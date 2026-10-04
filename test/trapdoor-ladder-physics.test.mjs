@@ -24,12 +24,12 @@ const baseline = physicsExports(source)
 const patched = physicsExports(patchClimbableTrapdoor(source).source)
 
 // a ladder (facing south, on the stone north of it) at y 0..1, a trapdoor at y 2 over it, stone at z -1
-const hatch = trapdoor => ({
+const hatch = (trapdoor, ladder = 'south') => ({
   getBlock (raw) {
     const p = raw.floored()
     const [name, properties] = p.x !== 0 || p.y < 0 ? ['stone', {}]
       : p.z === -1 && p.y < 2 ? ['stone', {}]
-        : p.z === 0 && p.y < 2 ? ['ladder', { facing: 'south', waterlogged: false }]
+        : p.z === 0 && p.y < 2 ? ['ladder', { facing: ladder, waterlogged: false }]
           : p.z === 0 && p.y === 2 ? ['oak_trapdoor', { half: 'bottom', powered: false, waterlogged: false, ...trapdoor }]
             : ['air', {}]
     const block = Block.fromProperties(name, properties, 0)
@@ -66,15 +66,20 @@ test('the trapdoor patch is idempotent and leaves an unknown source alone', () =
 
 // vanilla (LivingEntity.trapdoorUsableAsLadder): an open trapdoor over a ladder of its own facing is climbed; the feature
 // list prismarine-physics ships stops at 1.20, so on 26.1 the body stopped with its feet at the trapdoor's floor (y 2).
-// [what, trapdoor, highest feet unpatched, patched]: climbing ends with the feet a little over the last climbable cell
+// climbing ends with the feet a little over the last climbable cell
+// [what, ladder facing, trapdoor, highest feet unpatched, patched]
 const climbs = [
-  ['an open trapdoor facing like the ladder: climbed', { open: true, facing: 'south' }, 2, 3],
-  ['an open trapdoor facing away from the ladder: not climbed', { open: true, facing: 'north' }, 2, 2],
-  ['a shut trapdoor: a ceiling (head at y 2)', { open: false, facing: 'south' }, 0.19, 0.19]
+  ['an open trapdoor facing like the ladder: climbed', 'south', { open: true, facing: 'south' }, 2, 3],
+  ['an open trapdoor facing away from the ladder: not climbed', 'south', { open: true, facing: 'north' }, 2, 2],
+  ['a shut trapdoor: a ceiling (head at y 2)', 'south', { open: false, facing: 'south' }, 0.19, 0.19],
+  ['east ladder, east trapdoor: climbed', 'east', { open: true, facing: 'east' }, 2, 3],
+  ['east ladder, west trapdoor: not climbed', 'east', { open: true, facing: 'west' }, 2, 2],
+  ['west ladder, west trapdoor: climbed', 'west', { open: true, facing: 'west' }, 2, 3],
+  ['west ladder, east trapdoor: not climbed', 'west', { open: true, facing: 'east' }, 2, 2]
 ]
-for (const [what, trapdoor, before, after] of climbs) {
+for (const [what, ladder, trapdoor, before, after] of climbs) {
   test(`physics at a hatch, ${what}`, () => {
-    const world = hatch(trapdoor)
+    const world = hatch(trapdoor, ladder)
     const tops = [highest(baseline, world), highest(patched, world)]
     assert.ok(tops[0] >= before && tops[0] < before + 0.4 && tops[1] >= after && tops[1] < after + 0.4, `${tops}`)
   })

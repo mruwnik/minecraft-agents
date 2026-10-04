@@ -16,3 +16,8 @@ export const PATCHES = Object.freeze([
 export function missingPatches (read) {
   return PATCHES.filter(([path, marker]) => !(read(path) ?? '').includes(marker)).map(([, , title]) => title)
 }
+
+// A body that cannot do what its planner plans is worse than none: these patches are refused at start, not just reported.
+export const REQUIRED = Object.freeze(['trapdoor over a ladder'])
+
+export const missingRequired = read => missingPatches(read).filter(title => REQUIRED.includes(title))

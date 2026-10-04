@@ -19,7 +19,7 @@ import { leashFields, trackLeashes } from './leash.mjs'
 import { emptyHand } from './unequip.mjs'
 import { furnaceVisit } from './furnace.mjs'
 import { enchantVisit } from './enchant.mjs'
-import { missingPatches } from './deps-check.mjs'
+import { missingPatches, missingRequired } from './deps-check.mjs'
 import { wrapBlockAt } from './offset-shapes.mjs'
 
 const { Vec3 } = vec3
@@ -1373,11 +1373,14 @@ const readRepoFile = rel => { try { return readFileSync(join(REPO_ROOT, rel), 'u
 // The README's factory: connects, resolves once spawned.
 // `connect` and `timeScale` exist for tests: a stand-in for connectBot, and shrunken time bounds.
 // `opts.view` ({stateDir, agent, world, onEvent}) turns on the view dump (docs/view-format.md); BODY_VIEW=0 turns it off.
-export async function createPrimitives ({ view: viewOpts, ...opts }, { connect = connectBot, timeScale = 1, worldTimeoutMs = WORLD_TIMEOUT_MS, settleMs = SETTLE_MS } = {}) {
+// A patch the planner relies on (deps-check REQUIRED) that is gone makes it refuse: before it connects, with the fix named.
+export async function createPrimitives ({ view: viewOpts, ...opts }, { connect = connectBot, timeScale = 1, worldTimeoutMs = WORLD_TIMEOUT_MS, settleMs = SETTLE_MS, readFile = readRepoFile } = {}) {
+  const required = missingRequired(readFile)
+  if (required.length) throw new Error(`refusing to start: dependency patches missing (${required.join(', ')}); run node tools/patch-deps.mjs (an npm install undid them)`)
   const view = viewOpts ? createView(viewOpts) : null
   const bot = await connect(opts)
   const pending = await waitForWorld(bot, { timeoutMs: worldTimeoutMs }) ? [] : [{ kind: 'world-not-loaded', ms: worldTimeoutMs }]
-  const titles = missingPatches(rel => readRepoFile(rel))
+  const titles = missingPatches(readFile)
   if (titles.length) pending.push({ kind: 'dependency-patches-missing', titles, text: 'run node tools/patch-deps.mjs (an npm install undid them)' })
   return createPrimitivesFromBot(bot, { timeScale, reconnect: () => connect(opts), view, worldTimeoutMs, settleMs, pending })
 }

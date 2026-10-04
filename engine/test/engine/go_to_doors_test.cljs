@@ -172,6 +172,34 @@
           (is (= 2 (clicks p)))
           (is (= [] (opened eng))))))))
 
+(defn hatch-world
+  "A roof over the whole floor at y 66 with a trapdoor at x 3 over a two-high ladder (facing south): the only way down;
+  the body on the roof."
+  [trap-state]
+  (let [deck (assoc (box -2 66 -3 40 66 3 "stone") "3,66,0" "oak_trapdoor")]
+    {:self {:pos {:x 6 :y 67 :z 0}}
+     :blocks (merge flat deck {"3,64,0" "ladder" "3,65,0" "ladder"} (box 3 64 -1 3 65 -1 "stone"))
+     :states {"3,64,0" {:facing "south"} "3,65,0" {:facing "south"} "3,66,0" (merge {:half "bottom" :facing "south"} trap-state)}}))
+
+(deftest down-through-a-trapdoor-over-a-ladder-opens-it-descends-and-shuts-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p eng]} (await (go! (hatch-world {:open false}) {:pos [0 64 0] :range 0}))]
+          (is (= {:arrived true} @out))
+          (is (= [0 64 0] (at p)))
+          (is (false? (open? p [3 66 0])))
+          (is (= 2 (clicks p)))
+          (is (= [] (opened eng))))))))
+
+(deftest down-through-an-open-trapdoor-over-a-ladder
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (go! (hatch-world {:open true}) {:pos [0 64 0] :range 0}))]
+          (is (= {:arrived true} @out))
+          (is (= [0 64 0] (at p))))))))
+
 ;; ------------------------------------------------------------------ iron
 
 (deftest an-iron-door-is-a-wall

@@ -15,8 +15,11 @@ export const isOpenable = name => OPENABLE.test(name ?? '')
 // does the block at the cell k (x,y,z key) let a body through: an open door, gate or trapdoor
 export const isOpen = (s, k) => isOpenable(s.blocks.get(k)) && s.states.get(k)?.open === true
 
-// an open trapdoor over a ladder is climbable, as on the server
-export const climbsThrough = (s, x, y, z) => isOpen(s, key(x, y, z)) && /_trapdoor$/.test(s.blocks.get(key(x, y, z))) && s.blocks.get(key(x, y - 1, z)) === 'ladder'
+// an open trapdoor over a ladder of its own facing is climbable, as on the server (and in prismarine-physics once patched)
+export const climbsThrough = (s, x, y, z) => {
+  const [here, below] = [key(x, y, z), key(x, y - 1, z)]
+  return isOpen(s, here) && /_trapdoor$/.test(s.blocks.get(here)) && s.blocks.get(below) === 'ladder' && s.states.get(here)?.facing === s.states.get(below)?.facing
+}
 
 // the properties of the block at k for a planner state id, {} for a block that is neither openable, a button or lever, nor
 // a ladder (a trapdoor over it is judged against its facing)

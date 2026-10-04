@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { PATCHES, missingPatches } from './deps-check.mjs'
+import { PATCHES, REQUIRED, missingPatches, missingRequired } from './deps-check.mjs'
 
 const allPresent = path => PATCHES.filter(([p]) => p === path).map(([, marker]) => marker).join('\n')
 
@@ -25,4 +25,14 @@ test('the real repo files are patched', () => {
   const root = join(import.meta.dirname, '..', '..')
   const read = p => { try { return readFileSync(join(root, p), 'utf8') } catch { return null } }
   assert.deepEqual(missingPatches(read), [])
+})
+
+test('only a required patch is named by missingRequired', () => {
+  const without = title => path => PATCHES.filter(([p, , t]) => p === path && t !== title).map(([, marker]) => marker).join('\n')
+  assert.deepEqual(missingRequired(without('gate fix')), [])
+  assert.deepEqual(missingRequired(without('trapdoor over a ladder')), ['trapdoor over a ladder'])
+})
+
+test('every required patch is a known title', () => {
+  assert.deepEqual(REQUIRED.filter(t => !PATCHES.some(([, , title]) => title === t)), [])
 })

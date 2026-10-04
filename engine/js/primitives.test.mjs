@@ -1847,6 +1847,18 @@ test('createPrimitives does not return until the column under the body is loaded
   assert.equal(p.blockAt({ x: 2, y: 64, z: 0 }).name, 'oak_log')
 })
 
+test('createPrimitives refuses to start, before it connects, when a required dependency patch is missing', async () => {
+  let connected = false
+  const connect = async () => { connected = true; return stubBot(world) }
+  await assert.rejects(createPrimitives(WORLD_OPTS, { connect, readFile: () => null }), /trapdoor over a ladder.*patch-deps/s)
+  assert.equal(connected, false)
+})
+
+test('createPrimitives starts with the repo as it is: the required patches are applied', async () => {
+  const p = await createPrimitives(WORLD_OPTS, { connect: async () => stubBot(world), timeScale: 0.0001, worldTimeoutMs: 5000 })
+  assert.ok(p)
+})
+
 test('a reconnected bot is not adopted until its world is loaded', async () => {
   const bots = []
   const connect = async () => { const b = stubBot({ ...world, unloaded: bots.length > 0 }); bots.push(b); return b }

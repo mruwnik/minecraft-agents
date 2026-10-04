@@ -43,8 +43,8 @@ test('the planner properties of a ladder are its facing (the trapdoor over it is
   assert.deepEqual(pathProps(s, '0,64,0'), { facing: 'south' })
 })
 
-test('an open trapdoor over a ladder is climbed through, a shut one or one over stone is not', () => {
-  const s = world({ '0,64,0': 'ladder', '0,65,0': 'oak_trapdoor', '3,64,0': 'stone', '3,65,0': 'oak_trapdoor', '6,64,0': 'ladder', '6,65,0': 'oak_trapdoor' },
-    { '0,65,0': { open: true }, '3,65,0': { open: true }, '6,65,0': { open: false } })
-  assert.deepEqual([[0, 65, 0], [3, 65, 0], [6, 65, 0]].map(c => climbsThrough(s, ...c)), [true, false, false])
+test('an open trapdoor over a ladder of its own facing is climbed through, a shut one, one over stone or one of another facing is not', () => {
+  const s = world({ '0,64,0': 'ladder', '0,65,0': 'oak_trapdoor', '3,64,0': 'stone', '3,65,0': 'oak_trapdoor', '6,64,0': 'ladder', '6,65,0': 'oak_trapdoor', '9,64,0': 'ladder', '9,65,0': 'oak_trapdoor' },
+    { '0,64,0': { facing: 'east' }, '0,65,0': { open: true, facing: 'east' }, '3,65,0': { open: true, facing: 'east' }, '6,64,0': { facing: 'east' }, '6,65,0': { open: false, facing: 'east' }, '9,64,0': { facing: 'east' }, '9,65,0': { open: true, facing: 'west' } })
+  assert.deepEqual([[0, 65, 0], [3, 65, 0], [6, 65, 0], [9, 65, 0]].map(c => climbsThrough(s, ...c)), [true, false, false, false])
 })
