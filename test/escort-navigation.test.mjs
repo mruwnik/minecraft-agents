@@ -30,7 +30,7 @@ function moves (at, checked = true, from = point(0.5), to = point(6.5)) {
   return checked ? configureEscortMoves(m, options(at, from, to)) : m
 }
 function route (m, from, to) {
-  const search = new AStar(new Move(...from, 0, 0), m, new goals.GoalBlock(...to), 1000, 100, 12)
+  const search = new AStar(new Move(...from, 0, 0), m, new goals.GoalBlock(...to), Infinity, Infinity, 12)
   let result
   do { result = search.compute() } while (result.status === 'partial')
   return result

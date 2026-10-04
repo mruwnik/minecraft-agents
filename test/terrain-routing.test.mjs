@@ -33,7 +33,7 @@ function movements (at, { dig = false, scaffolding = false } = {}) {
   moves.canDig = dig; moves.canOpenDoors = true; moves.allowParkour = false; moves.allow1by1towers = false; moves.scafoldingBlocks = []
   return configureTerrainMoves(moves, { blockAt: at, scaffolding })
 }
-const search = (moves, from, to) => new AStar(new Move(...from, 0, 0), moves, new goals.GoalBlock(...to), 1000, 1000, 30).compute()
+const search = (moves, from, to) => new AStar(new Move(...from, 0, 0), moves, new goals.GoalBlock(...to), Infinity, Infinity, 30).compute()
 
 test('every registered block state receives finite collision/support classification without crashing', t => {
   const started = performance.now()

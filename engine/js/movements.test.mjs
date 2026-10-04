@@ -48,7 +48,7 @@ const rect = (x0, x1, z0, z1, y, name) => range(x0, x1).flatMap(x => range(z0, z
 const plan = (cells, from, to) => {
   const movements = new SafeMovements(fakeBot(cells))
   const goal = new GoalBlock(...to)
-  return new AStar(new Move(...from, 0, 0), movements, goal, 5000, 40, -1).compute()
+  return new AStar(new Move(...from, 0, 0), movements, goal, Infinity, Infinity, -1).compute()
 }
 const visits = (result, pred) => result.path.some(pred)
 const jumps = (result, from) => {
