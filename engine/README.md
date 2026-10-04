@@ -1536,12 +1536,14 @@ Known gaps:
 - `createPrimitives` accepts an optional `version` (default as in `src/config.mjs`).
 - Timeouts resolve with a status as the contract says, not by rejecting; only cuts and bad args reject.
 
-## Path planner (not used by the engine yet)
+## Path planner
 
 `src/engine/path/planner_tuned.cljs` is the only planner (an A* over a snapshot of section state ids: walking, jumps,
 drops, gap jumps, climbing, water, doors; costs in seconds plus risk). Its tests are `test/engine/planner_*_test.cljs`
 (helpers in `planner_fixture.cljs`); `planner_bench_test.cljs` plans the recorded benchmark queries (the frozen world
-queries and the live tester's courses) and checks the answers recorded in `test/planner-bench.json`. Bench: `npx
+queries and the live tester's courses) and checks the answers recorded in `test/planner-bench.json` (the world queries need the frozen bench, gitignored: set
+`PLANNER_BENCH_DIR` to it, or `PLANNER_BENCH_SKIP_WORLD=1` on a machine without one, e.g. CI, else that test fails;
+after an intended planner change `npm run record:planner-bench` re-records the file and prints which answers changed). Bench: `npx
 shadow-cljs compile planner-bench && npx shadow-cljs release planner-bench-release`, then `node bench-lang/bench.mjs`
 (dev against :advanced build, see its header). A gap jump or a drop never lands on farmland (vanilla tramples farmland under a
 fall of over 0.5 blocks); a jump up one block onto it is allowed (it falls about 0.3 from the top of the arc).

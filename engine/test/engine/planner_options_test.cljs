@@ -1,5 +1,5 @@
 (ns engine.planner-options-test
-  "The non-default-options cases of bench-lang/fixtures-equal.test.mjs against the ClojureScript planner: one query
+  "The non-default-options cases of the old JS planner's comparison suite (deleted with planner.mjs) against the ClojureScript planner: one query
   under several settings (weight, maxNodes, the box, the goal flood, costs), goals in an unloaded column or ignoring y,
   and create-search in slices matching plan. The JS planner's answers are recorded in test/planner-bench.json (see
   engine.planner-bench-test)."
