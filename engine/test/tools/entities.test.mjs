@@ -89,6 +89,18 @@ test('type, player, dimension and explicit centre filters compose; dimension can
   assert.equal(explicit.dimension, 'the_nether')
 })
 
+test('compact rows keep an ephemeral cache key distinct from a UUID', async t => {
+  const now = Date.now()
+  const self = entity('self', 'player', { x: 0, y: 64, z: 0 }, now, 1, { 'self?': true })
+  const transient = { key: 'item/temporary', type: 'item', dimension: 'overworld',
+    pos: { x: 1, y: 64, z: 0 }, 'observed-at': now - 5, 'expires-at': now + 119995 }
+  const fx = fixture(t)
+  fx.value = snapshot(now, [self, transient])
+  const result = await execute(options(['Probe', '--world', 'w', '--state', fx.state]), fx.getImpl)
+  assert.equal(result.items[0].uuid, undefined)
+  assert.equal(result.items[0].key, 'item/temporary')
+})
+
 test('raw output retains server timestamps but caps pages and never refreshes a row', async t => {
   const now = Date.now()
   const rows = [entity('self', 'player', { x: 0, y: 64, z: 0 }, now, 1, { 'self?': true })]
