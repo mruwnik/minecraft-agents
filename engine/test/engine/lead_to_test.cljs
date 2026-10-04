@@ -77,6 +77,75 @@
           (is (= :unleashed (:reason (done-event s))))
           (is (= [goal] (tu/walked-to (:eng s))) "one walk to the spot, no pull"))))))
 
+(deftest reports-whether-the-cow-was-gathered
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[label cow-spec gathered] [["at the spot" {} true]
+                                           ["trailing, pulled in" {:trail 5} true]
+                                           ["too far out to pull" {:trail 9} false]]]
+          (let [s (await (scenario {} {:inventory lead :entities [(cow 1 3 cow-spec)]} 24))]
+            (is (= :unleashed (:reason (done-event s))) label)
+            (is (= gathered (:gathered (done-event s))) label)
+            (is (= (if gathered 0 1) (count (events-of s :lead-to.gather-short))) label)))))))
+
+(deftest a-cow-10-out-is-not-pulled-so-far-that-the-lead-breaks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {} {:inventory lead :entities [(cow 1 3 {:trail 9 :breakAt 10})]} 24))
+              c (cow-of s 1)
+              [short] (events-of s :lead-to.gather-short)]
+          (is (= :unleashed (:reason (done-event s))) "no snap: the body did not walk on")
+          (is (<= 8 (:distance short)) "the warn names the distance the animal was left at")
+          (is (every? #(<= (:x %) 30) (tu/walked-to (:eng s))) "no walk past the spot: no pull was started")
+          (is (not (true? (.-leashed c)))))))))
+
+(deftest stops-after-the-pull-limit-and-says-the-cow-was-not-gathered
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:gather-tries 1} {:inventory lead :entities [(cow 1 3 {:trail 5})]} 40))]
+          (is (= :unleashed (:reason (done-event s))))
+          (is (false? (:gathered (done-event s))))
+          (is (= [30 32] (mapv :x (take 2 (tu/walked-to (:eng s))))) "the walk to the spot and one pull, no second")
+          (is (= 3 (count (tu/walked-to (:eng s)))) "the third walk is the body going to the cow to take the lead off")
+          (is (= 1 (count (events-of s :lead-to.gather-short)))))))))
+
+(deftest a-pull-that-cannot-arrive-lets-the-cow-go-and-says-so
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {} {:inventory lead :entities [(cow 1 3 {:trail 6})] :unreachable ["33,64,0"]} 40))]
+          (is (finished? s))
+          (is (= :unleashed (:reason (done-event s))))
+          (is (false? (:gathered (done-event s))))
+          (is (= 1 (count (events-of s :lead-to.gather-short))))
+          (is (= 3 (count (tu/walked-to (:eng s)))) "the walk to the spot, one failed pull, no retry, then the body goes to the cow to take the lead off"))))))
+
+(deftest a-lead-that-breaks-during-the-pull-is-reported
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {} {:inventory lead :entities [(cow 1 3 {:trail 6 :breakAt 7})]} 40))]
+          (is (= :lead-broke (:reason (done-event s))))
+          (is (false? (:gathered (done-event s)))))))))
+
+(deftest a-cow-lost-during-the-pull-is-lost
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p] :as s} (h/setup {:floor tu/walk-floor :inventory lead :entities [(cow 1 3 {:trail 6})]})]
+          (.override (.-world p) "steer"
+                     (fn [token args impl]
+                       (let [r (impl token args)]
+                         (when (< 29.5 (.. p -world -state -self -pos -x))
+                           (.splice (.. p -world -state -entities) 0 1))
+                         r)))
+          (await (submit s {} 40))
+          (is (finished? s))
+          (is (= :lost (:reason (done-event s)))))))))
+
 (deftest ties-the-cow-to-the-named-fence
   (async done
     (tu/run-async done

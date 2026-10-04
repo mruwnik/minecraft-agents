@@ -6,9 +6,12 @@ import { walkLine, openAir } from './fake-walkline.mjs'
 
 const FOLLOW_GAP = 2
 
-export function dragLeashed (s) {
+// `walked` is how far the body just walked. `breakAt` (a number on the spec): the lead breaks when a walk shorter
+// than that ends farther than that from the animal, which had no time to follow (a long walk lets it keep up).
+export function dragLeashed (s, walked = Infinity) {
   for (const e of s.entities.filter(x => x.leashedToMe)) {
-    if (e.snaps) {
+    const stretched = e.breakAt !== undefined && walked < e.breakAt && Math.hypot(e.pos.x - s.self.pos.x, e.pos.z - s.self.pos.z) > e.breakAt
+    if (e.snaps || stretched) {
       Object.assign(e, { leashed: false, leashedToMe: false })
       s.entities.push({ id: s.nextEntityId++, name: 'item', kind: 'item', pos: { ...e.pos }, item: { name: 'lead', count: 1 } })
       continue

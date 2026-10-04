@@ -114,11 +114,12 @@ export function fakeSteer (s, ownerOf, CutError) {
     const budget = Math.min(MAX_TICKS, Math.ceil(timeoutS * TICKS_PER_S))
     return new Promise((resolve, reject) => {
       let body = { x: s.self.pos.x + 0.5, y: s.self.pos.y, z: s.self.pos.z + 0.5, vy: 0, collided: false }
+      const from = { ...s.self.pos }
       let yaw = 0
       let ticks = 0
       const finish = (settle, value) => {
         s.controls = {}
-        if (settle === resolve) { dragLeashed(s); temptFollow(s) } // as the fake moveTo, once the walk is over
+        if (settle === resolve) { dragLeashed(s, Math.hypot(s.self.pos.x - from.x, s.self.pos.z - from.z)); temptFollow(s) } // as the fake moveTo, once the walk is over
         settle(value)
       }
       const tick = () => {
