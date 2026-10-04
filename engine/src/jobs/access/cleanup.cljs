@@ -5,7 +5,7 @@
             [engine.jobs.tools :as tools]
             [engine.jobs.util :as u]
             [engine.placement :as placement]
-            [jobs.debug.walk-plan :as walk-plan]))
+            [engine.path.walk :as walk]))
 
 (def doc
   "Take back this body's temporary blocks: the open entries of the scaffold ledger (engine.access.ledger, body
@@ -147,7 +147,7 @@
         (ledger/remember! c (ledger/begin-removal l cell))
         (let [[x y z] cell
               status (.-status (await (ctx/act c :dig #js {:pos #js {:x x :y y :z z}})))]
-          (when under? (await (walk-plan/settle! c)))
+          (when under? (await (walk/settle! c)))
           (if (#{"dug" "missing"} status)
             (ctx/update-mem! c assoc :collect true)
             (ctx/update-mem! c count-fail cell {:reason :dig-failed :dig status} (:give-up (:args c))))

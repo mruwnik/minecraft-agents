@@ -6,7 +6,7 @@
             [engine.path.executor :as ex]
             [engine.path.planner-tuned :as planner]
             [engine.test-util :as tu]
-            [jobs.debug.walk-plan :as walk-plan]))
+            [engine.path.walk :as walk]))
 
 (def version "1.21.4")
 (def lib (delay {:mc ((tu/require-here "minecraft-data") version)
@@ -44,9 +44,9 @@
                         #js {:from #js {:x x :y y :z z :px (+ x 0.5) :pz (+ z 0.5)}
                              :goal #js {:kind "near" :x gx :y gy :z gz :range 0}}
                         #js {:table (.-table pw) :space (.-space pw) :weight 1.2
-                             :limits (ex/planner-limits ex/policy (walk-plan/solid-fn pw))})]
+                             :limits (ex/planner-limits ex/policy (walk/solid-fn pw))})]
     (when (= "found" (.-status r))
-      (walk-plan/plan-steps pw r))))
+      (walk/plan-steps pw r))))
 
 (defn bot-at [[x y z]]
   (let [{:keys [vec3]} @lib]

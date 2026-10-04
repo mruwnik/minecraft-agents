@@ -5,7 +5,7 @@
             [engine.path.executor :as ex]
             [engine.path.planner-tuned :as planner]
             [engine.test-util :as tu]
-            [jobs.debug.walk-plan :as walk-plan]))
+            [engine.path.walk :as walk]))
 
 (defn box
   "A fake block map: name in every cell of x0..x1, y0..y1, z0..z1."
@@ -17,11 +17,11 @@
   planner's status, the set of step kinds, the executor's refusal kind for the plan (nil when it walks it)."
   [blocks [x y z] limited?]
   (let [pw (.pathWorld (tu/fake {:blocks blocks}))
-        limits (when limited? (ex/planner-limits ex/policy (walk-plan/solid-fn pw)))
+        limits (when limited? (ex/planner-limits ex/policy (walk/solid-fn pw)))
         r (planner/plan (.-snapshot pw)
                         #js {:from #js {:x 0 :y 64 :z 1 :px 0.5 :pz 1.5} :goal #js {:kind "near" :x x :y y :z z :range 0}}
                         #js {:table (.-table pw) :space (.-space pw) :weight 1.2 :limits limits})
-        steps (when (.-path r) (walk-plan/plan-steps pw r))]
+        steps (when (.-path r) (walk/plan-steps pw r))]
     {:status (.-status r) :moves (set (map :move steps)) :refused (:kind (ex/refusal ex/policy steps))}))
 
 ;; A trench x 5..6 (no floor) between a near floor x 0..4 and a far one, z -8..10; the walk round crosses at z 9..10.
@@ -112,7 +112,7 @@
     (.-status (planner/plan (.-snapshot pw)
                             #js {:from #js {:x 0 :y 64 :z 1 :px 0.5 :pz 1.5} :goal #js {:kind "near" :x x :y y :z z :range 0}}
                             #js {:table (.-table pw) :space (.-space pw) :weight 1.2 :floodAfter 0
-                                 :limits (ex/planner-limits ex/policy (walk-plan/solid-fn pw))}))))
+                                 :limits (ex/planner-limits ex/policy (walk/solid-fn pw))}))))
 
 (deftest the-goal-flood-tests-gap-jumps-without-a-move-into-the-takeoff
   (are [blocks goal] (= "found" (flooded-plan-status blocks goal))

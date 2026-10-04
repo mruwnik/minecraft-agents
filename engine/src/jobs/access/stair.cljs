@@ -4,7 +4,7 @@
             [engine.jobs.tools :as tools]
             [engine.jobs.util :as u]
             [engine.path.executor :as executor]
-            [jobs.debug.walk-plan :as walk-plan]
+            [engine.path.walk :as walk]
             [jobs.gather.mine :as mine]))
 
 (def doc
@@ -173,10 +173,10 @@
 (defn way-back
   "nil when a whole plan the executor can walk leads from the body to origin on a fresh pathWorld, else the stop."
   [c origin]
-  (let [pw (walk-plan/path-world (:primitives c))]
+  (let [pw (walk/path-world (:primitives c))]
     (if (nil? pw)
       {:reason :no-way-back :why :unsupported}
-      (let [{:keys [r steps beyond]} (walk-plan/plan-within c pw origin 0 (:default (:weight walk-plan/args)))
+      (let [{:keys [r steps beyond]} (walk/plan-within c pw origin 0 walk/default-weight)
             status (.-status r)
             stop (fn [refused] {:reason :no-way-back :why :refused :kind (:kind refused) :step (:at refused)})]
         (cond
