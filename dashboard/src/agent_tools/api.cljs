@@ -4,6 +4,7 @@
   (:require [agent-tools.changes :as changes]
             [agent-tools.map :as map-tool]
             [agent-tools.plans :as plans]
+            [agent-tools.time :as time-tool]
             [agent-tools.storage-compat :as compat]))
 
 (defn map-filters [ctx values]
@@ -49,3 +50,9 @@
 
 (defn changes-main [argv]
   (changes/main! (vec argv)))
+
+(defn time-options [argv] (compat/to-js (time-tool/options (vec argv))))
+(defn time-clock [ctx now] (compat/to-js (time-tool/clock (compat/from-js ctx) now)))
+(defn time-execute [request]
+  (.then (time-tool/execute! (compat/from-js request)) compat/to-js))
+(defn time-main [argv] (time-tool/main! (vec argv)))

@@ -1631,6 +1631,25 @@ reason and movement/outcome fields. Unwatched action events stay quiet. Addresse
 chat and required attention retain their normal wake behavior while tracking an
 action. Classification by a model remains deferred.
 
+World time can be read without choosing or starting a body:
+
+```bash
+node engine/tools/time.mjs --world claude clock
+node engine/tools/time.mjs --world claude dawn --timeout 1200
+```
+
+`clock` returns compact EDN with `:time-of-day`, `:day?`, `:seen-at`, `:age-ms`
+and `:by` from the newest fresh connected Overworld observer's `view/pose.json`.
+It reads no legacy shared clock and never predicts time between reports. Reports
+older than 90 seconds, disconnected bodies, other dimensions and malformed
+reports are ignored; no usable report returns `{:ok false :reason :time-unknown}`.
+`dawn` polls those same observations until day, loss of all usable reports, or
+the timeout (default 1200 seconds, maximum 3600). Day uses the engine's exact
+boundaries: before tick 12542 or after 23460. `--state DIR` selects another state
+directory; `--poll-ms` controls dawn polling (default 1000). Both commands run
+the ahead-of-time CLJS tools bundle directly in Node; build it once with
+`cd dashboard && npm run build-agent-tools`.
+
 Agent job management uses the existing engine scheduler through an EDN API;
 these commands return immediately, while `observe --wait --watch` handles wakeups:
 
