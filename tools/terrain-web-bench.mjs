@@ -15,6 +15,7 @@ const defaults = {
   panSteps: 5,
   stepMs: 60,
   zoomDelta: 480,
+  startZoomIn: 0,
   overviewSteps: 18,
   wheelStepMs: 50,
   screenshots: null,
@@ -28,6 +29,7 @@ function options(args) {
     ['--phase-ms', 'phaseMs'],
     ['--pan-x', 'panX'], ['--pan-y', 'panY'], ['--pan-steps', 'panSteps'],
     ['--step-ms', 'stepMs'], ['--zoom-delta', 'zoomDelta'],
+    ['--start-zoom-in', 'startZoomIn'],
     ['--overview-steps', 'overviewSteps'], ['--wheel-step-ms', 'wheelStepMs'],
     ['--screenshots', 'screenshots'], ['--out', 'out'],
   ]);
@@ -39,7 +41,7 @@ function options(args) {
     }
     if (i + 1 >= args.length) throw new Error(`missing value for ${args[i]}`);
     const value = args[++i];
-    if (['phaseMs', 'panX', 'panY', 'panSteps', 'stepMs', 'zoomDelta', 'overviewSteps', 'wheelStepMs'].includes(key)) {
+    if (['phaseMs', 'panX', 'panY', 'panSteps', 'stepMs', 'zoomDelta', 'startZoomIn', 'overviewSteps', 'wheelStepMs'].includes(key)) {
       const number = Number(value);
       if (!Number.isFinite(number) || number < 0 || (key.endsWith('Steps') && !Number.isInteger(number))) {
         throw new Error(`invalid ${args[i - 1]} value: ${value}`);
@@ -51,6 +53,7 @@ function options(args) {
   }
   if (out.phaseMs < 1000) throw new Error('--phase-ms must be at least 1000');
   if (out.panSteps < 1 || out.overviewSteps < 1) throw new Error('pan and overview steps must be positive');
+  if (!Number.isInteger(out.startZoomIn)) throw new Error('--start-zoom-in must be a non-negative integer');
   const overviewSetupMs = out.overviewSteps * out.wheelStepMs + out.panSteps * out.stepMs + out.wheelStepMs;
   if (out.phaseMs < overviewSetupMs) {
     throw new Error(`--phase-ms must be at least ${overviewSetupMs} to leave time for overview panning`);
@@ -63,6 +66,8 @@ const help = `Usage: node tools/terrain-web-bench.mjs [options]
 Runs three equal-duration samples against an already-open dashboard map:
 idle, repeated warm pan/zoom, and overview panning while zoomed out. It restores
 the starting zoom and pan when possible; refresh/reopen if interrupted.
+Use --start-zoom-in to prepare a zoomed-in image-tile view; the harness waits
+for a map-pane drawImage as a basic image-rendering check before sampling.
 
 Options:
   --cdp URL                Chrome /json endpoint (default ${defaults.cdp})
@@ -73,6 +78,7 @@ Options:
   --pan-steps N            Drag segments (default ${defaults.panSteps})
   --step-ms MS             Delay between drag segments (default ${defaults.stepMs})
   --zoom-delta N           Warm zoom in/out amount (default ${defaults.zoomDelta})
+  --start-zoom-in N        Prepare with N zoom-in wheel steps before samples (default ${defaults.startZoomIn})
   --overview-steps N       Zoom-out wheel events (default ${defaults.overviewSteps})
   --wheel-step-ms MS       Delay between overview wheel events (default ${defaults.wheelStepMs})
   --screenshots DIR        Save one PNG per measured phase
@@ -328,7 +334,7 @@ async function main() {
 
   const mouse = (type, x, y, extra = {}) => send('Input.dispatchMouseEvent', {type, x, y, ...extra});
   const wheel = (deltaY, deltaX = 0) => mouse('mouseWheel', pointer.x, pointer.y, {deltaY, deltaX});
-  const viewChange = {zoomOutSteps: 0, netPanX: 0, netPanY: 0};
+  const viewChange = {zoomOutSteps: 0, prepZoomInSteps: 0, netPanX: 0, netPanY: 0};
   const drag = async (dx, dy) => {
     await mouse('mouseMoved', pointer.x, pointer.y);
     await mouse('mousePressed', pointer.x, pointer.y, {button: 'left', buttons: 1, clickCount: 1});
@@ -394,17 +400,42 @@ async function main() {
       await sleep(opt.wheelStepMs);
     }
     viewChange.zoomOutSteps = 0;
+    for (let i = 0; i < viewChange.prepZoomInSteps; i++) {
+      await wheel(120);
+      await sleep(opt.wheelStepMs);
+    }
+    viewChange.prepZoomInSteps = 0;
   };
 
   const originalView = await evaluate(`(() => ({url:location.href, title:document.title, visibility:document.visibilityState,
     devicePixelRatio, viewport:{width:innerWidth,height:innerHeight}, mapCanvas:(()=>{const r=window.__terrainWebBenchLayers.mapCanvas.getBoundingClientRect(); return {x:r.x,y:r.y,width:r.width,height:r.height}})()}))()`);
+  let preparation = {zoomInEvents: 0, mapDrawImageCalls: 0, imageObserved: false};
   try {
+    for (let i = 0; i < opt.startZoomIn; i++) {
+      await wheel(-120);
+      viewChange.prepZoomInSteps++;
+      await sleep(opt.wheelStepMs);
+    }
+    if (opt.startZoomIn) {
+      const deadline = Date.now() + 30000;
+      while (Date.now() < deadline) {
+        preparation.mapDrawImageCalls = await evaluate(`window.__terrainWebBenchLayers.mark().draws.drawImage.calls`);
+        if (preparation.mapDrawImageCalls > 0) { preparation.imageObserved = true; break; }
+        await sleep(200);
+      }
+      preparation.zoomInEvents = viewChange.prepZoomInSteps;
+      if (!preparation.imageObserved) {
+        preparation.diagnosticScreenshot = await screenshot('preparation-failed');
+        throw new Error(`no terrain drawImage observed after ${preparation.zoomInEvents} --start-zoom-in steps; tile requests=${JSON.stringify(tileRequests.map(request => request.url))}; refusing a close-terrain benchmark without observed image drawing`);
+      }
+      await sleep(1500);
+    }
     await samplePhase('idle');
     await samplePhase('warm-pan-zoom', warmInteraction);
     await undoPan();
     await samplePhase('overview', overviewInteraction);
   } finally {
-    if (!closed && (viewChange.zoomOutSteps || viewChange.netPanX || viewChange.netPanY)) {
+    if (!closed && (viewChange.zoomOutSteps || viewChange.prepZoomInSteps || viewChange.netPanX || viewChange.netPanY)) {
       try { await restoreView(); } catch (error) { process.stderr.write(`warning: could not restore starting view: ${error.message}\n`); }
     }
     ws.close();
@@ -415,6 +446,7 @@ async function main() {
     timestamp: new Date().toISOString(),
     target: {url: page.url, title: page.title},
     settings: opt,
+    preparation,
     browser: install,
     page: originalView,
     phases: phaseResults,

@@ -118,6 +118,18 @@ node tools/terrain-web-bench.mjs --cdp http://127.0.0.1:9223/json \
   --out /tmp/terrain-perf.json --screenshots /tmp/terrain-perf-shots
 ```
 
+For close pan/zoom, center the page on a body whose coordinates overlap dumped terrain and ask the harness to zoom in before sampling:
+
+```sh
+node tools/terrain-web-bench.mjs --cdp http://127.0.0.1:9223/json \
+  --page '/map?world=claude' --start-zoom-in 1 --phase-ms 8000 \
+  --out /tmp/terrain-close.json --screenshots /tmp/terrain-close-shots
+```
+
+For example, `/map?world=claude&show=ClaudeProbe` centers the saved ClaudeProbe position in this dataset. The harness waits for a
+map-pane `drawImage` before it samples a prepared zoom; if the chosen position has no image terrain, it stops instead of reporting
+an invalid close-terrain result. This is a basic image-rendering check, not proof that every tile has loaded or that the final viewport contains terrain. Compare tile requests and screenshots, and choose a body and zoom that keep image tiles in view throughout the pan/zoom phase.
+
 The default run takes about 50 seconds. The harness sends pointer and wheel input to the map only; it does not call body-control or
 chat routes. Its browser task/script counters are useful for same-machine comparisons, not GPU timings: headless Chromium may use
 software rendering, and the canvas call timers do not include all raster/compositor work. Compare screenshots as well as numbers
@@ -138,3 +150,5 @@ change has no demonstrated pan speedup. Idle results are excluded because tile i
 26 redraw-triggering arrivals); frame p95 stayed around 16.7–16.8 ms, so these measurements do not establish an FPS gain. The
 overview optimization caches one `Path2D` of world-coordinate chunk coverage and fills it through the viewport transform,
 instead of rebuilding and filling a visible rectangle for every column on each redraw.
+
+A further close-pan experiment tested a spatial grid for label collision checks. One browser comparison showed only a small 2–4% CPU reduction, with slightly higher overview script time and unchanged 16.7 ms frame p95. The paired repeat did not complete, so the candidate was discarded; this pass changes the benchmark only and establishes no additional rendering speedup.
