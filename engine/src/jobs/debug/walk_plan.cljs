@@ -10,7 +10,8 @@
   of moveTo. One round does the whole walk and ends :done. Plans from the body's cell within the executor's
   abilities (the planner is told executor/planner-limits, so it walks round gap jumps and doors it cannot do; it
   swims), still refuses a plan with a step the executor cannot walk (a backstop), walks a partial plan only up to its
-  last step out of water, re-plans when the body ends off the plan (at most 5 times), and hands over {:status ...}:
+  first step it cannot undo (a drop of more than a block, a gap jump down: :no-path :reason :one-way, :one-way {:kind :at},
+  :near) and its last step out of water, re-plans when the body ends off the plan (at most 5 times), and hands over {:status ...}:
   :arrived, :refused (:kind :at), :no-path
   (:reason; :abilities with :kind :at when only a step the executor cannot do leads there), :stuck (:why :at),
   :gave-up (:reason :replan-limit), :failed (:reason) or :unsupported (no pathWorld), plus :replans. Emits
@@ -159,14 +160,31 @@
        {:status :failed :reason (.-reason r)})
      ms]))
 
+(defn near-goal
+  "How far, in blocks to 1 decimal, the step is from the goal cell to."
+  [{:keys [x y z]} [gx gy gz]]
+  (/ (js/Math.round (* 10 (js/Math.hypot (- gx x) (- gy y) (- gz z)))) 10))
+
+(defn stopped-one-way
+  "The no-path result of a partial plan cut short at a step that cannot be undone: that step, and how near to the goal
+  the walk got (from: the last step kept, or the start)."
+  [r from to one-way]
+  (assoc {:status :no-path :reason :one-way :planner (some-> (.-reason r) keyword)}
+         :one-way one-way :near (near-goal from to)))
+
 (defn partial-end
-  "A partial plan that was walked to its end is not an arrival unless the body is in range of the goal."
-  [done planner-status to range steps]
+  "A partial plan that was walked to its end is not an arrival unless the body is in range of the goal: then the walk
+  plans again, unless the plan was cut at a step that cannot be undone, which ends it (stopped-one-way)."
+  [done planner-status to range steps stop]
   (let [[x y z] (:at done)]
-    (if (and (= :arrived (:status done)) (= "partial" planner-status)
-             (not (u/within? {:x x :y y :z z} (zipmap [:x :y :z] to) range)))
-      {:status :off-plan :at (:at done) :step (dec (count steps))}
-      done)))
+    (cond
+      (not (and (= :arrived (:status done)) (= "partial" planner-status)
+                (not (u/within? {:x x :y y :z z} (zipmap [:x :y :z] to) range))))
+      done
+
+      stop (merge stop {:at (:at done)})
+
+      :else {:status :off-plan :at (:at done) :step (dec (count steps))})))
 
 (defn ^:async round [c]
   (let [{:keys [to range timeout-s weight]} (:args c)
@@ -181,13 +199,19 @@
         (let [pw (path-world p)
               {:keys [r steps beyond]} (plan-within c pw to range weight)
               planner-status (.-status r)
-              steps (if (= "partial" planner-status) (dry-end steps) steps)]
+              partial? (= "partial" planner-status)
+              {:keys [kept one-way]} (if partial? (executor/reversible-prefix steps) {:kept steps})
+              steps (if partial? (dry-end kept) steps)
+              stop (when one-way (stopped-one-way r (or (peek steps) (first kept)) to one-way))]
           (cond
             beyond
             (finish! c {:status :no-path :reason :abilities :kind (:kind beyond) :at (:at beyond) :replans replans}
                      t0 walked walk-ms)
 
-            (or (= "none" planner-status) (and (= "partial" planner-status) (< (count steps) 2)))
+            (and stop (< (count steps) 2))
+            (finish! c (assoc stop :replans replans) t0 walked walk-ms)
+
+            (or (= "none" planner-status) (and partial? (< (count steps) 2)))
             (finish! c {:status :no-path :reason (some-> (.-reason r) keyword) :replans replans} t0 walked walk-ms)
 
             :else
@@ -202,7 +226,7 @@
                   (let [[walk-result ms] (await (walk! c steps timeout-s))
                         walked (+ walked plan-len)
                         walk-ms (+ walk-ms ms)
-                        done (partial-end walk-result planner-status to range steps)
+                        done (partial-end walk-result planner-status to range steps stop)
                         after (if (#{:arrived :off-plan :stuck} (:status done))
                                 (executor/after-walk executor/policy replans done)
                                 {:finish done})]

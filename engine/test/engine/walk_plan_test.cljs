@@ -215,3 +215,65 @@
               started (filter #(and (= :action (:source %)) (= :started (:kind %)) (contains? (:args %) "timeoutS")) @seen)]
           (is (seq started))
           (is (every? #(not (contains? (:args %) "decide")) started)))))))
+
+;; an island (stone at y 63, feet 64) of x 0..4 over a lower floor (stone at y 60, feet 61) of x 5..11; the goal stands on a
+;; 3-high pillar of the lower floor, which no move reaches, so the plan is partial and its nearest end is down the drop
+(def island (merge (box 0 63 0 4 63 2 "stone") (box 5 60 0 11 60 2 "stone")))
+(def pillar-goal [10 64 1])
+(def pillar (box 10 61 0 10 63 2 "stone"))
+
+(defn ^:async stays-on-the-island
+  "Walk to goal over blocks from the island, n times in a row, each from where the last ended: results, and the x of the body
+  after each."
+  [blocks goal n]
+  (loop [i 0 at {:x 0 :y 64 :z 1} acc []]
+    (if (= i n)
+      acc
+      (let [{:keys [out p]} (await (walk blocks {:to goal} (fn [_]) at))
+            pos (.-pos (.self p))]
+        (recur (inc i) {:x (.-x pos) :y (.-y pos) :z (.-z pos)} (conj acc [@out (.-x pos)]))))))
+
+(deftest an-unreachable-goal-across-a-one-way-drop-leaves-the-body-on-the-island
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [rounds (await (stays-on-the-island (merge island pillar) pillar-goal 3))]
+          (is (= [:no-path :no-path :no-path] (map (comp :status first) rounds)))
+          (is (= [:one-way :one-way :one-way] (map (comp :reason first) rounds)))
+          (is (= [:drop :drop :drop] (map (comp :kind :one-way first) rounds)))
+          (is (every? #(<= (second %) 5) rounds) "the body never went down the drop"))))))
+
+(deftest a-one-way-stop-is-one-event-with-where-and-how-near
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out] :as s} (await (walk (merge island pillar) {:to pillar-goal} (fn [_]) {:x 0 :y 64 :z 1}))
+              ev (first (events-of s :walk-plan.result))]
+          (is (= 1 (count (events-of s :walk-plan.result))))
+          (is (= 0 (count-of s :walk-plan.replan)))
+          (is (vector? (:at (:one-way @out))) "the cell of the step not taken")
+          (is (number? (:near @out)) "how far from the goal the walk stopped")
+          (is (= :one-way (:reason ev))))))))
+
+(deftest a-reachable-goal-across-the-same-drop-is-walked-whole
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (walk island {:to [10 61 1]} (fn [_]) {:x 0 :y 64 :z 1}))
+              pos (.-pos (.self p))]
+          (is (= :arrived (:status @out)))
+          (is (> (.-x pos) 9)))))))
+
+;; level floor, a wall 2 high across the whole width: nothing in the plan is one-way, the body goes as near as it can
+(def walled (merge (box 0 63 0 11 63 2 "stone") (box 6 64 0 6 65 2 "stone")))
+
+(deftest an-unreachable-goal-on-level-ground-goes-near-and-can-walk-back
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (walk walled {:to [10 64 1]} (fn [_]) {:x 0 :y 64 :z 1}))
+              pos (.-pos (.self p))]
+          (is (= :no-path (:status @out)))
+          (is (not= :one-way (:reason @out)))
+          (is (>= (.-x pos) 4) "it went near the wall")
+          (is (< (.-x pos) 6)))))))

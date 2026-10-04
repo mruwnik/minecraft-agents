@@ -672,3 +672,42 @@
   (let [steps (ex/with-high-corners p corner-jump-steps (solid-set #{[11 65 0]}))]
     (is (= {:status :refused :kind :corner-jump :at [11 65 1]} (select-keys (ex/refusal p steps) [:status :kind :at])))
     (is (nil? (ex/refusal p corner-jump-steps)))))
+
+;; one-way steps: what a partial plan must not walk
+
+(def level-start (step 0 64 0 :start))
+
+(deftest one-way-step-is-a-drop-of-more-than-one-or-a-gap-down
+  (are [move y extra one-way?] (= one-way? (ex/one-way-step? level-start (step 1 y 0 move extra)))
+    :walk 64 {} false
+    :diagonal 64 {} false
+    :corner 64 {} false
+    :jump 65 {} false
+    :climb-up 65 {} false
+    :climb-down 63 {} false
+    :jump-climb 65 {} false
+    :swim 64 {:swim true} false
+    :exit 65 {} false
+    :drop 63 {} false
+    :drop 62 {} true
+    :drop 61 {} true
+    :drop 63 {:swim true} false
+    :drop 40 {:swim true} true
+    :gap 64 {} false
+    :gap 63 {} true
+    :open 64 {} true
+    :unknown-kind 64 {} true))
+
+(deftest one-way-step-measures-stand-height-not-the-cell
+  (is (not (ex/one-way-step? (step 0 64 0 :start {:h 8}) (step 1 63 0 :drop {:h 8}))) "64.5 to 63.5: 1 down")
+  (is (ex/one-way-step? (step 0 64 0 :start {:h 0}) (step 1 62 0 :drop {:h 8})) "64 to 62.5: 1.5 down"))
+
+(deftest reversible-steps-cut-a-plan-at-its-first-one-way-step
+  (let [steps [(step 0 64 0 :start) (step 1 64 0 :walk) (step 2 63 0 :drop) (step 3 61 0 :drop) (step 4 61 0 :walk)]]
+    (is (= [0 1 2] (mapv :x (:kept (ex/reversible-prefix steps)))))
+    (is (= {:kind :drop :at [3 61 0]} (:one-way (ex/reversible-prefix steps))))))
+
+(deftest a-plan-with-no-one-way-step-is-kept-whole
+  (let [r (ex/reversible-prefix straight)]
+    (is (= straight (:kept r)))
+    (is (nil? (:one-way r)))))

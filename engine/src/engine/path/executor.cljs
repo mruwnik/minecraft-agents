@@ -185,6 +185,37 @@
             (assoc :low-ceiling true)))
         steps)))
 
+;; ---------------------------------------------------------------- steps that cannot be undone
+
+(def two-way-moves
+  "Step kinds whose reverse the body's own moves walk: a rise of at most a block is jumped, so a jump's reverse is a drop,
+  a swim's reverse a swim, an exit's reverse a drop into water."
+  #{:start :walk :diagonal :corner :jump :climb-up :climb-down :jump-climb :swim :swim-up :swim-down :exit})
+
+(def max-way-back-drop
+  "A drop of at most this many blocks is undone by a jump up (a block is the highest rise the body jumps)."
+  1.0)
+
+(defn one-way-step?
+  "Step s after prev cannot be undone with the body's own moves: a drop of more than a block (water included: the bank
+  would have to be climbed), a gap jump down (a gap jump up is refused), and any kind not known to be reversible."
+  [prev s]
+  (let [fall (- (stand-y prev) (stand-y s))]
+    (case (:move s)
+      :drop (> fall max-way-back-drop)
+      :gap (pos? fall)
+      (not (contains? two-way-moves (:move s))))))
+
+(defn reversible-prefix
+  "{:kept steps :one-way {:kind :at}}: the steps up to (not including) the first one-way step, and that step (nil when
+  there is none and every step is kept)."
+  [steps]
+  (let [k (first (keep-indexed (fn [i s] (when (and (pos? i) (one-way-step? (nth steps (dec i)) s)) i)) steps))]
+    (if k
+      (let [{:keys [move x y z]} (nth steps k)]
+        {:kept (subvec steps 0 k) :one-way {:kind move :at [x y z]}})
+      {:kept steps :one-way nil})))
+
 ;; ---------------------------------------------------------------- what the planner may plan
 
 (def planner-kinds
