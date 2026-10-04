@@ -34,13 +34,36 @@
   (is (= :resuming (event-api/instance-status {:resume "j1" :list ["j1"]} "j1")))
   (is (= :queued (event-api/instance-status {:list ["j1"]} "j1"))))
 
+(deftest inventory-view-is-read-only-bounded-and-omits-empty-equipment-slots
+  (let [stacks (mapv (fn [slot] {:name (str "item-" slot) :count 2 :slot slot}) (range 50))
+        eng {:primitives #js {:self (fn [] #js {:inventory (clj->js stacks)
+                                                :equipment (clj->js {:head {:name "iron_helmet" :count 1 :durability 140}
+                                                                     :offHand nil
+                                                                     :mainHand {:name "iron_sword" :count 1}})})
+                              :isOffline (fn [] false)}}
+        view (event-api/inventory-view eng)]
+    (is (= true (:ok view)))
+    (is (= 46 (count (:inventory view))))
+    (is (= {:name "item-45" :count 2 :slot 45} (last (:inventory view))))
+    (is (true? (:more? view)))
+    (is (= {:head {:name "iron_helmet" :count 1 :durability 140}
+            :mainHand {:name "iron_sword" :count 1}}
+           (:equipment view)))))
+
+(deftest inventory-view-reports-offline-without-reading-primitives
+  (let [eng {:primitives #js {:isOffline (fn [] true)}}]
+    (is (= {:ok false :reason :offline} (event-api/inventory-view eng)))))
+
 (deftest unix-api-serves-edn-snapshot-events-and-resolution
   (async done
     (let [dir (tu/tmp-dir)
           socket-path (path/join dir "events.sock")
           stream (events/make {:generation-id "gen-api"})
           primitives #js {:self (fn [] #js {:username "TestBody" :pos #js {:x 1 :y 2 :z 3}
-                                             :health 18 :food 15})
+                                             :health 18 :food 15
+                                             :inventory #js [#js {:name "bread" :count 5 :slot 9}]
+                                             :equipment #js {:head #js {:name "iron_helmet" :count 1 :durability 140}
+                                                             :feet nil :offHand nil :mainHand nil}})
                           :isOffline (fn [] false)
                           :isSettling (fn [] true)}
           eng {:events stream
@@ -93,6 +116,14 @@
                         (is (= "jobs.movement.look-around" (get-in status [:current :name])))
                         (is (= {:total 0 :items [] :more? false} (:failed status)))
                         (is (= "req-1" (get-in status [:outstanding :items 0 :request-id])))
+                        (request socket-path "GET" "/inventory" {} nil))))
+             (.then (fn [response]
+                      (let [inventory (edn-response response)]
+                        (is (= 200 (:status response)))
+                        (is (true? (:ok inventory)))
+                        (is (= [{:name "bread" :count 5 :slot 9}] (:inventory inventory)))
+                        (is (= {:head {:name "iron_helmet" :count 1 :durability 140}}
+                               (:equipment inventory)))
                         (request socket-path "GET" "/job?id=j1" {} nil))))
              (.then (fn [response]
                       (let [job (edn-response response)]

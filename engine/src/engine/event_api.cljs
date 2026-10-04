@@ -67,9 +67,38 @@
 (def catalog-page-limit 20)
 (def max-catalog-page-limit 64)
 (def catalog-doc-limit 1200)
+(def inventory-stack-limit 46)
+(def equipment-slots [:head :torso :legs :feet :offHand :mainHand])
 
 (defn short-text [x n]
   (when (string? x) (subs x 0 (min n (count x)))))
+
+(defn inventory-stack [stack]
+  (when (and (map? stack) (string? (:name stack))
+             (integer? (:count stack)) (pos? (:count stack)))
+    (cond-> {:name (short-text (:name stack) 80) :count (:count stack)}
+      (and (integer? (:slot stack)) (<= 0 (:slot stack) 45)) (assoc :slot (:slot stack)))))
+
+(defn equipment-item [item]
+  (when (and (map? item) (string? (:name item)))
+    (cond-> {:name (short-text (:name item) 80)}
+      (and (integer? (:count item)) (pos? (:count item))) (assoc :count (:count item))
+      (and (number? (:durability item)) (not (neg? (:durability item)))) (assoc :durability (:durability item)))))
+
+(defn inventory-view
+  "Read-only player inventory and worn slots, bounded to the vanilla player-window capacity."
+  [eng]
+  (if (core/offline? eng)
+    {:ok false :reason :offline}
+    (let [self (js->clj (.self (:primitives eng)) :keywordize-keys true)
+          all-stacks (or (:inventory self) [])
+          stacks (->> all-stacks (take inventory-stack-limit) (keep inventory-stack) vec)
+          equipment (into {} (keep (fn [slot]
+                                     (when-let [item (equipment-item (get-in self [:equipment slot]))]
+                                       [slot item]))) equipment-slots)]
+      (cond-> {:ok true :inventory stacks}
+        (seq equipment) (assoc :equipment equipment)
+        (> (count all-stacks) inventory-stack-limit) (assoc :more? true)))))
 
 (defn bounded-value
   "A small EDN-safe projection for user-supplied job args/specs. Shared budget bounds total nodes."
@@ -273,6 +302,10 @@
 
                         (and (= method "GET") (= pathname "/snapshot"))
                         (respond! res 200 (snapshot eng))
+
+                        (and (= method "GET") (= pathname "/inventory"))
+                        (let [view (inventory-view eng)]
+                          (respond! res (if (:ok view) 200 503) view))
 
                         (and (= method "GET") (= pathname "/status"))
                         (let [limit (number-param (.-searchParams url) "limit" status-job-limit 32)]
