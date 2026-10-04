@@ -1099,6 +1099,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
         emit({ kind: 'spawned' })
         if (!respawning) return
         respawning = false
+      whisper: (from, message) => { if (from !== target.username) emit({ kind: 'whisper', from, message }) },
         settleFromNow()
         emit({ kind: 'respawned', pos: here(), dimension: target.game?.dimension })
       },

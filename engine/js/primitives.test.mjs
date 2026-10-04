@@ -370,6 +370,15 @@ const withBot = (patch, spec = world) => {
   patch(bot)
   return createPrimitivesFromBot(bot, { timeScale: SCALE })
 }
+test('body events: a whisper from another player is recorded, one from the body itself is not', () => {
+  const { bot, p } = rig(world)
+  const seen = []
+  p.onBodyEvent(e => seen.push(e))
+  bot.emit('whisper', 'Ann', 'psst')
+  bot.emit('whisper', 'Stub', 'echo')
+  assert.deepEqual(seen, [{ kind: 'whisper', from: 'Ann', message: 'psst' }])
+})
+
 const keysFor = metadataKeys => ({ entitiesByName: { player: { metadataKeys } } })
 
 test('self().onGround follows entity.onGround', () => {
