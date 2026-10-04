@@ -9,6 +9,7 @@ import { fakeUnequip } from './fake-unequip.mjs'
 import { fakeTrade } from './fake-trade.mjs'
 import { fakeUseOn } from './fake-use-on.mjs'
 import { dragLeashed } from './fake-leash.mjs'
+import { temptFollow } from './fake-tempt.mjs'
 import { fakeSteer, fakePathWorld } from './fake-steer.mjs'
 import { fakeFurnace, advanceFurnaces } from './fake-furnace.mjs'
 import { fakeEnchant } from './fake-enchant.mjs'
@@ -199,11 +200,13 @@ function defaultActs (s, emit) {
       if (d > maxDistance) {
         s.self.pos = stepToward(s.self.pos, pos, maxDistance)
         dragLeashed(s)
+        temptFollow(s)
         return { status: 'partial', pos: { ...s.self.pos }, distance: dist(s.self.pos, pos) }
       }
       s.self.pos = { ...pos }
       settle()
       dragLeashed(s)
+      temptFollow(s)
       return { status: 'arrived', pos: { ...pos }, distance: 0 }
     },
 
@@ -415,6 +418,7 @@ function defaultActs (s, emit) {
     },
 
     async wait () {
+      temptFollow(s)
       return { status: 'ok' }
     }
   }

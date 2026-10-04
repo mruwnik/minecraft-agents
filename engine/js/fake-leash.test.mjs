@@ -19,9 +19,19 @@ test('a lead on a cow marks it leashed to the body, the entities reading shows i
 test('a led animal follows the body when it walks', async () => {
   const p = fake(fenced)
   await p.interact('t', { id: 1, item: 'lead' })
-  await p.moveTo('t', { pos: at(30, 64, 0), range: 1 })
-  assert.equal(Math.hypot(cowOf(p).pos.x - 30, cowOf(p).pos.z), 2)
+  await p.moveTo('t', { pos: at(-30, 64, 0), range: 1 })
+  assert.equal(Math.hypot(cowOf(p).pos.x + 30, cowOf(p).pos.z), 2)
   assert.equal(cowOf(p).leashedToMe, true)
+})
+
+test('a led animal is dragged in a straight line: a fence or a gate, open or shut, stops it on its side', async () => {
+  for (const [label, block, state] of [['fence', 'oak_fence', {}], ['shut gate', 'oak_fence_gate', { open: false }], ['open gate', 'oak_fence_gate', { open: true }]]) {
+    const p = fake({ ...fenced, blocks: { '5,64,0': block }, states: { '5,64,0': state } })
+    await p.interact('t', { id: 1, item: 'lead' })
+    await p.moveTo('t', { pos: at(30, 64, 0), range: 1 })
+    assert.ok(cowOf(p).pos.x < 5 && cowOf(p).pos.x > 4, `${label}: at ${cowOf(p).pos.x}`)
+    assert.equal(cowOf(p).leashedToMe, true, label)
+  }
 })
 
 test('a lead on a snapping animal breaks on the walk and drops as an item', async () => {

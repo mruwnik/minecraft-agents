@@ -51,6 +51,17 @@
           (is (= 1 (:leads (done-event s))))
           (is (empty? (events-of s :unleash.gave-up))))))))
 
+(deftest a-lead-picked-up-at-once-counts-as-collected
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {} {:inventory [{:name "lead" :count 2}] :entities [(led 1 3 {:pickup true})]} 6))]
+          (is (finished? s))
+          (is (= 0 (lead-items s)) "nothing lay on the ground")
+          (is (= 3 (count-of s "lead")))
+          (is (= 1 (:collected (done-event s))))
+          (is (= 3 (:leads (done-event s)))))))))
+
 (deftest waits-for-the-lead-to-show-before-picking-up
   (async done
     (tu/run-async done

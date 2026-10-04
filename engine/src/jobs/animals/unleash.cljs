@@ -21,7 +21,7 @@
   (:failed). Unless :collect is false, it then waits 0.8 s for the drops to show and runs jobs.forestry.collect-drops
   for the leads in radius and ends. Done (info unleash.done, and a warn
   unleash.gave-up with the reason unless it is :unleashed; hands over {:reason
-  :freed [keys] :given-up {key reason} :collected n :leads carried-at-the-end}) with :reason :unleashed
+  :freed [keys] :given-up {key reason} :collected n :leads carried-at-the-end}, :collected the leads gained since the first round, also one picked up the moment it dropped) with :reason :unleashed
   when some animal was freed, :timeout after :timeout-s from the first round
   (without collecting), and, with nothing freed, :unreachable when one was
   given up on as unreachable, :refused when others were given up on, else
@@ -46,15 +46,20 @@
 
 (defn check [_c] true)
 
+(defn leads-carried [c]
+  (reduce + (map :count (filter #(= "lead" (:name %)) (u/inventory (:primitives c))))))
+
 (defn finish!
-  "Emit the outcome, hand it to the parent and end the job."
+  "Emit the outcome, hand it to the parent and end the job. :collected is the leads gained since the first round,
+  so a lead picked up the moment it dropped counts too."
   [c reason]
   (let [m (ctx/mem c)
+        leads (leads-carried c)
         result {:reason reason
                 :freed (vec (:freed m))
                 :given-up (:given-up m {})
-                :collected (:collected m 0)
-                :leads (reduce + (map :count (filter #(= "lead" (:name %)) (u/inventory (:primitives c)))))}]
+                :collected (max 0 (- leads (:leads-at-start m leads)))
+                :leads leads}]
     (ctx/emit! c :unleash.done :info (assoc result :text (str "unleash done: " (name reason) ", freed " (count (:freed m)))))
     (when (not= :unleashed reason)
       (ctx/emit! c :unleash.gave-up :warn {:reason reason :text (str "unleashing stopped: " (name reason))}))
@@ -186,13 +191,14 @@
   (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius (:radius (:args c)) :filter ["lead"]}))]
     (if-not (= :done r)
       :continue
-      (do (ctx/update-mem! c assoc :collected (:collected (ctx/child-result c :collect) 0))
-          (finish! c (:reason (ctx/mem c)))))))
+      (finish! c (:reason (ctx/mem c))))))
 
 (defn ^:async round [c]
   (let [now (ctx/now c)
         {:keys [timeout-s]} (:args c)]
-    (ctx/update-mem! c update :started #(or % now))
+    (ctx/update-mem! c #(-> %
+                            (update :started (fn [t] (or t now)))
+                            (update :leads-at-start (fn [n] (or n (leads-carried c))))))
     (let [m (ctx/mem c)
           cands (candidates c)]
       (cond

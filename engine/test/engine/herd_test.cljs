@@ -20,7 +20,12 @@
 (defn cow [id x z & [more]]
   (merge {:id id :uuid (str "u" id) :name "cow" :kind "passive" :pos {:x x :y 64 :z z}} more))
 
-(defn leads [n] [{:name "lead" :count n}])
+(def wheat {:name "wheat" :count 4})
+
+(defn leads
+  "n leads and the cows' food."
+  [n]
+  [{:name "lead" :count n} wheat])
 
 (defn world
   "The pen with its gate shut, the body west of it; more blocks and states merged over, other world keys passed on."
@@ -60,13 +65,14 @@
 (defn count-of [{:keys [p]} item]
   (reduce + (map :count (filter #(= item (:name %)) (js->clj (.-inventory (.self p)) :keywordize-keys true)))))
 (defn clicked-ids [s] (set (map #(.. % -args -id) (calls-of s "interact"))))
+(defn held [{:keys [p]}] (.-held (.self p)))
 
 (deftest brings-only-the-missing-ones-and-shuts-the-gate-behind-them
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:target 3}
-                                 {:entities [(cow 9 13 3) (cow 1 4 3) (cow 2 6 4) (cow 3 7 9)]}
+                                 {:entities [(cow 9 13 3) (cow 1 4 3) (cow 2 6 4) (cow 3 -8 12)]}
                                  40))
               e (done-event s)]
           (is (finished? s))
@@ -80,7 +86,21 @@
           (is (not (gate-open? s)) "the gate is shut")
           (is (< (self-x s) 10) "the body ends outside the pen")
           (is (= 2 (count-of s "lead")) "both leads are back")
+          (is (= 4 (count-of s "wheat")) "the lure costs no food")
+          (is (nil? (held s)) "the food is put away")
           (is (empty? (events-of s :herd.gave-up))))))))
+
+(deftest the-pens-own-animals-stay-in-while-the-gate-stands-open
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:target 3}
+                                 {:entities [(cow 8 11 3) (cow 9 11 2) (cow 1 4 3)]}
+                                 40))
+              e (done-event s)]
+          (is (= :brought (:reason e)))
+          (is (every? in-pen? [(cow-of s 8) (cow-of s 9) (cow-of s 1)]))
+          (is (not (gate-open? s))))))))
 
 (deftest a-gate-standing-open-at-the-start-is-used-and-shut
   (async done
@@ -126,7 +146,8 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[label w reason]
-                [["no lead" {:inventory [] :entities [(cow 1 4 3)]} :no-lead]
+                [["no lead" {:inventory [wheat] :entities [(cow 1 4 3)]} :no-lead]
+                 ["no food" {:inventory [{:name "lead" :count 2}] :entities [(cow 1 4 3)]} :no-food]
                  ["no cow outside" {:entities [(cow 9 13 3)]} :none]
                  ["a gap in the fence" {:entities [(cow 1 4 3)] :blocks {"16,64,3" "air"}} :leaky]
                  ["no gate" {:entities [(cow 1 4 3)] :blocks {gate-key "oak_fence"}} :no-gate]

@@ -6,40 +6,51 @@
             [engine.jobs.util :as u]))
 
 (def doc
-  "Bring grown animals of the mob type :mob into the pen :box on leads until it
-  holds :target of them: one convergent run that can be repeated. The check
-  declines while the box already holds :target adults (a cheap count by the
-  box's bounds), so a run with nothing to do never starts; a started run always
-  passes, so a cut job resumes. A body further than 16 blocks from the pen first
-  walks within 12 of it (a pen out of sight is never counted). The pen is read
-  with engine.jobs.pen over :box: an unreadable one ends :no-pen, a leak other
-  than the chosen gate standing open ends :leaky (with :leaks). The gate is :gate,
+  "Bring grown animals of the mob type :mob into the pen :box until it holds
+  :target of them: leads bring them to the gate, their food lures them through
+  it. One convergent run that can be repeated. The check declines while the box
+  already holds :target adults (a cheap count by the box's bounds), so a run
+  with nothing to do never starts; a started run always passes, so a cut job
+  resumes. A body further than 16 blocks from the pen first walks within 12 of
+  it (a pen out of sight is never counted). The pen is read with
+  engine.jobs.pen over :box: an unreadable one ends :no-pen, a leak other than
+  the chosen gate standing open ends :leaky (with :leaks). The gate is :gate,
   else the pen's gate nearest the body, and must have pen floor on one side and
   free floor straight across (a corner gate has not): else :no-gate. Adults
   standing on the pen's cells count; when they already make :target it ends
-  :full. Then, one per round, jobs.animals.leash (radius :radius) puts a lead on
-  the nearest adult outside the pen (babies, animals in the pen and those given
-  up on are skipped) until the missing number is led or leashing ends (:no-lead,
-  :none, :unreachable ...: with nobody led that is the reason, else the run goes
-  on with fewer). The body walks to the cell outside the gate, opens it (jobs.access.toggle,
-  one empty-hand click read back; :gate-stuck when it did not open), walks to the pen cell
-  farthest from the gate, waits up to :settle-s for every led animal to stand on
-  a pen cell, unleashes each (jobs.animals.unleash by uuid, leads picked up),
-  walks back to the cell inside the gate, opens it again if it was shut
-  meanwhile, walks out and shuts it from outside: the body ends outside, the gate
-  shut. Before each step until the release, an animal seen off this body's lead
-  is given up on (:lead-broke), one not seen at all too (:lost); when that leaves
-  nobody led, the leads lying within 8 are picked up (jobs.forestry.collect-drops)
-  and leashing starts again once, with the :lead-broke ones forgiven; a second
-  time ends :lost. :timeout after :timeout-s from the first round, counted until
-  the release. A run that gives up with animals on the lead unleashes them where
-  it stands first. Done (info herd.done, and one warn herd.gave-up unless the
-  reason is :brought or :full; hands over {:reason :inside n :target :brought
-  [keys] :given-up {key reason} :gate pos}, :inside counted on the pen's cells at
-  the end) with :reason :brought (the pen holds :target), :short (fewer: some
-  came, or none and no other reason), :full, :no-pen, :leaky, :no-gate,
-  :unreachable (a walk was blocked), :gate-stuck, :lost, :timeout, or the leash
-  reason when nobody could be led.")
+  :full. With no breeding food of :mob carried (engine.jobs.animals/breeding-food)
+  it ends :no-food before any lead is used. Then, one per round,
+  jobs.animals.leash (radius :radius) puts a lead on the nearest adult outside
+  the pen (babies, animals in the pen and those given up on are skipped) until
+  the missing number is led or leashing ends (:no-lead, :none, :unreachable
+  ...: with nobody led that is the reason, else the run goes on with fewer).
+  The body walks to the cell outside the gate and, the gate still shut, lets
+  every led animal go there (jobs.animals.unleash by uuid, leads picked up): a
+  dragged animal does not path and jams in a 1-wide gate. It opens the gate
+  (jobs.access.toggle, one empty-hand click read back; :gate-stuck when it did
+  not open), walks to the lure cell (the pen cell farthest from the gate within
+  5 of it) and only there takes the food in hand: the animals let go walk in by
+  their own path and stop about 2.5 short of the body, inside; the pen's own
+  animals are drawn inwards, never to an open gate with the food outside. It
+  waits up to :settle-s for every led animal to stand on a pen cell, empties
+  the hand (unequip; with no free slot one warn herd.hand-full and it goes on),
+  walks to the cell inside the gate, opens it again if it was shut meanwhile,
+  walks out and shuts it from outside: the body ends outside, the gate shut,
+  the hand empty. Animals of :mob within about 10 blocks that were not led may
+  follow the food in too. Before each step until the gate, an animal seen off
+  this body's lead is given up on (:lead-broke), one not seen at all too
+  (:lost); when that leaves nobody led, the leads lying within 8 are picked up
+  (jobs.forestry.collect-drops) and leashing starts again once, with the
+  :lead-broke ones forgiven; a second time ends :lost. :timeout after
+  :timeout-s from the first round, counted until the gate. A run that gives up
+  with animals on the lead unleashes them where it stands first. Done (info
+  herd.done, and one warn herd.gave-up unless the reason is :brought or :full;
+  hands over {:reason :inside n :target :brought [keys] :given-up {key reason}
+  :gate pos}, :inside counted on the pen's cells at the end) with :reason
+  :brought (the pen holds :target), :short (fewer: some came, or none and no
+  other reason), :full, :no-pen, :leaky, :no-gate, :no-food, :unreachable (a
+  walk was blocked), :gate-stuck, :lost, :timeout, or the leash reason when
+  nobody could be led.")
 
 (def args
   {:mob {:doc "the animal's name, such as \"cow\"" :default nil}
@@ -47,8 +58,8 @@
    :target {:doc "grown animals of :mob the pen should hold" :default 2}
    :gate {:doc "the fence gate {:x :y :z} to bring them through; the pen's usable gate nearest the body when nil" :default nil}
    :radius {:doc "animals within this many blocks of the body are fetched" :default 24}
-   :settle-s {:doc "seconds to wait at the far side of the pen for the led animals to come in" :default 8}
-   :timeout-s {:doc "seconds from the first round until the job gives up, counted until the release" :default 300}})
+   :settle-s {:doc "seconds to wait at the lure cell, food in hand, for the animals let go to walk in" :default 20}
+   :timeout-s {:doc "seconds from the first round until the job gives up, counted until the gate" :default 300}})
 
 (def near-pen 16)
 (def approach-range 12)
@@ -56,11 +67,12 @@
 (def release-radius 8)
 (def regather-radius 8)
 (def settle-ms 500)
+(def lure-reach 5)
 (def orthogonal [[1 0] [-1 0] [0 1] [0 -1]])
 
 (def leading
   "The phases in which animals are on the lead: watched before each step, bound by :timeout-s."
-  #{:leash :to-gate :open-in :in :settle})
+  #{:leash :to-gate :at-gate})
 
 (defn cell [{:keys [x y z]}] [x y z])
 
@@ -185,12 +197,16 @@
          (sort-by #(u/dist here (:gate %)))
          first)))
 
-(defn deepest
-  "The pen cell farthest from gate g: led animals stop behind the body, so they end inside, not in the gateway."
+(defn lure-cell
+  "The pen cell farthest from gate g within lure-reach of it: lured animals stop about 2.5 short of the body, so
+  they stand inside, and the ones let go outside the gate stay within the food's pull of about 10."
   [inside g]
   (let [[gx _ gz] (cell g)
         far (fn [[x _ z]] (+ (* (- x gx) (- x gx)) (* (- z gz) (- z gz))))]
-    (first (sort-by (juxt (comp - far) identity) inside))))
+    (->> inside
+         (filter #(<= (far %) (* lure-reach lure-reach)))
+         (sort-by (juxt (comp - far) identity))
+         first)))
 
 (defn other-leaks
   "The leaks of the pen but the chosen gate standing open."
@@ -198,7 +214,7 @@
   (filterv #(not= (cell (:pos %)) (cell g)) (:leaks answer)))
 
 (defn ^:async survey! [c]
-  (let [{:keys [box target]} (:args c)
+  (let [{:keys [mob box target]} (:args c)
         centre (box-centre box)]
     (if (> (u/dist (u/self-pos c) centre) near-pen)
       (if (= :blocked (await (u/walk-near! c centre approach-range)))
@@ -213,8 +229,9 @@
           (nil? chosen) (finish! c :no-gate)
           (seq leaks) (finish! c :leaky {:leaks (vec (take 12 leaks))})
           (>= inside target) (finish! c :full)
+          (nil? (animals/food-carried (:primitives c) mob)) (finish! c :no-food)
           :else (do (ctx/update-mem! c assoc :phase :leash :gate gate :inside-cell (cell-pos in) :outside-cell (cell-pos out)
-                                     :deep (cell-pos (deepest (:inside answer) gate)) :wanted (- target inside))
+                                     :lure (cell-pos (lure-cell (:inside answer) gate)) :wanted (- target inside))
                     :continue))))))
 
 (defn ^:async set-gate!
@@ -290,8 +307,16 @@
   (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius regather-radius :filter ["lead"]}))]
     (if (= :done r) (set-phase! c :leash) :continue)))
 
-(defn ^:async settle!
-  "Wait at the far side until every led animal stands on a pen cell, at most :settle-s."
+(defn ^:async hold-food!
+  "Take the mob's food in hand unless it is there already (a resumed run may have lost it)."
+  [c]
+  (let [p (:primitives c)
+        food (animals/food-carried p (:mob (:args c)))]
+    (when (and food (not= food (.-held (.self p))))
+      (await (ctx/act c :equip #js {:item food})))))
+
+(defn ^:async lure!
+  "Food in hand at the lure cell, wait until every led animal stands on a pen cell, at most :settle-s."
   [c]
   (let [m (ctx/mem c)
         now (ctx/now c)
@@ -299,10 +324,19 @@
         in? #(some->> (animal-now c %) .-pos u/pos-of (pen/in-pen? answer))
         waited (- now (:settle-from m now))]
     (if (or (every? in? (:led m)) (>= waited (* 1000 (:settle-s (:args c)))))
-      (set-phase! c :release)
+      (set-phase! c :calm)
       (do (ctx/update-mem! c update :settle-from #(or % now))
+          (await (hold-food! c))
           (await (ctx/act c :wait #js {:ms settle-ms}))
           :continue))))
+
+(defn ^:async calm!
+  "Put the food away so nothing follows the body out; a hand that cannot be emptied is warned about once."
+  [c]
+  (let [r (await (ctx/act c :unequip #js {}))]
+    (when (= "full" (.-status r))
+      (ctx/emit! c :herd.hand-full :warn {:text "no free slot: the food stays in hand on the way out"}))
+    (set-phase! c :to-gate-in)))
 
 ;; ------------------------------------------------------------------ the round
 
@@ -312,11 +346,14 @@
       :survey (await (survey! c))
       :regather (await (regather! c))
       :leash (await (leash-next! c))
-      :to-gate (await (walk-to! c (:outside-cell m) 0 :open-in))
+      :to-gate (await (walk-to! c (:outside-cell m) 0 :at-gate))
+      ;; a round of its own, so leads that broke on the walk are seen before the release
+      :at-gate (set-phase! c :release-out)
+      :release-out (await (release-step! c #(set-phase! c :open-in)))
       :open-in (await (set-gate! c :open :in))
-      :in (await (walk-to! c (:deep m) 1 :settle))
-      :settle (await (settle! c))
-      :release (await (release-step! c #(set-phase! c :to-gate-in)))
+      :in (await (walk-to! c (:lure m) 0 :lure))
+      :lure (await (lure! c))
+      :calm (await (calm! c))
       :to-gate-in (await (walk-to! c (:inside-cell m) 0 :open-out))
       :open-out (await (set-gate! c :open :leave))
       :leave (await (walk-to! c (:outside-cell m) 0 :shut))
