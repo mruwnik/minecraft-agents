@@ -727,6 +727,22 @@
           (is (= ["j1" "j2" "j2" "j1"] (ran seen)))
           (is (some #(= :cancelled (:kind %)) @seen)))))))
 
+(deftest front-without-hold-only-reorders-the-list-the-scan-starts-after-the-running-job
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup)
+              release (do (core/submit! eng '(walk {:pos {:x 5 :y 64 :z 0}}) {})
+                          (.hold (.-world p) "moveTo"))]
+          (let [walking (core/tick! eng)
+                plain (core/submit! eng '(count) {})
+                front (core/submit! eng '(count) {:front? true})]
+            (is (= [front "j1" plain] (listed eng)) "the front job heads the list")
+            (release)
+            (await walking)
+            (is (= [front plain] (listed eng)) "the walk is done")
+            (is (= plain (core/choose-listed eng)) "round-robin goes on after the finished job, so the front job waits its turn")))))))
+
 ;; ---------------------------------------------------------------- body events and restart
 
 (deftest body-events-become-records

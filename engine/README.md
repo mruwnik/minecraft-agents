@@ -788,7 +788,8 @@ eng id)`, true when `id` was marked failed) clears a failed mark and emits
 `job.retried`; `do-now!` (agent) cuts the
 running listed job and submits at the front with `:hold? true`.
 `submit!` opts: `:hold?`, `:backoff` (a config map or `false`, over any
-`(backoff cfg e)` wrapper), `:front?`, `:by`.
+`(backoff cfg e)` wrapper), `:front?` (puts the job first in the list; without `:hold?` the round-robin still
+continues after the job that ran last, so a front job runs after the jobs behind the running one, not next), `:by`.
 
 The list, register and changes are written to `engine.edn` on every change;
 memory as above. On boot both are reloaded, reflex instances are dropped, the
