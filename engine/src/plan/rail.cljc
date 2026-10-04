@@ -192,10 +192,9 @@
 ;; ---------------------------------------------------------------- layout
 
 (def power-every
-  "Default cells between single lit powered rails on a spaced line. PROVISIONAL: the live measurements have no row for
-  single powered rails yet (only for groups of 3, which held 0.40 blocks per tick at a pitch of 24); 14 is the
-  owner's 10-15 cells until a single-rail row is measured."
-  14)
+  "Default cells between single lit powered rails on a spaced line. Measured on the server: one lit powered rail every
+  34 cells holds 0.40 blocks per tick on a long run, 35 fails, and 34 sits 0.003 from the edge; 30 keeps a margin."
+  30)
 
 (def reach "Powered rails one source lights each way along its run (measured)." 8)
 

@@ -5,6 +5,7 @@
             [engine.core :as core]
             [engine.harvest-test :as h]
             [engine.takeover :as takeover]
+            [jobs.build.rail-line :as rail-line]
             [engine.test-util :as tu]
             [plan.rail :as rail]
             [plan.shape :as shape]))
@@ -82,7 +83,8 @@
     (core/submit! eng (list job args) {})
     (dotimes [_ 4] (swap! h/clock + 700) (await (core/tick! eng)))
     {:places (count (h/calls p "place"))
-     :declined (mapv #(select-keys % [:plan :reason :why :refused]) (h/events-of seen :rail-build.declined))
+     :declined (mapv #(select-keys % [:plan :reason :why :refused :cells]) (h/events-of seen :rail-build.declined))
+     :texts (mapv :text (h/events-of seen :rail-build.declined))
      :short (mapv :short (h/events-of seen :rail-build.short))
      :warns (count (filter #(re-find #"^(rail-)?build\." (name (:kind %))) @seen))}))
 
@@ -131,7 +133,77 @@
         (let [r (await (declines {:inventory (kit {}) :blocks (built-world (line-plan {}) "stone")
                                   :self {:pos {:x 0 :y 64 :z 3}}}
                                  {"line" (line-plan {})} {:plan "line"}))]
-          (is (= {:places 0 :declined [] :short [] :warns 0} r)))))))
+          (is (= {:places 0 :declined [] :texts [] :short [] :warns 0} r)))))))
+
+;; ---------------------------------------------------------------- redstone blocks on ground that is there
+
+(deftest a-redstone-block-bed-on-natural-ground-declines-once-naming-the-cells-and-what-would-work
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [opts {:power :block}
+              r (await (declines (spec "stone" 63 (kit opts)) {"line" (line-plan opts)} {:plan "line"}))]
+          (is (= [{:plan "line" :reason :source-blocked :cells [[3 63 0] [25 63 0]]}] (:declined r)))
+          (is (= 1 (:warns r)))
+          (is (= 0 (:places r)))
+          (is (every? #(re-find % (first (:texts r))) [#"\[3 63 0\]" #"\[25 63 0\]" #":torch" #":lever" #"raised"])))))))
+
+(deftest a-redstone-block-bed-on-a-raised-line-is-not-declined
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [opts {:power :block}
+              r (await (declines (spec "stone" 62 (kit opts)) {"line" (line-plan opts)} {:plan "line"}))]
+          (is (= [] (:declined r)))
+          (is (pos? (:places r))))))))
+
+;; ---------------------------------------------------------------- build.wrong
+
+(deftest sturdy-natural-ground-under-the-line-is-no-wrong-block-of-the-builder
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (assoc (ground "grass_block" 63) (h/cell-key 5 63 0) "farmland")
+              [result seen] (await (build! {:inventory (kit {}) :blocks world :self {:pos {:x 0 :y 64 :z 3}}}
+                                           {"line" (line-plan {})} {}))
+              [wrong] (h/events-of seen :build.wrong)]
+          (is (= [[5 63 0]] (mapv :pos (:cells wrong))) "only the bed cell that is not sturdy is wrong")
+          (is (= 1 (count (h/events-of seen :build.wrong))))
+          (is (= [[5 63 0]] (mapv :pos (get-in result [:built :wrong])))))))))
+
+(deftest ground-that-is-sturdy-everywhere-gives-no-build-wrong-notice
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[_ seen] (await (build! (spec "grass_block" 63 (kit {})) {"line" (line-plan {})} {}))]
+          (is (empty? (h/events-of seen :build.wrong))))))))
+
+;; ---------------------------------------------------------------- cells nobody has seen
+
+(defn missing-cell [want item] {:answer :missing :want want :item item :found "air"})
+(def unseen-cell (fn [want item] {:answer :unknown :want want :item item :found nil}))
+(def fill [:any "cobblestone" "dirt"])
+
+(deftest unseen-cells-are-owed-fill-only-up-to
+  (let [cells [(missing-cell fill "cobblestone") (missing-cell fill "dirt")
+               (unseen-cell fill "cobblestone") (unseen-cell fill "cobblestone")]]
+    (is (= {"cobblestone | dirt" 1} (rail-line/short-of cells {"cobblestone" 1})) "seen cells are owed for sure")
+    (is (= {"cobblestone | dirt" 3} (rail-line/up-to-of cells {"cobblestone" 1})) "with the unseen ones: up to")
+    (is (= {} (rail-line/short-of cells {"cobblestone" 2})))
+    (is (= {"cobblestone | dirt" 2} (rail-line/up-to-of cells {"cobblestone" 2})))
+    (is (= {} (rail-line/up-to-of cells {"cobblestone" 4})))))
+
+;; the two buffer blocks are seen empty and carried; the 11 bed cells at the far end are not seen
+(deftest a-far-end-nobody-has-seen-does-not-hold-the-line-back
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [far (mapv #(str % ",63,0") (range 20 31))
+              world {:inventory (kit {} {"cobblestone" (- 2 (:fill (:materials (rail/layout from to {}))))}) :blocks (ground "stone" 63) :unloaded far
+                     :self {:pos {:x 0 :y 64 :z 3}}}
+              r (await (declines world {"line" (line-plan {})} {:plan "line"}))]
+          (is (= [] (:short r)))
+          (is (pos? (:places r))))))))
 
 ;; ---------------------------------------------------------------- a line broken after the build
 
@@ -181,6 +253,6 @@
           (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
           (dotimes [_ 120] (swap! h/clock + 700) (await (core/tick! eng)))
           (is (every? #(= "rail" (h/block-at p % 64 0)) [0 1 28 29]))
-          (is (every? #(= "powered_rail" (h/block-at p % 64 0)) [2 3 4 5 19 24 25 26 27]))
+          (is (every? #(= "powered_rail" (h/block-at p % 64 0)) [2 3 4 5 24 25 26 27]))
           (is (= 1 (count (h/events-of seen :rail-build.done))))
           (is (empty? (:list (core/state eng)))))))))

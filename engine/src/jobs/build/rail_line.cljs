@@ -10,7 +10,7 @@
   "Build the rail line a plan of the body's world wants (:plan, optionally only its :part) and prove a ridden cart can
   run it. The plan's rail cells (wants naming a *rail block) must form one chain (plan.rail/line); plan.rail/layout
   writes such plans. Phase :build runs jobs.build.from-plan on the plan as a child (its args :reach :give-up :accept
-  pass through; zones, other plans' footprints, cuts and resuming are its rules; it places lowest first, so beds and
+  pass through, and :sturdy-ground is set: a sturdy block on the ground of the line is no wrong block; zones, other plans' footprints, cuts and resuming are its rules; it places lowest first, so beds and
   redstone blocks go in before the rails on them). Slice 1: straight flat lines only, as from-plan places in no
   particular order and stands at the body's feet height. Phase :switch then switches on every planned lever that is
   off (jobs.access.toggle as a child, once per lever). Phase :check runs plan.rail/judge-line over the world. Any
@@ -21,9 +21,11 @@
   falling beds (gravel, sand). The check declines with one rail-build.declined warn (:plan :reason) while the plan is
   missing, not :active or unreadable (:plan), its rail cells are not one chain (:not-a-line, :why :gap|:branch|
   :two-chains|:loop|:no-rails), no zone list has been read (:no-zones), or a cell still to build is refused by the
-  access rules (:refused, the whole list [{:pos :reason :zone|:plan}]); with :all-carried, while the items for every
-  cell still to build are not all carried (ONE warn rail-build.short {item n}; an :any want counts every choice
-  carried; unseen cells count as missing). Without :all-carried it builds what is carried, and with nothing to build
+  access rules (:refused, the whole list [{:pos :reason :zone|:plan}]), or a cell wanting a redstone block holds
+  another block (:source-blocked, the :cells; the builder never digs, so on natural ground :power :block cannot be
+  built: use :torch or :lever, or a raised bed); with :all-carried, while the items for every cell still to build
+  are not all carried (ONE warn rail-build.short {item n}; an :any want counts every choice carried; only cells
+  seen empty are owed, and the warn's :up-to {item n} counts the cells nobody has seen as well). Without :all-carried it builds what is carried, and with nothing to build
   it goes straight to the proof. It declines without a warn while the line is sound and nothing is missing. Once
   begun the check stays true; a restart resumes in the phase it was in (the world is the memory).")
 
@@ -94,7 +96,7 @@
     (mapv #(placement/item-of (if (string? %) % (:block %))) (rest want))
     [item]))
 
-(defn short-of
+(defn lacking
   "{item n} still lacking for cells, carried {item n}; an :any want is keyed by its text and counts every choice."
   [cells carried]
   (into (sorted-map)
@@ -103,19 +105,44 @@
                   (when (pos? n) [k n]))))
         (group-by #(if (vector? (:want %)) (shape/want-text (:want %)) (:item %)) cells)))
 
+(defn short-of
+  "{item n} certainly lacking: only cells seen to be empty are owed; a cell nobody has seen may hold ground already."
+  [cells carried]
+  (lacking (filter #(= :missing (:answer %)) cells) carried))
+
+(defn up-to-of
+  "{item n} lacking if every cell nobody has seen turns out to be empty as well (counted with the seen ones)."
+  [cells carried]
+  (lacking cells carried))
+
+(defn blocked-sources
+  "The cells wanting a redstone block that hold another block (the builder never digs), in order."
+  [cells]
+  (vec (sort (keep #(when (and (= "redstone_block" (shape/want-block (:want %))) (= :wrong (:answer %))) (:pos %))
+                   cells))))
+
 (defn ready?
-  "Whether a line that is not sound may be begun: nothing refused, and with :all-carried everything carried."
+  "Whether a line that is not sound may be begun: no redstone block cell taken by ground, nothing refused, and with
+  :all-carried everything certainly needed carried."
   [c cells]
   (let [{:keys [plan part all-carried]} (:args c)
+        blocked (blocked-sources cells)
         no (refused c cells)
-        short (short-of (build/owed cells) (build/carried-counts (:primitives c)))]
+        owed (build/owed cells)
+        carried (build/carried-counts (:primitives c))
+        short (short-of owed carried)]
     (cond
+      (seq blocked) (do (decline! c {:reason :source-blocked :cells blocked
+                                     :text (str "a redstone block cannot go at " (str/join ", " (map pr-str blocked))
+                                                ": the cell holds ground and this job never digs; use :power :torch or "
+                                                ":lever, or lay the line on a raised bed")})
+                        false)
       (seq no) (do (decline! c {:reason :refused :refused no
                                 :text (str "cells refused: " (str/join ", " (map #(str (pr-str (:pos %)) " " (name (:reason %))) no)))})
                    false)
       (and all-carried (seq short))
       (do (ctx/warn-once! c [plan :short] :rail-build.short
-                          {:plan plan :part part :short short
+                          {:plan plan :part part :short short :up-to (up-to-of owed carried)
                            :text (str "rail build of " plan " waits: short of " (build/shortage-text short))})
           false)
       :else true)))
@@ -133,7 +160,7 @@
 ;; ------------------------------------------------------------------ rounds
 
 (defn build-args [c]
-  (select-keys (:args c) [:plan :part :reach :give-up :accept]))
+  (assoc (select-keys (:args c) [:plan :part :reach :give-up :accept]) :sturdy-ground true))
 
 (defn nothing-to-place?
   "Whether the builder has nothing it could place with what is carried."

@@ -5,6 +5,7 @@
             [engine.jobs.access :as access]
             [engine.jobs.util :as u]
             [engine.placement :as placement]
+            [plan.rail :as rail]
             [plan.shape :as shape]))
 
 (def doc
@@ -33,7 +34,9 @@
   footprint, is refused for good (not retried, not counted as given up) and listed in the result's :refused
   [{:pos :reason :zone|:plan}] with one build.refused warn per reason. Water beside a cell is no obstacle by default;
   :accept names the fluid hazards taken (:fluid-adjacent water beside, :lava-adjacent lava beside), a cell with an
-  untaken one is refused as :hazard (with :hazards). The stand cell is taken at the body's feet height:
+  untaken one is refused as :hazard (with :hazards). With :sturdy-ground a sturdy block on the ground of a rail
+  line (plan.rail/ground: under every rail, the buffers and the torches) is right where the plan wants fill, and is
+  not listed :wrong. The stand cell is taken at the body's feet height:
   it assumes flat ground.")
 
 (def args
@@ -41,7 +44,8 @@
    :part {:doc "only the cells of this part" :default nil}
    :reach {:doc "cells whose centre is this close to the eye are placed without walking, in blocks" :default 4.2}
    :give-up {:doc "refused places or failed walks after which a cell is given up" :default 3}
-   :accept {:doc "fluid hazards of a cell taken: :fluid-adjacent (water beside; placing beside or into water seals and bridges), :lava-adjacent (lava beside; not taken by default: the body stands beside the cell)" :default [:fluid-adjacent]}})
+   :accept {:doc "fluid hazards of a cell taken: :fluid-adjacent (water beside; placing beside or into water seals and bridges), :lava-adjacent (lava beside; not taken by default: the body stands beside the cell)" :default [:fluid-adjacent]}
+   :sturdy-ground {:doc "a sturdy block on the ground of a rail line (plan.rail/ground) is no wrong block, whatever fill the plan wants there" :default false}})
 
 (def eye-height 1.62)
 
@@ -335,9 +339,16 @@
           (ctx/update-mem! c count-fail (:pos cell) :unreachable give-up))))
     :continue))
 
+(defn kept-ground
+  "The predicate of cells that stay unlisted as wrong: with :sturdy-ground, ground of a rail line holding a sturdy block."
+  [c cells]
+  (let [ground (when (:sturdy-ground (:args c)) (rail/ground cells))]
+    (fn [{:keys [pos]}] (and (contains? ground pos) (rail/sturdy? (world-block (:primitives c) pos))))))
+
 (defn finish! [c cells]
   (let [m (ctx/mem c)
         p (:primitives c)
+        kept? (kept-ground c cells)
         left (owed cells)
         given-up (merge (select-keys (:unplaceable m) (map :pos left)) (:given-up m {}))
         short (shortage left (carried-counts p))
@@ -345,7 +356,7 @@
                       (if-let [placed (get-in m [:misplaced pos])]
                         {:pos pos :found placed :want (shape/want-text want) :placed true}
                         {:pos pos :found found :want (shape/want-text want)}))
-                    (filter #(#{:wrong :extra} (:answer %)) cells))
+                    (filter #(and (#{:wrong :extra} (:answer %)) (not (kept? %))) cells))
         refused (->> (:refused m) (sort-by key) (mapv (fn [[pos why]] (assoc why :pos pos))))
         result {:placed (:placed m 0) :missing (mapv :pos left) :short short :given-up given-up :wrong wrong
                 :refused refused}

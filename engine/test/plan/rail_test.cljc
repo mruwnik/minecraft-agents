@@ -113,13 +113,18 @@
 
 (deftest the-spaced-line-has-a-launch-group-at-each-end-then-one-lit-rail-every-power-every-cells
   (are [opts powered] (= powered (indices-of (laid opts) "powered_rail"))
-    {} #{2 3 4 5 19 24 25 26 27}
+    {} #{2 3 4 5 24 25 26 27}
     {:power-every 6} #{2 3 4 5 11 17 23 24 25 26 27}
-    {:launch 3} #{2 3 4 18 25 26 27}
-    {:launch 5} #{2 3 4 5 6 20 23 24 25 26 27}
-    {:launch-ends :first} #{2 3 4 5 19}
+    {:launch 3} #{2 3 4 25 26 27}
+    {:launch 5} #{2 3 4 5 6 23 24 25 26 27}
+    {:launch-ends :first} #{2 3 4 5}
     {:style :all-powered} (set (range 2 28))
     {:style :all-powered :launch-ends :first} (set (range 2 28))))
+
+(deftest the-default-spacing-is-the-measured-30-cells
+  (is (= 30 rail/power-every))
+  (is (= #{2 3 4 5 35 65 94 95 96 97}
+         (indices-of (rail/layout [0 64 0] [99 64 0] {}) "powered_rail"))))
 
 (deftest every-end-is-a-buffer-and-two-normal-rails
   (are [opts] (let [chain (mapv :pos (chain-of (laid opts)))
@@ -131,10 +136,10 @@
 
 (deftest the-power-source-takes-the-place-the-option-names
   (are [opts block cells] (= cells (cells-wanting (laid opts) block))
-    {} "redstone_torch" #{[3 64 -1] [19 64 -1] [25 64 -1]}
-    {:power-side :right} "redstone_torch" #{[3 64 1] [19 64 1] [25 64 1]}
-    {:power :lever} "lever" #{[3 64 -1] [19 64 -1] [25 64 -1]}
-    {:power :block} "redstone_block" #{[3 63 0] [19 63 0] [25 63 0]}
+    {} "redstone_torch" #{[3 64 -1] [25 64 -1]}
+    {:power-side :right} "redstone_torch" #{[3 64 1] [25 64 1]}
+    {:power :lever} "lever" #{[3 64 -1] [25 64 -1]}
+    {:power :block} "redstone_block" #{[3 63 0] [25 63 0]}
     {:style :all-powered} "redstone_block" #{[10 63 0] [23 63 0]}
     {:style :all-powered :power :torch} "redstone_torch" #{[10 64 -1] [23 64 -1]}))
 
@@ -179,14 +184,15 @@
 (deftest a-line-along-z-runs-north-south-and-its-left-is-west-going-north
   (let [l (rail/layout [5 70 10] [5 70 -19] {})]
     (is (= #{:north_south} (set (map #(get-in % [:want :shape]) (chain-of l)))))
-    (is (= #{[4 70 7] [4 70 -9] [4 70 -15]} (cells-wanting l "redstone_torch")))
+    (is (= #{[4 70 7] [4 70 -15]} (cells-wanting l "redstone_torch")))
     (is (= #{[5 70 11] [5 70 -20]} (part-cells l "buffers")))))
 
 (deftest the-materials-are-counted
   (are [opts materials] (= materials (:materials (laid opts)))
-    {} {:items {"rail" 21 "powered_rail" 9 "redstone_torch" 3} :fill 37}
-    {:power :lever} {:items {"rail" 21 "powered_rail" 9 "lever" 3} :fill 37}
-    {:power :block} {:items {"rail" 21 "powered_rail" 9 "redstone_block" 3} :fill 31}
+    {} {:items {"rail" 22 "powered_rail" 8 "redstone_torch" 2} :fill 36}
+    {:power :lever} {:items {"rail" 22 "powered_rail" 8 "lever" 2} :fill 36}
+    {:power :block} {:items {"rail" 22 "powered_rail" 8 "redstone_block" 2} :fill 32}
+    {:power-every 14} {:items {"rail" 21 "powered_rail" 9 "redstone_torch" 3} :fill 37}
     {:style :all-powered} {:items {"rail" 4 "powered_rail" 26 "redstone_block" 2} :fill 32}))
 
 (deftest a-layout-is-a-good-plan-whose-planned-world-passes-the-proof
