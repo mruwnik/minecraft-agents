@@ -1,5 +1,6 @@
 (ns jobs.items.smelt
   (:require [engine.ctx :as ctx]
+            [engine.jobs.access :as access]
             [engine.jobs.util :as u]))
 
 (def doc
@@ -27,13 +28,16 @@
   out-of-fuel (leftover input is taken back), furnace-busy (the input slot
   holds another item), furnace-full, fuel-busy (the fuel slot holds another
   fuel), inventory-full (the output stays in the furnace), rejected-fuel.
-  Output found in the furnace at the start is taken and does not count.")
+  Output found in the furnace at the start is taken and does not count. A furnace in another's zone or claim that
+  does not allow :take is not touched: the round ends with reason \"refused\" (and :zones, :claims) after one
+  smelt.gave-up warn, before anything is loaded or taken (:ignore-zones? lifts it).")
 
 (def args
   {:furnace {:doc "furnace, blast furnace or smoker position {:x :y :z}" :default nil}
    :item {:doc "what to smelt; the first smeltable thing carried when nil" :default nil}
    :count {:doc "how many; all carried (at most one stack) when nil" :default nil}
-   :fuel {:doc "fuel item to load; the best carried when nil" :default nil}})
+   :fuel {:doc "fuel item to load; the best carried when nil" :default nil}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
 (def tick-ms 50)
 (def slack-ms 2000)
@@ -234,6 +238,13 @@
   (await (visit! c "take" {:output false :input true}))
   (stop! c reason))
 
+(defn refuse!
+  "End with reason \"refused\": the furnace is in another's zone or claim; one smelt.gave-up warn names them."
+  [c verdict]
+  (let [fields (access/refusal-fields [verdict])]
+    (ctx/emit! c :smelt.gave-up :warn (assoc fields :reason "refused" :text (str "smelt gave up: refused by " (access/refusal-text fields))))
+    (finish! c (select-keys fields [:zones :claims :reason]) )))
+
 (defn give-up!
   "Count a failed round in job memory: :continue until u/max-failures, then stop with the reason."
   [c reason]
@@ -319,20 +330,27 @@
               (do (ctx/emit! c :smelt.done :info {:text (str "smelted " (:got m)) :smelted (:got m)})
                   (finish! c {}))))))
 
+(defn ^:async round-at!
+  "Reach the furnace, read it, then load (first) or collect."
+  [c furnace owed?]
+  (case (await (u/walk-near! c furnace 3))
+    :partial :continue
+    :blocked (give-up! c "unreachable")
+    (let [state (await (visit! c "read" {}))]
+      (case (:status state)
+        "ok" (if (and owed? (:ready-at (ctx/mem c)))
+               (await (collect! c state))
+               (await (start! c state)))
+        "missing" (stop! c (if owed? "furnace-gone" "no-furnace"))
+        "cannot" (stop! c (if owed? "furnace-gone" "not-a-furnace"))
+        "unreachable" (give-up! c "unreachable")
+        (stop! c (str "furnace " (:status state)))))))
+
 (defn ^:async round
   "One bounded step: reach the furnace, read it, then load (first) or collect."
   [c]
   (let [furnace (:furnace (:args c))
         owed? (some? (:owed (ctx/mem c)))]
-    (case (await (u/walk-near! c furnace 3))
-      :partial :continue
-      :blocked (give-up! c "unreachable")
-      (let [state (await (visit! c "read" {}))]
-        (case (:status state)
-          "ok" (if (and owed? (:ready-at (ctx/mem c)))
-                 (await (collect! c state))
-                 (await (start! c state)))
-          "missing" (stop! c (if owed? "furnace-gone" "no-furnace"))
-          "cannot" (stop! c (if owed? "furnace-gone" "not-a-furnace"))
-          "unreachable" (give-up! c "unreachable")
-          (stop! c (str "furnace " (:status state))))))))
+    (if-let [v (access/container-refusal c :take furnace)]
+      (refuse! c v)
+      (await (round-at! c furnace owed?)))))

@@ -42,7 +42,8 @@
    :toss-below {:doc "a stack is tossed to make room only when its engine.value/item-worth is below this" :default 1}
    :swap-radius {:doc "when no slot is free, a dropped item worth more than some carried stack within this radius is swapped in" :default 8}
    :away {:doc "after tossing, walk this far away from where the items were thrown" :default 4}
-   :max-rounds {:doc "safety: give up (:declined, make-room.stalled) after this many rounds" :default 40}})
+   :max-rounds {:doc "safety: give up (:declined, make-room.stalled) after this many rounds" :default 40}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
 (def unusable-policy {:cap 5 :ttl 600000})
 
@@ -228,7 +229,8 @@
 (defn ^:async deposit!
   [c chest names keep]
   (ctx/update-mem! c assoc :acted true)
-  (let [r (await (ctx/call-child c :deposit 'jobs.storage.deposit {:chest chest :items names :keep keep}))
+  (let [r (await (ctx/call-child c :deposit 'jobs.storage.deposit
+                                   (merge (select-keys (:args c) [:ignore-zones?]) {:chest chest :items names :keep keep})))
         result (when (= :done r) (ctx/child-result c :deposit))]
     (when (:gave-up result)
       (ctx/remember! c :chest-unusable {:pos chest :reason (:reason result)} unusable-policy))

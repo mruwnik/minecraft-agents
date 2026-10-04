@@ -1,6 +1,7 @@
 (ns jobs.survival.get-food
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
+            [engine.jobs.access :as access]
             [engine.jobs.util :as u]
             [engine.triggers.hungry :as hungry]
             [jobs.survival.eat :as eat]))
@@ -24,7 +25,9 @@
   eats and still does step 3 (what is in sight), but does not walk to
   remembered sources it already knew when it gave up (one learned since is
   tried first), say food.none or write :hungry again; with nothing to do it
-  returns :declined. Wheat is not harvested. A source found empty or unreachable is forgotten.
+  returns :declined. Wheat is not harvested. A remembered chest in another's zone or claim is skipped, never taken
+  from, in every mode and when starving (one get-food.skipped warn): survival jobs never take other people's stuff
+  (:ignore-zones? lifts it). A source found empty or unreachable is forgotten.
   Hungry is food below :food (default 6), or below :food-when-hurt (default
   14) while health is below full; the same test as the hungry trigger.")
 
@@ -36,7 +39,8 @@
    :farm-radius {:doc "how far around a known farm to harvest, in blocks" :default 6}
    :take {:doc "most items to withdraw from a chest in one go" :default 16}
    :attack-gap-ms {:doc "least time between two swings at an animal, so a swing lands at full strength" :default 600}
-   :ask-cooldown-ms {:doc "after finding nothing, how long before saying so (and searching) again" :default (* 10 60 1000)}})
+   :ask-cooldown-ms {:doc "after finding nothing, how long before saying so (and searching) again" :default (* 10 60 1000)}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
 (def food-animals #{"cow" "pig" "sheep" "chicken" "rabbit"})
 
@@ -72,22 +76,38 @@
 
 ;; ------------------------------------------------------------------ sources
 
-(defn known-source
-  "The latest :food-source entry's data, when within :source-radius and not
-  already found unusable in this job."
+(defn foreign-chest?
+  "A chest source in another's zone or claim: survival jobs never take other people's stuff, in any mode and even
+  starving, so it is skipped (one get-food.skipped warn per chest). :ignore-zones? lifts it."
+  [c {:keys [pos kind]}]
+  (let [v (when (= :chest kind) (access/container-refusal c :take pos))]
+    (when v
+      (let [fields (access/refusal-fields [v])]
+        (ctx/warn-once! c [:skipped pos] :get-food.skipped
+                        (assoc fields :pos pos :text (str "skipped the chest at " (pr-str pos) ": " (access/refusal-text fields))))))
+    (boolean v)))
+
+(defn usable-entries
+  "The :food-source entries, newest first, within :source-radius, not found unusable in this job and not another's
+  chest."
   [c]
-  (let [{:keys [pos] :as source} (:data (ctx/latest c :food-source))]
-    (when (and source
-               (<= (u/dist (u/self-pos c) pos) (:source-radius (:args c)))
-               (not= pos (:dead-source (ctx/mem c))))
-      source)))
+  (->> (ctx/entries c :food-source)
+       reverse
+       (filter (fn [{:keys [data]}]
+                 (and (<= (u/dist (u/self-pos c) (:pos data)) (:source-radius (:args c)))
+                      (not= (:pos data) (:dead-source (ctx/mem c)))
+                      (not (foreign-chest? c data)))))))
+
+(defn known-source
+  "The newest usable :food-source entry's data (see usable-entries)."
+  [c]
+  (:data (first (usable-entries c))))
 
 (defn fresh-source
   "known-source, when its entry is strictly newer than the latest :hungry
   entry: a source the last fruitless search never had in front of it."
   [c]
-  (let [source (known-source c)
-        learned (:t (ctx/latest c :food-source))
+  (let [{source :data learned :t} (first (usable-entries c))
         gave-up (:t (ctx/latest c :hungry))]
     (when (and source learned gave-up (> learned gave-up))
       source)))

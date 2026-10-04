@@ -24,7 +24,8 @@
 (def args
   {:chest {:doc "store chest position; the known :chest place when nil" :default nil}
    :keep {:doc "loaves to carry when done" :default 16}
-   :table-radius {:doc "how far from the chest the table may be" :default 8}})
+   :table-radius {:doc "how far from the chest the table may be" :default 8}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
 (def per-trip-max 192)
 (def stack-size 64)
@@ -61,6 +62,13 @@
   [c kind text reason]
   (ctx/emit! c kind :warn {:text text :reason reason})
   (finish! c {:reason reason}))
+
+(defn refused!
+  "Finish with the withdraw or deposit child's refusal out ({:reason :refused :zones :claims}): no retry."
+  [c kind out]
+  (let [fields (select-keys out [:zones :claims])]
+    (ctx/emit! c kind :warn (assoc fields :reason :refused :text "cannot take from or put into the chest: refused by a zone or claim"))
+    (finish! c (assoc fields :reason :refused))))
 
 (defn give-up!
   "u/fail!, and when it gives up finish with the reason."
@@ -99,9 +107,12 @@
   [c chest bread]
   (let [{:keys [keep]} (:args c)
         r (await (ctx/call-child c :deposit 'jobs.storage.deposit
-                                 {:chest chest :items ["bread"] :keep {"bread" keep}}))
+                                 (merge (select-keys (:args c) [:ignore-zones?])
+                                        {:chest chest :items ["bread"] :keep {"bread" keep}})))
         out (ctx/child-result c :deposit)]
     (cond
+      (and (= :done r) (= :refused (:reason out))) (refused! c :bake.refused out)
+
       (and (= :done r) (:gave-up out))
       (stop! c :bake.deposit-failed (str "cannot put the bread away: " (:reason out))
              (str "deposit " (:reason out)))
@@ -131,12 +142,14 @@
   [c chest target]
   (ctx/update-mem! c assoc :started true)
   (let [r (await (ctx/call-child c :withdraw 'jobs.storage.withdraw
-                                 {:chest chest :items {"wheat" target}}))
+                                 (merge (select-keys (:args c) [:ignore-zones?])
+                                        {:chest chest :items {"wheat" target}})))
         out (ctx/child-result c :withdraw)]
-    (if (and (= :done r) (:gave-up out))
-      (stop! c :bake.withdraw-failed (str "cannot take the wheat out: " (:reason out))
-             (str "withdraw " (:reason out)))
-      :continue)))
+    (cond
+      (and (= :done r) (= :refused (:reason out))) (refused! c :bake.refused out)
+      (and (= :done r) (:gave-up out)) (stop! c :bake.withdraw-failed (str "cannot take the wheat out: " (:reason out))
+                                              (str "withdraw " (:reason out)))
+      :else :continue)))
 
 (defn finish-done!
   "Emit bake.done with the counts and finish."
@@ -154,9 +167,14 @@
       (finish-done! c)
       (let [before (carried p "bread")
             r (await (ctx/call-child c :topup 'jobs.storage.withdraw
-                                     {:chest chest :items {"bread" keep}}))]
+                                     (merge (select-keys (:args c) [:ignore-zones?])
+                                            {:chest chest :items {"bread" keep}})))
+            out (ctx/child-result c :topup)]
         (ctx/update-mem! c update :topped (fnil + 0) (max 0 (- (carried p "bread") before)))
-        (if (= :done r) (finish-done! c) :continue)))))
+        (cond
+          (and (= :done r) (= :refused (:reason out))) (refused! c :bake.refused out)
+          (= :done r) (finish-done! c)
+          :else :continue)))))
 
 (defn ^:async inspect!
   "Read the chest and take wheat out, top up the bread, or finish. Wheat for a

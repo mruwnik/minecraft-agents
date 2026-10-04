@@ -89,3 +89,19 @@
                                         (str job-name " declined: no zone list has been read (zones.edn missing or never valid)")
                                         (str job-name " declined: every target is refused by " (refusal-text fields)))))
   false)
+
+(defn container-refusal
+  "nil when action (:take or :put) at the container or furnace at pos is permitted, else the refusing verdict
+  {:ok false :reason :zone|:claim ...}. Only whose it is counts: a world with no zone list read refuses nothing
+  here (an unread zones.edn never locks a body out of its own chests), and a plan's footprint does not make a chest
+  anyone's (a plan's own chest is its job's source). The job's :ignore-zones? arg is honoured (see may?)."
+  [c action pos]
+  (when pos
+    (let [v (may? c action pos)]
+      (when (contains? #{:zone :claim} (:reason v))
+        v))))
+
+(defn refused-result
+  "The result map of a job that gave up on refusal verdict v: {:gave-up true :reason :refused :zones [..] :claims [..]}."
+  [v]
+  (assoc (select-keys (refusal-fields [v]) [:zones :claims]) :gave-up true :reason :refused))

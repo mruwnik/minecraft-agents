@@ -44,7 +44,8 @@
    :chest {:doc "chest position; the known :chest place when nil" :default nil}
    :craft {:doc "craft what the chest cannot supply" :default true}
    :craft-tiers {:doc "tool tiers to craft, in order; iron or diamond only when listed" :default ["stone" "wooden"]}
-   :radius {:doc "how far to look for a crafting table" :default 32}})
+   :radius {:doc "how far to look for a crafting table" :default 32}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
 (defn kind-of?
   "Does item name belong to tool kind: equal to it or ending in _kind."
@@ -116,6 +117,13 @@
     (when (= :done r) (ctx/result! c {:gave-up true :reason reason :short short}))
     r))
 
+(defn refused!
+  "End at once with the withdraw child's refusal res ({:reason :refused :zones :claims}) and what is short: another's
+  chest does not get asked three times."
+  [c res short]
+  (ctx/result! c (merge {:gave-up true :reason :refused :short short} (select-keys res [:zones :claims])))
+  :done)
+
 (defn finish!
   [c short]
   (ctx/result! c {:gave-up false :short short})
@@ -177,7 +185,8 @@
         (cond
           (zero? loaves) (recur (mark-missing mem kind "wheat") a still stacks inv chest)
           (< wheat-body (* 3 loaves)) [mem {:slot :get :job 'jobs.storage.withdraw :for :food-get
-                                            :args {:chest chest :items {"wheat" (* 3 loaves)}}}]
+                                            :args (merge (select-keys a [:ignore-zones?])
+                                                         {:chest chest :items {"wheat" (* 3 loaves)}})}]
           :else [mem {:slot :craft :job 'jobs.items.craft :for :food
                       :args {:item "bread" :count loaves :radius (:radius a)}}]))
       :else
@@ -188,7 +197,7 @@
           (let [{:keys [item get count]} (peek steps)]
             [mem (if get
                    {:slot :get :job 'jobs.storage.withdraw :for :get
-                    :args {:chest chest :items {get count}}}
+                    :args (merge (select-keys a [:ignore-zones?]) {:chest chest :items {get count}})}
                    {:slot :craft :job 'jobs.items.craft :for :tool
                     :args {:item item :count count :radius (:radius a)}})])
           (nil? tier) (recur (mark-missing mem kind (or (get (:why mem) kind) "no tier")) a still stacks inv chest)
@@ -312,6 +321,7 @@
                   (let [{:keys [mem end fail]} (absorb mem call res stacks inv)]
                     (ctx/update-mem! c merge (select-keys mem craft-keys))
                     (cond
+                      (= :refused fail) (refused! c res (into {} still))
                       fail (give-up! c fail (into {} still))
                       end (finish-craft! c still end)
                       :else :continue)))))))))))
@@ -345,9 +355,11 @@
                   (empty? take) (do (ctx/emit! c :kit.short :info {:short short :text (str "chest lacks " (pr-str short))})
                                     (finish! c short))
                   :else
-                  (let [r (await (ctx/call-child c :take 'jobs.storage.withdraw {:chest chest :items take}))
+                  (let [r (await (ctx/call-child c :take 'jobs.storage.withdraw
+                                                 (merge (select-keys a [:ignore-zones?]) {:chest chest :items take})))
                         res (when (= :done r) (ctx/child-result c :take))]
-                    (if (:gave-up res)
-                      (do (ctx/result! c {:gave-up true :reason (:reason res) :short (merge (into {} still) short)})
-                          :done)
-                      :continue)))))))))))
+                    (cond
+                      (= :refused (:reason res)) (refused! c res (merge (into {} still) short))
+                      (:gave-up res) (do (ctx/result! c {:gave-up true :reason (:reason res) :short (merge (into {} still) short)})
+                                         :done)
+                      :else :continue)))))))))))

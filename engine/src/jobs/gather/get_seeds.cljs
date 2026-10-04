@@ -220,12 +220,14 @@
   (let [{:keys [item]} (:args c)
         goal (:goal (ctx/mem c))
         chest (:chest (chest-target c))
-        r (await (ctx/call-child c :take 'jobs.storage.withdraw {:chest chest :items {item goal}}))
+        r (await (ctx/call-child c :take 'jobs.storage.withdraw
+                                   (merge (select-keys (:args c) [:ignore-zones?]) {:chest chest :items {item goal}})))
         out (ctx/child-result c :take)]
     (cond
       (not= :done r) :continue
       (>= (carried c) goal) (finish! c :count)
-      (:gave-up out) (do (ctx/emit! c :get-seeds.gave-up :warn {:reason (:reason out) :text (str "get-seeds: withdraw gave up: " (:reason out))})
+      (:gave-up out) (do (ctx/emit! c :get-seeds.gave-up :warn (merge (select-keys out [:zones :claims])
+                                                                      {:reason (:reason out) :text (str "get-seeds: withdraw gave up: " (:reason out))}))
                          (finish! c :short))
       :else (finish! c :short))))
 

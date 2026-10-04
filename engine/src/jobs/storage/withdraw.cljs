@@ -1,5 +1,6 @@
 (ns jobs.storage.withdraw
   (:require [engine.ctx :as ctx]
+            [engine.jobs.access :as access]
             [engine.jobs.util :as u]
             [engine.places :as places]
             [jobs.storage.deposit :as deposit]))
@@ -13,11 +14,14 @@
   {:gave-up true :reason r :short {...}} (the inspect or transfer status,
   \"unreachable\" for a blocked walk, \"nothing-moved\") when the failed attempts
   used it up and the warn was emitted. A container that is missing at the recorded :chest (loaded cell)
-  retracts that place with one chest_missing warn.")
+  retracts that place with one chest_missing warn. A chest in another's zone or claim that does not allow :take is
+  refused before the walk and again before the transfer: the job ends gave-up {:reason :refused :zones [..] :claims
+  [..]} after one withdraw.refused warn and takes nothing (:ignore-zones? lifts it).")
 
 (def args
   {:chest {:doc "chest position [x y z] or {:x :y :z}; the known :chest place when nil" :default nil}
-   :items {:doc "{item-name count}: carry at least this many of each name" :default {}}})
+   :items {:doc "{item-name count}: carry at least this many of each name" :default {}}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
 (defn shortfall
   "[[name n] ...] in the order of items: n is the target minus the total
@@ -45,6 +49,14 @@
   [stacks name]
   (transduce (comp (filter #(= name (.-name %))) (map #(.-count %))) + 0 (array-seq stacks)))
 
+(defn refuse!
+  "End refused: one withdraw.refused warn naming the zones and claims, the refusal as the result."
+  [c verdict]
+  (let [fields (access/refusal-fields [verdict])]
+    (ctx/emit! c :withdraw.refused :warn (assoc fields :text (str "withdraw refused: " (access/refusal-text fields))))
+    (ctx/result! c (access/refused-result verdict))
+    :done))
+
 (defn ^:async round
   "One bounded step: walk in reach, then move one name's stack. Done when
   nothing is short or the chest holds none of what is short. The shortfall is
@@ -54,8 +66,10 @@
   (let [{:keys [items]} (:args c)
         chest (deposit/chest-of (ctx/view c) (:args c))
         short (shortfall (u/inventory (:primitives c)) items)]
-    (if (empty? short)
-      (do (ctx/result! c {:gave-up false :short {}}) :done)
+    (cond
+      (empty? short) (do (ctx/result! c {:gave-up false :short {}}) :done)
+      (access/container-refusal c :take chest) (refuse! c (access/container-refusal c :take chest))
+      :else
       (let [w (await (u/walk-near! c chest 3))]
         (case w
           :partial :continue
@@ -72,6 +86,7 @@
                                                                      :text (str "chest lacks " (pr-str (into {} short)))})
                                   (ctx/result! c {:gave-up false :short (into {} short)})
                                   :done)
+                  (access/container-refusal c :take chest) (refuse! c (access/container-refusal c :take chest))
                   :else
                   (let [[name n] pick
                         r (await (ctx/act c :transfer (clj->js {:pos chest :direction "withdraw" :item name :count n})))]

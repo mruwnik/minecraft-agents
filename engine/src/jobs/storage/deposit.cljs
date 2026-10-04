@@ -1,6 +1,7 @@
 (ns jobs.storage.deposit
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
+            [engine.jobs.access :as access]
             [engine.jobs.util :as u]
             [engine.memory :as mem]
             [engine.places :as places]))
@@ -16,12 +17,16 @@
   finished clean is offered to the :chest place: recorded when none is recorded or the recorded one is gone,
   never over a different live recorded chest (the argument may be a one-off errand; one place.kept event says
   so; jobs.memory.set-place moves it). A transfer that finds the recorded chest missing (loaded cell, nothing
-  to open) retracts it with one chest_missing warn.")
+  to open) retracts it with one chest_missing warn. A chest in another's zone or claim that does not allow :put
+  (engine.access.zones/deposit-into-foreign-chest? is false) is refused before the walk and again before the
+  transfer: the job ends gave-up {:reason :refused :zones [..] :claims [..]} after one deposit.refused warn and
+  puts nothing in (:ignore-zones? lifts it).")
 
 (def args
   {:chest {:doc "chest position [x y z] or {:x :y :z}; the known :chest place when nil" :default nil}
    :items {:doc "item names to put away, in this order (the first name with something to spare goes first); everything but tools and armour when nil" :default nil}
-   :keep {:doc "{item-name count}: leave at least this many of the name carried" :default {}}})
+   :keep {:doc "{item-name count}: leave at least this many of the name carried" :default {}}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
 (def gear-suffixes ["_pickaxe" "_axe" "_shovel" "_hoe" "_sword" "_helmet" "_chestplate" "_leggings" "_boots"])
 (def gear-names #{"shears" "bow" "crossbow" "fishing_rod" "flint_and_steel" "shield" "trident"})
@@ -71,6 +76,14 @@
     (when (= :done r) (ctx/result! c {:gave-up true :reason reason}))
     r))
 
+(defn refuse!
+  "End refused: one deposit.refused warn naming the zones and claims, the refusal as the result."
+  [c verdict]
+  (let [fields (access/refusal-fields [verdict])]
+    (ctx/emit! c :deposit.refused :warn (assoc fields :text (str "deposit refused: " (access/refusal-text fields))))
+    (ctx/result! c (access/refused-result verdict))
+    :done))
+
 (defn ^:async round
   "Done when nothing is left to put away. Three failed transfers (full,
   missing, unreachable) give up with a chest_unusable warn."
@@ -84,15 +97,18 @@
                       (ctx/result! c {:gave-up false})
                       :done)
       (nil? chest) :continue
+      (access/container-refusal c :put chest) (refuse! c (access/container-refusal c :put chest))
       :else
       (let [w (await (u/walk-near! c chest 3))]
         (case w
           :partial :continue
           :blocked (give-up! c :chest_unusable "cannot reach the chest" "unreachable")
-          (let [r (await (ctx/act c :transfer (clj->js {:pos chest :direction "deposit"
-                                                         :item (:name (:stack pick)) :count (:count pick)})))]
-            (if (= "ok" (.-status r))
-              (do (when (pos? (or (.-moved r) 0)) (ctx/update-mem! c update :deposited (fnil inc 0)))
-                  :continue)
-              (do (places/retract-if-missing! c :chest chest (.-status r))
-                  (give-up! c :chest_unusable (str "chest not usable: " (.-status r)) (.-status r))))))))))
+          (if-let [v (access/container-refusal c :put chest)]
+            (refuse! c v)
+            (let [r (await (ctx/act c :transfer (clj->js {:pos chest :direction "deposit"
+                                                           :item (:name (:stack pick)) :count (:count pick)})))]
+              (if (= "ok" (.-status r))
+                (do (when (pos? (or (.-moved r) 0)) (ctx/update-mem! c update :deposited (fnil inc 0)))
+                    :continue)
+                (do (places/retract-if-missing! c :chest chest (.-status r))
+                    (give-up! c :chest_unusable (str "chest not usable: " (.-status r)) (.-status r)))))))))))
