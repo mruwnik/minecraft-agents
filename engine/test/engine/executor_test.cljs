@@ -59,21 +59,21 @@
 ;; refusal
 
 (deftest refusal-supported-plan
-  (is (nil? (ex/refusal straight)))
-  (is (nil? (ex/refusal [(step 0 64 0 :start) (step 1 64 0 :jump) (step 2 63 0 :drop)
+  (is (nil? (ex/refusal p straight)))
+  (is (nil? (ex/refusal p [(step 0 64 0 :start) (step 1 64 0 :jump) (step 2 63 0 :drop)
                          (step 2 63 1 :climb-up) (step 2 64 1 :jump-climb) (step 2 63 1 :climb-down)
                          (step 3 63 2 :corner) (step 3 63 3 :diagonal)]))))
 
 (deftest refusal-unsupported-kinds
   (are [steps kind reason at]
-       (= {:status :refused :kind kind :at at :reason reason} (ex/refusal steps))
-    [(step 0 64 0 :start) (step 10 64 3 :gap)] :gap "unsupported step kind :gap at [10 64 3]" [10 64 3]
+       (= {:status :refused :kind kind :at at :reason reason} (ex/refusal p steps))
+    [(step 0 64 0 :start) (step 1 64 0 :open)] :open "unsupported step kind :open at [1 64 0]" [1 64 0]
     [(step 0 64 0 :start) (step 1 64 0 :walk {:opens [{:x 1}]})] :open "unsupported step kind :open at [1 64 0]" [1 64 0]
     [(step 0 64 0 :start) (step 1 64 0 :walk {:swim true})] :swim "unsupported step kind :swim at [1 64 0]" [1 64 0]
     [(step 0 64 0 :start) (step 1 64 0 :swim-up)] :swim-up "unsupported step kind :swim-up at [1 64 0]" [1 64 0]))
 
 (deftest refusal-names-the-first
-  (is (= :gap (:kind (ex/refusal [(step 0 64 0 :start) (step 1 64 0 :gap) (step 2 64 0 :swim)])))))
+  (is (= :open (:kind (ex/refusal p [(step 0 64 0 :start) (step 1 64 0 :open) (step 2 64 0 :swim)])))))
 
 ;; corner slides
 
@@ -311,6 +311,138 @@
   (let [r (ex/tick p (state-at straight 1) (pose 0.6 64 3.5))]
     (is (= #{:forward :back :left :right :jump :sneak :sprint} (set (keys (controls-of r)))))
     (is (every? false? (map (controls-of r) [:back :left :right :sneak])))))
+
+;; gap jumps
+
+(defn gap-steps
+  "A course along +x: start, takeoff (10 64 0), landing n cells past it (y 63 for a down gap), a walk after."
+  [n & {:keys [landing-y prev-move] :or {landing-y 64 prev-move :walk}}]
+  [(step 9 64 0 :start) (step 10 64 0 prev-move) (step (+ 11 n) landing-y 0 :gap)
+   (step (+ 12 n) landing-y 0 :walk)])
+
+(deftest refusal-gap-walked
+  (are [steps] (nil? (ex/refusal p steps))
+    (gap-steps 1)
+    (gap-steps 2)
+    (gap-steps 3)
+    (gap-steps 2 :landing-y 63)))
+
+(deftest refusal-gap-kinds-and-reasons
+  (are [steps kind reason at]
+       (= {:status :refused :kind kind :at at :reason reason} (ex/refusal p steps))
+    (gap-steps 4) :gap-width "gap jump at [15 64 0] over 4 cells" [15 64 0]
+    [(step 9 64 0 :start) (step 10 64 0 :walk) (step 12 64 1 :gap)]
+    :gap-width "gap jump at [12 64 1] not in a straight line" [12 64 1]
+    (gap-steps 2 :landing-y 65) :gap-up "gap jump up at [13 65 0] (not measured yet)" [13 65 0]
+    (update (gap-steps 2) 2 assoc :low-ceiling true)
+    :gap-low-ceiling "gap jump at [13 64 0] under a ceiling lower than 3 blocks" [13 64 0]
+    (gap-steps 2 :prev-move :climb-up) :gap-takeoff "gap jump at [13 64 0] from a ladder" [13 64 0]
+    (gap-steps 2 :prev-move :jump-climb) :gap-takeoff "gap jump at [13 64 0] from a ladder" [13 64 0]))
+
+(deftest refusal-gap-takeoff-comes-first
+  (is (= :gap-takeoff (:kind (ex/refusal p (update (gap-steps 4 :prev-move :climb-down) 2 assoc :low-ceiling true))))))
+
+(deftest with-gap-ceilings-marks-by-cell
+  (let [at (fn [prev-h cells steps] (map #(true? (:low-ceiling %))
+                                         (ex/with-gap-ceilings p (assoc-in steps [1 :h] prev-h) (solid-set cells))))]
+    (are [prev-h cells marked?] (= marked? (nth (at prev-h cells (gap-steps 2)) 2))
+      0 #{[10 66 0]} true
+      0 #{[11 66 0]} true
+      0 #{[12 66 0]} true
+      0 #{[13 66 0]} false
+      0 #{[12 65 0]} false
+      0 #{[10 67 0]} false
+      8 #{[10 67 0]} true
+      0 #{} false)))
+
+(deftest with-gap-ceilings-leaves-other-steps-alone
+  (let [steps (gap-steps 2)
+        out (ex/with-gap-ceilings p steps (constantly true))]
+    (is (= [(nth steps 0) (nth steps 1) (nth steps 3)] [(nth out 0) (nth out 1) (nth out 3)]))
+    (is (true? (:low-ceiling (nth out 2))))))
+
+(deftest with-gap-ceilings-checks-the-right-cells-in-other-directions
+  (let [steps [(step 0 64 9 :start) (step 0 64 10 :walk) (step 0 64 7 :gap)]
+        marked? (fn [cell] (:low-ceiling (nth (ex/with-gap-ceilings p steps (solid-set #{cell})) 2)))]
+    (is (true? (marked? [0 66 10])))
+    (is (true? (marked? [0 66 9])))
+    (is (true? (marked? [0 66 8])))
+    (is (nil? (marked? [0 66 7])))
+    (is (nil? (marked? [1 66 9])))))
+
+(deftest with-gap-ceilings-then-refusal
+  (let [steps (ex/with-gap-ceilings p (gap-steps 2) (solid-set #{[11 66 0]}))]
+    (is (= :gap-low-ceiling (:kind (ex/refusal p steps))))
+    (is (nil? (ex/refusal p (ex/with-gap-ceilings p (gap-steps 2) (solid-set #{[14 66 0]})))))))
+
+(deftest past-edge-in-all-directions
+  (are [landing x z expected] (approx= expected (ex/past-edge (step 10 64 0 :walk) landing (pose x 64 z)))
+    (step 12 64 0 :gap) 10.5 0.5 -0.5
+    (step 12 64 0 :gap) 11.0 0.5 0.0
+    (step 12 64 0 :gap) 11.3 0.9 0.3
+    (step 8 64 0 :gap) 10.5 0.5 -0.5
+    (step 8 64 0 :gap) 10.0 0.5 0.0
+    (step 10 64 -2 :gap) 10.9 0.5 -0.5
+    (step 10 64 -2 :gap) 10.2 0.0 0.0
+    (step 10 64 2 :gap) 10.2 0.5 -0.5
+    (step 10 64 2 :gap) 10.2 1.0 0.0))
+
+(defn gap-jump-of
+  "The :jump control on the gap step of a course, at a pose."
+  [steps ps]
+  (:jump (controls-of (ex/tick p (state-at steps 2) ps))))
+
+(deftest gap-jump-at-the-takeoff-edge
+  (are [n x expected] (= expected (gap-jump-of (gap-steps n) (pose x 64 0.5)))
+    1 10.7 false
+    1 10.85 true
+    2 10.55 false
+    2 10.65 true
+    3 10.85 false
+    3 10.95 true
+    1 11.4 false
+    3 11.4 false))
+
+(deftest gap-jump-needs-the-ground
+  (is (false? (gap-jump-of (gap-steps 1) (pose 10.9 64 0.5 {:on-ground false})))))
+
+(deftest gap-jump-needs-the-takeoff-height
+  (is (false? (gap-jump-of (gap-steps 1) (pose 10.9 65.2 0.5)))))
+
+(deftest gap-jump-from-a-dip
+  (are [x expected] (= expected (gap-jump-of (gap-steps 1) (pose x 63 0.5)))
+    11.5 true
+    11.3 true
+    11.0 false))
+
+(deftest gap-sprint-by-width
+  (are [n ps expected] (= expected (:sprint (controls-of (ex/tick p (state-at (gap-steps n) 2) ps))))
+    1 (pose 10.5 64 0.5) false
+    2 (pose 10.5 64 0.5) true
+    3 (pose 10.5 64 0.5) true
+    3 (pose 11.5 64.4 0.5 {:on-ground false}) true
+    1 (pose 11.5 64.4 0.5 {:on-ground false}) false)
+  (is (false? (:sprint (controls-of (ex/tick (assoc p :sprint false) (state-at (gap-steps 3) 2) (pose 10.5 64 0.5)))))))
+
+(deftest gap-reached-only-on-the-ground
+  (are [ps expected] (= expected (:i (:state (ex/tick p (state-at (gap-steps 1) 2) ps))))
+    (pose 12.5 64 0.5 {:on-ground false}) 2
+    (pose 12.5 64 0.5) 3))
+
+(deftest gap-in-the-air-does-not-skip-ahead
+  (let [steps (conj (gap-steps 1) (step 14 64 0 :walk))]
+    (are [ps expected] (= expected (:i (:state (ex/tick p (state-at steps 2) ps))))
+      (pose 13.5 64 0.5 {:on-ground false}) 2
+      (pose 13.5 64 0.5) 4)))
+
+(deftest gap-landing-in-the-lookahead-needs-the-ground
+  (are [ps expected] (= expected (:i (:state (ex/tick p (state-at (gap-steps 1) 1) ps))))
+    (pose 12.5 64 0.5 {:on-ground false}) 1
+    (pose 12.5 64 0.5) 3))
+
+(deftest gap-overshoot-aims-back-at-the-landing
+  (let [r (ex/tick p (state-at (gap-steps 1) 2) (pose 13.0 64 0.5 {:on-ground false}))]
+    (is (yaw-eq? (:yaw r) (/ Math/PI 2)))))
 
 ;; re-plan bookkeeping
 

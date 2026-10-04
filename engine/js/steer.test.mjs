@@ -76,6 +76,17 @@ test('a cut mid-walk rejects cut and no control stays held', async () => {
   assert.equal(bot.listenerCount('physicsTick'), bot.base)
 })
 
+test('a cut mid-jump releases jump, sprint and forward', async () => {
+  const { bot, p } = rig()
+  const { result } = await start(p, bot, () => ({ controls: { forward: true, sprint: true, jump: true }, yaw: 1.5 }))
+  bot.emit('physicsTick')
+  assert.equal(pressed(bot).length, 3)
+  p.setOwner('other')
+  await assert.rejects(result, { code: 'cut' })
+  assert.deepEqual(pressed(bot), [])
+  assert.equal(bot.listenerCount('physicsTick'), bot.base)
+})
+
 test('a timeout resolves timeout with the pose and releases the controls', async () => {
   const { bot, p } = rig({ pos: [4.5, 64, 0.5] })
   const { result } = await start(p, bot, () => walking, { timeoutS: 1 })

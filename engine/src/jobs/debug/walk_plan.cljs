@@ -141,9 +141,13 @@
               planner-status (.-status r)]
           (if (= "none" planner-status)
             (finish! c {:status :no-path :reason (some-> (.-reason r) keyword) :replans replans} t0 walked walk-ms)
-            (let [steps (executor/with-free-sides (executor/steps-of (.-steps (.-path r))) (solid-fn pw))
+            (let [solid? (solid-fn pw)
+                  steps (executor/with-gap-ceilings
+                          executor/policy
+                          (executor/with-free-sides (executor/steps-of (.-steps (.-path r))) solid?)
+                          solid?)
                   plan-len (path-length steps)]
-              (if-let [refused (executor/refusal steps)]
+              (if-let [refused (executor/refusal executor/policy steps)]
                 (finish! c (assoc refused :replans replans) t0 walked walk-ms)
                 (do
                   (ctx/emit! c :walk-plan.plan :info

@@ -26,6 +26,11 @@
    :climb-over 0.2         ; keep climbing until feet are this far above a climb step's stand-y
    :crossing-xz 0.3        ; steer at a crossing point until this close to it
    :still-xz 0.1           ; closer than this to the aim: no forward, keep the yaw
+   :gap-jump {1 {:from 0.2 :sprint false}  ; by gap width: jump once the feet are within :from of the takeoff
+              2 {:from 0.4 :sprint true}   ; edge; sprint for the run and the flight
+              3 {:from 0.1 :sprint true}}
+   :gap-past 0.3           ; feet up to this far past the takeoff edge are still held by it (half the body's width)
+   :gap-headroom 3         ; free blocks over the takeoff's stand height needed over takeoff and gap cells
    :sprint true})
 
 (def move-names
@@ -33,7 +38,7 @@
    :swim-down :exit])
 
 (def supported-moves
-  #{:start :walk :diagonal :corner :jump :drop :climb-up :climb-down :jump-climb})
+  #{:start :walk :diagonal :corner :jump :drop :gap :climb-up :climb-down :jump-climb})
 
 (def sprint-moves #{:walk :diagonal})
 
@@ -63,14 +68,72 @@
     (some? opens) :open
     swim :swim))
 
+(def takeoff-blockers #{:climb-up :climb-down :jump-climb})
+
+(defn gap-cells
+  "[n dx dz] of a gap: the empty cells between takeoff and landing, and the step's direction; n is nil
+  unless takeoff and landing lie on one cardinal line."
+  [prev step]
+  (let [dx (- (:x step) (:x prev)) dz (- (:z step) (:z prev))]
+    [(when (= 1 (count (filter zero? [dx dz]))) (dec (+ (Math/abs dx) (Math/abs dz)))) dx dz]))
+
+(defn gap-refused
+  "The refusal for a :gap step walked from prev, or nil."
+  [policy prev {:keys [x y z] :as step}]
+  (let [at [x y z]
+        refuse (fn [kind reason] {:status :refused :kind kind :at at :reason reason})
+        [n] (gap-cells prev step)]
+    (cond
+      (contains? takeoff-blockers (:move prev))
+      (refuse :gap-takeoff (str "gap jump at " (pr-str at) " from a ladder"))
+
+      (nil? n) (refuse :gap-width (str "gap jump at " (pr-str at) " not in a straight line"))
+
+      (not (contains? (:gap-jump policy) n))
+      (refuse :gap-width (str "gap jump at " (pr-str at) " over " n " cells"))
+
+      (> (stand-y step) (stand-y prev))
+      (refuse :gap-up (str "gap jump up at " (pr-str at) " (not measured yet)"))
+
+      (:low-ceiling step)
+      (refuse :gap-low-ceiling (str "gap jump at " (pr-str at) " under a ceiling lower than "
+                                    (:gap-headroom policy) " blocks")))))
+
+(defn step-refusal
+  "The refusal for step s (after prev), or nil: an unsupported step kind, else a :gap step that cannot
+  be jumped from prev."
+  [policy prev s]
+  (let [{:keys [x y z]} s]
+    (or (when-let [kind (unsupported-kind s)]
+          {:status :refused :kind kind :at [x y z]
+           :reason (str "unsupported step kind " kind " at " (pr-str [x y z]))})
+        (when (and (= :gap (:move s)) (some? prev))
+          (gap-refused policy prev s)))))
+
 (defn refusal
-  "nil when every step is supported, else the refusal for the first unsupported one."
-  [steps]
-  (some (fn [{:keys [x y z] :as s}]
-          (when-let [kind (unsupported-kind s)]
-            {:status :refused :kind kind :at [x y z]
-             :reason (str "unsupported step kind " kind " at " (pr-str [x y z]))}))
-        steps))
+  "nil when every step can be walked, else the refusal for the first one that cannot."
+  [policy steps]
+  (->> steps
+       (map-indexed (fn [i s] (step-refusal policy (get steps (dec i)) s)))
+       (some identity)))
+
+(defn with-gap-ceilings
+  "Add :low-ceiling to each gap step whose takeoff or gap cells have a solid block within :gap-headroom
+  of the takeoff's stand height. solid? is a fn [x y z] -> bool."
+  [policy steps solid?]
+  (vec (map-indexed
+        (fn [i s]
+          (if-not (and (pos? i) (= :gap (:move s)))
+            s
+            (let [prev (nth steps (dec i))
+                  [n dx dz] (gap-cells prev s)
+                  cells (map (fn [k] [(+ (:x prev) (* k (Math/sign dx))) (+ (:z prev) (* k (Math/sign dz)))])
+                             (range 0 (inc (or n 0))))
+                  top (dec (Math/ceil (+ (stand-y prev) (:gap-headroom policy))))]
+              (if (some (fn [[x z]] (some #(solid? x % z) (range (+ (:y prev) 2) (inc top)))) cells)
+                (assoc s :low-ceiling true)
+                s))))
+        steps)))
 
 ;; ---------------------------------------------------------------- corner slides
 
@@ -111,6 +174,13 @@
 (defn in-cell? [step {:keys [x z]}]
   (and (= (:x step) (Math/floor x)) (= (:z step) (Math/floor z))))
 
+(defn past-edge
+  "Signed distance of the feet past the takeoff cell's edge that faces the gap step's landing: -0.5 at the
+  takeoff centre, 0 at the edge."
+  [prev step {:keys [x z]}]
+  (let [dx (Math/sign (- (:x step) (:x prev))) dz (Math/sign (- (:z step) (:z prev)))]
+    (- (+ (* (- x (+ (:x prev) 0.5)) dx) (* (- z (+ (:z prev) 0.5)) dz)) 0.5)))
+
 ;; ---------------------------------------------------------------- reached
 
 (defn reached?
@@ -118,6 +188,7 @@
   [policy step {:keys [y] :as pose}]
   (let [sy (stand-y step)]
     (and (in-cell? step pose)
+         (or (not= :gap (:move step)) (:on-ground pose))
          (case (:move step)
            (:climb-up :jump-climb) (>= y (- sy 0.1))
            :climb-down (<= y (+ sy (:arrive-y policy)))
@@ -125,12 +196,15 @@
 
 (defn advance
   "The index to walk to after this pose: past the last reached of the current step and the lookahead,
-  never beyond the last step."
-  [policy {:keys [steps i]} pose]
+  never beyond the last step. In the air over a gap nothing is skipped."
+  [policy {:keys [steps i]} {:keys [on-ground] :as pose}]
   (let [last-i (dec (count steps))
         hi (min last-i (+ i (:lookahead policy)))
         hit (last (filter #(reached? policy (nth steps %) pose) (range i (inc hi))))]
-    (if (nil? hit) i (min last-i (inc hit)))))
+    (cond
+      (and (= :gap (:move (nth steps i))) (not on-ground)) i
+      (nil? hit) i
+      :else (min last-i (inc hit)))))
 
 ;; ---------------------------------------------------------------- aim
 
@@ -170,13 +244,34 @@
                     (<= dist (:jump-xz policy))
                     (or on-ground on-climbable))))))
 
+(defn gap-rule
+  "The :gap-jump entry for the gap step i of steps."
+  [policy steps i]
+  (let [[n] (gap-cells (nth steps (dec i)) (nth steps i))]
+    (get (:gap-jump policy) n)))
+
+(defn gap-jump?
+  "On the takeoff cell, close enough to its edge: jump. Otherwise the plain rule (a body that fell into a
+  dip jumps up to the landing)."
+  [policy steps i {:keys [y on-ground] :as pose} dist]
+  (let [prev (nth steps (dec i))
+        step (nth steps i)
+        past (past-edge prev step pose)]
+    (or (boolean (and on-ground
+                      (<= (Math/abs (- y (stand-y prev))) (:arrive-y policy))
+                      (<= (- (:from (gap-rule policy steps i))) past)
+                      (< past (:gap-past policy))))
+        (jump? policy step pose dist))))
+
 (defn sprint? [policy steps i {:keys [on-ground]}]
   (let [window (take 3 (drop i steps))]
-    (boolean (and (:sprint policy)
-                  on-ground
-                  (= 3 (count window))
-                  (every? #(contains? sprint-moves (:move %)) window)
-                  (not-any? #(some? (:cx %)) window)))))
+    (boolean (if (= :gap (:move (first window)))
+               (and (:sprint policy) (:sprint (gap-rule policy steps i)))
+               (and (:sprint policy)
+                    on-ground
+                    (= 3 (count window))
+                    (every? #(contains? sprint-moves (:move %)) window)
+                    (not-any? #(some? (:cx %)) window))))))
 
 (defn yaw-to
   "Mineflayer's yaw: 0 faces -z, pi/2 faces -x."
@@ -191,7 +286,10 @@
         yaw' (if moving? (yaw-to x z ax az) (or yaw 0))]
     {:state (cond-> state moving? (assoc :yaw yaw'))
      :controls {:forward moving? :back false :left false :right false
-                :jump (jump? policy step pose dist) :sneak false
+                :jump (if (= :gap (:move step))
+                         (gap-jump? policy steps i pose dist)
+                         (jump? policy step pose dist))
+                :sneak false
                 :sprint (sprint? policy steps i pose)}
      :yaw yaw' :pitch 0}))
 

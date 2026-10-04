@@ -66,13 +66,24 @@
           (is (= 1 (count-of s :walk-plan.plan)))
           (is (= 1 (count-of s :walk-plan.result))))))))
 
-(deftest a-gap-jump-is-refused
+(deftest a-gap-jump-under-a-low-ceiling-is-refused
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out] :as s} (await (walk (merge (floor (range 5)) (floor (range 7 12))) args (fn [_])))]
+        (let [ceiling (into {} (for [x (range 4 7) z (range 3)] [(str x "," 66 "," z) "stone"]))
+              {:keys [out] :as s} (await (walk (merge (floor (range 5)) (floor (range 7 12)) ceiling) args (fn [_])))]
           (is (= :refused (:status @out)))
-          (is (= :gap (:kind @out)))
+          (is (= :gap-low-ceiling (:kind @out)))
+          (is (not (contains? (first (events-of s :walk-plan.result)) :blocks-per-s))))))))
+
+(deftest a-gap-jump-up-is-refused
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [ledge (into {} (for [x (range 7 12) z (range 3)] [(str x "," 64 "," z) "stone"]))
+              {:keys [out] :as s} (await (walk (merge (floor (range 5)) ledge) {:to [10 65 1]} (fn [_])))]
+          (is (= :refused (:status @out)))
+          (is (= :gap-up (:kind @out)))
           (is (not (contains? (first (events-of s :walk-plan.result)) :blocks-per-s))))))))
 
 (deftest a-goal-sealed-in-stone-is-no-path
