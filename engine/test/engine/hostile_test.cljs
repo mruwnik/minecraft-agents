@@ -216,15 +216,34 @@
             (is (not= 0 (:z m)) "turned off the straight line through the lava")
             (is (< (:x m) 0) "and still away")))))))
 
-(deftest retreat-gives-up-when-every-walk-is-blocked
+(def stone-box
+  "Stone three thick around the cell [6 64 0] (feet and head height, below and above): a zombie there cannot be
+  reached or hit."
+  (into {} (for [x (range 3 10) y [63 64 65 66] z (range -3 4) :when (not (and (= x 6) (= z 0) (#{64 65} y)))]
+             [(str x "," y "," z) "stone"])))
+
+(deftest retreat-gives-up-when-every-walk-and-the-fight-are-blocked
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:entities [(zombie 5 0)]})]
+        (let [{:keys [eng p seen clock]} (setup {:blocks stone-box :entities [(zombie 6 0)]})]
           (.override (.-world p) "moveTo" (fn ^:async f [_ _ _] #js {:status "blocked"}))
           (core/submit! eng retreat {})
-          (dotimes [_ 3] (await (core/tick! eng)))
+          (dotimes [_ 8] (swap! clock + 60000) (await (core/tick! eng)))
+          (is (= 1 (count (filter #(= :retreat_blocked (:kind %)) @seen))) "truly cornered: one warn, then done")
+          (is (zero? (count (calls p "attack"))))
           (is (= [] (:list (core/state eng)))))))))
+
+(deftest retreat-whose-every-walk-is-blocked-fights-with-the-fist
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:entities [(zombie 2 0)]})]
+          (.override (.-world p) "moveTo" (fn ^:async f [_ _ _] #js {:status "blocked"}))
+          (core/submit! eng retreat {})
+          (await (core/tick! eng))
+          (is (= 1 (count (calls p "attack"))) "unarmed and nothing to seal with: it hits back")
+          (is (= ["j1"] (:list (core/state eng)))))))))
 
 ;; ----------------------------------------------------------------- trigger
 
@@ -348,9 +367,9 @@
         (let [{:keys [p]} (await (first-round retreat {:inventory sword :blocks box :entities [(zombie 2 0)]}))]
           (is (= 1 (count (calls p "attack"))) "nowhere to go: it hits back"))
         (let [{:keys [eng p]} (await (first-round retreat {:blocks box :entities [(zombie 2 0)]}))]
-          (is (zero? (count (calls p "attack"))) "unarmed: no fight")
+          (is (= 1 (count (calls p "attack"))) "unarmed: the fist, not a failed round")
           (dotimes [_ 2] (await (core/tick! eng)))
-          (is (= [] (:list (core/state eng))) "and it gives up after three tries"))))))
+          (is (= ["j1"] (:list (core/state eng))) "no giving up while the zombie can be hit"))))))
 
 (def dead-end
   "A corridor five wide, closed behind the body (z -2), open towards +z."

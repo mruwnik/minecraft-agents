@@ -1,18 +1,31 @@
 (ns jobs.survival.retreat
   (:require [engine.ctx :as ctx]
+            [engine.jobs.access :as access]
             [engine.jobs.combat :as combat]
-            [engine.jobs.util :as u]))
+            [engine.jobs.shelter :as sh]
+            [engine.jobs.util :as u]
+            [jobs.survival.dig-in :as dig-in]))
 
 (def doc
   "Walk a short step away from the nearest hostile each round, leaning
   towards the latest :bed or :home when that is not through the hostile,
   avoiding :hazard positions and turning towards open ground when a wall is
-  behind. A flight starts for a hostile within :radius (ranged ones within
-  :ranged-radius) and keeps going while one is within :clear-radius, so a
-  chasing mob does not catch up between steps. Cornered (no open direction,
-  or the walk is blocked) it fights back with the best weapon whatever its
-  health, and keeps that fight while the hostile stays within :radius (no
-  running back into the corner); unarmed it gives up after three tries. Once per flight, with at
+  behind. A direction is probed column by column from the body's own cell,
+  stepping one block up or down where a walker would, so a stair dug behind
+  the body is a way back. A flight starts for a hostile within :radius (ranged
+  ones within :ranged-radius) and keeps going while one is within
+  :clear-radius, so a chasing mob does not catch up between steps. Cornered
+  (no open direction, or the walk is blocked) it escalates, never repeating a
+  failed round: armed, it fights back with the best weapon whatever its health
+  and keeps that fight while the hostile stays within :radius (no running back
+  into the corner); unarmed with :blocks carried, it seals itself in (the open
+  sides at feet and head height and the roof, dig-in's 1x1 cells, at most
+  :max-places a round; one retreat_sealed warn) and waits there until the
+  flight is over or for :max-hide-ms; a cell a hostile stands in, or a refused
+  placement, ends the sealing; then it fights with the best tool (pickaxe,
+  shovel, hoe) or the fist. Only a fight that cannot reach the hostile counts
+  a failed round, retreat_blocked after three. A seal cell in another's zone
+  is placed as a last resort (retreat.trespass-last-resort). Once per flight, with at
   least :eat-gap blocks to the nearest hostile and food carried, it eats
   (jobs.survival.eat up to 20) so health can regenerate on the run. Done when
   no hostile has been within :clear-radius for :cooldown-ms.")
@@ -24,7 +37,14 @@
    :eat-gap {:doc "with at least this many blocks to the nearest hostile, eat once per flight" :default 12}
    :step {:doc "blocks per walk" :default 6}
    :cooldown-ms {:doc "done once no hostile was in the clear radius for this long" :default 5000}
-   :weapons {:doc "item name substrings that count as weapons, for a cornered fight" :default combat/default-weapons}})
+   :weapons {:doc "item name substrings that count as weapons, for a cornered fight" :default combat/default-weapons}
+   :blocks {:doc "names of the blocks a cornered body may seal itself in with" :default dig-in/building-blocks}
+   :max-places {:doc "seal placements per round" :default 4}
+   :max-hide-ms {:doc "a sealed body waits at most this long before the flight ends" :default 60000}})
+
+(def tool-weapons
+  "Item name substrings a cornered body with no weapon and no seal swings: any of them beats the fist."
+  ["_pickaxe" "_shovel" "_hoe"])
 
 (def hazard-clearance 2.5)
 
@@ -70,12 +90,18 @@
         s (js/Math.sin a)]
     [(- (* ux c) (* uz s)) (+ (* ux s) (* uz c))]))
 
+(defn column-along
+  "The [x z] column k blocks along [ux uz] from the centre of from's cell (a
+  body at x 58.5 stands in column 58 and probes from 58.5, not 59)."
+  [from [ux uz] k]
+  [(js/Math.floor (+ (js/Math.floor (:x from)) 0.5 (* ux k)))
+   (js/Math.floor (+ (js/Math.floor (:z from)) 0.5 (* uz k)))])
+
 (defn point-along
   "The cell step blocks from from along [ux uz], same height."
-  [from [ux uz] step]
-  {:x (js/Math.round (+ (:x from) (* ux step)))
-   :y (:y from)
-   :z (js/Math.round (+ (:z from) (* uz step)))})
+  [from dir step]
+  (let [[x z] (column-along from dir step)]
+    {:x x :y (:y from) :z z}))
 
 (defn near-hazard?
   "Whether the walk from from to target passes within clearance of a hazard
@@ -84,42 +110,76 @@
   (let [mid {:x (/ (+ (:x from) (:x target)) 2) :y (:y from) :z (/ (+ (:z from) (:z target)) 2)}]
     (boolean (some #(or (< (u/dist % target) hazard-clearance) (< (u/dist % mid) hazard-clearance)) hazards))))
 
-(defn open-cells
-  "How many cells along [ux uz] from from, up to n, are free at feet and head
-  height before the first obstacle, per block-at (a cell -> block name or nil)."
+(defn free-at?
+  "Whether feet and head cells at feet height y in column x z are passable."
+  [block-at x y z]
+  (and (passable? (block-at {:x x :y y :z z})) (passable? (block-at {:x x :y (inc y) :z z}))))
+
+(defn next-y
+  "The feet height a walker at feet height y in column [px pz] reaches in the
+  next column [x z], or nil when it cannot enter it: the same height, one
+  lower when the floor there is open and the cell under it is not (a step
+  down), else one higher when that is free and there is headroom above the
+  column it steps from (a step up)."
+  [block-at [px pz] [x z] y]
+  (cond
+    (free-at? block-at x y z)
+    (if (and (passable? (block-at {:x x :y (dec y) :z z})) (not (passable? (block-at {:x x :y (- y 2) :z z}))))
+      (dec y)
+      y)
+    (and (free-at? block-at x (inc y) z) (passable? (block-at {:x px :y (+ y 2) :z pz}))) (inc y)
+    :else nil))
+
+(defn walk-cells
+  "The feet cells {:x :y :z}, one per block along [ux uz] from from, up to n,
+  that a walker passes before the first column it cannot enter, per block-at
+  (a cell -> block name or nil). A column met twice (a diagonal) repeats its cell."
   [block-at from dir n]
-  (let [free? (fn [k] (let [{:keys [x z]} (point-along from dir k)
-                            y (js/Math.floor (:y from))]
-                        (and (passable? (block-at {:x x :y y :z z}))
-                             (passable? (block-at {:x x :y (inc y) :z z})))))]
-    (count (take-while free? (range 1 (inc n))))))
+  (loop [k 1
+         prev [(js/Math.floor (:x from)) (js/Math.floor (:z from))]
+         y (js/Math.floor (:y from))
+         out []]
+    (let [col (column-along from dir k)
+          ny (when (<= k n) (if (= col prev) y (next-y block-at prev col y)))]
+      (if (nil? ny)
+        out
+        (recur (inc k) col ny (conj out {:x (first col) :y ny :z (second col)}))))))
+
+(defn open-cells
+  "How many blocks along [ux uz] from from, up to n, a walker gets before the
+  first obstacle (see walk-cells)."
+  [block-at from dir n]
+  (count (walk-cells block-at from dir n)))
 
 (defn worth?
-  "Whether walking open cells along dir from from is worth it against threat:
-  it must not end closer, and must either be a real walk (min-open + 1
-  cells) or gain at least 2 blocks of distance. A short side step in a dead
-  end is neither, so a body that only has those left is cornered."
-  [from threat dir open]
-  (let [now (u/dist from threat)
-        then (u/dist (point-along from dir open) threat)]
-    (and (>= open min-open)
-         (>= then now)
-         (or (> open min-open) (>= (- then now) 2)))))
+  "Whether walking the open blocks along a direction from from, to the cell
+  end, is worth it against threat: it must not end closer, and must either be
+  a real walk (min-open + 1 blocks) or gain at least 2 blocks of distance. A
+  short side step in a dead end is neither, so a body that only has those
+  left is cornered."
+  [from threat {:keys [open end]}]
+  (and (>= open min-open)
+       (let [now (u/dist from threat)
+             then (u/dist end threat)]
+         (and (>= then now)
+              (or (> open min-open) (>= (- then now) 2))))))
 
 (defn choose-target
-  "The walk target: the first direction, turning away from the preferred one
-  as needed, that avoids every hazard and is open for a full step; else the
-  most open one that is still worth walking (see worth?). nil when cornered."
+  "The walk target, a feet cell: the end of the first direction, turning away
+  from the preferred one as needed, that avoids every hazard and is open for a
+  full step; else the most open one that is still worth walking (see
+  worth?). nil when cornered."
   [block-at from threat home hazards step]
   (let [dir (direction from threat home)
         options (->> turns
                      (map #(rotate dir %))
-                     (map (fn [d] {:open (open-cells block-at from d step) :dir d}))
+                     (map (fn [d] (let [cells (walk-cells block-at from d step)]
+                                    {:open (count cells) :dir d :end (peek cells)})))
                      (remove #(near-hazard? hazards from (point-along from (:dir %) step)))
-                     (filter #(worth? from threat (:dir %) (:open %))))
+                     (filter #(worth? from threat %)))
         pick (or (first (filter #(>= (:open %) step) options))
                  (last (sort-by :open options)))]
-    (when pick (point-along from (:dir pick) (:open pick)))))
+    (:end pick)))
 
 (defn home-pos
   "The position of the latest :bed or :home entry, or nil."
@@ -136,17 +196,86 @@
 (defn block-at-fn [p]
   (fn [pos] (u/block-name p pos)))
 
+(defn ^:async fight!
+  "Fight back with the best of weapons (the fist when none is carried) whatever
+  the health, kept while the hostile stays close; a fight that cannot reach
+  any hostile counts a failed round."
+  [c weapons why]
+  (let [{:keys [radius ranged-radius]} (:args c)]
+    (ctx/update-mem! c assoc :cornered true)
+    (let [r (await (ctx/call-child c :cornered 'jobs.survival.fight-back
+                                   {:range radius :ranged-range ranged-radius :min-health 0 :weapons weapons}))]
+      (if (= :declined r)
+        (u/fail! c :retreat_blocked why)
+        :continue))))
+
+(defn hostile-cells
+  "The feet and head cells of the hostiles within radius: no block goes there."
+  [p radius]
+  (set (mapcat (fn [e] (let [cell (sh/cell (u/pos-of (.-pos e)))] [cell (update cell :y inc)]))
+               (combat/hostiles p radius))))
+
+(defn ^:async place-seal!
+  "Place carried blocks at cells in order. :ok, or :failed at the first
+  placement refused or with nothing left to place."
+  [c cells]
+  (loop [cells cells]
+    (let [item (dig-in/pick c (:blocks (:args c)))]
+      (cond
+        (empty? cells) :ok
+        (nil? item) :failed
+        :else (let [r (await (ctx/act c :place (clj->js {:pos (first cells) :item item})))]
+                (if (#{"placed" "occupied"} (.-status r))
+                  (recur (rest cells))
+                  :failed))))))
+
+(defn ^:async seal!
+  "Fill the open cells around the body (dig-in's 1x1: sides at feet and head
+  height, a roof support, the roof) with carried :blocks, at most
+  :max-places this round. :sealed when none is left open, :continue while
+  more are owed, :failed when a hostile stands in one, none is carried or a
+  placement is refused."
+  [c]
+  (let [{:keys [radius max-places blocks]} (:args c)
+        p (:primitives c)
+        cells (dig-in/open-cells p (sh/feet p))]
+    (cond
+      (empty? cells) :sealed
+      (some (hostile-cells p radius) cells) :failed
+      (nil? (dig-in/pick c blocks)) :failed
+      :else
+      (do (access/trespass! c "retreat" (some #(access/trespass-refusal (access/rules-input c) :place %) cells))
+          (if (= :failed (await (place-seal! c (take max-places cells))))
+            :failed
+            (if (empty? (dig-in/open-cells p (sh/feet p))) :sealed :continue))))))
+
+(defn ^:async hide!
+  "Seal the body in and wait there: :continue while sealing or waiting, :done
+  once sealed for :max-hide-ms, nil when it cannot seal."
+  [c]
+  (let [r (await (seal! c))
+        now (ctx/now c)]
+    (case r
+      :failed nil
+      :continue :continue
+      :sealed (let [at (:sealed-at (ctx/mem c))]
+                (cond
+                  (nil? at) (do (ctx/update-mem! c assoc :sealed-at now)
+                                (ctx/emit! c :retreat_sealed :warn {:text "cornered: sealed in with blocks until the hostile leaves"
+                                                                    :pos (sh/feet (:primitives c))})
+                                :continue)
+                  (>= (- now at) (:max-hide-ms (:args c))) :done
+                  :else :continue)))))
+
 (defn ^:async cornered!
-  "Nowhere to go: fight back with the best weapon whatever the health, else
-  count a failure."
+  "Nowhere to go. Armed: fight with the best weapon. Else seal in with carried
+  blocks and wait; failing that fight with the best tool or the fist."
   [c why]
-  (let [{:keys [radius ranged-radius weapons]} (:args c)]
+  (let [{:keys [weapons]} (:args c)]
     (if (combat/best-weapon (:primitives c) weapons)
-      (do (ctx/update-mem! c assoc :cornered true)
-          (await (ctx/call-child c :cornered 'jobs.survival.fight-back
-                                 {:range radius :ranged-range ranged-radius :min-health 0 :weapons weapons}))
-          :continue)
-      (u/fail! c :retreat_blocked why))))
+      (await (fight! c weapons why))
+      (or (await (hide! c))
+          (await (fight! c (into (vec weapons) tool-weapons) why))))))
 
 (defn ^:async eat-on-the-run!
   "Once per flight, with the nearest hostile at least :eat-gap away, eat."
