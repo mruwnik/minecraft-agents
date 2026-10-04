@@ -35,7 +35,7 @@
                                           :cursor {:stream-id "s4" :seq 2} :position {:x 1 :y 64 :z 2}
                                           :offline false :settling false})
                             "/events"
-                            (do (swap! received assoc :events-query (.-search url))
+                            (do (swap! received #(-> % (assoc :events-query (.-search url)) (update :events-queries (fnil conj []) (.-search url))))
                                 (answer! res {:stream-id "s4" :oldest-seq 1 :latest-seq 2 :gap? false
                                               :events [{:seq 1 :generation-id "g7" :time-ms 1000 :source :job :kind :started
                                                         :context {:job-id "j1"} :data {:name "jobs.test"} :attention :none}
@@ -136,3 +136,28 @@
           (is (false? (:up body)))
           (is (not= "stale legacy event" (get-in body [:engine :recent 0 :text])))))
       (finally (.rmSync fs root #js {:recursive true :force true})))))
+
+(deftest live-refresh-reads-only-events-after-the-cached-cursor
+  (async done
+    (let [root (.mkdtempSync fs (.join path (os/tmpdir) "dashboard-refresh-test-"))
+          original-state-dir server/state-dir
+          body {:world "w" :name "Mock"}
+          engine-dir (.join path root "worlds" "w" "agents" (:name body) "engine")
+          received (atom {})]
+      (.mkdirSync fs engine-dir #js {:recursive true})
+      (set! server/state-dir root)
+      (run done
+           (fn []
+             (-> (mock-engine! (.join path engine-dir "events.sock") received)
+                 (.then (fn [mock]
+                          (with-redefs [server/live-engines (atom {})]
+                            (-> (server/refresh-live-engine! body)
+                                (.then (fn [_] (server/refresh-live-engine! body)))
+                                (.then (fn [_]
+                                         (is (= ["?stream-id=s4&after=0&limit=1000"
+                                                 "?stream-id=s4&after=2&limit=1000"]
+                                                (:events-queries @received)))))
+                                (.finally #(close-mock! mock))))))
+                 (.finally (fn []
+                             (set! server/state-dir original-state-dir)
+                             (.rmSync fs root #js {:recursive true :force true})))))))))

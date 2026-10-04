@@ -234,7 +234,7 @@
                                               page-seq (last-seq events after)
                                               next-cursor {:stream-id (:stream-id (state-cursor snapshot))
                                                            :seq page-seq}
-                                              cache {:snapshot snapshot :cursor next-cursor :folded folded
+                                              cache {:snapshot snapshot :generation-id (:generation-id snapshot) :cursor next-cursor :folded folded
                                                      :events (vec (take-last event-page-size combined))
                                                      :reset? actual-reset?}]
                                           (swap! live-errors dissoc name)
