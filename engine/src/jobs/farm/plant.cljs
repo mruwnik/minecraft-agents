@@ -57,6 +57,8 @@
            (sort-by #(- (counts %)))
            first))))
 
+(declare planned sowing)
+
 (defn count-fail
   "Count a fail of kind k (:fails or :walk-fails) on the cell at pos; the cell is skipped at the max-fails-th."
   [m k pos]
