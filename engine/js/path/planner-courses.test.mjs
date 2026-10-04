@@ -21,7 +21,7 @@ const found = [
   'cocoa-a2-one-feethead', 'cocoa-a2-both-head', 'cocoa-a2-both-feethead-diag',
   'cocoa-open-a2-both-feethead', 'cocoa-open-a2-one-feethead', 'cocoa-farm-across', 'cocoa-farm-along',
   'checker-we', 'rand50-we', 'rand50-ew', 'target-in-rand50', 'full-walled',
-  'fence-diag', 'trap-ceil-top', 'tunnel-stairs'
+  'fence-diag', 'trap-ceil-top'
 ]
 for (const name of found) {
   test(`course ${name}: found`, () => {
@@ -32,9 +32,14 @@ for (const name of found) {
   })
 }
 
+// the stairs sit in a tunnel 2 high: the body lifted 0.5 onto the first stair has its head in the ceiling over the cell it leaves
+test('course tunnel-stairs: no way up the stairs under the 2 high ceiling', () => {
+  assert.equal(planCourse('tunnel-stairs').status, 'partial')
+})
+
 // every step of a path has the body-centre position the executor steers to
 test('steps carry px, pz: the cell centre for ordinary cells', () => {
-  const r = planCourse('tunnel-stairs')
+  const r = planCourse('trap-ceil-top')
   r.path.steps.forEach(s => {
     assert.ok(Number.isFinite(s.px) && Number.isFinite(s.pz))
     assert.ok(s.px >= s.x && s.px <= s.x + 1 && s.pz >= s.z && s.pz <= s.z + 1)

@@ -931,6 +931,7 @@ All responses are EDN, including errors; mutation bodies must be EDN too.
 | `GET /events?stream-id=<id>&after=<seq>&limit=<n>` | bounded event page after a cursor, with oldest/latest sequence and explicit gap indication |
 | `POST /attention/resolve` | `{:request-id "..." :reason :handled}` resolves a request idempotently; it does not retry or cancel its job |
 | `GET /status?limit=<n>` | compact body/job/attention projection; `limit` is 1..32 (default 4) |
+| `GET /inventory` | read-only carried stack and worn equipment snapshot, independent of manual takeover |
 | `GET /job?id=<id>&limit=<n>` | one listed or reflex job's bounded parsed spec, effective args, state and linked outstanding requests |
 | `GET /catalog?kind=jobs&prefix=jobs.farm.&limit=20&offset=0` | bounded page of exact job names (names only) |
 | `GET /catalog?kind=triggers&prefix=health&limit=20&offset=0` | bounded page of exact trigger names (names only) |
@@ -955,11 +956,18 @@ For a compact terminal/agent read, `node engine/tools/observe.mjs <agent> --worl
 prints the status projection as EDN. It reads the same private event socket and
 does not contact or disturb Mineflayer. Use `job <id>` or `catalog job|trigger
 <name>` only when the summary needs detail; `--world` is required (a name is unique only within a world); `--state <dir>` selects another
-state root and `--limit <n>` bounds the listed queue rows.
+state root and `--limit <n>` bounds the listed queue rows. `inventory` returns
+aggregate carried counts and non-empty equipment slots in one read; `--slots`
+adds each carried stack's slot. `equipment` returns only equipped gear. Both
+modes are read-only and need no takeover lease; `--raw` returns the bounded
+stack and equipment snapshot.
 
 ```sh
 node engine/tools/observe.mjs Bob --world claude
 node engine/tools/observe.mjs Bob --world claude --raw
+node engine/tools/observe.mjs Bob --world claude inventory
+node engine/tools/observe.mjs Bob --world claude inventory --slots
+node engine/tools/observe.mjs Bob --world claude equipment --raw
 node engine/tools/observe.mjs Bob --world claude job j17
 node engine/tools/observe.mjs Bob --world claude catalog jobs jobs.farm. --limit 10
 node engine/tools/observe.mjs Bob --world claude catalog job jobs.forestry.harvest-wood
@@ -1512,6 +1520,19 @@ climbing, water, doors; costs in seconds plus risk); `src/engine/path/planner_tu
 by `bench-lang/fixtures-equal.test.mjs`. Build: `npx shadow-cljs compile planner-bench` (tests) and `npx shadow-cljs
 release planner-bench-release` (bench). A gap jump or a drop never lands on farmland (vanilla tramples farmland under a
 fall of over 0.5 blocks); a jump up one block onto it is allowed (it falls about 0.3 from the top of the arc).
+
+An enclosed goal is found before any walking: for a `near` goal whose column is loaded, `step` first runs the backward goal
+flood with a small budget (`options.preFlood`, default 24 cells seen, capped by `goalFlood`; 0 turns it off). If the flood
+exhausts without meeting the start and the flooded cells have no cliff edge beside them (a free column with nothing to stand on
+within a drop: a goal on an island or above a drop is left to the search, which ends in a partial plan) the answer is
+`goal-enclosed`, `none`, no path, `expanded` 0. Otherwise the search goes on as
+before and the late flood (after `floodAfter` expansions, `goalFlood` cells) still covers bigger enclosed areas. The early
+pass leaves `stats.flooded` and `expanded` alone and reports its size as `stats.preFlooded`. Because it fires first, a
+goal sealed off by walls says `goal-enclosed` at once (`preFlood: 0` for the old exhausted search).
+
+A step up by walking (a stairs, a slab, a snow layer of 3 or more, a diagonal step up) lifts the body into the slab above its old
+top, so that slab must be free in the cell it leaves: stairs right behind a 2 high doorway are no way in (the head meets the lintel),
+behind a 3 high one they are. A ladder start, a tight cell (its mask judges) and a jump (which already checked) are as before.
 
 `engine.path.alternatives/plan-alternatives` (`planAlternatives(snapshot, query, options, k = 3)`) returns
 `{status, reason, paths, searches, ms}`: up to k paths, best first, each `{steps, cost, summary, total, differs}`

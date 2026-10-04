@@ -515,12 +515,44 @@ test('a top half stairs block is a full obstacle: it takes a jump', () => {
   assert.equal(r.path.cost.jumps, 1)
 })
 
+// ---- head room over the source column: a step up needs the raised body to fit under the ceiling where it stands ----
+
+// a wall at x=0 closed to y=75 with one doorway `high` cells high at z=2 (the lintel above it), the start outside at x=-1
+const house = (high, inside) => world({ fill: [[0, 64, -2, 0, 75, 40, 'stone'], [0, 64, 2, 0, 63 + high, 2, 'air'], ...inside] })
+const outside = { x: -1, y: 64, z: 2 }
+const behind = (...rows) => rows.map(([name, props]) => [1, 64, -2, 1, 64, 40, name, props])
+
+const risers = [
+  ['stairs flight', flight.map(([x0, y0, z0, x1, y1, z1, ...rest]) => [x0 - 3, y0, z0, x1 - 3, y1, z1, ...rest]), near(6, 68, 2)],
+  ['bottom slab', behind(['oak_slab', { type: 'bottom' }]), near(1, 64, 2)],
+  ['3 snow layers', behind(['snow', { layers: 3 }]), near(1, 64, 2)]
+]
+for (const [name, inside, goal] of risers) {
+  for (const [high, found] of [[2, false], [3, true]]) {
+    test(`${name} behind a ${high} high doorway: ${found ? 'found' : 'not found'}`, () => {
+      assert.equal(run(house(high, inside), goal, {}, outside).status === 'found', found)
+    })
+  }
+}
+
+test('a free-standing stair flight of the same shape is found', () => {
+  const inside = risers[0][1]
+  assert.equal(run(world({ fill: inside }), risers[0][2], {}, { x: -1, y: 64, z: 2 }).status, 'found')
+})
+
+for (const [name, props, block, found] of [['2 snow layers', { layers: 2 }, 'snow', true], ['carpet', {}, 'white_carpet', true]]) {
+  test(`${name} behind a 2 high doorway: found`, () => {
+    assert.equal(run(house(2, behind([block, props])), near(1, 64, 2), {}, outside).status === 'found', found)
+  })
+}
+
 // ---- goal side flood: a goal nothing can reach is reported cheaply ----
 
 const floating = world({ fill: [[10, 66, 10, 14, 66, 14, 'stone']] })
 
-// the flood runs only once the forward search has expanded floodAfter nodes; small here so tests need no huge worlds
-const flooding = { floodAfter: 20 }
+// the late flood runs only once the forward search has expanded floodAfter nodes; small here so tests need no huge worlds.
+// preFlood: 0 keeps the early flood (before the first expansion) from answering first: these tests are about the late one
+const flooding = { floodAfter: 20, preFlood: 0 }
 
 test('a goal on a platform 3 above the ground with no way up: goal-enclosed, cheaply', () => {
   const r = run(floating, near(12, 67, 12), flooding)
@@ -534,7 +566,7 @@ test('an easy query never floods: the flood needs floodAfter expansions first', 
 })
 
 test('without the flood a sealed platform is exhausted by the forward search', () => {
-  const r = run(floating, near(12, 67, 12))
+  const r = run(floating, near(12, 67, 12), { preFlood: 0 })
   assert.equal(r.reason, 'exhausted')
 })
 
@@ -564,6 +596,68 @@ test('a sealed goal no nearer than the start is none, as exhausted is', () => {
 test('an xz goal does not flood', () => {
   const r = run(floating, { kind: 'xz', x: 12, z: 12, range: 0 }, flooding)
   assert.notEqual(r.reason, 'goal-enclosed')
+  assert.notEqual(run(floating, { kind: 'xz', x: 12, z: 12, range: 0 }).reason, 'goal-enclosed')
+})
+
+// ---- early goal flood: a small enclosed goal is found before any walking, with default options ----
+
+// a ring of wall 3 high around the cell (cx, cz), `half` cells out, with the cells of `gap` left open
+const ring = (cx, cz, half, gap = []) => [
+  [cx - half, 64, cz - half, cx + half, 66, cz + half, 'stone'],
+  [cx - half + 1, 64, cz - half + 1, cx + half - 1, 66, cz + half - 1, 'air'],
+  ...gap.map(([x, z]) => [x, 64, z, x, 66, z, 'air'])
+]
+const sealed = near(10, 64, 10)
+const bigFloor = [[-2, 60, -2, 62, 63, 62, 'stone']]
+
+for (const [name, fill] of [['a small floor', ring(10, 10, 1)], ['a 60x60 floor', [...bigFloor, ...ring(10, 10, 1)]]]) {
+  test(`a goal walled in on all sides on ${name}: goal-enclosed at once, nothing expanded`, () => {
+    const r = run(world({ fill }), sealed)
+    assert.deepEqual([r.status, r.reason, r.path, r.expanded], ['none', 'goal-enclosed', null, 0])
+    assert.equal(r.stats.flooded, 0)
+  })
+}
+
+test('preFlood: 0 gives the old answer for a sealed goal: the search exhausts', () => {
+  const r = run(world({ fill: ring(10, 10, 1) }), sealed, { preFlood: 0 })
+  assert.equal(r.reason, 'exhausted')
+  assert.ok(r.expanded > 0)
+})
+
+test('goalFlood: 0 turns the early flood off too', () => {
+  assert.equal(run(world({ fill: ring(10, 10, 1) }), sealed, { goalFlood: 0 }).reason, 'exhausted')
+})
+
+// an unreachable goal that is not sealed (its cells have moves that leave the flooded region) is left to the search, which ends
+// with a partial plan to the nearest reachable cell
+const unsealed = [
+  ['a 3x3 island across a 4 wide gap', [[6, 60, -2, 40, 63, 40, 'air'], [10, 60, 9, 12, 63, 11, 'stone']], near(11, 64, 10)],
+  ['a pillar island 8 above the ground', [[9, 64, 9, 11, 71, 11, 'stone']], near(10, 72, 10)]
+]
+for (const [name, fill, goal] of unsealed) {
+  test(`early flood: a goal on ${name} is not claimed early, the search runs`, () => {
+    const r = run(world({ fill }), goal)
+    assert.ok(r.expanded > 0, `expanded ${r.expanded}`)
+    assert.ok(r.stats.preFlooded > 0)
+  })
+}
+
+test('a goal in a ring of wall with a one cell gap is found', () => {
+  const r = run(world({ fill: ring(10, 10, 1, [[9, 10]]) }), sealed)
+  assert.equal(r.status, 'found')
+  assert.deepEqual(lastCell(r), [10, 64, 10])
+})
+
+test('a goal inside solid stone is goal-not-standable, nothing expanded', () => {
+  const r = run(world({ fill: [[10, 64, 10, 10, 66, 10, 'stone']] }), sealed)
+  assert.deepEqual([r.status, r.reason, r.expanded], ['none', 'goal-not-standable', 0])
+})
+
+test('an enclosed area larger than the early budget is left to the search and the late flood', () => {
+  const r = run(world({ fill: ring(24, 24, 15) }), near(24, 64, 24))
+  assert.notEqual(r.status, 'found')
+  assert.ok(r.expanded > 0)
+  assert.ok(r.stats.preFlooded > 24)
 })
 
 // ---- search box: nodes far outside the start-goal box are not searched; 'box' says that is why it ended ----

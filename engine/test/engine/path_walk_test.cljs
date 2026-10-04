@@ -86,7 +86,7 @@
         (let [wall (into {} (for [[x z] [[9 1] [11 1] [10 0] [10 2]] y [64 65]] [(str x "," y "," z) "stone"]))
               blocks (merge (floor (range 12)) wall {"10,66,1" "stone"})
               [{:keys [result]}] (await (walk-to blocks [10 64 1] start))]
-          (is (= {:status :no-path :reason :exhausted} (select-keys result [:status :reason]))))))))
+          (is (= {:status :no-path :reason :goal-enclosed} (select-keys result [:status :reason]))))))))
 
 ;; an island (stone at y 63, feet 64) of x 0..4 over a lower floor of x 5..11; the goal stands on a 3-high pillar of the
 ;; lower floor, which no move reaches: the plan is partial and its nearest end is down the drop

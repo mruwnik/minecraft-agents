@@ -205,7 +205,7 @@
    ;; the query
    from-x from-y from-z from-px from-pz goal-x goal-y goal-z goal-range slack ^boolean near ^boolean goal-unloaded
    ;; options
-   max-nodes max-drop weight risk-weight goal-flood flood-after
+   max-nodes max-drop weight risk-weight goal-flood flood-after pre-flood
    ;; a search for an alternative path (options.avoid, see avoidCost): kinds of move refused, cells near earlier paths
    ^boolean avoiding avoid-kinds ^js avoid-cells avoid-factor
    ;; what the walker can do (options.limits): kinds of move never planned, a test of each gap jump and of each corner
@@ -256,7 +256,7 @@
    ^js surface-cache ^js dive-cache
    ^:mutable masks ^:mutable tight-masks ^:mutable regions-seen ^:mutable mask-ms
    ;; the goal flood: moves go to the probe instead of the search while it runs
-   ^:mutable ^boolean flooding ^:mutable fx ^:mutable fy ^:mutable fz ^:mutable ^boolean hit ^:mutable flooded
+   ^:mutable ^boolean flooding ^:mutable fx ^:mutable fy ^:mutable fz ^:mutable ^boolean hit ^:mutable flooded ^:mutable pre-flooded
    ^:mutable ^boolean flood-pending ^:mutable ^boolean saw-water
    ;; progress
    ^:mutable ^boolean started ^:mutable ^boolean finished ^:mutable reason ^:mutable ^boolean over-budget
@@ -1389,7 +1389,9 @@
               ;; (the body steps off a climbable without a jump: it is already rising)
               walks (or (<= delta STEP) climbs (and climbing (<= delta JUMP-UP)))]
           ;; a jump needs headroom over the start column; a tight start's mask checks that itself
-          (when (or walks (and (<= delta JUMP-UP) (or tight-src ^boolean (.clear s x z h0 (+ (* y2 16) h1 BODY)))))
+          (when (and (or walks (and (<= delta JUMP-UP) (or tight-src ^boolean (.clear s x z h0 (+ (* y2 16) h1 BODY)))))
+                     ;; a walk up lifts the body into the slab above its old top: that must be free in the start column
+                     (or (not walks) (<= delta 0) tight-src climbing ^boolean (.clear s x z (+ h0 BODY) (+ (* y2 16) h1 BODY))))
             (let [sec (+ (if walks walk (+ walk JUMP-S)) enter-extra)
                   move (if walks MOVE-WALK MOVE-JUMP)]
               (if (or tight-src ^boolean (.tightAt s x2 y2 z2))
@@ -1436,7 +1438,8 @@
                   sb (.side s x z2 lo hi)
                   slide (+ sa sb)] ; 1 when exactly one side is blocked
               (when (and (< slide 2)
-                         (or (not jump) ^boolean (.clear s x z h0 hi))
+                         ;; a step up lifts the body: its start column must have the room
+                         (or (<= h2 h0) ^boolean (.clear s x z (if jump h0 (+ h0 BODY)) hi))
                          ;; (the walker's test of a jump that slides along a corner: limit-corner)
                          (or (not jump) (zero? slide) (nil? limit-corner)
                              (true? (limit-corner x y z (- h0 (* y 16)) x2 y2 z2 h1))))
@@ -1772,9 +1775,9 @@
         ^boolean (.floodVisit s seen queue start-key fx (+ fy dy) fz) true
         :else (recur (inc dy)))))
 
-  (floodRun [s ^js seen ^js queue start-key]
+  (floodRun [s ^js seen ^js queue start-key budget]
     (loop [head 0]
-      (if (and (< head (.-length queue)) (<= (.-size seen) goal-flood))
+      (if (and (< head (.-length queue)) (<= (.-size seen) budget))
         (do
           (set! fx (aget queue head))
           (set! fy (aget queue (+ head 1)))
@@ -1785,10 +1788,10 @@
         false)))
 
   ;; Backward flood from the standable goal cells over predecessors: cells n with a forward move n -> c, found by running
-  ;; n's own moves (so it can never disagree with the search). True when it exhausts within goalFlood nodes without
+  ;; n's own moves (so it can never disagree with the search). True when it exhausts within budget nodes without
   ;; meeting the start: then nothing reaches the goal. Slow, but bounded by the budget; false on budget or when the start
   ;; is met, or when it meets water (a drop into water starts further up than the flood looks).
-  (goalEnclosed [s]
+  (goalEnclosed [s budget sealed]
     (let [start-key (.keyOf s from-x from-y from-z 0)
           seen (js/Set.)
           queue #js []]
@@ -1799,11 +1802,51 @@
         (do
           (set! flooding true)
           (set! allow-shut true) ; a shut trapdoor is a way through, only dearer: the flood must not call its far side enclosed
-          (let [open ^boolean (.floodRun s seen queue start-key)]
+          (let [open ^boolean (.floodRun s seen queue start-key budget)
+                enclosed (and (not open) (not saw-water) (<= (.-size seen) budget))
+                leaks (and enclosed ^boolean sealed ^boolean (.floodLeaks s queue))]
             (set! flooding false)
             (set! allow-shut false)
             (set! flooded (.-size seen))
-            (and (not open) (not saw-water) (<= (.-size seen) goal-flood)))))))
+            (and enclosed (not leaks)))))))
+
+  ;; a body-high free column beside the cell with nothing to stand on within a drop below it: a cliff or a gap, an edge the body
+  ;; can walk off to nowhere (a wall top above the floor is no cliff: its drop lands)
+  (cliffBeside [s x y z h]
+    (loop [c 0]
+      (if (== c 4)
+        false
+        (let [x2 (+ x (aget adx c))
+              z2 (+ z (aget adz c))]
+          (if (and ^boolean (.clear s x2 z2 (+ (* y 16) h) (+ (* y 16) h BODY))
+                   (loop [dy (- (inc max-drop))]
+                     (cond
+                       (> dy 1) true
+                       (>= (.nodeH s x2 (+ y dy) z2) 0) false
+                       :else (recur (inc dy)))))
+            true
+            (recur (inc c)))))))
+
+  ;; true when the flooded region has a cliff edge: the goal sits on an island or above a drop, not in a pocket
+  (floodLeaks [s ^js queue]
+    (loop [head 0]
+      (cond
+        (>= head (.-length queue)) false
+        ^boolean (.cliffBeside s (aget queue head) (aget queue (+ head 1)) (aget queue (+ head 2))
+                               (.nodeH s (aget queue head) (aget queue (+ head 1)) (aget queue (+ head 2)))) true
+        :else (recur (+ head 3)))))
+
+  ;; the early pass of the flood, before the first expansion: only a small enclosed goal is caught, so it stays cheap, and
+  ;; only a sealed one (no cliff edge beside the flooded cells: a goal on an island or above a drop is left to the search). It
+  ;; leaves flooded and expanded alone (the late flood owns them) and reports its size as stats.preFlooded.
+  (goalEnclosedEarly [s]
+    (let [budget (js/Math.min pre-flood goal-flood)]
+      (if (or (not near) (<= budget 0) goal-unloaded)
+        false
+        (let [enclosed ^boolean (.goalEnclosed s budget true)]
+          (set! pre-flooded flooded)
+          (set! flooded 0)
+          enclosed))))
 
   ;; ---- the search ----
 
@@ -1957,11 +2000,14 @@
 
   ;; the goal flood costs ~30 ms, so easy queries must never see it: it runs once, after flood-after forward expansions
   (step [s max-expansions]
-    (when-not started (.begin s))
+    (when-not started
+      (.begin s)
+      (when (and (not finished) ^boolean (.goalEnclosedEarly s))
+        (.finish s "goal-enclosed")))
     (loop [n 0]
       (when (and (< n max-expansions) (not finished))
         (if (and flood-pending (>= expanded flood-after) (not goal-unloaded))
-          (let [enclosed ^boolean (.goalEnclosed s)]
+          (let [enclosed ^boolean (.goalEnclosed s goal-flood false)]
             (set! flood-pending false)
             (set! expanded (+ expanded flooded))
             (if enclosed
@@ -2108,7 +2154,7 @@
          :reason why
          :ms elapsed
          :expanded expanded
-         :stats #js {:masks masks :tightMasks tight-masks :tightCells (.-size tight-seen) :regions regions-seen :maskMs mask-ms :flooded flooded}
+         :stats #js {:masks masks :tightMasks tight-masks :tightCells (.-size tight-seen) :regions regions-seen :maskMs mask-ms :flooded flooded :preFlooded pre-flooded}
          :path path
          :oneWay one-way})
 
@@ -2186,7 +2232,7 @@
      (.-x goal) (.-y goal) (.-z goal) goal-range (* OCTILE-SLACK goal-range) near goal-unloaded
      ;; options
      max-nodes (option options "maxDrop" 3) (option options "weight" 1) (option options "riskWeight" 2)
-     (option options "goalFlood" 4000) (option options "floodAfter" 3000)
+     (option options "goalFlood" 4000) (option options "floodAfter" 3000) (option options "preFlood" 24)
      ;; avoid
      (some? avoid) (if (some? avoid) (.-kinds avoid) 0) (if (some? avoid) (.-cells avoid) nil) (if (some? avoid) (.-factor avoid) 0)
      ;; limits
@@ -2223,8 +2269,8 @@
      (js/Float64Array. TABLE) (js/Uint8Array. TABLE) (js/Float64Array. TABLE) (js/Uint8Array. TABLE) (js/Map.) (js/Set.) (js/Int8Array. REGIONS)
      (js/Float64Array. REGIONS) (js/Int16Array. REGIONS) (js/Map.) (js/Map.)
      0 0 0 0
-     ;; the goal flood: flooding fx fy fz hit flooded flood-pending saw-water
-     false 0 0 0 false 0
+     ;; the goal flood: flooding fx fy fz hit flooded pre-flooded flood-pending saw-water
+     false 0 0 0 false 0 0
      (and near (pos? (option options "goalFlood" 4000))) false
      ;; progress: started finished reason over-budget boxed goal-node best-node
      false false nil false false -1 -1

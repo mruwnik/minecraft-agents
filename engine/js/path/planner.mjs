@@ -50,7 +50,8 @@
 // cardinal chain covers them). A drop out of or into a tight cell falls straight down from the crossing point: it must be free in
 // the takeoff mask, in the neighbour column at takeoff height and in the landing cell's mask, and the landing node is that
 // point's region. Gap jumps out of or into a tight cell are refused. A search box (margin, yMargin) bounds
-// the nodes, and a backward flood from the goal, run only once the search has spent floodAfter expansions, reports a goal nothing can reach
+// the nodes, and a backward flood from the goal reports a goal nothing can reach: a small one (preFlood cells) before the first expansion,
+// the full one (goalFlood cells) once the search has spent floodAfter expansions
 // (it declines to when it meets water: a drop into water starts further up than the flood looks).
 import { UNLOADED } from './snapshot.mjs'
 import { defaultStateTable, OPEN, OPENABLE, WATER, LAVA, NARROW, HAZARD_AVOID, DAMAGE_STAND, DAMAGE_TOUCH, SLOW, PORTAL, CLIMB_INSIDE, CLIMB_TRAP_SHUT, LADDER, VINES, SCAFFOLDING, OPEN_REDSTONE, KIND_DOOR, KIND_GATE, ACT_BUTTON, ACT_LEVER, ACT_PLATE } from './blocks.mjs'
@@ -116,7 +117,7 @@ export function createSearch (snapshot, query, options = {}) {
   const {
     maxNodes = 200000, maxDrop = 3, weight = 1, riskWeight = 2,
     table = defaultStateTable(),
-    goalFlood = 4000, floodAfter = 3000, margin = 64, yMargin = 48,
+    goalFlood = 4000, floodAfter = 3000, preFlood = 24, margin = 64, yMargin = 48,
     returnable = false // plan no step the body cannot undo (see isOneWay): the search a partial end is taken from
   } = options
   const costs = { ...DEFAULT_COSTS, ...options.costs }
@@ -949,6 +950,8 @@ export function createSearch (snapshot, query, options = {}) {
         const walks = delta <= STEP || climbs || (climbing && delta <= JUMP_UP)
         // a jump needs headroom over the start column; a tight start's mask checks that itself
         if (!walks && !(delta <= JUMP_UP && (tightSrc || clear(x, z, h0, ty * 16 + h1 + BODY)))) continue
+        // a walk up (a stairs, a slab, a deep snow layer) lifts the body into the slab above its old top: that must be free in the start column
+        if (walks && delta > 0 && !tightSrc && !climbing && !clear(x, z, h0 + BODY, ty * 16 + h1 + BODY)) continue
         const sec = (walks ? walk : walk + JUMP_S) + enterExtra
         const move = walks ? MOVE.WALK : MOVE.JUMP
         if (tightSrc || tightAt(x2, ty, z2)) tightMove(i, x, y, z, h, region, c, x2, ty, z2, h1, move, sec, enterRisk, enterSlow, climbing && delta > STEP ? GRID : SNAP)
@@ -992,7 +995,7 @@ export function createSearch (snapshot, query, options = {}) {
       const sa = side(x + dx, z, lo, hi)
       const sb = side(x, z + dz, lo, hi)
       if (sa === 2 || sb === 2 || (sa === 1 && sb === 1)) continue
-      if (jump && !clear(x, z, h0, hi)) continue
+      if (h2 > h0 && !clear(x, z, jump ? h0 : h0 + BODY, hi)) continue // a step up lifts the body: its start column must have the room
       const slide = sa + sb // 1 when exactly one side is blocked
       const walk = WALK_S * SQRT2 * (1 + SLOW_EXTRA * (slowFrom + enterSlow)) + slide * CORNER_S
       const code = jump ? MOVE.JUMP : slide ? MOVE.CORNER : MOVE.DIAGONAL
@@ -1287,10 +1290,12 @@ export function createSearch (snapshot, query, options = {}) {
   }
 
   // Backward flood from the standable goal cells over predecessors: cells n with a forward move n -> c, found by running n's
-  // own moves (so it can never disagree with the search). True when it exhausts within goalFlood nodes without meeting the
+  // own moves (so it can never disagree with the search). True when it exhausts within `budget` nodes without meeting the
   // start: then nothing reaches the goal. Slow, but bounded by the budget; false on budget or when the start is met.
   let flooded = 0
-  const goalEnclosed = () => {
+  let preFlooded = 0
+  // With `sealed`, an enclosed region also counts only when it has no cliff edge (the early pass).
+  const goalEnclosed = (budget, sealed = false) => {
     const inSpan = (x, z) => x - from.x + HALF >= 0 && x - from.x + HALF < SPAN && z - from.z + HALF >= 0 && z - from.z + HALF < SPAN
     const startKey = keyOf(from.x, from.y, from.z)
     const seen = new Set()
@@ -1337,7 +1342,7 @@ export function createSearch (snapshot, query, options = {}) {
     edge = probe
     allowShut = true // a shut trapdoor is a way through, only dearer: the flood must not call its far side enclosed
     let open = false
-    for (let head = 0; head < queue.length && !open && seen.size <= goalFlood; head++) {
+    for (let head = 0; head < queue.length && !open && seen.size <= budget; head++) {
       ;[fx, fy, fz] = queue[head]
       for (let dy = -1; dy <= maxDrop + 1; dy++) if (dy !== 0) open ||= visit(fx, fy + dy, fz) // climbs and falls in the column
       for (const [dx, dz] of AROUND) {
@@ -1349,10 +1354,36 @@ export function createSearch (snapshot, query, options = {}) {
         }
       }
     }
+    const enclosed = !open && !sawWater && seen.size <= budget
+    const leaks = enclosed && sealed && leaksOut(queue)
     edge = consider
     allowShut = false
     flooded = seen.size
-    return !open && !sawWater && seen.size <= goalFlood
+    return enclosed && !leaks
+  }
+
+  // a body-high free column beside the cell with nothing to stand on within a drop below it: a cliff or a gap, an edge the body
+  // can walk off to nowhere (a wall top above the floor is no cliff: its drop lands)
+  const cliffBeside = (x, y, z, h) => CARDINAL.some(([dx, dz]) => {
+    if (!clear(x + dx, z + dz, y * 16 + h, y * 16 + h + BODY)) return false
+    for (let dy = -maxDrop - 1; dy <= 1; dy++) if (nodeH(x + dx, y + dy, z + dz) >= 0) return false
+    return true
+  })
+
+  // true when the flooded region has a cliff edge: the goal sits on an island or above a drop, not in a pocket. (Not "a move lands
+  // outside": a jump over a one block wall does, and a goal walled in on all sides is still enclosed then.)
+  const leaksOut = queue => queue.some(([x, y, z]) => cliffBeside(x, y, z, nodeH(x, y, z)))
+
+  // the early pass of the flood, before the first expansion: only a small enclosed goal is caught, so it stays cheap, and only a
+  // sealed one (no cliff edge beside the flooded cells: a goal on an island or above a drop is left to the search). It leaves
+  // `flooded` and `expanded` alone (the late flood owns them) and reports its size as stats.preFlooded.
+  const goalEnclosedEarly = () => {
+    const budget = Math.min(preFlood, goalFlood)
+    if (!near || budget <= 0 || goalUnloaded) return false
+    const enclosed = goalEnclosed(budget, true)
+    preFlooded = flooded
+    flooded = 0
+    return enclosed
   }
 
   const finish = why => {
@@ -1454,11 +1485,14 @@ export function createSearch (snapshot, query, options = {}) {
   }
 
   const step = maxExpansions => {
-    if (!started) begin()
+    if (!started) {
+      begin()
+      if (!finished && goalEnclosedEarly()) finish('goal-enclosed')
+    }
     for (let n = 0; n < maxExpansions && !finished; n++) {
       if (floodPending && expanded >= floodAfter && !goalUnloaded) {
         floodPending = false
-        const enclosed = goalEnclosed()
+        const enclosed = goalEnclosed(goalFlood)
         expanded += flooded
         n += flooded // the flood counts toward the slice
         if (enclosed) { finish('goal-enclosed'); break }
@@ -1616,6 +1650,7 @@ export function createSearch (snapshot, query, options = {}) {
     else if (reason === 'exhausted' && airSeen) reason = 'air'
     const done = (status, path, oneWay = null, why = reason) => {
       stats.flooded = flooded
+      stats.preFlooded = preFlooded
       stats.tightCells = tightSeen.size
       return { status, reason: why, ms: elapsed, expanded, stats, path, oneWay }
     }
