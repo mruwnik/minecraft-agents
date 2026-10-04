@@ -490,6 +490,20 @@ read. The files are stat-ed again at most every 3 s, by the first read after tha
 again. A file that turns unreadable or invalid keeps its last good copy and is reported once (`:system`
 `world.plan-unreadable` / `world.blueprint-unreadable`, `:plan` or `:blueprint`, `:error`, `:kept`).
 
+**Notes.** What bodies saw, written by the bodies into the world's shared knowledge (`engine.notes`; plans stay
+read-only). Each body writes only its own file, `state/worlds/<world>/notes/<body>.edn` (`notes/paths`, the one place
+that says so), `{:body :notes [note]}`, whole, to a temp file then renamed. A note is `{:kind :what :pos [x y z] :by :t
+:until}` (`:t`, `:until` wall-clock ms): `{:kind :seen :what "oak_log"}` a block seen there, with `:id` (uuid) for an
+entity, `{:kind :searched :what [names] :r n}` ground looked over for those names within `r` (XZ). One item per
+`[kind what (or id pos)]`, the newest `:t` kept (tie: the lowest `:by`). Reads drop notes past `:until`; a body's file
+keeps at most 2000, the oldest dropped. Readers merge every body's file like plans: the folder is stat-ed at most every
+3 s, changed files re-read, a broken file keeps its last good copy with one `:system` `world.notes-unreadable` warn
+(`:body :error :kept`); the body's own notes are held in memory, so its writes show at once (a broken own file at start:
+one warn, start empty, moved to `<body>.edn.broken` at the first write; a failed write: one `world.notes-unwritable`
+warn per error, kept in memory, retried by the next write). Jobs: `(notes/notes c)` the merged live notes,
+`(notes/note! c [{:kind :what :pos :ttl-ms ...}])` stamps `:by :t :until` and writes. The store hangs off the world
+(`(:notes world)`); none means `[]` and no writes.
+
 **engine.chat.** Limits as data, enforced in `act!` for every `:chat` act (`gate!`); `say!` splits and spaces lines.
 
 **act.** Every acting primitive call goes through `act`. It checks the
