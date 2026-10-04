@@ -1,0 +1,3 @@
+;; explore live: search for sponge
+{:register []
+ :queue [(jobs.explore.search {:target "sponge" :max-distance 40})]}

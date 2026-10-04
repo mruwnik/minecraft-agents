@@ -1,0 +1,3 @@
+;; explore live: a natural surface target with a short look
+{:register []
+ :queue [(jobs.explore.search {:target ["fern" "large_fern"] :count 25 :scan-radius 12 :max-distance 96})]}

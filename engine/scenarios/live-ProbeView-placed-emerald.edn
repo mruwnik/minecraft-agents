@@ -1,0 +1,3 @@
+;; explore live: search for emerald_block
+{:register []
+ :queue [(jobs.explore.search {:target "emerald_block" :max-distance 80})]}
