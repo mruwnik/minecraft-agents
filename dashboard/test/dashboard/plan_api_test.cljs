@@ -8,6 +8,19 @@
 
 (defn opts [block-at] {:dir dir :blueprint-dir blueprint-dir :block-at block-at})
 
+(deftest a-village-anchor-preserves-proposed-status-without-invented-completion
+  (let [p {:id "marker" :kind :village :at [4 65 -2] :status :proposed
+           :parts [] :metadata {:geometry :incomplete :population {:target 8}}}
+        item (api/list-item {} (fn [& _] (throw (js/Error. "marker must not read blocks"))) {} ["marker" p])]
+    (is (= :proposed (:status item)))
+    (is (= :village (:kind item)))
+    (is (= [4 65 -2] (:at item)))
+    (is (= {:geometry :incomplete} (:metadata item)))
+    (is (= 0 (get-in item [:counts :total])))
+    (is (= 0 (:percent item)))
+    (is (nil? (:region item)))
+    (is (= [] (:elements item)))))
+
 (def wheat-everywhere (fn [_ _ _] #js {:name "wheat" :state #js {}}))
 (def nothing-dumped (fn [_ _ _] nil))
 (deftest the-world-lookup-keeps-the-block-state

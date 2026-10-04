@@ -20,7 +20,7 @@
 (def sides [:north :east :south :west])
 (def max-cells 200000)
 
-(def plan-keys #{:id :status :parts :assign :note})
+(def plan-keys #{:id :status :parts :assign :note :kind :at :metadata})
 (def where-keys [:box :outline :cells])
 (def area-part-keys #{:id :box :outline :cells :want :note})
 (def blueprint-part-keys #{:id :blueprint :at :turn :note})
@@ -32,6 +32,12 @@
 
 ;; ---------------------------------------------------------------- checking
 (defn coords? [v] (and (vector? v) (= 3 (count v)) (every? integer? v)))
+
+(defn finite-number? [v]
+  (and (number? v) #?(:clj (Double/isFinite (double v)) :cljs (js/Number.isFinite v))))
+
+(defn anchor? [v]
+  (and (vector? v) (= 3 (count v)) (every? finite-number? v)))
 
 (defn block-want? [want]
   (and (map? want) (string? (:block want)) (every? keyword? (keys want))))
@@ -100,6 +106,9 @@
                      (when-not (contains? statuses (:status plan))
                        (str ":status must be one of " (str/join " " (sort statuses))))
                      (when-not (vector? parts) ":parts must be a vector of parts")
+                     (when (and (contains? plan :kind) (not (keyword? (:kind plan)))) ":kind must be a keyword")
+                     (when (and (contains? plan :at) (not (anchor? (:at plan)))) ":at must be three finite coordinates [x y z]")
+                     (when (and (contains? plan :metadata) (not (map? (:metadata plan)))) ":metadata must be a map")
                      (when-not (or (nil? (:assign plan)) (and (vector? (:assign plan)) (every? #(string? (:spot %)) (:assign plan))))
                        ":assign must be a vector of {:spot name ...}")
                      (when-not (or (empty? ids) (apply distinct? ids)) "part ids must be unique")

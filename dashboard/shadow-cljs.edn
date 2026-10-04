@@ -9,6 +9,11 @@
            :output-to "out/server.cjs"
            :output-dir "out/server-js"
            :compiler-options {:infer-externs false}}
+  :migrate-data {:target :node-script
+                 :main dashboard.migrate-data/main
+                 :output-to "out/migrate-data.cjs"
+                 :output-dir "out/migrate-data-js"
+                 :compiler-options {:infer-externs true}}
   :agent-tools {:target :node-library
                      :exports {:storage agent-tools.storage-compat/api
                                :mapFilters agent-tools.api/map-filters

@@ -24,7 +24,9 @@
 (rf/reg-sub :shown-bodies (fn [d _] (db/shown-bodies d)))
 (rf/reg-sub :places (fn [d _] (:places (db/world-of d))))
 (rf/reg-sub :zones (fn [d _] (:zones (db/world-of d))))
-(rf/reg-sub :humans (fn [d _] (:humans (db/world-of d))))
+(rf/reg-sub :entity-status (fn [d _] (select-keys (db/world-of d) [:entity-sources :entity-truncated?])))
+(rf/reg-sub :entities (fn [d _] (:entities (db/world-of d))))
+(rf/reg-sub :entity-now (fn [d _] (or (:entity-clock d) (get-in d [:state :at]) 0)))
 (rf/reg-sub :clock-text (fn [d _] (logic/clock-text (:clock (db/world-of d)))))
 
 (rf/reg-sub
@@ -75,10 +77,14 @@
  (fn [[chat needle hide] _] (logic/filter-chat chat needle hide)))
 
 (rf/reg-sub
- :villager-sightings
+ :entity-sightings
  :<- [:bodies]
- :<- [:now]
- (fn [[bodies now] _] (mm/villager-sightings bodies (or now 0))))
+ :<- [:entity-now]
+ :<- [:entities]
+ (fn [[bodies now observations] _] (mm/entity-sightings observations bodies now)))
+
+(rf/reg-sub :humans :<- [:entity-sightings]
+ (fn [observations _] (mm/human-sightings observations)))
 
 (rf/reg-sub
  :player-rows
@@ -108,9 +114,10 @@
  :<- [:terrain?]
  :<- [:tiles]
  :<- [:current-world]
- :<- [:villager-sightings]
- (fn [[view canvas bodies places zones humans selected now plans conflicts terrain? tiles world villagers] _]
-   {:view view :canvas canvas :bodies bodies :places places :zones zones :humans humans :villagers villagers :selected selected
+ :<- [:entity-sightings]
+ :<- [:entity-now]
+ (fn [[view canvas bodies places zones humans selected now plans conflicts terrain? tiles world observations entity-now] _]
+   {:view view :canvas canvas :bodies bodies :places places :zones zones :entities observations :entity-now entity-now :selected selected
     :now now :plans plans :conflicts conflicts
     :terrain? terrain? :tile-world (:world tiles)
     :tile-index (when (= (:requested tiles) world) (:index tiles))}))

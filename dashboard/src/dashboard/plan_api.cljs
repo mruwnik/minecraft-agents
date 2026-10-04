@@ -27,7 +27,9 @@
        mtime-of (assoc :checked (assoc (cmp/checked (:cells expansion) mtime-of) :now (js/Date.now)))))))
 
 (defn header [id p]
-  {:id id :name id :status (:status p) :note (:note p) :children []})
+  (merge {:id id :name id :status (:status p) :note (:note p) :children []}
+         (select-keys p [:kind :at])
+         (when (:metadata p) {:metadata (select-keys (:metadata p) [:geometry])})))
 
 (defn read-all [{:keys [dir blueprint-dir]}]
   (assoc (plan/read-dir dir) :blueprints (:blueprints (plan/read-blueprints blueprint-dir))))
@@ -86,6 +88,7 @@
             pairs (conflicts/active-conflicts plans blueprints)
             mine (filter #(some #{id} (:plans %)) pairs)]
         (merge (header id p)
+               (select-keys p [:metadata])
                (select-keys result [:region :counts :elements :errors :spots :checked])
                {:layers (flag-conflicts (:layers result) (:grid result) (into #{} (mapcat :cells) mine))
                 :grid (:grid result)

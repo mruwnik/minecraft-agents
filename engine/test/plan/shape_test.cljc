@@ -36,6 +36,21 @@
     (assoc wheat-plan :assign {}) ":assign"
     (assoc wheat-plan :parts [{:id "a" :cells [[0 0 0]] :want "stone"} {:id "a" :cells [[1 0 0]] :want "stone"}]) "unique"))
 
+(deftest a-village-marker-has-an-anchor-and-intent-without-geometric-claims
+  (let [p {:id "p" :status :proposed :kind :village :at [1.5 64 -3]
+           :metadata {:population {:target 8} :legacy-place {:name "home"}}
+           :parts []}]
+    (is (= [] (errors-of p)))
+    (is (= [] (:cells (shape/expand p {}))))
+    (is (= [] (:parts (shape/expand p {}))))
+    (are [changed fragment] (some #(str/includes? (:error %) fragment) (errors-of changed))
+      (assoc p :at [0 #?(:clj Double/POSITIVE_INFINITY :cljs js/Infinity) 0]) ":at"
+      (assoc p :at [1 2]) ":at"
+      (assoc p :at nil) ":at"
+      (assoc p :kind "village") ":kind"
+      (assoc p :kind nil) ":kind"
+      (assoc p :metadata []) ":metadata")))
+
 (deftest part-errors-name-the-part
   (are [part fragment] (= [{:part "x" :fragment true}]
                           (mapv #(hash-map :part (:part %) :fragment (str/includes? (:error %) fragment)) (errors-of (with-part part))))

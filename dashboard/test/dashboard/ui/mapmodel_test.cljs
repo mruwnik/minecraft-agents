@@ -1,5 +1,6 @@
 (ns dashboard.ui.mapmodel-test
-  (:require [cljs.test :refer [deftest are is]]
+  (:require [clojure.string :as str]
+            [cljs.test :refer [deftest are is]]
             [dashboard.ui.mapmodel :as mm]))
 
 (deftest body-position
@@ -121,46 +122,6 @@
   (let [{:keys [items]} (mm/visible-terrain {:origin-x -16 :origin-z -16 :scale 0.01} {:w 1920 :h 1080} tile-index)]
     (is (= #{[0 0] [1 0] [0 1] [5 5] [-1 -1]} (set (map (juxt :cx :cz) items))))))
 
-;; ---------------------------------------------------------------- villagers
-(defn watcher [name up t villagers & {:keys [dimension] :or {dimension "overworld"}}]
-  {:name name :up up :view {:poseT t :dimension dimension :villagers villagers}})
-
-(def now 1000000)
-
-(deftest villager-sightings-are-live-only-from-a-body-that-is-up-and-fresh
-  (are [body expected] (= expected (map (juxt :id :old?) (mm/villager-sightings [body] now)))
-    (watcher "A" true (- now 2000) [{:id 1 :x 0 :z 0}]) [[1 false]]
-    (watcher "A" true (- now mm/villager-live-ms) [{:id 1 :x 0 :z 0}]) [[1 false]]
-    (watcher "A" true (- now mm/villager-live-ms 1) [{:id 1 :x 0 :z 0}]) [[1 true]]
-    (watcher "A" false (- now 2000) [{:id 1 :x 0 :z 0}]) [[1 true]]))
-
-(deftest villager-sightings-go-after-the-drop-time
-  (are [age expected] (= expected (count (mm/villager-sightings [(watcher "A" false (- now age) [{:id 1 :x 0 :z 0}])] now)))
-    (dec mm/villager-drop-ms) 1
-    mm/villager-drop-ms 1
-    (inc mm/villager-drop-ms) 0))
-
-(deftest villager-sightings-carry-position-time-and-who-saw
-  (is (= [{:id 1 :x 4 :y 5 :z 6 :seen-by "A" :t (- now 3000) :age-ms 3000 :old? false}]
-         (mm/villager-sightings [(watcher "A" true (- now 3000) [{:id 1 :x 4 :y 5 :z 6}])] now))))
-
-(deftest villager-sightings-keep-the-freshest-sighting-of-each-villager
-  (let [bodies [(watcher "Old" false (- now 600000) [{:id 1 :x 0 :z 0} {:id 2 :x 10 :z 10}])
-                (watcher "New" true (- now 1000) [{:id 1 :x 3 :z 3}])]]
-    (is (= [["New" 1 3 false] ["Old" 2 10 true]]
-           (map (juxt :seen-by :id :x :old?) (sort-by :id (mm/villager-sightings bodies now)))))))
-
-(deftest villager-sightings-ignore-other-dimensions-and-bodies-without-poses
-  (is (= [] (mm/villager-sightings [(watcher "A" true (- now 1000) [{:id 1 :x 0 :z 0}] :dimension "the_nether")
-                                    {:name "B" :up true}
-                                    {:name "C" :up true :view {:villagers [{:id 2 :x 0 :z 0}]}}]
-                                   now))))
-
-(deftest villager-tip-says-who-and-how-long-ago
-  (are [s expected] (= expected (mm/villager-tip s))
-    {:seen-by "A" :age-ms 3000 :old? false} "villager, seen by A 3s ago"
-    {:seen-by "A" :age-ms 300000 :old? true} "villager, seen by A 5m ago (old: nobody watching now)"))
-
 ;; ---------------------------------------------------------------- name labels
 (deftest pick-label-finds-the-body-name-under-the-point
   (let [boxes [{:kind :body :name "A" :px 10 :py 10 :w 30 :h 12}
@@ -192,8 +153,8 @@
            (map (juxt :name :kind :status :where) rows)))
     (is (= [nil {:x 10.4 :z -5.6} nil {:x 1 :z 3} {:x 5 :z 7}] (map :pos rows)))))
 
-(deftest villager-labels-need-a-closer-zoom
-  (are [scale expected] (= expected (mm/show-villager-labels? scale))
+(deftest entity-labels-need-a-closer-zoom
+  (are [scale expected] (= expected (mm/show-entity-labels? scale))
     0.5 false
     1.49 false
     1.5 true
@@ -217,3 +178,15 @@
   (let [boxes [{:kind :conflict :name "a x b: 4 cells" :px 10 :py 10 :w 90 :h 12 :wx 3 :wz 3}]]
     (is (= "a x b: 4 cells" (:name (mm/pick-label boxes 20 15))))
     (is (nil? (mm/pick-label boxes 200 15)))))
+
+(deftest a-plan-with-no-cells-is-a-point-at-its-anchor
+  (is (= {:x1 4 :z1 -2 :x2 4 :z2 -2} (mm/plan-box {:at [4 65 -2]})))
+  (is (nil? (mm/plan-box {}))))
+
+(deftest transient-entities-expire-and-do-not-duplicate-agent-players
+  (let [v {:key "v" :uuid "v" :type "villager" :pos {:x 4 :y 65 :z -2} :observed-at 10 :expires-at 20}
+        p (assoc v :key "p" :uuid "p" :type "player" :username "Bob")]
+    (is (= ["villager"] (mapv :type (mm/entity-sightings [v p] [{:name "Bob"}] 19))))
+    (is (= [] (mm/entity-sightings [v p] [] 20)))
+    (is (= ["player"] (mapv :type (mm/entity-sightings [p] [] 19))))
+    (is (= ["player"] (mapv :type (mm/entity-sightings [(dissoc p :username)] [{:name "Bob"}] 19))))))

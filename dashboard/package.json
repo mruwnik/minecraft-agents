@@ -7,7 +7,8 @@
     "build": "shadow-cljs compile server ui",
     "build-agent-tools": "shadow-cljs release agent-tools",
     "start": "shadow-cljs compile server ui && node --max-old-space-size=256 --max-semi-space-size=4 out/server.cjs",
-    "build-agent-tools:dev": "shadow-cljs compile agent-tools"
+    "build-agent-tools:dev": "shadow-cljs compile agent-tools",
+    "build-migrate-data": "shadow-cljs release migrate-data"
   },
   "devDependencies": {
     "shadow-cljs": "3.5.4"

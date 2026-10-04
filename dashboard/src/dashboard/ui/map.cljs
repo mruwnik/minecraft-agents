@@ -5,6 +5,7 @@
             [dashboard.tiles :as tiles]
             [dashboard.ui.logic :as logic]
             [dashboard.ui.mapmodel :as mm]
+            [dashboard.villagers-view :as vv]
             [dashboard.ui.plansmodel :as pm]
             [dashboard.ui.trouble :as trouble]))
 
@@ -24,7 +25,7 @@
   (-> (mv/zone-rect view (mm/plan-box plan))
       (mm/min-size 8)
       (assoc :kind :plan :name (:id plan) :title (:name plan) :color (pm/completion-color (:counts plan))
-             :percent (:percent plan) :conflicts (:conflicts plan))))
+             :anchor? (nil? (:region plan)) :percent (:percent plan) :conflicts (:conflicts plan))))
 
 (defn conflict-rect
   "A conflict's block box in pixels (at least 8 px) with its cells, kept as blocks and projected when drawn."
@@ -61,22 +62,25 @@
 
 (defn layout
   "Everything drawable with pixel positions, bodies first (so their labels win space)."
-  [{:keys [view bodies places zones humans villagers selected plans conflicts now canvas] :as model}]
+  [{:keys [view bodies places zones entities entity-now selected plans conflicts now canvas] :as model}]
   {:scale (:scale view)
    :conflicts (mapv #(conflict-rect view %) (mm/conflict-marks conflicts))
    :edges (if (and (:w canvas) (:h canvas)) (edge-arrows model bodies) [])
    :zones (for [z zones] (assoc (mv/zone-rect view z) :name (:name z)))
-   :plans (for [p plans :when (:region p)] (plan-rect view p))
+   :plans (for [p plans :when (mm/plan-box p)] (plan-rect view p))
    :plan-elements (vec (mapcat #(element-rects view %) plans))
    :bodies (for [b bodies :let [pos (mm/body-pos b)] :when pos]
              (let [status (trouble/status b (or now 0))]
                (assoc (mv/project view (:x pos) (:z pos)) :kind :body :name (:name b) :up (boolean (:up b))
                       :status status :color (mm/status-color status)
                       :selected? (= selected {:kind :body :name (:name b)}))))
-   :humans (for [h humans] (assoc (mv/project view (:x h) (:z h)) :kind :human :name (:name h)))
-   :villagers (for [v villagers]
-                (assoc (mv/project view (:x v) (:z v)) :kind :villager :name (:id v) :old? (:old? v)
-                       :age-ms (:age-ms v) :tip (mm/villager-tip v)))
+   :entities (vec (for [e entities
+                         :let [point (mv/project view (:x e) (:z e))]
+                         :when (or (nil? (:w canvas))
+                                   (and (<= -8 (:px point) (+ 8 (:w canvas)))
+                                        (<= -8 (:py point) (+ 8 (:h canvas)))))]
+                     (assoc point :kind :entity :name (:name e) :type (:type e)
+                            :color (mm/entity-color (:type e)) :tip (mm/entity-tip e entity-now))))
    :places (for [p places]
              (assoc (mv/project view (:x p) (:z p)) :kind :place :name (:name p) :place-kind (:kind p)
                     :color (mm/kind-color (:kind p))
@@ -91,10 +95,8 @@
       (logic/pick-nearest (:places lay) x y pick-radius)
       (mm/pick-plan (concat (:plan-elements lay) (:plans lay)) x y)))
 
-(defn villager-tip
-  "The text for a villager marker under x y, for the canvas's hover title."
-  [lay x y]
-  (:tip (logic/pick-nearest (:villagers lay) x y pick-radius)))
+(defn entity-tip [lay x y]
+  (:tip (logic/pick-nearest (:entities lay) x y pick-radius)))
 
 (defn dot! [ctx {:keys [px py]} color radius]
   (.beginPath ctx)
@@ -122,15 +124,6 @@
   (.closePath ctx)
   (set! (.-fillStyle ctx) color)
   (.fill ctx))
-
-(defn villager-mark! [ctx {:keys [px py old?]}]
-  (.save ctx)
-  (set! (.-globalAlpha ctx) (if old? 0.45 1))
-  (set! (.-fillStyle ctx) "#0b0d11")
-  (.fillRect ctx (- px 5) (- py 5) 10 10)
-  (set! (.-fillStyle ctx) mm/villager-color)
-  (.fillRect ctx (- px 3.5) (- py 3.5) 7 7)
-  (.restore ctx))
 
 (defn arrow! [ctx {:keys [px py angle color]}]
   (.save ctx)
@@ -176,14 +169,17 @@
       (.fillText ctx name px py))
     kept))
 
-(defn draw-plan! [ctx {:keys [px py w h color]}]
-  (set! (.-fillStyle ctx) color)
-  (set! (.-globalAlpha ctx) 0.18)
-  (.fillRect ctx px py w h)
-  (set! (.-globalAlpha ctx) 1)
+(defn draw-plan! [ctx {:keys [px py w h color anchor?]}]
   (set! (.-strokeStyle ctx) color)
   (set! (.-lineWidth ctx) 1.5)
-  (.strokeRect ctx px py w h))
+  (if anchor?
+    (do (.beginPath ctx) (.arc ctx (+ px (/ w 2)) (+ py (/ h 2)) 5 0 (* 2 js/Math.PI)) (.stroke ctx))
+    (do
+      (set! (.-fillStyle ctx) color)
+      (set! (.-globalAlpha ctx) 0.18)
+      (.fillRect ctx px py w h)
+      (set! (.-globalAlpha ctx) 1)
+      (.strokeRect ctx px py w h))))
 
 (defn draw-zone! [ctx {:keys [px py w h]}]
   (set! (.-fillStyle ctx) "rgba(91,143,214,0.07)")
@@ -201,8 +197,9 @@
   (set! (.-lineWidth ctx) 1)
   (.strokeRect ctx px py w h))
 
-(defn plan-label [{:keys [title percent conflicts]}]
-  (str title " " percent "%" (when-let [mark (pm/conflicts-label conflicts)] (str " · " mark))))
+(defn plan-label [{:keys [title percent conflicts anchor?]}]
+  (str title (if anchor? " (anchor)" (str " " percent "%"))
+       (when-let [mark (pm/conflicts-label conflicts)] (str " · " mark))))
 
 (defn draw-conflict!
   "The cells two active plans want differently, as solid squares (at least 3 px) inside a dashed box."
@@ -229,11 +226,9 @@
      (for [p (:plans lay)] (label-box ctx (assoc p :name (plan-label p)) (:color p) label-font))
      (for [e (:plan-elements lay) :when (> (:w e) 40)]
        (assoc (label-box ctx (assoc e :name (:title e)) (:color e) label-font) :px (+ (:px e) 2) :py (+ (:py e) 2)))
-     (for [h (:humans lay)] (label-box ctx h human-color label-font))
-     (when (mm/show-villager-labels? scale)
-       (for [v (:villagers lay)]
-         (label-box ctx (assoc v :name (if (:old? v) (str "villager " (logic/time-ago-text (:age-ms v))) "villager"))
-                    mm/villager-color label-font)))
+     (when (mm/show-entity-labels? scale)
+       (for [e (take 200 (:entities lay))]
+         (label-box ctx e (:color e) label-font)))
      (when (mm/show-place-labels? scale)
        (for [p (:places lay)] (label-box ctx p (:color p) label-font)))
      (for [b (:bodies lay) :when (not (:up b))] (label-box ctx b "#6e7681" label-font))
@@ -344,6 +339,8 @@
   (set! (.-width canvas) (* w dpr))
   (set! (.-height canvas) (* h dpr)))
 
+(defonce drawn-layout (atom nil))
+
 (defn draw! [canvas model]
   (let [{:keys [w h]} (:canvas model)
         ctx (when (and canvas w h (:view model)) (.getContext canvas "2d"))
@@ -357,6 +354,7 @@
       (let [lay (layout model)
             terrain-mode (when (and (:terrain? model) (:tile-index model) (:tile-world model))
                            (draw-terrain! ctx model dpr))]
+        (reset! drawn-layout lay)
         (when (= terrain-mode :coverage)
           (set! (.-fillStyle ctx) "rgba(215,220,228,0.75)")
           (set! (.-textBaseline ctx) "top")
@@ -366,8 +364,7 @@
         (doseq [e (:plan-elements lay)] (draw-element! ctx e))
         (doseq [c (:conflicts lay)] (draw-conflict! ctx c))
         (doseq [p (:places lay)] (diamond! ctx p (:color p)))
-        (doseq [h (:humans lay)] (dot! ctx h human-color 4))
-        (doseq [v (:villagers lay)] (villager-mark! ctx v))
+        (doseq [e (:entities lay)] (dot! ctx e (:color e) (if (= "player" (:type e)) 4 2.5)))
         (doseq [b (sort-by :up (:bodies lay))] (body-dot! ctx b))
         (doseq [x (concat (:bodies lay) (:places lay)) :when (:selected? x)] (ring! ctx x 10))
         (doseq [e (:edges lay)] (arrow! ctx e))
@@ -379,13 +376,16 @@
 
 (def legend-items
   [["body: working" (mm/status-color :working)] ["idle" (mm/status-color :idle)] ["trouble" (mm/status-color :trouble)]
-   ["offline" (mm/status-color :offline)] ["villager (faded: old sighting)" mm/villager-color] ["plan: 90%+" pm/green] ["conflict between plans" conflict-color] ["50%+" pm/amber] ["less" pm/red] ["unseen" pm/grey]])
+   ["offline" (mm/status-color :offline)] ["villager (expires after 2 minutes)" mm/villager-color] ["player" human-color] ["other moving entities" "#70b9b2"] ["plan: 90%+" pm/green] ["conflict between plans" conflict-color] ["50%+" pm/amber] ["less" pm/red] ["unseen" pm/grey]])
 
 (defn legend []
+  (let [{:keys [entity-sources entity-truncated?]} @(rf/subscribe [:entity-status])]
   (into [:div#maplegend
+         (when entity-truncated? [:div.maphint "Entity observations are truncated by the configured limit."])
+         (into [:div.maphint] (interpose " · " (vv/capability-text entity-sources)))
          [:div.maphint "drag to pan · wheel to zoom · click a body or its name for its view, a plan for its page, an arrow to go to its body, a pink conflict label to centre on it"]]
         (for [[label color] legend-items]
-          ^{:key label} [:span [:i {:style {:background color}}] label])))
+          ^{:key label} [:span [:i {:style {:background color}}] label]))))
 
 (defn map-view []
   (let [wrap (atom nil)
@@ -434,12 +434,12 @@
                                                 :moved (+ (:moved d) (js/Math.abs dx) (js/Math.abs dy))})
                                   (rf/dispatch [:pan dx dy]))
                                 (let [[x y] (canvas-pos e @canvas)]
-                                  (set! (.-title @canvas) (or (villager-tip (layout @model) x y) "")))))
+                                  (set! (.-title @canvas) (or (entity-tip @drawn-layout x y) "")))))
            :on-pointer-up (fn [e]
                             (let [d @drag
                                   [x y] (canvas-pos e @canvas)]
                               (reset! drag nil)
                               (when (< (:moved d 0) 4)
-                                (rf/dispatch [:map-click (some-> (pick (assoc (layout @model) :labels @label-boxes) x y)
+                                (rf/dispatch [:map-click (some-> (pick (assoc @drawn-layout :labels @label-boxes) x y)
                                                                  (select-keys [:kind :name :wx :wz]))]))))}]
          [legend]])})))

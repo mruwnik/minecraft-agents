@@ -13,9 +13,9 @@ The compile JVM is capped (`:jvm-opts ["-Xmx1G"]` in `shadow-cljs.edn`) because 
 
 ## Endpoints
 
-`/api/state?world=` is EDN (`application/edn`) because it carries engine summaries and outstanding attention requests. Other read endpoints below return JSON unless noted; all use `cache-control: no-store`.
+`/api/state?world=`, the plan endpoints, and the blueprint, village, villager and entity endpoints use EDN (`application/edn`). Other read endpoints below return JSON unless noted; all use `cache-control: no-store`.
 
-`/api/worlds`, `/api/chat?world=&limit=`, `/api/villages?world=`, `/api/villagers`,
+`/api/worlds`, `/api/chat?world=&limit=`, `/api/villages?world=`, `/api/villagers?world=&dimension=`, `/api/entities?world=&dimension=`,
 `/api/plans?world=` (every plan file of the world with its totals, cached 10 s), `/api/plan/<id>?world=` (full comparison: elements, per-layer grids, errors),
 `/api/blueprints`, `/api/blueprint/<name>`, POST `/api/blueprint-preview`, `/api/world` (501).
 
@@ -72,14 +72,17 @@ off screen gets an arrow on the edge, click it to pan there), `/plans` (plan fil
   engine data are listed as down, "not an engine body (unsupported)".
 - No look/screen/actions/whisper/icon endpoints, and `/api/world` is 501.
 - Chat comes from engine events (`:source :chat`, kind `:said`/`:whisper`); canonical `:time-ms` is epoch millis.
-- Villages, villagers and blueprints reuse the old JS modules (read-only, loaded with `require`).
+- Blueprints read the canonical `blueprints/<id>.edn` library and validate drafts using the engine's native schema. The editor previews and downloads EDN; preview does not place or change a build. POST `/api/blueprint-preview` requires `application/edn` and accepts `{:source "..." :stock "..."}`; stock is an optional EDN map of block names to counts.
+- Villages read native world plans with `:kind :village`. A plan's optional finite `:at [x y z]` is a map anchor; empty `:parts` remains incomplete geometry. Inspection metadata is historical evidence. See [village plan migration](docs/village-plan-migration.md) for the compiled, guarded migration CLI.
+- Entity observations come from each engine's `GET /entities` on `engine/control.sock`. Requests run asynchronously with a 1-second deadline, 4 MiB response limit, and at most four concurrent requests. Original observation times expire after two minutes; polling and unavailable bodies never renew them. The dashboard merges by world and UUID before filtering dimension, and caps cached sources, records, and output. `/api/villagers` filters that transient entity layer. No persistent villager roster is read or written.
+- The map draws all observed moving entity types on canvas, with distinct player and villager colors, bounded labels, and hover identity/age details. Agent players use their body markers. Older bodies without `/entities` show a restart message.
 
 ## Plans
 
 A plan records the desired state of a piece of the world; the format is the one of `docs/design.md`, "Plans and blueprints". The
 dashboard compares it with the chunk columns the bodies dumped (`state/worlds/<world>/chunks/<cx>.<cz>.bin`, `cx = floor(x/16)`).
 One EDN file per plan, `state/worlds/<world>/plans/<id>.edn`, and one per blueprint, `blueprints/<id>.edn` at the repo root (next to
-the legacy `.blueprint.json` library of `/blueprints`); the file name is the id. `plan.shape` (`../engine/src/plan/shape.cljc`, plain data, no
+legacy `.blueprint.json` files, which the dashboard ignores); the file name is the id. `plan.shape` (`../engine/src/plan/shape.cljc`, plain data, no
 IO, meant to be required by the engine's jobs too) is the only namespace that knows the format: checking (`plan-errors`,
 `blueprint-errors`), expansion into cells (`expand`, the later part winning a shared cell; blueprints placed and turned with `place`)
 and plan minus world (`judge`, `plan-minus-world`, `assignment-answers`). `dashboard.plan` reads the files, `dashboard.plan-compare`

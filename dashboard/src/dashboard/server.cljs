@@ -7,15 +7,17 @@
             ["url" :as url]
             [cljs.reader :as reader]
             [clojure.string :as str]
+            [dashboard.edn :as edn]
             [dashboard.chat :as chat]
             [dashboard.engine-edn :as engine-edn]
             [dashboard.chat-send :as chat-send]
             [dashboard.engine-events :as ee]
+            [dashboard.entity-observations :as entities]
             [dashboard.guard :as guard]
             [dashboard.items :as items]
             [dashboard.jobs-registry :as jobs-registry]
-            [dashboard.legacy :as legacy]
-            [dashboard.mapview :as mapview]
+            [dashboard.blueprint-library :as blueprint-lib]
+            [dashboard.village-data :as village-data]
             [dashboard.plan-api :as plan-api]
             [dashboard.rcon :as rcon]
             [dashboard.routes :as routes]
@@ -355,25 +357,102 @@
 (defn agent-names [bodies]
   (vec (distinct (mapcat (juxt :name :username) bodies))))
 
-;; ---------------------------------------------------------------- legacy (villages, villagers, blueprints)
-(defn from-js [x] (js->clj x :keywordize-keys true))
-(defn to-js [x] (legacy/to-js x))
+;; Entity socket refreshes run in the background when dashboard requests arrive. Socket failures
+;; preserve only the remaining lifetime of the previously observed entities.
+(def entity-refresh-ms 2000)
+(def entity-request-ms 1000)
+(def entity-response-bytes (* 4 1024 1024))
+(def entity-source-cap 128)
+(def entity-request-cap 4)
+(defonce entity-cache (atom {}))
+(defonce entity-in-flight (atom #{}))
 
-(defn all-places-js [worlds]
-  (to-js (vec (mapcat :places worlds))))
+(defn entity-socket [body] (.join path (engine-dir body) "control.sock"))
+
+(defn entity-request! [body]
+  (js/Promise.
+   (fn [resolve reject]
+     (let [req (.request http #js {:socketPath (entity-socket body) :method "GET" :path "/entities"}
+                         (fn [res]
+                           (let [chunks (atom []) size (atom 0)]
+                             (.on res "error" reject)
+                             (.on res "data"
+                                  (fn [chunk]
+                                    (swap! size + (.-length chunk))
+                                    (if (> @size entity-response-bytes)
+                                      (.destroy res (js/Error. "engine entity response exceeds 4 MiB"))
+                                      (swap! chunks conj chunk))))
+                             (.on res "end"
+                                  (fn []
+                                    (if (= 200 (.-statusCode res))
+                                      (try (resolve (edn/one-form (.toString (js/Buffer.concat (to-array @chunks)) "utf8")))
+                                           (catch :default e (reject e)))
+                                      (reject (ex-info (str "engine entity API HTTP " (.-statusCode res))
+                                                       {:status (.-statusCode res)}))))))))
+           timer (js/setTimeout #(.destroy req (js/Error. "engine entity API timed out")) entity-request-ms)]
+       (.once req "close" #(js/clearTimeout timer))
+       (.on req "error" reject)
+       (.end req)))))
+
+(defn refresh-entities! [world-name]
+  (let [now (js/Date.now)
+        targets (->> (agent-entries) (filter #(and (= world-name (:world %)) (engine-folder? %)))
+                     (sort-by (fn [b] [(get-in @entity-cache [(body-key b) :requested-at] 0) (:name b)])))
+        room (max 0 (- entity-request-cap (count @entity-in-flight)))]
+    (swap! entity-cache #(entities/bound (into {} (filter (fn [[key _]] (some (fn [b] (= key (body-key b))) (agent-entries))) %)) now))
+    (doseq [body (take room (filter #(and (not (contains? @entity-in-flight (body-key %)))
+                                         (>= (- now (get-in @entity-cache [(body-key %) :requested-at] 0)) entity-refresh-ms)) targets))
+            :let [key (body-key body)]]
+      (swap! entity-in-flight conj key)
+      (swap! entity-cache update key #(assoc % :body key :requested-at now :status (or (:status %) :loading)))
+      (-> (entity-request! body)
+          (.then (fn [payload]
+                   (swap! entity-cache assoc key (entities/body-snapshot body payload (js/Date.now)))
+                   (swap! entity-cache #(entities/bound % (js/Date.now)))))
+          (.catch (fn [e]
+                    (swap! entity-cache update key
+                           #(assoc % :online? nil :status (if (= 404 (:status (ex-data e))) :unsupported :unavailable)
+                                     :error (if (= 404 (:status (ex-data e)))
+                                              "This body has no /entities endpoint. Restart it with the current engine build to enable entity observations."
+                                              (subs (str (ex-message e)) 0 (min 384 (count (str (ex-message e))))))))))
+          (.finally #(swap! entity-in-flight disj key))))
+    (when (> (count @entity-cache) entity-source-cap)
+      (swap! entity-cache #(into {} (take entity-source-cap (sort-by (comp - :requested-at val) %)))))))
+
+(defn entity-snapshot [world-name dimension]
+  (let [targets (filter #(and (= world-name (:world %)) (engine-folder? %)) (agent-entries))
+        scoped (into {} (for [body (take entity-source-cap (sort-by :name targets))
+                              :let [key (body-key body)]]
+                          [key (or (get @entity-cache key) {:body key :status :loading :entities []})]))
+        snapshot (entities/merge-world scoped world-name dimension (js/Date.now))
+        truncated? (> (count targets) entity-source-cap)]
+    (assoc snapshot :source-count (count targets) :source-cap entity-source-cap
+           :sources-truncated? truncated? :truncated? (or truncated? (:truncated? snapshot)))))
+
+;; ---------------------------------------------------------------- saved village observations
+(defn to-js [x] (clj->js x :keyword-fn #(subs (str %) 1)))
 
 (defn village-snapshot [worlds]
-  (let [snap (legacy/village-snapshot repo-root root (all-places-js worlds))]
-    {:villages (.-villages snap) :error (.-error snap)}))
+  (village-data/snapshot root
+                         (vec (mapcat (fn [world]
+                                        (map #(assoc % :world (:name world)) (:places world)))
+                                      worlds))
+                         {:worlds (mapv :name worlds) :blueprint-dir (.join path repo-root "blueprints")}))
 
 ;; ---------------------------------------------------------------- state
 (defn world-entry [bodies agent-names world]
-  (let [own (filterv #(= (:name world) (:world %)) bodies)]
-    (assoc world :bodies own :humans (mapview/human-sightings own agent-names))))
+  (let [own (filterv #(= (:name world) (:world %)) bodies)
+        observations (entity-snapshot (:name world) "overworld")]
+    (assoc world :bodies own :humans []
+           :entities (:entities observations) :entity-sources (:sources observations)
+           :entity-truncated? (:truncated? observations))))
 
 (defn attach-villages [worlds villages]
-  (mapv (fn [w]
-          (assoc w :places (worlds/readable-places (from-js (legacy/attach-village-status repo-root (to-js (:places w)) villages)))))
+  (mapv (fn [world]
+          (assoc world :places
+                 (worlds/readable-places
+                  (village-data/attach-status (mapv #(assoc % :world (:name world)) (:places world))
+                                              (filterv #(= (:name world) (:world %)) villages)))))
         worlds))
 
 (declare send-edn!)
@@ -395,6 +474,7 @@
            :selected world-name)))
 
 (defn send-state! [res world-name]
+  (refresh-entities! world-name)
   (-> (refresh-live-engines!)
       (.then (fn [_] (send-edn! res 200 (snapshot world-name))))
       (.catch (fn [e]
@@ -688,15 +768,18 @@
 (def port (js/Number (or (.-PORT js/process.env) 3701)))
 
 (defn guarded-post!
-  "Refuses with the guard's status, else reads the body (nil when over limit-bytes) and calls (on-body text)."
-  [req res limit-bytes on-body]
-  (let [headers (.-headers req)
-        refused (or (guard/method-refusal (.-method req))
-                    (guard/refusal {:host (.-host headers) :origin (.-origin headers)
-                                    :content-type (aget headers "content-type") :port port}))]
-    (if refused
-      (send-json! res (:status refused) {:error (:error refused)})
-      (read-body req limit-bytes on-body))))
+  "Refuses with the guard's status, else reads the bounded body and calls on-body."
+  ([req res limit-bytes on-body]
+   (guarded-post! req res limit-bytes on-body {}))
+  ([req res limit-bytes on-body {:keys [content-types send-error] :or {send-error send-json!}}]
+   (let [headers (.-headers req)
+         refused (or (guard/method-refusal (.-method req))
+                     (guard/refusal {:host (.-host headers) :origin (.-origin headers)
+                                     :content-type (aget headers "content-type") :port port
+                                     :content-types content-types}))]
+     (if refused
+       (send-error res (:status refused) {:error (:error refused)})
+       (read-body req limit-bytes on-body)))))
 
 ;; ---------------------------------------------------------------- chat send (POST /api/chat/send)
 ;; dashboard.chat-send validates the body and builds the fixed tellraw command; the runner is RCON (dashboard.rcon),
@@ -748,15 +831,19 @@
    req res max-preview-bytes
    (fn [text]
      (if (nil? text)
-       (send-json! res 413 {:error "preview body exceeds 2 MiB"})
+       (send-edn! res 413 {:error "preview body exceeds 2 MiB"})
        (try
-         (let [input (js/JSON.parse text)
-               detail (legacy/preview repo-root (.-plan input) (.-stock input))]
-           (send-json-js! res (if (pos? (.-length (.-errors detail))) 400 200) detail))
-         (catch :default e (send-json! res 400 {:error (ex-message e)})))))))
+         (let [input (edn/one-form text)]
+           (if-not (and (map? input) (string? (:source input))
+                        (or (nil? (:stock input)) (string? (:stock input))))
+             (send-edn! res 400 {:error "preview requires {:source <EDN text> :stock <optional EDN text>}"})
+             (let [detail (blueprint-lib/preview (:source input) (:stock input))]
+               (send-edn! res 200 detail))))
+         (catch :default e (send-edn! res 400 {:error (ex-message e)})))))
+   {:content-types ["application/edn"] :send-error send-edn!}))
 
 (defn blueprint-library []
-  (legacy/library repo-root (all-places-js (read-worlds))))
+  (blueprint-lib/library (.join path repo-root "blueprints")))
 
 ;; ---------------------------------------------------------------- plans (dashboard.plan-api)
 ;; Plans are state/worlds/<world>/plans/<id>.edn, the blueprints they place blueprints/<id>.edn at the repo root (next to
@@ -890,17 +977,22 @@
     :plan-api (send-plans! res world-name plan-name)
     :chat (send-json! res 200 (chat-log (chat/chat-limit (.get query "limit")) world-name))
     :world (send-json! res 501 {:error "unsupported for engine bodies: world scan (needs a body's HTTP API)"})
+    :entities-api (do (refresh-entities! world-name)
+                      (send-edn! res 200 (entity-snapshot world-name (.get query "dimension"))))
+    :villagers-api (do (refresh-entities! world-name)
+                       (send-edn! res 200 (entities/villagers (entity-snapshot world-name (.get query "dimension")))))
     :villages-api (let [snap (village-snapshot (filterv #(= world-name (:name %)) (read-worlds)))]
-                    (send-json-js! res 200 (doto (to-js (select-keys snap [:error])) (aset "villages" (:villages snap)) (aset "readOnly" true))))))
+                    (send-edn! res 200 (assoc snap :readOnly true)))))
 
-(def world-kinds #{:state :chat :world :villages-api :plans-api :plan-api})
+(def world-kinds #{:state :chat :world :villages-api :villagers-api :entities-api :plans-api :plan-api})
+(def edn-library-kinds #{:villages-api :villagers-api :entities-api :blueprints :blueprint :blueprint-preview})
 
 (defn handle! [req res]
   (let [{:keys [kind] blueprint-name :name request-path :path :as route} (routes/route (.-url req))
         query (.-searchParams (js/URL. (.-url req) "http://dashboard"))
         choice (when (world-kinds kind) (choose-world query))]
     (cond
-      (:error choice) (send-json! res 400 choice)
+      (:error choice) ((if (edn-library-kinds kind) send-edn! send-json!) res 400 choice)
       (world-kinds kind) (handle-world-scoped! res kind (:name choice) query blueprint-name)
       :else
       (case kind
@@ -918,12 +1010,11 @@
         :tiles (send-tiles! res (:world route) query)
         :tile-stats (send-json! res 200 (tile-stats-json))
         :worlds (send-json! res 200 {:worlds (read-world-list)})
-        :villagers-api (send-json-js! res 200 (legacy/villagers repo-root root))
-        :blueprints (send-json-js! res 200 (blueprint-library))
-        :blueprint (let [found (.find (.-blueprints (blueprint-library)) #(= blueprint-name (.-name %)))]
+        :blueprints (send-edn! res 200 (blueprint-library))
+        :blueprint (let [found (first (filter #(= blueprint-name (:name %)) (:blueprints (blueprint-library))))]
                      (if found
-                       (send-json-js! res 200 found)
-                       (send-json! res 404 {:error (str "no blueprint called " blueprint-name ": /api/blueprints lists them")})))
+                       (send-edn! res 200 found)
+                       (send-edn! res 404 {:error (str "no blueprint called " blueprint-name ": /api/blueprints lists them")})))
         :blueprint-preview (preview! req res)
         :unsupported (send-json! res 404 {:error "unsupported for engine bodies"})
         (send-json! res 404 {:error route-list})))))
@@ -936,7 +1027,8 @@
     (catch :default e
       (if (.-headersSent res)
         (.end res)
-        (send-json! res 500 {:error (str (ex-message e))})))))
+        ((if (edn-library-kinds (:kind (routes/route (.-url req)))) send-edn! send-json!)
+         res 500 {:error (str (ex-message e))})))))
 
 (defn close-all!
   "Ends the thumbnail worker and the view server's scan worker (those that were started); resolves when done."

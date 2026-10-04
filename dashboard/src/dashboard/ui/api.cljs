@@ -1,5 +1,5 @@
 (ns dashboard.ui.api
-  (:require [cljs.reader :as reader]
+  (:require [dashboard.edn :as edn]
             [re-frame.core :as rf]))
 
 ;; keys of requests still in flight: a slow response never piles up behind the next poll tick
@@ -27,7 +27,7 @@
         (.then (fn [res]
                  (-> (.text res)
                      (.then (fn [text]
-                              (let [data (try (reader/read-string text) (catch :default e {:error (str e)}))]
+                              (let [data (try (edn/one-form text) (catch :default e {:error (str e)}))]
                                 (if (.-ok res)
                                   (rf/dispatch (conj on-ok data))
                                   (rf/dispatch (conj on-err (or (:error data) (str "http " (.-status res))))))))))))
@@ -55,7 +55,7 @@
       (.then (fn [res]
                (.then (.text res)
                       (fn [text]
-                        (let [data (try (reader/read-string text) (catch :default e {:error (str e)}))]
+                        (let [data (try (edn/one-form text) (catch :default e {:error (str e)}))]
                           (if (and (.-ok res) (not (:error data)))
                             (rf/dispatch (conj on-ok data))
                             (rf/dispatch (conj on-err (or (:error data) (str "http " (.-status res)))))))))))
@@ -66,6 +66,15 @@
 (rf/reg-fx :download-json
            (fn [{:keys [filename text]}]
              (let [url (js/URL.createObjectURL (js/Blob. #js [text] #js {:type "application/json"}))
+                   link (js/document.createElement "a")]
+               (set! (.-href link) url)
+               (set! (.-download link) filename)
+               (.click link)
+               (js/URL.revokeObjectURL url))))
+
+(rf/reg-fx :download-edn
+           (fn [{:keys [filename text]}]
+             (let [url (js/URL.createObjectURL (js/Blob. #js [text] #js {:type "application/edn"}))
                    link (js/document.createElement "a")]
                (set! (.-href link) url)
                (set! (.-download link) filename)
