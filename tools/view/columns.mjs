@@ -31,6 +31,8 @@ export function loadColumn (file, Chunk) {
   const { header, parts } = decodeColumnFile(fs.readFileSync(file))
   const column = new Chunk({ minY: header.minY, worldHeight: header.worldHeight })
   column.load(parts.sections)
+  // the dumped sky and block light, read cell by cell by grid.mjs fillColumn (absent in dumps without a light part)
+  if (parts.light) column.viewLight = { bytes: parts.light, meta: header.parts.find(p => p.name === 'light').meta ?? {} }
   return column
 }
 

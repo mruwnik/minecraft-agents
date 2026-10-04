@@ -2,6 +2,7 @@
 // Eyes for the bot: a small software raycaster over the chunk data mineflayer already holds.
 // Everything here is pure (no bot, no disk) so it can be tested without a server; the body feeds it the world.
 import zlib from 'node:zlib'
+import { lightColor, skyDarken } from './web/shading.mjs'
 
 // ---------------------------------------------------------------- png
 const PNG_MAGIC = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])
@@ -188,9 +189,12 @@ export function blockIcon (top, left, right, size = 32) {
 }
 
 // ---------------------------------------------------------------- world grid
-// shared memory, so the render worker reads the very cells block updates are written into, without a copy per look
+// shared memory (blocks and light), so the render worker reads the very cells block updates are written into, without a copy per look
+export const OPEN_SKY = 15 << 4 // a grid light byte, `sky << 4 | block`: open sky, no block light
 export function makeGrid (origin, size) {
   const data = new Uint16Array(new SharedArrayBuffer(size.x * size.y * size.z * 2))
+  // per cell `sky << 4 | block`; cells no dumped light covers count as open sky
+  const light = new Uint8Array(new SharedArrayBuffer(size.x * size.y * size.z)).fill(OPEN_SKY)
   const index = (x, y, z) => {
     const lx = x - origin.x
     const ly = y - origin.y
@@ -202,6 +206,7 @@ export function makeGrid (origin, size) {
     origin,
     size,
     data,
+    light,
     set: (x, y, z, id) => { const i = index(x, y, z); if (i >= 0) data[i] = id }
   }
 }
@@ -453,7 +458,37 @@ const PALETTES = {
   item: plain([255, 225, 40], [255, 225, 40])
 }
 const paletteFor = e => PALETTES[e.name] ?? PALETTES[e.kind] ?? plain(e.kind === 'hostile' ? HOSTILE : hashColor(e.name))
-// brightness of the day, 0.3 (midnight) .. 1 (day); timeOfDay 0 is sunrise, 6000 noon, 18000 midnight
+// ---------------------------------------------------------------- light
+// the light byte of a cell (`sky << 4 | block`), open sky outside the grid
+const lightByte = (grid, x, y, z) => {
+  const { origin, size } = grid
+  const lx = x - origin.x
+  const ly = y - origin.y
+  const lz = z - origin.z
+  if (lx < 0 || ly < 0 || lz < 0 || lx >= size.x || ly >= size.y || lz >= size.z) return OPEN_SKY
+  return grid.light[(ly * size.z + lz) * size.x + lx]
+}
+const FACE_NORMAL = { top: [0, 1, 0], bottom: [0, -1, 0], east: [1, 0, 0], west: [-1, 0, 0], south: [0, 0, 1], north: [0, 0, -1] }
+const brighter = (a, b) => (Math.max(a >> 4, b >> 4) << 4) | Math.max(a & 15, b & 15)
+// The light a hit face shows: the brighter of its own cell and the cell across the face (an opaque block stores 0, so
+// its face takes the air's light; a slab, torch or plant keeps its own).
+export const hitLight = (grid, hit) => {
+  const own = lightByte(grid, hit.x, hit.y, hit.z)
+  const n = FACE_NORMAL[hit.face]
+  return n ? brighter(own, lightByte(grid, hit.x + n[0], hit.y + n[1], hit.z + n[2])) : own
+}
+// the light at an entity: the cell around the middle of its height
+export const entityLight = (grid, e) => lightByte(grid, Math.floor(e.x), Math.floor(e.y + e.height / 2), Math.floor(e.z))
+
+// vanilla's lightmap (default brightness) for a time of day and rain: 256 [r, g, b] multipliers indexed by a light byte
+export const lightTable = (timeOfDay, rain = 0) => {
+  const darken = skyDarken(timeOfDay ?? 6000, rain ?? 0)
+  return Array.from({ length: 256 }, (_, i) => lightColor(i >> 4, i & 15, darken))
+}
+// {sky, block, seeing} of a light byte; seeing is the lightmap's brightest channel, 0.1 (no light) .. 1
+export const lightReport = (table, byte) => ({ sky: byte >> 4, block: byte & 15, seeing: Math.round(Math.max(...table[byte]) * 1000) / 1000 })
+
+// brightness of the sky colour, 0.3 (midnight) .. 1 (day); timeOfDay 0 is sunrise, 6000 noon, 18000 midnight
 const daylight = time => 0.3 + 0.7 * clamp01(0.5 + 1.6 * Math.sin(((time ?? 6000) % 24000) / 24000 * 2 * Math.PI))
 const mix = (a, b, k) => a + (b - a) * k
 
@@ -548,14 +583,15 @@ const mobFor = (e, eye) => {
 // {name, kind?, x, y, z, width, height, yaw?}, drawn as their family's parts. Returns {width,height,rgba,seen} where `seen` lists the entities
 // that actually ended up on screen (not hidden behind blocks) with the pixel they are centred on and the box of pixels
 // they cover.
-export function render ({ grid, info, texture, eye, entities = [], timeOfDay, width, height, maxDist = 64, ...camera }) {
+export function render ({ grid, info, texture, eye, entities = [], timeOfDay, rain = 0, width, height, maxDist = 64, ...camera }) {
   const cam = cameraFor({ ...camera, width, height })
   const light = daylight(timeOfDay)
+  const table = lightTable(timeOfDay, rain)
   const rgba = new Uint8Array(width * height * 4)
   const mobs = entities
     .filter(e => Math.hypot(e.x - eye.x, e.y - eye.y, e.z - eye.z) <= maxDist)
     .map(e => mobFor(e, eye))
-    .map(m => ({ ...m, rect: screenRect(cam.project, eye, m.box, width, height) }))
+    .map(m => ({ ...m, rect: screenRect(cam.project, eye, m.box, width, height), light: entityLight(grid, m.e) }))
     .filter(m => m.rect)
   let nearPixels = 0
   // one block description serves every cell of that state for as long as `info` keeps it, so its pictures are looked
@@ -615,23 +651,28 @@ export function render ({ grid, info, texture, eye, entities = [], timeOfDay, wi
         if (py > nearest.y2) nearest.y2 = py
         // 'south' is the mob's own front: the ray came in through its +z face
         const base = nearest.palette[nearestPaint === 1 && nearestFace === 'south' ? 3 : nearestPaint]
-        r = base[0] * FACE_SHADE[nearestFace] * Math.max(light, 0.6)
-        g = base[1] * FACE_SHADE[nearestFace] * Math.max(light, 0.6)
-        b = base[2] * FACE_SHADE[nearestFace] * Math.max(light, 0.6)
+        const lit = table[nearest.light]
+        r = base[0] * FACE_SHADE[nearestFace] * lit[0]
+        g = base[1] * FACE_SHADE[nearestFace] * lit[1]
+        b = base[2] * FACE_SHADE[nearestFace] * lit[2]
       } else if (hit) {
         if (hit.t < NEAR) nearPixels++
-        const fog = (hit.t / maxDist) ** 2
+        const byte = hitLight(grid, hit)
+        const lit = table[byte]
+        // fog fades toward the sky only as far as the sky reaches the hit: a dark cave stays dark far off
+        const fog = (hit.t / maxDist) ** 2 * (byte >> 4) / 15
+        const shade = FACE_SHADE[hit.face]
         if (hit.image) {
           const at = texel(hit.image, hit.u, hit.v)
           const tint = hit.image.tint
-          r = mix(hit.image.rgba[at] * (tint?.[0] ?? 255) / 255 * FACE_SHADE[hit.face] * light, skyR, fog)
-          g = mix(hit.image.rgba[at + 1] * (tint?.[1] ?? 255) / 255 * FACE_SHADE[hit.face] * light, skyG, fog)
-          b = mix(hit.image.rgba[at + 2] * (tint?.[2] ?? 255) / 255 * FACE_SHADE[hit.face] * light, skyB, fog)
+          r = mix(hit.image.rgba[at] * (tint?.[0] ?? 255) / 255 * shade * lit[0], skyR, fog)
+          g = mix(hit.image.rgba[at + 1] * (tint?.[1] ?? 255) / 255 * shade * lit[1], skyG, fog)
+          b = mix(hit.image.rgba[at + 2] * (tint?.[2] ?? 255) / 255 * shade * lit[2], skyB, fog)
         } else {
           const base = hashColor(hit.block.name ?? String(hit.id))
-          r = mix(base[0] * FACE_SHADE[hit.face] * light, skyR, fog)
-          g = mix(base[1] * FACE_SHADE[hit.face] * light, skyG, fog)
-          b = mix(base[2] * FACE_SHADE[hit.face] * light, skyB, fog)
+          r = mix(base[0] * shade * lit[0], skyR, fog)
+          g = mix(base[1] * shade * lit[1], skyG, fog)
+          b = mix(base[2] * shade * lit[2], skyB, fog)
         }
       }
       const at = (py * width + px) * 4
@@ -641,13 +682,14 @@ export function render ({ grid, info, texture, eye, entities = [], timeOfDay, wi
       rgba[at + 3] = 255
     }
   }
-  const seen = mobs.filter(m => m.pixels > 0).map(({ e, pixels, sumX, sumY, x1, y1, x2, y2 }) => ({
+  const seen = mobs.filter(m => m.pixels > 0).map(({ e, light: byte, pixels, sumX, sumY, x1, y1, x2, y2 }) => ({
     name: e.label ?? e.name,
     kind: e.kind,
     px: Math.round(sumX / pixels),
     py: Math.round(sumY / pixels),
     dist: Math.round(Math.hypot(e.x - eye.x, e.y + e.height / 2 - eye.y, e.z - eye.z)),
-    box: [x1, y1, x2, y2]
+    box: [x1, y1, x2, y2],
+    light: lightReport(table, byte)
   }))
   return { width, height, rgba, seen, near: nearPixels / (width * height) }
 }

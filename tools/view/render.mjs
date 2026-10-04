@@ -3,7 +3,7 @@
 // worlds/<world>/agents/<name>/view/pose.json. Nothing here touches a body or a server.
 import fs from 'node:fs'
 import path from 'node:path'
-import { render, encodePng, castRay, directionFor } from './renderer.mjs'
+import { render, encodePng, castRay, directionFor, hitLight, lightTable, lightReport } from './renderer.mjs'
 import { columnCache, makeChunkClass } from './columns.mjs'
 import { buildGrid } from './grid.mjs'
 import { cameraFromPose, entitiesFromPose } from './camera.mjs'
@@ -43,7 +43,8 @@ export function readPose (world, agentName, stateDir = DEFAULT_STATE_DIR) {
 }
 
 // `pose`: an already read pose (else read from the body's view/pose.json). `aim`: also return `center`, the block the
-// view's centre ray hits first, as the crosshair targets it ({name, x, y, z, t, face}, t the distance), or null.
+// view's centre ray hits first, as the crosshair targets it ({name, x, y, z, t, face, light}, t the distance, light
+// {sky, block, seeing} on the face hit), or null. Entities in `seen` carry their light too.
 export function renderView ({ world, agentName, width = 320, height = 180, fov = 70, maxDist = 64, radius = 8, stateDir = DEFAULT_STATE_DIR, override = {}, noPng = false, pose: given = null, aim = false }) {
   const started = performance.now()
   const pose = given ?? readPose(world, agentName, stateDir)
@@ -64,13 +65,13 @@ export function renderView ({ world, agentName, width = 320, height = 180, fov =
   })
   const gridDone = performance.now()
   const gridMs = gridDone - started
-  const out = render({ grid, info: blocks.info, texture: blocks.texture, eye: camera.eye, entities: entitiesFromPose(pose), timeOfDay: pose.timeOfDay, width, height, maxDist, yaw: camera.yaw, pitch: camera.pitch, fov })
+  const out = render({ grid, info: blocks.info, texture: blocks.texture, eye: camera.eye, entities: entitiesFromPose(pose), timeOfDay: pose.timeOfDay, rain: pose.rain ?? 0, width, height, maxDist, yaw: camera.yaw, pitch: camera.pitch, fov })
   const rayDone = performance.now()
   const png = noPng ? null : encodePng(width, height, out.rgba)
   const done = performance.now()
   const timings = { pose: poseDone - started, grid: gridDone - poseDone, raycast: rayDone - gridDone, png: done - rayDone, total: done - started }
   const hit = aim ? castRay(grid, blocks.info, camera.eye, directionFor(camera.yaw, camera.pitch), maxDist) : null
-  const center = hit && { name: hit.block.name ?? String(hit.id), x: hit.x, y: hit.y, z: hit.z, t: hit.t, face: hit.face }
+  const center = hit && { name: hit.block.name ?? String(hit.id), x: hit.x, y: hit.y, z: hit.z, t: hit.t, face: hit.face, light: lightReport(lightTable(pose.timeOfDay, pose.rain ?? 0), hitLight(grid, hit)) }
   return { png, ms: done - started, gridMs, timings, columns: loaded, pose, seen: out.seen, textured: blocks.textured, center }
 }
 

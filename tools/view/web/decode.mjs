@@ -100,7 +100,7 @@ export function decodeSections (bytes, format) {
 }
 
 // bit `i` of a long-array mask of [hi, lo] int32 pairs
-const maskBit = (mask, i) => ((mask?.[i >> 6]?.[(i & 63) >= 32 ? 0 : 1] ?? 0) >>> (i & 31)) & 1
+export const maskBit = (mask, i) => ((mask?.[i >> 6]?.[(i & 63) >= 32 ? 0 : 1] ?? 0) >>> (i & 31)) & 1
 
 // light as one byte per cell, `sky << 4 | block`, in decodeSections order. Light section L = s + 1 (0 is below minY).
 // Nibbles are little-endian within a byte (even cell index low). No sky data and not flagged empty means open sky (15).

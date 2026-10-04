@@ -3,7 +3,7 @@
 // main thread: renderBand() is render()'s per-pixel terrain work for a range of rows, drawEntities() its mob work on a
 // picture already drawn. Copied from src/vision/renderer.mjs because its render() cannot draw a band; keep it in step.
 // Every floating-point expression below is the original's, in the original's order: the output is byte-identical.
-import { castRay, colorOf, directionFor } from './renderer.mjs'
+import { castRay, colorOf, directionFor, hitLight, entityLight, lightTable, lightReport } from './renderer.mjs'
 
 const ENTRY_FACE = { x: ['east', 'west'], y: ['top', 'bottom'], z: ['south', 'north'] } // [moving negative, moving positive]
 // Nearest intersection of a ray with an axis-aligned box, into `out` ({t, face}); false when it misses. Scalars only:
@@ -239,9 +239,10 @@ const acceptFor = texture => {
 }
 
 // Terrain (or sky) for rows rowStart <= py < rowEnd into rgba and depth; returns the band's pixels with terrain closer than NEAR.
-export function renderBand ({ grid, info, texture, eye, timeOfDay, width, height, maxDist = 64, rgba, depth, rowStart, rowEnd, ...camera }) {
+export function renderBand ({ grid, info, texture, eye, timeOfDay, rain = 0, width, height, maxDist = 64, rgba, depth, rowStart, rowEnd, ...camera }) {
   const cam = cameraFor({ ...camera, width, height })
   const light = daylight(timeOfDay)
+  const table = lightTable(timeOfDay, rain)
   const accept = acceptFor(texture)
   const d = { x: 0, y: 0, z: 0 }
   let nearPixels = 0
@@ -258,18 +259,22 @@ export function renderBand ({ grid, info, texture, eye, timeOfDay, width, height
       let b = skyB
       if (hit) {
         if (hit.t < NEAR) nearPixels++
-        const fog = (hit.t / maxDist) ** 2
+        const byte = hitLight(grid, hit)
+        const lit = table[byte]
+        // fog fades toward the sky only as far as the sky reaches the hit: a dark cave stays dark far off
+        const fog = (hit.t / maxDist) ** 2 * (byte >> 4) / 15
+        const shade = FACE_SHADE[hit.face]
         if (hit.image) {
           const at = texel(hit.image, hit.u, hit.v)
           const tint = hit.image.tint
-          r = mix(hit.image.rgba[at] * (tint?.[0] ?? 255) / 255 * FACE_SHADE[hit.face] * light, skyR, fog)
-          g = mix(hit.image.rgba[at + 1] * (tint?.[1] ?? 255) / 255 * FACE_SHADE[hit.face] * light, skyG, fog)
-          b = mix(hit.image.rgba[at + 2] * (tint?.[2] ?? 255) / 255 * FACE_SHADE[hit.face] * light, skyB, fog)
+          r = mix(hit.image.rgba[at] * (tint?.[0] ?? 255) / 255 * shade * lit[0], skyR, fog)
+          g = mix(hit.image.rgba[at + 1] * (tint?.[1] ?? 255) / 255 * shade * lit[1], skyG, fog)
+          b = mix(hit.image.rgba[at + 2] * (tint?.[2] ?? 255) / 255 * shade * lit[2], skyB, fog)
         } else {
           const base = hashColor(hit.block.name ?? String(hit.id))
-          r = mix(base[0] * FACE_SHADE[hit.face] * light, skyR, fog)
-          g = mix(base[1] * FACE_SHADE[hit.face] * light, skyG, fog)
-          b = mix(base[2] * FACE_SHADE[hit.face] * light, skyB, fog)
+          r = mix(base[0] * shade * lit[0], skyR, fog)
+          g = mix(base[1] * shade * lit[1], skyG, fog)
+          b = mix(base[2] * shade * lit[2], skyB, fog)
         }
       }
       const p = py * width + px
@@ -285,13 +290,13 @@ export function renderBand ({ grid, info, texture, eye, timeOfDay, width, height
 }
 
 // render()'s entity work on a picture renderBand has drawn: the mobs nearer than the terrain (depth) overwrite its pixels.
-export function drawEntities ({ eye, entities = [], timeOfDay, width, height, maxDist = 64, rgba, depth, ...camera }) {
+export function drawEntities ({ grid, eye, entities = [], timeOfDay, rain = 0, width, height, maxDist = 64, rgba, depth, ...camera }) {
   const cam = cameraFor({ ...camera, width, height })
-  const light = daylight(timeOfDay)
+  const table = lightTable(timeOfDay, rain)
   const mobs = entities
     .filter(e => Math.hypot(e.x - eye.x, e.y - eye.y, e.z - eye.z) <= maxDist)
     .map(e => mobFor(e, eye))
-    .map(m => ({ ...m, rect: screenRect(cam.project, eye, m.box, width, height) }))
+    .map(m => ({ ...m, rect: screenRect(cam.project, eye, m.box, width, height), light: entityLight(grid, m.e) }))
     .filter(m => m.rect)
   const d = { x: 0, y: 0, z: 0 }
   const local = { x: 0, y: 0, z: 0 }
@@ -329,17 +334,19 @@ export function drawEntities ({ eye, entities = [], timeOfDay, width, height, ma
       // 'south' is the mob's own front: the ray came in through its +z face
       const base = nearest.palette[nearestPaint === 1 && nearestFace === 'south' ? 3 : nearestPaint]
       const at = (py * width + px) * 4
-      rgba[at] = base[0] * FACE_SHADE[nearestFace] * Math.max(light, 0.6)
-      rgba[at + 1] = base[1] * FACE_SHADE[nearestFace] * Math.max(light, 0.6)
-      rgba[at + 2] = base[2] * FACE_SHADE[nearestFace] * Math.max(light, 0.6)
+      const lit = table[nearest.light]
+      rgba[at] = base[0] * FACE_SHADE[nearestFace] * lit[0]
+      rgba[at + 1] = base[1] * FACE_SHADE[nearestFace] * lit[1]
+      rgba[at + 2] = base[2] * FACE_SHADE[nearestFace] * lit[2]
     }
   }
-  return mobs.filter(m => m.pixels > 0).map(({ e, pixels, sumX, sumY, x1, y1, x2, y2 }) => ({
+  return mobs.filter(m => m.pixels > 0).map(({ e, light: byte, pixels, sumX, sumY, x1, y1, x2, y2 }) => ({
     name: e.label ?? e.name,
     kind: e.kind,
     px: Math.round(sumX / pixels),
     py: Math.round(sumY / pixels),
     dist: Math.round(Math.hypot(e.x - eye.x, e.y + e.height / 2 - eye.y, e.z - eye.z)),
-    box: [x1, y1, x2, y2]
+    box: [x1, y1, x2, y2],
+    light: lightReport(table, byte)
   }))
 }

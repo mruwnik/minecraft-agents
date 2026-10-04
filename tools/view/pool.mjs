@@ -52,7 +52,7 @@ export function renderPool ({ threads, version, textureDir, timeoutMs = TIMEOUT_
     Atomics.store(control, DONE, 0)
     Atomics.store(control, ERROR, 0)
     Atomics.store(control, NEAR_PIXELS, 0)
-    const frame = { grid: { origin: grid.origin, size: grid.size, data: grid.data, top: grid.top }, params, rgba, depth, band: BAND }
+    const frame = { grid: { origin: grid.origin, size: grid.size, data: grid.data, light: grid.light, top: grid.top }, params, rgba, depth, band: BAND }
     for (const w of workers) w.postMessage(frame)
     waitDone()
     if (Atomics.load(control, ERROR)) throw new Error(workerError())
