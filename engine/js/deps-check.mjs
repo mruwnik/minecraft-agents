@@ -6,6 +6,7 @@ export const PATCHES = Object.freeze([
   ['node_modules/mineflayer-pathfinder/index.js', 'if (!placingBlock) placing = false // patched by bot/patch-deps.mjs', 'gate fix'],
   ['node_modules/mineflayer-pathfinder/lib/movements.js', 'patched by bot/patch-deps.mjs: no parkour over a fence', 'no parkour over fences'],
   ['node_modules/prismarine-physics/index.js', 'patched by bot/patch-deps.mjs: context-dependent scaffolding collision', 'scaffolding collision'],
+  ['node_modules/prismarine-physics/index.js', 'patched by bot/patch-deps.mjs: open trapdoor over a ladder', 'trapdoor over a ladder'],
   ['node_modules/mineflayer/lib/plugins/entities.js', 'patched by bot/patch-deps.mjs: my own air', 'own air only'],
   ['node_modules/mineflayer-pathfinder/lib/physics.js', 'patched by bot/patch-deps.mjs: scaffold descent preview', 'scaffold descent preview'],
   ['node_modules/mineflayer-pathfinder/index.js', 'patched by bot/patch-deps.mjs: scaffold descent driver', 'scaffold descent driver']

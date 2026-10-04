@@ -31,6 +31,9 @@
                   {"3,64,0" "ladder" "3,65,0" "ladder"} (box 3 64 -1 3 65 -1 "stone"))
    :states {"3,64,0" {:facing "south"} "3,65,0" {:facing "south"} "3,66,0" {:open false :half "bottom" :facing "south"}}})
 
+;; the trapdoor faces away from the ladder's facing: the body climbs to the ladder's top edge and jumps off it
+(def hatch-facing-away (assoc-in hatch [:states "3,66,0" :facing] "north"))
+
 (def pen
   {:blocks (merge flat (apply dissoc (box 5 64 -2 9 64 2 "oak_fence") (keys (box 6 64 -1 8 64 1 "x"))) {"5,64,0" "oak_fence_gate"})
    :states {"5,64,0" {:open false :facing "east"}}})
@@ -47,6 +50,7 @@
 (deftest a-goal-behind-something-the-search-opens-is-found
   (are [spec goal] (= {:status "found" :reason nil} (plan-over spec goal))
     hatch [6 67 0]
+    hatch-facing-away [6 67 0]
     pen [7 64 0]
     door-room [7 64 0]
     ladder-deck [6 67 0]))
@@ -54,8 +58,78 @@
 (deftest a-goal-behind-something-the-search-opens-is-not-enclosed-early
   (are [spec goal] (not= "goal-enclosed" (:reason (plan-over spec goal {:maxNodes 1})))
     hatch [6 67 0]
+    hatch-facing-away [6 67 0]
     pen [7 64 0]
     door-room [7 64 0]))
+
+;; ---- every kind of cell the search passes, the flood passes: a false :goal-enclosed is a goal go-to never tries ----
+
+(defn way-in
+  "The room with its west wall's cells (5,64,0) and (5,65,0) cleared and `blocks` put in."
+  ([blocks] (way-in blocks {}))
+  ([blocks states] {:blocks (merge flat (dissoc room "5,64,0" "5,65,0") blocks) :states states}))
+
+(defn up-to-deck
+  "A deck at y 66 over the floor, its only way up the column (3, 64..66, 0) against a wall, holding `blocks`."
+  [name]
+  {:blocks (merge flat (dissoc (box 2 66 -1 8 66 1 "stone") "3,66,0") (box 3 64 0 3 66 0 name) (box 3 64 -1 3 66 -1 "stone"))})
+
+(def iron-door-room
+  {"5,64,0" "iron_door" "5,65,0" "iron_door"})
+(def iron-door-states
+  {"5,64,0" {:open false :half "lower" :facing "east"} "5,65,0" {:open false :half "upper" :facing "east"}})
+
+(def passable
+  [[(way-in {"5,64,0" "oak_fence_gate"} {"5,64,0" {:open true :facing "east"}}) [7 64 0]]
+   [(way-in {"5,64,0" "oak_fence_gate"} {"5,64,0" {:open false :facing "east"}}) [7 64 0]]
+   [(update (way-in {"5,64,0" "stone_slab"}) :blocks dissoc "5,66,0") [7 64 0]]
+   [(way-in (merge iron-door-room {"4,64,0" "stone_pressure_plate"}) iron-door-states) [7 64 0]]
+   [(way-in (merge iron-door-room {"4,65,1" "stone_button"})
+            (merge iron-door-states {"4,65,1" {:face "wall" :facing "west" :powered false}})) [7 64 0]]
+   [(up-to-deck "vine") [6 67 0]]
+   [(up-to-deck "scaffolding") [6 67 0]]
+   [(up-to-deck "twisting_vines_plant") [6 67 0]]
+   [(up-to-deck "ladder") [6 67 0]]])
+
+(deftest every-kind-of-cell-the-search-passes-is-found
+  (doseq [[spec goal] passable]
+    (is (= "found" (:status (plan-over spec goal {:goalFlood 0 :preFlood 0}))) (pr-str goal (keys (:states spec))))))
+
+(deftest every-kind-of-cell-the-search-passes-is-not-enclosed
+  (doseq [[spec goal] passable
+          options [{:maxNodes 1} {:preFlood 0 :floodAfter 0}]]
+    (is (not= "goal-enclosed" (:reason (plan-over spec goal options))) (pr-str goal options))))
+
+;; water is a way the flood cannot follow (a drop into it starts higher than it looks): any water it meets is a leak
+(deftest water-on-the-way-in-is-never-enclosed
+  (are [spec goal options] (not= "goal-enclosed" (:reason (plan-over spec goal options)))
+    (way-in {"5,64,0" "water"}) [7 64 0] {:maxNodes 1}
+    (way-in {"5,64,0" "water"}) [7 64 0] {:preFlood 0 :floodAfter 0}
+    (up-to-deck "bubble_column") [6 67 0] {:maxNodes 1}
+    (up-to-deck "bubble_column") [6 67 0] {:preFlood 0 :floodAfter 0}))
+
+;; the search never enters cobweb or powder snow (AVOID): behind them the goal is walled in, and the flood says so
+(deftest a-way-in-the-search-refuses-is-enclosed
+  (are [name options] (= ["goal-enclosed" "exhausted"]
+                         [(:reason (plan-over (way-in {"5,64,0" name}) [7 64 0] options))
+                          (:reason (plan-over (way-in {"5,64,0" name}) [7 64 0] {:goalFlood 0 :preFlood 0}))])
+    "cobweb" {:maxNodes 1}
+    "cobweb" {:preFlood 0 :floodAfter 0}
+    "powder_snow" {:maxNodes 1}
+    "powder_snow" {:preFlood 0 :floodAfter 0}))
+
+;; a gap jump up is a way in: the goal is the top of a pillar (y 65) one empty cell past the floor's edge at x 4
+(def pillar {:blocks (merge (floor -2 -3 4 3) (box 6 50 0 6 64 0 "stone"))})
+
+(deftest a-goal-only-a-gap-jump-up-reaches-is-not-enclosed
+  (is (= "found" (:status (plan-over pillar [6 65 0] {:goalFlood 0 :preFlood 0}))))
+  (is (not= "goal-enclosed" (:reason (plan-over pillar [6 65 0] {:preFlood 0 :floodAfter 0})))))
+
+;; with doors never opened the search walks every way it has: its verdict, not a found path
+(deftest a-door-room-with-doors-never-opened-is-not-found
+  (are [options] (not= "found" (:status (plan-over door-room [7 64 0] (assoc options :limits {:kinds planner/AVOID-OPEN}))))
+    {}
+    {:preFlood 0 :floodAfter 0}))
 
 ;; A 2-wide roofed corridor x x0..x0+4, z 0..1, shut at its west end and open at its east one, with no way in from the
 ;; start's floor: what lies east of it decides whether the goal is walled in.
@@ -75,6 +149,12 @@
 (def into-out-of-span
   {:blocks (merge (corridor 2043) (floor 2048 -3 2060 4))})
 
+;; a one-cell pocket (10,64,1) on the edge of the loaded columns z 0..2, open only towards z -1 (unloaded) over the column
+;; x 10 z 0, which holds `between`, with no floor under it
+(defn pocket [between]
+  {:blocks (merge (dissoc (floor -2 0 11 2) "10,63,0") (box 9 64 0 9 65 1 "stone") (box 11 64 0 11 65 1 "stone")
+                  (box 10 64 2 10 65 2 "stone") {"10,66,1" "stone"} between)})
+
 ;; the early flood by default, the late one alone with preFlood 0 and floodAfter 0
 (deftest a-goal-whose-only-way-out-is-unseen-is-not-enclosed
   (are [spec goal options] (not= "goal-enclosed" (:reason (plan-over spec goal options)))
@@ -82,7 +162,13 @@
     into-out-of-span [2045 64 0] {}
     into-unloaded [12 64 0] {:preFlood 0 :floodAfter 0}
     into-out-of-span [2045 64 0] {:preFlood 0 :floodAfter 0}
-    hatch [6 67 0] {:preFlood 0 :floodAfter 0}))
+    hatch [6 67 0] {:preFlood 0 :floodAfter 0}
+    hatch-facing-away [6 67 0] {:preFlood 0 :floodAfter 0}
+    ;; a gap jump from the unloaded z -1 over the hole at z 0, level
+    (pocket {}) [10 64 1] {:preFlood 0 :floodAfter 0}
+    ;; over a cactus (a block one high nothing stands on) at z 0: only from a takeoff one block up
+    (pocket {"10,64,0" "cactus"}) [10 64 1] {}
+    (pocket {"10,64,0" "cactus"}) [10 64 1] {:preFlood 0 :floodAfter 0}))
 
 (deftest a-walled-goal-is-still-enclosed-at-once
   (are [spec goal] (= "goal-enclosed" (:reason (plan-over spec goal {:maxNodes 1})))

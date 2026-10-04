@@ -70,8 +70,9 @@
     (is (= 0 (:opens (cost r))))
     (is (>= (:climbed (cost r)) 5))))
 
-(deftest course-lad-trap-open-not-found
-  (is (not= "found" (:status (plan-course "lad-trap-open")))))
+;; the live course's open trapdoor faces like the ladder under it: vanilla climbs it
+(deftest course-lad-trap-open-found
+  (is (= "found" (:status (plan-course "lad-trap-open")))))
 
 (deftest cost-vector-counts-blocks-climbed
   (is (= 5 (:climbed (cost (plan-course "ladder-up")))))
@@ -151,6 +152,9 @@
     "copper_trapdoor" #{"found"}
     "iron_trapdoor" #{"partial" "none"}))
 
+;; Vanilla climbs an open trapdoor over a ladder of its own facing (the client does once tools/patch-deps turns
+;; prismarine-physics' climbableTrapdoor on for 26.1); over a ladder of another facing the body stands on the ladder's top
+;; edge, which the trapdoor's panel leaves free, and jumps off it. Either way every facing is a way up.
 (deftest trapdoor-over-ladder-facing-west
   (are [props status opens]
        (let [r (run5 (trap-over props) from5 (near 13 73 5) {:goalFlood 0})]
@@ -158,10 +162,29 @@
               (= opens (count (filter #(= (m :open) (:move %)) (steps r))))))
     {:open true :facing "east"} "found" 0
     {:open true :facing "south"} "found" 0
-    {:open true :facing "west"} "partial" 0
+    {:open true :facing "west"} "found" 0
     {:open false :facing "east"} "found" 1
     {:open false :facing "north"} "found" 1
-    {:open false :facing "west"} "partial" 0))
+    {:open false :facing "west"} "found" 1))
+
+;; the ladder faces west, so its wall is the stone east of the shaft: the step up into the trapdoor's cell aims 0.2 from it
+(deftest the-climb-into-a-trapdoor-over-a-ladder-presses-to-the-ladders-wall
+  (are [props]
+       (let [into (filter #(and (= 9 (:x %)) (= 72 (:y %))) (steps (run5 (trap-over props) from5 (near 13 73 5) {})))]
+         (and (= 1 (count into))
+              (true? (:hatch (first into)))
+              (close? 9.8 (:px (first into)))
+              (close? 5.5 (:pz (first into)))))
+    {:open true :facing "east"}
+    {:open true :facing "west"}
+    {:open false :facing "north"}
+    {:open false :facing "west"}))
+
+(deftest only-the-climb-into-a-trapdoor-over-a-ladder-is-pressed-to-the-wall
+  (are [snapshot from goal] (let [r (run5 snapshot from goal {})]
+                              (and (= "found" (:status r)) (= [] (filterv :hatch (steps r)))))
+    shaft from5 (near1 15 74 5)
+    (trap-over {:open true :facing "east"}) {:x 13 :y 73 :z 5} (near 2 64 5)))
 
 (def tower6
   (world {:fill [[9 64 5 9 69 5 "scaffolding" {:bottom false :waterlogged false :stability_distance 0}]]}))

@@ -150,7 +150,9 @@
          (and (= status (:status r))
               (= opens (count (opened-by r)))
               (= summary-ok (boolean (and (re-find #"opens 1 trapdoor" (summary r))
-                                          (re-find #"ladder down" (summary r)))))))
+                                          (re-find #"ladder down" (summary r)))))
+              ;; going down nothing is pressed to the ladder's wall (the body would stand on its top edge)
+              (not-any? :hatch (get-in r [:path :steps]))))
     "east" "found" 1 true
     "north" "found" 1 true
-    "west" "partial" 0 false))
+    "west" "found" 1 true))

@@ -46,6 +46,9 @@
 (def ^:const ACT-BUTTON 1)
 (def ^:const ACT-LEVER 2)
 (def ^:const ACT-PLATE 3)
+;; by a ladder's facing (1 east, 2 west, 3 south, 4 north): the way to the wall it hangs on
+(def wall-dx #js [0 -1 1 0 0])
+(def wall-dz #js [0 0 0 -1 1])
 (def ^:const GRID 17)
 ;; kinds of move a search for an alternative path may refuse (options.avoid.kinds, bits)
 (def ^:const AVOID-CLIMB 1)
@@ -278,15 +281,15 @@
         (aget tbl-open-state id)
         id)))
 
-  ;; does the climbable state `id` (climb = cl) at x,y,z make its cell one the body climbs in? An open trapdoor counts only
-  ;; over a ladder it does not face the same way as (measured live)
+  ;; does the climbable state `id` (climb = cl) at x,y,z make its cell one the body climbs in? An open trapdoor counts over
+  ;; a ladder: vanilla climbs it when it faces the ladder's way (the client too, with tools/patch-deps.mjs), and over a
+  ;; ladder of another facing its panel leaves the ladder's top edge free to stand on and jump from (the step into it is
+  ;; aimed at the ladder's wall, see hatchWall)
   (climbCell [s cl id x y z]
     (if (== cl CLIMB-INSIDE)
       true
       (let [below (.stateAt snapshot x (dec y) z)]
-        (if (or (== below UNLOADED) (not (== (aget tbl-climb-name below) LADDER)))
-          false
-          (not (== (aget tbl-facing id) (aget tbl-facing below)))))))
+        (and (not (== below UNLOADED)) (== (aget tbl-climb-name below) LADDER)))))
 
   (climbHere [s x y z]
     (let [id (.stateAt snapshot x y z)]
@@ -1742,16 +1745,18 @@
               (set! open-mode false)
               opened)))))
 
-  ;; can a gap jump in direction c come over the column beside the flood's current cell (free at body height)?
-  (jumpOver [s c]
-    (.clear s (+ fx (aget adx c)) (+ fz (aget adz c)) (* fy 16) (+ (* fy 16) BODY)))
+  ;; can a gap jump in direction c from a takeoff dy above the flood's current cell come over the column beside it (free at
+  ;; body height over the takeoff)?
+  (jumpOver [s c dy]
+    (let [lo (* (+ fy dy) 16)]
+      (.clear s (+ fx (aget adx c)) (+ fz (aget adz c)) lo (+ lo BODY))))
 
   ;; adds the cell when it is standable and a forward move of it reaches the flood's current cell; true when it is the
   ;; start. A cell the flood cannot see is a way in it does not know, and marks the flood leaked: always beside the current
   ;; cell (jump -1), and from a gap jump's takeoff in direction jump only when the jump can come over the column between.
   (floodVisit [s ^js seen ^js queue start-key x y z jump]
     (if ^boolean (.unseen s x y z)
-      (do (when (or (neg? jump) ^boolean (.jumpOver s jump)) (set! leaked true))
+      (do (when (or (neg? jump) ^boolean (.jumpOver s jump (- y fy))) (set! leaked true))
           false)
       (let [key (.keyOf s x y z 0)]
         (if (true? (.has seen key))
@@ -1769,15 +1774,15 @@
                       (== key start-key))
                   false))))))))
 
-  ;; cells a gap jump could come from: 2..4 along each cardinal, level or one up
+  ;; cells a gap jump could come from: 2..4 along each cardinal, level, one up or one down (a jump up a block)
   (floodAhead [s seen queue start-key]
     (loop [c 0
            n 2
-           dy 0]
+           dy -1]
       (cond
         (== c 4) false
-        (> n 4) (recur (inc c) 2 0)
-        (> dy 1) (recur c (inc n) 0)
+        (> n 4) (recur (inc c) 2 -1)
+        (> dy 1) (recur c (inc n) -1)
         ^boolean (.floodVisit s seen queue start-key (+ fx (* (aget adx c) n)) (+ fy dy) (+ fz (* (aget adz c) n)) c) true
         :else (recur c n (inc dy)))))
 
@@ -2059,12 +2064,28 @@
                           :pz (+ z (if tight (/ (bit-and (bit-shift-right shape 10) 31) 16) 0.5))}]
             (when ^boolean (.isWater s x (aget ys i) z) (unchecked-set step "swim" true))
             (when (pos? (aget opens i)) (unchecked-set step "opens" (aget open-lists (dec (aget opens i)))))
+            (let [p (aget parents i)
+                  wall (.hatchWall s x (aget ys i) z)]
+              (when (and (pos? wall) (>= p 0) (< (aget ys p) (aget ys i)))
+                (unchecked-set step "hatch" true)
+                (unchecked-set step "px" (+ x 0.5 (* 0.3 (aget wall-dx wall))))
+                (unchecked-set step "pz" (+ z 0.5 (* 0.3 (aget wall-dz wall))))))
             (when (== (bit-and (bit-shift-right shape 15) 1) 1)
               (unchecked-set step "cx" (+ x (/ (bit-and (bit-shift-right shape 16) 31) 16)))
               (unchecked-set step "cz" (+ z (/ (bit-and (bit-shift-right shape 21) 31) 16))))
             (.push out step))
           (recur (aget parents i))))
       (.reverse out)))
+
+  ;; the facing (1 east, 2 west, 3 south, 4 north) of the ladder under a trapdoor at x,y,z, or 0: a climb up into that cell
+  ;; is aimed at the ladder's wall, where the body stands on the ladder's top edge when the trapdoor's panel leaves it free
+  (hatchWall [s x y z]
+    (let [id (.stateAt snapshot x y z)
+          below (.stateAt snapshot x (dec y) z)]
+      (if (or (== id UNLOADED) (== below UNLOADED) (not (== (aget tbl-open-kind id) KIND-TRAPDOOR))
+              (not (== (aget tbl-climb-name below) LADDER)))
+        0
+        (aget tbl-facing below))))
 
   ;; "ladder up 9": consecutive climbing legs on one kind of climbable in one direction are one run
   (climbRuns [s ^js legs]

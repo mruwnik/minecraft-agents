@@ -52,6 +52,23 @@ test('the pose says climbable when the feet are in a ladder', async () => {
   assert.equal(poses[0].onClimbable, true)
 })
 
+// vanilla climbs an open trapdoor over a ladder of its own facing, and so does the client once tools/patch-deps.mjs has run
+const hatchCases = [
+  ['an open trapdoor over a ladder of its facing', 'ladder', { open: true, facing: 'south' }, true],
+  ['an open trapdoor over a ladder of another facing', 'ladder', { open: true, facing: 'north' }, false],
+  ['a shut trapdoor over a ladder of its facing', 'ladder', { open: false, facing: 'south' }, false],
+  ['an open trapdoor over stone', 'stone', { open: true, facing: 'south' }, false]
+]
+for (const [what, below, trapdoor, climbable] of hatchCases) {
+  test(`the pose with the feet in ${what}: climbable ${climbable}`, async () => {
+    const { bot, p } = rig({ pos: [0.5, 65, 0.5], blocks: { '0,64,0': below, '0,65,0': 'oak_trapdoor' }, props: { '0,64,0': { facing: 'south' }, '0,65,0': trapdoor } })
+    const poses = []
+    await start(p, bot, pose => { poses.push(pose); return { done: {} } })
+    bot.emit('physicsTick')
+    assert.equal(poses[0].onClimbable, climbable)
+  })
+}
+
 test('done resolves with the result and the tick count and releases the controls', async () => {
   const { bot, p } = rig()
   let n = 0

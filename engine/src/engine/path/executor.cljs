@@ -73,6 +73,7 @@
            :corner (boolean (.-corner s)) :px (.-px s) :pz (.-pz s)}
     (some? (.-cx s)) (assoc :cx (.-cx s) :cz (.-cz s))
     (.-swim s) (assoc :swim true)
+    (.-hatch s) (assoc :hatch true)
     (some? (.-opens s)) (assoc :opens (vec (js->clj (.-opens s) :keywordize-keys true)))))
 
 (defn steps-of
@@ -262,11 +263,14 @@
 ;; ---------------------------------------------------------------- reached
 
 (defn reached?
-  "The body is in the step's cell and at its height (climbs: at least that high / at most that high)."
+  "The body is in the step's cell and at its height (climbs: at least that high / at most that high). A climb into a
+  trapdoor's cell over a ladder (:hatch) counts once the body is held there, on the ladder's top edge or climbing: a client
+  that climbs no trapdoor bobs over the ladder's top until it stands on that edge."
   [policy step {:keys [y] :as pose}]
   (let [sy (stand-y step)]
     (and (in-cell? step pose)
          (or (not= :gap (:move step)) (:on-ground pose))
+         (or (not (:hatch step)) (and (>= y sy) (or (:on-ground pose) (:on-climbable pose))))
          (case (:move step)
            (:climb-up :jump-climb) (>= y (- sy 0.1))
            :climb-down (<= y (+ sy (:arrive-y policy)))

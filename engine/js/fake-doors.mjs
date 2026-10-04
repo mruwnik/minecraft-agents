@@ -18,10 +18,11 @@ export const isOpen = (s, k) => isOpenable(s.blocks.get(k)) && s.states.get(k)?.
 // an open trapdoor over a ladder is climbable, as on the server
 export const climbsThrough = (s, x, y, z) => isOpen(s, key(x, y, z)) && /_trapdoor$/.test(s.blocks.get(key(x, y, z))) && s.blocks.get(key(x, y - 1, z)) === 'ladder'
 
-// the properties of the block at k for a planner state id, {} for a block that is neither openable nor a button or lever
+// the properties of the block at k for a planner state id, {} for a block that is neither openable, a button or lever, nor
+// a ladder (a trapdoor over it is judged against its facing)
 export const pathProps = (s, k) => {
   const name = s.blocks.get(k)
-  if (!isOpenable(name) && !ACTIVATOR.test(name ?? '')) return {}
+  if (!isOpenable(name) && !ACTIVATOR.test(name ?? '') && name !== 'ladder') return {}
   const states = s.states.get(k) ?? {}
   return Object.fromEntries(PATH_PROPS.filter(p => states[p] !== undefined).map(p => [p, states[p]]))
 }

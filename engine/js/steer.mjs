@@ -14,6 +14,17 @@ const CLIMBABLE = new Set(['ladder', 'vine', 'scaffolding', 'twisting_vines', 't
 const isNum = n => typeof n === 'number' && Number.isFinite(n)
 const reasonOf = err => String(err).slice(0, 200)
 
+// what the client climbs at the feet: a climbable, or an open trapdoor over a ladder of its own facing (vanilla, and
+// prismarine-physics once tools/patch-deps.mjs has run)
+const climbableAt = (bot, cell) => {
+  const block = bot.blockAt(cell)
+  if (CLIMBABLE.has(block?.name)) return true
+  if (!/_trapdoor$/.test(block?.name ?? '')) return false
+  const below = bot.blockAt(cell.offset(0, -1, 0))
+  const props = block.getProperties()
+  return below?.name === 'ladder' && props.open === true && props.facing === below.getProperties().facing
+}
+
 export function createSteer ({ act, getBot, badArgs }) {
   const pose = bot => {
     const { position, velocity, onGround, isInWater, isCollidedHorizontally, yaw } = bot.entity
@@ -24,7 +35,7 @@ export function createSteer ({ act, getBot, badArgs }) {
       z: position.z,
       vy: velocity.y,
       onGround,
-      onClimbable: CLIMBABLE.has(bot.blockAt(cell)?.name),
+      onClimbable: climbableAt(bot, cell),
       inWater: isInWater,
       collided: isCollidedHorizontally,
       yaw,

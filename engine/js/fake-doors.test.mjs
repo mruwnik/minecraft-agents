@@ -38,6 +38,11 @@ test('the planner properties of a button are its face, facing and powered', () =
   assert.deepEqual(pathProps(s, '0,64,0'), { facing: 'west', face: 'wall', powered: false })
 })
 
+test('the planner properties of a ladder are its facing (the trapdoor over it is judged against it)', () => {
+  const s = world({ '0,64,0': 'ladder' }, { '0,64,0': { facing: 'south', other: 1 } })
+  assert.deepEqual(pathProps(s, '0,64,0'), { facing: 'south' })
+})
+
 test('an open trapdoor over a ladder is climbed through, a shut one or one over stone is not', () => {
   const s = world({ '0,64,0': 'ladder', '0,65,0': 'oak_trapdoor', '3,64,0': 'stone', '3,65,0': 'oak_trapdoor', '6,64,0': 'ladder', '6,65,0': 'oak_trapdoor' },
     { '0,65,0': { open: true }, '3,65,0': { open: true }, '6,65,0': { open: false } })

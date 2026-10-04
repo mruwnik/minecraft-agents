@@ -46,7 +46,8 @@
 
 (deftest steps-of-optional-fields
   (let [[s] (ex/steps-of #js [#js {:x 1 :y 2 :z 3 :h 0 :move 11 :corner true :px 1.5 :pz 3.5
-                                   :cx 1.0 :cz 3.2 :swim true :opens #js [#js {:x 1 :y 2 :z 3}]}])]
+                                   :cx 1.0 :cz 3.2 :swim true :hatch true :opens #js [#js {:x 1 :y 2 :z 3}]}])]
+    (is (true? (:hatch s)))
     (is (= 1.0 (:cx s)))
     (is (= 3.2 (:cz s)))
     (is (true? (:swim s)))
@@ -151,6 +152,22 @@
     (step 3 64 3 :climb-down) (pose 3.5 64.4 3.5) true
     (step 3 64 3 :climb-down) (pose 3.5 64.6 3.5) false
     (step 3 64 3 :climb-down) (pose 3.5 60.0 3.5) true))
+
+;; the climb into a trapdoor's cell over a ladder (:hatch, aimed at the ladder's wall): reached only once held there, on
+;; the ladder's top edge or climbing a trapdoor the client climbs; a body bobbing over the ladder's top is not there yet
+(deftest a-hatch-step-is-reached-once-held-in-its-cell
+  (are [ps expected] (= expected (ex/reached? p (step 3 64 3 :climb-up {:hatch true :px 3.8}) ps))
+    (pose 3.7 64.0 3.5 {:on-ground true}) true
+    (pose 3.5 64.3 3.5 {:on-ground false :on-climbable true}) true
+    (pose 3.5 64.1 3.5 {:on-ground false :on-climbable false}) false
+    (pose 3.5 63.95 3.5 {:on-ground false :on-climbable true}) false
+    (pose 3.5 63.95 3.5 {:on-ground true}) false))
+
+(deftest a-hatch-step-steers-at-the-ladders-wall
+  (let [steps [(step 3 63 3 :start) (step 3 64 3 :climb-up {:hatch true :px 3.8}) (step 4 65 3 :jump)]
+        r (ex/tick p (state-at steps 1) (pose 3.5 64.1 3.5 {:on-ground false}))]
+    (is (= 1 (get-in r [:state :i])))
+    (is (yaw-eq? (ex/yaw-to 3.5 3.5 3.8 3.5) (:yaw r)))))
 
 ;; tick: reaching and overshoot
 
