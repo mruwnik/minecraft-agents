@@ -1,0 +1,2 @@
+;; ProbeFight live cases for jobs.build.pen: idle, jobs are submitted with tools/jobs.mjs
+{:register [] :queue []}
