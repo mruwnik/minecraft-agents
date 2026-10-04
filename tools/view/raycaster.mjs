@@ -2,7 +2,7 @@
 // main thread: renderBand() is render()'s per-pixel terrain work for a range of rows, drawEntities() its mob work on a
 // picture already drawn. Copied from src/vision/renderer.mjs because its render() cannot draw a band; keep it in step.
 // Every floating-point expression below is the original's, in the original's order: the output is byte-identical.
-import { castRay, colorOf, directionFor } from '../../src/vision/renderer.mjs'
+import { castRay, colorOf, directionFor } from './renderer.mjs'
 
 const ENTRY_FACE = { x: ['east', 'west'], y: ['top', 'bottom'], z: ['south', 'north'] } // [moving negative, moving positive]
 // Nearest intersection of a ray with an axis-aligned box, into `out` ({t, face}); false when it misses. Scalars only:

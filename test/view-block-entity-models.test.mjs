@@ -3,7 +3,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { blockEntityElements, DYE_COLORS } from '../tools/view/block-entity-models.mjs'
-import { decodePng } from '../src/vision/renderer.mjs'
+import { decodePng } from '../tools/view/renderer.mjs'
 import { openJar, findClientJar } from '../tools/view/jar-read.mjs'
 
 const SOUTH = { north: 'south', south: 'north', east: 'west', west: 'east' }

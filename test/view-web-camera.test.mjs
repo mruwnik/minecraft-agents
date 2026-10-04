@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { directionFor, cameraBasis, rayDir } from '../tools/view/web/camera.mjs'
-import { directionFor as rendererDirectionFor, makeGrid, render } from '../src/vision/renderer.mjs'
+import { directionFor as rendererDirectionFor, makeGrid, render } from '../tools/view/renderer.mjs'
 
 const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-9, `${msg}: ${a} vs ${b}`)
 const angles = [-3, -1.2, 0, 0.7, Math.PI / 2, 2.5, Math.PI, 5]

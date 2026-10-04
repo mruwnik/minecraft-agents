@@ -2,7 +2,7 @@
 import { test, after } from 'node:test'
 import assert from 'node:assert/strict'
 import path from 'node:path'
-import { makeGrid } from '../src/vision/renderer.mjs'
+import { makeGrid } from '../tools/view/renderer.mjs'
 import { makeChunkClass } from '../tools/view/columns.mjs'
 import { makeBlockSource } from '../tools/view/blocks.mjs'
 import { renderBand, NEAR } from '../tools/view/raycaster.mjs'

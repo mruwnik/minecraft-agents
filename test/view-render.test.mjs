@@ -7,7 +7,7 @@ import path from 'node:path'
 import zlib from 'node:zlib'
 import { makeChunkClass } from '../tools/view/columns.mjs'
 import { renderView, readPose } from '../tools/view/render.mjs'
-import { decodePng } from '../src/vision/renderer.mjs'
+import { decodePng } from '../tools/view/renderer.mjs'
 
 const VERSION = '1.21.4'
 const Chunk = makeChunkClass(VERSION)

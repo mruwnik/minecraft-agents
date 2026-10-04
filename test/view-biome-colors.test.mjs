@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import minecraftData from 'minecraft-data'
-import { decodePng } from '../src/vision/renderer.mjs'
+import { decodePng } from '../tools/view/renderer.mjs'
 import { zipEntries, entryContent, findClientJar } from '../tools/view/jar-read.mjs'
 import { biomeColors, biomeColorsByName, biomeTable } from '../tools/view/biome-colors.mjs'
 

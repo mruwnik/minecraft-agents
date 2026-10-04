@@ -6,7 +6,7 @@
 import fs from 'node:fs'
 import minecraftData from 'minecraft-data'
 import tints from 'minecraft-data/minecraft-data/data/pc/26.1/tints.json' with { type: 'json' }
-import { decodePng } from '../../src/vision/renderer.mjs'
+import { decodePng } from './renderer.mjs'
 import { zipEntries, entryContent, findClientJar } from './jar-read.mjs'
 
 export const PLAINS_GRASS = [124, 189, 107]

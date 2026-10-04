@@ -7,7 +7,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import zlib from 'node:zlib'
-import { clientVersions, versionsDirs, jarTextures } from '../src/lib.mjs'
+import { clientVersions, versionsDirs, jarTextures } from './jar.mjs'
 
 const ROOT = path.join(import.meta.dirname, '..')
 const TEXTURES = path.join(ROOT, 'textures')

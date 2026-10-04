@@ -2,7 +2,7 @@
 // state/worlds/<world>/agents/<name>/view/pose.json. Nothing here touches a body or a server.
 import fs from 'node:fs'
 import path from 'node:path'
-import { render, encodePng } from '../../src/vision/renderer.mjs'
+import { render, encodePng } from './renderer.mjs'
 import { columnCache, makeChunkClass } from './columns.mjs'
 import { buildGrid } from './grid.mjs'
 import { cameraFromPose, entitiesFromPose } from './camera.mjs'

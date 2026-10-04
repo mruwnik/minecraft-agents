@@ -20,7 +20,7 @@ import { cameraBasis } from './view/web/camera.mjs'
 import { faceRegion } from './view/project.mjs'
 import { regionStats, luminance } from './view/stats.mjs'
 import { PLACES, AGENT as GHOST_AGENT, WORLD as GHOST_WORLD, writeGhostWorld, writePose } from './view/ghost-fixture.mjs'
-import { decodePng, encodePng } from '../src/vision/renderer.mjs'
+import { decodePng, encodePng } from './view/renderer.mjs'
 import { ENTITY_REGIONS, VIEWS as ENTITY_VIEWS, WIDTH as ENTITY_WIDTH, HEIGHT as ENTITY_HEIGHT, FOV as ENTITY_FOV, AGENT as ENTITY_AGENT, writeEntityWorld } from './view/entity-fixture.mjs'
 import { MODELS, CUBES, EYE as MODEL_EYE, AGENT as MODEL_AGENT, writeModelWorld } from './view/model-fixture.mjs'
 

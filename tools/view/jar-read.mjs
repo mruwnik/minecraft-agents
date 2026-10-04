@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import zlib from 'node:zlib'
-import { clientVersions, versionsDirs } from '../../src/lib/jar.mjs'
+import { clientVersions, versionsDirs } from '../jar.mjs'
 
 const END_OF_CENTRAL_DIRECTORY = 0x06054b50
 

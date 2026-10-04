@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { makeChunkClass } from '../tools/view/columns.mjs'
 import { buildGrid } from '../tools/view/grid.mjs'
 import { cameraFromPose, entitiesFromPose } from '../tools/view/camera.mjs'
-import { directionFor } from '../src/vision/renderer.mjs'
+import { directionFor } from '../tools/view/renderer.mjs'
 
 const Chunk = makeChunkClass('1.21.4')
 const stone = Chunk.registry.blocksByName.stone.defaultState

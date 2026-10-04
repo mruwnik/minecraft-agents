@@ -1,7 +1,7 @@
 // The browser's texture array: 16x16 RGBA layers with a mip chain, packed level-major (all layers of level 0, then 1...).
 import fs from 'node:fs'
 import path from 'node:path'
-import { decodePng, tintOf } from '../../src/vision/renderer.mjs'
+import { decodePng, tintOf } from './renderer.mjs'
 
 export const SIZE = 16
 export const LEVELS = 5

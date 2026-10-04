@@ -2,7 +2,7 @@
 // (a kind, one texture per face, a box) against the block's real visual model from the client jar, and merges the result
 // with what was seen in the world. Nothing is fixed here; the output is a durable list for whoever fixes them later.
 import tints from 'minecraft-data/minecraft-data/data/pc/26.1/tints.json' with { type: 'json' }
-import { tintOf } from '../../src/vision/renderer.mjs'
+import { tintOf } from './renderer.mjs'
 import { COLORMAP_BLOCKS } from './tints.mjs'
 import { OVER_CAP, ELEMENT_CAP } from './materials.mjs'
 

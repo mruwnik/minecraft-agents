@@ -4,7 +4,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { decodeColumnFile, columnCache, makeChunkClass } from '../../tools/view/columns.mjs'
-import { encodePng } from '../../src/vision/renderer.mjs'
+import { encodePng } from '../../tools/view/renderer.mjs'
 
 // -> {blockAt(x, y, z) -> {name, state: {property: value}} | null (no column dumped), close()}
 export function createWorldBlocks ({ stateDir, world }) {

@@ -1,0 +1,84 @@
+#!/bin/bash
+# runs one agent's body (called by state/worlds/<world>/agents/<Name>/start; the repo is five levels up). A dead body is silent, and its driver would wait for ever: when the body
+# ends badly, leave a body_down line in its events.jsonl, which the driver's event monitor picks up.
+self="$(readlink -f "$0")"
+cd "$1" || exit 1
+# NODE_OPTIONS (eg --inspect=...) is for the body alone: every helper below is a short node process that would
+# otherwise inherit it and bind the very same fixed debug port in turn, printing noise and racing the body for
+# it. Carry the original value across the supervisor hand-off in BODY_NODE_OPTIONS, leave NODE_OPTIONS unset for
+# every helper, and only set it back on the one line that execs the body itself.
+if [ -z "${BODY_NODE_OPTIONS+x}" ]; then
+  export BODY_NODE_OPTIONS="$NODE_OPTIONS"
+fi
+unset NODE_OPTIONS
+# the body outlives the shell that ran ./start: a driver's tool call that times out, or a stopped background task, sends
+# SIGTERM to its process group, and the trap at the end took the body down with it (12 bodies on 2026-10-01). So the
+# checks run here, and then this script runs again in a session of its own for the body, while the caller gets its
+# prompt back
+if [ "$BODY_SUPERVISOR" != 1 ]; then
+# before ANYTHING else, the log rotation below included: refuse a second body for this agent (#145). A second ./start
+# used to rotate the running body's bot.log away - the evidence of whatever sent the agent looking - and then the two
+# bodies traded one login every ten seconds. A broken lock tool (any exit but 3) must not keep an agent out of its own
+# body, so only its refusal stops us.
+node ../../../../../legacy/tools/body-lock.mjs check .
+[ $? -eq 3 ] && exit 3
+# claim the pid file now, under this wrapper's pid: the checks below take seconds, and two starts in that window both
+# passed the lock and traded logins (the body's own pid replaces it once it is up)
+node ../../../../../legacy/tools/body-lock.mjs write . $$
+trap 'rm -f body.pid' EXIT
+# two refusals, before the log rotation below touches anything: a config.json with no usable world (readWorld),
+# and - once the world is known - a body started outside while its world's clock says night (a7cd6038). `./start
+# --now` (or START_NOW=1) is the driver's word that the body spawns into a bed or under a roof, which the clock
+# cannot know; a missing world refuses even then.
+if ! refusal=$(node ../../../../../legacy/tools/start-gate.mjs "$PWD" "${@:2}" 2>&1); then
+  echo "$refusal" >&2
+  node -e 'process.stdout.write(JSON.stringify({ seq: 0, t: new Date().toISOString(), type: "body_down", exit: 5, advice: `your body was not started: ${process.argv[1].trim()}` }) + "\n")' "$refusal" >> events.jsonl
+  exit 5
+fi
+# a healthy body uses about 200 MB. A runaway should die early, not at 4 GB, and leave report.*.json with the JavaScript stack that did it
+# keep the last five runs' logs: a restart used to wipe the evidence of a crash, and on a day of fixes bodies restart every few minutes
+for n in 4 3 2 1; do [ -f bot.log.$n ] && mv bot.log.$n bot.log.$((n + 1)); done
+[ -f bot.log ] && mv bot.log bot.log.1
+# #148: refuse to start on code that does not parse (a half-saved file), and say which file and line. The body used to die at its
+# first import with a stack at the end of bot.log; check-code tries again every 5 s for 60 s, since an editor mid-save is back in seconds
+if ! broken=$(node ../../../../../legacy/tools/check-code.mjs ../../../../../legacy 60 2>&1); then
+  echo "$broken" > bot.log
+  node -e 'process.stdout.write(JSON.stringify({ seq: 0, t: new Date().toISOString(), type: "body_down", exit: 4, broken: process.argv[1].trim().split("\n"),
+    advice: "your body did not start: this code does not parse (someone is mid-edit, or saved a broken file). Tell whoever edits the bot, and ./start again once it is fixed" }) + "\n")' "$broken" >> events.jsonl
+  exit 4
+fi
+# the supervisor starts in this directory, where a relative path given to this script no longer leads anywhere
+supervisor=$(BODY_SUPERVISOR=1 node ../../../../../legacy/tools/detach.mjs "$self" "$PWD" "${@:2}") || exit 1
+node ../../../../../legacy/tools/body-lock.mjs write . "$supervisor"
+trap - EXIT
+exit 0
+fi
+# one trap covers every way the supervisor can end, not just the wait below: a kill (or a crash) during
+# patch-deps/textures, before $body even exists, used to leave body.pid stale with no trace in events.jsonl (a
+# driver would wait forever for a body_down that was never written). TERM/INT force a known exit code so the EXIT
+# trap below always has one to report, whether the body is running yet or not.
+body=
+report_down () {
+  code=$1
+  rm -f body.pid
+  [ "$code" -eq 0 ] && return
+  last=$(tail -n 5 bot.log 2>/dev/null)
+  node -e 'process.stdout.write(JSON.stringify({ seq: 0, t: new Date().toISOString(), type: "body_down", exit: Number(process.argv[1]),
+    last: process.argv[2] ? process.argv[2].split("\n") : [],
+    advice: "your body stopped (crash or kill): ./start it again; a crash leaves its cause at the end of bot.log" }) + "\n")' "$code" "$last" >> events.jsonl
+}
+trap 'report_down $?' EXIT
+trap '[ -n "$body" ] && kill "$body" 2>/dev/null; exit 143' TERM
+trap '[ -n "$body" ] && kill "$body" 2>/dev/null; exit 130' INT
+# bash defers a trap until the current foreground command finishes, so a kill (or crash) wouldn't be noticed
+# until patch-deps/textures themselves ended on their own; backgrounding each step and `wait`-ing on it instead
+# makes every trap above fire at once, the same way `wait $body` already does for the body itself below
+node ../../../../../tools/patch-deps.mjs > bot.log 2>&1 &
+wait $!
+node ../../../../../tools/textures.mjs >> bot.log 2>&1 &
+wait $!
+NODE_OPTIONS="$BODY_NODE_OPTIONS" node --max-old-space-size=1536 --report-on-fatalerror --report-compact --report-filename=crash-report.json ../../../../../legacy/src/bot.mjs . >> bot.log 2>&1 &
+body=$!
+node ../../../../../legacy/tools/body-lock.mjs write . $body
+wait $body
+exit $?

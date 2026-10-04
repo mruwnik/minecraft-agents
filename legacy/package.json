@@ -1,0 +1,8 @@
+{
+  "name": "minecraft-agents-legacy",
+  "private": true,
+  "description": "Archived HTTP-action body and JavaScript dashboard; dependencies are installed at the repository root.",
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  }
+}

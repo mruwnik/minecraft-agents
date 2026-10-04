@@ -4,7 +4,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import prismarineBlock from 'prismarine-block'
-import { decodePng, textureCandidates, tintOf } from '../../src/vision/renderer.mjs'
+import { decodePng, textureCandidates, tintOf } from './renderer.mjs'
 
 const AIR = new Set(['air', 'cave_air', 'void_air', 'light', 'barrier', 'structure_void'])
 const FULL_CUBE = JSON.stringify([[0, 0, 0, 1, 1, 1]])

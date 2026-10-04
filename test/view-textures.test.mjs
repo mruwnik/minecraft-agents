@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { decodePng } from '../src/vision/renderer.mjs'
+import { decodePng } from '../tools/view/renderer.mjs'
 import { mipChain, textureSet, decodeTexture, cropRegion } from '../tools/view/textures.mjs'
 
 const textureDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'textures')
