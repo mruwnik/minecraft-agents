@@ -129,3 +129,84 @@
     (is (= 0 (:seq (events/cursor stream))))
     (is (empty? (read-lines file)))
     (is (= 1 (events/emit! stream {:source :system :kind :started})))))
+
+;; ---------------------------------------------------------------- disk reads
+
+(defn emit-n! [stream n]
+  (doseq [i (range n)]
+    (events/emit! stream {:source :action :kind :finished :data {:i i :pad (apply str (repeat 40 "p"))}})))
+
+(defn disk-only
+  "A copy of the stream's reader state with an empty recent buffer, so every read goes to disk."
+  [stream]
+  (swap! stream assoc :recent [] :recent-byte-count 0)
+  stream)
+
+(defn without-whole-file-reads
+  "Run f with fs.readFileSync failing for file: a reader that loads a segment whole throws."
+  [file f]
+  (let [original (.-readFileSync fs)]
+    (set! (.-readFileSync fs)
+          (fn [p & more]
+            (when (= p file) (throw (js/Error. "whole-file read")))
+            (apply original p more)))
+    (try (f)
+         (finally (set! (.-readFileSync fs) original)))))
+
+(deftest disk-reads-do-not-load-the-whole-segment
+  (let [file (path/join (tu/tmp-dir) "events.edn")
+        stream (events/make {:file file :generation-id "g"})
+        sid (:stream-id (events/cursor stream))]
+    (emit-n! stream 400)
+    (disk-only stream)
+    (doseq [after [0 1 100 250 390 398]]
+      (let [page (without-whole-file-reads
+                  file #(events/read-after stream {:stream-id sid :after after :limit 10}))
+            want (range (inc after) (inc (min 400 (+ after 10))))]
+        (is (false? (:gap? page)) (str "after " after))
+        (is (= want (mapv :seq (:events page))) (str "after " after))))))
+
+(deftest disk-reads-equal-recent-reads-across-segments
+  (let [file (path/join (tu/tmp-dir) "events.edn")
+        stream (events/make {:file file :generation-id "g" :max-bytes 8192})
+        sid (:stream-id (events/cursor stream))]
+    (emit-n! stream 60)
+    (let [latest (:seq (events/cursor stream))
+          oldest (:oldest-seq (events/read-after stream {:stream-id sid :after latest}))
+          afters (range (dec oldest) latest)
+          from-recent (mapv #(events/read-after stream {:stream-id sid :after % :limit 7}) afters)]
+      (is (< 1 oldest) "retention dropped the oldest events")
+      (is (< 1 (count (filter #(fs/existsSync (events/segment-file file %)) (range events/segment-count))))
+          "the events span several segments")
+      (disk-only stream)
+      (is (= from-recent
+             (mapv #(events/read-after stream {:stream-id sid :after % :limit 7}) afters))))))
+
+(deftest disk-reads-report-a-hole-in-the-sequence-as-a-gap
+  (let [file (path/join (tu/tmp-dir) "events.edn")
+        line (fn [n] (str (pr-str {:seq n :generation-id "g" :time-ms 0 :source :a :kind :b}) "\n"))
+        _ (fs/mkdirSync (path/dirname file) #js {:recursive true})
+        _ (fs/writeFileSync file (apply str (map line (concat (range 1 11) (range 12 21)))))
+        _ (events/write-meta! file {:stream-id "s" :last-seq 20})
+        stream (disk-only (events/make {:file file :generation-id "g" :stream-id "s"}))]
+    (is (true? (:gap? (events/read-after stream {:stream-id "s" :after 5 :limit 100}))))
+    (is (true? (:gap? (events/read-after stream {:stream-id "s" :after 10 :limit 100}))))
+    (is (= (range 12 21)
+           (mapv :seq (:events (events/read-after stream {:stream-id "s" :after 11 :limit 100})))))))
+
+(deftest make-seeds-the-recent-buffer-from-the-active-file-tail
+  (let [file (path/join (tu/tmp-dir) "events.edn")
+        first-run (events/make {:file file :generation-id "g"})]
+    (emit-n! first-run 3000)
+    (let [restarted (events/make {:file file :generation-id "g"})
+          recent (:recent @restarted)]
+      (is (= 3000 (:seq (last recent))))
+      (is (= events/recent-count (count recent)))
+      (is (= (range (inc (- 3000 events/recent-count)) 3001) (mapv :seq recent)))
+      (is (= (:seq (last (:recent @first-run))) (:seq (last recent))))
+      (is (pos? (:recent-byte-count @restarted))))))
+
+(deftest make-seeds-a-short-file-completely
+  (let [file (path/join (tu/tmp-dir) "events.edn")]
+    (emit-n! (events/make {:file file :generation-id "g"}) 12)
+    (is (= (range 1 13) (mapv :seq (:recent @(events/make {:file file :generation-id "g"})))))))

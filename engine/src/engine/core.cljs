@@ -252,17 +252,27 @@
 (def empty-save-stats {:count 0 :bytes 0 :ms 0 :max-ms 0})
 
 (defn record-save!
-  "Measure a state or memory save: emit a debug memory.saved event and add it
-  to the running summary that flush-save-stats! reports. saved is the
-  {:bytes :ms} fsutil/write-edn! returned for file."
+  "Measure a state or memory save: add it to the running summary that
+  flush-save-stats! reports. saved is the {:bytes :ms} fsutil/write-edn!
+  returned for file."
   [eng file {:keys [bytes ms]}]
   (swap! (:save-stats eng) #(-> %
                                 (update :count inc)
                                 (update :bytes + bytes)
                                 (update :ms + ms)
-                                (update :max-ms max ms)))
-  (emit! eng {:source :memory :kind :saved :level :debug
-              :file (path/basename file) :bytes bytes :ms ms}))
+                                (update :max-ms max ms))))
+
+(defn save-file!
+  "Run write! (a fsutil/write-edn! of file) and record the save. A failed write
+  emits a warn memory.save-failed event with the error, then rethrows."
+  [eng file write!]
+  (let [saved (try
+                (write!)
+                (catch :default e
+                  (emit! eng {:source :memory :kind :save-failed :level :warn
+                              :file (path/basename file) :error (or (.-message e) (str e))})
+                  (throw e)))]
+    (record-save! eng file saved)))
 
 (defn flush-save-stats!
   "Emit the info memory.save-stats summary of the saves since the last one and
@@ -273,7 +283,7 @@
     (emit! eng (merge {:source :memory :kind :save-stats :level :info} stats))))
 
 (defn save-memory! [eng]
-  (record-save! eng (mem/file (:dir eng)) (mem/save! (:store eng))))
+  (save-file! eng (mem/file (:dir eng)) #(mem/save! (:store eng))))
 
 (defn job-memory [eng id]
   (mem/job-mem (mem/view (:store eng)) id []))
@@ -1153,8 +1163,8 @@
              :last-stats (atom (now))
              :save-stats (atom empty-save-stats)}]
     (add-watch st ::persist (fn [_ _ old new]
-                              (when (not= old new) (record-save! eng file (fsu/write-edn! file new)))))
-    (record-save! eng file (fsu/write-edn! file (state eng)))
+                              (when (not= old new) (save-file! eng file #(fsu/write-edn! file new)))))
+    (save-file! eng file #(fsu/write-edn! file (state eng)))
     (set-owner! eng nil)
     (.onBodyEvent primitives #(record-body-event! eng %))
     (drop-leftover-reflex-jobs! eng saved)

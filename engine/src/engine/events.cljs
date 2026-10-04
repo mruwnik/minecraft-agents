@@ -270,6 +270,31 @@
                  (.write js/process.stderr (str "event sink failed: " (.-message e) "\n")))))
         n))))
 
+(def read-chunk-bytes (* 64 1024))
+
+(defn read-bytes
+  "Up to len bytes of the file behind fd from position pos; empty at or past the end."
+  [fd pos len]
+  (let [buf (js/Buffer.alloc len)
+        n (fs/readSync fd buf 0 len pos)]
+    (.subarray buf 0 n)))
+
+(defn tail-records
+  "The last events of file, at most max-count and within max-bytes: {:records :bytes}.
+  Reads only the file's tail."
+  [file max-bytes max-count]
+  (let [fd (fs/openSync file "r")]
+    (try
+      (let [size (.-size (fs/fstatSync fd))
+            start (max 0 (- size max-bytes))
+            text (.toString (read-bytes fd start (- size start)) "utf8")
+            lines (cond->> (str/split-lines text)
+                    (pos? start) rest) ; the first line may be cut
+            lines (->> lines (remove str/blank?) (take-last max-count) vec)]
+        {:records (mapv #(seq-of-record % file (str "(tail of " size " bytes)")) lines)
+         :bytes (reduce + 0 (map #(inc (bytes-of %)) lines))})
+      (finally (fs/closeSync fd)))))
+
 (defn make
   "Create a canonical EDN event stream. Options: :file, :generation-id,
   :max-bytes (aggregate active+rotated cap), :stdout?, :sinks, :pos-fn,
@@ -298,13 +323,15 @@
                      (throw (ex-info (str "could not enforce configured :max-bytes " max-bytes)
                                      {:file file :bytes retained-bytes :max-bytes max-bytes})))
         run-id (random-id)
+        {recent :records recent-byte-count :bytes}
+        (if file (tail-records file recent-bytes recent-count) {:records [] :bytes 0})
         sinks (cond-> (vec sinks)
                 stdout? (conj #(.write js/process.stdout (str (pr-str %) "\n"))))]
     (atom {:file file :metadata-file (when file (metadata-file file))
            :stream-id sid :generation-id (or generation-id (random-id))
            :run-id run-id :max-bytes max-bytes :last-seq last-seq
            :oldest-seq (some :first-seq segments) :segments segments
-           :recent [] :recent-byte-count 0 :sinks sinks :now now :pos-fn pos-fn})))
+           :recent recent :recent-byte-count recent-byte-count :sinks sinks :now now :pos-fn pos-fn})))
 
 (defn cursor
   "Return the append cursor for this stream."
@@ -316,19 +343,87 @@
   (let [{:keys [stream-id last-seq]} @stream]
     {:stream-id stream-id :seq last-seq}))
 
-(defn disk-events-after [segments after limit]
+(defn line-end
+  "Byte offset of the newline ending the line that holds position pos, or size."
+  [fd size pos]
+  (loop [at pos]
+    (if (>= at size)
+      size
+      (let [buf (read-bytes fd at read-chunk-bytes)
+            i (.indexOf buf 10)]
+        (cond
+          (zero? (.-length buf)) size
+          (neg? i) (recur (+ at (.-length buf)))
+          :else (+ at i))))))
+
+(defn record-at
+  "The first non-blank line starting at or after byte offset start:
+  {:start :end :record}, or nil at the end of the file."
+  [fd size file start]
+  (loop [at start]
+    (when (< at size)
+      (let [end (line-end fd size at)
+            line (.toString (read-bytes fd at (- end at)) "utf8")]
+        (if (str/blank? line)
+          (recur (inc end))
+          {:start at :end end :record (seq-of-record line file (str "(byte " at ")"))})))))
+
+(defn first-start-after
+  "Byte offset of the first line whose :seq exceeds after, or size when there is
+  none. Binary search over byte offsets; reads one line per probe."
+  [fd size file after]
+  (loop [lo 0 hi size best size]
+    (if (>= lo hi)
+      best
+      (let [mid (quot (+ lo hi) 2)
+            from (if (zero? mid) 0 (inc (line-end fd size (dec mid))))
+            found (when (< from hi) (record-at fd size file from))]
+        (cond
+          (nil? found) (recur lo mid best)
+          (> (:seq (:record found)) after) (recur lo mid (:start found))
+          :else (recur (inc (:start found)) hi best))))))
+
+(defn records-from
+  "Up to n records of file from byte offset start (a line start) on, read
+  forward a chunk at a time."
+  [fd size file start n]
+  (loop [at start out [] chunk read-chunk-bytes]
+    (if (or (>= at size) (>= (count out) n))
+      out
+      (let [buf (read-bytes fd at chunk)
+            last-nl (.lastIndexOf buf 10)
+            complete? (or (>= (+ at (.-length buf)) size) (not (neg? last-nl)))]
+        (if-not complete?
+          (recur at out (* 2 chunk)) ; one line longer than the chunk
+          (let [used (if (neg? last-nl) (.-length buf) (inc last-nl))
+                lines (->> (str/split-lines (.toString (.subarray buf 0 used) "utf8"))
+                           (remove str/blank?))
+                records (map #(seq-of-record % file (str "(byte " at ")")) lines)]
+            (recur (+ at used) (into out (take (- n (count out)) records)) read-chunk-bytes)))))))
+
+(defn segment-records-after [file after n]
+  (let [fd (fs/openSync file "r")]
+    (try
+      (let [size (.-size (fs/fstatSync fd))
+            start (first-start-after fd size file after)]
+        (->> (records-from fd size file start n)
+             (filter #(> (:seq %) after))
+             vec))
+      (finally (fs/closeSync fd)))))
+
+(defn disk-events-after
+  "Up to limit events with :seq above after, oldest first. Cost follows the
+  events returned, not the segment sizes: the first wanted line of a segment
+  is found by binary search on byte offsets, so earlier lines are never parsed."
+  [segments after limit]
   (loop [remaining segments out []]
     (if (or (empty? remaining) (>= (count out) limit))
       out
       (let [{:keys [file bytes last-seq]} (first remaining)]
         (if (or (zero? bytes) (nil? last-seq) (<= last-seq after))
           (recur (rest remaining) out)
-          (let [records (->> (str/split-lines (fs/readFileSync file "utf8"))
-                             (remove str/blank?)
-                             (map-indexed (fn [i line] (seq-of-record line file (inc i))))
-                             (filter #(> (:seq %) after)))
-                needed (- limit (count out))]
-            (recur (rest remaining) (into out (take needed records)))))))))
+          (recur (rest remaining)
+                 (into out (segment-records-after file after (- limit (count out))))))))))
 
 (defn read-after
   "Read a bounded page after a cursor. A stream replacement, retention loss,

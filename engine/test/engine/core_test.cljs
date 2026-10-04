@@ -1359,20 +1359,31 @@
 
 ;; ---------------------------------------------------------------- save measurement
 
-(defn saved-events [seen]
-  (filterv #(= [:memory :saved] [(:source %) (:kind %)]) @seen))
+(defn memory-events [seen kind]
+  (filterv #(= [:memory kind] [(:source %) (:kind %)]) @seen))
 
-(deftest every-memory-and-engine-state-save-emits-memory-saved-with-bytes-and-ms
+(deftest saves-emit-no-per-save-event
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup)]
           (core/submit! eng '(count) {})
           (await (core/tick! eng))
-          (let [saved (saved-events seen)]
-            (is (= #{"memory.edn" "engine.edn"} (set (map :file saved))))
-            (is (every? #(pos? (:bytes %)) saved))
-            (is (every? #(and (number? (:ms %)) (>= (:ms %) 0)) saved))))))))
+          (is (empty? (memory-events seen :saved))))))))
+
+(deftest a-failed-memory-save-emits-a-warn-event-with-file-and-error-and-throws
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen dir]} (setup)
+              file (path/join dir "memory.edn")]
+          (fs/rmSync file #js {:force true})
+          (fs/mkdirSync (path/join file "blocker") #js {:recursive true}) ; a rename onto it fails
+          (is (thrown? js/Error (core/save-memory! eng)))
+          (let [[e & more] (memory-events seen :save-failed)]
+            (is (empty? more))
+            (is (= "memory.edn" (:file e)))
+            (is (string? (:error e)))))))))
 
 (deftest a-save-stats-summary-is-emitted-once-a-minute
   (async done
