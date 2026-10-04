@@ -574,6 +574,24 @@
           (is (empty? (calls s "dig")))
           (is (= :refused (:reason (done-event s)))))))))
 
+(def their-claim {:id "c9" :owner "Miles" :status :active :until 9999999999999 :min [5 60 -2] :max [7 70 2]})
+
+(deftest a-claim-added-between-the-choice-and-the-dig-is-named-in-the-refusal
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (ew/of-data {} {} [])
+              p (tu/fake-on-floor {:blocks {"6,64,0" "sand"}})
+              _ (.override (.-world p) "steer"
+                           (fn [token args impl] (ew/set-area-claims! w [their-claim])
+                             (impl token args)))
+              s (start {:p p :shared w})]
+          (core/submit! (:eng s) (spec {:block "sand" :count 1 :mend false}) {})
+          (await (run-ticks s 20))
+          (is (empty? (calls s "dig")))
+          (is (= [{:reason :claim :claim "c9" :owner "Miles"}]
+                 (map #(select-keys % [:reason :claim :owner]) (events-of s :mine.refused)))))))))
+
 (deftest hazards-not-accepted-are-not-dug
   (async done
     (tu/run-async done

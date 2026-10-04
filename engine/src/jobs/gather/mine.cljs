@@ -242,7 +242,7 @@
   [c pos v verdict]
   (when (= :hazard verdict) (skip! c pos))
   (ctx/emit! c :mine.refused :info (merge {:pos pos :verdict verdict}
-                                          (select-keys v [:reason :zone :plan :hazards])
+                                          (select-keys v [:reason :zone :claim :owner :plan :hazards])
                                           {:text (str "mine left " (access/cell pos) ": " (name verdict))})))
 
 (defn ^:async dig! [c pos]

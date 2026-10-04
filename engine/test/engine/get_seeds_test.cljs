@@ -310,6 +310,16 @@
             (is (= 0 (:got (done-event s))))
             (is (finished? s))))))))
 
+(deftest a-cut-in-a-claim-gives-up-naming-the-claim
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (ew/of-data {} {} [])
+              _ (ew/set-area-claims! w [{:id "c9" :owner "Miles" :status :active :until 9999999999999 :min [8 60 -2] :max [10 70 2]}])
+              s (await (in-world {:item "sugar_cane"} {:blocks (stand "sugar_cane" 9 0 3)} w 20))]
+          (is (empty? (dug-cells s)))
+          (is (= [["c9"]] (map :claims (events-of s :get-seeds.gave-up)))))))))
+
 (deftest the-free-stand-is-cut-and-the-refused-one-ends-the-job
   (async done
     (tu/run-async done

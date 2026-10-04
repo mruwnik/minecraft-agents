@@ -173,7 +173,7 @@
 (defn refuse!
   "Skip pos for good and remember what refused it (verdict v)."
   [c pos v]
-  (ctx/update-mem! c update :refused (fnil conj []) (select-keys v [:zone :plan]))
+  (ctx/update-mem! c update :refused (fnil conj []) (select-keys v [:zone :claim :owner :plan]))
   (skip! c pos))
 
 (defn vet!
