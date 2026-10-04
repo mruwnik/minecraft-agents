@@ -6,6 +6,7 @@
 
 (def max-text 256)
 (def sender-re #"^[A-Za-z0-9_]{1,16}$")
+(def target-re #"^[A-Za-z0-9_]{3,16}$")
 (def min-gap-ms 1000)
 (def window-ms 30000)
 (def window-max 5)
@@ -18,6 +19,8 @@
   (if (str/blank? configured) default-sender configured))
 
 (defn valid-sender? [s] (and (string? s) (boolean (re-matches sender-re s))))
+
+(defn valid-target? [s] (and (string? s) (boolean (re-matches target-re s))))
 
 (def section-code (js/RegExp. "§[\\s\\S]" "gu"))
 
@@ -36,6 +39,15 @@
   "The only command the dashboard sends. The text component is JSON, never concatenated."
   [sender text]
   (str "tellraw @a " (js/JSON.stringify (clj->js {:text (str "<" sender "> " (clean-text text))}))))
+
+(defn whisper-command
+  "tellraw to one named player, shaped as the vanilla whisper line so the body hears it from the sender."
+  [sender target text]
+  (str "tellraw " target " "
+       (js/JSON.stringify (clj->js {:translate "commands.message.display.incoming"
+                                    :with [{:text sender} {:text (clean-text text)}]
+                                    :color "gray"
+                                    :italic true}))))
 
 (defn parse-body [body]
   (try (js->clj (js/JSON.parse body))
@@ -69,3 +81,17 @@
       error (refuse 400 error)
       (rate-limited? stamps now) (refuse 429 "rate limit: 1 per second, 5 per 30 seconds")
       :else {:command (command sender text) :stamps (conj (within-window stamps now) now)})))
+
+(defn plan-whisper
+  "Like plan, for one named body: known and online are sets of body names. Refuses with 400, 404 or 409 before the rate limit."
+  [target body {:keys [sender stamps now known online]}]
+  (let [refuse (fn [status error] {:status status :json {:error error} :stamps stamps})
+        {:keys [text error]} (when (some? body) (validate body))]
+    (cond
+      (nil? body) (refuse 413 (str "body exceeds " guard/max-body-bytes " bytes"))
+      error (refuse 400 error)
+      (not (valid-target? target)) (refuse 400 "target is not a valid name")
+      (not (contains? known target)) (refuse 404 (str "no body called " target))
+      (not (contains? online target)) (refuse 409 (str target " is offline"))
+      (rate-limited? stamps now) (refuse 429 "rate limit: 1 per second, 5 per 30 seconds")
+      :else {:command (whisper-command sender target text) :stamps (conj (within-window stamps now) now)})))

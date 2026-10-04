@@ -145,6 +145,27 @@
 (rf/reg-event-db :chat-send-err (fn [db [_ message]] (update db :chat-send cs/failed message)))
 (rf/reg-event-db :chat-ack-clear (fn [db [_ id]] (update db :chat-send cs/clear-ack id)))
 
+;; whispers from the body popup: one draft per body, POST /api/whisper/<name>; only when cs/whisper-sendable?
+(defn whisper-state [db name] (get-in db [:whisper-send name] cs/initial))
+(rf/reg-event-db :whisper-draft (fn [db [_ name text]] (assoc-in db [:whisper-send name] (cs/edited (whisper-state db name) text))))
+(rf/reg-event-fx
+ :whisper-send
+ (fn [{:keys [db]} [_ name online?]]
+   (let [state (whisper-state db name)]
+     (when (cs/whisper-sendable? online? state name)
+       {:db (assoc-in db [:whisper-send name] (cs/begin state))
+        :post-json {:url (cs/whisper-url name) :body (clj->js (cs/request-body state))
+                    :on-ok [:whisper-send-ok name] :on-err [:whisper-send-err name] :on-unsupported [:whisper-send-err name "unsupported"]}}))))
+(rf/reg-event-fx
+ :whisper-send-ok
+ (fn [{:keys [db]} [_ name]]
+   (let [id (inc (:ack-id (whisper-state db name)))]
+     {:db (assoc-in db [:whisper-send name] (cs/succeeded (whisper-state db name) id))
+      :dispatch-later [{:ms ack-ms :dispatch [:whisper-ack-clear name id]}]
+      :fx [[:dispatch [:poll-chat]]]})))
+(rf/reg-event-db :whisper-send-err (fn [db [_ name message]] (assoc-in db [:whisper-send name] (cs/failed (whisper-state db name) message))))
+(rf/reg-event-db :whisper-ack-clear (fn [db [_ name id]] (assoc-in db [:whisper-send name] (cs/clear-ack (whisper-state db name) id))))
+
 (rf/reg-event-db :hide-whispers (fn [db [_ on?]] (assoc db :hide-whispers? on?)))
 
 ;; The one handler for every action engine bodies do not support: log it, show it, call nothing.

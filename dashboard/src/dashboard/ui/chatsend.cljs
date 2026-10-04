@@ -32,3 +32,26 @@
     :sent "sent"
     :failed error
     (if (str/blank? sender) "to everyone" (str "to everyone as " sender))))
+
+;; ---------------------------------------------------------------- whispers to one body (the popup's box)
+(def minecraft-name #"[A-Za-z0-9_]{3,16}")
+
+(defn whisper-url
+  "POST target for a whisper to `name`, nil unless it is a well-formed Minecraft name."
+  [name]
+  (when (and (string? name) (re-matches minecraft-name name))
+    (str "/api/whisper/" name)))
+
+(defn whisper-block-reason [online? _state]
+  (when-not online? "offline: nobody would hear it"))
+
+(defn whisper-sendable? [online? state name]
+  (boolean (and (sendable? state) (nil? (whisper-block-reason online? state)) (whisper-url name))))
+
+(defn whisper-caption [{:keys [status] :as state} online? name]
+  (or (whisper-block-reason online? state)
+      (case status
+        :pending "sending..."
+        :sent "sent"
+        :failed (:error state)
+        (str "whisper to " name))))

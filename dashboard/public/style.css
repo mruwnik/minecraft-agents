@@ -183,6 +183,12 @@ input:focus, select:focus, button:focus-visible, .bcard:focus-visible { outline:
 .armorrow .slot { width: 46px; height: 46px; aspect-ratio: auto; flex: none; }
 .nowrap { white-space: nowrap; }
 .dchrome.empty { display: none; }
+.whisperbox { flex: none; }
+.whisperbox input { width: 100%; }
+.whisperbox input:disabled { opacity: .5; }
+.whisperbox .caption { margin-top: 2px; font-size: 11px; color: var(--dim); min-height: 1.3em; }
+.whisperbox.sent .caption { color: var(--working); }
+.whisperbox.failed .caption { color: var(--danger); }
 .joblist { display: flex; flex-direction: column; gap: 2px; }
 .job { display: flex; gap: 8px; align-items: center; font-size: 12px; padding: 1px 4px; border-radius: 3px; }
 .job.current { background: rgba(63,185,80,.12); border-left: 2px solid var(--working); }

@@ -24,11 +24,11 @@ Replacement for `tools/dashboard.mjs`, for ENGINE bodies (agent folders with `en
   worker thread (heap caps, `resourceLimits` 160 MB old generation). `/api/thumbs/stats`: `{bodies, renders, last-ms, mean-ms, queue}`.
   On SIGTERM/SIGINT the server closes the thumbnailer and the view mount (`close()`, ends the block-issues scan worker) and exits. A body card whose view is older
   than 10 s shows an "N s old" / "N min old" mark when the body is online (`trouble/thumb-age-mark`).
-- Body cards (hub mode): online bodies get a live textured scene from the view hub (`ui/livecards.cljs`); an offline body gets ONE frame at its
-  last pose (`ui/stills.cljs`: one scene at a time is opened, snapshotted into a 2D canvas once the columns are loaded, and closed; re-taken only when
-  `poseMtimeMs` changes). Debug flags on the page URL: `?fps=1` labels live cards with their fps, `?nogl=1` forces the server stills,
+- Body cards (hub mode): online bodies get a live textured scene from the view hub (`ui/livecards.cljs`); an offline body shows the server's still
+  (`/api/thumb`, greyed by CSS) with no scene. Debug flags on the page URL: `?fps=1` labels live cards with their fps, `?nogl=1` forces the server stills,
   `?allive=1` gives every card with a view a live scene, offline ones too (the hub holds at most 12 scenes).
 - `/api/events/<body>?limit=&stream-id=&after=`: EDN page of canonical events (default tail 300, maximum 1000), the current outstanding attention map, and a cursor. `after` is exclusive. On `:gap? true`, the dashboard refreshes the snapshot and replaces its retained log tail before resuming. Legacy bodies without `events.edn` or an event socket may use their old `events.jsonl` as historical best-effort input.
+- `POST /api/whisper/<body>` `{"text": ...}`: a private message to one body, sent through RCON as `tellraw <body>` of the vanilla whisper line from the chat sender (the body records it as a `whisper` event; the chat panel reads it from `events.edn`). The target must match `[A-Za-z0-9_]{3,16}` (400), be an engine body (404) and be up (409); the text is cleaned and cut like chat; the rate limit is shared with `POST /api/chat/send`. The body popup has the input.
 - `POST /api/attention/<body>/resolve`: EDN request `{:request-id "..." :reason :handled}` to acknowledge an outstanding request. This only marks that request handled; it does not retry or restart its job.
 - `/api/item-icon/<item>.png`: an item's picture from the repo's `textures/`.
 - `/api/jobs`: `{at, jobs: [{kind, id, category, name, file, ns-doc, doc, args, backoff, running, reflex}]}`: every job

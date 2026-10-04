@@ -3,7 +3,6 @@
   (:require [re-frame.core :as rf]
             [dashboard.ui.livecards :as live]
             [dashboard.ui.logic :as logic]
-            [dashboard.ui.stills :as stills]
             [dashboard.ui.trouble :as trouble]))
 
 (def status-label {:manual "manual" :trouble "in trouble" :working "working" :idle "idle" :offline "offline"})
@@ -24,17 +23,16 @@
 
 (defn page-flags [] (live/flags (.-search js/location)))
 
-(defn preview [{:keys [name thumb thumb-age status offline pose-mtime]}]
+(defn preview [{:keys [name thumb thumb-age status offline]}]
   (let [flags (page-flags)
         mode (live/current-mode flags)
-        view (live/card-view mode (live/card-plan flags status) (some? thumb) (stills/record name))]
+        view (live/card-view mode (live/card-plan flags status) (some? thumb))]
     [:div.preview
      (case view
        :blank nil
        :img [:img {:src thumb :alt (str "view of " name) :loading "lazy" :draggable false}]
        :noview [:div.noview "no view"]
-       :live [live/live-preview {:name name :flags flags}]
-       :still [stills/still-canvas {:name name :pose-mtime pose-mtime}])
+       :live [live/live-preview {:name name :flags flags}])
      (when (= status :offline) [:span.offline-tag offline])
      (when thumb-age [:span.age-tag {:title "age of this view"} thumb-age])
      [:div.overlay [:span.bname name] (when-not (= status :offline) [status-pill status])]]))

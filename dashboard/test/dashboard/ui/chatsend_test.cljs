@@ -42,3 +42,44 @@
   (are [draft expected] (= expected (cs/request-body {:draft draft}))
     "hi" {:text "hi"}
     "  hi  " {:text "hi"}))
+
+(def draft {:draft "hi" :status :idle :error nil :ack-id 0})
+
+(deftest whisper-url-only-for-minecraft-names
+  (are [n expected] (= expected (cs/whisper-url n))
+    "Pacer" "/api/whisper/Pacer"
+    "a_1" "/api/whisper/a_1"
+    "abcdefghijklmnop" "/api/whisper/abcdefghijklmnop"
+    "" nil
+    nil nil
+    "ab" nil
+    "abcdefghijklmnopq" nil
+    "a b" nil
+    "@a" nil
+    "a/b" nil))
+
+(deftest whisper-block-reason-is-offline-only
+  (are [online? expected] (= expected (cs/whisper-block-reason online? draft))
+    true nil
+    false "offline: nobody would hear it"))
+
+(deftest whisper-sendable-refusals
+  (are [online? state n expected] (= expected (cs/whisper-sendable? online? state n))
+    true draft "Pacer" true
+    false draft "Pacer" false
+    true (assoc draft :draft " ") "Pacer" false
+    true (assoc draft :status :pending) "Pacer" false
+    true draft "" false
+    true draft "ab" false
+    true draft "abcdefghijklmnopq" false
+    true draft "a b" false
+    true draft "@a" false
+    true draft "a/b" false))
+
+(deftest whisper-captions
+  (are [state online? expected] (= expected (cs/whisper-caption state online? "Pacer"))
+    cs/initial true "whisper to Pacer"
+    (cs/begin draft) true "sending..."
+    (cs/succeeded draft 1) true "sent"
+    (cs/failed draft "boom") true "boom"
+    cs/initial false "offline: nobody would hear it"))

@@ -2,7 +2,8 @@
   (:require [clojure.string :as str]))
 
 (def blueprint-re #"^/api/blueprint/([a-z0-9]+(?:-[a-z0-9]+)*)$")
-(def unsupported-re #"^/api/(?:look|screen|actions|whisper|icon)/[A-Za-z0-9_]{1,64}(?:/live)?$")
+(def unsupported-re #"^/api/(?:look|screen|actions|icon)/[A-Za-z0-9_]{1,64}(?:/live)?$")
+(def whisper-send-re #"^/api/whisper/([A-Za-z0-9_-]{1,64})$")
 (def thumb-re #"^/api/thumb/([A-Za-z0-9_-]+)\.png$")
 (def tile-re #"^/api/tile/([A-Za-z0-9_-]+)/(-?\d+)\.(-?\d+)\.png$")
 (def tiles-re #"^/api/tiles/([A-Za-z0-9_-]+)$")
@@ -50,6 +51,7 @@
         (some->> (re-find plan-re path) second (assoc {:kind :plan-api} :name))
         (some->> (re-find attention-resolve-re path) second (assoc {:kind :attention-resolve} :name))
         (some->> (re-find events-re path) second (assoc {:kind :events} :name))
+        (some->> (re-find whisper-send-re path) second (assoc {:kind :whisper-send} :name))
         (when (re-find unsupported-re path) {:kind :unsupported})
         (when (and (re-find static-re path) (not (str/starts-with? path "/api/")) (not (str/includes? path ".."))) {:kind :static :path path})
         {:kind :unknown})))

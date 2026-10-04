@@ -1,5 +1,5 @@
 (ns dashboard.thumbs
-  "The server's still-image fallback for browsers without WebGL2 (with the hub, cards draw their own stills): decides
+  "The server's still-image fallback for browsers without WebGL2 (with the hub, offline cards show the server's still, online ones draw live): decides
   what to render and when; js/thumbs.mjs only renders one still on request.
   Rules: a body's still is cached by its pose mtime; a newer pose is re-rendered only when the cached one is at least
   min-interval-ms old; renders run one at a time; the render worker is replaced once it holds more than column-cap columns.")

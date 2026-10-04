@@ -1,7 +1,7 @@
 (ns dashboard.ui.livecards
-  "Previews on the body cards from the view hub's textured WebGL scenes: live scenes for online bodies, one snapshot
-  (dashboard.ui.stills) for offline ones; the server's PNGs only when the hub cannot draw (no WebGL2, ?nogl=1).
-  The pure decisions (flags, hub status, mode, plan, what a card shows, the snapshot queue, the fps label) come first; the
+  "Previews on the body cards from the view hub's textured WebGL scenes: live scenes for online bodies, the server's still
+  image for offline ones (no scene); the server's PNGs for all cards when the hub cannot draw (no WebGL2, ?nogl=1).
+  The pure decisions (flags, hub status, mode, plan, what a card shows, the fps label) come first; the
   reagent components with the hub lifecycle are below. The hub comes from window.getViewHub, defined by the module script in index.html."
   (:require [reagent.core :as r]
             [reagent.dom :as rdom]))
@@ -38,56 +38,20 @@
     :else :still))
 
 (defn card-plan
-  "In hub mode: :live (a scene kept open) for online bodies, :snapshot (one frame, scene closed) for offline ones; ?allive=1 makes all live."
+  "In hub mode: :live (a scene kept open) for online bodies, :last-image (the server's still, no scene) for offline ones; ?allive=1 makes all live."
   [{:keys [allive?]} status]
-  (if (or allive? (not= status :offline)) :live :snapshot))
+  (if (or allive? (not= status :offline)) :live :last-image))
 
 (defn card-view
-  "What a card's preview shows: :blank, :img (the server's PNG), :noview, :live (hub canvas) or :still (canvas holding a snapshot).
-  `still` is the snapshot record {:mtime :failed?} of the card, nil before it was taken."
-  [mode plan has-view? still]
+  "What a card's preview shows: :blank, :img (the server's PNG), :noview or :live (hub canvas). A :last-image card needs no hub,
+  so it is not blank while the hub loads."
+  [mode plan has-view?]
   (cond
+    (= plan :last-image) (if has-view? :img :noview)
     (= mode :pending) :blank
     (= mode :still) (if has-view? :img :noview)
     (not has-view?) :noview
-    (= plan :live) :live
-    (:failed? still) :img
-    :else :still))
-
-(def snapshot-timeout-ms 20000)
-
-(defn snapshot-state
-  "Is the scene ready to snapshot, still loading its columns, or out of time?"
-  [ready? waited-ms]
-  (cond
-    ready? :ready
-    (< waited-ms snapshot-timeout-ms) :waiting
-    :else :timeout))
-
-(def cooling-off-ms 1000)
-
-(defn cooling-down
-  "The names whose scene was closed less than cooling-off-ms ago. The hub reopens its /poses stream only when the set of agents
-  changes, and applies a change 500 ms after the last add or close; a scene added for an agent before that has no pose, ever."
-  [closed-at now]
-  (into #{} (comp (filter (fn [[_ at]] (< (- now at) cooling-off-ms))) (map key)) closed-at))
-
-(defn keep-record?
-  "A snapshot record that stays when its card goes away: a failed one (so the card is not retried in a loop)."
-  [record]
-  (boolean (:failed? record)))
-
-(defn next-snapshot
-  "The offline card to snapshot next, or nil. `wanted`: name -> pose mtime (nil: no view); `done`: name -> {:mtime ...} of the last
-  attempt (a failed one counts, it is not retried for the same pose); `blocked`: names to leave alone for now. Alphabetical, one at a time."
-  [wanted done blocked]
-  (->> (sort-by key wanted)
-       (filter (fn [[name mtime]] (and mtime (not (contains? blocked name)) (not= mtime (:mtime (get done name))))))
-       ffirst))
-
-(defonce closed-at (atom {})) ; name -> ms of the last time a scene of that body was closed
-
-(defn note-closed! [name] (swap! closed-at assoc name (js/Date.now)))
+    :else :live))
 
 (defn show-canvas?
   "The canvas replaces the still only once the scene has drawn or loaded something."
@@ -163,7 +127,7 @@
       (fn [this]
         (let [{:keys [timer scene canvas]} @state]
           (js/clearInterval timer)
-          (when scene (.detach scene canvas) (.close scene) (note-closed! (:name (r/props this))))))
+          (when scene (.detach scene canvas) (.close scene))))
       :reagent-render
       (fn [{:keys [shown?]}]
         [:canvas.live {:ref #(when % (swap! state assoc :canvas %))

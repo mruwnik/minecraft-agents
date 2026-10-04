@@ -96,3 +96,48 @@
     "{\"source\":\"action\",\"kind\":\"started\",\"name\":\"chat\"}" true
     "{\"source\":\"body\",\"kind\":\"position\",\"text\":\"chat\"}" false
     "{\"source\":\"job\",\"kind\":\"round_started\"}" false))
+
+(def body-whisper {:seq 4 :t t0 :source "body" :kind "whisper" :from "Jizo" :message "psst"})
+
+(deftest body-whisper-is-addressed-to-the-recipient-body
+  (is (= [{:t t0 :from "Jizo" :to "Pacer" :kind "whisper" :message "psst"}]
+         (chat/merge-chat [(heard "Pacer" body-whisper)] 200))))
+
+(deftest body-whisper-line-as-written-passes-the-pre-check-and-talk
+  (let [text (str "{\"seq\":4,\"t\":" t0 ",\"source\":\"body\",\"kind\":\"whisper\",\"from\":\"Jizo\",\"message\":\"psst\"}")
+        parsed (js->clj (js/JSON.parse text) :keywordize-keys true)]
+    (is (chat/maybe-talk-line? text))
+    (is (chat/talk? parsed))))
+
+(def edn-chat "{:seq 16753, :generation-id \"40b3\", :time-ms 1791070636598, :source :body, :kind :chat, :data {:from \"Rcon\", :pos {:x 1}}, :message \"ok-stone\"}")
+(def edn-whisper "{:seq 21347, :generation-id \"3aa1\", :time-ms 1791071891345, :source :body, :kind :whisper, :data {:from \"dashboard\", :pos {:x 1}}, :message \"whisper test\"}")
+(def edn-quoted "{:seq 5, :time-ms 1791070636598, :source :body, :kind :note, :data {:from \"Rcon\"}, :message \":source :body, :kind :chat\"}")
+(def edn-position "{:seq 6, :time-ms 1791070636598, :source :body, :kind :position, :data {:pos {:x 1 :y 2 :z 3}}}")
+
+(deftest edn-lines-give-talk-events
+  (are [line expected] (= expected (chat/edn-talk-line line))
+    edn-chat {:source "body" :kind "chat" :from "Rcon" :message "ok-stone" :t 1791070636598}
+    edn-whisper {:source "body" :kind "whisper" :from "dashboard" :message "whisper test" :t 1791071891345}))
+
+(deftest edn-talk-lines-merge
+  (is (= [{:t 1791070636598 :from "Rcon" :to nil :kind "chat" :message "ok-stone"}
+          {:t 1791071891345 :from "dashboard" :to "Pacer" :kind "whisper" :message "whisper test"}]
+         (chat/merge-chat [(heard "Pacer" (chat/edn-talk-line edn-chat) (chat/edn-talk-line edn-whisper))] 200))))
+
+(deftest edn-lines-that-are-not-talk-give-nil
+  (are [line] (nil? (chat/edn-talk-line line))
+    edn-position
+    edn-quoted
+    "{:seq 1, :source :engine, :kind :chat, :time-ms 1, :data {:from \"a\"}, :message \"x\"}"
+    "{:seq 1, :source :body, :kind :chat, :time-ms 1, :message \"no sender\"}"
+    "{:seq 1, :source :body, :kind :chat, :data {:from \"a\"}, :message \"no time\"}"
+    "{:seq 1, :source :body, :kind :chat, :data {:from"
+    ""))
+
+(deftest edn-marker-passes-talk-and-rejects-position-flood
+  (are [line passes?] (= passes? (boolean (chat/maybe-edn-talk-line? line)))
+    edn-chat true
+    edn-whisper true
+    edn-quoted true
+    "{:source :body :kind :chat}" true
+    edn-position false))

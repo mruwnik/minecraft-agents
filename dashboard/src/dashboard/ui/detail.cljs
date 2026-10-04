@@ -4,6 +4,7 @@
             [reagent.core :as r]
             [dashboard.ui.livecards :as live]
             [dashboard.ui.bodies :as bodies]
+            [dashboard.ui.chatsend :as cs]
             [dashboard.ui.drive :as drive]
             [dashboard.ui.eventlog :as eventlog]
             [dashboard.ui.hudmodel :as hudmodel]
@@ -76,6 +77,20 @@
         [:<>
          (if thumb [:img {:src thumb :alt (str "last view of " name)}] [:div.noview "no view"])
          [:div.offline-note offline-text]])]]))
+
+(defn whisper-box
+  "A private message to this body only."
+  [name online?]
+  (let [{:keys [draft status] :as state} @(rf/subscribe [:whisper-send name])
+        reason (cs/whisper-block-reason online? state)]
+    [:div.whisperbox {:class (clojure.core/name status)}
+     [:input#whisper-input {:type "text" :placeholder (or reason (str "whisper to " name "...")) :title reason
+                            :spell-check false :max-length 256 :value draft
+                            :disabled (boolean reason) :read-only (= :pending status)
+                            :on-change #(rf/dispatch [:whisper-draft name (.. % -target -value)])
+                            :on-key-down #(when (and (= "Enter" (.-key %)) (not (.-isComposing (.-nativeEvent %))))
+                                            (rf/dispatch [:whisper-send name online?]))}]
+     [:div.caption (cs/whisper-caption state online? name)]]))
 
 ;; ---------------------------------------------------------------- HUD
 (def heart-path "M4.5 8.2 L1.1 4.7 C-.3 3.2 .5 .9 2.5 .9 C3.4 .9 4.1 1.4 4.5 2.1 C4.9 1.4 5.6 .9 6.5 .9 C8.5 .9 9.3 3.2 7.9 4.7 Z")
@@ -225,7 +240,7 @@
       [:div.modal-back {:on-click #(rf/dispatch [:close-detail])}
        [:div.dmodal {:on-click #(.stopPropagation %)}
         [header m]
-        [:div.dleft [chrome (:online? m)] [view-box m]]
+        [:div.dleft [chrome (:online? m)] [whisper-box (:name m) (:online? m)] [view-box m]]
         [:div.dright [hud-panel (:hud m)] [inventory-panel (:hud m)] [jobs-panel m]]
         [attention-panel]
         [log-panel]]])))

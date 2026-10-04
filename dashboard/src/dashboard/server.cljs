@@ -390,26 +390,30 @@
 (defn talk-lines-of [text]
   (filterv chat/talk? (ee/parse-event-lines text chat/maybe-talk-line?)))
 
+(defn edn-talk-lines-of [text]
+  (into [] (comp (filter chat/maybe-edn-talk-line?) (keep chat/edn-talk-line)) (.split text "\n")))
+
 ;; First sight of a file: its last chat-tail-bytes. After that only the bytes appended since (a line still being
 ;; written is carried to the next read); a file that shrank starts over. Position events flood the file, so a small
 ;; tail would forget a chat line within minutes. Each chunk is reduced to its chat lines at once.
-(defn read-chat-tail [file cached]
+(defn read-chat-tail [file lines-of cached]
   (let [size (.-size (.statSync fs file))
         fresh? (or (nil? cached) (< size (:size cached)))
         start (if fresh? (max 0 (- size chat-tail-bytes)) (:size cached))
-        keep-last (fn [lines text] (vec (take-last chat-keep (into lines (talk-lines-of text)))))
+        keep-last (fn [lines text] (vec (take-last chat-keep (into lines (lines-of text)))))
         {:keys [acc rest]} (reduce-lines file start size (and fresh? (pos? start))
                                          (if fresh? (js/Uint8Array. 0) (:rest cached))
                                          keep-last (if fresh? [] (:lines cached)))]
     {:size size :rest rest :lines acc}))
 
 (defn chat-lines [name]
-  (let [file (events-file name)
+  (let [canonical? (canonical-engine? name)
+        file (if canonical? (canonical-events-file name) (events-file name))
         size (.-size (.statSync fs file))
         cached (get @tails name)]
     (if (= size (:size cached))
       (:lines cached)
-      (let [tail (read-chat-tail file cached)]
+      (let [tail (read-chat-tail file (if canonical? edn-talk-lines-of talk-lines-of) cached)]
         (swap! tails assoc name tail)
         (:lines tail)))))
 
@@ -700,6 +704,23 @@
              (.then (fn [_] (send-json! res 200 {:ok true :command command})))
              (.catch (fn [e] (send-json! res 502 {:error (str "RCON failed: " (ex-message e))})))))))))
 
+(defn send-whisper! [req res target]
+  (guarded-post!
+   req res guard/max-body-bytes
+   (fn [text]
+     (let [engine-bodies (filter :engine (bodies (js/Date.now)))
+           {:keys [status json command stamps]} (chat-send/plan-whisper
+                                                 target text
+                                                 {:sender chat-sender :stamps @chat-stamps :now (js/Date.now)
+                                                  :known (set (map :name engine-bodies))
+                                                  :online (set (map :name (filter :up engine-bodies)))})]
+       (reset! chat-stamps stamps)
+       (if status
+         (send-json! res status json)
+         (-> (run-chat-command! command)
+             (.then (fn [_] (send-json! res 200 {:ok true :command command})))
+             (.catch (fn [e] (send-json! res 502 {:error (str "RCON failed: " (ex-message e))})))))))))
+
 ;; ---------------------------------------------------------------- jobs (GET /api/jobs)
 ;; The job and trigger namespaces as compiled into this build (dashboard.jobs-registry), joined with usage.
 (defn read-jobs [now]
@@ -873,6 +894,7 @@
         :events (send-events! res blueprint-name query)
         :attention-resolve (resolve-attention! req res blueprint-name)
         :chat-send (send-chat! req res)
+        :whisper-send (send-whisper! req res blueprint-name)
         :jobs-api (send-json! res 200 {:at (js/Date.now) :jobs (read-jobs (js/Date.now))})
         :thumbs-stats (send-thumbs-stats! res)
         :tile (send-tile! res (:world route) (:cx route) (:cz route))

@@ -34,63 +34,33 @@
     {:allive? false} :working :live
     {:allive? false} :idle :live
     {:allive? false} :trouble :live
-    {:allive? false} :offline :snapshot
+    {:allive? false} :offline :last-image
+    {:allive? false} :manual :live
     {:allive? true} :offline :live
     {:allive? true} :working :live))
 
-(deftest next-snapshot
-  (are [wanted done blocked expected] (= expected (lc/next-snapshot wanted done blocked))
-    {} {} #{} nil
-    {"B" 5 "A" 4} {} #{} "A"
-    {"B" 5 "A" 4} {"A" {:mtime 4}} #{} "B"
-    {"B" 5 "A" 4} {"A" {:mtime 3}} #{} "A"
-    {"B" 5 "A" 4} {"A" {:mtime 4} "B" {:mtime 5}} #{} nil
-    {"A" nil} {} #{} nil
-    {"A" 4} {"A" {:mtime 4 :failed? true}} #{} nil
-    {"B" 5 "A" 4} {} #{"A"} "B"
-    {"A" 4} {} #{"A"} nil))
-
-(deftest cooling-down
-  (are [closed-at now expected] (= expected (lc/cooling-down closed-at now))
-    {} 5000 #{}
-    {"A" 4500} 5000 #{"A"}
-    {"A" 4000} 5000 #{}
-    {"A" 4001 "B" 1000} 5000 #{"A"}))
-
 (deftest transition-plans
-  ;; a body going offline closes its live scene (card-view :live -> :still, which takes a snapshot) and the reverse starts a live one
-  (are [from to expected] (= expected [(lc/card-view :hub (lc/card-plan {:allive? false} from) true nil)
-                                       (lc/card-view :hub (lc/card-plan {:allive? false} to) true nil)])
-    :working :offline [:live :still]
-    :trouble :offline [:live :still]
-    :offline :working [:still :live]
-    :offline :idle [:still :live]))
-
-(deftest keep-record
-  (are [record expected] (= expected (lc/keep-record? record))
-    nil false
-    {:mtime 1 :bitmap :bmp} false
-    {:mtime 1 :failed? true} true))
-
-(deftest snapshot-state
-  (are [ready? waited expected] (= expected (lc/snapshot-state ready? waited))
-    true 0 :ready
-    true 99999 :ready
-    false 0 :waiting
-    false 19999 :waiting
-    false 20000 :timeout))
+  ;; a body going offline swaps its live canvas (which closes its scene on unmount) for the server's image; the reverse opens a live scene
+  (are [from to expected] (= expected [(lc/card-view :hub (lc/card-plan {:allive? false} from) true)
+                                       (lc/card-view :hub (lc/card-plan {:allive? false} to) true)])
+    :working :offline [:live :img]
+    :trouble :offline [:live :img]
+    :offline :working [:img :live]
+    :offline :idle [:img :live]))
 
 (deftest card-view
-  (are [mode plan has-view? still expected] (= expected (lc/card-view mode plan has-view? still))
-    :pending :live true nil :blank
-    :still :live true nil :img
-    :still :snapshot false nil :noview
-    :hub :live true nil :live
-    :hub :live false nil :noview
-    :hub :snapshot false nil :noview
-    :hub :snapshot true nil :still
-    :hub :snapshot true {:mtime 3} :still
-    :hub :snapshot true {:mtime 3 :failed? true} :img))
+  (are [mode plan has-view? expected] (= expected (lc/card-view mode plan has-view?))
+    :pending :live true :blank
+    :pending :live false :blank
+    :pending :last-image true :img
+    :pending :last-image false :noview
+    :still :live true :img
+    :still :live false :noview
+    :still :last-image true :img
+    :hub :live true :live
+    :hub :live false :noview
+    :hub :last-image false :noview
+    :hub :last-image true :img))
 
 (deftest show-canvas
   (are [stats expected] (= expected (lc/show-canvas? stats))
@@ -124,10 +94,9 @@
 
 (deftest card-view-follows-the-body-going-offline-and-back
   ;; the preview element type is chosen by card-view; a different one remounts the component (live-canvas closes its scene
-  ;; on unmount, still-canvas takes a snapshot on mount), so the transition is exactly a change of this value
-  (are [status still expected] (= expected (lc/card-view :hub (lc/card-plan {:allive? false} status) true still))
-    :working nil :live
-    :manual nil :live
-    :offline nil :still
-    :offline {:mtime 3 :failed? true} :img
-    :idle nil :live))
+  ;; on unmount), so the transition is exactly a change of this value
+  (are [status expected] (= expected (lc/card-view :hub (lc/card-plan {:allive? false} status) true))
+    :working :live
+    :manual :live
+    :offline :img
+    :idle :live))

@@ -1,4 +1,5 @@
-(ns dashboard.chat)
+(ns dashboard.chat
+  (:require [cljs.reader :as reader]))
 
 (def same-line-ms 2000)
 (def chat-default 200)
@@ -18,6 +19,7 @@
     (and (= "body" (:source e)) (= "chat" (:kind e))) "chat"
     (and (= "chat" (:source e)) (= "said" (:kind e))) "chat"
     (and (= "chat" (:source e)) (= "whisper" (:kind e))) "whisper"
+    (and (= "body" (:source e)) (= "whisper" (:kind e))) "whisper"
     (own-chat? e) (if (get-in e [:args :to]) "whisper" "chat")
     (#{"chat" "whisper"} (:type e)) (:type e)))
 
@@ -37,6 +39,21 @@
 ;; Position events flood the file; only lines naming chat or whisper in kind, source, type or name are parsed.
 (def talk-marker #"\"(?:kind|source|type|name)\"\s*:\s*\"(?:chat|whisper)\"")
 (defn maybe-talk-line? [line] (re-find talk-marker line))
+
+;; The canonical events.edn: one EDN map per line, {:source :body :kind :chat|:whisper :data {:from} :message
+;; :time-ms}. The marker is a raw-line pre-check; the parser re-checks the parsed keys, so a line that only mentions
+;; chat inside some text is dropped. Gives the talk event shape talk? accepts, or nil.
+(def edn-talk-marker #":source :body,? :kind :(?:chat|whisper)")
+(defn maybe-edn-talk-line? [line] (re-find edn-talk-marker line))
+
+(defn read-edn-line [line] (try (reader/read-string line) (catch :default _ nil)))
+
+(defn edn-talk-line [line]
+  (let [e (read-edn-line line)
+        kind (when (map? e) (#{:chat :whisper} (:kind e)))
+        from (get-in e [:data :from])]
+    (when (and kind (= :body (:source e)) (string? from) (number? (:time-ms e)))
+      {:source "body" :kind (name kind) :from from :message (str (:message e)) :t (:time-ms e)})))
 
 (defn talk-line [agent e]
   {:t (epoch-ms (:t e))
