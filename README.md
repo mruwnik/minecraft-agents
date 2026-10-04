@@ -30,7 +30,10 @@ job request records are scoped by world and body under
 
 During the live migration, `state/worlds` and the existing `state/commands/<body>`
 paths remain compatibility links to the moved data. Old running builds can
-continue writing through those links. The remaining `state/` files (logs,
+continue writing through those links. When a canonical request directory already
+has concurrent writes, its records stay in place and the original directory is
+retained under the body's `.commands/.legacy-layout-backup/` (currently ProbeWalk).
+The remaining `state/` files (logs,
 screenshots, inspection reports, manifests, backups and manual notes) are
 retained for separate review; they are not required by current body storage.
 
