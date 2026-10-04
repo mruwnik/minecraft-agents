@@ -1,6 +1,7 @@
 (ns jobs.build.rail-line
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
+            [engine.jobs.rail :as builder]
             [engine.placement :as placement]
             [jobs.build.from-plan :as build]
             [plan.rail :as rail]
@@ -9,10 +10,13 @@
 (def doc
   "Build the rail line a plan of the body's world wants (:plan, optionally only its :part) and prove a ridden cart can
   run it. The plan's rail cells (wants naming a *rail block) must form one chain (plan.rail/line); plan.rail/layout
-  writes such plans. Phase :build runs jobs.build.from-plan on the plan as a child (its args :reach :give-up :accept
-  pass through, and :sturdy-ground is set: a sturdy block on the ground of the line is no wrong block; zones, other plans' footprints, cuts and resuming are its rules; it places lowest first, so beds and
-  redstone blocks go in before the rails on them). Slice 1: straight flat lines only, as from-plan places in no
-  particular order and stands at the body's feet height. Phase :switch then switches on every planned lever that is
+  writes such plans, with corners and slopes. Phase :build is the head-first builder (engine.jobs.rail): the cells go
+  in along the line from the end nearer the body, each station's bed and power under before its rail, the rail before
+  the torch or lever beside it, so every rail takes the shape its neighbours give it; the body stands on the rail
+  behind the cell it places (a cell beside it where there is none yet). A rail that has settled in the wrong shape is
+  dug and placed again up to :fix times, then given up as :shape. Placing, the access rules (zones, other plans'
+  footprints), refusals, give-ups and the result are jobs.build.from-plan's own (its args :reach :give-up :accept
+  apply; a sturdy block on the ground of the line is no wrong block), and the build.* events are its. Phase :switch then switches on every planned lever that is
   off (jobs.access.toggle as a child, once per lever). Phase :check runs plan.rail/judge-line over the world. Any
   sturdy block where the plan wants bed or buffer fill is kept and is no fault. Sound: info rail-build.done. Not
   sound: ONE warn rail-build.broken with the :breaks {:pos :why} (:gap :shape :unlit :lit-brake :no-bed :blocked :wet
@@ -36,7 +40,7 @@
    :give-up {:doc "as jobs.build.from-plan" :default 3}
    :accept {:doc "as jobs.build.from-plan" :default [:fluid-adjacent]}
    :all-carried {:doc "start only while every item still to place is carried (false: build what is carried)" :default true}
-   :fix {:doc "times a rail whose settled shape is wrong is dug and placed again; not used yet (slice 2)" :default 1}
+   :fix {:doc "times a rail whose settled shape is wrong is dug and placed again, then given up as :shape (0 or false: given up at once)" :default 1}
    :dig {:doc "dig :clear cells and wrong blocks in bed and rail cells; not used yet (slice 3)" :default false}})
 
 ;; ------------------------------------------------------------------ the plan
@@ -159,21 +163,11 @@
 
 ;; ------------------------------------------------------------------ rounds
 
-(defn build-args [c]
-  (assoc (select-keys (:args c) [:plan :part :reach :give-up :accept]) :sturdy-ground true))
-
-(defn nothing-to-place?
-  "Whether the builder has nothing it could place with what is carried."
-  [c cells]
-  (let [carried (build/carried-counts (:primitives c))]
-    (and (empty? (build/buildable cells carried {}))
-         (not-any? #(pos? (get carried (:item %) 0)) (build/unseen cells {})))))
-
 (defn ^:async build-step!
-  "One round of the builder as the child; its result is kept when it ends and the phase moves on. A builder not yet
-  begun with nothing to place is skipped: the proof says what is missing."
+  "One round of the head-first builder (engine.jobs.rail); its result is kept when it ends and the phase moves on. A
+  builder not yet begun with nothing to do is skipped: the proof says what is missing."
   [c cells]
-  (if (and (not (:building (ctx/mem c))) (nothing-to-place? c cells))
+  (if (and (not (:building (ctx/mem c))) (builder/idle? c cells))
     (let [left (build/owed cells)]
       (ctx/update-mem! c assoc :phase :switch
                        :built {:placed 0 :missing (mapv :pos left)
@@ -181,10 +175,7 @@
                                :given-up {} :wrong [] :refused []})
       :continue)
     (do (when-not (:building (ctx/mem c)) (ctx/update-mem! c assoc :building true))
-        (let [r (await (ctx/call-child c :build 'jobs.build.from-plan (build-args c)))]
-          (when (= :done r)
-            (ctx/update-mem! c assoc :phase :switch :built (ctx/child-result c :build)))
-          (if (= :done r) :continue r)))))
+        (await (builder/step! c cells)))))
 
 (defn unlit-levers
   "The planned levers standing in the world switched off and not yet tried."

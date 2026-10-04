@@ -10,7 +10,7 @@ import { fakeTrade } from './fake-trade.mjs'
 import { fakeUseOn } from './fake-use-on.mjs'
 import { dragLeashed } from './fake-leash.mjs'
 import { temptFollow } from './fake-tempt.mjs'
-import { railProperties } from './fake-rail.mjs'
+import { railProperties, railsPlaced } from './fake-rail.mjs'
 import { fakeSteer, fakePathWorld } from './fake-steer.mjs'
 import { fakeFurnace, advanceFurnaces } from './fake-furnace.mjs'
 import { fakeEnchant } from './fake-enchant.mjs'
@@ -181,6 +181,7 @@ function defaultActs (s, emit) {
       if (Object.keys(b.properties).length) s.states.set(key(b.pos), b.properties)
       else s.states.delete(key(b.pos))
     }
+    railsPlaced(s, r.blocks)
     return { status: 'placed', block: item, placed: { name: r.blocks[0].name, properties: { ...railProperties(s, pos), ...r.blocks[0].properties } } }
   }
 

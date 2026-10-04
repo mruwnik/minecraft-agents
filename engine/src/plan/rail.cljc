@@ -2,7 +2,8 @@
   "Rail lines in plans: pure, no IO (.cljc, so the dashboard and the tools can share it).
     1. the chain   line: the rail cells of a plan in order along the track, or why they are not one line
     2. the proof   judge-line: does the world hold a line a ridden cart runs from end to end
-    3. layout      layout: one straight flat segment as plan parts (every cell written out), with its materials
+    3. layout      layout: a line of straight legs (corners, slopes of 1 per cell) as plan parts (every cell written
+                   out), with its materials, or why the waypoints cannot be a line
   A plan stays a plan: rails are cells whose want names a *rail block. Positions are [x y z]. A world block is nil
   (unseen) or {:name n :state {k v}} as plan.shape takes it. Facts behind the numbers were measured on the server
   (rail facts, 2026-10-04): a source lights a powered rail and 8 more each way along its run, a lit powered rail
@@ -124,16 +125,20 @@
   (let [rail (block-at pos)
         bed (block-at (below pos))
         head (block-at (above pos))
-        wanted (when (map? want) (shape/state-text (get want :powered "")))]
+        climbs? (and (seq joins) (str/starts-with? (shape-joining pos joins) "ascending"))
+        high (when climbs? (block-at (above (above pos))))
+        wanted (when (map? want) (shape/state-text (get want :powered "")))
+        free? #(or (clear? %) (= "water" (:name %)))]
     (cond
       (some nil? [rail bed head]) [:unloaded]
+      (and climbs? (nil? high)) [:unloaded]
       (not (rail-name? (:name rail))) [:gap]
       :else (cond-> []
               (and (seq joins) (not= (shape-joining pos joins) (state rail :shape))) (conj :shape)
               (and (= "true" wanted) (not (lit? rail))) (conj :unlit)
               (and (= "false" wanted) (lit? rail)) (conj :lit-brake)
               (not (sturdy? bed)) (conj :no-bed)
-              (not (or (clear? head) (= "water" (:name head)))) (conj :blocked)
+              (not (and (free? head) (or (not climbs?) (free? high)))) (conj :blocked)
               (or (= "true" (state rail :waterlogged)) (= "water" (:name head))) (conj :wet)))))
 
 (defn end-breaks
@@ -215,34 +220,182 @@
     (not (and (set? fill) (seq fill) (every? string? fill))) :fill))
 
 (defn powered-indices
-  "The indices of a line of n rails that are lit powered rails."
-  [n {:keys [style launch launch-ends power-every]}]
-  (let [far-launch (= :both launch-ends)
-        first-group (range 2 (+ 2 launch))
-        last-normal (- n 2)
-        far-start (if far-launch (- last-normal launch) last-normal)
-        far-group (range far-start last-normal)
-        last-launch (+ 1 launch)]
-    (set (concat first-group
-                 (when far-launch far-group)
-                 (if (= :all-powered style)
-                   (range last-launch far-start)
-                   (range (+ last-launch power-every) far-start power-every))))))
+  "The indices of a line of n rails that are lit powered rails. shape ({:corners set :slopes set :lits set} of indices,
+  default none) is what the route holds: a lit rail beside each corner (the corner itself is a normal rail, so are
+  slope cells that are not in :lits). Spaced: the launch groups, the corner neighbours and :lits are fixed, and between
+  two fixed rails a lit one every power-every cells, counted from the earlier one, so the count restarts at each."
+  ([n o] (powered-indices n o {}))
+  ([n {:keys [style launch launch-ends power-every]} {:keys [corners slopes lits] :or {corners #{} slopes #{} lits #{}}}]
+   (let [limit (- n 2)
+         first-group (range 2 (+ 2 launch))
+         far-group (when (= :both launch-ends) (range (- limit launch) limit))
+         beside (mapcat (fn [c] [(dec c) (inc c)]) corners)]
+     (if (= :all-powered style)
+       (set (remove corners (range 2 limit)))
+       (let [fixed (sort (distinct (concat first-group far-group beside lits)))
+             spaced (for [[a b] (partition 2 1 (concat fixed [limit]))
+                          t (range (+ a power-every) b power-every)
+                          :when (not (or (contains? corners t) (contains? slopes t)))]
+                      t)]
+         (set (concat fixed spaced)))))))
+
+(defn consecutive-runs
+  "The runs of consecutive numbers in the ascending indices, as vectors."
+  [indices]
+  (reduce (fn [rs i] (if (= (dec i) (peek (peek rs))) (conj (pop rs) (conj (peek rs) i)) (conj rs [i]))) [] indices))
 
 (defn runs
   "The contiguous runs of the sorted indices, each cut into pieces of at most one source's reach (2 * reach + 1)."
   [indices]
   (->> (sort indices)
-       (reduce (fn [rs i] (if (= (dec i) (peek (peek rs))) (conj (pop rs) (conj (peek rs) i)) (conj rs [i]))) [])
+       consecutive-runs
        (mapcat #(partition-all (inc (* 2 reach)) %))))
 
 (defn middle [run] (nth run (quot (dec (count run)) 2)))
 
 (defn sorted-any [fill] (into [:any] (sort fill)))
 
+;; ---------------------------------------------------------------- layout: the route
+
+(defn heading [[x1 _ z1] [x2 _ z2]] [(compare x2 x1) (compare z2 z1)])
+
+(defn left-of [[dx dz]] [dz (- dx)])
+
+(defn right-of [[dx dz]] [(- dz) dx])
+
+(defn leg-cells
+  "The cells of leg i from waypoint a to waypoint b, without a: one step at a time along x or z, the height changing
+  1 per cell all the way (a slope) or not at all; else {:error :not-straight|:bad-slope :leg i}."
+  [i [x1 y1 z1] [x2 y2 z2]]
+  (let [dx (compare x2 x1)
+        dz (compare z2 z1)
+        len (+ (abs (- x2 x1)) (abs (- z2 z1)))
+        dy (- y2 y1)]
+    (cond
+      (not= 1 (+ (abs dx) (abs dz))) {:error :not-straight :leg i}
+      (not (or (zero? dy) (= len (abs dy)))) {:error :bad-slope :leg i}
+      :else (mapv (fn [k] [(+ x1 (* k dx)) (+ y1 (* k (compare dy 0))) (+ z1 (* k dz))]) (range 1 (inc len))))))
+
+(defn route
+  "The waypoints ([x y z] of rail cells, each leg along x or z) as {:cells [pos ...] the chain, :bounds [index ...] of
+  the waypoints in it, :corners {index :left|:right} where the line turns}, or {:error why :leg i ...}."
+  [waypoints]
+  (let [legs (vec (map-indexed (fn [i [a b]] (leg-cells i a b)) (partition 2 1 waypoints)))
+        heads (mapv heading waypoints (rest waypoints))
+        cells (into [(first waypoints)] cat (remove map? legs))
+        bounds (vec (reductions + 0 (map count (remove map? legs))))
+        turn (fn [k] (let [[d1 d2] [(heads (dec k)) (heads k)]]
+                       (cond (= d1 d2) nil
+                             (= d2 (left-of d1)) :left
+                             (= d2 (right-of d1)) :right
+                             :else :reversal)))
+        turns (when (empty? (filter map? legs)) (into {} (keep (fn [k] (when-let [t (turn k)] [k t]))) (range 1 (count legs))))
+        reversed (first (sort (keep (fn [[k t]] (when (= :reversal t) k)) turns)))]
+    (cond
+      (empty? legs) {:error :no-legs}
+      (some map? legs) (first (filter map? legs))
+      reversed {:error :reversal :leg reversed :at (cells (bounds reversed))}
+      :else {:cells cells :bounds bounds
+             :corners (into {} (map (fn [[k t]] [(bounds k) t])) turns)})))
+
+(defn leg-of
+  "The leg a chain index lies on (a waypoint belongs to the leg that ends there)."
+  [bounds i]
+  (count (take-while #(< % i) (rest bounds))))
+
+(defn touching
+  "The first cell that lies beside a cell of the line it does not follow in the chain (rails side by side join each
+  other), or on one: {:error :touching :at pos :leg l}."
+  [cells bounds]
+  (let [index (zipmap cells (range))]
+    (some (fn [j]
+            (let [[x y z] (cells j)
+                  beside? (fn [[dx dz]]
+                            (some (fn [dy] (when-let [i (index [(+ x dx) (+ y dy) (+ z dz)])] (< i (dec j)))) [-1 0 1]))]
+              (when (or (not= j (index (cells j))) (some beside? [[1 0] [-1 0] [0 1] [0 -1]]))
+                {:error :touching :at (cells j) :leg (leg-of bounds j)})))
+          (range (count cells)))))
+
+(defn slope-cells
+  "The indices of the cells whose rail climbs: a neighbour in the chain is one higher (ys: the height of each)."
+  [ys]
+  (let [n (count ys)
+        higher? (fn [i j] (and (< -1 j n) (> (ys j) (ys i))))]
+    (set (filter #(or (higher? % (dec %)) (higher? % (inc %))) (range n)))))
+
+(defn valley
+  "The first cell lower than both its neighbours: no rail shape joins them: {:error :valley :at pos :leg l}."
+  [cells bounds]
+  (some (fn [i] (let [y (get-in cells [i 1])]
+                  (when (and (pos? i) (< (inc i) (count cells))
+                             (> (get-in cells [(dec i) 1]) y) (> (get-in cells [(inc i) 1]) y))
+                    {:error :valley :at (cells i) :leg (leg-of bounds i)})))
+        (range (count cells))))
+
+(defn slope-lits
+  "The slope cells that are lit powered rails: every other one of each run of them, from the run's lower end (a climb
+  is powered whichever way the line is ridden)."
+  [ys slopes]
+  (->> (consecutive-runs (sort slopes))
+       (mapcat (fn [r] (take-nth 2 (if (<= (ys (first r)) (ys (peek r))) r (rseq r)))))
+       set))
+
+(defn structure-error
+  "The first thing in the route that the line cannot have, as {:error why :leg l ...}, or nil: a corner or a slope in
+  the launch groups or the two normal rails at an end or right beside the group (:leg-too-short for a corner, naming the
+  leg that is too short; :slope-into-launch), two corners closer than 3 cells (:leg-too-short), a corner on or beside a
+  climbing cell (:slope-into-corner)."
+  [cells bounds corners {:keys [launch launch-ends]}]
+  (let [n (count cells)
+        ys (mapv second cells)
+        near (+ launch 3)
+        far (if (= :both launch-ends) (+ launch 3) 3)
+        slopes (slope-cells ys)
+        cs (sort (keys corners))
+        leg (partial leg-of bounds)]
+    (or (some (fn [c] (cond (< c near) {:error :leg-too-short :leg (leg c)}
+                            (< (- n 1 c) far) {:error :leg-too-short :leg (inc (leg c))}))
+              cs)
+        (some (fn [[a b]] (when (< (- b a) 3) {:error :leg-too-short :leg (inc (leg a))})) (partition 2 1 cs))
+        (some (fn [c] (when (or (not= (ys (dec c)) (ys c) (ys (inc c))) (slopes (dec c)) (slopes (inc c)))
+                        {:error :slope-into-corner :at (cells c) :leg (leg c)}))
+              cs)
+        (some (fn [i] (when (or (< i near) (< (- n 1 i) far)) {:error :slope-into-launch :at (cells i) :leg (leg i)}))
+              (sort slopes)))))
+
+;; ---------------------------------------------------------------- layout: sources
+
+(defn heading-at
+  "The direction the chain ps runs in at index i, as [dx dz]."
+  [ps i]
+  (if (< (inc i) (count ps)) (heading (ps i) (ps (inc i))) (heading (ps (dec i)) (ps i))))
+
+(defn blocked?
+  "Whether the line holds a cell where a torch at cell [x y z] or its bed would stand: a rail from 2 below (its clear
+  cell is the bed) to 1 above (its bed is the torch's cell)."
+  [occupied [x y z]]
+  (boolean (some #(contains? occupied [x % z]) (range (- y 2) (+ y 2)))))
+
+(defn power-cell
+  "The cell of the torch or lever beside rail i of the chain ps: {:cell [x y z]} on the caller-side if one is given, else
+  on the outer side when the rail is near a bend (:outer, :left or :right), else on the left, else on the other side;
+  or {:error :power-side :at rail-pos} (and :side, the caller's) when every side it may take is a cell of the line
+  (occupied)."
+  [ps occupied {:keys [caller-side outer]} i]
+  (let [d (heading-at ps i)
+        [x y z] (ps i)
+        cell (fn [side] (let [[sx sz] (if (= :left side) (left-of d) (right-of d))] [(+ x sx) y (+ z sz)]))
+        preferred (or caller-side outer :left)
+        sides (if caller-side [caller-side] [preferred ({:left :right :right :left} preferred)])]
+    (if-let [side (first (remove #(blocked? occupied (cell %)) sides))]
+      {:cell (cell side)}
+      (cond-> {:error :power-side :at (ps i)} caller-side (assoc :side caller-side)))))
+
 (defn layout
-  "One straight flat segment of track as plan parts, every cell written out, from rail cell from to rail cell to
-  ([x y z], same y, along x or z), with options (defaults in `defaults`):
+  "A line of track as plan parts, every cell written out: (layout waypoints opts) with waypoints the [x y z] of rail
+  cells, each leg along x or z, flat or a slope of 1 up or down per cell (the height of the next waypoint says which);
+  (layout from to opts) is the one flat straight leg (it reports only the reason of an error). Options (defaults in
+  `defaults`):
     :style        :spaced (a launch group, then ONE lit powered rail every :power-every cells) or :all-powered
     :launch       lit powered rails in each launch group, 3-5
     :launch-ends  :both (a launch group at each end, so the line is ridden either way) or :first
@@ -255,44 +408,65 @@
                   there is kept
   Each end: a buffer block past the end rail, then two normal rails (the get-in and stop cells), then the launch
   group, so no lit powered rail is ever beside a buffer. The cell above every rail is :clear.
-  -> {:parts [...] :materials {:items {item n} :fill n}} (:fill: at most this many fill blocks), or {:error why}:
-  :not-flat, :not-straight, :too-short, or the option at fault."
-  [from to opts]
-  (let [o (merge defaults
-                 {:power (if (= :all-powered (:style opts)) :block :torch)}
-                 opts)
-        [x1 y1 z1] from
-        [x2 y2 z2] to
-        dx (compare x2 x1)
-        dz (compare z2 z1)
-        n (inc (+ (abs (- x2 x1)) (abs (- z2 z1))))
-        ends-needed (+ 2 (:launch o) 2 (if (= :both (:launch-ends o)) (:launch o) 0))]
-    (cond
-      (not= y1 y2) {:error :not-flat}
-      (not= 1 (+ (abs dx) (abs dz))) {:error :not-straight}
-      (opts-error o) {:error (opts-error o)}
-      (< n ends-needed) {:error :too-short}
-      :else
-      (let [at (fn [i] [(+ x1 (* i dx)) y1 (+ z1 (* i dz))])
-            rail-shape (if (zero? dz) :east_west :north_south)
-            [sx sz] (if (= :left (:power-side o)) [dz (- dx)] [(- dz) dx])
-            powered (powered-indices n o)
-            sources (map middle (runs powered))
-            source-cells (if (= :block (:power o))
-                           (mapv #(below (at %)) sources)
-                           (mapv #(let [[x y z] (at %)] [(+ x sx) y (+ z sz)]) sources))
-            buffers [(at -1) (at n)]
-            beds (concat (map (comp below at) (range n)) (map below buffers)
-                         (when-not (= :block (:power o)) (map below source-cells)))
-            fill (sorted-any (:fill o))
-            normal (vec (remove powered (range n)))]
-        {:parts [{:id "bed" :cells (vec beds) :want fill}
-                 {:id "buffers" :cells buffers :want fill}
-                 {:id "power" :cells source-cells :want (source-block (:power o))}
-                 {:id "rails" :cells (mapv at normal) :want {:block "rail" :shape rail-shape}}
-                 {:id "powered" :cells (mapv at (sort powered))
-                  :want {:block "powered_rail" :shape rail-shape :powered true}}
-                 {:id "head" :cells (mapv (comp above at) (range n)) :want :clear}]
-         :materials {:items {"rail" (count normal) "powered_rail" (count powered)
-                             (source-block (:power o)) (count source-cells)}
-                     :fill (- (+ (count beds) (count buffers)) (if (= :block (:power o)) (count source-cells) 0))}}))))
+  A corner is a normal rail (powered rails cannot curve) with a lit powered rail in the straight cell on each side
+  (a cart is slowed in a corner and the line is ridden both ways); the spacing count restarts at each of them. On a
+  slope every other climbing cell, from its lower end, is a lit powered rail with a source of its own (an unpowered
+  climb stops after 6), and the two cells above each climbing cell are :clear. A torch or lever stands on the outer side
+  of a bend, else on :power-side or the left; when the caller names :power-side and that side is a cell of the line the
+  result is an error, not the other side.
+  -> {:parts [...] :materials {:items {item n} :fill n}} (:fill: at most this many fill blocks), or {:error why ...}:
+  :not-flat, :not-straight, :bad-slope, :reversal, :too-short, :touching (rails side by side would join), :valley,
+  :leg-too-short (a corner in an end's launch group or beside a buffer, or two corners within 3 cells: :leg names the
+  leg), :slope-into-corner, :slope-into-launch, :power-side (:at the rail), or the option at fault."
+  ([from to opts]
+   (if (not= (second from) (second to))
+     {:error :not-flat}
+     (let [laid (layout [from to] opts)]
+       (if (:error laid) (select-keys laid [:error]) laid))))
+  ([waypoints opts]
+   (let [r (route waypoints)
+         o (merge defaults
+                  {:power (if (= :all-powered (:style opts)) :block :torch)}
+                  opts)
+         {:keys [cells bounds corners]} r
+         n (count cells)
+         ends-needed (+ 2 (:launch o) 2 (if (= :both (:launch-ends o)) (:launch o) 0))]
+     (or (when (:error r) r)
+         (when-let [error (opts-error o)] {:error error})
+         (when (< n ends-needed) {:error :too-short})
+         (touching cells bounds)
+         (valley cells bounds)
+         (structure-error cells bounds corners o)
+         (let [ys (mapv second cells)
+               slopes (slope-cells ys)
+               corner-set (set (keys corners))
+               powered (powered-indices n o {:corners corner-set :slopes slopes :lits (slope-lits ys slopes)})
+               sources (map middle (runs powered))
+               occupied (set cells)
+               outer (fn [i] (when-let [c (first (filter #(<= (abs (- i %)) 2) corner-set))]
+                               (if (= :left (corners c)) :right :left)))
+               beside (map #(power-cell cells occupied {:caller-side (:power-side opts) :outer (outer %)} %) sources)]
+           (or (first (filter :error beside))
+               (let [block? (= :block (:power o))
+                     source-cells (if block? (mapv #(below (cells %)) sources) (vec (distinct (map :cell beside))))
+                     buffers [(beyond (rseq cells)) (beyond cells)]
+                     beds (vec (concat (map below cells) (map below buffers) (when-not block? (map below source-cells))))
+                     shape-of (mapv (fn [i] (keyword (shape-joining (cells i) (keep #(get cells %) [(dec i) (inc i)]))))
+                                    (range n))
+                     groups (sort-by (fn [[[lit? _] idxs]] [lit? (first idxs)])
+                                     (group-by (fn [i] [(contains? powered i) (shape-of i)]) (range n)))
+                     rail-parts (mapv (fn [[[lit? shape] idxs]]
+                                        {:id (str (if lit? "powered" "rails") (when (not= shape (shape-of 0)) (str "-" (name shape))))
+                                         :cells (mapv cells idxs)
+                                         :want (if lit?
+                                                 {:block "powered_rail" :shape shape :powered true}
+                                                 {:block "rail" :shape shape})})
+                                      groups)
+                     head (vec (distinct (concat (map above cells) (map #(above (above (cells %))) (sort slopes)))))]
+                 {:parts (into [{:id "bed" :cells beds :want (sorted-any (:fill o))}
+                                {:id "buffers" :cells buffers :want (sorted-any (:fill o))}
+                                {:id "power" :cells source-cells :want (source-block (:power o))}]
+                               (conj rail-parts {:id "head" :cells head :want :clear}))
+                  :materials {:items {"rail" (- n (count powered)) "powered_rail" (count powered)
+                                      (source-block (:power o)) (count source-cells)}
+                              :fill (- (+ (count beds) (count buffers)) (if block? (count source-cells) 0))}})))))))

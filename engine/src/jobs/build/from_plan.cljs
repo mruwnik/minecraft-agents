@@ -340,27 +340,31 @@
     :continue))
 
 (defn kept-ground
-  "The predicate of cells that stay unlisted as wrong: with :sturdy-ground, ground of a rail line holding a sturdy block."
-  [c cells]
-  (let [ground (when (:sturdy-ground (:args c)) (rail/ground cells))]
+  "The predicate of cells that stay unlisted as wrong: with sturdy-ground, ground of a rail line holding a sturdy block."
+  [c cells sturdy-ground]
+  (let [ground (when sturdy-ground (rail/ground cells))]
     (fn [{:keys [pos]}] (and (contains? ground pos) (rail/sturdy? (world-block (:primitives c) pos))))))
 
-(defn finish! [c cells]
-  (let [m (ctx/mem c)
-        p (:primitives c)
-        kept? (kept-ground c cells)
+(defn summary
+  "What a build of cells left, from the job memory m: {:placed :missing :short :given-up :wrong :refused}."
+  [c cells m sturdy-ground]
+  (let [kept? (kept-ground c cells sturdy-ground)
         left (owed cells)
         given-up (merge (select-keys (:unplaceable m) (map :pos left)) (:given-up m {}))
-        short (shortage left (carried-counts p))
         wrong (mapv (fn [{:keys [pos found want]}]
                       (if-let [placed (get-in m [:misplaced pos])]
                         {:pos pos :found placed :want (shape/want-text want) :placed true}
                         {:pos pos :found found :want (shape/want-text want)}))
                     (filter #(and (#{:wrong :extra} (:answer %)) (not (kept? %))) cells))
-        refused (->> (:refused m) (sort-by key) (mapv (fn [[pos why]] (assoc why :pos pos))))
-        result {:placed (:placed m 0) :missing (mapv :pos left) :short short :given-up given-up :wrong wrong
-                :refused refused}
-        plan (:plan (:args c))]
+        refused (->> (:refused m) (sort-by key) (mapv (fn [[pos why]] (assoc why :pos pos))))]
+    {:placed (:placed m 0) :missing (mapv :pos left) :short (shortage left (carried-counts (:primitives c)))
+     :given-up given-up :wrong wrong :refused refused}))
+
+(defn announce!
+  "Emit the build events of a summary: build.short, build.gave-up, build.refused and build.wrong warns, build.done."
+  [c {:keys [short given-up refused wrong missing] :as result}]
+  (let [plan (:plan (:args c))
+        left missing]
     (when (seq short)
       (ctx/emit! c :build.short :warn {:plan plan :short short
                                        :text (str "build of " plan " is short of " (shortage-text short))}))
@@ -377,7 +381,11 @@
                                        :text (str "build of " plan " left " (count wrong) " wrong blocks: "
                                                   (str/join ", " (map #(str (pr-str (:pos %)) " " (:found %)) wrong)))}))
     (ctx/emit! c :build.done :info {:plan plan :placed (:placed result) :missing (count left)
-                                    :text (str "build of " plan " done: placed " (:placed result) ", still missing " (count left))})
+                                    :text (str "build of " plan " done: placed " (:placed result) ", still missing " (count left))})))
+
+(defn finish! [c cells]
+  (let [result (summary c cells (ctx/mem c) (:sturdy-ground (:args c)))]
+    (announce! c result)
     (ctx/result! c result)
     :done))
 

@@ -1,9 +1,10 @@
 (ns engine.rail-line-test
   "jobs.build.rail-line: build a rail plan with the from-plan builder and prove the line, against the fake world."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [deftest is are async]]
             [engine.build-from-plan-test :as b]
             [engine.core :as core]
             [engine.harvest-test :as h]
+            [engine.jobs.rail :as builder]
             [engine.takeover :as takeover]
             [jobs.build.rail-line :as rail-line]
             [engine.test-util :as tu]
@@ -254,5 +255,192 @@
           (dotimes [_ 120] (swap! h/clock + 700) (await (core/tick! eng)))
           (is (every? #(= "rail" (h/block-at p % 64 0)) [0 1 28 29]))
           (is (every? #(= "powered_rail" (h/block-at p % 64 0)) [2 3 4 5 24 25 26 27]))
+          (is (= 1 (count (h/events-of seen :rail-build.done))))
+          (is (empty? (:list (core/state eng)))))))))
+
+;; ---------------------------------------------------------------- corners and slopes: the head-first builder
+
+(def l-route [[0 64 0] [19 64 0] [19 64 12]])
+(def u-route [[0 64 0] [19 64 0] [19 64 3] [0 64 3]])
+(def slope-route [[0 64 0] [19 64 0] [25 70 0] [45 70 0]])
+(def down-route [[0 70 0] [14 70 0] [20 64 0] [40 64 0]])
+
+(defn route-plan [waypoints opts] {:id "line" :status :active :parts (:parts (rail/layout waypoints opts))})
+
+(defn route-kit
+  "Exactly the items the layout of the waypoints counts, the fill as cobblestone, plus extra {item n}."
+  [waypoints opts & [extra]]
+  (let [{:keys [items fill]} (:materials (rail/layout waypoints opts))]
+    (mapv (fn [[name n]] {:name name :count n}) (merge-with + items {"cobblestone" fill} extra))))
+
+(defn terrain
+  "Stone from y (top - 1) to top under every column x in xs, z in zs, where top is (top-of x)."
+  [top-of xs zs]
+  (into {} (for [x xs z zs y [(dec (top-of x)) (top-of x)]] [(h/cell-key x y z) "stone"])))
+
+(defn up-top
+  "The ground under the slope-route: the bed of the rail one block up for each cell along the climb (x 19 to 25)."
+  [x]
+  (cond (<= x 19) 63 (<= x 25) (+ 63 (- x 19)) :else 69))
+
+(defn down-top [x] (cond (<= x 14) 69 (<= x 20) (- 69 (- x 14)) :else 63))
+
+(def flat-top (constantly 63))
+
+(defn route-world
+  [waypoints opts top-of & [inventory]]
+  {:inventory (or inventory (route-kit waypoints opts))
+   :blocks (terrain top-of (range -5 60) (range -4 18))
+   :self {:pos {:x 0 :y (inc (top-of 0)) :z 3}}})
+
+(defn ^:async build-route!
+  "Build the plan of the waypoints over the world: [result seen p]."
+  [waypoints opts world args & [zones]]
+  (let [{:keys [eng p seen]} (b/start world {"line" (route-plan waypoints opts)} (or zones []))
+        result (await (h/child-outcome eng job (merge {:plan "line"} args) 900))]
+    [result seen p]))
+
+(defn shape-of [p [x y z]] (:shape (props p [x y z])))
+
+(deftest the-work-goes-station-by-station-the-bed-first-then-the-rail-then-what-stands-beside-it
+  (let [ps [[0 64 0] [1 64 0] [2 65 0]]
+        rail {:block "rail"}
+        cells [{:pos [2 65 0] :want rail} {:pos [1 64 -1] :want "redstone_torch"} {:pos [1 63 -1] :want "stone"}
+               {:pos [1 64 0] :want rail} {:pos [0 64 0] :want rail} {:pos [2 64 0] :want "stone"}
+               {:pos [0 63 0] :want "stone"} {:pos [1 63 0] :want "stone"}]
+        order (fn [from] (mapv :pos (builder/work-order ps from cells)))
+        before (fn [order a b] (< (.indexOf order a) (.indexOf order b)))]
+    (are [from pairs] (every? (fn [[a b]] (before (order from) a b)) pairs)
+      :first [[[0 63 0] [0 64 0]] [[0 64 0] [1 63 0]] [[1 63 0] [1 64 0]] [[1 63 -1] [1 64 0]] [[1 64 0] [1 64 -1]]
+              [[1 64 -1] [2 64 0]] [[2 64 0] [2 65 0]]]
+      :last [[[2 64 0] [2 65 0]] [[2 65 0] [1 63 0]] [[1 64 0] [1 64 -1]] [[1 64 -1] [0 63 0]] [[0 63 0] [0 64 0]]])))
+
+(deftest corners-and-slopes-are-built-in-line-order-and-pass-the-proof
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[label waypoints opts top-of]
+                [["L" l-route {} flat-top]
+                 ["U-turn" u-route {} flat-top]
+                 ["S-bend" [[0 64 0] [19 64 0] [19 64 3] [38 64 3]] {} flat-top]
+                 ["L all powered" l-route {:style :all-powered :power :torch} flat-top]
+                 ["6 up" slope-route {} up-top]
+                 ["6 down" down-route {} down-top]]]
+          (let [[result seen] (await (build-route! waypoints opts (route-world waypoints opts top-of) {}))]
+            (is (true? (:ok? result)) label)
+            (is (= [] (:breaks result)) label)
+            (is (= {} (get-in result [:built :given-up])) label)
+            (is (= 1 (count (h/events-of seen :rail-build.done))) label)
+            (is (empty? (h/events-of seen :rail-build.broken)) label)))))))
+
+(deftest the-corner-and-the-slope-come-out-as-the-layout-wants-them
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[_ _ p] (await (build-route! l-route {} (route-world l-route {} flat-top) {}))]
+          (is (= ["east_west" "south_west" "north_south"] (mapv #(shape-of p %) [[18 64 0] [19 64 0] [19 64 1]])))
+          (is (true? (:powered (props p [18 64 0]))))
+          (is (true? (:powered (props p [19 64 1])))))
+        (let [[_ _ p] (await (build-route! slope-route {} (route-world slope-route {} up-top) {}))]
+          (is (= ["east_west" "ascending_east" "ascending_east" "ascending_east" "east_west"]
+                 (mapv #(shape-of p %) [[18 64 0] [19 64 0] [20 65 0] [24 69 0] [25 70 0]])))
+          (is (= [true true true] (mapv #(:powered (props p %)) [[19 64 0] [21 66 0] [23 68 0]])))
+          (is (= "powered_rail" (h/block-at p 21 66 0))))))))
+
+(deftest a-slope-over-ground-that-lacks-its-bed-gets-the-bed-placed-from-the-line
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [lower (fn [x] (dec (up-top x)))
+              [result _ p] (await (build-route! slope-route {} (route-world slope-route {} lower) {}))]
+          (is (true? (:ok? result)))
+          (is (every? #(= "cobblestone" (h/block-at p % (+ 62 (- % 19) 1) 0)) [21 22 23 24]) "the bed under each climbing rail"))))))
+
+(deftest the-body-stands-on-the-line-it-builds-not-beside-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[_ _ p] (await (build-route! slope-route {} (route-world slope-route {} up-top) {}))
+              stands (set (map #(let [pos (.-pos (.-args %))] [(.-x pos) (.-y pos) (.-z pos)]) (h/calls p "moveTo")))
+              rails (set (map :pos (rail/line (:cells (shape/expand (route-plan slope-route {}) {})))))]
+          (is (some #(and (<= 19 (first %) 25) (rails %)) stands) "a stand on a climbing rail")
+          (is (some #(and (<= 5 (first %) 15) (rails %)) stands) "a stand on a flat rail"))))))
+
+;; ---------------------------------------------------------------- shapes that settled wrong
+
+(defn built-line-world
+  "A world with the whole plan of the waypoints already placed (names only) over the terrain, plus extra blocks and
+  stored states; the body holds extra items only."
+  [waypoints opts top-of extra-blocks states & [inventory]]
+  (assoc (merge-with merge
+                     {:blocks (terrain top-of (range -5 60) (range -4 18))}
+                     {:blocks (into {} (keep (fn [{:keys [pos want]}]
+                                               (when-not (= :clear want) [(apply h/cell-key pos) (shape/want-block want)])))
+                                    (:cells (shape/expand (route-plan waypoints opts) {})))}
+                     {:blocks extra-blocks})
+         :inventory (or inventory [])
+         :states states
+         :self {:pos {:x 3 :y 64 :z 3}}))
+
+(deftest a-rail-that-settled-in-the-wrong-shape-is-dug-and-placed-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (built-line-world l-route {} flat-top {} {"10,64,0" {:shape "north_south"}})
+              [result seen p] (await (build-route! l-route {} world {:all-carried false}))]
+          (is (true? (:ok? result)))
+          (is (= "east_west" (shape-of p [10 64 0])))
+          (is (= 1 (count (filter #(= {:x 10 :y 64 :z 0} (js->clj (.-pos (.-args %)) :keywordize-keys true)) (h/calls p "dig")))))
+          (is (= [] (h/events-of seen :rail-build.broken))))))))
+
+(deftest a-rail-that-cannot-come-out-right-is-given-up-as-shape-after-the-fixes-are-spent
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[fix digs] [[1 1] [2 2] [0 0]]]
+          (let [world (built-line-world l-route {} flat-top {"0,64,1" "rail"} {})
+                [result seen p] (await (build-route! l-route {} world {:all-carried false :fix fix}))
+                [warn] (h/events-of seen :rail-build.broken)]
+            (is (false? (:ok? result)) (str fix))
+            (is (= {[0 64 0] :shape} (get-in result [:built :given-up])) (str fix))
+            (is (= [{:pos [0 64 0] :why :shape}] (:breaks warn)) (str fix))
+            (is (= {[0 64 0] :shape} (:given-up warn)) (str fix))
+            (is (= digs (count (h/calls p "dig"))) (str fix))))))))
+
+(deftest a-corner-rail-broken-after-the-build-is-a-gap-in-the-next-proof
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (b/start (route-world l-route {} flat-top) {"line" (route-plan l-route {})} [])]
+          (await (h/child-outcome eng job {:plan "line"} 900))
+          (.delete (.-blocks (.-state (.-world p))) "19,64,0")
+          (core/submit! eng (list job {:plan "line" :all-carried false}) {})
+          (dotimes [_ 6] (swap! h/clock + 700) (await (core/tick! eng)))
+          (is (= [{:pos [19 64 0] :why :gap}] (:breaks (first (h/events-of seen :rail-build.broken))))))))))
+
+(deftest a-corner-in-a-zone-declines-before-anything-is-placed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (await (declines (route-world l-route {} flat-top) {"line" (route-plan l-route {})} {:plan "line"}
+                                 [(b/zone "shrine" [19 64 0] [19 64 0] #{})]))]
+          (is (= [{:plan "line" :reason :refused :refused [{:pos [19 64 0] :reason :zone :zone "shrine"}]}] (:declined r)))
+          (is (= 0 (:places r))))))))
+
+(deftest a-cut-mid-build-of-a-corner-line-resumes-and-finishes-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (b/start (route-world l-route {} flat-top) {"line" (route-plan l-route {})} [])
+              release (.hold (.-world p) "place")]
+          (core/submit! eng (list job {:plan "line"}) {})
+          (let [round (core/tick! eng)]
+            (await (js/Promise. (fn [resolve] (js/setTimeout resolve 20))))
+            (is (= {:ok true} (takeover/take! eng {:who "claude" :why "test"})))
+            (await round)
+            (release))
+          (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
+          (dotimes [_ 160] (swap! h/clock + 700) (await (core/tick! eng)))
+          (is (= ["east_west" "south_west" "north_south"] (mapv #(shape-of p %) [[18 64 0] [19 64 0] [19 64 1]])))
           (is (= 1 (count (h/events-of seen :rail-build.done))))
           (is (empty? (:list (core/state eng)))))))))

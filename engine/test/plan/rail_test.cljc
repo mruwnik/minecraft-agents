@@ -221,3 +221,148 @@
     [0 64 0] [29 64 0] {:power :piston} :power
     [0 64 0] [29 64 0] {:style :zigzag} :style
     [0 64 0] [29 64 0] {:fill #{}} :fill))
+
+;; ---------------------------------------------------------------- layout: corners and slopes
+
+(defn route [waypoints & [opts]] (rail/layout waypoints (or opts {})))
+
+(defn shape-at [laid i] (get-in (nth (chain-of laid) i) [:want :shape]))
+
+(def l-route [[0 64 0] [19 64 0] [19 64 12]])
+
+(deftest a-corner-is-a-normal-rail-of-the-corner-shape-whichever-way-the-line-turns
+  (are [waypoints shape] (= shape (shape-at (route waypoints) 15))
+    [[0 64 0] [15 64 0] [15 64 15]] :south_west
+    [[0 64 0] [15 64 0] [15 64 -15]] :north_west
+    [[15 64 0] [0 64 0] [0 64 15]] :south_east
+    [[15 64 0] [0 64 0] [0 64 -15]] :north_east
+    [[0 64 0] [0 64 15] [15 64 15]] :north_east
+    [[0 64 15] [0 64 0] [-15 64 0]] :south_west))
+
+(deftest each-corner-gets-a-lit-powered-rail-on-both-sides-and-itself-stays-a-normal-rail
+  (let [l (route l-route)]
+    (is (= #{2 3 4 5 18 20 26 27 28 29} (indices-of l "powered_rail")))
+    (is (= "rail" (shape/want-block (:want (nth (chain-of l) 19)))))
+    (is (= [:east_west :south_west :north_south]
+           (mapv #(shape-at l %) [18 19 20])))))
+
+(deftest the-spacing-count-restarts-at-each-corner
+  (let [powered (indices-of (route [[0 64 0] [60 64 0] [60 64 50]] {:power-every 10}) "powered_rail")]
+    (is (= #{2 3 4 5 15 25 35 45 55 59 61 71 81 91 101 105 106 107 108} powered))))
+
+(deftest a-u-turn-and-an-s-bend-are-lines-of-their-own
+  (are [waypoints corners] (= corners (set (keep-indexed (fn [i c] (when (#{:south_west :south_east :north_west :north_east} (get-in c [:want :shape])) i))
+                                                          (chain-of (route waypoints)))))
+    [[0 64 0] [19 64 0] [19 64 3] [0 64 3]] #{19 22}
+    [[0 64 0] [19 64 0] [19 64 3] [38 64 3]] #{19 22}))
+
+(def slope-up [[0 64 0] [19 64 0] [25 70 0] [45 70 0]])
+(def slope-down [[0 70 0] [14 70 0] [20 64 0] [40 64 0]])
+
+(deftest a-slope-has-a-climbing-rail-every-cell-and-every-other-one-is-lit-from-its-lower-end
+  (are [waypoints shapes lit] (let [l (route waypoints)]
+                                (and (= shapes (set (map #(shape-at l %) (range (count (chain-of l))))))
+                                     (= lit (set (filter (indices-of l "powered_rail") (range 15 30))))))
+    slope-up #{:east_west :ascending_east} #{19 21 23}
+    slope-down #{:east_west :ascending_west} #{16 18 20}))
+
+(deftest a-slope-is-a-run-of-climbing-cells-whose-top-is-flat
+  (let [l (route slope-up)]
+    (is (= [:east_west :ascending_east :ascending_east :ascending_east :ascending_east :ascending_east :ascending_east :east_west]
+           (mapv #(shape-at l %) (range 18 26)) ))
+    (is (= (mapv #(vector % (+ 64 (max 0 (- % 19)))  0) (range 0 26)) (mapv :pos (take 26 (chain-of l)))))))
+
+(deftest every-lit-slope-rail-has-a-source-of-its-own
+  (let [l (route slope-up)]
+    (is (= #{[19 64 -1] [21 66 -1] [23 68 -1]}
+           (set (filter #(< 15 (first %) 25) (cells-wanting l "redstone_torch")))))))
+
+(deftest a-slope-cell-needs-headroom-two-above-as-well-as-one
+  (let [l (route slope-up)
+        clear (part-cells l "head")]
+    (is (every? clear [[19 65 0] [19 66 0] [24 70 0] [24 71 0] [25 71 0]]))
+    (is (not (clear [25 72 0])))
+    (is (not (clear [10 66 0])))))
+
+(deftest a-corner-may-follow-a-slope-after-one-flat-cell-a-crest-is-fine-and-a-line-without-a-far-launch-group-may-end-short
+  (are [waypoints opts] (nil? (:error (route waypoints opts)))
+    [[0 64 0] [19 64 0] [25 70 0] [26 70 0] [26 70 20]] {}
+    [[0 64 0] [19 64 0] [25 70 0] [31 64 0] [50 64 0]] {}
+    [[0 64 0] [19 64 0] [19 64 4]] {:launch-ends :first}))
+
+(defn world-of
+  "The world a plan's cells describe: every wanted block with its wanted state, :clear cells left as air."
+  [cells]
+  (into {} (keep (fn [{:keys [pos want]}]
+                   (when-not (= :clear want)
+                     [pos {:name (shape/want-block want)
+                           :state (into {} (map (fn [[k v]] [k (shape/state-text v)]))
+                                        (when (map? want) (dissoc want :block)))}])))
+        cells))
+
+(deftest a-layout-of-corners-and-slopes-is-a-good-plan-whose-world-passes-the-proof
+  (are [waypoints opts] (let [l (route waypoints opts)
+                              cells (expanded l)]
+                          (and (= [] (shape/plan-errors {:id "p" :status :active :parts (:parts l)} "p"))
+                               (= {:ok? true :breaks [] :hazards []} (rail/judge-line cells (block-at (world-of cells))))))
+    l-route {}
+    l-route {:style :all-powered}
+    l-route {:power :lever :power-side :right}
+    [[0 64 0] [19 64 0] [19 64 3] [0 64 3]] {}
+    [[0 64 0] [19 64 0] [19 64 3] [38 64 3]] {:power :block}
+    slope-up {}
+    slope-up {:style :all-powered}
+    slope-down {}
+    [[0 64 0] [19 64 0] [25 70 0] [26 70 0] [26 70 20]] {}
+    [[0 64 0] [19 64 0] [25 70 0] [31 64 0] [50 64 0]] {:power :lever}))
+
+(deftest the-proof-names-a-corner-or-slope-built-wrong
+  (let [corner-cells (expanded (route l-route))
+        slope-cells (expanded (route slope-up))
+        corner-world (world-of corner-cells)
+        slope-world (world-of slope-cells)
+        judge (fn [cells world] (select-keys (rail/judge-line cells (block-at world)) [:ok? :breaks]))]
+    (are [cells world breaks] (= {:ok? false :breaks breaks} (judge cells world))
+      corner-cells (assoc corner-world [19 64 0] {:name "rail" :state {:shape "east_west"}}) [{:pos [19 64 0] :why :shape}]
+      corner-cells (assoc corner-world [19 64 0] {:name "rail" :state {:shape "north_west"}}) [{:pos [19 64 0] :why :shape}]
+      corner-cells (assoc corner-world [18 64 0] {:name "powered_rail" :state {:shape "east_west" :powered "false"}}) [{:pos [18 64 0] :why :unlit}]
+      slope-cells (assoc slope-world [21 66 0] {:name "powered_rail" :state {:shape "east_west" :powered "true"}}) [{:pos [21 66 0] :why :shape}]
+      slope-cells (assoc slope-world [22 67 0] {:name "rail" :state {:shape "ascending_west"}}) [{:pos [22 67 0] :why :shape}]
+      slope-cells (assoc slope-world [21 68 0] {:name "stone"}) [{:pos [21 66 0] :why :blocked}])))
+
+(deftest corner-and-slope-materials-are-counted
+  (are [waypoints opts materials] (= materials (:materials (route waypoints opts)))
+    l-route {} {:items {"rail" 22 "powered_rail" 10 "redstone_torch" 4} :fill 40}
+    slope-up {} {:items {"rail" 35 "powered_rail" 11 "redstone_torch" 5} :fill 55}))
+
+(deftest the-torch-stands-outside-a-corner-unless-the-caller-names-a-side-and-two-rails-may-share-one
+  (are [opts torches] (= torches (set (filter #(and (<= 15 (first %) 22) (<= (nth % 2) 1)) (cells-wanting (route l-route opts) "redstone_torch"))))
+    {} #{[18 64 -1] [20 64 1]}
+    {:power-side :left} #{[18 64 -1] [20 64 1]}
+    {:power-side :right} #{[18 64 1]}))
+
+(deftest a-lines-that-cannot-be-made-says-why-and-where
+  (are [waypoints opts error] (= error (select-keys (route waypoints opts) [:error :leg :at]))
+    [[0 64 0] [5 64 0] [5 64 20]] {} {:error :leg-too-short :leg 0}
+    [[0 64 0] [19 64 0] [19 64 4]] {} {:error :leg-too-short :leg 1}
+    [[0 64 0] [19 64 0] [19 64 2] [5 64 2]] {} {:error :leg-too-short :leg 1}
+    [[0 64 0] [19 64 0] [25 70 0] [25 70 20]] {} {:error :slope-into-corner :at [25 70 0] :leg 1}
+    [[0 64 0] [19 64 0] [19 64 20] [25 64 26]] {} {:error :not-straight :leg 2}
+    [[0 64 0] [6 64 0] [12 70 0] [40 70 0]] {} {:error :slope-into-launch :at [6 64 0] :leg 0}
+    [[0 64 0] [19 64 0] [25 67 0] [45 67 0]] {} {:error :bad-slope :leg 1}
+    [[0 64 0] [19 64 0] [10 64 0]] {} {:error :reversal :leg 1 :at [19 64 0]}
+    [[0 64 0] [10 64 0] [12 62 0] [14 64 0] [30 64 0]] {} {:error :valley :at [12 62 0] :leg 1}
+    [[0 64 0] [30 64 0] [30 64 12] [10 64 12] [10 64 1]] {} {:error :touching :at [10 64 1] :leg 3}
+    [[0 64 0] [19 64 0] [19 64 0]] {} {:error :not-straight :leg 1}
+    [[0 64 0] [19 64 0]] {:launch 6} {:error :launch}))
+
+(deftest a-power-side-the-caller-asked-for-that-is-taken-by-the-line-is-an-error-naming-the-cell
+  (are [occupied opts result] (= result (rail/power-cell [[18 64 0] [19 64 0]] occupied opts 0))
+    #{[18 64 1]} {:caller-side :right} {:error :power-side :at [18 64 0] :side :right}
+    #{[18 64 1]} {:caller-side :left} {:cell [18 64 -1]}
+    #{[18 64 -1]} {} {:cell [18 64 1]}
+    #{[18 64 -1]} {:outer :right} {:cell [18 64 1]}
+    #{} {:outer :right} {:cell [18 64 1]}
+    #{[18 62 -1]} {} {:cell [18 64 1]}
+    #{[18 61 -1]} {} {:cell [18 64 -1]}
+    #{[18 64 1] [18 64 -1]} {} {:error :power-side :at [18 64 0]}))
