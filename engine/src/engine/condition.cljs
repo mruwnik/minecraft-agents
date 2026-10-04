@@ -11,7 +11,8 @@
   and memory: pure, with the held-for timers and the scan cache threaded
   through as state. when-fn wraps a node as a register :when with its own
   state. Values are numbers, strings, keywords, positions, booleans or
-  unknown; unknown propagates and and/or are three-valued."
+  unknown; unknown propagates and and/or are three-valued, and only
+  (known? x) turns an unknown into a definite boolean."
   (:refer-clojure :exclude [compile])
   (:require [clojure.string :as str]
             [cljs.tools.reader.edn :as edn]
@@ -70,7 +71,8 @@
    '<= {:sig "(<= number number)" :arity 2 :args :number}
    '>= {:sig "(>= number number)" :arity 2 :args :number}
    '= {:sig "(= a a), a a number, string, keyword or boolean" :arity 2 :args :any}
-   'held-for {:sig "(held-for seconds boolean)" :arity 2}})
+   'held-for {:sig "(held-for seconds boolean)" :arity 2}
+   'known? {:sig "(known? form)" :arity 1}})
 
 (def comparable #{:number :string :keyword :boolean})
 
@@ -125,6 +127,18 @@
         (refusal? c) c
         (not= :boolean (:type c)) (type-refusal 'held-for c :boolean)
         :else {:op :held-for :form form :type :boolean :ms (* 1000 secs) :path path :children [c]}))))
+
+(defn check-known
+  "known? takes a fact or a call, of any type: a literal is always known, so
+  it is refused rather than answered."
+  [form [inner] path]
+  (let [c (check inner (conj path 0))]
+    (cond
+      (refusal? c) c
+      (= :literal (:op c)) (refuse :type inner
+                                   (str (pr-str inner) " is a literal and always known; known? wants a fact or a call here")
+                                   :allowed [(sig 'known?)])
+      :else {:op :known? :form form :type :boolean :children [c]})))
 
 (defn check-op [form sym args path]
   (let [op (get ops sym)
@@ -182,6 +196,7 @@
       (refuse :arity form (str head " takes " (sig head) ", not " (count args) " argument(s)") :allowed [(sig head)])
 
       (= 'held-for head) (check-held-for form args path)
+      (= 'known? head) (check-known form args path)
       (contains? ops head) (check-op form head args path)
       :else (check-fact form head args path))))
 
@@ -251,6 +266,7 @@
                     (unknown? inner) (done unknown st)
                     (false? inner) (done false st)
                     :else (done (>= (- now since) (:ms node)) (assoc-in st [:since (:path node)] since))))
+      :known? (done (not (unknown? (first vs))) st)
       (done (combine (:op node) vs) st))))
 
 (defn run [node env state]

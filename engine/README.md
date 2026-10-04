@@ -711,11 +711,19 @@ never evaluated. Not wired into the register or any command yet.
 ```clojure
 (and (< (inventory "bread") 8) (< (distance-to (place :home)) 16))
 (held-for 5 (hostile-near 10))
+(not (known? (place :home)))
 ```
 
 - Operators: `and or not` (booleans), `< > <= >=` (two numbers), `=` (two
   numbers, strings, keywords or booleans), `(held-for seconds cond)`: true once
-  cond has been definitely true for that many seconds (a literal).
+  cond has been definitely true for that many seconds (a literal), and
+  `(known? x)`: x is a fact or any call; it is always a definite boolean, true
+  when x's value is known and false when it is unknown, and the only form that
+  turns unknown into a definite value. Over a boolean it is true exactly when
+  that boolean is definite (`(known? (and a ?))` is true only if a is false),
+  and over `held-for` it follows the inner condition (a held-for is unknown
+  exactly while its condition is). Its sub-form is evaluated every tick like
+  every other, so a `held-for` inside still times.
 - Facts (`engine.condition.facts/table`, each with argument types, result
   type and cost): `(health) (food) (inventory "item") (free-slots)
   (distance-to pos) (blocks-near "name" r)` are numbers, `(place :kind)` a
@@ -728,8 +736,13 @@ never evaluated. Not wired into the register or any command yet.
 - A fact can be unknown (body offline, no such place). Unknown propagates
   through comparisons and `not`; `and`/`or` are three-valued (`(and false ?)`
   is false, `(or true ?)` true). A condition holds only when definitely true.
+  `known?` is how to ask about absence: "no home yet" is `(not (known? (place
+  :home)))` (without it `(not (place :home))` is unknown and never fires),
+  and `(and (known? (place :home)) (< (distance-to (place :home)) 16))` says
+  the same near-home test with the absent case spelled out. It gives no clock:
+  "every N minutes" still has no way to say "since the last time".
 - `compile` validates once, at registration: an unknown symbol, wrong arity,
-  wrong argument type, incomparable `=`, a bad held-for duration, a leading
+  wrong argument type (`known?` also refuses a literal), incomparable `=`, a bad held-for duration, a leading
   quote or a non-boolean top is refused as data `{:ok false :reason :at
   :message :allowed}`, `:at` the offending sub-form and `:allowed` the
   signatures that would do.

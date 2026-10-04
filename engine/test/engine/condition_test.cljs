@@ -203,6 +203,96 @@
                   :blocks (fn [_] #js [])
                   :blockAt (fn [_] nil)})
 
+;; ------------------------------------------------------------------ known?
+
+(def home (view 0 {:home [{:pos {:x 0 :y 64 :z 0}}]}))
+
+(deftest known-turns-unknown-into-a-definite-boolean
+  (let [step (fn [form p memory] (value form (env p memory)))
+        no-home '(not (known? (place :home)))
+        near-home '(and (known? (place :home)) (< (distance-to (place :home)) 16))
+        p (tu/fake {:self {:health 5}})]
+    (are [form p memory expected] (= expected (step form p memory))
+      no-home p (view 0) true
+      no-home p home false
+      '(known? (place :home)) p home true
+      '(known? (place :home)) p (view 0) false
+      '(known? (health)) p (view 0) true
+      '(known? (health)) offline (view 0) false
+      near-home p (view 0) false
+      near-home p home true)))
+
+(deftest known-over-a-boolean-expression-is-true-exactly-when-it-is-definite
+  (let [u '(< (distance-to (place :nowhere)) 1)
+        t '(< (health) 7)
+        f '(> (health) 7)]
+    (are [form expected] (= expected (value form f-env))
+      (list 'known? u) false
+      (list 'known? t) true
+      (list 'known? (list 'and t u)) false
+      (list 'known? (list 'and f u)) true
+      (list 'known? (list 'or t u)) true
+      (list 'known? (list 'or f u)) false
+      (list 'known? (list 'not u)) false
+      (list 'known? (list 'known? u)) true)))
+
+(deftest held-for-over-known-times-the-absence-and-is-evaluated-every-tick
+  (let [n (node '(held-for 5 (not (known? (place :bed)))))
+        step (fn [state memory] (c/evaluate n (env (tu/fake) memory) state))
+        bed (fn [now] (assoc (view 0 {:bed [{:pos {:x 0 :y 64 :z 0}}]}) :now now))
+        r0 (step {} (view 1000))
+        r1 (step (:state r0) (view 5999))
+        r2 (step (:state r1) (view 6000))
+        r3 (step (:state r2) (bed 6500))
+        r4 (step (:state r3) (view 7000))]
+    (is (= [false false true false false] (mapv :value [r0 r1 r2 r3 r4])))))
+
+(deftest known-over-held-for-is-unknown-only-while-its-condition-is
+  (let [n (node '(known? (held-for 5 (< (distance-to (place :home)) 5))))
+        step (fn [state memory] (c/evaluate n (env (tu/fake) memory) state))
+        r0 (step {} (view 0))
+        r1 (step (:state r0) home)
+        r2 (step (:state r1) (assoc home :now 100))]
+    (is (= [false true true] (mapv :value [r0 r1 r2])))
+    (is (seq (:since (:state r1))) "the timer inside advanced while the outer form was a plain boolean")))
+
+(deftest known-evaluates-its-sub-form-with-no-short-circuit
+  (let [n (node '(and (known? (place :home)) (held-for 2 (< (health) 7))))
+        p (tu/fake {:self {:health 5}})
+        r0 (c/evaluate n (env p (view 0)) {})
+        r1 (c/evaluate n (env p (assoc home :now 2000)) (:state r0))]
+    (is (= [false true] (mapv :value [r0 r1])))))
+
+(deftest known-takes-one-fact-or-expression
+  (are [form reason at] (let [r (refusal form)]
+                          (and (false? (:ok r)) (= reason (:reason r)) (= at (:at r))
+                               (= ["(known? form)"] (:allowed r))))
+    '(known?) :arity '(known?)
+    '(known? (place :home) (place :bed)) :arity '(known? (place :home) (place :bed))
+    '(known? 3) :type 3
+    '(known? :home) :type :home
+    '(known? "x") :type "x")
+  (are [form reason at] (let [r (refusal form)] (and (= reason (:reason r)) (= at (:at r))))
+    '(known? health) :not-a-form 'health
+    '(known? (nope)) :unknown-symbol '(nope)
+    '(known? (inventory :bread)) :type :bread))
+
+(deftest known-is-in-the-vocabulary-and-a-condition-by-itself
+  (is (some #{"(known? form)"} (:allowed (refusal '(some (daytime))))))
+  (is (some #{"(known? form)"} (:allowed (refusal '(health)))))
+  (is (:ok (c/compile '(known? (place :home)))))
+  (is (:ok (c/compile '(and (known? (health)) (not (known? (place :bed))))))))
+
+(deftest explain-shows-known-and-its-inner-term-with-their-values
+  (is (= [{:form '(not (known? (place :home))) :value true}
+          {:form '(known? (place :home)) :value false}
+          {:form '(place :home) :value ?}
+          {:form :home :value :home}]
+         (c/explain (node '(not (known? (place :home)))) (env) {})))
+  (is (= [{:form '(known? (health)) :value true}
+          {:form '(health) :value 5}]
+         (c/explain (node '(known? (health))) f-env {}))))
+
 (deftest facts-read-the-fake-world
   (let [p (tu/fake {:self {:health 12 :food 9 :pos {:x 3 :y 64 :z 4} :inWater true}
                     :time 13000

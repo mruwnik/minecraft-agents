@@ -396,6 +396,18 @@
     ''(< (health) 10) :quoted
     '(health) :not-boolean))
 
+(deftest known-compiles-through-the-seam-and-fires-on-an-absent-place
+  (let [{:keys [explain] fire :when :as r} (api/compile-condition '(not (known? (place :home))))
+        memory {:now 0 :data {:entries {:home [{:t 0 :data {:pos {:x 0 :y 64 :z 0}}}]}
+                              :policies {:home {:cap 50 :ttl :forever}}}}
+        p (tu/fake)]
+    (is (true? (:ok r)))
+    (is (true? (fire p {:now 0 :data {:entries {} :policies {}}})) "no home remembered: fires")
+    (is (false? (fire p memory)) "once a home is remembered it stops")
+    (is (= [['(not (known? (place :home))) true] ['(known? (place :home)) false] ['(place :home) :engine.condition.facts/unknown]]
+           (mapv (juxt :form :value) (take 3 (explain p {:now 0 :data {:entries {} :policies {}}})))))
+    (is (= :arity (:reason (api/compile-condition '(known?)))))))
+
 (deftest real-conditions-keep-their-own-held-for-timers
   (async done
     (tu/run-async done
