@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.hostile-test :as h]
+            [jobs.animals.herd :as herd]
             [engine.test-util :as tu]))
 
 (def job 'jobs.animals.herd)
@@ -217,3 +218,90 @@
           (is (every? in-pen? [(cow-of s 1) (cow-of s 2)]))
           (is (not (gate-open? s)))
           (is (= 2 (count-of s "lead"))))))))
+
+(defn call-names
+  "The names of the calls that matter for the hand, in order: equip, unequip, a lead taken off (interact without an
+  item) and a gate click (useOn)."
+  [{:keys [p]}]
+  (->> (.-calls (.-world p))
+       (keep (fn [c] (case (.-name c)
+                       "equip" :equip
+                       "unequip" :unequip
+                       "useOn" :gate
+                       "interact" (when-not (.. c -args -item) :unleash)
+                       nil)))
+       vec))
+
+(deftest the-gate-opens-before-the-animals-are-let-go-and-the-food-follows-at-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:target 1} {:entities [(cow 1 4 3)]} 40))
+              names (call-names s)]
+          (is (= :brought (:reason (done-event s))))
+          (is (= [:gate :unleash :equip :unequip :gate] names)
+              "gate opened with the animals still on the lead, then nothing but the walk in before the food comes out"))))))
+
+(def pen-cells
+  (set (for [x (range 11 16) z (range 1 6)] [x 64 z])))
+
+(deftest the-lure-cell-stands-off-the-line-through-the-gate
+  (is (= [14 64 1] (herd/lure-cell pen-cells gate [11 64 3]))
+      "animals come in along the gate line and stop short of the body: off the line the body's way out does not cross them")
+  (is (= [15 64 3] (herd/lure-cell (set (for [x (range 11 16)] [x 64 3])) gate [11 64 3]))
+      "a pen one cell wide has nothing off the line: the farthest cell in reach"))
+
+(defn first-index
+  "Index of the first call named name whose args satisfy pred."
+  [{:keys [p]} name pred]
+  (first (keep-indexed (fn [i c] (when (and (= name (.-name c)) (pred (.-args c))) i)) (.-calls (.-world p)))))
+
+(defn goes-in? [args] (>= (.. args -pos -x) 11))
+
+(deftest an-empty-pen-gets-the-food-out-before-the-walk-in-so-the-animals-follow
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:target 1} {:entities [(cow 1 4 3)]} 40))]
+          (is (= :brought (:reason (done-event s))))
+          (is (< (first-index s "equip" (constantly true)) (first-index s "moveTo" goes-in?))))))))
+
+(deftest a-pen-with-animals-keeps-the-gate-shut-while-the-animals-gather-round-the-food
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:target 2} {:entities [(cow 8 13 3) (cow 1 4 3)]} 40))]
+          (is (= :brought (:reason (done-event s))))
+          (is (= [:unleash :equip :gate :equip :unequip :gate] (call-names s))
+              "its own animals would follow the food out of an open gate: they gather with the gate shut"))))))
+
+(deftest the-way-out-detours-to-the-far-side-of-the-line-through-the-gate
+  (is (= [14 64 5] (herd/via-cell pen-cells gate [11 64 3] [14 64 1])) "animals stand between the lure cell and the gate")
+  (is (nil? (herd/via-cell pen-cells gate [11 64 3] [15 64 3])) "a lure cell on the line has no far side")
+  (is (nil? (herd/via-cell (disj pen-cells [14 64 5]) gate [11 64 3] [14 64 1])) "nor does one whose mirror cell is no pen floor"))
+
+(deftest the-food-goes-away-at-the-cell-inside-the-gate-after-the-way-round-the-animals
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:target 1} {:entities [(cow 1 4 3)]} 40))
+              unequip (first-index s "unequip" (constantly true))]
+          (is (= :brought (:reason (done-event s))))
+          (is (< (first-index s "moveTo" #(and (= 14 (.. % -pos -x)) (= 5 (.. % -pos -z)))) unequip)
+              "the food trails the body round the far side of them (the lure cell's mirror)")
+          (is (> unequip (first-index s "moveTo" #(= 11 (.. % -pos -x))))
+              "and goes away at the cell inside the gate"))))))
+
+(deftest the-lure-hides-the-food-now-and-then-so-animals-jammed-at-the-gate-come-apart
+  (let [s {:settle-from 0 :cycle-from 0}]
+    (is (= :wait (herd/lure-step s 9000 40 false)))
+    (is (= :hide (herd/lure-step s 10000 40 false)) "the food has been out a while and not all are in")
+    (is (= :wait (herd/lure-step (assoc s :hidden-at 10000) 14000 40 false)))
+    (is (= :show (herd/lure-step (assoc s :hidden-at 10000) 15000 40 false)))
+    (is (= :leave (herd/lure-step s 10000 40 true)) "all in")
+    (is (= :leave (herd/lure-step (assoc s :hidden-at 38000) 40000 40 false)) ":settle-s used up")))
+
+(deftest the-body-waits-at-the-gate-with-the-food-until-the-animals-are-round-it
+  (is (= :go (herd/gather-step {:gather-from 0} 1000 15 true)) "all near")
+  (is (= :wait (herd/gather-step {:gather-from 0} 14000 15 false)))
+  (is (= :go (herd/gather-step {:gather-from 0} 15000 15 false)) "waited long enough: those near follow, the lure goes on"))
