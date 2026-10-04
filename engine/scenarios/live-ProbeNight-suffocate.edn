@@ -1,0 +1,26 @@
+;; Trial steward: survival register (health-low raised to 15 so a 6-point hit is answered),
+;; and one listed loop: harvest the plan's ripe wheat and replant, then put the surplus in the chest.
+;; :suffocating is left out: on farmland (feet y 120.9375) its head cell is the wheat cell, wheat is not
+;; in its passable list, so it dug every crop the harvest replanted under the body (99 firings in a minute).
+{:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12}
+             :job (jobs.survival.breathe {:min-oxygen 12})}
+            {:trigger :burning :persistence :cooldown :cooldown-s 2
+             :job (jobs.survival.extinguish {:water-radius 6})}
+            {:trigger :hostile-near :persistence :cooldown :cooldown-s 5 :args {:radius 10 :ranged-radius 16}
+             :job (jobs.survival.respond-to-hostile {:radius 10 :ranged-radius 16 :fight-health 12 :min-health 8})}
+            {:trigger :health-low :persistence :cooldown :cooldown-s 10 :args {:health 15}
+             :job (jobs.survival.recover {:health 15 :healed 18 :sight 16})}
+            {:trigger :hungry :persistence :cooldown :cooldown-s 30 :args {:food 14 :food-when-hurt 18}
+             :job (jobs.survival.get-food {:food 14 :food-when-hurt 18})}
+            {:trigger :night-unsafe :persistence :cooldown :cooldown-s 10 :args {:roof-height 4}
+             :job (jobs.survival.shelter {:roof-height 4})}
+            {:trigger :stuck :persistence :cooldown :cooldown-s 60
+             :job (jobs.maintenance.unstick)}
+            {:trigger :died :persistence :cooldown :cooldown-s 30
+             :job (jobs.survival.recover-drops {:collect-radius 6})}
+            {:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 120 :args {:free 2}
+             :job (jobs.storage.make-room {:free 4 :chest-range 32})}]
+ :queue [(repeat (seq (jobs.farm.harvest {:plan "test-probenight-field" :center {:x 9100 :y 121 :z 9100} :radius 8})
+                      (jobs.storage.deposit {:chest {:x 9104 :y 121 :z 9100}
+                                             :items ["wheat" "wheat_seeds"]
+                                             :keep {"wheat_seeds" 24}})))]}
