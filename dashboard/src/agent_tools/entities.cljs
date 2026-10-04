@@ -2,7 +2,9 @@
   "A bounded, read-only projection of a body's short-lived entity cache."
   (:require [clojure.string :as str]
             [agent-tools.map :as map-tool]
-            [agent-tools.world-data :as data]))
+            [agent-tools.world-data :as data]
+            ["node:fs" :as fs]
+            ["node:path" :as path]))
 
 (def usage "entities.mjs BODY --world WORLD [--type TYPE] [--player NAME] [--dimension DIM] [--center X,Y,Z] [--radius N] [--limit N] [--offset N] [--raw] [--state DIR]")
 (def default-radius 64)
@@ -10,6 +12,8 @@
 (def max-radius 512)
 (def max-limit 50)
 (def max-offset 10000)
+(def stale-origin-ms 90000)
+(def future-origin-skew-ms 5000)
 
 (defn- number [value]
   (let [n (js/Number value)] (when (js/Number.isFinite n) n)))
@@ -69,6 +73,32 @@
 
 (defn- round-tenth [n] (/ (js/Math.round (* n 10)) 10))
 
+(defn- valid-position? [pos]
+  (and (map? pos)
+       (every? (fn [axis]
+                 (let [value (get pos axis)]
+                   (and (number? value) (js/Number.isFinite value))))
+               [:x :y :z])))
+
+(defn- fresh-pose-origin [request now]
+  (let [{:keys [world-dir world]} (:ctx request)
+        file (when (and world-dir (string? (:body request)))
+               (.join path world-dir "agents" (:body request) "view" "pose.json"))]
+    (try
+      (when (and file (.existsSync fs file) (<= (.-size (.statSync fs file)) 1048576))
+        (let [pose (js->clj (js/JSON.parse (.readFileSync fs file "utf8")) :keywordize-keys true)
+              seen (:t pose)
+              dimension (:dimension pose)
+              pos (:pos pose)]
+          (when (and (= world (:world pose))
+                     (= "online" (:status pose))
+                     (string? dimension) (not (str/blank? dimension))
+                     (number? seen) (js/Number.isFinite seen)
+                     (<= (- future-origin-skew-ms) (- now seen) stale-origin-ms)
+                     (valid-position? pos))
+            {:pos pos :dimension (dimension-name dimension) :observed-at seen :source :pose})))
+      (catch :default _ nil))))
+
 (defn- compact [now entity]
   (let [age (max 0 (- now (:observed-at entity)))
         pos (:pos entity)]
@@ -93,20 +123,28 @@
           limit (or (:limit request) default-limit)
           offset (or (:offset request) 0)
           self (->> rows
-                    (filter #(and (:self? %) (number? (:expires-at %)) (> (:expires-at %) now)))
+                    (filter #(and (:self? %)
+                                  (number? (:expires-at %)) (> (:expires-at %) now)
+                                  (number? (:observed-at %))
+                                  (valid-position? (:pos %))
+                                  (string? (:dimension %))))
                     (sort-by :observed-at >)
                     first)
-          center (or (:center request) (:pos self))
-          dimension (or (:dimension request) (:dimension self))]
+          pose-origin (when (and (nil? self) (true? (:online? snapshot))
+                                 (or (nil? (:center request)) (nil? (:dimension request))))
+                        (fresh-pose-origin request now))
+          origin (or self pose-origin)
+          center (or (:center request) (:pos origin))
+          dimension (or (:dimension request) (:dimension origin))]
       (when-not (and (number? now) (js/Number.isFinite now) (number? ttl) (pos? ttl))
         (throw (data/fail :bad-response "the entity snapshot is missing its server timestamps")))
       (when-not center
-        (throw (data/fail :origin-unavailable "no cached self position; pass --center X,Y,Z after the body observes itself")))
+        (throw (data/fail :origin-unavailable "no fresh self position; pass --center X,Y,Z")))
       (when-not dimension
         (throw (data/fail :dimension-unavailable "no cached self dimension; pass --dimension with --center")))
-      (when (and (:dimension request) self (not (:center request))
-                 (not= (:dimension request) (:dimension self)))
-        (throw (data/fail :dimension-origin-mismatch "--dimension differs from the cached self dimension; pass --center in the requested dimension")))
+      (when (and (:dimension request) origin (not (:center request))
+                 (not= (:dimension request) (:dimension origin)))
+        (throw (data/fail :dimension-origin-mismatch "--dimension differs from the cached body dimension; pass --center in the requested dimension")))
       (let [radius-squared (* radius radius)
             matches (->> rows
                          (filter #(and (not (:self? %))

@@ -13,6 +13,11 @@
     (.writeFileSync fs (.join path world-dir "world.json") "{}\n")
     {:state state :close #(.rmSync fs state #js {:recursive true :force true})}))
 
+(defn write-pose! [state body pose]
+  (let [file (.join path state "worlds" "w" "agents" body "view" "pose.json")]
+    (.mkdirSync fs (.dirname path file) #js {:recursive true})
+    (.writeFileSync fs file (js/JSON.stringify (clj->js pose)))))
+
 (defn entity
   ([key type dimension pos now age ttl]
    {:key (str type "/" key) :uuid (str "uuid-" key) :type type :dimension dimension :pos pos
@@ -82,10 +87,44 @@
   (let [now 1700000000000
         rows [(entity "cow" "cow" "overworld" {:x 0 :y 64 :z 0} now 5 119995)]
         request {:body "ProbeMove" :radius 64 :limit 10 :raw? false}]
-    (is (= "no cached self position; pass --center X,Y,Z after the body observes itself"
+    (is (= "no fresh self position; pass --center X,Y,Z"
            (.-message (try (entities/project request (snapshot now rows)) nil (catch :default e e)))))
     (is (= true (:ok (entities/project (assoc request :center {:x 0 :y 64 :z 0} :dimension "overworld")
                                        (snapshot now rows)))))
     (is (= :dimension-origin-mismatch
            (error-reason #(entities/project (assoc request :dimension "the_nether")
                                             (snapshot now [(entity "self" "player" "overworld" {:x 0 :y 64 :z 0} now 1 119999 {:self? true})])))))))
+
+(deftest fresh-online-body-pose-supplies-default-origin-when-entity-cache-omits-self
+  (let [{:keys [state close]} (fixture)
+        now 1700000000000
+        pose {:world "w" :status "online" :dimension "minecraft:overworld"
+              :pos {:x 18.5 :y 69 :z 9.5} :t (- now 1000)}
+        rows [(entity "near" "cow" "overworld" {:x 20.2 :y 69 :z 9} now 350 119650)
+              (entity "elsewhere" "cow" "the_nether" {:x 19 :y 69 :z 9} now 250 119750)]
+        live-snapshot (assoc (snapshot now rows) :online? true)
+        request (entities/options ["ProbeMove" "--world" "w" "--state" state])]
+    (try
+      (write-pose! state "ProbeMove" pose)
+      (let [result (entities/project request live-snapshot)]
+        (is (= true (:ok result)))
+        (is (= "overworld" (:dimension result)))
+        (is (= [18.5 69 9.5] (:center result)))
+        (is (= ["uuid-near"] (mapv :uuid (:items result)))))
+      ;; The pose is read after the entity snapshot; a few seconds of future skew is expected.
+      (write-pose! state "ProbeMove" (assoc pose :t (+ now 1000)))
+      (let [centered (entities/project (assoc request :center {:x 20 :y 69 :z 9}) live-snapshot)]
+        (is (= "overworld" (:dimension centered)))
+        (is (= [20 69 9] (:center centered))))
+      (write-pose! state "ProbeMove" (assoc pose :t (- now 90001)))
+      (is (= :origin-unavailable
+             (error-reason #(entities/project request live-snapshot))))
+      (write-pose! state "ProbeMove" (assoc pose :world "other"))
+      (is (= :origin-unavailable
+             (error-reason #(entities/project request live-snapshot))))
+      (write-pose! state "ProbeMove" (assoc pose :status "offline"))
+      (is (= :origin-unavailable
+             (error-reason #(entities/project request live-snapshot))))
+      (is (= :origin-unavailable
+             (error-reason #(entities/project request (snapshot now rows)))))
+      (finally (close)))))
