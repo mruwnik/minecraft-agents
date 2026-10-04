@@ -259,7 +259,7 @@ test('trade with an unknown villager uuid resolves gone', async () => {
 test('self reports the body in the contract shape', () => {
   const { p } = rig(world)
   const s = p.self()
-  assert.deepEqual(Object.keys(s).sort(), ['chunkLoaded', 'dimension', 'effects', 'experience', 'food', 'foodSaturation', 'health', 'held', 'inLava', 'inWater', 'inventory', 'isDay', 'isSleeping', 'onFire', 'onGround', 'oxygen', 'pos', 'raining', 'settling', 'thundering', 'timeOfDay', 'username'])
+  assert.deepEqual(Object.keys(s).sort(), ['chunkLoaded', 'dimension', 'effects', 'equipment', 'experience', 'food', 'foodSaturation', 'health', 'held', 'inLava', 'inWater', 'inventory', 'isDay', 'isSleeping', 'onFire', 'onGround', 'oxygen', 'pos', 'raining', 'settling', 'thundering', 'timeOfDay', 'username'])
   assert.equal(s.isDay, false)
   assert.deepEqual(s.inventory[0], { name: 'bread', count: 2, slot: 36 })
 })
@@ -2293,6 +2293,31 @@ test('enchant refuses a block that is not a table and one out of reach as data, 
   assert.deepEqual(await p.enchant('t1', { pos: at(1, 64, 2), op: 'offers', item: 'cake' }), { status: 'no-item', item: 'cake' })
   assert.ok(!names(bot).includes('openEnchantmentTable'))
 })
+
+const iron = (slot, durabilityUsed = 0) => ({ name: 'iron_helmet', count: 1, slot, durabilityUsed })
+const noGear = { head: null, torso: null, legs: null, feet: null, offHand: null, mainHand: null }
+
+test('self().equipment lists the armour slots, the off-hand and the main hand, durability left where the item has one', () => {
+  const worn = [{ name: 'iron_helmet', count: 1, slot: 5, durabilityUsed: 15 }, { name: 'iron_boots', count: 1, slot: 8 }, { name: 'shield', count: 1, slot: 45, durabilityUsed: 36 }, { name: 'totem_of_undying', count: 1, slot: 6 }]
+  const p = withBot(bot => { bot.heldItem = { name: 'bread', count: 3, slot: 36 } }, { ...world, worn })
+  assert.deepEqual(p.self().equipment, {
+    head: { name: 'iron_helmet', count: 1, durability: 150 },
+    torso: { name: 'totem_of_undying', count: 1 },
+    legs: null,
+    feet: { name: 'iron_boots', count: 1, durability: 195 },
+    offHand: { name: 'shield', count: 1, durability: 300 },
+    mainHand: { name: 'bread', count: 3 }
+  })
+})
+
+test('self().equipment is empty slots when nothing is worn, and worn items are not in the carried list', () => {
+  const bare = withBot(() => {}, { ...world, items: [] })
+  assert.deepEqual(bare.self().equipment, noGear)
+  const dressed = withBot(() => {}, { ...world, items: [], worn: [iron(5)] })
+  assert.deepEqual(dressed.self().inventory, [])
+  assert.equal(dressed.self().equipment.head.name, 'iron_helmet')
+})
+
 
 test('blockAt marks a block fullCube only when its collision shape fills the cell', () => {
   const { p } = rig({ blocks: { '1,64,0': 'stone', '2,64,0': 'farmland', '3,64,0': 'wheat', '4,64,0': 'oak_slab' },

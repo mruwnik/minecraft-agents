@@ -207,6 +207,7 @@
   (let [p (tu/fake {:self {:health 12 :food 9 :pos {:x 3 :y 64 :z 4} :inWater true}
                     :time 13000
                     :inventory [{:name "bread" :count 5} {:name "bread" :count 2} {:name "stick" :count 1}]
+                    :equipment {:head {:name "iron_helmet"} :offHand {:name "shield"}}
                     :entities [{:kind "hostile" :name "zombie" :pos {:x 6 :y 64 :z 4} :visible true}
                                {:kind "hostile" :name "zombie" :pos {:x 3 :y 64 :z 20} :visible true}
                                {:kind "hostile" :name "skeleton" :pos {:x 3 :y 64 :z 6} :visible false}]
@@ -218,6 +219,11 @@
       '(= (inventory "bread") 7) true
       '(= (inventory "apple") 0) true
       '(= (free-slots) 33) true
+      '(wearing "iron_helmet") true
+      '(wearing "shield") true
+      '(wearing "iron_boots") false
+      '(wearing "bread") false
+      '(wearing "iron_sword") false
       '(= (distance-to (place :home)) 5) true
       '(daytime) false
       '(hostile-near 4) true
@@ -235,6 +241,7 @@
     '(< (food) 7)
     '(< (inventory "bread") 7)
     '(< (free-slots) 2)
+    '(wearing "shield")
     '(< (distance-to (place :home)) 2)
     '(daytime)
     '(hostile-near 8)

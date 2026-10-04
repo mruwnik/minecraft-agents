@@ -236,6 +236,17 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   }
   const eye = () => ({ x: bot.entity.position.x, y: bot.entity.position.y + (bot.entity.height ?? 1.62), z: bot.entity.position.z })
   const inventory = () => bot.inventory.items()
+  // Worn and off-hand stacks are not in inventory().items(); they sit in these slots of the player window.
+  const WORN_SLOTS = { head: 5, torso: 6, legs: 7, feet: 8, offHand: 45 }
+  const gearView = item => {
+    if (!item) return null
+    const max = bot.registry?.itemsByName?.[item.name]?.maxDurability
+    return { name: item.name, count: item.count, ...(max > 0 && { durability: max - (item.durabilityUsed ?? 0) }) }
+  }
+  const equipment = () => ({
+    ...Object.fromEntries(Object.entries(WORN_SLOTS).map(([part, slot]) => [part, gearView(bot.inventory.slots[slot])])),
+    mainHand: gearView(bot.heldItem)
+  })
   const countsNow = () => itemCounts(inventory())
   const hostilesNear = () => Object.values(bot.entities)
     .filter(e => e !== bot.entity && entityKind(e) === 'hostile')
@@ -459,6 +470,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       raining: (bot.rainState ?? 0) > RAIN_LEVEL,
       thundering: (bot.rainState ?? 0) > RAIN_LEVEL && (bot.thunderState ?? 0) > THUNDER_LEVEL,
       held: bot.heldItem?.name ?? null,
+      equipment: equipment(),
       inventory: inventory().map(i => ({ name: i.name, count: i.count, slot: i.slot }))
     }
   }

@@ -47,6 +47,12 @@
   (transduce (comp (filter #(= item (.-name %))) (map #(.-count %))) + 0
              (array-seq (.-inventory s))))
 
+(defn wearing?
+  "Whether an armour slot or the off-hand holds item (the main hand is the held item, not worn)."
+  [s item]
+  (let [gear (.-equipment s)]
+    (boolean (some #(= item (some-> (aget gear %) .-name)) ["head" "torso" "legs" "feet" "offHand"]))))
+
 (defn distance-to [p s pos]
   (if (position? pos)
     (u/dist (u/pos-of (.-pos s)) pos)
@@ -66,6 +72,9 @@
    'inventory {:args [:string] :type :number :cost :cheap
                :doc "how many of the named item are carried (main and hotbar slots)"
                :read (online (fn [_ s item] (item-count s item)))}
+   'wearing {:args [:string] :type :boolean :cost :cheap
+             :doc "the named item is worn (head, torso, legs, feet) or held in the off-hand"
+             :read (online (fn [_ s item] (wearing? s item)))}
    'free-slots {:args [] :type :number :cost :cheap :doc "empty main and hotbar slots, of 36"
                 :read (online (fn [p _] (u/free-slots p)))}
    'place {:args [:keyword] :type :position :cost :cheap

@@ -105,7 +105,7 @@ and rejects with `code: 'cut'`. `null` means nobody may act.
 
 | method | args | returns |
 |---|---|---|
-| `self()` | none | `{username, pos, health, food, foodSaturation, oxygen, onFire, inWater, inLava, onGround, chunkLoaded, settling, isSleeping, effects, experience, dimension, timeOfDay, isDay, held, inventory}`; see below |
+| `self()` | none | `{username, pos, health, food, foodSaturation, oxygen, onFire, inWater, inLava, onGround, chunkLoaded, settling, isSleeping, effects, experience, dimension, timeOfDay, isDay, held, equipment, inventory}`; see below |
 | `entities(opts)` | `{radius = 16, kind?, names?, max = 32}`; `kind` is one of `hostile`, `passive`, `player`, `item`, `other` | `[{id, name, kind, pos, distance, visible?, item?, username?, sleeping?, creeper?}]` sorted by distance; see below |
 | `blocks(opts)` | `{radius = 16, names?, match?, max = 64, properties = false}`; `names` is an array of block names, `match` a JS predicate on the block name; with neither, every non-air block | `[{name, pos, age?, properties?, distance}]` sorted by distance |
 | `blockAt(pos)` | `{x, y, z}` | `{name, pos, age?, properties?}`, or `null` when the chunk is not loaded |
@@ -114,6 +114,7 @@ and rejects with `code: 'cut'`. `null` means nobody may act.
 
 - `health` 0..20 and `food` 0..20; `foodSaturation` is the hidden saturation (0..20).
 - `oxygen` 0..20 bubbles (`bot.oxygenLevel`; 20 until the server reports air).
+- `equipment`: `{head, torso, legs, feet, offHand, mainHand}`, each `null` or `{name, count, durability?}` (`durability` is what is left, `maxDurability - durabilityUsed`, only for items with a maximum). Armour and off-hand are slots 5 to 8 and 45 of the player window, which `inventory` (main and hotbar) does not list; `mainHand` is `bot.heldItem`. The fake takes `equipment: {head, torso, legs, feet, offHand: {name, count?, durability?}}` in its spec (its `equip` does not move items into it) and the stub bot `worn: [{name, count, slot, durabilityUsed?}]`.
 - `chunkLoaded`: false when the column under the body is not loaded (`bot.blockAt` of the body's position is null); mineflayer's physics then emits no tick and the body hangs frozen.
 - `settling`: true while the body is connected but its senses are not trustworthy yet (`isSettling()`): see Settling below.
 - `effects`: the active status effects, `[{name, amplifier, duration}]` (`[]` when none), from `bot.entity.effects`
@@ -719,7 +720,8 @@ never evaluated. Not wired into the register or any command yet.
   type and cost): `(health) (food) (inventory "item") (free-slots)
   (distance-to pos) (blocks-near "name" r)` are numbers, `(place :kind)` a
   position from memory, `(daytime) (in-water) (hostile-near r) (burning)
-  (suffocating) (night-unsafe) (stuck)` booleans. Cost `:cheap` is read every
+  (suffocating) (night-unsafe) (stuck) (wearing "item")` booleans (`wearing`: the
+  item is in an armour slot or the off-hand, from `self().equipment`). Cost `:cheap` is read every
   tick; `:scan` (`blocks-near`) is cached per instance for `:refresh-s` (5 s).
 - No variables, arithmetic, `let`, `fn` or functions of one's own: what the
   vocabulary cannot say becomes a new fact, written in ClojureScript with a test.

@@ -686,6 +686,22 @@ const builder = (blocks, inventory) => owned({ blocks, inventory: inventory.map(
 test('place with a click sets the state the game would and reports it', async () => {
   const p = builder({ '1,64,0': 'stone' }, ['oak_stairs'])
   const click = { against: at(1, 64, 0), cursor: { x: 0, y: 0.75, z: 0.5 }, yaw: 1.5 * Math.PI, pitch: 0 }
+
+test('self().equipment is empty slots by default and shows the spec equipment, the held item as main hand', () => {
+  const bare = createFake({})
+  assert.deepEqual(bare.self().equipment, { head: null, torso: null, legs: null, feet: null, offHand: null, mainHand: null })
+  const dressed = createFake({ self: { held: 'iron_sword' }, equipment: { head: { name: 'iron_helmet', durability: 150 }, offHand: { name: 'shield', count: 1 } } })
+  assert.deepEqual(dressed.self().equipment, {
+    head: { name: 'iron_helmet', count: 1, durability: 150 },
+    torso: null,
+    legs: null,
+    feet: null,
+    offHand: { name: 'shield', count: 1 },
+    mainHand: { name: 'iron_sword', count: 1 }
+  })
+  assert.deepEqual(dressed.self().inventory, [], 'worn items are not carried items')
+})
+
   const r = await p.place('t1', { pos: at(0, 64, 0), item: 'oak_stairs', click })
   assert.equal(r.status, 'placed')
   assert.equal(r.block, 'oak_stairs')

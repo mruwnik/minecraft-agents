@@ -78,6 +78,16 @@ const RECIPES = {
 }
 const CRAFT_REACH = 4.5
 
+const EQUIPMENT_PARTS = ['head', 'torso', 'legs', 'feet', 'offHand']
+const gear = item => item && { name: item.name, count: item.count ?? 1, ...(item.durability !== undefined && { durability: item.durability }) }
+function equipmentView (s) {
+  const carried = s.inventory.find(i => i.name === s.self.held)
+  return {
+    ...Object.fromEntries(EQUIPMENT_PARTS.map(part => [part, gear(s.equipment[part]) ?? null])),
+    mainHand: s.self.held ? gear({ name: s.self.held, count: carried?.count ?? 1 }) : null
+  }
+}
+
 function initialState (spec) {
   return {
     self: { ...clone(defaultSelf), ...clone(spec.self ?? {}), held: spec.self?.held ?? null },
@@ -90,6 +100,7 @@ function initialState (spec) {
     states: new Map(Object.entries(clone(spec.states ?? {}))), // "x,y,z" -> block state properties (composter level ...)
     entities: clone(spec.entities ?? []).map(withEntityDefaults),
     inventory: clone(spec.inventory ?? []),
+    equipment: clone(spec.equipment ?? {}), // {head torso legs feet offHand: {name, count?, durability?}}, worn and not carried
     containers: new Map(Object.entries(clone(spec.containers ?? {}))),
     drops: { ...(spec.drops ?? {}) },
     chat: [], // {message, to} lines the body said
@@ -533,6 +544,7 @@ export function createFake (spec = {}) {
         raining: s.raining,
         thundering: s.thundering,
         held: s.self.held,
+        equipment: equipmentView(s),
         inventory: withSlots(s.inventory)
       }
     },
