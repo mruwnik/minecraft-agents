@@ -153,3 +153,8 @@
     {:ok true :hazards [{:reason :fluid-adjacent}]} #{:fluid-adjacent} true
     {:ok true :hazards [{:reason :fluid-adjacent} {:reason :under-feet}]} #{:fluid-adjacent} false
     {:ok true :hazards [{:reason :fluid-adjacent} {:reason :under-feet}]} #{:fluid-adjacent :under-feet} true))
+
+(deftest a-footprint-map-names-the-plan-that-claims-the-cell
+  (is (= {:ok false :reason :footprint :plan "pad"} (dig plain [5 64 5] :footprints {[5 64 5] "pad"})))
+  (is (= {:ok false :reason :footprint :plan "pad"} (place (world [5 64 5] "air") [5 64 5] :footprints {[5 64 5] "pad"})))
+  (is (= {:ok true} (dig plain [5 64 5] :footprints {[5 64 6] "pad"}))))

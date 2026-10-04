@@ -129,3 +129,17 @@
   [ctx key kind fields]
   (when (world/first-time! (:world (:engine ctx)) [(:id ctx) key])
     (emit! ctx kind :warn fields)))
+
+(defn zones
+  "The body's world's zone list [{:name :min [x y z] :max [x y z] :owner :allow #{..}} ...] (see engine.zones), or
+  nil when the zone file is missing or was never readable. A dig or place job declines on nil (one warn); nil is
+  never \"no zones\" ([] is)."
+  [ctx]
+  (world/zones (:world (:engine ctx))))
+
+(defn footprints
+  "{[x y z] plan-id}: the cells of every :active plan, as engine.access.rules takes :footprints (a refusal then names
+  the :plan). A job working plan P passes {:except P} to leave P's own cells out."
+  ([ctx] (footprints ctx {}))
+  ([ctx {:keys [except]}]
+   (world/footprints (:world (:engine ctx)) except)))

@@ -109,6 +109,7 @@
                                                         :onEvent on-view-event}}))
             world (world/open {:plans-dir (path/join state-dir "worlds" (:world cfg) "plans")
                                :blueprint-dir (path/resolve root ".." "blueprints")
+                               :zones-file (path/join state-dir "worlds" (:world cfg) "zones.edn")
                                :emit (fn [e] (some-> @eng-ref (core/emit! e)))})
             eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (:engine-dir cfg)
                               :body (:username cfg) :max-event-bytes events-max-bytes :world world})

@@ -144,3 +144,100 @@
     (touch-later! bps "hut" (pr-str (assoc hut-bp :layers [["SS"]])))
     (swap! clock + 3000)
     (is (= 2 (count (:cells (world/plan w "huts")))))))
+
+;; ------------------------------------------------------------------ zones
+
+(def farm-zone {:name "farm" :min [0 60 0] :max [9 70 9] :owner "Miles"})
+
+(defn zone-reader
+  "A world over fresh dirs and a zones file path (not written yet); warns are collected in seen."
+  []
+  (let [dir (tu/tmp-dir)
+        clock (atom 0)
+        seen (atom [])
+        file (path/join dir "zones.edn")
+        w (world/open {:plans-dir (path/join dir "plans") :blueprint-dir (path/join dir "bps") :zones-file file
+                       :now #(deref clock) :every-ms 3000 :emit #(swap! seen conj %)})]
+    {:file file :clock clock :seen seen :w w}))
+
+(defn write-zones! [file text]
+  (fs/writeFileSync file text)
+  (let [t (+ 60 (rand-int 1000) (/ (.-mtimeMs (fs/statSync file)) 1000))] (fs/utimesSync file t t)))
+
+(defn later! [clock w] (swap! clock + 3000) (world/zones w))
+
+(deftest a-missing-zone-file-is-never-read-with-one-warn-naming-it
+  (let [{:keys [file clock seen w]} (zone-reader)]
+    (is (nil? (world/zones w)))
+    (is (nil? (later! clock w)))
+    (is (= [{:source :system :kind :world.zones-missing :level :warn :path file}]
+           (map #(select-keys % [:source :kind :level :path]) @seen)))))
+
+(deftest an-empty-zone-list-is-no-zones-and-a-good-one-is-read
+  (let [{:keys [file clock seen w]} (zone-reader)]
+    (write-zones! file "[]")
+    (is (= [] (world/zones w)))
+    (write-zones! file (pr-str [farm-zone]))
+    (is (= [farm-zone] (later! clock w)))
+    (is (= [] @seen))))
+
+(deftest a-broken-edit-keeps-the-last-good-zones-with-one-warn-until-fixed
+  (let [{:keys [file clock seen w]} (zone-reader)]
+    (write-zones! file (pr-str [farm-zone]))
+    (world/zones w)
+    (write-zones! file (pr-str [(dissoc farm-zone :owner)]))
+    (is (= [farm-zone] (later! clock w)))
+    (is (= [farm-zone] (later! clock w)))
+    (is (= [{:kind :world.zones-unreadable :level :warn :path file :kept true
+             :error "zone farm: :owner must be a non-empty string"}]
+           (map #(select-keys % [:kind :level :path :kept :error]) @seen)))
+    (write-zones! file (pr-str [(assoc farm-zone :name "pen")]))
+    (is (= "pen" (:name (first (later! clock w)))))
+    (is (= 1 (count @seen)))))
+
+(deftest a-zone-file-broken-from-the-start-is-never-read-until-fixed
+  (let [{:keys [file clock seen w]} (zone-reader)]
+    (write-zones! file "[{:name ")
+    (is (nil? (world/zones w)))
+    (is (nil? (later! clock w)))
+    (is (= [false] (map :kept @seen)))
+    (write-zones! file (pr-str [farm-zone]))
+    (is (= [farm-zone] (later! clock w)))))
+
+(deftest a-zone-file-moved-away-is-never-read-again-and-warned-again
+  (let [{:keys [file clock seen w]} (zone-reader)]
+    (write-zones! file (pr-str [farm-zone]))
+    (world/zones w)
+    (fs/unlinkSync file)
+    (is (nil? (later! clock w)))
+    (is (nil? (later! clock w)))
+    (is (= [:world.zones-missing] (map :kind @seen)))))
+
+(deftest a-world-from-data-has-no-zones-unless-given
+  (let [w (world/of-data {} {})]
+    (is (= [] (world/zones w)))
+    (world/set-zones! w nil)
+    (is (nil? (world/zones w)))
+    (world/set-zones! w [farm-zone])
+    (world/set-data! w {"field" wheat} {})
+    (is (= [farm-zone] (world/zones w))))
+  (is (nil? (world/zones nil))))
+
+;; ------------------------------------------------------------------ footprints
+
+(def pad {:id "pad" :status :active :parts [{:id "p" :box [[0 64 0] [1 64 0]] :want "stone"}]})
+(def wall {:id "wall" :status :active :parts [{:id "w" :box [[1 64 0] [1 65 0]] :want "stone"}]})
+
+(deftest footprints-are-the-cells-of-active-plans-by-plan
+  (let [w (world/of-data {"pad" pad "wall" wall "field" (assoc wheat :status :proposed)} {})
+        fps (world/footprints w nil)]
+    (is (= #{[0 64 0] [1 64 0] [1 65 0]} (set (keys fps))))
+    (is (= "pad" (fps [0 64 0])))
+    (is (= "wall" (fps [1 65 0])))))
+
+(deftest footprints-except-a-plan-leave-out-only-its-own-cells
+  (let [w (world/of-data {"pad" pad "wall" wall} {})]
+    (is (= {[1 64 0] "wall" [1 65 0] "wall"} (world/footprints w "pad")))
+    (is (= {[0 64 0] "pad" [1 64 0] "pad"} (world/footprints w "wall")))
+    (is (= 3 (count (world/footprints w "other"))))
+    (is (= {} (world/footprints nil nil)))))

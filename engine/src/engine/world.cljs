@@ -9,11 +9,19 @@
   keeps its last good copy and is reported once, by a world.plan-unreadable (or world.blueprint-unreadable) warn; a
   file that was never readable answers as broken, not as absent.
 
-  The state: {:plans {id entry} :blueprints {id entry} :expanded {id expansion} :checked-at ms}, an entry being
-  {:stamp [mtime size] :value v :error text}, :value the last good copy and :error the current file's trouble."
+  The zone file (state/worlds/<world>/zones.edn, checked by engine.zones) is read the same way, with one difference:
+  a missing file answers nil, like one never readable (warned once, by world.zones-missing, each time it goes), so a
+  dig or place job declines; an empty vector is a valid \"no zones\". A bad edit keeps the last good copy
+  (world.zones-unreadable).
+
+  The state: {:plans {id entry} :blueprints {id entry} :zones entry :expanded {id expansion} :claims {id #{cell}}
+  :footprints {cell id} :checked-at ms}, an entry being {:stamp [mtime size] :value v :error text}, :value the last
+  good copy and :error the current file's trouble; the zone entry is {:missing true} while there is no file.
+  :claims holds the cells of each :active plan, :footprints the same keyed by cell."
   (:require ["fs" :as fs]
             ["path" :as path]
             [clojure.string :as str]
+            [engine.zones :as zones]
             [plan.parse :as parse]
             [plan.shape :as shape]))
 
@@ -47,12 +55,27 @@
       [(assoc entries id (cond-> {:stamp stamp :error error} old (assoc :value old)))
        {:id id :error error :kept (some? old)}])))
 
+(defn claims
+  "{id #{[x y z]}}: the expanded cells of each plan whose last good copy is :active."
+  [{:keys [plans expanded]}]
+  (into {} (keep (fn [[id e]] (when (= :active (get-in e [:value :status]))
+                                [id (into #{} (map :pos) (get-in expanded [id :cells]))])))
+        plans))
+
+(defn footprint-index
+  "{[x y z] id} of claims; a cell two plans claim names one of them."
+  [claims]
+  (into {} (for [[id cells] claims cell cells] [cell id])))
+
 (defn expand-all
-  "state with :expanded rebuilt: each plan's last good copy expanded over the blueprints' last good copies."
+  "state with :expanded rebuilt (each plan's last good copy expanded over the blueprints' last good copies), and the
+  :claims and :footprints of the active plans with it."
   [state]
-  (let [blueprints (into {} (keep (fn [[id e]] (when (:value e) [id (:value e)]))) (:blueprints state))]
-    (assoc state :expanded (into {} (keep (fn [[id e]] (when (:value e) [id (shape/expand (:value e) blueprints)])))
-                                 (:plans state)))))
+  (let [blueprints (into {} (keep (fn [[id e]] (when (:value e) [id (:value e)]))) (:blueprints state))
+        state (assoc state :expanded (into {} (keep (fn [[id e]] (when (:value e) [id (shape/expand (:value e) blueprints)])))
+                                           (:plans state)))
+        cs (claims state)]
+    (assoc state :claims cs :footprints (footprint-index cs))))
 
 (defn answer
   "What a job gets for plan id: nil (no such file), {:id :broken text} (never readable), or
@@ -103,6 +126,39 @@
             [(drop-gone entries now-stamps) []]
             (stale-ids entries now-stamps))))
 
+(defn file-stamp
+  "[mtime size] of file, or nil when there is none."
+  [file]
+  (when-let [st (try (.statSync fs file) (catch :default _ nil))]
+    [(.-mtimeMs st) (.-size st)]))
+
+(defn read-zones
+  "The zone file parsed into {:value zones} or {:errors [..]}; an unreadable file is an error."
+  [file]
+  (let [text (try (.readFileSync fs file "utf8") (catch :default e {:error (ex-message e)}))]
+    (if (map? text)
+      {:errors [(str "unreadable file: " (:error text))]}
+      (zones/parse text))))
+
+(defn absorb-zones
+  "Fold the zone file's stamp (nil: no file) into its entry: [entry warn]. parsed is a thunk giving the file parsed,
+  called only when the stamp changed. No file forgets the zones, warning {:missing true} when it goes; a bad file
+  keeps the last good copy and warns {:id :error :kept} like absorb."
+  [entry stamp parsed]
+  (cond
+    (nil? stamp) [{:missing true} (when-not (:missing entry) {:missing true})]
+    (= stamp (:stamp entry)) [entry nil]
+    :else (let [[entries warn] (absorb {:zones (dissoc entry :missing)} :zones stamp (parsed))]
+            [(:zones entries) warn])))
+
+(defn zones-warn-event [file {:keys [missing error kept]}]
+  (if missing
+    {:source :system :kind :world.zones-missing :level :warn :path file
+     :text (str "zone file " file " is missing; dig and place jobs decline until it is there")}
+    {:source :system :kind :world.zones-unreadable :level :warn :path file :error error :kept kept
+     :text (str "zone file " file " cannot be read (" error ")"
+                (if kept "; the last good copy is still used" "; it was never readable, dig and place jobs decline"))}))
+
 (defn warn-event [{:keys [kind what]} {:keys [id error kept]}]
   {:source :system :kind kind :level :warn what id :error error :kept kept
    :text (str (name what) " " id " cannot be read (" error ")"
@@ -119,17 +175,24 @@
               results (into {} (map (fn [[kind spec]] [kind (sync-kind (get old kind) (get opts (:dir spec)) spec)]))
                             kinds)
               plans (first (:plans results))
-              blueprints (first (:blueprints results))]
-          (reset! state (cond-> (assoc old :checked-at now :plans plans :blueprints blueprints)
+              blueprints (first (:blueprints results))
+              file (:zones-file opts)
+              [zone-entry zone-warn] (if file
+                                       (absorb-zones (:zones old) (file-stamp file) #(read-zones file))
+                                       [(:zones old) nil])]
+          (reset! state (cond-> (assoc old :checked-at now :plans plans :blueprints blueprints :zones zone-entry)
                           (or (not= (:plans old) plans) (not= (:blueprints old) blueprints)) expand-all))
           (doseq [[kind [_ warns]] results
                   warn warns]
-            ((:emit opts) (warn-event (get kinds kind) warn))))))))
+            ((:emit opts) (warn-event (get kinds kind) warn)))
+          (when zone-warn
+            ((:emit opts) (zones-warn-event file zone-warn))))))))
 
 ;; ------------------------------------------------------------------ worlds
 
 (defn open
-  "A world over the files of :plans-dir and :blueprint-dir. opts: :now (ms clock), :emit (an event fn), :every-ms."
+  "A world over the files of :plans-dir and :blueprint-dir and the zone file :zones-file. opts: :now (ms clock),
+  :emit (an event fn), :every-ms."
   [{:keys [now every-ms] :as opts}]
   {:state (atom {:plans {} :blueprints {}})
    :said (atom #{})
@@ -139,15 +202,24 @@
   (expand-all {:plans (update-vals plans (fn [p] {:value p}))
                :blueprints (update-vals blueprints (fn [b] {:value b}))}))
 
+(defn zone-entry [zones] (if (some? zones) {:value zones} {:missing true}))
+
 (defn of-data
-  "A world over plans {id plan} and blueprints {id blueprint} held in memory, no files (tests)."
-  [plans blueprints]
-  {:state (atom (data-state plans blueprints)) :said (atom #{}) :opts {}})
+  "A world over plans {id plan}, blueprints {id blueprint} and zones (default [], none; nil: never read) held in
+  memory, no files (tests)."
+  ([plans blueprints] (of-data plans blueprints []))
+  ([plans blueprints zones]
+   {:state (atom (assoc (data-state plans blueprints) :zones (zone-entry zones))) :said (atom #{}) :opts {}}))
 
 (defn set-data!
-  "Replace the plans and blueprints of a world made with of-data."
+  "Replace the plans and blueprints of a world made with of-data; its zones stay."
   [w plans blueprints]
-  (reset! (:state w) (data-state plans blueprints)))
+  (swap! (:state w) #(assoc (data-state plans blueprints) :zones (:zones %))))
+
+(defn set-zones!
+  "Replace the zones of a world made with of-data (nil: never read)."
+  [w zones]
+  (swap! (:state w) assoc :zones (zone-entry zones)))
 
 (defn plan
   "The answer for plan id (see answer); nil for a nil world."
@@ -161,3 +233,22 @@
   [w key]
   (let [[old _] (swap-vals! (:said w) conj key)]
     (not (contains? old key))))
+
+(defn zones
+  "The world's zone list, or nil when the zone file is missing or was never readable (nil for a nil world)."
+  [w]
+  (when w
+    (refresh! w)
+    (get-in @(:state w) [:zones :value])))
+
+(defn footprints
+  "{[x y z] plan-id}: the cells the :active plans claim, without plan except's own (nil leaves none out); {} for a
+  nil world. A cell plan except shares with another plan stays, under the other's id."
+  [w except]
+  (if-not w
+    {}
+    (do (refresh! w)
+        (let [{:keys [claims footprints]} @(:state w)]
+          (if (contains? claims except)
+            (footprint-index (dissoc claims except))
+            (or footprints {}))))))

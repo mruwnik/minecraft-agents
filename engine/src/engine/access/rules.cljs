@@ -10,7 +10,8 @@
                  format is decided: {:name \"farm\" :min [x y z] :max [x y z] :allow #{:dig :place}}. The box is
                  inclusive. :allow is the set of actions the zone permits inside it; a zone without :allow permits
                  none. A zone is a keep-out box for every action it does not allow.
-    :footprints  set of [x y z] cells that other plans claim (may be empty)
+    :footprints  the [x y z] cells that other plans claim (may be empty): a set, or a map {cell plan-id} (what
+                 engine.ctx/footprints gives), whose :footprint refusal then names the :plan
     :ledger      set of [x y z] cells holding this body's own scaffold blocks (may be empty)
   Output: {:ok false :reason kw ...detail} for a refusal, else {:ok true}, and for a dig that has hazards
   {:ok true :hazards [{:reason kw ...detail} ...]} (:hazards is absent when empty).
@@ -18,7 +19,7 @@
   The rules say what is impossible or not permitted and only report what is dangerous; the job decides which
   danger it accepts (see accepts?).
   Refused, impossible or unknown: :not-loaded, :own-body, :not-replaceable (+ :block).
-  Refused, not permitted: :footprint, :zone (+ :zone name), :no-zones.
+  Refused, not permitted: :footprint (+ :plan id, for a footprint map), :zone (+ :zone name), :no-zones.
   Hazards of a dig, all that apply, in this order: :fluid-adjacent (+ :fluid :at), :falling-block (+ :block :at),
   :under-feet.
   Refusals run in this order and the first is the verdict, so the most specific reason wins and :no-zones, the
@@ -93,7 +94,8 @@
 
 (defn common-checks [action {:keys [block-at cell footprints zones]}]
   [#(when (nil? (block-at cell)) (refuse :not-loaded))
-   #(when (contains? footprints cell) (refuse :footprint))
+   #(when (contains? footprints cell)
+      (cond-> (refuse :footprint) (map? footprints) (assoc :plan (get footprints cell))))
    #(when-let [z (blocking-zone zones cell action)] (refuse :zone :zone (:name z)))])
 
 (defn no-zones-check [{:keys [zones]}]
