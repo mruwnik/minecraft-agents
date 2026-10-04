@@ -19,7 +19,7 @@ const rig = (spec) => {
 // Each case: a world where the primitive reaches the bot call named by `hangs`, the args, the cleanup call a cut or
 // timeout must make (null when none is needed), and the status a timeout resolves with (null when it cannot time out).
 const world = {
-  blocks: { '2,64,0': 'oak_log', '3,64,0': 'chest', '2,64,1': 'red_bed', '0,63,5': 'stone', '0,64,2': 'furnace' },
+  blocks: { '2,64,0': 'oak_log', '3,64,0': 'chest', '2,64,1': 'red_bed', '0,63,5': 'stone', '0,64,2': 'furnace', '1,64,2': 'enchanting_table' },
   items: [{ name: 'bread', count: 2, slot: 36 }, { name: 'cobblestone', count: 4, slot: 37 }],
   entities: { 7: { id: 7, name: 'item', type: 'object', position: at(5, 64, 0), getDroppedItem: () => ({ name: 'stick', count: 1 }) }, 8: { id: 8, name: 'zombie', type: 'hostile', position: at(1, 64, 0), height: 1.9, health: 20 } },
   containers: { '3,64,0': [{ name: 'cobblestone', count: 5, slot: 0 }] }
@@ -32,6 +32,7 @@ const acting = [
   { name: 'inspectContainer', args: { pos: at(3, 64, 0) }, hang: 'openContainer', cleanup: null, timeout: 'timeout' },
   { name: 'transfer', args: { pos: at(3, 64, 0), direction: 'deposit', item: 'cobblestone', count: 2 }, hang: 'deposit', cleanup: 'closeWindow', timeout: 'timeout' },
   { name: 'furnace', args: { pos: at(0, 64, 2), op: 'read' }, hang: 'openFurnace', cleanup: null, timeout: 'timeout' },
+  { name: 'enchant', args: { pos: at(1, 64, 2), op: 'offers', item: 'bread' }, hang: 'openEnchantmentTable', cleanup: null, timeout: 'failed' },
   { name: 'equip', args: { item: 'bread' }, hang: 'equip', cleanup: null, timeout: 'timeout' },
   { name: 'toss', args: { item: 'cobblestone' }, hang: 'toss', cleanup: null, timeout: 'timeout' },
   { name: 'eat', args: {}, hang: 'consume', cleanup: 'deactivateItem', timeout: 'timeout' },
@@ -234,7 +235,7 @@ test('attack drops its listener when the swing throws', async () => {
   assert.equal(bot.listenerCount('entityDead'), 0)
 })
 
-const badArgs = [['moveTo', {}], ['dig', {}], ['place', { pos: at(1, 1, 1) }], ['transfer', { pos: at(1, 1, 1), direction: 'sideways', item: 'x', count: 1 }], ['look', {}], ['collect', {}], ['attack', {}], ['toss', {}], ['toss', { item: 7 }], ['furnace', {}], ['furnace', { pos: at(0, 64, 2), op: 'stir' }], ['furnace', { pos: at(0, 64, 2), op: 'load' }], ['furnace', { pos: at(0, 64, 2), op: 'load', input: { item: 'coal', count: 0 } }]]
+const badArgs = [['moveTo', {}], ['dig', {}], ['place', { pos: at(1, 1, 1) }], ['transfer', { pos: at(1, 1, 1), direction: 'sideways', item: 'x', count: 1 }], ['look', {}], ['collect', {}], ['attack', {}], ['toss', {}], ['toss', { item: 7 }], ['furnace', {}], ['furnace', { pos: at(0, 64, 2), op: 'stir' }], ['furnace', { pos: at(0, 64, 2), op: 'load' }], ['furnace', { pos: at(0, 64, 2), op: 'load', input: { item: 'coal', count: 0 } }], ['enchant', {}], ['enchant', { pos: at(1, 64, 2), op: 'stir', item: 'bread' }], ['enchant', { pos: at(1, 64, 2), op: 'offers' }], ['enchant', { pos: at(1, 64, 2), op: 'enchant', item: 'bread', choice: 3 }]]
 for (const [name, args] of badArgs) {
   test(`${name} with bad args rejects with bad-args`, async () => {
     const { p } = rig(world)
@@ -2273,6 +2274,23 @@ test('furnace reads a furnace within reach and reports a refusal as data when it
   assert.deepEqual(await p.furnace('t1', { pos: at(9, 64, 0), op: 'read' }), { status: 'unreachable', reason: 'too-far', distance: 9.58 })
   assert.deepEqual(await p.furnace('t1', { pos: at(1, 64, 0), op: 'read' }), { status: 'cannot', reason: 'not-a-furnace' })
   assert.deepEqual(await p.furnace('t1', { pos: at(5, 64, 5), op: 'read' }), { status: 'missing' })
+})
+
+test('blockAt marks a block fullCube only when its collision shape fills the cell', () => {
+  const { p } = rig({ blocks: { '1,64,0': 'stone', '2,64,0': 'farmland', '3,64,0': 'wheat', '4,64,0': 'oak_slab' },
+    shapes: { '2,64,0': [[0, 0, 0, 1, 0.9375, 1]], '3,64,0': [], '4,64,0': [[0, 0, 0, 1, 0.5, 1]] } })
+  assert.equal(p.blockAt(at(1, 64, 0)).fullCube, true)
+  for (const x of [2, 3, 4]) assert.equal('fullCube' in p.blockAt(at(x, 64, 0)), false)
+  assert.equal('fullCube' in p.blockAt(at(9, 64, 0)), false)
+})
+
+test('enchant refuses a block that is not a table and one out of reach as data, without opening a window', async () => {
+  const { bot, p } = rig({ blocks: { '1,64,2': 'enchanting_table', '9,64,0': 'enchanting_table', '1,64,0': 'dirt' }, items: [{ name: 'bread', count: 1, slot: 36 }] })
+  assert.deepEqual(await p.enchant('t1', { pos: at(1, 64, 0), op: 'offers', item: 'bread' }), { status: 'cannot', reason: 'not-a-table' })
+  assert.deepEqual(await p.enchant('t1', { pos: at(9, 64, 0), op: 'offers', item: 'bread' }), { status: 'unreachable', reason: 'too-far', distance: 9.58 })
+  assert.deepEqual(await p.enchant('t1', { pos: at(5, 64, 5), op: 'offers', item: 'bread' }), { status: 'missing' })
+  assert.deepEqual(await p.enchant('t1', { pos: at(1, 64, 2), op: 'offers', item: 'cake' }), { status: 'no-item', item: 'cake' })
+  assert.ok(!names(bot).includes('openEnchantmentTable'))
 })
 
 test('blockAt marks a block fullCube only when its collision shape fills the cell', () => {

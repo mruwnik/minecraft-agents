@@ -18,6 +18,7 @@ import { interactWith, mobFields } from './interact.mjs'
 import { leashFields, trackLeashes } from './leash.mjs'
 import { emptyHand } from './unequip.mjs'
 import { furnaceVisit } from './furnace.mjs'
+import { enchantVisit } from './enchant.mjs'
 import { missingPatches } from './deps-check.mjs'
 import { wrapBlockAt } from './offset-shapes.mjs'
 
@@ -915,6 +916,16 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     return act(token, { boundS: 5 }, ctx => furnaceVisit(bot, ctx, { ...a, pos: cell(a.pos) }, { reach: REACH, distanceTo: p => dist(eye(), center(p)), settle: win => settleWindow(ctx, win) }))
   }
 
+  const enchant = async (token, a = {}) => {
+    if (!isOwner(token)) throw cutError()
+    need(isPos(a.pos), 'enchant needs pos {x, y, z}')
+    need(['offers', 'enchant'].includes(a.op), 'enchant op must be offers or enchant')
+    need(typeof a.item === 'string' && a.item !== '', 'enchant needs item, the name of what to enchant')
+    need(a.op !== 'enchant' || [0, 1, 2].includes(a.choice), 'enchant needs choice 0, 1 or 2')
+    need(a.levelCost === undefined || Number.isInteger(a.levelCost), 'enchant levelCost must be an integer')
+    return act(token, { boundS: 15 }, ctx => enchantVisit(bot, ctx, { ...a, pos: cell(a.pos) }, { reach: REACH, distanceTo: p => dist(eye(), center(p)), timeScale }))
+  }
+
   const chat = async (token, a = {}) => {
     if (!isOwner(token)) throw cutError()
     need(typeof a.message === 'string' && cleanMessage(a.message) !== '', 'chat needs message, a non-empty string')
@@ -1253,7 +1264,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   const useOn = createUseOn({ act, getBot: () => bot, inventory, eye, lookNow, timeScale, isOwner, cutError, badArgs })
   const { steer, pathWorld } = createSteer({ act, getBot: () => bot, badArgs })
 
-  const acting = Object.fromEntries(Object.entries({ moveTo, dig, place, jumpPlace, collect, inspectContainer, transfer, equip, toss, craft, furnace, chat, eat, attack, interact, trade, unequip, sleep, look, swim, useOn, steer })
+  const acting = Object.fromEntries(Object.entries({ moveTo, dig, place, jumpPlace, collect, inspectContainer, transfer, equip, toss, craft, furnace, enchant, chat, eat, attack, interact, trade, unequip, sleep, look, swim, useOn, steer })
     .map(([name, fn]) => [name, whenUp(fn)]))
   return { setOwner, isOwner, drive: driveNow, stopDriving, self, entities, blocks, blockAt, pathWorld, ...acting, wait, isOffline, isSettling, offline, onBodyEvent, close }
 }

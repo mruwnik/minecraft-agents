@@ -11,6 +11,7 @@ import { fakeUseOn } from './fake-use-on.mjs'
 import { dragLeashed } from './fake-leash.mjs'
 import { fakeSteer, fakePathWorld } from './fake-steer.mjs'
 import { fakeFurnace, advanceFurnaces } from './fake-furnace.mjs'
+import { fakeEnchant } from './fake-enchant.mjs'
 
 const key = ({ x, y, z }) => `${x},${y},${z}`
 const parseKey = (k) => { const [x, y, z] = k.split(',').map(Number); return { x, y, z } }
@@ -412,6 +413,7 @@ export function createFake (spec = {}) {
   acts.unequip = fakeUnequip(s)
   acts.steer = fakeSteer(s, () => owner, CutError)
   acts.furnace = fakeFurnace(s, spec)
+  acts.enchant = fakeEnchant(s, spec)
   let owner = null
   let sleeper = null // the offline call in its wait: { token, wake }
   let away = null // promise of the body being back, while offline
