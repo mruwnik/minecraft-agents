@@ -8,18 +8,19 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [engine.world :as ew]
             [jobs.gather.mine :as mine]))
 
 (defn spec [args] (list 'jobs.gather.mine args))
 
 (defn start
   "An engine over primitives p (made from world when not given) on dir."
-  [{:keys [world p dir clock]}]
+  [{:keys [world p dir clock shared]}]
   (let [clock (or clock (atom 1000000))
         [seen sink] (tu/legacy-capture-sink)
         p (or p (tu/fake world))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (or dir (tu/tmp-dir))
-                          :now #(deref clock)
+                          :now #(deref clock) :world shared
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen :clock clock}))
 
@@ -498,3 +499,86 @@
           (is (empty? (events-of s :mine.no-tool)))
           (is (= 2 (dig-count s)))
           (is (= :count (:reason (done-event s)))))))))
+
+;; ------------------------------------------------------------------ zones and footprints
+
+(def farm-zone {:name "farm" :min [2 60 -2] :max [4 70 2] :owner "Miles"})
+(def pad-plan {:id "pad" :status :active :parts [{:id "p" :box [[6 64 0] [6 64 0]] :want "sand"}]})
+(def two-in-two-out {"3,64,0" "sand" "3,64,1" "sand" "6,64,0" "sand" "6,64,1" "sand"})
+
+(defn ^:async zoned
+  "Submit the job with args in a fake world, sharing world w; run n ticks; the setup map."
+  [args world w n]
+  (let [s (start {:world world :shared w})]
+    (core/submit! (:eng s) (spec args) {})
+    (await (run-ticks s n))
+    s))
+
+(defn dug-cells [s] (mapv #(let [p (.-pos (.-args %))] [(.-x p) (.-y p) (.-z p)]) (calls s "dig")))
+
+(deftest cells-in-a-zone-are-left-and-the-rest-are-taken
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (zoned {:block "sand" :count 4 :mend false} {:blocks two-in-two-out}
+                              (ew/of-data {} {} [farm-zone]) 40))]
+          (is (= #{[6 64 0] [6 64 1]} (set (dug-cells s))))
+          (is (= :refused (:reason (done-event s))))
+          (is (= 2 (:got (done-event s))))
+          (is (= [{:reason :refused :zones ["farm"] :plans []}]
+                 (map #(select-keys % [:reason :zones :plans]) (events-of s :mine.declined)))))))))
+
+(deftest a-zone-that-allows-digging-is-dug
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (zoned {:block "sand" :count 4 :mend false} {:blocks two-in-two-out}
+                              (ew/of-data {} {} [(assoc farm-zone :allow #{:dig})]) 40))]
+          (is (= 4 (count (dug-cells s))))
+          (is (= :count (:reason (done-event s)))))))))
+
+(deftest only-refused-targets-decline-once-naming-the-zone-or-plan-and-stay-listed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[w blocks expected] [[(ew/of-data {} {} [farm-zone]) {"3,64,0" "sand"} {:zones ["farm"] :plans []}]
+                                     [(ew/of-data {"pad" pad-plan} {} []) {"6,64,0" "sand"} {:zones [] :plans ["pad"]}]]]
+          (let [s (await (zoned {:block "sand"} {:blocks blocks} w 5))]
+            (is (zero? (count (.-calls (.-world (:p s))))))
+            (is (not (finished? s)))
+            (is (= [(assoc expected :reason :refused)]
+                   (map #(select-keys % [:reason :zones :plans]) (events-of s :mine.declined))))))))))
+
+(deftest no-zone-list-declines-with-one-warn-and-digs-nothing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (zoned {:block "sand"} {:blocks {"6,64,0" "sand"}} (ew/of-data {} {} nil) 5))]
+          (is (empty? (calls s "dig")))
+          (is (not (finished? s)))
+          (is (= [:no-zones] (map :reason (events-of s :mine.declined)))))))))
+
+(deftest a-zone-added-between-the-choice-and-the-dig-stops-the-dig
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (ew/of-data {} {} [])
+              p (tu/fake {:blocks {"6,64,0" "sand"}})
+              _ (.override (.-world p) "moveTo"
+                           (fn [token args impl] (ew/set-zones! w [(assoc farm-zone :min [5 60 -2] :max [7 70 2])])
+                             (impl token args)))
+              s (start {:p p :shared w})]
+          (core/submit! (:eng s) (spec {:block "sand" :count 1 :mend false}) {})
+          (await (run-ticks s 20))
+          (is (= 1 (count (calls s "moveTo"))))
+          (is (empty? (calls s "dig")))
+          (is (= :refused (:reason (done-event s)))))))))
+
+(deftest hazards-not-accepted-are-not-dug
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:blocks {"3,64,0" "sand" "6,64,0" "sand" "6,64,1" "water"}}
+              s (await (scenario {:block "sand" :count 2 :wet true :accept #{}} world 30))]
+          (is (= [[3 64 0]] (dug-cells s)))
+          (is (= #{:fluid-adjacent :falling-block :under-feet} (:default (:accept mine/args)))))))))

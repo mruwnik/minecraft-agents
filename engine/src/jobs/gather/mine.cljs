@@ -1,6 +1,7 @@
 (ns jobs.gather.mine
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
+            [engine.jobs.access :as access]
             [engine.jobs.tools :as tools]
             [engine.jobs.util :as u]
             [jobs.survival.dig-in :as dig-in]))
@@ -42,7 +43,14 @@
   in :radius; otherwise it ends :spent-on-mend, keeping the earlier reason in
   :dig-reason. Hands over {:got n :reason r} (plus :dig-reason and :resumes when
   set; info mine.done with :mended, the cells filled); :got is how many more are carried
-  than at the start, at least 0.")
+  than at the start, at least 0.
+  Zones and plans (engine.access.rules, through engine.jobs.access): a target must also be a dig the rules permit,
+  with only :accept hazards, when it is chosen and again right before the dig. A cell inside a zone that does not
+  allow :dig, or in an active plan's footprint, is never a target; one refused right before the dig is skipped
+  without a failure (info mine.refused), as is one with a hazard not accepted. Every exposed block refused ends the
+  dig phase :refused, or, before the first round, declines; either way one mine.declined warn per job names the zones
+  and plans ({:reason :refused :zones :plans}). No zone list (zones.edn missing or never valid) declines the check
+  with one mine.declined warn {:reason :no-zones}, also in the middle of the job; nothing is dug or placed then.")
 
 (def args
   {:block {:doc "name of the block to mine (required)" :default nil}
@@ -53,7 +61,9 @@
    :mend {:doc "fill the ground under the start again afterwards" :default true}
    :collect-radius {:doc "how far around to collect drops after a dig" :default 6}
    :max-failures {:doc "failures in a row before giving up" :default 3}
-   :dry-digs {:doc "digs in a row after which the carried count of the item did not rise before giving up (:no-drops)" :default 3}})
+   :dry-digs {:doc "digs in a row after which the carried count of the item did not rise before giving up (:no-drops)" :default 3}
+   :accept {:doc "dig hazards of engine.access.rules taken (:fluid-adjacent :falling-block :under-feet); the lava and :wet rules above still hold"
+            :default #{:fluid-adjacent :falling-block :under-feet}}})
 
 (def ores
   {"coal_ore" "coal" "iron_ore" "raw_iron" "copper_ore" "raw_copper" "gold_ore" "raw_gold"
@@ -98,17 +108,23 @@
 
 (defn scan
   "{:targets [pos] nearest first, those over the ground snapshot after all
-  others, :wet? true when an unskipped block was rejected only for water}."
+  others, :refused [verdict] of exposed blocks a zone or plan refuses, :wet?
+  true when an unskipped block was rejected only for water}."
   [c]
-  (let [{:keys [block radius wet]} (:args c)
+  (let [{:keys [block radius wet accept]} (:args c)
         skipped (set (:skipped (ctx/mem c)))
         ground (into #{} (map :pos) (:ground (ctx/mem c)))
         here (u/self-pos c)
         cells (->> (array-seq (.blocks (:primitives c) #js {:radius radius :names #js [block] :max 128}))
                    (map #(u/pos-of (.-pos %)))
                    (remove skipped))
-        graded (map (juxt identity #(classify c wet %)) cells)]
-    {:targets (->> graded (filter #(= :ok (second %))) (map first) (sort-by (juxt #(if (ground %) 1 0) #(u/dist here %))) vec)
+        graded (map (juxt identity #(classify c wet %)) cells)
+        in (access/rules-input c)
+        judged (->> graded
+                    (filter #(= :ok (second %)))
+                    (map (fn [[pos]] (let [v (access/may-dig? in pos)] [pos v (access/judge v accept)]))))]
+    {:targets (->> judged (filter #(= :ok (nth % 2))) (map first) (sort-by (juxt #(if (ground %) 1 0) #(u/dist here %))) vec)
+     :refused (into [] (comp (filter #(= :refused (nth % 2))) (map second)) judged)
      :wet? (boolean (some #(= :wet (second %)) graded))}))
 
 (defn off-ground?
@@ -117,8 +133,15 @@
   (not-any? #(= pos (:pos %)) (:ground (ctx/mem c))))
 
 (defn check [c]
-  (boolean (or (:phase (ctx/mem c))
-               (and (:block (:args c)) (some? (first (:targets (scan c))))))))
+  (cond
+    (nil? (ctx/zones c)) (access/decline! c :mine.declined "mine" {:reason :no-zones})
+    (:phase (ctx/mem c)) true
+    (not (:block (:args c))) false
+    :else (let [{:keys [targets refused]} (scan c)]
+            (cond
+              (seq targets) true
+              (seq refused) (access/decline! c :mine.declined "mine" (assoc (access/refusal-fields refused) :reason :refused))
+              :else false))))
 
 (defn cell-of [pos] {:x (js/Math.floor (:x pos)) :y (js/Math.floor (:y pos)) :z (js/Math.floor (:z pos))})
 
@@ -171,14 +194,27 @@
                                         :last-carried now))))))
     :continue))
 
+(defn refused!
+  "The rules refused pos (verdict v) right before the dig, no failure: a hazard skips it; a zone or a plan keeps it
+  out of the targets anyway, and counted among the refused."
+  [c pos v verdict]
+  (when (= :hazard verdict) (skip! c pos))
+  (ctx/emit! c :mine.refused :info (merge {:pos pos :verdict verdict}
+                                          (select-keys v [:reason :zone :plan :hazards])
+                                          {:text (str "mine left " (access/cell pos) ": " (name verdict))})))
+
 (defn ^:async dig! [c pos]
   (await (equip! c))
-  (let [status (.-status (await (ctx/act c :dig (clj->js {:pos pos}))))]
-    (cond
-      (= "dug" status) (ctx/update-mem! c assoc :failures 0 :collecting true)
-      (= "missing" status) nil
-      (= "cannot" status) (skip! c pos)
-      :else (do (skip! c pos) (ctx/update-mem! c update :failures (fnil inc 0))))
+  (let [v (access/may-dig? (access/rules-input c) pos)
+        verdict (access/judge v (:accept (:args c)))]
+    (if (not= :ok verdict)
+      (refused! c pos v verdict)
+      (let [status (.-status (await (ctx/act c :dig (clj->js {:pos pos}))))]
+        (cond
+          (= "dug" status) (ctx/update-mem! c assoc :failures 0 :collecting true)
+          (= "missing" status) nil
+          (= "cannot" status) (skip! c pos)
+          :else (do (skip! c pos) (ctx/update-mem! c update :failures (fnil inc 0))))))
     :continue))
 
 (def max-partials 3)
@@ -202,7 +238,7 @@
 (defn ^:async dig-round! [c]
   (let [{:keys [goal failures dry]} (ctx/mem c)
         {:keys [max-failures wet dry-digs]} (:args c)
-        {:keys [targets wet?]} (scan c)
+        {:keys [targets refused wet?]} (scan c)
         pos (first targets)]
     (cond
       (>= (carried c) goal) (to-mend! c :count)
@@ -210,6 +246,9 @@
                                    (to-mend! c :no-drops))
       (>= failures max-failures) (do (ctx/emit! c :mine.gave-up :warn {:failures failures :text (str "mine gave up after " failures " failures")})
                                      (to-mend! c :gave-up))
+      (and (nil? pos) (seq refused))
+      (do (access/decline! c :mine.declined "mine" (assoc (access/refusal-fields refused) :reason :refused))
+          (to-mend! c :refused))
       (nil? pos) (to-mend! c (if (and wet? (not wet)) :wet :none))
       :else (let [walked (await (u/walk-near! c pos reach))]
               (cond

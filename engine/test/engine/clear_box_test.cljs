@@ -8,13 +8,15 @@
             [engine.takeover :as takeover]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [engine.world :as ew]
             [jobs.build.clear-box :as clear-box]))
 
-(defn setup [world]
+(defn setup [world & [shared]]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         p (tu/fake world)
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                          :world shared
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen}))
 
@@ -199,3 +201,72 @@
               result (await (child-outcome eng job args 20))]
           (is (= {:dug 1 :skipped {} :kept 0 :fluids {}} result))
           (is (= [["moveTo" 0] ["dig" 1]] (act-trail p))))))))
+
+;; ------------------------------------------------------------------ zones and footprints
+
+(def farm-zone {:name "farm" :min [1 60 1] :max [1 70 2] :owner "Miles"})
+(def pad-plan {:id "pad" :status :active :parts [{:id "p" :box [[2 64 1] [2 65 2]] :want "stone"}]})
+
+(defn ^:async listed-after [eng n]
+  (core/submit! eng (list job box) {})
+  (dotimes [_ n] (await (core/tick! eng)))
+  (count (:list (core/state eng))))
+
+(deftest cells-in-a-zone-or-another-plans-footprint-are-skipped
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:blocks eight} (ew/of-data {"pad" (assoc-in pad-plan [:parts 0 :box] [[2 64 1] [2 65 1]])}
+                                                                      {} [farm-zone]))
+              result (await (child-outcome eng job box 30))]
+          (is (= {:dug 2 :kept 0 :fluids {}} (dissoc result :skipped)))
+          (is (= {{:x 1 :y 65 :z 1} :zone {:x 1 :y 65 :z 2} :zone {:x 1 :y 64 :z 1} :zone {:x 1 :y 64 :z 2} :zone
+                  {:x 2 :y 65 :z 1} :footprint {:x 2 :y 64 :z 1} :footprint}
+                 (:skipped result)))
+          (is (= #{{:x 2 :y 65 :z 2} {:x 2 :y 64 :z 2}} (set (map #(js->clj (.-pos (.-args %)) :keywordize-keys true) (calls p "dig")))))
+          (is (= [{:zones ["farm"] :plans ["pad"] :cells 6}]
+                 (map #(select-keys % [:zones :plans :cells]) (kinds seen :clear-box.refused)))))))))
+
+(deftest a-box-wholly-refused-declines-once-naming-zone-and-plan-and-stays-listed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:blocks eight} (ew/of-data {"pad" pad-plan} {} [farm-zone]))]
+          (is (= 1 (await (listed-after eng 5))))
+          (is (empty? (calls p "dig")))
+          (is (= [{:reason :refused :zones ["farm"] :plans ["pad"]}]
+                 (map #(select-keys % [:reason :zones :plans]) (kinds seen :clear-box.declined)))))))))
+
+(deftest no-zone-list-declines-with-one-warn-and-digs-nothing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:blocks eight} (ew/of-data {} {} nil))]
+          (is (= 1 (await (listed-after eng 5))))
+          (is (empty? (.-calls (.-world p))))
+          (is (= [:no-zones] (map :reason (kinds seen :clear-box.declined)))))))))
+
+(deftest a-zone-added-between-the-choice-and-the-dig-stops-the-dig
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (ew/of-data {} {} [])
+              {:keys [eng p]} (setup {:blocks {"9,64,1" "dirt"}} w)
+              args {:from {:x 9 :y 64 :z 1} :to {:x 9 :y 64 :z 1}}]
+          (.override (.-world p) "moveTo"
+                     (fn [token a impl] (ew/set-zones! w [(assoc farm-zone :min [9 64 1] :max [9 64 1])]) (impl token a)))
+          (is (= {:dug 0 :skipped {{:x 9 :y 64 :z 1} :zone} :kept 0 :fluids {}} (await (child-outcome eng job args 8))))
+          (is (empty? (calls p "dig"))))))))
+
+(deftest a-hazard-not-accepted-is-tried-twice-then-skipped
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:blocks {"1,64,1" "dirt" "1,64,2" "water"}}
+              strict (setup world)
+              default (setup world)]
+          (is (= {:dug 0 :skipped {{:x 1 :y 64 :z 1} :hazard} :kept 0 :fluids {}}
+                 (await (child-outcome (:eng strict) job (assoc one :accept #{}) 8))))
+          (is (empty? (calls (:p strict) "dig")))
+          (is (= 1 (:dug (await (child-outcome (:eng default) job one 8)))))
+          (is (= #{:fluid-adjacent :falling-block} (:default (:accept clear-box/args)))))))))
