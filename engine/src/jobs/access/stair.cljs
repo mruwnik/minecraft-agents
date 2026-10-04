@@ -176,12 +176,13 @@
   (let [pw (walk-plan/path-world (:primitives c))]
     (if (nil? pw)
       {:reason :no-way-back :why :unsupported}
-      (let [r (walk-plan/plan-from c pw origin 0 (:default (:weight walk-plan/args)))
-            status (.-status r)]
-        (if (not= "found" status)
-          {:reason :no-way-back :why (keyword status) :planner (some-> (.-reason r) keyword)}
-          (when-let [refused (executor/refusal executor/policy (walk-plan/plan-steps pw r))]
-            {:reason :no-way-back :why :refused :kind (:kind refused) :step (:at refused)}))))))
+      (let [{:keys [r steps beyond]} (walk-plan/plan-within c pw origin 0 (:default (:weight walk-plan/args)))
+            status (.-status r)
+            stop (fn [refused] {:reason :no-way-back :why :refused :kind (:kind refused) :step (:at refused)})]
+        (cond
+          beyond (stop beyond)
+          (not= "found" status) {:reason :no-way-back :why (keyword status) :planner (some-> (.-reason r) keyword)}
+          :else (some-> (executor/refusal executor/policy steps) stop))))))
 
 (defn ^:async dig!
   "Equip the best tool, check the cell again, write the intent and dig it. :continue, or a stop map."

@@ -1,16 +1,19 @@
 (ns jobs.debug.walk-plan
-  (:require [engine.ctx :as ctx]
+  (:require [clojure.set :as set]
+            [engine.ctx :as ctx]
             [engine.jobs.util :as u]
             [engine.path.executor :as executor]
             [engine.path.planner-tuned :as planner]))
 
 (def doc
   "Debug job: plan a path to :to with the path planner and follow it with the plan executor (steer), instead
-  of moveTo. One round does the whole walk and ends :done. Plans from the body's cell, refuses plans with
-  steps the executor cannot walk (gap jumps, doors, swimming), re-plans when the body ends off the plan (at
-  most 5 times), and hands over {:status ...}: :arrived, :refused (:kind :at), :no-path (:reason),
-  :stuck (:why :at), :gave-up (:reason :replan-limit), :failed (:reason) or :unsupported (no pathWorld),
-  plus :replans. Emits :walk-plan.plan per plan, :walk-plan.replan, and :walk-plan.result with :ms, :walked
+  of moveTo. One round does the whole walk and ends :done. Plans from the body's cell within the executor's
+  abilities (the planner is told executor/planner-limits, so it walks round gap jumps, doors and water it cannot
+  do), still refuses a plan with a step the executor cannot walk (a start in water), re-plans when the body ends
+  off the plan (at most 5 times), and hands over {:status ...}: :arrived, :refused (:kind :at), :no-path
+  (:reason; :abilities with :kind :at when only a step the executor cannot do leads there), :stuck (:why :at),
+  :gave-up (:reason :replan-limit), :failed (:reason) or :unsupported (no pathWorld), plus :replans. Emits
+  :walk-plan.plan per plan, :walk-plan.replan, and :walk-plan.result (:kind as :refused-kind) with :ms, :walked
   (blocks of every plan followed), :walk-ms (time inside steer acts) and, only when arrived, :blocks-per-s
   (walked over walk-ms). A cut (manual takeover, a reflex) releases every control at once; the round
   rejects and a resumed round plans afresh from where the body stands.")
@@ -35,8 +38,11 @@
                (= :arrived (:status result))
                (assoc :blocks-per-s (/ (js/Math.round (* 100 (/ walked (max 0.001 (/ walk-ms 1000))))) 100)))]
     (ctx/result! c result)
+    ;; an event's :kind is its own: the refused step kind goes as :refused-kind
     (ctx/emit! c :walk-plan.result (if (= :arrived (:status result)) :info :warn)
-               (assoc full :text (str "walk " (name (:status result)) " in " ms " ms")))
+               (-> full
+                   (set/rename-keys {:kind :refused-kind})
+                   (assoc :text (str "walk " (name (:status result)) " in " ms " ms"))))
     :done))
 
 (defn path-length
@@ -78,14 +84,15 @@
     (.pathWorld p)))
 
 (defn plan-from
-  "Plan from the body's cell to the goal; the planner's JS result."
-  [c pw to range weight]
+  "Plan from the body's cell to the goal, within limits (the planner's options.limits, nil for none); the planner's JS
+  result."
+  [c pw to range weight limits]
   (let [pos (.-pos (.self (:primitives c)))
         [gx gy gz] to
         query #js {:from #js {:x (js/Math.floor (.-x pos)) :y (js/Math.floor (.-y pos)) :z (js/Math.floor (.-z pos))
                               :px (.-x pos) :pz (.-z pos)}
                    :goal #js {:kind "near" :x gx :y gy :z gz :range range}}]
-    (planner/plan (.-snapshot pw) query #js {:table (.-table pw) :space (.-space pw) :weight weight})))
+    (planner/plan (.-snapshot pw) query #js {:table (.-table pw) :space (.-space pw) :weight weight :limits limits})))
 
 (defn solid-fn
   "solid? for executor/with-free-sides over a pathWorld."
@@ -101,6 +108,19 @@
       executor/policy
       (executor/with-free-sides (executor/steps-of (.-steps (.-path r))) solid?)
       solid?)))
+
+(defn plan-within
+  "Plan within the executor's abilities: {:r :steps} (steps nil when r has no path). When that finds no whole path but a
+  search without the limits does, also :beyond, the executor's refusal of that path: no path within abilities, and the
+  kind of step that would have made one."
+  [c pw to range weight]
+  (let [r (plan-from c pw to range weight (executor/planner-limits executor/policy (solid-fn pw)))
+        within {:r r :steps (when (.-path r) (plan-steps pw r))}]
+    (if (= "found" (.-status r))
+      within
+      (let [wide (plan-from c pw to range weight nil)]
+        (cond-> within
+          (= "found" (.-status wide)) (assoc :beyond (executor/refusal executor/policy (plan-steps pw wide))))))))
 
 (defn ^:async walk!
   "Follow steps once. [result ms]: the executor's done map, or {:status :stuck ...} on a timeout,
@@ -146,12 +166,18 @@
       (loop [replans 0 walked 0 walk-ms 0]
         (await (settle! c))
         (let [pw (path-world p)
-              r (plan-from c pw to range weight)
+              {:keys [r steps beyond]} (plan-within c pw to range weight)
               planner-status (.-status r)]
-          (if (= "none" planner-status)
+          (cond
+            beyond
+            (finish! c {:status :no-path :reason :abilities :kind (:kind beyond) :at (:at beyond) :replans replans}
+                     t0 walked walk-ms)
+
+            (= "none" planner-status)
             (finish! c {:status :no-path :reason (some-> (.-reason r) keyword) :replans replans} t0 walked walk-ms)
-            (let [steps (plan-steps pw r)
-                  plan-len (path-length steps)]
+
+            :else
+            (let [plan-len (path-length steps)]
               (if-let [refused (executor/refusal executor/policy steps)]
                 (finish! c (assoc refused :replans replans) t0 walked walk-ms)
                 (do

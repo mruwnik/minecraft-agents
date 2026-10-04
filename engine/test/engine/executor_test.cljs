@@ -1,7 +1,8 @@
 (ns engine.executor-test
   "engine.path.executor: the pure decision half of walking a planned path."
   (:require [cljs.test :refer [deftest is are]]
-            [engine.path.executor :as ex]))
+            [engine.path.executor :as ex]
+            [engine.path.planner-tuned :as planner]))
 
 (def p ex/policy)
 
@@ -374,6 +375,42 @@
   (let [steps (ex/with-gap-ceilings p (gap-steps 2) (solid-set #{[11 66 0]}))]
     (is (= :gap-low-ceiling (:kind (ex/refusal p steps))))
     (is (nil? (ex/refusal p (ex/with-gap-ceilings p (gap-steps 2) (solid-set #{[14 66 0]})))))))
+
+;; planner limits
+
+(def swim-moves [:swim :swim-up :swim-down :exit])
+
+(deftest planner-limits-kinds-are-the-moves-the-policy-lacks
+  (are [moves kinds] (= kinds (.-kinds (ex/planner-limits (assoc p :moves moves) (constantly false))))
+    (:moves p) (+ planner/AVOID-WATER planner/AVOID-OPEN)
+    (conj (:moves p) :open) planner/AVOID-WATER
+    (into (:moves p) swim-moves) planner/AVOID-OPEN
+    (into (:moves p) (conj swim-moves :open)) 0
+    (disj (:moves p) :climb-down) (+ planner/AVOID-CLIMB planner/AVOID-WATER planner/AVOID-OPEN)))
+
+(defn gap-allowed?
+  "The planner-limits gap test for a jump from (10 64 0), stand h, reached by move code, to n cells along +x."
+  [n & {:keys [landing-y move h solid] :or {landing-y 64 move 1 h 0 solid #{}}}]
+  ((.-gap (ex/planner-limits p (solid-set solid))) 10 64 0 h move (+ 11 n) landing-y 0 0))
+
+(deftest planner-limits-gap-test-is-the-refusal
+  (are [args allowed?] (= allowed? (apply gap-allowed? args))
+    [1] true
+    [2] true
+    [3] true
+    [1 :landing-y 63] true
+    [2 :landing-y 63] true
+    [3 :landing-y 63] true
+    [4] false
+    [1 :landing-y 65] false
+    [2 :move 7] false
+    [2 :move 8] false
+    [2 :move 9] false
+    [2 :solid #{[10 66 0]}] false
+    [2 :solid #{[12 66 0]}] false
+    [2 :solid #{[13 66 0]}] true
+    [2 :h 8 :solid #{[10 67 0]}] false
+    [2 :solid #{[10 67 0]}] true))
 
 (deftest past-edge-in-all-directions
   (are [landing x z expected] (approx= expected (ex/past-edge (step 10 64 0 :walk) landing (pose x 64 z)))

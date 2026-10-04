@@ -9,11 +9,16 @@
   Pose:  {:x :y :z :vy :on-ground :on-climbable :in-water :collided}, feet position.
   State: {:steps :i :since :tick :yaw}; i is the index of the step walked to, since the tick at which it
          became current, tick the number of calls, yaw the last yaw sent while moving.
-  Done:  {:status :arrived :at} | {:status :off-plan :at :step} | {:status :stuck :at :step :move :target :why}.")
+  Done:  {:status :arrived :at} | {:status :off-plan :at :step} | {:status :stuck :at :step :move :target :why}.
+
+  What it can walk is stated once, in policy (:moves and the gap rules); planner-limits tells the planner the same, so a
+  search never plans a step the refusal below would turn away."
+  (:require [engine.path.planner-tuned :as planner]))
 
 (def policy
-  "Every number the executor uses."
-  {:max-replans 5          ; re-plans before giving up
+  "Every number the executor uses, and the step kinds it walks."
+  {:moves #{:start :walk :diagonal :corner :jump :drop :gap :climb-up :climb-down :jump-climb}
+   :max-replans 5          ; re-plans before giving up
    :no-progress-ticks 60   ; 3 s on one step without reaching it -> stuck
    :arrive-xz 0.35         ; final step: horizontal distance to px/pz
    :arrive-y 0.5           ; |feet y - stand-y| that counts as at a step's height
@@ -39,9 +44,6 @@
   [:start :walk :diagonal :jump :drop :gap :corner :climb-up :climb-down :jump-climb :open :swim :swim-up
    :swim-down :exit])
 
-(def supported-moves
-  #{:start :walk :diagonal :corner :jump :drop :gap :climb-up :climb-down :jump-climb})
-
 (def sprint-moves #{:walk :diagonal})
 
 ;; ---------------------------------------------------------------- steps
@@ -64,9 +66,9 @@
 
 (defn unsupported-kind
   "The kind of a step the executor cannot walk, or nil."
-  [{:keys [move opens swim]}]
+  [policy {:keys [move opens swim]}]
   (cond
-    (not (contains? supported-moves move)) move
+    (not (contains? (:moves policy) move)) move
     (some? opens) :open
     swim :swim))
 
@@ -106,7 +108,7 @@
   be jumped from prev."
   [policy prev s]
   (let [{:keys [x y z]} s]
-    (or (when-let [kind (unsupported-kind s)]
+    (or (when-let [kind (unsupported-kind policy s)]
           {:status :refused :kind kind :at [x y z]
            :reason (str "unsupported step kind " kind " at " (pr-str [x y z]))})
         (when (and (= :gap (:move s)) (some? prev))
@@ -119,23 +121,46 @@
        (map-indexed (fn [i s] (step-refusal policy (get steps (dec i)) s)))
        (some identity)))
 
+(defn low-ceiling?
+  "The gap step s from prev has a solid block within :gap-headroom of the takeoff's stand height over its
+  takeoff or gap cells. solid? is a fn [x y z] -> bool."
+  [policy prev s solid?]
+  (let [[n dx dz] (gap-cells prev s)
+        cells (map (fn [k] [(+ (:x prev) (* k (Math/sign dx))) (+ (:z prev) (* k (Math/sign dz)))])
+                   (range 0 (inc (or n 0))))
+        top (dec (Math/ceil (+ (stand-y prev) (:gap-headroom policy))))]
+    (boolean (some (fn [[x z]] (some #(solid? x % z) (range (+ (:y prev) 2) (inc top)))) cells))))
+
 (defn with-gap-ceilings
   "Add :low-ceiling to each gap step whose takeoff or gap cells have a solid block within :gap-headroom
   of the takeoff's stand height. solid? is a fn [x y z] -> bool."
   [policy steps solid?]
   (vec (map-indexed
         (fn [i s]
-          (if-not (and (pos? i) (= :gap (:move s)))
-            s
-            (let [prev (nth steps (dec i))
-                  [n dx dz] (gap-cells prev s)
-                  cells (map (fn [k] [(+ (:x prev) (* k (Math/sign dx))) (+ (:z prev) (* k (Math/sign dz)))])
-                             (range 0 (inc (or n 0))))
-                  top (dec (Math/ceil (+ (stand-y prev) (:gap-headroom policy))))]
-              (if (some (fn [[x z]] (some #(solid? x % z) (range (+ (:y prev) 2) (inc top)))) cells)
-                (assoc s :low-ceiling true)
-                s))))
+          (cond-> s
+            (and (pos? i) (= :gap (:move s)) (low-ceiling? policy (nth steps (dec i)) s solid?))
+            (assoc :low-ceiling true)))
         steps)))
+
+;; ---------------------------------------------------------------- what the planner may plan
+
+(def planner-kinds
+  "Planner move kinds (planner-tuned's AVOID bits) and the steps they plan."
+  [[planner/AVOID-CLIMB #{:climb-up :climb-down :jump-climb}]
+   [planner/AVOID-WATER #{:swim :swim-up :swim-down :exit}]
+   [planner/AVOID-OPEN #{:open}]])
+
+(defn planner-limits
+  "The planner's options.limits for this policy: kinds, the planner kinds with a step the policy cannot walk; gap, a
+  test of each gap jump (takeoff cell x y z, stand h in 1/16, reached by move code; landing lx ly lz lh) by gap-refused
+  with the takeoff's ceiling. solid? is a fn [x y z] -> bool."
+  [policy solid?]
+  #js {:kinds (reduce + 0 (keep (fn [[bit moves]] (when-not (every? (:moves policy) moves) bit)) planner-kinds))
+       :gap (fn [x y z h move lx ly lz lh]
+              (let [prev {:x x :y y :z z :h h :move (nth move-names move)}
+                    step {:x lx :y ly :z lz :h lh :move :gap}]
+                (nil? (gap-refused policy prev (cond-> step
+                                                 (low-ceiling? policy prev step solid?) (assoc :low-ceiling true))))))})
 
 ;; ---------------------------------------------------------------- corner slides
 

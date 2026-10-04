@@ -421,3 +421,9 @@
       {:reason :no-way-back :why :refused :kind :gap-up}
       (merge level (slab 66 (range 4 7))) [10 64 1]
       {:reason :no-way-back :why :refused :kind :gap-low-ceiling})))
+
+(deftest way-back-walks-round-a-gap-under-a-low-ceiling
+  (let [at (fn [y xs zs] (into {} (for [x xs z zs] [(str x "," y "," z) "stone"])))
+        blocks (merge (at 63 (range 5) (range -8 11)) (at 63 (range 7 13) (range -8 11)) (at 63 [5 6] [9 10])
+                      (at 66 (range 4 7) (range -8 9)))]
+    (is (nil? (way-back-of blocks [10 64 1])))))

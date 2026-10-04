@@ -15,7 +15,9 @@
    free-space masks of space.mjs (options.space: boxesNear, freeMask, labelRegions).
 
    Not in planner.mjs: options.avoid {kinds, cells, factor}, which engine.path.alternatives sets to search for another path
-   (see avoidCost). Without it the search is planner.mjs's.")
+   (see avoidCost), and options.limits {kinds, gap}, what the walker can do: kinds (the same bits) are never planned, and
+   gap(x, y, z, h, move, lx, ly, lz, lh) -> false refuses a gap jump from the takeoff node (feet cell x,y,z, stand h in 1/16,
+   reached by move) to the landing (engine.path.executor/planner-limits). Without them the search is planner.mjs's.")
 
 (set! *warn-on-infer* true)
 
@@ -204,6 +206,8 @@
    max-nodes max-drop weight risk-weight goal-flood flood-after
    ;; a search for an alternative path (options.avoid, see avoidCost): kinds of move refused, cells near earlier paths
    ^boolean avoiding avoid-kinds ^js avoid-cells avoid-factor
+   ;; what the walker can do (options.limits): kinds of move never planned, a test of each gap jump (nil: every one)
+   limit-kinds ^js limit-gap
    ;; costs (options.costs over DEFAULT-COSTS)
    c-climb-up c-climb-down c-jump-climb c-open c-open-redstone c-open-plate c-beside-magma c-swim-h c-swim-up c-swim-down
    c-exit c-current c-bubble-up c-bubble-down c-air-supply c-air-limit c-max-water-drop c-dripleaf c-dripleaf-risk
@@ -641,6 +645,7 @@
         ;; a gap jump or a drop never lands on farmland: a landing after a fall of over 0.5 blocks tramples it (a farmland node
         ;; is the farmland's own cell; a jump up one block falls about 0.3 from the top of its arc, so it may land there)
         (and (or (== move MOVE-GAP) (== move MOVE-DROP)) (== (aget tbl-farmland (.stateAt snapshot x y z)) 1)) nil
+        ^boolean (.refusedKind s limit-kinds x y z move) nil
         :else
         (let [extra (if avoiding (.avoidCost s x y z move dsec drisk) 0)]
           (when-not (neg? extra)
@@ -665,13 +670,20 @@
 
                     :else nil)))))))))
 
-  ;; what entering x,y,z by `move` adds to its cost in a search for an alternative path: -1 refuses a move of a kind avoided
-  ;; (climbing, water, opening something); a cell within 1 block of an earlier path costs avoid-factor times its own cost more
+  ;; is entering x,y,z by `move` of one of `kinds` (bits: climbing, water, opening something)?
+  (refusedKind [s kinds x y z move]
+    (cond
+      (zero? kinds) false
+      (and (not (zero? (bit-and kinds AVOID-CLIMB))) (>= move MOVE-CLIMB-UP) (<= move MOVE-OPEN)) true
+      (and (not (zero? (bit-and kinds AVOID-WATER))) (or (>= move MOVE-SWIM) ^boolean (.isWater s x y z))) true
+      (and (not (zero? (bit-and kinds AVOID-OPEN))) (or (== move MOVE-OPEN) (pos? move-open))) true
+      :else false))
+
+  ;; what entering x,y,z by `move` adds to its cost in a search for an alternative path: -1 refuses a move of a kind avoided;
+  ;; a cell within 1 block of an earlier path costs avoid-factor times its own cost more
   (avoidCost [s x y z move dsec drisk]
     (cond
-      (and (not (zero? (bit-and avoid-kinds AVOID-CLIMB))) (>= move MOVE-CLIMB-UP) (<= move MOVE-OPEN)) -1
-      (and (not (zero? (bit-and avoid-kinds AVOID-WATER))) (or (>= move MOVE-SWIM) ^boolean (.isWater s x y z))) -1
-      (and (not (zero? (bit-and avoid-kinds AVOID-OPEN))) (or (== move MOVE-OPEN) (pos? move-open))) -1
+      ^boolean (.refusedKind s avoid-kinds x y z move) -1
       (true? (.has avoid-cells (cell-key x y z))) (* avoid-factor (+ dsec (* risk-weight drisk)))
       :else 0))
 
@@ -1336,7 +1348,9 @@
                       ly gap-y]
                   (when-not (or (neg? h1) ^boolean (.isTight s lx ly lz))
                     (let [delta (- (+ (* ly 16) h1) h0)]
-                      (when-not (or (< delta -16) (> delta (if up WHOLE 0)))
+                      (when-not (or (< delta -16) (> delta (if up WHOLE 0))
+                                    (and (some? limit-gap)
+                                         (not (true? (limit-gap x y z (- h0 (* y 16)) (aget moves i) lx ly lz h1)))))
                         (.edge s lx ly lz h1 MOVE-GAP i
                                (+ (* (inc n) SPRINT-S) GAP-S (if (pos? delta) GAP-UP-S 0) enter-extra)
                                (+ enter-risk hole) enter-slow 0 0))))
@@ -2051,6 +2065,7 @@
         ^js costs (js/Object.assign #js {} DEFAULT-COSTS (.-costs options))
         max-nodes (option options "maxNodes" 200000)
         ^js avoid (.-avoid options)
+        ^js limits (.-limits options)
         margin (option options "margin" 64)
         y-margin (option options "yMargin" 48)
         goal-range (or-else (.-range goal) 0)
@@ -2078,6 +2093,8 @@
      (option options "goalFlood" 4000) (option options "floodAfter" 3000)
      ;; avoid
      (some? avoid) (if (some? avoid) (.-kinds avoid) 0) (if (some? avoid) (.-cells avoid) nil) (if (some? avoid) (.-factor avoid) 0)
+     ;; limits
+     (if (some? limits) (or-else (.-kinds limits) 0) 0) (if (some? limits) (.-gap limits) nil)
      ;; costs
      (unchecked-get costs "climbUp") (unchecked-get costs "climbDown") (unchecked-get costs "jumpClimb") (unchecked-get costs "open")
      (unchecked-get costs "openRedstone") (unchecked-get costs "openPlate") (unchecked-get costs "besideMagmaColumn")
