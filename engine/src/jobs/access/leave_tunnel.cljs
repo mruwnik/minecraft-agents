@@ -29,7 +29,14 @@
   Hands over {:status :done|:stopped :reason :sealed|:open|:walk-failed|:bad-args :at [x y z] :taken [cells]
   :left [{:cell :site :reason}] (torches not taken, those still standing on a stop included) :filled [cells] :open
   [{:cell :reason}]} (:sealed: every mouth cell is filled; :open: some are left open) and emits leave-tunnel.done
-  (info, :sealed), leave-tunnel.open (warn, :open) or leave-tunnel.stopped (warn, :walk-failed, :bad-args).")
+  (info, :sealed), leave-tunnel.open (warn, :open) or leave-tunnel.stopped (warn, :walk-failed, :bad-args).
+  A walk that does not arrive (the stair broken by an explosion or a cave-in, a hole in its floor) is not the end: the
+  body digs its own way out with jobs.access.stair :up to the entry's height, first back along the tunnel's heading,
+  then the other three (leave-tunnel.escape, info, per stair stopped warn); only when every heading stopped for an
+  access reason (:zone :claim :footprint) does it try them again with :ignore-zones? as the last resort. The new stair
+  is left as dug (nothing is placed, no item of another is taken). Out, the torches that cannot be reached are left
+  (:walk-failed in :left), the mouth is sealed as before, and the entry unreachable ends :done :open with :escaped true.
+  Every attempt failing ends :stopped :walk-failed with :escape (the stair results) as before.")
 
 (def args
   {:tunnel {:doc "the result of jobs.access.tunnel (:line :dug :torches)" :default nil}
@@ -107,14 +114,61 @@
     :done))
 
 (defn ^:async walk-to!
-  "Walk to cell: :continue while walking or once there; :done after a walk that did not arrive, with the stop
-  finished."
-  [c cell]
+  "Walk to cell: :continue while walking or once there. A walk that did not arrive starts the escape (the way out
+  does not need the tunnel's stair); once out, giveup is called with the walk instead."
+  [c cell giveup]
   (let [r (await (tunnel/walk-to! c :walk cell))]
     (cond
       (= :continue r) :continue
       (and (= :arrived (:status r)) (= cell (feet-of c))) :continue
-      :else (finish! c :stopped :walk-failed {:cell cell :walk r}))))
+      (:escaped (ctx/mem c)) (giveup r)
+      :else (do (ctx/update-mem! c assoc :escape {:i 0 :cell cell :walk r :results []})
+                :continue))))
+
+(def opposite {:north :south :south :north :east :west :west :east})
+
+(def access-reasons #{:zone :claim :footprint :no-zones})
+
+(defn escape-attempts
+  "The stairs to try, as [{:heading :ignore-zones?}]: back along the tunnel's heading first, then the others, all
+  respecting zones; then, when zones are not ignored already, the same again with :ignore-zones?."
+  [heading ignore?]
+  (let [order (distinct (remove nil? (concat [(opposite heading)] [:north :east :south :west])))
+        pass (fn [ig] (mapv (fn [h] {:heading h :ignore-zones? ig}) order))]
+    (if ignore? (pass true) (into (pass false) (pass true)))))
+
+(defn zones-blocked?
+  "Whether every attempt so far stopped, and one of them for an access reason."
+  [results]
+  (boolean (some #(access-reasons (:reason %)) results)))
+
+(defn ^:async escape!
+  "One attempt of the way out: a stair up to the entry's height along the next heading; done, the body is out and the
+  rounds go on; stopped, the next heading; none left, the walk failure stands."
+  [c]
+  (let [{:keys [tunnel]} (:args c)
+        ignore? (boolean (:ignore-zones? (:args c)))
+        {:keys [i cell walk results]} (:escape (ctx/mem c))
+        attempts (escape-attempts (:heading (:line tunnel)) ignore?)
+        attempt (get attempts i)
+        entry-y (second (first (tunnel/line-cells (:line tunnel))))]
+    (cond
+      (or (nil? attempt) (and (:ignore-zones? attempt) (not ignore?) (not (zones-blocked? results))))
+      (finish! c :stopped :walk-failed {:cell cell :walk walk :escape results})
+      :else
+      (let [r (await (ctx/call-child c (keyword (str "escape-" i)) 'jobs.access.stair
+                                     {:dir :up :heading (:heading attempt) :y entry-y
+                                      :ignore-zones? (:ignore-zones? attempt)}))
+            res (when (= :done r) (ctx/child-result c (keyword (str "escape-" i))))]
+        (cond
+          (nil? res) :continue
+          (= :done (:status res))
+          (do (ctx/emit! c :leave-tunnel.escape :info {:at (feet-of c) :heading (:heading attempt) :ignore-zones? (:ignore-zones? attempt)
+                                                      :text (str "leave-tunnel dug its own way out " (name (:heading attempt)))})
+              (ctx/update-mem! c #(-> % (dissoc :escape) (assoc :escaped true)))
+              :continue)
+          :else (do (ctx/update-mem! c update :escape #(-> % (assoc :i (inc i)) (update :results conj (select-keys res [:reason :cell :heading]))))
+                    :continue))))))
 
 (defn book-left! [c cell site reason]
   (ctx/update-mem! c update :left (fnil conj []) {:cell cell :site site :reason reason})
@@ -155,7 +209,7 @@
   (let [stand ((tunnel/line-cells (:line (:tunnel (:args c)))) (inc site))]
     (if (= stand (feet-of c))
       (await (dig-torch! c torch))
-      (await (walk-to! c stand)))))
+      (await (walk-to! c stand (fn [_] (book-left! c (:cell torch) site :walk-failed)))))))
 
 (defn ^:async fill!
   "Fill one mouth cell from the entry, or book it open with why not."
@@ -188,7 +242,7 @@
         body (u/self-pos c)
         todo (remove booked (mouth (:dug tunnel) entry (:block-at in)))]
     (cond
-      (not= entry (feet-of c)) (await (walk-to! c entry))
+      (not= entry (feet-of c)) (await (walk-to! c entry #(finish! c :done :open {:escaped true :walk %})))
       (empty? todo) (finish! c :done (if (empty? (:open m)) :sealed :open) {})
       :else (await (fill! c (first (sort-by (juxt #(% 1) #(- (from-plan/eye-dist body %))) todo)))))))
 
@@ -198,6 +252,7 @@
         torches (when (:line tunnel) (standing (:block-at (stair/rules-in c (feet-of c))) tunnel m))]
     (cond
       (not (:line tunnel)) (finish! c :stopped :bad-args {:why "tunnel must be the result of jobs.access.tunnel"})
+      (:escape m) (await (escape! c))
       (:collect m) (await (collect! c))
       (seq torches) (await (take-torch! c (first torches)))
       :else (await (seal! c)))))

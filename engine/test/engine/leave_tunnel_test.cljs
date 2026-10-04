@@ -43,6 +43,21 @@
         block-at (fn [cell] (if (some #{cell} cells) "air" (cliff cell)))]
     (is (= #{[0 61 -1] [0 62 -1] [0 63 -1]} (set (leave-tunnel/mouth (dug-of cells) [0 60 0] block-at))))))
 
+;; ---------------------------------------------------------------- the escape, pure
+
+(deftest escape-attempts-go-back-along-the-heading-then-the-others-then-override-zones
+  (are [heading ignore? expected] (= expected (mapv (juxt :heading :ignore-zones?) (leave-tunnel/escape-attempts heading ignore?)))
+    :east false [[:west false] [:north false] [:east false] [:south false]
+                 [:west true] [:north true] [:east true] [:south true]]
+    :north true [[:south true] [:north true] [:east true] [:west true]]))
+
+(deftest only-an-access-reason-warrants-the-override
+  (are [results expected] (= expected (leave-tunnel/zones-blocked? results))
+    [{:reason :zone} {:reason :no-floor}] true
+    [{:reason :footprint}] true
+    [{:reason :no-floor} {:reason :dig-failed}] false
+    [] false))
+
 ;; ---------------------------------------------------------------- the fake world
 
 (defn stone
@@ -206,21 +221,43 @@
             (is (= (count places) (count (distinct places))) "no cell placed twice")
             (is (= [] (the-ledger (:eng again))))))))))
 
-(deftest a-walk-that-cannot-arrive-stops-with-the-torches-left-and-in-the-ledger
+(defn block-stair!
+  "Stone in the middle of the stair, as a cave-in leaves it."
+  [p]
+  (doseq [k ["4,58,0" "4,59,0"]] (.set (.. (.-world p) -state -blocks) k "stone")))
+
+(defn drop-pickaxe!
+  "The stair is blocked and the pickaxe is gone: nothing can be dug out."
+  [p]
+  (block-stair! p)
+  (let [inv (.. (.-world p) -state -inventory)
+        i (.findIndex inv #(= "iron_pickaxe" (.-name %)))]
+    (.splice inv i 1)))
+
+(deftest a-broken-stair-is-no-trap-the-body-digs-its-own-way-out
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [block! (fn [p] (doseq [k ["4,58,0" "4,59,0"]] (.set (.. (.-world p) -state -blocks) k "stone")))
-              {:keys [eng p out] :as s} (await (run-out! (setup {:blocks eight-down :inventory (inventory)}
-                                                            {:target [6 57 0]} {} :between block!)))
+        (let [{:keys [p out] :as s} (await (run-out! (setup {:blocks eight-down :inventory (inventory)}
+                                                              {:target [6 57 0]} {} :between block-stair!)))
+              res @out]
+          (is (= :done (:status res)))
+          (is (= 1 (count (events-of s :leave-tunnel.escape))))
+          (is (= :sealed (:reason res)))
+          (is (>= (second (feet p)) 65) "the body stands at the entry's height or above")
+          (is (= 0 (count (events-of s :leave-tunnel.stopped)))))))))
+
+(deftest a-body-that-cannot-dig-out-stops-with-every-heading-named
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out] :as s} (await (run-out! (setup {:blocks eight-down :inventory (inventory)}
+                                                        {:target [6 57 0]} {} :between drop-pickaxe!)))
               res @out]
           (is (= :stopped (:status res)))
           (is (= :walk-failed (:reason res)))
-          (is (= 2 (count (:left res))))
-          (is (every? #(= :walk-failed (:reason %)) (:left res)))
-          (is (empty? (:taken res)))
-          (is (= 6 (carried p "torch")))
-          (is (= 2 (count (the-ledger eng))))
+          (is (= 4 (count (:escape res))) "the four headings, zones respected, none left to override")
+          (is (= 0 (count (events-of s :leave-tunnel.escape))))
           (is (= 1 (count (events-of s :leave-tunnel.stopped)))))))))
 
 (deftest a-tunnel-result-without-a-line-is-bad-args
