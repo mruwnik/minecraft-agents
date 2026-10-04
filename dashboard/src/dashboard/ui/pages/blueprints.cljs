@@ -16,7 +16,7 @@
       (when (seq kind) [:span.kind kind])
       (when (seq footprint) [:span footprint])
       (when (pos? layers) [:span (str layers " layers")])
-      (when (pos? blocks) [:span (str blocks " items")])
+      (when (pos? blocks) [:span (str blocks " block cells")])
       [:span {:class (str "pill " (bp/status-level status))} status]
       (when (pos? builds) [:span (str "built " builds "×")])]]))
 
@@ -24,13 +24,13 @@
   [:section
    [:h2 "draft blueprint"]
    [:button {:on-click #(rf/dispatch [:blueprints/copy-selected])} "copy selected into editor"]
-   [:textarea {:aria-label "Blueprint v2 JSON draft" :placeholder "Paste a schemaVersion 2 plan"
+   [:textarea {:aria-label "Blueprint EDN draft" :placeholder "Paste {:id \"my-blueprint\" :front :south :key {...} :layers [...]}"
                :value (or draft-plan "") :on-change #(rf/dispatch [:blueprints/draft-plan (.. % -target -value)])}]
-   [:label "optional declared item stock (JSON counts)"
-    [:textarea.stock {:aria-label "Declared stock" :placeholder "{\"oak_planks\": 64}"
+   [:label "optional declared block stock (EDN counts)"
+    [:textarea.stock {:aria-label "Declared stock" :placeholder "{\"oak_planks\" 64}"
                       :value (or draft-stock "") :on-change #(rf/dispatch [:blueprints/draft-stock (.. % -target -value)])}]]
    [:button {:on-click #(rf/dispatch [:blueprints/preview-draft])} "validate and preview"]
-   [:button {:on-click #(rf/dispatch [:blueprints/download-draft])} "download JSON"]
+   [:button {:on-click #(rf/dispatch [:blueprints/download-draft])} "download EDN"]
    [:div.draft-status (or draft-status "Draft preview never starts or modifies a build.")]])
 
 (defn sidebar [{:keys [library selected draft-status] :as state}]
@@ -86,7 +86,7 @@
 (defn layer-canvas [bp-data cells hover]
   (let [node (atom nil)
         hovered (r/atom nil)
-        draw! #(when @node (canvas/draw-layer! @node bp-data cells @hovered))]
+        draw! #(when @node (canvas/draw-layer! @node (bp/dimensions bp-data) cells @hovered))]
     (r/create-class
      {:component-did-mount draw!
       :component-did-update draw!
@@ -121,14 +121,14 @@
       [:div.block
        [:h2 "layers, from the ground up"]
        [:div#gridRow
-        (into [:div#layers] (map #(layer-box bp-data hover %) (map :y (:layers bp-data))))
+        (into [:div#layers] (map #(layer-box bp-data hover %) (bp/layer-ys bp-data)))
         (into [:div#legend] (map legend-item (bp/legend-rows bp-data)))]
        [:div#hover (when-let [[where what] (some-> @hover (str/split #" · "))]
                      [:<> where [:span.muted " · "] what])]])))
 
 (defn bill-block [detail]
   [:div.block
-   [:h2 "bill of materials"]
+   [:h2 "block quantities"]
    (into [:div#bill]
          (for [{:keys [item count share]} (bp/bill-rows (get-in detail [:bill :total]))]
            ^{:key item}
@@ -143,19 +143,25 @@
 
 (defn materials-block [detail]
   [:<>
-   [:h2 "material roles · requirements and preferences"]
-   (into [:div#materials]
+   [:h2 "material requirements"]
+   (if (bp/native? (:bp detail))
+     [:div#materials "The key declares exact blocks and block states. Quantities count cells by block name; they do not estimate inventory items for beds, doors, crops or fluids."
+      (when-let [stock (:stock detail)]
+        [:p (if (seq (:shortage stock))
+              (str "Declared block count shortages: " (str/join ", " (for [[block n] (:shortage stock)] (str n " " (bp/kname block)))))
+              "Declared block counts cover the blueprint.")])]
+     (into [:div#materials]
          (for [{:keys [role required preferences palette]} (bp/material-role-rows detail)]
            ^{:key role}
            [:section.materialRole
             [:h3 (str/replace role "_" " ")]
             (for [[i t] (map-indexed vector required)] ^{:key (str "r" i)} [:p (str "Required · " t)])
             (for [[i t] (map-indexed vector preferences)] ^{:key (str "p" i)} [:p.preference (str "Preference · " t)])
-            (when (seq palette) [:p (str "Allocated from declared stock · " (str/join ", " palette))])]))])
+            (when (seq palette) [:p (str "Allocated from declared stock · " (str/join ", " palette))])])))])
 
 (defn builds-line [builds]
   (if (empty? builds)
-    [:div#builds "not yet built anywhere: mark one with blueprint.build place=<name>"]
+    [:div#builds "Use this blueprint in an EDN plan to record a placement."]
     [:div#builds "standing at "
      (for [[i b] (map-indexed vector builds)]
        ^{:key i}
@@ -170,9 +176,9 @@
     [:div
      [:div.titleRow
       [:h3 (:name detail)]
-      [:span (when bp-data (str (:title bp-data) " · " footprint " · " layers " layers"))]
+      [:span (when bp-data (str (or (:title bp-data) (:id bp-data)) " · " footprint " · " layers " layers"))]
       [:span {:class (str "pill " (bp/status-level status))} status]]
-     [:div.desc (:description bp-data)]
+     [:div.desc (or (:note bp-data) (:description bp-data))]
      (when bp-data
        [:<>
         (into [:div#meta] (for [[k v] (bp/meta-facts detail)] ^{:key k} [:span (str k " ") [:b v]]))

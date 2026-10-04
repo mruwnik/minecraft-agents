@@ -1,5 +1,5 @@
 (ns dashboard.villagers-view
-  "What the villager roster page says, as plain data and strings. Ported from tools/dashboard/villagers.html."
+  "Transient villager observations displayed by the dashboard."
   (:require [clojure.string :as str]))
 
 (defn ago [now-ms iso]
@@ -11,10 +11,10 @@
       :else (str (quot s 86400) "d ago"))))
 
 (defn records [roster]
-  (vec (sort-by (juxt #(or (:profession %) "") #(str (:uuid %))) (vals (:villagers roster)))))
+  (vec (sort-by (juxt #(or (:profession %) "") #(str (or (:uuid %) (:key %)))) (vals (:villagers roster)))))
 
-(defn haystack [{:keys [uuid profession age place offers]}]
-  (str/lower-case (str uuid " " (or profession "") " " (or age "") " " (or (:name place) "") " " (pr-str (:items offers)))))
+(defn haystack [{:keys [uuid key profession age place offers]}]
+  (str/lower-case (str uuid " " key " " (or profession "") " " (or age "") " " (or (:name place) "") " " (pr-str (:items offers)))))
 
 (defn record-matches? [record query]
   (str/includes? (haystack record) (str/lower-case (str/trim (or query "")))))
@@ -22,11 +22,15 @@
 (defn filter-records [recs query]
   (filterv #(record-matches? % query) recs))
 
-(defn summary-lines [now-ms {:keys [profession age level place lastSeenAt lastSeenBy]}]
+(defn fresh-observation? [now {:keys [t until]}]
+  (and (js/Number.isFinite t) (js/Number.isFinite until) (<= t now) (> until now)))
+
+(defn summary-lines [now-ms {:keys [profession age level place lastSeenAt lastSeenBy t] :as record}]
   [(str (or profession "profession unknown") " · " (or age "age unknown"))
    (str "Lv " (or level "?"))
    (if (:name place) (str "place: " (:name place)) "place not assigned")
-   (if lastSeenAt (str "seen " (ago now-ms lastSeenAt) " by " (or lastSeenBy "unknown")) "no sighting time")])
+   (str (if lastSeenAt (str "seen " (ago now-ms lastSeenAt) " by " (or lastSeenBy "unknown")) "no sighting time")
+        (when (some? t) (if (fresh-observation? now-ms record) " · transient observation" " · expired observation")))])
 
 (defn offer-text [{:keys [outputItem inputItem1 inputItem2 nbTradeUses maximumNbTradeUses tradeDisabled]}]
   (let [enchants (str/join ", " (for [e (:enchants outputItem)] (str (:name e) " " (:lvl e))))
@@ -39,10 +43,16 @@
 (defn offers-heading [now-ms {:keys [observedAt observedBy]}]
   (str "Offers observed " (ago now-ms observedAt) " by " observedBy))
 
-(defn detail-lines [now-ms {:keys [uuid lastPosition workstationObservation lockEvidence purchases]}]
+(defn detail-lines [now-ms {:keys [uuid key lastPosition workstationObservation lockEvidence purchases world dimension t lastSeenAt] :as record}]
   (vec
    (concat
-    [{:text (str "UUID " uuid) :cls nil}]
+    [{:text (if uuid (str "UUID " uuid) (str "Transient identity " key)) :cls nil}]
+    (when (some? t)
+      [{:text (str "Observed " (or lastSeenAt "at an unknown time")
+                   (if (fresh-observation? now-ms record) " · transient observation" " · expired observation"))
+        :cls "muted"}
+       {:text (str "world " world " · " (if dimension (str "dimension " (name dimension)) "dimension not recorded"))
+        :cls "muted"}])
     (when lastPosition
       [{:text (str "last coordinates " (.toFixed (:x lastPosition) 1) ", " (.toFixed (:y lastPosition) 1) ", " (.toFixed (:z lastPosition) 1))
         :cls "coord"}])
@@ -59,3 +69,14 @@
         :cls nil}]))))
 
 (defn status-text [n clock] (str n " UUIDs · refreshed " clock))
+
+(defn live-records [roster now]
+  (filterv #(fresh-observation? now %) (records roster)))
+
+(defn capability-text [sources]
+  (vec (for [{:keys [body status error]} sources :when (not= :ready status)]
+         (str (:name body) ": " (case status
+                                 :unsupported "entity observations unavailable; restart this body with the current engine build"
+                                 :loading "loading entity observations"
+                                 :unavailable (or error "entity observations unavailable")
+                                 "entity observations unavailable")))))

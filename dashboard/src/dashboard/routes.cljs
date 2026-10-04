@@ -29,6 +29,7 @@
    "/api/state" {:kind :state}
    "/api/plans" {:kind :plans-api}
    "/api/villagers" {:kind :villagers-api}
+   "/api/entities" {:kind :entities-api}
    "/api/villages" {:kind :villages-api}
    "/api/chat" {:kind :chat}
    "/api/chat/send" {:kind :chat-send}
