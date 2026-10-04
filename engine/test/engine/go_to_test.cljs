@@ -168,11 +168,86 @@
 (deftest give-up-fields-explain-every-kind-of-fruitless-round
   (doseq [[result expected]
           [[{:status :no-path :reason :abilities :kind :gap-up} {:why :abilities :kind :gap-up}]
-           [{:status :no-path :reason :door-stuck :cells []} {:why :door-stuck}]
+           [{:status :no-path :reason :door-stuck :cells [{:x 1 :y 64 :z 0}]} {:why :door-stuck :cells [{:x 1 :y 64 :z 0}]}]
+           [{:status :no-path :reason :one-way :planner :exhausted :one-way {:x 3 :y 64 :z 0} :near 4.5}
+            {:why :one-way :one-way {:x 3 :y 64 :z 0} :near 4.5}]
+           [{:status :no-path :reason nil} {:why :no-path}]
+           [{:status :no-path} {:why :no-path}]
            [{:status :stuck :step 3 :move :jump :target [4 65 0] :why "no progress on step 3 for 3.0 s"}
             {:why :stuck :kind :jump :detail "no progress on step 3 for 3.0 s"}]
            [{:status :stuck :why "walk timed out after 60 s"} {:why :stuck :detail "walk timed out after 60 s"}]
            [{:status :off-plan :at [1 64 0] :step 2} {:why :off-plan :detail "left the plan at step 2"}]
-           [{:status :failed :reason "cut"} {:why :cut}]
+           [{:status :failed :reason "controls lost"} {:why :steer-failed :detail "controls lost"}]
+           [{:status :failed} {:why :steer-failed}]
            [{:status :arrived :at [1 64 0]} {:why :no-progress}]]]
     (is (= expected (go-to/give-up-fields result)) (pr-str result))))
+
+(defn ^:async go-prepped!
+  "go! with (prepare! p) run on the fake primitives before the job starts."
+  [world args prepare!]
+  (let [{:keys [eng p] :as s} (setup world)
+        out (atom :not-done)
+        eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out args)))]
+    (prepare! p)
+    (core/submit! eng '(recording-parent) {})
+    (assoc s :eng eng :out out :ticks (await (tick-out! eng 30)))))
+
+(defn steer-through
+  "A steer override that runs the walk's decide against pose-of (a fn of the tick count) for at most 200 ticks, as the real
+  steer does, and ends done when decide does."
+  [pose-of]
+  (fn ^:async f [_ args _]
+    (let [decide (.-decide args)]
+      (loop [i 0]
+        (if (>= i 200)
+          #js {:status "timeout" :pose (pose-of i)}
+          (let [out (decide (pose-of i))]
+            (if (.-done out)
+              #js {:status "done" :ticks i}
+              (recur (inc i)))))))))
+
+(defn pose [x z] #js {:x x :y 64 :z z :vy 0 :onGround true :onClimbable false :inWater false :collided false})
+
+(defn override-steer! [p f] (.override (.-world p) "steer" f))
+
+(deftest go-to-says-stuck-when-the-walk-never-progresses
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out eng p] :as s} (await (go-prepped! {:blocks flat} {:pos [10 64 0] :range 0}
+                                                            #(override-steer! % (steer-through (fn [_] (pose 0.5 0.5))))))
+              result @out]
+          (is (= {:arrived false :reason :unreachable :why :stuck}
+                 (select-keys result [:arrived :reason :why])))
+          (is (keyword? (:kind result)) "the move the walk was stuck on")
+          (is (re-find #"^no progress on step \d+" (:detail result)))
+          (is (= ["blocked" "blocked" "blocked"] (mapv :status (moved eng))))
+          (is (= [{:tries 3 :why :stuck :refused-kind (:kind result)}]
+                 (mapv #(select-keys % [:tries :why :refused-kind]) (events-of s :unreachable))))
+          (is (= (:detail result) (:detail (first (events-of s :unreachable))))))))))
+
+(deftest go-to-says-off-plan-when-the-walk-ends-off-its-plan
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out]} (await (go-prepped! {:blocks flat} {:pos [10 64 0] :range 0}
+                                                #(override-steer! % (steer-through (fn [_] (pose 0.5 30.5))))))]
+          (is (= {:arrived false :reason :unreachable :why :off-plan}
+                 (select-keys @out [:arrived :reason :why])))
+          (is (re-find #"^left the plan at step" (:detail @out))))))))
+
+(deftest go-to-says-steer-failed-when-the-steer-fails
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out]} (await (go-prepped! {:blocks flat} {:pos [10 64 0] :range 0}
+                                                #(override-steer! % (fn ^:async f [_ _ _] #js {:status "failed" :reason "no controls"}))))]
+          (is (= {:arrived false :reason :unreachable :why :steer-failed :detail "no controls"} @out)))))))
+
+(deftest go-to-says-no-progress-when-the-walk-ends-no-nearer
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out]} (await (go-prepped! {:blocks flat} {:pos [10 64 0] :range 0}
+                                                #(override-steer! % (fn ^:async f [_ _ _] #js {:status "done"}))))]
+          (is (= {:arrived false :reason :unreachable :why :no-progress} @out)))))))

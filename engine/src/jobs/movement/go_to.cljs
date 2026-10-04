@@ -21,9 +21,11 @@
   closer than any before (:best) is progress and resets the count; any other round that does not arrive (a partial
   walk without a new best, no path, stuck) counts, and three in a row give up with an unreachable warn (the last
   status and :why and :kind). Hands over {:arrived true}, or {:arrived false :reason :unreachable}
-  with :why saying why (the planner's :no-path reason, or :abilities; :stuck when the walk made no progress on a step, with the
-  step's move as :kind and the executor's text as :detail; :off-plan; :no-progress when a walk ended no nearer) and, when the
-  executor cannot walk the way there, the :kind of step that cannot (ctx/result!), and emits it as a :result info event.
+  with :why saying why (the planner's :no-path reason, or :abilities, or :no-path when it gave none; :stuck when the walk made
+  no progress on a step, with the step's move as :kind and the executor's text as :detail; :off-plan; :steer-failed with
+  the steer's reason as :detail; :no-progress when a walk ended no nearer) and, when the executor cannot walk the way there,
+  the :kind of step that cannot (ctx/result!); :door-stuck adds the :cells that would not open, :one-way the :near and :one-way
+  step the plan was cut at. It is emitted as a :result info event.
 
   Every round that walks writes a :moved memory entry {:from :to :status :target} (status \"arrived\", \"partial\" when
   the body got more than 1 closer, else \"blocked\"), which the stuck trigger and jobs.maintenance.unstick read.
@@ -63,10 +65,11 @@
 (defn arrived! [c] (finish! c {:arrived true}))
 
 (defn give-up-fields
-  "What a fruitless round's result says about why: {:why :kind :detail}, only the keys it has. A :no-path says the planner's
-  :reason (:why) and the :kind of step that cannot be walked; a walk that got stuck says :stuck, the :move it was stuck on
-  as :kind and the executor's :why text as :detail; one that left its plan says :off-plan; a failed steer says its reason;
-  a walk that ended with the body no nearer says :no-progress."
+  "What a fruitless round's result says about why: {:why :kind :detail ...}, only the keys it has. A :no-path says the planner's
+  :reason (:why, :no-path when it has none), the :kind of step that cannot be walked, and what its reason carries (:door-stuck's
+  :cells, :one-way's :near and :one-way); a walk that got stuck says :stuck, the :move it was stuck on as :kind and the
+  executor's :why text as :detail; one that left its plan says :off-plan; a failed steer says :steer-failed with its reason
+  as :detail; a walk that ended with the body no nearer says :no-progress."
   [{:keys [status reason kind move step] :as result}]
   (case status
     :stuck (cond-> {:why :stuck}
@@ -74,20 +77,21 @@
              (:why result) (assoc :detail (:why result)))
     :off-plan (cond-> {:why :off-plan}
                 step (assoc :detail (str "left the plan at step " step)))
+    :failed (cond-> {:why :steer-failed}
+              reason (assoc :detail (str reason)))
     (cond
-      reason (cond-> {:why (keyword reason)}
-               kind (assoc :kind kind))
+      (or reason (= :no-path status)) (merge {:why (if reason (keyword reason) :no-path)}
+                                             (select-keys result [:kind :cells :near :one-way]))
       :else {:why :no-progress})))
 
 (defn give-up! [c pos tries status result]
-  (let [{:keys [why kind detail]} (give-up-fields result)]
-    (ctx/emit! c :unreachable :warn (cond-> {:target pos :tries tries :status status :why why
-                                             :text (str "gave up walking to " pos)}
-                                      kind (assoc :refused-kind kind)
-                                      detail (assoc :detail detail)))
-    (finish! c (cond-> {:arrived false :reason :unreachable :why why}
-                 kind (assoc :kind kind)
-                 detail (assoc :detail detail)))))
+  (let [{:keys [why kind] :as fields} (give-up-fields result)
+        extra (dissoc fields :why :kind)]
+    (ctx/emit! c :unreachable :warn (cond-> (merge {:target pos :tries tries :status status :why why
+                                                    :text (str "gave up walking to " pos)}
+                                                   extra)
+                                      kind (assoc :refused-kind kind)))
+    (finish! c (merge {:arrived false :reason :unreachable} fields))))
 
 (defn refuse! [c {:keys [reason message]}]
   (ctx/emit! c :refused :warn {:reason reason :text message})
