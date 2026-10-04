@@ -1,0 +1,5 @@
+;; ProbeDrive live cases for the :mounted trigger and jobs.movement.leave-vehicle: idle (look-around), :mounted registered;
+;; the body is put on a boat or minecart through RCON (ride) and the trigger must make it dismount
+{:register [{:trigger :mounted :persistence :stop
+             :job (jobs.movement.leave-vehicle)}]
+ :queue [(repeat (jobs.movement.look-around))]}
