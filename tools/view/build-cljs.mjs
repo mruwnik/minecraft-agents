@@ -10,8 +10,9 @@ import { fileURLToPath } from 'node:url'
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 const dashboard = path.join(repo, 'dashboard')
 export const output = path.join(repo, 'tools', 'view', 'web', 'cljs', 'viewer.mjs')
-// what the :viewer build reads: its namespaces and the build config
-const sources = [path.join(dashboard, 'src', 'view'), path.join(dashboard, 'src', 'drive'), path.join(dashboard, 'shadow-cljs.edn')]
+// what the :viewer build reads: the build config and the dashboard's cljs sources (not just src/view and src/drive: a namespace
+// the viewer newly requires from elsewhere in src must count). ../engine/src is on the build's source path but the viewer requires none of it.
+export const sources = [path.join(dashboard, 'src'), path.join(dashboard, 'shadow-cljs.edn')]
 const MIN_MEMORY_MB = 3500
 
 // true when there is no output or a source is newer than it (mtimes in ms; output null when missing)

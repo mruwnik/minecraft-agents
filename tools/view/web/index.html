@@ -25,7 +25,16 @@
 <pre id="overlay">starting...</pre>
 <div id="bar"><select id="agents"></select><button id="free" type="button">free camera (F)</button></div>
 <div id="drive-banner" hidden></div>
-<script type="module" src="/web/app.mjs"></script>
-<script type="module" src="/web/drive.mjs"></script>
+<script>
+  // a page script that failed to load (usually the cljs bundle not built): show the server's message instead of a blank page
+  const loadFailed = async () => {
+    const reply = await fetch('/web/cljs/viewer.mjs').catch(() => null)
+    const text = reply && !reply.ok ? await reply.text() : 'a page script failed to load (see the console)'
+    document.getElementById('overlay').textContent = text
+    document.getElementById('overlay').style.color = '#ff8a80'
+  }
+</script>
+<script type="module" src="/web/app.mjs" onerror="loadFailed()"></script>
+<script type="module" src="/web/drive.mjs" onerror="loadFailed()"></script>
 </body>
 </html>

@@ -84,7 +84,7 @@ Page (`tools/view/web/`):
   Entities are drawn as boxes, up to 64.
 - `app.mjs` provides the agent picker and the SSE connection. It fetches columns nearest-first with 6 in flight and
   refetches a column on its `column` event. The overlay shows fps, pose age, file→frame latency, columns
-  loaded/wanted and HUD numbers. Press F for a free camera (mouse look + WASD). `window.__view` exposes the stats for
+  loaded/wanted and HUD numbers. Press F for a free camera (mouse look + WASD). `window.__view` exposes the stats (`window.__viewStats()` returns fps, loaded, wanted, poseAge, status; null without an agent) for
   automation.
 - `tools/view-web-bench.mjs <url> [--angle vulkan|gl] [--screenshot f.png]` runs headless Chromium over CDP and
   prints the fps, the latency percentiles and the WebGL renderer string.

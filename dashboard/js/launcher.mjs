@@ -8,9 +8,11 @@ export const minMemoryMb = 3500
 
 export const initial = { phase: 'idle', pending: false, stopping: null, quitting: false }
 
-// server last: shadow-cljs writes out/server.cjs only when the server step runs, so a failed viewer or ui build leaves the
-// old file. viewer: the view pages' cljs (tools/view/web/cljs/viewer.mjs), rebuilt only when its sources changed.
-export const buildSteps = ['viewer', 'ui', 'server']
+// ui before server: shadow-cljs writes out/server.cjs only when the server step runs, so a failed ui build leaves the old
+// file. viewer last and optional: the view pages' cljs (tools/view/web/cljs/viewer.mjs), rebuilt only when its sources
+// changed; its failure is a warning, because the launcher exists to keep the dashboard running.
+export const buildSteps = ['ui', 'server', 'viewer']
+const optionalSteps = ['viewer']
 
 // [command, args] of a step, run in the dashboard dir. The compile JVM is shared machine-wide, hence flock (build-cljs.mjs
 // takes it itself, only when it builds).
@@ -19,10 +21,17 @@ export const stepCommand = (step) =>
     ? ['node', ['../tools/view/build-cljs.mjs']]
     : ['flock', ['/tmp/mc-compile.lock', 'npx', 'shadow-cljs', 'compile', step]]
 
-// codes: exit codes of the steps run so far, in order; the run stops at the first non-zero one.
+// whether the run stops after this step: a required step failed
+export const stopsBuild = (step, code) => code !== 0 && !optionalSteps.includes(step)
+
+// codes: exit codes of the steps run so far, in order (the run stops at the first failed required step).
 export const buildOutcome = (codes) => {
-  const i = codes.findIndex((c) => c !== 0)
-  return i < 0 ? { ok: true, failed: null } : { ok: false, failed: buildSteps[i] }
+  const i = codes.findIndex((c, j) => stopsBuild(buildSteps[j], c))
+  return {
+    ok: i < 0,
+    failed: i < 0 ? null : buildSteps[i],
+    warned: buildSteps.filter((step, j) => j < codes.length && codes[j] !== 0 && optionalSteps.includes(step)),
+  }
 }
 
 export const onRestartRequest = (state) =>

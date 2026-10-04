@@ -151,6 +151,13 @@ test('GET /web/cljs/<file> serves the cljs build output', async () => {
   assert.match(script.headers.get('content-type'), /javascript/)
 })
 
+test('GET /web/cljs/viewer.mjs without a build is a 503 naming the build command', async () => {
+  const response = await get('/web/cljs/viewer.mjs')
+  assert.equal(response.status, 503)
+  assert.match(response.headers.get('content-type'), /text\/plain/)
+  assert.match(await response.text(), /node tools\/view\/build-cljs\.mjs/)
+})
+
 test('SSE sends the pose and hud on connect, then a pose event on change', async () => {
   const response = await get('/pose/w1/Bob?radius=2')
   assert.equal(response.headers.get('content-type'), 'text/event-stream')

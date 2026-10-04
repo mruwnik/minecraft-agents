@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  initial, onRestartRequest, onBuildDone, onServerExit, onQuit, buildSteps, buildOutcome, stepCommand, parseMemAvailableMb, enoughMemory, minMemoryMb,
+  initial, onRestartRequest, onBuildDone, onServerExit, onQuit, buildSteps, buildOutcome, stopsBuild, stepCommand, parseMemAvailableMb, enoughMemory, minMemoryMb,
 } from './launcher.mjs'
 
 test('a request while idle starts a build', () => {
@@ -90,16 +90,25 @@ test('a quit during a swap stops the replacement from starting', () => {
   assert.deepEqual(onServerExit(quit.state, 0).actions, ['exit:0'])
 })
 
-test('the viewer and the ui build before the server so a failed build leaves the old server file', () => {
-  assert.deepEqual(buildSteps, ['viewer', 'ui', 'server'])
+test('the ui builds before the server so a failed build leaves the old server file; the viewer comes last', () => {
+  assert.deepEqual(buildSteps, ['ui', 'server', 'viewer'])
 })
 
-test('buildOutcome stops at the first failed step', () => {
-  assert.deepEqual(buildOutcome([0, 0, 0]), { ok: true, failed: null })
-  assert.deepEqual(buildOutcome([1]), { ok: false, failed: 'viewer' })
-  assert.deepEqual(buildOutcome([0, 1]), { ok: false, failed: 'ui' })
-  assert.deepEqual(buildOutcome([0, 0, 2]), { ok: false, failed: 'server' })
+test('buildOutcome stops at the first failed required step', () => {
+  assert.deepEqual(buildOutcome([0, 0, 0]), { ok: true, failed: null, warned: [] })
+  assert.deepEqual(buildOutcome([1]), { ok: false, failed: 'ui', warned: [] })
+  assert.deepEqual(buildOutcome([0, 2]), { ok: false, failed: 'server', warned: [] })
 })
+
+test('a failed viewer build is a warning: the build is still ok', () => {
+  assert.deepEqual(buildOutcome([0, 0, 1]), { ok: true, failed: null, warned: ['viewer'] })
+})
+
+for (const [step, code, expected] of [
+  ['ui', 0, false], ['ui', 1, true], ['server', 1, true], ['viewer', 1, false], ['viewer', 0, false]
+]) {
+  test(`stopsBuild ${step} exit ${code}`, () => assert.equal(stopsBuild(step, code), expected))
+}
 
 for (const [step, expected] of [
   ['viewer', ['node', ['../tools/view/build-cljs.mjs']]],

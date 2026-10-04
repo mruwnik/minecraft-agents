@@ -28,6 +28,7 @@ const send = (res, status, body, headers = {}) => {
   res.writeHead(status, { 'Cache-Control': 'no-cache', ...headers })
   res.end(body)
 }
+const VIEWER_BUNDLE = 'cljs/viewer.mjs'
 const notFound = res => send(res, 404, 'not found', { 'Content-Type': 'text/plain' })
 
 const statOrNull = async file => {
@@ -152,7 +153,7 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
     if (!type) return notFound(res)
     const file = path.join(webDir, name)
     const stat = await statOrNull(file)
-    if (!stat?.isFile()) return notFound(res)
+    if (!stat?.isFile()) return name === VIEWER_BUNDLE ? send(res, 503, 'the viewer bundle web/cljs/viewer.mjs is not built: run `node tools/view/build-cljs.mjs` in the repo root', { 'Content-Type': 'text/plain' }) : notFound(res)
     send(res, 200, await fs.promises.readFile(file), { 'Content-Type': type })
   }
 

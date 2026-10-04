@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
-  initial, onRestartRequest, onBuildDone, onServerExit, onQuit, buildSteps, buildOutcome, stepCommand, parseMemAvailableMb, enoughMemory, minMemoryMb,
+  initial, onRestartRequest, onBuildDone, onServerExit, onQuit, buildSteps, buildOutcome, stopsBuild, stepCommand, parseMemAvailableMb, enoughMemory, minMemoryMb,
 } from './js/launcher.mjs'
 
 const dir = dirname(fileURLToPath(import.meta.url))
@@ -39,7 +39,8 @@ const runStep = (step) => new Promise((resolve) => {
 })
 
 // Resolves true on a good build. The compile JVM is shared machine-wide, hence flock. Steps run in buildSteps order and
-// stop at the first failure, so a failed ui build leaves out/server.cjs as it was.
+// stop at the first failed required step, so a failed ui build leaves out/server.cjs as it was; the optional viewer step
+// runs last and a failure of it is only a warning.
 const runBuild = async () => {
   const mb = availableMb()
   if (!enoughMemory(mb)) {
@@ -49,9 +50,10 @@ const runBuild = async () => {
   const codes = []
   for (const step of buildSteps) {
     codes.push(await runStep(step))
-    if (state.quitting || codes[codes.length - 1] !== 0) break
+    if (state.quitting || stopsBuild(step, codes[codes.length - 1])) break
   }
-  const { ok, failed } = buildOutcome(codes)
+  const { ok, failed, warned } = buildOutcome(codes)
+  warned.forEach((step) => say(`warning: the ${step} build failed; the dashboard goes on without it`))
   if (!ok) say(`build failed at the ${failed} step`)
   return ok
 }

@@ -1,5 +1,6 @@
 // The browser view: one scene (scene.mjs) of one agent drawn by the WebGL renderer (gl.mjs) every frame, with an overlay, a free
 // camera and the agent picker. window.__view exposes numbers for automated measurement. hub.mjs draws many scenes in one context.
+import { isAgentKey } from './agent-key.mjs'
 import { directionFor } from './camera.mjs'
 import { createDecoder } from './decoder.mjs'
 import { createRenderer } from './gl.mjs'
@@ -14,7 +15,9 @@ const numberParam = (name, fallback) => {
   return params.has(name) && Number.isFinite(value) && value > 0 ? value : fallback
 }
 // the body is <world>/<name>: a name is unique only within a world
-const agentName = params.get('agent')
+const agentParam = params.get('agent')
+const agentName = isAgentKey(agentParam) ? agentParam : null
+const agentError = agentParam && !agentName ? `bad ?agent=${agentParam}: use <world>/<name>, e.g. ?agent=claude/Bob (pick one below)` : null
 const radius = Math.min(32, Math.round(numberParam('radius', 8)))
 const fov = numberParam('fov', 70)
 const maxDist = numberParam('dist', radius * 16)
@@ -47,6 +50,7 @@ const scene = agentName
 const noMetrics = { fps: 0, frames: 0, latencies: [], shownLatencies: [], camTrace: [], underruns: 0, decodeMs: [], lightMs: [], uploadMs: [], columnDrawn: [], retargetMs: [], slowUploads: [], mainDecode: { ms: 0, columns: 0 }, loaded: 0, wanted: 0, ready: false }
 const view = window.__view = scene?.metrics ?? noMetrics
 view.renderer = gfx.renderer
+window.__viewStats = () => (scene ? { fps: view.fps, ...scene.stats() } : null) // measurement: fps, loaded, wanted, poseAge, status (docs/view-rendering-performance.md)
 
 const state = {
   free: null, // {eye, yaw, pitch} while the free camera is on
@@ -144,7 +148,7 @@ const renderOverlay = () => {
   const lat = view.latencies
   const counts = scene?.counts() ?? { inFlight: 0, decoding: 0, uploads: 0, needs: 0 }
   const lines = [
-    `${agentName ?? '(no agent)'}  ${pose?.status ?? '-'}${state.free ? '  [free camera]' : ''}`,
+    agentError ?? `${agentName ?? '(no agent)'}  ${pose?.status ?? '-'}${state.free ? '  [free camera]' : ''}`,
     `fps ${view.fps}  ${canvas.width}x${canvas.height}  fov ${fov}  dist ${maxDist}`,
     `pose age ${pose ? Date.now() - pose.t : '-'} ms  ${interpOn ? `interp ${fmt(scene?.interp.delay())} ms` : 'interp off'}  file->frame ${lat.length ? lat[lat.length - 1] : '-'} ms (p50 ${fmt(percentile(lat, 0.5))})`,
     `columns ${view.loaded}/${view.wanted}  fetching ${counts.inFlight}  decoding ${counts.decoding}  to upload ${counts.uploads}  queued ${counts.needs}${view.ready ? '  ready' : ''}`,

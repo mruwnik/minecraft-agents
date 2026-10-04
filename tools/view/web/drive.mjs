@@ -1,5 +1,6 @@
 // Manual takeover from the view page: a take-over button, a banner while anyone drives the body, and key/mouse
 // control while this page does. Talks to the view server's /drive/<agent>; does not depend on app.mjs.
+import { isAgentKey } from './agent-key.mjs'
 import { controlFor, lookStepFor, mouseLook, mergeLook, bannerText, serialQueue, whoFrom, shouldTakeOnClick, shouldReleaseOnEscape, leaveAction, withTimeout, isStale, shouldDrop } from './cljs/viewer.mjs' // view.drive (dashboard/src/view/drive.cljs)
 
 const REQUEST_TIMEOUT_MS = 1500
@@ -75,7 +76,7 @@ const start = () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(msg),
       ...init
-    }).then(r => r.json(), () => null)
+    }).then(r => (r.headers.get('content-type')?.includes('json') ? r.json() : null), () => null)
     if (isStale({ startedGen, currentGen: takeGen })) return reply
     if (reply) {
       lastReply = reply
@@ -90,7 +91,7 @@ const start = () => {
 
   const poll = async () => {
     const startedGen = takeGen
-    const reply = await fetch('/drive/' + agent).then(r => r.json(), () => null)
+    const reply = await fetch('/drive/' + agent).then(r => (r.headers.get('content-type')?.includes('json') ? r.json() : null), () => null)
     if (isStale({ startedGen, currentGen: takeGen })) return
     if (reply) {
       lastReply = reply
@@ -196,4 +197,4 @@ const start = () => {
   poll()
 }
 
-if (agent) start()
+if (isAgentKey(agent)) start()
