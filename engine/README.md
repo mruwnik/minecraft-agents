@@ -686,6 +686,43 @@ oxygen, on-fire, position, time of day and nearby hostiles) and writes a
 `:chat? true` it also sends the text to game chat, once a primitive `chat`
 exists; none does yet, so today the flag does nothing.
 
+### Conditions
+
+An ad hoc trigger's `:when` can be a condition: an EDN list in the look of a
+job expression, read and walked by `engine.condition` against a fixed table,
+never evaluated. Not wired into the register or any command yet.
+
+```clojure
+(and (< (inventory "bread") 8) (< (distance-to (place :home)) 16))
+(held-for 5 (hostile-near 10))
+```
+
+- Operators: `and or not` (booleans), `< > <= >=` (two numbers), `=` (two
+  numbers, strings, keywords or booleans), `(held-for seconds cond)`: true once
+  cond has been definitely true for that many seconds (a literal).
+- Facts (`engine.condition.facts/table`, each with argument types, result
+  type and cost): `(health) (food) (inventory "item") (free-slots)
+  (distance-to pos) (blocks-near "name" r)` are numbers, `(place :kind)` a
+  position from memory, `(daytime) (in-water) (hostile-near r) (burning)
+  (suffocating) (night-unsafe) (stuck)` booleans. Cost `:cheap` is read every
+  tick; `:scan` (`blocks-near`) is cached per instance for `:refresh-s` (5 s).
+- No variables, arithmetic, `let`, `fn` or functions of one's own: what the
+  vocabulary cannot say becomes a new fact, written in ClojureScript with a test.
+- A fact can be unknown (body offline, no such place). Unknown propagates
+  through comparisons and `not`; `and`/`or` are three-valued (`(and false ?)`
+  is false, `(or true ?)` true). A condition holds only when definitely true.
+- `compile` validates once, at registration: an unknown symbol, wrong arity,
+  wrong argument type, incomparable `=`, a bad held-for duration, a leading
+  quote or a non-boolean top is refused as data `{:ok false :reason :at
+  :message :allowed}`, `:at` the offending sub-form and `:allowed` the
+  signatures that would do.
+- `(when-fn node)` is the register's `:when` with its own held-for timers and
+  scan cache (one per registered instance, lost on restart); `(explain node
+  env state)` lists every sub-term with its value now.
+- Built-ins it can say: health-low `(< (health) 7)`, inventory-nearly-full
+  `(<= (free-slots) 2)`, hungry `(or (< (food) 6) (and (< (health) 20) (< (food)
+  14)))`, and burning, suffocating, night-unsafe and stuck as one fact each.
+
 ## The scheduler
 
 `tick!` (every 250 ms from `start!`):
