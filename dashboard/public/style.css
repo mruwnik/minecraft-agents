@@ -450,3 +450,9 @@ button.on { background: #27405f; border-color: #3d6396; }
 .pill.count:hover { filter: brightness(1.2); }
 .pill.count.on { box-shadow: 0 0 0 1px currentColor inset; border-color: currentColor; font-weight: 600; }
 .pill.count.dim { opacity: .45; }
+/* conflicts between active plans */
+.pconflict { color: #ff3da5; font-size: 11px; margin-top: 3px; cursor: pointer; }
+.pconflict:hover { text-decoration: underline; }
+.plan-conflicts { margin: 8px 0; }
+.plan-conflicts h3 { margin: 0 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); font-weight: 600; }
+.plan-legend i.conflict { background: transparent; border: 2px solid #ff3da5; box-sizing: border-box; }

@@ -92,3 +92,37 @@
 
 (deftest detail-of-an-unknown-plan-is-nil
   (is (nil? (api/detail (opts nothing-dumped) "nope"))))
+
+;; ---------------------------------------------------------------- active plans that want different things of one cell
+(def conflict-dir (.resolve path js/__dirname ".." "test" "fixtures" "plans-conflict"))
+(defn conflict-opts [] {:dir conflict-dir :blueprint-dir blueprint-dir :block-at nothing-dumped})
+
+(deftest summaries-list-the-conflicts-between-active-plans
+  (let [{:keys [plans conflicts]} (api/summaries (conflict-opts))]
+    (is (= [{:plans ["north-field" "south-field"] :count 4 :same 0 :shown 4
+             :box {:min [2 64 2] :max [3 64 3]} :cells [[2 64 2] [2 64 3] [3 64 2] [3 64 3]]}]
+           conflicts))
+    (are [id expected] (= expected (:conflicts (by-id plans id)))
+      "north-field" [{:with "south-field" :count 4 :box {:min [2 64 2] :max [3 64 3]}}]
+      "south-field" [{:with "north-field" :count 4 :box {:min [2 64 2] :max [3 64 3]}}]
+      "agreeing" []        ; the same want on a shared cell is no conflict
+      "old-idea" [])))     ; a retired plan conflicts with nothing
+
+(deftest summaries-without-conflicts-say-so
+  (is (= [] (:conflicts (api/summaries (opts nothing-dumped))))))
+
+(deftest the-cells-sent-to-the-browser-are-capped
+  (are [limit shown cells] (= {:count 4 :shown shown :cells cells}
+                              (select-keys (api/capped limit {:count 4 :cells [[0 0 0] [1 0 0] [2 0 0] [3 0 0]]}) [:count :shown :cells]))
+    10 4 [[0 0 0] [1 0 0] [2 0 0] [3 0 0]]
+    2 2 [[0 0 0] [1 0 0]]
+    0 0 []))
+
+(deftest detail-lists-its-conflicts-and-flags-the-cells-in-its-grid
+  (let [d (api/detail (conflict-opts) "north-field")
+        row (fn [z] (get-in d [:layers 0 :rows z]))]
+    (is (= [{:with "south-field" :count 4 :box {:min [2 64 2] :max [3 64 3]}}] (:conflicts d)))
+    (is (= [nil nil true true] (mapv :x (row 2))))
+    (is (= [nil nil nil nil] (mapv :x (row 1))))
+    (is (= [] (:conflicts (api/detail (conflict-opts) "agreeing"))))
+    (is (nil? (get-in (api/detail (conflict-opts) "agreeing") [:layers 0 :rows 0 0 :x])))))

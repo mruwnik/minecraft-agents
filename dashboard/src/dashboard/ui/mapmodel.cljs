@@ -1,6 +1,7 @@
 (ns dashboard.ui.mapmodel
   "Pure rules of the map: where a body is, colours, hit tests, label thresholds."
-  (:require [dashboard.ui.logic :as logic]))
+  (:require [dashboard.ui.logic :as logic]
+            [dashboard.ui.plansmodel :as pm]))
 
 (def place-color "#d9b25f")
 (def base-color "#e8c468")
@@ -62,6 +63,15 @@
   block further."
   [{[x1 _ z1] :min [x2 _ z2] :max}]
   {:x1 x1 :z1 z1 :x2 (inc x2) :z2 (inc z2)})
+
+(defn conflict-marks
+  "The pairs of plans in conflict (/api/plans :conflicts) as what the map draws: the label, the block box, the centre to go
+  to and the cells."
+  [pairs]
+  (vec (for [{:keys [box cells] :as pair} pairs
+             :let [{[x1 _ z1] :min [x2 _ z2] :max} box]]
+         {:kind :conflict :name (pm/pair-text pair) :box (bounds-box box)
+          :wx (/ (+ x1 x2 1) 2) :wz (/ (+ z1 z2 1) 2) :cells cells})))
 
 (defn plan-box
   "The block rectangle of a plan, nil for a plan with no cells."
@@ -155,7 +165,7 @@
 (defn pick-label
   "The body name label under the point, among label boxes ({:kind :px :py :w :h})."
   [boxes x y]
-  (first (filter #(and (= :body (:kind %)) (in-rect? % x y)) boxes)))
+  (first (filter #(and (contains? #{:body :conflict} (:kind %)) (in-rect? % x y)) boxes)))
 
 ;; ---------------------------------------------------------------- players list
 (defn where-text [{:keys [x y z]}]

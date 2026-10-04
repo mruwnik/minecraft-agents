@@ -65,6 +65,21 @@
 
 (defn percent-text [{:keys [percent]}] (str (or percent 0) "%"))
 
+(defn cells-text [n] (str n (if (= 1 n) " cell" " cells")))
+
+(defn conflict-text
+  "The mark on a plan that conflicts with another active plan; {:with plan :count cells}."
+  [{:keys [with count]}]
+  (str "conflicts with " with " in " (cells-text count)))
+
+(defn conflicts-label
+  "One short line for a plan's conflicts (the map's plan label), nil for none."
+  [conflicts]
+  (when (seq conflicts)
+    (str "conflicts with " (str/join ", " (map (fn [{:keys [with count]}] (str with " (" count ")")) conflicts)))))
+
+(defn pair-text [{[a b] :plans :keys [count]}] (str a " x " b ": " (cells-text count)))
+
 (defn region-text [{[x1 y1 z1] :min [x2 y2 z2] :max}]
   (str x1 ", " y1 ", " z1 "  to  " x2 ", " y2 ", " z2))
 
@@ -87,8 +102,9 @@
   (let [where (str x " " y " " z)]
     (if-not cell
       (str where ": not part of the plan")
-      (let [{:keys [s e a el]} cell]
-        (str where ": " s ", wanted " e (if a (str ", found " a) ", chunk not dumped") " (" el ")")))))
+      (let [{:keys [s e a el x]} cell]
+        (str where ": " s ", wanted " e (if a (str ", found " a) ", chunk not dumped") " (" el ")"
+             (when x ", CONFLICT with another active plan"))))))
 
 ;; ---------------------------------------------------------------- modes and views
 (def modes ["plan" "world" "diff"])

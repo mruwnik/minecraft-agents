@@ -13,14 +13,18 @@
        ^{:key k} [:span {:class (name k) :style {:width (str (get w k) "%")}}])]))
 
 (defn plan-row [selected {:keys [plan depth]}]
-  (let [{:keys [id name owner kind status counts percent]} plan]
+  (let [{:keys [id name owner kind status counts percent conflicts]} plan]
     ^{:key id}
     [:div.plan-row {:class (when (= id selected) "sel") :style {:margin-left (str (* depth 16) "px")}
                     :on-click #(rf/dispatch [:plans/select id])}
      [:div.prow1 [:span.pname (when (pos? depth) [:span.dim "└ "]) name] [:span.ppct (pm/percent-text {:percent percent})]]
      [completion-bar counts]
      [:div.prow2 [:span kind] [:span {:class (str "pstatus " status)} status] (when owner [:span (str "by " owner)])
-      [:span.dim (str (:total counts) " blocks")]]]))
+      [:span.dim (str (:total counts) " blocks")]]
+     (for [{:keys [with] :as conflict} conflicts]
+       ^{:key with}
+       [:div.pconflict {:title "open the other plan" :on-click (fn [e] (.stopPropagation e) (rf/dispatch [:plans/select with]))}
+        (pm/conflict-text conflict)])]))
 
 (defn plan-list []
   (let [{:keys [items file-errors failed selected]} @(rf/subscribe [:plans])]
@@ -64,6 +68,10 @@
         (set! (.-fillStyle ctx) fill)
         (.fillRect ctx x y size size))
       (when (pm/hatched? mode cell) (hatch! ctx x y size))
+      (when (:x cell)
+        (set! (.-strokeStyle ctx) "#ff3da5")
+        (set! (.-lineWidth ctx) 2)
+        (.strokeRect ctx (+ x 1) (+ y 1) (- size 2) (- size 2)))
       (set! (.-fillStyle ctx) "rgba(0,0,0,0.30)")
       (.fillRect ctx (+ x (dec size)) y 1 size)
       (.fillRect ctx x (+ y (dec size)) size 1))
@@ -117,6 +125,7 @@
        ^{:key k} [:span [:i {:style {:background (get pm/status-colors k)}}] label]))
    (when (not= "diff" mode)
      [:span.dim (if (= "plan" mode) "colours are the blocks the plan wants" "colours are the blocks found at the last check")])
+   [:span [:i.conflict] "conflict with another active plan"]
    (when (= :bird view) [:span.dim (pm/bird-rule mode)])])
 
 (defn switch [label options current event]
@@ -178,6 +187,14 @@
                ^{:key i} [:tr [:td.mono spot] [:td who] [:td use] [:td [:span.pill answer]]])
              (pm/assign-rows assign)))]]))
 
+(defn conflicts-section [conflicts]
+  (when (seq conflicts)
+    (into [:section.plan-conflicts [:h3 "conflicts"]]
+          (for [{:keys [with box] :as conflict} conflicts]
+            ^{:key with}
+            [:div.pconflict {:on-click #(rf/dispatch [:plans/select with])}
+             (pm/conflict-text conflict) [:span.dim.mono (str "  " (pm/region-text box))]]))))
+
 (defn plan-errors [errors]
   (when (seq errors)
     (into [:section.plan-errors [:h3 "problems"]]
@@ -193,7 +210,7 @@
       detail-failed [:main.plan-detail [:div.err detail-failed]]
       (nil? detail) [:main.plan-detail [:div.dim.pempty "loading..."]]
       :else
-      (let [{:keys [name kind status owner note region counts layers grid errors spots assign checked]} detail
+      (let [{:keys [name kind status owner note region counts layers grid errors spots assign checked conflicts]} detail
             layer (first (filter #(= current (:y %)) layers))
             rows (if (= :bird view) (pm/bird-rows layers mode) (:rows layer))]
         [:main.plan-detail
@@ -207,6 +224,7 @@
          [:div.pfacts [:span.dim "region"] [:span.mono (pm/region-text region)]
           [:span.dim (str "(" (pm/region-size region) ")")]]
          [plan-errors errors]
+         [conflicts-section conflicts]
          [:div.plan-body
           [:div.plan-els [elements-table detail element] [spots-table spots] [assign-table assign]]
           (when (seq layers)

@@ -117,7 +117,7 @@
  :map-click
  (fn [_ [_ {:keys [kind name wx wz] :as selection}]]
    (case kind
-     :edge {:dispatch [:center-on wx wz]}
+     (:edge :conflict) {:dispatch [:center-on wx wz]}
      :body {:fx [[:dispatch [:select selection]] [:dispatch [:open-detail name]]]}
      :plan {:dispatch [:plans/open name]}
      {:dispatch [:select selection]})))

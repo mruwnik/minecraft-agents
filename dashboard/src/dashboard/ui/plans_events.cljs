@@ -66,7 +66,7 @@
      (let [items (pm/sort-plans (:plans data))
            first-name (:id (:plan (first (pm/plan-tree items))))
            pick? (and (get-in db [:plans :selected-wanted?]) (nil? (get-in db [:plans :selected])) first-name)]
-       (cond-> {:db (update db :plans assoc :items items :file-errors (:errors data) :failed nil)}
+       (cond-> {:db (update db :plans assoc :items items :conflicts (:conflicts data) :file-errors (:errors data) :failed nil)}
          pick? (assoc :dispatch [:plans/select first-name]))))))
 
 (rf/reg-event-db :plans/err (fn [db [_ world message]] (if (not= world (:world db)) db (assoc-in db [:plans :failed] message))))
@@ -120,6 +120,7 @@
 (rf/reg-sub :plans (fn [db _] (:plans db)))
 (rf/reg-sub :plan-view-state :<- [:plans] (fn [plans _] (view-state plans)))
 (rf/reg-sub :plan-items :<- [:plans] (fn [p _] (:items p)))
+(rf/reg-sub :plan-conflicts :<- [:plans] (fn [p _] (:conflicts p)))
 
 (rf/reg-sub
  :plan-layer-y

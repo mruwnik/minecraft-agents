@@ -90,6 +90,13 @@ block names out of the dumped columns with the view's decoders.
 - Cell answers: `match`, `missing` (air where something is wanted), `wrong` (another block), `extra` (a block where `:clear` is
   wanted), `unknown` (the column was never dumped, or the want names block state: the columns give names only). Percent = match / all
   cells (unknown included). A part may have at most 200000 cells.
+- Conflicts: two `:active` plans that want different things of the same cell (`plan.conflicts`, `../engine/src/plan/conflicts.cljc`: the
+  cells are indexed once, never plan against plan) are shown where plans are shown. `/api/plans` carries `conflicts` (one entry per pair
+  of plans: `plans`, `count`, `same` = cells both want identically, `box`, `cells` capped at 3000 with `shown`) and each plan item its own
+  `conflicts` (`with`, `count`, `box`); `/api/plan/<id>` flags the cells `x` in its layers. Two wants agree when equal (a bare block name is
+  the block with no state) or when an `:any` shares a choice with the other. Same-want overlap is not reported; `proposed` and `retired`
+  plans conflict with nothing. The Plans page marks a plan "conflicts with <plan> in N cells" (click opens the other plan) and outlines the
+  cells in the grid; the map draws the cells in pink inside a dashed box with a label, and clicking the label centres the map on the box.
 - An invalid file (bad EDN, id not equal to the file name, a bad part, want or blueprint) is not listed; its problems, naming the part,
   are returned in `errors` of `/api/plans` and shown on the Plans page. A part placing a missing blueprint, or an assignment naming no
   part or spot, is an error of that plan's detail.

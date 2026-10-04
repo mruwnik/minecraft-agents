@@ -202,3 +202,24 @@
     {:spot "composter-1" :profession "farmer" :answer "match"}
     {:spot "composter-1" :who "farmer" :use "" :answer "match"})
   (is (= [] (pm/assign-rows nil))))
+
+;; ---------------------------------------------------------------- conflicts between active plans
+(deftest a-conflict-reads-as-a-sentence
+  (are [conflict expected] (= expected (pm/conflict-text conflict))
+    {:with "jizo-farm" :count 4} "conflicts with jizo-farm in 4 cells"
+    {:with "jizo-farm" :count 1} "conflicts with jizo-farm in 1 cell"))
+
+(deftest a-plans-conflicts-are-summed-up-for-a-label
+  (are [conflicts expected] (= expected (pm/conflicts-label conflicts))
+    [] nil
+    nil nil
+    [{:with "a" :count 4}] "conflicts with a (4)"
+    [{:with "a" :count 4} {:with "b" :count 1}] "conflicts with a (4), b (1)"))
+
+(deftest a-pair-reads-as-both-plans-and-the-cells
+  (is (= "a x b: 4 cells" (pm/pair-text {:plans ["a" "b"] :count 4})))
+  (is (= "a x b: 1 cell" (pm/pair-text {:plans ["a" "b"] :count 1}))))
+
+(deftest a-cell-in-conflict-says-so-in-its-tooltip
+  (is (str/ends-with? (pm/cell-text [1 64 2] {:s "match" :e "stone" :a "stone" :el "p" :x true}) "CONFLICT with another active plan"))
+  (is (not (str/includes? (pm/cell-text [1 64 2] {:s "match" :e "stone" :a "stone" :el "p"}) "CONFLICT"))))

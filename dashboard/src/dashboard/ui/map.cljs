@@ -17,12 +17,22 @@
 
 (def human-color "#f08ad0")
 (def zone-color "#5b8fd6")
+(def conflict-color "#ff3da5")
+(def conflict-min-cell 3)
 
 (defn plan-rect [view plan]
   (-> (mv/zone-rect view (mm/plan-box plan))
       (mm/min-size 8)
       (assoc :kind :plan :name (:id plan) :title (:name plan) :color (pm/completion-color (:counts plan))
-             :percent (:percent plan))))
+             :percent (:percent plan) :conflicts (:conflicts plan))))
+
+(defn conflict-rect
+  "A conflict's block box in pixels (at least 8 px) with its cells, kept as blocks and projected when drawn."
+  [view mark]
+  (-> (mv/zone-rect view (:box mark))
+      (mm/min-size 8)
+      (merge (select-keys mark [:kind :name :wx :wz :cells]))
+      (assoc :view view)))
 
 (defn element-rects
   "The elements of a plan inside its outline, only when zoomed in; a click on one opens its plan."
@@ -51,8 +61,9 @@
 
 (defn layout
   "Everything drawable with pixel positions, bodies first (so their labels win space)."
-  [{:keys [view bodies places zones humans villagers selected plans now canvas] :as model}]
+  [{:keys [view bodies places zones humans villagers selected plans conflicts now canvas] :as model}]
   {:scale (:scale view)
+   :conflicts (mapv #(conflict-rect view %) (mm/conflict-marks conflicts))
    :edges (if (and (:w canvas) (:h canvas)) (edge-arrows model bodies) [])
    :zones (for [z zones] (assoc (mv/zone-rect view z) :name (:name z)))
    :plans (for [p plans :when (:region p)] (plan-rect view p))
@@ -190,13 +201,31 @@
   (set! (.-lineWidth ctx) 1)
   (.strokeRect ctx px py w h))
 
-(defn plan-label [{:keys [title percent]}] (str title " " percent "%"))
+(defn plan-label [{:keys [title percent conflicts]}]
+  (str title " " percent "%" (when-let [mark (pm/conflicts-label conflicts)] (str " · " mark))))
+
+(defn draw-conflict!
+  "The cells two active plans want differently, as solid squares (at least 3 px) inside a dashed box."
+  [ctx {:keys [px py w h view cells]}]
+  (let [size (max conflict-min-cell (:scale view))]
+    (set! (.-fillStyle ctx) conflict-color)
+    (set! (.-globalAlpha ctx) 0.8)
+    (doseq [[x _ z] cells
+            :let [{cx :px cy :py} (mv/project view x z)]]
+      (.fillRect ctx cx cy size size))
+    (set! (.-globalAlpha ctx) 1)
+    (set! (.-strokeStyle ctx) conflict-color)
+    (set! (.-lineWidth ctx) 1.5)
+    (.setLineDash ctx #js [5 3])
+    (.strokeRect ctx px py w h)
+    (.setLineDash ctx #js [])))
 
 (defn labels [ctx lay canvas-w]
   (let [scale (:scale lay)]
     (concat
      (for [e (:edges lay)] (edge-label ctx e canvas-w))
      (for [b (:bodies lay) :when (:up b)] (label-box ctx b (:color b) body-font))
+     (for [c (:conflicts lay)] (label-box ctx c conflict-color body-font))
      (for [p (:plans lay)] (label-box ctx (assoc p :name (plan-label p)) (:color p) label-font))
      (for [e (:plan-elements lay) :when (> (:w e) 40)]
        (assoc (label-box ctx (assoc e :name (:title e)) (:color e) label-font) :px (+ (:px e) 2) :py (+ (:py e) 2)))
@@ -335,6 +364,7 @@
         (doseq [z (:zones lay)] (draw-zone! ctx z))
         (doseq [p (:plans lay)] (draw-plan! ctx p))
         (doseq [e (:plan-elements lay)] (draw-element! ctx e))
+        (doseq [c (:conflicts lay)] (draw-conflict! ctx c))
         (doseq [p (:places lay)] (diamond! ctx p (:color p)))
         (doseq [h (:humans lay)] (dot! ctx h human-color 4))
         (doseq [v (:villagers lay)] (villager-mark! ctx v))
@@ -349,11 +379,11 @@
 
 (def legend-items
   [["body: working" (mm/status-color :working)] ["idle" (mm/status-color :idle)] ["trouble" (mm/status-color :trouble)]
-   ["offline" (mm/status-color :offline)] ["villager (faded: old sighting)" mm/villager-color] ["plan: 90%+" pm/green] ["50%+" pm/amber] ["less" pm/red] ["unseen" pm/grey]])
+   ["offline" (mm/status-color :offline)] ["villager (faded: old sighting)" mm/villager-color] ["plan: 90%+" pm/green] ["conflict between plans" conflict-color] ["50%+" pm/amber] ["less" pm/red] ["unseen" pm/grey]])
 
 (defn legend []
   (into [:div#maplegend
-         [:div.maphint "drag to pan · wheel to zoom · click a body or its name for its view, a plan for its page, an arrow to go to its body"]]
+         [:div.maphint "drag to pan · wheel to zoom · click a body or its name for its view, a plan for its page, an arrow to go to its body, a pink conflict label to centre on it"]]
         (for [[label color] legend-items]
           ^{:key label} [:span [:i {:style {:background color}}] label])))
 

@@ -104,13 +104,14 @@
  :<- [:selected]
  :<- [:now]
  :<- [:plan-items]
+ :<- [:plan-conflicts]
  :<- [:terrain?]
  :<- [:tiles]
  :<- [:current-world]
  :<- [:villager-sightings]
- (fn [[view canvas bodies places zones humans selected now plans terrain? tiles world villagers] _]
+ (fn [[view canvas bodies places zones humans selected now plans conflicts terrain? tiles world villagers] _]
    {:view view :canvas canvas :bodies bodies :places places :zones zones :humans humans :villagers villagers :selected selected
-    :now now :plans plans
+    :now now :plans plans :conflicts conflicts
     :terrain? terrain? :tile-world (:world tiles)
     :tile-index (when (= (:requested tiles) world) (:index tiles))}))
 

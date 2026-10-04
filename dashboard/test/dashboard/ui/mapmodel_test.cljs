@@ -204,3 +204,16 @@
     {:kind :body :name "A" :pos {:x 1 :z 2}} [[:select {:kind :body :name "A"}] [:center-on 1 2] [:open-detail "A"]]
     {:kind :body :name "A" :pos nil} [[:select {:kind :body :name "A"}] [:open-detail "A"]]
     {:kind :human :name "Zed" :pos {:x 5 :z 7}} [[:select {:kind :human :name "Zed"}] [:center-on 5 7]]))
+
+;; ---------------------------------------------------------------- plan conflicts on the map
+(def pair {:plans ["a" "b"] :count 4 :shown 2 :box {:min [2 64 2] :max [3 64 3]} :cells [[2 64 2] [3 64 3]]})
+
+(deftest a-conflict-is-marked-over-its-box-and-points-at-its-centre
+  (is (= [{:kind :conflict :name "a x b: 4 cells" :box {:x1 2 :z1 2 :x2 4 :z2 4} :wx 3 :wz 3 :cells [[2 64 2] [3 64 3]]}]
+         (mm/conflict-marks [pair])))
+  (is (= [] (mm/conflict-marks nil))))
+
+(deftest a-conflict-label-can-be-clicked-like-a-body-name
+  (let [boxes [{:kind :conflict :name "a x b: 4 cells" :px 10 :py 10 :w 90 :h 12 :wx 3 :wz 3}]]
+    (is (= "a x b: 4 cells" (:name (mm/pick-label boxes 20 15))))
+    (is (nil? (mm/pick-label boxes 200 15)))))
