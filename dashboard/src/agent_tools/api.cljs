@@ -7,6 +7,7 @@
             [agent-tools.jobs :as jobs]
             [agent-tools.map :as map-tool]
             [agent-tools.plans :as plans]
+            [agent-tools.say :as say]
             [agent-tools.time :as time-tool]
             [agent-tools.storage-compat :as compat]))
 
@@ -85,3 +86,5 @@
   (compat/to-js (entities/options (vec argv))))
 (defn entities-project [request snapshot]
   (compat/to-js (entities/project (compat/from-js request) (compat/from-js snapshot))))
+(def say-usage (clj->js say/usage))
+(defn say-request-for [argv] (compat/to-js (say/request-for (vec argv))))

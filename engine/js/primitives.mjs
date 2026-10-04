@@ -994,6 +994,23 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     return act(token, { boundS: 3 }, ctx => say(bot, ctx, a, { timeScale }))
   }
 
+  // Control-adjacent chat is independent of the body ownership token: sending a
+  // message must not cut a running job or wait for a manual-control lease.
+  // It is deliberately online-only, so requests are never deferred until reconnect.
+  const chatDirect = async (a = {}) => {
+    if (closed || away || down || !bot.player) return { status: 'disconnected' }
+    need(typeof a.message === 'string' && cleanMessage(a.message) !== '', 'chat needs message, a non-empty string')
+    need(a.to === undefined || a.to === null || (typeof a.to === 'string' && PLAYER_NAME.test(a.to)), 'chat to must be a player name (3-16 letters, digits or _)')
+    need(cleanMessage(a.message).length <= (a.to ? CHAT_MAX - `/tell ${a.to} `.length : CHAT_MAX), `chat message must be at most ${CHAT_MAX} characters (a whisper less the /tell header); split it`)
+    const cleanups = []
+    const ctx = {
+      alive: () => { if (closed || away || down || !bot.player) throw new Error('chat body disconnected') },
+      onAbort: fn => cleanups.push(fn)
+    }
+    try { return await say(bot, ctx, a, { timeScale }) }
+    finally { cleanups.splice(0).reverse().forEach(fn => { try { fn() } catch {} }) }
+  }
+
   const bestFood = () => inventory()
     .filter(i => bot.registry.foodsByName?.[i.name])
     .sort((a, b) => bot.registry.foodsByName[b.name].foodPoints - bot.registry.foodsByName[a.name].foodPoints)[0]
@@ -1352,7 +1369,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
 
   const acting = Object.fromEntries(Object.entries({ moveTo, dig, place, jumpPlace, collect, inspectContainer, transfer, equip, toss, craft, furnace, enchant, chat, eat, attack, interact, trade, unequip, sleep, look, swim, useOn, steer })
     .map(([name, fn]) => [name, whenUp(fn)]))
-  return { setOwner, isOwner, drive: driveNow, stopDriving, self, entities, blocks, blockAt, pathWorld, ...acting, wait, isOffline, isSettling, offline, onBodyEvent, entityObservation, onEntityDeath, close }
+  return { setOwner, isOwner, drive: driveNow, stopDriving, self, entities, blocks, blockAt, pathWorld, ...acting, chatDirect, wait, isOffline, isSettling, offline, onBodyEvent, entityObservation, onEntityDeath, close }
 }
 
 const REPO_ROOT = join(import.meta.dirname, '..', '..')

@@ -930,6 +930,7 @@ All responses are EDN, including errors; mutation bodies must be EDN too.
 | `GET /snapshot` | coherent engine state, outstanding requests, body metadata and cursor |
 | `GET /events?stream-id=<id>&after=<seq>&limit=<n>` | bounded event page after a cursor, with oldest/latest sequence and explicit gap indication |
 | `POST /attention/resolve` | `{:request-id "..." :reason :handled}` resolves a request idempotently; it does not retry or cancel its job |
+| `POST /chat` | one public line or whisper; uses the body's identity and shared chat limits without acquiring its scheduler lease |
 | `GET /status?limit=<n>` | compact body/job/attention projection; `limit` is 1..32 (default 4) |
 | `GET /inventory` | read-only carried stack and worn equipment snapshot, independent of manual takeover |
 | `GET /job?id=<id>&limit=<n>` | one listed or reflex job's bounded parsed spec, effective args, state and linked outstanding requests |
@@ -1732,8 +1733,31 @@ node engine/tools/jobs.mjs Bob --world claude interrupt '(jobs.movement.look-aro
 node engine/tools/jobs.mjs Bob --world claude cancel j17
 node engine/tools/jobs.mjs Bob --world claude cancel-all
 node engine/tools/jobs.mjs Bob --world claude retry j17
+node engine/tools/jobs.mjs Bob --world claude resolve attention-17 --reason handled
 node engine/tools/observe.mjs Bob --world claude --wait --watch j17
 ```
+
+Resolve accepts `handled` or `condition-recovered`; it only marks the durable
+attention request and never retries or cancels its job. The command makes one
+request. If transport confirmation is unknown, inspect outstanding attention
+before deciding whether to send another.
+
+Fast chat uses the body's existing server identity directly, independently of
+job scheduling or a manual-control lease:
+
+```bash
+node engine/tools/say.mjs Bob --world claude "Hello, everyone!"
+node engine/tools/say.mjs Bob --world claude --to Steve "I found the cave entrance."
+```
+
+Omitting `--to` sends public chat; supplying it whispers to that online player.
+Messages are one line and capped at 256 characters (including the `/tell`
+header budget for whispers); slash-prefixed messages and invalid recipients are
+refused. Sends share the engine's rate limits with job chat. The command returns
+`{:status "blocked" :reason "busy"}` if another chat send is queued, and
+`{:status "disconnected"}` while the body is offline; direct messages are never
+deferred until reconnect. It does not take over or interrupt the current job or
+manual control.
 
 Specs are native EDN lists parsed by `engine.expr`, including existing `seq`,
 `any`, `repeat`, `hold` and `backoff` forms; they are never evaluated as code.

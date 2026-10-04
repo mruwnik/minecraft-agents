@@ -26,6 +26,14 @@ test('list/show/cancel/retry use fixed endpoints and validate arguments', () => 
   assert.ok(requestFor(['--world', 'w', 'Bob', 'list', '--request-id', 'bad']).error)
   assert.ok(requestFor(['--world', 'w', 'Bob', 'list', '--limit', '99']).error)
 })
+test('attention resolution targets its dedicated endpoint and validates its reason', () => {
+  const handled = requestFor(['Bob', '--world', 'w', 'resolve', 'notice:12', '--reason', 'handled'])
+  assert.equal(handled.path, '/attention/resolve')
+  assert.equal(handled.resolve, true)
+  assert.deepEqual(handled.request, { 'request-id': 'notice:12', reason: { key: 'handled' } })
+  assert.ok(requestFor(['Bob', '--world', 'w', 'resolve', 'notice:12']).error)
+  assert.ok(requestFor(['Bob', '--world', 'w', 'resolve', 'notice:12', '--reason', 'cancel']).error)
+})
 test('a body is addressed in its world: --world is required and names the socket folder', () => {
   assert.match(requestFor(['Bob']).error, /missing --world <world>/)
   assert.match(requestFor(['Bob', '--world', '../x']).error, /world/)
@@ -102,4 +110,29 @@ test('compiled CLI sends submit options and cancel-all through the existing gene
   assert.equal('id' in seen[1], false)
   for (const request of seen) assert.equal(request['generation-id'], 'generation')
   assert.equal(readEDN(fs.readFileSync(path.join(state, 'commands', 'Bob', 'jobs', 'clear.edn'),'utf8'))['generation-id'], 'generation')
+})
+
+test('resolve sends one direct EDN request and does not snapshot, retry, or cancel a job', async t => {
+  const state = fs.mkdtempSync(path.join(os.tmpdir(), 'jobs-resolve-'))
+  const dir = path.join(state, 'worlds', 'w', 'agents', 'Bob', 'engine')
+  fs.mkdirSync(dir, { recursive: true })
+  const socket = path.join(dir, 'events.sock'), seen = []
+  const server = http.createServer((req, res) => {
+    assert.equal(req.method, 'POST')
+    assert.equal(req.url, '/attention/resolve')
+    res.setHeader('content-type', 'application/edn')
+    let text = ''
+    req.on('data', chunk => { text += chunk })
+    req.on('end', () => { seen.push(readEDN(text)); res.end('{:ok true :resolved true}') })
+  })
+  await new Promise((resolve, reject) => { server.once('error', reject); server.listen(socket, resolve) })
+  t.after(async () => { await new Promise(resolve => server.close(resolve)); fs.rmSync(state, {recursive:true,force:true}) })
+  const child = spawn(process.execPath, [fileURLToPath(new URL('../../tools/jobs.mjs', import.meta.url)), 'Bob', '--world', 'w', '--state', state, 'resolve', 'req-1', '--reason', 'condition-recovered'])
+  let out = '', err = ''
+  child.stdout.on('data', chunk => { out += chunk })
+  child.stderr.on('data', chunk => { err += chunk })
+  const code = await new Promise((resolve, reject) => { child.once('error', reject); child.once('close', resolve) })
+  assert.equal(code, 0, out + err)
+  assert.equal(readEDN(out).resolved, true)
+  assert.deepEqual(seen, [{ 'request-id': 'req-1', reason: { key: 'condition-recovered' } }])
 })

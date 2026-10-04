@@ -169,6 +169,31 @@
               _ (await (chat/gate! eng p 1 #js {:message "b"}))]
           (is (>= (- (js/Date.now) t0) 70)))))))
 
+(deftest direct-chat-shares-rate-limits-with-job-chat-and-validates-before-sending
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup no-gap)
+              direct (atom [])
+              _ (.setOwner p 1)
+              _ (aset p "chatDirect" (fn [args]
+                                       (swap! direct conj (.-message args))
+                                       (js/Promise.resolve #js {:status "sent"})))
+              bad-name (await (chat/direct! eng "hello" "not a valid name") )
+              command (await (chat/direct! eng "/op Steve" nil))
+              overlong (await (chat/direct! eng (apply str (repeat 257 "x")) nil))
+              sent (await (chat/direct! eng "hello" nil))
+              ordinary (loop [i 0 acc []]
+                         (if (= i 5) acc
+                           (recur (inc i) (conj acc (await (chat/gate! eng p 1 #js {:message (str "m" i)}))))))]
+          (is (= "bad-name" (:reason bad-name)))
+          (is (= "command" (:reason command)))
+          (is (= "too-long" (:reason overlong)))
+          (is (= "sent" (.-status sent)))
+          (is (= ["hello"] @direct))
+          (is (= ["sent" "sent" "sent" "sent" "blocked"] (mapv #(.-status %) ordinary)))
+          (is (= 5 (count @(:said eng)))))))))
+
 ;; ------------------------------------------------------------------ say!
 
 (deftest say-splits-a-long-message-with-waits-between-parts

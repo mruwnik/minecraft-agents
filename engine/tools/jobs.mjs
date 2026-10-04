@@ -12,12 +12,12 @@ import { readEDN, writeEDN, keyword } from './observe-lib.mjs'
 export const usage = tools.jobsUsage
 export const specFor = tools.jobsSpecFor
 export const requestFor = argv => tools.jobsRequestFor(argv)
-export function post (socketPath, body, { timeoutMs = 3000, requestImpl = http.request } = {}) {
+export function post (socketPath, body, { path: requestPath = '/jobs', timeoutMs = 3000, requestImpl = http.request } = {}) {
   return new Promise((resolve, reject) => {
     const payload = writeEDN(body)
     let done = false, timer
     const finish = (fn, value) => { if (!done) { done = true; clearTimeout(timer); fn(value) } }
-    const req = requestImpl({ socketPath, path: '/jobs', method: 'POST', headers: { 'content-type': 'application/edn', 'content-length': Buffer.byteLength(payload) } }, res => {
+    const req = requestImpl({ socketPath, path: requestPath, method: 'POST', headers: { 'content-type': 'application/edn', 'content-length': Buffer.byteLength(payload) } }, res => {
       let bytes = 0, text = ''
       res.setEncoding('utf8')
       res.on('data', chunk => { bytes += Buffer.byteLength(chunk); if (bytes > 65536) req.destroy(Object.assign(new Error('response too large'), { code: 'ERESPONSETOOLARGE' })); else text += chunk })
@@ -35,7 +35,9 @@ export async function main (argv = process.argv.slice(2)) {
   if (r.error) { console.error(`${r.error}\n${usage}`); return 2 }
   try {
     let response
-    if (r.mutating) {
+    if (r.resolve) {
+      response = await post(r.socketPath, r.request, { path: r.path })
+    } else if (r.mutating) {
       const snapshot = await get(r.socketPath, '/snapshot')
       if (snapshot.status !== 200 || !/^application\/edn(?:;|$)/i.test(snapshot.contentType ?? '')) throw new Error('snapshot unavailable')
       const metaDir = path.join(r.state, 'commands', r.body, 'jobs')
@@ -50,7 +52,7 @@ export async function main (argv = process.argv.slice(2)) {
         const files = fs.readdirSync(metaDir).filter(f => f.endsWith('.edn')).map(f => ({ file: path.join(metaDir, f), at: fs.statSync(path.join(metaDir, f)).mtimeMs })).sort((a, b) => b.at - a.at)
         for (const f of files.slice(128)) fs.rmSync(f.file, { force: true })
       }
-      response = await post(r.socketPath, { ...r.request, 'generation-id': generation })
+      response = await post(r.socketPath, { ...r.request, 'generation-id': generation }, { path: r.path })
     } else response = await get(r.socketPath, r.path)
     if (!/^application\/edn(?:;|$)/i.test(response.contentType ?? '')) throw new Error('unexpected response format')
     const value = readEDN(response.text)
@@ -73,7 +75,8 @@ export async function main (argv = process.argv.slice(2)) {
     return response.status === 200 ? 0 : 1
   } catch (error) {
     process.stdout.write(writeEDN({ ok: false, reason: keyword(['ENOENT', 'ECONNREFUSED'].includes(error.code) ? 'no-running-body' : 'transport-error'),
-      ...(r.mutating ? { 'request-id': r.request['request-id'], confirmation: keyword('unknown'), message: 'Query/retry with the same request ID; do not submit a new ID.' } : {}) }) + '\n')
+      ...(r.resolve ? { 'request-id': r.request['request-id'], confirmation: keyword('unknown'), message: 'Resolve confirmation is unknown; inspect outstanding attention before another request.' }
+        : r.mutating ? { 'request-id': r.request['request-id'], confirmation: keyword('unknown'), message: 'Query/retry with the same request ID; do not submit a new ID.' } : {}) }) + '\n')
     return 2
   }
 }
