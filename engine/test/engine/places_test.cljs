@@ -420,6 +420,14 @@
           (is (= chest-a (place eng :chest)))
           (is (= [] (events-of seen :place.kept))))))))
 
+(deftest a-deposit-to-a-chest-given-as-a-vector-works
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (await (deposit-to {:arg [10 64 0]}))]
+          (is (= chest-a (place eng :chest)))
+          (is (= [] (events-of seen :place.kept))))))))
+
 (deftest a-deposit-to-the-recorded-chest-changes-nothing
   (async done
     (tu/run-async done

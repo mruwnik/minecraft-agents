@@ -16,7 +16,7 @@
   retracts that place with one chest_missing warn.")
 
 (def args
-  {:chest {:doc "chest position; the known :chest place when nil" :default nil}
+  {:chest {:doc "chest position [x y z] or {:x :y :z}; the known :chest place when nil" :default nil}
    :items {:doc "{item-name count}: carry at least this many of each name" :default {}}})
 
 (defn shortfall

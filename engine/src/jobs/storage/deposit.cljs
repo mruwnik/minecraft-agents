@@ -19,7 +19,7 @@
   to open) retracts it with one chest_missing warn.")
 
 (def args
-  {:chest {:doc "chest position; the known :chest place when nil" :default nil}
+  {:chest {:doc "chest position [x y z] or {:x :y :z}; the known :chest place when nil" :default nil}
    :items {:doc "item names to put away, in this order (the first name with something to spare goes first); everything but tools and armour when nil" :default nil}
    :keep {:doc "{item-name count}: leave at least this many of the name carried" :default {}}})
 
@@ -31,9 +31,12 @@
       (some #(str/ends-with? n %) gear-suffixes)))
 
 (defn chest-of
-  "The chest position: args :chest, else the known :chest place."
+  "The chest position: args :chest as {:x :y :z} (read from [x y z] or {:x :y :z}; nil when unreadable), else the
+  known :chest place."
   [view args]
-  (or (:chest args) (mem/place view :chest)))
+  (if (some? (:chest args))
+    (:pos (places/parse-pos (:chest args)))
+    (mem/place view :chest)))
 
 (defn carried
   "Total carried of name over all stacks."
