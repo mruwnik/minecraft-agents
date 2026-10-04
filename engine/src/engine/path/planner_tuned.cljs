@@ -257,7 +257,7 @@
    ^:mutable masks ^:mutable tight-masks ^:mutable regions-seen ^:mutable mask-ms
    ;; the goal flood: moves go to the probe instead of the search while it runs
    ^:mutable ^boolean flooding ^:mutable fx ^:mutable fy ^:mutable fz ^:mutable ^boolean hit ^:mutable flooded ^:mutable pre-flooded
-   ^:mutable ^boolean flood-pending ^:mutable ^boolean saw-water
+   ^:mutable ^boolean flood-pending ^:mutable ^boolean leaked
    ;; progress
    ^:mutable ^boolean started ^:mutable ^boolean finished ^:mutable reason ^:mutable ^boolean over-budget
    ^:mutable ^boolean boxed ; some node was refused by the box
@@ -1720,18 +1720,44 @@
                        (>= (.nodeH s x y z) 0))
               (.add seen (.keyOf s x y z 0))
               (.push queue x y z)
-              (when ^boolean (.isWater s x y z) (set! saw-water true)))
+              (when ^boolean (.isWater s x y z) (set! leaked true)))
             (recur dx dy (inc dz)))))))
 
+  ;; a cell the flood cannot see into: out of the span, or in a column the snapshot has not loaded
+  (unseen [s x y z]
+    (or (not ^boolean (.inSpan s x z))
+        (and (== (.stateAt snapshot x y z) UNLOADED)
+             (false? (.hasColumn snapshot (bit-shift-right x 4) (bit-shift-right z 4))))))
+
+  ;; the cell's stand height as the search can reach it: as it stands, or with a closed door, gate or trapdoor in its column
+  ;; read as open (the opening pass makes nodes the body only fits in once something is opened)
+  (floodH [s x y z]
+    (let [h (.nodeH s x y z)]
+      (if (or (>= h 0)
+              (not (or (pos? (aget tbl-openable (.stateAt snapshot x (dec y) z)))
+                       (pos? (aget tbl-openable (.stateAt snapshot x y z)))
+                       (pos? (aget tbl-openable (.stateAt snapshot x (inc y) z))))))
+        h
+        (do (set! open-mode true)
+            (let [opened (.nodeH s x y z)]
+              (set! open-mode false)
+              opened)))))
+
+  ;; can a gap jump in direction c come over the column beside the flood's current cell (free at body height)?
+  (jumpOver [s c]
+    (.clear s (+ fx (aget adx c)) (+ fz (aget adz c)) (* fy 16) (+ (* fy 16) BODY)))
+
   ;; adds the cell when it is standable and a forward move of it reaches the flood's current cell; true when it is the
-  ;; start
-  (floodVisit [s ^js seen ^js queue start-key x y z]
-    (if-not ^boolean (.inSpan s x z)
-      false
+  ;; start. A cell the flood cannot see is a way in it does not know, and marks the flood leaked: always beside the current
+  ;; cell (jump -1), and from a gap jump's takeoff in direction jump only when the jump can come over the column between.
+  (floodVisit [s ^js seen ^js queue start-key x y z jump]
+    (if ^boolean (.unseen s x y z)
+      (do (when (or (neg? jump) ^boolean (.jumpOver s jump)) (set! leaked true))
+          false)
       (let [key (.keyOf s x y z 0)]
         (if (true? (.has seen key))
           false
-          (let [h (.nodeH s x y z)]
+          (let [h (.floodH s x y z)]
             (if (neg? h)
               false
               (do
@@ -1740,7 +1766,7 @@
                 (if hit
                   (do (.add seen key)
                       (.push queue x y z)
-                      (when ^boolean (.isWater s x y z) (set! saw-water true))
+                      (when ^boolean (.isWater s x y z) (set! leaked true))
                       (== key start-key))
                   false))))))))
 
@@ -1753,7 +1779,7 @@
         (== c 4) false
         (> n 4) (recur (inc c) 2 0)
         (> dy 1) (recur c (inc n) 0)
-        ^boolean (.floodVisit s seen queue start-key (+ fx (* (aget adx c) n)) (+ fy dy) (+ fz (* (aget adz c) n))) true
+        ^boolean (.floodVisit s seen queue start-key (+ fx (* (aget adx c) n)) (+ fy dy) (+ fz (* (aget adz c) n)) c) true
         :else (recur c n (inc dy)))))
 
   ;; the predecessors of the flood's current cell; true when the start is among them
@@ -1763,7 +1789,7 @@
       (cond
         (== c 8) (.floodAhead s seen queue start-key)
         (> dy (inc max-drop)) (recur (inc c) -1)
-        ^boolean (.floodVisit s seen queue start-key (+ fx (aget adx c)) (+ fy dy) (+ fz (aget adz c))) true
+        ^boolean (.floodVisit s seen queue start-key (+ fx (aget adx c)) (+ fy dy) (+ fz (aget adz c)) -1) true
         :else (recur c (inc dy)))))
 
   ;; climbs and falls in the column
@@ -1772,7 +1798,7 @@
       (cond
         (> dy (inc max-drop)) false
         (zero? dy) (recur (inc dy))
-        ^boolean (.floodVisit s seen queue start-key fx (+ fy dy) fz) true
+        ^boolean (.floodVisit s seen queue start-key fx (+ fy dy) fz -1) true
         :else (recur (inc dy)))))
 
   (floodRun [s ^js seen ^js queue start-key budget]
@@ -1790,12 +1816,13 @@
   ;; Backward flood from the standable goal cells over predecessors: cells n with a forward move n -> c, found by running
   ;; n's own moves (so it can never disagree with the search). True when it exhausts within budget nodes without
   ;; meeting the start: then nothing reaches the goal. Slow, but bounded by the budget; false on budget or when the start
-  ;; is met, or when it meets water (a drop into water starts further up than the flood looks).
+  ;; is met, or when it leaks: it meets water (a drop into water starts further up than the flood looks), or an unloaded
+  ;; or out-of-span cell (what lies there is unknown).
   (goalEnclosed [s budget sealed]
     (let [start-key (.keyOf s from-x from-y from-z 0)
           seen (js/Set.)
           queue #js []]
-      (set! saw-water false)
+      (set! leaked false)
       (.floodSeeds s seen queue)
       (if (true? (.has seen start-key))
         false
@@ -1803,7 +1830,7 @@
           (set! flooding true)
           (set! allow-shut true) ; a shut trapdoor is a way through, only dearer: the flood must not call its far side enclosed
           (let [open ^boolean (.floodRun s seen queue start-key budget)
-                enclosed (and (not open) (not saw-water) (<= (.-size seen) budget))
+                enclosed (and (not open) (not leaked) (<= (.-size seen) budget))
                 leaks (and enclosed ^boolean sealed ^boolean (.floodLeaks s queue))]
             (set! flooding false)
             (set! allow-shut false)
@@ -2269,7 +2296,7 @@
      (js/Float64Array. TABLE) (js/Uint8Array. TABLE) (js/Float64Array. TABLE) (js/Uint8Array. TABLE) (js/Map.) (js/Set.) (js/Int8Array. REGIONS)
      (js/Float64Array. REGIONS) (js/Int16Array. REGIONS) (js/Map.) (js/Map.)
      0 0 0 0
-     ;; the goal flood: flooding fx fy fz hit flooded pre-flooded flood-pending saw-water
+     ;; the goal flood: flooding fx fy fz hit flooded pre-flooded flood-pending leaked
      false 0 0 0 false 0 0
      (and near (pos? (option options "goalFlood" 4000))) false
      ;; progress: started finished reason over-budget boxed goal-node best-node
