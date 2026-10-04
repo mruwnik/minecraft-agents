@@ -22,8 +22,7 @@
          :autorun false
          :build-hooks [(engine.build-hooks/add-job-namespaces)]
          :compiler-options {:infer-externs false}}
-  ;; The language benchmark (bench-lang/): the ClojureScript port of the path planner's search as a library the JS
-  ;; harness loads. planner-bench is compiled like :body (`shadow-cljs compile planner-bench`); planner-bench-release is
+  ;; The planner bench harness (bench-lang/): the ClojureScript path planner as a library the JS harness loads. planner-bench is compiled like :body (`shadow-cljs compile planner-bench`); planner-bench-release is
   ;; the same code under :advanced (`shadow-cljs release planner-bench-release`).
   :planner-bench {:target :node-library
                   :exports {:planTuned engine.path.planner-tuned/plan

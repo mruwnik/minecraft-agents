@@ -64,7 +64,7 @@ test('a ladder over a wall and the walk round its end are both returned, the che
   assert.deepEqual(r.paths.map(p => p.differs), ['best', 'on foot instead of by ladder'])
 })
 
-// the true cost of a level walk, from its own steps (planner.mjs): a block at walking speed, a diagonal sqrt 2 of one, a
+// the true cost of a level walk, from its own steps (the planner's costs): a block at walking speed, a diagonal sqrt 2 of one, a
 // diagonal slid along a blocked corner 0.15 s more
 const WALK_S = 1 / 4.317
 const STEP_S = { 1: WALK_S, 2: Math.SQRT2 * WALK_S, 6: Math.SQRT2 * WALK_S + 0.15 }

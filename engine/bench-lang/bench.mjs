@@ -1,8 +1,8 @@
-// The language benchmark: the JS planner and its ClojureScript ports plan the same courses in one node process, the
+// The planner benchmark: the builds of the ClojureScript planner plan the same courses in one node process, the
 // versions interleaved plan by plan (their order rotates with every course and round) so machine noise spreads evenly.
 // Each plan is timed from outside, setup and result building included. Warm-up rounds are discarded.
 //   cd engine && PLANNER_BENCH_DIR=<frozen dir> node bench-lang/bench.mjs [--rounds 30] [--warmup 5] [--out results.json]
-//     [--versions js,cljs-tuned-dev] [--max-load 8]
+//     [--versions cljs-tuned-dev,cljs-tuned-adv] [--max-load 8]
 // --max-load waits for the 1-minute load average to drop below it before starting.
 import fs from 'node:fs'
 import os from 'node:os'
@@ -32,7 +32,7 @@ const geomean = xs => Math.exp(sum(xs.map(Math.log)) / xs.length)
 
 // { all, world, course }: per group one row per version. samples[version][course] holds the ms of each timed round.
 //   medianMs, p95Ms: over every timed plan of the group; sumMs: the sum of the per-course medians (one pass over the set);
-//   nodesPerSec: nodes expanded in one pass / sumMs; ratio: sumMs / JS's; geomeanRatio: over courses, of median / JS's median
+//   nodesPerSec: nodes expanded in one pass / sumMs; ratio: sumMs / the first version's; geomeanRatio: over courses, of median / the first version's median
 export function summarize ({ versions, courses, samples }) {
   const rows = group => {
     const picked = courses.map((c, k) => k).filter(k => group === 'all' || courses[k].group === group)
@@ -68,7 +68,7 @@ export const parseArgs = argv => ({
 
 const formatTable = (group, rows) => [
   `${group} (${rows[0].plans} timed plans per version)`,
-  '  version              median ms    p95 ms   set ms   nodes/s   ratio to JS   geomean ratio',
+  '  version              median ms    p95 ms   set ms   nodes/s   ratio to 1st  geomean ratio',
   ...rows.map(r => `  ${r.name.padEnd(20)} ${r.medianMs.toFixed(3).padStart(9)} ${r.p95Ms.toFixed(2).padStart(9)} ${r.sumMs.toFixed(0).padStart(8)} ${Math.round(r.nodesPerSec).toString().padStart(9)} ${r.ratio.toFixed(3).padStart(13)} ${r.geomeanRatio.toFixed(3).padStart(15)}`)
 ].join('\n')
 
@@ -108,7 +108,7 @@ async function main (argv) {
   const log = line => console.error(line)
   const all = loadVersions()
   const versions = wanted ? all.filter(v => wanted.includes(v.name)) : all
-  if (versions[0]?.name !== 'js') throw new Error('the JS planner must be among the versions: ratios are to it')
+  if (versions.length === 0) throw new Error('no versions selected')
   const loaded = loadCourses()
   const courses = loaded.map(c => ({ id: c.id, group: c.group, expanded: versions[0].plan(c.snapshot, c.query).expanded }))
   await waitForLoad(maxLoad, log)

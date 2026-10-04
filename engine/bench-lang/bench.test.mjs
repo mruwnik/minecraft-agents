@@ -29,15 +29,15 @@ for (const [k, expected] of rotations) {
 }
 
 const run = {
-  versions: ['js', 'other'],
+  versions: ['first', 'other'],
   courses: [{ id: 'w', group: 'world', expanded: 100 }, { id: 'c', group: 'course', expanded: 300 }],
   // samples[version][course]: ms of each timed round
   samples: [[[1, 1, 1], [3, 3, 3]], [[2, 2, 2], [3, 3, 3]]]
 }
 
-test('summarize: pooled median and p95, sum of per-course medians, nodes per second, ratios to JS', () => {
+test('summarize: pooled median and p95, sum of per-course medians, nodes per second, ratios to the first version', () => {
   const { all } = summarize(run)
-  assert.deepEqual(all.map(v => v.name), ['js', 'other'])
+  assert.deepEqual(all.map(v => v.name), ['first', 'other'])
   assert.deepEqual(all.map(v => v.medianMs), [2, 2.5])
   assert.deepEqual(all.map(v => v.p95Ms), [3, 3])
   assert.deepEqual(all.map(v => v.sumMs), [4, 5])
@@ -55,6 +55,6 @@ test('summarize: one table per group', () => {
 
 test('parseArgs: defaults and overrides', () => {
   assert.deepEqual(parseArgs([]), { rounds: 30, warmup: 5, out: undefined, versions: undefined, maxLoad: Infinity })
-  assert.deepEqual(parseArgs(['--rounds', '3', '--warmup', '1', '--out', 'x.json', '--versions', 'js,cljs-tuned-dev', '--max-load', '8']),
-    { rounds: 3, warmup: 1, out: 'x.json', versions: ['js', 'cljs-tuned-dev'], maxLoad: 8 })
+  assert.deepEqual(parseArgs(['--rounds', '3', '--warmup', '1', '--out', 'x.json', '--versions', 'cljs-tuned-dev,cljs-tuned-adv', '--max-load', '8']),
+    { rounds: 3, warmup: 1, out: 'x.json', versions: ['cljs-tuned-dev', 'cljs-tuned-adv'], maxLoad: 8 })
 })

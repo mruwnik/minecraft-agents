@@ -1,25 +1,24 @@
 (ns engine.path.planner-tuned
-  "The path planner's search (engine/js/path/planner.mjs) in ClojureScript, written for speed: the same A* over the same
-   typed arrays, returning the same result. What the cells, moves and costs mean (climbing, water, doors, tight cells) is
-   described in planner.mjs, the specification: the same statuses, reasons, expanded counts, paths, costs and summaries.
+  "The path planner's search, in ClojureScript and written for speed: an A* over typed arrays of cells, moves and costs
+   (climbing, water, doors, tight cells), returning a status, reason, expanded count, path, costs and summary.
 
    How it is kept fast: all search state is in the mutable fields of one Search object and every function of the search
    is a method of it, so the emitted JavaScript is property reads, typed-array indexing and direct method calls. Rules the
    hot code keeps: no persistent data, no seqs, no keywords; every test is a comparison or a ^boolean hinted call (so no
    truthiness check is emitted: the compiled file has one cljs.core.truth_, in count-steps); `let`, `do` and `loop` only in
    statement or tail position (in expression position they compile to a closure called on the spot); values a JS function
-   returned on the side (support, touch, enter-risk, enter-slow, enter-extra, ty) are fields; where planner.mjs passes a
-   closure (swimEdge's emit, the opening pass's edge) the port splits the call in a begin and an end, or switches `edge-mode`.
+   returned on the side (support, touch, enter-risk, enter-slow, enter-extra, ty) are fields; where a closure would be
+   passed (swimEdge's emit, the opening pass's edge) the call is split in a begin and an end, or `edge-mode` is switched.
 
-   Not ported, called through interop: the snapshot (stateAt, sectionHas, hasColumn), the state table's arrays and the
+   Called through interop, not written in the search: the snapshot (stateAt, sectionHas, hasColumn), the state table's arrays and the
    free-space masks of space.mjs (options.space: boxesNear, freeMask, labelRegions).
 
-   Not in planner.mjs: options.avoid {kinds, cells, factor}, which engine.path.alternatives sets to search for another path
+   Options: options.avoid {kinds, cells, factor}, which engine.path.alternatives sets to search for another path
    (see avoidCost), and options.limits {kinds, gap, corner}, what the walker can do: kinds (the same bits) are never planned,
    gap(x, y, z, h, move, lx, ly, lz, lh) -> false refuses a gap jump from the takeoff node (feet cell x,y,z, stand h in 1/16,
    reached by move) to the landing, and corner(x, y, z, h, lx, ly, lz, lh) -> false refuses a diagonal jump with one blocked
    side (a corner slide) from the takeoff node to the landing (engine.path.executor/planner-limits). Without them the search
-   is planner.mjs's.")
+   is unrestricted.")
 
 (set! *warn-on-infer* true)
 
@@ -74,7 +73,7 @@
        :SWIM 11 :SWIM_UP 12 :SWIM_DOWN 13 :EXIT 14})
 
 (def DEFAULT-COSTS
-  "every cost the policy might want to change, in seconds (see planner.mjs); options.costs overrides"
+  "every cost the policy might want to change, in seconds; options.costs overrides"
   #js {:climbUp 0.43 :climbDown 0.33 :jumpClimb 0.5 :open 1.0 :openRedstone 1.5 :openPlate 0 :besideMagmaColumn 1
        :swimH 0.5 :swimUp 0.3 :swimDown 0.35 :exit 0.6 :current 0.3 :bubbleUp 0.08 :bubbleDown 0.12
        :airSupply 15 :airLimit 12 :maxWaterDrop 64 :dripleaf 0.2 :dripleafRisk 0.5})
@@ -1592,7 +1591,7 @@
 
   ;; Every expansion near a closed door, gate or trapdoor runs twice: once with the world as it stands, then in the opening
   ;; pass with those blocks open. An edge only the second pass finds is a move that needs something opened: it costs
-  ;; costs.open per block opened by hand and records step.opens (see planner.mjs).
+  ;; costs.open per block opened by hand and records step.opens.
   (expandOpening [s x y z h slow-from i region]
     (set! open-x x)
     (set! open-y y)
@@ -1989,7 +1988,7 @@
     hit)
 
   ;; A one-way step cannot be undone with the body's own moves: a gap jump down, a drop of more than JUMP-UP, or a drop the planner
-  ;; has no step-up move back from (see planner.mjs isOneWay).
+  ;; has no step-up move back from (a one-way move).
   (isOneWay [s node]
     (let [p (aget parents node)
           m (aget moves node)]
@@ -2203,7 +2202,7 @@
     #js {:path (if (== best-node -1) nil (.pathTo s best-node)) :distance best-distance})
 
   ;; the result; one-way-node is the first one-way step on the way to the nearest node (-1: none), clean-end the nearest node of
-  ;; the returnable search then run ({path distance}, see planner.mjs partialEnd)
+  ;; the returnable search then run ({path distance})
   (resultFrom [s one-way-node ^js clean-end]
     (cond
       (or (identical? reason "start-not-standable") (identical? reason "goal-not-standable")) (.outcome s "none" reason nil nil)
@@ -2308,7 +2307,7 @@
 
 (defn- result-of
   "The result of a finished search; when the path to its nearest node holds a one-way step, a second search with options.returnable
-  (and no goal flood) supplies the partial end (see planner.mjs partialEnd)."
+  (and no goal flood) supplies the partial end."
   [^Search search snapshot query options]
   (.settle search)
   (let [node (.oneWayNode search)]
@@ -2320,7 +2319,7 @@
         (.resultFrom search node (.nearest clean))))))
 
 (defn create-search
-  "{step, result, nearest} as planner.mjs's createSearch returns them. options.table and options.space are required."
+  "{step, result, nearest} as create-search returns them. options.table and options.space are required."
   [snapshot query options]
   (let [search (new-search snapshot query options)]
     (.init search)

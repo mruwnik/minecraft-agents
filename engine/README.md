@@ -1517,10 +1517,12 @@ Known gaps:
 
 ## Path planner (not used by the engine yet)
 
-`js/path/planner.mjs` is the specification (an A* over a snapshot of section state ids: walking, jumps, drops, gap jumps,
-climbing, water, doors; costs in seconds plus risk); `src/engine/path/planner_tuned.cljs` is its port, kept equal to it
-by `bench-lang/fixtures-equal.test.mjs`. Build: `npx shadow-cljs compile planner-bench` (tests) and `npx shadow-cljs
-release planner-bench-release` (bench). A gap jump or a drop never lands on farmland (vanilla tramples farmland under a
+`src/engine/path/planner_tuned.cljs` is the only planner (an A* over a snapshot of section state ids: walking, jumps,
+drops, gap jumps, climbing, water, doors; costs in seconds plus risk). Its tests are `test/engine/planner_*_test.cljs`
+(helpers in `planner_fixture.cljs`); `planner_bench_test.cljs` plans the recorded benchmark queries (the frozen world
+queries and the live tester's courses) and checks the answers recorded in `test/planner-bench.json`. Bench: `npx
+shadow-cljs compile planner-bench && npx shadow-cljs release planner-bench-release`, then `node bench-lang/bench.mjs`
+(dev against :advanced build, see its header). A gap jump or a drop never lands on farmland (vanilla tramples farmland under a
 fall of over 0.5 blocks); a jump up one block onto it is allowed (it falls about 0.3 from the top of the arc).
 
 An enclosed goal is found before any walking: for a `near` goal whose column is loaded, `step` first runs the backward goal
@@ -1574,12 +1576,12 @@ jump from 0.1 before; the body aims at the landing point
 in the air too, which brakes an overshoot, and the landing counts only on the ground. No run-up is needed. Refused: `:gap-up` (landing higher; not
 measured), `:gap-low-ceiling` (a block within 3 of the takeoff's feet over the takeoff or gap cells: the planner allows feet+2, where the head hits at
 once), `:gap-takeoff` (from a ladder), `:gap-width`. These numbers come from prismarine-physics (the body's own physics) driven by this executor,
-The tuned planner also takes `options.limits {kinds, gap, corner}` (not in planner.mjs): what the walker can do. `kinds` (the
+The tuned planner also takes `options.limits {kinds, gap, corner}`: what the walker can do. `kinds` (the
 `AVOID-*` bits: climbing, water, doors) are never planned; `gap(x, y, z, h, move, lx, ly, lz, lh)` returning anything but
 true refuses that gap jump (takeoff feet cell, stand height in 1/16, the move that reached it; landing cell and height);
 `corner(x, y, z, h, lx, ly, lz, lh)` returning anything but true refuses a diagonal jump with one blocked side (a corner slide)
 from that takeoff to that landing.
-Without it the search is planner.mjs's. `engine.path.executor/planner-limits` builds it from the executor's `policy`.
+Without it the walker is assumed to do anything. `engine.path.executor/planner-limits` builds it from the executor's `policy`.
 
 A partial plan ends at the node nearest the goal that the body can come back from. A step is one-way when the planner cannot plan
 its undoing: a gap jump down, a drop of more than a jump up (1.25 blocks), or a drop with no step-up move back from the lower

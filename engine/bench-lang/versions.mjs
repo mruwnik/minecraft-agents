@@ -1,11 +1,10 @@
-// The planners under comparison: the JS one and its ClojureScript port, from the dev build (compiled the way the
-// engine ships: `shadow-cljs compile`) and from the :advanced build (`shadow-cljs release`).
+// The planner versions the bench times: the ClojureScript planner from the dev build (compiled the way the engine
+// ships: `shadow-cljs compile`) and from the :advanced build (`shadow-cljs release`).
 //   cd engine && npx shadow-cljs compile planner-bench && npx shadow-cljs release planner-bench-release
 import fs from 'node:fs'
 import path from 'node:path'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
-import { plan as planJs, createSearch as createSearchJs } from '../js/path/planner.mjs'
 import { defaultStateTable } from '../js/path/blocks.mjs'
 import * as space from '../js/path/space.mjs'
 
@@ -36,11 +35,5 @@ export function loadVersions () {
       view
     }
   })
-  const js = {
-    name: 'js',
-    plan: (snapshot, query, extra) => planJs(snapshot, query, { table, ...extra }),
-    createSearch: (snapshot, query, extra) => createSearchJs(snapshot, query, { table, ...extra }),
-    view
-  }
-  return [js, ...cljs]
+  return cljs
 }

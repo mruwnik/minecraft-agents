@@ -1,4 +1,4 @@
-// The rules that keep the port fast, checked on the compiled file (see the ns docstring of planner_tuned.cljs): no truthiness
+// The rules that keep the planner fast, checked on the compiled file (see the ns docstring of planner_tuned.cljs): no truthiness
 // check in the search. The one allowed is in the cold count-steps. Build first: cd engine && npx shadow-cljs compile planner-bench
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
