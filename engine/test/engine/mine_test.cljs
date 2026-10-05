@@ -347,6 +347,8 @@
                        (.then (impl token args)
                               (fn [r]
                                 (fake/add-item! (:p s) "dirt" 1)
+                                ;; the drop is gone too (the body was carried off), so the walk back is the mend's
+                                (swap! (fake/state p) assoc :entities [])
                                 (set-pos! s 10 64 0)
                                 r))))
           ;; how many walks to the owed cell (y 63) were made when the first place came
@@ -816,3 +818,26 @@
                 s (await (zoned (merge {:block "dirt" :count 4} extra) {:blocks floor} (ew/of-data {} {} [zone]) 80))]
             (is (= mended-some (pos? (count (calls s "place")))) (pr-str [owner extra]))
             (is (= declined (mapv #(select-keys % [:reason :zones]) (events-of s :mine.declined))) (pr-str [owner extra]))))))))
+
+(deftest drops-beyond-the-radius-of-the-body-but-near-the-dug-block-are-collected
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks {"5,64,0" "iron_ore"} :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270}})]
+          (drop-away! (:p s) [8 62 0])
+          (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :tunnel-length 0 :collect-radius 3}) {})
+          (await (run-ticks s 30))
+          (is (= 1 (get (inv s) "raw_iron")))
+          (is (empty? (events-of s :mine.left-behind))))))))
+
+(deftest drops-beyond-the-radius-of-the-body-and-out-of-reach-are-listed-left
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks {"5,64,0" "iron_ore"} :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270
+                                :unreachable ["8,62,0"]}})]
+          (drop-away! (:p s) [8 62 0])
+          (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :tunnel-length 0 :collect-radius 3}) {})
+          (await (run-ticks s 30))
+          (is (nil? (get (inv s) "raw_iron")))
+          (is (= [{:pos [8 62 0] :count 1}] (:left (done-event s)))))))))

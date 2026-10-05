@@ -218,9 +218,21 @@
      (when (and tool (not= tool (.-held (.self (:primitives c)))))
        (await (ctx/act c :equip (clj->js {:item tool :dest "hand"})))))))
 
+(defn drop-radius
+  "The entity search radius that covers :collect-radius around the last dug cell, seen from the body: the body
+  stands up to its reach from the cell and the drop may have fallen further."
+  [c]
+  (let [r (:collect-radius (:args c))
+        dug (:dug-at (ctx/mem c))
+        here (u/pos-of (.-pos (.self (:primitives c))))]
+    (if dug
+      (+ r (u/dist here (zipmap [:x :y :z] (map #(+ 0.5 %) dug))))
+      r)))
+
 (defn left-behind
-  "Drops of the item lying within radius (default :collect-radius) of the body, as {[x y z] count}."
-  ([c] (left-behind c (:collect-radius (:args c))))
+  "Drops of the item lying within radius (default: :collect-radius around the last dug cell) of the body, as
+  {[x y z] count}."
+  ([c] (left-behind c (drop-radius c)))
   ([c radius]
   (let [item (item-name (:args c))]
     (into {}
@@ -249,9 +261,8 @@
       (ctx/update-mem! c update :left merge fresh))))
 
 (defn ^:async collect! [c]
-  (let [{:keys [collect-radius]} (:args c)
-        r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops
-                                 {:radius collect-radius :filter [(item-name (:args c))]}))]
+  (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops
+                                 {:radius (drop-radius c) :filter [(item-name (:args c))]}))]
     (when (= :done r)
       (await (note-left! c))
       (let [now (carried c)]
@@ -279,7 +290,7 @@
       (refused! c pos v verdict)
       (let [status (.-status (await (tidy/dig! c pos)))]
         (cond
-          (= "dug" status) (ctx/update-mem! c assoc :failures 0 :collecting true :looked :dug)
+          (= "dug" status) (ctx/update-mem! c assoc :failures 0 :collecting true :looked :dug :dug-at (access/cell pos))
           (= "missing" status) nil
           (= "cannot" status) (skip! c pos)
           :else (do (skip! c pos) (ctx/update-mem! c update :failures (fnil inc 0))))))
@@ -365,7 +376,7 @@
           (not= :ok verdict) (do (refused! c pos v verdict) :refused)
           (not (#{"dug" "missing"} status)) :dig-failed
           :else (do (when (and (= "dug" status) (= block (:block (:args c))))
-                      (ctx/update-mem! c assoc :collecting true))
+                      (ctx/update-mem! c assoc :collecting true :dug-at (access/cell pos)))
                     (recur (rest cells)))))
       :ok)))
 
