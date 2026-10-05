@@ -24,7 +24,9 @@
   the land past it runs on into unloaded land (engine.path.near; a pit whose cells are all loaded is never entered), and
   the next round plans on from there. When every way the loaded land holds is searched and none arrives (the planner ran
   out of land) but the searched land runs on into land not loaded within 256 blocks of the goal, the round walks to that
-  frontier instead (engine.path.near :explore), so the next round plans over what the walk loaded. A round that ends more
+  frontier instead (engine.path.near :explore), so the next round plans over what the walk loaded. From then on a search
+  that needs more than one round walks nowhere until it ends (near :progress false): the nearest node of an unfinished
+  search is often the dead end the frontier walk left, and a refresh on the way never swaps a walk from an ended search for an unfinished one's (walk/take-refresh?). A round that ends more
   than 1 closer than any before (:best), or more than 1 closer to its frontier than any round before got to that frontier,
   is progress and resets the count; any other round that does not arrive (a partial walk without a new best, no path,
   stuck) counts, and three in a row give up with an unreachable warn (the last status and :why and :kind). A goal the
@@ -128,7 +130,8 @@
 
       :else
       (let [{:keys [result status to]} (await (near/walk-round! c pos range {:doors doors :explore true
-                                                                              :budget walk/round-budget}))
+                                                                              :budget walk/round-budget
+                                                                              :progress (empty? (:frontier-best (ctx/mem c)))}))
             left (u/dist to pos)
             best (:best (ctx/mem c) d)
             frontier (:frontier result)

@@ -88,6 +88,17 @@
     (is (not (walk/take-refresh? old {:status "partial" :steps [(step 0 64 0 :start) (step 10 64 1 :walk)]} to))
         "an equal end elsewhere")))
 
+(deftest a-refresh-never-swaps-a-finished-search-for-an-unfinished-one
+  (let [old [(step 0 64 0 :start) (step 10 64 0 :walk)]
+        to [40 64 0]
+        unfinished {:status "partial" :r #js {:status "partial" :reason "searching"}
+                    :steps [(step 0 64 0 :start) (step 30 64 0 :walk)]}]
+    (is (not (walk/take-refresh? old unfinished to {:status "partial" :r #js {:status "partial" :reason "exhausted"}}))
+        "the old plan's search ended (a walk to its frontier): an unfinished search's nearest node does not replace it")
+    (is (walk/take-refresh? old unfinished to {:status "partial" :r #js {:status "partial" :reason "searching"}})
+        "an unfinished search's walk is replaced by a clearly better one")
+    (is (walk/take-refresh? old unfinished to) "no old plan given: by the ends alone")))
+
 ;; ---------------------------------------------------------------- the driver over the fake
 
 (defn on-steer

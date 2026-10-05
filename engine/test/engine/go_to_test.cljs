@@ -309,6 +309,35 @@
           (is (= ["partial" "blocked" "blocked" "blocked"] (mapv :status (moved eng)))
               "the walk to the frontier is progress"))))))
 
+;; the same walkway with searches that take several rounds (live: soak j29/j30, a walled walkway at y 100 whose goal lies
+;; below its middle). The walk to the frontier is refreshed on the way, and every search from the frontier is unfinished at
+;; first: an unfinished search's nearest node (back on the walkway, over the goal) must not win over the frontier, or the
+;; body swings between the two and gives up :off-plan
+(deftest go-to-keeps-to-the-frontier-when-later-searches-take-several-rounds
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [budget walk/round-budget
+              chunk walk/chunk-expansions
+              world {:blocks (merge (box 0 63 0 47 63 15 "stone") (box 18 79 8 47 79 8 "stone"))
+                     :self {:pos {:x 18.5 :y 80 :z 8.5}}}
+              {:keys [eng p] :as s} (setup world)
+              out (atom :not-done)
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out {:pos [10 64 8] :range 0})))]
+          (reset! walk/searches {})
+          (set! walk/round-budget 64)
+          (set! walk/chunk-expansions 16)
+          (core/submit! eng '(recording-parent) {})
+          (await (tick-out! eng 600))
+          (set! walk/round-budget budget)
+          (set! walk/chunk-expansions chunk)
+          (is (= {:arrived false :reason :unreachable :why :exhausted} (select-keys @out [:arrived :reason :why])))
+          (is (>= (first (at p)) 46) "walked to the frontier and stayed there")
+          (is (= ["partial" "blocked" "blocked" "blocked"] (mapv :status (moved eng)))
+              "one walk to the frontier, then three rounds that find no new one")
+          (is (= [] (filter #(= :refresh (:why %)) (remove :kept (events-of s :replan))))
+              "no refresh swapped the walk to the frontier for an unfinished search's nearest node"))))))
+
 ;; a floor x 0..6, z 0..60 cut by a wall at x 3 (feet and head) open only at z 59..60: the way to x 6 runs 120 blocks
 ;; round, and no round's search gets nearer than the start. With a budget of 32 expansions a round, the rounds search on
 ;; (no walk, no :moved entry, no fruitless round) until the search ends, and go-to arrives

@@ -367,11 +367,13 @@
   past a step the body cannot undo and stands at the loaded edge (progress oneWay.open, the rule open-path applies to a
   search that ended) walks the path to that node instead when it is progress-blocks nearer, with :one-way-taken (live: a
   gap jump down as go-to's first move kept every round of a 300-block search from walking, and it gave up :searching).
-  The search without the limits has no progress to walk."
-  ([search ms] (unfinished-plan search ms nil))
-  ([search ms one-way]
+  The search without the limits has no progress to walk, nor has one with progress false (go-to after a walk to a
+  frontier: the nearest node of a search that has not ended may be the dead end an ended one walked away from)."
+  ([search ms] (unfinished-plan search ms nil true))
+  ([search ms one-way] (unfinished-plan search ms one-way true))
+  ([search ms one-way progress]
    (let [walled (:walled search)
-         ^js pr (when-not (:unlimited search) (.progress ^js (:limited search)))
+         ^js pr (when (and progress (not (:unlimited search))) (.progress ^js (:limited search)))
          nearer? (fn [distance] (>= (- (.-startDistance pr) distance) progress-blocks))
          ^js ow (when pr (.-oneWay pr))
          past (when (and (= :open one-way) ow (true? (.-open ow)) (nearer? (.-distance ow))) (.-path ow))
@@ -385,8 +387,8 @@
 (defn ^:async plan-walk-budgeted!
   "plan-walk! that runs at most budget expansions of search (run-search!), going on with the body's unfinished search
   (searches) when it plans the same thing from the same cell. A search that ends is plan-walk's answer; one that does not
-  is unfinished-plan's."
-  [c pw to range weight {:keys [policy walls one-way frontier budget]}]
+  is unfinished-plan's (progress, default true: whether it may walk to where the search has got to)."
+  [c pw to range weight {:keys [policy walls one-way frontier budget progress] :or {progress true}}]
   (let [t (js/performance.now)
         who (body-name c)
         k (search-key c to range weight policy walls)
@@ -399,7 +401,7 @@
     (if within
       (do (swap! searches dissoc who)
           (walk-plan c (:walled search) (:walled search) to one-way frontier within))
-      (let [plan (unfinished-plan search ms one-way)]
+      (let [plan (unfinished-plan search ms one-way progress)]
         (if (= "partial" (:status plan))
           (swap! searches dissoc who)
           (swap! searches assoc who search))
@@ -409,7 +411,7 @@
   "plan-walk with plan-within! (yields to the event loop between search slices): what the walks (engine.path.near, walk-to!)
   plan with, so a long search never holds the body's API. With :budget (go-to: round-budget), one call searches at most
   that many expansions (plan-walk-budgeted!): a search that needs more walks to where it has got to, or nowhere
-  (\"searching\"), and goes on at the next call."
+  (\"searching\"), and goes on at the next call; with :progress false only nowhere until the search ends."
   ([c pw to range weight] (plan-walk! c pw to range weight nil))
   ([c pw to range weight {:keys [policy walls one-way frontier budget] :or {policy executor/policy} :as opts}]
    (if budget
@@ -543,13 +545,22 @@
   [status ticks interval]
   (and (= "partial" status) (>= ticks interval)))
 
+(defn unfinished?
+  "Whether plan walks to where a search still going on has got to (unfinished-plan: its r's reason \"searching\")."
+  [plan]
+  (= "searching" (some-> ^js (:r plan) .-reason)))
+
 (defn take-refresh?
   "Whether a refreshed plan (:status :steps) replaces the old steps: a whole plan always, a partial one when its end is at
-  least better-by blocks nearer the goal to than the old end (no weaving between near-equal ends)."
-  [old-steps {:keys [status steps]} to]
-  (and (>= (count steps) 2)
-       (or (= "found" status)
-           (<= (+ (near-goal (peek steps) to) (:better-by watch-policy)) (near-goal (peek old-steps) to)))))
+  least better-by blocks nearer the goal to than the old end (no weaving between near-equal ends). With old-plan, the plan
+  in force: a plan whose search ended (a walk to its frontier, its nearest end) is never replaced by an unfinished search's
+  walk (unfinished?): that one knows less, and its nearest node may be the dead end the ended search left."
+  ([old-steps fresh to] (take-refresh? old-steps fresh to nil))
+  ([old-steps {:keys [status steps] :as fresh} to old-plan]
+   (and (>= (count steps) 2)
+        (not (and old-plan (unfinished? fresh) (not (unfinished? old-plan))))
+        (or (= "found" status)
+            (<= (+ (near-goal (peek steps) to) (:better-by watch-policy)) (near-goal (peek old-steps) to))))))
 
 (defn watch-stop
   "The look-ahead at one tick: nil, or the done map that stops the walk to plan again: {:status :replan :why :changed :cells}
@@ -687,7 +698,7 @@
                 plan-ms (- (js/performance.now) t)
                 fresh (assoc fresh :ms plan-ms)]
             (if (= :refresh (:why done))
-              (let [take? (and (walkable? fresh) (take-refresh? steps fresh to))]
+              (let [take? (and (walkable? fresh) (take-refresh? steps fresh to plan))]
                 (tell! :refresh plan-ms (not take?))
                 (if take?
                   (recur fresh (:steps fresh) (inc n) ms walked')
