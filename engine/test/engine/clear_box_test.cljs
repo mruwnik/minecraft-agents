@@ -102,7 +102,7 @@
           (is (= {:dug 0 :skipped {{:x 9 :y 55 :z 1} :unreachable} :kept 0 :fluids {}} (await (child-outcome eng job args 20))))
           (is (empty? (calls p "dig"))))))))
 
-(deftest clear-box-equips-the-matching-tool-once
+(deftest clear-box-equips-the-cheapest-matching-tool-once
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -110,7 +110,7 @@
                                       :inventory [{:name "wooden_shovel" :count 1} {:name "iron_shovel" :count 1}
                                                   {:name "stone_pickaxe" :count 1}]})]
           (await (child-outcome eng job box 20))
-          (is (= ["iron_shovel" "stone_pickaxe"] (held-items p))))))))
+          (is (= ["wooden_shovel" "stone_pickaxe"] (held-items p))))))))
 
 (deftest clear-box-equips-nothing-without-a-tool
   (async done
