@@ -6,6 +6,7 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.job-api :as job-api]
+            [engine.memory :as mem]
             [engine.takeover :as takeover]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
@@ -70,6 +71,28 @@
     {} #{:water} [{:name "dig ok" :min [1 60 -1] :max [3 70 1] :allow #{:dig}}] nil
     {[1 67 0] "gravel" [1 66 0] "stone"} #{:water} [] :hazard
     {[1 67 0] "gravel" [1 66 0] "stone"} #{:falling-block} [] nil))
+
+(deftest a-cut-cell-that-is-the-floor-of-an-earlier-stair-is-refused
+  (let [in {:block-at (world-fn {}) :feet [0 65 0] :zones [] :footprints #{} :ledger #{}}
+        cells (stair/step-cells [0 65 0] :down :east)]
+    (is (= {:reason :undercuts-way :cell [1 64 0] :block "stone"}
+           (select-keys (stair/stop-of in (assoc cells :ways #{[1 64 0]}) #{}) [:reason :cell :block])))
+    (is (nil? (stair/stop-of in (assoc cells :ways #{[5 60 0]}) #{})) "an unrelated floor")
+    (is (nil? (stair/stop-of in cells #{})) "no known way")))
+
+(deftest way-floors-are-the-floors-of-the-steps-walked
+  (is (= [[1 63 0] [2 62 0]] (stair/way-floors [0 65 0] :down :east 2)))
+  (is (= [[0 65 -1]] (stair/way-floors [0 65 0] :up :north 1)))
+  (is (= [] (stair/way-floors [0 65 0] :down :east 0))))
+
+(deftest a-finished-stair-remembers-its-floors-and-a-second-one-stops-at-them
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng out]} (await (stair! {:blocks ground} east (fn [_])))
+              ways (mapcat (comp :floors :data) (mem/entries (mem/view (:store eng)) :stair-way))]
+          (is (= :done (:status @out)))
+          (is (= [[1 63 0] [2 62 0] [3 61 0]] (vec ways))))))))
 
 (deftest a-crop-or-farmland-in-the-cut-is-refused-and-never-dug
   (are [named cell block] (= {:reason :crop :cell cell :block block} (stop named #{}))
