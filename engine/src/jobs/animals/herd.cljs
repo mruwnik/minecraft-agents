@@ -2,6 +2,7 @@
   (:require [engine.ctx :as ctx]
             [engine.jobs.animals :as animals]
             [engine.jobs.apiary :as apiary]
+            [engine.jobs.declined :as declined]
             [engine.jobs.pen :as pen]
             [engine.jobs.util :as u]
             [engine.jobs.watch :as watch]
@@ -132,8 +133,9 @@
   "A started run always passes; else :mob and :box are given and the box holds fewer than :target adults."
   [c]
   (let [{:keys [mob box target]} (:args c)]
-    (boolean (or (:started (ctx/mem c))
-                 (and mob box (< (count (filter #(in-box? box (u/pos-of (.-pos %))) (adults c))) target))))))
+    (boolean (if (:started (ctx/mem c))
+               (declined/check c)
+               (and mob box (< (count (filter #(in-box? box (u/pos-of (.-pos %))) (adults c))) target))))))
 
 (defn read-pen [c]
   (pen/check {:block-at (apiary/block-at-fn (:primitives c)) :box (:box (:args c))}))
@@ -436,7 +438,7 @@
   written before an open and dropped after a shut."
   [c state next & [{:keys [reach then] :or {reach 3}}]]
   (when (= :open state) (hold-gate! c))
-  (let [r (await (ctx/call-child c :gate 'jobs.access.toggle {:pos (:gate (ctx/mem c)) :state state :reach reach}))]
+  (let [r (await (declined/call-child! c :gate 'jobs.access.toggle {:pos (:gate (ctx/mem c)) :state state :reach reach}))]
     (cond
       (not= :done r) (if (= :declined r) :declined :continue)
       (= :done (:status (ctx/child-result c :gate)))

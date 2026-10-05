@@ -888,6 +888,14 @@ parent must return `:declined` for the reason to reach it): `stair` waits
 `{:reason :too-few-blocks :short n :item}` (listed, it no longer gives up for blocks: it waits for them), `toggle` waits
 `{:reason :not-loaded :pos}` or `{:reason :standing-in :pos :block}`.
 
+A parent whose round returns a child's `:declined` would be offered the round again every tick, since its own check
+passes. `engine.jobs.declined` fixes that without the engine: `(declined/call-child! c slot job args)` books the child
+that declined (`:declined-child` `{:slot :job :args}` in the parent's memory, dropped by the first call that does not
+decline), and the parent's check ends with `(declined/check c)`, which runs `ctx/check-child` on the booked child. The
+parent is then parked (no rounds) with the child's wait reason, resumes as soon as the child's check passes. Users:
+`tunnel` (stair, leave-tunnel), `leave-tunnel` (escape stair), `herd` (gate toggle, once started), `rail-line` (lever
+toggle).
+
 `submit!` and `cancel!` (agent) edit the list; `retry!` (agent, `(core/retry!
 eng id)`, true when `id` was marked failed) clears a failed mark and emits
 `job.retried`; `do-now!` (agent) cuts the
