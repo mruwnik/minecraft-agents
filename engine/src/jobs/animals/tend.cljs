@@ -36,7 +36,7 @@
   {:mob {:doc "mob type name of the animals in the pen" :default "cow"}
    :box {:doc "the pen: {:min {:x :y :z} :max {:x :y :z}}, inclusive; required (without it the check declines)" :default nil}
    :target {:doc "adult herd size wanted; babies count toward it, they grow" :default 4}
-   :chest {:doc "chest position {:x :y :z} for the produce; nil: do not store" :default nil}
+   :chest {:doc "chest position {:x :y :z} for the produce; nil: do not store" :type :pos :default nil}
    :keep {:doc "{item-name count}: how many of a produce item deposit leaves carried" :default {}}})
 
 (def steps [:breed :cull :shear :collect :deposit])

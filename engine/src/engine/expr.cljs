@@ -23,6 +23,29 @@
   [entry]
   (into {} (map (fn [[k spec]] [k (:default spec)])) (:args entry)))
 
+(defn fail [msg form]
+  (throw (ex-info msg {:form form})))
+
+(defn cell
+  "{:x :y :z} for a position given as [x y z] or {:x :y :z} of numbers, else nil."
+  [v]
+  (cond
+    (and (map? v) (every? #(number? (get v %)) [:x :y :z])) (select-keys v [:x :y :z])
+    (and (sequential? v) (= 3 (count v)) (every? number? v)) (zipmap [:x :y :z] v)))
+
+(defn normalize-positions
+  "args with every arg its spec types :pos (a nil one is left) turned into {:x :y :z}; throws when one is neither
+  [x y z] nor {:x :y :z} of numbers, so a malformed position is refused at submit rather than run as nils."
+  [sym entry args]
+  (reduce (fn [acc [k spec]]
+            (let [v (get acc k)]
+              (cond
+                (not= :pos (:type spec)) acc
+                (nil? v) acc
+                (cell v) (assoc acc k (cell v))
+                :else (fail (str sym " " k " must be [x y z] or {:x :y :z} of numbers, got " (pr-str v)) args))))
+          args (:args entry)))
+
 (defn leaf
   "[def args] for job symbol sym with args merged over its defaults; throws
   when sym is not in the registry."
@@ -32,10 +55,7 @@
       (nil? entry) (throw (ex-info (str "unknown job " sym) {:job sym}))
       (not (and (fn? (:check entry)) (fn? (:round entry))))
       (throw (ex-info (str "job " sym " needs a check and a round") {:job sym}))
-      :else [entry (merge (defaults entry) args)])))
-
-(defn fail [msg form]
-  (throw (ex-info msg {:form form})))
+      :else [entry (normalize-positions sym entry (merge (defaults entry) args))])))
 
 (defn unknown-keys-message
   "Why args holds keys the job does not declare, or nil: each unknown key named, then the known ones.

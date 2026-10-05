@@ -15,7 +15,7 @@
   :ignore-zones? acts regardless.")
 
 (def args
-  {:at {:doc "where to plant; the oldest :forestry/replant debt when nil" :default nil}
+  {:at {:doc "where to plant; the oldest :forestry/replant debt when nil" :type :pos :default nil}
    :species {:doc "sapling species; any when nil" :default nil}
    :bone-meal {:doc "bone meal uses after planting, 0 for none" :default 0}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :default nil}

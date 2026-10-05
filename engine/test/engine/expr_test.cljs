@@ -8,6 +8,8 @@
 (def reg
   {'jobs.a {:check (constantly true) :round noop-round
             :args {:n {:doc "n" :default 1} :m {:doc "m" :default 2}}}
+   'jobs.p {:check (constantly true) :round noop-round
+            :args {:at {:doc "cell" :type :pos :default nil} :n {:doc "n" :default 1}}}
    'jobs.b {:check (constantly true) :round noop-round :args nil}
    'jobs.free {:check (constantly true) :round noop-round}})
 
@@ -74,3 +76,19 @@
 
 (deftest a-leaf-by-symbol-gets-its-defaults
   (is (= [(get reg 'jobs.a) {:n 1 :m 7}] (expr/leaf reg 'jobs.a {:m 7}))))
+
+(deftest position-args-take-a-vector-or-a-map-and-reach-the-job-as-a-map
+  (are [at expected] (= expected (:args (expr/parse reg (list 'jobs.p {:at at}))))
+    [1 64 -3] {:at {:x 1 :y 64 :z -3} :n 1}
+    {:x 1 :y 64 :z -3} {:at {:x 1 :y 64 :z -3} :n 1}
+    [1.5 64 2] {:at {:x 1.5 :y 64 :z 2} :n 1}
+    nil {:at nil :n 1}))
+
+(deftest malformed-position-args-are-refused-at-parse
+  (are [at] (re-find #"jobs.p :at must be \[x y z\] or \{:x :y :z\}" (problem (list 'jobs.p {:at at})))
+    [1 2]
+    [1 2 "3"]
+    {:x 1 :y 2}
+    {:x 1 :y nil :z 3}
+    "1 2 3"
+    5))

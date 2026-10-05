@@ -15,7 +15,7 @@
   {:w {:doc "patch width (x)" :default 5}
    :h {:doc "patch height (z)" :default 5}
    :range {:doc "patches lie within this many blocks of :center in x and z" :default 24}
-   :center {:doc "where to search from {:x :y :z}; nil is the body's cell" :default nil}
+   :center {:doc "where to search from {:x :y :z}; nil is the body's cell" :type :pos :default nil}
    :depth {:doc "how far above and below the centre's y to look for ground" :default 12}
    :limit {:doc "how many spots to keep" :default 3}
    :walk {:doc "walk to the best spot (finding and walking are separate; a parent can walk)" :default false}})

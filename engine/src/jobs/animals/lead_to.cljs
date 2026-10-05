@@ -48,8 +48,8 @@
 
 (def args
   {:mob {:doc "the animal's name, such as \"cow\"" :default nil}
-   :pos {:doc "where to lead it {:x :y :z}; the :fence cell when nil" :default nil}
-   :fence {:doc "the fence post {:x :y :z} to tie it to; unleash it at :pos when nil" :default nil}
+   :pos {:doc "where to lead it {:x :y :z}; the :fence cell when nil" :type :pos :default nil}
+   :fence {:doc "the fence post {:x :y :z} to tie it to; unleash it at :pos when nil" :type :pos :default nil}
    :range {:doc "how close to :pos counts as there" :default 2}
    :radius {:doc "animals within this many blocks are leashed from where the job starts" :default 8}
    :gather-radius {:doc "without :fence the animal is let go once it is within this many blocks of :pos" :default 3}

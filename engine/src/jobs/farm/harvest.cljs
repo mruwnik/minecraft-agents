@@ -33,7 +33,7 @@
 
 (def args
   {:radius {:doc "how far around the centre to harvest, in blocks" :default 12}
-   :center {:doc "centre of the field; the body's position when the job first runs when nil" :default nil}
+   :center {:doc "centre of the field; the body's position when the job first runs when nil" :type :pos :default nil}
    :replant {:doc "replant what was cut" :default true}
    :crops {:doc "crop block names to cut; all known crops when nil" :default nil}
    :give-up {:doc "unreachable crops after which cutting stops" :default 4}

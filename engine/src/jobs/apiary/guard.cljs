@@ -31,7 +31,7 @@
 
 (def args
   {:box {:doc "{:from pos :to pos}, fires inside it only; overrides :center and :radius" :default nil}
-   :center {:doc "centre of the search; the body's position when the job first runs when nil" :default nil}
+   :center {:doc "centre of the search; the body's position when the job first runs when nil" :type :pos :default nil}
    :radius {:doc "fires within this many blocks of the centre count, when :box is nil" :default 16}
    :max {:doc "actions (sinks and carpets) in one run, at most" :default 12}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})

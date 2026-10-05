@@ -5,6 +5,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.expr :as expr]
             [engine.takeover :as takeover]
             [engine.fake :as fake]
             [engine.memory :as mem]
@@ -275,3 +276,8 @@
               result (await (child-outcome eng job (assoc box :ignore-zones? true) 16))]
           (is (= 4 (:tilled result)))
           (is (= [[1 64 1]] (mapv #(:cell (:data %)) (mem/entries (mem/view (:store eng)) :tidy)))))))))
+
+(deftest till-spec-takes-vector-corners-and-refuses-malformed-ones
+  (is (= {:from {:x 1 :y 64 :z 2} :to {:x 3 :y 64 :z 4}}
+         (select-keys (:args (expr/parse registry/jobs '(jobs.farm.till {:from [1 64 2] :to [3 64 4]}))) [:from :to])))
+  (is (re-find #":from must be \[x y z\]" (expr/problem registry/jobs '(jobs.farm.till {:from [1 64] :to [3 64 4]})))))

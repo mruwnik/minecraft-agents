@@ -16,9 +16,9 @@
   with none. :ignore-zones? acts regardless.")
 
 (def args
-  {:at {:doc "one crop position to fertilize; the crops around the body when nil" :default nil}
+  {:at {:doc "one crop position to fertilize; the crops around the body when nil" :type :pos :default nil}
    :radius {:doc "crops within this many blocks of the body count, when :at is nil" :default 8}
-   :center {:doc "centre of the radius search; the body's position when nil" :default nil}
+   :center {:doc "centre of the radius search; the body's position when nil" :type :pos :default nil}
    :max {:doc "bone meal uses, at most" :default 16}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 

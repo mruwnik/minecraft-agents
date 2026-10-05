@@ -469,7 +469,7 @@ list, read with the EDN reader and interpreted, never evaluated.
 | `(hold e)` | like `e`, but the list entry holds the body; only around a whole spec, and not in a register entry |
 
 Nothing else is valid: a symbol that is neither a combinator nor a job in
-the registry, a missing or extra argument, args that are not a map, an args key the job does not declare (`jobs.movement.go-to has no arg :target; its args are :doors, :pos, :range`; a job with no args takes none), or a
+the registry, a missing or extra argument, args that are not a map, a position arg (typed `:type :pos` in the job's args: till :from/:to/:center, find-spot :center, plant-sapling :at, ...) that is neither `[x y z]` nor `{:x :y :z}` of numbers (a valid one reaches the job as `{:x :y :z}`), an args key the job does not declare (`jobs.movement.go-to has no arg :target; its args are :doors, :pos, :range`; a job with no args takes none), or a
 nested `hold` is refused at load (scenario validation, `submit!`,
 `register-reflex!`) with a message naming the problem and the whole spec.
 

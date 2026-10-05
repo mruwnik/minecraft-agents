@@ -18,9 +18,9 @@
   on counts a try, and two skip the cell :cover-stuck.")
 
 (def args
-  {:from {:doc "box corner (inclusive); with :to, any order" :default nil}
-   :to {:doc "opposite box corner (inclusive)" :default nil}
-   :center {:doc "centre of a square of cells at its y; with :radius" :default nil}
+  {:from {:doc "box corner (inclusive); with :to, any order" :type :pos :default nil}
+   :to {:doc "opposite box corner (inclusive)" :type :pos :default nil}
+   :center {:doc "centre of a square of cells at its y; with :radius" :type :pos :default nil}
    :radius {:doc "the square covers |dx|,|dz| <= radius" :default nil}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})

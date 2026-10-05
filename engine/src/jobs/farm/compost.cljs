@@ -17,7 +17,7 @@
   declines with {:reason :no-zones}. :ignore-zones? acts regardless.")
 
 (def args
-  {:at {:doc "the composter position; the nearest composter within :radius when nil" :default nil}
+  {:at {:doc "the composter position; the nearest composter within :radius when nil" :type :pos :default nil}
    :radius {:doc "how far to look for a composter, when :at is nil" :default 16}
    :items {:doc "item names to feed; every compostable thing carried except seeds and food when nil" :default nil}
    :keep {:doc "{item count} reserves never fed" :default {}}
