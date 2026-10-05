@@ -171,7 +171,7 @@ body sealed in is no danger), or a ranged mob (skeleton and the like) with a lin
 knows of are candidates (`reach/known-hostiles`, card 80f25a40): the perception's mob memory (`p.knownMobs`,
 `engine.perception`), sampled every 250 ms and at each query. A mob is heard within 16 blocks of the eye unless it is
 silent while it stalks (creeper); seen when the line from the eye to its middle is clear (`visible`), within 48, and it
-is in the view cone or heard (a player turns to a sound). It is kept at the place last sensed while it could not have
+is in the view cone or heard (a player turns to a sound), and it is lit: the cell of its feet or head passes the same light rule as blocks, else it is seen only within `:dark-sight` (4; a dark shape is made out only close up) and otherwise only heard if it makes noise. It is kept at the place last sensed while it could not have
 walked 16 blocks since (mob speed: about 6 s for a zombie) and dropped at once when the client stops tracking it. So an
 unseen creeper behind the body is no danger, one seen 3 s ago that went round a corner still is. Primitives without a
 perception (BODY_PERCEPTION=0, plain test fakes) fall back to every tracked mob. Trigger arg `:visible-only` (default
