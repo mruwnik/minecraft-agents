@@ -160,6 +160,8 @@
   (let [before (set (map #(.-id ^js %) (known-mobs c)))]
     (ctx/remember! c :watch-turned {:id (.-id m)} turn-policy)
     (ctx/remember! c :watched {:open (get-in (last-scan c) [:data :open] 0)} memory-policy)
+    (ctx/emit! c :watch.turned :info {:name (.-name m) :pos (js->clj (.-pos m) :keywordize-keys true)
+                                      :distance (.-distance m)})
     (await (ctx/act c :look (clj->js {:pos (js->clj (.-pos m) :keywordize-keys true)})))
     (sample! c before)
     :turned))
