@@ -116,14 +116,18 @@
                     status (.-status r)]
                 (if (#{"placed" "occupied"} status)
                   (do (when (= "placed" status) (ctx/update-mem! c update :placed (fnil conj #{}) (first cells)))
+                      (when (= "occupied" status) (ctx/update-mem! c update :occupied (fnil conj #{}) (first cells)))
                       (recur (rest cells)))
                   status))))))
 
 (defn ^:async walls-round [c]
   (let [{:keys [blocks max-places roof-height]} (:args c)
         p (:primitives c)
-        status (await (place-all! c blocks (take max-places (open-cells p (sh/feet p)))))]
+        occupied (:occupied (ctx/mem c) #{})
+        cells (remove occupied (open-cells p (sh/feet p)))
+        status (await (place-all! c blocks (take max-places cells)))]
     (cond
+      (empty? cells) :done
       (not= :ok status) (fail-site! c :walls-failed (str "cannot place a block: " status))
       (sh/roofed? p roof-height) :done
       :else :continue)))

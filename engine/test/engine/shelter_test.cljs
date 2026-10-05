@@ -706,3 +706,17 @@
           (await (tick-n eng 6))
           (is (= 2 (count (declined-events seen :always-shelter))))
           (is (= 1 (count (emitted seen :needs_bed)))))))))
+
+(deftest dig-in-treats-an-occupied-non-solid-cell-as-sealed-and-does-not-retry-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:time night :inventory dirt-stack
+                                      :blocks (assoc floor "1,66,0" "oak_leaves" "0,66,0" "oak_leaves")})]
+          (core/submit! eng '(jobs.survival.dig-in) {})
+          (is (<= (await (run-until-empty eng 8)) 5) "the job ends instead of looping")
+          (is (= [] (:list (core/state eng))))
+          (is (<= (count (filter #(contains? #{[1 66 0] [0 66 0]} [(:x (arg-pos %)) (:y (arg-pos %)) (:z (arg-pos %))])
+                                 (calls p "place")))
+                  2)
+              "each occupied cell is tried at most once"))))))
