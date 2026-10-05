@@ -344,15 +344,24 @@
 (defn unfinished-plan
   "The plan-walk answer of a search still going on: the path to its progress end (planner progress) when that is at least
   progress-blocks nearer the goal than the start, walked as a partial plan; else status \"searching\" with no steps
-  (no-walk: :searching), and the search goes on at the next call. The search without the limits has no progress to walk."
-  [search ms]
-  (let [walled (:walled search)
-        ^js pr (when-not (:unlimited search) (.progress ^js (:limited search)))
-        steps (when (and pr (>= (- (.-startDistance pr) (.-distance pr)) progress-blocks))
-                (dry-end (path-steps walled (.-path pr))))
-        walk? (>= (count steps) 2)
-        r #js {:status (if walk? "partial" "searching") :reason "searching" :path (when walk? (.-path pr)) :ms ms}]
-    {:r r :status (.-status r) :pw walled :ms ms :steps (when walk? steps)}))
+  (no-walk: :searching), and the search goes on at the next call. With one-way :open, a progress whose nearest node lies
+  past a step the body cannot undo and stands at the loaded edge (progress oneWay.open, the rule open-path applies to a
+  search that ended) walks the path to that node instead when it is progress-blocks nearer, with :one-way-taken (live: a
+  gap jump down as go-to's first move kept every round of a 300-block search from walking, and it gave up :searching).
+  The search without the limits has no progress to walk."
+  ([search ms] (unfinished-plan search ms nil))
+  ([search ms one-way]
+   (let [walled (:walled search)
+         ^js pr (when-not (:unlimited search) (.progress ^js (:limited search)))
+         nearer? (fn [distance] (>= (- (.-startDistance pr) distance) progress-blocks))
+         ^js ow (when pr (.-oneWay pr))
+         past (when (and (= :open one-way) ow (true? (.-open ow)) (nearer? (.-distance ow))) (.-path ow))
+         path (or past (when (and pr (.-path pr) (nearer? (.-distance pr))) (.-path pr)))
+         steps (when path (dry-end (path-steps walled path)))
+         walk? (>= (count steps) 2)
+         r #js {:status (if walk? "partial" "searching") :reason "searching" :path (when walk? path) :ms ms}]
+     (cond-> {:r r :status (.-status r) :pw walled :ms ms :steps (when walk? steps)}
+       (and walk? past) (assoc :one-way-taken {:kind (nth executor/move-names (.-move ow)) :at [(.-x ow) (.-y ow) (.-z ow)]})))))
 
 (defn ^:async plan-walk-budgeted!
   "plan-walk! that runs at most budget expansions of search (run-search!), going on with the body's unfinished search
@@ -371,7 +380,7 @@
     (if within
       (do (swap! searches dissoc who)
           (walk-plan c (:walled search) (:walled search) to one-way frontier within))
-      (let [plan (unfinished-plan search ms)]
+      (let [plan (unfinished-plan search ms one-way)]
         (if (= "partial" (:status plan))
           (swap! searches dissoc who)
           (swap! searches assoc who search))

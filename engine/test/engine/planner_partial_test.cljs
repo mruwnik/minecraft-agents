@@ -162,3 +162,28 @@
                                    (pf/options-js {}))]
     (loop [] (when-not (.step p 1000) (recur)))
     (is (nil? (.progress p)))))
+
+;; a start at the east edge of a ledge (feet 70, x 0..1, z 0..63) whose first move is a 3-drop to a floor (feet 67, x 2..47)
+;; that runs to the loaded edge (x 48 on is unloaded), the goal far east in unloaded land (live: a gap jump down as go-to's
+;; first move kept every unfinished search from walking)
+(def first-move-cliff [(stone 0 0 1 63 70) (stone 2 0 47 63 67)])
+
+(deftest the-progress-past-a-first-one-way-step-to-the-loaded-edge-is-open-with-its-path
+  (let [pr (progress-after first-move-cliff {:x 1 :y 70 :z 32} (near 120 67 32) 600)
+        beyond (:oneWay pr)]
+    (is (some? pr))
+    (is (nil? (:path pr)) "nothing before the drop is nearer")
+    (is (= (:startDistance pr) (:distance pr)))
+    (is (= {:move DROP :x 2 :y 67 :z 32} (select-keys beyond [:move :x :y :z])))
+    (is (true? (:open beyond)))
+    (is (<= 46 (first (last-cell beyond))) "the path beyond ends at the loaded edge")
+    (is (< (:distance beyond) (- (:startDistance pr) 40)))))
+
+;; the same ledge with only a closed pit below it (feet 67, x 2..13, z 30..34) and a wall too high to climb behind it
+;; (feet 72, x 14..17): every cell round the pit is loaded, so it leads nowhere
+(def first-move-pit [(stone 0 0 1 63 70) (stone 2 30 13 34 67) (stone 14 0 17 63 72)])
+
+(deftest the-progress-past-a-one-way-step-into-a-closed-pit-is-not-open
+  (let [pr (progress-after first-move-pit {:x 1 :y 70 :z 32} (near 120 67 32) 60)]
+    (is (= DROP (get-in pr [:oneWay :move])))
+    (is (false? (get-in pr [:oneWay :open])))))

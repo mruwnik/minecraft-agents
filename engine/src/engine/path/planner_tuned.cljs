@@ -2509,15 +2509,27 @@
 
   ;; Where an unfinished search has got to: the path to its expanded node nearest the goal, cut before the first step on the
   ;; way the body cannot undo (so the body can always come back, and whatever the search could reach it still can), with
-  ;; that end's distance to the goal and the start's: {path distance startDistance}; nil when nothing was expanded but the
-  ;; start, or the end stands on magma.
+  ;; that end's distance to the goal and the start's: {path distance startDistance oneWay}; path nil (distance the start's)
+  ;; when the cut leaves no step or its end stands on magma. oneWay, when the way to the nearest node holds such a step, is
+  ;; that step and the uncut path as result's oneWay: {move x y z distance path open}, open when the nearest node stands at
+  ;; the loaded edge (atLoadedEdge, not on magma). nil when nothing was expanded but the start, or there is neither.
   (progress [s]
     (if (or (not started) (<= best-node 0))
       nil
       (let [ow (.firstOneWay s best-node)
-            end (if (neg? ow) best-node (aget parents ow))]
-        (when-not (or (<= end 0) ^boolean (.endsOnMagma s (aget xs end) (aget ys end) (aget zs end) (aget hs end)))
-          #js {:path (.pathTo s end) :distance (.distanceTo s (aget xs end) (aget zs end)) :startDistance start-distance}))))
+            end (if (neg? ow) best-node (aget parents ow))
+            cut (when-not (or (<= end 0) ^boolean (.endsOnMagma s (aget xs end) (aget ys end) (aget zs end) (aget hs end)))
+                  end)
+            one-way (when-not (neg? ow)
+                      #js {:move (aget moves ow) :x (aget xs ow) :y (aget ys ow) :z (aget zs ow)
+                           :distance best-distance :path (.pathTo s best-node)
+                           :open (and ^boolean (.atLoadedEdge s best-node)
+                                      (not ^boolean (.endsOnMagma s (aget xs best-node) (aget ys best-node) (aget zs best-node) (aget hs best-node))))})]
+        (when (or (some? cut) (some? one-way))
+          #js {:path (when (some? cut) (.pathTo s cut))
+               :distance (if (some? cut) (.distanceTo s (aget xs cut) (aget zs cut)) start-distance)
+               :startDistance start-distance
+               :oneWay one-way}))))
 
   ;; The frontier node: of the nodes standing at the loaded edge (atLoadedEdge) within frontier-reach blocks of the goal
   ;; (along x and along z), the one with the least cost to it plus the heuristic on to the goal, -1 when none: where the
