@@ -1,7 +1,9 @@
 (ns engine.jobs.tools
   "Which carried tool suits a block."
   (:require [clojure.string :as str]
-            [engine.jobs.combat :as combat]))
+            [engine.ctx :as ctx]
+            [engine.jobs.combat :as combat]
+            [engine.jobs.util :as u]))
 
 (def shovel-blocks
   #{"dirt" "grass_block" "sand" "red_sand" "gravel" "clay" "soul_sand" "soul_soil" "mud" "snow_block"
@@ -42,3 +44,18 @@
   [item-names harvest-tools]
   (when (and (seq harvest-tools) (not-any? (set harvest-tools) item-names))
     (cheapest-tool harvest-tools)))
+
+(defn ^:async equip-for!
+  "Hold the best carried tool for block-name (best-tool) before digging it; nothing when none is carried or it is
+  already held. Resolves to the equip result, or nil."
+  [c block-name]
+  (let [p (:primitives c)
+        tool (when block-name (best-tool (map :name (u/inventory p)) block-name))]
+    (when (and tool (not= tool (.-held (.self p))))
+      (await (ctx/act c :equip #js {:item tool :dest "hand"})))))
+
+(defn can-harvest?
+  "Whether the carried tools harvest block-name (it drops itself or its item): the block's minecraft-data
+  harvestTools (primitive harvestTools) are empty, or one is carried."
+  [p block-name]
+  (nil? (harvest-need (map :name (u/inventory p)) (some-> (.harvestTools p block-name) js->clj))))

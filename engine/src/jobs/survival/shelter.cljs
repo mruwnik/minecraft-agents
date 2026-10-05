@@ -22,9 +22,13 @@
   :night at the day/night boundary) waits hold-ms and tries again; :no-way-out (leave! warns dig-in.trapped) ends
   the job failed (a shelter.failed warn and a result {:status :failed :reason :no-way-out :at :tries}, :at the pit position) since the shelter holds the body only until day.
   The player-sleeping-nearby reflex still logs out (20 s) for a sleeper whatever the roof.
-  A child that is actually working (:continue) makes the round :continue. Every case where nothing could be done
-  (all children declined, or dig-in ended without a roof) is :declined, so the reflex is dropped and the trigger
-  re-fires after its cooldown if the body is still unsafe.
+  A child that is actually working (:continue) makes the round :continue. At night it never declines: when nothing
+  could be done (all children declined, or dig-in ended without a roof) it holds the body anyway, exposed (job memory
+  :sheltered :exposed, one shelter.exposed warn), each round waiting hold-ms and then choosing again, so a player who
+  comes online (log-out) or blocks picked up (dig-in after a material-only failure) are used; dig-in leaves a
+  :dig-in-futile entry for every way it ends unroofed, so a failing dig is not rerun every round. A reflex that
+  holds is never fired again, so the night-unsafe trigger does not churn; its cooldown only matters after a higher
+  reflex cuts the shelter. By day an exposed shelter calls leave! too (a half-dug pit), then ends.
   A sleep that ends without sleeping (the bed was gone, or unreachable) falls through to the next choice in the
   same round and is recorded as :sleep-failed, so later rounds of this shelter do not call sleep again (and walk
   back toward the bed) while the other choices work. A body whose latest :slept entry is more than :max-days-awake
@@ -115,13 +119,24 @@
         (do (when (= :done s) (ctx/update-mem! c assoc :sleep-failed true))
             (await (log-out-step c a)))))))
 
+(defn ^:async hold-exposed
+  "Night, and no choice could shelter the body: hold it anyway until day (the shelter owns the night; a declined reflex
+  would only fire again after its cooldown and fail the same way). The first time, :sheltered :exposed and one
+  shelter.exposed warn; every round waits hold-ms, and the next round chooses again."
+  [c]
+  (when-not (= :exposed (:sheltered (ctx/mem c)))
+    (sheltered! c :exposed)
+    (ctx/emit! c :shelter.exposed :warn {:pos (sh/feet (:primitives c))
+                                         :text "cannot shelter here (no bed, nobody else online, dig-in cannot roof); holding until day"}))
+  (hold c))
+
 (defn ^:async day-round
-  "By day: after a dig-in, get the body out of the shelter with dig-in/leave!. :out ends :done; :no-way-out (leave! has
+  "By day: after a dig-in (or a night held exposed), get the body out of the shelter with dig-in/leave!. :out ends :done; :no-way-out (leave! has
   warned dig-in.trapped) ends the job failed (shelter.failed warn and a result, both with the reason and :at, the
   pit position), so the agent gets the body back; :unsafe (only :night, at the day/night boundary) waits hold-ms and
   tries again. Hostiles never hold it: leave! opens by day whatever is around."
   [c]
-  (if (= :dug-in (:sheltered (ctx/mem c)))
+  (if (#{:dug-in :exposed} (:sheltered (ctx/mem c)))
     (let [r (await (dig-in/leave! c))]
       (cond
         (= :continue r) :continue
@@ -141,4 +156,5 @@
       (not (sh/night? p)) (await (day-round c))
       (and covered (:sheltered (ctx/mem c))) (await (hold c))
       covered :done
-      :else (await (choose-round c)))))
+      :else (let [r (await (choose-round c))]
+              (if (= :declined r) (await (hold-exposed c)) r)))))

@@ -4,6 +4,7 @@
             [engine.ctx :as ctx]
             [engine.jobs.access :as access]
             [engine.jobs.shelter :as sh]
+            [engine.jobs.tools :as tools]
             [engine.jobs.util :as u]))
 
 (def doc
@@ -25,7 +26,13 @@
   re-fired reflex does not dig a deeper pit every time. Fluid-adjacent sites,
   failed descent and failed roofing are remembered with a :reason and block
   retries even with carried blocks. Descent without vertical progress gives
-  up after three attempts. On flat ground the start cell has no solid side neighbour to roof against, so the pit is
+  up after three attempts. Every dig holds the best carried tool for the block first (engine.jobs.tools/equip-for!:
+  a pickaxe for stone, so it drops cobblestone to roof with). With no placeable block carried and a block below the
+  carried tools cannot harvest (it would drop nothing), it does not dig at all (dig_in_failed \"cannot harvest ...\",
+  a material-only :dig-in-futile entry). Every way it ends with no roof over the body leaves a :dig-in-futile entry
+  (a hazard below, no floor under it, a failed dig, no block for the roof, every wall cell refused; else
+  {:reason :unsealed}). A declining check says why (job waiting): :day, :already-sealed {:pos}, or :futile {:pos
+  :why}. On flat ground the start cell has no solid side neighbour to roof against, so the pit is
   3 deep and roofed in the ground layer one below the start cell (a 2-deep pit when a side of the start cell is solid);
   with no solid side at either height it does not dig (dig_in_failed warn, :no-roof-support site). Dig mode keeps its :roof and :target-y, but if the
   body's x or z no longer matches that column it chooses again from the
@@ -177,7 +184,8 @@
                       (recur (rest cells)))
 
                   :else
-                  (let [d (await (tidy/dig! c cell true))]
+                  (let [_ (await (tools/equip-for! c (u/block-name (:primitives c) cell)))
+                        d (await (tidy/dig! c cell true))]
                     (ctx/update-mem! c update :cleared (fnil conj #{}) cell)
                     (when (not= "dug" (.-status d))
                       (ctx/update-mem! c update :occupied (fnil conj #{}) cell))
@@ -208,7 +216,8 @@
         cells (cells-to-try c open)
         status (await (place-all! c blocks (take max-places cells)))]
     (cond
-      (empty? cells) :done
+      (empty? cells) (do (when-not (sh/roofed? p roof-height) (remember-failed-site! c :walls-refused))
+                         :done)
       (not= :ok status) (fail-site! c :walls-failed (str "cannot place a block: " status "; " (open-text open)))
       (sh/roofed? p roof-height) :done
       :else :continue)))
@@ -238,10 +247,19 @@
       fluid (do (remember-failed-site! c :fluid-adjacent)
                 (ctx/emit! c :dig_in_failed :warn {:text (str fluid " beside the descent cell; not opening the pit")})
                 :done)
-      (hazards name) (do (ctx/emit! c :dig_in_failed :warn {:text (str name " below the body; not digging down")})
+      (hazards name) (do (remember-failed-site! c :hazard-below)
+                         (ctx/emit! c :dig_in_failed :warn {:text (str name " below the body; not digging down")})
                          :done)
       (and (sh/solid-at? p below) (not (sh/solid? under)))
-      (do (ctx/emit! c :dig_in_failed :warn {:text (str (or under "an unloaded cell") " under the floor; not digging through it")})
+      (do (remember-failed-site! c :no-floor)
+          (ctx/emit! c :dig_in_failed :warn {:text (str (or under "an unloaded cell") " under the floor; not digging through it")})
+          :done)
+      (and (sh/solid-at? p below) (nil? (pick c blocks)) (not (tools/can-harvest? p name)))
+      (do (ctx/remember! c :dig-in-futile {:pos (:roof (ctx/mem c))} futile-policy)
+          (ctx/emit! c :dig_in_failed :warn
+                     {:text (str "cannot harvest " name " without a "
+                                 (tools/harvest-need (map :name (u/inventory p)) (js->clj (.harvestTools p name)))
+                                 "; nothing to roof the pit with, so not digging")})
           :done)
       (not (sh/solid-at? p below))
       (let [before (:y (sh/feet p))
@@ -250,7 +268,8 @@
         (if (< (:y (sh/feet p)) before)
           (do (ctx/update-mem! c dissoc :failures) :continue)
           (fail-site! c :descent-stalled (str "cannot descend into the pit: " (.-status r)))))
-      :else (let [r (await (tidy/dig! c below true))]
+      :else (let [_ (await (tools/equip-for! c name))
+                  r (await (tidy/dig! c below true))]
               (if (= "dug" (.-status r))
                 (let [placeable (some #(some #{(.-name %)} blocks) (array-seq (.-drops r)))]
                   (await (collect-drops! c blocks (.-drops r)))
@@ -259,7 +278,7 @@
                     (do (ctx/remember! c :dig-in-futile {:pos (:roof (ctx/mem c))} futile-policy)
                         (ctx/emit! c :dig_in_failed :warn {:text "nothing to roof the pit with"})
                         :done)))
-                (u/fail! c :dig_in_failed (str "cannot dig down: " (.-status r))))))))
+                (fail-site! c :dig-failed (str "cannot dig down: " (.-status r))))))))
 
 (defn ^:async roof-round
   "In the pit: place one block at the cell the body started in."
@@ -268,7 +287,7 @@
         item (pick c blocks)
         roof (:roof (ctx/mem c))]
     (if (nil? item)
-      :done
+      (do (ctx/remember! c :dig-in-futile {:pos roof} futile-policy) :done)
       (let [r (await (tidy/place! c roof item true))]
         (if (#{"placed" "occupied"} (.-status r))
           (do (when (= "placed" (.-status r)) (ctx/update-mem! c update :placed (fnil conj #{}) roof))
@@ -402,20 +421,41 @@
           :else (ctx/update-mem! c assoc :mode :dig :roof (:roof plan) :start start
                                  :target-y (- (:y start) (:depth plan))))))))
 
-(defn futile-nearby?
-  "Whether a recent failed site blocks digging here. Material-only failures
-  can be retried after collecting blocks; unsafe or inaccessible sites cannot."
+(defn futile-entry-here?
+  "Whether any :dig-in-futile entry, whatever its reason, lies within futile-radius of the body."
+  [c]
+  (let [here (u/self-pos c)]
+    (boolean (some #(<= (u/dist here (:pos (:data %))) futile-radius) (ctx/entries c :dig-in-futile)))))
+
+(defn note-unroofed!
+  "A dig-in that ends with no roof over the body leaves a :dig-in-futile entry, so a caller that holds the body (the
+  night shelter) does not run it again every round: the entry its failure wrote, else {:pos feet :reason :unsealed}."
+  [c]
+  (when-not (or (sh/roofed? (:primitives c) (:roof-height (:args c))) (futile-entry-here? c))
+    (ctx/remember! c :dig-in-futile {:pos (sh/feet (:primitives c)) :reason :unsealed} futile-policy)))
+
+(defn futile-site
+  "The :dig-in-futile entry data that blocks digging here, or nil. Material-only failures (no :reason) can be retried
+  once blocks are carried; unsafe or inaccessible sites (a :reason) cannot."
   [c]
   (let [here (u/self-pos c)
         have-blocks (seq (carried c (:blocks (:args c))))]
-    (boolean (some #(and (or (:reason (:data %)) (not have-blocks))
-                         (<= (u/dist here (:pos (:data %))) futile-radius))
-                   (ctx/entries c :dig-in-futile)))))
+    (some #(when (and (or (:reason (:data %)) (not have-blocks))
+                      (<= (u/dist here (:pos (:data %))) futile-radius))
+             (:data %))
+          (ctx/entries c :dig-in-futile))))
 
-(defn check [c]
-  (and (sh/night? (:primitives c))
-       (not (sh/roofed? (:primitives c) (:roof-height (:args c))))
-       (not (futile-nearby? c))))
+(defn check
+  "Night, no roof over the body and no futile site here; a decline says why (ctx/wait): :day, :already-sealed, or
+  :futile with the failed site's :pos and :reason (none: it needs blocks to roof with)."
+  [c]
+  (let [p (:primitives c)]
+    (cond
+      (not (sh/night? p)) (ctx/wait c {:reason :day})
+      (sh/roofed? p (:roof-height (:args c))) (ctx/wait c {:reason :already-sealed :pos (sh/feet p)})
+      :else (if-let [site (futile-site c)]
+              (ctx/wait c (merge {:reason :futile} (select-keys site [:pos]) (when (:reason site) {:why (:reason site)})))
+              true))))
 
 (defn no-roof-round
   "No cell of the pit could be roofed (nothing solid beside the start cell or the ground cell under it): do not dig,
@@ -459,6 +499,7 @@
 (defn ^:async round [c]
   (let [r (await (step c))]
     (when (= :done r)
+      (note-unroofed! c)
       (let [p (:primitives c)
             feet (sh/feet p)
             placed (:placed (ctx/mem c) #{})
@@ -580,7 +621,8 @@
   (let [p (:primitives c)
         cell (first (filter #(sh/solid-at? p %) door))]
     (if cell
-      (let [r (await (tidy/dig! c cell))]
+      (let [_ (await (tools/equip-for! c (u/block-name p cell)))
+            r (await (tidy/dig! c cell))]
         (if (= "dug" (.-status r))
           :continue
           (leave-result! c :stopped :no-way-out {:tries [{:cell cell :reason (keyword (.-status r))}]})))

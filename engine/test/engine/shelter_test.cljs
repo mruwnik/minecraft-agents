@@ -52,6 +52,8 @@
 
 (defn emitted [seen kind] (filterv #(= kind (:kind %)) @seen))
 
+(defn emitted-by [seen source reflex] (filterv #(= [source reflex] [(:source %) (:reflex %)]) @seen))
+
 (def floor {"0,63,0" "dirt" "0,62,0" "stone" "0,61,0" "stone" "0,60,0" "stone"})
 (def dirt-stack [{:name "dirt" :count 12}])
 (def sleeper {:id 5 :name "Alex" :kind "player" :sleeping true :pos {:x 10 :y 64 :z 0}})
@@ -340,7 +342,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:time night :drops {"iron_ore" "raw_iron"}
+        (let [{:keys [eng p seen]} (setup {:time night :drops {"iron_ore" "raw_iron"} :inventory [{:name "iron_pickaxe" :count 1}]
                                            :blocks {"0,63,0" "iron_ore" "0,62,0" "iron_ore" "0,61,0" "stone"}})]
           (core/submit! eng '(jobs.survival.dig-in) {})
           (await (run-until-empty eng 8))
@@ -348,6 +350,55 @@
           (is (= [] (calls p "place")))
           (is (= 1 (count (emitted seen :dig_in_failed))))
           (is (re-find #"nothing to roof the pit with" (:text (first (emitted seen :dig_in_failed)))))
+          (is (= [] (:list (core/state eng))) "ended"))))))
+
+(deftest a-submitted-dig-in-says-why-it-waits
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[world futile reason]
+                [[{:time noon :blocks floor} [] {:reason :day}]
+                 [{:time night :blocks (assoc floor "0,66,0" "stone")} [] {:reason :already-sealed :pos {:x 0 :y 64 :z 0}}]
+                 [{:time night :blocks floor} [{:pos {:x 0 :y 64 :z 0} :reason :no-floor}]
+                  {:reason :futile :pos {:x 0 :y 64 :z 0} :why :no-floor}]
+                 [{:time night :blocks floor} [{:pos {:x 0 :y 63 :z 0}}] {:reason :futile :pos {:x 0 :y 63 :z 0}}]]]
+          (let [{:keys [eng seen]} (setup world)]
+            (doseq [f futile] (mem/write! (:store eng) :dig-in-futile f {:cap 5 :ttl 600000}))
+            (core/submit! eng '(jobs.survival.dig-in) {})
+            (await (tick-n eng 2))
+            (is (= [reason] (mapv #(select-keys % [:reason :pos :why]) (emitted seen :waiting))) (pr-str world futile))))))))
+
+(def stone-pit {"0,63,0" "stone" "0,62,0" "stone" "0,61,0" "stone" "0,60,0" "stone" "1,64,0" "stone"})
+
+(defn act-names
+  "The names of the dig and equip calls, in order."
+  [p]
+  (mapv #(.-name %) (filter #(#{"dig" "equip"} (.-name %)) (.-calls (.-world p)))))
+
+(deftest dig-in-holds-the-best-pickaxe-before-each-dig
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[inventory held names]
+                [[[{:name "stone_pickaxe" :count 1} {:name "iron_pickaxe" :count 1} {:name "dirt" :count 1}] "dirt" ["equip" "dig" "dig"]]
+                 [[{:name "iron_pickaxe" :count 1}] nil ["equip" "dig" "dig"]]
+                 [[{:name "iron_pickaxe" :count 1}] "iron_pickaxe" ["dig" "dig"]]]]
+          (let [{:keys [eng p]} (setup {:time night :blocks stone-pit :inventory inventory :self {:held held}})]
+            (core/submit! eng '(jobs.survival.dig-in) {})
+            (await (run-until-empty eng 8))
+            (is (= names (act-names p)) (pr-str inventory held))
+            (is (= "iron_pickaxe" (.-held (.self p))) (pr-str inventory held))))))))
+
+(deftest dig-in-does-not-dig-a-pit-it-cannot-harvest-with-nothing-to-roof-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:time night :blocks stone-pit :inventory [{:name "wooden_shovel" :count 1}]})]
+          (core/submit! eng '(jobs.survival.dig-in) {})
+          (await (run-until-empty eng 8))
+          (is (= [] (calls p "dig")) "a hand dig of stone drops nothing: no roofless pit")
+          (is (re-find #"cannot harvest stone" (:text (first (emitted seen :dig_in_failed)))))
+          (is (= [{:pos {:x 0 :y 64 :z 0}}] (entries eng :dig-in-futile)) "material-only: retried once blocks are carried")
           (is (= [] (:list (core/state eng))) "ended"))))))
 
 (deftest dig-in-walls-converge-on-the-current-cell
@@ -640,7 +691,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:time night :blocks stone-ground})]
+        (let [{:keys [eng p seen]} (setup {:time night :blocks stone-ground :inventory [{:name "dirt" :count 1}]})]
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night-unsafe}]}"))
           (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
           (await (tick-n eng 20))
@@ -768,40 +819,78 @@
 
 (def shelter-policy {:cap 10 :ttl day-ms})
 
-(deftest shelter-declines-when-dig-in-ends-without-a-roof
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:time night :inventory dirt-stack :blocks floor})
-              eng (update eng :triggers assoc :always-shelter always-shelter)]
-          (refuse-placing! p)
-          (core/register-reflex! eng {:trigger :always-shelter})
-          (await (tick-n eng 8))
-          (is (= 1 (count (declined-events seen :always-shelter))))
-          (is (nil? (core/running eng))))))))
+(defn ^:async tick-nights
+  "n batches of ticks, the clock 11 s on after each (past the night-unsafe cooldown, so a dropped reflex would fire again)."
+  [eng clock n]
+  (loop [i 0]
+    (when (< i n)
+      (await (tick-n eng 6))
+      (swap! clock + 11000)
+      (recur (inc i)))))
 
-(deftest shelter-declines-when-the-pit-cannot-be-roofed
+(deftest a-shelter-that-cannot-roof-holds-the-body-until-day-without-refiring
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {:time night :drops {"iron_ore" "raw_iron"}
-                                         :blocks {"0,63,0" "iron_ore" "0,62,0" "iron_ore" "0,61,0" "stone"}})
-              eng (update eng :triggers assoc :always-shelter always-shelter)]
-          (core/register-reflex! eng {:trigger :always-shelter})
-          (await (tick-n eng 6))
-          (is (= 1 (count (declined-events seen :always-shelter)))))))))
-
-(deftest a-declined-shelter-reflex-lets-a-lower-reflex-get-the-body
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:time night :self {:food 5} :blocks floor
-                                           :inventory [{:name "dirt" :count 12} {:name "bread" :count 3}]})]
+        (let [{:keys [eng p seen clock]} (setup {:time night :inventory dirt-stack :blocks floor})]
           (refuse-placing! p)
-          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night-unsafe} {:trigger :hungry}]}"))
-          (await (tick-n eng 8))
-          (is (seq (declined-events seen :night-unsafe)) "the shelter reflex was dropped with reflex.declined")
-          (is (< 5 (.-food (.self p))) "hungry got the body and ate"))))))
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night-unsafe}]}"))
+          (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
+          (await (tick-nights eng clock 6))
+          (is (= [] (declined-events seen :night-unsafe)) "never declined, so never dropped and fired again")
+          (is (= 1 (count (filter #(= :fired (:kind %)) (emitted-by seen :reflex :night-unsafe)))) "fired once")
+          (is (some? (:pending-reflex (core/state eng))) "the shelter holds the body at night")
+          (is (= 3 (count (calls p "place"))) "the walls are not tried again every round")
+          (is (= 1 (count (emitted seen :shelter.exposed))) "one warn that the body is unsheltered")
+          (is (zero? (notified seen)) "the queued job waits for day")
+          (.setTime (.-world p) noon)
+          (await (tick-n eng 10))
+          (is (nil? (:pending-reflex (core/state eng))) "the shelter ended at day")
+          (is (= 1 (notified seen)) "then the queued job ran"))))))
+
+(deftest an-unsheltered-hold-does-not-rerun-a-failing-dig-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[blocks reason] [[{"0,63,0" "stone" "0,62,0" "air"} :no-floor]
+                                 [{"0,63,0" "stone" "0,62,0" "water"} :no-floor]
+                                 [{"0,63,0" "water"} :hazard-below]]]
+          (let [{:keys [eng p seen]} (setup {:time night :blocks blocks :inventory [{:name "dirt" :count 1}]})]
+            (core/submit! eng '(jobs.survival.shelter) {})
+            (await (tick-n eng 30))
+            (is (= [] (calls p "dig")) (pr-str blocks))
+            (is (= 1 (count (emitted seen :dig_in_failed))) (pr-str blocks))
+            (is (= [reason] (mapv :reason (entries eng :dig-in-futile))) (pr-str blocks))
+            (is (= 1 (count (:list (core/state eng)))) "still holding")))))))
+
+(deftest an-unsheltered-hold-logs-out-once-another-player-comes-online
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:time night :inventory dirt-stack :blocks floor})]
+          (refuse-placing! p)
+          (core/submit! eng '(jobs.survival.shelter) {})
+          (await (tick-n eng 10))
+          (is (= [] (calls p "offline")) "alone: nobody to skip the night for")
+          (swap! (fake/state p) assoc :players ["Sam"])
+          (await (tick-n eng 4))
+          (is (= 1 (count (calls p "offline"))) "the hold chose again and logged out"))))))
+
+(deftest an-unsheltered-hold-after-a-futile-dig-ends-by-day
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:time night :drops {"iron_ore" "raw_iron"} :inventory [{:name "iron_pickaxe" :count 1}]
+                                           :blocks (merge ground {"0,63,0" "iron_ore" "0,62,0" "iron_ore" "0,61,0" "stone"})})]
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night-unsafe}]}"))
+          (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
+          (await (tick-n eng 20))
+          (is (= 1 (count (calls p "dig"))) "nothing to roof the pit with: one dig")
+          (is (some? (:pending-reflex (core/state eng))) "held at night")
+          (.setTime (.-world p) noon)
+          (await (tick-n eng 20))
+          (is (nil? (:pending-reflex (core/state eng))) "the shelter ended at day")
+          (is (= 1 (notified seen)) "then the queued job ran"))))))
 
 (deftest a-failed-unroofed-shelter-at-night-does-not-throw
   (async done
@@ -824,10 +913,10 @@
           (is (seq (calls p "place")) "dig-in was tried again, not a bare decline"))))))
 
 (def futile-world
-  {:time night :drops {"iron_ore" "raw_iron"}
+  {:time night :drops {"iron_ore" "raw_iron"} :inventory [{:name "iron_pickaxe" :count 1}]
    :blocks {"0,63,0" "iron_ore" "0,62,0" "iron_ore" "0,61,0" "stone"}})
 
-(deftest a-futile-pit-is-not-dug-again-on-the-next-firing
+(deftest a-futile-pit-is-not-dug-again-while-the-shelter-holds
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -836,10 +925,23 @@
           (core/register-reflex! eng {:trigger :always-shelter})
           (await (tick-n eng 6))
           (is (= [{:pos {:x 0 :y 63 :z 0}}] (entries eng :dig-in-futile)))
+          (await (tick-nights eng clock 3))
+          (is (= 1 (count (calls p "dig"))) "the hold does not dig again")
+          (is (= [] (declined-events seen :always-shelter))))))))
+
+(deftest a-futile-pit-is-not-dug-again-on-the-next-firing-after-a-cut
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (setup futile-world)
+              eng (update eng :triggers assoc :always-shelter always-shelter)]
+          (core/register-reflex! eng {:trigger :always-shelter})
+          (await (tick-n eng 6))
+          (core/cut! eng (core/holder eng) :test nil)
           (swap! clock + 11000)
           (await (tick-n eng 6))
-          (is (= 1 (count (calls p "dig"))) "the second firing does not dig")
-          (is (= 2 (count (declined-events seen :always-shelter)))))))))
+          (is (some? (:pending-reflex (core/state eng))) "fired again and holds")
+          (is (= 1 (count (calls p "dig"))) "the second firing does not dig"))))))
 
 (deftest a-futile-pit-does-not-stop-a-body-that-carries-blocks
   (async done
@@ -925,7 +1027,7 @@
           (await (tick-n eng 6))
           (swap! clock + 11000)
           (await (tick-n eng 6))
-          (is (= 2 (count (declined-events seen :always-shelter))))
+          (is (= [] (declined-events seen :always-shelter)) "it holds rather than declining")
           (is (= 1 (count (emitted seen :needs_bed)))))))))
 
 (deftest dig-in-treats-an-occupied-non-solid-cell-as-sealed-and-does-not-retry-it
