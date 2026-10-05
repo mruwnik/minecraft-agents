@@ -1,0 +1,4 @@
+;; ProbeDig live cases for jobs.survival.dig-in (sealed claim, refused wall cell): no reflexes by default; jobs are submitted with tools/jobs.mjs
+{:register [{:trigger :night-unsafe :persistence :cooldown :cooldown-s 10 :args {:roof-height 4}
+             :job (jobs.survival.dig-in {})}]
+ :queue []}
