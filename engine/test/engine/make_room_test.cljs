@@ -402,3 +402,17 @@
           (is (= [{:item "cobbled_deepslate" :count 64} {:item "tuff" :count 20}]
                  (:tossed (first (filter #(= :make-room.done (:kind %)) @seen)))))
           (is (some #(and (= :make-room.tossed (:kind %)) (:junk %)) @seen) "the event says it was a junk block"))))))
+
+(deftest a-submitted-make-room-ends-done-after-the-toss-that-made-room
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen clock]} (setup {:inventory (vec (concat [{:name "coal" :count 30}
+                                                                          {:name "cobbled_deepslate" :count 64} {:name "granite" :count 64}]
+                                                                         (same "diamond_pickaxe" 33 1)))})]
+          (core/submit! eng '(jobs.storage.make-room {:free 2 :keep-blocks 0}) {})
+          (dotimes [_ 12]
+            (swap! clock + 700)
+            (await (core/tick! eng)))
+          (is (some #(= :make-room.done (:kind %)) @seen) "done is emitted, not a wait for not-ready")
+          (is (empty? (:list (core/state eng))) "the job ended"))))))

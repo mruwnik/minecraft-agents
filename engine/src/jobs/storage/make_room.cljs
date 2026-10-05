@@ -265,9 +265,10 @@
     r))
 
 (defn check
-  "Fewer than :free slots are free."
+  "Fewer than :free slots are free, or the job has acted and its done/walk-away round is still to run."
   [c]
-  (< (u/free-slots (:primitives c)) (:free (:args c))))
+  (boolean (or (< (u/free-slots (:primitives c)) (:free (:args c)))
+               (:acted (ctx/mem c)))))
 
 (defn tossed-summary
   "The done event's fields: what was tossed ([{:item :count}]) and a text saying so."
