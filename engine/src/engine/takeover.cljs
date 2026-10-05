@@ -5,6 +5,7 @@
   take! cuts the holder like a reflex and gives the ownership token to the driver; the scheduler
   stands still (core/paused?) until the lease ends. The manual state never reaches engine.edn."
   (:require [engine.core :as core]
+            [engine.armour :as armour]
             [engine.entity-observations :as entity-observations]
             [engine.lease :as lease]
             [engine.jobs.tools :as tools]
@@ -21,7 +22,8 @@
    :dig {:method "dig" :timeout 10}
    :place {:method "place" :timeout 5}
    :use-on {:method "useOn" :timeout 5}
-   :interact {:method "interact" :timeout 2}})
+   :interact {:method "interact" :timeout 2}
+   :wear {:method "equip" :timeout 6}})
 
 (defn world-reply [status value]
   #js {:status status :contentType "application/edn" :text (str (pr-str value) "\n")})
@@ -43,6 +45,7 @@
                   :place #{:pos :item}
                   :use-on #{:pos :item :face}
                   :interact #{:id :item}
+                  :wear #{:item}
                   #{})]
     (cond
       (not (map? args)) "args must be a map"
@@ -63,6 +66,8 @@
       (= action :interact)
       (or (when-not (and (integer? (:id args)) (cljs.core/pos? (:id args))) "interact needs a positive entity :id")
           (when (and (:item args) (not (valid-item? (:item args)))) "item must be a short item name"))
+      (= action :wear)
+      (when (and (contains? args :item) (not (valid-item? (:item args)))) "item must be a short item name")
       :else "unknown action")))
 
 (defn compact-inventory [eng]
@@ -97,7 +102,7 @@
 (defn compact-result [result]
   (when (map? result)
     (let [drops (:drops result)]
-      (cond-> (-> (select-keys result [:status :pos :distance :reason :block :needed :before :after :consumed :hurt :health])
+      (cond-> (-> (select-keys result [:status :pos :distance :reason :block :needed :before :after :consumed :hurt :health :worn :item])
                   (update :reason #(when % (subs (str %) 0 (min 160 (count (str %)))))))
         (seq drops) (assoc :drops (->> drops (take 8) vec))
         (> (count drops) 8) (assoc :more-drops? true)))))
@@ -196,6 +201,21 @@
           (await (.equip p token #js {:item tool :dest "hand"})))
         (await (.dig p token (clj->js args)))))))
 
+(defn ^:async wear!
+  "A manual wear as the wear job does it: the named carried piece, or the best carried piece for each slot that is
+  empty or worn weaker. Resolves to a JS result: {:status \"worn\" :worn [{:item :slot}]}, or {:status \"cannot\" :reason
+  \"not-armour\"|\"no-item\"}, or {:status \"failed\" ...} when the server did not take a piece."
+  [eng token args]
+  (let [p (:primitives eng)
+        self (.self p)
+        names (map :name (js->clj (.-inventory self) :keywordize-keys true))
+        r (await (armour/wear! (fn [item slot] (.equip p token (clj->js {:item item :dest slot})))
+                               (armour/worn-of (.-equipment self)) names (:item args)))]
+    (clj->js (cond
+               (= :failed (:reason r)) (assoc (select-keys r [:worn :item :status]) :status "failed" :reason (:status r))
+               (:ok r) {:status "worn" :worn (:worn r)}
+               :else {:status "cannot" :reason (name (:reason r)) :item (:item r)}))))
+
 (defn submit-world-op! [eng {:keys [who request-id action args]}]
   (let [prior (world-record eng request-id)
         current @(:manual eng)
@@ -234,6 +254,7 @@
                             (and (= action :move-to) (walker-applies? eng args))
                             (.then (walk-move-to! eng token args timeout-s) clj->js)
                             (= action :dig) (dig-with-tool! eng token call-args)
+                            (= action :wear) (wear! eng token call-args)
                             :else
                             (.call (aget (:primitives eng) method) (:primitives eng) token (clj->js call-args))))
                         (catch :default e (js/Promise.reject e)))]

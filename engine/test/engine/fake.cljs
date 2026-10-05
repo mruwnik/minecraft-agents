@@ -457,10 +457,15 @@
           [(if deposit? (-> w (assoc :inventory from') (assoc-in [:containers pos] to')) (-> w (assoc :inventory to') (assoc-in [:containers pos] from')))
            {:status "ok" :moved moved}])))))
 
-(defn equip [w {:keys [item]}]
-  (if (zero? (carried (:inventory w) item))
-    [w {:status "no-item"}]
-    [(assoc-in w [:self :held] item) {:status "equipped"}]))
+(defn equip [w {:keys [item dest]}]
+  (let [part (when (contains? #{"head" "torso" "legs" "feet"} dest) dest)
+        old (when part (get-in w [:equipment part]))]
+    (cond
+      (zero? (carried (:inventory w) item)) [w {:status "no-item"}]
+      (not part) [(assoc-in w [:self :held] item) {:status "equipped"}]
+      :else [(cond-> (-> w (update :inventory #(first (take-from % item 1))) (assoc-in [:equipment part] {:name item :count 1}))
+               old (update :inventory add-to (:name old) 1))
+             {:status "equipped"}])))
 
 (defn eat [w {:keys [item]}]
   (let [food (or item (first (filter #(pos? (carried (:inventory w) %)) foods)))

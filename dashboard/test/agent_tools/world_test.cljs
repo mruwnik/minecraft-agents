@@ -34,6 +34,9 @@
     (is (= :place (get-in place [:body :action])))
     (is (= {:pos {:x 1 :y 64 :z 2} :item "oak_planks"} (get-in place [:body :args]))))
   (is (= 17 (get-in (world/request-for ["--world" "w" "Probe" "submit" "interact" "17"]) [:body :args :id])))
+  (is (= {:action :wear :args {:item "iron_helmet"}}
+         (select-keys (:body (world/request-for ["--world" "w" "Probe" "submit" "wear" "iron_helmet"])) [:action :args])))
+  (is (= {} (get-in (world/request-for ["--world" "w" "Probe" "submit" "wear"]) [:body :args])))
   (is (= {:pos {:x 1 :y 64 :z 2} :item "bread" :face "up"}
          (get-in (world/request-for ["--world" "w" "Probe" "submit" "use-on" "1" "64" "2" "--item" "bread" "--face" "up"])
                  [:body :args]))))

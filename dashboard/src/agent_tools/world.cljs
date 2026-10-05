@@ -16,6 +16,7 @@
        "  submit dig <x> <y> <z> | submit place <x> <y> <z> <item>\n"
        "  submit use-on <x> <y> <z> [--item <item>] [--face up|down|north|south|east|west]\n"
        "  submit interact <entity-id> [--item <item>] [--request-id <id>]\n"
+       "  submit wear [<item>]   (puts a carried armour piece on; no item: the best carried piece for each empty or weaker slot)\n"
        "  status <request-id> | cancel <request-id> | inventory\n"
        "Acquire the body first with drive.mjs <agent> --world <world> take --who <same-name> --idle-s <seconds>.\n"
        "Submit returns immediately with a request-id; poll status while continuing to observe/chat."))
@@ -52,6 +53,8 @@
     "place" (do (when (or (not= 4 (count args)) (some? item)) (fail "place needs x y z item"))
                 (assoc (pos-args action args 4) :item (nth args 3)))
     "use-on" (cond-> (pos-args action args 3) (seq item) (assoc :item item) (seq face) (assoc :face face))
+    "wear" (do (when (> (count args) 1) (fail "wear needs at most one item"))
+               (if (seq args) {:item (first args)} {}))
     "interact" (do (when-not (= 1 (count args)) (fail "interact needs one entity-id"))
                    (cond-> {:id (num (first args) "entity-id")} (seq item) (assoc :item item)))
     (fail (str "unknown action " (or action "undefined")))))

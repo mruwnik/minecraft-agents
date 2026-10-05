@@ -49,7 +49,7 @@
   (is (= :resuming (event-api/instance-status {:resume "j1" :list ["j1"]} "j1")))
   (is (= :queued (event-api/instance-status {:list ["j1"]} "j1"))))
 
-(deftest inventory-view-is-read-only-bounded-and-omits-empty-equipment-slots
+(deftest inventory-view-is-read-only-bounded-and-shows-empty-armour-slots-and-omits-other-empty-ones
   (let [stacks (mapv (fn [slot] {:name (str "item-" slot) :count 2 :slot slot}) (range 50))
         eng {:primitives #js {:self (fn [] #js {:inventory (clj->js stacks)
                                                 :equipment (clj->js {:head {:name "iron_helmet" :count 1 :durability 140}
@@ -62,6 +62,7 @@
     (is (= {:name "item-45" :count 2 :slot 45} (last (:inventory view))))
     (is (true? (:more? view)))
     (is (= {:head {:name "iron_helmet" :count 1 :durability 140}
+            :torso :empty :legs :empty :feet :empty
             :mainHand {:name "iron_sword" :count 1}}
            (:equipment view)))))
 
@@ -138,7 +139,7 @@
                         (is (= 200 (:status response)))
                         (is (true? (:ok inventory)))
                         (is (= [{:name "bread" :count 5 :slot 9}] (:inventory inventory)))
-                        (is (= {:head {:name "iron_helmet" :count 1 :durability 140}}
+                        (is (= {:head {:name "iron_helmet" :count 1 :durability 140} :torso :empty :legs :empty :feet :empty}
                                (:equipment inventory)))
                         (request socket-path "GET" "/job?id=j1" {} nil))))
              (.then (fn [response]

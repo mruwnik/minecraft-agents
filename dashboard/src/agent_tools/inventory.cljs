@@ -12,7 +12,9 @@
 (defn- equipment-view [items]
   (into {}
         (keep (fn [[slot item]]
-                (when (and (keyword? slot) (map? item) (short-name (:name item)))
+                (cond
+                  (and (keyword? slot) (= :empty item)) [slot :empty]
+                  (and (keyword? slot) (map? item) (short-name (:name item)))
                   [slot (cond-> {:name (short-name (:name item))}
                           (and (integer? (:count item)) (pos? (:count item))) (assoc :count (:count item))
                           (and (number? (:durability item)) (not (neg? (:durability item))))

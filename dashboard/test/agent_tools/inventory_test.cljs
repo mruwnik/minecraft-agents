@@ -18,6 +18,10 @@
     (is (= {:equipment {:head {:name "iron_helmet" :count 1 :durability 140}}}
            (inventory/compact source :equipment)))))
 
+(deftest compact-inventory-shows-bare-armour-slots
+  (is (= {:equipment {:head {:name "iron_helmet"} :torso :empty :legs :empty :feet :empty}}
+         (inventory/compact {:ok true :equipment {:head {:name "iron_helmet"} :torso :empty :legs :empty :feet :empty}} :equipment))))
+
 (deftest compact-inventory-omits-empty-gear-and-preserves-offline-refusals
   (is (= {:total-items 0 :kinds 0} (inventory/compact {:ok true :inventory []} :inventory)))
   (is (= {:equipment :none} (inventory/compact {:ok true :equipment {}} :equipment)))
