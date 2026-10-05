@@ -1,14 +1,17 @@
 (ns jobs.forestry.fell-tree
   (:require [engine.ctx :as ctx]
+            [engine.jobs.blocks :as blocks]
             [engine.jobs.gate :as gate]
             [engine.jobs.forestry :refer [scan-logs tree-near tree-at logs-at unreachable-set debts replant-kind
-                                          replant-policy default-radius logs-per-round max-partials eye-dist dig-reach]]
+                                          replant-policy default-radius max-partials eye-dist dig-reach log-name?]]
             [engine.jobs.util :as u]
             [engine.path.near :as near]))
 
 (def doc
-  "Fell the nearest tree (a log column with leaves near its top), two logs a
+  "Fell the nearest tree (a log column with leaves near its top), one log a
   round, lowest first; write a :forestry/replant debt before the base log is dug.
+  Each log is dug by a jobs.blocks.dig child (:dig), which holds the best carried axe, records a log of another's
+  dug with :ignore-zones? for tidying, and leaves the drop on the ground (jobs.forestry.harvest-wood collects it).
 
   Zones and claims are a rule the job consults: a tree whose base log is in a zone or claim of another owner, or in
   a plan's footprint (but :for-plan's own), is not a candidate; a log of the chosen tree that turns out to be refused
@@ -44,10 +47,6 @@
       (ctx/remember! c replant-kind {:pos base :species species} replant-policy)
       true)))
 
-(def untouched-statuses
-  "Dig statuses that leave the log standing, so the debt written ahead is void."
-  #{"unreachable" "cannot"})
-
 (defn ^:async approach!
   "Get the log at pos within reach to dig: nothing when its centre is within eye reach already, else walk to within 2
   of the column's foot (3 when that has no path: the foot may be the trunk itself). :there, :partial or :blocked."
@@ -60,30 +59,47 @@
         (await (near/walk-near! c foot 3))
         w))))
 
-(defn ^:async dig-up!
-  "Dig the logs in order, walking in reach first. Commits the replant debt
-  before the base log is dug (write-ahead; withdrawn when the dig leaves the log standing). Resolves to :ok, :partial (the walk made progress
-  but is not in reach yet; call again) or a non-ok walk or dig status for the
-  caller to count as a failure (:unreachable, :cannot and :out-of-reach mean
-  the tree cannot be dug from here and are marked unreachable by the round)."
-  [c logs]
-  (loop [[l & more] logs]
-    (if-not l
-      :ok
-      (let [w (await (approach! c (:pos l)))]
-        (case w
-          :blocked :blocked
-          :partial :partial
-          (if-not (log-allowed? c (:pos l))
-            :refused
-            (let [base? (= (:pos l) (:base (ctx/mem c)))
-                wrote? (and base? (record-debt! c))
-                r (await (ctx/act c :dig (clj->js {:pos (:pos l)})))]
-            (when (and wrote? (untouched-statuses (.-status r)))
-              (ctx/forget-where! c replant-kind #(= (:pos l) (:pos %))))
-            (if (#{"dug" "missing"} (.-status r))
-              (recur more)
-              (keyword (.-status r))))))))))
+(defn log-dig-args
+  "The jobs.blocks.dig args for the log at pos: no tool needed (an axe is held when carried), the drop left on the
+  ground, every dig hazard taken (as a player felling a tree does)."
+  [c pos]
+  (merge (select-keys (:args c) [:for-plan :ignore-zones?])
+         {:pos pos :collect false :need-drop false :accept #{:fluid-adjacent :falling-block :under-feet}}))
+
+(defn outcome
+  "What one round of the dig child (r, its result res, the reason its check waits with) means for the tree: :ok
+  (dug, gone, or still under way), :refused, :unreachable, :cannot, or the failed dig's status as a keyword."
+  [r res waits]
+  (case r
+    :continue :ok
+    :declined (if (= :not-allowed (:reason waits)) :refused :unreachable)
+    (case (:reason res)
+      (:dug :already-clear) :ok
+      (:cannot :fluid) :cannot
+      (keyword (or (:status res) (:reason res))))))
+
+(defn ^:async dig-log!
+  "Dig the log l (one blocks.dig child round), walking in reach first. Commits the replant debt before the base log
+  is dug (write-ahead; withdrawn when the log is still standing after the round). Resolves to :ok, :partial (the walk
+  made progress but is not in reach yet; call again) or a non-ok outcome for the round to count as a failure
+  (:unreachable, :cannot, :refused and :out-of-reach mean the tree cannot be dug from here)."
+  [c l]
+  (let [pos (:pos l)
+        w (await (approach! c pos))]
+    (case w
+      :blocked :blocked
+      :partial :partial
+      (if-not (log-allowed? c pos)
+        :refused
+        (let [base? (= pos (:base (ctx/mem c)))
+              wrote? (and base? (record-debt! c))
+              args (log-dig-args c pos)
+              r (await (ctx/call-child c :dig 'jobs.blocks.dig args))
+              res (ctx/child-result c :dig)
+              waits (when (= :declined r) (blocks/child-wait c :dig 'jobs.blocks.dig args))]
+          (when (and wrote? (some-> (u/block-name (:primitives c) pos) log-name?))
+            (ctx/forget-where! c replant-kind #(= pos (:pos %))))
+          (outcome r res waits))))))
 
 (defn candidate
   "The tree to fell: the one at :at (nil once marked unreachable), else the nearest of species within radius."
@@ -133,7 +149,7 @@
 
 (defn ^:async round
   "args {:species name-or-nil :radius 16}. Picks a tree (log column with
-  leaves) the first round and remembers the column, then digs up to two logs
+  leaves) the first round and remembers the column, then digs one log
   bottom-up per round. Writes the replant debt {:pos base :species} to body
   memory kind :forestry/replant when the base log is dug. A tree whose walk is
   :blocked, or partial three times in a row, is remembered as unreachable and
@@ -153,7 +169,7 @@
       (let [logs (tree-logs c radius)]
         (if (empty? logs)
           :done
-          (let [r (await (dig-up! c (take logs-per-round logs)))]
+          (let [r (await (dig-log! c (first logs)))]
             (case r
               :ok (do (ctx/update-mem! c assoc :partials 0) :continue)
               (:partial :blocked) (walk-failed! c r)

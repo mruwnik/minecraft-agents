@@ -417,7 +417,7 @@
                        (await (impl token args))))
           (core/submit! (:eng s) (list job {:plan "forest"}) {})
           (await (ticks (:eng s) 30))
-          (is (= [[3 64 0] [3 65 0]] (digs (:p s))) "the two logs of the first round, then it stops")
+          (is (= [[3 64 0]] (digs (:p s))) "the first round's log (one a round), then it stops")
           (is (= [{:pos {:x 3 :y 64 :z 0} :reason :refused :why :footprint}] (warns (:seen s) :forest.left))))))))
 
 ;; ------------------------------------------------------------------ restart

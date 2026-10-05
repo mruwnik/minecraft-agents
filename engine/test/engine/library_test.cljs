@@ -75,9 +75,9 @@
         (let [{:keys [eng p]} (setup {:blocks (tree 3 0 "oak" 4)})]
           (core/submit! eng (list 'jobs.forestry.fell-tree {:species "oak" :radius 10}) {})
           (await (core/tick! eng))
-          (is (= [{:x 3 :y 64 :z 0} {:x 3 :y 65 :z 0}]
+          (is (= [{:x 3 :y 64 :z 0}]
                  (mapv #(js->clj (.-pos (.-args %)) :keywordize-keys true) (calls p "dig")))
-              "one round digs at most two logs, lowest first")
+              "one round digs one log, the lowest first")
           (is (= [{:pos {:x 3 :y 64 :z 0} :species "oak"}] (debts eng))
               "the replant debt is committed with the base position")
           (is (pos? (await (run-until-empty eng 6))))
@@ -812,6 +812,17 @@
           (await (run-until-empty eng 6))
           (is (empty? (calls p "dig")))
           (is (= [{:reason :no-zones :zones []}] (declined-of seen :fell-tree.declined))))))))
+
+(deftest fell-tree-holds-an-axe-and-records-anothers-logs-for-tidying
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:blocks (tree 3 0 "oak" 2) :inventory [{:name "stone_axe" :count 1}]
+                                      :zones [(zone-of "Miles" [2 -1] [4 1])]})]
+          (core/submit! eng (list 'jobs.forestry.fell-tree {:radius 10 :ignore-zones? true}) {})
+          (await (run-until-empty eng 12))
+          (is (= ["stone_axe"] (distinct (map #(.-item (.-args %)) (calls p "equip")))))
+          (is (= [[3 64 0] [3 65 0]] (mapv #(:cell (:data %)) (mem/entries (mem/view (:store eng)) :tidy)))))))))
 
 (deftest plant-sapling-follows-the-zone-owner-and-the-opt-out
   (async done
