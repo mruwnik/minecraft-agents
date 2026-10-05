@@ -31,12 +31,21 @@
 
 (defn block-now [p cell] (u/block-name p (zipmap [:x :y :z] cell)))
 
+(defn in-body?
+  "Whether cell [x y z] is one the body stands in (feet or head)."
+  [p [x y z]]
+  (let [pos (.-pos (.self p))
+        feet [(js/Math.floor (.-x pos)) (js/Math.floor (.-y pos)) (js/Math.floor (.-z pos))]]
+    (boolean (some #{[x y z]} [feet (update feet 1 inc)]))))
+
 (defn why-not
-  "Why entry cannot be restored now (:changed :not-carried), or nil."
+  "Why entry cannot be restored now (:changed :not-carried :occupied: a block put back would be placed into the
+  body), or nil."
   [p {:keys [cell now action was]}]
   (cond
     (not= now (block-now p cell)) :changed
-    (and (= :dig action) (not (carried? p was))) :not-carried))
+    (and (= :dig action) (not (carried? p was))) :not-carried
+    (and (= :dig action) (in-body? p cell)) :occupied))
 
 (defn refusal
   "The refusing verdict (a zone, claim or plan footprint of another's) for action at pos ({:x :y :z}), judged as if

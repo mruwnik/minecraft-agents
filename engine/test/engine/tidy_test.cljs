@@ -11,6 +11,9 @@
             [engine.triggers :as triggers]
             [engine.triggers.tidy-pending :as tidy-pending]))
 
+(defn ^:async ticks! [eng n]
+  (dotimes [_ n] (await (core/tick! eng))))
+
 (defn tidy-entries [eng] (mapv :data (mem/entries (mem/view (:store eng)) :tidy)))
 
 (defn seed! [eng entries]
@@ -22,6 +25,11 @@
 (def zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}})
 
 (def enclosed {"0,65,0" "stone" "0,66,0" "stone"})
+
+(def enclosed-body
+  "The body at 0,64,0 shut in by stone on every side, as a breathe trespass finds it; a floor at y 63 is under it only."
+  {:blocks (merge {"0,66,0" "stone" "0,63,0" "stone" "1,64,0" "stone" "-1,64,0" "stone" "0,64,1" "stone" "0,64,-1" "stone"
+                            "0,65,0" "stone" "1,65,0" "stone" "-1,65,0" "stone" "0,65,1" "stone" "0,65,-1" "stone"})})
 
 (deftest breathe-records-what-it-dug-in-a-foreign-zone-only
   (async done
@@ -49,7 +57,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (restore! {:inventory [{:name "stone" :count 2}]} [(zs/whole-zone "Miles")] [dug])]
+        (let [{:keys [eng p seen]} (restore! (merge aside {:inventory [{:name "stone" :count 2}]}) [(zs/whole-zone "Miles")] [dug])]
           (await (zs/run-until-empty eng 6))
           (is (= [{:x 0 :y 65 :z 0}] (mapv zs/arg-pos (zs/calls p "place"))))
           (is (= [] (zs/calls p "dig")) "digs nothing")
@@ -84,9 +92,51 @@
             (is (= [[{:cell [0 65 0] :was "stone" :why why}]] (mapv :cells (zs/trespass seen :tidy.not-restored))) (pr-str why))
             (is (= [] (zs/trespass seen :tidy.restored)) (pr-str why))))))))
 
+(def aside {:self {:pos [2 64 0]}})
+
+(def standing-in-the-cell {:floor [-5 -5 5 5] :inventory [{:name "stone" :count 2}]})
+
+(deftest restore-steps-clear-of-the-cell-before-placing-in-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (restore! standing-in-the-cell [(zs/whole-zone "Miles")] [dug])]
+          (await (zs/run-until-empty eng 20))
+          (is (= [{:x 0 :y 65 :z 0}] (mapv zs/arg-pos (zs/calls p "place"))))
+          (is (= [] (tidy-entries eng)))
+          (is (= [[[0 65 0]]] (mapv :cells (zs/trespass seen :tidy.restored))))
+          (is (not= [0 0] [(js/Math.floor (.-x (.-pos (.self p)))) (js/Math.floor (.-z (.-pos (.self p))))]) "the body left the cell"))))))
+
+(deftest restore-keeps-a-cell-the-body-cannot-leave
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (restore! (-> enclosed-body (update :blocks dissoc "0,65,0") (assoc :inventory [{:name "stone" :count 2}])) [(zs/whole-zone "Miles")] [dug])]
+          (await (zs/run-until-empty eng 20))
+          (is (= [] (zs/calls p "place")) "never walls the body in")
+          (is (= 1 (count (tidy-entries eng))) "kept for when the body is out")
+          (is (= [[{:cell [0 65 0] :was "stone" :why :occupied}]] (mapv :cells (zs/trespass seen :tidy.not-restored)))))))))
+
+(deftest a-breathe-trespass-is-restored-after-the-body-moves-clear
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (zs/setup (assoc enclosed-body :floor [-5 -5 5 5] :inventory [{:name "stone" :count 2}])
+                                             [(zs/whole-zone "Miles")])]
+          (core/register-reflex! eng {:trigger :tidy-pending})
+          (core/submit! eng '(jobs.survival.breathe {:min-oxygen 12}) {})
+          (await (ticks! eng 40))
+          (is (= [] (zs/calls p "place")) "not while the body is shut in the shaft")
+          (is (= 2 (count (tidy-entries eng))) "the dug cells wait")
+          (fake/swap-self! p assoc :pos [4 64 0])
+          (await (ticks! eng 40))
+          (is (= #{{:x 0 :y 65 :z 0} {:x 0 :y 66 :z 0}} (set (map zs/arg-pos (zs/calls p "place")))))
+          (is (= [] (tidy-entries eng)))
+          (is (= [[[0 65 0] [0 66 0]]] (mapv :cells (zs/trespass seen :tidy.restored)))))))))
+
 ;; ------------------------------------------------------------------ the tidy-pending trigger
 
-(def with-stone {:inventory [{:name "stone" :count 2}]})
+(def with-stone (merge aside {:inventory [{:name "stone" :count 2}]}))
 (def with-stone-world with-stone)
 
 (defn holds?
@@ -128,9 +178,6 @@
   (is (= '(jobs.survival.restore-broken) (:job tidy-pending/trigger)))
   (is (= :stop (:persistence tidy-pending/trigger))))
 
-(defn ^:async ticks! [eng n]
-  (dotimes [_ n] (await (core/tick! eng))))
-
 (deftest a-trespass-is-restored-by-itself-through-the-trigger
   (async done
     (tu/run-async done
@@ -161,7 +208,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (zs/setup {} [(zs/whole-zone "Miles")])]
+        (let [{:keys [eng p seen]} (zs/setup aside [(zs/whole-zone "Miles")])]
           (seed! eng [dug])
           (core/register-reflex! eng {:trigger :tidy-pending})
           (await (ticks! eng 20))
