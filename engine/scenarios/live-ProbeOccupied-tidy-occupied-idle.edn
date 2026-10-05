@@ -1,0 +1,5 @@
+;; ProbeOccupied live cases for restore-broken (body never placed into): idle apart from the suffocating reflex (breathe) and the tidy-pending trigger, jobs submitted with tools/jobs.mjs
+{:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12}
+             :job (jobs.survival.breathe {:min-oxygen 12})}
+            {:trigger :tidy-pending :persistence :stop :cooldown-s 0}]
+ :queue []}
