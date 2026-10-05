@@ -651,6 +651,14 @@
     (note-waiting! eng id (if ok? ::passed @wait))
     ok?))
 
+(defn holds?
+  "Whether listed instance inst holds the body: submitted with (hold e) or :hold?, or a started run (one round or more)
+  of a job whose namespace defines (def hold true): a job that must not give the body away until it is done (herd).
+  Reflexes still cut it."
+  [eng inst]
+  (boolean (or (:hold? inst)
+               (and (pos? (:round inst 0)) (true? (:hold (first (job-of eng inst))))))))
+
 (defn choose-listed
   "The listed job to run next, never a failed one: a holder (or nothing, while its check declines),
   else the cut job, else round-robin from the cursor over passing checks."
@@ -659,7 +667,7 @@
         n (count list)
         failed? (fn [id] (contains? (:failed (state eng)) id))
         runnable? (fn [id] (and (not (failed? id)) (not (pass-over? eng id)) (check-passes? eng id)))
-        holder (some #(when (and (:hold? (instances %)) (not (failed? %))) %) list)]
+        holder (some #(when (and (holds? eng (instances %)) (not (failed? %))) %) list)]
     (cond
       holder (when (runnable? holder) holder)
       (and resume (some #{resume} list) (runnable? resume)) resume

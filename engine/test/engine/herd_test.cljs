@@ -373,6 +373,150 @@
           (is (< (self-x s) 10) "the body ends outside")
           (is (not (gate-open? s))))))))
 
+;; ------------------------------------------------------------------ the live cases (ProbeHerdB, card 4f4ab883)
+
+(defn lazy-cow
+  "A cow that stays put on the lead while the body is within 4 of it and, once it walks, stops 3.7 behind, as the live
+  cows that jammed did (ProbeHerdB: at rest 3.5 to 3.7 from the body, 1.3 to 2 off the axis)."
+  [id x z]
+  (cow id x z {:follow-at 4.0 :rest-at 3.7}))
+
+(defn ^:async brought-and-shut-up
+  "Run args in world w for n ticks, the body at its true position (the fake's hitbox mode: distances to the cows are
+  measured as live, not from a cell corner), and check the run ended :brought, the cows in the pen, the body outside,
+  the gate shut; label names the case."
+  [label args w n]
+  (let [s (await (scenario args (assoc w :bodyHitbox true) n))
+        e (done-event s)]
+    (is (finished? s) label)
+    (is (= :brought (:reason e)) label)
+    (is (= {} (:given-up e)) label)
+    (is (every? in-pen? (filter #(= "cow" (:name %)) (entities-of s))) label)
+    (is (< (self-x s) 10) (str label ": the body ends outside"))
+    (is (not (gate-open? s)) label)
+    (is (= (count (set (:brought e))) (count (:brought e))) (str label ": an animal is booked brought once"))
+    s))
+
+(deftest a-lazy-cow-off-the-axis-is-brought-through-a-gate-standing-open-either-way
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [facing ["east" "west"]]
+          (await (brought-and-shut-up (str "open, facing " facing) {:target 1}
+                                      {:entities [(lazy-cow 1 3 5)] :states {gate-key {:open true :facing facing}}} 400)))))))
+
+(deftest a-lazy-cow-is-brought-through-a-shut-gate
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (await (brought-and-shut-up "shut" {:target 1} {:entities [(lazy-cow 1 3 5)]} 400))))))
+
+(deftest a-lazy-cow-is-brought-through-a-crosswise-gate
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[label state] [["crosswise, open" {:open true :facing "north"}]
+                               ["crosswise, shut" {:open false :facing "south"}]]]
+          (await (brought-and-shut-up label {:target 1} {:entities [(lazy-cow 1 3 5)] :states {gate-key state}} 400)))))))
+
+(deftest two-lazy-cows-are-both-brought
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (await (brought-and-shut-up "two cows" {:target 2} {:entities [(lazy-cow 1 3 5) (lazy-cow 2 4 1)]} 900))))))
+
+(defn far-shut-clicks!
+  "Make the fake answer a shut click from 4 or more cells along the axis out of reach, as the live game does for a
+  body that stops short of the middle of in-4 (eye to gate centre 4.5 and more). Returns the atom of those refusals."
+  [{:keys [p] :as s}]
+  (let [refused (atom 0)]
+    (.override (.-world p) "useOn"
+               (fn [token args impl]
+                 (if (and (gate-open? s) (>= (- (self-x s) 10) 4))
+                   (do (swap! refused inc)
+                       (js/Promise.resolve #js {:status "unreachable" :reason "too-far" :distance 4.53}))
+                   (impl token args))))
+    refused))
+
+(deftest a-shut-click-out-of-reach-from-in-4-walks-closer-and-shuts
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (submit! (h/setup (world {:entities [(cow 1 4 3)]})) {:target 1})
+              refused (far-shut-clicks! s)]
+          (await (run-ticks s 400))
+          (let [e (done-event s)]
+            (is (pos? @refused) "the click from in-4 was refused")
+            (is (= :brought (:reason e)))
+            (is (in-pen? (cow-of s 1)))
+            (is (< (self-x s) 10) "the body ends outside")
+            (is (not (gate-open? s)))))))))
+
+(deftest a-gate-that-will-not-shut-from-inside-is-shut-from-outside-the-body-never-ends-in-the-pen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (submit! (h/setup (world {:entities [(cow 1 4 3)]})) {:target 1})]
+          ;; every shut click from a pen cell is refused out of reach, however close the body walks
+          (.override (.-world (:p s)) "useOn"
+                     (fn [token args impl]
+                       (if (and (gate-open? s) (>= (self-x s) 11))
+                         (js/Promise.resolve #js {:status "unreachable" :reason "too-far" :distance 4.6})
+                         (impl token args))))
+          (await (run-ticks s 600))
+          (is (finished? s))
+          (is (< (self-x s) 10) "the body ends outside")
+          (is (not (gate-open? s)) "the gate is shut from outside")
+          (is (empty? (on-lead s)))
+          (is (in-pen? (cow-of s 1)) "the cow let go inside stays in"))))))
+
+(deftest a-retry-from-out-shuts-the-gate-before-the-walk-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (submit! (h/setup (world {:entities [(cow 1 4 3 {:pin true})]})) {:target 1 :timeout-s 600})
+              opened-at (atom nil)
+              longest (atom 0)]
+          (loop [n 0]
+            (when (< n 900)
+              (await (run-ticks s 1))
+              (let [now @(:clock s)]
+                (if (gate-open? s)
+                  (do (when-not @opened-at (reset! opened-at now))
+                      (swap! longest max (- now @opened-at)))
+                  (reset! opened-at nil)))
+              (recur (inc n))))
+          (is (finished? s))
+          (is (= {"u1" :jammed} (:given-up (done-event s))))
+          (is (< @longest 40000) "the gate is never left open through the walk out and the second line-up")
+          (is (not (gate-open? s))))))))
+
+(deftest a-started-herd-keeps-the-body-until-it-is-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (submit! (h/setup (world {:entities [(cow 1 4 3)]})) {:target 1})]
+          (await (run-ticks s 2))
+          (core/submit! (:eng s) '(jobs.debug.notify {:text "between"}) {})
+          (await (run-ticks s 400))
+          (let [kinds (mapv :kind @(:seen s))
+                done-at (.indexOf kinds :herd.done)
+                notify-at (.indexOf kinds :job.notify)]
+            (is (= :brought (:reason (done-event s))))
+            (is (pos? done-at))
+            (is (> notify-at done-at) "the other listed job ran only after the herd was done")))))))
+
+(deftest a-herd-not-started-yet-does-not-jump-the-queue
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (h/setup (world {:entities [(cow 1 4 3)]}))]
+          (core/submit! (:eng s) '(jobs.debug.notify {:text "first"}) {})
+          (submit! s {:target 1})
+          (await (run-ticks s 400))
+          (let [kinds (mapv :kind @(:seen s))]
+            (is (< (.indexOf kinds :job.notify) (.indexOf kinds :herd.done)))))))))
+
 (deftest a-full-pen-declines-without-acting
   (async done
     (tu/run-async done
@@ -582,10 +726,11 @@
 (deftest settle-step-reads-the-distance-and-the-movement
   (doseq [[label dist moved waited expected]
           [["close and still" 3.3 0.0 0 :settled]
-           ["close, at the limit" 3.6 0.1 0 :settled]
+           ["a live cow's rest, off the axis" 3.7 0.0 0 :settled]
+           ["close, at the limit" 4.3 0.1 0 :settled]
            ["close but still moving" 3.0 0.25 0 :wait]
-           ["far, not long" 4.0 0.0 5999 :wait]
-           ["far, long enough" 4.0 0.0 6000 :pinned]
+           ["far, not long" 4.4 0.0 5999 :wait]
+           ["far, long enough" 4.4 0.0 6000 :pinned]
            ["far and moving, long enough" 5.0 1.0 9000 :pinned]]]
     (is (= expected (herd/settle-step dist moved waited)) label)))
 

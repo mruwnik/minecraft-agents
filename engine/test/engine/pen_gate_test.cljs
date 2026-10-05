@@ -9,8 +9,7 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [engine.triggers.pen-gate :as pg]
-            [engine.world :as world]
-            [clojure.string :as str]))
+            [engine.world :as world]))
 
 ;; ------------------------------------------------------------------ plans
 
@@ -211,8 +210,7 @@
 (def ground (into {} (for [x (range -5 30) z (range -5 30)] [(str x ",63," z) "stone"])))
 
 (defn pen-world
-  "The pen ring with its gate at 2,64,0 (open?), the body at x z (the tests that walk start south of the ring, on the gate's
-  side: the planner may plan along a fence's free side, which the fake's block-wise steer cannot walk), and a second gate of pen-b at 20,64,0 when more."
+  "The pen ring with its gate at 2,64,0 (open?), the body at x z, and a second gate of pen-b at 20,64,0 when more."
   [open? x z & [more]]
   (merge {:self {:pos {:x x :y 64 :z z}}
           :blocks (merge ground ring {"2,64,0" "oak_fence_gate"})
@@ -229,14 +227,10 @@
           (is (= 1 (:shut (first (events-of s :shut-gate.done)))) "one gate shut, reported"))))))
 
 (deftest from-the-far-side-the-job-walks-round-the-ring-and-shuts-the-gate
-  ;; The ring is a stone wall two high here, not fence: the fake's steer takes a fence cell for a full block while the
-  ;; planner walks beside the post (card aef2106d), so a walk round a fence ring gets stuck in the fake only.
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [walls (into {} (for [[k _] ring y [64 65]] [(str/replace k ",64," (str "," y ",")) "stone"]))
-              s (await (run-job (pen-world true 2 7 {:blocks (merge ground walls {"2,64,0" "oak_fence_gate"})})
-                                {"pen-a" pen-a} {} 30))]
+        (let [s (await (run-job (pen-world true 2 7) {"pen-a" pen-a} {} 30))]
           (is (seq (mem/entries (mem/view (:store (:eng s))) :moved)) "it walked")
           (is (not (gate-open? (:p s) 2 64 0)))
           (is (= 1 (:shut (first (events-of s :shut-gate.done)))))

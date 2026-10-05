@@ -246,6 +246,42 @@
           (is (= :changed (:reason result)))
           (is (= 1 (count (calls p "useOn")))))))))
 
+(defn too-far-first!
+  "Make the fake's first n clicks answer out of reach (as the live reach check does for a body at the edge of :reach);
+  returns the atom counting the clicks."
+  [p n]
+  (let [real-use (.-useOn p)
+        clicks (atom 0)]
+    (set! (.-useOn p) (fn [token a]
+                        (if (<= (swap! clicks inc) n)
+                          (js/Promise.resolve #js {:status "unreachable" :reason "too-far" :distance 4.53})
+                          (.call real-use p token a))))
+    clicks))
+
+(deftest a-click-out-of-reach-walks-closer-and-clicks-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (world "oak_fence_gate" {:open true} 3 4))
+              clicks (too-far-first! p 1)
+              result (await (child-outcome eng job {:pos at :state :closed :reach 4} 60))]
+          (is (= {:status :done :reason :changed} (head result [:status :reason])))
+          (is (false? (:open (props p at))))
+          (is (= 2 @clicks) "one click out of reach, one after the walk closer")
+          (is (seq (tu/walk-calls p)) "the body walked closer")
+          (is (<= (js/Math.abs (- (.. p self -pos -z) 0)) 3) "within reach - 1 of the block"))))))
+
+(deftest a-click-still-out-of-reach-after-walking-closer-twice-is-unreachable
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup (world "oak_fence_gate" {:open true} 3 4))
+              clicks (too-far-first! p 99)
+              result (await (child-outcome eng job {:pos at :state :closed :reach 4} 80))]
+          (is (= {:status :gave-up :reason :unreachable} (head result [:status :reason])))
+          (is (= 3 @clicks) "the first click and one after each of two walks closer")
+          (is (= 1 (count (kinds seen :toggle.gave-up)))))))))
+
 (deftest the-job-is-registered-with-doc-and-args
   (let [j (get registry/jobs job)]
     (is (string? (:doc j)))

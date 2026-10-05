@@ -30,17 +30,18 @@
   the pen, babies, animals in the pen, those given up on and those already leashed twice and
   still outside skipped), :approach
   (go-to out-4, range 0, :doors :never, then looks every 500 ms until the animal
-  is at rest: within 3.6 and moved under 0.25, at most 8 s), :clear-out (no adult of
+  is at rest: within 4.3 and moved under 0.25, at most 8 s), :clear-out (no adult of
   :mob within 2.5 of the cell inside the gate, else up to 10 s and one info
   herd.crowded-gate), :line-up (out-3, out-2, out-1, each walk and settle), :open
   (jobs.access.toggle :open; :gate-stuck when it did not open), :step (the
   gate cell, then the pen cells in line, 5 deep: each a go-to and a settle of at
-  most 6 s; an animal still beyond 3.6 after 6 s is pinned: the body steps back
-  one position and again, twice, then walks out to out-4 and starts over once,
+  most 6 s; an animal still beyond 4.3 after 6 s is pinned: the body steps back
+  one position and again, twice, then goes back to out-1, shuts the gate (an animal on its cell is waited for 6 s,
+  then the gate stays open), walks out to out-4 and starts over once,
   then gives up on the animal :jammed: it is let go at out-3 and the gate shut),
   :shut-behind (the gate is shut only while no adult of :mob overlaps its cell:
   looks up to 6 s, then once from the deepest cell, else as pinned; the body steps
-  back one cell and toggles :closed with :reach 4), :deep (go-to the pen cell
+  back one cell and toggles :closed with :reach 4, toggle walking closer when the click is out of reach), :deep (go-to the pen cell
   farthest from the gate, off the axis when one is as far, the animal following by
   its path; jobs.animals.unleash by key, leads picked up; the animal counts as
   brought when it stands on a pen cell), :deep-unequip (the body empties its hand once, so the animal does
@@ -69,7 +70,10 @@
   :lost, :timeout, or the leash reason when nobody could be led. A gate that will not shut lets
   a led animal go first and is tried again twice, then stays open with one warn herd.gate-open naming its position.
   The adults on the pen's cells are counted before the exit and again after the shut from outside; fewer is an
-  escape (warn herd.escaped), and the result carries :escaped, their total.")
+  escape (warn herd.escaped), and the result carries :escaped, their total; an animal is booked brought once. A run
+  that ends with the gate open and the body on a pen cell or the gate cell goes out the exit's way first (twice at
+  most), so the body ends outside; a shut that failed and then took is judged by the count. A started run holds the
+  body until it is done (hold): no other listed job gets a round in between; reflexes still cut it.")
 
 (def args
   {:mob {:doc "the animal's name, such as \"cow\"" :default nil}
@@ -78,6 +82,11 @@
    :gate {:doc "the fence gate {:x :y :z} to bring them through; the pen's usable gate nearest the body when nil" :default nil}
    :radius {:doc "animals within this many blocks of the body are fetched" :default 24}
    :timeout-s {:doc "seconds one animal may take from its lead on until it is let go" :default 180}})
+
+(def hold
+  "A started herd keeps the body until it is done (engine.core/holds?): another listed job given a round between two of
+  its rounds would walk off with an animal on the lead or leave the gate open. Reflexes still cut it."
+  true)
 
 (def near-pen 16)
 (def approach-range 12)
@@ -90,7 +99,8 @@
 (def leading
   "The phases in which the animal is on the lead and the walk is the body's own: watched before each step, bound
   by :timeout-s."
-  #{:approach :clear-out :line-up :open :step :shut-behind :shut-deepest :shut-back :shut-click :retry-out
+  #{:approach :clear-out :line-up :open :step :shut-behind :shut-deepest :shut-back :shut-click :retry-back :retry-shut
+    :retry-out
     :give-up-walk :deep})
 
 (def out-1 "Index in the axis cells of the cell outside the gate." 3)
@@ -220,25 +230,27 @@
   (max 0 (- before after)))
 
 (defn shut-failed!
-  "The gate cannot be shut: an animal still led is let go first (phase :let-go, the ending :gate-stuck unless one is
-  set), then the shut is tried again from :shut-gate, max-shut-retries times; the next failure leaves the gate to the
-  pen-gate trigger with one warn herd.gate-open naming it, and the run ends."
+  "The gate cannot be shut: an animal still led is let go first (phase :let-go, the ending :shut-failed unless one is
+  set: :gate-stuck if the gate stays open, judged by the count once it shuts after all), then the shut is tried again
+  from :shut-gate, max-shut-retries times; the next failure leaves the gate to the pen-gate trigger with one warn
+  herd.gate-open naming it, and the run ends."
   [c]
   (let [m (ctx/mem c)
         retries (:shut-retries m 0)
         [x y z] (gate-cell c)]
     (cond
-      (seq (led-now c)) (set-phase! c :let-go {:ending (or (:ending m) :gate-stuck)})
+      (seq (led-now c)) (set-phase! c :let-go {:ending (or (:ending m) :shut-failed)})
       (< retries max-shut-retries) (set-phase! c :shut-gate {:shut-retries (inc retries)})
       :else (do (ctx/emit! c :herd.gate-open :warn {:gate (:gate m)
                                                     :text (str "the gate at " x " " y " " z " could not be shut and stays open")})
-                (finish! c (:ending m))))))
+                (finish! c (if (= :shut-failed (:ending m)) :gate-stuck (:ending m)))))))
 
 (defn after-shut!
-  "The gate is shut (or was not open): end the run when it is ending, else leash again."
+  "The gate is shut (or was not open): end the run when it is ending (a :shut-failed ending is judged by the count, the
+  gate having shut after all), else leash again."
   [c]
   (if-let [reason (:ending (ctx/mem c))]
-    (finish! c reason)
+    (finish! c (when-not (= :shut-failed reason) reason))
     (set-phase! c :regather)))
 
 (defn census!
@@ -252,7 +264,10 @@
     (when (pos? escaped)
       (ctx/emit! c :herd.escaped :warn {:escaped escaped :before before :after after
                                         :text (str escaped " animal(s) escaped through the gate during the exit: " before " in the pen before, " after " after")}))
-    (set-phase! c :leash {:escaped-total (+ (:escaped-total m 0) escaped) :pen-before nil})))
+    (ctx/update-mem! c assoc :escaped-total (+ (:escaped-total m 0) escaped) :pen-before nil)
+    (if (:ending m)
+      (after-shut! c)
+      (set-phase! c :leash))))
 
 (defn ^:async release-step!
   "One round of unleashing (jobs.animals.unleash by key, kept on one animal until that child is done, which
@@ -310,7 +325,12 @@
 
 (def overlap-margin "Added to half-width + 0.5 when asking whether an entity overlaps a cell." 0.1)
 
-(def settled-dist "An animal this close (or closer) to the body is at rest behind it." 3.6)
+(def settled-dist
+  "An animal this close (or closer) to the body is at rest behind it. A live cow on a lead does not move while the body
+  is within about 4 of it and, once it walks, stops 3.2 to 3.7 away, often 1 to 2 off the axis (ProbeHerdB): 3.6 took
+  such a cow for pinned at the gate. 4.3 keeps a pinned animal one step further (5.3, plus the walk's overshoot) under
+  the 6 at which the lead starts to drag it."
+  4.3)
 
 (def settled-move "An animal that moved less than this since the last look has stopped." 0.25)
 
@@ -445,6 +465,16 @@
 
 (defn body-outside? [c]
   (outside-gate? (gate-cell c) (cell (:inside-cell (ctx/mem c))) (u/self-pos c)))
+
+(def max-leaves "How often a run that ends with the body on the pen side goes out before the shut." 2)
+
+(defn body-in-pen?
+  "True when the body stands on a cell of the box or on the gate cell: a shut from there would leave it inside."
+  [c]
+  (let [here (u/self-pos c)
+        [gx _ gz] (gate-cell c)]
+    (or (in-box? (:box (:args c)) here)
+        (and (= gx (js/Math.floor (:x here))) (= gz (js/Math.floor (:z here)))))))
 
 (defn ^:async exit-dash!
   "The exit in one round: walk-near! to out-1 with its own gate handling (open, pass, shut). Shut and outside: on to the
@@ -656,7 +686,7 @@
     (ctx/update-mem! c #(-> %
                             (dissoc :release-tried :releasing)
                             (assoc :led [] :animal nil)
-                            (cond-> in? (update :brought (fnil conj []) k))
+                            (cond-> (and in? (not (some #{k} (:brought %)))) (update :brought (fnil conj []) k))
                             (cond-> (and (not in?) (not (contains? (:given-up %) k))) (update :given-up assoc k :outside))))
     (set-phase! c next)))
 
@@ -667,7 +697,7 @@
         backs (:backs m 0)]
     (case (step-in-step idx backs (boolean (:retried m)))
       :back (set-phase! c :step {:pos-index (max out-1 (dec idx)) :back-step true :backs (inc backs) :deepest-tried false})
-      :retry-from-out (set-phase! c :retry-out {:backs 0 :retried true :deepest-tried false})
+      :retry-from-out (set-phase! c :retry-back {:backs 0 :retried true :deepest-tried false})
       :give-up (set-phase! c :give-up-walk))))
 
 (defn step-position!
@@ -697,6 +727,10 @@
                                     #(if (= i out-1) (set-phase! c :open) (set-phase! c :line-up {:pos-index (inc i)})))))
       :open (await (set-gate! c :open :step {:then {:pos-index gate-index :back-step false}}))
       :step (await (step-position! c))
+      ;; the retry walks out and lines up again with the gate shut: out-1, the shut (an animal on the gate cell is
+      ;; waited for, then the gate stays open), out-4
+      :retry-back (await (go-then! c (axis-cell out-1) :retry-shut))
+      :retry-shut (await (shut-when-clear! c 3 shut-look-ms :retry-out nil #(set-phase! c :retry-out)))
       :retry-out (await (settle-at! c 0 settle-out-ms #(set-phase! c :line-up {:pos-index 1})))
       ;; the animal is clear of the gate cell: step back one cell and shut; one that stays on it is waited for, then
       ;; looked at once more from the deepest cell, else it is as good as pinned
@@ -727,9 +761,12 @@
       :give-up-walk (await (go-then! c (axis-cell 1) :give-up-unleash {:given-up (assoc (:given-up m) (:animal m) :jammed)}))
       :give-up-unleash (await (release-step! c #(released! c :exit-out)))
       :let-go (await (release-step! c #(set-phase! c :shut-gate)))
-      :shut-gate (if (gate-open? c)
-                   (await (shut-when-clear! c 3 shut-look-ms :shut-gate nil #(shut-failed! c)))
-                   (after-shut! c)))))
+      ;; a run ending with the body on the pen side goes out first (the exit's own way, then the census ends it)
+      :shut-gate (cond
+                   (not (gate-open? c)) (after-shut! c)
+                   (and (body-in-pen? c) (< (:leaves m 0) max-leaves))
+                   (set-phase! c :exit {:leaves (inc (:leaves m 0)) :stepped-back false})
+                   :else (await (shut-when-clear! c 3 shut-look-ms :shut-gate nil #(shut-failed! c)))))))
 
 (defn ^:async round [c]
   (let [now (ctx/now c)]

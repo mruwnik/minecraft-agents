@@ -15,7 +15,9 @@
   or trapdoor in whose column the body stands is declined :standing-in; opening never is. Working a gate in someone's
   zone or in a plan's footprint is permitted (no block type changes, so zones and footprints do not apply). The body
   walks within :reach of the block (jobs.movement.go-to child with :doors :never, so the approach opens nothing; a walk that gives up is :unreachable), then clicks
-  ONCE with an empty hand (useOn with no item, which never tosses what was held: a hand that cannot be emptied is
+  ONCE with an empty hand; a click the game answers out of reach (it measures from the eye to the block's middle, so
+  a body stopped at the edge of :reach can be short) walks one cell closer and clicks again, twice at most (never
+  closer than 1), then is :unreachable (useOn with no item, which never tosses what was held: a hand that cannot be emptied is
   :no-room) and reads the block again. No second click: a click that changed nothing (an iron-like block, a
   protected area, lag; these cannot be told apart) is :unchanged, a block that moved but not to the wanted state
   (somebody else flipped it just before) is :wrong-way, each with one warn toggle.gave-up. Other reasons: :gone
@@ -93,6 +95,20 @@
           (ctx/wait c {:reason :standing-in :pos pos :block (.-name b)})
           :else true)))))
 
+(def max-closer "How often a click the game answers out of reach is followed by a walk one cell closer." 2)
+
+(defn reach
+  "The reach the walk aims for now: :reach, less one for each walk closer after a click out of reach (at least 1)."
+  [c]
+  (max 1 (- (:reach (:args c)) (:closer (ctx/mem c) 0))))
+
+(defn closer!
+  "The click was out of reach (the game measures from the eye to the block's middle, so a body that stopped at the
+  edge of :reach can be short): walk again, one cell closer."
+  [c]
+  (ctx/update-mem! c #(-> % (dissoc :arrived) (update :closer (fnil inc 0))))
+  :continue)
+
 (defn ^:async click!
   "Click once with an empty hand and read the block again."
   [c pos state block]
@@ -101,14 +117,16 @@
     (case outcome
       :gone (give-up! c :gone pos state (str text (if (= :unloaded why) " is no longer loaded" " is gone")) facts)
       :no-room (give-up! c :no-room pos state (str "no room to empty the hand at " text) facts)
-      :unreachable (give-up! c :unreachable pos state (str text " is out of reach") facts)
+      :unreachable (if (and (< (:closer (ctx/mem c) 0) max-closer) (> (reach c) 1))
+                     (closer! c)
+                     (give-up! c :unreachable pos state (str text " is out of reach") facts))
       :refused (give-up! c :refused pos state (str text " refused the click: " status " " reason) facts)
       :changed (finish! c :changed pos state (str text " is now " (name state)) facts)
       :unchanged (give-up! c :unchanged pos state (str text " did not change after the click (protected, iron-like or lag)") facts)
       :wrong-way (give-up! c :wrong-way pos state (str text " moved, but not to " (name state)) facts))))
 
 (defn ^:async walk! [c pos state block]
-  (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos pos :range (:reach (:args c)) :doors :never}))]
+  (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos pos :range (reach c) :doors :never}))]
     (cond
       (not= :done r) :continue
       (:arrived (ctx/child-result c :walk)) (do (ctx/update-mem! c assoc :arrived true) :continue)
@@ -133,6 +151,6 @@
           (and (= :openable kind) (= :closed state) (click/standing-in? (u/self-pos c) pos (:half (click/props-of b))))
           (decline! c :standing-in pos state (str "the body stands in " text) {:block block})
           (and (not (:arrived (ctx/mem c)))
-               (not (or (u/within? (u/self-pos c) pos (:reach (:args c)))
-                        (<= (u/dist (u/self-pos c) pos) (:reach (:args c)))))) (await (walk! c pos state block))
+               (not (or (u/within? (u/self-pos c) pos (reach c))
+                        (<= (u/dist (u/self-pos c) pos) (reach c))))) (await (walk! c pos state block))
           :else (await (click! c pos state block)))))))

@@ -134,14 +134,17 @@
 (def rest-gap 3.3)
 
 (defn path-follow
-  "The new position of a led animal near the body, or nil when the path regime does not apply (the drag runs)."
+  "The new position of a led animal near the body, or nil when the path regime does not apply (the drag runs). It
+  stays put within rest-gap, or within :follow-at (a number on the spec) when given, and walks to stop rest-gap away,
+  or :rest-at when given: a live cow on a lead does not move while the body is within about 4 of it, and once it moves
+  it stops 3.2 to 3.7 away (ProbeHerdB, card 4f4ab883)."
   [w e]
   (when-not (or (:snaps e) (some? (:trail e)))
     (let [d (flat (:pos e) (get-in w [:self :pos]))]
       (cond
         (> d path-range) nil
-        (or (:pin e) (<= d rest-gap)) (:pos e)
-        :else (walk-to w e rest-gap)))))
+        (or (:pin e) (<= d (or (:follow-at e) rest-gap))) (:pos e)
+        :else (walk-to w e (or (:rest-at e) rest-gap))))))
 
 ;; ---- the lead (fake-leash)
 
