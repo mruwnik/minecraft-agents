@@ -16,7 +16,7 @@ node tools/world-test.mjs --list
 Options: `--body` (default `ProbeFixture`, created and whitelisted when missing), `--world` (default `claude`),
 `--repeat N` (runs each case N times, each run on its own plot), `--first-plot I` (plot index to start at),
 `--allow-time` (a case whose `:time` is not the server's may `time set 14000`/`1000`; every set is appended to
-`--time-log`; without it such a case is skipped), `--results FILE` (all results as EDN). Exit code 0 when every run
+`--time-log` as local ISO with offset, naming `--card ID`; without it such a case is skipped), `--results FILE` (all results as EDN). Each run leases its plot (a file per plot index in `<tmpdir>/world-test-plot-leases/`, created exclusively, released after the run, a dead PID's lease reclaimed): runners started together never share a plot, and `--first-plot` is only where the search starts. Exit code 0 when every run
 passed. The runner refuses to start when another player is within 500 blocks of the grid's centre or the body already
 runs. The body is started (`--fresh`) once per distinct `:register` and stopped (SIGTERM to its own child) at the end.
 
