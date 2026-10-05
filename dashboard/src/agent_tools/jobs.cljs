@@ -12,10 +12,10 @@
 
 (def usage
   (str "usage: jobs.mjs <body> --world <world> list [--limit 8 --offset 0] | show <jID> | submit <EDN-spec> [--hold] [--front | --now] [--wait [--timeout 60s]] | cancel <jID> | cancel-all | retry <jID> | resolve <request-id> --reason handled|condition-recovered [--worlds DIR --state LEGACY_PARENT]\n"
-       "submit appends the job to the end of the list (jobs take turns, a held job keeps the body until it ends).\n"
+       "submit appends the job to the end of the list (jobs take turns). --hold makes the job hold the body: no other job gets a round until it ends or fails (reflexes still come first).\n"
        "  --front  list it directly after the current job: it gets the next round, nothing is cut\n"
-       "  --now    cut the current job and run this one at once (it holds the body); the cut job keeps its memory and\n"
-       "           continues right after it ends. Reflexes still come first.\n"
+       "  --now    cut the current job and run this one at once (it holds the body, as --hold does, until it ends); the cut job keeps its memory and\n"
+       "           continues right after it ends. Reflexes still come first. --now and --front cannot be combined (refused).\n"
        "  --wait   block until the job ends, or until anything that ends observe --wait (addressed chat, attention, an\n"
        "           engine restart, the --timeout), and print {:job .. :wait <the wake>}: the job's last events and a\n"
        "           bounded summary of what else happened meanwhile (reflexes fired, pickups, hurt, other jobs ended,\n"
@@ -216,7 +216,7 @@
       (and (:mutating r) (not (:resolve r))) (assoc :request-id request-id :confirmation :unknown
                                                     :message "Query/retry with the same request ID; do not submit a new ID."))))
 
-(defn follow-command [id] (str "observe --wait --watch " id))
+(defn follow-command [id] (str "./bin/observe --wait --watch " id))
 
 (defn wait-result
   "The submit answer with the wake that ended the wait under :wait, and :follow when the job had not ended by then."

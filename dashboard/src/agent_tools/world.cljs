@@ -22,7 +22,7 @@
        "  status <request-id> | cancel <request-id> | inventory\n"
        "Acquire the body first with drive.mjs <agent> --world <world> take --who <same-name> --idle-s <seconds>.\n"
        "Actions run one at a time in the order submitted: one submitted while another runs is queued behind it\n"
-       "(:status :queued, :behind <request-id>, at most 8 waiting); cancel drops a queued one, a release drops them all.\n"
+       "(:status :queued, :position <place in the queue>, :behind <the running action's request-id>, at most 8 waiting); cancel drops a queued one, a release drops them all.\n"
        "Submit returns at once with the request-id; add --wait [--timeout 60s] to block until that action ends (or until\n"
        "anything that ends observe --wait: addressed chat, attention, the timeout) and print {:operation .. :wait <the wake>},\n"
        "the wake carrying the action's result and a bounded summary of what else happened meanwhile."))
