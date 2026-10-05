@@ -4,13 +4,19 @@
 
 ### commit-mine
 
-    tools/commit-mine --card <id-or-prefix> -m <msg-file-or-text> <paths...> [--approved-core <card>]
+    tools/commit-mine --card <id-or-prefix> -m <msg-file-or-text> --expect-hunks N <paths...> [--approved-core <card>]
     tools/commit-mine --card <id> -m <msg> --hunks <patchfile> [<paths...>]
 
 Takes the `.git/commit-lock` (mkdir lock, backoff up to 600 s, `COMMIT_LOCK_TIMEOUT` seconds to change),
 stages exactly the given paths (`git add -A -- paths`; `--hunks` adds `git apply --cached <patch>` for
 files that hold others' edits), and commits. The lock is always released (trap). The commit message gets the
 Co-Authored-By trailer if missing. Never stashes, resets, amends or pushes.
+
+Path mode commits WHOLE files, which would sweep in other agents' uncommitted hunks. So `--expect-hunks N` is
+required: N = total hunks `git diff <paths>` shows (an untracked file counts 1). Without it, or on a mismatch,
+the tool prints the per-file hunk counts and exits 5 before staging anything. Check `git diff <path>`; if all
+hunks are yours rerun with the printed N. If not: `git diff <path> > my.patch`, delete the foreign hunks from
+the patch, and commit with `--hunks my.patch`.
 
 Refuses (exit 1, nothing left staged) when:
 - an engine-core path (`engine/src/engine/{core,expr,triggers,takeover,trigger_api}.cljs`, `registry.clj`,

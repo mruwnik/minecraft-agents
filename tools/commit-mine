@@ -13,12 +13,13 @@ LARGE_JS_LINES=40
 
 die() { echo "commit-mine: $*" >&2; exit "${2:-1}"; }
 
-card=""; msg=""; hunks=""; approved=""; paths=()
+card=""; msg=""; hunks=""; approved=""; expect=""; paths=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --card) card="${2:?}"; shift 2 ;;
     -m) msg="${2:?}"; shift 2 ;;
     --hunks) hunks="${2:?}"; shift 2 ;;
+    --expect-hunks) expect="${2:?}"; shift 2 ;;
     --approved-core) approved="${2:?}"; shift 2 ;;
     --) shift; paths+=("$@"); break ;;
     -*) die "unknown option $1" ;;
@@ -82,6 +83,28 @@ unstage() {
   local p; for p in "${paths[@]}"; do git restore --staged -- "$p" 2>/dev/null || true; done
 }
 trap cleanup EXIT INT TERM HUP
+
+# Path mode commits whole files, which sweeps in other agents' uncommitted hunks.
+# Require the caller to state how many hunks `git diff <paths>` shows (untracked file = 1).
+if [ ${#paths[@]} -gt 0 ]; then
+  count_hunks() { # prints "<hunks> <path>" per changed file
+    git diff -- "${paths[@]}" | awk '/^diff --git /{f=$4; sub(/^b\//,"",f)} /^@@/{n[f]++} /^Binary files/{n[f]++} END{for(k in n)print n[k], k}'
+    git ls-files --others --exclude-standard -- "${paths[@]}" | awk '{print 1, $0}'
+  }
+  per="$(count_hunks | sort -k2)"
+  total=$(awk '{t+=$1} END{print t+0}' <<<"$per")
+  if [ -z "$expect" ] || [ "$expect" != "$total" ]; then
+    {
+      echo "commit-mine: path mode commits WHOLE files; other agents may have uncommitted hunks in them."
+      echo "Hunks in the working tree for the given paths (count path):"
+      echo "$per" | sed 's/^/  /'
+      echo "Total: $total. Review with 'git diff <path>'. If every hunk is yours, rerun with --expect-hunks $total."
+      echo "If any hunk is not yours: 'git diff <path> > my.patch', delete foreign hunks from the patch, and use --hunks my.patch."
+    } >&2
+    [ -n "$expect" ] && die "--expect-hunks $expect does not match $total" 5
+    die "--expect-hunks N is required with paths" 5
+  fi
+fi
 
 # Stage.
 staged_by_me=1
