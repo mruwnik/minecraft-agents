@@ -97,6 +97,28 @@
     true ["found" nil]
     false ["none" "exhausted"]))
 
+;; a search in chunks (walk/plan-walk!) lets the event loop run between them: a timer set before the search fires before
+;; the search ends (live: a body's HTTP API went unanswered for the whole of a long search), and the plan is the
+;; one the search in one go finds
+(deftest a-long-search-yields-to-other-work-and-finds-the-same-plan
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/fake {:blocks (walkways true) :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+              c {:primitives p}
+              order (atom [])
+              chunk walk/chunk-expansions
+              whole (walk/plan-walk c (.pathWorld p) [6 64 0] 0 walk/default-weight)]
+          (set! walk/chunk-expansions 16)
+          (js/setTimeout #(swap! order conj :timer) 0)
+          (let [plan (await (walk/plan-walk! c (.pathWorld p) [6 64 0] 0 walk/default-weight))]
+            (swap! order conj :planned)
+            (set! walk/chunk-expansions chunk)
+            (is (= [:timer :planned] @order))
+            (is (= "found" (:status plan) (:status whole)))
+            (is (= (:steps whole) (:steps plan)))
+            (is (> (count (:steps plan)) 100))))))))
+
 (deftest a-goal-sealed-in-stone-is-no-path
   (async done
     (tu/run-async done

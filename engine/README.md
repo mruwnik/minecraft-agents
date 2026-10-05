@@ -1685,7 +1685,11 @@ within a drop: a goal on an island or above a drop is left to the search, which 
 `goal-enclosed`, `none`, no path, `expanded` 0. Otherwise the search goes on as
 before and the late flood (after `floodAfter` expansions, `goalFlood` cells) still covers bigger enclosed areas. The early
 pass leaves `stats.flooded` and `expanded` alone and reports its size as `stats.preFlooded`. Because it fires first, a
-goal sealed off by walls says `goal-enclosed` at once (`preFlood: 0` for the old exhausted search).
+goal sealed off by walls says `goal-enclosed` at once (`preFlood: 0` for the old exhausted search). The flood's nodes are the
+search's: one per region of a tight cell (a fence, wall or pane cell has a strip either side of its line, and no move joins
+them), so a pen of fence or wall with no gate is `goal-enclosed` once the late flood runs (live: a gateless fence pen was searched
+over the whole wide box instead, ~25 s a breed round). A cell the body fits in only once something is opened is one node for all
+its regions.
 
 A step up by walking (a stairs, a slab, a snow layer of 3 or more, a diagonal step up) lifts the body into the slab above its old
 top, so that slab must be free in the cell it leaves: stairs right behind a 2 high doorway are no way in (the head meets the lintel),
@@ -1714,7 +1718,11 @@ reach was searched and none is the goal even with every ability, as with a gap o
 a drop too deep; the walk first goes to the reachable cell nearest the goal (live: 6 blocks to the edge of a 4-wide gap). A plan with a step the executor cannot walk is still refused with `{:status :refused :kind :at :reason}`
 Either search that finds no whole path and ran into the planner's search box (reason `box`: 64 blocks round start and goal, 48
 up and down) is run once more in `walk/wide-box` (256 and 96): a way round can run far past the default box (live: a walled
-walkway whose way down lay 200 blocks along).
+walkway whose way down lay 200 blocks along). The walks (go-to's round, `walk-near!`, `walk-to!`) plan with `walk/plan-walk!`:
+each search runs in slices of `walk/chunk-expansions` (1000) expansions (`planner-tuned/create-plan`) with a `setImmediate`
+yield between them, so the body's HTTP API, perception and other jobs run while a long search does; the answer is
+`plan-walk`'s. `plan-walk`, `plan-within` and `plan-from` still plan in one go for the checks that call them (stair's way-back,
+lead-to's path check).
 before the body moves (a backstop). In the `:walk-plan.result` event `:kind` is `:refused-kind` (an event's `:kind`
 is its own). `jobs.access.stair`'s way-back check plans the same way (`walk-plan/plan-within`).
 Swimming (steps in water cells: `:swim :swim-up :swim-down :exit`, a drop into water, wading in water 1 deep, a start in water) is a

@@ -26,15 +26,16 @@
 
 (defn door-stuck [cells] {:status :no-path :reason :door-stuck :cells cells})
 
-(defn plan!
+(defn ^:async plan!
   "Plan from where the body stands over a fresh pathWorld (the live one copies a section the first time it reads it, so an
   old one is stale), with walls read as stone; with doors other than :never, the iron doors the plan would open are walls
   too (planned again without them). A one-way step (a drop of 2 or 3, a gap jump down) is taken when the land past it runs
-  on into unloaded land (walk/plan-walk :one-way :open): a far goal past a cliff is walked on to; a loaded pit is never entered."
+  on into unloaded land (walk/plan-walk :one-way :open): a far goal past a cliff is walked on to; a loaded pit is never entered.
+  A promise: the searches run in slices with yields between them (walk/plan-walk!), so the body's API answers meanwhile."
   [c to range doors policy walls]
   (loop [walls walls]
-    (let [plan (walk/plan-walk c (walk/path-world (:primitives c)) to range walk/default-weight
-                               {:policy policy :walls walls :one-way :open})
+    (let [plan (await (walk/plan-walk! c (walk/path-world (:primitives c)) to range walk/default-weight
+                                       {:policy policy :walls walls :one-way :open}))
           iron (when-not (= :never doors) (iron-cells c (:steps plan)))]
       (if (seq iron)
         (recur (into walls iron))
@@ -59,7 +60,7 @@
                     (pass/walk! c steps {:timeout-s timeout-s :doors doors :watch watch})))]
     (when-not (= :never doors) (await (pass/shut-leftovers! c doors)))
     (let [result (loop [walls [] stuck nil]
-                   (let [plan (plan! c to range doors policy walls)]
+                   (let [plan (await (plan! c to range doors policy walls))]
                      (if-let [no (walk/no-walk plan 0 policy)]
                        (if stuck (door-stuck stuck) no)
                        (let [{done :done last-plan :plan}

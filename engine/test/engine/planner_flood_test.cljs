@@ -180,3 +180,25 @@
     {:blocks (merge (floor -2 0 11 2) (box 9 64 1 9 65 1 "stone") (box 11 64 1 11 65 1 "stone")
                     (box 10 64 0 10 65 0 "stone") (box 10 64 2 10 65 2 "stone") {"10,66,1" "stone"})}
     [10 64 1]))
+
+;; a pen of fence (or wall) with no gate: a fence cell is tight, its two strips (inside and outside the line) separate
+;; regions the search never joins, so the flood must not join them either (live: a breed walk at a gateless 12-deep pen
+;; searched the whole wide box, ~25 s a round, while the body's API went unanswered)
+(defn ring-pen
+  "A ring of name round x 10..16, z -3..3 at y 64 over a floor; gap: a cell of the ring left empty."
+  [name gap]
+  {:blocks (merge (floor -2 -6 40 6)
+                  (apply dissoc (box 10 64 -3 16 64 3 name) (cond-> (keys (box 11 64 -2 15 64 2 "x")) gap (conj gap))))})
+
+(deftest a-gateless-fence-or-wall-pen-is-enclosed
+  (are [name options] (= "goal-enclosed" (:reason (plan-over (ring-pen name nil) [13 64 0] options)))
+    "oak_fence" {:preFlood 0 :floodAfter 0}
+    "oak_fence" {:preFlood 4000 :maxNodes 1}
+    "cobblestone_wall" {:preFlood 0 :floodAfter 0}
+    "nether_brick_fence" {:preFlood 0 :floodAfter 0}))
+
+(deftest a-fence-pen-with-a-gap-is-not-enclosed
+  (are [name options] (= {:status "found" :reason nil} (plan-over (ring-pen name "10,64,0") [13 64 0] options))
+    "oak_fence" {:preFlood 0 :floodAfter 0}
+    "oak_fence" {:preFlood 4000}
+    "cobblestone_wall" {:preFlood 0 :floodAfter 0}))

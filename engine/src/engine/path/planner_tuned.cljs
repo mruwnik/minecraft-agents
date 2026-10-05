@@ -260,8 +260,8 @@
    column-keys column-flags cell-keys cell-flags ^js mask-cache ^js tight-seen ^js pick ^js best-d ^js best-at
    ^js surface-cache ^js dive-cache
    ^:mutable masks ^:mutable tight-masks ^:mutable regions-seen ^:mutable mask-ms
-   ;; the goal flood: moves go to the probe instead of the search while it runs
-   ^:mutable ^boolean flooding ^:mutable fx ^:mutable fy ^:mutable fz ^:mutable ^boolean hit ^:mutable flooded ^:mutable pre-flooded
+   ;; the goal flood: moves go to the probe instead of the search while it runs; fr the probed cell's region (-1 any)
+   ^:mutable ^boolean flooding ^:mutable fx ^:mutable fy ^:mutable fz ^:mutable fr ^:mutable ^boolean hit ^:mutable flooded ^:mutable pre-flooded
    ^:mutable ^boolean flood-pending ^:mutable ^boolean leaked
    ;; progress
    ^:mutable ^boolean started ^:mutable ^boolean finished ^:mutable reason ^:mutable ^boolean over-budget
@@ -731,7 +731,7 @@
   ;; where moves go: into the search, or the goal flood's probe
   (sink [s x y z h move parent-node dsec drisk slow-to corner shape]
     (if flooding
-      (when (and (== x fx) (== y fy) (== z fz)) (set! hit true))
+      (when (and (== x fx) (== y fy) (== z fz) (or (neg? fr) (== fr (bit-and shape 15)))) (set! hit true))
       (.consider s x y z h move parent-node dsec drisk slow-to corner shape)))
 
   ;; the edge of a move: straight to the sink, or through one of the passes over an expansion near a door (see expandAt)
@@ -1759,10 +1759,18 @@
             (when (and (<= (+ (* dx dx) (* dy dy) (* dz dz)) (* goal-range goal-range))
                        ^boolean (.inSpan s x z)
                        (>= (.nodeH s x y z) 0))
-              (.add seen (.keyOf s x y z 0))
-              (.push queue x y z)
+              (dotimes [r (.floodRegions s x y z (.nodeH s x y z))]
+                (.add seen (.keyOf s x y z r))
+                (.push queue x y z r))
               (when ^boolean (.isWater s x y z) (set! leaked true)))
             (recur dx dy (inc dz)))))))
+
+  ;; the flood's nodes in a cell standing at h: one per region of a tight cell, as the search's nodes are (the strips either
+  ;; side of a fence line are two, and no move joins them), else one
+  (floodRegions [s x y z h]
+    (if ^boolean (.isTight s x y z)
+      (js/Math.min REGIONS (.-length (.-regs ^js (.shapeOf s x y z (+ (* y 16) h)))))
+      1))
 
   ;; a cell the flood cannot see into: out of the span, or in a column the snapshot has not loaded
   (unseen [s x y z]
@@ -1797,21 +1805,34 @@
     (if ^boolean (.unseen s x y z)
       (do (when (or (neg? jump) ^boolean (.jumpOver s jump (- y fy))) (set! leaked true))
           false)
-      (let [key (.keyOf s x y z 0)]
-        (if (true? (.has seen key))
-          false
-          (let [h (.floodH s x y z)]
-            (if (neg? h)
-              false
-              (do
-                (set! hit false)
-                (.expandAt s x y z h 0 -1 -1)
-                (if hit
-                  (do (.add seen key)
-                      (.push queue x y z)
-                      (when ^boolean (.isWater s x y z) (set! leaked true))
-                      (== key start-key))
-                  false))))))))
+      (let [h (.floodH s x y z)]
+        (cond
+          (neg? h) false
+          ;; a cell the body fits in only once something is opened: one node for all its regions (the opening pass's
+          ;; regions are its own), as wide as the flood was before it knew regions
+          (neg? (.nodeH s x y z)) (.floodNode s seen queue start-key x y z h -1)
+          :else (loop [r 0
+                       n (.floodRegions s x y z h)]
+                  (cond
+                    (>= r n) false
+                    ^boolean (.floodNode s seen queue start-key x y z h r) true
+                    :else (recur (inc r) n)))))))
+
+  ;; adds region r of the cell (-1: every region, as one node) when a forward move out of it reaches the flood's current
+  ;; node; true when it is the start
+  (floodNode [s ^js seen ^js queue start-key x y z h r]
+    (let [key (.keyOf s x y z (js/Math.max r 0))]
+      (if (true? (.has seen key))
+        false
+        (do
+          (set! hit false)
+          (.expandAt s x y z h 0 -1 r)
+          (if hit
+            (do (.add seen key)
+                (.push queue x y z r)
+                (when ^boolean (.isWater s x y z) (set! leaked true))
+                (== key start-key))
+            false)))))
 
   ;; cells a gap jump could come from: 2..4 along each cardinal, level, one up or one down (a jump up a block)
   (floodAhead [s seen queue start-key]
@@ -1851,18 +1872,20 @@
           (set! fx (aget queue head))
           (set! fy (aget queue (+ head 1)))
           (set! fz (aget queue (+ head 2)))
+          (set! fr (aget queue (+ head 3)))
           (if (or ^boolean (.floodColumn s seen queue start-key) ^boolean (.floodAround s seen queue start-key))
             true
-            (recur (+ head 3))))
+            (recur (+ head 4))))
         false)))
 
-  ;; Backward flood from the standable goal cells over predecessors: cells n with a forward move n -> c, found by running
-  ;; n's own moves (so it can never disagree with the search). True when it exhausts within budget nodes without
+  ;; Backward flood from the standable goal cells over predecessors: nodes n (a cell and, in a tight cell, a region; the
+  ;; queue holds x y z region) with a forward move n -> c, found by running n's own moves (so it can never disagree with
+  ;; the search). True when it exhausts within budget nodes without
   ;; meeting the start: then nothing reaches the goal. Slow, but bounded by the budget; false on budget or when the start
   ;; is met, or when it leaks: it meets water (a drop into water starts further up than the flood looks), or an unloaded
   ;; or out-of-span cell (what lies there is unknown).
   (goalEnclosed [s budget sealed]
-    (let [start-key (.keyOf s from-x from-y from-z 0)
+    (let [start-key (aget node-keys 0) ; the start node's key, its region in a tight cell (begin)
           seen (js/Set.)
           queue #js []]
       (set! leaked false)
@@ -1877,6 +1900,7 @@
                 leaks (and enclosed ^boolean sealed ^boolean (.floodLeaks s queue))]
             (set! flooding false)
             (set! allow-shut false)
+            (set! fr -1)
             (set! flooded (.-size seen))
             (and enclosed (not leaks)))))))
 
@@ -1904,7 +1928,7 @@
         (>= head (.-length queue)) false
         ^boolean (.cliffBeside s (aget queue head) (aget queue (+ head 1)) (aget queue (+ head 2))
                                (.nodeH s (aget queue head) (aget queue (+ head 1)) (aget queue (+ head 2)))) true
-        :else (recur (+ head 3)))))
+        :else (recur (+ head 4)))))
 
   ;; the early pass of the flood, before the first expansion: only a small enclosed goal is caught, so it stays cheap, and
   ;; only a sealed one (no cliff edge beside the flooded cells: a goal on an island or above a drop is left to the search). It
@@ -2023,6 +2047,7 @@
   ;; and looks for the one that enters the upper cell (the goal flood's probe, for one cell).
   (canReturn [s lx ly lz lh ux uy uz]
     (set! flooding true)
+    (set! fr -1)
     (set! fx ux)
     (set! fy uy)
     (set! fz uz)
@@ -2366,8 +2391,8 @@
      (js/Float64Array. TABLE) (js/Uint8Array. TABLE) (js/Float64Array. TABLE) (js/Uint8Array. TABLE) (js/Map.) (js/Set.) (js/Int8Array. REGIONS)
      (js/Float64Array. REGIONS) (js/Int16Array. REGIONS) (js/Map.) (js/Map.)
      0 0 0 0
-     ;; the goal flood: flooding fx fy fz hit flooded pre-flooded flood-pending leaked
-     false 0 0 0 false 0 0
+     ;; the goal flood: flooding fx fy fz fr hit flooded pre-flooded flood-pending leaked
+     false 0 0 0 -1 false 0 0
      (and near (pos? (option options "goalFlood" 4000))) false
      ;; progress: started finished reason over-budget boxed goal-node best-node
      false false nil false false -1 -1
@@ -2403,3 +2428,31 @@
     (.init search)
     (.step search js/Infinity)
     (result-of search snapshot query options)))
+
+(defn create-plan
+  "plan in slices, for a caller that yields to the event loop between them: {step, result}. step(n) runs at most about n
+  expansions (the goal flood's cells count toward them) and is true once the plan is ready; result() is then what plan
+  answers. The returnable search behind a one-way step (result-of) runs in the same slices."
+  [snapshot query options]
+  (let [search (new-search snapshot query options)
+        clean (volatile! nil)
+        node (volatile! -1)
+        ready (volatile! false)]
+    (.init search)
+    #js {:step (fn [max-expansions]
+                 (cond
+                   @ready true
+                   (some? @clean) (vreset! ready ^boolean (.step ^Search @clean max-expansions))
+                   (not ^boolean (.step search max-expansions)) false
+                   :else (do (.settle search)
+                             (vreset! node (.oneWayNode search))
+                             (if (neg? @node)
+                               (vreset! ready true)
+                               (let [^Search c (new-search snapshot query
+                                                           (js/Object.assign #js {} options #js {:returnable true :goalFlood 0}))]
+                                 (.init c)
+                                 (vreset! clean c)
+                                 false)))))
+         :result (fn [] (if (neg? @node)
+                          (.resultFrom search -1 nil)
+                          (.resultFrom search @node (.nearest ^Search @clean))))}))

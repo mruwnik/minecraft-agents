@@ -184,3 +184,41 @@
           (let [{:keys [eng p]} (await (walk-rounds! world [{:x 10 :y 64 :z 0} 0] prep 3))]
             (is (= [0 64 0] (mapv js/Math.floor (at p))) label)
             (is (backing-off? eng) label)))))))
+
+;; a pen of fence with no gate (live: a breed walk at a gateless pen searched the whole wide box for ~25 s a round): the
+;; round knows the goal is walled in once the goal flood runs, it does not search every way round. The floor is wide
+;; enough that the search has not run out of ground before the flood (floodAfter expansions).
+(def gateless-pen
+  (merge (floor -40 -40 60 40) (apply dissoc (box 10 64 -4 18 64 4 "oak_fence") (keys (box 11 64 -3 17 64 3 "x")))))
+
+(deftest walk-near-a-gateless-fence-pen-ends-blocked-goal-enclosed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [outs (atom [])
+              rounds (atom [])
+              ;; walk-near! until it is not :partial (a partial walk to the fence, the nearest the body gets), each time
+              ;; with the round's own result
+              job {:check (constantly true)
+                   :round (fn ^:async round [c]
+                            (loop [n 0]
+                              (let [r (await (near/walk-round! c {:x 14 :y 64 :z 0} 2 {:doors :shut}))]
+                                (swap! rounds conj (select-keys (:result r) [:status :reason]))
+                                (swap! outs conj (:status r))
+                                (when (and (= "partial" (:status r)) (< n 3)) (recur (inc n)))))
+                            :done)}
+              clock (atom 1000000)
+              [_ sink] (tu/legacy-capture-sink)
+              p (tu/fake {:self {:pos start} :blocks gateless-pen})
+              eng (core/create {:primitives p :jobs (assoc registry/jobs 'pen-walker job) :triggers triggers/all
+                                :dir (tu/tmp-dir) :now #(deref clock)
+                                :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+          (core/submit! eng '(pen-walker) {})
+          (loop [i 0]
+            (when (and (< i 10) (seq (:list (core/state eng))))
+              (await (core/tick! eng))
+              (recur (inc i))))
+          (is (= "blocked" (peek @outs)) (pr-str @outs))
+          (is (<= (count @outs) 2) "at most one walk to the fence before the round knows")
+          (is (= {:status :no-path :reason :goal-enclosed} (peek @rounds)))
+          (is (< (first (at p)) 10) "the body stayed outside the pen"))))))
