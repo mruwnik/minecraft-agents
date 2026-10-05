@@ -1,0 +1,32 @@
+;; jobs.gather.mine in a stone mass (cards 2c41db90 / 7c9378bc, hand-tested in 7c9378bc): a strip tunnel east finds an
+;; ore in line and the drop is collected (no false mine.left-behind, :got matches the inventory); ore with no face to
+;; the tunnel is never dug. (The left-behind case, a drop the body cannot reach, was not ported: see card 8aa80fca.)
+;; Stone mass x 2..30, z 8..24, y 0..6; body in a 1x2 cell at [16 0 16] facing east, stone pickaxe.
+{:defaults
+ {:tags [:mine :jobs] :time :any
+  :plot {:height 12}
+  :blocks [[:fill [2 0 8] [30 6 24] "stone"] [:fill [16 0 16] [16 1 16] "air"]]
+  :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1] ["cobblestone" 16]] :effects [["resistance" 600 4]]}}
+ :cases
+ [{:name "in-line-ore-collected"
+   :blocks [[:set [20 0 16] "iron_ore"]]
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 8})]]
+   :expect [{:event {:source :job :kind :mine.done :data {:got 1}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :mine.left-behind} :for-s 5}]
+   :after [[:item "raw_iron" 1] [:not-block [20 0 16] "iron_ore"]]
+   :limit-s 120}
+  {:name "ore-in-line-twice"
+   :blocks [[:set [19 0 16] "iron_ore"] [:set [22 0 16] "iron_ore"]]
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :count 2 :direction :east :tunnel-length 10})]]
+   :expect [{:event {:source :job :kind :mine.done :data {:got 2}} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :mine.left-behind} :for-s 5}]
+   :after [[:item "raw_iron" 2]]
+   :limit-s 140}
+  {:name "buried-ore-off-the-line-is-never-dug"
+   ;; ores not in the tunnel's line and with no face to the tunnel (never seen): the run ends at the tunnel length with
+   ;; nothing, and the ores stand
+   :blocks [[:set [18 0 14] "iron_ore"] [:set [19 3 16] "iron_ore"] [:set [20 0 18] "iron_ore"]]
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 5})]]
+   :expect [{:event {:source :job :kind :mine.done :data {:got 0 :reason :tunnel-length}} :within-s 100 :of-job true}]
+   :after [[:block [18 0 14] "iron_ore"] [:block [19 3 16] "iron_ore"] [:block [20 0 18] "iron_ore"]]
+   :limit-s 120}]}

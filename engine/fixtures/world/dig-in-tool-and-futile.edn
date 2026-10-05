@@ -1,0 +1,36 @@
+;; jobs.survival.dig-in on open ground without the usual materials (cards 0392fef7, f3e41d66, hand-tested in 0b0a8242):
+;; a pickaxe carried but not held is equipped before the digs and the pit is roofed with the dug stone; no pickaxe and
+;; no blocks on stone fails with a reason and digs nothing; a 1-thick floor over a void is not dug through.
+;; Night: run with --allow-time --time-log <the shared time log>. Run directly (not through the shelter job: that logs the body out for the night whenever another player is online).
+{:defaults
+ {:tags [:night :survival :dig-in]
+  :time :night
+  :blocks [[:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 4] "torch"] [:set [28 0 28] "torch"]
+           [:set [16 0 4] "torch"] [:set [16 0 28] "torch"] [:set [4 0 16] "torch"] [:set [28 0 16] "torch"]]
+  :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}}
+ :cases
+ [{:name "pickaxe-carried-is-equipped-then-digs-and-seals"
+   ;; a thick stone pad under the plot floor (the floor is one block over void; dig-in will not dig through it)
+   :blocks [[:fill [2 -6 2] [9 -1 9] "stone"]]
+   :body {:at [5.5 0 5.5] :inventory [["stick" 1] ["stone_pickaxe" 1]]}
+   :act [[:job (jobs.survival.dig-in {})]]
+   :expect [{:event {:source :action :kind :done :data {:name "equip"}} :within-s 20}
+            {:event {:source :job :kind :dig-in.sealed} :within-s 60 :of-job true}]
+   :limit-s 70}
+  {:name "no-pickaxe-no-blocks-fails-without-digging"
+   :blocks [[:fill [12 -6 12] [20 -1 20] "stone"]]
+   :body {:at [16.5 0 16.5]}
+   :act [[:job (jobs.survival.dig-in {})]]
+   :expect [{:event {:source :job :kind #{:dig_in_failed :waiting}} :within-s 20 :of-job true}
+            {:no-event {:source :action :kind :started :data {:name "dig"}} :for-s 10}]
+   :after [[:block [16 -1 16] "stone"]]
+   :limit-s 30}
+  {:name "one-thick-floor-over-void-is-not-dug-through"
+   :blocks [[:fill [20 5 20] [30 5 30] "stone"]]
+   :body {:at [25.5 6 25.5] :inventory [["stone_pickaxe" 1]]}
+   :plot {:height 12}
+   :act [[:job (jobs.survival.dig-in {})]]
+   :expect [{:event {:source :job :kind #{:dig_in_failed :waiting}} :within-s 20 :of-job true}
+            {:no-event {:source :action :kind :started :data {:name "dig"}} :for-s 10}]
+   :after [[:block [25 5 25] "stone"]]
+   :limit-s 30}]}

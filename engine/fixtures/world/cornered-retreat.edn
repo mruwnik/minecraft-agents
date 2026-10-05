@@ -1,0 +1,47 @@
+;; Cornered retreat (card af4935b9, fix 540c61e5, hand-tested in the live-cornered run): a body at the closed end of a 1-wide
+;; tunnel with a hostile coming along it seals itself in with carried blocks, else fights with the pickaxe, else the fist;
+;; it never places a block into the mob; on open ground it just walks away. Mobs are NoAI (they never hurt), helmeted
+;; (no sun burn); the fight cases judge by the mob dying.
+;; Stone mass x 2..30, z 10..22, y 0..4; tunnel 1x2 along z 16 from x 5 (closed end, body) to x 30.
+{:defaults
+ {:tags [:hostile :survival :cornered]
+  :time :any
+  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+              :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+  :blocks [[:fill [2 0 10] [30 4 22] "stone"] [:fill [5 0 16] [29 1 16] "air"]
+           [:set [8 1 16] "torch"] [:set [14 1 16] "torch"]]
+  :body {:at [5.5 0 16.5]}}
+ :cases
+ [{:name "seals-in-the-dead-end"
+   :body {:inventory [["cobblestone" 20]]}
+   :act [[:summon "skeleton" [10.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :retreat_sealed} :within-s 40}
+            {:no-event {:source :job :kind :retreat_blocked} :for-s 5}]
+   :after [[:block [6 0 16] "cobblestone"] [:block [6 1 16] "cobblestone"] [:body-near [5.5 0 16.5] 1.5]]
+   :limit-s 60}
+  {:name "pickaxe-fight-when-no-blocks"
+   :body {:inventory [["stone_pickaxe" 1]]}
+   :act [[:summon "zombie" [9.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:no-event {:source :job :kind :retreat_blocked} :for-s 40}]
+   :after [[:entities "type=zombie,tag=wt" [[2 0 10] [30 4 22]] 0]]
+   :limit-s 60}
+  {:name "fist-fight-when-empty-handed"
+   :act [[:summon "zombie" [9.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:no-event {:source :job :kind :retreat_blocked} :for-s 40}]
+   :after [[:entities "type=zombie,tag=wt" [[2 0 10] [30 4 22]] 0]]
+   :limit-s 60}
+  {:name "mob-in-the-gap-gets-no-block"
+   :body {:inventory [["cobblestone" 20]]}
+   :act [[:summon "zombie" [6.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 10}
+            {:no-event {:source :job :kind :retreat_sealed} :for-s 50}]
+   :after [[:not-block [6 0 16] "cobblestone"] [:not-block [6 1 16] "cobblestone"]
+           [:entities "type=zombie,tag=wt" [[2 0 10] [30 4 22]] 0]]
+   :limit-s 70}
+  {:name "open-ground-walks-away-no-seal"
+   :blocks [[:fill [2 0 10] [30 4 22] "air"]]
+   :body {:at [16.5 0 16.5] :inventory [["cobblestone" 20]]}
+   :act [[:summon "zombie" [21.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 10}
+            {:no-event {:source :job :kind :retreat_sealed} :for-s 15}]
+   :limit-s 30}]}

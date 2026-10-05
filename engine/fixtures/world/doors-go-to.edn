@@ -1,0 +1,51 @@
+;; Doors on a go-to walk (card ac4452e5, hand-tested in the live-doors run) and the door-left reflex (jobs.maintenance.shut-doors):
+;; a stone wall across the plot at x 16 with one door or gate in it; the body 6 west, the goal 6 east, no way round.
+;; :shut walks through and shuts what it opened; :leave-open leaves it open (the door-left reflex then walks back and shuts
+;; it, 10+ s later); :never treats it as a wall; an iron door with no button cannot be opened.
+{:defaults
+ {:tags [:door :movement] :time :any
+  :plot {:height 8}
+  :blocks [[:fill [16 0 0] [16 3 31] "stone"] [:fill [0 0 0] [31 3 0] "stone"] [:fill [0 0 31] [31 3 31] "stone"]
+           [:fill [0 0 0] [0 3 31] "stone"] [:fill [31 0 0] [31 3 31] "stone"]]
+  :body {:at [10.5 0 16.5] :effects [["resistance" 600 4]]}
+  :limit-s 60}
+ :cases
+ [{:name "oak-door-shut-behind"
+   :blocks [[:set [16 0 16] "oak_door[facing=east,half=lower,open=false]"] [:set [16 1 16] "oak_door[facing=east,half=upper,open=false]"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 40 :of-job true}]
+   :after [[:block [16 0 16] "oak_door[half=lower,open=false]"] [:body-near [22.5 0 16.5] 2]]}
+  {:name "oak-gate-shut-behind"
+   :blocks [[:set [16 0 16] "oak_fence_gate[facing=east,open=false]"] [:set [16 1 16] "air"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 40 :of-job true}]
+   :after [[:block [16 0 16] "oak_fence_gate[open=false]"] [:body-near [22.5 0 16.5] 2]]}
+  {:name "leave-open-keeps-it-open"
+   :blocks [[:set [16 0 16] "oak_fence_gate[facing=east,open=false]"] [:set [16 1 16] "air"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :doors :leave-open})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 40 :of-job true}]
+   :after [[:block [16 0 16] "oak_fence_gate[open=true]"]]}
+  {:name "door-left-reflex-shuts-a-gate-a-cut-walk-left-open"
+   ;; the walk's round is cut right after the open click (a --now job: walk 9 blocks back west), so the gate stays open
+   ;; with an :opened entry; 10 s on, the door-left reflex walks back and shuts it. The body is slowed (speed -90%) so
+   ;; the cut lands before it leaves the gate's column.
+   :register [{:trigger :door-left :persistence :cooldown :cooldown-s 5 :job (jobs.maintenance.shut-doors)}]
+   :blocks [[:set [16 0 16] "oak_fence_gate[facing=east,open=false]"] [:set [16 1 16] "air"]]
+   :body {:at [13.5 0 16.5] :effects [["slowness" 600 5]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1})]
+         [:await {:source :action :kind :done :data {:name "useOn"}} 30]
+         [:job (jobs.movement.go-to {:pos #at [5 0 20] :range 1}) [:now]]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :door-left}} :within-s 50}
+            {:event {:source :job :kind :shut-doors.done :data {:shut 1}} :within-s 80}]
+   :after [[:block [16 0 16] "oak_fence_gate[open=false]"]]
+   :limit-s 100}
+  {:name "never-treats-the-door-as-a-wall"
+   :blocks [[:set [16 0 16] "oak_door[facing=east,half=lower,open=false]"] [:set [16 1 16] "oak_door[facing=east,half=upper,open=false]"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :doors :never :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 40 :of-job true}]
+   :after [[:block [16 0 16] "oak_door[half=lower,open=false]"] [:body-near [10.5 0 16.5] 8]]}
+  {:name "iron-door-without-button-stays-shut"
+   :blocks [[:set [16 0 16] "iron_door[facing=east,half=lower,open=false]"] [:set [16 1 16] "iron_door[facing=east,half=upper,open=false]"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 40 :of-job true}]
+   :after [[:block [16 0 16] "iron_door[half=lower,open=false]"] [:body-near [10.5 0 16.5] 8]]}]}
