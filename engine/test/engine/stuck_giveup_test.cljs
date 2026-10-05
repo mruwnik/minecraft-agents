@@ -30,6 +30,23 @@
   (doseq [[here expected] [[{:x 20 :y 64 :z 0} false] [ut/at5 true]]]
     (is (= expected (stuck-in? {:self {:pos here} :floor tu/walk-floor} (repeat 4 (ut/bad-move)))) (pr-str here))))
 
+;; ------------------------------------------------------------------ walk-near! and a drop it cannot climb back
+
+(def cliff-island
+  "A plateau (feet 64) to x 10, a 3-drop to a floor (feet 61) that runs to the loaded edge at x 47, and on it a stone
+  pillar at x 47 (the last loaded column) whose top (feet 67) no walk reaches."
+  (merge (floor -2 -3 10 3) (floor 60 11 -3 47 3) (box 47 61 0 47 66 0 "stone")))
+
+(deftest walk-near-does-not-drop-off-a-cliff-toward-a-target-it-cannot-reach
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (ut/setup {:self {:pos {:x 0 :y 64 :z 0}} :blocks cliff-island})
+              top {:x 47 :y 67 :z 0}]
+          (core/submit! eng (list 'jobs.movement.pace {:a top :b top :laps 1 :rounds 1}) {})
+          (await (core/tick! eng))
+          (is (= 64 (js/Math.floor (.-y (.-pos (.self p))))) "still on the plateau"))))))
+
 ;; ------------------------------------------------------------------ unstick ends once out
 
 (def beside {:x 5 :y 64 :z 2})

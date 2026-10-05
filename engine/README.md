@@ -1693,9 +1693,10 @@ the upper cell, which no jump's rule does). When the path to the nearest node of
 that node's distance to the goal, the path to it, and `open`: true when that node stands within 2 columns of unloaded land (the
 land past the step runs on past what is loaded). `null` when nothing nearer lies behind one, and on every complete plan (which
 are never changed). With no returnable node 2 blocks nearer the status is `none` with `oneWay` set. `engine.path.walk` turns
-`oneWay` into the walk-plan `:one-way {:kind :at}` stop. `plan-walk` with `:one-way :open` (go-to and `walk-near!`, through
-`engine.path.near`) instead walks `oneWay.path` when `open` is true: a far goal past a cliff is walked on to, and a pit whose
-cells are all loaded and that gets no nearer is never entered. A search where the path to its nearest node has no one-way step
+`oneWay` into the walk-plan `:one-way {:kind :at}` stop. `plan-walk` with `:one-way :open` (go-to's rounds, through
+`engine.path.near/walk-round!`) instead walks `oneWay.path` when `open` is true: a far goal past a cliff is walked on to, and a pit whose
+cells are all loaded and that gets no nearer is never entered. `walk-near!` (the jobs' walks to a thing they can see) never
+does: a target it finds no way to (a cow on an island in a moat) does not lead the body off a ledge it cannot climb back. A search where the path to its nearest node has no one-way step
 pays nothing.
 
 The walk driver watches the way ahead while it walks (`engine.path.walk/follow!`, used by `walk-to!` and go-to's round). At
