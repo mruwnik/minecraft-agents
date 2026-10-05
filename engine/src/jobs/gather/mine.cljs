@@ -47,8 +47,8 @@
   then an ordinary target and is dug before the next step (veins followed by the look-around). The run used up ends
   the dig phase :tunnel-length, any stop ends it :tunnel-stopped; either way one warn mine.tunnel-end {:reason
   (:tunnel-length, :lava, :water, :fluid, :no-floor, :not-loaded, :refused, :dig-failed, :walk-failed) :heading
-  :length :at}. The result carries :tunnel {:origin :heading :steps :stop}; a job whose tunnel took a step ends,
-  after the mend, by walking back to the cell it started on (info mine.not-home when the walk does not arrive).
+  :length :at :next}, :at the offending cell (the lava beside the line), :next the line cell it stopped before. The
+  result carries :tunnel {:origin :heading :steps :stop}; every job ends, after the mend, by walking back to the cell it started on (info mine.not-home when the walk does not arrive).
   The mend phase fills every ground cell that is now air, cave_air or water with the first carried of dig-in's
   building blocks other than the item, the item itself last (when it is a building block or the block itself),
   lowest first, then nearest, never the body's feet or head cell; when only those are owed it jumpPlaces one block.
@@ -195,12 +195,10 @@
     :done))
 
 (defn wrap-up!
-  "The normal end: when the tunnel took a step the body walks back to where it started first (phase :home), else
-  finish."
+  "The normal end: the body walks back to where it started (phase :home), whatever the run did, then finishes."
   [c]
-  (if (pos? (get-in (ctx/mem c) [:tunnel :steps] 0))
-    (do (ctx/update-mem! c assoc :phase :home) :continue)
-    (finish! c)))
+  (ctx/update-mem! c assoc :phase :home)
+  :continue)
 
 (defn to-mend!
   "End the dig phase with a reason: mend next, or wrap up when there is nothing to mend."
@@ -229,11 +227,20 @@
                 (map (fn [e] [(access/cell (cell-of (u/pos-of (.-pos e)))) (or (some-> (.-item e) .-count) 1)])))
           (array-seq (.entities (:primitives c) #js {:radius (:collect-radius (:args c)) :kind "item" :max 32})))))
 
-(defn note-left!
-  "Report drops of the item collect-drops left lying (out of reach), once per cell."
+(def pickup-grace-ms 400)
+
+(defn ^:async note-left!
+  "Report drops of the item collect-drops left lying (out of reach), once per cell. A drop still listed right after
+  the collect may be one whose pickup packet has not arrived, so a drop counts only when it is still lying after a
+  short wait."
   [c]
   (let [known (:left (ctx/mem c))
-        fresh (into {} (remove (fn [[pos _]] (contains? known pos))) (left-behind c))]
+        fresh? (fn [[pos _]] (not (contains? known pos)))
+        first-look (into {} (filter fresh?) (left-behind c))
+        fresh (if (empty? first-look)
+                first-look
+                (do (await (ctx/act c :wait #js {:ms pickup-grace-ms}))
+                    (into {} (filter (fn [[pos _]] (contains? first-look pos))) (left-behind c))))]
     (when (seq fresh)
       (ctx/emit! c :mine.left-behind :info {:items (mapv (fn [[pos n]] {:pos pos :count n}) fresh)
                                             :text (str "mine left drops it could not pick up at "
@@ -245,7 +252,7 @@
         r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops
                                  {:radius collect-radius :filter [(item-name (:args c))]}))]
     (when (= :done r)
-      (note-left! c)
+      (await (note-left! c))
       (let [now (carried c)]
         (ctx/update-mem! c (fn [m]
                              (-> m
@@ -298,15 +305,17 @@
 ;; ------------------------------------------------------------------ the strip tunnel
 
 (defn cut-hazard
-  "Why the tunnel may not take cell pos (a fluid in it, lava or unwanted water beside it, not loaded), else nil."
+  "Why the tunnel may not take cell pos (a fluid in it, lava or unwanted water beside it, not loaded), else nil:
+  {:reason r :at cell}, the cell being the offending one (the lava beside pos, not pos itself)."
   [c pos]
   (let [own (u/block-name (:primitives c) pos)
-        beside (map #(u/block-name (:primitives c) (around pos %)) faces)]
+        beside (map (fn [f] (let [cell (around pos f)] [cell (u/block-name (:primitives c) cell)])) faces)
+        beside-of (fn [n] (some (fn [[cell nm]] (when (= n nm) cell)) beside))]
     (cond
-      (nil? own) :not-loaded
-      (rules/fluids own) :fluid
-      (some #{"lava"} beside) :lava
-      (and (some #{"water"} beside) (not (:wet (:args c)))) :water)))
+      (nil? own) {:reason :not-loaded :at pos}
+      (rules/fluids own) {:reason :fluid :at pos}
+      (beside-of "lava") {:reason :lava :at (beside-of "lava")}
+      (and (beside-of "water") (not (:wet (:args c)))) {:reason :water :at (beside-of "water")})))
 
 (defn step-cell
   "The feet cell k blocks along the tunnel from its origin."
@@ -318,7 +327,7 @@
 
 (defn tunnel-end!
   "The tunnel is done (stop: :tunnel-length or why it stopped at cell at): one warn mine.tunnel-end, then the mend."
-  [c stop at]
+  [c stop at & [next]]
   (let [{:keys [goal tunnel]} (ctx/mem c)
         {:keys [heading steps]} tunnel
         got (max 0 (- (carried c) (- goal (:count (:args c)))))]
@@ -328,7 +337,8 @@
                                    (if (= :tunnel-length stop) "its length is used up" (str "stopped, " (name stop)))
                                    (when at (str " at " (str/join "," (access/cell at))))
                                    "; got " got " of " (:count (:args c)))}
-                 at (assoc :at (access/cell at))))
+                 at (assoc :at (access/cell at))
+                 next (assoc :next (access/cell next))))
     (ctx/update-mem! c assoc-in [:tunnel :stop] stop)
     (to-mend! c (tunnel-reason stop))))
 
@@ -374,7 +384,7 @@
       stop (to-mend! c (tunnel-reason stop))
       (>= steps (:tunnel-length (:args c))) (tunnel-end! c :tunnel-length nil)
       (not (await (step-to! c from))) (tunnel-end! c :walk-failed from)
-      hazard (tunnel-end! c hazard next)
+      hazard (tunnel-end! c (:reason hazard) (:at hazard) next)
       (not (rules/solid-floor? name-at (update next :y dec))) (tunnel-end! c :no-floor next)
       :else (let [r (await (cut! c (remove #(air (name-at %)) cut)))]
               (if (not= :ok r)
@@ -518,7 +528,7 @@
       :else (await (raise! c item)))))
 
 (defn ^:async home-round!
-  "The last step of a job whose tunnel took a step: back to the cell it started on (moveTo), whatever the digging left
+  "The last step of every normal run: back to the cell it started on (moveTo), whatever the digging left
   open behind it; an info mine.not-home when the walk did not arrive. The job ends either way."
   [c]
   (let [{:keys [start]} (ctx/mem c)]

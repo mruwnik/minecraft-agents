@@ -211,7 +211,7 @@
           (await (run-ticks s 1))
           (is (zero? (:failures (job-mem s))) "failures start at 0")
           (await (run-ticks s 20))
-          (is (= ["partial" "partial" "partial"] (mapv :status (moved s))) "three walks, each cut short")
+          (is (= ["partial" "partial" "partial" "arrived"] (mapv :status (moved s))) "three walks, each cut short, then the walk home")
           (is (zero? (dig-count s)))
           (is (= :none (:reason (done-event s))))
           (is (finished? s)))))))
@@ -594,7 +594,7 @@
               s (start {:p p :shared w})]
           (core/submit! (:eng s) (spec {:block "sand" :count 1 :mend false :tunnel-length 0}) {})
           (await (run-ticks s 20))
-          (is (= 1 (count (moved s))) "one walk, then the zone refuses the dig")
+          (is (= 2 (count (moved s))) "one walk, then the zone refuses the dig, then the walk home")
           (is (empty? (calls s "dig")))
           (is (= :refused (:reason (done-event s)))))))))
 
@@ -679,7 +679,7 @@
                                  (rock-world {"4,64,1" "lava"}) 80))]
           (is (every? #(< (first %) 4) (dug-cells s)) "no cut beside the lava")
           (is (= :tunnel-stopped (:reason (done-event s))))
-          (is (= [{:reason :lava :at [4 64 0]}] (map #(select-keys % [:reason :at]) (tunnel-ends s))))
+          (is (= [{:reason :lava :at [4 64 1] :next [4 64 0]}] (map #(select-keys % [:reason :at :next]) (tunnel-ends s))))
           (is (= "lava" (block-at s 4 64 1))))))))
 
 (deftest the-tunnel-length-bound-ends-the-job-with-a-reason
@@ -741,6 +741,34 @@
           (is (= 0 (:got (done-event s))))
           (is (= [[{:pos [5 64 2] :count 1}]] (map :items (events-of s :mine.left-behind))))
           (is (= [{:pos [5 64 2] :count 1}] (:left (done-event s)))))))))
+
+(deftest drops-picked-up-a-moment-later-are-not-left-behind
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks {"3,64,0" "iron_ore"} :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270
+                                :unreachable ["5,64,2"]}})]
+          (drop-away! (:p s) [5 64 2])
+          ;; the pickup packet arrives during the wait: the item entity is gone by then
+          (.override (.-world (:p s)) "wait"
+                     (fn [token args impl]
+                       (swap! (fake/state (:p s)) assoc :entities [])
+                       (impl token args)))
+          (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :tunnel-length 0}) {})
+          (await (run-ticks s 20))
+          (is (empty? (events-of s :mine.left-behind)))
+          (is (nil? (:left (done-event s)))))))))
+
+(deftest a-run-that-only-dug-targets-still-walks-home
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks {"3,64,0" "iron_ore"} :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270}})]
+          (drop-away! (:p s) [5 64 2])
+          (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :tunnel-length 0}) {})
+          (await (run-ticks s 30))
+          (is (= :count (:reason (done-event s))))
+          (is (= [0 64 0] (feet s))))))))
 
 (deftest a-zone-follows-its-owner-and-the-opt-out
   (async done
