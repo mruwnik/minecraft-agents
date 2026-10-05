@@ -1,0 +1,28 @@
+;; engine.jobs.watch wired into go-to arrival and attack (card 9970c377). A sealed stone box: dark inside, or lit by
+;; a sea lantern floor. A scan shows as a memory_written of :watched. Time-independent (the roof shuts the sky out).
+{:defaults
+ {:tags [:watch :movement]
+  :time :any
+  :plot {:height 8}
+  :blocks [[:fill [8 -1 8] [24 6 24] "stone" :hollow]]
+  :body {:at [12.5 0 12.5] :effects [["resistance" 600 4]]}
+  :limit-s 30}
+ :cases
+ [{:name "go-to-dark-arrival-scans"
+   :act [[:job (jobs.movement.go-to {:pos #xyz [20 0 20] :range 0})]]
+   :expect [{:event {:source :job :kind :memory_written :data {:memory :watched}} :within-s 20 :of-job true}]
+   :after [[:body-near [20.5 0 20.5] 1.5]]}
+  {:name "go-to-lit-arrival-quiet"
+   :blocks [[:fill [9 -1 9] [23 -1 23] "sea_lantern"]]
+   :act [[:job (jobs.movement.go-to {:pos #xyz [20 0 20] :range 0})]]
+   :expect [{:no-event {:kind :memory_written :data {:memory :watched}} :for-s 12}]
+   :after [[:body-near [20.5 0 20.5] 1.5]]}
+  {:name "attack-cow-lit-no-scan"
+   :blocks [[:fill [9 -1 9] [23 -1 23] "sea_lantern"]]
+   :act [[:summon "cow" [12.5 0 17.5] "{NoAI:1b}"]
+         [:job (jobs.combat.attack {:targets "cow" :radius 16})]]
+   :expect [{:no-event {:kind :memory_written :data {:memory :watched}} :for-s 12}]}
+  {:name "attack-zombie-dark-scans-between-swings"
+   :act [[:summon "zombie" [12.5 0 17.5] "{NoAI:1b,Health:200f,attributes:[{id:\"minecraft:max_health\",base:200}]}"]
+         [:job (jobs.combat.attack {:targets "zombie" :radius 16})]]
+   :expect [{:event {:source :job :kind :memory_written :data {:memory :watched}} :within-s 12 :of-job true}]}]}

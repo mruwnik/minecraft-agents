@@ -1,7 +1,8 @@
 ;; engine.jobs.watch (card 943cac28): a digging body looks round so the view cone sees danger. A 1-wide strip tunnel in
 ;; a stone block, the body at its open end facing north, a creeper (NoAI, so it never blows) behind it in the corridor.
 ;; Lit corridor: the creeper is made known by the first look round (about 1-2 s) and the hostile-near reflex fires.
-;; Dark corridor: a creeper 6 behind stays unseen (a mob in the dark is seen only within 4); 3 behind it is seen.
+;; Dark corridor: a creeper 6 behind stays unseen (a mob in the dark is seen only within 4); 3 behind it is known at
+;; once (the body senses it within 4 on its own), so the hostile-near reflex fires before any look: there is no watch.saw.
 ;; Hand-run first on 2026-10-05 in a private area (see the card), not yet run by the runner.
 {:defaults
  {:tags [:hostile :mining :watch]
@@ -26,7 +27,7 @@
    :act [[:summon "creeper" [16.5 0 29.5] "{NoAI:1b}"]
          [:job (jobs.gather.mine {:block "diamond_ore" :direction :n :tunnel-length 12 :count 1})]]
    :expect [{:no-event {:kind :watch.saw} :for-s 12}]}
-  {:name "dark-creeper-3-behind-seen"
+  {:name "dark-creeper-3-behind-reflex-at-once"
    :act [[:summon "creeper" [16.5 0 29.5] "{NoAI:1b}"]
          [:job (jobs.gather.mine {:block "diamond_ore" :direction :n :tunnel-length 12 :count 1})]]
-   :expect [{:event {:kind :watch.saw :data {:name "creeper"}} :within-s 6}]}]}
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 6}]}]}
