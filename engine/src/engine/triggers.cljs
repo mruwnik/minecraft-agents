@@ -8,6 +8,7 @@
             [engine.jobs.util :as u]
             [engine.triggers.suffocating :as suffocating]
             [engine.triggers.burning :as burning]
+            [engine.triggers.wedged :as wedged]
             [engine.triggers.door-left :as door-left]
             [engine.triggers.hungry :as hungry]
             [engine.triggers.pen-gate :as pen-gate]
@@ -111,6 +112,6 @@
   "Every trigger by name, listed in the order a survival scenario registers
   them (the register is ordered by the scenario, not by this map)."
   (into {} (map (juxt :name identity))
-        [suffocating/suffocating burning/burning hostile-near health-low hungry/hungry
+        [suffocating/suffocating burning/burning wedged/wedged hostile-near health-low hungry/hungry
          night-unsafe/trigger shut-in-by-day/trigger player-sleeping-nearby/trigger stuck/stuck died/died pen-gate/trigger
          door-left/trigger inventory-nearly-full scaffold-left/trigger tidy-pending/trigger mounted/trigger player-joined/trigger]))
