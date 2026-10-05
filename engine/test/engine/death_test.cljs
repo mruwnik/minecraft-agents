@@ -8,90 +8,18 @@
             [engine.memory :as mem]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [engine.triggers.died :as died]
-            [engine.value :as value]))
+            [engine.triggers.died :as died]))
 
-;; ---------------------------------------------------------------- the value
+;; The value and cost functions are engine.jobs.value (jobs_value_test); route danger engine.jobs.danger.
 
-(def junk [{:name "wheat_seeds" :count 64} {:name "dirt" :count 64} {:name "cobblestone" :count 64}
-           {:name "oak_sapling" :count 3} {:name "stick" :count 12} {:name "dandelion" :count 2}])
-
-(def iron-kit [{:name "iron_pickaxe" :count 1} {:name "iron_chestplate" :count 1}
-               {:name "bow" :count 1} {:name "cooked_beef" :count 20}])
-
-(def netherite-kit [{:name "netherite_chestplate" :count 1}
-                    {:name "diamond_sword" :count 1 :enchants [{:name "sharpness" :lvl 5}]}
-                    {:name "stone_pickaxe" :count 1 :nbt {:Damage 0}}])
-
-(deftest inventory-value-tiers
-  (are [inventory level expected] (= expected (value/inventory-value inventory level))
-    [] 0 0
-    junk 0 0
-    iron-kit 0 16
-    netherite-kit 0 75
-    netherite-kit 10 80
-    junk 4 2
-    [{:name "stone_pickaxe" :count 1 :enchants []}] 0 1))
-
-(deftest inventory-value-counts-metals-per-item
-  (are [n expected] (= expected (value/inventory-value [{:name "iron_ingot" :count n}] 0))
-    1 2
-    3 6
-    8 16
-    32 64))
-
-(deftest inventory-value-adds-stacks-of-one-name
-  (is (= (value/inventory-value [{:name "raw_iron" :count 24}] 0)
-         (value/inventory-value [{:name "raw_iron" :count 4} {:name "raw_iron" :count 20}] 0)
-         48)))
+(def junk
+  "A pile too small to walk 20 blocks for: a few dirt and seeds."
+  [{:name "wheat_seeds" :count 5} {:name "dirt" :count 3}])
 
 (def death-pile-of-the-field-report
   [{:name "raw_iron" :count 4 :slot 17} {:name "raw_iron" :count 20 :slot 18}
    {:name "cobblestone" :count 64} {:name "cobblestone" :count 36}
    {:name "stone_pickaxe" :count 1} {:name "oak_planks" :count 29}])
-
-(deftest a-pile-of-raw-iron-outweighs-two-hostiles-and-a-walk
-  (is (> (value/inventory-value death-pile-of-the-field-report 0)
-         (value/retrieval-cost {:x 50 :y 40 :z 3} {:x 20 :y 66 :z 2}
-                               [{:x 52 :y 40 :z 3} {:x 55 :y 40 :z 3}] "mob" 1500))))
-
-(deftest inventory-value-treats-unknown-items-as-junk
-  (is (= 0 (value/inventory-value [{:name "mystery_item" :count 1}] 0))))
-
-;; ----------------------------------------------------------------- the cost
-
-(def here {:x 0 :y 64 :z 0})
-
-(defn cost [& {:keys [death now hostiles cause elapsed]
-               :or {death here now here hostiles [] cause "fall" elapsed 0}}]
-  (value/retrieval-cost death now hostiles cause elapsed))
-
-(deftest retrieval-cost-grows-with-distance
-  (is (= 0.0 (cost)))
-  (is (= 10.0 (cost :now {:x 100 :y 64 :z 0})))
-  (is (< (cost :now {:x 10 :y 64 :z 0}) (cost :now {:x 50 :y 64 :z 0}))))
-
-(deftest retrieval-cost-counts-hostiles-near-the-death-point-only
-  (let [near {:x 10 :y 64 :z 0}
-        far {:x 40 :y 64 :z 0}]
-    (is (= 10.0 (cost :hostiles [near])))
-    (is (= 20.0 (cost :hostiles [near near])))
-    (is (= 0.0 (cost :hostiles [far])))))
-
-(deftest retrieval-cost-grows-as-the-window-closes
-  (is (< (cost :elapsed 0) (cost :elapsed 60000) (cost :elapsed 240000) (cost :elapsed 299000))))
-
-(deftest retrieval-cost-is-infinite-at-the-end-of-the-window
-  (is (= js/Infinity (cost :elapsed 300000)))
-  (is (= js/Infinity (cost :elapsed 400000))))
-
-(deftest retrieval-cost-is-infinite-when-the-drops-are-unreachable-by-cause
-  (are [cause] (= js/Infinity (cost :cause cause))
-    "lava" "fire" "void" "Lava" :lava "in_fire" "out_of_world"))
-
-(deftest retrieval-cost-is-infinite-for-an-unknown-cause-without-a-position
-  (is (= js/Infinity (value/retrieval-cost nil here [] nil 0)))
-  (is (= 0.0 (cost :cause nil)) "an unknown cause with a position is fine"))
 
 ;; --------------------------------------------------------------- the trigger
 
@@ -185,7 +113,7 @@
           (is (= [] (tu/walk-calls p)))
           (is (= [] (calls p "collect")))
           (is (= :skip (:decision (recovered eng))))
-          (is (= 0 (:value (recovered eng)))))))))
+          (is (< (:value (recovered eng)) (:cost (recovered eng)))))))))
 
 (deftest recover-drops-skips-when-the-cause-was-lava
   (async done
@@ -476,6 +404,75 @@
           (await (run-until-empty eng 5))
           (is (= [:abandoned] (map :decision (decided-events seen))))
           (is (seq (:text (first (decided-events seen))))))))))
+
+;; ------------------------------------------- value against cost, overrides, the decision text
+
+(def zombie-by-the-way
+  "A zombie 3 blocks off the walk to the death point, 15 from the body: no yield, but a danger on the way."
+  {:id 7 :name "zombie" :kind "hostile" :pos {:x 15.5 :y 64 :z 3.5}})
+
+(defn fetching-events [seen] (filter #(= :recover-drops.fetching (:kind %)) @seen))
+
+(defn pile-drops [items]
+  (map-indexed (fn [i {:keys [name count]}] {:id (+ 100 i) :name "item" :kind "item" :pos {:x 20 :y 64 :z 0}
+                                             :item {:name name :count count}})
+               items))
+
+(deftest recover-drops-fetches-the-field-report-pile-past-a-zombie
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:floor tu/walk-floor :entities (conj (vec (pile-drops death-pile-of-the-field-report))
+                                                                                zombie-by-the-way)})]
+          (die! eng {:pos death-pos :inventory death-pile-of-the-field-report})
+          (core/submit! eng job {})
+          (loop [n 0]
+            (when (and (< n 30) (empty? (fetching-events seen)))
+              (await (core/tick! eng))
+              (recur (inc n))))
+          (swap! (fake/state p) update :entities #(filterv (fn [e] (not= "hostile" (:kind e))) %))
+          (await (run-until-empty eng 20))
+          (is (= :collected (:decision (recovered eng))))
+          (is (= [death-pos] (tu/walked-to eng)))
+          (let [text (:text (first (fetching-events seen)))]
+            (is (re-find #"raw_iron" text) "the main item is named")
+            (is (re-find #"zombie" text) "the danger on the way is named")
+            (is (re-find #"walk" text))))))))
+
+(deftest recover-drops-value-overrides-can-make-a-pile-worthless
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities drops})]
+          (die! eng {:pos death-pos :inventory iron-pile})
+          (core/submit! eng (list 'jobs.survival.recover-drops {:value-overrides {"raw_iron" 0}}) {})
+          (await (run-until-empty eng 5))
+          (is (= [] (tu/walk-calls p)))
+          (is (= :skip (:decision (recovered eng))))
+          (is (= 0 (:value (recovered eng)))))))))
+
+(deftest recover-drops-danger-overrides-can-make-a-zombie-too-dangerous
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:floor tu/walk-floor :entities (conj drops zombie-by-the-way)})]
+          (die! eng {:pos death-pos :inventory diamonds})
+          (core/submit! eng (list 'jobs.survival.recover-drops {:danger-overrides {"zombie" 1000}}) {})
+          (await (run-until-empty eng 5))
+          (is (= [] (tu/walk-calls p)))
+          (is (= :skip (:decision (recovered eng))))
+          (is (re-find #"zombie" (:text (first (decided-events seen))))))))))
+
+(deftest recover-drops-ignores-overrides-that-are-not-maps-and-says-so
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:floor tu/walk-floor :entities drops})]
+          (die! eng {:pos death-pos :inventory diamonds})
+          (core/submit! eng (list 'jobs.survival.recover-drops {:value-overrides "lots"}) {})
+          (await (run-until-empty eng 10))
+          (is (= :collected (:decision (recovered eng))))
+          (is (seq (filter #(= :recover-drops.bad-overrides (:kind %)) @seen))))))))
 
 ;; ------------------------------------------- a job does not survive a death
 

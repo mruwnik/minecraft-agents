@@ -1,15 +1,22 @@
 (ns jobs.survival.recover-drops
-  (:require [engine.ctx :as ctx]
+  (:require [clojure.string :as str]
+            [engine.ctx :as ctx]
+            [engine.jobs.danger :as danger]
             [engine.jobs.reach :as reach]
             [engine.jobs.util :as u]
+            [engine.jobs.value :as jv]
             [engine.triggers.died :as died]
             [engine.value :as value]))
 
 (def doc
   "After a death, go back for the drops when they are worth it. Round: take
   the latest :died entry with no newer :recovered. Skip (a :recovered entry
-  with :decision :skip) when engine.value/inventory-value of what was carried
-  is at most engine.value/retrieval-cost plus :margin. Otherwise walk to the
+  with :decision :skip) when engine.jobs.value/item-value of what was carried (with :value-overrides, plus 5 a level
+  of experience) is at most engine.jobs.value/fetch-cost plus :margin: a trip of 10, 0.3 a block of the straight
+  distance, 10 a point of engine.jobs.danger/route-danger along engine.jobs.danger/straight-route past the hostiles
+  the body sees (with :danger-overrides, after its armour), infinite when lava, fire or the void took the pile or the
+  walk would end after the despawn. A fetch emits recover-drops.fetching, a skip recover-drops.decided; both texts give
+  the value, the cost and their main parts. Otherwise walk to the
   death point (jobs.movement.go-to), then collect the items of the pile
   (the carried item names) it can see within :collect-radius, 10 as a pile
   rolls up to 8 blocks on open ground (jobs.forestry.collect-drops; never other items, never ones out of
@@ -30,7 +37,9 @@
   the cut still counts.")
 
 (def args
-  {:margin {:doc "added to the retrieval cost before comparing it to the value" :default 0}
+  {:margin {:doc "added to the fetch cost before comparing it to the value" :default 0}
+   :value-overrides {:doc "engine.jobs.value/item-value overrides, a map: item name or group (ore tool armor food block unknown) -> worth of one item, or {:times n}; e.g. {\"raw_iron\" 500}" :default {}}
+   :danger-overrides {:doc "engine.jobs.danger/route-danger overrides, a map: mob name -> threat in points of damage before armour, or {:times n}; e.g. {\"creeper\" 100 \"zombie\" 0}" :default {}}
    :danger-radius {:doc "a hostile this close makes the job yield without acting" :default 8}
    :collect-radius {:doc "collect the pile's drops within this many blocks of the death point (a pile on open ground rolls 6-8 out)" :default 10}})
 
@@ -47,9 +56,25 @@
 
 (defn finite [n] (if (js/isFinite n) n :infinite))
 
-(defn decision-text [decision {:keys [value cost reason items]} margin]
+(defn round1 [n] (/ (js/Math.round (* 10 n)) 10))
+
+(defn why-text
+  "The value and the cost with their main parts: \"value 3058.5 (24 raw_iron 2880, ...), cost 31 (trip 10, walk 6,
+  danger 15: zombie 1.5)\"."
+  [{:keys [value cost top-items parts reason top-mobs]} margin]
+  (str "value " (round1 value)
+       (when (seq top-items) (str " (" (str/join ", " (map (fn [{:keys [name count value]}] (str count " " name " " (round1 value))) top-items)) ")"))
+       ", cost " (if (= :infinite cost) (str "infinite (" (name (or reason :unknown)) ")") (round1 cost))
+       (when (seq parts)
+         (str " (" (str/join ", " (map (fn [[k n]] (str (name k) " " (round1 n))) parts))
+              (when (seq top-mobs) (str ": " (str/join ", " (map (fn [{:keys [name danger]}] (str name " " (round1 danger))) top-mobs))))
+              ")"))
+       (when (and (number? margin) (not (zero? margin))) (str " + margin " margin))))
+
+(defn decision-text [decision {:keys [reason items] :as decided} margin]
   (case decision
-    :skip (str "skip: value " value " <= cost " (if (= :infinite cost) "infinite" (.toFixed cost 1)) " (+ margin " margin ")")
+    :skip (str "skip: " (why-text decided margin))
+    :fetch (str "fetch: " (why-text decided margin))
     :collected (str "collected " items " items")
     :abandoned (str "abandoned: " (name (or reason :unknown)))))
 
@@ -59,7 +84,7 @@
   (let [pos (:pos (:data (died/unrecovered-death (ctx/view c))))]
     (ctx/remember! c :recovered (merge {:decision decision} fields) recovered-policy)
     (ctx/emit! c :recover-drops.decided :info
-               (assoc (select-keys fields [:value :cost :reason :items])
+               (assoc (select-keys fields [:value :cost :reason :items :parts :top-items :top-mobs])
                       :decision decision :pos pos
                       :text (decision-text decision fields (:margin (:args c)))))
     :done))
@@ -92,15 +117,43 @@
   (let [m (ctx/mem c)]
     (ctx/remember! c :recover-trip (select-keys m [:death-t :decided :baseline :phase]) trip-policy)))
 
-(defn entity-positions [p radius kind max]
-  (map (fn [e] (u/pos-of (.-pos e))) (array-seq (.entities p #js {:radius radius :kind kind :max max}))))
+(def xp-per-level "Worth of one experience level carried at the death (the game drops a few levels' worth)." 5)
+(def top-n 3)
+
+(defn seen-hostiles
+  "The hostiles the body sees (sensing's visible field), as a player would: none heard or known through walls."
+  [p]
+  (filter #(true? (.-visible %)) (array-seq (.entities p #js {:radius 64 :kind "hostile" :max 32}))))
+
+(defn overrides-arg
+  "The override map of arg k, or {} with a recover-drops.bad-overrides warn when it is not a map."
+  [c k]
+  (let [o (get (:args c) k)]
+    (cond
+      (nil? o) {}
+      (map? o) o
+      :else (do (ctx/emit! c :recover-drops.bad-overrides :warn
+                           {:arg k :got (pr-str o) :text (str "recover-drops: " (name k) " must be a map such as {\"raw_iron\" 500}; ignored " (pr-str o))})
+                {}))))
 
 (defn estimate
-  "{:value :cost} of recovering the drops of the :died data."
+  "{:value :cost :parts :reason :top-items :top-mobs} of recovering the drops of the :died data (cost js/Infinity when
+  they cannot be fetched)."
   [c {:keys [pos inventory cause experience]} elapsed]
-  (let [p (:primitives c)]
-    {:value (value/inventory-value inventory (:level experience))
-     :cost (value/retrieval-cost pos (u/self-pos c) (entity-positions p 64 "hostile" 32) cause elapsed)}))
+  (let [p (:primitives c)
+        here (u/self-pos c)
+        worth (jv/item-value inventory :overrides (overrides-arg c :value-overrides))
+        route (when pos (danger/straight-route p here pos))
+        threat (if route
+                 (danger/route-danger p route (seen-hostiles p) :overrides (overrides-arg c :danger-overrides))
+                 {:danger 0 :mobs []})
+        cost (jv/fetch-cost {:distance (when pos (u/dist here pos)) :danger (:danger threat) :elapsed-ms elapsed :cause cause})]
+    (cond-> {:value (+ (:value worth) (* xp-per-level (or (:level experience) 0)))
+             :cost (:cost cost)
+             :top-items (mapv #(select-keys % [:name :count :value]) (take top-n (:items worth)))}
+      (:parts cost) (assoc :parts (:parts cost))
+      (:reason cost) (assoc :reason (:reason cost))
+      (seq (:mobs threat)) (assoc :top-mobs (mapv #(select-keys % [:name :danger]) (take top-n (:mobs threat)))))))
 
 (defn ^:async go! [c pos]
   (let [r (await (ctx/call-child c :go 'jobs.movement.go-to {:pos pos :range arrive-range}))]
@@ -148,11 +201,15 @@
       (and (nil? (:decided (ctx/mem c))) (settling? c entry)) :continue
       :else
       (let [decided (or (:decided (ctx/mem c))
-                        (let [e (estimate c (:data entry) elapsed)]
-                          (ctx/update-mem! c assoc :decided {:value (:value e) :cost (finite (:cost e))}
-                                           :baseline (carried-counts c))
+                        (let [e (update (estimate c (:data entry) elapsed) :cost finite)
+                              fetch? (> (:value e) (+ (if (= :infinite (:cost e)) js/Infinity (:cost e)) margin))]
+                          (ctx/update-mem! c assoc :decided e :baseline (carried-counts c))
                           (save-trip! c)
-                          {:value (:value e) :cost (finite (:cost e))}))
+                          (when fetch?
+                            (ctx/emit! c :recover-drops.fetching :info
+                                       (assoc (select-keys e [:value :cost :parts :top-items :top-mobs])
+                                              :pos (:pos (:data entry)) :text (decision-text :fetch e margin))))
+                          e))
             pos (:pos (:data entry))]
         (cond
           (<= (:value decided) (+ (if (= :infinite (:cost decided)) js/Infinity (:cost decided)) margin))
