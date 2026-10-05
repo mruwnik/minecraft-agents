@@ -1,11 +1,14 @@
 (ns jobs.survival.eat
   (:require [engine.ctx :as ctx]
+            [engine.foods :as foods]
             [engine.jobs.util :as u]))
 
 (def doc
   "Eat the best food carried, one item per round, until food reaches :until
-  or nothing edible is left. Rotten flesh, spider eyes, pufferfish and
-  poisonous potatoes are not food unless :allow-bad is set. Writes a :fed
+  or nothing edible is left. Foods come from minecraft-data (engine.foods): best by hunger points then saturation.
+  Harmful foods (rotten flesh, spider eyes, pufferfish, poisonous potatoes, raw chicken) need :allow-bad; golden
+  apples and golden carrots are eaten only when named or at low health; chorus fruit and suspicious stew only when
+  named. A named item that is not food is refused at once (:not-food). Writes a :fed
   entry (item, food after) for each meal.")
 
 (def args
@@ -13,63 +16,58 @@
    :until {:doc "keep eating while food is below this (of 20)" :default 18}
    :allow-bad {:doc "also eat the harmful foods when nothing else is carried" :default false}})
 
-(def food-points
-  "Hunger points restored, by item name."
-  {"cooked_beef" 8 "cooked_porkchop" 8 "pumpkin_pie" 8 "rabbit_stew" 10
-   "cooked_mutton" 6 "cooked_chicken" 6 "cooked_salmon" 6 "mushroom_stew" 6
-   "beetroot_soup" 6 "golden_carrot" 6 "cooked_rabbit" 5 "cooked_cod" 5
-   "bread" 5 "baked_potato" 5 "apple" 4 "carrot" 3 "beef" 3 "porkchop" 3
-   "rabbit" 3 "mutton" 2 "chicken" 2 "cod" 2 "salmon" 2 "melon_slice" 2
-   "sweet_berries" 2 "glow_berries" 2 "cookie" 2 "beetroot" 1 "potato" 1
-   "dried_kelp" 1})
-
-(def bad-food-points
-  "Harmful foods, eaten only with :allow-bad."
-  {"rotten_flesh" 4 "spider_eye" 2 "pufferfish" 1 "poisonous_potato" 2})
-
-(def edible (set (keys food-points)))
-
 (def fed-policy {:cap 20 :ttl (* 6 60 60 1000)})
 
-(defn points
-  "Hunger points of item, or nil when it is not eaten under allow-bad."
-  [allow-bad item]
-  (or (food-points item) (when allow-bad (bad-food-points item))))
+(defn eaten?
+  "Is item eaten for these args: the :item when named (precious and named-only foods included), else by the
+  unnamed rules: not harmful unless allow-bad, and precious only at low health."
+  [allow-bad item health name]
+  (and (foods/food? name)
+       (or (and item (= item name) (or allow-bad (not (contains? foods/harmful name))))
+           (and (nil? item)
+                (not (contains? foods/named-only name))
+                (or allow-bad (not (contains? foods/harmful name)))
+                (or (not (contains? foods/precious name)) (< health foods/low-health))))))
 
 (defn best-food
-  "The name of the carried item with the most hunger points (ties by
-  carrying order), or nil. Only item when given."
-  [inventory allow-bad item]
+  "The name of the carried item to eat, or nil: the common foods by most hunger points then most saturation, then
+  precious ones, then harmful ones (allow-bad). Ties by carrying order. Only item when given."
+  [inventory allow-bad item health]
   (->> inventory
        (map :name)
        (filter #(or (nil? item) (= item %)))
-       (filter #(points allow-bad %))
-       (sort-by (fn [n] [(contains? #{"golden_carrot"} n) (- (points allow-bad n))]))
+       (filter #(eaten? allow-bad item health %))
+       (sort-by (fn [n] [(cond (contains? foods/harmful n) 2 (contains? foods/precious n) 1 :else 0)
+                         (- (foods/points n)) (- (foods/saturation n))]))
        first))
 
 (defn carried-best [c]
-  (let [{:keys [item allow-bad]} (:args c)]
-    (best-food (u/inventory (:primitives c)) allow-bad item)))
+  (let [{:keys [item allow-bad]} (:args c)
+        self (.self (:primitives c))]
+    (best-food (u/inventory (:primitives c)) allow-bad item (.-health self))))
 
-(defn refused-bad-item
-  "The :item when it is a harmful food named without :allow-bad, else nil."
+(defn refusal
+  "[reason text] when the :item is not eaten at all (not a food, or harmful without :allow-bad), else nil."
   [c]
   (let [{:keys [item allow-bad]} (:args c)]
-    (when (and item (not allow-bad) (contains? bad-food-points item))
-      item)))
+    (cond
+      (nil? item) nil
+      (not (foods/food? item)) [:not-food (str item " is not food")]
+      (and (not allow-bad) (contains? foods/harmful item))
+      [:bad-food (str item " is harmful food: pass :allow-bad true to eat it")])))
 
-(defn refuse-bad-item! [c item]
-  (ctx/emit! c :refused :warn {:reason :bad-food :item item
-                               :text (str item " is harmful food: pass :allow-bad true to eat it")})
-  (ctx/result! c {:ate false :reason :bad-food :item item})
-  :done)
+(defn refuse! [c [reason text]]
+  (let [item (:item (:args c))]
+    (ctx/emit! c :refused :warn {:reason reason :item item :text text})
+    (ctx/result! c {:ate false :reason reason :item item})
+    :done))
 
 (defn check
-  "A named harmful item without :allow-bad passes so the round can refuse it. Else hungrier than :until and food carried;
+  "A named item that is not eaten (not food, harmful without :allow-bad) passes so the round can refuse it. Else hungrier than :until and food carried;
   else it waits with reason :not-hungry or :no-food."
   [c]
   (cond
-    (refused-bad-item c) true
+    (refusal c) true
     (>= (.-food (.self (:primitives c))) (:until (:args c))) (ctx/wait c :not-hungry)
     (nil? (carried-best c)) (ctx/wait c :no-food)
     :else true))
@@ -77,8 +75,8 @@
 (defn ^:async round [c]
   (let [{:keys [until]} (:args c)
         best (carried-best c)]
-    (if-let [bad (refused-bad-item c)]
-      (refuse-bad-item! c bad)
+    (if-let [r (refusal c)]
+      (refuse! c r)
       (if (or (nil? best) (>= (.-food (.self (:primitives c))) until))
         :done
         (let [_ (await (ctx/act c :equip #js {:item best}))

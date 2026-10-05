@@ -5,6 +5,7 @@
             [engine.jobs.util :as u]
             [engine.path.near :as near]
             [engine.triggers.hungry :as hungry]
+            [engine.foods :as foods]
             [jobs.survival.eat :as eat]))
 
 (def doc
@@ -54,7 +55,7 @@
 
 (def harvest-items
   "What the drops of a harvest or a kill may be called."
-  (into eat/edible #{"wheat" "wheat_seeds" "beetroot_seeds" "poisonous_potato"}))
+  (into (set (filter foods/edible? (keys foods/table))) #{"wheat" "wheat_seeds" "beetroot_seeds" "poisonous_potato"}))
 
 (def hungry-policy {:cap 10 :ttl (* 60 60 1000)})
 
@@ -189,8 +190,8 @@
 
 (defn best-in-chest [items]
   (->> items
-       (filter #(eat/food-points (.-name %)))
-       (sort-by #(- (eat/food-points (.-name %))))
+       (filter #(foods/edible? (.-name %)))
+       (sort-by #(- (foods/points (.-name %))))
        first))
 
 (defn wheat-to-take

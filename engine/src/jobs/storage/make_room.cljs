@@ -6,7 +6,7 @@
             [engine.value :as value]
             [jobs.storage.deposit :as deposit]
             [jobs.survival.dig-in :as dig-in]
-            [jobs.survival.eat :as eat]))
+            [engine.foods :as foods]))
 
 (def doc
   "Make room in a nearly full inventory (the reflex of inventory-nearly-full),
@@ -81,8 +81,8 @@
   (let [totals (totals inventory)
         names (keys totals)
         food (->> names
-                  (filter #(and (not (protected? %)) (eat/edible %)))
-                  (sort-by (juxt #(- (eat/food-points %)) identity)))
+                  (filter #(and (not (protected? %)) (foods/edible? %)))
+                  (sort-by (juxt #(- (foods/points %)) identity)))
         blocks (filter #(contains? totals %) dig-in/building-blocks)]
     (merge (zipmap names (repeat 0))
            (select-keys totals (filter protected? names))
@@ -108,7 +108,7 @@
         budgets (into {} (map (fn [[n total]] [n (- total (get keep n 0))])) totals)
         candidates (->> inventory
                         (map #(assoc (select-keys % [:name :count :slot]) :worth (value/item-worth %)))
-                        (remove #(or (protected? (:name %)) (eat/edible (:name %))))
+                        (remove #(or (protected? (:name %)) (foods/edible? (:name %))))
                         (filter #(< (:worth %) max-worth))
                         (sort-by (juxt :worth #(get recency (:name %) 0) :count :slot)))]
     (first (reduce (fn [[chosen left] s]

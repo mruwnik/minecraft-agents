@@ -1,6 +1,6 @@
 (ns engine.triggers.hungry
   "The hungry trigger, and the condition the get-food job shares with it."
-  (:require [jobs.survival.eat :as eat]))
+  (:require [engine.foods :as foods]))
 
 (def default-food 6)
 
@@ -19,14 +19,14 @@
 
 (def rare-food
   "Foods kept for emergencies; never eaten just to top up."
-  #{"golden_carrot" "golden_apple" "enchanted_golden_apple"})
+  foods/precious)
 
 (defn top-up?
   "Health is below full, food is below top-up-food and a common food is
   carried (names: the carried item names): eat to regenerate like a player."
   [food health carried-names]
   (boolean (and (< health 20) (< food top-up-food)
-                (some #(and (eat/edible %) (not (rare-food %))) carried-names))))
+                (some #(and (foods/edible? %) (not (rare-food %))) carried-names))))
 
 (defn carried-names [self]
   (map #(.-name %) (array-seq (.-inventory self))))

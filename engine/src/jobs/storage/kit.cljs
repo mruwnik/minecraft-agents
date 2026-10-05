@@ -7,7 +7,7 @@
             [jobs.items.craft]
             [jobs.storage.deposit :as deposit]
             [jobs.storage.withdraw]
-            [jobs.survival.eat :as eat]))
+            [engine.foods :as foods]))
 
 (def doc
   "Take a kit out of the chest: :spare + 1 of each tool kind in :tools (any tier;
@@ -57,7 +57,7 @@
   "Predicate on item names for a kind: a tool kind string, or :food."
   [kind]
   (if (= :food kind)
-    #(contains? eat/food-points %)
+    foods/edible?
     #(kind-of? kind %)))
 
 (defn count-of
@@ -78,7 +78,7 @@
   "Sort key, higher is better: material tier of a tool name, food points of a food."
   [kind name]
   (if (= :food kind)
-    (get eat/food-points name 0)
+    (or (foods/points name) 0)
     (get combat/material-rank (first (str/split name #"_")) 0)))
 
 (defn plan

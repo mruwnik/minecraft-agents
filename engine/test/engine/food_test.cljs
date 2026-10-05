@@ -147,6 +147,67 @@
           (await (run-until-empty eng 10))
           (is (= 9 (food p))))))))
 
+(deftest eat-eats-foods-the-old-table-lacked
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [item ["honey_bottle" "tropical_fish" "chorus_fruit" "suspicious_stew"]]
+          (let [{:keys [eng p]} (setup {:self {:food 4} :inventory [{:name item :count 1}]})]
+            (core/submit! eng (list 'jobs.survival.eat {:item item}) {})
+            (await (core/tick! eng))
+            (is (= [item] (call-args p "eat" "item")))))))))
+
+(deftest eat-keeps-precious-food-for-a-named-meal-or-low-health
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:food 4 :health 20} :inventory [{:name "golden_apple" :count 1}]})]
+          (core/submit! eng '(jobs.survival.eat) {})
+          (is (nil? (core/tick! eng)) "healthy and unnamed: not eaten")
+          (is (= [] (calls p "eat"))))
+        (let [{:keys [eng p]} (setup {:self {:food 4 :health 20} :inventory [{:name "golden_apple" :count 1}]})]
+          (core/submit! eng '(jobs.survival.eat {:item "golden_apple"}) {})
+          (await (core/tick! eng))
+          (is (= ["golden_apple"] (call-args p "eat" "item")) "named"))
+        (let [{:keys [eng p]} (setup {:self {:food 4 :health 4} :inventory [{:name "golden_carrot" :count 1}]})]
+          (core/submit! eng '(jobs.survival.eat) {})
+          (await (core/tick! eng))
+          (is (= ["golden_carrot"] (call-args p "eat" "item")) "low health"))
+        (let [{:keys [eng p]} (setup {:self {:food 4 :health 4}
+                                      :inventory [{:name "golden_carrot" :count 1} {:name "bread" :count 1}]})]
+          (core/submit! eng '(jobs.survival.eat) {})
+          (await (core/tick! eng))
+          (is (= ["bread"] (call-args p "eat" "item")) "a common food still goes first"))))))
+
+(deftest eat-raw-chicken-is-harmful-food
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:food 4} :inventory [{:name "chicken" :count 2}]})]
+          (core/submit! eng '(jobs.survival.eat {:item "chicken"}) {})
+          (await (core/tick! eng))
+          (is (= [] (calls p "eat")))
+          (is (= [] (:list (core/state eng)))))))))
+
+(deftest eat-a-named-non-food-is-refused-at-once-with-a-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:food 4} :inventory [{:name "cobblestone" :count 3}]})]
+          (core/submit! eng '(jobs.survival.eat {:item "cobblestone"}) {})
+          (await (core/tick! eng))
+          (is (= [] (:list (core/state eng))))
+          (is (= [] (calls p "eat")))
+          (is (= 1 (count (filter #(and (= :refused (:kind %)) (= :not-food (:reason %))) @seen)))))))))
+
+(deftest eat-chooses-by-saturation-when-points-tie
+  (is (= "cooked_mutton" (eat/best-food [{:name "cooked_chicken"} {:name "cooked_mutton"}] false nil 20)))
+  (is (= "cooked_mutton" (eat/best-food [{:name "honey_bottle"} {:name "cooked_mutton"}] false nil 20))))
+
+(deftest golden-apples-are-rare-for-the-top-up-trigger
+  (is (not (hungry/top-up? 16 8 ["golden_apple"])))
+  (is (hungry/top-up? 16 8 ["honey_bottle"])))
+
 ;; ---------------------------------------------------------------- get-food
 
 (deftest get-food-eats-first
@@ -478,4 +539,4 @@
     (is (not (holds? {:food 16 :health 8 :inventory [{:name "golden_apple" :count 1}]})))))
 
 (deftest eat-prefers-common-food-over-golden-carrot
-  (is (= "bread" (eat/best-food [{:name "golden_carrot"} {:name "bread"}] false nil))))
+  (is (= "bread" (eat/best-food [{:name "golden_carrot"} {:name "bread"}] false nil 20))))
