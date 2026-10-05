@@ -40,6 +40,7 @@
             [engine.memory :as mem]
             [engine.triggers.stuck :as stuck]
             [engine.world :as world]
+            [clojure.string :as str]
             ["crypto" :as crypto]
             ["path" :as path]))
 
@@ -1175,16 +1176,66 @@
   (try (job-of eng inst) nil
        (catch :default e (ex-message e))))
 
+(defn stale-keys
+  "The arg keys of job sym that its registry entry no longer declares, sorted; nil when none."
+  [registry sym args]
+  (let [entry (get registry sym)]
+    (when (contains? entry :args)
+      (seq (sort-by str (remove (set (keys (:args entry))) (keys args)))))))
+
+(defn strip-form
+  "[form' stale] for a job spec form: every leaf's args without the keys its job no longer declares;
+  stale is [[sym [key ...]] ...]. Forms of an unexpected shape pass through (parse refuses them)."
+  [registry form]
+  (let [head (when (and (seq? form) (seq form)) (first form))
+        parts (rest form)
+        kids (fn [kids] (reduce (fn [[out stale] k] (let [[k2 s2] (strip-form registry k)] [(conj out k2) (into stale s2)]))
+                                [[] []] kids))]
+    (cond
+      (not (symbol? head)) [form []]
+      (#{'seq 'any 'repeat 'hold} head) (let [[out stale] (kids parts)] [(apply list head out) stale])
+      (= 'backoff head) (let [[out stale] (kids (rest parts))] [(apply list head (first parts) out) stale])
+      (not (map? (first parts))) [form []]
+      :else (let [args (first parts)
+                  ks (stale-keys registry head args)]
+              (if ks
+                [(list head (apply dissoc args ks)) [[head (vec ks)]]]
+                [form []])))))
+
+(defn strip-node
+  "[node' stale] for a parsed node, as strip-form does for a form."
+  [registry node]
+  (case (:op node)
+    :leaf (let [ks (stale-keys registry (:job node) (:args node))]
+            [(cond-> node ks (update :args #(apply dissoc % ks))) (if ks [[(:job node) (vec ks)]] [])])
+    :repeat (let [[c stale] (strip-node registry (:child node))] [(assoc node :child c) stale])
+    (let [rs (mapv #(strip-node registry %) (:children node))]
+      [(assoc node :children (mapv first rs)) (into [] (mapcat second) rs)])))
+
+(defn stale-text [stale]
+  (str/join "; " (for [[sym ks] stale] (str sym " " (str/join " " ks)))))
+
 (defn drop-unknown-jobs!
-  "After a restore: drop instances whose job namespace is gone, with a warn."
+  "After a restore: a listed job whose job namespace is gone is dropped with a warn; one whose saved args
+  hold keys its job no longer declares keeps running without them (defaults apply) and is returned in a
+  vector of notices {:job-id :reason :message :data} to raise once restore is done."
   [eng]
-  (doseq [[id inst] (:instances (state eng))
-          :let [problem (unknown-job eng inst)]
-          :when problem]
-    (swap! (:state eng) remove-listed id)
-    (mem/delete-job! (:store eng) id)
-    (emit! eng {:source :job :kind :failed :level :warn :job id :chain [id]
-                :error problem :text (str "dropped on restore: " problem)})))
+  (vec
+   (for [[id inst] (:instances (state eng))
+         :let [problem (unknown-job eng inst)]
+         :let [[node stale] (when-not problem (strip-node (:jobs eng) (:spec inst)))]
+         :when (or problem (seq stale))
+         :let [notice (when-not problem
+                        (swap! (:state eng) assoc-in [:instances id :spec] node)
+                        {:job-id id :reason :stale-args :kind :stale-args
+                         :data {:dropped (mapv (fn [[sym ks]] {:job (str sym) :args (mapv str ks)}) stale)}
+                         :message (str "job " id " restored without args its job no longer accepts (its defaults apply): " (stale-text stale))})]]
+     (do (when problem
+           (swap! (:state eng) remove-listed id)
+           (mem/delete-job! (:store eng) id)
+           (emit! eng {:source :job :kind :failed :level :warn :job id :chain [id]
+                       :error problem :text (str "dropped on restore: " problem)}))
+         notice))))
 
 (defn drop-leftover-reflex-jobs!
   "After a restore: restore dropped the reflex jobs a crash left in saved;
@@ -1204,18 +1255,41 @@
        nil
        (catch :default err (ex-message err))))
 
-(defn drop-unresolved-entries!
-  "After a restore: drop register entries whose trigger or job no longer resolves, with a warn."
+(defn remove-entry [s id]
+  (-> s
+      (update :register #(filterv (fn [x] (not= id (:id x))) %))
+      (update :changes dissoc id)
+      (update :reflex-state dissoc id)))
+
+(defn repair-entries!
+  "After a restore: a register entry whose trigger is gone, or whose job no longer parses even without
+  the args it no longer declares, is dropped; one with only stale args stays, with those args removed (the
+  job's defaults apply). Each is warned (reflex.restore-repaired / :dropped) and returned as a notice
+  {:job-id :reason :kind :message :data} for the caller to raise as a required attention request, so
+  the agent sees a danger reflex that changed. Never silent."
   [eng]
-  (doseq [e (:register (state eng))
-          :let [problem (unresolved-entry eng e)]
-          :when problem]
-    (swap! (:state eng) (fn [s] (-> s
-                                    (update :register #(filterv (fn [x] (not= (:id e) (:id x))) %))
-                                    (update :changes dissoc (:id e))
-                                    (update :reflex-state dissoc (:id e)))))
-    (emit! eng {:source :system :kind :dropped :level :warn :reflex (:id e)
-                :error problem :text (str "reflex " (:id e) " dropped on restore: " problem)})))
+  (vec
+   (for [e (:register (state eng))
+         :let [problem (unresolved-entry eng e)]
+         :when problem
+         :let [id (:id e)
+               [form stale] (strip-form (:jobs eng) (:job e))
+               kept? (and (seq stale)
+                          (some? (get-in eng [:triggers (:trigger e)]))
+                          (nil? (expr/problem (:jobs eng) form)))]]
+     (if kept?
+       (let [text (str "reflex " id " restored without args its job no longer accepts (its defaults apply): " (stale-text stale))]
+         (swap! (:state eng) update :register (fn [r] (mapv #(if (= id (:id %)) (assoc % :job form) %) r)))
+         (emit! eng {:source :system :kind :reflex-repaired :level :warn :reflex id
+                     :dropped (mapv (fn [[sym ks]] {:job (str sym) :args (mapv str ks)}) stale) :text text})
+         {:job-id (str "reflex:" (name id)) :reason :reflex-repaired :kind :reflex-repaired
+          :data {:reflex id :dropped (mapv (fn [[sym ks]] {:job (str sym) :args (mapv str ks)}) stale)}
+          :message text})
+       (let [text (str "reflex " id " DROPPED on restore, the body no longer has it: " problem)]
+         (swap! (:state eng) remove-entry id)
+         (emit! eng {:source :system :kind :dropped :level :warn :reflex id :error problem :text text})
+         {:job-id (str "reflex:" (name id)) :reason :reflex-dropped :kind :reflex-dropped
+          :data {:reflex id :error problem} :message text})))))
 
 (defn create
   "An engine over primitives p with state under dir. Restores engine.edn and
@@ -1280,11 +1354,11 @@
     (set-owner! eng nil)
     (.onBodyEvent primitives #(record-body-event! eng %))
     (drop-leftover-reflex-jobs! eng saved)
-    (drop-unknown-jobs! eng)
-    (drop-unresolved-entries! eng)
-    (doseq [[request-id request] (:attention (state eng))
-            :when (and (:job-id request) (not (some #{(:job-id request)} (:list (state eng)))))]
-      (resolve-attention! eng request-id :job-dropped))
+    (let [notices (into (filterv some? (drop-unknown-jobs! eng)) (repair-entries! eng))]
+      (doseq [[request-id request] (:attention (state eng))
+              :when (and (:job-id request) (not (some #{(:job-id request)} (:list (state eng)))))]
+        (resolve-attention! eng request-id :job-dropped))
+      (doseq [n notices] (request-attention! eng n)))
     ;; Upgrade older snapshots and repair a crash boundary: a parked failed job
     ;; must always have a durable required request before startup replay.
     (doseq [[id failure] (:failed (state eng))

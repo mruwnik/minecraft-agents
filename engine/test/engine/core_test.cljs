@@ -1395,6 +1395,46 @@
       (is (= [:hurt] (mapv :id (:register (core/state again)))))
       (is (some #(and (= :system (:source %)) (= :dropped (:kind %))) @seen)))))
 
+(def stale-registry
+  "The registry after a job dropped its :old arg."
+  (assoc registry 'walk {:check always :round walk-round :args {:pos nil}}))
+
+(defn attention-reasons [eng]
+  (set (map :reason (vals (:attention (core/state eng))))))
+
+(deftest a-restored-register-entry-with-a-stale-arg-is-kept-without-it-and-the-agent-is-told
+  (let [dir (tu/tmp-dir)
+        {:keys [eng]} (setup {} dir)]
+    (core/register-reflex! eng {:trigger :hurt :job '(walk {:pos {:x 1 :y 64 :z 2}})})
+    (swap! (:state eng) update :register
+           (fn [r] (mapv #(if (= :hurt (:id %)) (assoc % :job '(walk {:pos {:x 1 :y 64 :z 2} :old 12 :older 8})) %) r)))
+    (let [[again seen] (restore-with dir stale-registry triggers)
+          entry (first (:register (core/state again)))]
+      (is (= [:hurt] (mapv :id (:register (core/state again)))) "the reflex is kept")
+      (is (= '(walk {:pos {:x 1 :y 64 :z 2}}) (:job entry)) "only the stale args went")
+      (is (some #(and (= :system (:source %)) (= :reflex-repaired (:kind %)) (re-find #":old :older" (:text %))) @seen))
+      (is (= #{:reflex-repaired} (attention-reasons again)) "a required request the agent sees")
+      (is (some #(and (= :reflex-repaired (:kind %)) (= :required (:attention %))) @seen)))))
+
+(deftest a-restored-register-entry-that-cannot-be-kept-raises-an-attention-request
+  (let [dir (tu/tmp-dir)
+        {:keys [eng]} (setup {} dir)]
+    (core/register-reflex! eng {:trigger :never :job '(count)})
+    (let [[again seen] (restore-with dir (dissoc registry 'count) triggers)]
+      (is (= [] (:register (core/state again))))
+      (is (= #{:reflex-dropped} (attention-reasons again)))
+      (is (some #(and (= :dropped (:kind %)) (re-find #"DROPPED" (:text %))) @seen)))))
+
+(deftest a-restored-listed-job-with-a-stale-arg-runs-without-it-and-the-agent-is-told
+  (let [dir (tu/tmp-dir)
+        {:keys [eng]} (setup {} dir)]
+    (core/submit! eng '(walk {:pos {:x 1 :y 64 :z 2}}) {})
+    (swap! (:state eng) assoc-in [:instances "j1" :spec :args :old] 7)
+    (let [[again _] (restore-with dir stale-registry triggers)]
+      (is (= ["j1"] (listed again)))
+      (is (= {:pos {:x 1 :y 64 :z 2}} (get-in (core/state again) [:instances "j1" :spec :args])))
+      (is (= #{:stale-args} (attention-reasons again))))))
+
 (deftest a-child-by-symbol-gets-the-registry-defaults
   (async done
     (tu/run-async done

@@ -856,6 +856,7 @@ resumes first, then the front job after it.
 The list, register and changes are written to `engine.edn` on every change;
 memory as above. On boot both are reloaded, reflex instances are dropped, the
 in-flight job resumes first, and a `:restart` entry is appended.
+A restore never loses a reflex silently. A register entry (or listed job) whose saved job args hold keys its job no longer declares is kept with those keys removed (the job's defaults apply); a `system.reflex-repaired` warn names them and a required attention request (`reason :reflex-repaired`, `:stale-args` for a listed job) is raised, so the agent sees it in its attention list. An entry whose trigger or job is gone is dropped with a `system.dropped` warn (text `DROPPED on restore`) and a `:reflex-dropped` attention request.
 
 **Shutdown** (`core/shutdown!`, called by `main` on SIGINT/SIGTERM before the
 primitives close) rotates the token so the in-flight round's outcome is never
