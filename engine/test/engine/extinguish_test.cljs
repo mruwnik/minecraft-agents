@@ -376,3 +376,14 @@
       (fn ^:async t []
         (let [placed (await (cover-run [{:name "cobblestone" :count 8}] ["1,64,0" "1,63,0"] 4))]
           (is (= [{:pos {:x 1 :y 64 :z 0} :item "cobblestone"}] placed)))))))
+
+(deftest lava-beside-the-feet-under-an-overhang-is-covered
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w {:self {:onFire true} :inventory [{:name "cobblestone" :count 8}]
+                 :blocks (merge (floor 8) {"1,64,0" "lava" "1,65,0" "stone"})}
+              {:keys [eng p]} (setup w)]
+          (core/submit! eng '(jobs.survival.extinguish) {})
+          (dotimes [_ 3] (await (core/tick! eng)))
+          (is (= [{:pos {:x 1 :y 64 :z 0} :item "cobblestone"}] (mapv call-args (calls p "place")))))))))

@@ -1,0 +1,26 @@
+;; jobs.survival.extinguish exposed-lava rule (card 61a0396f item 3): lava under a block that is itself below the feet
+;; is an earlier cover's leftover (no second cover); lava beside the feet at feet level is covered even under an overhang.
+;; Same plot as extinguish-lava-cover.edn: a lava source at [17 1 16] above a one-cell pit [17 0 16].
+{:defaults
+ {:tags [:survival :lava :extinguish]
+  :time :any
+  :plot {:height 10 :floor "stone"}
+  :blocks [[:fill [8 0 8] [24 0 24] "stone"]
+           [:set [16 0 16] "netherrack"]
+           [:set [17 0 16] "air"] [:set [15 0 16] "air"] [:set [16 0 15] "air"] [:set [16 0 17] "air"]
+           [:set [18 1 16] "stone"] [:set [14 1 16] "stone"] [:set [16 1 14] "stone"] [:set [16 1 18] "stone"]]
+  :body {:at [16.5 1 16.5] :effects [["resistance" 600 4]] :inventory [["cobblestone" 8]] :settle-s 8}
+  :act [[:rcon "execute at $BODY run setblock ~1 ~ ~ lava"]
+        [:rcon "execute at $BODY run setblock ~ ~ ~ fire"]
+        [:job (jobs.survival.extinguish {})]]
+  :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}]
+  :limit-s 60}
+ :cases
+ [{:name "open-air-above-covered-once"
+   :after [[:item "cobblestone" 7] [:block [17 1 16] "cobblestone"]]}
+  {:name "pit-lava-one-cover-only"
+   ;; the source flows down into the pit: lava below the cover is no second candidate
+   :after [[:item "cobblestone" 7] [:block [17 1 16] "cobblestone"]]}
+  {:name "overhang-lava-at-feet-level-is-covered"
+   :blocks [[:set [17 2 16] "stone"]]
+   :after [[:block [17 1 16] "cobblestone"] [:item "cobblestone" 7]]}]}

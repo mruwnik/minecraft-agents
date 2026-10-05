@@ -140,11 +140,12 @@
        first))
 
 (defn exposed-lava
-  "The scanned lava cells with an open cell above them (air, water or more lava); one under a block, such as an
-  earlier cover, is no candidate."
-  [p scanned]
+  "The scanned lava cells without a block over them; lava below the feet level under a block, such as an earlier
+  cover, is no candidate. Lava at feet level is one even under an overhang: the body stands beside it."
+  [p feet scanned]
   (remove (fn [{:keys [name pos]}]
             (and (= "lava" name)
+                 (< (:y pos) (:y feet))
                  (let [above (u/block-name p (offset pos 0 1 0))]
                    (not (or (nil? above) (contains? passable above) (= "lava" above))))))
           scanned))
@@ -256,7 +257,7 @@
               (finish c))
 
           (and (not lava?) (< (:covers (ctx/mem c) 0) max-covers) (cover-item p)
-               (let [lava (:pos (adjacent-lava pos (exposed-lava p scanned)))]
+               (let [lava (:pos (adjacent-lava pos (exposed-lava p pos scanned)))]
                  (and lava
                       (nil? (access/trespass-refusal c :place lava))
                       (= "placed" (.-status (await (ctx/act c :place (clj->js {:pos lava :item (cover-item p)}))))))))
