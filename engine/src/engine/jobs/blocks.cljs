@@ -80,10 +80,10 @@
   (fresh-mem (ctx/mem c) pos))
 
 (defn ^:async walk!
-  "One go-to round toward pos (child :walk, range 2). Resolves to :continue; a walk that gives up, or arrives with the
+  "One go-to round toward pos (child :walk, range 3: every cell within 3 of the body's cell is within eye reach). Resolves to :continue; a walk that gives up, or arrives with the
   block still out of reach, is remembered as :unreachable {:from feet :why}, which the check waits on."
   [c pos]
-  (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos pos :range 2}))
+  (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos pos :range 3}))
         res (ctx/child-result c :walk)]
     (when (and (= :done r) (not (and (:arrived res) (in-reach? c pos))))
       (ctx/update-mem! c assoc :unreachable {:from (feet-cell c) :why (if (:arrived res) :out-of-reach (:why res :unreachable))}))

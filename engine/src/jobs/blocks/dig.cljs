@@ -22,7 +22,7 @@
     {:reason :unreachable :pos :why kw}  the go-to child gave up (or arrived with the block still out of reach); the
       wait lasts while the body stands where it gave up, so a body moved by anyone tries again
     {:reason :not-loaded :pos}
-  Out of reach, the round walks within 2 cells (go-to child, which opens and shuts doors). In reach, it holds the
+  Out of reach, the round walks within 3 cells (go-to child, which opens and shuts doors). In reach, it holds the
   best carried tool for the block (tools/equip-for!) and digs through engine.jobs.tidy/dig!, so a dig of another's
   block made with :ignore-zones? is recorded for jobs.survival.restore-broken. With :collect, the next rounds pick up
   the dig's drops (jobs.forestry.collect-drops child, filtered to their names, radius 4).

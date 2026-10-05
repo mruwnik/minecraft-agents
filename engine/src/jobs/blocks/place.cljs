@@ -21,7 +21,7 @@
     {:reason :not-loaded :pos}
     and while a plant is being cleared, the jobs.blocks.dig child's own wait reason.
   A plant, flower or snow layer in the cell (engine.jobs.blocks/clearable) is dug first with a jobs.blocks.dig child
-  (no tool needed, the drop is not collected). Out of reach, the round walks within 2 cells (go-to child). In reach it
+  (no tool needed, the drop is not collected). Out of reach, the round walks within 3 cells (go-to child). In reach it
   places through engine.jobs.tidy/place!, so a block placed in another's zone with :ignore-zones? is recorded for
   jobs.survival.restore-broken. Ends with info blocks.place.done and the result {:placed true|false :pos :item :reason};
   :reason is :placed, :already (the cell holds the block: nothing done), :bad-args (with a blocks.place.declined warn),
