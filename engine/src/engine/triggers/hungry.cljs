@@ -51,8 +51,8 @@
   (reduce + 0 (keep #(when (= "wheat" (.-name %)) (.-count %)) (array-seq (.-inventory self)))))
 
 (def default-rest-s
-  "How long the trigger rests after get-food found nothing (its :hungry entry), unless food comes to hand; the same
-  as get-food's :ask-cooldown-ms."
+  "Seconds the trigger rests after get-food found nothing (its :hungry entry), unless food comes to hand.
+  Same as get-food's :ask-cooldown-ms."
   600)
 
 (defn resting?
@@ -69,10 +69,10 @@
                   (not (and learned (> learned gave-up)))))))
 
 (def hungry
-  "Holds when hungry? says so, or top-up? does (a hurt body at food 14 to 17
-  carrying food); args :food and :food-when-hurt. It rests (resting?) for :rest-s (600) after get-food found
-  nothing, until food is carried, wheat to bake is, or a food source is learned: a body with nothing at hand is not
-  sent searching again every cooldown. The food.none warn says so."
+  "Holds when hungry? says so, or top-up? does (a hurt body at food 14 to 17 carrying food).
+  Args: :food, :food-when-hurt, :rest-s.
+  It rests (resting?) for :rest-s (600) after get-food found nothing, so a body with nothing at hand is not sent
+  searching again every cooldown. The rest ends when food is carried, wheat to bake is, or a food source is learned."
   {:name :hungry
    :when (fn [world memory args]
            (let [self (.self world)]

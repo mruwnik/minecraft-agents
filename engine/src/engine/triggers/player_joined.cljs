@@ -5,10 +5,11 @@
 (def default-window-s 10)
 
 (def trigger
-  "Holds when the latest :player-joined entry (the body event of that name, written when another player's
-  join reaches the body) is at most :window-s (args, default 10) old. It runs jobs.debug.notify, which reports
-  and writes a :notify entry; the cooldown equals the window, so one join fires once. Replace the job in the
-  register entry to greet or follow instead. :player-left has no trigger: it is a memory entry only."
+  "Holds when the latest :player-joined entry (a body event, written when another player's join reaches the body)
+  is at most :window-s (args, default 10) old.
+  Runs jobs.debug.notify, which reports and writes a :notify entry. The cooldown equals the window, so one join
+  fires once. Replace the job in the register entry to greet or follow instead.
+  :player-left has no trigger: it is a memory entry only."
   {:name :player-joined
    :when (fn [_world memory args]
            (let [t (:t (mem/latest memory :player-joined))]

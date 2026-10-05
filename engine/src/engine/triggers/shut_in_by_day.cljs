@@ -1,9 +1,10 @@
 (ns engine.triggers.shut-in-by-day
-  "The shut-in-by-day trigger. It holds by day while the body stands in its own latest :shelter entry's cell and is
-  still shut in it (a pit not climbed out of, a roofed shaft, a walled cell), so a body restarted while sealed, or sealed by
-  a dig-in an agent submitted directly, is let out: it fires the shelter job, whose day round calls dig-in's leave!. It
-  does not hold once a :shelter-trapped entry for this cell says leave! found no way out, so a trapped body is tried once
-  and not again every cooldown. It never holds at night."
+  "The shut-in-by-day trigger. It holds by day while the body stands in the cell of its own latest :shelter entry
+  and is still shut in (a pit not climbed out of, a roofed shaft, a walled cell).
+  This lets out a body restarted while sealed, or sealed by a dig-in an agent submitted directly.
+  It fires the shelter job, whose day round calls dig-in's leave!.
+  It stops holding once a :shelter-trapped entry for this cell says leave! found no way out, so a trapped body is
+  tried once, not every cooldown. It never holds at night."
   (:require [engine.jobs.shelter :as sh]
             [engine.memory :as mem]))
 

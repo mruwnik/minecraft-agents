@@ -1,17 +1,16 @@
 (ns engine.triggers.pen-gate
   "The pen-gate trigger, and the pure reading the shut-gate job shares with it.
 
-  Where the gates are comes from the plans: a gate is a cell of a plan whose want is a fence gate. The index
-  {cell plan-id} is built once per plan change (engine.world/derived), never per tick.
+  A gate is a cell of a plan whose want is a fence gate. The index {cell plan-id} is built once per plan change
+  (engine.world/derived), never per tick.
 
-  The trigger holds when a planned gate within :radius (8) blocks of the body stands open, the body is farther than
-  :min-dist (2) from it, and that has been so for :open-s (4) seconds. A job that opened a gate on purpose
-  (leading animals through, standing in the doorway) is therefore left alone: it is at the gate, or passing it, and the
-  clock restarts whenever the body is near again. A gate the job gave up on (a gate-gave-up entry in memory, written by
-  jobs.animals.shut-gate) is not looked at again for :quiet-s (10 min).
-
-  A gate cell with a :gate-held entry younger than :held-s (30) is not looked at; a job that leads animals through
-  writes it before opening the gate and drops it after shutting."
+  The trigger holds when a planned gate stands open, within :radius (8) of the body and farther than :min-dist (2),
+  and has done so for :open-s (4) seconds. The clock restarts whenever the body is near again, so a job that opened a
+  gate on purpose (standing in the doorway, passing it) is left alone.
+  Two memory entries hide a gate cell:
+    :gate-gave-up  written by jobs.animals.shut-gate; the cell is skipped for :quiet-s (10 min)
+    :gate-held     written by a job leading animals through, dropped after it shuts the gate; skipped while
+                   younger than :held-s (30)"
   (:require [engine.jobs.apiary :as apiary]
             [engine.jobs.pen :as pen]
             [engine.memory :as mem]
@@ -84,8 +83,9 @@
 ;; ------------------------------------------------------------------ the clock
 
 (defn track
-  "The clock {:at now :since {cell t}} after a look at now that found cells open and far: each keeps the time it was
-  first seen so; one not seen is forgotten, and a clock last looked at more than gap-ms ago starts from nothing."
+  "The clock {:at now :since {cell t}} after a look at now that found cells open and far.
+  Each cell keeps the time it was first seen so. A cell not seen is forgotten.
+  A clock last looked at more than gap-ms ago starts from nothing."
   [clock now cells]
   (let [fresh (if (and clock (<= (- now (:at clock)) gap-ms)) (:since clock) {})]
     {:at now :since (into {} (map (fn [c] [c (get fresh c now)])) cells)}))

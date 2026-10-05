@@ -1,17 +1,17 @@
 (ns engine.triggers.tidy-pending
-  "The tidy-pending trigger: a job that trespassed (engine.jobs.tidy) tidies up after itself without being asked. It
-  holds while the body is safe (health at least :min-health, no hostile within :danger-radius) and a :tidy entry whose
-  cell is loaded is either restorable now (the block is as the job left it, and a dug block's item is carried; fewer
-  than engine.jobs.tidy/max-tries tries) or one that the last run of jobs.survival.restore-broken has not reported
-  (its cell is not in the latest :tidy-reported entry): the run then restores, or warns once and forgets what it
-  cannot. A run that reports leaves only entries it cannot restore now, so the condition turns false and holds again
-  only when something has changed (item carried, body out of the cell, hostile gone, new entries). Persistence
-  :cooldown 10 s, not :stop: a run cut short by a backoff leaves entries unreported or still restorable (under
-  max-tries), the condition stays true, and a :stop latch, cleared only by a false condition, would then hold for
-  good, later entries included. The retry after the cooldown is bounded: each try counts toward max-tries, and a
-  run that ends reports. Entries whose cell is not loaded wait
-  until the body is near. Entries recorded by a job that is still live (running, queued, paused) are ignored: the
-  job may still be digging there; the trigger fires once it has ended."
+  "The tidy-pending trigger: a job that trespassed (engine.jobs.tidy) tidies up after itself without being asked.
+  It holds while the body is safe (health at least :min-health, no hostile within :danger-radius) and a :tidy entry
+  is pending. An entry is pending when its cell is loaded and either:
+    it is restorable now: the block is as the job left it, a dug block's item is carried, and it has had fewer than
+      engine.jobs.tidy/max-tries tries; or
+    the last run of jobs.survival.restore-broken has not reported it (its cell is not in the latest :tidy-reported).
+  The run restores what it can, and warns once about and forgets the rest.
+  After a run that reports, the condition turns false. It holds again only when something changed (item carried, body
+  out of the cell, hostile gone, new entries).
+  Entries of a job that is still live (running, queued, paused) are ignored: that job may still be digging there.
+  Entries in an unloaded cell wait until the body is near.
+  Persistence is :cooldown (10 s), not :stop. A run cut short by a backoff leaves entries pending, so the condition
+  stays true and a :stop latch would never clear. The retries are bounded: each try counts toward max-tries."
   (:require [engine.jobs.tidy :as tidy]
             [engine.memory :as mem]))
 

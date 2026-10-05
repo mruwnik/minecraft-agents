@@ -22,13 +22,13 @@
     :deferred-ends [{:reflex :job :outcome :ended-at ms :text}]  reflex jobs that ended while
                             the body was settling or offline, judged on the first ready tick
     :next-id n
-  The in-flight round itself ({:id :token :reflex :round}) is not persisted, nor
-  is the backoff: the engine's :backoffs atom {key entry} (engine.backoff), key
-  the instance id of a listed job or the reflex id (a keyword) of a reflex;
-  entry {:fruitless n :last {:act :status :reason}} and, once backing off,
-  :delay-ms :until ms :since ms :alerted ms (the last warn). It is dropped on
-  progress or when the listed job goes, and cleared whenever the engine leaves
-  a pause (reset-backoff!)."
+  Not persisted:
+    the in-flight round ({:id :token :reflex :round})
+    the backoff: the :backoffs atom {key entry} (see engine.backoff). The key is a
+      listed job's instance id or a reflex's id (a keyword). The entry is
+      {:fruitless n :last {:act :status :reason}}, plus :delay-ms :until :since
+      :alerted (ms of the last warn) once backing off. An entry goes on progress
+      or when the job goes, and all go when the engine leaves a pause."
   (:require [engine.composite :as composite]
             [engine.hurt :as hurt]
             [engine.chat :as chat]
@@ -556,14 +556,12 @@
                          :chain (conj (:chain base) (mem/path->id (:root base) slots))))))
 
 (defn ^:async call-child
-  "One round of the child job def in slot under parent base; see README.md.
-  The child's memory is the parent's [:children slot] sub-map, created with
-  the args when missing and cleared when the child is :done only; :continue
-  and :declined keep it, so a declined child's debts survive. Resolves to
-  :declined when the child's check or round declines, else :done or :continue.
-  A :done child's result! data is
-  readable with child-result for the rest of the parent's round. The child
-  shares the parent's token, so a cut anywhere ends the whole chain's round."
+  "One round of the child job def in slot under parent base (see README.md).
+  The child's memory is the parent's [:children slot] sub-map. It is created
+  with the args when missing and cleared only when the child is :done.
+  Resolves to :declined when the child's check or round declines, else :done or :continue.
+  A :done child's result! data stays readable with child-result for the rest of the parent's round.
+  The child shares the parent's token, so a cut anywhere ends the whole chain's round."
   [eng base slot def args]
   (let [store (:store eng)
         slots (conj (:slots base) slot)
@@ -1008,8 +1006,8 @@
 
 (defn insert-now
   "State with id listed directly before the current job (the one running, or cut and waiting to resume), else where
-  the next scan starts. A job done now ends with the scan at its own index, which is then the cut job's, so the cut
-  job runs next even when its :resume mark was taken by a later cut."
+  the next scan starts. When the new job ends, the scan restarts at its index, which is then the cut job's.
+  So the cut job runs next even if a later cut took its :resume mark."
   [{:keys [list current resume cursor] :as state} id]
   (let [idx (.indexOf list (or current resume))
         pos (if (neg? idx) (min cursor (count list)) idx)]
@@ -1017,11 +1015,13 @@
       (< pos cursor) (update :cursor inc))))
 
 (defn submit!
-  "Put a job spec (an expression, see engine.expr) on the list; (hold e) or
-  opts :hold? make it hold the body; (backoff cfg e) or opts :backoff (a map or
-  false, which wins) set its backoff config. opts: :hold? :backoff :front? :now? :by.
-  :front? lists the job directly after the current one (it gets the next round);
-  :now? lists it directly before the current one (do-now!). Throws on a bad spec. Returns the instance id."
+  "Put a job spec (an expression, see engine.expr) on the list. Returns the instance id; throws on a bad spec.
+  opts:
+    :hold?     hold the body (same as wrapping the spec in (hold e))
+    :backoff   backoff config, a map or false (wins over a (backoff cfg e) wrapper)
+    :front?    list it directly after the current job, so it gets the next round
+    :now?      list it directly before the current job (do-now!)
+    :by        who asked, for the event"
   [eng spec {:keys [front? now? by] :as opts}]
   (let [{:keys [node hold?] :as parsed} (expr/parse-spec (:jobs eng) spec)
         hold? (boolean (or hold? (:hold? opts)))
@@ -1287,11 +1287,11 @@
       (update :reflex-state dissoc id)))
 
 (defn repair-entries!
-  "After a restore: a register entry whose trigger is gone, or whose job no longer parses even without
-  the args it no longer declares, is dropped; one with only stale args stays, with those args removed (the
-  job's defaults apply). Each is warned (reflex.restore-repaired / :dropped) and returned as a notice
-  {:job-id :reason :kind :message :data} for the caller to raise as a required attention request, so
-  the agent sees a danger reflex that changed. Never silent."
+  "After a restore, fix register entries that no longer resolve.
+  An entry whose trigger is gone, or whose job does not parse even without its stale args, is dropped.
+  An entry with only stale args stays, minus those args (the job's defaults apply).
+  Each case is warned and returned as a notice {:job-id :reason :kind :message :data}
+  for the caller to raise as a required attention request. Never silent."
   [eng]
   (vec
    (for [e (:register (state eng))
@@ -1317,16 +1317,19 @@
           :data {:reflex id :error problem} :message text})))))
 
 (defn create
-  "An engine over primitives p with state under dir. Restores engine.edn and
+  "An engine over primitives with state under dir. Restores engine.edn and
   memory.edn when present, sweeps memory and appends a :restart entry.
-  Options: :primitives, :jobs (the registry, {sym {:check :round :doc
-  :args}}), :triggers ({name trigger}), :dir :now :events :body,
-  :max-event-bytes (default 64 MiB),
-  :stall-rounds (default 20), :sweep-ms (default 60000) and :stats-ms (how
-  often memory.save-stats is emitted, default 60000), :backoff (the engine-wide
-  backoff config, a map or false, see engine.backoff) and :backoff-alert-ms
-  (least gap between two job.backoff warns, default 300000), :world (the world's plans, an engine.world;
-  an empty one when not given)."
+  Options:
+    :primitives, :dir, :now, :events, :body
+    :jobs        the registry {sym {:check :round :doc :args}}
+    :triggers    {name trigger}
+    :world       an engine.world (an empty one when not given)
+    :backoff     engine-wide backoff config, a map or false (see engine.backoff)
+    :backoff-alert-ms  least gap between two job.backoff warns (300000)
+    :stall-rounds      rounds before job.stalled (20)
+    :sweep-ms          memory sweep interval (60000)
+    :stats-ms          memory.save-stats interval (60000)
+    :max-event-bytes   event log size cap (64 MiB)"
   [{:keys [primitives jobs triggers dir now events body stall-rounds sweep-ms stats-ms world
            max-event-bytes
            backoff backoff-alert-ms]
@@ -1384,8 +1387,8 @@
               :when (and (:job-id request) (not (some #{(:job-id request)} (:list (state eng)))))]
         (resolve-attention! eng request-id :job-dropped))
       (doseq [n notices] (request-attention! eng n)))
-    ;; Upgrade older snapshots and repair a crash boundary: a parked failed job
-    ;; must always have a durable required request before startup replay.
+    ;; A parked failed job must have a required request before the replay below
+    ;; (covers older snapshots and a crash between the two writes).
     (doseq [[id failure] (:failed (state eng))
             :when (and (not (:attention-closed? failure))
                        (not-any? #(same-request? % id :round-failed) (vals (:attention (state eng))))) ]

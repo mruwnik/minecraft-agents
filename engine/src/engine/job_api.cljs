@@ -1,5 +1,8 @@
 (ns engine.job-api
-  "Bounded agent job commands. Scheduling stays in core; command dedupe is saved with engine state."
+  "Agent commands on the job list (POST /jobs): submit, interrupt, cancel, cancel-all, retry.
+  Each request carries a :request-id and the :generation-id. A repeated id with the same request returns the first
+  result with :duplicate true; with a different request it is refused. Request records live in the engine state
+  (the last 128). Scheduling stays in core."
   (:require [engine.backoff :as backoff]
             [engine.core :as core]
             [engine.expr :as expr]
@@ -90,7 +93,7 @@
       (and (= op :interrupt) (core/manual? eng)) (fail :manual-control "Release the exclusive body lease before interrupting; submit can still queue work.")
       :else
       (do
-        ;; This synchronous state swap is durably saved by core's existing state watch before any job change.
+        ;; The state watch saves this record before the job change below, so a crash leaves it :pending.
         (remember! eng request-id {:signature signature :status :pending})
         (let [result (try
                        (case op

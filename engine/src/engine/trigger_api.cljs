@@ -47,12 +47,12 @@
 ;; ------------------------------------------------------------------ the :condition trigger (the seam)
 
 (defn compile-condition
-  "The condition compiler the body uses (engine.condition): form (data, or text
-  from a command line) -> {:ok true :when f :explain g} or the language's
-  refusal {:ok false :reason :at :message :allowed}. f is (fn [world memory
-  & _]), true only on a definite true; g is (fn [world memory]) -> [{:form
-  :value}], reading f's state without advancing it. Each call makes fresh
-  state (held-for timers, scan cache), kept in this process only."
+  "The condition compiler the body uses (engine.condition).
+  Takes a form (data, or text from a command line). Returns the language's refusal
+  {:ok false :reason :at :message :allowed}, or {:ok true :when f :explain g}:
+    f  (fn [world memory & _]), true only on a definite true
+    g  (fn [world memory]) -> [{:form :value}], reads f's state without advancing it
+  Each call makes fresh state (held-for timers, scan cache), kept in this process only."
   [form]
   (let [read (condition/read-condition form)
         compiled (when (:ok read) (condition/compile (:form read)))]

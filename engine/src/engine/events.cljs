@@ -137,8 +137,8 @@
   (js/Buffer.byteLength text "utf8"))
 
 (defn canonical-event
-  "Adapt existing internal event maps to the canonical EDN contract. Legacy
-  severity and body fields are deliberately discarded."
+  "The canonical event for internal event map event, numbered n. :level and :body are
+  dropped. Other fields outside the known set fold into :data."
   [{:keys [generation-id run-id now pos-fn]} n event]
   (let [source (:source event)
         kind (:kind event)
@@ -154,8 +154,7 @@
         known #{:seq :generation-id :run-id :time-ms :t :body :source :kind :level
                 :context :data :message :text :attention :request-id :job :round
                 :chain :reflex :action-id :cause :cause-seq :pos}
-        ;; Legacy emitters routinely pass absent optional fields as nil. Their
-        ;; stream omitted those fields; explicit canonical :data is kept.
+        ;; Emitters pass absent optional fields as nil: drop those.
         ;; A non-numeric :cause is the body's own datum (died/hurt: "lava"), not a cause sequence.
         extra (into {} (remove (comp nil? val))
                     (cond-> (apply dissoc event known)
@@ -236,12 +235,10 @@
                                        " bytes, above the " max-bytes " byte log cap\n"))
         {:error :event-too-large :bytes line-bytes :max-bytes max-bytes})
       (do
-        ;; Reserve before append. A crash after reservation can leave a visible sequence gap,
-        ;; but cannot make a later record reuse that cursor.
+        ;; Reserve the sequence before appending: a crash leaves a gap, never a reused number.
         (when file
           (write-meta! file {:stream-id stream-id :last-seq n}))
-        ;; Once reserved, a sequence is never reused in this process even if
-        ;; appending the record subsequently fails.
+        ;; The in-memory counter moves on even if the append fails.
         (swap! stream assoc :last-seq n)
         (when file
           (let [active (segment-file file 0)
@@ -337,7 +334,7 @@
            :recent recent :recent-byte-count recent-byte-count :sinks sinks :now now :pos-fn pos-fn})))
 
 (defn cursor
-  "Return the append cursor for this stream."
+  "The append cursor of the stream: {:stream-id :seq}."
   [stream]
   (let [{:keys [stream-id last-seq]} @stream]
     {:stream-id stream-id :seq last-seq}))

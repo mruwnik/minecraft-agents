@@ -78,9 +78,10 @@
   ((:child-result ctx) slot))
 
 (defn wait
-  "For a check that declines: false, noting why the job waits. reason is a keyword or a map with :reason (keep its
-  fields stable while the wait lasts: the scheduler tells a reason once, and again only when it changes). Outside a
-  check the scheduler runs (a round, a test) it only returns false."
+  "For a check that declines: returns false and notes why the job waits.
+  reason is a keyword or a map with :reason. Keep its fields stable while the wait lasts:
+  the scheduler tells a reason once, and again only when it changes.
+  Outside a check the scheduler runs (a round, a test) it only returns false."
   [ctx reason]
   (some-> (:wait ctx) (reset! reason))
   false)
@@ -117,9 +118,9 @@
   ([ctx kind level fields] ((:emit ctx) kind level fields)))
 
 (defn note-walk!
-  "Book one walk round for the backoff (engine.backoff): status is its :moved status (\"arrived\", \"partial\",
-  \"blocked\"), moved the blocks the body moved. The steer acts of the walk are neutral; this is what counts. A ctx with
-  no engine behind it books nothing."
+  "Book one walk round for the backoff (engine.backoff). status is its :moved status (\"arrived\", \"partial\",
+  \"blocked\"), moved the blocks the body moved. The steer acts of the walk are neutral, so this is what counts.
+  A ctx with no engine behind it books nothing."
   [ctx status moved]
   (when-let [f (:note-walk ctx)] (f status moved)))
 
@@ -147,9 +148,9 @@
     (emit! ctx kind :warn fields)))
 
 (defn zones
-  "The body's world's zone list [{:name :min [x y z] :max [x y z] :owner :allow #{..}} ...] (see engine.zones), or
-  nil when the zone file is missing or was never readable. A dig or place job declines on nil (one warn); nil is
-  never \"no zones\" ([] is)."
+  "The body's world's zone list [{:name :min [x y z] :max [x y z] :owner :allow #{..}} ...] (see engine.zones).
+  nil when the zone file is missing or was never readable: a dig or place job declines on nil, with one warn.
+  \"No zones\" is [], never nil."
   [ctx]
   (world/zones (:world (:engine ctx))))
 

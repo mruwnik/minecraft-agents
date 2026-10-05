@@ -1,9 +1,12 @@
 (ns engine.triggers.scaffold-left
-  "The scaffold-left trigger: holds while the scaffold ledger (engine.access.ledger) has an open entry in a loaded cell
-  whose placing job is no longer live (its job memory is gone: done, cancelled, discarded) and that no cleanup held in
-  the last 10 minutes, and a zone list has been read. Runs jobs.access.cleanup, which takes exactly those entries.
-  Persistence :stop: a cleanup that leaves entries holds them, the condition turns false, and it fires again only for
-  new ones or once the hold has run out."
+  "The scaffold-left trigger. It holds when a zone list has been read and the scaffold ledger (engine.access.ledger)
+  has an open entry that:
+    lies in a loaded cell
+    belongs to a job that is no longer live (its job memory is gone: done, cancelled, discarded)
+    no cleanup held in the last 10 minutes
+  Runs jobs.access.cleanup, which takes exactly those entries.
+  Persistence :stop: a cleanup that leaves entries holds them, so the condition turns false.
+  It fires again only for new entries or once the hold has run out."
   (:require [engine.access.ledger :as ledger]
             [engine.jobs.util :as u]
             [engine.world :as world]))

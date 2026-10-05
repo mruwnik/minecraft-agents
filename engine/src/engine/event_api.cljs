@@ -1,6 +1,8 @@
 (ns engine.event-api
-  "Private engine event and durable-attention API over a local Unix socket.
-  The wire format is EDN so keyword event fields survive unchanged."
+  "The engine's private HTTP API on a local Unix socket (mode 0600). The wire format is EDN.
+  GET   /snapshot, /status, /inventory, /events, /job, /jobs, /triggers, /catalog
+  POST  /jobs and /triggers (changes), /attention/resolve, /chat
+  Bodies are limited to 16 KB. Lists are paged and bounded."
   (:require [cljs.reader :as reader]
             [engine.core :as core]
             [engine.chat :as chat]
@@ -54,7 +56,9 @@
       (let [n (js/Number text)]
         (when (and (js/Number.isSafeInteger n) (<= 0 n maximum)) n)))))
 
-(defn snapshot [eng]
+(defn snapshot
+  "The whole persisted engine state with the body's position, offline/settling flags and the event cursor."
+  [eng]
   (let [p (:primitives eng)]
     {:body (.-username (.self p))
      :generation-id (:generation-id (core/state eng))
@@ -107,7 +111,8 @@
         (> (count all-stacks) inventory-stack-limit) (assoc :more? true)))))
 
 (defn bounded-value
-  "A small EDN-safe projection for user-supplied job args/specs. Shared budget bounds total nodes."
+  "A small EDN-safe copy of user-supplied job args or specs: depth at most 4, strings cut to 160
+  characters, at most budget nodes in all. Cut parts read :truncated."
   [value depth budget]
   (cond
     (zero? @budget) :truncated
@@ -179,7 +184,10 @@
            cause (assoc :cause cause)
            decision (assoc :recovered decision)))))))
 
-(defn status [eng requested-limit]
+(defn status
+  "The compact status view: mode, position, health, food, the current job, up to limit queued jobs,
+  failed jobs, outstanding attention requests and the event cursor."
+  [eng requested-limit]
   (let [s (core/state eng)
         p (:primitives eng)
         self (.self p)
@@ -231,7 +239,9 @@
      :outstanding {:total (count (:attention s)) :items attention
                    :more? (> (count (:attention s)) attention-limit)}}))
 
-(defn job-detail [eng id limit]
+(defn job-detail
+  "One listed job with its bounded spec and args, status, wait reason, failure and attention requests; nil when unknown."
+  [eng id limit]
   (let [s (core/state eng)]
     (when-let [inst (get-in s [:instances id])]
       (let [[_ args] (core/job-of eng inst)
@@ -296,7 +306,10 @@
                                   (try (fs/rmSync socket-path) (resolve true) (catch :default err (reject err)))
                                   (reject e)))))))))
 
-(defn create [socket-path eng]
+(defn create
+  "The API server for eng on socket-path: {:listen fn :close fn}, each returning a promise.
+  Refuses to listen when a live process already holds the socket."
+  [socket-path eng]
   (let [listening? (atom false)
         server (http/createServer
                 (fn [req res]

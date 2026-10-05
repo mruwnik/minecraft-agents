@@ -1,40 +1,43 @@
 (ns engine.perception
-  "What the body has seen: the perception layer between the raw world and everything above the body (card 37ac4545).
-  It wraps the primitives object once (main.cljs, and the same wrapper over the test fake) and holds the rules and the
-  seen-block memory. The raw world comes from a rawWorld reader (engine/js/raw-world.mjs for the body,
-  engine.fake.raw-world for tests): stateAt, lightAt, eye, sky, version, sightTable, stateInfo, onBlockChange.
+  "What the body has seen: the layer between the raw world and everything above the body.
+  It wraps the primitives object once (main.cljs, and the same wrapper over the test fake).
+  The raw world comes from a rawWorld reader (engine/js/raw-world.mjs for the body, engine.fake.raw-world for tests):
+  stateAt, lightAt, eye, sky, version, sightTable, stateInfo, onBlockChange.
 
-  Seen: a sight pass casts rays from the eye through a vanilla-like view cone (70 degrees vertical, 16:9) along the
-  body's real yaw and pitch, out to `:radius` (48). A ray records every cell it enters that the light rule lets the
-  body make out, and stops at the first cell that blocks sight (recorded under the same rule) or that is not loaded.
-  Light rule (the same as the picture's, light-sight): vanilla's lightmap brightness `seeing` of the cell's light is at
-  least 0.2, or the cell is within 2 blocks. A sight-blocking cell is lit by the brighter of itself and the cell the ray
-  came from (its face). A dark cell is not recorded; the ray goes on (a lit room is seen across a dark gap). Each pass
-  is spread over `:pass-ms` (1.5 s) in slices of `:step-ms` (one game tick); a new pass starts when the eye moved or
-  turned, or every `:idle-ms`. What is behind the body is seen only once it turns.
+  Seen blocks. A sight pass casts rays from the eye through a vanilla-like view cone (70 degrees vertical, 16:9)
+  along the body's real yaw and pitch, out to `:radius` (48).
+    A ray records every cell it enters that the light rule lets the body make out.
+    It stops at the first cell that blocks sight (recorded too) or that is not loaded.
+    Light rule: vanilla's lightmap brightness `seeing` of the cell's light is at least 0.2, or the cell is within 2 blocks.
+    A sight-blocking cell is lit by the brighter of itself and the cell the ray came from.
+    A dark cell is not recorded and the ray goes on, so a lit room is seen across a dark gap.
+    A pass is spread over `:pass-ms` (1.5 s) in slices of `:step-ms` (one game tick).
+    A new pass starts when the eye moved or turned, or every `:idle-ms`.
+    What is behind the body is seen only once it turns.
 
-  Memory: per dimension, per 16^3 section, a Uint16Array of stateId + 1 (0 = unknown), a Uint8Array of each cell's
-  seen time (whole minutes after the section's :base; a cell more than 255 minutes older than the newest write reads as
-  255 minutes older) and the section's last-seen time; capped at `:cap-bytes` (32 MB, 2730 sections of 12 KB) by
-  forgetting the least recently seen section; saved to and
-  loaded from a file (engine/js/seen-file.mjs). A block change in view (cone, line of sight, light) updates memory at
-  once; one out of view leaves the old state, a true memory error.
+  Block memory. Per dimension and 16^3 section: a Uint16Array of stateId + 1 (0 = unknown), a Uint8Array of each
+  cell's seen time (whole minutes after the section's :base) and the section's last-seen time.
+    A cell more than 255 minutes older than the newest write reads as 255 minutes older.
+    Capped at `:cap-bytes` (32 MB, 2730 sections of 12 KB) by forgetting the least recently seen section.
+    Saved to and loaded from a file (engine/js/seen-file.mjs).
+    A block change in view (cone, line of sight, light) updates memory at once.
+    A change out of view leaves the old state, a true memory error.
 
-  Mobs (card 80f25a40): a memory of the hostile mobs the body has seen or heard, by entity id, which the danger checks
-  (engine.jobs.reach, engine.jobs.danger's callers) take their candidates from instead of every mob the server tracks.
-  A sample (every `:mob-ms`, and at each knownMobs call) reads the hostiles within `:mob-scan` of the primitives:
-    heard  within `:hearing` (16) of the eye, unless the mob makes no sound while it stalks (`silent-mobs`: creeper);
-    seen   a clear line from the eye to its middle (the entity's `visible` field: the same sight rule as the sight
-           table) and within `:radius`, lit (the cell of its feet or head bright enough to make out by the same light rule as
-           blocks; one standing in the dark is seen only within `:dark-sight` (4), as a player at default brightness
-           makes out a dark shape only close up), and either inside the view cone or heard (a player turns to a sound it hears).
-  A sensed mob's entry takes its place and time (seen-at when seen). An entry not sensed now stays at its last place
-  while the mob could not have drifted `:mob-drift` (16) blocks since (time x `mob-speed`, blocks a second): about 6 s
-  for a zombie. An entry whose id the client no longer tracks (dead, despawned, far off) is dropped at once.
-  So an unseen silent creeper behind the body is no danger; a creeper seen 3 s ago that went round a corner still is.
+  Mob memory. The hostile mobs the body has seen or heard, by entity id. The danger checks (engine.jobs.reach and the
+  callers of engine.jobs.danger) take their candidates from it, not from every mob the server tracks.
+  A sample (every `:mob-ms`, and at each knownMobs call) reads the hostiles within `:mob-scan` and senses each one:
+    heard  within `:hearing` (16) of the eye, unless the mob makes no sound while it stalks (`silent-mobs`: creeper).
+    seen   all of: a clear line from the eye to its middle (the entity's `visible` field), within `:radius`,
+           lit (the cell of its feet or head is bright enough by the block light rule; a mob in the dark is seen
+           only within `:dark-sight` (4)), and inside the view cone or heard.
+  A sensed mob's entry takes its place and time (seen-at when seen).
+  An entry not sensed now stays at its last place while the mob could not have drifted `:mob-drift` (16) blocks
+  (time x `mob-speed`): about 6 s for a zombie.
+  An entry whose id the client no longer tracks (dead, despawned, far off) is dropped at once.
+  So an unseen silent creeper behind the body is no danger, but a creeper seen 3 s ago that went round a corner still is.
 
-  Wrapping changes nothing jobs already see: blocks, blockAt and entities stay raw; seenBlockAt, seenBlocks and
-  knownMobs are added, and dig, place, jumpPlace and useOn let memory take the true state of their cell once they settle.")
+  Wrapping leaves blocks, blockAt and entities raw. It adds seenBlockAt, seenBlocks and knownMobs.
+  dig, place, jumpPlace and useOn let memory take the true state of their cell once they settle.")
 
 (def defaults
   {:radius 48
@@ -348,8 +351,8 @@
          (set! (.-steps st) (inc (.-steps st)))
          (set! (.-stepMs st) (+ (.-stepMs st) ms))
          (set! (.-stepMsMax st) (max (.-stepMsMax st) ms))))
-     ;; No eye: the body is offline (quit, kicked or reconnecting). A pass in flight belongs to the old world, so it is
-     ;; dropped; the first step after the next spawn starts a fresh one. Memory and its :times stay as they are.
+     ;; No eye: the body is offline. The pass in flight belongs to the old world, so drop it.
+     ;; The first step after the next spawn starts a fresh one. Memory stays as it is.
      (when-not eye
        (set! (.-pass st) nil)
        (set! (.-lastStart st) nil)))))

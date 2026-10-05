@@ -1,12 +1,12 @@
 (ns engine.triggers.player-sleeping-nearby
-  "The player-sleeping-nearby trigger. It holds when it is night, another
-  player within :player-radius is asleep, no bed is remembered within
-  :bed-radius, :offline-allowed is not false and the last log-out was not
-  unsupported. Its log-out is 20 s: the sleeper skips the night within seconds of the body leaving, and a longer
-  absence would waste the day. The register cooldown (30 s) spaces log-outs, and a log-out
-  ending at the reconnect is judged once the body has settled. Whether the
-  body is roofed does not matter: a roofed body must still log out so the
-  sleeper can skip the night."
+  "The player-sleeping-nearby trigger. It holds (sh/log-out-wanted?) when all of these are so:
+    it is night
+    another player within :player-radius is asleep
+    no bed is remembered within :bed-radius
+    :offline-allowed is not false
+    the last log-out was not unsupported
+  The job logs out for 20 s: the sleeper skips the night within seconds of the body leaving.
+  The 30 s cooldown spaces log-outs. A roofed body must still log out, so the roof does not matter."
   (:require [engine.jobs.shelter :as sh]))
 
 (def trigger

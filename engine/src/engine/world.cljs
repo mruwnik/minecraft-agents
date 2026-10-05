@@ -1,27 +1,26 @@
 (ns engine.world
-  "The world's shared knowledge as a body reads it: the plans of its world (worlds/<world>/plans/<id>.edn) and
-  the blueprints they place (blueprints/<id>.edn at the repo root), parsed with plan.parse and expanded with
-  plan.shape. Bodies only read; nothing here writes a file.
+  "The world's shared knowledge as a body reads it. Bodies only read; nothing here writes a file.
+  Files:
+    worlds/<world>/plans/<id>.edn  plans, parsed with plan.parse and expanded with plan.shape
+    blueprints/<id>.edn            the blueprints plans place (repo root)
+    worlds/<world>/zones.edn       zones (checked by engine.zones)
+    worlds/<world>/claims.edn      shared-map area claims of bodies (engine.zones/parse-claims)
 
-  A world is {:state atom :said atom :opts {...}}. Jobs ask through engine.ctx (ctx/plan), which answers from memory:
-  the files are stat-ed again at most every :every-ms (asked lazily, by the first read after that), and only files
-  whose stamp (modification time and size) changed are read and parsed again. A file that turns unreadable or invalid
-  keeps its last good copy and is reported once, by a world.plan-unreadable (or world.blueprint-unreadable) warn; a
-  file that was never readable answers as broken, not as absent.
+  A world is {:state atom :said atom :opts {...}}. Jobs ask through engine.ctx (ctx/plan), which answers from memory.
+    The files are stat-ed again at most every :every-ms, lazily, by the first read after that.
+    Only files whose stamp (modification time and size) changed are read and parsed again.
+    A file that turns unreadable or invalid keeps its last good copy and warns once
+    (world.plan-unreadable, world.blueprint-unreadable, world.zones-unreadable, world.claims-unreadable).
+    A file that was never readable answers as broken, not as absent.
+  Zones differ: a missing file answers nil (warned once by world.zones-missing, each time it goes), so a dig or
+  place job declines. An empty vector is a valid \"no zones\".
+  Claims differ: a missing file is [] (no claims, no warn).
 
-  The zone file (worlds/<world>/zones.edn, checked by engine.zones) is read the same way, with one difference:
-  a missing file answers nil, like one never readable (warned once, by world.zones-missing, each time it goes), so a
-  dig or place job declines; an empty vector is a valid \"no zones\". A bad edit keeps the last good copy
-  (world.zones-unreadable).
-
-  The claims file (worlds/<world>/claims.edn, checked by engine.zones/parse-claims) is read the same way, but a missing
-  file is [] (no claims, no warn); a bad edit keeps the last good copy (world.claims-unreadable). These are the
-  shared-map area claims of bodies, held under :area-claims; the :claims of the state are the plans' cells.
-
-  The state: {:plans {id entry} :blueprints {id entry} :zones entry :expanded {id expansion} :claims {id #{cell}}
-  :footprints {cell id} :checked-at ms}, an entry being {:stamp [mtime size] :value v :error text}, :value the last
-  good copy and :error the current file's trouble; the zone entry is {:missing true} while there is no file.
-  :claims holds the cells of each plan, :footprints the same keyed by cell."
+  The state: {:plans {id entry} :blueprints {id entry} :zones entry :area-claims entry :expanded {id expansion}
+  :claims {id #{cell}} :footprints {cell id} :checked-at ms}.
+    An entry is {:stamp [mtime size] :value v :error text}: :value the last good copy, :error the current file's
+    trouble. The zone entry is {:missing true} while there is no file.
+    :area-claims holds the claims file. :claims and :footprints are the plans' cells, by plan and by cell."
   (:require ["fs" :as fs]
             ["path" :as path]
             [clojure.string :as str]
