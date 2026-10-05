@@ -20,7 +20,8 @@
   round by day ends :done (after a dig-in it first gets the body out of the pit, below); a first round that finds
   the body asleep, or roofed other than in its own shelter, ends :done at once. A first round (no child run yet) that finds the body
   shut in its own latest :shelter at night holds as after a dig-in (:sheltered :dug-in): the job keeps nothing it
-  needs to resume, so a shelter cut by a higher reflex is fired again by night-unsafe and simply holds. Otherwise it tries, in order, and the first that does not decline
+  needs to resume, so a shelter cut by a higher reflex is fired again by night-unsafe and simply holds. A first round that finds the body roofed (its hut, not a shelter it dug) at night with a known bed within :bed-radius and no :slept entry
+  within half an in-game day runs jobs.survival.sleep alone (:sheltered :slept once asleep; a sleep that fails ends the round :done). Otherwise it tries, in order, and the first that does not decline
   decides:
   1. jobs.survival.sleep, with a known bed within :bed-radius;
   2. jobs.survival.log-out {:others :online}, when another player is in the server's player list (the tab list):
@@ -69,7 +70,7 @@
   recorded shelter (the shut-in-by-day condition)."
   [c]
   (let [p (:primitives c)]
-    (or (night-unsafe/holds? p (ctx/view c) (:roof-height (:args c)))
+    (or (night-unsafe/holds? p (ctx/view c) (:roof-height (:args c)) (:bed-radius (:args c)))
         (sh/shut-in-by-day? p (:data (ctx/latest c :shelter)) (:data (ctx/latest c :shelter-trapped))))))
 
 (defn overdue? [c]
@@ -155,6 +156,18 @@
         (do (when (= :done s) (ctx/update-mem! c assoc :sleep-failed true))
             (await (log-out-step c a)))))))
 
+(defn ^:async sleep-when-roofed
+  "A body roofed other than in a shelter it dug (its hut) at night with a bed in reach and no sleep tonight: jobs.survival.sleep
+  alone (no log-out, no dig-in). :continue while it works; asleep it is :sheltered :slept and holds; a sleep that ends
+  without sleeping marks :sleep-failed and the round ends :done."
+  [c started]
+  (let [p (:primitives c)
+        s (await (ctx/call-child c :sleep 'jobs.survival.sleep {:bed-radius (:bed-radius (:args c))}))]
+    (cond
+      (= :continue s) :continue
+      (or (sh/sleeping? p) (seq (ctx/since c :slept started))) (do (sheltered! c :slept) :continue)
+      :else (do (ctx/update-mem! c assoc :sleep-failed true) :done))))
+
 (defn ^:async hold-exposed
   "Night, and no choice could shelter the body: hold it anyway until day (the shelter owns the night; a declined reflex
   would only fire again after its cooldown and fail the same way). The first time, :sheltered :exposed and one
@@ -194,6 +207,9 @@
       (and covered (:sheltered (ctx/mem c))) (await (hold c))
       (and covered (empty? (:children (ctx/mem c))) (not (sh/sleeping? p)) (dig-in/sheltered-in c))
       (do (sheltered! c :dug-in) (await (hold c)))
+      (and covered (not (sh/sleeping? p)) (not (:sleep-failed (ctx/mem c)))
+           (sh/sleep-wanted p (ctx/view c) (:bed-radius (:args c))))
+      (await (sleep-when-roofed c (ctx/now c)))
       covered :done
       :else (let [r (await (choose-round c))]
               (if (= :declined r) (await (hold-exposed c)) r)))))

@@ -105,6 +105,21 @@
     (when (and pos (<= (u/dist (u/self-pos {:primitives p}) pos) radius))
       pos)))
 
+;; a :slept entry younger than this counts as "slept tonight" (the night is under half an in-game day)
+(def slept-tonight-ms (/ ms-per-day 2))
+
+(defn sleep-wanted
+  "The remembered bed within radius when the body, awake at night, has not slept tonight (no :slept entry within half an
+  in-game day) and the bed was not given up on (no unexpired :bed-unreachable entry at it); else nil. The roof is not
+  asked: this is for a body sheltered already, which should set its respawn point in its own bed."
+  [p view radius]
+  (when (and (night? p) (not (sleeping? p)))
+    (let [bed (bed-in-view p view radius)]
+      (when (and bed
+                 (zero? (mem/count-in view :slept slept-tonight-ms))
+                 (not-any? #(= bed (:pos (:data %))) (mem/entries view :bed-unreachable)))
+        bed))))
+
 (defn bed
   "The remembered bed position when it is within radius of the body, else nil."
   [c radius]

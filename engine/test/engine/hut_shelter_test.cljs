@@ -4,10 +4,12 @@
   gone, and dig-in mends a hole in the roof of a closed room instead of walling the body in at feet and head height."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
+            [engine.memory :as mem]
             [engine.scenario :as scenario]
             [engine.shelter-test :as st]
             [engine.test-util :as tu :refer [box]]
             [engine.unstick-test :as ut]
+            [engine.triggers :as triggers]
             [jobs.survival.dig-in :as dig-in]))
 
 ;; A cobblestone hut: walls x 3..7, z -2..2, y 64..66, roof at y 67, the room x 4..6, z -1..1. A shut oak door in the
@@ -139,3 +141,39 @@
   (let [p (tu/fake (hut-world {:x 5 :y 64 :z 0} {}))]
     (is (true? (dig-in/shut-in? p {:pos {:x 5 :y 64 :z 0} :roof {:x 5 :y 67 :z 0}})) "a plain roofed entry")
     (is (false? (dig-in/shut-in? p {:pos {:x 5 :y 64 :z 0} :roof {:x 5 :y 67 :z 0} :room true})))))
+
+;; ------------------------------------------------------------------ a roofed body sleeps in the bed beside it
+
+(def bed-block {"6,64,0" "red_bed"})
+
+(defn bed-trigger-holds?
+  "The night-unsafe condition for the hut with the body at {:x 5 :y 64 :z 0} and a known bed at 6,64,0, after seed!."
+  [world seed!]
+  (let [{:keys [eng]} (st/setup {})]
+    (st/know-bed! eng {:x 6 :y 64 :z 0})
+    (seed! eng)
+    (boolean ((:when (get triggers/all :night-unsafe)) (tu/fake world) (mem/view (:store eng)) {}))))
+
+(deftest night-unsafe-holds-for-a-roofed-body-with-a-bed-it-has-not-slept-in-tonight
+  (let [night-world (merge (hut-world {:x 5 :y 64 :z 0} bed-block) {:time st/night})
+        none (fn [_])
+        slept (fn [eng] (mem/write! (:store eng) :slept {:pos {:x 6 :y 64 :z 0}} {:cap 10 :ttl (* 7 st/day-ms)}))
+        unreachable (fn [eng] (mem/write! (:store eng) :bed-unreachable {:pos {:x 6 :y 64 :z 0}} {:cap 5 :ttl 600000}))]
+    (is (true? (bed-trigger-holds? night-world none)) "roofed, night, bed known, not slept")
+    (is (false? (bed-trigger-holds? night-world slept)) "slept already tonight")
+    (is (false? (bed-trigger-holds? night-world unreachable)) "the bed was given up on")
+    (is (false? (bed-trigger-holds? (assoc night-world :time st/noon) none)) "by day")
+    (is (false? (bed-trigger-holds? (assoc night-world :self {:pos {:x 5 :y 64 :z 0} :isSleeping true}) none)) "asleep")))
+
+(deftest shelter-in-a-roofed-hut-sleeps-in-the-bed-and-holds-till-day
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (st/setup (merge (hut-world {:x 5 :y 64 :z 0} bed-block) {:time st/night}))]
+          (st/know-bed! eng {:x 6 :y 64 :z 0})
+          (core/submit! eng '(jobs.survival.shelter) {})
+          (await (st/tick-n eng 6))
+          (is (= 1 (count (st/calls p "sleep"))) "slept in the bed")
+          (is (= [] (st/calls p "dig")))
+          (is (= [] (st/calls p "place")) "no dig-in")
+          (is (= 1 (count (st/entries eng :slept)))))))))
