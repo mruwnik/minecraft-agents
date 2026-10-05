@@ -139,7 +139,9 @@
             :when (fn [w _ _] (< (.-food (.self w)) 10))}
    :near {:name :near :job '(walk {:pos {:x 50 :y 64 :z 0}}) :persistence :stop
           :when (fn [w _ _] (seq (.entities w #js {:kind "hostile" :radius 8})))}
-   :every-interval triggers/every-interval
+   ;; a look-around on a 45 s schedule, read from the :looked entry the job writes (no timer trigger ships)
+   :interval {:name :interval :job '(jobs.movement.look-around) :persistence :cooldown :cooldown-s 0
+              :when (fn [_ m _] (let [t (:t (mem/latest m :looked))] (or (nil? t) (>= (- (:now m) t) 45000))))}
    :never {:name :never :job '(eat) :when (constantly false)}
    :boom {:name :boom :job '(fail) :persistence :retry :when (constantly true)}
    :gated {:name :gated :job '(gated) :persistence :retry :when (constantly true)}
@@ -619,7 +621,7 @@
           (core/submit! eng '(count) {})
           (.hold world "moveTo")
           (let [walking (core/tick! eng)]
-            (core/register-reflex! eng {:trigger :every-interval :args {:seconds 45}})
+            (core/register-reflex! eng {:trigger :interval})
             (let [reflex-round (core/tick! eng)]
               (await walking)
               (await reflex-round)))
@@ -727,6 +729,36 @@
           (await (core/tick! eng))
           (is (= ["j1" "j2" "j2" "j1"] (ran seen)))
           (is (some #(= :cancelled (:kind %)) @seen)))))))
+
+(deftest an-interrupted-job-continues-right-after-the-jobs-done-now-before-it
+  ;; X and A take turns; A is cut by B, B by C. Each job done now goes directly before the one it cut, so once C and
+  ;; B are done the next round is A's again, not the round-robin's next pick (X).
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup)
+              x (core/submit! eng '(count) {})
+              a (core/submit! eng '(count) {})
+              _ (await (core/tick! eng))
+              a-round (core/tick! eng)
+              b (core/do-now! eng '(child {:rounds 2}))
+              _ (await a-round)
+              b-round (core/tick! eng)
+              c (core/do-now! eng '(child {:rounds 2}))]
+          (await b-round)
+          (is (= [x c b a] (listed eng)) "each job done now sits directly before the job it cut")
+          (dotimes [_ 4] (await (core/tick! eng)))
+          (is (= [x a b c c b a] (ran seen)) "C, then B, then the job cut first continues")
+          (is (= [x a] (listed eng)) "B and C are done")
+          (is (= {:n 2} (job-mem eng a)) "with its memory"))))))
+
+(deftest a-job-done-now-between-rounds-goes-where-the-next-scan-starts
+  (are [state expected] (= expected (:list (core/insert-now (merge {:list [] :cursor 0} state) "X")))
+    {:list ["A" "B" "C"] :current "B"} ["A" "X" "B" "C"]
+    {:list ["A" "B" "C"] :resume "C" :cursor 0} ["A" "B" "X" "C"]
+    {:list ["A" "B" "C"] :cursor 2} ["A" "B" "X" "C"]
+    {:list ["A" "B"] :cursor 9} ["A" "B" "X"]
+    {:list [] :cursor 0} ["X"]))
 
 (deftest insert-front-puts-the-job-directly-after-the-current-one
   (are [state expected] (= expected (:list (core/insert-front (merge {:list [] :cursor 0} state) "X")))

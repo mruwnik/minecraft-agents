@@ -245,7 +245,8 @@
                 blocked-drive (post eng {:op "set" :who "claude" :controls {:forward true}})]
             (is (= [200 :running] [(:status submitted) (get-in submitted [:edn :operation :status])]))
             (is (true? (get-in duplicate [:edn :duplicate])))
-            (is (= "action-running" (get-in overlap [:edn :reason])))
+            (is (= [:queued "move-1"] [(get-in overlap [:edn :operation :status]) (get-in overlap [:edn :behind])])
+                "a second action while one runs is queued behind it")
             (is (= "action-running" (get-in blocked-drive [:json :reason])))
             (let [cancelled (world-call eng {:op :cancel :who "claude" :request-id "move-1"})]
               (is (= :cancelled (get-in cancelled [:edn :operation :status])))
@@ -253,6 +254,71 @@
             (await (js/Promise.resolve))
             (is (= 1 (count (filter #(and (= :action (:source %)) (= :done (:kind %))
                                           (= "move-1" (:action-id %))) @seen))))))))))
+
+;; ---------------------------------------------------------------- queued world actions
+
+(defn held-moves!
+  "Make the primitive moveTo (no path sensing) hold each call until resolved by x: an atom {x resolve}."
+  [p]
+  (let [pending (atom {})]
+    (set! (.-pathWorld p) nil)
+    (set! (.-moveTo p) (fn [_ args] (js/Promise. (fn [resolve _] (swap! pending assoc (.-x (.-pos args)) resolve)))))
+    pending))
+
+(defn move [id x] {:op :submit :who "claude" :request-id id :action :move-to :args {:pos {:x x :y 64 :z 0} :timeoutS 1}})
+(defn op-status [eng id] (get-in (world-call eng {:op :status :who "claude" :request-id id}) [:edn :operation :status]))
+(defn settle! [] (js/Promise. #(js/setTimeout % 0)))
+
+(deftest world-actions-submitted-while-one-runs-run-in-order
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {})
+              pending (held-moves! p)]
+          (post eng {:op "take" :who "claude" :why "queue" :idleS 30})
+          (world-call eng (move "a" 10))
+          (let [b (world-call eng (move "b" 20))
+                c (world-call eng (move "c" 30))]
+            (is (= [200 :queued "a" 1] [(:status b) (get-in b [:edn :operation :status]) (get-in b [:edn :behind]) (get-in b [:edn :position])]))
+            (is (= [:queued 2] [(get-in c [:edn :operation :status]) (get-in c [:edn :position])])))
+          (await (settle!))
+          (is (= [10] (keys @pending)) "only the first action has started")
+          ((get @pending 10) #js {:status "arrived"})
+          (await (settle!))
+          (is (= [:done :running :queued] (mapv #(op-status eng %) ["a" "b" "c"])))
+          ((get @pending 20) #js {:status "arrived"})
+          (await (settle!))
+          ((get @pending 30) #js {:status "arrived"})
+          (await (settle!))
+          (is (= [:done :done :done] (mapv #(op-status eng %) ["a" "b" "c"])))
+          (is (= ["a" "b" "c"] (mapv :action-id (filter #(and (= :action (:source %)) (= :started (:kind %))) @seen))))
+          (is (= ["b" "c"] (mapv :action-id (filter #(and (= :action (:source %)) (= :queued (:kind %))) @seen)))))))))
+
+(deftest a-queued-world-action-can-be-cancelled-and-a-release-cancels-the-queue
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {})
+              pending (held-moves! p)]
+          (post eng {:op "take" :who "claude" :why "queue" :idleS 30})
+          (doseq [[id x] [["a" 10] ["b" 20] ["c" 30]]] (world-call eng (move id x)))
+          (is (= :cancelled (get-in (world-call eng {:op :cancel :who "claude" :request-id "b"}) [:edn :operation :status])))
+          ((get @pending 10) #js {:status "arrived"})
+          (await (settle!))
+          (is (= [:done :cancelled :running] (mapv #(op-status eng %) ["a" "b" "c"])) "the cancelled one is skipped")
+          (world-call eng (move "d" 40))
+          (post eng {:op "release" :who "claude"})
+          (is (= [:cancelled :cancelled] (mapv #(op-status eng %) ["c" "d"])) "a release cuts the running action and drops the queue")
+          (is (= [10 30] (sort (keys @pending))) "the dropped action never started"))))))
+
+(deftest the-world-action-queue-is-bounded
+  (let [{:keys [eng p]} (setup {})]
+    (held-moves! p)
+    (post eng {:op "take" :who "claude" :why "queue" :idleS 30})
+    (world-call eng (move "running" 1))
+    (doseq [n (range takeover/max-queued-world-ops)] (world-call eng (move (str "q" n) 1)))
+    (let [full (world-call eng (move "one-more" 1))]
+      (is (= [409 "queue-full"] [(:status full) (get-in full [:edn :reason])])))))
 
 (deftest world-action-requires-owner-and-enough-bounded-lease-time
   (let [{:keys [eng]} (setup {})

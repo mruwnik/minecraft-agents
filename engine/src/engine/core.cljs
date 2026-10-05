@@ -980,19 +980,23 @@
   (let [pos (front-position state)]
     (update state :list #(into (conj (subvec % 0 pos) id) (subvec % pos)))))
 
-(defn insert-head
-  "State with id first in the list; the scan keeps its place."
-  [state id]
-  (cond-> (update state :list #(into [id] %))
-    (pos? (count (:list state))) (update :cursor inc)))
+(defn insert-now
+  "State with id listed directly before the current job (the one running, or cut and waiting to resume), else where
+  the next scan starts. A job done now ends with the scan at its own index, which is then the cut job's, so the cut
+  job runs next even when its :resume mark was taken by a later cut."
+  [{:keys [list current resume cursor] :as state} id]
+  (let [idx (.indexOf list (or current resume))
+        pos (if (neg? idx) (min cursor (count list)) idx)]
+    (cond-> (update state :list #(into (conj (subvec % 0 pos) id) (subvec % pos)))
+      (< pos cursor) (update :cursor inc))))
 
 (defn submit!
   "Put a job spec (an expression, see engine.expr) on the list; (hold e) or
   opts :hold? make it hold the body; (backoff cfg e) or opts :backoff (a map or
-  false, which wins) set its backoff config. opts: :hold? :backoff :front? :head? :by.
+  false, which wins) set its backoff config. opts: :hold? :backoff :front? :now? :by.
   :front? lists the job directly after the current one (it gets the next round);
-  :head? lists it first (do-now!). Throws on a bad spec. Returns the instance id."
-  [eng spec {:keys [front? head? by] :as opts}]
+  :now? lists it directly before the current one (do-now!). Throws on a bad spec. Returns the instance id."
+  [eng spec {:keys [front? now? by] :as opts}]
   (let [{:keys [node hold?] :as parsed} (expr/parse-spec (:jobs eng) spec)
         hold? (boolean (or hold? (:hold? opts)))
         bo (if (contains? opts :backoff) (:backoff opts) (:backoff parsed))
@@ -1001,7 +1005,7 @@
         id (new-id! eng)]
     (swap! (:state eng) #(let [s (add-instance % id node (cond-> {:hold? hold?} (some? bo) (assoc :backoff bo)))]
                            (cond
-                             head? (insert-head s id)
+                             now? (insert-now s id)
                              front? (insert-front s id)
                              :else (update s :list conj id))))
     (mem/create-job! (:store eng) id args)
@@ -1034,13 +1038,14 @@
         true)))
 
 (defn do-now!
-  "Cut a running listed job and put the job spec at the front, holding the body."
+  "Cut a running listed job and list the job spec directly before it, holding the body: the new job runs now and the
+  cut one, memory kept, continues once it ends. A running reflex is not cut; the new job waits behind it."
   [eng spec]
   (expr/parse-spec (:jobs eng) spec)
   (let [r (running eng)]
     (when (and r (not (:reflex r)))
       (cut! eng r :do-now nil))
-    (submit! eng spec {:hold? true :head? true :by :agent})))
+    (submit! eng spec {:hold? true :now? true :by :agent})))
 
 ;; ------------------------------------------------------------------ register edits (agents only)
 
@@ -1253,7 +1258,7 @@
              :manual (atom nil)
              :away (atom nil)
              :waiting (atom {})
-             :world-ops (atom {:active nil :records {} :order []})
+             :world-ops (atom {:active nil :records {} :order [] :queue []})
              :acts (atom {})
              :said (atom [])
              :stalls (atom {})

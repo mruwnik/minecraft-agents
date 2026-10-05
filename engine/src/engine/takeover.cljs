@@ -16,7 +16,10 @@
             ["crypto" :as crypto]))
 
 (def max-world-ops 32)
-(declare cancel-active!)
+(def max-queued-world-ops
+  "World actions that may wait behind the running one; more are refused queue-full."
+  8)
+(declare cancel-active! start-next-world-op!)
 (def world-actions
   {:move-to {:method "moveTo" :timeout 10}
    :dig {:method "dig" :timeout 10}
@@ -89,12 +92,12 @@
 
 (defn set-world-record! [eng id record]
   (swap! (:world-ops eng)
-         (fn [{:keys [active records order]}]
+         (fn [{:keys [records order] :as ops}]
            (let [new? (not (contains? records id))
                  ids (if new? (conj order id) order)
                  ids (if (> (count ids) max-world-ops) (subvec ids (- (count ids) max-world-ops)) ids)
-                 records (-> (if new? records records) (assoc id record) (select-keys ids))]
-             {:active active :records records :order ids}))))
+                 records (-> records (assoc id record) (select-keys ids))]
+             (assoc ops :records records :order ids)))))
 
 (defn action-event! [eng id kind data]
   (core/emit! eng {:source :action :kind kind :action-id id :data data}))
@@ -135,14 +138,31 @@
         (action-event! eng id :done {:name (name (:action record)) :status :cut :reason reason})))
     id))
 
+(defn drop-queued!
+  "Cancel queued world action id (it never starts): status :cancelled with reason, and its one action.done event."
+  [eng id reason]
+  (swap! (:world-ops eng) update :queue #(filterv (fn [q] (not= id q)) %))
+  (when-let [record (world-record eng id)]
+    (when (= :queued (:status record))
+      (set-world-record! eng id (assoc record :status :cancelled :reason reason :finished-at (core/now eng)))
+      (action-event! eng id :done {:name (name (:action record)) :status :cut :reason reason}))))
+
+(defn drop-queue!
+  "Cancel every queued world action, in order."
+  [eng reason]
+  (run! #(drop-queued! eng % reason) (:queue @(:world-ops eng))))
+
 (defn cancel-world-op! [eng who id]
   (let [record (world-record eng id)]
     (cond
       (not (own-lease? eng who)) (op-refuse (if (core/manual? eng) "not-driver" "not-taken"))
       (nil? record) (op-refuse "operation-not-found")
       (not= who (:who record)) (op-refuse "not-driver")
+      (= :queued (:status record)) (do (drop-queued! eng id "cancelled") {:ok true :operation (op-view (world-record eng id))})
       (not= :running (:status record)) {:ok true :operation (op-view record)}
-      :else (do (cancel-active! eng "cancelled") {:ok true :operation (op-view (world-record eng id))}))))
+      :else (do (cancel-active! eng "cancelled")
+                (start-next-world-op! eng)
+                {:ok true :operation (op-view (world-record eng id))}))))
 
 ;; ------------------------------------------------------------------ move-to through go-to's walker
 
@@ -245,15 +265,83 @@
                (:ok r) {:status "worn" :worn (:worn r)}
                :else {:status "cannot" :reason (name (:reason r)) :item (:item r)}))))
 
-(defn submit-world-op! [eng {:keys [who request-id action args]}]
+(defn timeout-s-of
+  "The lease seconds world action action with args needs."
+  [eng action args]
+  (cond
+    (= action :move-to) (or (:timeoutS args) 10)
+    (and (= action :dig) (map? args) (valid-pos? (:pos args))) (dig-timeout-s eng args)
+    :else (:timeout (world-actions action) 10)))
+
+(defn finish-world-op!
+  "Book the end of the active world action (when attempt is still its current attempt) and start the next queued one."
+  [eng request-id attempt status fields event]
+  (when (current-attempt? eng request-id attempt)
+    (set-world-record! eng request-id (merge (world-record eng request-id) {:status status :finished-at (core/now eng)} fields))
+    (swap! (:world-ops eng) assoc :active nil)
+    (action-event! eng request-id :done event)
+    (start-next-world-op! eng)))
+
+(defn start-world-op!
+  "Run world action record now under the lease's current token; it becomes the active one."
+  [eng {:keys [request-id action args] :as record}]
+  (let [current @(:manual eng)
+        token (:token current)
+        now (core/now eng)
+        call-args (if (= action :move-to) (merge {:timeoutS (timeout-s-of eng action args)} args) args)
+        attempt (.randomUUID crypto)
+        record (assoc record :status :running :attempt-id attempt :owner-token token :started-at now)]
+    ;; A prior raw drive can leave controls held. Clear them before the action so lease ticks cannot
+    ;; issue drive/stop calls that interleave with its pathfinder or interaction.
+    (.stopDriving (:primitives eng))
+    (swap! (:manual eng) assoc :last-beat now :deadman? false :controls lease/all-false :deadlines {})
+    (swap! (:world-ops eng) assoc :active request-id)
+    (set-world-record! eng request-id record)
+    (action-event! eng request-id :started {:name (name action) :args call-args})
+    (let [method (:method (world-actions action))
+          promise (try
+                    (js/Promise.resolve
+                      (cond
+                        (and (= action :move-to) (walker-applies? eng args))
+                        (.then (walk-move-to! eng token args (:timeoutS call-args)) clj->js)
+                        (= action :dig) (dig-with-tool! eng token call-args)
+                        (= action :wear) (wear! eng token call-args)
+                        :else
+                        (.call (aget (:primitives eng) method) (:primitives eng) token (clj->js call-args))))
+                    (catch :default e (js/Promise.reject e)))]
+      (.then promise
+             (fn [result]
+               (let [value (js->clj result :keywordize-keys true)
+                     summary (compact-result value)]
+                 (finish-world-op! eng request-id attempt :done {:result summary}
+                                   {:name (name action) :status (:status value) :result summary})))
+             (fn [error]
+               (let [message (subs (str (.-message error)) 0 (min 200 (count (str (.-message error)))))]
+                 (finish-world-op! eng request-id attempt :failed {:reason message}
+                                   {:name (name action) :status :failed :error message}))))
+      record)))
+
+(defn start-next-world-op!
+  "Start the first queued world action, if none is active and the lease is still its submitter's."
+  [eng]
+  (when-not (:active @(:world-ops eng))
+    (when-let [id (first (:queue @(:world-ops eng)))]
+      (swap! (:world-ops eng) update :queue #(vec (rest %)))
+      (let [record (world-record eng id)]
+        (cond
+          (not= :queued (:status record)) (start-next-world-op! eng)
+          (not (own-lease? eng (:who record))) (do (drop-queued! eng id "lease-ended") (start-next-world-op! eng))
+          :else (start-world-op! eng record))))))
+
+(defn submit-world-op!
+  "Run a world action now, or queue it behind the running one (in order, at most max-queued-world-ops waiting)."
+  [eng {:keys [who request-id action args]}]
   (let [prior (world-record eng request-id)
         current @(:manual eng)
         idle-ms (:idle-ms current)
-        timeout-s (cond
-                    (= action :move-to) (or (:timeoutS args) 10)
-                    (and (= action :dig) (map? args) (valid-pos? (:pos args))) (dig-timeout-s eng args)
-                    :else (:timeout (world-actions action) 10))
-        now (core/now eng)]
+        timeout-s (timeout-s-of eng action args)
+        active (:active @(:world-ops eng))
+        queue (:queue @(:world-ops eng))]
     (cond
       (not (valid-label? who)) (op-refuse "bad-who")
       (not (valid-label? request-id)) (op-refuse "bad-request-id")
@@ -264,48 +352,18 @@
       (not (own-lease? eng who)) (op-refuse (if (core/manual? eng) "not-driver" "not-taken"))
       (not (contains? world-actions action)) (op-refuse "unknown-action")
       (action-args-error action args) (op-refuse "bad-args" (action-args-error action args))
-      (:active @(:world-ops eng)) (op-refuse "action-running" {:request-id (:active @(:world-ops eng))})
       (< idle-ms (+ (* timeout-s 1000) 1000)) (op-refuse "lease-too-short" {:minimum-idleS (inc timeout-s)})
+      (and active (>= (count queue) max-queued-world-ops))
+      (op-refuse "queue-full" {:running active :queued (count queue) :max max-queued-world-ops})
       :else
-      (let [token (:token current)
-            original-args args
-            call-args (if (= action :move-to) (merge {:timeoutS timeout-s} args) args)
-            attempt (.randomUUID crypto)
-            record {:request-id request-id :who who :action action :args original-args :status :running
-                    :attempt-id attempt :owner-token token :submitted-at now}]
-        ;; A prior raw drive can leave controls held. Clear them before the action so lease ticks cannot
-        ;; issue drive/stop calls that interleave with its pathfinder or interaction.
-        (.stopDriving (:primitives eng))
-        (swap! (:manual eng) assoc :last-beat now :deadman? false :controls lease/all-false :deadlines {})
-        (swap! (:world-ops eng) assoc :active request-id)
-        (set-world-record! eng request-id record)
-        (action-event! eng request-id :started {:name (name action) :args call-args})
-        (let [method (:method (world-actions action))
-              promise (try
-                        (js/Promise.resolve
-                          (cond
-                            (and (= action :move-to) (walker-applies? eng args))
-                            (.then (walk-move-to! eng token args timeout-s) clj->js)
-                            (= action :dig) (dig-with-tool! eng token call-args)
-                            (= action :wear) (wear! eng token call-args)
-                            :else
-                            (.call (aget (:primitives eng) method) (:primitives eng) token (clj->js call-args))))
-                        (catch :default e (js/Promise.reject e)))]
-          (.then promise
-                 (fn [result]
-                   (when (current-attempt? eng request-id attempt)
-                     (let [value (js->clj result :keywordize-keys true)]
-                       (let [summary (compact-result value)]
-                         (set-world-record! eng request-id (assoc (world-record eng request-id) :status :done :result summary :finished-at (core/now eng)))
-                       (swap! (:world-ops eng) assoc :active nil)
-                           (action-event! eng request-id :done {:name (name action) :status (:status value) :result summary})))))
-                 (fn [error]
-                   (when (current-attempt? eng request-id attempt)
-                     (let [message (subs (str (.-message error)) 0 (min 200 (count (str (.-message error))))) ]
-                       (set-world-record! eng request-id (assoc (world-record eng request-id) :status :failed :reason message :finished-at (core/now eng)))
-                     (swap! (:world-ops eng) assoc :active nil)
-                       (action-event! eng request-id :done {:name (name action) :status :failed :error message})))))
-          {:ok true :operation (op-view record)})))))
+      (let [record {:request-id request-id :who who :action action :args args :status :queued
+                    :submitted-at (core/now eng)}]
+        (if active
+          (do (set-world-record! eng request-id record)
+              (swap! (:world-ops eng) update :queue (fnil conj []) request-id)
+              (action-event! eng request-id :queued {:name (name action) :args args :behind active})
+              {:ok true :operation (op-view record) :behind active :position (count (:queue @(:world-ops eng)))})
+          {:ok true :operation (op-view (start-world-op! eng record))})))))
 
 (defn world-request [eng method body content-type]
   (let [request (try (reader/read-string (or body "")) (catch :default _ ::invalid))]
@@ -357,6 +415,7 @@
   "End the takeover: controls cleared, owner nil, the scheduler resumes on the next tick."
   [eng {:keys [who reason held-ms]}]
   (when (core/manual? eng)
+    (drop-queue! eng (str "lease-" reason))
     (cancel-active! eng (str "lease-" reason))
     (.stopDriving (:primitives eng))
     (core/set-owner! eng nil)
@@ -432,6 +491,7 @@
 (defn close!
   "End a held takeover for shutdown (call before core/shutdown!)."
   [eng]
+  (drop-queue! eng "shutdown")
   (cancel-active! eng "shutdown")
   (run! #(apply-effect! eng %) (lease/close @(:manual eng) (core/now eng)))
   (store! eng nil))
