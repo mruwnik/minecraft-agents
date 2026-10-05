@@ -56,14 +56,28 @@
   (let [{:keys [x y z]} (feet p)]
     (boolean (some #(solid-at? p {:x x :y (+ y %) :z z}) (range 1 (inc height))))))
 
+(def buried-scan 32)
+
+(def buried-thickness 3)
+
+(defn buried?
+  "The body is underground: at least buried-thickness solid blocks in the column within buried-scan blocks above the
+  feet (stone over a stair or shaft that is open overhead for more than the roof height). Mobs spawn there by block
+  light, not by time of day, so the night changes nothing; a single floating slab or a bridge does not count."
+  [p]
+  (let [{:keys [x y z]} (feet p)]
+    (<= buried-thickness
+        (count (take buried-thickness
+                     (filter #(solid-at? p {:x x :y (+ y %) :z z}) (range 1 (inc buried-scan))))))))
+
 (defn night? [p] (not (.-isDay (.self p))))
 
 (defn sleeping? [p] (boolean (.-isSleeping (.self p))))
 
 (defn unsafe-night?
-  "Night, awake and not under a roof."
+  "Night, awake, not under a roof and not buried underground."
   [p roof-height]
-  (and (night? p) (not (sleeping? p)) (not (roofed? p roof-height))))
+  (and (night? p) (not (sleeping? p)) (not (roofed? p roof-height)) (not (buried? p))))
 
 (defn bed-in-view
   "The remembered bed position in a memory view when it is within radius of

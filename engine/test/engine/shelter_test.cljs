@@ -86,6 +86,18 @@
     {:time night :blocks {"0,66,0" "stone"} :self {:pos {:x 1 :y 64 :z 0}}} {} true
     {:time night :self {:isSleeping true}} {} false))
 
+(def stone-above
+  "A column of stone from y+n for k blocks over the body at y 64."
+  (fn [n k] (into {} (map (fn [dy] [(str "0," (+ 64 n dy) ",0") "stone"]) (range k)))))
+
+(deftest night-unsafe-is-silent-when-buried-underground
+  (are [blocks held] (= held (fires? {:time night :blocks blocks} {}))
+    (stone-above 10 5) false
+    (stone-above 30 3) false
+    (stone-above 10 2) true
+    (stone-above 40 5) true
+    (stone-above 10 1) true))
+
 (defn sleeping-nearby?
   ([world args] (sleeping-nearby? world args nil))
   ([world args bed]
