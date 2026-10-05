@@ -2,6 +2,8 @@ node_modules/
 textures/
 state/
 .superpowers/
+ViaProxy-3.4.14.jar
+docs/superpowers/
 # the viewer cljs build (dashboard/shadow-cljs.edn :viewer; tools/view/build-cljs.mjs)
 tools/view/web/cljs/
 
