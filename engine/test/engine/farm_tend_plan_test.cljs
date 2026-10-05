@@ -246,6 +246,21 @@
           (is (= "dirt" (block-at s 2 63 2)))
           (is (= #{[3 64 2]} (set (keys (placed s))))))))))
 
+(deftest a-zone-over-the-only-ground-to-till-is-named-in-a-warn
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [zone {:name "keep-out" :min [2 60 2] :max [2 70 2] :owner "x" :allow #{}}
+              s (await (run {:plan "mix"} (world-of (ground "dirt" [[2 2]])
+                                                    {:inventory [(item "stone_hoe" 1) (item "wheat_seeds" 6)]})
+                            {"mix" (plan-of)} [zone] 6))
+              refused (events-of s :farm-tend.refused)]
+          (is (empty? (calls s "useOn")))
+          (is (= 1 (count refused)))
+          (is (= [{:zones ["keep-out"] :owners ["x"]}] (mapv #(select-keys % [:zones :owners]) refused)))
+          (is (re-find #"keep-out" (:text (first refused))))
+          (is (re-find #"x" (:text (first refused)))))))))
+
 (deftest tend-passes-the-zone-opt-out-to-its-children
   (async done
     (tu/run-async done

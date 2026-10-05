@@ -2,6 +2,8 @@
   (:require [clojure.string :as str]
             [engine.access.permit :as permit]
             [engine.ctx :as ctx]
+            [engine.jobs.access :as access]
+            [engine.jobs.gate :as gate]
             [engine.jobs.util :as u]
             [jobs.farm.fertilize :as fertilize]
             [jobs.farm.harvest :as harvest]
@@ -63,7 +65,9 @@
   farm-tend.declined warn naming the plan and the reason, while the plan is missing, unreadable, holds no
   crop cells (in :part) or no zone list has been read; a started run declines in its next round when the plan stopped
   being workable. The :field of the result then also holds :wrong, and the explicit farmland the plan wants without a
-  crop over it is not tilled (it would revert).")
+  crop over it is not tilled (it would revert). Untilled ground the rules refuse (a foreign zone or claim, another
+  plan's footprint) is left alone with one farm-tend.refused warn naming the zones, claims, plans and owners; when
+  nothing else is to be done the check stays false (the job waits, now with that reason on record).")
 
 (def args
   {:box {:doc "the field: {:min {:x :y :z} :max {:x :y :z}}, inclusive; y min is the farmland layer, max y at least min y + 1; at most 2048 cells; required unless :plan is given (without either the check declines)" :default nil}
@@ -293,6 +297,25 @@
   [crops]
   (into {} (for [[crop n] (frequencies (vals crops))] [(harvest/seed-of crop) (* 2 n)])))
 
+(defn note-refused!
+  "One farm-tend.refused warn per job when the rules refuse the hoe on untilled ground cells of the plan for a
+  social reason: names the zones, claims and plans and the owners that refuse, so a run with nothing else to do is
+  never silent. Returns the refused positions."
+  [c plan cells]
+  (let [verdicts (into [] (keep (fn [pos] (let [v (permit/permit c plan :dig pos)]
+                                            (when (gate/refused? v) [pos v]))))
+                       cells)
+        vs (map second verdicts)
+        fields {:zones (vec (distinct (keep :zone vs))) :claims (vec (distinct (keep :claim vs)))
+                :plans (vec (distinct (keep :plan vs))) :owners (vec (distinct (keep :owner vs)))}]
+    (when (seq verdicts)
+      (ctx/warn-once! c [plan :refused] :farm-tend.refused
+                      (assoc fields :plan plan :count (count verdicts)
+                             :text (str "tend of " plan " leaves " (count verdicts) " untilled cells: refused by "
+                                        (access/refusal-text fields)
+                                        (when (seq (:owners fields)) (str " (owner " (str/join ", " (:owners fields)) ")"))))))
+    (mapv first verdicts)))
+
 (defn plan-facts
   "What the decisions are made from for a plan, read live."
   [c]
@@ -308,10 +331,11 @@
         sowing (plant/sowing c crops)
         [mid R] (harvest/plan-field crops)
         keep (merge-with max (seed-reserve crops) keep)
-        tillable (->> (ground-cells answer crops)
-                      (remove (fn [[pos _]] (tried pos)))
-                      (filter (fn [[pos _]] (untilled? (ground-cell p pos))))
-                      (filter (fn [[pos _]] (permit/ok? c plan :dig pos))))
+        untilled-cells (->> (ground-cells answer crops)
+                            (remove (fn [[pos _]] (tried pos)))
+                            (filter (fn [[pos _]] (untilled? (ground-cell p pos)))))
+        _ (note-refused! c plan (map key untilled-cells))
+        tillable (filter (fn [[pos _]] (permit/ok? c plan :dig pos)) untilled-cells)
         seeded (filter (fn [[_ crop]] (let [seed (harvest/seed-of crop)] (> (get have seed 0) (get bare-of seed 0)))) tillable)]
     {:mid mid
      :radius R
