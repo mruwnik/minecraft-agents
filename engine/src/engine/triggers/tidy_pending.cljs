@@ -4,8 +4,12 @@
   cell is loaded is either restorable now (the block is as the job left it, and a dug block's item is carried; fewer
   than engine.jobs.tidy/max-tries tries) or one that the last run of jobs.survival.restore-broken has not reported
   (its cell is not in the latest :tidy-reported entry): the run then restores, or warns once and forgets what it
-  cannot. Persistence :stop: a run that leaves entries holds them, the condition turns false and fires again only
-  when something has changed (items carried, the hostile gone, new entries). Entries whose cell is not loaded wait
+  cannot. A run that reports leaves only entries it cannot restore now, so the condition turns false and holds again
+  only when something has changed (item carried, body out of the cell, hostile gone, new entries). Persistence
+  :cooldown 10 s, not :stop: a run cut short by a backoff leaves entries unreported or still restorable (under
+  max-tries), the condition stays true, and a :stop latch, cleared only by a false condition, would then hold for
+  good, later entries included. The retry after the cooldown is bounded: each try counts toward max-tries, and a
+  run that ends reports. Entries whose cell is not loaded wait
   until the body is near. Entries recorded by a job that is still live (running, queued, paused) are ignored: the
   job may still be digging there; the trigger fires once it has ended."
   (:require [engine.jobs.tidy :as tidy]
@@ -37,4 +41,5 @@
    :when (fn [p view args _kn live] (holds? p view args live))
    :job '(jobs.survival.restore-broken)
    :args defaults
-   :persistence :stop})
+   :persistence :cooldown
+   :cooldown-s 10})

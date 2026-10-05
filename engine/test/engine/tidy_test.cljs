@@ -5,11 +5,14 @@
             [engine.zones-survival-test :as zs]
             [engine.fake :as fake]
             [engine.core :as core]
+            [engine.events :as events]
             [engine.jobs.tidy :as tidy]
             [engine.memory :as mem]
+            [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [engine.triggers.tidy-pending :as tidy-pending]))
+            [engine.triggers.tidy-pending :as tidy-pending]
+            [engine.world :as ew]))
 
 (defn ^:async ticks! [eng n]
   (dotimes [_ n] (await (core/tick! eng))))
@@ -173,10 +176,10 @@
            [(assoc with-stone :unloaded ["0,65,0"]) [[:tidy dug]] false "cell not loaded"]]]
     (is (= expected (holds? world memory)) why)))
 
-(deftest the-trigger-is-a-builtin-with-the-stop-persistence
+(deftest the-trigger-is-a-builtin-with-a-cooldown
   (is (= tidy-pending/trigger (:tidy-pending triggers/all)))
   (is (= '(jobs.survival.restore-broken) (:job tidy-pending/trigger)))
-  (is (= :stop (:persistence tidy-pending/trigger))))
+  (is (= [:cooldown 10] ((juxt :persistence :cooldown-s) tidy-pending/trigger))))
 
 (deftest a-trespass-is-restored-by-itself-through-the-trigger
   (async done
@@ -216,6 +219,75 @@
           (fake/add-item! p "stone" 2)
           (await (ticks! eng 20))
           (is (= [{:x 0 :y 65 :z 0}] (mapv zs/arg-pos (zs/calls p "place"))))
+          (is (= [] (tidy-entries eng))))))))
+
+;; ------------------------------------------------------------------ after a backoff
+
+(def unplaceable
+  "A dug entry whose put-back the server refuses every time (seeds onto no farmland): restore-broken backs off on it."
+  {:cell [1 65 0] :action :dig :was "wheat_seeds" :now "air" :zone "vault" :tries 0 :job "j0"})
+
+(defn setup-with-backoff
+  "zs/setup with the engine's default backoff on and the clock returned, so a test can wait the backoff out."
+  [world zones]
+  (let [clock (atom 1000000)
+        [seen sink] (tu/legacy-capture-sink)
+        p (tu/fake (merge {:offlineScale 0.0001} world))
+        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                          :world (ew/of-data {} {} zones)
+                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+    {:eng eng :p p :seen seen :clock clock}))
+
+(defn ^:async ticks-over!
+  "n ticks, the clock moving ms after each."
+  [eng clock n ms]
+  (dotimes [_ n]
+    (await (core/tick! eng))
+    (swap! clock + ms)))
+
+(defn firings [seen] (count (filter #(and (= :fired (:kind %)) (= :tidy-pending (:reflex %))) @seen)))
+
+(defn ^:async backed-off!
+  "A body by an unplaceable entry with the tidy-pending trigger as registered; returns the setup once the reflex ended
+  with a backoff."
+  [world]
+  (let [{:keys [eng seen] :as s} (setup-with-backoff (merge-with into aside world {:inventory [{:name "wheat_seeds" :count 4}]})
+                                                     [(zs/whole-zone "Miles")])]
+    (seed! eng [unplaceable])
+    (core/register-reflex! eng {:trigger :tidy-pending})
+    (await (ticks-over! eng (:clock s) 12 10))
+    (is (= [:backoff] (mapv :outcome (filter #(and (= :ended (:kind %)) (= :tidy-pending (:reflex %))) @seen)))
+        "the first run ended with a backoff")
+    s))
+
+(deftest after-a-backoff-a-new-entry-is-restored
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen clock]} (await (backed-off! {:inventory [{:name "stone" :count 2}]}))]
+          (seed! eng [(assoc dug :job "j9")])
+          (await (ticks-over! eng clock 60 1000))
+          (is (= [{:x 0 :y 65 :z 0}] (filterv #(= 0 (:x %)) (mapv zs/arg-pos (zs/calls p "place")))) "the new entry is put back")
+          (is (= [] (tidy-entries eng)) "the given-up entry is forgotten too")
+          (is (>= 3 (firings seen)) "no loop on the entry that cannot be placed"))))))
+
+(deftest after-a-backoff-a-not-carried-entry-is-restored-once-the-item-is-picked-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen clock]} (await (backed-off! {}))]
+          (seed! eng [(assoc dug :job "j9")])
+          (await (ticks-over! eng clock 60 1000))
+          (is (= [] (filterv #(= 0 (:x %)) (mapv zs/arg-pos (zs/calls p "place")))) "no stone carried")
+          (is (= [[{:cell [1 65 0] :was "wheat_seeds" :why :gave-up} {:cell [0 65 0] :was "stone" :why :not-carried}]]
+                 (mapv :cells (zs/trespass seen :tidy.not-restored)))
+              "one warn: the seeds given up, the stone not carried")
+          (let [n (firings seen)]
+            (await (ticks-over! eng clock 60 1000))
+            (is (= n (firings seen)) "nothing changed: no firing"))
+          (fake/add-item! p "stone" 2)
+          (await (ticks-over! eng clock 60 1000))
+          (is (= [{:x 0 :y 65 :z 0}] (filterv #(= 0 (:x %)) (mapv zs/arg-pos (zs/calls p "place")))) "put back once carried")
           (is (= [] (tidy-entries eng))))))))
 
 (def dirt-box {:from {:x 1 :y 65 :z 1} :to {:x 2 :y 65 :z 2}})

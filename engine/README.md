@@ -690,6 +690,7 @@ down.
   | died | 30 | |
   | inventory-nearly-full | 120 | a body with nothing it may toss does not retry every tick |
 - Agent-only edits (functions in `engine.core`): `register-reflex!`,
+  | tidy-pending | 10 | a run that backed off retries its entries (3 tries per cell) and later ones; a run that ends reports, and what it cannot restore waits for a change |
   `remove-reflex!` (refused for built-ins), `mute!` (with TTL), `move!`
   (`{:above id}` or `{:below id}`, with TTL), `clear-change!`. Each property
   (mute, position) is at its default or under exactly one change; a new change
@@ -1497,7 +1498,7 @@ Listed in the order a survival register puts them (most urgent first, as
 | `:died` | a `:died` entry younger than five minutes with a newer `:respawned` and no newer `:recovered` | `(jobs.survival.recover-drops)` | cooldown 30 s |
 | `:inventory-nearly-full` | at most `:free` (default 2) of the 36 main and hotbar slots are empty; no chest is needed | `(jobs.storage.make-room)` | cooldown 120 s |
 | `:every-interval` | no `:looked` entry, or the latest is at least `:seconds` (default 60) old | `(jobs.movement.look-around)` | cooldown 0 |
-| `:tidy-pending` | the body is safe (health at least `:min-health` 14, no hostile within `:danger-radius` 8) and a `:tidy` entry with a loaded cell, whose recording job is no longer live (running, queued or paused; so a job still digging is not undone mid-way), is restorable now (cell as the job left it, dug block's item carried, under 3 tries) or not yet reported (cell not in the latest `:tidy-reported`, written by `restore-broken`), so entries it cannot restore are warned once and then left until something changes (item carried, hostile gone, new entries); in the survival scenario last | `(jobs.survival.restore-broken)` | stop |
+| `:tidy-pending` | the body is safe (health at least `:min-health` 14, no hostile within `:danger-radius` 8) and a `:tidy` entry with a loaded cell, whose recording job is no longer live (running, queued or paused; so a job still digging is not undone mid-way), is restorable now (cell as the job left it, dug block's item carried, under 3 tries) or not yet reported (cell not in the latest `:tidy-reported`, written by `restore-broken`), so entries it cannot restore are warned once and then left until something changes (item carried, body out of the cell, hostile gone, new entries); in the survival scenario last | `(jobs.survival.restore-broken)` | cooldown 10 s (not stop: a run cut short by a backoff leaves the condition true, and a stop latch would never clear, so later entries would never fire; retries are bounded by the 3 tries per cell) |
 | `:mounted` | the body rides something (`self().vehicle`) and no live job holds a vehicle (`engine.jobs.vehicle/held?`: a `:vehicle-hold {:job root-id}` entry whose job still has its `:job/<id>` memory; riding jobs call `hold!` before they mount and `release!` once off); in `triggers/all`, registered by no scenario yet | `(jobs.movement.leave-vehicle)` | stop |
 | `:player-joined` | the latest `:player-joined` memory entry is at most `:window-s` (default 10) old (`engine.triggers.player-joined`; in `triggers/all`, registered by no scenario yet; `:player-left` has no trigger) | `(jobs.debug.notify {:text "player joined"})` | cooldown 10 s |
 

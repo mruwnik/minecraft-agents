@@ -1,2 +1,2 @@
 ;; ProbeTidy live cases for engine.jobs.tidy and restore-broken: idle apart from the tidy-pending trigger, jobs submitted with tools/jobs.mjs
-{:register [{:trigger :tidy-pending :persistence :stop :cooldown-s 0}] :queue []}
+{:register [{:trigger :tidy-pending :persistence :cooldown :cooldown-s 10}] :queue []}
