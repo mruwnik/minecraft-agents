@@ -7,6 +7,7 @@
             [engine.events :as events]
             [engine.takeover :as takeover]
             [engine.fake :as fake]
+            [engine.memory :as mem]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [engine.world :as ew]
@@ -212,7 +213,7 @@
               args {:from {:x 1 :y 63 :z 1} :to {:x 1 :y 63 :z 1}}]
           (.override (.-world p) "dig" (fn ^:async f [_ _ _] #js {:status "unreachable"}))
           (is (= {:tilled 0 :skipped {{:x 1 :y 63 :z 1} :cover-stuck}} (await (child-outcome eng job args 10))))
-          (is (= 2 (count (calls p "dig")))))))))
+          (is (= 1 (count (calls p "dig"))) "the dig child remembers the failed reach and waits; it does not dig again from the same cell"))))))
 
 (defn counting-ctx
   "A ctx for till/check over the fake world; reads is an atom counting blockAt calls per cell."
@@ -264,3 +265,13 @@
           (await (run-until-empty eng 10))
           (is (empty? (calls p "useOn")))
           (is (= [:no-zones] (mapv :reason (kinds seen :till.declined)))))))))
+
+(deftest a-cover-dug-in-anothers-zone-with-the-opt-out-is-recorded-for-tidying
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:inventory hoe :blocks (assoc four "1,64,1" "short_grass")}
+                                   (ew/of-data {} {} [(assoc zone-over-one :owner "Miles")]))
+              result (await (child-outcome eng job (assoc box :ignore-zones? true) 16))]
+          (is (= 4 (:tilled result)))
+          (is (= [[1 64 1]] (mapv #(:cell (:data %)) (mem/entries (mem/view (:store eng)) :tidy)))))))))

@@ -13,7 +13,9 @@
   a result {:tilled n :skipped {pos reason}}. With :for-plan (the id of the plan the cells belong to) every cell is
   asked of engine.access.rules/may-dig? with the zones and the footprints of the OTHER active plans, when the round
   looks at it and again right before the hoe or the cover dig; a refused cell is skipped :not-permitted, and the
-  check declines while no zone list has been read.")
+  check declines while no zone list has been read. Ground cover over a cell (grass, ferns, snow layer) is dug by a
+  jobs.blocks.dig child (rules, tidy record, the drop left); a cover the child will not dig (it waits) or gives up
+  on counts a try, and two skip the cell :cover-stuck.")
 
 (def args
   {:from {:doc "box corner (inclusive); with :to, any order" :default nil}
@@ -100,6 +102,13 @@
       (skip! c [pos] reason)
       (ctx/update-mem! c assoc-in [:tries pos] n))))
 
+(defn cover-args
+  "The jobs.blocks.dig args for the ground cover at pos: no tool needed, the drop left, every dig hazard taken (a
+  plant over the ground)."
+  [c pos]
+  (merge (select-keys (:args c) [:for-plan :ignore-zones?])
+         {:pos pos :collect false :need-drop false :accept #{:fluid-adjacent :falling-block :under-feet}}))
+
 (defn nearest
   "The [pos name] of todo nearest the body."
   [c todo]
@@ -147,8 +156,10 @@
                 (do (skip! c [target] :not-permitted) :continue)
 
                 (ground-cover above)
-                (let [d (await (ctx/act c :dig (clj->js {:pos above-pos})))]
-                  (when (not= "dug" (.-status d)) (bump! c target :cover-stuck))
+                (let [r (await (ctx/call-child c :cover 'jobs.blocks.dig (cover-args c above-pos)))]
+                  (when (or (= :declined r)
+                            (and (= :done r) (not (#{:dug :already-clear} (:reason (ctx/child-result c :cover))))))
+                    (bump! c target :cover-stuck))
                   :continue)
 
                 (not (or (nil? above) (air above)))
