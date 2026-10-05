@@ -61,7 +61,7 @@
           (ut/block-moveTo! p) ; the job's own moveTo cannot route through a door
           (ut/seed-moved! eng (repeat 4 {:from {:x 5 :y 64 :z 1} :to {:x 5 :y 64 :z 1} :status "blocked" :target outside}))
           (core/submit! eng '(jobs.maintenance.unstick) {})
-          (await (st/tick-n eng 3))
+          (await (st/tick-n eng 30))
           (is (= [] (ut/calls p "jumpPlace")) "no pillar in the room")
           (is (= [] (ut/calls p "dig")) "no roof or wall dug")
           (is (= [] (ut/calls p "place")))
@@ -75,9 +75,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (ut/setup {:self {:pos ut/at5} :blocks ut/deep-pit :inventory [{:name "dirt" :count 4}]})]
-          (await (ut/run-attempts! eng p 1 :free))
-          (is (= [{:item "dirt" :count 3}] (ut/call-args p "jumpPlace")) "a real pit: the walk finds no way, so it pillars"))))))
+        (let [here {:x 5 :y 61 :z 0}
+              {:keys [eng p]} (ut/setup {:self {:pos here} :blocks ut/pit :inventory [{:name "dirt" :count 4}]})]
+          (await (ut/run-unstick! eng here ut/goal))
+          (is (= 3 (count (ut/calls p "jumpPlace"))) "a real pit: the walk finds no way, so go-to pillars")
+          (is (= [] (:list (core/state eng)))))))))
 
 ;; ------------------------------------------------------------------ night-unsafe in the hut
 

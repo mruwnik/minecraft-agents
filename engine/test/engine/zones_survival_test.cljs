@@ -152,18 +152,20 @@
 
 (defn dug [p] (mapv arg-pos (calls p "dig")))
 
-(deftest unstick-picks-the-stair-step-that-is-permitted
+(deftest unstick-in-a-pit-in-another-s-zone-neither-pillars-nor-digs
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[zones expected warns] [[[(zone "Miles" [6 64 0] [6 66 0])] [{:x 4 :y 65 :z 0} {:x 4 :y 66 :z 0}] []]
-                                        [[(zone "Miles" [4 64 -3] [6 66 3])] [{:x 6 :y 65 :z 0} {:x 6 :y 66 :z 0}] [["vault"]]]
-                                        [[(zone "Fake" [6 64 0] [6 66 0])] [{:x 6 :y 65 :z 0} {:x 6 :y 66 :z 0}] []]
-                                        [nil [{:x 6 :y 65 :z 0} {:x 6 :y 66 :z 0}] []]]]
-          (let [{:keys [eng p seen]} (setup {:self ut/dirt-self :blocks ut/dirt-pit} zones)]
-            (await (ut/run-attempts! eng p 1 false))
-            (is (= expected (dug p)) (pr-str zones))
-            (is (= warns (mapv :zones (trespass seen :unstick.trespass-last-resort))) (pr-str zones))))))))
+        (let [here {:x 5 :y 61 :z 0}
+              {:keys [eng p seen]} (setup {:self {:pos here} :blocks ut/pit :inventory [{:name "dirt" :count 4}]}
+                                          [(zone "Miles" [0 55 -5] [12 70 5])])]
+          (ut/seed-moved! eng (repeat 4 (ut/bad-move-at here ut/goal)))
+          (core/submit! eng '(jobs.maintenance.unstick) {})
+          (await (run-until-empty eng 100))
+          (is (= [] (calls p "jumpPlace")))
+          (is (= [] (calls p "dig")))
+          (is (= {:step :pillar :reason :zone} (select-keys (:escalation (ut/failed-event seen)) [:step :reason]))
+              "go-to's pillar refuses another's zone, and unstick says so"))))))
 
 ;; ------------------------------------------------------------------ get-food
 
