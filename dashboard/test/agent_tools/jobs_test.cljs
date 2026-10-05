@@ -68,6 +68,10 @@
     (is (thrown? js/Error (jobs/spec-for source)) source))
   (is (string? (:error (request "--world" "w" "Bob" "submit" "{:job \"custom\"}")))))
 
+(deftest a-malformed-job-spec-error-shows-an-example
+  (doseq [source ["{:job :foo}" "()" "(jobs.one) (jobs.two)"]]
+    (is (re-find #"e\.g\. \(jobs\.movement\.go-to \{" (.-message (try (jobs/spec-for source) (catch :default e e)))) source)))
+
 (deftest job-mutations-have-a-total-deadline-even-when-no-response-arrives
   (async done
     (-> (jobs/post! "/unused" {:op :cancel :id "j1"} {:timeout-ms 5 :request-fn (fn [_ _] (fake/pending-request))})

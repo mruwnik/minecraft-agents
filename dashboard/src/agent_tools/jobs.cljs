@@ -23,12 +23,19 @@
        "           checkpoint observe --wait uses, so the same events are not reported twice.\n"
        "Without --wait mutations return immediately; observe.mjs <body> --world <world> --wait --watch jID tracks completion."))
 
+(def spec-example "a spec is one list: a job name then an args map, e.g. (jobs.movement.go-to {:pos {:x 1 :y 64 :z 2}})")
+
+(defn read-spec [text]
+  (try (map-tool/read-edn text)
+       (catch :default error
+         (throw (js/Error. (str (.-message error) "; " spec-example))))))
+
 (defn spec-for [text]
   (when (or (not (string? text)) (> (.byteLength js/Buffer text) 12000))
     (throw (js/Error. "spec must be EDN text, at most 12000 bytes")))
-  (let [form (map-tool/read-edn text)]
+  (let [form (read-spec text)]
     (when-not (and (seq? form) (symbol? (first form)))
-      (throw (js/Error. "spec must be one native EDN job expression list")))
+      (throw (js/Error. (str "spec must be one native EDN job expression list; " spec-example))))
     form))
 
 (defn request-for [argv]
