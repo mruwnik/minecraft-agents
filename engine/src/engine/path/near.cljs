@@ -35,12 +35,18 @@
   explore, a search that ran out of loaded land walks to its frontier (walk/plan-walk :frontier). With budget, at most
   that many expansions of search (walk/plan-walk! :budget): the plan may be status \"searching\" (walk nowhere, the
   search goes on at the next call) or a walk to where an unfinished search has got to.
+  With budget, each plan's search is an info :planned event {:ms :status :why :nodes} (nodes only once the search is over).
   A promise: the searches run in slices with yields between them (walk/plan-walk!), so the body's API answers meanwhile."
   [c to range doors policy walls explore one-way budget]
   (loop [walls walls]
     (let [plan (await (walk/plan-walk! c (walk/path-world (:primitives c)) to range walk/default-weight
                                        {:policy policy :walls walls :one-way one-way :frontier explore :budget budget}))
           iron (when-not (= :never doors) (iron-cells c (:steps plan)))]
+      (when budget
+        (let [^js r (:r plan)]
+          (ctx/emit! c :planned :info (cond-> {:ms (js/Math.round (or (:ms plan) 0)) :status (:status plan)}
+                                        (some-> r .-reason) (assoc :why (.-reason r))
+                                        (some-> r .-expanded) (assoc :nodes (.-expanded r))))))
       (if (seq iron)
         (recur (into walls iron))
         plan))))
