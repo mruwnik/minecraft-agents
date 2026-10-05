@@ -226,7 +226,7 @@
           (is (= [] (calls p "place")))
           (is (= 1 (count (calls p "moveTo")))))))))
 
-(deftest burning-on-bare-stone-with-no-water-or-hazards-stands-still
+(deftest burning-on-bare-stone-with-no-water-or-hazards-stands-still-and-holds-the-body
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -237,11 +237,57 @@
                                 :now #(deref clock)
                                 :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
           (core/submit! eng '(jobs.survival.extinguish) {})
-          (await (core/tick! eng))
+          (dotimes [_ 3] (await (core/tick! eng)))
           (is (= [] (calls p "moveTo")) "does not walk")
+          (is (= 1 (count (:list (core/state eng)))) "still running while the fire burns, so no walk resumes")
+          (is (= 1 (count (filter #(= :extinguish_wait (:kind %)) @seen))) "the agent is told once")
+          (is (pos? (count (calls p "wait"))))
+          (swap! (fake/state p) assoc-in [:self :onFire] false)
+          (await (run-until-empty eng 10))
           (is (= [] (:list (core/state eng))))
-          (is (= 1 (count (filter #(= :extinguish_wait (:kind %)) @seen))))
           (is (not-any? #(or (= :required (:attention %)) (= :failed (:kind %))) @seen)))))))
+
+(deftest standing-still-gives-up-after-the-wait-cap
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:self {:onFire true} :blocks (floor 8)})]
+          (core/submit! eng '(jobs.survival.extinguish) {})
+          (await (run-until-empty eng (+ 5 extinguish/max-stand-waits)))
+          (is (= [] (:list (core/state eng)))))))))
+
+(deftest standing-still-eats-to-keep-regenerating
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:onFire true :food 10} :inventory [{:name "bread" :count 2}]
+                                      :blocks (floor 8)})]
+          (core/submit! eng '(jobs.survival.extinguish) {})
+          (await (core/tick! eng))
+          (is (= 1 (count (calls p "eat")))))))))
+
+(deftest powder-snow-counts-as-water
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:onFire true}
+                                      :blocks (merge (floor 8) {"3,64,0" "powder_snow"})})]
+          (core/submit! eng '(jobs.survival.extinguish) {})
+          (await (core/tick! eng))
+          (is (= [{:pos {:x 3 :y 64 :z 0} :range 0}] (mapv call-args (calls p "moveTo")))))))))
+
+(deftest covers-an-adjacent-lava-source-with-a-carried-block
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:onFire true}
+                                      :inventory [{:name "cobblestone" :count 4}]
+                                      :blocks (merge (floor 8) {"1,64,0" "lava"})})]
+          (core/submit! eng '(jobs.survival.extinguish) {})
+          (await (core/tick! eng))
+          (is (= [{:pos {:x 1 :y 64 :z 0} :item "cobblestone"}] (mapv call-args (calls p "place"))))
+          (is (= [] (calls p "moveTo")) "no walk past the lava")
+          (is (= "cobblestone" (.-name (.blockAt p #js {:x 1 :y 64 :z 0})))))))))
 
 (deftest burning-next-to-a-fire-block-still-walks
   (async done

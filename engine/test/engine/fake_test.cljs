@@ -208,7 +208,7 @@
        (is (= "dirt" placed))
        (is (= "no-item" (.-status r3)))))))
 
-(deftest place-puts-a-block-into-water-and-lava-stays-occupied
+(deftest place-puts-a-block-into-water-and-lava
   (async-test
    (fn ^:async t []
      (let [p (owned {:inventory [{:name "dirt" :count 2}]
@@ -220,7 +220,7 @@
        (is (= "placed" (.-status r1)))
        (is (= "dirt" (:name b)))
        (is (nil? (get-in b [:properties :level])))
-       (is (= "occupied" (.-status r2)))))))
+       (is (= "placed" (.-status r2)))))))
 
 (deftest containers-can-be-inspected-and-transferred-to-and-from
   (async-test

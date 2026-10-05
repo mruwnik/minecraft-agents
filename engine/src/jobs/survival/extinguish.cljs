@@ -2,6 +2,7 @@
   (:require [engine.ctx :as ctx]
             [engine.jobs.access :as access]
             [engine.jobs.util :as u]
+            [jobs.survival.eat :as eat]
             [engine.triggers.burning :as burning]))
 
 (def doc
@@ -17,8 +18,12 @@
   4. In lava, or with no water in reach, walks to the best nearby cell within :step blocks.
      It must be passable, solid underfoot and not fire, lava, magma or a campfire.
      Scoring favours distance from those hazards (up to 4 blocks) and height, and charges a small cost per block walked.
+  Water also counts powder snow. Not in lava, with a cover block carried (cobblestone, stone, dirt, ...) it first
+  places one on a lava cell next to the feet (side or below), so the body does not step past it.
   5. On fire, not in lava, with no water in reach and no hazard within 1.5 blocks, there is nothing useful to do.
-     It stands still, emits info extinguish_wait and ends. The trigger fires it again after its cooldown.
+     It stands still: emits info extinguish_wait once, eats when food is under 18 and food is carried (to keep
+     regenerating), and waits a second per round for up to 20 rounds. The job stays alive meanwhile, so an
+     interrupted walk does not resume into more hazards; it ends when the fire is out or after the 20 rounds.
   Ends when the body is neither burning nor in lava.
   Three failed rounds (no safe cell, or the walk blocked while burning) give an extinguish_stuck warning, then it gives up.
   Memory: writes :extinguish {:pos :cause} each round (cap 20, one hour),
@@ -48,12 +53,19 @@
 (def walk-cost 0.5)
 (def hazard-touch 1.5)
 
+(def max-stand-waits 20)
+(def stand-wait-ms 1000)
+(def eat-below 18)
+(def water-like ["water" "powder_snow"])
+(def cover-blocks ["cobblestone" "stone" "dirt" "netherrack" "cobbled_deepslate" "deepslate" "andesite" "diorite" "granite"
+                   "sand" "gravel"])
+
 (def max-pour-waits 8)
 (def max-water-waits 10)
 
 (defn body-burning? [c] (burning/burning? (.self (:primitives c))))
 
-(defn check [c] (boolean (or (body-burning? c) (:poured (ctx/mem c)))))
+(defn check [c] (boolean (or (body-burning? c) (:poured (ctx/mem c)) (:stand-waits (ctx/mem c)))))
 
 (defn floor-cell [pos] (into {} (map (fn [[k v]] [k (js/Math.floor v)])) pos))
 
@@ -112,6 +124,21 @@
   [pos scanned]
   (boolean (some #(<= (u/dist pos (:pos %)) hazard-touch) scanned)))
 
+(defn adjacent-lava
+  "A scanned lava cell next to the feet cell (side, or the cell below), or nil."
+  [pos scanned]
+  (->> scanned
+       (filter #(= "lava" (:name %)))
+       (filter (fn [{p :pos}]
+                 (and (<= (js/Math.abs (- (:x p) (:x pos))) 1)
+                      (<= (js/Math.abs (- (:z p) (:z pos))) 1)
+                      (<= 0 (- (:y pos) (:y p)) 1)
+                      (not= p pos)
+                      (<= (+ (js/Math.abs (- (:x p) (:x pos))) (js/Math.abs (- (:z p) (:z pos)))) 1))))
+       first))
+
+(defn cover-item [p] (some (fn [n] (when (some #(= n (:name %)) (u/inventory p)) n)) cover-blocks))
+
 (defn clear? [c] (not (body-burning? c)))
 
 (defn finish
@@ -167,6 +194,24 @@
     (ctx/update-mem! c assoc :poured pos)
     :continue))
 
+(defn ^:async stand-round!
+  "On fire, nothing to do but wait it out off the fire: eat to keep regenerating, tell the agent once, wait a second.
+  The job stays alive (so an interrupted walk does not resume into more hazards) up to max-stand-waits rounds."
+  [c]
+  (let [p (:primitives c)
+        waits (inc (:stand-waits (ctx/mem c) 0))
+        food (eat/carried-best c)]
+    (ctx/update-mem! c assoc :stand-waits waits)
+    (when (= 1 waits)
+      (ctx/emit! c :extinguish_wait :info {:text "no water near; standing still off the fire until it goes out"}))
+    (when (and food (< (.-food (.self p)) eat-below))
+      (await (ctx/act c :equip #js {:item food}))
+      (await (ctx/act c :eat #js {:item food})))
+    (await (ctx/act c :wait (clj->js {:ms stand-wait-ms})))
+    (if (or (clear? c) (>= waits max-stand-waits))
+      :done
+      :continue)))
+
 (defn ^:async round [c]
   (let [p (:primitives c)
         me (.self p)
@@ -183,7 +228,7 @@
             pos (floor-cell (u/pos-of (.-pos me)))
             lava? (boolean (.-inLava me))
             scanned (scan p scan-radius hazards 128)
-            water (when-not lava? (first (scan p water-radius ["water"] 1)))
+            water (when-not lava? (first (scan p water-radius water-like 1)))
             pour? (and (not lava?) (has-bucket? p))
             refusal (when pour? (access/trespass-refusal c :place pos))]
         (ctx/remember! c :extinguish {:pos pos :cause (if lava? :lava :fire)} extinguish-policy)
@@ -198,10 +243,15 @@
           (do (await (ctx/act c :moveTo (clj->js {:pos (:pos water) :range 0})))
               (finish c))
 
+          (and (not lava?) (cover-item p) (adjacent-lava pos scanned)
+               (let [lava (:pos (adjacent-lava pos scanned))
+                     r (await (ctx/act c :place (clj->js {:pos lava :item (cover-item p)})))]
+                 (= "placed" (.-status r))))
+          :continue
+
           (and (not lava?) (not (hazard-near? pos scanned)))
           (or (when refusal (await (pour-last-resort! c pos refusal)))
-              (do (ctx/emit! c :extinguish_wait :info {:text "no water near; waiting for the fire to go out"})
-                  :done))
+              (await (stand-round! c)))
 
           :else
           (let [target (best-cell p pos step (map :pos scanned))]

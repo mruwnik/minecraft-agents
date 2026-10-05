@@ -360,7 +360,7 @@
         (zero? (carried (:inventory w) "bucket")) [w {:status "no-item"}]
         :else [(-> w (take-one "bucket") (give "water_bucket" 1) (drop-block pos)) {:status "placed" :block "bucket"}])
 
-      (and (not (#{"air" "water"} here)) (not (replaceable? here))) [w {:status "occupied"}]
+      (and (not (#{"air" "water" "lava"} here)) (not (replaceable? here))) [w {:status "occupied"}]
       (and (crops item) (not= "farmland" (block-name w (update pos 1 dec)))) (failed)
       (zero? (carried (:inventory w) item)) [w {:status "no-item"}]
       (and click (no-shape (block-name w (:against click)))) [w {:status "no-support"}]

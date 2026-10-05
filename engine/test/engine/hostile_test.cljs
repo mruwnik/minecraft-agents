@@ -707,4 +707,5 @@
           (set-entities! p [(zombie (+ 3 (first (:pos (fake/self p)))) 0)])
           (swap! clock + 1000)
           (await (core/tick! eng))
+          (await (core/tick! eng))      ; the burning job ends on its next round (it holds while standing still)
           (is (= :hostile-near (:reflex (peek (reflex-fired seen)))) "fired again, fresh, as soon as the fire is out"))))))
