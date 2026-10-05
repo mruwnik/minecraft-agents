@@ -76,7 +76,7 @@ values are never converted wholesale; read fields with `.-field` or `aget`.
   rejection inside an acting call (a refused `placeBlock`, an aborted `dig`,
   a failed `equip`) resolves `{status: 'failed', reason}` with the library's
   message, at most 200 characters. The only other throw is `offline` when
-  every reconnect try fails.
+  its own reconnect tries all fail (the body then keeps reconnecting by itself).
 - **Time bounds** below are hard. A method that reaches its bound stops what it
   was doing and resolves with `status: 'timeout'` (or `partial` for `moveTo`).
   Nothing in a primitive runs for minutes; long waits are declining checks.
@@ -197,7 +197,7 @@ Remembered places (a known bed, a known chest) are not primitives. They are
 | `mount(token, a)` | `{id}`; gets the body on a boat, raft, minecart or rideable mob (`js/vehicle.mjs`): empties the hand (a held lead or food would leash or feed), looks at it, uses it, waits (wall time: no physics tick runs aboard) for the server to list the body as a passenger | `mounted` (`vehicle {id, uuid, name}`), `already-mounted` (`vehicle`), `gone`, `not-mountable` (not a boat, raft, minecart or rideable mob by name), `occupied` (every seat taken: boats and rafts 2, chest boats 1, camels 2, happy ghasts 4, others 1; a mob in a boat's front seat does not count, vanilla puts a boarding player first), `out-of-reach` (more than 3 from the eye), `hand-full`, `timeout` (not seated within 1 s: an unsaddled pig, a refusal) | 2 s | none needed |
 | `dismount(token, a)` | `{yaw?, pitch?}` in Minecraft degrees (0 south, 90 west); a yaw is written as a raw `look` packet first (mounted Mineflayer sends none; the server picks the exit from it), then sneak (26.1 dismounts on sneak; Mineflayer's `dismount()` sends jump) until the body is off the tracked list and a server position arrived | `dismounted` (`pos`, where the server put the body; the landing is the caller's to judge), `not-mounted`, `timeout` (`mounted` true or false) | 2 s | sneak released |
 | `useOn(token, a)` | `{pos, item?, face = 'up'}`; `face` is `up`, `down`, `north`, `south`, `east`, `west`; without `item` it uses an empty hand (an empty hotbar slot, else the held stack moved to a free slot; never tossed) | `used` (the block's name or properties, or the carried count of `item`, changed within 1 s), `unchanged`, `missing` (air or not loaded), `no-item`, `no-room` (empty hand asked, inventory full), `unreachable` (more than 4.5 from the eye; `reason: 'too-far'`, `distance`), `cannot` (`reason`: `bed` for beds and respawn anchors, `container` for blocks that open a window, `hazard` for flint_and_steel, fire_charge and lava_bucket, `use-place` for a block item on anything but a composter, `window` when a window opened anyway: it is closed) | 5 s | none needed |
-| `offline(token, a)` | `{ms = 300000}`, at most 600000 | `ok` (`ms` is the wait used), `cut`, `closed`, `unsupported` | `ms` plus the reconnect | see below |
+| `offline(token, a)` | `{ms = 300000}`, at most 600000 | `ok` (`ms` is the wait used), `cut`, `closed`, `unsupported`, `offline` (the connection is already down) | `ms` plus the reconnect | see below |
 
 Acting while asleep first leaves the bed (`leave_bed` sent by name, since mineflayer's `wake()` sends a wrong id on this protocol), bounded at 1 s (scaled by `timeScale`); a cut during `sleep` leaves the bed too.
 
@@ -244,8 +244,11 @@ the moment it quits until the fresh bot is adopted the body is offline, and `isO
 - `close()` during the wait or the reconnect cancels it and resolves `{status: 'closed'}` (a bot the reconnect already
   produced is quit). The engine's shutdown does this, so a SIGTERM during a log-out quits at once instead of
   reconnecting a body that is about to leave anyway.
-- If every reconnect try fails it emits `disconnected` and rejects with the last error; the body is then marked down,
-  and the next acting call tries the reconnect again.
+- If every reconnect try fails it emits `disconnected` and rejects with the last error; the body is then marked down
+  and reconnects by itself (below).
+- The quit of its own connection is not a drop: `offline` unbinds the bot before it quits, so the body stays away for
+  the whole `ms` and no unplanned reconnect cuts it short. Called while the body is down, `offline` resolves
+  `{status: 'offline'}` at once.
 
 Only `createPrimitives`, which owns the connection params, supports it; `createPrimitivesFromBot` resolves
 `{status: 'unsupported'}` without touching the bot. A stale token rejects with `cut` on entry and bad `ms` (not a
@@ -258,14 +261,17 @@ bot starts with no goal.
 
 The pathfinder's movements (`js/movements.mjs`) never dig or build. Powder snow, cobweb, sweet berry bush and wither rose in the body's cells, and magma, campfire and soul campfire underfoot, add a cost rather than a ban (30, 40, 20, 20 and 20, 40, 40: a detour of up to roughly that many blocks is preferred, crossing stays possible when it is the only way). Fire, soul fire and lava are avoided outright, a parkour jump never passes over lava or fire (no way round means `noPath`), and a drop into water is bound by the usual 4-block drop limit.
 
-An unplanned disconnect (the bot's `end` or `kicked`) emits `disconnected` and marks the body down; an `error` on the
-bot or its client is emitted as the body event `error` and never thrown, so it cannot crash the process. While the
-body is down, the next acting call (`moveTo`, `dig`, `place`, `collect`, `inspectContainer`, `transfer`, `equip`,
-`eat`, `attack`, `sleep`, `look`, `swim`) first makes the same reconnect `offline` uses (3 tries, 5 s apart, then up to 10 s for the world; calls
-arriving meanwhile share it), emits `online` and runs on the new bot. If every try fails it emits `reconnect-failed`
-(an error-level engine event) and resolves `{status: 'disconnected'}`; the next acting call tries again. Sensing
-reads keep answering from the dead bot. Without a connection to remake (`createPrimitivesFromBot`) a down body
-resolves `disconnected` at once. A stale token still rejects with `cut` first.
+An unplanned disconnect (the bot's `end` or `kicked`: a kick, a socket end, a server restart) emits `disconnected`,
+marks the body down and starts the reconnect at once, idle or busy, with no call needed: one try, then after each
+failure a `reconnect-failed` event (`reason`, `attempt`, `retryMs`; error level) and a wait of 1 s doubling up to 60 s
+before the next, until a fresh bot is adopted (`online`, then settling) or `close()` (which ends the loop). Only one
+loop runs. An `error` on the bot or its client is emitted as the body event `error` and never thrown, so it cannot
+crash the process. While the body is down it is offline: `isOffline()` is true (the scheduler pauses, a takeover or a
+world action is refused `offline`), sensing answers as for `offline` above, `drive` and every acting call resolve
+`{status: 'offline'}` at once without touching the bot (`moveTo` never says `arrived`). The engine turns an act's
+`offline` into a cut of the round (`engine.core/act!`): the job stays listed and resumes once the body is back. A
+manual move-to whose connection drops mid-walk ends `offline`. Without a connection to remake
+(`createPrimitivesFromBot`) a down body stays down and answers `offline`. A stale token still rejects with `cut` first.
 
 `jumpPlace` pillars the body up out of a pit: for each of `count` repetitions it first sneaks to the centre of its cell (within 0.1 and until it has stopped, up to 1 s; this gets the body off a wall, where the jump never happens, and a failure to centre is not fatal: a body that cannot jump ends `not-raised`), looks straight down, jumps, and once the feet clear
 the cell it stood in places `item` there against the block below that cell, releases jump and waits to stand one block

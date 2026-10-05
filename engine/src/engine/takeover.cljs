@@ -166,6 +166,10 @@
     (and (some? (walk/path-world p))
          (<= (core/distance here (:pos args)) (or (:maxDistance args) 64)))))
 
+(def dropped-walk
+  "A manual move-to whose connection dropped: neither arrived nor blocked, the body reconnects by itself."
+  {:status "offline" :reason "the body lost its connection; it reconnects by itself"})
+
 (defn ^:async walk-move-to!
   "move-to as go-to walks: engine.path.near/walk-round! with doors, gates and trapdoors opened and shut again, bounded by
   timeout-s (past it the lease's token is rotated, which cuts the walk). Resolves to a clj map in moveTo's result shape."
@@ -176,10 +180,12 @@
         timer (js/setTimeout (fn [] (reset! timed-out true) (rotate-token! eng)) (* 1000 timeout-s))]
     (try
       (let [round (await (near/walk-round! c cell (or range 1) {:doors :shut :timeout-s timeout-s}))]
-        (walker-result eng cell round))
+        (if (core/offline? eng) dropped-walk (walker-result eng cell round)))
       (catch :default e
-        (when-not @timed-out (throw e))
-        (assoc (walker-result eng cell {:status "partial"}) :reason "timeout"))
+        (cond
+          (core/offline? eng) dropped-walk
+          (not @timed-out) (throw e)
+          :else (assoc (walker-result eng cell {:status "partial"}) :reason "timeout")))
       (finally (js/clearTimeout timer)))))
 
 ;; ------------------------------------------------------------------ dig holds the carried tool
@@ -228,6 +234,7 @@
       prior (if (and (= who (:who prior)) (= action (:action prior)) (= args (:args prior)))
               {:ok true :operation (op-view prior) :duplicate true}
               (op-refuse "request-id-conflict"))
+      (core/offline? eng) (op-refuse "offline")
       (not (own-lease? eng who)) (op-refuse (if (core/manual? eng) "not-driver" "not-taken"))
       (not (contains? world-actions action)) (op-refuse "unknown-action")
       (action-args-error action args) (op-refuse "bad-args" (action-args-error action args))

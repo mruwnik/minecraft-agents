@@ -64,6 +64,12 @@
 (defn cut-error []
   (doto (js/Error. "cut: the ownership token changed") (aset "code" "cut")))
 
+(defn offline-cut-error
+  "The cut an act raises when its primitive answers offline (the connection dropped): the round ends, the job stays
+  listed and resumes once the body is back."
+  []
+  (doto (js/Error. "cut: the body lost its connection; the job resumes once it is back") (aset "code" "cut")))
+
 (defn cut? [e]
   (and (instance? js/Error e) (= "cut" (.-code e))))
 
@@ -439,6 +445,7 @@
         from (when (= :moveTo k) (self-pos p))]
     (try
       (let [r (await (if (= :chat k) (chat/gate! eng p token args) (.call (aget p (name k)) p token args)))
+            _ (when (= "offline" (some-> r .-status)) (throw (offline-cut-error)))
             to (when (= :moveTo k) (self-pos p))]
         (when (= :moveTo k)
           (mem/write! (:store eng) :moved {:from from :to to :status (.-status r)

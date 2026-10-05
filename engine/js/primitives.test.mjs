@@ -758,16 +758,20 @@ test('a failed reconnect is retried', async () => {
   assert.deepEqual(seen.map(e => e.kind), ['offline', 'online'])
 })
 
-test('a reconnect that keeps failing rejects and reports the body disconnected', async () => {
+test('a reconnect that keeps failing rejects, reports the body disconnected, then the body keeps trying by itself', async () => {
   let calls = 0
   const connect = async () => {
     calls += 1
-    if (calls > 1) throw new Error('refused')
+    if (calls > 1 && calls <= 5) throw new Error('refused')
     return stubBot(world)
   }
   const { p, seen } = await online({ connect })
   await assert.rejects(p.offline('t1', { ms: 1000 }), /refused/)
-  assert.deepEqual(seen.map(e => e.kind), ['offline', 'disconnected'])
+  assert.deepEqual(seen.slice(0, 2).map(e => e.kind), ['offline', 'disconnected'])
+  assert.equal(p.isOffline(), true)
+  await untilSeen(seen, 'online')
+  assert.deepEqual(seen.map(e => e.kind), ['offline', 'disconnected', 'reconnect-failed', 'online'])
+  assert.equal(p.isOffline(), false)
 })
 
 test('blocks and blockAt carry the age state of a crop, and only then', () => {
@@ -1087,35 +1091,113 @@ test('an error on the bot is reported as a body event and never thrown', async (
   assert.deepEqual(seen, [{ kind: 'error', reason: 'boom' }])
 })
 
-test('after the connection ends an acting call reconnects first and then runs on the new bot', async () => {
+// polls until an event of `kind` arrived `count` times; the reconnect runs on its own, no call drives it
+const untilSeen = async (seen, kind, count = 1) => {
+  for (let i = 0; i < 2000 && seen.filter(e => e.kind === kind).length < count; i++) await new Promise(resolve => setTimeout(resolve, 1))
+  return seen.filter(e => e.kind === kind)
+}
+const failing = (bots, fails) => async () => {
+  if (bots.length > 0 && fails.n-- > 0) throw new Error('refused')
+  const b = stubBot(world)
+  bots.push(b)
+  return b
+}
+
+for (const [event, reason] of [['end', 'socket closed'], ['kicked', 'bye']]) {
+  test(`an idle body reconnects by itself after ${event}, with no action`, async () => {
+    const bots = []
+    const { p, seen } = await online({ connect: connectOnce(bots) })
+    bots[0].emit(event, reason)
+    await untilSeen(seen, 'online')
+    assert.deepEqual(seen.map(e => e.kind), ['disconnected', 'online'])
+    assert.equal(bots.length, 2)
+    assert.equal(p.isOffline(), false)
+    assert.equal(p.self().username, 'Stub')
+  })
+}
+
+test('the reconnect backs off, doubling up to a minute, and keeps trying until it gets back', async () => {
   const bots = []
-  // timeScale 1: look's 1 s bound must not shrink to 10 ms, which a loaded machine can overrun; nothing here waits for it
-  const { p, seen } = await online({ connect: connectOnce(bots), timeScale: 1 })
-  bots[0].emit('end', 'socket closed')
-  assert.deepEqual(await p.look('t1', { pos: at(1, 64, 1) }), { status: 'ok' })
-  assert.deepEqual(seen.map(e => e.kind), ['disconnected', 'online'])
-  assert.equal(names(bots[1]).includes('lookAt'), true)
-  assert.equal(names(bots[0]).includes('lookAt'), false)
+  const { p, seen } = await online({ connect: failing(bots, { n: 8 }) })
+  bots[0].emit('kicked', 'bye')
+  await untilSeen(seen, 'online')
+  const failed = seen.filter(e => e.kind === 'reconnect-failed')
+  assert.deepEqual(failed.map(e => [e.attempt, e.retryMs, e.reason]),
+    [[1, 1000, 'refused'], [2, 2000, 'refused'], [3, 4000, 'refused'], [4, 8000, 'refused'], [5, 16000, 'refused'],
+      [6, 32000, 'refused'], [7, 60000, 'refused'], [8, 60000, 'refused']])
+  assert.equal(bots.length, 2)
+  assert.equal(p.isOffline(), false)
 })
 
-test('after a kick an acting call resolves disconnected when every reconnect try fails', async () => {
+test('close stops the reconnect loop', async () => {
   const bots = []
-test('the raw world has no eye from the end of the connection until the fresh bot is adopted', async () => {
+  const fails = { n: Infinity }
+  const { p, seen } = await online({ connect: failing(bots, fails) })
+  bots[0].emit('end', 'gone')
+  await untilSeen(seen, 'reconnect-failed')
+  await p.close()
+  const after = seen.length
+  await new Promise(resolve => setTimeout(resolve, 30))
+  assert.equal(seen.length, after)
+})
+
+test('a deliberate offline keeps its own timer: the end of the quit connection does not bring the body back early', async () => {
   const bots = []
   const { p } = await online({ connect: connectOnce(bots), timeScale: 1 })
+  const pending = p.offline('t1', { ms: 10 * MIN })
+  bots[0].emit('end', 'quit')
+  bots[0].emit('kicked', 'bye')
+  await new Promise(resolve => setTimeout(resolve, 30))
+  assert.equal(bots.length, 1)
+  assert.equal(p.isOffline(), true)
+  await p.close()
+  assert.deepEqual(await pending, { status: 'closed' })
+})
+
+test('while the connection is down every primitive answers offline, never success, and nothing reaches the bot', async () => {
+  const bots = []
+  const { p } = await online({ connect: failing(bots, { n: Infinity }) })
+  bots[0].emit('kicked', 'bye')
+  assert.equal(p.isOffline(), true)
+  assert.deepEqual(p.self(), { status: 'offline' })
+  assert.deepEqual(p.entities({}), [])
+  assert.deepEqual(p.blocks({}), [])
+  assert.equal(p.blockAt(at(2, 64, 0)), null)
+  assert.deepEqual(p.drive('t1', { look: { yaw: 90 } }), { status: 'offline' })
+  assert.deepEqual(await p.look('t1', { pos: at(1, 64, 1) }), { status: 'offline' })
+  assert.deepEqual(await p.dig('t1', { pos: at(2, 64, 0) }), { status: 'offline' })
+  assert.deepEqual(await p.offline('t1', { ms: 1000 }), { status: 'offline' })
+  assert.deepEqual(acted(bots[0]), [])
+  await p.close()
+})
+
+test('move-to never reports arrived while the connection is down, even at the target', async () => {
+  const bots = []
+  const { p } = await online({ connect: failing(bots, { n: Infinity }) })
+  const here = { ...bots[0].entity.position }
+  bots[0].emit('end', 'gone')
+  assert.deepEqual(await p.moveTo('t1', { pos: here, range: 2 }), { status: 'offline' })
+  await p.close()
+})
+
+test('the raw world has no eye from the end of the connection until the fresh bot is adopted', async () => {
+  const bots = []
+  const { p, seen } = await online({ connect: connectOnce(bots), timeScale: 1 })
   const before = p.rawWorld.eye()
   bots[0].emit('end', 'socket closed')
   const during = p.rawWorld.eye()
-  await p.look('t1', { pos: at(1, 64, 1) })
+  await untilSeen(seen, 'online')
   assert.deepEqual([before !== null, during, p.rawWorld.eye() !== null], [true, null, true])
 })
 
-  const { p, seen } = await online({ connect: connectOnce(bots, true) })
-  bots[0].emit('kicked', 'bye')
-  assert.deepEqual(await p.look('t1', { pos: at(1, 64, 1) }), { status: 'disconnected' })
-  assert.deepEqual(seen.map(e => e.kind), ['disconnected', 'reconnect-failed'])
-  assert.equal(seen[1].reason, 'refused')
-  assert.deepEqual(names(bots[0]).filter(n => n === 'lookAt'), [])
+test('after the reconnect acting calls run on the new bot', async () => {
+  const bots = []
+  const { p, seen } = await online({ connect: connectOnce(bots), timeScale: 1 })
+  bots[0].emit('end', 'socket closed')
+  await untilSeen(seen, 'online')
+  assert.deepEqual(await p.look('t1', { pos: at(1, 64, 1) }), { status: 'ok' })
+  assert.equal(names(bots[1]).includes('lookAt'), true)
+  assert.equal(names(bots[0]).includes('lookAt'), false)
 })
 
 test('a stale token still rejects with cut while the bot is down', async () => {
@@ -1123,12 +1205,14 @@ test('a stale token still rejects with cut while the bot is down', async () => {
   const { p } = await online({ connect: connectOnce(bots, true) })
   bots[0].emit('end', 'gone')
   await assert.rejects(p.look('old', { pos: at(1, 64, 1) }), err => err.code === 'cut')
+  await p.close()
 })
 
-test('without a connection to remake, a down body resolves acting calls disconnected', async () => {
+test('without a connection to remake, a down body answers offline', async () => {
   const { bot, p } = rig(world)
   bot.emit('end', 'gone')
-  assert.deepEqual(await p.look('t1', { pos: at(1, 64, 1) }), { status: 'disconnected' })
+  assert.deepEqual(await p.look('t1', { pos: at(1, 64, 1) }), { status: 'offline' })
+  assert.deepEqual(p.self(), { status: 'offline' })
 })
 
 // ---- mineflayer rejections are statuses ----

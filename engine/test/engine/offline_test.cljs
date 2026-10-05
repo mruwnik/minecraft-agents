@@ -119,3 +119,19 @@
           (swap! clock + 31000)
           (await (core/tick! eng))
           (is (= 2 (count (kinds-of seen :fired))) "after the 30 s cooldown the sleeper is still asleep at night, so the reflex fires again"))))))
+
+(deftest an-act-answering-offline-cuts-the-round-and-the-job-resumes-once-the-body-is-back
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {})
+              world (.-world p)]
+          (.override world "eat" (fn [_ _ _] (js/Promise.resolve #js {:status "offline"})))
+          (core/submit! eng '(eat) {})
+          (await (core/tick! eng))
+          (is (= 1 (count (kinds-of seen :cut))) "the round is cut, not failed or done")
+          (is (= [] (kinds-of seen :completed)))
+          (is (= 1 (count (:list (core/state eng)))) "the job stays listed")
+          (.override world "eat" nil)
+          (await (core/tick! eng))
+          (is (= 1 (count (kinds-of seen :completed))) "the next round runs it to the end"))))))

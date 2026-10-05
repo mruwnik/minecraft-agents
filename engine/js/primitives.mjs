@@ -93,6 +93,10 @@ const SWIM_DEFAULT_MS = 3000
 const SWIM_MAX_MS = 10000
 const RECONNECT_TRIES = 3
 const RECONNECT_RETRY_MS = 5000
+// after an unplanned drop (kick, socket end, server restart) the body reconnects by itself: the first try at once,
+// then after each failure a wait that doubles from the first to the cap, until it is back or closed
+const RECONNECT_BACKOFF_FIRST_MS = 1000
+const RECONNECT_BACKOFF_MAX_MS = 60000
 const WORLD_TIMEOUT_MS = 10000
 const WORLD_POLL_MS = 50
 const PHYSICS_STALL_MS = 2000 // no physicsTick this long over an unloaded column: the body hangs frozen
@@ -222,7 +226,10 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   // Offline is body state: set from the moment `offline` quits the bot until the fresh bot is adopted (or the
   // reconnect gave up); resolves then. Sensing answers 'offline' meanwhile and acting calls wait for it.
   let away = null
-  const isOffline = () => away !== null
+  // Down: the connection dropped unplanned (kick, socket end, server restart) and no fresh bot is adopted yet. The body
+  // reconnects by itself meanwhile (autoReconnect); sensing and acting answer 'offline'.
+  let down = false
+  const isOffline = () => away !== null || down
   // Settling: connected but the senses are not trustworthy yet (entities arrive after the chunks, there is no signal
   // for "all sent"). Starts at login, on every adopted reconnect, on respawn and on a teleport; ends settleMs after
   // the column under the body is loaded. readyAt null means the column was not loaded when it was last looked at.
@@ -1271,8 +1278,8 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
         settleFromNow()
         emit({ kind: 'respawned', pos: here(), dimension: target.game?.dimension })
       },
-      end: reason => { down = true; emit({ kind: 'disconnected', reason: String(reason) }) },
-      kicked: reason => { down = true; emit({ kind: 'disconnected', reason: JSON.stringify(reason) }) },
+      end: reason => dropped(String(reason)),
+      kicked: reason => dropped(JSON.stringify(reason)),
       // an unhandled 'error' on an EventEmitter throws and takes the process down; report it instead
       error: err => emit({ kind: 'error', reason: String(err?.message ?? err) })
     }
@@ -1283,7 +1290,6 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       removalEvents.forEach(([n, f]) => target.removeListener(n, f))
     }
   }
-  let down = false
   let unbind = bindEvents(bot)
 
   // Physics-stall watchdog: the column under the body unloaded and no tick for PHYSICS_STALL_MS. Once per stall it
@@ -1361,26 +1367,53 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     emit({ kind: 'online', pos: here() })
   }
 
-  // After an unplanned disconnect: the same reconnect path offline uses (3 tries). Shared by concurrent callers;
-  // true when the body is back, false (with a reconnect-failed event) when it is not or close() came first.
+  // a backoff wait that close() ends early and that never keeps the process alive
+  let wakeBackoff = null
+  const backoffWait = ms => new Promise(resolve => {
+    const timer = setTimeout(resolve, ms)
+    timer.unref?.()
+    wakeBackoff = () => { clearTimeout(timer); resolve() }
+  })
+
+  // After an unplanned drop: one try at once, then RECONNECT_BACKOFF_FIRST_MS doubling up to RECONNECT_BACKOFF_MAX_MS
+  // between tries, each failure a reconnect-failed event with the wait before the next. Runs until the body is back
+  // or close(); at most one loop runs.
   let recovering = null
-  const recover = () => {
-    if (!reconnect) return Promise.resolve(false)
-    recovering ??= reconnectBot()
-      .then(fresh => { if (fresh) adopt(fresh); return Boolean(fresh) })
-      .catch(error => { emit({ kind: 'reconnect-failed', reason: String(error?.message ?? error) }); return false })
-      .finally(() => { recovering = null })
-    return recovering
+  const autoReconnect = () => {
+    if (!reconnect || closed) return
+    recovering ??= (async () => {
+      for (let attempt = 1; !closed; attempt++) {
+        const fresh = await reconnect().then(b => ({ b }), error => ({ error }))
+        if (fresh.b && closed) { fresh.b.quit(); return }
+        if (fresh.b) {
+          const ready = await awaitWorld(fresh.b)
+          if (ready) adopt(ready)
+          return
+        }
+        const retryMs = Math.min(RECONNECT_BACKOFF_FIRST_MS * 2 ** (attempt - 1), RECONNECT_BACKOFF_MAX_MS)
+        emit({ kind: 'reconnect-failed', reason: String(fresh.error?.message ?? fresh.error), attempt, retryMs })
+        await backoffWait(retryMs * timeScale)
+      }
+    })().finally(() => { recovering = null })
   }
 
-  // An acting primitive while the bot is down: reconnect first; resolves 'disconnected' when that fails. A stale
+  // The bound bot's connection ended without the body asking for it (offline unbinds before it quits, so its own
+  // quit never lands here): the body is down and starts bringing itself back.
+  const dropped = reason => {
+    if (closed) return
+    down = true
+    emit({ kind: 'disconnected', reason })
+    autoReconnect()
+  }
+
+  // An acting primitive answers 'offline' while the connection is down (the body is reconnecting by itself). A stale
   // token still rejects with cut before anything else. While `offline` is bringing the body back (a cut ended its
   // wait) the call waits for that reconnect instead of acting on the quit bot.
   const whenUp = fn => async (token, a) => {
     if (!isOwner(token)) throw cutError()
     if (away) await away
     if (!isOwner(token)) throw cutError()
-    if (down && !await recover()) return { status: 'disconnected' }
+    if (down) return { status: 'offline' }
     if (bot.isSleeping && fn !== sleep) await ensureAwake(bot, { timeoutMs: 1000 * timeScale })
     return fn(token, a)
   }
@@ -1392,6 +1425,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     if (!isOwner(token)) throw cutError()
     need(a.ms === undefined || a.ms === null || (isNum(a.ms) && a.ms >= 0), 'offline needs ms, a number of milliseconds of at least 0')
     if (!reconnect) return { status: 'unsupported' }
+    if (down) return { status: 'offline' } // the connection already dropped; the body is reconnecting by itself
     const ms = Math.floor(Math.min(a.ms ?? OFFLINE_DEFAULT_MS, OFFLINE_MAX_MS))
     const call = { token, cut: () => call.wake?.(), wake: null }
     let release
@@ -1412,14 +1446,16 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       return full && isOwner(token) ? { status: 'ok', ms } : { status: 'cut' }
     } finally {
       inflight.delete(call)
-      if (away) down = true // no bot came back: the next acting call tries the reconnect itself
+      const lost = away !== null && !closed // no bot came back: the body keeps trying by itself
       away = null
+      if (lost) { down = true; autoReconnect() }
       release()
     }
   }
 
   const close = async () => {
     closed = true
+    wakeBackoff?.()
     clearInterval(watchdog)
     unbind()
     entityDeathListeners.clear()

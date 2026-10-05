@@ -442,3 +442,27 @@
             (is (= block (get-in op [:result :block])))
             (is (re-find (re-pattern needed) (str (get-in op [:result :reason]))) block)
             (is (= block (.-name (.blockAt p #js {:x 1 :y 64 :z 0}))) "the block is still there")))))))
+
+;; ---------------------------------------------------------------- a dropped connection answers offline
+
+(deftest world-actions-while-the-connection-is-down-answer-offline-and-never-run
+  (doseq [[action args] [[:move-to {:pos {:x 0 :y 64 :z 0} :range 2}]
+                         [:dig {:pos {:x 1 :y 64 :z 0}}]]]
+    (let [{:keys [eng state world]} (setup (dig-world "dirt" []))]
+      (post eng {:op "take" :who "claude" :why "outage" :idleS 30})
+      (swap! state assoc :offline true)
+      (let [reply (world-call eng {:op :submit :who "claude" :request-id "down-1" :action action :args args})]
+        (is (= [409 "offline"] [(:status reply) (get-in reply [:edn :reason])]) (str action))
+        (is (empty? (.-calls world)) (str action " reached no primitive"))))))
+
+(deftest a-world-move-to-whose-connection-drops-mid-walk-answers-offline-never-arrived
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng state world]} (setup {:blocks (floor -2 -3 40 3)})
+              drop! (fn [_ _ _] (swap! state assoc :offline true) (js/Promise.resolve #js {:status "offline"}))]
+          (.override world "steer" drop!)
+          (.override world "moveTo" drop!)
+          (let [op (await (submit-and-wait! eng {:pos {:x 10 :y 64 :z 0} :range 0}))]
+            (is (= :done (:status op)))
+            (is (= "offline" (get-in op [:result :status])))))))))
