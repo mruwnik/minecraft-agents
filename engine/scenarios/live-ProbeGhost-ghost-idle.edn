@@ -1,0 +1,2 @@
+;; ProbeGhost live cases for entity-row ghost dropping; idle, observed with tools/entities.mjs
+{:register [] :queue []}
