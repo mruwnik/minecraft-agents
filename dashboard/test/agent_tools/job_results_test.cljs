@@ -31,3 +31,12 @@
     (is (:events-truncated? result))
     (is (<= (count (:events result)) results/event-limit))
     (is (< (js/Buffer.byteLength (pr-str result)) 65536))))
+
+(deftest a-job-without-a-terminal-event-is-reported-unfinished
+  (let [result (results/project "j4" "g" [(event 1 "j4" :queued {:spec "mine"})] false)]
+    (is (= :unfinished (:status result)))
+    (is (false? (:finished? result)))
+    (is (= :queued (:state result))))
+  (let [result (results/project "j4" "g" [(event 1 "j4" :queued {}) (event 2 "j4" :round_started {})] false)]
+    (is (= :running (:state result))))
+  (is (true? (:finished? (results/project "j4" "g" [(event 1 "j4" :queued {}) (event 2 "j4" :completed {})] false)))))

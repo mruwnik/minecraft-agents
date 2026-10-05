@@ -684,7 +684,11 @@
           (is (= :count (:reason (done-event s))))
           (is (= [[1 65 0] [1 64 0] [2 65 0] [2 64 0] [3 65 0] [3 64 0]] cut) "a 1x2 run east, no further")
           (is (= {:heading "east" :steps 3} (select-keys (:tunnel (done-event s)) [:heading :steps])))
-          (is (= [0 64 0] (feet s)) "back where it started"))))))
+          (is (= [0 64 0] (feet s)) "back where it started")
+          (is (= [3 64 1] (:end (:tunnel (done-event s)))) "where the tunnel ended, before the walk back")
+          (is (true? (:walked-back? (:tunnel (done-event s)))))
+          (is (= [0 64 0] (:back-at (:tunnel (done-event s)))))
+          (is (re-find #"walked back to \[?0,64,0" (:text (done-event s)))))))))
 
 (deftest the-tunnel-stops-before-lava
   (async done

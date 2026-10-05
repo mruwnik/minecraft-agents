@@ -52,7 +52,7 @@
   the dig phase :tunnel-length, any stop ends it :tunnel-stopped; either way one warn mine.tunnel-end {:reason
   (:tunnel-length, :lava, :water, :fluid, :no-floor, :not-loaded, :refused, :dig-failed, :walk-failed) :heading
   :length :at :next}, :at the offending cell (the lava beside the line), :next the line cell it stopped before. The
-  result carries :tunnel {:origin :heading :steps :stop}; every job ends, after the mend, by walking back to the cell it started on (info mine.not-home when the walk does not arrive).
+  result carries :tunnel {:origin :heading :steps :stop :end (the cell it ended on, before the walk back) :back-at :walked-back?}, and the mine.done text says where it ended and that it walked back; every job ends, after the mend, by walking back to the cell it started on (info mine.not-home when the walk does not arrive).
   The mend phase fills every ground cell that is now air, cave_air or water with the first carried of dig-in's
   building blocks other than the item, the item itself last (when it is a building block or the block itself),
   lowest first, then nearest, never the body's feet or head cell; when only those are owed it jumpPlaces one block.
@@ -190,10 +190,16 @@
   (let [{:keys [goal reason mended dig-reason resumes tunnel left]} (ctx/mem c)
         got (max 0 (- (carried c) (- goal (:count (:args c)))))
         why (cond-> {} dig-reason (assoc :dig-reason dig-reason) resumes (assoc :resumes resumes)
-              (pos? (:steps tunnel 0)) (assoc :tunnel (-> tunnel (select-keys [:origin :heading :steps :stop]) (update :origin access/cell)))
+              (pos? (:steps tunnel 0)) (assoc :tunnel (-> tunnel (select-keys [:origin :heading :steps :stop :end :back-at :walked-back?]) (update :origin access/cell)))
               (seq left) (assoc :left (mapv (fn [[pos n]] {:pos pos :count n}) left)))]
     (ctx/emit! c :mine.done :info (merge {:got got :reason reason :mended (or mended 0)
-                                          :text (str "mine done: " (name reason) ", got " got ", mended " (or mended 0))}
+                                          :text (str "mine done: " (name reason) ", got " got ", mended " (or mended 0)
+                                                     (when-let [{:keys [end back-at walked-back?]} (when (pos? (:steps tunnel 0)) tunnel)]
+                                                       (str "; tunnel " (:steps tunnel) " blocks " (:heading tunnel)
+                                                            (when end (str ", ended at " (str/join "," end)))
+                                                            (if walked-back?
+                                                              (str ", walked back to " (str/join "," back-at))
+                                                              ", did not get back to its origin"))))}
                                          why))
     (ctx/result! c (merge {:got got :reason reason} why))
     :done))
@@ -576,8 +582,11 @@
   "The last step of every normal run: back to the cell it started on (moveTo), whatever the digging left
   open behind it; an info mine.not-home when the walk did not arrive. The job ends either way."
   [c]
-  (let [{:keys [start]} (ctx/mem c)]
-    (when-not (await (step-to! c start))
+  (let [{:keys [start]} (ctx/mem c)
+        _ (ctx/update-mem! c assoc-in [:tunnel :end] (access/cell (cell-of (u/self-pos c))))
+        arrived? (await (step-to! c start))]
+    (ctx/update-mem! c update :tunnel assoc :walked-back? (boolean arrived?) :back-at (access/cell (cell-of (u/self-pos c))))
+    (when-not arrived?
       (ctx/emit! c :mine.not-home :info {:to (access/cell start) :at (access/cell (cell-of (u/self-pos c)))
                                          :text (str "mine did not get back to " (str/join "," (access/cell start)))}))
     (when (seq (:left (ctx/mem c))) (still-left! c))

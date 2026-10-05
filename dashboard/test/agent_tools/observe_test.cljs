@@ -305,6 +305,12 @@
     (is (true? (:more @summary)))
     (is (= {:event :picked-up :item "wheat" :count 1} (first (:items @summary))))))
 
+(deftest make-room-tosses-are-summarised-with-item-and-count
+  (let [summary (observe/collect {:counts {} :items [] :more false}
+                                 (event :job :make-room.tossed {:item "coal" :count 4}))]
+    (is (= 1 (get-in summary [:counts :tossed])))
+    (is (= {:event :make-room.tossed :item "coal" :count 4} (first (:items summary))))))
+
 (deftest an-action-completion-is-not-summarised
   (is (= {} (:counts (observe/collect {:counts {} :items [] :more false} action-done)))))
 

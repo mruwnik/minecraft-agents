@@ -276,12 +276,20 @@
   (when (pos? (ctx/count-in c :no-bake no-bake-ms))
     (:reason (:data (ctx/latest c :no-bake)))))
 
+(defn harmful-carried-text
+  "\"; carrying 2 chicken, 5 rotten_flesh, skipped on purpose (...)\" for the harmful foods in the inventory, or nil."
+  [inventory]
+  (let [bad (->> inventory (filter #(contains? foods/harmful (:name %))) (map (juxt :name :count)))]
+    (when (seq bad)
+      (str "; carrying " (str/join ", " (map (fn [[n k]] (str k " " n)) bad))
+           ", skipped on purpose (raw or rotten food hurts; eat with :allow-bad via the eat job)"))))
+
 (defn none-text [c]
   (let [{:keys [hunt-radius]} (:args c)
         near (nearest-known-source c)
         wheat (carried-count c "wheat")
         reason (no-bake-reason c)]
-    (str "no food: carried none, searched for animals and ripe crops within " hunt-radius " blocks"
+    (str "no food: carried none" (harmful-carried-text (u/inventory (:primitives c))) ", searched for animals and ripe crops within " hunt-radius " blocks"
          (when (and (>= wheat 3) reason)
            (str "; carrying " wheat " wheat but cannot bake (" reason ")"))
          (if near

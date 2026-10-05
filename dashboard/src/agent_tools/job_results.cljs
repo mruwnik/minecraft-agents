@@ -47,8 +47,13 @@
                                        (seq (:data e)) (assoc :data (:data e)))) selected))]
     (if (empty? matching)
       {:ok false :id id :reason :job-history-unavailable :history-window history-limit}
-      (cond-> {:ok true :id id :status (or (:kind terminal) :observed)
-               :history (if (or partial? (not queued?)) :partial :complete)}
+      (cond-> (merge {:ok true :id id :status (or (:kind terminal) :unfinished)
+                      :finished? (some? terminal)
+                      :history (if (or partial? (not queued?)) :partial :complete)}
+                     ;; No terminal event: the job is still waiting or running; its events so far are not its outcome.
+                     (when-not terminal
+                       {:state (if (some #(and (= id (get-in % [:context :job-id])) (= :round_started (:kind %))) matching)
+                                 :running :queued)}))
         (seq selected) (assoc :events (:value clipped))
         (or (> (count observations) event-limit) (:truncated? clipped)) (assoc :events-truncated? true)
         (= :failed (:kind terminal)) (assoc :error (:value (bounded (get-in terminal [:data :error]))))))))

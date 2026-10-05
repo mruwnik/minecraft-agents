@@ -188,6 +188,7 @@
         category (cond
                    (and (= :job source) (#{:completed :failed} kind)) kind
                    (and (= :reflex source) (= :fired kind)) :reflexes
+                   (= :make-room.tossed kind) :tossed
                    (#{:picked-up :hurt :died :disconnected :online :reconnect-failed} kind) kind
                    (= :notice (:attention e)) :notices)]
     (if-not category

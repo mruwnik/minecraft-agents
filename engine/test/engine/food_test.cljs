@@ -87,6 +87,18 @@
           (await (tick-for! eng clock 300))
           (is (= 1 (count (hungry-fired seen))) "five minutes on, no food at hand: not fired again"))))))
 
+(deftest food-none-says-harmful-food-is-carried-but-skipped-on-purpose
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen clock]} (setup {:self {:food 3} :inventory [{:name "chicken" :count 2} {:name "rotten_flesh" :count 5}]})]
+          (core/register-reflex! eng {:trigger :hungry})
+          (await (tick-for! eng clock 5))
+          (let [text (:text (first (filterv #(= :food.none (:kind %)) @seen)))]
+            (is (re-find #"2 chicken" text))
+            (is (re-find #"5 rotten_flesh" text))
+            (is (re-find #"skipped on purpose" text))))))))
+
 (deftest hungry-reflex-wakes-when-food-is-carried-or-learned-or-the-rest-ends
   (let [when-fn (:when (get triggers/all :hungry))
         gave-up {:food 3}
