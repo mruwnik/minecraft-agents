@@ -82,7 +82,10 @@
   the sight test of a melee mob (the way to the body still counts). Players and passive mobs are
   other entity kinds and never count. A dead body (a :died entry with no
   newer :respawned) sees no danger. The job's own :radius and
-  :ranged-radius are set in the entry's :job spec."
+  :ranged-radius are set in the entry's :job spec. A danger reflex: by default
+  it never cools down (:persistence :retry) and its job is never backed off,
+  so it reacts every time the danger is there; an agent may set
+  :persistence :cooldown with :cooldown-s, or :backoff, in its own entry."
   {:name :hostile-near
    :when (fn [world memory args]
            (boolean (and (not (died/dead? memory))
@@ -91,8 +94,7 @@
                                                       {:sight? (:visible-only args true)})))))
    :job '(jobs.survival.respond-to-hostile)
    :args {:radius hostile-radius :ranged-radius ranged-radius}
-   :persistence :cooldown
-   :cooldown-s 5})
+   :persistence :retry})
 
 (def nearly-full-free 2)
 

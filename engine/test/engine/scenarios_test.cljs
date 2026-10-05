@@ -141,7 +141,7 @@
               "no errors besides the death itself"))))))
 
 (def survival-cooldowns
-  {:suffocating 0 :burning 0 :health-low 10 :hostile-near 5 :hungry 90 :night-unsafe 10 :shut-in-by-day 10 :player-sleeping-nearby 30 :stuck 60 :door-left 5 :died 30 :inventory-nearly-full 120 :tidy-pending 10})
+  {:suffocating 0 :burning 0 :health-low 10 :hungry 90 :night-unsafe 10 :shut-in-by-day 10 :player-sleeping-nearby 30 :stuck 60 :door-left 5 :died 30 :inventory-nearly-full 120 :tidy-pending 10})
 
 (deftest survival-triggers-wait-a-cooldown-after-their-job-ends
   (let [{:keys [eng]} (boot "scenarios/survival.edn" {})
@@ -149,6 +149,11 @@
     (doseq [[id cooldown] survival-cooldowns]
       (is (= [:cooldown cooldown] ((juxt :persistence :cooldown-s) (by-id id))) (str id " in the register"))
       (is (= [:cooldown cooldown] ((juxt :persistence :cooldown-s) (triggers/all id))) (str id " by default")))))
+
+(deftest survival-hostile-near-never-cools-down
+  (let [{:keys [eng]} (boot "scenarios/survival.edn" {})
+        entry (some #(when (= :hostile-near (:id %)) %) (:register (core/state eng)))]
+    (is (= [:retry 0] ((juxt :persistence :cooldown-s) entry)) "a danger reflex: no cooldown, by the trigger's default")))
 
 (deftest survival-digs-in-at-night-in-the-open-on-its-own
   (async done

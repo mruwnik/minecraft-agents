@@ -643,6 +643,7 @@
           (is (= [:failed] (reflex-outcomes seen))))))))
 
 (deftest only-the-documented-registry-jobs-opt-out-of-backoff
-  (is (= '#{jobs.survival.sleep jobs.survival.shelter jobs.maintenance.unstick jobs.survival.breathe jobs.survival.extinguish}
+  (is (= '#{jobs.survival.sleep jobs.survival.shelter jobs.maintenance.unstick jobs.survival.breathe jobs.survival.extinguish
+           jobs.survival.respond-to-hostile}
          (set (keep (fn [[k v]] (when (false? (:backoff v)) k)) registry/jobs)))
       "a new :backoff false must be added to this set deliberately, with its reason in the job's docstring (README, Jobs, backoff)"))

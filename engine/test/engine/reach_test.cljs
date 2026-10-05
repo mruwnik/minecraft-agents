@@ -47,6 +47,11 @@
     (is (true? (reach/walkable-way? p {:x 0.5 :y 64 :z 6.5} body)) "through the gap")
     (is (false? (reach/walkable-way? p {:x 0.5 :y 64 :z 6.5} body #{[0 64 1] [0 65 1]})) "the gap filled")))
 
+(deftest a-cell-counted-open-opens-a-way-through-a-seal
+  (let [p (tu/fake {:self {:pos body} :floor [-20 -20 20 20] :blocks walls})]
+    (is (true? (reach/walkable-way? p {:x 0.5 :y 64 :z 6.5} body #{} #{[0 64 1] [0 65 1]})) "the seal's side counted open")
+    (is (false? (reach/walkable-way? p {:x 0.5 :y 64 :z 6.5} body #{} #{})) "sealed")))
+
 (deftest a-step-up-and-a-drop-are-walked
   (let [step {"3,64,0" "stone" "4,64,0" "stone" "4,65,0" "stone" "5,64,0" "stone" "5,65,0" "stone" "5,66,0" "stone"}
         p (tu/fake {:self {:pos body} :floor [-20 -20 20 20] :blocks step})]

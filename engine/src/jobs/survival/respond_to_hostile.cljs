@@ -11,7 +11,16 @@
   damage the fight is expected to cost (engine.jobs.combat/fight-damage: the
   weapon, the armour worn, each mob's kind and what is left of it after the
   hits landed, the dangers killed nearest first) leaves at least :reserve
-  health. Writes one :hostile entry per encounter.")
+  health. Writes one :hostile entry per encounter. Done the first round no real
+  danger (as the hostile-near trigger: engine.jobs.reach, in sight) is within
+  :radius (:ranged-radius for ranged mobs), unless the retreat is hiding (sealed
+  in, up a pillar or down a pit): then the retreat says when the danger is gone.
+  A danger reflex: never backed off.")
+
+(def backoff
+  "Off: a danger reflex reacts every round the danger is there; fruitless rounds (a blocked walk, a cornered body
+  trying its escapes) must not mute it."
+  false)
 
 (def args
   {:radius {:doc "hostiles within this many blocks count" :default 8}
@@ -30,8 +39,6 @@
   (let [{:keys [radius ranged-radius]} (:args c)]
     (reach/dangers (:primitives c) radius {:ranged-radius ranged-radius} {})))
 
-(defn check [c]
-  (boolean (seq (near c))))
 
 (defn decide
   "Pure: :flee from any creeper, else :fight when the expected damage leaves at least reserve health, else :flee."
@@ -67,23 +74,33 @@
   (let [{:keys [reserve weapons] :as a} (:args c)
         p (:primitives c)
         self (.self p)
-        decision (if (empty? near)
-                   :flee ; retreat tracks its own cooldown after the hostile is out of sight
-                   (decide {:health (.-health self)
-                            :creeper? (boolean (some combat/creeper? near))
-                            :reserve reserve
-                            :damage (combat/fight-damage {:weapon (combat/best-weapon p weapons)
-                                                          :armour (combat/armour-points (.-equipment self))
-                                                          :mobs (map #(mob-of c %) near)})}))]
-    (when (seq near) (log-encounter! c (first near) decision))
+        decision (decide {:health (.-health self)
+                          :creeper? (boolean (some combat/creeper? near))
+                          :reserve reserve
+                          :damage (combat/fight-damage {:weapon (combat/best-weapon p weapons)
+                                                        :armour (combat/armour-points (.-equipment self))
+                                                        :mobs (map #(mob-of c %) near)})})]
+    (log-encounter! c (first near) decision)
     (ctx/update-mem! c assoc :decision decision)
     (let [result (await (run-child c decision a))]
       (if (= :declined result)
         (await (run-child c (other decision) a))
         result))))
 
+(defn hiding?
+  "Whether the retreat child holds a refuge (sealed in, a pillar or a pit): a hostile it hides from is out of sight
+  and has no way to the body, yet is still there."
+  [c]
+  (some? (get-in (ctx/mem c) [:children :flee :refuge])))
+
+(defn check
+  "A real danger near, or the retreat hiding from one (it says when that is over)."
+  [c]
+  (or (hiding? c) (boolean (seq (near c)))))
+
 (defn ^:async round [c]
   (let [hs (near c)]
-    (if (and (empty? hs) (= :fight (:decision (ctx/mem c))))
-      :done
-      (await (respond c hs)))))
+    (cond
+      (hiding? c) (await (run-child c :flee (:args c)))
+      (empty? hs) :done
+      :else (await (respond c hs)))))

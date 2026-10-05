@@ -161,37 +161,6 @@
   [eng]
   (select-keys (peek (tu/walked-to eng)) [:x :z]))
 
-(deftest retreat-moves-away-and-finishes-after-the-cooldown
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p clock]} (await (first-round '(jobs.survival.retreat {:clear-radius 8}) {:entities [(zombie 5 0)]}))]
-          (is (= {:x -6 :z 0} (last-move eng)) "a step of 6 directly away")
-          (swap! clock + 1000)
-          (await (core/tick! eng))
-          (is (= 1 (count (tu/walked-to eng))) "the hostile is out of radius: no more walking")
-          (is (= ["j1"] (:list (core/state eng))) "but not done before the cooldown")
-          (swap! clock + 5000)
-          (await (core/tick! eng))
-          (is (= [] (:list (core/state eng)))))))))
-
-(deftest retreat-resets-its-cooldown-whenever-a-hostile-is-seen
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p clock]} (await (first-round retreat {:entities [(zombie 5 0)]}))]
-          (swap! clock + 4000)
-          (set-entities! p [(assoc (zombie 5 0) :pos {:x -6 :y 64 :z 3})])
-          (await (core/tick! eng))
-          (is (= 2 (count (tu/walked-to eng))) "seen again after 4 s: walks again")
-          (swap! clock + 4000)
-          (set-entities! p [])
-          (await (core/tick! eng))
-          (is (= ["j1"] (:list (core/state eng))) "only 4 s since it was last seen")
-          (swap! clock + 1500)
-          (await (core/tick! eng))
-          (is (= [] (:list (core/state eng)))))))))
-
 (defn remember! [eng kind data] (mem/write! (:store eng) kind data mem/place-policy))
 
 (deftest retreat-leans-towards-a-bed-or-home-unless-it-is-through-the-hostile
@@ -353,17 +322,6 @@
 
 ;; ------------------------------------------------------- retreat keeps going and minds walls
 
-(deftest retreat-keeps-walking-while-the-hostile-is-within-the-clear-radius
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p clock]} (await (first-round retreat {:entities [(zombie 5 0)]}))]
-          (set-entities! p [(zombie 6 0)])
-          (swap! clock + 1000)
-          (await (core/tick! eng))
-          (is (= 2 (count (tu/walked-to eng))) "12 blocks behind is out of radius 8 but within 24: walk on")
-          (is (< (:x (last-move eng)) -6)))))))
-
 (defn wall-cells
   "Stone at feet and head height on the given [x z] cells."
   [cells]
@@ -468,18 +426,15 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p clock]} (await (first-round retreat {:self {:food 10} :inventory [{:name "bread" :count 3}]
-                                                                 :entities [(zombie 5 0)]}))]
-          (is (zero? (count (calls p "eat"))) "the zombie is 5 away: no time to eat")
-          (set-entities! p [(zombie 8 0)])
+                                                                 :entities [(skeleton 1 5 0)]}))]
+          (is (zero? (count (calls p "eat"))) "the skeleton is 5 away: no time to eat")
+          (set-entities! p [(skeleton 1 8 0)])
           (swap! clock + 1000)
           (await (core/tick! eng))
           (is (= 1 (count (calls p "eat"))) "14 blocks of gap: it eats")
           (swap! clock + 1000)
           (await (core/tick! eng))
           (is (= 1 (count (calls p "eat"))) "once per flight"))))))
-
-(deftest retreat-flees-until-the-hostile-is-forty-away
-  (is (= 40 (get-in (registry/jobs 'jobs.survival.retreat) [:args :clear-radius :default]))))
 
 (deftest a-cornered-fight-is-kept-while-the-hostile-is-close
   (async done
@@ -605,3 +560,94 @@
           (is (zero? (count (calls p "attack"))) "no fist fight")
           (is (= "cobblestone" (.-name (.blockAt p #js {:x 0 :y 64 :z 1})))
               "the side cell its hitbox overlapped is filled: it stood in the middle of its cell first"))))))
+
+;; ------------------------------------------------- the hostile reflex: no cooldown, no backoff, a clear end
+
+(defn reflex-ended [seen] (filterv #(and (= :reflex (:source %)) (= :ended (:kind %))) @seen))
+
+(defn reflex-fired [seen] (filterv #(and (= :reflex (:source %)) (= :fired (:kind %))) @seen))
+
+(defn reflex-jobs
+  "The ids of the reflex job instances the engine holds."
+  [eng]
+  (keep (fn [[id inst]] (when (:reflex inst) id)) (:instances (core/state eng))))
+
+(deftest hostile-near-defaults-to-no-cooldown
+  (is (= :retry (:persistence triggers/hostile-near)))
+  (is (zero? (:cooldown-s triggers/hostile-near 0))))
+
+(deftest respond-to-hostile-is-never-backed-off
+  (is (false? (:backoff (registry/jobs 'jobs.survival.respond-to-hostile)))))
+
+(deftest a-far-walkable-zombie-does-not-hold-the-body
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen clock]} (setup {:entities [(zombie 3 0)]})]
+          (core/register-reflex! eng {:trigger :hostile-near})
+          (await (core/tick! eng))
+          (is (= 1 (count (reflex-fired seen))) "a zombie at 3: the reflex fires")
+          (set-entities! p [(zombie 24 0)])
+          (dotimes [_ 2] (swap! clock + 1000) (await (core/tick! eng)))
+          (is (empty? (reflex-jobs eng)) "a zombie 30 blocks off, walkable or not, is outside the trigger's radius: the reflex ended")
+          (is (= [:done] (mapv :outcome (reflex-ended seen)))))))))
+
+(deftest a-retreat-is-done-the-first-round-no-danger-is-within-its-radius
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (await (first-round retreat {:entities [(zombie 5 0)]}))]
+          (is (= {:x -6 :z 0} (last-move eng)) "a step of 6 directly away")
+          (set-entities! p [(zombie 30 0)])
+          (swap! clock + 1000)
+          (await (core/tick! eng))
+          (is (= [] (:list (core/state eng))) "no wait for a clear radius of 40 or a cooldown"))))))
+
+(deftest a-blocked-retreat-with-the-danger-present-neither-ends-nor-backs-off
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen clock]} (setup {:entities [(zombie 5 0)]})]
+          (stuck-walks! p)
+          (core/register-reflex! eng {:trigger :hostile-near})
+          (dotimes [_ 12] (await (core/tick! eng)) (swap! clock + 1000))
+          (is (= 1 (count (reflex-fired seen))) "fired once and held")
+          (is (empty? (reflex-ended seen)) "never ended while the zombie stands")
+          (is (seq (reflex-jobs eng)))
+          (is (empty? (filter #(= :backoff (:kind %)) @seen)) "never backed off"))))))
+
+(deftest an-explicit-cooldown-in-the-agents-entry-is-honoured
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[why entry fires-again?]
+                [["the default: fired again at once" {:trigger :hostile-near :args {:radius 10}} true]
+                 ["the agent's own cooldown" {:trigger :hostile-near :args {:radius 10} :persistence :cooldown :cooldown-s 30} false]]]
+          (let [{:keys [eng seen clock]} (setup {:inventory sword
+                                                 :entities [(assoc (zombie 1 3 0) :health 5 :visible true)
+                                                            (assoc (zombie 2 0 7) :visible true)]})]
+            (core/register-reflex! eng (assoc entry :job '(jobs.survival.respond-to-hostile {:radius 4})))
+            (await (core/tick! eng))
+            (is (= [:done] (mapv :outcome (reflex-ended seen))) (str why ": the near zombie killed, the one at 7 is beyond the job's 4"))
+            (swap! clock + 1000)
+            (await (core/tick! eng))
+            (is (= (if fires-again? 2 1) (count (reflex-fired seen))) why)))))))
+
+(deftest a-hostile-reflex-cut-by-a-higher-one-fires-again-while-the-danger-stands
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen clock]} (setup {:entities [(zombie 5 0)]})]
+          (core/register-reflex! eng {:trigger :burning})
+          (core/register-reflex! eng {:trigger :hostile-near})
+          (await (core/tick! eng))
+          (is (= [:hostile-near] (mapv :reflex (reflex-fired seen))))
+          (fake/swap-self! p assoc :onFire true)
+          (swap! clock + 1000)
+          (await (core/tick! eng))
+          (is (= :burning (:reflex (peek (reflex-fired seen)))) "the fire cuts the flight")
+          (fake/swap-self! p assoc :onFire false)
+          (set-entities! p [(zombie (+ 3 (first (:pos (fake/self p)))) 0)])
+          (swap! clock + 1000)
+          (await (core/tick! eng))
+          (is (= :hostile-near (:reflex (peek (reflex-fired seen)))) "fired again, fresh, as soon as the fire is out"))))))

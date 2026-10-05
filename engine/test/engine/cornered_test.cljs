@@ -117,10 +117,34 @@
           (is (= 2 (count (calls p "place"))) "sealed: nothing more to place")
           (is (= ["j1"] (:list (core/state eng))) "it waits in the seal while the skeleton is near")
           (is (empty? (blocked-events seen)) "never a blocked retreat")
-          (swap! clock + 61000)
+          (dotimes [_ 4]
+            (swap! clock + 30000)
+            (await (core/tick! eng)))
+          (is (= ["j1"] (:list (core/state eng))) "no timer: still sealed two minutes on while the skeleton waits outside")
+          (is (= [0 64 0] (mapv js/Math.floor (:pos (fake/self p)))))
+          (is (= 1 (count (filter #(= :retreat_sealed (:kind %)) @seen))) "one notice that it walled itself in")
+          (swap! (fake/state p) assoc :entities [])
+          (swap! clock + 1000)
           (await (core/tick! eng))
-          (is (= [] (:list (core/state eng))) "not for ever: done after max-hide-ms")
-          (is (= 1 (count (filter #(= :retreat_sealed (:kind %)) @seen))) "one notice that it walled itself in"))))))
+          (is (= [] (:list (core/state eng))) "done the first round the skeleton is gone"))))))
+
+(deftest a-sealed-respond-to-hostile-stays-hidden-while-the-hostile-waits-outside
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (await (first-round '(jobs.survival.respond-to-hostile)
+                                                        {:blocks dead-end
+                                                         :inventory [{:name "cobblestone" :count 20}]
+                                                         :entities [(assoc (skeleton 4 64 0) :name "zombie")]}))]
+          (is (= [[1 64 0] [1 65 0]] (placed-cells p)) "unarmed: sealed in")
+          (dotimes [_ 5]
+            (swap! clock + 20000)
+            (await (core/tick! eng)))
+          (is (= ["j1"] (:list (core/state eng))) "the zombie cannot reach the sealed body, but would were it to leave: it stays")
+          (swap! (fake/state p) assoc :entities [])
+          (swap! clock + 1000)
+          (await (core/tick! eng))
+          (is (= [] (:list (core/state eng))) "the zombie gone: done"))))))
 
 (deftest a-sealed-body-is-done-once-the-hostile-has-gone
   (async done
@@ -129,12 +153,14 @@
         (let [{:keys [eng p clock]} (await (first-round retreat {:blocks dead-end
                                                                  :inventory [{:name "cobblestone" :count 20}]
                                                                  :entities [(skeleton 4 64 0)]}))]
-          (swap! (fake/state p) assoc :entities [])
           (swap! clock + 1000)
           (await (core/tick! eng))
-          (swap! clock + 5000)
+          (is (= ["j1"] (:list (core/state eng))) "sealed, the skeleton in the tunnel")
+          (swap! (fake/state p) assoc :entities [])
+          (fake/add-entity! p {:id 3 :name "zombie" :kind "hostile" :pos {:x 0 :y 64 :z 5} :health 20})
+          (swap! clock + 1000)
           (await (core/tick! eng))
-          (is (= [] (:list (core/state eng)))))))))
+          (is (= [] (:list (core/state eng))) "a zombie walled off in the rock is no danger even with the seal gone"))))))
 
 (deftest a-cornered-body-without-blocks-fights-with-its-pickaxe
   (async done

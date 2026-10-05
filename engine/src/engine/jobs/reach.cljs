@@ -221,11 +221,18 @@
   mob; if it runs out of budget, one from the body (which settles a body
   sealed in or on a small island); unknown counts as a way. With a set of
   cells solid, those cells count as solid blocks (what the way would be were
-  they filled)."
+  they filled); with a set of cells open, those count as air (what the way would be were they dug)."
   ([p mob-pos body-pos] (walkable-way? p mob-pos body-pos #{}))
-  ([p mob-pos body-pos solid]
+  ([p mob-pos body-pos solid] (walkable-way? p mob-pos body-pos solid #{}))
+  ([p mob-pos body-pos solid open]
    (let [base (lookup p)
-         kind-at (if (empty? solid) base (fn [x y z] (if (contains? solid [x y z]) :solid (base x y z))))]
+         kind-at (if (and (empty? solid) (empty? open))
+                   base
+                   (fn [x y z]
+                     (let [c [x y z]]
+                       (cond (contains? solid c) :solid
+                             (contains? open c) :open
+                             :else (base x y z)))))]
      (way? kind-at (cell-of mob-pos) (cell-of body-pos)))))
 
 (def room-cells
