@@ -415,7 +415,7 @@
     (- (max gx gz) (:body-half policy))))
 
 (defn rise-first?
-  "True for a straight jump up to step from the cell before it while the body is at the wall it climbs and below the
+  "True for a jump up to step from the cell before it (straight, or diagonal with both side cells free: not a corner slide) while the body is at the wall it climbs and below the
   step's stand height: it must go up first. Forward pressed there carries the client 0.02 into the wall (it skips a
   block it already overlaps), the server refuses that position and puts the body back, every try."
   [policy prev step {:keys [y in-water] :as pose}]
@@ -423,7 +423,7 @@
        (not in-water)
        (nil? (:cx step))
        (some? prev)
-       (zero? (* (- (:x step) (:x prev)) (- (:z step) (:z prev))))
+       (not (:corner step))
        (> (- (stand-y step) y) (:pressed-rise policy))
        (<= (wall-gap policy step pose) (:wall-gap policy))))
 

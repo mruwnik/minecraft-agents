@@ -251,3 +251,31 @@
     [] [58.5 16.31]
     [] [58.5 16.398]
     [[58 21 17 58 23 17 "air" {}]] [58.5 16.34]))
+
+;; Live (go-to soak): a one-block diagonal step up onto a grass block with both side cells free, the body standing near
+;; the corner of its own cell (x 8610.8, z 8192.3) so that its box already overlaps the block's column in x and touches
+;; its south face. Forward + jump there pressed the body on the block's face for 3 s, every try.
+
+(def diag-up
+  [[8600 60 8180 8620 66 8200 "stone" {}]
+   [8611 67 8191 8612 67 8191 "grass_block" {:snowy false}]
+   [8612 67 8192 8612 67 8192 "grass_block" {:snowy false}]])
+
+(deftest a-diagonal-step-up-with-free-sides-is-jumped
+  (are [at] (= :arrived (status-of diag-up [8610 67 8192] [8611 68 8191] at))
+    nil
+    [8610.5 8192.5]
+    [8610.8 8192.3]
+    [8610.69 8192.3]
+    [8610.8 8192.02]
+    [8610.7828 8192.2954]
+    [8610.7155 8192.296]))
+;; Pressed on the block's face near its corner, forward + jump slid the body into the block's column while it was still
+;; below the block's top (the server put it back, every try). The jump goes straight up first, as a straight one does.
+(deftest a-diagonal-jump-up-pressed-on-the-block-never-enters-it
+  (are [at] (let [{:keys [poses]} (walk diag-up [8610 67 8192] [8611 68 8191] at)]
+              (not-any? #(in-wall? [8611 67 8191] %) poses))
+    [8610.7 8192.31]
+    [8610.78 8192.31]
+    [8610.9 8192.32]
+    [8610.55 8192.31]))

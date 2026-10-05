@@ -719,7 +719,12 @@
   (are [st ps] (:forward (controls-of (ex/tick p st ps)))
     (state-at rise-north 1) (pose 5.5 64 5.31 {:in-water true})
     (state-at [(step 5 64 5 :start) (step 5 65 4 :jump {:cx 1})] 1) (pose 5.5 64 5.31)
-    (state-at [(step 4 64 5 :start) (step 5 65 4 :jump)] 1) (pose 5.5 64 5.31)))
+    (state-at [(step 4 64 5 :start) (step 5 65 4 :jump {:corner true})] 1) (pose 5.5 64 5.31)))
+
+(deftest a-diagonal-jump-with-free-sides-pressed-on-its-block-goes-up-first
+  (are [ps forward] (= forward (:forward (controls-of (ex/tick p (state-at [(step 4 64 5 :start) (step 5 65 4 :jump)] 1) ps))))
+    (pose 5.5 64 5.31) false
+    (pose 5.5 65.0013 5.31) true))
 
 ;; The planner asks planner-limits about every gap jump and corner jump it looks at; its answers must be the executor's own
 ;; refusals (gap-refused with low-ceiling?, high-corner?), whatever form they take.
