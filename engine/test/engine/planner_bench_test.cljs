@@ -18,10 +18,11 @@
              (js->clj :keywordize-keys true))))
 
 (defn record
-  "[status reason seconds risk end-cell expanded] of a planner result, as the recorded answers have them."
+  "[status reason seconds risk end-cell expanded] of a planner result, as the recorded answers have them (the JS planner
+  knew no :start-enclosed: it said goal-unloaded)."
   [r]
   (let [cost (get-in r [:path :cost])]
-    [(:status r) (:reason r) (:seconds cost) (:risk cost) (pf/last-cell r) (:expanded r)]))
+    [(:status r) (if (= "start-enclosed" (:reason r)) "goal-unloaded" (:reason r)) (:seconds cost) (:risk cost) (pf/last-cell r) (:expanded r)]))
 
 (defn close? [a b]
   (or (and (nil? a) (nil? b))

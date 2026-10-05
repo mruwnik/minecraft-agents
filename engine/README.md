@@ -628,7 +628,7 @@ gap jumps, climbing, water, doors), with costs in seconds plus risk. Tests are `
   bounded, resumable search (used by `fell-tree` and `mine`). `engine.path.regions` is a region map for routing and
   reachability proofs; nothing uses it yet.
 - A search is bounded per round (about 100 ms) and resumable; a search that needs more rounds walks toward where it has
-  got to, or waits. An enclosed goal is found by a small backward flood before any walking (`goal-enclosed`; `options.preFlood`, default 256 cells), and go-to keeps its flood between searches toward one goal (`goalFloodMemo`).
+  got to, or waits. A start closed in the loaded world, with the goal unloaded, ends `start-enclosed` (not `goal-unloaded`). An enclosed goal is found by a small backward flood before any walking (`goal-enclosed`; `options.preFlood`, default 256 cells), and go-to keeps its flood between searches toward one goal (`goalFloodMemo`).
 - A partial plan ends at the node nearest the goal that the body can come back from (one-way drops and gap jumps are not
   taken). `walk-near!` never leads the body off a ledge it cannot climb back.
 - The walker watches the way ahead and replans when the world under the plan changed, when a mob blocks a leg, and every 4 s

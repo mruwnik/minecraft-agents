@@ -91,8 +91,8 @@
           (.add known (known-key f g))
           (recur known (conj seen f) (inc n)))))))
 
-;; a body sealed in a 3x3 pen (walls and roof) at a chunk side, the goal far and unloaded (live: :goal-unloaded after 6
-;; rounds with 9 nodes). :goal-unloaded is the planner's reason for any search toward an unloaded goal. The edge stop
+;; a body sealed in a 3x3 pen (walls and roof) at a chunk side, the goal far and unloaded (live: 9 nodes). The search
+;; ends :start-enclosed (the start flood ran out with no node at the loaded edge); an open start keeps :goal-unloaded. The edge stop
 ;; changes nothing in a pen: both searches expand the 9 cells and name no frontier (no way leads out), so go-to is told
 ;; there is no edge to walk to; the edge stop did not end the search on the start
 (def pen
@@ -103,5 +103,5 @@
 (deftest a-sealed-pen-with-an-unloaded-goal-ends-the-same-with-the-edge-stop
   (doseq [opts [{} {:stopAtEdge true}]]
     (let [r (result-over {:blocks pen} [48 64 30] far-goal (merge {:weight 1.2 :knownCells (js/Set.)} opts))]
-      (is (= ["partial" "goal-unloaded" 9] [(:status r) (:reason r) (:expanded r)]) (str opts))
+      (is (= ["partial" "start-enclosed" 9] [(:status r) (:reason r) (:expanded r)]) (str opts))
       (is (nil? (:frontier r)) (str opts)))))

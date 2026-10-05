@@ -2653,8 +2653,18 @@
                                    best))}]
       #js {:steps steps :cost cost :summary (.summarize s steps node)}))
 
+  ;; Did the search run out of land with no node at the loaded edge: the start's region is closed in the loaded world?
+  (startEnclosed [s]
+    (and (identical? reason "exhausted") (== edge-node -1)
+         (loop [i 0]
+           (cond
+             (>= i n-nodes) true
+             ^boolean (.atLoadedEdge s i) false
+             :else (recur (inc i))))))
+
   (outcome [s status why path one-way]
-    (let [frontier (when-not (identical? status "found") (.frontierOf s))]
+    (let [frontier (when-not (identical? status "found") (.frontierOf s))
+          why (if (and (identical? why "goal-unloaded") ^boolean (.startEnclosed s)) "start-enclosed" why)]
       #js {:status status
            :reason why
            :ms elapsed

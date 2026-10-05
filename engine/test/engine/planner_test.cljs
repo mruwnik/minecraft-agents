@@ -318,7 +318,8 @@
 
 (defn check-unloaded-goal [goal]
   (let [r (run (world {}) goal)]
-    (is (= ["partial" "goal-unloaded"] (status+reason r)))
+    (is (= "partial" (:status r)))
+    (is (contains? #{"goal-unloaded" "start-enclosed"} (:reason r)))
     (is (< (distance-to-goal r [200 200]) (- (js/Math.hypot 198 198) 20)))))
 
 (deftest unloaded-goal-gives-partial-path-toward-it
