@@ -64,6 +64,14 @@
 
 (defn nonzero [n] (when (and (number? n) (not= 0 n) (not (js/Number.isNaN n))) n))
 
+(defn died-view
+  "A recent death: where it happened (the drops lie there), the cause when known, seconds since and seconds
+  until the drops despawn."
+  [{:keys [pos cause ago-ms despawns-in-ms]}]
+  (let [at (position pos)]
+    (clean-pairs :at at :cause (clip cause 80) :ago-s (js/Math.round (/ ago-ms 1000))
+                 :pile-at at :despawns-in-s (js/Math.round (/ despawns-in-ms 1000)))))
+
 (defn compact-status
   "Status without metadata or empty collections: positions rounded, queued jobs apart from the current one."
   [s]
@@ -77,6 +85,7 @@
        :mode (:mode s)
        :idle (when-not current true)
        :pos (position (:position s))
+       :died (when (:died s) (died-view (:died s)))
        :health (:health s)
        :food (:food s)
        :current (when current (job-view current))

@@ -945,7 +945,7 @@ All responses are EDN, including errors; mutation bodies must be EDN too.
 | `GET /events?stream-id=<id>&after=<seq>&limit=<n>` | bounded event page after a cursor, with oldest/latest sequence and explicit gap indication |
 | `POST /attention/resolve` | `{:request-id "..." :reason :handled}` resolves a request idempotently; it does not retry or cancel its job |
 | `POST /chat` | one public line or whisper; uses the body's identity and shared chat limits without acquiring its scheduler lease |
-| `GET /status?limit=<n>` | compact body/job/attention projection; `limit` is 1..32 (default 4) |
+| `GET /status?limit=<n>` | compact body/job/attention projection; `limit` is 1..32 (default 4). `:died` `{:pos :cause? :ago-ms :despawns-in-ms}` is present while the latest death is under five minutes old (the drops lie at `:pos`); `observe status` shows it as `:died {:at :cause :ago-s :pile-at :despawns-in-s}`. The died event does not carry a cause yet, so `:cause` shows only once a primitive records one |
 | `GET /inventory` | read-only carried stack and worn equipment snapshot, independent of manual takeover |
 | `GET /job?id=<id>&limit=<n>` | one listed or reflex job's bounded parsed spec, effective args, state and linked outstanding requests |
 | `GET /catalog?kind=jobs&prefix=jobs.farm.&limit=20&offset=0` | bounded page of exact job names (names only) |
@@ -1319,7 +1319,7 @@ unstartable (`engine.single`; only two starts racing over the same stale file wi
 | `jobs.survival.extinguish` | `{:water-radius 6 :step 4 :scan-radius 8}` | on fire or in lava, without fire resistance; stands still (info `:extinguish_wait`, done) when on fire with no bucket use, no water in `:water-radius` and no hazard within 1.5 blocks; after pouring a carried water bucket it remembers `:poured` and, once the fire is out, scoops the water back with `bucket` (info `:scoop_failed` if not placed; gives up waiting after 8 rounds) | none | writes `:extinguish` (cap 20, 1 h), `:hazard` for lava seen (cap 50, 6 h) |
 | `jobs.survival.recover` | `{:health 7 :healed 16 :sight 16}` | health below `:health`, or below `:healed` with a `:hurt` in the last 5 min, or a spell under way | `:spell-started`, children `:flee`, `:safety`, `:eat` | writes one `:hurt` per spell; reads `:bed`, `:home` |
 | `jobs.survival.respond-to-hostile` | `{:radius 8 :fight-health 12 :min-health 8 :max-fight 2 :weapons ["_sword" "_axe"]}` | a hostile within `:radius` | `:decision`, `:logged`, child `:fight` or `:flee` | writes one `:hostile` per encounter (cap 50, 1 h) |
-| `jobs.survival.fight-back` | `{:range 4 :min-health 8 :weapons ["_sword" "_axe"] :attack-gap-ms 600}` | health at least `:min-health` and a hostile within `:range` | `:last-attack` | none |
+| `jobs.survival.fight-back` | `{:range 4 :min-health 8 :weapons ["_sword" "_axe"] :skip [] :attack-gap-ms 600}` | health at least `:min-health` and a hostile within `:range` | `:last-attack`, `:struck`, `:killed` | none |
 | `jobs.combat.attack` | `{:targets [] :radius 16 :weapons :attack-gap-ms nil :lost-s 5 :timeout-s 120 :no-damage-hits 4 :max-hits 40 :walk-timeout-s 5 :absent :done}` | a listed target within `:radius`, or started, or `:absent` is `:done` | `:started :last-seen :last-attack :seen :hits :quiet :health :fails :given-up :killed :killed-players` | none; hands over `{:reason :killed :given-up}`; emits info `attack.done`, warns `attack.gave-up`, `attack.timeout` |
 | `jobs.survival.get-food` | `{:food 6 :food-when-hurt 14 :source-radius 64 :hunt-radius 24 :farm-radius 6 :take 16 :attack-gap-ms 600 :ask-cooldown-ms 600000}` | hungry (as the hungry trigger, including the top-up of a hurt body carrying common food below 18; the top-up never starts a hunt), or a meal under way | `:eating`, `:dead-source`, `:last-swing`, `:skipped-animals`, `:skipped-blocks`, children `:eat`, `:goto`, `:collect` | reads `:food-source` (forgets one found empty or unreachable); writes `:hungry` when nothing is found; during `:ask-cooldown-ms` after that it still eats and harvests/hunts what is in sight (no wheat) but skips the remembered sources it already knew when it gave up (one learned since is still tried first) and returns `:declined` when nothing is in sight |
 | `jobs.survival.shelter` | `{:roof-height 4 :bed-radius :urgent-bed-radius 128 :max-days-awake 3}` | the night-unsafe condition; a round ends `:done` when asleep, roofed within `:roof-height` or not night, and `:declined` when no child could do anything | `:sleep-failed`, children `:sleep`, `:dig-in` | reads `:slept`; writes `:needs-bed` (cap 1, 1 day; the once-a-day `needs_bed` warn flag); dig-in writes `:shelter`, which nothing reads) |
@@ -1508,9 +1508,11 @@ register; `scenarios/pace-cuts.edn` puts it above a long `pace` job.
 `self().inventory`, which lists main and hotbar slots only (armour and the
 off-hand are not in it): `engine.jobs.util/free-slots`.
 
-`engine.value/item-worth` (a number: 0, 1, 5 or 25, by tier; a missing `:count`
-counts as 1) is the shared item worth: `recover-drops` sums it over a death's
-inventory (`inventory-value`) and `make-room` reads it to decide what may be
+`engine.value/item-worth` (a number: 0, 1, 5 or 25 by tier, or 2 per item for raw
+iron, iron and gold ingots, coal and iron blocks; a missing `:count` counts as 1)
+is the shared item worth: `recover-drops` sums it over a death's inventory
+(`inventory-value`, which first adds the stacks of one name together, so a pile
+split over slots counts as one) and `make-room` reads it to decide what may be
 thrown.
 
 ### Live-unverified assumptions

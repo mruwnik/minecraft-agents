@@ -31,6 +31,20 @@
 (defn edn-response [response]
   (reader/read-string (:text response)))
 
+(def died-entry {:t 1000 :data {:pos {:x 50.5 :y 40 :z 3.5} :cause "skeleton" :inventory [{:name "raw_iron" :count 24}]}})
+
+(deftest death-summary-reports-where-cause-and-time-left
+  (is (= {:pos {:x 50.5 :y 40 :z 3.5} :cause "skeleton" :ago-ms 62000 :despawns-in-ms 238000}
+         (event-api/death-summary died-entry 63000))))
+
+(deftest death-summary-omits-an-unknown-cause
+  (is (= {:pos {:x 1 :y 2 :z 3} :ago-ms 0 :despawns-in-ms 300000}
+         (event-api/death-summary {:t 5 :data {:pos {:x 1 :y 2 :z 3}}} 5))))
+
+(deftest death-summary-is-nil-once-the-drops-have-despawned-or-without-a-death
+  (is (nil? (event-api/death-summary died-entry 301000)))
+  (is (nil? (event-api/death-summary nil 5))))
+
 (deftest resumed-job-is-not-reported-as-merely-queued
   (is (= :resuming (event-api/instance-status {:resume "j1" :list ["j1"]} "j1")))
   (is (= :queued (event-api/instance-status {:list ["j1"]} "j1"))))
@@ -68,6 +82,7 @@
                           :isOffline (fn [] false)
                           :isSettling (fn [] true)}
           eng {:events stream
+               :store (atom {:now js/Date.now :data {}})
                :state (atom {:generation-id "gen-api"
                              :list ["j1"] :current "j1"
                              :instances {"j1" {:id "j1" :round 2 :hold? true

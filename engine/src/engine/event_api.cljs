@@ -7,6 +7,8 @@
             [engine.expr :as expr]
             [engine.events :as events]
             [engine.job-api :as job-api]
+            [engine.memory :as mem]
+            [engine.value :as value]
             [engine.trigger-api :as trigger-api]
             ["fs" :as fs]
             ["http" :as http]
@@ -156,6 +158,17 @@
      :message (short-text (:message event) 240)
      :updated-at (:updated-at request)}))
 
+(defn death-summary
+  "What status reports of a :died memory entry at now: {:pos :cause? :ago-ms :despawns-in-ms}
+  while the drops can still be there (under the five minute despawn window), else nil."
+  [entry now]
+  (when entry
+    (let [ago (- now (:t entry))
+          {:keys [pos cause]} (:data entry)]
+      (when (< ago value/despawn-ms)
+        (cond-> {:pos pos :ago-ms ago :despawns-in-ms (- value/despawn-ms ago)}
+          cause (assoc :cause cause))))))
+
 (defn status [eng requested-limit]
   (let [s (core/state eng)
         p (:primitives eng)
@@ -183,6 +196,8 @@
                  (:who manual) (update :who #(short-text (str %) 80))
                  (string? (:why manual)) (update :why #(short-text % 160))))
      :position (core/self-pos p)
+     :died (let [view (mem/view (:store eng))]
+             (death-summary (mem/latest view :died) (:now view)))
      :health (when (number? (.-health self)) (.-health self))
      :food (when (number? (.-food self)) (.-food self))
      :current (when current

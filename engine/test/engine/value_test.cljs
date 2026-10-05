@@ -10,8 +10,8 @@
     {:name "dirt" :count 3} 0
     {:name "bread" :count 2} 1
     {:name "oak_log" :count 5} 1
-    {:name "iron_ingot" :count 3} 1
-    {:name "iron_ingot" :count 8} 5
+    {:name "iron_ingot" :count 3} 6
+    {:name "iron_ingot" :count 8} 16
     {:name "iron_pickaxe" :count 1} 5
     {:name "diamond" :count 1} 25
     {:name "netherite_sword" :count 1} 25
@@ -21,7 +21,7 @@
 (deftest item-worth-treats-a-missing-count-as-one
   (are [item expected] (= expected (value/item-worth item))
     {:name "bread"} 1
-    {:name "iron_ingot"} 1
+    {:name "iron_ingot"} 2
     {:name "diamond"} 25
     {:name "cobblestone"} 0
     {:name "stick" :enchants [{}]} 25))

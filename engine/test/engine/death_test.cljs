@@ -33,12 +33,27 @@
     junk 4 2
     [{:name "stone_pickaxe" :count 1 :enchants []}] 0 1))
 
-(deftest inventory-value-counts-bulk-metals-only-in-quantity
+(deftest inventory-value-counts-metals-per-item
   (are [n expected] (= expected (value/inventory-value [{:name "iron_ingot" :count n}] 0))
-    3 1
-    7 1
-    8 5
-    32 5))
+    1 2
+    3 6
+    8 16
+    32 64))
+
+(deftest inventory-value-adds-stacks-of-one-name
+  (is (= (value/inventory-value [{:name "raw_iron" :count 24}] 0)
+         (value/inventory-value [{:name "raw_iron" :count 4} {:name "raw_iron" :count 20}] 0)
+         48)))
+
+(def death-pile-of-the-field-report
+  [{:name "raw_iron" :count 4 :slot 17} {:name "raw_iron" :count 20 :slot 18}
+   {:name "cobblestone" :count 64} {:name "cobblestone" :count 36}
+   {:name "stone_pickaxe" :count 1} {:name "oak_planks" :count 29}])
+
+(deftest a-pile-of-raw-iron-outweighs-two-hostiles-and-a-walk
+  (is (> (value/inventory-value death-pile-of-the-field-report 0)
+         (value/retrieval-cost {:x 50 :y 40 :z 3} {:x 20 :y 66 :z 2}
+                               [{:x 52 :y 40 :z 3} {:x 55 :y 40 :z 3}] "mob" 1500))))
 
 (deftest inventory-value-treats-unknown-items-as-junk
   (is (= 0 (value/inventory-value [{:name "mystery_item" :count 1}] 0))))

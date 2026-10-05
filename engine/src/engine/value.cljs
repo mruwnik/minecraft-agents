@@ -13,27 +13,30 @@
     high       25  diamond and netherite anything, ancient debris, elytra,
                    totem of undying, nether star, beacon, shulker boxes
     medium      5  iron tools and armour, bow, crossbow, shield, redstone,
-                   ender pearls, golden apples; coal and iron blocks or
-                   ingots, gold ingots and raw iron at 8 or more in the stack
+                   ender pearls, golden apples
+    metal       2  each raw iron, iron ingot, gold ingot, coal block and iron
+                   block: it takes mining, smelting and time to replace, so a
+                   stack is worth its count times 2
     low         1  food, logs, planks, wood, stone/wooden/golden tools,
-                   leather gear, and the bulk metals below 8 in the stack
+                   leather gear
     junk        0  everything else (seeds, dirt, cobblestone, saplings,
                    sticks, flowers, unknown names)
 
-  Experience adds 0.5 per level: the game drops only a few levels' worth."
+  inventory-value adds the stacks of one name together before it prices them
+  (a pile split over slots is one pile). Experience adds 0.5 per level: the game drops only a few levels' worth."
   (:require [clojure.string :as str]))
 
 (def tier-values {:junk 0 :low 1 :medium 5 :high 25})
 
-(def bulk-count 8)
+(def metal-each 2)
 
 (def rules
-  "Name rules in priority order: {:tier :match regex :min-count n}."
+  "Name rules in priority order: {:match regex} plus :tier (the stack's worth is the tier value) or
+  :each (the stack's worth is :each per item)."
   [{:tier :high :match #"^(diamond|netherite)(_|$)|^(ancient_debris|elytra|totem_of_undying|nether_star|beacon)$|shulker_box$"}
    {:tier :medium :match #"^iron_(pickaxe|axe|shovel|hoe|sword|helmet|chestplate|leggings|boots)$"}
    {:tier :medium :match #"^(bow|crossbow|shield|redstone|ender_pearl|golden_apple)$"}
-   {:tier :medium :match #"^(coal_block|iron_block|iron_ingot|gold_ingot|raw_iron)$" :min-count bulk-count}
-   {:tier :low :match #"^(coal_block|iron_block|iron_ingot|gold_ingot|raw_iron)$"}
+   {:each metal-each :match #"^(coal_block|iron_block|iron_ingot|gold_ingot|raw_iron)$"}
    {:tier :low :match #"^(cooked_.*|bread|apple|carrot|baked_potato|golden_carrot|melon_slice|sweet_berries)$"}
    {:tier :low :match #"_(log|planks|wood)$"}
    {:tier :low :match #"^(stone|wooden|golden)_(pickaxe|axe|shovel|hoe|sword)$"}
@@ -44,26 +47,34 @@
   [item]
   (boolean (some #(seq (get item %)) [:enchants :nbt])))
 
-(defn item-tier
-  "The tier of an inventory entry; a missing :count counts as 1."
-  [{:keys [name count] :as item}]
-  (let [count (or count 1)]
-    (if (enchanted? item)
-      :high
-      (or (some (fn [r] (when (and (re-find (:match r) name) (>= count (:min-count r 0))) (:tier r)))
-                rules)
-          :junk))))
+(defn rule-for
+  "The first rule matching the entry's name, or nil."
+  [{:keys [name]}]
+  (some #(when (re-find (:match %) name) %) rules))
 
 (defn item-worth
-  "The worth of one inventory entry ({:name :count? ...}): the value of its tier."
+  "The worth of one inventory entry ({:name :count? ...}); a missing :count counts as 1."
   [item]
-  (tier-values (item-tier item)))
+  (cond
+    (enchanted? item) (tier-values :high)
+    :else (let [r (rule-for item)]
+            (cond (nil? r) 0
+                  (:each r) (* (:each r) (or (:count item) 1))
+                  :else (tier-values (:tier r))))))
+
+(defn merge-stacks
+  "inventory with the plain stacks of one name added into one entry; enchanted stacks stay apart."
+  [inventory]
+  (let [[special plain] ((juxt filter remove) enchanted? inventory)]
+    (concat special
+            (map (fn [[name stacks]] {:name name :count (transduce (map #(or (:count %) 1)) + 0 stacks)})
+                 (group-by :name plain)))))
 
 (defn inventory-value
   "The worth of carrying inventory ([{:name :count ...}]) with experience
-  level: the tier value of each stack plus 0.5 per level."
+  level: the worth of each name's stacks together plus 0.5 per level."
   [inventory level]
-  (+ (transduce (map item-worth) + 0 inventory)
+  (+ (transduce (map item-worth) + 0 (merge-stacks inventory))
      (* 0.5 (or level 0))))
 
 ;; ---------------------------------------------------------------- the cost
