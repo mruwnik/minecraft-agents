@@ -229,7 +229,7 @@
         [(if (zero? left) (into (subvec items 0 i) (subvec items (inc i))) (assoc-in items [i :count] left)) taken]))))
 
 (defn carried [items item] (transduce (comp (filter #(= item (:name %))) (map :count)) + 0 items))
-(defn with-slots [items] (vec (map-indexed (fn [slot i] {:name (:name i) :count (:count i) :slot slot}) items)))
+(defn with-slots [items] (vec (map-indexed (fn [slot i] (cond-> {:name (:name i) :count (:count i) :slot slot} (:durability i) (assoc :durability (:durability i) :maxDurability (:max-durability i)))) items)))
 
 (defn give [w item n] (update w :inventory add-to item n))
 (defn take-one [w item] (update w :inventory #(first (take-from % item 1))))

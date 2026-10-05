@@ -87,16 +87,26 @@
         worn (first (sort-by #(or (:durability %) js/Infinity) same))]
     (assoc (select-keys worn [:name :durability :max]) :n (count same))))
 
+(def wear-settle-ms "A tool one or two uses from breaking: the inventory may lag the dig; wait this long, up to" 250)
+(def wear-settle-tries "this many times, for the break to show." 3)
+
 (defn ^:async note-wear!
   "Emit :tool.low or :tool.broke (agent-facing, :warn) when the tool picked last time wore out since; ends with a
   :tool.none warning when no tool of its kind is left. :tool-wear is then renewed (cleared after a break) so an event
-  is told once. Called before each equip and after each dig (engine.jobs.tidy/dig!, the stair's dig!), since a tool
-  can break inside the dig with no equip after it."
+  is told once. A tool with 2 or less durability left
+  that still shows is re-read after short waits (the break reaches the inventory just after the dig). Called before each
+  equip and after each dig (engine.jobs.tidy/dig!, the stair's dig!), since a tool can break inside the dig with no equip after it."
   [c]
   (let [p (:primitives c)
         prev (:tool-wear (ctx/mem c))
-        now (when prev (wear-snapshot p prev))
-        ev (wear-event prev now)]
+        about-to-break? (and prev (<= (or (:durability prev) js/Infinity) 2))
+        [now ev] (loop [tries 0]
+                   (let [now (when prev (wear-snapshot p prev))
+                         ev (wear-event prev now)]
+                     (if (and about-to-break? (not= ev :tool-broke) (< tries wear-settle-tries))
+                       (do (await (ctx/act c :wait #js {:ms wear-settle-ms}))
+                           (recur (inc tries)))
+                       [now ev])))]
     (when ev
       (ctx/emit! c (if (= ev :tool-broke) :tool.broke :tool.low) :warn
                  {:tool (:name prev) :durability (:durability now) :left (:n now)})
