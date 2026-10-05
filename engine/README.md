@@ -1781,6 +1781,12 @@ shadow-cljs compile planner-bench && npx shadow-cljs release planner-bench-relea
 A gap jump over 3 cells above a pit the body cannot jump out of (the floor 2 or more blocks down) carries 0.5 risk
 (`GAP-PIT-RISK`): one that falls short traps the body, so a short way round
 is taken instead; where the jump is the only way it is still planned.
+The start cell is the floored body position (`from`). A body on the edge of a block (z .91 over a hole) stands on a
+neighbour: when the floored cell is no place to stand and the query gives `from.px/pz`, the planner starts from the first
+cell the 0.6-wide hitbox overlaps (most overlap, then lower x, then lower z) that stands with the feet at `from.py` (within
+1/16; `start-query`), else `start-not-standable`. `walk/plan-query` passes `px py pz`; `executor/start` given the body's pose
+walks to step 0 first when the body is beside its cell (`beside-start?`), else from step 1
+(`test/engine/planner_start_edge_test.cljs`).
 A corner slide (a diagonal along one blocked side) whose open side is a hole with lava, fire, powder snow, cobweb, magma or a
 lit campfire under it (within `FREE-FALL`, no floor, water or unloaded cell before it) carries 10 risk (`HAZARD-SLIDE-RISK`):
 the slide carries the body wholly over that hole and it dips in (`test/engine/planner_lava_rim_test.cljs`), so any way round up to about 20 s longer wins; where the slide is the only way (a

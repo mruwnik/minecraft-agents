@@ -76,6 +76,16 @@
             (is (= {:arrived true} @out) (str "range " r))
             (is (<= (+ (* (- 10 x) (- 10 x)) (* z z)) (* r r)) (str "within range " r ", at " (at p)))))))))
 
+(deftest go-to-from-the-edge-of-a-hole-arrives
+  ;; the body's floored cell (0,64,0) has a hole under it; its hitbox (z .61-1.21) stands on the block under (0,64,1)
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p] :as s} (await (go! {:blocks (dissoc flat "0,63,0") :self {:pos {:x 0.5 :y 64 :z 0.91}}}
+                                                {:pos [10 64 0]}))]
+          (is (= {:arrived true} @out) (str "events " (pr-str (map :data (events-of s :unreachable)))))
+          (is (< (js/Math.hypot (- 10 (first (at p))) (last (at p))) 2) (str "at " (at p))))))))
+
 (deftest go-to-already-within-range-does-not-walk
   (async done
     (tu/run-async done

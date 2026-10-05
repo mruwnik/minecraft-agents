@@ -487,10 +487,22 @@
                 :sprint (sprint? policy steps i pose)}
      :yaw yaw' :pitch 0}))
 
+(defn beside-start?
+  "The body at pose stands outside step 0's cell but its hitbox (0.3 each way) reaches into it: the planner moved the start
+  there off a block's edge (planner-tuned start-query)."
+  [step0 {:keys [x z] :as pose}]
+  (and (not (in-cell? step0 pose))
+       (< (- (:x step0) 0.3) x (+ (:x step0) 1.3))
+       (< (- (:z step0) 0.3) z (+ (:z step0) 1.3))))
+
 (defn start
-  "The state for walking steps; step 0 is where the plan starts."
-  [steps _now-tick]
-  {:steps steps :i (min 1 (max 0 (dec (count steps)))) :since 0 :tick 0 :yaw nil})
+  "The state for walking steps; step 0 is where the plan starts. With the body's pose: a body beside step 0's cell
+  (beside-start?) walks to step 0 first, else the walk begins at step 1."
+  ([steps now-tick] (start steps now-tick nil))
+  ([steps _now-tick pose]
+   {:steps steps
+    :i (if (and pose (> (count steps) 1) (beside-start? (first steps) pose)) 0 (min 1 (max 0 (dec (count steps)))))
+    :since 0 :tick 0 :yaw nil}))
 
 (defn arrived?
   "At the final step: reached, close to its point, and held there: on the ground, on a climbable, or (a final step in a

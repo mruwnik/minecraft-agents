@@ -115,7 +115,7 @@
   (let [pos (.-pos (.self (:primitives c)))
         [gx gy gz] to]
     #js {:from #js {:x (js/Math.floor (.-x pos)) :y (js/Math.floor (.-y pos)) :z (js/Math.floor (.-z pos))
-                    :px (.-x pos) :pz (.-z pos)}
+                    :px (.-x pos) :py (.-y pos) :pz (.-z pos)}
          :goal #js {:kind "near" :x gx :y gy :z gz :range range}}))
 
 (defn plan-options
@@ -637,7 +637,7 @@
   boundary with {:status :replan ...} when the way ahead changed or a partial plan is due a refresh."
   ([c steps timeout-s] (walk! c steps timeout-s nil))
   ([c steps timeout-s watch]
-  (let [state (volatile! (executor/start steps 0))
+  (let [state (volatile! (executor/start steps 0 (let [pos (.-pos (.self (:primitives c)))] {:x (.-x pos) :z (.-z pos)})))
         last-done (volatile! nil)
         decide (fn [js-pose]
                  (let [pose (pose-of js-pose)

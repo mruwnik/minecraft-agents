@@ -2715,7 +2715,7 @@
 
 (defn- goal-array [ctor ^js goals f] (new ctor (.map goals f)))
 
-(defn- new-search ^Search [^js snapshot ^js query ^js options]
+(defn- search-from ^Search [^js snapshot ^js query ^js options]
   (let [^js table (.-table options)
         ^js from (.-from query)
         ^js set-goals (.-goals query)
@@ -2819,6 +2819,50 @@
      (.-knownCells options) nil (.-knownEdges options) nil
      ;; searched-out
      false)))
+
+;; the body's hitbox reaches this far from its centre in x and z
+(def ^:const HITBOX-HALF 0.3)
+
+(defn- overlap [lo hi c] (- (js/Math.min hi (inc c)) (js/Math.max lo c)))
+
+(defn- hitbox-cells
+  "The cells [x z] other than (fx fz) that the body's hitbox at px pz overlaps, most overlap first, then lower x, then
+  lower z."
+  [fx fz px pz]
+  (let [x0 (- px HITBOX-HALF) x1 (+ px HITBOX-HALF) z0 (- pz HITBOX-HALF) z1 (+ pz HITBOX-HALF)]
+    (->> (for [x (range (js/Math.floor x0) (inc (js/Math.floor x1)))
+               z (range (js/Math.floor z0) (inc (js/Math.floor z1)))
+               :let [area (* (overlap x0 x1 x) (overlap z0 z1 z))]
+               :when (and (pos? area) (not (and (== x fx) (== z fz))))]
+           [area x z])
+         (sort-by (fn [[area x z]] [(- area) x z]))
+         (map (fn [[_ x z]] [x z])))))
+
+(defn- start-query
+  "query with its start cell moved for a body on the edge of a block: when from (the floored body position) is no
+  place to stand but from.px/pz is given, the first cell the 0.6-wide hitbox overlaps (hitbox-cells) that stands with
+  the feet at from.py (when given, within 1/16). Unchanged when the floored cell stands or no overlapped cell does.
+  search: a search of query, initialised."
+  [^Search search ^js query]
+  (let [^js from (.-from query)
+        px (.-px from) pz (.-pz from) py (.-py from)
+        fx (.-x from) fy (.-y from) fz (.-z from)]
+    (if (or (>= (.-start-h search) 0) (nil? px) (nil? pz))
+      query
+      (if-let [[x z] (first (filter (fn [[x z]]
+                                      (let [h (.nodeH search x fy z)]
+                                        (and (>= h 0) (or (nil? py) (<= (js/Math.abs (- (+ fy (/ h WHOLE)) py)) (/ 1 WHOLE))))))
+                                    (hitbox-cells fx fz px pz)))]
+        (js/Object.assign #js {} query #js {:from (js/Object.assign #js {} from #js {:x x :z z})})
+        query))))
+
+(defn- new-search
+  "The search of query, its start moved off the edge of a block (start-query); initialised (init again is harmless)."
+  ^Search [^js snapshot ^js query ^js options]
+  (let [^Search search (search-from snapshot query options)]
+    (.init search)
+    (let [q (start-query search query)]
+      (if (identical? q query) search (search-from snapshot q options)))))
 
 (defn- clean-options
   "The options of the returnable search behind a one-way step of search: options.returnable, no goal flood, and no
