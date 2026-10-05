@@ -20,7 +20,8 @@
   - Otherwise it picks the next candidate: adults in the bound not skipped, those that are not unhittable first
     (an animal behind a wall comes last), then nearest first. The target stays until killed or given up on.
 
-  Ends with info cull.done and {:killed n :remaining adults-in-bound :babies n :reason r :skipped [ids]}.
+  Ends with info cull.done and {:killed n :remaining adults-in-bound :babies n :reason r :skipped [ids]}. Skipped
+  animals stay alive and still count as adults, so they still breed.
   Reasons:
   - :count: :killed reached :count (nil: no cap).
   - :keep: at most :keep adults remain. The census is live every round, so the last :keep are never taken.

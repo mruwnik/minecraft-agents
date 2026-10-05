@@ -9,7 +9,8 @@
   ends itself. The check always passes, so a cut job resumes.
 
   Each round takes the nearest adult not yet fed, refused or given up on. The body walks to within 3 blocks
-  (like go-to it opens a shut gate or door on the way and shuts it behind). It then feeds the first breeding
+  (like go-to it opens a shut gate or door on the way and shuts it behind, so a gated pen is entered and its gate
+  left shut; a pen with no way in is :unreachable). It then feeds the first breeding
   food of the mob that it carries (engine.jobs.animals/breeding-food: wheat for cows, sheep, goats and
   mooshrooms; carrot, potato or beetroot for pigs; seeds for chickens; carrot, golden carrot or dandelion for
   rabbits; flowers for bees). Babies are never fed.
@@ -34,7 +35,7 @@
   Animals follow a body holding their food, so the hand is given back. Before the first feeding the job notes
   what the hand holds. When it ends it equips that item again if still carried, else empties the hand. :hand is
   :restored, :emptied or :full (no free slot: the food stays in hand, warn breed.hand-full). There is no :hand
-  when nothing was fed. A job cancelled while cut does not restore the hand.
+  when nothing was fed. A cut job restores the hand when it resumes and ends. A job cancelled while cut does not.
 
   A run that fed at least two animals writes one memory entry of kind :bred/<mob> (data {:fed [uuids]}, default
   one hour). A trigger can use it, e.g. (or (not (known? (since :bred/cow))) (> (since :bred/cow) 1200)).")

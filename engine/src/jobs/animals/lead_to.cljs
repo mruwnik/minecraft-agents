@@ -28,7 +28,8 @@
   :gather-radius from :pos, the body walks on past :pos (range 1) so the lead pulls it in. It waits for the
   animal to settle between pulls, at most :gather-tries pulls. A pull stays within 11 blocks of the animal (the
   lead breaks past 12). It is given up after 20 s, or before it starts when the planned walk strays more than 11
-  blocks from the animal (a wall in the way). That is no failure: the animal is let go where it is, with a warn
+  blocks from the animal (a wall in the way). An animal 10 or more blocks from :pos is never pulled. None of
+  this is a failure: the animal is let go where it is, with a warn
   lead-to.gather-short (:distance from :pos) and :gathered false. :gathered is true when the animal was within
   :gather-radius, or tied.
 
@@ -41,7 +42,7 @@
   - :timeout: :timeout-s from the first round (a cut walk leaves the animal on the lead).
   - :no-fence.
   - The reason of jobs.animals.leash (:no-lead, :none, :unreachable, :refused, :all-leashed, :timeout) when no
-    animal got on the lead, or of jobs.animals.unleash when the lead would not come off.")
+    animal got on the lead, or of jobs.animals.unleash (:refused, :unreachable, :none, :timeout) when the lead would not come off.")
 
 (def args
   {:mob {:doc "the animal's name, such as \"cow\"" :default nil}

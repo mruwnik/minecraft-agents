@@ -18,6 +18,7 @@
      places. A rail that settled in the wrong shape is dug and placed again up to :fix times, then given up as
      :shape. Placing, zones, other plans' footprints, refusals, give-ups and the build.* events are
      jobs.build.from-plan's (its args :reach :give-up :accept apply).
+     With nothing left to build the builder is skipped and the line goes straight to the proof.
   2. :switch turns on every planned lever that is off (jobs.access.toggle as a child, once per lever).
   3. :check runs plan.rail/judge-line over the world. A sturdy block where the plan wants bed or buffer fill is
      no fault.

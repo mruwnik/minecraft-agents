@@ -42,7 +42,8 @@
   3. :max-failures failures end :gave-up (warn mine.gave-up). :dry-digs digs in a row after which the carried
      count did not rise end :no-drops (warn mine.gave-up).
   4. Dig the nearest target by walking (one bounded search, engine.path.targets, going on next round; a seen
-     block out of every stand's reach is passed over; targets over the ground snapshot come last, so the floor
+     block out of every stand's reach is passed over; when the search finds none reachable, the nearest in a straight
+     line is tried; targets over the ground snapshot come last, so the floor
      under the start is dug last). Walk within 3: blocked skips the target and counts a failure, partial tries
      again and the third partial in a row skips it. The best carried tool is equipped. Dug resets the failures
      and starts collecting. Missing does nothing. Cannot (bedrock) skips without a failure. Anything else skips
@@ -68,7 +69,8 @@
   Mend: fills every ground cell that is now air, cave_air or water with the first carried of dig-in's building
   blocks other than the item (the item last, when it is a building block), lowest first, then nearest, never the
   body's feet or head cell. When only those are owed it jumpPlaces one block. Nothing to fill with warns
-  mine.mend-short. Six failed fills warn mine.mend-failed. Both end the job. The item is :item, else the
+  mine.mend-short. Six failed fills warn mine.mend-failed. Both end the job. A mend with no cell left to fill (also when every owed cell is refused)
+  ends as nothing owed. The item is :item, else the
   drop-item table, else the block name. The mend asks the zone rules too: an owed cell in a zone or claim of
   another owner that does not let others place is not filled (one warn mine.declined {:reason :refused}).
 
@@ -88,7 +90,8 @@
   :refused). One warn mine.declined per job names the zones and plans ({:reason :refused :zones :plans}).
 
   Hands over {:got n :reason r} plus :dig-reason, :resumes, :tunnel and :left when set; info mine.done with
-  :mended, the cells filled. :got is how many more are carried than at the start, at least 0. :tunnel is
+  :mended, the cells filled. Its text says the reason, :got and :mended, and for a tunnel its length, heading, end cell
+  and whether the body walked back. :got is how many more are carried than at the start, at least 0. :tunnel is
   {:origin :heading :steps :stop :end :back-at :walked-back?}, :end the cell it ended on before the walk back.")
 
 (def args

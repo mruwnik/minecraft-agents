@@ -17,7 +17,8 @@
   - the one cell of air above each crop cell counts like a crop cell, unless the plan names it.
   Never dug, only listed:
   - the planned crop itself (ripe or not) and any block the plan wants.
-  - water and lava.
+  - water and lava, so the plan's own water is never drained. A cell that wants water is never dug.
+  - farmland where a crop cell or a :clear cell wants something else (listed as :wrong).
   - a container or workstation, a bed, sign, banner, head or light where the plan wants something else.
     Result :kept {:pos :block :why :container|:owned|:light|:fluid}.
   - a block in a cell that wants another block, and a crop of another kind in a crop cell. Result :wrong

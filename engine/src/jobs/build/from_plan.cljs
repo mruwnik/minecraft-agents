@@ -46,7 +46,7 @@
   :sturdy-ground true accepts a sturdy block on the ground of a rail line (plan.rail/ground) where the plan wants
   fill; it is not listed :wrong.
   Result: {:placed n :missing [[x y z] ...] :short {item n} :given-up {[x y z] reason} :wrong [{:pos :found
-  :want}] :refused [...]}.
+  :want}] :refused [...]}. For a block placed in the wrong state, :found names the state it came out in.
   Events: build.done (info), build.short, build.gave-up, build.refused and build.wrong (warns). Event texts name
   the count and the first few cells. The whole list is in :cells of the event and in the result.
   The job declines (one build.declined warn naming the plan and the reason):

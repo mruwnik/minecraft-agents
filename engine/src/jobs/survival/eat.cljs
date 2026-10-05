@@ -9,7 +9,8 @@
   Harmful foods (rotten flesh, spider eyes, pufferfish, poisonous potatoes, raw chicken) need :allow-bad.
   Golden apples are eaten only when named or at low health. Chorus fruit and suspicious stew only when named.
   Declines with :not-hungry or :no-food. A named item that is not food, or is harmful without :allow-bad,
-  is refused at once with a refused warning.
+  is refused at once with a refused warning,
+  reason :not-food or :bad-food, and {:ate false :reason :item}.
   Memory: writes :fed {:item :food} for each meal.")
 
 (def args

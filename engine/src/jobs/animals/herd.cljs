@@ -30,8 +30,8 @@
     animals given up on and animals already fetched twice and still outside are skipped.
   - Approach the cell 4 out from the gate and wait until the animal rests (up to 8 s).
   - Wait up to 10 s for other adults to leave the cells inside the gate (one info herd.crowded-gate).
-  - Line up on the cells 3, 2 and 1 out, open the gate (jobs.access.toggle), then step through the gate
-    and 5 cells in. Each stop waits up to 6 s for the animal to rest.
+  - Line up on the cells 3, 2 and 1 out (each waits up to 8 s for the animal to rest), open the gate
+    (jobs.access.toggle), then step through the gate and 5 cells in. Each of those stops waits up to 6 s.
   - An animal still too far behind is pinned. The body steps back one cell and tries again, twice. Then it
     walks out, shuts the gate and starts the trip over once. After that the animal is given up as :jammed and
     let go outside.
@@ -39,10 +39,11 @@
   - Walk to the pen cell farthest from the gate and let the animal go there (jobs.animals.unleash, lead
     picked up). It counts as brought when it stands on a pen cell. The body empties its hand so the animal
     does not follow the lead out.
-  - Walk out. It waits up to 10 s while an adult is within 2 of the gate, then opens, passes and shuts the gate
-    in one go. If the gate is left open with the body outside, it shuts it from there. If it stays open, one
+  - Walk out. It waits up to 10 s while an adult is within 2 of the cell inside the gate or on the gate cell
+    (one info herd.crowded-gate), then opens, passes and shuts the gate in one go. If the gate is left open with the body outside, it shuts it from there. If it stays open, one
     warn herd.gate-open. A shut that leaves the body inside opens the gate again and goes out, twice at most,
-    then ends :gate-stuck.
+    then ends :gate-stuck. A run that ends with the gate open and the body on the pen side goes out the same
+    way first (twice at most).
   - Count the adults on the pen's cells before the exit and after the shut. Fewer is an escape (warn
     herd.escaped, counted in :escaped).
 
@@ -51,7 +52,7 @@
 
   Lead watching: an animal seen off this body's lead is given up on (:lead-broke), one not seen at all too
   (:lost). With nobody led, the open gate is shut, leads within 8 blocks are picked up
-  (jobs.forestry.collect-drops) and leashing starts again once. A second time ends :lost. :timeout-s limits one
+  (jobs.forestry.collect-drops) and leashing starts again once, with the :lead-broke animals forgiven. A second time ends :lost. :timeout-s limits one
   animal from its lead on until it is let go. An end with an animal on the lead lets it go where the body
   stands and shuts the gate from the body's side.
 
@@ -63,7 +64,9 @@
 
   Ends with info herd.done and result {:reason :inside n :target :brought [keys] :given-up {key reason}
   :gate pos :escaped n}. :inside is counted on the pen's cells at the end. Every reason but :brought and
-  :full also gives one warn herd.gave-up. Reasons: :brought (pen holds :target), :short (fewer came), :full,
+  :full also gives one warn herd.gave-up. An animal is booked brought once, however often it is led. Reasons:
+  :brought (pen holds :target), :short (fewer than :target in the pen: some came, or none came and no other
+  reason), :full,
   :no-pen, :leaky, :no-gate, :too-shallow, :unreachable (a walk was blocked), :gate-stuck, :lost, :timeout,
   or the leash reason when nobody could be led. The body ends outside with the gate shut.")
 

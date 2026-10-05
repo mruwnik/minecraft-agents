@@ -34,7 +34,8 @@
      - A cell is not dug when the one above it is sand or gravel, or any of its six neighbours is water or
        lava. Any dig status but dug or missing ends the attempt with \"dig: <status>\".
      - The best pickaxe carried is equipped first.
-     Each attempt that did nothing useful records why in job memory (:reasons).
+     Each attempt that did nothing useful records why in job memory (:reasons): \"dig: <status>\",
+     \"stair: no solid step\", \"stair: moveTo <status>\" or \"wall: moveTo <status>\".
   4. After every attempt it tries a moveTo toward the goal, capped at 3 blocks (range 1). If that neither arrived
      nor moved the body more than :min-move blocks, it retries once uncapped (:timeoutS 6). If either arrived or
      moved it that far, the spell is over (:done). The exception: a body enclosed at the spell's start and still

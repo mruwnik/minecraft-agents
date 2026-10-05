@@ -10,7 +10,7 @@
   and doors it cannot do, and it swims. A plan with a step the executor cannot walk is still refused (a
   backstop). A partial plan ends at the node nearest the goal that the body can come back from, walked up to its
   last step out of water. When a nearer node lies behind a step it cannot undo (a drop of more than a block, a
-  gap jump down), it ends there: :no-path with :reason :one-way. If the body ends off the plan it re-plans, at
+  gap jump down), it ends there: :no-path with :reason :one-way, :one-way {:kind :at} (that step) and :near (blocks from the goal). If the body ends off the plan it re-plans, at
   most 5 times.
   Result {:status ...}: :arrived, :refused (:kind :at), :no-path (:reason; :abilities with :kind :at when only a
   step the executor cannot do leads there), :stuck (:why :at), :gave-up (:reason :replan-limit), :failed

@@ -10,7 +10,9 @@
   Declines unless it is night and a bed is known: the :bed argument, else the remembered :bed within :bed-radius.
   Also declines while the bed is in :bed-unreachable (an unexpired entry with the same position).
   Ends when asleep, or when it turns day.
+  A :bed argument that is not a position declines too.
   Retries three times, then warns and ends: a taken bed, a monster nearby, an unreachable bed.
+  The failure kinds are bed_unreachable, bed_unloaded, bed_missing and bed_unusable (\"cannot sleep: <status>\").
   A bed whose chunk is not loaded is retried the same way.
   A bed that is not there is not retried: the job ends and the shelter chooser falls through.
   If it was the remembered bed, :bed is overwritten with {:gone true :was pos}, so it no longer reads as a place.

@@ -29,6 +29,7 @@
   Skipped steps are booked as {:skipped reason}: :no-ripe, :till-off, :no-hoe, :nothing-to-till, :no-seed,
   :no-bare, :fertilize-off, :no-bone-meal, :none-unripe, :no-composter, :no-surplus-seed, :no-chest,
   :nothing-to-store or :declined (the child declined).
+  A step that ran keeps its summary even if it is skipped later in the same run.
   The job declines (does nothing) unless the box has at most 2048 cells and some step would run. A started run
   always continues. A step under way is not re-decided.
   It ends :done with {:steps {step summary} :field {:crops :bare :untilled}} (info farm-tend.done). :field is
@@ -50,6 +51,7 @@
   - fertilize, compost and deposit work as in box mode. The seed reserve is twice the planned cells of each crop.
   Tilling and sowing are checked against zones and the footprints of the other active plans, when a cell is chosen
   and again before the act. Untilled ground the rules refuse is left alone with one farm-tend.refused warn.
+  When only refused ground remains, the check stays false: the job waits and the reason is on record.
   The job declines (one farm-tend.declined warn) while the plan is missing, unreadable, has no crop cells, or no
   zone list has been read. A started run declines in its next round if the plan stops being workable.")
 

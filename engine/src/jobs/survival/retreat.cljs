@@ -21,7 +21,8 @@
      That is the round's only act (retreat.door-shut info). Each door is clicked at most once a flight.
   2. Walks a short step (:step blocks) away from the nearest danger with the engine walker (engine.path.near/walk-near!),
      leaning toward the latest :bed or :home when that is not through the hostile, avoiding :hazard positions.
-     Eats once per flight when the nearest danger is at least :eat-gap blocks away and food is carried.
+     When a wall blocks the way away it turns up to 120 degrees towards open ground (at least 2 clear cells).
+     Eats once per flight (up to food 20) when the nearest danger is at least :eat-gap blocks away and food is carried.
   3. Cornered (no open direction worth a walk, or the walk is blocked): takes the safest option it has not yet failed.
      - fight (jobs.survival.fight-back) only when engine.jobs.combat/fight-damage leaves :reserve health. Never against a creeper.
      - seal in: fill the open sides at feet and head height and the roof (dig-in's 1x1 cells) with carried :blocks,
@@ -32,6 +33,7 @@
        Not against a ranged mob. Every block goes to the scaffold ledger (purpose :pillar) for jobs.access.cleanup.
      - back off: a step of up to 2 cells in any of 8 directions that gains at least a block on the hostile.
      - dig down and plug: dig-in's pit, then a carried or dug block over the head (ledger purpose :retreat-plug).
+       The pit is 2 deep under a solid side, else 3.
        Every cell must be solid, harvestable with what is carried, with no fluid beside and solid under it.
      - last of all, fight with the best weapon or tool (pickaxe, shovel, hoe) or the fist.
      Order: fight if it wins, then seal, pillar (not against a ranged mob), back off, pit, fight.

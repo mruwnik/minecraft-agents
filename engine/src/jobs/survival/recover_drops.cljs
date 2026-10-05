@@ -25,7 +25,9 @@
   (jobs.forestry.collect-drops; only the carried item names, never items out of sight).
   Ends by writing a :recovered entry {:decision :skip|:collected|:partial|:abandoned}.
   :collected counts the pile's items that entered the inventory since the decision, those picked up on the walk too.
-  :abandoned: the point is unreachable, nothing is left there, or the five minute despawn window closes.
+  :abandoned with :reason :unreachable (the walk was blocked), :nothing-found or :window-closed (the five minute
+  despawn window closed). :partial carries :left and :reason :unreachable or :not-visible.
+  A pile already carried again ends :collected without a collect step.
   The window keeps running while the body waits.
   Restart-safe: the decision, the baseline of carried items and the phase are kept in a :recover-trip entry keyed to the death.
   A run cut by a higher reflex, or a restarted body, goes on with the same trip.
