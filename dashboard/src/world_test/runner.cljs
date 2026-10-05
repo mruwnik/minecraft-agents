@@ -21,8 +21,8 @@
        "         [--world claude] [--first-plot I] [--card ID] [--allow-time --time-log FILE] [--results FILE] [--list]\n"
        "Runs world fixtures (default dir engine/fixtures/world) on the reserved plot grid x/z 20000..20640, y 150.\n"
        "--allow-time lets a case that needs night or day set the time (each set appended to --time-log); without it\n"
-       "such a case is skipped. A case that depends on the time of day holds /tmp/mc-time.lock for its whole run; a manual\n"
-       "`time set` takes the same lock: node tools/time-set.mjs <ticks|day|noon|night|midnight>. Exit code 0 when every run passed, 1 when one failed, 2 on a usage or setup error."))
+       "such a case is skipped. A case that depends on the time of day holds a time lock shared by phase (day cases together,\n"
+       "night cases together; the other phase waits; the first holder sets the time) for its whole run; a manual `time set` takes it too: node tools/time-set.mjs <ticks|day|noon|night|midnight>. Exit code 0 when every run passed, 1 when one failed, 2 on a usage or setup error."))
 
 (defn parse-args [argv]
   (loop [[a b & more :as all] (vec argv) opts {:paths [] :repeat 1 :body "ProbeFixture" :world "claude" :first-plot 0}]
@@ -214,40 +214,65 @@
 
 ;; ------------------------------------------------------------------ time lock
 
-(def time-lock-file (path/join (os/tmpdir) "mc-time.lock"))
+(def time-lock-dir (path/join (os/tmpdir) "mc-time-lock"))
+(def time-guard-file (path/join (os/tmpdir) "mc-time-lock.guard"))
 
-(defn try-time-lock! [pid]
-  (lease/try-lock
-   {:create! (fn [p] (try (fs/writeFileSync time-lock-file (str p) #js {:flag "wx"}) true
-                          (catch :default e (if (= "EEXIST" (.-code e)) false (throw e)))))
-    :holder (fn [] (try (let [n (js/parseInt (str/trim (fs/readFileSync time-lock-file "utf8")) 10)] (when-not (js/isNaN n) n))
-                        (catch :default _ nil)))
-    :reclaim! (fn [] (try (fs/unlinkSync time-lock-file) (catch :default _ nil)))
-    :alive? pid-alive?}
-   pid))
+(defn pause-sync [ms] (js/Atomics.wait (js/Int32Array. (js/SharedArrayBuffer. 4)) 0 0 ms))
+
+(defn with-guard
+  "Runs thunk holding a short-lived exclusive guard file (a dead holder's guard is reclaimed)."
+  [thunk]
+  (let [pid (.-pid js/process)]
+    (loop [tries 0]
+      (let [made (try (fs/writeFileSync time-guard-file (str pid) #js {:flag "wx"}) true
+                      (catch :default e (if (= "EEXIST" (.-code e)) false (throw e))))]
+        (if made
+          (try (thunk) (finally (try (fs/unlinkSync time-guard-file) (catch :default _ nil))))
+          (let [h (try (js/parseInt (str/trim (fs/readFileSync time-guard-file "utf8")) 10) (catch :default _ nil))]
+            (when (and h (not (js/isNaN h)) (not (pid-alive? h)))
+              (try (fs/unlinkSync time-guard-file) (catch :default _ nil)))
+            (pause-sync 5)
+            (recur (inc tries))))))))
+
+(defn time-entry-file [pid] (path/join time-lock-dir (str pid)))
+
+(defn time-lock-dir-ops []
+  (fs/mkdirSync time-lock-dir #js {:recursive true})
+  {:guard with-guard
+   :entries (fn [] (into {} (keep (fn [f]
+                                    (let [pid (js/parseInt f 10)]
+                                      (when-let [e (try (reader/read-string (fs/readFileSync (path/join time-lock-dir f) "utf8"))
+                                                        (catch :default _ nil))]
+                                        (when-not (js/isNaN pid) [pid e]))))
+                                  (fs/readdirSync time-lock-dir))))
+   :put! (fn [pid e] (fs/writeFileSync (time-entry-file pid) (pr-str e)))
+   :remove! (fn [pid] (try (fs/unlinkSync (time-entry-file pid)) (catch :default _ nil)))
+   :alive? pid-alive?})
 
 (defn release-time-lock! []
-  (when (= (str (.-pid js/process)) (try (str/trim (fs/readFileSync time-lock-file "utf8")) (catch :default _ nil)))
-    (try (fs/unlinkSync time-lock-file) (catch :default _ nil))))
+  (try (fs/unlinkSync (time-entry-file (.-pid js/process))) (catch :default _ nil)))
 
 (defn acquire-time-lock!
-  "Resolves when this process holds /tmp/mc-time.lock, logging who it waits for (once per holder)."
-  [what]
-  (let [pid (.-pid js/process)]
+  "Resolves to {:first? bool} when this process holds the time lock for phase (:day or :night), logging who it waits for
+  (once per holder set). Holders of the same phase share it."
+  [phase what]
+  (let [pid (.-pid js/process)
+        ops (time-lock-dir-ops)
+        seq (js/Date.now)]
     (letfn [(attempt [told]
-              (let [r (try-time-lock! pid)]
+              (let [r (lease/try-share ops pid phase seq)]
                 (if (:held r)
-                  (js/Promise.resolve nil)
+                  (js/Promise.resolve {:first? (:first? r)})
                   (do (when-not (= told (:waiting-on r))
-                        (log! "waiting for time lock held by " (:waiting-on r) " (" what ")"))
+                        (log! "waiting for time lock (" (name phase) ") held by " (str/join "," (:waiting-on r)) " (" what ")"))
                       (.then (sleep 2000) #(attempt (:waiting-on r)))))))]
       (attempt nil))))
 
 (defn with-time-lock!
-  "Runs thunk (a promise-returning fn) holding the time lock; always releases it."
-  [what thunk]
-  (.then (acquire-time-lock! what)
-         (fn [] (.finally (thunk) release-time-lock!))))
+  "Runs thunk (a promise-returning fn) holding the time lock for phase; always releases it."
+  [phase what thunk]
+  (.then (acquire-time-lock! phase what)
+         (fn [_] (.finally (thunk) release-time-lock!))))
 
 (defn time-set-main
   "argv: ticks or day|noon|night|midnight -> promise of the exit code; one `time set` under the time lock."
@@ -255,7 +280,8 @@
   (let [t (first (array-seq argv))]
     (if-not (and t (re-matches #"day|noon|night|midnight|\d+" t))
       (do (js/console.error "usage: node tools/time-set.mjs <ticks|day|noon|night|midnight>") (js/Promise.resolve 2))
-      (with-time-lock! (str "time set " t)
+      (with-time-lock! (lease/phase-of-ticks (case t "day" 1000 "noon" 6000 "night" 14000 "midnight" 18000 (js/parseInt t 10)))
+        (str "time set " t)
         #(.then (rcon! [(str "time set " t)]) (fn [[reply]] (log! reply) 0))))))
 
 (defn local-now
@@ -353,10 +379,10 @@
         started (js/Date.now)
         plan-files (atom [])
         result (fn [m] (merge {:id (:id c) :run run :plot i :origin origin :elapsed-s (/ (- (js/Date.now) started) 1000)} m))]
-    (-> (if (lease/needs-time-lock? rc)
-          (acquire-time-lock! (str (:id c) " depends on the time of day"))
+    (-> (if-let [phase (lease/time-phase rc)]
+          (acquire-time-lock! phase (str (:id c) " depends on the time of day"))
           (js/Promise.resolve nil))
-        (.then #(time-ok! opts rc))
+        (.then (fn [held] (if (or (nil? held) (:first? held)) (time-ok! opts rc) true)))
         (.then (fn [ok]
                  (if-not ok
                    (result {:status :skipped :why (str "needs " (name (:time rc)) " (no --allow-time)")})
@@ -382,8 +408,8 @@
                  (-> (exec-file ["engine/tools/jobs.mjs" (:body opts) "--world" (:world opts) "cancel-all"])
                      (.then #(rcon! (f/cleanup-commands f/default-grid origin (:body opts) rc)))
                      (.then (fn [_] (run! #(when (fs/existsSync %) (fs/unlinkSync %)) @plan-files) r))
-                     (.catch (fn [_] (run! #(when (fs/existsSync %) (fs/unlinkSync %)) @plan-files) r))))))
-        (.finally release-time-lock!)))
+                     (.catch (fn [_] (run! #(when (fs/existsSync %) (fs/unlinkSync %)) @plan-files) r)))))
+        (.finally release-time-lock!))))
 
 ;; ------------------------------------------------------------------ reporting
 

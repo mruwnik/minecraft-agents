@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Why JavaScript: thin entry point; the lock and the command are cljs (dashboard/src/world_test/runner.cljs), run from the world-test bundle.
-// A manual `time set` for live testers, under the same /tmp/mc-time.lock the world-test runner holds for time-dependent cases
-// (waits, saying who holds it, until the lock is free; a dead holder's lock is reclaimed).
+// A manual `time set` for live testers, under the same phase-shared time lock (/tmp/mc-time-lock/) the world-test runner holds for time-dependent cases
+// (waits, saying who holds it, while holders of the other phase exist; dead holders are reclaimed).
 //   node tools/time-set.mjs <ticks|day|noon|night|midnight>
 import fs from 'node:fs'
 import path from 'node:path'

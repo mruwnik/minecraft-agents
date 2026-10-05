@@ -61,39 +61,75 @@
   (is (= "execute if entity @a[name=!Me,name=!BodyA,x=1,y=2,z=3,distance=..500]"
          (l/near-command "Me" #{"BodyA"} [1 2 3]))))
 
-(defn fake-lock
-  "file: atom of the lock's pid or nil. create! is exclusive like fs 'wx'."
-  [file alive-pids]
-  {:create! (fn [pid] (if @file false (do (reset! file pid) true)))
-   :holder (fn [] @file)
-   :reclaim! (fn [] (reset! file nil))
+(defn fake-share
+  "files: atom of {pid entry}. guard just runs the thunk."
+  [files alive-pids]
+  {:guard (fn [f] (f))
+   :entries (fn [] @files)
+   :put! (fn [pid e] (swap! files assoc pid e))
+   :remove! (fn [pid] (swap! files dissoc pid))
    :alive? (fn [pid] (contains? alive-pids pid))})
 
-(deftest a-free-time-lock-is-taken
-  (let [file (atom nil)]
-    (is (= {:held true} (l/try-lock (fake-lock file #{}) 10)))
-    (is (= 10 @file))))
+(defn hold [phase] {:phase phase :state :hold :seq 1})
+(defn want [phase seq] {:phase phase :state :want :seq seq})
 
-(deftest a-time-lock-held-by-a-live-pid-names-the-holder
-  (let [file (atom 10)]
-    (is (= {:waiting-on 10} (l/try-lock (fake-lock file #{10 11}) 11)))
-    (is (= 10 @file))))
+(deftest a-free-time-lock-is-taken-as-first-holder
+  (let [files (atom {})]
+    (is (= {:held true :first? true} (l/try-share (fake-share files #{10}) 10 :day 5)))
+    (is (= :hold (:state (get @files 10))))
+    (is (= :day (:phase (get @files 10))))))
 
-(deftest a-time-lock-of-a-dead-pid-is-reclaimed
-  (let [file (atom 99)]
-    (is (= {:held true} (l/try-lock (fake-lock file #{11}) 11)))
-    (is (= 11 @file))))
+(deftest holders-of-the-same-phase-share-and-only-the-first-sets-the-time
+  (let [files (atom {10 (hold :day)})]
+    (is (= {:held true :first? false} (l/try-share (fake-share files #{10 11}) 11 :day 5)))
+    (is (= #{10 11} (set (keys @files))))))
 
-(deftest a-time-lock-that-vanishes-while-checking-is-retried
-  (let [file (atom nil)
-        n (atom 0)
-        d (assoc (fake-lock file #{}) :create! (fn [pid] (if (zero? (swap! n inc)) false (do (reset! file pid) true)))
-                 :holder (fn [] nil))]
-    (is (= {:held true} (l/try-lock d 5)))))
+(deftest the-other-phase-waits-for-every-holder-and-registers-as-waiting
+  (let [files (atom {10 (hold :day) 12 (hold :day)})]
+    (is (= {:waiting-on [10 12]} (l/try-share (fake-share files #{10 11 12}) 11 :night 5)))
+    (is (= :want (:state (get @files 11))))
+    (is (= 5 (:seq (get @files 11))))))
 
-(deftest only-cases-that-depend-on-the-time-of-day-need-the-lock
-  (is (true? (l/needs-time-lock? {:time :day})))
-  (is (true? (l/needs-time-lock? {:time :night})))
-  (is (true? (l/needs-time-lock? {:time :any :act [[:wait-s 1] [:time-set 1000]]})))
-  (is (false? (l/needs-time-lock? {:time :any :act [[:wait-s 1]]})))
-  (is (false? (l/needs-time-lock? {:time :any}))))
+(deftest the-waiter-is-granted-once-the-holders-are-gone-and-keeps-first
+  (let [files (atom {11 (want :night 5)})]
+    (is (= {:held true :first? true} (l/try-share (fake-share files #{11}) 11 :night 5)))
+    (is (= :hold (:state (get @files 11))))))
+
+(deftest a-new-holder-of-the-current-phase-queues-behind-a-waiter-of-the-other-phase
+  (let [files (atom {10 (hold :day) 11 (want :night 5)})]
+    (is (= {:waiting-on [11]} (l/try-share (fake-share files #{10 11 12}) 12 :day 9)))
+    (is (= :want (:state (get @files 12))))))
+
+(deftest an-older-same-phase-waiter-is-not-blocked-by-a-newer-other-phase-waiter
+  (let [files (atom {10 (hold :day) 11 (want :night 8) 12 (want :day 5)})]
+    (is (= {:held true :first? false} (l/try-share (fake-share files #{10 11 12}) 12 :day 5)))))
+
+(deftest the-oldest-waiter-goes-first-when-nobody-holds
+  (let [files (atom {11 (want :night 5) 12 (want :day 7)})
+        d (fake-share files #{11 12})]
+    (is (= {:waiting-on [11]} (l/try-share d 12 :day 7)))
+    (is (= {:held true :first? true} (l/try-share d 11 :night 5)))))
+
+(deftest dead-holders-and-waiters-are-reclaimed
+  (let [files (atom {10 (hold :day) 13 (want :night 1)})]
+    (is (= {:held true :first? true} (l/try-share (fake-share files #{11}) 11 :night 5)))
+    (is (= #{11} (set (keys @files))))))
+
+(deftest releasing-removes-only-the-own-entry
+  (let [files (atom {10 (hold :day) 11 (hold :day)})]
+    ((:remove! (fake-share files #{10 11})) 11)
+    (is (= #{10} (set (keys @files))))))
+
+(deftest manual-time-sets-name-their-phase
+  (is (= :day (l/phase-of-ticks 1000)))
+  (is (= :day (l/phase-of-ticks 6000)))
+  (is (= :night (l/phase-of-ticks 14000)))
+  (is (= :night (l/phase-of-ticks 18000)))
+  (is (= :day (l/phase-of-ticks 24000)))
+  (is (= :night (l/phase-of-ticks 38000))))
+
+(deftest a-case-holds-the-phase-it-needs
+  (is (= :day (l/time-phase {:time :day})))
+  (is (= :night (l/time-phase {:time :night :act [[:time-set 1000]]})))
+  (is (= :night (l/time-phase {:time :any :act [[:wait-s 1] [:time-set 14000]]})))
+  (is (nil? (l/time-phase {:time :any :act [[:wait-s 1]]}))))

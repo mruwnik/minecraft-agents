@@ -39,7 +39,7 @@ patterns write `#at [x y z]` (absolute `[x y z]`) or `#xyz [x y z]` (absolute `{
 |---|---|---|
 | `:name` | case name (string) | required |
 | `:tags` | keywords for `--tag` | none |
-| `:time` | `:day`, `:night` or `:any` | `:day` |
+| `:time` | `:day`, `:night` or `:any`; day/night cases hold a time lock shared by phase (same phase together, the other waits; `tools/time-set.mjs` takes it too), `:any` takes none | `:day` |
 | `:register` | the body's scenario register (triggers), as in `engine/scenarios/*.edn` | `[]` |
 | `:keep-memory` | `true`: the body's `engine/memory.edn` is not deleted before this case, and when a case follows another in the same register group the body is not restarted (it goes on with the memory it has); for cases that test memory across runs | `false` (every case starts a restarted body with its `memory.edn` deleted) |
 | `:plot` | `{:height 2..31 :floor "block"}` | `{:height 16 :floor "stone"}` |

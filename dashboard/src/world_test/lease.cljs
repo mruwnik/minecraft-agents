@@ -45,20 +45,42 @@
   (str "execute if entity @a[" (apply str (map #(str "name=!" % ",") (cons self (sort leased))))
        "x=" x ",y=" y ",z=" z ",distance=..500]"))
 
-(defn try-lock
-  "One attempt at the exclusive time lock: {:held true} when this call took it (a dead holder's lock is reclaimed),
-  else {:waiting-on pid}. file: {:create! (pid -> true when this call made it) :holder (-> pid or nil) :reclaim! :alive?}."
-  [{:keys [create! holder reclaim! alive?]} pid]
-  (loop []
-    (if (create! pid)
-      {:held true}
-      (let [h (holder)]
-        (cond
-          (nil? h) (recur)
-          (alive? h) {:waiting-on h}
-          :else (do (reclaim!) (recur)))))))
+(defn phase-of-ticks
+  "Time of day in ticks -> :night (13000..22999 of the day) or :day."
+  [ticks]
+  (let [t (mod ticks 24000)] (if (and (>= t 13000) (< t 23000)) :night :day)))
 
-(defn needs-time-lock?
-  "Whether case c depends on the time of day (a :day or :night case, or a :time-set step)."
+(defn decide
+  "entries: {pid {:phase :state (:hold or :want) :seq}} of live processes. -> {:held true :first? bool} when pid may
+  hold phase now (every holder shares the phase and no waiter of the other phase is older), else {:waiting-on pids}."
+  [entries pid phase seq]
+  (let [others (dissoc entries pid)
+        holders (filter (fn [[_ e]] (= :hold (:state e))) others)
+        blockers (concat (filter (fn [[_ e]] (not= phase (:phase e))) holders)
+                         (filter (fn [[_ e]] (and (= :want (:state e)) (not= phase (:phase e)) (< (:seq e) seq))) others))]
+    (if (empty? blockers)
+      {:held true :first? (empty? holders)}
+      {:waiting-on (vec (sort (map first blockers)))})))
+
+(defn try-share
+  "One attempt at the time lock shared by phase: any number of processes may hold the same phase together; the other
+  phase waits for all of them, and once it waits, new holders of the current phase queue behind it. Dead processes'
+  entries are dropped. dir: {:guard (thunk -> its result, run exclusively) :entries (-> {pid entry}) :put! (pid entry)
+  :remove! (pid) :alive? (pid -> bool)}. seq: when this process began waiting (keeps its place in the queue)."
+  [{:keys [guard entries put! remove! alive?]} pid phase seq]
+  (guard
+   (fn []
+     (let [live (into {} (filter (fn [[p _]] (or (= p pid) (alive? p)))) (entries))
+           _ (run! remove! (remove live (keys (entries))))
+           r (decide live pid phase seq)]
+       (put! pid {:phase phase :state (if (:held r) :hold :want) :seq seq})
+       r))))
+
+(defn time-phase
+  "The phase (:day or :night) whose time lock case c holds: its :time, else the phase of its first :time-set step; nil
+  when it does not depend on the time of day."
   [c]
-  (boolean (or (not= :any (:time c)) (some #(= :time-set (first %)) (:act c)))))
+  (case (:time c)
+    :day :day
+    :night :night
+    (some (fn [[op ticks]] (when (= :time-set op) (phase-of-ticks ticks))) (:act c))))
