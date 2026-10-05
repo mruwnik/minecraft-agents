@@ -186,7 +186,8 @@
             (is (backing-off? eng) label)))))))
 
 ;; a pen of fence with no gate (live: a breed walk at a gateless pen searched the whole wide box for ~25 s a round): the
-;; round knows the goal is walled in once the goal flood runs, it does not search every way round. The floor is wide
+;; round knows the goal is walled in once the goal flood runs, it does not search every way round, and it does not walk
+;; to the fence (live: a body ended pressed against a post). The floor is wide
 ;; enough that the search has not run out of ground before the flood (floodAfter expansions).
 (def gateless-pen
   (merge (floor -40 -40 60 40) (apply dissoc (box 10 64 -4 18 64 4 "oak_fence") (keys (box 11 64 -3 17 64 3 "x")))))
@@ -218,7 +219,6 @@
             (when (and (< i 10) (seq (:list (core/state eng))))
               (await (core/tick! eng))
               (recur (inc i))))
-          (is (= "blocked" (peek @outs)) (pr-str @outs))
-          (is (<= (count @outs) 2) "at most one walk to the fence before the round knows")
+          (is (= ["blocked"] @outs) "no walk to the fence: the round knows at once")
           (is (= {:status :no-path :reason :goal-enclosed} (peek @rounds)))
           (is (< (first (at p)) 10) "the body stayed outside the pen"))))))

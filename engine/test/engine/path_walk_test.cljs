@@ -213,3 +213,39 @@
     (is (= 1 (aget (.-kind (.-table walled)) id)) "a solid block")
     (is (= [16 0] [(aget (.-top (.-table walled)) id) (aget (.-openable (.-table walled)) id)]))
     (is (= [(.-table pw) (.-space pw)] [(.-table walled) (.-space walled)]))))
+
+;; ---- the frontier and a walled-in goal ----
+
+(defn plan-from
+  "walk/plan-walk from the cell pos (feet) to goal over blocks with opts."
+  [blocks [x y z] goal opts]
+  (let [p (tu/fake {:blocks blocks :self {:pos {:x (+ x 0.5) :y y :z (+ z 0.5)}}})]
+    (walk/plan-walk {:primitives p} (.pathWorld p) goal 0 walk/default-weight opts)))
+
+;; a walkway (feet 80) x 18..47 at z 8 over a floor x 0..47, z 0..15; columns from x 48 on are not loaded
+(def walkway-to-unloaded (merge (box 0 63 0 47 63 15 "stone") (box 18 79 8 47 79 8 "stone")))
+
+(deftest plan-walk-takes-the-frontier-only-when-asked
+  (let [asked (plan-from walkway-to-unloaded [18 80 8] [10 64 8] {:frontier true})
+        not-asked (plan-from walkway-to-unloaded [18 80 8] [10 64 8] nil)]
+    (is (nil? (walk/no-walk asked 0)))
+    (is (= {:at [46 80 8]} (:frontier-taken asked)))
+    (is (= [46 80 8] ((juxt :x :y :z) (peek (:steps asked)))))
+    (is (= {:status :no-path :reason :exhausted :replans 0} (walk/no-walk not-asked 0)))
+    (is (nil? (:frontier-taken not-asked)))))
+
+;; at the frontier the plan walks nowhere: not back to the walkway's end nearest the goal (x 18), which would swing the
+;; body between the two
+(deftest plan-walk-at-its-frontier-walks-nowhere
+  (let [plan (plan-from walkway-to-unloaded [46 80 8] [10 64 8] {:frontier true})]
+    (is (= {:status :no-path :reason :exhausted :replans 0} (walk/no-walk plan 0)))
+    (is (nil? (:frontier-taken plan)))))
+
+;; a floor x -2..10, z -2..4 cut by a stone wall at x 5 (feet and head): the goal's side is walled in, the planner's
+;; partial plan ends at the wall
+(def walled-off (merge (box -2 63 -2 10 63 4 "stone") (box 5 64 -2 5 65 4 "stone")))
+
+(deftest a-walled-in-goal-is-not-walked-towards
+  (let [plan (plan-from walled-off [0 64 1] [8 64 1] {:frontier true})]
+    (is (= ["partial" "goal-enclosed"] [(:status plan) (.-reason (:r plan))]))
+    (is (= {:status :no-path :reason :goal-enclosed :replans 0} (walk/no-walk plan 0)))))

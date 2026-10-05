@@ -17,10 +17,14 @@
   stands, follow the plan once, at most 60 s). A plan that only gets part of the way (the goal unloaded or far) is
   walked as far as its steps can be undone, or past a step that cannot be undone (a drop of 2 or 3, a gap jump down) when
   the land past it runs on into unloaded land (engine.path.near; a pit whose cells are all loaded is never entered), and
-  the next round plans on from there. A round that ends more than 1
-  closer than any before (:best) is progress and resets the count; any other round that does not arrive (a partial
-  walk without a new best, no path, stuck) counts, and three in a row give up with an unreachable warn (the last
-  status and :why and :kind). Hands over {:arrived true}, or {:arrived false :reason :unreachable}
+  the next round plans on from there. When every way the loaded land holds is searched and none arrives (the planner ran
+  out of land) but the searched land runs on into land not loaded within 256 blocks of the goal, the round walks to that
+  frontier instead (engine.path.near :explore), so the next round plans over what the walk loaded. A round that ends more
+  than 1 closer than any before (:best), or more than 1 closer to its frontier than any round before got to that frontier,
+  is progress and resets the count; any other round that does not arrive (a partial walk without a new best, no path,
+  stuck) counts, and three in a row give up with an unreachable warn (the last status and :why and :kind). A goal the
+  planner proves walled in (:goal-enclosed: no move from outside its region enters it) gives up in that round, unwalked.
+  Hands over {:arrived true}, or {:arrived false :reason :unreachable}
   with :why saying why (the planner's :no-path reason, or :abilities, or :no-path when it gave none; :stuck when the walk made
   no progress on a step, with the step's move as :kind and the executor's text as :detail; :off-plan; :steer-failed with
   the steer's reason as :detail; :no-progress when a walk ended no nearer) and, when the executor cannot walk the way there,
@@ -108,15 +112,21 @@
       (refuse! c {:reason :unsupported :message "the body cannot sense the world for path planning"})
 
       :else
-      (let [{:keys [result status to]} (await (near/walk-round! c pos range {:doors doors}))
+      (let [{:keys [result status to]} (await (near/walk-round! c pos range {:doors doors :explore true}))
             left (u/dist to pos)
-            best (:best (ctx/mem c) d)]
+            best (:best (ctx/mem c) d)
+            frontier (:frontier result)
+            fcell (when frontier (zipmap [:x :y :z] frontier))
+            fbests (:frontier-best (ctx/mem c) {})
+            fbest (when frontier (get fbests frontier (u/dist from fcell)))
+            explored? (boolean (and frontier (< (u/dist to fcell) (dec fbest))))]
         (if (= "arrived" status)
           (arrived! c)
-          (let [progress? (< left (dec best))
+          (let [progress? (or (< left (dec best)) explored?)
                 tries (if progress? 0 (inc (:blocked (ctx/mem c) 0)))]
-            (ctx/update-mem! c assoc :blocked tries :best (if progress? left best))
-            (if (< tries max-blocked)
+            (ctx/update-mem! c assoc :blocked tries :best (if (< left (dec best)) left best)
+                             :frontier-best (cond-> fbests frontier (assoc frontier (min fbest (u/dist to fcell)))))
+            (if (and (< tries max-blocked) (not= :goal-enclosed (:reason result)))
               :continue
               (give-up! c pos tries status result))))))))
 

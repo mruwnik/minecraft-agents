@@ -104,6 +104,8 @@
 (def ^:const HALF 2048)
 (def ^:const MIN-CLOSER 2) ; an exhausted search is a partial result only when it got this many blocks closer
 (def ^:const OPEN-REACH 2) ; a node this many columns or fewer from unloaded land stands at the loaded edge (oneWay.open)
+(def ^:const FLOOD-GROWTH 4) ; a goal flood that ran out of budget runs again with this many times the budget,
+(def ^:const FLOOD-SPACING 8) ; after this many times the expansions: the floods cost about half the search
 (def ^:const WHOLE 16) ; a full block in 1/16
 (def ^:const BODY-BLOCKS 1.8)
 (def ^:const REGIONS 16) ; regions of one cell that can be nodes (4 bits of the key)
@@ -210,7 +212,7 @@
    ;; the query
    from-x from-y from-z from-px from-pz goal-x goal-y goal-z goal-range slack ^boolean near ^boolean goal-unloaded
    ;; options
-   max-nodes max-drop weight risk-weight goal-flood flood-after pre-flood
+   max-nodes max-drop weight risk-weight ^:mutable goal-flood ^:mutable flood-after pre-flood frontier-reach
    ;; a search for an alternative path (options.avoid, see avoidCost): kinds of move refused, cells near earlier paths
    ^boolean avoiding avoid-kinds ^js avoid-cells avoid-factor
    ;; what the walker can do (options.limits): kinds of move never planned, a test of each gap jump and of each corner
@@ -2048,7 +2050,7 @@
   ;; pop the best open node and expand it
   (expandNext [s]
     (if (zero? heap-n)
-      (.finish s (if boxed "box" "exhausted"))
+      (.finish s (cond ^boolean (.floodAtEnd s) "goal-enclosed" boxed "box" :else "exhausted"))
       (let [i (.popMin s)
             x (aget xs i)
             y (aget ys i)
@@ -2118,7 +2120,30 @@
     (set! move-peak 0)
     (set! move-water 0))
 
-  ;; the goal flood costs ~30 ms, so easy queries must never see it: it runs once, after flood-after forward expansions
+  ;; after a late flood with budget: one that ran out of it (and neither leaked nor met the start) is due again after
+  ;; FLOOD-SPACING times the expansions with FLOOD-GROWTH times the budget (at most max-nodes), so its cost stays a share of
+  ;; the search's and a large walled-in region is still proved (live: a sealed platform whose flood needed ~12000 nodes
+  ;; searched the whole wide box, 50-190 s a give-up); any other is the last
+  (growFlood [s budget]
+    (if (and (> flooded budget) (not leaked) (< budget max-nodes))
+      (do (set! goal-flood (js/Math.min max-nodes (* FLOOD-GROWTH budget)))
+          (set! flood-after (* FLOOD-SPACING flood-after)))
+      (set! flood-pending false)))
+
+  ;; a search that ran out of nodes to expand with its late flood still due floods once more, so a walled-in goal is named
+  ;; so (live: a gateless pen on a platform whose search ran out before the flood ended :one-way at the platform's edge):
+  ;; with the flood budget when no late flood ran yet, else with no more than the search expanded. Not when a ladder was
+  ;; turned away at a gap or a swim for air: those reasons say more. True when the goal is walled in.
+  (floodAtEnd [s]
+    (if (or (not flood-pending) goal-unloaded gap-seen air-seen)
+      false
+      (let [budget (if (pos? flooded) (js/Math.min goal-flood expanded) goal-flood)
+            enclosed ^boolean (.goalEnclosed s budget false)]
+        (set! flood-pending false)
+        (set! expanded (+ expanded flooded))
+        enclosed)))
+
+  ;; the goal flood costs ~30 ms, so easy queries must never see it: it runs after flood-after forward expansions
   (step [s max-expansions]
     (when-not started
       (.begin s)
@@ -2127,8 +2152,9 @@
     (loop [n 0]
       (when (and (< n max-expansions) (not finished))
         (if (and flood-pending (>= expanded flood-after) (not goal-unloaded))
-          (let [enclosed ^boolean (.goalEnclosed s goal-flood false)]
-            (set! flood-pending false)
+          (let [budget goal-flood
+                enclosed ^boolean (.goalEnclosed s budget false)]
+            (.growFlood s budget)
             (set! expanded (+ expanded flooded))
             (if enclosed
               (.finish s "goal-enclosed")
@@ -2292,7 +2318,8 @@
          :expanded expanded
          :stats #js {:masks masks :tightMasks tight-masks :tightCells (.-size tight-seen) :regions regions-seen :maskMs mask-ms :flooded flooded :preFlooded pre-flooded}
          :path path
-         :oneWay one-way})
+         :oneWay one-way
+         :frontier (when-not (identical? status "found") (.frontierOf s))})
 
   ;; ends the search if it is not over; an exhausted search that turned a ladder away at a gap, or a swim move for lack of air,
   ;; says so
@@ -2321,6 +2348,36 @@
 
   (nearest [s]
     #js {:path (if (== best-node -1) nil (.pathTo s best-node)) :distance best-distance})
+
+  ;; The frontier node: of the nodes standing at the loaded edge (atLoadedEdge) within frontier-reach blocks of the goal
+  ;; (along x and along z), the one with the least cost to it plus the heuristic on to the goal, -1 when none: where the
+  ;; searched land runs on into land not loaded, so a way may go on there. Only columns within OPEN-REACH of a chunk's
+  ;; side can be at the edge.
+  (frontierNode [s]
+    (let [lo OPEN-REACH
+          hi (- 16 OPEN-REACH)]
+      (loop [i 0
+             best -1
+             best-f js/Infinity]
+        (if (< i n-nodes)
+          (let [x (aget xs i) y (aget ys i) z (aget zs i)
+                mx (bit-and x 15) mz (bit-and z 15)]
+            (if (and (or (< mx lo) (>= mx hi) (< mz lo) (>= mz hi))
+                     (<= (js/Math.max (js/Math.abs (- x goal-x)) (js/Math.abs (- z goal-z))) frontier-reach)
+                     (not ^boolean (.endsOnMagma s x y z (aget hs i)))
+                     ^boolean (.atLoadedEdge s i))
+              (let [f (+ (aget gs i) (.heuristic s x z))]
+                (if (< f best-f) (recur (inc i) i f) (recur (inc i) best best-f)))
+              (recur (inc i) best best-f)))
+          best))))
+
+  ;; the result's frontier: {x y z path} of frontierNode for a search that ran out of land to search (exhausted, its box,
+  ;; a ladder at a gap, air), nil otherwise or when no node stands at the loaded edge
+  (frontierOf [s]
+    (when (or (identical? reason "exhausted") (identical? reason "box") (identical? reason "ladder-gap") (identical? reason "air"))
+      (let [node (.frontierNode s)]
+        (when-not (neg? node)
+          #js {:x (aget xs node) :y (aget ys node) :z (aget zs node) :path (.pathTo s node)}))))
 
   ;; the result; one-way-node is the first one-way step on the way to the nearest node (-1: none), clean-end the nearest node of
   ;; the returnable search then run ({path distance})
@@ -2380,6 +2437,7 @@
      ;; options
      max-nodes (option options "maxDrop" 3) (option options "weight" 1) (option options "riskWeight" 2)
      (option options "goalFlood" 4000) (option options "floodAfter" 3000) (option options "preFlood" 24)
+     (option options "frontierReach" 256)
      ;; avoid
      (some? avoid) (if (some? avoid) (.-kinds avoid) 0) (if (some? avoid) (.-cells avoid) nil) (if (some? avoid) (.-factor avoid) 0)
      ;; limits

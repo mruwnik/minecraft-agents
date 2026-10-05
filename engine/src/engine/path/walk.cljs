@@ -237,18 +237,31 @@
   (when-let [^js ow (.-oneWay r)]
     (when (true? (.-open ow)) (.-path ow))))
 
+(defn frontier-path
+  "The planner's path to r's frontier (the searched node at the edge of what is loaded, within its reach of the goal, the
+  search having run out of land) and that node's cell [x y z]; nil when r has none."
+  [r]
+  (when-let [^js f (.-frontier r)]
+    {:path (.-path f) :at [(.-x f) (.-y f) (.-z f)]}))
+
 (defn walk-plan
-  "plan-walk's answer from its plan-within answer {:r :steps :beyond} over walled (pw with the walls)."
-  [c pw walled to one-way {:keys [r steps beyond]}]
-  (let [past (when (= :open one-way) (open-path r))
-        steps (if past (path-steps walled past) steps)
-        status (if past "partial" (.-status r))
+  "plan-walk's answer from its plan-within answer {:r :steps :beyond} over walled (pw with the walls). With frontier, a
+  search that ran out of loaded land to search (no path within abilities beyond it) walks to its frontier instead of its
+  nearest end: every way the loaded land holds is known and none arrives, so a way can only go on past what is loaded.
+  A body standing at its frontier walks nowhere (no nearest end either: walking it, then back to the frontier, would
+  swing between the two for ever)."
+  [c pw walled to one-way frontier {:keys [r steps beyond]}]
+  (let [edge (when (and frontier (not beyond)) (frontier-path r))
+        past (when (and (not edge) (= :open one-way)) (open-path r))
+        steps (cond edge (path-steps walled (:path edge)) past (path-steps walled past) :else steps)
+        status (if (or edge past) "partial" (.-status r))
         walked (if (= "partial" status) (dry-end steps) steps)
         step (one-way-of r)]
     {:r r :steps walked :beyond beyond :status status :pw pw
      :ms (or (some-> r .-ms) 0)
      :one-way-taken (when past step)
-     :stop (when (and step (not past)) (stopped-one-way r (or (peek walked) (first steps) (body-cell c)) to step))}))
+     :frontier-taken (when (and edge (> (count walked) 1)) {:at (:at edge)})
+     :stop (when (and step (not past) (not edge)) (stopped-one-way r (or (peek walked) (first steps) (body-cell c)) to step))}))
 
 (defn plan-walk
   "Plan the next walk from where the body stands: plan-within, and for a partial plan only the steps up to its last dry step
@@ -257,29 +270,35 @@
   oneWay, stopped-one-way), nil otherwise. opts {:policy :walls :one-way}: the executor policy the plan must fit (default
   executor/policy), the cells {:x :y :z} to read as walls, and :one-way :open to take that step when the land past it runs
   on into unloaded land (open-path; a far goal past a cliff): the plan is then the partial path past it, with no stop and
-  :one-way-taken the step {:kind :at}. The default never takes one."
+  :one-way-taken the step {:kind :at}. The default never takes one. :frontier true: a search that ran out of loaded land
+  walks to its frontier (walk-plan), with :frontier-taken {:at [x y z]}."
   ([c pw to range weight] (plan-walk c pw to range weight nil))
-  ([c pw to range weight {:keys [policy walls one-way] :or {policy executor/policy}}]
+  ([c pw to range weight {:keys [policy walls one-way frontier] :or {policy executor/policy}}]
    (let [walled (with-walls pw walls)]
-     (walk-plan c pw walled to one-way (plan-within c walled to range weight policy)))))
+     (walk-plan c pw walled to one-way frontier (plan-within c walled to range weight policy)))))
 
 (defn ^:async plan-walk!
   "plan-walk with plan-within! (yields to the event loop between search slices): what the walks (engine.path.near, walk-to!)
   plan with, so a long search never holds the body's API."
   ([c pw to range weight] (plan-walk! c pw to range weight nil))
-  ([c pw to range weight {:keys [policy walls one-way] :or {policy executor/policy}}]
+  ([c pw to range weight {:keys [policy walls one-way frontier] :or {policy executor/policy}}]
    (let [walled (with-walls pw walls)]
-     (walk-plan c pw walled to one-way (await (plan-within! c walled to range weight policy))))))
+     (walk-plan c pw walled to one-way frontier (await (plan-within! c walled to range weight policy))))))
 
 (defn no-walk
-  "The result of a plan that is not walked, nil when it is: no path within abilities (:beyond), a plan cut at a one-way step
-  with no step left, no path, a plan the policy (default executor/policy) refuses. replans goes in the result."
+  "The result of a plan that is not walked, nil when it is: no path within abilities (:beyond), a goal the planner proved
+  walled in (:goal-enclosed: its partial plan's nearer end gets the body no nearer to arriving, live it left a body
+  pressed against a fence post), a plan cut at a one-way step with no step left, no path, a plan the policy (default
+  executor/policy) refuses. replans goes in the result."
   ([plan replans] (no-walk plan replans executor/policy))
   ([{:keys [r steps beyond status stop]} replans policy]
    (let [partial? (= "partial" status)]
      (cond
        beyond
        {:status :no-path :reason :abilities :kind (:kind beyond) :at (:at beyond) :replans replans}
+
+       (= "goal-enclosed" (some-> r .-reason))
+       {:status :no-path :reason :goal-enclosed :replans replans}
 
        (and stop (< (count steps) 2))
        (assoc stop :replans replans)

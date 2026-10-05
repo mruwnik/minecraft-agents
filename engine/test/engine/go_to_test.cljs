@@ -274,3 +274,28 @@
         (let [{:keys [out]} (await (go-prepped! {:blocks flat} {:pos [10 64 0] :range 0}
                                                 #(override-steer! % (fn ^:async f [_ _ _] #js {:status "done"}))))]
           (is (= {:arrived false :reason :unreachable :why :no-progress} @out)))))))
+
+(deftest go-to-gives-up-at-once-on-a-walled-in-goal
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; a stone wall at x 5 cuts the floor: the goal's side is walled in
+        (let [walled (merge (box -2 63 -2 10 63 4 "stone") (box 5 64 -2 5 65 4 "stone"))
+              {:keys [out eng p]} (await (go! {:blocks walled} {:pos [8 64 1] :range 0}))]
+          (is (= {:arrived false :reason :unreachable :why :goal-enclosed} @out))
+          (is (= [0 64 0] (at p)) "the body did not walk to the wall")
+          (is (= ["blocked"] (mapv :status (moved eng))) "one round"))))))
+
+(deftest go-to-walks-to-where-the-loaded-land-runs-on-when-it-holds-no-way
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; a walkway (feet 80) x 18..47 at z 8 over a floor x 0..47, z 0..15, with no way down; from x 48 on nothing is
+        ;; loaded (the fake never loads more): the first round walks to the frontier, the rest find no new one
+        (let [world {:blocks (merge (box 0 63 0 47 63 15 "stone") (box 18 79 8 47 79 8 "stone"))
+                     :self {:pos {:x 18.5 :y 80 :z 8.5}}}
+              {:keys [out eng p]} (await (go! world {:pos [10 64 8] :range 0}))]
+          (is (= {:arrived false :reason :unreachable :why :exhausted} (select-keys @out [:arrived :reason :why])))
+          (is (>= (first (at p)) 46) "walked to the frontier")
+          (is (= ["partial" "blocked" "blocked" "blocked"] (mapv :status (moved eng)))
+              "the walk to the frontier is progress"))))))

@@ -202,3 +202,53 @@
     "oak_fence" {:preFlood 0 :floodAfter 0}
     "oak_fence" {:preFlood 4000}
     "cobblestone_wall" {:preFlood 0 :floodAfter 0}))
+
+;; ---- a flood that runs out of budget grows; a search that runs out floods once more ----
+
+(defn result-over
+  "Plan from [x y z] to the near goal [x y z] (range 0) over a fake world spec; the planner's result as cljs data."
+  [spec [fx fy fz] [x y z] options]
+  (let [pw (.pathWorld (tu/fake spec))]
+    (-> (planner/plan (.-snapshot pw)
+                      #js {:from #js {:x fx :y fy :z fz} :goal #js {:kind "near" :x x :y y :z z :range 0}}
+                      (js/Object.assign #js {:table (.-table pw) :space (.-space pw)} (clj->js options)))
+        (js->clj :keywordize-keys true))))
+
+;; a stone deck x 10..30, z 10..30 at y 70 (441 cells, no way up) over a floor of 63 x 63 cells (live: a sealed platform
+;; at y 151 whose flood needed ~12000 nodes searched the whole wide box, 50-190 s a give-up)
+(def high-deck {:blocks (merge (floor -2 -2 60 60) (box 10 70 10 30 70 30 "stone"))})
+
+(deftest a-flood-out-of-budget-grows-until-it-proves-the-goal-walled-in
+  (let [r (result-over high-deck [0 64 0] [20 71 20] {:preFlood 0 :floodAfter 20 :goalFlood 100})]
+    (is (= "goal-enclosed" (:reason r)))
+    (is (> (get-in r [:stats :flooded]) 100) "the flood grew past its first budget")
+    (is (< (:expanded r) 3969) "before the search ran out of floor")))
+
+;; a 5 x 5 deck at y 70 (x 4..8) over a 9 x 9 floor, all well inside the loaded columns (a gap jump from unloaded land
+;; onto it is a way the flood cannot rule out): the search runs out of floor (81 cells) before the late flood is due
+;; (live: a gateless pen on a platform ended :one-way at the platform's edge after a walk to the fence)
+(def small-floor-deck {:blocks (merge (floor -2 -2 6 6) (box 4 70 4 8 70 8 "stone"))})
+
+(deftest a-search-that-runs-out-before-the-flood-floods-at-the-end
+  (is (= "goal-enclosed" (:reason (result-over small-floor-deck [0 64 0] [6 71 6] {}))))
+  (is (= "exhausted" (:reason (result-over small-floor-deck [0 64 0] [6 71 6] {:goalFlood 0})))))
+
+;; ---- the frontier: where the searched land runs on into unloaded land ----
+
+;; a walkway (stone at y 79, feet 80) x 18..xe at z 8 over a floor x 0..47, z 0..15: columns x 0..47 are loaded, x 48 on
+;; are not (live: a walled walkway at y 100 whose only way down lay past the loaded chunks)
+(defn walkway [xe] {:blocks (merge (floor 0 0 47 15) (box 18 79 8 xe 79 8 "stone"))})
+
+(defn cell [m] (mapv m [:x :y :z]))
+
+(deftest a-search-that-runs-out-beside-unloaded-land-names-the-frontier
+  (let [r (result-over (walkway 47) [18 80 8] [10 64 8] {})]
+    (is (= ["none" "exhausted"] [(:status r) (:reason r)]))
+    (is (= [46 80 8] (cell (:frontier r))))
+    (is (= [46 80 8] (cell (last (get-in r [:frontier :path :steps])))))))
+
+(deftest a-search-that-runs-out-within-loaded-land-has-no-frontier
+  (are [spec options] (nil? (:frontier (result-over spec [18 80 8] [10 64 8] options)))
+    (walkway 40) {}
+    ;; the frontier is 36 from the goal
+    (walkway 47) {:frontierReach 20}))

@@ -521,14 +521,15 @@
     (is (= ["found" true] [(:status r) (< (:expanded r) 20)]))))
 
 (deftest without-the-flood-a-sealed-platform-is-exhausted
-  (is (= "exhausted" (:reason (run floating (near 12 67 12) {:preFlood 0})))))
+  (is (= "exhausted" (:reason (run floating (near 12 67 12) {:preFlood 0 :goalFlood 0})))))
 
 (deftest goal-on-ground-start-on-pillar-it-can-drop-from-is-found
   (is (= "found" (:status (run (world {:fill [[2 64 2 2 66 2 "stone"]]}) (near 8 64 2) {} {:x 2 :y 67 :z 2})))))
 
-(deftest flood-larger-than-its-budget-hands-over-to-the-main-search
+(deftest flood-larger-than-its-budget-hands-over-to-the-main-search-and-grows
   (let [small (run floating (near 12 67 12) (assoc flooding :goalFlood 10))]
-    (is (not= "goal-enclosed" (:reason small)))
+    (is (= "goal-enclosed" (:reason small)) "a later flood with a larger budget proves it")
+    (is (> (get-in small [:stats :flooded]) 10))
     (is (not= "found" (:status small)))
     (is (= "found" (:status (run (world {}) (near 20 64 20) {:goalFlood 10}))))))
 
@@ -566,9 +567,10 @@
     (ring 10 10 1)
     (into big-floor (ring 10 10 1))))
 
-(deftest pre-flood-0-gives-the-old-answer-the-search-exhausts
+(deftest pre-flood-0-leaves-it-to-the-late-flood
   (let [r (run (world {:fill (ring 10 10 1)}) sealed-goal {:preFlood 0})]
-    (is (= "exhausted" (:reason r)))
+    (is (= "goal-enclosed" (:reason r)))
+    (is (= 0 (get-in r [:stats :preFlooded])))
     (is (> (:expanded r) 0))))
 
 (deftest goal-flood-0-turns-the-early-flood-off-too
