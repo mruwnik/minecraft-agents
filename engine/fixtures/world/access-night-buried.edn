@@ -1,0 +1,78 @@
+;; Cards d6a489cf (night-unsafe is silent when buried: sky light 0 at feet and head), 820b2869 (dig-in walls run out of
+;; blocks -> pit), 555ea732 (a trapped pit shelter by day with no pickaxe fails :no-way-out once, never waits).
+;; Night: run with --allow-time --time-log <shared time log>. Stone mass x 2..30, z 8..24, y 0..9 (cases that need a taller
+;; mass say so). The register holds night-unsafe -> a notify job (the shelter job would log the body out for the night
+;; when it fires on open ground, hand-seen live; here only whether the trigger fires is judged).
+{:defaults
+ {:tags [:night :survival :access]
+  :time :night
+  :plot {:height 24}
+  :register [{:trigger :night-unsafe :persistence :cooldown :cooldown-s 2 :args {:roof-height 4}
+              :job (jobs.debug.notify {:text "night-unsafe fired"})}]
+  :blocks [[:fill [2 0 8] [30 9 24] "stone"]]
+  :body {:at [16.5 10 16.5] :effects [["resistance" 600 4]]}}
+ :cases
+ [{:name "buried-corridor-silent"
+   ;; vertical shaft at x 4 (open to the sky), 1x2 corridor east along z 16 from x 5 to 28; the body stands at its end,
+   ;; 24 cells from the opening: sky light 0 there. Torches keep mobs from spawning in it.
+   :blocks [[:fill [4 5 16] [4 9 16] "air"] [:fill [5 4 16] [28 5 16] "air"]
+            [:set [10 4 16] "torch"] [:set [16 4 16] "torch"] [:set [22 4 16] "torch"] [:set [27 4 16] "torch"]]
+   :body {:at [28.5 4 16.5] :inventory [["cobblestone" 16]]}
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :night-unsafe}} :for-s 25}
+            {:no-event {:source :job :kind :log-out} :for-s 25}]}
+  {:name "deep-diagonal-stair-silent"
+   ;; a 1-wide stair of 12 steps down from the top of a 29-high mass (the shape jobs.access.stair cuts): the body at its
+   ;; bottom has sky light 0 at feet and head although the stair is open overhead along its length
+   :plot {:height 31}
+   :blocks [[:fill [2 0 8] [30 28 24] "stone"] [:fill [5 28 16] [5 30 16] "air"] [:fill [6 27 16] [6 29 16] "air"] [:fill [7 26 16] [7 28 16] "air"] [:fill [8 25 16] [8 27 16] "air"] [:fill [9 24 16] [9 26 16] "air"] [:fill [10 23 16] [10 25 16] "air"] [:fill [11 22 16] [11 24 16] "air"] [:fill [12 21 16] [12 23 16] "air"] [:fill [13 20 16] [13 22 16] "air"] [:fill [14 19 16] [14 21 16] "air"] [:fill [15 18 16] [15 20 16] "air"] [:fill [16 17 16] [16 19 16] "air"]]
+   :body {:at [16.5 17 16.5] :inventory [["cobblestone" 16]]}
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :night-unsafe}} :for-s 25}]}
+  {:name "shallow-diagonal-stair-shelters"
+   :plot {:height 31}
+   :blocks [[:fill [2 0 8] [30 28 24] "stone"] [:fill [5 28 16] [5 30 16] "air"] [:fill [6 27 16] [6 29 16] "air"] [:fill [7 26 16] [7 28 16] "air"]]
+   :body {:at [7.5 26 16.5] :inventory [["cobblestone" 16]]}
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :night-unsafe}} :within-s 20}]}
+  {:name "surface-shelters"
+   :body {:inventory [["cobblestone" 16]]}
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :night-unsafe}} :within-s 20}]}
+  {:name "under-high-slab-shelters"
+   ;; a 7x7 slab 6 above the floor (over the roof height 4, light leaks in from the sides): not buried, so it shelters
+   :blocks [[:fill [2 0 8] [30 9 24] "air"] [:fill [2 0 8] [30 -1 24] "stone"]
+            [:fill [13 7 13] [19 7 19] "stone"] [:fill [13 0 13] [13 6 13] "stone"] [:fill [19 0 13] [19 6 13] "stone"]
+            [:fill [13 0 19] [13 6 19] "stone"] [:fill [19 0 19] [19 6 19] "stone"]]
+   :body {:at [16.5 0 16.5] :inventory [["cobblestone" 16]]}
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :night-unsafe}} :within-s 20}]}
+  {:name "ravine-bottom-shelters"
+   ;; a 3-wide cut 9 deep open to the sky: sky light runs straight down, so the bottom is not buried
+   :blocks [[:fill [15 0 8] [17 9 24] "air"]]
+   :body {:at [16.5 0 16.5] :inventory [["cobblestone" 16]]}
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :night-unsafe}} :within-s 20}]}
+  {:name "cave-mouth-shelters"
+   ;; a 1-wide, 6-high passage 8 long into the mass from its west face (ceiling above the roof height 4, light from the
+   ;; mouth), the body 5 cells in; a 1x2 passage would count as roofed (solid within 4 above) whatever the light
+   :blocks [[:fill [2 0 16] [10 5 16] "air"]]
+   :body {:at [7.5 0 16.5] :inventory [["cobblestone" 16]]}
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :night-unsafe}} :within-s 20}]}
+  {:name "dig-in-walls-run-out-falls-back-to-pit"
+   :register []
+   :body {:inventory [["cobblestone" 9] ["stone_pickaxe" 1]]}
+   :act [[:job (jobs.survival.dig-in {:max-places 2})]
+         [:await {:source :action :kind :done :data {:name "place"}} 30]
+         [:rcon "clear $BODY cobblestone"]]
+   :expect [{:event {:source :job :kind :dig-in.sealed} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :dig_in_failed} :for-s 90 :until {:source :job :kind :dig-in.sealed}}]
+   :limit-s 120}
+  ;; A trapped cell is remembered 5 minutes (:shelter-trapped, one try per cell): rerun this case after that, the plot
+  ;; cell is the same every run.
+  {:name "trapped-pit-by-day-no-pickaxe-fails-once"
+   :register []
+   :body {:inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.survival.dig-in {})]
+         [:await {:source :job :kind :dig-in.sealed} 90]
+         [:rcon "clear $BODY"]
+         [:time-set 1000]
+         [:job (jobs.survival.shelter {})]]
+   :expect [{:event {:source :job :kind :dig-in.trapped} :within-s 60 :of-job true}
+            {:event {:source :job :kind :shelter.failed :data {:reason :no-way-out}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :waiting :data {:reason :no-tool}} :for-s 10}]
+   :limit-s 150}]}
