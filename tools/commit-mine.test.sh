@@ -53,6 +53,27 @@ tools/commit-mine --card c -m m --expect-hunks 1 ok.mjs >/dev/null 2>&1; check "
 printf '%s\nmodule.exports = {\n' "$W" > bad.cjs
 tools/commit-mine --card c -m m --expect-hunks 1 bad.cjs >/dev/null 2>&1; check "unparseable cjs exit" "$?" 6
 rm bad.mjs bad.cjs
+# Parse check uses the file's real module type: .js follows the nearest package.json "type" (default CJS).
+mkdir -p cjspkg esmpkg; echo '{"type":"commonjs"}' > cjspkg/package.json; echo '{"type":"module"}' > esmpkg/package.json
+git add cjspkg/package.json esmpkg/package.json; git commit -q -m pkgs
+printf '%s\nimport fs from "fs"\nexport const e = fs\n' "$W" > cjspkg/esm.js
+tools/commit-mine --card c -m m --expect-hunks 1 cjspkg/esm.js >/dev/null 2>&1; check "esm-only js under cjs package exit" "$?" 6
+printf '%s\nimport fs from "fs"\nexport const e = fs\n' "$W" > bare.js
+tools/commit-mine --card c -m m --expect-hunks 1 bare.js >/dev/null 2>&1; check "esm-only js without package.json exit" "$?" 6
+printf '%s\nimport fs from "fs"\nexport const e = fs\n' "$W" > esmpkg/esm.js
+tools/commit-mine --card c -m m --expect-hunks 1 esmpkg/esm.js >/dev/null 2>&1; check "esm js under esm package exit" "$?" 0
+printf '%s\nmodule.exports = { a: 1 }\n' "$W" > cjspkg/ok.js
+tools/commit-mine --card c -m m --expect-hunks 1 cjspkg/ok.js >/dev/null 2>&1; check "cjs js under cjs package exit" "$?" 0
+printf '%s\nimport fs from "fs"\nexport const e = fs\n' "$W" > esm.cjs
+tools/commit-mine --card c -m m --expect-hunks 1 esm.cjs >/dev/null 2>&1; check "esm syntax in cjs exit" "$?" 6
+# Hunks mode parses the patch-applied blob: a patch that leaves a broken file is refused.
+printf '%s\nexport const a = 1\n' "$W" > p.mjs; git add p.mjs; git commit -q -m p
+printf '%s\nexport const a = (\nexport const z = 2\n' "$W" > p.mjs
+git diff p.mjs > p.patch
+tools/commit-mine --card c -m m --hunks p.patch --expect-hunks 1 p.mjs >/dev/null 2>&1; check "hunks mode unparseable exit" "$?" 6
+check "hunks mode refusal leaves index clean" "$(git diff --cached --name-only)" ""
+git checkout -q p.mjs
+rm -f bare.js esm.cjs p.patch
 # docs/ and .claude/ are committed only on the owner's word.
 mkdir -p docs .claude; echo d > docs/a.md; echo c > .claude/s.json
 out=$(tools/commit-mine --card c -m m --expect-hunks 1 docs/a.md 2>&1); check "docs refused exit" "$?" 1

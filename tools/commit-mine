@@ -178,14 +178,27 @@ while IFS=$'\t' read -r add del f; do
 done < <(git diff --cached --numstat -- "${allowed[@]}")
 
 # Check: every committed JS file parses (a hunk-mode commit can leave HEAD with a file that never existed on disk).
-parses() { # $1 = path, blob on stdin; module syntax for .mjs, .js/.cjs as either flavour
-  local tmp ext="${1##*.}" rc=0
-  tmp="$(mktemp -d)"; cat > "$tmp/f.$ext"
+pkg_type() { # $1 = path; "type" of the nearest package.json (staged, else HEAD), default commonjs
+  local d="$(dirname "$1")" pj
+  while :; do
+    [ "$d" = . ] && pj=package.json || pj="$d/package.json"
+    pj="$(git show ":$pj" 2>/dev/null || git show "HEAD:$pj" 2>/dev/null)" && {
+      [ "$(node -e 'try{process.stdout.write(String(JSON.parse(require("fs").readFileSync(0,"utf8")).type||""))}catch(e){}' <<<"$pj")" = module ] && echo module || echo commonjs
+      return
+    }
+    [ "$d" = . ] && { echo commonjs; return; }
+    d="$(dirname "$d")"
+  done
+}
+parses() { # $1 = path, blob on stdin; syntax checked as the file's real module type (.mjs ESM, .cjs CJS, .js by package.json)
+  local tmp ext="${1##*.}" rc=0 kind
   case "$ext" in
-    mjs) node --check "$tmp/f.mjs" 2>/dev/null || rc=1 ;;
-    cjs) node --check "$tmp/f.cjs" 2>/dev/null || rc=1 ;;
-    *) node --check "$tmp/f.js" 2>/dev/null || { cp "$tmp/f.js" "$tmp/f.mjs"; node --check "$tmp/f.mjs" 2>/dev/null || rc=1; } ;;
+    mjs) kind=mjs ;;
+    cjs) kind=cjs ;;
+    *) [ "$(pkg_type "$1")" = module ] && kind=mjs || kind=cjs ;;
   esac
+  tmp="$(mktemp -d)"; cat > "$tmp/f.$kind"
+  node --check "$tmp/f.$kind" 2>/dev/null || rc=1
   rm -rf "$tmp"; return $rc
 }
 while IFS= read -r f; do
