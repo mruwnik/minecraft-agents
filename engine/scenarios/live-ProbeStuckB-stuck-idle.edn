@@ -1,0 +1,4 @@
+;; ProbeStuckB live cases for 37b270af (combat through doors, stuck trigger only when held): stuck + door-left reflexes, otherwise idle
+{:register [{:trigger :stuck :persistence :cooldown :cooldown-s 60 :job (jobs.maintenance.unstick)}
+            {:trigger :door-left :persistence :cooldown :cooldown-s 5 :job (jobs.maintenance.shut-doors)}]
+ :queue [(repeat (jobs.movement.look-around))]}
