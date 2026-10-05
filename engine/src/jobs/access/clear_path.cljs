@@ -9,8 +9,8 @@
   - The wall is at most :max-thick blocks thick, starts right in front of the body, and has a floor under every
     row and room for the body beyond it (engine.jobs.escape/door).
   - Never digs a door, gate, trapdoor, bed, container, sign or an unbreakable block.
-  - Each cell is a jobs.blocks.dig child (zones, claims, hazards and tools are its rules). The drops are left
-    where they fall; the body walks over them.
+  - Each cell is a jobs.blocks.dig child (zones, claims, hazards and tools are its rules). It picks up the drop
+    (:collect) when there is room for it, so the block can be put back; with no room it digs on and leaves it.
   - Then it walks into the cell beyond (jobs.debug.walk-plan).
   Ends with {:status :done|:stopped :reason :dug [{:cell :block}] :at [x y z] :through [x y z]}, also as a
   clear-path.done info or clear-path.stopped warn event. Stops: :bad-args, :no-door (no such wall here),
@@ -58,20 +58,30 @@
         (finish! c :no-door {:why (str "no wall at most " max-thick " thick with a floor beyond, "
                                        (name (:heading (:args c))) " of " (pr-str (feet-of c)))})))))
 
-(defn ^:async dig-cell! [c cell]
-  (let [p (:primitives c)
-        block (u/block-name p (zipmap [:x :y :z] cell))
-        args {:pos cell :collect false :ignore-zones? (:ignore-zones? (:args c))}]
+(defn room-for-drop?
+  "A free slot, or a carried stack of what block drops (b/drops-of) under 64."
+  [p block]
+  (let [drops (set (b/drops-of p block))]
+    (boolean (or (pos? (u/free-slots p))
+                 (some #(and (drops (:name %)) (< (:count %) 64)) (u/inventory p))))))
+
+(defn ^:async dig-cell!
+  "One round of the dig child on the cell being dug (:digging {:cell :block :collect}, kept until the child ends, so
+  its drop pickup runs after the cell is already air)."
+  [c {:keys [cell block collect]}]
+  (let [args {:pos cell :collect collect :ignore-zones? (:ignore-zones? (:args c))}
+        done! (fn [] (ctx/update-mem! c dissoc :digging))]
     (if (escape/protected? block)
       (finish! c :protected {:cell cell :block block})
-      (if-let [wait (b/child-wait c :dig 'jobs.blocks.dig args)]
+      (if-let [wait (when-not (:started (:digging (ctx/mem c))) (b/child-wait c :dig 'jobs.blocks.dig args))]
         (finish! c :dig-waits {:cell cell :block block :wait wait})
-        (let [r (await (ctx/call-child c :dig 'jobs.blocks.dig args))
+        (let [_ (ctx/update-mem! c assoc-in [:digging :started] true)
+              r (await (ctx/call-child c :dig 'jobs.blocks.dig args))
               res (ctx/child-result c :dig)]
           (cond
             (not= :done r) :continue
-            (:dug res) (do (ctx/update-mem! c update :dug conj {:cell cell :block block}) :continue)
-            (= :already-clear (:reason res)) :continue
+            (:dug res) (do (done!) (ctx/update-mem! c update :dug conj {:cell cell :block block}) :continue)
+            (= :already-clear (:reason res)) (do (done!) :continue)
             :else (finish! c :dig-failed {:cell cell :block block :dig (select-keys res [:reason :status])})))))))
 
 (defn ^:async step-through! [c through]
@@ -87,6 +97,11 @@
         p (:primitives c)]
     (if-not through
       (await (plan! c))
-      (if-let [cell (first (remove #(b/air (u/block-name p (zipmap [:x :y :z] %))) cells))]
-        (await (dig-cell! c cell))
+      (if-let [digging (or (:digging (ctx/mem c))
+                           (when-let [cell (first (remove #(b/air (u/block-name p (zipmap [:x :y :z] %))) cells))]
+                             (let [block (u/block-name p (zipmap [:x :y :z] cell))
+                                   d {:cell cell :block block :collect (room-for-drop? p block)}]
+                               (ctx/update-mem! c assoc :digging d)
+                               d)))]
+        (await (dig-cell! c digging))
         (await (step-through! c through))))))

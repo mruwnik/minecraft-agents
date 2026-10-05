@@ -1,6 +1,8 @@
 ;; Card b40b4dea: go-to escalation. A body shut in (a pit, a sealed room) whose search runs out of land makes a way:
 ;; pillar (pit + enough blocks), clear-path (a wall up to 3 thick toward the goal), stair up; then it puts back what
 ;; stair or clear-path dug. :escalate false, bedrock, or open ground never change the world.
+;; Card 30615854: it digs only natural terrain outside others' zones, a door or gate beside the enclosure is its way
+;; out (no escalation), and a cut escalation's holes stay in the :tidy ledger (restore-broken puts them back).
 ;; Pit mass: stone x 10..22, z 10..22, y 0..3 (top feet y 4), a 1x1 shaft at x 16, z 16 from y 0 up.
 {:defaults
  {:tags [:movement :access]
@@ -23,16 +25,48 @@
             {:event {:source :job :kind :result :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:not-block [17 1 16] "air"] [:body-near [20.5 4 16.5] 2]]}
   {:name "sealed-room-clear-path-arrives-and-shuts-the-door"
-   ;; a hollow cobblestone room x 12..20, z 12..20, y 0..3 on a stone platform x 8..26 (y -1 is the plot floor), the
+   ;; a hollow stone room x 12..20, z 12..20, y 0..3 on a stone platform x 8..26 (y -1 is the plot floor), the
    ;; body inside at feet y 1; the goal outside to the east
    :blocks [[:fill [10 0 10] [22 3 22] "air"] [:fill [8 0 8] [26 0 26] "stone"]
-            [:fill [12 0 12] [20 3 20] "cobblestone" :hollow]]
+            [:fill [12 0 12] [20 3 20] "stone" :hollow]]
    :body {:at [16.5 1 16.5] :inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.movement.go-to {:pos #at [24 1 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :clear-path}} :within-s 60 :of-job true}
             {:event {:source :job :kind :go-to.restored} :within-s 120 :of-job true}
             {:event {:source :job :kind :result :data {:arrived true}} :within-s 140 :of-job true}]
-   :after [[:block [20 1 16] "cobblestone"] [:block [20 2 16] "cobblestone"] [:body-near [24.5 1 16.5] 2]]}
+   :after [[:not-block [20 1 16] "air"] [:not-block [20 2 16] "air"] [:body-near [24.5 1 16.5] 2]]}
+  {:name "built-wall-room-is-never-dug"
+   ;; the same room of oak planks: a build, never dug; go-to gives up with :escalation {:step :none :why :no-dig}
+   :blocks [[:fill [10 0 10] [22 3 22] "air"] [:fill [8 0 8] [26 0 26] "stone"]
+            [:fill [12 0 12] [20 3 20] "oak_planks" :hollow]]
+   :body {:at [16.5 1 16.5] :inventory [["stone_pickaxe" 1] ["iron_axe" 1] ["dirt" 8]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [24 1 16] :range 1})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false :escalation {:step :none :why :no-dig}}} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :go-to.escalated :data {:step :clear-path}} :for-s 30}
+            {:no-event {:source :job :kind :go-to.escalated :data {:step :stair}} :for-s 30}
+            {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 30}]
+   :after [[:block [20 1 16] "oak_planks"] [:block [20 2 16] "oak_planks"]]}
+  {:name "walled-yard-with-an-iron-door-does-not-dig"
+   ;; a stone-walled yard (no roof) with a shut iron door in the east wall: the door is the way out, nothing is dug
+   :blocks [[:fill [10 0 10] [22 3 22] "air"] [:fill [8 0 8] [26 0 26] "stone"]
+            [:fill [12 1 12] [20 3 20] "stone" :outline] [:fill [13 1 13] [19 3 19] "air"]
+            [:set [20 1 16] "iron_door[facing=east,half=lower]"] [:set [20 2 16] "iron_door[facing=east,half=upper]"]]
+   :body {:at [16.5 1 16.5] :inventory [["stone_pickaxe" 1] ["dirt" 8]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [24 1 16] :range 1})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :go-to.escalated} :for-s 30}
+            {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 30}]
+   :after [[:block [20 1 16] "iron_door"] [:not-block [19 1 16] "air"]]}
+  {:name "stair-cut-short-keeps-its-holes-in-the-ledger"
+   ;; the body dies after the first stair step: the job is cancelled, nothing is refilled under it, and the dug cells
+   ;; stay as :tidy entries with :escalation true (check worlds/.../memory.edn) for restore-broken
+   :body {:inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1})]
+         [:await {:source :job :kind :stair.step} 60]
+         [:kill-body]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :go-to.restored} :for-s 20}]
+   :after [[:block [17 1 16] "air"] [:block [17 2 16] "air"]]}
   {:name "escalate-false-gives-up-unchanged"
    :body {:inventory [["dirt" 8] ["stone_pickaxe" 1]]}
    :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1 :escalate false})]]

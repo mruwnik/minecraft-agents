@@ -5,6 +5,9 @@
   - door: the cells of a thin wall straight ahead with a floor beyond it (jobs.access.clear-path digs them).
   - stair-heading: a heading with a solid block in front to stair up on (jobs.access.stair).
   - wall-spot: the nearest cell beside a wall, for a body in a hollow with no wall next to it.
+  - natural?: whether a block is natural terrain, the only blocks an escalation digs.
+  - stair-cuts: the cells a stair up cuts.
+  - door-beside?: whether a door or gate borders the cells the body can walk to (a way out go-to handles).
   - choose: the escalation for a body here and a goal.
   Cells are [x y z]. block-at maps a cell to its block name (nil when not loaded)."
   (:require [engine.access.rules :as rules]
@@ -29,6 +32,13 @@
 (def protected
   "Blocks a way out never digs: doors, gates, trapdoors, beds, containers, signs, and what cannot be broken."
   #"_door$|_gate$|_trapdoor$|_bed$|chest$|barrel$|shulker_box$|furnace$|^smoker$|^hopper$|^dispenser$|^dropper$|^brewing_stand$|^lectern$|_sign$|^spawner$|^bedrock$|^barrier$|portal|^command_block$|^structure_block$|^jigsaw$")
+
+(def natural-blocks
+  "Natural terrain: the only blocks an escalation digs. Anything else (planks, bricks, glass, wool, cobblestone,
+  fences, doors ...) may be someone's build and is never dug."
+  #"^(?:stone|deepslate|andesite|diorite|granite|tuff|calcite|dirt|coarse_dirt|rooted_dirt|grass_block|podzol|mycelium|mud|clay|sand|red_sand|gravel|sandstone|red_sandstone|terracotta|(?:white|orange|magenta|light_blue|yellow|lime|pink|gray|light_gray|cyan|purple|blue|brown|green|red|black)_terracotta|netherrack|soul_sand|soul_soil|basalt|smooth_basalt|blackstone|end_stone|moss_block|dripstone_block|snow_block|[a-z_]+_ore)$")
+
+(defn natural? [n] (boolean (and n (re-find natural-blocks n))))
 
 (defn block-at-of
   "block-at over primitives p."
@@ -70,6 +80,37 @@
   [block-at feet]
   (count (take-while #(walled-at? block-at (up feet %)) (range max-depth))))
 
+(defn stair-cuts
+  "The cells a stair up along dir ([dx dz]) cuts from feet in n steps, step by step (jobs.access.stair/step-cells)."
+  [feet [dx dz] n]
+  (vec (for [i (range n)
+             :let [f (add feet [(* i dx) i (* i dz)])
+                   nxt (add f [dx 1 dz])]
+             cell [(up f 2) (up nxt 1) nxt]]
+         cell)))
+
+(def door-or-gate #"_door$|_fence_gate$")
+
+(defn door-beside?
+  "Whether a door or gate (iron ones too) is beside, at feet or head height, a cell the body can walk to from feet
+  (engine.jobs.reach/forward, at most reach/room-cells cells): the body's enclosure has a door, a way out go-to
+  opens or a player would, never one to dig round."
+  [p [fx fy fz]]
+  (let [kind-at (reach/lookup p reach/body-kind-of)
+        block-at (block-at-of p)
+        door? (fn [[x y z]] (some (fn [[dx dz]] (some #(some->> (block-at [(+ x dx) (+ y %) (+ z dz)]) (re-find door-or-gate))
+                                                     [0 1]))
+                                  cardinals))]
+    (loop [queue #queue [[fx fy fz]] seen #{[fx fy fz]}]
+      (if-let [cell (peek queue)]
+        (if (door? cell)
+          true
+          (let [nbrs (->> (apply reach/forward kind-at cell) (map vec) (remove seen))]
+            (if (>= (count seen) reach/room-cells)
+              false
+              (recur (into (pop queue) nbrs) (into seen nbrs)))))
+        false))))
+
 (defn walled-side? [block-at cell] (boolean (some #(solid? (block-at (ahead cell % 1))) cardinals)))
 
 (defn door
@@ -90,17 +131,23 @@
         (some rules/fluids names) nil
         :else (recur (inc k) (into cells (filter #(solid? (block-at %)) pair)))))))
 
+(defn diggable?
+  "Whether an escalation may cut cell: it is open (air or a plant), or natural terrain that may-dig? allows."
+  [block-at may-dig? cell]
+  (let [n (block-at cell)]
+    (or (passable? n) (and (natural? n) (boolean (may-dig? cell))))))
+
 (defn stair-heading
-  "The first heading of dirs (each [dx dz]) with a solid, unprotected block in front at feet height to stand on and
-  no protected block in the step's cut, as a keyword (:east ...), or nil."
-  [block-at feet dirs]
-  (some (fn [d]
-          (let [front (ahead feet d 1)
-                cut [(up feet 2) (up front 1) (up front 2)]]
-            (when (and (solid? (block-at front)) (not (protected? (block-at front)))
-                       (not-any? #(protected? (block-at %)) cut))
-              (heading-names d))))
-        dirs))
+  "The first heading of dirs (each [dx dz]) with a solid block in front at feet height to stand on and every cell of
+  the n steps' cuts diggable? (natural terrain, may-dig?), as a keyword (:east ...), or nil."
+  ([block-at feet dirs] (stair-heading block-at feet dirs 1 (constantly true)))
+  ([block-at feet dirs n may-dig?]
+   (some (fn [d]
+           (let [front (ahead feet d 1)]
+             (when (and (solid? (block-at front)) (not (protected? (block-at front)))
+                        (every? #(diggable? block-at may-dig? %) (stair-cuts feet d (max 1 n))))
+               (heading-names d))))
+         dirs)))
 
 (defn wall-spot
   "The nearest cell (breadth-first through standable cells, at most wall-search-radius away along x and z) that has
@@ -133,32 +180,43 @@
 
 (def max-door 3)
 
+(def heading-dirs (into {} (map (fn [[k v]] [v k])) heading-names))
+
 (defn choose
-  "How a body at feet (a cell) that cannot walk to goal (a cell) can make a way, cheapest first:
+  "How a body at feet (a cell) that cannot walk to goal (a cell) can make a way, cheapest first. It only ever digs
+  natural terrain (natural?) in cells (may-dig? cell) allows (go-to: no other owner's zone or claim):
   - {:step :pillar :height d :item}: in a pit d deep with room above the head and at least d pillar blocks carried.
-  - {:step :clear-path :heading kw}: a wall at most max-door thick straight toward the goal, with floor beyond.
   - {:step :stair :heading kw :steps n}: a block in front to stair up on, n the pit's depth (in no pit: how far the
-    goal is above, at most max-depth).
+    goal is above, at most max-depth), every cell of its cut diggable?.
+  - {:step :clear-path :heading kw}: a wall at most max-door thick straight toward the goal, with floor beyond,
+    every cell diggable?.
   - {:step :approach :pos cell}: no side of the body's cell is solid: walk to wall-spot first.
-  - {:step :none}: none of these."
-  [p feet goal]
-  (let [block-at (block-at-of p)
-        dir (heading feet goal)
-        depth (pit-depth block-at feet)
-        {:keys [item count]} (pillar-item p)
-        rise (if (pos? depth) depth (min max-depth (max 0 (- (second goal) (second feet)))))
-        stair (when (pos? rise) (stair-heading block-at feet (distinct (cond->> cardinals dir (cons dir)))))]
-    (cond
-      (and (pos? depth) item (>= count depth) (passable? (block-at (up feet 2))))
-      {:step :pillar :height depth :item item}
+  - {:step :none :why kw}: none of these. :why :no-headroom: a pit the carried blocks would pillar out of but for
+    the block over the head; :no-dig: nothing natural and allowed to dig; :no-wall: no wall to walk to."
+  ([p feet goal] (choose p feet goal (constantly true)))
+  ([p feet goal may-dig?]
+   (let [block-at (block-at-of p)
+         dir (heading feet goal)
+         depth (pit-depth block-at feet)
+         {:keys [item count]} (pillar-item p)
+         pillar-blocks? (and (pos? depth) item (>= count depth))
+         rise (if (pos? depth) depth (min max-depth (max 0 (- (second goal) (second feet)))))
+         stair (when (pos? rise)
+                 (stair-heading block-at feet (distinct (cond->> cardinals dir (cons dir))) rise may-dig?))
+         gap (when dir (door block-at feet dir max-door))]
+     (cond
+       (and pillar-blocks? (passable? (block-at (up feet 2))))
+       {:step :pillar :height depth :item item}
 
-      (and dir (door block-at feet dir max-door))
-      {:step :clear-path :heading (heading-names dir)}
+       stair
+       {:step :stair :heading stair :steps rise}
 
-      stair
-      {:step :stair :heading stair :steps rise}
+       (and gap (every? #(diggable? block-at may-dig? %) (:cells gap)))
+       {:step :clear-path :heading (heading-names dir)}
 
-      (not (walled-side? block-at feet))
-      (if-let [spot (wall-spot p feet dir)] {:step :approach :pos spot} {:step :none})
+       (not (walled-side? block-at feet))
+       (if-let [spot (wall-spot p feet dir)] {:step :approach :pos spot} {:step :none :why :no-wall})
 
-      :else {:step :none})))
+       pillar-blocks? {:step :none :why :no-headroom}
+
+       :else {:step :none :why :no-dig}))))

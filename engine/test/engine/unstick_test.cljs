@@ -345,7 +345,7 @@
           (await (run-unstick! eng at5 goal))
           (let [ev (failed-event seen)]
             (is (some? ev))
-            (is (= {:step :none} (:escalation ev)) "bedrock: no pillar block, no door, no stair")
+            (is (= {:step :none :why :no-dig} (:escalation ev)) "bedrock: no pillar block, no door, no stair")
             (is (= {:x 5 :z 0} (select-keys (:pos ev) [:x :z]))))
           (is (= [] (calls p "dig")))
           (is (= 1 (count (mem/entries (mem/view (:store eng)) :stuck))))

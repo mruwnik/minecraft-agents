@@ -10,16 +10,20 @@
             [engine.jobs.escape :as escape]
             [engine.registry :as registry]
             [engine.test-util :as tu :refer [box]]
-            [engine.triggers :as triggers]))
+            [engine.triggers :as triggers]
+            [engine.world :as ew]))
 
-(defn setup [world]
-  (let [clock (atom 1000000)
-        [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake world)
-        eng (core/create {:primitives p :jobs registry/jobs :triggers {} :dir (tu/tmp-dir) :now #(deref clock)
-                          :backoff false
-                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    {:eng eng :p p :seen seen}))
+(defn setup
+  ([world] (setup world nil))
+  ([world zones]
+   (let [clock (atom 1000000)
+         [seen sink] (tu/legacy-capture-sink)
+         p (tu/fake world)
+         eng (core/create (cond-> {:primitives p :jobs registry/jobs :triggers {} :dir (tu/tmp-dir) :now #(deref clock)
+                                   :backoff false
+                                   :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}
+                            zones (assoc :world (ew/of-data {} {} zones))))]
+     {:eng eng :p p :seen seen})))
 
 (defn recording-parent
   "A parent that runs job with args as its child and keeps the child's result in out."
@@ -38,10 +42,11 @@
           (recur (inc i))))))
 
 (defn ^:async run-job!
-  "Run job (default go-to) with args as a child over world; {:eng :p :seen :out}."
+  "Run job (default go-to) with args as a child over world (zones: a zone list); {:eng :p :seen :out}."
   ([world args] (run-job! world 'jobs.movement.go-to args))
-  ([world job args]
-   (let [{:keys [eng] :as s} (setup world)
+  ([world job args] (run-job! world job args nil))
+  ([world job args zones]
+   (let [{:keys [eng] :as s} (setup world zones)
          out (atom :not-done)
          eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out job args)))]
      (core/submit! eng '(recording-parent) {})
@@ -244,3 +249,168 @@
           (is (= [:stair :stair :stair] (mapv :step (events-of seen :go-to.escalated))))
           (is (= false (:arrived @out)))
           (is (= {:step :spent :n 3} (:escalation @out))))))))
+
+;; ------------------------------------------------------------------ review fixes (card 30615854, be7e5bb6)
+
+(defn ledger [eng] (mapv :data (mem/entries (mem/view (:store eng)) :tidy)))
+
+(defn holes [eng] (set (map :cell (filter :escalation (ledger eng)))))
+
+(defn dug-cells [p] (set (map #(mapv (js->clj (.-pos (.-args %)) :keywordize-keys true) [:x :y :z]) (calls p "dig"))))
+
+(deftest escape-natural-is-a-whitelist-of-terrain
+  (doseq [n ["stone" "dirt" "grass_block" "deepslate" "gravel" "sand" "netherrack" "iron_ore" "deepslate_diamond_ore"
+             "red_terracotta" "andesite" "tuff"]]
+    (is (escape/natural? n) n))
+  (doseq [n ["oak_planks" "bricks" "stone_bricks" "glass" "white_wool" "cobblestone" "oak_door" "iron_door"
+             "oak_fence" "spruce_fence_gate" "white_glazed_terracotta" "smooth_stone" "polished_andesite" nil]]
+    (is (not (escape/natural? n)) (pr-str n))))
+
+(deftest escape-stair-cuts-are-each-step-s-three-cells
+  (is (= [[0 63 0] [1 63 0] [1 62 0] [1 64 0] [2 64 0] [2 63 0]] (escape/stair-cuts [0 61 0] [1 0] 2))))
+
+(deftest escape-choose-never-digs-built-blocks
+  (doseq [wall ["oak_planks" "bricks" "glass" "white_wool" "cobblestone" "stone_bricks"]]
+    (let [built (apply dissoc (merge room (box -3 64 -3 3 65 3 wall)) (for [x (range -2 3) z (range -2 3) y [64 65]] (str x "," y "," z)))]
+      (is (= {:step :none :why :no-dig} (escape/choose (tu/fake {:self {:pos {:x 2 :y 64 :z 0}} :blocks built})
+                                                       [2 64 0] [8 64 0]))
+          wall))))
+
+(deftest escape-choose-prefers-a-stair-to-a-clear-path
+  (let [hill (merge room (box 3 64 -3 8 66 3 "dirt"))]
+    (is (= :stair (:step (escape/choose (tu/fake {:self {:pos {:x 2 :y 64 :z 0}} :blocks hill}) [2 64 0] [8 67 0]))))))
+
+(deftest escape-choose-stair-checks-every-step
+  (let [ba-pit (assoc pit "2,63,0" "bricks")]
+    (is (not= :east (:heading (escape/choose (tu/fake (merge in-pit {:blocks ba-pit})) [0 61 0] [10 64 0])))
+        "the second step east would cut bricks: another heading")))
+
+(deftest go-to-does-not-dig-through-a-built-wall
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [wall ["oak_planks" "bricks" "glass"]]
+          (let [built (apply dissoc (merge room (box -3 64 -3 3 65 3 wall))
+                             (for [x (range -2 3) z (range -2 3) y [64 65]] (str x "," y "," z)))
+                {:keys [out p seen]} (await (run-job! (merge in-room {:blocks built :inventory [{:name "dirt" :count 9}]})
+                                                  {:pos [8 64 0] :range 1}))]
+            (is (= false (:arrived @out)) wall)
+            (is (= {:step :none :why :no-dig} (:escalation @out)) wall)
+            (is (empty? (events-of seen :go-to.escalated)) wall)
+            (is (empty? (calls p "dig")) wall)))))))
+
+(deftest go-to-in-a-walled-yard-with-an-iron-door-does-not-escalate
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [yard (-> room (dissoc "-2,66,0") (assoc "3,64,0" "iron_door" "3,65,0" "iron_door"))
+              {:keys [out p seen]} (await (run-job! (merge in-room {:blocks yard}) {:pos [8 64 0] :range 1}))]
+          (is (= false (:arrived @out)))
+          (is (nil? (:escalation @out)) "the door is its way out, not a reason to dig")
+          (is (empty? (events-of seen :go-to.escalated)))
+          (is (empty? (calls p "dig"))))))))
+
+(deftest go-to-never-digs-in-another-s-zone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [zones [{:name "vault" :owner "Miles" :min [-3 60 -3] :max [3 70 3]}]
+              {:keys [out p seen]} (await (run-job! (merge in-room {:blocks room}) 'jobs.movement.go-to
+                                                {:pos [8 64 0] :range 1} zones))]
+          (is (= false (:arrived @out)))
+          (is (= {:step :none :why :no-dig} (:escalation @out)) "the wall is another owner's")
+          (is (empty? (events-of seen :go-to.escalated)))
+          (is (empty? (calls p "dig"))))))))
+
+(deftest go-to-roofed-pit-stairs-through-the-roof-rather-than-pillar
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p seen]} (await (run-job! (merge in-pit {:blocks (assoc pit "0,63,0" "dirt")
+                                                                   :inventory [{:name "dirt" :count 5}]})
+                                                {:pos [10 64 0] :range 1}))]
+          (is (= {:arrived true} @out))
+          (is (empty? (calls p "jumpPlace")) "the roof leaves no headroom to pillar")
+          (is (= [:stair] (mapv :step (events-of seen :go-to.escalated))))
+          (is (contains? (dug-cells p) [0 63 0]) "the stair's first cut is the roof"))))))
+
+(deftest go-to-roofed-pit-with-no-way-to-dig-says-no-headroom
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [walls (merge (box 3 60 -3 14 63 3 "stone") (box -2 60 -2 2 63 2 "bricks"))
+              roofed (assoc (apply dissoc walls pit-cells) "0,63,0" "dirt")
+              {:keys [out p seen]} (await (run-job! (merge in-pit {:blocks roofed :inventory [{:name "dirt" :count 5}]})
+                                                {:pos [10 64 0] :range 1}))]
+          (is (= false (:arrived @out)))
+          (is (= {:step :none :why :no-headroom} (:escalation @out)))
+          (is (empty? (events-of seen :go-to.escalated)))
+          (is (empty? (calls p "jumpPlace")))
+          (is (empty? (calls p "dig"))))))))
+
+(deftest go-to-never-refills-a-stair-while-the-body-is-still-shut-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng out p seen]} (await (run-job! {:self {:pos {:x 0 :y 34 :z 0}} :blocks deep-shaft
+                                                         :inventory [{:name "dirt" :count 64}]}
+                                                    {:pos [10 64 0] :range 1}))]
+          (is (= false (:arrived @out)))
+          (is (empty? (calls p "place")) "every stair stopped short of the rim: none of it is put back")
+          (is (empty? (events-of seen :go-to.restored)))
+          (is (= (dug-cells p) (holes eng)) "every dug cell is in the ledger for restore-broken")
+          (is (every? #(= "air" (block p %)) (holes eng))))))))
+
+(deftest go-to-stair-stopped-part-way-walks-on-and-keeps-its-holes
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; the third step would cut stone with no pickaxe: the stair stops after two, which already reach the rim
+        (let [{:keys [eng out p seen]} (await (run-job! (merge in-pit {:blocks (assoc pit "3,64,0" "stone")
+                                                                       :inventory [{:name "dirt" :count 2}]})
+                                                    {:pos [10 64 0] :range 1}))
+              dug (dug-cells p)]
+          (is (= {:arrived true} @out))
+          (is (= #{[1 63 0] [1 62 0] [2 63 0]} dug))
+          (is (= [{:step :stair :reason :no-tool}]
+                 (mapv #(select-keys % [:step :reason]) (events-of seen :go-to.escalation-stopped))))
+          (is (= [[1 62 0] [1 63 0]] (:cells (first (events-of seen :go-to.restored)))) "two carried dirt go back")
+          (is (= #{[2 63 0]} (holes eng)) "the one it had nothing for stays in the ledger")
+          (is (every? #(= "air" (block p %)) (holes eng))))))))
+
+(deftest go-to-cancelled-mid-escalation-leaves-its-holes-in-the-ledger
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plain (apply dissoc (merge (box -40 63 -40 40 63 40 "stone") pit) pit-cells)
+              {:keys [eng p seen]} (setup (merge in-pit {:blocks plain :inventory [{:name "dirt" :count 2}]}))]
+          (core/submit! eng '(jobs.movement.go-to {:pos [10 64 0] :range 1}) {})
+          (loop [i 0]
+            (when (and (< i 300) (< (count (calls p "dig")) 2))
+              (await (core/tick! eng))
+              (recur (inc i))))
+          (is (= 2 (count (calls p "dig"))))
+          (core/cancel! eng (first (:list (core/state eng))))
+          (is (empty? (:list (core/state eng))))
+          (is (= (dug-cells p) (holes eng)) "both dug cells outlive the cancelled job")
+          (is (every? :any-of (filter :escalation (ledger eng))))
+          (core/submit! eng '(jobs.survival.restore-broken) {})
+          (await (tick-out! eng 100))
+          (is (every? #(= "air" (block p %)) (holes eng)) "the body is still shut in: its holes stay open")
+          (swap! (fake/state p) assoc-in [:self :pos] [5.5 64 0.5])
+          (core/submit! eng '(jobs.survival.restore-broken) {})
+          (await (tick-out! eng 300))
+          (is (= "dirt" (block p [1 63 0])) "out of the pit, restore-broken puts them back")
+          (is (= "dirt" (block p [1 62 0])))
+          (is (empty? (holes eng))))))))
+
+(deftest clear-path-collects-what-it-digs-so-go-to-can-put-it-back
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p seen]} (await (run-job! (merge in-room {:blocks room}) {:pos [8 64 0] :range 1}))]
+          (is (= {:arrived true} @out))
+          (is (= [:clear-path] (mapv :step (events-of seen :go-to.escalated))))
+          (is (empty? (events-of seen :go-to.restore-skipped)) "nothing carried at the start: the dug dirt was picked up")
+          (is (= "dirt" (block p [3 64 0])))
+          (is (= "dirt" (block p [3 65 0]))))))))

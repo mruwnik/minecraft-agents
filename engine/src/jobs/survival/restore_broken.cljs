@@ -6,8 +6,10 @@
             [engine.jobs.util :as u]))
 
 (def doc
-  "Put back what a job broke in another's zone or claim (the :tidy entries engine.jobs.tidy writes).
-  A dug block is placed again from an item of the same name carried. A placed block is dug again. It digs nothing else.
+  "Put back what a job broke in another's zone or claim, and the holes a go-to escalation dug (the :tidy entries
+  engine.jobs.tidy and jobs.movement.go-to write). A dug block is placed again from an item of the same name
+  carried, or for an escalation hole what the block drops (cobblestone for stone). An escalation hole waits while
+  the body is shut in (:shut-in), as it is the body's way on. A placed block is dug again. It digs nothing else.
   Works only when the body is safe: health at least :min-health and no hostile within :danger-radius.
   Touches only a cell whose block is still what the job left (a changed cell is somebody's, left alone),
   with at most 3 tries per cell.
@@ -97,13 +99,19 @@
   (let [r (await (ctx/call-child c :go 'jobs.movement.go-to {:pos (zipmap [:x :y :z] cell) :range reach :escalate false}))]
     (if (= :continue r) :continue (if (:arrived (ctx/child-result c :go)) :done :failed))))
 
+(defn place-item
+  "The carried item that puts back the dug cell: tidy/place-item of its entry (an escalation hole takes what the
+  block drops), else was."
+  [c cell was]
+  (or (some->> (tidy/entries c) (filter #(= cell (:cell %))) first (tidy/place-item (:primitives c))) was))
+
 (defn ^:async put-back!
   "Place the recorded block again, or dig the placed one. True when it worked."
   [c {:keys [cell action was] :as e}]
   (let [pos (zipmap [:x :y :z] cell)
         _ (when-not (= :dig action) (await (tools/equip-tool! c (:now e) {:fast true})))
         res (await (if (= :dig action)
-                     (ctx/act c :place (clj->js {:pos pos :item was}))
+                     (ctx/act c :place (clj->js {:pos pos :item (place-item c cell was)}))
                      (ctx/act c :dig (clj->js {:pos pos}))))
         _ (when-not (= :dig action) (await (tools/note-wear! c)))]
     (contains? #{"placed" "dug"} (.-status res))))
