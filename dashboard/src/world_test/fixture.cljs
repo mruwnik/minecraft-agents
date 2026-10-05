@@ -209,12 +209,17 @@
   (str "summon " type " " (xyz-str (abs-pos origin pos)) " " (nbt-with-tag nbt)))
 
 (defn cleanup-commands
-  "Leave the plot: its entities killed, the body's inventory and effects cleared, the forceload removed."
+  "Leave the plot: its entities killed, the plot cleared to its floor and the body put back on it (a restarted body
+  starts where it last stood, so no hut or bed of this case may remain), its inventory and effects cleared, the
+  forceload removed."
   [grid origin body c]
-  [(kill-command grid origin (get-in c [:plot :height]))
-   (str "clear " body)
-   (str "effect clear " body)
-   (forceload-command "remove" grid origin)])
+  (let [{:keys [height floor]} (:plot c)]
+    (-> [(kill-command grid origin height)]
+        (into (clear-commands grid origin height floor))
+        (into [(str "clear " body)
+               (str "effect clear " body)
+               (str "tp " body " " (xyz-str (abs-pos origin [1.5 0 1.5])) " 0 0")
+               (forceload-command "remove" grid origin)]))))
 
 (defn plan-file-text
   "A :plans entry ({:id .. :parts ..}, positions already absolute) as the plan file text, its id prefixed so the

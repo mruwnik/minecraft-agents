@@ -24,7 +24,7 @@ Per run: forceload the plot, kill every non-player entity in it, clear it to air
 floor; build `:blocks`; write `:plans`; put the body at its start (survival, cleared, healed, fed, inventory,
 effects, spawn point); wait `:settle-s`; note the event log's end (t0); run `:act`; poll the log until every
 `:expect` is decided (or `:limit-s`); run the `:after` checks; then `jobs.mjs cancel-all`, kill the plot's
-entities, clear the body, delete the plans, remove the forceload.
+entities, clear the plot again (so the next restarted body does not start beside this case's hut or bed), put the body on it, clear the body, delete the plans, remove the forceload.
 
 ## Format
 

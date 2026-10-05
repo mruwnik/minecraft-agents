@@ -86,6 +86,15 @@
     (is (= "kill $BODY at 20000 150 20000" (f/substitute "kill $BODY at $X $Y $Z" "$BODY" origin)))
     (is (= "forceload remove 20000 20000 20031 20031" (last (f/cleanup-commands grid origin "ProbeFixture" open))))))
 
+(deftest cleanup-leaves-the-body-on-a-clean-plot
+  (let [[open glass] (f/file-cases text "hostile")
+        origin [20000 150 20000]
+        cmds (f/cleanup-commands grid origin "ProbeFixture" open)]
+    (is (every? (set cmds) (f/clear-commands grid origin 16 "stone")) "the plot is cleared (huts, beds) so a restarted body finds nothing")
+    (is (< (.indexOf cmds "fill 20000 150 20000 20031 166 20031 air") (.indexOf cmds "tp ProbeFixture 20001.5 150 20001.5 0 0")))
+    (is (= "tp ProbeFixture 20001.5 150 20001.5 0 0" (some #(when (re-find #"^tp " %) %) cmds)))
+    (is (< (.indexOf cmds "tp ProbeFixture 20001.5 150 20001.5 0 0") (.indexOf cmds "forceload remove 20000 20000 20031 20031")))))
+
 (deftest after-checks-read-rcon-replies
   (let [origin [20000 150 20000]]
     (is (= "execute if block 20003 150 20004 air" (f/after-command origin "B" grid {} [:block [3 0 4] "air"])))
