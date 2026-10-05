@@ -4,13 +4,16 @@
   gone, and dig-in mends a hole in the roof of a closed room instead of walling the body in at feet and head height."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
+            [engine.events :as events]
             [engine.jobs.shelter :as sh]
             [engine.memory :as mem]
+            [engine.registry :as registry]
             [engine.scenario :as scenario]
             [engine.shelter-test :as st]
             [engine.test-util :as tu :refer [box]]
             [engine.unstick-test :as ut]
             [engine.triggers :as triggers]
+            [engine.world :as ew]
             [jobs.survival.dig-in :as dig-in]))
 
 ;; A cobblestone hut: walls x 3..7, z -2..2, y 64..66, roof at y 67, the room x 4..6, z -1..1. A shut oak door in the
@@ -236,23 +239,94 @@
 ;; ------------------------------------------------------------------ bed review findings (card d9c87329)
 
 (defn holds-with
-  "The night-unsafe condition in world after seed! ran on a fresh engine's store."
-  [world seed!]
-  (let [{:keys [eng]} (st/setup {})]
+  "The night-unsafe condition in world after seed! ran on a fresh engine's store. Options: :zones and :claims (the
+  zone list and claims the trigger reads), :later (ms the clock moves on after seed!)."
+  [world seed! & {:keys [zones claims later] :or {zones [] claims [] later 0}}]
+  (let [{:keys [eng clock]} (st/setup {})
+        kn (ew/of-data {} {} zones)
+        p (tu/fake world)]
+    (swap! (:state kn) assoc :area-claims {:value claims})
     (seed! eng)
-    (boolean ((:when (get triggers/all :night-unsafe)) (tu/fake world) (mem/view (:store eng)) {}))))
+    (swap! clock + later)
+    (boolean ((:when (get triggers/all :night-unsafe)) p (mem/view (:store eng)) {} kn))))
 
-(def sleep-failed-policy {:cap 1 :ttl 300000})
+(def night-bed-world (merge (hut-world {:x 5 :y 64 :z 0} bed-block) {:time st/night}))
 
 (deftest a-recent-failed-sleep-stops-night-unsafe-from-holding-the-roofed-body
-  (let [night-world (merge (hut-world {:x 5 :y 64 :z 0} bed-block) {:time st/night})
-        carrying (assoc (merge (hut-world {:x 5 :y 64 :z 0} {}) {:time st/night}) :inventory [{:name "red_bed" :count 1}])
-        failed (fn [eng] (mem/write! (:store eng) :sleep-failed {:pos {:x 6 :y 64 :z 0}} sleep-failed-policy))]
-    (is (true? (holds-with night-world (fn [eng] (st/know-bed! eng {:x 6 :y 64 :z 0})))))
-    (is (false? (holds-with night-world (fn [eng] (st/know-bed! eng {:x 6 :y 64 :z 0}) (failed eng)))) "known bed")
-    (is (false? (holds-with (merge night-world {:blocks (:blocks night-world)}) failed)) "seen bed")
+  (let [carrying (assoc (merge (hut-world {:x 5 :y 64 :z 0} {}) {:time st/night}) :inventory [{:name "red_bed" :count 1}])
+        failed (fn [eng] (mem/write! (:store eng) :sleep-failed {:pos {:x 6 :y 64 :z 0}} sh/sleep-failed-policy))
+        known (fn [eng] (st/know-bed! eng {:x 6 :y 64 :z 0}))]
+    (is (true? (holds-with night-bed-world known)))
+    (is (false? (holds-with night-bed-world (fn [eng] (known eng) (failed eng)))) "known bed")
+    (is (true? (holds-with night-bed-world (fn [_]))) "a bed seen in the room, none remembered")
+    (is (false? (holds-with night-bed-world failed)) "a bed seen in the room")
+    (is (true? (holds-with night-bed-world failed :later (inc (:ttl sh/sleep-failed-policy)))) "seen bed, entry expired")
+    (is (true? (holds-with night-bed-world (fn [eng] (known eng) (failed eng)) :later (inc (:ttl sh/sleep-failed-policy))))
+        "known bed, entry expired")
     (is (true? (holds-with carrying (fn [_]))))
-    (is (false? (holds-with carrying failed)) "a carried bed")))
+    (is (false? (holds-with carrying failed)) "a carried bed")
+    (is (true? (holds-with carrying failed :later (inc (:ttl sh/sleep-failed-policy)))) "a carried bed, entry expired")))
+
+;; ------------------------------------------------------------------ beds of another owner (zones and claims)
+
+(def bed-cell {:x 6 :y 64 :z 0})
+
+(def self-name (.-username (.self (tu/fake {}))))
+
+(defn bed-zone [owner & [allow]]
+  (cond-> {:name "house" :min [3 64 -2] :max [7 66 2] :owner owner} allow (assoc :allow allow)))
+
+(defn bed-claim [owner]
+  {:id "c1" :owner owner :status :active :until 99999999999 :min [3 64 -2] :max [7 66 2]})
+
+(deftest night-unsafe-ignores-a-bed-in-another-owners-zone-or-claim
+  (let [known (fn [eng] (st/know-bed! eng bed-cell))]
+    (doseq [[label seed!] [["seen" (fn [_])] ["remembered" known]]]
+      (is (true? (holds-with night-bed-world seed! :zones [])) (str label ": unclaimed"))
+      (is (true? (holds-with night-bed-world seed! :zones [(bed-zone self-name)])) (str label ": own zone"))
+      (is (true? (holds-with night-bed-world seed! :claims [(bed-claim self-name)]))
+          (str label ": own claim is not another's"))
+      (is (true? (holds-with night-bed-world seed! :zones nil)) (str label ": no zone list read"))
+      (is (false? (holds-with night-bed-world seed! :zones [(bed-zone "Miles")])) (str label ": another owner's zone"))
+      (is (true? (holds-with night-bed-world seed! :zones [(bed-zone "Miles" #{:take})])) (str label ": the zone allows it"))
+      (is (false? (holds-with night-bed-world seed! :claims [(bed-claim "Miles")])) (str label ": another owner's claim")))))
+
+(defn zoned-setup
+  "st/setup with a world holding zones and claims."
+  [world zones claims]
+  (let [clock (atom 1000000)
+        [seen sink] (tu/legacy-capture-sink)
+        p (tu/fake (merge {:offlineScale 0.0001 :floor tu/walk-floor} world))
+        w (ew/of-data {} {} zones)
+        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
+                          :now #(deref clock) :world w
+                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+    (swap! (:state w) assoc :area-claims {:value claims})
+    {:eng eng :p p :seen seen :clock clock}))
+
+(deftest shelter-sleeps-in-an-own-or-unclaimed-bed-and-records-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[zones claims] [[[] []] [[(bed-zone self-name)] []] [[] [(bed-claim self-name)]]]]
+          (let [{:keys [eng p]} (zoned-setup night-bed-world zones claims)]
+            (core/submit! eng '(jobs.survival.shelter) {})
+            (await (st/tick-n eng 6))
+            (is (= 1 (count (st/calls p "sleep"))) "slept in the bed")
+            (is (= [{:pos bed-cell}] (st/entries eng :bed)) "recorded as :bed")))))))
+
+(deftest shelter-leaves-a-bed-of-another-owner-alone-and-does-not-record-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[zones claims known?] [[[(bed-zone "Miles")] [] false] [[] [(bed-claim "Miles")] false]
+                                       [[(bed-zone "Miles")] [] true] [[] [(bed-claim "Miles")] true]]]
+          (let [{:keys [eng p]} (zoned-setup night-bed-world zones claims)]
+            (when known? (st/know-bed! eng bed-cell))
+            (core/submit! eng '(jobs.survival.shelter) {})
+            (await (st/tick-n eng 6))
+            (is (= [] (st/calls p "sleep")) (pr-str [zones claims known?]))
+            (is (= (if known? [{:pos bed-cell}] []) (st/entries eng :bed)) "nothing new recorded as :bed")))))))
 
 (deftest a-sleep-that-ends-without-sleeping-writes-a-short-sleep-failed-entry
   (async done

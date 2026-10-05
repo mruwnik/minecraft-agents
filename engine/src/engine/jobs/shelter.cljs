@@ -2,8 +2,10 @@
   "What the night-survival jobs (shelter, sleep, log-out, dig-in) and the night-unsafe and player-sleeping-nearby
   triggers share: night and roof tests, the known bed, the log-out condition, the shelter entry."
   (:require [engine.ctx :as ctx]
+            [engine.access.zones :as zones]
             [engine.jobs.util :as u]
-            [engine.memory :as mem]))
+            [engine.memory :as mem]
+            [engine.world :as world]))
 
 (def ms-per-day
   "One in-game day in engine-clock milliseconds (20 minutes). \"A day\" in memory policies and :max-days-awake is
@@ -132,15 +134,34 @@
 
 (def seen-bed-radius 6)
 
+(defn bed-permit
+  "A predicate (fn [pos]) for whether the body may use the bed at pos: false inside another owner's zone that does not
+  allow :take, or another owner's claim (zones and claims are a rule jobs consult, see engine.access.zones); true
+  otherwise, also when no zone list was read. kn is the engine world (nil: everything is permitted), now the clock (ms)."
+  [p kn now]
+  (if (nil? kn)
+    (constantly true)
+    (let [in {:zones (world/zones kn)
+              :claims (world/live-claims (world/area-claims kn) now)
+              :footprints {}
+              :plan-cells #{}
+              :self (.-username (.self p))
+              :now now
+              :action :take}]
+      (fn [{:keys [x y z]}]
+        (not (#{:zone :claim} (:reason (zones/verdict (assoc in :cell [x y z])))))))))
+
 (defn seen-bed
   "A bed block the body can see in its room: found by a flood fill from its feet over free cells at feet height, within
-  seen-bed-radius (a bed behind a wall is not seen). The nearest cell of it, or nil."
-  [p]
+  seen-bed-radius (a bed behind a wall is not seen), skipping beds permit? refuses (default all permitted). The nearest
+  cell of it, or nil."
+  ([p] (seen-bed p (constantly true)))
+  ([p permit?]
   (let [{:keys [x y z] :as start} (feet p)]
     (loop [queue [start] seen #{start}]
       (when-let [pos (first queue)]
         (let [named (u/block-name p pos)]
-          (if (and (some? named) (.endsWith named "_bed") (not= pos start))
+          (if (and (some? named) (.endsWith named "_bed") (not= pos start) (permit? pos))
             pos
             (let [next (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
                              :let [n {:x (+ (:x pos) dx) :y y :z (+ (:z pos) dz)}]
@@ -148,17 +169,19 @@
                                         (<= (max (js/Math.abs (- (:x n) x)) (js/Math.abs (- (:z n) z))) seen-bed-radius)
                                         (walkable-at? p n))]
                          n)]
-              (recur (into (subvec (vec queue) 1) next) (into seen next)))))))))
+              (recur (into (subvec (vec queue) 1) next) (into seen next))))))))))
 
 (defn hut-bed
   "The bed of the room the body stands in: roofed within roof-height and in a room (not a tunnel), then the remembered
   :bed within hut-radius, else a bed it sees in the room; nil otherwise. A bed the body does not remember is found
-  here, so a second one is not put down beside it."
-  [p view roof-height]
-  (when (and (roofed? p roof-height) (in-room? p))
-    (or (let [pos (mem/place view :bed)]
-          (when (and pos (<= (u/dist (u/self-pos {:primitives p}) pos) hut-radius)) pos))
-        (seen-bed p))))
+  here, so a second one is not put down beside it. A bed permit? refuses (another owner's zone or claim, see
+  bed-permit; default all permitted) is not the bed of the room."
+  ([p view roof-height] (hut-bed p view roof-height (constantly true)))
+  ([p view roof-height permit?]
+   (when (and (roofed? p roof-height) (in-room? p))
+     (or (let [pos (mem/place view :bed)]
+           (when (and pos (<= (u/dist (u/self-pos {:primitives p}) pos) hut-radius) (permit? pos)) pos))
+         (seen-bed p permit?)))))
 
 (def sleep-failed-policy
   "The :sleep-failed entry a shelter writes when a roofed sleep ended without sleeping (bed taken, monsters near, ...):
@@ -168,15 +191,16 @@
 (defn sleep-wanted
   "The bed of the room a roofed body at night, awake, should sleep in (see hut-bed): none slept in tonight (no :slept
   entry within half an in-game day), not given up on (no unexpired :bed-unreachable at it) and no unexpired
-  :sleep-failed entry; else nil."
-  [p view roof-height]
-  (when (and (night? p) (not (sleeping? p)))
-    (let [bed (hut-bed p view roof-height)]
-      (when (and bed
-                 (zero? (mem/count-in view :slept slept-tonight-ms))
-                 (not-any? #(= bed (:pos (:data %))) (mem/entries view :bed-unreachable))
-                 (empty? (mem/entries view :sleep-failed)))
-        bed))))
+  :sleep-failed entry; else nil. permit? as in hut-bed."
+  ([p view roof-height] (sleep-wanted p view roof-height (constantly true)))
+  ([p view roof-height permit?]
+   (when (and (night? p) (not (sleeping? p)))
+     (let [bed (hut-bed p view roof-height permit?)]
+       (when (and bed
+                  (zero? (mem/count-in view :slept slept-tonight-ms))
+                  (not-any? #(= bed (:pos (:data %))) (mem/entries view :bed-unreachable))
+                  (empty? (mem/entries view :sleep-failed)))
+         bed)))))
 
 (def bed-place-failed-policy
   "Policy of the :bed-place-failed entry the shelter writes when it could not set up a carried bed: one, ten minutes."
@@ -190,8 +214,9 @@
 (defn bed-place-wanted?
   "Whether a sheltered body should put a carried bed down: night, awake, roofed within roof-height and in a room, no bed
   of the room (remembered near or seen), a bed item carried, no sleep tonight, and no :bed-place-failed or
-  :sleep-failed entry."
-  [p view roof-height]
+  :sleep-failed entry. permit? as in hut-bed."
+  ([p view roof-height] (bed-place-wanted? p view roof-height (constantly true)))
+  ([p view roof-height permit?]
   (boolean (and (night? p) (not (sleeping? p))
                 (roofed? p roof-height)
                 (some? (carried-bed p))
@@ -199,7 +224,7 @@
                 (empty? (mem/entries view :bed-place-failed))
                 (empty? (mem/entries view :sleep-failed))
                 (in-room? p)
-                (nil? (hut-bed p view roof-height)))))
+                (nil? (hut-bed p view roof-height permit?))))))
 
 (defn bed
   "The remembered bed position when it is within radius of the body, else nil."

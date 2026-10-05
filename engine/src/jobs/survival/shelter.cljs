@@ -141,6 +141,13 @@
       :else (do (when (= :done l) (ctx/update-mem! c assoc :log-out-failed true))
                 (await (dig-in-step c a))))))
 
+(defn bed-permit
+  "Whether the body may use a bed (sh/bed-permit over the job's world and clock); everything when :ignore-zones? is set."
+  [c]
+  (if (:ignore-zones? (:args c))
+    (constantly true)
+    (sh/bed-permit (:primitives c) (:world (:engine c)) (ctx/now c))))
+
 (defn ^:async choose-round [c]
   (let [p (:primitives c)
         urgent (overdue? c)
@@ -299,10 +306,10 @@
       (and covered (empty? (:children (ctx/mem c))) (not (sh/sleeping? p)) (dig-in/sheltered-in c))
       (do (sheltered! c :dug-in) (await (hold c)))
       (and covered (not (sh/sleeping? p)) (not (:sleep-failed (ctx/mem c)))
-           (sh/sleep-wanted p (ctx/view c) (:roof-height (:args c))))
-      (await (sleep-when-roofed c (ctx/now c) (sh/sleep-wanted p (ctx/view c) (:roof-height (:args c)))))
+           (sh/sleep-wanted p (ctx/view c) (:roof-height (:args c)) (bed-permit c)))
+      (await (sleep-when-roofed c (ctx/now c) (sh/sleep-wanted p (ctx/view c) (:roof-height (:args c)) (bed-permit c))))
       (and (sh/roofed? p (:roof-height (:args c))) (not (sh/sleeping? p))
-           (sh/bed-place-wanted? p (ctx/view c) (:roof-height (:args c))))
+           (sh/bed-place-wanted? p (ctx/view c) (:roof-height (:args c)) (bed-permit c)))
       (await (place-bed-and-sleep c))
       covered :done
       :else (let [r (await (choose-round c))]
