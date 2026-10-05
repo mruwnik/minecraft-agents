@@ -1,0 +1,2 @@
+;; ProbeForest live cases for jobs.forestry.harvest-wood: idle, jobs are submitted with tools/jobs.mjs
+{:register [] :queue []}
