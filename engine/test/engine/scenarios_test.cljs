@@ -96,7 +96,7 @@
                                                 :self {:experience {:level 3 :points 40 :progress 0}}
                                                 :inventory [{:name "bread" :count 4}]})
               food #(:food (fake/self p))]
-          (is (= [:suffocating :burning :hostile-near :night-unsafe :shut-in-by-day :health-low :hungry :player-sleeping-nearby :stuck :door-left
+          (is (= [:suffocating :burning :wedged :hostile-near :night-unsafe :shut-in-by-day :health-low :hungry :player-sleeping-nearby :stuck :door-left
                   :died :inventory-nearly-full :scaffold-left :tidy-pending]
                  (mapv :id (:register (core/state eng)))))
           (await (run-ticks eng clock 3 1000))
