@@ -9,6 +9,8 @@
             [engine.scenario :as scenario]
             [engine.fake :as fake]
             [engine.jobs.shelter :as sh]
+            [engine.fake.raw-world :as fake-raw]
+            [engine.perception :as perception]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]))
 
@@ -90,13 +92,36 @@
   "A column of stone from y+n for k blocks over the body at y 64."
   (fn [n k] (into {} (map (fn [dy] [(str "0," (+ 64 n dy) ",0") "stone"]) (range k)))))
 
-(deftest night-unsafe-is-silent-when-buried-underground
-  (are [blocks held] (= held (fires? {:time night :blocks blocks} {}))
-    (stone-above 10 5) false
-    (stone-above 30 3) false
-    (stone-above 10 2) true
-    (stone-above 40 5) true
-    (stone-above 10 1) true))
+(def dark {:light-default [0 0]})
+
+(defn fires-with-light?
+  "The trigger over a fake wrapped in the perception, so the raw world's light is read."
+  [world]
+  (let [raw-p (tu/fake (dissoc world :light-default :light))
+        _ (swap! (fake/state raw-p) merge (select-keys world [:light-default :light]))
+        per (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)})]
+    (boolean ((:when (get triggers/all :night-unsafe)) (perception/wrap raw-p per) {} {}))))
+
+(deftest night-unsafe-is-silent-when-sealed-from-the-sky
+  (are [world held] (= held (fires-with-light? (merge {:time night} world)))
+    ;; sky light 0 at feet and head: buried, whatever the column looks like
+    (merge dark {:blocks (stone-above 10 5)}) false
+    (merge dark {:blocks (stone-above 40 5)}) false
+    ;; a diagonal stair open overhead, light faded to 0 here
+    (merge dark {:blocks (stone-above 10 1)}) false
+    ;; a shaft or ravine: sky light comes straight down to the body
+    {:blocks (stone-above 10 5) :light {[0 64 0] [15 0] [0 65 0] [15 0]}} true
+    ;; a cave mouth under a thin ceiling, open to the side: dim sky light
+    {:blocks (stone-above 6 5) :light {[0 64 0] [3 0] [0 65 0] [3 0]}} true
+    ;; head cell alone lit
+    (merge dark {:light {[0 65 0] [1 0]}}) true
+    ;; torchlight is not sky light
+    (merge dark {:light {[0 64 0] [0 14]}}) false))
+
+(deftest night-unsafe-without-light-data-falls-back-to-the-column
+  (let [p (tu/fake {:time night :blocks (stone-above 10 5)})]
+    (is (sh/buried-by-column? p))
+    (is (not (sh/buried-by-column? (tu/fake {:time night :blocks (stone-above 10 2)}))))))
 
 (defn sleeping-nearby?
   ([world args] (sleeping-nearby? world args nil))

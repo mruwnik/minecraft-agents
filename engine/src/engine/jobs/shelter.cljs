@@ -60,15 +60,33 @@
 
 (def buried-thickness 3)
 
-(defn buried?
-  "The body is underground: at least buried-thickness solid blocks in the column within buried-scan blocks above the
-  feet (stone over a stair or shaft that is open overhead for more than the roof height). Mobs spawn there by block
-  light, not by time of day, so the night changes nothing; a single floating slab or a bridge does not count."
+(defn sky-light-at
+  "Sky light (0-15, before the night's darkening) of the cell, or nil when no light data is loaded there."
+  [p {:keys [x y z]}]
+  (let [raw (some-> (aget p "perception") :raw)]
+    (when (and raw (<= 0 (.stateAt ^js raw x y z)))
+      (bit-shift-right (.lightAt ^js raw x y z) 4))))
+
+(defn buried-by-column?
+  "Fallback without light data: at least buried-thickness solid blocks in the column within buried-scan above the feet."
   [p]
   (let [{:keys [x y z]} (feet p)]
     (<= buried-thickness
         (count (take buried-thickness
                      (filter #(solid-at? p {:x x :y (+ y %) :z z}) (range 1 (inc buried-scan))))))))
+
+(defn buried?
+  "The body is underground: no sky light at its feet and head cells. Sky light reaches a cell through any opening to
+  the open sky (straight down a shaft undimmed, one less per step sideways or diagonal), and the night's mobs spawn
+  or wander in there; a cell at 0 is sealed from the sky, so the night changes nothing (mobs spawn by block light).
+  A ravine, a shaft or a cave mouth keeps sky light and stays unsafe. Without light data, the column heuristic
+  (buried-by-column?) decides."
+  [p]
+  (let [{:keys [x y z] :as f} (feet p)
+        lights (keep #(sky-light-at p %) [f {:x x :y (inc y) :z z}])]
+    (if (empty? lights)
+      (buried-by-column? p)
+      (every? zero? lights))))
 
 (defn night? [p] (not (.-isDay (.self p))))
 
