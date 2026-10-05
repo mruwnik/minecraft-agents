@@ -1,0 +1,2 @@
+;; ProbeFarm live cases for agent visibility (card 1cc804ec): idle, jobs are submitted with tools/jobs.mjs
+{:register [] :queue []}

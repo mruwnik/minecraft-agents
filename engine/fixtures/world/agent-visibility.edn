@@ -1,0 +1,28 @@
+;; Agent-visible texts and results (card 1cc804ec, fixes 9cae4999): the mine result says where the tunnel ended and that the
+;; body walked back; the hungry food.none text names raw/rotten food carried and skipped on purpose; make-room tosses are
+;; events with item and count. (The observe tool's unfinished/queued answer and wait summary are hand-run through the tools.)
+{:defaults
+ {:tags [:visibility :jobs]
+  :time :any
+  :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}}
+ :cases
+ [{:name "mine-tunnel-end-and-walked-back"
+   :plot {:height 6}
+   :blocks [[:fill [8 0 8] [30 3 24] "stone"] [:fill [16 0 16] [16 1 16] "air"]]
+   :body {:inventory [["iron_pickaxe" 1] ["cobblestone" 8]]}
+   :act [[:job (jobs.gather.mine {:block "coal_ore" :count 1 :direction "east" :tunnel-length 4 :collect-radius 2})]]
+   :expect [{:event {:source :job :kind :mine.done :data {:tunnel {:steps 4 :heading [:any] :walked-back? true :end [:any] :back-at [:any]}}}
+             :within-s 150 :of-job true}]
+   :limit-s 160}
+  {:name "hungry-names-raw-chicken-skipped-on-purpose"
+   :body {:inventory [["chicken" 2] ["rotten_flesh" 5]]}
+   :act [[:job (jobs.survival.get-food {:food 21 :hunt-radius 4 :ask-cooldown-ms 0})]]
+   :expect [{:event {:source :job :kind :food.none :message [:contains "carrying 2 chicken, 5 rotten_flesh, skipped on purpose"]} :within-s 60 :of-job true}
+            {:event {:source :job :kind :food.none :message [:contains "searched for animals"]} :within-s 5 :of-job true}]
+   :limit-s 70}
+  {:name "make-room-tosses-are-events-with-item-and-count"
+   :body {:inventory [["dirt" 640] ["gravel" 640] ["sand" 640] ["andesite" 384]]}
+   :act [[:job (jobs.storage.make-room {:free 6})]]
+   :expect [{:event {:source :job :kind :make-room.tossed :data {:item [:any] :count [:>= 1]}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :make-room.tossed :data {:item "gravel"}} :within-s 90 :of-job true}]
+   :limit-s 100}]}
