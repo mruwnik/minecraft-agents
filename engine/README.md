@@ -26,6 +26,7 @@ npm run body -- --agent <name> --world <world> --scenario <file.edn>
 Builds (`shadow-cljs.edn`): `:test` is a `:node-test` build to
 `out/test.cjs`, picking up every namespace ending in `-test`; `:body` is a
 `:node-script` build to `out/body.cjs` with `engine.main/main`.
+The whole `:test` suite needs a 4 GB node heap (3200+ tests in one process: `npm run test:cljs` passes `--max-old-space-size=4096`; run it by hand as `node --max-old-space-size=4096 out/test.cjs`). Run one namespace with `--test=engine.<ns>-test`.
 The compile JVM is capped (`:jvm-opts ["-Xmx1G"]` in `shadow-cljs.edn`) because one compile must fit beside the game server on a 31 GB machine; uncapped it grew past 2 GB.
 
 **Compiling: `tools/compile <engine|dashboard> <build>... [--priority] [--release]`** (repo root; shell script). Every cljs compile goes
