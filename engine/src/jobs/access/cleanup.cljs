@@ -69,7 +69,9 @@
       (and (= cell [fx (dec fy) fz]) (not (rules/solid-floor? block-at below)))
       {:reason :no-floor-below :block (block-at below)}
       :else
-      (let [v (rules/may-dig? (assoc (select-keys in [:block-at :feet :zones :footprints :claims :self :now :ignore-zones? :ledger]) :cell cell))
+      (let [v (rules/may-dig? (-> (select-keys in [:block-at :feet :zones :footprints :claims :self :now :ignore-zones? :ledger])
+                                  (update :footprints #(into {} (remove (comp (:own-plans in #{}) val)) %))
+                                  (assoc :cell cell)))
             hazards (mapv hazard-reason (:hazards v))]
         (cond
           (not (:ok v)) (select-keys v [:reason :zone :claim :plan :block])

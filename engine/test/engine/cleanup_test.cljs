@@ -83,6 +83,13 @@
     {:block-at (lookup [1 64 0] "dirt" [2 64 0] "lava")} :hazard
     {:block-at (constantly nil)} :not-loaded))
 
+(deftest the-footprint-of-a-plan-this-body-made-does-not-keep-its-scaffold
+  (are [own-plans result] (= result (:step (step :entries [(entry [1 64 0])] :block-at (lookup [1 64 0] "dirt")
+                                                 :footprints {[1 64 0] "farm"} :own-plans own-plans)))
+    #{"farm"} :dig
+    #{"other"} :finish
+    #{} :finish))
+
 (deftest water-beside-is-accepted-by-default-lava-is-not
   (is (= :dig (:step (step :entries [(entry [1 64 0])] :block-at (lookup [1 64 0] "dirt" [1 65 0] "water")))))
   (is (= [:lava-adjacent] (:hazards (first (:open (step :entries [(entry [1 64 0])]
