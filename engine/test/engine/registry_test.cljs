@@ -1,5 +1,6 @@
 (ns engine.registry-test
   (:require [cljs.test :refer [deftest is]]
+            [engine.expr :as expr]
             [engine.registry :as registry]))
 
 (def migrated
@@ -41,3 +42,10 @@
     (is (= 16 (get-in args [:radius :default])))
     (is (string? (get-in args [:radius :doc]))))
   (is (nil? (get-in registry/jobs ['jobs.time.wait-for-day :args])) "args is optional"))
+
+(deftest real-jobs-refuse-unknown-arg-keys
+  (is (re-find #"jobs.movement.go-to has no arg :target; its args are :doors, :pos, :range"
+               (expr/problem registry/jobs '(jobs.movement.go-to {:target [50 40 3]}))))
+  (is (re-find #"jobs.time.wait-for-dusk has no arg :bogus; it takes no args"
+               (expr/problem registry/jobs '(jobs.time.wait-for-dusk {:bogus 1}))))
+  (is (nil? (expr/problem registry/jobs '(jobs.movement.go-to {:pos [50 40 3]})))))

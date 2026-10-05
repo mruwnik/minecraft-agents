@@ -38,6 +38,15 @@
       (command eng "cancel-retained" :cancel {:id (get-in submitted [:job :id])})
       (is (= :absent (get-in (command eng "retained" :submit {:spec good}) [:job :status]))))
     (core/shutdown! eng)))
+(deftest unknown-arg-keys-are-refused-as-bad-spec-naming-the-key
+  (let [{:keys [eng]} (setup)
+        r (command eng "typo" :submit {:spec '(wait {:bogus 1})})]
+    (is (= :bad-spec (:reason r)))
+    (is (re-find #"no arg :bogus; its args are :ms" (:message r)))
+    (is (= [] (:list (core/state eng))))
+    (is (= :bad-spec (:reason (command eng "typo2" :interrupt {:spec '(done {:ms 1})}))))
+    (is (= "j1" (get-in (command eng "ok" :submit {:spec '(wait {:ms 5})}) [:job :id])))))
+
 (deftest ledger-survives-restore-and-pending-is-not-executed-twice
   (let [{:keys [eng p jobs]} (setup)
         request {:op :submit :request-id "stable" :generation-id (:generation-id (core/state eng)) :spec '(done)}]

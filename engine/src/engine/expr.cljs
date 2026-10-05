@@ -2,7 +2,7 @@
   "Job expressions: the EDN form of a job spec, parsed (never evaluated)
   against the job registry into a node. See README.md, Job expressions.
 
-    (jobs.survival.eat {:min-food 6})   a leaf; args merged over the defaults
+    (jobs.survival.eat {:until 18})   a leaf; args merged over the defaults
     (seq e1 e2 ...)                     children in order
     (any e1 e2 ...)                     the first child whose check passes
     (repeat e)                          e again, fresh, each time it is done
@@ -36,6 +36,16 @@
 
 (defn fail [msg form]
   (throw (ex-info msg {:form form})))
+
+(defn unknown-keys-message
+  "Why args holds keys the job does not declare, or nil: each unknown key named, then the known ones.
+  The job registry always carries :args (nil for a job with none); a hand-built entry without the key is not checked."
+  [sym entry args]
+  (let [known (set (keys (:args entry)))
+        unknown (sort-by str (remove known (keys args)))
+        listing (if (seq known) (str "its args are " (str/join ", " (sort-by str known))) "it takes no args")]
+    (when (and (contains? entry :args) (seq unknown))
+      (str sym " has no arg " (str/join ", " unknown) "; " listing))))
 
 (defn parse-form
   "The node for form (the wrappers hold and backoff are peeled off before)."
@@ -71,6 +81,9 @@
       (> n 1) (fail (str head " takes at most one args map") form)
 
       (and (= 1 n) (not (map? (first parts)))) (fail (str "args of " head " must be a map") form)
+
+      (unknown-keys-message head (get registry head) (first parts))
+      (fail (unknown-keys-message head (get registry head) (first parts)) form)
 
       :else {:op :leaf :job head :args (second (leaf registry head (first parts)))})))
 

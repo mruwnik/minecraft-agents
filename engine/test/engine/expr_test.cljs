@@ -8,7 +8,8 @@
 (def reg
   {'jobs.a {:check (constantly true) :round noop-round
             :args {:n {:doc "n" :default 1} :m {:doc "m" :default 2}}}
-   'jobs.b {:check (constantly true) :round noop-round}})
+   'jobs.b {:check (constantly true) :round noop-round :args nil}
+   'jobs.free {:check (constantly true) :round noop-round}})
 
 (defn problem [form]
   (try (expr/parse-spec reg form) nil
@@ -16,7 +17,7 @@
 
 (deftest a-leaf-merges-its-args-over-the-defaults
   (is (= {:op :leaf :job 'jobs.a :args {:n 1 :m 2}} (expr/parse reg '(jobs.a))))
-  (is (= {:op :leaf :job 'jobs.a :args {:n 5 :m 2 :x 0}} (expr/parse reg '(jobs.a {:n 5 :x 0}))))
+  (is (= {:op :leaf :job 'jobs.a :args {:n 5 :m 0}} (expr/parse reg '(jobs.a {:n 5 :m 0}))))
   (is (= {:op :leaf :job 'jobs.b :args {}} (expr/parse reg '(jobs.b)))))
 
 (deftest combinators-nest
@@ -58,6 +59,14 @@
   (is (re-find #"a job spec is a list" (problem '[jobs.a])))
   (is (re-find #"a job spec is a list" (problem '())))
   (is (re-find #"in \(seq \(jobs.nope\)\)" (problem '(seq (jobs.nope)))) "the message names the whole spec"))
+
+(deftest unknown-arg-keys-are-refused-naming-each-and-listing-the-known
+  (is (re-find #"jobs.a has no arg :x, :y; its args are :m, :n" (problem '(jobs.a {:x 1 :n 2 :y 3}))))
+  (is (re-find #"jobs.b has no arg :n; it takes no args" (problem '(jobs.b {:n 1}))))
+  (is (re-find #"in \(seq \(jobs.a \{:z 1\}\)\)" (problem '(seq (jobs.a {:z 1})))))
+  (is (nil? (problem '(jobs.a {:n 1 :m 2}))))
+  (is (nil? (problem '(jobs.b {}))))
+  (is (nil? (problem '(jobs.free {:anything 1}))) "an entry without :args is not checked"))
 
 (deftest labels-print-the-spec
   (is (= "jobs.a" (expr/label (expr/parse reg '(jobs.a {:n 4})))))
