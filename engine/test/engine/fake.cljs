@@ -476,6 +476,7 @@
       (:invulnerable e) [w {:status "hit" :health (:health e) :hurt false}]
       (pos? (- (:health e) 5))
       [(animals/update-entity w id #(update % :health - 5)) {:status "hit" :health (- (:health e) 5) :hurt true}]
+      (:lingers e) [(animals/update-entity w id #(assoc % :health 0)) {:status "killed" :health 0 :hurt true}]
       :else [(reduce (fn [w d] (spawn w (:pos e) (:name d) (:count d)))
                      (update w :entities #(filterv (fn [x] (not= id (:id x))) %)) (:drops e))
              {:status "killed" :health 0 :hurt true}])))

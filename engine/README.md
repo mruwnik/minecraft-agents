@@ -154,9 +154,14 @@ only (other kinds have no `visible` field). `entities()` and `blocks()` themselv
 their distances; only `visible` tells them apart. The fake computes `visible` the same way over its cells (a spec
 entity may force it with `visible: true|false`).
 
-The `:hostile-near` trigger uses it: it holds only for a visible hostile within `:radius` (trigger arg `:visible-only`,
-default true; false restores the old behaviour). The trigger is wrong, not the job, when a hostile behind a wall fires
-the response. `engine.jobs.combat/hostiles` takes an optional third argument `{:sight :only|:prefer}`: `:only` keeps the
+The `:hostile-near` trigger uses it: it holds only for a real danger within `:radius` (`engine.jobs.reach/danger?`): a
+melee mob that is visible and has a walkable way to the body (a bounded search over the blocks as a zombie walks: one
+step up, up to three down, doors only when open, water swum; so a mob walled in, across a trench two deep, or with the
+body sealed in is no danger), or a ranged mob (skeleton and the like) with a line of fire (visible). Trigger arg
+`:visible-only` (default true) false drops a melee mob's sight test; the way to the body still counts. `retreat` and
+`respond-to-hostile` count dangers the same way, so a mob that cannot reach the body does not keep a flight alive (BaseMiner
+j301 sat 600+ rounds on a walled-off hostile within retreat's 40-block clear radius). The trigger is wrong, not the job,
+when a hostile that cannot hurt the body fires the response. `engine.jobs.combat/hostiles` takes an optional third argument `{:sight :only|:prefer}`: `:only` keeps the
 visible ones, `:prefer` lists them first (each group nearest first); two arguments ignore sight as before.
 
 Remembered places (a known bed, a known chest) are not primitives. They are
@@ -1426,7 +1431,9 @@ unstartable (`engine.single`; only two starts racing over the same stale file wi
   hostile, and turning up to 120 degrees to keep clear of `:hazard` cells and
   of walls (feet and head cells along the way must be passable; the probe
   starts at the body's cell centre and steps one block up or down where a
-  walker would, so a stair dug behind the body is a way back). A hostile
+  walker would, so a stair dug behind the body is a way back; a column with
+  no floor, a drop of two or more blocks, is not walked, so a void edge ends
+  the probe). A hostile
   within `:radius` (ranged ones within `:ranged-radius`) starts the flight; it
   goes on while one is within `:clear-radius`, and is done once none has been
   for `:cooldown-ms`. Cornered (no open direction, or the walk is blocked) it
@@ -1437,7 +1444,9 @@ unstartable (`engine.single`; only two starts racing over the same stale file wi
   flight is over or `:max-hide-ms` has passed; when it cannot seal (a hostile
   in a cell, nothing to place, a refused placement) it fights with the best
   tool (pickaxe, shovel, hoe) or the fist. Only a fight that cannot reach any
-  hostile counts a failed round (`retreat_blocked` after three).
+  hostile counts a failed round (`retreat_blocked` after three). A hostile that
+  fight killed is remembered (`:dead`) and no longer counts as a threat or a
+  target while its corpse stays listed: a won fight neither swings again nor warns.
   Once per flight, with at least `:eat-gap` blocks to the hostile, it eats
   (up to 20 food) so health regenerates on the run. `:respond-to-hostile`
   keeps a fight going below `:min-health` while the target is nearly dead by

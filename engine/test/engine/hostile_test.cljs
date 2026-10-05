@@ -223,7 +223,7 @@
   (into {} (for [x (range 3 10) y [63 64 65 66] z (range -3 4) :when (not (and (= x 6) (= z 0) (#{64 65} y)))]
              [(str x "," y "," z) "stone"])))
 
-(deftest retreat-gives-up-when-every-walk-and-the-fight-are-blocked
+(deftest retreat-from-a-zombie-entombed-in-stone-is-no-flight-at-all
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -231,8 +231,9 @@
           (.override (.-world p) "moveTo" (fn ^:async f [_ _ _] #js {:status "blocked"}))
           (core/submit! eng retreat {})
           (dotimes [_ 8] (swap! clock + 60000) (await (core/tick! eng)))
-          (is (= 1 (count (filter #(= :retreat_blocked (:kind %)) @seen))) "truly cornered: one warn, then done")
+          (is (zero? (count (filter #(= :retreat_blocked (:kind %)) @seen))) "it cannot reach the body: not a danger, no warn")
           (is (zero? (count (calls p "attack"))))
+          (is (zero? (count (calls p "moveTo"))) "and no flight")
           (is (= [] (:list (core/state eng)))))))))
 
 (deftest retreat-whose-every-walk-is-blocked-fights-with-the-fist
@@ -460,8 +461,52 @@
       (fn ^:async t []
         (let [{:keys [eng p clock]} (await (first-round retreat {:inventory sword :blocks box :entities [(assoc (zombie 2 0) :health 20)]}))]
           (is (= 1 (count (calls p "attack"))))
-          (swap! (fake/state p) assoc :blocks {})
+          (swap! (fake/state p) update :blocks #(apply dissoc % (keys box)))
           (swap! clock + 1000)
           (await (core/tick! eng))
           (is (= 2 (count (calls p "attack"))) "the pen opened up, but the zombie is still at 2: keep fighting")
           (is (zero? (count (calls p "moveTo"))) "no running back and forth"))))))
+
+;; ------------------------------------------------- only a real danger fires hostile-near
+
+(defn cells-of
+  "Blocks named block-name at every [x y z] in cells."
+  [block-name cells]
+  (into {} (for [[x y z] cells] [(str x "," y "," z) block-name])))
+
+(defn visible-zombie [x z] (assoc (zombie 7 x z) :visible true))
+
+(def danger-args {:radius 10 :ranged-radius 16})
+
+(def zombie-pen
+  "A 3x3 pen of stone two high around (8 0), the zombie in the middle."
+  (cells-of "stone" (for [x [7 8 9] z [-1 0 1] y [64 65] :when (not (and (= x 8) (= z 0)))] [x y z])))
+
+(def dividing-wall
+  "A wall at x 3 across the whole floor, three high."
+  (cells-of "stone" (for [z (range -10 11) y [64 65 66]] [3 y z])))
+
+(def trench
+  "A trench two deep at x 3 and 4 across the whole floor."
+  (cells-of "stone" (for [x [3 4] z (range -10 11)] [x 61 z])))
+
+(deftest hostile-near-ignores-a-zombie-with-no-way-to-the-body
+  (is (not (holds? {:blocks zombie-pen :entities [(visible-zombie 8 0)]} danger-args)) "walled into a pen")
+  (is (not (holds? {:blocks dividing-wall :entities [(visible-zombie 8 0)]} danger-args)) "behind a wall across the floor")
+  (is (not (holds? {:blocks trench :entities [(visible-zombie 8 0)]} danger-args)) "across a trench two deep: down is fine, up is not")
+  (is (not (holds? {:blocks (cells-of "stone" (for [x [-1 0 1] z [-1 0 1] y [64 65] :when (not (and (= x 0) (= z 0)))] [x y z]))
+                    :entities [(visible-zombie 5 0)]}
+                   danger-args))
+      "with the body sealed in"))
+
+(deftest hostile-near-fires-for-a-zombie-that-can-walk-to-the-body
+  (is (holds? {:entities [(visible-zombie 5 0)]} danger-args) "open ground")
+  (is (holds? {:blocks (cells-of "stone" (for [z (range -9 11) y [64 65 66]] [3 y z])) :entities [(visible-zombie 8 0)]} danger-args)
+      "a wall with a way round at z -10")
+  (is (holds? {:blocks (cells-of "stone" (for [x [3 4] z (range -10 11)] [x 62 z])) :entities [(visible-zombie 8 0)]} danger-args)
+      "across a trench one deep: it climbs out"))
+
+(deftest hostile-near-needs-a-line-of-fire-for-a-skeleton
+  (is (not (holds? {:blocks dividing-wall :entities [(skeleton 1 8 0)]} danger-args)) "behind a wall with no opening")
+  (is (holds? {:blocks (dissoc dividing-wall "3,65,0") :entities [(skeleton 1 8 0)]} danger-args)
+      "through a 1x1 window it can shoot"))

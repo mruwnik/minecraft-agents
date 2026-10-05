@@ -8,7 +8,8 @@
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.test-util :as tu]
-            [engine.triggers :as triggers]))
+            [engine.triggers :as triggers]
+            [jobs.survival.retreat :as retreat]))
 
 (defn setup [world]
   (let [clock (atom 1000000)
@@ -87,7 +88,7 @@
       (fn ^:async t []
         (let [{:keys [p]} (await (first-round retreat {:self {:pos [0.5 64 0.5]}
                                                        :blocks (rock [-9 9] [62 67] tunnel-cells)
-                                                       :entities [(skeleton 5.5 64 0.5)]}))
+                                                       :entities [(assoc (skeleton 5.5 64 0.5) :visible true)]}))
               m (last-move p)]
           (is (= 1 (count (calls p "moveTo"))) "x 0.5 is column 0, the tunnel, not column 1")
           (is (= {:x -6 :y 64 :z 0} m)))))))
@@ -162,3 +163,32 @@
                                                        :inventory [{:name "cobblestone" :count 20}]
                                                        :entities [(assoc (skeleton 1 64 0) :name "zombie")]}))]
           (is (= 1 (count (calls p "attack"))) "the zombie stands in the gap: the seal fails, it hits back"))))))
+
+(def corpse-zombie
+  "A zombie one hit from death whose corpse stays listed after it dies (a death animation)."
+  {:id 1 :name "zombie" :kind "hostile" :pos {:x 1 :y 64 :z 0} :health 5 :lingers true})
+
+(deftest a-cornered-fight-that-kills-its-hostile-neither-swings-at-the-corpse-nor-warns
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen clock]} (await (first-round retreat {:blocks dead-end :entities [corpse-zombie]}))]
+          (is (= 1 (count (calls p "attack"))) "one hit kills it")
+          (dotimes [_ 3]
+            (swap! clock + 1000)
+            (await (core/tick! eng)))
+          (is (= 1 (count (calls p "attack"))) "the dead id is not attacked again")
+          (is (empty? (blocked-events seen)) "the fight succeeded: no warn")
+          (swap! clock + 6000)
+          (await (core/tick! eng))
+          (is (= [] (:list (core/state eng))) "done once it has been gone for the cooldown"))))))
+
+(defn edge-world
+  "Floor (stone at y 63) for x <= edge on z 0 and air everywhere else."
+  [edge]
+  (fn [{:keys [x y z]}] (if (and (= y 63) (<= x edge) (= z 0)) "stone" "air")))
+
+(deftest walk-cells-stop-at-the-edge-of-a-floor
+  (is (= [1 2 3] (mapv :x (retreat/walk-cells (edge-world 3) {:x 0.5 :y 64 :z 0.5} [1 0] 6))) "the cells past the edge have no floor")
+  (is (= [1 2 3] (mapv :x (retreat/walk-cells (edge-world 3) {:x 0.5 :y 64 :z 0.5} [1 0] 3))))
+  (is (= [1 2 3 4 5 6] (mapv :x (retreat/walk-cells (edge-world 9) {:x 0.5 :y 64 :z 0.5} [1 0] 6)))))

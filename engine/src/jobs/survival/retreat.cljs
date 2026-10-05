@@ -66,6 +66,12 @@
   (or (nil? block-name) (contains? passable-names block-name)
       (some #(.endsWith block-name %) ["_sapling" "_flower" "_carpet" "_tulip" "_orchid" "_button" "_pressure_plate"])))
 
+(defn floorless?
+  "Whether a block name under a walker's feet is no floor: a loaded passable
+  block other than water (which a walker swims on). An unloaded cell (nil) is not."
+  [block-name]
+  (and (some? block-name) (passable? block-name) (not= "water" block-name)))
+
 (defn unit
   "[ux uz] for the vector (dx dz), or nil when it is zero."
   [dx dz]
@@ -119,14 +125,17 @@
   "The feet height a walker at feet height y in column [px pz] reaches in the
   next column [x z], or nil when it cannot enter it: the same height, one
   lower when the floor there is open and the cell under it is not (a step
-  down), else one higher when that is free and there is headroom above the
+  down; a column with no floor, a drop of two or more, is not entered), else one higher when that is free and there is headroom above the
   column it steps from (a step up)."
   [block-at [px pz] [x z] y]
   (cond
     (free-at? block-at x y z)
-    (if (and (passable? (block-at {:x x :y (dec y) :z z})) (not (passable? (block-at {:x x :y (- y 2) :z z}))))
-      (dec y)
-      y)
+    (let [below (block-at {:x x :y (dec y) :z z})
+          below2 (block-at {:x x :y (- y 2) :z z})]
+      (cond
+        (and (passable? below) (not (passable? below2))) (dec y)
+        (floorless? below) nil
+        :else y))
     (and (free-at? block-at x (inc y) z) (passable? (block-at {:x px :y (+ y 2) :z pz}))) (inc y)
     :else nil))
 
@@ -196,6 +205,11 @@
 (defn block-at-fn [p]
   (fn [pos] (u/block-name p pos)))
 
+(defn dead-ids
+  "The ids of hostiles a cornered fight has killed: their corpses may stay listed a while."
+  [c]
+  (vec (:dead (ctx/mem c))))
+
 (defn ^:async fight!
   "Fight back with the best of weapons (the fist when none is carried) whatever
   the health, kept while the hostile stays close; a fight that cannot reach
@@ -204,7 +218,10 @@
   (let [{:keys [radius ranged-radius]} (:args c)]
     (ctx/update-mem! c assoc :cornered true)
     (let [r (await (ctx/call-child c :cornered 'jobs.survival.fight-back
-                                   {:range radius :ranged-range ranged-radius :min-health 0 :weapons weapons}))]
+                                   {:range radius :ranged-range ranged-radius :min-health 0 :weapons weapons
+                                    :skip (dead-ids c)}))]
+      (ctx/update-mem! c update :dead #(into (vec %) (concat (get-in (ctx/mem c) [:children :cornered :killed])
+                                                             (:killed (ctx/child-result c :cornered)))))
       (if (= :declined r)
         (u/fail! c :retreat_blocked why)
         :continue))))
@@ -290,8 +307,9 @@
         p (:primitives c)
         now (ctx/now c)
         fleeing? (some? (:last-seen (ctx/mem c)))
-        threat (first (combat/hostiles p (if fleeing? (max clear-radius radius) radius)
-                                       {:ranged-radius (if fleeing? (max clear-radius ranged-radius) ranged-radius)}))]
+        dead (set (dead-ids c))
+        threat (first (remove #(contains? dead (.-id %)) (combat/hostiles p (if fleeing? (max clear-radius radius) radius)
+                                       {:ranged-radius (if fleeing? (max clear-radius ranged-radius) ranged-radius)})))]
     (cond
       (and (nil? threat) fleeing? (>= (- now (:last-seen (ctx/mem c))) cooldown-ms)) :done
       (and (nil? threat) fleeing?) :continue

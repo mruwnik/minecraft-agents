@@ -4,6 +4,7 @@
   register."
   (:require [engine.memory :as mem]
             [engine.jobs.combat :as combat]
+            [engine.jobs.reach :as reach]
             [engine.jobs.util :as u]
             [engine.triggers.suffocating :as suffocating]
             [engine.triggers.burning :as burning]
@@ -35,20 +36,21 @@
 (def ranged-radius 16)
 
 (def hostile-near
-  "Holds when a hostile mob the body can see is within :radius (args, default
-  8), or a ranged one (skeleton, stray, bogged, pillager, witch; see
-  engine.jobs.combat/ranged-mobs) within :ranged-radius (default 16, about a
-  skeleton's range). Sight is a block raycast from the eye to the mob (the
-  `visible` field of sensing), so a hostile behind a wall is silent;
-  :visible-only false counts every hostile again. Players and passive mobs are
+  "Holds when a real danger is within :radius (args, default 8): a hostile
+  mob the body can see AND that has a walkable way to it (engine.jobs.reach:
+  not walled off, not across a pit it cannot climb, not with the body sealed
+  in), or a ranged one (skeleton, stray, bogged, pillager, witch; see
+  engine.jobs.combat/ranged-mobs) with a line of fire within :ranged-radius
+  (default 16, about a skeleton's range). Sight is a block raycast from the
+  eye to the mob (the `visible` field of sensing). :visible-only false drops
+  the sight test of a melee mob (the way to the body still counts). Players and passive mobs are
   other entity kinds and never count. The job's own :radius and
   :ranged-radius are set in the entry's :job spec."
   {:name :hostile-near
    :when (fn [world _memory args]
-           (let [seen? (:visible-only args true)]
-             (boolean (some #(or (not seen?) (.-visible %))
-                            (combat/hostiles world (:radius args hostile-radius)
-                                             {:ranged-radius (:ranged-radius args ranged-radius)})))))
+           (boolean (seq (reach/dangers world (:radius args hostile-radius)
+                                        {:ranged-radius (:ranged-radius args ranged-radius)}
+                                        {:sight? (:visible-only args true)}))))
    :job '(jobs.survival.respond-to-hostile)
    :args {:radius hostile-radius :ranged-radius ranged-radius}
    :persistence :cooldown

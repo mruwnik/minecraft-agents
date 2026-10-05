@@ -11,13 +11,17 @@
   towards is blocked for three times is given up on (a warn of kind
   fight_unreachable) and no longer counts; with no other hostile in range the
   job declines, so respond-to-hostile retreats instead. Landed hits are kept
-  in :struck for the parent.")
+  in :struck for the parent; the ids it killed are in :killed and, when it ends
+  done, its result {:killed [ids]}. A mob that was
+  killed (or whose id is in :skip) is not swung at again while its corpse is
+  still listed.")
 
 (def args
   {:range {:doc "hostiles within this many blocks are fought" :default 4}
    :ranged-range {:doc "ranged hostiles (skeletons and the like) within this many blocks are fought" :default 16}
    :min-health {:doc "decline below this health" :default 8}
    :weapons {:doc "item name substrings that count as weapons" :default combat/default-weapons}
+   :skip {:doc "entity ids already dead: not fought" :default []}
    :attack-gap-ms {:doc "least time between swings" :default 600}})
 
 (def reach 3)
@@ -31,8 +35,10 @@
   "The hostiles within :range (ranged ones within :ranged-range): the visible
   ones nearest first, then the hidden ones."
   [c]
-  (let [{:keys [range ranged-range]} (:args c)]
-    (combat/hostiles (:primitives c) range {:ranged-radius (max range ranged-range) :sight :prefer})))
+  (let [{:keys [range ranged-range skip]} (:args c)
+        dead (into (set skip) (:killed (ctx/mem c)))]
+    (remove #(contains? dead (.-id %))
+            (combat/hostiles (:primitives c) range {:ranged-radius (max range ranged-range) :sight :prefer}))))
 
 (defn targets
   "The hostiles in range not given up on, nearest first."
@@ -78,7 +84,8 @@
       (ctx/update-mem! c assoc :last-attack (ctx/now c))
       (await (ctx/act c :look #js {:pos #js {:x (:x tpos) :y (+ 1 (:y tpos)) :z (:z tpos)}}))
       (let [a (await (ctx/act c :attack #js {:id (.-id target)}))]
-        (when (= "hit" (.-status a)) (note-hit! c target a))))
+        (when (= "hit" (.-status a)) (note-hit! c target a))
+        (when (= "killed" (.-status a)) (ctx/update-mem! c update :killed (fnil conj []) (.-id target)))))
     r))
 
 (defn ^:async round [c]
@@ -93,6 +100,6 @@
       (do (await (combat/equip-best! c (combat/best-weapon p weapons)))
           (await (swing! c target))
           (cond
-            (empty? (in-range c)) :done
+            (empty? (in-range c)) (do (ctx/result! c {:killed (vec (:killed (ctx/mem c)))}) :done)
             (empty? (targets c)) :declined
             :else :continue)))))
