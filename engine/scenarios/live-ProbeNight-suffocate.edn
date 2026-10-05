@@ -1,4 +1,4 @@
-;; Trial steward: survival register (health-low raised to 15 so a 6-point hit is answered),
+;; Trial steward: survival register (hungry raised to food 14),
 ;; and one listed loop: harvest the plan's ripe wheat and replant, then put the surplus in the chest.
 ;; :suffocating is left out: on farmland (feet y 120.9375) its head cell is the wheat cell, wheat is not
 ;; in its passable list, so it dug every crop the harvest replanted under the body (99 firings in a minute).
@@ -8,10 +8,8 @@
              :job (jobs.survival.extinguish {:water-radius 6})}
             {:trigger :hostile-near :persistence :cooldown :cooldown-s 5 :args {:radius 10 :ranged-radius 16}
              :job (jobs.survival.respond-to-hostile {:radius 10 :ranged-radius 16})}
-            {:trigger :health-low :persistence :cooldown :cooldown-s 10 :args {:health 15}
-             :job (jobs.survival.recover {:health 15 :healed 18 :sight 16})}
-            {:trigger :hungry :persistence :cooldown :cooldown-s 30 :args {:food 14 :food-when-hurt 18}
-             :job (jobs.survival.get-food {:food 14 :food-when-hurt 18})}
+            {:trigger :hungry :persistence :cooldown :cooldown-s 30 :args {:food 14}
+             :job (jobs.survival.get-food {:food 14})}
             {:trigger :night-unsafe :persistence :cooldown :cooldown-s 10 :args {:roof-height 4}
              :job (jobs.survival.shelter {:roof-height 4})}
             {:trigger :stuck :persistence :cooldown :cooldown-s 60

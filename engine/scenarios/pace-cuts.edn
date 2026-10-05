@@ -5,5 +5,5 @@
 {:register [{:id :look-timer :when (or (not (known? (since :looked))) (>= (since :looked) 20))
              :job (jobs.movement.look-around)}
             {:trigger :hostile-near}
-            {:trigger :health-low}]
+            {:trigger :hungry}]
  :queue [(jobs.movement.pace {:a {:x -80 :y 69 :z -41} :b {:x -76 :y 69 :z -38} :laps 3 :rounds 12})]}

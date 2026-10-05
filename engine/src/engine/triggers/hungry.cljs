@@ -5,18 +5,19 @@
 
 (def default-food 6)
 
-(def default-food-when-hurt 14)
-
-(defn hungry?
-  "Food is below :food (default 6 of 20), or below :food-when-hurt (default
-  14) while health is below full: a hurt body heals only on a fed stomach."
-  [food health args]
-  (or (< food (:food args default-food))
-      (and (< health 20) (< food (:food-when-hurt args default-food-when-hurt)))))
+(def default-health
+  "Below this health (of 20) carried food is eaten up to a full bar: saturation heals fastest on a full bar."
+  7)
 
 (def top-up-food
   "Natural regeneration needs food of at least this much (of 20)."
   18)
+
+(defn hungry?
+  "Food is below :food (default 6) plus one per missing hp, at most top-up-food: a hurt body below 18 food does not
+  heal, so the more hurt it is the sooner it looks for food."
+  [food health args]
+  (< food (min top-up-food (+ (:food args default-food) (- 20 health)))))
 
 (def rare-food
   "Foods kept for emergencies; never eaten just to top up."
@@ -45,6 +46,11 @@
   [self]
   (boolean (some #(eaten-unnamed? (.-health self) %) (carried-names self))))
 
+(defn eat-now?
+  "Health below :health (default 7), food below 20 and something a meal would eat carried."
+  [self args]
+  (boolean (and (< (.-health self) (:health args default-health)) (< (.-food self) 20) (carries-food? self))))
+
 (def bake-wheat "Carried wheat enough to bake a loaf." 3)
 
 (defn wheat-carried [self]
@@ -69,17 +75,18 @@
                   (not (and learned (> learned gave-up)))))))
 
 (def hungry
-  "Holds when hungry? says so, or top-up? does (a hurt body at food 14 to 17 carrying food).
-  Args: :food, :food-when-hurt, :rest-s.
+  "Holds when hungry? says so, top-up? does (a hurt body below 18 food carrying common food), or eat-now? does.
+  Args: :food, :health, :rest-s.
   It rests (resting?) for :rest-s (600) after get-food found nothing, so a body with nothing at hand is not sent
   searching again every cooldown. The rest ends when food is carried, wheat to bake is, or a food source is learned."
   {:name :hungry
    :when (fn [world memory args]
            (let [self (.self world)]
              (and (or (hungry? (.-food self) (.-health self) args)
-                      (top-up? (.-food self) (.-health self) (carried-names self)))
+                      (top-up? (.-food self) (.-health self) (carried-names self))
+                      (eat-now? self args))
                   (not (resting? self memory args)))))
    :job '(jobs.survival.get-food)
-   :args {:food default-food :food-when-hurt default-food-when-hurt :rest-s default-rest-s}
+   :args {:food default-food :health default-health :rest-s default-rest-s}
    :persistence :cooldown
    :cooldown-s 90})

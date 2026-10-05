@@ -2,6 +2,6 @@
 ;; lower reflex ever gets the body while shelter holds it all night.
 {:register [{:trigger :night-unsafe :args {:roof-height 4}
              :job (jobs.survival.shelter {:roof-height 4})}
-            {:trigger :hungry :args {:food 6 :food-when-hurt 14}
-             :job (jobs.survival.get-food {:food 6 :food-when-hurt 14})}]
+            {:trigger :hungry :args {:food 6}
+             :job (jobs.survival.get-food {:food 6})}]
  :queue [(repeat (jobs.movement.look-around))]}

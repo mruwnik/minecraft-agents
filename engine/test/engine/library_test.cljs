@@ -634,7 +634,7 @@
 (deftest woodcutter-scenario-is-valid-and-registers-the-library
   (let [s (scenario/parse (fs/readFileSync "scenarios/woodcutter.edn" "utf8"))]
     (is (= [] (scenario/problems registry/jobs triggers/all s)))
-    (is (= [:hostile-near :night-unsafe :health-low] (mapv :trigger (:register s))) "the night above health")
+    (is (= [:hostile-near :night-unsafe :hungry] (mapv :trigger (:register s))) "the night above food")
     (is (= '[jobs.forestry.harvest-wood jobs.storage.deposit] (mapv first (:queue s))))))
 
 ;; ---------------------------------------------------------------------- pace
@@ -731,7 +731,7 @@
   (let [s (scenario/parse (fs/readFileSync "scenarios/pace-cuts.edn" "utf8"))]
     (is (= [] (scenario/problems registry/jobs with-conditions s)))
     (is (= [:look-timer nil nil] (mapv :id (:register s))))
-    (is (= [nil :hostile-near :health-low] (mapv :trigger (:register s))))
+    (is (= [nil :hostile-near :hungry] (mapv :trigger (:register s))))
     (is (= '[jobs.movement.pace] (mapv first (:queue s))))))
 
 (deftest fell-tree-keeps-walking-on-a-partial-move-instead-of-digging
@@ -771,9 +771,8 @@
   (is (false? (trigger-holds triggers/hostile-near zombie-at-12 {:radius 8})))
   (is (true? (trigger-holds triggers/hostile-near zombie-at-12 {:radius 16}))))
 
-(deftest health-low-reads-its-threshold-from-args
-  (is (false? (trigger-holds triggers/health-low {:self {:health 10}} {:health 8})))
-  (is (true? (trigger-holds triggers/health-low {:self {:health 10}} {:health 12}))))
+(deftest health-low-is-gone-food-heals
+  (is (nil? (triggers/all :health-low)) "low health is the hungry trigger's: eat, or look for food"))
 
 (deftest inventory-nearly-full-holds-when-few-slots-are-free
   (are [stacks free expected] (= expected (trigger-holds triggers/inventory-nearly-full {:inventory (junk-stacks stacks)} {:free free}))

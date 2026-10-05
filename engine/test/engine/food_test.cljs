@@ -39,18 +39,22 @@
 
 ;; ---------------------------------------------------------------- hungry
 
-(deftest hungry-below-the-food-line-or-below-the-hurt-line-when-hurt
+(deftest hungry-food-line-rises-one-per-missing-hp-up-to-18
   (are [food health expected] (= expected (hungry/hungry? food health {}))
     5 20 true
     6 20 false
-    13 19 true
-    14 19 false
-    13 20 false
-    2 20 true))
+    2 20 true
+    6 19 true
+    7 19 false
+    13 12 true
+    14 12 false
+    17 8 true
+    17 3 true
+    18 3 false))
 
 (deftest hungry-thresholds-are-args
   (is (hungry/hungry? 9 20 {:food 10}))
-  (is (not (hungry/hungry? 13 10 {:food-when-hurt 12}))))
+  (is (not (hungry/hungry? 13 10 {:food 2})) "2 + 10 missing hp: hungry below 12"))
 
 (deftest hungry-trigger-reads-the-world
   (let [when-fn (:when (get triggers/all :hungry))
@@ -625,12 +629,34 @@
   (let [when-fn (:when (get triggers/all :hungry))
         holds? (fn [{:keys [inventory] :as self}] (when-fn (tu/fake {:self (dissoc self :inventory) :inventory inventory}) {} {}))
         bread [{:name "bread" :count 1}]]
-    (is (holds? {:food 16 :health 8 :inventory bread}))
-    (is (not (holds? {:food 16 :health 8 :inventory []})) "no food carried: no top-up")
-    (is (not (holds? {:food 18 :health 8 :inventory bread})) "regeneration already works")
+    (is (holds? {:food 16 :health 14 :inventory bread}))
+    (is (not (holds? {:food 16 :health 14 :inventory []})) "no food carried: no top-up")
+    (is (not (holds? {:food 18 :health 14 :inventory bread})) "regeneration already works")
     (is (not (holds? {:food 16 :health 20 :inventory bread})) "healthy")
-    (is (holds? {:food 16 :health 8 :inventory [{:name "golden_carrot" :count 1}]}) "a common food")
-    (is (not (holds? {:food 16 :health 8 :inventory [{:name "golden_apple" :count 1}]})))))
+    (is (holds? {:food 16 :health 14 :inventory [{:name "golden_carrot" :count 1}]}) "a common food")
+    (is (not (holds? {:food 16 :health 14 :inventory [{:name "golden_apple" :count 1}]})))))
+
+(deftest hungry-trigger-eats-to-full-below-the-health-line
+  (let [when-fn (:when (get triggers/all :hungry))
+        holds? (fn [{:keys [inventory] :as self} & [args]]
+                 (when-fn (tu/fake {:self (dissoc self :inventory) :inventory inventory}) {} (or args {})))
+        bread [{:name "bread" :count 1}]]
+    (is (holds? {:food 19 :health 6 :inventory bread}) "below 7 hp: eat up to 20")
+    (is (holds? {:food 19 :health 6 :inventory [{:name "golden_apple" :count 1}]}) "precious food at low health")
+    (is (not (holds? {:food 19 :health 6 :inventory []})) "nothing to eat and food enough to heal")
+    (is (not (holds? {:food 20 :health 6 :inventory bread})) "full")
+    (is (not (holds? {:food 19 :health 7 :inventory bread})) "at the line")
+    (is (not (holds? {:food 19 :health 6 :inventory bread} {:health 5})) "the health line is an arg")))
+
+(deftest get-food-eats-to-full-below-the-health-line
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:food 19 :health 5} :inventory [{:name "bread" :count 5}]})]
+          (core/submit! eng '(jobs.survival.get-food) {})
+          (await (run-until-empty eng 10))
+          (is (= 20 (food p)) "saturation heals fastest on a full bar")
+          (is (= [] (tu/walk-calls p))))))))
 
 (deftest eat-prefers-common-food-over-golden-apple
   (is (= "bread" (eat/best-food [{:name "golden_apple"} {:name "bread"}] false nil 20))))

@@ -96,7 +96,7 @@
                                                 :self {:experience {:level 3 :points 40 :progress 0}}
                                                 :inventory [{:name "bread" :count 4}]})
               food #(:food (fake/self p))]
-          (is (= [:suffocating :burning :wedged :hostile-near :night-unsafe :shut-in-by-day :health-low :hungry :player-sleeping-nearby :stuck :door-left
+          (is (= [:suffocating :burning :wedged :hostile-near :night-unsafe :shut-in-by-day :hungry :player-sleeping-nearby :stuck :door-left
                   :died :inventory-nearly-full :scaffold-left :tidy-pending]
                  (mapv :id (:register (core/state eng)))))
           (await (run-ticks eng clock 3 1000))
@@ -105,16 +105,17 @@
 
           (fake/swap-self! p assoc :health 5 :food 10)
           (await (run-ticks eng clock 3 1000))
-          (is (= [:health-low] (fired seen)) "low health fires recover")
-          (is (< 10 (food)) "recover ate at the safe point")
+          (is (= [:hungry] (fired seen)) "low health below 18 food fires get-food")
+          (is (< 10 (food)) "get-food ate where the body stands")
+          (is (= [] (tu/walk-calls p)) "no walk home")
           (fake/swap-self! p assoc :health 20)
           (await (run-ticks eng clock 3 1000))
-          (is (some #(= [:reflex :ended :health-low] [(:source %) (:kind %) (:reflex %)]) @seen)
-              "healed, recover ends")
+          (is (some #(= [:reflex :ended :hungry] [(:source %) (:kind %) (:reflex %)]) @seen)
+              "fed, get-food ends")
 
           (fake/add-entity! p {:id 50 :name "zombie" :kind "hostile" :pos [4 64 0] :health 20})
           (await (run-ticks eng clock 3 1000))
-          (is (= [:health-low :hostile-near] (fired seen)) "a hostile fires respond-to-hostile")
+          (is (= [:hungry :hostile-near] (fired seen)) "a hostile fires respond-to-hostile")
           (swap! (fake/state p) assoc :entities [])
           (await (run-ticks eng clock 10 1000))
           (is (some #(= [:reflex :ended :hostile-near] [(:source %) (:kind %) (:reflex %)]) @seen)
@@ -128,10 +129,10 @@
           (is (= {:level 3 :points 40} (:experience (:data (mem/latest (mem/view (:store eng)) :died))))
               "the died entry keeps the experience")
           (await (run-ticks eng clock 3 1000))
-          (is (= [:health-low :hostile-near] (fired seen)) "a dead body fires nothing")
+          (is (= [:hungry :hostile-near] (fired seen)) "a dead body fires nothing")
           (.respawn (.-world p))
           (await (run-ticks eng clock 3 1000))
-          (is (= [:health-low :hostile-near :died] (fired seen)) "the respawn lets a death fire recover-drops")
+          (is (= [:hungry :hostile-near :died] (fired seen)) "the respawn lets a death fire recover-drops")
           (await (run-ticks eng clock 10 1000))
           (is (= {:decision :collected :items 2}
                  (select-keys (:data (mem/latest (mem/view (:store eng)) :recovered)) [:decision :items]))
@@ -141,7 +142,7 @@
               "no errors besides the death itself"))))))
 
 (def survival-cooldowns
-  {:suffocating 0 :burning 0 :health-low 10 :hungry 90 :night-unsafe 10 :shut-in-by-day 10 :player-sleeping-nearby 30 :stuck 60 :door-left 5 :died 30 :inventory-nearly-full 120 :tidy-pending 10})
+  {:suffocating 0 :burning 0 :hungry 90 :night-unsafe 10 :shut-in-by-day 10 :player-sleeping-nearby 30 :stuck 60 :door-left 5 :died 30 :inventory-nearly-full 120 :tidy-pending 10})
 
 (deftest survival-triggers-wait-a-cooldown-after-their-job-ends
   (let [{:keys [eng]} (boot "scenarios/survival.edn" {})

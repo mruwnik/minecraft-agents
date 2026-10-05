@@ -9,10 +9,9 @@
             [jobs.survival.eat :as eat]))
 
 (def doc
-  "Keep the body fed. Hungry means food below :food, or below :food-when-hurt while health is below full
-  (the same test as the hungry trigger).
+  "Keep the body fed. Hungry means food below :food plus one per missing hp, at most 18 (the hungry trigger's test).
   Each round takes the first step that has something to do:
-  1. Eat what is carried (the eat job).
+  1. Eat what is carried (the eat job), up to 18, or up to 20 while health is below :health.
   1b. With none carried but 3 or more wheat, bake bread (the craft job, enough loaves for the hunger, within 32 blocks
       of a table) and eat it next round. A failed bake is remembered as :no-bake for 10 minutes and the ladder goes on.
   2. Use the newest :food-source entry {:pos :kind} within :source-radius.
@@ -33,7 +32,7 @@
 
 (def args
   {:food {:doc "hungry below this much food (of 20)" :default hungry/default-food}
-   :food-when-hurt {:doc "hungry below this much food while health is below full" :default hungry/default-food-when-hurt}
+   :health {:doc "below this health eat up to a full bar" :default hungry/default-health}
    :source-radius {:doc "how far away a remembered food source still counts, in blocks" :default 64}
    :hunt-radius {:doc "how far to look for animals and wild crops, in blocks" :default 24}
    :farm-radius {:doc "how far around a known farm to harvest, in blocks" :default 6}
@@ -75,6 +74,7 @@
   (let [self (.self (:primitives c))]
     (or (hungry-now? c)
         (hungry/top-up? (.-food self) (.-health self) (hungry/carried-names self))
+        (hungry/eat-now? self (:args c))
         (boolean (:eating (ctx/mem c))))))
 
 ;; ------------------------------------------------------------------ sources
@@ -366,7 +366,8 @@
     (await (search! c))))
 
 (defn ^:async round [c]
-  (let [eaten (await (ctx/call-child c :eat 'jobs.survival.eat {}))]
+  (let [low? (< (.-health (.self (:primitives c))) (:health (:args c)))
+        eaten (await (ctx/call-child c :eat 'jobs.survival.eat {:until (if low? 20 hungry/top-up-food)}))]
     (ctx/update-mem! c assoc :eating (= :continue eaten))
     (cond
       (= :continue eaten) :continue

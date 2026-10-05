@@ -1,6 +1,4 @@
 ;; ProbeAttack live cases for the cornered retreat (card af4935b9): idle, only the hostile and health reflexes are registered
 {:register [{:trigger :hostile-near :persistence :cooldown :cooldown-s 5 :args {:radius 8 :ranged-radius 16}
-             :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}
-            {:trigger :health-low :persistence :cooldown :cooldown-s 10 :args {:health 7}
-             :job (jobs.survival.recover {:health 7 :healed 16 :sight 16})}]
+             :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
  :queue []}

@@ -20,7 +20,7 @@
   recorded :shelter or a leave! is under way, whatever its job memory says; a :no-way-out writes a :shelter-trapped entry for the cell, kept
   5 minutes, so the trigger does not refire on it). Every hold round eats one carried food (jobs.survival.eat's
   choice, :shelter.ate) when the hungry trigger's condition holds: in the shipped registers night-unsafe sits above
-  hungry and health-low, so those reflexes cannot cut a held body (registered above it, they would). A
+  hungry, so that reflex cannot cut a held body (registered above it, they would). A
   round by day ends :done (after a dig-in it first gets the body out of the pit, below); a first round that finds
   the body asleep, or roofed other than in its own shelter, ends :done at once. A first round (no child run yet) that finds the body
   shut in its own latest :shelter at night holds as after a dig-in (:sheltered :dug-in): the job keeps nothing it
@@ -102,13 +102,13 @@
 
 (defn ^:async eat-if-hungry!
   "The hungry reflex (below night-unsafe in the shipped registers) cannot reach a body the shelter holds, so a hold round eats one carried food (jobs.survival.eat's
-  choice, engine.foods) when the body is hungry by the hungry trigger's own condition (food below 6, or below 14 when
-  hurt). A sleeping body does not eat."
+  choice, engine.foods) when the body is hungry by the hungry trigger's own condition (hungry?, or eat-now? below 7 hp).
+  A sleeping body does not eat."
   [c]
   (let [p (:primitives c)
         self (.self p)
         health (.-health self)
-        best (when (and (not (sh/sleeping? p)) (hungry/hungry? (.-food self) health {}))
+        best (when (and (not (sh/sleeping? p)) (or (hungry/hungry? (.-food self) health {}) (hungry/eat-now? self {})))
                (eat/best-food (u/inventory p) false nil health))]
     (when best
       (await (ctx/act c :equip #js {:item best}))

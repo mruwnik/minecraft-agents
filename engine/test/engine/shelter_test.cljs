@@ -223,6 +223,17 @@
           (is (seq (emitted seen :shelter.ate)) "the shelter ate while holding")
           (is (empty? (filterv #(= [:reflex :ended :night-unsafe] [(:source %) (:kind %) (:reflex %)]) @seen))))))))
 
+(deftest a-held-shelter-eats-below-the-health-line-though-not-hungry
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:time night :blocks {"0,66,0" "stone"} :self {:food 19 :health 5}
+                                         :inventory [{:name "bread" :count 2}]})]
+          (mem/write! (:store eng) :shelter own-shelter {:cap 10 :ttl day-ms})
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night-unsafe}]}"))
+          (await (tick-n eng 2))
+          (is (seq (emitted seen :shelter.ate)) "below 7 hp it eats up to a full bar"))))))
+
 ;; -------------------------------------------------------------------- sleep
 
 (deftest sleep-goes-to-the-bed-sleeps-and-writes-slept

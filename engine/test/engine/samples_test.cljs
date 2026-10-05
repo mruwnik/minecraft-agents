@@ -11,7 +11,7 @@
             [engine.triggers :as triggers]))
 
 (def scenario-text
-  "{:register [{:trigger :health-low}]
+  "{:register [{:trigger :hungry}]
     :queue [(jobs.movement.go-to {:pos {:x 30 :y 64 :z 0}})
             (jobs.time.wait-for-day)]}")
 
@@ -28,8 +28,8 @@
     (is (= [] (scenario/problems registry/jobs triggers/all s)))
     (let [ps (scenario/problems registry/jobs triggers/all
                                 '{:register [{:trigger :nope}
-                                             {:trigger :health-low :job (jobs.fly)}
-                                             {:trigger :health-low :job (hold (jobs.survival.eat))}]
+                                             {:trigger :hungry :job (jobs.fly)}
+                                             {:trigger :hungry :job (hold (jobs.survival.eat))}]
                                   :queue [{:job :go-to} (jobs.fly) (seq)]})]
       (is (= 6 (count ps)))
       (is (= "unknown trigger :nope" (first ps)))
@@ -39,7 +39,7 @@
       (is (re-find #"unknown job or combinator jobs.fly" (nth ps 4)))
       (is (re-find #"seq takes at least one" (nth ps 5))))))
 
-(deftest go-to-wait-for-day-and-health-low-end-to-end
+(deftest go-to-wait-for-day-and-hungry-end-to-end
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -53,16 +53,16 @@
           (is (nil? (core/tick! eng)) "night: nothing ready")
           (fake/swap-self! p assoc :health 6 :food 10)
           (await (core/tick! eng))
-          (is (= 15 (.-food (.self p))) "health-low ran recover, which ate")
-          (fake/swap-self! p assoc :health 18)
-          (await (core/tick! eng))
-          (is (= ["j2"] (:list (core/state eng))) "healed: recover is done")
+          (is (= 15 (.-food (.self p))) "hurt below 18 food: get-food ate where the body stands")
+          (fake/swap-self! p assoc :health 20)
+          (dotimes [_ 3] (await (core/tick! eng)))
+          (is (= ["j2"] (:list (core/state eng))) "fed: get-food is done")
           (is (nil? (core/tick! eng)) "cooling down, and still night")
           (.setTime world 1000)
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))))
-          (is (= ["jobs.movement.go-to" "jobs.survival.recover" "jobs.survival.recover" "jobs.time.wait-for-day"]
-                 (->> @seen (filter #(= :round_started (:kind %))) (mapv :name)))))))))
+          (is (= ["jobs.movement.go-to" "jobs.survival.get-food" "jobs.time.wait-for-day"]
+                 (->> @seen (filter #(= :round_started (:kind %))) (map :name) dedupe vec))))))))
 
 (deftest go-to-gives-up-after-three-blocked-walks
   (async done

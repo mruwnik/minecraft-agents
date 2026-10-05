@@ -1,6 +1,4 @@
-;; ProbeFight trigger test: health-low and hostile-near against notify.
-{:register [{:trigger :health-low :args {:health 7}
-             :job (jobs.debug.notify {:text "health-low fired"})}
-            {:trigger :hostile-near :args {:radius 8}
+;; ProbeFight trigger test: hostile-near against notify.
+{:register [{:trigger :hostile-near :args {:radius 8}
              :job (jobs.debug.notify {:text "hostile-near fired"})}]
  :queue [(repeat (jobs.movement.look-around))]}

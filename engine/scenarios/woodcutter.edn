@@ -2,6 +2,6 @@
 ;; until body memory has a :chest entry, and sleep needs a :bed entry.
 {:register [{:trigger :hostile-near}
             {:trigger :night-unsafe}
-            {:trigger :health-low}]
+            {:trigger :hungry}]
  :queue [(jobs.forestry.harvest-wood {:species "oak" :radius 16})
          (jobs.storage.deposit)]}

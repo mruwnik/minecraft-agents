@@ -332,8 +332,7 @@ Built-in triggers, in the order `scenarios/survival.edn` registers them (most ur
 | `:burning` | on fire or in lava, without `fire_resistance` | `extinguish` | 0 |
 | `:wedged` | a full block fills the cell of the feet (sand fallen on the body); quiet while a recent `:unwedge-blocked` entry names the cell | `survival.unwedge` | 0 |
 | `:hostile-near` | a real danger (see Sensing) within `:radius` 8, ranged within `:ranged-radius` 16; `:visible-only false` counts heard mobs | `respond-to-hostile` | none (retry) |
-| `:health-low` | health below `:health` 7, or a recover spell under way and below `:healed` 16 | `recover` | 10 s |
-| `:hungry` | food below `:food` 6, or below `:food-when-hurt` 14 while health is below 20; also a top-up when hurt | `get-food` | 90 s |
+| `:hungry` | food below `:food` 6 plus one per missing hp (at most 18: below 18 nothing heals); or hurt, below 18 and common food carried; or health below `:health` 7 and food carried (eats to 20) | `get-food` | 90 s |
 | `:night-unsafe` | night, awake, and not safely roofed or shut in | `shelter` | 10 s |
 | `:shut-in-by-day` | day, and still shut in the cell of its own latest `:shelter` | `shelter` | 10 s |
 | `:player-sleeping-nearby` | night, another player within 128 asleep, no known bed within 48 | `log-out` (20 s) | 30 s |
@@ -348,7 +347,7 @@ Built-in triggers, in the order `scenarios/survival.edn` registers them (most ur
 | `:player-joined` | a `:player-joined` entry under `:window-s` 10 old (registered by no scenario) | `debug.notify` | 10 s |
 
 The dangers (`:suffocating`, `:burning`) have no cooldown and their jobs have no backoff. Needs rest with a reason the agent
-sees (`:hungry` after `food.none`, `:health-low` after `cannot_heal`). There is no timer trigger: periodic work is a job.
+sees (`:hungry` after `food.none`). There is no timer trigger: periodic work is a job.
 To see a trigger fire without its real job, register it against `jobs.debug.notify`.
 
 ### Conditions
@@ -449,7 +448,7 @@ nothing; `:by` names who asks, `:generation-id` is checked when given):
 
 | `:op` | request |
 |---|---|
-| `:put` | `{:op :put :id :health-low-12 :trigger :health-low :args {:health 12}}` or ad hoc `{:op :put :id :bread-low :when (< (inventory "bread") 8) :job (jobs.survival.eat)}`; also `:persistence :cooldown-s :backoff :ttl-s`. Creates or replaces a custom entry (built-ins refused). Ad hoc entries default to `:persistence :stop` |
+| `:put` | `{:op :put :id :hungry-12 :trigger :hungry :args {:food 12}}` or ad hoc `{:op :put :id :bread-low :when (< (inventory "bread") 8) :job (jobs.survival.eat)}`; also `:persistence :cooldown-s :backoff :ttl-s`. Creates or replaces a custom entry (built-ins refused). Ad hoc entries default to `:persistence :stop` |
 | `:remove` | `{:op :remove :id ...}` (built-ins refused; the round in flight finishes) |
 | `:mute` | `{:op :mute :id ... :ttl-s 60}` |
 | `:move` | `{:op :move :id ... :above :hostile-near :ttl-s 60}` (or `:below`) |
@@ -495,7 +494,7 @@ Exit codes: 0 ok, 1 refused, 2 no running body or bad usage. The view page can d
 A scenario is EDN read with `cljs.reader`:
 
 ```clojure
-{:register [{:trigger :health-low}
+{:register [{:trigger :hungry}
             {:trigger :hostile-near :args {:radius 12}
              :job (jobs.survival.retreat {:radius 12 :step 10})}]
  :queue    [(jobs.movement.go-to {:pos {:x 10 :y 64 :z 0}})
@@ -561,7 +560,6 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 | `survival.eat` `{:item :until 18}` | Eats the best carried food (points, then saturation); harmful food only with `:allow-bad` |
 | `survival.get-food` | Ladder: eat, known source, hunt or harvest; gives up with warn `food.none` |
 | `survival.breathe`, `survival.extinguish` | Swim up or dig the head free; pour water or reach water. Never trespass except as a last resort |
-| `survival.recover` `{:health 7 :healed 16}` | Flees, goes to bed or home, eats and waits until healed. Does not fight |
 | `survival.respond-to-hostile` | Fights (`fight-back`) when the odds are fair, else `retreat` |
 | `survival.retreat` | Flees from the nearest real danger; never ends while one stands. Cornered it fights, seals itself in, pillars, or digs down, then hides until the way is closed |
 | `survival.fight-back` | Equips the best weapon and hits the nearest hostile within `:range` |

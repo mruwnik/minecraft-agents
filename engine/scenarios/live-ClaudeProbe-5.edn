@@ -1,7 +1,7 @@
 ;; Log-out live test, body B (no bed): the survival night pair as survival.edn
 ;; registers it (shelter digs in, the log-out reflex logs out for 20 s) and a
 ;; hungry notify to see a reflex fire after the return.
-{:register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :args {:food 6 :food-when-hurt 14}
+{:register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :args {:food 6}
              :job (jobs.debug.notify {:text "hungry fired"})}
             {:trigger :night-unsafe :persistence :cooldown :cooldown-s 10 :args {:roof-height 4}
              :job (jobs.survival.shelter {:roof-height 4})}

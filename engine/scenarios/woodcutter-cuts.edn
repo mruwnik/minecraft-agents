@@ -7,6 +7,6 @@
              :job (jobs.movement.look-around)}
             {:trigger :hostile-near}
             {:trigger :night-unsafe}
-            {:trigger :health-low}]
+            {:trigger :hungry}]
  :queue [(jobs.forestry.harvest-wood {:species "oak" :radius 16})
          (jobs.storage.deposit)]}

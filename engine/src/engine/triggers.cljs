@@ -2,8 +2,7 @@
   "Trigger definitions. :job is the default job spec (an expression, see
   engine.expr); :args are the trigger's own. See README.md, Triggers and the
   register."
-  (:require [engine.memory :as mem]
-            [engine.jobs.combat :as combat]
+  (:require [engine.jobs.combat :as combat]
             [engine.jobs.reach :as reach]
             [engine.jobs.util :as u]
             [engine.triggers.suffocating :as suffocating]
@@ -21,53 +20,6 @@
             [engine.triggers.mounted :as mounted]
             [engine.triggers.player-joined :as player-joined]
             [engine.triggers.died :as died]))
-
-(def default-health 7)
-
-(def default-healed 16)
-
-(def spell-ms
-  "A :hurt entry (written by recover when a spell starts) older than this no longer keeps a spell going.
-  Same window as recover's own check."
-  (* 5 60 1000))
-
-(def regen-food "Natural regeneration needs at least this much food." 18)
-
-(defn spell-under-way?
-  "A recover spell started (the latest :hurt entry, younger than spell-ms) and has not ended (no :heal-ended entry
-  newer than it)."
-  [view]
-  (let [hurt (:t (mem/latest view :hurt))
-        ended (:t (mem/latest view :heal-ended))]
-    (boolean (and hurt
-                  (< (- (:now view) hurt) spell-ms)
-                  (not (and ended (>= ended hurt)))))))
-
-(defn cannot-heal?
-  "True when recover gave up (the latest :heal-ended says :cannot-heal) and healing still cannot work:
-  food below regen-food and no food carried."
-  [self view]
-  (boolean (and (= :cannot-heal (:why (:data (mem/latest view :heal-ended))))
-                (< (.-food self) regen-food)
-                (not (hungry/carries-food? self)))))
-
-(def health-low
-  "Holds when health is below :health (args, default 7 of 20).
-  It also holds while a recover spell is under way (spell-under-way?) and health is below :healed (default 16),
-  so a recover cut by a higher reflex fires again until the body is healed.
-  It rests while recover's give-up stands (cannot-heal?) until food is carried or food reaches 18.
-  Runs recover, which flees, eats and waits for regeneration. Cools down 10 s."
-  {:name :health-low
-   :when (fn [world memory args]
-           (let [self (.self world)
-                 health (.-health self)]
-             (and (or (< health (:health args default-health))
-                      (and (< health (:healed args default-healed)) (spell-under-way? memory)))
-                  (not (cannot-heal? self memory)))))
-   :job '(jobs.survival.recover)
-   :args {:health default-health :healed default-healed}
-   :persistence :cooldown
-   :cooldown-s 10})
 
 (def hostile-radius 8)
 
@@ -112,6 +64,6 @@
   "Every trigger by name, listed in the order a survival scenario registers
   them (the register is ordered by the scenario, not by this map)."
   (into {} (map (juxt :name identity))
-        [suffocating/suffocating burning/burning wedged/wedged hostile-near health-low hungry/hungry
+        [suffocating/suffocating burning/burning wedged/wedged hostile-near hungry/hungry
          night-unsafe/trigger shut-in-by-day/trigger player-sleeping-nearby/trigger stuck/stuck died/died pen-gate/trigger
          door-left/trigger inventory-nearly-full scaffold-left/trigger tidy-pending/trigger mounted/trigger player-joined/trigger]))

@@ -101,7 +101,7 @@
                :primitives primitives
                :jobs registry/jobs
                :triggers triggers/all
-               :running (atom {:id "j1" :round 2 :reflex :health-low})
+               :running (atom {:id "j1" :round 2 :reflex :hungry})
                :manual (atom nil)
                :now (constantly 123)}
           server (event-api/create socket-path eng)
@@ -135,7 +135,7 @@
                         (is (= 15 (:food status)))
                         (is (= "j1" (get-in status [:current :id])))
                         (is (= :running (get-in status [:current :status])))
-                        (is (= :health-low (get-in status [:current :reflex])))
+                        (is (= :hungry (get-in status [:current :reflex])))
                         (is (= "jobs.movement.look-around" (get-in status [:current :name])))
                         (is (= {:total 0 :items [] :more? false} (:failed status)))
                         (is (= "req-1" (get-in status [:outstanding :items 0 :request-id])))
@@ -163,12 +163,12 @@
                         (is (= :job (:kind job)))
                         (is (= 2000 (get-in job [:args :every-ms :default])))
                         (is (string? (:doc job)))
-                        (request socket-path "GET" "/catalog?kind=trigger&name=health-low" {} nil))))
+                        (request socket-path "GET" "/catalog?kind=trigger&name=hungry" {} nil))))
              (.then (fn [response]
                       (let [trigger (edn-response response)]
                         (is (= 200 (:status response)))
                         (is (= :trigger (:kind trigger)))
-                        (is (= :health-low (:name trigger)))
+                        (is (= :hungry (:name trigger)))
                         (is (= :cooldown (:persistence trigger)))
                         (request socket-path "GET"
                                  "/catalog?kind=jobs&prefix=jobs.movement.&limit=1&offset=0" {} nil))))
@@ -177,11 +177,11 @@
                         (is (= 200 (:status response)))
                         (is (= ["jobs.movement.follow"] (:items listing)))
                         (is (= 1 (:next-offset listing)))
-                        (request socket-path "GET" "/catalog?kind=triggers&prefix=health" {} nil))))
+                        (request socket-path "GET" "/catalog?kind=triggers&prefix=hung" {} nil))))
              (.then (fn [response]
                       (let [listing (edn-response response)]
                         (is (= 200 (:status response)))
-                        (is (= ["health-low"] (:items listing)))
+                        (is (= ["hungry"] (:items listing)))
                         (is (nil? (:next-offset listing)))
                         (request socket-path "GET"
                                  (str "/events?stream-id=" (js/encodeURIComponent sid)

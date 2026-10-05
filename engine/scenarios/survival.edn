@@ -1,13 +1,13 @@
 ;; Stay alive and otherwise idle. The reflexes are registered in priority
-;; order, most urgent first: air, fire, a block at the feet, hostiles, night (the shelter, and getting out of it by day), health, food,
+;; order, most urgent first: air, fire, a block at the feet, hostiles, night (the shelter, and getting out of it by day), food (which heals),
 ;; logging out when another player sleeps, being stuck, a door a walk left open, then a death's drops, then a full
 ;; inventory, then the safety nets: scaffold a job left (taken back only once its job is no longer live, so it
 ;; never cuts the job that built it) and trespass digs to restore. Between reflexes the body looks around, one look per round, so it visibly idles. A reflex job that
 ;; declines or is done is dropped, and the trigger fires it again once its cooldown (counted from the job ending)
 ;; has passed; the dangers (air, fire) have none. A reflex job cut by a higher one is fired again by its trigger,
-;; whose condition holds until the work is done. Hostiles sit above health: respond-to-hostile already flees when
-;; hurt and fights only when healthy (or cornered), so recover runs once no visible hostile is near. The night sits
-;; above health and food: the shelter eats while it holds, and recover or get-food must not walk off at night.
+;; whose condition holds until the work is done. Hostiles sit above food: respond-to-hostile already flees when
+;; hurt and fights only when healthy (or cornered). The night sits above food: the shelter eats while it holds, and
+;; get-food must not walk off at night.
 {:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 0 :args {:min-oxygen 12}
              :job (jobs.survival.breathe {:min-oxygen 12})}
             {:trigger :burning :persistence :cooldown :cooldown-s 0
@@ -20,10 +20,8 @@
              :job (jobs.survival.shelter {:roof-height 4})}
             {:trigger :shut-in-by-day :persistence :cooldown :cooldown-s 10
              :job (jobs.survival.shelter {:roof-height 4})}
-            {:trigger :health-low :persistence :cooldown :cooldown-s 10 :args {:health 7 :healed 16}
-             :job (jobs.survival.recover {:health 7 :healed 16 :sight 16})}
-            {:trigger :hungry :persistence :cooldown :cooldown-s 90 :args {:food 6 :food-when-hurt 14}
-             :job (jobs.survival.get-food {:food 6 :food-when-hurt 14})}
+            {:trigger :hungry :persistence :cooldown :cooldown-s 90 :args {:food 6}
+             :job (jobs.survival.get-food {:food 6})}
             {:trigger :player-sleeping-nearby :persistence :cooldown :cooldown-s 30 :job (jobs.survival.log-out)}
             {:trigger :stuck :persistence :cooldown :cooldown-s 60
              :job (jobs.maintenance.unstick)}
