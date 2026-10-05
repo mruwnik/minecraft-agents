@@ -1,7 +1,8 @@
 (ns jobs.animals.unleash
   (:require [engine.ctx :as ctx]
             [engine.jobs.animals :as animals]
-            [engine.jobs.util :as u]))
+            [engine.jobs.util :as u]
+            [engine.path.near :as near]))
 
 (def doc
   "Take the lead off the animals within :radius that are on this body's lead
@@ -9,7 +10,7 @@
   starts and ends itself. :mob limits it to one kind of animal (any when nil),
   :animal to one animal by its uuid (any when nil). Each round takes the nearest
   such animal not given up on, walks to within 3 blocks of what is clicked
-  (moveTo range 2, :walk-timeout-s) and clicks it with an empty hand: the
+  (engine walker, range 2, doors :shut, steers bounded by :walk-timeout-s) and clicks it with an empty hand: the
   animal itself when it is on this body's lead, else the leash_knot it is tied
   to (the click removes the knot and hands every animal tied to it to this body's lead, a second click on the animal then takes the lead off, as on 26.1). An animal tied to a
   knot the sensing cannot see is given up on (:no-knot). A click on the animal counts only
@@ -118,10 +119,10 @@
   (let [tpos (u/pos-of (.-pos target))]
     (if (<= (u/dist (u/self-pos c) tpos) reach)
       :there
-      (let [r (await (ctx/act c :moveTo (clj->js {:pos tpos :range 2 :timeoutS (:walk-timeout-s (:args c))})))]
-        (case (.-status r)
-          "arrived" :there
-          "partial" :partial
+      (let [r (await (near/walk-near! c tpos 2 {:doors :shut :timeout-s (:walk-timeout-s (:args c))}))]
+        (case r
+          :there :there
+          :partial :partial
           (do (give-up! c k :unreachable)
               (bump-row! c)
               :blocked))))))

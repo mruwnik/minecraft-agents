@@ -1,11 +1,12 @@
 (ns jobs.movement.follow
   (:require [engine.ctx :as ctx]
-            [engine.jobs.util :as u]))
+            [engine.jobs.util :as u]
+            [engine.path.near :as near]))
 
 (def doc
   "Keep the body within :range of the player :player, who must be within
   :radius to be seen. Each round: a player in range is looked at (the head)
-  and waited on 500 ms; one farther off is walked to (moveTo range :range,
+  and waited on 500 ms; one farther off is walked to (engine walker, doors :shut, range :range,
   :timeoutS 5). A player out of sight is walked to where they were last seen
   until :lost-s has passed, then the job ends with {:reason \"lost\" :last-seen
   pos} (info follow.lost). Three blocked walks in a row end it with
@@ -60,8 +61,8 @@
   anything else counts, and the third in a row ends the job (warn
   follow.unreachable, result {:reason \"unreachable\"}). :continue or :done."
   [c pos range]
-  (let [r (await (ctx/act c :moveTo (clj->js {:pos pos :range range :timeoutS walk-timeout-s})))
-        blocked (if (contains? #{"arrived" "partial"} (.-status r)) 0 (inc (:blocked (ctx/mem c) 0)))
+  (let [r (await (near/walk-near! c pos range {:doors :shut :timeout-s walk-timeout-s}))
+        blocked (if (contains? #{:there :partial} r) 0 (inc (:blocked (ctx/mem c) 0)))
         out (if (or (> blocked 0) (u/within? (u/self-pos c) pos range)) 0 (inc (:out-of-range (ctx/mem c) 0)))]
     (ctx/update-mem! c assoc :blocked blocked :out-of-range out)
     (cond

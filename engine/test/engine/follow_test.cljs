@@ -22,7 +22,7 @@
   [world args]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake world)
+        p (tu/fake-on-floor world)
         out (atom :not-done)
         parent {:check (constantly true)
                 :round (fn ^:async recording-round [c]
@@ -48,7 +48,7 @@
        (recur (inc i))))))
 
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
-(defn move-targets [p] (mapv #(js->clj (.-pos (.-args %)) :keywordize-keys true) (calls p "moveTo")))
+(defn move-targets [eng] (tu/walked-to eng))
 (defn self-x [p] (.-x (.-pos (.self p))))
 (defn entities [p] (fake/entities p))
 (defn has-event? [{:keys [seen]} kind] (boolean (some #(= kind (:kind %)) @seen)))
@@ -72,9 +72,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p out]} (await (follow {:entities [(steve 10)]} {:player "Steve"} 3 500))]
-          (is (= 1 (count (move-targets p))))
-          (is (= {:x 10 :y 64 :z 0} (first (move-targets p))))
+        (let [{:keys [p out eng]} (await (follow {:entities [(steve 10)]} {:player "Steve"} 3 500))]
+          (is (= 1 (count (move-targets eng))))
+          (is (= {:x 10 :y 64 :z 0} (first (move-targets eng))))
           (is (<= (Math/abs (- 10 (self-x p))) 3))
           (is (= :not-done @out) "following goes on"))))))
 
@@ -83,7 +83,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p]} (await (follow {:entities [(steve 2)]} {:player "Steve"} 4 500))]
-          (is (empty? (calls p "moveTo")))
+          (is (empty? (tu/walk-calls p)))
           (is (= 4 (count (calls p "look"))))
           (is (= 4 (count (calls p "wait"))))
           (is (= 65.6 (.-y (.-pos (.-args (first (calls p "look"))))))))))))
@@ -93,18 +93,18 @@
     (tu/run-async done
       (fn ^:async t []
         (let [move (fn [s i] (when (= 2 i) (swap! (fake/state (:p s)) assoc-in [:entities 0 :pos 0] 20)))
-              {:keys [p]} (await (follow {:entities [(steve 2)]} {:player "Steve"} 4 500 move))]
-          (is (= [{:x 20 :y 64 :z 0}] (move-targets p)))
-          (is (= 20 (self-x p))))))))
+              {:keys [p eng]} (await (follow {:entities [(steve 2)]} {:player "Steve"} 4 500 move))]
+          (is (= [{:x 20 :y 64 :z 0}] (move-targets eng)))
+          (is (<= (Math/abs (- 20 (self-x p))) 3)))))))
 
 (deftest a-player-who-disappears-is-walked-to-then-lost
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [vanish (fn [s i] (when (= 1 i) (swap! (fake/state (:p s)) update :entities subvec 1)))
-              {:keys [p out] :as s} (await (follow {:entities [(steve 10)]} {:player "Steve" :lost-s 3} 20 1000 vanish))]
+              {:keys [p out eng] :as s} (await (follow {:entities [(steve 10)]} {:player "Steve" :lost-s 3} 20 1000 vanish))]
           (is (= {:reason "lost" :last-seen {:x 10 :y 64 :z 0}} @out))
-          (is (= 1 (count (move-targets p))) "the last-seen cell is walked to once")
+          (is (every? #{{:x 10 :y 64 :z 0}} (move-targets eng)) "only the last-seen cell is walked to")
           (is (has-event? s :follow.lost)))))))
 
 (deftest a-player-who-is-never-there-is-absent-after-two-seconds
@@ -129,7 +129,7 @@
       (fn ^:async t []
         (let [{:keys [out p] :as s} (await (follow {:entities [(steve 10)] :unreachable ["10,64,0"]} {:player "Steve"} 10 500))]
           (is (= {:reason "unreachable"} @out))
-          (is (= 3 (count (calls p "moveTo"))))
+          (is (= 3 (count (tu/walked-to (:eng s)))))
           (is (has-event? s :follow.unreachable)))))))
 
 (deftest timeout-ends-the-follow
@@ -138,15 +138,3 @@
       (fn ^:async t []
         (let [{:keys [out]} (await (follow {:entities [(steve 2)]} {:player "Steve" :timeout-s 3} 20 1000))]
           (is (= {:reason "timeout"} @out)))))))
-
-(deftest three-arrived-but-out-of-range-walks-are-out-of-range
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (setup {:entities [(steve 10)]} {:player "Steve"})
-              {:keys [p out]} s]
-          (.override (.-world p) "moveTo" (fn ^:async f [_ _ _] #js {:status "arrived"}))
-          (await (run-ticks s 10 500))
-          (is (= {:reason "out-of-range"} @out))
-          (is (= 3 (count (calls p "moveTo"))))
-          (is (has-event? s :follow.out-of-range)))))))

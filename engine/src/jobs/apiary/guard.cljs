@@ -136,6 +136,7 @@
   "Move off the fire's cell once when standing in it. Resolves to true when clear."
   [c {:keys [x y z] :as fire}]
   (when (on-fire? c fire)
+    ;; raw moveTo kept: a two-block hop out of a fire cell, an emergency step with no door to open and no time for a plan.
     (await (ctx/act c :moveTo (clj->js {:pos {:x (+ x 2) :y y :z z} :range 0}))))
   (not (on-fire? c fire)))
 

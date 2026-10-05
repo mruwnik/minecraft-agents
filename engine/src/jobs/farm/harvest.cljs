@@ -2,7 +2,9 @@
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
             [engine.jobs.gate :as gate]
-            [engine.jobs.util :as u]))
+            [engine.jobs.util :as u]
+            [engine.path.near :as near]
+            [engine.path.walk :as walk]))
 
 (def doc
   "Cut the ripe crops within :radius of a centre (the body's position when the job first runs,
@@ -209,18 +211,18 @@
    debts))
 
 (defn ^:async walk!
-  "Walk until within range of pos: :there, :partial (closer, call again), :no-path (the pathfinder
-  found none) or :blocked (no progress, maybe only this time)."
+  "Walk until within range of pos with the engine walker (one near/walk-round!, doors :shut): :there, :partial (closer,
+  call again), :no-path (the plan found none) or :blocked (no progress, maybe only this time, or no pathWorld sensing)."
   [c pos range]
-  (if (u/within? (u/self-pos c) pos range)
-    :there
-    (let [r (await (ctx/act c :moveTo (clj->js {:pos pos :range range})))
-          no-path? (= "noPath" (.-reason r))]
-      (case (.-status r)
-        "arrived" :there
-        "partial" (if no-path? :no-path :partial)
-        "blocked" (if no-path? :no-path :blocked)
-        :blocked))))
+  (cond
+    (u/within? (u/self-pos c) pos range) :there
+    (nil? (walk/path-world (:primitives c))) (do (ctx/note-walk! c "blocked" 0) :blocked)
+    :else (let [{:keys [result status]} (await (near/walk-round! c (near/cell-of pos) range {:doors :shut}))
+                no-path? (= :no-path (:status result))]
+            (case status
+              "arrived" :there
+              "partial" (if no-path? :no-path :partial)
+              (if no-path? :no-path :blocked)))))
 
 (defn carried-names [p] (set (map :name (u/inventory p))))
 

@@ -330,6 +330,7 @@
         (ctx/update-mem! c assoc :last-seen now)
         (if (nil? target)
           (await (cornered! c "no open way away from the hostile"))
+          ;; raw moveTo kept: a flight from a danger; planning with doors would cost the time the retreat needs, and a shut door in the way ends the retreat as :blocked.
           (let [r (await (ctx/act c :moveTo (clj->js {:pos target :range 1})))]
             (if (= "blocked" (.-status r))
               (await (cornered! c "the way away from the hostile is blocked"))

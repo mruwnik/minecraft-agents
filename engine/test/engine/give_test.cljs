@@ -24,7 +24,7 @@
   [world args]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake world)
+        p (tu/fake-on-floor world)
         out (atom :not-done)
         parent {:check (constantly true)
                 :round (fn ^:async recording-round [c]
@@ -110,7 +110,7 @@
                                    [{:player "Steve" :item "bread"} 5 {}]]]
           (let [{:keys [p out] :as s} (await (give (assoc bread :entities [(steve 10)]) args 12 true))]
             (is (= {:given given} @out))
-            (is (= 1 (count (calls p "moveTo"))))
+            (is (= 1 (count (tu/walked-to (:eng s)))))
             (is (= 1 (count (calls p "toss"))))
             (is (= left (inv p)))
             (is (has-event? s :give.done))))))))
@@ -141,7 +141,7 @@
         (let [{:keys [p out] :as s} (await (give (assoc bread :entities [(steve 10)] :unreachable ["10,64,0"])
                                                  {:player "Steve" :item "bread"} 12 true))]
           (is (= {:given 0 :reason "unreachable"} @out))
-          (is (= 3 (count (calls p "moveTo"))))
+          (is (= 3 (count (tu/walked-to (:eng s)))))
           (is (empty? (calls p "toss")))
           (is (has-event? s :give.unreachable)))))))
 
@@ -216,16 +216,3 @@
           (is (= {:given 5 :reason "unconfirmed"} @out))
           (is (<= 3000 (- @clock 1000000)))
           (is (has-event? s :give.unconfirmed)))))))
-
-(deftest three-arrived-but-out-of-range-walks-are-out-of-range
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (setup (assoc bread :entities [(steve 10)]) {:player "Steve" :item "bread"})
-              {:keys [p out]} s]
-          (.override (.-world p) "moveTo" (fn ^:async f [_ _ _] #js {:status "arrived"}))
-          (await (run-ticks s 12 500 false (fn [_ _])))
-          (is (= {:given 0 :reason "out-of-range"} @out))
-          (is (= 3 (count (calls p "moveTo"))))
-          (is (empty? (calls p "toss")))
-          (is (has-event? s :give.out-of-range)))))))

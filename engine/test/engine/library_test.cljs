@@ -608,28 +608,28 @@
 
 (def pace-args {:a {:x 5 :y 64 :z 0} :b {:x 10 :y 64 :z 0} :laps 3 :rounds 2})
 
-(defn move-xs [p] (mapv #(.-x (.-pos (.-args %))) (calls p "moveTo")))
+(defn move-xs [eng] (mapv :x (tu/walked-to eng)))
 
 (deftest pace-walks-a-b-a-b-in-order-and-continues
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {})]
+        (let [{:keys [eng]} (setup {})]
           (core/submit! eng (list 'jobs.movement.pace pace-args) {})
           (await (core/tick! eng))
-          (is (= [5 10 5 10 5 10] (move-xs p)))
+          (is (= [5 10 5 10 5 10] (move-xs eng)))
           (is (= 1 (count (:list (core/state eng)))) "still listed after round one"))))))
 
 (deftest pace-ends-with-a-warn-when-a-leg-does-not-arrive
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:noPath ["10,64,0"]})]
+        (let [{:keys [eng seen]} (setup {:noPath ["10,64,0"]})]
           (core/submit! eng (list 'jobs.movement.pace pace-args) {})
           (await (core/tick! eng))
-          (is (= [5 10] (move-xs p)) "ends at the blocked leg")
+          (is (= [5 10] (move-xs eng)) "ends at the blocked leg")
           (is (= [] (:list (core/state eng))) "done at once, not round after round")
-          (is (= [{:to {:x 10 :y 64 :z 0} :status "blocked" :reason "noPath"}]
+          (is (= [{:to {:x 10 :y 64 :z 0} :status "blocked"}]
                  (->> @seen (filter #(= :leg-unfinished (:kind %)))
                       (mapv #(select-keys % [:to :status :reason]))))))))))
 
@@ -637,12 +637,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {})]
+        (let [{:keys [eng]} (setup {})]
           (core/submit! eng (list 'jobs.movement.pace pace-args) {})
           (await (core/tick! eng))
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))))
-          (is (= 12 (count (calls p "moveTo")))))))))
+          (is (= 12 (count (tu/walked-to eng)))))))))
 
 ;; ------------------------------------------------- look-around, every-interval
 

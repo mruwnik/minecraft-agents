@@ -14,7 +14,7 @@
   "An engine over the fake world spec with the plans {id plan} as its world data."
   [spec plans]
   (let [[seen sink] (tu/legacy-capture-sink)
-        p (tu/fake spec)
+        p (tu/fake-on-floor spec)
         w (world/of-data plans {})
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref h/clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref h/clock)})
@@ -132,7 +132,7 @@
         (let [{:keys [eng p w]} (start {:blocks (h/field "wheat" 7 (range 2 6) [9]) :ages (h/ages 7 (range 2 6) [9])
                                         :drops h/wheat-drops}
                                        {"field" (field-plan [2 9])})]
-          (.override (.-world p) "moveTo"
+          (.override (.-world p) "steer"
                      (fn ^:async f [token args impl]
                        (world/set-data! w {"field" (field-plan [2])} {})
                        (await (impl token args))))

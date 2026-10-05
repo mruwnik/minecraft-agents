@@ -387,6 +387,7 @@
 (defn ^:async step-off!
   "Walk two blocks off the column of pos, which the body stands in. :continue."
   [c pos]
+  ;; raw moveTo kept: a two-block hop off the cell the body stands on, in the open work area, to free that cell for a sapling; no door is on the way.
   (let [r (await (ctx/act c :moveTo (clj->js {:pos (update pos :x + 2) :range 1})))]
     (when-not (#{"arrived" "partial"} (.-status r))
       (fail! c pos :unreachable))

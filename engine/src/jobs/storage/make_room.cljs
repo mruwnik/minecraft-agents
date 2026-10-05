@@ -209,6 +209,7 @@
   (let [{:keys [tossed-at toss-dir]} (ctx/mem c)
         away (:away (:args c))
         [dx dz] toss-dir
+        ;; raw moveTo kept: a hop of a few blocks away from the spot the items were tossed, on open ground beside the chest; no door is on the way.
         _ (await (ctx/act c :moveTo (clj->js {:pos {:x (- (:x tossed-at) (* away dx)) :y (:y tossed-at) :z (- (:z tossed-at) (* away dz))}
                                               :range 1 :timeoutS 10})))]
     (ctx/update-mem! c assoc :walked true)

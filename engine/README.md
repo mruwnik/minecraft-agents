@@ -1769,6 +1769,8 @@ plans and walks with it one round at a time, and so does every job that walks wi
 60 s, a `:moved` entry; `:there`, `:partial` when it ended more than 1 closer, `:blocked`; `{:doors :shut}` by default, herd, shut-gate and
 lead-to's fence walk pass `:never`). Live (ProbeNight, 2026-10-04, scenarios `live-ProbeNight-exec-*.edn`): flat 30 blocks 6.95 blocks/s against `moveTo` 7.0; steps, a corner slide, an 8-high ladder up and down all arrived; a manual `take` cuts the walk with every control released.
 
+Jobs that walk to a target use `walk-near!` (or one `walk-round!`, as `jobs.farm.harvest` does to tell a no-path walk from a blocked one) and so pass shut wooden doors: `attack`/`hunt`, `leash`, `shear`, `unleash`, `give`, `follow`, `pace` and `harvest` (`engine.job-walk-doors-test`: from inside a doored hut each one leaves through the door and shuts it; a chased target is aimed at again each steer, bounded by the job's walk timeout). The raw `moveTo` stays only where the walk is a hop of a few blocks in an open work area (forestry step-off, `make_room` walk-away, `clear_box` step-off, apiary guard `clear-fire!`), an emergency step with no time to plan (`breathe`, `extinguish`, `retreat`), a step into the job's own pit (`dig-in`), or the job's own walk home (`mine`, `unstick`).
+
 ## Migrating old bots
 
 `npx shadow-cljs compile migrate`, then `node out/migrate.cjs --world <world> [--dry-run] [--worlds <dir>] [--state-dir <legacy-parent>] Name...` (default state

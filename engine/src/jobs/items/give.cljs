@@ -1,13 +1,14 @@
 (ns jobs.items.give
   (:require [engine.ctx :as ctx]
-            [engine.jobs.util :as u]))
+            [engine.jobs.util :as u]
+            [engine.path.near :as near]))
 
 (def doc
   "Walk to the player :player, toss them :count of :item (everything carried
   when nil) and confirm the drop was taken. Before the toss: nothing carried
   ends it with {:given 0 :reason \"no-item\"} (warn give.no-item); a player not
   seen within :radius is waited for 2 s, then {:given 0 :reason \"gone\"} (info
-  give.gone); one farther than :reach is walked to (moveTo, :timeoutS 5), and
+  give.gone); one farther than :reach is walked to (engine walker, doors :shut, steers of 5 s), and
   three blocked walks in a row give {:given 0 :reason \"unreachable\"} (warn
   give.unreachable). In reach the body looks at the player's head and tosses;
   the item entities of the item within :radius that were not there before are
@@ -82,8 +83,8 @@
   the third in a row ends as out-of-range. :continue or :done."
   [c pos]
   (let [reach (:reach (:args c))
-        r (await (ctx/act c :moveTo (clj->js {:pos pos :range reach :timeoutS walk-timeout-s})))
-        blocked (if (contains? #{"arrived" "partial"} (.-status r)) 0 (inc (:blocked (ctx/mem c) 0)))
+        r (await (near/walk-near! c pos reach {:doors :shut :timeout-s walk-timeout-s}))
+        blocked (if (contains? #{:there :partial} r) 0 (inc (:blocked (ctx/mem c) 0)))
         out (if (or (> blocked 0) (u/within? (u/self-pos c) pos reach)) 0 (inc (:out-of-range (ctx/mem c) 0)))]
     (ctx/update-mem! c assoc :blocked blocked :out-of-range out)
     (cond

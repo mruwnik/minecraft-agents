@@ -196,6 +196,7 @@
               :continue)
 
           water
+          ;; raw moveTo kept: an emergency step into water or out of fire (range 0), a few blocks, no time for a plan.
           (do (await (ctx/act c :moveTo (clj->js {:pos (:pos water) :range 0})))
               (finish c))
 
@@ -209,6 +210,7 @@
             (if-not target
               (or (when refusal (await (pour-last-resort! c pos refusal)))
                   (u/fail! c :extinguish_stuck "no safe cell within reach"))
+              ;; raw moveTo kept: an emergency step into water or out of fire (range 0), a few blocks, no time for a plan.
               (let [r (await (ctx/act c :moveTo (clj->js {:pos target :range 0})))]
                 (cond
                   (clear? c) :done

@@ -172,6 +172,7 @@
   (let [me (u/self-pos c)
         min-x (apply min (map :x (cells (:args c))))
         dest {:x (dec min-x) :y (js/Math.floor (:y me)) :z (js/Math.floor (:z me))}
+        ;; raw moveTo kept: one step to the cell beside the box at the feet level the body already stands on, to leave the cell the job must clear.
         r (await (ctx/act c :moveTo (clj->js {:pos dest :range 0})))]
     (when (= "blocked" (.-status r))
       (bump! c (first (apply min-key #(u/dist me (first %)) todo)) :unreachable))

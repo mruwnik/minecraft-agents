@@ -1,13 +1,14 @@
 (ns jobs.animals.leash
   (:require [engine.ctx :as ctx]
             [engine.jobs.animals :as animals]
-            [engine.jobs.util :as u]))
+            [engine.jobs.util :as u]
+            [engine.path.near :as near]))
 
 (def doc
   "Put a lead on one animal of the mob type :mob (a name such as \"cow\")
   within :radius and end: a one-shot order that starts and ends itself. Each
   round takes the nearest animal not on a lead already (to anyone), not
-  given up on and not named in :skip (uuids or ids), walks to within 3 blocks (moveTo range 2, :walk-timeout-s) and
+  given up on and not named in :skip (uuids or ids), walks to within 3 blocks (engine walker, range 2, doors :shut, steers bounded by :walk-timeout-s) and
   uses the lead the body carries on it. Animals are tracked by uuid (entity
   ids change when chunks reload), by id when it has none. The use counts only
   when the sensing then shows the animal on this body's lead (leashedToMe); an
@@ -82,10 +83,10 @@
   (let [tpos (u/pos-of (.-pos animal))]
     (if (<= (u/dist (u/self-pos c) tpos) reach)
       :there
-      (let [r (await (ctx/act c :moveTo (clj->js {:pos tpos :range 2 :timeoutS (:walk-timeout-s (:args c))})))]
-        (case (.-status r)
-          "arrived" :there
-          "partial" :partial
+      (let [r (await (near/walk-near! c tpos 2 {:doors :shut :timeout-s (:walk-timeout-s (:args c))}))]
+        (case r
+          :there :there
+          :partial :partial
           (do (give-up! c (animals/key-of animal) :unreachable)
               (bump-row! c)
               :blocked))))))

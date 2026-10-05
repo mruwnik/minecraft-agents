@@ -20,7 +20,7 @@
   "An engine over primitives p (made from world when not given) on dir."
   [{:keys [world p dir shared]}]
   (let [[seen sink] (tu/legacy-capture-sink)
-        p (or p (tu/fake world))
+        p (or p (tu/fake-on-floor world))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (or dir (tu/tmp-dir)) :now #(deref clock)
                           :world (or shared (ew/of-data {} {} []))
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -258,13 +258,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (start {:world far-cell})
-              blocked (atom 0)]
-          (.override (.-world p) "moveTo"
-                     (fn ^:async f [token args impl]
-                       (if (< @blocked 2)
-                         (do (swap! blocked inc) #js {:status "blocked"})
-                         (await (impl token args)))))
+        (let [{:keys [eng p]} (start {:world far-cell})]
+          (tu/short-walks! p 1 2) ; the first two steers run for no time: blocked walks without a reason
           (let [result (await (child-outcome eng job {} 100))]
             (is (= {:cut 1 :replanted 1 :bare [] :lost [] :gave-up false} result))))))))
 
@@ -276,7 +271,7 @@
               {:keys [eng p]} (start {:world {:blocks (zipmap cells (repeat "wheat")) :ages (zipmap cells (repeat 7))
                                               :noPath cells}})
               result (await (child-outcome eng job {:radius 14} 100))]
-          (is (= 4 (count (calls p "moveTo"))))
+          (is (= 4 (count (tu/walked-to eng))))
           (is (zero? (count (calls p "dig"))))
           (is (= {:cut 0 :replanted 0 :bare [] :lost [] :gave-up true} result)))))))
 
@@ -286,9 +281,10 @@
       (fn ^:async t []
         (let [cells (far-cells [8 9])
               {:keys [eng p]} (start {:world {:blocks (zipmap cells (repeat "wheat")) :ages (zipmap cells (repeat 7))
-                                              :unreachable cells}})
+                                              }})
+              _ (tu/short-walks! p 1) ; every steer runs for no time: blocked walks without a reason
               result (await (child-outcome eng job {} 100))]
-          (is (= 6 (count (calls p "moveTo"))))
+          (is (= 6 (count (tu/walked-to eng))))
           (is (= {:cut 0 :replanted 0 :bare [] :lost [] :gave-up false} result))
           (is (= [] (:list (core/state eng)))))))))
 
@@ -323,12 +319,12 @@
           (is (every? true? @owed)))))))
 
 (defn send-body-away!
-  "After the dig at the one-cell field the body stands 60 blocks away, as after a chase or a respawn."
+  "After the dig at the one-cell field the body stands 32 blocks away, on the walk floor, as after a chase or a respawn."
   [p]
   (.override (.-world p) "dig"
              (fn ^:async f [token args impl]
                (let [r (await (impl token args))]
-                 (fake/swap-self! p assoc :pos [60 64 0])
+                 (fake/swap-self! p assoc :pos [35 64 0])
                  r))))
 
 (deftest a-body-far-from-its-field-walks-back-and-replants
@@ -337,9 +333,9 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (start {:world one-cell})]
           (send-body-away! p)
-          (let [result (await (child-outcome eng job {} 100))
-                homeward (filterv #(zero? (.-x (.-pos (.-args %)))) (calls p "moveTo"))]
-            (is (= 1 (count homeward)))
+          (let [result (await (child-outcome eng job {} 600))
+                homeward (filterv #(zero? (:x %)) (tu/walked-to eng))]
+            (is (pos? (count homeward)) "walked back to the field")
             (is (= {:cut 1 :replanted 1 :bare [] :lost [] :gave-up false} result))
             (is (= "wheat" (block-at p 3 64 0)))))))))
 
@@ -350,13 +346,9 @@
         (let [{:keys [eng p]} (start {:world one-cell})
               cell {:x 3 :y 64 :z 0}]
           (send-body-away! p)
-          (.override (.-world p) "moveTo"
-                     (fn ^:async f [token args impl]
-                       (if (zero? (.-x (.-pos args)))
-                         #js {:status "blocked"}
-                         (await (impl token args)))))
+          (tu/short-walks! p 1) ; every steer runs for no time: the walk home is blocked each time
           (let [result (await (child-outcome eng job {} 100))]
-            (is (= 3 (count (filterv #(zero? (.-x (.-pos (.-args %)))) (calls p "moveTo")))))
+            (is (= 3 (count (filterv #(zero? (:x %)) (tu/walked-to eng)))))
             (is (= {:cut 1 :replanted 0 :bare [cell] :lost [] :gave-up false} result))))))))
 
 ;; ------------------------------------------------------------------ zones and claims

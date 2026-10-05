@@ -245,6 +245,7 @@
           :done)
       (not (sh/solid-at? p below))
       (let [before (:y (sh/feet p))
+            ;; raw moveTo kept: a step into the cell the job is digging, range 0.5, inside its own pit; the planner has no standable goal there.
             r (await (ctx/act c :moveTo (clj->js {:pos below :range 0.5})))]
         (if (< (:y (sh/feet p)) before)
           (do (ctx/update-mem! c dissoc :failures) :continue)
@@ -586,6 +587,7 @@
       (let [{:keys [x y z]} (sh/feet p)
             [d] door
             beyond {:x (+ (:x d) (- (:x d) x)) :y y :z (+ (:z d) (- (:z d) z))}]
+        ;; raw moveTo kept: a step into the cell the job is digging, range 0.5, inside its own pit; the planner has no standable goal there.
         (await (ctx/act c :moveTo (clj->js {:pos (if (sh/solid-at? p (update beyond :y dec)) beyond d) :range 0.5})))
         (update-leave! c assoc :stepped true)
         :continue))))

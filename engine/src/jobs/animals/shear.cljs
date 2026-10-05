@@ -1,13 +1,14 @@
 (ns jobs.animals.shear
   (:require [engine.ctx :as ctx]
             [engine.jobs.animals :as animals]
-            [engine.jobs.util :as u]))
+            [engine.jobs.util :as u]
+            [engine.path.near :as near]))
 
 (def doc
   "Shear the adult sheep within :radius and pick up the wool: a one-shot order
   that starts and ends itself. Each round takes the nearest adult sheep not
   shorn or given up on yet (babies and sheep already sheared are skipped),
-  walks to within 3 blocks (moveTo range 2, :walk-timeout-s) and uses the
+  walks to within 3 blocks (engine walker, range 2, doors :shut, steers bounded by :walk-timeout-s) and uses the
   shears the body carries on it. Sheep are tracked by uuid (entity ids change
   when chunks reload), by id when it has none. A sheep is shorn when the
   shearing took effect; it is given up on when its walk is blocked
@@ -112,10 +113,10 @@
   (let [tpos (u/pos-of (.-pos sheep))]
     (if (<= (u/dist (u/self-pos c) tpos) reach)
       :there
-      (let [r (await (ctx/act c :moveTo (clj->js {:pos tpos :range 2 :timeoutS (:walk-timeout-s (:args c))})))]
-        (case (.-status r)
-          "arrived" (do (reset-row! c) :there)
-          "partial" :partial
+      (let [r (await (near/walk-near! c tpos 2 {:doors :shut :timeout-s (:walk-timeout-s (:args c))}))]
+        (case r
+          :there (do (reset-row! c) :there)
+          :partial :partial
           (do (give-up! c (animals/key-of sheep) :unreachable)
               (bump-row! c)
               :blocked))))))

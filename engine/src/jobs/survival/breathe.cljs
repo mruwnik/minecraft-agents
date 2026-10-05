@@ -156,6 +156,7 @@
         surfaced?)
 
       :else
+      ;; raw moveTo kept: an emergency step to air or out of water (range 0), where the planner may have no standable cell; no time for a plan.
       (= "arrived" (status (await (ctx/act c :moveTo (clj->js {:pos {:x (:x target) :y fy :z (:z target)}
                                                                 :range 0}))))))))
 
@@ -192,6 +193,7 @@
       false
       (do (when (solid-at? p above)
             (await (tidy/dig! c above true)))
+          ;; raw moveTo kept: an emergency step to air or out of water (range 0), where the planner may have no standable cell; no time for a plan.
           (= "arrived" (status (await (ctx/act c :moveTo (clj->js {:pos head :range 0})))))))))
 
 (defn hold-decider
@@ -282,6 +284,7 @@
         (note! c why)
         (if side
           (do (ctx/update-mem! c assoc :side-tried true)
+              ;; raw moveTo kept: an emergency step to air or out of water (range 0), where the planner may have no standable cell; no time for a plan.
               (await (ctx/act c :moveTo (clj->js {:pos side :range 0})))
               (if (nil? (s/situation p min-oxygen)) (after-situation c) :continue))
           (let [drowning? (= :drowning why)
