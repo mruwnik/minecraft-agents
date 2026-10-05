@@ -3,7 +3,10 @@
             [engine.access.rules :as rules]
             [engine.ctx :as ctx]
             [engine.jobs.access :as access]
+            [engine.jobs.tidy :as tidy]
+            [engine.jobs.tools :as tools]
             [engine.jobs.util :as u]
+            [jobs.build.clear-box :as clear-box]
             [engine.path.near :as near]
             [engine.placement :as placement]
             [plan.rail :as rail]
@@ -11,23 +14,30 @@
 
 (def doc
   "Build what a plan of the body's world wants (:plan, optionally only its :part) from what the body carries: every
-  planned cell that stands empty (plan.shape judges it :missing) gets its block placed. Wrong blocks are reported,
-  never dug, and :clear cells, crops and trees are not this job's. Each round re-reads the plan and the world and
-  takes the first step that applies: (1) place every buildable cell within :reach of the eye, lowest first (a cell
+  planned cell that stands empty (plan.shape judges it :missing) gets its block placed, and so does one that holds a
+  replaceable block (leaf_litter, fern, vine, water ...; engine.access.rules/replaceable), which a place takes over.
+  A cell holding any other wrong block (dirt, leaves, stone ...) is dug first and then placed, when its item is
+  carried and the rules allow the dig (own or unzoned cells, another plan's footprint and foreign zones refuse it as
+  for a place; with :ignore-zones? the cell is dug and the trespass noted as tidy does) with the best carried tool,
+  by hand for what needs none (everything but pickaxe blocks, leaves excepted: a pickaxe block without a pickaxe is given up
+  as :no-tool); a block it could not dig, or that is not allowed, is listed under :wrong, and one that came out of a
+  place in the wrong state is listed and never dug or placed again. A door's upper half and a bed's head (and a tall
+  plant's upper half) are never targets: the lower or foot cell places the whole item, and a wrong block in the other
+  half is dug first. :clear cells, crops and trees are not this job's. Each round re-reads the plan and the world and
+  takes the first step that applies: (0) dig the wrong blocks in reach (see above), after the places; (1) place every buildable cell within :reach of the eye, lowest first (a cell
   is buildable when its block is carried, the cell below it is not itself still owed, it is not the body's own
   feet or head cell, and engine.placement finds a click that gives its state: the neighbour, face, cursor, look and
   sneak go with the place, from wherever the body stands; a :facing want that engine.placement places plainly is
   placed only while the body looks the way it should face, standing on the far side); (2) else walk to a stand
   cell two blocks beside the nearest buildable cell (for such a plain :facing want, on the side it faces away from); (3) else walk toward the nearest cell nobody can see (unloaded), which is never taken as built; (4) else
-  finish. A cell whose state no neighbour gives now (or a door's upper half, a bed's head: the other part makes them)
-  waits; still missing at the end it is given up with engine.placement's reason (:no-support, :no-room,
-  :other-half, :opened, :double-slab). A placed block whose reported state is not the want is listed under :wrong
+  finish. A cell whose state no neighbour gives now waits; still missing at the end it is given up with engine.placement's
+  reason (:no-support, :no-room, :opened, :double-slab). A placed block whose reported state is not the want is listed under :wrong
   with :placed true and the state it came out in; it is never dug or placed again. A cell whose place is refused (anything but placed, occupied or
   no-item) or whose stand cell cannot be walked to :give-up times is given up. It finishes with a result {:placed n
   :missing [[x y z] ...] :short {item n} :given-up {[x y z] :refused|:unreachable|:unloaded|reason} :wrong [{:pos :found :want}]
   :refused [...]}
   and the events build.done (info), build.short (warn: the items still lacking), build.gave-up (warn) and
-  build.wrong (warn). The check declines, with one build.declined warn naming the plan and the reason, while the
+  build.wrong (warn). The event texts name the count and the first few cells; the whole list is in :cells of the event and in the result. The check declines, with one build.declined warn naming the plan and the reason, while the
   plan is missing, unreadable or has no cells to build (in :part), and, before the job has begun,
   while cells are missing but none of their blocks is carried, and while no zone list has been read. Every place goes
   through engine.access.rules/may-place? with the zones and the footprints of the OTHER active plans, when the cell is
@@ -119,6 +129,24 @@
 (defn shortage-text [short]
   (str/join ", " (map (fn [[item n]] (str item " " n)) short)))
 
+(def tall-plants #{"tall_grass" "large_fern" "sunflower" "lilac" "rose_bush" "peony" "tall_seagrass" "pitcher_plant"})
+
+(defn companion?
+  "Whether want is the other half of a two-block item: a door's or tall plant's upper half, a bed's head. The lower or
+  foot cell places both; the companion is never a target of its own."
+  [want]
+  (let [b (when (map? want) (:block want))
+        is (fn [k v] (= v (some-> (get want k) name)))]
+    (boolean (and b (or (and (is :half "upper") (or (str/ends-with? b "_door") (tall-plants b)))
+                        (and (is :part "head") (str/ends-with? b "_bed")))))))
+
+(def soft-by-hand #"_leaves$|_wool$|_carpet$|glass")
+
+(defn by-hand?
+  "Whether the block is dug without a tool that suits it (everything but pickaxe blocks, and soft ones)."
+  [block-name]
+  (or (not= "pickaxe" (tools/tool-kind block-name)) (some? (re-find soft-by-hand block-name))))
+
 (defn plan-trouble
   "Why a plan answer with these cells cannot be built, or nil."
   [answer cells]
@@ -190,13 +218,30 @@
        (#(shape/plan-minus-world % (partial world-block p)))
        (mapv #(assoc % :item (item-for (:want %) carried)))))
 
+(defn prepared
+  "Cells (as judged) ready for the rounds: a wrong cell holding a replaceable block is :missing (placed into
+  directly); a companion half is marked :companion; a wrong block of another kind that the body carries the item for,
+  that is no container, not already misplaced by this job, is marked :dig? (dug, then placed)."
+  [cells carried misplaced]
+  (mapv (fn [{:keys [answer found want item pos] :as cell}]
+          (let [wrong? (= :wrong answer)
+                loose? (and wrong? (rules/replaceable found))
+                digs? (and wrong? (not loose?) item (contains? carried item) (not (contains? misplaced pos))
+                           (not (clear-box/kept? [] found)))]
+            (cond-> cell
+              (companion? want) (assoc :companion true)
+              loose? (assoc :answer :missing)
+              digs? (assoc :dig? true))))
+        cells))
+
 (defn planned
   "{:cells judged} for the plan in the args, or {:trouble text} (warned once per reason)."
   [c]
   (let [{:keys [plan part]} (:args c)
         answer (ctx/plan c plan)
         cells (when (and answer (not (:broken answer)))
-                (judged (:primitives c) answer part (set (keys (carried-counts (:primitives c))))))
+                (let [carried (set (keys (carried-counts (:primitives c))))]
+                  (prepared (judged (:primitives c) answer part carried) carried (:misplaced (ctx/mem c) {}))))
         trouble (or (plan-trouble answer cells)
                     (when (and (nil? (ctx/zones c)) (not (:ignore-zones? (:args c)))) "no zone list has been read"))]
     (if-not trouble
@@ -237,22 +282,30 @@
           ks (when (map? wanted) (keys (dissoc wanted :block)))]
       (shape/want-text (into {:block (:name block)} (select-keys (:state block) ks))))))
 
-(defn missing [cells] (filterv #(and (= :missing (:answer %)) (:item %)) cells))
+(defn missing
+  "The cells to place: empty (or holding a replaceable block), with an item; never a companion half."
+  [cells]
+  (filterv #(and (= :missing (:answer %)) (:item %) (not (:companion %))) cells))
+
+(defn digging
+  "The cells holding a wrong block to dig before they are placed."
+  [cells]
+  (filterv :dig? cells))
 
 (defn unseen
   "The cells with an item that nobody can see now (unloaded), not given up."
   [cells given-up]
-  (filterv #(and (nil? (:found %)) (:item %) (not (contains? given-up (:pos %)))) cells))
+  (filterv #(and (nil? (:found %)) (:item %) (not (:companion %)) (not (contains? given-up (:pos %)))) cells))
 
 (defn owed
-  "The cells still to build: missing or unseen."
+  "The cells still to build: missing, wrong to dig, or unseen."
   [cells]
-  (into (missing cells) (unseen cells {})))
+  (-> (missing cells) (into (digging cells)) (into (unseen cells {}))))
 
 (defn buildable
   "The missing cells this body can work on: item carried, not given up, the cell below not itself owed."
   [cells carried given-up]
-  (let [owed (set (map :pos (missing cells)))]
+  (let [owed (set (map :pos (into (missing cells) (digging cells))))]
     (filterv #(and (pos? (get carried (:item %) 0))
                    (not (contains? given-up (:pos %)))
                    (not (owed (update (:pos %) 1 dec))))
@@ -268,6 +321,7 @@
           (or (:begun (ctx/mem c))
               (empty? (owed cells))
               (seq (buildable cells (carried-counts p) {}))
+              (seq (digging cells))
               (some #(pos? (get (carried-counts p) (:item %) 0)) (unseen cells {}))
               (do (ctx/warn-once! c [(:plan (:args c)) :no-items] :build.declined
                                   (let [reason (str "nothing carried to build with: "
@@ -306,6 +360,46 @@
           ("occupied" "no-item") nil
           (ctx/update-mem! c count-fail pos :refused (:give-up (:args c))))))))
 
+(defn pos-map [pos] (zipmap [:x :y :z] pos))
+
+(defn ^:async dig-one!
+  "Dig the wrong block of the cell with the best carried tool after asking the access rules once more; a refusal is
+  booked, a failed dig counts a failure, a dug cell counts a dig (given up as :refilled when it keeps coming back)."
+  [c {:keys [pos]}]
+  (let [p (:primitives c)
+        v (access/may-dig? (rules-input c) (pos-map pos))
+        accept (set (:accept (:args c)))
+        judged (access/judge v accept)
+        n (u/block-name p (pos-map pos))]
+    (case judged
+      :ok (let [tool (tools/best-tool (map :name (u/inventory p)) n)]
+            (when (and tool (not= tool (.-held (.self p))))
+              (await (ctx/act c :equip #js {:item tool :dest "hand"})))
+            (let [status (.-status (await (tidy/dig! c (pos-map pos))))]
+              (case status
+                "dug" (ctx/update-mem! c #(let [m (update-in % [:digs pos] (fnil inc 0))]
+                                            (if (>= (get-in m [:digs pos]) (:give-up (:args c)))
+                                              (assoc-in m [:given-up pos] :refilled)
+                                              m)))
+                "missing" nil
+                (ctx/update-mem! c count-fail pos :refused (:give-up (:args c))))))
+      :refused (ctx/update-mem! c refuse pos (select-keys v [:reason :zone :plan :claim]))
+      :hazard (ctx/update-mem! c refuse pos {:reason :hazard
+                                             :hazards (vec (distinct (remove accept (map :reason (:hazards v)))))})
+      nil)))
+
+(defn diggable
+  "The cells of digs not closed (given up or refused); a pickaxe block without a pickaxe is given up here as :no-tool."
+  [c digs closed]
+  (let [names (map :name (u/inventory (:primitives c)))
+        open (remove #(contains? closed (:pos %)) digs)
+        {no-tool true ok false} (group-by #(boolean (and (not (by-hand? (:found %)))
+                                                         (nil? (tools/best-tool names (:found %)))))
+                                          open)]
+    (when (seq no-tool)
+      (ctx/update-mem! c update :given-up merge (into {} (map (fn [cell] [(:pos cell) :no-tool])) no-tool)))
+    (vec ok)))
+
 (defn in-reach
   "The buildable cells the body can place from where it stands, lowest first, then nearest."
   [c todo]
@@ -317,6 +411,15 @@
                        (or (:click %) (facing-ok? (facing-of (:want %)) (:pos %) body))))
          (sort-by (juxt #(get (:pos %) 1) #(eye-dist body (:pos %)))))))
 
+(defn in-dig-reach
+  "The cells to dig the body can reach from where it stands, lowest first, then nearest."
+  [c cells]
+  (let [body (u/self-pos c)
+        mine (body-cells body)]
+    (->> cells
+         (filter #(and (<= (eye-dist body (:pos %)) (:reach (:args c))) (not (mine (:pos %)))))
+         (sort-by (juxt #(get (:pos %) 1) #(eye-dist body (:pos %)))))))
+
 (defn ^:async walk-to!
   "Walk to a stand cell beside cell; a cell that cannot be walked to, or is still out of reach (or unseen, as
   :unloaded) on arrival, counts a failure."
@@ -324,7 +427,7 @@
   (let [body (u/self-pos c)
         planned (set (map :pos cells))
         bad (set (:bad-stands (ctx/mem c)))
-        facing (when-not (:click cell) (facing-of (:want cell)))
+        facing (when-not (or (:click cell) (:dig? cell)) (facing-of (:want cell)))
         stands (remove bad (stand-cells (:pos cell) (js/Math.floor (:y body)) facing planned))
         stand (first (sort-by #(u/dist body (zipmap [:x :y :z] %)) stands))
         give-up (:give-up (:args c))]
@@ -336,7 +439,7 @@
                                   (update :bad-stands (fnil conj []) stand))))
         (when (and (= :there w) (nil? (:found cell)))
           (ctx/update-mem! c count-fail (:pos cell) :unloaded give-up))
-        (when (and (= :there w) (:found cell) (empty? (in-reach c [cell])))
+        (when (and (= :there w) (:found cell) (empty? (if (:dig? cell) (in-dig-reach c [cell]) (in-reach c [cell]))))
           (ctx/update-mem! c count-fail (:pos cell) :unreachable give-up))))
     :continue))
 
@@ -361,6 +464,16 @@
     {:placed (:placed m 0) :missing (mapv :pos left) :short (shortage left (carried-counts (:primitives c)))
      :given-up given-up :wrong wrong :refused refused}))
 
+(def listed 8)
+
+(defn cells-text
+  "The count of items and the first few, as text for an event; the whole list goes in the event's data. Never clipped
+  with an ellipsis: it says how many more there are."
+  [items show]
+  (let [shown (take listed items)
+        more (- (count items) (count shown))]
+    (str (str/join ", " (map show shown)) (when (pos? more) (str ", and " more " more (all in :cells)")))))
+
 (defn announce!
   "Emit the build events of a summary: build.short, build.gave-up, build.refused and build.wrong warns, build.done."
   [c {:keys [short given-up refused wrong missing] :as result}]
@@ -372,15 +485,15 @@
     (when (seq given-up)
       (ctx/emit! c :build.gave-up :warn {:plan plan :cells given-up
                                          :text (str "build of " plan " gave up " (count given-up) " cells: "
-                                                    (str/join ", " (map (fn [[pos why]] (str (pr-str pos) " " (name why))) given-up)))}))
+                                                    (cells-text (sort-by key given-up) (fn [[pos why]] (str (pr-str pos) " " (name why)))))}))
     (doseq [[reason group] (group-by :reason refused)]
       (ctx/emit! c :build.refused :warn {:plan plan :reason reason :cells group
                                          :text (str "build of " plan " refused " (count group) " cells (" (name reason) "): "
-                                                    (str/join ", " (map #(str (pr-str (:pos %)) " " (or (:zone %) (:plan %) (str/join "," (map name (:hazards %))))) group)))}))
+                                                    (cells-text group #(str (pr-str (:pos %)) " " (or (:zone %) (:plan %) (str/join "," (map name (:hazards %)))))))}))
     (when (seq wrong)
       (ctx/emit! c :build.wrong :warn {:plan plan :cells wrong
                                        :text (str "build of " plan " left " (count wrong) " wrong blocks: "
-                                                  (str/join ", " (map #(str (pr-str (:pos %)) " " (:found %)) wrong)))}))
+                                                  (cells-text wrong #(str (pr-str (:pos %)) " " (:found %))))}))
     (ctx/emit! c :build.done :info {:plan plan :placed (:placed result) :missing (count left)
                                     :text (str "build of " plan " done: placed " (:placed result) ", still missing " (count left))})))
 
@@ -397,8 +510,10 @@
       (do (when-not (:begun (ctx/mem c)) (ctx/update-mem! c assoc :begun true))
           (let [closed #(merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))
                 todo (placeable c (permitted c (buildable cells (carried-counts (:primitives c)) (closed))))
+                digs (diggable c (digging cells) (closed))
                 given-up (closed)
                 near (in-reach c todo)
+                dig-near (in-dig-reach c digs)
                 nearest #(first (sort-by (fn [cell] (u/dist (u/self-pos c) (zipmap [:x :y :z] (:pos cell)))) %))]
             (cond
               (seq near) (do (loop [left near]
@@ -406,6 +521,12 @@
                                  (await (place-one! c (first left)))
                                  (recur (rest left))))
                              :continue)
+              (seq dig-near) (do (loop [left dig-near]
+                                   (when (seq left)
+                                     (await (dig-one! c (first left)))
+                                     (recur (rest left))))
+                                 :continue)
               (seq todo) (await (walk-to! c cells (nearest todo)))
+              (seq digs) (await (walk-to! c cells (nearest digs)))
               (seq (unseen cells given-up)) (await (walk-to! c cells (nearest (unseen cells given-up))))
               :else (finish! c cells)))))))

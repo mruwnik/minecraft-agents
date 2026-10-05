@@ -30,7 +30,7 @@
 (def loose
   "Cells a click cannot be made on: nothing there, a fluid, or what the game replaces."
   #{"air" "cave_air" "void_air" "water" "lava" "bubble_column" "fire" "soul_fire" "short_grass" "tall_grass" "grass"
-    "fern" "large_fern" "snow" "vine" "dead_bush" "seagrass" "tall_seagrass" "light"})
+    "fern" "large_fern" "snow" "vine" "dead_bush" "seagrass" "tall_seagrass" "light" "leaf_litter" "glow_lichen" "hanging_roots"})
 
 (def usable
   #"^(chest|trapped_chest|ender_chest|barrel|furnace|smoker|blast_furnace|crafting_table|hopper|dispenser|dropper|brewing_stand|enchanting_table|anvil|chipped_anvil|damaged_anvil|grindstone|stonecutter|loom|cartography_table|smithing_table|lectern|bell|beacon|lever|note_block|jukebox|cake|composter|flower_pot|repeater|comparator|daylight_detector|respawn_anchor|crafter)$|_(door|trapdoor|fence_gate|bed|button|shulker_box)$|^shulker_box$")

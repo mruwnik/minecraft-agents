@@ -110,16 +110,6 @@
           (is (= [[[4 64 3] "oak_fence"]] (places p)))
           (is (= 1 (:placed result))))))))
 
-(deftest a-wrong-block-is-reported-not-dug
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (start {:blocks {"4,64,3" "stone"} :inventory kit} {"pen" (pen-plan)})
-              result (await (h/child-outcome eng job {:plan "pen"} 200))]
-          (is (empty? (h/calls p "dig")))
-          (is (= "stone" (block p [4 64 3])))
-          (is (= [{:pos [4 64 3] :found "stone" :want "oak_fence"}] (:wrong result))))))))
-
 (deftest a-cell-refused-three-times-is-given-up
   (async done
     (tu/run-async done
@@ -373,3 +363,88 @@
         (let [{:keys [eng]} (start {:inventory kit} {"pen" (pen-plan)} nil)
               result (await (h/child-outcome eng job {:plan "pen" :ignore-zones? true} 200))]
           (is (= 9 (:placed result))))))))
+
+;; ---------------------------------------------------------------- wrong blocks in wanted cells
+
+(defn ^:async fence-run
+  "Build the pen with the blocks laid and the extra plans, items and args: [result p seen]."
+  [blocks inventory plans args]
+  (let [{:keys [eng p seen]} (start {:blocks blocks :inventory inventory} (merge {"pen" (pen-plan)} plans))
+        result (await (h/child-outcome eng job (merge {:plan "pen"} args) 300))]
+    [result p seen]))
+
+(deftest a-replaceable-block-in-a-wanted-cell-is-placed-into-directly
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (fence-run {"4,64,3" "leaf_litter" "5,64,3" "fern"} kit {} {}))]
+          (is (empty? (h/calls p "dig")))
+          (is (= "oak_fence" (block p [4 64 3])))
+          (is (= {:placed 9 :wrong [] :missing []} (select-keys result [:placed :wrong :missing]))))))))
+
+(deftest a-wrong-solid-block-is-dug-by-hand-when-no-tool-is-needed-then-placed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (fence-run {"4,64,3" "dirt" "2,64,3" "oak_leaves"} kit {} {}))]
+          (is (= 2 (count (h/calls p "dig"))))
+          (is (= ["oak_fence" "oak_fence"] (mapv #(block p %) [[4 64 3] [2 64 3]])))
+          (is (= {:placed 9 :wrong [] :missing [] :given-up {}} (select-keys result [:placed :wrong :missing :given-up]))))))))
+
+(deftest a-wrong-stone-is-dug-with-the-carried-pickaxe-and-without-one-is-given-up-as-no-tool
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[with p] (await (fence-run {"4,64,3" "stone"} (conj kit {:name "stone_pickaxe" :count 1}) {} {}))
+              [without q] (await (fence-run {"4,64,3" "stone"} kit {} {}))]
+          (is (= "oak_fence" (block p [4 64 3])))
+          (is (= [] (:wrong with)))
+          (is (empty? (h/calls q "dig")))
+          (is (= "stone" (block q [4 64 3])))
+          (is (= {[4 64 3] :no-tool} (:given-up without)))
+          (is (= [{:pos [4 64 3] :found "stone" :want "oak_fence"}] (:wrong without))))))))
+
+(deftest a-wrong-block-in-another-plans-cell-is-listed-and-never-dug
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (fence-run {"4,64,3" "dirt"} kit {"other" other-plan} {}))]
+          (is (empty? (h/calls p "dig")))
+          (is (= "dirt" (block p [4 64 3])))
+          (is (= [{:pos [4 64 3] :found "dirt" :want "oak_fence"}] (:wrong result)))
+          (is (= [{:pos [4 64 3] :reason :footprint :plan "other"}] (:refused result))))))))
+
+(deftest a-door-is-placed-once-at-its-lower-cell-over-wrong-blocks-and-never-gives-up-the-upper-half
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [door [{:id "door" :cells [[2 64 2]] :want {:block "oak_door" :facing :north :half :lower}}
+                    {:id "door-top" :cells [[2 65 2]] :want {:block "oak_door" :facing :north :half :upper}}]
+              [result p seen] (await (build door (assoc ground "2,64,2" "dirt" "2,65,2" "oak_leaves") [{:name "oak_door" :count 1}]))
+              [litter q] (await (build door (assoc ground "2,64,2" "leaf_litter") [{:name "oak_door" :count 1}]))]
+          (is (= [[[2 64 2] "oak_door"]] (places p)))
+          (is (= 2 (count (h/calls p "dig"))))
+          (is (= ["lower" "upper"] (mapv #(:half (state-at p %)) [[2 64 2] [2 65 2]])))
+          (is (= {:placed 1 :missing [] :wrong [] :given-up {}} (select-keys result [:placed :missing :wrong :given-up])))
+          (is (empty? (h/events-of seen :build.gave-up)))
+          (is (= [[[2 64 2] "oak_door"]] (places q)))
+          (is (empty? (h/calls q "dig")))
+          (is (= {:placed 1 :wrong [] :given-up {}} (select-keys litter [:placed :wrong :given-up]))))))))
+
+(deftest every-wrong-cell-is-listed-and-the-event-text-is-never-clipped
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cells (mapv (fn [x] [x 64 0]) (range 10 40))
+              wall {"wall" {:id "wall" :parts [{:id "w" :cells cells :want "oak_planks"}]}}
+              guard {"other" {:id "other" :parts [{:id "o" :cells cells :want "stone"}]}}
+              {:keys [eng seen]} (start {:blocks (into {} (map (fn [[x y z]] [(h/cell-key x y z) "dirt"])) cells)
+                                         :inventory [{:name "oak_planks" :count 64}]}
+                                        (merge wall guard))
+              result (await (h/child-outcome eng job {:plan "wall"} 300))
+              wrong (first (h/events-of seen :build.wrong))]
+          (is (= 30 (count (:wrong result))))
+          (is (= 30 (count (:cells wrong))))
+          (is (re-find #"30 wrong" (:text wrong)))
+          (is (not (re-find #"…|\.\.\." (:text wrong))))
+          (is (< (count (:text wrong)) 240)))))))
