@@ -3,6 +3,7 @@
 ;; a trapped shelter with no pickaxe still fails :no-way-out once, never waits). Stone mass x 8..24, z 8..24, y 0..9.
 {:defaults
  {:tags [:access :mining]
+  :time :any
   :plot {:height 20}
   :blocks [[:fill [8 0 8] [24 9 24] "stone"]]
   :body {:at [16.5 10 16.5] :effects [["resistance" 600 4]]}}
@@ -14,6 +15,11 @@
    :expect [{:event {:source :job :kind :tool.low} :within-s 40}
             {:event {:source :job :kind :waiting :data {:reason :no-tool}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :stair.done} :for-s 5}]}
+  {:name "pickaxe-already-low-at-first-hold"
+   :body {:inventory [["stone_pickaxe" 1]]}
+   :act [[:rcon "item replace entity $BODY container.0 with minecraft:stone_pickaxe[minecraft:damage=125]"]
+         [:job (jobs.access.stair {:dir :down :heading :east :steps 6})]]
+   :expect [{:event {:source :job :kind :tool.low} :within-s 30}]}
   {:name "pickaxe-breaks-mid-stair"
    :body {:inventory [["stone_pickaxe" 1]]}
    :act [[:rcon "item replace entity $BODY container.0 with minecraft:stone_pickaxe[minecraft:damage=130]"]
@@ -21,6 +27,12 @@
    :expect [{:event {:source :job :kind :tool.broke} :within-s 30}
             {:event {:source :job :kind :tool.none} :within-s 30}
             {:event {:source :job :kind :waiting :data {:reason :no-tool}} :within-s 40 :of-job true}]}
+  {:name "pickaxe-breaks-spare-carried-no-tool-none"
+   :body {:inventory [["stone_pickaxe" 1] ["iron_pickaxe" 1]]}
+   :act [[:rcon "item replace entity $BODY container.0 with minecraft:stone_pickaxe[minecraft:damage=130]"]
+         [:job (jobs.access.stair {:dir :down :heading :east :steps 3})]]
+   :expect [{:event {:source :job :kind :tool.broke} :within-s 30}
+            {:no-event {:source :job :kind :tool.none} :for-s 25}]}
   {:name "diamond-ore-stone-pickaxe-no-tool"
    :blocks [[:set [17 9 16] "diamond_ore"]]
    :body {:inventory [["stone_pickaxe" 1]]}

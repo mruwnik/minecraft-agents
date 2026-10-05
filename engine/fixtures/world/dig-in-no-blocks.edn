@@ -1,0 +1,30 @@
+;; Card 820b2869: dig-in with NO building blocks carried. A fresh dirt cell must choose pit mode (dig, roof from the
+;; dug dirt), not walls (which would fail :no-item). Should-fail: stone under the body and no tool -> dig_in_failed
+;; says why (cannot harvest). A failed or sealed cell is remembered 5 minutes (:dig-in-futile): one run per plot
+;; cell, so use --first-plot to move between runs (the same plot cell makes the next run wait :futile). Night: run with --allow-time --time-log <shared time log>. Mass x 8..24, z 8..24, y 0..9.
+{:defaults
+ {:tags [:night :survival :access]
+  :time :night
+  :plot {:height 20}
+  :register []
+  :body {:at [16.5 10 16.5] :effects [["resistance" 600 4]]}}
+ :cases
+ [{:name "flat-dirt-no-blocks-digs-pit"
+   :blocks [[:fill [8 0 8] [24 9 24] "dirt"]]
+   :act [[:job (jobs.survival.dig-in {})]]
+   :expect [{:event {:source :job :kind :dig-in.sealed} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :dig_in_failed} :for-s 90 :until {:source :job :kind :dig-in.sealed}}]
+   :limit-s 120}
+  {:name "dirt-with-pickaxe-no-blocks-digs-pit"
+   :blocks [[:fill [8 0 8] [24 9 24] "dirt"]]
+   :body {:inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.survival.dig-in {})]]
+   :expect [{:event {:source :job :kind :dig-in.sealed} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :dig_in_failed} :for-s 90 :until {:source :job :kind :dig-in.sealed}}]
+   :limit-s 120}
+  {:name "stone-no-tool-no-blocks-says-why"
+   :blocks [[:fill [8 0 8] [24 9 24] "stone"]]
+   :act [[:job (jobs.survival.dig-in {})]]
+   :expect [{:event {:source :job :kind :dig_in_failed :message [:contains "cannot harvest stone"]} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :dig-in.sealed} :for-s 5}]
+   :limit-s 60}]}
