@@ -60,3 +60,40 @@
 (deftest the-near-check-excludes-every-leased-body-by-name
   (is (= "execute if entity @a[name=!Me,name=!BodyA,x=1,y=2,z=3,distance=..500]"
          (l/near-command "Me" #{"BodyA"} [1 2 3]))))
+
+(defn fake-lock
+  "file: atom of the lock's pid or nil. create! is exclusive like fs 'wx'."
+  [file alive-pids]
+  {:create! (fn [pid] (if @file false (do (reset! file pid) true)))
+   :holder (fn [] @file)
+   :reclaim! (fn [] (reset! file nil))
+   :alive? (fn [pid] (contains? alive-pids pid))})
+
+(deftest a-free-time-lock-is-taken
+  (let [file (atom nil)]
+    (is (= {:held true} (l/try-lock (fake-lock file #{}) 10)))
+    (is (= 10 @file))))
+
+(deftest a-time-lock-held-by-a-live-pid-names-the-holder
+  (let [file (atom 10)]
+    (is (= {:waiting-on 10} (l/try-lock (fake-lock file #{10 11}) 11)))
+    (is (= 10 @file))))
+
+(deftest a-time-lock-of-a-dead-pid-is-reclaimed
+  (let [file (atom 99)]
+    (is (= {:held true} (l/try-lock (fake-lock file #{11}) 11)))
+    (is (= 11 @file))))
+
+(deftest a-time-lock-that-vanishes-while-checking-is-retried
+  (let [file (atom nil)
+        n (atom 0)
+        d (assoc (fake-lock file #{}) :create! (fn [pid] (if (zero? (swap! n inc)) false (do (reset! file pid) true)))
+                 :holder (fn [] nil))]
+    (is (= {:held true} (l/try-lock d 5)))))
+
+(deftest only-cases-that-depend-on-the-time-of-day-need-the-lock
+  (is (true? (l/needs-time-lock? {:time :day})))
+  (is (true? (l/needs-time-lock? {:time :night})))
+  (is (true? (l/needs-time-lock? {:time :any :act [[:wait-s 1] [:time-set 1000]]})))
+  (is (false? (l/needs-time-lock? {:time :any :act [[:wait-s 1]]})))
+  (is (false? (l/needs-time-lock? {:time :any}))))

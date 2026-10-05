@@ -90,7 +90,7 @@
                :compiler-options {:optimizations :simple :infer-externs false}}
   ;; tools/world-test.mjs: the world-fixture runner (world-test.runner), one ahead-of-time compiled file.
   :world-test {:target :node-library
-               :exports {:main world-test.runner/main}
+               :exports {:main world-test.runner/main :timeSet world-test.runner/time-set-main}
                :output-to "out/world-test.cjs"
                :output-dir "out/world-test-js"
                :compiler-options {:optimizations :simple :infer-externs false}}

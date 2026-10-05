@@ -44,3 +44,21 @@
   [self leased [x y z]]
   (str "execute if entity @a[" (apply str (map #(str "name=!" % ",") (cons self (sort leased))))
        "x=" x ",y=" y ",z=" z ",distance=..500]"))
+
+(defn try-lock
+  "One attempt at the exclusive time lock: {:held true} when this call took it (a dead holder's lock is reclaimed),
+  else {:waiting-on pid}. file: {:create! (pid -> true when this call made it) :holder (-> pid or nil) :reclaim! :alive?}."
+  [{:keys [create! holder reclaim! alive?]} pid]
+  (loop []
+    (if (create! pid)
+      {:held true}
+      (let [h (holder)]
+        (cond
+          (nil? h) (recur)
+          (alive? h) {:waiting-on h}
+          :else (do (reclaim!) (recur)))))))
+
+(defn needs-time-lock?
+  "Whether case c depends on the time of day (a :day or :night case, or a :time-set step)."
+  [c]
+  (boolean (or (not= :any (:time c)) (some #(= :time-set (first %)) (:act c)))))
