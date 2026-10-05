@@ -2,8 +2,10 @@
   "Whether a hostile mob is a real danger to the body: a melee mob that has a
   walkable way to the body (a bounded search over the blocks as a zombie
   walks: one step up, up to three down, doors only when open, water swum),
-  and a ranged mob (skeleton and the like) that has a line of fire (it is in
-  sight). A mob walled off, across a pit it cannot climb out of, or with the
+  and a ranged mob (skeleton and the like) that has a line of fire (a ray from
+  its eye to the body's eye or centre that no arrow-stopping block crosses:
+  glass, leaves, solids and shut trapdoors stop it; air, grass, flowers and
+  torches do not). A mob walled off, across a pit it cannot climb out of, or with the
   body sealed in, is not."
   (:require [clojure.string :as str]
             [engine.jobs.combat :as combat]
@@ -281,18 +283,79 @@
       (= :closed (flood (partial forward kind-at) [x y z] room-cells)))
     false))
 
+(def arrow-passes
+  "Blocks (beyond shelter's non-solid and walk-through ones) an arrow flies through: plants and flowers, torches,
+  ladders, fences and gates (thin posts), snow layers."
+  #"_(sapling|flower|tulip|roots|torch|fence|fence_gate|bush)$|^(poppy|dandelion|blue_orchid|allium|azure_bluet|oxeye_daisy|cornflower|lily_of_the_valley|wither_rose|sunflower|lilac|rose_bush|peony|torchflower|pitcher_plant|brown_mushroom|red_mushroom|sugar_cane|kelp|kelp_plant|lily_pad|ladder|nether_sprout|wheat|carrots|potatoes|beetroots|bubble_column|pink_petals|wildflowers|leaf_litter|short_dry_grass|tall_dry_grass|hanging_roots|glow_lichen|moss_carpet|redstone_torch|soul_torch|light|structure_void)$")
+
+(defn arrow-kind-of
+  "What a block b is to an arrow: :open or :solid. An unloaded cell (nil) is open; a shut or open door, gate or
+  trapdoor follows its open property; shelter's non-solid blocks, walk-through ones and arrow-passes fly through;
+  anything else (glass, leaves, every solid) stops it."
+  [b]
+  (let [name (some-> b .-name)]
+    (cond
+      (nil? name) :open
+      (openable? name) (if (open-prop? b) :open :solid)
+      (sh/non-solid name) :open
+      (re-find sh/walk-through name) :open
+      (re-find arrow-passes name) :open
+      :else :solid)))
+
+(def eye-height 1.62)
+
+(defn ray-clear?
+  "Whether the segment from a to b ([x y z] numbers) crosses no :solid cell of kind-at (the start and end cells do not
+  count): the cell walk of engine/js/sight.mjs lineClear."
+  [kind-at [ax ay az] [bx by bz]]
+  (let [dx (- bx ax) dy (- by ay) dz (- bz az)
+        end-x (js/Math.floor bx) end-y (js/Math.floor by) end-z (js/Math.floor bz)
+        sx (js/Math.sign dx) sy (js/Math.sign dy) sz (js/Math.sign dz)
+        tdx (if (zero? dx) js/Infinity (js/Math.abs (/ 1 dx)))
+        tdy (if (zero? dy) js/Infinity (js/Math.abs (/ 1 dy)))
+        tdz (if (zero? dz) js/Infinity (js/Math.abs (/ 1 dz)))
+        cx0 (js/Math.floor ax) cy0 (js/Math.floor ay) cz0 (js/Math.floor az)
+        tmax (fn [d cur a td] (if (zero? d) js/Infinity (* (if (pos? d) (- (inc cur) a) (- a cur)) td)))]
+    (loop [cx cx0 cy cy0 cz cz0
+           tx (tmax dx cx0 ax tdx) ty (tmax dy cy0 ay tdy) tz (tmax dz cz0 az tdz)
+           n (+ (js/Math.abs (- end-x cx0)) (js/Math.abs (- end-y cy0)) (js/Math.abs (- end-z cz0)))]
+      (if (zero? n)
+        true
+        (let [axis (cond (and (<= tx ty) (<= tx tz)) :x (<= ty tz) :y :else :z)
+              t (case axis :x tx :y ty :z tz)]
+          (if (> t 1)
+            true
+            (let [cx' (if (= axis :x) (+ cx sx) cx)
+                  cy' (if (= axis :y) (+ cy sy) cy)
+                  cz' (if (= axis :z) (+ cz sz) cz)]
+              (cond
+                (and (== cx' end-x) (== cy' end-y) (== cz' end-z)) true
+                (keyword-identical? :solid (kind-at cx' cy' cz')) false
+                :else (recur cx' cy' cz'
+                             (if (= axis :x) (+ tx tdx) tx) (if (= axis :y) (+ ty tdy) ty) (if (= axis :z) (+ tz tdz) tz)
+                             (dec n))))))))))
+
+(defn line-of-fire?
+  "Whether a ranged mob standing at mob-pos ({:x :y :z}, its feet) has a clear arrow line to the body at body-pos
+  (feet): a ray from the mob's eye to the body's eye or to its centre that no arrow-stopping block crosses. A few dozen
+  block reads."
+  [arrow-at mob-pos body-pos]
+  (let [from [(:x mob-pos) (+ (:y mob-pos) eye-height) (:z mob-pos)]
+        bx (:x body-pos) bz (:z body-pos)]
+    (boolean (some #(ray-clear? arrow-at from [bx (+ (:y body-pos) %) bz]) [eye-height 0.9]))))
+
 (defn danger-in?
   "danger? with the blocks read through kind-at (a lookup the caller shares between the mobs of one query)."
   [p kind-at e {:keys [sight?] :or {sight? true}}]
   (let [seen? (true? (.-visible e))]
     (if (combat/ranged? e)
-      seen?
+      (line-of-fire? (lookup p arrow-kind-of) (u/pos-of (.-pos e)) (u/pos-of (.-pos (.self p))))
       (and (or seen? (not sight?))
            (way? kind-at (cell-of (u/pos-of (.-pos e))) (cell-of (u/pos-of (.-pos (.self p)))))))))
 
 (defn danger?
   "Whether hostile e (JS entity) is a real danger to the body of primitives p.
-  A ranged mob needs a line of fire (in sight); a melee mob needs a walkable
+  A ranged mob needs a line of fire (line-of-fire?); a melee mob needs a walkable
   way to the body and, unless :sight? is false, to be in sight."
   ([p e] (danger? p e {}))
   ([p e opts] (danger-in? p (lookup p) e opts)))

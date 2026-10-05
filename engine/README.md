@@ -158,7 +158,7 @@ entity may force it with `visible: true|false`).
 The `:hostile-near` trigger uses it: it never holds while the body is dead (a `:died` with no newer `:respawned`), and otherwise holds only for a real danger within `:radius` (`engine.jobs.reach/danger?`): a
 melee mob that is visible and has a walkable way to the body (a bounded search over the blocks as a zombie walks: one
 step up, up to three down, doors only when open, water swum; so a mob walled in, across a trench two deep, or with the
-body sealed in is no danger), or a ranged mob (skeleton and the like) with a line of fire (visible). Trigger arg
+body sealed in is no danger), or a ranged mob (skeleton and the like) with a line of fire: a ray from the mob's eye to the body's eye or centre (`reach/line-of-fire?`, a few dozen block reads) that no arrow-stopping block crosses. Glass, leaves, shut doors and trapdoors and every solid stop it (so a skeleton behind glass is no danger); air, grass, flowers, torches, fences, open doors and the like do not, and a 1-high slit with a clear ray counts. Sight (`visible`) is not asked of a ranged mob. Trigger arg
 `:visible-only` (default true) false drops a melee mob's sight test; the way to the body still counts. `retreat` and
 `respond-to-hostile` count dangers the same way and within the same radii, checked each round, so a mob that cannot
 reach the body or is beyond the trigger's radius does not keep a flight alive (BaseMiner j301 sat 600+ rounds with

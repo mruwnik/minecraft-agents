@@ -307,6 +307,31 @@
   (is (not (holds? {:entities [(skeleton 1 13 0)]} {:radius 8 :ranged-radius 10})) "beyond the ranged radius")
   (is (= 16 (:ranged-radius (:args triggers/hostile-near))) "16 by default"))
 
+(defn arrow-wall
+  "Blocks of name at x 3 across z -3..3 for each y in ys, except the cells in gaps ([y z])."
+  [name ys & [gaps]]
+  (into {} (for [y ys z (range -3 4) :when (not (contains? (set gaps) [y z]))] [(str "3," y "," z) name])))
+
+(def slit "A 1-high gap at head height in a stone wall." (merge (arrow-wall "stone" [64 65 66] [[65 0]])))
+
+(defn skeleton-at-6 [] [(skeleton 1 6 0)])
+
+(defn skeleton-fires?
+  "Whether hostile-near holds for a skeleton at x 6 with blocks in the way."
+  [blocks]
+  (boolean (holds? {:entities (skeleton-at-6) :blocks blocks} {:radius 8 :ranged-radius 16})))
+
+(deftest hostile-near-needs-an-arrow-line-for-a-ranged-mob
+  (doseq [[label blocks fires?]
+          [["in the open" {} true]
+           ["behind a glass wall" (arrow-wall "glass" [64 65 66]) false]
+           ["behind a stone wall" (arrow-wall "stone" [64 65 66]) false]
+           ["behind a leaves wall" (arrow-wall "oak_leaves" [64 65 66]) false]
+           ["through a 1-high slit at head height" slit true]
+           ["through a wall of poppies and torches" (merge (arrow-wall "poppy" [64]) (arrow-wall "torch" [65 66])) true]
+           ["behind a wall of shut trapdoors" (arrow-wall "oak_trapdoor" [64 65 66]) false]]]
+    (is (= fires? (skeleton-fires? blocks)) label)))
+
 (deftest combat-hostiles-takes-a-ranged-radius
   (let [p (tu/fake-on-floor {:entities [(zombie 1 13 0) (skeleton 2 12 0) (zombie 3 5 0)]})
         ids (fn [hs] (mapv #(.-id %) hs))]
