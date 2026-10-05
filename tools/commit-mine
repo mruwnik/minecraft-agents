@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Commit exactly your own paths in a shared checkout, under a lock, with a ledger row.
-# Usage: tools/commit-mine --card <id-or-prefix> -m <msg-file-or-text> --expect-hunks N <paths...>
+# Usage: tools/commit-mine --card <id-or-prefix> -m <msg-file-or-text> --expect-lines L <paths...>
 #        tools/commit-mine --card <id> -m <msg> --hunks <patchfile> --expect-hunks N <paths...>
-#   Path mode commits whole files; N = hunks `git diff <paths>` shows.
+#   Path mode commits whole files and needs --expect-lines L: the added+deleted lines `git diff --numstat <paths>` shows
+#   (untracked file = its line count). Lines, not hunks: a foreign edit next to yours merges into one hunk but adds lines.
+#   --expect-hunks N is also checked when given.
 #   Hunks mode commits only the patch: build it ONLY from hunks you wrote. The paths are required and
 #   must cover every file in the patch (else exit 3, listing the others); N must equal the patch's
 #   hunk count (else exit 5); the tool prints each hunk's path and first changed line, check them.
@@ -26,13 +28,14 @@ die() { echo "commit-mine: $*" >&2; exit "${2:-1}"; }
 # A flag's value must exist and must not look like another flag.
 val() { case "$2" in ""|--*) die "$1 needs a value, got '${2:-<nothing>}' (a value may not start with --)" ;; esac; printf '%s' "$2"; }
 
-card=""; msg=""; hunks=""; approved=""; owner_said=""; expect=""; paths=()
+card=""; msg=""; hunks=""; approved=""; owner_said=""; expect=""; expect_lines=""; paths=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --card) card="$(val --card "${2-}")"; shift 2 ;;
     -m) msg="$(val -m "${2-}")"; shift 2 ;;
     --hunks) hunks="$(val --hunks "${2-}")"; shift 2 ;;
     --expect-hunks) expect="$(val --expect-hunks "${2-}")"; shift 2 ;;
+    --expect-lines) expect_lines="$(val --expect-lines "${2-}")"; shift 2 ;;
     --approved-core) approved="$(val --approved-core "${2-}")"; shift 2 ;;
     --owner-said) owner_said="$(val --owner-said "${2-}")"; shift 2 ;;
     --) shift; paths+=("$@"); break ;;
@@ -136,21 +139,31 @@ if [ -z "$hunks" ]; then
     git diff -- "${paths[@]}" | awk '/^diff --git /{f=$4; sub(/^b\//,"",f)} /^@@/{n[f]++} /^Binary files/{n[f]++} END{for(k in n)print n[k], k}'
     git ls-files --others --exclude-standard -- "${paths[@]}" | awk '{print 1, $0}'
   }
-  count_staged() { # same count, from the index: what is about to be committed
-    git diff --cached -- "${allowed[@]}" | awk '/^diff --git /{f=$4; sub(/^b\//,"",f)} /^(new|deleted) file mode/{z[f]=1} /^@@/{n[f]++} /^Binary files/{n[f]++} END{t=0; for(k in z) if(!n[k]) n[k]=1; for(k in n)t+=n[k]; print t}'
+  numstat_lines() { awk -F'\t' '{ if ($1 == "-") t += 1; else t += $1 + $2 } END{print t+0}'; }
+  count_lines() { # added+deleted lines in the working tree for the given paths (untracked files count their lines)
+    {
+      git diff --numstat -- "${paths[@]}"
+      git ls-files --others --exclude-standard -z -- "${paths[@]}" | while IFS= read -r -d '' f; do
+        printf '%s\t0\t%s\n' "$(awk 'END{print NR}' "$f")" "$f"
+      done
+    } | numstat_lines
+  }
+  count_staged() { # same line count, from the index: what is about to be committed
+    git diff --cached --numstat -- "${allowed[@]}" | numstat_lines
   }
   per="$(count_hunks | sort -k2)"
-  total=$(awk '{t+=$1} END{print t+0}' <<<"$per")
-  if [ -z "$expect" ] || [ "$expect" != "$total" ]; then
+  total_hunks=$(awk '{t+=$1} END{print t+0}' <<<"$per")
+  total=$(count_lines)
+  if [ -z "$expect_lines" ] || [ "$expect_lines" != "$total" ] || { [ -n "$expect" ] && [ "$expect" != "$total_hunks" ]; }; then
     {
-      echo "commit-mine: path mode commits WHOLE files; other agents may have uncommitted hunks in them."
+      echo "commit-mine: path mode commits WHOLE files; other agents may have uncommitted lines in them."
       echo "Hunks in the working tree for the given paths (count path):"
       echo "$per" | sed 's/^/  /'
-      echo "Total: $total. Review with 'git diff <path>'. If every hunk is yours, rerun with --expect-hunks $total."
-      echo "If any hunk is not yours: 'git diff <path> > my.patch', delete foreign hunks from the patch, and use --hunks my.patch."
+      echo "Total: $total line(s) added+deleted in $total_hunks hunk(s). Review with 'git diff <path>'. If every line is yours, rerun with --expect-lines $total."
+      echo "If any line is not yours: 'git diff <path> > my.patch', delete foreign hunks from the patch, and use --hunks my.patch."
     } >&2
-    [ -n "$expect" ] && die "--expect-hunks $expect does not match $total" 5
-    die "--expect-hunks N is required with paths" 5
+    [ -n "$expect_lines" ] && die "--expect-lines $expect_lines (and --expect-hunks ${expect:-unset}) do not match $total lines / $total_hunks hunks" 5
+    die "--expect-lines L is required with paths" 5
   fi
 fi
 
@@ -176,7 +189,7 @@ if [ -n "$hunks" ]; then
   [ "$want" = "$got" ] || die "staged diff differs from the patch (it must hold exactly the patch's changed lines); nothing committed" 7
 else
   staged_total="$(count_staged)"
-  [ "$staged_total" = "$total" ] || die "staged $staged_total hunk(s) but $total were confirmed: a file changed while committing; nothing committed. Recheck 'git diff' and rerun" 7
+  [ "$staged_total" = "$total" ] || die "staged $staged_total line(s) but $total were confirmed: a file changed while committing; nothing committed. Recheck 'git diff' and rerun" 7
 fi
 
 # Foreign staged paths.
