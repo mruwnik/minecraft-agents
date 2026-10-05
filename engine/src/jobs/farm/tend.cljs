@@ -58,7 +58,7 @@
   plan names it as something else, which it then leaves alone) while a hoe is carried, the seed of that cell's crop
   outruns the bare farmland waiting for it and the access rules allow it; plant sows every bare crop cell with its own
   crop's seed when that seed is carried (a bare cell whose seed is not carried stays bare, one farm-tend.short-seed
-  warn per missing seed, even when nothing else runs); fertilize, compost and deposit as before, the seed reserve being
+  warn per missing seed, even when nothing else runs); fertilize, compost and deposit as in box mode, the seed reserve being
   twice the planned cells of each crop. Tilling is checked with may-dig? on the ground cell and sowing with may-place?
   on the crop cell, with the zones and the footprints of the OTHER active plans, when the cell is chosen and again
   right before the act (in jobs.farm.till and jobs.farm.plant, called with the plan). The check declines, with one

@@ -62,10 +62,6 @@
       :else true)))
 
 (defn ^:async round
-  "args {:at pos-or-nil :species name-or-nil}. Without :at, plants at the
-  oldest replant debt in body memory (of species, when given). Equips a
-  sapling, places it and clears the debt. Done at once when there is nothing
-  to plant."
   [c]
   (let [t (target-of (debts c) (:args c))
         sapling (when t (sapling-for (u/inventory (:primitives c)) (:species t)))

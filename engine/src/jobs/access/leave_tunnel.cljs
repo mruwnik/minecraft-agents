@@ -35,8 +35,8 @@
   then the other three (leave-tunnel.escape, info, per stair stopped warn); only when every heading stopped for an
   access reason (:zone :claim :footprint) does it try them again with :ignore-zones? as the last resort. The new stair
   is left as dug (nothing is placed, no item of another is taken). Out, the torches that cannot be reached are left
-  (:walk-failed in :left), the mouth is sealed as before, and the entry unreachable ends :done :open with :escaped true.
-  Every attempt failing ends :stopped :walk-failed with :escape (the stair results) as before.")
+  (:walk-failed in :left), the mouth is sealed, and the entry unreachable ends :done :open with :escaped true.
+  Every attempt failing ends :stopped :walk-failed with :escape (the stair results).")
 
 (def args
   {:tunnel {:doc "the result of jobs.access.tunnel (:line :dug :torches)" :default nil}

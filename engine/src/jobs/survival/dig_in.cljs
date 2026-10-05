@@ -44,7 +44,7 @@
   cells of one side it placed itself; the pit has no :door but :start, the feet
   cell it was dug from (the surface height), and walls mode at the bottom of a
   1x1 shaft has :start at the shaft's top (shaft-top); a shelter sealed again where the
-  latest entry already stood keeps that entry's :start. jobs.survival.leave-shelter
+  latest entry already stood keeps that entry's :start. jobs.survival.shelter (via leave!)
   reads the entry to get out by day.
   When it placed any block it emits one dig-in.sealed event only if the world shows the body shut in (a roof, and in
   walls mode no open cell around the feet); otherwise one dig-in.unsealed warn {:pos :placed :open :text} naming the cells
@@ -67,10 +67,10 @@
   room-reach of the feet, with a door, gate or trapdoor a hand opens in its walls) only mends that hole with one
   carried block (plug mode, first in the zone rule's order), instead of walling the body in at feet and head height in
   the room; its :shelter entry has :room true and :roof the plug, and leave! treats it as never shut in (the room's
-  door is the way out). A room with an open door or doorway, or with no door, gets walls or a pit as before.
+  door is the way out). A room with an open door or doorway, or with no door, gets walls or a pit.
   Memory: writes :shelter and :dig-in-futile; reads :dig-in-futile.
 
-  Leaving is not a round of this job but the function leave!, which the night-shelter job calls by day (see its doc).")
+  Leaving is not a round of this job but the function leave!, which the jobs.survival.shelter job calls by day (see its doc).")
 
 (def building-blocks
   ["dirt" "cobblestone" "cobbled_deepslate" "stone" "andesite" "diorite" "granite" "netherrack"
@@ -406,7 +406,7 @@
   y+roof-height straight above the feet that is not solid and has a solid side neighbour to be placed against, when
   once filled it leaves the feet in a closed room (room-cells) with a door, gate or trapdoor in its walls (door-of?).
   nil when there is none (open ground, a room with an open door or doorway, a shaft or pit with no door): walls or a
-  pit then, as before."
+  pit then."
   [p {:keys [x y z] :as feet} roof-height]
   (let [column (map (fn [dy] {:x x :y (+ y dy) :z z}) (range 2 (inc roof-height)))
         plug (first (filter #(and (not (sh/solid-at? p %)) (supported? p %)) column))
@@ -662,7 +662,7 @@
   "One stair attempt out of a pit (jobs.access.stair :up, a child of the caller): to the :start height, or with no
   :start one step at a time until nothing solid is within sh/default-roof-height above, at most max-climb steps. A
   stopped stair books its reason and the next heading is tried; so does a declined one (it lacks a tool or a slot:
-  booked :declined) instead of waiting, because the caller (the night-shelter) must end failed, not wait, when trapped."
+  booked :declined) instead of waiting, because the caller (jobs.survival.shelter) must end failed, not wait, when trapped."
   [c {:keys [start]} toward]
   (let [{:keys [i order tries climbed] :or {i 0 tries [] climbed 0}} (leave-mem c)
         order (or order (heading-order (sh/feet (:primitives c)) toward))
@@ -693,7 +693,7 @@
                     :continue))))))
 
 (defn ^:async leave!
-  "One round of getting the body out of the shelter dig-in built, for the night-shelter job to call by day from its
+  "One round of getting the body out of the shelter dig-in built, for the jobs.survival.shelter job to call by day from its
   own round (its job memory holds the progress under :dig-out; the stair is its child :dig-out-<i>). Resolves to
   :continue while working, else a result map {:status :done|:stopped :reason :out|:unsafe|:no-way-out :at [x y z]}
   plus :why (:unsafe), :heading (the stair that got it out) or :tries ({:heading :reason :cell} per stopped stair).

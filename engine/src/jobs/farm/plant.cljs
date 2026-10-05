@@ -9,7 +9,8 @@
 (def doc
   "Sow the bare farmland of a :box. A cell is bare when the block at (x, min.y, z) is farmland and
   the block above it is air (an unloaded block is not bare). Each round takes the bare cells that
-  are not skipped and the seed (the :seed arg, else the carried seed with the largest stack):
+  are not skipped and the seed (the :seed arg, else the carried seed with the largest stack on the first
+  pick, kept while still carried so one run sows one crop):
   no cell ends the job with reason :none (:done once something was planted, :gave-up when cells
   were skipped), no seed with :no-seed; otherwise the cells within :reach are planted, or the body
   walks to the nearest. A cell whose place is refused or unreachable, or whose walk is blocked,

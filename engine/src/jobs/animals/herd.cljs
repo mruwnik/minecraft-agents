@@ -51,7 +51,7 @@
   cell, then :exit-dash: one walk-near! round to out-1 that opens the gate, passes and shuts it itself, so
   the gate is open for the pass only; one that ends with the gate still open and the body outside shuts it from there
   (:shut-out) under the same overlap check: 4 looks, then once more from the cell inside, else the gate is left open
-  with one warn herd.gate-open; one that leaves the body inside goes the old way, :exit-open, :exit-out, :shut-out. A
+  with one warn herd.gate-open; one that leaves the body inside goes by :exit-open, :exit-out, :shut-out. A
   shut that leaves the body on the pen side opens the gate again and goes out, twice at most, then :gate-stuck). While the gate is open a :gate-held memory entry
   {:cell [x y z]} is written before each open and kept fresh every round, dropped
   after each shut, so the pen-gate trigger leaves the gate alone. The body ends
@@ -479,7 +479,7 @@
 
 (defn ^:async exit-dash!
   "The exit in one round: walk-near! to out-1 with its own gate handling (open, pass, shut). Shut and outside: on to the
-  census. Open and outside: the shut from outside (:shut-out). Still inside, or blocked: the old way (:exit-open), the
+  census. Open and outside: the shut from outside (:shut-out). Still inside, or blocked: by :exit-open, the
   failure counted in :dash-tries."
   [c]
   (hold-gate! c)

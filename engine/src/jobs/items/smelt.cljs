@@ -313,7 +313,7 @@
           (await (load! c state plan)))))))
 
 (defn ^:async take!
-  "Take the output. :done-or-more: the next state of the furnace, or :full."
+  "Take the output with one furnace visit and add what was taken to :got. Returns the visit result: status \"full\" when the inventory has no room, :input while the furnace still holds input."
   [c]
   (let [r (await (visit! c "take" {}))
         got (reduce + 0 (map :count (:taken r)))]

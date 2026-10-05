@@ -25,7 +25,7 @@
   a flow is traced upstream (blockAt properties.level: 0 source, 1-7 flowing, 8+ falling; at most 16 cells) and its
   source filled with carried dirt, after which the cell is given 10 s to recede (the check declines, the round
   returns :declined: nothing is polled). Water that cannot be traced, no dirt carried, or a source the access rules
-  refuse leaves the cell as :wet {:pos :why :source?} (warn prepare.wet {:pos :why :water-source :text}).
+  refuse leaves the cell as :wet {:pos :why, :source when one was traced} (warn prepare.wet {:pos :why :water-source :text}).
 
   Never dug, only reported: another species' sapling, any log but the species' own, lava, container, bed, sign, light
   in the cell (result :wrong); under the cell anything but natural ground (planks, logs, wool, a chest, air, fluid,
@@ -47,7 +47,7 @@
   cramped, without soil or short of saplings is left alone, with one note per cell (prepare.wrong, prepare.no-soil,
   prepare.cramped, prepare.wet) and one per species short (prepare.short {:species :missing}); the job wakes when what
   it lacked is carried. Ends with {:cleared :soiled :planted :dammed :short {species missing} :wrong :no-soil :cramped
-  :wet [{:pos :why :source?}] :refused}
+  :wet [{:pos :why, :source when traced}] :refused}
   and the info prepare.done.")
 
 (def args

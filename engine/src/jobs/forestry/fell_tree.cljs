@@ -16,7 +16,8 @@
   first): the one the body walks to soonest, so a walled-off or cliff-top tree is passed over for a reachable one. The
   search runs at most ~100 ms a round and goes on the next round; one that proves every candidate out of reach marks
   them all unreachable (the job warns tree_blocked and finishes, no walk); one that runs out of nodes takes the nearest
-  in a line, and its walk decides as before.
+  in a line, and its walk decides.
+  A tree whose walk is :blocked, or partial three times in a row, is marked unreachable and the next candidate chosen.
   Each log is dug by a jobs.blocks.dig child (:dig), which holds the best carried axe, records a log of another's
   dug with :ignore-zones? for tidying, and leaves the drop on the ground (jobs.forestry.harvest-wood collects it).
 
@@ -190,13 +191,6 @@
     :continue))
 
 (defn ^:async round
-  "args {:species name-or-nil :radius 16}. Picks a tree (log column with
-  leaves) the first round and remembers the column, then digs one log
-  bottom-up per round. Writes the replant debt {:pos base :species} to body
-  memory kind :forestry/replant when the base log is dug. A tree whose walk is
-  :blocked, or partial three times in a row, is remembered as unreachable and
-  the next candidate is chosen; with none left it warns tree_blocked and
-  finishes. Done when the column holds no logs."
   [c]
   (let [{:keys [species radius]} (:args c)
         chosen (or (:column (ctx/mem c)) (await (choose-tree! c radius species)))]

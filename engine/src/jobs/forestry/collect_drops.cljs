@@ -23,8 +23,7 @@
        (reduce + 0)))
 
 (defn ^:async round
-  "args {:radius 16 :filter [item names] or nil}. Collects the nearest
-  matching dropped item, one per round. Items that could not be reached (or
+  "Collects the nearest matching dropped item, one per round. Items that could not be reached (or
   were in reach and not picked up) are remembered in job memory and skipped,
   and :collected counts the items gained, also on a round that gave up.
   :ids limits it to those entity ids (a dig's own drops). Done when none are left in radius."

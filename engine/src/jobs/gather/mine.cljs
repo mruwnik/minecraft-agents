@@ -421,7 +421,7 @@
 (defn ^:async next-target!
   "The target to walk to next: of the targets off the ground snapshot (else those over it), the one the body walks to
   soonest (targets/nearest!), :searching while that search goes on, the nearest in a line when none is found reachable
-  (its walk decides, as before); nil with no targets."
+  (its walk decides); nil with no targets."
   [c targets]
   (let [ground (into #{} (map :pos) (:ground (ctx/mem c)))
         off (vec (remove ground targets))
