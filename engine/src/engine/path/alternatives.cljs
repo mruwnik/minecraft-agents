@@ -15,7 +15,7 @@
    These searches are weighted (WEIGHT) and capped (NODES-TIMES the first search's expansions, at least NODES-MIN).
    Each round returns the cheapest candidate that passes. When none passes the list ends, so one path is a normal
    answer. Costs are the true cost of the walk (the penalty only orders the search). Every step is an edge of the
-   normal search, since avoiding only adds cost or refuses.
+   normal search, since avoiding only adds cost or refuses."
   (:require [clojure.string :as str]
             [engine.path.planner-tuned :as planner]))
 
