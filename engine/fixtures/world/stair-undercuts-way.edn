@@ -1,0 +1,30 @@
+;; Card 2052c235: jobs.access.stair never cuts the floor of a stair this body finished earlier (:undercuts-way), and a
+;; stair down through rock still works and leaves the way back whole. Stone mass x 8..24, z 8..24, y 0..9; the body
+;; stands on top at x 10. Stair 1: 6 steps east (floors x 11..16, y 4..9). Stair 2 from its end heading west: its first
+;; step cuts (15 4..6 16), and (15 4 16) is the floor of stair 1's step 5.
+{:defaults
+ {:tags [:access :mining]
+  :time :any
+  :plot {:height 20}
+  :blocks [[:fill [8 0 8] [24 9 24] "stone"]]
+  :body {:at [10.5 10 16.5] :inventory [["iron_pickaxe" 1]] :effects [["resistance" 600 4]]}}
+ :cases
+ [{:name "stair-down-then-go-to-back-up"
+   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 6})]
+         [:await {:source :job :kind :stair.done} 120]
+         [:job (jobs.movement.go-to {:pos #at [10 10 16] :range 1})]]
+   :expect [{:event {:source :job :kind :stair.done :data {:steps 6}} :within-s 120 :of-job true}
+            {:event {:source :job :kind :result :data {:arrived true}} :within-s 220 :of-job true}]
+   :limit-s 230
+   :after [[:body-near [10.5 10 16.5] 2.5]]}
+  {:name "second-stair-under-first-stops-undercuts-way"
+   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 6})]
+         [:await {:source :job :kind :stair.done} 120]
+         [:job (jobs.access.stair {:dir :down :heading :west :steps 3})]
+         [:await {:source :job :kind :stair.stopped} 60]
+         [:job (jobs.movement.go-to {:pos #at [10 10 16] :range 1})]]
+   :expect [{:event {:source :job :kind :stair.stopped :data {:reason :undercuts-way :cell #at [15 4 16]}} :within-s 200 :of-job true}
+            {:event {:source :job :kind :result :data {:arrived true}} :within-s 320 :of-job true}]
+   :limit-s 330
+   :after [[:block [15 4 16] "stone"] [:block [14 3 16] "stone"] [:block [16 3 16] "stone"]
+           [:body-near [10.5 10 16.5] 2.5]]}]}
