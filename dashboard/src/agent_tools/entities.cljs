@@ -108,7 +108,8 @@
              :age-ms age}
       (:uuid entity) (assoc :uuid (:uuid entity))
       (nil? (:uuid entity)) (assoc :key (:key entity))
-      (:username entity) (assoc :player (:username entity)))))
+      (:username entity) (assoc :player (:username entity))
+      (:sense entity) (assoc :sense (:sense entity)))))
 
 (defn project
   "Filter only the snapshot rows and timestamps the body supplied. Never refreshes observations."

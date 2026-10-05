@@ -385,6 +385,41 @@
                                 (if ax (+ tmx tdx) tmx) (if ay (+ tmy tdy) tmy) (if az (+ tmz tdz) tmz)
                                 (if target? prev (.lightAt ^js raw nx ny nz)) (dec budget))))))))))
 
+(defn line-clear?
+  "Whether the eye at (ox oy oz) has a clear line to the point (tx ty tz): no cell strictly between the eye's cell and
+  the point's cell blocks sight under `table` (the raw world's sightTable) or is unloaded. No cone and no light rule:
+  this answers whether a thing there could be seen by turning to it."
+  [^js raw ^js table ox oy oz tx ty tz]
+  (let [vx (- tx ox) vy (- ty oy) vz (- tz oz)
+        d (js/Math.hypot vx vy vz)
+        x1 (js/Math.floor tx) y1 (js/Math.floor ty) z1 (js/Math.floor tz)]
+    (or (zero? d)
+        (let [dx (/ vx d) dy (/ vy d) dz (/ vz d)
+              sx (if (pos? dx) 1 -1) sy (if (pos? dy) 1 -1) sz (if (pos? dz) 1 -1)
+              tdx (if (zero? dx) js/Infinity (js/Math.abs (/ 1 dx)))
+              tdy (if (zero? dy) js/Infinity (js/Math.abs (/ 1 dy)))
+              tdz (if (zero? dz) js/Infinity (js/Math.abs (/ 1 dz)))
+              x0 (js/Math.floor ox) y0 (js/Math.floor oy) z0 (js/Math.floor oz)]
+          (loop [cx x0 cy y0 cz z0
+                 tmx (if (zero? dx) js/Infinity (* tdx (if (pos? dx) (- (inc x0) ox) (- ox x0))))
+                 tmy (if (zero? dy) js/Infinity (* tdy (if (pos? dy) (- (inc y0) oy) (- oy y0))))
+                 tmz (if (zero? dz) js/Infinity (* tdz (if (pos? dz) (- (inc z0) oz) (- oz z0))))
+                 budget (+ 3 (js/Math.abs (- x1 x0)) (js/Math.abs (- y1 y0)) (js/Math.abs (- z1 z0)))]
+            (let [t (min tmx tmy tmz)]
+              (cond
+                (or (and (== cx x1) (== cy y1) (== cz z1)) (> t d)) true
+                (<= budget 0) false
+                :else
+                (let [ax (== t tmx) ay (and (not ax) (== t tmy)) az (and (not ax) (not ay))
+                      nx (if ax (+ cx sx) cx) ny (if ay (+ cy sy) cy) nz (if az (+ cz sz) cz)
+                      here (.stateAt raw nx ny nz)]
+                  (cond
+                    (and (== nx x1) (== ny y1) (== nz z1)) true
+                    (or (< here 0) (== 1 (aget table here))) false
+                    :else (recur nx ny nz
+                                 (if ax (+ tmx tdx) tmx) (if ay (+ tmy tdy) tmy) (if az (+ tmz tdz) tmz)
+                                 (dec budget)))))))))))
+
 (defn on-change!
   "A block changed in the raw world: memory takes the new state only if the body sees the cell now."
   [{:keys [raw opts st] :as per} x y z id]

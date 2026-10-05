@@ -1019,7 +1019,14 @@ node engine/tools/entities.mjs Bob --world claude --player Alex --limit 20
 node engine/tools/entities.mjs Bob --world claude --center 100,64,-20 --dimension overworld --raw
 ```
 
-The command reads the body's in-memory `/entities` cache. By default it centers
+The command reads the body's in-memory `/entities` cache. The cache holds only
+what the body perceives as a player would (`engine.entity-observations/sense`):
+itself, an entity heard within 16 blocks of the eye (through walls; drops, xp
+orbs and other silent things are never heard), or one within 64 blocks with a
+clear line from the eye to its middle or head under the raw world's sight table
+(no view cone or light rule: turning would show it). Each row carries `:sense`
+(`:self`, `:seen` or `:heard`). Mobs in the rock under the body are not listed.
+The engine's reflexes and `entities()` do not read this cache. By default it centers
 a 64-block, 3D radius on the newest unexpired self observation, uses that
 observation's dimension, and returns the nearest 10 rows. Players and other
 entity types are included; `--type` and exact `--player` filters narrow the

@@ -8,7 +8,50 @@
   #js {:id id :name type :type "mob" :uuid uuid :position #js {:x x :y 64 :z 0}})
 (defn sample [source entities & [online dim]]
   #js {:source source :online (if (nil? online) true online) :dimension (or dim "overworld") :entities (into-array entities)})
-(defn cache [& [opts]] (seen/open (merge {:world "w" :body "Probe"} opts)))
+(defn cache [& [opts]] (seen/open (merge {:world "w" :body "Probe" :sense (constantly :seen)} opts)))
+
+(defn mob [id type y & [x z]]
+  #js {:id id :name type :type "mob" :uuid (str type id) :height 1.8 :position #js {:x (or x 0.5) :y y :z (or z 0.5)}})
+
+(defn ground-world
+  "A raw world: the eye at (0.5 65.62 0.5) over solid stone below y 64, open air above; `walls` cells are stone too."
+  [& [walls]]
+  (let [stone 1 table (js/Uint8Array. #js [0 1]) walls (set walls)]
+    #js {:eye (fn [] #js {:x 0.5 :y 65.62 :z 0.5 :yaw 0 :pitch 0 :dimension "overworld"})
+         :sightTable (fn [] table)
+         :stateAt (fn [x y z] (if (or (< y 64) (contains? walls [x y z])) stone 0))}))
+
+(defn listed [raw source entities]
+  (let [c (seen/open {:world "w" :body "Probe" :sense (partial seen/sense raw)})]
+    (seen/observe! c (sample source entities) 0)
+    (into {} (map (juxt :type :sense)) (:entities (seen/snapshot c 0)))))
+
+(deftest underground-mobs-out-of-hearing-are-not-listed
+  (let [bot #js {:entity #js {:id 1 :type "player" :username "Probe" :position #js {:x 0.5 :y 64 :z 0.5}}}]
+    (is (= {"player" :self "cow" :seen "zombie" :heard}
+           (listed (ground-world) bot
+                   [(.-entity bot)
+                    (mob 2 "cow" 64 40.5 0.5)          ; on the surface 40 blocks off, nothing between
+                    (mob 3 "zombie" 54)                ; 10 blocks down through rock: heard
+                    (mob 4 "skeleton" 44 10.5 0.5)     ; deep under the floor: neither
+                    (mob 5 "enderman" 52 20.5 0.5)
+                    (mob 6 "spider" 38)
+                    (mob 7 "pig" 64 70.5 0.5)])))))    ; open line but beyond sight range
+
+(deftest a-wall-hides-a-mob-past-hearing-and-silent-drops-are-only-seen
+  (let [wall (for [y (range 64 70) z (range -3 4)] [5 y z])
+        bot #js {:entity #js {:id 1 :type "player" :username "Probe" :position #js {:x 0.5 :y 64 :z 0.5}}}
+        drop #js {:id 9 :name "item" :type "object" :uuid "i9" :height 0.25 :position #js {:x 8.5 :y 64 :z 0.5}}]
+    (is (= {"player" :self "cow" :heard}
+           (listed (ground-world wall) bot [(.-entity bot) (mob 2 "cow" 64 12.5 0.5) (mob 3 "zombie" 64 30.5 0.5) drop])))
+    (is (= {"player" :self "cow" :seen "zombie" :seen "item" :seen}
+           (listed (ground-world) bot [(.-entity bot) (mob 2 "cow" 64 12.5 0.5) (mob 3 "zombie" 64 30.5 0.5) drop])))))
+
+(deftest without-an-eye-only-the-body-itself-is-listed
+  (let [raw #js {:eye (fn [] nil) :sightTable (fn [] (js/Uint8Array. #js [0 1])) :stateAt (fn [_ _ _] 0)}
+        bot #js {:entity #js {:id 1 :type "player" :username "Probe" :position #js {:x 0.5 :y 64 :z 0.5}}}]
+    (is (= {"player" :self} (listed raw bot [(.-entity bot) (mob 2 "cow" 64 3.5 0.5)])))
+    (is (= {"player" :self} (listed nil bot [(.-entity bot) (mob 2 "cow" 64 3.5 0.5)])))))
 
 (deftest loaded-entities-refresh-and-unloaded-entities-expire
   (let [c (cache) bot (js-obj) e (entity 1 "villager" "v-1" 1)]

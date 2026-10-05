@@ -1,12 +1,24 @@
 (ns engine.entity-observations
-  "Two-minute in-memory knowledge of server-tracked entities. No writes, jobs or network sensing."
+  "Two-minute in-memory knowledge of the entities the body perceived, as a player would. No writes, jobs or network
+  sensing. A sample keeps an entity only when the body senses it (see `sense`): itself, one it hears (within
+  `hearing-range` of the eye, through walls; not silent things such as drops), or one it could see by turning to it
+  (within `sight-range`, a clear line from the eye to its middle or its head). Mineflayer tracks far more (mobs deep in
+  the rock under the body); those are never listed. What was sensed stays known for `ttl-ms`. The engine's own
+  reflexes do not read this cache (they use primitives.entities)."
   (:require [clojure.string :as str]
+            [engine.perception :as perception]
             ["crypto" :as crypto]))
 
 (def ttl-ms 120000)
 (def sample-ms 1000)
 (def max-entities 10000)
 (def max-snapshot-bytes (* 4 1024 1024))
+(def hearing-range 16)
+(def sight-range 64)
+(def silent-types
+  "Entity types that make no sound a player would hear through a wall."
+  #{"item" "experience_orb" "arrow" "spectral_arrow" "painting" "item_frame" "glow_item_frame" "armor_stand"
+    "leash_knot" "marker" "item_display" "block_display" "text_display" "interaction" "falling_block"})
 
 (defn short-text [value limit]
   (when (and (string? value) (not (str/blank? value)))
@@ -17,12 +29,6 @@
     (case s "minecraft:overworld" "overworld" "minecraft:the_nether" "the_nether"
           "minecraft:the_end" "the_end" s)))
 
-(defn open [{:keys [world body now cap] :or {now js/Date.now cap max-entities}}]
-  {:state (atom {:entities {} :online? false :available? true :dropped 0 :overflow-until 0})
-   :opts {:world world :body body :now now :cap (min max-entities (max 1 cap))
-          :session (.randomUUID crypto)}
-   :connections (js/WeakMap.) :objects (js/WeakMap.) :dead (js/WeakSet.) :next-id (atom 0)})
-
 (defn object-id! [store table object]
   (when object
     (or (.get table object)
@@ -32,6 +38,35 @@
   (if (or (= "player" (.-type e)) (string? (.-username e)))
     "player"
     (or (short-text (.-name e) 64) (short-text (.-type e) 64) "unknown")))
+
+(defn sense
+  "How the body perceives entity e over the raw world (engine.perception's reader; nil when there is none):
+  :self, :seen, :heard, or nil when a player standing there could neither see nor hear it."
+  [^js raw ^js source ^js e]
+  (let [^js eye (when raw (.eye raw))
+        ^js table (when raw (.sightTable raw))
+        ^js p (.-position e)]
+    (cond
+      (and source (identical? e (.-entity source))) :self
+      (or (nil? eye) (nil? p)) nil
+      :else
+      (let [h (or (.-height e) 1.8)
+            mx (.-x p) mz (.-z p) my (+ (.-y p) (/ h 2)) hy (+ (.-y p) (max 0.1 (- h 0.1)))
+            d (js/Math.hypot (- mx (.-x eye)) (- my (.-y eye)) (- mz (.-z eye)))
+            seen? (fn [y] (perception/line-clear? raw table (.-x eye) (.-y eye) (.-z eye) mx y mz))]
+        (cond
+          (and table (pos? (.-length table)) (<= d sight-range) (or (seen? my) (seen? hy))) :seen
+          (and (<= d hearing-range) (not (silent-types (entity-type e)))) :heard
+          :else nil)))))
+
+(defn open
+  "A cache. :sense (fn [source e]) is the perception rule; by default (no raw world) only the body itself."
+  [{:keys [world body now cap] sense-fn :sense :or {now js/Date.now cap max-entities}}]
+  {:state (atom {:entities {} :online? false :available? true :dropped 0 :overflow-until 0})
+   :opts {:world world :body body :now now :cap (min max-entities (max 1 cap))
+          :sense (or sense-fn (partial sense nil))
+          :session (.randomUUID crypto)}
+   :connections (js/WeakMap.) :objects (js/WeakMap.) :dead (js/WeakSet.) :next-id (atom 0)})
 
 (defn entity-uuid [source e]
   (or (short-text (.-uuid e) 80)
@@ -52,11 +87,12 @@
     (when (and p (every? #(and (number? %) (js/Number.isFinite %)) [(.-x p) (.-y p) (.-z p)]))
       {:x (.-x p) :y (.-y p) :z (.-z p)})))
 
-(defn observation [store source dim e now]
+(defn observation [store source dim [e how] now]
   (when-let [pos (when-not (.has (:dead store) e) (position e))]
     (merge (entity-identity store source e)
            {:type (entity-type e) :id (when (integer? (.-id e)) (.-id e)) :world (get-in store [:opts :world])
-            :dimension dim :pos pos :observed-at now :expires-at (+ now ttl-ms)}
+            :dimension dim :pos pos :observed-at now :expires-at (+ now ttl-ms)
+            :sense how}
            (when-let [username (short-text (.-username e) 64)] {:username username})
            (when (identical? e (.-entity source)) {:self? true}))))
 
@@ -64,11 +100,14 @@
   (into {} (filter (fn [[_ entity]] (> (:expires-at entity) now))) entities))
 
 (defn observe!
-  "Apply an unfiltered local provider sample. Offline/stalled samples never refresh observations."
+  "Apply a local provider sample (every tracked entity), keeping only what the body senses. Offline/stalled samples
+  never refresh observations."
   [store sample now]
   (let [online? (true? (.-online sample)) dim (dimension (.-dimension sample))
         source (.-source sample)
-        loaded (when (and online? source dim) (array-seq (.-entities sample)))
+        sense-of (get-in store [:opts :sense])
+        loaded (when (and online? source dim)
+                 (keep #(when-let [how (sense-of source %)] [% how]) (array-seq (.-entities sample))))
         cap (get-in store [:opts :cap])
         incoming (keep #(observation store source dim % now) (take cap loaded))
         prior (prune (:entities @(:state store)) now)
@@ -134,7 +173,7 @@
 (defn start!
   "Register once for body lifetime. A missing/broken provider reports endpoint503 without failing body jobs."
   [primitives options]
-  (let [store (open options) now (get-in store [:opts :now])
+  (let [store (open (merge {:sense (partial sense (.-rawWorld primitives))} options)) now (get-in store [:opts :now])
         sample! (fn []
                   (try
                     (when-not (fn? (.-entityObservation primitives))

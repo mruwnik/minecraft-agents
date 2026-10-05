@@ -51,8 +51,8 @@
   (let [now 1700000000000
         rows [(entity "self" "player" "overworld" {:x 0.45 :y 64 :z 0.52} now 100 119900 {:self? true :username "ProbeMove"})
               (entity "old-self" "player" "the_nether" {:x 100 :y 64 :z 0} now 5000 115000 {:self? true :username "ProbeMove"})
-              (entity "cow" "cow" "overworld" {:x 3.24 :y 64 :z 0.54} now 1234 118766)
-              (entity "player" "player" "overworld" {:x 7 :y 64 :z 0} now 850 119150 {:username "Alex"})
+              (entity "cow" "cow" "overworld" {:x 3.24 :y 64 :z 0.54} now 1234 118766 {:sense :heard})
+              (entity "player" "player" "overworld" {:x 7 :y 64 :z 0} now 850 119150 {:username "Alex" :sense :seen})
               (entity "far" "zombie" "overworld" {:x 65 :y 64 :z 0} now 1 119999)
               (entity "other-dimension" "cow" "the_nether" {:x 1 :y 64 :z 1} now 1 119999)
               (entity "expired" "zombie" "overworld" {:x 1 :y 64 :z 1} now 150000 0)]
@@ -66,6 +66,7 @@
     (is (= [3.2 64 0.5] (:pos (first (:items result)))))
     (is (= 1234 (:age-ms (first (:items result)))))
     (is (= "Alex" (:player (second (:items result)))))
+    (is (= [:heard :seen] (mapv :sense (:items result))))
     (is (not (contains? (first (:items result)) :ttl-left-ms)))
     (is (not (contains? result :world)))))
 
