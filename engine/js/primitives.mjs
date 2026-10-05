@@ -10,21 +10,21 @@ import { createView } from './view.mjs'
 import { createRawWorld } from './raw-world.mjs'
 import { lineClear, rayClear } from './sight.mjs'
 import { isReplaceable, isInteractable } from './blocks.mjs'
-import { craftItem } from './craft.mjs'
-import { tradeWith } from './trade.mjs'
-import { say } from './chat.mjs'
 import { leaveBed, ensureAwake } from './bed.mjs'
 import { createUseOn, stateProperties } from './use-on.mjs'
-import { trackLiveEntities, liveEntities, liveEntity } from './live-entities.mjs'
 import { createSteer } from './steer.mjs'
 import { interactWith, mobFields } from './interact.mjs'
 import { leashFields, trackLeashes } from './leash.mjs'
+import { trackLiveEntities, liveEntities, liveEntity } from './live-entities.mjs'
 import { trackVehicles, vehicleFields, selfVehicle, mountVehicle, dismountVehicle } from './vehicle.mjs'
 import { emptyHand } from './unequip.mjs'
 import { furnaceVisit } from './furnace.mjs'
 import { enchantVisit } from './enchant.mjs'
+import { craftItem } from './craft.mjs'
+import { tradeWith } from './trade.mjs'
 import { missingPatches, missingRequired } from './deps-check.mjs'
 import { wrapBlockAt } from './offset-shapes.mjs'
+import { say } from './chat.mjs'
 
 const { Vec3 } = vec3
 const { goals } = pf
@@ -71,19 +71,21 @@ export const REACH = 4.5
 export const ATTACK_REACH = 3.5
 const MONSTER_RANGE = 8
 const DROP_RADIUS = 2
+const RAIN_LEVEL = 0.2 // vanilla client: raining above this rain level, thundering above THUNDER_LEVEL while raining
+const THUNDER_LEVEL = 0.9
 const DROP_WAIT_S = 1
-const POLL_MS = 50
-const HURT_WAIT_MS = 300 // attack waits this long for the server's entityHurt on the target
 const DIG_MARGIN_S = 5 // slack over the expected dig time (latency, a tick of lag)
-const CONTAINER = /chest|barrel|shulker_box|furnace|smoker|hopper|dispenser|dropper|brewing_stand/
+const POLL_MS = 50
 const DAMAGE_FRESH_MS = 1000 // a damage packet older than this is not the cause of a health loss
-const DESTS = ['hand', 'off-hand', 'head', 'torso', 'legs', 'feet']
+const HURT_WAIT_MS = 300 // attack waits this long for the server's entityHurt on the target
 const SETTLE_QUIET_MS = 150 // transfer closes its window only after this long without a slot update...
 const SETTLE_CAP_MS = 1500 // ...or this long in all
+const CONTAINER = /chest|barrel|shulker_box|furnace|smoker|hopper|dispenser|dropper|brewing_stand/
+const DESTS = ['hand', 'off-hand', 'head', 'torso', 'legs', 'feet']
 const DEFAULT_RADIUS = 16
+const HIT_RANGE = 6 // melee reach checked by entities: hittable is reported within it
 const SEE_THROUGH = /glass|^water$|^fire$|grass$|^snow$|^vine$|^ladder$|torch$|^lava$/
 const KINDS = ['hostile', 'passive', 'player', 'item', 'other']
-const HIT_RANGE = 6 // melee reach checked by entities: hittable is reported within it
 const OFFLINE_DEFAULT_MS = 5 * 60 * 1000
 const OFFLINE_MAX_MS = 10 * 60 * 1000
 const JUMP_PLACE_MAX = 8
@@ -128,8 +130,6 @@ const LOOK_TICK_MS = 100 // a look waits for the next physics tick (the rotation
 const STEP_S = 1.5
 const STEP_ATTEMPTS = 2
 const FLAG_ON_FIRE = 0x01
-const RAIN_LEVEL = 0.2 // vanilla client: raining above this rain level, thundering above THUNDER_LEVEL while raining
-const THUNDER_LEVEL = 0.9
 
 const WAIT_MAX_MS = 10000
 const sleepMs = ms => new Promise(resolve => setTimeout(resolve, ms))
@@ -722,13 +722,6 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     .filter(d => !(before.get(d.id) >= d.count))
     .map(d => ({ ...d, count: d.count - (before.get(d.id) ?? 0) }))
 
-  const dig = async (token, a = {}) => {
-    if (!isOwner(token)) throw cutError()
-    need(isPos(a.pos), 'dig needs pos {x, y, z}')
-    const p = cell(a.pos)
-    return act(token, { boundS: digBoundS(p) }, async ctx => {
-      const block = bot.blockAt(vec(p))
-      if (!block || isAir(block.name)) return { status: 'missing' }
   // the bound of a dig: the time the server needs with the held tool (bot.digTime) plus a margin and the drop wait
   const digBoundS = p => {
     const block = bot.blockAt(vec(p))
@@ -754,6 +747,13 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     return Object.keys(ids).map(id => bot.registry.items?.[id]?.name).filter(Boolean)
   }
 
+  const dig = async (token, a = {}) => {
+    if (!isOwner(token)) throw cutError()
+    need(isPos(a.pos), 'dig needs pos {x, y, z}')
+    const p = cell(a.pos)
+    return act(token, { boundS: digBoundS(p) }, async ctx => {
+      const block = bot.blockAt(vec(p))
+      if (!block || isAir(block.name)) return { status: 'missing' }
       if (dist(eye(), center(p)) > REACH) return { status: 'unreachable' }
       if (!block.diggable) return { status: 'cannot' }
       ctx.onAbort(() => bot.stopDigging())
@@ -1098,6 +1098,28 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     })
   }
 
+  const interact = async (token, a = {}) => {
+    if (!isOwner(token)) throw cutError()
+    need(isNum(a.id), 'interact needs an entity id')
+    need(a.item == null || typeof a.item === 'string', 'interact item must be an item name')
+    return act(token, { boundS: 2 }, ctx => interactWith(bot, ctx, a, { timeScale, reach: ATTACK_REACH }))
+  }
+
+  const trade = async (token, a = {}) => {
+    if (!isOwner(token)) throw cutError()
+    need(typeof a.villager === 'string' && a.villager !== '', 'trade needs a villager uuid')
+    need(a.op === 'offers' || a.op === 'buy', 'trade op must be offers or buy')
+    need(a.op !== 'buy' || (Number.isInteger(a.offer) && a.offer >= 0), 'trade buy needs an offer index of 0 or more')
+    need(a.times == null || (Number.isInteger(a.times) && a.times >= 1), 'trade times must be a positive integer')
+    return act(token, { boundS: 8 }, ctx => tradeWith(bot, ctx, a, { timeScale, reach: ATTACK_REACH }))
+  }
+
+  const unequip = async (token, a = {}) => {
+    if (!isOwner(token)) throw cutError()
+    need(a.dest == null || a.dest === 'hand', 'unequip only empties the hand')
+    return act(token, { boundS: 2 }, ctx => emptyHand(bot, ctx))
+  }
+
   const attack = async (token, a = {}) => {
     if (!isOwner(token)) throw cutError()
     need(isNum(a.id), 'attack needs an entity id')
@@ -1128,28 +1150,6 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       const killed = deadSeen || !now || (health !== undefined && health <= 0)
       return { status: killed ? 'killed' : 'hit', ...(health !== undefined && { health }), hurt: hurtSeen || killed }
     })
-  }
-
-  const interact = async (token, a = {}) => {
-    if (!isOwner(token)) throw cutError()
-    need(isNum(a.id), 'interact needs an entity id')
-    need(a.item == null || typeof a.item === 'string', 'interact item must be an item name')
-    return act(token, { boundS: 2 }, ctx => interactWith(bot, ctx, a, { timeScale, reach: ATTACK_REACH }))
-  }
-
-  const trade = async (token, a = {}) => {
-    if (!isOwner(token)) throw cutError()
-    need(typeof a.villager === 'string' && a.villager !== '', 'trade needs a villager uuid')
-    need(a.op === 'offers' || a.op === 'buy', 'trade op must be offers or buy')
-    need(a.op !== 'buy' || (Number.isInteger(a.offer) && a.offer >= 0), 'trade buy needs an offer index of 0 or more')
-    need(a.times == null || (Number.isInteger(a.times) && a.times >= 1), 'trade times must be a positive integer')
-    return act(token, { boundS: 8 }, ctx => tradeWith(bot, ctx, a, { timeScale, reach: ATTACK_REACH }))
-  }
-
-  const unequip = async (token, a = {}) => {
-    if (!isOwner(token)) throw cutError()
-    need(a.dest == null || a.dest === 'hand', 'unequip only empties the hand')
-    return act(token, { boundS: 2 }, ctx => emptyHand(bot, ctx))
   }
 
   const sleep = async (token, a = {}) => {
@@ -1254,16 +1254,6 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       return /^(soul_)?fire$/.test(name ?? '') ? { cause: 'fire' } : {}
     }
     const remember = () => { if (target.health > 0) snapshot = inventoryNow() }
-    const handlers = {
-      physicsTick: () => { lastTick = Date.now(); stalled = false; lastPos = target.entity.position.clone(); if (++ticks % 20 === 0) remember() },
-      health: () => {
-        remember()
-        if (target.health < lastHealth) emit({ kind: 'hurt', health: target.health, food: target.food, amount: lastHealth - target.health, ...hurtNow(), ...causeNow() })
-        lastHealth = target.health
-      },
-      // bot.experience still holds the pre-death values here; the server resets it in a later packet.
-      death: () => { stopWalking(target); emit({
-        kind: 'died',
     // The last damage packet to this body: the damage type's name (target.damageTypeNames comes from the login
     // registry) and the entity responsible, as a client can know them. The next health loss reports it; engine.hurt
     // turns it into the cause.
@@ -1285,6 +1275,16 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       const { at, ...fields } = last
       return fields
     }
+    const handlers = {
+      physicsTick: () => { lastTick = Date.now(); stalled = false; lastPos = target.entity.position.clone(); if (++ticks % 20 === 0) remember() },
+      health: () => {
+        remember()
+        if (target.health < lastHealth) emit({ kind: 'hurt', health: target.health, food: target.food, amount: lastHealth - target.health, ...hurtNow(), ...causeNow() })
+        lastHealth = target.health
+      },
+      // bot.experience still holds the pre-death values here; the server resets it in a later packet.
+      death: () => { stopWalking(target); emit({
+        kind: 'died',
         pos: here(),
         inventory: inventoryNow().length > 0 ? inventoryNow() : snapshot,
         experience: { level: target.experience?.level ?? 0, points: target.experience?.points ?? 0 },
@@ -1321,6 +1321,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     Object.entries(handlers).forEach(([name, fn]) => target.on(name, fn))
     if (entityDeathListeners.size) removalEvents.forEach(([n, f]) => target.on(n, f))
     return () => {
+      target._client?.removeListener('damage_event', onDamage)
       Object.entries(handlers).forEach(([name, fn]) => target.removeListener(name, fn))
       removalEvents.forEach(([n, f]) => target.removeListener(n, f))
     }
@@ -1331,7 +1332,6 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   // reports, drops the walk goal and releases the controls; the next physicsTick re-arms it.
   const watchdog = setInterval(() => {
     if (closed || down || isOffline() || stalled) return
-      target._client?.removeListener('damage_event', onDamage)
     const ms = Date.now() - lastTick
     if (ms <= PHYSICS_STALL_MS * timeScale || columnLoaded()) return
     stalled = true
@@ -1544,6 +1544,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   }
 
   const useOn = createUseOn({ act, getBot: () => bot, inventory, eye, lookNow, timeScale, isOwner, cutError, badArgs })
+
   const { steer, pathWorld } = createSteer({ act, getBot: () => bot, badArgs })
 
   // dig, place, jumpPlace and useOn mark the cell's column for the view dump once they settle, whatever the outcome
