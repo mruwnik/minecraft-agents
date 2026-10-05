@@ -1,0 +1,12 @@
+;; ProbeRefire night cases (d71dae2e): as the idle scenario without night-unsafe and shut-in-by-day (added at run time once dug in; other players online make shelter log out)
+{:register [{:trigger :burning :persistence :cooldown :cooldown-s 0
+             :job (jobs.survival.extinguish {:water-radius 6})}
+            {:trigger :hostile-near :persistence :cooldown :cooldown-s 5 :args {:radius 8 :ranged-radius 16}
+             :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}
+            {:trigger :health-low :persistence :cooldown :cooldown-s 10 :args {:health 7 :healed 16}
+             :job (jobs.survival.recover {:health 7 :healed 16 :sight 16})}
+            {:trigger :hungry :persistence :cooldown :cooldown-s 90 :args {:food 6 :food-when-hurt 14}
+             :job (jobs.survival.get-food {:food 6 :food-when-hurt 14})}
+            {:trigger :died :persistence :cooldown :cooldown-s 30
+             :job (jobs.survival.recover-drops {:collect-radius 6})}]
+ :queue []}
