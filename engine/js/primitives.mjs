@@ -135,10 +135,10 @@ const WAIT_MAX_MS = 10000
 const sleepMs = ms => new Promise(resolve => setTimeout(resolve, ms))
 // Resolves true once the column under the body is loaded (blockAt there is non-null), false after `timeoutMs`.
 // A body that acts before its chunk arrives sees no roof, no bed and no other players.
-export async function waitForWorld (bot, { timeoutMs = WORLD_TIMEOUT_MS, pollMs = WORLD_POLL_MS } = {}) {
+export async function waitForWorld (bot, { timeoutMs = WORLD_TIMEOUT_MS, pollMs = WORLD_POLL_MS, stop = () => false } = {}) {
   const deadline = Date.now() + timeoutMs
   while (!bot.blockAt(bot.entity.position)) {
-    if (Date.now() >= deadline) return false
+    if (stop() || Date.now() >= deadline) return false
     await sleepMs(pollMs)
   }
   return true
@@ -1376,6 +1376,23 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     return null
   }
 
+  // awaitWorld, but a fresh bot that is kicked or ends while its world loads is not adopted: null (it is not bound yet,
+  // so nothing else would notice the drop), and the wait stops at once with no world-not-loaded
+  const awaitWorldUnlessEnded = async fresh => {
+    let ended = false
+    const mark = () => { ended = true }
+    fresh.once('end', mark)
+    fresh.once('kicked', mark)
+    const loaded = await waitForWorld(fresh, { timeoutMs: worldTimeoutMs, stop: () => ended })
+    fresh.removeListener('end', mark)
+    fresh.removeListener('kicked', mark)
+    if (ended) return null
+    if (!loaded) emit({ kind: 'world-not-loaded', ms: worldTimeoutMs })
+    if (!closed) return fresh
+    fresh.quit()
+    return null
+  }
+
   // a fresh bot, retried a few times; null when close() came first (a bot made meanwhile is quit)
   const reconnectBot = async () => {
     for (let attempt = 1; ; attempt++) {
@@ -1419,9 +1436,10 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
         const fresh = await reconnect().then(b => ({ b }), error => ({ error }))
         if (fresh.b && closed) { fresh.b.quit(); return }
         if (fresh.b) {
-          const ready = await awaitWorld(fresh.b)
-          if (ready) adopt(ready)
-          return
+          const ready = await awaitWorldUnlessEnded(fresh.b)
+          if (ready) { adopt(ready); return }
+          if (closed) return
+          fresh.error = new Error('the connection ended before the world loaded')
         }
         const retryMs = Math.min(RECONNECT_BACKOFF_FIRST_MS * 2 ** (attempt - 1), RECONNECT_BACKOFF_MAX_MS)
         emit({ kind: 'reconnect-failed', reason: String(fresh.error?.message ?? fresh.error), attempt, retryMs })
@@ -1436,6 +1454,8 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     if (closed) return
     down = true
     emit({ kind: 'disconnected', reason })
+    // a call still waiting on the dead bot would sit until its time bound: cut it now so its job resumes after the reconnect
+    for (const call of [...inflight]) call.cut()
     autoReconnect()
   }
 

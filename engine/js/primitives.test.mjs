@@ -1203,6 +1203,34 @@ test('after the reconnect acting calls run on the new bot', async () => {
 
 test('a stale token still rejects with cut while the bot is down', async () => {
   const bots = []
+test('a call in flight when the connection drops is cut at once, not left to its time bound', async () => {
+  const bots = []
+  const { p } = await online({ connect: failing(bots, { n: Infinity }), timeScale: 1 })
+  const flying = p.steer('t1', { decide: () => ({ controls: {} }), timeoutS: 30 })
+  await new Promise(resolve => setTimeout(resolve, 5))
+  bots[0].emit('end', 'gone')
+  await assert.rejects(flying, err => err.code === 'cut')
+  await p.close()
+})
+
+test('a fresh bot kicked while its world loads is not adopted: the body keeps reconnecting', async () => {
+  const bots = []
+  const connect = async () => {
+    const b = stubBot(world)
+    if (bots.length === 1) b.blockAt = () => null // its chunk never arrives
+    bots.push(b)
+    return b
+  }
+  const { p, seen } = await online({ connect, timeScale: 1 })
+  bots[0].emit('end', 'first')
+  for (let i = 0; i < 1000 && bots.length < 2; i++) await new Promise(resolve => setTimeout(resolve, 1))
+  await new Promise(resolve => setTimeout(resolve, 30)) // the world wait is under way
+  bots[1].emit('end', 'second')
+  await untilSeen(seen, 'online')
+  assert.deepEqual([bots.length, seen.filter(e => e.kind === 'online').length], [3, 1])
+  await p.close()
+})
+
   const { p } = await online({ connect: connectOnce(bots, true) })
   bots[0].emit('end', 'gone')
   await assert.rejects(p.look('old', { pos: at(1, 64, 1) }), err => err.code === 'cut')
