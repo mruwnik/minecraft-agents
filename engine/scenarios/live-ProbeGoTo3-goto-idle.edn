@@ -1,0 +1,2 @@
+;; ProbeGoTo3 live cases for go-to start cell and loaded-edge stop: idle, jobs via tools/jobs.mjs
+{:register [] :queue []}
