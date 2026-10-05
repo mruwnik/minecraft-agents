@@ -385,14 +385,13 @@ const mergeable = (a, b, top) => {
   return volume(u) <= MERGE_MAX_GROWTH * (volume(a) + volume(b))
 }
 
-// Overlapping boxes are merged into one box while the union stays within the caps (a fill of hundreds of blocks would
-// otherwise chain into one huge box). Boxes that overlap but stay apart are still exact when run one after another: a
-// change only alters light within 15 cells of itself, which is inside its own box's interior, and the box shell (16 away)
-// is never touched by it. Block states are read live, so every change is already in the states when any box runs. Each
-// change's own box runs at least once after the change, recomputing its whole neighbourhood from the final states; a
-// cell near another box's shell that was briefly stale after the first run is inside some other change's box and is
-// fixed when that one runs. Each box joins the first kept box it can merge with, repeated while that still merges something.
-// Merges append in place to copies this function owns; the input boxes and their arrays are never mutated.
+// Merges overlapping boxes while the union stays within the caps (a fill of hundreds of blocks would otherwise chain
+// into one huge box). Boxes that overlap but stay apart are still exact when run one after another: a change only
+// alters light within 15 cells of itself, inside its own box's interior, and the box shell (16 away) is never touched.
+// Block states are read live, so every change is already in them when any box runs, and each change's box recomputes
+// its whole neighbourhood from the final states. A cell left stale near another box's shell is inside some other
+// change's box and is fixed when that one runs.
+// Each box joins the first kept box it can merge with, repeated until nothing merges. The input boxes are never mutated.
 export function mergeOverlapping (boxes, top) {
   const pass = list => {
     const out = []

@@ -39,16 +39,15 @@
     (first (sort-by rank item-names))))
 
 (defn harvest-need
-  "nil when the carried items (names) can harvest a block whose minecraft-data harvestTools are harvest-tools (item
-  names; nil when any tool or the hand harvests it), else the cheapest tool that does."
+  "nil when the carried items (names) can harvest a block with these harvest-tools (item names; empty when the hand
+  does), else the cheapest tool that does."
   [item-names harvest-tools]
   (when (and (seq harvest-tools) (not-any? (set harvest-tools) item-names))
     (cheapest-tool harvest-tools)))
 
 (defn suited-item
-  "The carried item (maps {:name :durability ...}) a careful player digs block-name with: of the right kind and, when
-  harvest-tools (the block's harvest tool names) is not empty, one of them; the cheapest material, the most worn of
-  that material first. nil for none."
+  "The carried item (map {:name :durability ...}) a careful player digs block-name with, or nil. It is of the right
+  kind and, when harvest-tools is not empty, one of them. Cheapest material first, then the most worn."
   [items block-name harvest-tools]
   (let [suffix (str "_" (tool-kind block-name))
         ok (set harvest-tools)
@@ -66,8 +65,8 @@
 (def low-fraction "A tool at or under this fraction of its durability is low." 0.1)
 
 (defn wear-event
-  "What changed between prev and now (maps {:name :durability :max :n}: the tool last held and the carried tools of
-  that name now, :n their count; now nil for none): :tool-broke when fewer are carried, :tool-low when the tool just
+  "What changed between prev (the tool last held) and now (the carried tools of that name; nil for none). Both are
+  maps {:name :durability :max :n}, :n the count. :tool-broke when fewer are carried, :tool-low when the tool just
   fell to the low fraction of its durability, else nil."
   [prev now]
   (when prev
@@ -104,9 +103,9 @@
         (ctx/emit! c :tool.none :warn {:tool (:name prev)})))))
 
 (defn ^:async equip-tool!
-  "Hold the tool a careful player digs block-name with (pick: cheapest that harvests, most worn first); with
-  {:fast true} the best carried tool (best-tool) for a reflex dig. Emits :tool.low / :tool.broke / :tool.none for the
-  tool held last time (note-wear!). Nothing when none is carried or it is held. Resolves to the equip result, or nil."
+  "Hold the tool for digging block-name: the cheapest that harvests (pick), or with {:fast true} the best carried
+  one (best-tool). Emits :tool.low / :tool.broke / :tool.none for the tool held last time (note-wear!). Does nothing
+  when none is carried or it is already held. Resolves to the equip result, or nil."
   [c block-name opts]
   (let [p (:primitives c)
          _ (await (note-wear! c))
@@ -121,12 +120,11 @@
        (await (ctx/act c :equip #js {:item tool :dest "hand"})))))
 
 (defn equip-for!
-  "equip-tool! with the default (cheapest suited) choice; or with opts {:fast true}. A promise."
+  "equip-tool!, a promise."
   ([c block-name] (equip-tool! c block-name nil))
   ([c block-name opts] (equip-tool! c block-name opts)))
 
 (defn can-harvest?
-  "Whether the carried tools harvest block-name (it drops itself or its item): the block's minecraft-data
-  harvestTools (primitive harvestTools) are empty, or one is carried."
+  "Whether the carried tools harvest block-name: its harvestTools are empty, or one is carried."
   [p block-name]
   (nil? (harvest-need (map :name (u/inventory p)) (some-> (.harvestTools p block-name) js->clj))))

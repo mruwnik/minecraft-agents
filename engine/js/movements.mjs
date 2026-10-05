@@ -5,7 +5,7 @@ import pf from 'mineflayer-pathfinder'
 const { Vec3 } = vec3
 const { Movements } = pf
 
-// extra cost, not a ban: crossing stays possible when it is the only way, and a detour of up to about this many blocks is preferred
+// Extra cost, not a ban: crossing stays possible when it is the only way. A detour of up to about this many blocks is preferred.
 const BODY_COSTS = Object.freeze({ powder_snow: 30, cobweb: 40, sweet_berry_bush: 20, wither_rose: 20 })
 const FLOOR_COSTS = Object.freeze({ magma_block: 20, campfire: 40, soul_campfire: 40 })
 const PORTALS = ['nether_portal', 'end_portal', 'end_gateway'] // walking in teleports the body away; never entered

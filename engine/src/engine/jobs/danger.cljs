@@ -1,27 +1,22 @@
 (ns engine.jobs.danger
-  "The danger of walking a route past mobs (route-danger), in expected points of damage after the body's armour, and a
-  straight ground route between two points (straight-route) for a caller that has no planned one.
+  "The danger of walking a route past mobs (route-danger), in expected points of damage after the body's armour, and
+  a straight ground route between two points (straight-route) for a caller with no planned one.
 
-  The mobs are an input: what the body has seen or remembers, as a player would ({:name :pos} per mob, other keys
-  such as :seen-at ignored; JS entities are read too), e.g. engine.jobs.reach/known-hostiles (the perception's mob
-  memory, as recover-drops passes). route-danger never reads the world's entities itself, so an unseen creeper behind
-  the body never counts.
+  The mobs are an input: what the body has seen or remembers ({:name :pos} per mob; JS entities are read too), e.g.
+  engine.jobs.reach/known-hostiles. route-danger never reads the world's entities itself, so an unseen creeper
+  never counts.
 
   Per mob:
-    hostile?  minecraft-data's entity type \"hostile\" (or category \"Hostile mobs\"); anything else is no danger
+    hostile?  minecraft-data's entity type \"hostile\" (or category \"Hostile mobs\"). Anything else is no danger
               unless an override names it. Endermen and zombified piglins only fight when provoked: x0.1.
-    threat    points of damage before armour: a creeper's blast at point blank 43 (normal difficulty, one hit);
-              any other: engine.jobs.combat/mob-dps (3 for an unknown hostile) x 3 s of exposure, in hits of one
-              second each. minecraft-data has no attack damage, so these game numbers live in combat.
-    weight    by the closest route cell: 1 within 2 blocks, falling to 0 at :radius (16, a skeleton's range)
-    reach     a melee mob (creepers too) needs a walkable way to that cell (engine.jobs.reach's walker search); a
-              ranged mob (combat/ranged-mobs) a line of fire to one of the route cells near it. A mob behind walls is
-              no danger. The searches of one call share one read of each block (one reach/lookup).
-    armour    the vanilla formula per hit: damage x (1 - min(20, max(points/5, points - 4 x damage/(toughness + 8)))/25),
-              then x (1 - min(20, EPF)/25) with EPF protection 1 a level, blast_protection 2 a level (explosions),
-              projectile_protection 2 a level (arrows), fire_protection 2 a level (fire, unused here). Armour points
-              are engine.jobs.combat/piece-points, toughness diamond 2 and netherite 3 a piece (minecraft-data has
-              neither).
+    threat    damage before armour: a creeper's blast is 43 (one hit); any other mob is engine.jobs.combat/mob-dps
+              (3 if unknown) x 3 s of exposure.
+    weight    by the closest route cell: 1 within 2 blocks, falling to 0 at :radius (16).
+    reach     a melee mob (creepers too) needs a walkable way to that cell (engine.jobs.reach). A ranged mob needs a
+              line of fire to one of the route cells near it. A mob behind walls is no danger.
+    armour    vanilla's formula per hit: the armour-points and toughness reduction, then the enchantment reduction
+              (EPF: protection 1 a level, blast 2 for explosions, projectile 2 for arrows). Toughness is 2 a diamond
+              piece and 3 a netherite piece.
   danger = threat after armour x weight, when the mob can reach the route; else 0.
   Overrides {mob-name number-or-{:times n}}: a number is the mob's threat before armour, {:times n} multiplies it.
   Equipment: {part {:name :enchants [{:name :lvl}]}} for head torso legs feet, default what the body wears."
@@ -110,7 +105,7 @@
                            enchants))))
 
 (defn after-armour
-  "Damage threat (in hits equal hits) after armour stats and enchantments, for damage type dtype."
+  "The threat (spread over hits) after armour stats and enchantments, for damage type dtype."
   [{:keys [points toughness enchants]} dtype threat hits]
   (let [hit (/ threat (max 1 hits))
         armour (min 20 (max (/ points 5) (- points (/ (* 4 hit) (+ toughness 8)))))
@@ -150,10 +145,10 @@
 ;; ---------------------------------------------------------------- the danger
 
 (defn route-danger
-  "{:danger total :mobs [{:name :pos :distance :weight :threat :danger} ...]} of walking route ([{:x :y :z}], cells)
-  past mobs (cljs maps {:name :pos} or JS entities: only what the body senses), mobs that add danger only, the
-  worst first. Options :overrides {mob-name number-or-{:times n}}, :equipment (default what the body of primitives p
-  wears), :radius (16), :version (minecraft-data, default the body's). See the ns doc for the scheme."
+  "{:danger total :mobs [{:name :pos :distance :weight :threat :danger} ...]} of walking route ([{:x :y :z}] cells)
+  past mobs (cljs maps {:name :pos} or JS entities). Lists only mobs that add danger, the worst first.
+  Options: :overrides, :equipment (default what the body wears), :radius (16), :version (minecraft-data, default the
+  body's). See the ns doc."
   [p route mobs & {:keys [overrides equipment radius version]}]
   (let [version (or version @foods/selected)
         radius (or radius default-radius)

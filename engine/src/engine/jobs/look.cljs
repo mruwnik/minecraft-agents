@@ -1,7 +1,7 @@
 (ns engine.jobs.look
-  "Looking around like a player: a job that needs a block it has to have seen turns the body through the four headings
-  (level, then down at the floor ahead) with a sight pass after each look, so what lies beside or behind it comes
-  into perception's memory. Never sensing through walls: the looks only widen what the eye can reach."
+  "Looking around like a player. A job that needs a block it has seen turns the body through the four headings (level,
+  then down at the floor ahead) with a sight pass after each look, so what lies beside or behind it enters
+  perception's memory. Nothing is sensed through walls."
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
             [engine.jobs.util :as u]

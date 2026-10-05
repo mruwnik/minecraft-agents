@@ -1,8 +1,7 @@
-// Chat and whisper: send one line, then listen briefly for
-// the server's refusal (a system line only this body sees; an unsigned /tell looks sent otherwise).
-
-// The rules (cleaning, empty, slash, player name, length budget) live in engine.chat/validate, which gate! and
-// direct! run before any send. This layer keeps the Mineflayer calls, the server-refusal parsing and assertSendable.
+// Chat and whisper: send one line, then listen briefly for the server's refusal (a system line only this body sees;
+// an unsigned /tell looks sent otherwise).
+// The rules (cleaning, empty, slash, player name, length budget) live in engine.chat/validate, which gate! and direct!
+// run before any send. This file keeps the Mineflayer calls, the refusal parsing and assertSendable.
 
 const REFUSALS = [/^Command had invalid signature/, /^No player was found/, /^Unknown or incomplete command/, /^An unexpected error occurred trying to execute that command/, /^That player cannot be found/i]
 

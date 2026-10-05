@@ -1,10 +1,11 @@
 (ns engine.jobs.tidy
   "Tidying up after trespassing. A job that breaks or places a block in another's zone or claim (a survival job's last
-  resort, or any job run with :ignore-zones?) notes what it did: before the act, `refusal` asks the rules (zones
-  ignored by no opt-out) whether the cell is another's; after the act, `record!` writes a :tidy entry to body memory
-  {:cell [x y z] :action :dig|:place :was block-before :now block-after :zone/:claim/:plan :tries n :job id}, :job the
-  top-level job that recorded it (the trigger :tidy-pending waits until that job has ended). The
-  jobs.survival.restore-broken job puts the cells back when the body is safe. Best effort, never at the cost of safety."
+  resort, or any job run with :ignore-zones?) notes what it did.
+  Before the act, `refusal` asks the rules (ignoring the :ignore-zones? opt-out) whether the cell is another's.
+  After the act, `record!` writes a :tidy entry to body memory:
+  {:cell [x y z] :action :dig|:place :was block-before :now block-after :zone/:claim/:plan :tries n :job id}.
+  :job is the top-level job that recorded it; the :tidy-pending trigger waits until that job has ended.
+  jobs.survival.restore-broken puts the cells back when the body is safe. Best effort, never at the cost of safety."
   (:require [engine.ctx :as ctx]
             [engine.jobs.access :as access]
             [engine.jobs.combat :as combat]
@@ -22,8 +23,8 @@
   {:cap 1 :ttl (* 6 60 60 1000)})
 
 (defn unsafe?
-  "Whether the body (primitives p) should not be busy with other people's blocks now: health under :min-health or a
-  hostile within :danger-radius."
+  "Whether the body should not be busy with other people's blocks now: health under :min-health or a hostile within
+  :danger-radius."
   [p {:keys [min-health danger-radius]}]
   (or (< (.-health (.self p)) min-health)
       (boolean (seq (combat/hostiles p danger-radius)))))
@@ -51,8 +52,8 @@
     (contains? (body-cells {:x (.-x pos) :y (.-y pos) :z (.-z pos)}) (vec cell))))
 
 (defn why-not
-  "Why entry cannot be restored now (:changed :not-carried :occupied: a block put back would be placed into the
-  body), or nil."
+  "Why entry cannot be restored now, or nil: :changed (the cell no longer holds what was recorded), :not-carried (the
+  dug block is not carried) or :occupied (the block would be placed into the body)."
   [p {:keys [cell now action was]}]
   (cond
     (not= now (block-now p cell)) :changed
@@ -60,8 +61,8 @@
     (and (= :dig action) (in-body? p cell)) :occupied))
 
 (defn unreachable?
-  "Whether the body cannot get within reach blocks of entry's cell: it is farther off and has no walkable way next to the
-  cell (a body sealed in). An unknown answer (search out of budget) counts as reachable."
+  "Whether the body cannot get within reach blocks of entry's cell: it is farther off and has no walkable way to the
+  cell (a sealed body). An unknown answer counts as reachable."
   [p {:keys [cell]} reach]
   (let [here (u/self-pos {:primitives p})
         at (zipmap [:x :y :z] cell)]
@@ -69,8 +70,8 @@
          (not (reach/walkable-way? p here at)))))
 
 (defn refusal
-  "The refusing verdict (a zone, claim or plan footprint of another's) for action at pos ({:x :y :z}), judged as if
-  the job's :ignore-zones? were off; nil when the cell is permitted or no zone list is read. Call before the act."
+  "The verdict refusing action at pos ({:x :y :z}) for another's zone, claim or plan footprint, judged as if
+  :ignore-zones? were off. nil when permitted or no zone list is read. Call before the act."
   [c action pos]
   (access/trespass-refusal (access/rules-input c {:ignore-zones? false}) action pos))
 

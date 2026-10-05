@@ -27,8 +27,8 @@
 
 (defn find-trees
   "The log columns whose top log has leaves close by, nearest first (lazily), each as
-  {:column {:x :z} :base pos :species name}. logs and leaves come nearest first from scan; columns in excluded (a set
-  of [x z]) are skipped."
+  {:column {:x :z} :base pos :species name}. logs and leaves are scan results; columns in excluded (a set of [x z])
+  are skipped."
   [logs leaves excluded]
   (let [logs (remove (fn [{:keys [pos]}] (excluded [(:x pos) (:z pos)])) logs)
         columns (group-by (fn [{:keys [pos]}] [(:x pos) (:z pos)]) logs)
@@ -65,8 +65,8 @@
   40)
 
 (defn logs-at
-  "The logs of species standing in the column over pos, lowest first, read cell by cell (no radius): the cells
-  from pos up, skipping the air where the lowest logs were dug, ending at the first other block above the first log."
+  "The logs of species in the column over pos, lowest first, read cell by cell up from pos. Skips the air where the
+  lowest logs were dug and ends at the first other block above the first log."
   [p {:keys [x y z]} species]
   (let [log (str species "_log")]
     (->> (range max-column)

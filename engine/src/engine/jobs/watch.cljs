@@ -1,16 +1,23 @@
 (ns engine.jobs.watch
-  "Looking round while a job stares at its work (card 943cac28). A body that digs or builds faces one way, and perception
-  sees only inside the view cone, so a creeper (silent) walking up behind it stays unknown. A job calls `watch!` at the
-  seams between its acts; when the place is risky it turns the head to the open headings round the body and takes a mob
-  sample after each look, so the danger checks and the hostile reflex see what a player who glanced round would.
+  "Looking round while a job stares at its work. A body that digs or builds faces one way and perception sees only
+  the view cone, so a silent creeper behind it stays unknown. A job calls `watch!` between its acts. When the place
+  is risky it turns to each open heading and takes a mob sample after each look.
 
-  Risky means: the feet cell is dark (effective light under 8), a hostile is known within 24 blocks in the last 30 s
-  (alert), or the job says so (:risky? true; a strip tunnel is). A quiet, lit place never scans. Scans run every
-  :every-ms (3 s; :alert-ms, 2 s, while alert), before a dig of 2 s or longer, and when more headings have opened
-  than at the last scan (a tunnel breaking into a cave). A mob heard but not seen is turned to once per 5 s.
-  The clock is body memory (kind :watched), so a parent and its child share it. Only headings with a clear line at
-  feet and head height are looked at (the body's own neighbours: no x-ray); no sight pass is run, only mob samples.
-  The helper never turns back: the job's next act aims itself. A body with no perception does nothing."
+  Risky means one of:
+  - the feet cell is dark (effective light under 8);
+  - a hostile was known within 24 blocks in the last 30 s (alert);
+  - the job says so (:risky? true; a strip tunnel does).
+  A quiet, lit place never scans.
+
+  A scan is due:
+  - every :every-ms (3 s), or :alert-ms (2 s) while alert;
+  - before a dig of 2 s or longer;
+  - when more headings are open than at the last scan.
+  A mob heard but not seen is turned to once per 5 s.
+
+  The clock is body memory (kind :watched), shared by a parent and its child.
+  Only headings with a clear line at feet and eye height are looked at.
+  It never turns back; the job's next act aims itself. A body with no perception does nothing."
   (:require [engine.ctx :as ctx]
             [engine.perception :as perception]))
 
@@ -31,7 +38,7 @@
 (defn perception-of [c] (aget (:primitives c) "perception"))
 
 (defn effective-light
-  "Light at the cell (x y z) of raw: the brighter of block light and sky light less the sky darkening of the hour."
+  "Light at cell x y z of raw: the brighter of block light and sky light less the sky darkening."
   [raw x y z]
   (let [packed (.lightAt raw x y z)
         sky (bit-shift-right packed 4)
@@ -126,12 +133,12 @@
          (and before-dig (> age dig-gap-ms) (>= (or (dig-ms c before-dig) 0) long-dig-ms))))))
 
 (defn sample!
-  "One mob sample (what a glance takes in); the known mobs not in before (a set of ids), nearest first."
+  "The known mobs whose ids are not in before (a set), nearest first."
   [c before]
   (filterv #(not (before (.-id ^js %))) (known-mobs c)))
 
 (defn ^:async scan!
-  "Look along each open heading, a mob sample after each; :saw (and watch.saw) when a new hostile became known."
+  "Look along each open heading with a mob sample after each. Returns :saw (and emits :watch.saw) when a new mob became known, else :scanned."
   [c open]
   (let [before (set (map #(.-id ^js %) (known-mobs c)))
         started (ctx/now c)]

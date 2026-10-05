@@ -1,15 +1,13 @@
 (ns engine.jobs.shelter
-  "What the night-survival jobs (shelter, sleep, log-out, dig-in) and the
-  night-unsafe and player-sleeping-nearby triggers share: night and roof
-  tests, the known bed, the log-out condition, the shelter entry. See README.md, Job library."
+  "What the night-survival jobs (shelter, sleep, log-out, dig-in) and the night-unsafe and player-sleeping-nearby
+  triggers share: night and roof tests, the known bed, the log-out condition, the shelter entry."
   (:require [engine.ctx :as ctx]
             [engine.jobs.util :as u]
             [engine.memory :as mem]))
 
 (def ms-per-day
-  "One in-game day in engine-clock milliseconds (20 minutes). The engine has
-  no world day counter, so \"a day\" in memory policies and in
-  :max-days-awake is this long."
+  "One in-game day in engine-clock milliseconds (20 minutes). \"A day\" in memory policies and :max-days-awake is
+  this long."
   1200000)
 
 (def default-roof-height 4)
@@ -19,19 +17,18 @@
 (def default-player-radius 128)
 
 (def non-solid
-  "Block names that are not a roof: air, fluids and the plants and fixtures
-  a body can stand in."
+  "Block names that are not a roof: air, fluids, and plants and fixtures a body can stand in."
   #{"air" "cave_air" "void_air" "water" "lava" "short_grass" "grass" "tall_grass" "fern" "large_fern"
     "torch" "wall_torch" "snow" "vine" "dead_bush" "seagrass" "tall_seagrass" "fire"})
 
 (def walk-through
-  "Names of blocks a mob or body walks through or over: signs and banners, rails, pressure plates, buttons, levers,
-  carpets, tripwire and cobweb. Not solid, so neither a roof, a wall nor a floor."
+  "Blocks a mob or body walks through or over (signs, banners, rails, plates, buttons, levers, carpets, tripwire,
+  cobweb). Not solid: neither roof, wall nor floor."
   #"(_sign|_banner|_carpet|_pressure_plate|_button|_rail)$|^(rail|lever|tripwire|tripwire_hook|string|cobweb|redstone_wire)$")
 
 (defn solid?
-  "Whether a block name counts as solid: not nil (an unloaded chunk), not in
-  non-solid, not walk-through, and not leaves or a sapling or flower."
+  "Whether a block name counts as solid: not nil (unloaded), not non-solid or walk-through, and not leaves or a
+  sapling."
   [name]
   (and (some? name)
        (not (non-solid name))
@@ -50,8 +47,7 @@
 (defn solid-at? [p pos] (solid? (u/block-name p pos)))
 
 (defn roofed?
-  "A solid block within height blocks straight above the feet cell (the
-  cells y+1 .. y+height)."
+  "Whether a solid block lies within height blocks straight above the feet cell."
   [p height]
   (let [{:keys [x y z]} (feet p)]
     (boolean (some #(solid-at? p {:x x :y (+ y %) :z z}) (range 1 (inc height))))))
@@ -76,11 +72,9 @@
                      (filter #(solid-at? p {:x x :y (+ y %) :z z}) (range 1 (inc buried-scan))))))))
 
 (defn buried?
-  "The body is underground: no sky light at its feet and head cells. Sky light reaches a cell through any opening to
-  the open sky (straight down a shaft undimmed, one less per step sideways or diagonal), and the night's mobs spawn
-  or wander in there; a cell at 0 is sealed from the sky, so the night changes nothing (mobs spawn by block light).
-  A ravine, a shaft or a cave mouth keeps sky light and stays unsafe. Without light data, the column heuristic
-  (buried-by-column?) decides."
+  "The body is underground: no sky light at its feet and head cells. A cell at 0 is sealed from the sky, so the night
+  changes nothing there. A ravine, shaft or cave mouth keeps sky light and stays unsafe. Without light data,
+  buried-by-column? decides."
   [p]
   (let [{:keys [x y z] :as f} (feet p)
         lights (keep #(sky-light-at p %) [f {:x x :y (inc y) :z z}])]
@@ -98,20 +92,19 @@
   (and (night? p) (not (sleeping? p)) (not (roofed? p roof-height)) (not (buried? p))))
 
 (defn bed-in-view
-  "The remembered bed position in a memory view when it is within radius of
-  the body, else nil."
+  "The remembered bed position when it is within radius of the body, else nil."
   [p view radius]
   (let [pos (mem/place view :bed)]
     (when (and pos (<= (u/dist (u/self-pos {:primitives p}) pos) radius))
       pos)))
 
-;; a :slept entry younger than this counts as "slept tonight" (the night is under half an in-game day)
+;; A :slept entry younger than this counts as "slept tonight".
 (def slept-tonight-ms (/ ms-per-day 2))
 
 (defn sleep-wanted
-  "The remembered bed within radius when the body, awake at night, has not slept tonight (no :slept entry within half an
-  in-game day) and the bed was not given up on (no unexpired :bed-unreachable entry at it); else nil. The roof is not
-  asked: this is for a body sheltered already, which should set its respawn point in its own bed."
+  "The remembered bed within radius when the body is awake at night, has not slept tonight (no :slept entry within half
+  a day) and has not given up on that bed (no unexpired :bed-unreachable entry). The roof is not asked: this is for a
+  body already sheltered."
   [p view radius]
   (when (and (night? p) (not (sleeping? p)))
     (let [bed (bed-in-view p view radius)]
@@ -121,7 +114,7 @@
         bed))))
 
 (def bed-place-failed-policy
-  "The :bed-place-failed entries the shelter writes when it could not set up a carried bed: one, kept ten minutes."
+  "Policy of the :bed-place-failed entry the shelter writes when it could not set up a carried bed: one, ten minutes."
   {:cap 1 :ttl 600000})
 
 (defn carried-bed
@@ -153,8 +146,7 @@
              (array-seq (.entities p #js {:radius radius :kind "player" :max 32})))))
 
 (defn log-out-unsupported?
-  "Whether the latest :log-out entry in a memory view says the server does not
-  support logging out."
+  "Whether the latest :log-out entry says the server does not support logging out."
   [view]
   (= "unsupported" (:status (:data (mem/latest view :log-out)))))
 
@@ -184,11 +176,10 @@
     (+ (* ms-per-tick (- morning-tick t)) morning-margin-ms)))
 
 (defn log-out-wanted?
-  "Whether logging out is wanted: it is night, no bed is remembered within :bed-radius, :offline-allowed is not
-  false, the last log-out was not unsupported, and :others holds: :asleep-nearby (the default) wants another player
-  within :player-radius asleep (logging out lets them skip the night); :online wants another player in the server's
-  player list (the night shelter's step 2: away for the night instead of digging in). Takes the primitives, a memory
-  view and the args map (missing keys take their defaults). Being roofed does not matter."
+  "Whether logging out is wanted. All of: night; no bed remembered within :bed-radius; :offline-allowed not false;
+  the last log-out was not unsupported; and :others holds. :asleep-nearby (default) wants another player within
+  :player-radius asleep. :online wants another player in the server's player list. A roof does not matter.
+  Args missing keys take their defaults."
   [p view args]
   (boolean (and (not= false (:offline-allowed args))
                 (night? p)
@@ -199,16 +190,15 @@
                        (sleeping-players p (:player-radius args default-player-radius)))))))
 
 (defn days-awake
-  "In-game days since the latest :slept entry, or nil when none is
-  remembered (the body has no known last sleep)."
+  "In-game days since the latest :slept entry, or nil when none is remembered."
   [c]
   (when-let [t (:t (ctx/latest c :slept))]
     (/ (- (ctx/now c) t) ms-per-day)))
 
 (defn shut-in?
-  "Whether the body is still in shelter entry: never for a mended room (:room, its own door is the way out); below a
-  pit's :start height (a stair stopped part way counts), behind a solid :door cell, or, with neither (a roof over a
-  shaft that was walled already), under a solid block within default-roof-height."
+  "Whether the body is still shut in by its shelter entry. Never for a mended :room (its door is the way out). With a
+  pit :start, when below that height. With a :door, when a door cell is solid. With neither, when under a solid
+  block within default-roof-height."
   [p {:keys [start door room]}]
   (cond
     room false
@@ -228,12 +218,12 @@
   (in-own-shelter (:primitives c) (:data (ctx/latest c :shelter))))
 
 (def trapped-policy
-  "The :shelter-trapped entries a shelter writes when leave! found no way out: one per failed attempt, kept 5 minutes."
+  "Policy of the :shelter-trapped entries written when leave! found no way out: up to 3, five minutes."
   {:cap 3 :ttl 300000})
 
 (defn shut-in-by-day?
-  "By day, the body is shut in its own latest shelter entry (data) and no :shelter-trapped entry (data) says leave!
-  found no way out of this very cell. Never at night: the shelter holds then."
+  "By day: the body is shut in its own shelter (data) and no :shelter-trapped entry (data) says leave! found no way
+  out of this cell. Never at night."
   [p shelter trapped]
   (boolean (and (not (night? p))
                 (in-own-shelter p shelter)

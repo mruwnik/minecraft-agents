@@ -1,8 +1,7 @@
 (ns engine.jobs.access
-  "engine.access.rules and engine.access.zones as a job asks them: the blocks read through the body's primitives, the
-  zones, claims and the active plans' footprints through ctx, read once and reused for every cell asked in a round.
-  Zones are a rule the jobs consult, never enforced by the engine: a job passes :ignore-zones? to act regardless of
-  zones, claims and footprints (the rules of the game allow it)."
+  "engine.access.rules and engine.access.zones as a job asks them. Blocks come from the body's primitives; zones,
+  claims and plan footprints come from ctx, read once per round. Zones are a rule the jobs consult, never enforced
+  by the engine. A job given :ignore-zones? acts regardless of zones, claims and footprints."
   (:require [clojure.string :as str]
             [engine.access.rules :as rules]
             [engine.access.zones :as zones]
@@ -12,11 +11,11 @@
 (defn cell [{:keys [x y z]}] [x y z])
 
 (defn zone-input
-  "The social half of the rules' input: {:zones :footprints :plan-cells :claims :self :own-plans :now :ignore-zones?}. opts:
-  :except, a plan id whose own footprint is left out of :footprints and its cells given as :plan-cells (a set; empty
-  without :except), for a job working that plan: the plan is the permission, so it may work over a foreign zone or
-  claim (engine.access.zones/verdict); :ignore-zones?, the job's opt-out (default: the
-  job's own :ignore-zones? arg)."
+  "The social half of the rules' input: {:zones :footprints :plan-cells :claims :self :own-plans :now :ignore-zones?}.
+  opts:
+  :except is a plan id for a job working that plan. Its footprint is left out of :footprints and its cells are given
+  as :plan-cells, because the plan is the permission (see engine.access.zones/verdict).
+  :ignore-zones? defaults to the job's own :ignore-zones? arg."
   ([c] (zone-input c {}))
   ([c {:keys [except] :as opts}]
    {:zones (ctx/zones c)
@@ -47,10 +46,11 @@
   (rules/may-dig? (assoc in :cell (cell pos))))
 
 (defn may?
-  "Whether action (:dig :place :sow :harvest :take :put) at pos ({:x :y :z}, or [x y z]) is permitted, over a ctx
-  (read afresh, see rules-input) or a rules input map. :dig and :place (:sow is a place of a plant, ignoring the body's
-  own cell) give the rules' verdict, physics and hazards included; :harvest, :take and :put ask zones, claims and
-  footprints only. Same output shape: {:ok true :hazards [..]} or {:ok false :reason kw ...detail}."
+  "Whether action (:dig :place :sow :harvest :take :put) at pos ({:x :y :z} or [x y z]) is permitted, over a ctx
+  (read afresh) or a rules input map.
+  :dig and :place give the rules' verdict, physics and hazards included. :sow is a place that ignores the body's own cell.
+  :harvest, :take and :put ask zones, claims and footprints only.
+  Returns {:ok true :hazards [..]} or {:ok false :reason kw ...detail}."
   [c-or-in action pos]
   (let [in (if (:primitives c-or-in) (rules-input c-or-in) c-or-in)
         in (assoc in :cell (if (vector? pos) pos (cell pos)))]
@@ -64,9 +64,9 @@
           (if (:ok v) {:ok true} v))))))
 
 (defn judge
-  "What a dig job does with verdict v given the hazards it accepts: :ok (dig), :refused (a zone or another plan's
-  footprint or a claim: leave the cell for good), :hazard (a hazard not accepted), :no-zones (no zone list: dig nothing now) or
-  :not-loaded."
+  "What a dig job does with verdict v given the hazards it accepts:
+  :ok (dig), :refused (zone, claim or another plan's footprint: leave the cell for good), :hazard (a hazard not
+  accepted), :no-zones (no zone list: dig nothing now), :not-loaded, or another reason from the rules."
   [v accept]
   (cond
     (rules/accepts? v (set accept)) :ok
@@ -87,8 +87,8 @@
                                (when (seq plans) (str "plan " (str/join ", " plans)))])))
 
 (defn decline!
-  "Warn kind once for this job (per reason: :no-zones or :refused, the latter with refusal fields) and answer false
-  noting the reason and its fields with ctx/wait (the agent sees them as why the job waits), for a check that declines."
+  "For a check that declines. Warns kind once per reason (:no-zones or :refused) and waits via ctx/wait with the
+  reason and fields, which the agent sees as why the job waits."
   [c kind job-name {:keys [reason] :as fields}]
   (ctx/warn-once! c [:access reason] kind
                   (assoc fields :text (if (= :no-zones reason)
@@ -98,9 +98,8 @@
 
 (defn container-refusal
   "nil when action (:take or :put) at the container or furnace at pos is permitted, else the refusing verdict
-  {:ok false :reason :zone|:claim ...}. Only whose it is counts: a world with no zone list read refuses nothing
-  here (an unread zones.edn never locks a body out of its own chests), and a plan's footprint does not make a chest
-  anyone's (a plan's own chest is its job's source). The job's :ignore-zones? arg is honoured (see may?)."
+  {:ok false :reason :zone|:claim ...}. Only zones and claims count. An unread zone list refuses nothing, and a plan's
+  footprint does not make a chest anyone's. Honours the job's :ignore-zones? arg."
   [c action pos]
   (when pos
     (let [v (may? c action pos)]
@@ -117,10 +116,9 @@
 (def social-reasons #{:zone :claim :footprint})
 
 (defn trespass-refusal
-  "The refusing verdict when action at pos is refused for a social reason (another's zone, claim or plan footprint),
-  else nil: physics and hazards are no business of the last-resort rule, and a missing zone list refuses nothing, so
-  a survival job is never blocked by an unread zones.edn. A footprint of a plan this body made (the plan's :metadata :by is its
-  own name, :own-plans of the input) is not another's. c-or-in as may?."
+  "The verdict refusing action at pos for a social reason (another's zone, claim or plan footprint), else nil.
+  Physics and hazards do not count, and a missing zone list refuses nothing. A footprint of a plan this body made
+  (:own-plans of the input) is not another's. c-or-in as may?."
   [c-or-in action pos]
   (let [in (if (:primitives c-or-in) (rules-input c-or-in) c-or-in)
         v (may? in action pos)]
@@ -129,9 +127,9 @@
       v)))
 
 (defn choose
-  "From options, the first one whose cells (cells-of option) are all permitted for action; failing that the first
-  option, the last resort. {:option o :trespass v} with v the first refusal of the option chosen (nil when it is
-  permitted), or nil without options. Survival jobs break another's stuff only when no permitted option exists."
+  "Pick from options the first whose cells (cells-of option) are all permitted for action, else the first option as a
+  last resort. Returns {:option o :trespass v}, v the first refusal of the chosen option (nil when permitted), or nil
+  without options."
   [c action options cells-of]
   (when (seq options)
     (let [in (rules-input c)
@@ -140,9 +138,8 @@
       {:option o :trespass v})))
 
 (defn trespass!
-  "The one warn <job-name>.trespass-last-resort naming the zone or claim, for a survival job that acts on a cell the
-  rules refuse because no permitted option existed. A plain job event: the engine checks nothing. A nil verdict does
-  nothing."
+  "Warn <job-name>.trespass-last-resort once, naming the zone or claim, for a survival job acting on a refused cell
+  because no permitted option existed. A nil verdict does nothing."
   [c job-name v]
   (when v
     (let [fields (refusal-fields [v])]

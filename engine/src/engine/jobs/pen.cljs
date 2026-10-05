@@ -16,11 +16,10 @@
     down, never through one; 4 down is not walked;
   - a diagonal step needs both orthogonal neighbours steppable.
 
-  Where it leaks: with a :box the steps out of it; without one the fill runs on
-  into open ground until :max-cells, and the way out is read off the walk to
-  its far end (the first open gate, doorway or ridge climbed over). A leaky pen
-  is then refilled with those cells walled off, so :inside and :gates are the
-  pen's own and in-pen? can count animals in a pen whose gate stands open.")
+  Leaks: with a :box, any step out of it. Without one, the fill runs into open
+  ground until :max-cells and the way out is read off the walk to its far end
+  (an open gate, a gap or a ridge climbed over). A leaky pen is refilled with
+  those cells walled off, so :inside and :gates are the pen's own.")
 
 (def step-up 1.0)
 (def max-drop 3.0)
@@ -339,14 +338,15 @@
             fill))))))
 
 (defn check
-  "The pen check. opts: :block-at (required), :at {:x :y :z} (the feet cell to start from) and/or :box
-  {:min :max} (the pen the caller means: every surface in it starts the fill, and a step out of it is a leak),
-  :max-cells (default 2000). Returns {:closed? :reason :inside :leaks :gates}: :reason is nil when closed, else :leak,
-  :unbounded (more than :max-cells reached and no way out pinned down: a pen bigger than the bound, or an open
-  one whose gap shows no wall either side; give a :box for the exact crossings), :unloaded (a cell it needed was
-  not loaded) or :no-start. :inside is a set of [x y z] feet cells; for a leaky pen without a box it is what the
-  pen encloses once its leaks (open gates, gaps) are shut, empty when that does not close it (a low wall all
-  round). :leaks is [{:pos {:x :y :z} :why}] with :why one of :open-gate :gap :climb :open :unloaded."
+  "The pen check.
+  opts: :block-at (required), :at {:x :y :z} (feet cell to start from) and/or :box {:min :max} (every surface in it
+  starts the fill and a step out of it is a leak), :max-cells (default 2000).
+  Returns {:closed? :reason :inside :leaks :gates}.
+  :reason is nil when closed, else :leak, :unbounded (more than :max-cells reached and no way out pinned down; give
+  a :box for exact crossings), :unloaded (a needed cell was not loaded) or :no-start.
+  :inside is a set of [x y z] feet cells. For a leaky pen without a box it is what the pen encloses with its leaks
+  shut, or empty when that does not close it.
+  :leaks is [{:pos {:x :y :z} :why}], :why one of :open-gate :gap :climb :open :unloaded."
   [{:keys [max-cells] :or {max-cells default-max-cells} :as opts}]
   (let [opts (assoc opts :max-cells max-cells :sealed #{})
         {:keys [world fill leaks]} (analyse opts)]

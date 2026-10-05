@@ -17,10 +17,8 @@
 
 (defn hostiles
   "The hostile mobs within radius of the body, nearest first, as JS entities.
-  opts: {:sight mode} :only keeps the ones the body can see (the `visible`
-  field of sensing), :prefer lists the visible ones first, each group nearest
-  first; without it sight is ignored. {:ranged-radius r} counts ranged mobs
-  (ranged-mobs) out to r instead of radius."
+  opts: :sight :only keeps the visible ones; :sight :prefer lists visible ones first, each group nearest first;
+  without :sight visibility is ignored. :ranged-radius r counts ranged mobs out to r instead of radius."
   ([p radius] (hostiles p radius {}))
   ([p radius {:keys [sight ranged-radius]}]
    (let [rr (or ranged-radius radius)
@@ -70,8 +68,7 @@
   500)
 
 (defn attack-gap-ms
-  "The full-strength attack cooldown, in ms, of the held item (nil: a fist),
-  never below min-gap-ms."
+  "The full-strength attack cooldown in ms of the held item (nil: a fist), at least min-gap-ms."
   [item-name]
   (max min-gap-ms
        (cond
@@ -94,8 +91,7 @@
   (get weapon-damage-by-name item-name 1))
 
 (defn remaining-health
-  "What is left of a mob: its reported :health when known, else its full
-  health less :hits times :damage (armour ignored, so an estimate)."
+  "What is left of a mob: its reported :health, else full health less :hits times :damage (an estimate)."
   [{:keys [name hits damage health]}]
   (if (number? health)
     health
@@ -109,7 +105,7 @@
 ;; ---- the odds of a fight
 
 (def armour-by-piece
-  "Armour points of each worn piece, by material and slot; a turtle shell helmet is 2."
+  "Armour points of each worn piece, by material and slot."
   {"leather" {"helmet" 1 "chestplate" 3 "leggings" 2 "boots" 1}
    "golden" {"helmet" 2 "chestplate" 5 "leggings" 3 "boots" 1}
    "chainmail" {"helmet" 2 "chestplate" 5 "leggings" 4 "boots" 1}
@@ -123,26 +119,25 @@
     (get-in armour-by-piece [material piece] 0)))
 
 (defn armour-points
-  "The armour points worn, from a primitives self's equipment (JS {head torso legs feet} of {name}); nil is 0."
+  "The armour points worn, from the self's equipment (JS {head torso legs feet} of {name}); nil is 0."
   [equipment]
   (if equipment
     (reduce + (map #(piece-points (some-> (aget equipment %) .-name)) ["head" "torso" "legs" "feet"]))
     0))
 
 (def mob-dps
-  "Damage a mob deals a body per second while it can hit it (normal difficulty, about one hit a second for melee,
-  an arrow every second or two for a skeleton); unknown ones count as 3."
+  "Damage a mob deals per second while it can hit the body (normal difficulty). Unknown mobs count as 3."
   {"zombie" 3 "husk" 3 "drowned" 3 "zombie_villager" 3 "skeleton" 2 "stray" 2 "bogged" 2 "spider" 2 "cave_spider" 3
    "witch" 3 "pillager" 2 "vindicator" 8 "slime" 2 "silverfish" 1 "endermite" 2 "phantom" 2 "enderman" 7})
 
 (def walk-speed "Blocks a second a body closes on a mob it walks up to." 4)
 
 (defn fight-damage
-  "The damage a body expects to take fighting mobs [{:name :distance :hits :health}] nearest first with weapon (an item
-  name, nil a fist) wearing armour points: the mobs are killed one at a time, each taking ceil(what is left / the
-  weapon's damage) swings at the weapon's attack gap, and every mob hits at its mob-dps until it dies. A ranged one also
-  shoots while the body walks up to it (distance less a reach of 3, at walk-speed). Armour takes 4% a point off, at most
-  80%."
+  "The damage a body expects to take fighting mobs [{:name :distance :hits :health}] (nearest first) with weapon (item
+  name, nil a fist) and armour points.
+  The mobs die one at a time, each after ceil(health left / weapon damage) swings at the weapon's attack gap. Every
+  mob hits at its mob-dps until it dies. A ranged mob also shoots while the body walks up to it (distance less 3, at
+  walk-speed). Armour takes 4% a point off, at most 80%."
   [{:keys [weapon armour mobs]}]
   (let [dmg (weapon-damage weapon)
         gap-s (/ (attack-gap-ms weapon) 1000)

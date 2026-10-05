@@ -2,34 +2,32 @@
   "What a list of items is worth (item-value) and what fetching them costs (fetch-cost), in one unit: about a second
   of a player's work. recover-drops compares the two; any job may ask what a pile, a chest or a kit is worth.
 
-  The worth of one item is built from minecraft-data for the body's version, never from a hand list of items:
+  The worth of one item is built from minecraft-data for the body's version, never from a hand list:
 
-    natural items  an item a block drops (blocks[].drops), from a block no crafting recipe makes (a placed iron block
-                   is no iron mine): hardness (0.1..5) x tool tier x rarity, the cheapest such block.
-                     tool tier: the weakest pickaxe/axe/shovel in the block's harvestTools: none or wood/gold x1,
-                     stone/copper x4, iron x16, diamond/netherite x64 (each tier costs the one below to reach, and the
-                     blocks that need it lie deeper and sparser)
-                     rarity: x10 for an ore block (*_ore, ancient_debris): a few per chunk, not a whole layer
-                   dirt 0.5, cobblestone 1.5, a log 2, coal 30, raw iron 120, diamond 480
-    made items     the cheapest crafting recipe (minecraft-data recipes): the sum of the ingredients plus 1 for the
-                   craft, divided by the result count; or smelting (not in minecraft-data, so a few name rules:
-                   raw_X -> X_ingot, X -> cooked_X, ancient_debris -> netherite_scrap, cobblestone -> stone,
-                   sand -> glass, clay_ball -> brick) at the input plus 2 for fuel and time. Recipes loop (ingot <->
-                   block <-> nugget); the table is a fixpoint, the cheapest way wins.
-                   stone pickaxe 6.75, iron ingot 122, diamond pickaxe 1443
-    no source      an item neither dropped by a block nor made (mob loot, chest loot): 4 x 64 / stack size, so a
-                   64-stack (rotten flesh) is 4 each, a 16-stack (ender pearl) 16, an unstackable (totem, elytra) 256
-    unknown        a name minecraft-data does not list: unknown-each (1)
+    natural items  An item a block drops, from a block no crafting recipe makes: hardness (0.1..5) x tool tier x
+                   rarity, taking the cheapest such block.
+                   Tool tier: the weakest tool in the block's harvestTools. None, wood or gold x1, stone or copper x4,
+                   iron x16, diamond or netherite x64.
+                   Rarity: x10 for an ore block (*_ore, ancient_debris).
+                   Examples: dirt 0.5, cobblestone 1.5, a log 2, coal 30, raw iron 120, diamond 480.
+    made items     The cheapest crafting recipe: the ingredients plus 1 for the craft, divided by the result count.
+                   Or smelting, which minecraft-data does not describe, so by name rule (raw_X -> X_ingot,
+                   X -> cooked_X, ancient_debris -> netherite_scrap, cobblestone -> stone, sand -> glass,
+                   clay_ball -> brick): the input plus 2 for fuel and time.
+                   Recipes loop (ingot, block, nugget), so the table is a fixpoint and the cheapest way wins.
+                   Examples: stone pickaxe 6.75, iron ingot 122, diamond pickaxe 1443.
+    no source      Neither dropped nor made (mob and chest loot): 4 x 64 / stack size. A 64-stack is 4 each, a
+                   16-stack 16, an unstackable 256.
+    unknown        A name minecraft-data does not list: unknown-each (1).
 
-  Per stack: the item's worth x count (nil counts 1; 0, negative or not a number 0), x the durability left of the
-  most (:durability, what primitives report, against the data's maxDurability; never below 0.1), plus each enchantment
-  (:enchants [{:name :lvl|:level}]) at 30 x level x 10 / the enchantment's weight (common ones 30 a level, mending
-  150). The units make distances comparable: walking a block costs about 0.3 (fetch-cost).
+  Per stack: worth x count (nil counts 1; 0, negative or not a number counts 0), x the durability left (:durability
+  against maxDurability, at least 0.1), plus each enchantment (:enchants [{:name :lvl|:level}]) at
+  30 x level x 10 / the enchantment's weight. Walking a block costs about 0.3 (fetch-cost).
 
   Overrides ({name-or-group value}): a number is the worth of one item, {:times n} multiplies it. A name override
   goes into the table, so what is made of the item follows ({\"iron_ingot\" 0} makes an iron pickaxe worth its
-  sticks). Groups apply to the final worth of their members: \"ore\" (what an ore block drops), \"tool\" (has
-  durability and is not armour), \"armor\", \"food\", \"block\" (placeable), \"unknown\". A name override beats a
+  sticks). Group overrides apply to the final worth of their members: \"ore\" (what an ore block drops), \"tool\"
+  (has durability, not armour), \"armor\", \"food\", \"block\" (placeable), \"unknown\". A name override beats a
   group one."
   (:require ["minecraft-data" :as minecraft-data]
             [clojure.string :as str]
@@ -201,10 +199,10 @@
     {:name name :count n :each each :value (* n each)}))
 
 (defn item-value
-  "{:value total :items [{:name :count :each :value} ...]} of items ([{:name :count ...}], inventory and drop shapes;
-  stacks of one name with the same durability and enchantments are added), main contributors first. See the ns doc
-  for the scheme. :overrides {name-or-group number-or-{:times n}}; :version a minecraft-data version (default the
-  body's, engine.foods/selected). Never throws on odd entries: no name is worth 0, an unknown name unknown-each."
+  "{:value total :items [{:name :count :each :value} ...]} of items ([{:name :count ...}], inventory or drop shape),
+  main contributors first. Stacks of one name with the same durability and enchantments are added. See the ns doc.
+  Options: :overrides, :version (minecraft-data, default the body's). Never throws on odd entries: no name is
+  worth 0, an unknown name unknown-each."
   [items & {:keys [overrides version]}]
   (let [version (or version @foods/selected)
         overrides (normal-overrides overrides)
@@ -236,10 +234,10 @@
     (boolean (some #(str/includes? c %) lethal-causes))))
 
 (defn fetch-cost
-  "{:cost :parts {:trip :walk :danger}} of fetching a pile distance blocks off with danger (route-danger's number)
-  on the way, elapsed-ms after it dropped; or {:cost js/Infinity :reason} when it cannot be fetched:
-  :no-position (distance nil), :window-closed (the 5 min despawn passed), :too-far (the walk at 2.9 blocks a second
-  ends after the despawn), :lethal-cause (lava, fire or the void took the items)."
+  "{:cost :parts {:trip :walk :danger}} of fetching a pile `distance` blocks off, with `danger` (route-danger's number)
+  on the way, `elapsed-ms` after it dropped.
+  Or {:cost js/Infinity :reason}: :no-position (distance nil), :window-closed (the 5 min despawn passed), :too-far
+  (the walk would end after the despawn), :lethal-cause (lava, fire or the void took the items)."
   [{:keys [distance danger elapsed-ms cause]}]
   (let [elapsed (or elapsed-ms 0)
         walk-ms (when (number? distance) (* 1000 (/ distance walk-blocks-per-s)))

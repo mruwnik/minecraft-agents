@@ -2,10 +2,10 @@
   "Vehicles from the job side: what the body rides (self().vehicle, see engine/js/vehicle.mjs), the vehicle hold, and
   where to step off.
 
-  The hold: a job that means to ride (launch, drive, land, cross-water) calls hold! before it mounts and release!
-  after it is off. Body memory :vehicle-hold {:job root-id} (cap 8, 1 day). It counts only while that root job's
-  memory kind :job/<id> exists, so a cancelled or dropped holder stops holding at once and a listed holder keeps its
-  hold across a restart. The :mounted trigger fires on a body aboard that nothing holds."
+  A job that means to ride (launch, drive, land, cross-water) calls hold! before it mounts and release! after it is
+  off. The hold is body memory :vehicle-hold {:job root-id}. It counts only while that root job's memory
+  (kind :job/<id>) exists, so a cancelled holder stops holding at once. The :mounted trigger fires on a body aboard
+  that nothing holds."
   (:require [engine.ctx :as ctx]
             [engine.jobs.util :as u]
             [engine.memory :as mem]
@@ -61,8 +61,7 @@
 (defn centre [{:keys [x y z]}] {:x (+ x 0.5) :y y :z (+ z 0.5)})
 
 (defn nearest-dry-cell
-  "The dry cell nearest pos (horizontally within radius of its cell, feet y one below to one above), not pos's own
-  column; nil when there is none."
+  "The dry cell nearest pos, within radius horizontally and one block up or down, not in pos's own column; or nil."
   [p pos radius]
   (let [fx (js/Math.floor (:x pos)) fy (js/Math.floor (:y pos)) fz (js/Math.floor (:z pos))]
     (->> (for [dx (range (- radius) (inc radius)) dz (range (- radius) (inc radius)) dy [0 1 -1]

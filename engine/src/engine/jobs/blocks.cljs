@@ -1,7 +1,7 @@
 (ns engine.jobs.blocks
-  "Shared parts of the leaf jobs jobs.blocks.dig and jobs.blocks.place, and what a parent needs to run them as
-  children: child-wait reads the reason a child's check would wait with, and body-wait? tells a reason about the body
-  (a tool, an item, a free slot: the parent should wait on it too) from one about the cell (skip that cell)."
+  "Shared parts of jobs.blocks.dig and jobs.blocks.place, and what a parent needs to run them as children.
+  child-wait reads why a child's check would wait. body-wait? tells a reason about the body (tool, item, free slot:
+  the parent waits too) from one about the cell (the parent skips that cell)."
   (:require ["minecraft-data" :as minecraft-data]
             [clojure.set :as set]
             [engine.access.rules :as rules]
@@ -21,13 +21,12 @@
     "tall_dry_grass" "bush" "firefly_bush"})
 
 (def clearable
-  "What jobs.blocks.place digs out of a cell before placing: the plants and snow layer a placement would overwrite
-  (engine.access.rules/replaceable less air and fluids) and the small flowers, which a placement does not overwrite."
+  "What jobs.blocks.place digs out of a cell before placing: the replaceable plants and snow layer
+  (engine.access.rules/replaceable, less air and fluids) and small flowers, which a placement does not overwrite."
   (into (set/difference rules/replaceable air fluids) flowers))
 
 (def drops-table
-  "{block name [item name ..]} of what minecraft-data lists a block drops for a version (memoised): stone drops
-  cobblestone, ores their raw item or gem, grass_block dirt, and leaves, short grass and glass nothing."
+  "{block name [item name ..]} of what minecraft-data lists each block drops for a version (memoised)."
   (memoize
    (fn [version]
      (let [data (minecraft-data version)]
@@ -35,8 +34,8 @@
              (array-seq (.-blocksArray data)))))))
 
 (defn drops-of
-  "The item names block-name drops by minecraft-data for the version of primitives p (no tool or enchantment is
-  considered); the block's own name for a block the data does not list."
+  "The item names block-name drops by minecraft-data (tool and enchantment ignored), or the block's own name when
+  the data does not list it."
   [p block-name]
   (get (drops-table (foods/version-of p)) block-name [block-name]))
 
@@ -58,36 +57,36 @@
     [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]))
 
 (defn in-reach?
-  "Whether the block at pos can be dug or placed from where the body stands (eye to cell centre, with a margin under
-  the primitive's 4.5)."
+  "Whether the block at pos can be dug or placed from where the body stands (eye to cell centre, within
+  forestry/dig-reach, a margin under the primitive's 4.5)."
   [c pos]
   (<= (forestry/eye-dist (u/self-pos c) pos) forestry/dig-reach))
 
 (defn rules-in
-  "The rules input for this job: zones, claims, the footprints of every plan but :for-plan, and its :ignore-zones?."
+  "The rules input for this job: zones, claims, every plan's footprint but :for-plan's, and :ignore-zones?."
   [c]
   (access/rules-input c {:except (:for-plan (:args c))}))
 
 (def social #{:zone :claim :footprint :no-zones})
 
 (defn not-allowed
-  "The wait reason for a verdict v refused by zones, claims, a plan's footprint or no zone list:
-  {:reason :not-allowed :pos :by kw} plus the :zone/:claim/:plan/:owner that refused; nil for any other verdict."
+  "The wait reason for a verdict v refused by a zone, claim, plan footprint or missing zone list:
+  {:reason :not-allowed :pos :by kw} plus whichever of :zone :claim :plan :owner refused. nil for any other verdict."
   [pos v]
   (when (contains? social (:reason v))
     (merge {:reason :not-allowed :pos pos :by (:reason v)} (select-keys v [:zone :claim :plan :owner]))))
 
 (defn unreachable-wait
-  "The wait reason for job memory m's remembered failed walk to pos: {:reason :unreachable :pos :why}, while the body
-  still stands in the cell it gave up from (a body moved by anyone else tries again); else nil."
+  "The wait reason {:reason :unreachable :pos :why} for the failed walk remembered in memory m, while the body still
+  stands in the cell it gave up from. Once the body has moved, nil (it tries again)."
   [c m pos]
   (when-let [{:keys [from why]} (:unreachable m)]
     (when (= from (feet-cell c))
       {:reason :unreachable :pos pos :why why})))
 
 (defn fresh-mem
-  "Job memory m for target pos: m when it is about pos, else emptied (children too) and marked for pos. A parent
-  that reuses one slot for a run of cells gets a clean child per cell."
+  "Job memory m for target pos: m when it is about pos, else emptied (children too) and marked for pos. Gives a
+  parent that reuses one slot a clean child per cell."
   [m pos]
   (if (= pos (:for m)) m (assoc (select-keys m [:args]) :for pos :children {})))
 
@@ -97,8 +96,8 @@
   (fresh-mem (ctx/mem c) pos))
 
 (defn ^:async walk!
-  "One go-to round toward pos (child :walk, range 3: every cell within 3 of the body's cell is within eye reach). Resolves to :continue; a walk that gives up, or arrives with the
-  block still out of reach, is remembered as :unreachable {:from feet :why}, which the check waits on."
+  "One go-to round toward pos (child :walk, range 3). Resolves to :continue. A walk that gives up, or arrives with
+  the block still out of reach, is remembered as :unreachable {:from feet :why}, which the check waits on."
   [c pos]
   (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos pos :range 3}))
         res (ctx/child-result c :walk)]
@@ -116,8 +115,7 @@
 
 (defn child-wait
   "Why the child job (a registry symbol) in slot with args would wait now: its check's ctx/wait reason as a map
-  ({:reason kw ...}; {:reason :not-ready} for a plain false), or nil when its check passes. Usable in a round or a
-  check."
+  {:reason kw ...} ({:reason :not-ready} for a plain false), or nil when its check passes."
   [c slot job args]
   (let [a (atom nil)]
     (when-not (ctx/check-child (assoc c :wait a) slot job args)

@@ -6,8 +6,7 @@
 (def max-failures 3)
 
 (defn block-name
-  "The block name at cell pos of primitives p, or nil when the chunk is not
-  loaded (blockAt returns null there)."
+  "The block name at cell pos, or nil when the chunk is not loaded."
   [p pos]
   (some-> (.blockAt p (clj->js pos)) .-name))
 
@@ -45,8 +44,7 @@
   (max 0 (- inventory-slots (.-length (.-inventory (.self p))))))
 
 (defn fail!
-  "Count a failed round in job memory. Returns :continue until max-failures,
-  then emits a warn of kind and gives up with :done."
+  "Count a failed round in job memory. Returns :continue until max-failures, then emits a warn of kind and returns :done."
   [c kind text]
   (let [tries (inc (:failures (ctx/mem c) 0))]
     (ctx/update-mem! c assoc :failures tries)

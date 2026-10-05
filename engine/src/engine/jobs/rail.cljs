@@ -1,15 +1,14 @@
 (ns engine.jobs.rail
-  "The head-first builder of jobs.build.rail-line. A rail takes its shape from the rails beside it when it is placed, so
-  a line with corners and slopes is built in line order, standing on the line:
-    1. the work is ordered station by station along the chain (plan.rail/line) from the end the build starts at
-       (nearer to the body when it begins); at each station the cells below the rail come first (the bed, a redstone
-       block under), then the rail, then what stands beside it (a torch or lever, with its own bed);
-    2. each round places the cells in that order while they are within reach, and walks on when the next one is not,
-       to the rail behind it (the line carries the body over hills, bridges and tunnels, and needs no scaffold), else
-       to a cell beside it as jobs.build.from-plan does;
-    3. a rail has settled once every neighbour it has in the chain is a rail in the world; a settled rail holding the
-       wrong shape is dug and placed again (:fix times), then given up as :shape.
-  Placing, access rules, refusals, give-ups and the result are jobs.build.from-plan's own functions over this job's
+  "The head-first builder of jobs.build.rail-line. A rail takes its shape from the rails beside it when placed, so a
+  line with corners and slopes is built in line order, standing on the line.
+    1. Work is ordered station by station along the chain (plan.rail/line), from the end nearer the body at the
+       start. At each station: the cells below the rail (bed, redstone block), then the rail, then what stands beside
+       it (torch, lever, with its own bed).
+    2. Each round places cells in that order while they are within reach. When the next is not, it walks to the rail
+       behind it, else to a cell beside it as jobs.build.from-plan does.
+    3. A rail has settled once every neighbour it has in the chain is a rail in the world. A settled rail of the wrong
+       shape is dug and placed again (:fix times), then given up as :shape.
+  Placing, access rules, refusals, give-ups and the result are jobs.build.from-plan's functions over this job's
   memory. Every dig and place asks engine.access.rules right before it acts."
   (:require [engine.access.rules :as rules]
             [engine.ctx :as ctx]
@@ -56,8 +55,7 @@
 ;; ------------------------------------------------------------------ shapes
 
 (defn wrong-shapes
-  "The positions of rails that have settled (every neighbour in the chain is a rail in the world) and hold another shape
-  than the chain gives them."
+  "The positions of settled rails (every chain neighbour is a rail in the world) whose shape differs from the chain's."
   [c ps]
   (let [at (partial build/world-block (:primitives c))
         rail? #(rail/rail-name? (:name (at %)))]
@@ -76,8 +74,8 @@
     (cond (number? f) f f 1 :else 0)))
 
 (defn idle?
-  "Whether the builder has nothing to do: nothing it could place with what is carried, nothing unseen to go to with an
-  item carried for it, no settled wrong shape."
+  "Whether the builder has nothing to do: nothing placeable with what is carried, no unseen cell with its item
+  carried, no settled wrong shape."
   [c cells]
   (let [carried (build/carried-counts (:primitives c))
         ps (mapv :pos (rail/line cells))]
@@ -88,8 +86,7 @@
 ;; ------------------------------------------------------------------ steps
 
 (defn stand-behind
-  "The rail behind cell (up to 3 back, on the side the build comes from) that is placed in the world and not a bad stand,
-  or nil."
+  "The nearest of the 3 rails behind cell (on the side the build comes from) that is placed and not a bad stand, or nil."
   [c ps from cell]
   (let [by-column (column-index ps)
         i (station ps by-column (:pos cell))
@@ -102,8 +99,8 @@
          first)))
 
 (defn ^:async walk-to!
-  "Walk to a stand for cell: the rail behind it, else a cell beside it. A cell that cannot be walked to, or is still out
-  of reach (or unseen, as :unloaded) on arrival, counts a failure."
+  "Walk to a stand for cell: the rail behind it, else a cell beside it. Counts a failure when the stand cannot be
+  walked to, or on arrival the cell is still out of reach or unseen (:unloaded)."
   [c ps from cells cell]
   (let [body (u/self-pos c)
         planned (set (map :pos cells))
@@ -125,7 +122,7 @@
     :continue))
 
 (defn ^:async place-run!
-  "Place the cells in order from the head while each is within reach: {:placed n :next cell} with the cell out of reach."
+  "Place the cells in order while each is within reach. Returns {:placed n} and, when one was out of reach, :next cell."
   [c ordered]
   (loop [left ordered n 0]
     (if-let [cell (first left)]
@@ -136,7 +133,7 @@
       {:placed n})))
 
 (defn ^:async dig-away!
-  "Dig the rail at pos (after the rules agree) and pick up what drops; one more fix is booked."
+  "Dig the rail at pos if the rules agree, pick up the drops and count one fix."
   [c pos]
   (let [v (rules/may-dig? (assoc (build/rules-input c) :cell pos))
         [x y z] pos]
@@ -152,8 +149,8 @@
                   (recur (rest drops))))))))))
 
 (defn ^:async fix-step!
-  "Deal with the settled wrong rail at pos: given up as :shape once the fixes are spent, else dig it (walking into reach
-  first); it is placed again in its turn."
+  "Deal with the settled wrong rail at pos: give up as :shape once the fixes are spent, else dig it (walking into
+  reach first). It is placed again in its turn."
   [c ps from cells pos]
   (let [cell (first (filter #(= pos (:pos %)) cells))]
     (cond
@@ -164,7 +161,7 @@
                 :continue))))
 
 (defn finish!
-  "The build is over: its result is kept, its events are emitted and the job moves on to switching levers."
+  "End the build: keep the result, emit its events and move on to switching levers."
   [c cells]
   (let [result (build/summary c cells (ctx/mem c) true)]
     (build/announce! c result)
@@ -172,8 +169,8 @@
     :continue))
 
 (defn ^:async step!
-  "One round of the builder over the judged cells of the plan: fix a settled wrong rail, else place from the head of the
-  work in reach, else walk on, else go toward cells nobody can see, else finish. Always :continue."
+  "One round of the builder over the plan's judged cells, in this order: fix a settled wrong rail, place work in reach,
+  walk on, go toward unseen cells, else finish. Always :continue."
   [c cells]
   (let [p (:primitives c)
         ps (mapv :pos (rail/line cells))
