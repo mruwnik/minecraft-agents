@@ -1,0 +1,2 @@
+;; ProbeDoor live cases for world move-to through doors: idle, driven with engine/tools/world.mjs
+{:register [] :queue []}
