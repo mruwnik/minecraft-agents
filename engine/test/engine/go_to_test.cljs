@@ -7,6 +7,8 @@
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.memory :as mem]
+            [engine.perception :as perception]
+            [engine.fake.raw-world :as fake-raw]
             [engine.path.walk :as walk]
             [engine.takeover :as takeover]
             [engine.test-util :as tu :refer [box floor]]
@@ -15,10 +17,16 @@
 
 (def start {:x 0 :y 64 :z 0})
 
-(defn setup [world]
+(defn setup
+  "A world key :light [sky block] makes the body see through perception, in that light everywhere."
+  [world]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake (merge {:self {:pos start}} world))
+        raw (tu/fake (merge {:self {:pos start}} (dissoc world :light)))
+        _ (when-let [l (:light world)] (swap! (fake/state raw) assoc :light-default l))
+        p (if (:light world)
+            (perception/wrap raw (perception/create (fake-raw/create raw) {:radius 16 :ray-deg 2 :now #(deref clock)}))
+            raw)
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen}))
@@ -329,3 +337,16 @@
           (is (= {:arrived true} @out))
           (is (= [] (events-of s :unreachable)))
           (is (= ["arrived"] (mapv :status (moved eng))) "one round walked: the rounds that searched wrote nothing"))))))
+
+;; ------------------------------------------------------- looking round on arrival (card 9970c377)
+
+(deftest go-to-looks-round-on-arrival-in-the-dark-only
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [lit (await (go! {:blocks flat :light [15 0]} {:pos [10 64 0] :range 1}))
+              dark (await (go! {:blocks flat :light [0 0]} {:pos [10 64 0] :range 1}))
+              watched (fn [{:keys [eng]}] (mem/entries (mem/view (:store eng)) :watched))]
+          (is (= {:arrived true} @(:out dark)))
+          (is (empty? (watched lit)))
+          (is (seq (watched dark))))))))

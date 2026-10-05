@@ -2,6 +2,7 @@
   (:require [engine.ctx :as ctx]
             [engine.jobs.shelter :as sh]
             [engine.jobs.util :as u]
+            [engine.jobs.watch :as watch]
             [engine.path.near :as near]
             [engine.path.walk :as walk]
             [engine.places :as places]))
@@ -74,7 +75,11 @@
                                (:kind result) (assoc :refused-kind (:kind result))))
   :done)
 
-(defn arrived! [c] (finish! c {:arrived true}))
+(defn ^:async arrived!
+  "Look round once if the place is risky (engine.jobs.watch), then finish: the next job starts facing along the walk."
+  [c]
+  (await (watch/watch! c {}))
+  (finish! c {:arrived true}))
 
 (defn give-up-fields
   "What a fruitless round's result says about why: {:why :kind :detail ...}, only the keys it has. A :no-path says the planner's
