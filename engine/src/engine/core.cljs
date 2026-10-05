@@ -431,6 +431,25 @@
 (defn owner? [eng token]
   (and (some? token) (.isOwner (:primitives eng) token)))
 
+(defn away
+  "Why and until when the body is away, or nil while it is online: {:by :job :why :back-at} when a job logged it out
+  (the offline act: :by the root job's name, :job the instance, :why from the act's :why, :back-at epoch ms), and
+  {:by :connection :why :connection-lost} when it is offline with no log-out on record (a kick or crash; the body
+  reconnects by itself)."
+  [eng]
+  (when (true? (.isOffline (:primitives eng)))
+    (or (some-> (:away eng) deref)
+        {:by :connection :why :connection-lost})))
+
+(defn log-out-record
+  "The away record of an offline act by instance id of root job root, starting at now."
+  [eng root id args now]
+  (let [ms (.-ms args)]
+    (cond-> {:by (keyword (some-> (get-in (state eng) [:instances root :spec]) expr/label))
+             :job id
+             :why (keyword (or (.-why args) "away"))}
+      (number? ms) (assoc :back-at (+ now (min ms 600000))))))
+
 (defn ^:async act!
   "Every acting primitive call from a job: check the ownership token, save
   memory, emit action.started, call, save memory again, emit action.done.
@@ -444,7 +463,11 @@
                 :action-id action-id}
         p (:primitives eng)
         _ (emit! eng (merge fields {:source :action :kind :started :args (js->clj args)}))
-        from (when (= :moveTo k) (self-pos p))]
+        from (when (= :moveTo k) (self-pos p))
+        away-record (when (= :offline k) (log-out-record eng root id args ((:now eng))))
+        _ (when away-record
+            (reset! (:away eng) away-record)
+            (emit! eng (merge fields {:source :action :kind :logged-out :level :info} away-record)))]
     (try
       (let [r (await (if (= :chat k) (chat/gate! eng p token args) (.call (aget p (name k)) p token args)))
             _ (when (= "offline" (some-> r .-status)) (throw (offline-cut-error)))
@@ -464,7 +487,9 @@
         (emit! eng (cond-> (merge fields {:source :action :kind :done
                                           :status (if (cut? e) :cut :failed)})
                      (not (cut? e)) (assoc :error (str e))))
-        (throw e)))))
+        (throw e))
+      (finally
+        (when away-record (reset! (:away eng) nil))))))
 
 (defn make-ctx
   "The ctx a round or a check receives. base is {:root :slots :chain :token
@@ -1226,6 +1251,7 @@
              :running (atom nil)
              :tokens (atom 0)
              :manual (atom nil)
+             :away (atom nil)
              :waiting (atom {})
              :world-ops (atom {:active nil :records {} :order []})
              :acts (atom {})

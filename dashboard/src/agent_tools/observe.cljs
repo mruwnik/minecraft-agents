@@ -86,6 +86,7 @@
           queued-total (- (or (:total jobs) 0) (if (some #(= (:id %) (:id current)) items) 1 0))]
       (clean-pairs
        :mode (:mode s)
+       :offline (:offline s)
        :idle (when-not current true)
        :pos (position (:position s))
        :died (when (:died s) (died-view (:died s)))

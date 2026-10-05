@@ -3,6 +3,7 @@
   writes and tick failures must not choke on the missing pos."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
+            [engine.event-api :as event-api]
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.fake :as fake]
@@ -92,3 +93,38 @@
             (is (some? (.-pos (.self p))) "sensing is back")
             (is (number? (events/emit! (:events eng) {:source :system :kind :probe :level :info})))
             (is (some? (:pos (last @seen))) "events carry a pos again")))))))
+
+(defn ^:async night-round [c]
+  (await (ctx/act c :offline #js {:ms 20000 :why "logged-out-for-night"}))
+  :done)
+
+(deftest a-deliberate-log-out-tells-why-and-when-back-while-away-and-nothing-after
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [clock (atom 1000000)
+              p (tu/fake {:offlineScale 0.01})
+              [seen sink] (tu/legacy-capture-sink)
+              eng (core/create {:primitives p :jobs {'night {:check (constantly true) :round night-round}}
+                                :triggers {} :dir (tu/tmp-dir) :now #(deref clock) :body "Fake"})
+              _ (swap! (:events eng) update :sinks conj sink)
+              id (core/submit! eng '(night) {})
+              {:keys [round]} (await (go-offline eng p))
+              away (core/away eng)
+              status (event-api/status eng nil)]
+          (is (= {:by :night :job id :why :logged-out-for-night :back-at 1020000} away))
+          (is (= :offline (:mode status)))
+          (is (= away (:offline status)))
+          (is (= {:ok false :reason :offline :offline away} (event-api/inventory-view eng)))
+          (let [e (first (filter #(= :logged-out (:kind %)) @seen))]
+            (is (some? e) "an event at log-out")
+            (is (= 1020000 (:back-at e))))
+          (await round)
+          (is (nil? (core/away eng)))
+          (is (nil? (:offline (event-api/status eng nil)))))))))
+
+(deftest a-dropped-connection-reports-connection-lost-not-a-log-out
+  (let [eng {:primitives #js {:isOffline (fn [] true)} :away (atom nil)}]
+    (is (= {:by :connection :why :connection-lost} (core/away eng)))
+    (is (= {:ok false :reason :offline :offline {:by :connection :why :connection-lost}}
+           (event-api/inventory-view eng)))))

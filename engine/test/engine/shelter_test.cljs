@@ -261,6 +261,7 @@
           (core/submit! eng '(jobs.survival.log-out) {})
           (await (run-until-empty eng 3))
           (is (= [475050] (mapv #(.-ms (.-args %)) (calls p "offline"))) "until morning by default")
+          (is (= ["logged-out-for-sleeping-player"] (mapv #(.-why (.-args %)) (calls p "offline"))))
           (is (= [{:ms 475050 :status "ok"}] (entries eng :log-out)))
           (is (= {:cap 10 :ttl day-ms} (mem/policy (mem/view (:store eng)) :log-out))))))))
 

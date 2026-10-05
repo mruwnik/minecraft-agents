@@ -168,7 +168,8 @@
   [lease {:keys [method path body]} now world opts]
   (cond
     (not= path "/drive") (result lease not-found)
-    (= method "GET") (result lease (ok (with-pos {:manual (view lease now) :offline (:offline world) :settling (:settling world)}
+    (= method "GET") (result lease (ok (with-pos (cond-> {:manual (view lease now) :offline (:offline world) :settling (:settling world)}
+                                 (:away world) (assoc :away (:away world)))
                                                  (:pos world))))
     (not= method "POST") (result lease not-found)
     (not (and (map? body) (contains? ops (:op body)))) (result lease bad-request)

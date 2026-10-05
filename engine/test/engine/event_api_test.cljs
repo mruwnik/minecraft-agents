@@ -68,7 +68,7 @@
 
 (deftest inventory-view-reports-offline-without-reading-primitives
   (let [eng {:primitives #js {:isOffline (fn [] true)}}]
-    (is (= {:ok false :reason :offline} (event-api/inventory-view eng)))))
+    (is (= {:ok false :reason :offline :offline {:by :connection :why :connection-lost}} (event-api/inventory-view eng)))))
 
 (deftest unix-api-serves-edn-snapshot-events-and-resolution
   (async done

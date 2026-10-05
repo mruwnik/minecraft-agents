@@ -32,8 +32,11 @@
   (or (:offline-ms (:args c))
       (sh/ms-until-morning (.-timeOfDay (.self (:primitives c))))))
 
+(defn why [c]
+  (if (= :online (:others (:args c))) "logged-out-for-night" "logged-out-for-sleeping-player"))
+
 (defn ^:async round [c]
-  (let [r (await (ctx/act c :offline #js {:ms (away-ms c)}))
+  (let [r (await (ctx/act c :offline #js {:ms (away-ms c) :why (why c)}))
         out {:ms (.-ms r) :status (.-status r)}]
     (ctx/remember! c :log-out out log-out-policy)
     (ctx/result! c out)

@@ -255,6 +255,15 @@ Only `createPrimitives`, which owns the connection params, supports it; `createP
 number, negative) with `bad-args`. The fake behaves the same: `isOffline()`, the offline sensing above, and a cut ends
 its wait early with the body back (online event) before the call resolves `cut`.
 
+Why the body is away is cljs state, not the primitive's: `engine.core/act!` records an `:offline` act in the engine's
+`:away` atom, `{:by <root job name> :job <instance id> :why <the act's :why, default :away> :back-at <epoch ms>}`
+(`jobs.survival.log-out` passes `:why` `logged-out-for-night` or `logged-out-for-sleeping-player`), emits the
+`action` event `logged-out` with those fields, and clears it when the act ends. `engine.core/away` answers it while the
+body is offline, and `{:by :connection :why :connection-lost}` when no log-out is on record (a kick or crash; the
+`disconnected` and `reconnect-failed` body events tell the rest). `/status` has it as `:offline` beside `:mode :offline`
+(the agent tools' `observe` shows it), the inventory refusal carries it, the snapshot has `:away`, and `GET /drive` has
+`:away` only for a deliberate log-out.
+
 The pathfinder goal never outlives a walk: `moveTo` and `collect` clear it (and the control states) on every way out, and the
 body's `death` and `respawn` events clear it too, so the body does not walk back to an old goal after a respawn. A reconnected
 bot starts with no goal.

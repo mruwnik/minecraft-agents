@@ -655,3 +655,8 @@
                           (is (= 0 (:code job)) (:out job))
                           (is (= (:out job) (:out result)))
                           (is (= search-found (get-in (data/read-edn (:out result)) [:events 0 :data :found])))))))))
+
+(deftest compact-status-keeps-why-and-return-of-an-offline-body
+  (is (= {:by :shelter :job "j563" :why :logged-out-for-night :back-at 1020000}
+         (:offline (observe/compact-status {:mode :offline :offline {:by :shelter :job "j563" :why :logged-out-for-night :back-at 1020000}}))))
+  (is (not (contains? (observe/compact-status {:mode :scheduled}) :offline))))

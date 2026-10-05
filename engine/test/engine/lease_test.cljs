@@ -457,3 +457,11 @@
 (deftest every-drive-contract-scenario-matches-the-wire
   (doseq [{:keys [name steps]} contract]
     (is (= [] (run-scenario steps)) name)))
+
+(deftest get-reports-why-and-return-of-a-log-out-and-omits-it-online
+  (let [away {:by :shelter :why :logged-out-for-night :back-at 5}
+        rig (make-rig)]
+    (swap! rig assoc :world {:offline true :away away :settling false :pos pos})
+    (is (= away (get-in (get! rig) [:json :away])))
+    (swap! rig assoc :world {:offline false :settling false :pos pos})
+    (is (not (contains? (:json (get! rig)) :away)))))

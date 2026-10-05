@@ -391,6 +391,7 @@
 
 (defn world-of [eng]
   {:offline (core/offline? eng)
+   :away (let [a (core/away eng)] (when-not (= :connection (:by a)) a)) ; offline with no :away: a kick or crash
    :settling (core/settling? eng)
    :pos (js->clj (.-pos (.self (:primitives eng))) :keywordize-keys true)})
 

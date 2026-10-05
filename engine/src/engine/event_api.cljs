@@ -62,6 +62,7 @@
      :outstanding (core/outstanding eng)
      :position (core/self-pos p)
      :offline (core/offline? eng)
+     :away (core/away eng)
      :settling (core/settling? eng)
      :cursor (events/cursor (:events eng))}))
 
@@ -93,7 +94,7 @@
   "Read-only player inventory and worn slots, bounded to the vanilla player-window capacity."
   [eng]
   (if (core/offline? eng)
-    {:ok false :reason :offline}
+    {:ok false :reason :offline :offline (core/away eng)}
     (let [self (js->clj (.self (:primitives eng)) :keywordize-keys true)
           all-stacks (or (:inventory self) [])
           stacks (->> all-stacks (take inventory-stack-limit) (keep inventory-stack) vec)
@@ -196,6 +197,7 @@
                  (core/offline? eng) :offline
                  (core/settling? eng) :settling
                  :else :scheduled)
+     :offline (core/away eng)
      :manual (when manual
                (cond-> (select-keys manual [:who :why :since])
                  (:who manual) (update :who #(short-text (str %) 80))
