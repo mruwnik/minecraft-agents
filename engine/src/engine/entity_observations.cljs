@@ -1,10 +1,11 @@
 (ns engine.entity-observations
-  "Two-minute in-memory knowledge of the entities the body perceived, as a player would. No writes, jobs or network
-  sensing. A sample keeps an entity only when the body senses it (see `sense`): itself, one it hears (within
-  `hearing-range` of the eye, through walls; not silent things such as drops), or one it could see by turning to it
-  (within `sight-range`, a clear line from the eye to its middle or its head). Mineflayer tracks far more (mobs deep in
+  "Two-minute in-memory knowledge of the entities the body perceived, as a player would (the /entities tool). No writes,
+  jobs or network sensing, and one perception layer: a hostile mob is listed only from engine.perception's known-mobs
+  memory (`known-sense`: :seen, :heard with its place, :remembered at the place last sensed, with `:age-ms`), anything
+  else by perception's own rule for a thing at a place (`sense`: perception/sense-thing, a clear line, light, the view
+  cone or hearing; drops and the like make no sound). The body itself is :self. Mineflayer tracks far more (mobs deep in
   the rock under the body); those are never listed. What was sensed stays known for `ttl-ms`. The engine's own
-  reflexes do not read this cache (they use primitives.entities)."
+  reflexes do not read this cache."
   (:require [clojure.string :as str]
             [engine.perception :as perception]
             ["crypto" :as crypto]))
@@ -13,8 +14,6 @@
 (def sample-ms 1000)
 (def max-entities 10000)
 (def max-snapshot-bytes (* 4 1024 1024))
-(def hearing-range 16)
-(def sight-range 64)
 (def silent-types
   "Entity types that make no sound a player would hear through a wall."
   #{"item" "experience_orb" "arrow" "spectral_arrow" "painting" "item_frame" "glow_item_frame" "armor_stand"
@@ -39,32 +38,44 @@
     "player"
     (or (short-text (.-name e) 64) (short-text (.-type e) 64) "unknown")))
 
+(defn hostile? [^js e]
+  (boolean (or (= "hostile" (.-type e)) (re-find #"(?i)hostile" (str (.-kind e))))))
+
 (defn sense
-  "How the body perceives entity e over the raw world (engine.perception's reader; nil when there is none):
-  :self, :seen, :heard, or nil when a player standing there could neither see nor hear it."
-  [^js raw ^js source ^js e]
-  (let [^js eye (when raw (.eye raw))
+  "How the body perceives entity e (a non-hostile one; hostile mobs come from perception's known-mobs memory, see
+  `known-sense`), through engine.perception's one rule (perception/sense-thing: a clear line from the eye to its middle
+  or head, within sight, lit, and in the view cone or heard; heard within hearing range unless it makes no sound: drops
+  and the like). per is the perception (nil: no world to sense by). :self, :seen, :heard, or nil."
+  [per ^js source ^js e]
+  (let [^js raw (:raw per)
+        ^js eye (when raw (.eye raw))
         ^js table (when raw (.sightTable raw))
         ^js p (.-position e)]
     (cond
       (and source (identical? e (.-entity source))) :self
-      (or (nil? eye) (nil? p)) nil
+      (or (nil? eye) (nil? p) (nil? table) (zero? (.-length table))) nil
       :else
       (let [h (or (.-height e) 1.8)
-            mx (.-x p) mz (.-z p) my (+ (.-y p) (/ h 2)) hy (+ (.-y p) (max 0.1 (- h 0.1)))
-            d (js/Math.hypot (- mx (.-x eye)) (- my (.-y eye)) (- mz (.-z eye)))
-            seen? (fn [y] (perception/line-clear? raw table (.-x eye) (.-y eye) (.-z eye) mx y mz))]
-        (cond
-          (and table (pos? (.-length table)) (<= d sight-range) (or (seen? my) (seen? hy))) :seen
-          (and (<= d hearing-range) (not (silent-types (entity-type e)))) :heard
-          :else nil)))))
+            my (+ (.-y p) (/ h 2)) hy (+ (.-y p) (max 0.1 (- h 0.1)))
+            clear? (fn [y] (perception/line-clear? raw table (.-x eye) (.-y eye) (.-z eye) (.-x p) y (.-z p)))]
+        (perception/sense-thing per eye p (boolean (or (clear? my) (clear? hy))) (boolean (silent-types (entity-type e))))))))
+
+(defn known-sense
+  "How the body perceives hostile mob e by perception's known-mobs entry (a knownMobs() row, or nil when the body knows
+  nothing of it): :seen, :heard, :remembered (not sensed now: its place is where it was last sensed), or nil."
+  [^js entry]
+  (cond (nil? entry) nil
+        (.-remembered entry) :remembered
+        (.-heard entry) :heard
+        :else :seen))
 
 (defn open
-  "A cache. :sense (fn [source e]) is the perception rule; by default (no raw world) only the body itself."
-  [{:keys [world body now cap] sense-fn :sense :or {now js/Date.now cap max-entities}}]
+  "A cache. :sense (fn [source e]) is the perception rule for what is not a hostile mob; :known (fn [] known-mobs rows)
+  is perception's mob memory, the only source of hostile mobs; by default (no perception) only the body itself."
+  [{:keys [world body now cap known] sense-fn :sense :or {now js/Date.now cap max-entities}}]
   {:state (atom {:entities {} :online? false :available? true :dropped 0 :overflow-until 0})
    :opts {:world world :body body :now now :cap (min max-entities (max 1 cap))
-          :sense (or sense-fn (partial sense nil))
+          :sense (or sense-fn (partial sense nil)) :known known
           :session (.randomUUID crypto)}
    :connections (js/WeakMap.) :objects (js/WeakMap.) :dead (js/WeakSet.) :next-id (atom 0)})
 
@@ -83,15 +94,16 @@
        :identity :ephemeral})))
 
 (defn position [e]
-  (let [p (.-position e)]
+  (let [p (or (.-position e) (.-pos e))]
     (when (and p (every? #(and (number? %) (js/Number.isFinite %)) [(.-x p) (.-y p) (.-z p)]))
       {:x (.-x p) :y (.-y p) :z (.-z p)})))
 
-(defn observation [store source dim [e how] now]
-  (when-let [pos (when-not (.has (:dead store) e) (position e))]
+(defn observation [store source dim [e how entry] now]
+  (when-let [pos (when-not (.has (:dead store) e) (position (or entry e)))]
     (merge (entity-identity store source e)
            {:type (entity-type e) :id (when (integer? (.-id e)) (.-id e)) :world (get-in store [:opts :world])
-            :dimension dim :pos pos :observed-at now :expires-at (+ now ttl-ms)
+            :dimension dim :pos pos :observed-at (- now (if entry (or (.-ageMs entry) 0) 0))
+            :expires-at (+ (- now (if entry (or (.-ageMs entry) 0) 0)) ttl-ms)
             :sense how}
            (when-let [username (short-text (.-username e) 64)] {:username username})
            (when (identical? e (.-entity source)) {:self? true}))))
@@ -107,8 +119,14 @@
         source (.-source sample)
         sense-of (get-in store [:opts :sense])
         tracked (when (and online? source dim) (array-seq (.-entities sample)))
-        senses (map (fn [e] [e (sense-of source e)]) tracked)
-        loaded (keep (fn [[e how]] (when how [e how])) senses)
+        known (when-let [f (get-in store [:opts :known])]
+                (when tracked (into {} (map (fn [^js m] [(.-id m) m])) (f))))
+        sense-entry (fn [e]
+                      (if (hostile? e)
+                        (let [entry (get known (.-id e))] [e (known-sense entry) entry])
+                        [e (sense-of source e)]))
+        senses (map sense-entry tracked)
+        loaded (keep (fn [[e how entry]] (when how [e how entry])) senses)
         ;; Still loaded but no longer sensed (walked behind a wall, teleported away): the row would be a ghost.
         lost (into #{} (keep (fn [[e how]] (when-not how (:key (entity-identity store source e))))) senses)
         cap (get-in store [:opts :cap])
@@ -156,7 +174,9 @@
   ([store now]
    (swap! (:state store) update :entities prune now)
    (let [state @(:state store)
-         values (sort-by (juxt :dimension :key) (vals (:entities state)))
+         values (->> (vals (:entities state))
+                     (map #(assoc % :age-ms (max 0 (- now (:observed-at %)))))
+                     (sort-by (juxt :dimension :key)))
          bounded (bounded-entities values)
          dropped (+ (:dropped bounded) (if (> (:overflow-until state) now) (:dropped state) 0))]
      {:ok true :world (get-in store [:opts :world]) :body (get-in store [:opts :body])
@@ -176,7 +196,8 @@
 (defn start!
   "Register once for body lifetime. A missing/broken provider reports endpoint503 without failing body jobs."
   [primitives options]
-  (let [store (open (merge {:sense (partial sense (.-rawWorld primitives))} options)) now (get-in store [:opts :now])
+  (let [store (open (merge {:sense (partial sense (.-perception primitives))
+                          :known (when (fn? (.-knownMobs primitives)) #(array-seq (.knownMobs primitives)))} options)) now (get-in store [:opts :now])
         sample! (fn []
                   (try
                     (when-not (fn? (.-entityObservation primitives))

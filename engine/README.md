@@ -1093,14 +1093,13 @@ node engine/tools/entities.mjs Bob --world claude --player Alex --limit 20
 node engine/tools/entities.mjs Bob --world claude --center 100,64,-20 --dimension overworld --raw
 ```
 
-The command reads the body's in-memory `/entities` cache. The cache holds only
-what the body perceives as a player would (`engine.entity-observations/sense`):
-itself, an entity heard within 16 blocks of the eye (through walls; drops, xp
-orbs and other silent things are never heard), or one within 64 blocks with a
-clear line from the eye to its middle or head under the raw world's sight table
-(no view cone or light rule: turning would show it). Each row carries `:sense`
-(`:self`, `:seen` or `:heard`). Mobs in the rock under the body are not listed. A mob that is still loaded but no longer sensed at its new position
-(behind a wall, teleported out of range) is dropped at the next sample (1 s), not kept as a ghost for the
+The command reads the body's in-memory `/entities` cache. One perception layer (card 5ce22e00): a hostile mob is
+listed only from perception's known-mobs memory (`:sense` `:seen`, `:heard` (unseen), or `:remembered` at the place last
+sensed, a mob in the dark or a silent creeper behind the body is not listed); every other entity (animals, players, drops)
+by perception's own rule for a thing at a place (`perception/sense-thing`: a clear line from the eye to its middle or
+head, within 48, lit (else only within 4), and in the view cone or heard; heard within 16 unless it makes no sound, so
+drops, xp orbs and the like are never heard); itself is `:self`. Every row carries `:sense` and `:age-ms` (since last
+sensed). A mob that is still loaded but no longer sensed (a non-hostile one behind a wall out of hearing, teleported away) is dropped at the next sample (1 s), not kept as a ghost for the
 two minutes; one that unloads keeps its last row until it expires.
 The engine's reflexes and `entities()` do not read this cache. By default it centers
 a 64-block, 3D radius on the newest unexpired self observation, uses that

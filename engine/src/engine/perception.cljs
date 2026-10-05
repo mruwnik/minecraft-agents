@@ -576,18 +576,24 @@
         lit? (fn [yy] (== 1 (aget visible (.lightAt ^js raw x yy z))))]
     (or (lit? y) (lit? (inc y)))))
 
-(defn mob-sense
-  "How the body senses hostile e (an entities() entry) from eye: :seen, :heard or nil (see the ns doc)."
-  [{:keys [opts grid] :as per} ^js eye ^js e]
-  (let [^js pos (.-pos e)
-        vx (- (.-x pos) (.-x eye)) vy (- (+ (.-y pos) mob-middle) (.-y eye)) vz (- (.-z pos) (.-z eye))
+(defn sense-thing
+  "How the body senses a thing at pos (feet) from eye, given whether a line from the eye to it is clear (`visible?`)
+  and whether it makes no sound (`silent?`): :seen, :heard or nil. One rule for mobs (mob-sense) and for what
+  engine.entity-observations lists (the /entities tool)."
+  [{:keys [opts grid] :as per} ^js eye ^js pos visible? silent?]
+  (let [vx (- (.-x pos) (.-x eye)) vy (- (+ (.-y pos) mob-middle) (.-y eye)) vz (- (.-z pos) (.-z eye))
         d (js/Math.hypot vx vy vz)
-        heard? (and (<= d (:hearing opts)) (or (not (silent-mobs (.-name e))) (true? (.-fusing e))))
-        seen? (and (true? (.-visible e))
+        heard? (and (<= d (:hearing opts)) (not silent?))
+        seen? (and visible?
                    (<= d (:radius opts))
                    (or (<= d (:dark-sight opts)) (mob-lit? per pos))
                    (or heard? (in-cone? (basis (.-yaw eye) (.-pitch eye)) (:hx grid) (:hy grid) vx vy vz)))]
     (cond seen? :seen heard? :heard :else nil)))
+
+(defn mob-sense
+  "How the body senses hostile e (an entities() entry) from eye: :seen, :heard or nil (see the ns doc)."
+  [per ^js eye ^js e]
+  (sense-thing per eye (.-pos e) (true? (.-visible e)) (and (silent-mobs (.-name e)) (not (true? (.-fusing e))))))
 
 (defn sense-mobs!
   "One mob sample over primitives src: sensed mobs take their place and time, mobs the client no longer tracks or that
