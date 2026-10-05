@@ -184,6 +184,7 @@
         d (or (:data e) {})
         category (cond
                    (and (= :job source) (#{:completed :failed} kind)) kind
+                   (and (= :reflex source) (= :fired kind)) :reflexes
                    (#{:picked-up :hurt :died :disconnected :online :reconnect-failed} kind) kind
                    (= :notice (:attention e)) :notices)]
     (if-not category
@@ -191,7 +192,8 @@
       (let [summary (update-in summary [:counts category] #(min 1000000 (inc (or % 0))))]
         (if (< (count (:items summary)) 4)
           (update summary :items conj
-                  (clean-pairs :event (:kind e) :job (get-in e [:context :job-id]) :item (clip (:item d) 80) :count (:count d)
+                  (clean-pairs :event (:kind e) :job (when-not (= :reflexes category) (get-in e [:context :job-id]))
+                               :reflex (get-in e [:context :reflex-id]) :item (clip (:item d) 80) :count (:count d)
                                :message (clip (first (filter some? [(:message e) (:error d) (:reason d)])))))
           (assoc summary :more true))))))
 
@@ -636,6 +638,22 @@
        " :body " (js/JSON.stringify (:agent request)) "}\n"))
 
 (defn line [text] (if (str/ends-with? text "\n") text (str text "\n")))
+
+(defn wait-for!
+  "Wait as observe --wait does, watching the jobs watch and the world actions watch-actions (ID lists): a promise of
+  the wake map, or of {:ok false :reason r} when the wait could not run. base is {:agent :world :state :socket-path};
+  timeout and observer as on the command line (default 60s and agent). SIGINT and SIGTERM cancel it."
+  [base {:keys [watch watch-actions timeout observer]} get!]
+  (let [controller (js/AbortController.)
+        cancel #(.abort controller)
+        opts (wait-options {:timeout timeout :observer observer :watch (clj->js watch) :watch-action (clj->js watch-actions)})]
+    (.once js/process "SIGINT" cancel)
+    (.once js/process "SIGTERM" cancel)
+    (-> (wait-observe (assoc base :wait-options opts) get! (.-signal controller) identity)
+        (.catch (fn [error] {:ok false :reason (get failure-reasons (code-of error) :transport-error)}))
+        (.finally (fn []
+                    (.removeListener js/process "SIGINT" cancel)
+                    (.removeListener js/process "SIGTERM" cancel))))))
 
 (defn wait!
   "Run the wait with SIGINT and SIGTERM cancelling it; the exit code."

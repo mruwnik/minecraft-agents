@@ -3,11 +3,13 @@
   (:require [agent-tools.drive :as drive]
             [agent-tools.http :as http]
             [agent-tools.map :as map-tool]
+            [agent-tools.observe :as observe]
             [agent-tools.world-data :as data]
             [engine.bodies :as bodies]
             [clojure.string :as str]
             ["node:crypto" :as crypto]
-            ["node:fs" :as fs]))
+            ["node:fs" :as fs]
+            ["node:path" :as path]))
 
 (def usage
   (str "usage: world.mjs <agent> <command> [args] --world <world> [--who claude] [--worlds <dir>] [--state <legacy-parent>]\n"
@@ -19,7 +21,11 @@
        "  submit wear [<item>]   (puts a carried armour piece on; no item: the best carried piece for each empty or weaker slot)\n"
        "  status <request-id> | cancel <request-id> | inventory\n"
        "Acquire the body first with drive.mjs <agent> --world <world> take --who <same-name> --idle-s <seconds>.\n"
-       "Submit returns immediately with a request-id; poll status while continuing to observe/chat."))
+       "Actions run one at a time in the order submitted: one submitted while another runs is queued behind it\n"
+       "(:status :queued, :behind <request-id>, at most 8 waiting); cancel drops a queued one, a release drops them all.\n"
+       "Submit returns at once with the request-id; add --wait [--timeout 60s] to block until that action ends (or until\n"
+       "anything that ends observe --wait: addressed chat, attention, the timeout) and print {:operation .. :wait <the wake>},\n"
+       "the wake carrying the action's result and a bounded summary of what else happened meanwhile."))
 
 (def request-timeout-ms 3000)
 (def max-response-bytes 65536)
@@ -27,7 +33,8 @@
 (def options
   {:who {:type "string" :default "claude"} :state {:type "string"} :worlds {:type "string"} :world {:type "string"}
    :range {:type "string"} :timeout-s {:type "string"} :max-distance {:type "string"}
-   :item {:type "string"} :face {:type "string"} :request-id {:type "string"}})
+   :item {:type "string"} :face {:type "string"} :request-id {:type "string"}
+   :wait {:type "boolean"} :timeout {:type "string"}})
 
 (def action-options [:range :timeout-s :max-distance :item :face])
 
@@ -91,18 +98,35 @@
       (not (<= 1 (count who) 80)) {:error "--who must be 1..80 characters"}
       (and (some? (:request-id values)) (not= command "submit")) {:error "--request-id is only valid for submit"}
       (and (not= command "submit") (some #(some? (% values)) action-options)) {:error "action options are only valid with submit"}
-      :else {:agent agent :world world :state (bodies/storage-root values map-tool/default-state-dir) :who who
-             :body (command-body command action (vec args) who values)})))
+      (and (:wait values) (not= command "submit")) {:error "--wait requires submit"}
+      (and (:timeout values) (not (:wait values))) {:error "--timeout requires --wait"}
+      :else (do (when (:wait values) (observe/wait-options {:timeout (:timeout values)}))
+                (cond-> {:agent agent :world world :state (bodies/storage-root values map-tool/default-state-dir) :who who
+                         :body (command-body command action (vec args) who values)}
+                  (:wait values) (assoc :wait {:timeout (:timeout values)}))))))
 
 (defn request-for [argv]
   (try (request-for-unsafe argv) (catch :default error {:error (.-message error)})))
 
 (defn body-edn [body] (data/write-edn body))
 
-(defn send! [socket-path body]
-  (http/request {:socket-path socket-path :method "POST" :path "/world" :label "world"
-                 :headers {"content-type" "application/edn"} :body (str (body-edn body) "\n")
-                 :timeout-ms request-timeout-ms :max-bytes max-response-bytes}))
+(defn send! [socket-path body request-fn]
+  (http/request (cond-> {:socket-path socket-path :method "POST" :path "/world" :label "world"
+                         :headers {"content-type" "application/edn"} :body (str (body-edn body) "\n")
+                         :timeout-ms request-timeout-ms :max-bytes max-response-bytes}
+                  request-fn (assoc :request-fn request-fn))))
+
+(defn ^:async wait-after!
+  "After an accepted submit, wait for its action as observe --wait --watch-action does: the answer with the wake under
+  :wait."
+  [parsed answer request-fn]
+  (let [get! (fn [socket endpoint options]
+               (observe/get! socket endpoint (cond-> options request-fn (assoc :request-fn request-fn))))
+        base {:agent (:agent parsed) :world (:world parsed) :state (:state parsed)
+              :socket-path (.join path (bodies/body-dir (:state parsed) (:world parsed) (:agent parsed)) "engine" "events.sock")}
+        wake (await (observe/wait-for! base {:watch-actions [(get-in parsed [:body :request-id])]
+                                             :timeout (get-in parsed [:wait :timeout])} get!))]
+    (assoc answer :wait wake)))
 
 (defn failure-text [error socket-path]
   (case (aget error "code")
@@ -112,22 +136,29 @@
       (str "connection failed (" (or (aget error "code") (.-message error)) ")")
       (str "no running body (no socket at " socket-path ")"))))
 
+(defn print-text! [text] (.write (.-stdout js/process) text))
+
 (defn main!
   ([] (main! (vec (.slice (.-argv js/process) 2))))
-  ([argv]
+  ([argv] (main! argv {}))
+  ([argv {:keys [request-fn output] :or {output print-text!}}]
    (let [parsed (request-for argv)]
      (if (:error parsed)
        (do (js/console.error (str (:error parsed) "\n" usage)) (js/Promise.resolve 2))
        (let [socket (drive/socket-path-for parsed)]
-         (.then (send! socket (:body parsed))
+         (.then (send! socket (:body parsed) request-fn)
                 (fn [{:keys [status content-type text]}]
-                  (if (http/edn-response? content-type)
-                    (do (.write (.-stdout js/process) text)
-                        (if (and (>= status 200) (< status 300)) 0 1))
-                    (do (.write (.-stdout js/process)
-                                (str "{:ok false :reason :world-unavailable :http-status " status
-                                     " :hint \"restart body with the current engine build\"}\n"))
-                        1)))
+                  (let [ok? (and (>= status 200) (< status 300))
+                        answer (when (http/edn-response? content-type) (data/read-edn text))]
+                    (cond
+                      (nil? answer)
+                      (do (output (str "{:ok false :reason :world-unavailable :http-status " status
+                                       " :hint \"restart body with the current engine build\"}\n"))
+                          1)
+                      (and (:wait parsed) ok? (:ok answer))
+                      (.then (wait-after! parsed answer request-fn)
+                             (fn [result] (output (str (data/write-edn result) "\n")) 0))
+                      :else (do (output text) (if ok? 0 1)))))
                 (fn [error]
                   (let [request-id (get-in parsed [:body :request-id])]
                     (js/console.error (str (failure-text error socket) "; command was not confirmed"

@@ -13,7 +13,29 @@
   (let [r (request "--world" "w" "Bob" "submit" "(jobs.movement.go-to {:pos {:x -1 :y 64 :z 2}})" "--request-id" "move-home")]
     (is (= "move-home" (get-in r [:request :request-id])))
     (is (re-find #"\(jobs.movement.go-to \{:pos \{:x -1" (data/write-edn (:request r)))))
-  (is (= :interrupt (get-in (request "--world" "w" "Bob" "interrupt" "(repeat (jobs.movement.look-around))") [:request :op]))))
+  (is (= :interrupt (get-in (request "--world" "w" "Bob" "submit" "(repeat (jobs.movement.look-around))" "--now") [:request :op]))))
+
+(deftest submit-appends-by-default-and-now-cuts-in-front-of-the-current-job
+  (let [plain (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-day)")
+        now (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-day)" "--now")]
+    (is (= :submit (get-in plain [:request :op])))
+    (is (= {:op :submit} (select-keys (:request plain) [:op :front? :hold?])) "a plain submit appends")
+    (is (= :interrupt (get-in now [:request :op])))
+    (is (= '(jobs.time.wait-for-day) (get-in now [:request :spec]))))
+  (doseq [[pattern args] [[#"unknown operation" ["interrupt" "(jobs.time.wait-for-day)"]]
+                          [#"--now and --front" ["submit" "(jobs.time.wait-for-day)" "--now" "--front"]]
+                          [#"--now requires submit" ["list" "--now"]]
+                          [#"--now requires submit" ["cancel" "j1" "--now"]]]]
+    (is (re-find pattern (str (:error (apply request "Bob" "--world" "w" args)))) (pr-str args))))
+
+(deftest wait-and-its-timeout-belong-to-submit
+  (is (= {:timeout "5m"} (select-keys (:wait (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-day)" "--wait" "--timeout" "5m")) [:timeout])))
+  (is (some? (:wait (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-day)" "--now" "--wait"))))
+  (is (nil? (:wait (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-day)"))))
+  (doseq [[pattern args] [[#"--wait requires submit" ["cancel" "j1" "--wait"]]
+                          [#"--timeout requires --wait" ["submit" "(jobs.time.wait-for-day)" "--timeout" "5s"]]
+                          [#"--timeout must be" ["submit" "(jobs.time.wait-for-day)" "--wait" "--timeout" "forever"]]]]
+    (is (re-find pattern (str (:error (apply request "Bob" "--world" "w" args)))) (pr-str args))))
 
 (deftest list-show-cancel-and-retry-use-fixed-endpoints-and-validate-arguments
   (is (= "/jobs?limit=8&offset=0" (:path (request "--world" "w" "Bob"))))
@@ -71,7 +93,7 @@
     (is (not (contains? (:request plain) :front?))))
   (doseq [args [["cancel-all" "j1"] ["cancel-all" "--hold"] ["list" "--hold"] ["show" "j1" "--hold"] ["retry" "j1" "--hold"]]]
     (is (string? (:error (apply request "Bob" "--world" "w" args))) (pr-str args)))
-  (doseq [args [["list" "--front"] ["show" "j1" "--front"] ["interrupt" "(jobs.time.wait-for-day)" "--front"]
+  (doseq [args [["list" "--front"] ["show" "j1" "--front"]
                 ["cancel-all" "--front"] ["cancel" "j1" "--front"] ["retry" "j1" "--front"]]]
     (is (re-find #"--front requires submit" (:error (apply request "Bob" "--world" "w" args))) (pr-str args))))
 
@@ -163,4 +185,75 @@
           (.then (fn [{:keys [code out]}]
                    (is (= 1 code))
                    (is (= "r9" (:request-id (data/read-edn out))))))
+          (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
+
+;; submit --wait
+
+(defn event-of [n source kind context & [extra]]
+  (merge {:seq n :generation-id "g" :time-ms n :source source :kind kind :context context} extra))
+
+(defn waiting-engine
+  "A fake engine whose event stream is the atom events; POST /jobs answers the job j7."
+  [events]
+  (fn [{:keys [method path]}]
+    (let [cursor {:stream-id "s" :seq (count @events)}]
+      {:text (data/write-edn
+               (cond
+                 (= "POST" method) {:ok true :job {:id "j7" :status :queued}}
+                 (= "/snapshot" path) {:generation-id "g" :body "Bob" :outstanding {} :cursor cursor
+                                       :state {:instances {"j7" {}}}}
+                 (= "/status" path) {:mode :scheduled}
+                 :else (let [after (js/Number (.get (.-searchParams (js/URL. (str "http://x" path))) "after"))]
+                         {:gap? false :stream-id "s" :latest-seq (count @events) :cursor cursor
+                          :events (filterv #(> (:seq %) after) @events)})))})))
+
+(deftest submit-wait-returns-the-job-and-everything-until-it-ends
+  (let [state (state-dir)
+        events (atom [(event-of 1 :system :started {})])]
+    (js/setTimeout #(swap! events into [(event-of 2 :job :queued {:job-id "j7" :chain ["j7"]})
+                                        (event-of 3 :reflex :fired {:job-id "j8" :reflex-id :hostile-near}
+                                                  {:message "hostile-near → jobs.survival.respond-to-hostile"})
+                                        (event-of 4 :body :picked-up {} {:data {:item "oak_log" :count 3}})
+                                        (event-of 5 :job :arrived {:job-id "j7" :chain ["j7"]} {:data {:pos [1 64 2]}})
+                                        (event-of 6 :job :completed {:job-id "j7" :chain ["j7"]})])
+                   60)
+    (async done
+      (-> (run-main! state ["submit" "(jobs.movement.go-to {:pos {:x 1 :y 64 :z 2}})" "--wait" "--timeout" "3s"]
+                     (waiting-engine events))
+          (.then (fn [{:keys [code out]}]
+                   (let [result (data/read-edn out)
+                         wait (:wait result)]
+                     (is (= 0 code))
+                     (is (= {:id "j7" :status :queued} (:job result)))
+                     (is (= [:job-finished "j7" :completed] [(:wake wait) (:job wait) (:result wait)]))
+                     (is (= [{:event :arrived :data {:pos [1 64 2]}}] (:events wait)) "the job's own events")
+                     (is (= {:reflexes 1 :picked-up 1} (get-in wait [:summary :counts])) "and what else happened meanwhile")
+                     (is (= {:event :fired :reflex :hostile-near :message "hostile-near → jobs.survival.respond-to-hostile"}
+                            (first (get-in wait [:summary :items]))))
+                     (is (not (contains? result :follow)) "nothing left to follow"))))
+          (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
+
+(deftest a-wait-that-ends-before-the-job-says-how-to-go-on-waiting
+  (let [state (state-dir)
+        events (atom [(event-of 1 :system :started {})])]
+    (async done
+      (-> (run-main! state ["submit" "(jobs.time.wait-for-day)" "--wait" "--timeout" "100ms"] (waiting-engine events))
+          (.then (fn [{:keys [code out]}]
+                   (let [result (data/read-edn out)]
+                     (is (= 0 code))
+                     (is (= :timeout (get-in result [:wait :wake])))
+                     (is (= "observe --wait --watch j7" (:follow result))))))
+          (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
+
+(deftest a-refused-submit-does-not-wait
+  (let [state (state-dir)]
+    (async done
+      (-> (run-main! state ["submit" "(jobs.time.wait-for-day)" "--wait"]
+                     (fn [{:keys [method path]}]
+                       {:status (if (= "POST" method) 400 200)
+                        :text (if (= "/snapshot" path) "{:generation-id \"g\"}" "{:ok false :reason :bad-spec}")}))
+          (.then (fn [{:keys [code out seen]}]
+                   (is (= 1 code))
+                   (is (= {:ok false :reason :bad-spec} (data/read-edn out)))
+                   (is (= ["GET" "POST"] (mapv :method seen)) "no event reads")))
           (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))

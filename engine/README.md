@@ -845,9 +845,12 @@ parent reads the result of its round, not a wait, so a declining child would lea
 `submit!` and `cancel!` (agent) edit the list; `retry!` (agent, `(core/retry!
 eng id)`, true when `id` was marked failed) clears a failed mark and emits
 `job.retried`; `do-now!` (agent) cuts the
-running listed job and submits first in the list with `:hold? true`.
+running listed job (never a reflex) and lists the new job directly before it with `:hold? true` (`core/insert-now`;
+between rounds, where the next scan starts): the new job runs now, and once it ends the scan stands at the cut job,
+which continues with its memory. This holds when a later cut (a reflex, another `do-now!`) has taken the cut job's
+`:resume` mark: `[X A]`, A running, do-now B then C during B: `[X C B A]`, rounds C.., B.., A.
 `submit!` opts: `:hold?`, `:backoff` (a config map or `false`, over any
-`(backoff cfg e)` wrapper), `:front?`, `:by`. `:front?` lists the job directly
+`(backoff cfg e)` wrapper), `:front?`, `:now?` (as `do-now!` lists it, without the cut), `:by`. `:front?` lists the job directly
 after the current job, so it gets the very next round; round-robin then goes on
 in list order (`[A B C D]`, C current, front X: `[A B C X D]`, rounds X, D, A,
 B, C, X...). There is no front other than the current job. Details: the
@@ -1143,8 +1146,8 @@ Rounds that throw or decline do not count toward a backoff, so under
 same validation and is loaded as puts by `:scenario`; its ids must be unique.
 
 `POST /jobs` (`tools/jobs.mjs`, below) also takes `:front?`, `:hold?`,
-`:backoff` and `:by` on `:submit`, and `:by` on `:interrupt`; `:by` is kept on
-the instance.
+`:backoff` and `:by` on `:submit`, and `:by` on `:interrupt` (`core/do-now!`, the CLI's `submit --now`); `:by` is kept
+on the instance.
 
 `POST /jobs {:op :cancel-all :request-id r :generation-id g :by who}` clears the whole list: every listed job (the
 running one, queued, held (`:hold?`) and parked-failed ones) is cancelled through the same path as a single `:cancel`
@@ -1164,11 +1167,11 @@ cannot listen (for example a path over 107 bytes) the body emits `system.control
 The body has three control modes. In normal scheduling, triggers are evaluated
 and eligible jobs take round-robin turns; a listed job does not interrupt
 another listed job. Reflexes can cut a listed round according to register
-priority. An explicit `do-now!` request cuts a running listed round, queues the
-new job at the front as a holder, and records the cut listed job for later
+priority. An explicit `do-now!` request cuts a running listed round, lists the
+new job directly before the cut one as a holder, and records the cut listed job for later
 resumption. The do-it-now operation does not cut a running reflex. After the
-urgent holder ends, the normal holder/check rules apply, so a prior hold or a
-declining resume check can affect which listed job runs next.
+urgent holder ends, the cut job runs next under the normal holder/check rules, so a prior hold or a
+declining resume check can still affect which listed job runs next.
 
 Manual takeover is the third mode: `take` cuts the current holder and pauses
 all trigger evaluation and job rounds until release or lease expiry. The
@@ -1232,11 +1235,18 @@ node engine/tools/drive.mjs ProbeDrive --world claude release --who claude      
 World actions keep the same exclusive lease and use the engine's existing owner-token primitives; they do not create a
 second Mineflayer connection. `world.mjs` accepts `move-to`, `dig`, `place`, `use-on`, `interact`, `wear [item]` (the wear job's choice, run by hand: result `worn` with the pieces, or `cannot` with `not-armour` / `no-item`) and `inventory`. Mutating
 actions have finite primitive deadlines (at most 10 s), require a lease with at least one extra second of idle time, and
-run one at a time. Starting one clears held drive controls. While it runs, `/drive set` and `stop` are refused; cancel,
+run one at a time in the order submitted: one submitted while another runs is queued behind it (reply
+`{:ok true :operation {:status :queued ..} :behind <running id> :position n}`, event `action.queued`; at most 8 wait, a
+ninth is refused `queue-full`). `cancel` of a queued one drops it (`:cancelled`, its `action.done` with status `cut`, it
+never starts); release, lease expiry and shutdown drop the whole queue the same way. A queued action whose lease is no
+longer its submitter's when its turn comes is dropped `lease-ended`. Starting one clears held drive controls. While it runs, `/drive set` and `stop` are refused; cancel,
 release, lease expiry, or engine shutdown cuts the action. This socket is local access control, not per-`who` authentication:
 `who` is the lease label and the Unix socket's filesystem permissions govern access.
 
-Submission returns promptly with an operation ID. Reuse `--request-id` if a response is lost; operation IDs are retained
+Submission returns promptly with an operation ID; `submit ... --wait [--timeout 60s]` instead blocks until that action
+ends, or until anything that ends `observe --wait` (addressed chat, attention, an engine restart, the timeout), and prints
+the reply with the wake under `:wait` (`{:wake :action-finished :action id :result {..}}` and a bounded `:summary` of
+what else happened), through the same observer checkpoint as `observe --wait`. Reuse `--request-id` if a response is lost; operation IDs are retained
 in memory for the latest 32 actions and are not durable across restart. `status` can read a finished result after release;
 `cancel` requires the current lease. Inventory is compact and capped at 40 stacks.
 
@@ -2012,15 +2022,26 @@ imports the renderer only when it draws.
 
 `cd dashboard && npm run build-agent-tools`.
 
-Agent job management uses the existing engine scheduler through an EDN API;
-these commands return immediately, while `observe --wait --watch` handles wakeups:
+Agent job management uses the existing engine scheduler through an EDN API.
+`submit` appends the job to the end of the list (listed jobs take turns; a held job keeps the body until it ends).
+`--front` lists it directly after the current job (the next round, nothing cut). `--now` cuts the current listed job
+and runs the new one at once as a holder (`core/do-now!`); the cut job keeps its memory and continues right after the
+new one ends; a running reflex is not cut, the new job waits behind it. `--wait [--timeout 60s]` (any submit) blocks
+until the job ends, or until anything that ends `observe --wait` (addressed chat, required attention, an engine
+restart, the timeout), and prints one map: the submit reply plus `:wait`, the wake (for the job's end
+`{:wake :job-finished :job id :result :completed :events [..up to 8 of its own events..] :history ..}` with a
+`:summary` of what else happened meanwhile: counts and up to 4 items of reflexes fired, pickups, hurt, other jobs
+completed or failed, warnings). If the wait ends before the job, `:follow` names the command that waits on. It shares
+the `agent` observer checkpoint with `observe --wait`, so an event is reported once. Without `--wait` commands return
+immediately, while `observe --wait --watch` handles wakeups:
 
 ```bash
 node engine/tools/jobs.mjs Bob --world claude list
 node engine/tools/jobs.mjs Bob --world claude show j17
 node engine/tools/jobs.mjs Bob --world claude submit '(jobs.movement.go-to {:pos {:x 10 :y 64 :z 20}})'
 node engine/tools/jobs.mjs Bob --world claude submit '(jobs.time.wait-for-day)' --hold
-node engine/tools/jobs.mjs Bob --world claude interrupt '(jobs.movement.look-around {:every-ms 2000})'
+node engine/tools/jobs.mjs Bob --world claude submit '(jobs.movement.look-around {:every-ms 2000})' --now
+node engine/tools/jobs.mjs Bob --world claude submit '(jobs.movement.go-to {:pos {:x 10 :y 64 :z 20}})' --wait --timeout 5m
 node engine/tools/jobs.mjs Bob --world claude cancel j17
 node engine/tools/jobs.mjs Bob --world claude cancel-all
 node engine/tools/jobs.mjs Bob --world claude retry j17

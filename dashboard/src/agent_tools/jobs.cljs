@@ -3,13 +3,25 @@
   (:require [engine.bodies :as bodies]
             [agent-tools.http :as http]
             [agent-tools.map :as map-tool]
+            [agent-tools.observe :as observe]
             [agent-tools.world-data :as data]
             [clojure.string :as str]
             ["node:fs" :as fs]
             ["node:path" :as path]
             ["node:crypto" :as crypto]))
 
-(def usage "usage: jobs.mjs <body> --world <world> list [--limit 8 --offset 0] | show <jID> | submit <EDN-spec> [--hold --front] | interrupt <EDN-spec> | cancel <jID> | cancel-all | retry <jID> | resolve <request-id> --reason handled|condition-recovered [--worlds DIR --state LEGACY_PARENT]\nMutations return immediately; observe.mjs <body> --world <world> --wait --watch jID tracks completion.")
+(def usage
+  (str "usage: jobs.mjs <body> --world <world> list [--limit 8 --offset 0] | show <jID> | submit <EDN-spec> [--hold] [--front | --now] [--wait [--timeout 60s]] | cancel <jID> | cancel-all | retry <jID> | resolve <request-id> --reason handled|condition-recovered [--worlds DIR --state LEGACY_PARENT]\n"
+       "submit appends the job to the end of the list (jobs take turns, a held job keeps the body until it ends).\n"
+       "  --front  list it directly after the current job: it gets the next round, nothing is cut\n"
+       "  --now    cut the current job and run this one at once (it holds the body); the cut job keeps its memory and\n"
+       "           continues right after it ends. Reflexes still come first.\n"
+       "  --wait   block until the job ends, or until anything that ends observe --wait (addressed chat, attention, an\n"
+       "           engine restart, the --timeout), and print {:job .. :wait <the wake>}: the job's last events and a\n"
+       "           bounded summary of what else happened meanwhile (reflexes fired, pickups, hurt, other jobs ended,\n"
+       "           warnings). If the wait ends before the job, :follow names the command that waits on. Uses the observer\n"
+       "           checkpoint observe --wait uses, so the same events are not reported twice.\n"
+       "Without --wait mutations return immediately; observe.mjs <body> --world <world> --wait --watch jID tracks completion."))
 
 (defn spec-for [text]
   (when (or (not (string? text)) (> (.byteLength js/Buffer text) 12000))
@@ -24,19 +36,21 @@
     (let [{:keys [positionals values]} (map-tool/parse-options argv
           {:state {:type "string"} :worlds {:type "string"} :world {:type "string"}
            :request-id {:type "string"} :limit {:type "string"} :offset {:type "string"}
-           :reason {:type "string"} :hold {:type "boolean"} :front {:type "boolean"}})
+           :reason {:type "string"} :hold {:type "boolean"} :front {:type "boolean"} :now {:type "boolean"}
+           :wait {:type "boolean"} :timeout {:type "string"}})
           [body op arg & extra] positionals
           op (keyword (or op "list"))
+          interrupt? (and (= op :submit) (true? (:now values)))
           no-argument? (#{:list :cancel-all} op)
-          mutating? (boolean (#{:submit :interrupt :cancel :cancel-all :retry :resolve} op))
-          spec-op? (#{:submit :interrupt} op)]
+          mutating? (boolean (#{:submit :cancel :cancel-all :retry :resolve} op))
+          spec-op? (= :submit op)]
       (when-not (and (string? body) (re-matches #"[A-Za-z0-9_-]{1,40}" body))
         (throw (js/Error. "body must be a valid name")))
       (when (nil? (:world values))
         (throw (js/Error. "missing --world <world>: the world the body plays in (a folder under worlds/)")))
       (when-not (re-matches #"[A-Za-z0-9_-]{1,64}" (:world values))
         (throw (js/Error. "the world must be a name of letters, digits, _ and -")))
-      (when-not (#{:list :show :submit :interrupt :cancel :cancel-all :retry :resolve} op)
+      (when-not (#{:list :show :submit :cancel :cancel-all :retry :resolve} op)
         (throw (js/Error. "unknown operation")))
       (when (or (seq extra) (if no-argument? (some? arg) (nil? arg)))
         (throw (js/Error. (str (name op) (if no-argument? " takes no argument" " needs exactly one argument")))))
@@ -47,17 +61,28 @@
       (when (and (not= op :list) (or (:limit values) (:offset values)))
         (throw (js/Error. "--limit and --offset require list")))
       (when (and (contains? values :hold) (not spec-op?))
-        (throw (js/Error. "--hold requires submit or interrupt")))
+        (throw (js/Error. "--hold requires submit")))
       (when (and (contains? values :front) (not= op :submit))
         (throw (js/Error. "--front requires submit")))
+      (when (and (contains? values :now) (not= op :submit))
+        (throw (js/Error. "--now requires submit")))
+      (when (and (:now values) (:front values))
+        (throw (js/Error. "--now and --front are exclusive: --now cuts the current job, --front waits for its round to end")))
+      (when (and (contains? values :wait) (not= op :submit))
+        (throw (js/Error. "--wait requires submit")))
+      (when (and (:timeout values) (not (:wait values)))
+        (throw (js/Error. "--timeout requires --wait")))
+      (when (:wait values)
+        (observe/wait-options {:timeout (:timeout values)}))
       (when (and (= op :resolve) (not (#{"handled" "condition-recovered"} (:reason values))))
         (throw (js/Error. "resolve requires --reason handled or condition-recovered")))
       (when (and (not= op :resolve) (:reason values))
         (throw (js/Error. "--reason requires resolve")))
       (let [state (bodies/storage-root values map-tool/default-state-dir)
-            base {:body body :world (:world values) :state state
-                  :socketPath (.join path (bodies/worlds-dir state) (:world values) "agents" body "engine" "events.sock")
-                  :mutating mutating?}]
+            base (cond-> {:body body :world (:world values) :state state
+                          :socketPath (.join path (bodies/worlds-dir state) (:world values) "agents" body "engine" "events.sock")
+                          :mutating mutating?}
+                   (:wait values) (assoc :wait {:timeout (:timeout values)}))]
         (cond
           (= op :list)
           (let [limit (js/Number (or (:limit values) 8)) offset (js/Number (or (:offset values) 0))]
@@ -80,7 +105,7 @@
                 (when-not (re-matches #"[A-Za-z0-9_.:-]{1,80}" id)
                   (throw (js/Error. "--request-id must be a short identifier")))
                 (assoc base :path "/jobs"
-                       :request (cond-> {:op op :request-id id}
+                       :request (cond-> {:op (if interrupt? :interrupt op) :request-id id}
                                   spec-op? (assoc :spec (spec-for arg))
                                   (#{:cancel :retry} op) (assoc :id arg)
                                   (contains? values :hold) (assoc :hold? (:hold values))
@@ -184,6 +209,32 @@
       (and (:mutating r) (not (:resolve r))) (assoc :request-id request-id :confirmation :unknown
                                                     :message "Query/retry with the same request ID; do not submit a new ID."))))
 
+(defn follow-command [id] (str "observe --wait --watch " id))
+
+(defn wait-result
+  "The submit answer with the wake that ended the wait under :wait, and :follow when the job had not ended by then."
+  [answer id wake]
+  (cond-> (assoc answer :wait wake)
+    (not (and (= :job-finished (:wake wake)) (= id (:job wake)))) (assoc :follow (follow-command id))))
+
+(defn submit-and-wait!
+  "Submit, then wait for the job as observe --wait --watch does; print one map. A refused submit prints as without
+  --wait and does not wait. A promise of the exit code."
+  [r output {:keys [request-fn] :as opts}]
+  (.then (exchange! r opts)
+         (fn [{:keys [status content-type text] :as response}]
+           (let [answer (when (http/edn-response? content-type) (data/read-edn text))
+                 id (get-in answer [:job :id])]
+             (if-not (and (= 200 status) (:ok answer) (string? id))
+               (deliver! r output response)
+               (let [get! (fn [socket endpoint options]
+                            (observe/get! socket endpoint (cond-> options request-fn (assoc :request-fn request-fn))))]
+                 (.then (observe/wait-for! {:agent (:body r) :world (:world r) :state (:state r) :socket-path (:socketPath r)}
+                                           {:watch [id] :timeout (get-in r [:wait :timeout])} get!)
+                        (fn [wake]
+                          (output (str (data/write-edn (wait-result answer id wake)) "\n"))
+                          0))))))))
+
 (defn main!
   ([] (main! (vec (.slice (.-argv js/process) 2))))
   ([argv] (main! argv {}))
@@ -192,8 +243,7 @@
      (if (:error r)
        (do (js/console.error (str (:error r) "\n" usage)) (js/Promise.resolve 2))
        (-> (js/Promise.resolve nil)
-           (.then #(exchange! r opts))
-           (.then #(deliver! r output %))
+           (.then #(if (:wait r) (submit-and-wait! r output opts) (.then (exchange! r opts) (fn [response] (deliver! r output response)))))
            (.catch (fn [error]
                      (output (str (data/write-edn (failure-for r error)) "\n"))
                      2)))))))
