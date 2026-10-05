@@ -149,14 +149,17 @@
                   (some? (:chain event)) (assoc :chain (:chain event))
                   (some? (:reflex event)) (assoc :reflex-id (:reflex event))
                   (some? (:action-id event)) (assoc :action-id (:action-id event))
-                  (some? (:cause event)) (assoc :cause-seq (:cause event))
+                  (number? (:cause event)) (assoc :cause-seq (:cause event))
                   (some? (:cause-seq event)) (assoc :cause-seq (:cause-seq event)))
         known #{:seq :generation-id :run-id :time-ms :t :body :source :kind :level
                 :context :data :message :text :attention :request-id :job :round
                 :chain :reflex :action-id :cause :cause-seq :pos}
         ;; Legacy emitters routinely pass absent optional fields as nil. Their
         ;; old stream omitted those fields; explicit canonical :data is kept.
-        extra (into {} (remove (comp nil? val)) (apply dissoc event known))
+        ;; A non-numeric :cause is the body's own datum (died/hurt: "lava"), not a cause sequence.
+        extra (into {} (remove (comp nil? val))
+                    (cond-> (apply dissoc event known)
+                      (not (number? (:cause event))) (assoc :cause (:cause event))))
         pos (or (:pos event) (when pos-fn (pos-fn)))
         data (cond-> (merge (or (:data event) {}) extra)
                (and pos (nil? (get (or (:data event) {}) :pos)))

@@ -10,7 +10,10 @@
   with :decision :skip) when engine.value/inventory-value of what was carried
   is at most engine.value/retrieval-cost plus :margin. Otherwise walk to the
   death point (jobs.movement.go-to), then collect everything within
-  :collect-radius (jobs.forestry.collect-drops) and record :collected. Gives
+  :collect-radius (jobs.forestry.collect-drops) and record :collected with the
+  count of the pile's items that entered the inventory since the decision (those
+  picked up on the walk count; a pile already carried again ends :collected
+  without a collect step). Gives
   up as :abandoned when the point is unreachable, nothing is left there, or
   the five minute despawn window closes. Nothing is decided or walked until
   a :respawned entry newer than the death exists (the body is alive again); the
@@ -84,9 +87,26 @@
       (not (:arrived (ctx/child-result c :go))) (finish! c :abandoned (assoc (:decided (ctx/mem c)) :reason :unreachable))
       :else (do (ctx/update-mem! c assoc :phase :collect) :continue))))
 
-(defn ^:async collect! [c radius]
-  (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius radius}))
-        items (:collected (ctx/child-result c :collect) 0)]
+(defn carried-counts
+  "{item name total} of what the body carries."
+  [c]
+  (reduce (fn [m {:keys [name count]}] (update m name (fnil + 0) count)) {} (u/inventory (:primitives c))))
+
+(defn recovered-items
+  "How many of the pile's items entered the inventory since the baseline (taken when the
+  trip was decided): per item name the rise, capped by what the pile held. Items picked up
+  on the walk count as well as those the collect step picks up."
+  [c pile]
+  (let [baseline (:baseline (ctx/mem c))
+        now (carried-counts c)
+        wanted (reduce (fn [m {:keys [name count]}] (update m name (fnil + 0) count)) {} pile)]
+    (reduce + 0 (map (fn [[name n]] (min n (max 0 (- (get now name 0) (get baseline name 0))))) wanted))))
+
+(defn ^:async collect! [c radius pile]
+  (let [r (if (>= (recovered-items c pile) (reduce + 0 (map :count pile)))
+            :done
+            (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius radius})))
+        items (recovered-items c pile)]
     (cond
       (= :continue r) :continue
       (pos? items) (finish! c :collected (assoc (:decided (ctx/mem c)) :items items))
@@ -107,12 +127,13 @@
       :else
       (let [decided (or (:decided (ctx/mem c))
                         (let [e (estimate c (:data entry) elapsed)]
-                          (ctx/update-mem! c assoc :decided {:value (:value e) :cost (finite (:cost e))})
+                          (ctx/update-mem! c assoc :decided {:value (:value e) :cost (finite (:cost e))}
+                                           :baseline (carried-counts c))
                           {:value (:value e) :cost (finite (:cost e))}))
             pos (:pos (:data entry))]
         (cond
           (<= (:value decided) (+ (if (= :infinite (:cost decided)) js/Infinity (:cost decided)) margin))
           (finish! c :skip decided)
 
-          (= :collect (:phase (ctx/mem c))) (await (collect! c collect-radius))
+          (= :collect (:phase (ctx/mem c))) (await (collect! c collect-radius (:inventory (:data entry))))
           :else (await (go! c pos)))))))

@@ -210,3 +210,11 @@
   (let [file (path/join (tu/tmp-dir) "events.edn")]
     (emit-n! (events/make {:file file :generation-id "g"}) 12)
     (is (= (range 1 13) (mapv :seq (:recent @(events/make {:file file :generation-id "g"})))))))
+
+(deftest a-body-cause-stays-in-data-and-a-cause-seq-in-context
+  (let [[seen sink] (tu/capture-sink)
+        stream (events/make {:generation-id "g" :sinks [sink] :now (constantly 1)})]
+    (events/emit! stream {:source :body :kind :died :cause "lava"})
+    (events/emit! stream {:source :job :kind :done :cause 7})
+    (is (= [{:data {:cause "lava"}} {:context {:cause-seq 7}}]
+           [(select-keys (first @seen) [:data :context]) (select-keys (second @seen) [:data :context])]))))

@@ -249,6 +249,39 @@
           (await (run-until-empty eng 5))
           (is (= {:decision :abandoned :items 0} (select-keys (recovered eng) [:decision :items]))))))))
 
+(deftest recover-drops-counts-items-picked-up-on-the-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities drops})
+              iron [{:name "raw_iron" :count 20 :slot 0}]]
+          (die! eng {:pos death-pos :inventory iron})
+          (core/submit! eng job {})
+          (loop [n 0]
+            (when (and (< n 30) (empty? (tu/walk-calls p)))
+              (await (core/tick! eng))
+              (recur (inc n))))
+          (swap! (fake/state p) #(-> % (assoc :entities []) (assoc :inventory [{:name "raw_iron" :count 20}])))
+          (is (< (await (run-until-empty eng 10)) 10))
+          (is (= {:decision :collected :items 20} (select-keys (recovered eng) [:decision :items]))))))))
+
+(deftest recover-drops-counts-only-the-pile-items-picked-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities drops})
+              iron [{:name "raw_iron" :count 20 :slot 0}]]
+          (die! eng {:pos death-pos :inventory iron})
+          (core/submit! eng job {})
+          (loop [n 0]
+            (when (and (< n 30) (empty? (tu/walk-calls p)))
+              (await (core/tick! eng))
+              (recur (inc n))))
+          (swap! (fake/state p) #(-> % (assoc :entities []) (assoc :inventory [{:name "dirt" :count 9}])))
+          (is (< (await (run-until-empty eng 10)) 10))
+          (is (= {:decision :abandoned :items 0 :reason :nothing-found}
+                 (select-keys (recovered eng) [:decision :items :reason]))))))))
+
 (deftest recover-drops-yields-to-a-hostile-and-resumes
   (async done
     (tu/run-async done
