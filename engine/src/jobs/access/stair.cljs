@@ -29,6 +29,8 @@
     but :not-loaded.
   - :fluid-in-cut: a cut cell holds a fluid.
   - :crop: a crop, stem or farmland in a cut cell (never dug, zone or not).
+  - :undercuts-way: a cut cell is the floor of a stair this body cut earlier (memory :stair-way, written at every
+    end with the floors of the steps walked).
   - :unbreakable: bedrock, barrier, portal frames, command blocks.
   - :no-tool: a pickaxe block with no pickaxe carried.
   - :inventory-full: the drop has no room.
@@ -116,17 +118,33 @@
       (let [hs (vec (distinct (concat (:hazards v) (stair-hazards (:block-at in) (:cell in) cut))))]
         (cond-> {:ok true} (seq hs) (assoc :hazards hs))))))
 
+(def way-policy {:cap 30 :ttl :forever})
+
+(defn way-floors
+  "The floors of the steps a stair walked (not the start's own ground), from its origin, direction and steps reached."
+  [origin dir heading steps]
+  (let [d (delta dir heading)]
+    (vec (for [i (range 1 (inc (or steps 0)))] (add (add origin (mapv #(* i %) d)) [0 -1 0])))))
+
+(defn known-floor
+  "The first cut cell that is a floor of a stair the body made earlier (ways: the set of those floors)."
+  [cut ways]
+  (first (filter ways cut)))
+
 (defn stop-of
   "Why the step cannot go on, as {:reason ...detail}, or nil when every cell may be cut.
   in: the rules' input without :cell. cells :bridged? true: the floor was placed by the stair, what is under it is not judged."
-  [{:keys [block-at] :as in} {:keys [cut floor under bridged?]} accept]
-  (let [fluid-cell (first (filter #(rules/fluids (block-at %)) cut))
+  [{:keys [block-at] :as in} {:keys [cut floor under bridged? ways]} accept]
+  (let [floor-cell (known-floor cut (or ways #{}))
+        fluid-cell (first (filter #(rules/fluids (block-at %)) cut))
         crop-cell (first (filter #(crop-names (block-at %)) cut))]
     (cond
       (some #(nil? (block-at %)) (conj cut floor under))
       {:reason :not-loaded :cell (first (filter #(nil? (block-at %)) (conj cut floor under)))}
       fluid-cell {:reason :fluid-in-cut :cell fluid-cell :fluid (block-at fluid-cell)}
       crop-cell {:reason :crop :cell crop-cell :block (block-at crop-cell)}
+      floor-cell {:reason :undercuts-way :cell floor-cell :block (block-at floor-cell)
+                  :why "the cell is the floor of a stair this body cut earlier; cutting it breaks the way"}
       (not (rules/solid-floor? block-at floor)) {:reason :no-floor :cell floor :block (block-at floor)}
       (and (not bridged?) (let [n (block-at under)] (or (rules/air n) (rules/fluids n))))
       {:reason :cave-below :cell under :block (block-at under)}
@@ -183,6 +201,9 @@
                        :at (feet-of c) :dug (:dug m [])}
                       detail)]
     (ctx/result! c result)
+    (when-let [{:keys [origin]} (when (pos? steps) m)]
+      (let [{:keys [dir heading]} (:args c)]
+        (ctx/remember! c :stair-way {:floors (way-floors origin dir heading steps)} way-policy)))
     (if (= :done reason)
       (ctx/emit! c :stair.done :info (assoc result :text (str "stair " (name (:dir (:args c))) " done, " steps " steps")))
       (ctx/emit! c :stair.stopped :warn
@@ -322,7 +343,8 @@
             (if (= i target)
               :finished
               (let [{:keys [next cut] :as cells} (-> (step-cells feet dir heading)
-                                                           (as-> cs (assoc cs :bridged? (contains? (:bridged (ctx/mem c)) (:floor cs)))))
+                                                           (as-> cs (assoc cs :bridged? (contains? (:bridged (ctx/mem c)) (:floor cs))
+                                                       :ways (set (mapcat #(:floors (:data %)) (ctx/entries c :stair-way))))))
                     stop (stop-of in cells accept)]
                 (if (and (= :no-floor (:reason stop)) (rules/air (:block stop)))
                   (await (bridge! c in cells))
