@@ -9,7 +9,7 @@ export const SOLID = 1 // has collision
 export const WATER = 2
 export const LAVA = 3
 export const CLIMB = 4 // ladder, vines, scaffolding: the body climbs while its feet are inside
-export const OPENABLE = 5 // doors, gates, trapdoors: stage 2 adds the open move; for now their current collision
+export const OPENABLE = 5 // doors, gates, trapdoors: walked as their current collision
 export const NARROW = 6 // collision that does not cover the cell (posts, panes, bamboo): a walk may not pass through
 
 export const HAZARD_NONE = 0

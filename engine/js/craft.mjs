@@ -53,7 +53,7 @@ const shortOf = (bot, id, table) => ({
 
 // The result goes into an empty slot (mineflayer does not join it to a stack), then gets merged. At a table that means
 // two empty slots for a result with no stack of its own yet (one for the result, one the new stack keeps) and one when it
-// joins a stack: with less mineflayer tosses the leftover ingredients on the ground (seen live: 58 of 64 wheat on the floor)
+// joins a stack: with less mineflayer tosses the leftover ingredients on the ground
 const hasRoom = (bot, item, perBatch, table) => {
   const free = bot.inventory.emptySlotCount()
   const stackSize = bot.registry.itemsByName[item].stackSize ?? 64

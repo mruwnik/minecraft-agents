@@ -155,7 +155,7 @@
                 :context :data :message :text :attention :request-id :job :round
                 :chain :reflex :action-id :cause :cause-seq :pos}
         ;; Legacy emitters routinely pass absent optional fields as nil. Their
-        ;; old stream omitted those fields; explicit canonical :data is kept.
+        ;; stream omitted those fields; explicit canonical :data is kept.
         ;; A non-numeric :cause is the body's own datum (died/hurt: "lava"), not a cause sequence.
         extra (into {} (remove (comp nil? val))
                     (cond-> (apply dissoc event known)

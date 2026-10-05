@@ -102,7 +102,7 @@
 (def ^:const SLOW-EXTRA 0.75) ; walking time grows by this much of itself per slow end of a move
 (def ^:const LAVA-ADJACENT 0.5) ; hp of risk for a step with lava beside the feet
 ;; hp of risk for a corner slide whose open side is a hole onto lava or fire: the slide carries the body wholly over that
-;; hole and it dips in (live: BaseMiner burned 2 of 2 times on such a slide, card cd97ec8b). Large, so a way round of up
+;; hole and it dips in. Large, so a way round of up
 ;; to about a minute's walk wins; still allowed, so a body in a pocket whose only way out is such a slide gets out.
 (def ^:const HAZARD-SLIDE-RISK 10)
 (def ^:const FREE-FALL 3)
@@ -1013,9 +1013,8 @@
   ;; The walker goes in a straight line from a cell's representative point to the crossing point of the next move, and from
   ;; a crossing point to the representative point it leads to, so a move is only as good as those lines. A fence post
   ;; beside a gap leaves its cell a U-shaped region (a strip each side of the line, joined along the gap) with its point on
-  ;; one strip: a crossing on the other strip lies behind the post, and the body walks head-on into it and sticks (live,
-  ;; ProbePen: pressed on the post at x .065, :stuck). A ring of free space round a bamboo stalk is the same: in
-  ;; prismarine-physics the body stuck on a stalk on 7 of 8 replayed courses until these lines were checked. Is every
+  ;; one strip: a crossing on the other strip lies behind the post, and the body walks head-on into it and sticks. A ring of free
+  ;; space round a bamboo stalk is the same, so these lines are checked. Is every
   ;; mask point the segment (ai, aj) - (bi, bj) passes (one per 1/16 along its longer axis, rounded) free? An end that is
   ;; itself blocked (a boundary point snapped to the nearest region, at a step or a climbable) leaves the leg unjudged.
   (lineFree [s ^js mask ai aj bi bj]
@@ -2251,16 +2250,14 @@
 
   ;; after a late flood with budget: one that ran out of it (and neither leaked nor met the start) is due again after
   ;; FLOOD-SPACING times the expansions with FLOOD-GROWTH times the budget (at most max-nodes), so its cost stays a share of
-  ;; the search's and a large walled-in region is still proved (live: a sealed platform whose flood needed ~12000 nodes
-  ;; searched the whole wide box, 50-190 s a give-up); any other is the last
+  ;; the search's and a large walled-in region is still proved; any other is the last
   (growFlood [s budget]
     (if (and (> flooded budget) (not leaked) (< budget max-nodes))
       (do (set! goal-flood (js/Math.min max-nodes (* FLOOD-GROWTH budget)))
           (set! flood-after (* FLOOD-SPACING flood-after)))
       (set! flood-pending false)))
 
-  ;; a search that ran out of nodes to expand with its late flood still due floods once more, so a walled-in goal is named
-  ;; so (live: a gateless pen on a platform whose search ran out before the flood ended :one-way at the platform's edge):
+  ;; a search that ran out of nodes to expand with its late flood still due floods once more, so a walled-in goal is named:
   ;; with the flood budget when no late flood ran yet, else with no more than the search expanded. Not when a ladder was
   ;; turned away at a gap or a swim for air: those reasons say more. True when that flood is begun (step runs it and
   ;; finishes the search: goal-enclosed, box or exhausted).
