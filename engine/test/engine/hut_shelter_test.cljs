@@ -5,6 +5,7 @@
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
             [engine.events :as events]
+            [engine.fake :as fake]
             [engine.jobs.shelter :as sh]
             [engine.memory :as mem]
             [engine.registry :as registry]
@@ -183,6 +184,22 @@
           (is (= [] (st/calls p "dig")))
           (is (= [] (st/calls p "place")) "no dig-in")
           (is (= 1 (count (st/entries eng :slept)))))))))
+
+(deftest a-sleeping-shelter-holds-the-night-and-ends-at-day
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (st/setup (merge (hut-world {:x 5 :y 64 :z 0} bed-block) {:time st/night}))
+              id (core/submit! eng '(jobs.survival.shelter) {})]
+          (st/know-bed! eng {:x 6 :y 64 :z 0})
+          (set! (.-sleep p) (fn [& _] (swap! (fake/state p) assoc-in [:self :isSleeping] true)
+                              (js/Promise.resolve #js {:status "sleeping"})))
+          (await (st/tick-n eng 7))
+          (is (some #{id} (:list (core/state eng))) "still listed while asleep at night")
+          (is (nil? (core/waiting eng id)) "not parked waiting while asleep")
+          (swap! (fake/state p) #(-> % (assoc :time st/noon) (assoc-in [:self :isSleeping] false)))
+          (await (st/tick-n eng 4))
+          (is (not-any? #{id} (:list (core/state eng))) "ended once it is day"))))))
 
 (deftest night-unsafe-holds-for-a-roofed-body-carrying-a-bed-and-knowing-none
   (let [world (merge (hut-world {:x 5 :y 64 :z 0} {}) {:time st/night :inventory [{:name "red_bed" :count 1}]})

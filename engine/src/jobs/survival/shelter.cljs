@@ -70,10 +70,12 @@
 
 (defn check
   "The night-unsafe condition (night, awake, unroofed or shut in its own shelter), or (by day) the body shut in its own
-  recorded shelter (the shut-in-by-day condition)."
+  recorded shelter (the shut-in-by-day condition). A shelter that has already sheltered the body (job memory
+  :sheltered) always passes: it holds a sleeper through the night and ends at day."
   [c]
   (let [p (:primitives c)]
-    (or (night-unsafe/holds? p (ctx/view c) (:roof-height (:args c)))
+    (or (some? (:sheltered (ctx/mem c)))
+        (night-unsafe/holds? p (ctx/view c) (:roof-height (:args c)))
         (sh/shut-in-by-day? p (:data (ctx/latest c :shelter)) (:data (ctx/latest c :shelter-trapped))))))
 
 (defn overdue? [c]
