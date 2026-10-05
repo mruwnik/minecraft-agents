@@ -621,7 +621,7 @@
           (is (nil? (:pending-reflex (core/state eng))) "the shelter ended: the body is the agent's again")
           (is (= 1 (notified seen)) "the queued job ran"))))))
 
-(deftest a-pit-shelter-with-a-hostile-near-keeps-holding-by-day
+(deftest a-pit-shelter-with-a-hostile-near-still-leaves-by-day-and-ends
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -632,10 +632,11 @@
           (fake/add-entity! p {:id 7 :name "zombie" :kind "hostile" :pos {:x 2 :y 64 :z 0}})
           (.setTime (.-world p) noon)
           (await (tick-n eng 40))
-          (is (< (:y (pos-of p)) 64) "still in the pit")
-          (is (some? (:pending-reflex (core/state eng))) "danger, not a dead end: still holding")
+          (is (>= (:y (pos-of p)) 64) "out of the pit: a hostile is the hostile reflex's business, not the shelter's")
+          (is (nil? (:pending-reflex (core/state eng))) "no hold: the shelter ended")
+          (is (empty? (emitted seen :dig-in.staying)))
           (is (empty? (emitted seen :shelter.failed)))
-          (is (zero? (notified seen))))))))
+          (is (= 1 (notified seen)) "then the queued job ran"))))))
 
 (deftest a-sleeping-shelter-holds-until-day-then-the-queued-job-runs
   (async done

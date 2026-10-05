@@ -2,7 +2,6 @@
   (:require [engine.jobs.tidy :as tidy]
             [engine.ctx :as ctx]
             [engine.jobs.access :as access]
-            [engine.jobs.combat :as combat]
             [engine.jobs.shelter :as sh]
             [engine.jobs.util :as u]))
 
@@ -371,10 +370,6 @@
 
 ;; ------------------------------------------------------------------ leaving the shelter (leave!)
 
-(def leave-hostile-radius
-  "A hostile this close, seen or heard, keeps the shelter shut: opening it is what would give the mob a way in."
-  16)
-
 (def max-climb
   "Stair steps cut one at a time out of a roofed shaft with no recorded :start before leave! gives up."
   32)
@@ -400,12 +395,10 @@
       entry)))
 
 (defn leave-unsafe
-  "Why the shelter must stay shut now: :night, or :hostile-near when a hostile is within radius, seen or heard (whether
-  or not it could reach the body: the shelter is what keeps it out); nil when the body may leave."
-  [p radius]
-  (cond
-    (sh/night? p) :night
-    (seq (combat/hostiles p radius)) :hostile-near))
+  "Why the shelter must stay shut now: :night; nil when the body may leave. Hostiles do not keep it shut: by day the
+  body leaves whatever is around, and a real danger is the hostile reflex's to deal with, as anywhere else."
+  [p]
+  (when (sh/night? p) :night))
 
 (def headings {:north [0 -1] :east [1 0] :south [0 1] :west [-1 0]})
 
@@ -503,8 +496,8 @@
   :continue while working, else a result map {:status :done|:stopped :reason :out|:unsafe|:no-way-out :at [x y z]}
   plus :why (:unsafe), :heading (the stair that got it out) or :tries ({:heading :reason :cell} per stopped stair).
   The shelter is the latest :shelter entry when the body stands in its :pos and is shut in it (sheltered-in); none:
-  {:status :done :reason :out} at once. Never opened while it is unsafe (leave-unsafe: night, or a hostile within
-  :hostile-radius, default 16, seen or heard): {:status :stopped :reason :unsafe :why :night|:hostile-near}, nothing dug.
+  {:status :done :reason :out} at once. Never opened at night (leave-unsafe): {:status :stopped :reason :unsafe :why
+  :night}, nothing dug. By day it opens whatever hostiles are around (a real danger fires the hostile reflex).
   A walled cell: its own :door cells are dug (feet, then head height), then the body steps through to the cell beyond
   when it has a floor. A pit (:start) or a roofed shaft (no :start, no :door): a stair up (jobs.access.stair :up) to the
   start height, or for a shaft one step at a time until nothing solid is within 4 above (at most 32 steps, else
@@ -514,13 +507,13 @@
   and a missing floor, so such a heading stops and the next is tried. The pit and the stair are left dug. Events:
   dig-in.left (info), dig-in.staying (info, unsafe), dig-in.trapped (warn, no way out)."
   ([c] (leave! c {}))
-  ([c {:keys [toward hostile-radius] :or {hostile-radius leave-hostile-radius}}]
+  ([c {:keys [toward]}]
    (let [p (:primitives c)
          entry (or (:entry (leave-mem c)) (sheltered-in c))
          _ (when entry (update-leave! c assoc :entry entry))
          shut? (and entry (shut-in? p entry))
          step? (and entry (:door entry) (not shut?) (not (:stepped (leave-mem c))))
-         why (when shut? (leave-unsafe p hostile-radius))]
+         why (when shut? (leave-unsafe p))]
      (cond
        step? (await (open-door! c (:door entry)))
        (not shut?) (leave-result! c :done :out (select-keys (leave-mem c) [:heading]))

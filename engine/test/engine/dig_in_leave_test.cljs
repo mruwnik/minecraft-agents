@@ -1,7 +1,8 @@
 (ns engine.dig-in-leave-test
   "jobs.survival.dig-in/leave!: from every shelter dig-in builds (a walled cell, a 3-deep pit on flat ground, a 2-deep
   pit beside a block, a pit in a slope, a roofed shaft) the body gets out by day to a standable open cell, and a go-to
-  then arrives; at night, or with a hostile by the shelter, it stays shut. Also dig-in's :shelter entry and its
+  then arrives; at night it stays shut, by day it leaves whatever hostiles are around (the hostile reflex deals with a
+  real danger). Also dig-in's :shelter entry and its
   dig-in.sealed event (BaseMiner #39: a shelter dug open at night was closed again with nothing the agent could see)."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
@@ -147,18 +148,26 @@
             (is (= "dirt" (block-at p [0 63 0])) "the roof stays")
             (is (= [0 61 0] (feet p)))))))))
 
-(deftest at-dawn-a-zombie-by-the-pit-still-keeps-it-shut
+(defn pocket
+  "The ground with a closed 1x1x2 air pocket in the stone at x 5 z 0 (feet 60, head 61): nothing connects it to the
+  outside."
+  []
+  (reduce dissoc (ground) ["5,60,0" "5,61,0"]))
+
+(deftest by-day-leave-digs-out-whatever-hostiles-are-around
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p out] :as s} (setup)]
-          (await (dig-in! s))
-          (fake/add-entity! p zombie)
-          (let [digs (count (calls p "dig"))]
+        (doseq [[label spec mob] [["a zombie by the pit, with a way to the exit" {} zombie]
+                                  ["a zombie in a closed pocket of stone 5 blocks away" {:blocks (pocket)}
+                                   (assoc zombie :pos {:x 5 :y 60 :z 0})]]]
+          (let [{:keys [p out seen] :as s} (setup spec)]
+            (await (dig-in! s))
+            (fake/add-entity! p mob)
             (await (leave-at-dawn! s))
-            (is (= [:unsafe :hostile-near] ((juxt :reason :why) @out)))
-            (is (= digs (count (calls p "dig"))))
-            (is (= "dirt" (block-at p [0 63 0])))))))))
+            (is (= [:done :out] ((juxt :status :reason) @out)) label)
+            (is (= 64 (second (feet p))) (str label ": up and out"))
+            (is (= [] (emitted seen :dig-in.staying)) (str label ": never unsafe"))))))))
 
 (deftest away-from-the-shelter-leave-is-out-at-once
   (async done
