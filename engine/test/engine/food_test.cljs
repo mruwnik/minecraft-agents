@@ -117,6 +117,27 @@
           (await (core/tick! eng))
           (is (= ["rotten_flesh"] (call-args p "eat" "item"))))))))
 
+(deftest eat-refuses-a-named-harmful-item-without-allow-bad
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:food 14} :inventory [{:name "rotten_flesh" :count 3}]})]
+          (core/submit! eng '(jobs.survival.eat {:item "rotten_flesh"}) {})
+          (await (core/tick! eng))
+          (is (= [] (:list (core/state eng))) "the job ends at once, it does not queue")
+          (is (= [] (calls p "eat")))
+          (is (= 1 (count (filter #(and (= :refused (:kind %)) (re-find #"allow-bad" (str (:text %)))) @seen)))
+              "one refused event names :allow-bad"))))))
+
+(deftest eat-named-harmful-item-with-allow-bad-is-eaten
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:food 14} :inventory [{:name "rotten_flesh" :count 1}]})]
+          (core/submit! eng '(jobs.survival.eat {:item "rotten_flesh" :allow-bad true}) {})
+          (await (core/tick! eng))
+          (is (= ["rotten_flesh"] (call-args p "eat" "item"))))))))
+
 (deftest eat-until-is-an-arg
   (async done
     (tu/run-async done

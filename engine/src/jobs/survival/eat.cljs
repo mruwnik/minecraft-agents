@@ -51,10 +51,25 @@
   (let [{:keys [item allow-bad]} (:args c)]
     (best-food (u/inventory (:primitives c)) allow-bad item)))
 
+(defn refused-bad-item
+  "The :item when it is a harmful food named without :allow-bad, else nil."
+  [c]
+  (let [{:keys [item allow-bad]} (:args c)]
+    (when (and item (not allow-bad) (contains? bad-food-points item))
+      item)))
+
+(defn refuse-bad-item! [c item]
+  (ctx/emit! c :refused :warn {:reason :bad-food :item item
+                               :text (str item " is harmful food: pass :allow-bad true to eat it")})
+  (ctx/result! c {:ate false :reason :bad-food :item item})
+  :done)
+
 (defn check
-  "Hungrier than :until and food carried. Else it waits with reason :not-hungry or :no-food."
+  "A named harmful item without :allow-bad passes so the round can refuse it. Else hungrier than :until and food carried;
+  else it waits with reason :not-hungry or :no-food."
   [c]
   (cond
+    (refused-bad-item c) true
     (>= (.-food (.self (:primitives c))) (:until (:args c))) (ctx/wait c :not-hungry)
     (nil? (carried-best c)) (ctx/wait c :no-food)
     :else true))
@@ -62,13 +77,15 @@
 (defn ^:async round [c]
   (let [{:keys [until]} (:args c)
         best (carried-best c)]
-    (if (or (nil? best) (>= (.-food (.self (:primitives c))) until))
-      :done
-      (let [_ (await (ctx/act c :equip #js {:item best}))
-            r (await (ctx/act c :eat #js {:item best}))]
-        (if (not= "ate" (.-status r))
-          :done
-          (do (ctx/remember! c :fed {:item best :food (.-food r)} fed-policy)
-              (if (or (>= (.-food r) until) (nil? (carried-best c)))
-                :done
-                :continue)))))))
+    (if-let [bad (refused-bad-item c)]
+      (refuse-bad-item! c bad)
+      (if (or (nil? best) (>= (.-food (.self (:primitives c))) until))
+        :done
+        (let [_ (await (ctx/act c :equip #js {:item best}))
+              r (await (ctx/act c :eat #js {:item best}))]
+          (if (not= "ate" (.-status r))
+            :done
+            (do (ctx/remember! c :fed {:item best :food (.-food r)} fed-policy)
+                (if (or (>= (.-food r) until) (nil? (carried-best c)))
+                  :done
+                  :continue))))))))
