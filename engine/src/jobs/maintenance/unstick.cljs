@@ -46,14 +46,20 @@
   else \"stair: moveTo <status>\"). A cell is not dug when the one above it is
   sand or gravel or any of its six neighbours is water or lava (the reason
   says which); any dig status but dug or missing ends the attempt with
-  \"dig: <status>\" (bedrock gives cannot, a slow block timeout). The best
+  \"dig: <status>\" (bedrock gives cannot, a slow block timeout). Every dug
+  block is noted as a :tidy entry (engine.jobs.tidy, whoever's it is), so
+  jobs.survival.restore-broken (trigger :tidy-pending) puts it back once the
+  spell has ended, as cleanup takes the pillar blocks back. The best
   pickaxe carried is equipped first. Each attempt that did nothing useful
   records why in job memory (:reasons). After every attempt it
   tries a moveTo toward the stored goal itself, capped at hop-blocks (3) along
   the way (range 1, :maxDistance 3; within 3 blocks it simply walks there). If
-  that did not move the body more than :min-move blocks from where it stood
-  (status is ignored), it retries once uncapped (range 1, :timeoutS 6). If
-  either moved it that far the spell is over (:done); otherwise :continue. After :max-attempts counted attempts, or at the round cap, it emits the warn
+  that neither arrived (the body is at the goal, however short the move)
+  nor moved the body more than :min-move blocks from where it stood, it
+  retries once uncapped (range 1, :timeoutS 6). If either arrived or moved it
+  that far the spell is over (:done); so is it when the body was enclosed
+  (engine.jobs.reach/enclosed?) at the spell's start and is not any more
+  (it is out, though the goal may stay out of reach); otherwise :continue. After :max-attempts counted attempts, or at the round cap, it emits the warn
   event unstick.failed with the position, :attempts (counted), :rounds (used, also what the :text reports), :reasons (each distinct reason once, with \" (xN)\" when repeated; job memory keeps the raw list) and a :text naming them, writes a :stuck memory entry (cap 10,
   ttl 1 hour) and ends so the list resumes.
 
@@ -176,8 +182,15 @@
 (def dig-ok-statuses #{"dug" "missing"})
 
 (defn ^:async dig!
+  "Dig pos and note the dug block as a :tidy entry (engine.jobs.tidy), another's or not, so
+  jobs.survival.restore-broken puts it back once the spell has ended: unstick breaks things only to get out, and
+  tidies up after."
   [c pos]
-  (await (tidy/dig! c pos true)))
+  (let [pend (or (tidy/pending c :dig pos)
+                 {:cell (access/cell pos) :action :dig :was (block-name c pos)})
+        r (await (ctx/act c :dig (clj->js {:pos pos})))]
+    (when (= "dug" (.-status r)) (tidy/record! c pend "air"))
+    r))
 
 (defn best-pickaxe [c]
   (let [have (set (map :name (u/inventory (:primitives c))))]
@@ -385,16 +398,15 @@
 (defn ^:async hop!
   "A moveTo toward the stored goal, capped at hop-blocks; when that does not
   succeed, one uncapped retry with :timeoutS retry-timeout-s. Success is
-  displacement alone: the body ended more than min-move blocks from where it
+  the body at the goal (a moveTo that arrived, however short) or
+  displacement: the body ended more than min-move blocks from where it
   stood before, whatever the status."
   [c min-move]
   (let [before (u/self-pos c)]
     (when-let [goal (:goal (ctx/mem c))]
-      (letfn [(moved? [] (> (u/dist before (u/self-pos c)) min-move))]
-        (await (ctx/act c :moveTo (clj->js {:pos goal :range 1 :maxDistance hop-blocks})))
-        (or (moved?)
-            (do (await (ctx/act c :moveTo (clj->js {:pos goal :range 1 :timeoutS retry-timeout-s})))
-                (moved?)))))))
+      (letfn [(ok? [r] (or (= "arrived" (.-status r)) (> (u/dist before (u/self-pos c)) min-move)))]
+        (or (ok? (await (ctx/act c :moveTo (clj->js {:pos goal :range 1 :maxDistance hop-blocks}))))
+            (ok? (await (ctx/act c :moveTo (clj->js {:pos goal :range 1 :timeoutS retry-timeout-s})))))))))
 
 (def walk-timeout-s
   "The bound of the first round's walk (one steer of engine.path.near/walk-near!)."
@@ -433,6 +445,12 @@
   (or (pos? (:rounds (ctx/mem c) 0))
       (stuck/stuck? (ctx/view c) (:args c))))
 
+(defn got-out?
+  "Whether a body that was enclosed when the spell began (job memory :enclosed) is not any more: it is out, and digging
+  on toward a goal that stays out of reach would only wreck the place."
+  [c]
+  (and (:enclosed (ctx/mem c)) (not (reach/enclosed? (:primitives c)))))
+
 (defn ^:async attempt!
   "One counted attempt (step back, pillar or dig), then the hop toward the goal: :done when the hop moved the body."
   [c attempt min-move]
@@ -451,8 +469,8 @@
   (let [y (feet-y c)
         rose? (> y (:best-y (ctx/mem c)))]
     (ctx/update-mem! c #(-> % (assoc :best-y (max y (:best-y %))) (update :attempts (fnil + 0) (if rose? 0 1)))))
-  (if (await (hop! c min-move))
-    (do (ctx/update-mem! c dissoc :attempts :rounds :best-y :reasons)
+  (if (or (await (hop! c min-move)) (got-out? c))
+    (do (ctx/update-mem! c dissoc :attempts :rounds :best-y :reasons :enclosed)
         :done)
     :continue))
 
@@ -464,9 +482,10 @@
       (let [attempt (inc rounds)]
         (await (land! c))
         (ctx/update-mem! c merge
-                         (when (= 1 attempt) (merge (bearings c (cell (u/self-pos c))) {:best-y (feet-y c)}))
+                         (when (= 1 attempt) (merge (bearings c (cell (u/self-pos c)))
+                                                    {:best-y (feet-y c) :enclosed (reach/enclosed? (:primitives c))}))
                          {:rounds attempt})
         (if (and (= 1 attempt) (await (walk-out! c min-move)))
-          (do (ctx/update-mem! c dissoc :attempts :rounds :best-y :reasons)
+          (do (ctx/update-mem! c dissoc :attempts :rounds :best-y :reasons :enclosed)
               :done)
           (await (attempt! c attempt min-move)))))))

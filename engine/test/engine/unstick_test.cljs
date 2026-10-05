@@ -695,10 +695,12 @@
 ;; ---------------------------------------------------------------- stair result and progress
 
 (defn arrive-without-moving!
-  "Make every moveTo of the fake report arrived and leave the body where it is."
+  "Make every stair moveTo (range 0) of the fake report arrived and leave the body where it is; a hop toward the goal
+  (an arrived one would end the spell) is blocked."
   [p]
   (.override (.-world p) "moveTo"
-             (fn ^:async f [_ _ _] #js {:status "arrived" :pos (.-pos (.self p)) :distance 0})))
+             (fn ^:async f [_ args _]
+               #js {:status (if (zero? (.-range args)) "arrived" "blocked") :pos (.-pos (.self p)) :distance 0})))
 
 (deftest unstick-stair-step-that-arrives-records-no-reason
   (async done

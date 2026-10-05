@@ -1,9 +1,13 @@
 (ns engine.triggers.stuck
   "The stuck trigger and the condition the unstick job shares with it. Both
   read the :moved entries: engine.core/act writes one after every moveTo, engine.path.near one after every walk (go-to and
-  walk-near!). An entry with :no-path true is a walk that found no way to its goal: evidence about the goal, not the body,
-  so the trigger counts it only when the body is enclosed (engine.jobs.reach/enclosed?)."
+  walk-near!). Only a move that did not carry the body anywhere is bad: a walk that took the body away, whatever its
+  status (a partial path that ended farther from the goal), shows the body is free. An entry with :no-path true is a walk
+  that found no way to its goal: evidence about the goal, not the body, so the trigger counts it only when the body is
+  enclosed (engine.jobs.reach/enclosed?). Bad moves made somewhere else (the body has been carried, teleported or has
+  fallen away since) do not hold it where it stands."
   (:require [engine.jobs.reach :as reach]
+            [engine.jobs.util :as u]
             [engine.memory :as mem]))
 
 (def defaults
@@ -13,19 +17,16 @@
   "Policy of the :moved entries, written by engine.core/act after each moveTo and by engine.path.near after each walk (go-to, walk-near!)."
   {:cap 20 :ttl (* 10 60 1000)})
 
-(def ok-statuses #{"arrived" "partial"})
-
 (defn dist [a b]
   (js/Math.hypot (- (:x a) (:x b)) (- (:y a) (:y b)) (- (:z a) (:z b))))
 
 (defn bad-move?
-  "A :moved entry's data is a bad move when moveTo did not end arrived or
-  partial, or the body moved less than min-move blocks. A move that asked for
-  a spot within min-move of where the body already stood is a no-op, not bad."
-  [min-move {:keys [from to status target]}]
-  (or (not (ok-statuses status))
-      (and (< (dist from to) min-move)
-           (or (nil? target) (>= (dist from target) min-move)))))
+  "A :moved entry's data is a bad move when the body moved less than min-move blocks, whatever the status: a walk that
+  carried the body farther (even one that ended blocked, farther from its goal) did not find it held. A move that asked
+  for a spot within min-move of where the body already stood is a no-op, not bad."
+  [min-move {:keys [from to target]}]
+  (and (< (dist from to) min-move)
+       (or (nil? target) (>= (dist from target) min-move))))
 
 (defn stuck?
   "True when the last :n :moved entries are all bad moves and the newest of
@@ -56,14 +57,24 @@
         restarted (or (:t (mem/latest view :restart)) 0)]
     (mapv :data (take-last n (filter (fn [{:keys [t]}] (and (> t gave-up) (>= t restarted))) (mem/entries view :moved))))))
 
+(defn held-here?
+  "Whether every one of moves ended within (* 2 min-move) blocks of where the body of primitives p stands now: bad moves
+  made somewhere else (before a fall, a teleport, a knock-back) say nothing about this spot."
+  [p moves min-move]
+  (let [here (u/self-pos {:primitives p})]
+    (every? #(< (dist (:to %) here) (* 2 min-move)) moves)))
+
 (defn body-stuck?
-  "stuck?, and the body is really held: some of the bad moves had a way and still did not move the body, or (every one
-  found no path) the body of primitives p is enclosed. Walks that found no path while the body has room around it are a
-  goal out of reach (a target across water, a raw pathfinder that takes a door for a wall), not a stuck body."
+  "stuck?, and the body is really held where it stands (held-here?, when p is given): some of the bad moves had a way and
+  still did not move the body, or (every one found no path) the body of primitives p is enclosed. Walks that found no
+  path while the body has room around it are a goal out of reach (a target across water, a raw pathfinder that takes a
+  door for a wall), not a stuck body."
   [p view args]
-  (and (stuck? view args)
-       (or (not-every? :no-path (counted-moves view args))
-           (and (some? p) (reach/enclosed? p)))))
+  (let [moves (counted-moves view args)]
+    (and (stuck? view args)
+         (or (nil? p) (held-here? p moves (:min-move (merge defaults args))))
+         (or (not-every? :no-path moves)
+             (and (some? p) (reach/enclosed? p))))))
 
 (def stuck
   "Holds when body-stuck? does, with :n, :min-move, :window-ms and :quiet-ms from
