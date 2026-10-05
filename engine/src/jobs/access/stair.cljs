@@ -133,15 +133,22 @@
     (vec (for [i (range 1 (inc (or steps 0)))] (add (add origin (mapv #(* i %) d)) [0 -1 0])))))
 
 (defn known-floor
-  "The first cut cell that is a floor of a stair the body made earlier (ways: the set of those floors)."
-  [cut ways]
-  (first (filter ways cut)))
+  "The first cut cell that is a floor of a stair the body made earlier (ways: the set of those floors) and is still
+  solid as the body sees it now (a floor dug away since, or put back as air, no longer carries a way)."
+  [block-at cut ways]
+  (first (filter #(and (contains? ways %) (rules/solid-floor? block-at %)) cut)))
+
+(defn ways-of
+  "The set of floors of the stairs this body cut earlier in its current dimension (memory :stair-way)."
+  [c]
+  (let [dim (.-dimension (.self (:primitives c)))]
+    (set (mapcat #(when (= dim (:dim (:data %))) (:floors (:data %))) (ctx/entries c :stair-way)))))
 
 (defn stop-of
   "Why the step cannot go on, as {:reason ...detail}, or nil when every cell may be cut.
   in: the rules' input without :cell. cells :bridged? true: the floor was placed by the stair, what is under it is not judged."
   [{:keys [block-at] :as in} {:keys [cut floor under bridged? ways]} accept]
-  (let [floor-cell (known-floor cut (or ways #{}))
+  (let [floor-cell (known-floor block-at cut (into (set (:ways in)) ways))
         fluid-cell (first (filter #(rules/fluids (block-at %)) cut))
         crop-cell (first (filter #(crop-names (block-at %)) cut))]
     (cond
@@ -185,7 +192,8 @@
     [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]))
 
 (defn rules-in [c feet]
-  (merge {:block-at (fn [[x y z]] (u/block-name (:primitives c) {:x x :y y :z z})) :feet feet :ledger #{}}
+  (merge {:block-at (fn [[x y z]] (u/block-name (:primitives c) {:x x :y y :z z})) :feet feet :ledger #{}
+          :ways (ways-of c)}
          (access-world c)))
 
 (defn target-steps
@@ -209,7 +217,8 @@
     (ctx/result! c result)
     (when-let [{:keys [origin]} (when (pos? steps) m)]
       (let [{:keys [dir heading]} (:args c)]
-        (ctx/remember! c :stair-way {:floors (way-floors origin dir heading steps)} way-policy)))
+        (ctx/remember! c :stair-way {:dim (.-dimension (.self (:primitives c)))
+                                     :floors (way-floors origin dir heading steps)} way-policy)))
     (if (= :done reason)
       (ctx/emit! c :stair.done :info (assoc result :text (str "stair " (name (:dir (:args c))) " done, " steps " steps")))
       (ctx/emit! c :stair.stopped :warn
@@ -349,8 +358,7 @@
             (if (= i target)
               :finished
               (let [{:keys [next cut] :as cells} (-> (step-cells feet dir heading)
-                                                           (as-> cs (assoc cs :bridged? (contains? (:bridged (ctx/mem c)) (:floor cs))
-                                                       :ways (set (mapcat #(:floors (:data %)) (ctx/entries c :stair-way))))))
+                                                           (as-> cs (assoc cs :bridged? (contains? (:bridged (ctx/mem c)) (:floor cs)))))
                     stop (stop-of in cells accept)]
                 (if (and (= :no-floor (:reason stop)) (rules/air (:block stop)))
                   (await (bridge! c in cells))

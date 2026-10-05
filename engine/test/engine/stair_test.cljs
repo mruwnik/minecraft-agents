@@ -5,6 +5,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.fake :as fake]
             [engine.job-api :as job-api]
             [engine.memory :as mem]
             [engine.takeover :as takeover]
@@ -78,12 +79,17 @@
     (is (= {:reason :undercuts-way :cell [1 64 0] :block "stone"}
            (select-keys (stair/stop-of in (assoc cells :ways #{[1 64 0]}) #{}) [:reason :cell :block])))
     (is (nil? (stair/stop-of in (assoc cells :ways #{[5 60 0]}) #{})) "an unrelated floor")
-    (is (nil? (stair/stop-of in cells #{})) "no known way")))
+    (is (nil? (stair/stop-of in cells #{})) "no known way")
+    (is (= :undercuts-way (:reason (stair/stop-of (assoc in :ways #{[1 64 0]}) cells #{}))) "ways in the rules input")
+    (is (nil? (stair/stop-of (assoc in :block-at (world-fn {[1 64 0] "air"})) (assoc cells :ways #{[1 64 0]}) #{}))
+        "a floor that is air now is no way")))
 
 (deftest way-floors-are-the-floors-of-the-steps-walked
   (is (= [[1 63 0] [2 62 0]] (stair/way-floors [0 65 0] :down :east 2)))
   (is (= [[0 65 -1]] (stair/way-floors [0 65 0] :up :north 1)))
   (is (= [] (stair/way-floors [0 65 0] :down :east 0))))
+
+(declare block-at stair! east ground setup tick-out!)
 
 (deftest a-finished-stair-remembers-its-floors-and-a-second-one-stops-at-them
   (async done
@@ -93,6 +99,54 @@
               ways (mapcat (comp :floors :data) (mem/entries (mem/view (:store eng)) :stair-way))]
           (is (= :done (:status @out)))
           (is (= [[1 63 0] [2 62 0] [3 61 0]] (vec ways))))))))
+
+(def second-east {:dir :down :heading :east :steps 1})
+
+(defn ^:async second-stair!
+  "A first stair (east, 3 down) over ground; then the body stands at (0 64 0), made open, and a second stair runs east, its first cut being (1 63 0), the floor of the first one's
+  first step. prep2 runs on the world before the second stair; mem2 on the store."
+  [prep2 mem2]
+  (let [args (atom east)
+        s (await (tick-out! (setup {:blocks ground} args (fn [_]))))
+        {:keys [eng p clock]} s
+        world-state (.. p -world -state)]
+    (fake/set-block! p [0 64 0] "air")
+    (swap! world-state assoc-in [:self :pos] [0 64 0])
+    (prep2 p)
+    (mem2 (:store eng))
+    (reset! args second-east)
+    (reset! (:out s) :not-done)
+    (core/submit! eng '(recording-parent) {})
+    (await (tick-out! s))))
+
+(deftest a-second-stair-under-the-first-stops-at-its-floor
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (second-stair! (fn [_]) (fn [_])))]
+          (is (= :stopped (:status @out)))
+          (is (= :undercuts-way (:reason @out)))
+          (is (= [1 63 0] (:cell @out)))
+          (is (= 0 (:steps @out)))
+          (is (= "stone" (block-at p [1 63 0])) "the first stair's floor is never cut"))))))
+
+(deftest a-floor-dug-away-since-no-longer-stops-a-stair
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out]} (await (second-stair! (fn [p] (fake/set-block! p [1 63 0] "air")) (fn [_])))]
+          (is (not= :undercuts-way (:reason @out)))
+          (is (= :done (:status @out))))))))
+
+(deftest a-floor-remembered-in-another-dimension-does-not-stop-a-stair
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [forget-all (fn [store] (mem/forget! store :stair-way)
+                           (mem/write! store :stair-way {:dim "the_nether" :floors [[1 63 0]]}))
+              {:keys [out]} (await (second-stair! (fn [_]) forget-all))]
+          (is (not= :undercuts-way (:reason @out)))
+          (is (= :done (:status @out))))))))
 
 (deftest a-crop-or-farmland-in-the-cut-is-refused-and-never-dug
   (are [named cell block] (= {:reason :crop :cell cell :block block} (stop named #{}))
@@ -148,7 +202,7 @@
         w (world/of-data (:plans spec {}) {} (get spec :zones []))
         parent {:check (constantly true)
                 :round (fn ^:async recording-round [c]
-                         (let [r (await (ctx/call-child c :kid job args))]
+                         (let [r (await (ctx/call-child c :kid job (if (satisfies? IDeref args) @args args)))]
                            (when (= :done r) (reset! out (ctx/child-result c :kid)))
                            r))}
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'recording-parent parent)

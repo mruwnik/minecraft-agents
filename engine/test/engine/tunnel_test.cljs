@@ -26,8 +26,8 @@
     (let [n (get named cell (if (< y 65) "stone" "air"))]
       (when-not (= :unloaded n) n))))
 
-(defn approach [named target & {:keys [zones footprints max-length accept] :or {zones [] footprints #{} max-length 24 accept #{}}}]
-  (tunnel/approach {:block-at (world-fn named) :zones zones :footprints footprints :ledger #{}}
+(defn approach [named target & {:keys [zones footprints max-length accept ways] :or {zones [] footprints #{} max-length 24 accept #{}}}]
+  (tunnel/approach {:block-at (world-fn named) :zones zones :footprints footprints :ledger #{} :ways ways}
                    target [0 65 0] max-length accept))
 
 (defn stair-target [{:keys [stand heading]}]
@@ -77,6 +77,12 @@
                 (and (:entry a) (not= :east (:heading a))))
     {:zones [{:name "cellar" :min [-1 63 0] :max [-1 63 0]}]}
     {:footprints {[-1 63 0] "wall"}}))
+
+(deftest the-floor-of-an-earlier-stair-takes-another-heading-or-declines
+  (let [a (approach {} [6 57 0] :ways #{[-1 63 0]})]
+    (is (:entry a))
+    (is (not= :east (:heading a)) "the east line would cut the way"))
+  (is (= :undercuts-way (:reason (approach {} [0 60 0] :ways #{[0 61 0]})))))
 
 (deftest declines-name-the-reason
   (are [named target opts reason] (= reason (:reason (apply approach named target (mapcat identity opts))))
@@ -210,6 +216,17 @@
           (is (= "air" (block-at p [6 58 0])) "and opens the cell over it, so the target's cell can be walked into")
           (is (= 22 (count (:dug @out))) "8 steps of 3 cells, less the air over the ground, and the cell over the target")
           (is (= 1 (count (events-of s :tunnel.done)))))))))
+
+(deftest a-tunnel-plans-round-the-floor-of-an-earlier-stair
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup {:blocks (assoc ground "6,57,0" "iron_ore")} {:target [6 57 0]} (fn [_]))
+              _ (mem/write! (:store (:eng s)) :stair-way {:dim "overworld" :floors [[-2 64 0]]})
+              {:keys [out p]} (await (tick-out! s))]
+          (is (= :done (:status @out)))
+          (is (= :reached (:reason @out)))
+          (is (= "stone" (block-at p [-2 64 0])) "the way's floor is planned round, not cut or stopped at midway"))))))
 
 (deftest a-run-after-the-stair-cuts-two-high
   (async done

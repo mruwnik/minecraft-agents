@@ -26,13 +26,14 @@
   Choosing the line: the four headings are tried and, per heading, entry distances 1 to :max-length. A distance
   fits when the stair's steps are at most the distance less one. Every cell of a fitting line is judged from the
   loaded blocks before anything is walked or dug, as the stair judges its own steps (engine.access.rules: zones,
-  other plans' footprints, unloaded; a fluid in a cut; a fluid beside a cut or a falling block over one, taken
+  other plans' footprints, unloaded; a cut cell that is the floor of a stair this body cut earlier, :undercuts-way,
+  from the :stair-way memory; a fluid in a cut; a fluid beside a cut or a falling block over one, taken
   only when named in :accept, default #{}; the next floor solid; the cell under it neither air nor fluid). The
   target's own column counts as a last run step. The shortest valid line wins. Among equals one that leaves the
   floor under the body's start uncut wins, then the entry nearest the body.
 
   No valid line stops before any walk or dig with the reason all judged lines share (:zone :footprint :hazard
-  :cave-below :no-floor :fluid-in-cut :not-loaded :no-zones). :too-far: no line fits within :max-length.
+  :cave-below :no-floor :fluid-in-cut :undercuts-way :not-loaded :no-zones). :too-far: no line fits within :max-length.
   :no-approach: the headings differ, with :headings giving each one's reason.
 
   Then the body walks to the entry (jobs.debug.walk-plan; failing: :walk-in-failed) and the stair child cuts
