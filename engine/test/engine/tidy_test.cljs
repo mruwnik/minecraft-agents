@@ -6,6 +6,7 @@
             [engine.fake :as fake]
             [engine.core :as core]
             [engine.events :as events]
+            [engine.jobs.reach :as reach]
             [engine.jobs.tidy :as tidy]
             [jobs.survival.restore-broken :as restore-broken]
             [engine.memory :as mem]
@@ -404,3 +405,51 @@
           (is (= 4 (count (zs/calls p "place"))) "restored once after the job ended")
           (is (= [] (tidy-entries eng)))
           (is (= [] (zs/trespass seen :tidy.not-restored))))))))
+
+;; ------------------------------------------------------------------ a sealed body with entries outside
+
+(def sealed-with-outside
+  "The body sealed in the walled cube at its middle: its own cell waits (:occupied) and so does a cell 5 away outside the walls."
+  [(dug-cell [0 64 0]) (dug-cell [5 64 0])])
+
+(deftest a-sealed-body-reports-what-it-cannot-reach-once-and-does-not-loop
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (assoc-in (assoc with-hitbox :blocks walled-cube) [:self :pos] [0 64 0])
+              {:keys [eng p seen clock]} (setup-with-backoff world [(zs/whole-zone "Miles")])]
+          (seed! eng sealed-with-outside)
+          (core/register-reflex! eng {:trigger :tidy-pending})
+          (await (ticks-over! eng clock 80 1000))
+          (is (= [] (zs/calls p "place")) "nothing is placed")
+          (is (= [] (filterv #(= :backoff (:outcome %)) (filter #(= :ended (:kind %)) @seen))) "no run backed off")
+          (is (= 1 (firings seen)) "one run, no refiring every cycle")
+          (is (= [[{:cell [0 64 0] :was "stone" :why :occupied} {:cell [5 64 0] :was "stone" :why :unreachable}]]
+                 (mapv :cells (zs/trespass seen :tidy.not-restored)))
+              "one warn naming both")
+          (is (= 2 (count (tidy-entries eng))) "both entries wait"))))))
+
+(deftest a-sealed-body-restores-the-cell-it-can-reach
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (assoc-in (assoc with-hitbox :blocks (dissoc walled-cube "2,64,0")) [:self :pos] [0 64 0])
+              {:keys [eng p seen]} (restore! world [(zs/whole-zone "Miles")] [(dug-cell [0 64 0]) (dug-cell [2 64 0])])]
+          (await (zs/run-until-empty eng 30))
+          (is (= [{:x 2 :y 64 :z 0}] (mapv zs/arg-pos (zs/calls p "place"))) "the wall cell within reach is put back")
+          (is (= [[[2 64 0]]] (mapv :cells (zs/trespass seen :tidy.restored))))
+          (is (= [[{:cell [0 64 0] :was "stone" :why :occupied}]] (mapv :cells (zs/trespass seen :tidy.not-restored)))))))))
+
+;; ------------------------------------------------------------------ the floor rule
+
+(def torch-ring
+  "Torches in the floor at y 63 on the ring two cells out around the body: the nearest cells clear of the dug cell."
+  (into {} (for [x (range -2 3) z (range -2 3) :when (= 2 (max (js/Math.abs x) (js/Math.abs z)))] [(cell-key [x 63 z]) "torch"])))
+
+(deftest clear-cell-never-chooses-a-cell-above-a-torch
+  (let [p (tu/fake (assoc-in (assoc with-hitbox :blocks torch-ring) [:self :pos] [0 64 0]))]
+    (is (nil? (restore-broken/clear-cell {:primitives p} (dug-cell [0 64 0]) [])) "the ring of torches is no floor to walk or stand on")))
+
+(deftest standable-cell-is-the-rule-clear-cell-and-go-to-share
+  (doseq [[below expected] [["stone" true] ["torch" false] ["lava" false] ["cactus" false] ["air" false] ["water" false]]]
+    (is (= expected (reach/standable-cell? (tu/fake {:blocks {"0,63,0" below}}) {:x 0 :y 64 :z 0})) below)))

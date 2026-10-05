@@ -2,8 +2,7 @@
   (:require [engine.ctx :as ctx]
             [engine.jobs.reach :as reach]
             [engine.jobs.tidy :as tidy]
-            [engine.jobs.util :as u]
-            [jobs.survival.extinguish :as extinguish]))
+            [engine.jobs.util :as u]))
 
 (def doc
   "Put back what a job broke in another's zone or claim (the :tidy entries engine.jobs.tidy writes). A dug block is
@@ -44,7 +43,7 @@
                     dy (range -1 3)
                     :let [pos {:x (+ x dx) :y (+ y dy) :z (+ z dz)}]
                     :when (halo-clear? reserved [(:x pos) (:y pos) (:z pos)])
-                    :when (extinguish/standable? p pos)]
+                    :when (reach/standable-cell? p pos)]
                 pos)]
     (->> cands
          (sort-by #(u/dist here (centre %)))
@@ -151,6 +150,7 @@
       (why-not c e) (let [why (why-not c e)]
                       (skip! c e why)
                       :continue)
+      (tidy/unreachable? (:primitives c) e (:reach a)) (do (skip! c e :unreachable) :continue)
       (>= (:tries e) tidy/max-tries) (do (skip! c e :gave-up) :continue)
       (seals-others? c e waiting) (do (skip! c e :seals) :continue)
       :else (await (restore-one! c e (:reach a))))))

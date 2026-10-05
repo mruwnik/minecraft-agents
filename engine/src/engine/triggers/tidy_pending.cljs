@@ -15,7 +15,7 @@
   (:require [engine.jobs.tidy :as tidy]
             [engine.memory :as mem]))
 
-(def defaults {:min-health 14 :danger-radius 8})
+(def defaults {:min-health 14 :danger-radius 8 :reach 3})
 
 (defn loaded-entries
   "The :tidy data maps in view whose cell is loaded and whose recording job is not live (not in the set live of
@@ -34,7 +34,9 @@
         reported (set (:cells (:data (mem/latest view :tidy-reported))))]
     (boolean (and (seq entries)
                   (not (tidy/unsafe? p args))
-                  (some #(or (restorable? p %) (not (contains? reported (:cell %)))) entries)))))
+                  (some #(or (not (contains? reported (:cell %)))
+                             (and (restorable? p %) (not (tidy/unreachable? p % (:reach args)))))
+                        entries)))))
 
 (def trigger
   {:name :tidy-pending

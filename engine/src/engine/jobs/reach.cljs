@@ -23,6 +23,10 @@
   (let [v (some-> b .-properties .-open)]
     (or (true? v) (= "true" v))))
 
+(def hazard-blocks
+  "Blocks a walker treats as walls and never stands on."
+  #{"lava" "fire" "soul_fire" "magma_block" "cactus" "sweet_berry_bush"})
+
 (defn kind-of
   "What a block block is to a walker: :open, :water or :solid. An unloaded cell (nil) is open."
   [b]
@@ -30,7 +34,7 @@
     (cond
       (nil? name) :open
       (= "water" name) :water
-      (#{"lava" "fire" "soul_fire" "magma_block" "cactus" "sweet_berry_bush"} name) :solid
+      (hazard-blocks name) :solid
       (openable? name) (if (open-prop? b) :open :solid)
       (str/ends-with? name "_leaves") :solid
       (sh/solid? name) :solid
@@ -56,6 +60,18 @@
   (and (passable? kind-at [x y z]) (passable? kind-at [x (inc y) z])
        (or (= :water (kind-at [x y z]))
            (#{:solid :water} (kind-at [x (dec y) z])))))
+
+;; the one job-side rule for a cell a body can stand in (restore-broken's clear-cell asks it); it follows the planner's
+;; floor: a torch, a sign or a carpet is no floor, so go-to refuses such a goal as :goal-not-standable
+(defn standable-cell?
+  "Whether a body can stand with its feet in cell pos {:x :y :z} of primitives p: feet and head cells free and a floor
+  below that is a solid block (a torch, plant, rail, lava, fire, cactus or water is none)."
+  [p {:keys [x y z]}]
+  (let [kind-at (lookup p)
+        below (.blockAt p #js {:x x :y (dec y) :z z})]
+    (and (passable? kind-at [x y z]) (passable? kind-at [x (inc y) z])
+         (= :solid (kind-at [x (dec y) z]))
+         (not (hazard-blocks (some-> below .-name))))))
 
 (def dirs [[1 0] [-1 0] [0 1] [0 -1]])
 

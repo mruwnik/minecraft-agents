@@ -8,6 +8,7 @@
   (:require [engine.ctx :as ctx]
             [engine.jobs.access :as access]
             [engine.jobs.combat :as combat]
+            [engine.jobs.reach :as reach]
             [engine.jobs.util :as u]))
 
 (def tidy-policy
@@ -57,6 +58,15 @@
     (not= now (block-now p cell)) :changed
     (and (= :dig action) (not (carried? p was))) :not-carried
     (and (= :dig action) (in-body? p cell)) :occupied))
+
+(defn unreachable?
+  "Whether the body cannot get within reach blocks of entry's cell: it is farther off and has no walkable way next to the
+  cell (a body sealed in). An unknown answer (search out of budget) counts as reachable."
+  [p {:keys [cell]} reach]
+  (let [here (u/self-pos {:primitives p})
+        at (zipmap [:x :y :z] cell)]
+    (and (> (u/dist here {:x (+ 0.5 (:x at)) :y (:y at) :z (+ 0.5 (:z at))}) (inc reach))
+         (not (reach/walkable-way? p here at)))))
 
 (defn refusal
   "The refusing verdict (a zone, claim or plan footprint of another's) for action at pos ({:x :y :z}), judged as if
