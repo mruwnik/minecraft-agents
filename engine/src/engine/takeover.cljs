@@ -7,6 +7,7 @@
   (:require [engine.core :as core]
             [engine.entity-observations :as entity-observations]
             [engine.lease :as lease]
+            [engine.jobs.tools :as tools]
             [engine.path.near :as near]
             [engine.path.walk :as walk]
             [cljs.reader :as reader]
@@ -96,7 +97,7 @@
 (defn compact-result [result]
   (when (map? result)
     (let [drops (:drops result)]
-      (cond-> (-> (select-keys result [:status :pos :distance :reason :block :before :after :consumed :hurt :health])
+      (cond-> (-> (select-keys result [:status :pos :distance :reason :block :needed :before :after :consumed :hurt :health])
                   (update :reason #(when % (subs (str %) 0 (min 160 (count (str %)))))))
         (seq drops) (assoc :drops (->> drops (take 8) vec))
         (> (count drops) 8) (assoc :more-drops? true)))))
@@ -176,6 +177,25 @@
         (assoc (walker-result eng cell {:status "partial"}) :reason "timeout"))
       (finally (js/clearTimeout timer)))))
 
+;; ------------------------------------------------------------------ dig holds the carried tool
+
+(defn ^:async dig-with-tool!
+  "A manual dig as a job digs: the best carried tool for the block is held first. A block no carried tool can harvest is
+  not dug (the dig would lose its drop): {:status \"no-tool\" :block :needed :reason}. Resolves to a JS result."
+  [eng token args]
+  (let [p (:primitives eng)
+        block (some-> (.blockAt p (clj->js (:pos args))) .-name)
+        names (map :name (js->clj (.-inventory (.self p)) :keywordize-keys true))
+        needed (when block (tools/harvest-need names block))
+        tool (when block (tools/best-tool names block))]
+    (if needed
+      #js {:status "no-tool" :block block :needed needed
+           :reason (str block " needs " needed (when (not= "pickaxe" needed) " or better") "; no carried tool can harvest it")}
+      (do
+        (when (and tool (not= tool (.-held (.self p))))
+          (await (.equip p token #js {:item tool :dest "hand"})))
+        (await (.dig p token (clj->js args)))))))
+
 (defn submit-world-op! [eng {:keys [who request-id action args]}]
   (let [prior (world-record eng request-id)
         current @(:manual eng)
@@ -210,8 +230,11 @@
         (let [method (:method (world-actions action))
               promise (try
                         (js/Promise.resolve
-                          (if (and (= action :move-to) (walker-applies? eng args))
+                          (cond
+                            (and (= action :move-to) (walker-applies? eng args))
                             (.then (walk-move-to! eng token args timeout-s) clj->js)
+                            (= action :dig) (dig-with-tool! eng token call-args)
+                            :else
                             (.call (aget (:primitives eng) method) (:primitives eng) token (clj->js call-args))))
                         (catch :default e (js/Promise.reject e)))]
           (.then promise

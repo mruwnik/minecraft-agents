@@ -375,3 +375,55 @@
                          [:edn :detail])]
       (is (re-find #"1\.\.10" detail))
       (is (re-find #"go-to" detail)))))
+
+;; ---------------------------------------------------------------- world dig holds the carried tool
+
+(defn ^:async dig-and-wait!
+  "Take the body, submit one world dig at pos, wait until it is no longer running; the operation as the status op shows it."
+  [eng pos]
+  (post eng {:op "take" :who "claude" :why "dig" :idleS 30})
+  (world-call eng {:op :submit :who "claude" :request-id "dig-1" :action :dig :args {:pos pos}})
+  (loop [i 0]
+    (let [op (get-in (world-call eng {:op :status :who "claude" :request-id "dig-1"}) [:edn :operation])]
+      (if (or (not= :running (:status op)) (> i 200))
+        op
+        (do (await (js/Promise. #(js/setTimeout % 5)))
+            (recur (inc i)))))))
+
+(defn dig-world [block inventory]
+  {:blocks (assoc (floor -2 -3 4 3) "1,64,0" block) :inventory inventory})
+
+(deftest world-dig-holds-the-best-carried-tool-first
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (dig-world "stone" [{:name "wooden_pickaxe" :count 1} {:name "iron_pickaxe" :count 1}]))
+              op (await (dig-and-wait! eng {:x 1 :y 64 :z 0}))]
+          (is (= "dug" (get-in op [:result :status])))
+          (is (= "iron_pickaxe" (.-held (.self p)))))))))
+
+(deftest world-dig-of-a-shovel-block-by-hand-needs-no-tool
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (dig-world "dirt" []))
+              op (await (dig-and-wait! eng {:x 1 :y 64 :z 0}))]
+          (is (= "dug" (get-in op [:result :status])))
+          (is (nil? (.-held (.self p)))))))))
+
+(deftest world-dig-refuses-a-block-no-carried-tool-can-harvest
+  (doseq [[block inventory needed]
+          [["stone" [] "pickaxe"]
+           ["iron_ore" [] "stone_pickaxe"]
+           ["iron_ore" [{:name "wooden_pickaxe" :count 1}] "stone_pickaxe"]
+           ["diamond_ore" [{:name "stone_pickaxe" :count 1}] "iron_pickaxe"]
+           ["obsidian" [{:name "iron_pickaxe" :count 1}] "diamond_pickaxe"]]]
+    (async done
+      (tu/run-async done
+        (fn ^:async t []
+          (let [{:keys [eng p]} (setup (dig-world block inventory))
+                op (await (dig-and-wait! eng {:x 1 :y 64 :z 0}))]
+            (is (= "no-tool" (get-in op [:result :status])) block)
+            (is (= block (get-in op [:result :block])))
+            (is (re-find (re-pattern needed) (str (get-in op [:result :reason]))) block)
+            (is (= block (.-name (.blockAt p #js {:x 1 :y 64 :z 0}))) "the block is still there")))))))

@@ -1195,6 +1195,7 @@ node engine/tools/drive.mjs ProbeDrive --world claude release --who claude
 ```
 
 `move-to` accepts `--range`, `--max-distance` (up to 64 blocks), and `--timeout-s` (1..10; for a longer walk submit `jobs.movement.go-to` or chain calls). A move-to within `--max-distance` walks as go-to does (engine.path.near/walk-round!: it opens a shut door, gate or trapdoor, passes and shuts it again; a result that is not `arrived` carries a `:reason` such as `no-path`, `door-stuck at [cells]` or `timeout`); a farther one, or a body without path sensing, runs the pathfinder primitive `moveTo`, which treats every door as a wall. `dig`, `place`, `use-on`, and
+`dig` holds the best carried tool for the block first, as jobs do (`engine.takeover/dig-with-tool!`, `engine.jobs.tools/harvest-need`). A block that needs a pickaxe tier no carried tool reaches (stone, cobblestone or any ore by hand or without a pickaxe; iron ore with a wooden pickaxe; gold, diamond, emerald, redstone ore with less than iron; obsidian with less than diamond) is not dug: the result is `{:status "no-tool" :block b :needed "stone_pickaxe" :reason ...}` (`needed` is `pickaxe` for any, else the minimum tier). Reported `drops` are items that appeared with this dig only (snapshot before, growth only).
 `interact` use the existing primitive's reach, item and interaction checks. `interact` takes an entity ID, not a name.
 `use-on` refuses beds, containers and its existing hazard list. The operation status describes what the primitive returned;
 it does not schedule jobs or alter the engine's queue.
