@@ -7,7 +7,8 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [engine.triggers.wedged :as wedged]))
+            [engine.triggers.wedged :as wedged]
+            [jobs.survival.breathe :as breathe]))
 
 (def unwedge 'jobs.survival.unwedge)
 
@@ -90,3 +91,44 @@
       (fn ^:async t []
         (let [{:keys [p]} (setup {})]
           (is (false? ((:check (get registry/jobs unwedge)) {:primitives p :args {}}))))))))
+
+(def stone-sides-but-east
+  (into floor (for [[x z] [[-1 0] [0 1] [0 -1]]] [(str x ",64," z) "stone"])))
+
+(deftest step-out-target-is-the-free-side-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:blocks (merge stone-sides-but-east {"0,64,0" "sand"})})]
+          (core/submit! eng (list unwedge) {})
+          (await (core/tick! eng))
+          (let [call (first (array-seq (.. p -world -calls)))
+                pos (.. call -args -pos)]
+            (is (= "moveTo" (.-name call)))
+            (is (= [1 64 0] [(.-x pos) (.-y pos) (.-z pos)]))))))))
+
+(deftest a-lava-side-cell-is-not-stepped-into
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:blocks (merge stone-sides-but-east {"0,64,0" "sand" "1,64,0" "lava" "1,63,0" "stone"})})]
+          (core/submit! eng (list unwedge) {})
+          (await (core/tick! eng))
+          (is (not (some #{"moveTo"} (call-names p))))
+          (is (= "sand" (.-name (.blockAt p (tu/pos 0 64 0))))))))))
+
+(deftest a-fire-or-magma-side-cell-is-not-stepped-into
+  (doseq [[label blocks] [["fire" {"1,64,0" "fire"}] ["magma floor" {"1,63,0" "magma_block"}]]]
+    (let [p (tu/fake {:blocks (merge stone-sides-but-east {"0,64,0" "sand"} blocks)})]
+      (is (nil? (breathe/side-cell p (.self p))) label))))
+
+(deftest a-dig-beside-lava-is-refused-and-counts-as-failure
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:blocks (merge boxed {"0,64,0" "sand" "0,65,0" "lava"})})]
+          (core/submit! eng (list unwedge) {})
+          (dotimes [_ 4] (await (core/tick! eng)))
+          (is (= "sand" (.-name (.blockAt p (tu/pos 0 64 0)))) "no dig")
+          (is (not (some #{"dig"} (call-names p))))
+          (is (= 1 (count (filter #(= :unwedge.blocked (:kind %)) @seen))) "final after three refusals"))))))

@@ -154,10 +154,12 @@
       (= "arrived" (status (await (ctx/act c :moveTo (clj->js {:pos {:x (:x target) :y fy :z (:z target)}
                                                                 :range 0}))))))))
 
+(def harmful-in-cell #{"lava" "fire" "soul_fire" "cactus" "sweet_berry_bush" "campfire" "soul_campfire" "magma_block"})
+
 (defn side-cell
   "A horizontal neighbour of the feet cell where the body fits (feet and head
-  cells passable) and can stand (the cell below is neither air, water nor
-  lava); nil if none. Unloaded cells do not count."
+  cells passable and not harmful: lava, fire, cactus...) and can stand (the cell below is neither air, water, lava
+  nor magma); nil if none. Unloaded cells do not count."
   [p self]
   (let [fx (js/Math.floor (.. self -pos -x))
         fy (js/Math.floor (.. self -pos -y))
@@ -168,7 +170,8 @@
                       below (u/block-name p (update cell :y dec))]
                   (and feet head below
                        (not (s/suffocates? p cell)) (not (s/suffocates? p (update cell :y inc)))
-                       (not (s/air? below)) (not (contains? #{"water" "lava"} below)))))]
+                       (not (contains? harmful-in-cell feet)) (not (contains? harmful-in-cell head))
+                       (not (s/air? below)) (not (contains? #{"water" "lava" "magma_block"} below)))))]
     (->> [[1 0] [-1 0] [0 1] [0 -1]]
          (map (fn [[dx dz]] {:x (+ fx dx) :y fy :z (+ fz dz)}))
          (filter fits?)
