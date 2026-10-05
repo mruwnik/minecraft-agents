@@ -400,7 +400,7 @@
                                                                       (let [i (acquire-plot! (:first-plot opts))]
                                                                         (-> (run-case! opts c i run)
                                                                             (.then (fn [r] (report! r) (swap! results conj r)))
-                                                                            (.finally #(release-plot! i))))))))))
+                                                                            (.finally #(release-plot! i)))))))))))
                                          (js/Promise.resolve nil)
                                          (map-indexed vector (for [run (range 1 (inc (:repeat opts))) c group] [c run])))
                                  (.finally #(stop-body! opts))))))
