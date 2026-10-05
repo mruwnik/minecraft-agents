@@ -951,3 +951,14 @@
               _ (await (run-ticks dk 400))]
           (is (empty? (watched lit)))
           (is (seq (watched dk))))))))
+
+(deftest a-body-standing-in-the-open-gate-steps-out-to-shut-it-and-is-never-parked
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:target 1}
+                                 {:entities [(cow 1 4 3)] :self {:pos {:x 10.5 :y 64 :z 3.5}}
+                                  :states {gate-key {:open true :facing "east"}}} 300))]
+          (is (some? (done-event s)) (str "the run ends, it is not parked on the toggle's :standing-in wait: " (pr-str (first (events-of s :waiting)))))
+          (is (not (gate-open? s)))
+          (is (< (self-x s) 10) "the body ends outside"))))))

@@ -256,6 +256,7 @@
       :else (await (fill! c (first (sort-by (juxt #(% 1) #(- (from-plan/eye-dist body %))) todo)))))))
 
 (defn ^:async round [c]
+  (declined/begin! c)
   (let [{:keys [tunnel]} (:args c)
         m (ctx/mem c)
         torches (when (:line tunnel) (standing (:block-at (stair/rules-in c (feet-of c))) tunnel m))]

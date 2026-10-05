@@ -2,6 +2,7 @@
   "jobs.survival.extinguish and the burning trigger against the fake world."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
+            [engine.zones-survival-test :as zs]
             [engine.fake :as fake]
             [engine.events :as events]
             [engine.jobs.util :as u]
@@ -336,3 +337,35 @@
             (is (empty? more))
             (is (some? e))
             (is (= {:x 0 :y 64 :z 0} (:pos e)))))))))
+
+(defn ^:async cover-run
+  "Ticks n rounds of a burning body with inventory on stone, lava at the cells; the engine's place calls."
+  [inv lava n & [zones]]
+  (let [w {:self {:onFire true} :inventory inv
+           :blocks (merge (floor 8) (into {} (map (fn [k] [k "lava"]) lava)))}
+        {:keys [eng p]} (if zones (zs/setup w zones) (setup w))]
+    (core/submit! eng '(jobs.survival.extinguish) {})
+    (dotimes [_ n] (await (core/tick! eng)))
+    (mapv call-args (calls p "place"))))
+
+(deftest sand-and-gravel-are-never-a-cover-block
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [item ["sand" "gravel" "red_sand" "white_concrete_powder"]]
+          (is (= [] (await (cover-run [{:name item :count 8}] ["1,64,0"] 2))) item))
+        (is (= 1 (count (await (cover-run [{:name "cobblestone" :count 8}] ["1,64,0"] 1)))))))))
+
+(deftest a-cover-is-not-placed-in-anothers-zone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= [] (await (cover-run [{:name "cobblestone" :count 4}] ["1,64,0"] 2 [(zs/whole-zone "Miles")]))))))))
+
+(deftest covers-per-run-are-capped
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [placed (await (cover-run [{:name "cobblestone" :count 20}]
+                                       ["1,64,0" "-1,64,0" "0,64,1" "0,64,-1" "1,64,1" "2,64,0" "-2,64,0" "0,64,2"] 12))]
+          (is (<= (count (filter #(= "cobblestone" (:item %)) placed)) extinguish/max-covers)))))))

@@ -1,5 +1,6 @@
 (ns jobs.animals.herd
-  (:require [engine.ctx :as ctx]
+  (:require [engine.access.click :as click]
+            [engine.ctx :as ctx]
             [engine.jobs.animals :as animals]
             [engine.jobs.apiary :as apiary]
             [engine.jobs.declined :as declined]
@@ -432,12 +433,18 @@
                                      :wanted (- target inside))
                     :continue))))))
 
-(defn ^:async set-gate!
-  "Put the gate into state (:open or :closed) with jobs.access.toggle (within :reach), then go to phase next, merging
-  :then into the memory; :gate-stuck when it did not open, shut-failed! when it did not shut. The :gate-held entry is
-  written before an open and dropped after a shut."
-  [c state next & [{:keys [reach then] :or {reach 3}}]]
-  (when (= :open state) (hold-gate! c))
+(declare go!)
+
+(defn ^:async step-out-of-gate!
+  "The body stands in the gate cell: walk to the first cell outside it (the next round shuts)."
+  [c]
+  (case (await (go! c (nth (:axis (ctx/mem c)) out-1)))
+    :arrived :continue
+    :failed (end! c :unreachable)
+    :continue))
+
+(defn ^:async toggle-gate!
+  [c state next reach then]
   (let [r (await (declined/call-child! c :gate 'jobs.access.toggle {:pos (:gate (ctx/mem c)) :state state :reach reach}))]
     (cond
       (not= :done r) (if (= :declined r) :declined :continue)
@@ -446,6 +453,16 @@
           (set-phase! c next then))
       (= :open state) (end! c :gate-stuck)
       :else (shut-failed! c))))
+
+(defn ^:async set-gate!
+  "Put the gate into state (:open or :closed) with jobs.access.toggle (within :reach), then go to phase next, merging
+  :then into the memory; :gate-stuck when it did not open, shut-failed! when it did not shut. The :gate-held entry is
+  written before an open and dropped after a shut. A shut with the body in the gate cell first walks out of it."
+  [c state next & [{:keys [reach then] :or {reach 3}}]]
+  (when (= :open state) (hold-gate! c))
+  (if (and (= :closed state) (click/standing-in? (u/self-pos c) (cell-pos (gate-cell c)) nil))
+    (await (step-out-of-gate! c))
+    (await (toggle-gate! c state next reach then))))
 
 (defn outside-gate?
   "True when pos {:x :z} stands past the gate cell g on the side away from the pen cell in beside it (along the axis)."
@@ -826,6 +843,7 @@
   that starts unsafe restarts first (restart!). A step that changed no memory and took under pace-ms is followed by a
   wait, so a step that keeps answering at once never spins."
   [c]
+  (declined/begin! c)
   (ctx/update-mem! c update :started #(or % (ctx/now c)))
   (when-not (safe? c) (restart! c))
   (loop []

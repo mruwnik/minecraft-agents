@@ -251,6 +251,7 @@
     :done))
 
 (defn ^:async round [c]
+  (declined/begin! c)
   (let [{:keys [cells trouble]} (planned c)
         phase (:phase (ctx/mem c))]
     (cond

@@ -482,6 +482,7 @@
           (finish! c (:reason a) (dissoc a :reason)))))))
 
 (defn ^:async round [c]
+  (declined/begin! c)
   (let [m (ctx/mem c)]
     (cond
       (nil? (:plan m)) (choose! c)

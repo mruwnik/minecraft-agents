@@ -19,7 +19,8 @@
      It must be passable, solid underfoot and not fire, lava, magma or a campfire.
      Scoring favours distance from those hazards (up to 4 blocks) and height, and charges a small cost per block walked.
   Water also counts powder snow. Not in lava, with a cover block carried (cobblestone, stone, dirt, ...) it first
-  places one on a lava cell next to the feet (side or below), so the body does not step past it.
+  places one on a lava cell next to the feet (side or below), so the body does not step past it. Never sand, gravel or
+  other falling blocks, never in another's zone or claim, and at most 3 covers per run.
   5. On fire, not in lava, with no water in reach and no hazard within 1.5 blocks, there is nothing useful to do.
      It stands still: emits info extinguish_wait once, eats when food is under 18 and food is carried (to keep
      regenerating), and waits a second per round for up to 20 rounds. The job stays alive meanwhile, so an
@@ -57,8 +58,9 @@
 (def stand-wait-ms 1000)
 (def eat-below 18)
 (def water-like ["water" "powder_snow"])
-(def cover-blocks ["cobblestone" "stone" "dirt" "netherrack" "cobbled_deepslate" "deepslate" "andesite" "diorite" "granite"
-                   "sand" "gravel"])
+(def max-covers "Lava cells covered per run." 3)
+;; solid blocks that do not fall (sand, gravel and concrete powder would drop into the lava)
+(def cover-blocks ["cobblestone" "stone" "dirt" "netherrack" "cobbled_deepslate" "deepslate" "andesite" "diorite" "granite"])
 
 (def max-pour-waits 8)
 (def max-water-waits 10)
@@ -243,11 +245,13 @@
           (do (await (ctx/act c :moveTo (clj->js {:pos (:pos water) :range 0})))
               (finish c))
 
-          (and (not lava?) (cover-item p) (adjacent-lava pos scanned)
-               (let [lava (:pos (adjacent-lava pos scanned))
-                     r (await (ctx/act c :place (clj->js {:pos lava :item (cover-item p)})))]
-                 (= "placed" (.-status r))))
-          :continue
+          (and (not lava?) (< (:covers (ctx/mem c) 0) max-covers) (cover-item p)
+               (let [lava (:pos (adjacent-lava pos scanned))]
+                 (and lava
+                      (nil? (access/trespass-refusal c :place lava))
+                      (= "placed" (.-status (await (ctx/act c :place (clj->js {:pos lava :item (cover-item p)}))))))))
+          (do (ctx/update-mem! c update :covers (fnil inc 0))
+              :continue)
 
           (and (not lava?) (not (hazard-near? pos scanned)))
           (or (when refusal (await (pour-last-resort! c pos refusal)))
