@@ -392,7 +392,10 @@
         (let [{:keys [p]} (await (first-round retreat {:inventory sword :blocks box :entities [(zombie 2 0)]}))]
           (is (= 1 (count (calls p "attack"))) "nowhere to go: it hits back"))
         (let [{:keys [eng p]} (await (first-round retreat {:blocks box :entities [(zombie 2 0)]}))]
-          (is (= 1 (count (calls p "attack"))) "unarmed: the fist, not a failed round")
+          (is (zero? (count (calls p "attack"))) "unarmed: first a step back into the far corner of the pen")
+          (is (= -1 (:x (last-move eng))) "the far corner")
+          (await (core/tick! eng))
+          (is (= 1 (count (calls p "attack"))) "nowhere further and nothing to build with: the fist, not a failed round")
           (dotimes [_ 2] (await (core/tick! eng)))
           (is (= ["j1"] (:list (core/state eng))) "no giving up while the zombie can be hit"))))))
 
@@ -598,7 +601,7 @@
       (fn ^:async t []
         (let [{:keys [p]} (await (first-round retreat {:bodyHitbox true :self {:pos [0.5 64 0.75]}
                                                        :inventory [{:name "cobblestone" :count 16}]
-                                                       :blocks stair-exit :entities [(zombie 0 2)]}))]
+                                                       :blocks stair-exit :entities [(zombie 0.5 2.5)]}))]
           (is (zero? (count (calls p "attack"))) "no fist fight")
           (is (= "cobblestone" (.-name (.blockAt p #js {:x 0 :y 64 :z 1})))
               "the side cell its hitbox overlapped is filled: it stood in the middle of its cell first"))))))

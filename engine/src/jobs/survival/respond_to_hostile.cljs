@@ -44,10 +44,10 @@
 
 (def child-jobs {:fight 'jobs.survival.fight-back :flee 'jobs.survival.retreat})
 
-(defn ^:async run-child [c decision {:keys [radius ranged-radius weapons]}]
+(defn ^:async run-child [c decision {:keys [radius ranged-radius weapons reserve]}]
   (let [child-args (case decision
                      :fight {:range radius :ranged-range ranged-radius :min-health 0 :weapons weapons}
-                     :flee {:radius radius :ranged-radius ranged-radius :weapons weapons})]
+                     :flee {:radius radius :ranged-radius ranged-radius :weapons weapons :reserve reserve})]
     (await (ctx/call-child c decision (child-jobs decision) child-args))))
 
 (defn log-encounter! [c threat decision]

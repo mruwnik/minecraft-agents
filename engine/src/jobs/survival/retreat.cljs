@@ -1,11 +1,16 @@
 (ns jobs.survival.retreat
-  (:require [engine.ctx :as ctx]
+  (:require [engine.access.ledger :as ledger]
+            [engine.access.rules :as rules]
+            [engine.ctx :as ctx]
             [engine.jobs.access :as access]
             [engine.jobs.combat :as combat]
             [engine.jobs.reach :as reach]
             [engine.jobs.shelter :as sh]
+            [engine.jobs.tidy :as tidy]
+            [engine.jobs.tools :as tools]
             [engine.jobs.util :as u]
             [engine.path.near :as near]
+            [jobs.access.pillar :as pillar]
             [jobs.survival.dig-in :as dig-in]))
 
 (def doc
@@ -17,19 +22,34 @@
   stepping one block up or down where a walker would, so a stair dug behind
   the body is a way back. A flight starts for a hostile within :radius (ranged
   ones within :ranged-radius) and keeps going while one is within
-  :clear-radius, so a chasing mob does not catch up between steps. Cornered
-  (no open direction, or the walk is blocked) it escalates, never repeating a
-  failed round: armed, it fights back with the best weapon whatever its health
-  and keeps that fight while the hostile stays within :radius (no running back
-  into the corner); unarmed with :blocks carried, it seals itself in (first stepping to the
-  middle of its cell when its hitbox reaches into a cell to fill; the open
-  sides at feet and head height and the roof, dig-in's 1x1 cells, at most
-  :max-places a round; one retreat_sealed warn) and waits there until the
-  flight is over or for :max-hide-ms; a cell a hostile stands in, or a refused
-  placement, ends the sealing; then it fights with the best tool (pickaxe,
-  shovel, hoe) or the fist. Only a fight that cannot reach the hostile counts
-  a failed round, retreat_blocked after three. A seal cell in another's zone
-  is placed as a last resort (retreat.trespass-last-resort). Once per flight, with at
+  :clear-radius, so a chasing mob does not catch up between steps.
+  Cornered (no open direction worth a walk, or the walk is blocked) it takes the
+  safest option it has (escape-order), skipping any that failed this flight:
+  - fight (jobs.survival.fight-back, best weapon) only when the odds say it wins:
+    engine.jobs.combat/fight-damage leaves :reserve health, and never a creeper;
+  - seal in: fill the open sides at feet and head height and the roof (dig-in's 1x1
+    cells) with carried :blocks, first stepping to the middle of its cell when its
+    hitbox reaches into a cell to fill, at most :max-places a round, one
+    retreat_sealed warn, then wait there until the flight is over or for
+    :max-hide-ms; not while a hostile's hitbox overlaps a cell to fill;
+  - pillar up 3 (jobs.access.pillar as a child, the carried block with the most,
+    3 or more): solid floor, the cells above free, not against a ranged mob;
+    every block goes to the scaffold ledger (purpose :pillar), so
+    jobs.access.cleanup takes it back once the job has ended;
+  - back off: a step of up to 2 cells in any of the 8 directions that gains at
+    least a block on the hostile;
+  - dig down and plug: dig-in's pit (2 deep under a cell with a solid side, else
+    3), every cell solid, harvestable with what is carried, no fluid beside, solid
+    under it, then a carried or dug block placed over the head (ledger purpose
+    :retreat-plug);
+  - last of all fight with the best weapon or tool (pickaxe, shovel, hoe) or the
+    fist, kept while the hostile stays within :radius.
+  The order is fight-if-it-wins, then seal, pillar (not against a ranged mob),
+  back off, pit, fight; against a creeper back off comes first. Up on a pillar or
+  down a pit it waits while any hostile is within :radius (no time limit), done
+  :cooldown-ms after the last. Only a fight that cannot reach the hostile counts
+  a failed round, retreat_blocked after three. A cell in another's zone is used
+  as a last resort (retreat.trespass-last-resort). Once per flight, with at
   least :eat-gap blocks to the nearest hostile and food carried, it eats
   (jobs.survival.eat up to 20) so health can regenerate on the run. Done when
   no real danger (engine.jobs.reach: one with no walkable way to the body, or a
@@ -45,6 +65,7 @@
    :step {:doc "blocks per walk" :default 6}
    :cooldown-ms {:doc "done once no hostile was in the clear radius for this long" :default 5000}
    :weapons {:doc "item name substrings that count as weapons, for a cornered fight" :default combat/default-weapons}
+   :reserve {:doc "health a cornered fight must be expected to leave" :default 4}
    :blocks {:doc "names of the blocks a cornered body may seal itself in with" :default dig-in/building-blocks}
    :max-places {:doc "seal placements per round" :default 4}
    :max-hide-ms {:doc "a sealed body waits at most this long before the flight ends" :default 60000}})
@@ -237,11 +258,26 @@
         (u/fail! c :retreat_blocked why)
         :continue))))
 
+(def mob-half-width
+  "Half the width of a zombie-sized mob's hitbox."
+  0.3)
+
+(defn hitbox-cells
+  "The feet and head cells a mob standing at pos overlaps (its hitbox is 0.6 wide, so one straddling a cell
+  boundary is in both cells: the server refuses a block there)."
+  [{:keys [x y z]}]
+  (let [span (fn [v] (distinct [(js/Math.floor (- v mob-half-width)) (js/Math.floor (+ v mob-half-width))]))
+        fy (js/Math.floor y)]
+    (for [cx (span x) cz (span z) cy [fy (inc fy)]] {:x cx :y cy :z cz})))
+
 (defn hostile-cells
-  "The feet and head cells of the hostiles within radius: no block goes there."
+  "The cells the hostiles within radius overlap: no block goes there."
   [p radius]
-  (set (mapcat (fn [e] (let [cell (sh/cell (u/pos-of (.-pos e)))] [cell (update cell :y inc)]))
-               (combat/hostiles p radius))))
+  (set (mapcat #(hitbox-cells (u/pos-of (.-pos %))) (combat/hostiles p radius))))
+
+(defn tried? [c option] (contains? (:tried (ctx/mem c)) option))
+
+(defn tried! [c option] (ctx/update-mem! c update :tried (fnil conj #{}) option))
 
 (defn ^:async place-seal!
   "Place carried blocks at cells in order. :ok, or :failed at the first
@@ -289,7 +325,7 @@
       (do (when (off-centre? p) (await (centre! c)))
           (access/trespass! c "retreat" (some #(access/trespass-refusal (access/rules-input c) :place %) cells))
           (if (= :failed (await (place-seal! c (take max-places cells))))
-            :failed
+            (do (tried! c :seal) :failed)
             (if (empty? (dig-in/open-cells p (sh/feet p))) :sealed :continue))))))
 
 (defn ^:async hide!
@@ -310,15 +346,237 @@
                   (>= (- now at) (:max-hide-ms (:args c))) :done
                   :else :continue)))))
 
+;; ------------------------------------------------------------------ cornered: the safest option
+
+(defn escape-order
+  "Pure: the cornered options to try, safest first. {:win? the odds say a fight leaves reserve health (never true
+  for a creeper), :creeper? one is near, :ranged? the threat shoots}."
+  [{:keys [win? creeper? ranged?]}]
+  (cond
+    win? [:fight]
+    creeper? [:back-off :seal :pillar :pit :fight]
+    :else (into (if ranged? [:seal] [:seal :pillar]) [:back-off :pit :fight])))
+
+(defn near-hostiles
+  "The hostiles a cornered body weighs: within :radius, ranged ones within :ranged-radius, the dead skipped."
+  [c]
+  (let [{:keys [radius ranged-radius]} (:args c)
+        dead (set (dead-ids c))]
+    (remove #(dead (.-id %)) (combat/hostiles (:primitives c) radius {:ranged-radius ranged-radius}))))
+
+(defn fight-wins?
+  "Whether fighting hostiles with the best weapon carried is expected to leave :reserve health
+  (engine.jobs.combat/fight-damage); never against a creeper."
+  [c hostiles]
+  (let [p (:primitives c)
+        self (.self p)
+        {:keys [weapons reserve]} (:args c)]
+    (boolean
+     (and (seq hostiles)
+          (not-any? combat/creeper? hostiles)
+          (<= (combat/fight-damage {:weapon (combat/best-weapon p weapons)
+                                    :armour (combat/armour-points (.-equipment self))
+                                    :mobs (map (fn [e] {:name (.-name e) :distance (.-distance e) :hits 0}) hostiles)})
+              (- (.-health self) reserve))))))
+
+(defn back-off-target
+  "A cell to back off to: of the ends of the open cells (up to 2, see walk-cells) in the eight compass directions,
+  the farthest from threat, when it gains at least a block on it and passes no hazard; nil when none does."
+  [block-at from threat hazards]
+  (let [now (u/dist from threat)]
+    (->> (range 0 360 45)
+         (keep #(peek (walk-cells block-at from (rotate [1 0] %) 2)))
+         (remove #(near-hazard? hazards from %))
+         (filter #(>= (u/dist % threat) (inc now)))
+         (sort-by #(- (u/dist % threat)))
+         first)))
+
+(defn ^:async back-off!
+  "Step back from threat (back-off-target): :continue, nil when there is no such cell or the walk is blocked."
+  [c threat]
+  (when-let [target (back-off-target (block-at-fn (:primitives c)) (u/self-pos c) (u/pos-of (.-pos threat))
+                                     (keep (comp :pos :data) (ctx/entries c :hazard)))]
+    (if (= :blocked (await (near/walk-near! c target 0 {:timeout-s flight-timeout-s})))
+      (do (tried! c :back-off) nil)
+      :continue)))
+
+(def pillar-height 3)
+
+(defn pillar-item
+  "The carried :blocks block with the most, when it is at least pillar-height; else nil."
+  [c]
+  (->> (dig-in/carried c (:blocks (:args c)))
+       (filter #(>= (:count %) pillar-height))
+       (sort-by :count >)
+       first
+       :name))
+
+(defn up [[x y z] n] [x (+ y n) z])
+
+(defn pillar-ok?
+  "Whether a pillar-height pillar fits here: a solid floor, and the head cell and every cell the body rises into free."
+  [block-at feet]
+  (and (rules/solid-floor? block-at (up feet -1))
+       (every? #(pillar/clear? (block-at (up feet %))) (range 1 (+ 2 pillar-height)))))
+
+(defn cell-map [[x y z]] {:x x :y y :z z})
+
+(declare refuge-round!)
+
+(defn ^:async start-refuge!
+  "Note refuge (a map with :kind) in job memory and run its first round."
+  [c refuge]
+  (ctx/update-mem! c assoc :refuge refuge)
+  (await (refuge-round! c)))
+
+(defn ^:async pillar!
+  "Start a pillar-height pillar (jobs.access.pillar, ledgered) when it fits: a round's result, else nil."
+  [c]
+  (let [p (:primitives c)
+        block-at (pillar/block-at-of p)
+        feet (pillar/feet-cell c)
+        item (pillar-item c)]
+    (when (and item (pillar-ok? block-at feet))
+      (access/trespass! c "retreat" (some #(access/trespass-refusal (access/rules-input c) :place (cell-map (up feet %)))
+                                          (range pillar-height)))
+      (await (start-refuge! c {:kind :pillar :item item})))))
+
+(def drop-of
+  "The block a dug block drops, where it is another (an unlisted one drops itself)."
+  {"grass_block" "dirt" "stone" "cobblestone" "deepslate" "cobbled_deepslate" "podzol" "dirt" "mycelium" "dirt"})
+
+(defn pit-plan
+  "{:roof :target-y} for a pit dug down from feet and plugged over the head (dig-in/dig-plan: 2 deep under a cell with
+  a solid side, else 3), or nil: every cell to dig solid, no fluid in or beside it, harvestable with what is carried,
+  solid under the bottom, and a block to plug with carried or dug."
+  [c feet]
+  (let [p (:primitives c)
+        blocks (:blocks (:args c))
+        {:keys [roof depth] :as plan} (dig-in/dig-plan p feet)
+        cells (when plan (map #(update feet :y - %) (range 1 (inc depth))))
+        names (map #(u/block-name p %) cells)]
+    (when (and plan
+               (every? #(sh/solid-at? p %) cells)
+               (not-any? dig-in/hazards names)
+               (not-any? #(dig-in/lateral-fluid p %) cells)
+               (every? #(tools/can-harvest? p %) names)
+               (sh/solid-at? p (update feet :y - (inc depth)))
+               (or (dig-in/pick c blocks) (some (set blocks) (map #(get drop-of % %) names))))
+      {:roof roof :target-y (- (:y feet) depth)})))
+
+(defn ^:async pit!
+  "Start digging down and plugging (pit-plan) when it can: a round's result, else nil."
+  [c]
+  (let [feet (sh/feet (:primitives c))]
+    (when-let [{:keys [roof target-y] :as plan} (pit-plan c feet)]
+      (let [in (access/rules-input c)]
+        (access/trespass! c "retreat" (or (some #(access/trespass-refusal in :dig (assoc feet :y %)) (range target-y (:y feet)))
+                                          (access/trespass-refusal (assoc in :feet nil) :place roof))))
+      (await (start-refuge! c (assoc plan :kind :pit))))))
+
 (defn ^:async cornered!
-  "Nowhere to go. Armed: fight with the best weapon. Else seal in with carried
-  blocks and wait; failing that fight with the best tool or the fist."
+  "Nowhere worth walking to: the first option of escape-order that it can take and has not failed this flight."
   [c why]
-  (let [{:keys [weapons]} (:args c)]
-    (if (combat/best-weapon (:primitives c) weapons)
-      (await (fight! c weapons why))
-      (or (await (hide! c))
-          (await (fight! c (into (vec weapons) tool-weapons) why))))))
+  (let [{:keys [weapons]} (:args c)
+        hostiles (near-hostiles c)
+        threat (first hostiles)
+        order (escape-order {:win? (fight-wins? c hostiles)
+                             :creeper? (boolean (some combat/creeper? hostiles))
+                             :ranged? (boolean (and threat (combat/ranged? threat)))})]
+    (loop [[option & more] order]
+      (let [r (when-not (tried? c option)
+                (case option
+                  :fight (await (fight! c (if (= [:fight] order) weapons (into (vec weapons) tool-weapons)) why))
+                  :seal (await (hide! c))
+                  :pillar (await (pillar! c))
+                  :back-off (when threat (await (back-off! c threat)))
+                  :pit (await (pit! c))))]
+        (cond
+          (some? r) r
+          (seq more) (recur more)
+          :else (await (fight! c (into (vec weapons) tool-weapons) why)))))))
+
+;; ------------------------------------------------------------------ up a pillar or down a pit
+
+(defn ^:async abandon-refuge!
+  "The refuge failed: forget it, never try that option again this flight."
+  [c]
+  (let [kind (:kind (:refuge (ctx/mem c)))]
+    (ctx/update-mem! c dissoc :refuge)
+    (tried! c kind)
+    :continue))
+
+(defn hidden-round
+  "Up the pillar or down the pit: wait while a hostile is near, done cooldown-ms after the last."
+  [c]
+  (let [now (ctx/now c)]
+    (cond
+      (seq (near-hostiles c)) (do (ctx/update-mem! c assoc :last-seen now) :continue)
+      (>= (- now (or (:last-seen (ctx/mem c)) now)) (:cooldown-ms (:args c))) :done
+      :else :continue)))
+
+(defn hide-now! [c refuge text]
+  (ctx/update-mem! c assoc :refuge (assoc refuge :hidden true))
+  (ctx/emit! c :retreat_sealed :warn {:text text :pos (sh/feet (:primitives c))})
+  :continue)
+
+(defn ^:async pillar-round!
+  "One block of the pillar (the child jobs.access.pillar); hidden once it is at least 2 high."
+  [c {:keys [item] :as refuge}]
+  (let [r (await (ctx/call-child c :pillar 'jobs.access.pillar {:height pillar-height :item item :ignore-zones? true}))]
+    (case r
+      :declined (await (abandon-refuge! c))
+      :done (if (>= (:built (ctx/child-result c :pillar) 0) 2)
+              (hide-now! c refuge "cornered: pillared up out of reach until the hostile leaves")
+              (await (abandon-refuge! c)))
+      :continue)))
+
+(defn ^:async plug!
+  "Place a carried block over the head at roof, ledgered as :retreat-plug."
+  [c {:keys [roof] :as refuge}]
+  (let [p (:primitives c)
+        item (dig-in/pick c (:blocks (:args c)))
+        cell [(:x roof) (:y roof) (:z roof)]]
+    (if (nil? item)
+      (await (abandon-refuge! c))
+      (let [l (ledger/intend (ledger/open-entries (ctx/view c))
+                             {:cell cell :item item :before (u/block-name p roof) :job (:id c) :purpose :retreat-plug})
+            _ (ledger/remember! c l)
+            r (await (tidy/place! c roof item true))]
+        (ledger/remember! c (ledger/reconcile l (pillar/block-at-of p)))
+        (if (= "placed" (.-status r))
+          (hide-now! c refuge "cornered: dug down and plugged the hole until the hostile leaves")
+          (await (abandon-refuge! c)))))))
+
+(defn ^:async pit-round!
+  "One step of the pit: dig the cell under the feet (collecting the blocks it drops), drop into it, or plug."
+  [c {:keys [roof target-y] :as refuge}]
+  (let [p (:primitives c)
+        blocks (:blocks (:args c))
+        {:keys [x y z]} (sh/feet p)
+        below {:x x :y (dec y) :z z}]
+    (cond
+      (not (and (= x (:x roof)) (= z (:z roof)))) (await (abandon-refuge! c))
+      (<= y target-y) (await (plug! c refuge))
+      (sh/solid-at? p below)
+      (let [_ (await (tools/equip-for! c (u/block-name p below)))
+            r (await (tidy/dig! c below true))]
+        (if (= "dug" (.-status r))
+          (do (await (dig-in/collect-drops! c blocks (.-drops r))) :continue)
+          (await (abandon-refuge! c))))
+      :else
+      ;; raw moveTo kept: a drop into the body's own pit, as dig-in's descent; the planner has no standable goal there.
+      (do (await (ctx/act c :moveTo (clj->js {:pos below :range 0.5})))
+          (if (< (:y (sh/feet p)) y) :continue (await (abandon-refuge! c)))))))
+
+(defn ^:async refuge-round!
+  "A round in a refuge: building it (pillar or pit), or hidden in it."
+  [c]
+  (let [{:keys [kind hidden] :as refuge} (:refuge (ctx/mem c))]
+    (cond
+      hidden (hidden-round c)
+      (= :pillar kind) (await (pillar-round! c refuge))
+      :else (await (pit-round! c refuge)))))
 
 (defn ^:async eat-on-the-run!
   "Once per flight, with the nearest hostile at least :eat-gap away, eat."
@@ -328,7 +586,7 @@
     (let [r (await (ctx/call-child c :eat 'jobs.survival.eat {:until 20}))]
       (when (not= :declined r) (ctx/update-mem! c assoc :ate true)))))
 
-(defn ^:async round [c]
+(defn ^:async flight-round [c]
   (let [{:keys [radius ranged-radius clear-radius step cooldown-ms]} (:args c)
         p (:primitives c)
         now (ctx/now c)
@@ -356,4 +614,9 @@
           (let [r (await (near/walk-near! c target 1 {:timeout-s flight-timeout-s}))]
             (if (= :blocked r)
               (await (cornered! c "the way away from the hostile is blocked"))
-              :continue)))))))
+              (do (ctx/update-mem! c dissoc :tried) :continue))))))))
+
+(defn ^:async round [c]
+  (if (:refuge (ctx/mem c))
+    (await (refuge-round! c))
+    (await (flight-round c))))
