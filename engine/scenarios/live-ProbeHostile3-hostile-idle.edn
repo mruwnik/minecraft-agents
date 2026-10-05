@@ -1,0 +1,6 @@
+;; ProbeHostile3 hostile-reflex cases (A3, card 26c1230e): extinguish and hostile-near with no explicit cooldown (the default :retry persistence)
+{:register [{:trigger :burning :persistence :cooldown :cooldown-s 0
+             :job (jobs.survival.extinguish {:water-radius 6})}
+            {:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+             :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+ :queue []}
