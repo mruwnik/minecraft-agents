@@ -137,3 +137,46 @@
   [c]
   (when-let [t (:t (ctx/latest c :slept))]
     (/ (- (ctx/now c) t) ms-per-day)))
+
+(defn shut-in?
+  "Whether the body is still in shelter entry: never for a mended room (:room, its own door is the way out); below a
+  pit's :start height (a stair stopped part way counts), behind a solid :door cell, or, with neither (a roof over a
+  shaft that was walled already), under a solid block within default-roof-height."
+  [p {:keys [start door room]}]
+  (cond
+    room false
+    start (< (:y (feet p)) (:y start))
+    door (boolean (some #(solid-at? p %) door))
+    :else (roofed? p default-roof-height)))
+
+(defn in-own-shelter
+  "The shelter entry data when the body stands in its :pos and is shut in it, else nil."
+  [p entry]
+  (when (and entry (= (:pos entry) (feet p)) (shut-in? p entry))
+    entry))
+
+(defn sheltered-in
+  "The body's latest :shelter entry when the body stands in its :pos and is shut in it, else nil."
+  [c]
+  (in-own-shelter (:primitives c) (:data (ctx/latest c :shelter))))
+
+(def trapped-policy
+  "The :shelter-trapped entries a shelter writes when leave! found no way out: one per failed attempt, kept 5 minutes."
+  {:cap 3 :ttl 300000})
+
+(defn shut-in-by-day?
+  "By day, the body is shut in its own latest shelter entry (data) and no :shelter-trapped entry (data) says leave!
+  found no way out of this very cell. Never at night: the shelter holds then."
+  [p shelter trapped]
+  (boolean (and (not (night? p))
+                (in-own-shelter p shelter)
+                (not= (:pos shelter) (:pos trapped)))))
+
+(defn shelter-hint
+  "{:inside-own-shelter pos :hint text} when the body is sealed in its own shelter (a go-to, attack or hunt that cannot
+  reach its target says so), else nil."
+  [c]
+  (when-let [{{:keys [x y z]} :pos :as entry} (sheltered-in c)]
+    {:inside-own-shelter (:pos entry)
+     :hint (str "the body is sealed in its own shelter at [" x " " y " " z "]: the shelter job lets it out by day "
+                "(jobs.survival.shelter), or run jobs.survival.dig-in leave")}))

@@ -1,11 +1,19 @@
 (ns jobs.survival.shelter
   (:require [engine.ctx :as ctx]
             [engine.jobs.shelter :as sh]
-            [jobs.survival.dig-in :as dig-in]))
+            [engine.jobs.util :as u]
+            [engine.triggers.hungry :as hungry]
+            [jobs.survival.dig-in :as dig-in]
+            [jobs.survival.eat :as eat]))
 
 (def doc
   "Survive the night: the job owns the whole night, so the normal job loop does not get the body back until day.
-  Check: the night-unsafe condition (night, awake, no solid block within :roof-height blocks above the body). A
+  Check: the night-unsafe condition (night, awake, no solid block within :roof-height blocks above the body), or by
+  day the body shut in its own latest dig-in shelter (the shut-in-by-day trigger: a body restarted while sealed, or
+  sealed by a dig-in submitted directly, is let out: the day round calls leave! whenever the body is shut in its
+  recorded :shelter or a leave! is under way, whatever its job memory says; a :no-way-out writes a :shelter-trapped entry for the cell, kept
+  5 minutes, so the trigger does not refire on it). Every hold round eats one carried food (jobs.survival.eat's
+  choice, :shelter.ate) when the hungry trigger's condition holds, since that reflex cannot reach a held body. A
   round by day ends :done (after a dig-in it first gets the body out of the pit, below); a first round that finds
   the body asleep or roofed ends :done at once. Otherwise it tries, in order, and the first that does not decline
   decides:
@@ -50,8 +58,12 @@
   at night, so a backoff would leave the body unsheltered longer."
   false)
 
-(defn check [c]
-  (sh/unsafe-night? (:primitives c) (:roof-height (:args c))))
+(defn check
+  "The night-unsafe condition, or (by day) the body shut in its own recorded shelter (the shut-in-by-day condition)."
+  [c]
+  (let [p (:primitives c)]
+    (or (sh/unsafe-night? p (:roof-height (:args c)))
+        (sh/shut-in-by-day? p (:data (ctx/latest c :shelter)) (:data (ctx/latest c :shelter-trapped))))))
 
 (defn overdue? [c]
   (let [days (sh/days-awake c)]
@@ -75,7 +87,24 @@
   "How long one holding round waits (the wait primitive does not wake a sleeping body); a higher reflex cuts it."
   5000)
 
+(defn ^:async eat-if-hungry!
+  "The hungry reflex cannot reach a body the shelter holds, so a hold round eats one carried food (jobs.survival.eat's
+  choice, engine.foods) when the body is hungry by the hungry trigger's own condition (food below 6, or below 14 when
+  hurt). A sleeping body does not eat."
+  [c]
+  (let [p (:primitives c)
+        self (.self p)
+        health (.-health self)
+        best (when (and (not (sh/sleeping? p)) (hungry/hungry? (.-food self) health {}))
+               (eat/best-food (u/inventory p) false nil health))]
+    (when best
+      (await (ctx/act c :equip #js {:item best}))
+      (let [r (await (ctx/act c :eat #js {:item best}))]
+        (when (= "ate" (.-status r))
+          (ctx/emit! c :shelter.ate :info {:item best :food (.-food r) :text (str "ate " best " while holding the shelter")}))))))
+
 (defn ^:async hold [c]
+  (await (eat-if-hungry! c))
   (await (ctx/act c :wait #js {:ms hold-ms}))
   :continue)
 
@@ -136,7 +165,7 @@
   pit position), so the agent gets the body back; :unsafe (only :night, at the day/night boundary) waits hold-ms and
   tries again. Hostiles never hold it: leave! opens by day whatever is around."
   [c]
-  (if (#{:dug-in :exposed} (:sheltered (ctx/mem c)))
+  (if (or (#{:dug-in :exposed} (:sheltered (ctx/mem c))) (:dig-out (ctx/mem c)) (dig-in/sheltered-in c))
     (let [r (await (dig-in/leave! c))]
       (cond
         (= :continue r) :continue
@@ -144,6 +173,7 @@
         (= :no-way-out (:reason r))
         (let [result {:status :failed :reason :no-way-out :at (:at r) :tries (:tries r)}]
           (ctx/emit! c :shelter.failed :warn (assoc result :text "no way out of the shelter by day; giving the body back"))
+          (ctx/remember! c :shelter-trapped {:pos (sh/feet (:primitives c))} sh/trapped-policy)
           (ctx/result! c result)
           :done)
         :else (await (hold c))))

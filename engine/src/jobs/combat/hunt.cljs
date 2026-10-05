@@ -1,6 +1,7 @@
 (ns jobs.combat.hunt
   (:require [engine.ctx :as ctx]
             [engine.jobs.combat :as combat]
+            [engine.jobs.shelter :as sh]
             [engine.jobs.util :as u]))
 
 (def doc
@@ -105,7 +106,8 @@
   (let [killed (:killed (ctx/mem c) 0)
         spared (if (and (= :keep reason) (pos? (keep-of c))) (max 0 (- (:count (:args c)) killed)) 0)
         remaining (count (present c))
-        out {:killed killed :reason reason :spared spared :remaining remaining}]
+        out (cond-> {:killed killed :reason reason :spared spared :remaining remaining}
+              (= :gave-up reason) (merge (sh/shelter-hint c)))]
     (ctx/emit! c :hunt.done :info (assoc out :text (str "hunt done: " (name reason) ", killed " killed
                                                         ", spared " spared " of the ask, " remaining " adults left")))
     (ctx/result! c out)
@@ -115,8 +117,9 @@
   "Warn and end after too many skipped animals in a row."
   [c]
   (let [{:keys [killed skipped]} (ctx/mem c)]
-    (ctx/emit! c :hunt.gave-up :warn {:killed (or killed 0) :skipped (vec skipped)
-                                      :text (str "hunt gave up: " (count skipped) " animals skipped, killed " (or killed 0))})
+    (ctx/emit! c :hunt.gave-up :warn (merge {:killed (or killed 0) :skipped (vec skipped)
+                                             :text (str "hunt gave up: " (count skipped) " animals skipped, killed " (or killed 0))}
+                                            (sh/shelter-hint c)))
     (finish! c :gave-up)))
 
 (defn book-outcome!

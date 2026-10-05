@@ -1,6 +1,7 @@
 (ns jobs.combat.attack
   (:require [engine.ctx :as ctx]
             [engine.jobs.combat :as combat]
+            [engine.jobs.shelter :as sh]
             [engine.jobs.util :as u]
             [engine.path.near :as near]))
 
@@ -126,8 +127,9 @@
 (defn give-up!
   [c target reason]
   (ctx/update-mem! c assoc-in [:given-up (.-id target)] reason)
-  (ctx/emit! c :attack.gave-up :warn {:target (.-id target) :name (display-name target) :reason reason
-                                      :text (str "giving up on " (display-name target) " " (.-id target) ": " (name reason))}))
+  (ctx/emit! c :attack.gave-up :warn (merge {:target (.-id target) :name (display-name target) :reason reason
+                                             :text (str "giving up on " (display-name target) " " (.-id target) ": " (name reason))}
+                                            (when (= :unreachable reason) (sh/shelter-hint c)))))
 
 (defn fail!
   "Count a blocked walk or out-of-reach swing at target; give up at u/max-failures."

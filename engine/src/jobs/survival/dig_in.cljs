@@ -545,25 +545,9 @@
 
 (def access-reasons #{:zone :claim :footprint :no-zones})
 
-(defn shut-in?
-  "Whether the body is still in shelter entry: never for a mended room (:room, its own door is the way out); below a
-  pit's :start height (a stair stopped part way counts), behind a
-  solid :door cell, or, with neither (a roof over a shaft that was walled already), under a solid block within
-  sh/default-roof-height."
-  [p {:keys [start door room]}]
-  (cond
-    room false
-    start (< (:y (sh/feet p)) (:y start))
-    door (boolean (some #(sh/solid-at? p %) door))
-    :else (sh/roofed? p sh/default-roof-height)))
+(def shut-in? sh/shut-in?)
 
-(defn sheltered-in
-  "The body's latest :shelter entry when the body stands in its :pos and is shut in it, else nil."
-  [c]
-  (let [p (:primitives c)
-        entry (:data (ctx/latest c :shelter))]
-    (when (and entry (= (:pos entry) (sh/feet p)) (shut-in? p entry))
-      entry)))
+(def sheltered-in sh/sheltered-in)
 
 (defn leave-unsafe
   "Why the shelter must stay shut now: :night; nil when the body may leave. Hostiles do not keep it shut: by day the

@@ -1,5 +1,6 @@
 (ns jobs.movement.go-to
   (:require [engine.ctx :as ctx]
+            [engine.jobs.shelter :as sh]
             [engine.jobs.util :as u]
             [engine.path.near :as near]
             [engine.path.walk :as walk]
@@ -66,7 +67,8 @@
   :reason (:why, :no-path when it has none), the :kind of step that cannot be walked, and what its reason carries (:door-stuck's
   :cells, :one-way's :near and :one-way); a walk that got stuck says :stuck, the :move it was stuck on as :kind and the
   executor's :why text as :detail; one that left its plan says :off-plan; a failed steer says :steer-failed with its reason
-  as :detail; a walk that ended with the body no nearer says :no-progress."
+  as :detail; a walk that ended with the body no nearer says :no-progress. A body sealed in its own dig-in shelter adds
+  :inside-own-shelter (its cell) and a :hint (the shelter job lets it out by day, or run dig-in leave)."
   [{:keys [status reason kind move step] :as result}]
   (case status
     :stuck (cond-> {:why :stuck}
@@ -82,7 +84,7 @@
       :else {:why :no-progress})))
 
 (defn give-up! [c pos tries status result]
-  (let [{:keys [why kind] :as fields} (give-up-fields result)
+  (let [{:keys [why kind] :as fields} (merge (give-up-fields result) (sh/shelter-hint c))
         extra (dissoc fields :why :kind)]
     (ctx/emit! c :unreachable :warn (cond-> (merge {:target pos :tries tries :status status :why why
                                                     :text (str "gave up walking to " pos)}
