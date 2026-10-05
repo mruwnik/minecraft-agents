@@ -306,12 +306,30 @@
   (let [{:keys [x y z]} (body-cell c)]
     [[x y z] to range weight policy walls]))
 
+(defn goal-unloaded?
+  "Whether the snapshot reads the goal cell to [x y z] as unloaded (the planner's goal-unloaded: no goal flood runs)."
+  [^js snapshot [x y z]]
+  (== planner/UNLOADED (.stateAt snapshot x y z)))
+
 (defn new-search
-  "A budgeted search from the body's cell over walled: its limited search begun (wide-box, the policy's limits)."
+  "A budgeted search from the body's cell over walled: its limited search begun (wide-box, the policy's limits);
+  :goal-unloaded whether its snapshot read the goal unloaded."
   [c walled to range weight policy key]
   {:key key :t (js/Date.now) :walled walled :r nil :unlimited nil
+   :goal-unloaded (goal-unloaded? (.-snapshot walled) to)
    :limited (planner/create-plan (.-snapshot walled) (plan-query c to range)
                                  (plan-options walled weight (executor/planner-limits policy (solid-fn walled)) wide-box))})
+
+(defn go-on?
+  "Whether the kept search goes on at this call: it plans the same (key k), is younger than search-max-age-ms, and did
+  not begin with the goal unloaded that pw (this call's pathWorld) has loaded now. A search's snapshot keeps the land as
+  it first read it, so one begun with the goal unloaded never floods the goal (live j53: a search begun while the chunks
+  round a goal on a sealed platform were still arriving searched on for 100 rounds, then gave up :searching; a new one
+  proves the goal walled in)."
+  [kept k ^js pw to]
+  (and (= k (:key kept))
+       (< (- (js/Date.now) (:t kept)) search-max-age-ms)
+       (not (and (:goal-unloaded kept) (not (goal-unloaded? (.-snapshot pw) to))))))
 
 (defn ^:async run-search!
   "Run search on for at most budget expansions and round-ms, in slices of chunk-expansions with a yield! between them. [search within]:
@@ -372,7 +390,7 @@
         who (body-name c)
         k (search-key c to range weight policy walls)
         kept (get @searches who)
-        search (if (and (= k (:key kept)) (< (- (js/Date.now) (:t kept)) search-max-age-ms))
+        search (if (go-on? kept k pw to)
                  kept
                  (new-search c (with-walls pw walls) to range weight policy k))
         [search within] (await (run-search! c search budget policy to range weight))

@@ -548,7 +548,7 @@
 
 ;; ---- mobs: the hostiles the body has seen or heard
 
-(def silent-mobs "Hostiles that make no sound while they stalk: known only once seen." #{"creeper"})
+(def silent-mobs "Hostiles that make no sound while they stalk: known only once seen, or while fusing (hissing)." #{"creeper"})
 
 (def mob-speed
   "Blocks a second a hostile covers when it chases (rough game values); one not listed `default-mob-speed`."
@@ -582,7 +582,7 @@
   (let [^js pos (.-pos e)
         vx (- (.-x pos) (.-x eye)) vy (- (+ (.-y pos) mob-middle) (.-y eye)) vz (- (.-z pos) (.-z eye))
         d (js/Math.hypot vx vy vz)
-        heard? (and (<= d (:hearing opts)) (not (silent-mobs (.-name e))))
+        heard? (and (<= d (:hearing opts)) (or (not (silent-mobs (.-name e))) (true? (.-fusing e))))
         seen? (and (true? (.-visible e))
                    (<= d (:radius opts))
                    (or (<= d (:dark-sight opts)) (mob-lit? per pos))

@@ -54,6 +54,8 @@ test('mobFields', async t => {
     ['sheared sheep', 'sheep', { metadata: { [WOOL]: 0x10 } }, { baby: false, sheared: true }],
     ['coloured sheep', 'sheep', { metadata: { [WOOL]: 0x0e } }, { baby: false, sheared: false }],
     ['zombie has no baby key', 'zombie', {}, {}],
+    ['fusing creeper', 'creeper', { metadata: { 16: 1 } }, { fusing: true }],
+    ['idle creeper', 'creeper', { metadata: { 16: -1 } }, { fusing: false }],
     ['uuid passes through', 'zombie', { uuid: 'abc-123' }, { uuid: 'abc-123' }]
   ]
   for (const [label, name, extra, expected] of rows) {

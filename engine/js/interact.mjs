@@ -24,6 +24,7 @@ const hasMetaKey = (bot, e, key) => bot.registry?.entitiesByName?.[e.name]?.meta
 export const mobFields = (bot, e) => ({
   ...(typeof e.uuid === 'string' && { uuid: e.uuid }),
   ...(hasMetaKey(bot, e, 'baby') && { baby: e.metadata?.[metaIndex(bot, e, 'baby', -1)] === true }),
+  ...(e.name === 'creeper' && { fusing: e.metadata?.[metaIndex(bot, e, 'swell_dir', 16)] === 1 }),
   ...(e.name === 'sheep' && { sheared: ((e.metadata?.[metaIndex(bot, e, 'wool', WOOL_FALLBACK)] ?? 0) & WOOL_SHEARED) !== 0 })
 })
 

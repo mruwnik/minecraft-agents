@@ -68,13 +68,12 @@
     (is (= [1] (danger-ids p)))
     (is (true? (.-seen (first (.knownMobs p)))))))
 
-(deftest a-zombie-heard-through-a-wall-is-known-but-not-seen
+(deftest a-zombie-heard-through-a-wall-is-known-not-seen-and-counts
   (let [{:keys [p]} (rig {:entities [(mob 1 "zombie" 6 -3)] :blocks wall})
         [m] (.knownMobs p)]
     (is (true? (.-heard m)))
     (is (false? (.-seen m)))
-    (is (= [] (danger-ids p)) "a melee mob must have been seen")
-    (is (= 1 (some-> (reach/nearest-danger p 8 {} {:sight? false}) .-id)) "heard counts without the sight test")))
+    (is (= [1] (danger-ids p)) "a heard melee mob with a way round the wall counts (card 99f833e8)")))
 
 (deftest a-creeper-seen-three-seconds-ago-round-a-corner-still-counts
   (let [{:keys [p clock]} (rig {:entities [(mob 1 "creeper" 2 4)] :blocks wall})]
@@ -208,3 +207,34 @@
       (is (some? m))
       (is (true? (.-remembered m)))
       (is (true? (.-seen m))))))
+
+;; ---- cards 99f833e8, 271c2a45: heard melee mobs count; a fusing creeper hisses
+
+(deftest a-zombie-heard-in-the-dark-with-a-way-is-a-danger
+  (let [{:keys [p]} (rig {:entities [(mob 1 "zombie" 0 8)]})]
+    (dark-around! p 0 8)
+    (is (= [1] (danger-ids p)))
+    (is (true? (hostile-near? p)))))
+
+(def glass-box
+  "A zombie boxed in glass at (0 64 8): heard, but no way to the body."
+  (concat (tu/box -1 64 7 1 65 7 "glass") (tu/box -1 64 9 1 65 9 "glass")
+          (tu/box -1 64 7 -1 65 9 "glass") (tu/box 1 64 7 1 65 9 "glass")))
+
+(deftest a-zombie-heard-in-a-sealed-glass-box-is-no-danger
+  (let [{:keys [p]} (rig {:entities [(mob 1 "zombie" 0 8)] :blocks glass-box})]
+    (dark-around! p 0 8)
+    (is (= [] (danger-ids p)))))
+
+(deftest a-fusing-creeper-behind-the-body-is-heard-and-a-danger
+  (let [{:keys [p]} (rig {:entities [(assoc (mob 1 "creeper" 0 -3) :fusing true)]})]
+    (is (= [1] (danger-ids p)))
+    (is (some? (first (known p))) "known although behind the body")))
+
+(deftest a-fusing-creeper-out-of-hearing-is-unknown
+  (let [{:keys [p]} (rig {:entities [(assoc (mob 1 "creeper" 0 -20) :fusing true)]})]
+    (is (= [] (known p)))))
+
+(deftest an-idle-creeper-behind-the-body-stays-unknown
+  (let [{:keys [p]} (rig {:entities [(assoc (mob 1 "creeper" 0 -3) :fusing false)]})]
+    (is (= [] (known p)))))

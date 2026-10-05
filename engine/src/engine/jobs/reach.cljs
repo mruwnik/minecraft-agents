@@ -484,11 +484,11 @@
     (boolean (some #(ray-clear? arrow-at from [bx (+ (:y body-pos) %) bz]) [eye-height 0.9]))))
 
 (defn seen-mob?
-  "Whether the body has seen hostile e: a known-hostiles entry's seen flag (seen now, or remembered), else (raw
-  entities) its visible field."
+  "Whether the body has seen or heard hostile e: a known-hostiles entry's seen flag (seen now, or remembered) or heard
+  flag (a player turns to a groan), else (raw entities) its visible field."
   [e]
   (let [s (.-seen e)]
-    (if (some? s) (true? s) (true? (.-visible e)))))
+    (if (some? s) (or (true? s) (true? (.-heard e))) (true? (.-visible e)))))
 
 (defn known-hostiles
   "The hostiles the body knows of within radius (ranged ones, combat/ranged-mobs, within :ranged-radius), nearest first:
