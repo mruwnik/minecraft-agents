@@ -295,8 +295,9 @@
    ^:mutable ^boolean flooding ^:mutable fx ^:mutable fy ^:mutable fz ^:mutable fr ^:mutable ^boolean hit ^:mutable flooded ^:mutable pre-flooded
    ^:mutable ^boolean flood-pending ^:mutable ^boolean leaked
    ;; the late flood kept over the searches of one goal (options.goalFloodMemo, see keepFlood; nil: none), the expansions
-   ;; the earlier searches of that goal made (a late flood is due by all of them), and the cells taken over from them
-   ^js flood-memo ^:mutable flood-base ^:mutable lf-imported
+   ;; the earlier searches of that goal made (a late flood is due by all of them), the cells taken over from them, and
+   ;; whether a fresh flood is checking their enclosed answer (progress is nil meanwhile, so the caller does not walk)
+   ^js flood-memo ^:mutable flood-base ^:mutable lf-imported ^:mutable ^boolean verifying
    ;; the moves out of each cell the flood has expanded (key -> array of the keys its moves enter, see floodNode), for the
    ;; whole search: the world does not change under it, so a cell is expanded once however many floods ask about it
    ^js flood-moves ^:mutable ^js flood-out
@@ -2349,22 +2350,29 @@
       (set! lf-seen (js/Set.))
       (set! leaked false)
       (when-not ^boolean (.takeFlood s)
-        (.clear lf-seen)
-        (set! lf-queue #js [])
-        (.floodSeeds s lf-seen lf-queue)
-        (when (true? (.has lf-seen (aget node-keys 0)))
-          (set! lf-open true)
-          (set! lf-seed-open true)))))
+        (.freshFlood s))))
+
+  ;; the late flood begun afresh from the goal's cells in this search's world
+  (freshFlood [s]
+    (set! lf-seen (js/Set.))
+    (set! lf-queue #js [])
+    (set! lf-head 0)
+    (set! lf-imported 0)
+    (set! leaked false)
+    (set! lf-active true)
+    (.floodSeeds s lf-seen lf-queue)
+    (when (true? (.has lf-seen (aget node-keys 0)))
+      (set! lf-open true)
+      (set! lf-seed-open true)))
 
   ;; ---- the late flood kept over the searches of one goal (options.goalFloodMemo) ----
-  ;; The backward flood does not depend on the start, only its meeting test does. A caller that begins a new search
-  ;; toward the same goal after each walk (go-to) passes one memo object to them all: each search writes its flood
-  ;; (the queue of x y z region, absolute, and its head), budget and schedule there (keepFlood), and the next one goes on
-  ;; with them (takeSchedule, takeFlood), so the floods grow by the expansions of all the searches and none starts
-  ;; afresh. A flood that leaked or met the start is dropped. The caller keeps a memo only while the world it read is
-  ;; current (engine.path.walk/goal-floods).
+  ;; The backward flood does not depend on the start. Searches toward one goal (go-to's, one after each walk) share one
+  ;; memo: each writes its flood, budget and schedule there (keepFlood), the next goes on with them (takeSchedule,
+  ;; takeFlood). Cells it took over read an older world, so their enclosed answer is checked by a fresh flood (step). A
+  ;; flood that leaked or met the start is dropped. The key holds the options that change the flood's moves (the box,
+  ;; avoid and the walker's limits only refuse the search's nodes, not the flood's).
 
-  (goalId [s] (str goal-x "," goal-y "," goal-z "," goal-range))
+  (goalId [s] (str goal-x "," goal-y "," goal-z "," goal-range "," max-drop "," c-air-supply "," c-air-limit "," c-max-water-drop))
 
   (memoOfGoal [s]
     (and (some? flood-memo) (identical? (.-goal flood-memo) (.goalId s))))
@@ -2448,6 +2456,7 @@
   ;; nor leaking); flooded is the flood's size (left alone when the start is one of the goal's own cells, as goalEnclosed)
   (lateFloodEnd [s]
     (set! lf-active false)
+    (set! verifying false)
     (when-not lf-seed-open (set! flooded (.-size lf-seen)))
     (and (not lf-open) (not leaked) (<= (.-size lf-seen) lf-budget) (not ^boolean (.floodGap s lf-queue))))
 
@@ -2470,17 +2479,21 @@
                 used (inc (- (.-size lf-seen) size0))]
             (cond
               (not over) (recur (+ n used))
-              lf-end (let [enclosed ^boolean (.lateFloodEnd s)]
-                       (set! flood-pending false)
-                       (set! expanded (+ expanded (- flooded lf-imported)))
-                       (.finish s (cond enclosed "goal-enclosed" boxed "box" :else "exhausted")))
-              :else (let [enclosed ^boolean (.lateFloodEnd s)]
-                      (.growFlood s lf-budget)
-                      (set! expanded (+ expanded (- flooded lf-imported)))
-                      (if enclosed
-                        (.finish s "goal-enclosed")
-                        (do (.expandNext s)
-                            (recur (+ n used)))))))
+              :else
+              (let [enclosed ^boolean (.lateFloodEnd s)]
+                (set! expanded (+ expanded (- flooded lf-imported)))
+                (cond
+                  ;; cells taken over from the memo read an older world: a fresh flood checks the answer
+                  (and enclosed (pos? lf-imported)) (do (.freshFlood s)
+                                                        (set! verifying true)
+                                                        (recur (+ n used)))
+                  lf-end (do (set! flood-pending false)
+                             (.finish s (cond enclosed "goal-enclosed" boxed "box" :else "exhausted")))
+                  :else (do (.growFlood s lf-budget)
+                            (if enclosed
+                              (.finish s "goal-enclosed")
+                              (do (.expandNext s)
+                                  (recur (+ n used)))))))))
 
           (and flood-pending (not goal-unloaded)
                (or (>= (+ flood-base expanded) flood-after) (and (some? lf-seen) (>= (* 2 n-nodes) max-nodes))))
@@ -2691,7 +2704,7 @@
   ;;   uncut path. open is true when the nearest node stands at the loaded edge (atLoadedEdge, not on magma).
   ;; nil when nothing was expanded but the start, or there is neither.
   (progress [s]
-    (if (or (not started) (<= best-node 0))
+    (if (or (not started) (<= best-node 0) verifying)
       nil
       (let [ow (.firstOneWay s best-node)
             end (if (neg? ow) best-node (aget parents ow))
@@ -2916,8 +2929,8 @@
      ;; the goal flood: flooding fx fy fz fr hit flooded pre-flooded flood-pending leaked
      false 0 0 0 -1 false 0 0
      (and near (pos? (option options "goalFlood" 4000))) false
-     ;; flood-memo flood-base lf-imported
-     (when (and near (pos? (option options "goalFlood" 4000))) (.-goalFloodMemo options)) 0 0
+     ;; flood-memo flood-base lf-imported verifying
+     (when (and near (pos? (option options "goalFlood" 4000))) (.-goalFloodMemo options)) 0 0 false
      ;; flood-moves flood-out flood-h-keys flood-h-vals flood-target
      (js/Map.) nil nil nil 0
      ;; progress: started finished reason over-budget boxed goal-node best-node

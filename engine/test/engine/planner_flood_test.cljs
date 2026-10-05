@@ -345,19 +345,20 @@
 
 (defn rounds
   "Searches toward goal over spec, one a round of n expansions, each from the next start of froms (cycled), as go-to
-  begins one after each walk; memo the options.goalFloodMemo they share (nil: none). The reason of the first that ends
-  within k rounds, else :unfinished."
+  begins one after each walk; memo the options.goalFloodMemo they share (nil: none). A search with no progress to walk
+  goes on in the next round, as go-to's does. The reason of the first that ends within k rounds, else :unfinished."
   [spec froms goal options n k memo]
-  (let [pw (.pathWorld (tu/fake spec))]
-    (loop [i 0]
-      (if (>= i k)
-        :unfinished
-        (let [^js p (planner/create-plan (.-snapshot pw) (query-of (nth (cycle froms) i) goal)
-                                         (js/Object.assign #js {:table (.-table pw) :space (.-space pw) :goalFloodMemo memo}
-                                                           (clj->js options)))]
-          (if (.step p n)
-            (let [r (.result p)] (or (.-reason r) (.-status r)))
-            (recur (inc i))))))))
+  (let [pw (.pathWorld (tu/fake spec))
+        search (fn [i] (planner/create-plan (.-snapshot pw) (query-of (nth (cycle froms) i) goal)
+                                            (js/Object.assign #js {:table (.-table pw) :space (.-space pw) :goalFloodMemo memo}
+                                                              (clj->js options))))]
+    (loop [i 0
+           ^js p (search 0)]
+      (cond
+        (>= i k) :unfinished
+        (.step p n) (let [r (.result p)] (or (.-reason r) (.-status r)))
+        (nil? (.progress p)) (recur (inc i) p)
+        :else (recur (inc i) (search (inc i)))))))
 
 (def small-floods {:preFlood 0 :floodAfter 20 :goalFlood 100})
 
@@ -389,3 +390,108 @@
   (is (not= "goal-enclosed" (:reason (plan-over gappy-ladder-deck [6 67 0] {:maxNodes 1}))))
   (is (= "ladder-gap" (:reason (plan-over gappy-ladder-deck [6 67 0] {}))))
   (is (= "ladder-gap" (:reason (plan-over gappy-ladder-deck [6 67 0] {:preFlood 0 :floodAfter 0})))))
+
+;; ---- a kept flood read an older world: its enclosed answer is checked by a fresh flood ----
+
+;; a stone room x 5..18, z -7..6 (12 x 12 inside, feet y 64), sealed; the way in its west wall at z 0 cleared in opened-room
+(def sealed-room {:blocks (merge flat (hollow 5 63 -7 18 67 6))})
+(def opened-room {:blocks (merge flat (dissoc (hollow 5 63 -7 18 67 6) "5,64,0" "5,65,0"))})
+
+;; the room on a floor round it, opened (far-opened) in its east wall at z 0, away from the start: the flood proves the
+;; goal (17 64 0) walled in before the search gets round
+(def round-room (merge (floor -2 -10 24 10) (hollow 5 63 -7 18 67 6)))
+(def far-sealed {:blocks round-room})
+(def far-opened {:blocks (dissoc round-room "18,64,0" "18,65,0")})
+
+(defn search-over [spec from goal options memo]
+  (let [pw (.pathWorld (tu/fake spec))]
+    (planner/create-plan (.-snapshot pw) (query-of from goal)
+                         (js/Object.assign #js {:table (.-table pw) :space (.-space pw) :goalFloodMemo memo} (clj->js options)))))
+
+(defn reason-of [^js p] (let [r (.result p)] (or (.-reason r) (.-status r))))
+
+;; the goal beside the way in: the kept flood expanded its cells while they were walled
+(deftest a-kept-flood-of-a-world-since-opened-does-not-call-the-goal-enclosed
+  (let [memo #js {}
+        a (search-over far-sealed [0 64 0] [17 64 0] small-floods memo)]
+    (is (false? (.step a 60)) "the first search is still going when the world changes")
+    (is (some? (.-queue memo)))
+    (let [b (search-over far-opened [0 64 0] [17 64 0] small-floods memo)]
+      (.step b 100000)
+      (is (= "found" (reason-of b))))))
+
+(deftest a-kept-flood-that-proved-the-goal-enclosed-is-checked-in-the-new-world
+  (let [memo #js {}
+        a (search-over sealed-room [0 64 0] [6 64 0] small-floods memo)]
+    (.step a 100000)
+    (is (= "goal-enclosed" (reason-of a)))
+    (let [b (search-over opened-room [0 64 0] [6 64 0] small-floods memo)]
+      (.step b 100000)
+      (is (= "found" (reason-of b))))
+    (let [c (search-over sealed-room [0 64 0] [6 64 0] small-floods memo)]
+      (.step c 100000)
+      (is (= "goal-enclosed" (reason-of c)) "a sealed room is still proved"))))
+
+;; a pit x 8..19, z -6..5, feet y 61, 3 below the floor round it: a drop of 3 is the only way in
+(def pit {:blocks (apply dissoc (merge (floor -2 -8 24 8) (box 7 60 -7 20 63 6 "stone")) (keys (box 8 61 -6 19 63 5 "x")))})
+
+;; the memo's flood was made with maxDrop 2 (the pit walled in for it); a search that may drop 3 must not take it
+(deftest a-kept-flood-of-other-moves-is-not-used
+  (let [memo #js {}
+        a (search-over pit [0 64 0] [13 61 0] (assoc small-floods :maxDrop 2) memo)]
+    (.step a 100000)
+    (is (= "goal-enclosed" (reason-of a)))
+    (let [other #js {}]
+      (.step (search-over pit [0 64 0] [13 61 0] small-floods other) 1)
+      (is (not= (.-goal memo) (.-goal other)) "the memo's key names the moves"))
+    (let [b (search-over pit [0 64 0] [13 61 0] small-floods memo)]
+      (.step b 100000)
+      (is (= "found" (reason-of b))))))
+
+;; ---- pockets up to the early flood's 256 cells: every way in the search takes, the flood takes ----
+
+(defn big-way-in
+  "The 12 x 12 room (sealed-room) with its west wall's cells (5,64,0) and (5,65,0) cleared and `blocks` put in."
+  ([blocks] (big-way-in blocks {}))
+  ([blocks states] {:blocks (merge (:blocks opened-room) blocks) :states states}))
+
+;; a 13 x 13 attic (deck y 66, x 2..14, z -6..6, walls and a roof round it) whose only way in is a ladder up to a trapdoor
+(defn attic [trapdoor-state]
+  {:blocks (merge flat
+                  (assoc (box 2 66 -6 14 66 6 "stone") "3,66,0" "oak_trapdoor")
+                  (apply dissoc (box 1 66 -7 15 68 7 "stone") (keys (box 2 66 -6 14 68 6 "x")))
+                  (box 1 69 -7 15 69 7 "stone")
+                  {"3,64,0" "ladder" "3,65,0" "ladder"} (box 3 64 -1 3 65 -1 "stone"))
+   :states {"3,64,0" {:facing "south"} "3,65,0" {:facing "south"} "3,66,0" trapdoor-state}})
+
+;; the pit with water 2 deep (y 55..56) at the bottom of an 8-deep drop and a dry ledge (x 17..19, feet 57) for the goal
+(def water-pit
+  {:blocks (merge (apply dissoc (merge (floor -2 -8 24 8) (box 7 54 -7 20 63 6 "stone")) (keys (box 8 55 -6 19 63 5 "x")))
+                  (box 8 55 -6 16 56 5 "water") (box 17 55 -6 19 56 5 "stone"))})
+
+(def big-ways-in
+  [[(big-way-in {"5,64,0" "oak_door" "5,65,0" "oak_door"}
+                {"5,64,0" {:open false :half "lower" :facing "east"} "5,65,0" {:open false :half "upper" :facing "east"}}) [12 64 0]]
+   [(big-way-in {"5,64,0" "oak_door" "5,65,0" "oak_door"}
+                {"5,64,0" {:open true :half "lower" :facing "east"} "5,65,0" {:open true :half "upper" :facing "east"}}) [12 64 0]]
+   [(big-way-in {"5,64,0" "oak_fence_gate"} {"5,64,0" {:open false :facing "east"}}) [12 64 0]]
+   [(big-way-in (merge iron-door-room {"4,64,0" "stone_pressure_plate"}) iron-door-states) [12 64 0]]
+   [(attic {:open false :half "bottom" :facing "south"}) [8 67 0]]
+   [(attic {:open true :half "bottom" :facing "south"}) [8 67 0]]
+   [pit [13 61 0]]
+   [(big-way-in {"5,64,0" "water"}) [12 64 0]]
+   [water-pit [18 57 0]]])
+
+(deftest every-way-into-a-big-pocket-the-search-takes-is-found
+  (doseq [[spec goal] big-ways-in]
+    (is (= "found" (:status (plan-over spec goal {:goalFlood 0 :preFlood 0}))) (pr-str goal (:states spec)))))
+
+(deftest every-way-into-a-big-pocket-the-search-takes-is-not-enclosed
+  (doseq [[spec goal] big-ways-in
+          options [{} {:maxNodes 1} {:preFlood 0 :floodAfter 0}]]
+    (is (not= "goal-enclosed" (:reason (plan-over spec goal options))) (pr-str goal (:states spec) options))))
+
+(deftest a-big-pocket-with-no-way-in-is-enclosed-at-once
+  (are [spec goal options] (= "goal-enclosed" (:reason (plan-over spec goal options)))
+    sealed-room [12 64 0] {:maxNodes 1}
+    pit [13 61 0] {:maxNodes 1 :maxDrop 2}))

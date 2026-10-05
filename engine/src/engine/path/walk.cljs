@@ -325,11 +325,8 @@
         (swap! known-land assoc who fresh)
         fresh))))
 
-(defonce ^{:doc "The goal flood of go-to's budgeted searches toward one goal, per body (by name): {:key :t :memo}, memo the
-  planner's options.goalFloodMemo (a JS object the searches write their late flood to and go on with), key what they plan
-  but the start [to range weight policy walls], t when it began (ms). Each walk begins a new search; without it the
-  flood started afresh each time and a large sealed area was proved only once the walks stopped (live j53, ~30 s). Kept
-  for search-max-age-ms like a search (the flood read the world as it was); forgotten with the known land."}
+(defonce ^{:doc "Per body: {:key :t :memo}, memo the planner's options.goalFloodMemo shared by go-to's searches toward one
+  goal (key [to range weight policy walls]), kept for search-max-age-ms; forgotten with the known land."}
   goal-floods (atom {}))
 
 (defn forget-known!
