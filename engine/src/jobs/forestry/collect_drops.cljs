@@ -10,6 +10,7 @@
 (def args
   {:radius {:doc "search radius in blocks" :default default-radius}
    :filter {:doc "item names to collect; everything when nil" :default nil}
+   :ids {:doc "entity ids to collect (only those); any item when nil" :default nil}
    :visible-only {:doc "skip items the body has no line of sight to (a player cannot see through walls)" :default false}})
 
 (defn check [_c] true)
@@ -26,13 +27,15 @@
   matching dropped item, one per round. Items that could not be reached (or
   were in reach and not picked up) are remembered in job memory and skipped,
   and :collected counts the items gained, also on a round that gave up.
-  Done when none are left in radius."
+  :ids limits it to those entity ids (a dig's own drops). Done when none are left in radius."
   [c]
-  (let [{:keys [radius visible-only]} (:args c)
+  (let [{:keys [radius visible-only ids]} (:args c)
+        only-ids (some-> ids set)
         wanted (some-> (:filter (:args c)) set)
         skipped (set (:skipped (ctx/mem c)))
         item (->> (array-seq (.entities (:primitives c) #js {:radius radius :kind "item" :max 32}))
                   (remove #(skipped (.-id %)))
+                  (filter #(or (nil? only-ids) (only-ids (.-id %))))
                   (remove #(and visible-only (false? (.-visible %))))
                   (filter #(or (nil? wanted) (wanted (some-> (.-item %) .-name))))
                   first)]

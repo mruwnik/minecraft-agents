@@ -25,7 +25,9 @@
   Out of reach, the round walks within 3 cells (go-to child, which opens and shuts doors). In reach, it holds the
   best carried tool for the block (tools/equip-for!) and digs through engine.jobs.tidy/dig!, so a dig of another's
   block made with :ignore-zones? is recorded for jobs.survival.restore-broken. With :collect, the next rounds pick up
-  the dig's drops (jobs.forestry.collect-drops child, filtered to their names, radius 4).
+  the dig's drops (jobs.forestry.collect-drops child, only the item entities that appeared with this dig, by id: an
+  item that lay there before, or is dropped there by anyone else, is never taken). The room check judges what the
+  block drops by minecraft-data (stone: cobblestone; leaves: nothing), not its own name.
   Ends with info blocks.dig.done and the result {:dug true|false :pos :block :reason :collected n}; :reason is
   :dug, :already-clear (air there, nothing done), :fluid (a fluid is not dug), :cannot (bedrock and the like), or
   :bad-args (with a blocks.dig.declined warn). A dig the primitive refuses (a timeout, a failure) ends :failed with
@@ -41,7 +43,7 @@
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
-(def collect-radius 4)
+(def collect-radius 8)
 
 (defn needs
   "What the body lacks to dig block-name with these args: {:tool item} or nil. The hook for a :fetch option (B2):
@@ -52,10 +54,13 @@
                                (some-> (.harvestTools (:primitives c) block-name) js->clj))}))
 
 (defn room?
-  "A free slot, or a carried stack of block-name under 64 (most blocks drop themselves)."
+  "Room for what block-name drops (b/drops-of, minecraft-data): nothing dropped, a free slot, or a carried stack of
+  a dropped item under 64."
   [p block-name]
-  (or (pos? (u/free-slots p))
-      (boolean (some #(and (= block-name (:name %)) (< (:count %) 64)) (u/inventory p)))))
+  (let [drops (set (b/drops-of p block-name))]
+    (or (empty? drops)
+        (pos? (u/free-slots p))
+        (boolean (some #(and (drops (:name %)) (< (:count %) 64)) (u/inventory p))))))
 
 (defn problem
   "Why the job cannot run now: a wait reason map (see doc), or nil. Bad args, air and fluids pass: the round ends them."
@@ -99,8 +104,8 @@
 (defn ^:async collect!
   "One collect-drops round over the dug block's drops; finish when it is done."
   [c pos]
-  (let [{:keys [block drops]} (:dug (ctx/mem c))
-        r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius collect-radius :filter drops}))]
+  (let [{:keys [block ids]} (:dug (ctx/mem c))
+        r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius collect-radius :ids ids}))]
     (if (= :done r)
       (finish! c {:dug true :pos pos :block block :reason :dug
                   :collected (:collected (ctx/child-result c :collect) 0)})
@@ -112,10 +117,10 @@
   (await (tools/equip-for! c block))
   (let [r (await (tidy/dig! c pos))
         status (.-status r)
-        drops (vec (distinct (keep #(.-name %) (array-seq (or (.-drops r) #js [])))))]
+        ids (vec (keep #(.-id %) (array-seq (or (.-drops r) #js []))))]
     (case status
-      "dug" (if (and (:collect (:args c)) (seq drops))
-              (do (ctx/update-mem! c assoc :dug {:block block :drops drops}) :continue)
+      "dug" (if (and (:collect (:args c)) (seq ids))
+              (do (ctx/update-mem! c assoc :dug {:block block :ids ids}) :continue)
               (finish! c {:dug true :pos pos :block block :reason :dug :collected 0}))
       "missing" (finish! c {:dug false :pos pos :block block :reason :already-clear})
       "cannot" (finish! c {:dug false :pos pos :block block :reason :cannot})

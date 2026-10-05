@@ -2,9 +2,11 @@
   "Shared parts of the leaf jobs jobs.blocks.dig and jobs.blocks.place, and what a parent needs to run them as
   children: child-wait reads the reason a child's check would wait with, and body-wait? tells a reason about the body
   (a tool, an item, a free slot: the parent should wait on it too) from one about the cell (skip that cell)."
-  (:require [clojure.set :as set]
+  (:require ["minecraft-data" :as minecraft-data]
+            [clojure.set :as set]
             [engine.access.rules :as rules]
             [engine.ctx :as ctx]
+            [engine.foods :as foods]
             [engine.jobs.access :as access]
             [engine.jobs.forestry :as forestry]
             [engine.jobs.util :as u]
@@ -22,6 +24,21 @@
   "What jobs.blocks.place digs out of a cell before placing: the plants and snow layer a placement would overwrite
   (engine.access.rules/replaceable less air and fluids) and the small flowers, which a placement does not overwrite."
   (into (set/difference rules/replaceable air fluids) flowers))
+
+(def drops-table
+  "{block name [item name ..]} of what minecraft-data lists a block drops for a version (memoised): stone drops
+  cobblestone, ores their raw item or gem, grass_block dirt, and leaves, short grass and glass nothing."
+  (memoize
+   (fn [version]
+     (let [data (minecraft-data version)]
+       (into {} (map (fn [b] [(.-name b) (vec (keep #(some-> (aget (.-items data) %) .-name) (array-seq (.-drops b))))]))
+             (array-seq (.-blocksArray data)))))))
+
+(defn drops-of
+  "The item names block-name drops by minecraft-data for the version of primitives p (no tool or enchantment is
+  considered); the block's own name for a block the data does not list."
+  [p block-name]
+  (get (drops-table (foods/version-of p)) block-name [block-name]))
 
 (defn parse
   "{:pos {:x :y :z}} of args' :pos (a cell, fractions floored), or {:error text}."

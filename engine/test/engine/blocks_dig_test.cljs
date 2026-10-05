@@ -151,6 +151,46 @@
           (is (:dug (await (child-outcome eng job {:pos at :collect false} 5))))
           (is (= "air" (block-at p at))))))))
 
+(deftest a-same-named-item-lying-nearby-is-not-taken
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [lying {:id 99 :name "item" :kind "item" :pos {:x 1 :y 64 :z 0} :item {:name "cobblestone" :count 5}}
+              {:keys [eng p]} (setup {:self body :blocks {"2,64,0" "stone"} :drops {"stone" "cobblestone"}
+                                      :entities [lying] :inventory pick})
+              result (await (child-outcome eng job {:pos [2 64 0]} 10))]
+          (is (= {:dug true :collected 1} (select-keys result [:dug :collected])))
+          (is (= 1 (carried p "cobblestone")))
+          (is (= [99] (mapv #(.-id %) (array-seq (.entities p #js {:kind "item"}))))))))))
+
+(deftest the-drop-of-stone-is-cobblestone-for-the-room-check
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [stone-full (conj (vec (butlast full-inventory)) {:name "stone" :count 10})
+              env (setup {:self body :blocks {"2,64,0" "stone"} :inventory (into stone-full pick)})]
+          (is (= {:reason :inventory-full :pos at} (await (waiting-after env (list job {:pos at}) 3)))))))))
+
+(deftest a-carried-stack-of-the-real-drop-is-room
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self body :blocks {"2,64,0" "stone"} :drops {"stone" "cobblestone"}
+                                      :inventory (into (conj (vec (drop-last 2 full-inventory)) {:name "cobblestone" :count 10}) pick)})
+              result (await (child-outcome eng job {:pos at} 10))]
+          (is (= {:dug true :collected 1} (select-keys result [:dug :collected])))
+          (is (= 11 (carried p "cobblestone"))))))))
+
+(deftest a-block-with-no-drop-needs-no-room
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self body :blocks {"2,64,0" "oak_leaves"} :drops {"oak_leaves" []}
+                                      :inventory full-inventory})
+              result (await (child-outcome eng job {:pos at} 10))]
+          (is (= {:dug true :collected 0} (select-keys result [:dug :collected])))
+          (is (= "air" (block-at p at))))))))
+
 (deftest a-hazard-not-accepted-waits-hazard
   (async done
     (tu/run-async done
