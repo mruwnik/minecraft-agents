@@ -294,6 +294,9 @@
    ;; the goal flood: moves go to the probe instead of the search while it runs; fr the probed cell's region (-1 any)
    ^:mutable ^boolean flooding ^:mutable fx ^:mutable fy ^:mutable fz ^:mutable fr ^:mutable ^boolean hit ^:mutable flooded ^:mutable pre-flooded
    ^:mutable ^boolean flood-pending ^:mutable ^boolean leaked
+   ;; the late flood kept over the searches of one goal (options.goalFloodMemo, see keepFlood; nil: none), the expansions
+   ;; the earlier searches of that goal made (a late flood is due by all of them), and the cells taken over from them
+   ^js flood-memo ^:mutable flood-base ^:mutable lf-imported
    ;; the moves out of each cell the flood has expanded (key -> array of the keys its moves enter, see floodNode), for the
    ;; whole search: the world does not change under it, so a cell is expanded once however many floods ask about it
    ^js flood-moves ^:mutable ^js flood-out
@@ -2047,7 +2050,7 @@
 
   (floodRun [s ^js seen ^js queue start-key budget]
     (loop [head 0]
-      (if (and (< head (.-length queue)) (<= (.-size seen) budget))
+      (if (and (not leaked) (< head (.-length queue)) (<= (.-size seen) budget))
         (do
           (set! fx (aget queue head))
           (set! fy (aget queue (+ head 1)))
@@ -2078,7 +2081,7 @@
           (set! allow-shut true) ; a shut trapdoor is a way through, only dearer: the flood must not call its far side enclosed
           (let [open ^boolean (.floodRun s seen queue start-key budget)
                 enclosed (and (not open) (not leaked) (<= (.-size seen) budget))
-                leaks (and enclosed ^boolean sealed ^boolean (.floodLeaks s queue))]
+                leaks (and enclosed (or (and ^boolean sealed ^boolean (.floodLeaks s queue)) ^boolean (.floodGap s queue)))]
             (set! flooding false)
             (set! allow-shut false)
             (set! fr -1)
@@ -2101,6 +2104,22 @@
                        :else (recur (inc dy)))))
             true
             (recur (inc c)))))))
+
+  ;; a ladder with a gap ends below the climbable cell x y z: climbUp from its cell below the gap turns it away (gap-seen)
+  (gapBelow [s x y z]
+    (and ^boolean (.freeCell s (.stateAt s x (dec y) z))
+         (or ^boolean (.climbHere s x (- y 2) z)
+             (and ^boolean (.freeCell s (.stateAt s x (- y 2) z)) ^boolean (.climbHere s x (- y 3) z)))))
+
+  ;; true when a flooded cell is the top of a ladder with a gap: the goal is not walled in, its way in is that ladder, and
+  ;; the search says so (ladder-gap: lad-gap, the course whose only way up is such a ladder)
+  (floodGap [s ^js queue]
+    (loop [head 0]
+      (cond
+        (>= head (.-length queue)) false
+        (and ^boolean (.climbHere s (aget queue head) (aget queue (+ head 1)) (aget queue (+ head 2)))
+             ^boolean (.gapBelow s (aget queue head) (aget queue (+ head 1)) (aget queue (+ head 2)))) true
+        :else (recur (+ head 4)))))
 
   ;; true when the flooded region has a cliff edge: the goal sits on an island or above a drop, not in a pocket
   (floodLeaks [s ^js queue]
@@ -2302,11 +2321,13 @@
       (set! flood-pending false)))
 
   ;; A search that ran out of nodes with its late flood still due floods once more, so a walled-in goal is named.
-  ;; The budget is the flood budget if no late flood ran yet, else at most what the search expanded. Skipped when a
-  ;; ladder was turned away at a gap or a swim for air, because those reasons say more. True when that flood begins
+  ;; The budget is the flood budget if no late flood ran yet, else at most what the search expanded. A ladder turned
+  ;; away at a gap or a swim for air does not skip it: the flood takes the search's own moves and leaks at any water,
+  ;; and a flood that reaches the top of a ladder with a gap is not enclosed (floodGap), so a walled-in goal is walled in
+  ;; whatever else the search refused (settle names ladder-gap or air only when it is not). True when that flood begins
   ;; (step runs it and finishes the search: goal-enclosed, box or exhausted).
   (floodAtEnd [s]
-    (if (or (not flood-pending) goal-unloaded gap-seen air-seen)
+    (if (or (not flood-pending) goal-unloaded)
       false
       (do (.lateFloodBegin s (if (pos? flooded) (js/Math.min goal-flood expanded) goal-flood) true)
           true)))
@@ -2323,12 +2344,72 @@
     (set! lf-active true)
     (when (nil? lf-seen)
       (set! lf-seen (js/Set.))
-      (set! lf-queue #js [])
       (set! leaked false)
-      (.floodSeeds s lf-seen lf-queue)
-      (when (true? (.has lf-seen (aget node-keys 0)))
-        (set! lf-open true)
-        (set! lf-seed-open true))))
+      (when-not ^boolean (.takeFlood s)
+        (.clear lf-seen)
+        (set! lf-queue #js [])
+        (.floodSeeds s lf-seen lf-queue)
+        (when (true? (.has lf-seen (aget node-keys 0)))
+          (set! lf-open true)
+          (set! lf-seed-open true)))))
+
+  ;; ---- the late flood kept over the searches of one goal (options.goalFloodMemo) ----
+  ;; The backward flood does not depend on the start, only its meeting test does. A caller that begins a new search
+  ;; toward the same goal after each walk (go-to) passes one memo object to them all: each search writes its flood
+  ;; (the queue of x y z region, absolute, and its head), budget and schedule there (keepFlood), and the next one goes on
+  ;; with them (takeSchedule, takeFlood), so the floods grow by the expansions of all the searches and none starts
+  ;; afresh. A flood that leaked or met the start is dropped. The caller keeps a memo only while the world it read is
+  ;; current (engine.path.walk/goal-floods).
+
+  (goalId [s] (str goal-x "," goal-y "," goal-z "," goal-range))
+
+  (memoOfGoal [s]
+    (and (some? flood-memo) (identical? (.-goal flood-memo) (.goalId s))))
+
+  (dropMemo [s]
+    (set! (.-goal flood-memo) nil)
+    (set! (.-queue flood-memo) nil)
+    (set! (.-after flood-memo) nil))
+
+  ;; at the first step: the schedule of the earlier searches; a memo of another goal is emptied
+  (takeSchedule [s]
+    (when (some? flood-memo)
+      (cond
+        (not ^boolean (.memoOfGoal s)) (.dropMemo s)
+        (some? (.-after flood-memo)) (do (set! flood-base (.-expanded flood-memo))
+                                         (set! flood-after (.-after flood-memo))
+                                         (set! goal-flood (.-budget flood-memo))))))
+
+  ;; the kept flood made this search's late flood (its cells keyed afresh: keyOf is relative to the start); false when
+  ;; there is none or a cell lies out of this search's span. The start among its cells has met it.
+  (takeFlood [s]
+    (let [^js q (when ^boolean (.memoOfGoal s) (.-queue flood-memo))]
+      (if (nil? q)
+        false
+        (let [n (.-length q)]
+          (loop [i 0]
+            (cond
+              (>= i n) (do (set! lf-queue q)
+                           (set! lf-head (.-head flood-memo))
+                           (set! lf-imported (.-size lf-seen))
+                           (when (true? (.has lf-seen (aget node-keys 0))) (set! lf-open true))
+                           true)
+              (not ^boolean (.inSpan s (aget q i) (aget q (+ i 2)))) false
+              :else (do (.add lf-seen (.keyOf s (aget q i) (aget q (+ i 1)) (aget q (+ i 2)) (js/Math.max 0 (aget q (+ i 3)))))
+                        (recur (+ i 4)))))))))
+
+  ;; after each step: the flood and schedule into the memo; a flood that leaked or met the start is dropped
+  (keepFlood [s]
+    (when (some? flood-memo)
+      (if (or leaked lf-open)
+        (.dropMemo s)
+        (do (set! (.-goal flood-memo) (.goalId s))
+            (set! (.-after flood-memo) flood-after)
+            (set! (.-budget flood-memo) goal-flood)
+            (set! (.-expanded flood-memo) (+ flood-base expanded))
+            (when (some? lf-seen)
+              (set! (.-queue flood-memo) lf-queue)
+              (set! (.-head flood-memo) lf-head))))))
 
   ;; floods at most about allowance more cells of the run in progress; true when the run is over (the start met, the
   ;; flood exhausted, or past its budget), false when it stopped for the allowance
@@ -2341,7 +2422,7 @@
         (set! allow-shut true) ; a shut trapdoor is a way through, only dearer: the flood must not call its far side enclosed
         (let [state (loop []
                       (cond
-                        (not (and (< lf-head (.-length lf-queue)) (<= (.-size lf-seen) lf-budget))) 0
+                        (not (and (not leaked) (< lf-head (.-length lf-queue)) (<= (.-size lf-seen) lf-budget))) 0
                         (> (.-size lf-seen) limit) 1
                         :else
                         (do
@@ -2365,13 +2446,16 @@
   (lateFloodEnd [s]
     (set! lf-active false)
     (when-not lf-seed-open (set! flooded (.-size lf-seen)))
-    (and (not lf-open) (not leaked) (<= (.-size lf-seen) lf-budget)))
+    (and (not lf-open) (not leaked) (<= (.-size lf-seen) lf-budget) (not ^boolean (.floodGap s lf-queue))))
 
   ;; The goal flood costs about 30 ms, so easy queries must not see it: it runs after flood-after forward
-  ;; expansions. A slice of max-expansions counts each newly flooded cell as one.
+  ;; expansions (of this search and the earlier ones of a kept flood). A flood that grew is due again by then, or once
+  ;; the search has made half its max-nodes, so the last growth comes before the search runs out of nodes. A slice of
+  ;; max-expansions counts each newly flooded cell as one.
   (step [s max-expansions]
     (when-not started
       (.begin s)
+      (.takeSchedule s)
       (when (and (not finished) ^boolean (.goalEnclosedEarly s))
         (.finish s "goal-enclosed")))
     (loop [n 0]
@@ -2385,23 +2469,25 @@
               (not over) (recur (+ n used))
               lf-end (let [enclosed ^boolean (.lateFloodEnd s)]
                        (set! flood-pending false)
-                       (set! expanded (+ expanded flooded))
+                       (set! expanded (+ expanded (- flooded lf-imported)))
                        (.finish s (cond enclosed "goal-enclosed" boxed "box" :else "exhausted")))
               :else (let [enclosed ^boolean (.lateFloodEnd s)]
                       (.growFlood s lf-budget)
-                      (set! expanded (+ expanded flooded))
+                      (set! expanded (+ expanded (- flooded lf-imported)))
                       (if enclosed
                         (.finish s "goal-enclosed")
                         (do (.expandNext s)
                             (recur (+ n used)))))))
 
-          (and flood-pending (>= expanded flood-after) (not goal-unloaded))
+          (and flood-pending (not goal-unloaded)
+               (or (>= (+ flood-base expanded) flood-after) (and (some? lf-seen) (>= (* 2 n-nodes) max-nodes))))
           (do (.lateFloodBegin s goal-flood false)
               (recur n))
 
           :else
           (do (.expandNext s)
               (recur (inc n))))))
+    (.keepFlood s)
     finished)
 
   ;; ---- results ----
@@ -2786,7 +2872,7 @@
      (when multi (goal-array js/Uint8Array set-goals (fn [^js g] (if (identical? (.-kind g) "near") 1 0))))
      ;; options
      max-nodes (option options "maxDrop" 3) (option options "weight" 1) (option options "riskWeight" 2)
-     (option options "goalFlood" 4000) (option options "floodAfter" 3000) (option options "preFlood" 24)
+     (option options "goalFlood" 4000) (option options "floodAfter" 3000) (option options "preFlood" 256)
      (option options "frontierReach" 256)
      ;; avoid
      (some? avoid) (if (some? avoid) (.-kinds avoid) 0) (if (some? avoid) (.-cells avoid) nil) (if (some? avoid) (.-factor avoid) 0)
@@ -2827,6 +2913,8 @@
      ;; the goal flood: flooding fx fy fz fr hit flooded pre-flooded flood-pending leaked
      false 0 0 0 -1 false 0 0
      (and near (pos? (option options "goalFlood" 4000))) false
+     ;; flood-memo flood-base lf-imported
+     (when (and near (pos? (option options "goalFlood" 4000))) (.-goalFloodMemo options)) 0 0
      ;; flood-moves flood-out flood-h-keys flood-h-vals flood-target
      (js/Map.) nil nil nil 0
      ;; progress: started finished reason over-budget boxed goal-node best-node

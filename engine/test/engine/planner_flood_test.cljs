@@ -303,3 +303,89 @@
     small-floor-deck [0 64 0] [6 71 6] {}
     (walkway 47) [18 80 8] [10 64 8] {}
     flat [0 64 0] [30 64 2] {:floodAfter 5 :goalFlood 10}))
+
+;; ---- the flood schedule (cards 29912d63, 59551eba) ----
+
+;; a 12 x 12 ring of fence round x 10..21, z -6..5 (100 cells inside) over a floor (live: a gateless 12 x 12 pen on a
+;; platform; the early flood's 24 nodes never covered it, and the body walked to a post)
+(def big-pen
+  {:blocks (merge (floor -2 -8 40 8)
+                  (apply dissoc (box 10 64 -6 21 64 5 "oak_fence") (keys (box 11 64 -5 20 64 4 "x"))))})
+
+(deftest a-12-by-12-gateless-pen-is-enclosed-before-the-search
+  (is (= "goal-enclosed" (:reason (plan-over big-pen [15 64 0] {:maxNodes 1})))))
+
+;; small-floor-deck with a ladder against a stone post at (0, 64..67, -2) whose rung at y 65 is missing: the search turns
+;; the ladder away at the gap (ladder-gap) and runs out of floor; the goal on the deck is walled in all the same
+(def deck-and-gappy-ladder
+  {:blocks (merge (:blocks small-floor-deck) (box 0 64 -2 0 67 -2 "stone") {"0,64,-1" "ladder" "0,66,-1" "ladder"})
+   :states {"0,64,-1" {:facing "south"} "0,66,-1" {:facing "south"}}})
+
+(deftest a-ladder-gap-elsewhere-does-not-hide-a-walled-in-goal
+  (is (= "ladder-gap" (:reason (result-over deck-and-gappy-ladder [0 64 0] [6 71 6] {:goalFlood 0}))) "the search saw the gap")
+  (is (= "goal-enclosed" (:reason (result-over deck-and-gappy-ladder [0 64 0] [6 71 6] {})))))
+
+;; a sealed 45 x 45 deck (2025 cells) over a 93 x 93 floor: the floods of 100, 400 and 1600 cells run out, and the next
+;; (6000) was due after 10240 expansions, past the 6000 nodes the search may make: it must come before them
+(def wide-deck {:blocks (merge (floor -2 -2 90 90) (box 10 70 10 54 70 54 "stone"))})
+
+(deftest a-sealed-area-is-proved-before-max-nodes
+  (let [r (result-over wide-deck [0 64 0] [30 71 30] {:preFlood 0 :floodAfter 20 :goalFlood 100 :maxNodes 6000})]
+    (is (= "goal-enclosed" (:reason r)))
+    (is (> (get-in r [:stats :flooded]) 1600))))
+
+;; water beside the goal: the flood can prove nothing once it meets water, so it stops there (not at the start, 30 away)
+(deftest a-flood-that-leaks-stops
+  (let [r (result-over {:blocks (assoc flat "31,64,0" "water" "31,63,0" "stone")} [0 64 0] [30 64 0]
+                       {:preFlood 0 :floodAfter 0 :goalFlood 100000})]
+    (is (= "found" (:status r)))
+    (is (< (get-in r [:stats :flooded]) 50))))
+
+;; ---- the flood kept over searches toward one goal (options.goalFloodMemo) ----
+
+(defn rounds
+  "Searches toward goal over spec, one a round of n expansions, each from the next start of froms (cycled), as go-to
+  begins one after each walk; memo the options.goalFloodMemo they share (nil: none). The reason of the first that ends
+  within k rounds, else :unfinished."
+  [spec froms goal options n k memo]
+  (let [pw (.pathWorld (tu/fake spec))]
+    (loop [i 0]
+      (if (>= i k)
+        :unfinished
+        (let [^js p (planner/create-plan (.-snapshot pw) (query-of (nth (cycle froms) i) goal)
+                                         (js/Object.assign #js {:table (.-table pw) :space (.-space pw) :goalFloodMemo memo}
+                                                           (clj->js options)))]
+          (if (.step p n)
+            (let [r (.result p)] (or (.-reason r) (.-status r)))
+            (recur (inc i))))))))
+
+(def small-floods {:preFlood 0 :floodAfter 20 :goalFlood 100})
+
+(deftest a-flood-goes-on-over-the-searches-of-one-goal
+  (is (= :unfinished (rounds high-deck [[0 64 0] [2 64 0]] [20 71 20] small-floods 300 12 nil))
+      "each search floods afresh and never gets to the flood that proves it")
+  (is (= "goal-enclosed" (rounds high-deck [[0 64 0] [2 64 0]] [20 71 20] small-floods 300 12 #js {}))))
+
+(deftest a-kept-flood-of-another-goal-is-not-used
+  (let [memo #js {}]
+    (is (= :unfinished (rounds high-deck [[0 64 0]] [20 71 20] small-floods 300 2 memo)))
+    (set! (.-after memo) 0) ; the kept flood would go on at once
+    (is (= "found" (rounds high-deck [[0 64 0]] [40 64 40] (assoc small-floods :floodAfter 0) 100000 1 memo)))))
+
+;; a search that begins inside the kept flood can reach the goal: the flood must not call the goal walled in
+(deftest a-start-inside-the-kept-flood-meets-it
+  (let [memo #js {}]
+    (is (= :unfinished (rounds high-deck [[0 64 0]] [15 71 15] small-floods 300 2 memo)))
+    (is (some? (.-queue memo)) "a flood is kept")
+    (set! (.-after memo) 0) ; the kept flood goes on at once
+    (is (= "found" (rounds high-deck [[16 71 15]] [15 71 15] (assoc small-floods :floodAfter 0) 100000 1 memo)))))
+
+;; the deck of up-to-deck whose ladder lacks its rung at y 65: the ladder is the way in, so the goal is not walled in, early
+;; or late, and the answer names the gap
+(def gappy-ladder-deck {:blocks (dissoc (:blocks (up-to-deck "ladder")) "3,65,0")
+                        :states {"3,64,0" {:facing "south"} "3,66,0" {:facing "south"}}})
+
+(deftest a-goal-whose-way-in-is-a-ladder-with-a-gap-is-not-enclosed
+  (is (not= "goal-enclosed" (:reason (plan-over gappy-ladder-deck [6 67 0] {:maxNodes 1}))))
+  (is (= "ladder-gap" (:reason (plan-over gappy-ladder-deck [6 67 0] {}))))
+  (is (= "ladder-gap" (:reason (plan-over gappy-ladder-deck [6 67 0] {:preFlood 0 :floodAfter 0})))))

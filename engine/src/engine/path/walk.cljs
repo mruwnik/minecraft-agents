@@ -325,10 +325,19 @@
         (swap! known-land assoc who fresh)
         fresh))))
 
+(defonce ^{:doc "The goal flood of go-to's budgeted searches toward one goal, per body (by name): {:key :t :memo}, memo the
+  planner's options.goalFloodMemo (a JS object the searches write their late flood to and go on with), key what they plan
+  but the start [to range weight policy walls], t when it began (ms). Each walk begins a new search; without it the
+  flood started afresh each time and a large sealed area was proved only once the walks stopped (live j53, ~30 s). Kept
+  for search-max-age-ms like a search (the flood read the world as it was); forgotten with the known land."}
+  goal-floods (atom {}))
+
 (defn forget-known!
-  "Forget the body's known land (known-land)."
+  "Forget the body's known land (known-land) and its kept goal flood (goal-floods)."
   [c]
-  (swap! known-land dissoc (.-username (.self (:primitives c)))))
+  (let [who (.-username (.self (:primitives c)))]
+    (swap! known-land dissoc who)
+    (swap! goal-floods dissoc who)))
 
 (defn learn-known!
   "Add the cells a planner result knew to its end (its known, set when it ran out of land) to the known land's cells,
@@ -345,6 +354,19 @@
 
 (defn body-name [c] (.-username (.self (:primitives c))))
 
+(defn goal-flood!
+  "The body's kept goal flood memo for searches of to within range (goal-floods), a new one when it held another goal or
+  is older than search-max-age-ms."
+  [c to range weight policy walls]
+  (let [who (body-name c)
+        k [to range weight policy walls]
+        kept (get @goal-floods who)]
+    (if (and (= k (:key kept)) (< (- (js/Date.now) (:t kept)) search-max-age-ms))
+      (:memo kept)
+      (let [memo #js {}]
+        (swap! goal-floods assoc who {:key k :t (js/Date.now) :memo memo})
+        memo))))
+
 (defn search-key [c to range weight policy walls]
   (let [{:keys [x y z]} (body-cell c)]
     [[x y z] to range weight policy walls]))
@@ -360,12 +382,13 @@
   snapshot read the goal unloaded. With known land (go-to's frontier walks), :edge-stop true: its searches set the
   planner's stopAtEdge, so one toward a goal that is unloaded ends at the first loaded-edge node it expands, its frontier,
   not after searching all loaded land (card 7a031d15: over max-searching rounds when no node got progress-blocks nearer)."
-  [c walled to range weight policy key known]
+  [c walled to range weight policy key known & [flood]]
   {:key key :t (js/Date.now) :walled walled :r nil :unlimited nil
    :goal-unloaded (goal-unloaded? (.-snapshot walled) to)
    :edge-stop (some? known)
    :limited (planner/create-plan (.-snapshot walled) (plan-query c to range)
                                  (cond-> (plan-options walled weight (executor/planner-limits policy (solid-fn walled)) wide-box)
+                                   flood (doto (unchecked-set "goalFloodMemo" flood))
                                    known (doto (unchecked-set "knownCells" (:cells known))
                                                (unchecked-set "knownEdges" (:edges known))
                                                (unchecked-set "stopAtEdge" true))))})
@@ -446,7 +469,7 @@
         known (when frontier (known-cells! c to range))
         search (if (go-on? kept k pw to)
                  kept
-                 (new-search c (with-walls pw walls) to range weight policy k known))
+                 (new-search c (with-walls pw walls) to range weight policy k known (goal-flood! c to range weight policy walls)))
         [search within] (await (run-search! c search budget policy to range weight))
         ms (- (js/performance.now) t)]
     (if within

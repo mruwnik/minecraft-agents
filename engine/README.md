@@ -1904,18 +1904,28 @@ The walk driver watches the way ahead while it walks (`engine.path.walk/follow!`
 
 An enclosed goal is found before any walking.
 - For a `near` goal whose column is loaded, `step` first runs the backward goal flood with a small budget
-  (`options.preFlood`, default 24 cells seen, capped by `goalFlood`; 0 turns it off). If the flood exhausts without
+  (`options.preFlood`, default 256 cells seen, capped by `goalFlood`; 0 turns it off: a 12x12 pen floods ~144). If the flood exhausts without
   meeting the start, and the flooded cells have no cliff edge beside them, the answer is `goal-enclosed`, `none`, no path,
   `expanded` 0. A cliff edge is a free column with nothing to stand on within a drop: a goal on an island or above a drop
   is left to the search, which ends in a partial plan.
 - This early pass leaves `stats.flooded` and `expanded` alone and reports its size as `stats.preFlooded`.
 - Otherwise the search goes on, and the late flood (after `floodAfter` expansions, `goalFlood` cells) covers bigger
   enclosed areas. A late flood that runs out of its budget (without leaking or meeting the start) runs again after 8
-  times the expansions with 4 times the budget (at most `maxNodes`). So the floods cost about half the search, and a
-  large sealed region is still proved.
+  times the expansions with 4 times the budget (at most `maxNodes`), or as soon as the search has made `maxNodes`/2
+  nodes, so the last growth comes before the search runs out of nodes (a 16000-64000-cell sealed area was left
+  `budget`). So the floods cost about half the search, and a large sealed region is still proved.
+- A flood stops at its first leak (water, or a cell it cannot see): it can prove nothing more.
 - A search that runs out of nodes with its late flood still due floods once more: with `goalFlood`, or no more than it
-  expanded when a late flood already ran. Not after a ladder gap or a swim refused for air, whose reasons say more. So a
-  goal in a small platform's pen is `goal-enclosed`, not the partial end's one-way drop.
+  expanded when a late flood already ran. Also after a ladder gap or a swim refused for air: the flood takes the
+  search's own moves and leaks at any water, so a walled-in goal is `goal-enclosed`, and `ladder-gap`/`air` are named
+  only when it is not. A flood (early or late) that reaches the top of a ladder with a gap is never enclosed: that
+  ladder is the way in, and the answer stays `ladder-gap`. So a goal in a small platform's pen is `goal-enclosed`, not the partial end's one-way drop.
+- Kept flood (`options.goalFloodMemo`, go-to only): a JS object the searches toward one goal share. Each writes its late
+  flood there (queue of absolute cells, head, budget, schedule, expansions so far); the next search, from wherever the
+  body walked, keys the cells afresh and goes on with them, its floods due by the expansions of all the searches. A start among the kept cells has met the flood; a flood that leaked or met the start is
+  dropped; a memo of another goal is emptied. `engine.path.walk/goal-floods` keeps one per body for
+  `search-max-age-ms`, forgotten with the known land (go-to's start, each escalation). Before it each progress walk
+  started the flood afresh (live j53: ~30 s to prove a sealed platform).
 - The late floods and the flood at the end are one flood, continued: a grown flood goes on from where the last one
   stopped. It is breadth-first from the same seeds, so it floods and answers as a fresh one with its budget would, stats
   included. It runs in `create-plan`'s slices like expansions (each newly flooded cell counts as one), so no slice holds
