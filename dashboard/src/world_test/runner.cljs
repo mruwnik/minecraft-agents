@@ -345,11 +345,38 @@
 
 ;; ------------------------------------------------------------------ main
 
+(defn body-lease-file [name] (path/join lease-dir (str "body-" name ".lease")))
+
+(defn read-body-leases
+  "{body-name pid} of the body lease files in the lease dir."
+  []
+  (if-not (fs/existsSync lease-dir)
+    {}
+    (into {} (keep (fn [f]
+                     (when-let [[_ name] (re-matches #"body-(.+)\.lease" f)]
+                       (let [n (js/parseInt (str/trim (fs/readFileSync (path/join lease-dir f) "utf8")) 10)]
+                         (when-not (js/isNaN n) [name n]))))
+                   (array-seq (fs/readdirSync lease-dir))))))
+
+(defn lease-body!
+  "Records that this runner's body is a test body (the other runners' players check ignores it while this PID lives)."
+  [{:keys [body]}]
+  (fs/mkdirSync lease-dir #js {:recursive true})
+  (fs/writeFileSync (body-lease-file body) (str (.-pid js/process))))
+
+(defn release-body! [{:keys [body]}]
+  (try (fs/unlinkSync (body-lease-file body)) (catch :default _ nil)))
+
 (defn players-near
-  "Resolves to the reply of the check for other players within 500 blocks of the grid's centre."
+  "Resolves to nil, or to the refusal text, when a player other than this body and the bodies of live runners
+  (body leases) is within 500 blocks of the grid's centre; it names who is online besides those."
   [opts]
-  (let [[x y z] (f/grid-centre f/default-grid)]
-    (.then (rcon! [(str "execute if entity @a[name=!" (:body opts) ",x=" x ",y=" y ",z=" z ",distance=..500]")]) first)))
+  (let [leased (lease/leased-bodies (read-body-leases) pid-alive?)]
+    (.then (rcon! [(lease/near-command (:body opts) leased (f/grid-centre f/default-grid)) "list"])
+           (fn [[reply listing]]
+             (when (str/includes? reply "Test passed")
+               (str "another player is within 500 blocks of the plot grid (not a leased test body): "
+                    (str/join ", " (lease/strangers (lease/parse-online listing) (:body opts) leased))))))))
 
 (defn run-all! [opts cases]
   (let [groups (group-by :register cases)
@@ -386,15 +413,17 @@
                    (running? opts) (do (log! "the body " (:body opts) " already runs; stop it first") 2)
                    :else
                    (.then (players-near opts)
-                          (fn [reply]
-                            (if (str/includes? reply "Test passed")
-                              (do (log! "another player is within 500 blocks of the plot grid: " reply) 2)
+                          (fn [refusal]
+                            (if refusal
+                              (do (log! refusal) 2)
                               (-> (ensure-body! opts)
+                                  (.then #(lease-body! opts))
                                   (.then #(run-all! opts cases))
                                   (.then (fn [results]
                                            (when-let [file (:results opts)] (fs/writeFileSync file (pr-str results)))
                                            (let [n (frequencies (map :status results))]
                                              (log! "world-test: " (count results) " runs, " (n :pass 0) " passed, " (n :fail 0) " failed, "
                                                    (n :error 0) " errors, " (n :skipped 0) " skipped")
-                                             (if (= (count results) (n :pass 0)) 0 1))))))))))))
+                                             (if (= (count results) (n :pass 0)) 0 1))))
+                                  (.finally #(release-body! opts))))))))))
       (.catch (fn [e] (js/console.error (.-message e)) (js/console.error usage) 2))))

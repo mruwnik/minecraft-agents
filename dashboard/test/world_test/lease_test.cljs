@@ -45,3 +45,18 @@
   (is (= "2026-10-05T15:04:09.007+01:00" (l/local-iso [2026 10 5 15 4 9 7] 60)))
   (is (= "2026-10-05T03:04:09.120-05:30" (l/local-iso [2026 10 5 3 4 9 120] -330)))
   (is (= "2026-01-02T00:00:00.000+00:00" (l/local-iso [2026 1 2 0 0 0 0] 0))))
+
+(deftest bodies-with-a-live-lease-are-not-other-players
+  (is (= #{"BodyA"} (l/leased-bodies {"BodyA" 10 "BodyB" 99} (fn [pid] (= pid 10))))))
+
+(deftest the-online-list-reply-is-parsed-into-names
+  (is (= ["A" "B"] (l/parse-online "There are 2 of a max of 20 players online: A, B")))
+  (is (= [] (l/parse-online "There are 0 of a max of 20 players online: "))))
+
+(deftest near-players-skip-leased-bodies-and-self
+  (is (= ["Someone"] (l/strangers ["Me" "BodyA" "Someone"] "Me" #{"BodyA"})))
+  (is (= [] (l/strangers ["Me" "BodyA"] "Me" #{"BodyA"}))))
+
+(deftest the-near-check-excludes-every-leased-body-by-name
+  (is (= "execute if entity @a[name=!Me,name=!BodyA,x=1,y=2,z=3,distance=..500]"
+         (l/near-command "Me" #{"BodyA"} [1 2 3]))))
