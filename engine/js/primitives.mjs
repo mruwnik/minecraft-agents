@@ -9,7 +9,7 @@ import { connectBot } from './connect.mjs'
 import { createView } from './view.mjs'
 import { createRawWorld } from './raw-world.mjs'
 import { lineClear, rayClear } from './sight.mjs'
-import { isReplaceable } from './blocks.mjs'
+import { isReplaceable, isInteractable } from './blocks.mjs'
 import { craftItem } from './craft.mjs'
 import { tradeWith } from './trade.mjs'
 import { say } from './chat.mjs'
@@ -677,7 +677,10 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
           if (bot.entity.position.y < start.y + 1.01) return outcome('not-raised')
           // placeBlock's own unforced lookAt turns gradually when the body is slightly off-centre and delays the packet
           // ~1 s, until the body has fallen back into the cell and the server refuses; 'ignore' sends it at once
+          const sneakOn = isInteractable(below.name)
+          if (sneakOn) bot.setControlState('sneak', true)
           const failure = await bot._placeBlockWithOptions(below, new Vec3(0, 1, 0), { swingArm: 'right', forceLook: 'ignore' }).then(() => null, err => err)
+          if (sneakOn) bot.setControlState('sneak', false)
           ctx.alive()
           release()
           if (failure) return outcome(`place-failed: ${String(failure.message ?? failure).slice(0, 100)}`)
@@ -721,9 +724,14 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     })
   }
 
-  const supportFor = p => [[0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, 1, 0]]
+  // A player clicks a plain block when there is one; a door, chest or table would open instead of taking the block.
+  const supportCandidates = p => [[0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, 1, 0]]
     .map(([dx, dy, dz]) => ({ ref: bot.blockAt(new Vec3(p.x + dx, p.y + dy, p.z + dz)), face: new Vec3(-dx, -dy, -dz) }))
-    .find(({ ref }) => ref && !isAir(ref.name) && ref.boundingBox === 'block')
+    .filter(({ ref }) => ref && !isAir(ref.name) && ref.boundingBox === 'block')
+  const supportFor = p => {
+    const candidates = supportCandidates(p)
+    return candidates.find(({ ref }) => !isInteractable(ref.name)) ?? candidates[0]
+  }
 
   const isBucket = name => name === 'bucket' || name.endsWith('_bucket')
   const isLiquid = name => name === 'water' || name === 'lava'
@@ -780,6 +788,17 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       if (click.sneak) sneak(false)
     }
   }
+  // Sneaking skips the block's own use, so the click places; released again whatever the placement does.
+  const placeSneaking = async (ctx, { ref, face }, sneak) => {
+    if (!sneak) return bot.placeBlock(ref, face)
+    ctx.onAbort(() => bot.setControlState('sneak', false))
+    bot.setControlState('sneak', true)
+    try {
+      await bot.placeBlock(ref, face)
+    } finally {
+      bot.setControlState('sneak', false)
+    }
+  }
   const isClick = (c, p) => Boolean(c) && isPos(c.against) && isPos(c.cursor) &&
     Math.abs(c.against.x - p.x) + Math.abs(c.against.y - p.y) + Math.abs(c.against.z - p.z) === 1 &&
     [c.cursor.x, c.cursor.y, c.cursor.z].every(v => v >= 0 && v <= 1)
@@ -805,7 +824,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       await bot.equip(item, 'hand')
       ctx.alive()
       if (a.click) await clickPlace(ctx, support, a.click)
-      else await bot.placeBlock(support.ref, support.face)
+      else await placeSneaking(ctx, support, isInteractable(support.ref.name))
       const now = bot.blockAt(vec(p))
       return { status: 'placed', block: a.item, placed: { name: now?.name, properties: now ? stateProperties(now) : {} } }
     })

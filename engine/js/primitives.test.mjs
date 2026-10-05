@@ -2483,3 +2483,32 @@ test('a plain place reads the block back too', async () => {
   p.setOwner('t1')
   assert.deepEqual(await p.place('t1', { pos: at(1, 64, 0), item: 'oak_log' }), { status: 'placed', block: 'oak_log', placed: { name: 'oak_log', properties: { axis: 'y' } } })
 })
+
+// ---- place against an interactable block: a click on a door, chest or table opens it instead of placing ----
+
+// the reference block and the sneak state at each placeBlock, read off the call log
+const placeTrace = bot => bot.calls.filter(c => ['placeBlock', 'setControlState'].includes(c.name))
+  .map(c => c.name === 'placeBlock' ? ['place', c.args[0].name] : [c.args[0], c.args[1]])
+
+const interactables = ['oak_door', 'iron_door', 'oak_trapdoor', 'oak_fence_gate', 'chest', 'trapped_chest', 'ender_chest', 'barrel', 'crafting_table', 'furnace', 'blast_furnace', 'smoker', 'anvil', 'red_bed', 'stone_button', 'lever', 'note_block', 'enchanting_table', 'brewing_stand', 'hopper', 'dispenser', 'dropper', 'shulker_box', 'red_shulker_box']
+
+for (const name of interactables) {
+  test(`place with only a ${name} to click sneaks for the click and releases after`, async () => {
+    const { bot, p } = rig({ blocks: { '5,69,5': name }, items: [{ name: 'cobblestone', count: 2, slot: 36 }], pos: [5.5, 70, 5.5] })
+    assert.equal((await p.place('t1', { pos: at(5, 70, 5), item: 'cobblestone' })).status, 'placed')
+    assert.deepEqual(placeTrace(bot), [['sneak', true], ['place', name], ['sneak', false]])
+  })
+
+  test(`place prefers a plain wall to a ${name}, without sneaking`, async () => {
+    const { bot, p } = rig({ blocks: { '5,69,5': name, '6,70,5': 'stone' }, items: [{ name: 'cobblestone', count: 2, slot: 36 }], pos: [5.5, 70, 5.5] })
+    assert.equal((await p.place('t1', { pos: at(5, 70, 5), item: 'cobblestone' })).status, 'placed')
+    assert.deepEqual(placeTrace(bot), [['place', 'stone']])
+  })
+}
+
+test('place releases sneak when the placement throws', async () => {
+  const { bot, p } = rig({ blocks: { '5,69,5': 'oak_door' }, items: [{ name: 'cobblestone', count: 2, slot: 36 }], pos: [5.5, 70, 5.5], hang: [] })
+  bot.placeBlock = () => Promise.reject(new Error('refused'))
+  assert.equal((await p.place('t1', { pos: at(5, 70, 5), item: 'cobblestone' })).status, 'failed')
+  assert.equal(bot.controlState.sneak, false)
+})
