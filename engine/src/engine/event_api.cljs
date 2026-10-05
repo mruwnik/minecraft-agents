@@ -165,15 +165,19 @@
      :updated-at (:updated-at request)}))
 
 (defn death-summary
-  "What status reports of a :died memory entry at now: {:pos :cause? :ago-ms :despawns-in-ms}
-  while the drops can still be there (under the five minute despawn window), else nil."
-  [entry now]
-  (when entry
-    (let [ago (- now (:t entry))
-          {:keys [pos cause]} (:data entry)]
-      (when (< ago value/despawn-ms)
-        (cond-> {:pos pos :ago-ms ago :despawns-in-ms (- value/despawn-ms ago)}
-          cause (assoc :cause cause))))))
+  "What status reports of a :died memory entry at now: {:pos :cause? :ago-ms :despawns-in-ms :recovered?}
+  while the drops can still be there (under the five minute despawn window), else nil. :recovered is the decision
+  of a :recovered entry newer than the death (:collected, :partial, :skip, :abandoned), when there is one."
+  ([entry now] (death-summary entry now nil))
+  ([entry now recovered]
+   (when entry
+     (let [ago (- now (:t entry))
+           {:keys [pos cause]} (:data entry)
+           decision (when (and recovered (> (:t recovered) (:t entry))) (:decision (:data recovered)))]
+       (when (< ago value/despawn-ms)
+         (cond-> {:pos pos :ago-ms ago :despawns-in-ms (- value/despawn-ms ago)}
+           cause (assoc :cause cause)
+           decision (assoc :recovered decision)))))))
 
 (defn status [eng requested-limit]
   (let [s (core/state eng)
@@ -204,7 +208,7 @@
                  (string? (:why manual)) (update :why #(short-text % 160))))
      :position (core/self-pos p)
      :died (let [view (mem/view (:store eng))]
-             (death-summary (mem/latest view :died) (:now view)))
+             (death-summary (mem/latest view :died) (:now view) (mem/latest view :recovered)))
      :health (when (number? (.-health self)) (.-health self))
      :food (when (number? (.-food self)) (.-food self))
      :current (when current

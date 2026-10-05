@@ -69,11 +69,14 @@
 
 (defn died-view
   "A recent death: where it happened (the drops lie there), the cause when known, seconds since and seconds
-  until the drops despawn."
-  [{:keys [pos cause ago-ms despawns-in-ms]}]
-  (let [at (position pos)]
+  until the drops despawn; once the pile is picked up (:recovered \"collected\") the pile and timer are left out."
+  [{:keys [pos cause ago-ms despawns-in-ms recovered]}]
+  (let [at (position pos)
+        picked-up? (= "collected" (name (or recovered "")))]
     (clean-pairs :at at :cause (clip cause 80) :ago-s (js/Math.round (/ ago-ms 1000))
-                 :pile-at at :despawns-in-s (js/Math.round (/ despawns-in-ms 1000)))))
+                 :recovered (when recovered (name recovered))
+                 :pile-at (when-not picked-up? at)
+                 :despawns-in-s (when-not picked-up? (js/Math.round (/ despawns-in-ms 1000))))))
 
 (defn compact-status
   "Status without metadata or empty collections: positions rounded, queued jobs apart from the current one."

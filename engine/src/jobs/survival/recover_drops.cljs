@@ -14,8 +14,9 @@
   with :decision :skip) when engine.jobs.value/item-value of what was carried (with :value-overrides, plus 5 a level
   of experience) is at most engine.jobs.value/fetch-cost plus :margin: a trip of 10, 0.3 a block of the straight
   distance, 10 a point of engine.jobs.danger/route-danger along engine.jobs.danger/straight-route past the hostiles
-  the body sees (with :danger-overrides, after its armour), infinite when lava, fire or the void took the pile or the
-  walk would end after the despawn. A fetch emits recover-drops.fetching, a skip recover-drops.decided; both texts give
+  the body knows of (seen or heard, remembered while likely near: engine.jobs.reach/known-hostiles; with
+  :danger-overrides, after its armour), infinite when lava, fire or the void took the pile or the walk would end after
+  the despawn. A fetch emits recover-drops.fetching, a skip recover-drops.decided; both texts give
   the value, the cost and their main parts. Otherwise walk to the
   death point (jobs.movement.go-to), then collect the items of the pile
   (the carried item names) it can see within :collect-radius, 10 as a pile
@@ -76,6 +77,8 @@
     :skip (str "skip: " (why-text decided margin))
     :fetch (str "fetch: " (why-text decided margin))
     :collected (str "collected " items " items")
+    :partial (str "partial: " items " items back, left " (str/join ", " (map (fn [[k n]] (str n " " k)) (:left decided)))
+                  ", " (case reason :unreachable "in sight but not picked up" "not in sight"))
     :abandoned (str "abandoned: " (name (or reason :unknown)))))
 
 (defn finish!
@@ -84,7 +87,7 @@
   (let [pos (:pos (:data (died/unrecovered-death (ctx/view c))))]
     (ctx/remember! c :recovered (merge {:decision decision} fields) recovered-policy)
     (ctx/emit! c :recover-drops.decided :info
-               (assoc (select-keys fields [:value :cost :reason :items :parts :top-items :top-mobs])
+               (assoc (select-keys fields [:value :cost :reason :items :left :parts :top-items :top-mobs])
                       :decision decision :pos pos
                       :text (decision-text decision fields (:margin (:args c)))))
     :done))
@@ -121,9 +124,12 @@
 (def top-n 3)
 
 (defn seen-hostiles
-  "The hostiles the body sees (sensing's visible field), as a player would: none heard or known through walls."
+  "The hostiles the body knows of within 64 (engine.jobs.reach/known-hostiles: the perception's mob memory, seen or
+  heard and remembered while likely still near, as a player would; none it never sensed). Primitives without that
+  memory: the ones in sight now."
   [p]
-  (filter #(true? (.-visible %)) (array-seq (.entities p #js {:radius 64 :kind "hostile" :max 32}))))
+  (let [known (reach/known-hostiles p 64 {})]
+    (if (.-knownMobs p) known (filterv reach/seen-mob? known))))
 
 (defn overrides-arg
   "The override map of arg k, or {} with a recover-drops.bad-overrides warn when it is not a map."
@@ -155,12 +161,18 @@
       (:reason cost) (assoc :reason (:reason cost))
       (seq (:mobs threat)) (assoc :top-mobs (mapv #(select-keys % [:name :danger]) (take top-n (:mobs threat)))))))
 
-(defn ^:async go! [c pos]
+(def max-collect-passes "Walks back to the pile after a collect pass that left visible items of it behind." 3)
+(def stray-range "A body this far from the death point in the collect phase (a flee cut the trip) walks back first." 5)
+
+(defn ^:async go!
+  "Walk to the death point. A walk that does not arrive (a fire or a mob in the way, a door) is retried on the next
+  round while the pile is worth it: round writes :abandoned itself when the window closes."
+  [c pos]
   (let [r (await (ctx/call-child c :go 'jobs.movement.go-to {:pos pos :range arrive-range}))]
     (cond
       (not= :done r) :continue
-      (not (:arrived (ctx/child-result c :go))) (finish! c :abandoned (assoc (:decided (ctx/mem c)) :reason :unreachable))
-      :else (do (ctx/update-mem! c assoc :phase :collect) (save-trip! c) :continue))))
+      (not (:arrived (ctx/child-result c :go))) (do (ctx/update-mem! c assoc :blocked true) :continue)
+      :else (do (ctx/update-mem! c assoc :phase :collect :blocked false) (save-trip! c) :continue))))
 
 (defn carried-counts
   "{item name total} of what the body carries."
@@ -177,15 +189,54 @@
         wanted (reduce (fn [m {:keys [name count]}] (update m name (fnil + 0) count)) {} pile)]
     (reduce + 0 (map (fn [[name n]] (min n (max 0 (- (get now name 0) (get baseline name 0))))) wanted))))
 
-(defn ^:async collect! [c radius pile]
-  (let [r (if (>= (recovered-items c pile) (reduce + 0 (map :count pile)))
-            :done
-            (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius radius :filter (vec (distinct (map :name pile))) :visible-only true})))
-        items (recovered-items c pile)]
+(defn pile-ids
+  "Ids of the item entities in sight lying within radius of pos whose name is one of names."
+  [c pos names radius]
+  (let [wanted (set names)]
+    (->> (array-seq (.entities (:primitives c) #js {:radius (+ radius stray-range 4) :kind "item" :max 64}))
+         (remove #(false? (.-visible %)))
+         (filter #(wanted (some-> (.-item %) .-name)))
+         (filter #(<= (u/dist pos (u/pos-of (.-pos %))) radius))
+         (mapv #(.-id %)))))
+
+(defn left-over
+  "{item name count} of the pile not yet back in the inventory."
+  [c pile]
+  (let [baseline (:baseline (ctx/mem c))
+        now (carried-counts c)
+        wanted (reduce (fn [m {:keys [name count]}] (update m name (fnil + 0) count)) {} pile)]
+    (into {} (keep (fn [[name n]] (let [l (- n (max 0 (- (get now name 0) (get baseline name 0))))] (when (pos? l) [name l]))) wanted))))
+
+(defn finish-collect!
+  "End the collect phase: :collected when all of the pile is back, else :partial naming what is left and why."
+  [c pile ids]
+  (let [items (recovered-items c pile)
+        left (left-over c pile)
+        decided (:decided (ctx/mem c))]
     (cond
-      (= :continue r) :continue
-      (pos? items) (finish! c :collected (assoc (:decided (ctx/mem c)) :items items))
-      :else (finish! c :abandoned (assoc (:decided (ctx/mem c)) :items 0 :reason :nothing-found)))))
+      (empty? left) (finish! c :collected (assoc decided :items items))
+      (zero? items) (finish! c :abandoned (assoc decided :items 0 :reason :nothing-found))
+      :else (finish! c :partial (assoc decided :items items :left left :reason (if (seq ids) :unreachable :not-visible))))))
+
+(defn ^:async collect! [c pos radius pile]
+  (let [names (vec (distinct (map :name pile)))
+        total (reduce + 0 (map :count pile))]
+    (if (>= (recovered-items c pile) total)
+      (finish-collect! c pile [])
+      (let [ids (pile-ids c pos names radius)]
+        (if (empty? ids)
+          (finish-collect! c pile ids)
+          (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops
+                                         {:radius (+ radius stray-range 4) :ids ids :filter names :visible-only true}))]
+            (cond
+              (= :continue r) :continue
+              (empty? (left-over c pile)) (finish-collect! c pile [])
+              :else
+              (let [again (pile-ids c pos names radius)
+                    passes (:passes (ctx/mem c) 0)]
+                (if (and (seq again) (< passes max-collect-passes))
+                  (do (ctx/update-mem! c assoc :passes (inc passes) :phase :go) (save-trip! c) :continue)
+                  (finish-collect! c pile again))))))))))
 
 (defn ^:async round [c]
   (let [{:keys [margin danger-radius collect-radius]} (:args c)
@@ -195,7 +246,7 @@
     (when entry (key-to-death! c entry))
     (cond
       (nil? entry) :done
-      (>= elapsed value/despawn-ms) (finish! c :abandoned (assoc (:decided (ctx/mem c)) :reason :window-closed))
+      (>= elapsed value/despawn-ms) (finish! c :abandoned (assoc (:decided (ctx/mem c)) :reason (if (:blocked (ctx/mem c)) :unreachable :window-closed)))
       threatened? :continue
       (not (died/respawned-since? (ctx/view c) entry)) :continue
       (and (nil? (:decided (ctx/mem c))) (settling? c entry)) :continue
@@ -215,5 +266,8 @@
           (<= (:value decided) (+ (if (= :infinite (:cost decided)) js/Infinity (:cost decided)) margin))
           (finish! c :skip decided)
 
-          (= :collect (:phase (ctx/mem c))) (await (collect! c collect-radius (:inventory (:data entry))))
+          (and (= :collect (:phase (ctx/mem c))) (> (u/dist (u/self-pos c) pos) stray-range))
+          (do (ctx/update-mem! c assoc :phase :go) :continue)
+
+          (= :collect (:phase (ctx/mem c))) (await (collect! c pos collect-radius (:inventory (:data entry))))
           :else (await (go! c pos)))))))

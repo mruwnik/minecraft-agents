@@ -37,6 +37,12 @@
   (is (= {:pos {:x 50.5 :y 40 :z 3.5} :cause "skeleton" :ago-ms 62000 :despawns-in-ms 238000}
          (event-api/death-summary died-entry 63000))))
 
+(deftest death-summary-marks-a-pile-recovered-after-the-death
+  (is (= {:pos {:x 50.5 :y 40 :z 3.5} :cause "skeleton" :ago-ms 62000 :despawns-in-ms 238000 :recovered :collected}
+         (event-api/death-summary died-entry 63000 {:t 2000 :data {:decision :collected}})))
+  (is (not (contains? (event-api/death-summary died-entry 63000 {:t 500 :data {:decision :collected}}) :recovered))
+      "a :recovered older than the death is another death's"))
+
 (deftest death-summary-omits-an-unknown-cause
   (is (= {:pos {:x 1 :y 2 :z 3} :ago-ms 0 :despawns-in-ms 300000}
          (event-api/death-summary {:t 5 :data {:pos {:x 1 :y 2 :z 3}}} 5))))

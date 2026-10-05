@@ -142,17 +142,56 @@
           (is (pos? (:value (recovered eng))))
           (is (false? (died-holds (mem/view (:store eng)))) "the trigger is cleared"))))))
 
-(deftest recover-drops-abandons-when-the-death-point-is-unreachable
+(deftest recover-drops-retries-a-blocked-walk-and-then-collects
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities drops :unreachable ["20,64,0"]})]
+        (let [{:keys [eng p clock]} (setup {:floor tu/walk-floor :entities drops :unreachable ["20,64,0"]})]
           (die! eng {:pos death-pos :inventory diamonds})
           (core/submit! eng job {})
-          (is (< (await (run-until-empty eng 10)) 10))
-          (is (= [] (:list (core/state eng))))
-          (is (= [] (calls p "collect")))
+          (await (run-until-empty eng 6))
+          (swap! clock + 60000)
+          (is (nil? (recovered eng)) "a blocked walk is no verdict")
+          (is (= 1 (count (:list (core/state eng)))) "the job is still on its way")
+          (swap! (fake/state p) assoc :unreachable #{})
+          (is (< (await (run-until-empty eng 20)) 20))
+          (is (= {"diamond_pickaxe" 1 "diamond_sword" 1} (inv p)))
+          (is (= :collected (:decision (recovered eng)))))))))
+
+(deftest recover-drops-reports-unreachable-when-the-window-closes-on-a-blocked-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng clock]} (setup {:floor tu/walk-floor :entities drops :unreachable ["20,64,0"]})]
+          (die! eng {:pos death-pos :inventory diamonds})
+          (core/submit! eng job {})
+          (await (run-until-empty eng 6))
+          (swap! clock + 300000)
+          (await (run-until-empty eng 6))
           (is (= {:decision :abandoned :reason :unreachable} (select-keys (recovered eng) [:decision :reason]))))))))
+
+(deftest recover-drops-collects-items-beyond-the-radius-from-the-body-but-near-the-pile
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [far (drop-item 2 25.5 "diamond_sword")
+              {:keys [eng p]} (setup {:floor tu/walk-floor :entities [(drop-item 1 20 "diamond_pickaxe") far]})]
+          (die! eng {:pos death-pos :inventory diamonds})
+          (core/submit! eng (list 'jobs.survival.recover-drops {:collect-radius 6}) {})
+          (is (< (await (run-until-empty eng 20)) 20))
+          (is (= {"diamond_pickaxe" 1 "diamond_sword" 1} (inv p)))
+          (is (= {:decision :collected :items 2} (select-keys (recovered eng) [:decision :items]))))))))
+
+(deftest recover-drops-ends-partial-and-names-what-is-left
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities [(drop-item 1 20 "diamond_pickaxe")]})]
+          (die! eng {:pos death-pos :inventory diamonds})
+          (core/submit! eng job {})
+          (is (< (await (run-until-empty eng 20)) 20))
+          (is (= {:decision :partial :items 1 :left {"diamond_sword" 1} :reason :not-visible}
+                 (select-keys (recovered eng) [:decision :items :left :reason]))))))))
 
 (deftest recover-drops-abandons-when-the-window-closes-mid-trip
   (async done

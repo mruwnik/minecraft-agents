@@ -190,6 +190,9 @@
    ["shows a recent death with where, cause, pile and time left"
     "{:mode :scheduled :current nil :position {:x 20.5 :y 66 :z 2.5} :died {:pos {:x 50.5 :y 40 :z 3.46} :cause \"skeleton\" :ago-ms 62000 :despawns-in-ms 238000}}"
     "{:mode :scheduled :idle true :pos [20.5 66 2.5] :died {:at [50.5 40 3.5] :cause \"skeleton\" :ago-s 62 :pile-at [50.5 40 3.5] :despawns-in-s 238}}"]
+   ["a collected pile drops the pile and the despawn timer"
+    "{:mode :scheduled :current nil :died {:pos {:x 1 :y 2 :z 3} :ago-ms 1000 :despawns-in-ms 299000 :recovered :collected}}"
+    "{:mode :scheduled :idle true :died {:at [1 2 3] :ago-s 1 :recovered \"collected\"}}"]
    ["a death without a known cause omits it"
     "{:mode :scheduled :current nil :died {:pos {:x 1 :y 2 :z 3} :ago-ms 1000 :despawns-in-ms 299000}}"
     "{:mode :scheduled :idle true :died {:at [1 2 3] :ago-s 1 :pile-at [1 2 3] :despawns-in-s 299}}"]
