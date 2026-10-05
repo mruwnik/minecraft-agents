@@ -1,16 +1,15 @@
 (ns jobs.survival.restore-broken
   (:require [engine.ctx :as ctx]
-            [engine.jobs.combat :as combat]
-            [engine.jobs.tidy :as tidy]
-            [engine.jobs.util :as u]))
+            [engine.jobs.tidy :as tidy]))
 
 (def doc
   "Put back what a job broke in another's zone or claim (the :tidy entries engine.jobs.tidy writes). A dug block is
   placed again from the item of the same name carried; a placed block is dug again. Only when the body is safe
   (health at least :min-health, no hostile within :danger-radius), only a cell whose block is still what the job left
   (a changed cell is somebody's, left alone), and at most 3 tries per cell. Digs nothing else. Ends with one info
-  tidy.restored (the cells put back) and one warn tidy.not-restored {:cells [{:cell :was :why}]}; a cell that is
-  not restored for now (unsafe, item not carried) keeps its entry, the others are forgotten.")
+  tidy.restored (the cells put back) and, only when a cell is left, one warn tidy.not-restored {:cells [{:cell :was :why}]}; a cell that is
+  not restored for now (unsafe, item not carried) keeps its entry, the others are forgotten. At its end it remembers the cells still waiting (:tidy-reported), which
+  the trigger :tidy-pending reads to warn once per set of cells.")
 
 (def args
   {:min-health {:doc "least health to restore anything" :default 14}
@@ -21,22 +20,15 @@
 
 (defn check [c] (boolean (seq (tidy/entries c))))
 
-(defn block-now [c cell] (u/block-name (:primitives c) (zipmap [:x :y :z] cell)))
-
 (defn unsafe?
   "Whether the body should not be busy with other people's blocks now."
-  [c {:keys [min-health danger-radius]}]
-  (or (< (.-health (.self (:primitives c))) min-health)
-      (boolean (seq (combat/hostiles (:primitives c) danger-radius)))))
-
-(defn carried? [c item] (some #(= item (:name %)) (u/inventory (:primitives c))))
+  [c args]
+  (tidy/unsafe? (:primitives c) args))
 
 (defn why-not
   "Why entry cannot be restored now (:changed :not-carried), or nil."
-  [c {:keys [cell now action was]}]
-  (cond
-    (not= now (block-now c cell)) :changed
-    (and (= :dig action) (not (carried? c was))) :not-carried))
+  [c e]
+  (tidy/why-not (:primitives c) e))
 
 (defn ^:async walk-near!
   "Walk to within reach of cell: :done, :continue (still walking) or :failed."
@@ -73,7 +65,9 @@
     (doseq [cell restored] (tidy/forget-cell! c cell))
     (doseq [{:keys [cell why]} failed :when (#{:changed :gave-up} why)] (tidy/forget-cell! c cell))
     (ctx/emit! c :tidy.restored :info {:cells (vec restored) :text (str "restored " (count restored) " broken blocks")})
-    (ctx/emit! c :tidy.not-restored :warn {:cells (vec failed) :text (str (count failed) " broken blocks not restored")})
+    (when (seq failed)
+      (ctx/emit! c :tidy.not-restored :warn {:cells (vec failed) :text (str (count failed) " broken blocks not restored")}))
+    (ctx/remember! c :tidy-reported {:cells (mapv :cell (tidy/entries c))} tidy/reported-policy)
     :done))
 
 (defn skip! [c {:keys [cell was]} why]

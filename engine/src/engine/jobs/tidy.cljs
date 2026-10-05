@@ -6,6 +6,7 @@
   jobs.survival.restore-broken job puts the cells back when the body is safe. Best effort, never at the cost of safety."
   (:require [engine.ctx :as ctx]
             [engine.jobs.access :as access]
+            [engine.jobs.combat :as combat]
             [engine.jobs.util :as u]))
 
 (def tidy-policy
@@ -13,6 +14,28 @@
   {:cap 100 :ttl (* 6 60 60 1000)})
 
 (def max-tries 3)
+
+(def reported-policy
+  "Body memory policy of :tidy-reported, the cells still waiting when restore-broken last ended."
+  {:cap 1 :ttl (* 6 60 60 1000)})
+
+(defn unsafe?
+  "Whether the body (primitives p) should not be busy with other people's blocks now: health under :min-health or a
+  hostile within :danger-radius."
+  [p {:keys [min-health danger-radius]}]
+  (or (< (.-health (.self p)) min-health)
+      (boolean (seq (combat/hostiles p danger-radius)))))
+
+(defn carried? [p item] (boolean (some #(= item (:name %)) (u/inventory p))))
+
+(defn block-now [p cell] (u/block-name p (zipmap [:x :y :z] cell)))
+
+(defn why-not
+  "Why entry cannot be restored now (:changed :not-carried), or nil."
+  [p {:keys [cell now action was]}]
+  (cond
+    (not= now (block-now p cell)) :changed
+    (and (= :dig action) (not (carried? p was))) :not-carried))
 
 (defn refusal
   "The refusing verdict (a zone, claim or plan footprint of another's) for action at pos ({:x :y :z}), judged as if

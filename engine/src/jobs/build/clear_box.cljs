@@ -10,6 +10,8 @@
   "Dig out a box from the top down (site levelling, demolition). Beds,
   containers and fluids are kept. Ends with a result {:dug n :skipped {pos
   reason} :kept n :fluids {name count}}.
+  A corner that is neither {:x :y :z} nor [x y z] of numbers declines with one clear-box.declined warn
+  {:reason :bad-args :text}.
   Zones and plans (engine.access.rules, through engine.jobs.access): each round the loaded cells a zone (one that does
   not allow :dig) or an active plan's footprint refuses are skipped for good (reason :zone or :footprint; one
   clear-box.refused info per round names the zones and plans), and the chosen cell is asked again right before the
@@ -19,7 +21,7 @@
   in the middle of the job.")
 
 (def args
-  {:from {:doc "box corner (inclusive); any order" :default nil}
+  {:from {:doc "box corner (inclusive); any order; {:x :y :z} or [x y z]" :default nil}
    :to {:doc "opposite box corner (inclusive); at most 400 cells" :default nil}
    :keep {:doc "extra block names to leave alone" :default []}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
@@ -35,21 +37,31 @@
 
 (defn span [a b] (range (min a b) (inc (max a b))))
 
+(defn corner
+  "Corner v as {:x :y :z}: a map, or a vector [x y z] of numbers; nil for anything else."
+  [v]
+  (cond
+    (and (map? v) (every? #(number? (get v %)) [:x :y :z])) (select-keys v [:x :y :z])
+    (and (sequential? v) (= 3 (count v)) (every? number? v)) (zipmap [:x :y :z] v)))
+
 (defn box-error
   "Why the box :from/:to cannot be cleared, or nil."
   [{:keys [from to]}]
-  (if-not (and from to)
-    "clear-box needs :from and :to"
-    (let [n (* (count (span (:x from) (:x to))) (count (span (:y from) (:y to))) (count (span (:z from) (:z to))))]
-      (when (> n max-cells)
-        (str "clear-box covers " n " cells, at most " max-cells)))))
+  (cond
+    (not (and from to)) "clear-box needs :from and :to"
+    (not (and (corner from) (corner to))) "clear-box :from and :to must each be {:x :y :z} or [x y z] numbers"
+    :else (let [[a b] [(corner from) (corner to)]
+                n (* (count (span (:x a) (:x b))) (count (span (:y a) (:y b))) (count (span (:z a) (:z b))))]
+            (when (> n max-cells)
+              (str "clear-box covers " n " cells, at most " max-cells)))))
 
 (defn cells
-  "The cells [{:x :y :z} ...] of the box :from/:to. Throws ex-info for a
-  missing corner or over max-cells cells."
+  "The cells [{:x :y :z} ...] of the box :from/:to (corners as maps or [x y z]). Throws ex-info for a
+  missing or malformed corner or over max-cells cells."
   [{:keys [from to] :as args}]
   (when-let [e (box-error args)] (throw (ex-info e {})))
-  (vec (for [x (span (:x from) (:x to)) y (span (:y from) (:y to)) z (span (:z from) (:z to))] {:x x :y y :z z})))
+  (let [[a b] [(corner from) (corner to)]]
+    (vec (for [x (span (:x a) (:x b)) y (span (:y a) (:y b)) z (span (:z a) (:z b))] {:x x :y y :z z}))))
 
 (defn kept? [keep n]
   (or (some? (re-find kept-pattern n)) (boolean (some #{n} keep))))
@@ -91,12 +103,20 @@
   [c]
   (boolean (some #(contains? (ctx/mem c) %) [:dug :skipped :tries])))
 
+(defn decline-box!
+  "Warn once clear-box.declined {:reason :bad-args} naming the box's problem; false."
+  [c]
+  (let [text (box-error (:args c))]
+    (ctx/warn-once! c [:access :bad-args] :clear-box.declined {:reason :bad-args :text text})
+    false))
+
 (defn check
   "Declines without a zone list, and before the first round when every pending cell is refused."
   [c]
   (cond
+    (and (not (started? c)) (box-error (:args c))) (decline-box! c)
     (and (nil? (ctx/zones c)) (not (:ignore-zones? (:args c)))) (access/decline! c :clear-box.declined "clear-box" {:reason :no-zones})
-    (or (started? c) (box-error (:args c))) true
+    (started? c) true
     :else (let [{:keys [allowed refused]} (sort-out c (pending c))]
             (if (and (empty? allowed) (seq refused))
               (access/decline! c :clear-box.declined "clear-box"

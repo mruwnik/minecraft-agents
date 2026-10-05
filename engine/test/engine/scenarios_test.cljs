@@ -92,7 +92,7 @@
                                                 :inventory [{:name "bread" :count 4}]})
               food #(:food (fake/self p))]
           (is (= [:suffocating :burning :hostile-near :health-low :hungry :night-unsafe :player-sleeping-nearby :stuck :door-left
-                  :died :inventory-nearly-full]
+                  :died :inventory-nearly-full :tidy-pending]
                  (mapv :id (:register (core/state eng)))))
           (await (run-ticks eng clock 3 1000))
           (is (= [] (fired seen)) "a healthy body in daylight fires nothing")
