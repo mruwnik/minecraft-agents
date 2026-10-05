@@ -4,7 +4,7 @@
     it is shut in its own latest :shelter (a shelter cut by a higher reflex after it dug in fires again and holds
       the body until day, eating as it holds)
     it is roofed in a room (a hut, not a one-wide tunnel) with a bed of the room (remembered within 12 blocks, or seen
-      in the room; not in another owner's zone or claim), no sleep tonight and no :sleep-failed entry, so the shelter job can sleep in it
+      in the room; not an occupied one), no sleep tonight and no :sleep-failed entry, so the shelter job can sleep in it
     it is roofed in a room with a bed item carried and no bed of the room (the shelter job puts it down and sleeps)
   It never holds by day; shut-in-by-day takes over then."
   (:require [engine.jobs.shelter :as sh]

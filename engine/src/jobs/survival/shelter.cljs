@@ -144,11 +144,9 @@
                 (await (dig-in-step c a))))))
 
 (defn bed-permit
-  "Whether the body may use a bed (sh/bed-permit over the job's world and clock); everything when :ignore-zones? is set."
+  "Whether the body may use a bed (sh/bed-permit over the job's world and clock)."
   [c]
-  (if (:ignore-zones? (:args c))
-    (constantly true)
-    (sh/bed-permit (:primitives c) (:world (:engine c)) (ctx/now c))))
+  (sh/bed-permit (:primitives c) (:world (:engine c)) (ctx/now c)))
 
 (defn ^:async choose-round [c]
   (let [p (:primitives c)

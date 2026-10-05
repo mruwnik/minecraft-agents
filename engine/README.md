@@ -565,7 +565,7 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 | `survival.respond-to-hostile` | Fights (`fight-back`) when the odds are fair, else `retreat` |
 | `survival.retreat` | Flees from the nearest real danger; never ends while one stands. Cornered it fights, seals itself in, pillars, or digs down, then hides until the way is closed |
 | `survival.fight-back` | Equips the best weapon and hits the nearest hostile within `:range` |
-| `survival.shelter` | Owns the night: sleep, else log-out when another player is online, else dig-in; holds until day and exits a dug-in shelter by day |
+| `survival.shelter` | Owns the night: sleep (any bed in reach, in any zone or claim, but an occupied one unless in the body's own zone), else log-out when another player is online, else dig-in; holds until day and exits a dug-in shelter by day |
 | `survival.sleep`, `survival.dig-in`, `survival.log-out` | Walk to a known bed and sleep; roof the body in; leave the server for a while and come back |
 | `survival.recover-drops` | After death, weighs the drops' value against the trip's danger (`engine.jobs.value`, `engine.jobs.danger`) and fetches or skips them |
 | `survival.restore-broken` | Puts back what a job broke in another's zone, and the holes go-to's escalation dug |

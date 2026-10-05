@@ -296,17 +296,26 @@
 (defn bed-claim [owner]
   {:id "c1" :owner owner :status :active :until 99999999999 :min [3 64 -2] :max [7 66 2]})
 
-(deftest night-unsafe-ignores-a-bed-in-another-owners-zone-or-claim
+(def occupied-world
+  "night-bed-world with the bed's occupied state set, as a player sees a bed another sleeps in."
+  (assoc night-bed-world :states {"6,64,0" {:occupied true}}))
+
+(def lying-world
+  "night-bed-world with another player lying in the bed (no state set)."
+  (assoc night-bed-world :entities [{:id 9 :name "Miles" :kind "player" :pos [6 64 0] :sleeping true}]))
+
+(deftest night-unsafe-uses-a-bed-in-any-zone-or-claim-but-not-an-occupied-one
   (let [known (fn [eng] (st/know-bed! eng bed-cell))]
     (doseq [[label seed!] [["seen" (fn [_])] ["remembered" known]]]
       (is (true? (holds-with night-bed-world seed! :zones [])) (str label ": unclaimed"))
       (is (true? (holds-with night-bed-world seed! :zones [(bed-zone self-name)])) (str label ": own zone"))
-      (is (true? (holds-with night-bed-world seed! :claims [(bed-claim self-name)]))
-          (str label ": own claim is not another's"))
       (is (true? (holds-with night-bed-world seed! :zones nil)) (str label ": no zone list read"))
-      (is (false? (holds-with night-bed-world seed! :zones [(bed-zone "Miles")])) (str label ": another owner's zone"))
-      (is (true? (holds-with night-bed-world seed! :zones [(bed-zone "Miles" #{:take})])) (str label ": the zone allows it"))
-      (is (false? (holds-with night-bed-world seed! :claims [(bed-claim "Miles")])) (str label ": another owner's claim")))))
+      (is (true? (holds-with night-bed-world seed! :zones [(bed-zone "Miles")])) (str label ": another owner's zone"))
+      (is (true? (holds-with night-bed-world seed! :claims [(bed-claim "Miles")])) (str label ": another owner's claim"))
+      (doseq [[wlabel w] [["occupied state" occupied-world] ["a player lying in it" lying-world]]]
+        (is (false? (holds-with w seed! :zones [])) (str label ": " wlabel))
+        (is (false? (holds-with w seed! :zones [(bed-zone "Miles")])) (str label ": " wlabel ", another's zone"))
+        (is (true? (holds-with w seed! :zones [(bed-zone self-name)])) (str label ": " wlabel ", own zone"))))))
 
 (defn zoned-setup
   "st/setup with a world holding zones and claims."
@@ -321,29 +330,43 @@
     (swap! (:state w) assoc :area-claims {:value claims})
     {:eng eng :p p :seen seen :clock clock}))
 
-(deftest shelter-sleeps-in-an-own-or-unclaimed-bed-and-records-it
+(deftest shelter-sleeps-in-any-free-bed-and-records-it
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[zones claims] [[[] []] [[(bed-zone self-name)] []] [[] [(bed-claim self-name)]]]]
+        (doseq [[zones claims] [[[] []] [[(bed-zone self-name)] []] [[] [(bed-claim self-name)]]
+                                [[(bed-zone "Miles")] []] [[] [(bed-claim "Miles")]]]]
           (let [{:keys [eng p]} (zoned-setup night-bed-world zones claims)]
             (core/submit! eng '(jobs.survival.shelter) {})
             (await (st/tick-n eng 6))
-            (is (= 1 (count (st/calls p "sleep"))) "slept in the bed")
+            (is (= 1 (count (st/calls p "sleep"))) (pr-str [zones claims]))
             (is (= [{:pos bed-cell}] (st/entries eng :bed)) "recorded as :bed")))))))
 
-(deftest shelter-leaves-a-bed-of-another-owner-alone-and-does-not-record-it
+(deftest shelter-leaves-an-occupied-bed-alone-unless-it-is-in-its-own-zone
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[zones claims known?] [[[(bed-zone "Miles")] [] false] [[] [(bed-claim "Miles")] false]
-                                       [[(bed-zone "Miles")] [] true] [[] [(bed-claim "Miles")] true]]]
-          (let [{:keys [eng p]} (zoned-setup night-bed-world zones claims)]
+        (doseq [w [occupied-world lying-world]
+                known? [false true]
+                zones [[] [(bed-zone "Miles")]]]
+          (let [{:keys [eng p]} (zoned-setup w zones [])]
             (when known? (st/know-bed! eng bed-cell))
             (core/submit! eng '(jobs.survival.shelter) {})
             (await (st/tick-n eng 6))
-            (is (= [] (st/calls p "sleep")) (pr-str [zones claims known?]))
+            (is (= [] (st/calls p "sleep")) (pr-str [known? zones]))
             (is (= (if known? [{:pos bed-cell}] []) (st/entries eng :bed)) "nothing new recorded as :bed")))))))
+
+(deftest shelter-tries-an-occupied-bed-in-its-own-zone-and-a-refusal-is-a-failed-sleep
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [w [occupied-world lying-world]]
+          (let [{:keys [eng p]} (zoned-setup w [(bed-zone self-name)] [])]
+            (set! (.-sleep p) (fn [& _] (js/Promise.resolve #js {:status "occupied"})))
+            (core/submit! eng '(jobs.survival.shelter) {})
+            (await (st/tick-n eng 12))
+            (is (= [{:pos bed-cell}] (st/entries eng :sleep-failed)) "the normal failed-sleep memory")
+            (is (= [] (st/entries eng :bed-unreachable)) "not a permanent skip")))))))
 
 (deftest a-sleep-that-ends-without-sleeping-writes-a-short-sleep-failed-entry
   (async done

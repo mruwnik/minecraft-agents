@@ -134,22 +134,31 @@
 
 (def seen-bed-radius 6)
 
+(defn bed-occupied?
+  "Whether the bed at pos is occupied as a player sees it: the bed block's occupied state, or another player lying within
+  a block of it (a bed is two cells)."
+  [p {:keys [x y z] :as pos}]
+  (let [b (.blockAt p (clj->js pos))
+        props (when b (or (.-properties b) (some-> (.-getProperties b) (.call b))))
+        me (.-username (.self p))]
+    (boolean (or (true? (some-> props .-occupied))
+                 (= "true" (some-> props .-occupied str))
+                 (some #(and (.-sleeping %) (not= me (.-username %))
+                             (<= (js/Math.abs (- (.-x (.-pos %)) x)) 1.5)
+                             (<= (js/Math.abs (- (.-z (.-pos %)) z)) 1.5)
+                             (<= (js/Math.abs (- (.-y (.-pos %)) y)) 1.5))
+                       (array-seq (.entities p #js {:radius 6 :kind "player" :max 32})))))))
+
 (defn bed-permit
-  "A predicate (fn [pos]) for whether the body may use the bed at pos: false inside another owner's zone that does not
-  allow :take, or another owner's claim (zones and claims are a rule jobs consult, see engine.access.zones); true
-  otherwise, also when no zone list was read. kn is the engine world (nil: everything is permitted), now the clock (ms)."
-  [p kn now]
-  (if (nil? kn)
-    (constantly true)
-    (let [in {:zones (world/zones kn)
-              :claims (world/live-claims (world/area-claims kn) now)
-              :footprints {}
-              :plan-cells #{}
-              :self (.-username (.self p))
-              :now now
-              :action :take}]
-      (fn [{:keys [x y z]}]
-        (not (#{:zone :claim} (:reason (zones/verdict (assoc in :cell [x y z])))))))))
+  "A predicate (fn [pos]) for whether the body may use the bed at pos: any bed, in anyone's zone or claim (sleeping sets
+  only the sleeper's own spawn), unless it is occupied; a bed in a zone the body owns is always a candidate (the server
+  refuses an occupied one, which is a failed sleep). kn is the engine world (nil: no zone known)."
+  [p kn _now]
+  (let [zones (when kn (world/zones kn))
+        me (.-username (.self p))]
+    (fn [{:keys [x y z] :as pos}]
+      (or (boolean (some #(and (zones/in-box? [x y z] %) (zones/same-owner? (:owner %) me)) zones))
+          (not (bed-occupied? p pos))))))
 
 (defn seen-bed
   "A bed block the body can see in its room: found by a flood fill from its feet over free cells at feet height, within
@@ -174,7 +183,7 @@
 (defn hut-bed
   "The bed of the room the body stands in: roofed within roof-height and in a room (not a tunnel), then the remembered
   :bed within hut-radius, else a bed it sees in the room; nil otherwise. A bed the body does not remember is found
-  here, so a second one is not put down beside it. A bed permit? refuses (another owner's zone or claim, see
+  here, so a second one is not put down beside it. A bed permit? refuses (an occupied one, see
   bed-permit; default all permitted) is not the bed of the room."
   ([p view roof-height] (hut-bed p view roof-height (constantly true)))
   ([p view roof-height permit?]
