@@ -22,7 +22,7 @@
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         raw (tu/fake-on-floor (assoc world :floor-block "andesite"))
-        p (perception/wrap raw (perception/create (fake-raw/create raw) sight-opts))
+        p (perception/wrap raw (perception/create (fake-raw/create raw) (assoc sight-opts :now #(deref clock))))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
                           :now #(deref clock) :world (ew/of-data {} {} zones)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -251,7 +251,26 @@
           (await (run-ticks s 60))
           (is (= 1 (get (inv s) "wooden_pickaxe")) (pr-str (core/waiting (:eng s) id)))
           (is (= "air" (block-at s 0 64 1)))
-          (is (= 1 (count (events-of s :fetch.done)))))))))
+          (is (= 1 (count (events-of s :fetch.done))))
+          (is (empty? (events-of s :stair.stopped)) "the stair went on from where it began")
+          (is (empty? (listed s)))
+          (let [me (:pos (fake/self (:p s)))]
+            (is (= [0 0] [(js/Math.floor (:x me)) (js/Math.floor (:z me))]) "back on the stair line at its origin")))))))
+
+(deftest a-failed-fetch-clears-the-return-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:self {:pos {:x 0 :y 64 :z 0}}
+                        :blocks {"0,61,1" "andesite" "0,62,1" "andesite" "0,63,1" "stone" "0,64,1" "stone" "0,65,1" "stone"
+                                 "-3,64,2" "chest"}
+                        :containers {"-3,64,2" [{:name "dirt" :count 1}]}
+                        :drops {"stone" "cobblestone"}}
+                       [own-zone])
+              id (core/submit! (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1 :fetch true}) {})]
+          (await (run-ticks s 40))
+          (is (= 1 (count (events-of s :fetch.failed))))
+          (is (nil? (:fetch-return (core/job-memory (:eng s) id))) (pr-str (core/job-memory (:eng s) id))))))))
 
 (deftest stair-without-fetch-waits-no-tool
   (async done
@@ -269,6 +288,20 @@
           (is (empty? (inspects s))))))))
 
 ;; ------------------------------------------------------------------ the fetch jobs themselves
+
+(deftest a-remembered-chest-out-of-view-is-trusted-a-fresh-one-is-read
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (world {chest-at []}) [own-zone])
+              chests #(mapv fetch/cell-of (fetch/seen-chests {:primitives (:p s)}))]
+          (is (= [[-2 64 3]] (chests)))
+          (fake/remove-block! (:p s) [-2 64 3])
+          (is (empty? (chests)) "in view just now: the live block says it is gone")
+          (swap! (fake/state (:p s)) fake/put-block [-2 64 3] "chest")
+          (swap! (:clock s) + 60000)
+          (fake/remove-block! (:p s) [-2 64 3])
+          (is (= [[-2 64 3]] (chests)) "a minute old memory is not checked against the live block"))))))
 
 (deftest obtain-with-no-seen-chest-waits-no-source
   (async done

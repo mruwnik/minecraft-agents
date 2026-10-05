@@ -154,6 +154,10 @@
     (ctx/update-mem! c #(-> % (dissoc :fetching) (update :children dissoc :fetch)))
     (ctx/emit! c :fetch.done :info {:key key :text (str "fetched " (pr-str (second key)))})))
 
+(defn feet [c]
+  (let [{:keys [x y z]} (u/self-pos c)]
+    [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]))
+
 (defn ^:async walk-back!
   "One go-to round (child :fetch-back, range 0) back to the cell the body left to fetch; the mark is dropped once
   there or when the walk ends (arrived or not: the job judges where it stands). :continue."
@@ -163,22 +167,6 @@
     (when-not (= :continue r)
       (ctx/update-mem! c dissoc :fetch-return))
     :continue))
-
-(defn ^:async step!
-  "One round's fetch part for job with wait reason w: runs the due fetch (round!) and returns its round result, or
-  settles a finished one and returns nil (the job does its own work).
-  opts {:return? true}: a job whose work depends on where the body stands (a stair) first walks back to the cell it
-  stood on when the fetch began (child :fetch-back), then goes on."
-  ([c job w] (step! c job w nil))
-  ([c job w {:keys [return?]}]
-   (if-let [pl (due c job w)]
-     (await (round! c (assoc pl :return? return?)))
-     (do (settle! c)
-         (let [back (:fetch-return (ctx/mem c))]
-           (cond
-             (nil? back) nil
-             (= back (feet c)) (do (ctx/update-mem! c dissoc :fetch-return) nil)
-             :else (await (walk-back! c back))))))))
 
 (defn booked-wait
   "The wait reason of the child booked by engine.jobs.declined, nil when none is booked or its check passes now."
@@ -200,15 +188,11 @@
                  {:key key :until (+ (ctx/now c) (* 60000 (:fail-minutes opts))) :failed (:reason res :failed)}
                  (select-keys res [:tried :chain]))]
     (ctx/remember! c failed-kind f failed-policy)
-    (ctx/update-mem! c #(-> % (dissoc :fetching) (update :children dissoc :fetch)))
+    (ctx/update-mem! c #(-> % (dissoc :fetching :fetch-return) (update :children dissoc :fetch)))
     (ctx/emit! c :fetch.failed :warn (assoc (shown f) :for (:reason wait)
                                             :text (str "could not fetch " (or (:item args) (:block args) (pr-str (:any-of args)))
                                                        ": " (name (:failed f)))))
     :continue))
-
-(defn feet [c]
-  (let [{:keys [x y z]} (u/self-pos c)]
-    [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]))
 
 (defn bad!
   "End the job for a bad :fetch arg."
@@ -244,6 +228,22 @@
                   :continue)
               (fail! c pl res))))))))
 
+(defn ^:async step!
+  "One round's fetch part for job with wait reason w: runs the due fetch (round!) and returns its round result, or
+  settles a finished one and returns nil (the job does its own work).
+  opts {:return? true}: a job whose work depends on where the body stands (a stair) first walks back to the cell it
+  stood on when the fetch began (child :fetch-back), then goes on."
+  ([c job w] (step! c job w nil))
+  ([c job w {:keys [return?]}]
+   (if-let [pl (due c job w)]
+     (await (round! c (assoc pl :return? return?)))
+     (do (settle! c)
+         (let [back (:fetch-return (ctx/mem c))]
+           (cond
+             (nil? back) nil
+             (= back (feet c)) (do (ctx/update-mem! c dissoc :fetch-return) nil)
+             :else (await (walk-back! c back))))))))
+
 ;; ------------------------------------------------------------------ chests: seen ones and their stock
 
 (def container-names ["chest" "trapped_chest" "barrel"])
@@ -278,16 +278,19 @@
       (let [n (+ (get items name 0) delta)]
         (ctx/remember! c stock-kind {:pos cell :items (if (pos? n) (assoc items name n) (dissoc items name))} stock-policy)))))
 
+(def view-age-ms 10000)
+
 (defn seen-chests
-  "The containers the body has seen (perception's seenBlocks, never x-ray) within chest-radius that are still there,
-  as {:x :y :z}, nearest first; empty without perception."
+  "The containers the body has seen (perception's seenBlocks, never x-ray) within chest-radius, as {:x :y :z},
+  nearest first; empty without perception. A cell seen in the last view-age-ms is checked against the live block
+  (gone: dropped); an older memory is trusted, a failed open or a later sight corrects it."
   [c]
   (let [p (:primitives c)]
     (if-let [f (aget p "seenBlocks")]
       (let [me (u/self-pos c)]
         (->> (array-seq (.call f p #js {:radius chest-radius :names (clj->js container-names) :max 32}))
              (keep (fn [b] (let [pos (u/pos-of (.-pos b))]
-                             (when (= (.-name b) (u/block-name p pos)) pos))))
+                             (when (or (> (aget b "age-ms") view-age-ms) (= (.-name b) (u/block-name p pos))) pos))))
              (sort-by #(u/dist me %))))
       [])))
 
