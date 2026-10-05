@@ -376,7 +376,10 @@
           (is (= [] (tidy-entries eng))))))))
 
 (def dirt-box {:from {:x 1 :y 65 :z 1} :to {:x 2 :y 65 :z 2}})
-(def dirt-world {:blocks {"1,65,1" "dirt" "2,65,1" "dirt" "1,65,2" "dirt" "2,65,2" "dirt"}})
+(def dirt-world
+  "Four dirt cells at y 65 on a stone floor at y 64 (the ground the body walks on once they are dug, and steps out of the pit onto)."
+  {:blocks (merge (tu/box -4 64 -4 6 64 6 "stone")
+                  {"1,65,1" "dirt" "2,65,1" "dirt" "1,65,2" "dirt" "2,65,2" "dirt"})})
 (def miles-zone {:name "farm" :min [1 60 1] :max [2 70 2] :owner "Miles"})
 
 (defn ^:async clear-in-foreign-zone!
