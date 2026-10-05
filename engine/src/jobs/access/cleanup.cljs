@@ -56,6 +56,20 @@
   [{:keys [reason fluid]}]
   (if (and (= :fluid-adjacent reason) (= "lava" fluid)) :lava-adjacent reason))
 
+(defn open? [block-at pos] (let [n (block-at pos)] (boolean (and n (rules/replaceable n)))))
+
+(defn exit-after-dig?
+  "True when a body standing on cell, dropping onto the block below it, has a way on: a side cell at its new feet
+  level that is open with open head room (walked off), or solid with two open cells above it (a step up)."
+  [block-at cell]
+  (boolean
+   (some (fn [[dx dz]]
+           (let [side (rules/offset cell dx 0 dz)]
+             (or (and (open? block-at side) (open? block-at (rules/offset side 0 1 0)))
+                 (and (not (open? block-at side)) (block-at side)
+                      (open? block-at (rules/offset side 0 1 0)) (open? block-at (rules/offset side 0 2 0))))))
+         [[1 0] [-1 0] [0 1] [0 -1]])))
+
 (defn blocker
   "Why entry e cannot be dug now, as {:reason ...detail}, or nil. in: {:feet :block-at :zones :footprints :ledger
   :accept}."
@@ -68,6 +82,8 @@
       (and (= [x z] [fx fz]) (< y (dec fy))) {:reason :under-body}
       (and (= cell [fx (dec fy) fz]) (not (rules/solid-floor? block-at below)))
       {:reason :no-floor-below :block (block-at below)}
+      (and (= cell [fx (dec fy) fz]) (not (exit-after-dig? block-at cell)))
+      {:reason :no-exit}
       :else
       (let [v (rules/may-dig? (-> (select-keys in [:block-at :feet :zones :footprints :claims :self :now :ignore-zones? :ledger])
                                   (update :footprints #(into {} (remove (comp (:own-plans in #{}) val)) %))

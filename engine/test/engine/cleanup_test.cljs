@@ -61,6 +61,31 @@
   (is (= [{:cell [0 66 0] :item "dirt" :reason :no-floor-below :block "air"}]
          (:open (step :feet [0 67 0] :entries [(entry [0 66 0])] :block-at (lookup [0 66 0] "dirt" [0 64 0] "stone"))))))
 
+(defn shaft-world
+  "A 1x1 shaft through stone whose ground is y 73: dirt at the given cells, stone elsewhere up to y 73, air above."
+  [dirt]
+  (fn [[x y z :as pos]]
+    (cond (some #{pos} dirt) "dirt"
+          (and (= [x z] [0 0]) (<= y 73)) "air"
+          (<= y 73) "stone"
+          :else "air")))
+
+(deftest a-body-on-a-pillar-in-a-shaft-is-not-dug-from-under
+  (let [cells [[0 68 0] [0 69 0] [0 70 0]]
+        s (step :feet [0 71 0] :entries (mapv entry cells)
+                :block-at (shaft-world cells))]
+    (is (= :finish (:step s)) "no dig: the walls leave the body no way out of the hole it would fall into")
+    (is (= :no-exit (:reason (first (filter #(= [0 70 0] (:cell %)) (:open s))))))))
+
+(deftest a-pillar-top-level-with-the-ground-beside-is-dug-from-on-top
+  (let [cells [[0 69 0] [0 70 0]]
+        in-world (fn [[x y z :as pos]] (cond (some #{pos} cells) "dirt"
+                                             (and (= [x z] [0 0]) (<= y 70)) "air"
+                                             (<= y 70) "stone"
+                                             :else "air"))]
+    ;; feet at 71 standing on [0 70 0]; digging it drops the feet to 70 where the ground (y 70) is solid with air above: a step up
+    (is (= [:dig [0 70 0]] ((juxt :step :cell) (step :feet [0 71 0] :entries (mapv entry cells) :block-at in-world))))))
+
 (deftest beside-the-body-the-highest-in-reach-goes-first
   (let [cells [[0 64 0] [0 65 0] [1 64 0]]]
     (is (= [:dig [0 65 0]] ((juxt :step :cell) (step :entries (mapv entry cells) :block-at (column-world cells)))))))

@@ -1,0 +1,16 @@
+;; Card 6864a6e5: a body that pillared out of a 1x1 shaft stands on the pillar; the scaffold-left reflex must not dig
+;; the pillar from under it (cleanup refuses :no-exit), so the body stays on top and a go-to out of the shaft works.
+;; Shaft: x 16, z 16, from the floor up to y 5; walls stone to y 6 (ground y 6), body starts at the bottom.
+{:name "pillar-out-of-shaft-stays"
+ :tags [:access :survival]
+ :plot {:height 12}
+ :register [{:trigger :scaffold-left :args {} :job (jobs.access.cleanup {})}]
+ :blocks [[:fill [14 0 14] [18 6 18] "stone"]
+          [:fill [16 0 16] [16 6 16] "air"]]
+ :body {:at [16.5 0 16.5] :inventory [["dirt" 8]]}
+ :act [[:job (jobs.access.pillar {:height 5})]
+       [:await {:source :job :kind :pillar.done} 60]
+       [:wait-s 5]]
+ ;; the body is still on the pillar top (feet y 5) five seconds after the job ended: nothing dug under it
+ :expect [{:no-event {:source :job :kind :cleanup.done :data {:removed 1}} :for-s 5}]
+ :after [[:not-block [16 4 16] "air"] [:body-near [16.5 5 16.5] 1.5]]}
