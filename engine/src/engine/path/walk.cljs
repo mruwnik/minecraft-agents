@@ -357,14 +357,18 @@
 (defn new-search
   "A budgeted search from the body's cell over walled: its limited search begun (wide-box, the policy's limits, known
   land {:cells :edges} as the planner's options.knownCells and knownEdges when not nil); :goal-unloaded whether its
-  snapshot read the goal unloaded."
+  snapshot read the goal unloaded. With known land (go-to's frontier walks), :edge-stop true: its searches set the
+  planner's stopAtEdge, so one toward a goal that is unloaded ends at the first loaded-edge node it expands, its frontier,
+  not after searching all loaded land (card 7a031d15: over max-searching rounds when no node got progress-blocks nearer)."
   [c walled to range weight policy key known]
   {:key key :t (js/Date.now) :walled walled :r nil :unlimited nil
    :goal-unloaded (goal-unloaded? (.-snapshot walled) to)
+   :edge-stop (some? known)
    :limited (planner/create-plan (.-snapshot walled) (plan-query c to range)
                                  (cond-> (plan-options walled weight (executor/planner-limits policy (solid-fn walled)) wide-box)
                                    known (doto (unchecked-set "knownCells" (:cells known))
-                                               (unchecked-set "knownEdges" (:edges known)))))})
+                                               (unchecked-set "knownEdges" (:edges known))
+                                               (unchecked-set "stopAtEdge" true))))})
 
 (defn go-on?
   "Whether the kept search goes on at this call: it plans the same (key k), is younger than search-max-age-ms, and did
@@ -394,7 +398,8 @@
           (let [r (.result phase)]
             (if (beyond-needed? r)
               (recur (assoc search :r r :unlimited (planner/create-plan (.-snapshot walled) (plan-query c to range)
-                                                                        (plan-options walled weight nil wide-box)))
+                                                                        (cond-> (plan-options walled weight nil wide-box)
+                                                                          (:edge-stop search) (doto (unchecked-set "stopAtEdge" true)))))
                      used)
               [search (within-of walled r)]))
 

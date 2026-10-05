@@ -36,7 +36,9 @@
      nodes at the loaded edge that are not known in the result's edges. engine.path.walk keeps both for go-to.
    - options.knownEdges: a Set of the cells (knownKey) earlier searches found at the loaded edge that no search has
      known to its end since. When it is empty, a frontier in known land is never taken: every edge was searched past,
-     and the result says so as searchedOut true (the way on, if any, is not in the land this goal's searches can reach).")
+     and the result says so as searchedOut true (the way on, if any, is not in the land this goal's searches can reach).
+   - options.stopAtEdge: with the goal unloaded, the search ends at the first node it expands at the loaded edge (edgeStop)
+     and names it as its frontier, not after searching all loaded land. go-to's budgeted searches set it (walk/new-search).")
 
 (set! *warn-on-infer* true)
 
@@ -324,7 +326,10 @@
    ;; known-new is a Set)
    ^js known-edges ^:mutable ^js edges-new
    ;; whether frontierNode refused a frontier in known land because no edge is left open (result searchedOut)
-   ^:mutable ^boolean searched-out]
+   ^:mutable ^boolean searched-out
+   ;; options.stopAtEdge with the goal unloaded: the search ends at the first node it expands at the loaded edge (edgeStop),
+   ;; edge-node (-1: none yet), which is then its frontier
+   ^boolean stop-at-edge ^:mutable edge-node]
 
   Object
 
@@ -2214,9 +2219,26 @@
             (when (and (not deadly) (< d best-distance))
               (set! best-distance d)
               (set! best-node i))
-            (.expandAt s x y z (aget hs i) (aget slows i) i (bit-and (aget shapes i) 15))
-            (when (pos? (.-length held)) (.flushHeld s))
-            (when over-budget (.finish s "budget")))))))
+            (if (and stop-at-edge ^boolean (.edgeStop s i))
+              (do (set! edge-node i)
+                  (.finish s "exhausted"))
+              (do (.expandAt s x y z (aget hs i) (aget slows i) i (bit-and (aget shapes i) 15))
+                  (when (pos? (.-length held)) (.flushHeld s))
+                  (when over-budget (.finish s "budget")))))))))
+
+  ;; Does the search end at node i (stop-at-edge; i is not on magma)? When it is a frontier node (frontierNode's test: within
+  ;; OPEN-REACH of a chunk's side, within frontier-reach of the goal, at the loaded edge) not in options.knownCells. The goal
+  ;; is unloaded, so every way to it crosses the loaded edge, and nodes come out in order of cost plus (weighted) heuristic:
+  ;; the first such node is the frontier the search would name once it had searched all loaded land (with weight 1 the very
+  ;; same node, ties aside), found without searching the rest (card 7a031d15: up to 200000 nodes, over 100 go-to rounds).
+  ;; A known node does not end it: frontierNode takes one only when no other edge is left.
+  (edgeStop [s i]
+    (let [x (aget xs i) z (aget zs i)
+          mx (bit-and x 15) mz (bit-and z 15)]
+      (and (or (< mx OPEN-REACH) (>= mx (- 16 OPEN-REACH)) (< mz OPEN-REACH) (>= mz (- 16 OPEN-REACH)))
+           (<= (js/Math.max (js/Math.abs (- x goal-x)) (js/Math.abs (- z goal-z))) frontier-reach)
+           (not (and (some? known-cells) ^boolean (.has known-cells (.knownKey s x (aget ys i) z))))
+           ^boolean (.atLoadedEdge s i))))
 
   ;; ---- steps the body cannot undo ----
 
@@ -2610,7 +2632,8 @@
   ;; node in it is taken only when no other node is at the edge, and options.knownEdges, when given, still holds an edge
   ;; no search has known since (one an earlier search saw and did not take, which a way through known land may lead
   ;; back to); else there is no frontier. While known-new is a Set, the scan adds there the key of each such node
-  ;; not at the edge (land this search knows to its end), and to edges-new the key of each unknown node at the edge.
+  ;; not at the edge that the search expanded (land this search knows to its end; a search that ended at its first edge
+  ;; node, edgeStop, leaves the nodes it did not expand out), and to edges-new the key of each unknown node at the edge.
   (frontierNode [s]
     (let [lo OPEN-REACH
           hi (- 16 OPEN-REACH)]
@@ -2630,7 +2653,7 @@
                     edge ^boolean (.atLoadedEdge s i)
                     f (+ (aget gs i) (.heuristic s x z))]
                 (cond
-                  (not edge) (do (when (and (some? known-new) (not known)) (.add known-new k))
+                  (not edge) (do (when (and (some? known-new) (not known) (== (aget heap-pos i) -2)) (.add known-new k))
                                  (recur (inc i) best best-f kbest kbest-f))
                   (and known (< f kbest-f)) (recur (inc i) best best-f i f)
                   known (recur (inc i) best best-f kbest kbest-f)
@@ -2658,13 +2681,14 @@
   ;; the result's frontier: {x y z path known} of frontierNode for a search that ran out of land to search (exhausted,
   ;; its box, a ladder at a gap, air), nil otherwise or when no node stands at the loaded edge. known: the node is in
   ;; options.knownCells. A search that ran out of land to its end (exhausted, ladder-gap) with options.knownCells also
-  ;; collects the result's known (frontierNode).
+  ;; collects the result's known (frontierNode). A search that ended at its first edge node (edgeStop) names that node.
   (frontierOf [s]
     (when (or (identical? reason "exhausted") (identical? reason "box") (identical? reason "ladder-gap") (identical? reason "air"))
       (when (and (some? known-cells) (or (identical? reason "exhausted") (identical? reason "ladder-gap")))
         (set! known-new (js/Set.))
         (set! edges-new #js []))
-      (let [node (.frontierNode s)]
+      (let [scanned (.frontierNode s)
+            node (if (neg? edge-node) scanned edge-node)]
         (when-not (neg? node)
           (let [x (aget xs node) y (aget ys node) z (aget zs node)]
             #js {:x x :y y :z z :path (.pathTo s node)
@@ -2818,7 +2842,9 @@
      ;; known-cells known-new known-edges edges-new
      (.-knownCells options) nil (.-knownEdges options) nil
      ;; searched-out
-     false)))
+     false
+     ;; stop-at-edge edge-node
+     (and goal-unloaded (true? (option options "stopAtEdge" false))) -1)))
 
 ;; the body's hitbox reaches this far from its centre in x and z
 (def ^:const HITBOX-HALF 0.3)
@@ -2865,11 +2891,11 @@
       (if (identical? q query) search (search-from snapshot q options)))))
 
 (defn- clean-options
-  "The options of the returnable search behind a one-way step of search: options.returnable, no goal flood, and no
-  more nodes than the search itself made. It only finds where a partial plan ends. With no flood to prove a walled-in
+  "The options of the returnable search behind a one-way step of search: options.returnable, no goal flood, no stop at
+  the loaded edge (stopAtEdge), and no more nodes than the search itself made. It only finds where a partial plan ends. With no flood to prove a walled-in
   goal it would otherwise search the whole box."
   [^Search search options]
-  (js/Object.assign #js {} options #js {:returnable true :goalFlood 0
+  (js/Object.assign #js {} options #js {:returnable true :goalFlood 0 :stopAtEdge false
                                         :maxNodes (js/Math.min (option options "maxNodes" 200000) (js/Math.max 1 (.-n-nodes search)))}))
 
 (defn- result-of

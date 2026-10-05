@@ -50,7 +50,8 @@
         (let [{:keys [out p ticks]} (await (run-go-to! true))]
           (is (= {:arrived false :reason :unreachable :why :goal-enclosed} (select-keys @out [:arrived :reason :why])))
           (is (< ticks 20) "ends in the round after the goal loads, not after the old search")
-          (is (= 44 (js/Math.floor (first (gt/at p)))) "the body did not walk"))))))
+          (is (<= 44 (js/Math.floor (first (gt/at p))) 47)
+              "the body walked no farther than the loaded edge (its frontier, before the goal loaded)"))))))
 
 ;; the goal stays unloaded: the kept search goes on as before (no new search every round)
 (deftest a-search-whose-goal-stays-unloaded-goes-on
@@ -64,3 +65,15 @@
             (set! walk/new-search new-search)
             (is (not= :goal-enclosed (:why @out)))
             (is (< (count @plans) 10) "one search kept over its rounds, not one a round")))))))
+
+;; the goal stays unloaded far past the loaded floor's east edge (card 7a031d15): no node of the loaded land is 8 blocks
+;; nearer than the start, so only an ended search walks; ending only once all loaded land is searched took more rounds
+;; than go-to's max-searching (live: ~200k nodes at ~2000 a round). The search ends at the first node it expands at the
+;; loaded edge, and go-to walks there (its frontier) instead of giving up :searching
+(deftest a-far-goal-past-the-loaded-edge-walks-to-the-frontier
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (run-go-to! false))]
+          (is (not= :searching (:why @out)) (str "result " @out))
+          (is (<= 46 (js/Math.floor (first (gt/at p)))) (str "walked to the east edge, at " (gt/at p))))))))

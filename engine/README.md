@@ -1933,6 +1933,11 @@ An enclosed goal is found before any walking.
 - A result that is not `found` and ran out of land (`exhausted`, `box`, `ladder-gap`, `air`) carries `frontier`
   `{x y z path}` when a searched node stands within 2 columns of unloaded land and within `options.frontierReach`
   (default 256) of the goal along x and z. It is the one with the least cost plus heuristic to the goal.
+- `options.stopAtEdge` (go-to's budgeted searches with known land, `walk/new-search`; card 7a031d15): toward a goal
+  that is unloaded, the search ends at the first node it expands that would be a frontier (not a known cell) and names
+  it, instead of searching all loaded land first (up to 200000 nodes, past go-to's 100 `:searching` rounds). Nodes
+  come out by cost plus weighted heuristic, so with weight 1 it is the same node, with go-to's 1.2 the weighted-A* one.
+  Its `known` holds only the nodes it expanded. The returnable search behind a one-way step does not stop there.
 - Known land (go-to only; `options.knownCells`, `options.knownEdges`, kept per body and goal in
   `engine.path.walk/known-land`, out of job memory). The loaded land follows the body, so land a search already covered
   reads as a loaded edge again once the body walks away and it unloads (live: soak j29, a walled walkway whose far end
