@@ -701,3 +701,22 @@
   (let [steps (ex/with-high-corners p corner-jump-steps (solid-set #{[11 65 0]}))]
     (is (= {:status :refused :kind :corner-jump :at [11 65 1]} (select-keys (ex/refusal p steps) [:status :kind :at])))
     (is (nil? (ex/refusal p corner-jump-steps)))))
+
+;; a rise jumped straight up when pressed on its wall
+
+(def rise-north [(step 5 64 5 :start) (step 5 65 4 :jump)])
+
+(deftest a-jump-up-at-its-wall-goes-up-before-forward
+  (are [ps forward jump] (= {:forward forward :jump jump}
+                            (select-keys (controls-of (ex/tick p (state-at rise-north 1) ps)) [:forward :jump]))
+    (pose 5.5 64 5.31) false true          ; pressed on the wall: straight up
+    (pose 5.5 64 5.35) false true
+    (pose 5.5 64 5.5) true true            ; a body further off runs at it as before
+    (pose 5.5 65.0013 5.31) true false     ; up on the step's height: forward
+    (pose 5.5 64.5 5.31 {:on-ground false}) false false))
+
+(deftest a-jump-in-water-or-round-a-corner-keeps-forward
+  (are [st ps] (:forward (controls-of (ex/tick p st ps)))
+    (state-at rise-north 1) (pose 5.5 64 5.31 {:in-water true})
+    (state-at [(step 5 64 5 :start) (step 5 65 4 :jump {:cx 1})] 1) (pose 5.5 64 5.31)
+    (state-at [(step 4 64 5 :start) (step 5 65 4 :jump)] 1) (pose 5.5 64 5.31)))

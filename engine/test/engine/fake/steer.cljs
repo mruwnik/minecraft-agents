@@ -79,10 +79,17 @@
             (assoc body :collided true)))))))
 
 (defn vertical
-  "The body after the vertical part of a tick."
-  [w body {:keys [jump]}]
+  "The body after the vertical part of a tick. A jump without forward, on the ground out of water, lifts the body to the
+  top of a jump (the next tick's walk, from there, steps onto what is ahead); the lift falls at the tick after."
+  [w body {:keys [jump forward]}]
   (let [[cx cz] [(floor (:x body)) (floor (:z body))]
         cell (floor (:y body))]
+    (cond
+      (and jump (not forward) (not (:lifted body)) (= (:y body) cell) (solid? w cx (dec cell) cz)
+           (not= "water" (name-at w cx cell cz)) (not (climbable? w cx cell cz)))
+      (assoc body :y (round (+ (:y body) jump-step)) :vy 0.42 :lifted true)
+      (:lifted body) (dissoc body :lifted)
+      :else
     (if (climbable? w cx cell cz)
       (if jump
         (if (solid? w cx (floor (+ (:y body) climb height)) cz)
@@ -96,7 +103,7 @@
       (let [ground (->> (range (dec cell) (- cell 1 fall-limit) -1) (filter #(solid? w cx % cz)) first)]
         (if (or (solid? w cx (dec cell) cz) (nil? ground))
           (assoc body :vy 0)
-          (assoc body :y (inc ground) :vy (- (inc ground) (:y body))))))))
+          (assoc body :y (inc ground) :vy (- (inc ground) (:y body)))))))))
 
 (defn step-body
   "One tick of the walker: horizontal then vertical."

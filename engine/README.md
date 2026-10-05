@@ -1695,6 +1695,10 @@ step in water; sinking below the leg in water is not off the plan (drifting side
 executor adds nothing. A partial plan is walked only up to its last step out of water, so a walk never ends swimming (a bank too high to
 climb out is `:no-path`). Prismarine-physics courses (`swim_physics_test`): flush-bank crossings 6 wide both ways and 20 wide, a 1-deep
 wade, a current across, a 3-block drop in, up from the bottom and out, a dive to a goal on the bottom. Not yet run live.
+A straight `:jump` up one cell (no corner) from the cell before it, with the body at the wall it climbs (its edge within `:wall-gap` 0.05 of the
+step's cell) and its feet below the step's height, holds jump without forward and presses forward once up (live, stair `:dir :up`: forward and
+jump pressed on the wall made the client sink 0.02 into it, the server refused the position and put the body back for 3 s; the first step of a
+stair out of a cut, `stairs_physics_test`, with a check that no tick of the walk is inside the wall). The fake's `steer` lifts a jump made without forward.
 A gap jump (1 to 3 empty cells, landing level or up to one block lower) is jumped from the takeoff edge, by width: over 1 a
 walking jump from 0.2 before the edge, over 2 a sprint jump from 0.4 before (one block down: a walking jump from the edge), over 3 a sprint
 jump from 0.1 before; the body aims at the landing point

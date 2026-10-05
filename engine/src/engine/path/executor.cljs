@@ -33,6 +33,9 @@
    :rise 0.6               ; a rise above this (vanilla step height) needs a jump
    :pressed-rise 0.01      ; pressed on a block ahead, any rise above this is jumped (a step under a low ceiling is refused
                            ; by the client physics, which lifts the body by the step height first)
+   :wall-gap 0.05          ; a rise is jumped straight up (no forward) while the body is within this of the wall it climbs
+                           ; (half the body's width apart): forward on that wall made the client sink into it
+   :body-half 0.31         ; half the body's width, as the client physics has it
    :body-height 1.8        ; a corner jump needs the side cells clear this far over the landing's stand height
    :climb-over 0.2         ; keep climbing until feet are this far above a climb step's stand-y
    :crossing-xz 0.3        ; steer at a crossing point until this close to it
@@ -380,6 +383,26 @@
   [x z ax az]
   (Math/atan2 (- (- ax x)) (- (- az z))))
 
+(defn wall-gap
+  "Horizontal distance from the body's edge to the cell of step: 0 pressed on it, negative inside its columns."
+  [policy step {:keys [x z]}]
+  (let [gx (- (Math/abs (- x (+ (:x step) 0.5))) 0.5)
+        gz (- (Math/abs (- z (+ (:z step) 0.5))) 0.5)]
+    (- (max gx gz) (:body-half policy))))
+
+(defn rise-first?
+  "True for a straight jump up to step from the cell before it while the body is at the wall it climbs and below the
+  step's stand height: it must go up first. Forward pressed there carries the client 0.02 into the wall (it skips a
+  block it already overlaps), the server refuses that position and puts the body back, every try."
+  [policy prev step {:keys [y in-water] :as pose}]
+  (and (= :jump (:move step))
+       (not in-water)
+       (nil? (:cx step))
+       (some? prev)
+       (zero? (* (- (:x step) (:x prev)) (- (:z step) (:z prev))))
+       (> (- (stand-y step) y) (:pressed-rise policy))
+       (<= (wall-gap policy step pose) (:wall-gap policy))))
+
 (defn controls-for [policy {:keys [steps i yaw] :as state} {:keys [x z] :as pose}]
   (let [step (nth steps i)
         [ax az :as aim] (aim-point policy step pose)
@@ -387,7 +410,7 @@
         moving? (>= dist (:still-xz policy))
         yaw' (if moving? (yaw-to x z ax az) (or yaw 0))]
     {:state (cond-> state moving? (assoc :yaw yaw'))
-     :controls {:forward moving? :back false :left false :right false
+     :controls {:forward (and moving? (not (rise-first? policy (when (pos? i) (nth steps (dec i))) step pose))) :back false :left false :right false
                 :jump (cond
                         (= :gap (:move step)) (gap-jump? policy steps i pose dist)
                         (and (:in-water pose) (not (contains? climb-moves (:move step)))) (swim-jump? policy step pose)

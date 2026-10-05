@@ -71,12 +71,15 @@
     (when (= "found" (.-status r))
       (walk/plan-steps pw r))))
 
-(defn bot-at [[x y z]]
+(defn bot-at
+  "A bot standing at feet cell [x y z], at its middle or at the point px pz inside it."
+  ([cell] (bot-at cell nil))
+  ([[x y z] [px pz]]
   (let [{:keys [vec3]} @lib]
-    #js {:entity #js {:position (new vec3 (+ x 0.5) y (+ z 0.5)) :velocity (new vec3 0 0 0) :onGround true :isInWater false
+    #js {:entity #js {:position (new vec3 (or px (+ x 0.5)) y (or pz (+ z 0.5))) :velocity (new vec3 0 0 0) :onGround true :isInWater false
                       :isInLava false :isInWeb false :isCollidedHorizontally false :isCollidedVertically false
                       :elytraFlying false :yaw 0 :pitch 0 :effects #js {} :attributes #js {}}
-         :jumpTicks 0 :jumpQueued false :fireworkRocketDuration 0 :version version :inventory #js {:slots #js []}}))
+         :jumpTicks 0 :jumpQueued false :fireworkRocketDuration 0 :version version :inventory #js {:slots #js []}})))
 
 (defn pose-of [bot]
   (let [e (.-entity bot) p (.-position e)]
@@ -86,29 +89,32 @@
 (defn walk
   "Walk the plan from from to goal in physics. {:done :steps :ticks :pose :i}: the executor's done map (nil when it ran out
   of ticks), the planned steps (nil: no plan), ticks used, the last pose and the step index."
-  [fills from goal]
+  ([fills from goal] (walk fills from goal nil))
+  ([fills from goal at]
   (let [{:keys [mc physics]} @lib
         world (world-of fills)
         phys ((.-Physics physics) mc world)
         _ (set! (.-playerHalfWidth phys) 0.31)
         steps (plan fills from goal)
-        bot (bot-at from)]
+        bot (bot-at from at)]
     (if (nil? steps)
       {:done {:status :no-plan}}
-      (loop [t 0 state (ex/start steps 0)]
+      (loop [t 0 state (ex/start steps 0) poses []]
         (let [pose (pose-of bot)
               {:keys [done controls yaw] :as r} (ex/tick ex/policy state pose)]
           (if (or done (>= t max-ticks))
-            {:done done :steps steps :ticks t :pose pose :i (:i (:state r))}
+            {:done done :steps steps :ticks t :pose pose :poses poses :i (:i (:state r))}
             (do (set! (.-yaw (.-entity bot)) yaw)
                 (.apply (.simulatePlayer phys (new (.-PlayerState physics) bot (clj->js controls)) world) bot)
-                (recur (inc t) (:state r)))))))))
+                (recur (inc t) (:state r) (conj poses pose))))))))))
 
 ;; Courses along +x on a stone floor (top at y 64), z -2..6, x 0..24.
 
 (def floor-fill [0 63 -2 24 63 6 "stone" {}])
 
-(defn status-of [fills from goal] (:status (:done (walk fills from goal))))
+(defn status-of
+  ([fills from goal] (status-of fills from goal nil))
+  ([fills from goal at] (:status (:done (walk fills from goal at)))))
 
 (defn stairs
   "A stairs block (or a row of them over z zs, a fill) at x y."
@@ -207,3 +213,41 @@
 
 (deftest a-small-step-up-under-a-low-ceiling-is-walked
   (is (= :arrived (status-of low-ceiling-path [1 64 1] [10 65 1]))))
+
+;; The first step of a stair up, cut in solid stone: a 1-wide tunnel, the body on its floor, the next column one block
+;; ahead and one up (live: the jump made no progress for 3 s).
+
+(def stair-stone [50 10 0 70 40 30 "stone" {}])
+
+(defn stair-up-cut
+  "Air cells (a fill each) of a stair going north from [58 21 16]: the standing cell with headroom, the step ahead."
+  [extra]
+  (into [stair-stone
+         [58 21 16 58 23 16 "air" {}]
+         [58 22 15 58 23 15 "air" {}]]
+        extra))
+
+(defn in-wall?
+  "The feet pose is inside the full block at cell [bx by bz]: its bounding box (half-width 0.3, the server's) overlaps it."
+  [[bx by bz] {:keys [x y z]}]
+  (and (< (- x 0.3) (inc bx)) (> (+ x 0.3) bx)
+       (< (- z 0.3) (inc bz)) (> (+ z 0.3) bz)
+       (< y (inc by)) (> (+ y 1.8) by)))
+
+(deftest the-first-step-of-a-stair-up-in-stone-is-jumped
+  (are [extra at] (= :arrived (status-of (stair-up-cut extra) [58 21 16] [58 22 15] at))
+    [] nil
+    [[58 21 17 58 23 17 "air" {}]] nil
+    [] [58.5 16.31]
+    [[58 21 17 58 23 17 "air" {}]] [58.5 16.398]))
+
+;; Live: pressed on the wall of the step, forward and jump together made the client sink 0.02 into the wall (the
+;; physics skips a block it already overlaps by rounding); the server refused that position and put the body back,
+;; every try, for 3 s. A body in a wall is never right, so the jump is made straight up first.
+(deftest a-jump-up-pressed-on-a-wall-never-enters-it
+  (are [extra at] (let [{:keys [poses]} (walk (stair-up-cut extra) [58 21 16] [58 22 15] at)]
+                    (not-any? #(in-wall? [58 21 15] %) poses))
+    [] nil
+    [] [58.5 16.31]
+    [] [58.5 16.398]
+    [[58 21 17 58 23 17 "air" {}]] [58.5 16.34]))
