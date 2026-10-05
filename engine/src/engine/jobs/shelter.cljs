@@ -91,18 +91,45 @@
   [view]
   (= "unsupported" (:status (:data (mem/latest view :log-out)))))
 
+(defn other-players-online
+  "Usernames of the other players in the server's player list (the tab list a player sees), from self().players."
+  [p]
+  (let [s (.self p)
+        me (.-username s)]
+    (filterv #(not= me %) (array-seq (or (.-players s) #js [])))))
+
+(def morning-tick
+  "The first time of day (ticks) that self().isDay counts as day again after a night."
+  23461)
+
+(def ms-per-tick 50)
+
+(def morning-margin-ms
+  "Extra time away, so a body that logged out until morning comes back after the night has ended."
+  2000)
+
+(defn ms-until-morning
+  "Milliseconds until the night ends at time of day t (ticks), plus morning-margin-ms; 0 by day. A whole night is
+  about 9 minutes, under the offline primitive's ten-minute cap."
+  [t]
+  (if (or (< t 12542) (>= t morning-tick))
+    0
+    (+ (* ms-per-tick (- morning-tick t)) morning-margin-ms)))
+
 (defn log-out-wanted?
-  "Whether logging out would let a sleeping player skip the night: it is
-  night, no bed is remembered within :bed-radius, :offline-allowed is not
-  false, the last log-out was not unsupported, and another player within
-  :player-radius is asleep. Takes the primitives, a memory view and the args
-  map (missing keys take their defaults). Being roofed does not matter."
+  "Whether logging out is wanted: it is night, no bed is remembered within :bed-radius, :offline-allowed is not
+  false, the last log-out was not unsupported, and :others holds: :asleep-nearby (the default) wants another player
+  within :player-radius asleep (logging out lets them skip the night); :online wants another player in the server's
+  player list (the night shelter's step 2: away for the night instead of digging in). Takes the primitives, a memory
+  view and the args map (missing keys take their defaults). Being roofed does not matter."
   [p view args]
   (boolean (and (not= false (:offline-allowed args))
                 (night? p)
                 (nil? (bed-in-view p view (:bed-radius args default-bed-radius)))
                 (not (log-out-unsupported? view))
-                (seq (sleeping-players p (:player-radius args default-player-radius))))))
+                (seq (if (= :online (:others args))
+                       (other-players-online p)
+                       (sleeping-players p (:player-radius args default-player-radius)))))))
 
 (defn days-awake
   "In-game days since the latest :slept entry, or nil when none is

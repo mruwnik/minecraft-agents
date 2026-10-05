@@ -258,9 +258,17 @@ test('trade with an unknown villager uuid resolves gone', async () => {
 test('self reports the body in the contract shape', () => {
   const { p } = rig(world)
   const s = p.self()
-  assert.deepEqual(Object.keys(s).sort(), ['chunkLoaded', 'dimension', 'effects', 'equipment', 'experience', 'food', 'foodSaturation', 'health', 'held', 'inLava', 'inWater', 'inventory', 'isDay', 'isSleeping', 'onFire', 'onGround', 'oxygen', 'pos', 'raining', 'settling', 'thundering', 'timeOfDay', 'username', 'vehicle'])
+  assert.deepEqual(Object.keys(s).sort(), ['chunkLoaded', 'dimension', 'effects', 'equipment', 'experience', 'food', 'foodSaturation', 'health', 'held', 'inLava', 'inWater', 'inventory', 'isDay', 'isSleeping', 'onFire', 'onGround', 'oxygen', 'players', 'pos', 'raining', 'settling', 'thundering', 'timeOfDay', 'username', 'vehicle'])
   assert.equal(s.isDay, false)
   assert.deepEqual(s.inventory[0], { name: 'bread', count: 2, slot: 36 })
+})
+
+test('self lists the other players in the player list (the tab list), not the body itself', () => {
+  const { bot, p } = rig(world)
+  bot.players = { [bot.username]: {}, Steve: {}, Alex: {} }
+  assert.deepEqual(p.self().players, ['Steve', 'Alex'])
+  delete bot.players
+  assert.deepEqual(p.self().players, [])
 })
 
 for (const [rainState, thunderState, isRaining, raining, thundering] of [

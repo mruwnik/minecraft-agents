@@ -475,6 +475,8 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       dimension: bot.game?.dimension,
       timeOfDay,
       isDay: timeOfDay < 12542 || timeOfDay > 23460,
+      // the other players in the server's player list (what the tab list shows a player)
+      players: Object.keys(bot.players ?? {}).filter(name => name !== bot.username),
       raining: (bot.rainState ?? 0) > RAIN_LEVEL,
       thundering: (bot.rainState ?? 0) > RAIN_LEVEL && (bot.thunderState ?? 0) > THUNDER_LEVEL,
       held: bot.heldItem?.name ?? null,

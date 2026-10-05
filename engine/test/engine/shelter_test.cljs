@@ -8,6 +8,7 @@
             [engine.memory :as mem]
             [engine.scenario :as scenario]
             [engine.fake :as fake]
+            [engine.jobs.shelter :as sh]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]))
 
@@ -129,7 +130,7 @@
 
 (deftest player-sleeping-nearby-is-registered-and-fires-log-out
   (let [t (get triggers/all :player-sleeping-nearby)]
-    (is (= '(jobs.survival.log-out) (:job t)))
+    (is (= '(jobs.survival.log-out {:offline-ms 20000}) (:job t)))
     (is (= [:cooldown 30] ((juxt :persistence :cooldown-s) t)))
     (is (= {:player-radius 128 :bed-radius 48 :offline-allowed true} (:args t)))))
 
@@ -257,8 +258,8 @@
         (let [{:keys [eng p]} (setup {:time night :entities [sleeper]})]
           (core/submit! eng '(jobs.survival.log-out) {})
           (await (run-until-empty eng 3))
-          (is (= [20000] (mapv #(.-ms (.-args %)) (calls p "offline"))) "twenty seconds by default")
-          (is (= [{:ms 20000 :status "ok"}] (entries eng :log-out)))
+          (is (= [475050] (mapv #(.-ms (.-args %)) (calls p "offline"))) "until morning by default")
+          (is (= [{:ms 475050 :status "ok"}] (entries eng :log-out)))
           (is (= {:cap 10 :ttl day-ms} (mem/policy (mem/view (:store eng)) :log-out))))))))
 
 (deftest log-out-declines-without-a-sleeper-with-a-bed-or-when-not-allowed
@@ -471,7 +472,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:time night :entities [sleeper] :blocks {"6,64,0" "red_bed"}})]
+        (let [{:keys [eng p]} (setup {:time night :entities [sleeper] :players ["Alex"] :blocks {"6,64,0" "red_bed"}})]
           (know-bed! eng {:x 6 :y 64 :z 0})
           (core/submit! eng '(jobs.survival.shelter) {})
           (await (run-until-empty eng 8))
@@ -479,16 +480,70 @@
           (is (= [] (calls p "offline")))
           (is (= 1 (count (entries eng :slept)))))))))
 
-(deftest shelter-digs-in-rather-than-logging-out-when-no-bed-and-another-player-sleeps
+(deftest ms-until-morning-counts-to-the-end-of-the-night-plus-a-margin
+  (are [t ms] (= ms (sh/ms-until-morning t))
+    14000 475050
+    12542 547950
+    20000 175050
+    23460 2050
+    23461 0
+    1000 0
+    0 0))
+
+(deftest shelter-digs-in-when-alone-on-the-server
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:time night :entities [sleeper] :inventory dirt-stack :blocks floor})]
+        (let [{:keys [eng p]} (setup {:time night :inventory dirt-stack :blocks floor})]
+          (core/submit! eng '(jobs.survival.shelter) {})
+          (await (tick-n eng 8))
+          (is (= [] (calls p "offline")) "nobody else online: no log-out")
+          (is (= 10 (count (calls p "place"))) "dug in")
+          (is (= [] (entries eng :log-out))))))))
+
+(def ms-of-offline (fn [p] (mapv #(.-ms (.-args %)) (calls p "offline"))))
+
+(deftest shelter-logs-out-until-morning-when-another-player-is-online-and-no-bed-is-known
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:time night :players ["Alex"] :inventory dirt-stack :blocks floor})]
           (core/submit! eng '(jobs.survival.shelter) {})
           (await (run-until-empty eng 8))
-          (is (= [] (calls p "offline")) "did not go offline")
-          (is (seq (calls p "place")) "dug in")
-          (is (= [] (entries eng :log-out))))))))
+          (is (= [475050] (ms-of-offline p)) "away until the night is over")
+          (is (= [{:ms 475050 :status "ok"}] (entries eng :log-out)))
+          (is (= [] (calls p "place")) "did not dig in")
+          (is (true? (.-isDay (.self p))) "back by day")
+          (is (= [] (:list (core/state eng))) "the shelter ended at day"))))))
+
+(deftest shelter-logs-out-again-when-it-comes-back-at-night
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:time night :players ["Alex"] :inventory dirt-stack :blocks floor})
+              n (atom 0)]
+          (.override (.-world p) "offline"
+                     (fn ^:async f [token a impl]
+                       (let [r (await (impl token a))]
+                         (when (= 1 (swap! n inc)) (.setTime (.-world p) 20000))
+                         r)))
+          (core/submit! eng '(jobs.survival.shelter) {})
+          (await (run-until-empty eng 12))
+          (is (= [475050 175050] (ms-of-offline p)) "the second log-out lasts the rest of the night")
+          (is (= [] (calls p "place")))
+          (is (= [] (:list (core/state eng)))))))))
+
+(deftest shelter-digs-in-when-the-log-out-fails
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:time night :players ["Alex"] :inventory dirt-stack :blocks floor})]
+          (.override (.-world p) "offline" (fn [_ _ _] #js {:status "unsupported"}))
+          (core/submit! eng '(jobs.survival.shelter) {})
+          (await (tick-n eng 8))
+          (is (= 1 (count (calls p "offline"))) "tried once; unsupported is not tried again")
+          (is (= ["unsupported"] (mapv :status (entries eng :log-out))))
+          (is (= 10 (count (calls p "place"))) "fell through to dig-in"))))))
 
 (deftest shelter-falls-through-a-missing-bed-to-the-next-choice
   (async done
@@ -499,19 +554,78 @@
           (core/submit! eng '(jobs.survival.shelter) {})
           (await (run-until-empty eng 8))
           (is (= [{:gone true :was {:x 6 :y 64 :z 0}}] (entries eng :bed)))
-          (is (= [] (calls p "offline")) "shelter never logs out"))))))
+          (is (= [] (calls p "offline")) "nobody else online: no log-out"))))))
 
-(deftest shelter-digs-in-and-ends-once-roofed
+(defn notified [seen] (count (emitted seen :job.notify)))
+
+(deftest a-dug-in-shelter-holds-the-body-until-day-then-the-queued-job-runs
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:time night :inventory dirt-stack :blocks floor :entities [awake]})]
-          (core/submit! eng '(jobs.survival.shelter) {})
-          (is (<= (await (run-until-empty eng 12)) 6) "ends instead of waiting for day")
-          (is (= 10 (count (calls p "place"))))
+        (let [{:keys [eng p seen]} (setup {:time night :inventory dirt-stack :blocks floor :entities [awake]})]
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night-unsafe}]}"))
+          (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
+          (await (tick-n eng 20))
+          (is (= 10 (count (calls p "place"))) "dug in")
           (is (= [] (calls p "dig")))
           (is (= [:built] (mapv :state (entries eng :shelter))))
-          (is (= [] (:list (core/state eng)))))))))
+          (is (some? (:pending-reflex (core/state eng))) "the shelter reflex is still running at night")
+          (is (zero? (notified seen)) "the queued job does not start before day")
+          (.setTime (.-world p) noon)
+          (await (tick-n eng 6))
+          (is (nil? (:pending-reflex (core/state eng))) "the shelter ended at day")
+          (is (not= {:x 0 :y 64 :z 0} (pos-of p)) "the body stepped out of its walls")
+          (is (= 1 (notified seen)) "then the queued job ran"))))))
+
+(def ground
+  "Dirt (no tool needed) from y 60 to 63 over x and z -4..4: room for a pit and a stair out of it."
+  (into {} (for [x (range -4 5) z (range -4 5) y (range 60 64)] [(str x "," y "," z) "dirt"])))
+
+(deftest a-pit-shelter-holds-until-day-then-ends-with-the-body-out-of-the-pit
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:time night :blocks ground})]
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night-unsafe}]}"))
+          (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
+          (await (tick-n eng 20))
+          (is (< (:y (pos-of p)) 64) "in the pit")
+          (is (some? (:pending-reflex (core/state eng))) "the shelter holds the body at night")
+          (is (zero? (notified seen)))
+          (.setTime (.-world p) noon)
+          (await (tick-n eng 40))
+          (is (nil? (:pending-reflex (core/state eng))) "the shelter ended at day")
+          (is (>= (:y (pos-of p)) 64) "the body stands on the surface, out of the pit")
+          (is (= 1 (notified seen)) "then the queued job ran"))))))
+
+(deftest a-pit-shelter-with-no-way-out-keeps-holding-by-day
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [stone (into {} (map (fn [[k _]] [k "stone"])) ground)
+              {:keys [eng p seen]} (setup {:time night :blocks stone})]
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night-unsafe}]}"))
+          (await (tick-n eng 20))
+          (is (< (:y (pos-of p)) 64) "in the pit")
+          (.setTime (.-world p) noon)
+          (await (tick-n eng 40))
+          (is (seq (emitted seen :dig-in.trapped)) "no pickaxe for the stone stair: trapped")
+          (is (some? (:pending-reflex (core/state eng))) "the shelter does not end until the body is out"))))))
+
+(deftest a-sleeping-shelter-holds-until-day-then-the-queued-job-runs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:time night :skipNight false :blocks {"6,64,0" "red_bed"}})]
+          (know-bed! eng {:x 6 :y 64 :z 0})
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night-unsafe}]}"))
+          (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
+          (await (tick-n eng 20))
+          (is (true? (.-isSleeping (.self p))) "asleep in the bed, the night not skipped")
+          (is (zero? (notified seen)) "the queued job does not wake the body before day")
+          (.setTime (.-world p) noon)
+          (await (tick-n eng 6))
+          (is (= 1 (notified seen))))))))
 
 (deftest shelter-ends-without-acting-when-already-roofed
   (async done

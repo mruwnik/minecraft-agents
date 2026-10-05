@@ -1,6 +1,6 @@
 (ns engine.fake
   "The fake world the cljs tests drive: the primitives object of README.md over one atom of cljs world data, never a
-  server. (create spec) takes the spec as a cljs map (the keys createFake took: :self :time :raining :blocks
+  server. (create spec) takes the spec as a cljs map (the keys createFake took: :self :time :players :raining :blocks
   {\"x,y,z\" name} :entities :inventory :equipment :containers :drops :recipes :unreachable :noPath :swimFails
   :mountFails :dismountFails :skipNight :settles :offlineScale :ages :states :unloaded :furnaces :enchantTables) and
   returns the JS object the engine's primitives are: methods taking (token, args) and returning promises of JS
@@ -10,7 +10,7 @@
   world.state is an atom of
     {:self {:username :pos [x y z] :health :food :foodSaturation :oxygen :onFire :inWater :inLava :onGround
             :isSleeping :effects :experience {:level :points :progress} :dimension :held :vehicle}
-     :time :raining :thundering :blocks {[x y z] name} :unloaded #{pos} :ages {pos n} :states {pos {prop v}}
+     :time :players [username] :raining :thundering :blocks {[x y z] name} :unloaded #{pos} :ages {pos n} :states {pos {prop v}}
      :entities [{:id :name :kind :pos [x y z] ...}] (flags kebab-case: :leashed-to-me :in-love :break-at ...)
      :inventory [{:name :count}] :equipment {part stack} :containers {pos [stack]} :drops :chat [{:message :to}]
      :recipes :unreachable :no-path #{pos} :furnaces :enchant-tables :controls :yaw :pitch :offline :settling ...}
@@ -46,6 +46,7 @@
 (def fake-body-id -1)
 (def offline-default-ms (* 5 60 1000))
 (def offline-max-ms (* 10 60 1000))
+(def ms-per-tick 50)
 (def no-shape #{"air" "cave_air" "water" "lava" "fire" "short_grass" "tall_grass" "snow"})
 (def see-through #{"air" "water" "lava" "fire" "short_grass" "tall_grass" "snow" "glass" "glass_pane"})
 ;; blocks whose collision shape does not fill the cell (or that have none); every other block is a full cube
@@ -152,6 +153,7 @@
         self (norm-pos (:self spec))]
     (-> {:self (merge default-self self {:held (:held self)})
          :time (:time spec 1000)
+         :players (vec (:players spec))
          :raining (:raining spec false)
          :thundering (:thundering spec false)
          :blocks (cells (:blocks spec) identity)
@@ -593,7 +595,7 @@
                   {:username (:username s) :pos (:pos s) :settling (:settling w)
                    :vehicle (some-> (vehicle-of w) (update :uuid identity))
                    :experience (:experience s)
-                   :timeOfDay (:time w) :isDay (day-at? (:time w)) :raining (:raining w) :thundering (:thundering w)
+                   :timeOfDay (:time w) :isDay (day-at? (:time w)) :players (:players w) :raining (:raining w) :thundering (:thundering w)
                    :held (:held s) :equipment (equipment-view w) :inventory (with-slots (:inventory w))}))))
 
 ;; ---- the world object's helpers for tests
@@ -691,12 +693,13 @@
                                  (reset! away (js/Promise. (fn [resolve] (reset! released resolve))))
                                  (swap! state assoc :offline true)
                                  (emit! #js {:kind "offline" :ms wanted})
-                                 (await (js/Promise.
-                                         (fn [resolve]
-                                           (let [timer (js/setTimeout resolve (* wanted (:offline-scale @state)))]
-                                             (reset! sleeper {:token token :wake (fn [] (js/clearTimeout timer) (resolve))})))))
-                                 (reset! sleeper nil)
-                                 (swap! state #(assoc % :offline false :settling (:settles %)))
+                                 (let [full (await (js/Promise.
+                                                    (fn [resolve]
+                                                      (let [timer (js/setTimeout #(resolve true) (* wanted (:offline-scale @state)))]
+                                                        (reset! sleeper {:token token :wake (fn [] (js/clearTimeout timer) (resolve false))})))))]
+                                   (reset! sleeper nil)
+                                   (swap! state #(cond-> (assoc % :offline false :settling (:settles %))
+                                                   full (update :time (fn [t] (mod (+ t (js/Math.floor (/ wanted ms-per-tick))) 24000))))))
                                  (reset! away nil)
                                  (emit! #js {:kind "online" :pos (pos-js (body-pos @state))})
                                  (@released nil)
@@ -729,7 +732,7 @@
                                (not (undefined? forced)) forced
                                (and (#{"moveTo" "steer"} name) (some? (get-in @state [:self :vehicle]))) #js {:status "mounted"}
                                :else
-                               (let [_ (when (not= name "sleep") (swap! state assoc-in [:self :isSleeping] false))
+                               (let [_ (when-not (#{"sleep" "wait"} name) (swap! state assoc-in [:self :isSleeping] false))
                                      impl (acts name)
                                      override (@overrides name)]
                                  (let [impl' (fn [t x] (js/Promise. (fn [resolve] (resolve (impl t x)))))]

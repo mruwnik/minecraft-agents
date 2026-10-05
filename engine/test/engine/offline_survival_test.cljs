@@ -75,7 +75,7 @@
                 entry (mem/write! (:store eng) :probe {:x 1})]
             (is (nil? (:wt entry)))
             (await round)
-            (is (= 5000 (:wt (mem/write! (:store eng) :probe {:x 2}))) "world time is back after the return")))))))
+            (is (= 5400 (:wt (mem/write! (:store eng) :probe {:x 2}))) "world time is back after the return, 20 s (400 ticks) on")))))))
 
 (deftest the-engine-survives-a-job-going-offline-and-resumes
   (async done
