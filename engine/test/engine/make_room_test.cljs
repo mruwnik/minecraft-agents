@@ -111,15 +111,30 @@
                    {:name "stick" :count 3 :slot 3}
                    {:name "flint" :count 3 :slot 4}]
         order (fn [recency] (names-of (mr/toss-order inventory {} recency 5)))]
-    (is (= ["stick" "flint" "gravel" "dirt" "oak_log"] (order {})) "worth 0 first; the same worth by count (3, 3 by slot, 9, 40)")
-    (is (= ["flint" "gravel" "dirt" "stick" "oak_log"] (order {"stick" 100})) "the one picked up most recently goes last of its worth")
-    (is (= ["stick" "gravel" "dirt" "flint" "oak_log"] (order {"flint" 100 "gravel" 50 "dirt" 50}))
+    (is (= ["dirt" "gravel" "stick" "flint" "oak_log"] (order {})) "junk blocks first (bigger stack first), then worth 0 by count (3, 3 by slot)")
+    (is (= ["dirt" "gravel" "flint" "stick" "oak_log"] (order {"stick" 100})) "the one picked up most recently goes last of its worth")
+    (is (= ["dirt" "gravel" "stick" "flint" "oak_log"] (order {"flint" 100 "gravel" 50 "dirt" 50}))
         "stick has no pick-up (0): before the picked-up names; later pick-ups after earlier ones")))
 
+(deftest toss-order-throws-junk-blocks-before-coal-and-copper-whole-stacks-first
+  (let [inventory [{:name "coal" :count 30 :slot 0}
+                   {:name "raw_copper" :count 12 :slot 1}
+                   {:name "tuff" :count 20 :slot 2}
+                   {:name "cobbled_deepslate" :count 64 :slot 3}
+                   {:name "granite" :count 64 :slot 4}
+                   {:name "iron_ore" :count 5 :slot 5}
+                   {:name "diamond" :count 2 :slot 6}]]
+    (is (= ["cobbled_deepslate" "granite" "tuff" "raw_copper" "coal"]
+           (names-of (mr/toss-order (subvec inventory 0 5) {} {} 1))))
+    (is (= ["cobbled_deepslate" "granite" "tuff" "iron_ore" "raw_copper" "coal"]
+           (names-of (mr/toss-order (subvec inventory 0 6) {} {} 1)))
+        "junk blocks first, whole stacks before partial; then the rest")
+    (is (not-any? #{"diamond"} (names-of (mr/toss-order inventory {} {} 1))))))
+
 (deftest toss-order-orders-by-recency-before-count
-  (let [inventory [{:name "gravel" :count 9 :slot 0} {:name "flint" :count 3 :slot 1}]]
-    (is (= ["gravel" "flint"] (names-of (mr/toss-order inventory {} {"gravel" 1 "flint" 2} 5))))
-    (is (= ["flint" "gravel"] (names-of (mr/toss-order inventory {} {"gravel" 2 "flint" 1} 5))))))
+  (let [inventory [{:name "stick" :count 9 :slot 0} {:name "flint" :count 3 :slot 1}]]
+    (is (= ["stick" "flint"] (names-of (mr/toss-order inventory {} {"stick" 1 "flint" 2} 5))))
+    (is (= ["flint" "stick"] (names-of (mr/toss-order inventory {} {"stick" 2 "flint" 1} 5))))))
 
 (deftest toss-order-skips-protected-food-and-stacks-worth-max-or-more
   (let [inventory [{:name "iron_pickaxe" :count 1 :slot 0}
@@ -140,7 +155,7 @@
       [64 64 64] 192 []
       [64 64 64] 100 [0]
       [40 30] 64 []
-      [40 30] 30 [1]
+      [40 30] 30 [0]
       [10 64] 64 [0])))
 
 (deftest deposit-names-lists-the-names-above-their-keep-least-worth-keeping-first
@@ -372,3 +387,18 @@
           (is (= 3 (count (calls p "toss"))))
           (is (some #(= :make-room.stalled (:kind %)) @seen))
           (is (declined? seen)))))))
+
+
+(deftest junk-blocks-are-tossed-before-coal-and-copper-and-the-result-says-so
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:inventory (vec (concat [{:name "coal" :count 30} {:name "raw_copper" :count 12}
+                                                                   {:name "cobbled_deepslate" :count 64} {:name "tuff" :count 20}]
+                                                                  (same "diamond_pickaxe" 30 1)))})]
+          (await (run-reflex eng {:free 4 :keep-blocks 0} {}))
+          (is (= ["cobbled_deepslate" "tuff"] (mapv #(arg-of "item" %) (calls p "toss"))))
+          (is (= {"coal" 30 "raw_copper" 12} (select-keys (carried p) ["coal" "raw_copper"])))
+          (is (= [{:item "cobbled_deepslate" :count 64} {:item "tuff" :count 20}]
+                 (:tossed (first (filter #(= :make-room.done (:kind %)) @seen)))))
+          (is (some #(and (= :make-room.tossed (:kind %)) (:junk %)) @seen) "the event says it was a junk block"))))))

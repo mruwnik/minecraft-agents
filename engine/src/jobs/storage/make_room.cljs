@@ -1,5 +1,6 @@
 (ns jobs.storage.make-room
-  (:require [engine.ctx :as ctx]
+  (:require [clojure.string :as str]
+            [engine.ctx :as ctx]
             [engine.jobs.shelter :as sh]
             [engine.jobs.util :as u]
             [engine.memory :as mem]
@@ -11,7 +12,9 @@
 (def doc
   "Make room in a nearly full inventory (the inventory-nearly-full reflex), one step per round, until :free slots
   are free. Each round first checks whether anything is left to do and ends :done when not.
-  Never put away or thrown: tools, weapons, armour and buckets. Food is never thrown and is put away only above
+  What is thrown, like a player: plain junk blocks first (junk-blocks: cobblestone, cobbled deepslate, granite,
+  tuff, dirt, gravel...), whole big stacks before partial, then the rest by worth; ores, fuel and the like
+  only after the junk. Never put away or thrown: tools, weapons, armour and buckets. Food is never thrown and is put away only above
   :keep-food (best food-points first). Building blocks (the dig-in list, in its order) are kept up to
   :keep-blocks.
   Steps, in order:
@@ -27,7 +30,7 @@
      of the four directions with two free cells ahead at eye level and tosses.
   After a toss, once enough slots are free (or nothing is left to throw), it walks :away blocks from where the
   items were thrown, so it does not pick them up again.
-  Emits info make-room.tossed, .swapped, .done and .declined. Three failed tosses end it with warn
+  Hands over {:tossed [{:item :count}] :free}. Emits info make-room.tossed (with :junk), .swapped, .done (with :tossed, what was thrown) and .declined. Three failed tosses end it with warn
   make-room.toss-failed. After :max-rounds rounds it ends :declined with warn make-room.stalled. It also ends
   :declined when nothing may be tossed.")
 
@@ -45,6 +48,11 @@
 (def unusable-policy {:cap 5 :ttl 600000})
 
 (def tool-like #{"bucket" "water_bucket" "lava_bucket"})
+
+(def junk-blocks
+  "Plain blocks a player throws first when the bag is full."
+  #{"dirt" "coarse_dirt" "cobblestone" "cobbled_deepslate" "deepslate" "stone" "granite" "diorite" "andesite"
+    "tuff" "gravel" "netherrack" "sand" "red_sand" "calcite" "dripstone_block"})
 
 (def cardinals [[1 0] [-1 0] [0 1] [0 -1]])
 
@@ -95,8 +103,9 @@
 
 (defn toss-order
   "The stacks that may be thrown, first to throw first: [{:name :count :slot
-  :worth}] sorted by worth, then when the name was last picked up (never is
-  0, oldest), then count, then slot. A stack qualifies when its name is not
+  :worth :junk}]: plain junk blocks (junk-blocks) first, the biggest stack
+  first (whole stacks before partial), then by worth, then when the name was
+  last picked up (never is 0, oldest), then count, then slot. A stack qualifies when its name is not
   protected or food, its worth is below max-worth, and its whole count fits in
   what the name carries above its keep, after the stacks of the name that come
   before it in the order: a toss frees a whole slot and never cuts into a floor."
@@ -104,10 +113,12 @@
   (let [totals (totals inventory)
         budgets (into {} (map (fn [[n total]] [n (- total (get keep n 0))])) totals)
         candidates (->> inventory
-                        (map #(assoc (select-keys % [:name :count :slot]) :worth (value/item-worth %)))
+                        (map #(assoc (select-keys % [:name :count :slot]) :worth (value/item-worth %) :junk (contains? junk-blocks (:name %))))
                         (remove #(or (protected? (:name %)) (foods/edible? (:name %))))
                         (filter #(< (:worth %) max-worth))
-                        (sort-by (juxt :worth #(get recency (:name %) 0) :count :slot)))]
+                        (sort-by (fn [s] (if (:junk s)
+                                           [0 0 (- (:count s)) 0 (:slot s)]
+                                           [1 (:worth s) 0 (get recency (:name s) 0) (:count s) (:slot s)]))))]
     (first (reduce (fn [[chosen left] s]
                      (if (<= (:count s) (left (:name s)))
                        [(conj chosen s) (update left (:name s) - (:count s))]
@@ -193,9 +204,10 @@
         r (await (ctx/act c :toss (clj->js {:item (:name stack) :count (:count stack) :slot (:slot stack)})))]
     (if (not= "tossed" (.-status r))
       (u/fail! c :make-room.toss-failed (str "toss " (:name stack) ": " (.-status r)))
-      (do (ctx/update-mem! c assoc :tossed-at {:x x :y y :z z} :toss-dir dir :walked false :acted true)
+      (do (ctx/update-mem! c #(-> % (assoc :tossed-at {:x x :y y :z z} :toss-dir dir :walked false :acted true)
+                                (update :tossed (fnil conj []) {:item (:name stack) :count (:count stack)})))
           (ctx/emit! c :make-room.tossed :info
-                     (merge {:item (:name stack) :count (:count stack) :worth (:worth stack)
+                     (merge {:item (:name stack) :count (:count stack) :worth (:worth stack) :junk (boolean (:junk stack))
                              :text (str "tossed " (:count stack) " " (:name stack))}
                             fields))
           :continue))))
@@ -257,6 +269,14 @@
   [c]
   (< (u/free-slots (:primitives c)) (:free (:args c))))
 
+(defn tossed-summary
+  "The done event's fields: what was tossed ([{:item :count}]) and a text saying so."
+  [m free-now]
+  (let [tossed (vec (:tossed m))]
+    {:free free-now :tossed tossed
+     :text (str free-now " free"
+                (when (seq tossed) (str ", tossed " (str/join ", " (map #(str (:count %) " " (:item %)) tossed)))))}))
+
 (defn ^:async round
   [c]
   (let [{:keys [free max-rounds toss-below]} (:args c)
@@ -280,7 +300,8 @@
 
       (>= free-now free)
       (do (when (:acted m)
-            (ctx/emit! c :make-room.done :info {:free free-now :text (str "room made: " free-now " free")}))
+            (ctx/emit! c :make-room.done :info (tossed-summary m free-now)))
+          (ctx/result! c {:tossed (vec (:tossed m)) :free free-now})
           :done)
 
       (and chest (seq names)) (await (deposit! c chest names keep))
@@ -292,7 +313,8 @@
       (pending-walk? c) (await (walk-away! c))
 
       (:acted m)
-      (do (ctx/emit! c :make-room.done :info {:free free-now :short true :text (str "short of room: " free-now " free, nothing more may be tossed")})
+      (do (ctx/emit! c :make-room.done :info (assoc (tossed-summary m free-now) :short true))
+          (ctx/result! c {:tossed (vec (:tossed m)) :free free-now :short true})
           :done)
 
       :else (do (ctx/emit! c :make-room.declined :info {:free free-now :reason "nothing-to-toss" :text "nothing it may toss"})
