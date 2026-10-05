@@ -40,7 +40,7 @@
   solid (it stands inside a hollow wider than a pit, so it is not \"in a
   pit\" either), it first walks (moveTo range 0) to the nearest cell at the
   same level with a solid side, reached through standable cells within
-  wall-search-radius (8) blocks, and digs the stair from there (none:
+  wall-search-radius (24) blocks, and digs the stair from there (none:
   \"stair: no solid step\"; the walk falls short: \"wall: moveTo <status>\"),
   then moves to F1 with range 0 (no reason when that arrives or the feet rose,
   else \"stair: moveTo <status>\"). A cell is not dug when the one above it is
@@ -57,7 +57,8 @@
   that neither arrived (the body is at the goal, however short the move)
   nor moved the body more than :min-move blocks from where it stood, it
   retries once uncapped (range 1, :timeoutS 6). If either arrived or moved it
-  that far the spell is over (:done); so is it when the body was enclosed
+  that far the spell is over (:done), unless the body was enclosed at the spell's start and still is (a shuffle inside
+  the same hollow is not progress: it does not count as displacement, for the first round's walk or the hop; arriving does); so is it when the body was enclosed
   (engine.jobs.reach/enclosed?) at the spell's start and is not any more
   (it is out, though the goal may stay out of reach); otherwise :continue. After :max-attempts counted attempts, or at the round cap, it emits the warn
   event unstick.failed with the position, :attempts (counted), :rounds (used, also what the :text reports), :reasons (each distinct reason once, with \" (xN)\" when repeated; job memory keeps the raw list) and a :text naming them, writes a :stuck memory entry (cap 10,
@@ -268,7 +269,7 @@
 
 (def wall-search-radius
   "How far (blocks along x and along z) wall-spot looks for a wall to stair into."
-  8)
+  24)
 
 (defn walled-side? [c pos] (boolean (some #(solid? c (shift pos %)) cardinals)))
 
@@ -395,16 +396,26 @@
           (= "partial" status) (str "pillar: partial " placed " of " count)
           :else (str "pillar: " (or (.-reason r) status)))))))
 
+(defn free-to-count-move?
+  "Whether a move of the body counts as progress: the body was not enclosed (engine.jobs.reach/enclosed?) when the spell
+  began (job memory :enclosed), or is not enclosed now. A body shuffled around inside the enclosure it started in has
+  not got anywhere."
+  [c]
+  (or (not (:enclosed (ctx/mem c))) (not (reach/enclosed? (:primitives c)))))
+
 (defn ^:async hop!
   "A moveTo toward the stored goal, capped at hop-blocks; when that does not
   succeed, one uncapped retry with :timeoutS retry-timeout-s. Success is
   the body at the goal (a moveTo that arrived, however short) or
   displacement: the body ended more than min-move blocks from where it
-  stood before, whatever the status."
+  stood before, whatever the status; displacement counts only when the body
+  was not enclosed when the spell began or is not enclosed now (a shuffle
+  inside the same hollow is not progress). Arriving always counts."
   [c min-move]
   (let [before (u/self-pos c)]
     (when-let [goal (:goal (ctx/mem c))]
-      (letfn [(ok? [r] (or (= "arrived" (.-status r)) (> (u/dist before (u/self-pos c)) min-move)))]
+      (letfn [(ok? [r] (or (= "arrived" (.-status r))
+                          (and (> (u/dist before (u/self-pos c)) min-move) (free-to-count-move? c))))]
         (or (ok? (await (ctx/act c :moveTo (clj->js {:pos goal :range 1 :maxDistance hop-blocks}))))
             (ok? (await (ctx/act c :moveTo (clj->js {:pos goal :range 1 :timeoutS retry-timeout-s})))))))))
 
@@ -416,13 +427,14 @@
   "The first round's try before anything is placed or dug: a walk toward the stored goal with the engine's planner
   (engine.path.near/walk-near!, doors :shut: a shut door, gate or trapdoor is opened, passed and shut again), which
   the moveTo a job got stuck with cannot do. Skipped while the body is airborne (land! gave up). True when it moved
-  the body more than min-move blocks."
+  the body more than min-move blocks and that counts (free-to-count-move?: not when it only shuffled inside the enclosure
+  it started in)."
   [c min-move]
   (let [before (u/self-pos c)
         goal (:goal (ctx/mem c))]
     (when (and goal (on-ground? c))
       (await (near/walk-near! c goal 1 {:doors :shut :timeout-s walk-timeout-s}))
-      (> (u/dist before (u/self-pos c)) min-move))))
+      (and (> (u/dist before (u/self-pos c)) min-move) (free-to-count-move? c)))))
 
 (defn summarize-reasons
   "Each distinct reason once, in first-seen order, with \" (xN)\" appended when it occurred N > 1 times."

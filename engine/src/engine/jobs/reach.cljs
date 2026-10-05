@@ -229,8 +229,9 @@
      (way? kind-at (cell-of mob-pos) (cell-of body-pos)))))
 
 (def room-cells
-  "Standable cells a flood from the body reaches before the body counts as having room (not enclosed)."
-  256)
+  "Standable cells a flood from the body reaches before the body counts as having room (not enclosed). Large enough
+  that a wide, shallow hollow (20x20, 2 deep: about 400 cells) still floods as closed."
+  1024)
 
 (defn body-kind-of
   "kind-of for the body's own walk: a shut wooden door, gate or trapdoor is :open (a hand opens it); iron ones are not."
@@ -264,7 +265,7 @@
 
 (defn enclosed?
   "Whether the body of primitives p is shut in: the cells it can walk to as a player does (one step up, up to three down,
-  water swum, wooden doors, gates and trapdoors opened) number fewer than room-cells. A pit or a sealed room is; open
+  water swum, wooden doors, gates and trapdoors opened) number fewer than room-cells (1024). A pit or a sealed room is; open
   ground, or a hut with a door, is not. False with no body position."
   [p]
   (if (some-> (.self p) .-pos)

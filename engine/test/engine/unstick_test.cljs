@@ -8,6 +8,7 @@
             [engine.memory :as mem]
             [engine.scenario :as scenario]
             [engine.fake :as fake]
+            [engine.jobs.reach :as reach]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [engine.triggers.stuck :as stuck]
@@ -180,6 +181,10 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:self {:pos at5}})]
+          (.override (.-world p) "moveTo"
+                     (fn ^:async f [token args impl]
+                       (let [r (await (impl token args))]
+                         (if (.-maxDistance args) (doto r (aset "status" "arrived")) r))))
           (seed-moved! eng (repeat 4 (bad-move)))
           (is (true? (stuck-now? eng)))
           (core/submit! eng '(jobs.maintenance.unstick) {})
@@ -381,6 +386,14 @@
                    #js {:status "blocked" :pos (.-pos (.self p)) :distance 5}
                    (await (impl token args)))))))
 
+(defn ^:async tick-n!
+  "Tick n more times (no new job)."
+  [eng n]
+  (loop [i 0]
+    (when (< i n)
+      (await (core/tick! eng))
+      (recur (inc i)))))
+
 (defn ^:async run-attempts!
   "Seed a stuck body, block moveTo (all of them when hop? is false, only the first two when true, none when :free)
   and tick n times."
@@ -517,14 +530,14 @@
           (is (= [] (calls p "jumpPlace")))
           (is (not-any? #(= :unstick.failed (:kind %)) @seen)))))))
 
-(deftest unstick-counts-displacement-not-status
+(deftest unstick-does-not-count-displacement-inside-the-enclosure-it-started-in
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (walled-in-setup)]
           (moved-to! p 7)
           (await (start-spell! eng))
-          (is (= [] (:list (core/state eng))) "blocked but 2 blocks from the stuck spot: done"))))))
+          (is (seq (:list (core/state eng))) "blocked, 2 blocks away, but still shut in: the spell goes on"))))))
 
 (deftest unstick-does-not-count-a-short-move-as-success
   (async done
@@ -773,6 +786,57 @@
           (is (= [] (:list (core/state eng))) "out of the hollow, the spell is over")
           (is (seq (dig-positions p)) "it dug stair steps into a wall")
           (is (= 67 (.-y (.-pos (.self p)))) "feet back at the surface"))))))
+
+(def huge-hollow
+  "A 2-deep 20x20 hollow in solid dirt (x 3..22, z -10..9, open at y 65 and 66, floor y 64, surface feet at y 67): about
+  400 standable cells, the nearest wall 10 blocks from the middle."
+  (apply dissoc
+         (into {} (for [x (range 0 26) y (range 60 67) z (range -13 13)] [(str x "," y "," z) "dirt"]))
+         (for [x (range 3 23) z (range -10 10) y [65 66]] (str x "," y "," z))))
+
+(deftest a-body-in-the-middle-of-a-huge-hollow-is-enclosed
+  (is (true? (reach/enclosed? (tu/fake {:self {:pos {:x 12 :y 65 :z 0}} :blocks huge-hollow})))))
+
+(deftest unstick-walks-to-a-wall-and-stairs-out-of-a-huge-hollow
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:pos {:x 12 :y 65 :z 0}} :blocks huge-hollow
+                                           :inventory [{:name "dirt" :count 4}]})]
+          (lifting-moveTo! p 67)
+          (await (run-attempts! eng p 8 :free))
+          (is (nil? (failed-event seen)) "no give-up: the wall is 10 blocks away")
+          (is (= [] (:list (core/state eng))) "out of the hollow, the spell is over")
+          (is (seq (dig-positions p)) "it dug stair steps into a wall")
+          (is (= 67 (.-y (.-pos (.self p)))) "feet back at the surface"))))))
+
+(defn shuffling-moveTo!
+  "Every stair moveTo (range 0) puts the body on its target. A hop (anything else) shuffles the body 2 blocks sideways
+  and answers partial, noPath, as the raw pathfinder does inside a hollow."
+  [p]
+  (let [state (.-state (.-world p))]
+    (.override (.-world p) "moveTo"
+               (fn ^:async f [_ args _]
+                 (let [pos (.-pos args)
+                       lift? (zero? (.-range args))]
+                   (if lift?
+                     (swap! state assoc-in [:self :pos] [(.-x pos) (.-y pos) (.-z pos)])
+                     (swap! state update-in [:self :pos 0] + 2))
+                   #js {:status (if lift? "arrived" "partial") :reason (if lift? nil "noPath")
+                        :pos (.-pos (.self p)) :distance 5})))))
+
+(deftest unstick-does-not-end-the-spell-on-a-shuffle-inside-the-hollow-it-started-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:pos {:x 12 :y 65 :z 0}} :blocks huge-hollow
+                                           :inventory [{:name "dirt" :count 4}]})]
+          (shuffling-moveTo! p)
+          (await (run-attempts! eng p 1 :free))
+          (is (seq (:list (core/state eng))) "a 2 block shuffle inside the same hollow is not progress")
+          (await (tick-n! eng 8))
+          (is (= [] (:list (core/state eng))) "out of the hollow, the spell is over")
+          (is (< 65 (.-y (.-pos (.self p)))) "the feet rose: the later rounds stair out"))))))
 
 (deftest unstick-bedrock-pit-gives-up-after-max-attempts-rounds
   (async done
