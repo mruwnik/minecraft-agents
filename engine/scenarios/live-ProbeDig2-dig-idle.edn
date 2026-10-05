@@ -1,0 +1,2 @@
+;; ProbeDig2 live cases for jobs.blocks.dig own-drop pickup: idle, jobs are submitted with tools/jobs.mjs
+{:register [] :queue []}
