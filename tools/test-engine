@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# tools/test-engine <ns>... | --full
+# Compiles the engine :test build through tools/compile (it takes the compile lock itself), then runs the tests OUTSIDE the lock.
+# <ns>: engine namespaces, e.g. engine.go-to-test (comma-joined into --test=). --full: the whole suite (shared-code changes only).
+# Why not JS: a thin shell wrapper; runs node with --max-old-space-size=4096.
+set -u
+repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+[ $# -ge 1 ] || { echo "usage: tools/test-engine <ns>... | --full" >&2; exit 2; }
+if [ "$1" = "--full" ]; then args=(); else args=("--test=$(IFS=,; echo "$*")"); fi
+"$repo/tools/compile" engine test || exit $?
+cd "$repo/engine" && exec node --max-old-space-size=4096 out/test.cjs "${args[@]}"

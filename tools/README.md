@@ -4,7 +4,7 @@
 
 ### commit-mine
 
-    tools/commit-mine --card <id-or-prefix> -m <msg-file-or-text> --expect-hunks N <paths...> [--approved-core <card>]
+    tools/commit-mine --card <id-or-prefix> -m <msg-file-or-text> --expect-lines L <paths...> [--approved-core <card>]
     tools/commit-mine --card <id> -m <msg> --hunks <patchfile> --expect-hunks N <paths...>
 
 Takes the `.git/commit-lock` (mkdir lock, backoff up to 600 s, `COMMIT_LOCK_TIMEOUT` seconds to change),
@@ -12,11 +12,11 @@ stages exactly the given paths (`git add -A -- paths`; `--hunks` adds `git apply
 files that hold others' edits), and commits. The lock is always released (trap). The commit message gets the
 Co-Authored-By trailer if missing. Never stashes, resets, amends or pushes.
 
-Path mode commits WHOLE files, which would sweep in other agents' uncommitted hunks. So `--expect-hunks N` is
-required: N = total hunks `git diff <paths>` shows (an untracked file counts 1). Without it, or on a mismatch,
-the tool prints the per-file hunk counts and exits 5 before staging anything. Check `git diff <path>`; if all
-hunks are yours rerun with the printed N. If not: `git diff <path> > my.patch`, delete the foreign hunks from
-the patch (only hunks you wrote), and commit with `--hunks my.patch`.
+Path mode commits WHOLE files, which would sweep in other agents' uncommitted hunks. So `--expect-lines L` is
+required: L = added+deleted lines `git diff --numstat <paths>` shows (an untracked file counts its lines). Without
+it, or on a mismatch, the tool prints the per-file counts and exits 5 before staging anything. Check `git diff
+<path>`; if all lines are yours rerun with the printed L. If not: `git diff <path> > my.patch`, delete the foreign
+hunks from the patch (only hunks you wrote), and commit with `--hunks my.patch`.
 
 Hunks mode commits exactly the patch (the given paths are not staged whole). The paths are required and must
 cover every file in the patch, else exit 3 listing the others. `--expect-hunks N` must equal the patch's hunk
@@ -56,6 +56,14 @@ Talks to the differ HTTP API (default `http://localhost:8576`, override with `DI
 whose repo path is this checkout, override with `CARD_REPO`). `CARD_AUTHOR` sets the note author (default
 `agent`). The HTTP API cannot set the worker field, so `claim` sets `in_progress` and adds a note
 "claimed by <worker>" authored by the worker. Needs `curl` and `jq`.
+
+### compile / test-engine
+
+    tools/compile engine|dashboard <build>      tools/test-engine <ns>... | --full
+
+- `tools/compile` is the only user of `/tmp/mc-compile.lock`: never `flock` it or wrap it in `flock` (it exits 2 if you do).
+- Run tests with `tools/test-engine engine.<ns>-test ...` (queues the compile, then runs node outside the lock; `--full` = whole suite).
+- Never hold the lock while testing; a waiting compile is not stuck, a `flock` wrapper is.
 
 ## Live testing
 

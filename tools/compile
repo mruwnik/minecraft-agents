@@ -13,13 +13,16 @@
 #   --stop      stop the project's server (needs the lock; for restarts; no build argument).
 #
 # Queue: a ticket file <lane>-<ns>-<pid> per waiter in /tmp/mc-compile.queue (lane 0 priority, 1 normal); the first live
-# ticket polls the flock without blocking, so order is priority lane first, then arrival. Dead waiters' tickets are pruned.
+# ticket waits on the flock in 2 s blocking slices (so it wakes the moment the lock frees, competing fairly with any plain
+# `flock` waiter; a non-blocking poll every 0.2 s would lose to them), so order is priority lane first, then arrival.
+# Dead waiters' tickets are pruned. Running under a process that holds the lock (an ancestor with the lock file open, e.g.
+# `flock /tmp/mc-compile.lock tools/compile ...`) would wait for itself for ever: it exits 2 at once instead.
 # Memory: a missing server starts only with MIN_START_MB (3500) available; the compile itself uses the server's heap.
 # Env: MC_COMPILE_LOG=1 prints "waited Ns, compiled Ns".
 set -u
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-lock=/tmp/mc-compile.lock
-queue=/tmp/mc-compile.queue
+lock=${MC_COMPILE_LOCK:-/tmp/mc-compile.lock}   # env overrides are for tools/compile.test.sh only
+queue=${MC_COMPILE_QUEUE:-/tmp/mc-compile.queue}
 MIN_START_MB=3500
 
 usage() { echo "usage: tools/compile <engine|dashboard> <build>... [--priority] [--release] | <project> --stop" >&2; exit 2; }
@@ -43,6 +46,20 @@ done
 available_mb() { awk '/MemAvailable/ {print int($2/1024)}' /proc/meminfo; }
 server_pid() { local p; p=$(cat "$dir/.shadow-cljs/server.pid" 2>/dev/null) && [ -n "$p" ] && kill -0 "$p" 2>/dev/null && echo "$p"; }
 
+# Deadlock guard: an ancestor process holding the lock file open (flock(1) wrapping us, or an inherited fd) means we would wait for ourselves.
+if [ -e "$lock" ]; then
+  want=$(stat -c %i "$lock")
+  a=$PPID
+  while [ -n "$a" ] && [ "$a" -gt 1 ]; do
+    for fd in /proc/$a/fd/*; do
+      [ "$(stat -L -c %i "$fd" 2>/dev/null)" = "$want" ] && [ "$(stat -L -c %d "$fd" 2>/dev/null)" = "$(stat -c %d "$lock")" ] || continue
+      echo "tools/compile: process $a already holds $lock. tools/compile takes the lock itself; don't wrap it in flock (or run it from a lock holder)." >&2
+      exit 2
+    done
+    a=$(awk '{print $4}' "/proc/$a/stat" 2>/dev/null)
+  done
+fi
+
 mkdir -p "$queue"
 ticket="$queue/$lane-$(date +%s%N)-$$"
 : > "$ticket"
@@ -56,8 +73,15 @@ while :; do
     kill -0 "$pid" 2>/dev/null || rm -f "$f"
   done
   first=$(ls "$queue" 2>/dev/null | head -n1)
-  if [ "$queue/$first" = "$ticket" ] && flock -n 9; then break; fi
-  sleep 0.2
+  if [ "$queue/$first" = "$ticket" ]; then
+    if flock -w 2 9; then
+      first=$(ls "$queue" 2>/dev/null | head -n1)  # a priority ticket may have arrived while we blocked
+      [ "$queue/$first" = "$ticket" ] && break
+      flock -u 9
+    fi
+  else
+    sleep 0.2
+  fi
 done
 t1=$(date +%s.%N)
 rm -f "$ticket"
