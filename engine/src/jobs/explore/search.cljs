@@ -228,7 +228,7 @@
   "One go-to round toward the leg; on its end book the leg arrived or failed."
   [c]
   (let [[x y z] (:leg (ctx/mem c))
-        r (await (ctx/call-child c :leg 'jobs.movement.go-to {:pos {:x x :y y :z z} :range 2}))]
+        r (await (ctx/call-child c :leg 'jobs.movement.go-to {:pos {:x x :y y :z z} :range 2 :escalate false}))]
     (if-not (= :done r)
       :continue
       (let [arrived (:arrived (ctx/child-result c :leg))

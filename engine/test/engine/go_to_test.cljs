@@ -132,7 +132,6 @@
           (is (= ["partial" "blocked" "blocked" "blocked"] (mapv :status (moved eng)))
               "a round that gets closer is progress and resets the count"))))))
 
-(deftest go-to-accepts-doors
 (deftest go-to-goes-down-a-cliff-whose-foot-runs-into-unloaded-land
   (async done
     (tu/run-async done
@@ -155,6 +154,7 @@
           (is (= 64 (js/Math.floor (second (at p)))) "still on the plateau")
           (is (< (first (at p)) 11)))))))
 
+(deftest go-to-accepts-doors
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -290,7 +290,7 @@
       (fn ^:async t []
         ;; a stone wall at x 5 cuts the floor: the goal's side is walled in
         (let [walled (merge (box -2 63 -2 10 63 4 "stone") (box 5 64 -2 5 65 4 "stone"))
-              {:keys [out eng p]} (await (go! {:blocks walled} {:pos [8 64 1] :range 0}))]
+              {:keys [out eng p]} (await (go! {:blocks walled} {:pos [8 64 1] :range 0 :escalate false}))]
           (is (= {:arrived false :reason :unreachable :why :goal-enclosed} @out))
           (is (= [0 64 0] (at p)) "the body did not walk to the wall")
           (is (= ["blocked"] (mapv :status (moved eng))) "one round"))))))

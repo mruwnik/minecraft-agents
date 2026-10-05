@@ -99,7 +99,7 @@
   "One go-to round toward pos (child :walk, range 3). Resolves to :continue. A walk that gives up, or arrives with
   the block still out of reach, is remembered as :unreachable {:from feet :why}, which the check waits on."
   [c pos]
-  (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos pos :range 3}))
+  (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos pos :range 3 :escalate false}))
         res (ctx/child-result c :walk)]
     (when (and (= :done r) (not (and (:arrived res) (in-reach? c pos))))
       (ctx/update-mem! c assoc :unreachable {:from (feet-cell c) :why (if (:arrived res) :out-of-reach (:why res :unreachable))}))

@@ -85,7 +85,7 @@
 (defn ^:async walk-near!
   "Walk to within reach of cell: :done, :continue (still walking) or :failed."
   [c cell reach]
-  (let [r (await (ctx/call-child c :go 'jobs.movement.go-to {:pos (zipmap [:x :y :z] cell) :range reach}))]
+  (let [r (await (ctx/call-child c :go 'jobs.movement.go-to {:pos (zipmap [:x :y :z] cell) :range reach :escalate false}))]
     (if (= :continue r) :continue (if (:arrived (ctx/child-result c :go)) :done :failed))))
 
 (defn ^:async put-back!
@@ -135,7 +135,7 @@
   (let [target (when-not (:stepped (ctx/mem c)) (clear-cell c e waiting))]
     (if-not target
       (do (skip! c e :occupied) :continue)
-      (let [r (await (ctx/call-child c :go 'jobs.movement.go-to {:pos target :range 0}))]
+      (let [r (await (ctx/call-child c :go 'jobs.movement.go-to {:pos target :range 0 :escalate false}))]
         (when-not (= :continue r) (ctx/update-mem! c assoc :stepped true))
         :continue))))
 

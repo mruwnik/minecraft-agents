@@ -101,7 +101,7 @@
               :continue))))))
 
 (defn ^:async walk! [c]
-  (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos (destination c) :range (:range (:args c)) :doors :leave-open}))]
+  (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos (destination c) :range (:range (:args c)) :doors :leave-open :escalate false}))]
     (if-not (= :done r)
       :continue
       (if (:arrived (ctx/child-result c :walk))
@@ -187,7 +187,7 @@
       (>= (- now started) (* 1000 pull-timeout-s)) (stop-gathering! c d)
       (path-leaves-reach? c target animal-pos) (stop-gathering! c d)
       :else
-      (let [r (await (ctx/call-child c :pull 'jobs.movement.go-to {:pos target :range 1 :doors :leave-open}))]
+      (let [r (await (ctx/call-child c :pull 'jobs.movement.go-to {:pos target :range 1 :doors :leave-open :escalate false}))]
         (if-not (= :done r)
           :continue
           (let [arrived (:arrived (ctx/child-result c :pull))]

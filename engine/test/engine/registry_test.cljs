@@ -25,7 +25,7 @@
      jobs.movement.go-to jobs.movement.pace jobs.movement.look-around jobs.movement.follow jobs.movement.leave-vehicle
      jobs.time.wait-for-day jobs.time.wait-for-dusk jobs.debug.notify jobs.debug.walk-plan jobs.debug.access-check
      jobs.access.stair jobs.access.tunnel jobs.access.toggle jobs.farm.tidy
-     jobs.access.cleanup jobs.access.leave-tunnel
+     jobs.access.cleanup jobs.access.leave-tunnel jobs.access.clear-path
      jobs.blocks.dig jobs.blocks.place
      jobs.memory.set-place jobs.memory.forget-place jobs.memory.remember})
 
@@ -45,7 +45,7 @@
   (is (nil? (get-in registry/jobs ['jobs.time.wait-for-day :args])) "args is optional"))
 
 (deftest real-jobs-refuse-unknown-arg-keys
-  (is (re-find #"jobs.movement.go-to has no arg :target; its args are :doors, :pos, :range"
+  (is (re-find #"jobs.movement.go-to has no arg :target; its args are :doors, :escalate, :pos, :range"
                (expr/problem registry/jobs '(jobs.movement.go-to {:target [50 40 3]}))))
   (is (re-find #"jobs.time.wait-for-dusk has no arg :bogus; it takes no args"
                (expr/problem registry/jobs '(jobs.time.wait-for-dusk {:bogus 1}))))

@@ -1,0 +1,54 @@
+;; Card b40b4dea: go-to escalation. A body shut in (a pit, a sealed room) whose search runs out of land makes a way:
+;; pillar (pit + enough blocks), clear-path (a wall up to 3 thick toward the goal), stair up; then it puts back what
+;; stair or clear-path dug. :escalate false, bedrock, or open ground never change the world.
+;; Pit mass: stone x 10..22, z 10..22, y 0..3 (top feet y 4), a 1x1 shaft at x 16, z 16 from y 0 up.
+{:defaults
+ {:tags [:movement :access]
+  :plot {:height 12}
+  :blocks [[:fill [10 0 10] [22 3 22] "stone"] [:fill [16 0 16] [16 3 16] "air"]]
+  :body {:at [16.5 0 16.5]}
+  :limit-s 150}
+ :cases
+ [{:name "pit-pillar-arrives"
+   :body {:inventory [["dirt" 8]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :pillar}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :result :data {:arrived true}} :within-s 120 :of-job true}]
+   :after [[:body-near [20.5 4 16.5] 2]]}
+  {:name "pit-stair-arrives-and-restores"
+   :body {:inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :go-to.restored} :within-s 120 :of-job true}
+            {:event {:source :job :kind :result :data {:arrived true}} :within-s 140 :of-job true}]
+   :after [[:not-block [17 1 16] "air"] [:body-near [20.5 4 16.5] 2]]}
+  {:name "sealed-room-clear-path-arrives-and-shuts-the-door"
+   ;; a hollow cobblestone room x 12..20, z 12..20, y 0..3 on a stone platform x 8..26 (y -1 is the plot floor), the
+   ;; body inside at feet y 1; the goal outside to the east
+   :blocks [[:fill [10 0 10] [22 3 22] "air"] [:fill [8 0 8] [26 0 26] "stone"]
+            [:fill [12 0 12] [20 3 20] "cobblestone" :hollow]]
+   :body {:at [16.5 1 16.5] :inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [24 1 16] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :clear-path}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :go-to.restored} :within-s 120 :of-job true}
+            {:event {:source :job :kind :result :data {:arrived true}} :within-s 140 :of-job true}]
+   :after [[:block [20 1 16] "cobblestone"] [:block [20 2 16] "cobblestone"] [:body-near [24.5 1 16.5] 2]]}
+  {:name "escalate-false-gives-up-unchanged"
+   :body {:inventory [["dirt" 8] ["stone_pickaxe" 1]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false :reason :unreachable}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :go-to.escalated} :for-s 30}]
+   :after [[:block [16 0 16] "air"] [:block [17 1 16] "stone"] [:body-near [16.5 0 16.5] 1]]}
+  {:name "bedrock-pit-gives-up-with-a-reason"
+   :blocks [[:fill [14 0 14] [18 3 18] "bedrock"] [:fill [16 0 16] [16 3 16] "air"]]
+   :body {:inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false :escalation {:step :none}}} :within-s 60 :of-job true}
+            {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 30}]}
+  {:name "open-ground-tower-never-escalates"
+   ;; open plot, a 5-high stone column whose top no walk reaches: the body is not shut in, so nothing is built or dug
+   :blocks [[:fill [10 0 10] [22 3 22] "air"] [:fill [24 0 16] [24 4 16] "stone"]]
+   :body {:inventory [["dirt" 8] ["stone_pickaxe" 1]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [24 5 16] :range 0})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :go-to.escalated} :for-s 30}]}]}

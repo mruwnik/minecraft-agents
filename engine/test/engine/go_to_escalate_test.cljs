@@ -1,0 +1,246 @@
+(ns engine.go-to-escalate-test
+  "jobs.movement.go-to escalation (pillar, stair, clear-path, a walk to a wall) and engine.jobs.escape, against the fake
+  world."
+  (:require [cljs.test :refer [deftest is async]]
+            [engine.core :as core]
+            [engine.ctx :as ctx]
+            [engine.events :as events]
+            [engine.fake :as fake]
+            [engine.memory :as mem]
+            [engine.jobs.escape :as escape]
+            [engine.registry :as registry]
+            [engine.test-util :as tu :refer [box]]
+            [engine.triggers :as triggers]))
+
+(defn setup [world]
+  (let [clock (atom 1000000)
+        [seen sink] (tu/legacy-capture-sink)
+        p (tu/fake world)
+        eng (core/create {:primitives p :jobs registry/jobs :triggers {} :dir (tu/tmp-dir) :now #(deref clock)
+                          :backoff false
+                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+    {:eng eng :p p :seen seen}))
+
+(defn recording-parent
+  "A parent that runs job with args as its child and keeps the child's result in out."
+  [out job args]
+  {:check (constantly true)
+   :round (fn ^:async recording-round [c]
+            (let [r (await (ctx/call-child c :kid job args))]
+              (when (= :done r) (reset! out (ctx/child-result c :kid)))
+              r))})
+
+(defn ^:async tick-out! [eng n]
+  (loop [i 0]
+    (if (or (>= i n) (empty? (:list (core/state eng))))
+      i
+      (do (await (core/tick! eng))
+          (recur (inc i))))))
+
+(defn ^:async run-job!
+  "Run job (default go-to) with args as a child over world; {:eng :p :seen :out}."
+  ([world args] (run-job! world 'jobs.movement.go-to args))
+  ([world job args]
+   (let [{:keys [eng] :as s} (setup world)
+         out (atom :not-done)
+         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out job args)))]
+     (core/submit! eng '(recording-parent) {})
+     (await (tick-out! eng 1000))
+     (assoc s :eng eng :out out))))
+
+(defn feet [p] (let [pos (.-pos (.self p))] (mapv js/Math.floor [(.-x pos) (.-y pos) (.-z pos)])))
+
+(defn block [p cell] (get-in @(fake/state p) [:blocks cell] "air"))
+
+(defn events-of [seen kind] (filterv #(= kind (:kind %)) @seen))
+
+(defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
+
+(def pit-cells #{"0,61,0" "0,62,0" "0,63,0"})
+
+(def pit
+  "A 3-deep 1x1 pit (feet at y 61) in a dirt block x -2..2, y 60..63, z -2..2; stone ground 4 deep east of it (x 3..14)
+  whose top is at the pit's rim (feet y 64)."
+  (apply dissoc (merge (box 3 60 -3 14 63 3 "stone") (box -2 60 -2 2 63 2 "dirt")) pit-cells))
+
+(def stone-pit
+  "The pit with stone walls (a pickaxe block)."
+  (apply dissoc (merge (box 3 60 -3 14 63 3 "stone") (box -2 60 -2 2 63 2 "stone")) pit-cells))
+
+(def in-pit {:self {:pos {:x 0 :y 61 :z 0}}})
+
+(def room
+  "A sealed 5x5 dirt room (inside x -2..2, z -2..2, feet y 64; walls one thick at x/z +-3, y 64..65; roof y 66) on a
+  stone floor x -6..12, z -6..6."
+  (merge (box -6 63 -6 12 63 6 "stone")
+         (apply dissoc (box -3 64 -3 3 66 3 "dirt") (for [x (range -2 3) z (range -2 3) y [64 65]] (str x "," y "," z)))))
+
+(def in-room {:self {:pos {:x 0 :y 64 :z 0}}})
+
+(def hollow
+  "A 2-deep 20x20 hollow in solid dirt (open x 3..22, z -10..9, y 65..66; floor y 64; top of the dirt at y 66, feet
+  on top at y 67)."
+  (apply dissoc
+         (box 0 60 -13 25 66 12 "dirt")
+         (for [x (range 3 23) z (range -10 10) y [65 66]] (str x "," y "," z))))
+
+;; ------------------------------------------------------------------ escape (pure reads)
+
+(defn ba [world] (fn [[x y z]] (get (:blocks world) (str x "," y "," z) "air")))
+
+(deftest escape-pit-depth-counts-the-walled-levels
+  (is (= 3 (escape/pit-depth (ba {:blocks pit}) [0 61 0])))
+  (is (= 0 (escape/pit-depth (ba {:blocks room}) [0 64 0])) "the middle of a room is no pit"))
+
+(deftest escape-door-is-the-solid-cells-of-a-thin-wall-with-floor-beyond
+  (is (= {:cells [[3 65 0] [3 64 0]] :through [4 64 0]} (escape/door (ba {:blocks room}) [2 64 0] [1 0] 3)))
+  (is (nil? (escape/door (ba {:blocks room}) [1 64 0] [1 0] 3)) "no wall right in front")
+  (is (nil? (escape/door (ba {:blocks pit}) [0 61 0] [1 0] 3)) "no floor beyond the pit's wall"))
+
+(deftest escape-door-never-goes-through-a-door-a-bed-or-a-container
+  (doseq [b ["iron_door" "oak_door" "spruce_fence_gate" "red_bed" "chest" "barrel" "bedrock"]]
+    (is (nil? (escape/door (ba {:blocks (assoc room "3,64,0" b)}) [2 64 0] [1 0] 3)) b)))
+
+(deftest escape-door-is-at-most-max-thick
+  (let [thick (merge room (box 3 64 -3 6 65 3 "dirt"))]
+    (is (nil? (escape/door (ba {:blocks thick}) [2 64 0] [1 0] 3)) "4 thick")
+    (is (= [7 64 0] (:through (escape/door (ba {:blocks thick}) [2 64 0] [1 0] 4))))))
+
+(deftest escape-choose-walks-to-a-wall-first-from-the-middle-of-a-room
+  (is (= {:step :approach :pos [2 64 0]} (escape/choose (tu/fake (merge in-room {:blocks room})) [0 64 0] [8 64 0]))
+      "the nearest cell with the wall toward the goal beside it"))
+
+(deftest escape-choose-pillars-only-with-enough-blocks
+  (is (= {:step :pillar :height 3 :item "dirt"}
+         (escape/choose (tu/fake (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 3}]})) [0 61 0] [10 64 0])))
+  (is (= {:step :stair :heading :east :steps 3}
+         (escape/choose (tu/fake (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 2}]})) [0 61 0] [10 64 0]))))
+
+;; ------------------------------------------------------------------ go-to escalation
+
+(deftest go-to-pillars-out-of-a-pit-when-it-carries-blocks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p seen]} (await (run-job! (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 5}]})
+                                                {:pos [10 64 0] :range 1}))]
+          (is (= {:arrived true} @out))
+          (is (= [:pillar] (mapv :step (events-of seen :go-to.escalated))))
+          (is (= 3 (count (calls p "jumpPlace"))) "one block per pillar round")
+          (is (empty? (calls p "dig"))))))))
+
+(deftest go-to-stairs-out-of-a-pit-and-puts-back-what-it-dug
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p seen]} (await (run-job! (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 2}]})
+                                                {:pos [10 64 0] :range 1}))
+              restored (first (events-of seen :go-to.restored))
+              skipped (first (events-of seen :go-to.restore-skipped))]
+          (is (= {:arrived true} @out))
+          (is (= [:stair] (mapv :step (events-of seen :go-to.escalated))) "2 blocks are too few for a 3-deep pillar")
+          (is (= [[1 62 0] [1 63 0]] (:cells restored)) "the two blocks carried go back, lowest first")
+          (is (= "dirt" (block p [1 62 0])))
+          (is (= "dirt" (block p [1 63 0])))
+          (is (= [[2 63 0]] (mapv :cell (:cells skipped))) "nothing left to put back the third"))))))
+
+(deftest go-to-clears-a-door-out-of-a-sealed-room-and-shuts-it-behind
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p seen]} (await (run-job! (merge in-room {:blocks room :inventory [{:name "dirt" :count 2}]})
+                                                {:pos [8 64 0] :range 1}))]
+          (is (= {:arrived true} @out))
+          (is (= [:clear-path] (mapv :step (events-of seen :go-to.escalated))) "the failed walks took it to the east wall")
+          (is (empty? (events-of seen :go-to.restore-skipped)))
+          (is (= [[3 64 0] [3 65 0]] (:cells (first (events-of seen :go-to.restored)))))
+          (is (= "dirt" (block p [3 64 0])) "the door is shut again")
+          (is (= "dirt" (block p [3 65 0])))
+          (is (< 6 (first (feet p)))))))))
+
+(deftest go-to-walks-to-a-wall-and-stairs-out-of-a-wide-hollow
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out seen]} (await (run-job! {:self {:pos {:x 12 :y 65 :z 0}} :blocks hollow}
+                                              {:pos [24 67 0] :range 1}))]
+          (is (= {:arrived true} @out))
+          (is (= [:stair] (mapv :step (events-of seen :go-to.escalated))) "the failed walks took it to the east wall"))))))
+
+(deftest go-to-with-escalate-false-gives-up-as-before
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p seen]} (await (run-job! (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 5}]})
+                                                {:pos [10 64 0] :range 1 :escalate false}))]
+          (is (= false (:arrived @out)))
+          (is (= :unreachable (:reason @out)))
+          (is (empty? (events-of seen :go-to.escalated)))
+          (is (empty? (calls p "jumpPlace")))
+          (is (empty? (calls p "dig"))))))))
+
+(deftest go-to-gives-up-with-the-escalation-s-wait-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (run-job! (merge in-pit {:blocks stone-pit}) {:pos [10 64 0] :range 1}))]
+          (is (= false (:arrived @out)))
+          (is (= {:step :stair :reason :no-tool} (select-keys (:escalation @out) [:step :reason]))
+              "stone walls, no pickaxe, no blocks: the stair waits for a pickaxe, and go-to says so")
+          (is (empty? (calls p "dig"))))))))
+
+(deftest go-to-on-open-ground-never-escalates
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [tower (merge (box -20 63 -20 20 63 20 "stone") (box 8 64 0 8 68 0 "stone"))
+              {:keys [out p seen]} (await (run-job! {:self {:pos {:x 0 :y 64 :z 0}} :blocks tower
+                                                 :inventory [{:name "dirt" :count 9}]}
+                                                {:pos [8 69 0] :range 0}))]
+          (is (= false (:arrived @out)) "the top of a 5-high stone column cannot be walked to")
+          (is (empty? (events-of seen :go-to.escalated)) "not shut in: go-to does not change the world")
+          (is (empty? (calls p "jumpPlace"))))))))
+
+(deftest a-dig-s-walk-does-not-escalate
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p seen]} (await (run-job! (merge in-pit {:blocks (assoc pit "10,64,0" "dirt")
+                                                               :inventory [{:name "dirt" :count 5}]})
+                                                'jobs.blocks.dig {:pos [10 64 0]}))]
+          (is (= :not-done @out) "the dig waits: it cannot reach the cell")
+          (is (empty? (events-of seen :go-to.escalated)) "its go-to child runs with :escalate false")
+          (is (empty? (calls p "jumpPlace"))))))))
+
+(deftest go-to-sealed-in-its-own-shelter-does-not-dig-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cell (merge (box -6 63 -6 12 63 6 "stone") (dissoc (box -1 64 -1 1 66 1 "dirt") "0,64,0" "0,65,0"))
+              {:keys [eng p seen]} (setup {:self {:pos {:x 0 :y 64 :z 0}} :blocks cell :inventory [{:name "dirt" :count 5}]})
+              out (atom :not-done)
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent
+                                          (recording-parent out 'jobs.movement.go-to {:pos [8 64 0] :range 1})))]
+          (mem/write! (:store eng) :shelter {:pos {:x 0 :y 64 :z 0} :roof {:x 0 :y 66 :z 0} :state :built}
+                      {:cap 10 :ttl 86400000})
+          (core/submit! eng '(recording-parent) {})
+          (await (tick-out! eng 300))
+          (is (= false (:arrived @out)))
+          (is (= {:x 0 :y 64 :z 0} (:inside-own-shelter @out)) "the give-up names the shelter")
+          (is (empty? (events-of seen :go-to.escalated)) "a body sealed in its own shelter stays in it")
+          (is (empty? (calls p "dig"))))))))
+
+(def deep-shaft
+  "A 1x1 shaft 30 deep (feet at y 34) in solid dirt x -30..30, y 30..63, z -30..30."
+  (apply dissoc (box -30 30 -30 30 63 30 "dirt") (for [y (range 34 64)] (str "0," y ",0"))))
+
+(deftest go-to-escalates-at-most-three-times
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; each stair climbs at most 8: three of them leave the body 6 short of the rim
+        (let [{:keys [out seen]} (await (run-job! {:self {:pos {:x 0 :y 34 :z 0}} :blocks deep-shaft}
+                                              {:pos [10 64 0] :range 1}))]
+          (is (= [:stair :stair :stair] (mapv :step (events-of seen :go-to.escalated))))
+          (is (= false (:arrived @out)))
+          (is (= {:step :spent :n 3} (:escalation @out))))))))
