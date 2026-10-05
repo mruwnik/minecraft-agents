@@ -371,12 +371,12 @@
         (let [plan {:id "mix" :parts [{:id "far" :cells [[8 64 0]] :want {:crop "wheat"}}]}
               s (setup (world-of (ground "farmland" [[8 0]]) {:inventory [(item "wheat_seeds" 3)]}) {"mix" plan} [])
               late (foreign-plan [[8 64 0]])]
-          (.override (.-world (:p s)) "moveTo" (fn [token args impl] (world/set-data! (:w s) {"mix" plan "other" late} {}) (impl token args)))
+          (.override (.-world (:p s)) "steer" (fn [token args impl] (world/set-data! (:w s) {"mix" plan "other" late} {}) (impl token args)))
           (core/submit! (:eng s) (list 'jobs.farm.plant {:plan "mix"}) {})
           (dotimes [_ 6]
             (swap! (:clock s) + 700)
             (await (core/tick! (:eng s))))
-          (is (seq (calls s "moveTo")))
+          (is (seq (tu/walk-calls (:p s))))
           (is (empty? (calls s "place")))
           (is (= "air" (block-at s 8 64 0))))))))
 

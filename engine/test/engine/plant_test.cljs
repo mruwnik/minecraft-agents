@@ -65,7 +65,7 @@
 (def field-box (box 2 2 4 4))
 
 (defn field-world [seeds & [extra]]
-  (merge {:blocks (farmland (range 2 5) (range 2 5)) :inventory seeds} extra))
+  (merge {:blocks (farmland (range 2 5) (range 2 5)) :inventory seeds :floor tu/walk-floor} extra))
 
 (defn sown [p xs zs block]
   (every? (fn [[x z]] (and (= block (block-at p x 64 z)) (= 0 (age-at p x 64 z)))) (for [x xs z zs] [x z])))

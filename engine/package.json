@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "npm run test:cljs && npm run test:js",
-    "test:cljs": "shadow-cljs compile test && node out/test.cjs",
+    "test:cljs": "shadow-cljs compile test && node --max-old-space-size=4096 out/test.cjs",
     "test:js": "node --test 'js/**/*.test.mjs' 'test/tools/**/*.test.mjs'",
     "record:planner-bench": "shadow-cljs compile planner-record && node out/planner-record.cjs",
     "build": "shadow-cljs compile body",

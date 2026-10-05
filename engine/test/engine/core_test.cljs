@@ -3,6 +3,7 @@
             [cljs.reader :as reader]
             [engine.core :as core]
             [engine.ctx :as ctx]
+            [engine.hurt :as hurt]
             [engine.memory :as mem]
             [engine.events :as events]
             [engine.registry :as registry]
@@ -889,7 +890,8 @@
   (let [{:keys [eng p seen]} (setup)]
     (.emit (.-world p) #js {:kind "hurt" :health 5})
     (is (= [{:health 5}] (mapv :data (mem/entries (mem/view (:store eng)) :hurt))))
-    (is (some #(= [:body :hurt] [(:source %) (:kind %)]) @seen))))
+    (hurt/flush! eng #(core/emit! eng %))
+    (is (some #(= [:body :hurt] [(:source %) (:kind %)]) @seen) "the merged :hurt event follows its window")))
 
 (deftest cancelling-a-reflex-job-between-rounds-leaves-no-ghost-instance
   (async done

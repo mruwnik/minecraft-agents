@@ -64,6 +64,8 @@
     (core/submit! eng '(jobs.survival.restore-broken) {})
     s))
 
+(def aside {:self {:pos [2 64 0]}})
+
 (deftest restore-places-the-dug-block-when-carried-and-safe
   (async done
     (tu/run-async done
@@ -102,8 +104,6 @@
             (is (= kept (count (tidy-entries eng))) (pr-str why))
             (is (= [[{:cell [0 65 0] :was "stone" :why why}]] (mapv :cells (zs/trespass seen :tidy.not-restored))) (pr-str why))
             (is (= [] (zs/trespass seen :tidy.restored)) (pr-str why))))))))
-
-(def aside {:self {:pos [2 64 0]}})
 
 (def standing-in-the-cell {:floor [-5 -5 5 5] :inventory [{:name "stone" :count 2}]})
 

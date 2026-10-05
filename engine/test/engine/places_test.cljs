@@ -230,8 +230,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [job [set-place forget-place]]
-          (let [{:keys [eng reasons]} (await (try-job #(mem/write! (:store %) :my-spots {:pos {:x 1 :y 64 :z 1}}) job {:name :my-spots :pos [2 64 2]}))]
+        (doseq [[job args] [[set-place {:name :my-spots :pos [2 64 2]}] [forget-place {:name :my-spots}]]]
+          (let [{:keys [eng reasons]} (await (try-job #(mem/write! (:store %) :my-spots {:pos {:x 1 :y 64 :z 1}}) job args))]
             (is (= [:not-a-place] reasons) (str job))
             (is (= [{:pos {:x 1 :y 64 :z 1}}] (entries eng :my-spots)))))))))
 
