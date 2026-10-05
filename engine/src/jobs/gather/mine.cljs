@@ -5,6 +5,7 @@
             [engine.jobs.access :as access]
             [engine.jobs.gate :as gate]
             [engine.jobs.tools :as tools]
+            [engine.access.rules :as rules]
             [engine.jobs.util :as u]
             [engine.path.near :as near]
             [jobs.survival.dig-in :as dig-in]))
@@ -63,7 +64,12 @@
   Buried targets (:buried, on by default; false: exposed blocks only): a block with no air face is a buried target when the rules permit
   its dig (a zone or plan refusal counts among the refused as above). When no exposed target is left, the nearest
   buried one is visited: from where the body stands, jobs.access.tunnel (child :tunnel, :max-length :tunnel-max)
-  cuts a straight stair and run to stand beside it; then it is dug as above (judged again right before the dig) and
+  cuts a straight stair and run to stand beside it (a body with six solid cells over its head, say in a cave or its own
+  mine, has no surface to tunnel from: a buried block within :burrow-max is dug toward instead, a 1-wide 2-high way
+  from the body's cell along x then z, climbing or descending a step per block when the heights differ, every cut
+  judged by the rules and refused beside lava, in a fluid or beside water unless :wet, until the block has an air face
+  and is an ordinary target; it goes where nothing is mended or walked back, a stop skips the target and counts a
+  failure, info mine.burrow-stopped); then it is dug as above (judged again right before the dig) and
   its drops collected; then the body walks back up to the tunnel's entry over its own stair (jobs.debug.walk-plan,
   child :out) and from there to where the visit began (moveTo, as mine walks to targets; not arriving there is an
   info mine.not-home). The visit is in job memory (:visit {:target :from :entry :stage :in|:dig|:out|:home}), so a
@@ -86,6 +92,7 @@
    :dry-digs {:doc "digs in a row after which the carried count of the item did not rise before giving up (:no-drops)" :default 3}
    :buried {:doc "also tunnel to blocks with no air face (jobs.access.tunnel) once no exposed one is left; false: exposed blocks only" :default true}
    :tunnel-max {:doc "longest tunnel line to a buried block, in blocks" :default 24}
+   :burrow-max {:doc "underground (rock over the head, no surface to tunnel from): the longest distance to a buried block that is dug straight toward, in blocks" :default 12}
    :accept {:doc "dig hazards of engine.access.rules taken (:fluid-adjacent :falling-block :under-feet); the lava and :wet rules above still hold"
             :default #{:fluid-adjacent :falling-block :under-feet}}})
 
@@ -285,6 +292,100 @@
   (ctx/update-mem! c assoc :visit {:target (access/cell pos) :from (access/cell (cell-of (u/self-pos c))) :stage :in})
   :continue)
 
+;; ------------------------------------------------------------------ burrow (underground, no surface to tunnel from)
+
+(def burrow-roof 6)
+(def burrow-sides [[1 0] [-1 0] [0 1] [0 -1]])
+
+(defn underground?
+  "Whether the six cells over the body's head are all solid rock (not air, a fluid, a plant, leaves or a log)."
+  [c]
+  (let [{:keys [x y z]} (cell-of (u/self-pos c))]
+    (every? #(and % (not (not-solid %)) (not (str/ends-with? % "_leaves")) (not (str/ends-with? % "_log")))
+            (map #(u/block-name (:primitives c) {:x x :y % :z z}) (range (+ y 2) (+ y 2 burrow-roof))))))
+
+(defn burrow-step
+  "The step from feet [x y z] toward the cell beside target at its height: {:next :cut :floor} (see stair/step-cells),
+  :arrived, or {:stop reason} (:shaft, :too-steep: the heights differ by more than the way along has blocks)."
+  [feet [tx ty tz]]
+  (let [taxi (fn [g] (reduce + (map #(js/Math.abs (- %1 %2)) g feet)))
+        goal (apply min-key taxi (map (fn [[dx dz]] [(+ tx dx) ty (+ tz dz)]) burrow-sides))
+        [dx dy dz] (mapv - goal feet)
+        horiz (+ (js/Math.abs dx) (js/Math.abs dz))]
+    (cond
+      (and (zero? horiz) (zero? dy)) :arrived
+      (zero? horiz) {:stop :shaft}
+      (> (js/Math.abs dy) horiz) {:stop :too-steep}
+      :else (let [side (if (and (not (zero? dx)) (>= (js/Math.abs dx) (js/Math.abs dz))) [(js/Math.sign dx) 0] [0 (js/Math.sign dz)])]
+              (let [[hx hz] side
+                    up (fn [[x y z] d] [x (+ y d) z])
+                    n [(+ (feet 0) hx) (+ (feet 1) (js/Math.sign dy)) (+ (feet 2) hz)]]
+                ;; flat: head cell then feet cell; up: the cell over the head first; down: the way is cut from the top
+                {:next n
+                 :cut (cond (zero? dy) [(up n 1) n]
+                            (pos? dy) [(up feet 2) (up n 1) n]
+                            :else [(up n 2) (up n 1) n])
+                 :floor (up n -1)})))))
+
+(defn cut-hazard
+  "Why the cell may not be cut for a burrow (a fluid in it, lava or unwanted water beside it), else nil."
+  [c cell]
+  (let [pos (zipmap [:x :y :z] cell)
+        own (u/block-name (:primitives c) pos)
+        beside (map #(u/block-name (:primitives c) (around pos %)) faces)]
+    (cond
+      (nil? own) :not-loaded
+      (rules/fluids own) :fluid
+      (some #{"lava"} beside) :lava
+      (and (some #{"water"} beside) (not (:wet (:args c)))) :water)))
+
+(defn burrow-stop!
+  "End the burrow: skip the target and count a failure."
+  [c target reason]
+  (ctx/emit! c :mine.burrow-stopped :info {:target target :reason reason
+                                           :text (str "mine stopped burrowing to " (pr-str target) ": " (name reason))})
+  (skip-failed! c (zipmap [:x :y :z] target))
+  (ctx/update-mem! c dissoc :burrow)
+  :continue)
+
+(defn ^:async burrow-dig!
+  "Dig one cell of a burrow step (equip, rules, tidy): true when the cell is air afterwards, else false."
+  [c cell]
+  (await (equip! c))
+  (let [pos (zipmap [:x :y :z] cell)
+        v (access/may-dig? (access/rules-input c) pos)
+        verdict (access/judge v (:accept (:args c)))]
+    (if (not= :ok verdict)
+      (do (refused! c pos v verdict) false)
+      (contains? #{"dug" "missing"} (.-status (await (tidy/dig! c pos)))))))
+
+(defn ^:async burrow-round!
+  "One step of the burrow toward a buried target: dig the next cell of the way, or walk into it."
+  [c {:keys [target]}]
+  (let [pos (zipmap [:x :y :z] target)
+        feet (let [{:keys [x y z]} (cell-of (u/self-pos c))] [x y z])
+        step (if (and (= (:block (:args c)) (u/block-name (:primitives c) pos))
+                      (= :buried (classify c (:wet (:args c)) pos)))
+               (burrow-step feet target)
+               :arrived)]
+    (if (= :arrived step)
+      (do (ctx/update-mem! c dissoc :burrow) :continue)
+      (let [{:keys [next cut floor stop]} step
+            blocking (first (remove #(air (u/block-name (:primitives c) (zipmap [:x :y :z] %))) cut))
+            hazard (some #(cut-hazard c %) (remove #(air (u/block-name (:primitives c) (zipmap [:x :y :z] %))) cut))]
+        (cond
+          stop (burrow-stop! c target stop)
+          hazard (burrow-stop! c target hazard)
+          (not (rules/solid-floor? #(u/block-name (:primitives c) (zipmap [:x :y :z] %)) floor)) (burrow-stop! c target :no-floor)
+          blocking (if (await (burrow-dig! c blocking)) :continue (burrow-stop! c target :dig-failed))
+          :else (let [r (await (ctx/act c :moveTo (clj->js {:pos {:x (+ (first next) 0.5) :y (second next) :z (+ (nth next 2) 0.5)} :range 0})))]
+                  (if (= "arrived" (.-status r)) :continue (burrow-stop! c target :walk-failed))))))))
+
+(defn burrow?
+  "Whether to dig straight toward the buried target: underground and within :burrow-max."
+  [c pos]
+  (and (underground? c) (<= (u/dist (u/self-pos c) pos) (:burrow-max (:args c)))))
+
 (defn ^:async dig-round! [c]
   (let [{:keys [goal failures dry]} (ctx/mem c)
         {:keys [max-failures wet dry-digs]} (:args c)
@@ -296,6 +397,8 @@
                                    (to-mend! c :no-drops))
       (>= failures max-failures) (do (ctx/emit! c :mine.gave-up :warn {:failures failures :text (str "mine gave up after " failures " failures")})
                                      (to-mend! c :gave-up))
+      (and (nil? pos) (seq buried) (burrow? c (first buried)))
+      (do (ctx/update-mem! c assoc :burrow {:target (access/cell (first buried))}) :continue)
       (and (nil? pos) (seq buried)) (visit! c (first buried))
       (and (nil? pos) (seq refused))
       (do (access/decline! c :mine.declined "mine" (assoc (access/refusal-fields refused) :reason :refused))
@@ -543,4 +646,5 @@
       (= :mend (:phase m)) (await (mend-round! c))
       (:collecting m) (await (collect! c))
       (:visit m) (await (visit-round! c (:visit m)))
+      (:burrow m) (await (burrow-round! c (:burrow m)))
       :else (await (dig-round! c)))))

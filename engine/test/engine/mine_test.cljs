@@ -814,3 +814,51 @@
                 s (await (zoned (merge {:block "dirt" :count 4} extra) {:blocks floor} (ew/of-data {} {} [zone]) 80))]
             (is (= mended-some (pos? (count (calls s "place")))) (pr-str [owner extra]))
             (is (= declined (mapv #(select-keys % [:reason :zones]) (events-of s :mine.declined))) (pr-str [owner extra]))))))))
+
+;; ------------------------------------------------------------------ underground: no surface to tunnel from
+
+(def deep-rock
+  "Solid stone x -12..12, y 30..70, z -12..12 with a small cave (air at 0,50..51,0) and iron ore at ore; the body
+  stands in the cave under twenty blocks of rock."
+  (fn [ore]
+    (-> (cells "stone" (range -12 13) (range 30 71) (range -12 13))
+        (assoc "0,50,0" "air" "0,51,0" "air")
+        (assoc ore "iron_ore"))))
+
+(defn deep-world [ore]
+  {:blocks (deep-rock ore) :self {:pos {:x 0.5 :y 50 :z 0.5}}
+   :drops {"iron_ore" "raw_iron" "stone" "cobblestone"}
+   :inventory [{:name "iron_pickaxe" :count 1}]})
+
+(deftest underground-buried-ore-is-burrowed-to-not-tunnelled-from-a-far-surface
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (buried-scenario {:block "iron_ore" :count 1 :mend false :radius 12}
+                                        (deep-world "4,50,2") 400))]
+          (is (finished? s))
+          (is (= :count (:reason (done-event s))))
+          (is (= 1 (:got (done-event s))))
+          (is (= "air" (block-at s 4 50 2)))
+          (is (empty? (events-of s :tunnel.stopped)))
+          (is (empty? (events-of s :mine.tunnel))))))))
+
+(deftest underground-burrow-also-climbs-and-descends
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (buried-scenario {:block "iron_ore" :count 1 :mend false :radius 12}
+                                        (deep-world "-5,52,-1") 400))]
+          (is (finished? s))
+          (is (= 1 (:got (done-event s))))
+          (is (= "air" (block-at s -5 52 -1))))))))
+
+(deftest a-burrow-never-cuts-beside-lava
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (update (deep-world "4,50,0") :blocks assoc "2,50,1" "lava")
+              s (await (buried-scenario {:block "iron_ore" :count 1 :mend false :radius 12} world 200))]
+          (is (finished? s))
+          (is (= 0 (:got (done-event s))))
+          (is (= "iron_ore" (block-at s 4 50 0))))))))
