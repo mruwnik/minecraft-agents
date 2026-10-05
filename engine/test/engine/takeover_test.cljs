@@ -443,6 +443,42 @@
             (is (re-find (re-pattern needed) (str (get-in op [:result :reason]))) block)
             (is (= block (.-name (.blockAt p #js {:x 1 :y 64 :z 0}))) "the block is still there")))))))
 
+;; ---------------------------------------------------------------- a dig's lease covers its expected dig time
+
+(defn submit-dig-with-digtime
+  "Take the body for idle-s, make a dig take dig-ms (the digTime of the chosen tool), submit one dig; the submit reply."
+  [{:keys [eng state]} idle-s dig-ms]
+  (post eng {:op "take" :who "claude" :why "dig" :idleS idle-s})
+  (swap! state assoc :dig-ms dig-ms)
+  (world-call eng {:op :submit :who "claude" :request-id "dig-1" :action :dig :args {:pos {:x 1 :y 64 :z 0}}}))
+
+(deftest world-dig-lease-is-the-expected-dig-time-plus-a-margin
+  (doseq [[dig-ms idle-s accepted? minimum] [[1000 10 false 11]    ; a short dig keeps the old 10 s floor
+                                             [1000 11 true nil]
+                                             [12000 15 false 21]   ; 12 s dig + margin: a lease that would expire mid-dig is refused
+                                             [12000 21 true nil]
+                                             [9400 30 true nil]
+                                             [250000 60 false 61]    ; the hard bound: never longer than 60 s
+                                             [250000 61 true nil]]]
+    (let [reply (submit-dig-with-digtime (setup (dig-world "dirt" [])) idle-s dig-ms)]
+      (is (= accepted? (true? (get-in reply [:edn :ok]))) (str dig-ms " ms, idleS " idle-s))
+      (is (= minimum (get-in reply [:edn :detail :minimum-idleS])) (str dig-ms " ms, idleS " idle-s)))))
+
+(deftest a-twelve-second-world-dig-is-not-cut-by-the-lease
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng world clock] :as w} (setup (dig-world "dirt" []))
+              release (.hold world "dig")]
+          (is (true? (get-in (submit-dig-with-digtime w 21 12000) [:edn :ok])))
+          (swap! clock + 12500)
+          (takeover/tick! eng opts)
+          (is (true? (core/manual? eng)) "the lease is held through the dig")
+          (is (= :running (get-in (world-call eng {:op :status :who "claude" :request-id "dig-1"}) [:edn :operation :status])))
+          (release)
+          (await (js/Promise. #(js/setTimeout % 20)))
+          (is (= :done (get-in (world-call eng {:op :status :who "claude" :request-id "dig-1"}) [:edn :operation :status]))))))))
+
 ;; ---------------------------------------------------------------- a dropped connection answers offline
 
 (deftest world-actions-while-the-connection-is-down-answer-offline-and-never-run

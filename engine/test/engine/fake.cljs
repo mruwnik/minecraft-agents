@@ -869,6 +869,7 @@
        (aset p k f))
      (aset p "world" world)
      p)))
+              "digTime" (fn [_pos _item] (or (:dig-ms @state) 0))
               "harvestTools"
               (fn [block]
                 (let [data (minecraft-data "26.1")

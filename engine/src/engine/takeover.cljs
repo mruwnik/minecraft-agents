@@ -190,6 +190,21 @@
 
 ;; ------------------------------------------------------------------ dig holds the carried tool
 
+(def dig-floor-s "A short dig keeps the common 10 s lease." 10)
+(def dig-margin-s "Slack over the expected dig time: the look, the equip, the drop wait and latency." 8)
+(def dig-cap-s "The longest lease a dig is given, whatever digTime says." 60)
+
+(defn dig-timeout-s
+  "The lease seconds a world dig needs: the expected dig time of the tool the dig will hold (primitives digTime, the
+  carried best tool for the block) plus dig-margin-s, at least dig-floor-s and at most dig-cap-s."
+  [eng args]
+  (let [p (:primitives eng)
+        pos (clj->js (:pos args))
+        block (some-> (.blockAt p pos) .-name)
+        names (map :name (js->clj (.-inventory (.self p)) :keywordize-keys true))
+        ms (or (.digTime p pos (when block (tools/best-tool names block))) 0)]
+    (-> (+ (/ ms 1000) dig-margin-s) (max dig-floor-s) (min dig-cap-s) js/Math.ceil)))
+
 (defn ^:async dig-with-tool!
   "A manual dig as a job digs: the best carried tool for the block is held first. A block no carried tool can harvest is
   not dug (the dig would lose its drop): {:status \"no-tool\" :block :needed :reason}. Resolves to a JS result."
@@ -226,7 +241,10 @@
   (let [prior (world-record eng request-id)
         current @(:manual eng)
         idle-ms (:idle-ms current)
-        timeout-s (if (= action :move-to) (or (:timeoutS args) 10) (:timeout (world-actions action) 10))
+        timeout-s (cond
+                    (= action :move-to) (or (:timeoutS args) 10)
+                    (and (= action :dig) (map? args) (valid-pos? (:pos args))) (dig-timeout-s eng args)
+                    :else (:timeout (world-actions action) 10))
         now (core/now eng)]
     (cond
       (not (valid-label? who)) (op-refuse "bad-who")

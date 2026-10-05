@@ -2720,6 +2720,23 @@ test('a dig that overruns its expected time by far still hits the bound', async 
   assert.equal(r.status, 'timeout')
 })
 
+// digTime(pos, item): the expected dig time in ms with the named tool (the held one when item is omitted or held)
+test('digTime is the held tool time without an item, and the named item time for another tool', () => {
+  const { bot, p } = rig(world)
+  bot.digTime = () => 12000
+  bot.registry.itemsByName = { diamond_pickaxe: { id: 7 } }
+  const real = bot.blockAt
+  bot.blockAt = pos => { const b = real(pos); return b && { ...b, digTime: type => (type === 7 ? 9400 : 99999) } }
+  assert.equal(p.digTime(at(2, 64, 0)), 12000)
+  assert.equal(p.digTime(at(2, 64, 0), 'diamond_pickaxe'), 9400)
+})
+
+test('digTime is 0 for air and a block that cannot be dug', () => {
+  const { bot, p } = rig(world)
+  bot.digTime = () => 12000
+  assert.equal(p.digTime(at(0, 70, 0)), 0)
+})
+
 // harvestTools names the items minecraft-data lists as able to harvest a block; null when any tool (or the hand) does
 test('harvestTools lists the harvesting item names, null when the block lists none', () => {
   const { bot, p } = rig(world)

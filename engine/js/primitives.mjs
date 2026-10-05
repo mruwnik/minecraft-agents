@@ -733,6 +733,16 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     return (Number.isFinite(ms) ? ms / 1000 : 0) + DIG_MARGIN_S + DROP_WAIT_S
   }
 
+  // the expected dig time in ms of the block at pos with the named tool (the held one when item is omitted or held);
+  // 0 for air and a block that cannot be dug. Enchantments and effects are left out, so a faster dig is never cut short.
+  const digTime = (pos, itemName) => {
+    const block = bot.blockAt(vec(cell(pos)))
+    if (!block || isAir(block.name) || !block.diggable) return 0
+    if (!itemName || itemName === bot.heldItem?.name) return bot.digTime?.(block) ?? 0
+    const type = bot.registry?.itemsByName?.[itemName]?.id
+    return block.digTime?.(type, bot.game?.gameMode === 'creative', bot.entity.isInWater, !bot.entity.onGround, [], {}) ?? 0
+  }
+
   // the item names minecraft-data lists as able to harvest a block (its drops are lost otherwise); null when the
   // block lists none, i.e. any tool or the hand harvests it
   const harvestTools = blockName => {
@@ -1525,7 +1535,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     .map(([name, fn]) => [name, whenUp(fn)]))
   // the raw world engine.perception looks at (stateAt, lightAt, eye, block changes): body-side only, never a job's
   const rawWorld = createRawWorld({ getBot: () => bot, isOffline: () => isOffline() || down, lightOverlay: (cx, cz, s) => view?.lightOverlay?.(cx, cz, s) })
-  return { setOwner, isOwner, drive: driveNow, stopDriving, self, entities, blocks, blockAt, harvestTools, pathWorld, ...acting, chatDirect, wait, isOffline, isSettling, offline, onBodyEvent, entityObservation, onEntityDeath, rawWorld, close }
+  return { setOwner, isOwner, drive: driveNow, stopDriving, self, entities, blocks, blockAt, harvestTools, digTime, pathWorld, ...acting, chatDirect, wait, isOffline, isSettling, offline, onBodyEvent, entityObservation, onEntityDeath, rawWorld, close }
 }
 
 const REPO_ROOT = join(import.meta.dirname, '..', '..')
