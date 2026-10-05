@@ -106,7 +106,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:mob "cow"} {:inventory (wheat 2) :entities [(cow 1 8) (cow 2 9)]} 6))]
-          (is (pos? (count (h/calls (:p s) "moveTo"))))
+          (is (pos? (count (h/calls (:p s) "steer"))))
           (is (= :fed (:reason (done-event s)))))))))
 
 (deftest ends-without-feeding
@@ -335,3 +335,39 @@
           (is (= :unpaired (:reason (done-event s))))
           (is (= ["u3"] (:fed (done-event s))))
           (is (empty? (events-of s :job.backoff))))))))
+
+;; ------------------------------------------------------------ a gated pen
+
+(defn pen-blocks
+  "A pen x 6..20, z -8..8: a fence at y 64 with a gate at 6,64,0, or without a gate a stone wall 3 high (a 1-high wall is jumped)."
+  [gate?]
+  (let [wall (if gate? "oak_fence" "stone")
+        top (if gate? 64 66)
+        ring (merge (tu/box 6 64 -8 20 top -8 wall) (tu/box 6 64 8 20 top 8 wall)
+                    (tu/box 6 64 -8 6 top 8 wall) (tu/box 20 64 -8 20 top 8 wall))]
+    (if gate? (assoc ring "6,64,0" "oak_fence_gate" "6,63,0" "stone") ring)))
+
+(defn gate-open? [{:keys [p]}]
+  (:open (js->clj (.-properties (.blockAt p #js {:x 6 :y 64 :z 0})) :keywordize-keys true)))
+
+(deftest breed-opens-a-pen-gate-to-reach-the-animals-and-leaves-it-shut
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:mob "cow"}
+                                 {:inventory (wheat 2) :blocks (pen-blocks true) :states {"6,64,0" {:open false :facing "east"}}
+                                  :entities [(cow 1 14 {:pos {:x 14 :y 64 :z 1}}) (cow 2 14 {:pos {:x 14 :y 64 :z -1}})]} 12))]
+          (is (= :fed (:reason (done-event s))))
+          (is (empty? (h/calls (:p s) "moveTo")) "walks with the go-to walker, not a raw moveTo")
+          (is (pos? (count (h/calls (:p s) "steer"))))
+          (is (false? (gate-open? s))))))))
+
+(deftest breed-declines-when-the-pen-has-no-gate
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:mob "cow"}
+                                 {:inventory (wheat 2) :blocks (pen-blocks false)
+                                  :entities [(cow 1 14 {:pos {:x 14 :y 64 :z 1}}) (cow 2 14 {:pos {:x 14 :y 64 :z -1}})]} 12))]
+          (is (= :unreachable (:reason (done-event s))))
+          (is (empty? (interacts s))))))))

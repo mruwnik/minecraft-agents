@@ -1,13 +1,14 @@
 (ns jobs.animals.breed
   (:require [engine.ctx :as ctx]
             [engine.jobs.animals :as animals]
-            [engine.jobs.util :as u]))
+            [engine.jobs.util :as u]
+            [engine.path.near :as near]))
 
 (def doc
   "Feed :count animals of the mob type :mob (a name such as \"cow\") within
   :radius so that they breed: a one-shot order that starts and ends itself.
   Each round takes the nearest adult not fed, refused or given up on yet,
-  walks to within 3 blocks (moveTo range 2, :walk-timeout-s) and uses the
+  walks to within 3 blocks (walk-near! range 2, :walk-timeout-s: it opens a shut gate or door on the way and shuts it behind, as go-to does, so a gated pen is entered and its gate left shut; a pen with no way in is :unreachable) and uses the
   first breeding food of the mob's list that the body carries on it
   (engine.jobs.animals/breeding-food: wheat for cows, sheep, goats and
   mooshrooms; carrot, potato or beetroot for pigs; seeds for chickens; carrot,
@@ -146,10 +147,10 @@
   (let [tpos (u/pos-of (.-pos animal))]
     (if (<= (u/dist (u/self-pos c) tpos) reach)
       :there
-      (let [r (await (ctx/act c :moveTo (clj->js {:pos tpos :range 2 :timeoutS (:walk-timeout-s (:args c))})))]
-        (case (.-status r)
-          "arrived" (do (reset-row! c) :there)
-          "partial" :partial
+      (let [r (await (near/walk-near! c tpos 2 {:timeout-s (:walk-timeout-s (:args c))}))]
+        (case r
+          :there (do (reset-row! c) :there)
+          :partial :partial
           (do (give-up! c (animals/key-of animal) :unreachable)
               (bump-row! c)
               :blocked))))))
