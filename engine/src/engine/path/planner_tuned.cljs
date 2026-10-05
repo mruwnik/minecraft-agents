@@ -29,7 +29,14 @@
        gap(x, y, z, h, move, lx, ly, lz, lh): false refuses a gap jump from the takeoff node (feet cell x,y,z, stand h
          in 1/16, reached by move) to the landing.
        corner(x, y, z, h, lx, ly, lz, lh): false refuses a diagonal jump with one blocked side (a corner slide).
-     engine.path.executor/planner-limits builds them.")
+     engine.path.executor/planner-limits builds them.
+   - options.knownCells: a Set of the cells (knownKey) earlier searches toward the same goal knew to their end. The
+     frontier avoids them while another edge is loaded (frontierNode, result frontier.known), and a search that ends
+     exhausted puts the cells it adds in the result's known (a Set; nil without knownCells), and the cells of its
+     nodes at the loaded edge that are not known in the result's edges. engine.path.walk keeps both for go-to.
+   - options.knownEdges: a Set of the cells (knownKey) earlier searches found at the loaded edge that no search has
+     known to its end since. When it is empty, a frontier in known land is never taken: every edge was searched past,
+     and the result says so as searchedOut true (the way on, if any, is not in the land this goal's searches can reach).")
 
 (set! *warn-on-infer* true)
 
@@ -309,7 +316,15 @@
    ;; edge capture (engine.path.regions, capture-search): capturing makes the goal-dependent rules a superset (every cell
    ;; reads as in the goal: a portal is standable, every dive is worth it); while capture-out is an array, each move's edge
    ;; is pushed there as x y z region cost (seconds + risk-weight * risk) instead of going to the search
-   ^:mutable ^boolean capturing ^:mutable ^js capture-out]
+   ^:mutable ^boolean capturing ^:mutable ^js capture-out
+   ;; land a caller's earlier searches toward the same goal searched to the end (options.knownCells, a Set of knownKey,
+   ;; nil for none; see frontierNode), and the cells this search adds to it once it ends exhausted (a Set, see frontierOf)
+   ^js known-cells ^:mutable ^js known-new
+   ;; options.knownEdges (nil for none), and the cells of this search's edge nodes not in known-cells (an array while
+   ;; known-new is a Set)
+   ^js known-edges ^:mutable ^js edges-new
+   ;; whether frontierNode refused a frontier in known land because no edge is left open (result searchedOut)
+   ^:mutable ^boolean searched-out]
 
   Object
 
@@ -2515,15 +2530,19 @@
       #js {:steps steps :cost cost :summary (.summarize s steps node)}))
 
   (outcome [s status why path one-way]
-    #js {:status status
-         :reason why
-         :ms elapsed
-         :expanded expanded
-         :stats #js {:masks masks :tightMasks tight-masks :tightCells (.-size tight-seen) :regions regions-seen :maskMs mask-ms :flooded flooded :preFlooded pre-flooded}
-         :path path
-         :oneWay one-way
-         :frontier (when-not (identical? status "found") (.frontierOf s))
-         :limited limit-refused})
+    (let [frontier (when-not (identical? status "found") (.frontierOf s))]
+      #js {:status status
+           :reason why
+           :ms elapsed
+           :expanded expanded
+           :stats #js {:masks masks :tightMasks tight-masks :tightCells (.-size tight-seen) :regions regions-seen :maskMs mask-ms :flooded flooded :preFlooded pre-flooded}
+           :path path
+           :oneWay one-way
+           :frontier frontier
+           :known known-new
+           :edges edges-new
+           :searchedOut searched-out
+           :limited limit-refused}))
 
   ;; ends the search if it is not over; an exhausted search that turned a ladder away at a gap, or a swim move for lack of air,
   ;; says so
@@ -2578,34 +2597,78 @@
                :startDistance start-distance
                :oneWay one-way}))))
 
+  ;; The key of cell x y z in options.knownCells and the result's known: relative to the goal along x and z (a frontier
+  ;; node lies within frontier-reach of it), so the memory of one goal's searches holds small numbers.
+  (knownKey [s x y z]
+    (+ (* (+ (* (+ (- x goal-x) 1024) 2048) (+ (- z goal-z) 1024)) 1024) (+ y 512)))
+
   ;; The frontier node: where the searched land runs on into land not loaded, so a way may go on there. Of the nodes
   ;; at the loaded edge (atLoadedEdge) within frontier-reach blocks of the goal (along x and along z), the one with
   ;; the least cost plus heuristic. -1 when none. Only columns within OPEN-REACH of a chunk's side can be at the edge.
+  ;; With options.knownCells (land earlier searches toward this goal searched to the end, while the land round it was
+  ;; loaded: the loaded land follows the body, so land searched before reads as a loaded edge again once it unloads), a
+  ;; node in it is taken only when no other node is at the edge, and options.knownEdges, when given, still holds an edge
+  ;; no search has known since (one an earlier search saw and did not take, which a way through known land may lead
+  ;; back to); else there is no frontier. While known-new is a Set, the scan adds there the key of each such node
+  ;; not at the edge (land this search knows to its end), and to edges-new the key of each unknown node at the edge.
   (frontierNode [s]
     (let [lo OPEN-REACH
           hi (- 16 OPEN-REACH)]
       (loop [i 0
              best -1
-             best-f js/Infinity]
+             best-f js/Infinity
+             kbest -1
+             kbest-f js/Infinity]
         (if (< i n-nodes)
           (let [x (aget xs i) y (aget ys i) z (aget zs i)
                 mx (bit-and x 15) mz (bit-and z 15)]
             (if (and (or (< mx lo) (>= mx hi) (< mz lo) (>= mz hi))
                      (<= (js/Math.max (js/Math.abs (- x goal-x)) (js/Math.abs (- z goal-z))) frontier-reach)
-                     (not ^boolean (.endsOnMagma s x y z (aget hs i)))
-                     ^boolean (.atLoadedEdge s i))
-              (let [f (+ (aget gs i) (.heuristic s x z))]
-                (if (< f best-f) (recur (inc i) i f) (recur (inc i) best best-f)))
-              (recur (inc i) best best-f)))
-          best))))
+                     (not ^boolean (.endsOnMagma s x y z (aget hs i))))
+              (let [k (when (some? known-cells) (.knownKey s x y z))
+                    known (and (some? k) ^boolean (.has known-cells k))
+                    edge ^boolean (.atLoadedEdge s i)
+                    f (+ (aget gs i) (.heuristic s x z))]
+                (cond
+                  (not edge) (do (when (and (some? known-new) (not known)) (.add known-new k))
+                                 (recur (inc i) best best-f kbest kbest-f))
+                  (and known (< f kbest-f)) (recur (inc i) best best-f i f)
+                  known (recur (inc i) best best-f kbest kbest-f)
+                  :else (do (when (some? edges-new) (.push edges-new k))
+                            (if (< f best-f)
+                              (recur (inc i) i f kbest kbest-f)
+                              (recur (inc i) best best-f kbest kbest-f)))))
+              (recur (inc i) best best-f kbest kbest-f)))
+          (cond
+            (not (neg? best)) best
+            (or (neg? kbest) ^boolean (.edgesOpen s)) kbest
+            :else (do (set! searched-out true) -1))))))
 
-  ;; the result's frontier: {x y z path} of frontierNode for a search that ran out of land to search (exhausted, its box,
-  ;; a ladder at a gap, air), nil otherwise or when no node stands at the loaded edge
+  ;; whether options.knownEdges (absent: taken as open) holds an edge this search has not known to its end (known-new)
+  (edgesOpen [s]
+    (or (nil? known-edges)
+        (let [it (.values known-edges)]
+          (loop []
+            (let [^js n (.next it)]
+              (cond
+                (.-done n) false
+                (and (some? known-new) ^boolean (.has known-new (.-value n))) (recur)
+                :else true))))))
+
+  ;; the result's frontier: {x y z path known} of frontierNode for a search that ran out of land to search (exhausted,
+  ;; its box, a ladder at a gap, air), nil otherwise or when no node stands at the loaded edge. known: the node is in
+  ;; options.knownCells. A search that ran out of land to its end (exhausted, ladder-gap) with options.knownCells also
+  ;; collects the result's known (frontierNode).
   (frontierOf [s]
     (when (or (identical? reason "exhausted") (identical? reason "box") (identical? reason "ladder-gap") (identical? reason "air"))
+      (when (and (some? known-cells) (or (identical? reason "exhausted") (identical? reason "ladder-gap")))
+        (set! known-new (js/Set.))
+        (set! edges-new #js []))
       (let [node (.frontierNode s)]
         (when-not (neg? node)
-          #js {:x (aget xs node) :y (aget ys node) :z (aget zs node) :path (.pathTo s node)}))))
+          (let [x (aget xs node) y (aget ys node) z (aget zs node)]
+            #js {:x x :y y :z z :path (.pathTo s node)
+                 :known (and (some? known-cells) ^boolean (.has known-cells (.knownKey s x y z)))})))))
 
   ;; the result; one-way-node is the first one-way step on the way to the nearest node (-1: none), clean-end the nearest node of
   ;; the returnable search then run ({path distance})
@@ -2751,7 +2814,11 @@
      ;; lf-seen lf-queue lf-head lf-budget lf-active lf-open lf-seed-open lf-end limit-refused
      nil nil 0 0 false false false false false
      ;; capturing capture-out
-     false nil)))
+     false nil
+     ;; known-cells known-new known-edges edges-new
+     (.-knownCells options) nil (.-knownEdges options) nil
+     ;; searched-out
+     false)))
 
 (defn- clean-options
   "The options of the returnable search behind a one-way step of search: options.returnable, no goal flood, and no

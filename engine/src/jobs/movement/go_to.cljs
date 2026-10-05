@@ -230,6 +230,24 @@
             (:placed res) (next! :restored cell)
             :else (skip! (:reason res))))))))
 
+(defn forget-known-land!
+  "Forget the land earlier searches knew to their end (walk/known-land) at the go-to's first walking round and after each
+  escalation (:escalations, the world changed): a new go-to, or a dug way, may open a way through it."
+  [c]
+  (let [epoch (:escalations (ctx/mem c) 0)]
+    (when-not (= epoch (:known-epoch (ctx/mem c)))
+      (walk/forget-known! c)
+      (ctx/update-mem! c assoc :known-epoch epoch))))
+
+(defn known-frontier-result
+  "A round's walk result as go-to judges it: a walk to a frontier in land earlier searches knew to their end
+  (:frontier-known: there was no other edge) explores nothing, so it is the search's own answer, :exhausted, and never
+  progress."
+  [result]
+  (if (:frontier-known result)
+    {:status :no-path :reason :exhausted :frontier-known true}
+    result))
+
 (defn ^:async walk! [c pos range doors]
   (let [from (u/self-pos c)
         d (u/dist from pos)
@@ -242,9 +260,11 @@
       (refuse! c {:reason :unsupported :message "the body cannot sense the world for path planning"})
 
       :else
-      (let [{:keys [result status to]} (await (near/walk-round! c pos range {:doors doors :explore true
-                                                                              :budget walk/round-budget
-                                                                              :progress (empty? (:frontier-best (ctx/mem c)))}))
+      (let [_ (forget-known-land! c)
+            {walked :result status :status to :to} (await (near/walk-round! c pos range {:doors doors :explore true
+                                                                                          :budget walk/round-budget
+                                                                                          :progress (empty? (:frontier-best (ctx/mem c)))}))
+            result (known-frontier-result walked)
             left (u/dist to pos)
             best (:best (ctx/mem c) d)
             frontier (:frontier result)

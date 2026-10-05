@@ -1927,6 +1927,16 @@ An enclosed goal is found before any walking.
 - A result that is not `found` and ran out of land (`exhausted`, `box`, `ladder-gap`, `air`) carries `frontier`
   `{x y z path}` when a searched node stands within 2 columns of unloaded land and within `options.frontierReach`
   (default 256) of the goal along x and z. It is the one with the least cost plus heuristic to the goal.
+- Known land (go-to only; `options.knownCells`, `options.knownEdges`, kept per body and goal in
+  `engine.path.walk/known-land`, out of job memory). The loaded land follows the body, so land a search already covered
+  reads as a loaded edge again once the body walks away and it unloads (live: soak j29, a walled walkway whose far end
+  lay over the goal, 38 rounds walking end to end). A search that ends `exhausted` or `ladder-gap` returns `known` (the
+  cells of its edge-band nodes that were not at the edge: covered to their end) and `edges` (those at the edge, not
+  known). The frontier skips known cells while another edge is loaded; a known one is taken only while some earlier
+  edge is still not known (it may lie back through known land), then `frontier.known` is true and go-to counts that
+  round as `:exhausted`, never progress. With no edge left open the result says `searchedOut` and the round walks
+  nowhere (`walk/no-walk`: `:no-path :exhausted`). go-to forgets its known land at its first round and after each
+  escalation (the world changed).
 
 A step up by walking (a stairs, a slab, a snow layer of 3 or more, a diagonal step up) lifts the body into the slab above its old
 top, so that slab must be free in the cell it leaves: stairs right behind a 2 high doorway are no way in (the head meets the lintel),

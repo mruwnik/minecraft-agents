@@ -13,7 +13,9 @@
      :time :players [username] :raining :thundering :blocks {[x y z] name} :unloaded #{pos} :ages {pos n} :states {pos {prop v}}
      :entities [{:id :name :kind :pos [x y z] ...}] (flags kebab-case: :leashed-to-me :in-love :break-at ...)
      :inventory [{:name :count}] :equipment {part stack} :containers {pos [stack]} :drops :chat [{:message :to}]
-     :recipes :unreachable :no-path #{pos} :furnaces :enchant-tables :controls :yaw :pitch :offline :settling ...}
+     :recipes :unreachable :no-path #{pos} :furnaces :enchant-tables :controls :yaw :pitch :offline :settling
+     :view-chunks n (spec :viewChunks; the pathWorld loads only the chunk columns within n chunks of the body's, as a
+     server's view distance does: land the body walked away from unloads; nil loads every column) ...}
   The helpers state, set-block!, remove-block!, add-entity!, entities, self, swap-self! and add-item! are how tests
   read and change it. The mechanics (interact, leads, tempt, steer, furnace, enchant, trade, use-on, rails, placing,
   doors) are the engine.fake.* namespaces; this one holds the rest (walk, dig, place, craft, ...), the owner token,
@@ -191,6 +193,7 @@
          :skip-night (:skipNight spec true)
          :settles (:settles spec false)
          :body-hitbox (:bodyHitbox spec false)
+         :view-chunks (:viewChunks spec)
          :settling false
          :offline-scale (:offlineScale spec 0.001)
          :furnaces (cells (:furnaces spec) #(rekey kebab %))

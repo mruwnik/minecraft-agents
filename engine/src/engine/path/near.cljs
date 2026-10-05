@@ -61,7 +61,8 @@
   plan, then the result is :no-path :door-stuck. Before and after the walk, the blocks this job opened and left (a cut
   round, a walk that ended in a doorway) are shut when within reach (pass/shut-leftovers!); farther ones, and those a cut
   leaves, are the door-left trigger's (engine.triggers.door-left). With explore (go-to), a search that ran out of loaded land
-  walks to its frontier, and the result carries :frontier, that node's cell [x y z], when the last plan walked was one.
+  walks to its frontier, and the result carries :frontier, that node's cell [x y z], when the last plan walked was one,
+  and :frontier-known true when that node lay in land earlier searches knew to their end (walk/known-land).
   With budget (go-to), each plan searches at most that many expansions (plan!): a plan still searching is the result
   {:status :searching} (walk/no-walk), nothing walked; progress false: an unfinished search walks nowhere (plan!)."
   [c to range doors timeout-s explore one-way budget progress]
@@ -83,7 +84,8 @@
                          (cond
                            (not= :door-stuck (:status done))
                            (cond-> (walk/partial-end done (:status last-plan) to range (:steps last-plan) (:stop last-plan))
-                             (:frontier-taken last-plan) (assoc :frontier (:at (:frontier-taken last-plan))))
+                             (:frontier-taken last-plan) (assoc :frontier (:at (:frontier-taken last-plan)))
+                             (:known (:frontier-taken last-plan)) (assoc :frontier-known true))
                            stuck (door-stuck (:cells done))
                            :else (recur (into walls (:cells done)) (:cells done)))))))]
       ;; however the walk ended, what it opened and could not shut yet (the body was in its column) is shut when in reach

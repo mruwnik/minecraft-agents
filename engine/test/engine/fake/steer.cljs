@@ -174,11 +174,24 @@
 (def blocks-mod (delay (node/require-here "./js/path/blocks.mjs")))
 (def space (delay (node/require-here "./js/path/space.mjs")))
 
+(defn in-view-fn
+  "Whether a cell's chunk column lies within the world's :view-chunks of the body's chunk (always, without it)."
+  [w]
+  (if-let [n (:view-chunks w)]
+    (let [[bx _ bz] (get-in w [:self :pos])
+          bcx (bit-shift-right (floor bx) 4)
+          bcz (bit-shift-right (floor bz) 4)]
+      (fn [[[x _ z] _]]
+        (and (<= (js/Math.abs (- (bit-shift-right x 4) bcx)) n)
+             (<= (js/Math.abs (- (bit-shift-right z 4) bcz)) n))))
+    (constantly true)))
+
 (defn path-world
   "{:snapshot :table :space}: the fake's blocks as the planner reads them. The fixture joins fences, walls and panes
-  to their neighbours, as the server does: a lone post is a gap a body slips through."
+  to their neighbours, as the server does: a lone post is a gap a body slips through. With :view-chunks only the
+  columns near the body are loaded (in-view-fn)."
   [w]
-  (let [entries (concat (:blocks w) (buried w))
+  (let [entries (filter (in-view-fn w) (concat (:blocks w) (buried w)))
         blocks (map (fn [[[x y z :as pos] name]] [x y z name (doors/path-props w pos)]) entries)]
     {:snapshot (fx/fixture-snapshot {:blocks blocks})
      :table (.defaultStateTable ^js @blocks-mod)

@@ -234,20 +234,24 @@
 
 (defn frontier-path
   "The planner's path to r's frontier (the searched node at the edge of what is loaded, within its reach of the goal, the
-  search having run out of land) and that node's cell [x y z]; nil when r has none."
+  search having run out of land) and that node's cell [x y z], with :known true when the node lies in land earlier
+  searches knew to their end (known-land); nil when r has none."
   [r]
   (when-let [^js f (.-frontier r)]
-    {:path (.-path f) :at [(.-x f) (.-y f) (.-z f)]}))
+    (cond-> {:path (.-path f) :at [(.-x f) (.-y f) (.-z f)]}
+      (true? (.-known f)) (assoc :known true))))
 
 (defn walk-plan
   "plan-walk's answer from its plan-within answer {:r :steps :beyond} over walled (pw with the walls).
   With frontier, a search that ran out of loaded land (no path within abilities beyond it) walks to its frontier, not
   its nearest end. Every way the loaded land holds is known and none arrives, so a way can only go on past what is
   loaded. A body standing at its frontier walks nowhere, not even to the nearest end: that would swing between
-  the two for ever."
+  the two for ever. A search whose only edges lie in land earlier searches knew to their end, with none left open
+  (the planner's searchedOut, known-land), walks nowhere either (:searched-out, no-walk: :no-path :exhausted)."
   [c pw walled to one-way frontier {:keys [r steps beyond]}]
   (let [edge (when (and frontier (not beyond)) (frontier-path r))
-        past (when (and (not edge) (= :open one-way)) (open-path r))
+        out (and frontier (not beyond) (not edge) (true? (.-searchedOut r)))
+        past (when (and (not edge) (not out) (= :open one-way)) (open-path r))
         steps (cond edge (path-steps walled (:path edge)) past (path-steps walled past) :else steps)
         status (if (or edge past) "partial" (.-status r))
         walked (if (= "partial" status) (dry-end steps) steps)
@@ -255,7 +259,8 @@
     {:r r :steps walked :beyond beyond :status status :pw pw
      :ms (or (some-> r .-ms) 0)
      :one-way-taken (when past step)
-     :frontier-taken (when (and edge (> (count walked) 1)) {:at (:at edge)})
+     :frontier-taken (when (and edge (> (count walked) 1)) (cond-> {:at (:at edge)} (:known edge) (assoc :known true)))
+     :searched-out out
      :stop (when (and step (not past) (not edge)) (stopped-one-way r (or (peek walked) (first steps) (body-cell c)) to step))}))
 
 (defn plan-walk
@@ -299,6 +304,41 @@
   without them when that is needed (beyond-needed?)."}
   searches (atom {}))
 
+(defonce ^{:doc "Land go-to's ended searches knew to their end, per body (by name): {:goal [to range] :cells :edges},
+  cells a js/Set of the planner's knownKey (options.knownCells), edges one of the cells those searches found at the loaded
+  edge and none has known since (options.knownEdges). The loaded land follows the body, so a search from afar reads
+  land searched before as a loaded edge again once it has unloaded: without this memory its frontier swings back there
+  (live: soak j29, a walled walkway whose far end lay over the goal, 38 rounds end to end). A new goal starts afresh;
+  go-to forgets it at its start and after an escalation changed the world (forget-known!). Kept out of job memory,
+  which is persisted: it can hold thousands of cells."}
+  known-land (atom {}))
+
+(defn known-cells!
+  "The body's known land toward to within range (known-land), {:cells :edges}, a new empty one when it held another goal."
+  [c to range]
+  (let [who (.-username (.self (:primitives c)))
+        goal [to range]
+        kept (get @known-land who)]
+    (if (= goal (:goal kept))
+      kept
+      (let [fresh {:goal goal :cells (js/Set.) :edges (js/Set.)}]
+        (swap! known-land assoc who fresh)
+        fresh))))
+
+(defn forget-known!
+  "Forget the body's known land (known-land)."
+  [c]
+  (swap! known-land dissoc (.-username (.self (:primitives c)))))
+
+(defn learn-known!
+  "Add the cells a planner result knew to its end (its known, set when it ran out of land) to the known land's cells,
+  dropping them from its edges, and add the result's edges that are not known."
+  [{:keys [^js cells ^js edges]} ^js r]
+  (when-let [^js known (some-> r .-known)]
+    (.forEach known (fn [k] (.add cells k) (.delete edges k))))
+  (when-let [^js found (some-> r .-edges)]
+    (.forEach found (fn [k] (when-not (.has cells k) (.add edges k))))))
+
 (def search-max-age-ms
   "A kept search older than this is not gone on with (the land it read may have changed): a new one begins."
   60000)
@@ -315,13 +355,16 @@
   (== planner/UNLOADED (.stateAt snapshot x y z)))
 
 (defn new-search
-  "A budgeted search from the body's cell over walled: its limited search begun (wide-box, the policy's limits);
-  :goal-unloaded whether its snapshot read the goal unloaded."
-  [c walled to range weight policy key]
+  "A budgeted search from the body's cell over walled: its limited search begun (wide-box, the policy's limits, known
+  land {:cells :edges} as the planner's options.knownCells and knownEdges when not nil); :goal-unloaded whether its
+  snapshot read the goal unloaded."
+  [c walled to range weight policy key known]
   {:key key :t (js/Date.now) :walled walled :r nil :unlimited nil
    :goal-unloaded (goal-unloaded? (.-snapshot walled) to)
    :limited (planner/create-plan (.-snapshot walled) (plan-query c to range)
-                                 (plan-options walled weight (executor/planner-limits policy (solid-fn walled)) wide-box))})
+                                 (cond-> (plan-options walled weight (executor/planner-limits policy (solid-fn walled)) wide-box)
+                                   known (doto (unchecked-set "knownCells" (:cells known))
+                                               (unchecked-set "knownEdges" (:edges known)))))})
 
 (defn go-on?
   "Whether the kept search goes on at this call: it plans the same (key k), is younger than search-max-age-ms, and did
@@ -387,19 +430,23 @@
 (defn ^:async plan-walk-budgeted!
   "plan-walk! that runs at most budget expansions of search (run-search!), going on with the body's unfinished search
   (searches) when it plans the same thing from the same cell. A search that ends is plan-walk's answer; one that does not
-  is unfinished-plan's (progress, default true: whether it may walk to where the search has got to)."
+  is unfinished-plan's (progress, default true: whether it may walk to where the search has got to). With frontier, the
+  searches read and add to the body's known land toward the goal (known-land): a frontier in land an earlier search
+  knew to its end is walked to only when there is no other (:frontier-taken :known)."
   [c pw to range weight {:keys [policy walls one-way frontier budget progress] :or {progress true}}]
   (let [t (js/performance.now)
         who (body-name c)
         k (search-key c to range weight policy walls)
         kept (get @searches who)
+        known (when frontier (known-cells! c to range))
         search (if (go-on? kept k pw to)
                  kept
-                 (new-search c (with-walls pw walls) to range weight policy k))
+                 (new-search c (with-walls pw walls) to range weight policy k known))
         [search within] (await (run-search! c search budget policy to range weight))
         ms (- (js/performance.now) t)]
     (if within
       (do (swap! searches dissoc who)
+          (when known (learn-known! known (:r within)))
           (walk-plan c (:walled search) (:walled search) to one-way frontier within))
       (let [plan (unfinished-plan search ms one-way progress)]
         (if (= "partial" (:status plan))
@@ -424,7 +471,7 @@
   walled in (:goal-enclosed: its partial plan's nearer end gets the body no nearer to arriving), a plan cut at a one-way step with no step left, no path, a plan the policy (default
   executor/policy) refuses. replans goes in the result."
   ([plan replans] (no-walk plan replans executor/policy))
-  ([{:keys [r steps beyond status stop]} replans policy]
+  ([{:keys [r steps beyond status stop searched-out]} replans policy]
    (let [partial? (= "partial" status)]
      (cond
        (= "searching" status)
@@ -435,6 +482,9 @@
 
        (= "goal-enclosed" (some-> r .-reason))
        {:status :no-path :reason :goal-enclosed :replans replans}
+
+       searched-out
+       {:status :no-path :reason :exhausted :searched-out true :replans replans}
 
        (and stop (< (count steps) 2))
        (assoc stop :replans replans)
