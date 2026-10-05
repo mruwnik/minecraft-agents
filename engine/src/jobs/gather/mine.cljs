@@ -27,7 +27,7 @@
   (1) a collecting flag runs the collect-drops child for the item within :collect-radius (walking to each drop until
   it is picked up; the count is the inventory's, never the dig's drop report), and drops of the item still lying
   there afterwards (out of reach) are reported once each, info mine.left-behind {:items [{:pos :count}]}, and listed
-  in the result's :left; (2) carrying the goal ends :count; (3) :max-failures failures end :gave-up (warn
+  in the result's :left (re-checked at the end, after the walk home: only drops still lying then stay in it); (2) carrying the goal ends :count; (3) :max-failures failures end :gave-up (warn
   mine.gave-up); :dry-digs digs in a row after which the carried count of the item did not rise end :no-drops (warn
   mine.gave-up with :reason :no-drops); (4) the nearest target (those over the ground snapshot only after all
   others, so the floor under the start is dug last) is walked to (within 3: blocked skips it and counts a failure,
@@ -219,13 +219,14 @@
        (await (ctx/act c :equip (clj->js {:item tool :dest "hand"})))))))
 
 (defn left-behind
-  "Drops of the item lying within :collect-radius, as {[x y z] count}."
-  [c]
+  "Drops of the item lying within radius (default :collect-radius) of the body, as {[x y z] count}."
+  ([c] (left-behind c (:collect-radius (:args c))))
+  ([c radius]
   (let [item (item-name (:args c))]
     (into {}
           (comp (filter #(= item (some-> (.-item %) .-name)))
                 (map (fn [e] [(access/cell (cell-of (u/pos-of (.-pos e)))) (or (some-> (.-item e) .-count) 1)])))
-          (array-seq (.entities (:primitives c) #js {:radius (:collect-radius (:args c)) :kind "item" :max 32})))))
+          (array-seq (.entities (:primitives c) #js {:radius radius :kind "item" :max 32}))))))
 
 (def pickup-grace-ms 400)
 
@@ -527,6 +528,16 @@
       (some? pos) (await (place! c pos item))
       :else (await (raise! c item)))))
 
+(defn still-left!
+  "Keep in :left only the drops still lying in the world: one a later steer picked up (or that despawned) is
+  dropped. Looks as far as the farthest listed drop, from where the body stands now."
+  [c]
+  (let [left (:left (ctx/mem c))
+        here (u/self-pos c)
+        radius (inc (apply max (map #(u/dist here (zipmap [:x :y :z] (key %))) left)))
+        lying (left-behind c radius)]
+    (ctx/update-mem! c assoc :left (into {} (filter #(contains? lying (key %))) left))))
+
 (defn ^:async home-round!
   "The last step of every normal run: back to the cell it started on (moveTo), whatever the digging left
   open behind it; an info mine.not-home when the walk did not arrive. The job ends either way."
@@ -535,6 +546,7 @@
     (when-not (await (step-to! c start))
       (ctx/emit! c :mine.not-home :info {:to (access/cell start) :at (access/cell (cell-of (u/self-pos c)))
                                          :text (str "mine did not get back to " (str/join "," (access/cell start)))}))
+    (when (seq (:left (ctx/mem c))) (still-left! c))
     (finish! c)))
 
 (defn no-tool?

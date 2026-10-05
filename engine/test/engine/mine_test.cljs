@@ -759,6 +759,24 @@
           (is (empty? (events-of s :mine.left-behind)))
           (is (nil? (:left (done-event s)))))))))
 
+(deftest drops-picked-up-after-the-report-are-not-listed-left-at-the-end
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks {"8,64,0" "iron_ore"} :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270
+                                :unreachable ["5,64,2"]}})]
+          (drop-away! (:p s) [5 64 2])
+          ;; a later steer (the walk home) picks the drop up
+          (.override (.-world (:p s)) "moveTo"
+                     (fn [token args impl]
+                       (when (= 0.5 (.-x (.-pos args)))
+                         (swap! (fake/state (:p s)) assoc :entities []))
+                       (impl token args)))
+          (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :tunnel-length 0}) {})
+          (await (run-ticks s 20))
+          (is (= 1 (count (events-of s :mine.left-behind))) "reported when it was still lying")
+          (is (nil? (:left (done-event s))) "but gone by the end"))))))
+
 (deftest a-run-that-only-dug-targets-still-walks-home
   (async done
     (tu/run-async done
