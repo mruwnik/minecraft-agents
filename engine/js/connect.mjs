@@ -4,6 +4,7 @@
 import mineflayer from 'mineflayer'
 import pf from 'mineflayer-pathfinder'
 import { SafeMovements } from './movements.mjs'
+import { fixDigMaterials } from './dig-materials.mjs'
 
 const { pathfinder } = pf
 
@@ -42,6 +43,7 @@ export function connectBot ({ host, port, username, auth = DEFAULTS.auth, versio
     bot.on('end', onEnd)
     bot.once('spawn', () => {
       settle()
+      fixDigMaterials(bot.registry)
       bot.pathfinder.setMovements(new SafeMovements(bot))
       resolve(bot)
     })
