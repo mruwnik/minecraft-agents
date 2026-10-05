@@ -427,7 +427,7 @@
 
 ;; ------------------------------------------------------------------ ctx and rounds
 
-(declare submit! call-child self-pos wait-reason)
+(declare submit! call-child self-pos)
 
 (defn owner? [eng token]
   (and (some? token) (.isOwner (:primitives eng) token)))
@@ -502,8 +502,7 @@
   [eng {:keys [root slots chain token args round reflex] :as base}]
   (let [store (:store eng)
         results (or (:results base) (atom {}))
-        child-wait (or (:child-wait base) (atom nil))
-        base (assoc base :results results :child-wait child-wait)
+        base (assoc base :results results)
         id (mem/path->id root slots)
         check! #(when-not (owner? eng token) (throw (cut-error)))
         wrote! (fn [kind] (emit! eng {:source :job :kind :memory_written :level :debug :job id
@@ -573,17 +572,12 @@
     (swap! (:results base) dissoc child-id)
     (when (empty? (mem/job-mem (mem/view store) (:root base) slots))
       (mem/update-job! store (:root base) slots assoc :args args :children {}))
-    (let [c (child-ctx eng base slot args)
-          wait (atom nil)
-          child-wait (:child-wait base)]
-      (reset! child-wait nil)
-      (if-not ((:check def) (assoc c :wait wait))
-        (do (reset! child-wait (when @wait (wait-reason @wait)))
-            :declined)
+    (let [c (child-ctx eng base slot args)]
+      (if-not ((:check def) c)
+:declined
         (let [{:keys [status error]} (normalize-result (await ((:round def) c)))]
           (when-not (owner? eng (:token base)) (throw (cut-error)))
           (when (= status :error) (throw error))
-          (when-not (= status :declined) (reset! child-wait nil))
           (if (= status :done)
             (clear!)
             (swap! (:results base) dissoc child-id))
@@ -592,13 +586,10 @@
 (defn ^:async run-round [eng run inst]
   (let [[def args] (job-of eng inst)
         results (atom {})
-        child-wait (atom nil)
         c (make-ctx eng {:root (:id run) :slots [] :chain [(:id run)] :token (:token run)
-                         :args args :round (:round run) :reflex (:reflex run) :results results
-                         :child-wait child-wait})]
+                         :args args :round (:round run) :reflex (:reflex run) :results results})]
     (try
-      (assoc (normalize-result (await ((:round def) c))) :result (get @results (:id run))
-             :child-wait @child-wait)
+      (assoc (normalize-result (await ((:round def) c))) :result (get @results (:id run)))
       (catch :default e
         (if (cut? e) {:status :cut :error e} {:status :error :error e})))))
 
@@ -636,7 +627,7 @@
   [eng id reason]
   (let [before (get @(:waiting eng) id)]
     (if (= ::passed reason)
-      (when (and before (not (:child (meta before)))) (swap! (:waiting eng) dissoc id))
+      (when before (swap! (:waiting eng) dissoc id))
       (let [r (wait-reason reason)]
         (when (not= before r)
           (swap! (:waiting eng) #(assoc (select-keys % (:list (state eng))) id r))
@@ -683,23 +674,7 @@
   [result]
   (and (map? result) (= :stopped (:status result))))
 
-(defn note-child-wait!
-  "A listed job's round returned :declined because its child's check waits (reason, or nil when the child gave none):
-  the job waits with that reason, told once. Any other round result drops a wait taken from a child."
-  [eng id status reason]
-  (let [before (get @(:waiting eng) id)]
-    (cond
-      (and (= :declined status) reason)
-      (let [r (with-meta (wait-reason reason) {:child true})]
-        (when (not= before r)
-          (swap! (:waiting eng) #(assoc (select-keys % (:list (state eng))) id r))
-          (emit! eng (merge (job-fields eng id)
-                            {:source :job :kind :waiting :level :info :data r :text (waiting-text r)}))))
-      (:child (meta before))
-      (swap! (:waiting eng) dissoc id))))
-
-(defn settle-listed! [eng {:keys [id]} {:keys [status error result child-wait]}]
-  (note-child-wait! eng id status child-wait)
+(defn settle-listed! [eng {:keys [id]} {:keys [status error result]}]
   (let [idx (.indexOf (:list (state eng)) id)
         fields (job-fields eng id)]
     (case status
