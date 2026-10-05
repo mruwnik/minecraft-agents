@@ -1,0 +1,2 @@
+;; ProbeWaiting live cases for job.waiting reasons and smelt furnace choice: idle, jobs are submitted with tools/jobs.mjs
+{:register [] :queue []}
