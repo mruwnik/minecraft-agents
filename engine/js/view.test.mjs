@@ -246,6 +246,13 @@ test('pose snapshot has the fixed shape, eye height and nearby entities only', (
   assert.equal(pose.rain, 0)
 })
 
+test('a dropped item in the pose names what it holds; a drop the library cannot read, and other entities, carry no item', () => {
+  const drop = (id, getDroppedItem) => entity(id, 12, -3, { name: 'item', getDroppedItem })
+  const bot = fakeBot({ entities: { 2: drop(2, () => ({ name: 'oak_log', count: 1 })), 3: drop(3, () => { throw new Error('no slot') }), 4: entity(4, 11, -3) } })
+  const items = Object.fromEntries(poseSnapshot(bot, { world: 'w', now: 1 }).entities.map(e => [e.id, e.item]))
+  assert.deepEqual(items, { 2: 'oak_log', 3: undefined, 4: undefined })
+})
+
 test('sneaking lowers the eye', () => {
   const bot = fakeBot()
   bot.entity.height = 1.45

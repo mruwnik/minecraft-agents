@@ -101,7 +101,26 @@ const PALETTES = {
 // the species with a palette of their own (not the kinds 'player' as a fallback, nor the 'item' drop)
 export const SPECIES = Object.keys(PALETTES).filter(name => name !== 'item')
 export const hasPalette = name => name in PALETTES
-export const paletteFor = e => PALETTES[e.name] ?? PALETTES[e.kind] ?? plain(e.kind === 'hostile' ? HOSTILE : hashColor(e.name))
+// A dropped item takes the colour of the block it is (or the material it is made of); an item with no entry here gets a colour
+// hashed from its name, and one the pose does not name (an older body) stays the plain item colour.
+const ITEM_COLORS = [
+  [/^(oak|dark_oak)_/, [150, 115, 65]], [/^spruce_/, [115, 85, 50]], [/^birch_/, [215, 205, 140]], [/^jungle_/, [160, 115, 80]],
+  [/^acacia_/, [170, 90, 50]], [/^cherry_/, [230, 175, 175]], [/^mangrove_/, [120, 55, 50]], [/^bamboo_/, [200, 180, 80]],
+  [/^(crimson)_/, [120, 50, 75]], [/^(warped)_/, [45, 110, 110]],
+  [/^(white|light_gray)_/, [215, 215, 215]], [/^(gray|black)_/, [60, 60, 65]], [/^(red)_/, [170, 45, 40]], [/^(orange)_/, [225, 120, 35]],
+  [/^(yellow)_/, [235, 200, 55]], [/^(lime|green)_/, [100, 160, 40]], [/^(cyan|light_blue|blue)_/, [60, 130, 200]],
+  [/^(purple|magenta)_/, [150, 60, 170]], [/^(pink)_/, [235, 140, 170]], [/^brown_/, [110, 75, 45]],
+  [/^(cobblestone|stone|andesite|diorite|granite|deepslate|cobbled_deepslate|gravel)$/, [125, 125, 125]], [/^(dirt|coarse_dirt|farmland|mud)$/, [120, 85, 55]],
+  [/^(sand|sandstone)$/, [220, 205, 150]], [/^(grass_block|short_grass|oak_leaves)$/, [100, 160, 70]], [/^(coal|charcoal)$/, [40, 40, 40]],
+  [/^(raw_)?iron(_ingot|_ore)?$/, [215, 180, 160]], [/^(raw_)?gold(_ingot|_ore)?$/, [240, 200, 50]], [/^(raw_)?copper(_ingot|_ore)?$/, [200, 110, 75]],
+  [/^(diamond|diamond_ore)$/, [90, 220, 215]], [/^(emerald|emerald_ore)$/, [60, 200, 100]], [/^(redstone|redstone_ore)$/, [200, 30, 20]],
+  [/^(lapis_lazuli|lapis_ore)$/, [40, 70, 170]], [/^(stick|bone_meal|string|feather|bone)$/, [225, 220, 200]], [/^(wheat|wheat_seeds|hay_block)$/, [210, 185, 70]],
+  [/^(rotten_flesh)$/, [150, 95, 70]], [/^(snow|snowball|snow_block)$/, [245, 250, 250]], [/^(glass|ice)$/, [180, 215, 235]],
+  [/^(apple|beef|porkchop|carrot|beetroot|sweet_berries)$/, [200, 60, 50]]
+]
+const itemColor = item => ITEM_COLORS.find(([re]) => re.test(item))?.[1] ?? hashColor(item)
+const PLAIN_ITEM = 'item'
+export const paletteFor = e => e.name === PLAIN_ITEM && e.item ? plain(itemColor(e.item)) : PALETTES[e.name] ?? PALETTES[e.kind] ?? plain(e.kind === 'hostile' ? HOSTILE : hashColor(e.name))
 export const colorFor = e => paletteFor(e)[0]
 
 // ---------------------------------------------------------------- labels

@@ -8,6 +8,9 @@ export const cameraFromPose = pose => ({
   pitch: pose.pitch ?? 0
 })
 
+// a dropped item is a quarter of a block across, as the game's item entity is
+const ITEM_SIZE = 0.25
+
 // eyes.mjs's visibleEntities, from the pose's entity list
 export const entitiesFromPose = pose => (pose.entities ?? []).filter(e => e.pos).map(e => ({
   name: e.name ?? e.type,
@@ -16,7 +19,8 @@ export const entitiesFromPose = pose => (pose.entities ?? []).filter(e => e.pos)
   x: e.pos.x,
   y: e.pos.y,
   z: e.pos.z,
-  width: e.name === 'item' ? 0.35 : e.width || 0.6,
-  height: e.name === 'item' ? 0.35 : e.height || 1.8,
+  ...(e.item ? { item: e.item } : {}),
+  width: e.name === 'item' ? e.width || ITEM_SIZE : e.width || 0.6,
+  height: e.name === 'item' ? e.height || ITEM_SIZE : e.height || 1.8,
   yaw: e.yaw ?? 0
 }))

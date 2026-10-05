@@ -256,12 +256,22 @@ export function restoreColumn (column, { sections, light }) {
 
 const eyeHeight = entity => entity.height ? entity.height - 0.18 : 1.62
 
-const entityView = e => ({
+// the name of the item a drop entity holds, or null when the client library cannot read it (it reads one fixed metadata index)
+const droppedName = (bot, e) => {
+  if (e.name !== 'item') return null
+  try {
+    const stack = e.getDroppedItem?.()
+    return stack?.name ?? bot.registry?.items?.[stack?.type ?? stack?.itemId]?.name ?? null
+  } catch { return null }
+}
+
+const entityView = (bot, e, item = droppedName(bot, e)) => ({
   id: e.id,
   type: e.type ?? null,
   name: e.name ?? null,
   kind: e.kind ?? null,
   ...(e.username ? { username: e.username } : {}),
+  ...(item ? { item } : {}),
   pos: xyz(e.position),
   yaw: e.yaw ?? 0,
   pitch: e.pitch ?? 0,
@@ -288,7 +298,7 @@ export function poseSnapshot (bot, { world, now }) {
     pitch: self.pitch,
     velocity: xyz(self.velocity ?? { x: 0, y: 0, z: 0 }),
     onGround: Boolean(self.onGround),
-    entities: Object.values(bot.entities ?? {}).filter(e => e !== self && e.position && near(e.position, p)).map(entityView),
+    entities: Object.values(bot.entities ?? {}).filter(e => e !== self && e.position && near(e.position, p)).map(e => entityView(bot, e)),
     timeOfDay: bot.time?.timeOfDay ?? null,
     rain: bot.rainState ?? 0
   }
@@ -442,6 +452,8 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
   }
 
   const markColumn = (cx, cz) => pending.add(`${cx},${cz}`)
+  // the body's own dig, place, jumpPlace or useOn: the column is dumped by the next flush (every FLUSH_MS), whatever the server's block update does
+  const markCell = (x, y, z) => markColumn(Math.floor(x / 16), Math.floor(z / 16))
   const onLoad = safely(point => {
     const cx = Math.floor(point.x / 16)
     const cz = Math.floor(point.z / 16)
@@ -452,8 +464,6 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
   const onUpdate = safely((oldBlock, newBlock) => {
     const p = (newBlock ?? oldBlock)?.position
     if (!p) return
-  // the body's own dig, place, jumpPlace or useOn: the column is dumped by the next flush (every FLUSH_MS), whatever the server's block update does
-  const markCell = (x, y, z) => markColumn(Math.floor(x / 16), Math.floor(z / 16))
     markColumn(Math.floor(p.x / 16), Math.floor(p.z / 16))
     if (oldBlock?.stateId !== newBlock?.stateId) changes.set(`${p.x},${p.y},${p.z}`, { x: p.x, y: p.y, z: p.z })
   })

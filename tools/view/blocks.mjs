@@ -10,6 +10,14 @@ import { decodePng, textureCandidates, tintOf } from './renderer.mjs'
 const AIR = new Set(['air', 'cave_air', 'void_air', 'light', 'barrier', 'structure_void'])
 const FULL_CUBE = JSON.stringify([[0, 0, 0, 1, 1, 1]])
 
+// An open fence gate has no collision shape (the prismarine shapes are empty), which the renderer would draw as a plant. It is
+// drawn as the game does: its two posts with the leaves swung open along the gate's facing axis, as boxes in the cell.
+const openGateBoxes = facing => {
+  const [a, b] = [[0, 0.125], [0.875, 1]]
+  const acrossX = facing === 'north' || facing === 'south'
+  return [a, b].map(([lo, hi]) => acrossX ? [lo, 0.3125, 0.375, hi, 1, 1] : [0.375, 0.3125, lo, 1, 1, hi])
+}
+
 export function makeBlockSource (registry, textureDir) {
   const Block = prismarineBlock(registry)
   const images = new Map()
@@ -33,6 +41,7 @@ export function makeBlockSource (registry, textureDir) {
     if (AIR.has(b.name)) return null
     const base = { name: b.name, props: b.getProperties() }
     if (b.name === 'water' || b.name === 'lava') return { ...base, kind: 'cube' }
+    if (b.name.endsWith('_fence_gate') && base.props.open) return { ...base, kind: 'boxes', boxes: openGateBoxes(base.props.facing) }
     if (!b.shapes.length) return { ...base, kind: 'cross' }
     return JSON.stringify(b.shapes) === FULL_CUBE ? { ...base, kind: 'cube' } : { ...base, kind: 'boxes', boxes: b.shapes }
   }

@@ -78,7 +78,7 @@
 (defn by-d ^number [^js a ^js b] (- (.-d a) (.-d b)))
 
 (defn entity-boxes
-  "The nearest 64 entities to the eye as {min, max, color, name, label, kind} boxes relative to origin (name, label and kind are what
+  "The nearest 64 entities to the eye as {min, max, color, name, label, item, kind} boxes relative to origin (name, label, item and kind are what
    the browser view's species colours and name labels go by)."
   [^js entities ^js origin ^js eye]
   (if (nil? entities)
@@ -100,6 +100,7 @@
                      :color (entity-color e)
                      :name (.-name e)
                      :label (.-username e)
+                     :item (.-item e)
                      :kind (entity-kind e)}))))))
 
 (defn new-metrics []
