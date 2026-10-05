@@ -144,3 +144,15 @@
     (doseq [[id cooldown] survival-cooldowns]
       (is (= [:cooldown cooldown] ((juxt :persistence :cooldown-s) (by-id id))) (str id " in the register"))
       (is (= [:cooldown cooldown] ((juxt :persistence :cooldown-s) (triggers/all id))) (str id " by default")))))
+
+(deftest survival-digs-in-at-night-in-the-open-on-its-own
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen clock]} (boot "scenarios/survival.edn"
+                                               {:time 14000
+                                                :inventory [{:name "dirt" :count 16}]})]
+          (await (run-ticks eng clock 6 1000))
+          (is (some #{:night-unsafe} (fired seen)) "night in the open fires the night reflex with no job submitted")
+          (is (contains? (names-started seen) "jobs.survival.shelter") "the reflex ran the shelter job")
+          (is (seq (filter #(= "place" (.-name %)) (.-calls (.-world p)))) "no bed: shelter dug in and placed blocks"))))))
