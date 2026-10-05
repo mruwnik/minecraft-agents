@@ -1,0 +1,2 @@
+;; ProbeStair live cases for stair bridging, :no-floor :filler :none, :unbreakable and job.stopped: idle, jobs submitted with tools/jobs.mjs
+{:register [] :queue []}
