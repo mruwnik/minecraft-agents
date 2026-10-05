@@ -9,6 +9,7 @@ import { promisify } from 'node:util'
 import prismarineRegistry from 'prismarine-registry'
 import { lightTable, relightBox } from './light.mjs'
 import { bodyDir, worldsDir } from './bodies.mjs'
+import { liveEntities } from './live-entities.mjs'
 
 const deflate = promisify(zlib.deflate)
 
@@ -298,7 +299,7 @@ export function poseSnapshot (bot, { world, now }) {
     pitch: self.pitch,
     velocity: xyz(self.velocity ?? { x: 0, y: 0, z: 0 }),
     onGround: Boolean(self.onGround),
-    entities: Object.values(bot.entities ?? {}).filter(e => e !== self && e.position && near(e.position, p)).map(e => entityView(bot, e)),
+    entities: liveEntities(bot).filter(e => e !== self && e.position && near(e.position, p)).map(e => entityView(bot, e)),
     timeOfDay: bot.time?.timeOfDay ?? null,
     rain: bot.rainState ?? 0
   }

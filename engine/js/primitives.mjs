@@ -15,6 +15,7 @@ import { tradeWith } from './trade.mjs'
 import { say } from './chat.mjs'
 import { leaveBed, ensureAwake } from './bed.mjs'
 import { createUseOn, stateProperties } from './use-on.mjs'
+import { trackLiveEntities, liveEntities, liveEntity } from './live-entities.mjs'
 import { createSteer } from './steer.mjs'
 import { interactWith, mobFields } from './interact.mjs'
 import { leashFields, trackLeashes } from './leash.mjs'
@@ -209,6 +210,7 @@ const gained = (before, after) => Object.entries(after)
 export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect = null, view = null, worldTimeoutMs = WORLD_TIMEOUT_MS, settleMs = SETTLE_MS, pending = [] } = {}) {
   let bot = initialBot
   trackLeashes(bot)
+  trackLiveEntities(bot)
   trackVehicles(bot)
   view?.attach(bot)
   let closed = false
@@ -253,7 +255,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     mainHand: gearView(bot.heldItem)
   })
   const countsNow = () => itemCounts(inventory())
-  const hostilesNear = () => Object.values(bot.entities)
+  const hostilesNear = () => liveEntities(bot)
     .filter(e => e !== bot.entity && entityKind(e) === 'hostile')
     .filter(e => Math.hypot(e.position.x - bot.entity.position.x, e.position.z - bot.entity.position.z) <= MONSTER_RANGE && Math.abs(e.position.y - bot.entity.position.y) <= 5)
 
@@ -501,7 +503,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   const entities = ({ radius = DEFAULT_RADIUS, kind, names, max = 32 } = {}) => {
     if (isOffline()) return []
     const me = here()
-    return Object.values(bot.entities)
+    return liveEntities(bot)
       .filter(e => e !== bot.entity && e.position)
       .map(e => ({ e, distance: dist(me, e.position), kind: entityKind(e) }))
       .filter(({ e, distance, kind: k }) => distance <= radius && (!kind || k === kind) && (!names || names.includes(e.name ?? e.username)))
@@ -696,7 +698,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     })
   }
 
-  const dropsNear = p => Object.values(bot.entities)
+  const dropsNear = p => liveEntities(bot)
     .filter(e => entityKind(e) === 'item' && dist(center(p), e.position) <= DROP_RADIUS)
     .map(e => ({ id: e.id, ...droppedItem(bot, e), pos: xyz(e.position) }))
 
@@ -845,12 +847,12 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     const before = countsNow()
     const result = (status, reason) => ({ status, ...(reason && { reason }), gained: gained(before, countsNow()) })
     return act(token, { boundS: Math.min(timeoutS, 20), onTimeout: () => result('timeout') }, async ctx => {
-      const target = bot.entities[id]
+      const target = liveEntity(bot, id)
       if (!target || entityKind(target) !== 'item') return { status: 'gone' }
       let approaches = 0
       let inReachSince = null
-      while (bot.entities[id]) {
-        const item = bot.entities[id]
+      while (liveEntity(bot, id)) {
+        const item = liveEntity(bot, id)
         if (inPickupReach(item)) {
           inReachSince ??= Date.now()
           if (Date.now() - inReachSince > PICKUP_WAIT_S * 1000 * timeScale) return result('unreachable', 'not-picked-up')
@@ -863,7 +865,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
         const p = item.position
         const { reached } = await walk(ctx, new goals.GoalNear(p.x, p.y, p.z, approaches === 0 ? 1 : 0), { stall: false })
         approaches++
-        if (!reached && bot.entities[id]) return result('unreachable')
+        if (!reached && liveEntity(bot, id)) return result('unreachable')
       }
       const got = gained(before, countsNow())
       return got.length ? { status: 'collected', gained: got } : { status: 'gone', gained: [] }
@@ -1268,7 +1270,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     source: bot,
     online: !closed && !down && !stalled && !isOffline() && Date.now() - lastTick <= 10000,
     dimension: bot.game?.dimension,
-    entities: Object.values(bot.entities ?? {})
+    entities: liveEntities(bot)
   })
   const onEntityDeath = listener => {
     if (!entityDeathListeners.size) bot.on('entityDead', relayEntityDeath)
@@ -1311,6 +1313,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     unbind()
     bot = fresh
     trackLeashes(bot)
+    trackLiveEntities(bot)
     trackVehicles(bot)
     unbind = bindEvents(bot)
     view?.attach(bot)
