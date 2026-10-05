@@ -776,8 +776,7 @@ To see that a trigger fires without running the real job, register it against
 Each run emits an info event of kind `job.notify` (the text plus health, food,
 oxygen, on-fire, position, time of day and nearby hostiles) and writes a
 `:notify` entry `{:text ...}` to body memory (cap 20, ttl 10 minutes). With
-`:chat? true` it also sends the text to game chat, once a primitive `chat`
-exists; none does yet, so today the flag does nothing.
+`:chat? true` it also sends the text to game chat (`engine.chat/say!`; `:to` whispers it).
 
 ### Conditions
 
@@ -1449,7 +1448,7 @@ unstartable (`engine.single`; only two starts racing over the same stale file wi
 | `jobs.animals.leash` | `{:mob nil :radius 8 :skip [] :walk-timeout-s 5 :timeout-s 30}` | always | `:started`, `:given-up {key reason}`, `:fails`, `:in-row` | none; puts a lead on the nearest animal of `:mob` not on a lead and not in `:skip` (keys), walking to within 3; counts only when the sensing then shows it `leashedToMe`; hands over `{:reason :animal key :id :given-up}`, `:reason` one of `:leashed :no-lead :none :all-leashed :unreachable :refused :timeout`; info `leash.done`, warn `leash.gave-up` unless `:leashed` | the lead stays in the hand |
 | `jobs.animals.unleash` | `{:mob nil :animal nil :radius 8 :walk-timeout-s 5 :timeout-s 30 :collect true}` | always | `:freed`, `:given-up`, `:phase`, `:dropped`, child `:collect` | collect-drops (leads); frees animals on this body's lead (empty-hand click) or tied to a `leash_knot` (click the knot, which hands them to the body's lead, then the animal; a settle poll of 1.5 s follows each click), then waits 0.8 s and picks the leads up; hands over `{:reason :freed :given-up :collected :leads}` (`:collected`: leads gained since the first round, also one picked up the moment it dropped), `:reason` one of `:unleashed :none :unreachable :refused :timeout`; info `unleash.done`, warn `unleash.gave-up` unless `:unleashed` | |
 | `jobs.animals.lead-to` | `{:mob nil :pos nil :fence nil :range 2 :radius 8 :gather-radius 3 :gather-tries 3 :watch-radius 64 :timeout-s 180}` | always | `:phase` (`:leash :walk :gather :arrive :release`), `:animal`, `:still-led`, `:ties`, `:pulls`, `:pull-target`, `:gather-seen`, `:settles`, children `:leash`, `:walk`, `:pull`, `:unleash` | leash, go-to, unleash; without `:fence` a `:gather` phase after the walk (a body outwalks a led animal, which trails a lead length behind): while the animal is farther than `:gather-radius` from `:pos`, a go-to child (range 1) walks the body on past the spot so the lead pulls it within `:gather-radius`, waiting for it to settle between pulls (`:gather-seen`, `:settles`), at most `:gather-tries` times, each pull going no farther past the spot than keeps the body within 11 blocks of the animal (the lead breaks past 12 on 26.1, `Leashable.LEASH_TOO_FAR_DIST`; so a cow 10 or more blocks out is never pulled) given up after 20 s (its go-to child dropped) and given up before it starts when the planned walk to its target strays more than 11 blocks from the animal (a wall the animal is jammed at, the detour would break the lead); a failed, given-up or impossible pull or spent pulls is no failure: the animal is let go where it is with a warn `lead-to.gather-short` `{:distance}` (from the spot) and `:gathered false` in the result (`:gathered` is true when the animal was within `:gather-radius`, or tied); with `:fence` (a block named `*_fence`, checked before anything is leashed) the animal is tied by an empty-hand `useOn` on the post and counted only when the sensing shows it held by something else than the body; every walking round and the arrival check that the animal is still on the lead (`:lead-broke` when seen off it, `:lost` when not seen); hands over `{:reason :animal :still-led :gathered :at}`, `:reason` one of `:tied :unleashed :lead-broke :lost :unreachable :tie-failed :timeout :no-fence` or a leash/unleash reason; info `lead-to.done`, warn `lead-to.gave-up` unless tied/unleashed | on `:unreachable`, `:tie-failed` and `:timeout` the animal stays on the lead |
-| `jobs.animals.herd` | `{:mob nil :box nil :target 2 :gate nil :radius 24 :timeout-s 180}` | started, or `:mob` and `:box` given and fewer than `:target` adults of `:mob` stand in the box (so a full pen declines) | `:phase` (`:survey :regather :leash :approach :clear-out :line-up :open :step :shut-behind :shut-deepest :shut-back :shut-click :deep :deep-release :deep-unequip :let-go :exit :clear-in :exit-dash :exit-open :exit-out :shut-out :shut-side :shut-back-in :shut-gate :retry-back :retry-shut :retry-out :give-up-walk :census`), `:gate`, `:inside-cell`, `:outside-cell`, `:wanted`, `:led`, `:brought`, `:given-up`, `:trouble`, `:regathered`, `:releasing`, `:release-tried`, `:ending`, `:tries` (leashes per animal), `:pen-before`, `:escaped-total`, `:shut-retries`, `:reopens`, `:dash-tries`, `:leaves`, children `:leash`, `:unleash`, `:collect`, `:gate`, `:walk` | leash (one animal, with `:skip`: babies, animals in the pen, given-up ones, ones leashed twice already and still outside), go-to (one cell at a time, `:doors :never`), toggle, unleash (by uuid), collect-drops (leads, once after every lead broke); reads the pen with `engine.jobs.pen` over `:box`, picks a gate with pen floor on one side and free floor straight across, needs 4 free cells straight out from it (`:no-gate` `:why :no-approach`) and 5 pen cells straight in (`:too-shallow`), counts adults on the pen cells; no food is used. One animal per round: leash it, walk to 4 cells outside the gate and settle, wait until no adult stands within 2.5 of the cell inside, step out-3..out-1 (the cow lines up on the axis), open the gate, then step through it and 5 cells in, one cell and one settle (rests within 4.3, moved under 0.25) at a time: a led animal the body leaves within 6 blocks walks by its own path; a live cow does not move while the body is within about 4 and stops 3.2 to 3.7 behind it, often 1 to 2 off the axis; one dragged by a long walk jams in the gap. Pinned (beyond 4.3 after 6 s): back one step twice, then back to out-1, the gate shut (unless an animal stays on its cell), out to out-4 and again once, then `:jammed` (let go outside, gate shut). The gate is shut from inside once no adult overlaps its cell (never while one does), from in-4 with reach 4 (toggle walks closer when the click is out of reach), the body leads the animal deep, unleashes it, empties its hand once (the animal would follow the lead in it), walks to the cell inside and leaves in one walk-near! round to out-1 that opens, passes and shuts the gate itself; a round that leaves the gate open with the body outside shuts it from there, one that leaves the body inside goes open, out-1, shut; a shut with the body still on the pen side opens again and goes out, twice at most, then `:gate-stuck`. A gate that will not shut lets a led animal go first and is tried twice more, then stays open with one warn `herd.gate-open` naming its position. A run that ends with the gate open and the body on the pen side (on a pen cell or the gate cell) goes out the exit's way first, twice at most, so the body never ends inside; a shut that failed and then took ends judged by the count. The adults on the pen cells are counted before the exit and after the shut from outside: fewer is one warn `herd.escaped` per exit. Gate facing does not matter: a gate set crosswise in the fence line (fences not joined to it) is used the same way. A `:gate-held` memory entry `{:cell}` is written before each open and dropped after each shut (the `:pen-gate` trigger skips such a gate for `:held-s`). Timeout `:timeout-s` per animal. An animal seen off the lead is `:lead-broke`, unseen `:lost`; nobody led any more: leads within 8 picked up, leashing started again once; a give-up with an animal on the lead unleashes it and shuts an open gate first; hands over `{:reason :inside :target :brought :given-up :gate :escaped}`, `:reason` one of `:brought :short :full :no-pen :leaky :no-gate :too-shallow :unreachable :gate-stuck :lost :timeout` or a leash reason; info `herd.done`, one warn `herd.gave-up` unless brought/full; an animal is booked brought once; a round ends only in a safe state (gate shut, body off the pen and gate cells, nobody on the lead): from the lead on it steps on in one round, so no other listed job gets a round mid-trip; a round that starts unsafe (after a cut) restarts from the world, info `herd.restarted` `{:led :inside :gate-open :phase}` | one animal at a time through the gate; body ends outside with the gate shut; unit-tested (lazy cows: `:follow-at 4 :rest-at 3.7` in the fake), live: ProbeHerdB 2edefeae (6 case groups) before the card 4f4ab883 fixes |
+| `jobs.animals.herd` | `{:mob nil :box nil :target 2 :gate nil :radius 24 :timeout-s 180}` | started, or `:mob` and `:box` given and fewer than `:target` adults of `:mob` stand in the box (so a full pen declines) | `:phase` (`:survey :regather :leash :approach :clear-out :line-up :open :step :shut-behind :shut-deepest :shut-back :shut-click :deep :deep-release :deep-unequip :let-go :exit :clear-in :exit-dash :exit-open :exit-out :shut-out :shut-side :shut-back-in :shut-gate :retry-back :retry-shut :retry-out :give-up-walk :census`), `:gate`, `:inside-cell`, `:outside-cell`, `:wanted`, `:led`, `:brought`, `:given-up`, `:trouble`, `:regathered`, `:releasing`, `:release-tried`, `:ending`, `:tries` (leashes per animal), `:pen-before`, `:escaped-total`, `:shut-retries`, `:reopens`, `:dash-tries`, `:leaves`, children `:leash`, `:unleash`, `:collect`, `:gate`, `:walk` | leash (one animal, with `:skip`: babies, animals in the pen, given-up ones, ones leashed twice already and still outside), go-to (one cell at a time, `:doors :never`), toggle, unleash (by uuid), collect-drops (leads, once after every lead broke); reads the pen with `engine.jobs.pen` over `:box`, picks a gate with pen floor on one side and free floor straight across, needs 4 free cells straight out from it (`:no-gate` `:why :no-approach`) and 5 pen cells straight in (`:too-shallow`), counts adults on the pen cells; no food is used. One animal per round: leash it, walk to 4 cells outside the gate and settle, wait until no adult stands within 2.5 of the cell inside, step out-3..out-1 (the cow lines up on the axis), open the gate, then step through it and 5 cells in, one cell and one settle (rests within 4.3, moved under 0.25) at a time: a led animal the body leaves within 6 blocks walks by its own path; a live cow does not move while the body is within about 4 and stops 3.2 to 3.7 behind it, often 1 to 2 off the axis; one dragged by a long walk jams in the gap. Pinned (beyond 4.3 after 6 s): back one step twice, then back to out-1, the gate shut (unless an animal stays on its cell), out to out-4 and again once, then `:jammed` (let go outside, gate shut). The gate is shut from inside once no adult overlaps its cell (never while one does), from in-4 with reach 4 (toggle walks closer when the click is out of reach), the body leads the animal deep, unleashes it, empties its hand once (the animal would follow the lead in it), walks to the cell inside and leaves in one walk-near! round to out-1 that opens, passes and shuts the gate itself; a round that leaves the gate open with the body outside shuts it from there, one that leaves the body inside goes open, out-1, shut; a shut with the body still on the pen side opens again and goes out, twice at most, then `:gate-stuck`. A gate that will not shut lets a led animal go first and is tried twice more, then stays open with one warn `herd.gate-open` naming its position. A run that ends with the gate open and the body on the pen side (on a pen cell or the gate cell) goes out the exit's way first, twice at most, so the body never ends inside; a shut that failed and then took ends judged by the count. The adults on the pen cells are counted before the exit and after the shut from outside: fewer is one warn `herd.escaped` per exit. Gate facing does not matter: a gate set crosswise in the fence line (fences not joined to it) is used the same way. A `:gate-held` memory entry `{:cell}` is written before each open and dropped after each shut (the `:pen-gate` trigger skips such a gate for `:held-s`). Timeout `:timeout-s` per animal. An animal seen off the lead is `:lead-broke`, unseen `:lost`; nobody led any more: leads within 8 picked up, leashing started again once; a give-up with an animal on the lead unleashes it and shuts an open gate first; hands over `{:reason :inside :target :brought :given-up :gate :escaped}`, `:reason` one of `:brought :short :full :no-pen :leaky :no-gate :too-shallow :unreachable :gate-stuck :lost :timeout` or a leash reason; info `herd.done`, one warn `herd.gave-up` unless brought/full; an animal is booked brought once; a round ends only in a safe state (gate shut, body off the pen and gate cells, nobody on the lead): from the lead on it steps on in one round, so no other listed job gets a round mid-trip; a round that starts unsafe (after a cut) restarts from the world, info `herd.restarted` `{:led :inside :gate-open :phase}` | one animal at a time through the gate; body ends outside with the gate shut; unit-tested (lazy cows: `:follow-at 4 :rest-at 3.7` in the fake) |
 | `jobs.animals.pen-check` | `{:at [x y z] or nil :box {:min :max} or nil :max-cells 2000}` | `:at` or `:box` is given (declines otherwise) | none | none; read-only, never moves; flood-fills what a cow can walk (`engine.jobs.pen`: fence, wall and closed gate 1.5 high, an open gate or door a way out, a block, slab or carpet stepped onto, a drop over 3 not taken, a diagonal step needs both sides open) from the feet cell `:at`, or from every surface inside `:box` where a step out of it is a leak; hands over and emits (info `pen-check.done`) `{:closed? :reason :cells :leaks [{:pos :why}] :gates [{:pos :open?}]}`, `:reason` nil when closed, else `:leak` (`:why` one of `:open-gate :gap :climb :open :unloaded`, at most 12 listed), `:unbounded` (more than `:max-cells` reached: a pen bigger than the bound, or an open one without a `:box` whose gap shows no wall either side), `:unloaded` or `:no-start`; `:cells` of a leaky pen without a `:box` is what it would enclose with its leaks shut (0 when shutting up to 4 rounds does not close it, or a wall is climbed, e.g. a low wall all round); `engine.jobs.pen/in-pen?` counts an animal's position against the inside cells |
 | `jobs.animals.shut-gate` | `{:plan nil :radius 8 :reach 3 :tries 3}` | with `:plan` always (a plan that is missing or unreadable ends with one `shut-gate.declined` warn); without, an open gate of a plan is within `:radius` and not given up lately | `:shut`, `:tries {cell n}`, `:given-up [[cell reason]]`, `:standing` | writes `:gate-gave-up` `{:cell :reason}` (cap 50, 10 min) when a gate is given up; shuts the open planned gates (every one of `:plan` wherever it is, else those within `:radius`), nearest first: walks within `:reach`, clicks with an empty hand, reads the block again (the open reading of `engine.jobs.pen`); a gate the body stands in is left (`:standing-in`); a gate unreachable or not shut after `:tries` rounds is given up with one `shut-gate.gave-up` warn; a gate in no plan is never touched; ends with info `shut-gate.done` and `{:shut n :left [{:cell :reason}]}`; own backoff `{:after 9}` |
 | `jobs.debug.walk-plan` | `{:to [x y z] :range 0 :timeout-s 60 :weight 1.2}` | always | none | none; plans with the path planner within the executor's abilities and walks the plan with `steer`; hands over `{:status :arrived\|:refused\|:no-path\|:stuck\|:gave-up\|:failed\|:unsupported :replans}` (`:no-path :reason :abilities :kind`: only a step the executor cannot do leads there; it swims, and walks a partial plan only to its last step out of water), also emitted as `:walk-plan.result` (`:kind` as `:refused-kind`) with `:ms`, `:walked` (blocks of the plans followed), `:walk-ms` (time in `steer`) and, when arrived, `:blocks-per-s` |
@@ -1679,39 +1678,21 @@ A body that stares at its work sees only inside the view cone, so a creeper (sil
 
 ### Live-unverified assumptions
 
-The survival jobs pass against the fake only. What they assume about the real
-server and mineflayer, none of it checked live:
+What the survival jobs assume about the real server and mineflayer that has not been checked live:
 
-- `extinguish` pours a water bucket with `place` at the body's own feet cell. Falsified live (2026-10-03): `place` with a water bucket on air rejects with "Server refused to place water_bucket ... the block is still air", and with a fire block in the feet cell it returned `occupied`; a bucket needs a use-item primitive. Since then `place` uses buckets through `activateItem` and treats fire, grass and snow as free (see the `place` result above); not yet re-checked live.
-- Verified live: placing into the body's own cell is refused by the server ("the block is still air"), so `unstick` pillars with `jumpPlace` instead: in a 3-deep 1x1 pit, count 3 places 3 blocks in about 1.9 s and leaves the body at ground level; with no block it returns `failed`/`no-item` at once, under a roof `failed`/`no-headroom`.
-- `jobs.combat.attack` judges damage by `attack`'s `hurt` (the server's entityHurt) since `health` is never present live; whether a creative player, an `Invulnerable` mob and PvP-off all report `hurt: false` is unchecked.
-- `breathe`, `extinguish` and `unstick` use `moveTo` with range 0 to step
-  into a cell, water included.
-- `dig-in` dig mode picks the roof cell so it has a solid side neighbour (`dig-plan`): the start cell and a 2-deep pit
-  when a side of it is solid, else the ground-layer cell under it and a 3-deep pit (flat ground has nothing beside the
-  start cell; live the roof place gave `no-support` and left the body in an open pit); with neither it does not dig
-  (`dig_in_failed`, `:dig-in-futile` reason `:no-roof-support`). A roof place that still fails ends the job with
-  `dig_in_failed` after three failed rounds, the body left in the pit (open).
-- `onFire` and the sleeping pose are read from metadata indices found through
-  the registry's `metadataKeys` (see Sensing); the fallback indices are guesses.
-- `:hostile-near` needs a visible hostile, but `respond-to-hostile` still picks its targets with `combat/hostiles`
-  without `{:sight ...}`, so once it runs it may choose one behind a wall.
-- Wheat is not food raw and there is no crafting yet, so `get-food` skips it.
-- `make-room`: a tossed stack lands outside the pickup range of the body, so it
-  does not take the stack straight back (the walk-away is the guard);
-  `playerCollect` fires for the body's own ground pick-ups (verified live) and
-  its dropped item is readable (the `picked-up` event is skipped when it is
-  not), but not for `/give` (verified live: 0 `picked-up` events after about
-  150 `/give`s). Items that arrived any way but a pick-up (`/give`, withdrawn
-  from a chest) have no `:picked-up` entry and count as picked up longest ago
-  (recency 0) in the toss and deposit orders.
+- `jobs.combat.attack` judges damage by `attack`'s `hurt` (the server's entityHurt) since `health` is never present
+  live; whether a creative player, an `Invulnerable` mob and PvP-off all report `hurt: false` is unchecked.
+- `onFire` and the sleeping pose are read from metadata indices found through the registry's `metadataKeys` (see
+  Sensing); the fallback indices are guesses.
+- `make-room`: a tossed stack lands outside the body's pickup range, so the body does not take it straight back (the
+  walk-away is the guard). Items that arrived any way but a pick-up (`/give`, withdrawn from a chest) have no
+  `:picked-up` entry and count as picked up longest ago (recency 0) in the toss and deposit orders (`playerCollect`
+  fires for the body's own pick-ups but not for `/give`).
 
 ## Not built (hooks only)
 
-Claims, no-touch regions, flapping counters, the per-body no-progress
-detector, progress events, multi-body, world memory, soft
-pathfinding weights, a reflex pointing at a listed instance (a register entry
-may carry `:instance` later).
+Flapping counters, the per-body no-progress detector, progress events, multi-body, world memory, soft pathfinding
+weights, a reflex pointing at a listed instance (a register entry may carry `:instance` later).
 
 ## Primitives: implementation notes
 
@@ -1772,12 +1753,11 @@ queries and the live tester's courses) and checks the answers recorded in `test/
 after an intended planner change `npm run record:planner-bench` re-records the file and prints which answers changed). Bench: `npx
 shadow-cljs compile planner-bench && npx shadow-cljs release planner-bench-release`, then `node bench-lang/bench.mjs`
 A gap jump over 3 cells above a pit the body cannot jump out of (the floor 2 or more blocks down) carries 0.5 risk
-(`GAP-PIT-RISK`): one that falls short traps the body (live: a crater whose only way out was a corner jump), so a short way round
+(`GAP-PIT-RISK`): one that falls short traps the body, so a short way round
 is taken instead; where the jump is the only way it is still planned.
 A corner slide (a diagonal along one blocked side) whose open side is a hole with lava, fire, powder snow, cobweb, magma or a
 lit campfire under it (within `FREE-FALL`, no floor, water or unloaded cell before it) carries 10 risk (`HAZARD-SLIDE-RISK`):
-the slide carries the body wholly over that hole and it dips in (live: BaseMiner burned on a lava pool rim, card cd97ec8b,
-`test/engine/planner_lava_rim_test.cljs`), so any way round up to about 20 s longer wins; where the slide is the only way (a
+the slide carries the body wholly over that hole and it dips in (`test/engine/planner_lava_rim_test.cljs`), so any way round up to about 20 s longer wins; where the slide is the only way (a
 pocket on the rim) it is still planned. The walker takes a corner step without sprint and slides along the wall as before.
 (dev against :advanced build, see its header). A drop out of or into a tight cell (a doorway on a sill, a ledge beside a
 fence) is judged where the body falls: 5/16 past the edge it walked off (`DROP-INSET`, its 0.31 half-width clear of the
@@ -1786,8 +1766,8 @@ fall of over 0.5 blocks); a jump up one block onto it is allowed (it falls about
 A move into or out of a tight cell is planned only where the executor's straight legs are free in the cell's mask: the
 region's stand point to the crossing, and the crossing to the next region's stand point (`lineFree`). A free region need not
 be convex: the cell of a fence post beside a gap is one U-shaped region (a strip each side of the line, joined along the
-gap) whose stand point lies on one strip, and a crossing on the other strip lies behind the post (live, ProbePen: go-to into
-a pen with a post missing walked head-on into the post beside the gap and stuck). In prismarine-physics the replayed bamboo
+gap) whose stand point lies on one strip, and a crossing on the other strip lies behind the post (go-to into
+a pen with a post missing walked head-on into the post beside the gap). In prismarine-physics the replayed bamboo
 and fence courses stuck the body the same way on 12 of 13 found plans before the check, and arrive on all of them after it
 (`courses_physics_test`); a solid block of offset bamboo (`full-walled`, `target-in-full`), which the body could pass
 only by weaving inside cells, now has no plan.
@@ -1870,9 +1850,7 @@ within a drop: a goal on an island or above a drop is left to the search, which 
 `goal-enclosed`, `none`, no path, `expanded` 0. Otherwise the search goes on as
 before and the late flood (after `floodAfter` expansions, `goalFlood` cells) still covers bigger enclosed areas: a late
 flood that runs out of its budget (without leaking or meeting the start) runs again after 8 times the expansions with 4 times
-the budget (at most `maxNodes`), so the floods cost about half the search and a large sealed region is still proved (live: goals
-on a sealed platform at y 151 needed ~12000 flood nodes and were given up after 50-190 s of `budget` search; now
-`goal-enclosed` after ~15000 expanded). A search that runs out of nodes with its late flood still due floods once more (with
+the budget (at most `maxNodes`), so the floods cost about half the search and a large sealed region is still proved. A search that runs out of nodes with its late flood still due floods once more (with
 `goalFlood`, or no more than it expanded when a late flood already ran; not after a ladder gap or a swim refused for air, whose
 reasons say more), so a goal on a small platform's pen is `goal-enclosed`, not the partial end's one-way drop. The
 flood expands each candidate cell's moves once per search, not once for each flooded neighbour that asks (a flood looks at
@@ -1893,8 +1871,7 @@ one with the least cost plus heuristic to the goal. The early
 pass leaves `stats.flooded` and `expanded` alone and reports its size as `stats.preFlooded`. Because it fires first, a
 goal sealed off by walls says `goal-enclosed` at once (`preFlood: 0` for the old exhausted search). The flood's nodes are the
 search's: one per region of a tight cell (a fence, wall or pane cell has a strip either side of its line, and no move joins
-them), so a pen of fence or wall with no gate is `goal-enclosed` once the late flood runs (live: a gateless fence pen was searched
-over the whole wide box instead, ~25 s a breed round). A cell the body fits in only once something is opened is one node for all
+them), so a pen of fence or wall with no gate is `goal-enclosed` once the late flood runs. A cell the body fits in only once something is opened is one node for all
 its regions.
 
 A step up by walking (a stairs, a slab, a snow layer of 3 or more, a diagonal step up) lifts the body into the slab above its old
@@ -1923,10 +1900,9 @@ without the limits is run: if it finds one,
 the result is `{:status :no-path :reason :abilities :kind :at}`, the kind and cell of its first step the executor refuses (no path within
 abilities; the body does not move). Otherwise `:reason` is the planner's: `:exhausted` (no `:kind`) means every cell the body can
 reach was searched and none is the goal even with every ability, as with a gap of 4 or more cells (wider than any jump), a wall or
-a drop too deep; the walk first goes to the reachable cell nearest the goal (live: 6 blocks to the edge of a 4-wide gap). A plan with a step the executor cannot walk is still refused with `{:status :refused :kind :at :reason}`
+a drop too deep; the walk first goes to the reachable cell nearest the goal. A plan with a step the executor cannot walk is still refused with `{:status :refused :kind :at :reason}`
 The walks search `walk/wide-box` (256 blocks round start and goal, 96 up and down) from the start, not the planner's default box
-(64 and 48) and then the wide one again: a way round can run far past the default box (live: a walled walkway whose way down
-lay 200 blocks along), and A* goes no wider than it must (bench: 26500 expansions against the default box, then 2000 in the
+(64 and 48) and then the wide one again: a way round can run far past the default box, and A* goes no wider than it must (bench: 26500 expansions against the default box, then 2000 in the
 wide one). The walks (go-to's round, `walk-near!`, `walk-to!`) plan with `walk/plan-walk!`:
 each search runs in slices of `walk/chunk-expansions` (1000) expansions (`planner-tuned/create-plan`) with a `setImmediate`
 yield between them, so the body's HTTP API, perception and other jobs run while a long search does; the answer is
@@ -1943,10 +1919,9 @@ step in water; sinking below the leg in water is not off the plan (drifting side
 executor adds nothing. A partial plan is walked only up to its last step out of water, so a walk never ends swimming (a bank too high to
 climb out is `:no-path`). Prismarine-physics courses (`swim_physics_test`): flush-bank crossings 6 wide both ways and 20 wide, a 1-deep
 wade, a current across, a 3-block drop in, up from the bottom and out, a dive to a goal on the bottom. Not yet run live.
-A `:jump` up one cell (straight, or diagonal with both side cells free: not a corner slide; live go-to: a diagonal step-up pressed on the block's corner stuck 3 s, `:stuck :jump`) from the cell before it, with the body at the wall it climbs (its edge within `:wall-gap` 0.05 of the
-step's cell) and its feet below the step's height, holds jump without forward and presses forward once up (live, stair `:dir :up`: forward and
-jump pressed on the wall made the client sink 0.02 into it, the server refused the position and put the body back for 3 s; the first step of a
-stair out of a cut, `stairs_physics_test`, with a check that no tick of the walk is inside the wall). The fake's `steer` lifts a jump made without forward.
+A `:jump` up one cell (straight, or diagonal with both side cells free: not a corner slide) from the cell before it, with the body at the wall it climbs (its edge within `:wall-gap` 0.05 of the
+step's cell) and its feet below the step's height, holds jump without forward and presses forward once up (forward and
+jump pressed on the wall make the client sink 0.02 into it and the server puts the body back; `stairs_physics_test` checks that no tick of the walk is inside the wall). The fake's `steer` lifts a jump made without forward.
 A gap jump (1 to 3 empty cells, landing level or up to one block lower) is jumped from the takeoff edge, by width: over 1 a
 walking jump from 0.2 before the edge, over 2 a sprint jump from 0.4 before (one block down: a walking jump from the edge), over 3 a sprint
 jump from 0.1 before; the body aims at the landing point
@@ -1966,7 +1941,7 @@ stair roof walk with no special case (`stairs_physics_test`, prismarine-physics)
 its end short of the goal) is planned again, at most 5 times (`executor/policy`: every number the executor uses). `moveTo` does not use it; `jobs.movement.go-to`
 plans and walks with it one round at a time, and so does every job that walks with `engine.path.near/walk-near!` (one round: plan, one walk of at most
 60 s, a `:moved` entry; `:there`, `:partial` when it ended more than 1 closer, `:blocked`; `{:doors :shut}` by default, herd, shut-gate and
-lead-to's fence walk pass `:never`). Live (ProbeNight, 2026-10-04, scenarios `live-ProbeNight-exec-*.edn`): flat 30 blocks 6.95 blocks/s against `moveTo` 7.0; steps, a corner slide, an 8-high ladder up and down all arrived; a manual `take` cuts the walk with every control released.
+lead-to's fence walk pass `:never`). A manual `take` cuts the walk with every control released.
 
 Jobs that walk to a target use `walk-near!` (or one `walk-round!`, as `jobs.farm.harvest` does to tell a no-path walk from a blocked one) and so pass shut wooden doors: `attack`/`hunt`, `leash`, `shear`, `unleash`, `give`, `follow`, `pace` and `harvest` (`engine.job-walk-doors-test`: from inside a doored hut each one leaves through the door and shuts it; a chased target is aimed at again each steer, bounded by the job's walk timeout). The raw `moveTo` stays only where the walk is a hop of a few blocks in an open work area (forestry step-off, `make_room` walk-away, `clear_box` step-off, apiary guard `clear-fire!`), an emergency step with no time to plan (`breathe`, `extinguish`, `retreat`), a step into the job's own pit (`dig-in`), or the job's own walk home (`mine`, `unstick`).
 
@@ -2039,19 +2014,6 @@ The tool can only expose events the body emits. Older body builds without a
 whisper listener do not expose incoming whispers; addressed public chat works
 through the existing chat event. Restart a body with the current build when
 upgrading its event support.
-
-Live validation used the isolated `ObserveWaitTest` body on the test server,
-with tool state under `/tmp/observe-wait-live`. Two-second quiet waits returned
-31-byte EDN (32 bytes including the newline). Real addressed public chat and whispers woke about 70–80 ms after
-injection in these samples; public banter remained quiet under `addressed` and
-woke under `all`, while `none` suppressed whispers. A real wheat pickup produced
-a timeout summary, and a running look-around job woke its watcher on completion.
-The test used the primary checkout's existing engine build and concurrent
-whisper-listener changes; this tool change contains no engine modifications.
-The temporary body stopped and its added whitelist entry was removed. Durable
-attention lifecycle, cancellation/replay, bounds and reset behavior are covered
-by simulated API tests; a live failure injection did not create required attention
-because the existing wait primitive normalized the malformed argument.
 
 Use `--watch-action <request-id>` to wake when an explicitly tracked manual world
 operation emits its action completion event. Both watcher flags accept repeated
@@ -2236,14 +2198,8 @@ execute again; never treat an old ID as an unlimited deduplication guarantee.
 Transport uncertainty prints the request ID and asks for a same-ID query/retry;
 it never automatically resubmits with a new ID.
 
-Live validation used an isolated `ObserveJobsTest` body: a repeat look-around
-job ran, a one-shot interrupt completed and woke observe, and the original job
-resumed. Cancellation stopped it. A go-to job without its target produced a
-real parked failure/required attention, then retry and cancel cleared it.
-Replaying the original submit ID created no additional job; the final queue was
-empty. The owned body stopped and its added whitelist entry was removed.
-Unit tests additionally verify saved dedupe across restore, pending uncertainty,
-ledger bounds, lease protection, and failed-interrupt predecessor resumption.
+Unit tests verify saved dedupe across restore, pending uncertainty,
+ledger bounds, lease protection and failed-interrupt predecessor resumption.
 
 Trigger management uses the existing `GET/POST /triggers` API. The external
 command returns compact EDN immediately; the engine owns condition evaluation,
@@ -2289,13 +2245,6 @@ before sending one request. This API does not deduplicate request IDs; the tool
 never automatically retries an uncertain mutation. If confirmation is unknown,
 inspect `show` or `list` before issuing it again, since a repeated put resets
 entry state.
-
-Live validation used an isolated `TriggerToolTest` body. Giving it bread fired
-an inventory condition; mute suppressed future firing without cancelling its
-active round, unmute resumed it, and mute expiry resumed it automatically.
-Ordering, reset, temporary order expiry, built-in removal protection, missing
-home explanations, invalid-condition refusal, and custom removal were verified.
-The owned body stopped and its temporary whitelist entry was removed.
 
 ## Plan and blueprint tools
 
