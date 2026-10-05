@@ -328,7 +328,7 @@
 
 (def settled-dist
   "An animal this close (or closer) to the body is at rest behind it. A live cow on a lead does not move while the body
-  is within about 4 of it and, once it walks, stops 3.2 to 3.7 away, often 1 to 2 off the axis (ProbeHerdB): 3.6 took
+  is within about 4 of it and, once it walks, stops 3.2 to 3.7 away, often 1 to 2 off the axis, so 3.6 took
   such a cow for pinned at the gate. 4.3 keeps a pinned animal one step further (5.3, plus the walk's overshoot) under
   the 6 at which the lead starts to drag it."
   4.3)
