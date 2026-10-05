@@ -105,6 +105,22 @@
             (is (= "oak_sapling" (h/block-at p 3 64 0)) stray)
             (is (= (expect {:cleared 1 :planted 1}) result) stray)))))))
 
+(deftest a-pickaxe-that-breaks-in-the-clearing-dig-says-tool-broke-and-tool-none
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (world {"3,64,0" "stone"} (item "stone_pickaxe" 1)) {"forest" one-cell})]
+          (.override (.-world (:p s)) "dig"
+                     (fn ^:async f [token args impl]
+                       (let [r (await (impl token args))]
+                         (swap! (fake/state (:p s)) assoc :inventory [])
+                         r)))
+          (core/submit! (:eng s) (list job {:plan "forest"}) {})
+          (await (ticks (:eng s) 20))
+          (is (= [[3 64 0]] (digs (:p s))))
+          (is (= 1 (count (h/events-of (:seen s) :tool.broke))))
+          (is (= 1 (count (h/events-of (:seen s) :tool.none)))))))))
+
 (deftest a-bare-cell-over-soil-is-just-planted
   (async done
     (tu/run-async done

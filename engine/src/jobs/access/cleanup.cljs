@@ -179,12 +179,12 @@
         under? (= cell (update (feet-of c) 1 dec))]
     (if (or (nil? e) (blocker (inputs c l [e] (ctx/zones c)) e))
       :continue
-      (let [tool (tools/best-tool (map :name (u/inventory p)) item)]
-        (when (and tool (not= tool (.-held (.self p))))
-          (await (ctx/act c :equip #js {:item tool :dest "hand"})))
+      (do
+        (await (tools/equip-tool! c item {:fast true}))
         (ledger/remember! c (ledger/begin-removal l cell))
         (let [[x y z] cell
-              status (.-status (await (ctx/act c :dig #js {:pos #js {:x x :y y :z z}})))]
+              status (.-status (await (ctx/act c :dig #js {:pos #js {:x x :y y :z z}})))
+              _ (await (tools/note-wear! c))]
           (when under? (await (walk/settle! c)))
           (if (#{"dug" "missing"} status)
             (ctx/update-mem! c assoc :collect true)

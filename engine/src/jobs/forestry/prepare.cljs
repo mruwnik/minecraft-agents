@@ -422,7 +422,8 @@
             (if (not= :ok v)
               (blocked! c cell v)
               (do (await (equip-for! c block))
-                  (let [r (await (ctx/act c :dig (clj->js {:pos target})))]
+                  (let [r (await (ctx/act c :dig (clj->js {:pos target})))
+                        _ (await (tools/note-wear! c))]
                     (case (.-status r)
                       "dug" (on-dug c)
                       "missing" nil

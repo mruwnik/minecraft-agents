@@ -413,3 +413,20 @@
           (await (ticks s eng 10))
           (is (= "dirt" (block p [0 64 0])))
           (is (= 1 (count (of-kind seen :cleanup.declined)))))))))
+
+(deftest a-pickaxe-that-breaks-in-the-dig-says-tool-broke-and-tool-none
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup {:self {:x 3.5 :y 64 :z 0.5} :blocks (merge (floor -2 5) {"0,64,0" "stone"})
+                                                :entries [(entry [0 64 0] :item "stone")]})]
+          (fake/add-item! p "stone_pickaxe" 1)
+          (.override (.-world p) "dig"
+                     (fn ^:async f [token args impl]
+                       (let [r (await (impl token args))]
+                         (swap! (fake/state p) assoc :inventory [])
+                         r)))
+          (core/submit! eng '(recording-parent) {})
+          (await (ticks s eng 30))
+          (is (= 1 (count (of-kind seen :tool.broke))))
+          (is (= 1 (count (of-kind seen :tool.none)))))))))
