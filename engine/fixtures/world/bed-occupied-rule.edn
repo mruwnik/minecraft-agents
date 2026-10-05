@@ -1,0 +1,29 @@
+;; Bed rule (card d9c87329, commit 2d0fa06d): a roofed body at night sleeps in a free bed it sees in its hut and skips a bed
+;; whose block state says occupied (no sleep call, no :bed written, night-unsafe does not hold for it). Zones and a second
+;; sleeping body are not in a fixture: the own-zone refusal and the lying-player case are hand-run.
+;; Needs night: run with --allow-time --time-log <the shared time log>.
+{:defaults
+ {:tags [:night :survival :sleep]
+  :time :night-exclusive
+  :register [{:trigger :night-unsafe}]
+  :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
+           [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]]
+  :body {:at [13.5 0 13.5] :effects [["resistance" 600 4]] :settle-s 8}}
+ :cases
+ [{:name "free-red-bed-slept"
+   :blocks [[:set [10 0 12] "red_bed[facing=east,part=foot]"] [:set [11 0 12] "red_bed[facing=east,part=head]"]]
+   :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 90}]
+   :after [[:body-near [10.5 0 12.5] 6]]
+   :limit-s 100}
+  {:name "free-blue-bed-slept"
+   :blocks [[:set [12 0 10] "blue_bed[facing=south,part=foot]"] [:set [12 0 11] "blue_bed[facing=south,part=head]"]]
+   :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 90}]
+   :after [[:body-near [12.5 0 10.5] 6]]
+   :limit-s 100}
+  {:name "occupied-bed-skipped"
+   :blocks [[:set [10 0 12] "red_bed[facing=east,part=foot,occupied=true]"] [:set [11 0 12] "red_bed[facing=east,part=head,occupied=true]"]]
+   :expect [{:no-event {:source :action :kind :started :data {:name "sleep"}} :for-s 40}
+            {:no-event {:source :job :kind :place.set :data {:name :bed}} :for-s 40}
+            {:no-event {:source :reflex :kind :fired} :for-s 40}]
+   :after [[:body-near [13.5 0 13.5] 1.5]]
+   :limit-s 50}]}
