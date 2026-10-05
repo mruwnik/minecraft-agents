@@ -2,6 +2,7 @@
   (:require [engine.ctx :as ctx]
             [engine.jobs.access :as access]
             [engine.jobs.combat :as combat]
+            [engine.jobs.reach :as reach]
             [engine.jobs.shelter :as sh]
             [engine.jobs.util :as u]
             [jobs.survival.dig-in :as dig-in]))
@@ -28,7 +29,9 @@
   is placed as a last resort (retreat.trespass-last-resort). Once per flight, with at
   least :eat-gap blocks to the nearest hostile and food carried, it eats
   (jobs.survival.eat up to 20) so health can regenerate on the run. Done when
-  no hostile has been within :clear-radius for :cooldown-ms.")
+  no real danger (engine.jobs.reach: one with no walkable way to the body, or a
+  ranged one with no line of fire, is none) has been within :clear-radius for
+  :cooldown-ms.")
 
 (def args
   {:radius {:doc "hostiles within this many blocks start a flight" :default 8}
@@ -308,8 +311,9 @@
         now (ctx/now c)
         fleeing? (some? (:last-seen (ctx/mem c)))
         dead (set (dead-ids c))
-        threat (first (remove #(contains? dead (.-id %)) (combat/hostiles p (if fleeing? (max clear-radius radius) radius)
-                                       {:ranged-radius (if fleeing? (max clear-radius ranged-radius) ranged-radius)})))]
+        threat (first (remove #(contains? dead (.-id %)) (reach/dangers p (if fleeing? (max clear-radius radius) radius)
+                                     {:ranged-radius (if fleeing? (max clear-radius ranged-radius) ranged-radius)}
+                                     {:sight? false})))]
     (cond
       (and (nil? threat) fleeing? (>= (- now (:last-seen (ctx/mem c))) cooldown-ms)) :done
       (and (nil? threat) fleeing?) :continue
