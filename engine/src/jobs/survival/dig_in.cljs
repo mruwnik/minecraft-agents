@@ -629,7 +629,8 @@
 (defn ^:async climb!
   "One stair attempt out of a pit (jobs.access.stair :up, a child of the caller): to the :start height, or with no
   :start one step at a time until nothing solid is within sh/default-roof-height above, at most max-climb steps. A
-  stopped stair books its reason and the next heading is tried."
+  stopped stair books its reason and the next heading is tried; so does a declined one (it lacks a tool or a slot:
+  booked :declined) instead of waiting, because the caller (the night-shelter) must end failed, not wait, when trapped."
   [c {:keys [start]} toward]
   (let [{:keys [i order tries climbed] :or {i 0 tries [] climbed 0}} (leave-mem c)
         order (or order (heading-order (sh/feet (:primitives c)) toward))
@@ -649,6 +650,10 @@
             res (when (= :done r) (ctx/child-result c slot))]
         (when (and res (:ignore-zones? attempt)) (note-trespass! c (:dug res)))
         (cond
+          (= :declined r) (do (update-leave! c #(-> % (assoc :i (inc i))
+                                                    (update :tries (fnil conj [])
+                                                            {:reason :declined :heading (:heading attempt)})))
+                              :continue)
           (nil? res) :continue
           (= :done (:status res)) (do (update-leave! c update :climbed (fnil + 0) (:steps res 0)) :continue)
           :else (do (update-leave! c #(-> % (assoc :i (inc i))

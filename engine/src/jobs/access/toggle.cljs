@@ -83,7 +83,7 @@
   parent reads the result."
   [c]
   (let [{:keys [pos state error]} (parse (:args c))]
-    (if (or error (seq (:slots c)))
+    (if error
       true
       (let [b (.blockAt (:primitives c) (clj->js pos))
             props (some-> b click/props-of)]

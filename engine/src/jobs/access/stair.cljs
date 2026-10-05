@@ -226,7 +226,7 @@
   "True, or a wait for what the next dig lacks (see need). Only for a stair that is itself listed: as a child (leave-tunnel,
   tunnel, dig-in) it runs and stops with the same reason in its result, which its parent reads."
   [c]
-  (if-let [lack (and (empty? (:slots c)) (need c))] (ctx/wait c lack) true))
+  (if-let [lack (need c)] (ctx/wait c lack) true))
 
 (defn ^:async dig!
   "Equip the best tool, check the cell again, write the intent and dig it. :continue, or a stop map."

@@ -5,6 +5,8 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.job-api :as job-api]
+            [engine.job-api :as job-api]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.access.toggle :as toggle]))
@@ -26,7 +28,7 @@
           (recur (inc i))))))
 
 (defn ^:async child-outcome
-  "Run job with args as the child of a recording parent until the list is empty, at most n ticks; the child's result."
+  "Run job with args as the child of a recording parent until the list is empty, at most n ticks; the child's result, or {:waiting w} when the child declined and its parent waits."
   [eng job args n]
   (let [out (atom :not-done)
         parent {:check (constantly true)
@@ -35,9 +37,11 @@
                            (when (= :done r) (reset! out (ctx/child-result c :kid)))
                            r))}
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
-    (core/submit! eng '(recording-parent) {})
-    (await (run-until-empty eng n))
-    @out))
+    (let [id (core/submit! eng '(recording-parent) {})]
+      (await (run-until-empty eng n))
+      (if-let [w (:waiting (job-api/summary eng id))]
+        {:waiting w}
+        @out))))
 
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
 (defn props [p pos] (js->clj (.-properties (.blockAt p (clj->js pos))) :keywordize-keys true))
@@ -152,7 +156,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [result p]} (await (run (assoc (world "oak_door" {:open false}) :unloaded ["3,64,0"]) {:pos at :state :open}))]
-          (is (= {:status :declined :reason :not-loaded} (head result [:status :reason])))
+          (is (= :not-loaded (get-in result [:waiting :reason])) "the child declines: its parent waits")
           (is (empty? (calls p "useOn"))))))))
 
 (deftest the-body-standing-in-a-door-is-not-shut-in-but-may-open-it
@@ -165,8 +169,8 @@
                                    (assoc-in [:blocks "3,65,0"] "oak_door")
                                    (assoc-in [:states "3,65,0"] {:open true}))
                                {:pos (assoc at :y 65) :state :closed}))]
-          (is (= {:status :declined :reason :standing-in} (head (:result shut) [:status :reason])))
-          (is (= {:status :declined :reason :standing-in} (head (:result upper) [:status :reason])) "the door's upper half")
+          (is (= :standing-in (get-in shut [:result :waiting :reason])))
+          (is (= :standing-in (get-in upper [:result :waiting :reason])) "the door's upper half")
           (is (empty? (calls (:p shut) "useOn")))
           (is (= :changed (:reason (:result open)))))))))
 
@@ -182,7 +186,7 @@
                     (assoc-in [:blocks "3,66,0"] "oak_door")
                     (assoc-in [:states "3,66,0"] {:open true :half "upper"}))
               {:keys [result p]} (await (run w {:pos (assoc at :y 66) :state :closed}))]
-          (is (= {:status :declined :reason :standing-in} (head result [:status :reason])))
+          (is (= :standing-in (get-in result [:waiting :reason])))
           (is (empty? (calls p "useOn"))))))))
 
 ;; ------------------------------------------------------------------ gave up after one click

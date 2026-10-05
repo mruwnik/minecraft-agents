@@ -5,6 +5,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.job-api :as job-api]
             [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.takeover :as takeover]
@@ -174,8 +175,8 @@
                           :triggers triggers/all :dir (or dir (tu/tmp-dir)) :now #(deref clock) :world w
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     (prep p)
-    (when-not (:p opts) (core/submit! eng '(recording-parent) {}))
-    {:eng eng :p p :clock clock :seen seen :out out}))
+    (let [id (when-not (:p opts) (core/submit! eng '(recording-parent) {}))]
+      {:eng eng :p p :clock clock :seen seen :out out :id id})))
 
 (defn ^:async tick-out! [{:keys [eng clock] :as s}]
   (loop [i 0]
@@ -392,6 +393,17 @@
             (is (= n (count l)) (str keep?))
             (is (every? #(and (= :placed (:state %)) (= :tunnel-torch (:purpose %))) l) (str keep?))
             (is (= (set (map :cell l)) (set (when-not keep? (map :cell (:torches @out))))) (str keep?))))))))
+
+(deftest no-pickaxe-waits-with-the-stairs-reason-and-digs-nothing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng id out p seen]} (await (tunnel! {:blocks eight-down :inventory []} {:target [6 57 0]} (fn [_])))
+              w (:waiting (job-api/summary eng id))]
+          (is (= :not-done @out) "the stair child declined: no result")
+          (is (= :no-tool (:reason w)))
+          (is (empty? (digs p)))
+          (is (= 1 (count (filter #(= :waiting (:kind %)) @seen))) "told once"))))))
 
 (deftest no-torches-digs-on-and-books-every-site-unlit-with-one-warn
   (async done

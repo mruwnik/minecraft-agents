@@ -286,7 +286,8 @@
 
 (defn ^:async stair-part!
   "One round of the stair child over the segment from line index k, also its last one at the segment's end (it hands
-  over what it dug): :continue, or a stop map when the stair stopped. :stair-done once the body stands at the stair's
+  over what it dug): :continue, :declined when the stair declined (the wait, e.g. :no-tool, reaches this job's
+  job.waiting), or a stop map when the stair stopped. :stair-done once the body stands at the stair's
   end."
   [c {:keys [heading dir] :as plan} k]
   (let [cells (line-cells plan)
@@ -294,7 +295,7 @@
                                  {:dir dir :heading heading :y ((cells (segment-end plan k)) 1)
                                   :accept (set (:accept (:args c))) :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (if (not= :done r)
-      :continue
+      (if (= :declined r) :declined :continue)
       (let [res (ctx/child-result c :stair)
             done? (= :done (:status res))]
         (ctx/update-mem! c #(-> % (update :dug (fnil into []) (:dug res))
@@ -428,12 +429,13 @@
         keep? (:keep (:args c))
         r (if keep?
             (await (walk-to! c :out (:entry plan)))
-            (if (= :done (await (ctx/call-child c :out 'jobs.access.leave-tunnel
-                                           {:tunnel way-out :ignore-zones? (boolean (:ignore-zones? (:args c)))})))
-              (ctx/child-result c :out)
-              :continue))]
+            (let [k (await (ctx/call-child c :out 'jobs.access.leave-tunnel
+                                           {:tunnel way-out :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+              (cond (= :done k) (ctx/child-result c :out)
+                    (= :declined k) :declined
+                    :else :continue)))]
     (cond
-      (= :continue r) :continue
+      (#{:continue :declined} r) r
       keep? (finish! c (:reason stop) (assoc (dissoc stop :reason) :out (= (:entry plan) (feet-of c)) :walk-out r))
       :else (finish! c (:reason stop) (assoc (dissoc stop :reason) :out (= (:entry plan) (feet-of c)) :leave r)))))
 
@@ -468,6 +470,6 @@
       (:stop m) (await (retreat! c))
       :else (let [r (await (work! c))]
               (cond
-                (= :continue r) :continue
+                (#{:continue :declined} r) r
                 (= :reached r) (finish! c :reached {})
                 :else (stop! c r))))))

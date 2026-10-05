@@ -450,7 +450,7 @@
   (when (= :open state) (hold-gate! c))
   (let [r (await (ctx/call-child c :gate 'jobs.access.toggle {:pos (:gate (ctx/mem c)) :state state :reach reach}))]
     (cond
-      (not= :done r) :continue
+      (not= :done r) (if (= :declined r) :declined :continue)
       (= :done (:status (ctx/child-result c :gate)))
       (do (when (= :closed state) (drop-gate! c))
           (set-phase! c next then))

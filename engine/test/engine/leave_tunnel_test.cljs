@@ -6,6 +6,7 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.fake :as fake]
+            [engine.job-api :as job-api]
             [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.test-util :as tu]
@@ -113,10 +114,15 @@
         eng (core/create {:primitives p' :jobs (assoc registry/jobs 'recording-parent parent)
                           :triggers triggers/all :dir (or dir (tu/tmp-dir)) :now #(deref clock) :world w
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    (when-not p
-      (keep-body-put! p')
-      (core/submit! eng '(recording-parent) {}))
-    {:eng eng :p p' :clock clock :seen seen :tun tun :out out}))
+    (let [id (when-not p
+               (keep-body-put! p')
+               (core/submit! eng '(recording-parent) {}))]
+      {:eng eng :p p' :clock clock :seen seen :tun tun :out out :id id})))
+
+(defn waiting
+  "The reason the recording parent waits with (job.waiting), or nil."
+  [{:keys [eng id]}]
+  (:waiting (job-api/summary eng id)))
 
 (defn ^:async ticks-while! [{:keys [eng clock]} more?]
   (loop [i 0]
@@ -247,18 +253,17 @@
           (is (>= (second (feet p)) 65) "the body stands at the entry's height or above")
           (is (= 0 (count (events-of s :leave-tunnel.stopped)))))))))
 
-(deftest a-body-that-cannot-dig-out-stops-with-every-heading-named
+(deftest a-body-without-a-pickaxe-cannot-dig-out-and-waits-for-one
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out] :as s} (await (run-out! (setup {:blocks eight-down :inventory (inventory)}
-                                                        {:target [6 57 0]} {} :between drop-pickaxe!)))
-              res @out]
-          (is (= :stopped (:status res)))
-          (is (= :walk-failed (:reason res)))
-          (is (= 4 (count (:escape res))) "the four headings, zones respected, none left to override")
+                                                        {:target [6 57 0]} {} :between drop-pickaxe!)))]
+          (is (= :not-done @out) "no result: the escape's stair declined")
+          (is (= :no-tool (:reason (waiting s))) "the parent waits with the stair's reason")
+          (is (= "pickaxe" (:tool (waiting s))))
           (is (= 0 (count (events-of s :leave-tunnel.escape))))
-          (is (= 1 (count (events-of s :leave-tunnel.stopped)))))))))
+          (is (= 0 (count (events-of s :leave-tunnel.stopped)))))))))
 
 (deftest a-tunnel-result-without-a-line-is-bad-args
   (async done

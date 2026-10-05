@@ -144,7 +144,8 @@
 
 (defn ^:async escape!
   "One attempt of the way out: a stair up to the entry's height along the next heading; done, the body is out and the
-  rounds go on; stopped, the next heading; none left, the walk failure stands."
+  rounds go on; stopped, the next heading; none left, the walk failure stands; the stair declined (:declined: its
+  wait, e.g. :no-tool, reaches this job's job.waiting)."
   [c]
   (let [{:keys [tunnel]} (:args c)
         ignore? (boolean (:ignore-zones? (:args c)))
@@ -161,6 +162,7 @@
                                       :ignore-zones? (:ignore-zones? attempt)}))
             res (when (= :done r) (ctx/child-result c (keyword (str "escape-" i))))]
         (cond
+          (= :declined r) :declined
           (nil? res) :continue
           (= :done (:status res))
           (do (ctx/emit! c :leave-tunnel.escape :info {:at (feet-of c) :heading (:heading attempt) :ignore-zones? (:ignore-zones? attempt)

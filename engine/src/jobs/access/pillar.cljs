@@ -143,7 +143,7 @@
         step (next-step (merge (access-inputs c)
                                {:feet feet :base (or (:base (ctx/mem c)) feet) :height height :block-at block-at
                                 :carried (carried p) :item item :ledger (ledger/cells l)}))]
-    (if (and (empty? (:slots c)) (= :too-few-blocks (:reason step)))
+    (if (= :too-few-blocks (:reason step))
       (ctx/wait c {:reason :too-few-blocks :short (:short step) :item (or item default-items)})
       true)))
 

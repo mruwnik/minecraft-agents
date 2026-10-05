@@ -5,6 +5,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.job-api :as job-api]
             [engine.takeover :as takeover]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
@@ -159,8 +160,13 @@
                           :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock) :world w
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     (prep p)
-    (core/submit! eng '(recording-parent) {})
-    {:eng eng :p p :clock clock :seen seen :out out}))
+    (let [id (core/submit! eng '(recording-parent) {})]
+      {:eng eng :p p :clock clock :seen seen :out out :id id})))
+
+(defn waiting
+  "The reason the parent of the stair child waits with (job.waiting), or nil."
+  [{:keys [eng id]}]
+  (:waiting (job-api/summary eng id)))
 
 (defn ^:async tick-out! [{:keys [eng clock] :as s}]
   (loop [i 0]
@@ -359,9 +365,9 @@
     (tu/run-async done
       (fn ^:async t []
         (let [full (into pick (repeat 35 {:name "dirt" :count 64}))
-              {:keys [out p]} (await (stair! {:blocks ground :inventory full} east (fn [_])))]
-          (is (= :inventory-full (:reason @out)))
-          (is (= [1 64 0] (:cell @out)))
+              {:keys [out p] :as s} (await (stair! {:blocks ground :inventory full} east (fn [_])))]
+          (is (= :not-done @out) "the child declines: its parent waits")
+          (is (= :no-free-slot (:reason (waiting s))))
           (is (empty? (digs p))))))))
 
 (deftest a-stack-with-room-is-room
@@ -376,8 +382,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p]} (await (stair! {:blocks ground :inventory []} east (fn [_])))]
-          (is (= :no-tool (:reason @out)))
+        (let [{:keys [out p] :as s} (await (stair! {:blocks ground :inventory []} east (fn [_])))]
+          (is (= :not-done @out) "the child declines: its parent waits")
+          (is (= :no-tool (:reason (waiting s))))
+          (is (= "pickaxe" (:tool (waiting s))))
           (is (empty? (digs p))))))))
 
 (deftest bad-args-end-at-once
