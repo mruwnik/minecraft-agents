@@ -1,0 +1,43 @@
+;; jobs.farm.plant box mode (cards 88da0ba0, ee5eb5b4): a sown cell is walked over (crops have no collision), one run
+;; sows one crop (the first pick is kept while carried), no seed ends with :no-seed, a field inside another plan's
+;; footprint stays bare. Water beside the farmland (floor y -1 is the ground layer).
+{:defaults
+ {:tags [:farm :plant :jobs]
+  :time :any
+  :body {:at [10.5 0 14.5] :effects [["resistance" 600 4]]}}
+ :cases
+ [{:name "sow-wheat-row-walks-over-sown-cells"
+   :blocks [[:fill [10 -1 16] [21 -1 16] "farmland[moisture=7]"] [:fill [10 -1 17] [21 -1 17] "water"]]
+   :body {:inventory [["wheat_seeds" 30]]}
+   :act [[:job (jobs.farm.plant {:box {:min #xyz [10 -1 16] :max #xyz [21 -1 16]}})]]
+   :expect [{:event {:source :job :kind :plant.done :data {:planted 12 :reason :done}} :within-s 90 :of-job true}]
+   :after [[:block [10 0 16] "wheat"] [:block [21 0 16] "wheat"] [:item "wheat_seeds" 18]]}
+  {:name "one-run-one-crop-first-pick-kept"
+   :blocks [[:fill [10 -1 16] [21 -1 16] "farmland[moisture=7]"] [:fill [10 -1 17] [21 -1 17] "water"]]
+   :body {:inventory [["wheat_seeds" 7] ["carrot" 6]]}
+   :act [[:job (jobs.farm.plant {:box {:min #xyz [10 -1 16] :max #xyz [21 -1 16]}})]]
+   :expect [{:event {:source :job :kind :plant.done :data {:planted 12 :reason :done}} :within-s 90 :of-job true}]
+   :after [[:block [16 0 16] "wheat"] [:block [17 0 16] "carrots"] [:block [21 0 16] "carrots"]
+           [:item "wheat_seeds" 0] [:item "carrot" 1]]}
+  {:name "seed-arg-picks-that-crop"
+   :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -1 17] [13 -1 17] "water"]]
+   :body {:inventory [["carrot" 20] ["wheat_seeds" 5]]}
+   :act [[:job (jobs.farm.plant {:box {:min #xyz [10 -1 16] :max #xyz [13 -1 16]} :seed "wheat_seeds"})]]
+   :expect [{:event {:source :job :kind :plant.done :data {:planted 4 :reason :done}} :within-s 60 :of-job true}]
+   :after [[:block [10 0 16] "wheat"] [:block [13 0 16] "wheat"] [:item "carrot" 20]]}
+  {:name "no-seed-does-not-sow"
+   :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -1 17] [13 -1 17] "water"]]
+   :act [[:job (jobs.farm.plant {:box {:min #xyz [10 -1 16] :max #xyz [13 -1 16]}})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :not-ready}} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind :plant.done :data {:planted [:>= 1]}} :for-s 20}]
+   :after [[:block [10 0 16] "air"] [:block [13 0 16] "air"]]}
+  {:name "field-in-a-plan-footprint-stays-bare"
+   :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -1 17] [13 -1 17] "water"]]
+   :plans [{:id "other"
+            :parts [{:id "field" :cells [#at [10 0 16] #at [11 0 16] #at [12 0 16] #at [13 0 16]] :want [:any "stone"]}]}]
+   :body {:inventory [["wheat_seeds" 10]]}
+   :act [[:job (jobs.farm.plant {:box {:min #xyz [10 -1 16] :max #xyz [13 -1 16]}})]]
+   :expect [{:event {:source :job :kind :plant.declined :data {:reason :refused}} :within-s 20 :of-job true}
+            {:event {:source :job :kind :waiting :data {:reason :refused}} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind :plant.done :data {:planted [:>= 1]}} :for-s 20}]
+   :after [[:block [10 0 16] "air"] [:item "wheat_seeds" 10]]}]}
