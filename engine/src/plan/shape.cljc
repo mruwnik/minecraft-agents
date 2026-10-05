@@ -26,9 +26,9 @@
   (get-in plan [:metadata :by]))
 
 (defn with-author
-  "The plan with :metadata :by set to by (the plan tools stamp the actor of every write; the engine reads it back)."
+  "The plan with :metadata :by set to by when it names no maker yet; an existing maker is kept (the plan tools stamp the first writer; the engine reads it back)."
   [plan by]
-  (assoc-in plan [:metadata :by] by))
+  (cond-> plan (nil? (author plan)) (assoc-in [:metadata :by] by)))
 
 (def where-keys [:box :outline :cells])
 (def area-part-keys #{:id :box :outline :cells :want :note})
