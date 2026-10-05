@@ -1,5 +1,7 @@
 ;; Night cases. dig-in walls a carried-block refuge on open ground (hand-tested in 0d350ed0: sealed, every cell solid);
 ;; wake (card 8c1ed3ad): the body sleeps in a bed, the time is set to day, it gets out of bed and walks off.
+;; cut-sleep-at-night (card 8c1ed3ad): the body sleeps at night, a zombie comes, the hostile reflex cuts the sleep
+;; (the cleanup calls bot.wake()), the body is out of bed and a go-to completes.
 ;; Both need night: run them with --allow-time --time-log <the shared time log>. Torches keep the plot lit.
 {:defaults
  {:tags [:night :survival]
@@ -27,4 +29,20 @@
    ;; a top-level go-to (chain of one): the sleep job's own walk to the bed is a go-to child
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"} :context {:chain [[:any]]}}
              :within-s 120 :of-job true}]
+   :after [[:body-near [8.5 0 16.5] 1.5]]}
+  {:name "cut-sleep-at-night-and-walk-off"
+   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+               :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+   :blocks [[:set [20 0 16] "red_bed[facing=east,part=foot]"] [:set [21 0 16] "red_bed[facing=east,part=head]"]]
+   :act [[:job (jobs.survival.sleep {:bed #at [20 0 16]})]
+         [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 60]
+         [:wait-s 3]
+         [:summon "zombie" [27.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:await {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} 30]
+         [:wait-s 8]
+         [:rcon "kill @e[type=zombie,tag=wt,x=$X,y=$Y,z=$Z,distance=..40]"]
+         [:wait-s 2]
+         [:job (jobs.movement.go-to {:pos #xyz [8 0 16] :range 0})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"} :context {:chain [[:any]]}}
+             :within-s 150 :of-job true}]
    :after [[:body-near [8.5 0 16.5] 1.5]]}]}
