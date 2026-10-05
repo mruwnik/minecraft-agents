@@ -1,0 +1,2 @@
+;; ProbeHostile live cases for the hostile trigger (a8e10fa6) and cornered follow-ups (86a11353): hostile-near registered, nothing queued
+{:register [{:trigger :hostile-near :args {:radius 8}}] :queue []}
