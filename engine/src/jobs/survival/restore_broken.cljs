@@ -71,6 +71,14 @@
       (boolean (some #(and (reach/walkable-way? p here (at %))
                            (not (reach/walkable-way? p here (at %) #{cell}))) others)))))
 
+(defn seals-body?
+  "Whether putting back the dug block of e would shut the body itself in: it has room to walk now and would not with
+  the cell solid (its doorway, its stair)."
+  [c {:keys [cell action]}]
+  (and (= :dig action)
+       (let [p (:primitives c)]
+         (and (not (reach/enclosed? p)) (reach/enclosed? p #{(vec cell)})))))
+
 (defn check [c] (boolean (seq (tidy/entries c))))
 
 (defn unsafe?
@@ -158,5 +166,5 @@
                       :continue)
       (tidy/unreachable? (:primitives c) e (:reach a)) (do (skip! c e :unreachable) :continue)
       (>= (:tries e) tidy/max-tries) (do (skip! c e :gave-up) :continue)
-      (seals-others? c e waiting) (do (skip! c e :seals) :continue)
+      (or (seals-body? c e) (seals-others? c e waiting)) (do (skip! c e :seals) :continue)
       :else (await (restore-one! c e (:reach a))))))

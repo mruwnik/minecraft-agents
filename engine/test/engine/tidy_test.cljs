@@ -447,6 +447,19 @@
               "one warn naming both")
           (is (= 2 (count (tidy-entries eng))) "both entries wait"))))))
 
+(deftest restore-keeps-the-doorway-that-is-the-bodys-only-way-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (assoc-in (assoc with-hitbox :floor [-25 -25 25 25] :blocks (dissoc walled-cube "2,64,0" "2,65,0")) [:self :pos] [0 64 0])
+              {:keys [eng p seen]} (restore! world [(zs/whole-zone "Miles")] [(dug-cell [2 64 0])])]
+          (is (not (reach/enclosed? p)) "the hut has a doorway")
+          (is (reach/enclosed? p #{[2 64 0]}) "filling it would shut the body in")
+          (await (zs/run-until-empty eng 30))
+          (is (= [] (zs/calls p "place")) "the doorway is not filled")
+          (is (= 1 (count (tidy-entries eng))) "kept for when the body is out")
+          (is (= [[{:cell [2 64 0] :was "stone" :why :seals}]] (mapv :cells (zs/trespass seen :tidy.not-restored)))))))))
+
 (deftest a-sealed-body-restores-the-cell-it-can-reach
   (async done
     (tu/run-async done

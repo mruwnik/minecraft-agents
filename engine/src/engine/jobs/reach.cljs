@@ -401,13 +401,18 @@
 
 (defn enclosed?
   "Whether the body is shut in: it can walk to fewer than room-cells cells (one step up, up to three down, water swum,
-  wooden doors opened). A pit or sealed room is; open ground or a hut with a door is not. False with no body position."
-  [p]
-  (if (some-> (.self p) .-pos)
-    (let [kind-at (lookup p body-kind-of)
-          {:keys [x y z]} (sh/feet p)]
-      (= :closed (flood (partial forward kind-at) [x y z] room-cells)))
-    false))
+  wooden doors opened). A pit or sealed room is; open ground or a hut with a door is not. False with no body position.
+  solid: a set of cells [x y z] treated as solid blocks (what if they were filled)."
+  ([p] (enclosed? p #{}))
+  ([p solid]
+   (if (some-> (.self p) .-pos)
+     (let [base (lookup p body-kind-of)
+           kind-at (if (empty? solid)
+                     base
+                     (fn [x y z] (if (contains? solid [x y z]) :solid (base x y z))))
+           {:keys [x y z]} (sh/feet p)]
+       (= :closed (flood (partial forward kind-at) [x y z] room-cells)))
+     false)))
 
 (def arrow-passes
   "Blocks, besides shelter's non-solid and walk-through ones, that an arrow flies through: plants, torches, ladders,
