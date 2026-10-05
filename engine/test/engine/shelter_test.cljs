@@ -720,3 +720,26 @@
                                  (calls p "place")))
                   2)
               "each occupied cell is tried at most once"))))))
+
+(deftest dig-in-clears-a-passable-occupied-cell-and-seals-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [passable ["torch" "oak_sapling"]]
+          (let [{:keys [eng p]} (setup {:time night :inventory dirt-stack
+                                        :blocks (assoc floor "1,64,0" passable "1,65,0" passable)})]
+            (core/submit! eng '(jobs.survival.dig-in) {})
+            (is (<= (await (run-until-empty eng 10)) 8) (str passable ": the job ends"))
+            (is (= [] (:list (core/state eng))))
+            (is (= "dirt" (.-name (.blockAt p (tu/pos 1 64 0)))) (str passable " at feet height is walled, not left a hole"))
+            (is (= "dirt" (.-name (.blockAt p (tu/pos 1 65 0)))) (str passable " at head height is walled"))))))))
+
+(deftest dig-in-ends-when-a-passable-cell-cannot-be-cleared
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:time night :inventory dirt-stack :blocks (assoc floor "1,64,0" "torch")})]
+          (.override (.-world p) "dig" (fn ^:async f [_ _ _] #js {:status "unreachable"}))
+          (core/submit! eng '(jobs.survival.dig-in) {})
+          (is (<= (await (run-until-empty eng 12)) 10) "the job still ends")
+          (is (= [] (:list (core/state eng)))))))))

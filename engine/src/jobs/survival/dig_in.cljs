@@ -36,6 +36,10 @@
   after three failures with a dig_in_failed warn. The mode is the first of walls (when enough blocks are carried)
   and dig whose cells are all permitted by the zone rules; when every way is in another's zone or claim it takes the
   first anyway, as a last resort, with one dig-in.trespass-last-resort warn (a missing zone list changes nothing).
+  A cell the place primitive reports occupied counts as sealed only when
+  the block fills it (leaves); a block a mob walks through (torch, sapling,
+  cobweb) is dug out once and placed again, and a cell that is occupied
+  again, or whose dig fails, is given up on, so the job always ends.
   Memory: writes :shelter and :dig-in-futile; reads :dig-in-futile.")
 
 (def building-blocks
@@ -103,22 +107,43 @@
         side (or both (first feet-placed))]
     (when side [(at side 0) (at side 1)])))
 
+(defn full-cube? [c cell]
+  (boolean (some-> (.blockAt (:primitives c) (clj->js cell)) .-fullCube)))
+
 (defn ^:async place-all!
   "Place item-picked blocks at cells in order. Resolves to :ok, or the first
-  status that is not placed or occupied (no-item when none is carried)."
+  status that is not placed or occupied (no-item when none is carried). A cell
+  reported occupied by a block that fills it (its :fullCube) is sealed already
+  and remembered in :occupied. One a mob walks through (a torch, a sapling, a
+  cobweb) is dug out once (a last resort, via tidy) and placed again; if that
+  second try is occupied too, or the dig fails, the cell is remembered in
+  :occupied so it is never tried a third time."
   [c blocks cells]
   (loop [cells cells]
-    (let [item (pick c blocks)]
+    (let [item (pick c blocks)
+          cell (first cells)]
       (cond
         (empty? cells) :ok
         (nil? item) "no-item"
-        :else (let [r (await (tidy/place! c (first cells) item true))
+        :else (let [r (await (tidy/place! c cell item true))
                     status (.-status r)]
-                (if (#{"placed" "occupied"} status)
-                  (do (when (= "placed" status) (ctx/update-mem! c update :placed (fnil conj #{}) (first cells)))
-                      (when (= "occupied" status) (ctx/update-mem! c update :occupied (fnil conj #{}) (first cells)))
+                (cond
+                  (= "placed" status)
+                  (do (ctx/update-mem! c update :placed (fnil conj #{}) cell)
                       (recur (rest cells)))
-                  status))))))
+
+                  (not= "occupied" status) status
+
+                  (or (full-cube? c cell) (contains? (:cleared (ctx/mem c) #{}) cell))
+                  (do (ctx/update-mem! c update :occupied (fnil conj #{}) cell)
+                      (recur (rest cells)))
+
+                  :else
+                  (let [d (await (tidy/dig! c cell true))]
+                    (ctx/update-mem! c update :cleared (fnil conj #{}) cell)
+                    (when (not= "dug" (.-status d))
+                      (ctx/update-mem! c update :occupied (fnil conj #{}) cell))
+                    (recur (if (= "dug" (.-status d)) cells (rest cells))))))))))
 
 (defn ^:async walls-round [c]
   (let [{:keys [blocks max-places roof-height]} (:args c)
