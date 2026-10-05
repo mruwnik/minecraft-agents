@@ -87,6 +87,18 @@
                :output-dir "out/rcon-tools-js"
                ;; :simple keeps property names, so the node API calls need no externs
                :compiler-options {:optimizations :simple :infer-externs false}}
+  ;; tools/world-test.mjs: the world-fixture runner (world-test.runner), one ahead-of-time compiled file.
+  :world-test {:target :node-library
+               :exports {:main world-test.runner/main}
+               :output-to "out/world-test.cjs"
+               :output-dir "out/world-test-js"
+               :compiler-options {:optimizations :simple :infer-externs false}}
+  ;; Its unit tests alone (the dashboard :test build compiles every dashboard test): node out/world-test-unit.cjs
+  :world-test-unit {:target :node-test
+                    :output-to "out/world-test-unit.cjs"
+                    :output-dir "out/world-test-unit"
+                    :ns-regexp "^world-test\\..*-test$"
+                    :compiler-options {:infer-externs false}}
   ;; The browser viewer's cljs (tools/view/web imports cljs/viewer.mjs): built with `shadow-cljs release viewer`, one file.
   :viewer {:target :esm
            :output-dir "../tools/view/web/cljs"

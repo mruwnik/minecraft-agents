@@ -1,0 +1,28 @@
+;; jobs.blocks.dig and jobs.blocks.place (card 3e96747a, hand-tested in 7cac937b): an idle body, jobs submitted.
+{:defaults
+ {:tags [:blocks :jobs]
+  :body {:at [16.5 0 16.5]}}
+ :cases
+ [{:name "dig-near-collects"
+   :blocks [[:set [18 0 16] "stone"]]
+   :body {:inventory [["iron_pickaxe" 1]]}
+   :act [[:job (jobs.blocks.dig {:pos #at [18 0 16]})]]
+   :expect [{:event {:source :job :kind :blocks.dig.done :data {:reason :dug}} :within-s 60 :of-job true}]
+   :after [[:block [18 0 16] "air"] [:item "cobblestone" [:>= 1]]]}
+  {:name "dig-far-walks-and-collects"
+   :blocks [[:set [26 0 16] "stone"]]
+   :body {:inventory [["iron_pickaxe" 1]]}
+   :act [[:job (jobs.blocks.dig {:pos #at [26 0 16]})]]
+   :expect [{:event {:source :job :kind :blocks.dig.done :data {:reason :dug}} :within-s 90 :of-job true}]
+   :after [[:block [26 0 16] "air"] [:item "cobblestone" [:>= 1]]]}
+  {:name "dig-without-pickaxe-waits"
+   :blocks [[:set [18 0 16] "stone"]]
+   :act [[:job (jobs.blocks.dig {:pos #at [18 0 16]})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-tool}} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind :blocks.dig.done} :for-s 20}]
+   :after [[:block [18 0 16] "stone"]]}
+  {:name "place-cobblestone"
+   :body {:inventory [["cobblestone" 4]]}
+   :act [[:job (jobs.blocks.place {:pos #at [18 0 18] :item "cobblestone"})]]
+   :expect [{:event {:source :job :kind :blocks.place.done} :within-s 60 :of-job true}]
+   :after [[:block [18 0 18] "cobblestone"] [:item "cobblestone" 3]]}]}

@@ -1,0 +1,21 @@
+;; jobs.survival.recover-drops weighs the pile's value against the trip (card 22cf6592, hand-tested in a68e3e29).
+;; The body dies at [26 0 26] (an RCON kill) and respawns at its spawn point [4 0 4], about 31 blocks away.
+{:defaults
+ {:tags [:survival :death :jobs]
+  :body {:at [26.5 0 26.5] :spawnpoint [4 0 4]}
+  :act [[:wait-s 1]
+        [:kill-body]
+        [:await {:source :body :kind :respawned} 30]
+        [:wait-s 4]
+        [:job (jobs.survival.recover-drops)]]
+  :limit-s 150}
+ :cases
+ [{:name "valuable-pile-fetched"
+   :body {:inventory [["raw_iron" 24] ["cobblestone" 64] ["cobblestone" 36]]}
+   :expect [{:event {:source :job :kind :recover-drops.decided :data {:decision :collected}} :within-s 120 :of-job true}]
+   :after [[:item "raw_iron" 24]]}
+  {:name "three-dirt-skipped"
+   :body {:inventory [["dirt" 3]]}
+   :expect [{:event {:source :job :kind :recover-drops.decided :data {:decision :skip}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :recover-drops.fetching} :for-s 40 :until {:source :job :kind :recover-drops.decided}}]
+   :after [[:item "dirt" 0]]}]}

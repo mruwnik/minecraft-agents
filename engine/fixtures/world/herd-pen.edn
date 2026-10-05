@@ -1,0 +1,45 @@
+;; jobs.animals.herd through a shut gate (card 4f4ab883, hand-tested in 2edefeae / 31cd9b2a), and the same with the
+;; pen planned and the pen-gate reflex registered (card aba4e0cf: pen-gate must not shut the gate mid-herd).
+;; Pen: oak fence ring x 18..24, z 13..19, inside 19..23 x 14..18, gate on the west side at [18 0 16].
+{:defaults
+ {:tags [:herd :animals :jobs]
+  :plot {:floor "grass_block"}
+  :blocks [[:fill [18 0 13] [24 0 19] "oak_fence"]
+           [:fill [19 0 14] [23 0 18] "air"]
+           [:set [18 0 16] "oak_fence_gate[facing=east,open=false]"]]
+  :body {:at [12.5 0 16.5] :inventory [["lead" 4]]}
+  :limit-s 300}
+ :cases
+ [{:name "shut-gate-one-cow-brought"
+   :act [[:summon "cow" [10.5 0 18.5]]
+         [:wait-s 2]
+         [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
+   :expect [{:event {:source :job :kind :herd.done :data {:reason :brought}} :within-s 240 :of-job true}]
+   :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]
+           [:block [18 0 16] "oak_fence_gate[open=false]"]]}
+  {:name "planned-pen-gate-left-alone"
+   :tags [:herd :animals :triggers]
+   :register [{:trigger :pen-gate}]
+   :plans [{:id "pen"
+            :parts [{:id "fence" :outline [#at [18 0 13] #at [24 0 19]] :want [:any "oak_fence"]}
+                    {:id "gate" :cells [#at [18 0 16]] :want [:any "oak_fence_gate"]}]}]
+   :act [[:summon "cow" [10.5 0 18.5]]
+         [:wait-s 2]
+         [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
+   :expect [{:event {:source :job :kind :herd.done :data {:reason :brought}} :within-s 240 :of-job true}
+            {:no-event {:source :reflex :kind :fired :context {:reflex-id :pen-gate}} :for-s 240 :until {:source :job :kind :herd.done}}]
+   :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]
+           [:block [18 0 16] "oak_fence_gate[open=false]"]]}
+  ;; the control for the case above: the same planned pen with its gate left open and no herd, so pen-gate does fire
+  ;; and shuts it (proves the plan and the trigger are live, so the quiet case is not quiet by accident)
+  {:name "planned-pen-open-gate-shut-by-reflex"
+   :tags [:animals :triggers]
+   :register [{:trigger :pen-gate}]
+   :blocks [[:set [18 0 16] "oak_fence_gate[facing=east,open=true]"]]
+   :plans [{:id "pen"
+            :parts [{:id "fence" :outline [#at [18 0 13] #at [24 0 19]] :want [:any "oak_fence"]}
+                    {:id "gate" :cells [#at [18 0 16]] :want [:any "oak_fence_gate"]}]}]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :pen-gate}} :within-s 30}
+            {:event {:source :reflex :kind :ended :context {:reflex-id :pen-gate} :data {:outcome :done}} :within-s 45}]
+   :after [[:block [18 0 16] "oak_fence_gate[open=false]"]]
+   :limit-s 60}]}

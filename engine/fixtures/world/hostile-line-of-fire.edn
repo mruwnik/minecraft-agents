@@ -1,0 +1,55 @@
+;; hostile-near line of fire (card b3eabdf4, hand-tested in d834ad64): a ranged mob is a danger only with an arrow
+;; line, a melee mob only with a way to the body. Body in the plot's middle, the mob 6 east, a wall 3 east.
+{:defaults
+ {:tags [:hostile :triggers]
+  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+              :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+  :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}}
+ :cases
+ [{:name "skeleton-open-fires"
+   :act [[:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 9}]}
+  {:name "skeleton-slit-fires"
+   :blocks [[:fill [19 0 12] [19 6 20] "stone"] [:fill [19 1 12] [19 1 20] "air"]]
+   :act [[:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 9}]
+   :after [[:block [19 0 16] "stone"] [:block [19 1 16] "air"]]}
+  {:name "skeleton-poppies-fires"
+   :blocks [[:fill [19 -1 12] [19 -1 20] "grass_block"] [:fill [19 0 12] [19 0 20] "poppy"]]
+   :act [[:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 9}]
+   :after [[:block [19 0 16] "poppy"]]}
+  {:name "skeleton-torches-fires"
+   :blocks [[:fill [19 0 12] [19 0 20] "torch"]]
+   :act [[:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 9}]
+   :after [[:block [19 0 16] "torch"]]}
+  {:name "skeleton-glass-quiet"
+   :blocks [[:fill [19 0 12] [19 6 20] "glass"]]
+   :act [[:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 10}]
+   :after [[:entities "type=skeleton,tag=wt" [[20 0 14] [24 2 18]] 1]]}
+  {:name "skeleton-leaves-quiet"
+   :blocks [[:fill [19 0 12] [19 6 20] "oak_leaves[persistent=true]"]]
+   :act [[:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 10}]
+   :after [[:entities "type=skeleton,tag=wt" [[20 0 14] [24 2 18]] 1]]}
+  {:name "skeleton-stone-quiet"
+   :blocks [[:fill [19 0 12] [19 6 20] "stone"]]
+   :act [[:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 10}]
+   :after [[:entities "type=skeleton,tag=wt" [[20 0 14] [24 2 18]] 1]]}
+  {:name "zombie-sealed-glass-quiet"
+   :blocks [[:fill [20 0 14] [24 2 18] "glass" :hollow]]
+   :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 10}]
+   :after [[:entities "type=zombie,tag=wt" [[21 0 15] [23 1 17]] 1]]}
+  {:name "skeleton-ai-sealed-glass-quiet"
+   :blocks [[:fill [20 0 14] [24 2 18] "glass" :hollow]]
+   :act [[:summon "skeleton" [22.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 10}]
+   :after [[:entities "type=skeleton,tag=wt" [[21 0 15] [23 1 17]] 1]]}
+  {:name "zombie-way-round-glass-fires"
+   :blocks [[:fill [19 0 14] [19 2 18] "glass"]]
+   :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 9}]}]}

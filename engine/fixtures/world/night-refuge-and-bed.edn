@@ -1,0 +1,30 @@
+;; Night cases. dig-in walls a carried-block refuge on open ground (hand-tested in 0d350ed0: sealed, every cell solid);
+;; wake (card 8c1ed3ad): the body sleeps in a bed, the time is set to day, it gets out of bed and walks off.
+;; Both need night: run them with --allow-time --time-log <the shared time log>. Torches keep the plot lit.
+{:defaults
+ {:tags [:night :survival]
+  :time :night
+  :blocks [[:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 4] "torch"] [:set [28 0 28] "torch"]
+           [:set [16 0 4] "torch"] [:set [16 0 28] "torch"] [:set [4 0 16] "torch"] [:set [28 0 16] "torch"]]
+  :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}}
+ :cases
+ [{:name "dig-in-walls-sealed"
+   :body {:inventory [["cobblestone" 16]]}
+   :act [[:job (jobs.survival.dig-in {})]]
+   :expect [{:event {:source :job :kind :dig-in.sealed} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :dig-in.unsealed} :for-s 60 :until {:source :job :kind :dig-in.sealed}}]
+   :after [[:not-block [17 0 16] "air"] [:not-block [15 0 16] "air"] [:not-block [16 0 17] "air"] [:not-block [16 0 15] "air"]
+           [:not-block [17 1 16] "air"] [:not-block [15 1 16] "air"] [:not-block [16 1 17] "air"] [:not-block [16 1 15] "air"]
+           [:not-block [16 2 16] "air"]]}
+  {:name "wake-at-day-and-walk-off"
+   :blocks [[:set [20 0 16] "red_bed[facing=east,part=foot]"] [:set [21 0 16] "red_bed[facing=east,part=head]"]]
+   :act [[:job (jobs.survival.sleep {:bed #at [20 0 16]})]
+         [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 60]
+         [:wait-s 3]
+         [:time-set 1000]
+         [:wait-s 3]
+         [:job (jobs.movement.go-to {:pos #xyz [8 0 16] :range 0})]]
+   ;; a top-level go-to (chain of one): the sleep job's own walk to the bed is a go-to child
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"} :context {:chain [[:any]]}}
+             :within-s 120 :of-job true}]
+   :after [[:body-near [8.5 0 16.5] 1.5]]}]}
