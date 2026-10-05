@@ -141,6 +141,20 @@
   [c]
   (fn [cell] (nil? (tidy/refusal c :dig (zipmap [:x :y :z] cell)))))
 
+(def placed-policy
+  "Body memory policy of :escalation-placed, the cells go-to put a block back in: later escalations may dig them."
+  {:cap 100 :ttl (* 6 60 60 1000)})
+
+(defn own-placed-fn
+  "(own? cell block): go-to itself placed block at cell (a put-back), so it is not someone's build."
+  [c]
+  (let [placed (set (map (comp (juxt :cell :block) :data) (ctx/entries c :escalation-placed)))]
+    (fn [cell block] (contains? placed [(vec cell) block]))))
+
+(defn note-placed! [c cell]
+  (when-let [block (u/block-name (:primitives c) (zipmap [:x :y :z] cell))]
+    (ctx/remember! c :escalation-placed {:cell (vec cell) :block block} placed-policy)))
+
 (defn planned-cells
   "The solid cells escalation e from feet would cut, [{:cell :block}]: the stair's cuts or clear-path's door."
   [p {:keys [step heading steps]} feet]
@@ -152,10 +166,10 @@
     (vec (for [cell cells :let [n (block-at cell)] :when (escape/solid? n)] {:cell cell :block n}))))
 
 (defn own-holes
-  "The ledger entries (engine.jobs.tidy :tidy, body memory) of cells go-to escalations of this job dug, lowest first."
+  "The ledger entries (engine.jobs.tidy :tidy, body memory) of cells this go-to's escalations dug, lowest first."
   [c]
   (->> (tidy/entries c)
-       (filter #(and (:escalation %) (= (:root c) (:job %))))
+       (filter #(and (:escalation %) (= (:root c) (:job %)) (= (:id c) (:go-to %))))
        (sort-by (comp second :cell))
        vec))
 
@@ -168,20 +182,22 @@
         noted (set (map :cell (tidy/entries c)))]
     (doseq [{:keys [cell block]} (distinct dug)
             :when (and (not (noted cell)) (b/air (u/block-name p (zipmap [:x :y :z] cell))))]
-      (tidy/record! c {:cell cell :action :dig :was block :escalation true
+      (tidy/record! c {:cell cell :action :dig :was block :escalation true :go-to (:id c)
                        :any-of (vec (distinct (cons block (b/drops-of p block))))}
                     "air"))))
 
 (defn ^:async escalate!
-  "Start the next escalation for the give-up kept in memory (:give-up), or give up with it when there is none."
-  [c pos]
+  "Start the next escalation for the give-up kept in memory (:give-up), or give up with it when there is none (or
+  with failed, the detail of the escalation that just failed, when there is none left after it)."
+  [c pos failed]
   (let [{:keys [tries status result]} (:give-up (ctx/mem c))
         n (inc (:escalations (ctx/mem c) 0))
         feet (feet-cell c)
-        e (escape/choose (:primitives c) feet (mapv #(js/Math.floor (% pos)) [:x :y :z]) (may-dig-fn c))]
+        e (escape/choose (:primitives c) feet (mapv #(js/Math.floor (% pos)) [:x :y :z]) (may-dig-fn c)
+                       {:own? (own-placed-fn c) :skip (:skipped-steps (ctx/mem c) #{})})]
     (cond
       (> n max-escalations) (give-up! c pos tries status result {:escalation {:step :spent :n max-escalations}})
-      (= :none (:step e)) (give-up! c pos tries status result {:escalation e})
+      (= :none (:step e)) (give-up! c pos tries status result {:escalation (or failed e)})
       :else
       (do (ctx/emit! c :go-to.escalated :info {:step (:step e) :why (:why (give-up-fields result)) :n n :at feet
                                                :text (str "no way out on foot: " (name (:step e)))})
@@ -191,20 +207,21 @@
 
 (defn escalate?
   "Whether a give-up with result may escalate instead: the body is shut in (reach/enclosed?) and no door or gate
-  borders where it can walk (escape/door-beside?: that is its way out, a locked or iron one included). Never out of
+  borders where it can walk (escape/door-beside?: that is its way out; an iron door, or any door under :doors :never,
+  is a wall). Never out of
   the body's own shelter: it is shut in on purpose."
   [c result]
   (and (:escalate (:args c))
        (contains? escalate-reasons (some-> (:reason result) keyword))
        (not (sh/sheltered-in c))
        (reach/enclosed? (:primitives c))
-       (not (escape/door-beside? (:primitives c) (feet-cell c)))))
+       (not (escape/door-beside? (:primitives c) (feet-cell c) (some-> (:doors (:args c)) keyword)))))
 
 (defn ^:async give-up-or-escalate! [c pos tries status result]
   (if (escalate? c result)
     (do (ctx/update-mem! c assoc :give-up {:tries tries :status status
                                            :result (select-keys result [:status :reason :kind :cells :near :one-way])})
-        (await (escalate! c pos)))
+        (await (escalate! c pos nil)))
     (give-up! c pos tries status result)))
 
 (defn escalated!
@@ -225,17 +242,21 @@
     (or (> (count (own-holes c)) (:holes-before m 0))
         (not= (:escalation-from m) (feet-cell c)))))
 
-(defn escalation-failed!
+(defn ^:async escalation-failed!
   "The child stopped or would wait: when it changed something, walk again (escalated!) after a go-to.escalation-stopped
-  warn; else give up with detail."
+  warn; else try the next method (escalate!, never the same step twice, at most max-escalations in all), giving up
+  with detail when none is left."
   [c pos {:keys [step] :as detail}]
   (if (partly-made? c)
     (do (ctx/emit! c :go-to.escalation-stopped :warn (assoc detail :text (str (name step) " stopped part way: "
                                                                               (some-> (:reason detail) name)
                                                                               "; walking again")))
         (escalated! c detail))
-    (let [{:keys [tries status result]} (:give-up (ctx/mem c))]
-      (give-up! c pos tries status result {:escalation detail}))))
+    (do (ctx/emit! c :go-to.escalation-stopped :warn (assoc detail :text (str (name step) " failed: "
+                                                                              (some-> (:reason detail) name)
+                                                                              "; trying another way")))
+        (ctx/update-mem! c update :skipped-steps (fnil conj #{}) step)
+        (await (escalate! c pos detail)))))
 
 (defn ^:async escalation-round!
   "One round of the escalation child. After it, every planned cell now dug is in the ledger (note-holes!). Its wait or
@@ -304,7 +325,7 @@
                   res (ctx/child-result c :restore)]
               (cond
                 (not= :done r) :continue
-                (:placed res) (do (tidy/forget-cell! c cell) (done! :restored cell))
+                (:placed res) (do (tidy/forget-cell! c cell) (note-placed! c cell) (done! :restored cell))
                 :else (skip! (:reason res))))))))))
 
 (defn restore-next!
@@ -387,5 +408,5 @@
       (:restore-now m) (await (restore-round! c))
       (:escalation m) (await (escalation-round! c pos))
       (:escalate-now m) (do (ctx/update-mem! c dissoc :escalate-now)
-                            (await (escalate! c pos)))
+                            (await (escalate! c pos nil)))
       :else (await (walk! c pos (:range (:args c)) (some-> (:doors (:args c)) keyword))))))

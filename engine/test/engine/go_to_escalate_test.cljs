@@ -260,9 +260,11 @@
 
 (deftest escape-natural-is-a-whitelist-of-terrain
   (doseq [n ["stone" "dirt" "grass_block" "deepslate" "gravel" "sand" "netherrack" "iron_ore" "deepslate_diamond_ore"
-             "red_terracotta" "andesite" "tuff"]]
+             "red_terracotta" "andesite" "tuff" "oak_leaves" "mangrove_roots" "ice" "packed_ice" "blue_ice" "powder_snow"
+             "magma_block" "pointed_dripstone" "amethyst_block" "suspicious_sand" "crimson_nylium" "warped_wart_block"
+             "ancient_debris" "sculk" "infested_stone"]]
     (is (escape/natural? n) n))
-  (doseq [n ["oak_planks" "bricks" "stone_bricks" "glass" "white_wool" "cobblestone" "oak_door" "iron_door"
+  (doseq [n ["oak_planks" "bricks" "stone_bricks" "glass" "white_wool" "cobblestone" "oak_door" "iron_door" "oak_log" "glowstone" "cobbled_deepslate" "dirt_path"
              "oak_fence" "spruce_fence_gate" "white_glazed_terracotta" "smooth_stone" "polished_andesite" nil]]
     (is (not (escape/natural? n)) (pr-str n))))
 
@@ -298,17 +300,6 @@
             (is (= {:step :none :why :no-dig} (:escalation @out)) wall)
             (is (empty? (events-of seen :go-to.escalated)) wall)
             (is (empty? (calls p "dig")) wall)))))))
-
-(deftest go-to-in-a-walled-yard-with-an-iron-door-does-not-escalate
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [yard (-> room (dissoc "-2,66,0") (assoc "3,64,0" "iron_door" "3,65,0" "iron_door"))
-              {:keys [out p seen]} (await (run-job! (merge in-room {:blocks yard}) {:pos [8 64 0] :range 1}))]
-          (is (= false (:arrived @out)))
-          (is (nil? (:escalation @out)) "the door is its way out, not a reason to dig")
-          (is (empty? (events-of seen :go-to.escalated)))
-          (is (empty? (calls p "dig"))))))))
 
 (deftest go-to-never-digs-in-another-s-zone
   (async done
@@ -414,3 +405,75 @@
           (is (empty? (events-of seen :go-to.restore-skipped)) "nothing carried at the start: the dug dirt was picked up")
           (is (= "dirt" (block p [3 64 0])))
           (is (= "dirt" (block p [3 65 0]))))))))
+
+;; ------------------------------------------------------------------ review follow-ups (card 732fce4c)
+
+(def cobble-room
+  "room with cobblestone walls (the walls are not natural)."
+  (merge (box -6 63 -6 12 63 6 "stone")
+         (apply dissoc (box -3 64 -3 3 66 3 "cobblestone")
+                (for [x (range -2 3) z (range -2 3) y [64 65]] (str x "," y "," z)))))
+
+(deftest escape-choose-digs-blocks-the-body-placed-itself
+  (let [p (tu/fake {:self {:pos {:x 2 :y 64 :z 0}} :blocks cobble-room})
+        mine? (fn [cell block] (and (= "cobblestone" block) (= 3 (first cell))))]
+    (is (= {:step :none :why :no-dig} (escape/choose p [2 64 0] [8 64 0])) "someone's cobblestone wall")
+    (is (= {:step :clear-path :heading :east} (escape/choose p [2 64 0] [8 64 0] (constantly true) {:own? mine?}))
+        "its own put-back cobblestone")
+    (is (= {:step :none :why :no-dig}
+           (escape/choose p [2 64 0] [8 64 0] (constantly true) {:own? (fn [cell _] (= [3 64 0] cell))}))
+        "one of the two door cells is not its own")))
+
+(deftest escape-choose-skips-failed-steps
+  (let [with-dirt (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 3}]})]
+    (is (= :pillar (:step (escape/choose (tu/fake with-dirt) [0 61 0] [10 64 0]))))
+    (is (= {:step :stair :heading :east :steps 3}
+           (escape/choose (tu/fake with-dirt) [0 61 0] [10 64 0] (constantly true) {:skip #{:pillar}})))
+    (is (= :none (:step (escape/choose (tu/fake with-dirt) [0 61 0] [10 64 0] (constantly true)
+                                       {:skip #{:pillar :stair :clear-path :approach}}))))))
+
+(deftest escape-door-beside-counts-only-doors-the-body-can-open
+  (let [at (fn [b] (tu/fake {:self {:pos {:x 0 :y 64 :z 0}} :blocks (assoc room "3,64,0" b)}))
+        in-yard (fn [b] (escape/door-beside? (at b) [2 64 0]))]
+    (is (true? (in-yard "oak_door")))
+    (is (true? (in-yard "spruce_fence_gate")))
+    (is (false? (in-yard "iron_door")) "iron doors are walls")
+    (is (false? (in-yard "oak_trapdoor")) "a trapdoor in a wall is no exit")
+    (is (false? (escape/door-beside? (at "oak_door") [2 64 0] :never)) "doors :never makes every door a wall")
+    (is (true? (escape/door-beside? (at "oak_door") [2 64 0] :leave-open)))))
+
+(deftest go-to-with-a-usable-door-beside-does-not-escalate
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [yard (-> room (dissoc "-2,66,0") (assoc "3,64,0" "oak_door" "3,65,0" "oak_door"))
+              {:keys [out p seen]} (await (run-job! (merge in-room {:blocks yard}) {:pos [8 64 0] :range 1}))]
+          (is (empty? (events-of seen :go-to.escalated)))
+          (is (empty? (calls p "dig"))))))))
+
+(deftest go-to-tries-the-next-method-when-the-first-fails
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; another owner's zone covers the pit's column: the pillar may not place there, the stair digs beside it
+        (let [zones [{:name "shaft" :owner "Miles" :min [0 60 0] :max [0 64 0]}]
+              {:keys [out p seen]} (await (run-job! (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 5}]})
+                                                'jobs.movement.go-to {:pos [10 64 0] :range 1} zones))]
+          (is (= {:arrived true} @out))
+          (is (= [:pillar :stair] (mapv :step (events-of seen :go-to.escalated))))
+          (is (empty? (calls p "jumpPlace"))))))))
+
+(deftest go-to-puts-back-with-a-block-it-may-dig-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [stone-hole (apply dissoc (merge (box 3 60 -3 14 63 3 "stone") (box -2 60 -2 2 63 2 "stone")) pit-cells)
+              {:keys [eng p]} (setup (merge in-pit {:blocks stone-hole
+                                                     :inventory [{:name "iron_pickaxe" :count 1}
+                                                                 {:name "cobblestone" :count 2}]}))]
+          (core/submit! eng '(jobs.movement.go-to {:pos [10 64 0] :range 1}) {})
+          (await (tick-out! eng 600))
+          (is (= "cobblestone" (block p [1 62 0])) "the put-back block is cobblestone")
+          (is (= #{[[1 62 0] "cobblestone"] [[1 63 0] "cobblestone"]}
+                 (set (map (comp (juxt :cell :block) :data) (mem/entries (mem/view (:store eng)) :escalation-placed)))
+               )))))))
