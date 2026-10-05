@@ -33,8 +33,8 @@
 (def bury 3)
 (def passable
   #{"air" "water" "ladder" "vine" "short_grass" "tall_grass" "rail" "powered_rail" "detector_rail" "activator_rail"})
-;; small blocks with no collision box: the planner and the game walk through them
-(def no-collision #"^(lever|torch|wall_torch|redstone_torch|redstone_wall_torch)$|_(button|pressure_plate|sign|wall_sign|hanging_sign)$")
+;; small blocks (and crops) with no collision box: the planner and the game walk through them
+(def no-collision #"^(lever|torch|wall_torch|redstone_torch|redstone_wall_torch|wheat|carrots|potatoes|beetroots)$|_(button|pressure_plate|sign|wall_sign|hanging_sign)$")
 (def climbable-names #{"ladder" "vine"})
 ;; blocks whose boxes leave part of their cell free: the steer judges a move into such a cell by boxes, not by cell
 (def narrow-re #"_fence$|_fence_gate$|_wall$|_pane$|^glass_pane$|^iron_bars$|^bamboo$")

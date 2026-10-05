@@ -150,10 +150,10 @@
     (tu/run-async done
       (fn ^:async t []
         (let [xs (range 2 14)
-              {:keys [eng p]} (start {:blocks (farmland xs [2]) :inventory (inv "wheat_seeds" 12)})
+              {:keys [eng p]} (start {:blocks (farmland xs [2]) :inventory (inv "wheat_seeds" 12) :floor tu/walk-floor})
               result (await (child-outcome eng job {:box (box 2 2 13 2)} 100))]
           (is (= {:planted 12 :skipped [] :reason :done} result))
-          (is (pos? (count (calls p "moveTo"))))
+          (is (pos? (count (tu/walk-calls p))))
           (is (sown p xs [2] "wheat")))))))
 
 (deftest nothing-is-planted-outside-the-box-or-on-a-crop
@@ -161,7 +161,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (start {:blocks (merge (farmland (range 0 7) [2]) {"3,64,2" "carrots"})
-                                      :inventory (inv "wheat_seeds" 20)})
+                                      :inventory (inv "wheat_seeds" 20) :floor tu/walk-floor})
               result (await (child-outcome eng job {:box (box 2 2 4 2)} 100))]
           (is (= {:planted 2 :skipped [] :reason :done} result))
           (is (= ["air" "air" "wheat" "carrots" "wheat" "air" "air"]

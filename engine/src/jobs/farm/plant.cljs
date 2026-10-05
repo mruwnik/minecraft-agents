@@ -234,7 +234,13 @@
   (let [p (:primitives c)
         m (ctx/mem c)
         cells (sowable-cells c (bare-cells p (:box (:args c)) (:skipped m)))
-        seed (pick-seed (:seed (:args c)) (u/inventory p))]
+        inventory (u/inventory p)
+        kept (:sowing m)                ; the seed picked first is kept while carried: one run, one crop
+        seed (if (and (nil? (:seed (:args c))) kept (pick-seed kept inventory))
+               kept
+               (pick-seed (:seed (:args c)) inventory))]
+    (when (and seed (not= seed kept))
+      (ctx/update-mem! c assoc :sowing seed))
     (cond
       (empty? cells) (finish! c (cond (seq (:skipped m)) :gave-up (pos? (:planted m 0)) :done :else :none))
       (nil? seed) (finish! c :no-seed)
