@@ -31,7 +31,7 @@
 (def hostile-policy {:cap 50 :ttl (* 60 60 1000)})
 
 (defn near
-  "The hostiles that count: visible ones, melee within :radius and ranged
+  "The hostiles that count: ones the body has seen (engine.jobs.reach/known-hostiles), melee within :radius and ranged
   within :ranged-radius. One behind a wall cannot reach or shoot the body, so
   it is left alone, as is one with no walkable way to the body (engine.jobs.reach),
   as the hostile-near trigger does."

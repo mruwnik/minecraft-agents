@@ -165,21 +165,36 @@ their distances; only `visible` tells them apart. The fake computes `visible` th
 entity may force it with `visible: true|false`).
 
 The `:hostile-near` trigger uses it: it never holds while the body is dead (a `:died` with no newer `:respawned`), and otherwise holds only for a real danger within `:radius` (`engine.jobs.reach/danger?`): a
-melee mob that is visible and has a walkable way to the body (a bounded search over the blocks as a zombie walks: one
+melee mob the body has seen and that has a walkable way to the body (a bounded search over the blocks as a zombie walks: one
 step up, up to three down, doors only when open, water swum; so a mob walled in, across a trench two deep, or with the
-body sealed in is no danger), or a ranged mob (skeleton and the like) with a line of fire: a ray from the mob's eye to the body's eye or centre (`reach/line-of-fire?`, a few dozen block reads) that no arrow-stopping block crosses. Glass, leaves, shut doors and trapdoors and every solid stop it (so a skeleton behind glass is no danger); air, grass, flowers, torches, fences, open doors and the like do not, and a 1-high slit with a clear ray counts. Sight (`visible`) is not asked of a ranged mob. Trigger arg
-`:visible-only` (default true) false drops a melee mob's sight test; the way to the body still counts. `retreat` and
+body sealed in is no danger), or a ranged mob (skeleton and the like) with a line of fire: a ray from the mob's eye to the body's eye or centre (`reach/line-of-fire?`, a few dozen block reads) that no arrow-stopping block crosses. Glass, leaves, shut doors and trapdoors and every solid stop it (so a skeleton behind glass is no danger); air, grass, flowers, torches, fences, open doors and the like do not, and a 1-high slit with a clear ray counts. Sight is not asked of a ranged mob. Only mobs the body
+knows of are candidates (`reach/known-hostiles`, card 80f25a40): the perception's mob memory (`p.knownMobs`,
+`engine.perception`), sampled every 250 ms and at each query. A mob is heard within 16 blocks of the eye unless it is
+silent while it stalks (creeper); seen when the line from the eye to its middle is clear (`visible`), within 48, and it
+is in the view cone or heard (a player turns to a sound). It is kept at the place last sensed while it could not have
+walked 16 blocks since (mob speed: about 6 s for a zombie) and dropped at once when the client stops tracking it. So an
+unseen creeper behind the body is no danger, one seen 3 s ago that went round a corner still is. Primitives without a
+perception (BODY_PERCEPTION=0, plain test fakes) fall back to every tracked mob. Trigger arg `:visible-only` (default
+true) false lets a heard, unseen melee mob count; the way to the body still counts. recover-drops' route danger
+(`engine.jobs.danger/route-danger`) takes the same known mobs. `retreat` and
 `respond-to-hostile` count dangers the same way and within the same radii, checked each round, so a mob that cannot
 reach the body or is beyond the trigger's radius does not keep a flight alive (BaseMiner j301 sat 600+ rounds with
 nothing in sight while retreat still had a 40-block clear radius). The trigger is wrong, not the job,
 when a hostile that cannot hurt the body fires the response. `engine.jobs.combat/hostiles` takes an optional third argument `{:sight :only|:prefer}`: `:only` keeps the
 visible ones, `:prefer` lists them first (each group nearest first); two arguments ignore sight as before.
-The reach searches (`walkable-way?`, `enclosed?`, `dangers`, `nearest-danger`) read each block once per query: the
-searches of every mob in one `dangers` or `nearest-danger` call share a single read. They key cells by number and keep
-the open list in a binary heap. The search bench times them on the recorded world of the planner bench: `npx
+The reach searches (`walkable-way?`, `enclosed?`, `dangers`, `nearest-danger`) read blocks as state ids from the
+primitives' `rawWorld` (`stateAt`: the section id copies the planner snapshot reads too, kind worked out once per state
+id) when there is one, else each block once per query with `blockAt`. The mobs of one `dangers` or `nearest-danger`
+call share their proofs (`reach/proofs`): cells a closed search proved have no way (not expanded again), cells of a
+found way and every cell a search back from the body met (a later search stops there: a way), and, once a mob's search
+ran out of budget, the closure back from the cells near the body (a mob's answer is then a set lookup). They key cells
+by number and keep the open list in a binary heap. The search bench times them on the recorded world of the planner bench: `npx
 shadow-cljs compile search-bench`, then `node bench-lang/search.mjs` (median, p95 and max ms, and blocks read per
-search kind). In 160 bodies x 2214 mob cells (2026-10-05): `enclosed?` max 41 ms, `walkable-way?` max 77 ms,
-`dangers` max 46 ms. The persistent-map version took 186, 338 and 337 ms.
+search kind; `--raw` reads through a rawWorld as the body does; `x32` rows are up to 32 mobs within 16). In 160 bodies x
+2214 mob cells (2026-10-05): `enclosed?` max 41 ms, `walkable-way?` max 77 ms, `dangers` max 46 ms. The persistent-map
+version took 186, 338 and 337 ms. Many mobs (the search investigation's 160 bodies with 8 or 32 mobs within 16,
+2026-10-05): `dangers` max 207 ms before; with shared proofs and state-id reads max 76-93 ms (p50 0.4 ms), the same
+answers in all 160.
 The go-to bench runs go-to's rounds of planning over the planner bench's courses (`npx shadow-cljs compile goto-bench`, then
 `node bench-lang/goto.mjs`): each round plans as go-to does, a walked plan moves the body to its end. It gives each course's
 answer and the round and search ms. On the 304 courses (2026-10-05, load ~9): one search a round, max 89 ms, p95 61 ms,

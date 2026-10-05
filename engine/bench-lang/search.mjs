@@ -2,9 +2,11 @@
 // ClojureScript ones (out/search-bench.cjs, `npx shadow-cljs compile search-bench`).
 // The search bench: times the job-side reach searches (engine.jobs.reach: walkable-way?, enclosed?, nearest-danger,
 // dangers) on the recorded world of the planner bench, with blockAt answered the way the body's primitives answer it
-// (a prismarine Block per read, its state properties copied). Bodies stand at the bench queries' start cells; the mobs
-// are standable cells around them. Each case runs --rounds times; the table gives the median ms and the blocks read.
-//   cd engine && node bench-lang/search.mjs [--rounds 3] [--bodies 40] [--out results.json]
+// (a prismarine Block per read, its state properties copied), or with --raw from a rawWorld as the body's (state ids of
+// section copies, engine/js/raw-world.mjs; the searches then call blockAt for nothing). Bodies stand at the bench
+// queries' start cells; the mobs are standable cells around them ("x32": up to 32 mobs within 16, the many-mob case).
+// Each case runs --rounds times; the table gives the median ms and the blocks read (blockAt calls; stateAt with --raw).
+//   cd engine && node bench-lang/search.mjs [--rounds 3] [--bodies 40] [--raw] [--out results.json]
 import fs from 'node:fs'
 import path from 'node:path'
 import { createRequire } from 'node:module'
@@ -15,12 +17,15 @@ import prismarineRegistry from 'prismarine-registry'
 import vec3 from 'vec3'
 import { decodeColumnFile, restoreColumn } from '../js/view.mjs'
 import { stateProperties } from '../js/use-on.mjs'
+import { sectionIds } from '../js/path/snapshot.mjs'
+import { stateInfo } from '../js/raw-world.mjs'
 import { benchDir } from './courses.mjs'
 
 const { Vec3 } = vec3
 const require = createRequire(import.meta.url)
 const OUT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../out/search-bench.cjs')
-const ChunkColumn = prismarineChunk(prismarineRegistry('26.1'))
+const registry = prismarineRegistry('26.1')
+const ChunkColumn = prismarineChunk(registry)
 
 const flagValue = (argv, flag) => argv.includes(flag) ? argv[argv.indexOf(flag) + 1] : undefined
 
@@ -38,7 +43,30 @@ const recordedWorld = dir => {
     }
     return columns.get(key)
   }
+  // the rawWorld reads: a section's state ids copied once (sectionIds, as raw-world.mjs and the planner snapshot do)
+  // (numeric section keys and the last section kept, as raw-world.mjs)
+  const sections = new Map()
+  let lastKey = -1
+  let lastIds = null
+  const stateAt = (x, y, z) => {
+    if (y < -64 || y >= 320) return -1
+    const s = (y + 64) >> 4
+    const key = (((x >> 4) & 0xFFFF) * 65536 + ((z >> 4) & 0xFFFF)) * 64 + s
+    if (key !== lastKey) {
+      let ids = sections.get(key)
+      if (ids === undefined) {
+        const container = columnAt(x >> 4, z >> 4)?.sections?.[s]?.data
+        ids = container ? sectionIds(container) : null
+        sections.set(key, ids)
+      }
+      lastKey = key
+      lastIds = ids
+    }
+    if (lastIds === null) return -1
+    return lastIds[(((y + 64) & 15) << 8) | ((z & 15) << 4) | (x & 15)]
+  }
   return {
+    stateAt,
     blockAt: (x, y, z) => {
       const column = columnAt(x >> 4, z >> 4)
       if (!column || y < -64 || y >= 320) return null
@@ -50,7 +78,9 @@ const recordedWorld = dir => {
 }
 
 // the primitives the reach searches read: blockAt as the body's (js/primitives.mjs blockAt), self and entities
-const primitivesOver = (world, body, mobs, reads) => ({
+const info = stateInfo(registry)
+const primitivesOver = (world, body, mobs, reads, raw = false) => ({
+  ...(raw && { rawWorld: { stateAt: (x, y, z) => { reads.n++; return world.stateAt(x, y, z) }, stateInfo: info } }),
   blockAt: ({ x, y, z }) => {
     reads.n++
     const block = world.blockAt(x, y, z)
@@ -88,6 +118,21 @@ const mobCells = (world, body, radius) => {
   return [...picks.values()]
 }
 
+// up to max standable cells within radius, every step-th column, nearest first: the many-mobs case
+const manyMobCells = (world, body, radius, max, step) => {
+  const found = []
+  for (let dx = -radius; dx <= radius; dx += step) {
+    for (let dz = -radius; dz <= radius; dz += step) {
+      for (let dy = -8; dy <= 8; dy++) {
+        const d = Math.hypot(dx, dy, dz)
+        if (d < 3 || d > radius) continue
+        if (standable(world, body.x + dx, body.y + dy, body.z + dz)) found.push({ x: body.x + dx, y: body.y + dy, z: body.z + dz, d })
+      }
+    }
+  }
+  return found.sort((a, b) => a.d - b.d).slice(0, max)
+}
+
 const median = xs => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)]
 const quantile = (xs, q) => [...xs].sort((a, b) => a - b)[Math.min(xs.length - 1, Math.floor(q * xs.length))]
 
@@ -109,6 +154,7 @@ function main (argv) {
   const rounds = Number(flagValue(argv, '--rounds') ?? 3)
   const bodies = Number(flagValue(argv, '--bodies') ?? 40)
   const out = flagValue(argv, '--out')
+  const raw = argv.includes('--raw')
   const lib = require(OUT)
   const dir = benchDir()
   const world = recordedWorld(dir)
@@ -119,12 +165,16 @@ function main (argv) {
     const mobs8 = mobCells(world, body, 8)
     const mobs16 = mobCells(world, body, 16)
     const reads = { n: 0 }
-    const p = primitivesOver(world, body, mobs16, reads)
+    const p = primitivesOver(world, body, mobs16, reads, raw)
     rows.push({ search: 'enclosed?', id: q.id, ...time(rounds, reads, () => lib.enclosed(p)) })
     for (const m of mobs16) rows.push({ search: 'walkable-way?', id: `${q.id} mob ${m.x - body.x},${m.y - body.y},${m.z - body.z}`, ...time(rounds, reads, () => lib.walkableWay(p, { x: m.x + 0.5, y: m.y, z: m.z + 0.5 }, { x: body.x + 0.5, y: body.y, z: body.z + 0.5 })) })
-    const p8 = primitivesOver(world, body, mobs8, reads)
+    const p8 = primitivesOver(world, body, mobs8, reads, raw)
     rows.push({ search: 'nearest-danger r8', id: `${q.id} (${mobs8.length} mobs)`, ...time(rounds, reads, () => lib.nearestDanger(p8, 8, 16)) })
     rows.push({ search: 'dangers r8', id: `${q.id} (${mobs8.length} mobs)`, ...time(rounds, reads, () => lib.dangers(p8, 8, 16)) })
+    const many = manyMobCells(world, body, 16, 32, 2)
+    const pMany = primitivesOver(world, body, many, reads, raw)
+    rows.push({ search: 'dangers r16 x32', id: `${q.id} (${many.length} mobs)`, ...time(rounds, reads, () => lib.dangers(pMany, 16, 16)) })
+    rows.push({ search: 'nearest-danger r16 x32', id: `${q.id} (${many.length} mobs)`, ...time(rounds, reads, () => lib.nearestDanger(pMany, 16, 16)) })
   }
   const bySearch = Object.groupBy(rows, r => r.search)
   console.log('search                 cases   median ms   p95 ms    max ms  >100ms  median reads  max reads')

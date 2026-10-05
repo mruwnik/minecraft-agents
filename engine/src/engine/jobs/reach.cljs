@@ -6,7 +6,10 @@
   its eye to the body's eye or centre that no arrow-stopping block crosses:
   glass, leaves, solids and shut trapdoors stop it; air, grass, flowers and
   torches do not). A mob walled off, across a pit it cannot climb out of, or with the
-  body sealed in, is not."
+  body sealed in, is not.
+  The candidates are the mobs the body knows of (known-hostiles: engine.perception's mob memory, seen or heard and
+  remembered at the place last sensed); blocks are read as state ids from the raw world when the primitives have one
+  (lookup), and the mobs of one query share their walk proofs (proofs)."
   (:require [clojure.string :as str]
             [engine.jobs.combat :as combat]
             [engine.jobs.shelter :as sh]
@@ -52,22 +55,44 @@
   [ox oz]
   (fn [x y z] (+ (* (+ (- x ox) key-span) 4294967296) (* (+ (- z oz) key-span) 4096) (+ y 2048))))
 
+(defn state-lookup
+  "kind-at over a raw world reader (stateAt, stateInfo: engine/js/raw-world.mjs, the planner snapshot's section id
+  arrays): the cell's state id, then block-kind of that state, worked out once per state id for the lookup's life. An
+  unloaded cell (id < 0) is block-kind of nil."
+  [^js raw block-kind]
+  (let [by-id (js/Map.)
+        unloaded (block-kind nil)]
+    (fn [x y z]
+      (let [id (.stateAt raw x y z)]
+        (if (< id 0)
+          unloaded
+          (let [hit (.get by-id id)]
+            (if (some? hit)
+              hit
+              (let [v (block-kind (.stateInfo raw id))]
+                (.set by-id id v)
+                v))))))))
+
 (defn lookup
-  "A function (kind-at x y z) over primitives p: block-kind (default kind-of) of the block there, each cell read once for
-  the lookup's life. One lookup is one query (a search, or the searches of every mob of one danger query)."
+  "A function (kind-at x y z) over primitives p: block-kind (default kind-of) of the block there. With a raw world
+  (p.rawWorld, the body's) a cell is its state id in the section copies the planner snapshot reads too (state-lookup:
+  no block object per read); else each cell is read once with blockAt for the lookup's life. One lookup is one query
+  (a search, or the searches of every mob of one danger query)."
   ([p] (lookup p kind-of))
   ([p block-kind]
-   (let [cache (js/Map.)
-         key (volatile! nil)]
-     (fn [x y z]
-       (let [key-of (or @key (vreset! key (keyer x z)))
-             k (key-of x y z)
-             hit (.get cache k)]
-         (if (some? hit)
-           hit
-           (let [v (block-kind (.blockAt p #js {:x x :y y :z z}))]
-             (.set cache k v)
-             v)))))))
+   (if-let [raw (.-rawWorld p)]
+     (state-lookup raw block-kind)
+     (let [cache (js/Map.)
+           key (volatile! nil)]
+       (fn [x y z]
+         (let [key-of (or @key (vreset! key (keyer x z)))
+               k (key-of x y z)
+               hit (.get cache k)]
+           (if (some? hit)
+             hit
+             (let [v (block-kind (.blockAt p #js {:x x :y y :z z}))]
+               (.set cache k v)
+               v))))))))
 
 (defn passable? [kind-at x y z] (not (keyword-identical? :solid (kind-at x y z))))
 
@@ -218,6 +243,120 @@
     :closed false
     (not= :closed (search (partial backward kind-at) body mob))))
 
+;; ---- proofs shared by the mobs of one danger query (one body cell)
+
+(defn proofs
+  "What the walk searches of one danger query toward the body's cell [x y z] have proved, for the next mob's search:
+  dead (cells a search from a mob expanded every reachable cell of without meeting the body: none has a way), alive
+  (the cells of a found way: each has one) and reach (near-closure, worked out once a mob's search ran out of budget:
+  exactly the cells with a way to the body, or :budget), keyed by one key fn."
+  [[bx _ bz]]
+  #js {:key (keyer bx bz) :dead (js/Set.) :alive (js/Set.) :reach nil})
+
+(defn forward-proving
+  "search from the mob's cell over forward moves to a cell near the body, with proofs: a dead cell is not expanded (no
+  way goes on from it), an alive one counts as met. A closed search adds every cell it saw to dead, a found one its
+  way to alive. :found, :closed or :budget."
+  [kind-at ^js pr [sx sy sz] [tx ty tz]]
+  (let [key (.-key pr) dead (.-dead pr) alive (.-alive pr)
+        parent (js/Map.)
+        open #js []
+        k0 (key sx sy sz)]
+    (.set parent k0 -1)
+    (heap-push! open #js [(heuristic sx sy sz tx ty tz) 0 sx sy sz k0])
+    (loop [n 0]
+      (cond
+        (zero? (.-length open)) (do (.forEach parent (fn [_ k] (.add dead k))) :closed)
+        (>= n node-budget) :budget
+        :else
+        (let [top (heap-pop! open)
+              g (aget top 1) x (aget top 2) y (aget top 3) z (aget top 4) k (aget top 5)]
+          (cond
+            (or (near-cell? x y z tx ty tz) (.has alive k))
+            (do (loop [c k] (when-not (== c -1) (.add alive c) (recur (.get parent c)))) :found)
+            (.has dead k) (recur (inc n))
+            :else
+            (let [nexts (forward kind-at x y z)
+                  g' (inc g)]
+              (dotimes [i (.-length nexts)]
+                (let [c (aget nexts i)
+                      cx (aget c 0) cy (aget c 1) cz (aget c 2)
+                      ck (key cx cy cz)]
+                  (when-not (.has parent ck)
+                    (.set parent ck k)
+                    (heap-push! open #js [(+ g' (heuristic cx cy cz tx ty tz)) g' cx cy cz ck]))))
+              (recur (inc n)))))))))
+
+(def near-budget
+  "Cells near-closure expands before it gives up: once per danger query, it answers every mob after."
+  node-budget)
+
+(def near-offsets
+  "The offsets of the cells near-cell? counts as near a cell: one either way on each axis."
+  (vec (for [dx [-1 0 1] dy [-1 0 1] dz [-1 0 1]] [dx dy dz])))
+
+(defn near-closure
+  "Breadth-first back from the cells near the body's cell (near-cell?, the forward search's goal) over backward moves,
+  every cell met added to pr's alive (each has a way to the body): the set of keys (pr's key) of every cell with a way
+  to the body (a forward search from it would meet one), or :budget when more than near-budget cells were expanded."
+  [kind-at ^js pr [bx by bz]]
+  (let [key (.-key pr)
+        ^js alive (.-alive pr)
+        seen (js/Set.)
+        queue #js []
+        meet! (fn [x y z c]
+                (let [k (key x y z)]
+                  (when-not (.has seen k)
+                    (.add seen k)
+                    (.add alive k)
+                    (.push queue c))))]
+    (doseq [[dx dy dz] near-offsets]
+      (let [x (+ bx dx) y (+ by dy) z (+ bz dz)]
+        (meet! x y z #js [x y z])))
+    (loop [head 0]
+      (cond
+        (== head (.-length queue)) seen
+        (>= head near-budget) :budget
+        :else (let [c (aget queue head)
+                    nexts (backward kind-at (aget c 0) (aget c 1) (aget c 2))]
+                (dotimes [i (.-length nexts)]
+                  (let [n (aget nexts i)]
+                    (meet! (aget n 0) (aget n 1) (aget n 2) n)))
+                (recur (inc head)))))))
+
+(defn proved-way?
+  "way? with the proofs pr of the query's earlier mobs. Once the cells with a way to the body are known (near-closure
+  closed) a mob's answer is whether its cell is one of them, no search. Else a forward search that skips dead cells and
+  stops at alive ones (found and closed answers as way?'s; a proof only spares work); on budget the near-closure is
+  worked out once for the query: closed, it answers this mob and every later one; past its budget (its cells are
+  alive now, so later forward searches stop on reaching them), way?'s search back from the body to this mob decides
+  (unknown counts as a way), the cells it meets added to alive too; once one runs out of budget, every later mob's
+  answer is a way (the cells with a way to the body are more than a search expands, so none closes)."
+  [kind-at ^js pr mob body]
+  (let [[mx my mz] mob
+        key (.-key pr)
+        ^js alive (.-alive pr)
+        mk (key mx my mz)
+        ^js reach (.-reach pr)]
+    (cond
+      (instance? js/Set reach) (.has reach mk)
+      (keyword-identical? reach :open) (not= :closed (forward-proving kind-at pr mob body))
+      :else
+      (case (forward-proving kind-at pr mob body)
+        :found true
+        :closed false
+        (let [r (or reach (set! (.-reach pr) (near-closure kind-at pr body)))]
+          (if (instance? js/Set r)
+            (.has r mk)
+            (let [back (search (fn [x y z]
+                                 (let [ns (backward kind-at x y z)]
+                                   (dotimes [i (.-length ns)]
+                                     (let [n (aget ns i)] (.add alive (key (aget n 0) (aget n 1) (aget n 2)))))
+                                   ns))
+                               body mob)]
+              (when (keyword-identical? back :budget) (set! (.-reach pr) :open))
+              (not= :closed back))))))))
+
 (defn walkable-way?
   "Whether a walker at the mob's cell can reach the body's. A search from the
   mob; if it runs out of budget, one from the body (which settles a body
@@ -344,37 +483,62 @@
         bx (:x body-pos) bz (:z body-pos)]
     (boolean (some #(ray-clear? arrow-at from [bx (+ (:y body-pos) %) bz]) [eye-height 0.9]))))
 
+(defn seen-mob?
+  "Whether the body has seen hostile e: a known-hostiles entry's seen flag (seen now, or remembered), else (raw
+  entities) its visible field."
+  [e]
+  (let [s (.-seen e)]
+    (if (some? s) (true? s) (true? (.-visible e)))))
+
+(defn known-hostiles
+  "The hostiles the body knows of within radius (ranged ones, combat/ranged-mobs, within :ranged-radius), nearest first:
+  the perception's mob memory (p.knownMobs, engine.perception: seen or heard, and remembered while likely still near,
+  each at the place it was last sensed) when p has one, else combat/hostiles (every mob the client tracks)."
+  [p radius {:keys [ranged-radius]}]
+  (if-let [known (.-knownMobs p)]
+    (let [rr (or ranged-radius radius)]
+      (filterv #(and (= "hostile" (.-kind %)) (<= (.-distance %) (if (combat/ranged? %) rr radius)))
+               (array-seq (.call known p))))
+    (combat/hostiles p radius {:ranged-radius ranged-radius})))
+
 (defn danger-in?
-  "danger? with the blocks read through kind-at (a lookup the caller shares between the mobs of one query)."
-  [p kind-at e {:keys [sight?] :or {sight? true}}]
-  (let [seen? (true? (.-visible e))]
-    (if (combat/ranged? e)
-      (line-of-fire? (lookup p arrow-kind-of) (u/pos-of (.-pos e)) (u/pos-of (.-pos (.self p))))
-      (and (or seen? (not sight?))
-           (way? kind-at (cell-of (u/pos-of (.-pos e))) (cell-of (u/pos-of (.-pos (.self p)))))))))
+  "danger? with the blocks read through kind-at (a lookup the caller shares between the mobs of one query) and, with
+  pr, the walk searches' proofs of the query's earlier mobs (proofs)."
+  ([p kind-at e opts] (danger-in? p kind-at nil e opts))
+  ([p kind-at pr e {:keys [sight?] :or {sight? true}}]
+   (if (combat/ranged? e)
+     (line-of-fire? (lookup p arrow-kind-of) (u/pos-of (.-pos e)) (u/pos-of (.-pos (.self p))))
+     (and (or (seen-mob? e) (not sight?))
+          (let [mob (cell-of (u/pos-of (.-pos e)))
+                body (cell-of (u/pos-of (.-pos (.self p))))]
+            (if pr (proved-way? kind-at pr mob body) (way? kind-at mob body)))))))
 
 (defn danger?
   "Whether hostile e (JS entity) is a real danger to the body of primitives p.
   A ranged mob needs a line of fire (line-of-fire?); a melee mob needs a walkable
-  way to the body and, unless :sight? is false, to be in sight."
+  way to the body and, unless :sight? is false, to have been seen (seen-mob?)."
   ([p e] (danger? p e {}))
   ([p e opts] (danger-in? p (lookup p) e opts)))
 
+(defn query-proofs [p] (proofs (cell-of (u/pos-of (.-pos (.self p))))))
+
 (defn dangers
-  "The hostiles of combat/hostiles (same opts) that are real dangers, nearest first. The mobs' searches share one read
-  of each block."
+  "The hostiles of known-hostiles (same opts) that are real dangers, nearest first. The mobs' searches share their
+  block reads and their proofs (proofs)."
   ([p radius opts] (dangers p radius opts {}))
   ([p radius opts danger-opts]
-   (let [kind-at (lookup p)]
-     (filterv #(danger-in? p kind-at % danger-opts) (combat/hostiles p radius (dissoc opts :sight))))))
+   (let [kind-at (lookup p)
+         pr (query-proofs p)]
+     (filterv #(danger-in? p kind-at pr % danger-opts) (known-hostiles p radius opts)))))
 
 (defn nearest-danger
-  "The nearest of combat/hostiles (same opts) that is a real danger, nil when none; danger-opts as danger?, plus :skip, a
+  "The nearest of known-hostiles (same opts) that is a real danger, nil when none; danger-opts as danger?, plus :skip, a
   set of ids left out. It stops at the first danger found, so the walk search runs for no mob farther off; the mobs'
-  searches share one read of each block."
+  searches share their block reads and their proofs."
   [p radius opts {:keys [skip] :as danger-opts}]
   (let [skip (set skip)
         kind-at (lookup p)
+        pr (delay (query-proofs p))
         danger-opts (dissoc danger-opts :skip)]
-    (some #(when (and (not (contains? skip (.-id %))) (danger-in? p kind-at % danger-opts)) %)
-          (combat/hostiles p radius (dissoc opts :sight)))))
+    (some #(when (and (not (contains? skip (.-id %))) (danger-in? p kind-at @pr % danger-opts)) %)
+          (known-hostiles p radius opts))))

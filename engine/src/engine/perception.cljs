@@ -20,7 +20,19 @@
   loaded from a file (engine/js/seen-file.mjs). A block change in view (cone, line of sight, light) updates memory at
   once; one out of view leaves the old state, a true memory error.
 
-  S1 changes nothing jobs see: blocks, blockAt and entities stay raw; seenBlockAt and seenBlocks are added for S2.")
+  Mobs (card 80f25a40): a memory of the hostile mobs the body has seen or heard, by entity id, which the danger checks
+  (engine.jobs.reach, engine.jobs.danger's callers) take their candidates from instead of every mob the server tracks.
+  A sample (every `:mob-ms`, and at each knownMobs call) reads the hostiles within `:mob-scan` of the primitives:
+    heard  within `:hearing` (16) of the eye, unless the mob makes no sound while it stalks (`silent-mobs`: creeper);
+    seen   a clear line from the eye to its middle (the entity's `visible` field: the same sight rule as the sight
+           table) and within `:radius`, and either inside the view cone or heard (a player turns to a sound it hears).
+  A sensed mob's entry takes its place and time (seen-at when seen). An entry not sensed now stays at its last place
+  while the mob could not have drifted `:mob-drift` (16) blocks since (time x `mob-speed`, blocks a second): about 6 s
+  for a zombie. An entry whose id the client no longer tracks (dead, despawned, far off) is dropped at once.
+  So an unseen silent creeper behind the body is no danger; a creeper seen 3 s ago that went round a corner still is.
+
+  S1 changes nothing jobs see: blocks, blockAt and entities stay raw; seenBlockAt and seenBlocks are added for S2, and
+  knownMobs for the danger checks.")
 
 (def defaults
   {:radius 48
@@ -37,7 +49,11 @@
    :cap-bytes (* 32 1024 1024)
    :save-ms 60000
    :stats-ms 60000
-   :error-every-ms 60000})
+   :error-every-ms 60000
+   :mob-ms 250            ; a mob sample this often
+   :mob-scan 64           ; hostiles within this of the body are sampled
+   :hearing 16            ; a mob within this of the eye is heard
+   :mob-drift 16})        ; a mob not sensed is forgotten once it could have walked this far
 
 (def section-bytes 12288) ; ids (8192) and per-cell seen times (4096)
 (def minute-ms 60000)
@@ -207,6 +223,7 @@
      :st #js {:stores (js/Map.) :count 0 :cap (max 1 (js/Math.floor (/ (:cap-bytes o) section-bytes)))
               :stamp 0 :lastKey -1 :lastSec nil :dim "overworld" :sight nil :visible nil
               :pass nil :lastStart nil :unsubscribe nil
+              :mobs (js/Map.) :mobSource nil
               :passes 0 :rays 0 :cells 0 :steps 0 :stepMs 0 :stepMsMax 0}}))
 
 (defn steps-per-pass [{:keys [opts]}] (max 1 (js/Math.round (/ (:pass-ms opts) (:step-ms opts)))))
@@ -526,6 +543,100 @@
      :sections (.-count st) :bytes (* section-bytes (.-count st))
      :steps-per-pass (steps-per-pass per) :rays-per-pass (rays-per-pass per)}))
 
+;; ---- mobs: the hostiles the body has seen or heard
+
+(def silent-mobs "Hostiles that make no sound while they stalk: known only once seen." #{"creeper"})
+
+(def mob-speed
+  "Blocks a second a hostile covers when it chases (rough game values); one not listed `default-mob-speed`."
+  {"zombie" 2.3 "husk" 2.3 "drowned" 2.3 "zombie_villager" 2.3 "zombified_piglin" 2.3 "blaze" 2.3
+   "skeleton" 2.5 "stray" 2.5 "bogged" 2.5 "wither_skeleton" 2.5 "creeper" 2.5 "witch" 2.5
+   "silverfish" 2.5 "endermite" 2.5 "slime" 2 "magma_cube" 2
+   "spider" 3 "cave_spider" 3 "enderman" 3 "hoglin" 3 "zoglin" 3 "ravager" 3 "piglin_brute" 3.5
+   "pillager" 3.5 "vindicator" 3.5 "evoker" 3 "guardian" 5 "phantom" 6 "vex" 8})
+
+(def default-mob-speed 3)
+
+(defn mob-forget-ms
+  "How long a mob of name not sensed again stays known: the time it takes to drift :mob-drift blocks."
+  [{:keys [opts]} name]
+  (* 1000 (/ (:mob-drift opts) (get mob-speed name default-mob-speed))))
+
+(def mob-middle 0.9)
+
+(defn mob-sense
+  "How the body senses hostile e (an entities() entry) from eye: :seen, :heard or nil (see the ns doc)."
+  [{:keys [opts grid]} ^js eye ^js e]
+  (let [^js pos (.-pos e)
+        vx (- (.-x pos) (.-x eye)) vy (- (+ (.-y pos) mob-middle) (.-y eye)) vz (- (.-z pos) (.-z eye))
+        d (js/Math.hypot vx vy vz)
+        heard? (and (<= d (:hearing opts)) (not (silent-mobs (.-name e))))
+        seen? (and (true? (.-visible e))
+                   (<= d (:radius opts))
+                   (or heard? (in-cone? (basis (.-yaw eye) (.-pitch eye)) (:hx grid) (:hy grid) vx vy vz)))]
+    (cond seen? :seen heard? :heard :else nil)))
+
+(defn sense-mobs!
+  "One mob sample over primitives src: sensed mobs take their place and time, mobs the client no longer tracks or that
+  could have drifted :mob-drift blocks since they were last sensed are forgotten. Returns the map of live entities
+  sensed now, by id."
+  [{:keys [raw opts st] :as per} ^js src]
+  (let [^js st st
+        ^js mobs (.-mobs st)
+        ^js eye (.eye ^js raw)
+        now ((:now opts))
+        sensed (js/Map.)]
+    (if-not (and eye src)
+      sensed
+      (let [listed (js/Set.)]
+        (doseq [^js e (array-seq (.entities src #js {:radius (:mob-scan opts) :kind "hostile" :max 64}))
+                :when (.-pos e)]
+          (.add listed (.-id e))
+          (when-let [how (mob-sense per eye e)]
+            (let [^js old (.get mobs (.-id e))
+                  ^js pos (.-pos e)]
+              (.set sensed (.-id e) e)
+              (.set mobs (.-id e)
+                    #js {:id (.-id e) :name (.-name e) :kind (.-kind e)
+                         :pos #js {:x (.-x pos) :y (.-y pos) :z (.-z pos)}
+                         :at now
+                         :seenAt (if (keyword-identical? how :seen) now (some-> old .-seenAt))
+                         :heard (keyword-identical? how :heard)}))))
+        (doseq [[id ^js m] (vec (es6-iterator-seq (.entries mobs)))]
+          (when (or (not (.has listed id))
+                    (> (- now (.-at m)) (mob-forget-ms per (.-name m))))
+            (.delete mobs id)))
+        sensed))))
+
+(defn known-mobs
+  "The hostiles the body knows of after a fresh sample over primitives src, nearest first, as entities() entries: a mob
+  sensed now is its live entry; one remembered is {:id :name :kind :pos (where it was last sensed) :distance :visible
+  false}. Each adds seen (seen now or since it was last out of mind), heard (heard now, unseen), remembered (not
+  sensed now) and ageMs (since last sensed)."
+  [{:keys [raw opts st] :as per} ^js src]
+  (let [sensed (sense-mobs! per src)
+        ^js eye (.eye ^js raw)
+        now ((:now opts))]
+    (if-not eye
+      #js []
+      (let [fx (.-x eye) fy (- (.-y eye) eye-height) fz (.-z eye)
+            out (into-array
+                 (for [^js m (es6-iterator-seq (.values (.-mobs ^js st)))]
+                   (let [^js live (.get sensed (.-id m))
+                         ^js pos (.-pos m)
+                         base (if live
+                                (js/Object.assign #js {} live)
+                                #js {:id (.-id m) :name (.-name m) :kind (.-kind m) :pos pos
+                                     :distance (js/Math.hypot (- (.-x pos) fx) (- (.-y pos) fy) (- (.-z pos) fz))
+                                     :visible false})]
+                     (when (= "creeper" (.-name m)) (aset base "creeper" true))
+                     (js/Object.assign base #js {:seen (some? (.-seenAt m))
+                                                 :heard (and (some? live) (.-heard m))
+                                                 :remembered (nil? live)
+                                                 :ageMs (- now (.-at m))}))))]
+        (.sort out (fn [^js a ^js b] (- (.-distance a) (.-distance b))))
+        out))))
+
 ;; ---- persistence (io: engine/js/seen-file.mjs)
 
 (defn all-sections
@@ -578,6 +689,7 @@
         timer (fn [ms f] (doto (js/setInterval (fn [] (try (f) (catch :default e (report! e)))) ms) (.unref)))
         timers [(timer (:step-ms opts) #(step! per))
                 (timer (:save-ms opts) save)
+                (timer (:mob-ms opts) #(when-let [src (.-mobSource st)] (sense-mobs! per src)))
                 (timer (:stats-ms opts) #(on-event (merge {:kind :perception.stats :source :body :level :info}
                                                           (stats per))))]]
     (fn []
@@ -587,11 +699,14 @@
 
 (defn wrap
   "The primitives object p with every primitive as it is (blocks, blockAt, entities stay raw in S1), plus
-  seenBlockAt({x,y,z}) and seenBlocks({radius, names, max}) over memory, and the perception itself."
+  seenBlockAt({x,y,z}) and seenBlocks({radius, names, max}) over memory, knownMobs() (known-mobs: the hostiles the body
+  has seen or heard, sampled from p's entities), and the perception itself."
   [p per]
   (let [out (js/Object.assign #js {} p)
         pos-js (fn [[x y z]] #js {:x x :y y :z z})]
     (aset out "perception" per)
+    (set! (.-mobSource ^js (:st per)) p)
+    (aset out "knownMobs" (fn [] (known-mobs per p)))
     (run! #(when-let [f (aget p %)] (aset out % (touching per p f))) touching-primitives)
     (aset out "seenBlockAt" (fn [^js a]
                               (let [b (seen-block per [(.-x a) (.-y a) (.-z a)])]

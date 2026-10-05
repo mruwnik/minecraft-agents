@@ -3,8 +3,9 @@
   straight ground route between two points (straight-route) for a caller that has no planned one.
 
   The mobs are an input: what the body has seen or remembers, as a player would ({:name :pos} per mob, other keys
-  such as :seen-at ignored; JS entities are read too). route-danger never reads the world's entities itself, so an
-  unseen creeper behind the body never counts.
+  such as :seen-at ignored; JS entities are read too), e.g. engine.jobs.reach/known-hostiles (the perception's mob
+  memory, as recover-drops passes). route-danger never reads the world's entities itself, so an unseen creeper behind
+  the body never counts.
 
   Per mob:
     hostile?  minecraft-data's entity type \"hostile\" (or category \"Hostile mobs\"); anything else is no danger
