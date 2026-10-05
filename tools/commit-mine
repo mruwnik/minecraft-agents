@@ -61,7 +61,7 @@ done
 # Message.
 if [ -f "$msg" ]; then message="$(cat "$msg")"; else message="$msg"; fi
 trailer='Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>'
-grep -qF "$trailer" <<<"$message" || message="$message"$'\n\n'"$trailer"
+grep -qiE '^Co-Authored-By:' <<<"$message" || message="$message"$'\n\n'"$trailer"
 
 # Lock with backoff.
 waited=0; delay=0.2
