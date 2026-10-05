@@ -73,13 +73,15 @@
 
 (def hostile-near
   "Holds when a real danger is within :radius (args, default 8): a hostile
-  mob the body can see AND that has a walkable way to it (engine.jobs.reach:
+  mob the body knows of AND that has a walkable way to it (engine.jobs.reach:
   not walled off, not across a pit it cannot climb, not with the body sealed
   in), or a ranged one (skeleton, stray, bogged, pillager, witch; see
   engine.jobs.combat/ranged-mobs) with a line of fire within :ranged-radius
-  (default 16, about a skeleton's range). Sight is a block raycast from the
-  eye to the mob (the `visible` field of sensing). :visible-only false drops
-  the sight test of a melee mob (the way to the body still counts). Players and passive mobs are
+  (default 16, about a skeleton's range). Only known mobs count
+  (engine.perception's mob memory: seen in the view cone, or heard and in the
+  clear, and remembered at the place last sensed while likely still near); an
+  unseen silent creeper behind the body does not. :visible-only false lets a
+  heard melee mob count unseen (the way to the body still counts). Players and passive mobs are
   other entity kinds and never count. A dead body (a :died entry with no
   newer :respawned) sees no danger. The job's own :radius and
   :ranged-radius are set in the entry's :job spec. A danger reflex: by default
