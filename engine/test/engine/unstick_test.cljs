@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.registry :as registry]
             [engine.core :as core]
+            [engine.access.ledger :as ledger]
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.scenario :as scenario]
@@ -405,6 +406,29 @@
           (is (= [] (calls p "dig")))
           (is (= [] (calls p "place")))
           (is (= [] (:list (core/state eng))) "the hop succeeded: done"))))))
+
+(defn ledger-of [eng] (ledger/open-entries (mem/view (:store eng))))
+
+(deftest unstick-pillar-blocks-are-written-to-the-scaffold-ledger-for-cleanup
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:pos at5} :blocks low-walls :inventory [{:name "cobblestone" :count 4}]})]
+          (await (run-attempts! eng p 1 :free))
+          (is (= [{:cell [5 64 0] :item "cobblestone" :before "air" :purpose :unstick-pillar :state :placed}
+                  {:cell [5 65 0] :item "cobblestone" :before "air" :purpose :unstick-pillar :state :placed}]
+                 (->> (ledger-of eng) (sort-by :cell) (mapv #(dissoc % :job))))
+              "each cell jumpPlace filled is an open entry, so jobs.access.cleanup takes it back once the body is out")
+          (is (= #{"j1"} (set (map :job (ledger-of eng)))) "owned by the unstick job"))))))
+
+(deftest unstick-pillar-that-places-nothing-leaves-no-ledger-entry
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:pos at5} :blocks low-walls :inventory [{:name "cobblestone" :count 4}]})]
+          (.override (.-world p) "jumpPlace" (fn ^:async f [_ _ _] #js {:status "failed" :placed 0 :reason "no-support"}))
+          (await (run-attempts! eng p 1 true))
+          (is (= [] (ledger-of eng))))))))
 
 (deftest unstick-pillars-with-the-largest-stack-and-cobblestone-counts
   (async done

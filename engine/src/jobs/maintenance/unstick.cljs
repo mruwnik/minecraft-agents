@@ -1,5 +1,6 @@
 (ns jobs.maintenance.unstick
-  (:require [engine.jobs.tidy :as tidy]
+  (:require [engine.access.ledger :as ledger]
+            [engine.jobs.tidy :as tidy]
             [clojure.string :as str]
             [engine.ctx :as ctx]
             [engine.jobs.access :as access]
@@ -305,8 +306,14 @@
 
 (defn pillar-skipped-reason [c] (:why (pillar-plan c (cell (u/self-pos c)))))
 
+(def purpose
+  "The scaffold ledger purpose of the blocks the pillar places."
+  :unstick-pillar)
+
 (defn ^:async pillar!
-  "Pillar up with jumpPlace, depth-many blocks of the largest stack carried.
+  "Pillar up with jumpPlace, depth-many blocks of the largest stack carried. Every cell is written to the scaffold
+  ledger (engine.access.ledger) as an intent before the jump and settled from the cells after it, so the blocks it
+  really placed stay open entries that jobs.access.cleanup takes back (the trigger :scaffold-left) once the body is out.
   Returns nil when it did something useful, else the reason it did not."
   [c]
   (let [here (cell (u/self-pos c))
@@ -314,7 +321,14 @@
     (if-not item
       why
       (let [_ (access/trespass! c "unstick" (:trespass (access/choose c :place [(mapv #(up here %) (range count))] identity)))
+            cells (mapv #(access/cell (up here %)) (range count))
+            block-at (fn [[x y z]] (u/block-name (:primitives c) {:x x :y y :z z}))
+            l (reduce #(ledger/intend %1 {:cell %2 :item item :before (block-at %2) :job (:id c) :purpose purpose})
+                      (ledger/reconcile (ledger/open-entries (ctx/view c)) block-at)
+                      cells)
+            _ (ledger/remember! c l)
             r (await (ctx/act c :jumpPlace (clj->js {:item item :count count})))
+            _ (ledger/remember! c (ledger/reconcile l block-at))
             status (.-status r)
             placed (.-placed r)]
         (cond

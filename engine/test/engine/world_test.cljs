@@ -242,6 +242,11 @@
     (is (= 3 (count (world/footprints w "other"))))
     (is (= {} (world/footprints nil nil)))))
 
+(deftest plan-authors-lists-the-plans-that-name-a-maker
+  (let [w (world/of-data {"pad" (assoc pad :by "Fake") "wall" wall} {})]
+    (is (= {"pad" "Fake"} (world/plan-authors w)))
+    (is (= {} (world/plan-authors nil)))))
+
 ;; ------------------------------------------------------------------ claims
 
 (def a-claim {:id "c1" :owner "Miles" :status :active :until 5000 :min [0 60 0] :max [9 70 9]})

@@ -53,6 +53,32 @@
             (is (= [{:x 0 :y 65 :z 0} {:x 0 :y 66 :z 0}] (mapv arg-pos (calls p "dig"))) (pr-str zones))
             (is (= warns (mapv :zones (trespass seen :breathe.trespass-last-resort))) (pr-str zones))))))))
 
+(defn setup-with-plan [world plan]
+  (let [clock (atom 1000000)
+        [seen sink] (tu/legacy-capture-sink)
+        p (tu/fake (merge {:offlineScale 0.0001} world))
+        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                          :backoff false :world (ew/of-data {"hut" plan} {} [])
+                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+    {:eng eng :p p :seen seen}))
+
+(def roof-plan {:id "hut" :parts [{:id "roof" :box [[0 65 0] [0 66 0]] :want "stone"}]})
+
+(deftest trespass-warns-of-a-plans-footprint-only-when_another_made_it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[by warns] [[nil [["hut"]]]
+                            ["Miles" [["hut"]]]
+                            ["Fake" []]
+                            ["fake" []]]]
+          (let [{:keys [eng p seen]} (setup-with-plan {:blocks {"0,65,0" "stone" "0,66,0" "stone"}}
+                                                       (cond-> roof-plan by (assoc :by by)))]
+            (core/submit! eng '(jobs.survival.breathe {:min-oxygen 12}) {})
+            (await (core/tick! eng))
+            (is (= 2 (count (calls p "dig"))) (pr-str by))
+            (is (= warns (mapv :plans (trespass seen :breathe.trespass-last-resort))) (pr-str by))))))))
+
 ;; ------------------------------------------------------------------ extinguish
 
 (def pool {"4,64,0" "water"})

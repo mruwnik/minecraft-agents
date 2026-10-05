@@ -26,6 +26,7 @@
                  (into #{} (keep (fn [[cell id]] (when (= id except) cell))) (ctx/footprints c)))
     :claims (ctx/claims c)
     :self (ctx/self-name c)
+    :own-plans (into #{} (keep (fn [[id by]] (when (zones/same-owner? by (ctx/self-name c)) id))) (ctx/plan-authors c))
     :now (ctx/now c)
     :ignore-zones? (boolean (if (contains? opts :ignore-zones?) (:ignore-zones? opts) (:ignore-zones? (:args c))))}))
 
@@ -118,10 +119,14 @@
 (defn trespass-refusal
   "The refusing verdict when action at pos is refused for a social reason (another's zone, claim or plan footprint),
   else nil: physics and hazards are no business of the last-resort rule, and a missing zone list refuses nothing, so
-  a survival job is never blocked by an unread zones.edn. c-or-in as may?."
+  a survival job is never blocked by an unread zones.edn. A footprint of a plan this body made (the plan's :by is its
+  own name, :own-plans of the input) is not another's. c-or-in as may?."
   [c-or-in action pos]
-  (let [v (may? c-or-in action pos)]
-    (when (contains? social-reasons (:reason v)) v)))
+  (let [in (if (:primitives c-or-in) (rules-input c-or-in) c-or-in)
+        v (may? in action pos)]
+    (when (and (contains? social-reasons (:reason v))
+               (not (and (= :footprint (:reason v)) (contains? (:own-plans in) (:plan v)))))
+      v)))
 
 (defn choose
   "From options, the first one whose cells (cells-of option) are all permitted for action; failing that the first

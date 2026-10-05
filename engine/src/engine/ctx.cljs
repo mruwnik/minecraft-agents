@@ -164,6 +164,11 @@
   [ctx]
   (.-username (.self (:primitives ctx))))
 
+(defn plan-authors
+  "{plan-id by}: the body each plan names as its maker (:by); a plan without :by is not listed."
+  [ctx]
+  (world/plan-authors (:world (:engine ctx))))
+
 (defn footprints
   "{[x y z] plan-id}: the cells of every plan, as engine.access.rules takes :footprints (a refusal then names
   the :plan). A job working plan P passes {:except P} to leave P's own cells out."
