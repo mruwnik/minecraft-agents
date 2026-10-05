@@ -58,7 +58,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks eight})
-              result (await (child-outcome eng job {:from (:to box) :to (:from box)} 20))]
+              result (await (child-outcome eng job {:from (:to box) :to (:from box)} 40))]
           (is (= {:dug 8 :skipped {} :kept 0 :fluids {}} result))
           (is (= [65 65 65 65 64 64 64 64] (dug-ys p)))
           (is (= ["air"] (distinct (map #(block-at p %) [{:x 1 :y 65 :z 1} {:x 2 :y 64 :z 2}])))))))))
@@ -97,9 +97,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:blocks {"9,64,1" "dirt"} :unreachable ["9,64,1"]})
-              args {:from {:x 9 :y 64 :z 1} :to {:x 9 :y 64 :z 1}}]
-          (is (= {:dug 0 :skipped {{:x 9 :y 64 :z 1} :unreachable} :kept 0 :fluids {}} (await (child-outcome eng job args 8))))
+        (let [{:keys [eng p]} (setup {:blocks {"9,55,1" "dirt"}})
+              args {:from {:x 9 :y 55 :z 1} :to {:x 9 :y 55 :z 1}}]
+          (is (= {:dug 0 :skipped {{:x 9 :y 55 :z 1} :unreachable} :kept 0 :fluids {}} (await (child-outcome eng job args 20))))
           (is (empty? (calls p "dig"))))))))
 
 (deftest clear-box-equips-the-matching-tool-once
@@ -157,14 +157,14 @@
                                  r))}
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
           (core/submit! eng '(recording-parent) {})
-          (await (core/tick! eng))
+          (dotimes [_ 3] (await (core/tick! eng)))   ; the first cell: dig, pick up the drop, the pick-up ends
           (.hold world "dig")
           (let [running (core/tick! eng)]
             (await (js/Promise. (fn [resolve] (js/setTimeout resolve 20))))
             (takeover/take! eng {:who "claude" :why "cut"})
             (await running))
           (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
-          (await (run-until-empty eng 20))
+          (await (run-until-empty eng 40))
           (is (= {:dug 8 :skipped {} :kept 0 :fluids {}} @out)))))))
 
 (deftest clear-box-walks-toward-a-box-in-unloaded-chunks-then-digs
@@ -206,7 +206,8 @@
                                       :self {:pos {:x 1.5 :y 64 :z 1.5}}})
               result (await (child-outcome eng job args 20))]
           (is (= {:dug 2 :skipped {} :kept 0 :fluids {}} result))
-          (is (= [["dig" 2] ["moveTo" 0] ["dig" 1]] (act-trail p))))))))
+          (is (= [["dig" 2] ["dig" 1]] (act-trail p))
+              "picking up the first cell's drop walked the body off the cell under foot, so no step-off is needed"))))))
 
 (deftest clear-box-steps-off-a-lone-cell-under-foot-before-digging-it
   (async done
@@ -296,3 +297,25 @@
           (let [{:keys [eng]} (setup {:blocks eight} (ew/of-data {} {} [(assoc farm-zone :owner owner)]))
                 result (await (child-outcome eng job (merge box extra) 30))]
             (is (= dug (:dug result)) (pr-str [owner extra]))))))))
+
+(deftest clear-box-picks-up-what-it-digs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:blocks eight})
+              result (await (child-outcome eng job box 40))
+              carried (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p)))]
+          (is (= 8 (:dug result)))
+          (is (= {"dirt" 4 "stone" 4} (select-keys carried ["dirt" "stone"]))))))))
+
+(def full-inventory (mapv (fn [i] {:name (str "item_" i) :count 1}) (range 36)))
+
+(deftest clear-box-with-a-full-inventory-waits-inventory-full
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:blocks eight :inventory full-inventory})
+              id (core/submit! eng (list job box) {})]
+          (dotimes [_ 4] (await (core/tick! eng)))
+          (is (= :inventory-full (:reason (core/waiting eng id))))
+          (is (empty? (calls p "dig"))))))))

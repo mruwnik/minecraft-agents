@@ -1,8 +1,7 @@
 (ns jobs.build.clear-box
-  (:require [engine.jobs.tidy :as tidy]
-            [engine.ctx :as ctx]
+  (:require [engine.ctx :as ctx]
             [engine.jobs.access :as access]
-            [engine.jobs.tools :as tools]
+            [engine.jobs.blocks :as blocks]
             [engine.jobs.util :as u]
             [engine.path.near :as near]))
 
@@ -18,7 +17,11 @@
   dig. A cell whose dig has a hazard not in :accept counts a try (reason :hazard after two). A box with every pending
   cell refused declines before its first round, with one clear-box.declined warn {:reason :refused :zones :plans};
   no zone list (zones.edn missing or never valid) declines with one clear-box.declined warn {:reason :no-zones}, also
-  in the middle of the job.")
+  in the middle of the job.
+  Each cell is dug by a jobs.blocks.dig child (:dig): it walks in reach (go-to), holds the best carried tool, digs
+  through tidy/dig! and picks up the drop; no tool is needed (a block whose tool is missing is dug and its drop
+  lost). While the child waits on the body (:inventory-full) the check waits with the same reason; a cell the child
+  waits on (:unreachable, a refusal, a hazard) is skipped or tried again as above.")
 
 (def args
   {:from {:doc "box corner (inclusive); any order; {:x :y :z} or [x y z]" :default nil}
@@ -66,6 +69,12 @@
 (defn kept? [keep n]
   (or (some? (re-find kept-pattern n)) (boolean (some #{n} keep))))
 
+(defn dig-args
+  "The jobs.blocks.dig args for the cell at pos: no tool needed, the drop picked up, the job's :accept and opt-out."
+  [c pos]
+  (merge (select-keys (:args c) [:accept :ignore-zones?])
+         {:pos pos :need-drop false :collect true}))
+
 (defn named
   "[[pos block-name] ...] of the loaded cells not skipped."
   [c]
@@ -99,9 +108,9 @@
      :refused (into [] (comp (filter #(= :refused (nth % 3))) (map (fn [[pos _ v]] [pos v]))) judged)}))
 
 (defn started?
-  "Whether a round has left anything in memory (dug, skipped or tried a cell)."
+  "Whether a round has left anything in memory (dug, skipped, tried or started on a cell)."
   [c]
-  (boolean (some #(contains? (ctx/mem c) %) [:dug :skipped :tries])))
+  (boolean (some #(contains? (ctx/mem c) %) [:dug :skipped :tries :target])))
 
 (defn decline-box!
   "Warn once clear-box.declined {:reason :bad-args} naming the box's problem; false."
@@ -116,6 +125,8 @@
   (cond
     (and (not (started? c)) (box-error (:args c))) (decline-box! c)
     (and (nil? (ctx/zones c)) (not (:ignore-zones? (:args c)))) (access/decline! c :clear-box.declined "clear-box" {:reason :no-zones})
+    (:target (ctx/mem c)) (let [w (blocks/child-wait c :dig 'jobs.blocks.dig (dig-args c (:target (ctx/mem c))))]
+                            (if (blocks/body-wait? w) (ctx/wait c w) true))
     (started? c) true
     :else (let [{:keys [allowed refused]} (sort-out c (pending c))]
             (if (and (empty? allowed) (seq refused))
@@ -191,47 +202,51 @@
     (ctx/result! c {:dug dug :skipped skipped :kept kept :fluids wet})
     :done))
 
-(defn verdict
-  "How the rules judge digging pos now: :ok, :refused, :hazard, :no-zones or :not-loaded, with the verdict."
-  [c pos]
-  (let [v (access/may-dig? (access/rules-input c) pos)]
-    [(access/judge v (:accept (:args c))) v]))
+(defn declined!
+  "Book the cell t whose dig child declined with wait reason w: a body reason keeps it (the check waits on it), a
+  refusal or a missing zone list skips or leaves it, a hazard counts a try, anything else skips it as :unreachable."
+  [c t w]
+  (when-not (blocks/body-wait? w)
+    (ctx/update-mem! c dissoc :target)
+    (case (:reason w)
+      :not-allowed (when (#{:zone :claim :footprint} (:by w)) (skip-refused! c [[t (assoc w :reason (:by w))]]))
+      :hazard (bump! c t :hazard)
+      :not-loaded nil
+      (skip! c t :unreachable)))
+  :continue)
 
 (defn ^:async dig!
-  "Equip, ask the rules again, dig."
-  [c pos n]
-  (let [p (:primitives c)
-        tool (tools/best-tool (map :name (u/inventory p)) n)]
-    (when (and tool (not= tool (.-held (.self p))))
-      (await (ctx/act c :equip #js {:item tool :dest "hand"})))
-    (let [[judged v] (verdict c pos)]
-      (case judged
-        :ok (let [status (.-status (await (tidy/dig! c pos)))]
-              (case status
-                ("dug" "missing") (ctx/update-mem! c #(cond-> (update % :tries dissoc pos)
-                                                        (= "dug" status) (update :dug (fnil inc 0))))
-                "cannot" (skip! c pos :cannot)
-                (bump! c pos :refused)))
-        :refused (skip-refused! c [[pos v]])
-        :hazard (bump! c pos :hazard)
-        nil)
-      :continue)))
+  "One round of the dig child on the target cell t; book its end. A refused dig counts a try (:refused after two)."
+  [c t]
+  (let [args (dig-args c t)
+        r (await (ctx/call-child c :dig 'jobs.blocks.dig args))]
+    (case r
+      :continue :continue
+      :declined (declined! c t (blocks/child-wait c :dig 'jobs.blocks.dig args))
+      (let [res (ctx/child-result c :dig)]
+        (ctx/update-mem! c dissoc :target)
+        (case (:reason res)
+          :dug (ctx/update-mem! c #(-> % (update :tries dissoc t) (update :dug (fnil inc 0))))
+          :already-clear (ctx/update-mem! c update :tries dissoc t)
+          (:cannot :fluid) (skip! c t :cannot)
+          (bump! c t :refused))
+        :continue))))
 
 (defn ^:async round
-  "One bounded step: skip the refused cells, walk to the highest nearest pending cell, equip a tool, dig."
+  "One bounded step: a round of the dig child on the cell under way (until it has picked up the drop), else skip the
+  refused cells and start on the highest nearest pending cell; an unloaded one is walked to first."
   [c]
-  (let [{:keys [allowed refused]} (sort-out c (pending c))]
-    (when (seq refused) (skip-refused! c refused))
-    (if (empty? allowed)
-      (finish! c)
-      (if-let [[pos n] (target c allowed)]
-        (if (and n (= :hazard (first (verdict c pos))))
-          (do (bump! c pos :hazard) :continue)
-          (let [w (await (near/walk-near! c pos 3))]
-            (case w
-              :partial :continue
-              :blocked (do (bump! c pos :unreachable) :continue)
-              (if (nil? n)
-                :continue
-                (await (dig! c pos n))))))
-        (await (step-off! c allowed))))))
+  (if-let [t (:target (ctx/mem c))]
+    (await (dig! c t))
+    (let [{:keys [allowed refused]} (sort-out c (pending c))]
+      (when (seq refused) (skip-refused! c refused))
+      (if (empty? allowed)
+        (finish! c)
+        (if-let [[pos n] (target c allowed)]
+          (if (nil? n)
+            (let [w (await (near/walk-near! c pos 3))]
+              (when (= :blocked w) (bump! c pos :unreachable))
+              :continue)
+            (do (ctx/update-mem! c assoc :target pos)
+                (await (dig! c pos))))
+          (await (step-off! c allowed)))))))
