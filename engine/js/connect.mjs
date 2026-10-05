@@ -35,6 +35,7 @@ export function connectBot ({ host, port, username, auth = DEFAULTS.auth, versio
     }
     const fail = err => {
       settle()
+      bot.on('error', () => {}) // the ended socket may still report a late error (write EPIPE); nobody is left to listen
       bot.end()
       reject(err)
     }

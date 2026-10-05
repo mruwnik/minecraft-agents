@@ -759,6 +759,44 @@ test('a failed reconnect is retried', async () => {
   assert.deepEqual(seen.map(e => e.kind), ['offline', 'online'])
 })
 
+test('offline: a fresh bot that ends while its world loads is not adopted; the next try is', async () => {
+  const bots = []
+  const connect = async () => {
+    const b = stubBot(world)
+    if (bots.length === 1) { // its chunk never arrives and the connection ends meanwhile
+      b.blockAt = () => null
+      setTimeout(() => b.emit('end', 'kicked while loading'), 20)
+    }
+    bots.push(b)
+    return b
+  }
+  const { p, seen } = await online({ connect })
+  assert.deepEqual(await p.offline('t1', { ms: 1000 }), { status: 'ok', ms: 1000 })
+  assert.deepEqual([bots.length, seen.map(e => e.kind)], [3, ['offline', 'online']])
+  assert.equal(p.isOffline(), false)
+  await p.close()
+})
+
+test('a fresh bot that is not bound yet survives a late socket error (write EPIPE) while its world loads and after it ended', async () => {
+  const bots = []
+  const connect = async () => {
+    const b = stubBot(world)
+    if (bots.length === 1) {
+      b.blockAt = () => null
+      setTimeout(() => b.emit('error', new Error('write EPIPE')), 10)
+      setTimeout(() => b.emit('end', 'kicked while loading'), 20)
+      setTimeout(() => b.emit('error', new Error('write EPIPE')), 40)
+    }
+    bots.push(b)
+    return b
+  }
+  const { p, seen } = await online({ connect })
+  assert.deepEqual(await p.offline('t1', { ms: 1000 }), { status: 'ok', ms: 1000 })
+  await new Promise(resolve => setTimeout(resolve, 60))
+  assert.equal(bots.length, 3)
+  await p.close()
+})
+
 test('a reconnect that keeps failing rejects, reports the body disconnected, then the body keeps trying by itself', async () => {
   let calls = 0
   const connect = async () => {

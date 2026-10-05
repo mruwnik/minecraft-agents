@@ -1369,18 +1369,15 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   })
 
   // waits for the fresh bot's world; a timeout is a warn event and the bot is used anyway. null when close() came first.
-  const awaitWorld = async fresh => {
-    if (!await waitForWorld(fresh, { timeoutMs: worldTimeoutMs })) emit({ kind: 'world-not-loaded', ms: worldTimeoutMs })
-    if (!closed) return fresh
-    fresh.quit()
-    return null
-  }
-
-  // awaitWorld, but a fresh bot that is kicked or ends while its world loads is not adopted: null (it is not bound yet,
+  // A fresh bot that is kicked or ends while its world loads is not adopted: null (it is not bound yet,
   // so nothing else would notice the drop), and the wait stops at once with no world-not-loaded
   const awaitWorldUnlessEnded = async fresh => {
     let ended = false
     const mark = () => { ended = true }
+    // connect's own error listener is gone once the bot spawned and nothing binds it yet: a late socket error (write EPIPE
+    // after a kick) would throw uncaught and end the process. Kept for good: the bot may be dropped, and a bound one reports
+    // errors through its own handler.
+    fresh.on('error', () => {})
     fresh.once('end', mark)
     fresh.once('kicked', mark)
     const loaded = await waitForWorld(fresh, { timeoutMs: worldTimeoutMs, stop: () => ended })
@@ -1399,7 +1396,11 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       if (closed) return null
       const fresh = await reconnect().then(b => ({ b }), error => ({ error }))
       if (fresh.b && closed) { fresh.b.quit(); return null }
-      if (fresh.b) return awaitWorld(fresh.b)
+      if (fresh.b) {
+        const ready = await awaitWorldUnlessEnded(fresh.b)
+        if (ready || closed) return ready
+        fresh.error = new Error('the connection ended before the world loaded')
+      }
       if (attempt >= RECONNECT_TRIES) throw fresh.error
       await sleepMs(RECONNECT_RETRY_MS * timeScale)
     }
