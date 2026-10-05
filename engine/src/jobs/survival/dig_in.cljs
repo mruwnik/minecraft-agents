@@ -14,7 +14,7 @@
   head height, a support cell beside the roof cell, then one above the head, at
   most :max-places placements per round. Walls mode converges: every round it
   computes the open cells from the body's current feet cell, so a body that
-  was moved is walled in where it now stands. With fewer blocks it digs down
+  was moved is walled in where it now stands. If the blocks run out part-way (used up, lost, or the body moved to a cell with more open cells) the mode is chosen again, so it digs a pit instead of failing no-item. With fewer blocks it digs down
   two, but only while the block under each one is solid and no lateral water
   or lava borders the descent cell (collecting the blocks it digs), and places one
   above, at the cell the body stood in, from a carried or dug block. If a dig
@@ -209,7 +209,10 @@
 (defn open-text [cells]
   (str "open cells " (pr-str (mapv (juxt :x :y :z) cells))))
 
-(defn ^:async walls-round [c]
+(defn ^:async walls-round
+  "One round of walls mode. Out of blocks (the carried ones were used up or lost, or the body moved to a cell with more
+  open cells than blocks) it forgets the mode so the next round chooses again: a pit dug with what it can harvest."
+  [c]
   (let [{:keys [blocks max-places roof-height]} (:args c)
         p (:primitives c)
         open (open-cells p (sh/feet p))
@@ -218,6 +221,7 @@
     (cond
       (empty? cells) (do (when-not (sh/roofed? p roof-height) (remember-failed-site! c :walls-refused))
                          :done)
+      (= "no-item" status) (do (ctx/update-mem! c dissoc :mode :start) :continue)
       (not= :ok status) (fail-site! c :walls-failed (str "cannot place a block: " status "; " (open-text open)))
       (sh/roofed? p roof-height) :done
       :else :continue)))

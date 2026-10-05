@@ -443,6 +443,22 @@
           (is (= {:x 5 :y 64 :z 0} (:pos (last (entries eng :shelter)))))
           (is (= {:x 5 :y 66 :z 0} (:roof (last (entries eng :shelter))))))))))
 
+(deftest dig-in-walls-out-of-blocks-falls-back-to-a-pit
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:time night :inventory [{:name "dirt" :count 30}]
+                                           :blocks (merge floor {"5,63,0" "dirt" "5,62,0" "stone" "5,61,0" "stone" "5,60,0" "stone" "6,64,0" "stone"})})]
+          (core/submit! eng '(jobs.survival.dig-in) {})
+          (await (core/tick! eng))
+          (swap! (fake/state p) assoc :inventory [])
+          (teleport! p 5 64 0)
+          (await (run-until-empty eng 12))
+          (is (empty? (emitted seen :dig_in_failed)) "no failure: it switched to a pit")
+          (is (seq (calls p "dig")) "it dug down")
+          (is (< (:y (pos-of p)) 64) "the body is in the pit")
+          (is (= "dirt" (.-name (.blockAt p (tu/pos 5 64 0)))) "the pit is roofed with a dug block"))))))
+
 (deftest dig-in-dig-mode-rechooses-when-the-body-moved-off-its-column
   (async done
     (tu/run-async done
