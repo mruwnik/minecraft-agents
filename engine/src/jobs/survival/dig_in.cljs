@@ -1,5 +1,6 @@
 (ns jobs.survival.dig-in
   (:require [engine.jobs.tidy :as tidy]
+            [engine.access.click :as click]
             [engine.ctx :as ctx]
             [engine.jobs.access :as access]
             [engine.jobs.shelter :as sh]
@@ -48,6 +49,13 @@
   the block fills it (leaves); a block a mob walks through (torch, sapling,
   cobweb) is dug out once and placed again, and a cell that is occupied
   again, or whose dig fails, is given up on, so the job always ends.
+  A body standing in a closed room whose roof has a hole over it (room-plug: the lowest cell of y+2 .. y+:roof-height
+  above the feet that is open, has a solid side neighbour, and once filled leaves the room closed: a flood from the
+  feet through cells that are not sealed?, nor an open door, gate or trapdoor, stays within room-limit cells and
+  room-reach of the feet, with a door, gate or trapdoor a hand opens in its walls) only mends that hole with one
+  carried block (plug mode, first in the zone rule's order), instead of walling the body in at feet and head height in
+  the room; its :shelter entry has :room true and :roof the plug, and leave! treats it as never shut in (the room's
+  door is the way out). A room with an open door or doorway, or with no door, gets walls or a pit as before.
   Memory: writes :shelter and :dig-in-futile; reads :dig-in-futile.
 
   Leaving is not a round of this job but the function leave!, which the night-shelter job calls by day (see its doc).")
@@ -258,17 +266,73 @@
       (supported? p below) {:roof below :depth 3})))
 
 (defn mode-choice
-  "[mode refusal] for the shelter from start: the first of :walls (only when walls-ok?) and :dig whose cells are all
-  permitted, else the first of them with its refusal (nil when permitted). dig-plan is the pit's {:roof :depth}, nil
-  when it cannot be roofed (the start cell's rules are then checked)."
-  [c start walls-cells walls-ok? dig-plan]
+  "[mode refusal] for the shelter from start: the first of :plug (only with a room-plug cell), :walls (only when
+  walls-ok?) and :dig whose cells are all permitted, else the first of them with its refusal (nil when permitted).
+  dig-plan is the pit's {:roof :depth}, nil when it cannot be roofed (the start cell's rules are then checked)."
+  [c start walls-cells walls-ok? dig-plan plug]
   (let [in (access/rules-input c)
         {:keys [roof depth]} (or dig-plan {:roof start :depth 2})
         walls-v (some #(access/trespass-refusal in :place %) walls-cells)
         dig-v (or (some #(access/trespass-refusal in :dig %) (map #(update start :y - %) (range 1 (inc depth))))
                   (access/trespass-refusal (assoc in :feet nil) :place roof))
-        options (cond-> [] walls-ok? (conj [:walls walls-v]) :always (conj [:dig dig-v]))]
+        plug-v (when plug (access/trespass-refusal (assoc in :feet nil) :place plug))
+        options (cond-> [] plug (conj [:plug plug-v]) walls-ok? (conj [:walls walls-v]) :always (conj [:dig dig-v]))]
     (or (first (filter (comp nil? second) options)) (first options))))
+
+(def room-limit
+  "Most cells a closed room may have (the flood from the feet stops there and the room counts as open)."
+  256)
+
+(def room-reach
+  "Farthest a closed room's cell may be from the feet along any axis."
+  8)
+
+(defn room-wall?
+  "Whether a cell bounds a room against mobs: sealed?, and not an openable door, gate or trapdoor standing open."
+  [p cell]
+  (let [b (.blockAt p (clj->js cell))]
+    (and (sealed? p cell)
+         (not (and (= :openable (click/kind-of (.-name b))) (click/reached? :open (click/props-of b)))))))
+
+(def neighbours [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
+
+(defn shift [{:keys [x y z]} [dx dy dz]] {:x (+ x dx) :y (+ y dy) :z (+ z dz)})
+
+(defn room-cells
+  "The cells reachable from the feet cell through cells that are not room-wall? (six neighbours, the cell plug counted
+  as a wall) when they form a closed room: at most room-limit of them, none farther than room-reach from the feet on
+  any axis, none unloaded. nil when they do not."
+  [p {fx :x fy :y fz :z :as feet} plug]
+  (loop [todo [feet] seen #{feet}]
+    (if-let [{:keys [x y z] :as cell} (peek todo)]
+      (cond
+        (> (count seen) room-limit) nil
+        (< room-reach (max (js/Math.abs (- x fx)) (js/Math.abs (- y fy)) (js/Math.abs (- z fz)))) nil
+        (nil? (.blockAt p (clj->js cell))) nil
+        :else (let [next (for [d neighbours
+                               :let [n (shift cell d)]
+                               :when (and (not (seen n)) (not= n plug) (not (room-wall? p n)))]
+                           n)]
+                (recur (into (pop todo) next) (into seen next))))
+      seen)))
+
+(defn door-of?
+  "Whether a cell next to one of the room's cells holds a door, gate or trapdoor a hand opens: the room's way out."
+  [p cells]
+  (boolean (some (fn [cell] (some #(= :openable (click/kind-of (u/block-name p (shift cell %)))) neighbours)) cells)))
+
+(defn room-plug
+  "In a closed room with a door whose roof has a hole over the body: the cell to mend, the lowest of y+2 ..
+  y+roof-height straight above the feet that is not solid and has a solid side neighbour to be placed against, when
+  once filled it leaves the feet in a closed room (room-cells) with a door, gate or trapdoor in its walls (door-of?).
+  nil when there is none (open ground, a room with an open door or doorway, a shaft or pit with no door): walls or a
+  pit then, as before."
+  [p {:keys [x y z] :as feet} roof-height]
+  (let [column (map (fn [dy] {:x x :y (+ y dy) :z z}) (range 2 (inc roof-height)))
+        plug (first (filter #(and (not (sh/solid-at? p %)) (supported? p %)) column))
+        cells (when plug (room-cells p feet plug))]
+    (when (and cells (door-of? p cells))
+      plug)))
 
 (defn shaft-top
   "When the feet cell is the bottom of a 1x1 shaft (no side open at feet height): the first height up the open column
@@ -288,7 +352,9 @@
   "Record in job memory how this shelter is built. Walls mode stores
   :mode :walls (the cells are recomputed from the feet every round), and :start
   at the shaft-top when the body stands at the bottom of a 1x1 shaft. Dig mode
-  stores :roof, the starting cell, and :target-y. Chosen once, again only when
+  stores :roof, the starting cell, and :target-y. Plug mode (a closed room with
+  a hole in its roof over the body, room-plug; at least one block carried)
+  stores :plug, the one cell to fill. Chosen once, again only when
   the body leaves a dig-mode column. See mode-choice for the zone rule."
   [c]
   (let [p (:primitives c)
@@ -300,9 +366,11 @@
       (let [cells (open-cells p start)
             have (reduce + (map :count (carried c (:blocks (:args c)))))
             plan (dig-plan p start)
-            [chosen refusal] (mode-choice c start cells (>= have (count cells)) plan)]
+            plug (when (pos? have) (room-plug p start (:roof-height (:args c))))
+            [chosen refusal] (mode-choice c start cells (>= have (count cells)) plan plug)]
         (access/trespass! c "dig-in" refusal)
         (cond
+          (= :plug chosen) (ctx/update-mem! c assoc :mode :plug :plug plug)
           (= :walls chosen) (ctx/update-mem! c #(cond-> (assoc % :mode :walls)
                                                   (shaft-top p start) (assoc :start {:x x :y (shaft-top p start) :z z})))
           (nil? plan) (ctx/update-mem! c assoc :mode :no-roof-support)
@@ -332,10 +400,25 @@
   (ctx/emit! c :dig_in_failed :warn {:text "nothing solid beside the roof cell to place against; not digging a pit"})
   :done)
 
+(defn ^:async plug-round
+  "In a closed room: place one block in the hole of the roof over the body (:plug)."
+  [c]
+  (let [{:keys [blocks]} (:args c)
+        item (pick c blocks)
+        plug (:plug (ctx/mem c))]
+    (if (nil? item)
+      (fail-site! c :plug-failed "cannot mend the roof: no-item")
+      (let [r (await (tidy/place! c plug item true))]
+        (if (#{"placed" "occupied"} (.-status r))
+          (do (when (= "placed" (.-status r)) (ctx/update-mem! c update :placed (fnil conj #{}) plug))
+              :done)
+          (fail-site! c :plug-failed (str "cannot mend the roof: " (.-status r))))))))
+
 (defn ^:async step [c]
   (choose-mode c)
   (let [{:keys [mode target-y]} (ctx/mem c)]
     (cond
+      (= :plug mode) (await (plug-round c))
       (= :walls mode) (await (walls-round c))
       (= :no-roof-support mode) (no-roof-round c)
       (> (:y (sh/feet (:primitives c))) target-y) (await (descend-round c))
@@ -347,8 +430,11 @@
       (let [p (:primitives c)
             feet (sh/feet p)
             placed (:placed (ctx/mem c) #{})
-            roof (update feet :y + 2)
-            roof (if (= :walls (:mode (ctx/mem c))) roof (:roof (ctx/mem c)))
+            mode (:mode (ctx/mem c))
+            roof (case mode
+                   :walls (update feet :y + 2)
+                   :plug (:plug (ctx/mem c))
+                   (:roof (ctx/mem c)))
             door (when (= :walls (:mode (ctx/mem c))) (door placed feet))
             start (when (#{:dig :walls} (:mode (ctx/mem c))) (:start (ctx/mem c)))
             prev (:data (ctx/latest c :shelter))
@@ -358,13 +444,17 @@
         (when (seq placed)
           (ctx/emit! c :dig-in.sealed (if resealed :warn :info)
                      {:pos feet :placed (vec placed) :resealed resealed
-                      :text (str (if resealed "sealed the shelter again: " "sealed in for the night: ")
+                      :text (str (cond
+                                   (= :plug mode) "mended the roof of a closed room over the body: "
+                                   resealed "sealed the shelter again: "
+                                   :else "sealed in for the night: ")
                                  "placed " (count placed) " blocks at " (pr-str (mapv (juxt :x :y :z) placed))
                                  ". At night an open shelter is closed again; it is left by day")}))
         (ctx/remember! c :shelter (cond-> {:pos feet :state :built}
                                     (contains? placed roof) (assoc :roof roof)
                                     door (assoc :door door)
-                                    start (assoc :start start))
+                                    start (assoc :start start)
+                                    (= :plug mode) (assoc :room true))
                        shelter-policy)))
     r))
 
@@ -377,11 +467,13 @@
 (def access-reasons #{:zone :claim :footprint :no-zones})
 
 (defn shut-in?
-  "Whether the body is still in shelter entry: below a pit's :start height (a stair stopped part way counts), behind a
+  "Whether the body is still in shelter entry: never for a mended room (:room, its own door is the way out); below a
+  pit's :start height (a stair stopped part way counts), behind a
   solid :door cell, or, with neither (a roof over a shaft that was walled already), under a solid block within
   sh/default-roof-height."
-  [p {:keys [start door]}]
+  [p {:keys [start door room]}]
   (cond
+    room false
     start (< (:y (sh/feet p)) (:y start))
     door (boolean (some #(sh/solid-at? p %) door))
     :else (sh/roofed? p sh/default-roof-height)))

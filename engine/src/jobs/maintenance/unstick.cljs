@@ -4,6 +4,7 @@
             [engine.ctx :as ctx]
             [engine.jobs.access :as access]
             [engine.jobs.util :as u]
+            [engine.path.near :as near]
             [engine.triggers.stuck :as stuck]))
 
 (def doc
@@ -16,7 +17,12 @@
   rounds per spell bounds the rest. First it waits
   (the :wait primitive, 50 ms steps, up to 1 s) for the body to be on the
   ground, so the cells it picks are the landed ones; still airborne, it uses
-  them anyway. Then: attempt 1 steps back one block the way it came, unless
+  them anyway. In the first round, before anything is placed or dug, it walks
+  toward the stored goal with the engine's planner (engine.path.near/walk-near!
+  with :doors :shut, at most walk-timeout-s per steer): a shut door, gate or
+  trapdoor the job's moveTo cannot pass is opened, passed and shut again, so a
+  body in a room is not pillared and dug out of it. When that walk moves the
+  body more than :min-move blocks the spell is over (:done). Then: attempt 1 steps back one block the way it came, unless
   the body is in a pit (at least three of the four sides solid at feet+k for
   k = 0, 1, ... gives the depth d, capped at 8), where it goes straight to the
   next rule. Otherwise, when a placeable block is carried in a pit, it
@@ -330,6 +336,22 @@
             (do (await (ctx/act c :moveTo (clj->js {:pos goal :range 1 :timeoutS retry-timeout-s})))
                 (moved?)))))))
 
+(def walk-timeout-s
+  "The bound of the first round's walk (one steer of engine.path.near/walk-near!)."
+  10)
+
+(defn ^:async walk-out!
+  "The first round's try before anything is placed or dug: a walk toward the stored goal with the engine's planner
+  (engine.path.near/walk-near!, doors :shut: a shut door, gate or trapdoor is opened, passed and shut again), which
+  the moveTo a job got stuck with cannot do. Skipped while the body is airborne (land! gave up). True when it moved
+  the body more than min-move blocks."
+  [c min-move]
+  (let [before (u/self-pos c)
+        goal (:goal (ctx/mem c))]
+    (when (and goal (on-ground? c))
+      (await (near/walk-near! c goal 1 {:doors :shut :timeout-s walk-timeout-s}))
+      (> (u/dist before (u/self-pos c)) min-move))))
+
 (defn summarize-reasons
   "Each distinct reason once, in first-seen order, with \" (xN)\" appended when it occurred N > 1 times."
   [reasons]
@@ -351,6 +373,29 @@
   (or (pos? (:rounds (ctx/mem c) 0))
       (stuck/stuck? (ctx/view c) (:args c))))
 
+(defn ^:async attempt!
+  "One counted attempt (step back, pillar or dig), then the hop toward the goal: :done when the hop moved the body."
+  [c attempt min-move]
+  (let [here (cell (u/self-pos c))
+        pillar? (pillar-possible? c)
+        action (cond
+                 (and (= 1 attempt) (zero? (pit-depth c here))) :step-back
+                 pillar? :pillar
+                 :else :dig)
+        skipped (when (and (= :dig action) (not pillar?)) (pillar-skipped-reason c))
+        why (await (case action
+                     :step-back (step-back! c)
+                     :pillar (pillar! c)
+                     :dig (dig-step! c)))]
+    (ctx/update-mem! c update :reasons (fnil into []) (keep identity [skipped why])))
+  (let [y (feet-y c)
+        rose? (> y (:best-y (ctx/mem c)))]
+    (ctx/update-mem! c #(-> % (assoc :best-y (max y (:best-y %))) (update :attempts (fnil + 0) (if rose? 0 1)))))
+  (if (await (hop! c min-move))
+    (do (ctx/update-mem! c dissoc :attempts :rounds :best-y :reasons)
+        :done)
+    :continue))
+
 (defn ^:async round [c]
   (let [{:keys [min-move max-attempts]} (:args c)
         {:keys [attempts rounds] :or {attempts 0 rounds 0}} (ctx/mem c)]
@@ -361,22 +406,7 @@
         (ctx/update-mem! c merge
                          (when (= 1 attempt) (merge (bearings c (cell (u/self-pos c))) {:best-y (feet-y c)}))
                          {:rounds attempt})
-        (let [here (cell (u/self-pos c))
-              pillar? (pillar-possible? c)
-              action (cond
-                       (and (= 1 attempt) (zero? (pit-depth c here))) :step-back
-                       pillar? :pillar
-                       :else :dig)
-              skipped (when (and (= :dig action) (not pillar?)) (pillar-skipped-reason c))
-              why (await (case action
-                           :step-back (step-back! c)
-                           :pillar (pillar! c)
-                           :dig (dig-step! c)))]
-          (ctx/update-mem! c update :reasons (fnil into []) (keep identity [skipped why])))
-        (let [y (feet-y c)
-              rose? (> y (:best-y (ctx/mem c)))]
-          (ctx/update-mem! c #(-> % (assoc :best-y (max y (:best-y %))) (update :attempts (fnil + 0) (if rose? 0 1)))))
-        (if (await (hop! c min-move))
+        (if (and (= 1 attempt) (await (walk-out! c min-move)))
           (do (ctx/update-mem! c dissoc :attempts :rounds :best-y :reasons)
               :done)
-          :continue)))))
+          (await (attempt! c attempt min-move)))))))
