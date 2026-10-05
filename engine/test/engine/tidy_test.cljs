@@ -88,6 +88,21 @@
           (is (= [] (zs/calls p "place")))
           (is (= [[[0 65 0]]] (mapv :cells (zs/trespass seen :tidy.restored)))))))))
 
+(deftest restore-digging-a-placed-block-with-a-pickaxe-that-breaks-says-tool-broke-then-tool-none
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (restore! {:blocks {"0,65,0" "cobblestone"} :inventory [{:name "stone_pickaxe" :count 1}]}
+                                             [(zs/whole-zone "Miles")] [placed])]
+          (.override (.-world p) "dig"
+                     (fn ^:async f [token args impl]
+                       (let [r (await (impl token args))]
+                         (swap! (fake/state p) assoc :inventory [])
+                         r)))
+          (await (zs/run-until-empty eng 6))
+          (is (= 1 (count (zs/trespass seen :tool.broke))))
+          (is (= 1 (count (zs/trespass seen :tool.none)))))))))
+
 (deftest restore-skips-and-warns-what-it-cannot-put-back
   (async done
     (tu/run-async done

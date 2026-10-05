@@ -2,6 +2,7 @@
   (:require [engine.ctx :as ctx]
             [engine.jobs.reach :as reach]
             [engine.jobs.tidy :as tidy]
+            [engine.jobs.tools :as tools]
             [engine.jobs.util :as u]))
 
 (def doc
@@ -90,11 +91,13 @@
 
 (defn ^:async put-back!
   "Place the recorded block again, or dig the placed one. True when it worked."
-  [c {:keys [cell action was]}]
+  [c {:keys [cell action was] :as e}]
   (let [pos (zipmap [:x :y :z] cell)
+        _ (when-not (= :dig action) (await (tools/equip-tool! c (:now e) {:fast true})))
         res (await (if (= :dig action)
                      (ctx/act c :place (clj->js {:pos pos :item was}))
-                     (ctx/act c :dig (clj->js {:pos pos}))))]
+                     (ctx/act c :dig (clj->js {:pos pos}))))
+        _ (when-not (= :dig action) (await (tools/note-wear! c)))]
     (contains? #{"placed" "dug"} (.-status res))))
 
 (defn ^:async restore-one!
