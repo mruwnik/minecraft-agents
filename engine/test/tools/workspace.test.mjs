@@ -98,10 +98,25 @@ test('actual wrappers work from another cwd and give useful help for every tool'
     assert.equal(result.status, 0, `${command}: ${result.stderr}`)
     assert.match(result.stdout, new RegExp(`Workspace ${command}:`))
     assert.doesNotMatch(result.stdout, /undefined/)
-    assert.ok(result.stdout.length > 150)
+    assert.ok(result.stdout.length > 40, `${command}: ${result.stdout}`)
     const rejected = f.run(command, ['--world=other'])
     assert.equal(rejected.status, 2)
     assert.match(rejected.stderr, /cannot override/)
+  }
+})
+
+test('player help shows the ./bin form, no body/world plumbing, and says what output means', t => {
+  const f = fixture(t)
+  const help = command => f.run(command, ['--help']).stdout
+  for (const command of commands) {
+    const text = help(command)
+    assert.doesNotMatch(text, /omit the body|<agent>|<body>|BODY|--world <world>|--world WORLD|--worlds|--state|npm run build-agent-tools/, command)
+  }
+  assert.match(help('world'), /\.\/bin\/drive take --who NAME --why .* --idle-s N/)
+  assert.match(help('drive'), /usage: \.\/bin\/drive <op>/)
+  assert.match(help('drive'), /take --who NAME --why/)
+  for (const [command, word] of [['entities', /:age-ms/], ['map', /:box/], ['world-changes', /:cursor/], ['observe', /:unknown-job/], ['time', /:time-of-day/]]) {
+    assert.match(help(command), word, command)
   }
 })
 

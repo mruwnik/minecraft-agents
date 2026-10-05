@@ -6,7 +6,7 @@
             ["node:path" :as path]
             ["node:timers/promises" :refer [setTimeout]]))
 
-(def usage "time.mjs --world WORLD clock|dawn [--worlds DIR --state LEGACY_PARENT --timeout 1200 --poll-ms 1000]")
+(def usage "time.mjs --world WORLD clock|dawn [--worlds DIR --state LEGACY_PARENT --timeout 1200 --poll-ms 1000]\nclock: :time-of-day in ticks (0-24000; 13000-23000 is night), :day? true by day, :age-ms how old the reading is. dawn: waits until day.")
 (def stale-ms 90000)
 
 (defn options [argv]

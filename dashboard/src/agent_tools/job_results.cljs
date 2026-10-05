@@ -46,7 +46,7 @@
                                        (:message e) (assoc :message (:message e))
                                        (seq (:data e)) (assoc :data (:data e)))) selected))]
     (if (empty? matching)
-      {:ok false :id id :reason :job-history-unavailable :history-window history-limit}
+      {:ok false :id id :reason (if partial? :job-history-unavailable :unknown-job) :history-window history-limit}
       (cond-> (merge {:ok true :id id :status (or (:kind terminal) :unfinished)
                       :finished? (some? terminal)
                       :history (if (or partial? (not queued?)) :partial :complete)}

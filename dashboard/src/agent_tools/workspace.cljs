@@ -46,6 +46,19 @@
 (defn route-js [file command argv]
   (clj->js (route (assoc (context! file) :dir (.dirname path (.resolve path file))) command (vec argv))))
 
+;; Player help: the wrapper supplies the body, world and directories, so they are cut from the usage lines.
+(def player-cuts
+  [[#"(\S+)\.mjs" "./bin/$1"]
+   [#"\[--worlds DIR --state LEGACY_PARENT " "["]
+   [#" \[--worlds (?:DIR|<dir>) --state (?:LEGACY_PARENT|<legacy-parent>)\]" ""]
+   [#" --worlds (?:DIR|<dir>) --state (?:LEGACY_PARENT|<legacy-parent>)" ""]
+   [#" \[--worlds (?:DIR|<dir>)\]| \[--state (?:LEGACY_PARENT|<legacy-parent>)\]" ""]
+   [#" \[--worlds <dir>\]| \[--state <legacy-parent>\]| --worlds <dir>| --state <legacy-parent>| --repo <dir>" ""]
+   [#" (?:<agent>|<body>|BODY)(?= )" ""]
+   [#" --world (?:<world>|WORLD)" ""]])
+(defn player-usage [text]
+  (reduce (fn [t [from to]] (str/replace t (js/RegExp. (.-source from) "g") to)) text player-cuts))
+
 (defn wrapper [repo command]
   ;; Dynamic imports work even beneath a caller's type:commonjs package.json.
   ;; No require/__dirname or top-level await: the same script also works in ESM.

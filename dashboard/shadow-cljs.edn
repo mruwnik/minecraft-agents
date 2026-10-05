@@ -18,6 +18,7 @@
                      :exports {:workspaceGenerate agent-tools.workspace/generate!
                                :workspaceRoute agent-tools.workspace/route-js
                                :workspaceUsage agent-tools.workspace/usage
+                               :workspacePlayerUsage agent-tools.workspace/player-usage
                                :storage agent-tools.storage-compat/api
                                :mapFilters agent-tools.api/map-filters
                                :mapSummary agent-tools.api/map-summary

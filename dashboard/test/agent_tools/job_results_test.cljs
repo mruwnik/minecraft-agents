@@ -21,7 +21,8 @@
            (:events result)))))
 
 (deftest history-and-output-loss-are-explicit
-  (is (= :job-history-unavailable (:reason (results/project "j999" "g" [] false))))
+  (is (= :unknown-job (:reason (results/project "j999" "g" [] false))))
+  (is (= :job-history-unavailable (:reason (results/project "j999" "g" [] true))))
   (is (= :partial (:history (results/project "j4" "g" [(event 2 "j4" :completed {})] false))))
   (let [events (into [(event 1 "j4" :queued {})]
                      (map #(event % "j4" :search.done {:found (vec (repeat 80 {:what (apply str (repeat 1000 "s")) :pos [1 2 3]}))})

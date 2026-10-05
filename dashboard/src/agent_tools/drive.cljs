@@ -10,8 +10,8 @@
 (def controls ["forward" "back" "left" "right" "jump" "sneak" "sprint"])
 
 (def usage
-  (str "usage: drive.mjs <agent> <op> [args] --world <world> [--who claude] [--worlds <dir>] [--state <legacy-parent>]\n"
-       "  take --why \"<text>\" [--idle-s <n>] | hold <control>[,<control>...] <ms> | look <yaw> <pitch>\n"
+  (str "usage: drive.mjs <agent> <op> [args] --world <world> [--worlds <dir>] [--state <legacy-parent>]\n"
+       "  take --who NAME --why \"<text>\" --idle-s <n> | hold <control>[,<control>...] <ms> | look <yaw> <pitch>\n"
        "  turn <dyaw> [dpitch] | jump | stop | ping | state | release [--force]\n"
        "  controls: " (str/join " " controls)))
 

@@ -7,7 +7,7 @@
             ["node:fs" :as fs]
             ["node:path" :as path]))
 
-(def usage "entities.mjs BODY --world WORLD [--type TYPE] [--player NAME] [--dimension DIM] [--center X,Y,Z] [--radius N] [--limit N] [--offset N] [--raw] [--worlds DIR --state LEGACY_PARENT]")
+(def usage "entities.mjs BODY --world WORLD [--type TYPE] [--player NAME] [--dimension DIM] [--center X,Y,Z] [--radius N] [--limit N] [--offset N] [--raw] [--worlds DIR --state LEGACY_PARENT]\nLists entities the body has seen lately, nearest first. :pos is [x y z] blocks, :age-ms how long ago it was seen; :total counts all matches, --limit/--offset page.")
 (def default-radius 64)
 (def default-limit 10)
 (def max-radius 512)

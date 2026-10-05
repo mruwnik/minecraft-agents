@@ -3,7 +3,7 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { loadTools } from './agent-tools-loader.mjs'
-const tools = loadTools(['ednWrite', 'workspaceGenerate', 'workspaceRoute', 'workspaceUsage'])
+const tools = loadTools(['ednWrite', 'workspaceGenerate', 'workspaceRoute', 'workspaceUsage', 'workspacePlayerUsage'])
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 
@@ -14,7 +14,7 @@ export async function runBound (context, command, argv) {
     if (argv.length === 1 && ['--help', '-h'].includes(argv[0])) {
       // each launcher checks only its own exports: usage comes from the tool's module, plans from the plan library
       const usage = command === 'plans' || command === 'blueprints' ? (await import('./plan-tools-lib.mjs')).usage[command] : module.usage
-      process.stdout.write(`Workspace ${command}: omit the body and --world/--worlds/--state/--repo/--repo-root shown below; these are supplied from context.edn.\n${usage}\n`)
+      process.stdout.write(`Workspace ${command}:\n${tools.workspacePlayerUsage(usage)}\n`)
       return 0
     }
     return await module.main(args)

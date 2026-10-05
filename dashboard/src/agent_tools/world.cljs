@@ -12,7 +12,7 @@
             ["node:path" :as path]))
 
 (def usage
-  (str "usage: world.mjs <agent> <command> [args] --world <world> [--who claude] [--worlds <dir>] [--state <legacy-parent>]\n"
+  (str "usage: world.mjs <agent> <command> [args] --world <world> [--worlds <dir>] [--state <legacy-parent>]\n"
        "  submit move-to <x> <y> <z> [--range <n>] [--timeout-s <1..10>] [--max-distance <1..64>]\n"
        "    (walks like go-to, doors included; one bounded step: for a longer walk submit jobs.movement.go-to)\n"
        "  submit dig <x> <y> <z> | submit place <x> <y> <z> <item>\n"
@@ -20,7 +20,7 @@
        "  submit interact <entity-id> [--item <item>] [--request-id <id>]\n"
        "  submit wear [<item>]   (puts a carried armour piece on; no item: the best carried piece for each empty or weaker slot)\n"
        "  status <request-id> | cancel <request-id> | inventory\n"
-       "Acquire the body first with drive.mjs <agent> --world <world> take --who <same-name> --idle-s <seconds>.\n"
+       "Acquire the body first: drive.mjs take --who NAME --why \"<text>\" --idle-s N.\n"
        "Actions run one at a time in the order submitted: one submitted while another runs is queued behind it\n"
        "(:status :queued, :position <place in the queue>, :behind <the running action's request-id>, at most 8 waiting); cancel drops a queued one, a release drops them all.\n"
        "Submit returns at once with the request-id; add --wait [--timeout 60s] to block until that action ends (or until\n"

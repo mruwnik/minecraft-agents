@@ -6,7 +6,7 @@
             ["node:path" :as path]
             ["node:timers/promises" :refer [setTimeout]]))
 
-(def usage "world-changes.mjs --world WORLD [--cursor EDN | --observer NAME] [--wait --timeout 60s] [--raw] [--type TYPE --owner OWNER --status STATUS --text TEXT --center EDN --place NAME --radius 128 --limit 10 --worlds DIR --state LEGACY_PARENT]")
+(def usage "world-changes.mjs --world WORLD [--cursor EDN | --observer NAME] [--wait --timeout 60s] [--raw] [--type TYPE --owner OWNER --status STATUS --text TEXT --center EDN --place NAME --radius 128 --limit 10 --worlds DIR --state LEGACY_PARENT]\nMap edits since a cursor (:op add|edit|remove, :seq order, :time-ms epoch ms, :by who). Pass back the returned :cursor to see only newer ones; --wait blocks for a change.")
 
 (defn options [argv]
   (let [{:keys [positionals values]} (map-tool/parse-options argv
