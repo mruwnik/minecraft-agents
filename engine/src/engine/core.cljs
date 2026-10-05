@@ -549,10 +549,11 @@
 
 (defn ^:async run-round [eng run inst]
   (let [[def args] (job-of eng inst)
+        results (atom {})
         c (make-ctx eng {:root (:id run) :slots [] :chain [(:id run)] :token (:token run)
-                         :args args :round (:round run) :reflex (:reflex run)})]
+                         :args args :round (:round run) :reflex (:reflex run) :results results})]
     (try
-      (normalize-result (await ((:round def) c)))
+      (assoc (normalize-result (await ((:round def) c))) :result (get @results (:id run)))
       (catch :default e
         (if (cut? e) {:status :cut :error e} {:status :error :error e})))))
 
@@ -599,7 +600,12 @@
 
 ;; ------------------------------------------------------------------ settling a round
 
-(defn settle-listed! [eng {:keys [id]} {:keys [status error]}]
+(defn stopped-result?
+  "True when a job that ended :done handed over a result of status :stopped (it gave up; not a success)."
+  [result]
+  (and (map? result) (= :stopped (:status result))))
+
+(defn settle-listed! [eng {:keys [id]} {:keys [status error result]}]
   (let [idx (.indexOf (:list (state eng)) id)
         fields (job-fields eng id)]
     (case status
@@ -608,9 +614,14 @@
                                   #(assoc (remove-listed % id) :cursor (max idx 0)))
           (forget-backoff! eng id)
           (mem/delete-job! (:store eng) id)
-          (emit! eng (merge fields {:source :job :kind :completed :level :info
-                                    :attention :notice
-                                    :data {:status :completed}})))
+          (emit! eng (if (stopped-result? result)
+                       (merge fields {:source :job :kind :stopped :level :warn :attention :notice
+                                      :data (dissoc result :dug)
+                                      :text (str "stopped: " (name (:reason result))
+                                                 (some->> (:cell result) pr-str (str " at ")))})
+                       (merge fields {:source :job :kind :completed :level :info
+                                      :attention :notice
+                                      :data {:status :completed}}))))
 
       :cut
       (do (swap! (:state eng) assoc :resume id :current nil)

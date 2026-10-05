@@ -229,11 +229,72 @@
           (is (= 1 (:steps @out)))
           (is (= "stone" (block-at p [2 64 0])) "nothing of the step is cut"))))))
 
-(deftest a-gap-in-the-next-floor-stops-without-placing
+(def cave-gap
+  "Open air at x 1, y 62..65 over the stone ground: the floor of the first step up is missing, and so is what is under it."
+  (apply dissoc ground (for [y (range 62 65) z (range -2 3)] (str "1," y "," z))))
+
+(def up-east {:dir :up :heading :east :steps 1})
+
+(deftest a-gap-in-the-next-floor-is-bridged-with-carried-filler
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p]} (await (stair! {:blocks (dissoc ground "2,62,0")} east (fn [_])))]
+        (let [inv (conj pick {:name "cobblestone" :count 10})
+              {:keys [out p]} (await (stair! {:blocks cave-gap :inventory inv} up-east (fn [_])))]
+          (is (= :done (:status @out)))
+          (is (= [1 66 0] (:at @out)))
+          (is (= "cobblestone" (block-at p [1 65 0])) "the floor was placed")
+          (is (= 1 (count (filter #(= "place" (.-name %)) (.-calls (.-world p)))))))))))
+
+(deftest a-gap-in-the-next-floor-without-filler-says-so
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [inv (conj pick {:name "diamond" :count 5} {:name "gold_block" :count 5})
+              {:keys [out p]} (await (stair! {:blocks cave-gap :inventory inv} up-east (fn [_])))]
+          (is (= :no-floor (:reason @out)))
+          (is (= :none (:filler @out)))
+          (is (re-find #"filler" (:why @out)))
+          (is (empty? (filter #(= "place" (.-name %)) (.-calls (.-world p))))))))))
+
+(deftest a-top-level-stair-with-no-progress-ends-stopped-not-completed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [clock (atom 1000000)
+              [seen sink] (tu/capture-sink)
+              p (tu/fake {:self {:pos {:x 0 :y 65 :z 0}} :inventory pick :blocks cave-gap})
+              eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
+                                :now #(deref clock) :world (world/of-data {} {} [])
+                                :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+          (core/submit! eng (list job up-east) {})
+          (await (tick-out! {:eng eng :clock clock}))
+          (let [ended (filter #(and (= :job (:source %)) (#{:completed :stopped} (:kind %))) @seen)
+                e (first ended)]
+            (is (= 1 (count ended)))
+            (is (= :stopped (:kind e)))
+            (is (= :stopped (get-in e [:data :status])))
+            (is (= :no-floor (get-in e [:data :reason])))
+            (is (= [1 65 0] (get-in e [:data :cell])))
+            (is (= 0 (get-in e [:data :steps])))))))))
+
+(deftest bedrock-in-the-cut-is-unbreakable-not-no-tool
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [inventory [pick []]]
+          (let [{:keys [out p]} (await (stair! {:blocks (assoc ground "1,64,0" "bedrock") :inventory inventory} east (fn [_])))]
+            (is (= :unbreakable (:reason @out)))
+            (is (= [1 64 0] (:cell @out)))
+            (is (= "bedrock" (:block @out)))
+            (is (empty? (digs p)))))))))
+
+(deftest lava-for-a-floor-is-never-bridged
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [inv (conj pick {:name "cobblestone" :count 10})
+              {:keys [out p]} (await (stair! {:blocks (assoc cave-gap "1,65,0" "lava") :inventory inv} up-east (fn [_])))]
           (is (= :no-floor (:reason @out)))
           (is (empty? (filter #(= "place" (.-name %)) (.-calls (.-world p))))))))))
 

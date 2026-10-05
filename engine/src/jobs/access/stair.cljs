@@ -1,11 +1,13 @@
 (ns jobs.access.stair
-  (:require [engine.access.rules :as rules]
+  (:require [clojure.string :as str]
+            [engine.access.rules :as rules]
             [engine.ctx :as ctx]
             [engine.jobs.access :as access]
             [engine.jobs.tools :as tools]
             [engine.jobs.util :as u]
             [engine.path.executor :as executor]
             [engine.path.walk :as walk]
+            [jobs.survival.dig-in :as dig-in]
             [jobs.gather.mine :as mine]))
 
 (def doc
@@ -15,8 +17,12 @@
   and the next column at the new feet and head height. Then it walks into the step with jobs.debug.walk-plan and,
   before cutting the next one, plans the way back to the stair's first cell on a fresh pathWorld: it must be found
   whole and walkable by the executor (no gap, door or swim), else the stair stops :no-way-back.
+  A step whose floor is air gets a carried building block (dig-in/building-blocks: dirt, cobblestone, stone, planks and
+  the like, never an ore, a valuable or a golden block) placed there after the rules' may-place? (:zone, :footprint ...
+  refuse and stop); the cell under a placed floor is not judged (:cave-below). No such block carried: :no-floor with
+  :filler :none and a :why saying so; a lava or water floor is never bridged.
   Each step is judged when chosen and every cell again right before its dig: the next floor must be a solid floor
-  (else :no-floor: this slice places nothing), the cell under it neither air nor fluid (:cave-below) and loaded;
+  (else :no-floor, unless the floor is air and filler is carried: then it is bridged, see below), the cell under it neither air nor fluid (:cave-below) and loaded;
   a cut cell holding a fluid stops (:fluid-in-cut). Access refusals stop with their reason (:zone, :claim, :footprint,
   :not-loaded, :no-zones; :ignore-zones? skips all of them but :not-loaded). Hazards are engine.access.rules' (one per
   fluid beside) plus one the stair adds for its geometry: a falling block over the top cut of the next column, the
@@ -25,7 +31,7 @@
   (live, it flowed into the cut and onto the body's cell, which the walker cannot leave: no swimming; named, the
   stair digs and stops :fluid-in-cut a round later), lava never is, a falling block would land on the body or refill
   the cut, and :under-feet never comes up (the stair never digs the block it stands on), so seeing it is a bug.
-  A pickaxe block with no pickaxe carried stops :no-tool (by hand stone drops nothing); a dig whose drop has no
+  A block no tool breaks (bedrock, barrier, portal frames, command blocks) stops :unbreakable. A pickaxe block with no pickaxe carried stops :no-tool (by hand stone drops nothing); a dig whose drop has no
   room stops :inventory-full; a cell refilled 3 times stops :refills. The body's cell is the progress: a resumed
   round finds its step from where the body stands on the stair line (off it: :off-stair). Dug cells are left and
   recorded. Hands over {:status :done|:stopped :reason kw :steps n :at [x y z] :dug [{:cell :block}]} plus detail
@@ -43,6 +49,7 @@
 (def rises {:down -1 :up 1})
 (def max-cell-digs 3)
 (def stack-size 64)
+(def unbreakable #{"bedrock" "barrier" "end_portal_frame" "end_portal" "nether_portal" "command_block" "structure_block" "jigsaw"})
 
 (defn check [_c] true)
 
@@ -96,15 +103,15 @@
 
 (defn stop-of
   "Why the step cannot go on, as {:reason ...detail}, or nil when every cell may be cut.
-  in: the rules' input without :cell."
-  [{:keys [block-at] :as in} {:keys [cut floor under]} accept]
+  in: the rules' input without :cell. cells :bridged? true: the floor was placed by the stair, what is under it is not judged."
+  [{:keys [block-at] :as in} {:keys [cut floor under bridged?]} accept]
   (let [fluid-cell (first (filter #(rules/fluids (block-at %)) cut))]
     (cond
       (some #(nil? (block-at %)) (conj cut floor under))
       {:reason :not-loaded :cell (first (filter #(nil? (block-at %)) (conj cut floor under)))}
       fluid-cell {:reason :fluid-in-cut :cell fluid-cell :fluid (block-at fluid-cell)}
       (not (rules/solid-floor? block-at floor)) {:reason :no-floor :cell floor :block (block-at floor)}
-      (let [n (block-at under)] (or (rules/air n) (rules/fluids n)))
+      (and (not bridged?) (let [n (block-at under)] (or (rules/air n) (rules/fluids n))))
       {:reason :cave-below :cell under :block (block-at under)}
       :else
       (some (fn [cell]
@@ -163,7 +170,8 @@
       (ctx/emit! c :stair.done :info (assoc result :text (str "stair " (name (:dir (:args c))) " done, " steps " steps")))
       (ctx/emit! c :stair.stopped :warn
                  (assoc result :text (str "stair stopped after " steps " steps: " (name reason)
-                                          (some->> (:cell detail) pr-str (str " at "))))))
+                                          (some->> (:cell detail) pr-str (str " at "))
+                                          (some->> (:why detail) (str ": "))))))
     :done))
 
 (defn record-dug
@@ -197,6 +205,7 @@
         tool (tools/best-tool (map :name (u/inventory p)) block)]
     (cond
       (>= tries max-cell-digs) {:reason :refills :cell cell :block block}
+      (unbreakable block) {:reason :unbreakable :cell cell :block block}
       (no-tool? p block) {:reason :no-tool :cell cell :block block :tool "pickaxe"}
       (not (room-for? p (mine/item-name {:block block}))) {:reason :inventory-full :cell cell :block block}
       :else
@@ -218,6 +227,23 @@
                 (if (#{"dug" "missing"} status)
                   :continue
                   {:reason :dig-failed :cell cell :block block :dig status})))))))))
+
+(defn ^:async bridge!
+  "Place carried filler on the missing floor of the step. :continue, or a stop map."
+  [c in {:keys [floor]}]
+  (let [item (dig-in/pick c dig-in/building-blocks)
+        verdict (rules/may-place? (assoc in :cell floor))
+        [x y z] floor]
+    (cond
+      (nil? item) {:reason :no-floor :cell floor :block ((:block-at in) floor) :filler :none
+                   :why (str "no floor and no filler block carried (" (str/join ", " (take 4 dig-in/building-blocks)) " ...)")}
+      (not (:ok verdict)) (assoc (dissoc verdict :ok) :cell floor)
+      :else
+      (do (await (ctx/act c :place #js {:pos #js {:x x :y y :z z} :item item}))
+          (if (rules/air ((:block-at (rules-in c (feet-of c))) floor))
+            {:reason :place-failed :cell floor :item item}
+            (do (ctx/update-mem! c update :bridged (fnil conj #{}) floor)
+                :continue))))))
 
 (defn ^:async step!
   "Walk into the cut step. :continue, or a stop map."
@@ -251,11 +277,15 @@
             (ctx/update-mem! c assoc :checked i)
             (if (= i target)
               :finished
-              (let [{:keys [next cut] :as cells} (step-cells feet dir heading)]
-                (or (stop-of in cells accept)
+              (let [{:keys [next cut] :as cells} (-> (step-cells feet dir heading)
+                                                           (as-> cs (assoc cs :bridged? (contains? (:bridged (ctx/mem c)) (:floor cs)))))
+                    stop (stop-of in cells accept)]
+                (if (and (= :no-floor (:reason stop)) (rules/air (:block stop)))
+                  (await (bridge! c in cells))
+                  (or stop
                     (if-let [cell (first (remove #(rules/air ((:block-at in) %)) cut))]
                       (await (dig! c in cell cut accept))
-                      (await (step! c next))))))))))))
+                      (await (step! c next)))))))))))))
 
 (defn ^:async round [c]
   (let [m (ctx/mem c)]
