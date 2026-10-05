@@ -576,7 +576,7 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 
 | job | what it does |
 |---|---|
-| `gather.mine` `{:block :count :radius ...}` | Mines like a player: strip-tunnels and digs ore it has seen; never targets unseen ore. Picks the cheapest suited tool |
+| `gather.mine` `{:block :count :radius ...}` | Mines like a player: strip-tunnels and digs ore it has seen; never targets unseen ore. Picks the cheapest suited tool. Torches the tunnel every `:torch-interval` (10) steps, crafting more from coal and sticks |
 | `gather.get-seeds` | Carries `:count` more of a planting material from known sources |
 | `forestry.fell-tree`, `collect-drops`, `plant-sapling`, `harvest-wood` | Fell a column (writes a `:forestry/replant` debt), collect nearby drops, plant a sapling, and the three in turn |
 | `forestry.maintain`, `forestry.prepare` | Keep and prepare the tree cells of a forest plan |

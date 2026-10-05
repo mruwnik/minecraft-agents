@@ -416,3 +416,7 @@
             (await (core/tick! eng)))
           (is (some #(= :make-room.done (:kind %)) @seen) "done is emitted, not a wait for not-ready")
           (is (empty? (:list (core/state eng))) "the job ended"))))))
+
+(deftest torches-are-never-tossed
+  (let [inventory [{:name "torch" :count 16 :slot 0} {:name "flint" :count 3 :slot 1}]]
+    (is (= ["flint"] (names-of (mr/toss-order inventory {} {} 1))))))

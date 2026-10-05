@@ -59,9 +59,9 @@
 ;; ------------------------------------------------------------------ pure
 
 (defn protected?
-  "Never put away, never thrown: tools, weapons, armour and the buckets."
+  "Never put away, never thrown: tools, weapons, armour, the buckets and torches."
   [name]
-  (boolean (or (deposit/tool? name) (tool-like name))))
+  (boolean (or (deposit/tool? name) (tool-like name) (= "torch" name))))
 
 (defn totals
   "{name carried} over all stacks."

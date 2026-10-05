@@ -11,6 +11,8 @@
             [engine.path.targets :as targets]
             [engine.jobs.watch :as watch]
             [engine.jobs.look :refer [cell-of headings heading-name facing glance! look-around!]]
+            [engine.jobs.torch :as torch]
+            [jobs.build.from-plan :as from-plan]
             [jobs.survival.dig-in :as dig-in]))
 
 (def doc
@@ -66,6 +68,14 @@
   mine.tunnel-end {:reason (:tunnel-length :lava :water :fluid :no-floor :not-loaded :refused :dig-failed
   :walk-failed) :heading :length :at :next}. :at is the offending cell, :next the line cell it stopped before.
 
+  Torches: the strip tunnel hangs a torch (jobs.access.tunnel/torch-at: a wall torch in the head cell, else a floor
+  torch) behind the body at its first step, then every :torch-interval steps, and at the cut's end when none hangs
+  within 4 blocks of it; 0 hangs none. Torches are the body's own and stay: nothing takes them back. Under 2
+  carried with a coal or charcoal and a stick, the torch craft is run as a child (4 torches). With no torch and
+  nothing to craft from, one info mine.no-torches and the tunnel goes on dark (it tries again at the next torch
+  step, after more coal or sticks are picked up). A place the rules refuse, or that fails, is an info
+  mine.torch-left-out {:cell :reason}.
+
   Mend: fills every ground cell that is now air, cave_air or water with the first carried of dig-in's building
   blocks other than the item (the item last, when it is a building block), lowest first, then nearest, never the
   body's feet or head cell. When only those are owed it jumpPlaces one block. Nothing to fill with warns
@@ -107,6 +117,7 @@
    :dry-digs {:doc "digs in a row after which the carried count of the item did not rise before giving up (:no-drops)" :default 3}
    :direction {:doc "the strip tunnel's heading: north, south, east or west (n/s/e/w); nil: the way the body faces when the job starts" :default nil}
    :tunnel-length {:doc "the most blocks the strip tunnel runs in this job, at the body's level; 0: no tunnel, seen blocks only" :default 32}
+   :torch-interval {:doc "the strip tunnel hangs a torch every this many steps; 0: none" :default 10}
    :accept {:doc "dig hazards of engine.access.rules taken (:fluid-adjacent :falling-block :under-feet); the lava and :wet rules above still hold"
             :default #{:fluid-adjacent :falling-block :under-feet}}})
 
@@ -409,6 +420,92 @@
                     (recur (rest cells)))))
       :ok)))
 
+;; ------------------------------------------------------------------ torches
+
+(def end-torch-gap "A cut's end gets a torch when the last hangs this many steps back or more." 4)
+
+(defn count-of [c names]
+  (transduce (comp (filter #(contains? names (:name %))) (map :count)) + 0 (u/inventory (:primitives c))))
+
+(defn craftable? [c]
+  (and (pos? (count-of c #{"coal" "charcoal"})) (pos? (count-of c #{"stick"}))))
+
+(defn on-line?
+  "Whether the body stands on the tunnel's last cell, past its first."
+  [c]
+  (let [{:keys [tunnel]} (ctx/mem c)]
+    (and (pos? (:steps tunnel 0)) (= (cell-of (u/self-pos c)) (step-cell tunnel (:steps tunnel))))))
+
+(defn torch-gap
+  "Steps since the last torch hung (the steps taken when none did yet)."
+  [c]
+  (let [m (ctx/mem c)] (- (get-in m [:tunnel :steps] 0) (or (:torch-at m) 0))))
+
+(defn torch-due?
+  "Whether the tunnel's next torch is owed: the first at step 1, then every :torch-interval."
+  [c]
+  (let [interval (:torch-interval (:args c))]
+    (and (pos? (or interval 0)) (on-line? c)
+         (or (nil? (:torch-at (ctx/mem c))) (>= (torch-gap c) interval)))))
+
+(defn end-torch-due? [c]
+  (and (pos? (or (:torch-interval (:args c)) 0)) (on-line? c) (>= (torch-gap c) end-torch-gap)))
+
+(defn left-out!
+  "Book the torch step done at this length, with an info event of the reason."
+  [c cell reason]
+  (ctx/update-mem! c assoc :torch-at (get-in (ctx/mem c) [:tunnel :steps]))
+  (ctx/emit! c :mine.torch-left-out :info {:cell cell :reason reason
+                                           :text (str "mine hung no torch" (some->> cell (str/join ",") (str " at ")) ": " (name reason))}))
+
+(defn ^:async hang-torch!
+  "Hang a torch on the cell behind the body."
+  [c]
+  (let [p (:primitives c)
+        {:keys [tunnel]} (ctx/mem c)
+        block-at (fn [[x y z]] (u/block-name p {:x x :y y :z z}))
+        site (step-cell tunnel (dec (:steps tunnel)))
+        choice (torch/torch-at (headings (:heading tunnel)) [(:x site) (:y site) (:z site)]
+                               (from-plan/eye (u/self-pos c)) block-at)
+        cell (:cell choice)
+        reason (cond (:refused choice) (:refused choice)
+                     (not (gate/allowed? c :mine.declined "mine" :place (zipmap [:x :y :z] cell))) :refused)]
+    (if reason
+      (left-out! c cell reason)
+      (let [r (await (ctx/act c :place (clj->js {:pos (zipmap [:x :y :z] cell) :item "torch"
+                                                 :click (from-plan/js-click (:click choice))})))]
+        (ctx/update-mem! c assoc :torch-at (:steps tunnel))
+        (when-not (or (= "placed" (.-status r)) (torch/torch-blocks (block-at cell)))
+          (left-out! c cell :place-failed))))))
+
+(defn ^:async torch-step!
+  "One round of the tunnel's torch: craft more when under 2 are carried and coal or charcoal and a stick are, say so
+  once with none to hang, else hang one. :continue."
+  [c]
+  (let [m (ctx/mem c)
+        n (torch/torches-carried (:primitives c))]
+    (cond
+      (and (< n 2) (craftable? c) (not (:craft-failed m)))
+      (let [r (await (ctx/call-child c :torches 'jobs.items.craft {:item "torch" :count 4}))]
+        (when (and (= :done r) (zero? (:made (ctx/child-result c :torches) 0)))
+          (ctx/update-mem! c assoc :craft-failed true))
+        :continue)
+
+      (zero? n)
+      (do (when-not (:no-torches-said m)
+            (ctx/emit! c :mine.no-torches :info {:text "mine has no torches and nothing to craft them from: the tunnel stays dark"}))
+          (ctx/update-mem! c assoc :no-torches-said true :torch-at (get-in m [:tunnel :steps]))
+          :continue)
+
+      :else (do (await (hang-torch! c)) :continue))))
+
+(defn ^:async end!
+  "tunnel-end!, after a torch at the cut's end when one is due."
+  [c stop at & [next]]
+  (if (end-torch-due? c)
+    (await (torch-step! c))
+    (tunnel-end! c stop at next)))
+
 (defn ^:async tunnel-round!
   "One step of the strip tunnel: back onto its last cell, judge and cut the next two, look at them, step in."
   [c]
@@ -423,19 +520,20 @@
         hazard (some #(cut-hazard c %) cut)]
     (cond
       stop (to-mend! c (tunnel-reason stop))
-      (>= steps (:tunnel-length (:args c))) (tunnel-end! c :tunnel-length nil)
-      (not (await (step-to! c from))) (tunnel-end! c :walk-failed from)
-      hazard (tunnel-end! c (:reason hazard) (:at hazard) next)
-      (not (rules/solid-floor? name-at (update next :y dec))) (tunnel-end! c :no-floor next)
+      (>= steps (:tunnel-length (:args c))) (end! c :tunnel-length nil)
+      (not (await (step-to! c from))) (end! c :walk-failed from)
+      (torch-due? c) (await (torch-step! c))
+      hazard (end! c (:reason hazard) (:at hazard) next)
+      (not (rules/solid-floor? name-at (update next :y dec))) (end! c :no-floor next)
       :else (let [_ (await (watch/watch! c {:risky? true :before-dig (first (remove #(air (name-at %)) cut))}))
                   r (await (cut! c (remove #(air (name-at %)) cut)))]
               (if (not= :ok r)
-                (tunnel-end! c r next)
+                (end! c r next)
                 (do (await (glance! c [(headings heading)]))
                     (if (await (step-to! c next))
                       (do (ctx/update-mem! c #(-> % (update-in [:tunnel :steps] inc) (assoc :looked next)))
                           :continue)
-                      (tunnel-end! c :walk-failed next))))))))
+                      (end! c :walk-failed next))))))))
 
 ;; ------------------------------------------------------------------ the dig phase
 

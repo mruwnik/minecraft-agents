@@ -906,3 +906,70 @@
               s (await (scenario {:block "iron_ore" :count 1 :direction "east" :tunnel-length 8 :mend false}
                                  (rock-world (merge open trench {"6,64,0" "iron_ore"})) 60))]
           (is (some #{[6 64 0]} (dug-cells s)) (pr-str (dug-cells s))))))))
+
+;; ------------------------------------------------------------------ torches
+
+(def long-rock
+  "Stone over x -9..40, y 62..67, z -9..9 with the body's pocket at the origin."
+  (dissoc (cells "stone" (range -9 41) (range 62 68) (range -9 10)) "0,64,0" "0,65,0"))
+
+(defn torch-world [inventory]
+  {:blocks long-rock :drops {"iron_ore" "raw_iron" "stone" "cobblestone"} :inventory inventory})
+
+(defn torch-xs
+  "The sorted x of the torches standing in the tunnel (z -1..1, y 64..65, x 0..40)."
+  [s]
+  (vec (sort (for [x (range 0 41) y [64 65] z [-1 0 1]
+                   :when (#{"torch" "wall_torch"} (block-at s x y z))]
+               x))))
+
+(def torches8 [{:name "iron_pickaxe" :count 1} {:name "torch" :count 8}])
+
+(deftest the-tunnel-hangs-a-torch-every-interval
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "iron_ore" :count 1 :direction "east" :tunnel-length 22 :mend false}
+                                 (torch-world torches8) 200))]
+          (is (= [0 10 20] (torch-xs s)) "the entry, then every 10")
+          (is (= 5 (get (inv s) "torch")))
+          (is (empty? (events-of s :mine.no-torches)))
+          (is (= :tunnel-length (:reason (done-event s)))))))))
+
+(deftest the-torch-interval-is-an-arg
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "iron_ore" :count 1 :direction "east" :tunnel-length 9 :torch-interval 4 :mend false}
+                                 (torch-world torches8) 200))]
+          (is (= [0 4 8] (torch-xs s))))))))
+
+(deftest the-end-of-the-cut-gets-a-torch
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "iron_ore" :count 1 :direction "east" :tunnel-length 6 :mend false}
+                                 (torch-world torches8) 120))]
+          (is (= [0 5] (torch-xs s)) "the entry, and the cut's end 5 blocks on"))))))
+
+(deftest coal-and-sticks-are-crafted-into-torches
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "iron_ore" :count 1 :direction "east" :tunnel-length 12 :mend false}
+                                 (torch-world [{:name "iron_pickaxe" :count 1} {:name "coal" :count 1} {:name "stick" :count 1}]) 300))]
+          (is (= [0 10] (torch-xs s)))
+          (is (= 2 (get (inv s) "torch")) "4 crafted, 2 hung")
+          (is (nil? (get (inv s) "coal")))
+          (is (empty? (events-of s :mine.no-torches))))))))
+
+(deftest no-torches-and-no-materials-keeps-mining-with-one-event
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "iron_ore" :count 1 :direction "east" :tunnel-length 22 :mend false}
+                                 (torch-world pickaxe) 200))]
+          (is (= [] (torch-xs s)))
+          (is (= 1 (count (events-of s :mine.no-torches))))
+          (is (= 22 (:steps (:tunnel (done-event s)))) "the tunnel went on")
+          (is (= :tunnel-length (:reason (done-event s)))))))))

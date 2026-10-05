@@ -5,7 +5,7 @@
             [engine.jobs.access :as access]
             [engine.jobs.declined :as declined]
             [engine.jobs.util :as u]
-            [engine.placement :as placement]
+            [engine.jobs.torch :as torch]
             [jobs.access.stair :as stair]
             [jobs.build.from-plan :as from-plan]))
 
@@ -217,7 +217,7 @@
 
 (defn feet-of [c] (stair/feet-of c))
 
-(def torch-blocks #{"torch" "wall_torch"})
+(def torch-blocks torch/torch-blocks)
 
 (defn head-of [cell] (stair/add cell [0 1 0]))
 
@@ -341,30 +341,10 @@
                                         :text (str "tunnel torch left out at " (pr-str cell) ": " (name reason))}))
     nil))
 
-(defn side-dirs
-  "The unit steps to the left and to the right of heading."
-  [heading]
-  (let [[dx dz] (stair/headings heading)] [[dz 0 (- dx)] [(- dz) 0 dx]]))
-
-(defn facing-name [d] (some (fn [[n v]] (when (= v d) n)) placement/steps))
-
 (defn torch-choice
-  "How to hang the torch of site s from the eye: a wall torch in the head cell on the first side wall (left, then
-  right of the heading) that takes it, else a floor torch in the feet cell: {:cell :block :click}, or {:refused
-  :no-support}."
+  "How to hang the torch of site s from the eye: engine.jobs.torch/torch-at for the head and feet cells of s."
   [plan s eye block-at]
-  (let [cells (line-cells plan)
-        feet (cells s)
-        head (head-of feet)
-        world (fn [cell] (some->> (block-at cell) (hash-map :name)))
-        wall (fn [d] (assoc (placement/click {:block "wall_torch" :facing (facing-name (mapv - d))} head eye world)
-                            :cell head :block "wall_torch"))
-        floor (assoc (placement/click "torch" feet eye world) :cell feet :block "torch")]
-    (or (first (remove :refused (map wall (side-dirs (:heading plan)))))
-        (if (:refused floor) {:refused :no-support} floor))))
-
-(defn torches-carried [p]
-  (reduce + (map :count (filter #(= "torch" (:name %)) (u/inventory p)))))
+  (torch/torch-at (stair/headings (:heading plan)) ((line-cells plan) s) eye block-at))
 
 (defn ^:async hang!
   "Hang the torch of site s from the body's place, or book the site :unlit with why not. The ledger entry (a dead
@@ -375,7 +355,7 @@
         choice (torch-choice plan s (from-plan/eye (u/self-pos c)) block-at)
         cell (:cell choice)
         verdict (when cell (rules/may-place? (assoc in :cell cell)))
-        reason (cond (zero? (torches-carried p)) :no-torches
+        reason (cond (zero? (torch/torches-carried p)) :no-torches
                      (:refused choice) (:refused choice)
                      (not (:ok verdict)) (:reason verdict))]
     (if reason
