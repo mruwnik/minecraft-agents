@@ -330,7 +330,7 @@ const zeroStats = () => ({
 })
 
 const noView = Object.freeze({
-  attach: () => {}, detach: async () => {}, stop: () => {}, flushColumns: async () => {}, tickPose: async () => {}, tickHud: async () => {},
+  attach: () => {}, detach: async () => {}, stop: () => {}, markCell: () => {}, flushColumns: async () => {}, tickPose: async () => {}, tickHud: async () => {},
   idle: async () => {}, pendingCount: () => 0, stats: () => zeroStats()
 })
 
@@ -452,6 +452,8 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
   const onUpdate = safely((oldBlock, newBlock) => {
     const p = (newBlock ?? oldBlock)?.position
     if (!p) return
+  // the body's own dig, place, jumpPlace or useOn: the column is dumped by the next flush (every FLUSH_MS), whatever the server's block update does
+  const markCell = (x, y, z) => markColumn(Math.floor(x / 16), Math.floor(z / 16))
     markColumn(Math.floor(p.x / 16), Math.floor(p.z / 16))
     if (oldBlock?.stateId !== newBlock?.stateId) changes.set(`${p.x},${p.y},${p.z}`, { x: p.x, y: p.y, z: p.z })
   })
@@ -801,5 +803,5 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
 
   // the relit light of world section s of column (cx, cz), {sky, block} one byte per cell, or undefined (engine.perception reads light through it)
   const lightOverlay = (cx, cz, s) => overlays.get(`${cx},${cz}`)?.get(s)
-  return { attach, detach, stop, flushColumns, tickPose, tickHud, idle, pendingCount: () => pending.size, stats: takeStats, lightOverlay }
+  return { attach, detach, stop, markCell, flushColumns, tickPose, tickHud, idle, pendingCount: () => pending.size, stats: takeStats, lightOverlay }
 }

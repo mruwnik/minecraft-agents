@@ -5,6 +5,7 @@
             [clojure.string :as str]
             [agent-tools.world-data :as data]
             [dashboard.agent-plan-tools :as checks]
+            [dashboard.plan-compare :as cmp]
             [plan.parse :as parse]
             ["node:fs" :as fs]
             ["node:path" :as path]
@@ -202,12 +203,15 @@
                          (let [score (checks/score-native (:expansion prepared) #(get @blocks %) #(get @mtimes [%1 %2])
                                                          (or inventory {}) (some? inventory)
                                                          (js/Number (or (:offset req) 0)) (js/Number (or (:limit req) 10)))
-                               checked (:checked score)]
+                               checked (:checked score)
+                               stale (cmp/stale-note checked cmp/stale-ms)]
                            (cond-> (assoc (dissoc prepared :expansion :cells)
                                           :world (:world ctx) :evidence :saved-column-dumps :live-loaded? false
                                           :score (assoc score :checked
-                                                        (assoc checked :newest-age-ms (when (js/Number.isFinite (:newest checked)) (max 0 (- (:now checked) (:newest checked))))
-                                                               :freshness (if (< (:dumped checked) (:chunks checked)) :incomplete-saved-dumps :saved-dumps))))
+                                                        (cond-> (assoc checked :newest-age-ms (when (js/Number.isFinite (:newest checked)) (max 0 (- (:now checked) (:newest checked))))
+                                                                       :freshness (if (< (:dumped checked) (:chunks checked)) :incomplete-saved-dumps :saved-dumps)
+                                                                       :oldest-age-ms (when (js/Number.isFinite (:oldest checked)) (max 0 (- (:now checked) (:oldest checked)))))
+                                                          stale (assoc :stale stale))))
                              (:geometry req) (assoc :cells (:cells prepared))
                              (:large req) (assoc :large true)))
                          (finally (.call (aget columns "close") columns)))))))))))

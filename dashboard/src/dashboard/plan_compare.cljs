@@ -40,6 +40,16 @@
     {:chunks (count chunks) :dumped (count times)
      :oldest (when (seq times) (apply min times)) :newest (when (seq times) (apply max times))}))
 
+(def stale-ms "A chunk dump older than this is reported stale by a plan check." 30000)
+
+(defn stale-note
+  "A short line when the oldest dump under the cells is older than limit-ms, naming its age; nil otherwise (or when no
+  chunk was dumped). checked is the map of `checked` plus :now."
+  [{:keys [oldest now]} limit-ms]
+  (when (and oldest (> (- now oldest) limit-ms))
+    (str "stale: oldest chunk dump is " (quot (- now oldest) 1000) " s old (limit " (quot limit-ms 1000)
+         " s); the body re-dumps columns it changes within seconds, so check again shortly")))
+
 (defn layers
   "One top-down grid per y that holds cells: {:y y :rows [[cell-or-nil ...]]} over the x/z bounds of all the cells
   ([:min-x :min-z :cols :rows] in the second value)."

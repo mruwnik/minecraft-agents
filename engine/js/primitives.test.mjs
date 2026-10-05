@@ -1408,6 +1408,21 @@ test('the view attaches to every bot, detaches while offline and on close, then 
 
 // Every bound body gets half-width 0.31 (mineflayer's 0.3 has the server reject every move of a body flush against a block face).
 
+test('dig, place, jumpPlace and useOn mark their cell on the view once they settle, whatever the outcome', async () => {
+  const marks = []
+  const view = { attach: () => {}, detach: () => {}, stop: () => {}, markCell: (x, y, z) => marks.push([x, y, z]) }
+  const bot = stubBot(world)
+  const p = createPrimitivesFromBot(bot, { timeScale: SCALE, view })
+  p.setOwner('t1')
+  await p.dig('t1', { pos: at(2, 64, 0) })
+  await p.place('t1', { pos: at(1, 64, 0), item: 'cobblestone' }).catch(() => {})
+  await p.jumpPlace('t1', { pos: at(1, 64, 0), item: 'cobblestone' }).catch(() => {})
+  await p.useOn('t1', { pos: at(2, 64, 1) }).catch(() => {})
+  await p.dig('t1', { pos: at(9, 64, 9) }).catch(() => {})
+  assert.deepEqual(marks, [[2, 64, 0], [1, 64, 0], [1, 64, 0], [2, 64, 1], [9, 64, 9]])
+  await p.close()
+})
+
 test('a bound bot has half-width 0.31, the initial one and a reconnected one', async () => {
   const first = stubBot(world)
   const second = stubBot(world)

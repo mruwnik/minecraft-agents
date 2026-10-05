@@ -1410,7 +1410,16 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   const useOn = createUseOn({ act, getBot: () => bot, inventory, eye, lookNow, timeScale, isOwner, cutError, badArgs })
   const { steer, pathWorld } = createSteer({ act, getBot: () => bot, badArgs })
 
-  const acting = Object.fromEntries(Object.entries({ moveTo: onFoot(moveTo), dig, place, jumpPlace, collect, inspectContainer, transfer, equip, toss, craft, furnace, enchant, chat, eat, attack, interact, trade, unequip, sleep, look, swim, useOn, steer: onFoot(steer), mount, dismount })
+  // dig, place, jumpPlace and useOn mark the cell's column for the view dump once they settle, whatever the outcome
+  const marking = fn => async (token, a) => {
+    const mark = () => {
+      const p = a?.pos
+      if (isNum(p?.x) && isNum(p?.y) && isNum(p?.z)) view?.markCell?.(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z))
+    }
+    try { return await fn(token, a) } finally { mark() }
+  }
+
+  const acting = Object.fromEntries(Object.entries({ moveTo: onFoot(moveTo), dig: marking(dig), place: marking(place), jumpPlace: marking(jumpPlace), collect, inspectContainer, transfer, equip, toss, craft, furnace, enchant, chat, eat, attack, interact, trade, unequip, sleep, look, swim, useOn: marking(useOn), steer: onFoot(steer), mount, dismount })
     .map(([name, fn]) => [name, whenUp(fn)]))
   // the raw world engine.perception looks at (stateAt, lightAt, eye, block changes): body-side only, never a job's
   const rawWorld = createRawWorld({ getBot: () => bot, isOffline, lightOverlay: (cx, cz, s) => view?.lightOverlay?.(cx, cz, s) })

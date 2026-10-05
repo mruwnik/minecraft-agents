@@ -66,3 +66,10 @@
       cells {:chunks 4 :dumped 3 :oldest 1000 :newest 3000}
       [{:pos [40 64 40]}] {:chunks 1 :dumped 0 :oldest nil :newest nil}
       [] {:chunks 0 :dumped 0 :oldest nil :newest nil})))
+
+(deftest stale-note-names-the-age-of-the-oldest-dump-past-the-limit
+  (are [checked expected] (= expected (cmp/stale-note checked 30000))
+    {:chunks 2 :dumped 2 :oldest 1000 :newest 90000 :now 75000} "stale: oldest chunk dump is 74 s old (limit 30 s); the body re-dumps columns it changes within seconds, so check again shortly"
+    {:chunks 2 :dumped 2 :oldest 50000 :newest 60000 :now 75000} nil
+    {:chunks 2 :dumped 2 :oldest 45000 :newest 60000 :now 75000} nil
+    {:chunks 1 :dumped 0 :oldest nil :newest nil :now 75000} nil))

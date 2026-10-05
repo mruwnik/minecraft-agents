@@ -88,6 +88,15 @@ test('attach to a world without a column listing still works', () => {
   assert.equal(view.pendingCount(), 0)
 })
 
+test('markCell marks the column of a block position dirty, and the next flush writes it', async () => {
+  const { view, dir } = makeView(fakeBot({ columns: { '0,0': makeColumn(), '-1,2': makeColumn() } }))
+  assert.equal(view.pendingCount(), 0)
+  view.markCell(-3, 70, 40)
+  assert.equal(view.pendingCount(), 1)
+  await view.flushColumns()
+  assert.deepEqual(fs.readdirSync(worldChunks(dir)), ['-1.2.bin'])
+})
+
 test('column file round-trips sections, light and header', () => {
   const column = makeColumn()
   const raw = encodeColumn({ column, x: -3, z: 12, t: 1234, body: 'Bob', mcVersion: VERSION })
