@@ -1,0 +1,58 @@
+;; Card cbc5e195 (a parent of a declining child parks instead of spinning rounds). Stone mass x 8..24, z 8..24, y 0..9;
+;; the body stands on top (feet y 10). Without a pickaxe jobs.access.tunnel's stair child declines (:no-tool); the tunnel
+;; tells it once (job.waiting) and runs no more rounds (a bounded :round, the spin made ~4 rounds a second) until a
+;; pickaxe is carried, then goes on. Round counts are judged by :round numbers of the job's own events.
+{:defaults
+ {:tags [:access :mining]
+  :plot {:height 20}
+  :blocks [[:fill [8 0 8] [24 9 24] "stone"]]
+  :body {:at [16.5 10 16.5] :effects [["resistance" 600 4]]}}
+ :cases
+ [{:name "tunnel-no-pickaxe-parks-then-resumes"
+   :body {:inventory [["torch" 8] ["cobblestone" 8]]}
+   :act [[:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :keep true})]
+         [:await {:source :job :kind :waiting :data {:reason :no-tool}} 40]
+         [:wait-s 36]
+         [:rcon "give $BODY stone_pickaxe 1"]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-tool}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :round_started :round [:> 6]} :for-s 36 :of-job true}
+            {:event {:source :job :kind :tunnel.done} :within-s 150 :of-job true}]
+   :limit-s 170}
+  ;; leave-tunnel inside a tunnel whose stair is filled: the walk to the entry fails, the way out is its own stair up
+  ;; (the escape), which declines without a pickaxe (:no-tool); the job parks, then digs out once one is carried.
+  {:name "leave-tunnel-no-pickaxe-parks-then-resumes"
+   :blocks [[:fill [12 9 20] [16 7 20] "air"] [:fill [13 8 20] [15 6 20] "air"] [:fill [12 10 20] [16 8 20] "air"]
+            [:fill [13 8 20] [13 9 20] "stone"]]
+   :body {:at [15.5 6 20.5] :inventory [["cobblestone" 4]]}
+   :act [[:job (jobs.access.leave-tunnel {:tunnel {:line {:entry #at [11 10 20] :heading :east :dir :down :steps 4 :run 0
+                                                          :stand #at [15 6 20] :target #at [16 6 20]}
+                                                   :dug [{:cell #at [12 9 20] :block "stone"} {:cell #at [13 9 20] :block "stone"}
+                                                         {:cell #at [13 8 20] :block "stone"} {:cell #at [14 9 20] :block "stone"}
+                                                         {:cell #at [14 8 20] :block "stone"} {:cell #at [14 7 20] :block "stone"}
+                                                         {:cell #at [15 8 20] :block "stone"} {:cell #at [15 7 20] :block "stone"}
+                                                         {:cell #at [15 6 20] :block "stone"}]
+                                                   :torches []}})]
+         [:await {:source :job :kind :waiting :data {:reason :no-tool}} 90]
+         [:wait-s 36]
+         [:rcon "give $BODY stone_pickaxe 1"]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-tool}} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :round_started :round [:> 8]} :for-s 36 :of-job true}
+            {:event {:source :job :kind :leave-tunnel.escape} :within-s 150 :of-job true}]
+   :limit-s 170}
+  ;; the control: a toggle that can never succeed is NOT parked for ever; its own decline ends the herd (:short, a few
+  ;; rounds). After the gate opens it is swapped for an iron trapdoor, which ignores a hand (toggle :needs-redstone).
+  {:name "herd-stuck-gate-ends-through-its-own-give-up"
+   :tags [:herd :animals]
+   :plot {:floor "grass_block" :height 16}
+   :blocks [[:fill [8 0 8] [24 9 24] "air"]
+            [:fill [18 0 13] [24 0 19] "oak_fence"] [:fill [19 0 14] [23 0 18] "air"]
+            [:set [18 0 16] "oak_fence_gate[facing=east,open=false]"]]
+   :body {:at [12.5 0 16.5] :inventory [["lead" 4]]}
+   :act [[:summon "cow" [10.5 0 18.5]] [:wait-s 2]
+         [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]
+         [:await {:source :job :kind :toggle.done :data {:wanted :open}} 60]
+         [:rcon "execute positioned $X $Y $Z run setblock ~18 ~ ~16 iron_trapdoor[open=true]"]]
+   :expect [{:event {:source :job :kind :toggle.declined :data {:reason :needs-redstone}} :within-s 120 :of-job true}
+            {:event {:source :job :kind :herd.done :data {:reason :short}} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :round_started :round [:> 20]} :for-s 120 :until {:source :job :kind :herd.done} :of-job true}]
+   :limit-s 140}]}
