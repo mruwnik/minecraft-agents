@@ -1,0 +1,32 @@
+;; jobs.animals.herd end to end after commit 37ee4ca9 (card 38ebe2ad): the shut walks out of the gate cell first
+;; (step-out-of-gate!) instead of parking on a declined :standing-in toggle. These runs are the no-park guard: the gate
+;; ends shut, the animals in, no job.waiting. They do NOT force the body into the gate cell at a shut (no case found
+;; that does), so the step-out itself is only covered by the unit test. Resistance V against night mobs. Same pen as herd-pen.edn:
+;; oak fence ring x 18..24, z 13..19, inside 19..23 x 14..18, gate on the west side at [18 0 16].
+{:defaults
+ {:tags [:herd :animals :jobs]
+  :time :any
+  :plot {:floor "grass_block"}
+  :blocks [[:fill [18 0 13] [24 0 19] "oak_fence"]
+           [:fill [19 0 14] [23 0 18] "air"]
+           [:set [18 0 16] "oak_fence_gate[facing=east,open=false]"]]
+  :body {:at [12.5 0 16.5] :inventory [["lead" 4]] :effects [["resistance" 900 4]]}
+  :limit-s 300}
+ :cases
+ [{:name "plain-run-no-park"
+   :act [[:summon "cow" [10.5 0 18.5]]
+         [:wait-s 2] [:rcon "execute at $BODY run kill @e[type=zombie,distance=..40]"] [:rcon "execute at $BODY run kill @e[type=skeleton,distance=..40]"] [:rcon "execute at $BODY run kill @e[type=spider,distance=..40]"] [:rcon "execute at $BODY run kill @e[type=creeper,distance=..40]"]
+         [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
+   :expect [{:event {:source :job :kind :herd.done :data {:reason :brought}} :within-s 240 :of-job true}
+            {:no-event {:source :job :kind :waiting :data {:reason [:not :ready]}} :for-s 5}]
+   :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]
+           [:block [18 0 16] "oak_fence_gate[open=false]"]]}
+  {:name "two-cows-no-park"
+   :act [[:summon "cow" [10.5 0 18.5]]
+         [:summon "cow" [10.5 0 14.5]]
+         [:wait-s 2] [:rcon "execute at $BODY run kill @e[type=zombie,distance=..40]"] [:rcon "execute at $BODY run kill @e[type=skeleton,distance=..40]"] [:rcon "execute at $BODY run kill @e[type=spider,distance=..40]"] [:rcon "execute at $BODY run kill @e[type=creeper,distance=..40]"]
+         [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 2})]]
+   :expect [{:event {:source :job :kind :herd.done :data {:reason :brought}} :within-s 280 :of-job true}
+            {:no-event {:source :job :kind :waiting :data {:reason [:not :ready]}} :for-s 5}]
+   :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 2]
+           [:block [18 0 16] "oak_fence_gate[open=false]"]]}]}
