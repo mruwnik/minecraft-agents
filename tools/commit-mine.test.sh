@@ -19,4 +19,20 @@ rc=$(commit_msg $'same\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.c
 echo x > f.txt; tools/commit-mine --card c -m m f.txt >/dev/null 2>&1; check "missing --expect-hunks exit" "$?" 5
 git checkout -q f.txt
 tools/commit-mine -m m f.txt >/dev/null 2>&1; check "no card exit" "$?" 1
+# Hunks mode: paths and --expect-hunks are required; a patch touching other paths is refused.
+printf 'a\nb\nc\n' > g.txt; printf 'a\nb\nc\n' > h.txt; git add g.txt h.txt; git commit -q -m two
+printf 'A\nb\nc\n' > g.txt; printf 'a\nb\nC\n' > h.txt
+git diff g.txt > g.patch; git diff g.txt h.txt > gh.patch
+tools/commit-mine --card c -m m --hunks g.patch --expect-hunks 1 >/dev/null 2>&1; check "hunks without paths exit" "$?" 1
+out=$(tools/commit-mine --card c -m m --hunks gh.patch --expect-hunks 2 g.txt 2>&1); check "hunks foreign path exit" "$?" 3
+check "foreign path listed" "$(grep -c 'h.txt' <<<"$out")" 1
+check "foreign refusal leaves HEAD" "$(git log -1 --format=%s)" "$(git log -1 --format=%s)"
+tools/commit-mine --card c -m m --hunks g.patch g.txt >/dev/null 2>&1; check "hunks missing expect exit" "$?" 5
+out=$(tools/commit-mine --card c -m m --hunks g.patch --expect-hunks 2 g.txt 2>&1); check "hunks wrong expect exit" "$?" 5
+check "hunk list prints path and line" "$(grep -c 'g.txt: -a' <<<"$out")" 1
+before=$(git rev-parse HEAD)
+tools/commit-mine --card c -m hm --hunks g.patch --expect-hunks 1 g.txt >/dev/null 2>&1; check "hunks ok exit" "$?" 0
+check "hunks commit only g" "$(git show --name-only --format= HEAD)" "g.txt"
+check "h.txt change still uncommitted" "$(git diff --name-only)" "h.txt"
+check "index clean" "$(git diff --cached --name-only)" ""
 exit $fail

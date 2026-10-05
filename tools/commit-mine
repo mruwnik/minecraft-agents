@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 # Commit exactly your own paths in a shared checkout, under a lock, with a ledger row.
-# Usage: tools/commit-mine --card <id-or-prefix> -m <msg-file-or-text> [--hunks <patchfile>]
-#                          [--approved-core <card>] <paths...>
+# Usage: tools/commit-mine --card <id-or-prefix> -m <msg-file-or-text> --expect-hunks N <paths...>
+#        tools/commit-mine --card <id> -m <msg> --hunks <patchfile> --expect-hunks N <paths...>
+#   Path mode commits whole files; N = hunks `git diff <paths>` shows.
+#   Hunks mode commits only the patch: build it ONLY from hunks you wrote. The paths are required and
+#   must cover every file in the patch (else exit 3, listing the others); N must equal the patch's
+#   hunk count (else exit 5); the tool prints each hunk's path and first changed line, check them.
+#   Optional: --approved-core <card>.
 # See tools/README.md. Never stashes, resets, amends or pushes.
 set -euo pipefail
 
@@ -29,7 +34,7 @@ done
 [ -n "$card" ] || die "--card is required"
 [ -n "$msg" ] || die "-m is required"
 [ -z "$hunks" ] || [ -f "$hunks" ] || die "no such patch file: $hunks"
-[ ${#paths[@]} -gt 0 ] || [ -n "$hunks" ] || die "give paths or --hunks"
+[ ${#paths[@]} -gt 0 ] || die "give paths (in --hunks mode: the paths the patch touches)"
 
 ROOT="$(git rev-parse --show-toplevel)"; cd "$ROOT"
 GITDIR="$(cd "$(git rev-parse --git-common-dir)" && pwd)"
@@ -42,12 +47,37 @@ for p in "${paths[@]}"; do
   p="$(realpath -m --relative-to="$ROOT" -- "$p")"
   allowed+=("${p%/}")
 done
-if [ -n "$hunks" ]; then
-  while IFS= read -r f; do allowed+=("$f"); done < <(git apply --numstat -z "$hunks" | tr '\0' '\n' | awk -F'\t' 'NF>=3{print $3}')
-fi
 [ ${#allowed[@]} -gt 0 ] || die "nothing to commit"
 
 is_allowed() { local f="$1" a; for a in "${allowed[@]}"; do [ "$f" = "$a" ] || [[ "$f" == "$a"/* ]] && return 0; done; return 1; }
+
+# Hunks mode: the patch may touch only the given paths, and the hunk count must be confirmed.
+if [ -n "$hunks" ]; then
+  patch_files="$(git apply --numstat -z "$hunks" | tr '\0' '\n' | awk -F'\t' 'NF>=3{print $3}')"
+  stray=()
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    is_allowed "$f" || stray+=("$f")
+  done <<<"$patch_files"
+  [ ${#stray[@]} -eq 0 ] || die "patch touches paths not given on the command line: ${stray[*]} (foreign hunks? build the patch only from your own hunks)" 3
+  hunk_list="$(awk '
+    /^diff --git /{f=$4; sub(/^b\//,"",f); inh=0}
+    /^@@/{inh=1; first=1; n++; next}
+    inh && first && /^[-+]/ && !/^(---|\+\+\+) /{printf "  hunk %d: %s: %s\n", n, f, $0; first=0}
+  ' "$hunks")"
+  hunk_total="$(grep -c '^@@' "$hunks" || true)"
+  if [ -z "$expect" ] || [ "$expect" != "$hunk_total" ]; then
+    {
+      echo "commit-mine: hunks mode commits exactly this patch. Hunks in $hunks (path, first changed line):"
+      echo "$hunk_list"
+      echo "Total: $hunk_total. Every hunk must be one YOU wrote; delete any other agent's hunk from the patch."
+      echo "Then rerun with --expect-hunks $hunk_total."
+    } >&2
+    [ -n "$expect" ] && die "--expect-hunks $expect does not match $hunk_total" 5
+    die "--expect-hunks N is required with --hunks" 5
+  fi
+  echo "commit-mine: committing $hunk_total hunk(s):" >&2; echo "$hunk_list" >&2
+fi
 
 flags=()
 # Engine-core gate (before locking).
@@ -79,14 +109,14 @@ cleanup() {
   exit $rc
 }
 unstage() {
-  [ -z "$hunks" ] || git apply --cached -R "$hunks" 2>/dev/null || true
+  if [ -n "$hunks" ]; then git apply --cached -R "$hunks" 2>/dev/null || true; return; fi
   local p; for p in "${paths[@]}"; do git restore --staged -- "$p" 2>/dev/null || true; done
 }
 trap cleanup EXIT INT TERM HUP
 
 # Path mode commits whole files, which sweeps in other agents' uncommitted hunks.
 # Require the caller to state how many hunks `git diff <paths>` shows (untracked file = 1).
-if [ ${#paths[@]} -gt 0 ]; then
+if [ -z "$hunks" ]; then
   count_hunks() { # prints "<hunks> <path>" per changed file
     git diff -- "${paths[@]}" | awk '/^diff --git /{f=$4; sub(/^b\//,"",f)} /^@@/{n[f]++} /^Binary files/{n[f]++} END{for(k in n)print n[k], k}'
     git ls-files --others --exclude-standard -- "${paths[@]}" | awk '{print 1, $0}'
@@ -108,8 +138,7 @@ fi
 
 # Stage.
 staged_by_me=1
-[ ${#paths[@]} -eq 0 ] || git add -A -- "${paths[@]}"
-[ -z "$hunks" ] || git apply --cached "$hunks"
+if [ -n "$hunks" ]; then git apply --cached "$hunks"; else git add -A -- "${paths[@]}"; fi
 
 # Foreign staged paths.
 foreign=()
