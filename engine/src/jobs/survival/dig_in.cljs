@@ -59,6 +59,8 @@
   the block fills it (leaves); a block a mob walks through (torch, sapling,
   cobweb) is dug out once and placed again, and a cell that is occupied
   again, or whose dig fails, is given up on, so the job always ends.
+  A door, gate or trapdoor beside the body counts as a wall only when shut: one standing open is shut with one click
+  (never placed into or dug); an iron one, which a hand cannot shut, is given up on.
   A body standing in a closed room whose roof has a hole over it (room-plug: the lowest cell of y+2 .. y+:roof-height
   above the feet that is open, has a solid side neighbour, and once filled leaves the room closed: a flood from the
   feet through cells that are not sealed?, nor an open door, gate or trapdoor, stays within room-limit cells and
@@ -119,14 +121,34 @@
   iron bars, gates, doors and trapdoors."
   #"(_fence|_fence_gate|_wall|_pane|_door|_trapdoor)$|^iron_bars$")
 
-(defn sealed?
-  "Whether a cell already stops a mob: its block fills the cell (blockAt's :fullCube: stone, leaves, glass) or is a
-  fence, wall, pane, bar, gate or door. Signs, rails, plates, buttons, levers, carpets, torches, plants, slabs and
-  stairs let a mob walk or step through (or leave a gap it fits through), so they are not sealed; nor is an
-  unloaded cell."
+(defn open-openable
+  "The block at cell when it is a door, gate or trapdoor (wooden, copper or iron) standing open, else nil."
   [p cell]
   (let [b (.blockAt p (clj->js cell))]
-    (boolean (and b (or (.-fullCube b) (re-find mob-proof-shapes (.-name b)))))))
+    (when (and b (#{:openable :iron} (click/kind-of (.-name b))) (click/reached? :open (click/props-of b)))
+      b)))
+
+(defn sealed?
+  "Whether a cell already stops a mob: its block fills the cell (blockAt's :fullCube: stone, leaves, glass) or is a
+  fence, wall, pane, bar, or a gate, door or trapdoor that is shut (one standing open is a way in). Signs, rails,
+  plates, buttons, levers, carpets, torches, plants, slabs and stairs let a mob walk or step through (or leave a gap
+  it fits through), so they are not sealed; nor is an unloaded cell."
+  [p cell]
+  (let [b (.blockAt p (clj->js cell))]
+    (boolean (and b
+                  (not (open-openable p cell))
+                  (or (.-fullCube b) (re-find mob-proof-shapes (.-name b)))))))
+
+(defn ^:async shut-open!
+  "Shut the door, gate or trapdoor standing open at cell with one click of the hand (engine.access.click): :shut when
+  it is shut now, :open when it stays open (an iron one, or a click that did nothing), nil when the cell holds none.
+  A shelter fills such a cell by shutting it, never by placing into it or digging it."
+  [c cell]
+  (when-let [b (open-openable (:primitives c) cell)]
+    (if (= :openable (click/kind-of (.-name b)))
+      (let [r (await (click/click! c cell :closed (.-name b)))]
+        (if (= :changed (:outcome r)) :shut :open))
+      :open)))
 
 (defn open-cells
   "The cells to fill around the feet cell, in placement order: sides at feet
@@ -159,17 +181,27 @@
   and remembered in :occupied. One a mob walks through (a torch, a sapling, a
   cobweb) is dug out once (a last resort, via tidy) and placed again; if that
   second try is occupied too, or the dig fails, the cell is remembered in
-  :occupied so it is never tried a third time."
+  :occupied so it is never tried a third time. A cell sealed? by now (the other half of a door just shut) is skipped;
+  a door, gate or trapdoor standing open is shut (shut-open!), never placed into or dug, and one that stays open (iron)
+  is remembered in :occupied."
   [c blocks cells]
   (loop [cells cells]
     (let [item (pick c blocks)
           cell (first cells)]
       (cond
         (empty? cells) :ok
+        (sealed? (:primitives c) cell) (recur (rest cells))
         (nil? item) "no-item"
-        :else (let [r (await (tidy/place! c cell item true))
-                    status (.-status r)]
+        :else (let [door (await (shut-open! c cell))
+                    r (when-not door (await (tidy/place! c cell item true)))
+                    status (some-> r .-status)]
                 (cond
+                  (= :shut door) (recur (rest cells))
+
+                  (= :open door)
+                  (do (ctx/update-mem! c update :occupied (fnil conj #{}) cell)
+                      (recur (rest cells)))
+
                   (= "placed" status)
                   (do (ctx/update-mem! c update :placed (fnil conj #{}) cell)
                       (recur (rest cells)))

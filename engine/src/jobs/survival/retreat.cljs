@@ -1,5 +1,6 @@
 (ns jobs.survival.retreat
-  (:require [engine.access.ledger :as ledger]
+  (:require [engine.access.click :as click]
+            [engine.access.ledger :as ledger]
             [engine.access.rules :as rules]
             [engine.ctx :as ctx]
             [engine.jobs.access :as access]
@@ -23,6 +24,10 @@
   the body is a way back. The flight goes on while a real danger is within
   :radius (ranged ones within :ranged-radius), the radius of the hostile-near
   trigger, checked each round.
+  First of all, a door, gate or trapdoor standing open within a hand's reach (door-reach) and nearer the hostile
+  than the body (a hut's open door with a skeleton outside) is shut with one click, the round's only act
+  (retreat.door-shut info); each door is clicked at most once a flight, and the next round sees whether the danger
+  is gone (a shut door stops arrows and walks).
   Cornered (no open direction worth a walk, or the walk is blocked) it takes the
   safest option it has (escape-order), skipping any that failed this flight:
   - fight (jobs.survival.fight-back, best weapon) only when the odds say it wins:
@@ -31,7 +36,8 @@
     cells) with carried :blocks, first stepping to the middle of its cell when its
     hitbox reaches into a cell to fill, at most :max-places a round, one
     retreat_sealed warn, then hide there (below); not while a hostile's hitbox
-    overlaps a cell to fill;
+    overlaps a cell to fill; an open door there is shut, not filled; a cell the place answers occupied
+    (a torch, chest or bed) is left alone, and when only such cells stay open the seal has failed;
   - pillar up 3 (jobs.access.pillar as a child, the carried block with the most,
     3 or more): solid floor, the cells above free, not against a ranged mob;
     every block goes to the scaffold ledger (purpose :pillar), so
@@ -292,19 +298,29 @@
   [p radius]
   (set (mapcat #(hitbox-cells (u/pos-of (.-pos %))) (combat/hostiles p radius))))
 
+(defn occupied? [c cell] (contains? (:seal-occupied (ctx/mem c)) cell))
+
 (defn ^:async place-seal!
   "Place carried blocks at cells in order. :ok, or :failed at the first
-  placement refused or with nothing left to place."
+  placement refused or with nothing left to place. A door, gate or trapdoor standing open is shut instead
+  (dig-in/shut-open!); a cell the place answers occupied (a torch, a chest, a bed: a block the seal leaves alone), or an
+  open iron door, is remembered in :seal-occupied and never tried again this flight."
   [c cells]
   (loop [cells cells]
-    (let [item (dig-in/pick c (:blocks (:args c)))]
+    (let [item (dig-in/pick c (:blocks (:args c)))
+          cell (first cells)]
       (cond
         (empty? cells) :ok
+        (dig-in/sealed? (:primitives c) cell) (recur (rest cells))
         (nil? item) :failed
-        :else (let [r (await (ctx/act c :place (clj->js {:pos (first cells) :item item})))]
-                (if (#{"placed" "occupied"} (.-status r))
-                  (recur (rest cells))
-                  :failed))))))
+        :else (let [door (await (dig-in/shut-open! c cell))
+                    status (when-not door (.-status (await (ctx/act c :place (clj->js {:pos cell :item item})))))]
+                (cond
+                  (or (= :shut door) (= "placed" status)) (recur (rest cells))
+                  (or (= :open door) (= "occupied" status))
+                  (do (ctx/update-mem! c update :seal-occupied (fnil conj #{}) cell)
+                      (recur (rest cells)))
+                  :else :failed))))))
 
 (defn off-centre?
   "Whether the body's hitbox (0.6 wide) reaches out of its cell into a side cell."
@@ -324,14 +340,20 @@
   "Fill the open cells around the body (dig-in's 1x1: sides at feet and head
   height, a roof support, the roof) with carried :blocks, at most
   :max-places this round. :sealed when none is left open, :continue while
-  more are owed, :failed when a hostile stands in one, none is carried or a
-  placement is refused."
+  more are owed, :failed when a hostile stands in one, none is carried, a
+  placement is refused, or only cells it cannot fill are left open (place-seal!'s :seal-occupied: a torch, chest or bed
+  in a side cell, which the seal leaves alone; the option then counts as failed this flight, so a cornered body moves
+  on to the next one instead of placing there round after round).
+  A door standing open in a side cell is no wall (dig-in/sealed?): it is shut."
   [c]
   (let [{:keys [radius max-places blocks]} (:args c)
         p (:primitives c)
-        cells (dig-in/open-cells p (sh/feet p))]
+        open (dig-in/open-cells p (sh/feet p))
+        cells (remove #(occupied? c %) open)
+        unfillable (fn [] (tried! c :seal) :failed)]
     (cond
-      (empty? cells) :sealed
+      (empty? open) :sealed
+      (empty? cells) (unfillable)
       (some (hostile-cells p radius) cells) :failed
       (nil? (dig-in/pick c blocks)) :failed
       :else
@@ -340,7 +362,11 @@
           (ctx/update-mem! c update :seal-cells (fnil into #{}) (map (juxt :x :y :z) (take max-places cells)))
           (if (= :failed (await (place-seal! c (take max-places cells))))
             (do (tried! c :seal) :failed)
-            (if (empty? (dig-in/open-cells p (sh/feet p))) :sealed :continue))))))
+            (let [left (dig-in/open-cells p (sh/feet p))]
+              (cond
+                (empty? left) :sealed
+                (every? #(occupied? c %) left) (unfillable)
+                :else :continue)))))))
 
 (declare hide-now!)
 
@@ -613,12 +639,62 @@
     (let [r (await (ctx/call-child c :eat 'jobs.survival.eat {:until 20}))]
       (when (not= :declined r) (ctx/update-mem! c assoc :ate true)))))
 
+(def door-reach
+  "Farthest (blocks, feet to the cell's middle) an open door may be for the flight to shut it: within a hand's reach."
+  4)
+
+(defn door-key [{:keys [x y z]}] [x y z])
+
+(defn lower-half
+  "The cell of a door's lower half (a gate's or trapdoor's own cell) for an openable block b at cell."
+  [b cell]
+  (if (= "upper" (:half (click/props-of b))) (update cell :y dec) cell))
+
+(defn door-to-shut
+  "The nearest door, gate or trapdoor a hand shuts that stands open within door-reach of the body, is nearer the
+  threat at threat-pos than the body is (it lies between them, or beyond the body towards the threat), is not the
+  one the body stands in, and has not been clicked this flight (:doors-clicked): {:cell :name}, or nil."
+  [c threat-pos]
+  (let [p (:primitives c)
+        self (u/self-pos c)
+        {fx :x fy :y fz :z} (sh/feet p)
+        r (js/Math.ceil door-reach)
+        clicked (:doors-clicked (ctx/mem c) #{})
+        mid (fn [{:keys [x y z]}] {:x (+ x 0.5) :y y :z (+ z 0.5)})]
+    (->> (for [x (range (- fx r) (+ fx r 1)) y (range (dec fy) (+ fy 3)) z (range (- fz r) (+ fz r 1))]
+           {:x x :y y :z z})
+         (keep (fn [cell]
+                 (when-let [b (dig-in/open-openable p cell)]
+                   (when (= :openable (click/kind-of (.-name b)))
+                     (let [low (lower-half b cell)]
+                       {:cell low :name (.-name b) :half (:half (click/props-of b))})))))
+         distinct
+         (remove #(clicked (door-key (:cell %))))
+         (remove #(click/standing-in? self (:cell %) (:half %)))
+         (filter #(<= (u/dist self (mid (:cell %))) door-reach))
+         (filter #(< (u/dist threat-pos (mid (:cell %))) (u/dist threat-pos self)))
+         (sort-by #(u/dist self (mid (:cell %))))
+         first)))
+
+(defn ^:async shut-door!
+  "Shut door (door-to-shut) with one click; every door is clicked at most once a flight, so a door that will not stay
+  shut does not hold the flight. :continue: the next round sees whether the danger is still there."
+  [c {:keys [cell name]}]
+  (ctx/update-mem! c update :doors-clicked (fnil conj #{}) (door-key cell))
+  (let [r (await (click/click! c cell :closed name))]
+    (when (= :changed (:outcome r))
+      (ctx/emit! c :retreat.door-shut :info {:cell (door-key cell) :text (str "shut the " name " at " (door-key cell)
+                                                                             " on the hostile")})))
+  :continue)
+
 (defn ^:async flight-round [c]
   (let [{:keys [radius ranged-radius step]} (:args c)
         p (:primitives c)
-        threat (reach/nearest-danger p radius {:ranged-radius ranged-radius} {:sight? false :skip (dead-ids c)})]
+        threat (reach/nearest-danger p radius {:ranged-radius ranged-radius} {:sight? false :skip (dead-ids c)})
+        door (when threat (door-to-shut c (u/pos-of (.-pos threat))))]
     (cond
       (nil? threat) :done
+      door (await (shut-door! c door))
       (and (:cornered (ctx/mem c)) (<= (.-distance threat) radius)) (await (cornered! c "cornered"))
       :else
       (let [_ (when (:cornered (ctx/mem c)) (ctx/update-mem! c dissoc :cornered))
