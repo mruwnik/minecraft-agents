@@ -42,6 +42,19 @@
    :expect [{:event {:source :job :kind :fetch.failed :data {:failed :no-source}} :within-s 40 :of-job true}
             {:event {:source :job :kind :waiting :data {:reason :no-tool :fetch {:failed :no-source}}} :within-s 50 :of-job true}]
    :after [[:block [18 0 19] "stone"] [:item "dirt" 0]]}
+  {:name "chest-removed-looking-away-is-dropped"
+   ;; the body sees the chest, looks away for 12 s, the chest is removed, then the dig. The client still gets the block update (a
+   ;; removal cannot be hidden inside the plot), so the chest is dropped from seen-chests: one clean fetch.failed, no open tried.
+   :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:wooden_pickaxe\",count:1}]}"]]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 12]
+         [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 0"] [:wait-s 1]
+         [:rcon "execute positioned $X $Y $Z run setblock ~14 ~ ~19 air"]
+         [:job (jobs.blocks.dig {:pos #at [18 0 19] :fetch true})]]
+   :expect [{:event {:source :job :kind :fetch.started} :within-s 30 :of-job true}
+            {:event {:source :job :kind :fetch.failed} :within-s 60 :of-job true}
+            {:event {:source :job :kind :waiting :data {:reason :no-tool :fetch {:failed [:any]}}} :within-s 70 :of-job true}
+            {:no-event {:source :action :kind :started :data {:name "inspectContainer"}} :for-s 10}]
+   :after [[:block [18 0 19] "stone"] [:item "wooden_pickaxe" 0]]}
   {:name "stair-fetches-pickaxe-and-walks-back"
    ;; dirt on top (y 7..9) needs no tool, stone below does: the body is 3 steps down the stair when it lacks the pickaxe,
    ;; walks up to the chest at the surface (20 0 16 on the plot's level 10), then back to where it left off.
