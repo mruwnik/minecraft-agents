@@ -94,8 +94,8 @@
         (let [{:keys [eng p seen]} (setup night-world [(zone "Miles" [1 64 -1] [1 66 1])])]
           (core/submit! eng '(jobs.survival.dig-in) {})
           (await (run-until-empty eng 10))
-          (is (= [{:x 0 :y 63 :z 0} {:x 0 :y 62 :z 0}] (mapv arg-pos (calls p "dig"))) "the pit, not the walls")
-          (is (= [{:x 0 :y 64 :z 0}] (mapv arg-pos (calls p "place"))))
+          (is (= [{:x 0 :y 63 :z 0} {:x 0 :y 62 :z 0} {:x 0 :y 61 :z 0}] (mapv arg-pos (calls p "dig"))) "the pit, not the walls")
+          (is (= [{:x 0 :y 63 :z 0}] (mapv arg-pos (calls p "place"))))
           (is (= [] (trespass seen :dig-in.trespass-last-resort))))))))
 
 (deftest dig-in-trespasses-only-when-every-way-is-foreign

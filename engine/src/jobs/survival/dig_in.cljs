@@ -24,7 +24,9 @@
   re-fired reflex does not dig a deeper pit every time. Fluid-adjacent sites,
   failed descent and failed roofing are remembered with a :reason and block
   retries even with carried blocks. Descent without vertical progress gives
-  up after three attempts. Dig mode keeps its :roof and :target-y, but if the
+  up after three attempts. On flat ground the start cell has no solid side neighbour to roof against, so the pit is
+  3 deep and roofed in the ground layer one below the start cell (a 2-deep pit when a side of the start cell is solid);
+  with no solid side at either height it does not dig (dig_in_failed warn, :no-roof-support site). Dig mode keeps its :roof and :target-y, but if the
   body's x or z no longer matches that column it chooses again from the
   current cell. Returns :continue until roofed.
   When it ends, however it ends, it writes a :shelter entry {:pos :roof :state
@@ -232,14 +234,31 @@
               :done)
           (fail-site! c :roof-failed (str "cannot roof the pit: " (.-status r))))))))
 
+(defn supported?
+  "Whether a block placed in cell has a solid side neighbour to be placed against."
+  [p {:keys [x y z]}]
+  (boolean (some (fn [[dx dz]] (sh/solid-at? p {:x (+ x dx) :y y :z (+ z dz)})) sides)))
+
+(defn dig-plan
+  "{:roof :depth} for a pit dug from start: the roof goes at start when a side of it is solid (the pit is 2 deep), else
+  one lower, in the ground layer, when a side of that is solid (3 deep: flat ground has nothing beside the start cell
+  to place the roof against). nil when neither can be roofed."
+  [p start]
+  (let [below (update start :y dec)]
+    (cond
+      (supported? p start) {:roof start :depth 2}
+      (supported? p below) {:roof below :depth 3})))
+
 (defn mode-choice
   "[mode refusal] for the shelter from start: the first of :walls (only when walls-ok?) and :dig whose cells are all
-  permitted, else the first of them with its refusal (nil when permitted)."
-  [c start walls-cells walls-ok?]
+  permitted, else the first of them with its refusal (nil when permitted). dig-plan is the pit's {:roof :depth}, nil
+  when it cannot be roofed (the start cell's rules are then checked)."
+  [c start walls-cells walls-ok? dig-plan]
   (let [in (access/rules-input c)
+        {:keys [roof depth]} (or dig-plan {:roof start :depth 2})
         walls-v (some #(access/trespass-refusal in :place %) walls-cells)
-        dig-v (or (some #(access/trespass-refusal in :dig %) [(update start :y dec) (update start :y - 2)])
-                  (access/trespass-refusal (assoc in :feet nil) :place start))
+        dig-v (or (some #(access/trespass-refusal in :dig %) (map #(update start :y - %) (range 1 (inc depth))))
+                  (access/trespass-refusal (assoc in :feet nil) :place roof))
         options (cond-> [] walls-ok? (conj [:walls walls-v]) :always (conj [:dig dig-v]))]
     (or (first (filter (comp nil? second) options)) (first options))))
 
@@ -257,11 +276,14 @@
     (when (or moved (not mode))
       (let [cells (open-cells p start)
             have (reduce + (map :count (carried c (:blocks (:args c)))))
-            [chosen refusal] (mode-choice c start cells (>= have (count cells)))]
+            plan (dig-plan p start)
+            [chosen refusal] (mode-choice c start cells (>= have (count cells)) plan)]
         (access/trespass! c "dig-in" refusal)
-        (if (= :walls chosen)
-          (ctx/update-mem! c assoc :mode :walls)
-          (ctx/update-mem! c assoc :mode :dig :roof start :target-y (- (:y start) 2)))))))
+        (cond
+          (= :walls chosen) (ctx/update-mem! c assoc :mode :walls)
+          (nil? plan) (ctx/update-mem! c assoc :mode :no-roof-support)
+          :else (ctx/update-mem! c assoc :mode :dig :roof (:roof plan) :start start
+                                 :target-y (- (:y start) (:depth plan))))))))
 
 (defn futile-nearby?
   "Whether a recent failed site blocks digging here. Material-only failures
@@ -278,11 +300,20 @@
        (not (sh/roofed? (:primitives c) (:roof-height (:args c))))
        (not (futile-nearby? c))))
 
+(defn no-roof-round
+  "No cell of the pit could be roofed (nothing solid beside the start cell or the ground cell under it): do not dig,
+  since the body would be left in an open pit."
+  [c]
+  (remember-failed-site! c :no-roof-support)
+  (ctx/emit! c :dig_in_failed :warn {:text "nothing solid beside the roof cell to place against; not digging a pit"})
+  :done)
+
 (defn ^:async step [c]
   (choose-mode c)
   (let [{:keys [mode target-y]} (ctx/mem c)]
     (cond
       (= :walls mode) (await (walls-round c))
+      (= :no-roof-support mode) (no-roof-round c)
       (> (:y (sh/feet (:primitives c))) target-y) (await (descend-round c))
       :else (await (roof-round c)))))
 

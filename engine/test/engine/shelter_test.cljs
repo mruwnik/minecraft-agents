@@ -51,7 +51,7 @@
 
 (defn emitted [seen kind] (filterv #(= kind (:kind %)) @seen))
 
-(def floor {"0,63,0" "dirt" "0,62,0" "stone" "0,61,0" "stone"})
+(def floor {"0,63,0" "dirt" "0,62,0" "stone" "0,61,0" "stone" "0,60,0" "stone"})
 (def dirt-stack [{:name "dirt" :count 12}])
 (def sleeper {:id 5 :name "Alex" :kind "player" :sleeping true :pos {:x 10 :y 64 :z 0}})
 (def awake {:id 6 :name "Sam" :kind "player" :pos {:x 10 :y 64 :z 0}})
@@ -302,27 +302,37 @@
           (await (run-until-empty eng 6))
           (is (= 8 (count (calls p "place")))))))))
 
-(deftest dig-in-digs-down-two-and-roofs-with-a-dug-block
+(deftest dig-in-digs-down-three-on-flat-ground-and-roofs-with-a-dug-block
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:time night :blocks floor})]
           (core/submit! eng '(jobs.survival.dig-in) {})
           (await (run-until-empty eng 8))
-          (is (= [{:x 0 :y 63 :z 0} {:x 0 :y 62 :z 0}] (mapv arg-pos (calls p "dig"))))
-          (is (= {:x 0 :y 62 :z 0} (pos-of p)) "two blocks down")
-          (is (= [{:x 0 :y 64 :z 0}] (mapv arg-pos (calls p "place"))) "the roof goes where the body stood")
-          (is (= [{:pos {:x 0 :y 62 :z 0} :roof {:x 0 :y 64 :z 0} :state :built}] (entries eng :shelter))))))))
+          (is (= [{:x 0 :y 63 :z 0} {:x 0 :y 62 :z 0} {:x 0 :y 61 :z 0}] (mapv arg-pos (calls p "dig"))))
+          (is (= {:x 0 :y 61 :z 0} (pos-of p)) "three blocks down")
+          (is (= [{:x 0 :y 63 :z 0}] (mapv arg-pos (calls p "place"))) "the roof goes in the ground layer, beside solid ground")
+          (is (= [{:pos {:x 0 :y 61 :z 0} :roof {:x 0 :y 63 :z 0} :state :built}] (entries eng :shelter))))))))
+
+(deftest dig-in-digs-down-two-and-roofs-at-the-start-cell-beside-a-solid-block
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:time night :blocks (assoc floor "1,64,0" "stone")})]
+          (core/submit! eng '(jobs.survival.dig-in) {})
+          (await (run-until-empty eng 8))
+          (is (= 2 (count (calls p "dig"))))
+          (is (= [{:x 0 :y 64 :z 0}] (mapv arg-pos (calls p "place"))) "the roof goes where the body stood"))))))
 
 (deftest dig-in-with-few-carried-blocks-digs-down-and-roofs-with-one
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:time night :drops {"iron_ore" "raw_iron"} :inventory [{:name "cobblestone" :count 1}]
-                                      :blocks {"0,63,0" "iron_ore" "0,62,0" "iron_ore" "0,61,0" "stone"}})]
+                                      :blocks {"0,63,0" "iron_ore" "0,62,0" "iron_ore" "0,61,0" "iron_ore" "0,60,0" "stone"}})]
           (core/submit! eng '(jobs.survival.dig-in) {})
           (await (run-until-empty eng 8))
-          (is (= 2 (count (calls p "dig"))))
+          (is (= 3 (count (calls p "dig"))))
           (is (= "cobblestone" (.-item (.-args (first (calls p "place"))))) "the carried block is used first"))))))
 
 (deftest dig-in-stops-after-one-dig-when-nothing-can-roof-the-pit
@@ -356,7 +366,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:time night :blocks (merge floor {"5,63,0" "stone" "5,62,0" "stone" "5,61,0" "stone"})})]
+        (let [{:keys [eng p]} (setup {:time night :blocks (merge floor {"5,63,0" "stone" "5,62,0" "stone" "5,61,0" "stone" "5,60,0" "stone" "6,64,0" "stone"})})]
           (core/submit! eng '(jobs.survival.dig-in) {})
           (await (core/tick! eng))
           (teleport! p 5 64 0)
@@ -397,6 +407,42 @@
           (is (= [{:pos {:x 0 :y 64 :z 0} :roof {:x 0 :y 66 :z 0} :state :built
                    :door [{:x 1 :y 64 :z 0} {:x 1 :y 65 :z 0}]}]
                  (entries eng :shelter))))))))
+
+;; the fake's place does not check support; this one refuses a cell with no solid neighbour, as the real one does
+(defn require-support! [p]
+  (let [supported? (fn [pos] (some #(let [n (.-name (.blockAt p (tu/pos (+ (.-x pos) (first %)) (+ (.-y pos) (second %)) (+ (.-z pos) (nth %  2)))))]
+                                      (not (#{"air" "cave_air"} n)))
+                                   [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]))]
+    (.override (.-world p) "place"
+               (fn ^:async f [_ args impl]
+                 (if (supported? (.-pos args))
+                   (await (impl _ args))
+                   #js {:status "no-support"})))))
+
+(deftest dig-in-dig-mode-on-flat-ground-roofs-in-the-ground-layer
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:time night :inventory [{:name "dirt" :count 3}] :blocks floor})]
+          (require-support! p)
+          (core/submit! eng '(jobs.survival.dig-in) {})
+          (await (run-until-empty eng 12))
+          (is (= [] (emitted seen :dig_in_failed)))
+          (is (= {:x 0 :y 61 :z 0} (pos-of p)) "three down")
+          (is (= "dirt" (.-name (.blockAt p (tu/pos 0 63 0)))) "roof flush with the ground, beside solid ground")
+          (is (= {:x 0 :y 63 :z 0} (:roof (last (entries eng :shelter))))))))))
+
+(deftest dig-in-does-not-dig-where-nothing-can-be-roofed-against
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:time night :inventory [{:name "dirt" :count 3}]
+                                           :blocks (assoc floor "1,63,0" "water" "-1,63,0" "water" "0,63,1" "water" "0,63,-1" "water")})]
+          (core/submit! eng '(jobs.survival.dig-in) {})
+          (await (run-until-empty eng 12))
+          (is (= [] (calls p "dig")) "floor intact")
+          (is (= 1 (count (emitted seen :dig_in_failed))))
+          (is (= :no-roof-support (:reason (first (entries eng :dig-in-futile))))))))))
 
 (deftest dig-in-will-not-dig-through-a-thin-floor-into-water
   (async done
@@ -614,7 +660,7 @@
               eng (update eng :triggers assoc :always-shelter always-shelter)]
           (core/register-reflex! eng {:trigger :always-shelter})
           (await (tick-n eng 6))
-          (is (= [{:pos {:x 0 :y 64 :z 0}}] (entries eng :dig-in-futile)))
+          (is (= [{:pos {:x 0 :y 63 :z 0}}] (entries eng :dig-in-futile)))
           (swap! clock + 11000)
           (await (tick-n eng 6))
           (is (= 1 (count (calls p "dig"))) "the second firing does not dig")
@@ -669,11 +715,11 @@
           (refuse-placing! p)
           (core/register-reflex! eng {:trigger :always-shelter})
           (await (tick-n eng 8))
-          (is (= 2 (count (calls p "dig"))))
+          (is (= 3 (count (calls p "dig"))))
           (is (= :roof-failed (:reason (first (entries eng :dig-in-futile)))))
           (swap! clock + 11000)
           (await (tick-n eng 8))
-          (is (= 2 (count (calls p "dig"))) "fresh reflex cannot excavate another two blocks")
+          (is (= 3 (count (calls p "dig"))) "fresh reflex cannot excavate another pit")
           (is (= 3 (count (calls p "place"))) "failed roof is not retried at the same site"))))))
 
 (deftest unsupported-walls-are-not-retried-on-every-reflex-firing
