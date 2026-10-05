@@ -26,18 +26,23 @@
     (some #(when (= phase (first %)) %) (phases (:args c)))))
 
 (defn check
-  "The current phase's child would run: its check, against its sub-map."
+  "The current phase's child would run: its check, against its sub-map. The :plant phase always runs: a child that
+  would wait (no sapling carried) ends the job instead of leaving it queued."
   [c]
   (let [[slot job args] (current-phase c)]
-    (boolean (ctx/check-child c slot job args))))
+    (or (= :plant slot)
+        (boolean (ctx/check-child c slot job args)))))
 
 (defn ^:async round
   "Steps the current phase's child once; when the child is done the phase
   advances. Done when the :plant child is done. A declined child is
-  :continue (the check normally keeps the round from running at all)."
+  :continue (the check normally keeps the round from running at all). The :plant phase with a child that would
+  wait (no sapling carried, the spot not clear) is done without it: the replant stays owed."
   [c]
   (let [[phase job args] (current-phase c)
-        r (await (ctx/call-child c phase job args))
+        r (if (and (= :plant phase) (not (ctx/check-child c phase job args)))
+            :done
+            (await (ctx/call-child c phase job args)))
         next-phase (second (drop-while #(not= phase %) (map first (phases (:args c)))))]
     (cond
       (not= :done r) :continue
