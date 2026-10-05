@@ -6,16 +6,13 @@
             [engine.path.near :as near]))
 
 (def doc
-  "Equip the best weapon, step up to the nearest hostile within :range and hit
-  it, at most one swing per :attack-gap-ms. Done when no hostile is within
-  :range; declines when health is below :min-health. A hostile the walk
-  towards is blocked for three times is given up on (a warn of kind
-  fight_unreachable) and no longer counts; with no other hostile in range the
-  job declines, so respond-to-hostile retreats instead. Landed hits are kept
-  in :struck for the parent; the ids it killed are in :killed and, when it ends
-  done, its result {:killed [ids]}. A mob that was
-  killed (or whose id is in :skip) is not swung at again while its corpse is
-  still listed.")
+  "Equip the best weapon, walk up to the nearest hostile within :range and hit it, at most one swing per :attack-gap-ms.
+  Declines when health is below :min-health.
+  Ends when no hostile is within :range, with the result {:killed [ids]}.
+  A hostile the walk toward is blocked for three times is given up on, with a fight_unreachable warning, and no longer counts.
+  When no other hostile is in range the job declines, so respond-to-hostile retreats instead.
+  A killed mob, or one whose id is in :skip, is not swung at again while its corpse is listed.
+  Job memory (for the parent): :struck {id {:name :hits :health}} for landed hits, and :killed.")
 
 (def args
   {:range {:doc "hostiles within this many blocks are fought" :default 4}

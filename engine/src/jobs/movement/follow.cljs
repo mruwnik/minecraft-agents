@@ -4,18 +4,18 @@
             [engine.path.near :as near]))
 
 (def doc
-  "Keep the body within :range of the player :player, who must be within
-  :radius to be seen. Each round: a player in range is looked at (the head)
-  and waited on 500 ms; one farther off is walked to (engine walker, doors :shut, range :range,
-  :timeoutS 5). A player out of sight is walked to where they were last seen
-  until :lost-s has passed, then the job ends with {:reason \"lost\" :last-seen
-  pos} (info follow.lost). Three blocked walks in a row end it with
-  {:reason \"unreachable\"} (warn follow.unreachable). A player never seen
-  within 2 s of the first round ends it with {:reason \"absent\"} (info
-  follow.absent, the grace is for the world's entities to arrive).
-  {:reason \"timeout\"} after :timeout-s when set; nil follows until
-  cancelled. Idling is look and wait, neutral for backoff. A cut leaves
-  nothing to undo; the last-seen position stays in memory.")
+  "Keep the body within :range of the player :player, who must be within :radius to be seen.
+  Each round: a player in range is looked at (the head) and waited on for 500 ms.
+  One farther off is walked to (engine walker, doors :shut, 5 s per walk).
+  A player out of sight is walked to where they were last seen.
+  Ends with a result {:reason ...}:
+  - \"lost\" (info follow.lost, with :last-seen): the player was out of sight for :lost-s.
+  - \"unreachable\" (warn follow.unreachable): three blocked walks in a row.
+  - \"out-of-range\" (warn follow.out-of-range): three walks in a row that arrived or got closer but left the body out of range.
+  - \"absent\" (info follow.absent): the player was never seen within 2 s of the first round
+    (the grace lets the world's entities arrive).
+  - \"timeout\": :timeout-s passed. With :timeout-s nil it follows until cancelled.
+  Idling is look and wait, neutral for backoff. A cut leaves nothing to undo. The last-seen position stays in job memory.")
 
 (def args
   {:player {:doc "username to follow" :default nil}

@@ -5,31 +5,24 @@
             [engine.triggers.burning :as burning]))
 
 (def doc
-  "Put the body out: it is on fire or in lava. Each round, with a water bucket
-  carried and the body on land, pours the water at the feet, remembers the cell
-  as :poured and, once the fire is out, scoops that water back up with the
-  empty bucket so no source block is left behind. The block read can lag the
-  pour, so a poured cell not yet read as water is waited for (up to 10 rounds)
-  before the job gives it up; a scoop that is not placed warns
-  extinguish.scoop_failed naming the cell; if still burning after 8 waiting rounds it stops
-  waiting and acts normally). A cell in another's zone or claim is not poured over while water or a safe cell is
-  within reach; with nothing else to do it pours there anyway, as a last resort, with one
-  extinguish.trespass-last-resort warn (a missing zone list changes nothing). Otherwise it makes
-  one short walk: when in lava or no water is within :water-radius, to the
-  best nearby cell (:step blocks around the body) that is passable, stands on
-  something solid and is not fire, lava, magma or a campfire, scored by
-  distance from those hazards (up to 4 blocks), a bonus for each block of
-  height gained, and a small cost per block walked; when on fire with water
-  within :water-radius, into the nearest water. On fire (not in lava) with no
-  bucket use, no water within :water-radius and no fire, lava, magma or
-  campfire within 1.5 blocks of the feet cell, there is nothing useful to do:
-  it stands still, emits info :extinguish_wait and is done (the trigger fires
-  it again after its cooldown while the body still burns). Lava seen within :scan-radius
-  is written to memory as :hazard entries (cap 50, 6 hours) for retreat logic.
-  If there is no safe cell, or the walk is blocked while still burning, that
-  is a failed round; after three the job warns :extinguish_stuck once and
-  gives up. Each round writes an :extinguish entry with position and cause (cap 20,
-  1 hour). Done once the body is neither on fire nor in lava.")
+  "Put the body out when it is on fire or in lava.
+  Each round, in this order:
+  1. With a water bucket carried and the body not in lava, pours water at the feet and notes the cell as :poured.
+     A cell in another's zone or claim is skipped while another way exists. As a last resort it pours there anyway,
+     with one extinguish.trespass-last-resort warning.
+  2. Once the fire is out, scoops the water back up with the empty bucket so no source block stays.
+     It waits up to 10 rounds for the poured cell to read as water, and up to 8 rounds while still burning.
+     A scoop that fails warns extinguish.scoop_failed with the cell.
+  3. With no bucket, on fire and with water within :water-radius, walks into the nearest water.
+  4. In lava, or with no water in reach, walks to the best nearby cell within :step blocks.
+     It must be passable, solid underfoot and not fire, lava, magma or a campfire.
+     Scoring favours distance from those hazards (up to 4 blocks) and height, and charges a small cost per block walked.
+  5. On fire, not in lava, with no water in reach and no hazard within 1.5 blocks, there is nothing useful to do.
+     It stands still, emits info extinguish_wait and ends. The trigger fires it again after its cooldown.
+  Ends when the body is neither burning nor in lava.
+  Three failed rounds (no safe cell, or the walk blocked while burning) give an extinguish_stuck warning, then it gives up.
+  Memory: writes :extinguish {:pos :cause} each round (cap 20, one hour),
+  and lava seen within :scan-radius as :hazard entries (cap 50, six hours) for retreat logic.")
 
 (def backoff
   "Off: a danger reflex (rule: no cooldown and no backoff while the danger lasts); fruitless rounds while no water or safe cell is

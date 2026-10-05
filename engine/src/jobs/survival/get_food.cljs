@@ -9,29 +9,27 @@
             [jobs.survival.eat :as eat]))
 
 (def doc
-  "Keep the body fed. Each round takes the first step of this ladder that
-  has something to do: (1) eat what is carried (the eat job); (1b) when none is carried but 3 or more wheat is, bake bread
-  (the craft job, enough loaves for the hunger, within 32 blocks of a table)
-  and eat it next round; a failed bake is remembered as :no-bake in body
-  memory for 10 minutes, so no firing of this job tries again meanwhile and
-  the ladder goes on; (2) use the
-  latest :food-source body-memory entry {:pos :kind} within :source-radius:
-  a :farm is walked to and its mature crops dug and collected (replanting
-  is not this job's business), a :chest is walked to and its best food
-  withdrawn (with no edible food in it but 3 or more wheat, wheat is
-  withdrawn, in multiples of 3 and enough for the hunger, for step 1b), :animals centres the hunt there; (3) hunt the nearest passive
-  food animal within :hunt-radius, or else dig mature crops or sweet berry
-  bushes in it, and collect the drops; (4) nothing found: emit a food.none
-  warn naming what was searched and the nearest known source, write a
-  :hungry entry and finish. For :ask-cooldown-ms after that the round still
-  eats and still does step 3 (what is in sight), but does not walk to
-  remembered sources it already knew when it gave up (one learned since is
-  tried first), say food.none or write :hungry again; with nothing to do it
-  returns :declined. Wheat is not harvested. A remembered chest in another's zone or claim is skipped, never taken
-  from, in every mode and when starving (one get-food.skipped warn): survival jobs never take other people's stuff
-  (:ignore-zones? lifts it). A source found empty or unreachable is forgotten.
-  Hungry is food below :food (default 6), or below :food-when-hurt (default
-  14) while health is below full; the same test as the hungry trigger.")
+  "Keep the body fed. Hungry means food below :food, or below :food-when-hurt while health is below full
+  (the same test as the hungry trigger).
+  Each round takes the first step that has something to do:
+  1. Eat what is carried (the eat job).
+  1b. With none carried but 3 or more wheat, bake bread (the craft job, enough loaves for the hunger, within 32 blocks
+      of a table) and eat it next round. A failed bake is remembered as :no-bake for 10 minutes and the ladder goes on.
+  2. Use the newest :food-source entry {:pos :kind} within :source-radius.
+     :farm: walk there, dig mature crops and collect them. It does not replant.
+     :chest: walk there and withdraw its best food. With no food but 3 or more wheat,
+     withdraw wheat in multiples of 3, enough for the hunger, for step 1b.
+     :animals: hunt there.
+     A source found empty or unreachable is forgotten.
+  3. Hunt the nearest passive food animal within :hunt-radius. Otherwise dig mature crops or sweet berry bushes. Collect the drops.
+  4. Nothing found: emit a food.none warning (what was searched, the nearest known source),
+     write :hungry and end.
+  For :ask-cooldown-ms after that, each round still eats and still does step 3. It does not walk to sources it already
+  knew when it gave up (one learned since is tried first), and does not warn or write :hungry again.
+  With nothing to do it declines.
+  Wheat is never harvested. A chest in another's zone or claim is skipped and never taken from, even when starving
+  (one get-food.skipped warning). :ignore-zones? lifts that.
+  Memory: reads :food-source and :hungry. Writes :hungry {:food} (cap 10, one hour) and :no-bake.")
 
 (def args
   {:food {:doc "hungry below this much food (of 20)" :default hungry/default-food}

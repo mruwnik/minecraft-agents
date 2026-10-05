@@ -7,44 +7,31 @@
             [engine.path.near :as near]))
 
 (def doc
-  "Attack the entities :targets names until none is left within :radius. A
-  target is an entity id (a number), or a string: a player's username, or a mob
-  type such as \"zombie\" (every mob of that name within :radius). Players match
-  only by username, never by type; items never match; the body never targets
-  itself. Each round takes the nearest target not given up on, holds the best
-  weapon carried (equipped once), walks within reach with the engine walker
-  (engine.path.near/walk-near! range 2, :doors :shut: a shut wooden door, gate
-  or trapdoor on the way is opened, passed and shut again; each steer is
-  bounded by :walk-timeout-s, so a moving target is aimed at again from where
-  it is now) and swings once, but only when the entity's `hittable`
-  sensing is not false (a clear line from the eye to some point of its hitbox:
-  the server would accept a swing through glass, the job does not make one;
-  instead it walks closer, range 1, and counts that as a blocked walk), at most one swing per :attack-gap-ms (nil:
-  the held weapon's cooldown, combat/attack-gap-ms). A target is given up on
-  (warn attack.gave-up with :reason) after three blocked walks or out-of-reach
-  swings in a row (:unreachable; a landed hit resets the count; an out-of-reach swing right after a walk that arrived means the target moved on and does not count), after :no-damage-hits swings in a row that did no
-  damage (:no-damage: the attack reported hurt false, or a known health that
-  did not drop), or after :max-hits hits without a kill (:too-many-hits). A
-  kill is booked only when the attack reports killed (a target that merely
-  vanishes is not); a killed target or player is not attacked again in this
-  run, even after respawning. Done (info
-  attack.done, and hands over {:reason :killed [ids] :given-up {id reason}})
-  with :reason :cleared once no target has been within :radius for :lost-s
-  (waiting in 1 s steps) and every target seen was killed, :gave-up when each
-  was killed or given up on and one was given up on (also once every target
-  present has been given up on), :lost when some was neither, :timeout after :timeout-s from the first round (warn
-  attack.timeout), or :absent when no target is present, after a 2 s grace for the
-  world's entities to arrive.
-  :absent :done (the default) lets the job start and end with :absent
-  - (jobs.combat.attack {:targets [123 \"zombie\"]}) is a one-shot order;
-  :absent :wait makes the check decline until a target is present -
-  (repeat (jobs.combat.attack {:targets \"zombie\" :absent :wait})) is a
-  standing guard. The check passes while a target not given up on is within
-  :radius, and always once the job has started, so a cut job resumes and ends
-  itself. Creepers get no special handling: they are attacked only when
-  listed, and the body does not back off. It does not guard the body's
-  health: the survival register sits above it and cuts it; the job resumes
-  after.")
+  "Attack the entities :targets names until none is left within :radius.
+  A target is an entity id (a number), a player's username, or a mob type such as \"zombie\"
+  (every mob of that name within :radius). Players match only by username. Items never match. The body never targets itself.
+  Each round takes the nearest target not given up on, holds the best weapon carried, walks within reach
+  (engine.path.near/walk-near!, doors :shut, each walk bounded by :walk-timeout-s) and swings once.
+  Swings at most once per :attack-gap-ms (nil: the held weapon's cooldown).
+  It does not swing when the entity's `hittable` sensing is false (no clear line to its hitbox, for example glass).
+  It walks closer instead, and counts that as a blocked walk.
+  A target is given up on, with an attack.gave-up warning and a :reason:
+  - :unreachable: three blocked walks or out-of-reach swings in a row. A landed hit resets the count.
+    An out-of-reach swing right after a walk that arrived (the target moved on) does not count.
+  - :no-damage: :no-damage-hits swings in a row that did no damage.
+  - :too-many-hits: :max-hits hits without a kill.
+  A kill counts only when the attack reports killed. A killed target or player is not attacked again in this run,
+  even after respawning.
+  Ends with info attack.done and the result {:reason :killed [ids] :given-up {id reason}}. :reason is:
+  - :cleared: no target within :radius for :lost-s (waiting in 1 s steps), and every target seen was killed.
+  - :gave-up: every target seen was killed or given up on, and one was given up on.
+  - :lost: some target was neither killed nor given up on.
+  - :timeout: :timeout-s after the first round (attack.timeout warning).
+  - :absent: no target was present after a 2 s grace for the world's entities to arrive.
+  :absent :done (the default) lets the job start and end with :absent, so {:targets [123 \"zombie\"]} is a one-shot order.
+  :absent :wait makes the check decline until a target is present, so {:targets \"zombie\" :absent :wait} repeated is a standing guard.
+  Otherwise the check passes while a target not given up on is within :radius, and always once the job has started.
+  Creepers get no special handling. The job does not guard the body's health: the survival register sits above it and cuts it.")
 
 (def args
   {:targets {:doc "entity ids, player usernames and mob types to kill; a single one may be given bare" :default []}

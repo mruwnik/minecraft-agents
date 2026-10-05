@@ -6,24 +6,18 @@
             [engine.places :as places]))
 
 (def doc
-  "Walk to the remembered :bed (go-to as a child) and sleep. Check: it is
-  night and a :bed entry lies within :bed-radius of the body. Done when asleep
-  or when it turns out to be day; a :slept entry (cap 10, kept seven in-game
-  days) is written when the sleep primitive succeeds. A bed that is not at its
-  place is retracted by writing a :bed entry {:gone true :was pos}, which has
-  no :pos, so it no longer reads as a known place, and the job ends so the
-  shelter chooser falls through; when the bed's chunk is not loaded (the block
-  reads nil) it is not retracted but retried like the failures below. A taken bed, a monster nearby or an
-  unreachable bed is retried three times, then warns and ends; an unreachable
-  bed is then also remembered in a :bed-unreachable entry {:pos bed} (cap 5,
-  kept ten minutes), and while an unexpired entry has the same pos as the
-  remembered bed the check declines, so the body does not walk at it again.
-  With a :bed argument it sleeps in that bed instead (a bad position declines the check), whatever its distance,
-  and after sleeping there the bed is recorded as :bed when none is recorded or the recorded one is gone; a
-  different live recorded :bed is kept, with one place.kept event. A missing argument bed is not recorded and
-  retracts nothing but the recorded bed when that is the same cell.
-  Memory: reads :bed and :bed-unreachable; writes :slept, :bed (a gone bed, or the bed given as an argument)
-  and :bed-unreachable.")
+  "Walk to a bed and sleep in it.
+  Declines unless it is night and a bed is known: the :bed argument, else the remembered :bed within :bed-radius.
+  Also declines while the bed is in :bed-unreachable (an unexpired entry with the same position).
+  Ends when asleep, or when it turns day.
+  Retries three times, then warns and ends: a taken bed, a monster nearby, an unreachable bed.
+  A bed whose chunk is not loaded is retried the same way.
+  A bed that is not there is not retried: the job ends and the shelter chooser falls through.
+  If it was the remembered bed, :bed is overwritten with {:gone true :was pos}, so it no longer reads as a place.
+  With a :bed argument the radius is ignored. After sleeping there it is recorded as :bed
+  when none is recorded or the recorded one is gone. A live recorded :bed is kept (one place.kept event).
+  Memory: reads :bed and :bed-unreachable. Writes :slept (cap 10, seven in-game days),
+  :bed (see above) and :bed-unreachable {:pos bed} after an unreachable bed (cap 5, ten minutes).")
 
 (def args
   {:bed-radius {:doc "a remembered bed farther than this many blocks from the body is not used"

@@ -6,20 +6,16 @@
             [engine.triggers.hungry :as hungry]))
 
 (def doc
-  "A hurt body flees and heals; it does not fight. Starts when health is
-  below :health (default 7). Because regeneration is slow it then keeps going
-  until health reaches :healed (default 16) rather than stopping at the
-  trigger threshold: between the two it runs only while a :hurt entry from the
-  last five minutes exists, so a long-healed body is left alone. Each round: a
-  hostile within :sight blocks is fled (jobs.survival.retreat); else walk to
-  the latest :bed, else :home, else stay; at the safe point eat if hungry and
-  carrying food, then wait idle-ms (2 s) per round so health regenerates. Done once health reaches :healed.
-  Health only regenerates at 18 food or more, so below that with nothing to
-  eat it gives up (a warn of kind cannot_heal) instead of holding the body.
-  One :hurt entry is written per spell, and a :heal-ended entry {:why :healed|:cannot-heal} when it ends: the
-  health-low trigger fires recover again while a spell is under way (a recover cut by a higher reflex resumes from
-  scratch, nothing kept in job memory but the once-per-spell latch), and rests after :cannot-heal until food is
-  carried or food reaches 18.")
+  "Flee and heal a hurt body. It does not fight.
+  Starts when health is below :health. Then it keeps going until health reaches :healed.
+  Between the two thresholds it runs only while a :hurt entry from the last five minutes exists.
+  Each round: flee a hostile within :sight (jobs.survival.retreat), else walk to the latest :bed, else :home, else stay.
+  At the safe point it eats if hungry and carrying food, then waits 2 s so health regenerates.
+  Ends when health reaches :healed.
+  Gives up with a cannot_heal warning when food is under 18 and nothing is carried, since health does not regenerate then.
+  The health-low trigger rests after that until food is carried or food reaches 18.
+  Memory: writes one :hurt entry per spell and a :heal-ended entry {:why :healed|:cannot-heal} when it ends.
+  A recover cut by a higher reflex starts the round again from scratch.")
 
 (def args
   {:health {:doc "start recovering when health is below this" :default 7}

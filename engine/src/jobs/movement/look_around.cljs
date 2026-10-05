@@ -3,10 +3,9 @@
             [engine.jobs.util :as u]))
 
 (def doc
-  "Face a point look-ahead blocks away in a random direction (any yaw, a
-  height up to a block below or 1.5 above the body), write a :looked entry to body
-  memory (a condition can read it: (since :looked)), then wait :every-ms before
-  the next round, so an idle body does not spin.")
+  "Face a random point 3 blocks away (any yaw, from a block below to 1.5 above the body),
+  write a :looked entry to body memory (a condition can read it: (since :looked)),
+  then wait :every-ms so an idle body does not spin.")
 
 (def args
   {:every-ms {:doc "milliseconds to wait after each look" :default 2000}})

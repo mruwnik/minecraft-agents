@@ -8,69 +8,40 @@
             [engine.jobs.util :as u]))
 
 (def doc
-  "Roof the body in for the night. Check: it is night and nothing solid is
-  within :roof-height blocks above. With enough :blocks carried to fill every
-  open cell, it walls a 1x1 shelter: the four sides at feet height, the four at
-  head height, a support cell beside the roof cell, then one above the head, at
-  most :max-places placements per round. Walls mode converges: every round it
-  computes the open cells from the body's current feet cell, so a body that
-  was moved is walled in where it now stands. If the blocks run out part-way (used up, lost, or the body moved to a cell with more open cells) the mode is chosen again, so it digs a pit instead of failing no-item. With fewer blocks it digs down
-  two, but only while the block under each one is solid and no lateral water
-  or lava borders the descent cell (collecting the blocks it digs), and places one
-  above, at the cell the body stood in, from a carried or dug block. If a dig
-  drops no placeable block and none is carried it stops at once (a
-  dig_in_failed warn, \"nothing to roof the pit with\") instead of leaving the
-  body in a roofless pit, and remembers the column's start cell as a
-  :dig-in-futile entry (cap 5, 10 minutes). Its check declines while it carries
-  no placeable block and such an entry lies within 8 blocks of the body, so a
-  re-fired reflex does not dig a deeper pit every time. Fluid-adjacent sites,
-  failed descent and failed roofing are remembered with a :reason and block
-  retries even with carried blocks. Descent without vertical progress gives
-  up after three attempts. Every dig holds the best carried tool for the block first (engine.jobs.tools/equip-for!:
-  a pickaxe for stone, so it drops cobblestone to roof with). With no placeable block carried and a block below the
-  carried tools cannot harvest (it would drop nothing), it does not dig at all (dig_in_failed \"cannot harvest ...\",
-  a material-only :dig-in-futile entry). Every way it ends with no roof over the body leaves a :dig-in-futile entry
-  (a hazard below, no floor under it, a failed dig, no block for the roof, every wall cell refused; else
-  {:reason :unsealed}). A declining check says why (job waiting): :day, :already-sealed {:pos}, or :futile {:pos
-  :why}. On flat ground the start cell has no solid side neighbour to roof against, so the pit is
-  3 deep and roofed in the ground layer one below the start cell (a 2-deep pit when a side of the start cell is solid);
-  with no solid side at either height it does not dig (dig_in_failed warn, :no-roof-support site). Dig mode keeps its :roof and :target-y, but if the
-  body's x or z no longer matches that column it chooses again from the
-  current cell. Returns :continue until roofed.
-  When it ends, however it ends, it writes a :shelter entry {:pos :roof :state
-  :built} (cap 10, kept one in-game day) with :pos the current feet cell;
-  :roof is the cell it actually placed above the body, absent when none was.
-  In walls mode the entry also has :door, the feet-height and head-height
-  cells of one side it placed itself; the pit has no :door but :start, the feet
-  cell it was dug from (the surface height), and walls mode at the bottom of a
-  1x1 shaft has :start at the shaft's top (shaft-top); a shelter sealed again where the
-  latest entry already stood keeps that entry's :start. jobs.survival.shelter (via leave!)
-  reads the entry to get out by day.
-  When it placed any block it emits one dig-in.sealed event only if the world shows the body shut in (a roof, and in
-  walls mode no open cell around the feet); otherwise one dig-in.unsealed warn {:pos :placed :open :text} naming the cells
-  still open. A wall cell the server refuses is retried after the others, and given up on after two refusals. The
-  dig-in.sealed event {:pos :placed :resealed :text}: info for a new shelter,
-  warn when :resealed (the latest :shelter entry was already at this feet cell: a shelter dug open at night and closed
-  again by the night-unsafe reflex), so an agent digging out at night sees why its dig was undone; such an entry keeps
-  the latest one's :door too. A body that cannot place or dig gives up after three failures with a dig_in_failed warn. The mode is the first of walls (when enough blocks are carried)
-  and dig whose cells are all permitted by the zone rules; when every way is in another's zone or claim it takes the
-  first anyway, as a last resort, with one dig-in.trespass-last-resort warn (a missing zone list changes nothing).
-  A cell the place primitive reports occupied counts as sealed only when
-  the block fills it (leaves); a block a mob walks through (torch, sapling,
-  cobweb) is dug out once and placed again, and a cell that is occupied
-  again, or whose dig fails, is given up on, so the job always ends.
-  A door, gate or trapdoor beside the body counts as a wall only when shut: one standing open is shut with one click
-  (never placed into or dug); an iron one, which a hand cannot shut, is given up on.
-  A body standing in a closed room whose roof has a hole over it (room-plug: the lowest cell of y+2 .. y+:roof-height
-  above the feet that is open, has a solid side neighbour, and once filled leaves the room closed: a flood from the
-  feet through cells that are not sealed?, nor an open door, gate or trapdoor, stays within room-limit cells and
-  room-reach of the feet, with a door, gate or trapdoor a hand opens in its walls) only mends that hole with one
-  carried block (plug mode, first in the zone rule's order), instead of walling the body in at feet and head height in
-  the room; its :shelter entry has :room true and :roof the plug, and leave! treats it as never shut in (the room's
-  door is the way out). A room with an open door or doorway, or with no door, gets walls or a pit.
-  Memory: writes :shelter and :dig-in-futile; reads :dig-in-futile.
-
-  Leaving is not a round of this job but the function leave!, which the jobs.survival.shelter job calls by day (see its doc).")
+  "Roof the body in for the night.
+  Declines (waiting) with :day, :already-sealed {:pos} (something solid within :roof-height above),
+  or :futile {:pos :why} (a :dig-in-futile entry within 8 blocks that blocks it, see below).
+  Ends when roofed. Returns :continue until then.
+  The mode is the first of these whose cells the zone rules permit. If none is permitted it takes the first
+  as a last resort, with one dig-in.trespass-last-resort warning.
+  - plug: the body is in a closed room with a door and a hole in the roof over it. One carried block mends the hole.
+  - walls: enough :blocks are carried for every open cell. Places the four sides at feet height, the four at head height,
+    a support beside the roof cell, then the roof cell, at most :max-places per round.
+    Every round it recomputes the open cells from the current feet cell. If the blocks run out, it chooses again.
+  - dig: digs a pit two deep (three on flat ground, where the start cell has no solid side to roof against),
+    then places one block at the roof cell from a carried or dug block.
+    It digs only where the block under is solid and no water or lava borders the cell.
+    It holds the best carried tool for each block first.
+    If the body leaves the column, it chooses again.
+  With no solid side at either height it does not dig (dig_in_failed warning, :no-roof-support).
+  A wall cell the server refuses is retried after the others, and given up after two refusals.
+  A cell occupied by a block a mob walks through (torch, sapling, cobweb) is dug once and placed again.
+  A door, gate or trapdoor beside the body counts as a wall only when shut. An open one is shut with one click.
+  An iron one cannot be shut by hand and is given up on.
+  Fails (dig_in_failed warning) after three failures to place or dig, or at once when:
+  a hazard is below, no floor is under the pit, no block can roof the pit, or the carried tools cannot harvest the block below.
+  Every end with no roof over the body leaves a :dig-in-futile {:pos :reason} entry,
+  and the check declines while one lies within 8 blocks. An entry with no :reason (a lack of blocks or tools)
+  is retried once blocks are carried or a carried tool harvests the block.
+  Events: dig-in.sealed when it placed blocks and the world shows the body shut in
+  (a warning when :resealed, meaning the latest :shelter entry was already at this cell),
+  else dig-in.unsealed (warning) naming the cells still open.
+  Memory: reads :dig-in-futile. Writes :dig-in-futile (cap 5, ten minutes)
+  and, on any end, :shelter {:pos :roof :state :built} (cap 10, one in-game day).
+  :roof is the cell it placed above the body, absent if none. Walls mode adds :door, the feet and head cells of one side it placed.
+  Pit mode adds :start, the cell dug from. Walls mode at the bottom of a shaft has :start at the shaft's top.
+  Plug mode adds :room true. A shelter sealed again where the latest entry stood keeps that entry's :start and :door.
+  Leaving is the function leave!, which jobs.survival.shelter calls by day.")
 
 (def building-blocks
   ["dirt" "cobblestone" "cobbled_deepslate" "stone" "andesite" "diorite" "granite" "netherrack"
@@ -175,15 +146,12 @@
   (boolean (some-> (.blockAt (:primitives c) (clj->js cell)) .-fullCube)))
 
 (defn ^:async place-all!
-  "Place item-picked blocks at cells in order. Resolves to :ok, or the first
-  status that is not placed or occupied (no-item when none is carried). A cell
-  reported occupied by a block that fills it (its :fullCube) is sealed already
-  and remembered in :occupied. One a mob walks through (a torch, a sapling, a
-  cobweb) is dug out once (a last resort, via tidy) and placed again; if that
-  second try is occupied too, or the dig fails, the cell is remembered in
-  :occupied so it is never tried a third time. A cell sealed? by now (the other half of a door just shut) is skipped;
-  a door, gate or trapdoor standing open is shut (shut-open!), never placed into or dug, and one that stays open (iron)
-  is remembered in :occupied."
+  "Place blocks at cells in order. Resolves to :ok, or the first status that is not placed or occupied.
+  A cell occupied by a block that fills it is sealed already and goes in :occupied.
+  A cell occupied by a block a mob walks through is dug once and placed again.
+  If that second try is occupied too, or the dig fails, the cell goes in :occupied and is not tried again.
+  A cell that is sealed by now (the other half of a door just shut) is skipped.
+  An open door, gate or trapdoor is shut (shut-open!), never placed into or dug. One that stays open goes in :occupied."
   [c blocks cells]
   (loop [cells cells]
     (let [item (pick c blocks)
@@ -429,13 +397,10 @@
           :else (recur (inc yy)))))))
 
 (defn choose-mode
-  "Record in job memory how this shelter is built. Walls mode stores
-  :mode :walls (the cells are recomputed from the feet every round), and :start
-  at the shaft-top when the body stands at the bottom of a 1x1 shaft. Dig mode
-  stores :roof, the starting cell, and :target-y. Plug mode (a closed room with
-  a hole in its roof over the body, room-plug; at least one block carried)
-  stores :plug, the one cell to fill. Chosen once, again only when
-  the body leaves a dig-mode column. See mode-choice for the zone rule."
+  "Record in job memory how this shelter is built, once. Chosen again only when the body leaves a dig-mode column.
+  :walls stores :mode, and :start at the shaft top when the body is at the bottom of a 1x1 shaft.
+  :dig stores :roof, :start and :target-y. :plug stores the one cell to fill.
+  See mode-choice for the zone rule."
   [c]
   (let [p (:primitives c)
         {:keys [mode roof]} (ctx/mem c)
@@ -693,21 +658,22 @@
                     :continue))))))
 
 (defn ^:async leave!
-  "One round of getting the body out of the shelter dig-in built, for the jobs.survival.shelter job to call by day from its
-  own round (its job memory holds the progress under :dig-out; the stair is its child :dig-out-<i>). Resolves to
-  :continue while working, else a result map {:status :done|:stopped :reason :out|:unsafe|:no-way-out :at [x y z]}
+  "One round of getting the body out of the shelter dig-in built. The shelter job calls it by day.
+  Progress is in the caller's job memory under :dig-out. The stair is its child :dig-out-<i>.
+  Resolves to :continue while working, else {:status :done|:stopped :reason :out|:unsafe|:no-way-out :at [x y z]}
   plus :why (:unsafe), :heading (the stair that got it out) or :tries ({:heading :reason :cell} per stopped stair).
-  The shelter is the latest :shelter entry when the body stands in its :pos and is shut in it (sheltered-in); none:
-  {:status :done :reason :out} at once. Never opened at night (leave-unsafe): {:status :stopped :reason :unsafe :why
-  :night}, nothing dug. By day it opens whatever hostiles are around (a real danger fires the hostile reflex).
-  A walled cell: its own :door cells are dug (feet, then head height), then the body steps through to the cell beyond
-  when it has a floor. A pit (:start) or a roofed shaft (no :start, no :door): a stair up (jobs.access.stair :up) to the
-  start height, or for a shaft one step at a time until nothing solid is within 4 above (at most 32 steps, else
-  :too-deep); the heading nearest opts :toward first, then the others; only when one stopped for an access reason
-  (:zone :claim :footprint :no-zones), the four again with :ignore-zones? as the survival last resort, whose dug cells
-  of another's are noted as :tidy entries. The stair refuses lava and water in or beside its cuts, falling blocks
-  and a missing floor, so such a heading stops and the next is tried. The pit and the stair are left dug. Events:
-  dig-in.left (info), dig-in.staying (info, unsafe), dig-in.trapped (warn, no way out)."
+  The shelter is the latest :shelter entry when the body stands in its :pos and is shut in. Without one: done, :out.
+  At night nothing is dug: stopped, :unsafe, :why :night. By day it leaves whatever hostiles are around.
+  - A walled shelter: digs its :door cells (feet, then head), then steps through to the cell beyond if it has a floor.
+  - A pit (:start) or a roofed shaft (no :start, no :door): a stair up (jobs.access.stair :up) to the start height.
+    A shaft goes one step at a time until nothing solid is within 4 above (at most 32 steps, else :too-deep).
+    The heading nearest :toward goes first. The stair refuses lava, water, falling blocks and a missing floor,
+    and then the next heading is tried.
+  - Only when a heading stopped for an access reason (:zone :claim :footprint :no-zones),
+    all four are tried again with :ignore-zones?, the survival last resort.
+    The cells dug in another's zone or claim are noted as :tidy entries.
+  The pit and the stair are left dug.
+  Events: dig-in.left (info), dig-in.staying (info, unsafe), dig-in.trapped (warn, no way out)."
   ([c] (leave! c {}))
   ([c {:keys [toward]}]
    (let [p (:primitives c)

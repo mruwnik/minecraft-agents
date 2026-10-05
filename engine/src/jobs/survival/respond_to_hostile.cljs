@@ -5,16 +5,16 @@
             [engine.jobs.util :as u]))
 
 (def doc
-  "A hostile is near: fight it (jobs.survival.fight-back, the best weapon
-  carried equipped) when the odds are fair, else retreat (jobs.survival.retreat).
-  Decided afresh every round: never against a creeper; otherwise fight when the
-  damage the fight is expected to cost (engine.jobs.combat/fight-damage: the
-  weapon, the armour worn, each mob's kind and what is left of it after the
-  hits landed, the dangers killed nearest first) leaves at least :reserve
-  health. Writes one :hostile entry per encounter. Done the first round no real
-  danger (as the hostile-near trigger: engine.jobs.reach, in sight) is within
-  :radius (:ranged-radius for ranged mobs), unless the retreat is hiding (sealed
-  in, up a pillar or down a pit): then the retreat says when the danger is gone.
+  "A hostile is near: fight it (jobs.survival.fight-back, best weapon equipped) when the odds are fair,
+  else retreat (jobs.survival.retreat).
+  Decided afresh every round. Never fights a creeper. Otherwise fights when the damage the fight is expected to cost
+  leaves at least :reserve health (engine.jobs.combat/fight-damage: weapon, armour worn, each mob's kind
+  and what is left of it after the hits landed, the dangers killed nearest first).
+  If the chosen child declines, the other one runs.
+  Ends the first round no real danger (as the hostile-near trigger, engine.jobs.reach, in sight) is within :radius
+  (:ranged-radius for ranged mobs).
+  Exception: while the retreat is hiding (sealed in, up a pillar or down a pit), the retreat says when the danger is gone.
+  Memory: writes one :hostile entry {:mob :pos :decision} per encounter.
   A danger reflex: never backed off.")
 
 (def backoff

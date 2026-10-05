@@ -3,10 +3,9 @@
             [engine.path.near :as near]))
 
 (def doc
-  "Walk a, b, a, b (:laps times each) per round, a walk per leg (engine.path.near/walk-near!, doors :shut); done after
-  :rounds rounds, or at once, with a :leg-unfinished warn (target, status),
-  when a leg does not arrive. A harmless long round for showing a
-  reflex cut a running job.")
+  "Walk a, b, a, b (:laps times each) per round, one walk per leg (engine.path.near/walk-near!, doors :shut).
+  Ends after :rounds rounds, or at once with a :leg-unfinished warning (target, status) when a leg does not arrive.
+  A harmless long job, for showing that a reflex cuts a running one.")
 
 (def args
   {:a {:doc "first point" :default nil}

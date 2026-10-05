@@ -4,12 +4,13 @@
             [engine.jobs.util :as u]))
 
 (def doc
-  "Eat the best food carried, one item per round, until food reaches :until
-  or nothing edible is left. Foods come from minecraft-data (engine.foods): best by hunger points then saturation.
-  Harmful foods (rotten flesh, spider eyes, pufferfish, poisonous potatoes, raw chicken) need :allow-bad; golden
-  apples are eaten only when named or at low health; chorus fruit and suspicious stew only when
-  named. A named item that is not food is refused at once (:not-food). Writes a :fed
-  entry (item, food after) for each meal.")
+  "Eat the best carried food, one item per round, until food reaches :until or nothing edible is left.
+  Best means most hunger points, then most saturation (data from engine.foods).
+  Harmful foods (rotten flesh, spider eyes, pufferfish, poisonous potatoes, raw chicken) need :allow-bad.
+  Golden apples are eaten only when named or at low health. Chorus fruit and suspicious stew only when named.
+  Declines with :not-hungry or :no-food. A named item that is not food, or is harmful without :allow-bad,
+  is refused at once with a refused warning.
+  Memory: writes :fed {:item :food} for each meal.")
 
 (def args
   {:item {:doc "the food to eat; the best carried when nil" :default nil}

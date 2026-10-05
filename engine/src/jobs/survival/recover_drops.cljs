@@ -9,33 +9,27 @@
             [engine.value :as value]))
 
 (def doc
-  "After a death, go back for the drops when they are worth it. Round: take
-  the latest :died entry with no newer :recovered. Skip (a :recovered entry
-  with :decision :skip) when engine.jobs.value/item-value of what was carried (with :value-overrides, plus 5 a level
-  of experience) is at most engine.jobs.value/fetch-cost plus :margin: a trip of 10, 0.3 a block of the straight
-  distance, 10 a point of engine.jobs.danger/route-danger along engine.jobs.danger/straight-route past the hostiles
-  the body knows of (seen or heard, remembered while likely near: engine.jobs.reach/known-hostiles; with
-  :danger-overrides, after its armour), infinite when lava, fire or the void took the pile or the walk would end after
-  the despawn. A fetch emits recover-drops.fetching, a skip recover-drops.decided; both texts give
-  the value, the cost and their main parts. Otherwise walk to the
-  death point (jobs.movement.go-to), then collect the items of the pile
-  (the carried item names) it can see within :collect-radius, 10 as a pile
-  rolls up to 8 blocks on open ground (jobs.forestry.collect-drops; never other items, never ones out of
-  line of sight) and record :collected with the
-  count of the pile's items that entered the inventory since the decision (those
-  picked up on the walk count; a pile already carried again ends :collected
-  without a collect step). Gives
-  up as :abandoned when the point is unreachable, nothing is left there, or
-  the five minute despawn window closes. Nothing is decided or walked until
-  a :respawned entry newer than the death exists (the body is alive again); the
-  window still closes meanwhile. A real danger (engine.jobs.reach/nearest-danger: a mob that can reach the body, or a
-  ranged one with a line of fire) within :danger-radius makes the round yield without acting, so a reflex can deal
-  with it; a walled-off mob does not. The check holds while a death is unrecovered,
-  however old, so an expired trip still gets to write :abandoned.
-  Restart-safe: the decision, the baseline of carried items and the phase live in a :recover-trip body-memory entry
-  keyed to the death, not only in job memory, so a run cut by a higher reflex (and fired again by the died trigger,
-  which holds until :recovered is written) or a restarted body goes on with the same trip: what was picked up before
-  the cut still counts.")
+  "After a death, go back for the drops when they are worth it.
+  Takes the latest :died entry with no newer :recovered. The check holds while a death is unrecovered, however old,
+  so an expired trip still gets to write :abandoned.
+  Waits (no decision, no walk) until a :respawned entry newer than the death exists.
+  Yields without acting while a real danger is within :danger-radius, so a reflex can deal with it.
+  A real danger is a mob that can reach the body, or a ranged one with a line of fire (engine.jobs.reach/nearest-danger).
+  Decision: skips when the value of what was carried is at most the fetch cost plus :margin.
+  - Value: engine.jobs.value/item-value (with :value-overrides), plus 5 per level of experience.
+  - Cost: a trip of 10, 0.3 per block of straight distance, and 10 per point of route danger (engine.jobs.danger)
+    past the hostiles the body knows of (seen or heard, engine.jobs.reach/known-hostiles; :danger-overrides, after armour).
+  - Infinite when lava, fire or the void took the pile, or the walk would end after the despawn.
+  A fetch emits recover-drops.fetching. A skip emits recover-drops.decided. Both texts give the value, the cost and their parts.
+  Fetch: walks to the death point (jobs.movement.go-to), then collects the pile's items it can see within :collect-radius
+  (jobs.forestry.collect-drops; only the carried item names, never items out of sight).
+  Ends by writing a :recovered entry {:decision :skip|:collected|:partial|:abandoned}.
+  :collected counts the pile's items that entered the inventory since the decision, those picked up on the walk too.
+  :abandoned: the point is unreachable, nothing is left there, or the five minute despawn window closes.
+  The window keeps running while the body waits.
+  Restart-safe: the decision, the baseline of carried items and the phase are kept in a :recover-trip entry keyed to the death.
+  A run cut by a higher reflex, or a restarted body, goes on with the same trip.
+  Memory: reads :died, :respawned, :recover-trip. Writes :recovered and :recover-trip.")
 
 (def args
   {:margin {:doc "added to the fetch cost before comparing it to the value" :default 0}

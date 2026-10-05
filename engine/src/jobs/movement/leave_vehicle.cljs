@@ -4,12 +4,13 @@
             [engine.jobs.vehicle :as vehicle]))
 
 (def doc
-  "Get off whatever the body rides (boat, raft, minecart, mount). Done at once on foot. Faces :toward when given,
-  else the nearest dry cell (feet and head air over a solid, non-fluid block) within :radius of the vehicle, else
-  leaves without a look; the server picks the exit from that look. Then the dismount primitive (sneak). On
-  dismounted: info vehicle.left {:pos :landed} with :landed :dry or :in-water (the body's own read after landing),
-  the same map as its result, done. A failed dismount is retried next round; after :max-tries warn
-  vehicle.dismount_failed {:tries :status} and done (the body stays aboard). The :mounted trigger runs it.")
+  "Get off whatever the body rides (boat, raft, minecart, mount). Ends at once when on foot.
+  Faces :toward when given, else the nearest dry cell within :radius of the vehicle
+  (feet and head air over a solid, non-fluid block), else leaves without a look. The server picks the exit from that look.
+  Then it uses the dismount primitive (sneak).
+  On success: info vehicle.left {:pos :landed}, :landed being :dry or :in-water. The result is the same map.
+  A failed dismount is retried next round. After :max-tries it warns vehicle.dismount_failed {:tries :status} and ends,
+  with the body still aboard. The :mounted trigger runs it.")
 
 (def args
   {:toward {:doc "a position {:x :y :z} to face when getting off (its cell's centre); nil picks a dry cell" :default nil}

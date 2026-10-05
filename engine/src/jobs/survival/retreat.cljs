@@ -15,56 +15,34 @@
             [jobs.survival.dig-in :as dig-in]))
 
 (def doc
-  "Walk a short step away from the nearest hostile each round with the engine
-  walker (engine.path.near/walk-near!, doors opened and shut behind), leaning
-  towards the latest :bed or :home when that is not through the hostile,
-  avoiding :hazard positions and turning towards open ground when a wall is
-  behind. A direction is probed column by column from the body's own cell,
-  stepping one block up or down where a walker would, so a stair dug behind
-  the body is a way back. The flight goes on while a real danger is within
-  :radius (ranged ones within :ranged-radius), the radius of the hostile-near
-  trigger, checked each round.
-  First of all, a door, gate or trapdoor standing open within a hand's reach (door-reach) and nearer the hostile
-  than the body (a hut's open door with a skeleton outside) is shut with one click, the round's only act
-  (retreat.door-shut info); each door is clicked at most once a flight, and the next round sees whether the danger
-  is gone (a shut door stops arrows and walks).
-  Cornered (no open direction worth a walk, or the walk is blocked) it takes the
-  safest option it has (escape-order), skipping any that failed this flight:
-  - fight (jobs.survival.fight-back, best weapon) only when the odds say it wins:
-    engine.jobs.combat/fight-damage leaves :reserve health, and never a creeper;
-  - seal in: fill the open sides at feet and head height and the roof (dig-in's 1x1
-    cells) with carried :blocks, first stepping to the middle of its cell when its
-    hitbox reaches into a cell to fill, at most :max-places a round, one
-    retreat_sealed warn, then hide there (below); not while a hostile's hitbox
-    overlaps a cell to fill; an open door there is shut, not filled; a cell the place answers occupied
-    (a torch, chest or bed) is left alone, and when only such cells stay open the seal has failed;
-  - pillar up 3 (jobs.access.pillar as a child, the carried block with the most,
-    3 or more): solid floor, the cells above free, not against a ranged mob;
-    every block goes to the scaffold ledger (purpose :pillar), so
-    jobs.access.cleanup takes it back once the job has ended;
-  - back off: a step of up to 2 cells in any of the 8 directions that gains at
-    least a block on the hostile;
-  - dig down and plug: dig-in's pit (2 deep under a cell with a solid side, else
-    3), every cell solid, harvestable with what is carried, no fluid beside, solid
-    under it, then a carried or dug block placed over the head (ledger purpose
-    :retreat-plug);
-  - last of all fight with the best weapon or tool (pickaxe, shovel, hoe) or the
-    fist, kept while the hostile stays within :radius.
-  The order is fight-if-it-wins, then seal, pillar (not against a ranged mob),
-  back off, pit, fight; against a creeper back off comes first. An option that
-  fails is not tried again until every one has failed; then they are all tried
-  again from the start (one retreat_blocked warn per flight): the job never
-  ends while the danger stands. Sealed in, up a pillar or down a pit it hides,
-  with no time limit, while a hostile within :radius (ranged ones within
-  :ranged-radius) would have a walkable way to the refuge's cell were the
-  refuge's own blocks gone, and is done the first round none has. A cell in
-  another's zone is used as a last resort (retreat.trespass-last-resort). Once
-  per flight, with at least :eat-gap blocks to the nearest danger and food
-  carried, it eats (jobs.survival.eat up to 20) so health can regenerate on the
-  run. Done the first round no real danger (engine.jobs.reach: one with no
-  walkable way to the body, or a ranged one with no line of fire, is none) is
-  within :radius (ranged ones within :ranged-radius). Each round looks for the
-  nearest real danger only, so a mob far off costs no search while one is close.")
+  "Flee from the nearest hostile. Never ends while a real danger stands.
+  Each round, in this order:
+  1. A door, gate or trapdoor standing open within a hand's reach and nearer the hostile than the body is shut with one click.
+     That is the round's only act (retreat.door-shut info). Each door is clicked at most once a flight.
+  2. Walks a short step (:step blocks) away from the nearest danger with the engine walker (engine.path.near/walk-near!),
+     leaning toward the latest :bed or :home when that is not through the hostile, avoiding :hazard positions.
+     Eats once per flight when the nearest danger is at least :eat-gap blocks away and food is carried.
+  3. Cornered (no open direction worth a walk, or the walk is blocked): takes the safest option it has not yet failed.
+     - fight (jobs.survival.fight-back) only when engine.jobs.combat/fight-damage leaves :reserve health. Never against a creeper.
+     - seal in: fill the open sides at feet and head height and the roof (dig-in's 1x1 cells) with carried :blocks,
+       at most :max-places a round. It first steps to the middle of its cell, and does not place while a hostile's hitbox
+       overlaps a cell to fill. An open door is shut, not filled. A cell that answers occupied (torch, chest, bed) is left alone.
+       When only such cells stay open the seal has failed.
+     - pillar up 3 (jobs.access.pillar, the carried block with the most, at least 3). Needs a solid floor and free cells above.
+       Not against a ranged mob. Every block goes to the scaffold ledger (purpose :pillar) for jobs.access.cleanup.
+     - back off: a step of up to 2 cells in any of 8 directions that gains at least a block on the hostile.
+     - dig down and plug: dig-in's pit, then a carried or dug block over the head (ledger purpose :retreat-plug).
+       Every cell must be solid, harvestable with what is carried, with no fluid beside and solid under it.
+     - last of all, fight with the best weapon or tool (pickaxe, shovel, hoe) or the fist.
+     Order: fight if it wins, then seal, pillar (not against a ranged mob), back off, pit, fight.
+     Against a creeper back off comes first.
+     An option that fails is not tried again until all have failed. Then all are tried again (one retreat_blocked warning per flight).
+  Sealed in, up a pillar or down a pit it hides (one retreat_sealed warning), with no time limit.
+  It hides while a hostile within :radius (ranged ones :ranged-radius) would have a walkable way to the refuge if its own
+  blocks were gone.
+  Ends the first round no real danger is within :radius (ranged ones :ranged-radius).
+  A real danger is as in engine.jobs.reach: a mob with a walkable way to the body, or a ranged one with a line of fire.
+  A cell in another's zone is used only as a last resort (retreat.trespass-last-resort warning).")
 
 (def args
   {:radius {:doc "hostiles within this many blocks start a flight" :default 8}

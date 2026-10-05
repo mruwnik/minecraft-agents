@@ -7,33 +7,22 @@
             [engine.triggers.suffocating :as s]))
 
 (def doc
-  "Get air. Drowning (in water, oxygen below :min-oxygen, head under water):
-  when the own column reaches air within :reach blocks up, swim (the swim
-  primitive rises to the surface); else walk sideways at the feet's height to
-  the nearest column within :radius that does, and swim from there next round.
-  Enclosed (head cell
-  holds a suffocating block, see engine.triggers.suffocating): first, once per
-  job, step to a horizontal neighbour at the same feet height whose feet and
-  head cells are passable and which has something to stand on (not air, water
-  or lava); if that does not clear the situation (:side-tried in job memory)
-  the next round digs: dig the head
-  block, dig the block above it if solid, and step up; a dig that is not
-  dug/missing (cannot, timeout, unreachable) is a failed round and nothing
-  moves. One action per round;
-  the situation is gone once the head is clear, and in water either oxygen is
-  back at :min-oxygen or the head is in air. After a swim that surfaced
-  (:surfaced in job memory) a body still in water heads for land instead of
-  bobbing: it swims toward the nearest land cell within :shore-radius (feet y
-  from one below to two above the own; feet and head cells air, the cell below solid,
-  i.e. not air, water, lava, fire or magma); done when it stands out of the
-  water. With no land in :shore-radius it looks within :far-radius and walks there with the
-  walk driver (engine.path.walk, which swims within its air limits). A body that cannot get out
-  (no land in reach, the driver finds no way, three failed shore swims) stays afloat instead of
-  ending, because a body with no job sinks and the trigger would fire again for ever: each round
-  holds jump for a few seconds (a steer act), one :afloat warn (:no_shore after three failed
-  swims) says so once, and the job ends when the body is out of the water. Gives up (:no_air or
-  :no_way_out warn) after three failed rounds when drowning with no air in reach; the
-  suffocating trigger then fires it again.")
+  "Get air when drowning or stuck inside a block. One action per round.
+  Drowning (in water, head under, oxygen below :min-oxygen):
+  - If the own column reaches air within :reach blocks up, swim (the swim primitive rises to the surface).
+  - Otherwise walk sideways, at the feet's height, to the nearest column within :radius that does.
+  Enclosed (head cell holds a suffocating block, see engine.triggers.suffocating):
+  - First, once per job, step to a side cell with room to stand.
+  - If that does not help, dig the head block, dig the block above it if solid, and step up.
+  - A dig that fails (cannot, timeout, unreachable) is a failed round.
+  After a swim that surfaced, a body still in water heads for land instead of bobbing:
+  it swims to the nearest land cell within :shore-radius, else walks to land within :far-radius.
+  Ends when the head is clear and the body stands out of the water.
+  A body that cannot get out stays afloat (it holds jump for a few seconds each round) instead of ending,
+  because a body with no job sinks and the trigger would fire again for ever. One :afloat warning says so.
+  Gives up with a :no_air, :no_way_out or :no_shore warning after three failed rounds.
+  The suffocating trigger then fires it again.
+  Memory: writes one :breathe entry per job.")
 
 (def backoff
   "Off: a danger reflex (rule: no cooldown and no backoff while the danger lasts); fruitless rounds while air is
