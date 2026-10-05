@@ -5,6 +5,7 @@
             [engine.hostile-test :as h]
             [engine.jobs.combat :as combat]
             [engine.fake :as fake]
+            [engine.memory :as mem]
             [engine.test-util :as tu]
             [jobs.combat.attack :as attack]))
 
@@ -22,6 +23,14 @@
   (dotimes [_ n]
     (swap! clock + step)
     (await (core/tick! eng))))
+
+(defn ^:async scenario-seeing
+  "As scenario, over a body that sees through perception."
+  [args world n]
+  (let [s (h/setup-seeing world nil)]
+    (core/submit! (:eng s) (spec args) {})
+    (await (run-ticks s n 700))
+    s))
 
 (defn ^:async scenario
   "Submit the job with args in a world; run n ticks 700 ms apart; the setup map."
@@ -449,3 +458,24 @@
               (recur (inc i))))
           (is (>= (count (attacked s)) 5) "swung well past three times")
           (is (empty? (events-of s :attack.gave-up))))))))
+
+;; ------------------------------------------------------- looking round between swings (card 9970c377)
+
+(defn watched [{:keys [eng]}] (mem/entries (mem/view (:store eng)) :watched))
+
+(deftest a-fight-with-a-hostile-looks-round-while-the-cooldown-runs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario-seeing {:targets [7] :attack-gap-ms 3000} {:inventory h/sword :entities [(zed 7 3)]} 3))]
+          (is (seq (watched s)) "a hostile known near: alert, so the cooldown is spent looking round")
+          (is (= [7] (distinct (attacked s)))))))))
+
+(deftest a-hunt-of-a-cow-in-a-lit-place-never-looks-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario-seeing {:targets ["cow"] :attack-gap-ms 3000}
+                                 {:inventory h/sword :entities [(ent 8 "cow" "passive" 3)]} 3))]
+          (is (empty? (watched s)))
+          (is (= [8] (distinct (attacked s)))))))))

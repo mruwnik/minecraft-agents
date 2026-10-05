@@ -2,6 +2,7 @@
   (:require [engine.ctx :as ctx]
             [engine.jobs.combat :as combat]
             [engine.jobs.util :as u]
+            [engine.jobs.watch :as watch]
             [engine.path.near :as near]))
 
 (def doc
@@ -95,7 +96,7 @@
         last-attack (:last-attack (ctx/mem c))]
     (cond
       (nil? target) (if (empty? (in-range c)) :done :declined)
-      (and last-attack (< (- (ctx/now c) last-attack) attack-gap-ms)) :continue
+      (and last-attack (< (- (ctx/now c) last-attack) attack-gap-ms)) (do (await (watch/watch! c {})) :continue)
       :else
       (do (await (combat/equip-best! c (combat/best-weapon p weapons)))
           (await (swing! c target))

@@ -283,3 +283,18 @@
   (let [s (h/setup {:floor tu/walk-floor :inventory lead})]
     (with-redefs [walk/plan-walk (fn ([_ _ _ _ _] (throw (js/RangeError. "cannot be converted to a BigInt"))) ([_ _ _ _ _ _] (throw (js/RangeError. "cannot be converted to a BigInt"))))]
       (is (false? (lead-to/path-leaves-reach? {:primitives (:p s)} {:x 33.4 :y 64 :z 0.6} animal-at-3))))))
+
+;; ------------------------------------------------------- looking round while leading (card 9970c377)
+
+(defn watched [{:keys [eng]}] (mem/entries (mem/view (:store eng)) :watched))
+
+(deftest leading-in-the-dark-looks-round-and-in-the-light-does-not
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w {:floor tu/walk-floor :inventory lead :entities [(cow 1 3)]}
+              lit (await (submit (h/setup-seeing w nil) {} 12))
+              dark (await (submit (h/setup-seeing w [0 0]) {} 12))]
+          (is (empty? (watched lit)))
+          (is (seq (watched dark)))
+          (is (= :unleashed (:reason (done-event dark)))))))))

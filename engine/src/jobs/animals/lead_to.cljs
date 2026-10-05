@@ -2,6 +2,7 @@
   (:require [engine.ctx :as ctx]
             [engine.jobs.animals :as animals]
             [engine.jobs.util :as u]
+            [engine.jobs.watch :as watch]
             [engine.path.near :as near]
             [engine.path.walk :as walk]
             [engine.places :as places]))
@@ -276,8 +277,8 @@
         (= :leash phase) (await (leash! c))
         (and (#{:walk :gather :arrive} phase) (nil? a)) (do (ctx/update-mem! c assoc :still-led false) (finish! c :lost))
         (and (#{:walk :gather :arrive} phase) (not (animals/led-by-me? a))) (do (ctx/update-mem! c assoc :still-led false) (finish! c :lead-broke))
-        (= :walk phase) (await (walk! c))
-        (= :gather phase) (await (gather! c a))
+        (= :walk phase) (do (await (watch/watch! c {})) (await (walk! c)))
+        (= :gather phase) (do (await (watch/watch! c {})) (await (gather! c a)))
         (= :arrive phase) (await (arrive! c))
         (= :release phase) (await (let-go! c))
         :else (finish! c :lost)))))

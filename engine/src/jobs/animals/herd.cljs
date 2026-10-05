@@ -4,6 +4,7 @@
             [engine.jobs.apiary :as apiary]
             [engine.jobs.pen :as pen]
             [engine.jobs.util :as u]
+            [engine.jobs.watch :as watch]
             [engine.path.near :as near]
             [engine.triggers.pen-gate :as pg]))
 
@@ -779,7 +780,8 @@
     (cond
       (and lead-phase? animal-started (>= (- now animal-started) (* 1000 (:timeout-s (:args c))))) (end! c :timeout)
       (and lead-phase? (pos? (prune-led! c)) (empty? (:led (ctx/mem c)))) (regather-or-lose! c)
-      :else (await (step! c phase)))))
+      :else (do (when lead-phase? (await (watch/watch! c {})))
+                (await (step! c phase))))))
 
 ;; ------------------------------------------------------------------ the round: safe at its end
 

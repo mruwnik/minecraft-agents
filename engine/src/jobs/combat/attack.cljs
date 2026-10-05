@@ -3,6 +3,7 @@
             [engine.jobs.combat :as combat]
             [engine.jobs.shelter :as sh]
             [engine.jobs.util :as u]
+            [engine.jobs.watch :as watch]
             [engine.path.near :as near]))
 
 (def doc
@@ -272,5 +273,5 @@
                            (await (wait! c 1000)))
         :else (do (ctx/update-mem! c #(-> % (assoc :last-seen now) (update :seen (fnil into #{}) (mapv (fn [e] (.-id e)) targets))))
                   (if (within-gap? c)
-                    :continue
+                    (do (await (watch/watch! c {})) :continue)
                     (await (engage! c (first targets)))))))))

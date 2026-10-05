@@ -8,6 +8,8 @@
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.memory :as mem]
+            [engine.perception :as perception]
+            [engine.fake.raw-world :as fake-raw]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]))
 
@@ -25,6 +27,19 @@
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen :clock clock}))
 
+(defn setup-seeing
+  "As setup, the body seeing through perception (engine.perception/wrap) as it does live; light is [sky block] for
+  every cell when given (jobs that look round only in the dark)."
+  [world light]
+  (let [clock (atom 1000000)
+        [seen sink] (tu/legacy-capture-sink)
+        raw (tu/fake-on-floor world)
+        _ (when light (swap! (fake/state raw) assoc :light-default light))
+        p (perception/wrap raw (perception/create (fake-raw/create raw) {:radius 16 :ray-deg 2 :now #(deref clock)}))
+        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+    {:eng eng :p p :seen seen :clock clock}))
+
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
 
 (defn hostile-entries [eng] (mapv :data (mem/entries (mem/view (:store eng)) :hostile)))
@@ -34,6 +49,14 @@
   ([id x z] {:id id :name "zombie" :kind "hostile" :pos {:x x :y 64 :z z}}))
 
 (def sword [{:name "iron_sword" :count 1}])
+
+(defn ^:async first-round-seeing
+  "As first-round, over a body that sees through perception."
+  [spec world]
+  (let [s (setup-seeing world nil)]
+    (core/submit! (:eng s) spec {})
+    (await (core/tick! (:eng s)))
+    s))
 
 (defn ^:async first-round
   "Submit spec in a world and run one tick; the setup map."
@@ -131,6 +154,15 @@
             (await (core/tick! eng)))
           (is (= 4 (count (calls p "attack"))))
           (is (= [] (:list (core/state eng))) "four hits killed it: done"))))))
+
+(deftest fight-back-looks-round-while-the-cooldown-runs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (await (first-round-seeing fight {:inventory sword :entities [(zombie 7 3 0)]}))]
+          (is (empty? (mem/entries (mem/view (:store eng)) :watched)) "no wait yet: the first round swings")
+          (await (core/tick! eng))
+          (is (seq (mem/entries (mem/view (:store eng)) :watched)) "the second round waits out the gap and looks round"))))))
 
 (deftest fight-back-walks-up-to-a-mob-beyond-reach
   (async done

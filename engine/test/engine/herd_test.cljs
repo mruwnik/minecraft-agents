@@ -934,3 +934,20 @@
       (fn ^:async t []
         (let [s (await (scenario {:target 1} {:inventory [{:name "lead" :count 2}] :entities [(cow 1 4 3)]} 5))]
           (is (not= :no-food (:reason (done-event s)))))))))
+
+;; ------------------------------------------------------- looking round while herding (card 9970c377)
+
+(defn watched [{:keys [eng]}] (mem/entries (mem/view (:store eng)) :watched))
+
+(deftest herding-in-the-dark-looks-round-and-in-the-light-does-not
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w {:entities [(cow 1 4 3)]}
+              seeing (fn [light] (submit! (clock-on-wait! (h/setup-seeing (world w) light)) {:target 1}))
+              lit (seeing nil)
+              dk (seeing [0 0])
+              _ (await (run-ticks lit 400))
+              _ (await (run-ticks dk 400))]
+          (is (empty? (watched lit)))
+          (is (seq (watched dk))))))))
