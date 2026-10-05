@@ -1092,6 +1092,16 @@ test('after the connection ends an acting call reconnects first and then runs on
 
 test('after a kick an acting call resolves disconnected when every reconnect try fails', async () => {
   const bots = []
+test('the raw world has no eye from the end of the connection until the fresh bot is adopted', async () => {
+  const bots = []
+  const { p } = await online({ connect: connectOnce(bots), timeScale: 1 })
+  const before = p.rawWorld.eye()
+  bots[0].emit('end', 'socket closed')
+  const during = p.rawWorld.eye()
+  await p.look('t1', { pos: at(1, 64, 1) })
+  assert.deepEqual([before !== null, during, p.rawWorld.eye() !== null], [true, null, true])
+})
+
   const { p, seen } = await online({ connect: connectOnce(bots, true) })
   bots[0].emit('kicked', 'bye')
   assert.deepEqual(await p.look('t1', { pos: at(1, 64, 1) }), { status: 'disconnected' })

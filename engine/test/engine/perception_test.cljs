@@ -274,3 +274,40 @@
               _ (await (.jumpPlace wrapped "t" (at 1)))
               _ (await (.useOn wrapped "t" (at 2)))]
           (is (= ["stone" "dirt" "sand"] (mapv #(seen-name per [% 65 4]) [0 1 2]))))))))
+
+(deftest sight-passes-pause-while-offline-and-restart-after-spawn
+  (let [{:keys [p per]} (rig {"0,65,3" "gold_block"} {:pass-ms 1000 :step-ms 50})
+        rays #(:rays (perception/stats per))
+        _ (dotimes [_ 5] (perception/step! per))
+        mid (rays)
+        _ (swap! (fake/state p) assoc :offline true)
+        _ (dotimes [_ 40] (perception/step! per))
+        paused (rays)
+        steps-paused (:steps (perception/stats per))
+        _ (swap! (fake/state p) assoc :offline false)
+        _ (dotimes [_ 20] (perception/step! per))
+        after (perception/stats per)]
+    (is (pos? mid))
+    (is (= mid paused))
+    (is (= 5 steps-paused))
+    (is (= 1 (:passes after)))
+    (is (= (+ mid (:rays-per-pass after)) (:rays after)))
+    (is (= "gold_block" (seen-name per [0 65 3])))))
+
+(deftest memory-survives-an-offline-spell-and-saving-offline-is-harmless
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [clock (atom 0)
+              {:keys [p per]} (rig {"0,64,0" "stone"} {:now #(deref clock)})
+              file (path/join (tu/tmp-dir) "engine" "seen-offline.bin")
+              _ (perception/touch! per [0 64 0])
+              _ (swap! clock + 120000)
+              _ (swap! (fake/state p) assoc :offline true)
+              _ (perception/pass! per)
+              _ (await (perception/save! per @seen-file file))
+              _ (swap! (fake/state p) assoc :offline false)
+              fresh (:per (rig {} {:now #(deref clock)}))
+              _ (perception/load! fresh @seen-file file)]
+          (is (= ["stone" 120000] ((juxt :name :age-ms) (perception/seen-block per [0 64 0]))))
+          (is (= ["stone" 120000] ((juxt :name :age-ms) (perception/seen-block fresh [0 64 0])))))))))

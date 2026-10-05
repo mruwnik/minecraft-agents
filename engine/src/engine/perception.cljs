@@ -297,7 +297,7 @@
 
 (defn step!
   "One slice of the sight pass (one game tick's share). Starts a new pass when none runs and the eye moved, turned or
-  idled long enough. Nothing while offline."
+  idled long enough. While offline (no eye) it casts nothing and drops the pass in flight."
   ([per] (step! per false))
   ([{:keys [raw opts st] :as per} force?]
    (let [^js st st
@@ -327,7 +327,12 @@
        (let [ms (- (js/performance.now) started)]
          (set! (.-steps st) (inc (.-steps st)))
          (set! (.-stepMs st) (+ (.-stepMs st) ms))
-         (set! (.-stepMsMax st) (max (.-stepMsMax st) ms)))))))
+         (set! (.-stepMsMax st) (max (.-stepMsMax st) ms))))
+     ;; No eye: the body is offline (quit, kicked or reconnecting). A pass in flight belongs to the old world, so it is
+     ;; dropped; the first step after the next spawn starts a fresh one. Memory and its :times stay as they are.
+     (when-not eye
+       (set! (.-pass st) nil)
+       (set! (.-lastStart st) nil)))))
 
 (defn pass!
   "A whole sight pass at once (tests, and a forced look): finishes any pass in flight, then runs a fresh one."
