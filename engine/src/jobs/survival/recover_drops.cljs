@@ -12,7 +12,9 @@
   death point (jobs.movement.go-to), then collect everything within
   :collect-radius (jobs.forestry.collect-drops) and record :collected. Gives
   up as :abandoned when the point is unreachable, nothing is left there, or
-  the five minute despawn window closes. A hostile within :danger-radius
+  the five minute despawn window closes. Nothing is decided or walked until
+  a :respawned entry newer than the death exists (the body is alive again); the
+  window still closes meanwhile. A hostile within :danger-radius
   makes the round yield without acting, so a reflex can deal with it; the
   trip resumes afterwards. The check holds while a death is unrecovered,
   however old, so an expired trip still gets to write :abandoned.")
@@ -100,6 +102,7 @@
       (nil? entry) :done
       (>= elapsed value/despawn-ms) (finish! c :abandoned (assoc (:decided (ctx/mem c)) :reason :window-closed))
       threatened? :continue
+      (not (died/respawned-since? (ctx/view c) entry)) :continue
       (and (nil? (:decided (ctx/mem c))) (settling? c entry)) :continue
       :else
       (let [decided (or (:decided (ctx/mem c))

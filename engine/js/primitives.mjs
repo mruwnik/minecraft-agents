@@ -1205,12 +1205,21 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     // once a second of physics ticks. Lava and suffocation deaths keep their slots, the live inventory is used then.
     let snapshot = inventoryNow()
     let ticks = 0
+    // What the body stands in, as engine.value/lethal-cause? names it. The death message of the server is not used:
+    // it arrives in a later packet than the death event. Unknown (a mob, a fall, hunger) leaves the cause out.
+    const causeNow = () => {
+      const pos = target.entity.position
+      if (pos.y < -64) return { cause: 'void' }
+      const name = target.blockAt(new Vec3(Math.floor(pos.x), Math.floor(pos.y), Math.floor(pos.z)))?.name
+      if (name === 'lava') return { cause: 'lava' }
+      return /^(soul_)?fire$/.test(name ?? '') ? { cause: 'fire' } : {}
+    }
     const remember = () => { if (target.health > 0) snapshot = inventoryNow() }
     const handlers = {
       physicsTick: () => { lastTick = Date.now(); stalled = false; lastPos = target.entity.position.clone(); if (++ticks % 20 === 0) remember() },
       health: () => {
         remember()
-        if (target.health < lastHealth) emit({ kind: 'hurt', health: target.health, food: target.food })
+        if (target.health < lastHealth) emit({ kind: 'hurt', health: target.health, food: target.food, ...causeNow() })
         lastHealth = target.health
       },
       // bot.experience still holds the pre-death values here; the server resets it in a later packet.
@@ -1218,7 +1227,8 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
         kind: 'died',
         pos: here(),
         inventory: inventoryNow().length > 0 ? inventoryNow() : snapshot,
-        experience: { level: target.experience?.level ?? 0, points: target.experience?.points ?? 0 }
+        experience: { level: target.experience?.level ?? 0, points: target.experience?.points ?? 0 },
+        ...causeNow()
       }) },
       respawn: () => { stopWalking(target); respawning = true },
       forcedMove: () => {

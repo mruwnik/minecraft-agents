@@ -15,6 +15,7 @@
             [engine.triggers.player-sleeping-nearby :as player-sleeping-nearby]
             [engine.triggers.scaffold-left :as scaffold-left]
             [engine.triggers.stuck :as stuck]
+            [engine.triggers.tidy-pending :as tidy-pending]
             [engine.triggers.mounted :as mounted]
             [engine.triggers.player-joined :as player-joined]
             [engine.triggers.died :as died]))
@@ -44,13 +45,15 @@
   (default 16, about a skeleton's range). Sight is a block raycast from the
   eye to the mob (the `visible` field of sensing). :visible-only false drops
   the sight test of a melee mob (the way to the body still counts). Players and passive mobs are
-  other entity kinds and never count. The job's own :radius and
+  other entity kinds and never count. A dead body (a :died entry with no
+  newer :respawned) sees no danger. The job's own :radius and
   :ranged-radius are set in the entry's :job spec."
   {:name :hostile-near
-   :when (fn [world _memory args]
-           (boolean (seq (reach/dangers world (:radius args hostile-radius)
-                                        {:ranged-radius (:ranged-radius args ranged-radius)}
-                                        {:sight? (:visible-only args true)}))))
+   :when (fn [world memory args]
+           (boolean (and (not (died/dead? memory))
+                         (seq (reach/dangers world (:radius args hostile-radius)
+                                             {:ranged-radius (:ranged-radius args ranged-radius)}
+                                             {:sight? (:visible-only args true)})))))
    :job '(jobs.survival.respond-to-hostile)
    :args {:radius hostile-radius :ranged-radius ranged-radius}
    :persistence :cooldown
@@ -100,4 +103,4 @@
   (into {} (map (juxt :name identity))
         [suffocating/suffocating burning/burning hostile-near health-low hungry/hungry
          night-unsafe/trigger player-sleeping-nearby/trigger night-and-bed-known stuck/stuck died/died pen-gate/trigger
-         door-left/trigger inventory-nearly-full every-interval scaffold-left/trigger mounted/trigger player-joined/trigger]))
+         door-left/trigger inventory-nearly-full every-interval scaffold-left/trigger tidy-pending/trigger mounted/trigger player-joined/trigger]))

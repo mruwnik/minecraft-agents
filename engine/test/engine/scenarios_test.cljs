@@ -123,7 +123,11 @@
           (is (= {:level 3 :points 40} (:experience (:data (mem/latest (mem/view (:store eng)) :died))))
               "the died entry keeps the experience")
           (await (run-ticks eng clock 3 1000))
-          (is (= [:health-low :hostile-near :died] (fired seen)) "a death fires recover-drops")
+          (is (= [:health-low :hostile-near] (fired seen)) "a dead body fires nothing")
+          (.respawn (.-world p))
+          (await (run-ticks eng clock 3 1000))
+          (is (= [:health-low :hostile-near :died] (fired seen)) "the respawn lets a death fire recover-drops")
+          (await (run-ticks eng clock 10 1000))
           (is (= {:decision :collected :items 2}
                  (select-keys (:data (mem/latest (mem/view (:store eng)) :recovered)) [:decision :items]))
               "the drops lie at its feet, so the trip is worth it; items counts the stack (two bread left after eating)")

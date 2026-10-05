@@ -526,6 +526,37 @@ test('the died event carries the death position, the inventory and the experienc
 
 const emptiedAtDeath = (snapshotOn) => {
   const items = []
+for (const [block, cause] of [['lava', 'lava'], ['fire', 'fire'], ['soul_fire', 'fire']]) {
+  test(`the died event names the cause ${cause} when the body dies standing in ${block}`, () => {
+    const { bot, p } = rig({ ...world, blocks: { ...world.blocks, '4,70,2': block } })
+    const seen = []
+    p.onBodyEvent(e => seen.push(e))
+    bot.entity.position = new Vec3(4, 70, 2)
+    bot.emit('death')
+    assert.equal(seen[0].cause, cause)
+  })
+}
+
+test('the died event names the cause void below the world', () => {
+  const { bot, p } = rig(world)
+  const seen = []
+  p.onBodyEvent(e => seen.push(e))
+  bot.entity.position = new Vec3(4, -70, 2)
+  bot.emit('death')
+  assert.equal(seen[0].cause, 'void')
+})
+
+test('the hurt event carries the cause of the damage the same way', () => {
+  const { bot, p } = rig({ ...world, blocks: { ...world.blocks, '0,64,0': 'lava' } })
+  const seen = []
+  p.onBodyEvent(e => seen.push(e))
+  bot.health = 20
+  bot.emit('health')
+  bot.health = 12
+  bot.emit('health')
+  assert.equal(seen.find(e => e.kind === 'hurt').cause, 'lava')
+})
+
   const { bot, p } = rig({ ...world, items })
   const seen = []
   p.onBodyEvent(e => seen.push(e))

@@ -260,6 +260,18 @@
   (is (not (holds? {:entities [{:id 1 :name "Steve" :kind "player" :pos {:x 2 :y 64 :z 0}}]} {:radius 8})) "a player")
   (is (not (holds? {:entities [{:id 2 :name "cow" :kind "passive" :pos {:x 2 :y 64 :z 0}}]} {:radius 8})) "a passive"))
 
+(deftest hostile-near-sees-no-danger-while-the-body-is-dead
+  (let [near (tu/fake-on-floor {:entities [(zombie 5 0)]})
+        holds-with (fn [& entries]
+                     (boolean (when-hostile-near near
+                                                 {:data (reduce (fn [d [kind t]] (mem/add-entry d kind {:t t :data {}} nil)) mem/empty-data entries)
+                                                  :now 3000}
+                                                 {:radius 8})))]
+    (is (false? (holds-with [:died 1000])) "died, not yet respawned")
+    (is (true? (holds-with [:died 1000] [:respawned 2000])) "alive again")
+    (is (false? (holds-with [:respawned 500] [:died 1000])) "an older respawn does not count")
+    (is (true? (holds-with)) "never died")))
+
 (deftest hostile-near-fires-the-chooser
   (is (= '(jobs.survival.respond-to-hostile) (:job triggers/hostile-near))))
 

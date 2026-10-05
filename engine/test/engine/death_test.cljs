@@ -104,21 +104,27 @@
 (defn died-holds [memory] ((:when died/died) nil memory {}))
 
 (def died-at [:died 1000 {:pos {:x 20 :y 64 :z 0} :inventory []}])
+(def respawned-at [:respawned 1100 {:pos {:x 0 :y 64 :z 0}}])
 
 (deftest died-trigger-holds-after-a-death
-  (is (true? (died-holds (memory-with 2000 died-at)))))
+  (is (true? (died-holds (memory-with 2000 died-at respawned-at)))))
+
+(deftest died-trigger-waits-for-the-respawn
+  (is (false? (died-holds (memory-with 2000 died-at))) "the body is still dead")
+  (is (false? (died-holds (memory-with 2000 [:respawned 500 {}] died-at))) "a respawn older than the death does not count")
+  (is (true? (died-holds (memory-with 2000 died-at [:respawned 1100 {}])))))
 
 (deftest died-trigger-does-not-hold-without-a-death
   (is (false? (died-holds (memory-with 2000)))))
 
 (deftest died-trigger-does-not-hold-after-recovered
-  (is (false? (died-holds (memory-with 2000 died-at [:recovered 1500 {:decision :skip}]))))
-  (is (true? (died-holds (memory-with 2000 [:recovered 500 {:decision :skip}] died-at)))
+  (is (false? (died-holds (memory-with 2000 died-at respawned-at [:recovered 1500 {:decision :skip}]))))
+  (is (true? (died-holds (memory-with 2000 [:recovered 500 {:decision :skip}] died-at respawned-at)))
       "a recovery older than the death does not count"))
 
 (deftest died-trigger-does-not-hold-after-five-minutes
-  (is (true? (died-holds (memory-with (+ 1000 299000) died-at))))
-  (is (false? (died-holds (memory-with (+ 1000 300000) died-at)))))
+  (is (true? (died-holds (memory-with (+ 1000 299000) died-at respawned-at))))
+  (is (false? (died-holds (memory-with (+ 1000 300000) died-at respawned-at)))))
 
 (deftest died-trigger-is-registered-and-runs-the-job
   (is (= died/died (:died triggers/all)))
@@ -149,7 +155,19 @@
 
 (def drops [(drop-item 1 20 "diamond_pickaxe") (drop-item 2 21 "diamond_sword")])
 
-(defn die! [eng data] (mem/write! (:store eng) :died data))
+(defn die-unrespawned!
+  "The body has died and no :respawned entry exists yet."
+  [eng data] (mem/write! (:store eng) :died data))
+
+(defn die!
+  "A death that happened 5 s ago and a respawn 3 s ago: the body is alive again and settled."
+  [eng data]
+  (let [store (:store eng)
+        now ((:now @store))
+        entry (fn [t d] {:t t :wt ((:world-time @store)) :data d})]
+    (swap! store update :data
+           #(-> % (mem/add-entry :died (entry (- now 5000) data) nil)
+                (mem/add-entry :respawned (entry (- now 3000) {:pos {:x 0 :y 64 :z 0}}) nil)))))
 
 (defn recovered [eng] (:data (mem/latest (mem/view (:store eng)) :recovered)))
 
@@ -292,6 +310,30 @@
           (is (some? (:decided (job-memory eng))) "2500 ms after the respawn: decided")
           (await (run-until-empty eng 10))
           (is (= :collected (:decision (recovered eng)))))))))
+
+;; The field race: the died reflex fired before :respawned was recorded, go-to "arrived" as the dead
+;; body, and collect ran from the spawn point.
+(deftest recover-drops-waits-for-the-respawn-before-planning
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (setup {:floor tu/walk-floor :entities drops})]
+          (die-unrespawned! eng {:pos death-pos :inventory diamonds})
+          (core/submit! eng job {})
+          (await (core/tick! eng))
+          (await (core/tick! eng))
+          (swap! clock + 500)
+          (await (core/tick! eng))
+          (is (nil? (:decided (job-memory eng))) "dead: no decision")
+          (is (= [] (tu/walk-calls p)) "dead: no walking")
+          (is (= [] (calls p "collect")))
+          (is (= 1 (count (:list (core/state eng)))) "the job stays listed")
+          (swap! clock + 500)
+          (mem/write! (:store eng) :respawned {:pos {:x 0 :y 64 :z 0}})
+          (swap! clock + 3000)
+          (await (run-until-empty eng 15))
+          (is (= [death-pos] (tu/walked-to eng)))
+          (is (= {:decision :collected :items 2} (select-keys (recovered eng) [:decision :items]))))))))
 
 (deftest recover-drops-reports-a-skip
   (async done
