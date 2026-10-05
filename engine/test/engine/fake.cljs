@@ -349,6 +349,7 @@
         failed #(vector w {:status "failed" :reason (str "Server refused to place " item " at (" (str/join ", " pos) "): the block is still air")})]
     (cond
       (not (near? w pos)) [w {:status "unreachable"}]
+      (and (:body-hitbox w) (not (#{"bucket" "water_bucket"} item)) (contains? (body-cells w) pos)) (failed)
 
       (= item "bucket")                 ; scoops the water cell it is aimed at
       (cond
@@ -361,7 +362,6 @@
       (zero? (carried (:inventory w) item)) [w {:status "no-item"}]
       (and click (no-shape (block-name w (:against click)))) [w {:status "no-support"}]
 
-      (and (:body-hitbox w) (not (#{"bucket" "water_bucket"} item)) (contains? (body-cells w) pos)) (failed)
       (crops item)                      ; a seed or tuber becomes the young crop
       [(-> w (take-one item) (put-block pos (crops item)) (assoc-in [:ages pos] 0)) {:status "placed" :block item}]
 
@@ -864,6 +864,12 @@
                                   (to-js (merge b (when (contains? (:ages w) pos) {:age (get-in w [:ages pos])})
                                                 (when (and properties (seq props)) {:properties props}))))))
                          to-array))))
+              "digTime" (fn [_pos _item] (or (:dig-ms @state) 0))
+              "harvestTools"
+              (fn [block]
+                (let [data (minecraft-data "26.1")
+                      ids (some-> (aget (.-blocksByName data) block) .-harvestTools js/Object.keys)]
+                  (when ids (to-array (map #(.-name (aget (.-items data) %)) ids)))))
               "blockAt"
               (fn [a]
                 (let [w @state pos (vec-pos (args-in a))
@@ -881,9 +887,3 @@
        (aset p k f))
      (aset p "world" world)
      p)))
-              "digTime" (fn [_pos _item] (or (:dig-ms @state) 0))
-              "harvestTools"
-              (fn [block]
-                (let [data (minecraft-data "26.1")
-                      ids (some-> (aget (.-blocksByName data) block) .-harvestTools js/Object.keys)]
-                  (when ids (to-array (map #(.-name (aget (.-items data) %)) ids)))))
