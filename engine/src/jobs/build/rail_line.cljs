@@ -1,6 +1,7 @@
 (ns jobs.build.rail-line
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
+            [engine.jobs.declined :as declined]
             [engine.jobs.rail :as builder]
             [engine.placement :as placement]
             [jobs.build.from-plan :as build]
@@ -164,6 +165,7 @@
   (let [{:keys [cells trouble]} (planned c)]
     (boolean
      (and (not trouble)
+          (declined/check c)
           (or (:phase (ctx/mem c))
               (sound? c cells)
               (ready? c cells))))))
@@ -198,7 +200,7 @@
   "Switch on the next planned lever that is off (once each), then move on to the proof."
   [c cells]
   (if-let [{:keys [pos]} (first (unlit-levers c cells))]
-    (let [r (await (ctx/call-child c :lever 'jobs.access.toggle {:pos pos :state :on}))]
+    (let [r (await (declined/call-child! c :lever 'jobs.access.toggle {:pos pos :state :on}))]
       (when (= :done r) (ctx/update-mem! c update :switched (fnil conj []) pos))
       (if (= :done r) :continue r))
     (do (ctx/update-mem! c assoc :phase :check)

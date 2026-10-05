@@ -3,6 +3,7 @@
             [engine.access.rules :as rules]
             [engine.ctx :as ctx]
             [engine.jobs.access :as access]
+            [engine.jobs.declined :as declined]
             [engine.jobs.util :as u]
             [jobs.access.stair :as stair]
             [jobs.access.tunnel :as tunnel]
@@ -53,7 +54,7 @@
 (defn check [c]
   (if (and (nil? (ctx/zones c)) (not (:ignore-zones? (:args c))))
     (access/decline! c :leave-tunnel.declined "leave-tunnel" {:reason :no-zones})
-    true))
+    (declined/check c)))
 
 (def faces [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
 
@@ -163,7 +164,7 @@
       (or (nil? attempt) (and (:ignore-zones? attempt) (not ignore?) (not (zones-blocked? results))))
       (finish! c :stopped :walk-failed {:cell cell :walk walk :escape results})
       :else
-      (let [r (await (ctx/call-child c (keyword (str "escape-" i)) 'jobs.access.stair
+      (let [r (await (declined/call-child! c (keyword (str "escape-" i)) 'jobs.access.stair
                                      {:dir :up :heading (:heading attempt) :y entry-y
                                       :ignore-zones? (:ignore-zones? attempt)}))
             res (when (= :done r) (ctx/child-result c (keyword (str "escape-" i))))]

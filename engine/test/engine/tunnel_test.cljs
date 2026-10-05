@@ -166,7 +166,7 @@
         p (or (:p opts) (tu/fake (merge {:self {:pos {:x 0 :y 65 :z 0}} :inventory pick} (dissoc spec :zones :plans))))
         out (atom :not-done)
         w (world/of-data (:plans spec {}) {} (get spec :zones []))
-        parent {:check (constantly true)
+        parent {:check (fn [c] (boolean (ctx/check-child c :kid job args)))
                 :round (fn ^:async recording-round [c]
                          (let [r (await (ctx/call-child c :kid job args))]
                            (when (= :done r) (reset! out (ctx/child-result c :kid)))
@@ -262,6 +262,26 @@
             (is (= :stopped (:status @out)) (str reason))
             (is (empty? (digs p)) (str reason))
             (is (= [0 65 0] (feet p)) (str reason))))))))
+
+(defn rounds [{:keys [seen]}] (count (filter #(= :round_started (:kind %)) @seen)))
+
+(defn ^:async tick-n! [{:keys [eng clock]} n]
+  (dotimes [_ n] (swap! clock + 500) (await (core/tick! eng))))
+
+(deftest a-tunnel-without-a-pickaxe-waits-without-rounds-and-resumes-when-given-one
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p out] :as s} (setup {:blocks ground :inventory []} {:target [6 57 0]} (fn [_]))]
+          (await (tick-n! s 12))
+          (let [n (rounds s)]
+            (is (<= n 8) "a few rounds to plan and meet the declined stair")
+            (await (tick-n! s 10))
+            (is (= n (rounds s)) "parked: no rounds while the stair child would decline")
+            (is (= 1 (count (filter #(and (= :waiting (:kind %)) (= :no-tool (:reason %))) @(:seen s)))) "told once")
+            (fake/add-item! p "iron_pickaxe" 1)
+            (await (tick-out! s))
+            (is (= :reached (:reason @out)) "resumes once the pickaxe is carried")))))))
 
 (deftest no-zone-list-declines-with-one-warn
   (async done

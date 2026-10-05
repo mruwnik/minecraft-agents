@@ -3,6 +3,7 @@
             [engine.access.rules :as rules]
             [engine.ctx :as ctx]
             [engine.jobs.access :as access]
+            [engine.jobs.declined :as declined]
             [engine.jobs.util :as u]
             [engine.placement :as placement]
             [jobs.access.stair :as stair]
@@ -82,7 +83,7 @@
 (defn check [c]
   (if (and (nil? (ctx/zones c)) (not (:ignore-zones? (:args c))))
     (access/decline! c :tunnel.declined "tunnel" {:reason :no-zones})
-    true))
+    (declined/check c)))
 
 (defn ahead
   "The cell n along heading from cell, same height."
@@ -308,7 +309,7 @@
   end."
   [c {:keys [heading dir] :as plan} k]
   (let [cells (line-cells plan)
-        r (await (ctx/call-child c :stair 'jobs.access.stair
+        r (await (declined/call-child! c :stair 'jobs.access.stair
                                  {:dir dir :heading heading :y ((cells (segment-end plan k)) 1)
                                   :accept (set (:accept (:args c))) :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (if (not= :done r)
@@ -446,7 +447,7 @@
         keep? (:keep (:args c))
         r (if keep?
             (await (walk-to! c :out (:entry plan)))
-            (let [k (await (ctx/call-child c :out 'jobs.access.leave-tunnel
+            (let [k (await (declined/call-child! c :out 'jobs.access.leave-tunnel
                                            {:tunnel way-out :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
               (cond (= :done k) (ctx/child-result c :out)
                     (= :declined k) :declined

@@ -98,7 +98,9 @@
         tun (atom :not-done)
         out (atom :not-done)
         w (world/of-data {} {} (get spec :zones []))
-        parent {:check (constantly true)
+        parent {:check (fn [c] (if-let [t (:tunnel (ctx/mem c))]
+                                 (boolean (ctx/check-child c :kid job (assoc largs :tunnel t)))
+                                 true))
                 :round (fn ^:async recording-round [c]
                          (if-let [t (:tunnel (ctx/mem c))]
                            (let [r (await (ctx/call-child c :kid job (assoc largs :tunnel t)))]
@@ -264,6 +266,24 @@
           (is (= "pickaxe" (:tool (waiting s))))
           (is (= 0 (count (events-of s :leave-tunnel.escape))))
           (is (= 0 (count (events-of s :leave-tunnel.stopped)))))))))
+
+(deftest a-waiting-escape-runs-no-rounds-and-resumes-when-a-pickaxe-is-given
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng clock p out] :as s} (setup {:blocks eight-down :inventory (inventory)}
+                                                     {:target [6 57 0]} {} :between drop-pickaxe!)
+              rounds #(count (filter (fn [e] (= :round_started (:kind e))) @(:seen s)))
+              tick-n! (fn ^:async tick-n [n] (dotimes [_ n] (swap! clock + 500) (await (core/tick! eng))))]
+          (await (ticks-while! s #(not (waiting s))))
+          (await (tick-n! 2))
+          (let [n (rounds)]
+            (await (tick-n! 15))
+            (is (= n (rounds)) "parked: no rounds while the escape's stair would decline")
+            (is (= 1 (count (filter #(= :waiting (:kind %)) @(:seen s)))) "told once")
+            (fake/add-item! p "iron_pickaxe" 1)
+            (await (run-out! s))
+            (is (= :done (:status @out)) "resumes once the pickaxe is carried")))))))
 
 (deftest a-tunnel-result-without-a-line-is-bad-args
   (async done
