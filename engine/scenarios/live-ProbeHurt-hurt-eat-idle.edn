@@ -1,0 +1,2 @@
+;; ProbeHurt live cases for hurt events and eat refusal: idle, jobs are submitted with tools/jobs.mjs
+{:register [] :queue []}
