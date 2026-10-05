@@ -31,12 +31,23 @@
 
 (defn block-now [p cell] (u/block-name p (zipmap [:x :y :z] cell)))
 
+(def half-width 0.3)
+(def body-height 1.8)
+
+(defn body-cells
+  "The cells [x y z] the body's hitbox (0.6 wide, 1.8 tall, at pos {:x :y :z} its feet) intersects."
+  [{:keys [x y z]}]
+  (let [span (fn [lo hi] (range (js/Math.floor lo) (inc (js/Math.floor (- hi 1e-9)))))]
+    (set (for [i (span (- x half-width) (+ x half-width))
+               j (span y (+ y body-height))
+               k (span (- z half-width) (+ z half-width))]
+           [i j k]))))
+
 (defn in-body?
-  "Whether cell [x y z] is one the body stands in (feet or head)."
-  [p [x y z]]
-  (let [pos (.-pos (.self p))
-        feet [(js/Math.floor (.-x pos)) (js/Math.floor (.-y pos)) (js/Math.floor (.-z pos))]]
-    (boolean (some #{[x y z]} [feet (update feet 1 inc)]))))
+  "Whether cell [x y z] is one the body's hitbox intersects (a block placed there would be refused)."
+  [p cell]
+  (let [pos (.-pos (.self p))]
+    (contains? (body-cells {:x (.-x pos) :y (.-y pos) :z (.-z pos)}) (vec cell))))
 
 (defn why-not
   "Why entry cannot be restored now (:changed :not-carried :occupied: a block put back would be placed into the

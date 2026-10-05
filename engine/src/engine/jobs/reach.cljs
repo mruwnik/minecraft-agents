@@ -118,16 +118,20 @@
 (defn walkable-way?
   "Whether a walker at the mob's cell can reach the body's. A search from the
   mob; if it runs out of budget, one from the body (which settles a body
-  sealed in or on a small island); unknown counts as a way."
-  [p mob-pos body-pos]
-  (let [kind-at (lookup p)
-        mob (let [{:keys [x y z]} (sh/cell mob-pos)] [x y z])
-        body (let [{:keys [x y z]} (sh/cell body-pos)] [x y z])
-        r (search (partial forward kind-at) mob body)]
-    (case r
-      :found true
-      :closed false
-      (not= :closed (search (partial backward kind-at) body mob)))))
+  sealed in or on a small island); unknown counts as a way. With a set of
+  cells solid, those cells count as solid blocks (what the way would be were
+  they filled)."
+  ([p mob-pos body-pos] (walkable-way? p mob-pos body-pos #{}))
+  ([p mob-pos body-pos solid]
+   (let [base (lookup p)
+         kind-at (if (empty? solid) base (fn [c] (if (contains? solid c) :solid (base c))))
+         mob (let [{:keys [x y z]} (sh/cell mob-pos)] [x y z])
+         body (let [{:keys [x y z]} (sh/cell body-pos)] [x y z])
+         r (search (partial forward kind-at) mob body)]
+     (case r
+       :found true
+       :closed false
+       (not= :closed (search (partial backward kind-at) body mob))))))
 
 (defn danger?
   "Whether hostile e (JS entity) is a real danger to the body of primitives p.

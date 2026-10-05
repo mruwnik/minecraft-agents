@@ -125,8 +125,9 @@
      :t (js/Date.now)}))
 
 (defn start-body [w]
-  (let [[x y z] (get-in w [:self :pos])]
-    {:x (+ x 0.5) :y y :z (+ z 0.5) :vy 0 :collided false}))
+  (let [[x y z] (get-in w [:self :pos])
+        mid (if (:body-hitbox w) identity #(+ % 0.5))]    ; hitbox mode: the position is the true one, not a cell corner
+    {:x (mid x) :y y :z (mid z) :vy 0 :collided false}))
 
 ;; --- the planner's view of the world
 
@@ -202,6 +203,8 @@
                               (when (number? (:yaw out)) (reset! yaw (:yaw out)))
                               (reset! body (step-body @state @body controls @yaw))
                               (swap! state assoc-in [:self :pos]
-                                     [(floor (:x @body)) (floor (:y @body)) (floor (:z @body))])
+                                     (if (:body-hitbox @state)
+                                       [(:x @body) (floor (:y @body)) (:z @body)]
+                                       [(floor (:x @body)) (floor (:y @body)) (floor (:z @body))]))
                               (js/setImmediate tick))))))]
          (js/setImmediate tick))))))

@@ -1,5 +1,6 @@
 (ns jobs.survival.restore-broken
   (:require [engine.ctx :as ctx]
+            [engine.jobs.reach :as reach]
             [engine.jobs.tidy :as tidy]
             [engine.jobs.util :as u]
             [jobs.survival.extinguish :as extinguish]))
@@ -22,22 +23,50 @@
 
 (def step-radius 4)
 
+(defn halo-clear?
+  "Whether a body standing at the middle of feet cell [x y z] (its 0.6 wide hitbox can reach into the neighbouring
+  columns) is clear of every cell in reserved at feet and head height."
+  [reserved [x y z]]
+  (not-any? reserved (for [dx [-1 0 1] dz [-1 0 1] dy [0 1]] [(+ x dx) (+ y dy) (+ z dz)])))
+
 (defn clear-cell
-  "The nearest standable cell within step-radius of the body whose feet and head are not the cell of entry e, or nil."
-  [c {:keys [cell]}]
+  "The nearest standable cell within step-radius of the body that the body can walk to, and where its hitbox is clear
+  of the cell of entry e and of every entry of waiting (still to be restored), or nil."
+  [c {:keys [cell]} waiting]
   (let [p (:primitives c)
         here (u/self-pos c)
         floor (fn [k] (js/Math.floor (k here)))
         [x y z] [(floor :x) (floor :y) (floor :z)]
+        reserved (into #{cell} (map :cell) waiting)
+        centre (fn [pos] (-> pos (update :x + 0.5) (update :z + 0.5)))
         cands (for [dx (range (- step-radius) (inc step-radius))
                     dz (range (- step-radius) (inc step-radius))
                     dy (range -1 3)
-                    :let [pos {:x (+ x dx) :y (+ y dy) :z (+ z dz)}
-                          feet [(:x pos) (:y pos) (:z pos)]]
-                    :when (not (#{feet (update feet 1 inc)} cell))
+                    :let [pos {:x (+ x dx) :y (+ y dy) :z (+ z dz)}]
+                    :when (halo-clear? reserved [(:x pos) (:y pos) (:z pos)])
                     :when (extinguish/standable? p pos)]
                 pos)]
-    (when (seq cands) (apply min-key #(u/dist here %) cands))))
+    (->> cands
+         (sort-by #(u/dist here (centre %)))
+         (filter #(reach/walkable-way? p here %))
+         first)))
+
+(def max-others-checked 12)
+
+(defn seals-others?
+  "Whether putting back the dug block of e would shut the body off from another entry of waiting it can still reach
+  now (the body must be able to walk next to a cell to place a block in it)."
+  [c {:keys [cell action] :as e} waiting]
+  (when (= :dig action)
+    (let [p (:primitives c)
+          here (u/self-pos c)
+          others (->> waiting
+                      (remove #(= cell (:cell %)))
+                      (filter #(and (= :dig (:action %)) (nil? (tidy/why-not p %))))
+                      (take max-others-checked))
+          at (fn [o] (zipmap [:x :y :z] (:cell o)))]
+      (boolean (some #(and (reach/walkable-way? p here (at %))
+                           (not (reach/walkable-way? p here (at %) #{cell}))) others)))))
 
 (defn check [c] (boolean (seq (tidy/entries c))))
 
@@ -97,10 +126,11 @@
   (ctx/update-mem! c update :seen (fnil conj #{}) cell))
 
 (defn ^:async step-clear!
-  "The body stands in the cell of e: walk to a clear standable cell (:continue), or, with none or after a walk that
-  did not clear it, skip e as :occupied (its entry stays for when the body is out)."
-  [c e]
-  (let [target (when-not (:stepped (ctx/mem c)) (clear-cell c e))]
+  "The body's hitbox overlaps the cell of e: walk to a clear standable cell (:continue), or, with none or after a walk
+  that did not clear it, skip e as :occupied (its entry stays for when the body is out). The cell is clear of every
+  entry still waiting."
+  [c e waiting]
+  (let [target (when-not (:stepped (ctx/mem c)) (clear-cell c e waiting))]
     (if-not target
       (do (skip! c e :occupied) :continue)
       (let [r (await (ctx/call-child c :go 'jobs.movement.go-to {:pos target :range 0}))]
@@ -110,13 +140,17 @@
 (defn ^:async round [c]
   (let [a (:args c)
         seen (:seen (ctx/mem c) #{})
-        e (first (remove #(contains? seen (:cell %)) (tidy/entries c)))]
+        waiting (vec (remove #(contains? seen (:cell %)) (tidy/entries c)))
+        e (or (first (filter #(= :occupied (why-not c %)) waiting))
+              (first (remove #(seals-others? c % waiting) waiting))
+              (first waiting))]
     (cond
       (nil? e) (report! c)
       (unsafe? c a) (do (skip! c e :unsafe) :continue)
-      (= :occupied (why-not c e)) (await (step-clear! c e))
+      (= :occupied (why-not c e)) (await (step-clear! c e waiting))
       (why-not c e) (let [why (why-not c e)]
                       (skip! c e why)
                       :continue)
       (>= (:tries e) tidy/max-tries) (do (skip! c e :gave-up) :continue)
+      (seals-others? c e waiting) (do (skip! c e :seals) :continue)
       :else (await (restore-one! c e (:reach a))))))

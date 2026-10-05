@@ -149,9 +149,16 @@
 (defn cell-set [coll] (into #{} (map parse-cell) coll))
 (defn string-keys [m] (into {} (map (fn [[k v]] [(key-name k) v])) m))
 
+(defn centre-xz
+  "pos with a whole x or z moved to the middle of its cell (a body stands at the middle of a cell; fractions stay)."
+  [[x y z]]
+  (let [mid #(if (= % (js/Math.floor %)) (+ % 0.5) %)]
+    [(mid x) y (mid z)]))
+
 (defn initial-state [spec]
   (let [spec (if (object? spec) (js->clj spec :keywordize-keys true) spec)
-        self (norm-pos (:self spec))]
+        self (cond-> (norm-pos (:self spec))
+               (and (:bodyHitbox spec) (:pos (:self spec))) (update :pos centre-xz))]
     (-> {:self (merge default-self self {:held (:held self)})
          :time (:time spec 1000)
          :players (vec (:players spec))
@@ -183,6 +190,7 @@
          :pitch 0
          :skip-night (:skipNight spec true)
          :settles (:settles spec false)
+         :body-hitbox (:bodyHitbox spec false)
          :settling false
          :offline-scale (:offlineScale spec 0.001)
          :furnaces (cells (:furnaces spec) #(rekey kebab %))
@@ -256,6 +264,13 @@
 
 ;; ---- the acts: (act w args) -> [world' result], args as cljs data
 
+(defn body-cells
+  "The cells the body's hitbox (0.6 wide, 1.8 tall) intersects."
+  [w]
+  (let [[x y z] (body-pos w)
+        span (fn [v _] (range (js/Math.floor (- v 0.3)) (inc (js/Math.floor (+ v 0.3 -1e-9)))))]
+    (set (for [i (span x 0.6) j (range (js/Math.floor y) (inc (js/Math.floor (+ y 1.8 -1e-9)))) k (span z 0.6)] [i j k]))))
+
 (defn move-to [w {:keys [pos range maxDistance] :or {range 1 maxDistance 64}}]
   (let [here (body-pos w)
         d (dist here pos)
@@ -268,8 +283,9 @@
       (let [w' (-> w (assoc-in [:self :pos] (step-toward here pos maxDistance)) (after-walk here))]
         [w' {:status "partial" :pos (body-pos w') :distance (dist (body-pos w') pos)}])
       :else
-      (let [w' (-> w (assoc-in [:self :pos] pos) settle (after-walk here))]
-        [w' {:status "arrived" :pos pos :distance 0}]))))
+      (let [stand (if (:body-hitbox w) (centre-xz pos) pos)
+            w' (-> w (assoc-in [:self :pos] stand) settle (after-walk here))]
+        [w' {:status "arrived" :pos stand :distance 0}]))))
 
 (defn dig [w {:keys [pos]}]
   (let [block (block-name w pos)
@@ -333,6 +349,7 @@
       (zero? (carried (:inventory w) item)) [w {:status "no-item"}]
       (and click (no-shape (block-name w (:against click)))) [w {:status "no-support"}]
 
+      (and (:body-hitbox w) (not (#{"bucket" "water_bucket"} item)) (contains? (body-cells w) pos)) (failed)
       (crops item)                      ; a seed or tuber becomes the young crop
       [(-> w (take-one item) (put-block pos (crops item)) (assoc-in [:ages pos] 0)) {:status "placed" :block item}]
 

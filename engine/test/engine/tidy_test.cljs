@@ -7,6 +7,7 @@
             [engine.core :as core]
             [engine.events :as events]
             [engine.jobs.tidy :as tidy]
+            [jobs.survival.restore-broken :as restore-broken]
             [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.test-util :as tu]
@@ -16,6 +17,12 @@
 
 (defn ^:async ticks! [eng n]
   (dotimes [_ n] (await (core/tick! eng))))
+
+(defn setup
+  "zs/setup with the fake's hitbox mode: the body stands at the middle of cells and the server refuses a block
+  placed into its 0.6 x 1.8 hitbox."
+  [world zones]
+  (zs/setup (assoc world :bodyHitbox true) zones))
 
 (defn tidy-entries [eng] (mapv :data (mem/entries (mem/view (:store eng)) :tidy)))
 
@@ -43,7 +50,7 @@
                                   [[(zs/whole-zone "fake")] []]
                                   [[] []]
                                   [nil []]]]
-          (let [{:keys [eng]} (zs/setup {:blocks enclosed} zones)]
+          (let [{:keys [eng]} (setup {:blocks enclosed} zones)]
             (core/submit! eng '(jobs.survival.breathe {:min-oxygen 12}) {})
             (await (core/tick! eng))
             (is (= recorded (tidy-entries eng)) (pr-str zones))))))))
@@ -51,7 +58,7 @@
 (defn restore!
   "Run restore-broken on a world with seeded entries; [eng p seen] after the job ran."
   [world zones entries]
-  (let [{:keys [eng] :as s} (zs/setup world zones)]
+  (let [{:keys [eng] :as s} (setup world zones)]
     (seed! eng entries)
     (core/submit! eng '(jobs.survival.restore-broken) {})
     s))
@@ -120,11 +127,88 @@
           (is (= 1 (count (tidy-entries eng))) "kept for when the body is out")
           (is (= [[{:cell [0 65 0] :was "stone" :why :occupied}]] (mapv :cells (zs/trespass seen :tidy.not-restored)))))))))
 
+(def with-hitbox {:bodyHitbox true :floor [-8 -8 8 8] :inventory [{:name "stone" :count 12}]})
+
+(defn dug-cell [cell] {:cell cell :action :dig :was "stone" :now "air" :zone "vault" :tries 0})
+
+(deftest restore-steps-clear-when-the-hitbox-overlaps-the-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (restore! (assoc-in with-hitbox [:self :pos] [0.709 64 0.5]) [(zs/whole-zone "Miles")] [(dug-cell [1 64 0])])]
+          (await (zs/run-until-empty eng 20))
+          (is (= [{:x 1 :y 64 :z 0}] (mapv zs/arg-pos (zs/calls p "place"))) "one place, after the step: the server refuses an overlapping one")
+          (is (= [] (tidy-entries eng)))
+          (is (= [[[1 64 0]]] (mapv :cells (zs/trespass seen :tidy.restored)))))))))
+
+(deftest restore-puts-back-a-dug-box-the-body-stands-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [box (vec (for [x [-1 0 1] z [-1 0 1]] [x 64 z]))
+              {:keys [eng p seen]} (restore! (assoc-in with-hitbox [:self :pos] [0.5 64 0.5]) [(zs/whole-zone "Miles")] (mapv dug-cell box))]
+          (await (zs/run-until-empty eng 60))
+          (is (= (set box) (set (map (comp (juxt :x :y :z) zs/arg-pos) (zs/calls p "place")))))
+          (is (= 9 (count (zs/calls p "place"))) "each cell placed once, none refused")
+          (is (= [] (tidy-entries eng)))
+          (is (= [[]] (mapv #(vec (remove (set box) (:cells %))) (zs/trespass seen :tidy.restored)))))))))
+
+(deftest restore-keeps-a-cell-the-hitbox-overlaps-and-the-body-cannot-leave
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (-> enclosed-body (update :blocks dissoc "0,65,0") (assoc :inventory [{:name "stone" :count 2}] :bodyHitbox true)
+                        (assoc-in [:self :pos] [0.709 64 0.5]))
+              {:keys [eng p seen]} (restore! world [(zs/whole-zone "Miles")] [dug])]
+          (await (zs/run-until-empty eng 20))
+          (is (= [] (zs/calls p "place")))
+          (is (= 1 (count (tidy-entries eng))))
+          (is (= [[{:cell [0 65 0] :was "stone" :why :occupied}]] (mapv :cells (zs/trespass seen :tidy.not-restored)))))))))
+
+(defn cell-key [[x y z]] (str x "," y "," z))
+
+(def walled-cube
+  "A roofed 3x3 room (walls at 2 from the middle, roof at y 66) on a wide floor: the body at its middle cannot leave."
+  (into {} (for [x (range -2 3) z (range -2 3) y [64 65 66]
+                 :when (or (= y 66) (= 2 (max (js/Math.abs x) (js/Math.abs z))))]
+             [(cell-key [x y z]) "stone"])))
+
+(deftest restore-keeps-a-cell-when-the-only-clear-cells-are-outside-the-walls
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (assoc with-hitbox :blocks walled-cube)
+              {:keys [eng p seen]} (restore! (assoc-in world [:self :pos] [0 64 0]) [(zs/whole-zone "Miles")] [(dug-cell [0 64 0])])]
+          (await (zs/run-until-empty eng 20))
+          (is (nil? (restore-broken/clear-cell {:primitives p} (dug-cell [0 64 0]) [])) "no clear cell the body can walk to")
+          (is (= [] (zs/calls p "place")))
+          (is (= 1 (count (tidy-entries eng))))
+          (is (= [[{:cell [0 64 0] :was "stone" :why :occupied}]] (mapv :cells (zs/trespass seen :tidy.not-restored)))))))))
+
+(def dead-end
+  "A one-wide tunnel x 2..4 at z 0 (feet y 64, roof y 66) with the body at its closed end x 4."
+  (into {} (for [x (range 1 6) z [-1 0 1] y [64 65 66]
+                 :when (or (= y 66) (not= z 0) (#{1 5} x))
+                 :when (not (and (= y 66) (not (<= 2 x 4))) )]
+             [(cell-key [x y z]) "stone"])))
+
+(deftest restore-puts-back-the-cell-that-would-seal-another-last
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (assoc-in (assoc with-hitbox :blocks dead-end) [:self :pos] [4 64 0])
+              entries [(dug-cell [3 64 0]) (dug-cell [2 64 0])]
+              {:keys [eng p seen]} (restore! world [(zs/whole-zone "Miles")] entries)]
+          (await (zs/run-until-empty eng 40))
+          (is (= [{:x 2 :y 64 :z 0} {:x 3 :y 64 :z 0}] (mapv zs/arg-pos (zs/calls p "place"))) "the far cell first, then the one next to the body")
+          (is (= [] (tidy-entries eng)))
+          (is (= [[[2 64 0] [3 64 0]]] (mapv :cells (zs/trespass seen :tidy.restored)))))))))
+
 (deftest a-breathe-trespass-is-restored-after-the-body-moves-clear
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (zs/setup (assoc enclosed-body :floor [-5 -5 5 5] :inventory [{:name "stone" :count 2}])
+        (let [{:keys [eng p seen]} (setup (assoc enclosed-body :floor [-5 -5 5 5] :inventory [{:name "stone" :count 2}])
                                              [(zs/whole-zone "Miles")])]
           (core/register-reflex! eng {:trigger :tidy-pending})
           (core/submit! eng '(jobs.survival.breathe {:min-oxygen 12}) {})
@@ -185,7 +269,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (zs/setup with-stone [(zs/whole-zone "Miles")])]
+        (let [{:keys [eng p seen]} (setup with-stone [(zs/whole-zone "Miles")])]
           (seed! eng [dug])
           (core/register-reflex! eng {:trigger :tidy-pending})
           (await (ticks! eng 12))
@@ -198,7 +282,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (zs/setup {} [(zs/whole-zone "Miles")])]
+        (let [{:keys [eng p seen]} (setup {} [(zs/whole-zone "Miles")])]
           (seed! eng [dug])
           (core/register-reflex! eng {:trigger :tidy-pending})
           (await (ticks! eng 40))
@@ -211,7 +295,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (zs/setup aside [(zs/whole-zone "Miles")])]
+        (let [{:keys [eng p seen]} (setup aside [(zs/whole-zone "Miles")])]
           (seed! eng [dug])
           (core/register-reflex! eng {:trigger :tidy-pending})
           (await (ticks! eng 20))
@@ -232,7 +316,7 @@
   [world zones]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake (merge {:offlineScale 0.0001} world))
+        p (tu/fake (merge {:offlineScale 0.0001 :bodyHitbox true} world))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :world (ew/of-data {} {} zones)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -298,7 +382,7 @@
   "clear-box with :ignore-zones? in Miles's zone, the tidy-pending reflex registered; [world-dug-while-running seen
   eng p] once the job and the restore have ended. Records how many places happened before the box job ended."
   [world]
-  (let [{:keys [eng p seen]} (zs/setup world [miles-zone])
+  (let [{:keys [eng p seen]} (setup world [miles-zone])
         placed-while-live (atom 0)]
     (core/register-reflex! eng {:trigger :tidy-pending})
     (core/submit! eng (list 'jobs.build.clear-box (assoc dirt-box :ignore-zones? true)) {})
