@@ -2,7 +2,8 @@
   "Tidying up after trespassing. A job that breaks or places a block in another's zone or claim (a survival job's last
   resort, or any job run with :ignore-zones?) notes what it did: before the act, `refusal` asks the rules (zones
   ignored by no opt-out) whether the cell is another's; after the act, `record!` writes a :tidy entry to body memory
-  {:cell [x y z] :action :dig|:place :was block-before :now block-after :zone/:claim/:plan :tries n}. The
+  {:cell [x y z] :action :dig|:place :was block-before :now block-after :zone/:claim/:plan :tries n :job id}, :job the
+  top-level job that recorded it (the trigger :tidy-pending waits until that job has ended). The
   jobs.survival.restore-broken job puts the cells back when the body is safe. Best effort, never at the cost of safety."
   (:require [engine.ctx :as ctx]
             [engine.jobs.access :as access]
@@ -55,7 +56,7 @@
   "Remember pending entry p (see pending) with the block now at its cell; nil p does nothing."
   [c p now]
   (when p
-    (ctx/remember! c :tidy (assoc p :now now :tries 0) tidy-policy)))
+    (ctx/remember! c :tidy (assoc p :now now :tries 0 :job (:root c)) tidy-policy)))
 
 (defn entries
   "The :tidy data maps, oldest first."

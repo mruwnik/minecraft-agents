@@ -27,8 +27,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[zones recorded] [[[(zs/whole-zone "Miles")] [{:cell [0 65 0] :action :dig :was "stone" :now "air" :zone "vault" :tries 0}
-                                                              {:cell [0 66 0] :action :dig :was "stone" :now "air" :zone "vault" :tries 0}]]
+        (doseq [[zones recorded] [[[(zs/whole-zone "Miles")] [{:cell [0 65 0] :action :dig :was "stone" :now "air" :zone "vault" :tries 0 :job "j1"}
+                                                              {:cell [0 66 0] :action :dig :was "stone" :now "air" :zone "vault" :tries 0 :job "j1"}]]
                                   [[(zs/whole-zone "fake")] []]
                                   [[] []]
                                   [nil []]]]
@@ -82,18 +82,29 @@
             (is (= [] (zs/calls p "dig")) (pr-str why))
             (is (= kept (count (tidy-entries eng))) (pr-str why))
             (is (= [[{:cell [0 65 0] :was "stone" :why why}]] (mapv :cells (zs/trespass seen :tidy.not-restored))) (pr-str why))
-            (is (= [[]] (mapv :cells (zs/trespass seen :tidy.restored))) (pr-str why))))))))
+            (is (= [] (zs/trespass seen :tidy.restored)) (pr-str why))))))))
 
 ;; ------------------------------------------------------------------ the tidy-pending trigger
 
-(defn holds?
-  "Whether the trigger holds on a fake world with the memory entries [[kind data] ...] written."
-  [world memory]
-  (let [s (mem/open (tu/tmp-dir) {:now (constantly 1000)})]
-    (doseq [[kind data] memory] (mem/write! s kind data tidy/tidy-policy))
-    ((:when tidy-pending/trigger) (tu/fake world) (mem/view s) tidy-pending/defaults nil)))
-
 (def with-stone {:inventory [{:name "stone" :count 2}]})
+(def with-stone-world with-stone)
+
+(defn holds?
+  "Whether the trigger holds on a fake world with the memory entries [[kind data] ...] written and the jobs live
+  (default none)."
+  ([world memory] (holds? world memory #{}))
+  ([world memory live]
+   (let [s (mem/open (tu/tmp-dir) {:now (constantly 1000)})]
+     (doseq [[kind data] memory] (mem/write! s kind data tidy/tidy-policy))
+     ((:when tidy-pending/trigger) (tu/fake world) (mem/view s) tidy-pending/defaults nil live))))
+
+(deftest the-trigger-ignores-entries-of-a-job-that-is-still-live
+  (doseq [[live expected why] [[#{"j1"} false "its job is live"]
+                               [#{"j2"} true "another job is live, its own has ended"]
+                               [#{} true "its job has ended"]]]
+    (is (= expected (holds? with-stone-world [[:tidy (assoc dug :job "j1")]] live)) why))
+  (is (true? (holds? with-stone-world [[:tidy dug]] #{"j1"})) "an entry with no job id is never held back"))
+
 (def reported [:tidy-reported {:cells [[0 65 0]]}])
 
 (deftest the-trigger-holds-for-a-restorable-entry-when-safe-and-for-an-unreported-one
@@ -143,7 +154,7 @@
           (await (ticks! eng 40))
           (is (= [] (zs/calls p "place")))
           (is (= 1 (count (zs/trespass seen :tidy.not-restored))))
-          (is (= 1 (count (zs/trespass seen :tidy.restored))) "the job ran once")
+          (is (= [] (zs/trespass seen :tidy.restored)) "nothing restored, no info")
           (is (= 1 (count (tidy-entries eng))) "the entry is kept for later"))))))
 
 (deftest a-reported-entry-is-restored-once-the-item-is-carried
@@ -159,3 +170,34 @@
           (await (ticks! eng 20))
           (is (= [{:x 0 :y 65 :z 0}] (mapv zs/arg-pos (zs/calls p "place"))))
           (is (= [] (tidy-entries eng))))))))
+
+(def dirt-box {:from {:x 1 :y 65 :z 1} :to {:x 2 :y 65 :z 2}})
+(def dirt-world {:blocks {"1,65,1" "dirt" "2,65,1" "dirt" "1,65,2" "dirt" "2,65,2" "dirt"}})
+(def miles-zone {:name "farm" :min [1 60 1] :max [2 70 2] :owner "Miles"})
+
+(defn ^:async clear-in-foreign-zone!
+  "clear-box with :ignore-zones? in Miles's zone, the tidy-pending reflex registered; [world-dug-while-running seen
+  eng p] once the job and the restore have ended. Records how many places happened before the box job ended."
+  [world]
+  (let [{:keys [eng p seen]} (zs/setup world [miles-zone])
+        placed-while-live (atom 0)]
+    (core/register-reflex! eng {:trigger :tidy-pending})
+    (core/submit! eng (list 'jobs.build.clear-box (assoc dirt-box :ignore-zones? true)) {})
+    (loop [i 0]
+      (when (< i 80)
+        (let [live? (some #(= 'jobs.build.clear-box (:def (get-in (core/state eng) [:instances %]))) (:list (core/state eng)))]
+          (when live? (reset! placed-while-live (count (zs/calls p "place")))))
+        (await (core/tick! eng))
+        (recur (inc i))))
+    {:placed-while-live @placed-while-live :seen seen :eng eng :p p}))
+
+(deftest a-trespassing-clear-box-is-not-undone-while-it-runs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [placed-while-live seen eng p]} (await (clear-in-foreign-zone! (assoc dirt-world :inventory [{:name "dirt" :count 4}])))]
+          (is (= 0 placed-while-live) "nothing placed while clear-box was live")
+          (is (= 4 (count (zs/calls p "dig"))) "each dirt dug exactly once")
+          (is (= 4 (count (zs/calls p "place"))) "restored once after the job ended")
+          (is (= [] (tidy-entries eng)))
+          (is (= [] (zs/trespass seen :tidy.not-restored))))))))

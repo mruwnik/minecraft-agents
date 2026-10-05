@@ -7,7 +7,7 @@
   placed again from the item of the same name carried; a placed block is dug again. Only when the body is safe
   (health at least :min-health, no hostile within :danger-radius), only a cell whose block is still what the job left
   (a changed cell is somebody's, left alone), and at most 3 tries per cell. Digs nothing else. Ends with one info
-  tidy.restored (the cells put back) and, only when a cell is left, one warn tidy.not-restored {:cells [{:cell :was :why}]}; a cell that is
+  tidy.restored (the cells put back; none when none were) and, only when a cell is left, one warn tidy.not-restored {:cells [{:cell :was :why}]}; a cell that is
   not restored for now (unsafe, item not carried) keeps its entry, the others are forgotten. At its end it remembers the cells still waiting (:tidy-reported), which
   the trigger :tidy-pending reads to warn once per set of cells.")
 
@@ -64,7 +64,8 @@
   (let [{:keys [restored failed]} (ctx/mem c)]
     (doseq [cell restored] (tidy/forget-cell! c cell))
     (doseq [{:keys [cell why]} failed :when (#{:changed :gave-up} why)] (tidy/forget-cell! c cell))
-    (ctx/emit! c :tidy.restored :info {:cells (vec restored) :text (str "restored " (count restored) " broken blocks")})
+    (when (seq restored)
+      (ctx/emit! c :tidy.restored :info {:cells (vec restored) :text (str "restored " (count restored) " broken blocks")}))
     (when (seq failed)
       (ctx/emit! c :tidy.not-restored :warn {:cells (vec failed) :text (str (count failed) " broken blocks not restored")}))
     (ctx/remember! c :tidy-reported {:cells (mapv :cell (tidy/entries c))} tidy/reported-policy)

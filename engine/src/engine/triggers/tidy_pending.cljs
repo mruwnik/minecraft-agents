@@ -6,23 +6,27 @@
   (its cell is not in the latest :tidy-reported entry): the run then restores, or warns once and forgets what it
   cannot. Persistence :stop: a run that leaves entries holds them, the condition turns false and fires again only
   when something has changed (items carried, the hostile gone, new entries). Entries whose cell is not loaded wait
-  until the body is near."
+  until the body is near. Entries recorded by a job that is still live (running, queued, paused) are ignored: the
+  job may still be digging there; the trigger fires once it has ended."
   (:require [engine.jobs.tidy :as tidy]
             [engine.memory :as mem]))
 
 (def defaults {:min-health 14 :danger-radius 8})
 
 (defn loaded-entries
-  "The :tidy data maps in view whose cell is loaded."
-  [p view]
-  (filterv #(some? (tidy/block-now p (:cell %))) (map :data (mem/entries view :tidy))))
+  "The :tidy data maps in view whose cell is loaded and whose recording job is not live (not in the set live of
+  job ids: running, queued or paused); an entry without a job id counts as ended."
+  [p view live]
+  (->> (map :data (mem/entries view :tidy))
+       (remove #(contains? live (:job %)))
+       (filterv #(some? (tidy/block-now p (:cell %))))))
 
 (defn restorable? [p {:keys [tries] :as e}]
   (and (< tries tidy/max-tries) (nil? (tidy/why-not p e))))
 
-(defn holds? [p view args]
+(defn holds? [p view args live]
   (let [args (merge defaults args)
-        entries (loaded-entries p view)
+        entries (loaded-entries p view live)
         reported (set (:cells (:data (mem/latest view :tidy-reported))))]
     (boolean (and (seq entries)
                   (not (tidy/unsafe? p args))
@@ -30,7 +34,7 @@
 
 (def trigger
   {:name :tidy-pending
-   :when (fn [p view args _kn] (holds? p view args))
+   :when (fn [p view args _kn live] (holds? p view args live))
    :job '(jobs.survival.restore-broken)
    :args defaults
    :persistence :stop})
