@@ -463,7 +463,8 @@
     {:lease lease :reply reply}))
 
 (defn handle
-  "Drive requests retain their JSON wire format. /world passes EDN to the owner-token action API."
+  "Route one control-socket request: /entities answers from the seen-entities store, /world passes EDN to the owner-token
+  action API, anything else is a /drive request in its JSON wire format."
   [eng opts method path body content-type]
   (cond
     (= path "/entities") (entity-observations/request (:seen-entities eng) method)
