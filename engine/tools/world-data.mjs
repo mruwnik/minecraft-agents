@@ -1,4 +1,4 @@
-// Why JavaScript: compatibility exports for Node callers, storage and coordination are CLJS; Thin Node launcher over the AOT cljs bundle dashboard/out/agent-tools.cjs; runs without starting a compiler or JVM (500 ms startup budget).
+// Why JavaScript: Node-facing exports of the cljs storage and coordination code in the AOT bundle (no compiler or JVM start, 500 ms budget).
 import { loadTools } from './agent-tools-loader.mjs'
 const tools = loadTools(['storage'])
 

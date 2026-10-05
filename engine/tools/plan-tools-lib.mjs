@@ -1,11 +1,11 @@
-// Why JavaScript: ESM boundary: generation, validation and routing policy live in AOT CLJS, this is a compatibility entry point; Thin Node launcher over the AOT cljs bundle dashboard/out/agent-tools.cjs; runs without starting a compiler or JVM (500 ms startup budget).
+// Why JavaScript: ESM boundary over the AOT cljs bundle; plan generation, validation and routing live in cljs (no compiler or JVM start, 500 ms budget).
 import { loadTools } from './agent-tools-loader.mjs'
 const tools = loadTools(['blueprintForm', 'planExecute', 'planOneForm', 'planRequestFor', 'planUsage'])
 
 export const RAW_BYTES = 65536
 export const loadBridge = () => tools
-// Shadow's development VM cannot import ESM itself. Keep this lazy Node loader
-// at the host boundary; the CLJS implementation owns all plan operations.
+// Shadow's development VM cannot import ESM itself, so this lazy Node loader
+// stays at the host boundary; the cljs side owns all plan operations.
 const loadWorldBlocks = () => import('../../dashboard/js/worldblocks.mjs')
 export const execute = (kind, argv, output = () => {}) => tools.planExecute(kind, argv, output, loadWorldBlocks)
 export const usage = tools.planUsage

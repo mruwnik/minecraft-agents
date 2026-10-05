@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Why JavaScript: stable CLI launcher, command logic lives in agent-tools.changes; Thin Node launcher over the AOT cljs bundle dashboard/out/agent-tools.cjs; runs without starting a compiler or JVM (500 ms startup budget).
+// Why JavaScript: thin CLI launcher over the AOT cljs bundle; the command logic is agent-tools.changes (no compiler or JVM start, 500 ms budget).
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { loadTools } from './agent-tools-loader.mjs'

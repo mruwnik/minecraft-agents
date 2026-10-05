@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Why JavaScript: ESM boundary: generation, validation and routing policy live in AOT CLJS; loads the real tools lazily in this process, avoiding a second Node startup; Thin Node launcher over the AOT cljs bundle dashboard/out/agent-tools.cjs; runs without starting a compiler or JVM (500 ms startup budget).
+// Why JavaScript: ESM boundary over the AOT cljs bundle; routing lives in cljs, the real tool is loaded lazily in this process to avoid a second Node start (500 ms budget).
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { loadTools } from './agent-tools-loader.mjs'
