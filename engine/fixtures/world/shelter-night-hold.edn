@@ -11,7 +11,7 @@
   :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}}
  :cases
  [{:name "night-sleeps-and-shelter-does-not-complete"
-   :time :night
+   :time :night-exclusive
    :tags [:night]
    :blocks [[:set [20 0 16] "red_bed[facing=east,part=foot]"] [:set [21 0 16] "red_bed[facing=east,part=head]"]]
    :act [[:job (jobs.memory.set-place {:name :bed :pos #at [20 0 16]})]

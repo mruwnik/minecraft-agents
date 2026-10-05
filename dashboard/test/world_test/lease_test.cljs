@@ -133,3 +133,20 @@
   (is (= :night (l/time-phase {:time :night :act [[:time-set 1000]]})))
   (is (= :night (l/time-phase {:time :any :act [[:wait-s 1] [:time-set 14000]]})))
   (is (nil? (l/time-phase {:time :any :act [[:wait-s 1]]}))))
+
+(deftest an-exclusive-night-holder-shares-with-nobody-not-even-night
+  (let [files (atom {10 (hold :night-x)})]
+    (is (= {:waiting-on [10]} (l/try-share (fake-share files #{10 11}) 11 :night-x 5)))
+    (is (= {:waiting-on [10]} (l/try-share (fake-share files #{10 11}) 11 :night 5)))
+    (is (= {:waiting-on [10]} (l/try-share (fake-share files #{10 11}) 11 :day 5)))))
+
+(deftest an-exclusive-night-case-waits-for-plain-night-holders
+  (let [files (atom {10 (hold :night) 12 (hold :night)})]
+    (is (= {:waiting-on [10 12]} (l/try-share (fake-share files #{10 11 12}) 11 :night-x 5)))))
+
+(deftest an-older-waiter-of-any-phase-blocks-a-new-exclusive-holder
+  (let [files (atom {11 (want :night 3)})]
+    (is (= {:waiting-on [11]} (l/try-share (fake-share files #{11 12}) 12 :night-x 5)))))
+
+(deftest time-phase-of-an-exclusive-night-case
+  (is (= :night-x (l/time-phase {:time :night-exclusive}))))

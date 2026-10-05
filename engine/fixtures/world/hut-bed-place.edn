@@ -6,7 +6,7 @@
 ;; by the plot clear are picked up before t0 and fire the reflex early).
 {:defaults
  {:tags [:night :survival :sleep]
-  :time :night
+  :time :night-exclusive
   :register [{:trigger :night-unsafe}]
   :body {:effects [["resistance" 600 4]] :settle-s 8}}
  :cases

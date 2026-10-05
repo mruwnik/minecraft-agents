@@ -311,7 +311,7 @@
     (js/Promise.resolve true)
     (.then (rcon! ["time query day"])
            (fn [[reply]]
-             (let [want-night (= :night (:time c))]
+             (let [want-night (boolean (#{:night :night-exclusive} (:time c)))]
                (if (= want-night (boolean (night? (daytime reply))))
                  true
                  (set-time! opts (if want-night 14000 1000) (str (:id c) " needs " (name (:time c))))))))))

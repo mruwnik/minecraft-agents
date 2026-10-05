@@ -5,7 +5,7 @@
 ;; Both need night: run them with --allow-time --time-log <the shared time log>. Torches keep the plot lit.
 {:defaults
  {:tags [:night :survival]
-  :time :night
+  :time :night-exclusive
   :blocks [[:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 4] "torch"] [:set [28 0 28] "torch"]
            [:set [16 0 4] "torch"] [:set [16 0 28] "torch"] [:set [4 0 16] "torch"] [:set [28 0 16] "torch"]]
   :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}}

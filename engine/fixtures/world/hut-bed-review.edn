@@ -7,7 +7,7 @@
 ;; inside the settle). Cases that must not refire are checked by hand by counting events in the body's log for 5 minutes.
 {:defaults
  {:tags [:night :survival :sleep]
-  :time :night
+  :time :night-exclusive
   :register [{:trigger :night-unsafe}]
   :body {:effects [["resistance" 600 4]] :settle-s 8}}
  :cases

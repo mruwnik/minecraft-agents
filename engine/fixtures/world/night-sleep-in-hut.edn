@@ -6,7 +6,7 @@
 ;; Hut: stone walls x 8..16, z 8..16, roof at y 3, a 7x7 room with torches; the bed at [10 0 12].
 {:defaults
  {:tags [:night :survival :sleep]
-  :time :night
+  :time :night-exclusive
   :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow]
            [:fill [9 0 9] [15 2 15] "air"]
            [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]

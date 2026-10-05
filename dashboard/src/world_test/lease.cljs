@@ -52,12 +52,15 @@
 
 (defn decide
   "entries: {pid {:phase :state (:hold or :want) :seq}} of live processes. -> {:held true :first? bool} when pid may
-  hold phase now (every holder shares the phase and no waiter of the other phase is older), else {:waiting-on pids}."
+  hold phase now (every holder shares the phase and no waiter of the other phase is older), else {:waiting-on pids}.
+  :night-x (a sleeping case) shares with nobody: every holder and every older waiter blocks it, and it blocks all."
   [entries pid phase seq]
   (let [others (dissoc entries pid)
         holders (filter (fn [[_ e]] (= :hold (:state e))) others)
-        blockers (concat (filter (fn [[_ e]] (not= phase (:phase e))) holders)
-                         (filter (fn [[_ e]] (and (= :want (:state e)) (not= phase (:phase e)) (< (:seq e) seq))) others))]
+        solo? (fn [p] (= :night-x p))
+        differs? (fn [e] (or (not= phase (:phase e)) (solo? phase)))
+        blockers (concat (filter (fn [[_ e]] (differs? e)) holders)
+                         (filter (fn [[_ e]] (and (= :want (:state e)) (differs? e) (< (:seq e) seq))) others))]
     (if (empty? blockers)
       {:held true :first? (empty? holders)}
       {:waiting-on (vec (sort (map first blockers)))})))
@@ -77,10 +80,11 @@
        r))))
 
 (defn time-phase
-  "The phase (:day or :night) whose time lock case c holds: its :time, else the phase of its first :time-set step; nil
+  "The phase (:day, :night or :night-x) whose time lock case c holds: its :time, else the phase of its first :time-set step; nil
   when it does not depend on the time of day."
   [c]
   (case (:time c)
     :day :day
     :night :night
+    :night-exclusive :night-x
     (some (fn [[op ticks]] (when (= :time-set op) (phase-of-ticks ticks))) (:act c))))

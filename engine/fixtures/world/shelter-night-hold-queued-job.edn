@@ -4,7 +4,7 @@
 ;; Night: run with --allow-time --time-log <the shared time log>. Another runner's day set during the 45 s makes the shelter end early (a fail not of the job).
 {:defaults
  {:tags [:night :survival :shelter]
-  :time :night
+  :time :night-exclusive
   :blocks [[:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 4] "torch"] [:set [28 0 28] "torch"]
            [:set [16 0 4] "torch"] [:set [16 0 28] "torch"] [:set [4 0 16] "torch"] [:set [28 0 16] "torch"]
            [:set [20 0 16] "red_bed[facing=east,part=foot]"] [:set [21 0 16] "red_bed[facing=east,part=head]"]]

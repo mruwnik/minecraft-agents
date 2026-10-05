@@ -84,7 +84,7 @@
   (let [h (get-in c [:plot :height])]
     (cond-> []
       (not (string? (:name c))) (conj ":name must be a string")
-      (not (#{:day :night :any} (:time c))) (conj ":time must be :day, :night or :any")
+      (not (#{:day :night :night-exclusive :any} (:time c))) (conj ":time must be :day, :night, :night-exclusive or :any")
       (not (and (int? h) (< 1 h 32))) (conj ":plot :height must be an integer 2..31")
       (not (vector? (get-in c [:body :at]))) (conj ":body :at must be [x y z]")
       (some #(not (step-kinds (first %))) (:act c)) (conj (str ":act steps must be one of " (sort step-kinds)))
