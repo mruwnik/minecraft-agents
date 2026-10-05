@@ -1,0 +1,34 @@
+;; Torches light the plot (a hostile within 8 blocks makes restore-broken skip every cell as :unsafe). Day cases: run with --allow-time --time-log <the shared time log>.
+;; jobs.survival.restore-broken counts tool wear after it digs a placed block (card c5d2cded part 2, fix 91467815): a pickaxe
+;; with 1 durability left breaks in the dig (warn tool.broke, then tool.none); a healthy one gives no tool event.
+;; The :tidy :place entry comes from a real jobs.blocks.place with :ignore-zones? true into another plan's footprint.
+;; Run one case per call: node tools/world-test.mjs engine/fixtures/world/restore-broken-wear.edn --match <name> --first-plot N
+{:defaults
+ {:tags [:tidy :restore-broken :tool-wear]
+  :blocks [[:set [2 0 2] "torch"] [:set [2 0 6] "torch"] [:set [2 0 14] "torch"] [:set [2 0 22] "torch"] [:set [2 0 30] "torch"] [:set [6 0 2] "torch"] [:set [6 0 6] "torch"] [:set [6 0 14] "torch"] [:set [6 0 22] "torch"] [:set [6 0 30] "torch"] [:set [14 0 2] "torch"] [:set [14 0 6] "torch"] [:set [14 0 14] "torch"] [:set [14 0 22] "torch"] [:set [14 0 30] "torch"] [:set [22 0 2] "torch"] [:set [22 0 6] "torch"] [:set [22 0 14] "torch"] [:set [22 0 22] "torch"] [:set [22 0 30] "torch"] [:set [30 0 2] "torch"] [:set [30 0 6] "torch"] [:set [30 0 14] "torch"] [:set [30 0 22] "torch"] [:set [30 0 30] "torch"]]
+  :plans [{:id "other" :parts [{:id "spot" :cells [#at [18 0 16]] :want [:any "cobblestone"]}]}]
+  :limit-s 90}
+ :cases
+ [{:name "last-durability-pick-breaks-in-the-restore-dig"
+   :body {:inventory [["iron_pickaxe[damage=249]" 1] ["cobblestone" 2]]}
+   :act [[:job (jobs.blocks.place {:pos #at [18 0 16] :item "cobblestone" :ignore-zones? true})] [:wait-s 10]
+         [:job (jobs.survival.restore-broken {})]]
+   :expect [{:event {:source :job :kind :tool.broke} :within-s 60}
+            {:event {:source :job :kind :tool.none} :within-s 60}
+            {:event {:source :job :kind :tidy.restored} :within-s 60}]
+   :after [[:block [18 0 16] "air"] [:item "iron_pickaxe" 0]]}
+  {:name "second-last-durability-pick-breaks"
+   :body {:at [16.5 0 10.5] :inventory [["iron_pickaxe[damage=249]" 1] ["cobblestone" 2]]}
+   :plans [{:id "other2" :parts [{:id "spot2" :cells [#at [20 0 10]] :want [:any "cobblestone"]}]}]
+   :act [[:job (jobs.blocks.place {:pos #at [20 0 10] :item "cobblestone" :ignore-zones? true})] [:wait-s 10]
+         [:job (jobs.survival.restore-broken {})]]
+   :expect [{:event {:source :job :kind :tool.broke} :within-s 60}
+            {:event {:source :job :kind :tool.none} :within-s 60}]
+   :after [[:block [12 0 10] "air"] [:item "iron_pickaxe" 0]]}
+  {:name "healthy-pick-no-tool-event"
+   :body {:inventory [["iron_pickaxe" 1] ["cobblestone" 2]]}
+   :act [[:job (jobs.blocks.place {:pos #at [18 0 16] :item "cobblestone" :ignore-zones? true})] [:wait-s 10]
+         [:job (jobs.survival.restore-broken {})]]
+   :expect [{:event {:source :job :kind :tidy.restored} :within-s 60}
+            {:no-event {:source :job :kind #{:tool.broke :tool.none :tool.low}} :for-s 15}]
+   :after [[:block [18 0 16] "air"] [:item "iron_pickaxe" 1]]}]}

@@ -1,0 +1,54 @@
+;; Torches light the plot (a hostile within 8 blocks makes restore-broken skip every cell as :unsafe). Day cases: run with --allow-time --time-log <the shared time log>.
+;; jobs.survival.restore-broken never shuts the body itself in (card 3e85c26b, fix 354d4f3b): a dug doorway cell of a hut the
+;; body stands in stays pending (warn tidy.not-restored :why :seals) until the body is out, then is put back; a dug cell on
+;; open ground, or a window in a hut that still has a doorway, is restored at once. The tidy entries come from real digs
+;; (jobs.blocks.dig :ignore-zones? true on cells another plan's footprint claims). The plot has a second level (platform
+;; at y 2 up a two-step ramp) so the open ground holds more than reach/room-cells (1024) standable cells.
+;; Run one case per call: node tools/world-test.mjs engine/fixtures/world/restore-broken-seals.edn --match <name> --first-plot N
+{:defaults
+ {:tags [:tidy :restore-broken]
+  :blocks [[:fill [0 2 21] [31 2 31] "stone"] [:set [20 0 19] "stone"] [:set [20 1 20] "stone"]
+           [:fill [8 0 8] [12 2 12] "cobblestone"] [:fill [9 0 9] [11 2 11] "air"] [:fill [8 3 8] [12 3 12] "cobblestone"]
+           [:set [9 0 9] "torch"] [:set [2 0 2] "torch"] [:set [2 0 6] "torch"] [:set [2 0 14] "torch"] [:set [2 0 22] "torch"] [:set [2 0 30] "torch"] [:set [6 0 2] "torch"] [:set [6 0 6] "torch"] [:set [6 0 14] "torch"] [:set [6 0 22] "torch"] [:set [6 0 30] "torch"] [:set [14 0 2] "torch"] [:set [14 0 6] "torch"] [:set [14 0 14] "torch"] [:set [14 0 22] "torch"] [:set [14 0 30] "torch"] [:set [22 0 2] "torch"] [:set [22 0 6] "torch"] [:set [22 0 14] "torch"] [:set [22 0 22] "torch"] [:set [22 0 30] "torch"] [:set [30 0 2] "torch"] [:set [30 0 6] "torch"] [:set [30 0 14] "torch"] [:set [30 0 22] "torch"] [:set [30 0 30] "torch"]
+           [:set [2 3 23] "torch"] [:set [2 3 28] "torch"] [:set [10 3 23] "torch"] [:set [10 3 28] "torch"] [:set [18 3 23] "torch"] [:set [18 3 28] "torch"] [:set [26 3 23] "torch"] [:set [26 3 28] "torch"]]
+  :body {:at [10.5 0 10.5] :inventory [["iron_pickaxe" 1]]}
+  :limit-s 90}
+ :cases
+ [{:name "hut-east-doorway-kept-then-restored"
+   :plans [{:id "other" :parts [{:id "door" :cells [#at [12 0 10] #at [12 1 10]] :want [:any "cobblestone"]}]}]
+   :act [[:job (jobs.blocks.dig {:pos #at [12 0 10] :ignore-zones? true})] [:wait-s 10]
+         [:job (jobs.blocks.dig {:pos #at [12 1 10] :ignore-zones? true})] [:wait-s 10]
+         [:job (jobs.survival.restore-broken {})] [:wait-s 15]
+         [:job (jobs.movement.go-to {:pos #xyz [15 0 10] :range 1})] [:wait-s 15]
+         [:job (jobs.survival.restore-broken {})]]
+   :expect [{:event {:source :job :kind :tidy.not-restored :data {:cells [{:why :seals} {:why :seals}]}} :within-s 60}
+            {:event {:source :job :kind :tidy.restored :data {:cells [[:any] [:any]]}} :within-s 85}]
+   :after [[:block [12 0 10] "cobblestone"] [:block [12 1 10] "cobblestone"]]}
+  {:name "hut-south-doorway-kept-then-restored"
+   :plans [{:id "other" :parts [{:id "door" :cells [#at [10 0 12] #at [10 1 12]] :want [:any "cobblestone"]}]}]
+   :act [[:job (jobs.blocks.dig {:pos #at [10 0 12] :ignore-zones? true})] [:wait-s 10]
+         [:job (jobs.blocks.dig {:pos #at [10 1 12] :ignore-zones? true})] [:wait-s 10]
+         [:job (jobs.survival.restore-broken {})] [:wait-s 15]
+         [:job (jobs.movement.go-to {:pos #xyz [10 0 15] :range 1})] [:wait-s 15]
+         [:job (jobs.survival.restore-broken {})]]
+   :expect [{:event {:source :job :kind :tidy.not-restored :data {:cells [{:why :seals} {:why :seals}]}} :within-s 60}
+            {:event {:source :job :kind :tidy.restored :data {:cells [[:any] [:any]]}} :within-s 85}]
+   :after [[:block [10 0 12] "cobblestone"] [:block [10 1 12] "cobblestone"]]}
+  {:name "open-ground-wall-cells-restored"
+   :blocks [[:fill [24 0 5] [24 1 5] "cobblestone"]]
+   :plans [{:id "other" :parts [{:id "wall" :cells [#at [24 0 5] #at [24 1 5]] :want [:any "cobblestone"]}]}]
+   :body {:at [22.5 0 5.5]}
+   :act [[:job (jobs.blocks.dig {:pos #at [24 0 5] :ignore-zones? true})] [:wait-s 10]
+         [:job (jobs.blocks.dig {:pos #at [24 1 5] :ignore-zones? true})] [:wait-s 10]
+         [:job (jobs.survival.restore-broken {})]]
+   :expect [{:event {:source :job :kind :tidy.restored :data {:cells [[:any] [:any]]}} :within-s 80}
+            {:no-event {:source :job :kind :tidy.not-restored} :for-s 20}]
+   :after [[:block [24 0 5] "cobblestone"] [:block [24 1 5] "cobblestone"]]}
+  {:name "window-in-hut-with-doorway-restored"
+   :blocks [[:set [12 0 10] "air"] [:set [12 1 10] "air"]]
+   :plans [{:id "other" :parts [{:id "window" :cells [#at [8 1 10]] :want [:any "cobblestone"]}]}]
+   :act [[:job (jobs.blocks.dig {:pos #at [8 1 10] :ignore-zones? true})] [:wait-s 10]
+         [:job (jobs.survival.restore-broken {})]]
+   :expect [{:event {:source :job :kind :tidy.restored :data {:cells [[:any]]}} :within-s 70}
+            {:no-event {:source :job :kind :tidy.not-restored} :for-s 20}]
+   :after [[:block [8 1 10] "cobblestone"]]}]}
