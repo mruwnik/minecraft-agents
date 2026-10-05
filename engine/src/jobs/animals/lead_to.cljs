@@ -8,44 +8,40 @@
             [engine.places :as places]))
 
 (def doc
-  "Put a lead on one animal of the mob type :mob, walk to :pos with it
-  following and there either tie it to the fence post at :fence or let it go:
-  a one-shot order that starts and ends itself. Phases :leash, :walk, :gather
-  and :arrive, each by a child job: jobs.animals.leash (radius :radius),
-  jobs.movement.go-to (to :pos, or to the :fence cell when no :pos is given,
-  range :range), without :fence a :gather (see below) and then, with :fence,
-  a click with an empty hand on that post (useOn) after walking to within 2 of
-  it, else jobs.animals.unleash for that animal (which picks the lead up
-  again). Before every walking round and again on arrival the animal is looked
-  up (within :watch-radius): when it is seen off this body's lead the job ends
-  at once with :lead-broke, when it is not seen at all with :lost, never with
-  success. A tie counts only when the sensing then shows the animal held by
-  something else than this body (leashed, not leashedToMe); one click is
-  retried once. With :fence the block there must be a fence (name ending
-  _fence) or the job ends :no-fence before leashing anything. Done (info
-  lead-to.done, and a warn lead-to.gave-up with the reason unless it is
-  :tied or :unleashed; hands over {:reason :animal key :still-led bool :at
-  pos}) with :reason :tied or :unleashed on success, :lead-broke or :lost
-  as above, :unreachable when the walk gave up (the animal is then still on
-  the lead: :still-led true), :tie-failed when the post did not take the
-  animal (still on the lead), :timeout after :timeout-s from the first round
-  (a cut walk leaves the animal on the lead), :no-fence, and the reason of
-  jobs.animals.leash (:no-lead, :none, :unreachable, :refused, :all-leashed,
-  :timeout) when no animal got on the lead, or of jobs.animals.unleash
-  (:refused, :unreachable, :none, :timeout) when the lead would not come off.
-  :gather (no :fence only): a body outwalks a led animal, which trails about
-  a lead length behind it, so on arrival the animal is looked up and, when it
-  is farther than :gather-radius from :pos, the body walks on past :pos (range
-  1) so the lead pulls the animal within :gather-radius, waiting for the animal
-  to settle between pulls; at most :gather-tries pulls. A pull goes no farther past :pos
-  than keeps the body within 11 blocks of the animal (the lead breaks past 12), and is given up
-  after 20 s (its child go-to is dropped) or before it starts when the planned walk to its target passes more than 11
-  blocks from the animal (a wall it is jammed at: the detour would break the lead). A cow 10 or more blocks out is never pulled: it is let go
-  where it is, :gathered false. A pull that did not arrive, a pull given up, an animal too far out for a pull
-  or running out of pulls is no failure: the animal is let go where it is, with a warn
-  lead-to.gather-short (:distance from :pos) and :gathered false in the result (:gathered
-  is true when the animal was within :gather-radius, or tied).
-  The check always passes, so a cut job resumes and ends itself.")
+  "Put a lead on one animal of type :mob, walk to :pos with it following, then tie it to the fence post :fence
+  or let it go. A one-shot order that starts and ends itself. The check always passes.
+
+  Phases, each by a child job:
+  - :leash: jobs.animals.leash (radius :radius).
+  - :walk: jobs.movement.go-to to :pos (the :fence cell when no :pos), range :range.
+  - :gather (no :fence only): see below.
+  - :arrive: with :fence, walk within 2 of the post and click it with an empty hand (useOn), tried twice.
+    Without :fence, jobs.animals.unleash lets the animal go and picks the lead up.
+
+  With :fence the block there must be a fence (name ends _fence), else :no-fence before anything is leashed.
+  A tie counts only when the sensing then shows the animal held by something else than this body.
+
+  Before each walking round the animal is looked up (within :watch-radius). Seen off this body's lead: ends
+  :lead-broke. Not seen: ends :lost.
+
+  Gather: a led animal trails about a lead length behind the body. On arrival, if the animal is farther than
+  :gather-radius from :pos, the body walks on past :pos (range 1) so the lead pulls it in. It waits for the
+  animal to settle between pulls, at most :gather-tries pulls. A pull stays within 11 blocks of the animal (the
+  lead breaks past 12). It is given up after 20 s, or before it starts when the planned walk strays more than 11
+  blocks from the animal (a wall in the way). That is no failure: the animal is let go where it is, with a warn
+  lead-to.gather-short (:distance from :pos) and :gathered false. :gathered is true when the animal was within
+  :gather-radius, or tied.
+
+  Ends with info lead-to.done and a warn lead-to.gave-up unless the reason is :tied or :unleashed. Result
+  {:reason :animal key :still-led bool :at pos :gathered bool}. Reasons:
+  - :tied, :unleashed: success.
+  - :lead-broke, :lost: as above.
+  - :unreachable: the walk gave up (the animal is still on the lead).
+  - :tie-failed: the post did not take the animal (still on the lead).
+  - :timeout: :timeout-s from the first round (a cut walk leaves the animal on the lead).
+  - :no-fence.
+  - The reason of jobs.animals.leash (:no-lead, :none, :unreachable, :refused, :all-leashed, :timeout) when no
+    animal got on the lead, or of jobs.animals.unleash when the lead would not come off.")
 
 (def args
   {:mob {:doc "the animal's name, such as \"cow\"" :default nil}
@@ -127,9 +123,8 @@
   20)
 
 (def max-reach
-  "The farthest a pull's target lies from the animal. The lead breaks when the body is more than 12 blocks from
-  it (Leashable.LEASH_TOO_FAR_DIST on 26.1; 10 before the 1.21.6 rework). A pull walks with range 1, so the body
-  can end 1 beyond its target: 10 + 1 leaves a block to spare."
+  "The farthest a pull's target lies from the animal. The lead breaks past 12 blocks, and a pull walks with
+  range 1, so 10 leaves a block to spare."
   10)
 
 (def pull-timeout-s
@@ -151,9 +146,8 @@
              :z (+ (:z pos) (* k (- (:z pos) (:z animal-pos))))))))
 
 (def path-reach
-  "How far from the animal any point of a pull's walk may lie. The animal does not move away while pulled, so a
-  path that strays farther than this (a detour round a wall it is jammed at) would break the lead: 12 breaks it,
-  and a pull's own target lies up to 10 + 1 out."
+  "How far from the animal any point of a pull's walk may lie. A path that strays farther (a detour round a wall
+  the animal is jammed at) would break the lead."
   11)
 
 (defn plan-or-nil

@@ -5,47 +5,39 @@
             [engine.path.near :as near]))
 
 (def doc
-  "Feed :count animals of the mob type :mob (a name such as \"cow\") within
-  :radius so that they breed: a one-shot order that starts and ends itself.
-  Each round takes the nearest adult not fed, refused or given up on yet,
-  walks to within 3 blocks (walk-near! range 2, :walk-timeout-s: it opens a shut gate or door on the way and shuts it behind, as go-to does, so a gated pen is entered and its gate left shut; a pen with no way in is :unreachable) and uses the
-  first breeding food of the mob's list that the body carries on it
-  (engine.jobs.animals/breeding-food: wheat for cows, sheep, goats and
-  mooshrooms; carrot, potato or beetroot for pigs; seeds for chickens; carrot,
-  golden carrot or dandelion for rabbits; flowers for bees). Animals are tracked
-  by uuid (entity ids change when chunks reload), by id when it has none. An
-  animal is fed when it enters love mode; it is refused when nothing happens
-  (no-effect: on its breeding cooldown, or already in love); it is given up on
-  when its walk is blocked (:unreachable), when two feedings were out of reach
-  (:unreachable), when it vanished (:gone), when the server said it cannot
-  (:cannot) or the use failed (:failed), or when the food was eaten without
-  love, a baby the sensing missed (:baby, and a warn breed.baby). Babies are
-  never fed. Done (info
-  breed.done, and a warn breed.gave-up with the reason unless it is :fed;
-  hands over {:reason :fed [keys] :refused [keys] :given-up {key reason} :food
-  item :adults n :babies n}) with :reason :fed once :count animals were fed,
-  :timeout after :timeout-s from the first round, :unknown-mob when :mob has
-  no breeding food, :bees-indoors for bees at night or in rain, :no-food
-  when no food of the mob is carried (or it ran out), and, when no candidate
-  is left or fewer than two are present before the first feeding, :unreachable
-  when one was given up on as unreachable, :unpaired when an odd number was
-  fed, :refused when some refused and none ate, else :too-few. It also ends,
-  with the reason of that rule, after three fruitless rounds in a row (blocked
-  walks, refusals, out-of-reach, cannot or failed feedings), before the engine
-  would back it off. The check
-  always passes, so a cut job resumes and ends itself.
-  Animals follow a body holding their food, so the hand is given back: right
-  before the first feeding the job notes what the hand holds, and when it ends
-  (every reason) it equips that item again when still carried, else empties the
-  hand (unequip). The handover then has :hand, :restored (equipped the previous
-  item), :emptied (unequipped, or already empty) or :full (no free slot: the
-  food stays in hand, and a warn breed.hand-full); no :hand when nothing was
-  fed. A cut job restores the hand when it resumes and ends; a job cancelled
-  while cut does not (there is no cancel hook). A run that fed at least two
-  animals leaves one body-memory entry of kind :bred/<mob> (:bred/cow, data
-  {:fed [uuids]}, the engine's default policy: an hour), so a trigger on
-  (or (not (known? (since :bred/cow))) (> (since :bred/cow) 1200)) breeds again
-  20 minutes after the last time; a run that fed nobody or one leaves nothing.")
+  "Feed :count animals of type :mob (such as \"cow\") within :radius so that they breed. A one-shot order that
+  ends itself. The check always passes, so a cut job resumes.
+
+  Each round takes the nearest adult not yet fed, refused or given up on. The body walks to within 3 blocks
+  (like go-to it opens a shut gate or door on the way and shuts it behind). It then feeds the first breeding
+  food of the mob that it carries (engine.jobs.animals/breeding-food: wheat for cows, sheep, goats and
+  mooshrooms; carrot, potato or beetroot for pigs; seeds for chickens; carrot, golden carrot or dandelion for
+  rabbits; flowers for bees). Babies are never fed.
+
+  Per animal:
+  - Fed: it went into love mode.
+  - Refused: nothing happened (on its breeding cooldown, or already in love). It is not tried again.
+  - Given up: :unreachable (walk blocked, or two feedings out of reach), :gone, :cannot, :failed, or :baby
+    (the food was eaten without love; a baby the sensing missed, warn breed.baby).
+
+  Ends with info breed.done and a warn breed.gave-up unless the reason is :fed. Result {:reason :fed [keys]
+  :refused [keys] :given-up {key reason} :food item :adults n :babies n :hand}. Reasons:
+  - :fed: :count animals were fed.
+  - :timeout: :timeout-s from the first round.
+  - :unknown-mob: no breeding food is known for :mob.
+  - :bees-indoors: bees at night or in rain.
+  - :no-food: none carried, or it ran out.
+  - When no candidate is left, or fewer than two adults stand near before the first feeding: :unreachable if one
+    was given up as unreachable, else :unpaired (odd number fed), :refused (some refused, none ate) or :too-few.
+  - The same reasons after three fruitless rounds in a row, before the engine would back the job off.
+
+  Animals follow a body holding their food, so the hand is given back. Before the first feeding the job notes
+  what the hand holds. When it ends it equips that item again if still carried, else empties the hand. :hand is
+  :restored, :emptied or :full (no free slot: the food stays in hand, warn breed.hand-full). There is no :hand
+  when nothing was fed. A job cancelled while cut does not restore the hand.
+
+  A run that fed at least two animals writes one memory entry of kind :bred/<mob> (data {:fed [uuids]}, default
+  one hour). A trigger can use it, e.g. (or (not (known? (since :bred/cow))) (> (since :bred/cow) 1200)).")
 
 (def args
   {:mob {:doc "the mob type to breed, such as \"cow\"" :default nil}

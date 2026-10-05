@@ -6,16 +6,21 @@
             [engine.triggers.pen-gate :as pg]))
 
 (def doc
-  "Shut the planned fence gates that stand open. A planned gate is a cell of a plan whose want is a fence
-  gate (engine.triggers.pen-gate/gate-cells); a gate in no plan is never touched. Without :plan: the open planned
-  gates within :radius of the body (the job of the pen-gate trigger, which holds when one has stood open with the
-  body more than 2 blocks away for 4 s, so a job that holds a gate open on purpose is not fought). With :plan: every
-  open gate of that plan, wherever it is. Each round takes the nearest open gate: walks within :reach of it and
-  clicks it with an empty hand, then reads the block again; a gate the body stands in the cell of is left (reason
-  :standing-in), and one that could not be reached or did not shut after :tries rounds is given up with one warn
-  (shut-gate.gave-up) and a gate-gave-up entry in memory, which keeps the trigger away from it for 10 minutes. Ends
-  with the info shut-gate.done and a result {:shut n :left [{:cell [x y z] :reason r}]}; with a :plan that is missing,
-  or unreadable it warns once (shut-gate.declined) and ends with {:shut 0 :left [] :declined text}.")
+  "Shut the planned fence gates that stand open. A planned gate is a cell of a plan whose want is a fence gate
+  (engine.triggers.pen-gate/gate-cells). A gate in no plan is never touched.
+
+  - Without :plan: the open planned gates within :radius of the body. This is the job of the pen-gate trigger,
+    which waits until a gate has stood open for 4 s with the body more than 2 blocks away, so a job that holds a
+    gate open on purpose is not fought.
+  - With :plan: every open gate of that plan, wherever it is.
+
+  Each round takes the nearest open gate, walks within :reach of it, clicks it with an empty hand and reads the
+  block again. A gate the body stands in is left (reason :standing-in). A gate that could not be reached or did
+  not shut after :tries rounds is given up with one warn shut-gate.gave-up and a :gate-gave-up memory entry,
+  which keeps the trigger away from it for 10 minutes.
+
+  Ends with info shut-gate.done and {:shut n :left [{:cell [x y z] :reason r}]}. A :plan that is missing or
+  unreadable gives one warn shut-gate.declined and {:shut 0 :left [] :declined text}.")
 
 (def args
   {:plan {:doc "id of a plan whose open gates are all shut; nil: the open planned gates of every active plan within :radius" :default nil}
@@ -23,7 +28,7 @@
    :reach {:doc "walk until within this many cells of the gate (the click reaches 4.5 from the eye)" :default 3}
    :tries {:doc "failed rounds on one gate before it is given up" :default 3}})
 
-;; two unreachable gates are six fruitless rounds in a row, which the default backoff (3) would cut short
+;; Two unreachable gates are six fruitless rounds in a row; the default backoff of 3 would cut that short.
 (def backoff {:after 9})
 
 (def quiet-ttl-ms (* 1000 (:quiet-s pg/defaults)))

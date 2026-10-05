@@ -11,32 +11,42 @@
             [jobs.gather.mine :as mine]))
 
 (def doc
-  "Dig a 1-wide stair :steps steps (or down/up to feet height :y) :down or :up along :heading, from where the body
-  stands. A step cuts three cells top first so the body can walk one block forward and one down (or up) with full
-  headroom: down, the next column at the old head, the old feet and the new feet height; up, the cell over the head
-  and the next column at the new feet and head height. Then it walks into the step with jobs.debug.walk-plan and,
-  before cutting the next one, plans the way back to the stair's first cell on a fresh pathWorld: it must be found
-  whole and walkable by the executor (no gap, door or swim), else the stair stops :no-way-back.
-  A step whose floor is air gets a carried building block (dig-in/building-blocks: dirt, cobblestone, stone, planks and
-  the like, never an ore, a valuable or a golden block) placed there after the rules' may-place? (:zone, :footprint ...
-  refuse and stop); the cell under a placed floor is not judged (:cave-below). No such block carried: :no-floor with
-  :filler :none and a :why saying so; a lava or water floor is never bridged.
-  Each step is judged when chosen and every cell again right before its dig: the next floor must be a solid floor
-  (else :no-floor, unless the floor is air and filler is carried: then it is bridged, see below), the cell under it neither air nor fluid (:cave-below) and loaded;
-  a cut cell holding a fluid stops (:fluid-in-cut). Access refusals stop with their reason (:zone, :claim, :footprint,
-  :not-loaded, :no-zones; :ignore-zones? skips all of them but :not-loaded). Hazards are engine.access.rules' (one per
-  fluid beside) plus one the stair adds for its geometry: a falling block over the top cut of the next column, the
-  column the body walks into. Accepted hazards
-  (:accept, a set of :water :lava :falling-block :under-feet) default to #{}: water beside the cut is not taken
-  (live, it flowed into the cut and onto the body's cell, which the walker cannot leave: no swimming; named, the
-  stair digs and stops :fluid-in-cut a round later), lava never is, a falling block would land on the body or refill
-  the cut, and :under-feet never comes up (the stair never digs the block it stands on), so seeing it is a bug.
-  A crop, stem or farmland in a cut cell stops :crop (never dug, zone or not).
-  A block no tool breaks (bedrock, barrier, portal frames, command blocks) stops :unbreakable. A pickaxe block with no pickaxe carried stops :no-tool (by hand stone drops nothing); a dig whose drop has no
-  room stops :inventory-full; a cell refilled 3 times stops :refills. The body's cell is the progress: a resumed
-  round finds its step from where the body stands on the stair line (off it: :off-stair). Dug cells are left and
-  recorded. Hands over {:status :done|:stopped :reason kw :steps n :at [x y z] :dug [{:cell :block}]} plus detail
-  (:cell :hazards :zone :walk ...), also as a :stair.done info or :stair.stopped warn event.")
+  "Dig a 1-wide stair :down or :up along :heading from where the body stands, :steps steps or to feet height :y.
+  The check waits (:no-tool, :no-free-slot) when the next dig lacks a pickaxe or room for the drop.
+
+  A step cuts three cells, top first, so the body can walk one block forward and one down (or up) with full
+  headroom. Then the body walks into the step (jobs.debug.walk-plan). Before cutting the next step it plans the
+  way back to the stair's first cell on a fresh pathWorld. The way must be whole and walkable by the executor
+  (no gap, door or swim), else the stair stops :no-way-back.
+
+  A step's floor must be solid, the cell under it neither air nor fluid (:cave-below), and everything loaded.
+  A floor of air gets a carried building block (dig-in/building-blocks, never an ore or valuable) after the
+  rules' may-place?. The cell under a placed floor is not judged. With no such block: :no-floor with :filler
+  :none. A lava or water floor is never bridged.
+
+  Each step is judged when chosen and each cell again right before its dig. Stops:
+  - Access refusals with their reason: :zone :claim :footprint :not-loaded :no-zones. :ignore-zones? skips all
+    but :not-loaded.
+  - :fluid-in-cut: a cut cell holds a fluid.
+  - :crop: a crop, stem or farmland in a cut cell (never dug, zone or not).
+  - :unbreakable: bedrock, barrier, portal frames, command blocks.
+  - :no-tool: a pickaxe block with no pickaxe carried.
+  - :inventory-full: the drop has no room.
+  - :refills: a cell refilled 3 times.
+  - :hazard: a hazard not in :accept (below).
+  - :off-stair: the body is off the stair line.
+
+  Hazards are the rules' (one per fluid beside) plus a falling block over the top cut of the next column.
+  :accept is a set of :water :lava :falling-block :under-feet, default #{}. Water beside the cut is not taken
+  by default (it can flow into the cut and onto the body's cell, which the walker cannot leave). Lava never is
+  in practice, and a falling block would land on the body or refill the cut. :under-feet never comes up, since
+  the stair never digs the block it stands on.
+
+  The body's cell is the progress: a resumed round finds its step from where the body stands on the stair
+  line. Dug cells are left and recorded.
+
+  Hands over {:status :done|:stopped :reason kw :steps n :at [x y z] :dug [{:cell :block}]} plus detail (:cell
+  :hazards :zone :walk ...), also as a stair.done info or stair.stopped warn event.")
 
 (def args
   {:dir {:doc ":down or :up" :default :down}

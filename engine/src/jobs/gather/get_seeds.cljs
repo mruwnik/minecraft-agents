@@ -7,37 +7,40 @@
 
 (def doc
   "Carry :count more of :item (a planting material) than at the start, renewably.
-  The way depends on the material: wheat_seeds from grass (:sources, 1 drop in 8),
-  sugar_cane and bamboo cut off a wild stand above its base (the second segment
-  from the bottom, so the base grows again and a stand of one is never cut),
-  carrot, potato and beetroot_seeds from a chest only (never from a field). A
-  :chest or :plan always means the chest way; :sources always means the break
-  way; any other material with neither declines. The goal (carried + :count) is
-  fixed in the first round. One step per round: (1) carrying the goal ends
-  :count; (2) the chest way: the withdraw child takes the item from the chest,
-  ending :count when the goal is carried, else :short (warn get-seeds.gave-up
-  with withdraw's reason when it gave up); (3) after a dig batch the
-  collect-drops child picks up the item (and only it) within :collect-radius;
-  (4) :dry-digs digs in a row that brought no new item end :dry (warn
-  get-seeds.gave-up); (5) the nearest source blocks within :radius not skipped
-  (for a stand: the cut cells) are judged by engine.access.rules, and at most
-  :per-round of the permitted ones are walked to (within 3) and dug in order,
-  each judged again right before its dig: a cell in a zone that does not allow
-  :dig or in an active plan's footprint is skipped for good and remembered, one
-  with a hazard not in :accept is skipped; a block whose walk is blocked or
-  partial is skipped and the batch goes on, a dig that is neither dug nor missing
-  skips the block (tall grass takes its other half with it, so a missing one is
-  fine); no block left ends :refused (warn get-seeds.gave-up with :zones and
-  :plans) when any was refused, else :none; two batches in a row where nothing
-  was diggable (no block dug and none skipped: all missing) end :barren (warn
-  get-seeds.gave-up), while a batch of only skipped blocks is not barren.
-  Hands over {:got n :reason r} (info get-seeds.done); :got is how many more are
-  carried than at the start, at least 0.
-  Declines (one warn get-seeds.declined {:reason r} per reason): :no-source (a
-  material of no known way), :no-chest (the chest way with no :chest and no known
-  chest place), :plan-missing, :plan-broken, :no-chest-cell (the
-  :plan has no chest cell), :no-zones (the break way with no zone list read), and :too-short (cane or bamboo
-  in range but no stand of two or more: the job stays queued, a stand may grow).")
+
+  The way depends on the material:
+  - wheat_seeds: break grass (:sources, 1 drop in 8).
+  - sugar_cane and bamboo: cut a wild stand above its base (the second segment from the bottom, so the base
+    grows again; a stand of one is never cut).
+  - carrot, potato, beetroot_seeds: take from a chest only, never from a field.
+  - A :chest or :plan always means the chest way. :sources always means the break way. Any other material
+    with neither declines.
+
+  The goal (carried + :count) is fixed in the first round. One step per round:
+  1. Carrying the goal ends :count.
+  2. Chest way: the withdraw child takes the item. It ends :count when the goal is carried, else :short (warn
+     get-seeds.gave-up with withdraw's reason when it gave up).
+  3. After a dig batch the collect-drops child picks up the item (only it) within :collect-radius.
+  4. :dry-digs digs in a row that brought no new item end :dry (warn get-seeds.gave-up).
+  5. Otherwise a batch: the nearest source blocks within :radius not skipped (for a stand: its cut cells) are
+     judged by engine.access.rules. At most :per-round of the permitted ones are walked to (within 3) and
+     dug, each judged again right before its dig.
+
+  Skipped blocks: a cell in a zone that bars :dig or in an active plan's footprint is skipped for good and
+  remembered. So is one with a hazard not in :accept, one whose walk is blocked or partial, and one whose dig
+  is neither dug nor missing (tall grass takes its other half with it, so missing is fine).
+
+  No block left ends :refused (warn get-seeds.gave-up with :zones and :plans) when any was refused, else
+  :none. Two batches in a row where nothing was diggable (none dug, none skipped: all missing) end :barren
+  (warn get-seeds.gave-up). A batch of only skipped blocks is not barren.
+
+  Hands over {:got n :reason r} (info get-seeds.done). :got is how many more are carried than at the start, at
+  least 0.
+
+  Declines (one warn get-seeds.declined {:reason r} per reason): :no-source (a material with no known way),
+  :no-chest (chest way with no :chest and no known chest place), :plan-missing, :plan-broken,
+  :no-chest-cell (the :plan has no chest cell), :no-zones (break way with no zone list read), and :too-short
+  (cane or bamboo in range but no stand of two or more: the job stays queued, a stand may grow).")
 
 (def args
   {:item {:doc "the planting material to gather" :default "wheat_seeds"}

@@ -6,31 +6,31 @@
             [jobs.combat.hunt :as hunt]))
 
 (def doc
-  "Keep one pen of one kind of animal in order. The pen is the :box; one run is
-  one convergent pass over five steps in a fixed order, each a child job run one
-  round at a time: :breed (jobs.animals.breed, 2 animals) when adults plus babies
-  are below :target, there are at least 2 adults and the breeding food is carried;
-  :cull (jobs.animals.cull, :keep the larger of 2 and :target minus the babies)
-  when the adults exceed that; :shear (jobs.animals.shear) for sheep when shears
-  are carried and an adult is not sheared; :collect (jobs.forestry.collect-drops,
-  only the item names lying in the box) when some lie there; :deposit
-  (jobs.storage.deposit) when a :chest is given and produce of the kind (the
-  hunt drops table plus eggs for chickens; never tools or breeding food) is
-  carried above its :keep entry. A step whose conditions do not hold is skipped
-  and booked {:skipped reason} (:at-target, :too-few-adults, :no-food,
-  :within-target, :not-sheep, :no-shears, :none-shearable, :no-drops, :no-chest,
-  :nothing-to-store, or :declined when the child declined). The check passes when
-  a box is given and some step would run, and always once started (a cut job
-  resumes); otherwise the job declines and does nothing, so it is cheap under
-  repeat. A step under way is not re-decided, it runs until its child is done.
-  Hands over {:mob :target :adults :babies (live census in the box) :steps
-  {step summary}} (info tend.done) and ends :done, also when every step was
-  skipped after the first. Summaries: breed {:fed n :reason}, cull {:killed
-  :remaining :reason}, shear {:shorn n :reason :collected}, collect {:collected},
-  deposit {:gave-up :reason}. Known limit: the box is the only pen there is, an
-  animal inside it may still be outside the fence, and breed, shear and
-  collect-drops look around the body (a radius covering the box), so animals of
-  the kind or items just outside the box can be fed, sheared or picked up.")
+  "Keep one pen of one kind of animal in order. The pen is :box. One run is one pass over five steps in this
+  order, each a child job run one round at a time. A step under way is not re-decided.
+
+  - :breed (jobs.animals.breed, 2 animals): adults plus babies are below :target, at least 2 adults, breeding
+    food carried.
+  - :cull (jobs.animals.cull): adults exceed :keep, the larger of 2 and :target minus the babies.
+  - :shear (jobs.animals.shear): sheep, shears carried, an adult not sheared.
+  - :collect (jobs.forestry.collect-drops): items lie in the box, only those item names.
+  - :deposit (jobs.storage.deposit): a :chest is given and produce of the kind is carried above its :keep
+    entry. Produce is the hunt drops table plus eggs for chickens, never tools or breeding food.
+
+  A step whose conditions do not hold is skipped and booked {:skipped reason}: :at-target, :too-few-adults,
+  :no-food, :within-target, :not-sheep, :no-shears, :none-shearable, :no-drops, :no-chest, :nothing-to-store,
+  or :declined when the child declined.
+
+  The check passes when a box is given and some step would run, and always once started. Otherwise it declines,
+  so the job is cheap under repeat.
+
+  Ends :done with info tend.done and {:mob :target :adults :babies (live census in the box) :steps {step
+  summary}}. Summaries: breed {:fed n :reason}, cull {:killed :remaining :reason}, shear {:shorn n :reason
+  :collected}, collect {:collected}, deposit {:gave-up :reason}.
+
+  Limit: the box is the only pen there is. An animal inside it may be outside the fence. Breed, shear and
+  collect-drops look in a radius around the body that covers the box, so animals or items just outside it can
+  be fed, sheared or picked up.")
 
 (def args
   {:mob {:doc "mob type name of the animals in the pen" :default "cow"}

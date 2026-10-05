@@ -4,23 +4,21 @@
             [engine.jobs.pen :as pen]))
 
 (def doc
-  "Read-only: say whether an animal can walk out of a pen, by flood-filling what
-  a cow can walk (engine.jobs.pen has the rules: fences, walls and closed gates
-  1.5 high, an open gate a way out, a block, slab or carpet stepped onto, a drop
-  of more than 3 not taken) from the feet cell :at [x y z], or from every
-  surface inside :box {:min :max}, where a step out of the box is a leak. The
-  fill stops after :max-cells cells: a pen bigger than that is not closed with
-  reason :unbounded (a fill without a box that finds no wall either side of a
-  gap says that too). Hands over and emits (info pen-check.done) {:closed?
-  :reason :cells :leaks :gates}: :reason is nil when closed, else :leak
-  (:leaks [{:pos {:x :y :z} :why}], why one of :open-gate :gap :climb :open
-  :unloaded; at most 12 listed, :leaks-total when more), :unbounded, :unloaded
-  or :no-start (:at is no floor to stand on); :cells counts the inside cells
-  (for a leaky pen without a box: the cells it would enclose with its leaks,
-  open gates and gaps, shut; 0 when shutting up to 4 rounds of them does not close it,
-  as with a low wall all round); :gates lists every fence gate in or beside
-  those cells with :open?. It declines without :at and :box, and never moves,
-  digs or places.")
+  "Read-only: say whether an animal can walk out of a pen. Flood-fills what a cow can walk (rules in
+  engine.jobs.pen: fences, walls and closed gates are 1.5 high, an open gate is a way out, a drop of more than 3
+  is not taken) from the feet cell :at [x y z], or from every surface inside :box, where a step out of the box
+  is a leak. Never moves, digs or places. Declines without :at and :box.
+
+  The fill stops after :max-cells cells: a bigger pen is not closed, reason :unbounded. A fill without a box
+  that finds no wall either side of a gap says that too.
+
+  Hands over and emits (info pen-check.done) {:closed? :reason :cells :leaks :gates}:
+  - :reason is nil when closed, else :leak, :unbounded, :unloaded or :no-start (:at is no floor to stand on).
+  - :leaks lists {:pos {:x :y :z} :why}, why one of :open-gate :gap :climb :open :unloaded. At most 12 are
+    listed, :leaks-total gives the count when more.
+  - :cells counts the inside cells. For a leaky pen without a box it counts the cells the pen would enclose with
+    its leaks shut, and 0 when shutting up to 4 rounds of them does not close it (a low wall all round).
+  - :gates lists every fence gate in or beside those cells with :open?.")
 
 (def args
   {:at {:doc "feet cell [x y z] of a spot inside the pen (the floor's top, where the animal's feet are)" :default nil}

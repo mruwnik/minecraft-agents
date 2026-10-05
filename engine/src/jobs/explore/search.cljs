@@ -6,21 +6,33 @@
 
 (def doc
   "Look for :count things named :target (a block or entity name, or several) by walking legs from where the job
-  starts (the origin). Each step looks around (blocks and entities with those names within :scan-radius), writes
-  what it saw as :seen notes and the spot as a :searched note (engine.notes), and ends when :count are found;
-  else it chooses the next leg and walks it with jobs.movement.go-to as a child (range 2), one child round per
-  round. Legs are :spacing apart: :spiral rings round the origin, or :outward ahead along :heading (then the
-  sides). A leg is never tried twice, never beyond :max-distance (XZ) of the origin, and is skipped when a live
-  :searched note of any body (this one included) listing every target name lies within half its radius
-  (:skipped). A leg needs a standing cell in its column within 12 of the feet, read top down through leaves:
-  an unloaded, wet or standless column is recorded failed (:not-loaded, :wet, :no-surface) and the next
-  candidate is tried in the same round; a walk go-to gives up on is recorded :unreachable, and three of those in
-  a row end the search (:stuck). With :use-notes, live :seen notes of a target within :max-distance count as
-  found (:noted true, :by). Ends with the result {:reason :found|:not-found :why :found [{:what :pos :id?
-  :noted? :by?}] :coverage {:legs :scans :failed [{:pos :reason}] :skipped :farthest}}, :why one of :distance
-  (no leg left), :legs (:max-legs walked), :time (:timeout-s since the first round), :stuck, :bad-args; info
-  search.done or warn search.not-found. Memory: :origin :started :legs :scans :found :tried :failed :skipped
-  :farthest :failed-in-row and :leg while a walk is under way (a cut or restart resumes it).")
+  starts (the origin).
+
+  Each step looks around (blocks and entities with those names within :scan-radius), writes what it saw as
+  :seen notes and the spot as a :searched note (engine.notes), and ends when :count are found. Otherwise it
+  chooses the next leg and walks it with jobs.movement.go-to as a child (range 2), one child round per round.
+
+  Legs are :spacing apart: :spiral rings round the origin, or :outward ahead along :heading, then the sides. A
+  leg is never tried twice and never goes beyond :max-distance (XZ) of the origin. It is skipped (:skipped)
+  when a live :searched note of any body, this one included, listing every target name lies within half its
+  radius.
+
+  A leg needs a standing cell in its column within 12 of the feet, read top down through leaves. An unloaded,
+  wet or standless column is recorded failed (:not-loaded, :wet, :no-surface) and the next candidate is tried
+  in the same round. An unloaded column is not tried but looked at again later. When only unloaded ones are
+  left the round ends and the check declines for 2 s, up to :load-wait-s (a body just logged in has no chunks
+  yet), then the search ends :not-loaded. A walk go-to gives up on is recorded :unreachable. Three of those in
+  a row end the search (:stuck).
+
+  With :use-notes, live :seen notes of a target within :max-distance count as found (:noted true, :by).
+
+  Ends with {:reason :found|:not-found :why :found [{:what :pos :id? :noted? :by?}] :coverage {:legs :scans
+  :failed [{:pos :reason}] :skipped :farthest}}, info search.done or warn search.not-found. :why is one of
+  :distance (no leg left), :legs (:max-legs walked), :time (:timeout-s since the first round), :stuck,
+  :not-loaded or :bad-args.
+
+  Memory: :origin :started :legs :scans :found :tried :failed :skipped :farthest :failed-in-row, and :leg while
+  a walk is under way, so a cut or restart resumes it.")
 
 (def args
   {:target {:doc "a block or entity name, or several (a vector or set)" :default nil}

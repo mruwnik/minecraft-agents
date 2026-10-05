@@ -6,29 +6,31 @@
             [engine.jobs.util :as u]))
 
 (def doc
-  "Place one block at :pos ([x y z] or {:x :y :z}): :item, or the first carried of :any-of. One act per round (a
-  jobs.movement.go-to round, a jobs.blocks.dig round clearing the cell, or the place).
+  "Place one block at :pos ([x y z] or {:x :y :z}): :item, or the first carried of :any-of. One act per round: a
+  jobs.movement.go-to round, a jobs.blocks.dig round clearing the cell, or the place.
 
-  The check says whether it can run, and when it cannot it waits with a reason (ctx/wait; job.waiting and observe
-  show it) and places nothing:
-    {:reason :need :item name :pos} or {:reason :need :any-of [names] :pos}  the item is not carried
-    {:reason :not-allowed :pos :by :zone|:claim|:footprint|:no-zones ...}  zones, claims or another plan's footprint
-      refuse the place (:for-plan's own footprint does not; :ignore-zones? skips the rule)
-    {:reason :occupied :pos :block name}  a block that is neither air, a fluid nor a plant or snow layer fills the cell
-    {:reason :own-body :pos}  the body stands in the cell
-    {:reason :no-support :pos}  no solid neighbour to place against
-    {:reason :unreachable :pos :why kw}  the go-to child gave up; the wait lasts while the body stands where it gave up
-    {:reason :not-loaded :pos}
-    and while a plant is being cleared, the jobs.blocks.dig child's own wait reason.
-  A plant, flower or snow layer in the cell (engine.jobs.blocks/clearable) is dug first with a jobs.blocks.dig child
-  (no tool needed, the drop is not collected). Out of reach, the round walks within 3 cells (go-to child). In reach it
-  places through engine.jobs.tidy/place!, so a block placed in another's zone with :ignore-zones? is recorded for
-  jobs.survival.restore-broken. Ends with info blocks.place.done and the result {:placed true|false :pos :item :reason};
-  :reason is :placed, :already (the cell holds the block: nothing done), :bad-args (with a blocks.place.declined warn),
-  :clear-failed (the plant could not be dug) or :failed (the primitive refused the place, with its :status: the
-  caller decides whether to try again).
-  Fetching a missing item is not done yet: a :fetch option (items.obtain as a child) will hook in where the :need
-  wait is made (needs).")
+  The check waits with a reason (ctx/wait; job.waiting and observe show it) and places nothing when:
+  - {:reason :need :item name :pos} or {:reason :need :any-of [names] :pos}: the item is not carried.
+  - {:reason :not-allowed :pos :by :zone|:claim|:footprint|:no-zones ...}: zones, claims or another plan's
+    footprint refuse the place. :for-plan's own footprint does not. :ignore-zones? skips the rule.
+  - {:reason :occupied :pos :block name}: a block that is neither air, a fluid, a plant nor a snow layer fills
+    the cell.
+  - {:reason :own-body :pos}: the body stands in the cell.
+  - {:reason :no-support :pos}: no solid neighbour to place against.
+  - {:reason :unreachable :pos :why kw}: the go-to child gave up. The wait lasts while the body stands where it
+    gave up.
+  - {:reason :not-loaded :pos}.
+  - While a plant is being cleared, the jobs.blocks.dig child's own wait reason.
+
+  A plant, flower or snow layer in the cell (engine.jobs.blocks/clearable) is dug first with a jobs.blocks.dig
+  child (no tool needed, the drop is not collected). Out of reach, the round walks within 3 cells (go-to child).
+  In reach it places through engine.jobs.tidy/place!, so a block placed in another's zone with :ignore-zones? is
+  recorded for jobs.survival.restore-broken.
+
+  Ends with info blocks.place.done and {:placed true|false :pos :item :reason}. :reason is :placed, :already
+  (the cell holds the block: nothing done), :bad-args (with a blocks.place.declined warn), :clear-failed (the
+  plant could not be dug) or :failed (the primitive refused, with its :status). The caller decides whether to
+  try again.")
 
 (def args
   {:pos {:doc "the cell to fill, [x y z] or {:x :y :z}" :default nil}
@@ -51,8 +53,7 @@
       :else {:pos pos :items items})))
 
 (defn needs
-  "What the body lacks: {:item name} or {:any-of [names]} when none of items is carried, else nil. The hook for a
-  :fetch option (B2): a parent or this job may obtain it instead of waiting."
+  "What the body lacks: {:item name} or {:any-of [names]} when none of items is carried, else nil."
   [c items]
   (let [carried (set (map :name (u/inventory (:primitives c))))]
     (when-not (some carried items)

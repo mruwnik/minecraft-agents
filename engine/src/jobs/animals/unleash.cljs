@@ -5,29 +5,34 @@
             [engine.path.near :as near]))
 
 (def doc
-  "Take the lead off the animals within :radius that are on this body's lead
-  or tied to a fence knot, and pick the leads up again: a one-shot order that
-  starts and ends itself. :mob limits it to one kind of animal (any when nil),
-  :animal to one animal by its uuid (any when nil). Each round takes the nearest
-  such animal not given up on, walks to within 3 blocks of what is clicked
-  (engine walker, range 2, doors :shut, steers bounded by :walk-timeout-s) and clicks it with an empty hand: the
-  animal itself when it is on this body's lead, else the leash_knot it is tied
-  to (the click removes the knot and hands every animal tied to it to this body's lead, a second click on the animal then takes the lead off, as on 26.1). An animal tied to a
-  knot the sensing cannot see is given up on (:no-knot). A click on the animal counts only
-  when the sensing then shows it off its lead; a click on the knot when it then shows it on
-  this body's lead (the next round takes it off). An animal is given up on when
-  its walk is blocked (:unreachable), when two clicks were out of reach
-  (:unreachable), when the click freed nothing within 1.5 s (:no-effect), when it vanished
-  (:gone) or when the server said it cannot (:cannot) or the use failed
-  (:failed). Unless :collect is false, it then waits 0.8 s for the drops to show and runs jobs.forestry.collect-drops
-  for the leads in radius and ends. Done (info unleash.done, and a warn
-  unleash.gave-up with the reason unless it is :unleashed; hands over {:reason
-  :freed [keys] :given-up {key reason} :collected n :leads carried-at-the-end}, :collected the leads gained since the first round, also one picked up the moment it dropped) with :reason :unleashed
-  when some animal was freed, :timeout after :timeout-s from the first round
-  (without collecting), and, with nothing freed, :unreachable when one was
-  given up on as unreachable, :refused when others were given up on, else
-  :none. It also ends after three fruitless rounds in a row. The check always
-  passes, so a cut job resumes and ends itself.")
+  "Take the lead off the animals within :radius that are on this body's lead or tied to a fence knot, and pick
+  the leads up again. A one-shot order that starts and ends itself. The check always passes.
+
+  :mob limits it to one kind (any when nil), :animal to one animal by uuid (any when nil).
+
+  Each round takes the nearest such animal not given up on. The body walks to within 3 blocks of what it
+  clicks (doors :shut, each steer bounded by :walk-timeout-s) and clicks with an empty hand:
+  - An animal on this body's lead is clicked itself. It counts when the sensing then shows it off the lead
+    (checked for up to 1.5 s).
+  - An animal tied to a knot: the knot is clicked. That removes the knot and hands every animal tied to it to
+    this body's lead, and the next round takes the lead off. An animal tied to a knot the sensing cannot see is
+    given up on (:no-knot).
+
+  An animal is given up on when its walk is blocked or two clicks were out of reach (:unreachable), the click
+  freed nothing (:no-effect), it vanished (:gone), the server said it cannot (:cannot) or the use failed
+  (:failed).
+
+  Unless :collect is false the job then waits 0.8 s for the drops and runs jobs.forestry.collect-drops for the
+  leads in :radius.
+
+  Ends with info unleash.done and a warn unleash.gave-up unless the reason is :unleashed. Result {:reason :freed
+  [keys] :given-up {key reason} :collected n :leads n}. :collected is the leads gained since the first round,
+  :leads the leads carried at the end. Reasons:
+  - :unleashed: some animal was freed.
+  - :timeout: :timeout-s from the first round (no collecting).
+  - With nothing freed: :unreachable if one was given up as unreachable, else :refused (others given up) or
+    :none.
+  - It also ends after three fruitless rounds in a row.")
 
 (def args
   {:mob {:doc "the animal's name, such as \"cow\"; any animal when nil" :default nil}

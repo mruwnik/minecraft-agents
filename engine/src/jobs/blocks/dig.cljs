@@ -7,33 +7,32 @@
             [engine.jobs.util :as u]))
 
 (def doc
-  "Dig the one block at :pos ([x y z] or {:x :y :z}) and pick up what it dropped, as a player would: one act per
-  round (a jobs.movement.go-to round, an equip and the dig, or a jobs.forestry.collect-drops round).
+  "Dig the one block at :pos ([x y z] or {:x :y :z}) and pick up what it dropped, as a player would. One act per
+  round: a jobs.movement.go-to round, an equip and the dig, or a jobs.forestry.collect-drops round.
 
-  The check says whether it can run, and when it cannot it waits with a reason (ctx/wait; job.waiting and observe
-  show it) and never digs:
-    {:reason :not-allowed :pos :by :zone|:claim|:footprint|:no-zones ...}  zones, claims or another plan's footprint
-      refuse the dig (engine.jobs.access; :for-plan's own footprint does not, :ignore-zones? skips the rule)
-    {:reason :hazard :pos :hazards [kw ..]}  the rules report a dig hazard not in :accept (:fluid-adjacent,
-      :falling-block, :under-feet)
-    {:reason :no-tool :needs item :block name}  with :need-drop, no carried tool harvests the block
-      (tools/can-harvest?); :needs is the cheapest tool that does
-    {:reason :inventory-full :pos}  with :collect, no free slot and no carried stack of the block's name to grow
-    {:reason :unreachable :pos :why kw}  the go-to child gave up (or arrived with the block still out of reach); the
-      wait lasts while the body stands where it gave up, so a body moved by anyone tries again
-    {:reason :not-loaded :pos}
-  Out of reach, the round walks within 3 cells (go-to child, which opens and shuts doors). In reach, it holds the
-  best carried tool for the block (tools/equip-for!) and digs through engine.jobs.tidy/dig!, so a dig of another's
-  block made with :ignore-zones? is recorded for jobs.survival.restore-broken. With :collect, the next rounds pick up
-  the dig's drops (jobs.forestry.collect-drops child, only the item entities that appeared with this dig, by id: an
-  item that lay there before, or is dropped there by anyone else, is never taken). The room check judges what the
-  block drops by minecraft-data (stone: cobblestone; leaves: nothing), not its own name.
-  Ends with info blocks.dig.done and the result {:dug true|false :pos :block :reason :collected n}; :reason is
-  :dug, :already-clear (air there, nothing done), :fluid (a fluid is not dug), :cannot (bedrock and the like), or
-  :bad-args (with a blocks.dig.declined warn). A dig the primitive refuses (a timeout, a failure) ends :failed with
-  its :status at once: the caller decides whether to try again.
-  Fetching a missing tool is not done yet: a :fetch option (items.get-tool as a child) will hook in where the :no-tool
-  wait is made (needs).")
+  The check waits with a reason (ctx/wait; job.waiting and observe show it) and never digs when:
+  - {:reason :not-allowed :pos :by :zone|:claim|:footprint|:no-zones ...}: zones, claims or another plan's
+    footprint refuse the dig (engine.jobs.access). :for-plan's own footprint does not. :ignore-zones? skips the
+    rule.
+  - {:reason :hazard :pos :hazards [kw ..]}: a dig hazard not in :accept (:fluid-adjacent :falling-block
+    :under-feet).
+  - {:reason :no-tool :needs item :block name}: with :need-drop, no carried tool harvests the block
+    (tools/can-harvest?). :needs is the cheapest tool that does.
+  - {:reason :inventory-full :pos}: with :collect, no free slot and no carried stack of the block's drop to
+    grow. The drop is judged by minecraft-data (stone gives cobblestone, leaves nothing).
+  - {:reason :unreachable :pos :why kw}: the go-to child gave up, or arrived with the block still out of reach.
+    The wait lasts while the body stands where it gave up, so a body moved by anyone tries again.
+  - {:reason :not-loaded :pos}.
+
+  Out of reach, the round walks within 3 cells (go-to child, which opens and shuts doors). In reach it holds the
+  best carried tool (tools/equip-for!) and digs through engine.jobs.tidy/dig!, so a dig of another's block with
+  :ignore-zones? is recorded for jobs.survival.restore-broken. With :collect the next rounds pick up the drops
+  (jobs.forestry.collect-drops child, only the item entities that appeared with this dig, by id).
+
+  Ends with info blocks.dig.done and {:dug true|false :pos :block :reason :collected n}. :reason is :dug,
+  :already-clear (air there, nothing done), :fluid (a fluid is not dug), :cannot (bedrock and the like) or
+  :bad-args (with a blocks.dig.declined warn). A dig the primitive refuses (a timeout, a failure) ends :failed
+  with its :status at once. The caller decides whether to try again.")
 
 (def args
   {:pos {:doc "the block to dig, [x y z] or {:x :y :z}" :default nil}
@@ -46,8 +45,7 @@
 (def collect-radius 8)
 
 (defn needs
-  "What the body lacks to dig block-name with these args: {:tool item} or nil. The hook for a :fetch option (B2):
-  a parent or this job may obtain it instead of waiting."
+  "What the body lacks to dig block-name with these args: {:tool item} or nil."
   [c block-name]
   (when (and (:need-drop (:args c)) (not (tools/can-harvest? (:primitives c) block-name)))
     {:tool (tools/harvest-need (map :name (u/inventory (:primitives c)))

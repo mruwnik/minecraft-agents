@@ -5,27 +5,37 @@
             [engine.places :as places]))
 
 (def doc
-  "Put one block into a WANTED :state, not click it once: the state is read first and a block already there is left
-  alone (a run that finds it done ends at once, :already, with no click). :pos is [x y z] or {:x :y :z}. States by
-  block: :open / :closed for fence gates, doors and trapdoors of every wood and of copper (the property open; a door
-  is two blocks that move together, either half may be named; a double door is two blocks, so two runs); :on / :off
-  for a lever (powered); :press for a button (powered, which it drops by itself after 1 to 1.5 s: the press counts
-  when the click shows it powered). Iron doors and iron trapdoors ignore a hand and are declined :needs-redstone;
-  any other block is :not-toggleable; a state the block cannot have is :bad-state with :valid. Closing a door, gate
-  or trapdoor in whose column the body stands is declined :standing-in; opening never is. Working a gate in someone's
-  zone or in a plan's footprint is permitted (no block type changes, so zones and footprints do not apply). The body
-  walks within :reach of the block (jobs.movement.go-to child with :doors :never, so the approach opens nothing; a walk that gives up is :unreachable), then clicks
-  ONCE with an empty hand; a click the game answers out of reach (it measures from the eye to the block's middle, so
-  a body stopped at the edge of :reach can be short) walks one cell closer and clicks again, twice at most (never
-  closer than 1), then is :unreachable (useOn with no item, which never tosses what was held: a hand that cannot be emptied is
-  :no-room) and reads the block again. No second click: a click that changed nothing (an iron-like block, a
-  protected area, lag; these cannot be told apart) is :unchanged, a block that moved but not to the wanted state
-  (somebody else flipped it just before) is :wrong-way, each with one warn toggle.gave-up. Other reasons: :gone
-  (the block vanished or unloaded), :refused (useOn said cannot or no-item). Before any walk: warn toggle.declined
-  with :reason :bad-args, :not-loaded, :no-block, :not-toggleable, :needs-redstone, :bad-state or :standing-in. Ends
-  with info toggle.done (:changed or :already) and the result {:status :done|:declined|:gave-up :reason :pos :block
-  :wanted :was :now}. The pen-gate trigger may shut a planned pen gate that this job opened once the body is more
-  than 2 blocks away for 4 s.")
+  "Put one block into a WANTED :state. The state is read first. A block already there is left alone and the run
+  ends :already with no click. :pos is [x y z] or {:x :y :z}.
+
+  States by block:
+  - :open / :closed: fence gates, doors and trapdoors of every wood and of copper. A door is two blocks that
+    move together, either half may be named. A double door is two blocks, so two runs.
+  - :on / :off: a lever.
+  - :press: a button. It counts when the click shows it powered.
+
+  Iron doors and iron trapdoors ignore a hand (:needs-redstone). Any other block is :not-toggleable. A state the
+  block cannot have is :bad-state with :valid. Closing a door, gate or trapdoor the body stands in is declined
+  :standing-in (the check waits for it), opening never is. Zones and footprints do not apply, since no block
+  type changes.
+
+  The body walks within :reach of the block (jobs.movement.go-to child with :doors :never, so the approach
+  opens nothing). A walk that gives up is :unreachable. It then clicks once with an empty hand (useOn with no
+  item, which never tosses what was held; a hand that cannot be emptied is :no-room) and reads the block again.
+  A click the game answers out of reach (it measures from the eye to the block's middle) walks one cell closer
+  and clicks again, twice at most and never closer than 1, then is :unreachable.
+
+  There is no second click. A click that changed nothing (iron-like block, protected area or lag, which cannot
+  be told apart) is :unchanged. A block that moved but not to the wanted state is :wrong-way. Both give one
+  warn toggle.gave-up. Other reasons: :gone (block vanished or unloaded), :refused (useOn said cannot or
+  no-item).
+
+  Declines before any walk with warn toggle.declined and :reason :bad-args, :not-loaded, :no-block,
+  :not-toggleable, :needs-redstone, :bad-state or :standing-in.
+
+  Ends with info toggle.done (:changed or :already) and the result {:status :done|:declined|:gave-up :reason
+  :pos :block :wanted :was :now}. The pen-gate trigger may shut a planned pen gate this job opened once the
+  body has been more than 2 blocks away for 4 s.")
 
 (def args
   {:pos {:doc "the block, [x y z] or {:x :y :z}; either half of a door" :default nil}

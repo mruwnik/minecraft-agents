@@ -5,27 +5,26 @@
             [engine.path.near :as near]))
 
 (def doc
-  "Put a lead on one animal of the mob type :mob (a name such as \"cow\")
-  within :radius and end: a one-shot order that starts and ends itself. Each
-  round takes the nearest animal not on a lead already (to anyone), not
-  given up on and not named in :skip (uuids or ids), walks to within 3 blocks (engine walker, range 2, doors :shut, steers bounded by :walk-timeout-s) and
-  uses the lead the body carries on it. Animals are tracked by uuid (entity
-  ids change when chunks reload), by id when it has none. The use counts only
-  when the sensing then shows the animal on this body's lead (leashedToMe); an
-  animal that used the lead without it is given up on (:unconfirmed). An
-  animal is given up on when its walk is blocked (:unreachable), when two
-  attempts were out of reach (:unreachable), when nothing happened
-  (:no-effect), when it vanished (:gone), or when the server said it cannot
-  (:cannot) or the use failed (:failed). Done (info leash.done, and a warn
-  leash.gave-up with the reason unless it is :leashed; hands over {:reason
-  :animal key :id entity-id :given-up {key reason}}) with :reason :leashed
-  once an animal is on the lead, :no-lead when no lead is carried (or the
-  server found none), :timeout after :timeout-s from the first round, and,
-  when no candidate is left, :unreachable when one was given up on as
-  unreachable, :refused when others were given up on, :all-leashed when
-  animals are present but all are on leads, else :none. It also ends, with
-  the reason of that rule, after three fruitless rounds in a row. The check
-  always passes, so a cut job resumes and ends itself.")
+  "Put a lead on one animal of type :mob (such as \"cow\") within :radius and end. A one-shot order that starts and
+  ends itself. The check always passes, so a cut job resumes.
+
+  Each round takes the nearest animal that is not on anyone's lead, not given up on and not in :skip (uuids or
+  ids). The body walks to within 3 blocks (doors :shut, each steer bounded by :walk-timeout-s) and uses the lead
+  it carries. The use counts only when the sensing then shows the animal on this body's lead. Animals are
+  tracked by uuid, by id when it has none.
+
+  An animal is given up on when its walk is blocked or two attempts were out of reach (:unreachable), nothing
+  happened (:no-effect), it vanished (:gone), the server said it cannot (:cannot), the use failed (:failed) or
+  the lead did not show afterwards (:unconfirmed).
+
+  Ends with info leash.done and a warn leash.gave-up unless the reason is :leashed. Result {:reason :animal key
+  :id entity-id :given-up {key reason}}. Reasons:
+  - :leashed: an animal is on the lead.
+  - :no-lead: no lead carried, or the server found none.
+  - :timeout: :timeout-s from the first round.
+  - When no candidate is left: :unreachable if one was given up as unreachable, else :refused (others given
+    up), :all-leashed (animals present but all led) or :none.
+  - The same reasons after three fruitless rounds in a row.")
 
 (def args
   {:mob {:doc "the animal's name, such as \"cow\"" :default nil}

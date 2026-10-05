@@ -6,19 +6,29 @@
             [engine.jobs.util :as u]))
 
 (def doc
-  "Pillar up :height blocks from the cell the body stands in, by jump-placing one block at a time under itself
-  (jumpPlace with a count of 1). Every block is written to the scaffold ledger (engine.access.ledger, body memory) as
-  an intent before its jump and confirmed when the cell is seen holding it, so a cleanup can take the pillar back
-  even after a cut or a restart; a restart between intent and placement is decided from the cell. One block per
-  round. Before each block: the whole rest of the column (feet up to the top) must be permitted (no zone that does not
-  allow :place, no other plan's footprint, a zone list loaded), the body must stand on a solid block, the cell above
-  the head and the one above that must be clear (the new feet and head cells), a block must be carried, and the cell
-  must pass engine.access.rules/may-place?. Material: :item, or without it dirt while any is carried, then
-  cobblestone. Ends with the result {:status :done|:gave-up :reason :cells [[x y z] ...] :built n :height n}, :cells
-  being this job's confirmed blocks, lowest first; events pillar.done (info) and pillar.gave-up (warn, with :reason
-  and, by reason, :at :block :zone :short :detail). Gives up with :too-few-blocks (:short still owed), :ceiling (stops
-  below it), :not-on-solid, :zone, :footprint, :no-zones, :not-loaded, :not-replaceable, :off-column (the body left
-  the column it started in), :place-failed (3 failed jumps in a row, :detail the primitive's reason) or :bad-args.")
+  "Pillar up :height blocks from the cell the body stands in, by jump-placing one block at a time under itself.
+  One block per round.
+
+  Every block is written to the scaffold ledger (engine.access.ledger, body memory) as an intent before its
+  jump and confirmed when the cell is seen holding it, so a cleanup can take the pillar back after a cut or
+  restart. A restart between intent and placement is decided from the cell.
+
+  Before each block it checks:
+  - the whole rest of the column, feet up to the top, is permitted (no zone that bars :place, no other plan's
+    footprint, a zone list loaded)
+  - the body stands on a solid block
+  - the two cells above the head are clear
+  - a block is carried: :item, or without it dirt while any is carried, then cobblestone
+  - the cell passes engine.access.rules/may-place?
+
+  The check waits (:too-few-blocks, with :short) when blocks are missing. Every other give-up is left to the
+  round, so a parent running this as a child reads the result.
+
+  Ends with {:status :done|:gave-up :reason :cells [[x y z] ...] :built n :height n}. :cells are this job's
+  confirmed blocks, lowest first. Events: pillar.done (info) and pillar.gave-up (warn, with :reason and by
+  reason :at :block :zone :short :detail). Gives up with :too-few-blocks (:short still owed), :ceiling,
+  :not-on-solid, :zone, :footprint, :no-zones, :not-loaded, :not-replaceable, :off-column (the body left the
+  column it started in), :place-failed (3 failed jumps in a row, :detail the primitive's reason) or :bad-args.")
 
 (def args
   {:height {:doc "blocks to rise, 1 to 64" :default 1}

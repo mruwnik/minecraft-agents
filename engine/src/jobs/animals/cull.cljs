@@ -5,32 +5,28 @@
             [jobs.combat.hunt :as hunt]))
 
 (def doc
-  "Thin a herd of one kind (:mob) down to :keep adults, collecting the drops.
-  The herd is the animals of the kind inside a bound: :box ({:min {:x :y :z}
-  :max {:x :y :z}}, inclusive) when set, else :radius blocks around :centre
-  ({:x :z}, horizontal) when set, else :radius blocks around the body. Babies
-  are never targets and never counted as adults (an entity is an adult unless it
-  reports baby true). The check passes while more than :keep adults are in the
-  bound, and always once the job has started (a cut job resumes); otherwise it
-  declines and the job does nothing. One step per round: (1) with a :target, the
-  attack child fights it (every round it is not done); it is booked killed, or
-  skipped when attack gave up on it or lost it, and :skips counts skipped
-  animals in a row; :max-skips of them in a row ends the job :gave-up (warn
-  cull.gave-up); (2) after a target the collect-drops child picks up :drops
-  (nil: the kind's entry in jobs.combat.hunt/drops, else every item within
-  :collect-radius); (3) :killed reaching :count (nil: no cap) ends :count;
-  (4) at most :keep adults in the bound ends :keep (skipped animals still count,
-  they still breed; the census is live every round, so the last :keep adults are
-  never taken); (5) no candidate: when some animal was skipped as unreachable the
-  job ends :unreachable at once (warn cull.gave-up), else it ends :none on the
-  second round in a row that finds none, after a 1 s wait (look twice; warn
-  cull.gave-up); (6) else the best candidate becomes the :target and is attacked
-  in the same round. Candidates are the adults in the bound not skipped, those
-  whose hittable is not false first (an animal behind a wall comes last), then
-  nearest first. The target stays until it is killed or given up on. Hands over
-  {:killed n :remaining adults-in-bound :babies babies-in-bound :reason r
-  :skipped [ids]} (info cull.done) with reason :keep, :count, :unreachable
-  (adults above :keep remain but every one was given up on), :gave-up or :none.")
+  "Thin a herd of one kind (:mob) down to :keep adults and collect the drops.
+
+  The herd is the animals of the kind inside a bound: :box when set, else :radius blocks around :centre
+  ({:x :z}, horizontal), else :radius blocks around the body. Babies are never targets and never count as
+  adults. The check waits (:too-few) while :keep or fewer adults are in the bound. A started job always passes,
+  so a cut job resumes.
+
+  Each round does one of these:
+  - With a target: the attack child fights it. It is booked killed, or skipped when attack gave up or lost it.
+    :max-skips skips in a row end the job :gave-up (warn cull.gave-up).
+  - After a kill: collect-drops picks up :drops (nil: the kind's entry in jobs.combat.hunt/drops, else every
+    item within :collect-radius).
+  - Otherwise it picks the next candidate: adults in the bound not skipped, those that are not unhittable first
+    (an animal behind a wall comes last), then nearest first. The target stays until killed or given up on.
+
+  Ends with info cull.done and {:killed n :remaining adults-in-bound :babies n :reason r :skipped [ids]}.
+  Reasons:
+  - :count: :killed reached :count (nil: no cap).
+  - :keep: at most :keep adults remain. The census is live every round, so the last :keep are never taken.
+  - :unreachable: no candidate is left, some were skipped (warn cull.gave-up).
+  - :none: no candidate on two rounds in a row, with a 1 s wait between (warn cull.gave-up).
+  - :gave-up: too many skips in a row.")
 
 (def args
   {:mob {:doc "mob type name of the animals to thin" :default "cow"}

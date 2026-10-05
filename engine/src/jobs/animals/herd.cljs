@@ -9,77 +9,63 @@
             [engine.triggers.pen-gate :as pg]))
 
 (def doc
-  "Bring grown animals of the mob type :mob into the pen :box until it holds
-  :target of them, one animal at a time on a lead, the body stepping through the
-  gate one cell at a time: a led animal that is dragged in one long walk jams in
-  a 1-wide gate, one that the body leaves 6 or fewer blocks behind walks by its
-  own path to rest 3.3 behind it, through an open gate. The check declines while
-  the box already holds :target adults (a cheap count by the box's bounds), so a
-  run with nothing to do never starts; a started run always passes, so a cut job
-  resumes. A body further than 16 blocks from the pen first walks within 12 of
-  it (a pen out of sight is never counted). The pen is read with
-  engine.jobs.pen over :box: an unreadable one ends :no-pen, a leak other than
-  the chosen gate standing open ends :leaky (with :leaks). The gate is :gate,
-  else the pen's gate nearest the body, and must have pen floor on one side and
-  free floor straight across (a corner gate has not): else :no-gate. Adults
-  standing on the pen's cells count; when they already make :target it ends
-  :full. The four cells outside the gate straight across (out-4 .. out-1) must be
-  free floor (else :no-gate with :why :no-approach), and the pen must hold 5
-  cells in a straight line from the cell inside the gate along its axis (else
-  :too-shallow). No food is needed. Each animal gets one round trip, phases
-  :leash (jobs.animals.leash, radius :radius, one animal: the nearest adult outside
-  the pen, babies, animals in the pen, those given up on and those already leashed twice and
-  still outside skipped), :approach
-  (go-to out-4, range 0, :doors :never, then looks every 500 ms until the animal
-  is at rest: within 4.3 and moved under 0.25, at most 8 s), :clear-out (no adult of
-  :mob within 2.5 of the cell inside the gate, else up to 10 s and one info
-  herd.crowded-gate), :line-up (out-3, out-2, out-1, each walk and settle), :open
-  (jobs.access.toggle :open; :gate-stuck when it did not open), :step (the
-  gate cell, then the pen cells in line, 5 deep: each a go-to and a settle of at
-  most 6 s; an animal still beyond 4.3 after 6 s is pinned: the body steps back
-  one position and again, twice, then goes back to out-1, shuts the gate (an animal on its cell is waited for 6 s,
-  then the gate stays open), walks out to out-4 and starts over once,
-  then gives up on the animal :jammed: it is let go at out-3 and the gate shut),
-  :shut-behind (the gate is shut only while no adult of :mob overlaps its cell:
-  looks up to 6 s, then once from the deepest cell, else as pinned; the body steps
-  back one cell and toggles :closed with :reach 4, toggle walking closer when the click is out of reach), :deep (go-to the pen cell
-  farthest from the gate, off the axis when one is as far, the animal following by
-  its path; jobs.animals.unleash by key, leads picked up; the animal counts as
-  brought when it stands on a pen cell), :deep-unequip (the body empties its hand once, so the animal does
-  not follow the lead it carries out of the gate; a full inventory is ignored), :exit (walk to the cell inside the gate,
-  wait up to 10 s while an adult of :mob is within 2 of it or overlaps the gate
-  cell, then :exit-dash: one walk-near! round to out-1 that opens the gate, passes and shuts it itself, so
-  the gate is open for the pass only; one that ends with the gate still open and the body outside shuts it from there
-  (:shut-out) under the same overlap check: 4 looks, then once more from the cell inside, else the gate is left open
-  with one warn herd.gate-open; one that leaves the body inside goes by :exit-open, :exit-out, :shut-out. A
-  shut that leaves the body on the pen side opens the gate again and goes out, twice at most, then :gate-stuck). While the gate is open a :gate-held memory entry
-  {:cell [x y z]} is written before each open and kept fresh every round, dropped
-  after each shut, so the pen-gate trigger leaves the gate alone. The body ends
-  outside, the gate shut. Before each step with an animal on the lead, one seen off
-  this body's lead is given up on (:lead-broke), one not seen at all too (:lost);
-  with nobody led the open gate is shut, the leads lying within 8 are picked up
-  (jobs.forestry.collect-drops) and leashing starts again once, with the
-  :lead-broke ones forgiven; a second time ends :lost. :timeout after :timeout-s
-  from an animal's lead on until it is let go. An end with an animal on the lead
-  unleashes it where the body stands and shuts the open gate from the side the
-  body is on (same overlap check). Done (info herd.done, and one warn
-  herd.gave-up unless the reason is :brought or :full; hands over {:reason
-  :inside n :target :brought [keys] :given-up {key reason} :gate pos}, :inside
-  counted on the pen's cells at the end) with :reason :brought (the pen holds
-  :target), :short (fewer: some came, or none and no other reason), :full, :no-pen,
-  :leaky, :no-gate, :too-shallow, :unreachable (a walk was blocked), :gate-stuck,
-  :lost, :timeout, or the leash reason when nobody could be led. A gate that will not shut lets
-  a led animal go first and is tried again twice, then stays open with one warn herd.gate-open naming its position.
-  The adults on the pen's cells are counted before the exit and again after the shut from outside; fewer is an
-  escape (warn herd.escaped), and the result carries :escaped, their total; an animal is booked brought once. A run
-  that ends with the gate open and the body on a pen cell or the gate cell goes out the exit's way first (twice at
-  most), so the body ends outside; a shut that failed and then took is judged by the count. A round ends only in a
-  safe state (safe?: the gate shut, the body outside the pen and the gate cell, no animal on this body's lead): through
-  the unsafe stretch, from the lead on to the shut from outside, the round goes on step by step, so no other listed job
-  gets a round in between. A cut (a reflex, an agent's do-now) can still end it there; a round that starts unsafe
-  restarts from what it sees (restart!): an animal on the lead with the body in the pen steps on from the nearest axis
-  cell, with the body outside goes back to out-1, shuts and lines up again; nobody led and the body in the pen goes
-  out; nobody led and the gate open shuts it; a run that was ending ends.")
+  "Bring grown animals of type :mob into the pen :box until it holds :target of them. Each animal goes
+  on a lead and is walked through the gate one cell at a time (a long drag jams in a 1-wide gate).
+  No food is needed.
+
+  Declines while the box already holds :target adults. A started run always passes, so a cut job resumes.
+  A body more than 16 blocks from the pen first walks within 12 of it.
+
+  Checks before the first animal (each ends the run with its reason):
+  - :no-pen: the pen cannot be read from :box.
+  - :leaky: the pen has a leak other than the chosen gate (:leaks lists them).
+  - :no-gate: no usable gate. The gate is :gate, else the pen's gate nearest the body. It needs pen floor on
+    one side and free floor straight across (a corner gate has none). The four cells straight out from the gate
+    must be free floor too (:why :no-approach).
+  - :too-shallow: fewer than 5 pen cells in a line inward from the gate.
+  - :full: adults already on the pen's cells make :target.
+
+  One round trip per animal:
+  - Leash the nearest adult outside the pen (jobs.animals.leash, :radius). Babies, animals in the pen,
+    animals given up on and animals already fetched twice and still outside are skipped.
+  - Approach the cell 4 out from the gate and wait until the animal rests (up to 8 s).
+  - Wait up to 10 s for other adults to leave the cells inside the gate (one info herd.crowded-gate).
+  - Line up on the cells 3, 2 and 1 out, open the gate (jobs.access.toggle), then step through the gate
+    and 5 cells in. Each stop waits up to 6 s for the animal to rest.
+  - An animal still too far behind is pinned. The body steps back one cell and tries again, twice. Then it
+    walks out, shuts the gate and starts the trip over once. After that the animal is given up as :jammed and
+    let go outside.
+  - Shut the gate behind the animal once no adult overlaps its cell, from one cell back.
+  - Walk to the pen cell farthest from the gate and let the animal go there (jobs.animals.unleash, lead
+    picked up). It counts as brought when it stands on a pen cell. The body empties its hand so the animal
+    does not follow the lead out.
+  - Walk out. It waits up to 10 s while an adult is within 2 of the gate, then opens, passes and shuts the gate
+    in one go. If the gate is left open with the body outside, it shuts it from there. If it stays open, one
+    warn herd.gate-open. A shut that leaves the body inside opens the gate again and goes out, twice at most,
+    then ends :gate-stuck.
+  - Count the adults on the pen's cells before the exit and after the shut. Fewer is an escape (warn
+    herd.escaped, counted in :escaped).
+
+  While the gate is open a :gate-held memory entry {:cell [x y z]} is kept fresh, so the pen-gate trigger
+  leaves it alone. It is dropped after each shut.
+
+  Lead watching: an animal seen off this body's lead is given up on (:lead-broke), one not seen at all too
+  (:lost). With nobody led, the open gate is shut, leads within 8 blocks are picked up
+  (jobs.forestry.collect-drops) and leashing starts again once. A second time ends :lost. :timeout-s limits one
+  animal from its lead on until it is let go. An end with an animal on the lead lets it go where the body
+  stands and shuts the gate from the body's side.
+
+  A round ends only in a safe state: gate shut, body outside the pen and the gate cell, nobody on the lead.
+  Between the lead and the shut from outside the round goes on step by step, so no other job interleaves. A
+  cut there is possible. A round that starts unsafe restarts from what it sees: led with the body in the pen
+  steps on from the nearest axis cell, led with the body outside goes back and lines up again, nobody led
+  with the body in the pen goes out, nobody led with the gate open shuts it.
+
+  Ends with info herd.done and result {:reason :inside n :target :brought [keys] :given-up {key reason}
+  :gate pos :escaped n}. :inside is counted on the pen's cells at the end. Every reason but :brought and
+  :full also gives one warn herd.gave-up. Reasons: :brought (pen holds :target), :short (fewer came), :full,
+  :no-pen, :leaky, :no-gate, :too-shallow, :unreachable (a walk was blocked), :gate-stuck, :lost, :timeout,
+  or the leash reason when nobody could be led. The body ends outside with the gate shut.")
 
 (def args
   {:mob {:doc "the animal's name, such as \"cow\"" :default nil}
@@ -327,10 +313,9 @@
 (def overlap-margin "Added to half-width + 0.5 when asking whether an entity overlaps a cell." 0.1)
 
 (def settled-dist
-  "An animal this close (or closer) to the body is at rest behind it. A live cow on a lead does not move while the body
-  is within about 4 of it and, once it walks, stops 3.2 to 3.7 away, often 1 to 2 off the axis, so 3.6 took
-  such a cow for pinned at the gate. 4.3 keeps a pinned animal one step further (5.3, plus the walk's overshoot) under
-  the 6 at which the lead starts to drag it."
+  "An animal this close (or closer) to the body is at rest behind it. A led animal stops 3.2 to 3.7 away,
+  often 1 to 2 off the axis. Beyond 4.3 it is pinned. A pinned one is still under the 6 at which the lead
+  drags it."
   4.3)
 
 (def settled-move "An animal that moved less than this since the last look has stopped." 0.25)

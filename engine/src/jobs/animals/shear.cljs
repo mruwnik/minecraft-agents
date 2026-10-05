@@ -5,30 +5,29 @@
             [engine.path.near :as near]))
 
 (def doc
-  "Shear the adult sheep within :radius and pick up the wool: a one-shot order
-  that starts and ends itself. Each round takes the nearest adult sheep not
-  shorn or given up on yet (babies and sheep already sheared are skipped),
-  walks to within 3 blocks (engine walker, range 2, doors :shut, steers bounded by :walk-timeout-s) and uses the
-  shears the body carries on it. Sheep are tracked by uuid (entity ids change
-  when chunks reload), by id when it has none. A sheep is shorn when the
-  shearing took effect; it is given up on when its walk is blocked
-  (:unreachable), when two shearings were out of reach (:unreachable), when
-  nothing happened (:no-effect: it was sheared already, the sensing lagged),
-  when it vanished (:gone), or when the server said it cannot (:cannot) or the
-  use failed (:failed). Once :count sheep are shorn (every one in radius when
-  :count is nil), none is left, the shears are gone or three rounds in a row
-  were fruitless (blocked walks, no effect, out-of-reach, cannot or failed),
-  and unless :collect is false, it runs jobs.forestry.collect-drops for the
-  wool in radius and then ends. Done (info shear.done, and a warn
-  shear.gave-up with the reason unless it is :shorn; hands over {:reason
-  :shorn [keys] :given-up {key reason} :collected n}) with :reason :shorn when
-  the count was reached or the sheep ran out after some were shorn,
-  :shears-broke when the shears were gone after some were shorn, :timeout
-  after :timeout-s from the first round (without collecting), :no-shears when
-  no shears are carried and none was shorn, and, with nothing shorn,
-  :unreachable when one was given up on as unreachable, :all-sheared when
-  adult sheep are present but all are sheared or refused, else :none. The check
-  always passes, so a cut job resumes and ends itself.")
+  "Shear the adult sheep within :radius and pick up the wool. A one-shot order that starts and ends itself. The
+  check always passes, so a cut job resumes.
+
+  Each round takes the nearest adult sheep not yet shorn or given up on (babies and sheared sheep are
+  skipped). The body walks to within 3 blocks (doors :shut, each steer bounded by :walk-timeout-s) and uses the
+  shears it carries. Sheep are tracked by uuid, by id when it has none.
+
+  A sheep is given up on when its walk is blocked or two shearings were out of reach (:unreachable), nothing
+  happened (:no-effect: already sheared), it vanished (:gone), the server said it cannot (:cannot) or the use
+  failed (:failed).
+
+  Shearing stops when :count sheep are shorn (every one in radius when nil), none is left, the shears are gone
+  or three rounds in a row were fruitless. Unless :collect is false it then runs jobs.forestry.collect-drops for
+  the wool in :radius and ends.
+
+  Ends with info shear.done and a warn shear.gave-up unless the reason is :shorn. Result {:reason :shorn [keys]
+  :given-up {key reason} :collected n}. Reasons:
+  - :shorn: the count was reached, or the sheep ran out after some were shorn.
+  - :shears-broke: the shears were gone after some were shorn.
+  - :timeout: :timeout-s from the first round (no collecting).
+  - :no-shears: none carried and none shorn.
+  - With nothing shorn: :unreachable if one was given up as unreachable, else :all-sheared (adults present but
+    all sheared or refused) or :none.")
 
 (def args
   {:count {:doc "sheep to shear; every one in radius when nil" :default nil}

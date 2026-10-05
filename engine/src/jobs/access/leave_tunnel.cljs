@@ -11,32 +11,38 @@
             [jobs.survival.dig-in :as dig-in]))
 
 (def doc
-  "Leave a dead-end tunnel (the result of jobs.access.tunnel: :line :dug :torches): take its torches back and block
-  its mouth off. Every round is read from the world, so a cut or a restart goes on. First the torches that still
-  stand (a torch or wall torch in the cell of a site of :torches, deepest first, none already left): the body walks
-  to the cell after the site (jobs.debug.walk-plan as a child; not arriving: :stopped :walk-failed), asks
-  engine.access.rules may-dig? (a refusal books the torch as left with its reason, never forced), marks the scaffold
-  ledger entry :removing before the dig and drops it when the cell is air; a cell still holding the torch after the dig
-  is left :dig-failed. After a dig the drops are collected (jobs.forestry.collect-drops, radius 3, torches). Then the
-  body walks to the entry and seals the mouth from there: the dug cells at or above the entry's floor (entry y less 1)
-  that are open now and touch an open cell the tunnel did not dig (flat ground, a stair down: the cells of the first
-  steps at ground level, flush when filled; a stair into a hill: its face). Deeper cells are under rock and left.
-  One cell per round, the lowest first, then the farthest from the body; each asks may-place? right before (a
-  refusal books the cell open with its reason: :zone :footprint :own-body, never forced), must be within :reach of
-  the eye (:out-of-reach) and is filled with the dug block's drop if carried (unless it is a :spare item), else
-  the first carried building block (jobs.survival.dig-in) that is no :spare, else a :spare item that can be placed; nothing: :no-blocks;
-  a place that leaves the cell open: :place-failed. Nil zone list declines the check (one leave-tunnel.declined warn).
-  Hands over {:status :done|:stopped :reason :sealed|:open|:walk-failed|:bad-args :at [x y z] :taken [cells]
-  :left [{:cell :site :reason}] (torches not taken, those still standing on a stop included) :filled [cells] :open
-  [{:cell :reason}]} (:sealed: every mouth cell is filled; :open: some are left open) and emits leave-tunnel.done
-  (info, :sealed), leave-tunnel.open (warn, :open) or leave-tunnel.stopped (warn, :walk-failed, :bad-args).
-  A walk that does not arrive (the stair broken by an explosion or a cave-in, a hole in its floor) is not the end: the
-  body digs its own way out with jobs.access.stair :up to the entry's height, first back along the tunnel's heading,
-  then the other three (leave-tunnel.escape, info, per stair stopped warn); only when every heading stopped for an
-  access reason (:zone :claim :footprint) does it try them again with :ignore-zones? as the last resort. The new stair
-  is left as dug (nothing is placed, no item of another is taken). Out, the torches that cannot be reached are left
-  (:walk-failed in :left), the mouth is sealed, and the entry unreachable ends :done :open with :escaped true.
-  Every attempt failing ends :stopped :walk-failed with :escape (the stair results).")
+  "Leave a dead-end tunnel (the result of jobs.access.tunnel: :line :dug :torches): take its torches back and
+  block its mouth off. Every round is read from the world, so a cut or restart goes on. A nil zone list declines
+  the check (one warn leave-tunnel.declined).
+
+  Torches first. For each torch that still stands, deepest first, the body walks to the cell after its site
+  (jobs.debug.walk-plan as a child). It asks engine.access.rules/may-dig?. A refusal books the torch as left
+  with that reason and is never forced. Otherwise the scaffold ledger entry is marked :removing, the torch is
+  dug and the entry dropped once the cell is air. A cell still holding the torch is left :dig-failed. The drops
+  are then collected (jobs.forestry.collect-drops, radius 3).
+
+  Then it walks to the entry and seals the mouth. The mouth is the dug cells at or above the entry's floor that
+  are open now and touch an open cell the tunnel did not dig (flat ground, a stair down, a hill face). Deeper
+  cells are under rock and left. One cell per round, the lowest first, then the farthest from the body. Each
+  asks may-place? right before. A refusal (:zone :footprint :own-body) books the cell open with its reason and
+  is never forced. The cell must be within :reach of the eye (:out-of-reach). It is filled with the dug block's
+  drop if carried (unless a :spare item), else the first carried building block (jobs.survival.dig-in) that is
+  not :spare, else a :spare item that can be placed. Nothing to place: :no-blocks. A place that leaves the cell
+  open: :place-failed.
+
+  A walk that does not arrive (stair broken by an explosion or cave-in, a hole in its floor) is not the end. The
+  body digs its own way out with jobs.access.stair :up to the entry's height, first back along the tunnel's
+  heading, then the other three (info leave-tunnel.escape; warn for each stair that stopped). Only when a
+  heading stopped for an access reason (:zone :claim :footprint) does it try them all again with
+  :ignore-zones? as the last resort. The new stair is left as dug, nothing is placed. Once out, torches that
+  cannot be reached are left (:walk-failed in :left) and the mouth is sealed. If the entry itself is
+  unreachable it ends :done :open with :escaped true. If every attempt fails it ends :stopped :walk-failed
+  with :escape (the stair results).
+
+  Result {:status :done|:stopped :reason :sealed|:open|:walk-failed|:bad-args :at [x y z] :taken [cells] :left
+  [{:cell :site :reason}] :filled [cells] :open [{:cell :reason}]}. :left holds torches not taken, including
+  those still standing on a stop. Events: leave-tunnel.done (info, :sealed), leave-tunnel.open (warn, :open),
+  leave-tunnel.stopped (warn, :walk-failed or :bad-args).")
 
 (def args
   {:tunnel {:doc "the result of jobs.access.tunnel (:line :dug :torches)" :default nil}

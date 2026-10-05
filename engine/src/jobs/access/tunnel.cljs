@@ -9,49 +9,66 @@
             [jobs.build.from-plan :as from-plan]))
 
 (def doc
-  "Cut a way to stand beside a buried block :target [x y z] and stop there, the target the next cell ahead at feet
-  height. The way is one straight line along a heading through the target's column: from an entry stand on the
-  surface (the column's top cell over a solid floor, two open cells; no entry from water), a 1-wide stair down (or
-  up) to the target's height with jobs.access.stair as a called child (:y the target's height, so it resumes from
-  any step), then a flat run 1 wide and 2 high (head cell first) up to the stand. Never a shaft, and the run never
-  passes under its own stair. The choice tries the four headings and, per heading, the entry distances 1 to
-  :max-length; a distance fits when the stair's steps are at most the distance less one. Every cell of a fitting
-  line is judged from the loaded blocks before anything is walked or dug, step by step as the stair judges its own
-  (engine.access.rules: zones, other plans' footprints, unloaded; a fluid in a cut; a fluid beside a cut or a
-  falling block over one, taken only when named in :accept, default #{}; the next floor solid; the cell under it
-  neither air nor fluid), plus the target's own column as a last run step: the target and the cell over it, the
-  target's floor. At the stand the cell over the target is dug (so after the caller digs the target its cell is 2
-  high and can be walked into, to pick up a drop that landed out of reach); the target itself is left. The
-  shortest valid line wins; among equals one that leaves the floor under the body's start uncut, then the entry
-  nearest the body. No valid line stops before any walk or dig with the
-  reason all judged lines share (:zone, :footprint, :hazard, :cave-below, :no-floor, :fluid-in-cut, :not-loaded,
-  :no-zones), :too-far when no line fits within :max-length, else :no-approach with :headings (each heading's first
-  reason). Then the body walks to the entry (jobs.debug.walk-plan; failing: :walk-in-failed), the stair child cuts
-  and walks its steps, and each run step is judged again right before each dig (stair's dig!: :hazard, :zone,
-  :no-tool, :inventory-full, :refills, :dig-failed). Before each further run step, and at the stand, the way back to
-  the entry is planned on a fresh pathWorld and must be whole and walkable (else :no-way-back, and the body stays
-  where it is). Any other stop after the body has entered walks it back to the entry first (:out true when it
-  arrived): a dead end (:keep false) through jobs.access.leave-tunnel as a child (the torches taken back, the mouth
-  sealed; its result in :leave), a kept tunnel by the plain walk. The body's cell is the progress: on the stair line the stair child goes on, on the run line the run, at
-  the stand it is done; anywhere else it walks to the entry. A cell dug before a cut is air and is not dug again.
-  Dug cells are left and recorded. A nil zone list declines the check (one tunnel.declined warn).
-  Torches go in on the way: the line's cells are numbered 0 (entry) to n (stand), the target n+1, and a torch site is
-  a cell index s whose torch hangs in the head cell of s on a side wall (a wall torch; else a floor torch in the feet
-  cell), placed from cell s+1 so the body is never in its own place. Sites are chosen when the line is: 0, then each
-  time the farthest s whose cell s+1 the torch before still lights (light 14 less the taxicab distance, from the
-  nearer of head and feet), until every cell 0..n+1 is lit: a flat run every 11 cells, a stair every 5 steps, none
-  when the entry is the stand. The stair is cut in segments up to cell s+1 of the next site so the torch goes in
-  between them (the way back to the entry is planned before each segment). A site is placed when due (the body on
-  s+1, nothing hanging in its cells: the world is the record, so a restart does not hang it twice); a site the body
-  already passed is :unlit :passed. With no torch carried, or the place refused (engine.access.rules may-place?,
-  no wall or floor to hang on: :no-support) or failed (:place-failed), the site is :unlit with its reason and the
-  tunnel goes on dark, one tunnel.unlit warn for the first. :keep (default false: a dead end) writes each torch to
-  the scaffold ledger (purpose :tunnel-torch, before the place) for jobs.access.leave-tunnel to take back; :keep true
-  leaves them and the tunnel as they are.
-  Hands over {:status :done|:stopped :reason :reached|kw :target :entry :heading :stand :at [x y z] :dug [{:cell
-  :block}] :inside bool :keep bool :line {:entry :heading :dir :steps :run :stand :target} :torches [{:cell :site
-  :block}] (those standing now, from the world) :unlit [{:cell :site :reason}]} (:inside: the body is off the entry,
-  on the way in; false when it never got there) plus detail, also as a :tunnel.done info or :tunnel.stopped warn event.")
+  "Cut a way to stand beside a buried block :target [x y z] and stop there, with the target the next cell ahead
+  at feet height. The target itself is left. A nil zone list declines the check (one warn tunnel.declined).
+
+  The way is one straight line along a heading through the target's column:
+  1. An entry stand on the surface (the column's top cell over a solid floor, two open cells; no entry from
+     water).
+  2. A 1-wide stair down (or up) to the target's height, cut by jobs.access.stair as a child with :y set, so it
+     resumes from any step.
+  3. A flat run, 1 wide and 2 high (head cell first), up to the stand. Never a shaft, and the run never passes
+     under its own stair.
+  4. At the stand the cell over the target is dug, so after the caller digs the target the cell is 2 high and can
+     be walked into to pick up a drop.
+
+  Choosing the line: the four headings are tried and, per heading, entry distances 1 to :max-length. A distance
+  fits when the stair's steps are at most the distance less one. Every cell of a fitting line is judged from the
+  loaded blocks before anything is walked or dug, as the stair judges its own steps (engine.access.rules: zones,
+  other plans' footprints, unloaded; a fluid in a cut; a fluid beside a cut or a falling block over one, taken
+  only when named in :accept, default #{}; the next floor solid; the cell under it neither air nor fluid). The
+  target's own column counts as a last run step. The shortest valid line wins. Among equals one that leaves the
+  floor under the body's start uncut wins, then the entry nearest the body.
+
+  No valid line stops before any walk or dig with the reason all judged lines share (:zone :footprint :hazard
+  :cave-below :no-floor :fluid-in-cut :not-loaded :no-zones). :too-far: no line fits within :max-length.
+  :no-approach: the headings differ, with :headings giving each one's reason.
+
+  Then the body walks to the entry (jobs.debug.walk-plan; failing: :walk-in-failed) and the stair child cuts
+  and walks its steps. Each run step is judged again right before each dig (:hazard :zone :no-tool
+  :inventory-full :refills :dig-failed). Before each further run step, and at the stand, the way back to the
+  entry is planned on a fresh pathWorld and must be whole and walkable, else :no-way-back and the body stays
+  where it is.
+
+  After any other stop once the body has entered, it walks back to the entry first (:out true when it arrived).
+  A dead end (:keep false) goes through jobs.access.leave-tunnel as a child (result in :leave). A kept tunnel
+  is left by a plain walk.
+
+  The body's cell is the progress. On the stair line the stair child goes on, on the run line the run, at the
+  stand it is done, anywhere else it walks to the entry. A cell dug before a cut is air and is not dug again.
+  Dug cells are left and recorded.
+
+  Torches: the line's cells are numbered 0 (entry) to n (stand), the target is n+1. A torch site is a cell
+  index s whose torch hangs in the head cell of s on a side wall (else a floor torch in the feet cell), placed
+  from cell s+1. Sites are 0, then each time the farthest s whose cell s+1 the previous torch still lights
+  (light 14 less the taxicab distance), until every cell is lit. That is a flat run every 11 cells, a stair
+  every 5 steps, none when the entry is the stand. The stair is cut in segments up to cell s+1 of the next
+  site so the torch goes in between.
+
+  A site is placed when due (the body on s+1, nothing hanging in its cells; the world is the record, so a
+  restart does not hang it twice). A site the body already passed is :unlit :passed. With no torch carried
+  (:no-torches), the place refused (may-place?, or no wall or floor to hang on: :no-support) or failed
+  (:place-failed), the site is :unlit with its reason and the tunnel goes on dark. The first gives one warn
+  tunnel.unlit.
+
+  :keep (default false, a dead end) writes each torch to the scaffold ledger (purpose :tunnel-torch, before the
+  place) for jobs.access.leave-tunnel to take back. :keep true leaves the torches and the tunnel as they are.
+
+  Hands over {:status :done|:stopped :reason :reached|kw :target :entry :heading :stand :at [x y z] :dug
+  [{:cell :block}] :inside bool :keep bool :line {:entry :heading :dir :steps :run :stand :target} :torches
+  [{:cell :site :block}] :unlit [{:cell :site :reason}]} plus detail. :torches are those standing now, read
+  from the world. :inside is true when the body is off the entry, on the way in. Also a tunnel.done info or
+  tunnel.stopped warn event.")
 
 (def args
   {:target {:doc "the buried block [x y z]" :default nil}

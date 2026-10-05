@@ -10,26 +10,43 @@
 
 (def doc
   "Take back this body's temporary blocks: the open entries of the scaffold ledger (engine.access.ledger, body
-  memory). :job nil takes the entries whose placing job is no longer live (its job memory is gone) and that no cleanup
-  held in the last 10 minutes; an instance id takes that instance's and its children's (a parent cleaning up after its
-  own pillar passes its own id); :all takes every entry. Every round first settles the entries it works on from their
-  cells: the recorded item still there -> ours; a cell marked :removing now air -> removed; anything else (another
-  player swapped it, or it is gone) -> the entry is dropped with an info cleanup.dropped {:cell :item :found} and the
-  cell is never dug; an unloaded cell keeps its entry. Then one step: dig the highest (then nearest) cell within
-  :reach of the eye that may be dug, marking the entry :removing in the ledger before the dig (a cut or restart is
-  decided from the cell); else walk (jobs.debug.walk-plan as a child, never digging a way) to within 3 of the nearest;
-  else finish. The body's own column below the feet is dug only from on top: the block under the feet when the cell
-  below it is a solid floor (the one under-feet dig; the body falls one block and lands), deeper cells wait for the
-  descent (:under-body); over a hole it stops (:no-floor-below). Every dig asks engine.access.rules/may-dig? (zones,
-  the active plans' footprints, the ledger's cells) when chosen and again right before the dig primitive; a refusal
-  (:zone :footprint :no-zones :not-loaded) or a hazard :accept does not name (:hazard, lava beside is :lava-adjacent)
-  keeps the entry open. A walk with no plan holds the cell :unreachable at once; :give-up walks that end out of reach
-  hold it :out-of-reach, :give-up failed digs :dig-failed. Ends by collecting the removed items' drops
-  (jobs.forestry.collect-drops, filtered to the items they drop: a wall torch gives the torch) and hands over {:removed [{:cell :item}] :dropped [{:cell
-  :item :found}] :open [{:cell :item :reason ...}] :collected n}, info cleanup.done, warn cleanup.left while :open;
-  the open cells are held (:scaffold-held, 10 minutes) so the check and the scaffold-left trigger do not offer them
-  again at once. The check declines while nothing is offered and, with one cleanup.declined warn, while no zone list
-  has been read.")
+  memory).
+
+  Which entries (:job):
+  - nil: entries whose placing job is no longer live and that no cleanup held in the last 10 minutes.
+  - an instance id: that instance's and its children's. A parent cleaning up after its own pillar passes its
+    own id.
+  - :all: every entry.
+
+  Every round first settles the entries it works on from their cells. The recorded item still there: ours. A
+  cell marked :removing that is now air: removed. Anything else (swapped by someone, or gone): the entry is
+  dropped with an info cleanup.dropped {:cell :item :found} and the cell is never dug. An unloaded cell keeps
+  its entry.
+
+  Then one step:
+  - Dig the highest (then nearest) cell within :reach of the eye that may be dug. The entry is marked
+    :removing before the dig, so a cut or restart is decided from the cell.
+  - Else walk to within 3 of the nearest (jobs.debug.walk-plan as a child, never digging a way).
+  - Else finish.
+
+  The body's own column is dug only from on top: the block under the feet when the cell below is solid floor
+  (the body falls one block and lands). Deeper cells wait for the descent (:under-body). Over a hole it stops
+  (:no-floor-below).
+
+  Every dig asks engine.access.rules/may-dig? (zones, plan footprints, ledger cells) when chosen and again
+  right before the dig. A refusal (:zone :footprint :no-zones :not-loaded) or a hazard :accept does not name
+  (:hazard; lava beside is :lava-adjacent) keeps the entry open. A walk with no plan holds the cell
+  :unreachable at once. After :give-up walks ending out of reach the cell is held :out-of-reach, after
+  :give-up failed digs :dig-failed.
+
+  Ends by collecting the removed items' drops (jobs.forestry.collect-drops, filtered to the items they drop;
+  a wall torch gives the torch). Result {:removed [{:cell :item}] :dropped [{:cell :item :found}] :open [{:cell
+  :item :reason}] :collected n}, info cleanup.done, and warn cleanup.left while :open is not empty. Open cells
+  are held (:scaffold-held, 10 minutes) so the check and the scaffold-left trigger do not offer them again at
+  once.
+
+  The check declines while nothing is offered. It also declines while no zone list has been read, with one warn
+  cleanup.declined.")
 
 (def args
   {:job {:doc "nil: entries no live job owns; \"jN\": that instance's and its children's; :all: every entry" :default nil}
