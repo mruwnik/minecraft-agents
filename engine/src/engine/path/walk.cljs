@@ -83,9 +83,10 @@
       #js {:snapshot walled :table (.-table pw) :space (.-space pw)})))
 
 (def wide-box
-  "The planner's search box (options margin and yMargin, blocks round start and goal) of a second search when the first,
-  in the planner's default box (64 and 48), ended against it: a way round can run past it (live: a walled walkway whose
-  way down lay 200 blocks along)."
+  "The planner's search box (options margin and yMargin, blocks round start and goal) of the walks' searches: a way round
+  can run far past the planner's default box (64 and 48; live: a walled walkway whose way down lay 200 blocks along). The
+  walks search it from the start: A* goes no wider than it must, and a search in the default box that ran into it then
+  searched the wide box again (live: 26500 expansions against the default box, then 2000 in the wide one)."
   {:margin 256 :yMargin 96})
 
 (def chunk-expansions
@@ -123,28 +124,16 @@
   [pw weight limits box]
   (js/Object.assign #js {:table (.-table pw) :space (.-space pw) :weight weight :limits limits} (clj->js box)))
 
-(defn box-again?
-  "A search that finds no whole path and ran into its box (reason \"box\"): run again in wide-box."
-  [r]
-  (and (not= "found" (.-status r)) (= "box" (.-reason r))))
-
 (defn plan-from
-  "Plan from the body's cell to the goal, within limits (the planner's options.limits, nil for none); the planner's JS
-  result. A search that finds no whole path and ran into its box (reason \"box\") is run again in wide-box. In one go:
-  the walks plan with plan-from!, which yields to the event loop."
+  "Plan from the body's cell to the goal in wide-box, within limits (the planner's options.limits, nil for none); the
+  planner's JS result. In one go: the walks plan with plan-from!, which yields to the event loop."
   [c pw to range weight limits]
-  (let [query (plan-query c to range)
-        plan (fn [box] (planner/plan (.-snapshot pw) query (plan-options pw weight limits box)))
-        r (plan nil)]
-    (if (box-again? r) (plan wide-box) r)))
+  (planner/plan (.-snapshot pw) (plan-query c to range) (plan-options pw weight limits wide-box)))
 
 (defn ^:async plan-from!
-  "plan-from with each search in slices (run-plan!), yielding to the event loop between them."
+  "plan-from in slices (run-plan!), yielding to the event loop between them."
   [c pw to range weight limits]
-  (let [query (plan-query c to range)
-        plan (fn [box] (run-plan! (.-snapshot pw) query (plan-options pw weight limits box)))
-        r (await (plan nil))]
-    (if (box-again? r) (await (plan wide-box)) r)))
+  (await (run-plan! (.-snapshot pw) (plan-query c to range) (plan-options pw weight limits wide-box))))
 
 (defn solid-fn
   "solid? for executor/with-free-sides over a pathWorld."
@@ -177,26 +166,33 @@
   (cond-> within
     (= "found" (.-status wide)) (assoc :beyond (executor/refusal policy (plan-steps pw wide)))))
 
+(defn beyond-needed?
+  "Whether a search within the walker's limits that found no whole path leaves a search without them to run: only when
+  the limits turned some move away (r.limited). Otherwise the search without them would search the very same moves."
+  [r]
+  (and (not= "found" (.-status r)) (true? (.-limited r))))
+
 (defn plan-within
   "Plan within the executor's abilities (policy, default executor/policy): {:r :steps} (steps nil when r has no path). When
-  that finds no whole path but a search without the limits does, also :beyond, the executor's refusal of that path: no path
-  within abilities, and the kind of step that would have made one."
+  that finds no whole path, and the limits turned a move away (beyond-needed?), but a search without the limits finds one,
+  also :beyond, the executor's refusal of that path: no path within abilities, and the kind of step that would have made
+  one."
   ([c pw to range weight] (plan-within c pw to range weight executor/policy))
   ([c pw to range weight policy]
    (let [r (plan-from c pw to range weight (executor/planner-limits policy (solid-fn pw)))
          within (within-of pw r)]
-     (if (= "found" (.-status r))
-       within
-       (with-beyond within pw policy (plan-from c pw to range weight nil))))))
+     (if (beyond-needed? r)
+       (with-beyond within pw policy (plan-from c pw to range weight nil))
+       within))))
 
 (defn ^:async plan-within!
   "plan-within with plan-from! (yields to the event loop between search slices)."
   [c pw to range weight policy]
   (let [r (await (plan-from! c pw to range weight (executor/planner-limits policy (solid-fn pw))))
         within (within-of pw r)]
-    (if (= "found" (.-status r))
-      within
-      (with-beyond within pw policy (await (plan-from! c pw to range weight nil))))))
+    (if (beyond-needed? r)
+      (with-beyond within pw policy (await (plan-from! c pw to range weight nil)))
+      within)))
 
 (defn dry-end
   "A partial plan up to its last step out of water: a walk that cannot reach the goal never leaves the body swimming (at a
@@ -277,13 +273,121 @@
    (let [walled (with-walls pw walls)]
      (walk-plan c pw walled to one-way frontier (plan-within c walled to range weight policy)))))
 
+;; ---------------------------------------------------------------- one bounded search a round (go-to)
+
+(def round-budget
+  "Expansions (each newly flooded cell of the goal flood counts as one) a budgeted plan-walk! runs in one call, at most
+  round-ms of it: about 100 ms of search however dear the land makes an expansion (10-20 us on the bench). A search that
+  needs more goes on at the next call (searches)."
+  6000)
+
+(def round-ms
+  "The time a budgeted plan-walk! stops searching after (checked between slices of chunk-expansions, which take up to
+  ~20 ms)."
+  80)
+
+(def progress-blocks
+  "Blocks nearer the goal an unfinished search's progress end must be for a budgeted plan-walk! to walk to it."
+  8)
+
+(defonce ^{:doc "The unfinished budgeted search of each body (by name): {:key :t :walled :limited :r :unlimited}. key says
+  what it plans (start cell, goal, range, weight, policy, walls); t when it began (ms); walled the pathWorld it plans over;
+  limited the search within the walker's limits (planner/create-plan), r its result once over, unlimited the search
+  without them when that is needed (beyond-needed?)."}
+  searches (atom {}))
+
+(def search-max-age-ms
+  "A kept search older than this is not gone on with (the land it read may have changed): a new one begins."
+  60000)
+
+(defn body-name [c] (.-username (.self (:primitives c))))
+
+(defn search-key [c to range weight policy walls]
+  (let [{:keys [x y z]} (body-cell c)]
+    [[x y z] to range weight policy walls]))
+
+(defn new-search
+  "A budgeted search from the body's cell over walled: its limited search begun (wide-box, the policy's limits)."
+  [c walled to range weight policy key]
+  {:key key :t (js/Date.now) :walled walled :r nil :unlimited nil
+   :limited (planner/create-plan (.-snapshot walled) (plan-query c to range)
+                                 (plan-options walled weight (executor/planner-limits policy (solid-fn walled)) wide-box))})
+
+(defn ^:async run-search!
+  "Run search on for at most budget expansions and round-ms, in slices of chunk-expansions with a yield! between them. [search within]:
+  within, plan-within's answer, once the search is over (the search without the limits run after the limited one when
+  beyond-needed?), else nil and the search to go on with."
+  [c search budget policy to range weight]
+  (let [walled (:walled search)
+        t0 (js/performance.now)]
+    (loop [search search used 0]
+      (let [^js phase (or (:unlimited search) (:limited search))
+            over ^boolean (.step phase chunk-expansions)
+            used (+ used chunk-expansions)]
+        (cond
+          (and over (:unlimited search))
+          [search (with-beyond (within-of walled (:r search)) walled policy (.result phase))]
+
+          over
+          (let [r (.result phase)]
+            (if (beyond-needed? r)
+              (recur (assoc search :r r :unlimited (planner/create-plan (.-snapshot walled) (plan-query c to range)
+                                                                        (plan-options walled weight nil wide-box)))
+                     used)
+              [search (within-of walled r)]))
+
+          (or (>= used budget) (>= (- (js/performance.now) t0) round-ms)) [search nil]
+
+          :else (do (await (yield!))
+                    (recur search used)))))))
+
+(defn unfinished-plan
+  "The plan-walk answer of a search still going on: the path to its progress end (planner progress) when that is at least
+  progress-blocks nearer the goal than the start, walked as a partial plan; else status \"searching\" with no steps
+  (no-walk: :searching), and the search goes on at the next call. The search without the limits has no progress to walk."
+  [search ms]
+  (let [walled (:walled search)
+        ^js pr (when-not (:unlimited search) (.progress ^js (:limited search)))
+        steps (when (and pr (>= (- (.-startDistance pr) (.-distance pr)) progress-blocks))
+                (dry-end (path-steps walled (.-path pr))))
+        walk? (>= (count steps) 2)
+        r #js {:status (if walk? "partial" "searching") :reason "searching" :path (when walk? (.-path pr)) :ms ms}]
+    {:r r :status (.-status r) :pw walled :ms ms :steps (when walk? steps)}))
+
+(defn ^:async plan-walk-budgeted!
+  "plan-walk! that runs at most budget expansions of search (run-search!), going on with the body's unfinished search
+  (searches) when it plans the same thing from the same cell. A search that ends is plan-walk's answer; one that does not
+  is unfinished-plan's."
+  [c pw to range weight {:keys [policy walls one-way frontier budget]}]
+  (let [t (js/performance.now)
+        who (body-name c)
+        k (search-key c to range weight policy walls)
+        kept (get @searches who)
+        search (if (and (= k (:key kept)) (< (- (js/Date.now) (:t kept)) search-max-age-ms))
+                 kept
+                 (new-search c (with-walls pw walls) to range weight policy k))
+        [search within] (await (run-search! c search budget policy to range weight))
+        ms (- (js/performance.now) t)]
+    (if within
+      (do (swap! searches dissoc who)
+          (walk-plan c (:walled search) (:walled search) to one-way frontier within))
+      (let [plan (unfinished-plan search ms)]
+        (if (= "partial" (:status plan))
+          (swap! searches dissoc who)
+          (swap! searches assoc who search))
+        plan))))
+
 (defn ^:async plan-walk!
   "plan-walk with plan-within! (yields to the event loop between search slices): what the walks (engine.path.near, walk-to!)
-  plan with, so a long search never holds the body's API."
+  plan with, so a long search never holds the body's API. With :budget (go-to: round-budget), one call searches at most
+  that many expansions (plan-walk-budgeted!): a search that needs more walks to where it has got to, or nowhere
+  (\"searching\"), and goes on at the next call."
   ([c pw to range weight] (plan-walk! c pw to range weight nil))
-  ([c pw to range weight {:keys [policy walls one-way frontier] :or {policy executor/policy}}]
-   (let [walled (with-walls pw walls)]
-     (walk-plan c pw walled to one-way frontier (await (plan-within! c walled to range weight policy))))))
+  ([c pw to range weight {:keys [policy walls one-way frontier budget] :or {policy executor/policy} :as opts}]
+   (if budget
+     (await (plan-walk-budgeted! c pw to range weight (assoc opts :policy policy)))
+     (let [walled (with-walls pw walls)]
+       (walk-plan c pw walled to one-way frontier (await (plan-within! c walled to range weight policy)))))))
 
 (defn no-walk
   "The result of a plan that is not walked, nil when it is: no path within abilities (:beyond), a goal the planner proved
@@ -294,6 +398,9 @@
   ([{:keys [r steps beyond status stop]} replans policy]
    (let [partial? (= "partial" status)]
      (cond
+       (= "searching" status)
+       {:status :searching :replans replans}
+
        beyond
        {:status :no-path :reason :abilities :kind (:kind beyond) :at (:at beyond) :replans replans}
 

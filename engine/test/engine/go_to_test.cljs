@@ -7,6 +7,7 @@
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.memory :as mem]
+            [engine.path.walk :as walk]
             [engine.takeover :as takeover]
             [engine.test-util :as tu :refer [box floor]]
             [engine.triggers :as triggers]
@@ -299,3 +300,32 @@
           (is (>= (first (at p)) 46) "walked to the frontier")
           (is (= ["partial" "blocked" "blocked" "blocked"] (mapv :status (moved eng)))
               "the walk to the frontier is progress"))))))
+
+;; a floor x 0..6, z 0..60 cut by a wall at x 3 (feet and head) open only at z 59..60: the way to x 6 runs 120 blocks
+;; round, and no round's search gets nearer than the start. With a budget of 32 expansions a round, the rounds search on
+;; (no walk, no :moved entry, no fruitless round) until the search ends, and go-to arrives
+(deftest go-to-searches-on-over-rounds-until-its-search-ends
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [budget walk/round-budget
+              chunk walk/chunk-expansions
+              joined (merge (box 0 63 0 6 63 60 "stone") (box 3 64 0 3 65 58 "stone"))
+              {:keys [eng p] :as s} (setup {:blocks joined :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+              out (atom :not-done)
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out {:pos [6 64 0] :range 0})))]
+          (reset! walk/searches {})
+          (set! walk/round-budget 32)
+          (set! walk/chunk-expansions 16)
+          (core/submit! eng '(recording-parent) {})
+          (let [plans (atom 0)
+                plan-walk walk/plan-walk-budgeted!]
+            (set! walk/plan-walk-budgeted! (fn [& args] (swap! plans inc) (apply plan-walk args)))
+            (await (tick-out! eng 200))
+            (set! walk/plan-walk-budgeted! plan-walk)
+            (is (> @plans 3) "several rounds searched"))
+          (set! walk/round-budget budget)
+          (set! walk/chunk-expansions chunk)
+          (is (= {:arrived true} @out))
+          (is (= [] (events-of s :unreachable)))
+          (is (= ["arrived"] (mapv :status (moved eng))) "one round walked: the rounds that searched wrote nothing"))))))

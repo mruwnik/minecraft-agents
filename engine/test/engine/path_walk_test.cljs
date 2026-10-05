@@ -5,6 +5,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.path.planner-tuned :as planner]
             [engine.path.walk :as walk]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]))
@@ -249,3 +250,72 @@
   (let [plan (plan-from walled-off [0 64 1] [8 64 1] {:frontier true})]
     (is (= ["partial" "goal-enclosed"] [(:status plan) (.-reason (:r plan))]))
     (is (= {:status :no-path :reason :goal-enclosed :replans 0} (walk/no-walk plan 0)))))
+
+;; ---- one search where one will do; one bounded search a call (go-to) ----
+
+(defn searches-of
+  "How many planner searches (planner/plan) f runs."
+  [f]
+  (let [n (atom 0)
+        plan planner/plan]
+    (with-redefs [planner/plan (fn [snapshot query options] (swap! n inc) (plan snapshot query options))]
+      (f))
+    @n))
+
+;; the walkways without their join run past the default box and hold no way: the answer was 4 searches (the default box,
+;; the wide one, and both again without the walker's limits); the limits turned no move away, so it is one
+(deftest plan-within-searches-once-where-the-limits-turned-nothing-away
+  (is (= 1 (searches-of #(plan-within-status (walkways false) [6 64 0]))))
+  (is (= ["none" "exhausted"] (plan-within-status (walkways false) [6 64 0]))))
+
+;; a trench whose only way over is a gap jump up, which the executor does not walk: the search without the limits finds it
+(def gap-up-only (merge (box 0 63 -8 4 63 10 "stone") (box 7 63 -8 12 64 10 "stone")))
+
+(deftest plan-within-searches-without-the-limits-when-they-turned-a-move-away
+  (let [p (tu/fake {:blocks gap-up-only :self {:pos {:x 0.5 :y 64 :z 1.5}}})
+        within (atom nil)]
+    (is (= 2 (searches-of #(reset! within (walk/plan-within {:primitives p} (.pathWorld p) [10 65 1] 0 walk/default-weight)))))
+    (is (= :gap-up (:kind (:beyond @within))))))
+
+(defn ^:async budgeted-calls
+  "plan-walk! with budget (chunk-expansions 16) called from pos toward goal until a call answers with more than
+  \"searching\": [that plan, the calls]."
+  [blocks pos goal budget]
+  (let [p (tu/fake {:blocks blocks :self {:pos pos}})
+        c {:primitives p}
+        chunk walk/chunk-expansions]
+    (reset! walk/searches {})
+    (set! walk/chunk-expansions 16)
+    (loop [calls 1]
+      (let [plan (await (walk/plan-walk! c (.pathWorld p) goal 0 walk/default-weight {:budget budget}))]
+        (if (and (= "searching" (:status plan)) (< calls 100))
+          (recur (inc calls))
+          (do (set! walk/chunk-expansions chunk)
+              [plan calls]))))))
+
+;; the joined walkways' way round is ~200 cells along a walkway that leads away from the goal: no call gets nearer, so
+;; each walks nowhere and the next goes on with the same search, which ends with the plan of a search in one go
+(deftest a-budgeted-search-goes-on-at-the-next-call-and-ends-as-in-one-go
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/fake {:blocks (walkways true) :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+              whole (walk/plan-walk {:primitives p} (.pathWorld p) [6 64 0] 0 walk/default-weight)
+              [plan calls] (await (budgeted-calls (walkways true) {:x 0.5 :y 64 :z 0.5} [6 64 0] 32))]
+          (is (> calls 3) "several calls")
+          (is (= {:status :searching :replans 0} (walk/no-walk (walk/unfinished-plan {:walled nil :limited #js {:progress (fn [] nil)}} 1) 0)))
+          (is (= "found" (:status plan) (:status whole)))
+          (is (= (:steps whole) (:steps plan)))
+          (is (= {} @walk/searches) "the search is over"))))))
+
+;; a long corridor toward the goal: the first call's search is not over, but it got well on: that much is walked
+(deftest a-budgeted-search-that-got-well-on-walks-there
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[plan calls] (await (budgeted-calls (floor (range 120)) {:x 0.5 :y 64 :z 1.5} [110 64 1] 32))]
+          (is (= 1 calls))
+          (is (= ["partial" "searching"] [(:status plan) (.-reason (:r plan))]))
+          (is (nil? (walk/no-walk plan 0)))
+          (is (>= (:x (peek (:steps plan))) walk/progress-blocks))
+          (is (= {} @walk/searches) "the body walks on: a new search from where it gets to"))))))

@@ -54,6 +54,12 @@
                  :output-to "out/search-bench.cjs"
                  :output-dir "out/search-bench"
                  :compiler-options {:infer-externs false}}
+  ;; The go-to bench (bench-lang/goto.mjs): go-to's round planning over the planner bench's courses.
+  :goto-bench {:target :node-library
+               :exports {:simulate engine.goto-bench/simulate}
+               :output-to "out/goto-bench.cjs"
+               :output-dir "out/goto-bench"
+               :compiler-options {:infer-externs false}}
   :planner-bench-release {:target :node-library
                           :exports {:planTuned engine.path.planner-tuned/plan
                                     :createSearchTuned engine.path.planner-tuned/create-search

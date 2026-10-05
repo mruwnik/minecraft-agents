@@ -209,7 +209,8 @@
   by high-corner?. solid? is a fn [x y z] -> bool."
   [policy solid?]
   ;; The planner calls these for every gap and corner jump it looks at, so they are gap-refused (with low-ceiling?) and
-  ;; high-corner? over numbers, with no maps, seqs or refusal texts (the map form cost 3-5x the search itself live).
+  ;; high-corner? over numbers, with no maps, seqs or refusal texts (the map form, refusal texts and all, made a limited
+  ;; search about a third slower on the bench).
   (let [blocker (to-array (map #(contains? takeoff-blockers %) move-names))
         widths (set (keys (:gap-jump policy)))
         headroom (:gap-headroom policy)

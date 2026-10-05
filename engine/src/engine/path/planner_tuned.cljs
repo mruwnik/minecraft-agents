@@ -2621,15 +2621,23 @@
      ;; lf-seen lf-queue lf-head lf-budget lf-active lf-open lf-seed-open lf-end limit-refused
      nil nil 0 0 false false false false false)))
 
+(defn- clean-options
+  "The options of the returnable search behind a one-way step of search: options.returnable, no goal flood, and no more
+  nodes than the search itself made. Its nearest node is only where a partial plan ends; with no flood to prove a walled-in
+  goal it would otherwise search all the box holds (live: 2 s over the wide box after a 300 ms search)."
+  [^Search search options]
+  (js/Object.assign #js {} options #js {:returnable true :goalFlood 0
+                                        :maxNodes (js/Math.min (option options "maxNodes" 200000) (js/Math.max 1 (.-n-nodes search)))}))
+
 (defn- result-of
   "The result of a finished search; when the path to its nearest node holds a one-way step, a second search with options.returnable
-  (and no goal flood) supplies the partial end."
+  (and no goal flood, clean-options) supplies the partial end."
   [^Search search snapshot query options]
   (.settle search)
   (let [node (.oneWayNode search)]
     (if (neg? node)
       (.resultFrom search -1 nil)
-      (let [^Search clean (new-search snapshot query (js/Object.assign #js {} options #js {:returnable true :goalFlood 0}))]
+      (let [^Search clean (new-search snapshot query (clean-options search options))]
         (.init clean)
         (.step clean js/Infinity)
         (.resultFrom search node (.nearest clean))))))
@@ -2669,8 +2677,7 @@
                              (vreset! node (.oneWayNode search))
                              (if (neg? @node)
                                (vreset! ready true)
-                               (let [^Search c (new-search snapshot query
-                                                           (js/Object.assign #js {} options #js {:returnable true :goalFlood 0}))]
+                               (let [^Search c (new-search snapshot query (clean-options search options))]
                                  (.init c)
                                  (vreset! clean c)
                                  false)))))

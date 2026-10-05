@@ -14,7 +14,11 @@
   is refused the same way as :unsupported.
 
   One round is one plan and one walk (engine.path.walk: plan within the executor's abilities from where the body
-  stands, follow the plan once, at most 60 s). A plan that only gets part of the way (the goal unloaded or far) is
+  stands, follow the plan once, at most 60 s). The plan is one search of at most walk/round-budget expansions (about
+  100 ms): a search that needs more walks to where it has got to when that is at least walk/progress-blocks nearer the
+  goal, else the round walks nothing (\"searching\": no :moved entry, neither progress nor a fruitless round) and the next
+  round goes on with the same search; max-searching such rounds in a row give up (:why :searching). A plan that only gets
+  part of the way (the goal unloaded or far) is
   walked as far as its steps can be undone, or past a step that cannot be undone (a drop of 2 or 3, a gap jump down) when
   the land past it runs on into unloaded land (engine.path.near; a pit whose cells are all loaded is never entered), and
   the next round plans on from there. When every way the loaded land holds is searched and none arrives (the planner ran
@@ -52,6 +56,12 @@
            :default :shut}})
 
 (def max-blocked 3)
+
+(def max-searching
+  "Rounds in a row whose search is still going on (walk/round-budget expansions each) before go-to gives up: far more than
+  any one search takes (it ends after the planner's maxNodes); only a body moved off its search's start every round
+  (pushed, drifting) starts afresh each time."
+  100)
 
 (defn check [_c] true)
 
@@ -112,7 +122,8 @@
       (refuse! c {:reason :unsupported :message "the body cannot sense the world for path planning"})
 
       :else
-      (let [{:keys [result status to]} (await (near/walk-round! c pos range {:doors doors :explore true}))
+      (let [{:keys [result status to]} (await (near/walk-round! c pos range {:doors doors :explore true
+                                                                              :budget walk/round-budget}))
             left (u/dist to pos)
             best (:best (ctx/mem c) d)
             frontier (:frontier result)
@@ -120,11 +131,21 @@
             fbests (:frontier-best (ctx/mem c) {})
             fbest (when frontier (get fbests frontier (u/dist from fcell)))
             explored? (boolean (and frontier (< (u/dist to fcell) (dec fbest))))]
-        (if (= "arrived" status)
+        (cond
+          (= "arrived" status)
           (arrived! c)
+
+          (= "searching" status)
+          (let [n (inc (:searching (ctx/mem c) 0))]
+            (ctx/update-mem! c assoc :searching n)
+            (if (< n max-searching)
+              :continue
+              (give-up! c pos (:blocked (ctx/mem c) 0) :searching {:status :no-path :reason :searching})))
+
+          :else
           (let [progress? (or (< left (dec best)) explored?)
                 tries (if progress? 0 (inc (:blocked (ctx/mem c) 0)))]
-            (ctx/update-mem! c assoc :blocked tries :best (if (< left (dec best)) left best)
+            (ctx/update-mem! c assoc :blocked tries :searching 0 :best (if (< left (dec best)) left best)
                              :frontier-best (cond-> fbests frontier (assoc frontier (min fbest (u/dist to fcell)))))
             (if (and (< tries max-blocked) (not= :goal-enclosed (:reason result)))
               :continue
