@@ -1,0 +1,25 @@
+;; KNOWN FAILING (card 79be43a4, bug card named in its notes): after jobs.survival.shelter slept at night it holds the body
+;; (README: a wait per round while night and asleep, so queued jobs wait for day). Seen live: the job parks as
+;; waiting :not-ready after its first round and a queued go-to runs at once and walks the body out of bed.
+;; Expected once fixed: the go-to does not complete while it is night; after the time is set to day it does.
+;; Night: run with --allow-time --time-log <the shared time log>. Another runner's night sets can undo the day set.
+{:defaults
+ {:tags [:night :survival :shelter :known-fail]
+  :time :night
+  :blocks [[:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 4] "torch"] [:set [28 0 28] "torch"]
+           [:set [16 0 4] "torch"] [:set [16 0 28] "torch"] [:set [4 0 16] "torch"] [:set [28 0 16] "torch"]
+           [:set [20 0 16] "red_bed[facing=east,part=foot]"] [:set [21 0 16] "red_bed[facing=east,part=head]"]]
+  :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}}
+ :cases
+ [{:name "queued-go-to-waits-for-day"
+   :act [[:job (jobs.memory.set-place {:name :bed :pos #at [20 0 16]})]
+         [:job (jobs.survival.shelter {})]
+         [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 60]
+         [:wait-s 3]
+         [:job (jobs.movement.go-to {:pos #xyz [8 0 16] :range 0})]
+         [:wait-s 30]
+         [:time-set 1000]]
+   :expect [{:no-event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :for-s 30}
+            {:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 120 :of-job true}]
+   :after [[:body-near [8.5 0 16.5] 1.5]]
+   :limit-s 160}]}

@@ -1,0 +1,32 @@
+;; jobs.gather.mine and a drop it cannot get (card 79be43a4; the left-behind case not ported in card 8aa80fca). README: drops
+;; still lying 0.4 s after the collect are reported once (info mine.left-behind) and listed in :left; then the body
+;; walks back to the start cell (info mine.not-home otherwise). It must never end stranded below or beyond: the checks are
+;; mine.left-behind, mine.done, no mine.not-home, the body at the start cell. Case 1: the ore hangs over a 1-deep pit
+;; (reachable drop: collected, nothing left). Case 2: the ore stands across a 1-wide 5-deep trench in the line, is dug from
+;; the cut's end and its drop lies in plain view on the far side, out of reach. (Seen in the probe runs: ore across a
+;; 2-wide trench is never dug, and a drop down a 1-wide shaft is out of sight and not reported: sensing is like a
+;; player's.) Stone mass x 2..30, z 8..24, y -6..6; body in a 1x2 cell at [16 0 16] facing east, stone pickaxe; the cut
+;; [16..19] is open already so ore further east is in view.
+{:defaults
+ {:tags [:mine :jobs] :time :any
+  :plot {:height 12}
+  :blocks [[:fill [2 -6 8] [30 6 24] "stone"] [:fill [16 0 16] [19 1 16] "air"]]
+  :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1] ["cobblestone" 16]] :effects [["resistance" 600 4]]}}
+ :cases
+ [{:name "shallow-pit-drop-collected"
+   :blocks [[:set [20 0 16] "iron_ore"] [:set [20 -1 16] "air"]]
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 8})]]
+   :expect [{:event {:source :job :kind :mine.done :data {:got 1}} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :mine.left-behind} :for-s 5}]
+   :after [[:item "raw_iron" 1] [:body-near [16.5 0 16.5] 1.5]]
+   :limit-s 140}
+  {:name "drop-across-a-trench-left-behind-body-goes-home"
+   ;; the ore stands across a 1-wide, 5-deep trench in the line: seen from the start, dug from the cut's end (2 away),
+   ;; its drop lies on the far side in plain view and cannot be reached
+   :blocks [[:fill [20 -4 16] [20 1 16] "air"] [:set [21 0 16] "iron_ore"]]
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 8})]]
+   :expect [{:event {:source :job :kind :mine.left-behind} :within-s 60 :of-job true}
+            {:event {:source :job :kind :mine.done} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :mine.not-home} :for-s 5}]
+   :after [[:body-near [16.5 0 16.5] 1.5] [:item "raw_iron" 0]]
+   :limit-s 100}]}

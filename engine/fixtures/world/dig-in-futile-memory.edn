@@ -1,0 +1,51 @@
+;; jobs.survival.dig-in :dig-in-futile memory across cases that keep the body's memory (card 79be43a4; see the README
+;; row of jobs.survival.dig-in: every end with no roof leaves {:pos :reason} (:needs for a block it could not harvest),
+;; the check declines while one lies within 8 blocks, an entry without :reason is retried once a tool harvests the
+;; block or blocks are carried). The cases share one plot (plots are leased first-free, so run this file alone with
+;; --first-plot set high, e.g. 300, to keep positions the same) and run in order: c1 writes a tool-only entry, c2 (memory
+;; kept) retries it with a pickaxe and seals, c3 writes a reasoned (:no-floor) entry, c4 (a second register group: the
+;; body is restarted with memory.edn kept) is declined by it, c5 elsewhere on the plot (> 8 blocks) is not.
+;; The 10 minute expiry is not run. Night: run with --allow-time --time-log <the shared time log>.
+{:defaults
+ {:tags [:night :survival :dig-in :memory]
+  :time :night
+  :keep-memory true
+  :blocks [[:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 4] "torch"] [:set [28 0 28] "torch"]
+           [:set [16 0 4] "torch"] [:set [16 0 28] "torch"] [:set [4 0 16] "torch"] [:set [28 0 16] "torch"]
+           [:fill [2 -6 2] [9 -1 9] "stone"] [:fill [20 5 20] [30 5 30] "stone"]]
+  :plot {:height 12}
+  :body {:at [5.5 0 5.5] :effects [["resistance" 600 4]]}}
+ :cases
+ [{:name "c1-tool-entry-written"
+   :keep-memory false
+   :act [[:job (jobs.survival.dig-in {})]]
+   :expect [{:event {:source :job :kind :dig_in_failed} :within-s 30 :of-job true}]
+   :after [[:block [5 -1 5] "stone"]]
+   :limit-s 40}
+  {:name "c2-tool-entry-retried-with-pickaxe-and-seals"
+   :body {:inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.survival.dig-in {})]]
+   :expect [{:event {:source :job :kind :dig-in.sealed} :within-s 60 :of-job true}]
+   :limit-s 70}
+  {:name "c3-no-floor-entry-written"
+   :body {:at [25.5 6 25.5] :inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.survival.dig-in {})]]
+   :expect [{:event {:source :job :kind :dig_in_failed} :within-s 30 :of-job true}]
+   :after [[:block [25 5 25] "stone"]]
+   :limit-s 40}
+  {:name "c4-reasoned-entry-declines-after-restart"
+   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+               :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+   :body {:at [25.5 6 25.5] :inventory [["stone_pickaxe" 1] ["cobblestone" 16]]}
+   :act [[:job (jobs.survival.dig-in {})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :futile}} :within-s 30 :of-job true}
+            {:no-event {:source :action :kind :started :data {:name "dig"}} :for-s 10}]
+   :after [[:block [25 5 25] "stone"]]
+   :limit-s 40}
+  {:name "c5-entry-elsewhere-does-not-block"
+   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+               :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+   :body {:at [5.5 0 5.5] :inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.survival.dig-in {})]]
+   :expect [{:event {:source :job :kind :dig-in.sealed} :within-s 60 :of-job true}]
+   :limit-s 70}]}
