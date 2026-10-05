@@ -89,6 +89,24 @@
     (seen/observe! c (sample bot [(entity 99 "cow" "cow" 1)]) 2)
     (is (= 1 (:count (seen/snapshot c 2))))))
 
+(deftest item-removal-forgets-collected-drops-but-not-other-or-far-entities
+  (let [c (cache) bot (js-obj) drop (entity 1 "item" "i1" 0) far (entity 2 "item" "i2" 40) cow (entity 3 "cow" "c1" 1)
+        remove! #(seen/dead! c #js {:source bot :entity % :dimension "overworld" :removal "gone"})]
+    (seen/observe! c (sample bot [drop far cow]) 0)
+    (remove! drop)
+    (remove! cow)
+    (is (= #{"item/i2" "cow/c1"} (set (map :key (:entities (seen/snapshot c 1))))))
+    (seen/observe! c (sample bot [far cow]) 2)
+    (is (= 2 (:count (seen/snapshot c 2))))))
+
+(deftest collected-stack-that-remains-is-resampled
+  (let [c (cache) bot (js-obj) drop (entity 1 "item" "i1" 0)]
+    (seen/observe! c (sample bot [drop]) 0)
+    (seen/dead! c #js {:source bot :entity drop :dimension "overworld" :removal "collect"})
+    (is (= 0 (:count (seen/snapshot c 1))))
+    (seen/observe! c (sample bot [drop]) 2)
+    (is (= 1 (:count (seen/snapshot c 2))))))
+
 (deftest death-before-first-observation-suppresses-anonymous-corpses
   (let [c (cache) bot (js-obj) e (entity 1 "cow" nil 0)]
     (seen/dead! c #js {:source bot :entity e :dimension "overworld"})

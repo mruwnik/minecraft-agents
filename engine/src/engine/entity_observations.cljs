@@ -83,13 +83,17 @@
     nil))
 
 (defn dead!
-  "Only an explicit entityDead removes knowledge early; ordinary unload retains its last observation."
+  "An explicit entityDead removes knowledge early and keeps the entity from being resampled. A :removal
+  sample (server entityGone or a pickup's collect) forgets only dropped items, without suppressing a
+  resample: a partly collected stack that is still loaded comes back with the next sample. Ordinary
+  unload of anything else retains its last observation."
   [store sample]
   (let [e (.-entity sample) source (.-source sample)
         dim (dimension (.-dimension sample))
+        removal? (some? (.-removal sample))
         known? (when e (or (entity-uuid source e) (.get (:objects store) e)))]
-    (when (and e source dim)
-      (.add (:dead store) e)
+    (when (and e source dim (or (not removal?) (= "item" (entity-type e))))
+      (when-not removal? (.add (:dead store) e))
       (when known?
         (let [key (:key (entity-identity store source e))]
           (when (= dim (get-in @(:state store) [:entities key :dimension]))

@@ -1181,7 +1181,12 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   const emit = event => listeners.forEach(fn => fn(event))
   const inventoryNow = () => inventory().map(i => ({ name: i.name, count: i.count, slot: i.slot }))
 
-  const relayEntityDeath = entity => entityDeathListeners.forEach(fn => fn({ entity, source: bot, dimension: bot.game?.dimension }))
+  const relayEntityDeath = (entity, removal) => entityDeathListeners.forEach(fn => fn({ entity, source: bot, dimension: bot.game?.dimension, removal }))
+  // item entities that leave the world (despawn, pickup) are forgotten by the entity cache too
+  const relayEntityGone = entity => relayEntityDeath(entity, 'gone')
+  const relayCollected = (_collector, collected) => relayEntityDeath(collected, 'collect')
+  const relayDead = entity => relayEntityDeath(entity)
+  const removalEvents = [['entityDead', relayDead], ['entityGone', relayEntityGone], ['playerCollect', relayCollected]]
 
   // Wires one bot's events to the listeners; returns the function that unwires them.
   let lastTick = Date.now() // of the current bot's physics; the watchdog below reads it
@@ -1244,10 +1249,10 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       error: err => emit({ kind: 'error', reason: String(err?.message ?? err) })
     }
     Object.entries(handlers).forEach(([name, fn]) => target.on(name, fn))
-    if (entityDeathListeners.size) target.on('entityDead', relayEntityDeath)
+    if (entityDeathListeners.size) removalEvents.forEach(([n, f]) => target.on(n, f))
     return () => {
       Object.entries(handlers).forEach(([name, fn]) => target.removeListener(name, fn))
-      target.removeListener('entityDead', relayEntityDeath)
+      removalEvents.forEach(([n, f]) => target.removeListener(n, f))
     }
   }
   let down = false
@@ -1280,11 +1285,11 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     entities: liveEntities(bot)
   })
   const onEntityDeath = listener => {
-    if (!entityDeathListeners.size) bot.on('entityDead', relayEntityDeath)
+    if (!entityDeathListeners.size) removalEvents.forEach(([n, f]) => bot.on(n, f))
     entityDeathListeners.add(listener)
     return () => {
       entityDeathListeners.delete(listener)
-      if (!entityDeathListeners.size) bot.removeListener('entityDead', relayEntityDeath)
+      if (!entityDeathListeners.size) removalEvents.forEach(([n, f]) => bot.removeListener(n, f))
     }
   }
 

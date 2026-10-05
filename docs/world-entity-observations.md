@@ -10,7 +10,7 @@ own player-list UUID supplies its identity when the login entity omits the UUID.
 `engine.entity-observations` samples the local Mineflayer entity collection once
 per second. Every tracked entity refreshes its `:observed-at` timestamp and its
 `:expires-at` timestamp 120000 milliseconds later. Unloaded entities remain as
-last-known observations until that expiry. Disconnects, deliberate offline time
+last-known observations until that expiry, except dropped items: an item entity the server removes (entityGone) or that a pickup collects is forgotten at once. Disconnects, deliberate offline time
 and stale physics stop refreshing the old connection's entities. Reads never
 refresh timestamps. The cache is cleared by process restart and writes no notes,
 roster, entity files or events. Recording sends no extra Minecraft queries and
