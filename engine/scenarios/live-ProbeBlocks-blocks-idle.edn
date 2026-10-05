@@ -1,0 +1,2 @@
+;; ProbeBlocks live cases for jobs.blocks.dig, jobs.blocks.place, till, fell-tree, clear-box: idle, jobs submitted with tools/jobs.mjs
+{:register [] :queue []}
