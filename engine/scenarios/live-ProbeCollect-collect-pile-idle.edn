@@ -1,0 +1,2 @@
+;; ProbeCollect live cases for recover-drops collecting its own death pile on open ground (collect-radius 10, carried names, line of sight only)
+{:register [{:trigger :died :args {}} {:trigger :hostile-near :args {:radius 8}}] :queue []}
