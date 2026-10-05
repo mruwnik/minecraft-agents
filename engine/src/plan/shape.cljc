@@ -20,6 +20,16 @@
 (def max-cells 200000)
 
 (def plan-keys #{:id :parts :assign :note :kind :at :metadata})
+(defn author
+  "The body or agent that made a plan, :metadata :by; nil when it names none."
+  [plan]
+  (get-in plan [:metadata :by]))
+
+(defn with-author
+  "The plan with :metadata :by set to by (the plan tools stamp the actor of every write; the engine reads it back)."
+  [plan by]
+  (assoc-in plan [:metadata :by] by))
+
 (def where-keys [:box :outline :cells])
 (def area-part-keys #{:id :box :outline :cells :want :note})
 (def blueprint-part-keys #{:id :blueprint :at :turn :note})

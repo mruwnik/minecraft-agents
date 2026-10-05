@@ -4,7 +4,8 @@
             ["fs" :as fs]
             ["path" :as path]
             [engine.test-util :as tu]
-            [engine.world :as world]))
+            [engine.world :as world]
+            [plan.shape :as shape]))
 
 (def wheat {:id "field" :parts [{:id "rows" :box [[0 64 0] [1 64 0]] :want {:crop "wheat"}}]})
 (def hut-bp {:id "hut" :front :south :key {"S" "stone"} :layers [["S"]]})
@@ -243,7 +244,7 @@
     (is (= {} (world/footprints nil nil)))))
 
 (deftest plan-authors-lists-the-plans-that-name-a-maker
-  (let [w (world/of-data {"pad" (assoc pad :by "Fake") "wall" wall} {})]
+  (let [w (world/of-data {"pad" (shape/with-author pad "Fake") "wall" wall} {})]
     (is (= {"pad" "Fake"} (world/plan-authors w)))
     (is (= {} (world/plan-authors nil)))))
 

@@ -7,6 +7,7 @@
             [dashboard.agent-plan-tools :as checks]
             [dashboard.plan-compare :as cmp]
             [plan.parse :as parse]
+            [plan.shape :as shape]
             ["node:fs" :as fs]
             ["node:path" :as path]
             ["node:util" :as util]))
@@ -226,12 +227,11 @@
     (when (and (= command "add") old) (fail! :already-exists (str "plan " (:id req) " already exists; use edit")))
     (when (and (#{"edit" "remove"} command) (nil? old)) (fail! :not-found (str "no plan " (:id req) " in " (:world ctx))))
     (validate-revision! (:revision req))
-    (let [value (if (= command "remove") nil (edn-value (:edn req) "edn"))
+    (let [value (when-not (= command "remove") (some-> (edn-value (:edn req) "edn") (as-> v (if (map? v) (shape/with-author v (:by req)) v))))
           source (:edn req)]
       (when (and value (not= (:id value) (:id req))) (fail! :bad-plan (str "plan :id must be \"" (:id req) "\"")))
       (-> (data/mutate-document ctx (cond-> {:kind :plan :id (:id req) :value value :by (:by req)
                                            :expected-revision (when-not (= command "add") (:revision req)) :dry-run (boolean (:dry-run req))}
-                                    (some? (:edn req)) (assoc :text (:edn req))
                                     value (assoc :validate (fn [_] (let [result (prepare ctx source (:id req) [] nil [])]
                                                                    (when-not (:ok result) {:errors (:errors result)}))))))
           (.then (fn [result]

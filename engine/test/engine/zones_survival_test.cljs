@@ -9,7 +9,8 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [engine.unstick-test :as ut]
-            [engine.world :as ew]))
+            [engine.world :as ew]
+            [plan.shape :as shape]))
 
 (defn setup [world zones]
   (let [clock (atom 1000000)
@@ -73,7 +74,7 @@
                             ["Fake" []]
                             ["fake" []]]]
           (let [{:keys [eng p seen]} (setup-with-plan {:blocks {"0,65,0" "stone" "0,66,0" "stone"}}
-                                                       (cond-> roof-plan by (assoc :by by)))]
+                                                       (cond-> roof-plan by (shape/with-author by)))]
             (core/submit! eng '(jobs.survival.breathe {:min-oxygen 12}) {})
             (await (core/tick! eng))
             (is (= 2 (count (calls p "dig"))) (pr-str by))

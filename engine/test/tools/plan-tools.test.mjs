@@ -28,6 +28,18 @@ const planText = id => `{:id "${id}" :parts [{:id "base" :cells [[0 64 0] [1 64 
 const blueprintText = id => `{:id "${id}" :front :north :key {"S" "stone"} :layers [ ["S"] ]}`
 const require = createRequire(import.meta.url)
 
+test('a plan written by the tools names its maker in :metadata :by, the last writer', async () => {
+  const fx = fixture()
+  try {
+    const file = path.join(fx.state, 'worlds', 'fixture', 'plans', 'home.edn')
+    assert.equal((await invoke('plan', fx, ['add', 'home', '--edn', planText('home'), '--by', 'Maker'])).code, 0)
+    assert.match(fs.readFileSync(file, 'utf8'), /:metadata \{:by "Maker"\}/)
+    const shown = await invoke('plan', fx, ['show', 'home'])
+    assert.equal((await invoke('plan', fx, ['edit', 'home', '--edn', planText('home'), '--by', 'Other', '--revision', shown.value.revision])).code, 0)
+    assert.match(fs.readFileSync(file, 'utf8'), /:metadata \{:by "Other"\}/)
+  } finally { fx.close() }
+})
+
 test('plan parser rejects missing world, bad commands, and unsupported options as EDN', async () => {
   const fx = fixture()
   try {

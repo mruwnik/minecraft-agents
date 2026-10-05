@@ -165,7 +165,7 @@
   (.-username (.self (:primitives ctx))))
 
 (defn plan-authors
-  "{plan-id by}: the body each plan names as its maker (:by); a plan without :by is not listed."
+  "{plan-id by}: the body each plan names as its maker (:metadata :by); a plan without it is not listed."
   [ctx]
   (world/plan-authors (:world (:engine ctx))))
 

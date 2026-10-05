@@ -358,3 +358,13 @@
     {:tree "oak"} "oak_leaves"
     {:tree "crimson"} "nether_wart_block"
     :clear nil))
+
+;; ---------------------------------------------------------------- who made a plan
+(deftest a-plans-maker-lives-in-metadata-by
+  (let [made (shape/with-author wheat-plan "Jizo")]
+    (is (= "Jizo" (shape/author made)))
+    (is (= [] (errors-of made)) "the shape accepts a plan carrying its maker")
+    (is (= "Miles" (shape/author (shape/with-author made "Miles"))) "the last writer is the maker")
+    (is (= {:geometry :planned :by "Jizo"} (:metadata (shape/with-author (assoc wheat-plan :metadata {:geometry :planned}) "Jizo"))))
+    (is (nil? (shape/author wheat-plan)))
+    (is (nil? (shape/author nil)))))

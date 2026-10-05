@@ -696,8 +696,8 @@ down.
   | stuck | 60 | must outlast the 60 s window the newest move is measured in |
   | died | 30 | |
   | inventory-nearly-full | 120 | a body with nothing it may toss does not retry every tick |
-- Agent-only edits (functions in `engine.core`): `register-reflex!`,
   | tidy-pending | 10 | a run that backed off retries its entries (3 tries per cell) and later ones; a run that ends reports, and what it cannot restore waits for a change |
+- Agent-only edits (functions in `engine.core`): `register-reflex!`,
   `remove-reflex!` (refused for built-ins), `mute!` (with TTL), `move!`
   (`{:above id}` or `{:below id}`, with TTL), `clear-change!`. Each property
   (mute, position) is at its default or under exactly one change; a new change
@@ -1289,7 +1289,7 @@ By default a job skips a target the verdict refuses, with one warn naming the zo
 `smelt` and the jobs built on them give up `:refused {:zones :claims}` on a foreign container. Survival jobs (`breathe`,
 `extinguish`, `dig-in`, `maintenance.unstick`, the crop dig of `get-food`) take a permitted option first and break
 another's block only as a last resort, with one `<job>.trespass-last-resort` warn; they never take from a foreign
-container (`get-food` skips such a chest). A missing zone list never blocks a survival job. A plan's footprint counts as another's only when the plan is not this body's own: a plan file with `:by` equal to the body's username (case-insensitive) is its own, and a plan without `:by` stays another's (`engine.jobs.access/trespass-refusal`, `:own-plans` of the rules input, `engine.world/plan-authors`).
+container (`get-food` skips such a chest). A missing zone list never blocks a survival job. A plan's footprint counts as another's only when the plan is not this body's own: a plan whose `:metadata :by` equals the body's username (case-insensitive) is its own (`plans.mjs add`/`edit` stamp `:metadata :by` with `--by`, so the last writer is the maker; `plan.shape/author`, `with-author`), and a plan without it stays another's (`engine.jobs.access/trespass-refusal`, `:own-plans` of the rules input, `engine.world/plan-authors`).
 
 Tidying up (`engine.jobs.tidy`): a dig or place that breaks another's block (a survival last resort in `breathe`, `dig-in` and `maintenance.unstick`, or any act of `mine` and `clear-box` run with `:ignore-zones? true`) is noted as a `:tidy` entry `{:cell :action :was :now :zone/:claim/:plan :tries :job}` in body memory (`:job` is the top-level job that recorded it); `jobs.survival.restore-broken` puts the cells back when the body is safe and reports what it could not. The trigger `:tidy-pending` (`engine.triggers.tidy-pending`, last in `scenarios/survival.edn`) starts it on its own, see Debugging triggers. Not noted: `extinguish`, `get-food` and the other `:ignore-zones?` jobs.
 

@@ -316,12 +316,12 @@
             (or footprints {}))))))
 
 (defn plan-authors
-  "{plan-id by}: the :by (the body that made the plan) of each plan that names one; {} for a nil world."
+  "{plan-id by}: the :metadata :by (the body that made the plan) of each plan that names one; {} for a nil world."
   [w]
   (if-not w
     {}
     (do (refresh! w)
-        (into {} (keep (fn [[id e]] (when-let [by (:by (:value e))] [id by]))) (:plans @(:state w))))))
+        (into {} (keep (fn [[id e]] (when-let [by (shape/author (:value e))] [id by]))) (:plans @(:state w))))))
 
 (defn area-claims
   "The world's area claims as read from claims.edn ([] when there is no file or no world; the last good copy when it is

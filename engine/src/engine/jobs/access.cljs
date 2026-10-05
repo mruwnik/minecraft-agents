@@ -119,7 +119,7 @@
 (defn trespass-refusal
   "The refusing verdict when action at pos is refused for a social reason (another's zone, claim or plan footprint),
   else nil: physics and hazards are no business of the last-resort rule, and a missing zone list refuses nothing, so
-  a survival job is never blocked by an unread zones.edn. A footprint of a plan this body made (the plan's :by is its
+  a survival job is never blocked by an unread zones.edn. A footprint of a plan this body made (the plan's :metadata :by is its
   own name, :own-plans of the input) is not another's. c-or-in as may?."
   [c-or-in action pos]
   (let [in (if (:primitives c-or-in) (rules-input c-or-in) c-or-in)
