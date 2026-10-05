@@ -1,0 +1,74 @@
+;; Bed review findings (card d9c87329, commits 9169664e, 6ec6d391): a hut bed the body does not remember is slept in and
+;; recorded (no second bed even with one carried); a one-wide tunnel never counts as a room (no walk to a bed, no bed put
+;; down); a sleep that fails (a NoAI monster near) writes one shelter.sleep_failed and does not refire for five minutes;
+;; a live remembered :bed beyond reach is kept (place.kept) when a carried bed is put down in a new hut.
+;; Needs night: run with --allow-time --time-log <shared time log>. One case per runner call (--match), :settle-s 8,
+;; a plot not used before (--first-plot); the carried bed is given after t0 (a bed carried at the start fires the reflex
+;; inside the settle). Cases that must not refire are checked by hand by counting events in the body's log for 5 minutes.
+{:defaults
+ {:tags [:night :survival :sleep]
+  :time :night
+  :register [{:trigger :night-unsafe}]
+  :body {:effects [["resistance" 600 4]] :settle-s 8}}
+ :cases
+ [{:name "seen-unknown-bed-slept-and-recorded-no-second-bed"
+   :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
+            [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]]
+   :body {:at [13.5 0 13.5]}
+   :act [[:rcon "execute positioned $X $Y $Z run setblock ~10 ~ ~12 red_bed[facing=east,part=foot]"] [:rcon "execute positioned $X $Y $Z run setblock ~11 ~ ~12 red_bed[facing=east,part=head]"] [:rcon "give $BODY red_bed 1"]]
+   :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 90}
+            {:event {:source :job :kind :place.set :data {:name :bed :auto true}} :within-s 90}
+            {:no-event {:source :action :kind :done :data {:name "place" :status "placed"}} :for-s 40}]
+   :after [[:item "red_bed" 1] [:body-near [10.5 0 12.5] 6]]
+   :limit-s 100}
+   {:name "seen-unknown-bed-nothing-carried-slept"
+   :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
+            [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]]
+   :body {:at [13.5 0 13.5]}
+   :act [[:rcon "execute positioned $X $Y $Z run setblock ~10 ~ ~12 red_bed[facing=east,part=foot]"] [:rcon "execute positioned $X $Y $Z run setblock ~11 ~ ~12 red_bed[facing=east,part=head]"]]
+   :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 60}
+            {:event {:source :job :kind :place.set :data {:name :bed :auto true}} :within-s 60}]
+   :after [[:body-near [10.5 0 12.5] 6]]
+   :limit-s 70}
+  {:name "remembered-bed-out-of-sight-walked-to-and-slept"
+   :blocks [[:fill [2 0 2] [28 3 28] "stone" :hollow] [:fill [3 0 3] [27 2 27] "air"]
+            [:set [3 1 3] "torch"] [:set [27 1 27] "torch"] [:set [14 1 14] "torch"] [:set [20 1 14] "torch"]]
+   :body {:at [6.5 0 14.5]}
+   :act [[:rcon "execute positioned $X $Y $Z run setblock ~16 ~ ~14 red_bed[facing=east,part=foot]"]
+         [:rcon "execute positioned $X $Y $Z run setblock ~17 ~ ~14 red_bed[facing=east,part=head]"]
+         [:job (jobs.memory.set-place {:name :bed :pos #at [16 0 14]}) [:now]]]
+   :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 60}
+            {:no-event {:source :action :kind :done :data {:name "place"}} :for-s 20}]
+   :after [[:body-near [16.5 0 14.5] 4]]
+   :limit-s 70}
+  {:name "tunnel-miner-bed-5-to-12-away-no-walk-no-place"
+   :blocks [[:fill [4 0 4] [26 4 20] "stone"] [:fill [10 0 12] [16 1 12] "air"]
+            [:fill [17 0 11] [19 2 13] "air"] [:set [18 1 12] "torch"] [:set [11 1 12] "torch"]
+            [:set [18 0 12] "red_bed[facing=east,part=foot]"] [:set [19 0 12] "red_bed[facing=east,part=head]"]]
+   :body {:at [10.5 0 12.5]}
+   :act [[:job (jobs.memory.set-place {:name :bed :pos #at [18 0 12]}) [:now]] [:wait-s 3]
+         [:rcon "give $BODY red_bed 1"] [:wait-s 60]]
+   :expect [{:no-event {:source :action :kind :done :data {:name "sleep"}} :for-s 60}
+            {:no-event {:source :action :kind :done :data {:name "place"}} :for-s 60}
+            {:no-event {:source :reflex :kind :fired} :for-s 60}]
+   :after [[:item "red_bed" 1] [:body-near [10.5 0 12.5] 1.5]]
+   :limit-s 80}
+  {:name "monster-near-one-sleep-failed-no-refire"
+   :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
+            [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]]
+   :body {:at [13.5 0 13.5]}
+   :act [[:summon "zombie" [14.5 0 11.5] "{NoAI:1b,Silent:1b}"] [:rcon "execute positioned $X $Y $Z run setblock ~10 ~ ~12 red_bed[facing=east,part=foot]"] [:rcon "execute positioned $X $Y $Z run setblock ~11 ~ ~12 red_bed[facing=east,part=head]"] [:wait-s 75]]
+   :expect [{:event {:source :job :kind :shelter.sleep_failed} :within-s 40}
+            {:no-event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :for-s 75}]
+   :limit-s 90}
+  {:name "far-known-bed-kept-carried-bed-placed"
+   :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
+            [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]]
+   :body {:at [12.5 0 12.5]}
+   :act [[:job (jobs.memory.set-place {:name :bed :pos #at [0 0 1000]}) [:now]] [:wait-s 3]
+         [:rcon "give $BODY red_bed 1"]]
+   :expect [{:event {:source :action :kind :done :data {:name "place" :status "placed"}} :within-s 40}
+            {:event {:source :job :kind :place.kept :data {:name :bed :kept {:x [:any] :y 150}}} :within-s 90}
+            {:no-event {:source :job :kind :place.set :data {:name :bed :auto true}} :for-s 30}]
+   :after [[:item "red_bed" 0]]
+   :limit-s 100}]}
