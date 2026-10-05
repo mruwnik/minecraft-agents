@@ -94,7 +94,9 @@
         result (await (walk-once! c [(:x pos) (:y pos) (:z pos)] range doors timeout-s))
         to (u/self-pos c)
         status (move-status (u/within? to pos range) (u/dist from pos) (u/dist to pos))]
-    (ctx/remember! c :moved {:from from :to to :status status :target pos} stuck/moved-policy)
+    (ctx/remember! c :moved (cond-> {:from from :to to :status status :target pos}
+                              (= :no-path (:status result)) (assoc :no-path true))
+                   stuck/moved-policy)
     (ctx/note-walk! c status (u/dist from to))
     {:result result :status status :from from :to to}))
 

@@ -450,8 +450,9 @@
             _ (when (= "offline" (some-> r .-status)) (throw (offline-cut-error)))
             to (when (= :moveTo k) (self-pos p))]
         (when (= :moveTo k)
-          (mem/write! (:store eng) :moved {:from from :to to :status (.-status r)
-                                           :target (js->clj (.-pos args) :keywordize-keys true)}
+          (mem/write! (:store eng) :moved (cond-> {:from from :to to :status (.-status r)
+                                                   :target (js->clj (.-pos args) :keywordize-keys true)}
+                                            (= "noPath" (.-reason r)) (assoc :no-path true))
                       stuck/moved-policy))
         (save-memory! eng)
         (record-act! eng {:root root :reflex reflex} k r (distance from to))

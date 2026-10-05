@@ -133,6 +133,45 @@
        :closed false
        (not= :closed (search (partial backward kind-at) body mob))))))
 
+(def room-cells
+  "Standable cells a flood from the body reaches before the body counts as having room (not enclosed)."
+  256)
+
+(defn body-kind-of
+  "kind-of for the body's own walk: a shut wooden door, gate or trapdoor is :open (a hand opens it); iron ones are not."
+  [b]
+  (let [name (some-> b .-name)]
+    (if (and name (openable? name) (not (str/starts-with? name "iron_")))
+      :open
+      (kind-of b))))
+
+(defn flood
+  "Breadth-first over (next-cells cell) from start: :closed when every reachable cell is expanded within budget cells,
+  else :room."
+  [next-cells start budget]
+  (loop [queue #queue [start] seen #{start}]
+    (cond
+      (empty? queue) :closed
+      (>= (count seen) budget) :room
+      :else (let [fresh (remove seen (next-cells (peek queue)))]
+              (recur (into (pop queue) fresh) (into seen fresh))))))
+
+(defn enclosed?
+  "Whether the body of primitives p is shut in: the cells it can walk to as a player does (one step up, up to three down,
+  water swum, wooden doors, gates and trapdoors opened) number fewer than room-cells. A pit or a sealed room is; open
+  ground, or a hut with a door, is not. False with no body position."
+  [p]
+  (if (some-> (.self p) .-pos)
+    (let [kind-at (let [cache (volatile! {})]
+                    (fn [[x y z :as k]]
+                      (or (get @cache k)
+                          (let [v (body-kind-of (.blockAt p #js {:x x :y y :z z}))]
+                            (vswap! cache assoc k v)
+                            v))))
+          {:keys [x y z]} (sh/feet p)]
+      (= :closed (flood (partial forward kind-at) [x y z] room-cells)))
+    false))
+
 (defn danger?
   "Whether hostile e (JS entity) is a real danger to the body of primitives p.
   A ranged mob needs a line of fire (in sight); a melee mob needs a walkable

@@ -113,8 +113,8 @@
                   :doc "night, awake and nothing overhead (the night-unsafe trigger)"
                   :read (online (fn [p _] (sh/unsafe-night? p sh/default-roof-height)))}
    'stuck {:args [] :type :boolean :cost :cheap
-           :doc "the last moves all failed (the stuck trigger, default args)"
-           :read (fn [{:keys [memory]}] (stuck/stuck? memory {}))}
+           :doc "the last moves all failed and the body is really held (the stuck trigger, default args)"
+           :read (fn [{:keys [world memory]}] (stuck/body-stuck? world memory {}))}
    'blocks-near {:args [:string :number] :type :number :cost :scan :refresh-s 5
                  :doc "how many blocks of that name are within the radius (at most 32), counted up to 256"
                  :read (online blocks-near)}})

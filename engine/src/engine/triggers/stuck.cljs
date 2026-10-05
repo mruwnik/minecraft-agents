@@ -1,7 +1,10 @@
 (ns engine.triggers.stuck
   "The stuck trigger and the condition the unstick job shares with it. Both
-  read only the :moved entries: engine.core/act writes one after every moveTo, engine.path.near one after every walk (go-to and walk-near!)."
-  (:require [engine.memory :as mem]))
+  read the :moved entries: engine.core/act writes one after every moveTo, engine.path.near one after every walk (go-to and
+  walk-near!). An entry with :no-path true is a walk that found no way to its goal: evidence about the goal, not the body,
+  so the trigger counts it only when the body is enclosed (engine.jobs.reach/enclosed?)."
+  (:require [engine.jobs.reach :as reach]
+            [engine.memory :as mem]))
 
 (def defaults
   {:n 4 :min-move 1.5 :window-ms 60000 :quiet-ms 300000})
@@ -45,15 +48,32 @@
          (< (- (:now view) (:t (last last-n))) window-ms)
          (every? #(bad-move? min-move (:data %)) last-n))))
 
+(defn counted-moves
+  "The last :n :moved entries' data that stuck? reads (moves after the latest :stuck and restart)."
+  [view args]
+  (let [{:keys [n]} (merge defaults args)
+        gave-up (or (:t (mem/latest view :stuck)) 0)
+        restarted (or (:t (mem/latest view :restart)) 0)]
+    (mapv :data (take-last n (filter (fn [{:keys [t]}] (and (> t gave-up) (>= t restarted))) (mem/entries view :moved))))))
+
+(defn body-stuck?
+  "stuck?, and the body is really held: some of the bad moves had a way and still did not move the body, or (every one
+  found no path) the body of primitives p is enclosed. Walks that found no path while the body has room around it are a
+  goal out of reach (a target across water, a raw pathfinder that takes a door for a wall), not a stuck body."
+  [p view args]
+  (and (stuck? view args)
+       (or (not-every? :no-path (counted-moves view args))
+           (and (some? p) (reach/enclosed? p)))))
+
 (def stuck
-  "Holds when stuck? does, with :n, :min-move, :window-ms and :quiet-ms from
+  "Holds when body-stuck? does, with :n, :min-move, :window-ms and :quiet-ms from
   the args. Moves from before the latest restart do not count. The job it starts is (jobs.maintenance.unstick); see its doc for
   how the two interact. After a give-up the :stuck entry silences the trigger
   for :quiet-ms (5 min), so a body still blocked under the resumed job does
   not re-fire it every cooldown; the 60 s cooldown only covers the spell
   that ended well."
   {:name :stuck
-   :when (fn [_world memory args] (stuck? memory args))
+   :when (fn [world memory args] (body-stuck? world memory args))
    :job '(jobs.maintenance.unstick)
    :args defaults
    :persistence :cooldown

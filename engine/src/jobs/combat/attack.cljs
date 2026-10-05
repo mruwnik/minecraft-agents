@@ -1,7 +1,8 @@
 (ns jobs.combat.attack
   (:require [engine.ctx :as ctx]
             [engine.jobs.combat :as combat]
-            [engine.jobs.util :as u]))
+            [engine.jobs.util :as u]
+            [engine.path.near :as near]))
 
 (def doc
   "Attack the entities :targets names until none is left within :radius. A
@@ -9,11 +10,14 @@
   type such as \"zombie\" (every mob of that name within :radius). Players match
   only by username, never by type; items never match; the body never targets
   itself. Each round takes the nearest target not given up on, holds the best
-  weapon carried (equipped once), walks within reach (moveTo range 2,
-  :walk-timeout-s) and swings once, but only when the entity's `hittable`
+  weapon carried (equipped once), walks within reach with the engine walker
+  (engine.path.near/walk-near! range 2, :doors :shut: a shut wooden door, gate
+  or trapdoor on the way is opened, passed and shut again; each steer is
+  bounded by :walk-timeout-s, so a moving target is aimed at again from where
+  it is now) and swings once, but only when the entity's `hittable`
   sensing is not false (a clear line from the eye to some point of its hitbox:
   the server would accept a swing through glass, the job does not make one;
-  instead it walks closer, moveTo range 1, and counts that as a blocked walk), at most one swing per :attack-gap-ms (nil:
+  instead it walks closer, range 1, and counts that as a blocked walk), at most one swing per :attack-gap-ms (nil:
   the held weapon's cooldown, combat/attack-gap-ms). A target is given up on
   (warn attack.gave-up with :reason) after three blocked walks or out-of-reach
   swings in a row (:unreachable; a landed hit resets the count; an out-of-reach swing right after a walk that arrived means the target moved on and does not count), after :no-damage-hits swings in a row that did no
@@ -162,17 +166,16 @@
         (>= (get hits id 0) max-hits) (give-up! c target :too-many-hits)))))
 
 (defn ^:async walk!
-  "Walk within reach of target when further than reach. Resolves to :there
-  (no walk needed), :arrived (a moveTo arrived), :partial or :blocked."
+  "Walk within reach of target when further than reach (near/walk-near! range 2, doors :shut, each steer bounded by
+  :walk-timeout-s). Resolves to :there (no walk needed), :arrived (the walk got within range), :partial or :blocked."
   [c target]
   (let [tpos (u/pos-of (.-pos target))]
     (if (<= (u/dist (u/self-pos c) tpos) reach)
       :there
-      (let [r (await (ctx/act c :moveTo (clj->js {:pos tpos :range 2 :timeoutS (:walk-timeout-s (:args c))})))]
-        (case (.-status r)
-          "arrived" :arrived
-          "partial" :partial
-          :blocked)))))
+      (case (await (near/walk-near! c tpos 2 {:doors :shut :timeout-s (:walk-timeout-s (:args c))}))
+        :there :arrived
+        :partial :partial
+        :blocked))))
 
 (defn ^:async swing!
   "Face and hit target once. walked? says a walk just arrived: an out-of-reach
@@ -193,7 +196,7 @@
 (defn ^:async close-in!
   "Walk right up to a target that cannot be hit from here, and count a failure."
   [c target]
-  (await (ctx/act c :moveTo (clj->js {:pos (u/pos-of (.-pos target)) :range 1 :timeoutS (:walk-timeout-s (:args c))})))
+  (await (near/walk-near! c (u/pos-of (.-pos target)) 1 {:doors :shut :timeout-s (:walk-timeout-s (:args c))}))
   (fail! c target))
 
 (defn ^:async swing-or-close-in!

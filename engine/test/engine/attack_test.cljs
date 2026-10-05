@@ -156,7 +156,7 @@
         (let [s (await (scenario {:targets [7]} {:inventory h/sword :entities [(zed 7 10)] :unreachable ["10,64,0"]} 5))
               gave-up (events-of s :attack.gave-up)]
           (is (zero? (count (attacked s))))
-          (is (= 3 (count (h/calls (:p s) "moveTo"))))
+          (is (= [] (h/calls (:p s) "moveTo")) "walks with the engine walker, not the raw pathfinder")
           (is (= [[7 :unreachable]] (mapv (juxt :target :reason) gave-up)))
           (is (nil? (:level (first gave-up))))
           (is (finished? s))
@@ -437,12 +437,15 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p eng] :as s} (h/setup {:inventory h/sword :entities [(zed 7 10)]})]
-          ;; the walk answers arrived but the body stays far; the swing finds the target gone on
-          (.override (.-world p) "moveTo" (fn [_ _ _] (js/Promise.resolve #js {:status "arrived"})))
+        (let [{:keys [p eng clock] :as s} (h/setup {:inventory h/sword :entities [(zed 7 10)]})]
+          ;; the target runs to the other side before each round: every walk arrives, and the swing finds it gone on
           (.override (.-world p) "attack" (fn [_ _ _] (js/Promise.resolve #js {:status "out-of-reach"})))
           (core/submit! eng (spec {:targets [7] :timeout-s 1000}) {})
-          (await (run-ticks s 14 700))
+          (loop [i 0]
+            (when (< i 14)
+              (swap! (fake/state p) assoc-in [:entities 0 :pos] [(if (even? i) 10 -4) 64 0])
+              (swap! clock + 700)
+              (await (core/tick! eng))
+              (recur (inc i))))
           (is (>= (count (attacked s)) 5) "swung well past three times")
-          (is (>= (count (h/calls p "moveTo")) 5) "walked each round")
           (is (empty? (events-of s :attack.gave-up))))))))
