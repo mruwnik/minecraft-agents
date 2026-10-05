@@ -186,8 +186,8 @@
          :next-entity-id 1000
          :offline false
          :controls {}
-         :yaw 0
-         :pitch 0
+         :yaw (:yaw spec 0)
+         :pitch (:pitch spec 0)
          :skip-night (:skipNight spec true)
          :settles (:settles spec false)
          :body-hitbox (:bodyHitbox spec false)
@@ -300,6 +300,18 @@
             ids (map #(+ (:next-entity-id w) %) (range (count names)))
             w' (reduce #(spawn %1 pos %2 1) w names)]
         [w' {:status "dug" :block block :drops (mapv (fn [id item] {:id id :name item :count 1 :pos pos}) ids names)}]))))
+
+(defn look-at
+  "The body turned (Minecraft degrees on :yaw/:pitch, as drive sets them): toward pos from the eye (the feet cell's
+  centre, 1.62 up), else from a mineflayer yaw and pitch in radians, as the real look takes them."
+  [w {:keys [pos yaw pitch]}]
+  (let [deg (/ 180 js/Math.PI)]
+    (if pos
+      (let [[x y z] (body-pos w)
+            [px py pz] pos
+            dx (- px (+ (js/Math.floor x) 0.5)) dy (- py (+ y 1.62)) dz (- pz (+ (js/Math.floor z) 0.5))]
+        (assoc w :yaw (mod (* deg (js/Math.atan2 (- dx) dz)) 360) :pitch (- (* deg (js/Math.atan2 dy (js/Math.hypot dx dz))))))
+      (assoc w :yaw (mod (- 180 (* deg yaw)) 360) :pitch (- (* deg pitch))))))
 
 (defn plain-click
   "The click a place without one makes: the first solid neighbour's face (below first), looked at from the eye."
@@ -684,7 +696,7 @@
                "sleep" (act! sleep)
                "swim" (act! swim)
                "useOn" (act! use-on/use-on)
-               "look" (fn [_ _] #js {:status "ok"})
+               "look" (fn [_ a] (swap! state look-at (args-in a)) #js {:status "ok"})
                "wait" (fn [_ _] (swap! state animals/tempt-follow) #js {:status "ok"})
                "interact" (act! (fn [w a] (animals/interact w (merge {:item nil} a))))
                "trade" (guarded (act! trade/trade))

@@ -8,91 +8,80 @@
             [engine.access.rules :as rules]
             [engine.jobs.util :as u]
             [engine.path.near :as near]
+            [engine.perception :as perception]
             [jobs.survival.dig-in :as dig-in]))
 
 (def doc
-  "Dig and pick up :count more of one block kind (:block) within :radius, then
-  mend the pit under where it started. A pickaxe block (by engine.jobs.tools/tool-kind)
-  with no *_pickaxe carried ends at once, before any write or dig: warn
-  mine.no-tool with :tool \"pickaxe\", hand over {:got 0 :reason :no-tool :tool \"pickaxe\"}
-  (shovel and axe blocks drop by hand, so those go on without the tool). Check: a phase is in memory, or :block
-  is named and an exposed one is within :radius. An exposed block has at least
-  one of its 6 face neighbours air or cave_air; it is skipped when a neighbour
-  is lava, or water unless :wet. The first round writes the goal (carried +
-  :count), the start cell and the ground (the solid cells of the 5x5 under the
-  start at y-1 and y-2, empty when :mend is false) to job memory before any
-  dig, so a cut or a restart still mends. Then, one step per round, in order:
-  (1) a collecting flag runs the collect-drops child for the item within
-  :collect-radius; (2) carrying the goal ends :count; (3) :max-failures
-  failures end :gave-up (warn mine.gave-up); :dry-digs digs in a row after
-  which the collect phase left the carried count of the item unchanged (a
-  full inventory) end :no-drops (warn mine.gave-up with
-  :reason :no-drops); (4) no target ends :wet when an
-  exposed block was rejected only for water, else :none; (5) the nearest
-  target (those over the ground snapshot only after all others, so the floor
-  under the start is dug last) is walked to (within 3: blocked skips it and counts a failure, partial
-  tries again, the third partial in a row skips it like blocked), the best carried tool of the kind (shovel, axe or pickaxe by
-  block; the material decides) is equipped, and the block dug: dug resets the
-  failures and starts collecting, missing does nothing, cannot (bedrock) skips
-  it without a failure, anything else skips it and counts one. The mend phase
-  fills every ground cell that is now air, cave_air or water with the first
-  carried of dig-in's building blocks other than the item, the item itself last
-  (when it is a building block or the block itself), lowest first, then nearest, never the body's feet
-  or head cell; when only those are owed it jumpPlaces one block. Nothing to
-  fill with warns mine.mend-short, six failed fills warn mine.mend-failed; both
-  end the job. The item is :item, else the drop-item table, else the block
-  name. When nothing is owed and the mend left fewer than the goal carried
-  (it spent what the dig brought), the job goes back to the dig phase (ground
-  kept, :resumes + 1, at most 2) while an exposed target off the ground remains
-  in :radius; otherwise it ends :spent-on-mend, keeping the earlier reason in
-  :dig-reason. Hands over {:got n :reason r} (plus :dig-reason and :resumes when
-  set; info mine.done with :mended, the cells filled); :got is how many more are carried
-  than at the start, at least 0. A job that dug tunnels ends, after the mend, by walking back to the cell it
-  started on (info mine.not-home when the walk does not arrive): its later digs may have led it down a tunnel.
+  "Mine like a player: dig out :count more of one block kind (:block) that the body has seen, strip-tunnelling at its
+  own level to find more, then mend the pit under where it started.
+  Targets come only from perception (the primitives' seenBlocks: what the body has seen, never x-ray): a remembered
+  :block within :radius that is still there and has at least one of its 6 face neighbours air or cave_air (a block
+  with no air face is never a target); it is skipped when a neighbour is lava, or water unless :wet. Without a
+  perception the body sees nothing and only tunnels.
+  A pickaxe block (by engine.jobs.tools/tool-kind) with no *_pickaxe carried ends at once, before any write or dig:
+  warn mine.no-tool with :tool \"pickaxe\", hand over {:got 0 :reason :no-tool :tool \"pickaxe\"} (shovel and axe
+  blocks drop by hand). Check: a phase is in memory, or :block is named, unless every seen target is refused (below).
+  The first round writes the goal (carried + :count), the start cell, the tunnel's heading (:direction, else the way
+  the body faces) and the ground (the solid cells of the 5x5 under the start at y-1 and y-2, empty when :mend is
+  false) to job memory before any dig, so a cut or a restart still mends. Then, one step per round, in order:
+  (1) a collecting flag runs the collect-drops child for the item within :collect-radius (walking to each drop until
+  it is picked up; the count is the inventory's, never the dig's drop report), and drops of the item still lying
+  there afterwards (out of reach) are reported once each, info mine.left-behind {:items [{:pos :count}]}, and listed
+  in the result's :left; (2) carrying the goal ends :count; (3) :max-failures failures end :gave-up (warn
+  mine.gave-up); :dry-digs digs in a row after which the carried count of the item did not rise end :no-drops (warn
+  mine.gave-up with :reason :no-drops); (4) the nearest target (those over the ground snapshot only after all
+  others, so the floor under the start is dug last) is walked to (within 3: blocked skips it and counts a failure,
+  partial tries again, the third partial in a row skips it like blocked), the best carried tool of the kind is
+  equipped and the block dug: dug resets the failures and starts collecting, missing does nothing, cannot (bedrock)
+  skips it without a failure, anything else skips it and counts one; (5) with no target the body looks around from
+  where it stands (each heading, level and down at the floor ahead, a sight pass after each look), once per cell
+  and again after each dig, so a vein's next block comes into view (it also looks around once before the first
+  target); (6) still none: the strip tunnel.
+  The strip tunnel: a 1-wide 2-high straight run at the level the body stands on when it starts, along :direction
+  (north, south, east, west or n/s/e/w; default the way the body faced when the job started), at most :tunnel-length
+  blocks per job (0: no tunnel; then no target ends :wet when a seen block was rejected only for water, else :none).
+  Each step stands on the last cell of the run, judges the next cell and the one over it (a fluid in it, lava beside
+  it, or water beside it unless :wet; a floor that is solid; the zone and plan rules, with only :accept hazards),
+  digs them head first (a cut of :block is collected like a target), looks ahead level and down at the new cells
+  so perception records the walls, floor, roof and face they exposed, and steps in. Whatever ore comes into view is
+  then an ordinary target and is dug before the next step (veins followed by the look-around). The run used up ends
+  the dig phase :tunnel-length, any stop ends it :tunnel-stopped; either way one warn mine.tunnel-end {:reason
+  (:tunnel-length, :lava, :water, :fluid, :no-floor, :not-loaded, :refused, :dig-failed, :walk-failed) :heading
+  :length :at}. The result carries :tunnel {:origin :heading :steps :stop}; a job whose tunnel took a step ends,
+  after the mend, by walking back to the cell it started on (info mine.not-home when the walk does not arrive).
+  The mend phase fills every ground cell that is now air, cave_air or water with the first carried of dig-in's
+  building blocks other than the item, the item itself last (when it is a building block or the block itself),
+  lowest first, then nearest, never the body's feet or head cell; when only those are owed it jumpPlaces one block.
+  Nothing to fill with warns mine.mend-short, six failed fills warn mine.mend-failed; both end the job. The item is
+  :item, else the drop-item table, else the block name. When nothing is owed and the mend left fewer than the goal
+  carried (it spent what the dig brought), the body looks around once from where it stands, and the job goes back to
+  the dig phase (ground kept, :resumes + 1, at most 2) while a seen target off the ground remains in :radius; otherwise it ends :spent-on-mend, keeping the earlier
+  reason in :dig-reason. Hands over {:got n :reason r} (plus :dig-reason, :resumes, :tunnel and :left when set;
+  info mine.done with :mended, the cells filled); :got is how many more are carried than at the start, at least 0.
   Zones and plans (engine.access.rules, through engine.jobs.access): a target must also be a dig the rules permit,
   with only :accept hazards, when it is chosen and again right before the dig. A cell inside a zone that does not
   allow :dig, or in an active plan's footprint, is never a target; one refused right before the dig is skipped
-  without a failure (info mine.refused), as is one with a hazard not accepted. Every exposed block refused ends the
-  dig phase :refused, or, before the first round, declines; either way one mine.declined warn per job names the zones
-  and plans ({:reason :refused :zones :plans}). No zone list (zones.edn missing or never valid) declines the check
-  with one mine.declined warn {:reason :no-zones}, also in the middle of the job; nothing is dug or placed then.
-  The mend asks the zone rules too: an owed cell in a zone or claim of another owner that does not let others place
-  (the dig was allowed, e.g. :allow #{:dig}) is not filled (one mine.declined warn {:reason :refused}), and a mend
-  with no cell left to fill ends as one with nothing owed.
-  With :buried false and only buried blocks in range the check also declines, with one mine.declined warn
-  {:reason :no-exposed}; the job stays queued (an exposed one may turn up) and nothing is dug.
-  Buried targets (:buried, on by default; false: exposed blocks only): a block with no air face is a buried target when the rules permit
-  its dig (a zone or plan refusal counts among the refused as above). When no exposed target is left, the nearest
-  buried one is visited: from where the body stands, jobs.access.tunnel (child :tunnel, :max-length :tunnel-max)
-  cuts a straight stair and run to stand beside it (a body with six solid cells over its head, say in a cave or its own
-  mine, has no surface to tunnel from: a buried block within :burrow-max is dug toward instead, a 1-wide 2-high way
-  from the body's cell along x then z, climbing or descending a step per block when the heights differ, every cut
-  judged by the rules and refused beside lava, in a fluid or beside water unless :wet, until the block has an air face
-  and is an ordinary target; it goes where nothing is mended or walked back, a stop skips the target and counts a
-  failure, info mine.burrow-stopped); then it is dug as above (judged again right before the dig) and
-  its drops collected; then the body walks back up to the tunnel's entry over its own stair (jobs.debug.walk-plan,
-  child :out) and from there to where the visit began (moveTo, as mine walks to targets; not arriving there is an
-  info mine.not-home). The visit is in job memory (:visit {:target :from :entry :stage :in|:dig|:out|:home}), so a
-  cut or a restart goes on from its stage. A tunnel that stops skips the target and counts a failure (it walks back
-  to its entry itself; the walk up to the entry runs only when the tunnel says the body is still :inside); a walk
-  out that does not arrive ends the job :trapped (warn mine.trapped). The way out of a tunnel is jobs.access.leave-tunnel (child :out, the mined item as :spare): the torches the tunnel hung come back and the mouth is sealed; its stop ends the job :trapped. Info mine.tunnel {:target
-  :entry :dug n} per reached target, and the result carries :tunnels [{:target :entry :dug n}] and, when a mouth
-  cell was left open (a zone or no block to fill it), :open [{:cell :reason}] from jobs.access.leave-tunnel.")
+  without a failure (info mine.refused), as is one with a hazard not accepted. Seen blocks all refused: before the
+  first round the check declines; in the job the tunnel goes on (or, with :tunnel-length 0, the dig phase ends
+  :refused); either way one mine.declined warn per job names the zones and plans ({:reason :refused :zones :plans}).
+  No zone list (zones.edn missing or never valid) declines the check with one mine.declined warn {:reason
+  :no-zones}, also in the middle of the job; nothing is dug or placed then. The mend asks the zone rules too: an
+  owed cell in a zone or claim of another owner that does not let others place is not filled (one mine.declined
+  warn {:reason :refused}), and a mend with no cell left to fill ends as one with nothing owed.")
 
 (def args
   {:block {:doc "name of the block to mine (required)" :default nil}
    :item {:doc "the item the block drops; nil: the drop-item table, else the block name" :default nil}
    :count {:doc "how many more to carry than at the start" :default 8}
-   :radius {:doc "blocks within this many blocks of the body count" :default 16}
-   :wet {:doc "dig blocks that touch water" :default false}
+   :radius {:doc "seen blocks within this many blocks of the body count" :default 16}
+   :wet {:doc "dig blocks that touch water, and tunnel beside water" :default false}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
    :mend {:doc "fill the ground under the start again afterwards" :default true}
    :collect-radius {:doc "how far around to collect drops after a dig" :default 6}
    :max-failures {:doc "failures in a row before giving up" :default 3}
    :dry-digs {:doc "digs in a row after which the carried count of the item did not rise before giving up (:no-drops)" :default 3}
-   :buried {:doc "also tunnel to blocks with no air face (jobs.access.tunnel) once no exposed one is left; false: exposed blocks only" :default true}
-   :tunnel-max {:doc "longest tunnel line to a buried block, in blocks" :default 24}
-   :burrow-max {:doc "underground (rock over the head, no surface to tunnel from): the longest distance to a buried block that is dug straight toward, in blocks" :default 12}
+   :direction {:doc "the strip tunnel's heading: north, south, east or west (n/s/e/w); nil: the way the body faces when the job starts" :default nil}
+   :tunnel-length {:doc "the most blocks the strip tunnel runs in this job, at the body's level; 0: no tunnel, seen blocks only" :default 32}
    :accept {:doc "dig hazards of engine.access.rules taken (:fluid-adjacent :falling-block :under-feet); the lava and :wet rules above still hold"
             :default #{:fluid-adjacent :falling-block :under-feet}}})
 
@@ -137,53 +126,49 @@
       (and (some #{"water"} names) (not wet)) :wet
       :else :ok)))
 
+(defn seen-cells
+  "The cells perception remembers holding block within radius of the body, nearest first ([] without a perception)."
+  [p block radius]
+  (if-let [f (aget p "seenBlocks")]
+    (mapv #(u/pos-of (.-pos %)) (array-seq (.call f p #js {:radius radius :names #js [block] :max 128})))
+    []))
+
 (defn scan
-  "{:targets [pos] nearest first, those over the ground snapshot after all
-  others, :buried [pos] the buried ones the rules permit (only with :buried), nearest first, :refused [verdict]
-  of blocks a zone or plan refuses, :wet? true when an unskipped block was rejected only for water}."
+  "{:targets [pos] nearest first (the higher of two as near), those over the ground snapshot after all others, :refused [verdict] of blocks a
+  zone or plan refuses, :wet? true when an unskipped block was rejected only for water}. Only seen blocks that are
+  still there count."
   [c]
-  (let [{:keys [block radius wet accept buried]} (:args c)
+  (let [{:keys [block radius wet accept]} (:args c)
+        p (:primitives c)
         skipped (set (:skipped (ctx/mem c)))
         ground (into #{} (map :pos) (:ground (ctx/mem c)))
         here (u/self-pos c)
-        cells (->> (array-seq (.blocks (:primitives c) #js {:radius radius :names #js [block] :max 128}))
-                   (map #(u/pos-of (.-pos %)))
-                   (remove skipped))
+        cells (->> (seen-cells p block radius)
+                   (remove skipped)
+                   (filter #(= block (u/block-name p %))))
         graded (map (juxt identity #(classify c wet %)) cells)
         in (access/rules-input c)
-        judge (fn [[pos]] (let [v (access/may-dig? in pos)] [pos v (access/judge v accept)]))
-        judged (->> graded (filter #(= :ok (second %))) (map judge))
-        deep (if buried (->> graded (filter #(= :buried (second %))) (map judge)) [])]
-    {:targets (->> judged (filter #(= :ok (nth % 2))) (map first) (sort-by (juxt #(if (ground %) 1 0) #(u/dist here %))) vec)
-     :buried (->> deep (filter #(= :ok (nth % 2))) (map first) (sort-by #(u/dist here %)) vec)
-     :refused (into [] (comp (filter #(= :refused (nth % 2))) (map second)) (concat judged deep))
-     :wet? (boolean (some #(= :wet (second %)) graded))
-     :hidden? (boolean (and (not buried) (some #(= :buried (second %)) graded)))}))
+        judged (->> graded
+                    (filter #(= :ok (second %)))
+                    (map (fn [[pos]] (let [v (access/may-dig? in pos)] [pos v (access/judge v accept)]))))]
+    {:targets (->> judged (filter #(= :ok (nth % 2))) (map first) (sort-by (juxt #(if (ground %) 1 0) #(u/dist here %) #(- (:y %)))) vec)
+     :refused (into [] (comp (filter #(= :refused (nth % 2))) (map second)) judged)
+     :wet? (boolean (some #(= :wet (second %)) graded))}))
 
 (defn off-ground?
   "Whether a target is not one of the ground snapshot's cells."
   [c pos]
   (not-any? #(= pos (:pos %)) (:ground (ctx/mem c))))
 
-(defn decline-no-exposed!
-  "One warn per job: the blocks in range are all buried and :buried is off. The job stays queued."
-  [c]
-  (ctx/warn-once! c [:access :no-exposed] :mine.declined
-                  {:reason :no-exposed
-                   :text "mine declined: the blocks in range are all buried and :buried is false"})
-  false)
-
 (defn check [c]
   (cond
     (and (nil? (ctx/zones c)) (not (:ignore-zones? (:args c)))) (access/decline! c :mine.declined "mine" {:reason :no-zones})
     (:phase (ctx/mem c)) true
     (not (:block (:args c))) false
-    :else (let [{:keys [targets buried refused hidden?]} (scan c)]
-            (cond
-              (or (seq targets) (seq buried)) true
-              (seq refused) (access/decline! c :mine.declined "mine" (assoc (access/refusal-fields refused) :reason :refused))
-              hidden? (decline-no-exposed! c)
-              :else false))))
+    :else (let [{:keys [targets refused]} (scan c)]
+            (if (and (empty? targets) (seq refused))
+              (access/decline! c :mine.declined "mine" (assoc (access/refusal-fields refused) :reason :refused))
+              true))))
 
 (defn cell-of [pos] {:x (js/Math.floor (:x pos)) :y (js/Math.floor (:y pos)) :z (js/Math.floor (:z pos))})
 
@@ -199,11 +184,11 @@
 (defn finish!
   "Emit the outcome, hand it to the parent and end the job."
   [c]
-  (let [{:keys [goal reason mended dig-reason resumes tunnels open]} (ctx/mem c)
+  (let [{:keys [goal reason mended dig-reason resumes tunnel left]} (ctx/mem c)
         got (max 0 (- (carried c) (- goal (:count (:args c)))))
         why (cond-> {} dig-reason (assoc :dig-reason dig-reason) resumes (assoc :resumes resumes)
-              (seq tunnels) (assoc :tunnels tunnels)
-              (seq open) (assoc :open open))]
+              (pos? (:steps tunnel 0)) (assoc :tunnel (-> tunnel (select-keys [:origin :heading :steps :stop]) (update :origin access/cell)))
+              (seq left) (assoc :left (mapv (fn [[pos n]] {:pos pos :count n}) left)))]
     (ctx/emit! c :mine.done :info (merge {:got got :reason reason :mended (or mended 0)
                                           :text (str "mine done: " (name reason) ", got " got ", mended " (or mended 0))}
                                          why))
@@ -211,9 +196,10 @@
     :done))
 
 (defn wrap-up!
-  "The normal end: when the job dug tunnels the body walks back to where it started first (phase :home), else finish."
+  "The normal end: when the tunnel took a step the body walks back to where it started first (phase :home), else
+  finish."
   [c]
-  (if (seq (:tunnels (ctx/mem c)))
+  (if (pos? (get-in (ctx/mem c) [:tunnel :steps] 0))
     (do (ctx/update-mem! c assoc :phase :home) :continue)
     (finish! c)))
 
@@ -227,16 +213,40 @@
 
 (defn skip! [c pos] (ctx/update-mem! c update :skipped (fnil conj []) pos))
 
-(defn ^:async equip! [c]
-  (let [tool (tools/best-tool (map :name (u/inventory (:primitives c))) (:block (:args c)))]
-    (when (and tool (not= tool (.-held (.self (:primitives c)))))
-      (await (ctx/act c :equip (clj->js {:item tool :dest "hand"}))))))
+(defn ^:async equip!
+  "Hold the best carried tool for block (the mined block when not given)."
+  ([c] (equip! c (:block (:args c))))
+  ([c block]
+   (let [tool (tools/best-tool (map :name (u/inventory (:primitives c))) block)]
+     (when (and tool (not= tool (.-held (.self (:primitives c)))))
+       (await (ctx/act c :equip (clj->js {:item tool :dest "hand"})))))))
+
+(defn left-behind
+  "Drops of the item lying within :collect-radius, as {[x y z] count}."
+  [c]
+  (let [item (item-name (:args c))]
+    (into {}
+          (comp (filter #(= item (some-> (.-item %) .-name)))
+                (map (fn [e] [(access/cell (cell-of (u/pos-of (.-pos e)))) (or (some-> (.-item e) .-count) 1)])))
+          (array-seq (.entities (:primitives c) #js {:radius (:collect-radius (:args c)) :kind "item" :max 32})))))
+
+(defn note-left!
+  "Report drops of the item collect-drops left lying (out of reach), once per cell."
+  [c]
+  (let [known (:left (ctx/mem c))
+        fresh (into {} (remove (fn [[pos _]] (contains? known pos))) (left-behind c))]
+    (when (seq fresh)
+      (ctx/emit! c :mine.left-behind :info {:items (mapv (fn [[pos n]] {:pos pos :count n}) fresh)
+                                            :text (str "mine left drops it could not pick up at "
+                                                       (str/join " " (map (fn [[pos _]] (str/join "," pos)) fresh)))})
+      (ctx/update-mem! c update :left merge fresh))))
 
 (defn ^:async collect! [c]
   (let [{:keys [collect-radius]} (:args c)
         r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops
                                  {:radius collect-radius :filter [(item-name (:args c))]}))]
     (when (= :done r)
+      (note-left! c)
       (let [now (carried c)]
         (ctx/update-mem! c (fn [m]
                              (-> m
@@ -262,7 +272,7 @@
       (refused! c pos v verdict)
       (let [status (.-status (await (tidy/dig! c pos)))]
         (cond
-          (= "dug" status) (ctx/update-mem! c assoc :failures 0 :collecting true)
+          (= "dug" status) (ctx/update-mem! c assoc :failures 0 :collecting true :looked :dug)
           (= "missing" status) nil
           (= "cannot" status) (skip! c pos)
           :else (do (skip! c pos) (ctx/update-mem! c update :failures (fnil inc 0))))))
@@ -286,52 +296,70 @@
       (ctx/update-mem! c assoc :partials n :partial-pos pos))
     :continue))
 
-(defn visit!
-  "Start a visit to the buried target pos from where the body stands."
-  [c pos]
-  (ctx/update-mem! c assoc :visit {:target (access/cell pos) :from (access/cell (cell-of (u/self-pos c))) :stage :in})
+;; ------------------------------------------------------------------ looking (a player glances at what it opened)
+
+(def headings {"north" [0 -1] "south" [0 1] "east" [1 0] "west" [-1 0]})
+(def heading-short {"n" "north" "s" "south" "e" "east" "w" "west"})
+
+(defn heading-name
+  "north, south, east or west for a heading arg (a name or n/s/e/w, string or keyword), else nil."
+  [d]
+  (when d
+    (let [n (str/lower-case (name d))]
+      (cond (headings n) n
+            (heading-short n) (heading-short n)))))
+
+(defn facing
+  "The heading nearest the way the body looks (perception's eye; mineflayer yaw 0 looks north), south without a
+  perception."
+  [p]
+  (if-let [eye (some-> (aget p "perception") :raw (.eye))]
+    (let [yaw (.-yaw eye)
+          dx (- (js/Math.sin yaw))
+          dz (- (js/Math.cos yaw))]
+      (if (> (js/Math.abs dx) (js/Math.abs dz))
+        (if (pos? dx) "east" "west")
+        (if (pos? dz) "south" "north")))
+    "south"))
+
+(defn glances
+  "The points a look along [dx dz] takes in from eye: level, 4 blocks ahead, then down (about 50 degrees) at the
+  floor ahead."
+  [eye [dx dz]]
+  [{:x (+ (:x eye) (* 4 dx)) :y (:y eye) :z (+ (:z eye) (* 4 dz))}
+   {:x (+ (:x eye) (* 1.5 dx)) :y (- (:y eye) 1.8) :z (+ (:z eye) (* 1.5 dz))}])
+
+(defn see!
+  "A sight pass now, so what the last look faced is in memory before the next decision."
+  [c]
+  (when-let [per (aget (:primitives c) "perception")]
+    (perception/pass! per)))
+
+(defn ^:async glance!
+  "Look along each of dirs ([dx dz]), level and down, a sight pass after each look."
+  [c dirs]
+  (let [{:keys [x y z]} (cell-of (u/self-pos c))
+        eye {:x (+ x 0.5) :y (+ y 1.62) :z (+ z 0.5)}]
+    (loop [points (mapcat #(glances eye %) dirs)]
+      (when-let [pt (first points)]
+        (await (ctx/act c :look (clj->js {:pos pt})))
+        (see! c)
+        (recur (rest points))))))
+
+(defn ^:async look-around!
+  "Look along every heading from here: before the first target, and with no target in view once per cell and again
+  after a dig."
+  [c]
+  (await (glance! c (vals headings)))
+  (ctx/update-mem! c assoc :looked (cell-of (u/self-pos c)))
   :continue)
 
-;; ------------------------------------------------------------------ burrow (underground, no surface to tunnel from)
-
-(def burrow-roof 6)
-(def burrow-sides [[1 0] [-1 0] [0 1] [0 -1]])
-
-(defn underground?
-  "Whether the six cells over the body's head are all solid rock (not air, a fluid, a plant, leaves or a log)."
-  [c]
-  (let [{:keys [x y z]} (cell-of (u/self-pos c))]
-    (every? #(and % (not (not-solid %)) (not (str/ends-with? % "_leaves")) (not (str/ends-with? % "_log")))
-            (map #(u/block-name (:primitives c) {:x x :y % :z z}) (range (+ y 2) (+ y 2 burrow-roof))))))
-
-(defn burrow-step
-  "The step from feet [x y z] toward the cell beside target at its height: {:next :cut :floor} (see stair/step-cells),
-  :arrived, or {:stop reason} (:shaft, :too-steep: the heights differ by more than the way along has blocks)."
-  [feet [tx ty tz]]
-  (let [taxi (fn [g] (reduce + (map #(js/Math.abs (- %1 %2)) g feet)))
-        goal (apply min-key taxi (map (fn [[dx dz]] [(+ tx dx) ty (+ tz dz)]) burrow-sides))
-        [dx dy dz] (mapv - goal feet)
-        horiz (+ (js/Math.abs dx) (js/Math.abs dz))]
-    (cond
-      (and (zero? horiz) (zero? dy)) :arrived
-      (zero? horiz) {:stop :shaft}
-      (> (js/Math.abs dy) horiz) {:stop :too-steep}
-      :else (let [side (if (and (not (zero? dx)) (>= (js/Math.abs dx) (js/Math.abs dz))) [(js/Math.sign dx) 0] [0 (js/Math.sign dz)])]
-              (let [[hx hz] side
-                    up (fn [[x y z] d] [x (+ y d) z])
-                    n [(+ (feet 0) hx) (+ (feet 1) (js/Math.sign dy)) (+ (feet 2) hz)]]
-                ;; flat: head cell then feet cell; up: the cell over the head first; down: the way is cut from the top
-                {:next n
-                 :cut (cond (zero? dy) [(up n 1) n]
-                            (pos? dy) [(up feet 2) (up n 1) n]
-                            :else [(up n 2) (up n 1) n])
-                 :floor (up n -1)})))))
+;; ------------------------------------------------------------------ the strip tunnel
 
 (defn cut-hazard
-  "Why the cell may not be cut for a burrow (a fluid in it, lava or unwanted water beside it), else nil."
-  [c cell]
-  (let [pos (zipmap [:x :y :z] cell)
-        own (u/block-name (:primitives c) pos)
+  "Why the tunnel may not take cell pos (a fluid in it, lava or unwanted water beside it, not loaded), else nil."
+  [c pos]
+  (let [own (u/block-name (:primitives c) pos)
         beside (map #(u/block-name (:primitives c) (around pos %)) faces)]
     (cond
       (nil? own) :not-loaded
@@ -339,57 +367,89 @@
       (some #{"lava"} beside) :lava
       (and (some #{"water"} beside) (not (:wet (:args c)))) :water)))
 
-(defn burrow-stop!
-  "End the burrow: skip the target and count a failure."
-  [c target reason]
-  (ctx/emit! c :mine.burrow-stopped :info {:target target :reason reason
-                                           :text (str "mine stopped burrowing to " (pr-str target) ": " (name reason))})
-  (skip-failed! c (zipmap [:x :y :z] target))
-  (ctx/update-mem! c dissoc :burrow)
-  :continue)
+(defn step-cell
+  "The feet cell k blocks along the tunnel from its origin."
+  [{:keys [origin heading]} k]
+  (let [[dx dz] (headings heading)]
+    (-> origin (update :x + (* k dx)) (update :z + (* k dz)))))
 
-(defn ^:async burrow-dig!
-  "Dig one cell of a burrow step (equip, rules, tidy): true when the cell is air afterwards, else false."
-  [c cell]
-  (await (equip! c))
-  (let [pos (zipmap [:x :y :z] cell)
-        v (access/may-dig? (access/rules-input c) pos)
-        verdict (access/judge v (:accept (:args c)))]
-    (if (not= :ok verdict)
-      (do (refused! c pos v verdict) false)
-      (contains? #{"dug" "missing"} (.-status (await (tidy/dig! c pos)))))))
+(defn tunnel-reason [stop] (if (= :tunnel-length stop) :tunnel-length :tunnel-stopped))
 
-(defn ^:async burrow-round!
-  "One step of the burrow toward a buried target: dig the next cell of the way, or walk into it."
-  [c {:keys [target]}]
-  (let [pos (zipmap [:x :y :z] target)
-        feet (let [{:keys [x y z]} (cell-of (u/self-pos c))] [x y z])
-        step (if (and (= (:block (:args c)) (u/block-name (:primitives c) pos))
-                      (= :buried (classify c (:wet (:args c)) pos)))
-               (burrow-step feet target)
-               :arrived)]
-    (if (= :arrived step)
-      (do (ctx/update-mem! c dissoc :burrow) :continue)
-      (let [{:keys [next cut floor stop]} step
-            blocking (first (remove #(air (u/block-name (:primitives c) (zipmap [:x :y :z] %))) cut))
-            hazard (some #(cut-hazard c %) (remove #(air (u/block-name (:primitives c) (zipmap [:x :y :z] %))) cut))]
-        (cond
-          stop (burrow-stop! c target stop)
-          hazard (burrow-stop! c target hazard)
-          (not (rules/solid-floor? #(u/block-name (:primitives c) (zipmap [:x :y :z] %)) floor)) (burrow-stop! c target :no-floor)
-          blocking (if (await (burrow-dig! c blocking)) :continue (burrow-stop! c target :dig-failed))
-          :else (let [r (await (ctx/act c :moveTo (clj->js {:pos {:x (+ (first next) 0.5) :y (second next) :z (+ (nth next 2) 0.5)} :range 0})))]
-                  (if (= "arrived" (.-status r)) :continue (burrow-stop! c target :walk-failed))))))))
+(defn tunnel-end!
+  "The tunnel is done (stop: :tunnel-length or why it stopped at cell at): one warn mine.tunnel-end, then the mend."
+  [c stop at]
+  (let [{:keys [goal tunnel]} (ctx/mem c)
+        {:keys [heading steps]} tunnel
+        got (max 0 (- (carried c) (- goal (:count (:args c)))))]
+    (ctx/emit! c :mine.tunnel-end :warn
+               (cond-> {:reason stop :heading heading :length steps :got got
+                        :text (str "mine's tunnel ended after " steps " blocks " heading ": "
+                                   (if (= :tunnel-length stop) "its length is used up" (str "stopped, " (name stop)))
+                                   (when at (str " at " (str/join "," (access/cell at))))
+                                   "; got " got " of " (:count (:args c)))}
+                 at (assoc :at (access/cell at))))
+    (ctx/update-mem! c assoc-in [:tunnel :stop] stop)
+    (to-mend! c (tunnel-reason stop))))
 
-(defn burrow?
-  "Whether to dig straight toward the buried target: underground and within :burrow-max."
+(defn ^:async step-to!
+  "Walk to the centre of cell pos: true when there."
   [c pos]
-  (and (underground? c) (<= (u/dist (u/self-pos c) pos) (:burrow-max (:args c)))))
+  (or (= (cell-of (u/self-pos c)) pos)
+      (= "arrived" (.-status (await (ctx/act c :moveTo (clj->js {:pos {:x (+ (:x pos) 0.5) :y (:y pos) :z (+ (:z pos) 0.5)}
+                                                                  :range 0})))))))
+
+(defn ^:async cut!
+  "Dig the cells in order (equip, rules, tidy): :ok when each is air afterwards, else :refused or :dig-failed. A cut
+  of the mined block is collected like a target."
+  [c cells]
+  (loop [cells cells]
+    (if-let [pos (first cells)]
+      (let [block (u/block-name (:primitives c) pos)
+            _ (await (equip! c block))
+            v (access/may-dig? (access/rules-input c) pos)
+            verdict (access/judge v (:accept (:args c)))
+            status (when (= :ok verdict) (.-status (await (tidy/dig! c pos))))]
+        (cond
+          (not= :ok verdict) (do (refused! c pos v verdict) :refused)
+          (not (#{"dug" "missing"} status)) :dig-failed
+          :else (do (when (and (= "dug" status) (= block (:block (:args c))))
+                      (ctx/update-mem! c assoc :collecting true))
+                    (recur (rest cells)))))
+      :ok)))
+
+(defn ^:async tunnel-round!
+  "One step of the strip tunnel: back onto its last cell, judge and cut the next two, look at them, step in."
+  [c]
+  (let [m (ctx/mem c)
+        t (or (:tunnel m) {:origin (cell-of (u/self-pos c)) :heading (:heading m) :steps 0})
+        _ (when-not (:tunnel m) (ctx/update-mem! c assoc :tunnel t))
+        {:keys [steps stop heading]} t
+        name-at #(u/block-name (:primitives c) %)
+        from (step-cell t steps)
+        next (step-cell t (inc steps))
+        cut [(update next :y inc) next]
+        hazard (some #(cut-hazard c %) cut)]
+    (cond
+      stop (to-mend! c (tunnel-reason stop))
+      (>= steps (:tunnel-length (:args c))) (tunnel-end! c :tunnel-length nil)
+      (not (await (step-to! c from))) (tunnel-end! c :walk-failed from)
+      hazard (tunnel-end! c hazard next)
+      (not (rules/solid-floor? name-at (update next :y dec))) (tunnel-end! c :no-floor next)
+      :else (let [r (await (cut! c (remove #(air (name-at %)) cut)))]
+              (if (not= :ok r)
+                (tunnel-end! c r next)
+                (do (await (glance! c [(headings heading)]))
+                    (if (await (step-to! c next))
+                      (do (ctx/update-mem! c #(-> % (update-in [:tunnel :steps] inc) (assoc :looked next)))
+                          :continue)
+                      (tunnel-end! c :walk-failed next))))))))
+
+;; ------------------------------------------------------------------ the dig phase
 
 (defn ^:async dig-round! [c]
-  (let [{:keys [goal failures dry]} (ctx/mem c)
-        {:keys [max-failures wet dry-digs]} (:args c)
-        {:keys [targets buried refused wet?]} (scan c)
+  (let [{:keys [goal failures dry looked]} (ctx/mem c)
+        {:keys [max-failures wet dry-digs tunnel-length]} (:args c)
+        {:keys [targets refused wet?]} (scan c)
         pos (first targets)]
     (cond
       (>= (carried c) goal) (to-mend! c :count)
@@ -397,110 +457,20 @@
                                    (to-mend! c :no-drops))
       (>= failures max-failures) (do (ctx/emit! c :mine.gave-up :warn {:failures failures :text (str "mine gave up after " failures " failures")})
                                      (to-mend! c :gave-up))
-      (and (nil? pos) (seq buried) (burrow? c (first buried)))
-      (do (ctx/update-mem! c assoc :burrow {:target (access/cell (first buried))}) :continue)
-      (and (nil? pos) (seq buried)) (visit! c (first buried))
-      (and (nil? pos) (seq refused))
-      (do (access/decline! c :mine.declined "mine" (assoc (access/refusal-fields refused) :reason :refused))
-          (to-mend! c :refused))
-      (nil? pos) (to-mend! c (if (and wet? (not wet)) :wet :none))
-      :else (let [walked (await (near/walk-near! c pos reach))]
-              (cond
-                (= :blocked walked) (do (skip-failed! c pos) :continue)
-                (= :partial walked) (partial! c pos)
-                :else (do (ctx/update-mem! c dissoc :partials :partial-pos)
-                          (await (dig! c pos))))))))
-
-(defn tunnel-of
-  "What the way out of a tunnel needs of its result."
-  [res]
-  (select-keys res [:line :dug :torches :keep]))
-
-(defn ^:async tunnel-in!
-  "The tunnel child's round toward the visit's target: reached, the dig stage next; stopped, skip the target, count
-  a failure and walk out."
-  [c {:keys [target]}]
-  (let [r (await (ctx/call-child c :tunnel 'jobs.access.tunnel {:target target :max-length (:tunnel-max (:args c))}))
-        res (when (= :done r) (ctx/child-result c :tunnel))]
-    (cond
-      (nil? res) nil
-      (= :done (:status res))
-      (let [t {:target target :entry (:entry res) :dug (count (:dug res))}]
-        (ctx/emit! c :mine.tunnel :info (assoc t :text (str "mine tunnelled to " (pr-str target) " from " (pr-str (:entry res)))))
-        (ctx/update-mem! c #(-> % (update :tunnels (fnil conj []) t)
-                                   (update :visit assoc :stage :dig :entry (:entry res) :tunnel (tunnel-of res)))))
-      :else (do (skip-failed! c (zipmap [:x :y :z] target))
-                (ctx/update-mem! c update :visit assoc :stage :out :entry (when (:inside res) (:entry res))
-                                 :tunnel (when (:inside res) (tunnel-of res)))))
-    :continue))
-
-(defn trapped!
-  "End the job :trapped: the way out did not arrive."
-  [c here to res]
-  (ctx/emit! c :mine.trapped :warn {:at here :to to :walk res :text (str "mine could not walk back out to " (pr-str to))})
-  (ctx/update-mem! c #(-> % (dissoc :visit) (assoc :reason :trapped)))
-  (finish! c))
-
-(defn ^:async leave-out!
-  "A dead-end tunnel's way out: jobs.access.leave-tunnel (torches back, mouth sealed, the mined item spared); its
-  stop ends the job :trapped."
-  [c {:keys [tunnel entry]}]
-  (let [r (await (ctx/call-child c :out 'jobs.access.leave-tunnel {:tunnel tunnel :spare [(item-name (:args c))]}))
-        res (when (= :done r) (ctx/child-result c :out))]
-    (cond
-      (nil? res) :continue
-      (= :done (:status res)) (do (ctx/update-mem! c #(-> % (assoc-in [:visit :stage] :home)
-                                                          (update :open (fnil into []) (:open res))))
-                                  :continue)
-      :else (trapped! c (access/cell (cell-of (u/self-pos c))) entry res))))
-
-(defn ^:async walk-out!
-  "Leave the tunnel: a dead end through jobs.access.leave-tunnel, a kept one walking back up to its entry over its own
-  stair (jobs.debug.walk-plan); not arriving ends the job :trapped. Then the home stage."
-  [c {:keys [entry tunnel] :as visit}]
-  (if (and tunnel (not (:keep tunnel)))
-    (await (leave-out! c visit))
-    (let [here (access/cell (cell-of (u/self-pos c)))
-          r (when (and entry (not= entry here)) (await (ctx/call-child c :out 'jobs.debug.walk-plan {:to entry})))
-          res (when (= :done r) (ctx/child-result c :out))]
-      (cond
-        (or (nil? entry) (= entry here)) (do (ctx/update-mem! c assoc-in [:visit :stage] :home) :continue)
-        (nil? res) :continue
-        (= :arrived (:status res)) :continue
-        :else (trapped! c here entry res)))))
-
-(defn ^:async surface-walk!
-  "Walk to pos (range 0) on the surface after a tunnel: :there, :partial or :blocked. Kept on moveTo (the old walker)
-  while card c97285bf is open: the walk driver gets stuck climbing out of the tunnel stair in the fake."
-  [c pos]
-  (if (u/within? (u/self-pos c) pos 0)
-    :there
-    (let [r (await (ctx/act c :moveTo (clj->js {:pos pos :range 0})))]
-      (case (.-status r)
-        "arrived" :there
-        "partial" :partial
-        :blocked))))
-
-(defn ^:async walk-home!
-  "From the tunnel's entry back to where the visit began, on the surface (moveTo, as mine walks to targets); the
-  visit ends either way, an info mine.not-home when the walk did not arrive."
-  [c {:keys [from]}]
-  (let [walked (await (surface-walk! c (zipmap [:x :y :z] from)))]
-    (when (not= :there walked)
-      (ctx/emit! c :mine.not-home :info {:to from :walk walked :text (str "mine did not get back to " (pr-str from) ": " (name walked))}))
-    (ctx/update-mem! c dissoc :visit)
-    :continue))
-
-(defn ^:async visit-round!
-  "One step of the visit to a buried target: tunnel in, dig it (its drops are collected before the next stage),
-  walk out."
-  [c {:keys [stage target] :as visit}]
-  (case stage
-    :in (await (tunnel-in! c visit))
-    :dig (do (ctx/update-mem! c assoc-in [:visit :stage] :out)
-             (await (dig! c (zipmap [:x :y :z] target))))
-    :out (await (walk-out! c visit))
-    :home (await (walk-home! c visit))))
+      (nil? looked) (await (look-around! c))
+      (some? pos) (let [walked (await (near/walk-near! c pos reach))]
+                    (cond
+                      (= :blocked walked) (do (skip-failed! c pos) :continue)
+                      (= :partial walked) (partial! c pos)
+                      :else (do (ctx/update-mem! c dissoc :partials :partial-pos)
+                                (await (dig! c pos)))))
+      (not= looked (cell-of (u/self-pos c))) (await (look-around! c))
+      :else (do (when (seq refused)
+                  (access/decline! c :mine.declined "mine" (assoc (access/refusal-fields refused) :reason :refused)))
+                (cond
+                  (pos? tunnel-length) (await (tunnel-round! c))
+                  (seq refused) (to-mend! c :refused)
+                  :else (to-mend! c (if (and wet? (not wet)) :wet :none)))))))
 
 ;; ------------------------------------------------------------------ mend
 
@@ -574,13 +544,15 @@
 
 (def max-resumes 2)
 
-(defn mended!
-  "Nothing is owed: dig on when the mend spent the count and targets off the ground remain, else finish."
+(defn ^:async mended!
+  "Nothing is owed. The mend spent the count: look around once from here, then dig on while targets off the ground
+  remain (at most max-resumes times). Else finish."
   [c]
-  (let [{:keys [resumes reason]} (ctx/mem c)
+  (let [{:keys [resumes reason looked]} (ctx/mem c)
         more? (some #(off-ground? c %) (:targets (scan c)))]
     (cond
       (not (spent-on-mend? c)) (wrap-up! c)
+      (not= looked (cell-of (u/self-pos c))) (await (look-around! c))
       (and more? (< (or resumes 0) max-resumes))
       (do (ctx/update-mem! c #(-> % (assoc :phase :dig :failures 0 :dry 0 :last-carried (carried c) :mend-failures 0)
                                   (dissoc :collecting :partials :partial-pos)
@@ -594,7 +566,7 @@
         item (when (seq cells) (filler c))
         pos (mend-target c cells)]
     (cond
-      (empty? cells) (mended! c)
+      (empty? cells) (await (mended! c))
       (>= (:mend-failures (ctx/mem c) 0) max-mend-failures)
       (do (ctx/emit! c :mine.mend-failed :warn {:owed (mapv :pos cells) :text (str "mine could not mend: " (cells-text cells))})
           (wrap-up! c))
@@ -605,13 +577,13 @@
       :else (await (raise! c item)))))
 
 (defn ^:async home-round!
-  "The last step of a job that dug tunnels: back to where it started, on the surface, whatever the digging left
+  "The last step of a job whose tunnel took a step: back to the cell it started on (moveTo), whatever the digging left
   open behind it; an info mine.not-home when the walk did not arrive. The job ends either way."
   [c]
-  (let [{:keys [start]} (ctx/mem c)
-        walked (await (surface-walk! c start))]
-    (when (not= :there walked)
-      (ctx/emit! c :mine.not-home :info {:to (access/cell start) :walk walked :text (str "mine did not get back to " (pr-str (access/cell start)) ": " (name walked))}))
+  (let [{:keys [start]} (ctx/mem c)]
+    (when-not (await (step-to! c start))
+      (ctx/emit! c :mine.not-home :info {:to (access/cell start) :at (access/cell (cell-of (u/self-pos c)))
+                                         :text (str "mine did not get back to " (str/join "," (access/cell start)))}))
     (finish! c)))
 
 (defn no-tool?
@@ -629,15 +601,23 @@
   :done)
 
 (defn ^:async round [c]
-  (let [m (ctx/mem c)]
+  (let [m (ctx/mem c)
+        heading (heading-name (:direction (:args c)))]
     (cond
       (and (nil? (:phase m)) (no-tool? c)) (no-tool! c)
+
+      (and (nil? (:phase m)) (:direction (:args c)) (nil? heading))
+      (do (ctx/emit! c :mine.done :warn {:got 0 :reason :bad-direction :direction (:direction (:args c))
+                                         :text (str "mine: no such direction " (pr-str (:direction (:args c))) "; north, south, east or west")})
+          (ctx/result! c {:got 0 :reason :bad-direction})
+          :done)
 
       (nil? (:phase m))
       (let [now (carried c)
             start (cell-of (u/self-pos c))]
         (ctx/update-mem! c assoc
                          :goal (+ now (:count (:args c))) :start start :failures 0 :dry 0 :last-carried now
+                         :heading (or heading (facing (:primitives c)))
                          :ground (if (:mend (:args c)) (snapshot c start) [])
                          :phase :dig)
         :continue)
@@ -645,6 +625,4 @@
       (= :home (:phase m)) (await (home-round! c))
       (= :mend (:phase m)) (await (mend-round! c))
       (:collecting m) (await (collect! c))
-      (:visit m) (await (visit-round! c (:visit m)))
-      (:burrow m) (await (burrow-round! c (:burrow m)))
       :else (await (dig-round! c)))))

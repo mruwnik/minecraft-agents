@@ -2,7 +2,7 @@
   "The rawWorld reader (the shape engine/js/raw-world.mjs gives the real body) over a fake's world atom, so
   engine.perception runs over the fake exactly as over the body. Block state ids are the default states of the fake's
   block names; a cell in the spec's :unloaded reads -1. Light comes from the world's :light {[x y z] [sky block]}, else
-  :light-default (open daylight [15 0] when unset). The eye is the body's cell centre at eye height, looking along the
+  :light-default (open daylight [15 0] when unset). The eye is the centre of the body's cell at eye height, looking along the
   world's :yaw/:pitch (Minecraft degrees, as drive sets them), in mineflayer radians. Block changes come from a watch
   on :blocks. The sight table and state names are raw-world.mjs's own, over the fixture registry. Test-only."
   (:require [engine.fake.node :as node]
@@ -30,7 +30,7 @@
   (when-not (:offline w)
     (let [[x y z] (get-in w [:self :pos])
           rad (/ js/Math.PI 180)]
-      #js {:x (+ x 0.5) :y (+ y eye-height) :z (+ z 0.5)
+      #js {:x (+ (js/Math.floor x) 0.5) :y (+ y eye-height) :z (+ (js/Math.floor z) 0.5)
            :yaw (- js/Math.PI (* (or (:yaw w) 0) rad)) :pitch (- (* (or (:pitch w) 0) rad))
            :dimension (get-in w [:self :dimension] "overworld")})))
 
