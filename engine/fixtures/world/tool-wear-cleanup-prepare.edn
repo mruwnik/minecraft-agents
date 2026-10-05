@@ -1,6 +1,6 @@
 ;; Card c5d2cded part 1: tool wear after digs in jobs.access.cleanup and jobs.forestry.prepare. A pickaxe with 1 durability
 ;; left (damage=249) breaks in the dig: warn tool.broke then tool.none; a healthy pick gives no tool event; no pick at all
-;; gives none either (it digs by hand). Cleanup digs the cobblestone pillar the same body placed; prepare digs a
+;; gives none either (nothing is dug: prepare and cleanup leave a block that needs a pick). Cleanup digs the cobblestone pillar the same body placed; prepare digs a
 ;; cobblestone stray in the planned oak cell. Torches keep hostiles away. Run: node tools/world-test.mjs <file> --match <name> --first-plot N
 {:defaults
  {:tags [:tool-wear :cleanup :prepare]
@@ -30,7 +30,9 @@
    :act [[:job (jobs.access.pillar {:height 2 :item "cobblestone" :ignore-zones? true})]
          [:await {:source :job :kind :pillar.done} 60]
          [:job (jobs.access.cleanup {:job :all :ignore-zones? true})]]
-   :expect [{:no-event {:source :job :kind #{:tool.broke :tool.none :tool.low}} :for-s 20}]}
+   ;; no pick: the cobblestone pillar stays (entries open :no-tool), nothing dug, no tool event
+   :expect [{:event {:source :job :kind :cleanup.done} :within-s 30}
+            {:no-event {:source :job :kind #{:tool.broke :tool.none :tool.low}} :for-s 20}]}
   {:name "prepare-last-durability-pick-breaks"
    :blocks [[:set [16 0 16] "cobblestone"]]
    :plans [{:id "wood" :parts [{:id "t" :cells [#at [16 0 16]] :want {:tree "oak"}}]}]
@@ -52,6 +54,8 @@
    :plans [{:id "wood" :parts [{:id "t" :cells [#at [16 0 16]] :want {:tree "oak"}}]}]
    :body {:at [16.5 0 12.5] :inventory [["oak_sapling" 1] ["dirt" 2]]}
    :act [[:job (jobs.forestry.prepare {:plan "test-probewear-wood"})]]
-   ;; no pick: prepare digs the stray and the stone under it by hand (slow, no drops); no tool event, no error
-   :expect [{:no-event {:source :job :kind #{:tool.broke :tool.none :tool.low}} :for-s 20}
-            {:no-event {:source :job :kind #{:failed :error}} :for-s 20}]}]}
+   ;; no pick: the cobblestone stray is not dug by hand; warn prepare.no-tool, no tool event, no error
+   :expect [{:event {:source :job :kind :prepare.no-tool} :within-s 30}
+            {:no-event {:source :job :kind #{:tool.broke :tool.none :tool.low}} :for-s 20}
+            {:no-event {:source :job :kind #{:failed :error}} :for-s 20}]
+   :after [[:block [16 0 16] "cobblestone"]]}]}

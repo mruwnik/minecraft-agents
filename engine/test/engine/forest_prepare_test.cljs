@@ -11,7 +11,7 @@
 
 (def job 'jobs.forestry.prepare)
 
-(def zero {:cleared 0 :soiled 0 :planted 0 :dammed 0 :short {} :wrong [] :no-soil [] :cramped [] :wet [] :refused []})
+(def zero {:cleared 0 :soiled 0 :planted 0 :dammed 0 :short {} :wrong [] :no-soil [] :no-tool [] :cramped [] :wet [] :refused []})
 
 (defn expect [m] (merge zero m))
 
@@ -98,12 +98,30 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [stray ["short_grass" "tall_grass" "poppy" "snow" "oak_leaves" "stone" "fern"]]
+        (doseq [stray ["short_grass" "tall_grass" "poppy" "snow" "oak_leaves" "fern"]]
           (let [{:keys [p result]} (await (outcome (world {"3,64,0" stray} (item "oak_sapling" 1)) {"forest" one-cell}))]
             (is (= [[3 64 0]] (digs p)) stray)
             (is (= [[3 64 0 "oak_sapling"]] (places p)) stray)
             (is (= "oak_sapling" (h/block-at p 3 64 0)) stray)
             (is (= (expect {:cleared 1 :planted 1}) result) stray)))))))
+
+(deftest a-stone-stray-or-ground-needing-a-pickaxe-is-not-dug-by-hand
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[blocks cell] [[{"3,64,0" "stone"} [3 64 0]] [{"3,64,0" "cobblestone"} [3 64 0]] [{"3,63,0" "stone"} [3 63 0]]]]
+          (let [{:keys [p seen]} (await (run (world blocks (item "dirt" 1) (item "oak_sapling" 1)) {"forest" one-cell} {:plan "forest"} 10))]
+            (is (= [] (digs p)) (str cell))
+            (is (= [] (places p)) (str cell))
+            (is (= [{:pos {:x 3 :y 64 :z 0} :block (first (vals blocks))}] (warns seen :prepare.no-tool)) (str cell))))))))
+
+(deftest a-field-with-other-work-reports-the-cell-left-for-want-of-a-tool
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p result]} (await (outcome (world {"3,64,0" "stone" "4,64,0" "short_grass"} (item "oak_sapling" 2)) {"forest" two-cells}))]
+          (is (= [[4 64 0]] (digs p)))
+          (is (= (expect {:cleared 1 :planted 1 :no-tool [{:pos [3 64 0] :block "stone"}]}) result)))))))
 
 (deftest a-pickaxe-that-breaks-in-the-clearing-dig-says-tool-broke-and-tool-none
   (async done
@@ -137,7 +155,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [under ["stone" "sand" "gravel" "cobblestone"]]
-          (let [{:keys [p result]} (await (outcome (world {"3,63,0" under} (item "dirt" 1) (item "oak_sapling" 1)) {"forest" one-cell}))]
+          (let [{:keys [p result]} (await (outcome (world {"3,63,0" under} (item "dirt" 1) (item "oak_sapling" 1) (item "stone_pickaxe" 1)) {"forest" one-cell}))]
             (is (= [[3 63 0]] (digs p)) under)
             (is (= [[3 63 0 "dirt"] [3 64 0 "oak_sapling"]] (places p)) under)
             (is (= "dirt" (h/block-at p 3 63 0)) under)
@@ -272,7 +290,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p result]} (await (with-zones [{:name "vault" :min [3 63 0] :max [3 63 0] :allow #{}}]
-                                          #(outcome (world {"3,63,0" "stone" "3,64,0" "short_grass"} (item "dirt" 1) (item "oak_sapling" 1)) {"forest" one-cell})))]
+                                          #(outcome (world {"3,63,0" "stone" "3,64,0" "short_grass"} (item "dirt" 1) (item "oak_sapling" 1) (item "stone_pickaxe" 1)) {"forest" one-cell})))]
           (is (= [[3 64 0]] (digs p)) "the cell is cleared, the ground is not touched")
           (is (= [] (places p)))
           (is (= (expect {:cleared 1 :refused [{:pos [3 64 0] :reason :zone}]}) result)))))))
@@ -346,7 +364,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p result]} (await (outcome (far-world {"9,63,0" "stone"} (item "dirt" 1) (item "oak_sapling" 1)) {"forest" far-plan}))]
+        (let [{:keys [p result]} (await (outcome (far-world {"9,63,0" "stone"} (item "dirt" 1) (item "oak_sapling" 1) (item "stone_pickaxe" 1)) {"forest" far-plan}))]
           (is (= [[9 63 0]] (digs p)))
           (is (= [[9 63 0 "dirt"] [9 64 0 "oak_sapling"]] (places p)))
           (is (= (expect {:soiled 1 :planted 1}) result)))))))
@@ -427,7 +445,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p eng seen]} (await (run (world {"3,64,0" "oak_sapling" "4,63,0" "stone"}) {"forest" two-cells} {:plan "forest"} 20))]
+        (let [{:keys [p eng seen]} (await (run (world {"3,64,0" "oak_sapling" "4,63,0" "stone"} (item "stone_pickaxe" 1)) {"forest" two-cells} {:plan "forest"} 20))]
           (is (= 0 (calls-made p)))
           (give! p "dirt" 1)
           (give! p "oak_sapling" 1)
@@ -439,7 +457,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p eng result]} (await (outcome (world {"3,64,0" "short_grass" "4,63,0" "stone"} (item "dirt" 1) (item "oak_sapling" 2)) {"forest" two-cells}))
+        (let [{:keys [p eng result]} (await (outcome (world {"3,64,0" "short_grass" "4,63,0" "stone"} (item "dirt" 1) (item "oak_sapling" 2) (item "stone_pickaxe" 1)) {"forest" two-cells}))
               before (calls-made p)]
           (is (= (expect {:cleared 1 :soiled 1 :planted 2}) result))
           (core/submit! eng (list job {:plan "forest"}) {})
@@ -474,7 +492,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [spec (world {"3,63,0" "stone"} (item "dirt" 1) (item "oak_sapling" 1))
+        (let [spec (world {"3,63,0" "stone"} (item "dirt" 1) (item "oak_sapling" 1) (item "stone_pickaxe" 1))
               dir (tu/tmp-dir)
               p (tu/fake-on-floor spec)
               first-run (start spec {"forest" one-cell} dir p)]

@@ -35,7 +35,8 @@
 
   Every dig asks engine.access.rules/may-dig? (zones, plan footprints, ledger cells) when chosen and again
   right before the dig. A refusal (:zone :footprint :no-zones :not-loaded) or a hazard :accept does not name
-  (:hazard; lava beside is :lava-adjacent) keeps the entry open. A walk with no plan holds the cell
+  (:hazard; lava beside is :lava-adjacent) keeps the entry open, and so does :no-tool (the block needs a tool no
+  carried one is: dug by hand it drops nothing). A walk with no plan holds the cell
   :unreachable at once. After :give-up walks ending out of reach the cell is held :out-of-reach, after
   :give-up failed digs :dig-failed.
 
@@ -89,13 +90,14 @@
 
 (defn blocker
   "Why entry e cannot be dug now, as {:reason ...detail}, or nil. in: {:feet :block-at :zones :footprints :ledger
-  :accept}."
-  [{:keys [feet block-at accept] :as in} {:keys [cell]}]
+  :accept :can-harvest? (block name -> whether a carried tool harvests it; absent: always)}."
+  [{:keys [feet block-at accept can-harvest?] :as in} {:keys [cell]}]
   (let [[fx fy fz] feet
         [x y z] cell
         below (rules/offset cell 0 -1 0)]
     (cond
       (nil? (block-at cell)) {:reason :not-loaded}
+      (and can-harvest? (not (can-harvest? (block-at cell)))) {:reason :no-tool :block (block-at cell)}
       (and (= [x z] [fx fz]) (< y (dec fy))) {:reason :under-body}
       (and (= cell [fx (dec fy) fz]) (not (rules/solid-floor? block-at below)))
       {:reason :no-floor-below :block (block-at below)}
@@ -144,6 +146,7 @@
   (let [{:keys [accept reach]} (:args c)]
     (merge (access/zone-input c {:ignore-zones? (:ignore-zones? (:args c))})
            {:feet (feet-of c) :eye (eye-of c) :block-at (block-at-of (:primitives c)) :entries entries
+            :can-harvest? #(tools/can-harvest? (:primitives c) %)
             :ledger (ledger/cells l) :zones zones :accept (set accept) :reach reach
             :held (:held (ctx/mem c) {})})))
 

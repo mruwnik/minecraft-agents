@@ -414,6 +414,25 @@
           (is (= "dirt" (block p [0 64 0])))
           (is (= 1 (count (of-kind seen :cleanup.declined)))))))))
 
+(deftest a-block-that-needs-a-pickaxe-is-held-no-tool-without-one
+  (are [carried reason] (= reason (:reason (first (:open (step :entries [(entry [1 64 0] :item "cobblestone")]
+                                                              :block-at (lookup [1 64 0] "cobblestone")
+                                                              :can-harvest? #(or (not= % "cobblestone") carried))))))
+    false :no-tool
+    true nil))
+
+(deftest cleanup-of-cobblestone-without-a-pickaxe-digs-nothing-and-leaves-it-open
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p out digs] :as s} (setup {:self {:x 3.5 :y 64 :z 0.5} :blocks (merge (floor -2 5) {"0,64,0" "cobblestone"})
+                                                    :entries [(entry [0 64 0] :item "cobblestone")]})]
+          (core/submit! eng '(recording-parent) {})
+          (await (ticks s eng 30))
+          (is (= [] @digs))
+          (is (= "cobblestone" (block p [0 64 0])))
+          (is (= [{:cell [0 64 0] :item "cobblestone" :reason :no-tool :block "cobblestone"}] (:open @out))))))))
+
 (deftest a-pickaxe-that-breaks-in-the-dig-says-tool-broke-and-tool-none
   (async done
     (tu/run-async done

@@ -26,6 +26,8 @@
   :declined, nothing is polled). Water that cannot be traced, no dirt carried, or a refused source leaves the
   cell as :wet {:pos :why :source} (warn prepare.wet).
   Never dug, only reported:
+  - a stray or natural ground that no carried tool harvests (stone with no pickaxe: slow, nothing drops): result
+    :no-tool {:pos :block}, warn prepare.no-tool. The cell is taken up when a tool is carried.
   - in the cell: another species' sapling, any log but the species' own, lava, a container, bed, sign or
     light (result :wrong).
   - under the cell: anything but natural ground (planks, logs, wool, a chest, air, fluid, a cell the plan names)
@@ -49,7 +51,7 @@
   is carried. A started job runs on to finish.
   The job declines (one prepare.declined warn) while the plan is missing, unreadable or has no tree cells (in
   :part), and while no zone list is loaded.
-  Result: {:cleared :soiled :planted :dammed :short {species missing} :wrong :no-soil :cramped :wet :refused},
+  Result: {:cleared :soiled :planted :dammed :short {species missing} :wrong :no-soil :no-tool :cramped :wet :refused},
   info prepare.done.")
 
 (def args
@@ -207,10 +209,21 @@
       (= source cell) {:state :fill :target pos :source source :item dirt}
       :else {:state :dam :target (zipmap [:x :y :z] source) :source source :item dirt})))
 
+(declare assess-open)
+
 (defn assess
   "{:state ...} of one planned cell: :unsupported, :unloaded, :growing, :grown, :wrong (:found), :cramped (:at :block),
   :fill / :dam / :wet (:why :source) for water in the cell, :clear (:block: a stray to dig), :soil-dig, :soil-place,
-  :no-soil (:why), :plant (:item) or :short."
+  :no-soil (:why), :no-tool (:block: a dig no carried tool harvests; snow, whose drop is a snowball, is dug anyway), :plant (:item) or :short."
+  [p pos species world]
+  (let [r (assess-open p pos species world)
+        dug (when (#{:clear :soil-dig} (:state r)) (:block r))]
+    (if (and dug (not= "snow" dug) (not (tools/can-harvest? p dug)))
+      {:state :no-tool :block dug}
+      r)))
+
+(defn assess-open
+  "assess before the tool rule."
   [p pos species {:keys [carried over] :as world}]
   (let [n (u/block-name p pos)
         sapling (maintain/sapling-of species)]
@@ -307,6 +320,9 @@
                            {:pos pos :why why :water-source (some-> source vec)
                             :text (str "prepare leaves " (pr-str (maintain/cell-vec pos)) " wet: " (name why)
                                        (when source (str ", water source " (pr-str source))))})
+      :no-tool (ctx/warn-once! c [:no-tool pos block] :prepare.no-tool
+                               {:pos pos :block block
+                                :text (str "prepare leaves " block " at " (pr-str (maintain/cell-vec pos)) ": no carried tool harvests it")})
       :cramped (ctx/warn-once! c [:cramped pos at] :prepare.cramped
                                {:pos pos :at at :block block
                                 :text (str "prepare leaves " (pr-str (maintain/cell-vec pos)) ": " block " at " (pr-str at) " blocks the growth space")})
@@ -545,6 +561,7 @@
                 :short missing
                 :wrong (state-list states :wrong (fn [{:keys [pos found species]}] {:pos (maintain/cell-vec pos) :found found :species species}))
                 :no-soil (state-list states :no-soil (fn [{:keys [pos why]}] {:pos (maintain/cell-vec pos) :why why}))
+                :no-tool (state-list states :no-tool (fn [{:keys [pos block]}] {:pos (maintain/cell-vec pos) :block block}))
                 :cramped (state-list states :cramped (fn [{:keys [pos at block]}] {:pos (maintain/cell-vec pos) :at at :block block}))
                 :wet (state-list states :wet (fn [{:keys [pos why source]}]
                                                (cond-> {:pos (maintain/cell-vec pos) :why why} source (assoc :source source))))
@@ -552,7 +569,7 @@
     (ctx/emit! c :prepare.done :info
                (assoc result :text (str "prepare done: cleared " (:cleared result) ", soiled " (:soiled result)
                                         ", planted " (:planted result) ", short " (reduce + (vals missing))
-                                        ", left " (+ (count (:wrong result)) (count (:no-soil result)) (count (:cramped result))
+                                        ", left " (+ (count (:wrong result)) (count (:no-soil result)) (count (:no-tool result)) (count (:cramped result))
                                                     (count (:wet result)) (count (:refused result))))))
     (ctx/result! c result)
     :done))
