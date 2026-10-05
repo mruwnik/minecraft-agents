@@ -70,6 +70,42 @@
     {[1 67 0] "gravel" [1 66 0] "stone"} #{:water} [] :hazard
     {[1 67 0] "gravel" [1 66 0] "stone"} #{:falling-block} [] nil))
 
+(deftest a-crop-or-farmland-in-the-cut-is-refused-and-never-dug
+  (are [named cell block] (= {:reason :crop :cell cell :block block} (stop named #{}))
+    {[1 66 0] "wheat"} [1 66 0] "wheat"
+    {[1 65 0] "carrots"} [1 65 0] "carrots"
+    {[1 64 0] "farmland"} [1 64 0] "farmland"
+    {[1 65 0] "melon_stem"} [1 65 0] "melon_stem"
+    {[1 65 0] "attached_pumpkin_stem"} [1 65 0] "attached_pumpkin_stem"))
+
+(deftest a-stair-queued-in-a-farm-stops-before-digging-the-crop
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (stair! {:blocks (assoc ground "1,64,0" "wheat")} east (fn [_])))]
+          (is (= :crop (:reason @out)))
+          (is (= [1 64 0] (:cell @out)))
+          (is (= "wheat" (:block @out)))
+          (is (= 0 (:steps @out)))
+          (is (empty? (digs p))))))))
+
+(deftest off-stair-says-where-the-body-is-against-the-start
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [prep (fn [p]
+                     (let [world (.-world p)]
+                       (.override world "dig"
+                                  (fn ^:async f [token a impl]
+                                    (let [r (await (impl token a))]
+                                      (swap! (.. world -state) assoc-in [:self :pos] [7 65 4])
+                                      r)))))
+              {:keys [out]} (await (stair! {:blocks ground} east prep))]
+          (is (= :off-stair (:reason @out)))
+          (is (= [0 65 0] (:origin @out)))
+          (is (= [7 0 4] (:offset @out)))
+          (is (= 0 (:steps @out))))))))
+
 (deftest a-stop-names-the-cell-and-the-hazards
   (let [s (stop {[2 64 0] "lava"} #{:water})]
     (is (= [1 64 0] (:cell s)))

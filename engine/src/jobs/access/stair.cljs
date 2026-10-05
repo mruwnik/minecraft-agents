@@ -31,6 +31,7 @@
   (live, it flowed into the cut and onto the body's cell, which the walker cannot leave: no swimming; named, the
   stair digs and stops :fluid-in-cut a round later), lava never is, a falling block would land on the body or refill
   the cut, and :under-feet never comes up (the stair never digs the block it stands on), so seeing it is a bug.
+  A crop, stem or farmland in a cut cell stops :crop (never dug, zone or not).
   A block no tool breaks (bedrock, barrier, portal frames, command blocks) stops :unbreakable. A pickaxe block with no pickaxe carried stops :no-tool (by hand stone drops nothing); a dig whose drop has no
   room stops :inventory-full; a cell refilled 3 times stops :refills. The body's cell is the progress: a resumed
   round finds its step from where the body stands on the stair line (off it: :off-stair). Dug cells are left and
@@ -76,6 +77,12 @@
     (when (and (<= 0 i steps) (= feet (add origin [(* i dx) (* i dy) (* i dz)])))
       i)))
 
+(def crop-names
+  "Blocks a stair never cuts: a farm's crops, stems and the farmland they stand on (the farm is another's work even
+  when no zone says so)."
+  #{"wheat" "carrots" "potatoes" "beetroots" "melon_stem" "pumpkin_stem" "attached_melon_stem" "attached_pumpkin_stem"
+    "nether_wart" "sweet_berry_bush" "torchflower_crop" "pitcher_crop" "farmland"})
+
 (defn hazard-key
   "The :accept key of a hazard: a fluid beside is :lava or :water (bubble columns are water)."
   [{:keys [reason fluid]}]
@@ -103,11 +110,13 @@
   "Why the step cannot go on, as {:reason ...detail}, or nil when every cell may be cut.
   in: the rules' input without :cell. cells :bridged? true: the floor was placed by the stair, what is under it is not judged."
   [{:keys [block-at] :as in} {:keys [cut floor under bridged?]} accept]
-  (let [fluid-cell (first (filter #(rules/fluids (block-at %)) cut))]
+  (let [fluid-cell (first (filter #(rules/fluids (block-at %)) cut))
+        crop-cell (first (filter #(crop-names (block-at %)) cut))]
     (cond
       (some #(nil? (block-at %)) (conj cut floor under))
       {:reason :not-loaded :cell (first (filter #(nil? (block-at %)) (conj cut floor under)))}
       fluid-cell {:reason :fluid-in-cut :cell fluid-cell :fluid (block-at fluid-cell)}
+      crop-cell {:reason :crop :cell crop-cell :block (block-at crop-cell)}
       (not (rules/solid-floor? block-at floor)) {:reason :no-floor :cell floor :block (block-at floor)}
       (and (not bridged?) (let [n (block-at under)] (or (rules/air n) (rules/fluids n))))
       {:reason :cave-below :cell under :block (block-at under)}
@@ -290,7 +299,10 @@
         i (stair-index origin feet dir heading target)]
     (ctx/update-mem! c record-dug (:block-at in))
     (cond
-      (nil? i) {:reason :off-stair :cell feet}
+      (nil? i) {:reason :off-stair :cell feet :origin origin
+                :offset (mapv - feet origin)
+                :why (str "the body is " (pr-str (mapv - feet origin)) " from the stair's start " (pr-str origin)
+                          ", off its line")}
       :else
       (do
         (ctx/update-mem! c assoc :at-step i)
