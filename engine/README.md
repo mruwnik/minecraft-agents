@@ -1194,7 +1194,7 @@ node engine/tools/world.mjs ProbeDrive --world claude inventory --who claude
 node engine/tools/drive.mjs ProbeDrive --world claude release --who claude
 ```
 
-`move-to` accepts `--range`, `--max-distance` (up to 64 blocks), and `--timeout-s` (1..10). `dig`, `place`, `use-on`, and
+`move-to` accepts `--range`, `--max-distance` (up to 64 blocks), and `--timeout-s` (1..10; for a longer walk submit `jobs.movement.go-to` or chain calls). A move-to within `--max-distance` walks as go-to does (engine.path.near/walk-round!: it opens a shut door, gate or trapdoor, passes and shuts it again; a result that is not `arrived` carries a `:reason` such as `no-path`, `door-stuck at [cells]` or `timeout`); a farther one, or a body without path sensing, runs the pathfinder primitive `moveTo`, which treats every door as a wall. `dig`, `place`, `use-on`, and
 `interact` use the existing primitive's reach, item and interaction checks. `interact` takes an entity ID, not a name.
 `use-on` refuses beds, containers and its existing hazard list. The operation status describes what the primitive returned;
 it does not schedule jobs or alter the engine's queue.

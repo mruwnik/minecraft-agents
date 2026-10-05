@@ -7,6 +7,8 @@
   (:require [engine.core :as core]
             [engine.entity-observations :as entity-observations]
             [engine.lease :as lease]
+            [engine.path.near :as near]
+            [engine.path.walk :as walk]
             [cljs.reader :as reader]
             [clojure.string :as str]
             ["crypto" :as crypto]))
@@ -51,7 +53,7 @@
           (when (and (contains? args :maxDistance)
                      (not (and (finite-number? (:maxDistance args)) (<= 1 (:maxDistance args) 64)))) "maxDistance must be 1..64")
           (when (and (contains? args :timeoutS)
-                     (not (and (finite-number? (:timeoutS args)) (<= 1 (:timeoutS args) 10)))) "timeoutS must be 1..10"))
+                     (not (and (finite-number? (:timeoutS args)) (<= 1 (:timeoutS args) 10)))) "timeoutS must be 1..10 (a manual move-to is one bounded step; for a longer walk submit the job jobs.movement.go-to, or chain move-to calls)"))
       (#{:dig :place :use-on} action)
       (or (when-not position-valid? (str (name action) " needs a finite :pos {x y z} in world bounds"))
           (when (and (= action :place) (not (valid-item? (:item args)))) "place needs a short :item name")
@@ -109,6 +111,13 @@
 (defn own-lease? [eng who]
   (and (core/manual? eng) (= who (:who @(:manual eng)))))
 
+(defn rotate-token!
+  "Give the lease a new ownership token synchronously: primitives cut the old promise and clear held controls."
+  [eng]
+  (let [token (str "m" (swap! (:tokens eng) inc))]
+    (core/set-owner! eng token)
+    (swap! (:manual eng) assoc :token token)))
+
 (defn cancel-active! [eng reason]
   (when-let [id (:active @(:world-ops eng))]
     (when-let [record (world-record eng id)]
@@ -116,9 +125,7 @@
         (set-world-record! eng id (assoc record :status :cancelled :reason reason :finished-at (core/now eng)))
         (swap! (:world-ops eng) assoc :active nil)
         ;; Rotate the token synchronously: primitives cut the old promise and clear held controls.
-        (let [token (str "m" (swap! (:tokens eng) inc))]
-          (core/set-owner! eng token)
-          (swap! (:manual eng) assoc :token token))
+        (rotate-token! eng)
         (action-event! eng id :done {:name (name (:action record)) :status :cut :reason reason})))
     id))
 
@@ -130,6 +137,44 @@
       (not= who (:who record)) (op-refuse "not-driver")
       (not= :running (:status record)) {:ok true :operation (op-view record)}
       :else (do (cancel-active! eng "cancelled") {:ok true :operation (op-view (world-record eng id))}))))
+
+;; ------------------------------------------------------------------ move-to through go-to's walker
+
+(defn cell-pos [pos] (near/cell-of {:x (:x pos) :y (:y pos) :z (:z pos)}))
+
+(defn walker-result
+  "The result of a walk round in moveTo's shape: {:status :pos :distance} and a :reason when it did not arrive."
+  [eng target {:keys [status result]}]
+  (let [here (js->clj (.-pos (.self (:primitives eng))) :keywordize-keys true)
+        reason (or (:reason result) (some-> (:status result) name))]
+    (cond-> {:status status :pos here :distance (core/distance here target)}
+      (and (not= "arrived" status) reason) (assoc :reason (str (name reason)
+                                                              (when-let [cells (seq (:cells result))] (str " at " (pr-str cells))))))))
+
+(defn walker-applies?
+  "Whether a move-to goes through the walker: the body can sense the world for planning and the target is within maxDistance
+  (a farther one is a hop, which only the primitive makes)."
+  [eng args]
+  (let [p (:primitives eng)
+        here (js->clj (.-pos (.self p)) :keywordize-keys true)]
+    (and (some? (walk/path-world p))
+         (<= (core/distance here (:pos args)) (or (:maxDistance args) 64)))))
+
+(defn ^:async walk-move-to!
+  "move-to as go-to walks: engine.path.near/walk-round! with doors, gates and trapdoors opened and shut again, bounded by
+  timeout-s (past it the lease's token is rotated, which cuts the walk). Resolves to a clj map in moveTo's result shape."
+  [eng token {:keys [pos range]} timeout-s]
+  (let [c (core/make-ctx eng {:root "manual-move-to" :slots [] :chain ["manual-move-to"] :token token :args {} :round 0 :reflex nil})
+        cell (cell-pos pos)
+        timed-out (atom false)
+        timer (js/setTimeout (fn [] (reset! timed-out true) (rotate-token! eng)) (* 1000 timeout-s))]
+    (try
+      (let [round (await (near/walk-round! c cell (or range 1) {:doors :shut :timeout-s timeout-s}))]
+        (walker-result eng cell round))
+      (catch :default e
+        (when-not @timed-out (throw e))
+        (assoc (walker-result eng cell {:status "partial"}) :reason "timeout"))
+      (finally (js/clearTimeout timer)))))
 
 (defn submit-world-op! [eng {:keys [who request-id action args]}]
   (let [prior (world-record eng request-id)
@@ -164,7 +209,10 @@
         (action-event! eng request-id :started {:name (name action) :args call-args})
         (let [method (:method (world-actions action))
               promise (try
-                        (js/Promise.resolve (.call (aget (:primitives eng) method) (:primitives eng) token (clj->js call-args)))
+                        (js/Promise.resolve
+                          (if (and (= action :move-to) (walker-applies? eng args))
+                            (.then (walk-move-to! eng token args timeout-s) clj->js)
+                            (.call (aget (:primitives eng) method) (:primitives eng) token (clj->js call-args))))
                         (catch :default e (js/Promise.reject e)))]
           (.then promise
                  (fn [result]

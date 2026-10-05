@@ -12,6 +12,7 @@
 (def usage
   (str "usage: world.mjs <agent> <command> [args] --world <world> [--who claude] [--worlds <dir>] [--state <legacy-parent>]\n"
        "  submit move-to <x> <y> <z> [--range <n>] [--timeout-s <1..10>] [--max-distance <1..64>]\n"
+       "    (walks like go-to, doors included; one bounded step: for a longer walk submit jobs.movement.go-to)\n"
        "  submit dig <x> <y> <z> | submit place <x> <y> <z> <item>\n"
        "  submit use-on <x> <y> <z> [--item <item>] [--face up|down|north|south|east|west]\n"
        "  submit interact <entity-id> [--item <item>] [--request-id <id>]\n"

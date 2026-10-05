@@ -7,7 +7,7 @@
             [engine.events :as events]
             [engine.registry :as registry]
             [engine.takeover :as takeover]
-            [engine.test-util :as tu]
+            [engine.test-util :as tu :refer [box floor]]
             [engine.triggers :as real-triggers]
             [cljs.reader :as reader]
             ["fs" :as fs]
@@ -298,6 +298,7 @@
         (let [{:keys [eng p]} (setup {})
               old-resolve (atom nil)
               new-resolve (atom nil)]
+          (set! (.-pathWorld p) nil) ; no path sensing: move-to is the primitive, whose promises this test holds
           (set! (.-moveTo p)
                 (fn [_ args]
                   (case (.-x (.-pos args))
@@ -324,3 +325,53 @@
           (await (js/Promise.resolve))
           (await (js/Promise.resolve))
           (is (= :done (get-in (world-call eng {:op :status :who "claude" :request-id "reused"}) [:edn :operation :status]))))))))
+
+;; ---------------------------------------------------------------- world move-to walks like go-to
+
+(def gate-world
+  {:blocks (merge (floor -2 -3 40 3) (assoc (box 5 64 -6 5 64 6 "oak_fence") "5,64,0" "oak_fence_gate"))
+   :states {"5,64,0" {:open false :facing "east"}}})
+
+(defn ^:async submit-and-wait!
+  "Take the body, submit one world move-to, wait until it is no longer running; the operation as the status op shows it."
+  [eng args]
+  (post eng {:op "take" :who "claude" :why "walk" :idleS 30})
+  (world-call eng {:op :submit :who "claude" :request-id "walk-1" :action :move-to :args args})
+  (loop [i 0]
+    (let [op (get-in (world-call eng {:op :status :who "claude" :request-id "walk-1"}) [:edn :operation])]
+      (if (or (not= :running (:status op)) (> i 200))
+        op
+        (do (await (js/Promise. #(js/setTimeout % 5)))
+            (recur (inc i)))))))
+
+(deftest world-move-to-passes-a-shut-gate-and-shuts-it-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup gate-world)
+              op (await (submit-and-wait! eng {:pos {:x 10 :y 64 :z 0} :range 0}))
+              pos (.-pos (.self p))]
+          (is (= :done (:status op)))
+          (is (= "arrived" (get-in op [:result :status])))
+          (is (= [10 64 0] [(.-x pos) (.-y pos) (.-z pos)]))
+          (is (false? (:open (js->clj (.-properties (.blockAt p #js {:x 5 :y 64 :z 0})) :keywordize-keys true)))))))))
+
+(deftest world-move-to-names-why-it-cannot-get-there
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:blocks (merge (floor -2 -3 40 3) (box 5 64 -6 5 66 6 "stone"))})
+              op (await (submit-and-wait! eng {:pos {:x 10 :y 64 :z 0} :range 0}))]
+          (is (= :done (:status op)))
+          (is (contains? #{"blocked" "partial"} (get-in op [:result :status])))
+          (is (seq (str (get-in op [:result :reason])))
+              (str "reason: " (get-in op [:result :reason]))))))))
+
+(deftest move-to-timeout-message-says-what-to-do-for-a-longer-walk
+  (let [{:keys [eng]} (setup {})]
+    (post eng {:op "take" :who "claude" :why "walk" :idleS 30})
+    (let [detail (get-in (world-call eng {:op :submit :who "claude" :request-id "long" :action :move-to
+                                          :args {:pos {:x 1 :y 64 :z 0} :timeoutS 20}})
+                         [:edn :detail])]
+      (is (re-find #"1\.\.10" detail))
+      (is (re-find #"go-to" detail)))))
