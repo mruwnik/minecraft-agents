@@ -2748,7 +2748,8 @@
   ;; node, edgeStop, leaves the nodes it did not expand out), and to edges-new the key of each unknown node at the edge.
   (frontierNode [s]
     (let [lo OPEN-REACH
-          hi (- 16 OPEN-REACH)]
+          hi (- 16 OPEN-REACH)
+          track (some? known-new)]
       (loop [i 0
              best -1
              best-f js/Infinity
@@ -2756,7 +2757,8 @@
              kbest-f js/Infinity]
         (if (< i n-nodes)
           (let [x (aget xs i) y (aget ys i) z (aget zs i)
-                mx (bit-and x 15) mz (bit-and z 15)]
+                mx (bit-and x 15) mz (bit-and z 15)
+                expanded (== (aget heap-pos i) -2)]
             (if (and (or (< mx lo) (>= mx hi) (< mz lo) (>= mz hi))
                      (<= (js/Math.max (js/Math.abs (- x goal-x)) (js/Math.abs (- z goal-z))) frontier-reach)
                      (not ^boolean (.endsOnMagma s x y z (aget hs i))))
@@ -2765,7 +2767,7 @@
                     edge ^boolean (.atLoadedEdge s i)
                     f (+ (aget gs i) (.heuristic s x z))]
                 (cond
-                  (not edge) (do (when (and (some? known-new) (not known) (== (aget heap-pos i) -2)) (.add known-new k))
+                  (not edge) (do (when (and track (not known) expanded) (.add known-new k))
                                  (recur (inc i) best best-f kbest kbest-f))
                   (and known (< f kbest-f)) (recur (inc i) best best-f i f)
                   known (recur (inc i) best best-f kbest kbest-f)
@@ -2773,22 +2775,72 @@
                             (if (< f best-f)
                               (recur (inc i) i f kbest kbest-f)
                               (recur (inc i) best best-f kbest kbest-f)))))
-              (recur (inc i) best best-f kbest kbest-f)))
+              (do (when (and track (some? known-edges))
+                    (.noteOffBand s i x y z expanded))
+                  (recur (inc i) best best-f kbest kbest-f))))
           (cond
             (not (neg? best)) best
-            (or (neg? kbest) ^boolean (.edgesOpen s)) kbest
-            :else (do (set! searched-out true) -1))))))
+            (neg? kbest) kbest
+            :else (let [open (.openEdges s)]
+                    (cond
+                      (nil? open) kbest
+                      (zero? (.-length open)) (do (set! searched-out true) -1)
+                      :else (.nearestToEdge s open))))))))
 
-  ;; whether options.knownEdges (absent: taken as open) holds an edge this search has not known to its end (known-new)
-  (edgesOpen [s]
-    (or (nil? known-edges)
-        (let [it (.values known-edges)]
-          (loop []
-            (let [^js n (.next it)]
-              (cond
-                (.-done n) false
-                (and (some? known-new) ^boolean (.has known-new (.-value n))) (recur)
-                :else true))))))
+  ;; An off-band node of a search that ended at its first edge (edgeStop) and was never expanded lies in land this search
+  ;; did not cover: it is left in edges-new (a handful: the fringe of the search) as an edge a way may still lead from. An
+  ;; expanded node that options.knownEdges holds is covered now: it goes in known-new.
+  (noteOffBand [s i x y z expanded]
+    (let [k (.knownKey s x y z)]
+      (cond
+        (and expanded (.has known-edges k)) (.add known-new k)
+        (and (not expanded) (>= edge-node 0) (< (.-length edges-new) 64)
+             (<= (js/Math.max (js/Math.abs (- x goal-x)) (js/Math.abs (- z goal-z))) frontier-reach)
+             (not (and (some? known-cells) ^boolean (.has known-cells k))))
+        (.push edges-new k))))
+
+  ;; the cells of options.knownEdges this search has not known to its end (known-new) as keys, an array; nil when it holds none
+  ;; (absent options.knownEdges: taken as open).
+  (openEdges [s]
+    (when (some? known-edges)
+      (let [out #js []
+            it (.values known-edges)]
+        (loop []
+          (let [^js n (.next it)]
+            (cond
+              (.-done n) out
+              (and (some? known-new) ^boolean (.has known-new (.-value n))) (recur)
+              :else (do (.push out (.-value n)) (recur))))))))
+
+  ;; the cell [x z] of a knownKey
+  (keyX [s k] (+ (- (js/Math.floor (/ (js/Math.floor (/ k 1024)) 2048)) 1024) goal-x))
+  (keyZ [s k] (+ (- (mod (js/Math.floor (/ k 1024)) 2048) 1024) goal-z))
+
+  ;; With no unknown edge left in the loaded land and an open edge out of sight (options.knownEdges, one an earlier search
+  ;; saw and did not cover; the loaded land follows the body), the known frontier node that lies nearest to such an edge
+  ;; (ties: the least cost plus heuristic): the walk to it brings that edge back into view. -1 when none.
+  (nearestToEdge [s open]
+    (let [lo OPEN-REACH
+          hi (- 16 OPEN-REACH)]
+      (loop [i 0 best -1 best-d js/Infinity best-f js/Infinity]
+        (if (< i n-nodes)
+          (let [x (aget xs i) y (aget ys i) z (aget zs i)
+                mx (bit-and x 15) mz (bit-and z 15)]
+            (if (and (or (< mx lo) (>= mx hi) (< mz lo) (>= mz hi))
+                     (<= (js/Math.max (js/Math.abs (- x goal-x)) (js/Math.abs (- z goal-z))) frontier-reach)
+                     (not ^boolean (.endsOnMagma s x y z (aget hs i)))
+                     ^boolean (.atLoadedEdge s i))
+              (let [d (loop [j 0 d js/Infinity]
+                        (if (< j (.-length open))
+                          (let [k (aget open j)]
+                            (recur (inc j) (js/Math.min d (js/Math.max (js/Math.abs (- x (.keyX s k))) (js/Math.abs (- z (.keyZ s k)))))))
+                          d))
+                    f (+ (aget gs i) (.heuristic s x z))]
+                (if (or (< d best-d) (and (== d best-d) (< f best-f)))
+                  (recur (inc i) i d f)
+                  (recur (inc i) best best-d best-f)))
+              (recur (inc i) best best-d best-f)))
+          best))))
 
   ;; the result's frontier: {x y z path known} of frontierNode for a search that ran out of land to search (exhausted,
   ;; its box, a ladder at a gap, air), nil otherwise or when no node stands at the loaded edge. known: the node is in
@@ -2804,7 +2856,20 @@
         (when-not (neg? node)
           (let [x (aget xs node) y (aget ys node) z (aget zs node)]
             #js {:x x :y y :z z :path (.pathTo s node)
-                 :known (and (some? known-cells) ^boolean (.has known-cells (.knownKey s x y z)))})))))
+                 :known (and (some? known-cells) ^boolean (.has known-cells (.knownKey s x y z)))
+                 :target (when (some? known-cells) (.targetOf s x z))})))))
+
+  ;; [x z] of the cell of options.knownEdges, not covered by this search, nearest to x z; nil when none
+  (targetOf [s x z]
+    (let [open (.openEdges s)]
+      (when (and (some? open) (pos? (.-length open)))
+        (loop [j 0 best nil best-d js/Infinity]
+          (if (< j (.-length open))
+            (let [k (aget open j)
+                  kx (.keyX s k) kz (.keyZ s k)
+                  d (js/Math.max (js/Math.abs (- x kx)) (js/Math.abs (- z kz)))]
+              (if (< d best-d) (recur (inc j) #js [kx kz] d) (recur (inc j) best best-d)))
+            best)))))
 
   ;; the result; one-way-node is the first one-way step on the way to the nearest node (-1: none), clean-end the nearest node of
   ;; the returnable search then run ({path distance})

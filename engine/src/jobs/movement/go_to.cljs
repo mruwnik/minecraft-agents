@@ -229,7 +229,7 @@
   on past it (restore-next!)."
   [c {:keys [step]}]
   (ctx/update-mem! c #(cond-> (-> % (dissoc :escalation :escalation-from :planned :holes-before :best)
-                                  (assoc :blocked 0 :searching 0 :frontier-best {}))
+                                  (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {}))
                         (= :approach step) (assoc :escalate-now true)
                         (not= :approach step) (assoc :restore-pending true)))
   :continue)
@@ -286,7 +286,7 @@
       (ctx/emit! c :go-to.restore-skipped :warn {:cells skipped
                                                  :text (str "left " (count skipped) " dug blocks for restore-broken")}))
     (ctx/update-mem! c #(-> % (dissoc :restore-now :restore-seen :restored :skipped :changed :best)
-                            (assoc :blocked 0 :searching 0 :frontier-best {})))))
+                            (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {})))))
 
 (defn skip-why
   "Why hole e must not be filled now, or nil: :changed (no longer air: forgotten), :occupied (the body is in it),
@@ -348,10 +348,11 @@
 (defn known-frontier-result
   "A round's walk result as go-to judges it: a walk to a frontier in land earlier searches knew to their end
   (:frontier-known: there was no other edge) explores nothing, so it is the search's own answer, :exhausted, and never
-  progress."
+  progress, unless it brings an edge seen earlier and now out of view nearer (:frontier-target)."
   [result]
   (if (:frontier-known result)
-    {:status :no-path :reason :exhausted :frontier-known true}
+    (cond-> {:status :no-path :reason :exhausted :frontier-known true}
+      (:frontier-target result) (assoc :frontier-target (:frontier-target result)))
     result))
 
 (defn ^:async walk! [c pos range doors]
@@ -377,7 +378,11 @@
             fcell (when frontier (zipmap [:x :y :z] frontier))
             fbests (:frontier-best (ctx/mem c) {})
             fbest (when frontier (get fbests frontier (u/dist from fcell)))
-            explored? (boolean (and frontier (< (u/dist to fcell) (dec fbest))))]
+            explored? (boolean (and frontier (< (u/dist to fcell) (dec fbest))))
+            target (:frontier-target result)
+            tbests (:target-best (ctx/mem c) {})
+            tdist (when target (u/dist to {:x (first target) :y (:y to) :z (second target)}))
+            nearer? (boolean (and target (< tdist (dec (get tbests target js/Infinity)))))]
         (cond
           (= "arrived" status)
           (if (:restore-pending (ctx/mem c)) (restore-next! c) (arrived! c))
@@ -390,10 +395,11 @@
               (give-up! c pos (:blocked (ctx/mem c) 0) :searching {:status :no-path :reason :searching})))
 
           :else
-          (let [progress? (or (< left (dec best)) explored?)
+          (let [progress? (or (< left (dec best)) explored? nearer?)
                 tries (if progress? 0 (inc (:blocked (ctx/mem c) 0)))]
             (ctx/update-mem! c assoc :blocked tries :searching 0 :best (if (< left (dec best)) left best)
-                             :frontier-best (cond-> fbests frontier (assoc frontier (min fbest (u/dist to fcell)))))
+                             :frontier-best (cond-> fbests frontier (assoc frontier (min fbest (u/dist to fcell))))
+                             :target-best (cond-> tbests target (assoc target (min tdist (get tbests target js/Infinity)))))
             (when (and progress? (:restore-pending (ctx/mem c))) (restore-next! c))
             (if (and (< tries max-blocked) (not= :goal-enclosed (:reason result)))
               :continue

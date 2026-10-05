@@ -91,3 +91,40 @@
           (is (= 80 (second (at p))) "still on the walkway")
           (is (<= (turns eng 40) 1)
               (str "east, then west, never back over land searched: " (mapv (juxt :status :to) (moved eng)))))))))
+
+;; the walkway runs 160 blocks on past the goal: the way down lies several view distances behind the body
+(deftest go-to-walks-back-along-a-long-walkway-to-the-stair-out-of-view
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out eng p]} (await (go! {:blocks (walkway 207) :self {:pos {:x 200.5 :y 80 :z 8.5}} :viewChunks 1}
+                                              {:pos [40 64 9] :range 1}))]
+          (is (= {:arrived true} (select-keys @out [:arrived])) (str "result " @out " at " (at p)))
+          (is (<= (turns eng 200) 2)
+              (str "west to the stair, then east on the ground: " (mapv (juxt :status :to) (moved eng)))))))))
+
+;; no way down at all: it may look back east once at what it left out of view, then it gives up
+(deftest go-to-gives-up-on-a-long-walkway-with-no-way-down
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [blocks (merge (box -56 63 9 207 63 9 "stone") (box -40 79 8 207 79 8 "stone"))
+              {:keys [out eng p]} (await (go! {:blocks blocks :self {:pos {:x 200.5 :y 80 :z 8.5}} :viewChunks 1}
+                                              {:pos [40 64 9] :range 1}))]
+          (is (= {:arrived false :reason :unreachable} (select-keys @out [:arrived :reason])) (str "result " @out))
+          (is (<= (turns eng 200) 3)
+              (str "west, once back east to see its far end, then done: " (count (moved eng)))))))))
+
+;; the goal lies at the west end, below a walkway whose west end is a dead end; the stair is at its east end, 250 blocks off,
+;; out of view from the west end. The search that took the west edge never saw the east one (it ends at the first edge it
+;; expands): the body must walk back to it, not give up with the west searched out
+(deftest go-to-walks-on-east-to-a-way-it-left-out-of-view
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [blocks (merge (box -56 63 9 240 63 9 "stone")
+                            (box -40 79 8 207 79 8 "stone")
+                            (apply merge (for [i (range 1 17)] (box (+ 207 i) (- 79 i) 8 (+ 207 i) (- 79 i) 8 "stone"))))
+              {:keys [out eng p]} (await (go! {:blocks blocks :self {:pos {:x 40.5 :y 80 :z 8.5}} :viewChunks 1}
+                                              {:pos [-50 64 9] :range 1}))]
+          (is (= {:arrived true} (select-keys @out [:arrived])) (str "result " @out " at " (at p) (mapv (juxt :status :to) (moved eng)))))))))

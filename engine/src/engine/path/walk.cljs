@@ -239,7 +239,8 @@
   [r]
   (when-let [^js f (.-frontier r)]
     (cond-> {:path (.-path f) :at [(.-x f) (.-y f) (.-z f)]}
-      (true? (.-known f)) (assoc :known true))))
+      (true? (.-known f)) (assoc :known true)
+      (some? (.-target f)) (assoc :target (vec (.-target f))))))
 
 (defn walk-plan
   "plan-walk's answer from its plan-within answer {:r :steps :beyond} over walled (pw with the walls).
@@ -259,7 +260,7 @@
     {:r r :steps walked :beyond beyond :status status :pw pw
      :ms (or (some-> r .-ms) 0)
      :one-way-taken (when past step)
-     :frontier-taken (when (and edge (> (count walked) 1)) (cond-> {:at (:at edge)} (:known edge) (assoc :known true)))
+     :frontier-taken (when (and edge (> (count walked) 1)) (cond-> {:at (:at edge)} (:known edge) (assoc :known true) (:target edge) (assoc :target (:target edge))))
      :searched-out out
      :stop (when (and step (not past) (not edge)) (stopped-one-way r (or (peek walked) (first steps) (body-cell c)) to step))}))
 

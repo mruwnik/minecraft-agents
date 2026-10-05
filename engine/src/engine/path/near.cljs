@@ -85,7 +85,8 @@
                            (not= :door-stuck (:status done))
                            (cond-> (walk/partial-end done (:status last-plan) to range (:steps last-plan) (:stop last-plan))
                              (:frontier-taken last-plan) (assoc :frontier (:at (:frontier-taken last-plan)))
-                             (:known (:frontier-taken last-plan)) (assoc :frontier-known true))
+                             (:known (:frontier-taken last-plan)) (assoc :frontier-known true
+                                                         :frontier-target (:target (:frontier-taken last-plan))))
                            stuck (door-stuck (:cells done))
                            :else (recur (into walls (:cells done)) (:cells done)))))))]
       ;; however the walk ended, what it opened and could not shut yet (the body was in its column) is shut when in reach
