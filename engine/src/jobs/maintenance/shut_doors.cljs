@@ -7,13 +7,16 @@
 
 (def doc
   "Shut the doors, gates and trapdoors a walk opened and left open (the job of the door-left trigger,
-  engine.triggers.door-left). Only blocks with an :opened entry (written by engine.path.pass when a walk opens a block,
-  dropped when it shuts it) count, whatever their age; a block the walker did not open is never touched. Each round takes
-  the nearest one within :radius that stands open: walks within :reach of it (doors :never: it opens nothing on the
-  way), then shuts it as the walker does (pass/shut-column!: an animal in its cell is waited out, never pushed). A block
-  the body stands in the column of waits for a later round. One not shut after :tries rounds (no way there, a click that
-  does nothing) is given up with one warn (shut-doors.gave-up) and its entry dropped, so the trigger leaves it. Ends with
-  the info shut-doors.done and a result {:shut n :left [{:cell :reason}]}.")
+  engine.triggers.door-left).
+  Only blocks with an :opened entry count (written by engine.path.pass when a walk opens a block, dropped when it
+  shuts it), whatever their age. A block the walker did not open is never touched. Blocks a :leave-open walk left
+  open on purpose are left alone.
+  Each round takes the nearest such block within :radius that stands open. It walks within :reach of it (doors
+  :never: it opens nothing on the way), then shuts it as the walker does (pass/shut-column!). An animal in the
+  cell is waited out, never pushed. A block the body stands in the column of waits for a later round.
+  A block not shut after :tries rounds (no way there, a click that does nothing) is given up with one warn
+  (shut-doors.gave-up) and its entry dropped, so the trigger leaves it.
+  Ends with info shut-doors.done and {:shut n :left [{:cell :reason}]}.")
 
 (def args
   {:radius {:doc "how far from the body a left block is looked for, in blocks" :default 16}

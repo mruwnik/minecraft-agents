@@ -3,10 +3,11 @@
             [engine.places :as places]))
 
 (def doc
-  "Forget a named place in body memory, one round: the place (or the retraction of a gone one) is removed, so the
-  readers see none. One place.forgotten info event with :was and a result {:ok true :name :was}. Refused, as one
-  place.refused warn event with :reason and :text and a result {:ok false :reason}: :bad-name, :reserved-name,
-  :no-such-place (nothing recorded under that name), :not-a-place (the name holds other memory, which is left alone).")
+  "Forget a named place in body memory, in one round. The place (or the retraction of a gone one) is removed.
+  Emits info place.forgotten with :was. Result {:ok true :name :was}.
+  A refusal gives warn place.refused with :reason and :text, and the result {:ok false :reason}. :reason is
+  :bad-name, :reserved-name, :no-such-place (nothing recorded under that name) or :not-a-place (the name holds
+  other memory, which is left alone).")
 
 (def args
   {:name {:doc "the place's name: a keyword or string" :default nil}})

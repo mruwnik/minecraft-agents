@@ -6,22 +6,20 @@
             [engine.path.near :as near]))
 
 (def doc
-  "Dig out a box from the top down (site levelling, demolition). Beds,
-  containers and fluids are kept. Ends with a result {:dug n :skipped {pos
-  reason} :kept n :fluids {name count}}.
-  A corner that is neither {:x :y :z} nor [x y z] of numbers declines with one clear-box.declined warn
-  {:reason :bad-args :text}.
-  Zones and plans (engine.access.rules, through engine.jobs.access): each round the loaded cells a zone (one that does
-  not allow :dig) or an active plan's footprint refuses are skipped for good (reason :zone or :footprint; one
-  clear-box.refused info per round names the zones and plans), and the chosen cell is asked again right before the
-  dig. A cell whose dig has a hazard not in :accept counts a try (reason :hazard after two). A box with every pending
-  cell refused declines before its first round, with one clear-box.declined warn {:reason :refused :zones :plans};
-  no zone list (zones.edn missing or never valid) declines with one clear-box.declined warn {:reason :no-zones}, also
-  in the middle of the job.
-  Each cell is dug by a jobs.blocks.dig child (:dig): it walks in reach (go-to), holds the best carried tool, digs
-  through tidy/dig! and picks up the drop; no tool is needed (a block whose tool is missing is dug and its drop
-  lost). While the child waits on the body (:inventory-full) the check waits with the same reason; a cell the child
-  waits on (:unreachable, a refusal, a hazard) is skipped or tried again as above.")
+  "Dig out a box from the top down (site levelling, demolition). Beds, containers and fluids are kept (:keep adds
+  more block names). The box is :from and :to, each {:x :y :z} or [x y z], at most 400 cells.
+  Each cell is dug by a jobs.blocks.dig child: it walks in reach, holds the best carried tool and picks up the
+  drop. No tool is needed (a block whose tool is missing is dug and its drop lost). While the child waits on
+  the body (:inventory-full) the job waits with the same reason.
+  Zones and plans: loaded cells that a zone or an active plan's footprint refuses are skipped for good (reason
+  :zone or :footprint, one clear-box.refused info per round). The chosen cell is checked again before the dig.
+  A dig hazard not in :accept counts a try (reason :hazard after two).
+  The job declines:
+  - on bad corners or too many cells (clear-box.declined {:reason :bad-args}).
+  - before the first round when every pending cell is refused (clear-box.declined {:reason :refused :zones
+    :plans}).
+  - when no zone list has been read (clear-box.declined {:reason :no-zones}), also in the middle of the job.
+  Result: {:dug n :skipped {pos reason} :kept n :fluids {name count}}.")
 
 (def args
   {:from {:doc "box corner (inclusive); any order; {:x :y :z} or [x y z]" :default nil}

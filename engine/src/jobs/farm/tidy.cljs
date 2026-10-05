@@ -9,28 +9,31 @@
             [plan.shape :as shape]))
 
 (def doc
-  "Dig the stray blocks over a plan of the body's world (:plan, optionally only its :part) and pick the drops
-  up. Bodies only read plans; the plan does not say what a stray is, this job does. Over the cells the plan names:
-  a cell it wants :clear holds a stray when anything is in it; a crop cell (want {:crop c}) holds one when it holds
-  anything but that crop (weeds, saplings, leaves, stone, dirt ...); and the one cell of air above every crop cell
-  that the plan does not itself name counts like a crop cell. NEVER dug, only listed: the planned crop itself (ripe
-  or not) and a block the plan wants; water and lava; farmland where a crop cell or its air is wanted clear; a
-  container or workstation (anything with an inventory), a bed, sign, banner or head, and any light, where the plan
-  wants something else (result :kept {:pos :block :why :container|:owned|:light|:fluid}); a block in a cell that
-  wants another block (farmland, water, a fence ...) and a crop of another kind in a crop cell (result :wrong
-  {:pos :found :want}, warn tidy.wrong): fixing them is a build, till or plant job's work, and a cell that wants
-  water is never dug, so the plan's own water is never drained. Cells nobody has loaded are no strays.
-  Every dig goes through engine.access.rules/may-dig? with the zones and the footprints of all OTHER active plans,
-  asked when the cell is chosen and again right before the dig. :footprint, :zone and a cell that cannot be dug are
-  refused at once; a hazard the dig reports and :accept does not name defers the cell until nothing else is left,
-  then it is tried :give-up times (the body may have moved) and refused as :hazard. A cell that cannot be walked to
-  or reached :give-up times is refused as :unreachable. Refused cells are the result's :refused [{:pos :block
-  :reason ...}] and the warn tidy.refused. The sweep goes top-down, nearest first, and ends by collecting the
-  drops (jobs.forestry.collect-drops, everything within the field's extent plus 4 blocks, as a child). Ends with a
-  result {:dug n :collected n :kept [...] :wrong [...] :refused [...]} and the info tidy.done; convergent: over a
-  tidy field it digs nothing and says \"nothing to dig\". The check declines, with one tidy.declined warn naming
-  the plan and the reason, while the plan is missing, unreadable or has no cells (in :part), and while
-  no zone list has been read (nil zones never mean no zones).")
+  "Dig the stray blocks over a plan's cells (:plan, optionally only its :part) and pick up the drops.
+  The plan does not say what a stray is, this job does:
+  - a cell the plan wants :clear holds a stray when anything is in it.
+  - a crop cell (want {:crop c}) holds one when it holds anything but that crop (weeds, saplings, leaves,
+    stone, dirt ...).
+  - the one cell of air above each crop cell counts like a crop cell, unless the plan names it.
+  Never dug, only listed:
+  - the planned crop itself (ripe or not) and any block the plan wants.
+  - water and lava.
+  - a container or workstation, a bed, sign, banner, head or light where the plan wants something else.
+    Result :kept {:pos :block :why :container|:owned|:light|:fluid}.
+  - a block in a cell that wants another block, and a crop of another kind in a crop cell. Result :wrong
+    {:pos :found :want} and warn tidy.wrong. Fixing these is a build, till or plant job's work.
+  Cells that are not loaded hold no strays.
+  Every dig is checked against zones and the footprints of all other active plans, when the cell is chosen and
+  again before the dig. A zone, claim, footprint or undiggable cell is refused at once. A dig hazard that
+  :accept does not name defers the cell until nothing else is left. It is then tried :give-up times and refused
+  as :hazard. A cell that cannot be walked to or reached :give-up times is refused as :unreachable.
+  Refused cells are in the result's :refused [{:pos :block :reason}] and the warn tidy.refused.
+  The sweep goes top-down, nearest first. It ends by collecting the drops within the field's extent plus 4 blocks
+  (jobs.forestry.collect-drops as a child).
+  Result: {:dug n :collected n :kept [...] :wrong [...] :refused [...]}, info tidy.done. Over a tidy field it
+  digs nothing.
+  The job declines (one tidy.declined warn naming the plan and the reason) while the plan is missing, unreadable
+  or has no cells (in :part), and while no zone list has been read.")
 
 (def args
   {:plan {:doc "id of a plan of the body's world" :default nil}

@@ -5,15 +5,12 @@
             [engine.path.near :as near]))
 
 (def doc
-  "Use bone meal on crops that are not ripe: the crop at :at, or the unripe crops
-  within :radius of the body, nearest first, at most :max uses. A crop that refuses
-  bone meal or cannot be reached is left alone. Ends with a result {:used n}.
-
-  Zones and claims are a rule the job consults: a crop in a zone or claim of another owner, or in a plan's footprint,
-  is no target (the bone meal is the owner's to give, a :harvest of the zone rules), asked when chosen and again
-  right before the use. One fertilize.declined warn per job names the zones, claims and plans ({:reason :refused
-  ...}); without a zone list it declines with {:reason :no-zones}. A job whose every crop is refused ends like one
-  with none. :ignore-zones? acts regardless.")
+  "Use bone meal on unripe crops: the crop at :at, or the unripe crops within :radius, nearest first.
+  Needs bone meal in the inventory. A crop that refuses bone meal or cannot be reached is skipped.
+  Ends when :max uses are spent, the bone meal runs out or no unripe crop is left. Result: {:used n}.
+  Zones: a crop in another owner's zone or claim, or inside a plan's footprint, is skipped (it counts as a
+  :harvest). The job warns fertilize.declined once, with :reason :refused (or :no-zones when no zone list was read).
+  :ignore-zones? true skips the check.")
 
 (def args
   {:at {:doc "one crop position to fertilize; the crops around the body when nil" :type :pos :default nil}

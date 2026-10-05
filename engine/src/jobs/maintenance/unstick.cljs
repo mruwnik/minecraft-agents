@@ -10,71 +10,49 @@
             [engine.triggers.stuck :as stuck]))
 
 (def doc
-  "Get a body out of being stuck: a job keeps calling moveTo and the body gets
-  nowhere. Each round is one attempt, counted in job memory, except a round
-  after which the body's feet are higher than ever yet in this spell (:best-y,
-  from the start position): that is progress and is not counted, so climbing
-  an 8-deep pit one block per round does not use the attempts up. Only counted
-  attempts reach :max-attempts; a hard cap of :max-attempts + 8 (max-pillar)
-  rounds per spell bounds the rest. First it waits
-  (the :wait primitive, 50 ms steps, up to 1 s) for the body to be on the
-  ground, so the cells it picks are the landed ones; still airborne, it uses
-  them anyway. In the first round, before anything is placed or dug, it walks
-  toward the stored goal with the engine's planner (engine.path.near/walk-near!
-  with :doors :shut, at most walk-timeout-s per steer): a shut door, gate or
-  trapdoor the job's moveTo cannot pass is opened, passed and shut again, so a
-  body in a room is not pillared and dug out of it. When that walk moves the
-  body more than :min-move blocks the spell is over (:done). Then: attempt 1 steps back one block the way it came, unless
-  the body is in a pit (at least three of the four sides solid at feet+k for
-  k = 0, 1, ... gives the depth d, capped at 8), where it goes straight to the
-  next rule. Otherwise, when a placeable block is carried in a pit, it
-  pillars: jumpPlace with the largest stack and count d (blocks it digged are
-  carried, so pillaring is preferred every round). Otherwise it digs, toward
-  the stored goal (no goal: the first cardinal), as a DOOR when the wall in
-  front is one block thick (the cells two ahead at feet and head height are
-  open): the solid blocks in front at feet and head height. Else as a STAIR,
-  lifting the body one block: it digs each solid one of H, the cell above the
-  head (headroom to jump), and F1, F2, the feet and head cells one block up
-  in front, which stand on the front block at feet height (left solid; if
-  it is open, the next cardinal is tried). When no side of the body's cell is
-  solid (it stands inside a hollow wider than a pit, so it is not \"in a
-  pit\" either), it first walks (moveTo range 0) to the nearest cell at the
-  same level with a solid side, reached through standable cells within
-  wall-search-radius (24) blocks, and digs the stair from there (none:
-  \"stair: no solid step\"; the walk falls short: \"wall: moveTo <status>\"),
-  then moves to F1 with range 0 (no reason when that arrives or the feet rose,
-  else \"stair: moveTo <status>\"). A cell is not dug when the one above it is
-  sand or gravel or any of its six neighbours is water or lava (the reason
-  says which); any dig status but dug or missing ends the attempt with
-  \"dig: <status>\" (bedrock gives cannot, a slow block timeout). Every dug
-  block is noted as a :tidy entry (engine.jobs.tidy, whoever's it is), so
-  jobs.survival.restore-broken (trigger :tidy-pending) puts it back once the
-  spell has ended, as cleanup takes the pillar blocks back. The best
-  pickaxe carried is equipped first. Each attempt that did nothing useful
-  records why in job memory (:reasons). After every attempt it
-  tries a moveTo toward the stored goal itself, capped at hop-blocks (3) along
-  the way (range 1, :maxDistance 3; within 3 blocks it simply walks there). If
-  that neither arrived (the body is at the goal, however short the move)
-  nor moved the body more than :min-move blocks from where it stood, it
-  retries once uncapped (range 1, :timeoutS 6). If either arrived or moved it
-  that far the spell is over (:done), unless the body was enclosed at the spell's start and still is (a shuffle inside
-  the same hollow is not progress: it does not count as displacement, for the first round's walk or the hop; arriving does); so is it when the body was enclosed
-  (engine.jobs.reach/enclosed?) at the spell's start and is not any more
-  (it is out, though the goal may stay out of reach); otherwise :continue. After :max-attempts counted attempts, or at the round cap, it emits the warn
-  event unstick.failed with the position, :attempts (counted), :rounds (used, also what the :text reports), :reasons (each distinct reason once, with \" (xN)\" when repeated; job memory keeps the raw list) and a :text naming them, writes a :stuck memory entry (cap 10,
-  ttl 1 hour) and ends so the list resumes.
-
-  How it pairs with the stuck trigger (engine.triggers.stuck): both read only
-  the :moved entries act writes after every moveTo. The trigger fires when the
-  last :n are all bad and the newest is inside :window-ms; this job's check is that same
-  condition, or an attempt already begun and not yet proven by a good move, so
-  the spell is not abandoned halfway when its own bad attempts push the old
-  evidence out of the window. The job's own moveTo calls write :moved entries
-  too: the good one that ends the spell becomes the newest of the last :n, so
-  the trigger is false at once and cannot re-fire until :n new bad moves
-  happen. On failure the :stuck entry makes the trigger ignore every move
-  before it, and stay quiet for :quiet-ms (5 min), so neither the failed
-  attempts nor a body still blocked under the resumed job re-fire it.")
+  "Get a body out of being stuck: a job keeps calling moveTo and the body gets nowhere.
+  Each round is one attempt, counted in job memory. A round after which the feet are higher than ever yet in this
+  spell is progress and is not counted, so climbing a deep pit one block per round does not use the attempts up.
+  After :max-attempts counted attempts, or :max-attempts + 8 rounds in all, it gives up.
+  Each round:
+  1. It waits (50 ms steps, up to 1 s) for the body to be on the ground. If still airborne it goes on anyway.
+  2. In the first round, before anything is placed or dug, it walks toward the stored goal with the engine's
+     planner (engine.path.near/walk-near!, doors :shut, at most walk-timeout-s per steer). A shut door, gate or
+     trapdoor that the job's moveTo could not pass is opened, passed and shut again, so a body in a room is not
+     pillared and dug out. If that moves the body more than :min-move blocks, the spell is over.
+  3. One attempt:
+     - Attempt 1 steps back one block the way it came, unless the body is in a pit. A pit is at least three of
+       the four sides solid at feet+k for k = 0, 1 ...; that gives the depth, capped at 8.
+     - In a pit with a placeable block carried, it pillars (jumpPlace, the largest stack, depth many blocks).
+       Blocks it dug are carried, so pillaring is preferred every round.
+     - Otherwise it digs toward the stored goal (no goal: the first cardinal). It digs a DOOR when the wall in
+       front is one block thick: the solid blocks in front at feet and head height. Else it digs a STAIR: the
+       solid ones of H (the cell above the head) and F1, F2 (the feet and head cells one block up in front), then
+       moves onto F1. If the front block at feet height is open, the next cardinal is tried.
+     - When no side of the body's cell is solid (a hollow wider than a pit), it first walks to the nearest cell
+       at the same level with a solid side (within 24 blocks, through standable cells) and digs the stair there.
+     - A cell is not dug when the one above it is sand or gravel, or any of its six neighbours is water or
+       lava. Any dig status but dug or missing ends the attempt with \"dig: <status>\".
+     - The best pickaxe carried is equipped first.
+     Each attempt that did nothing useful records why in job memory (:reasons).
+  4. After every attempt it tries a moveTo toward the goal, capped at 3 blocks (range 1). If that neither arrived
+     nor moved the body more than :min-move blocks, it retries once uncapped (:timeoutS 6). If either arrived or
+     moved it that far, the spell is over (:done). The exception: a body enclosed at the spell's start and still
+     enclosed (engine.jobs.reach/enclosed?) gains nothing from shuffling inside the same hollow. Arriving always
+     counts. A body that was enclosed and is not any more is also done, though the goal may stay out of reach.
+  Every dug block is noted as a :tidy entry (engine.jobs.tidy, whoever's it is), so jobs.survival.restore-broken
+  (trigger :tidy-pending) puts it back once the spell has ended. Pillar blocks are written to the scaffold ledger
+  and taken back by jobs.access.cleanup.
+  On giving up it warns unstick.failed with :pos, :attempts (counted), :rounds, :reasons (each distinct reason
+  once, \"(xN)\" when repeated) and a :text naming them. It writes a :stuck memory entry (cap 10, ttl 1 hour) and
+  ends so the job list resumes.
+  Pairing with the stuck trigger (engine.triggers.stuck): both read only the :moved entries that act writes
+  after every moveTo. The trigger fires when the last :n are all bad and the newest is inside :window-ms. This
+  job's check is that same condition, or an attempt already begun and not yet proven by a good move, so its own
+  bad attempts pushing the old evidence out of the window do not abandon the spell. The job's own moveTo calls
+  write :moved entries too. The good one that ends the spell becomes the newest of the last :n, so the trigger
+  is false at once. After a failure the :stuck entry makes the trigger ignore every move before it and stay quiet
+  for :quiet-ms (5 min).")
 
 (def args
   {:n {:doc "bad moves in a row that count as stuck" :default (:n stuck/defaults)}

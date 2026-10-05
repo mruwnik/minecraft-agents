@@ -6,16 +6,16 @@
             [engine.path.near :as near]))
 
 (def doc
-  "Hoe dirt, grass_block or dirt_path into farmland over a set of ground cells,
-  given as the box :from/:to or the square :center/:radius (at most 256 cells).
-  Water nearby is not its concern. A cell that is not tillable, is covered,
-  cannot be reached or refuses the hoe twice is skipped with a reason. Ends with
-  a result {:tilled n :skipped {pos reason}}. With :for-plan (the id of the plan the cells belong to) every cell is
-  asked of engine.access.rules/may-dig? with the zones and the footprints of the OTHER active plans, when the round
-  looks at it and again right before the hoe or the cover dig; a refused cell is skipped :not-permitted, and the
-  check declines while no zone list has been read. Ground cover over a cell (grass, ferns, snow layer) is dug by a
-  jobs.blocks.dig child (rules, tidy record, the drop left); a cover the child will not dig (it waits) or gives up
-  on counts a try, and two skip the cell :cover-stuck.")
+  "Hoe dirt, grass_block or dirt_path into farmland over a set of ground cells, given as the box :from/:to or
+  the square :center/:radius (at most 256 cells). Water nearby is not its concern.
+  Needs a hoe; the job declines without one. Ground cover over a cell (grass, ferns, snow layer) is dug first with
+  a jobs.blocks.dig child. If that child declines or gives up, it counts a try.
+  Cells are skipped with a reason: :not-tillable, :covered (something else above), :not-permitted (zone rules),
+  :unreachable, :gone, :refused (the hoe failed twice) or :cover-stuck (two failed cover digs).
+  With :for-plan (the id of the plan the cells belong to) that plan's own footprint does not refuse a cell. Zones
+  and the footprints of other plans are checked when a cell is chosen and again before the hoe or cover dig.
+  The job declines while no zone list has been read, unless :ignore-zones? is true.
+  Result: {:tilled n :skipped {pos reason}}.")
 
 (def args
   {:from {:doc "box corner (inclusive); with :to, any order" :type :pos :default nil}

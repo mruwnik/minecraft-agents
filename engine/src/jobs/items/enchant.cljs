@@ -4,30 +4,22 @@
             [engine.path.near :as near]))
 
 (def doc
-  "Enchant one :item at an enchanting table. Each round walks to the table (the
-  :table position, else the nearest within :radius), reads the three offers
-  with the item lying in the table (level cost, lapis cost, the enchantment the
-  server hints at), chooses one and enchants. The choice: :slot 1-3 asks for
-  that offer alone; else :choice \"best\" takes the dearest offer the body can
-  pay, \"cheapest\" the lowest level cost it can pay (the lower slot on a
-  tie). Offers dearer than :max-level-cost (nil: no limit) are ignored. An
-  offer costs its slot number in lapis and in levels, and needs levels of at
-  least its level cost (and at least its slot number). Ends with a result
-  {:enchanted true :item :slot :level-cost :levels-spent :lapis-spent :enchants
-  [{:name :level}] :xp-level :hint {:enchant :level}|nil} measured by the primitive from what is carried
-  and the body's level after the window closed; info enchant.done. It gives up
-  with {:enchanted false :reason r :levels-spent n :lapis-spent n} and warn
-  enchant.gave-up: no-table, not-a-table, no-item, already-enchanted (every
-  copy carried has enchantments), not-enchantable (the table offers nothing),
-  no-lapis, too-few-levels, no-offer (the :slot has no offer),
-  no-offer-within-cost, inventory-full, window (it did not open, three times),
-  window-stalled (the enchant call hung: nothing is repeated), not-confirmed
-  (the item came back unenchanted), offer-changed (three times: the offers
-  moved between the read and the buy), unreachable. A failed enchant is never
-  repeated, as it may have taken the price. Memory: :attempt (written before
-  the enchant call), so a restart after a landed enchant finds the item
-  enchanted and reports it (:resumed true, enchants unknown) instead of
-  enchanting again; :failures.")
+  "Enchant one :item at an enchanting table. Walks to the table (:table, else the nearest within :radius), reads
+  the three offers with the item lying in the table, chooses one and enchants.
+  An offer costs its slot number in lapis, and in levels at least its level cost and its slot number. The
+  choice: :slot 1-3 takes that offer alone. Otherwise :choice \"best\" takes the dearest offer the body can pay and
+  \"cheapest\" the lowest level cost it can pay (the lower slot on a tie). Offers dearer than :max-level-cost
+  are ignored.
+  Result on success: {:enchanted true :item :slot :level-cost :levels-spent :lapis-spent :enchants [{:name
+  :level}] :xp-level :hint {:enchant :level}|nil}, measured from what is carried and the body's level after the
+  window closed. Info enchant.done.
+  It gives up with {:enchanted false :reason r :levels-spent n :lapis-spent n} and warn enchant.gave-up.
+  Reasons: no-table, not-a-table, no-item, already-enchanted (every copy carried is enchanted),
+  not-enchantable, no-lapis, too-few-levels, no-offer (the :slot has none), no-offer-within-cost,
+  inventory-full, window (did not open, three times), window-stalled, not-confirmed (the item came back
+  unenchanted), offer-changed (three times), unreachable.
+  A failed enchant is never repeated, as it may have taken the price. The attempt is written to memory before the
+  call. After a restart that finds the item enchanted, the job reports it (:resumed true, enchants unknown).")
 
 (def args
   {:item {:doc "name of the item to enchant, from the inventory" :default nil}

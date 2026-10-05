@@ -7,29 +7,26 @@
             [engine.path.walk :as walk]))
 
 (def doc
-  "Cut the ripe crops within :radius of a centre (the body's position when the job first runs,
-  kept in memory) and replant them. Each round takes the first step that applies: (1) replant:
-  every cell in the replant debt that is still bare farmland is seeded from what is carried
-  (within :reach, else walk to the nearest); (2) cut the ripe crops within :reach, else walk
-  to the nearest, giving up on a crop that cannot be reached and, after :give-up of those,
-  on cutting at all (a harvest.gave-up warn; replanting and collecting go on); (3) collect
-  the drops once; (4) finish with a result {:cut :replanted :bare :gave-up}, cells that
-  could not be replanted named in a harvest.bare warn. The debt {:pos :seed} of a cell is
-  written to job memory before its dig, so a cut, a reflex or a restart never loses which
-  cells owe a seed (the world only shows bare farmland, not which seed was there).
-
-  With :plan (and optionally :part) the field is that plan's crop cells instead (wants {:crop c} of a crop
-  harvest knows), read afresh every round and check: a cell is cut only when it is ripe and holds the crop
-  the plan wants there, crops outside the plan are left standing, and every planned cell standing bare
-  (air over farmland) owes the planned crop's seed (the plan is the debt; memory only keeps the counts of
-  refused places). The check declines, with one harvest.declined warn naming the plan and the reason, while
-  the plan is missing, unreadable or holds no crop cells; :assign in the plan is not read.
-
-  Zones and claims are a rule the job consults: a crop (and a bare cell to replant) in a zone or claim of another
-  owner, or in another plan's footprint, is not a candidate, left standing. One harvest.declined warn per job names
-  the zones, claims and plans ({:reason :refused :zones :claims :plans}); without a zone list (zones.edn missing or
-  never valid) it declines with {:reason :no-zones}. A job whose every crop is refused ends like one with none to
-  cut. :ignore-zones? acts regardless.")
+  "Cut the ripe crops within :radius of a centre and replant them, then collect the drops.
+  The centre is :center, or the body's position when the job first runs (kept in memory).
+  Each round does the first step that applies:
+  1. Replant: seed the bare farmland of cells it cut, from the seeds carried.
+  2. Cut the ripe crops, walking to the nearest when out of :reach. A crop it cannot reach is skipped.
+     After :give-up such crops it stops cutting (warn harvest.gave-up); replanting and collecting go on.
+  3. Collect the drops.
+  4. Finish.
+  Result: {:cut :replanted :bare :lost :gave-up}. Cells that could not be replanted, or stopped being a crop
+  afterwards, are named in a harvest.bare warn.
+  Each cell it cuts is written to memory with its seed before the dig, because bare farmland does not show
+  which seed was there. A restart or reflex in between loses nothing.
+  :plan (optionally :part) makes the plan's crop cells the field instead (:radius and :center are then unused).
+  The plan is read again every round. A cell is cut only when ripe and holding the crop the plan wants there.
+  Crops outside the plan are left standing. Every planned cell standing bare owes the planned crop's seed.
+  The job declines (one harvest.declined warn naming the plan and the reason) while the plan is missing,
+  unreadable or has no crop cells.
+  Zones: a crop or bare cell in another owner's zone or claim, or in another plan's footprint, is left alone.
+  The job warns harvest.declined once, with :reason :refused (or :no-zones when no zone list was read).
+  :ignore-zones? true skips the check.")
 
 (def args
   {:radius {:doc "how far around the centre to harvest, in blocks" :default 12}

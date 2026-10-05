@@ -10,33 +10,27 @@
             [engine.foods :as foods]))
 
 (def doc
-  "Take a kit out of the chest: :spare + 1 of each tool kind in :tools (any tier;
-  a name is of a kind when it equals it or ends in _kind) and :food food items
-  (any name in the eat table). Each round the needs are re-derived from the
-  inventory at its start and the plan from the inspected chest (best tier and best food
-  first), and the plan is handed to jobs.storage.withdraw as carry-at-least
-  targets. Nothing is stored between rounds. Ends with a result
-  {:gave-up false :short {kind n}} (short is empty when the kit is complete,
-  else what the chest could not supply, keyed by the kind string or :food), or
-  {:gave-up true :reason r :short {...}} (\"unreachable\", the inspect status, or
-  the withdraw's reason) when the failed attempts used it up and the warn was
-  emitted.
-
-  With :craft (the default) the take phase does not finish on a short: it enters
-  phase :craft in memory. Each craft round re-derives what is still short from the
-  inventory and makes exactly one child call. Per short tool kind K the tiers of
-  :craft-tiers are tried in order for the tool tier_K through jobs.items.craft;
-  when it comes back short of a material, the chest is asked for it (through
-  jobs.storage.withdraw, exactly what the recipe needs), else a stick or planks
-  is crafted as a sub-step (at most two deep), else the tier is ruled out and
-  the next is tried. A short result drops the kept inspect, so the next round inspects again
-  (an ok act, so short crafts alone never trip the backoff). Food short is made as bread from wheat (chest or body) in
-  batches of 3. The result gets :missing {kind text} for what could not be made
-  (\"no-table\" and \"full\" (inventory full) end the phase for every short kind),
-  only when non-empty. A craft phase that ends with a non-empty :missing is
-  remembered as :no-craft in body memory for 10 minutes: while it lives, a take
-  phase that would enter the craft phase finishes at once with the short and the
-  remembered :missing of the kinds still short.")
+  "Take a kit out of the chest: :spare + 1 of each tool kind in :tools, and :food food items. A name is of a tool
+  kind when it equals it or ends in _kind. Any tier counts, the best tier and best food are taken first. Food is
+  any name in the eat table.
+  Each round works out the needs from the inventory and the plan from the inspected chest, and hands the plan to
+  jobs.storage.withdraw as carry-at-least targets.
+  Ends with {:gave-up false :short {kind n}}. :short is empty when the kit is complete, else what the chest could
+  not supply, keyed by the kind string or :food. After failed attempts it ends {:gave-up true :reason r :short
+  {...}}, with r \"unreachable\", the inspect status or the withdraw's reason. A chest that refuses (zone or
+  claim) ends at once with :reason :refused.
+  With :craft (the default) a short does not end the job. It enters a craft phase. Each craft round makes
+  exactly one child call:
+  - For a short tool kind K, the tiers of :craft-tiers are tried in order for tier_K (jobs.items.craft).
+  - When the craft comes back short of a material, the chest is asked for it (jobs.storage.withdraw). Failing
+    that, a stick or planks is crafted as a sub-step (at most two deep). Failing that, the tier is ruled out and
+    the next is tried.
+  - Food is made as bread from wheat (chest or body), in batches of 3.
+  The result gets :missing {kind text} for what could not be made (only when non-empty). \"no-table\" and
+  \"full\" end the phase for every short kind.
+  A craft phase that ends with a non-empty :missing is remembered as :no-craft in body memory for 10 minutes.
+  While that lives, a take phase that would enter the craft phase ends at once with the short and the remembered
+  :missing.")
 
 (def args
   {:tools {:doc "tool kinds to carry, e.g. [\"hoe\" \"pickaxe\"]" :default ["hoe"]}

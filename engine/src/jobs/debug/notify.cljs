@@ -4,14 +4,12 @@
             [engine.ctx :as ctx]))
 
 (def doc
-  "For testing triggers: does nothing but report. Emits an info event of kind
-  job.notify with the text and a snapshot of sensing (health, food, oxygen,
-  on-fire, position, time of day, nearby hostiles), writes a :notify entry to
-  body memory, and sends the text with engine.chat/say! when :chat? is true
-  (it refuses commands; the engine rate-limits to 1 line/s and 5 per 30 s,
-  returning blocked or rate past that; a chat that is not sent is reported as an info
-  notify.chat-failed and does not fail the job). Register it against a trigger
-  to see that the trigger fires without running the real job.")
+  "For testing triggers: does nothing but report. Register it against a trigger to see that the trigger fires
+  without running the real job.
+  Emits an info event job.notify with the text and a snapshot of sensing (health, food, oxygen, on-fire, position,
+  time of day, nearby hostiles), and writes a :notify entry to body memory.
+  With :chat? true it also sends the text with engine.chat/say! (commands are refused; the engine rate-limits
+  chat). A chat that is not sent is reported as info notify.chat-failed and does not fail the job.")
 
 (def args
   {:text {:doc "text to report" :default "notify"}

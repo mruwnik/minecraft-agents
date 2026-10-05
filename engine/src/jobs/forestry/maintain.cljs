@@ -7,29 +7,28 @@
             [engine.path.near :as near]))
 
 (def doc
-  "Keep the trees a forest plan wants (cells wanting {:tree species}; a large tree is four cells). Each round
-  takes the first step that applies: (1) collect the drops of a tree just felled; (2) go on felling the tree
-  begun; (3) plant the planned sapling on a planned cell standing bare (air over soil) or owing one (cut by this
-  job), walking in reach; (4) fell the nearest grown tree of the wanted species standing on a planned cell
-  (jobs.forestry.fell-tree as a child on that column, so its limits hold) and note the cell as owing a sapling
-  before the base log is dug, so a cut or a restart or an edit of the plan never loses the replant; (5) finish with
-  a result {:felled :planted :left :bare}.
-
-  Cells are read afresh from the plan and the world every round and check. A sapling of the wanted species is left
-  to grow. Anything else on a planned cell (another species, a block) is left and reported once
-  (forest.foreign); the plan does not judge and removing is not this job's business. Trees off the planned cells
-  are never touched. A bare cell whose sapling is not carried is skipped with one forest.no-sapling note naming the
-  species, and is planted later, in a run that finds the sapling. A tree is left standing (forest.left, once, and
-  skipped for 30 minutes in body memory :forestry/left) when its column is higher than :max-logs, when fell-tree
-  gave up on it, when a log of it may not be dug (engine.access.rules/may-dig? per log of the column, all or none
-  before the first dig and again before every felling round: another active plan's footprint or a zone) or when
-  planting it was refused or failed three times (may-place?).
-
-  The check declines, with one forest.declined warn naming the plan and the reason, while the plan is missing,
-  unreadable or holds no tree cells, and while no zone list is loaded. Otherwise it passes only when a
-  step would act: a grown tree stands on a planned cell that is not left, or a bare planned cell has its sapling
-  carried; so with nothing ripe and nothing to plant it declines, and what it reads each tick is the planned cells
-  (a few block reads), nothing is polled in a round.")
+  "Keep the trees a forest plan wants (cells wanting {:tree species}; a large tree is four cells).
+  Each round does the first step that applies:
+  1. Collect the drops of a tree just felled.
+  2. Go on felling the tree begun.
+  3. Plant the planned sapling on a planned cell standing bare (air over soil) or owing one.
+  4. Fell the nearest grown tree of the wanted species on a planned cell (jobs.forestry.fell-tree as a child). The
+     cell is noted as owing a sapling before the base log is dug, so a restart or plan edit never loses the replant.
+  5. Finish. Result: {:felled :planted :left :bare}.
+  Cells are read from the plan and the world every round. A sapling of the wanted species is left to grow.
+  Anything else on a planned cell (another species, a block) is left and reported once (forest.foreign). Trees off
+  the planned cells are never touched.
+  A bare cell whose sapling is not carried is skipped, with one forest.no-sapling note. A later run plants it.
+  A tree is left standing (forest.left, once, and skipped for 30 minutes via body memory :forestry/left) when:
+  - its column holds more than :max-logs logs,
+  - fell-tree gave up on it,
+  - a log of it may not be dug (another plan's footprint or a zone; checked for the whole column before the first
+    dig and again before every felling round), or
+  - planting it was refused or failed three times.
+  Waits (check) unless a grown tree stands on a planned cell that is not left, or a bare planned cell has its
+  sapling carried. A started job always runs on to finish.
+  The job declines (one forest.declined warn naming the plan and the reason) while the plan is missing,
+  unreadable or has no tree cells, and while no zone list is loaded.")
 
 (def args
   {:plan {:doc "id of a plan of the body's world; its tree cells are the forest" :default nil}

@@ -7,17 +7,16 @@
             [jobs.storage.deposit :as deposit]))
 
 (def doc
-  "Walk to the chest and take items out, one name per round, until at least the
-  wanted count of each name is carried. Target-based: what is short is
-  re-derived from the inventory every round, so a cut or restart loses nothing.
-  Ends with a result {:gave-up false :short {name n}} (short is empty when
-  everything is carried, else what the chest could not supply), or
-  {:gave-up true :reason r :short {...}} (the inspect or transfer status,
-  \"unreachable\" for a blocked walk, \"nothing-moved\") when the failed attempts
-  used it up and the warn was emitted. A container that is missing at the recorded :chest (loaded cell)
-  retracts that place with one chest_missing warn. A chest in another's zone or claim that does not allow :take is
-  refused before the walk and again before the transfer: the job ends gave-up {:reason :refused :zones [..] :claims
-  [..]} after one withdraw.refused warn and takes nothing (:ignore-zones? lifts it).")
+  "Walk to the chest and take items out, one name per round, until at least the wanted count of each name in
+  :items is carried. What is short is re-derived from the inventory every round, so a cut or restart loses
+  nothing.
+  Ends with {:gave-up false :short {name n}}. :short is empty when everything is carried, else what the chest could
+  not supply. After three failed attempts it ends {:gave-up true :reason r :short {...}} and warns. r is the
+  inspect or transfer status, \"unreachable\" (blocked walk) or \"nothing-moved\".
+  Memory: a container missing at the recorded :chest retracts that place, with one chest_missing warn.
+  Zones: a chest in another owner's zone or claim that does not allow :take is refused before the walk and again
+  before the transfer. The job ends {:gave-up true :reason :refused :zones [..] :claims [..]} after one
+  withdraw.refused warn and takes nothing. :ignore-zones? true skips the check.")
 
 (def args
   {:chest {:doc "chest position [x y z] or {:x :y :z}; the known :chest place when nil" :default nil}

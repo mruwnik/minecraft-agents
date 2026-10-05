@@ -5,17 +5,19 @@
             [engine.places :as places]))
 
 (def doc
-  "Record a named place (:bed, :chest, :home, any name) in body memory, one round. :pos [x y z] or {:x :y :z} (whole or
-  fractional, floored to its cell); without it the cell the body stands in. With :block (a block name such as
-  \"white_bed\" or \"chest\"; \"bed\" is any colour of bed) the block must stand at the position or within 1 of it,
-  and the place is recorded at the block's own cell. Nothing is recorded when two such blocks lie within 1 and
-  neither at the position (:ambiguous: give the exact one), when none does (:no-such-block) or the position is not
-  loaded (:not-loaded). A recorded place of that name is moved. Places are this body's own memory; the readers
-  (sleep, deposit, the (place :name) condition fact) find them by name. Refused, as one place.refused warn event
-  with :reason and :text and a result {:ok false :reason}: :bad-name, :reserved-name (a memory kind the engine
-  uses), :not-a-place (the name holds other memory), :bad-pos, :bad-block, :no-such-block, :ambiguous, :not-loaded.
-  Success: one place.set info event and a result {:ok true :name :pos}. Submit it on a running body with
-  {:op :submit :front? true :spec (jobs.memory.set-place {...})}; the outcome is in the event stream.")
+  "Record a named place (:bed, :chest, :home, any name) in body memory, in one round.
+  :pos is [x y z] or {:x :y :z}, floored to its cell. Without it the cell the body stands in is used.
+  With :block (a block name such as \"white_bed\" or \"chest\"; \"bed\" is any colour of bed) the block must stand
+  at the position or within 1 of it. The place is recorded at the block's own cell.
+  A place already recorded under that name is moved. Places are this body's own memory. Readers (sleep, deposit,
+  the (place :name) condition fact) find them by name.
+  Refused (warn place.refused with :reason and :text, result {:ok false :reason}): :bad-name, :reserved-name (a
+  memory kind the engine uses), :not-a-place (the name holds other memory), :bad-pos, :bad-block,
+  :no-such-block, :ambiguous (two such blocks lie within 1 and neither at the position: give the exact one),
+  :not-loaded.
+  Success: info place.set and result {:ok true :name :pos}.
+  To run it on a body that is running: {:op :submit :front? true :spec (jobs.memory.set-place {...})}. The
+  outcome is in the event stream.")
 
 (def args
   {:name {:doc "the place's name: a keyword or string of 1 to 32 lowercase letters, digits and dashes" :default nil}

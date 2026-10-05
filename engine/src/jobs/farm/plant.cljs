@@ -7,30 +7,22 @@
             [jobs.farm.harvest :as harvest]))
 
 (def doc
-  "Sow the bare farmland of a :box. A cell is bare when the block at (x, min.y, z) is farmland and
-  the block above it is air (an unloaded block is not bare). Each round takes the bare cells that
-  are not skipped and the seed (the :seed arg, else the carried seed with the largest stack on the first
-  pick, kept while still carried so one run sows one crop):
-  no cell ends the job with reason :none (:done once something was planted, :gave-up when cells
-  were skipped), no seed with :no-seed; otherwise the cells within :reach are planted, or the body
-  walks to the nearest. A cell whose place is refused or unreachable, or whose walk is blocked,
-  three times is skipped (a plant.gave-up warn). Result {:planted n :skipped [cells] :reason r}.
-
-  With :plan (and optionally :part) the field is that plan's crop cells instead (wants {:crop c} of a crop harvest
-  knows; the :box and :seed arguments are not used): every planned cell standing bare (air over farmland) is sown with
-  the seed of the crop the plan wants there, when that seed is carried. Every sowing is asked of
-  engine.access.rules/may-place? with the zones and the footprints of the OTHER active plans, when the cell is chosen
-  and again right before the place; a refused cell is left bare and listed in the result's :refused [{:pos :reason}].
-  The result is {:planted :skipped :refused :short [seed names carried none of] :reason r}, :reason :no-seed when
-  nothing else was left to sow and some seed was short. The check declines, with one plant.declined warn naming the
-  plan and the reason, while the plan is missing, unreadable, holds no crop cells (in :part) or no zone
-  list has been read.
-
-  In box mode zones and claims are a rule the job consults: a cell whose sowing is in a zone or claim of another owner
-  (or in the footprint of a plan) is not a candidate, left bare, and does not count as work (all refused ends the
-  job with reason :none, as no bare cell does); the cell is asked when chosen and again right before the place. One
-  plant.declined warn per job names the zones, claims and plans ({:reason :refused ...}); without a zone list it
-  declines with {:reason :no-zones}. :ignore-zones? acts regardless.")
+  "Sow the bare farmland of a :box. A cell is bare when (x, min.y, z) is farmland and the block above is air.
+  The seed is :seed, else the carried seed with the largest stack. That pick is kept while it is carried,
+  so one run sows one crop.
+  Each round plants the bare cells within :reach, or walks to the nearest. A cell whose place is refused or
+  unreachable, or whose walk is blocked, three times is skipped (warn plant.gave-up).
+  Result: {:planted n :skipped [cells] :reason r}. :reason is :done, :none (no bare cell), :gave-up (cells
+  were skipped) or :no-seed.
+  :plan (optionally :part) makes the plan's crop cells the field instead (:box and :seed are then unused).
+  Every planned cell standing bare is sown with the seed of the crop the plan wants there, when it is carried.
+  Zones and the footprints of other active plans are asked before choosing a cell and again before the place.
+  The result adds :refused [{:pos :reason}] and :short [seeds not carried]. :reason is :no-seed when the
+  only cells left lack a seed. The job declines (one plant.declined warn naming the plan and the reason) while
+  the plan is missing, unreadable, has no crop cells, or no zone list has been read.
+  Box mode zones: a cell in another owner's zone or claim, or in a plan's footprint, is left bare. If every
+  cell is refused the job ends with :none. The job warns plant.declined once, with :reason :refused (or
+  :no-zones when no zone list was read). :ignore-zones? true skips the check.")
 
 (def args
   {:box {:doc "the field: {:min {:x :y :z} :max {:x :y :z}}, inclusive; the ground layer is y = (:y :min); required (without it the check declines)" :default nil}

@@ -10,45 +10,47 @@
             [jobs.forestry.maintain :as maintain]))
 
 (def doc
-  "Get the planting spots of a forest plan ready: per planned tree cell (want {:tree species}; the cell is where the
-  sapling goes) converge on \"a sapling of the planned species can be planted and can grow here\". Each round takes
-  one step on the nearest cell that can still be improved: (1) dig the stray in the cell (grass, flowers, snow,
-  leaves, a stone: anything that is not air, the species' own sapling or log, or a thing never dug); (2) replace
-  natural ground under the cell (stone, sand, gravel, cobblestone, deepslate, ...) with carried dirt (dig, then place;
-  a hole this job dug is filled first, also after a restart); (3) plant the sapling when it is carried
-  (jobs.forestry.plant-sapling as a child, the body in reach and off the cell). Drops of the digs are collected
-  (jobs.forestry.collect-drops) when the next step is on another cell or none is left, so the saplings leaves drop are
-  planted too. Provisioning is another job: (seq (jobs.storage.withdraw ...) (jobs.forestry.prepare ...)).
-
-  Water in the cell is repaired: a source in the cell is filled with carried dirt (then the dirt is dug as a stray), but a source beside it on its level
-  is dammed first, as it would flood the dug cell back;
-  a flow is traced upstream (blockAt properties.level: 0 source, 1-7 flowing, 8+ falling; at most 16 cells) and its
-  source filled with carried dirt, after which the cell is given 10 s to recede (the check declines, the round
-  returns :declined: nothing is polled). Water that cannot be traced, no dirt carried, or a source the access rules
-  refuse leaves the cell as :wet {:pos :why, :source when one was traced} (warn prepare.wet {:pos :why :water-source :text}).
-
-  Never dug, only reported: another species' sapling, any log but the species' own, lava, container, bed, sign, light
-  in the cell (result :wrong); under the cell anything but natural ground (planks, logs, wool, a chest, air, fluid,
-  a cell the plan names: :no-soil with :why :other-block/:kept/:hollow/:fluid/:planned) and natural ground when no
-  dirt is carried (:no-dirt); nothing above the cell is ever dug: a block in the growth space a tree cannot grow
-  through (anything but air, leaves, saplings, plants, snow, vines) leaves the whole cell untouched and is reported
-  as :cramped {:pos :at :block}. The growth space is HEADROOM cells from the planned cell up, the cell included: oak
-  7, birch 8, spruce 9, jungle 13, acacia 10, dark_oak 10, pale_oak 10, cherry 9 (the tallest trunk the generator
-  rolls, base plus both random parts, plus one: from memory, ~70% sure of the single values; light level and the
-  neighbours of a 2x2 tree are not checked); :headroom {species n} overrides. A species not in the table is refused
-  :unsupported-species. The species' own sapling is left growing, its own log is maintain's business.
-
-  Every dig and place asks engine.access.rules (zones, the footprints of all OTHER active plans) when the cell is
-  chosen and again right before the act. A refusal, a dig hazard not in :accept, or three failed tries (walk, dig,
-  place, planting) skips the cell for 10 minutes (body memory :forestry/prepare-skip) and is reported as :refused
-  {:pos :reason} (warn prepare.refused). The check declines, with one prepare.declined warn, while the plan is
-  missing, unreadable or holds no tree cells (in :part), and while no zone list is loaded. Otherwise it
-  passes only while a step can be taken (or once the job has begun): a field where every cell is done, wrong,
-  cramped, without soil or short of saplings is left alone, with one note per cell (prepare.wrong, prepare.no-soil,
-  prepare.cramped, prepare.wet) and one per species short (prepare.short {:species :missing}); the job wakes when what
-  it lacked is carried. Ends with {:cleared :soiled :planted :dammed :short {species missing} :wrong :no-soil :cramped
-  :wet [{:pos :why, :source when traced}] :refused}
-  and the info prepare.done.")
+  "Get the planting spots of a forest plan ready. A spot is a planned tree cell (want {:tree species}); the cell
+  is where the sapling goes. The goal per cell: a sapling of the planned species can be planted and can grow there.
+  Each round takes one step on the nearest cell that can still be improved:
+  1. Dig the stray in the cell (grass, flowers, snow, leaves, stone: anything but air, the species' own sapling or
+     log, or a thing never dug).
+  2. Replace natural ground under the cell (stone, sand, gravel, cobblestone, deepslate ...) with carried dirt. It
+     digs, then places. A hole this job dug is filled first, also after a restart.
+  3. Plant the sapling when it is carried (jobs.forestry.plant-sapling as a child).
+  Drops are collected (jobs.forestry.collect-drops) when the next step is on another cell or none is left.
+  Bringing saplings and dirt is another job, e.g. (seq (jobs.storage.withdraw ...) (jobs.forestry.prepare ...)).
+  Water in the cell is repaired. A source in the cell is filled with carried dirt (the dirt is then dug as a
+  stray). A source beside it on its level is dammed first, since it would flood the dug cell back. A flow is
+  traced upstream (at most 16 cells) and its source filled. The cell then gets 10 s to recede (the round returns
+  :declined, nothing is polled). Water that cannot be traced, no dirt carried, or a refused source leaves the
+  cell as :wet {:pos :why :source} (warn prepare.wet).
+  Never dug, only reported:
+  - in the cell: another species' sapling, any log but the species' own, lava, a container, bed, sign or
+    light (result :wrong).
+  - under the cell: anything but natural ground (planks, logs, wool, a chest, air, fluid, a cell the plan names)
+    gives :no-soil with :why :other-block, :kept, :hollow, :fluid or :planned. Natural ground with no dirt
+    carried gives :no-soil :no-dirt.
+  - above the cell: nothing is dug. A block in the growth space that a tree cannot grow through (anything but
+    air, leaves, saplings, plants, snow, vines) leaves the cell untouched and reported as :cramped
+    {:pos :at :block}.
+  The growth space is HEADROOM cells from the planned cell up, the cell included: oak 7, birch 8, spruce 9,
+  jungle 13, acacia 10, dark_oak 10, pale_oak 10, cherry 9. These are approximate (about 70% sure of each).
+  Light level and the neighbours of a 2x2 tree are not checked. :headroom {species n} overrides. A species not in
+  the table is refused as :unsupported-species. The species' own sapling is left growing, its own log is
+  maintain's business.
+  Every dig and place is checked against zones and the footprints of all other active plans, when the cell is
+  chosen and again before the act. A refusal, a dig hazard not in :accept, or three failed tries (walk, dig,
+  place, plant) skips the cell for 10 minutes (body memory :forestry/prepare-skip). It is reported as :refused
+  {:pos :reason} (warn prepare.refused).
+  Waits (check) unless a step can be taken. A field where every cell is done, wrong, cramped, without soil or
+  short of saplings is left alone, with one note per cell (prepare.wrong, prepare.no-soil, prepare.cramped,
+  prepare.wet) and one per species short (prepare.short {:species :missing}). The job wakes when what it lacked
+  is carried. A started job runs on to finish.
+  The job declines (one prepare.declined warn) while the plan is missing, unreadable or has no tree cells (in
+  :part), and while no zone list is loaded.
+  Result: {:cleared :soiled :planted :dammed :short {species missing} :wrong :no-soil :cramped :wet :refused},
+  info prepare.done.")
 
 (def args
   {:plan {:doc "id of a plan of the body's world; its tree cells are the planting spots" :default nil}

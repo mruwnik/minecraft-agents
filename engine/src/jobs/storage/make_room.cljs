@@ -9,30 +9,27 @@
             [engine.foods :as foods]))
 
 (def doc
-  "Make room in a nearly full inventory (the reflex of inventory-nearly-full),
-  one step per round, until :free slots are free. Each round asks first
-  whether anything is left to do and ends :done when not. Tools, weapons,
-  armour and buckets are never put away or thrown away. Food is never thrown
-  away and is put away only above :keep-food (best food-points first);
-  building blocks (the dig-in list, in its order) only above :keep-blocks.
-  Steps, in order: a chest known within :chest-range (and not marked
-  :chest-unusable) takes what deposit may put away (jobs.storage.deposit with
-  :keep), least worth keeping first: names without a floor before food and
-  building blocks, then the cheapest, then the one picked up longest ago; a chest that fails is remembered as :chest-unusable for ten minutes
-  and the job goes on without it. Without a usable chest the stack of least
-  worth is thrown: engine.value/item-worth below :toss-below, cheapest first,
-  the one picked up longest ago first among equals (:picked-up entries), then
-  the smaller stack; a stack is thrown only whole and only while the name's
-  floor stays carried. The body turns to the first of the four directions with
-  two free cells ahead at eye level, looks there and tosses. After a toss,
-  once enough slots are free (or nothing is left to throw) it walks :away
-  blocks back from where the items were thrown, so it does not pick them up
-  again. When no slot is free and an item lies within :swap-radius that is
-  worth more than the cheapest throwable stack, that stack is thrown away from
-  the item and the item is collected. Emits info make-room.tossed, .swapped,
-  .done, .declined; gives up :declined after :max-rounds rounds with a warn
-  make-room.stalled, and :declined when there is nothing it may toss. Three
-  failed tosses end it with a make-room.toss-failed warn.")
+  "Make room in a nearly full inventory (the inventory-nearly-full reflex), one step per round, until :free slots
+  are free. Each round first checks whether anything is left to do and ends :done when not.
+  Never put away or thrown: tools, weapons, armour and buckets. Food is never thrown and is put away only above
+  :keep-food (best food-points first). Building blocks (the dig-in list, in its order) are kept up to
+  :keep-blocks.
+  Steps, in order:
+  1. A chest known within :chest-range (and not marked :chest-unusable) takes what jobs.storage.deposit may put
+     away, least worth keeping first: names without a floor before food and building blocks, then the cheapest,
+     then the one picked up longest ago. A chest that fails is remembered as :chest-unusable for ten minutes and
+     the job goes on without it.
+  2. With no slot free and an item lying within :swap-radius that is worth more than the cheapest throwable
+     stack, that stack is thrown away from the item and the item is collected.
+  3. Without a usable chest, the stack of least worth is thrown. A stack qualifies when engine.value/item-worth is
+     below :toss-below, and it is thrown whole and only while the name's floor stays carried. Cheapest first,
+     then the one picked up longest ago (:picked-up entries), then the smaller stack. The body turns to the first
+     of the four directions with two free cells ahead at eye level and tosses.
+  After a toss, once enough slots are free (or nothing is left to throw), it walks :away blocks from where the
+  items were thrown, so it does not pick them up again.
+  Emits info make-room.tossed, .swapped, .done and .declined. Three failed tosses end it with warn
+  make-room.toss-failed. After :max-rounds rounds it ends :declined with warn make-room.stalled. It also ends
+  :declined when nothing may be tossed.")
 
 (def args
   {:free {:doc "done once at least this many slots are free (above the trigger's 2, so it does not refire at once)" :default 4}

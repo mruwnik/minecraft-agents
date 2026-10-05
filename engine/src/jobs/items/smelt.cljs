@@ -6,36 +6,30 @@
             [engine.path.near :as near]))
 
 (def doc
-  "Smelt count of an item in a furnace, blast furnace or smoker without
-  standing by it. The first round walks to the furnace, reads it, takes any
-  output already there, and loads the input and the fuel (worked out from the
-  count at one fuel item per 8 coal-items, 1.5 for wood, 0.5 for a stick;
-  taken from what is carried when :fuel is nil, coal and charcoal first). Then
-  the job ends its round and its check declines until the cook should be done
-  (job.waiting reason cooking, with :furnace and :ready-at), so the body does other jobs meanwhile; the next round takes the output. The
-  wait is decided by the clock, not by the furnace: ready-at is now plus the
-  cook time of the items loaded (200 ticks each in a furnace, 100 in the other
-  two) plus a margin; the check also wakes the job early once :unlit-from has
-  passed and the furnace block is no longer lit (the fuel ran out or the cook
-  ended) or no longer a furnace (broken). The check reads only memory, the clock and one block, no
-  window. A woken round that finds the cook unfinished (the chunk was unloaded,
-  say) waits again from the furnace's own bars. Memory keeps what is owed
-  (:owed {:item :count}, :got, :ready-at, :unlit-from) and :target, the input
-  the furnace must hold after the load, so a restart or a cut before the load
-  was noted neither loses the output nor loads twice. Ends with a result
-  {:smelted n :wanted n}, plus :reason after a warn (smelt.gave-up) when it
-  gives up: no-furnace-seen (no :furnace given and none seen), no-furnace, not-a-furnace, furnace-gone (broken or replaced meanwhile), output-gone (input and output both gone: someone emptied it),
-  unreachable, no-item, nothing-smeltable, not-smeltable (the kind of furnace
-  cannot cook it, also found when it never lit), no-fuel, unknown-fuel,
-  out-of-fuel (leftover input is taken back), furnace-busy (the input slot
-  holds another item), furnace-full, fuel-busy (the fuel slot holds another
-  fuel), inventory-full (the output stays in the furnace), rejected-fuel.
-  Output found in the furnace at the start is taken and does not count. A furnace in another's zone or claim that
-  does not allow :take is not touched: the round ends with reason \"refused\" (and :zones, :claims) after one
-  smelt.gave-up warn, before anything is loaded or taken (:ignore-zones? lifts it).")
+  "Smelt :count of an item in a furnace, blast furnace or smoker without standing by it.
+  The first round walks to the furnace, reads it, takes any output already there (it does not count) and loads
+  the input and the fuel. Fuel is worked out from the count: one fuel item smelts 8 items for coal or charcoal,
+  1.5 for wood, 0.5 for a stick. It is taken from what is carried when :fuel is nil, coal and charcoal first.
+  The job then ends its round and waits (check reason :cooking, with :furnace and :ready-at) so the body can do
+  other jobs. The next round takes the output.
+  The wait is decided by the clock: ready-at is now plus the cook time of the items loaded (200 ticks each in a
+  furnace, 100 in the other two) plus a margin. The check wakes the job early once :unlit-from has passed and
+  the furnace block is no longer lit or no longer a furnace. It reads only memory, the clock and one block. A
+  woken round that finds the cook unfinished waits again from the furnace's own bars.
+  What is owed is kept in memory before the load, so a restart or cut neither loses the output nor loads twice.
+  Result: {:smelted n :wanted n}, plus :reason after a warn (smelt.gave-up) when it gives up:
+  - no-furnace-seen (no :furnace given and none seen), no-furnace, not-a-furnace, furnace-gone (broken or
+    replaced meanwhile), output-gone (input and output both gone), unreachable.
+  - no-item, nothing-smeltable, not-smeltable (this kind of furnace cannot cook it, also found when it never lit).
+  - no-fuel, unknown-fuel, rejected-fuel, out-of-fuel (leftover input is taken back), fuel-busy (the fuel slot
+    holds another fuel).
+  - furnace-busy (the input slot holds another item), furnace-full, inventory-full (the output stays in the
+    furnace).
+  - \"refused\" (with :zones, :claims): the furnace is in another owner's zone or claim and does not allow
+    :take. Nothing is loaded or taken. :ignore-zones? true skips the check.")
 
 (def args
-  {:furnace {:doc "furnace, blast furnace or smoker position {:x :y :z}; when nil the first round takes the nearest one the body has seen (perception's memory, never x-ray) within 32 blocks that is still there and cooks :item (any kind when :item is nil), emits smelt.furnace naming it and keeps it; with none seen the job ends with reason no-furnace-seen" :default nil}
+  {:furnace {:doc "furnace, blast furnace or smoker position {:x :y :z}; when nil the nearest one the body has seen within 32 blocks that cooks :item is chosen (smelt.furnace says which), or the job ends with no-furnace-seen" :default nil}
    :item {:doc "what to smelt; the first smeltable thing carried when nil" :default nil}
    :count {:doc "how many; all carried (at most one stack) when nil" :default nil}
    :fuel {:doc "fuel item to load; the best carried when nil" :default nil}

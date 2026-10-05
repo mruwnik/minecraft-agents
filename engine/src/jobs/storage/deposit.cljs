@@ -8,20 +8,17 @@
             [engine.places :as places]))
 
 (def doc
-  "Walk to the chest and deposit one stack per round: the named items, in the
-  order named, or everything but tools and armour (saplings included), in
-  inventory order. :keep leaves at least
-  that many of a name carried (the stack moved is cut short to respect it).
-  Ends with a result {:gave-up false} when nothing is left to put away, or
-  {:gave-up true :reason r} (the transfer status, or \"unreachable\") when
-  the failed attempts used it up and the warn was emitted. A :chest argument that took at least one item and
-  finished clean is offered to the :chest place: recorded when none is recorded or the recorded one is gone,
-  never over a different live recorded chest (the argument may be a one-off errand; one place.kept event says
-  so; jobs.memory.set-place moves it). A transfer that finds the recorded chest missing (loaded cell, nothing
-  to open) retracts it with one chest_missing warn. A chest in another's zone or claim that does not allow :put
-  (engine.access.zones/deposit-into-foreign-chest? is false) is refused before the walk and again before the
-  transfer: the job ends gave-up {:reason :refused :zones [..] :claims [..]} after one deposit.refused warn and
-  puts nothing in (:ignore-zones? lifts it).")
+  "Walk to the chest and deposit one stack per round: the named :items in the order named, or everything but tools
+  and armour (saplings included) in inventory order. :keep leaves at least that many of a name carried.
+  Ends with {:gave-up false} when nothing is left to put away, or {:gave-up true :reason r} after three failed
+  transfers (warn chest_unusable). r is the transfer status or \"unreachable\".
+  Memory: a :chest argument that took at least one item and finished clean is offered to the :chest place. It is
+  recorded when none is recorded or the recorded one is gone, never over a different live one (place.kept
+  event; jobs.memory.set-place moves it). A transfer that finds the recorded chest missing retracts it, with one
+  chest_missing warn.
+  Zones: a chest in another owner's zone or claim that does not allow :put is refused before the walk and again
+  before the transfer. The job ends {:gave-up true :reason :refused :zones [..] :claims [..]} after one
+  deposit.refused warn and puts nothing in. :ignore-zones? true skips the check.")
 
 (def args
   {:chest {:doc "chest position [x y z] or {:x :y :z}; the known :chest place when nil" :default nil}

@@ -3,8 +3,10 @@
             [engine.jobs.forestry :refer [default-radius drop-filter]]))
 
 (def doc
-  "Fell a tree, collect what dropped and replant: phases :fell, :collect and
-  :plant, one child round per round.")
+  "Fell a tree, collect what dropped and replant. Runs three child jobs in turn, one child round per round:
+  :fell (jobs.forestry.fell-tree), :collect (collect-drops) and :plant (plant-sapling).
+  Ends when :plant is done. The replant is skipped, and stays owed, when no sapling is carried or the spot is not
+  clear.")
 
 (def args
   {:species {:doc "log species; any when nil" :default nil}

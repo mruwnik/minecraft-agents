@@ -4,15 +4,12 @@
             [engine.jobs.util :as u]))
 
 (def doc
-  "Put armour on. With :item, that carried piece goes into its slot (a worn piece
-  of the slot comes back to the pockets); without it, the best carried piece for
-  each slot that is empty or worn with a weaker one (leather < golden < turtle
-  helmet < chainmail < iron < diamond < netherite). Ends with {:worn
-  [{:item :slot}]} (info wear.done; info wear.nothing when nothing carried is
-  better than what is worn), or {:worn [] :reason \"not-armour\"} for an item
-  that is no armour piece and {:reason \"no-item\"} for one not carried (warn
-  wear.refused). A piece the server does not take ends {:worn done :reason
-  \"failed\" :status s} (warn wear.failed). Memory: none.")
+  "Put armour on. With :item, that carried piece goes into its slot, and a worn piece of the slot comes back to
+  the pockets. Without it, the best carried piece goes into each slot that is empty or worn with a weaker one
+  (leather < golden < turtle helmet < chainmail < iron < diamond < netherite).
+  Result: {:worn [{:item :slot}]}, info wear.done. Nothing better than what is worn gives info wear.nothing.
+  :reason \"not-armour\" (the item is no armour piece) or \"no-item\" (not carried) comes with warn wear.refused.
+  A piece the server does not take gives :reason \"failed\" and :status, warn wear.failed.")
 
 (def args
   {:item {:doc "the armour piece to wear; nil wears the best carried piece for each slot" :default nil}})

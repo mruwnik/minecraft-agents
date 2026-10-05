@@ -4,12 +4,11 @@
             [engine.path.near :as near]))
 
 (def doc
-  "Read the ground around and pick where a :w x :h farm would go: flat first,
-  then water within 4, open sky (nothing above the column up to depth + 8), and near
-  :center. Scans a bounded number of block reads per round. Optionally walks to the best spot.
-  Never digs or marks anything. Ends with a result {:spot pos-or-nil :spots
-  [...] :walked bool} (pos is the north-west corner at ground level; :reason
-  :none or :unreachable when it did not work out).")
+  "Pick where a :w x :h farm would go. Ranks patches by flatness first, then water within 4,
+  open sky and nearness to :center. Reads blocks only: it never digs or marks anything.
+  With :walk true it then walks to the best spot.
+  Result: {:spot pos-or-nil :spots [...] :walked bool}. A pos is the north-west corner at ground level.
+  :reason is :none (no patch found) or :unreachable (walk failed).")
 
 (def args
   {:w {:doc "patch width (x)" :default 5}

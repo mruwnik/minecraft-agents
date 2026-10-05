@@ -4,23 +4,24 @@
             [engine.path.near :as near]))
 
 (def doc
-  "Walk to the player :player, toss them :count of :item (everything carried
-  when nil) and confirm the drop was taken. Before the toss: nothing carried
-  ends it with {:given 0 :reason \"no-item\"} (warn give.no-item); a player not
-  seen within :radius is waited for 2 s, then {:given 0 :reason \"gone\"} (info
-  give.gone); one farther than :reach is walked to (engine walker, doors :shut, steers of 5 s), and
-  three blocked walks in a row give {:given 0 :reason \"unreachable\"} (warn
-  give.unreachable). In reach the body looks at the player's head and tosses;
-  the item entities of the item within :radius that were not there before are
-  the drop. A drop never seen within 3 s of the toss (its spawn may be late)
-  ends {:given tossed :reason \"unconfirmed\"} (info give.unconfirmed). Once none lie, the drop was taken: {:given n} (info give.done). A
-  drop still lying after :wait-s is collected back, never left as litter; then
-  the result is {:given (tossed - back) :reason \"not-taken\" :returned back}
-  (info give.returned), also when the body picks the drop up on its own. A
-  toss that is refused three times, or three collects that change nothing, end
-  it through u/fail! (warn give.gave-up) with the status or \"litter\" as the
-  reason. Memory: :started, :blocked, :tossed, :tossed-t, :before, :had,
-  :collecting, :seen-drop. A cut after the toss leaves the drop where it lies.")
+  "Walk to the player :player, toss them :count of :item (everything carried when nil) and confirm the drop was
+  taken.
+  Before the toss it ends with {:given 0 :reason r} when:
+  - nothing is carried: \"no-item\" (warn give.no-item).
+  - the player is not seen within :radius for 2 s: \"gone\" (info give.gone).
+  - three walks in a row are blocked: \"unreachable\" (warn give.unreachable).
+  - three arrivals in a row are still out of reach: \"out-of-range\" (warn give.out-of-range).
+  A player farther than :reach is walked to (doors :shut). In reach the body looks at the player's head and tosses.
+  The item entities within :radius that were not there before are the drop.
+  After the toss:
+  - The drop is gone once seen: {:given n} (info give.done).
+  - The drop is never seen within 3 s: {:given tossed :reason \"unconfirmed\"} (info give.unconfirmed).
+  - The drop still lies after :wait-s: it is collected back, never left as litter. The result is {:given (tossed -
+    back) :reason \"not-taken\" :returned back} (info give.returned). The same happens if the body picks it up on
+    its own.
+  A toss refused three times, or three collects that change nothing, end through u/fail! (warn give.gave-up)
+  with the status or \"litter\" as the reason.
+  A cut after the toss leaves the drop where it lies.")
 
 (def args
   {:player {:default nil}

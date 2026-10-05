@@ -3,9 +3,9 @@
             [engine.jobs.forestry :refer [default-radius]]))
 
 (def doc
-  "Collect the nearest matching dropped item, one per round, until none are
-  left in radius. Hands over {:collected n}, the items that entered the
-  inventory (the sum of the stack counts; ctx/result!).")
+  "Collect the nearest matching dropped item, one per round, until none is left within :radius.
+  An item that cannot be reached or picked up is skipped.
+  Result: {:collected n}, the number of items that entered the inventory.")
 
 (def args
   {:radius {:doc "search radius in blocks" :default default-radius}

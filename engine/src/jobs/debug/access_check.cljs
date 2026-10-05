@@ -4,14 +4,15 @@
             [engine.jobs.util :as u]))
 
 (def doc
-  "Debug job: report, for each cell given, whether the body may dig it and whether it may place a block there
-  (engine.access.rules), without digging or placing anything. One round ends :done with the result
-  {:verdicts [{:cell [x y z] :block name-or-nil :dig verdict :place verdict} ...]}, also emitted as one
-  :access-check.result event (counts of ok and refused digs and places). The cells come from :cells or from
-  the box :from/:to (inclusive, at most 400 cells). :zones, :footprints, :claims and :ledger are the rules' inputs
-  and default to empty; pass :zones nil to see the no-zone-list refusal; :self (default the body's name) is who
-  the zones and claims are judged for, :ignore-zones? the opt-out. An ok dig verdict may carry :hazards. Bad arguments end with
-  {:status :bad-args :reason text}.")
+  "Debug job: report whether the body may dig each given cell and whether it may place a block there
+  (engine.access.rules). Digs and places nothing.
+  The cells come from :cells, or from the box :from/:to (inclusive, at most 400 cells).
+  The rules' inputs are :zones, :footprints, :claims and :ledger, all empty by default. Pass :zones nil to see the
+  no-zone-list refusal. :self is who the zones and claims are judged for (default the body's name).
+  :ignore-zones? judges as a job that acts regardless.
+  One round ends :done with {:verdicts [{:cell [x y z] :block name-or-nil :dig verdict :place verdict} ...]}. An
+  ok dig verdict may carry :hazards. One :access-check.result event gives the counts of ok and refused digs and
+  places. Bad arguments end with {:status :bad-args :reason text}.")
 
 (def args
   {:cells {:doc "cells [[x y z] ...] to check" :default nil}

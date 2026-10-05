@@ -7,21 +7,24 @@
             [jobs.build.from-plan :as build]))
 
 (def doc
-  "Build the fence a plan of the body's world wants (:plan, optionally only its :part) and prove it holds animals.
-  The plan gives cells; the pen is the bounding box of the cells that want a fence, a fence gate or a wall (a plan
-  with none is declined). Phase 1 runs jobs.build.from-plan on the plan (its args :reach :give-up :accept pass
-  through; zones, other plans' footprints, materials and cuts are its rules, a cut job resumes in it). Phase 2 runs
-  engine.jobs.pen over that box (what jobs.animals.pen-check says, with the box taken from the plan): a step out of
-  the box is a leak. Nothing is placed that the plan does not ask for: a leak left after the build is the plan's
-  hole, or a cell the build refused (zone, other plan), gave up or was short of material for. Closed: info
-  pen-build.done. Not closed: ONE warn pen-build.leaky naming the leaks {:pos :why} (:gap :open-gate :climb :open
-  :unloaded; at most 12) and what the build left: :refused, :given-up, :short {item n}. Either way it ends :done with
-  {:closed? :reason :cells :leaks :gates :built {:placed :missing :short :given-up :wrong :refused}}, :reason nil
-  when closed, else :leak, :unbounded, :unloaded or :no-start (see jobs.animals.pen-check). The check declines with
-  one pen-build.declined warn while the plan is missing, unreadable, has no cells (in :part), no fence
-  cells, or no zone list has been read (unless :ignore-zones?); it declines without a warn while nothing is missing and the pen already holds
-  (nothing to do, nothing is rebuilt or re-checked after a restart: the world is the memory), and through the
-  builder's own build.declined while materials are not carried. Once begun the check stays true.")
+  "Build the fence a plan wants (:plan, optionally only its :part) and prove it holds animals.
+  The pen is the bounding box of the plan's cells that want a fence, a fence gate or a wall.
+  Phase 1 runs jobs.build.from-plan on the plan. Its args :reach :give-up :accept pass through, and its rules
+  (zones, other plans' footprints, materials, cuts) apply. Phase 2 checks the pen over that box with
+  engine.jobs.pen (see jobs.animals.pen-check): a step out of the box is a leak.
+  Nothing is placed that the plan does not ask for. A leak left after the build is a hole in the plan, or a cell
+  the build refused, gave up on or lacked material for.
+  Always ends :done with {:closed? :reason :cells :leaks :gates :built {:placed :missing :short :given-up
+  :wrong :refused}}. :reason is nil when closed, else :leak, :unbounded, :unloaded or :no-start.
+  Closed gives info pen-build.done. Not closed gives one warn pen-build.leaky naming the leaks {:pos :why}
+  (:gap :open-gate :climb :open :unloaded; at most 12) and what the build left (:refused, :given-up, :short).
+  Declines:
+  - with one pen-build.declined warn while the plan is missing, unreadable, has no cells (in :part), has no
+    fence cells, or no zone list has been read (unless :ignore-zones?).
+  - without a warn when nothing is missing and the pen already holds. Nothing is rebuilt after a restart: the
+    world is the memory.
+  - through the builder's own build.declined while materials are not carried.
+  Once begun, the check stays true.")
 
 (def args
   {:plan {:doc "id of a plan of the body's world" :default nil}

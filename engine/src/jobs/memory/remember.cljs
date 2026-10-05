@@ -4,18 +4,19 @@
             [engine.places :as places]))
 
 (def doc
-  "Write one entry of a kind of the spec's own into body memory, one round: the way a job sequence leaves the mark a
-  trigger reads with (since :kind). (seq (jobs.animals.breed {...}) (jobs.memory.remember {:kind :bred-cows}))
-  followed by a trigger whose :when is (or (not (known? (since :bred-cows))) (> (since :bred-cows) 1200)) breeds
-  again 20 minutes after the last time, and when it was never done. :kind is an unnamespaced keyword that nothing else
-  writes: refused as :bad-kind (not a keyword, or namespaced) and :reserved-kind (a kind the engine or another job
-  writes, :hurt :slept :scaffold ..., or the name of a recorded place). :data is an optional map kept in the entry.
-  Without :ttl-s and :cap the kind gets the engine's default policy (cap 50, 1 hour; a kind that already has a policy
-  keeps it): the entry is gone after an hour, and (since :kind) is unknown again, so a job that wants \"every 3 days\"
-  passes :ttl-s 259200. :ttl-s (seconds) and :cap (entries kept, newest) must be positive, :cap whole; else :bad-ttl
-  and :bad-cap, :data not a map is :bad-data. Refused, as one memory.refused warn event with :reason and :text and a
-  result {:ok false :reason}; the job still ends. Success: one memory.remembered info event with :memory-kind :entry (the data) and
-  :policy, and a result {:ok true :kind}.")
+  "Write one entry of a kind of your own into body memory, in one round. A trigger reads it with (since :kind).
+  Example: (seq (jobs.animals.breed {...}) (jobs.memory.remember {:kind :bred-cows})) followed by a trigger whose
+  :when is (or (not (known? (since :bred-cows))) (> (since :bred-cows) 1200)) breeds again 20 minutes after the
+  last time, and when it was never done.
+  :kind is an unnamespaced keyword that nothing else writes. :data is an optional map kept in the entry.
+  Without :ttl-s and :cap the kind gets the engine's default policy (cap 50, 1 hour; a kind that already has a
+  policy keeps it). After the hour the entry is gone and (since :kind) is unknown again. A job that wants \"every
+  3 days\" passes :ttl-s 259200. :ttl-s is in seconds and must be positive. :cap is the number of newest entries
+  kept, a positive whole number.
+  Refused (warn memory.refused with :reason and :text, result {:ok false :reason}, and the job still ends):
+  :bad-kind (not a keyword, or namespaced), :reserved-kind (a kind the engine or another job writes, such as
+  :hurt, :slept, :scaffold, or the name of a recorded place), :bad-ttl, :bad-cap, :bad-data (not a map).
+  Success: info memory.remembered with :memory-kind, :entry and :policy. Result {:ok true :kind}.")
 
 (def args
   {:kind {:doc "the memory kind to write: an unnamespaced keyword no engine job writes, e.g. :bred-cows" :default nil}

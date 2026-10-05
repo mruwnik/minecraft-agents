@@ -14,42 +14,45 @@
             [plan.shape :as shape]))
 
 (def doc
-  "Build what a plan of the body's world wants (:plan, optionally only its :part) from what the body carries: every
-  planned cell that stands empty (plan.shape judges it :missing) gets its block placed, and so does one that holds a
-  replaceable block (leaf_litter, fern, vine, water ...; engine.access.rules/replaceable), which a place takes over.
+  "Build what a plan wants (:plan, optionally only its :part) from what the body carries.
+  A planned cell that stands empty gets its block placed. So does a cell holding a replaceable block (leaf_litter,
+  fern, vine, water ...), which a place takes over.
   A cell holding any other wrong block (dirt, leaves, stone ...) is dug first and then placed, when its item is
-  carried and the rules allow the dig (own or unzoned cells, another plan's footprint and foreign zones refuse it as
-  for a place; with :ignore-zones? the cell is dug and the trespass noted as tidy does) with the best carried tool,
-  by hand for what needs none (everything but pickaxe blocks, leaves excepted: a pickaxe block without a pickaxe is given up
-  as :no-tool); a block it could not dig, or that is not allowed, is listed under :wrong, and one that came out of a
-  place in the wrong state is listed and never dug or placed again. A door's upper half and a bed's head (and a tall
-  plant's upper half) are never targets: the lower or foot cell places the whole item, and a wrong block in the other
-  half is dug first. :clear cells, crops and trees are not this job's. Each round re-reads the plan and the world and
-  takes the first step that applies: (0) dig the wrong blocks in reach (see above), after the places; (1) place every buildable cell within :reach of the eye, lowest first (a cell
-  is buildable when its block is carried, the cell below it is not itself still owed, it is not the body's own
-  feet or head cell, and engine.placement finds a click that gives its state: the neighbour, face, cursor, look and
-  sneak go with the place, from wherever the body stands; a :facing want that engine.placement places plainly is
-  placed only while the body looks the way it should face, standing on the far side); (2) else walk to a stand
-  cell two blocks beside the nearest buildable cell (for such a plain :facing want, on the side it faces away from); (3) else walk toward the nearest cell nobody can see (unloaded), which is never taken as built; (4) else
-  finish. A cell whose state no neighbour gives now waits; still missing at the end it is given up with engine.placement's
-  reason (:no-support, :no-room, :opened, :double-slab). A placed block whose reported state is not the want is listed under :wrong
-  with :placed true and the state it came out in; it is never dug or placed again. A cell whose place is refused (anything but placed, occupied or
-  no-item) or whose stand cell cannot be walked to :give-up times is given up. It finishes with a result {:placed n
-  :missing [[x y z] ...] :short {item n} :given-up {[x y z] :refused|:unreachable|:unloaded|reason} :wrong [{:pos :found :want}]
-  :refused [...]}
-  and the events build.done (info), build.short (warn: the items still lacking), build.gave-up (warn) and
-  build.wrong (warn). The event texts name the count and the first few cells; the whole list is in :cells of the event and in the result. The check declines, with one build.declined warn naming the plan and the reason, while the
-  plan is missing, unreadable or has no cells to build (in :part), and, before the job has begun,
-  while cells are missing but none of their blocks is carried, and while no zone list has been read. Every place goes
-  through engine.access.rules/may-place? with the zones and the footprints of the OTHER active plans, when the cell is
-  chosen and again right before the place; a cell in a zone that does not allow :place, or in another active plan's
-  footprint, is refused for good (not retried, not counted as given up) and listed in the result's :refused
-  [{:pos :reason :zone|:plan}] with one build.refused warn per reason. Water beside a cell is no obstacle by default;
-  :accept names the fluid hazards taken (:fluid-adjacent water beside, :lava-adjacent lava beside), a cell with an
-  untaken one is refused as :hazard (with :hazards). With :sturdy-ground a sturdy block on the ground of a rail
-  line (plan.rail/ground: under every rail, the buffers and the torches) is right where the plan wants fill, and is
-  not listed :wrong. The stand cell is taken at the body's feet height:
-  it assumes flat ground.")
+  carried and the rules allow the dig. The best carried tool is used, or the hand for blocks that need none. A
+  pickaxe block without a pickaxe is given up as :no-tool. A block that could not be dug, or may not be, is listed
+  under :wrong. So is a block that came out of a place in the wrong state (:placed true); it is never dug or placed
+  again.
+  A door's upper half, a bed's head and a tall plant's upper half are never targets: the lower or foot cell places
+  the whole item. :clear cells, crops and trees are not this job's.
+  Each round re-reads the plan and the world, then takes the first step that applies:
+  1. Place every buildable cell within :reach of the eye, lowest first. A cell is buildable when its block is
+     carried, the cell below it is not itself still owed, and it is not the body's own feet or head cell.
+     engine.placement picks the click (neighbour, face, cursor, look, sneak) that gives the wanted state. A
+     :facing want that is placed plainly waits until the body looks the right way, from the far side.
+  2. Dig the wrong blocks within reach.
+  3. Walk to a stand cell two blocks beside the nearest buildable (or diggable) cell. The stand cell is at the
+     body's feet height, so flat ground is assumed.
+  4. Walk toward the nearest unloaded cell. Unseen cells are never taken as built.
+  5. Finish.
+  A cell whose state no neighbour gives waits. If still missing at the end it is given up with engine.placement's
+  reason (:no-support, :no-room, :opened, :double-slab). A cell whose place is refused, or whose stand cell
+  cannot be reached, :give-up times is given up (:refused, :unreachable or :unloaded).
+  Zones: every place is checked against zones and the footprints of the other active plans, when the cell is
+  chosen and again before the place. A cell in a zone that does not allow :place, or in another plan's footprint,
+  is refused for good (not counted as given up). It is listed in :refused [{:pos :reason :zone|:plan}], with one
+  build.refused warn per reason.
+  Water beside a cell is no obstacle by default. :accept names the fluid hazards taken (:fluid-adjacent,
+  :lava-adjacent). A cell with an untaken one is refused as :hazard.
+  :sturdy-ground true accepts a sturdy block on the ground of a rail line (plan.rail/ground) where the plan wants
+  fill; it is not listed :wrong.
+  Result: {:placed n :missing [[x y z] ...] :short {item n} :given-up {[x y z] reason} :wrong [{:pos :found
+  :want}] :refused [...]}.
+  Events: build.done (info), build.short, build.gave-up, build.refused and build.wrong (warns). Event texts name
+  the count and the first few cells. The whole list is in :cells of the event and in the result.
+  The job declines (one build.declined warn naming the plan and the reason):
+  - while the plan is missing, unreadable or has no cells to build (in :part).
+  - while no zone list has been read.
+  - before the job has begun, while cells are missing but none of their blocks is carried.")
 
 (def args
   {:plan {:doc "id of a plan of the body's world" :default nil}

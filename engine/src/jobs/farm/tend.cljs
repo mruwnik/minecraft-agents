@@ -13,61 +13,45 @@
             [plan.shape :as shape]))
 
 (def doc
-  "Keep one field of crops in order. The field is the :box (inclusive; its lowest
-  layer y = min is the farmland, the layer above it holds the crops, so max y is
-  at least min y + 1); one run is one convergent pass over six steps in a fixed
-  order, each a child job run one round at a time: :harvest (jobs.farm.harvest,
-  replanting) when a ripe crop lies in the box; :till (jobs.farm.till, one ground
-  cell per call, the nearest to the body first) when :till is true, a hoe is
-  carried, dirt or grass lies uncovered in the ground layer and more seed is
-  carried than there is bare farmland (bare farmland reverts to dirt, so a bed is
-  only made when it can be sown), re-decided after each cell until it skips;
-  :plant (jobs.farm.plant) when bare farmland lies in the box and a seed is
-  carried; :fertilize (jobs.farm.fertilize) when :fertilize is true, bone meal is
-  carried and an unripe crop lies in the box; :compost (jobs.farm.compost) when a
-  :composter is given and seed above the reserve is carried; :deposit
-  (jobs.storage.deposit) when a :chest is given and farm goods (seeds, crops,
-  melon, pumpkin, hay, cocoa; never tools, food or anything else) above the keep
-  are carried. The seed reserve is enough to sow the field twice over: twice the
-  beds (farmland or untilled cells of the ground layer), spread over the carried
-  seeds in turn; the keep of compost and deposit is that reserve or the :keep
-  entry, whichever is larger. A step whose conditions do not hold is skipped and
-  booked {:skipped reason} (:no-ripe, :till-off, :no-hoe, :nothing-to-till,
-  :no-seed, :no-bare, :fertilize-off, :no-bone-meal, :none-unripe,
-  :no-composter, :no-surplus-seed, :no-chest, :nothing-to-store, or :declined
-  when the child declined); a till that tilled keeps its {:tilled n} when it
-  later skips. The check passes when a box of at most 2048 cells is given and
-  some step would run, and always once started (a cut job resumes); otherwise
-  the job declines and does nothing, so it is cheap under repeat. A step under
-  way is not re-decided, it runs until its child is done. Hands over {:steps
-  {step summary} :field {:crops :bare :untilled} (live census at the end)} (info
-  farm-tend.done) and ends :done, also when every step was skipped after the
-  first. Summaries: harvest {:cut :replanted :bare :gave-up}, till {:tilled n},
-  plant {:planted :reason :skipped}, fertilize {:used}, compost {:fed
-  :bone-meal :reason}, deposit {:gave-up :reason}. Known limits: harvest and
-  fertilize work in a sphere around the box centre, so crops just outside the box
-  may be cut or fertilized; a dirt lane inside the box is a bed unless :till is
-  false; a ripe crop that cannot be reached makes the check pass on every run
-  (harvest gives up on it, the run still ends).
-
-  With :plan (and optionally :part) the field is the plan's crop cells instead of the :box (wants {:crop c} of
-  a crop harvest knows: wheat, carrots, potatoes, beetroots; the plan's other cells are never touched). The same six
-  steps, each per cell with the crop the plan names there: harvest cuts the ripe planned crop (a ripe crop of another
-  kind in a crop cell stands: tend never digs a wrong crop, it lists it as :wrong {:pos :found :want}, warn
-  farm-tend.wrong); till hoes the ground under a crop cell (the farmland of the plan: the cell below, unless the
-  plan names it as something else, which it then leaves alone) while a hoe is carried, the seed of that cell's crop
-  outruns the bare farmland waiting for it and the access rules allow it; plant sows every bare crop cell with its own
-  crop's seed when that seed is carried (a bare cell whose seed is not carried stays bare, one farm-tend.short-seed
-  warn per missing seed, even when nothing else runs); fertilize, compost and deposit as in box mode, the seed reserve being
-  twice the planned cells of each crop. Tilling is checked with may-dig? on the ground cell and sowing with may-place?
-  on the crop cell, with the zones and the footprints of the OTHER active plans, when the cell is chosen and again
-  right before the act (in jobs.farm.till and jobs.farm.plant, called with the plan). The check declines, with one
-  farm-tend.declined warn naming the plan and the reason, while the plan is missing, unreadable, holds no
-  crop cells (in :part) or no zone list has been read; a started run declines in its next round when the plan stopped
-  being workable. The :field of the result then also holds :wrong, and the explicit farmland the plan wants without a
-  crop over it is not tilled (it would revert). Untilled ground the rules refuse (a foreign zone or claim, another
-  plan's footprint) is left alone with one farm-tend.refused warn naming the zones, claims, plans and owners; when
-  nothing else is to be done the check stays false (the job waits, now with that reason on record).")
+  "Keep one field of crops in order. The field is the :box (inclusive). Its lowest layer (y = min) is the
+  farmland and the layer above holds the crops, so max y is at least min y + 1.
+  One run is one pass over six steps in this order. Each step is a child job that runs when its conditions hold:
+  - :harvest (jobs.farm.harvest, replanting): a ripe crop lies in the box.
+  - :till (jobs.farm.till): :till is true, a hoe is carried, dirt or grass lies uncovered in the ground layer and
+    more seed is carried than there is bare farmland. It tills one cell at a time, nearest first.
+  - :plant (jobs.farm.plant): bare farmland lies in the box and a seed is carried.
+  - :fertilize (jobs.farm.fertilize): :fertilize is true, bone meal is carried and an unripe crop lies in the box.
+  - :compost (jobs.farm.compost): a :composter is given and seed above the reserve is carried.
+  - :deposit (jobs.storage.deposit): a :chest is given and farm goods are carried above the keep. Farm goods are
+    seeds, crops, melon, pumpkin, hay and cocoa. Tools and food are never stored.
+  The seed reserve is twice the number of beds (farmland or untilled ground cells), spread over the carried seeds.
+  The keep for compost and deposit is that reserve or the :keep entry, whichever is larger.
+  Skipped steps are booked as {:skipped reason}: :no-ripe, :till-off, :no-hoe, :nothing-to-till, :no-seed,
+  :no-bare, :fertilize-off, :no-bone-meal, :none-unripe, :no-composter, :no-surplus-seed, :no-chest,
+  :nothing-to-store or :declined (the child declined).
+  The job declines (does nothing) unless the box has at most 2048 cells and some step would run. A started run
+  always continues. A step under way is not re-decided.
+  It ends :done with {:steps {step summary} :field {:crops :bare :untilled}} (info farm-tend.done). :field is
+  counted live at the end. Summaries: harvest {:cut :replanted :bare :gave-up}, till {:tilled n}, plant {:planted
+  :reason :skipped}, fertilize {:used}, compost {:fed :bone-meal :reason}, deposit {:gave-up :reason}.
+  Limits: harvest and fertilize work in a sphere around the box centre, so crops just outside the box may be
+  touched. A dirt lane inside the box counts as a bed unless :till is false. A ripe crop that cannot be reached
+  keeps the check passing on every run (harvest gives up on it and the run still ends).
+  :plan (optionally :part) makes the plan's crop cells the field instead of :box. Only crops harvest knows
+  (wheat, carrots, potatoes, beetroots) count. The plan's other cells are never touched. The same six steps run
+  per cell, with the crop the plan names there:
+  - harvest never digs a wrong crop. A ripe crop of another kind in a crop cell stays standing and is listed in
+    :field :wrong {:pos :found :want} (warn farm-tend.wrong).
+  - till hoes the ground under a crop cell (the cell below, unless the plan names it as something else) while
+    a hoe is carried, the cell's seed outnumbers the bare farmland waiting for it and the access rules allow it.
+    Farmland the plan wants without a crop over it is not tilled, since it would revert.
+  - plant sows every bare crop cell with its own crop's seed. A cell whose seed is not carried stays bare, with one
+    farm-tend.short-seed warn per missing seed.
+  - fertilize, compost and deposit work as in box mode. The seed reserve is twice the planned cells of each crop.
+  Tilling and sowing are checked against zones and the footprints of the other active plans, when a cell is chosen
+  and again before the act. Untilled ground the rules refuse is left alone with one farm-tend.refused warn.
+  The job declines (one farm-tend.declined warn) while the plan is missing, unreadable, has no crop cells, or no
+  zone list has been read. A started run declines in its next round if the plan stops being workable.")
 
 (def args
   {:box {:doc "the field: {:min {:x :y :z} :max {:x :y :z}}, inclusive; y min is the farmland layer, max y at least min y + 1; at most 2048 cells; required unless :plan is given (without either the check declines)" :default nil}

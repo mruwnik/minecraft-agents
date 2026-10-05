@@ -7,33 +7,27 @@
             [jobs.apiary.harvest :as harvest]))
 
 (def doc
-  "Keep one apiary in order. The apiary is the :box ({:from :to}) or :center
-  (the body's position at the first run) and :radius; one run is one convergent
-  pass over four steps in a fixed order, each a child job run one round at a
-  time and never run twice in a pass: :guard (jobs.apiary.guard) when a lit
-  fire lacks a carpet or a sink and a carried item does it; :harvest
-  (jobs.apiary.harvest, :with) when a ripe hive is smoked and the tool is
-  carried and no ripe hive stands over a fire that is still unsafe (the harvest
-  child cannot be told to leave one hive out, so one unsafe fire holds the
-  whole step back); :breed (jobs.animals.breed, 2 bees) when :target is given,
-  the bees in the area (adults and babies) are below it, there are 2 adults, it
-  is day, it is not raining and a flower is carried; :deposit
-  (jobs.storage.deposit) when a :chest is given and honeycomb or honey bottles
-  above their :keep entry are carried. Only produce is ever deposited, so
-  tools, bottles, carpet, campfires and flowers stay carried. A step whose
-  conditions do not hold is booked {:skipped reason} (:safe, :no-fire,
-  :no-carpet, :no-campfire, :not-ripe, :no-tool, :unsafe-fire, :not-smoked,
-  :open-fire, :no-target, :at-target, :night, :raining, :too-few-adults,
-  :no-food, :no-chest, :nothing-to-store); one that declines is booked
-  {:skipped :declined} and one that throws {:skipped :failed :error text}; the
-  pass goes on either way. The check passes when some step would run, and
-  always once started (a cut job resumes); otherwise the job declines and does
-  nothing, so it is cheap under repeat. Hands over {:target :bees :steps {step
-  summary}} (info maintain.done) and ends :done, also when every step was
-  skipped after the first. Summaries: guard {:sunk :carpeted :reason :left},
-  harvest {:harvested :reason :declined}, breed {:fed :reason}, deposit
-  {:gave-up :reason}. Guard and harvest consult the zones and claims (see their docs); :ignore-zones? is passed to
-  them.")
+  "Keep one apiary in order. The apiary is the :box ({:from :to}), or :center (the body's position at the first
+  run) with :radius.
+  One run is one pass over four steps in a fixed order. Each is a child job, run one round at a time and never run
+  twice in a pass:
+  - :guard (jobs.apiary.guard): a lit fire lacks a carpet or a sink and a carried item does it.
+  - :harvest (jobs.apiary.harvest, with :with): a ripe hive is smoked, the tool is carried, and no ripe hive
+    stands over a fire that is still unsafe. The harvest child cannot leave one hive out, so one unsafe fire holds
+    the whole step back.
+  - :breed (jobs.animals.breed, 2 bees): :target is given, the bees in the area (adults and babies) are below it,
+    there are 2 adults, it is day, it is not raining and a flower is carried.
+  - :deposit (jobs.storage.deposit): a :chest is given and honeycomb or honey bottles above their :keep entry are
+    carried. Only produce is deposited; tools, bottles, carpet, campfires and flowers stay carried.
+  A step whose conditions do not hold is booked {:skipped reason} (:safe, :no-fire, :no-carpet, :no-campfire,
+  :not-ripe, :no-tool, :unsafe-fire, :not-smoked, :open-fire, :no-target, :at-target, :night, :raining,
+  :too-few-adults, :no-food, :no-chest, :nothing-to-store). One that declines is booked {:skipped :declined}
+  and one that throws {:skipped :failed :error text}. The pass goes on either way.
+  The job declines (does nothing) unless some step would run. A started run always continues.
+  It ends :done with {:target :bees :steps {step summary}} (info maintain.done), also when every step was
+  skipped. Summaries: guard {:sunk :carpeted :reason :left}, harvest {:harvested :reason :declined}, breed {:fed
+  :reason}, deposit {:gave-up :reason}.
+  :ignore-zones? is passed to guard and harvest, which check zones and claims (see their docs).")
 
 (def args
   {:box {:doc "the apiary: {:from pos :to pos}; overrides :center and :radius" :default nil}

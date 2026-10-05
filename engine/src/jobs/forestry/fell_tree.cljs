@@ -10,23 +10,21 @@
             [engine.path.targets :as targets]))
 
 (def doc
-  "Fell the nearest tree (a log column with leaves near its top) by walking, one log a
-  round, lowest first; write a :forestry/replant debt before the base log is dug.
-  The tree is chosen by one bounded search over the candidates (engine.path.targets, at most 32, nearest in a line
-  first): the one the body walks to soonest, so a walled-off or cliff-top tree is passed over for a reachable one. The
-  search runs at most ~100 ms a round and goes on the next round; one that proves every candidate out of reach marks
-  them all unreachable (the job warns tree_blocked and finishes, no walk); one that runs out of nodes takes the nearest
-  in a line, and its walk decides.
-  A tree whose walk is :blocked, or partial three times in a row, is marked unreachable and the next candidate chosen.
-  Each log is dug by a jobs.blocks.dig child (:dig), which holds the best carried axe, records a log of another's
-  dug with :ignore-zones? for tidying, and leaves the drop on the ground (jobs.forestry.harvest-wood collects it).
-
-  Zones and claims are a rule the job consults: a tree whose base log is in a zone or claim of another owner, or in
-  a plan's footprint (but :for-plan's own), is not a candidate; a log of the chosen tree that turns out to be refused
-  (a zone edge through the trunk) is asked again right before the dig and the tree is left, as an unreachable one
-  is. One fell-tree.declined warn per job names the zones, claims and plans ({:reason :refused ...}); without a zone
-  list it declines with {:reason :no-zones}. A job whose every tree is refused ends like one with no tree in sight.
-  :ignore-zones? acts regardless.")
+  "Fell the nearest tree: a log column with leaves near its top. Digs one log a round, lowest first.
+  The base log's :forestry/replant debt is written before it is dug.
+  With :at it fells that one column instead (:radius and :species are then unused).
+  The tree is chosen by a bounded search over at most 32 candidates, nearest in a line first (engine.path.targets).
+  It picks the tree the body walks to soonest, so a walled-off or cliff-top tree is passed over for a reachable
+  one. The search continues over several rounds if needed. If it proves every candidate out of reach, the job
+  warns tree_blocked and ends. If it runs out of nodes, it takes the nearest in a line and the walk decides.
+  A tree whose walk is blocked, or partial three times in a row, is marked unreachable and the next one is chosen.
+  Each log is dug by a jobs.blocks.dig child. That child holds the best carried axe and leaves the drop on the
+  ground (jobs.forestry.harvest-wood collects it).
+  Waits (check) with :reason :no-tree when no tree is in sight.
+  Zones: a tree whose base log is in another owner's zone or claim, or in a plan's footprint (but :for-plan's
+  own), is not a candidate. A later log that turns out refused makes the tree count as unreachable. The job warns
+  fell-tree.declined once, with :reason :refused (or :no-zones when no zone list was read). :ignore-zones? true
+  skips the check.")
 
 (def args
   {:species {:doc "log species such as \"oak\"; any when nil" :default nil}

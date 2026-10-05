@@ -5,14 +5,13 @@
             [engine.path.near :as near]))
 
 (def doc
-  "Craft count more of an item: 2x2 recipes anywhere, bigger ones at a crafting
-  table, walking to the given or the nearest one within the radius when the
-  body is not in reach of one. Target-based: the count carried when the job
-  started is kept in memory and the target is that plus count, so a cut or a
-  partial batch loses nothing. Ends with a result {:made n} (n is how many of
-  the item were gained), plus :short {name n} when an ingredient ran out, or
-  :reason (\"no-table\", \"unreachable\", \"full\", the cannot reason, or the
-  failed status) when it stopped short, after emitting a warn.")
+  "Craft :count more of :item. 2x2 recipes work anywhere. Bigger ones need a crafting table: :table, else the
+  nearest within :radius, walking there when out of reach.
+  The count carried at the start is kept in memory and the target is that plus :count, so a cut or a partial
+  batch loses nothing.
+  Ends with {:made n}, the number of items gained. When it stops short it adds :short {name n} (an ingredient ran
+  out) or :reason (\"no-table\", \"not-a-table\", \"unreachable\", \"full\", the cannot reason, or the failed
+  status), after a warn.")
 
 (def args
   {:item {:doc "item name to craft" :default nil}

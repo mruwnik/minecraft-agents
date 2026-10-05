@@ -6,28 +6,22 @@
             [engine.path.near :as near]))
 
 (def doc
-  "Keep the lit campfires of an apiary in the standard column: the fire one
-  block underground with ground on all four sides, a carpet on it, then air,
-  then the hive. A raised fire (some side open, so bees fly in sideways) with
-  real walled ground under it is dug out (its carpet taken first), the ground
-  block under it too, and a carried campfire is placed one block lower (mining
-  a campfire gives charcoal, not the fire, so one must be carried). Then every
-  lit fire with nothing on it gets a non-moss carpet (an open fire burns
-  landing bees). Fires are worked nearest first, at most :max actions in a
-  run; a fire that cannot be reached or refuses is skipped for the rest of the
-  run. The body never stands in a fire's cell. Ends with a result {:sunk n
-  :carpeted n :reason r :left {pos reason} :skipped {pos reason} :fires n};
-  :reason is :guarded (work done, nothing left), :limit (:max reached), :safe,
-  :no-fire, :no-carpet, :no-campfire (nothing to do it with), a skip reason
-  such as :unreachable, :on-fire, :occupied, :cannot or :place-failed, or
-  :gave-up after 3 fruitless fires in a row. Every end but :guarded and :limit
-  also emits a warn apiary.guard-gave-up.
-
-  Zones and claims are a rule the job consults: a fire in a zone or claim of another owner, or in a plan's footprint,
-  is left out of the survey (all refused ends :no-fire), and each dig and place of a sink and each carpet is asked
-  again right before it (a refusal skips the fire, :refused). One apiary.guard-declined warn per job names the zones,
-  claims and plans ({:reason :refused ...}); without a zone list it declines with {:reason :no-zones}.
-  :ignore-zones? acts regardless.")
+  "Keep the lit campfires of an apiary in the standard column: the fire one block underground with ground on all
+  four sides, a carpet on it, then air, then the hive.
+  - A raised fire (some side open, so bees fly in sideways) with real walled ground under it is sunk. The carpet
+    is taken first, then the fire and the ground block under it are dug out, and a carried campfire is placed
+    one block lower. Mining a campfire gives charcoal, not the fire, so one must be carried.
+  - Every lit fire with nothing on it gets a non-moss carpet, since an open fire burns landing bees.
+  Fires are worked nearest first, at most :max actions in a run. A fire that cannot be reached or refuses is
+  skipped for the rest of the run. The body never stands in a fire's cell.
+  Result: {:sunk n :carpeted n :reason r :left {pos reason} :skipped {pos reason} :fires n}. :reason is
+  :guarded (work done, nothing left), :limit (:max reached), :safe, :no-fire, :no-carpet, :no-campfire, a skip
+  reason (:unreachable, :on-fire, :occupied, :cannot, :place-failed, :refused) or :gave-up (3 fruitless fires
+  in a row). Every end but :guarded and :limit also warns apiary.guard-gave-up.
+  Zones: a fire in another owner's zone or claim, or in a plan's footprint, is left out of the survey (all refused
+  ends :no-fire). Each dig and place is checked again before it (a refusal skips the fire as :refused). The job
+  warns apiary.guard-declined once, with :reason :refused (or :no-zones when no zone list was read).
+  :ignore-zones? true skips the check.")
 
 (def args
   {:box {:doc "{:from pos :to pos}, fires inside it only; overrides :center and :radius" :default nil}

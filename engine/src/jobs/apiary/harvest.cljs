@@ -6,26 +6,22 @@
             [engine.path.near :as near]))
 
 (def doc
-  "Take the honey of the ripe hives (honey_level 5) near a centre with shears
-  (3 honeycomb) or a glass bottle (a honey bottle), nearest first, at most :max
-  hives. A hive is worked only when it is smoked by vanilla's own rule: a lit
-  campfire at most 5 blocks under it, only air-like blocks between, or a lit
-  campfire directly under the first block in the way. An unsmoked hive angers
-  the bees, so it is declined without a click (:not-smoked); a smoked hive over
-  an open lit fire (nothing with a collision box on it, a non-moss carpet counts)
-  burns the bees that land, so it is declined too (:open-fire). A hive the body
-  cannot walk to, or that refuses the item, is skipped for the rest of the run.
-  After each shears harvest the honeycomb on the ground is collected. Ends with
-  a result {:harvested n :reason r :with item :declined {pos reason} :skipped
-  {pos reason} :collected n}; :reason is :harvested (some taken, nothing more to
-  do), :limit (:max reached), :no-tool, :no-hive, :not-ripe, :not-smoked,
-  :open-fire, :unreachable, or :gave-up after 3 fruitless hives in a row. Declines and
-  give-ups also emit a warn apiary.gave-up.
-
-  Zones and claims are a rule the job consults: a hive in a zone or claim of another owner, or in a plan's footprint,
-  is not one to take honey from (:harvest of the zone rules), left out of the survey (all refused ends :no-hive) and
-  asked again right before the click. One apiary.declined warn per job names the zones, claims and plans ({:reason
-  :refused ...}); without a zone list it declines with {:reason :no-zones}. :ignore-zones? acts regardless.")
+  "Take the honey of the ripe hives (honey_level 5) near a centre, nearest first, at most :max hives. Shears give 3
+  honeycomb, a glass bottle gives a honey bottle. After each shears harvest the honeycomb on the ground is
+  collected.
+  A hive is worked only when it is smoked by vanilla's rule: a lit campfire at most 5 blocks under it with only
+  air-like blocks between, or a lit campfire directly under the first block in the way.
+  - An unsmoked hive angers the bees, so it is declined without a click (:not-smoked).
+  - A smoked hive over an open lit fire (nothing with a collision box on it; a non-moss carpet counts) burns
+    the bees that land, so it is declined too (:open-fire).
+  - A hive the body cannot walk to, or that refuses the item, is skipped for the rest of the run.
+  Result: {:harvested n :reason r :with item :declined {pos reason} :skipped {pos reason} :collected n}. :reason is
+  :harvested (some taken, nothing more to do), :limit (:max reached), :no-tool, :no-hive, :not-ripe,
+  :not-smoked, :open-fire, :unreachable or :gave-up (3 fruitless hives in a row). Declines and give-ups also warn
+  apiary.gave-up.
+  Zones: a hive in another owner's zone or claim, or in a plan's footprint, is left out of the survey (all refused
+  ends :no-hive) and checked again before the click. The job warns apiary.declined once, with :reason :refused (or
+  :no-zones when no zone list was read). :ignore-zones? true skips the check.")
 
 (def args
   {:with {:doc ":shears, :bottle or :either (shears first when both are carried)" :default :either}

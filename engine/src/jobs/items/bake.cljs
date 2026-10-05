@@ -5,22 +5,17 @@
             [jobs.storage.deposit :as deposit]))
 
 (def doc
-  "Turn the store chest's wheat into bread: walk to the chest, find a crafting
-  table within :table-radius of it, take the wheat out (whole loaves only, at
-  most three stacks per trip, empty slots kept for the bread), craft it through
-  jobs.items.craft, put the bread back through jobs.storage.deposit and carry
-  :keep loaves (a shortfall is taken from the chest). Every round re-derives
-  from the inventory and the chest, so a cut loses nothing: carried bread above
-  :keep is deposited first, carried wheat is crafted before the chest is read
-  again. Ends with a result {:baked n :deposited n}, no wheat to make a loaf of
-  being a success (info bake.nothing), or plus :reason (\"no-table\" before
-  anything was taken, \"unreachable\", \"chest status\", \"deposit reason\",
-  \"withdraw reason\" or \"craft reason\") after a warn (bake.no-table,
-  bake.gave-up, bake.deposit-failed, bake.withdraw-failed, bake.craft-failed).
-  Bread is never tossed; what cannot be put away stays carried. Memory: :table,
-  :bread0 (bread carried on the first round), :topped (bread the top-up took
-  out), :deposited, :started (the first inspect saw wheat
-  for a loaf), :failures.")
+  "Turn the store chest's wheat into bread. Walks to the chest, finds a crafting table within :table-radius of it,
+  takes the wheat out, crafts it (jobs.items.craft), puts the bread back (jobs.storage.deposit) and carries
+  :keep loaves. A shortfall of bread is taken from the chest.
+  Only whole loaves are made. At most three stacks of wheat are taken per trip, and empty slots are left for the
+  bread. Bread is never tossed: what cannot be put away stays carried.
+  Every round starts from the inventory and the chest, so a cut loses nothing.
+  Ends with {:baked n :deposited n}. No wheat for a loaf is a success (info bake.nothing).
+  A stop adds :reason, after a warn (bake.no-table, bake.gave-up, bake.deposit-failed, bake.withdraw-failed,
+  bake.craft-failed). :reason is \"no-table\" (before anything was taken), \"unreachable\", \"inventory-full\",
+  \"chest <status>\", \"deposit <reason>\", \"withdraw <reason>\", \"craft <reason>\" or :refused (a zone or claim
+  refuses the chest; bake.refused).")
 
 (def args
   {:chest {:doc "store chest position; the known :chest place when nil" :default nil}

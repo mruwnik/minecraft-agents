@@ -6,13 +6,13 @@
             [engine.path.near :as near]))
 
 (def doc
-  "Plant a sapling at :at, or at the oldest replant debt, and clear that debt.
-
-  Zones and claims are a rule the job consults: a spot in a zone or claim of another owner, or in a plan's footprint
-  (but :for-plan's own), is not planted, asked when chosen and again right before the place; the job is done at
-  once, as with nothing to plant, and a debt stays owed. One plant-sapling.declined warn per job names the zones,
-  claims and plans ({:reason :refused ...}); without a zone list it declines with {:reason :no-zones}.
-  :ignore-zones? acts regardless.")
+  "Plant a sapling at :at, or at the oldest replant debt, and clear that debt. With :bone-meal n it then uses up to
+  n bone meal on it.
+  Waits (check) with :reason :no-sapling when none is carried (:species), or :log-on-spot when the spot still holds a
+  log. Ends at once when there is nothing to plant or the spot is refused (a debt stays owed).
+  Zones: a spot in another owner's zone or claim, or in a plan's footprint (but :for-plan's own), is not planted.
+  The job warns plant-sapling.declined once, with :reason :refused (or :no-zones when no zone list was read).
+  :ignore-zones? true skips the check.")
 
 (def args
   {:at {:doc "where to plant; the oldest :forestry/replant debt when nil" :type :pos :default nil}

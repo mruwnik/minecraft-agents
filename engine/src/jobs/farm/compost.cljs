@@ -5,16 +5,14 @@
             [engine.path.near :as near]))
 
 (def doc
-  "Feed a composter what a farm cannot use and take the bone meal it makes. Walks
-  to the composter, feeds it until it fills, empties it and collects the bone meal,
-  until :times are taken, nothing is left to feed or it keeps failing. Ends with a
-  result {:fed {name n} :bone-meal n}, plus a :reason when it stopped early.
-
-  Zones and claims are a rule the job consults: a composter in a zone or claim of another owner, or in a plan's
-  footprint, is not one to use (the bone meal is the owner's to give, a :harvest of the zone rules), asked when it is
-  chosen and again right before each use of it; with none left the job ends as it does with no composter. One
-  compost.declined warn per job names the zones, claims and plans ({:reason :refused ...}); without a zone list it
-  declines with {:reason :no-zones}. :ignore-zones? acts regardless.")
+  "Feed a composter what a farm cannot use and collect the bone meal it makes.
+  Walks to the composter, feeds it, empties it when full and picks up the bone meal.
+  Ends when :times bone meal is taken, nothing is left to feed, there is no composter,
+  or three failures in a row.
+  Result: {:fed {name n} :bone-meal n}, plus :reason (:no-composter, :nothing-to-feed, :gave-up) when it stopped early.
+  Zones: a composter in another owner's zone or claim, or inside a plan's footprint, is not used (it counts as a
+  :harvest). The job warns compost.declined once, with :reason :refused (or :no-zones when no zone list was read).
+  :ignore-zones? true skips the check.")
 
 (def args
   {:at {:doc "the composter position; the nearest composter within :radius when nil" :type :pos :default nil}

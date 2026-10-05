@@ -8,31 +8,35 @@
             [plan.shape :as shape]))
 
 (def doc
-  "Build the rail line a plan of the body's world wants (:plan, optionally only its :part) and prove a ridden cart can
-  run it. The plan's rail cells (wants naming a *rail block) must form one chain (plan.rail/line); plan.rail/layout
-  writes such plans, with corners and slopes. Phase :build is the head-first builder (engine.jobs.rail): the cells go
-  in along the line from the end nearer the body, each station's bed and power under before its rail, the rail before
-  the torch or lever beside it, so every rail takes the shape its neighbours give it; the body stands on the rail
-  behind the cell it places (a cell beside it where there is none yet). A rail that has settled in the wrong shape is
-  dug and placed again up to :fix times, then given up as :shape. Placing, the access rules (zones, other plans'
-  footprints), refusals, give-ups and the result are jobs.build.from-plan's own (its args :reach :give-up :accept
-  apply; a sturdy block on the ground of the line is no wrong block), and the build.* events are its. Phase :switch then switches on every planned lever that is
-  off (jobs.access.toggle as a child, once per lever). Phase :check runs plan.rail/judge-line over the world. Any
-  sturdy block where the plan wants bed or buffer fill is kept and is no fault. Sound: info rail-build.done. Not
-  sound: ONE warn rail-build.broken with the :breaks {:pos :why} (:gap :shape :unlit :lit-brake :no-bed :blocked :wet
-  :no-buffer :launch-trap :unloaded; at most 12) and what the build left (:refused :given-up :short). Either way it
-  ends :done with {:ok? :breaks :hazards :built {:placed :missing :short :given-up :wrong :refused}}; :hazards lists
-  falling beds (gravel, sand). The check declines with one rail-build.declined warn (:plan :reason) while the plan is
-  missing or unreadable (:plan), its rail cells are not one chain (:not-a-line, :why :gap|:branch|
-  :two-chains|:loop|:no-rails), no zone list has been read (:no-zones), or a cell still to build is refused by the
-  access rules (:refused, the whole list [{:pos :reason :zone|:plan}]), or a cell wanting a redstone block holds
-  another block (:source-blocked, the :cells; the builder never digs, so on natural ground :power :block cannot be
-  built: use :torch or :lever, or a raised bed); with :all-carried, while the items for every cell still to build
-  are not all carried (ONE warn rail-build.short {item n}; an :any want counts every choice carried; only cells
-  seen empty are owed, and the warn's :up-to {item n} counts the cells nobody has seen as well). Without :all-carried it builds what is carried, and with nothing to build
-  it goes straight to the proof. A line that is sound already starts and ends at once with rail-build.done (placed
-  0): a job that stayed queued would hold the body's queue for ever. Once
-  begun the check stays true; a restart resumes in the phase it was in (the world is the memory).")
+  "Build the rail line a plan wants (:plan, optionally only its :part) and prove a ridden cart can run it.
+  The plan's rail cells (wants naming a *rail block) must form one chain (plan.rail/line). plan.rail/layout writes
+  such plans, with corners and slopes.
+  Three phases:
+  1. :build, the head-first builder (engine.jobs.rail). Cells go in along the line from the end nearer the
+     body. Each station's bed and power go under before its rail, and the rail before the torch or lever beside
+     it, so every rail takes the shape its neighbours give it. The body stands on the rail behind the cell it
+     places. A rail that settled in the wrong shape is dug and placed again up to :fix times, then given up as
+     :shape. Placing, zones, other plans' footprints, refusals, give-ups and the build.* events are
+     jobs.build.from-plan's (its args :reach :give-up :accept apply).
+  2. :switch turns on every planned lever that is off (jobs.access.toggle as a child, once per lever).
+  3. :check runs plan.rail/judge-line over the world. A sturdy block where the plan wants bed or buffer fill is
+     no fault.
+  Always ends :done with {:ok? :breaks :hazards :built {:placed :missing :short :given-up :wrong :refused}}.
+  :hazards lists falling beds (gravel, sand). Sound gives info rail-build.done. Not sound gives one warn
+  rail-build.broken with :breaks {:pos :why} (:gap :shape :unlit :lit-brake :no-bed :blocked :wet :no-buffer
+  :launch-trap :unloaded; at most 12) and what the build left (:refused :given-up :short).
+  A line that is sound already ends at once with rail-build.done (placed 0).
+  The job declines with one rail-build.declined warn (:plan :reason) while:
+  - the plan is missing or unreadable (:plan).
+  - its rail cells are not one chain (:not-a-line, :why :gap|:branch|:two-chains|:loop|:no-rails).
+  - no zone list has been read (:no-zones).
+  - a cell still to build is refused by the access rules (:refused, with the list [{:pos :reason :zone|:plan}]).
+  - a cell wanting a redstone block holds another block (:source-blocked, :cells). The builder never digs, so on
+    natural ground use :torch or :lever, or a raised bed.
+  With :all-carried (the default) it also waits, with one rail-build.short warn {item n}, until the items for
+  every cell still to build are carried. An :any want counts every choice carried. Only cells seen empty are owed;
+  the warn's :up-to {item n} counts the unseen cells too. With :all-carried false it builds what is carried.
+  Once begun the check stays true. A restart resumes in the phase it was in: the world is the memory.")
 
 (def args
   {:plan {:doc "id of a plan of the body's world" :default nil}
@@ -43,7 +47,7 @@
    :all-carried {:doc "start only while every item still to place is carried (false: build what is carried)" :default true}
    :fix {:doc "times a rail whose settled shape is wrong is dug and placed again, then given up as :shape (0 or false: given up at once)" :default 1}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
-   :dig {:doc "dig :clear cells and wrong blocks in bed and rail cells; not used yet (slice 3)" :default false}})
+   :dig {:doc "not used" :default false}})
 
 ;; ------------------------------------------------------------------ the plan
 

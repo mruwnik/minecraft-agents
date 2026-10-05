@@ -4,26 +4,23 @@
             [engine.path.near :as near]))
 
 (def doc
-  "Buy :count of :buy from the villager with uuid :villager. Each round is one
-  bounded step: find the villager within 48 blocks, walk within 2 of it, read
-  its offers (one short window visit, prices move between visits), choose and
-  buy. Of the offers that give :buy and are not sold out, those whose price
-  (the adjusted count of the first cost stack) is within :max-price (nil: no
-  limit) are kept and the cheapest is taken, the lowest index on a tie. :count
-  is items wanted; an offer gives several per trade, so it buys ceil(remaining
-  / items per trade) trades and may overshoot a little; the result counts the
-  items actually gained. Ends with a result {:bought n :paid {item n} :item
-  :buy}, plus :reason when it gave up (warn trade.gave-up): \"gone\" (not
-  listed within 48, also a non-villager entity under the uuid), \"unreachable\"
-  (walk blocked, or still out of reach after three tries), \"not-villager\",
-  \"no-offers\" (unemployed, nitwit, baby, or an empty window), \"window\" (the
-  window did not open three times, busy villager), \"no-offer\" (nothing gives
-  :buy), \"sold-out\", \"price\" (every open offer is dearer than :max-price;
-  :price is the cheapest seen), \"payment-short\", \"no-room\", \"incomplete\"
-  (a buy stopped short for no reason, three times), or the primitive's failure
-  reason. Success is info trade.done. A partial purchase before a give-up stays
-  bought and paid. Memory: :bought, :paid (kept across a cut and restart, so a
-  purchase is neither lost nor repeated), :failures.")
+  "Buy :count of :buy from the villager with uuid :villager. Each round is one bounded step: find the villager
+  within 48 blocks, walk within 2 of it, read its offers (prices move between visits), choose and buy.
+  Of the offers that give :buy and are not sold out, those whose price (the adjusted count of the first cost
+  stack) is within :max-price (nil: no limit) are kept. The cheapest is taken, the lowest index on a tie.
+  :count is items wanted. An offer gives several per trade, so it buys ceil(remaining / items per trade) trades
+  and may overshoot a little.
+  Result: {:bought n :paid {item n} :item :buy}. n counts the items actually gained. Success is info trade.done.
+  A give-up adds :reason and warns trade.gave-up. A partial purchase stays bought and paid.
+  :reason is one of:
+  - \"gone\" (not listed within 48, also a non-villager entity under the uuid), \"not-villager\".
+  - \"unreachable\" (walk blocked, or still out of reach after three tries).
+  - \"no-offers\" (unemployed, nitwit, baby, or an empty window), \"window\" (did not open three times: busy
+    villager), \"no-offer\" (nothing gives :buy), \"sold-out\".
+  - \"price\" (every open offer is dearer than :max-price; :price is the cheapest seen).
+  - \"payment-short\", \"no-room\", \"incomplete\" (a buy stopped short for no reason, three times), or the
+    primitive's failure reason.
+  What was bought and paid is kept across a cut and restart, so a purchase is neither lost nor repeated.")
 
 (def args
   {:villager {:doc "the villager's entity uuid" :default nil}
