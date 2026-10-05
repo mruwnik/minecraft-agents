@@ -177,3 +177,46 @@
           (is (= [] (st/calls p "dig")))
           (is (= [] (st/calls p "place")) "no dig-in")
           (is (= 1 (count (st/entries eng :slept)))))))))
+
+(deftest night-unsafe-holds-for-a-roofed-body-carrying-a-bed-and-knowing-none
+  (let [world (merge (hut-world {:x 5 :y 64 :z 0} {}) {:time st/night :inventory [{:name "red_bed" :count 1}]})
+        holds (fn [world seed!]
+                (let [{:keys [eng]} (st/setup {})]
+                  (seed! eng)
+                  (boolean ((:when (get triggers/all :night-unsafe)) (tu/fake world) (mem/view (:store eng)) {}))))]
+    (is (true? (holds world (fn [_]))) "a carried bed, none known")
+    (is (false? (holds (dissoc world :inventory) (fn [_]))) "no bed carried")
+    (is (false? (holds world (fn [eng] (mem/write! (:store eng) :bed-place-failed {} {:cap 1 :ttl 600000})))) "set-up failed lately")
+    (is (false? (holds world (fn [eng] (st/know-bed! eng {:x 6 :y 64 :z 0})
+                                (mem/write! (:store eng) :slept {:pos {:x 6 :y 64 :z 0}} {:cap 10 :ttl (* 7 st/day-ms)}))))
+        "a known bed already slept in")))
+
+(deftest shelter-in-a-hut-puts-a-carried-bed-down-records-it-and-sleeps
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (st/setup (merge (hut-world {:x 5 :y 64 :z 0} {})
+                                               {:time st/night :inventory [{:name "red_bed" :count 1}]}))]
+          (core/submit! eng '(jobs.survival.shelter) {})
+          (await (st/tick-n eng 8))
+          
+          (is (= 1 (count (st/calls p "place"))) "one bed placed")
+          (is (= "red_bed" (.-item (.-args (first (st/calls p "place"))))))
+          (is (= [] (st/calls p "dig")))
+          (is (= 1 (count (st/calls p "sleep"))) "slept in it")
+          (is (= 1 (count (st/entries eng :bed))) "recorded as the bed")
+          (is (= (st/arg-pos (first (st/calls p "place"))) (:pos (first (st/entries eng :bed)))))
+          (is (= 1 (count (st/entries eng :slept)))))))))
+
+(deftest shelter-in-a-hut-with-no-room-for-the-bed-gives-up-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [boxed (into {} (for [x [4 5 6] z [-1 0 1] :when (not= [x z] [5 0])] [(str x ",64," z) "cobblestone"]))
+              {:keys [eng p]} (st/setup (merge (hut-world {:x 5 :y 64 :z 0} boxed)
+                                               {:time st/night :inventory [{:name "red_bed" :count 1}]}))]
+          (core/submit! eng '(jobs.survival.shelter) {})
+          (await (st/tick-n eng 4))
+          (is (= [] (st/calls p "place")))
+          (is (= [] (st/calls p "sleep")))
+          (is (= 1 (count (st/entries eng :bed-place-failed)))))))))

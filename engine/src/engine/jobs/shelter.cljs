@@ -120,6 +120,26 @@
                  (not-any? #(= bed (:pos (:data %))) (mem/entries view :bed-unreachable)))
         bed))))
 
+(def bed-place-failed-policy
+  "The :bed-place-failed entries the shelter writes when it could not set up a carried bed: one, kept ten minutes."
+  {:cap 1 :ttl 600000})
+
+(defn carried-bed
+  "The name of a bed item the body carries (any colour), or nil."
+  [p]
+  (some #(when (.endsWith (:name %) "_bed") (:name %)) (u/inventory p)))
+
+(defn bed-place-wanted?
+  "Whether a sheltered body should put a carried bed down: night, awake, roofed within roof-height, no remembered bed
+  within radius, a bed item carried, no sleep tonight and no :bed-place-failed entry."
+  [p view roof-height radius]
+  (boolean (and (night? p) (not (sleeping? p))
+                (roofed? p roof-height)
+                (nil? (bed-in-view p view radius))
+                (some? (carried-bed p))
+                (zero? (mem/count-in view :slept slept-tonight-ms))
+                (empty? (mem/entries view :bed-place-failed)))))
+
 (defn bed
   "The remembered bed position when it is within radius of the body, else nil."
   [c radius]

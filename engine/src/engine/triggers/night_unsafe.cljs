@@ -9,11 +9,13 @@
 
 (defn holds?
   "Night, awake, and unroofed, shut in the body's own latest :shelter, or sheltered with a bed in reach it has not slept
-  in tonight (the shelter job sleeps in it, which sets the respawn point)."
+  in tonight (the shelter job sleeps in it, which sets the respawn point), or with no bed in reach but a bed item
+  carried (the shelter job puts it down and sleeps in it)."
   ([p view roof-height] (holds? p view roof-height sh/default-bed-radius))
   ([p view roof-height bed-radius]
   (boolean (or (sh/unsafe-night? p roof-height)
                (some? (sh/sleep-wanted p view bed-radius))
+               (sh/bed-place-wanted? p view roof-height bed-radius)
                (and (sh/night? p)
                     (not (sh/sleeping? p))
                     (sh/in-own-shelter p (:data (mem/latest view :shelter))))))))
