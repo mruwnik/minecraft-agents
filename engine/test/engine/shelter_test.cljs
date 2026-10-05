@@ -312,7 +312,7 @@
           (is (= [{:x 0 :y 63 :z 0} {:x 0 :y 62 :z 0} {:x 0 :y 61 :z 0}] (mapv arg-pos (calls p "dig"))))
           (is (= {:x 0 :y 61 :z 0} (pos-of p)) "three blocks down")
           (is (= [{:x 0 :y 63 :z 0}] (mapv arg-pos (calls p "place"))) "the roof goes in the ground layer, beside solid ground")
-          (is (= [{:pos {:x 0 :y 61 :z 0} :roof {:x 0 :y 63 :z 0} :state :built}] (entries eng :shelter))))))))
+          (is (= [{:pos {:x 0 :y 61 :z 0} :roof {:x 0 :y 63 :z 0} :start {:x 0 :y 64 :z 0} :state :built}] (entries eng :shelter))))))))
 
 (deftest dig-in-digs-down-two-and-roofs-at-the-start-cell-beside-a-solid-block
   (async done
