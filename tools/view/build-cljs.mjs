@@ -1,7 +1,7 @@
-// Why JavaScript: it builds the cljs, so it cannot be cljs; a Node launcher that starts the shadow-cljs JVM only when needed.
+// Why JavaScript: it builds the cljs, so it cannot be cljs; a Node launcher that runs tools/compile (shadow-cljs) only when needed.
 // Builds tools/view/web/cljs/viewer.mjs (dashboard/shadow-cljs.edn :viewer, `shadow-cljs release viewer`) when it is missing
 // or older than a source it is built from. Run by the root `npm test` (pretest) and the dashboard launcher; by hand:
-//   node tools/view/build-cljs.mjs [--force]
+//   node tools/view/build-cljs.mjs [--force] [--priority]   (--priority: jump the compile queue, see tools/compile)
 import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -31,7 +31,8 @@ const main = () => {
     return 1
   }
   console.error('building the viewer cljs (shadow-cljs release viewer)')
-  const run = spawnSync('flock', ['/tmp/mc-compile.lock', 'npx', 'shadow-cljs', 'release', 'viewer'], { cwd: dashboard, stdio: 'inherit' })
+  // tools/compile takes the compile lock and uses the dashboard's shadow-cljs server, so this is not wrapped in flock
+  const run = spawnSync(path.join(repo, 'tools', 'compile'), ['dashboard', 'viewer', '--release', ...(process.argv.includes('--priority') ? ['--priority'] : [])], { stdio: 'inherit' })
   return run.status ?? 1
 }
 

@@ -113,9 +113,9 @@ for (const [step, code, expected] of [
 }
 
 for (const [step, expected] of [
-  ['viewer', ['node', ['../tools/view/build-cljs.mjs']]],
-  ['ui', ['flock', ['/tmp/mc-compile.lock', 'npx', 'shadow-cljs', 'compile', 'ui']]],
-  ['server', ['flock', ['/tmp/mc-compile.lock', 'npx', 'shadow-cljs', 'compile', 'server']]]
+  ['viewer', ['node', ['../tools/view/build-cljs.mjs', '--priority']]],
+  ['ui', ['../tools/compile', ['dashboard', 'ui', '--priority']]],
+  ['server', ['../tools/compile', ['dashboard', 'server', '--priority']]]
 ]) {
   test(`stepCommand ${step}`, () => assert.deepEqual(stepCommand(step), expected))
 }

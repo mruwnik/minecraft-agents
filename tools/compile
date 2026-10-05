@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# tools/compile <engine|dashboard> <build>... [--priority] [--release]
+#
+# Every cljs compile in this repo goes through here: it queues on /tmp/mc-compile.lock (the machine-wide compile lock, taken
+# here, so never wrap this in flock) and runs `npx shadow-cljs compile|release <build>` in the project. The shadow-cljs CLI
+# connects to the project's long-lived `shadow-cljs server` when one runs (no JVM per compile, ~2 s instead of ~30 s); this
+# script starts that server first, detached, when it is not running and memory allows.
+#
+#   --priority  jump the queue: ahead of every waiting normal compile (it still waits for the compile now running).
+#               For the owner's UI rebuilds (dashboard ui/server) and nothing else.
+#   --release   `shadow-cljs release` instead of `compile` (the :viewer build).
+#   --stop      stop the project's server (needs the lock; for restarts; no build argument).
+#
+# Queue: a ticket file <lane>-<ns>-<pid> per waiter in /tmp/mc-compile.queue (lane 0 priority, 1 normal); the first live
+# ticket polls the flock without blocking, so order is priority lane first, then arrival. Dead waiters' tickets are pruned.
+# Memory: a missing server starts only with MIN_START_MB (3500) available; the compile itself uses the server's heap.
+# Env: MC_COMPILE_LOG=1 prints "waited Ns, compiled Ns".
+set -u
+repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+lock=/tmp/mc-compile.lock
+queue=/tmp/mc-compile.queue
+MIN_START_MB=3500
+
+usage() { echo "usage: tools/compile <engine|dashboard> <build>... [--priority] [--release] | <project> --stop" >&2; exit 2; }
+
+[ $# -ge 2 ] || usage
+project=$1; shift
+case "$project" in engine|dashboard) ;; *) usage ;; esac
+dir="$repo/$project"
+lane=1; verb=compile; stop=0; builds=()
+for a in "$@"; do
+  case "$a" in
+    --priority) lane=0 ;;
+    --release) verb=release ;;
+    --stop) stop=1 ;;
+    -*) usage ;;
+    *) builds+=("$a") ;;
+  esac
+done
+[ "$stop" = 1 ] || [ ${#builds[@]} -gt 0 ] || usage
+
+available_mb() { awk '/MemAvailable/ {print int($2/1024)}' /proc/meminfo; }
+server_pid() { local p; p=$(cat "$dir/.shadow-cljs/server.pid" 2>/dev/null) && [ -n "$p" ] && kill -0 "$p" 2>/dev/null && echo "$p"; }
+
+mkdir -p "$queue"
+ticket="$queue/$lane-$(date +%s%N)-$$"
+: > "$ticket"
+exec 9>>"$lock"
+trap 'rm -f "$ticket"' EXIT
+t0=$(date +%s.%N)
+while :; do
+  for f in "$queue"/*; do  # prune tickets of dead waiters
+    [ -e "$f" ] || continue
+    pid=${f##*-}
+    kill -0 "$pid" 2>/dev/null || rm -f "$f"
+  done
+  first=$(ls "$queue" 2>/dev/null | head -n1)
+  if [ "$queue/$first" = "$ticket" ] && flock -n 9; then break; fi
+  sleep 0.2
+done
+t1=$(date +%s.%N)
+rm -f "$ticket"
+
+if [ "$stop" = 1 ]; then
+  p=$(server_pid) || { echo "no $project server running" >&2; exit 0; }
+  kill "$p"; exit 0
+fi
+
+if ! server_pid >/dev/null; then
+  mb=$(available_mb)
+  if [ "$mb" -lt "$MIN_START_MB" ]; then
+    echo "tools/compile: no $project shadow-cljs server and only $mb MB available ($MIN_START_MB needed to start one)" >&2
+    exit 1
+  fi
+  echo "tools/compile: starting the $project shadow-cljs server" >&2
+  # the background subshell must drop the lock fd too, or it holds the lock until the server dies
+  (exec 9>&-; cd "$dir" && exec setsid nohup npx shadow-cljs server >"$dir/.shadow-cljs/server.log" 2>&1 </dev/null) &
+  for _ in $(seq 1 300); do
+    p=$(server_pid) && [ -s "$dir/.shadow-cljs/nrepl.port" ] && [ -s "$dir/.shadow-cljs/http.port" ] && break
+    sleep 0.5
+  done
+  server_pid >/dev/null || { echo "tools/compile: the $project server did not start (see $dir/.shadow-cljs/server.log)" >&2; exit 1; }
+  sleep 3
+fi
+
+cd "$dir" || exit 1
+# the server (and any detached child) must not inherit the lock fd
+npx shadow-cljs "$verb" "${builds[@]}" 9>&-
+code=$?
+t2=$(date +%s.%N)
+[ -z "${MC_COMPILE_LOG:-}" ] || awk -v a="$t0" -v b="$t1" -v c="$t2" 'BEGIN{printf "tools/compile: waited %.1fs, compiled %.1fs\n", b-a, c-b}' >&2
+exit $code

@@ -14,12 +14,13 @@ export const initial = { phase: 'idle', pending: false, stopping: null, quitting
 export const buildSteps = ['ui', 'server', 'viewer']
 const optionalSteps = ['viewer']
 
-// [command, args] of a step, run in the dashboard dir. The compile JVM is shared machine-wide, hence flock (build-cljs.mjs
-// takes it itself, only when it builds).
+// [command, args] of a step, run in the dashboard dir. tools/compile takes the machine-wide compile lock and uses the
+// dashboard's shadow-cljs server; --priority because the owner waits for these (build-cljs.mjs goes through the same
+// wrapper itself, only when it builds).
 export const stepCommand = (step) =>
   step === 'viewer'
-    ? ['node', ['../tools/view/build-cljs.mjs']]
-    : ['flock', ['/tmp/mc-compile.lock', 'npx', 'shadow-cljs', 'compile', step]]
+    ? ['node', ['../tools/view/build-cljs.mjs', '--priority']]
+    : ['../tools/compile', ['dashboard', step, '--priority']]
 
 // whether the run stops after this step: a required step failed
 export const stopsBuild = (step, code) => code !== 0 && !optionalSteps.includes(step)

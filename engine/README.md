@@ -28,6 +28,15 @@ Builds (`shadow-cljs.edn`): `:test` is a `:node-test` build to
 `:node-script` build to `out/body.cjs` with `engine.main/main`.
 The compile JVM is capped (`:jvm-opts ["-Xmx1G"]` in `shadow-cljs.edn`) because one compile must fit beside the game server on a 31 GB machine; uncapped it grew past 2 GB.
 
+**Compiling: `tools/compile <engine|dashboard> <build>... [--priority] [--release]`** (repo root; shell script). Every cljs compile goes
+through it: it queues on `/tmp/mc-compile.lock` (takes the lock itself, so never wrap it in `flock`; `tools/view/build-cljs.mjs` calls it)
+and runs `npx shadow-cljs compile <build>` against the project's long-lived `shadow-cljs server`, which it starts (detached, `.shadow-cljs/server.log`)
+when missing and at least 3500 MB is available. No JVM per compile: an up-to-date build takes ~1-3 s, a cold JVM compile took ~8 s (dashboard `ui`) to 30 s+.
+Waiters take tickets in `/tmp/mc-compile.queue`: `--priority` goes ahead of every waiting normal compile (still behind the one running); the owner's UI
+rebuilds (the dashboard launcher's `ui`/`server`/viewer steps) use it, agents never do. `--release` runs `shadow-cljs release` (the `:viewer` build).
+`MC_COMPILE_LOG=1` prints the lock wait and compile seconds. `tools/compile <project> --stop` stops that project's server (holds the lock; for restarts only).
+Plain `npx shadow-cljs compile x` in a project dir also reaches the server, but skips the queue and the lock.
+
 Layout:
 
 - `js/primitives.mjs` the real mineflayer layer; `js/connect.mjs` makes the bot; `js/stub-bot.mjs` is a bare stub bot for the primitive tests.

@@ -34,7 +34,7 @@ const availableMb = () => {
   try { return parseMemAvailableMb(readFileSync('/proc/meminfo', 'utf8')) } catch { return null }
 }
 
-// Detached, so the whole group (flock, npx, the shadow-cljs JVM) can be killed with one signal. TERM first, SIGKILL after
+// Detached, so the whole group (tools/compile, npx, the shadow-cljs client) can be killed with one signal. TERM first, SIGKILL after
 // killAfterMs if the group is still there. Resolves when the group has exited or been killed.
 const killBuild = () => {
   const b = build
@@ -54,7 +54,7 @@ const runStep = (step) => new Promise((resolve) => {
   build.on('exit', (code) => { build = null; resolve(code === null ? 1 : code) })
 })
 
-// Resolves true on a good build. The compile JVM is shared machine-wide, hence flock. Steps run in buildSteps order and
+// Resolves true on a good build. Compiles go through tools/compile (compile lock, shared shadow-cljs server). Steps run in buildSteps order and
 // stop at the first failed required step, so a failed ui build leaves out/server.cjs as it was; the optional viewer step
 // runs last and a failure of it is only a warning.
 const runBuild = async () => {
