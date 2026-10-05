@@ -6,7 +6,8 @@
 #   Hunks mode commits only the patch: build it ONLY from hunks you wrote. The paths are required and
 #   must cover every file in the patch (else exit 3, listing the others); N must equal the patch's
 #   hunk count (else exit 5); the tool prints each hunk's path and first changed line, check them.
-#   Optional: --approved-core <card>.
+#   Optional: --approved-core <card-id> (takes the id of the card holding the owner's approval; needed for engine-core paths).
+#   Every flag that takes a value refuses one starting with "--" (so a missing value never swallows the next flag).
 # See tools/README.md. Never stashes, resets, amends or pushes.
 set -euo pipefail
 
@@ -18,14 +19,17 @@ LARGE_JS_LINES=40
 
 die() { echo "commit-mine: $*" >&2; exit "${2:-1}"; }
 
+# A flag's value must exist and must not look like another flag.
+val() { case "$2" in ""|--*) die "$1 needs a value, got '${2:-<nothing>}' (a value may not start with --)" ;; esac; printf '%s' "$2"; }
+
 card=""; msg=""; hunks=""; approved=""; expect=""; paths=()
 while [ $# -gt 0 ]; do
   case "$1" in
-    --card) card="${2:?}"; shift 2 ;;
-    -m) msg="${2:?}"; shift 2 ;;
-    --hunks) hunks="${2:?}"; shift 2 ;;
-    --expect-hunks) expect="${2:?}"; shift 2 ;;
-    --approved-core) approved="${2:?}"; shift 2 ;;
+    --card) card="$(val --card "${2-}")"; shift 2 ;;
+    -m) msg="$(val -m "${2-}")"; shift 2 ;;
+    --hunks) hunks="$(val --hunks "${2-}")"; shift 2 ;;
+    --expect-hunks) expect="$(val --expect-hunks "${2-}")"; shift 2 ;;
+    --approved-core) approved="$(val --approved-core "${2-}")"; shift 2 ;;
     --) shift; paths+=("$@"); break ;;
     -*) die "unknown option $1" ;;
     *) paths+=("$1"); shift ;;

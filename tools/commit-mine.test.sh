@@ -35,4 +35,11 @@ tools/commit-mine --card c -m hm --hunks g.patch --expect-hunks 1 g.txt >/dev/nu
 check "hunks commit only g" "$(git show --name-only --format= HEAD)" "g.txt"
 check "h.txt change still uncommitted" "$(git diff --name-only)" "h.txt"
 check "index clean" "$(git diff --cached --name-only)" ""
+# A flag value starting with -- is refused, naming the flag (no silent swallowing of the next flag).
+echo y > f.txt
+out=$(tools/commit-mine --card c -m m --approved-core --expect-hunks 1 f.txt 2>&1); check "approved-core swallowing exit" "$?" 1
+check "refusal names the flag" "$(grep -c -- '--approved-core' <<<"$out")" 1
+tools/commit-mine --card --expect-hunks 1 -m m f.txt >/dev/null 2>&1; check "card swallowing exit" "$?" 1
+tools/commit-mine --card c -m m --expect-hunks --approved-core x f.txt >/dev/null 2>&1; check "expect swallowing exit" "$?" 1
+git checkout -q f.txt
 exit $fail
