@@ -18,6 +18,10 @@ export function connectBot ({ host, port, username, auth = DEFAULTS.auth, versio
   return new Promise((resolve, reject) => {
     const bot = mineflayer.createBot({ host, port, username, auth, version })
     bot.loadPlugin(pathfinder)
+    // Mineflayer does not keep the damage_type registry; primitives names a damage packet's type from it.
+    bot._client.on('registry_data', packet => {
+      if (packet.id === 'minecraft:damage_type') bot.damageTypeNames = packet.entries.map(e => e.key.replace(/^minecraft:/, ''))
+    })
     const timer = setTimeout(() => fail(new Error(`no spawn within ${timeoutMs} ms`)), timeoutMs)
     const onError = err => fail(err)
     const onKicked = reason => fail(new Error(`kicked before spawn: ${JSON.stringify(reason)}`))

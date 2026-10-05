@@ -2,6 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createPrimitives, createPrimitivesFromBot, mcToMineflayerLook, mineflayerToMcLook } from './primitives.mjs'
+import { EventEmitter } from 'node:events'
 import { stubBot, names, Vec3 } from './stub-bot.mjs'
 
 // the calls a bot received, minus the blockAt reads waitForWorld makes
@@ -2727,4 +2728,48 @@ test('harvestTools lists the harvesting item names, null when the block lists no
   assert.deepEqual(p.harvestTools('iron_ore'), ['stone_pickaxe', 'iron_pickaxe'])
   assert.equal(p.harvestTools('dirt'), null)
   assert.equal(p.harvestTools('no_such_block'), null)
+})
+
+const hurtRig = () => {
+  const bot = stubBot(world)
+  bot._client = new EventEmitter()
+  bot.damageTypeNames = ['fall', 'mob_attack']
+  const p = createPrimitivesFromBot(bot, { timeScale: SCALE })
+  const seen = []
+  p.onBodyEvent(e => seen.push(e))
+  bot.health = 20
+  bot.emit('health')
+  return { bot, seen }
+}
+
+test('the hurt event carries the amount and the attacker of the damage packet', () => {
+  const { bot, seen } = hurtRig()
+  bot._client.emit('damage_event', { entityId: bot.entity.id, sourceTypeId: 1, sourceCauseId: 9, sourceDirectId: 9 })
+  bot.health = 17
+  bot.emit('health')
+  const hurt = seen.find(e => e.kind === 'hurt')
+  assert.equal(hurt.amount, 3)
+  assert.deepEqual(hurt.attacker, { id: 8, name: 'zombie' })
+  assert.equal(hurt.damageType, 'mob_attack')
+})
+
+test('the hurt event carries the damage type when nothing is responsible, and nothing stale', () => {
+  const { bot, seen } = hurtRig()
+  bot._client.emit('damage_event', { entityId: bot.entity.id, sourceTypeId: 0, sourceCauseId: 0, sourceDirectId: 0 })
+  bot.health = 14
+  bot.emit('health')
+  bot.health = 12
+  bot.emit('health')
+  const [fall, second] = seen.filter(e => e.kind === 'hurt')
+  assert.equal(fall.damageType, 'fall')
+  assert.equal('attacker' in fall, false)
+  assert.equal('damageType' in second, false)
+})
+
+test('a damage packet for another entity is not the cause', () => {
+  const { bot, seen } = hurtRig()
+  bot._client.emit('damage_event', { entityId: 999, sourceTypeId: 0, sourceCauseId: 0, sourceDirectId: 0 })
+  bot.health = 14
+  bot.emit('health')
+  assert.equal('damageType' in seen.find(e => e.kind === 'hurt'), false)
 })

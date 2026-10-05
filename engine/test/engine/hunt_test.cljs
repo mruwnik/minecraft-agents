@@ -270,3 +270,13 @@
           (core/submit! eng (spec {:mob "zombie"}) {})
           (await (core/tick! eng))
           (is (pos? (count (h/calls p "attack")))))))))
+
+(deftest a-chicken-hunt-collects-meat-and-feather
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [chicken (animal 1 "chicken" 3 {:drops [{:name "feather" :count 1} {:name "chicken" :count 1}]})
+              s (await (scenario {:mob "chicken" :count 1 :keep 0} {:inventory h/sword :entities [chicken]} 30))]
+          (is (= 1 (get (inv s) "chicken")))
+          (is (= 1 (get (inv s) "feather")))
+          (is (finished? s)))))))

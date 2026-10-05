@@ -76,6 +76,7 @@ const POLL_MS = 50
 const HURT_WAIT_MS = 300 // attack waits this long for the server's entityHurt on the target
 const DIG_MARGIN_S = 5 // slack over the expected dig time (latency, a tick of lag)
 const CONTAINER = /chest|barrel|shulker_box|furnace|smoker|hopper|dispenser|dropper|brewing_stand/
+const DAMAGE_FRESH_MS = 1000 // a damage packet older than this is not the cause of a health loss
 const DESTS = ['hand', 'off-hand', 'head', 'torso', 'legs', 'feet']
 const SETTLE_QUIET_MS = 150 // transfer closes its window only after this long without a slot update...
 const SETTLE_CAP_MS = 1500 // ...or this long in all
@@ -1244,12 +1245,33 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       physicsTick: () => { lastTick = Date.now(); stalled = false; lastPos = target.entity.position.clone(); if (++ticks % 20 === 0) remember() },
       health: () => {
         remember()
-        if (target.health < lastHealth) emit({ kind: 'hurt', health: target.health, food: target.food, ...causeNow() })
+        if (target.health < lastHealth) emit({ kind: 'hurt', health: target.health, food: target.food, amount: lastHealth - target.health, ...hurtNow(), ...causeNow() })
         lastHealth = target.health
       },
       // bot.experience still holds the pre-death values here; the server resets it in a later packet.
       death: () => { stopWalking(target); emit({
         kind: 'died',
+    // The last damage packet to this body: the damage type's name (target.damageTypeNames comes from the login
+    // registry) and the entity responsible, as a client can know them. The next health loss reports it; engine.hurt
+    // turns it into the cause.
+    let damage = null
+    const onDamage = packet => {
+      if (packet.entityId !== target.entity?.id) return
+      const source = packet.sourceCauseId > 0 ? target.entities?.[packet.sourceCauseId - 1] : undefined
+      damage = {
+        at: Date.now(),
+        damageType: target.damageTypeNames?.[packet.sourceTypeId],
+        ...(source && { attacker: { id: source.id, name: source.name ?? source.username } })
+      }
+    }
+    target._client?.on('damage_event', onDamage)
+    const hurtNow = () => {
+      const last = damage
+      damage = null
+      if (!last || Date.now() - last.at >= DAMAGE_FRESH_MS) return {}
+      const { at, ...fields } = last
+      return fields
+    }
         pos: here(),
         inventory: inventoryNow().length > 0 ? inventoryNow() : snapshot,
         experience: { level: target.experience?.level ?? 0, points: target.experience?.points ?? 0 },
@@ -1296,6 +1318,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   // reports, drops the walk goal and releases the controls; the next physicsTick re-arms it.
   const watchdog = setInterval(() => {
     if (closed || down || isOffline() || stalled) return
+      target._client?.removeListener('damage_event', onDamage)
     const ms = Date.now() - lastTick
     if (ms <= PHYSICS_STALL_MS * timeScale || columnLoaded()) return
     stalled = true

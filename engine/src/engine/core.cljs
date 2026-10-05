@@ -30,6 +30,7 @@
   progress or when the listed job goes, and cleared whenever the engine leaves
   a pause (reset-backoff!)."
   (:require [engine.composite :as composite]
+            [engine.hurt :as hurt]
             [engine.chat :as chat]
             [engine.backoff :as backoff]
             [engine.events :as events]
@@ -1126,12 +1127,15 @@
   [eng e]
   (let [m (js->clj e :keywordize-keys true)]
     (when (= "died" (:kind m))
+      (hurt/flush! eng #(emit! eng %))
       (drop-jobs-on-death! eng))
     (mem/write! (:store eng) (keyword (:kind m)) (dissoc m :kind))
     (save-memory! eng)
-    (emit! eng (merge (dissoc m :kind)
-                      {:source :body :kind (keyword (:kind m))
-                       :level (body-event-level (:kind m))}))))
+    (if (= "hurt" (:kind m))
+      (hurt/record! eng #(emit! eng %) m)
+      (emit! eng (merge (dissoc m :kind)
+                        {:source :body :kind (keyword (:kind m))
+                         :level (body-event-level (:kind m))})))))
 
 (defn unknown-job
   "The message why inst's spec no longer resolves against the registry, or nil."
@@ -1213,6 +1217,7 @@
                              :live-jobs #(set (keys (:instances @st)))})
         eng {:primitives primitives :jobs jobs :triggers triggers :dir dir :now now :events ev
              :store store
+             :hurt (hurt/new-state)
              :world (or world (world/of-data {} {}))
              :state st
              :running (atom nil)
