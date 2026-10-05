@@ -353,6 +353,26 @@
           (is (= :brought (:reason (done-event s))))
           (is (not (gate-open? s))))))))
 
+(deftest a-gate-set-crosswise-in-the-fence-line-and-standing-open-is-used-and-shut
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:target 1} {:entities [(cow 1 4 3)] :states {gate-key {:open true :facing "north"}}} 300))]
+          (is (= :brought (:reason (done-event s))))
+          (is (in-pen? (cow-of s 1)))
+          (is (< (self-x s) 10) "the body ends outside")
+          (is (not (gate-open? s))))))))
+
+(deftest a-gate-set-crosswise-in-the-fence-line-and-shut-is-opened-used-and-shut
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:target 1} {:entities [(cow 1 4 3)] :states {gate-key {:open false :facing "south"}}} 300))]
+          (is (= :brought (:reason (done-event s))))
+          (is (in-pen? (cow-of s 1)))
+          (is (< (self-x s) 10) "the body ends outside")
+          (is (not (gate-open? s))))))))
+
 (deftest a-full-pen-declines-without-acting
   (async done
     (tu/run-async done
@@ -420,6 +440,54 @@
           (is (not (gate-open? s)))
           (is (empty? (held-entries s)))
           (is (= 1 (count (events-of s :herd.gave-up)))))))))
+
+(deftest a-gate-that-will-not-shut-lets-the-animal-go-retries-twice-and-warns-once-with-the-position
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (submit! (h/setup (world {:entities [(cow 1 4 3)]})) {:target 1})
+              shut-clicks (atom 0)]
+          ;; the gate opens as usual and then ignores every click: a shut never takes
+          (.override (.-world (:p s)) "useOn"
+                     (fn [token args impl]
+                       (if (gate-open? s)
+                         (do (swap! shut-clicks inc)
+                             (js/Promise.resolve #js {:status "unchanged" :before #js {:name "oak_fence_gate" :properties #js {:open true}}
+                                                      :after #js {:name "oak_fence_gate" :properties #js {:open true}}}))
+                         (impl token args))))
+          (await (run-ticks s 600))
+          (let [warns (events-of s :herd.gate-open)]
+            (is (finished? s))
+            (is (empty? (on-lead s)) "the animal is unleashed before the shut is tried again")
+            (is (= 1 (count warns)))
+            (is (= gate (:gate (first warns))))
+            (is (= "the gate at 10 64 3 could not be shut and stays open" (:text (first warns))))
+            (is (>= @shut-clicks 3) "the shut was tried again after each failure")))))))
+
+(deftest the-escape-census-counts-the-animals-gone-from-the-pen
+  (doseq [[before after escaped] [[3 3 0] [3 2 1] [2 0 2] [1 2 0]]]
+    (is (= escaped (herd/escaped-count before after)) (str before " -> " after))))
+
+(deftest a-cow-that-walks-out-through-the-open-gate-during-the-exit-is-counted-escaped
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (submit! (h/setup (world {:entities [(cow 1 4 3)]})) {:target 1})
+              pushed (atom false)]
+          ;; the first gate click after the hand is emptied (the exit's open) lets the cow out
+          (.override (.-world (:p s)) "useOn"
+                     (fn [token args impl]
+                       (when (and (seq (calls-of s "unequip")) (not @pushed) (not (gate-open? s)))
+                         (reset! pushed true)
+                         (set-x! s 1 8))
+                       (impl token args)))
+          (await (run-ticks s 400))
+          (let [escaped (first (events-of s :herd.escaped))]
+            (is @pushed "the cow was moved out during the exit")
+            (is (= 1 (:escaped escaped)))
+            (is (= 1 (:before escaped)))
+            (is (= 0 (:after escaped)))
+            (is (= 1 (:escaped (done-event s))))))))))
 
 (deftest a-lead-that-keeps-breaking-is-given-up-after-one-retry
   (async done
@@ -533,6 +601,77 @@
   (is (= [15 64 1] (herd/let-go-cell (rect 11 15 1 5) g [11 64 3])) "corners are far, the axis end is not farther: a corner")
   (is (= [15 64 3] (herd/let-go-cell (rect 11 15 3 3) g [11 64 3])) "a one-wide pen: the far end of the axis")
   (is (= [16 64 3] (herd/let-go-cell (conj (rect 11 15 1 5) [16 64 3]) g [11 64 3])) "farther on the axis than any off it"))
+
+;; ------------------------------------------------------------------ the deep release and the retries
+
+(deftest the-exit-opens-passes-and-shuts-the-gate-in-one-walk-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (submit! (h/setup (world {:entities [(cow 1 4 3)]})) {:target 1})]
+          (loop [n 0]
+            (when (< n 400)
+              (await (run-ticks s 1))
+              (recur (inc n))))
+          (let [acts (filterv #(and (= :action (:source %)) (= :started (:kind %))) @(:seen s))
+                after (rest (drop-while #(not= "unequip" (:name %)) acts))
+                clicks (filterv #(= "useOn" (:name %)) after)
+                unequip (first (filter #(= "unequip" (:name %)) acts))]
+            (is (= :brought (:reason (done-event s))))
+            (is (= 2 (count clicks)) "one open and one shut after the hand is emptied")
+            (is (= #{[(:job unequip) (:round (first clicks))]} (set (map (juxt :job :round) clicks)))
+                "the open, the pass and the shut are one round of the herd job itself, not toggle children")
+            (is (not (gate-open? s)))
+            (is (< (self-x s) 10) "the body ends outside")
+            (is (zero? (:escaped (done-event s))))
+            (is (in-pen? (cow-of s 1)))))))))
+
+(deftest outside-gate-is-the-body-past-the-gate-cell-on-the-out-side
+  (doseq [[pos out?] [[{:x 9.5 :z 3.5} true] [{:x 9.9 :z 3.5} true] [{:x 10.5 :z 3.5} false] [{:x 11.5 :z 3.5} false] [{:x 9.5 :z 5.5} true]]]
+    (is (= out? (herd/outside-gate? [10 64 3] [11 64 3] pos)) (str pos))))
+
+(deftest a-shut-with-the-body-on-the-pen-side-opens-the-gate-again-twice-at-most
+  (doseq [[outside? reopens step] [[true 0 :census] [true 2 :census] [false 0 :reopen] [false 1 :reopen] [false 2 :stuck]]]
+    (is (= step (herd/shut-side-step outside? reopens)) (str outside? " " reopens))))
+
+(deftest a-pen-cow-on-the-gate-cell-at-the-exit-never-leaves-the-body-inside-a-shut-pen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (submit! (h/setup (world {:entities [(cow 1 4 3) (cow 8 14.5 5.5)]})) {:target 2})
+              placed (atom false)]
+          (loop [n 0]
+            (when (< n 900)
+              (await (run-ticks s 1))
+              (let [pen-cow (cow-of s 8)]
+                (when (and (seq (calls-of s "unequip")) (not @placed))
+                  (reset! placed true)
+                  (update-entity! s 8 assoc :pos [10.6 64 3.5]))
+                (when (and @placed (gate-open? s) (>= (self-x s) 11) (< (first (:pos pen-cow)) 11.5))
+                  (set-x! s 8 13.5)))
+              (recur (inc n))))
+          (is (finished? s))
+          (is (< (self-x s) 10) "the body is outside")
+          (is (not (gate-open? s)) "the gate is shut"))))))
+
+(deftest the-hand-is-emptied-once-per-animal-between-the-deep-release-and-the-exit-toggles
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:target 1} {:entities [(cow 1 4 3)]} 400))]
+          (is (= :brought (:reason (done-event s))))
+          (is (= 1 (count (calls-of s "unequip"))))
+          (is (= ["useOn" "useOn" "unequip" "useOn" "useOn"]
+                 (->> (.-calls (.-world (:p s)))
+                      (map #(.-name %))
+                      (filter #{"useOn" "unequip"})
+                      vec))
+              "open and shut for the trip, then the hand is emptied, then open and shut to leave"))))))
+
+(deftest an-animal-fetched-twice-and-still-outside-is-never-fetched-again
+  (is (= ["a" "b"] (herd/tired-keys {"a" 2 "b" 3 "c" 1} #{"c"})))
+  (is (= [] (herd/tired-keys {"a" 2 "b" 3} #{"a" "b"})) "in the pen is not skipped by tries")
+  (is (= [] (herd/tired-keys {} #{}))))
 
 ;; ------------------------------------------------------------------ the survey's new declines
 

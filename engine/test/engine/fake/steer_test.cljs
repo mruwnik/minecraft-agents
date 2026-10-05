@@ -303,6 +303,37 @@
           (is (= ["done" "timeout"] [(:status through) (:status shut)]))
           (is (< (:x (:pose shut)) 3)))))))
 
+;; ---- fences, posts and gates collide by their boxes, as in the game: a body slips through the free side of a post
+
+(def wide-floor (merge (floor 63 -2 12) (into {} (for [x (range -2 13)] [[x 63 1] "stone"]))))
+
+(defn post-rig
+  "A two-row floor (z 0 and 1), the body's true position at x 0.5 and z, the blocks over it."
+  [blocks z & [states]]
+  (rig (merge wide-floor blocks) [0.5 64 z] {:body-hitbox true :states (or states {})}))
+
+(deftest a-body-slips-past-a-lone-post-on-its-free-side-and-is-stopped-by-the-post
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [post {[3 64 1] "oak_fence"}
+              beside (await (run (post-rig post 1.0) (walk-to 5.5) {:timeout-s 3}))
+              into-it (await (run (post-rig post 1.5) (walk-to 5.5) {:timeout-s 1}))]
+          (is (= ["done" "timeout"] [(:status beside) (:status into-it)]))
+          (is (< (:x (:pose into-it)) 3.5)))))))
+
+(deftest a-shut-gate-set-crosswise-between-two-posts-leaves-a-gap-a-body-slips-through
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; a fence line along z at x 3: posts at z -1 and 1, not joined to the gate at z 0 that faces north (its wall
+        ;; runs along x at z 0.375..0.625): between the wall and the post (z 1.375) the 0.62-wide body fits at z 1
+        (let [blocks {[3 64 -1] "oak_fence" [3 64 0] "oak_fence_gate" [3 64 1] "oak_fence"}
+              states {[3 64 0] {:open false :facing "north"}}
+              gap (await (run (post-rig blocks 1.0 states) (walk-to 5.5) {:timeout-s 3}))
+              wall (await (run (post-rig blocks 0.5 states) (walk-to 5.5) {:timeout-s 1}))]
+          (is (= ["done" "timeout"] [(:status gap) (:status wall)])))))))
+
 (deftest a-body-walks-through-the-open-halves-of-a-door
   (async done
     (tu/run-async done

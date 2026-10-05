@@ -4,7 +4,8 @@
 
   steer is a toy kinematic walker, not physics: every tick (a setImmediate, so tests are fast) it asks decide for
   controls, then moves 0.2 blocks (0.26 sprinting) along the yaw, steps up at most 0.6 (1.25 with jump), drops to the
-  next floor at once, and climbs or descends a ladder. The kinematics are pure functions (body, controls, yaw, world)
+  next floor at once, and climbs or descends a ladder. A move into a cell holding a fence, gate, wall, pane or bamboo is
+  judged by the body's box against the joined blocks' boxes (path/space.mjs), so a body slips beside a post as in the game. The kinematics are pure functions (body, controls, yaw, world)
   -> body. A tick budget of timeout-s * 20 (at most 2400) stands in for the real time bound.
 
   steer! runs the loop against a world atom. It resolves to {:status :done :result r :ticks n}, {:status :timeout
@@ -35,6 +36,8 @@
 ;; small blocks with no collision box: the planner and the game walk through them
 (def no-collision #"^(lever|torch|wall_torch|redstone_torch|redstone_wall_torch)$|_(button|pressure_plate|sign|wall_sign|hanging_sign)$")
 (def climbable-names #{"ladder" "vine"})
+;; blocks whose boxes leave part of their cell free: the steer judges a move into such a cell by boxes, not by cell
+(def narrow-re #"_fence$|_fence_gate$|_wall$|_pane$|^glass_pane$|^iron_bars$|^bamboo$")
 
 (defn round [n] (/ (js/Math.round (* n 1e6)) 1e6))
 (defn floor [n] (js/Math.floor n))
@@ -61,8 +64,24 @@
          (filter (fn [g] (and (solid? w x (dec g) z) (not (solid? w x g z)) (not (solid? w x (inc g) z)))))
          first)))
 
+(declare body-clear?)
+
+(defn narrow-cell?
+  "Does the body's cell at (x, z), feet or head row, hold a block whose collision leaves part of the cell free?"
+  [w x y z]
+  (let [cy (floor y)]
+    (boolean (some #(re-find narrow-re (name-at w x % z)) [cy (inc cy)]))))
+
+(defn narrow-or-same?
+  "Is (x, z) in the body's own cell or in a cell holding a narrow block (the cells the box judgement covers)?"
+  [w body x z]
+  (or (and (= (floor x) (floor (:x body))) (= (floor z) (floor (:z body))))
+      (narrow-cell? w (floor x) (:y body) (floor z))))
+
 (defn horizontal
-  "The body after the horizontal part of a tick."
+  "The body after the horizontal part of a tick. A move whose cell holds a narrow block (a post, gate, wall, pane or
+  bamboo) is judged by the body's box against the blocks' boxes, as the planner's space judges it; a blocked move
+  slides along one axis, as the game's collision does."
   [w body {:keys [forward jump] :as controls} yaw]
   (if-not forward
     (assoc body :collided false)
@@ -70,13 +89,21 @@
           x (- (:x body) (* (js/Math.sin yaw) dist))
           z (- (:z body) (* (js/Math.cos yaw) dist))
           [cx cz] [(floor x) (floor z)]]
+      (cond
+        (narrow-cell? w cx (:y body) cz)
+        (if-let [[x' z'] (->> [[x z] [x (:z body)] [(:x body) z]]
+                              (filter (fn [[x' z']] (and (narrow-or-same? w body x' z') (body-clear? w x' (:y body) z'))))
+                              first)]
+          (assoc body :x x' :z z' :collided (not= [x' z'] [x z]))
+          (assoc body :collided true))
+        :else
       (if (and (= cx (floor (:x body))) (= cz (floor (:z body))))
         (assoc body :x x :z z :collided false)
         (let [g (ground-at w cx (:y body) cz)
               rise (if (nil? g) js/Infinity (- g (:y body)))]
           (if (or (<= rise step) (and (<= rise jump-step) jump))
             (assoc body :x x :y g :z z :collided false)
-            (assoc body :collided true)))))))
+            (assoc body :collided true))))))))
 
 (defn vertical
   "The body after the vertical part of a tick. A jump without forward, on the ground out of water, lifts the body to the
@@ -156,6 +183,22 @@
     {:snapshot (fx/fixture-snapshot {:blocks blocks})
      :table (.defaultStateTable ^js @blocks-mod)
      :space @space}))
+
+(defn local-blocks
+  "[x y z name props] for the cells within 2 of (cx, cz), rows cy-1 .. cy+2, air where the world holds nothing (so every
+  column is loaded for the planner's snapshot)."
+  [w cx cy cz]
+  (for [x (range (- cx 2) (+ cx 3)) y (range (dec cy) (+ cy 3)) z (range (- cz 2) (+ cz 3))]
+    [x y z (name-at w x y z) (doors/path-props w [x y z])]))
+
+(defn body-clear?
+  "Does the body's box (the planner's half-width, feet at y, 1.8 tall) centred at (px, pz) touch no collision box of the
+  blocks around it? Fences are joined to their neighbours as the server joins them."
+  [w px y pz]
+  (let [[cx cy cz] [(floor px) (floor y) (floor pz)]
+        snapshot (fx/fixture-snapshot {:blocks (local-blocks w cx cy cz)})
+        boxes (.boxesNear ^js @space snapshot (.defaultStateTable ^js @blocks-mod) cx cy cz y (+ y height))]
+    (not (.bodyHits ^js @space boxes px pz))))
 
 ;; --- the tick loop
 
