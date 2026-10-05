@@ -223,7 +223,7 @@
                                        (fit-hidden!)
                                        (.placeholder surface canvas width height))))
                           ;; renders the scene now at width x height; waits no longer than the columns already decoded
-                          ;; a failure comes back as a rejected promise, never a throw, as the async function it replaced did
+                          ;; a failure comes back as a rejected promise, never a throw
                           snapshot (fn [^js snapshot-options]
                                      (try
                                        (let [width (option snapshot-options "width" 320)

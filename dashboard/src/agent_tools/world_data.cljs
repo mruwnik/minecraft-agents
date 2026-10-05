@@ -25,8 +25,8 @@
 (defn revision [text]
   (when (some? text) (subs (.digest (.update (.createHash crypto "sha256") text) "hex") 0 24)))
 
-;; Keep collection-object revisions compatible with the tools' original EDN
-;; encoding. Source text for standalone documents is always retained verbatim.
+;; Collections are written in a fixed EDN format (the revision is a hash of the text).
+;; Source text for standalone documents is kept verbatim.
 (declare write-edn)
 (defn- ordered-entries [m]
   (let [prior (:json-keys (meta m))]
@@ -46,9 +46,8 @@
     :else (pr-str v)))
 
 (defn read-edn [text]
-  ;; cljs.reader's hash maps lose source key order above eight entries. The
-  ;; original collection revision contract includes that order, so retain it
-  ;; as map metadata while keeping ordinary native EDN values everywhere.
+  ;; cljs.reader's hash maps lose source key order above eight entries. The revision covers that order,
+  ;; so it is kept as map metadata; the values themselves are ordinary EDN.
   (let [size (count text) cursor (atom 0)]
     (letfn [(peek-char [] (when (< @cursor size) (.charAt text @cursor)))
             (skip! []
@@ -95,8 +94,7 @@
                               (with-meta (set items) {:edn-items (vec (distinct items))})))
                         (do (token!) (form!) (reader/read-string (subs text start @cursor))))
                   (do (token!) (reader/read-string (subs text start @cursor))))))]
-      ;; Reader performs the full EDN validation (including tagged literals).
-      ;; Unusual reader forms still use its full native EDN support.
+      ;; the reader does the full EDN validation (tagged literals included)
       (let [decoded (reader/read-string text)]
         (try (form!) (catch :default _ decoded))))))
 

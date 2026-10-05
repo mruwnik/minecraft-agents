@@ -1,9 +1,8 @@
 (ns agent-tools.storage-compat
   (:require [agent-tools.world-data :as data]))
 
-;; Legacy JavaScript callers use keyword wrappers and camel-case option names.
-;; Conversion belongs solely at this exported boundary; the implementation and
-;; other CLJS tools use native EDN values.
+;; JavaScript callers use keyword wrappers and camel-case option names. The conversion happens only at this
+;; exported boundary; the implementation and the other cljs tools use plain EDN values.
 (def aliases {"repoRoot" :repo-root "worldDir" :world-dir "plansDir" :plans-dir
               "blueprintDir" :blueprint-dir "columnsDir" :columns-dir "metadataDir" :metadata-dir
               "expectedRevision" :expected-revision "dryRun" :dry-run
