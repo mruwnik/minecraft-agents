@@ -8,7 +8,7 @@
             [engine.access.rules :as rules]
             [engine.jobs.util :as u]
             [engine.path.near :as near]
-            [engine.perception :as perception]
+            [engine.jobs.look :refer [cell-of headings heading-name facing glance! look-around!]]
             [jobs.survival.dig-in :as dig-in]))
 
 (def doc
@@ -170,7 +170,6 @@
               (access/decline! c :mine.declined "mine" (assoc (access/refusal-fields refused) :reason :refused))
               true))))
 
-(defn cell-of [pos] {:x (js/Math.floor (:x pos)) :y (js/Math.floor (:y pos)) :z (js/Math.floor (:z pos))})
 
 (defn snapshot
   "The solid cells of the 5x5 under the start at y-1 and y-2, as {:pos :name}."
@@ -295,64 +294,6 @@
       (skip-failed! c pos)
       (ctx/update-mem! c assoc :partials n :partial-pos pos))
     :continue))
-
-;; ------------------------------------------------------------------ looking (a player glances at what it opened)
-
-(def headings {"north" [0 -1] "south" [0 1] "east" [1 0] "west" [-1 0]})
-(def heading-short {"n" "north" "s" "south" "e" "east" "w" "west"})
-
-(defn heading-name
-  "north, south, east or west for a heading arg (a name or n/s/e/w, string or keyword), else nil."
-  [d]
-  (when d
-    (let [n (str/lower-case (name d))]
-      (cond (headings n) n
-            (heading-short n) (heading-short n)))))
-
-(defn facing
-  "The heading nearest the way the body looks (perception's eye; mineflayer yaw 0 looks north), south without a
-  perception."
-  [p]
-  (if-let [eye (some-> (aget p "perception") :raw (.eye))]
-    (let [yaw (.-yaw eye)
-          dx (- (js/Math.sin yaw))
-          dz (- (js/Math.cos yaw))]
-      (if (> (js/Math.abs dx) (js/Math.abs dz))
-        (if (pos? dx) "east" "west")
-        (if (pos? dz) "south" "north")))
-    "south"))
-
-(defn glances
-  "The points a look along [dx dz] takes in from eye: level, 4 blocks ahead, then down (about 50 degrees) at the
-  floor ahead."
-  [eye [dx dz]]
-  [{:x (+ (:x eye) (* 4 dx)) :y (:y eye) :z (+ (:z eye) (* 4 dz))}
-   {:x (+ (:x eye) (* 1.5 dx)) :y (- (:y eye) 1.8) :z (+ (:z eye) (* 1.5 dz))}])
-
-(defn see!
-  "A sight pass now, so what the last look faced is in memory before the next decision."
-  [c]
-  (when-let [per (aget (:primitives c) "perception")]
-    (perception/pass! per)))
-
-(defn ^:async glance!
-  "Look along each of dirs ([dx dz]), level and down, a sight pass after each look."
-  [c dirs]
-  (let [{:keys [x y z]} (cell-of (u/self-pos c))
-        eye {:x (+ x 0.5) :y (+ y 1.62) :z (+ z 0.5)}]
-    (loop [points (mapcat #(glances eye %) dirs)]
-      (when-let [pt (first points)]
-        (await (ctx/act c :look (clj->js {:pos pt})))
-        (see! c)
-        (recur (rest points))))))
-
-(defn ^:async look-around!
-  "Look along every heading from here: before the first target, and with no target in view once per cell and again
-  after a dig."
-  [c]
-  (await (glance! c (vals headings)))
-  (ctx/update-mem! c assoc :looked (cell-of (u/self-pos c)))
-  :continue)
 
 ;; ------------------------------------------------------------------ the strip tunnel
 

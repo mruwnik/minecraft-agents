@@ -622,3 +622,24 @@
           (is (= ["no-furnace-seen"] (mapv :reason (of-kind seen :smelt.gave-up))))
           (is (empty? (:list (core/state eng))))
           (is (= before (inv-of p))))))))
+
+(deftest without-a-furnace-in-view-it-looks-around-and-finds-one-behind
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (seeing-setup {:blocks {"0,64,-3" "furnace"} :inventory iron-and-coal})]
+          (core/submit! eng '(jobs.items.smelt {:item "raw_iron" :count 3}) {})
+          (await (seeing-ticks s 4))
+          (is (= {:name "raw_iron" :count 3} (:input (get (:furnaces @(fake/state p)) [0 64 -3])))
+              "the furnace behind the body was found by turning around")
+          (is (empty? (of-kind seen :smelt.gave-up))))))))
+
+(deftest with-no-furnace-anywhere-it-looks-around-once-then-ends
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (seeing-setup {:inventory iron-and-coal})]
+          (core/submit! eng '(jobs.items.smelt {:item "raw_iron" :count 3}) {})
+          (await (seeing-ticks s 4))
+          (is (= 8 (count (calls p "look"))) "four headings, level and down, once")
+          (is (= ["no-furnace-seen"] (mapv :reason (of-kind seen :smelt.gave-up)))))))))

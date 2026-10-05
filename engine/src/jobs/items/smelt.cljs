@@ -1,6 +1,7 @@
 (ns jobs.items.smelt
   (:require [engine.ctx :as ctx]
             [engine.jobs.access :as access]
+            [engine.jobs.look :as look]
             [engine.jobs.util :as u]
             [engine.path.near :as near]))
 
@@ -378,7 +379,8 @@
 
 (defn ^:async round
   "One bounded step: reach the furnace, read it, then load (first) or collect. Without a :furnace the first round
-  chooses the nearest seen one (kept in memory), or ends no-furnace-seen."
+  chooses the nearest seen one (kept in memory); with none in view it looks around once from where it stands (the
+  four headings, level and down, a sight pass after each) and chooses again; none seen after that ends no-furnace-seen."
   [c]
   (if-let [furnace (furnace-of c)]
     (await (round-with c furnace))
@@ -386,4 +388,6 @@
       (do (ctx/update-mem! c assoc :furnace pos)
           (ctx/emit! c :smelt.furnace :info {:furnace pos :text (str "smelting at the furnace seen at " (:x pos) " " (:y pos) " " (:z pos))})
           (await (round-with c pos)))
-      (stop! c "no-furnace-seen"))))
+      (if (look/looked-here? c)
+        (stop! c "no-furnace-seen")
+        (await (look/look-around! c))))))
