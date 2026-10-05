@@ -596,21 +596,46 @@
           (await (tick-n eng 40))
           (is (nil? (:pending-reflex (core/state eng))) "the shelter ended at day")
           (is (>= (:y (pos-of p)) 64) "the body stands on the surface, out of the pit")
+          (is (empty? (emitted seen :shelter.failed)) "out: done, not failed")
           (is (= 1 (notified seen)) "then the queued job ran"))))))
 
-(deftest a-pit-shelter-with-no-way-out-keeps-holding-by-day
+(def stone-ground (into {} (map (fn [[k _]] [k "stone"])) ground))
+
+(deftest a-pit-shelter-with-no-way-out-ends-failed-by-day-and-the-queued-job-runs
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [stone (into {} (map (fn [[k _]] [k "stone"])) ground)
-              {:keys [eng p seen]} (setup {:time night :blocks stone})]
+        (let [{:keys [eng p seen]} (setup {:time night :blocks stone-ground})]
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night-unsafe}]}"))
+          (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
           (await (tick-n eng 20))
           (is (< (:y (pos-of p)) 64) "in the pit")
+          (is (zero? (notified seen)) "held at night")
           (.setTime (.-world p) noon)
           (await (tick-n eng 40))
           (is (seq (emitted seen :dig-in.trapped)) "no pickaxe for the stone stair: trapped")
-          (is (some? (:pending-reflex (core/state eng))) "the shelter does not end until the body is out"))))))
+          (let [[w & more] (emitted seen :shelter.failed)]
+            (is (empty? more) "one warn")
+            (is (= :no-way-out (:reason w)))
+            (is (= (let [{:keys [x y z]} (pos-of p)] [x y z]) (:at w)) "the pit position"))
+          (is (nil? (:pending-reflex (core/state eng))) "the shelter ended: the body is the agent's again")
+          (is (= 1 (notified seen)) "the queued job ran"))))))
+
+(deftest a-pit-shelter-with-a-hostile-near-keeps-holding-by-day
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:time night :blocks ground})]
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night-unsafe}]}"))
+          (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
+          (await (tick-n eng 20))
+          (fake/add-entity! p {:id 7 :name "zombie" :kind "hostile" :pos {:x 2 :y 64 :z 0}})
+          (.setTime (.-world p) noon)
+          (await (tick-n eng 40))
+          (is (< (:y (pos-of p)) 64) "still in the pit")
+          (is (some? (:pending-reflex (core/state eng))) "danger, not a dead end: still holding")
+          (is (empty? (emitted seen :shelter.failed)))
+          (is (zero? (notified seen))))))))
 
 (deftest a-sleeping-shelter-holds-until-day-then-the-queued-job-runs
   (async done

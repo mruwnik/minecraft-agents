@@ -18,8 +18,9 @@
   Once asleep or dug in it holds: each round waits hold-ms (the wait does not wake a sleeper) and ends :continue
   while it is night and the body is still asleep or roofed; woken or unroofed at night, it chooses again. By day,
   after a dig-in, each round calls jobs.survival.dig-in/leave! (the shelter's own way out) and the job ends only once
-  it reports the body :out; :unsafe (a hostile near) or :no-way-out (leave! warns dig-in.trapped) waits hold-ms and
-  tries again, so a trapped body keeps the job (and its agent sees the warns).
+  it reports the body :out; :unsafe (a hostile near, a danger) waits hold-ms and tries
+  again; :no-way-out (leave! warns dig-in.trapped) ends the job failed (a shelter.failed warn and a result
+  {:status :failed :reason :no-way-out :at :tries}, :at the pit position) since the shelter holds the body only until day.
   The player-sleeping-nearby reflex still logs out (20 s) for a sleeper whatever the roof.
   A child that is actually working (:continue) makes the round :continue. Every case where nothing could be done
   (all children declined, or dig-in ended without a roof) is :declined, so the reflex is dropped and the trigger
@@ -115,14 +116,20 @@
             (await (log-out-step c a)))))))
 
 (defn ^:async day-round
-  "By day: after a dig-in, get the body out of the shelter with dig-in/leave! and end only once it reports :out; any
-  other answer (:unsafe, a hostile near; :no-way-out, which leave! warns about) waits hold-ms and tries again."
+  "By day: after a dig-in, get the body out of the shelter with dig-in/leave!. :out ends :done; :no-way-out (leave! has
+  warned dig-in.trapped) ends the job failed (shelter.failed warn and a result, both with the reason and :at, the
+  pit position), so the agent gets the body back; :unsafe (a hostile near, a danger) waits hold-ms and tries again."
   [c]
   (if (= :dug-in (:sheltered (ctx/mem c)))
     (let [r (await (dig-in/leave! c))]
       (cond
         (= :continue r) :continue
         (= :out (:reason r)) :done
+        (= :no-way-out (:reason r))
+        (let [result {:status :failed :reason :no-way-out :at (:at r) :tries (:tries r)}]
+          (ctx/emit! c :shelter.failed :warn (assoc result :text "no way out of the shelter by day; giving the body back"))
+          (ctx/result! c result)
+          :done)
         :else (await (hold c))))
     :done))
 
