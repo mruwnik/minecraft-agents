@@ -1,0 +1,49 @@
+;; Hut door in a flight from a hostile (card b335a1e4, fix ebba1382): retreat shuts an open door nearer the danger than
+;; the body (retreat.door-shut, one click), never one behind the body, never a shut one, never an iron door (no hand).
+;; Hut: stone walls x 12..20, z 12..20, roof y 3, interior 7x7. Body mid-room, skeleton (NoAI) 10 south of the south wall.
+{:defaults
+ {:tags [:hostile :survival :door]
+  :register [{:trigger :hostile-near :args {:radius 12 :ranged-radius 16}
+              :job (jobs.survival.respond-to-hostile {:radius 12 :ranged-radius 16})}]
+  :blocks [[:fill [12 0 12] [20 3 20] "stone" :hollow]
+           [:fill [13 0 13] [19 2 19] "air"]
+           [:set [13 1 13] "torch"] [:set [19 1 19] "torch"]]
+  :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]] :inventory [["cobblestone" 20]]}}
+ :cases
+ [{:name "open-door-nearer-the-skeleton-is-shut"
+   :blocks [[:set [16 0 20] "oak_door[facing=south,half=lower,open=true]"]
+            [:set [16 1 20] "oak_door[facing=south,half=upper,open=true]"]]
+   :act [[:summon "skeleton" [16.5 0 26.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :retreat.door-shut} :within-s 40}]
+   :after [[:block [16 0 20] "oak_door[half=lower,open=false]"] [:not-block [16 0 19] "cobblestone"]]
+   :limit-s 60}
+  {:name "open-door-zombie-outside-is-shut"
+   :blocks [[:set [16 0 20] "oak_door[facing=south,half=lower,open=true]"]
+            [:set [16 1 20] "oak_door[facing=south,half=upper,open=true]"]]
+   :act [[:summon "zombie" [16.5 0 24.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :retreat.door-shut} :within-s 40}]
+   :after [[:block [16 0 20] "oak_door[half=lower,open=false]"]]
+   :limit-s 60}
+  {:name "shut-door-is-not-clicked"
+   :blocks [[:set [16 0 20] "oak_door[facing=south,half=lower,open=false]"]
+            [:set [16 1 20] "oak_door[facing=south,half=upper,open=false]"]
+            [:set [14 0 20] "air"] [:set [14 1 20] "air"]]
+   :act [[:summon "skeleton" [14.5 0 26.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:no-event {:source :job :kind :retreat.door-shut} :for-s 25}]
+   :after [[:block [16 0 20] "oak_door[half=lower,open=false]"]]
+   :limit-s 40}
+  {:name "door-behind-the-body-is-not-clicked"
+   :blocks [[:set [16 0 12] "oak_door[facing=north,half=lower,open=true]"]
+            [:set [16 1 12] "oak_door[facing=north,half=upper,open=true]"]
+            [:set [16 0 20] "air"] [:set [16 1 20] "air"]]
+   :act [[:summon "skeleton" [16.5 0 26.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:no-event {:source :job :kind :retreat.door-shut} :for-s 25}]
+   :after [[:block [16 0 12] "oak_door[half=lower,open=true]"]]
+   :limit-s 40}
+  {:name "open-iron-door-is-not-shut"
+   :blocks [[:set [16 0 20] "iron_door[facing=south,half=lower,open=true]"]
+            [:set [16 1 20] "iron_door[facing=south,half=upper,open=true]"]]
+   :act [[:summon "skeleton" [16.5 0 26.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:no-event {:source :job :kind :retreat.door-shut} :for-s 25}]
+   :after [[:block [16 0 20] "iron_door[half=lower,open=true]"]]
+   :limit-s 40}]}

@@ -1,0 +1,28 @@
+;; Door and torch cells on open ground (card b335a1e4, fix ebba1382): a 1-wide dead end whose open cell holds a torch
+;; (seen: one occupied place into the torch, one above it, then the cornered fight gives up; no place loop) and dig-in
+;; beside an open oak door (the door is shut, the pocket sealed).
+{:defaults
+ {:tags [:hostile :survival :door]
+  :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]] :inventory [["cobblestone" 20]]}}
+ :cases
+ [{:name "dead-end-torch-cell-no-place-loop"
+   :register [{:trigger :hostile-near :args {:radius 12 :ranged-radius 16}
+               :job (jobs.survival.respond-to-hostile {:radius 12 :ranged-radius 16})}]
+   :blocks [[:fill [15 0 6] [17 3 28] "stone"] [:fill [16 0 7] [16 1 28] "air"] [:set [16 0 8] "torch"]]
+   :body {:at [16.5 0 7.5]}
+   :act [[:summon "skeleton" [16.5 0 20.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 15}
+            {:event {:source :job :kind :fight_unreachable} :within-s 20}]
+   :after [[:block [16 0 8] "torch"]]
+   :limit-s 40}
+  {:name "dig-in-shuts-open-door"
+   :time :night
+   :blocks [[:fill [14 0 17] [18 2 17] "stone"]
+            [:set [16 0 17] "oak_door[facing=south,half=lower,open=true]"]
+            [:set [16 1 17] "oak_door[facing=south,half=upper,open=true]"]
+            [:set [4 0 4] "torch"] [:set [28 0 28] "torch"]]
+   :body {:inventory [["cobblestone" 16]]}
+   :act [[:job (jobs.survival.dig-in {})]]
+   :expect [{:event {:source :job :kind :dig-in.sealed} :within-s 60 :of-job true}]
+   :after [[:block [16 0 17] "oak_door[half=lower,open=false]"] [:not-block [16 0 16] "cobblestone"]]
+   :limit-s 70}]}

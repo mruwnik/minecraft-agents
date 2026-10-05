@@ -1,0 +1,49 @@
+;; A carried bed in a roofed hut at night (card 07d5a79f, 5d2913a8): placed in a row of three free roofed cells and slept in;
+;; no such row (a 2x2 room, or the cells inside another's plan footprint) writes one shelter.bed_place_failed warn, the bed
+;; stays in the pack and the trigger does not refire. The bed is given after t0 (a bed carried at the start would be put
+;; down inside the settle, before the expectations count events). Run one case per runner call, wipe the body's engine/memory.edn
+;; between calls (a :slept entry blocks the next case) and use a plot not used by an earlier case (--first-plot: bed items dropped
+;; by the plot clear are picked up before t0 and fire the reflex early).
+{:defaults
+ {:tags [:night :survival :sleep]
+  :time :night
+  :register [{:trigger :night-unsafe}]
+  :body {:effects [["resistance" 600 4]] :settle-s 8}}
+ :cases
+ [{:name "bed-put-down-in-3x3-room-and-slept-in"
+   :blocks [[:fill [10 0 10] [14 3 14] "stone" :hollow] [:fill [11 0 11] [13 2 13] "air"] [:set [12 2 10] "glowstone"]]
+   :body {:at [12.5 0 12.5]}
+   :act [[:rcon "give $BODY red_bed 1"]]
+   :expect [{:event {:source :action :kind :done :data {:name "place" :status "placed"}} :within-s 30}
+            {:event {:source :job :kind :place.set :data {:name :bed :auto true}} :within-s 30}
+            {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 60}]
+   :after [[:body-near [12.5 0 12.5] 3] [:item "red_bed" 0]
+            [:block [12 0 11] "red_bed[part=foot]"] [:block [13 0 11] "red_bed[part=head]"]]
+   :limit-s 80}
+  {:name "no-room-2x2-bed-place-failed-once"
+   :blocks [[:fill [10 0 10] [13 3 13] "stone" :hollow] [:fill [11 0 11] [12 2 12] "air"] [:set [11 2 10] "glowstone"]]
+   :body {:at [11.5 0 11.5]}
+   :act [[:rcon "give $BODY red_bed 1"]]
+   :expect [{:event {:source :job :kind :shelter.bed_place_failed} :within-s 30}
+            {:no-event {:source :action :kind :done :data {:name "place" :status "placed"}} :for-s 40}]
+   :after [[:item "red_bed" 1]]
+   :limit-s 70}
+  {:name "no-room-no-refire"
+   :blocks [[:fill [10 0 10] [13 3 13] "stone" :hollow] [:fill [11 0 11] [12 2 12] "air"] [:set [11 2 10] "glowstone"]]
+   :body {:at [11.5 0 11.5]}
+   :act [[:rcon "give $BODY red_bed 1"] [:wait-s 100]]
+   :expect [{:event {:source :job :kind :shelter.bed_place_failed} :within-s 30}]
+   :after [[:item "red_bed" 1]]
+   :limit-s 140}
+  {:name "planned-footprint-no-bed-place"
+   :blocks [[:fill [10 0 10] [14 3 14] "stone" :hollow] [:fill [11 0 11] [13 2 13] "air"] [:set [12 2 10] "glowstone"]]
+   :plans [{:id "other"
+            :parts [{:id "floor" :cells [#at [11 0 11] #at [12 0 11] #at [13 0 11] #at [11 0 12] #at [12 0 12] #at [13 0 12]
+                                         #at [11 0 13] #at [12 0 13] #at [13 0 13]]
+                     :want [:any "stone"]}]}]
+   :body {:at [12.5 0 12.5]}
+   :act [[:rcon "give $BODY red_bed 1"]]
+   :expect [{:event {:source :job :kind :shelter.bed_place_failed} :within-s 30}
+            {:no-event {:source :action :kind :done :data {:name "place" :status "placed"}} :for-s 40}]
+   :after [[:item "red_bed" 1]]
+   :limit-s 70}]}
