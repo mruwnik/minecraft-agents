@@ -35,11 +35,12 @@
   8)
 
 (defn neutral?
-  "Whether act with status is neutral: a neutral act, a failed moveTo that
-  moved the body (straight line, blocks) at least moved-min, or a :walk round
-  (booked by engine.path.near) that made progress: it ended nearer
-  (\"partial\") or moved the body at least walk-moved-min. An arrival is
-  progress; a walk with no path or that got nowhere is a failure."
+  "Whether an act is neutral (counts for neither side). Neutral when:
+  - the act is in neutral-acts,
+  - it is a failed moveTo that moved the body at least moved-min blocks, or
+  - it is a :walk round (booked by engine.path.near) that ended nearer
+    (\"partial\") or moved the body at least walk-moved-min blocks.
+  An arrival is progress. A walk with no path, or one that got nowhere, is a failure."
   [act status moved]
   (or (contains? neutral-acts act)
       (and (= :moveTo act) (failure? status) (some? moved) (>= moved moved-min))

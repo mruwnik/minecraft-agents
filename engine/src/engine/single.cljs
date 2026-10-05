@@ -1,10 +1,12 @@
 (ns engine.single
-  "One process per body. A body binds <engine dir>/body.sock the moment it starts, before it opens any file in its
-  folder and before it logs in, and holds it until it stops. Every connection to it is answered with one JSON line,
-  {pid world body}, and closed. A second start connects instead of binding: an answer means a live body, so it
-  refuses. Nothing is ever read from a stale file: a socket left by a crashed body answers ECONNREFUSED (so does a plain file
-  in its place, on Linux), which is a clean 'not running', and the next start replaces it. Any other error while
-  probing refuses the start, because unknown is not 'not running'."
+  "One process per body, guarded by a socket.
+  - A body binds <engine dir>/body.sock when it starts, before it opens any file in its folder or logs in,
+    and holds it until it stops.
+  - Every connection is answered with one JSON line {pid world body}, then closed.
+  - A second start connects instead of binding. An answer means a live body, so it refuses.
+  - A socket left by a crashed body answers ECONNREFUSED (so does a plain file in its place, on Linux).
+    That counts as 'not running' and the next start replaces it.
+  - Any other error while probing refuses the start, because unknown is not 'not running'."
   (:require ["fs" :as fs]
             ["net" :as net]
             ["path" :as path]))

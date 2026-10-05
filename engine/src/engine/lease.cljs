@@ -13,7 +13,7 @@
            [:release who reason held-ms] [:deadman who silent-ms].
   take and set need an answer from the engine before their reply is complete: request marks them
   :pending :take / :drive and taken / driven finish the job.
-  Reply json maps use the wire's camelCase keywords, so clj->js gives today's JSON."
+  Reply maps use the wire's camelCase keys, so clj->js gives the JSON as sent."
   (:require [clojure.string :as str]))
 
 (def control-order [:forward :back :left :right :jump :sneak :sprint])

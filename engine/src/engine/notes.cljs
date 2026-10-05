@@ -1,21 +1,24 @@
 (ns engine.notes
-  "Notes: what bodies saw, written by the bodies themselves into the world's shared knowledge (plans, by contrast,
-  are only read). Each body writes its own file, worlds/<world>/notes/<body>.edn (see paths), whole, to a temp
-  file and renamed, so a reader never sees half a file and nobody else ever writes it. Readers merge every body's
-  file of the world.
+  "Notes: what bodies saw, written by the bodies themselves into the world's shared knowledge. (Plans, by
+  contrast, are only read.)
 
   A note is {:kind :what :pos [x y z] :by body :t ms :until ms} plus what its kind needs:
-  {:kind :seen :what \"oak_log\" :pos ..} a block seen there, {:kind :seen :what \"cow\" :id uuid :pos ..} an entity
-  (an animal walks: keyed by its uuid), {:kind :searched :what [names] :pos .. :r n} looked for those names within
-  r blocks (XZ) of pos. :t and :until are wall-clock ms, the clock all bodies share. One item per key
-  (note-key: kind, what, and the uuid or position), the newest :t kept, a tie going to the lowest :by.
+  - {:kind :seen :what \"oak_log\" :pos ..}: a block seen there
+  - {:kind :seen :what \"cow\" :id uuid :pos ..}: an entity, keyed by its uuid because animals walk
+  - {:kind :searched :what [names] :pos .. :r n}: looked for those names within r blocks (XZ) of pos
+  :t and :until are wall-clock ms, a clock all bodies share. There is one note per key (note-key: kind,
+  what, and the uuid or position). The newest :t wins, a tie goes to the lowest :by.
 
-  Reading follows engine.world: the folder is stat-ed at most every :every-ms, lazily, and only files whose stamp
-  changed are read again; a broken file keeps its last good copy with one world.notes-unreadable warn. The body's
-  own notes are held in memory (read from its file once, at the first use), so its writes show at once.
+  Files: each body writes only its own worlds/<world>/notes/<body>.edn (see paths), whole, to a temp
+  file that is renamed, so a reader never sees half a file. Readers merge every body's file.
 
-  A store is {:state atom :opts {...}}; :state {:files {body entry} :checked-at ms :own [note] :own-loaded? bool
-  :broken-own? bool}, an entry as in engine.world."
+  Reading follows engine.world. The folder is stat-ed at most every :every-ms, lazily, and only files whose
+  stamp changed are read again. A broken file keeps its last good copy and warns once
+  (world.notes-unreadable). The body's own notes are kept in memory, read from its file at first use, so
+  its writes show at once.
+
+  A store is {:state atom :opts {...}}. :state is {:files {body entry} :checked-at ms :own [note]
+  :own-loaded? bool :broken-own? bool}, an entry as in engine.world."
   (:require ["fs" :as fs]
             ["path" :as path]
             [cljs.reader :as reader]

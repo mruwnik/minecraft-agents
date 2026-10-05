@@ -1,11 +1,15 @@
 (ns engine.entity-observations
-  "Two-minute in-memory knowledge of the entities the body perceived, as a player would (the /entities tool). No writes,
-  jobs or network sensing, and one perception layer: a hostile mob is listed only from engine.perception's known-mobs
-  memory (`known-sense`: :seen, :heard with its place, :remembered at the place last sensed, with `:age-ms`), anything
-  else by perception's own rule for a thing at a place (`sense`: perception/sense-thing, a clear line, light, the view
-  cone or hearing; drops and the like make no sound). The body itself is :self. Mineflayer tracks far more (mobs deep in
-  the rock under the body); those are never listed. What was sensed stays known for `ttl-ms`. The engine's own
-  reflexes do not read this cache."
+  "In-memory knowledge of the entities the body perceived, as a player would (the /entities tool).
+  What was sensed stays known for `ttl-ms` (two minutes). Nothing is written to disk and the engine's own
+  reflexes do not read this cache.
+
+  Each entity is listed with how it was sensed:
+  - hostile mobs come only from engine.perception's known-mobs memory (`known-sense`): :seen, :heard, or
+    :remembered at the place last sensed, with :age-ms
+  - everything else goes through perception's rule for a thing at a place (`sense`): a clear line, light and
+    the view cone, or hearing. Drops and the like make no sound.
+  - the body itself is :self.
+  Mineflayer tracks far more (mobs deep in the rock under the body). Those are never listed."
   (:require [clojure.string :as str]
             [engine.perception :as perception]
             ["crypto" :as crypto]))
@@ -42,10 +46,10 @@
   (boolean (or (= "hostile" (.-type e)) (re-find #"(?i)hostile" (str (.-kind e))))))
 
 (defn sense
-  "How the body perceives entity e (a non-hostile one; hostile mobs come from perception's known-mobs memory, see
-  `known-sense`), through engine.perception's one rule (perception/sense-thing: a clear line from the eye to its middle
-  or head, within sight, lit, and in the view cone or heard; heard within hearing range unless it makes no sound: drops
-  and the like). per is the perception (nil: no world to sense by). :self, :seen, :heard, or nil."
+  "How the body perceives entity e, a non-hostile one (hostile mobs: see `known-sense`). Uses
+  perception/sense-thing: a clear line from the eye to the entity's middle or head, within sight, lit and in
+  the view cone, or heard within hearing range unless it makes no sound. per is the perception (nil: no
+  world, so nothing is sensed). Returns :self, :seen, :heard or nil."
   [per ^js source ^js e]
   (let [^js raw (:raw per)
         ^js eye (when raw (.eye raw))
@@ -143,10 +147,9 @@
     nil))
 
 (defn dead!
-  "An explicit entityDead removes knowledge early and keeps the entity from being resampled. A :removal
-  sample (server entityGone or a pickup's collect) forgets only dropped items, without suppressing a
-  resample: a partly collected stack that is still loaded comes back with the next sample. Ordinary
-  unload of anything else retains its last observation."
+  "Forget an entity early. An entityDead sample also keeps it from being resampled.
+  A :removal sample (entityGone or a pickup) forgets only dropped items and does not block a resample, so a
+  partly collected stack that is still loaded comes back. Any other unload keeps the last observation."
   [store sample]
   (let [e (.-entity sample) source (.-source sample)
         dim (dimension (.-dimension sample))

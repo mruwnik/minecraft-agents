@@ -1,36 +1,38 @@
 (ns engine.access.rules
-  "Pure rules: may the body dig, or place a block, at a cell. No sensing, no side effects; the caller reads the world
-  into a lookup and acts on the verdict.
+  "Pure rules: may the body dig, or place a block, at a cell. No sensing, no side effects. The caller reads
+  the world into a lookup and acts on the verdict.
 
   Input, one map:
-    :block-at    fn [x y z] -> block name string, or nil when the cell is not loaded
+    :block-at    fn [x y z] -> block name, or nil when the cell is not loaded
     :cell        [x y z] the cell to dig or fill
     :feet        [x y z] the body's feet cell (its head cell is one above)
-    :zones       nil (no zone list loaded) or a vector of zones {:name :min :max :owner :allow}; the social part
-                 (zones, claims, footprints, no zone list) is engine.access.zones/verdict, see there: the owner may
-                 always act, others only as :allow says
-    :footprints  the [x y z] cells that other plans claim (may be empty): a set, or a map {cell plan-id} (what
-                 engine.ctx/footprints gives), whose :footprint refusal then names the :plan
-    :claims      the active area claims (engine.ctx/claims); :self the body's name; :now the clock in ms
-    :ignore-zones?  true skips every zone, claim, footprint and no-zone-list check (a job's opt-out; the physics
-                 below still apply)
+    :zones       nil (no zone list loaded) or a vector of zones {:name :min :max :owner :allow}
+    :footprints  cells other plans claim: a set, or a map {cell plan-id} (what engine.ctx/footprints gives),
+                 in which case a :footprint refusal names the :plan
+    :claims      the active area claims (engine.ctx/claims)
+    :self        the body's name
+    :now         the clock in ms
+    :ignore-zones?  true skips the zone, claim, footprint and no-zone-list checks (a job's opt-out). The
+                 physical rules still apply.
     :ledger      set of [x y z] cells holding this body's own scaffold blocks (may be empty)
-  Output: {:ok false :reason kw ...detail} for a refusal, else {:ok true}, and for a dig that has hazards
-  {:ok true :hazards [{:reason kw ...detail} ...]} (:hazards is absent when empty).
+  The social part (zones, claims, footprints, no zone list) is engine.access.zones/verdict.
 
-  The rules say what is impossible or not permitted and only report what is dangerous; the job decides which
+  Output: {:ok true}, or {:ok false :reason kw ...detail}. A dig with hazards is {:ok true :hazards [{:reason
+  kw ...detail} ...]}; :hazards is absent when empty.
+
+  The rules say what is impossible or not permitted and only report what is dangerous. The job decides which
   danger it accepts (see accepts?).
-  Refused, impossible or unknown: :not-loaded, :own-body, :not-replaceable (+ :block).
-  Refused, not permitted (engine.access.zones): :footprint (+ :plan id, for a footprint map), :zone (+ :zone name
-  :owner), :claim (+ :claim id :owner), :no-zones.
-  Hazards of a dig, all that apply, in this order: one :fluid-adjacent (+ :fluid :at) per neighbouring fluid cell, :falling-block (+ :block :at),
-  :under-feet.
-  Refusals run in this order and the first is the verdict, so the most specific reason wins and :no-zones, the
-  general one, only shows when nothing else is wrong (a caller that overrides it for an emergency can rely on
-  that):
+  - Impossible or unknown: :not-loaded, :own-body, :not-replaceable (+ :block)
+  - Not permitted (engine.access.zones): :footprint (+ :plan), :zone (+ :zone :owner), :claim (+ :claim
+    :owner), :no-zones
+  - Hazards of a dig, in this order: one :fluid-adjacent (+ :fluid :at) per neighbouring fluid cell,
+    :falling-block (+ :block :at), :under-feet
+
+  The first failing check is the verdict, so the most specific reason wins and :no-zones, the general one,
+  shows only when nothing else is wrong. A caller that overrides it for an emergency can rely on that.
     dig:   :not-loaded, :footprint, :zone, :no-zones, then the hazards
     place: :not-loaded, :footprint, :zone, :own-body, :not-replaceable, :no-zones
-  A cell holding air, water, lava or a bubble column is placeable."
+  A cell holding air, water, lava or a bubble column can be placed into."
   (:require [clojure.string :as str]
             [engine.access.zones :as zones]))
 
@@ -92,9 +94,9 @@
   (or (some #(%) checks) {:ok true}))
 
 (defn social-verdict
-  "engine.access.zones/verdict for action over the rules input, for a nil zone list as if it were empty (the
-  no-zones refusal comes last, see no-zones-check). A footprint given as a set refuses without a :plan. :plan-cells, the cells of the
-  plan the job builds, let it work over a foreign zone or claim (ok :plan, see zones/verdict)."
+  "engine.access.zones/verdict for action over the rules input. A nil zone list counts as empty here (the
+  no-zones refusal comes last, see no-zones-check). A footprint given as a set refuses without a :plan.
+  :plan-cells, the cells of the plan the job builds, let it work over a foreign zone or claim (ok :plan)."
   [action {:keys [zones footprints cell] :as in}]
   (let [v (zones/verdict (assoc (select-keys in [:claims :self :now :plan-cells]) :zones (or zones []) :footprints footprints
                                 :action action :cell cell))]

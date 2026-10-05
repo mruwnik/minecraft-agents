@@ -1,33 +1,29 @@
 (ns engine.migrate
-  "Migrating an old bot's state into the engine's structure. Pure: the caller
-  (engine.migrate-cli) reads and parses the files and passes the data in.
+  "Migrating an old bot's state into the engine's structure. Pure: the caller (engine.migrate-cli) reads and
+  parses the files and passes the data in.
 
   (convert {:name :config :places :events :now :places-mtime}) returns
-  {:memory memory.edn data (always; empty-data when there is nothing to carry), :pose pose.json map or nil,
-   :beds n, :chests n  (entries carried over),
-   :beds-dropped [..], :chests-dropped [..]  (earlier entries that lost),
-   :skipped [{:file :error}], :world w}.
+  {:memory   memory.edn data (empty-data when there is nothing to carry)
+   :pose     pose.json map, or nil
+   :beds :chests            entries carried over (0 or 1 each)
+   :beds-dropped :chests-dropped   earlier entries that lost
+   :skipped  [{:file :error}]
+   :world    w}
 
-  A file that failed to parse is passed as {:parse-error msg} instead of its
-  data; it is skipped and named in :skipped, the rest converts. A missing file
-  is nil and is not an error.
+  A file that failed to parse is passed as {:parse-error msg}. It is skipped and named in :skipped, and the
+  rest converts. A missing file is nil and is not an error.
 
-  Every converted body gets a memory (empty when it has no bed or chest) so
-  that it has an engine/ dir, which the dashboard needs to show it.
+  Memory: every converted body gets one (empty if it has no bed or chest), so it has an engine/ dir for the
+  dashboard. Places of kind \"bed\" and \"chest\" whose :by is the body's name become memory kinds :bed and
+  :chest under mem/place-policy (cap 1, forever), so the last one in file order wins and earlier ones are
+  listed as dropped. Each entry is {:t t :wt 0 :data {:pos {:x :y :z}}}, with :t the places file's mtime
+  (else :now) and :wt 0 because old files carry no world time.
 
-  Carried: places of kind \"bed\" and \"chest\" whose :by equals the body's
-  name, as memory kinds :bed and :chest. Both are cap 1 under
-  mem/place-policy, so the last one in file order wins and the earlier ones
-  are listed as dropped. Each entry is {:t t :wt 0 :data {:pos {:x :y :z}}}:
-  :t is :places-mtime (else :now), when the old places file was last written,
-  and :wt is 0 (the old files carry no world time). The place policy has
-  :ttl :forever, so the entries are never expired and the first start's sweep
-  keeps them whatever :t is.
+  Pose: the last event (file order) whose :pos or :position has numeric x y z. :t is that event's time in
+  ms, the world comes from the config, and :dimension from the event when it has one. No such event or no
+  world: no pose.
 
-  Pose: the offline record from the last event (file order) whose :pos or
-  :position is a map of numeric x y z, with :t that event's time in ms and the
-  world from the config and the event's :dimension when it has one (the old events that do all say overworld; a nether position would carry the_nether); none when there is no such event or no world. Not
-  carried: everything else (jobs, journal, watches, other places, events)."
+  Not carried: jobs, journal, watches, other places, events."
   (:require [engine.memory :as mem]))
 
 (def carried-kinds {"bed" :bed "chest" :chest})

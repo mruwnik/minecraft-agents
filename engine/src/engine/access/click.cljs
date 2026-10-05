@@ -42,10 +42,15 @@
     (and (= x fx) (= z fz) (<= low (inc fy)) (<= fy high))))
 
 (defn ^:async click!
-  "Click the block block at pos once with an empty hand and read it again: {:outcome :facts ...}. outcome is :changed (the
-  block is now in state), :unchanged (the click moved nothing), :wrong-way (it moved, but not to state), :gone (:why :missing
-  when the block is not there, :unloaded when it can no longer be read), :no-room (the hand cannot be emptied), :unreachable
-  (out of reach) or :refused (the click was turned away: :status and :reason are the primitive's). facts is {:block :was :now}."
+  "Click the block at pos once with an empty hand, then read it again. Returns {:outcome :facts ...}, facts
+  being {:block :was :now}. outcome is one of:
+  - :changed, the block is now in state
+  - :unchanged, the click moved nothing
+  - :wrong-way, it moved, but not to state
+  - :gone, with :why :missing (not there) or :unloaded (can no longer be read)
+  - :no-room, the hand cannot be emptied
+  - :unreachable, out of reach
+  - :refused, the click was turned away (:status and :reason are the primitive's)"
   [c pos state block]
   (let [r (await (ctx/act c :useOn (clj->js {:pos pos})))
         status (.-status r)

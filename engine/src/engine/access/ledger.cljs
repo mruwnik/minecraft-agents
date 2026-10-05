@@ -1,24 +1,33 @@
 (ns engine.access.ledger
-  "The scaffold ledger: every temporary block this body placed (pillars, tunnel torches, retreat plugs and the like), so a cleanup
-  can take back exactly its own blocks, even after a cut, a discarded job or a restart.
+  "The scaffold ledger: every temporary block this body placed (pillars, tunnel torches, retreat plugs and the
+  like), so a cleanup can take back exactly its own blocks, even after a cut, a discarded job or a restart.
 
-  It lives in body memory (not job memory: a discarded job's memory is gone, its blocks are not), as the single
-  entry of kind :scaffold (cap 1, forever) whose data is {:entries [entry ...]}. An entry is
-    {:cell [x y z] :item \"dirt\" :before \"air\" :job \"j4\" :purpose :pillar :state :intent|:placed}
-  with at most one entry per cell. A job writes the entry as an :intent before the placing act (act saves memory
-  before it calls the primitive) and confirms it once it sees the item in the cell. An :intent left by a cut or a
-  restart is decided by looking at the cell (decide, reconcile): it holds the item -> placed; anything else -> not
-  placed, dropped; not loaded -> undecided, kept. Every entry is open until a cleanup drops it.
+  Storage: body memory, not job memory (a discarded job's memory is gone, its blocks are not). One entry of
+  kind :scaffold (cap 1, forever) with data {:entries [entry ...]}. An entry is
+    {:cell [x y z] :item \"dirt\" :before \"air\" :job \"j4\" :purpose :pillar :state :intent|:placed|:removing}
+  with at most one entry per cell. Every entry stays open until a cleanup drops it.
 
-  The lifecycle functions are pure over the entry vector; open-entries reads it from a memory view, write! and
-  remember! store it.
+  Placing: a job writes the entry as :intent before the placing act (act saves memory before it calls the
+  primitive) and confirms it (:placed) once it sees the item in the cell. An :intent left by a cut or a
+  restart is decided from the cell (decide, reconcile):
+  - it holds the item: placed
+  - anything else: not placed, dropped
+  - not loaded: undecided, kept
 
-  Cleanup (jobs.access.cleanup) marks an entry :removing before its dig and settles every entry it works on from the
-  cell (settle-entry): the item there -> kept (:placed); a :removing cell now air -> removed; anything else -> dropped,
-  not ours any more; not loaded -> kept. The owner of an entry is the root instance of its :job (j4 for
-  j4/pillar); it is live while body memory holds that instance's job memory (listed, or a running reflex).
-  Cells a cleanup could not take are held (kind :scaffold-held, 10 minutes) so the standing offer does not repeat
-  them every tick."
+  Cleanup (jobs.access.cleanup): marks an entry :removing before its dig, then settles each entry it works on
+  from the cell (settle-entry):
+  - the item is there: kept as :placed
+  - a :removing cell that is now air: removed
+  - anything else: dropped, it is not ours any more
+  - not loaded: kept
+  Cells a cleanup could not take are held (kind :scaffold-held, 10 minutes) so the standing offer does not
+  repeat them every tick.
+
+  Owner: the root instance of an entry's :job (j4 for j4/pillar). It is live while body memory holds that
+  instance's job memory (listed, or a running reflex).
+
+  The lifecycle functions are pure over the entry vector. open-entries reads it from a memory view, write!
+  and remember! store it."
   (:require [clojure.string :as str]
             [engine.access.rules :as rules]
             [engine.ctx :as ctx]

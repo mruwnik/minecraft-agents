@@ -82,10 +82,12 @@
     {:x (+ x dx) :y (+ y dy) :z (+ z dz)}))
 
 (defn find-block
-  "Where block (a name) stands at pos or within 1 of it, reading cells through block-at (a function of a cell to
-  a block name, nil when unloaded). {:pos cell :block name} for the cell at pos when it matches, else for the only
-  matching cell within 1. Otherwise a refusal: :not-loaded (pos is unloaded), :ambiguous (several match around pos
-  and not pos itself; :candidates lists them) or :no-such-block (:found is what pos holds)."
+  "Where block (a name) stands at pos or within 1 of it. block-at maps a cell to a block name (nil: unloaded).
+  Returns {:pos cell :block name} for pos itself when it matches, else for the only matching cell within 1.
+  Otherwise a refusal:
+  - :not-loaded, pos is unloaded
+  - :ambiguous, several cells around pos match and pos does not (:candidates lists them)
+  - :no-such-block, none match (:found is what pos holds)"
   [block-at pos block]
   (let [here (block-at pos)]
     (cond

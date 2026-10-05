@@ -16,12 +16,18 @@
     :now         ms clock, against a claim's :until
     :action      :dig :place :harvest :take :put
     :cell        [x y z]
-  Output: {:ok true :why :own-zone|:own-claim|:open|:plan} or {:ok false :reason :no-zones|:footprint|:zone|:claim
-  ...detail}: :footprint + :plan, :zone + :zone + :owner, :claim + :claim + :owner.
-  Order: no zones, another plan's footprint, the caller's own plan cell (ok :plan), a foreign zone not allowing the action (the most restrictive wins on
-  nesting), a foreign claim (claims allow nothing), else ok.")
+  Output: {:ok true :why :own-zone|:own-claim|:open|:plan}, or {:ok false :reason ...} with detail:
+  :no-zones, :footprint + :plan, :zone + :zone + :owner, :claim + :claim + :owner.
 
-;; The three owner decisions still open: each is one line to change.
+  Checks run in this order, the first that applies is the verdict:
+  1. no zone list: refused
+  2. another plan's footprint: refused
+  3. a cell of the caller's own plan: ok :plan
+  4. a foreign zone that does not allow the action: refused (on nesting the most restrictive wins)
+  5. a foreign claim: refused (claims allow nothing)
+  6. otherwise ok.")
+
+;; Policy switches. Each is one line to change.
 
 (def deposit-into-foreign-chest?
   "False: putting items into another's chest (:put) is refused like any act in a foreign zone or claim unless the

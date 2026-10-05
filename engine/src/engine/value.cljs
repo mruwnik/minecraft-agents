@@ -5,9 +5,7 @@
 
   Item value, per stack (an inventory entry), first matching rule wins:
 
-    enchanted  25  the item has a non-empty :enchants or :nbt key (the
-                   primitives do not report either yet, so this only fires
-                   once they do)
+    enchanted  25  the item has a non-empty :enchants or :nbt key
     high       25  diamond and netherite anything, ancient debris, elytra,
                    totem of undying, nether star, beacon, shulker boxes
     medium      5  iron tools and armour, bow, crossbow, shield, redstone,
