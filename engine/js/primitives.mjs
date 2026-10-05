@@ -703,7 +703,10 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     .map(e => ({ id: e.id, ...droppedItem(bot, e), pos: xyz(e.position) }))
   // an item already lying near the cell is not this dig's drop, unless its stack grew (a drop that merged into it)
   const lyingBefore = p => new Map(dropsNear(p).map(d => [d.id, d.count]))
-  const newDrops = (p, before) => dropsNear(p).filter(d => !(before.get(d.id) >= d.count))
+  // a grown stack is reported with the growth only (new count minus the count before the dig)
+  const newDrops = (p, before) => dropsNear(p)
+    .filter(d => !(before.get(d.id) >= d.count))
+    .map(d => ({ ...d, count: d.count - (before.get(d.id) ?? 0) }))
 
   const dig = async (token, a = {}) => {
     if (!isOwner(token)) throw cutError()
