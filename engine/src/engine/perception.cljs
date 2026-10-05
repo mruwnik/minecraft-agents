@@ -33,8 +33,8 @@
   for a zombie. An entry whose id the client no longer tracks (dead, despawned, far off) is dropped at once.
   So an unseen silent creeper behind the body is no danger; a creeper seen 3 s ago that went round a corner still is.
 
-  S1 changes nothing jobs see: blocks, blockAt and entities stay raw; seenBlockAt and seenBlocks are added for S2, and
-  knownMobs for the danger checks.")
+  Wrapping changes nothing jobs already see: blocks, blockAt and entities stay raw; seenBlockAt, seenBlocks and
+  knownMobs are added, and dig, place, jumpPlace and useOn let memory take the true state of their cell once they settle.")
 
 (def defaults
   {:radius 48
@@ -717,7 +717,8 @@
       (save))))
 
 (defn wrap
-  "The primitives object p with every primitive as it is (blocks, blockAt, entities stay raw in S1), plus
+  "The primitives object p with every primitive as it is (blocks, blockAt, entities stay raw; dig, place, jumpPlace and useOn also let memory
+  take the true state of their cell, see touching), plus
   seenBlockAt({x,y,z}) and seenBlocks({radius, names, max}) over memory, knownMobs() (known-mobs: the hostiles the body
   has seen or heard, sampled from p's entities), and the perception itself."
   [p per]

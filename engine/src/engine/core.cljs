@@ -737,9 +737,9 @@
                             {:source :job :kind :yielded :level :info :status status}))))))
 
 (defn trigger-holds?
-  "Whether entry's trigger holds: (:when world view args plans), where view is a
-  memory view {:data :now} (see engine.memory), args are the entry's args and
-  plans is the engine's engine.world (read from memory; a trigger may ignore it) and live is the set of ids of
+  "Whether entry's trigger holds: (:when world view args plans live), where view is a
+  memory view {:data :now} (see engine.memory), args are the entry's args, plans is the
+  engine's engine.world (a trigger may ignore it) and live is the set of ids of
   the jobs still listed (running, queued or paused; not the parked failed ones)."
   [eng entry world view]
   (let [t (trigger-def eng (:trigger entry))

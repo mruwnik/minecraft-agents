@@ -1,7 +1,7 @@
 // Why JavaScript: binary/graphics; column encoding, light overlay and atomic writers for the view dumps.
 // View dump: what the body knows about the world, written to disk for an external renderer. Format: docs/view-format.md.
 // The body pays no rendering cost here: it copies mineflayer's packed chunk data, deflates off the main thread and writes
-// files. Nothing in this module walks blocks.
+// files. The one cell walk is the bounded local relight of the light overlay (light.mjs).
 import fs from 'node:fs'
 import path from 'node:path'
 import zlib from 'node:zlib'

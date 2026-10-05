@@ -1,5 +1,5 @@
 (ns engine.access.ledger
-  "The scaffold ledger: every temporary block this body placed (pillars, later bridges and stair plugs), so a cleanup
+  "The scaffold ledger: every temporary block this body placed (pillars, tunnel torches, retreat plugs and the like), so a cleanup
   can take back exactly its own blocks, even after a cut, a discarded job or a restart.
 
   It lives in body memory (not job memory: a discarded job's memory is gone, its blocks are not), as the single
