@@ -1,0 +1,49 @@
+;; Card 03db6712 (B2 :fetch, slice F1: carried and seen-chest sources). The body stands at the middle facing south
+;; (yaw 0, turned by RCON so its first sight sees the chest and the stone); a stone pillar 3 south-east to dig, a chest
+;; 3 south-west. Zones: the plot is outside every box, so the chest is an open, unzoned one (usable by the owner's rule).
+;; Not covered here (needs a zone entry): a chest in another body's zone without :take is never used.
+{:defaults
+ {:tags [:fetch :mining]
+  :plot {:height 8}
+  :blocks [[:set [18 0 19] "stone"] [:set [18 1 19] "stone"]]
+  :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "dig-fetches-pickaxe-from-seen-chest"
+   :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:wooden_pickaxe\",count:1}]}"]]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+         [:job (jobs.blocks.dig {:pos #at [18 0 19] :fetch true})]]
+   :expect [{:event {:source :job :kind :fetch.started} :within-s 20 :of-job true}
+            {:event {:source :job :kind :fetch.done} :within-s 60 :of-job true}
+            {:event {:source :job :kind :blocks.dig.done :data {:dug true}} :within-s 80 :of-job true}]
+   :after [[:block [18 0 19] "air"] [:item "wooden_pickaxe" 1] [:item "cobblestone" 1]]}
+  {:name "dig-without-fetch-waits-no-tool"
+   :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:wooden_pickaxe\",count:1}]}"]]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+         [:job (jobs.blocks.dig {:pos #at [18 0 19]})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-tool}} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind :fetch.started} :for-s 15}
+            {:no-event {:source :action :kind :started :data {:name "inspectContainer"}} :for-s 15}]
+   :after [[:block [18 0 19] "stone"] [:item "wooden_pickaxe" 0]]}
+  {:name "chest-never-seen-not-used"
+   :blocks [[:fill [13 0 18] [15 2 20] "stone" :outline]
+            [:set [14 1 19] "chest{Items:[{Slot:0b,id:\"minecraft:wooden_pickaxe\",count:1}]}"]]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+         [:job (jobs.blocks.dig {:pos #at [18 0 19] :fetch true})]]
+   :expect [{:event {:source :job :kind :fetch.failed :data {:failed :no-source}} :within-s 30 :of-job true}
+            {:event {:source :job :kind :waiting :data {:reason :no-tool :fetch {:failed :no-source}}} :within-s 40 :of-job true}
+            {:no-event {:source :action :kind :started :data {:name "inspectContainer"}} :for-s 20}]
+   :after [[:block [18 0 19] "stone"] [:item "wooden_pickaxe" 0]]}
+  {:name "chest-without-pickaxe-fails-once"
+   :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:dirt\",count:3}]}"]]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+         [:job (jobs.blocks.dig {:pos #at [18 0 19] :fetch true})]]
+   :expect [{:event {:source :job :kind :fetch.failed :data {:failed :no-source}} :within-s 40 :of-job true}
+            {:event {:source :job :kind :waiting :data {:reason :no-tool :fetch {:failed :no-source}}} :within-s 50 :of-job true}]
+   :after [[:block [18 0 19] "stone"] [:item "dirt" 0]]}
+  {:name "place-fetches-block-from-seen-chest"
+   :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:cobblestone\",count:5}]}"]]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+         [:job (jobs.blocks.place {:pos #at [16 0 19] :item "cobblestone" :fetch true})]]
+   :expect [{:event {:source :job :kind :blocks.place.done :data {:placed true}} :within-s 80 :of-job true}]
+   :after [[:block [16 0 19] "cobblestone"]]}]}

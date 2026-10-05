@@ -3,6 +3,7 @@
             [engine.access.rules :as rules]
             [engine.ctx :as ctx]
             [engine.jobs.access :as access]
+            [engine.jobs.fetch :as fetch]
             [engine.jobs.tools :as tools]
             [engine.jobs.util :as u]
             [engine.path.executor :as executor]
@@ -48,7 +49,11 @@
   line. Dug cells are left and recorded.
 
   Hands over {:status :done|:stopped :reason kw :steps n :at [x y z] :dug [{:cell :block}]} plus detail (:cell
-  :hazards :zone :walk ...), also as a stair.done info or stair.stopped warn event.")
+  :hazards :zone :walk ...), also as a stair.done info or stair.stopped warn event.
+
+  :fetch (default false; engine.jobs.fetch): the :no-tool wait is not waited out; the rounds run jobs.items.get-tool
+  for the block (child :fetch) first, then walks back to the cell it stood on (child :fetch-back) and goes on. A
+  parent's stair child does not fetch.")
 
 (def args
   {:dir {:doc ":down or :up" :default :down}
@@ -56,7 +61,8 @@
    :steps {:doc "steps to cut; or give :y" :default nil}
    :y {:doc "feet height to end at, instead of :steps" :default nil}
    :accept {:doc "hazards taken: #{:water :lava :falling-block :under-feet}" :default #{}}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
+   :fetch {:doc "get a missing pickaxe instead of waiting :no-tool (engine.jobs.fetch): true, a set of kinds or a map of limits" :default false}})
 
 (def headings {:north [0 -1] :south [0 1] :east [1 0] :west [-1 0]})
 (def rises {:down -1 :up 1})
@@ -257,7 +263,7 @@
   "True, or a wait for what the next dig lacks (see need). Only for a stair that is itself listed: as a child (leave-tunnel,
   tunnel, dig-in) it runs and stops with the same reason in its result, which its parent reads."
   [c]
-  (if-let [lack (need c)] (ctx/wait c lack) true))
+  (if-let [lack (need c)] (fetch/check c 'jobs.access.stair lack) true))
 
 (defn ^:async dig!
   "Equip the best tool, check the cell again, write the intent and dig it. :continue, or a stop map."
@@ -354,14 +360,18 @@
                       (await (step! c next)))))))))))))
 
 (defn ^:async round [c]
-  (let [m (ctx/mem c)]
-    (if (nil? (:origin m))
+  (let [m (ctx/mem c)
+        r (await (fetch/step! c 'jobs.access.stair (need c) {:return? true}))]
+    (cond
+      r r
+      (nil? (:origin m))
       (let [feet (feet-of c)
             target (target-steps (:args c) feet)]
         (if (map? target)
           (finish! c :bad-args {:why (:error target)})
           (do (ctx/update-mem! c assoc :origin feet :target target :dug [])
               :continue)))
+      :else
       (let [r (await (work! c))]
         (cond
           (= :continue r) :continue

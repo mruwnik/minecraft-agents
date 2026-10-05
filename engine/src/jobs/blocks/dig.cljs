@@ -2,6 +2,7 @@
   (:require [engine.ctx :as ctx]
             [engine.jobs.access :as access]
             [engine.jobs.blocks :as b]
+            [engine.jobs.fetch :as fetch]
             [engine.jobs.tidy :as tidy]
             [engine.jobs.tools :as tools]
             [engine.jobs.util :as u]))
@@ -32,7 +33,11 @@
   Ends with info blocks.dig.done and {:dug true|false :pos :block :reason :collected n}. :reason is :dug,
   :already-clear (air there, nothing done), :fluid (a fluid is not dug), :cannot (bedrock and the like) or
   :bad-args (with a blocks.dig.declined warn). A dig the primitive refuses (a timeout, a failure) ends :failed
-  with its :status at once. The caller decides whether to try again.")
+  with its :status at once. The caller decides whether to try again.
+
+  :fetch (default false; engine.jobs.fetch): a :no-tool wait is not waited out. The check passes and the rounds run
+  jobs.items.get-tool for the block (child :fetch) until a tool is carried, then dig. A fetch that fails is
+  remembered for :fail-minutes; meanwhile the check waits :no-tool with {:fetch {:failed reason ...}}.")
 
 (def args
   {:pos {:doc "the block to dig, [x y z] or {:x :y :z}" :default nil}
@@ -40,7 +45,8 @@
    :need-drop {:doc "wait :no-tool when no carried tool harvests the block; false digs anyway and the drop is lost (clearing)" :default true}
    :accept {:doc "dig hazards of engine.access.rules taken (:fluid-adjacent :falling-block :under-feet)" :default #{}}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :default nil}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
+   :fetch {:doc "get a missing tool instead of waiting :no-tool (engine.jobs.fetch): true, a set of kinds or a map of limits" :default false}})
 
 (def collect-radius 8)
 
@@ -88,7 +94,7 @@
 
 (defn check [c]
   (if-let [r (problem c)]
-    (ctx/wait c r)
+    (fetch/check c 'jobs.blocks.dig r)
     true))
 
 (defn finish!
@@ -132,8 +138,10 @@
           (ctx/result! c {:dug false :reason :bad-args :text error})
           :done)
       (let [_ (when-not (= pos (:for (ctx/mem c))) (ctx/update-mem! c b/fresh-mem pos))
-            block (u/block-name (:primitives c) pos)]
+            block (u/block-name (:primitives c) pos)
+            r (await (fetch/step! c 'jobs.blocks.dig (problem c)))]
         (cond
+          r r
           (:dug (ctx/mem c)) (await (collect! c pos))
           (b/air block) (finish! c {:dug false :pos pos :block block :reason :already-clear})
           (b/fluids block) (finish! c {:dug false :pos pos :block block :reason :fluid})

@@ -2,6 +2,7 @@
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
             [engine.jobs.access :as access]
+            [engine.jobs.fetch :as fetch]
             [engine.jobs.util :as u]
             [engine.memory :as mem]
             [engine.path.near :as near]
@@ -18,7 +19,8 @@
   chest_missing warn.
   Zones: a chest in another owner's zone or claim that does not allow :put is refused before the walk and again
   before the transfer. The job ends {:gave-up true :reason :refused :zones [..] :claims [..]} after one
-  deposit.refused warn and puts nothing in. :ignore-zones? true skips the check.")
+  deposit.refused warn and puts nothing in. :ignore-zones? true skips the check.
+  Stock: a chest whose stock is booked in body memory :fetch/stock gets what was put in added (engine.jobs.fetch).")
 
 (def args
   {:chest {:doc "chest position [x y z] or {:x :y :z}; the known :chest place when nil" :default nil}
@@ -106,7 +108,9 @@
             (let [r (await (ctx/act c :transfer (clj->js {:pos chest :direction "deposit"
                                                            :item (:name (:stack pick)) :count (:count pick)})))]
               (if (= "ok" (.-status r))
-                (do (when (pos? (or (.-moved r) 0)) (ctx/update-mem! c update :deposited (fnil inc 0)))
+                (do (when (pos? (or (.-moved r) 0))
+                      (ctx/update-mem! c update :deposited (fnil inc 0))
+                      (fetch/note-moved! c chest (:name (:stack pick)) (.-moved r)))
                     :continue)
                 (do (places/retract-if-missing! c :chest chest (.-status r))
                     (give-up! c :chest_unusable (str "chest not usable: " (.-status r)) (.-status r)))))))))))

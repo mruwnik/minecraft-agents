@@ -2,6 +2,7 @@
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
             [engine.jobs.combat :as combat]
+            [engine.jobs.fetch :as fetch]
             [engine.jobs.util :as u]
             [engine.path.near :as near]
             [jobs.items.craft]
@@ -30,7 +31,8 @@
   \"full\" end the phase for every short kind.
   A craft phase that ends with a non-empty :missing is remembered as :no-craft in body memory for 10 minutes.
   While that lives, a take phase that would enter the craft phase ends at once with the short and the remembered
-  :missing.")
+  :missing.
+  Every inspect books what the chest holds in body memory :fetch/stock (engine.jobs.fetch).")
 
 (def args
   {:tools {:doc "tool kinds to carry, e.g. [\"hoe\" \"pickaxe\"]" :default ["hoe"]}
@@ -290,6 +292,7 @@
           (if (not= "ok" (.-status seen))
             (give-up! c (.-status seen) (into {} still))
             (let [stacks (stacks-of (.-items seen))]
+              (fetch/note-stock! c chest stacks)
               (ctx/update-mem! c assoc :chest-items stacks)
               stacks)))))))
 
@@ -339,7 +342,8 @@
           (let [seen (await (ctx/act c :inspectContainer (clj->js {:pos chest})))]
             (if (not= "ok" (.-status seen))
               (give-up! c (.-status seen) (into {} still))
-              (let [inv (u/inventory (:primitives c))
+              (let [_ (fetch/note-stock! c chest (.-items seen))
+                    inv (u/inventory (:primitives c))
                     {:keys [take short]} (plan still inv (stacks-of (.-items seen)))]
                 (cond
                   (and (empty? take) (:craft a) (pos? (ctx/count-in c :no-craft no-craft-ms)))

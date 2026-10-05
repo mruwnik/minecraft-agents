@@ -1,6 +1,7 @@
 (ns jobs.storage.withdraw
   (:require [engine.ctx :as ctx]
             [engine.jobs.access :as access]
+            [engine.jobs.fetch :as fetch]
             [engine.jobs.util :as u]
             [engine.path.near :as near]
             [engine.places :as places]
@@ -16,7 +17,9 @@
   Memory: a container missing at the recorded :chest retracts that place, with one chest_missing warn.
   Zones: a chest in another owner's zone or claim that does not allow :take is refused before the walk and again
   before the transfer. The job ends {:gave-up true :reason :refused :zones [..] :claims [..]} after one
-  withdraw.refused warn and takes nothing. :ignore-zones? true skips the check.")
+  withdraw.refused warn and takes nothing. :ignore-zones? true skips the check.
+  Stock: what the chest holds is booked in body memory :fetch/stock when inspected and after each take
+  (engine.jobs.fetch), for jobs.items.obtain.")
 
 (def args
   {:chest {:doc "chest position [x y z] or {:x :y :z}; the known :chest place when nil" :default nil}
@@ -78,7 +81,8 @@
             (if (not= "ok" (.-status seen))
               (do (places/retract-if-missing! c :chest chest (.-status seen))
                   (give-up! c (.-status seen) short))
-              (let [pick (some (fn [[name n]] (let [held (held-in (.-items seen) name)]
+              (let [_ (fetch/note-stock! c chest (.-items seen))
+                    pick (some (fn [[name n]] (let [held (held-in (.-items seen) name)]
                                                 (when (pos? held) [name (min n held)])))
                                short)]
                 (cond
@@ -94,4 +98,4 @@
                       (not= "ok" (.-status r)) (do (places/retract-if-missing! c :chest chest (.-status r))
                                                    (give-up! c (.-status r) short))
                       (zero? (.-moved r)) (give-up! c "nothing-moved" short)
-                      :else :continue)))))))))))
+                      :else (do (fetch/note-moved! c chest name (- (.-moved r))) :continue))))))))))))

@@ -17,7 +17,7 @@
      jobs.apiary.maintain
      jobs.village.trade
      jobs.items.smelt
-     jobs.items.enchant
+     jobs.items.enchant jobs.items.obtain jobs.items.get-tool jobs.items.fetch-limits
      jobs.build.from-plan jobs.build.pen jobs.build.rail-line
      jobs.access.pillar
      jobs.explore.search jobs.explore.look

@@ -2,6 +2,7 @@
   (:require [engine.ctx :as ctx]
             [engine.jobs.access :as access]
             [engine.jobs.blocks :as b]
+            [engine.jobs.fetch :as fetch]
             [engine.jobs.tidy :as tidy]
             [engine.jobs.util :as u]))
 
@@ -30,14 +31,19 @@
   Ends with info blocks.place.done and {:placed true|false :pos :item :reason}. :reason is :placed, :already
   (the cell holds the block: nothing done), :bad-args (with a blocks.place.declined warn), :clear-failed (the
   plant could not be dug) or :failed (the primitive refused, with its :status). The caller decides whether to
-  try again.")
+  try again.
+
+  :fetch (default false; engine.jobs.fetch): a :need wait is not waited out. The rounds run jobs.items.obtain for one
+  of the item (child :fetch), then place. A failed fetch is remembered for :fail-minutes; meanwhile the check waits
+  :need with {:fetch {:failed reason ...}}.")
 
 (def args
   {:pos {:doc "the cell to fill, [x y z] or {:x :y :z}" :default nil}
    :item {:doc "the block item to place" :default nil}
    :any-of {:doc "block items, the first carried one is placed (instead of :item)" :default nil}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :default nil}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
+   :fetch {:doc "get the missing block item instead of waiting :need (engine.jobs.fetch): true, a set of kinds or a map of limits" :default false}})
 
 (defn wanted [{:keys [item any-of]}]
   (vec (if item [item] any-of)))
@@ -114,7 +120,7 @@
 
 (defn check [c]
   (if-let [r (problem c)]
-    (ctx/wait c r)
+    (fetch/check c 'jobs.blocks.place r)
     true))
 
 (defn finish! [c result]
@@ -147,8 +153,10 @@
           (ctx/result! c {:placed false :reason :bad-args :text error})
           :done)
       (let [_ (when-not (= pos (:for (ctx/mem c))) (ctx/update-mem! c b/fresh-mem pos))
-            block (u/block-name (:primitives c) pos)]
+            block (u/block-name (:primitives c) pos)
+            r (when-not (some #{block} items) (await (fetch/step! c 'jobs.blocks.place (problem c))))]
         (cond
+          r r
           (some #{block} items) (finish! c {:placed false :pos pos :item block :reason :already})
           (b/clearable block) (await (clear! c pos))
           (not (b/in-reach? c pos)) (await (b/walk! c pos))
