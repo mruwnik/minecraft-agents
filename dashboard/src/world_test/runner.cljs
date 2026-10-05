@@ -3,7 +3,7 @@
   test server with one probe body. Per case and run: a fresh plot of the reserved grid is cleared and built, the body
   is put at its start, the act steps run, the body's event log is read until every expectation is decided, the
   :after checks ask the server, and the plot is cleaned up. The body is started once per distinct :register (the
-  scenario) and restarted before every case with its engine/memory.edn deleted (a case with :keep-memory true keeps
+  scenario) and restarted before every case with its engine/memory.edn and seen.bin deleted and the plot it was last left on cleared (a case with :keep-memory true keeps
   the memory: the body goes on from the case before it). Stopped at the end. Pure parts: world-test.fixture and world-test.expect."
   (:require ["child_process" :as cp]
             ["fs" :as fs]
@@ -137,14 +137,33 @@
   (str/includes? (or (.-stdout (cp/spawnSync "pgrep" #js ["-af" (str "out/body.cjs --agent " body " ")] #js {:encoding "utf8"})) "")
                  (str "--agent " body " ")))
 
-(defn memory-file [opts] (path/join (body-dir opts) "engine" "memory.edn"))
+(defn last-plot-file [opts] (path/join (os/tmpdir) (str "world-test-" (:body opts)) "last-origin.edn"))
+
+(defn note-last-plot!
+  "Records the plot the body is about to be put on, so a later start can clear it first (the body is saved there)."
+  [opts origin]
+  (fs/mkdirSync (path/dirname (last-plot-file opts)) #js {:recursive true})
+  (fs/writeFileSync (last-plot-file opts) (pr-str origin)))
+
+(defn reset-last-plot!
+  "Resolves once the plot the body was last left on is cleared (its traps gone), before the body starts."
+  [opts]
+  (let [file (last-plot-file opts)
+        origin (when (fs/existsSync file)
+                 (try (reader/read-string (fs/readFileSync file "utf8")) (catch :default _ nil)))]
+    (if (vector? origin)
+      (rcon! (f/reset-plot-commands f/default-grid origin))
+      (js/Promise.resolve nil))))
 
 (defn start-body!
   "Starts the body with a scenario holding register, --fresh; resolves once it logged :system :started. The body's own
   engine/memory.edn is deleted first unless keep-memory? (--fresh only drops engine.edn)."
   [opts register keep-memory?]
-  (when (and (not keep-memory?) (fs/existsSync (memory-file opts)))
-    (fs/unlinkSync (memory-file opts)))
+  (when-not keep-memory?
+    (doseq [name f/clean-start-files
+            :let [file (path/join (body-dir opts) "engine" name)]
+            :when (fs/existsSync file)]
+      (fs/unlinkSync file)))
   (let [dir (path/join (os/tmpdir) (str "world-test-" (:body opts)))
         scenario (path/join dir "scenario.edn")
         out (path/join dir "body.log")
@@ -378,6 +397,7 @@
         rc (f/resolve-tags c origin)
         started (js/Date.now)
         plan-files (atom [])
+        _ (note-last-plot! opts origin)
         result (fn [m] (merge {:id (:id c) :run run :plot i :origin origin :elapsed-s (/ (- (js/Date.now) started) 1000)} m))]
     (-> (if-let [phase (lease/time-phase rc)]
           (acquire-time-lock! phase (str (:id c) " depends on the time of day"))
@@ -472,6 +492,7 @@
                                                          (-> (if (= :keep plan)
                                                                (js/Promise.resolve nil)
                                                                (-> (stop-body! opts)
+                                                                   (.then #(when-not (= :restart-keep plan) (reset-last-plot! opts)))
                                                                    (.then #(start-body! opts register (= :restart-keep plan)))))
                                                              (.then (fn []
                                                                       (let [i (acquire-plot! (:first-plot opts))]

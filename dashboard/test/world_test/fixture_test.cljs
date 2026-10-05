@@ -119,3 +119,15 @@
   (is (= :restart-keep (f/body-start-plan {:keep-memory true} true)))
   (is (= :keep (f/body-start-plan {:keep-memory true} false)))
   (is (= :restart-clean (f/body-start-plan {:keep-memory false} false))))
+
+(deftest reset-plot-clears-a-left-over-plot-before-the-body-starts
+  (let [origin [20000 150 20000]
+        cmds (f/reset-plot-commands grid origin)]
+    (is (= "forceload add 20000 20000 20031 20031" (first cmds)))
+    (is (every? (set cmds) (f/clear-commands grid origin 31 "stone")) "the plot is cleared to its full height")
+    (is (some #(re-find #"^kill " %) cmds))
+    (is (= "forceload remove 20000 20000 20031 20031" (last cmds)))
+    (is (not-any? #(re-find #"^tp " %) cmds))))
+
+(deftest clean-start-forgets-memory-and-seen-blocks
+  (is (= ["memory.edn" "seen.bin"] f/clean-start-files)))

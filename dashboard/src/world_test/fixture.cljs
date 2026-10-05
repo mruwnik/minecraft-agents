@@ -179,6 +179,18 @@
     (into [(forceload-command "add" grid origin) (kill-command grid origin height)]
           (clear-commands grid origin height floor))))
 
+(defn reset-plot-commands
+  "Clear a plot that may hold a left-over case (its full height), without a body connected: forceload, kill, clear,
+  forceload removed. The runner sends it for the plot the body was last left on, before the body starts."
+  [grid origin]
+  (let [plot {:plot {:height 31 :floor "stone"}}]
+    (conj (setup-commands grid origin plot) (forceload-command "remove" grid origin))))
+
+(def clean-start-files
+  "The body's files (in its engine dir) a clean start deletes: engine memory and the seen-blocks memory, whose cells
+  of the last case's plot would otherwise hold blocks that are gone."
+  ["memory.edn" "seen.bin"])
+
 (defn block-command
   "One :blocks entry: [:fill [x y z] [x y z] block] (optionally :hollow / :outline as a fifth element) or
   [:set [x y z] block], plot-relative."
