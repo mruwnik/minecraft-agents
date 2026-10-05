@@ -369,3 +369,10 @@
         (let [placed (await (cover-run [{:name "cobblestone" :count 20}]
                                        ["1,64,0" "-1,64,0" "0,64,1" "0,64,-1" "1,64,1" "2,64,0" "-2,64,0" "0,64,2"] 12))]
           (is (<= (count (filter #(= "cobblestone" (:item %)) placed)) extinguish/max-covers)))))))
+
+(deftest lava-under-an-already-covered-cell-is-not-covered-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [placed (await (cover-run [{:name "cobblestone" :count 8}] ["1,64,0" "1,63,0"] 4))]
+          (is (= [{:pos {:x 1 :y 64 :z 0} :item "cobblestone"}] placed)))))))

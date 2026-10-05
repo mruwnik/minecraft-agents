@@ -896,3 +896,13 @@
           (core/submit! (:eng s) (spec {:block "stone" :count 1}) {})
           (await (run-ticks s 10))
           (is (= "stone_pickaxe" (.-held (.self (:p s))))))))))
+
+(deftest ore-across-a-wide-trench-in-view-is-dug-from-the-cut-end
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [open (cells "air" (range 1 4) [64 65] [0])
+              trench (cells "air" [4 5] (range 62 66) [0])
+              s (await (scenario {:block "iron_ore" :count 1 :direction "east" :tunnel-length 8 :mend false}
+                                 (rock-world (merge open trench {"6,64,0" "iron_ore"})) 60))]
+          (is (some #{[6 64 0]} (dug-cells s)) (pr-str (dug-cells s))))))))

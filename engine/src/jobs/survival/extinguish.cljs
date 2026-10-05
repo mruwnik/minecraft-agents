@@ -19,7 +19,7 @@
      It must be passable, solid underfoot and not fire, lava, magma or a campfire.
      Scoring favours distance from those hazards (up to 4 blocks) and height, and charges a small cost per block walked.
   Water also counts powder snow. Not in lava, with a cover block carried (cobblestone, stone, dirt, ...) it first
-  places one on a lava cell next to the feet (side or below), so the body does not step past it. Never sand, gravel or
+  places one on a lava cell next to the feet (side or below) with open air above it, so the body does not step past it. Never sand, gravel or
   other falling blocks, never in another's zone or claim, and at most 3 covers per run.
   5. On fire, not in lava, with no water in reach and no hazard within 1.5 blocks, there is nothing useful to do.
      It stands still: emits info extinguish_wait once, eats when food is under 18 and food is carried (to keep
@@ -139,6 +139,16 @@
                       (<= (+ (js/Math.abs (- (:x p) (:x pos))) (js/Math.abs (- (:z p) (:z pos)))) 1))))
        first))
 
+(defn exposed-lava
+  "The scanned lava cells with an open cell above them (air, water or more lava); one under a block, such as an
+  earlier cover, is no candidate."
+  [p scanned]
+  (remove (fn [{:keys [name pos]}]
+            (and (= "lava" name)
+                 (let [above (u/block-name p (offset pos 0 1 0))]
+                   (not (or (nil? above) (contains? passable above) (= "lava" above))))))
+          scanned))
+
 (defn cover-item [p] (some (fn [n] (when (some #(= n (:name %)) (u/inventory p)) n)) cover-blocks))
 
 (defn clear? [c] (not (body-burning? c)))
@@ -246,7 +256,7 @@
               (finish c))
 
           (and (not lava?) (< (:covers (ctx/mem c) 0) max-covers) (cover-item p)
-               (let [lava (:pos (adjacent-lava pos scanned))]
+               (let [lava (:pos (adjacent-lava pos (exposed-lava p scanned)))]
                  (and lava
                       (nil? (access/trespass-refusal c :place lava))
                       (= "placed" (.-status (await (ctx/act c :place (clj->js {:pos lava :item (cover-item p)}))))))))
