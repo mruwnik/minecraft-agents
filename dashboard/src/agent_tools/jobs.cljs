@@ -152,7 +152,7 @@
     :else (get! (:socketPath r) (:path r) opts)))
 
 (defn job-detail [value]
-  (cond-> (into {} (filter (comp some? val)) (select-keys value [:id :name :status :round :spec]))
+  (cond-> (into {} (filter (comp some? val)) (select-keys value [:id :name :status :round :spec :waiting]))
     (:failure value) (assoc :failure (:failure value))
     (pos? (or (get-in value [:attention :total]) 0)) (assoc :attention (:attention value))))
 

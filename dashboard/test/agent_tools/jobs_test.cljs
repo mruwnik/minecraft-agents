@@ -143,10 +143,10 @@
   (let [state (state-dir)]
     (async done
       (-> (run-main! state ["show" "j3"]
-                     (fn [_] {:text "{:id \"j3\" :name \"go\" :status :running :round 2 :spec (jobs.x) :noise 1 :attention {:total 0}}"}))
+                     (fn [_] {:text "{:id \"j3\" :name \"go\" :status :queued :round 2 :spec (jobs.x) :noise 1 :waiting {:reason :no-tree :radius 2} :attention {:total 0}}"}))
           (.then (fn [{:keys [code out]}]
                    (is (= 0 code))
-                   (is (= {:id "j3" :name "go" :status :running :round 2 :spec '(jobs.x)} (data/read-edn out)))))
+                   (is (= {:id "j3" :name "go" :status :queued :round 2 :spec '(jobs.x) :waiting {:reason :no-tree :radius 2}} (data/read-edn out)))))
           (.then (fn [_] (run-main! state ["list"] (fn [_] {:status 404 :text "{:ok false :reason :not-found}"}))))
           (.then (fn [{:keys [code out]}]
                    (is (= 2 code))

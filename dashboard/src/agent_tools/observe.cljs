@@ -51,8 +51,11 @@
 
 ;; Compact status
 
-(defn job-view [item]
-  (clean-pairs :id (:id item) :name (clip (:name item) 120) :status (:status item) :reflex (:reflex item)))
+(defn job-view
+  "A job row; :waiting is why its check declines (the engine's reason map), when it waits."
+  [item]
+  (clean-pairs :id (:id item) :name (clip (:name item) 120) :status (:status item) :reflex (:reflex item)
+               :waiting (:waiting item)))
 
 (defn attention-item [a]
   (clean-pairs :id (:request-id a) :job (:job-id a) :reason (:reason a) :message (clip (:message a))))

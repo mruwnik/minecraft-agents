@@ -91,9 +91,13 @@
       (:keep (ctx/mem c))
       (if (hostile? c) 0 2)))
 
-(defn check [c]
-  (boolean (or (:started (ctx/mem c))
-               (> (count (present c)) (keep-of c)))))
+(defn check
+  "Started, or more adults of :mob in :radius than the pair rule keeps. Else it waits with reason :too-few (and :mob
+  :keep)."
+  [c]
+  (or (boolean (or (:started (ctx/mem c))
+                   (> (count (present c)) (keep-of c))))
+      (ctx/wait c {:reason :too-few :mob (:mob (:args c)) :keep (keep-of c)})))
 
 (defn finish!
   "Emit the outcome, hand it to the parent and end the job."

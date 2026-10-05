@@ -51,9 +51,13 @@
   (let [{:keys [item allow-bad]} (:args c)]
     (best-food (u/inventory (:primitives c)) allow-bad item)))
 
-(defn check [c]
-  (and (< (.-food (.self (:primitives c))) (:until (:args c)))
-       (some? (carried-best c))))
+(defn check
+  "Hungrier than :until and food carried. Else it waits with reason :not-hungry or :no-food."
+  [c]
+  (cond
+    (>= (.-food (.self (:primitives c))) (:until (:args c))) (ctx/wait c :not-hungry)
+    (nil? (carried-best c)) (ctx/wait c :no-food)
+    :else true))
 
 (defn ^:async round [c]
   (let [{:keys [until]} (:args c)

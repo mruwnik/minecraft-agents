@@ -162,10 +162,11 @@
 
 (defn check
   "A tree is chosen, or every candidate was unreachable (the round warns and
-  finishes), or a tree is in sight."
+  finishes), or a tree is in sight. Else it waits with reason :no-tree (and :radius, :species when given)."
   [c]
   (let [m (ctx/mem c)
         {:keys [radius species]} (:args c)]
-    (boolean (or (:column m)
-                 (seq (:unreachable m))
-                 (candidate c radius species)))))
+    (or (boolean (or (:column m)
+                     (seq (:unreachable m))
+                     (candidate c radius species)))
+        (ctx/wait c (cond-> {:reason :no-tree :radius radius} species (assoc :species species))))))

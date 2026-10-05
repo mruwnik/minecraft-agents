@@ -10,8 +10,8 @@
   output already there, and loads the input and the fuel (worked out from the
   count at one fuel item per 8 coal-items, 1.5 for wood, 0.5 for a stick;
   taken from what is carried when :fuel is nil, coal and charcoal first). Then
-  the job ends its round and its check declines until the cook should be done,
-  so the body does other jobs meanwhile; the next round takes the output. The
+  the job ends its round and its check declines until the cook should be done
+  (job.waiting reason cooking, with :furnace and :ready-at), so the body does other jobs meanwhile; the next round takes the output. The
   wait is decided by the clock, not by the furnace: ready-at is now plus the
   cook time of the items loaded (200 ticks each in a furnace, 100 in the other
   two) plus a margin; the check also wakes the job early once :unlit-from has
@@ -23,7 +23,7 @@
   the furnace must hold after the load, so a restart or a cut before the load
   was noted neither loses the output nor loads twice. Ends with a result
   {:smelted n :wanted n}, plus :reason after a warn (smelt.gave-up) when it
-  gives up: no-furnace, not-a-furnace, furnace-gone (broken or replaced meanwhile), output-gone (input and output both gone: someone emptied it),
+  gives up: no-furnace-seen (no :furnace given and none seen), no-furnace, not-a-furnace, furnace-gone (broken or replaced meanwhile), output-gone (input and output both gone: someone emptied it),
   unreachable, no-item, nothing-smeltable, not-smeltable (the kind of furnace
   cannot cook it, also found when it never lit), no-fuel, unknown-fuel,
   out-of-fuel (leftover input is taken back), furnace-busy (the input slot
@@ -34,7 +34,7 @@
   smelt.gave-up warn, before anything is loaded or taken (:ignore-zones? lifts it).")
 
 (def args
-  {:furnace {:doc "furnace, blast furnace or smoker position {:x :y :z}" :default nil}
+  {:furnace {:doc "furnace, blast furnace or smoker position {:x :y :z}; when nil the first round takes the nearest one the body has seen (perception's memory, never x-ray) within 32 blocks that is still there and cooks :item (any kind when :item is nil), emits smelt.furnace naming it and keeps it; with none seen the job ends with reason no-furnace-seen" :default nil}
    :item {:doc "what to smelt; the first smeltable thing carried when nil" :default nil}
    :count {:doc "how many; all carried (at most one stack) when nil" :default nil}
    :fuel {:doc "fuel item to load; the best carried when nil" :default nil}
@@ -45,6 +45,7 @@
 (def grace-ms 6000)
 (def recheck-ms 6000)
 (def slot-max 64)
+(def seen-radius 32)
 
 ;; ------------------------------------------------------------------ what burns and what cooks
 
@@ -183,6 +184,25 @@
 
 (def furnace-block? #{"furnace" "blast_furnace" "smoker"})
 
+(defn furnace-of
+  "The furnace this job uses: the :furnace arg, else the one its first round chose (job memory), else nil."
+  [c]
+  (or (:furnace (:args c)) (:furnace (ctx/mem c))))
+
+(defn nearest-furnace
+  "The nearest furnace, blast furnace or smoker the body has seen (perception's seenBlocks: memory of what it saw,
+  never x-ray) within seen-radius, still that block now, that cooks item (any kind when item is nil); nil when none."
+  [c item]
+  (let [p (:primitives c)]
+    (when-let [f (aget p "seenBlocks")]
+      (some (fn [b]
+              (let [pos (u/pos-of (.-pos b))
+                    kind (.-name b)]
+                (when (and (or (nil? item) (smelts? kind item))
+                           (= kind (u/block-name p pos)))
+                  pos)))
+            (array-seq (.call f p #js {:radius seen-radius :names (clj->js (vec furnace-block?)) :max 16}))))))
+
 (defn needs-attention?
   "Whether the block at pos is loaded and is no longer a lit furnace: it is not lit (the fuel ran out, or the cook
   is over) or it is not a furnace any more (broken, replaced)."
@@ -193,24 +213,25 @@
              (false? (some-> (.-properties block) .-lit))))))
 
 (defn check
-  "A furnace position is given, and the cook is due: nothing loaded yet, or the clock passed ready-at, or since
-  :unlit-from the furnace block is unlit or gone. Memory, the clock and one block: no window is opened."
+  "The cook is due: no furnace chosen yet (the round chooses one), nothing loaded yet, or the clock passed ready-at,
+  or since :unlit-from the furnace block is unlit or gone. Else it waits with reason :cooking. Memory, the clock and
+  one block: no window is opened."
   [c]
-  (let [furnace (:furnace (:args c))
+  (let [furnace (furnace-of c)
         m (ctx/mem c)
         now (ctx/now c)]
-    (boolean
-     (and furnace
-          (or (nil? (:ready-at m))
-              (>= now (:ready-at m))
-              (and (>= now (:unlit-from m)) (needs-attention? (:primitives c) furnace)))))))
+    (or (nil? furnace)
+        (nil? (:ready-at m))
+        (>= now (:ready-at m))
+        (and (>= now (:unlit-from m)) (needs-attention? (:primitives c) furnace))
+        (ctx/wait c {:reason :cooking :furnace furnace :ready-at (:ready-at m)}))))
 
 ;; ------------------------------------------------------------------ the round
 
 (defn ^:async visit!
   "One furnace visit through act, as a cljs map."
   [c op extra]
-  (let [r (await (ctx/act c :furnace (clj->js (merge {:pos (:furnace (:args c)) :op op} extra))))]
+  (let [r (await (ctx/act c :furnace (clj->js (merge {:pos (furnace-of c) :op op} extra))))]
     (js->clj r :keywordize-keys true)))
 
 (defn wait-until!
@@ -347,11 +368,22 @@
         "unreachable" (give-up! c "unreachable")
         (stop! c (str "furnace " (:status state)))))))
 
-(defn ^:async round
-  "One bounded step: reach the furnace, read it, then load (first) or collect."
-  [c]
-  (let [furnace (:furnace (:args c))
-        owed? (some? (:owed (ctx/mem c)))]
+(defn ^:async round-with
+  "The round once the furnace is known."
+  [c furnace]
+  (let [owed? (some? (:owed (ctx/mem c)))]
     (if-let [v (access/container-refusal c :take furnace)]
       (refuse! c v)
       (await (round-at! c furnace owed?)))))
+
+(defn ^:async round
+  "One bounded step: reach the furnace, read it, then load (first) or collect. Without a :furnace the first round
+  chooses the nearest seen one (kept in memory), or ends no-furnace-seen."
+  [c]
+  (if-let [furnace (furnace-of c)]
+    (await (round-with c furnace))
+    (if-let [pos (nearest-furnace c (:item (:args c)))]
+      (do (ctx/update-mem! c assoc :furnace pos)
+          (ctx/emit! c :smelt.furnace :info {:furnace pos :text (str "smelting at the furnace seen at " (:x pos) " " (:y pos) " " (:z pos))})
+          (await (round-with c pos)))
+      (stop! c "no-furnace-seen"))))

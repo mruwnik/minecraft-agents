@@ -193,6 +193,9 @@
    ["a death without a known cause omits it"
     "{:mode :scheduled :current nil :died {:pos {:x 1 :y 2 :z 3} :ago-ms 1000 :despawns-in-ms 299000}}"
     "{:mode :scheduled :idle true :died {:at [1 2 3] :ago-s 1 :pile-at [1 2 3] :despawns-in-s 299}}"]
+   ["a queued job shows why it waits"
+    "{:mode :scheduled :current nil :jobs {:total 1 :items [{:id \"j2\" :name \"smelt\" :status :queued :waiting {:reason :cooking :ready-at 5}}]}}"
+    "{:mode :scheduled :idle true :jobs {:total 1 :items [{:id \"j2\" :name \"smelt\" :status :queued :waiting {:reason :cooking :ready-at 5}}]}}"]
    ["an error answer passes through"
     "{:ok false :reason :nope}"
     "{:ok false :reason :nope}"]])

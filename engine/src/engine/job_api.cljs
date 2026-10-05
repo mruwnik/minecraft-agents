@@ -17,8 +17,9 @@
           :else :absent)))
 (defn summary [eng id]
   (when-let [inst (get-in (core/state eng) [:instances id])]
-    {:id id :name (text (expr/label (:spec inst)) 160) :status (status eng id)
-     :round (:round inst) :hold? (boolean (:hold? inst))}))
+    (cond-> {:id id :name (text (expr/label (:spec inst)) 160) :status (status eng id)
+             :round (:round inst) :hold? (boolean (:hold? inst))}
+      (core/waiting eng id) (assoc :waiting (core/waiting eng id)))))
 (defn list-jobs [eng offset limit]
   (let [ids (:list (core/state eng))
         items (mapv #(summary eng %) (take limit (drop offset ids)))

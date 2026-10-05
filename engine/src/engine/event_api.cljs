@@ -71,6 +71,7 @@
 (def max-catalog-page-limit 64)
 (def catalog-doc-limit 1200)
 (def inventory-stack-limit 46)
+(def armour-slots #{:head :torso :legs :feet})
 (def equipment-slots [:head :torso :legs :feet :offHand :mainHand])
 
 (defn short-text [x n]
@@ -97,8 +98,9 @@
           all-stacks (or (:inventory self) [])
           stacks (->> all-stacks (take inventory-stack-limit) (keep inventory-stack) vec)
           equipment (into {} (keep (fn [slot]
-                                     (when-let [item (equipment-item (get-in self [:equipment slot]))]
-                                       [slot item]))) equipment-slots)]
+                                     (if-let [item (equipment-item (get-in self [:equipment slot]))]
+                                       [slot item]
+                                       (when (armour-slots slot) [slot :empty])))) equipment-slots)]
       (cond-> {:ok true :inventory stacks}
         (seq equipment) (assoc :equipment equipment)
         (> (count all-stacks) inventory-stack-limit) (assoc :more? true)))))
@@ -140,14 +142,17 @@
     (= id (:pending-reflex s)) :reflex
     :else :unknown))
 
-(defn job-summary [s id]
+(defn job-summary
+  "A queue row; waiting is why the job waits (its check's reason), or nil."
+  [s id waiting]
   (when-let [inst (get-in s [:instances id])]
-    {:id id
-     :name (short-text (expr/label (:spec inst)) 160)
-     :round (:round inst)
-     :status (instance-status s id)
-     :hold? (boolean (:hold? inst))
-     :reflex (:reflex inst)}))
+    (cond-> {:id id
+             :name (short-text (expr/label (:spec inst)) 160)
+             :round (:round inst)
+             :status (instance-status s id)
+             :hold? (boolean (:hold? inst))
+             :reflex (:reflex inst)}
+      waiting (assoc :waiting (bounded-value waiting 0 (volatile! 32))))))
 
 (defn attention-summary [[request-id request]]
   (let [event (:event request)]
@@ -179,7 +184,7 @@
         manual @(:manual eng)
         limit (or requested-limit status-job-limit)
         queue-count (count (:list s))
-        queue (mapv #(job-summary s %) (take limit (:list s)))
+        queue (mapv #(job-summary s % (core/waiting eng %)) (take limit (:list s)))
         attention (->> (:attention s)
                        (sort-by (fn [[id req]] [(- (or (:updated-at req) 0)) id]))
                        (take attention-limit)
@@ -201,7 +206,7 @@
      :health (when (number? (.-health self)) (.-health self))
      :food (when (number? (.-food self)) (.-food self))
      :current (when current
-                (when-let [summary (job-summary s current-id)]
+                (when-let [summary (job-summary s current-id nil)]
                   (assoc summary
                          :status (cond (core/running eng) :running
                                        (:reflex current) :reflex
@@ -235,6 +240,7 @@
          :spec (bounded-value (:spec inst) 0 budget)
          :args (bounded-value args 0 budget) :bounded? true :round (:round inst) :hold? (boolean (:hold? inst))
          :reflex (:reflex inst) :status (instance-status s id)
+         :waiting (some-> (core/waiting eng id) (bounded-value 0 (volatile! 32)))
          :current? (= id (:id (core/holder eng)))
          :failure (when failure {:error (short-text (:error failure) 1000) :at (:t failure)})
          :attention {:total (count requests) :items (->> requests (take limit) vec)

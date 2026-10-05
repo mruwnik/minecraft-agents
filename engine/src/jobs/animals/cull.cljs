@@ -96,9 +96,12 @@
          (sort-by (juxt #(if (false? (.-hittable %)) 1 0)
                         #(u/dist here (u/pos-of (.-pos %))))))))
 
-(defn check [c]
-  (boolean (or (:started (ctx/mem c))
-               (> (count (:adults (census c))) (:keep (:args c))))))
+(defn check
+  "Started, or more adults of :mob inside the bound than :keep. Else it waits with reason :too-few (and :mob :keep)."
+  [c]
+  (or (boolean (or (:started (ctx/mem c))
+                   (> (count (:adults (census c))) (:keep (:args c)))))
+      (ctx/wait c {:reason :too-few :mob (:mob (:args c)) :keep (:keep (:args c))})))
 
 (defn finish!
   "Emit the outcome, hand it to the parent and end the job."

@@ -472,7 +472,7 @@
         wrote! (fn [kind] (emit! eng {:source :job :kind :memory_written :level :debug :job id
                                       :chain chain :round round :reflex reflex :memory kind}))]
     {:engine eng :primitives (:primitives eng) :token token :args args :id id
-     :root root :slots slots :chain chain :round round :reflex reflex
+     :root root :slots slots :chain chain :round round :reflex reflex :wait (:wait base)
      :view #(mem/view store)
      :update-mem (fn [f more]
                    (check!)
@@ -569,18 +569,51 @@
       fallback)))
 
 (defn check-ctx
-  "The ctx a listed job's check receives: memory and sensing, no token."
-  [eng inst args]
+  "The ctx a listed job's check receives: memory and sensing, no token. wait is the atom ctx/wait notes a reason in."
+  [eng inst args wait]
   (make-ctx eng {:root (:id inst) :slots [] :chain [(:id inst)] :token nil
-                 :args args :round (:round inst) :reflex (:reflex inst)}))
+                 :args args :round (:round inst) :reflex (:reflex inst) :wait wait}))
+
+(defn wait-reason
+  "A check's reason as a map with :reason: a keyword r is {:reason r}; no reason (a plain false) is :not-ready."
+  [r]
+  (cond (map? r) r
+        (some? r) {:reason r}
+        :else {:reason :not-ready}))
+
+(defn waiting-text [{:keys [reason] :as r}]
+  (let [more (dissoc r :reason)]
+    (str "waiting: " (if (keyword? reason) (name reason) reason) (when (seq more) (str " " (pr-str more))))))
+
+(defn note-waiting!
+  "Listed job id's check declined with reason (or none): emit job.waiting when the reason is new for this wait, and
+  keep it for jobs show and observe. A passing check (reason ::passed) ends the wait."
+  [eng id reason]
+  (let [before (get @(:waiting eng) id)]
+    (if (= ::passed reason)
+      (when before (swap! (:waiting eng) dissoc id))
+      (let [r (wait-reason reason)]
+        (when (not= before r)
+          (swap! (:waiting eng) #(assoc (select-keys % (:list (state eng))) id r))
+          (emit! eng (merge (job-fields eng id)
+                            {:source :job :kind :waiting :level :info :data r :text (waiting-text r)})))))))
+
+(defn waiting
+  "Why listed job id waits: the reason map of its last declining check, or nil while its check passes."
+  [eng id]
+  (some-> (:waiting eng) deref (get id)))
 
 (defn check-passes?
-  "Whether listed instance id's check passes now. A throwing check declines."
+  "Whether listed instance id's check passes now. A throwing check declines. A declining check's reason (ctx/wait)
+  is told once with note-waiting!."
   [eng id]
-  (let [inst (get-in (state eng) [:instances id])]
-    (boolean (call-guarded eng (str "check of " id) false
-                           #(let [[def args] (job-of eng inst)]
-                              ((:check def) (check-ctx eng inst args)))))))
+  (let [inst (get-in (state eng) [:instances id])
+        wait (atom nil)
+        ok? (boolean (call-guarded eng (str "check of " id) false
+                                   #(let [[def args] (job-of eng inst)]
+                                      ((:check def) (check-ctx eng inst args wait)))))]
+    (note-waiting! eng id (if ok? ::passed @wait))
+    ok?))
 
 (defn choose-listed
   "The listed job to run next, never a failed one: a holder (or nothing, while its check declines),
@@ -1178,6 +1211,7 @@
              :running (atom nil)
              :tokens (atom 0)
              :manual (atom nil)
+             :waiting (atom {})
              :world-ops (atom {:active nil :records {} :order []})
              :acts (atom {})
              :said (atom [])

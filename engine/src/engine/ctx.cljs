@@ -77,8 +77,17 @@
   [ctx slot]
   ((:child-result ctx) slot))
 
+(defn wait
+  "For a check that declines: false, noting why the job waits. reason is a keyword or a map with :reason (keep its
+  fields stable while the wait lasts: the scheduler tells a reason once, and again only when it changes). Outside a
+  check the scheduler runs (a round, a test) it only returns false."
+  [ctx reason]
+  (some-> (:wait ctx) (reset! reason))
+  false)
+
 (defn check-child
-  "Run job's check as the child in slot would see it, for a parent's check."
+  "Run job's check as the child in slot would see it, for a parent's check. A reason the child's check gives with
+  wait is the parent's too, when the parent declines."
   [ctx slot job args]
   (let [[def args] (child-job ctx job args)
         slots (conj (:slots ctx) slot)]

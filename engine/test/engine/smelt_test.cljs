@@ -7,6 +7,8 @@
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.fake :as fake]
+            [engine.fake.raw-world :as fake-raw]
+            [engine.perception :as perception]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.items.smelt :as smelt]))
@@ -190,8 +192,8 @@
     7000 "smoker" false
     7000 "blast_furnace" false))
 
-(deftest the-check-needs-a-furnace-position
-  (is (false? (boolean (smelt/check {:args {:furnace nil} :root "j1" :slots [] :view (fn [] {:now 0 :data {}})})))))
+(deftest without-a-furnace-the-first-round-runs-to-choose-one
+  (is (true? (boolean (smelt/check {:args {:furnace nil} :root "j1" :slots [] :view (fn [] {:now 0 :data {}})})))))
 
 ;; ------------------------------------------------------------------ against the fake world
 
@@ -572,3 +574,51 @@
         (is (= {:smelted 3 :wanted 3} (await (result-of base-world {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 3}))))
         (is (= {:smelted 0 :wanted 0 :reason "no-furnace"}
                (await (result-of (dissoc base-world :blocks) {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 3}))))))))
+
+;; ------------------------------------------------------------------ no :furnace: the nearest one seen
+;; The fake body stands at 0,64,0 facing south (+z): what lies ahead is seen.
+
+(defn seeing-setup
+  "setup over primitives that see through the body's perception (no x-ray)."
+  [world]
+  (let [clock (atom 1000000)
+        [seen sink] (tu/legacy-capture-sink)
+        raw (tu/fake-on-floor world)
+        p (perception/wrap raw (perception/create (fake-raw/create raw) {:radius 20 :ray-deg 1}))
+        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+    {:eng eng :p p :seen seen :clock clock}))
+
+(defn ^:async seeing-ticks [{:keys [eng p]} n]
+  (dotimes [_ n]
+    (perception/pass! (aget p "perception"))
+    (await (core/tick! eng))))
+
+(def iron-and-coal [{:name "raw_iron" :count 5} {:name "coal" :count 3}])
+
+(deftest without-a-furnace-it-uses-the-nearest-seen-one-that-cooks-the-item
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (seeing-setup {:blocks {"1,64,2" "smoker" "-1,64,4" "furnace" "0,64,7" "furnace"}
+                                                         :inventory iron-and-coal})]
+          (core/submit! eng '(jobs.items.smelt {:item "raw_iron" :count 3}) {})
+          (await (seeing-ticks s 3))
+          (is (= {:name "raw_iron" :count 3} (:input (get (:furnaces @(fake/state p)) [-1 64 4])))
+              "the nearer furnace; the nearer smoker cannot cook iron")
+          (is (nil? (:input (get (:furnaces @(fake/state p)) [0 64 7]))))
+          (is (= {:x -1 :y 64 :z 4} (:furnace (first (of-kind seen :smelt.furnace))))
+              "the chosen furnace is told")
+          (is (= [:cooking] (mapv :reason (of-kind seen :waiting))) "while it cooks the job says why it waits"))))))
+
+(deftest without-a-furnace-and-none-seen-it-ends-with-a-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (seeing-setup {:inventory iron-and-coal})
+              before (inv-of p)]
+          (core/submit! eng '(jobs.items.smelt {:item "raw_iron" :count 3}) {})
+          (await (seeing-ticks s 3))
+          (is (= ["no-furnace-seen"] (mapv :reason (of-kind seen :smelt.gave-up))))
+          (is (empty? (:list (core/state eng))))
+          (is (= before (inv-of p))))))))

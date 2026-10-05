@@ -50,15 +50,15 @@
 
 (defn check
   "Nothing to plant (the round finishes), or a matching sapling is carried
-  and the spot no longer holds a log."
+  and the spot no longer holds a log. Else it waits with reason :no-sapling (and :species) or :log-on-spot (and :pos)."
   [c]
   (let [p (:primitives c)
         t (target-of (debts c) (:args c))]
     (cond
       (:meal (ctx/mem c)) true
       (nil? t) true
-      (nil? (sapling-for (u/inventory p) (:species t))) false
-      (log-name? (some-> (.blockAt p (clj->js (:pos t))) .-name)) false
+      (nil? (sapling-for (u/inventory p) (:species t))) (ctx/wait c {:reason :no-sapling :species (:species t)})
+      (log-name? (some-> (.blockAt p (clj->js (:pos t))) .-name)) (ctx/wait c {:reason :log-on-spot :pos (:pos t)})
       :else true)))
 
 (defn ^:async round
