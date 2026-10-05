@@ -166,3 +166,45 @@
       (is (pos? dead))
       (is (false? (reach/proved-way? kind-at pr [2 64 7] [0 64 0])) "settled by the proof")
       (is (= dead (.-size (.-dead pr))) "no new cell searched"))))
+
+;; ---- light (card 01b5462f): a mob in the dark is seen only close up
+
+(defn dark! [p cells] (swap! (fake/state p) assoc :light cells))
+(defn dark-around! [p mob-x mob-z]
+  (dark! p {[mob-x 64 mob-z] [0 0] [mob-x 65 mob-z] [0 0]}))
+(defn known [p] (vec (.knownMobs p)))
+
+(deftest a-silent-creeper-in-the-dark-beyond-the-threshold-is-not-seen
+  (let [{:keys [p]} (rig {:entities [(mob 1 "creeper" 0 8)]})]
+    (dark-around! p 0 8)
+    (is (= [] (known p)))
+    (is (= [] (danger-ids p)))))
+
+(deftest a-silent-creeper-in-the-dark-within-the-threshold-is-seen
+  (let [{:keys [p]} (rig {:entities [(mob 1 "creeper" 0 3)]})]
+    (dark-around! p 0 3)
+    (is (= [1] (danger-ids p)))
+    (is (true? (.-seen (first (known p)))))))
+
+(deftest a-creeper-lit-by-a-torch-in-the-dark-is-seen-far
+  (let [{:keys [p]} (rig {:entities [(mob 1 "creeper" 0 8)]})]
+    (dark! p {[0 64 8] [0 14] [0 65 8] [0 14]})
+    (is (= [1] (danger-ids p)))))
+
+(deftest a-zombie-in-the-dark-is-heard-not-seen
+  (let [{:keys [p]} (rig {:entities [(mob 1 "zombie" 0 8)]})]
+    (dark-around! p 0 8)
+    (let [m (first (known p))]
+      (is (some? m) "heard within 16 as before")
+      (is (false? (.-seen m)))
+      (is (true? (.-heard m))))))
+
+(deftest a-seen-mob-that-walks-into-the-dark-stays-remembered
+  (let [{:keys [p clock]} (rig {:entities [(mob 1 "creeper" 0 8)]})]
+    (is (= [1] (danger-ids p)) "seen in the light")
+    (dark-around! p 0 8)
+    (later! clock 1000)
+    (let [m (first (known p))]
+      (is (some? m))
+      (is (true? (.-remembered m)))
+      (is (true? (.-seen m))))))

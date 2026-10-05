@@ -25,7 +25,9 @@
   A sample (every `:mob-ms`, and at each knownMobs call) reads the hostiles within `:mob-scan` of the primitives:
     heard  within `:hearing` (16) of the eye, unless the mob makes no sound while it stalks (`silent-mobs`: creeper);
     seen   a clear line from the eye to its middle (the entity's `visible` field: the same sight rule as the sight
-           table) and within `:radius`, and either inside the view cone or heard (a player turns to a sound it hears).
+           table) and within `:radius`, lit (the cell of its feet or head bright enough to make out by the same light rule as
+           blocks; one standing in the dark is seen only within `:dark-sight` (4), as a player at default brightness
+           makes out a dark shape only close up), and either inside the view cone or heard (a player turns to a sound it hears).
   A sensed mob's entry takes its place and time (seen-at when seen). An entry not sensed now stays at its last place
   while the mob could not have drifted `:mob-drift` (16) blocks since (time x `mob-speed`, blocks a second): about 6 s
   for a zombie. An entry whose id the client no longer tracks (dead, despawned, far off) is dropped at once.
@@ -53,6 +55,7 @@
    :mob-ms 250            ; a mob sample this often
    :mob-scan 64           ; hostiles within this of the body are sampled
    :hearing 16            ; a mob within this of the eye is heard
+   :dark-sight 4          ; a mob standing in the dark (light too low to make out) is seen only within this
    :mob-drift 16})        ; a mob not sensed is forgotten once it could have walked this far
 
 (def section-bytes 12288) ; ids (8192) and per-cell seen times (4096)
@@ -564,15 +567,25 @@
 
 (def mob-middle 0.9)
 
+(defn mob-lit?
+  "Whether the mob at pos stands in light bright enough to make out: the light rule of the sight table, read at the
+  cells of its feet and head."
+  [{:keys [raw opts st]} ^js pos]
+  (let [^js visible (or (.-visible ^js st) (set! (.-visible ^js st) (table-now raw (:seeing-min opts))))
+        x (js/Math.floor (.-x pos)) z (js/Math.floor (.-z pos)) y (js/Math.floor (.-y pos))
+        lit? (fn [yy] (== 1 (aget visible (.lightAt ^js raw x yy z))))]
+    (or (lit? y) (lit? (inc y)))))
+
 (defn mob-sense
   "How the body senses hostile e (an entities() entry) from eye: :seen, :heard or nil (see the ns doc)."
-  [{:keys [opts grid]} ^js eye ^js e]
+  [{:keys [opts grid] :as per} ^js eye ^js e]
   (let [^js pos (.-pos e)
         vx (- (.-x pos) (.-x eye)) vy (- (+ (.-y pos) mob-middle) (.-y eye)) vz (- (.-z pos) (.-z eye))
         d (js/Math.hypot vx vy vz)
         heard? (and (<= d (:hearing opts)) (not (silent-mobs (.-name e))))
         seen? (and (true? (.-visible e))
                    (<= d (:radius opts))
+                   (or (<= d (:dark-sight opts)) (mob-lit? per pos))
                    (or heard? (in-cone? (basis (.-yaw eye) (.-pitch eye)) (:hx grid) (:hy grid) vx vy vz)))]
     (cond seen? :seen heard? :heard :else nil)))
 
