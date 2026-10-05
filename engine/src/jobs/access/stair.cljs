@@ -233,8 +233,7 @@
   [c in cell cut accept]
   (let [p (:primitives c)
         block ((:block-at in) cell)
-        tries (get-in (ctx/mem c) [:tries cell] 0)
-        tool (tools/best-tool (map :name (u/inventory p)) block)]
+        tries (get-in (ctx/mem c) [:tries cell] 0)]
     (cond
       (>= tries max-cell-digs) {:reason :refills :cell cell :block block}
       (unbreakable block) {:reason :unbreakable :cell cell :block block}
@@ -242,8 +241,7 @@
       (not (room-for? p (mine/item-name {:block block}))) {:reason :inventory-full :cell cell :block block}
       :else
       (do
-        (when (and tool (not= tool (.-held (.self p))))
-          (await (ctx/act c :equip #js {:item tool :dest "hand"})))
+        (await (tools/equip-for! c block))
         (let [v (cell-verdict (assoc in :cell cell) cut)
               block ((:block-at in) cell)]
           (cond

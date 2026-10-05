@@ -229,13 +229,13 @@
           (is (= :none (:reason (done-event s))))
           (is (finished? s)))))))
 
-(deftest the-best-tool-is-equipped
+(deftest the-cheapest-tool-is-equipped
   (async done
     (tu/run-async done
       (fn ^:async t []
         (doseq [[block carried expected]
-                [["sand" ["wooden_shovel" "iron_shovel"] "iron_shovel"]
-                 ["stone" ["wooden_pickaxe" "stone_pickaxe"] "stone_pickaxe"]
+                [["sand" ["wooden_shovel" "iron_shovel"] "wooden_shovel"]
+                 ["stone" ["wooden_pickaxe" "stone_pickaxe"] "wooden_pickaxe"]
                  ["oak_log" ["iron_axe" "diamond_pickaxe"] "iron_axe"]]]
           (let [s (start {:world {:blocks {"3,64,0" block} :inventory (mapv #(hash-map :name % :count 1) carried)}})]
             (core/submit! (:eng s) (spec {:block block :count 1}) {})
@@ -885,3 +885,14 @@
           (is (empty? (watched lit)))
           (is (= [[1 64 0]] (dug-cells dark)))
           (is (seq (watched dark))))))))
+
+(deftest the-cheapest-pickaxe-that-harvests-is-held-and-wear-is-reported
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks {"3,64,0" "stone"}
+                                :inventory [{:name "iron_pickaxe" :count 1 :durability 200 :maxDurability 250}
+                                            {:name "stone_pickaxe" :count 1 :durability 100 :maxDurability 131}]}})]
+          (core/submit! (:eng s) (spec {:block "stone" :count 1}) {})
+          (await (run-ticks s 10))
+          (is (= "stone_pickaxe" (.-held (.self (:p s))))))))))

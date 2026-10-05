@@ -29,9 +29,10 @@
     (<= (+ (* (d :x) (d :x)) (* (d :y) (d :y)) (* (d :z) (d :z))) (* range range))))
 
 (defn inventory
-  "The carried items as cljs maps {:name :count :slot}."
+  "The carried items as cljs maps {:name :count :slot}, with :durability (left) and :max for tools."
   [p]
-  (mapv (fn [i] {:name (.-name i) :count (.-count i) :slot (.-slot i)})
+  (mapv (fn [i] (cond-> {:name (.-name i) :count (.-count i) :slot (.-slot i)}
+                  (some? (.-durability i)) (assoc :durability (.-durability i) :max (.-maxDurability i))))
         (array-seq (.-inventory (.self p)))))
 
 (def inventory-slots

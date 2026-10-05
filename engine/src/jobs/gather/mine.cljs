@@ -224,9 +224,7 @@
   "Hold the best carried tool for block (the mined block when not given)."
   ([c] (equip! c (:block (:args c))))
   ([c block]
-   (let [tool (tools/best-tool (map :name (u/inventory (:primitives c))) block)]
-     (when (and tool (not= tool (.-held (.self (:primitives c)))))
-       (await (ctx/act c :equip (clj->js {:item tool :dest "hand"})))))))
+   (await (tools/equip-for! c block))))
 
 (defn drop-radius
   "The entity search radius that covers :collect-radius around the last dug cell, seen from the body: the body

@@ -407,10 +407,7 @@
 (defn ^:async equip-for!
   "Hold the carried tool that suits the block, when there is one."
   [c block]
-  (let [p (:primitives c)
-        tool (tools/best-tool (map :name (u/inventory p)) block)]
-    (when (and tool (not= tool (.-held (.self p))))
-      (await (ctx/act c :equip #js {:item tool :dest "hand"})))))
+  (tools/equip-for! c block))
 
 (defn ^:async dig!
   "Dig the block at target (a cell the planned cell owes work on). on-dug is called with c when it went."

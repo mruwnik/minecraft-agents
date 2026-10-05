@@ -45,14 +45,85 @@
   (when (and (seq harvest-tools) (not-any? (set harvest-tools) item-names))
     (cheapest-tool harvest-tools)))
 
-(defn ^:async equip-for!
-  "Hold the best carried tool for block-name (best-tool) before digging it; nothing when none is carried or it is
-  already held. Resolves to the equip result, or nil."
-  [c block-name]
+(defn suited-item
+  "The carried item (maps {:name :durability ...}) a careful player digs block-name with: of the right kind and, when
+  harvest-tools (the block's harvest tool names) is not empty, one of them; the cheapest material, the most worn of
+  that material first. nil for none."
+  [items block-name harvest-tools]
+  (let [suffix (str "_" (tool-kind block-name))
+        ok (set harvest-tools)
+        rank (fn [n] (let [i (.indexOf cheapness (first (str/split n #"_")))] (if (neg? i) (count cheapness) i)))]
+    (->> items
+         (filter #(and (str/ends-with? (:name %) suffix) (or (empty? ok) (ok (:name %)))))
+         (sort-by (juxt (comp rank :name) #(or (:durability %) js/Infinity)))
+         first)))
+
+(defn suited-tool
+  "Name of suited-item, or nil."
+  [items block-name harvest-tools]
+  (:name (suited-item items block-name harvest-tools)))
+
+(def low-fraction "A tool at or under this fraction of its durability is low." 0.1)
+
+(defn wear-event
+  "What changed between prev and now (maps {:name :durability :max :n}: the tool last held and the carried tools of
+  that name now, :n their count; now nil for none): :tool-broke when fewer are carried, :tool-low when the tool just
+  fell to the low fraction of its durability, else nil."
+  [prev now]
+  (when prev
+    (let [low? (fn [t] (and (:durability t) (:max t) (<= (:durability t) (* low-fraction (:max t)))))]
+      (cond
+        (< (:n now 0) (:n prev 1)) (when (<= (or (:durability prev) 0) 20) :tool-broke)
+        (and (low? now) (not (low? prev))) :tool-low))))
+
+(defn pick
+  "The carried item to dig block-name with (suited-item against the block's harvest tools), or nil."
+  [p block-name]
+  (suited-item (u/inventory p) block-name (some-> (.harvestTools p block-name) js->clj)))
+
+(defn wear-snapshot
+  "{:name :durability :max :n} of the carried tool item: its most worn copy and how many of that name are carried."
+  [p item]
+  (let [same (filter #(= (:name item) (:name %)) (u/inventory p))
+        worn (first (sort-by #(or (:durability %) js/Infinity) same))]
+    (assoc (select-keys worn [:name :durability :max]) :n (count same))))
+
+(defn ^:async note-wear!
+  "Emit :tool.low or :tool.broke (agent-facing, :warn) when the tool picked last time wore out since; ends with a
+  :tool.none warning when no tool of its kind is left."
+  [c]
   (let [p (:primitives c)
-        tool (when block-name (best-tool (map :name (u/inventory p)) block-name))]
-    (when (and tool (not= tool (.-held (.self p))))
-      (await (ctx/act c :equip #js {:item tool :dest "hand"})))))
+        prev (:tool-wear (ctx/mem c))
+        now (when prev (wear-snapshot p prev))
+        ev (wear-event prev now)]
+    (when ev
+      (ctx/emit! c (if (= ev :tool-broke) :tool.broke :tool.low) :warn
+                 {:tool (:name prev) :durability (:durability now) :left (:n now)})
+      (when (and (= ev :tool-broke) (zero? (:n now))
+                 (not-any? #(str/ends-with? (:name %) (str "_" (last (str/split (:name prev) #"_")))) (u/inventory p)))
+        (ctx/emit! c :tool.none :warn {:tool (:name prev)})))))
+
+(defn ^:async equip-tool!
+  "Hold the tool a careful player digs block-name with (pick: cheapest that harvests, most worn first); with
+  {:fast true} the best carried tool (best-tool) for a reflex dig. Emits :tool.low / :tool.broke / :tool.none for the
+  tool held last time (note-wear!). Nothing when none is carried or it is held. Resolves to the equip result, or nil."
+  [c block-name opts]
+  (let [p (:primitives c)
+         _ (await (note-wear! c))
+         item (when block-name
+                (if (:fast opts)
+                  (some->> (best-tool (map :name (u/inventory p)) block-name) (assoc {} :name))
+                  (pick p block-name)))
+         tool (:name item)]
+     (when tool
+       (ctx/update-mem! c assoc :tool-wear (wear-snapshot p item)))
+     (when (and tool (not= tool (.-held (.self p))))
+       (await (ctx/act c :equip #js {:item tool :dest "hand"})))))
+
+(defn equip-for!
+  "equip-tool! with the default (cheapest suited) choice; or with opts {:fast true}. A promise."
+  ([c block-name] (equip-tool! c block-name nil))
+  ([c block-name opts] (equip-tool! c block-name opts)))
 
 (defn can-harvest?
   "Whether the carried tools harvest block-name (it drops itself or its item): the block's minecraft-data

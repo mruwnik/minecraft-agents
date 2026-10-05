@@ -490,7 +490,10 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       thundering: (bot.rainState ?? 0) > RAIN_LEVEL && (bot.thunderState ?? 0) > THUNDER_LEVEL,
       held: bot.heldItem?.name ?? null,
       equipment: equipment(),
-      inventory: inventory().map(i => ({ name: i.name, count: i.count, slot: i.slot }))
+      inventory: inventory().map(i => {
+        const max = bot.registry?.itemsByName?.[i.name]?.maxDurability
+        return { name: i.name, count: i.count, slot: i.slot, ...(max > 0 && { durability: max - (i.durabilityUsed ?? 0), maxDurability: max }) }
+      })
     }
   }
 

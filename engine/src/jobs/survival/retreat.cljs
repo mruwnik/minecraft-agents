@@ -586,7 +586,7 @@
       (not (and (= x (:x roof)) (= z (:z roof)))) (await (abandon-refuge! c))
       (<= y target-y) (await (plug! c refuge))
       (sh/solid-at? p below)
-      (let [_ (await (tools/equip-for! c (u/block-name p below)))
+      (let [_ (await (tools/equip-for! c (u/block-name p below) {:fast true}))
             r (await (tidy/dig! c below true))]
         (if (= "dug" (.-status r))
           (do (await (dig-in/collect-drops! c blocks (.-drops r))) :continue)

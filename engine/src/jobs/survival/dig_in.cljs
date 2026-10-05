@@ -184,7 +184,7 @@
                       (recur (rest cells)))
 
                   :else
-                  (let [_ (await (tools/equip-for! c (u/block-name (:primitives c) cell)))
+                  (let [_ (await (tools/equip-for! c (u/block-name (:primitives c) cell) {:fast true}))
                         d (await (tidy/dig! c cell true))]
                     (ctx/update-mem! c update :cleared (fnil conj #{}) cell)
                     (when (not= "dug" (.-status d))
@@ -272,7 +272,7 @@
         (if (< (:y (sh/feet p)) before)
           (do (ctx/update-mem! c dissoc :failures) :continue)
           (fail-site! c :descent-stalled (str "cannot descend into the pit: " (.-status r)))))
-      :else (let [_ (await (tools/equip-for! c name))
+      :else (let [_ (await (tools/equip-for! c name {:fast true}))
                   r (await (tidy/dig! c below true))]
               (if (= "dug" (.-status r))
                 (let [placeable (some #(some #{(.-name %)} blocks) (array-seq (.-drops r)))]
@@ -613,7 +613,7 @@
   (let [p (:primitives c)
         cell (first (filter #(sh/solid-at? p %) door))]
     (if cell
-      (let [_ (await (tools/equip-for! c (u/block-name p cell)))
+      (let [_ (await (tools/equip-for! c (u/block-name p cell) {:fast true}))
             r (await (tidy/dig! c cell))]
         (if (= "dug" (.-status r))
           :continue
