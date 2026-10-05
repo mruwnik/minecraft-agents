@@ -156,3 +156,31 @@
     "east" "found" 1 true
     "north" "found" 1 true
     "west" "found" 1 true))
+
+(defn sill-room
+  "a room a step up: its floor (and the doorway's sill) at y 64, so its feet cells are y 65, behind a wall x 8 with an
+  oak door in it at z 5 standing on the sill; outside, west of the wall, feet cells are y 64"
+  [facing open]
+  (wall [9 64 -2 20 64 40 "stone"] [8 64 5 8 64 5 "stone"]
+        [8 65 5 8 65 5 "oak_door" {:half "lower" :facing facing :open open}]
+        [8 66 5 8 66 5 "oak_door" {:half "upper" :facing facing :open open}]))
+
+(deftest out-of-a-room-through-a-door-on-a-sill-one-step-down
+  (are [facing open from]
+       (= "found" (:status (run (sill-room facing open) from (near 2 64 5) {:goalFlood 0})))
+    "east" false {:x 12 :y 65 :z 5}
+    "west" false {:x 12 :y 65 :z 5}
+    "east" true {:x 12 :y 65 :z 5}
+    "west" true {:x 12 :y 65 :z 5}
+    "east" false {:x 8 :y 65 :z 5}
+    "west" false {:x 8 :y 65 :z 5}
+    "east" true {:x 8 :y 65 :z 5}
+    "west" true {:x 8 :y 65 :z 5}))
+
+(deftest into-a-room-through-a-door-on-a-sill-one-step-up
+  (are [facing open]
+       (= "found" (:status (run (sill-room facing open) {:x 2 :y 64 :z 5} (near 12 65 5) {:goalFlood 0})))
+    "east" false
+    "west" false
+    "east" true
+    "west" true))

@@ -271,3 +271,26 @@
           (is (= 1 (clicks p)))
           (is (= [gate-cell] (mapv :cell (opened eng))) "the entry stays for the trigger")
           (is (= [[5 64 0]] (mapv :cell (events-of s :door-left-open)))))))))
+
+;; ------------------------------------------------------------------ a door on a sill, a step above the ground outside
+
+(defn sill-hut-world
+  "A room a step up (floor x 6..12 at y 64, feet y 65) behind the wall x 5, whose oak door at z 0 stands on a stone sill
+  at y 64; outside, west of the wall, the feet are at y 64. The door open or shut, facing east or west; the body at pos."
+  [pos open facing]
+  {:self {:pos pos}
+   :blocks (merge flat (box 6 64 -3 12 64 3 "stone") (box 5 64 -3 5 67 3 "stone")
+                  {"5,65,0" "oak_door" "5,66,0" "oak_door"})
+   :states {"5,65,0" {:open open :half "lower" :facing facing} "5,66,0" {:open open :half "upper" :facing facing}}})
+
+(deftest out-of-and-into-a-room-through-a-door-on-a-sill
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [open [false true]
+                facing ["east" "west"]
+                [from to] [[{:x 10 :y 65 :z 0} [0 64 0]] [{:x 5 :y 65 :z 0} [0 64 0]] [{:x 0 :y 64 :z 0} [10 65 0]]]]
+          (let [{:keys [out p]} (await (go! (sill-hut-world from open facing) {:pos to :range 0}))]
+            (is (= {:arrived true} @out) (str open " " facing " " from))
+            (is (= to (at p)) (str open " " facing " " from))
+            (is (= [open open] (mapv #(open? p %) [[5 65 0] [5 66 0]])) "the door is left as it was")))))))

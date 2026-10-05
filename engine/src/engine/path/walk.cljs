@@ -60,14 +60,24 @@
                                  (zero? (aget openable id)) (zero? (aget hazard id))))
                    (range 1 (.-length top))))))
 
+(defn wall-cells
+  "The cells [x y z] of walls ({:x :y :z} maps), each with the cell over it when the block there now stands taller than
+  a block (a fence gate, 1.5): the body can no more jump onto it than through it."
+  [snapshot table walls]
+  (let [top (.-top table)]
+    (into #{} (mapcat (fn [{:keys [x y z]}]
+                        (if (> (aget top (.stateAt snapshot x y z)) 16) [[x y z] [x (inc y) z]] [[x y z]])))
+          walls)))
+
 (defn with-walls
-  "pw (the primitives' pathWorld) with the cells walls ({:x :y :z} maps) read as stone: a cell the walk found it cannot pass."
+  "pw (the primitives' pathWorld) with the cells walls ({:x :y :z} maps) read as stone: a cell the walk found it cannot
+  pass (wall-cells: the cell over a block taller than a block too)."
   [pw walls]
   (if (empty? walls)
     pw
     (let [snapshot (.-snapshot pw)
           id (wall-id (.-table pw))
-          wall? (into #{} (map (juxt :x :y :z)) walls)
+          wall? (wall-cells snapshot (.-table pw) walls)
           walled (js/Object.create snapshot)]
       (set! (.-stateAt walled) (fn [x y z] (if (contains? wall? [x y z]) id (.stateAt snapshot x y z))))
       #js {:snapshot walled :table (.-table pw) :space (.-space pw)})))

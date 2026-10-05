@@ -110,6 +110,7 @@
 (def ^:const AIR-STEP 1) ; seconds of air that make an arrival at a node already reached worth a record of its own
 (def ^:const TABLE 8192) ; slots of the direct-mapped tight-cell caches
 (def ^:const SNAP 6) ; a blocked boundary point takes the region of the nearest free position within this many 1/16
+(def ^:const DROP-INSET 5) ; a body walking off a ledge falls once its 0.31 half-width clears it: 5/16 past the edge
 (def ^:const NONE -1e9) ; surfaceY of a water column that does not reach open air
 
 (def CENTRE "the representative point of an ordinary cell, in 1/16" #js {:px 8 :pz 8})
@@ -879,6 +880,14 @@
       (== c 2) t
       :else (+ (* 16 GRID) t)))
 
+  ;; index in B's mask of boundary point t moved d/16 into B, away from the shared edge
+  (insetB [s c t d]
+    (cond
+      (== c 0) (+ (* t GRID) d)
+      (== c 1) (+ (* t GRID) (- 16 d))
+      (== c 2) (+ (* d GRID) t)
+      :else (+ (* (- 16 d) GRID) t)))
+
   ;; What a node knows beyond its cell, in one Uint32 (0 for an ordinary cell reached from an ordinary one): bits 0-3
   ;; region, bit 4 set for a tight cell with its representative point px (5-9) and pz (10-14) in 1/16, bit 15 set with the
   ;; crossing point the move in came by, relative to the cell in 1/16: x (16-20), z (21-25).
@@ -907,18 +916,22 @@
       out))
 
   ;; pick[rb]: for each region of B a boundary point free for both cells leads to from region `label` of A, the point
-  ;; nearest the line between the two representative points; -1 where none does
-  (crossings [s c label ^js rep-a ^boolean tight-b ^js own-a ^js own-b ^js joint-a ^js joint-b snap-a snap-b ^js falls]
+  ;; nearest the line between the two representative points; -1 where none does. A drop (inset DROP-INSET, else 0)
+  ;; falls from the point `inset` into B, where the body has cleared the ledge it walked off: it must pass there at the
+  ;; joint height, and the fall and the landing are judged there.
+  (crossings [s c label ^js rep-a ^boolean tight-b ^js own-a ^js own-b ^js joint-a ^js joint-b snap-a snap-b ^js falls inset]
     (let [mask-a (.-mask joint-a)
           mask-b (.-mask joint-b)]
       (.fill pick -1)
       (loop [t 0]
         (when (<= t 16)
           (let [pa (.indexA s c t)
-                pb (.indexB s c t)]
-            (when (and (not (zero? (aget mask-a pa))) (not (zero? (aget mask-b pb))) (== (.regionNear s own-a pa snap-a) label)
-                       (not ^boolean (.fallBlocked s falls pb)))
-              (let [lb (.regionNear s own-b pb snap-b)
+                pb (.indexB s c t)
+                pf (if (zero? inset) pb (.insetB s c t inset))]
+            (when (and (not (zero? (aget mask-a pa))) (not (zero? (aget mask-b pb))) (not (zero? (aget mask-b pf)))
+                       (== (.regionNear s own-a pa snap-a) label)
+                       (not ^boolean (.fallBlocked s falls pf)))
+              (let [lb (.regionNear s own-b pf snap-b)
                     rb (if tight-b lb (if (== lb (.-centre own-b)) 0 -1))]
                 (when (and (>= rb 0) (< rb REGIONS))
                   (let [^js rep-b (if tight-b (aget (.-regs own-b) rb) CENTRE)
@@ -964,7 +977,8 @@
         (when (and (<= ra last-region) (< ra REGIONS))
           (let [label (if tight-a ra (.-centre own-a))]
             (when (>= label 0)
-              (.crossings s c label (if tight-a (aget regs-a ra) CENTRE) tight-b own-a own-b joint-a joint-b snap-a snap-b falls)
+              (.crossings s c label (if tight-a (aget regs-a ra) CENTRE) tight-b own-a own-b joint-a joint-b snap-a snap-b falls
+                          (if (== move MOVE-DROP) DROP-INSET 0))
               (.tightEdges s i c x2 y2 z2 h1 move sec drisk slow-to tight-b own-b)))
           (recur (inc ra))))))
 
