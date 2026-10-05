@@ -1,0 +1,32 @@
+;; A roofed body at night sleeps in its bed (card 07d5a79f): night-unsafe holds for a sheltered body with a bed in reach
+;; and no sleep tonight, jobs.survival.shelter runs jobs.survival.sleep, and the respawn point is set at the bed
+;; (the death after it respawns at the hut, not at the world spawn). Not run yet: needs night, run with
+;; --allow-time --time-log <the shared time log>; a live tester checks it (RCON `data get entity <body> SpawnX/SpawnZ`
+;; may be read in an :after step once the runner supports it; the respawn position is the check here).
+;; Hut: stone walls x 8..16, z 8..16, roof at y 3, a 7x7 room with torches; the bed at [10 0 12].
+{:defaults
+ {:tags [:night :survival :sleep]
+  :time :night
+  :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow]
+           [:fill [9 0 9] [15 2 15] "air"]
+           [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]
+           [:set [10 0 12] "red_bed[facing=east,part=foot]"] [:set [11 0 12] "red_bed[facing=east,part=head]"]]
+  :register [{:trigger :night-unsafe}]
+  :body {:at [13.5 0 13.5] :effects [["resistance" 600 4]]}}
+ :cases
+ [{:name "roofed-body-sleeps-in-its-bed-and-respawns-there"
+   :act [[:job (jobs.memory.set-place {:name :bed :pos #at [10 0 12]})]
+         [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 90]
+         [:wait-s 3]
+         [:kill-body]
+         [:await {:source :body :kind :respawned} 30]]
+   :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 90}]
+   :after [[:body-near [10.5 0 12.5] 6]]
+   :limit-s 150}
+  {:name "carried-bed-is-put-down-and-slept-in"
+   :body {:inventory [["red_bed" 1]]}
+   :blocks [[:set [10 0 12] "air"] [:set [11 0 12] "air"]]
+   :act [[:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 90]]
+   :expect [{:event {:source :action :kind :done :data {:name "place" :status "placed"}} :within-s 60}
+            {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 90}]
+   :limit-s 150}]}
