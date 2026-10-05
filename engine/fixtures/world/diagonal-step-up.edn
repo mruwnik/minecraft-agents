@@ -1,0 +1,24 @@
+;; Card 16198501 (fix 710e0491): go-to gave up :stuck on a one-block diagonal step-up (:jump to a grass block's top) from a pose
+;; hugging the block's corner (8610.78,8192.3): the executor held forward+jump for the diagonal, the body slid into the
+;; block's column and the server put it back. A single stone block stands on the plot floor; the body starts a diagonal
+;; step from it (corner hugging poses, all four diagonals) with the goal on top of the block: must arrive.
+{:defaults {:tags [:movement :go-to :jump]
+            :plot {:height 8}
+            :blocks [[:set [16 0 16] "stone"]]}
+ :cases
+ [{:name "step-up-from-sw-corner-hugging-arrives"
+   :body {:at [15.22 0 17.3]}
+   :act [[:job (jobs.movement.go-to {:pos #at [16 1 16] :range 0})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 40 :of-job true}]}
+  {:name "step-up-from-ne-corner-hugging-arrives"
+   :body {:at [17.78 0 14.7]}
+   :act [[:job (jobs.movement.go-to {:pos #at [16 1 16] :range 0})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 40 :of-job true}]}
+  {:name "step-up-from-se-corner-hugging-arrives"
+   :body {:at [17.78 0 17.3]}
+   :act [[:job (jobs.movement.go-to {:pos #at [16 1 16] :range 0})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 40 :of-job true}]}
+  {:name "step-up-from-nw-corner-hugging-arrives"
+   :body {:at [15.22 0 14.7]}
+   :act [[:job (jobs.movement.go-to {:pos #at [16 1 16] :range 0})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 40 :of-job true}]}]}
