@@ -399,7 +399,7 @@
           (await (run-until-empty eng 8))
           (is (= [] (calls p "dig")) "a hand dig of stone drops nothing: no roofless pit")
           (is (re-find #"cannot harvest stone" (:text (first (emitted seen :dig_in_failed)))))
-          (is (= [{:pos {:x 0 :y 64 :z 0}}] (entries eng :dig-in-futile)) "material-only: retried once blocks are carried")
+          (is (= [{:pos {:x 0 :y 64 :z 0} :needs "stone"}] (entries eng :dig-in-futile)) "material-only: retried once blocks are carried or the block is harvestable")
           (is (= [] (:list (core/state eng))) "ended"))))))
 
 (deftest dig-in-walls-converge-on-the-current-cell
@@ -902,6 +902,19 @@
           (core/register-reflex! eng {:trigger :night-unsafe})
           (await (tick-n eng 4))
           (is (not (nil? eng))))))))
+
+(deftest a-material-only-futile-entry-stops-blocking-once-the-body-can-harvest-the-block
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[inventory digs?] [[[{:name "wooden_pickaxe" :count 1}] true]
+                                   [[{:name "wooden_shovel" :count 1}] false]]]
+          (let [{:keys [eng p seen]} (setup {:time night :blocks stone-pit :inventory inventory})]
+            (mem/write! (:store eng) :dig-in-futile {:pos {:x 0 :y 64 :z 0} :needs "stone"} {:cap 5 :ttl 600000})
+            (core/submit! eng '(jobs.survival.dig-in) {})
+            (await (run-until-empty eng 8))
+            (is (= digs? (boolean (seq (calls p "dig")))) (pr-str inventory))
+            (is (= (if digs? [] [:futile]) (mapv :reason (emitted seen :waiting))) (pr-str inventory))))))))
 
 (deftest shelter-retries-dig-in-at-night-beside-an-unroofed-shelter
   (async done

@@ -255,7 +255,7 @@
           (ctx/emit! c :dig_in_failed :warn {:text (str (or under "an unloaded cell") " under the floor; not digging through it")})
           :done)
       (and (sh/solid-at? p below) (nil? (pick c blocks)) (not (tools/can-harvest? p name)))
-      (do (ctx/remember! c :dig-in-futile {:pos (:roof (ctx/mem c))} futile-policy)
+      (do (ctx/remember! c :dig-in-futile {:pos (:roof (ctx/mem c)) :needs name} futile-policy)
           (ctx/emit! c :dig_in_failed :warn
                      {:text (str "cannot harvest " name " without a "
                                  (tools/harvest-need (map :name (u/inventory p)) (js->clj (.harvestTools p name)))
@@ -436,11 +436,15 @@
 
 (defn futile-site
   "The :dig-in-futile entry data that blocks digging here, or nil. Material-only failures (no :reason) can be retried
-  once blocks are carried; unsafe or inaccessible sites (a :reason) cannot."
+  once blocks are carried, or, when the entry names the block it could not harvest (:needs), once a carried tool
+  harvests it; unsafe or inaccessible sites (a :reason) cannot."
   [c]
   (let [here (u/self-pos c)
-        have-blocks (seq (carried c (:blocks (:args c))))]
-    (some #(when (and (or (:reason (:data %)) (not have-blocks))
+        have-blocks (seq (carried c (:blocks (:args c))))
+        retry? (fn [{:keys [reason needs]}]
+                 (and (not reason)
+                      (or have-blocks (and needs (tools/can-harvest? (:primitives c) needs)))))]
+    (some #(when (and (not (retry? (:data %)))
                       (<= (u/dist here (:pos (:data %))) futile-radius))
              (:data %))
           (ctx/entries c :dig-in-futile))))
