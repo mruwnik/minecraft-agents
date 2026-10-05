@@ -164,6 +164,12 @@ body sealed in is no danger), or a ranged mob (skeleton and the like) with a lin
 j301 sat 600+ rounds on a walled-off hostile within retreat's 40-block clear radius). The trigger is wrong, not the job,
 when a hostile that cannot hurt the body fires the response. `engine.jobs.combat/hostiles` takes an optional third argument `{:sight :only|:prefer}`: `:only` keeps the
 visible ones, `:prefer` lists them first (each group nearest first); two arguments ignore sight as before.
+The reach searches (`walkable-way?`, `enclosed?`, `dangers`, `nearest-danger`) read each block once per query: the
+searches of every mob in one `dangers` or `nearest-danger` call share a single read. They key cells by number and keep
+the open list in a binary heap. The search bench times them on the recorded world of the planner bench: `npx
+shadow-cljs compile search-bench`, then `node bench-lang/search.mjs` (median, p95 and max ms, and blocks read per
+search kind). In 160 bodies x 2214 mob cells (2026-10-05): `enclosed?` max 41 ms, `walkable-way?` max 77 ms,
+`dangers` max 46 ms. The persistent-map version took 186, 338 and 337 ms.
 
 Remembered places (a known bed, a known chest) are not primitives. They are
 `:bed` and `:chest` entries in body memory; see `engine.memory/place` below.

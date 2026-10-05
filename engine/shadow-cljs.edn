@@ -45,6 +45,15 @@
                   :output-to "out/planner-bench.cjs"
                   :output-dir "out/planner-bench"
                   :compiler-options {:infer-externs false}}
+  ;; The search bench (bench-lang/search.mjs): the job-side reach searches as a library over a recorded world.
+  :search-bench {:target :node-library
+                 :exports {:walkableWay engine.search-bench/walkable-way
+                           :enclosed engine.search-bench/enclosed
+                           :nearestDanger engine.search-bench/nearest-danger
+                           :dangers engine.search-bench/dangers}
+                 :output-to "out/search-bench.cjs"
+                 :output-dir "out/search-bench"
+                 :compiler-options {:infer-externs false}}
   :planner-bench-release {:target :node-library
                           :exports {:planTuned engine.path.planner-tuned/plan
                                     :createSearchTuned engine.path.planner-tuned/create-search
