@@ -1,19 +1,22 @@
 (ns engine.path.pass
-  "Walking a plan that opens doors, gates and trapdoors by hand. The plan is cut at each step that opens something: the walk
-  goes up to the step before it, the block is clicked open with an empty hand (engine.access.click) and read back, and the
-  walk goes on; once the body is out of the opened block's column the walker shuts it again when its policy says so. The
-  executor's tick never sees an :opens step.
+  "Walking a plan that opens doors, gates and trapdoors by hand. The plan is cut at each step that opens something.
+  The walk goes up to the step before it, the block is clicked open with an empty hand (engine.access.click) and read
+  back, and the walk goes on. Once the body is out of the opened block's column the walker shuts it again, if its
+  policy says so. The executor's tick never sees an :opens step.
 
-  Policy (the :doors arg of jobs.movement.go-to): :shut (the walker shuts what it opened), :leave-open (it leaves it open),
-  :never (the plan has no such step). A block the walker opened inside a zone of another owner, or next to one, is shut
-  whatever the policy: a pass through somebody's pen must not let anything out. Only a block the walker found shut is ever
-  shut by it, never one that was open already.
+  Policy (the :doors arg of jobs.movement.go-to):
+  - :shut: the walker shuts what it opened.
+  - :leave-open: it leaves it open.
+  - :never: the plan has no such step.
+  A block opened inside a zone of another owner, or next to one, is shut whatever the policy, so a pass through
+  somebody's pen lets nothing out. The walker only shuts a block it found shut, never one that was open already.
 
   Every block the walker opens gets an :opened memory entry {:cell {:x :y :z} :by job-id :t ms :shut? bool} before the
-  click (:shut? false: the policy leaves it open); it is dropped when the block is shut. A walk that is cut between the open
-  and the shut leaves it, for the next round of the same job (shut-leftovers!) or the door-left trigger
-  (engine.triggers.door-left), whose job jobs.maintenance.shut-doors walks back and shuts it. A block that is not shut because an animal stands in its cell (the walker waits and tries
-  again, never pushes) or because the click did nothing stays open with its entry and one :door-left-open warn."
+  click (:shut? false: the policy leaves it open). The entry is dropped when the block is shut.
+  A walk cut between the open and the shut leaves the entry. The next round of the same job shuts it
+  (shut-leftovers!), or the door-left trigger (engine.triggers.door-left) does, with jobs.maintenance.shut-doors.
+  A block that stays open (an animal stands in its cell, so the walker waits and tries again but never pushes; or the
+  click did nothing) keeps its entry and gets one :door-left-open warn."
   (:require [engine.access.click :as click]
             [engine.ctx :as ctx]
             [engine.jobs.util :as u]

@@ -1,29 +1,35 @@
 (ns engine.path.planner-tuned
-  "The path planner's search, in ClojureScript and written for speed: an A* over typed arrays of cells, moves and costs
-   (climbing, water, doors, tight cells), returning a status, reason, expanded count, path, costs and summary.
+  "The path planner's search: an A* over typed arrays of cells, moves and costs (climbing, water, doors, tight
+   cells). It returns a status, reason, expanded count, path, costs and summary. Written for speed.
 
-   How it is kept fast: all search state is in the mutable fields of one Search object and every function of the search
-   is a method of it, so the emitted JavaScript is property reads, typed-array indexing and direct method calls. Rules the
-   hot code keeps: no persistent data, no seqs, no keywords; every test is a comparison or a ^boolean hinted call (so no
-   truthiness check is emitted: the compiled file has one cljs.core.truth_, in count-steps); `let`, `do` and `loop` only in
-   statement or tail position (in expression position they compile to a closure called on the spot); values a JS function
-   returned on the side (support, touch, enter-risk, enter-slow, enter-extra, ty) are fields; where a closure would be
-   passed (swimEdge's emit, the opening pass's edge) the call is split in a begin and an end, or `edge-mode` is switched.
+   How it stays fast:
+   - All search state is in the mutable fields of one Search object, and every function of the search is a method of
+     it. The emitted JavaScript is property reads, typed-array indexing and direct method calls.
+   - No persistent data, no seqs, no keywords in the hot code. Every test is a comparison or a ^boolean hinted call,
+     so no truthiness check is emitted (the compiled file has one cljs.core.truth_, in count-steps).
+   - `let`, `do` and `loop` only in statement or tail position: in expression position they compile to a closure
+     called on the spot.
+   - Values that a JS function returns on the side (support, touch, enter-risk, enter-slow, enter-extra, ty) are
+     fields. Where a closure would be passed (swimEdge's emit, the opening pass's edge) the call is split in a begin
+     and an end, or `edge-mode` is switched.
 
-   Called through interop, not written in the search: the snapshot (stateAt, sectionHas, hasColumn), the state table's arrays and the
-   free-space masks of space.mjs (options.space: boxesNear, freeMask, labelRegions).
+   Called through interop, not written in the search: the snapshot (stateAt, sectionHas, hasColumn), the state table's
+   arrays, and the free-space masks of space.mjs (options.space: boxesNear, freeMask, labelRegions).
 
-   Goal sets: query.goals, an array of goals ({kind x y z range} as query.goal), plans to the nearest of them by cost in
-   one search: the goal test is the cell in any goal's area, the heuristic the least of the goals' (admissible and
-   consistent as each is), and a found result's goal is the index of the goal reached. A goal set runs no goal flood and
-   answers no goal-not-standable or goal-unloaded (they prove things of one goal); query.goal is then not read.
+   Goal sets: query.goals is an array of goals ({kind x y z range}, like query.goal). One search plans to the nearest
+   of them by cost. The goal test is the cell in any goal's area, and the heuristic is the least of the goals'
+   (admissible and consistent, as each is). A found result's goal is the index of the goal reached. A goal set runs no
+   goal flood and answers no goal-not-standable or goal-unloaded, since those prove things about one goal. query.goal
+   is not read then.
 
-   Options: options.avoid {kinds, cells, factor}, which engine.path.alternatives sets to search for another path
-   (see avoidCost), and options.limits {kinds, gap, corner}, what the walker can do: kinds (the same bits) are never planned,
-   gap(x, y, z, h, move, lx, ly, lz, lh) -> false refuses a gap jump from the takeoff node (feet cell x,y,z, stand h in 1/16,
-   reached by move) to the landing, and corner(x, y, z, h, lx, ly, lz, lh) -> false refuses a diagonal jump with one blocked
-   side (a corner slide) from the takeoff node to the landing (engine.path.executor/planner-limits). Without them the search
-   is unrestricted.")
+   Options:
+   - options.avoid {kinds, cells, factor}: set by engine.path.alternatives to search for another path (see avoidCost).
+   - options.limits {kinds, gap, corner}: what the walker can do. Without it the search is unrestricted.
+       kinds: bits of the move kinds never planned.
+       gap(x, y, z, h, move, lx, ly, lz, lh): false refuses a gap jump from the takeoff node (feet cell x,y,z, stand h
+         in 1/16, reached by move) to the landing.
+       corner(x, y, z, h, lx, ly, lz, lh): false refuses a diagonal jump with one blocked side (a corner slide).
+     engine.path.executor/planner-limits builds them.")
 
 (set! *warn-on-infer* true)
 
@@ -317,10 +323,10 @@
         (aget tbl-open-state id)
         id)))
 
-  ;; does the climbable state `id` (climb = cl) at x,y,z make its cell one the body climbs in? An open trapdoor counts over
-  ;; a ladder: vanilla climbs it when it faces the ladder's way (the client too, with tools/patch-deps.mjs), and over a
-  ;; ladder of another facing its panel leaves the ladder's top edge free to stand on and jump from (the step into it is
-  ;; aimed at the ladder's wall, see hatchWall)
+  ;; Does the climbable state `id` (climb = cl) at x,y,z make its cell one the body climbs in? An open trapdoor
+  ;; counts over a ladder. Facing the ladder's way, it is climbed (vanilla, and the client with tools/patch-deps.mjs).
+  ;; Facing another way, its panel leaves the ladder's top edge free to stand on and jump from (the step into it
+  ;; aims at the ladder's wall, see hatchWall).
   (climbCell [s cl id x y z]
     (if (== cl CLIMB-INSIDE)
       true
@@ -791,9 +797,10 @@
 
   (stand16 [s node] (+ (* (aget ys node) 16) (aget hs node)))
 
-  ;; The returnable search plans no step the body cannot undo. True when the move is not considered now: a gap jump down is
-  ;; refused, a drop of more than JUMP-UP too, any other drop is held back until the probe (canReturn) says the body can climb back
-  ;; (the probe runs the moves of another cell, so it cannot run inside an expansion: see flushHeld).
+  ;; The returnable search plans no step the body cannot undo. True when the move is not considered now.
+  ;; A gap jump down and a drop of more than JUMP-UP are refused. Any other drop is held back until the probe
+  ;; (canReturn) says the body can climb back. The probe runs the moves of another cell, so it cannot run inside an
+  ;; expansion: see flushHeld.
   (holdsBack [s x y z h move parent-node dsec drisk slow-to corner shape]
     (cond
       (== move MOVE-GAP) (< (+ (* y 16) h) (.stand16 s parent-node))
@@ -1010,13 +1017,13 @@
           (recur (inc k))))
       out))
 
-  ;; The walker goes in a straight line from a cell's representative point to the crossing point of the next move, and from
-  ;; a crossing point to the representative point it leads to, so a move is only as good as those lines. A fence post
-  ;; beside a gap leaves its cell a U-shaped region (a strip each side of the line, joined along the gap) with its point on
-  ;; one strip: a crossing on the other strip lies behind the post, and the body walks head-on into it and sticks. A ring of free
-  ;; space round a bamboo stalk is the same, so these lines are checked. Is every
-  ;; mask point the segment (ai, aj) - (bi, bj) passes (one per 1/16 along its longer axis, rounded) free? An end that is
-  ;; itself blocked (a boundary point snapped to the nearest region, at a step or a climbable) leaves the leg unjudged.
+  ;; The walker goes in a straight line from a cell's representative point to the crossing point of a move, and from
+  ;; a crossing point to the representative point it leads to. So each such line must be free. Example: a fence post
+  ;; beside a gap leaves its cell a U-shaped region. A crossing on the strip without the representative point lies
+  ;; behind the post, and the body would walk into it and stick. A ring of free space round a bamboo stalk is the same.
+  ;; Is every mask point the segment (ai, aj) - (bi, bj) passes (one per 1/16 along its longer axis, rounded) free?
+  ;; If an end is itself blocked (a boundary point snapped to the nearest region, at a step or a climbable), the leg
+  ;; is not judged.
   (lineFree [s ^js mask ai aj bi bj]
     (let [di (- bi ai)
           dj (- bj aj)
@@ -1264,9 +1271,9 @@
     (let [h (.standH s x y z)]
       (if (>= h 0) h (.swimAt s x y z))))
 
-  ;; One swim or exit edge: the caller calls swimBegin, makes the edge (`base` + `extra` seconds) if it says true, then calls
-  ;; swimEnd. `base` seconds of swimming count for the air, `extra` seconds of current do not. src-sub: the body starts the
-  ;; move with its head in water; target-water: it ends in a water cell.
+  ;; One swim or exit edge. The caller calls swimBegin, makes the edge (`base` + `extra` seconds) if it says true,
+  ;; then calls swimEnd. `base` seconds of swimming count for the air, `extra` seconds of current do not.
+  ;; src-sub: the body starts the move with its head in water. target-water: it ends in a water cell.
   (swimBegin [s i ^boolean target-water x2 y2 z2 base extra ^boolean src-sub]
     (let [target-sub (and target-water ^boolean (.submerged s x2 y2 z2))
           use (+ (if (>= i 0) (aget airs i) 0) base)]
@@ -1389,10 +1396,9 @@
           src-surface (if src-sub (.surfaceY s x y z) y)]
       (.swimVertical s x y z i region src-b src-sub 1)
       (.swimVertical s x y z i region src-b src-sub -1)
-      ;; out of the water onto a bank: at the same level, or up to one cell over the top water cell of this column. Live
-      ;; (26.1): a floating body gets out onto land whose stand height is at most the water's top face + 1/16 (flush, or a
-      ;; 15/16 top), never onto land one higher. A body standing on a floor in water 1 deep is not floating: it walks and
-      ;; jumps out by the ordinary rules.
+      ;; Out of the water onto a bank. A floating body gets out onto land whose stand height is at most the water's
+      ;; top face + 1/16 (flush, or a 15/16 top), never onto land one higher. A body standing on a floor in water 1
+      ;; deep is not floating: it walks and jumps out by the ordinary rules.
       (let [top-water ^boolean (.isWater s x (inc y) z)
             near-surface (or (not top-water) (not ^boolean (.isWater s x (+ y 2) z)))
             yt (if top-water (inc y) y)
@@ -1588,10 +1594,10 @@
         (let [h2 (+ (* y2 16) h1)
               jump (> (- h2 h0) STEP)]
           (when (<= (- h2 h0) JUMP-UP)
-            ;; the 0.62 wide body brushes both side cells near their shared corner, for its whole height: neither may hold
-            ;; anything it must not touch (water, or a hole, is fine to pass). One side holding plain collision is a
-            ;; corner slide: the body presses on it and slides over the other side cell (dipping there if it has no
-            ;; floor, the step height lifts it out)
+            ;; The 0.62 wide body brushes both side cells near their shared corner, for its whole height. Neither may
+            ;; hold anything it must not touch (water or a hole is fine). One side holding plain collision is a
+            ;; corner slide: the body presses on it and slides over the other side cell. If that has no floor the
+            ;; body dips, and the step height lifts it out.
             (let [lo (js/Math.min h0 h2)
                   hi (+ (js/Math.max h0 h2) BODY)
                   sa (.side s x2 z lo hi)
@@ -1936,9 +1942,10 @@
     (let [lo (* (+ fy dy) 16)]
       (.clear s (+ fx (aget adx c)) (+ fz (aget adz c)) lo (+ lo BODY))))
 
-  ;; adds the cell when it is standable and a forward move of it reaches the flood's current cell; true when it is the
-  ;; start. A cell the flood cannot see is a way in it does not know, and marks the flood leaked: always beside the current
-  ;; cell (jump -1), and from a gap jump's takeoff in direction jump only when the jump can come over the column between.
+  ;; Adds the cell when it is standable and a forward move of it reaches the flood's current cell. True when it is
+  ;; the start. A cell the flood cannot see is a way in it does not know, so it marks the flood leaked. That counts
+  ;; for a cell beside the current one (jump -1), and for a gap jump's takeoff in direction jump only when the jump
+  ;; can come over the column between.
   (floodVisit [s ^js seen ^js queue start-key x y z jump]
     (if ^boolean (.unseen s x y z)
       (do (when (or (neg? jump) ^boolean (.jumpOver s jump (- y fy))) (set! leaked true))
@@ -2032,12 +2039,12 @@
             (recur (+ head 4))))
         false)))
 
-  ;; Backward flood from the standable goal cells over predecessors: nodes n (a cell and, in a tight cell, a region; the
-  ;; queue holds x y z region) with a forward move n -> c, found by running n's own moves (so it can never disagree with
-  ;; the search). True when it exhausts within budget nodes without
-  ;; meeting the start: then nothing reaches the goal. Slow, but bounded by the budget; false on budget or when the start
-  ;; is met, or when it leaks: it meets water (a drop into water starts further up than the flood looks), or an unloaded
-  ;; or out-of-span cell (what lies there is unknown).
+  ;; Backward flood from the standable goal cells over predecessors: nodes n (a cell and, in a tight cell, a region;
+  ;; the queue holds x y z region) with a forward move n -> c. Predecessors are found by running n's own moves, so the
+  ;; flood cannot disagree with the search. Slow, but bounded by the budget.
+  ;; True when the flood exhausts within budget nodes without meeting the start: nothing reaches the goal.
+  ;; False when the budget runs out, the start is met, or the flood leaks. It leaks into water (a drop into water
+  ;; starts further up than it looks) and into an unloaded or out-of-span cell (what lies there is unknown).
   (goalEnclosed [s budget sealed]
     (let [start-key (aget node-keys 0) ; the start node's key, its region in a tight cell (begin)
           seen (js/Set.)
@@ -2211,8 +2218,8 @@
     (set! flooding false)
     hit)
 
-  ;; A one-way step cannot be undone with the body's own moves: a gap jump down, a drop of more than JUMP-UP, or a drop the planner
-  ;; has no step-up move back from (a one-way move).
+  ;; A one-way step cannot be undone with the body's own moves: a gap jump down, a drop of more than JUMP-UP, or a
+  ;; drop the planner has no step-up move back from.
   (isOneWay [s node]
     (let [p (aget parents node)
           m (aget moves node)]
@@ -2248,19 +2255,19 @@
     (set! move-peak 0)
     (set! move-water 0))
 
-  ;; after a late flood with budget: one that ran out of it (and neither leaked nor met the start) is due again after
-  ;; FLOOD-SPACING times the expansions with FLOOD-GROWTH times the budget (at most max-nodes), so its cost stays a share of
-  ;; the search's and a large walled-in region is still proved; any other is the last
+  ;; After a late flood with budget: one that ran out of it (and neither leaked nor met the start) is due again
+  ;; after FLOOD-SPACING times the expansions, with FLOOD-GROWTH times the budget (at most max-nodes). That keeps its
+  ;; cost a share of the search's, and a large walled-in region is still proved. Any other late flood is the last.
   (growFlood [s budget]
     (if (and (> flooded budget) (not leaked) (< budget max-nodes))
       (do (set! goal-flood (js/Math.min max-nodes (* FLOOD-GROWTH budget)))
           (set! flood-after (* FLOOD-SPACING flood-after)))
       (set! flood-pending false)))
 
-  ;; a search that ran out of nodes to expand with its late flood still due floods once more, so a walled-in goal is named:
-  ;; with the flood budget when no late flood ran yet, else with no more than the search expanded. Not when a ladder was
-  ;; turned away at a gap or a swim for air: those reasons say more. True when that flood is begun (step runs it and
-  ;; finishes the search: goal-enclosed, box or exhausted).
+  ;; A search that ran out of nodes with its late flood still due floods once more, so a walled-in goal is named.
+  ;; The budget is the flood budget if no late flood ran yet, else at most what the search expanded. Skipped when a
+  ;; ladder was turned away at a gap or a swim for air, because those reasons say more. True when that flood begins
+  ;; (step runs it and finishes the search: goal-enclosed, box or exhausted).
   (floodAtEnd [s]
     (if (or (not flood-pending) goal-unloaded gap-seen air-seen)
       false
@@ -2269,9 +2276,9 @@
 
   ;; ---- the late flood ----
   ;; The late floods and the flood at the end of one search are one backward flood (goalEnclosed's, without the cliff
-  ;; test), continued: a run with a bigger budget goes on from where the last one stopped. It is breadth-first from the same
-  ;; seeds over the same moves, so a run floods what a fresh flood with its budget would, in the same order, and answers
-  ;; the same; the cells flooded before are not flooded again, and a run can stop and go on later (step's slices).
+  ;; test), continued: a run with a bigger budget goes on from where the last one stopped. It is breadth-first over the
+  ;; same seeds and moves, so it answers what a fresh flood with that budget would. Cells flooded before are not
+  ;; flooded again, and a run can stop and go on later (step's slices).
 
   (lateFloodBegin [s budget end]
     (set! lf-budget budget)
@@ -2323,8 +2330,8 @@
     (when-not lf-seed-open (set! flooded (.-size lf-seen)))
     (and (not lf-open) (not leaked) (<= (.-size lf-seen) lf-budget)))
 
-  ;; the goal flood costs ~30 ms, so easy queries must never see it: it runs after flood-after forward expansions. A slice
-  ;; of max-expansions counts each newly flooded cell as one.
+  ;; The goal flood costs about 30 ms, so easy queries must not see it: it runs after flood-after forward
+  ;; expansions. A slice of max-expansions counts each newly flooded cell as one.
   (step [s max-expansions]
     (when-not started
       (.begin s)
@@ -2546,12 +2553,13 @@
   (nearest [s]
     #js {:path (if (== best-node -1) nil (.pathTo s best-node)) :distance best-distance})
 
-  ;; Where an unfinished search has got to: the path to its expanded node nearest the goal, cut before the first step on the
-  ;; way the body cannot undo (so the body can always come back, and whatever the search could reach it still can), with
-  ;; that end's distance to the goal and the start's: {path distance startDistance oneWay}; path nil (distance the start's)
-  ;; when the cut leaves no step or its end stands on magma. oneWay, when the way to the nearest node holds such a step, is
-  ;; that step and the uncut path as result's oneWay: {move x y z distance path open}, open when the nearest node stands at
-  ;; the loaded edge (atLoadedEdge, not on magma). nil when nothing was expanded but the start, or there is neither.
+  ;; Where an unfinished search has got to: {path distance startDistance oneWay}.
+  ;; - path: the way to the expanded node nearest the goal, cut before the first step the body cannot undo, so the
+  ;;   body can always come back. nil (distance the start's) when the cut leaves no step or its end stands on magma.
+  ;; - distance and startDistance: that end's and the start's distance to the goal.
+  ;; - oneWay: set when the way to the nearest node holds such a step: {move x y z distance path open}, with the
+  ;;   uncut path. open is true when the nearest node stands at the loaded edge (atLoadedEdge, not on magma).
+  ;; nil when nothing was expanded but the start, or there is neither.
   (progress [s]
     (if (or (not started) (<= best-node 0))
       nil
@@ -2570,10 +2578,9 @@
                :startDistance start-distance
                :oneWay one-way}))))
 
-  ;; The frontier node: of the nodes standing at the loaded edge (atLoadedEdge) within frontier-reach blocks of the goal
-  ;; (along x and along z), the one with the least cost to it plus the heuristic on to the goal, -1 when none: where the
-  ;; searched land runs on into land not loaded, so a way may go on there. Only columns within OPEN-REACH of a chunk's
-  ;; side can be at the edge.
+  ;; The frontier node: where the searched land runs on into land not loaded, so a way may go on there. Of the nodes
+  ;; at the loaded edge (atLoadedEdge) within frontier-reach blocks of the goal (along x and along z), the one with
+  ;; the least cost plus heuristic. -1 when none. Only columns within OPEN-REACH of a chunk's side can be at the edge.
   (frontierNode [s]
     (let [lo OPEN-REACH
           hi (- 16 OPEN-REACH)]
@@ -2747,16 +2754,16 @@
      false nil)))
 
 (defn- clean-options
-  "The options of the returnable search behind a one-way step of search: options.returnable, no goal flood, and no more
-  nodes than the search itself made. Its nearest node is only where a partial plan ends; with no flood to prove a walled-in
-  goal it would otherwise search all the box holds (live: 2 s over the wide box after a 300 ms search)."
+  "The options of the returnable search behind a one-way step of search: options.returnable, no goal flood, and no
+  more nodes than the search itself made. It only finds where a partial plan ends. With no flood to prove a walled-in
+  goal it would otherwise search the whole box."
   [^Search search options]
   (js/Object.assign #js {} options #js {:returnable true :goalFlood 0
                                         :maxNodes (js/Math.min (option options "maxNodes" 200000) (js/Math.max 1 (.-n-nodes search)))}))
 
 (defn- result-of
-  "The result of a finished search; when the path to its nearest node holds a one-way step, a second search with options.returnable
-  (and no goal flood, clean-options) supplies the partial end."
+  "The result of a finished search. When the path to its nearest node holds a one-way step, a second search
+  (clean-options) supplies the partial end."
   [^Search search snapshot query options]
   (.settle search)
   (let [node (.oneWayNode search)]
@@ -2780,7 +2787,7 @@
     search))
 
 (defn create-search
-  "{step, result, nearest} as create-search returns them. options.table and options.space are required."
+  "A search to run in steps: #js {step(n) result() nearest()}. options.table and options.space are required."
   [snapshot query options]
   (let [search (new-search snapshot query options)]
     (.init search)
@@ -2795,10 +2802,11 @@
     (result-of search snapshot query options)))
 
 (defn create-plan
-  "plan in slices, for a caller that yields to the event loop between them: {step, result, progress}. step(n) runs at most
-  about n expansions (each newly flooded cell of the goal flood counts as one) and is true once the plan is ready; result()
-  is then what plan answers. The returnable search behind a one-way step (result-of) runs in the same slices. progress()
-  is where an unfinished search has got to (Search.progress), nil once the search itself is over."
+  "plan in slices, for a caller that yields to the event loop between them: #js {step result progress}.
+  step(n) runs at most about n expansions (each newly flooded cell of the goal flood counts as one). It is true once
+  the plan is ready, and result() is then what plan answers. The returnable search behind a one-way step (result-of)
+  runs in the same slices. progress() is where an unfinished search has got to (Search.progress), nil once the
+  search itself is over."
   [snapshot query options]
   (let [search (new-search snapshot query options)
         clean (volatile! nil)

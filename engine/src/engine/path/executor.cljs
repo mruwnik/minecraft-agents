@@ -207,9 +207,8 @@
   with the takeoff's ceiling; corner, a test of each jump that slides along a corner (takeoff x y z h, landing lx ly lz lh)
   by high-corner?. solid? is a fn [x y z] -> bool."
   [policy solid?]
-  ;; The planner calls these for every gap and corner jump it looks at, so they are gap-refused (with low-ceiling?) and
-  ;; high-corner? over numbers, with no maps, seqs or refusal texts (the map form, refusal texts and all, made a limited
-  ;; search about a third slower on the bench).
+  ;; The planner calls these for every gap and corner jump it looks at. They repeat gap-refused (with low-ceiling?)
+  ;; and high-corner? over plain numbers: the map and refusal-text forms made a limited search a third slower.
   (let [blocker (to-array (map #(contains? takeoff-blockers %) move-names))
         widths (set (keys (:gap-jump policy)))
         headroom (:gap-headroom policy)
@@ -289,9 +288,9 @@
 ;; ---------------------------------------------------------------- reached
 
 (defn reached?
-  "The body is in the step's cell and at its height (climbs: at least that high / at most that high). A climb into a
-  trapdoor's cell over a ladder (:hatch) counts once the body is held there, on the ladder's top edge or climbing: a client
-  that climbs no trapdoor bobs over the ladder's top until it stands on that edge."
+  "The body is in the step's cell and at its height (climbs: at least that high going up, at most that high going
+  down). A :hatch step (a trapdoor cell over a ladder) counts only once the body is held there, on the ladder's top
+  edge or climbing, because the client bobs over the ladder's top until it stands on that edge."
   [policy step {:keys [y] :as pose}]
   (let [sy (stand-y step)]
     (and (in-cell? step pose)
@@ -331,8 +330,8 @@
 ;; ---------------------------------------------------------------- tick
 
 (defn off-plan?
-  "Too far from the leg (previous step's point to the aim), or too far below or above it. A body in water that is
-  below the leg sank or plunged in; it comes up again, so only the land counts that as falling off."
+  "Too far from the leg (previous step's point to the aim), or too far below or above it. Below the leg in water
+  does not count: a body that plunged in comes back up."
   [policy prev step [ax az] {:keys [x y z in-water]}]
   (let [y1 (stand-y prev) y2 (stand-y step)]
     (or (> (dist-to-segment x z (:px prev) (:pz prev) ax az) (:off-plan-xz policy))
@@ -359,9 +358,8 @@
                     (or on-ground on-climbable))))))
 
 (defn swim-jump?
-  "In water, jump (swim up) while the feet are below the step's height plus :swim-float: at the surface that keeps the
-  head out, under it the body at the step's level; onto a bank the water's lift and the push at its edge carry the body
-  out. On a :swim-down the body sinks."
+  "In water, jump (swim up) while the feet are below the step's height plus :swim-float. That keeps the head out
+  at the surface. Never on a :swim-down."
   [policy {:keys [move] :as step} {:keys [y]}]
   (and (not= :swim-down move)
        (< y (+ (stand-y step) (:swim-float policy)))))
@@ -414,9 +412,9 @@
     (- (max gx gz) (:body-half policy))))
 
 (defn rise-first?
-  "True for a jump up to step from the cell before it (straight, or diagonal with both side cells free: not a corner slide) while the body is at the wall it climbs and below the
-  step's stand height: it must go up first. Forward pressed there carries the client 0.02 into the wall (it skips a
-  block it already overlaps), the server refuses that position and puts the body back, every try."
+  "True when a jump up must go straight up first: a straight or free diagonal jump (no corner slide), the body
+  at the wall it climbs and below the step's stand height. Pushing forward there moves the client 0.02 into the
+  wall, and the server rejects that position every time."
   [policy prev step {:keys [y in-water] :as pose}]
   (and (= :jump (:move step))
        (not in-water)

@@ -1,31 +1,36 @@
 (ns engine.path.regions
-  "The region map: which parts of the loaded world the planner's own moves join, kept per body so a walking query can
-  learn in about a millisecond whether a goal is reachable at all, unreachable (proved), or unknown (the way may run
-  through land not loaded), with a coarse route and an estimate of its cost.
+  "The region map: which parts of the loaded world the planner's own moves join, kept per body. A query tells in
+  about a millisecond whether a goal is reachable, provably unreachable, or unknown (the way may run through land
+  that is not loaded). A reachable answer carries a coarse route and a cost estimate.
 
-  Nodes are the planner's nodes (a feet cell, or one free-space region of a tight cell; a cell the body fits only once a
-  door, gate or trapdoor is opened is one node). For each 16x16x16 section every node's moves are made by the planner
-  itself (planner-tuned/capture-search, captureAt: the same expandAt the search runs, from a node with no history), the
-  nodes are grouped into the strongly connected components of the moves that stay inside the section (the section's
-  regions), and each region keeps its edges out: to other regions of the section, and to node refs in other sections
-  (resolved when asked, building that section when it is loaded and not yet built). A region path therefore always
-  holds a real planner path, and no region path is a proof for every planner variant: the capture is a superset of the
-  planner's moves (history and the walker's limits only take moves away; the goal-dependent rules read every cell as in
-  the goal).
+  How it is built:
+  - Nodes are the planner's nodes: a feet cell, or one free-space region of a tight cell. A cell the body fits only
+    once a door, gate or trapdoor is opened is one node.
+  - Each 16x16x16 section gets its node moves from the planner itself (planner-tuned/capture-search, captureAt: the
+    same expandAt the search runs, from a node with no history).
+  - Nodes joined by moves that stay inside the section form its regions (strongly connected components).
+  - Each region keeps its edges out: to other regions of the section, and to node refs in other sections. Those are
+    resolved when asked, building the other section if it is loaded and not yet built.
+  So a region path always holds a real planner path. It does not prove the path for every planner variant: the
+  capture is a superset of the planner's moves, since history and the walker's limits only remove moves, and the
+  goal-dependent rules read every cell as in the goal.
 
-  Encoding (typed arrays per section): node keys li*16+region sorted (Uint16), each node's region (Uint16); per region
-  its representative cell, flags (open: within a gap jump of an unloaded column; water) and CSR edge lists (Float64
+  Encoding, typed arrays per section: node keys (li*16+region, sorted, Uint16) and each node's region (Uint16). Per
+  region: a representative cell, flags (open = within a gap jump of an unloaded column; water), CSR edge lists (Float64
   targets: -1-region for a region of the same section, a node ref for another section; Float32 costs), and the
-  regions with a move into it from the same section. A section that has edges into another registers in `into` (target
-  section -> sources), which the backward closure reads instead of keeping reverse edges.
+  regions with a move into it from the same section. `into` maps a target section to the sections with edges into
+  it; the backward closure reads it instead of keeping reverse edges.
 
-  Keys: section key ((sx+2^14)*2^15 + sz+2^14)*64 + sy (sy counted from the world's minY), node ref section*65536 +
-  li*16 + region, region id section*65536 + region index (worlds of +-262000 blocks).
+  Keys: section key ((sx+2^14)*2^15 + sz+2^14)*64 + sy (sy counted from the world's minY). Node ref =
+  section*65536 + li*16 + region. Region id = section*65536 + region index. This covers worlds of +-262000 blocks.
 
-  Updates: a block change drops every section whose cells' moves may read the block (5 columns round, 4 below, 5 above;
-  with water at or below the change within a drop into water, the sections over it up to 69 above too) and queues it to
-  be built again; a column loaded or unloaded drops the sections of its own and the 8 columns round (their open flags
-  and edges across the border). The background build (build-step!, attach!) builds the queue in slices.
+  Updates:
+  - A block change drops every section whose moves may read that block: 5 columns round, 4 below, 5 above. With
+    water at or below the change (a drop into water), the sections up to 69 above go too. Dropped sections are queued
+    to be built again.
+  - A column loaded or unloaded drops the sections of its own and the 8 columns round (open flags and edges across
+    the border).
+  - The background build (build-step!, attach!) builds the queue in slices.
 
   Queries: route answers {:status :reachable :regions :waypoints :cost :estimate}, {:status :unreachable :why} or
   {:status :unknown :why}."

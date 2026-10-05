@@ -83,16 +83,15 @@
       #js {:snapshot walled :table (.-table pw) :space (.-space pw)})))
 
 (def wide-box
-  "The planner's search box (options margin and yMargin, blocks round start and goal) of the walks' searches: a way round
-  can run far past the planner's default box (64 and 48; live: a walled walkway whose way down lay 200 blocks along). The
-  walks search it from the start: A* goes no wider than it must, and a search in the default box that ran into it then
-  searched the wide box again (live: 26500 expansions against the default box, then 2000 in the wide one)."
+  "The planner's search box (options margin and yMargin, blocks round start and goal) of the walks' searches. A way
+  round can run far past the planner's default box (64 and 48). The walks search the wide box from the start:
+  A* goes no wider than it must, and a search in the default box that hit its edge would only have to be repeated."
   {:margin 256 :yMargin 96})
 
 (def chunk-expansions
-  "Expansions a search of the walking plans (plan-from! and the functions over it) runs between yields to the event loop,
-  so the body's HTTP API, perception and the other jobs run while a long search does (live: a search that found no way
-  over the wide box held the event loop ~25 s). A live expansion costs some tens of microseconds."
+  "Expansions a search of the walking plans (plan-from! and the functions over it) runs between yields to the event
+  loop, so the body's HTTP API, perception and the other jobs run during a long search. An expansion costs some tens
+  of microseconds."
   1000)
 
 (defn yield!
@@ -241,11 +240,11 @@
     {:path (.-path f) :at [(.-x f) (.-y f) (.-z f)]}))
 
 (defn walk-plan
-  "plan-walk's answer from its plan-within answer {:r :steps :beyond} over walled (pw with the walls). With frontier, a
-  search that ran out of loaded land to search (no path within abilities beyond it) walks to its frontier instead of its
-  nearest end: every way the loaded land holds is known and none arrives, so a way can only go on past what is loaded.
-  A body standing at its frontier walks nowhere (no nearest end either: walking it, then back to the frontier, would
-  swing between the two for ever)."
+  "plan-walk's answer from its plan-within answer {:r :steps :beyond} over walled (pw with the walls).
+  With frontier, a search that ran out of loaded land (no path within abilities beyond it) walks to its frontier, not
+  its nearest end. Every way the loaded land holds is known and none arrives, so a way can only go on past what is
+  loaded. A body standing at its frontier walks nowhere, not even to the nearest end: that would swing between
+  the two for ever."
   [c pw walled to one-way frontier {:keys [r steps beyond]}]
   (let [edge (when (and frontier (not beyond)) (frontier-path r))
         past (when (and (not edge) (= :open one-way)) (open-path r))
@@ -260,14 +259,18 @@
      :stop (when (and step (not past) (not edge)) (stopped-one-way r (or (peek walked) (first steps) (body-cell c)) to step))}))
 
 (defn plan-walk
-  "Plan the next walk from where the body stands: plan-within, and for a partial plan only the steps up to its last dry step
-  (dry-end). The planner ends a partial plan at the nearest node the body can come back from; {:r :steps :beyond :status :stop
-  :one-way-taken}: stop is the no-path result for a plan with a nearer end behind a step that cannot be undone (the planner's
-  oneWay, stopped-one-way), nil otherwise. opts {:policy :walls :one-way}: the executor policy the plan must fit (default
-  executor/policy), the cells {:x :y :z} to read as walls, and :one-way :open to take that step when the land past it runs
-  on into unloaded land (open-path; a far goal past a cliff): the plan is then the partial path past it, with no stop and
-  :one-way-taken the step {:kind :at}. The default never takes one. :frontier true: a search that ran out of loaded land
-  walks to its frontier (walk-plan), with :frontier-taken {:at [x y z]}."
+  "Plan the next walk from where the body stands: plan-within, and for a partial plan only the steps up to its last
+  dry step (dry-end). The planner ends a partial plan at the nearest node the body can come back from.
+  Answer {:r :steps :beyond :status :stop :one-way-taken}. :stop is the no-path result (stopped-one-way) for a plan
+  whose nearer end lies behind a step that cannot be undone, else nil.
+  opts:
+  - :policy, the executor policy the plan must fit (default executor/policy).
+  - :walls, cells {:x :y :z} to read as walls.
+  - :one-way :open, to take a one-way step when the land past it runs on into unloaded land (open-path; a far goal
+    past a cliff). The plan is then the partial path past it, with no :stop and :one-way-taken {:kind :at}. By default
+    it never takes one.
+  - :frontier true, so a search that ran out of loaded land walks to its frontier (walk-plan), with
+    :frontier-taken {:at [x y z]}."
   ([c pw to range weight] (plan-walk c pw to range weight nil))
   ([c pw to range weight {:keys [policy walls one-way frontier] :or {policy executor/policy}}]
    (let [walled (with-walls pw walls)]
@@ -322,10 +325,8 @@
 
 (defn go-on?
   "Whether the kept search goes on at this call: it plans the same (key k), is younger than search-max-age-ms, and did
-  not begin with the goal unloaded that pw (this call's pathWorld) has loaded now. A search's snapshot keeps the land as
-  it first read it, so one begun with the goal unloaded never floods the goal (live j53: a search begun while the chunks
-  round a goal on a sealed platform were still arriving searched on for 100 rounds, then gave up :searching; a new one
-  proves the goal walled in)."
+  not begin with the goal unloaded that pw (this call's pathWorld) has loaded since. A search's snapshot keeps the
+  land as it first read it, so one begun with the goal unloaded never floods the goal; a new one can prove it walled in."
   [kept k ^js pw to]
   (and (= k (:key kept))
        (< (- (js/Date.now) (:t kept)) search-max-age-ms)
@@ -418,8 +419,7 @@
 
 (defn no-walk
   "The result of a plan that is not walked, nil when it is: no path within abilities (:beyond), a goal the planner proved
-  walled in (:goal-enclosed: its partial plan's nearer end gets the body no nearer to arriving, live it left a body
-  pressed against a fence post), a plan cut at a one-way step with no step left, no path, a plan the policy (default
+  walled in (:goal-enclosed: its partial plan's nearer end gets the body no nearer to arriving), a plan cut at a one-way step with no step left, no path, a plan the policy (default
   executor/policy) refuses. replans goes in the result."
   ([plan replans] (no-walk plan replans executor/policy))
   ([{:keys [r steps beyond status stop]} replans policy]

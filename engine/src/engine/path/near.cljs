@@ -123,15 +123,19 @@
 (defn cell-of [pos] (into {} (map (fn [k] [k (js/Math.floor (k pos))])) [:x :y :z]))
 
 (defn ^:async walk-near!
-  "Walk until the body's cell is within range cells of pos's cell (u/within?), skipping the walk when it already is: one
-  round of plan and walk (walk-round!, at most 60 s). Resolves to :there, :partial (ended more than 1 closer, call again)
-  or :blocked (no path, a walk that got no nearer, or a body with no pathWorld sensing; booked as a failed walk). opts
-  {:doors :timeout-s}: the door policy of engine.path.pass, default :shut (open a shut door, gate or trapdoor on the way,
-  pass, shut it again); a job that works gates itself passes :never (a shut one is a wall). timeout-s bounds each steer
-  (default walk-timeout-s); a job chasing a mob or a villager passes a short one, so it aims again at where it is now.
-  It never takes a step it cannot undo (a drop of 2 or 3, a gap jump down) on a partial plan (walk-round! :one-way nil):
-  its target is something the body can see, so a way there that is not found is not past a cliff, and an unreachable
-  target (a cow on an island) must not lead the body off a ledge it cannot climb back."
+  "Walk until the body's cell is within range cells of pos's cell (u/within?). Does nothing when it already is.
+  One round of plan and walk (walk-round!, at most 60 s). Resolves to:
+  - :there
+  - :partial: ended more than 1 closer, call again
+  - :blocked: no path, a walk that got no nearer, or a body with no pathWorld sensing (booked as a failed walk)
+  opts:
+  - :doors, the door policy of engine.path.pass. Default :shut (open a shut door, gate or trapdoor on the way, pass,
+    shut it again). A job that works gates itself passes :never (a shut one is a wall).
+  - :timeout-s bounds each steer (default walk-timeout-s). A job chasing a mob or a villager passes a short one, so it
+    aims again at where the target is.
+  A partial plan never takes a step the body cannot undo (a drop of 2 or 3, a gap jump down; walk-round! :one-way nil).
+  The target is something the body can see, so a missing way is not past a cliff, and an unreachable target (a cow on
+  an island) must not lead the body off a ledge."
   ([c pos range] (walk-near! c pos range nil))
   ([c pos range {:keys [doors timeout-s] :or {doors :shut timeout-s walk-timeout-s}}]
    (let [cell (cell-of pos)]

@@ -1,18 +1,21 @@
 (ns engine.path.alternatives
   "Up to k clearly different paths for one query, best first, each with its true cost and what sets it apart.
 
-   Different: a path is returned only when, against the paths returned before it, its set of kinds (ladder, water, door;
-   none of them is on foot) is not one of theirs, or fewer than 60% of its cells lie within 2 blocks of their cells.
-   (A distance is the largest of |dx|, |dy| and |dz|. Within 2, not 1: the penalised search below steers just past 1 block,
-   so over open ground it finds the same walk shifted 2 blocks over, which is not another way.)
+   Different: a path is returned only if, against the paths returned before it, either
+   - its set of kinds (ladder, water, door; none of them is on foot) is not one of theirs, or
+   - fewer than 60% of its cells lie within 2 blocks of their cells.
+   A distance is the largest of |dx|, |dy| and |dz|. It is 2, not 1, because the penalised search below steers just
+   past 1 block: over open ground it would find the same walk shifted 2 blocks over, which is not another way.
 
    How: the first path is `plan` itself. Candidates for the next come from the same search run again with options.avoid:
-   once per kind seen in a returned path with that kind refused (and once with all of the first path's kinds refused), and
-   once with every cell within 1 block of a returned path costing (1 + factor) times its own cost, factor 1, then 4, then
-   16 while the result is still too close and still pays a penalty away from its ends. These searches are weighted (WEIGHT)
-   and capped (NODES-TIMES the first search's expansions, at least NODES-MIN). Each round returns the cheapest candidate
-   that passes; none passing ends the list, so one path is a normal answer. Costs are the true cost of the walk (the
-   penalty orders the search only), and every step is an edge of the normal search (avoiding only adds cost or refuses)."
+   - once per kind seen in a returned path, with that kind refused (and once with all of the first path's kinds
+     refused);
+   - once with every cell within 1 block of a returned path costing (1 + factor) times its own cost. The factor is 1,
+     then 4, then 16 while the result is still too close and still pays a penalty away from its ends.
+   These searches are weighted (WEIGHT) and capped (NODES-TIMES the first search's expansions, at least NODES-MIN).
+   Each round returns the cheapest candidate that passes. When none passes the list ends, so one path is a normal
+   answer. Costs are the true cost of the walk (the penalty only orders the search). Every step is an edge of the
+   normal search, since avoiding only adds cost or refuses.
   (:require [clojure.string :as str]
             [engine.path.planner-tuned :as planner]))
 

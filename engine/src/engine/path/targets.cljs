@@ -1,13 +1,12 @@
 (ns engine.path.targets
-  "The nearest of many targets by walking cost, for jobs that choose one of several (a tree, an ore block, ...): one
-  planner search over the set of goals (planner query.goals: in any target's goal area; the heuristic the least over the
-  targets), from the cell the body stands in, within the walker's abilities (executor/planner-limits) over the walks'
-  wide box, at most max-nodes nodes. A target walled off, or across a gap no move crosses, is passed over for a farther
-  one the body can walk to; the straight-line nearest was unreachable in 15 of 45 tree and ore cases of the search
-  investigation while a reachable one stood by.
-  Bounded and resumable as go-to's search is (engine.path.walk/run-search!): one call runs at most budget expansions and
-  walk/round-ms; a search not over answers :searching and goes on at the next call from the same cell to the same targets
-  (kept per body and tag, for at most walk/search-max-age-ms)."
+  "The nearest of many targets by walking cost, for jobs that choose one of several (a tree, an ore block, ...).
+  One planner search over the set of goals (planner query.goals: the goal test is any target's goal area, the heuristic
+  the least over the targets), from the cell the body stands in. It stays within the walker's abilities
+  (executor/planner-limits), over the walks' wide box, at most max-nodes nodes. A target walled off, or across a gap
+  no move crosses, is passed over for a farther one the body can walk to.
+  Bounded and resumable like go-to's search (engine.path.walk/run-search!). One call runs at most budget expansions
+  and walk/round-ms. A search not over answers :searching and goes on at the next call from the same cell to the same
+  targets (kept per body and tag, for at most walk/search-max-age-ms)."
   (:require [engine.path.executor :as executor]
             [engine.path.planner-tuned :as planner]
             [engine.path.walk :as walk]))

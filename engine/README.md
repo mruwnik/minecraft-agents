@@ -1771,130 +1771,154 @@ pocket on the rim) it is still planned. The walker takes a corner step without s
 fence) is judged where the body falls: 5/16 past the edge it walked off (`DROP-INSET`, its 0.31 half-width clear of the
 ledge), so stepping down out of a door that stands a block above the ground outside is planned. A gap jump or a drop never lands on farmland (vanilla tramples farmland under a
 fall of over 0.5 blocks); a jump up one block onto it is allowed (it falls about 0.3 from the top of the arc).
-A move into or out of a tight cell is planned only where the executor's straight legs are free in the cell's mask: the
-region's stand point to the crossing, and the crossing to the next region's stand point (`lineFree`). A free region need not
-be convex: the cell of a fence post beside a gap is one U-shaped region (a strip each side of the line, joined along the
-gap) whose stand point lies on one strip, and a crossing on the other strip lies behind the post (go-to into
-a pen with a post missing walked head-on into the post beside the gap). In prismarine-physics the replayed bamboo
-and fence courses stuck the body the same way on 12 of 13 found plans before the check, and arrive on all of them after it
-(`courses_physics_test`); a solid block of offset bamboo (`full-walled`, `target-in-full`), which the body could pass
-only by weaving inside cells, now has no plan.
+A move into or out of a tight cell is planned only where the executor's straight legs are free in the cell's mask: from the
+region's stand point to the crossing, and from the crossing to the next region's stand point (`lineFree`). A free region
+need not be convex. The cell of a fence post beside a gap is one U-shaped region (a strip each side of the line, joined
+along the gap) whose stand point lies on one strip. A crossing on the other strip lies behind the post, and the body would
+walk head-on into it. Replayed bamboo and fence courses (`courses_physics_test`) stuck on 12 of 13 found plans without
+the check and arrive on all with it. A solid block of offset bamboo (`full-walled`, `target-in-full`), which the body could
+pass only by weaving inside cells, has no plan.
 
-The tuned planner also takes `options.limits {kinds, gap, corner}`: what the walker can do. `kinds` (the
-`AVOID-*` bits: climbing, water, doors) are never planned; `gap(x, y, z, h, move, lx, ly, lz, lh)` returning anything but
-true refuses that gap jump (takeoff feet cell, stand height in 1/16, the move that reached it; landing cell and height);
-`corner(x, y, z, h, lx, ly, lz, lh)` returning anything but true refuses a diagonal jump with one blocked side (a corner slide)
-from that takeoff to that landing.
-Without it the walker is assumed to do anything. `engine.path.executor/planner-limits` builds it from the executor's `policy`.
+The tuned planner takes `options.limits {kinds, gap, corner}`: what the walker can do. Without it the walker is assumed to
+do anything. `engine.path.executor/planner-limits` builds it from the executor's `policy`.
+- `kinds`: `AVOID-*` bits (climbing, water, doors) that are never planned.
+- `gap(x, y, z, h, move, lx, ly, lz, lh)`: anything but true refuses that gap jump (takeoff feet cell, stand height in
+  1/16, the move that reached it; landing cell and height).
+- `corner(x, y, z, h, lx, ly, lz, lh)`: anything but true refuses a diagonal jump with one blocked side (a corner slide)
+  from that takeoff to that landing.
+`result.limited` is true when the limits turned some move away.
 
-The tuned planner takes a goal set too: `query.goals`, an array of goals as `query.goal` has them (`near` spheres and
-`xz` discs mixed), plans to the one nearest by cost in one search. The goal test is "in any goal's area", the heuristic
-the least of the goals' heuristics (each is admissible and consistent, so their least is), and a found result's `goal` is
-the index of the goal reached. A goal set runs no goal flood and never answers `goal-not-standable` or `goal-unloaded`
-(they prove things of one goal): every goal walled off ends `exhausted` or on `options.maxNodes` (`budget`). At weight 1
-it agrees with one search per goal on the bench (`planner_goals_test`: same least cost, a goal of that cost).
-`engine.path.targets/nearest!` is the jobs' helper: the target ({:x :y :z}, nearest in a line first, the first 32) the
-body walks to soonest within range, searched within the walker's abilities over the walks' wide box with at most 20000
-nodes, bounded and resumable as go-to's search is (at most `walk/round-budget` expansions and `walk/round-ms` a call; a
-search not over answers `{:status :searching}` and goes on at the next call from the same cell to the same targets, per
-body and `:tag`). It answers `{:status :found :target :index :cost}` or `{:status :none :reason :proved}` (proved: the
-search ran out of land with no frontier, so no target is walkable; not on the node cap). One target is not searched.
+Goal sets: `query.goals` is an array of goals as `query.goal` has them (`near` spheres and `xz` discs mixed). One search
+plans to the one nearest by cost.
+- The goal test is "in any goal's area". The heuristic is the least of the goals' (each is admissible and consistent, so
+  their least is). A found result's `goal` is the index of the goal reached.
+- No goal flood runs, and `goal-not-standable` and `goal-unloaded` are never answered (they prove things of one goal).
+  If every goal is walled off the search ends `exhausted`, or on `options.maxNodes` (`budget`).
+- At weight 1 it agrees with one search per goal on the bench (`planner_goals_test`).
+
+`engine.path.targets/nearest!` is the jobs' helper for a set of targets. It takes `{:x :y :z}` cells (nearest in a line
+first; the first 32 are searched) and finds the one the body walks to soonest within range.
+- The search stays within the walker's abilities, over the walks' wide box, with at most 20000 nodes.
+- It is bounded and resumable like go-to's search: a call runs at most `walk/round-budget` expansions and `walk/round-ms`.
+  A search not over answers `{:status :searching}` and goes on at the next call from the same cell to the same targets
+  (kept per body and `:tag`).
+- It answers `{:status :found :target :index :cost}` or `{:status :none :reason :proved}`. Proved means the search ran
+  out of land with no frontier, so no target is walkable. The node cap does not prove it.
+- One target is not searched.
 `jobs.forestry.fell-tree` and `jobs.gather.mine` choose their target with it.
 
-`engine.path.regions` is the region map: per 16x16x16 section, the planner's nodes grouped into the strongly connected
-components of the planner's own moves within the section (regions), each with its edges out (the cheapest move per
-target region or node ref in another section). The moves are the planner's: `planner-tuned/capture-search` is a Search
-whose `captureAt` runs `expandAt` from a node with no history and pushes each move's target and cost (seconds + 2 x
-risk) instead of searching; while capturing, every cell reads as in the goal (a portal is standable, every dive worth
-it), so the captured moves are a superset of any search's and no region path is a proof for every planner variant.
-`route(map, from, goals)` answers `{:status :reachable :regions :waypoints :cost :estimate :goal}`, `{:status
-:unreachable :why :goal-not-standable|:goal-enclosed|:exhausted}` (`:goal-enclosed`: the backward closure of the goal
-regions, at most 256, met no start and no region by unloaded land) or `{:status :unknown :why :start-unloaded|
-:start-not-standable|:goal-unloaded|:unloaded|:building}`; a section it needs that is not built is built then (`:max-builds`
-bounds that: `:building`). On the bench (`path_regions_agreement_test`) every course and world query the planner walks is
-`:reachable`, every course it does not is proved unreachable but the one whose start is not standable, and the one world
-query the map calls reachable that the planner did not find ran into the planner's search box. Encoding: typed arrays per
-section (node keys and regions, region representatives, flags open/water, CSR edges), one shared object for a section
-with no node. Updates: `invalidate!` per changed block drops the sections whose moves may read it (5 columns round, 4
-below, 5 above; with water at or below it within a drop into water, up to 69 above) and queues them; `column-changed!`
-drops a loaded or unloaded column's sections and its 8 neighbours'; `path_regions_test` checks that a map so updated equals
-one built afresh after placing, digging and water changes. `attach!` keeps a map over a source (`js/path/region-source.mjs`
-over a bot: one live snapshot kept for the session, block updates written into it, columns loaded or unloaded forgotten)
-and builds the queue in the background, 8 ms slices every 25 ms. Nothing uses it yet: go-to's use of it (and attaching it
-to each body) is the next step.
+`engine.path.regions` is the region map. Nothing uses it yet: go-to's use of it (and attaching it to each body) is the
+next step.
+- Per 16x16x16 section, the planner's nodes are grouped into the strongly connected components of the planner's own moves
+  within the section (regions). Each region has its edges out: the cheapest move per target region or node ref in
+  another section.
+- The moves are the planner's. `planner-tuned/capture-search` is a Search whose `captureAt` runs `expandAt` from a node
+  with no history and pushes each move's target and cost (seconds + 2 x risk) instead of searching. While capturing,
+  every cell reads as in the goal (a portal is standable, every dive worth it). So the captured moves are a superset of any
+  search's, and no region path is a proof for every planner variant.
+- `route(map, from, goals)` answers one of:
+  - `{:status :reachable :regions :waypoints :cost :estimate :goal}`
+  - `{:status :unreachable :why :goal-not-standable|:goal-enclosed|:exhausted}`. `:goal-enclosed` means the backward
+    closure of the goal regions (at most 256) met no start and no region by unloaded land.
+  - `{:status :unknown :why :start-unloaded|:start-not-standable|:goal-unloaded|:unloaded|:building}`
+  A section it needs that is not built is built then. `:max-builds` bounds that (`:building`).
+- Encoding: typed arrays per section (node keys and regions, region representatives, flags open/water, CSR edges), one
+  shared object for a section with no node.
+- Updates: `invalidate!` per changed block drops the sections whose moves may read it (5 columns round, 4 below, 5
+  above; with water at or below it within a drop into water, up to 69 above) and queues them. `column-changed!` drops a
+  loaded or unloaded column's sections and its 8 neighbours'. `path_regions_test` checks that a map so updated equals one
+  built afresh after placing, digging and water changes.
+- `attach!` keeps a map over a source (`js/path/region-source.mjs` over a bot: one live snapshot kept for the session,
+  block updates written into it, columns loaded or unloaded forgotten) and builds the queue in the background, in 8 ms
+  slices every 25 ms.
+- On the bench (`path_regions_agreement_test`) every course and world query the planner walks is `:reachable`. Every course
+  it does not walk is proved unreachable, but the one whose start is not standable. The one world query the map calls
+  reachable that the planner did not find ran into the planner's search box.
 
-A partial plan ends at the node nearest the goal that the body can come back from. A step is one-way when the planner cannot plan
-its undoing: a gap jump down, a drop of more than a jump up (1.25 blocks), or a drop with no step-up move back from the lower
-cell (a drop of exactly 1 is returnable when that move is legal, by the planner's own rule: it does not look at the headroom over
-the upper cell, which no jump's rule does). When the path to the nearest node of all holds one, a second search with
-`options.returnable` (one-way steps never planned; no goal flood) finds the partial end, and `result.oneWay` is
-`{move, x, y, z, distance, path, open}`: the first one-way step on the way to the nearer node (the move code, the cell it enters),
-that node's distance to the goal, the path to it, and `open`: true when that node stands within 2 columns of unloaded land (the
-land past the step runs on past what is loaded). `null` when nothing nearer lies behind one, and on every complete plan (which
-are never changed). With no returnable node 2 blocks nearer the status is `none` with `oneWay` set. `engine.path.walk` turns
-`oneWay` into the walk-plan `:one-way {:kind :at}` stop. `plan-walk` with `:one-way :open` (go-to's rounds, through
-`engine.path.near/walk-round!`) instead walks `oneWay.path` when `open` is true: a far goal past a cliff is walked on to, and a pit whose
-cells are all loaded and that gets no nearer is never entered. `walk-near!` (the jobs' walks to a thing they can see) never
-does: a target it finds no way to (a cow on an island in a moat) does not lead the body off a ledge it cannot climb back. A search where the path to its nearest node has no one-way step
-pays nothing.
+A partial plan ends at the node nearest the goal that the body can come back from.
+- A step is one-way when the planner cannot plan its undoing: a gap jump down, a drop of more than a jump up (1.25
+  blocks), or a drop with no step-up move back from the lower cell. A drop of exactly 1 is returnable when that move is
+  legal, by the planner's own rule: it does not look at the headroom over the upper cell.
+- When the path to the nearest node of all holds one, a second search with `options.returnable` (one-way steps never
+  planned; no goal flood) finds the partial end. `result.oneWay` is `{move, x, y, z, distance, path, open}`: the first
+  one-way step on the way to the nearer node (the move code, the cell it enters), that node's distance to the goal, the
+  path to it, and `open`. `open` is true when that node stands within 2 columns of unloaded land (the land past the step
+  runs on past what is loaded). It is `null` when nothing nearer lies behind one, and on every complete plan (which are
+  never changed). With no returnable node 2 blocks nearer the status is `none` with `oneWay` set.
+- `engine.path.walk` turns `oneWay` into the walk-plan `:one-way {:kind :at}` stop.
+- `plan-walk` with `:one-way :open` (go-to's rounds, through `engine.path.near/walk-round!`) instead walks `oneWay.path`
+  when `open` is true. A far goal past a cliff is walked on to, and a pit whose cells are all loaded and that gets no
+  nearer is never entered.
+- `walk-near!` (the jobs' walks to a thing they can see) never does this. A target it finds no way to (a cow on an island
+  in a moat) does not lead the body off a ledge it cannot climb back.
+A search whose path to its nearest node has no one-way step pays nothing for this.
 
-The walk driver watches the way ahead while it walks (`engine.path.walk/follow!`, used by `walk-to!` and go-to's round). At
-each step the body reaches, and every 5 ticks along a plain straight or diagonal leg, while it stands on the ground (never in the
-air, in water, on a ladder, or before a gap, climb or swim step), the cells of the next 10 legs (the columns the body's footprint
-crosses, from the floor to two over the feet) are read in a fresh `pathWorld` and compared with the plan's own snapshot; a cell
-whose state differs for the planner (any per-state array of the state table or its collision boxes; a crop's age does not) stops
-the walk and plans again from the body's cell in the same round (`:changed`, the new plan is walked). A partial plan is planned
-again every 4 s, or less often when planning is slow (at most 5 % of the walk) (`:refresh`); the new plan replaces it only when
-it is whole or ends at least 2 blocks nearer the goal. A walk stuck with a mob on its leg waits 1 s (at most 3 times) and plans
-with the mob's cells as walls (`:mob`). At most 12 such replans per follow; past that the plan is walked unwatched. Cells the plan
-opens by hand are not watched. Each replan is announced (go-to: a `:replan` info event `{:why :ms :kept :replans :at}`, `:ms` the
-planning time). Measured on the frozen bench (cljs dev build, machine load ~19 on 16 cores): plan p50 2.5 ms, p90 16 ms, p99
-203 ms, max 484 ms.
+The walk driver watches the way ahead while it walks (`engine.path.walk/follow!`, used by `walk-to!` and go-to's round).
+- When it looks: at each step the body reaches, and every 5 ticks along a plain straight or diagonal leg, while the body
+  stands on the ground. Never in the air, in water, on a ladder, or before a gap, climb or swim step.
+- What it reads: the cells of the next 10 legs (the columns the body's footprint crosses, from the floor to two over the
+  feet), in a fresh `pathWorld`, compared with the plan's own snapshot. A cell whose state differs for the planner (any
+  per-state array of the state table or its collision boxes; a crop's age does not) stops the walk and plans again from
+  the body's cell in the same round (`:changed`, the new plan is walked).
+- `:refresh`: a partial plan is planned again every 4 s, or less often when planning is slow (at most 5 % of the walk). The
+  new plan replaces it only when it is whole or ends at least 2 blocks nearer the goal. It never replaces a plan from a
+  search that ended (a walk to the frontier, or to its nearest end) with the walk of a search still going on
+  (`walk/take-refresh?`): the unfinished one knows less, and its nearest node may be the dead end the ended search left.
+- `:mob`: a walk stuck with a mob on its leg waits 1 s (at most 3 times) and plans with the mob's cells as walls.
+- At most 12 such replans per follow; past that the plan is walked unwatched. Cells the plan opens by hand are not watched.
+- Each replan is announced (go-to: a `:replan` info event `{:why :ms :kept :replans :at}`, `:ms` the planning time).
+  Measured on the frozen bench (cljs dev build, machine load ~19 on 16 cores): plan p50 2.5 ms, p90 16 ms, p99 203 ms,
+  max 484 ms.
 
-An enclosed goal is found before any walking: for a `near` goal whose column is loaded, `step` first runs the backward goal
-flood with a small budget (`options.preFlood`, default 24 cells seen, capped by `goalFlood`; 0 turns it off). If the flood
-exhausts without meeting the start and the flooded cells have no cliff edge beside them (a free column with nothing to stand on
-within a drop: a goal on an island or above a drop is left to the search, which ends in a partial plan) the answer is
-`goal-enclosed`, `none`, no path, `expanded` 0. Otherwise the search goes on as
-before and the late flood (after `floodAfter` expansions, `goalFlood` cells) still covers bigger enclosed areas: a late
-flood that runs out of its budget (without leaking or meeting the start) runs again after 8 times the expansions with 4 times
-the budget (at most `maxNodes`), so the floods cost about half the search and a large sealed region is still proved. A search that runs out of nodes with its late flood still due floods once more (with
-`goalFlood`, or no more than it expanded when a late flood already ran; not after a ladder gap or a swim refused for air, whose
-reasons say more), so a goal on a small platform's pen is `goal-enclosed`, not the partial end's one-way drop. The
-flood expands each candidate cell's moves once per search, not once for each flooded neighbour that asks (a flood looks at
-about 90 cells per node). Its stand heights sit in a direct-mapped cache. A 200000-node flood over the plains bench world
-now takes 4.5-5.4 s instead of 7.5-10 s; a sealed 111x111 deck takes 230-270 ms instead of 260-307 ms. The late floods
-and the flood at the end of one search are one flood, continued: a grown flood goes on from where the last one stopped (it
-is breadth-first from the same seeds, so it floods and answers as a fresh one with its budget would, stats included), and a
-flood runs in `create-plan`'s slices like expansions (each newly flooded cell counts as one), so no slice holds a whole
-flood. The returnable search behind a one-way step makes no more nodes than the search itself did: with no flood it would
-otherwise search all the box holds (bench: 2 s over the wide box after a 300 ms search). `result.limited` is true when
-`options.limits` turned some move away. `create-plan`'s `progress()` says where an unfinished search has got to: the path
-to its expanded node nearest the goal, cut before the first step the body cannot undo, `{path distance startDistance oneWay}`
-(`path` nil and `distance` the start's when the cut leaves no step; `oneWay`, when such a step lies on the way, is
-`{move x y z distance path open}` as a result's, `path` the uncut one, `open` when the node stands at the loaded edge). A result that
-is not `found` and ran out of land (`exhausted`, `box`, `ladder-gap`, `air`) carries `frontier` `{x y z path}` when a searched
-node stands within 2 columns of unloaded land and within `options.frontierReach` (default 256) of the goal along x and z: the
-one with the least cost plus heuristic to the goal. The early
-pass leaves `stats.flooded` and `expanded` alone and reports its size as `stats.preFlooded`. Because it fires first, a
-goal sealed off by walls says `goal-enclosed` at once (`preFlood: 0` for the old exhausted search). The flood's nodes are the
-search's: one per region of a tight cell (a fence, wall or pane cell has a strip either side of its line, and no move joins
-them), so a pen of fence or wall with no gate is `goal-enclosed` once the late flood runs. A cell the body fits in only once something is opened is one node for all
-its regions.
+An enclosed goal is found before any walking.
+- For a `near` goal whose column is loaded, `step` first runs the backward goal flood with a small budget
+  (`options.preFlood`, default 24 cells seen, capped by `goalFlood`; 0 turns it off). If the flood exhausts without
+  meeting the start, and the flooded cells have no cliff edge beside them, the answer is `goal-enclosed`, `none`, no path,
+  `expanded` 0. A cliff edge is a free column with nothing to stand on within a drop: a goal on an island or above a drop
+  is left to the search, which ends in a partial plan.
+- This early pass leaves `stats.flooded` and `expanded` alone and reports its size as `stats.preFlooded`.
+- Otherwise the search goes on, and the late flood (after `floodAfter` expansions, `goalFlood` cells) covers bigger
+  enclosed areas. A late flood that runs out of its budget (without leaking or meeting the start) runs again after 8
+  times the expansions with 4 times the budget (at most `maxNodes`). So the floods cost about half the search, and a
+  large sealed region is still proved.
+- A search that runs out of nodes with its late flood still due floods once more: with `goalFlood`, or no more than it
+  expanded when a late flood already ran. Not after a ladder gap or a swim refused for air, whose reasons say more. So a
+  goal in a small platform's pen is `goal-enclosed`, not the partial end's one-way drop.
+- The late floods and the flood at the end are one flood, continued: a grown flood goes on from where the last one
+  stopped. It is breadth-first from the same seeds, so it floods and answers as a fresh one with its budget would, stats
+  included. It runs in `create-plan`'s slices like expansions (each newly flooded cell counts as one), so no slice holds
+  a whole flood.
+- The flood expands each candidate cell's moves once per search, not once for each flooded neighbour that asks (a flood
+  looks at about 90 cells per node). Its stand heights sit in a direct-mapped cache. A 200000-node flood over the plains
+  bench world takes 4.5-5.4 s, a sealed 111x111 deck 230-270 ms.
+- The flood's nodes are the search's: one per region of a tight cell (a fence, wall or pane cell has a strip either side
+  of its line, and no move joins them). So a pen of fence or wall with no gate is `goal-enclosed` once the late flood
+  runs. A cell the body fits in only once something is opened is one node for all its regions.
+- The returnable search behind a one-way step makes no more nodes than the search itself did. With no flood it would
+  otherwise search all the box holds.
+- `create-plan`'s `progress()` says where an unfinished search has got to: `{path distance startDistance oneWay}`. `path`
+  is the way to its expanded node nearest the goal, cut before the first step the body cannot undo (nil, with `distance`
+  the start's, when the cut leaves no step). `oneWay`, when such a step lies on the way, is `{move x y z distance path open}`
+  as a result's, `path` the uncut one, `open` when the node stands at the loaded edge.
+- A result that is not `found` and ran out of land (`exhausted`, `box`, `ladder-gap`, `air`) carries `frontier`
+  `{x y z path}` when a searched node stands within 2 columns of unloaded land and within `options.frontierReach`
+  (default 256) of the goal along x and z. It is the one with the least cost plus heuristic to the goal.
 
 A step up by walking (a stairs, a slab, a snow layer of 3 or more, a diagonal step up) lifts the body into the slab above its old
 top, so that slab must be free in the cell it leaves: stairs right behind a 2 high doorway are no way in (the head meets the lintel),
 behind a 3 high one they are. A ladder start, a tight cell (its mask judges) and a jump (which already checked) are as before.
 
 `engine.path.alternatives/plan-alternatives` (`planAlternatives(snapshot, query, options, k = 3)`) returns
-`{status, reason, paths, searches, ms}`: up to k paths, best first, each `{steps, cost, summary, total, differs}`
-(`total` = seconds + riskWeight × risk, the true cost of the walk; `differs` says what sets it apart, e.g. `on foot
-instead of by ladder`). A path is returned only when, against the paths returned before it, its set of kinds (ladder,
-water, door; none of them is on foot) is not one of theirs, or fewer than 60% of its cells lie within 2 blocks of their
-cells. The first path is `plan`'s own; the others come from the same search re-run with a kind refused, or with the
-cells within 1 block of earlier paths costing more (weight 1.5, at most 10× the first search's expansions). One path
-back is the normal answer where there is only one way. On the bench set (304 queries, best of 7 interleaved): k=1
-p50 1.09 ms, p99 89 ms (as `plan`); k=3 p50 7.0 ms, p99 335 ms, with 2 or 3 paths for 83 queries.
+`{status, reason, paths, searches, ms}`: up to k paths, best first, each `{steps, cost, summary, total, differs}`.
+`total` = seconds + riskWeight × risk, the true cost of the walk. `differs` says what sets the path apart, e.g. `on foot
+instead of by ladder`.
+- A path is returned only when, against the paths returned before it, its set of kinds (ladder, water, door; none of them
+  is on foot) is not one of theirs, or fewer than 60% of its cells lie within 2 blocks of their cells.
+- The first path is `plan`'s own. The others come from the same search re-run with a kind refused, or with the cells
+  within 1 block of earlier paths costing more (weight 1.5, at most 10× the first search's expansions).
+- One path back is the normal answer where there is only one way.
+- Bench set (304 queries, best of 7 interleaved): k=1 p50 1.09 ms, p99 89 ms (as `plan`); k=3 p50 7.0 ms, p99 335 ms,
+  with 2 or 3 paths for 83 queries.
 
 ### Executor
 
