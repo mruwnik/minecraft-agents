@@ -79,7 +79,7 @@
                      (if-let [no (walk/no-walk plan 0 policy)]
                        (if stuck (door-stuck stuck) no)
                        (let [{done :done last-plan :plan}
-                             (await (walk/follow! c plan {:plan-fn #(plan! c to range doors policy (into walls %) explore one-way budget progress)
+                             (await (walk/follow! c plan {:plan-fn #(plan! c to range doors policy (into walls %) explore one-way (walk/replan-budget budget) progress)
                                                           :walk-fn walk-fn :to to :policy policy :announce! announce!}))]
                          (cond
                            (not= :door-stuck (:status done))

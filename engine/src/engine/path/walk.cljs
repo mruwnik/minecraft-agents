@@ -294,6 +294,16 @@
   ~20 ms)."
   80)
 
+(def refresh-rounds
+  "Rounds of round-budget a replan during a walk (a refresh, a change) may search: the body stands while it plans, and a
+  search from each new cell that stops after one round never ends, so a dead end in view goes unseen until the frontier."
+  4)
+
+(defn replan-budget
+  "The expansions of one replan's search (nil, none, stays nil) for a round's budget."
+  [budget]
+  (some-> budget (* refresh-rounds)))
+
 (def progress-blocks
   "Blocks nearer the goal an unfinished search's progress end must be for a budgeted plan-walk! to walk to it."
   8)
@@ -423,7 +433,7 @@
                      used)
               [search (within-of walled r)]))
 
-          (or (>= used budget) (>= (- (js/performance.now) t0) round-ms)) [search nil]
+          (or (>= used budget) (>= (- (js/performance.now) t0) (* round-ms (max 1 (/ budget round-budget))))) [search nil]
 
           :else (do (await (yield!))
                     (recur search used)))))))
@@ -629,12 +639,15 @@
   "Whether a refreshed plan (:status :steps) replaces the old steps: a whole plan always, a partial one when its end is at
   least better-by blocks nearer the goal to than the old end (no weaving between near-equal ends). With old-plan, the plan
   in force: a plan whose search ended (a walk to its frontier, its nearest end) is never replaced by an unfinished search's
-  walk (unfinished?): that one knows less, and its nearest node may be the dead end the ended search left."
+  walk (unfinished?): that one knows less, and its nearest node may be the dead end the ended search left. A walk to a
+  frontier is replaced by one to another frontier of an ended search, however far its end: the old one is a dead end."
   ([old-steps fresh to] (take-refresh? old-steps fresh to nil))
-  ([old-steps {:keys [status steps] :as fresh} to old-plan]
+  ([old-steps {:keys [status steps frontier-taken] :as fresh} to old-plan]
    (and (>= (count steps) 2)
         (not (and old-plan (unfinished? fresh) (not (unfinished? old-plan))))
         (or (= "found" status)
+            (and frontier-taken (:frontier-taken old-plan) (not (unfinished? fresh))
+                 (not= (:at frontier-taken) (:at (:frontier-taken old-plan))))
             (<= (+ (near-goal (peek steps) to) (:better-by watch-policy)) (near-goal (peek old-steps) to))))))
 
 (defn watch-stop

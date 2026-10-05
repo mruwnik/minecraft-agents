@@ -99,6 +99,23 @@
         "an unfinished search's walk is replaced by a clearly better one")
     (is (walk/take-refresh? old unfinished to) "no old plan given: by the ends alone")))
 
+(deftest a-refresh-from-an-ended-search-takes-its-new-frontier-over-the-old
+  (let [old [(step 0 64 0 :start) (step 10 64 0 :walk)]
+        to [40 64 0]
+        ended (fn [at] {:status "partial" :r #js {:status "partial" :reason "exhausted"} :frontier-taken {:at at}
+                        :steps [(step 0 64 0 :start) (step 5 64 3 :walk)]})
+        unfinished {:status "partial" :r #js {:status "partial" :reason "searching"} :frontier-taken {:at [5 64 3]}
+                    :steps [(step 0 64 0 :start) (step 5 64 3 :walk)]}
+        old-plan {:status "partial" :r #js {:status "partial" :reason "exhausted"} :frontier-taken {:at [10 64 0]}}]
+    (is (walk/take-refresh? old (ended [5 64 3]) to old-plan)
+        "the search from here ended on another frontier: the old one is a dead end now, though the new end is farther off")
+    (is (not (walk/take-refresh? old (ended [10 64 0]) to old-plan)) "the same frontier: the ends rule")
+    (is (not (walk/take-refresh? old unfinished to old-plan)) "an unfinished search never replaces it")))
+
+(deftest a-replan-searches-several-rounds
+  (is (= 4000 (walk/replan-budget 1000)) "a refresh or change replan gets refresh-rounds times a round's budget")
+  (is (nil? (walk/replan-budget nil)) "no budget stays none"))
+
 ;; ---------------------------------------------------------------- the driver over the fake
 
 (defn on-steer
