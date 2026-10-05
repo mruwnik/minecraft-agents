@@ -872,8 +872,11 @@ after a restart the wait is told once more.
 The checks that decline say why: `access/decline!` (tunnel, mine, till, clear-box, leave-tunnel, fell-tree and other zone
 users) waits `{:reason :no-zones}` or `{:reason :refused :zones :claims :plans}`; `get-seeds` waits `:no-source`,
 `:too-short`, a chest trouble, `:no-zones` or `{:reason :nothing-in-range :radius}`; `wait-for-day` / `wait-for-dusk` wait
-`:day-not-come` / `{:reason :dusk-not-come :dusk 12000}`. Three checks wait only when the job is listed itself (a child's
-parent reads the result of its round, not a wait, so a declining child would leave it looping): `stair` waits
+`:day-not-come` / `{:reason :dusk-not-come :dusk 12000}`. A parent's ROUND that calls a child whose check waits gets
+`:declined` from `ctx/call-child`; the engine keeps the child's reason (the deepest one through nested calls) and, when
+the parent's round returns `:declined`, the parent's `job.waiting` carries it (told once, kept while the parent's check
+passes, dropped when a round returns anything else). Three checks still wait only when the job is listed itself (a
+parent must return `:declined` for the reason to reach it): `stair` waits
 `{:reason :no-tool :tool "pickaxe" :block}` or `{:reason :no-free-slot :block}` for the next cell to dig, `pillar` waits
 `{:reason :too-few-blocks :short n :item}` (listed, it no longer gives up for blocks: it waits for them), `toggle` waits
 `{:reason :not-loaded :pos}` or `{:reason :standing-in :pos :block}`.
