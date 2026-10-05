@@ -252,3 +252,54 @@
     (walkway 40) {}
     ;; the frontier is 36 from the goal
     (walkway 47) {:frontierReach 20}))
+
+;; ---- the late flood in slices ----
+
+(defn query-of [[fx fy fz] [x y z]]
+  #js {:from #js {:x fx :y fy :z fz} :goal #js {:kind "near" :x x :y y :z z :range 0}})
+
+(defn sliced-over
+  "create-plan stepped n expansions at a time to the end: [the result as cljs data, the most cells the late flood grew by
+  in one step]."
+  [spec from goal options n]
+  (let [pw (.pathWorld (tu/fake spec))
+        options (js/Object.assign #js {:table (.-table pw) :space (.-space pw)} (clj->js options))
+        ^js search (@#'planner/new-search (.-snapshot pw) (query-of from goal) options)]
+    (.init search)
+    (loop [most 0]
+      (let [before (some-> (.-lf-seen search) .-size)
+            done (.step search n)
+            grew (- (or (some-> (.-lf-seen search) .-size) 0) (or before 0))]
+        (if done
+          [(js->clj (planner/plan (.-snapshot pw) (query-of from goal) options) :keywordize-keys true) (max most grew)]
+          (recur (max most grew)))))))
+
+(defn answer [r] [(:status r) (:reason r) (:expanded r) (get-in r [:stats :flooded]) (some-> (:path r) :steps last (select-keys [:x :y :z]))])
+
+(defn sliced-answer
+  "The answer of create-plan stepped n at a time."
+  [spec from goal options n]
+  (let [pw (.pathWorld (tu/fake spec))
+        ^js p (planner/create-plan (.-snapshot pw) (query-of from goal)
+                                   (js/Object.assign #js {:table (.-table pw) :space (.-space pw)} (clj->js options)))]
+    (loop [] (when-not (.step p n) (recur)))
+    (answer (js->clj (.result p) :keywordize-keys true))))
+
+;; a late flood that grows goes on from where the last one stopped: a slice floods at most about its own share of cells,
+;; and the answer, the stats included, is the one of a search in one go
+(deftest a-late-flood-runs-in-the-slices-of-the-search
+  (let [options {:preFlood 0 :floodAfter 20 :goalFlood 100}
+        [whole most] (sliced-over high-deck [0 64 0] [20 71 20] options 50)]
+    (is (= "goal-enclosed" (:reason whole)))
+    (is (> (get-in whole [:stats :flooded]) 400) "the flood grew twice")
+    (is (< most 150) "no slice flooded much more than its 50")))
+
+(deftest a-search-in-slices-answers-as-in-one-go
+  (are [spec from goal options] (= (answer (result-over spec from goal options))
+                                   (sliced-answer spec from goal options 7)
+                                   (sliced-answer spec from goal options 1000))
+    high-deck [0 64 0] [20 71 20] {:preFlood 0 :floodAfter 20 :goalFlood 100}
+    high-deck [0 64 0] [20 71 20] {}
+    small-floor-deck [0 64 0] [6 71 6] {}
+    (walkway 47) [18 80 8] [10 64 8] {}
+    flat [0 64 0] [30 64 2] {:floodAfter 5 :goalFlood 10}))

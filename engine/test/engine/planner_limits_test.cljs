@@ -157,3 +157,22 @@
   (are [lid] (= "none" (:status (plan-over (covered "leaf_litter" lid) [3 64 1] true)))
     "oak_leaves"
     "stone"))
+
+(defn limited-flag
+  "result.limited of a limited plan from (0 64 1) to goal over blocks: did the walker's limits refuse a move?"
+  [blocks [x y z]]
+  (let [pw (.pathWorld (tu/fake {:blocks blocks}))]
+    (.-limited (planner/plan (.-snapshot pw)
+                             #js {:from #js {:x 0 :y 64 :z 1 :px 0.5 :pz 1.5} :goal #js {:kind "near" :x x :y y :z z :range 0}}
+                             #js {:table (.-table pw) :space (.-space pw) :weight 1.2
+                                  :limits (ex/planner-limits ex/policy (walk/solid-fn pw))}))))
+
+;; a search the limits never turned a move away from searched what a search without them would (walk/plan-within then
+;; needs no second search to know there is no way beyond the walker's abilities)
+(deftest a-result-says-whether-the-limits-refused-a-move
+  (are [blocks goal limited] (= limited (limited-flag blocks goal))
+    gap-up-only [10 65 1] true
+    ceiling-only [10 64 1] true
+    vine-only [10 66 1] true
+    (box 0 63 -2 12 63 4 "stone") [10 64 1] false
+    near-floor [10 64 1] false))

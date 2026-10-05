@@ -280,7 +280,14 @@
    ^:mutable best-distance ^:mutable start-distance ^:mutable expanded ^:mutable t0 ^:mutable elapsed
    ^:mutable start-h ^:mutable start-slow
    ;; the returnable search (options.returnable): no step the body cannot undo is planned; the drops it has not yet probed
-   ^boolean returnable ^js held ^:mutable ^boolean replaying]
+   ^boolean returnable ^js held ^:mutable ^boolean replaying
+   ;; the late flood, one backward flood continued by each late flood and the flood at the end (lateFloodBegin): its seen
+   ;; keys, queue (x y z region per node) and the head of the queue, the budget of the run in progress, whether a run is in
+   ;; progress, whether it met the start (lf-seed-open: among the goal's own cells), whether the run is the one at the end
+   ^:mutable ^js lf-seen ^:mutable ^js lf-queue ^:mutable lf-head ^:mutable lf-budget ^:mutable ^boolean lf-active
+   ^:mutable ^boolean lf-open ^:mutable ^boolean lf-seed-open ^:mutable ^boolean lf-end
+   ;; the walker's limits (options.limits) refused some move: a search without them could have gone further
+   ^:mutable ^boolean limit-refused]
 
   Object
 
@@ -683,7 +690,7 @@
         ;; is the farmland's own cell; a jump up one block falls about 0.3 from the top of its arc, so it may land there)
         (and (or (== move MOVE-GAP) (== move MOVE-DROP)) (== (aget tbl-farmland (.stateAt snapshot x y z)) 1)) nil
         (and returnable (not replaying) ^boolean (.holdsBack s x y z h move parent-node dsec drisk slow-to corner shape)) nil
-        ^boolean (.refusedKind s limit-kinds x y z move) nil
+        ^boolean (.refusedKind s limit-kinds x y z move) (do (set! limit-refused true) nil)
         :else
         (let [extra (if avoiding (.avoidCost s x y z move dsec drisk) 0)]
           (when-not (neg? extra)
@@ -1448,7 +1455,8 @@
                       (when-not (or (< delta -16) (> delta (if up WHOLE 0))
                                     (and (some? limit-gap)
                                          ;; (the goal flood expands cells nothing reached: i is -1, the takeoff a plain walk)
-                                         (not (true? (limit-gap x y z (- h0 (* y 16)) (if (neg? i) MOVE-WALK (aget moves i)) lx ly lz h1)))))
+                                         (not (true? (limit-gap x y z (- h0 (* y 16)) (if (neg? i) MOVE-WALK (aget moves i)) lx ly lz h1)))
+                                         (set! limit-refused true)))
                         (.edge s lx ly lz h1 MOVE-GAP i
                                (+ (* (inc n) SPRINT-S) GAP-S (if (pos? delta) GAP-UP-S 0) enter-extra)
                                (+ enter-risk risk) enter-slow 0 0))))
@@ -1520,7 +1528,8 @@
                          (or (<= h2 h0) ^boolean (.clear s x z (if jump h0 (+ h0 BODY)) hi))
                          ;; (the walker's test of a jump that slides along a corner: limit-corner)
                          (or (not jump) (zero? slide) (nil? limit-corner)
-                             (true? (limit-corner x y z (- h0 (* y 16)) x2 y2 z2 h1))))
+                             (true? (limit-corner x y z (- h0 (* y 16)) x2 y2 z2 h1))
+                             (do (set! limit-refused true) false)))
                 (let [walk (+ (* WALK-S SQRT2 (+ 1 (* SLOW-EXTRA (+ slow-from enter-slow)))) (* slide CORNER-S))
                       brushed (+ (.sideTouch s x2 z lo hi) (.sideTouch s x z2 lo hi))]
                   (.edge s x2 y2 z2 h1
@@ -2090,7 +2099,8 @@
   ;; pop the best open node and expand it
   (expandNext [s]
     (if (zero? heap-n)
-      (.finish s (cond ^boolean (.floodAtEnd s) "goal-enclosed" boxed "box" :else "exhausted"))
+      (when-not ^boolean (.floodAtEnd s)
+        (.finish s (if boxed "box" "exhausted")))
       (let [i (.popMin s)
             x (aget xs i)
             y (aget ys i)
@@ -2173,17 +2183,72 @@
   ;; a search that ran out of nodes to expand with its late flood still due floods once more, so a walled-in goal is named
   ;; so (live: a gateless pen on a platform whose search ran out before the flood ended :one-way at the platform's edge):
   ;; with the flood budget when no late flood ran yet, else with no more than the search expanded. Not when a ladder was
-  ;; turned away at a gap or a swim for air: those reasons say more. True when the goal is walled in.
+  ;; turned away at a gap or a swim for air: those reasons say more. True when that flood is begun (step runs it and
+  ;; finishes the search: goal-enclosed, box or exhausted).
   (floodAtEnd [s]
     (if (or (not flood-pending) goal-unloaded gap-seen air-seen)
       false
-      (let [budget (if (pos? flooded) (js/Math.min goal-flood expanded) goal-flood)
-            enclosed ^boolean (.goalEnclosed s budget false)]
-        (set! flood-pending false)
-        (set! expanded (+ expanded flooded))
-        enclosed)))
+      (do (.lateFloodBegin s (if (pos? flooded) (js/Math.min goal-flood expanded) goal-flood) true)
+          true)))
 
-  ;; the goal flood costs ~30 ms, so easy queries must never see it: it runs after flood-after forward expansions
+  ;; ---- the late flood ----
+  ;; The late floods and the flood at the end of one search are one backward flood (goalEnclosed's, without the cliff
+  ;; test), continued: a run with a bigger budget goes on from where the last one stopped. It is breadth-first from the same
+  ;; seeds over the same moves, so a run floods what a fresh flood with its budget would, in the same order, and answers
+  ;; the same; the cells flooded before are not flooded again, and a run can stop and go on later (step's slices).
+
+  (lateFloodBegin [s budget end]
+    (set! lf-budget budget)
+    (set! lf-end end)
+    (set! lf-active true)
+    (when (nil? lf-seen)
+      (set! lf-seen (js/Set.))
+      (set! lf-queue #js [])
+      (set! leaked false)
+      (.floodSeeds s lf-seen lf-queue)
+      (when (true? (.has lf-seen (aget node-keys 0)))
+        (set! lf-open true)
+        (set! lf-seed-open true))))
+
+  ;; floods at most about allowance more cells of the run in progress; true when the run is over (the start met, the
+  ;; flood exhausted, or past its budget), false when it stopped for the allowance
+  (lateFloodRun [s allowance]
+    (if lf-open
+      true
+      (let [start-key (aget node-keys 0)
+            limit (+ (.-size lf-seen) allowance)]
+        (set! flooding true)
+        (set! allow-shut true) ; a shut trapdoor is a way through, only dearer: the flood must not call its far side enclosed
+        (let [state (loop []
+                      (cond
+                        (not (and (< lf-head (.-length lf-queue)) (<= (.-size lf-seen) lf-budget))) 0
+                        (> (.-size lf-seen) limit) 1
+                        :else
+                        (do
+                          (set! fx (aget lf-queue lf-head))
+                          (set! fy (aget lf-queue (+ lf-head 1)))
+                          (set! fz (aget lf-queue (+ lf-head 2)))
+                          (set! fr (aget lf-queue (+ lf-head 3)))
+                          (set! flood-target (if (neg? fr) (- -1 (.keyOf s fx fy fz 0)) (.keyOf s fx fy fz fr)))
+                          (if (or ^boolean (.floodColumn s lf-seen lf-queue start-key) ^boolean (.floodAround s lf-seen lf-queue start-key))
+                            2
+                            (do (set! lf-head (+ lf-head 4))
+                                (recur))))))]
+          (set! flooding false)
+          (set! allow-shut false)
+          (set! fr -1)
+          (when (== state 2) (set! lf-open true))
+          (not (== state 1))))))
+
+  ;; the run that is over: true when the goal is walled in (the flood exhausted within its budget, neither meeting the start
+  ;; nor leaking); flooded is the flood's size (left alone when the start is one of the goal's own cells, as goalEnclosed)
+  (lateFloodEnd [s]
+    (set! lf-active false)
+    (when-not lf-seed-open (set! flooded (.-size lf-seen)))
+    (and (not lf-open) (not leaked) (<= (.-size lf-seen) lf-budget)))
+
+  ;; the goal flood costs ~30 ms, so easy queries must never see it: it runs after flood-after forward expansions. A slice
+  ;; of max-expansions counts each newly flooded cell as one.
   (step [s max-expansions]
     (when-not started
       (.begin s)
@@ -2191,15 +2256,30 @@
         (.finish s "goal-enclosed")))
     (loop [n 0]
       (when (and (< n max-expansions) (not finished))
-        (if (and flood-pending (>= expanded flood-after) (not goal-unloaded))
-          (let [budget goal-flood
-                enclosed ^boolean (.goalEnclosed s budget false)]
-            (.growFlood s budget)
-            (set! expanded (+ expanded flooded))
-            (if enclosed
-              (.finish s "goal-enclosed")
-              (do (.expandNext s)
-                  (recur (+ n flooded 1))))) ; the flood counts toward the slice
+        (cond
+          lf-active
+          (let [size0 (.-size lf-seen)
+                over ^boolean (.lateFloodRun s (- max-expansions n))
+                used (inc (- (.-size lf-seen) size0))]
+            (cond
+              (not over) (recur (+ n used))
+              lf-end (let [enclosed ^boolean (.lateFloodEnd s)]
+                       (set! flood-pending false)
+                       (set! expanded (+ expanded flooded))
+                       (.finish s (cond enclosed "goal-enclosed" boxed "box" :else "exhausted")))
+              :else (let [enclosed ^boolean (.lateFloodEnd s)]
+                      (.growFlood s lf-budget)
+                      (set! expanded (+ expanded flooded))
+                      (if enclosed
+                        (.finish s "goal-enclosed")
+                        (do (.expandNext s)
+                            (recur (+ n used)))))))
+
+          (and flood-pending (>= expanded flood-after) (not goal-unloaded))
+          (do (.lateFloodBegin s goal-flood false)
+              (recur n))
+
+          :else
           (do (.expandNext s)
               (recur (inc n))))))
     finished)
@@ -2359,7 +2439,8 @@
          :stats #js {:masks masks :tightMasks tight-masks :tightCells (.-size tight-seen) :regions regions-seen :maskMs mask-ms :flooded flooded :preFlooded pre-flooded}
          :path path
          :oneWay one-way
-         :frontier (when-not (identical? status "found") (.frontierOf s))})
+         :frontier (when-not (identical? status "found") (.frontierOf s))
+         :limited limit-refused})
 
   ;; ends the search if it is not over; an exhausted search that turned a ladder away at a gap, or a swim move for lack of air,
   ;; says so
@@ -2388,6 +2469,18 @@
 
   (nearest [s]
     #js {:path (if (== best-node -1) nil (.pathTo s best-node)) :distance best-distance})
+
+  ;; Where an unfinished search has got to: the path to its expanded node nearest the goal, cut before the first step on the
+  ;; way the body cannot undo (so the body can always come back, and whatever the search could reach it still can), with
+  ;; that end's distance to the goal and the start's: {path distance startDistance}; nil when nothing was expanded but the
+  ;; start, or the end stands on magma.
+  (progress [s]
+    (if (or (not started) (<= best-node 0))
+      nil
+      (let [ow (.firstOneWay s best-node)
+            end (if (neg? ow) best-node (aget parents ow))]
+        (when-not (or (<= end 0) ^boolean (.endsOnMagma s (aget xs end) (aget ys end) (aget zs end) (aget hs end)))
+          #js {:path (.pathTo s end) :distance (.distanceTo s (aget xs end) (aget zs end)) :startDistance start-distance}))))
 
   ;; The frontier node: of the nodes standing at the loaded edge (atLoadedEdge) within frontier-reach blocks of the goal
   ;; (along x and along z), the one with the least cost to it plus the heuristic on to the goal, -1 when none: where the
@@ -2524,7 +2617,9 @@
      ;; best-distance start-distance expanded t0 elapsed start-h start-slow
      js/Infinity 0 0 (js/performance.now) 0 -1 0
      ;; returnable held replaying
-     (true? (option options "returnable" false)) #js [] false)))
+     (true? (option options "returnable" false)) #js [] false
+     ;; lf-seen lf-queue lf-head lf-budget lf-active lf-open lf-seed-open lf-end limit-refused
+     nil nil 0 0 false false false false false)))
 
 (defn- result-of
   "The result of a finished search; when the path to its nearest node holds a one-way step, a second search with options.returnable
@@ -2555,9 +2650,10 @@
     (result-of search snapshot query options)))
 
 (defn create-plan
-  "plan in slices, for a caller that yields to the event loop between them: {step, result}. step(n) runs at most about n
-  expansions (the goal flood's cells count toward them) and is true once the plan is ready; result() is then what plan
-  answers. The returnable search behind a one-way step (result-of) runs in the same slices."
+  "plan in slices, for a caller that yields to the event loop between them: {step, result, progress}. step(n) runs at most
+  about n expansions (each newly flooded cell of the goal flood counts as one) and is true once the plan is ready; result()
+  is then what plan answers. The returnable search behind a one-way step (result-of) runs in the same slices. progress()
+  is where an unfinished search has got to (Search.progress), nil once the search itself is over."
   [snapshot query options]
   (let [search (new-search snapshot query options)
         clean (volatile! nil)
@@ -2580,4 +2676,6 @@
                                  false)))))
          :result (fn [] (if (neg? @node)
                           (.resultFrom search -1 nil)
-                          (.resultFrom search @node (.nearest ^Search @clean))))}))
+                          (.resultFrom search @node (.nearest ^Search @clean))))
+         ;; while the search itself is not over: where it has got to (Search.progress), else nil
+         :progress (fn [] (when-not (.-finished search) (.progress search)))}))

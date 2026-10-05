@@ -720,3 +720,31 @@
     (state-at rise-north 1) (pose 5.5 64 5.31 {:in-water true})
     (state-at [(step 5 64 5 :start) (step 5 65 4 :jump {:cx 1})] 1) (pose 5.5 64 5.31)
     (state-at [(step 4 64 5 :start) (step 5 65 4 :jump)] 1) (pose 5.5 64 5.31)))
+
+;; The planner asks planner-limits about every gap jump and corner jump it looks at; its answers must be the executor's own
+;; refusals (gap-refused with low-ceiling?, high-corner?), whatever form they take.
+(defn ceiling-world
+  "solid? over a few columns with blocks at various heights round 0 64 0."
+  [x y z]
+  (contains? #{[1 66 0] [2 67 0] [0 68 0] [3 66 0] [0 66 1] [1 65 1] [-1 67 0] [0 65 -1] [1 64 1] [1 66 -2]} [x y z]))
+
+(deftest planner-limits-answer-as-the-executor-refusals
+  (let [limits (ex/planner-limits ex/door-policy ceiling-world)
+        gap (.-gap limits)
+        corner (.-corner limits)
+        gap-cases (for [move (range (count ex/move-names)) h [0 8] [dx dz] [[1 0] [-1 0] [0 1] [0 -1] [1 1]] n (range 1 6)
+                        dy [-1 0 1] lh [0 4]]
+                    [move h (* dx n) dy (* dz n) lh])
+        corner-cases (for [[lx lz] [[1 1] [-1 1] [1 -1] [-1 -1]] ly [63 64 65] lh [0 8]] [lx ly lz lh])]
+    (is (= [] (remove (fn [[move h lx dy lz lh]]
+                        (let [prev {:x 0 :y 64 :z 0 :h h :move (nth ex/move-names move)}
+                              st {:x lx :y (+ 64 dy) :z lz :h lh :move :gap}
+                              expected (nil? (ex/gap-refused ex/door-policy prev
+                                                             (cond-> st (ex/low-ceiling? ex/door-policy prev st ceiling-world)
+                                                               (assoc :low-ceiling true))))]
+                          (= expected (true? (gap 0 64 0 h move lx (+ 64 dy) lz lh)))))
+                      gap-cases)))
+    (is (= [] (remove (fn [[lx ly lz lh]]
+                        (= (not (ex/high-corner? ex/door-policy 0 0 lx ly lz lh ceiling-world))
+                           (true? (corner 0 64 0 0 lx ly lz lh))))
+                      corner-cases)))))

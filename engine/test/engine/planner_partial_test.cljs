@@ -2,6 +2,7 @@
   "engine/js/path/planner-partial.test.mjs against the ClojureScript planner: the partial end of a plan, the node nearest
   the goal among those reached without a step the body cannot undo, and result :oneWay when a nearer node lies behind one."
   (:require [cljs.test :refer [deftest is are]]
+            [engine.path.planner-tuned :as planner]
             [engine.planner-fixture :as pf :refer [near cells moves last-cell]]))
 
 (def DROP (:drop pf/MOVE))
@@ -130,3 +131,34 @@
          (is (nil? (:oneWay r))))
     3 "found" nil [12 70 2]
     4 "partial" "exhausted" [5 70 2]))
+
+;; ---- where an unfinished search has got to (create-plan's progress) ----
+
+(defn progress-after
+  "create-plan over fill from `from` to goal, stepped n expansions once: its progress as cljs data (nil when none)."
+  [fill from goal n]
+  (let [^js p (planner/create-plan (pf/snapshot {:fill fill}) (clj->js {:from from :goal goal}) (pf/options-js {}))]
+    (.step p n)
+    (js->clj (.progress p) :keywordize-keys true)))
+
+;; a long field (feet 64) far from a goal at x 80; on the second, the field lies 3 below a ledge (feet 67) the start stands on
+(def field [(stone -2 -20 80 20 64)])
+(def ledge-field [(stone -2 -20 80 20 64) (stone -2 -2 3 2 67)])
+
+(deftest an-unfinished-search-says-where-it-has-got-to
+  (let [{:keys [distance startDistance] :as pr} (progress-after field {:x 0 :y 64 :z 0} (near 80 64 0) 30)]
+    (is (< distance (- startDistance 10)) "well on its way")
+    (is (= [0 64 0] (first (cells pr))))
+    (is (= distance (let [[x _ z] (last (cells pr))] (- 80 x))) "its distance is its end's")))
+
+(deftest the-progress-of-a-search-stops-before-a-step-the-body-cannot-undo
+  (let [pr (progress-after ledge-field {:x 0 :y 67 :z 0} (near 80 64 0) 60)]
+    (is (some? pr))
+    (is (every? #(= 67 (second %)) (cells pr)) "the drop off the ledge is not taken")
+    (is (not-any? #{DROP} (moves pr)))))
+
+(deftest a-search-that-is-over-has-no-progress
+  (let [^js p (planner/create-plan (pf/snapshot {:fill field}) (clj->js {:from {:x 0 :y 64 :z 0} :goal (near 10 64 0)})
+                                   (pf/options-js {}))]
+    (loop [] (when-not (.step p 1000) (recur)))
+    (is (nil? (.progress p)))))

@@ -208,14 +208,37 @@
   with the takeoff's ceiling; corner, a test of each jump that slides along a corner (takeoff x y z h, landing lx ly lz lh)
   by high-corner?. solid? is a fn [x y z] -> bool."
   [policy solid?]
-  #js {:kinds (reduce + 0 (keep (fn [[bit moves]] (when-not (every? (:moves policy) moves) bit)) planner-kinds))
-       :gap (fn [x y z h move lx ly lz lh]
-              (let [prev {:x x :y y :z z :h h :move (nth move-names move)}
-                    step {:x lx :y ly :z lz :h lh :move :gap}]
-                (nil? (gap-refused policy prev (cond-> step
-                                                 (low-ceiling? policy prev step solid?) (assoc :low-ceiling true))))))
-       :corner (fn [x _y z _h lx ly lz lh]
-                 (not (high-corner? policy x z lx ly lz lh solid?)))})
+  ;; The planner calls these for every gap and corner jump it looks at, so they are gap-refused (with low-ceiling?) and
+  ;; high-corner? over numbers, with no maps, seqs or refusal texts (the map form cost 3-5x the search itself live).
+  (let [blocker (to-array (map #(contains? takeoff-blockers %) move-names))
+        widths (set (keys (:gap-jump policy)))
+        headroom (:gap-headroom policy)
+        body (:body-height policy)
+        solid-run? (fn [x z y0 y1]
+                     (loop [y y0]
+                       (cond (> y y1) false
+                             (solid? x y z) true
+                             :else (recur (inc y)))))]
+    #js {:kinds (reduce + 0 (keep (fn [[bit moves]] (when-not (every? (:moves policy) moves) bit)) planner-kinds))
+         :gap (fn [x y z h move lx ly lz lh]
+                (let [dx (- lx x)
+                      dz (- lz z)
+                      n (dec (+ (Math/abs dx) (Math/abs dz)))
+                      sx (Math/sign dx)
+                      sz (Math/sign dz)
+                      top (dec (Math/ceil (+ y (/ h 16) headroom)))]
+                  (and (not (aget blocker move))
+                       (or (zero? dx) (zero? dz))
+                       (not (and (zero? dx) (zero? dz)))
+                       (contains? widths n)
+                       (<= (+ (* ly 16) lh) (+ (* y 16) h))
+                       (loop [k 0]
+                         (cond (> k n) true
+                               (solid-run? (+ x (* k sx)) (+ z (* k sz)) (+ y 2) top) false
+                               :else (recur (inc k)))))))
+         :corner (fn [x _y z _h lx ly lz lh]
+                   (let [top (dec (Math/ceil (+ ly (/ lh 16) body)))]
+                     (not (or (solid-run? lx z ly top) (solid-run? x lz ly top)))))}))
 
 ;; ---------------------------------------------------------------- corner slides
 
