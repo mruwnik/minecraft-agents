@@ -8,8 +8,10 @@
   "Put the body out: it is on fire or in lava. Each round, with a water bucket
   carried and the body on land, pours the water at the feet, remembers the cell
   as :poured and, once the fire is out, scoops that water back up with the
-  empty bucket so no source block is left behind (info :scoop_failed when the
-  scoop is not placed; if still burning after 8 waiting rounds it stops
+  empty bucket so no source block is left behind. The block read can lag the
+  pour, so a poured cell not yet read as water is waited for (up to 10 rounds)
+  before the job gives it up; a scoop that is not placed warns
+  extinguish.scoop_failed naming the cell; if still burning after 8 waiting rounds it stops
   waiting and acts normally). A cell in another's zone or claim is not poured over while water or a safe cell is
   within reach; with nothing else to do it pours there anyway, as a last resort, with one
   extinguish.trespass-last-resort warn (a missing zone list changes nothing). Otherwise it makes
@@ -49,6 +51,7 @@
 (def hazard-touch 1.5)
 
 (def max-pour-waits 8)
+(def max-water-waits 10)
 
 (defn body-burning? [c] (burning/burning? (.self (:primitives c))))
 
@@ -127,7 +130,7 @@
 (defn has-bucket? [p] (boolean (some #(= "water_bucket" (:name %)) (u/inventory p))))
 
 (defn clear-pour! [c]
-  (ctx/update-mem! c dissoc :poured :pour-waits))
+  (ctx/update-mem! c dissoc :poured :pour-waits :water-waits))
 
 (defn ^:async scoop-round
   "The water was poured at poured. Wait while burning (up to max-pour-waits
@@ -142,15 +145,19 @@
           (do (ctx/update-mem! c assoc :pour-waits waits) :continue)))
 
       (not= "water" (u/block-name p poured))
-      (do (clear-pour! c) :done)
+      (let [waits (inc (:water-waits (ctx/mem c) 0))]
+        (if (> waits max-water-waits)
+          (do (clear-pour! c) :done)
+          (do (ctx/update-mem! c assoc :water-waits waits) :continue)))
 
       :else
       (let [r (await (ctx/act c :place (clj->js {:pos poured :item "bucket"})))
             status (.-status r)]
         (clear-pour! c)
         (when-not (= "placed" status)
-          (ctx/emit! c :scoop_failed :info {:text (str "could not scoop the poured water: " status)
-                                             :status status}))
+          (ctx/emit! c :extinguish.scoop_failed :warn
+                     {:text (str "could not scoop the poured water at " (pr-str poured) ": " status)
+                      :pos poured :status status}))
         :done))))
 
 (defn ^:async pour-last-resort!

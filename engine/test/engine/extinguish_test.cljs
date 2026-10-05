@@ -195,7 +195,7 @@
           (await (core/tick! eng))
           (is (= 1 (count (:list (core/state eng)))) "still listed after the pour")
           (fake/remove-block! p [0 64 0])
-          (await (run-until-empty eng 3))
+          (await (run-until-empty eng 15))
           (is (= [] (:list (core/state eng))))
           (is (= 1 (count (calls p "place")))))))))
 
@@ -252,3 +252,41 @@
           (core/submit! eng '(jobs.survival.extinguish) {})
           (await (core/tick! eng))
           (is (= 1 (count (calls p "moveTo")))))))))
+
+(deftest a-block-read-that-lags-the-pour-does-not-skip-the-scoop
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:onFire true}
+                                      :inventory [{:name "water_bucket" :count 1}]
+                                      :blocks (floor 6)})]
+          (core/submit! eng '(jobs.survival.extinguish) {})
+          (await (core/tick! eng))
+          (fake/remove-block! p [0 64 0])      ; the server's block update has not arrived yet
+          (await (core/tick! eng))
+          (is (= 1 (count (:list (core/state eng)))) "still waiting for the water block")
+          (fake/set-block! p [0 64 0] "water")  ; now it arrives
+          (await (run-until-empty eng 5))
+          (is (= [] (:list (core/state eng))))
+          (is (= ["water_bucket" "bucket"] (mapv :item (map call-args (calls p "place")))))
+          (is (not= "water" (.-name (.blockAt p #js {:x 0 :y 64 :z 0}))))
+          (is (some #(= "water_bucket" (:name %)) (u/inventory p))))))))
+
+(deftest a-failed-scoop-warns-with-the-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [clock (atom 1000000)
+              [seen sink] (tu/legacy-capture-sink)
+              p (tu/fake {:self {:onFire true} :inventory [{:name "water_bucket" :count 1}] :blocks (floor 6)})
+              eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
+                                :now #(deref clock)
+                                :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+          (core/submit! eng '(jobs.survival.extinguish) {})
+          (await (core/tick! eng))
+          (swap! (fake/state p) assoc :inventory [])   ; no empty bucket to scoop with
+          (await (run-until-empty eng 5))
+          (let [[e & more] (filter #(= :extinguish.scoop_failed (:kind %)) @seen)]
+            (is (empty? more))
+            (is (some? e))
+            (is (= {:x 0 :y 64 :z 0} (:pos e)))))))))
