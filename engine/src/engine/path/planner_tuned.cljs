@@ -101,6 +101,10 @@
 (def ^:const CORNER-S 0.15) ; a diagonal slid along a blocked corner: slower than a straight one
 (def ^:const SLOW-EXTRA 0.75) ; walking time grows by this much of itself per slow end of a move
 (def ^:const LAVA-ADJACENT 0.5) ; hp of risk for a step with lava beside the feet
+;; hp of risk for a corner slide whose open side is a hole onto lava or fire: the slide carries the body wholly over that
+;; hole and it dips in (live: BaseMiner burned 2 of 2 times on such a slide, card cd97ec8b). Large, so a way round of up
+;; to about a minute's walk wins; still allowed, so a body in a pocket whose only way out is such a slide gets out.
+(def ^:const HAZARD-SLIDE-RISK 10)
 (def ^:const FREE-FALL 3)
 (def ^:const EXIT-SLACK 1) ; 1/16: a floating body exits onto land up to this over the water's top face
 (def ^:const SQRT2 1.4142135623730951)
@@ -485,6 +489,21 @@
             (== (aget tbl-kind id) LAVA) 1
             (or (pos? (aget tbl-top id)) (== (aget tbl-kind id) WATER)) 0
             :else (recur (inc k)))))))
+
+  ;; 1 when the side column x z of a corner slide whose body's feet are at lo (1/16 absolute) has no floor and lava or a
+  ;; block to avoid or that hurts to stand on (fire, powder snow, cobweb, magma, a lit campfire) under the hole within a
+  ;; safe drop, else 0. A floor (collision), water or unloaded land ends the look.
+  (slideHoleRisk [s x z lo]
+    (let [top-y (bit-shift-right (dec lo) 4)]
+      (loop [k 0]
+        (if (> k FREE-FALL)
+          0
+          (let [id (.stateAt s x (- top-y k) z)]
+            (cond
+              (== id UNLOADED) 0
+              (or (== (aget tbl-kind id) LAVA) (== (aget tbl-hazard id) HAZARD-AVOID) (== (aget tbl-hazard id) DAMAGE-STAND)) 1
+              (or (pos? (aget tbl-top id)) (== (aget tbl-kind id) WATER)) 0
+              :else (recur (inc k))))))))
 
   ;; A body that falls into the cell under a gap cell x y z cannot jump back out: the cell two below is open too (no
   ;; collision, not water), so the floor is two or more blocks down
@@ -1587,7 +1606,11 @@
                              (true? (limit-corner x y z (- h0 (* y 16)) x2 y2 z2 h1))
                              (do (set! limit-refused true) false)))
                 (let [walk (+ (* WALK-S SQRT2 (+ 1 (* SLOW-EXTRA (+ slow-from enter-slow)))) (* slide CORNER-S))
-                      brushed (+ (.sideTouch s x2 z lo hi) (.sideTouch s x z2 lo hi))]
+                      brushed (+ (.sideTouch s x2 z lo hi) (.sideTouch s x z2 lo hi)
+                                 ;; a slide over a hole onto lava or fire (the open side is x2 z when sb holds the corner)
+                                 (if (== slide 1)
+                                   (* HAZARD-SLIDE-RISK (if (zero? sa) (.slideHoleRisk s x2 z lo) (.slideHoleRisk s x z2 lo)))
+                                   0))]
                   (.edge s x2 y2 z2 h1
                          (cond jump MOVE-JUMP (== slide 1) MOVE-CORNER :else MOVE-DIAGONAL)
                          i (+ (if jump (+ walk JUMP-S) walk) enter-extra) (+ enter-risk brushed) enter-slow slide 0)))))))))

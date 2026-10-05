@@ -1,0 +1,122 @@
+;; The lava-pool rim BaseMiner burned on (card cd97ec8b; events seq 60606-60636, 60782-60814): a cave whose floor
+;; holds a source-lava pool, the walkable rim one block above it. Rebuilt from the body's recorded chunks around
+;; [112..131, -55..-51, 46..64] (plot = world x-108, y+54, z-42; the rim floor y -55 is the plot floor y -1).
+;; The pocket [16 0 7] [15 0 8] [15 0 9] joins the cave only by corner slides whose open side is a hole onto the
+;; lava ([16 0 8] and [15 0 10]); the planner made them as plain corner slides and the slide carried the body over
+;; the lava 2 of 2 times. After the planner fix such a slide costs HAZARD-SLIDE-RISK (10 hp): a walk that has a way round
+;; never takes it (no :hurt by lava); a walk out of or into the pocket still takes it (the only way) and arrives, and
+;; records whether the dip burned the body (the walker is unchanged).
+{:defaults
+ {:tags [:movement :lava :go-to]
+  :plot {:height 8 :floor "stone"}
+  :blocks
+  [[:fill [4 0 4] [23 6 22] "deepslate"]
+   [:fill [18 -1 6] [20 -1 6] "lava"]
+   [:fill [17 -1 7] [21 -1 7] "lava"]
+   [:fill [16 -1 8] [21 -1 8] "lava"]
+   [:fill [16 -1 9] [19 -1 9] "lava"]
+   [:fill [15 -1 10] [18 -1 10] "lava"]
+   [:fill [15 -1 11] [17 -1 11] "lava"]
+   [:fill [16 -1 12] [16 -1 12] "lava"]
+   [:fill [17 0 6] [22 0 6] "air"]
+   [:fill [16 0 7] [23 0 7] "air"]
+   [:fill [15 0 8] [22 0 8] "air"]
+   [:fill [15 0 9] [21 0 9] "air"]
+   [:fill [14 0 10] [19 0 10] "air"]
+   [:fill [14 0 11] [18 0 11] "air"]
+   [:fill [13 0 12] [17 0 12] "air"]
+   [:fill [13 0 13] [16 0 13] "air"]
+   [:fill [12 0 14] [16 0 14] "air"]
+   [:fill [12 0 15] [15 0 15] "air"]
+   [:fill [11 0 16] [14 0 16] "air"]
+   [:fill [11 0 17] [13 0 17] "air"]
+   [:fill [10 0 18] [13 0 18] "air"]
+   [:fill [9 0 19] [12 0 19] "air"]
+   [:fill [10 0 20] [12 0 20] "air"]
+   [:fill [20 1 5] [20 1 5] "air"]
+   [:fill [22 1 5] [22 1 5] "air"]
+   [:fill [18 1 6] [23 1 6] "air"]
+   [:fill [16 1 7] [23 1 7] "air"]
+   [:fill [15 1 8] [23 1 8] "air"]
+   [:fill [15 1 9] [22 1 9] "air"]
+   [:fill [14 1 10] [19 1 10] "air"]
+   [:fill [13 1 11] [18 1 11] "air"]
+   [:fill [13 1 12] [17 1 12] "air"]
+   [:fill [12 1 13] [17 1 13] "air"]
+   [:fill [12 1 14] [16 1 14] "air"]
+   [:fill [11 1 15] [16 1 15] "air"]
+   [:fill [10 1 16] [15 1 16] "air"]
+   [:fill [10 1 17] [14 1 17] "air"]
+   [:fill [9 1 18] [14 1 18] "air"]
+   [:fill [5 1 19] [13 1 19] "air"]
+   [:fill [4 1 20] [13 1 20] "air"]
+   [:fill [4 1 21] [12 1 21] "air"]
+   [:fill [10 1 22] [10 1 22] "air"]
+   [:fill [22 2 5] [22 2 5] "air"]
+   [:fill [19 2 6] [23 2 6] "air"]
+   [:fill [18 2 7] [23 2 7] "air"]
+   [:fill [16 2 8] [23 2 8] "air"]
+   [:fill [15 2 9] [18 2 9] "air"]
+   [:fill [20 2 9] [23 2 9] "air"]
+   [:fill [14 2 10] [18 2 10] "air"]
+   [:fill [14 2 11] [17 2 11] "air"]
+   [:fill [13 2 12] [17 2 12] "air"]
+   [:fill [12 2 13] [17 2 13] "air"]
+   [:fill [12 2 14] [16 2 14] "air"]
+   [:fill [11 2 15] [16 2 15] "air"]
+   [:fill [10 2 16] [15 2 16] "air"]
+   [:fill [10 2 17] [14 2 17] "air"]
+   [:fill [4 2 18] [14 2 18] "air"]
+   [:fill [4 2 19] [13 2 19] "air"]
+   [:fill [4 2 20] [13 2 20] "air"]
+   [:fill [4 2 21] [12 2 21] "air"]
+   [:fill [4 2 22] [11 2 22] "air"]
+   [:fill [21 3 6] [23 3 6] "air"]
+   [:fill [21 3 7] [23 3 7] "air"]
+   [:fill [21 3 8] [23 3 8] "air"]
+   [:fill [22 3 9] [23 3 9] "air"]
+   [:fill [16 3 11] [16 3 11] "air"]
+   [:fill [14 3 12] [16 3 12] "air"]
+   [:fill [13 3 13] [16 3 13] "air"]
+   [:fill [12 3 14] [15 3 14] "air"]
+   [:fill [11 3 15] [15 3 15] "air"]
+   [:fill [11 3 16] [15 3 16] "air"]
+   [:fill [10 3 17] [14 3 17] "air"]
+   [:fill [4 3 18] [13 3 18] "air"]
+   [:fill [4 3 19] [13 3 19] "air"]
+   [:fill [4 3 20] [12 3 20] "air"]
+   [:fill [4 3 21] [11 3 21] "air"]
+   [:fill [4 3 22] [10 3 22] "air"]]
+  :limit-s 90}
+ :cases
+ [;; should succeed: out of the pocket and down the cave. The slides are the only way out, so they are taken: the body
+  ;; must arrive (never trapped); a lava :hurt here is recorded, not failed (the dip of the unavoidable slide)
+  {:name "out-of-the-pocket-arrives"
+   :body {:at [16.5 0 7.5]}
+   :act [[:job (jobs.movement.go-to {:pos #at [4 1 21]})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 80 :of-job true}]}
+  ;; should succeed: from the cave into the pocket (the goal is in it, the slides the only way in): arrives
+  {:name "into-the-pocket-arrives"
+   :body {:at [10.5 1 17.5]}
+   :act [[:job (jobs.movement.go-to {:pos #at [16 0 7]})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 80 :of-job true}]}
+  ;; should succeed: along the rim to the rim cell [14 0 11] (world [122 -54 53]) beside the pocket's mouth, which has
+  ;; a plain way along the rim: no slide over the lava, no lava :hurt
+  {:name "along-the-rim-no-slide"
+   :body {:at [10.5 1 17.5]}
+   :act [[:job (jobs.movement.go-to {:pos #at [14 0 11]})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 80 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes ["lava"]}} :for-s 80 :until {:source :job :kind :completed}}]}
+  ;; should succeed: a goal on the plot floor north-east of the box, straight past the pocket (the BaseMiner home
+  ;; case, which ended its walk in the pocket): arrives by walking round the box, never via the rim
+  {:name "far-goal-does-not-end-on-the-rim"
+   :body {:at [10.5 1 17.5]}
+   :act [[:job (jobs.movement.go-to {:pos #at [28 0 4]})]]
+   :expect [{:event {:source :job :kind :result} :within-s 80 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes ["lava"]}} :for-s 80 :until {:source :job :kind :completed}}]}
+  ;; should fail: the goal is a cell over the lava itself: unreachable, and the body never walks in
+  {:name "goal-over-the-lava-declined"
+   :body {:at [10.5 1 17.5]}
+   :act [[:job (jobs.movement.go-to {:pos #at [17 0 9]})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 80 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes ["lava"]}} :for-s 80 :until {:source :job :kind :completed}}]}]}

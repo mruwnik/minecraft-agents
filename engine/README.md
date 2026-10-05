@@ -1774,6 +1774,11 @@ shadow-cljs compile planner-bench && npx shadow-cljs release planner-bench-relea
 A gap jump over 3 cells above a pit the body cannot jump out of (the floor 2 or more blocks down) carries 0.5 risk
 (`GAP-PIT-RISK`): one that falls short traps the body (live: a crater whose only way out was a corner jump), so a short way round
 is taken instead; where the jump is the only way it is still planned.
+A corner slide (a diagonal along one blocked side) whose open side is a hole with lava, fire, powder snow, cobweb, magma or a
+lit campfire under it (within `FREE-FALL`, no floor, water or unloaded cell before it) carries 10 risk (`HAZARD-SLIDE-RISK`):
+the slide carries the body wholly over that hole and it dips in (live: BaseMiner burned on a lava pool rim, card cd97ec8b,
+`test/engine/planner_lava_rim_test.cljs`), so any way round up to about 20 s longer wins; where the slide is the only way (a
+pocket on the rim) it is still planned. The walker takes a corner step without sprint and slides along the wall as before.
 (dev against :advanced build, see its header). A drop out of or into a tight cell (a doorway on a sill, a ledge beside a
 fence) is judged where the body falls: 5/16 past the edge it walked off (`DROP-INSET`, its 0.31 half-width clear of the
 ledge), so stepping down out of a door that stands a block above the ground outside is planned. A gap jump or a drop never lands on farmland (vanilla tramples farmland under a
