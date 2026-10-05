@@ -60,7 +60,7 @@ whose repo path is this checkout, override with `CARD_REPO`). `CARD_AUTHOR` sets
 
 ### world-test.mjs
 
-    node tools/world-test.mjs [fixture.edn|dir ...] [--tag T] [--match TEXT] [--repeat N] [--list] [--allow-time --time-log F]
+    node tools/world-test.mjs [fixture.edn|dir ...] [--tag T] [--match TEXT] [--repeat N] [--body NAME] [--world claude] [--first-plot I] [--card ID] [--results FILE] [--list] [--allow-time --time-log F]
 
 Runs world fixtures (live cases as EDN, `engine/fixtures/world/`, format in its README) on a reserved plot grid
 (x/z 20000..20640, y 150) with one probe body (`ProbeFixture` by default): builds each case's plot, starts the body

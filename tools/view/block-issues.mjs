@@ -162,7 +162,6 @@ const shapeVerdict = (resolved, material) => {
 }
 
 // extra: severity (a milder one than the reason's default), model (id), parents (its chain), ignored (properties)
-// extra: severity (a milder one than the reason's default), model (a model id), ignored (properties)
 // drawnAs comes from the first affected state's material; drawnVariants lists every distinct picture when there are several
 const makeRecord = (block, reason, ids, materialAt, detail, extra = {}, resolved = []) => {
   const drawn = ids.map(id => drawnAs(materialAt(id)))
@@ -234,7 +233,7 @@ const blockRecords = ({ block, materials, materialOf, models }) => {
 
   const describe = model => model ? `model ${model.id} (${model.chain.join(' > ')}), ${model.elements.length} element${model.elements.length === 1 ? '' : 's'}` : 'no model'
 
-  // states the view draws from its own entity models (block-entity-models.mjs) are no longer reported here
+  // states the view draws from its own entity models (block-entity-models.mjs) are not reported here
   const undrawn = entityOnly ? ids.filter(id => !materialAt(id).entity) : ids
   if ((entityOnly && undrawn.length) || PARTLY_ENTITY.has(block.name)) {
     const detail = entityOnly ? `the model has no elements, the game draws it with a block-entity renderer: ${describe(resolved[0])}` : 'the model has geometry, but its items are drawn by a block-entity renderer'

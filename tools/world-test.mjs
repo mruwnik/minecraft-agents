@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Why JavaScript: thin entry point; the runner is cljs (dashboard/src/world_test/runner.cljs), run from the
 // ahead-of-time compiled bundle dashboard/out/world-test.cjs (build it with: tools/compile dashboard world-test).
-//   node tools/world-test.mjs [fixture.edn|dir ...] [--tag T] [--match TEXT] [--repeat N] [--list] ...
+//   node tools/world-test.mjs [fixture.edn|dir ...] [--tag T] [--match TEXT] [--repeat N] [--body NAME] [--world W] [--first-plot I] [--card ID] [--results FILE] [--list] [--allow-time --time-log F]
 import fs from 'node:fs'
 import path from 'node:path'
 import { createRequire } from 'node:module'

@@ -2,7 +2,7 @@
 // The tint group of a model face with a `tintindex`, for one block state, and the stage-1 colours the shader multiplies by: a single
 // fixed biome (plains) for the colormap groups. minecraft-data's tints.json gives the constant tints by block name, redstone by power
 // and water for plains; its plains grass and foliage entries are 0 (the game reads them from the colormap), so those two are the
-// vanilla plains colours, as src/vision/renderer.mjs has them. WHICH blocks use which colormap is FROM MEMORY of the game's
+// vanilla plains colours, as renderer.mjs has them. WHICH blocks use which colormap is FROM MEMORY of the game's
 // BlockColors and may be stale for 26.1: check it against the game.
 import tints from 'minecraft-data/minecraft-data/data/pc/26.1/tints.json' with { type: 'json' }
 

@@ -7,7 +7,7 @@
 //   V1 (2db6cef8): pose interpolation and drive key rules: ./bench-old/interp.mjs and drive-keys.mjs against view.interp, view.drive.
 // The JS originals are verbatim copies under ./bench-old (see their headers); the cljs side is the release build of the :viewer-bench
 // shadow-cljs build (advanced optimisations, the :viewer build's compiler options), so build it first:
-//   (cd dashboard && flock /tmp/mc-compile.lock npx shadow-cljs release viewer-bench)
+//   tools/compile dashboard viewer-bench --release
 //   node tools/view/bench-cljs-vs-js.mjs [--rounds 3] [--json]
 // A sample is the mean of `batch` calls (1 for the heavy functions, more for the sub-microsecond ones, where one timer read is
 // a large part of a call); p99 is of the samples. Each implementation is warmed up before measuring, and rounds alternate js, cljs.

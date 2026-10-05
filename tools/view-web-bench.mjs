@@ -1,6 +1,6 @@
 // Why JavaScript: drives headless Chromium over CDP to measure the WebGL view (browser/GPU).
 // Measures the browser view in headless Chromium over CDP.
-//   node tools/view-web-bench.mjs <url> [--angle vulkan] [--seconds 5] [--screenshot file.png] [--no-vsync] [--width W --height H] [--trace seconds] [--hub]
+//   node tools/view-web-bench.mjs <url> [--angle vulkan] [--seconds 5] [--screenshot file.png] [--no-vsync] [--width W --height H] [--trace seconds] [--hub] [--chromium <binary, default /usr/bin/chromium>] [--timeout <seconds, default 90>]
 // --beside-hub <hub url>: the url is a single view; measures its fps alone, then again with a hub page (own window, same browser) running beside it, and the hub's per-card rates.
 // --dashboard: the url is the dashboard (e.g. http://localhost:3701/#/bodies); reads the page's own hub (window.getViewHub()) with the --hub report, plus the page's requestAnimationFrame frame times (fps, p50, p95, max).
 // --hub: the url is tools/view/web/hub-demo.html (many scenes in one context); samples window.__hub every second for --seconds and prints per-scene fps (min / median over scenes),

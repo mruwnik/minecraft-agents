@@ -1,7 +1,7 @@
 // Why JavaScript: thin dev tool of the JS view stack; replays recorded poses into a temporary view server.
 // Replays a recorded pose stream (tools/view-pose-record.mjs) as body "Replay" of the recorded world (<world>/Replay) in a temp state dir, so the browser view
 // can be measured on a deterministic input. Prints the state dir; serve it with `node tools/view-serve.mjs --state <dir>`.
-//   node tools/view-pose-replay.mjs --in poses.jsonl [--hz 20] [--synthetic walk|teleport|sprint] [--state state] [--seconds N] [--touch-ms 2000]
+//   node tools/view-pose-replay.mjs --in poses.jsonl [--hz 20] [--synthetic walk|teleport|sprint] [--state state] [--seconds N] [--touch-ms 2000] [--dir <temp state dir>] [--worlds <dir>]
 // --synthetic ignores the recording except for its first pose (a bare --synthetic is walk):
 //   walk: a straight walk at 4.317 blocks/s, 20 blocks each way, at --hz, in the recorded place with the world's chunks and biomes.json symlinked.
 //   teleport: stands still and every 6 s jumps between two places >= 1000 blocks apart that both have column files.

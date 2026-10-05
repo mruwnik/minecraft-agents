@@ -1,7 +1,7 @@
 // Why JavaScript: graphics; converts pose files into the renderer's camera numbers.
 // A pose file's numbers as the renderer wants them. The renderer takes mineflayer's own yaw and pitch in radians
-// (directionFor: yaw 0 faces north, 90 degrees west, 180 south, 270 east; pitch > 0 looks up), which is what the old
-// eyes.mjs passed it as bot.entity.yaw/pitch, so the conversion is the identity plus the eye.
+// (directionFor: yaw 0 faces north, 90 degrees west, 180 south, 270 east; pitch > 0 looks up), the same as
+// bot.entity.yaw/pitch, so the conversion is the identity plus the eye.
 export const cameraFromPose = pose => ({
   eye: { x: pose.eye.x, y: pose.eye.y, z: pose.eye.z },
   yaw: pose.yaw ?? 0,
@@ -11,7 +11,7 @@ export const cameraFromPose = pose => ({
 // a dropped item is a quarter of a block across, as the game's item entity is
 const ITEM_SIZE = 0.25
 
-// eyes.mjs's visibleEntities, from the pose's entity list
+// the entities the renderer draws, from the pose's entity list
 export const entitiesFromPose = pose => (pose.entities ?? []).filter(e => e.pos).map(e => ({
   name: e.name ?? e.type,
   label: e.username ?? e.name,

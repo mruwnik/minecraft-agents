@@ -1,7 +1,7 @@
 // Why JavaScript: binary data; extracts textures from the client jar for the view.
-// textures/ is Mojang's art, so it is not checked in: this fills it (blocks, and items under item/) from a client jar the first time a body starts
-// without it. tools/start-body runs it beside patch-deps.mjs. It never stops a body from starting: with no textures
-// `./mc look` still draws, colouring every block by a hash of its name instead of its picture.
+// textures/ is Mojang's art and not checked in: this fills it (blocks, and items under item/) from a client jar when a
+// body starts without it, beside patch-deps.mjs. It never stops a body from starting: without textures the view colours
+// every block by a hash of its name.
 //   node tools/textures.mjs
 // The jar it reads: $MC_CLIENT_JAR when set, else the newest plain release the launcher installed (<versions>/<v>/<v>.jar).
 import fs from 'node:fs'
@@ -52,8 +52,8 @@ const installedJar = () => VERSIONS.filter(fs.existsSync)
   .flatMap(dir => clientVersions(fs.readdirSync(dir)).map(v => jarOf(dir, v)))
   .find(fs.existsSync)
 
-// blocks lie flat in textures/, where src/vision/eyes.mjs reads them; items go under item/ for the dashboard's inventory
-// screen. Each kind is filled on its own, so a textures/ from before items were extracted still gets them
+// Blocks lie flat in textures/; items go under item/ for the dashboard's inventory screen. Each kind is filled on its
+// own, so a textures/ from before items were extracted still gets them.
 const KINDS = [['block', TEXTURES], ['item', path.join(TEXTURES, 'item')]]
 const missing = KINDS.filter(([kind, dir]) => {
   const already = pngsIn(dir).length
@@ -70,7 +70,7 @@ if (!jar || !fs.existsSync(jar)) {
   process.exit(0)
 }
 
-// a jar that is there but unreadable is still not a reason to leave the agent without a body
+// an unreadable jar must not stop the body from starting
 try {
   const buf = fs.readFileSync(jar)
   const entries = zipEntries(buf)

@@ -1,5 +1,5 @@
 // Why JavaScript: patches JS dependency sources in node_modules (Mineflayer boundary).
-// Dependency source patch adapters copied from the previous terrain integration.
+// Source patches that let the terrain adapter (stateMovements) hook into mineflayer-pathfinder: waypoints, start, stop.
 export function patchTerrainWaypoints (source) {
   const marker = '// terrain-aware waypoint adapter'
   if (source.includes(marker)) return { status: 'already patched', source }
@@ -20,8 +20,7 @@ export function patchPathNodeCopies (source) {
   return { status: 'patched', source: source.replace(anchor, `${anchor}\n    ${marker}\n    path = path.map(node => Object.assign(Object.create(Object.getPrototypeOf(node)), node, {\n      toBreak: node.toBreak.map(block => block.clone ? block.clone() : { ...block }),\n      toPlace: node.toPlace.map(block => ({ ...block }))\n    }))`) }
 }
 
-// Native emptyBlocks is indexed by block type, so a snow type whose minimum
-// state has no collision also misclassifies its thicker, collidable states.
+// The start node comes from the terrain adapter's grounded position when it has one.
 export function patchTerrainStart (source) {
   const marker = '// terrain-aware grounded start adapter'
   if (source.includes(marker)) return { status: 'already patched', source }
@@ -31,6 +30,7 @@ export function patchTerrainStart (source) {
   return { status: 'patched', source: source.replace(anchor, replacement) }
 }
 
+// On stopping, keep the terrain-checked stance, and count a waypoint as reached only when the adapter agrees.
 export function patchTerrainStop (source) {
   const marker = '// preserve checked terrain stance on stopping v2'
   if (source.includes(marker)) return { status: 'already patched', source }

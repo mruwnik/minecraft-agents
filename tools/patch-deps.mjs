@@ -1,5 +1,5 @@
 // Why JavaScript: bootstrapping; edits JS dependency sources in node_modules during install, before any cljs exists.
-// fixes to node_modules that cannot be made from outside: run when preparing installed dependencies, so an npm install cannot quietly undo them
+// Fixes to node_modules that cannot be made from outside. Run after installing dependencies; a fresh npm install drops them.
 import fs from 'node:fs'
 import path from 'node:path'
 import { patchPathfinder, patchGotoPartial, patchParkourFences, patchItemEnchants, patchGateWaypoints } from './dependency-patches/patches.mjs'
@@ -30,7 +30,7 @@ for (const [relative, patch, title, warning] of PATCHES) {
   const file = path.join(import.meta.dirname, '..', relative)
   const { status, source } = patch(fs.readFileSync(file, 'utf8'))
   if (status === 'patched') {
-    // several bodies may start at once: write beside it and rename
+    // several bodies may start at once: write a temp file and rename
     fs.writeFileSync(`${file}.${process.pid}.tmp`, source)
     fs.renameSync(`${file}.${process.pid}.tmp`, file)
   }

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # tools/compile <engine|dashboard> <build>... [--priority] [--release]
+# tools/compile <engine|dashboard> --stop
 #
 # Every cljs compile in this repo goes through here: it queues on /tmp/mc-compile.lock (the machine-wide compile lock, taken
 # here, so never wrap this in flock) and runs `npx shadow-cljs compile|release <build>` in the project. The shadow-cljs CLI

@@ -1,7 +1,6 @@
 // Why JavaScript: graphics; block descriptions and textures for the software renderer.
-// Block descriptions and textures for the renderer, as src/vision/render-worker.mjs builds them (copied: that file
-// is a worker that reads workerData on load, so it cannot be imported). No textures dir means every block is a
-// flat colour hashed from its name, which the renderer does by itself.
+// Block descriptions and textures for the renderer. No textures dir means every block is a flat colour hashed from
+// its name, which the renderer does by itself.
 import fs from 'node:fs'
 import path from 'node:path'
 import prismarineBlock from 'prismarine-block'

@@ -1,5 +1,5 @@
 // Why JavaScript: WebGL/browser; camera data a shader takes, browser-safe with no imports.
-// The camera of src/vision/renderer.mjs (cameraFor, non-panorama) as data a shader can take. Browser-safe, no imports.
+// The camera of tools/view/renderer.mjs (cameraFor, non-panorama) as data a shader can take. Browser-safe, no imports.
 // mineflayer's convention: yaw 0 faces north (-z) and grows turning left; pitch > 0 looks up.
 export const directionFor = (yaw, pitch) => ({
   x: -Math.sin(yaw) * Math.cos(pitch),

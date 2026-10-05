@@ -58,7 +58,7 @@ const grassColors = biomeTable('26.1', ['plains', 'swamp']).colors
 const grassExpected = i => grassTop.map((v, c) => v * grassColors[i * 12 + c] / 255)
 const plainsGrassExpected = grassExpected(0)
 const swampGrassExpected = grassExpected(1)
-const GRASS_TOLERANCE = 35 // wider than the 25 first aimed at: ambient occlusion by the wall and mip averaging make the mean approximate (not measured yet)
+const GRASS_TOLERANCE = 35 // wide: ambient occlusion by the wall and mip averaging make the mean approximate
 const distance = (a, b) => Math.hypot(...a.map((v, i) => v - b[i]))
 
 const limeExpected = textureAverage('lime_wool').map(v => v * Z_FACE_SHADE)
