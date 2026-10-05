@@ -51,8 +51,6 @@
 (def stack-size 64)
 (def unbreakable #{"bedrock" "barrier" "end_portal_frame" "end_portal" "nether_portal" "command_block" "structure_block" "jigsaw"})
 
-(defn check [_c] true)
-
 (defn add [[x y z] [dx dy dz]] [(+ x dx) (+ y dy) (+ z dz)])
 
 (defn delta
@@ -195,6 +193,31 @@
           beyond (stop beyond)
           (not= "found" status) {:reason :no-way-back :why (keyword status) :planner (some-> (.-reason r) keyword)}
           :else (some-> (executor/refusal executor/policy steps) stop))))))
+
+(defn need
+  "What the next cell to dig lacks, as a reason map for ctx/wait, or nil: :no-tool (a pickaxe), :no-free-slot (no room
+  for the drop). Judged for the step from the feet when the body is at the stair's start or on it; bad args and the
+  rules' refusals are left to the round."
+  [c]
+  (let [{:keys [dir heading]} (:args c)
+        p (:primitives c)
+        feet (feet-of c)
+        {:keys [origin target]} (ctx/mem c)
+        on-stair? (or (nil? origin) (some? (stair-index origin feet dir heading target)))]
+    (when (and on-stair? (rises dir) (headings heading))
+      (let [block-at (:block-at (rules-in c feet))
+            {:keys [cut]} (step-cells feet dir heading)
+            block (some #(let [n (block-at %)] (when (and n (not (rules/air n)) (not (unbreakable n))) n)) cut)]
+        (cond
+          (nil? block) nil
+          (no-tool? p block) {:reason :no-tool :tool "pickaxe" :block block}
+          (not (room-for? p (mine/item-name {:block block}))) {:reason :no-free-slot :block block})))))
+
+(defn check
+  "True, or a wait for what the next dig lacks (see need). Only for a stair that is itself listed: as a child (leave-tunnel,
+  tunnel, dig-in) it runs and stops with the same reason in its result, which its parent reads."
+  [c]
+  (if-let [lack (and (empty? (:slots c)) (need c))] (ctx/wait c lack) true))
 
 (defn ^:async dig!
   "Equip the best tool, check the cell again, write the intent and dig it. :continue, or a stop map."

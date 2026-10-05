@@ -145,20 +145,17 @@
             (is (= [0 68 0] (:at g)))
             (is (= (column base 2) (:cells g)))))))))
 
-(deftest too-few-blocks-builds-what-it-has-and-says-so
+(deftest too-few-blocks-builds-what-it-has-and-then-waits-saying-so
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen] :as s} (setup {:inventory [{:name "dirt" :count 2}]})]
-          (core/submit! eng (list job {:height 6}) {})
+        (let [{:keys [eng p] :as s} (setup {:inventory [{:name "dirt" :count 2}]})
+              id (core/submit! eng (list job {:height 6}) {})]
           (await (ticks s eng 8))
-          (is (finished? eng))
+          (is (not (finished? eng)) "still listed: it waits for blocks")
           (is (= [0 66 0] (feet p)))
           (is (= 2 (count (the-ledger eng))))
-          (let [g (first (of-kind seen :pillar.gave-up))]
-            (is (= :too-few-blocks (:reason g)))
-            (is (= 2 (:built g)))
-            (is (= 4 (:short g)))))))))
+          (is (= {:reason :too-few-blocks :short 4} (select-keys (core/waiting eng id) [:reason :short]))))))))
 
 (deftest a-zone-refuses-before-any-placement
   (async done

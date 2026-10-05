@@ -94,8 +94,6 @@
               (not (:ok place)) (refusal->give-up (assoc place :at feet))
               :else {:step :place :cell feet :item use})))))))
 
-(defn check [_c] true)
-
 ;; ------------------------------------------------------------------ the round
 
 (defn feet-cell [c]
@@ -131,6 +129,23 @@
                                           (when (:short step) (str ", " (:short step) " blocks short"))
                                           (when (:at step) (str " at " (pr-str (:at step))))))))
     :done))
+
+(defn check
+  "True, or a wait for what a pillar lacks (next-step's :too-few-blocks, with how many blocks are short). Every other
+  give-up stays with the round, which ends with its result; so does this one for a pillar run as a child (retreat),
+  whose parent reads the result."
+  [c]
+  (let [p (:primitives c)
+        block-at (block-at-of p)
+        l (ledger/reconcile (ledger/open-entries (ctx/view c)) block-at)
+        feet (feet-cell c)
+        {:keys [height item]} (:args c)
+        step (next-step (merge (access-inputs c)
+                               {:feet feet :base (or (:base (ctx/mem c)) feet) :height height :block-at block-at
+                                :carried (carried p) :item item :ledger (ledger/cells l)}))]
+    (if (and (empty? (:slots c)) (= :too-few-blocks (:reason step)))
+      (ctx/wait c {:reason :too-few-blocks :short (:short step) :item (or item default-items)})
+      true)))
 
 (defn ^:async place!
   "Write the intent, jump-place one block, confirm it when the cell shows it. Three failed jumps in a row give up."

@@ -128,11 +128,11 @@
     (pos? (.-length (.blocks (:primitives c) #js {:radius radius :names #js [(:block (materials item))] :max 1})))))
 
 (defn decline!
-  "One warn per reason, then false for the check."
+  "One warn per reason, then false for the check, noting the reason with ctx/wait."
   [c reason]
   (ctx/warn-once! c [:declined reason] :get-seeds.declined
                   {:reason reason :text (str "get-seeds declined: " (name reason))})
-  false)
+  (ctx/wait c reason))
 
 (defn check [c]
   (let [m (mode (:args c))]
@@ -142,7 +142,7 @@
       (and (nil? (ctx/zones c)) (not (:ignore-zones? (:args c)))) (decline! c :no-zones)
       (or (:goal (ctx/mem c)) (seq (source-blocks c))) true
       (and (= :stalk m) (stalks-in-range? c)) (decline! c :too-short)
-      :else false)))
+      :else (ctx/wait c {:reason :nothing-in-range :radius (:radius (:args c))}))))
 
 (defn finish!
   "Emit the outcome, hand it to the parent and end the job."

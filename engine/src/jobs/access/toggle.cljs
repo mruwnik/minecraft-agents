@@ -74,7 +74,24 @@
     (ctx/result! c result)
     :done))
 
-(defn check [_c] true)
+(defn check
+  "True, or a wait for what the block's state needs from the body: :not-loaded (the block is not loaded) or
+  :standing-in (the body stands in the door or gate to be closed; it must step out). Bad args and every other decline
+  stay with the round, which ends with its result; so do these for a toggle run as a child (herd, rail-line), whose
+  parent reads the result."
+  [c]
+  (let [{:keys [pos state error]} (parse (:args c))]
+    (if (or error (seq (:slots c)))
+      true
+      (let [b (.blockAt (:primitives c) (clj->js pos))
+            props (some-> b click/props-of)]
+        (cond
+          (nil? b) (ctx/wait c {:reason :not-loaded :pos pos})
+          (and (= :openable (click/kind-of (.-name b))) (= :closed state)
+               (not (click/reached? state props))
+               (click/standing-in? (u/self-pos c) pos (:half props)))
+          (ctx/wait c {:reason :standing-in :pos pos :block (.-name b)})
+          :else true)))))
 
 (defn ^:async click!
   "Click once with an empty hand and read the block again."

@@ -87,14 +87,14 @@
                                (when (seq plans) (str "plan " (str/join ", " plans)))])))
 
 (defn decline!
-  "Warn kind once for this job (per reason: :no-zones or :refused, the latter with refusal fields) and answer false,
-  for a check that declines."
+  "Warn kind once for this job (per reason: :no-zones or :refused, the latter with refusal fields) and answer false
+  noting the reason and its fields with ctx/wait (the agent sees them as why the job waits), for a check that declines."
   [c kind job-name {:keys [reason] :as fields}]
   (ctx/warn-once! c [:access reason] kind
                   (assoc fields :text (if (= :no-zones reason)
                                         (str job-name " declined: no zone list has been read (zones.edn missing or never valid)")
                                         (str job-name " declined: every target is refused by " (refusal-text fields)))))
-  false)
+  (ctx/wait c fields))
 
 (defn container-refusal
   "nil when action (:take or :put) at the container or furnace at pos is permitted, else the refusing verdict
