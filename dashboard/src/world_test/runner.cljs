@@ -12,11 +12,12 @@
             [clojure.string :as str]
             [dashboard.rcon :as rcon]
             [world-test.expect :as x]
-            [world-test.fixture :as f]))
+            [world-test.fixture :as f]
+            [world-test.lease :as lease]))
 
 (def usage
   (str "usage: node tools/world-test.mjs [fixture.edn|dir ...] [--tag T] [--match TEXT] [--repeat N] [--body NAME]\n"
-       "         [--world claude] [--first-plot I] [--allow-time --time-log FILE] [--results FILE] [--list]\n"
+       "         [--world claude] [--first-plot I] [--card ID] [--allow-time --time-log FILE] [--results FILE] [--list]\n"
        "Runs world fixtures (default dir engine/fixtures/world) on the reserved plot grid x/z 20000..20640, y 150.\n"
        "--allow-time lets a case that needs night or day set the time (each set appended to --time-log); without it\n"
        "such a case is skipped. Exit code 0 when every run passed, 1 when one failed, 2 on a usage or setup error."))
@@ -32,6 +33,7 @@
       (= a "--world") (recur more (assoc opts :world b))
       (= a "--first-plot") (recur more (assoc opts :first-plot (js/Number b)))
       (= a "--time-log") (recur more (assoc opts :time-log b))
+      (= a "--card") (recur more (assoc opts :card b))
       (= a "--results") (recur more (assoc opts :results b))
       (= a "--allow-time") (recur (rest all) (assoc opts :allow-time true))
       (= a "--list") (recur (rest all) (assoc opts :list true))
@@ -172,6 +174,45 @@
 
 (defn night? [t] (and t (<= 13000 t 23000)))
 
+;; ------------------------------------------------------------------ plot leases (parallel runners)
+
+(def lease-dir (path/join (os/tmpdir) "world-test-plot-leases"))
+
+(defn lease-file [i] (path/join lease-dir (str "plot-" i ".lease")))
+
+(defn pid-alive? [pid]
+  (try (.kill js/process pid 0) true
+       (catch :default e (= "EPERM" (.-code e)))))
+
+(defn read-holder [i]
+  (try (let [n (js/parseInt (str/trim (fs/readFileSync (lease-file i) "utf8")) 10)] (when-not (js/isNaN n) n))
+       (catch :default _ nil)))
+
+(defn acquire-plot!
+  "Leases the first free plot index from `first` (exclusive lease file holding this PID; leases of dead PIDs are
+  reclaimed), so runners started together never share a plot."
+  [first]
+  (fs/mkdirSync lease-dir #js {:recursive true})
+  (lease/acquire
+   {:create! (fn [i pid] (try (fs/writeFileSync (lease-file i) (str pid) #js {:flag "wx"}) true
+                              (catch :default e (if (= "EEXIST" (.-code e)) false (throw e)))))
+    :holder read-holder
+    :reclaim! (fn [i] (try (fs/unlinkSync (lease-file i)) (catch :default _ nil)))
+    :alive? pid-alive?}
+   {:pid (.-pid js/process) :first first :total (* (:cols f/default-grid) (:rows f/default-grid))}))
+
+(defn release-plot! [i]
+  (when (= (.-pid js/process) (read-holder i))
+    (try (fs/unlinkSync (lease-file i)) (catch :default _ nil))))
+
+(defn local-now
+  "Now as local ISO with the UTC offset, the shared time log's format."
+  []
+  (let [d (js/Date.)]
+    (lease/local-iso [(.getFullYear d) (inc (.getMonth d)) (.getDate d) (.getHours d) (.getMinutes d) (.getSeconds d)
+                      (.getMilliseconds d)]
+                     (- (.getTimezoneOffset d)))))
+
 (defn set-time!
   "Sets the time when allowed (and logs it); resolves to true, or false when not allowed."
   [opts ticks why]
@@ -180,8 +221,8 @@
     (.then (rcon! [(str "time set " ticks)])
            (fn [_]
              (when-let [file (:time-log opts)]
-               (fs/appendFileSync file (str (.toISOString (js/Date.)) " time set " ticks " by world-test " (:body opts)
-                                            " for card 17342482 (" why ")\n")))
+               (fs/appendFileSync file (str (local-now) " time set " ticks " by world-test " (:body opts)
+                                            " for card " (or (:card opts) "world-fixtures") " (" why ")\n")))
              true))))
 
 (defn time-ok!
@@ -312,7 +353,6 @@
 
 (defn run-all! [opts cases]
   (let [groups (group-by :register cases)
-        plot (atom (:first-plot opts))
         results (atom [])]
     (-> (reduce (fn [p [register group]]
                   (.then p (fn []
@@ -320,10 +360,10 @@
                                  (.then (fn []
                                           (reduce (fn [p2 [c run]]
                                                     (.then p2 (fn []
-                                                                (let [i @plot]
-                                                                  (swap! plot inc)
-                                                                  (.then (run-case! opts c i run)
-                                                                         (fn [r] (report! r) (swap! results conj r)))))))
+                                                                (let [i (acquire-plot! (:first-plot opts))]
+                                                                  (-> (run-case! opts c i run)
+                                                                      (.then (fn [r] (report! r) (swap! results conj r)))
+                                                                      (.finally #(release-plot! i)))))))
                                                   (js/Promise.resolve nil)
                                                   (for [run (range 1 (inc (:repeat opts))) c group] [c run]))))
                                  (.finally #(stop-body! opts))))))
