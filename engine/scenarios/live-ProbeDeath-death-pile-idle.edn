@@ -1,0 +1,2 @@
+;; ProbeDeath live cases for the death pile value and the status :died line: died and hostile-near reflexes registered
+{:register [{:trigger :died :args {}} {:trigger :hostile-near :args {:radius 8}}] :queue []}
