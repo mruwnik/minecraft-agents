@@ -1,0 +1,41 @@
+;; jobs.survival.extinguish lava cover (card 38ebe2ad): a burning body (a fire block on netherrack at its feet) beside
+;; lava covers it with a carried non-falling block: one cover per adjacent lava cell, at most 3 per run, never sand or
+;; gravel (they fall into the lava). Resistance V so the fire cannot kill the probe. The body stands on a stone
+;; platform (y 0) at [16 1 16]; each lava source (placed with the fire, right before the job) sits above a one-cell pit,
+;; so it flows down, not sideways into the body's cell; a stone block behind each source is the support the place clicks. :time :any (short runs on a lit-or-not open plot).
+{:defaults
+ {:tags [:survival :lava :extinguish]
+  :time :any
+  :plot {:height 10 :floor "stone"}
+  :blocks [[:fill [8 0 8] [24 0 24] "stone"]
+           [:set [16 0 16] "netherrack"]
+           [:set [17 0 16] "air"] [:set [15 0 16] "air"] [:set [16 0 15] "air"] [:set [16 0 17] "air"]
+           [:set [18 1 16] "stone"] [:set [14 1 16] "stone"] [:set [16 1 14] "stone"] [:set [16 1 18] "stone"]]
+  :body {:at [16.5 1 16.5] :effects [["resistance" 600 4]] :settle-s 2}
+  :limit-s 60}
+ :cases
+ [{:name "one-lava-cell-one-cover"
+   :body {:inventory [["cobblestone" 8]]}
+   :act [[:rcon "execute at $BODY run setblock ~1 ~ ~ lava"]
+         [:rcon "execute at $BODY run setblock ~ ~ ~ fire"]
+         [:job (jobs.survival.extinguish {})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}]
+   :after [[:item "cobblestone" [:>= 6]]
+           [:block [17 1 16] "cobblestone"]]}
+  {:name "four-lava-cells-at-most-three-covers"
+   :body {:inventory [["cobblestone" 8]]}
+   :act [[:rcon "execute at $BODY run setblock ~1 ~ ~ lava"]
+         [:rcon "execute at $BODY run setblock ~-1 ~ ~ lava"]
+         [:rcon "execute at $BODY run setblock ~ ~ ~1 lava"]
+         [:rcon "execute at $BODY run setblock ~ ~ ~-1 lava"]
+         [:rcon "execute at $BODY run setblock ~ ~ ~ fire"]
+         [:job (jobs.survival.extinguish {})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}]
+   :after [[:item "cobblestone" 5]]}
+  {:name "only-sand-and-gravel-nothing-placed"
+   :body {:inventory [["sand" 8] ["gravel" 8]]}
+   :act [[:rcon "execute at $BODY run setblock ~1 ~ ~ lava"]
+         [:rcon "execute at $BODY run setblock ~ ~ ~ fire"]
+         [:job (jobs.survival.extinguish {})]]
+   :expect [{:no-event {:source :action :kind :started :data {:name "place"}} :for-s 20}]
+   :after [[:item "sand" 8] [:item "gravel" 8] [:block [17 1 16] "lava"]]}]}
