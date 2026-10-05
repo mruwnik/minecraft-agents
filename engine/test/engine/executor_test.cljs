@@ -135,6 +135,28 @@
     (is (not (contains? (nth out 0) :free)))
     (is (not (contains? (nth out 2) :free)))))
 
+(deftest hop-corner-only-when-the-open-side-is-a-hole-in-the-takeoffs-column-under-a-low-ceiling
+  ;; takeoff [0 64 0], landing [1 64 1]; wall [1 64 0] so the open side is [0 1] (takeoff's x, landing's z)
+  (let [prev (step 0 64 0 :start)
+        corner (step 1 64 1 :corner {:corner true :free [0 1]})
+        low #{[1 64 0] [1 66 1]}]
+    (are [solid expected] (= expected (ex/hop-corner? prev corner (solid-set solid)))
+      low true
+      (conj low [0 63 1]) false                     ; floor under the open side: no hole
+      #{[1 64 0]} false                             ; no ceiling over the landing: the step-up lifts the body
+      (conj low [0 66 1]) false)                    ; the open side as low: the body cannot rise above the landing either
+    (is (false? (ex/hop-corner? prev (assoc corner :free [1 0]) (solid-set low))))
+    (is (= [nil true nil] (mapv :hop (ex/with-corner-hops [prev corner (step 2 64 1 :walk)] (solid-set low)))))))
+
+(deftest hop-now-on-the-tick-the-box-clears-the-row
+  (let [prev (step 0 64 0 :start)
+        corner (step 1 64 1 :corner {:corner true :free [0 1] :hop true})]
+    ;; box edge at z + 0.31 must pass 1.31 - z left; yaw 0 faces -z, so a push along +z is yaw pi
+    (is (true? (ex/hop-now? p prev corner (pose 0.5 64 1.25 {:vz 0.05}) Math/PI true)))
+    (is (false? (ex/hop-now? p prev corner (pose 0.5 64 0.9 {:vz 0.05}) Math/PI true)))
+    (is (false? (ex/hop-now? p prev corner (pose 0.5 64 1.25 {:vz 0.05 :on-ground false}) Math/PI true)))
+    (is (false? (ex/hop-now? p prev (dissoc corner :hop) (pose 0.5 64 1.25 {:vz 0.05}) Math/PI true)))))
+
 ;; reached?
 
 (deftest reached-by-move-class

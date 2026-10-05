@@ -6,7 +6,8 @@
   Step:  {:x :y :z :h :move kw :corner bool :px :pz}, plus :cx :cz (crossing point on the boundary the
          move came in by), :swim true, :opens [...] and :free [fx fz] (corner slides) when present.
          h is the stand height above the cell floor in 1/16 block; px/pz is the point to stand at.
-  Pose:  {:x :y :z :vy :on-ground :on-climbable :in-water :collided}, feet position.
+  Pose:  {:x :y :z :vy :on-ground :on-climbable :in-water :collided}, feet position; :vx :vz (horizontal velocity, blocks
+         per tick) when the body reports them.
   State: {:steps :i :since :tick :yaw}; i is the index of the step walked to, since the tick at which it
          became current, tick the number of calls, yaw the last yaw sent while moving.
   Done:  {:status :arrived :at} | {:status :off-plan :at :step} | {:status :stuck :at :step :move :target :why}.
@@ -37,6 +38,8 @@
                            ; (half the body's width apart): forward on that wall made the client sink into it
    :body-half 0.31         ; half the body's width, as the client physics has it
    :body-height 1.8        ; a corner jump needs the side cells clear this far over the landing's stand height
+   :walk-accel 0.098       ; client physics: a walking (not sprinting) body on the ground gains this much speed per tick
+                           ; along its yaw (0.1 speed x 0.98 forward)
    :climb-over 0.2         ; keep climbing until feet are this far above a climb step's stand-y
    :crossing-xz 0.3        ; steer at a crossing point until this close to it
    :still-xz 0.1           ; closer than this to the aim: no forward, keep the yaw
@@ -262,6 +265,48 @@
             s))
         steps)))
 
+;; A corner slide whose open side lies in the takeoff's column and the landing's row (free = [x of prev, z of step]): the
+;; client physics moves a body along x before z, so on the tick its box clears the blocked side's row in z it is still
+;; held off the landing's column in x, and the next tick starts with the box wholly over the open side. Over a hole that
+;; tick drops the body; the floor edge then blocks it in x, and only the client's step-up lifts it onto the landing, which
+;; a ceiling 2 blocks over the landing's floor stops (the open side's higher ceiling lets the lift go above it). Live: the
+;; lava rim pocket (card 74a8cee4), the body fell into the lava in 4 of 4 walks out. Such a step is :hop: the body jumps on
+;; the very tick its box clears the row, so it is in the air, not falling, over the hole, and the next tick carries it
+;; onto the landing.
+
+(defn hop-corner?
+  "The corner step (after prev, open side free [fx fz]) must be hopped (see above). solid? is a fn [x y z] -> bool."
+  [prev {:keys [x y z free] :as step} solid?]
+  (let [[fx fz] free]
+    (boolean
+     (and free
+          (= y (:y prev))
+          (= fx (:x prev)) (= fz z)
+          (not (solid? fx (dec y) fz))
+          (solid? x (+ y 2) z)
+          (not (solid? fx (+ y 2) fz))))))
+
+(defn with-corner-hops
+  "Add :hop to each corner step with a free side that must be hopped (hop-corner?). Run after with-free-sides."
+  [steps solid?]
+  (vec (map-indexed
+        (fn [i s]
+          (cond-> s
+            (and (pos? i) (:corner s) (hop-corner? (nth steps (dec i)) s solid?)) (assoc :hop true)))
+        steps)))
+
+(defn hop-now?
+  "On a :hop step, on the ground: this tick's z move (the body's z velocity plus the walk's push along yaw when forward)
+  takes its box clear of the takeoff's row."
+  [policy prev step {:keys [z vz on-ground]} yaw forward?]
+  (boolean
+   (when (and (:hop step) prev on-ground)
+     (let [s (Math/sign (- (:z step) (:z prev)))
+           half (:body-half policy)
+           left (if (pos? s) (- (+ (:z prev) 1 half) z) (- z (- (:z prev) half)))
+           dz (* s (+ (or vz 0) (if forward? (* -1 (:walk-accel policy) (Math/cos yaw)) 0)))]
+       (and (pos? left) (<= left dz))))))
+
 ;; ---------------------------------------------------------------- geometry
 
 (defn dist-xz [x z ax az]
@@ -429,13 +474,15 @@
         [ax az :as aim] (aim-point policy step pose)
         dist (dist-xz x z ax az)
         moving? (>= dist (:still-xz policy))
-        yaw' (if moving? (yaw-to x z ax az) (or yaw 0))]
+        yaw' (if moving? (yaw-to x z ax az) (or yaw 0))
+        prev (when (pos? i) (nth steps (dec i)))
+        forward? (and moving? (not (rise-first? policy prev step pose)))]
     {:state (cond-> state moving? (assoc :yaw yaw'))
-     :controls {:forward (and moving? (not (rise-first? policy (when (pos? i) (nth steps (dec i))) step pose))) :back false :left false :right false
+     :controls {:forward forward? :back false :left false :right false
                 :jump (cond
                         (= :gap (:move step)) (gap-jump? policy steps i pose dist)
                         (and (:in-water pose) (not (contains? climb-moves (:move step)))) (swim-jump? policy step pose)
-                        :else (jump? policy step pose dist))
+                        :else (or (jump? policy step pose dist) (hop-now? policy prev step pose yaw' forward?)))
                 :sneak false
                 :sprint (sprint? policy steps i pose)}
      :yaw yaw' :pitch 0}))

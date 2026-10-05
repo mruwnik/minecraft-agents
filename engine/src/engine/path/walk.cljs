@@ -42,7 +42,7 @@
     (/ (js/Math.round (* 10 d)) 10)))
 
 (defn pose-of [pose]
-  {:x (.-x pose) :y (.-y pose) :z (.-z pose) :vy (.-vy pose) :on-ground (.-onGround pose)
+  {:x (.-x pose) :y (.-y pose) :z (.-z pose) :vx (.-vx pose) :vy (.-vy pose) :vz (.-vz pose) :on-ground (.-onGround pose)
    :on-climbable (.-onClimbable pose) :in-water (.-inWater pose) :collided (.-collided pose)})
 
 (defn steer-args
@@ -141,14 +141,14 @@
     (fn [x y z] (pos? (aget tops (.stateAt snapshot x y z))))))
 
 (defn path-steps
-  "The executor's steps for a planner path over pw: corner free sides, high corners and gap ceilings marked."
+  "The executor's steps for a planner path over pw: corner free sides and hops, high corners and gap ceilings marked."
   [pw ^js path]
   (let [solid? (solid-fn pw)]
     (executor/with-gap-ceilings
       executor/policy
       (executor/with-high-corners
         executor/policy
-        (executor/with-free-sides (executor/steps-of (.-steps path)) solid?)
+        (executor/with-corner-hops (executor/with-free-sides (executor/steps-of (.-steps path)) solid?) solid?)
         solid?)
       solid?)))
 

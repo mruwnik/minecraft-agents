@@ -83,7 +83,8 @@
 
 (defn pose-of [bot]
   (let [e (.-entity bot) p (.-position e)]
-    {:x (.-x p) :y (.-y p) :z (.-z p) :vy (.-y (.-velocity e)) :on-ground (.-onGround e) :on-climbable false
+    {:x (.-x p) :y (.-y p) :z (.-z p) :vx (.-x (.-velocity e)) :vy (.-y (.-velocity e)) :vz (.-z (.-velocity e))
+     :on-ground (.-onGround e) :on-climbable false
      :in-water (.-isInWater e) :collided (.-isCollidedHorizontally e)}))
 
 (defn walk

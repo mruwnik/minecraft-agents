@@ -1772,7 +1772,13 @@ is taken instead; where the jump is the only way it is still planned.
 A corner slide (a diagonal along one blocked side) whose open side is a hole with lava, fire, powder snow, cobweb, magma or a
 lit campfire under it (within `FREE-FALL`, no floor, water or unloaded cell before it) carries 10 risk (`HAZARD-SLIDE-RISK`):
 the slide carries the body wholly over that hole and it dips in (`test/engine/planner_lava_rim_test.cljs`), so any way round up to about 20 s longer wins; where the slide is the only way (a
-pocket on the rim) it is still planned. The walker takes a corner step without sprint and slides along the wall as before.
+pocket on the rim) it is still planned. The walker takes a corner step without sprint and slides along the wall as before,
+except a slide whose open side is a hole in the takeoff's column and the landing's row under a ceiling 2 over the landing's
+floor (`executor/hop-corner?`, step `:hop`): the client moves a body along x before z, so the tick after its box clears the
+wall's row it starts wholly over the hole and drops, and the low ceiling stops the step-up that would lift it out. The
+walker jumps on the very tick its box clears the row (`hop-now?`, from the pose's `:vz`, which `steer` reports with `:vx`),
+so the body crosses the hole in the air (`test/engine/walk_lava_rim_test.cljs`: the rim pocket both ways and all 16 slide
+orientations, never touching the lava, in prismarine-physics).
 (dev against :advanced build, see its header). A drop out of or into a tight cell (a doorway on a sill, a ledge beside a
 fence) is judged where the body falls: 5/16 past the edge it walked off (`DROP-INSET`, its 0.31 half-width clear of the
 ledge), so stepping down out of a door that stands a block above the ground outside is planned. A gap jump or a drop never lands on farmland (vanilla tramples farmland under a

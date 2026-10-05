@@ -4,8 +4,8 @@
 ;; The pocket [16 0 7] [15 0 8] [15 0 9] joins the cave only by corner slides whose open side is a hole onto the
 ;; lava ([16 0 8] and [15 0 10]); the planner made them as plain corner slides and the slide carried the body over
 ;; the lava 2 of 2 times. After the planner fix such a slide costs HAZARD-SLIDE-RISK (10 hp): a walk that has a way round
-;; never takes it (no :hurt by lava); a walk out of or into the pocket still takes it (the only way) and arrives, and
-;; records whether the dip burned the body (the walker is unchanged).
+;; never takes it (no :hurt by lava); a walk out of or into the pocket still takes it (the only way) and arrives. The
+;; walker hops those slides (executor :hop, card 74a8cee4), so even then the body takes no lava :hurt.
 {:defaults
  {:tags [:movement :lava :go-to]
   :plot {:height 8 :floor "stone"}
@@ -90,16 +90,18 @@
   :limit-s 90}
  :cases
  [;; should succeed: out of the pocket and down the cave. The slides are the only way out, so they are taken: the body
-  ;; must arrive (never trapped); a lava :hurt here is recorded, not failed (the dip of the unavoidable slide)
+  ;; must arrive (never trapped) and the hopped slide never dips it into the lava
   {:name "out-of-the-pocket-arrives"
    :body {:at [16.5 0 7.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [4 1 21]})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 80 :of-job true}]}
-  ;; should succeed: from the cave into the pocket (the goal is in it, the slides the only way in): arrives
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 80 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes ["lava"]}} :for-s 80 :until {:source :job :kind :completed}}]}
+  ;; should succeed: from the cave into the pocket (the goal is in it, the slides the only way in): arrives, no lava
   {:name "into-the-pocket-arrives"
    :body {:at [10.5 1 17.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [16 0 7]})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 80 :of-job true}]}
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 80 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes ["lava"]}} :for-s 80 :until {:source :job :kind :completed}}]}
   ;; should succeed: along the rim to the rim cell [14 0 11] (world [122 -54 53]) beside the pocket's mouth, which has
   ;; a plain way along the rim: no slide over the lava, no lava :hurt
   {:name "along-the-rim-no-slide"
