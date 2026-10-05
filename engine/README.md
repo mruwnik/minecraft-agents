@@ -1949,7 +1949,7 @@ An enclosed goal is found before any walking.
   that is unloaded, the search ends at the first node it expands that would be a frontier (not a known cell) and names
   it, instead of searching all loaded land first (up to 200000 nodes, past go-to's 100 `:searching` rounds). Nodes
   come out by cost plus weighted heuristic, so with weight 1 it is the same node, with go-to's 1.2 the weighted-A* one.
-  Its `known` holds only the nodes it expanded. The returnable search behind a one-way step does not stop there.
+  Its `known` holds only the nodes it expanded. The start (node 0) never ends it (a body at an edge with an unknown start cell would get a one-step path and never try another edge); when the start is the only edge node the search goes on and the scan names it. The returnable search behind a one-way step does not stop there.
 - Known land (go-to only; `options.knownCells`, `options.knownEdges`, kept per body and goal in
   `engine.path.walk/known-land`, out of job memory). The loaded land follows the body, so land a search already covered
   reads as a loaded edge again once the body walks away and it unloads (live: soak j29, a walled walkway whose far end

@@ -2250,11 +2250,14 @@
   ;; is unloaded, so every way to it crosses the loaded edge, and nodes come out in order of cost plus (weighted) heuristic:
   ;; the first such node is the frontier the search would name once it had searched all loaded land (with weight 1 the very
   ;; same node, ties aside), found without searching the rest (card 7a031d15: up to 200000 nodes, over 100 go-to rounds).
-  ;; A known node does not end it: frontierNode takes one only when no other edge is left.
+  ;; A known node does not end it: frontierNode takes one only when no other edge is left. Nor does the start (node 0): a body
+  ;; within OPEN-REACH of unloaded land with an unknown start cell (a teleport, a chunk gap) would get a one-step path and
+  ;; never try another edge; the search goes on, and when the start is the only edge node, frontierNode's scan names it.
   (edgeStop [s i]
     (let [x (aget xs i) z (aget zs i)
           mx (bit-and x 15) mz (bit-and z 15)]
-      (and (or (< mx OPEN-REACH) (>= mx (- 16 OPEN-REACH)) (< mz OPEN-REACH) (>= mz (- 16 OPEN-REACH)))
+      (and (pos? i)
+           (or (< mx OPEN-REACH) (>= mx (- 16 OPEN-REACH)) (< mz OPEN-REACH) (>= mz (- 16 OPEN-REACH)))
            (<= (js/Math.max (js/Math.abs (- x goal-x)) (js/Math.abs (- z goal-z))) frontier-reach)
            (not (and (some? known-cells) ^boolean (.has known-cells (.knownKey s x (aget ys i) z))))
            ^boolean (.atLoadedEdge s i))))

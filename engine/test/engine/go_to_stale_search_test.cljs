@@ -50,8 +50,8 @@
         (let [{:keys [out p ticks]} (await (run-go-to! true))]
           (is (= {:arrived false :reason :unreachable :why :goal-enclosed} (select-keys @out [:arrived :reason :why])))
           (is (< ticks 20) "ends in the round after the goal loads, not after the old search")
-          (is (<= 44 (js/Math.floor (first (gt/at p))) 47)
-              "the body walked no farther than the loaded edge (its frontier, before the goal loaded)"))))))
+          (is (= 47 (js/Math.floor (first (gt/at p))))
+              "the body walked to the loaded edge (its frontier) before the goal loaded, and no farther"))))))
 
 ;; the goal stays unloaded: the kept search goes on as before (no new search every round)
 (deftest a-search-whose-goal-stays-unloaded-goes-on
