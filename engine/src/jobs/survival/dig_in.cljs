@@ -39,7 +39,10 @@
   1x1 shaft has :start at the shaft's top (shaft-top); a shelter sealed again where the
   latest entry already stood keeps that entry's :start. jobs.survival.leave-shelter
   reads the entry to get out by day.
-  When it placed any block it emits one dig-in.sealed event {:pos :placed :resealed :text}: info for a new shelter,
+  When it placed any block it emits one dig-in.sealed event only if the world shows the body shut in (a roof, and in
+  walls mode no open cell around the feet); otherwise one dig-in.unsealed warn {:pos :placed :open :text} naming the cells
+  still open. A wall cell the server refuses is retried after the others, and given up on after two refusals. The
+  dig-in.sealed event {:pos :placed :resealed :text}: info for a new shelter,
   warn when :resealed (the latest :shelter entry was already at this feet cell: a shelter dug open at night and closed
   again by the night-unsafe reflex), so an agent digging out at night sees why its dig was undone; such an entry keeps
   the latest one's :door too. A body that cannot place or dig gives up after three failures with a dig_in_failed warn. The mode is the first of walls (when enough blocks are carried)
@@ -164,7 +167,10 @@
                   (do (ctx/update-mem! c update :placed (fnil conj #{}) cell)
                       (recur (rest cells)))
 
-                  (not= "occupied" status) status
+                  (not= "occupied" status)
+                  (do (when (not= "no-item" status)
+                        (ctx/update-mem! c update-in [:refused cell] (fnil inc 0)))
+                      status)
 
                   (or (full-cube? c cell) (contains? (:cleared (ctx/mem c) #{}) cell))
                   (do (ctx/update-mem! c update :occupied (fnil conj #{}) cell)
@@ -177,15 +183,33 @@
                       (ctx/update-mem! c update :occupied (fnil conj #{}) cell))
                     (recur (if (= "dug" (.-status d)) cells (rest cells))))))))))
 
+(def max-refusals
+  "Times the place primitive may refuse one wall cell before it is given up on."
+  2)
+
+(defn cells-to-try
+  "The open cells still worth a placement: not occupied, not refused max-refusals times, the least refused first (a cell
+  the server refused is retried after the others, which may give it a support)."
+  [c open]
+  (let [{:keys [occupied refused]} (ctx/mem c)
+        tries #(get refused % 0)]
+    (->> open
+         (remove (or occupied #{}))
+         (remove #(>= (tries %) max-refusals))
+         (sort-by tries))))
+
+(defn open-text [cells]
+  (str "open cells " (pr-str (mapv (juxt :x :y :z) cells))))
+
 (defn ^:async walls-round [c]
   (let [{:keys [blocks max-places roof-height]} (:args c)
         p (:primitives c)
-        occupied (:occupied (ctx/mem c) #{})
-        cells (remove occupied (open-cells p (sh/feet p)))
+        open (open-cells p (sh/feet p))
+        cells (cells-to-try c open)
         status (await (place-all! c blocks (take max-places cells)))]
     (cond
       (empty? cells) :done
-      (not= :ok status) (fail-site! c :walls-failed (str "cannot place a block: " status))
+      (not= :ok status) (fail-site! c :walls-failed (str "cannot place a block: " status "; " (open-text open)))
       (sh/roofed? p roof-height) :done
       :else :continue)))
 
@@ -424,6 +448,13 @@
       (> (:y (sh/feet (:primitives c))) target-y) (await (descend-round c))
       :else (await (roof-round c)))))
 
+(defn sealed-in?
+  "Whether the world shows the body shut in: a roof within roof-height above and, for walls mode, no open cell around
+  the feet (checked from the blocks, not from what was placed)."
+  [p mode roof-height]
+  (and (sh/roofed? p roof-height)
+       (or (not= :walls mode) (empty? (open-cells p (sh/feet p))))))
+
 (defn ^:async round [c]
   (let [r (await (step c))]
     (when (= :done r)
@@ -441,7 +472,13 @@
             resealed (= feet (:pos prev))
             start (or start (when resealed (:start prev)))
             door (or door (when resealed (:door prev)))]
-        (when (seq placed)
+        (when (and (seq placed) (not (sealed-in? p mode (:roof-height (:args c)))))
+          (let [open (open-cells p feet)]
+            (ctx/emit! c :dig-in.unsealed :warn
+                       {:pos feet :placed (vec placed) :open open
+                        :text (str "NOT sealed in: placed " (count placed) " blocks at " (pr-str (mapv (juxt :x :y :z) placed))
+                                   ", but the world still shows " (open-text open) (when (empty? open) " (no roof)"))})))
+        (when (and (seq placed) (sealed-in? p mode (:roof-height (:args c))))
           (ctx/emit! c :dig-in.sealed (if resealed :warn :info)
                      {:pos feet :placed (vec placed) :resealed resealed
                       :text (str (cond

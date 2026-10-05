@@ -466,6 +466,41 @@
           (is (= [] (calls p "dig")))
           (is (= 1 (count (emitted seen :dig_in_failed)))))))))
 
+(defn refuse-cell!
+  "Make place at cell (a [x y z] vector) fail the way the server's \"still air\" refusal does; others work as usual."
+  [p [x y z]]
+  (.override (.-world p) "place"
+             (fn ^:async f [token a impl]
+               (let [pos (.-pos a)]
+                 (if (and (= x (.-x pos)) (= y (.-y pos)) (= z (.-z pos)))
+                   #js {:status "failed" :reason "Server refused to place dirt: the block is still air"}
+                   (await (impl token a)))))))
+
+(deftest dig-in-does-not-claim-sealed-when-a-wall-is-refused
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:time night :inventory dirt-stack :blocks floor})]
+          (refuse-cell! p [-1 64 0])
+          (core/submit! eng '(jobs.survival.dig-in) {})
+          (is (<= (await (run-until-empty eng 12)) 10) "bounded")
+          (is (= [] (emitted seen :dig-in.sealed)) "no sealed claim while a wall is open")
+          (let [[u] (emitted seen :dig-in.unsealed)]
+            (is (some? u) "reported honestly")
+            (is (= [{:x -1 :y 64 :z 0}] (:open u)) "the open cell is named")))))))
+
+(deftest dig-in-places-the-other-walls-before-retrying-a-refused-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:time night :inventory dirt-stack :blocks floor})]
+          (refuse-cell! p [-1 64 0])
+          (core/submit! eng '(jobs.survival.dig-in) {})
+          (await (run-until-empty eng 12))
+          (is (every? #(= "dirt" (.-name (.blockAt p (tu/pos (first %) (second %) (nth % 2)))))
+                      [[1 64 0] [0 64 1] [0 64 -1] [-1 65 0] [1 65 0] [0 66 0]])
+              "every cell but the refused one is filled"))))))
+
 ;; ----------------------------------------------------------------- shelter
 
 (deftest shelter-prefers-a-bed-over-logging-out
