@@ -86,13 +86,27 @@
             (when (hazards name) name)))
         sides))
 
+(def mob-proof-shapes
+  "Blocks that stop a mob although their collision shape does not fill the cell: fences (1.5 high), walls, panes,
+  iron bars, gates, doors and trapdoors."
+  #"(_fence|_fence_gate|_wall|_pane|_door|_trapdoor)$|^iron_bars$")
+
+(defn sealed?
+  "Whether a cell already stops a mob: its block fills the cell (blockAt's :fullCube: stone, leaves, glass) or is a
+  fence, wall, pane, bar, gate or door. Signs, rails, plates, buttons, levers, carpets, torches, plants, slabs and
+  stairs let a mob walk or step through (or leave a gap it fits through), so they are not sealed; nor is an
+  unloaded cell."
+  [p cell]
+  (let [b (.blockAt p (clj->js cell))]
+    (boolean (and b (or (.-fullCube b) (re-find mob-proof-shapes (.-name b)))))))
+
 (defn open-cells
   "The cells to fill around the feet cell, in placement order: sides at feet
   height, sides at head height, a support beside the roof cell (a block needs a
   solid face neighbour to be placed against, and the roof cell has none until
-  the support exists), then the roof cell above the head; only those not solid."
+  the support exists), then the roof cell above the head; only those not sealed?."
   [p {:keys [x y z]}]
-  (filterv #(not (sh/solid-at? p %))
+  (filterv #(not (sealed? p %))
            (concat (for [dy [0 1] [dx dz] sides] {:x (+ x dx) :y (+ y dy) :z (+ z dz)})
                    [{:x (inc x) :y (+ y 2) :z z} {:x x :y (+ y 2) :z z}])))
 

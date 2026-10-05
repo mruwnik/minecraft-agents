@@ -743,3 +743,29 @@
           (core/submit! eng '(jobs.survival.dig-in) {})
           (is (<= (await (run-until-empty eng 12)) 10) "the job still ends")
           (is (= [] (:list (core/state eng)))))))))
+
+(deftest dig-in-walls-over-blocks-a-mob-walks-through
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [passable ["oak_sign" "oak_wall_sign" "rail" "stone_pressure_plate" "stone_button" "lever" "white_carpet"]]
+          (let [{:keys [eng p]} (setup {:time night :inventory dirt-stack
+                                        :blocks (assoc floor "1,64,0" passable "0,65,1" passable "0,66,0" passable)})]
+            (core/submit! eng '(jobs.survival.dig-in) {})
+            (is (<= (await (run-until-empty eng 12)) 10) (str passable ": the job ends"))
+            (is (= [] (:list (core/state eng))))
+            (is (= "dirt" (.-name (.blockAt p (tu/pos 1 64 0)))) (str passable " in a feet wall cell is walled"))
+            (is (= "dirt" (.-name (.blockAt p (tu/pos 0 65 1)))) (str passable " in a head wall cell is walled"))
+            (is (= "dirt" (.-name (.blockAt p (tu/pos 0 66 0)))) (str passable " in the roof cell is walled"))))))))
+
+(deftest dig-in-keeps-blocks-that-already-stop-a-mob
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:time night :inventory dirt-stack
+                                      :blocks (assoc floor "1,64,0" "oak_fence" "0,64,1" "glass" "-1,64,0" "iron_bars")})]
+          (core/submit! eng '(jobs.survival.dig-in) {})
+          (await (run-until-empty eng 8))
+          (is (= [] (calls p "dig")))
+          (is (= ["oak_fence" "glass" "iron_bars"]
+                 (mapv #(.-name (.blockAt p (apply tu/pos %))) [[1 64 0] [0 64 1] [-1 64 0]]))))))))

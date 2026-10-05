@@ -24,12 +24,18 @@
   #{"air" "cave_air" "void_air" "water" "lava" "short_grass" "grass" "tall_grass" "fern" "large_fern"
     "torch" "wall_torch" "snow" "vine" "dead_bush" "seagrass" "tall_seagrass" "fire"})
 
+(def walk-through
+  "Names of blocks a mob or body walks through or over: signs and banners, rails, pressure plates, buttons, levers,
+  carpets, tripwire and cobweb. Not solid, so neither a roof, a wall nor a floor."
+  #"(_sign|_banner|_carpet|_pressure_plate|_button|_rail)$|^(rail|lever|tripwire|tripwire_hook|string|cobweb|redstone_wire)$")
+
 (defn solid?
   "Whether a block name counts as solid: not nil (an unloaded chunk), not in
-  non-solid, and not leaves or a sapling or flower."
+  non-solid, not walk-through, and not leaves or a sapling or flower."
   [name]
   (and (some? name)
        (not (non-solid name))
+       (not (re-find walk-through name))
        (not (.endsWith name "_leaves"))
        (not (.endsWith name "_sapling"))))
 
