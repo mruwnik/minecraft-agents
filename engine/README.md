@@ -2051,7 +2051,7 @@ EDN blueprint library. All four shared-world commands (`map`, `world-changes`,
 `cd dashboard && npm run build-agent-tools`; calls do not compile on demand or
 start a JVM. For development, `npm run build-agent-tools:dev` creates an
 unoptimized build of the same library. Rebuild after changing its CLJS sources.
-The `.mjs` command paths remain stable, thin Node launchers; the existing Node
+Each launcher calls `loadTools([...names])` with only the bundle exports it uses, so a stale bundle (or a new tool whose exports are not built yet) fails only that tool with `:build-required` naming its missing exports; `AGENT_TOOLS_BUNDLE` points the loader at a scratch bundle. The `.mjs` command paths remain stable, thin Node launchers; the existing Node
 regression tests exercise these public boundaries independently of CLJS. These
 tests live in `engine/test/tools/`; run them with
 `cd engine && npm run test:agent-tools` (builds the library, then tests it).

@@ -2,7 +2,8 @@
 // Why JavaScript: stable CLI launcher, command logic lives in agent-tools.changes; Thin Node launcher over the AOT cljs bundle dashboard/out/agent-tools.cjs; runs without starting a compiler or JVM (500 ms startup budget).
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import tools from './agent-tools-loader.mjs'
+import { loadTools } from './agent-tools-loader.mjs'
+const tools = loadTools(['changesExecute', 'changesMain', 'changesOptions', 'changesUsage'])
 
 export const usage = tools.changesUsage
 export const options = tools.changesOptions

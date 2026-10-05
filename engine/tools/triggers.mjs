@@ -2,7 +2,8 @@
 // Why JavaScript: Node entry point/launcher for the AOT bundle; the command logic is agent-tools.triggers.
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import tools from './agent-tools-loader.mjs'
+import { loadTools } from './agent-tools-loader.mjs'
+const tools = loadTools(['triggersMain', 'triggersRequestFor', 'triggersUsage'])
 
 export const usage = tools.triggersUsage
 export const requestFor = argv => tools.triggersRequestFor(argv)

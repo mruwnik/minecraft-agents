@@ -1,5 +1,6 @@
 // Why JavaScript: ESM boundary: generation, validation and routing policy live in AOT CLJS, this is a compatibility entry point; Thin Node launcher over the AOT cljs bundle dashboard/out/agent-tools.cjs; runs without starting a compiler or JVM (500 ms startup budget).
-import tools from './agent-tools-loader.mjs'
+import { loadTools } from './agent-tools-loader.mjs'
+const tools = loadTools(['blueprintForm', 'planExecute', 'planOneForm', 'planRequestFor', 'planUsage'])
 
 export const RAW_BYTES = 65536
 export const loadBridge = () => tools

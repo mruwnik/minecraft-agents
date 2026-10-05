@@ -2,7 +2,8 @@
 // Why JavaScript: Node entry point/launcher for the AOT bundle; the command logic is agent-tools.observe.
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import tools from './agent-tools-loader.mjs'
+import { loadTools } from './agent-tools-loader.mjs'
+const tools = loadTools(['observeMain', 'observeRequestFor', 'observeUsage'])
 
 export const usage = tools.observeUsage
 export const requestFor = argv => tools.observeRequestFor(argv)
