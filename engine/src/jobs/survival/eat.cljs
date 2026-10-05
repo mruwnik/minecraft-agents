@@ -44,7 +44,7 @@
        (map :name)
        (filter #(or (nil? item) (= item %)))
        (filter #(points allow-bad %))
-       (sort-by #(- (points allow-bad %)))
+       (sort-by (fn [n] [(contains? #{"golden_carrot"} n) (- (points allow-bad n))]))
        first))
 
 (defn carried-best [c]

@@ -73,7 +73,10 @@
 (defn check
   "Hungry, or in the middle of a meal that began when it was."
   [c]
-  (or (hungry-now? c) (boolean (:eating (ctx/mem c)))))
+  (let [self (.self (:primitives c))]
+    (or (hungry-now? c)
+        (hungry/top-up? (.-food self) (.-health self) (hungry/carried-names self))
+        (boolean (:eating (ctx/mem c))))))
 
 ;; ------------------------------------------------------------------ sources
 

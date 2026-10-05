@@ -7,7 +7,8 @@
             [engine.memory :as mem]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [engine.triggers.hungry :as hungry]))
+            [engine.triggers.hungry :as hungry]
+            [jobs.survival.eat :as eat]))
 
 (defn setup [world]
   (let [clock (atom 1000000)
@@ -441,3 +442,19 @@
           (is (= [6] (call-args p "transfer" "count")))
           (is (= [2] (call-args p "craft" "count")))
           (is (> (food p) 12) "baked and eaten"))))))
+
+;; ---------------------------------------------------------------- top-up
+
+(deftest hungry-trigger-tops-up-a-hurt-body-that-carries-food
+  (let [when-fn (:when (get triggers/all :hungry))
+        holds? (fn [{:keys [inventory] :as self}] (when-fn (tu/fake {:self (dissoc self :inventory) :inventory inventory}) {} {}))
+        bread [{:name "bread" :count 1}]]
+    (is (holds? {:food 16 :health 8 :inventory bread}))
+    (is (not (holds? {:food 16 :health 8 :inventory []})) "no food carried: no top-up")
+    (is (not (holds? {:food 18 :health 8 :inventory bread})) "regeneration already works")
+    (is (not (holds? {:food 16 :health 20 :inventory bread})) "healthy")
+    (is (not (holds? {:food 16 :health 8 :inventory [{:name "golden_carrot" :count 1}]})) "rare food kept")
+    (is (not (holds? {:food 16 :health 8 :inventory [{:name "golden_apple" :count 1}]})))))
+
+(deftest eat-prefers-common-food-over-golden-carrot
+  (is (= "bread" (eat/best-food [{:name "golden_carrot"} {:name "bread"}] false nil))))
