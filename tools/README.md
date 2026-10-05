@@ -26,12 +26,13 @@ Refuses (exit 1, nothing left staged) when:
 - an engine-core path (`engine/src/engine/{core,expr,triggers,takeover,trigger_api}.cljs`, `registry.clj`,
   `registry.cljs`) is given without `--approved-core <card>`;
 - a new or largely changed (40+ added lines and at least half the file) `.js/.mjs/.cjs` file has no `Why JavaScript:` line;
+- a path under `docs/` or `.claude/` is given without `--owner-said <card>` (committed only when the owner says so);
 - an added line or the message holds the owner's first name as a whole word (words like "danger" are fine;
   `/home/<user>/` path segments are ignored).
 
 Foreign staged paths (someone staged outside the lock): in path mode they are left out via `commit --only` and
 flagged; in `--hunks` mode the run refuses (exit 3) and unstages its own hunks, so retry later.
-Exit 4: the lock could not be taken.
+Exit 4: the lock could not be taken. Exit 6: a staged `.js/.mjs/.cjs` blob fails `node --check` (nothing committed).
 
 Every commit appends a JSON line to `.git/commit-ledger.jsonl`:
 `time, hash, card, paths, insertions, deletions, flags` (flags: hunks-mode, engine-core approvals,

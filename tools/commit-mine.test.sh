@@ -42,4 +42,22 @@ check "refusal names the flag" "$(grep -c -- '--approved-core' <<<"$out")" 1
 tools/commit-mine --card --expect-hunks 1 -m m f.txt >/dev/null 2>&1; check "card swallowing exit" "$?" 1
 tools/commit-mine --card c -m m --expect-hunks --approved-core x f.txt >/dev/null 2>&1; check "expect swallowing exit" "$?" 1
 git checkout -q f.txt
+# A committed JS file must parse: a broken .mjs is refused (naming it), a valid one commits.
+W='// Why JavaScript: test'
+printf '%s\nexport const a = 1\n' "$W" > ok.mjs; printf '%s\nexport const b = (\n' "$W" > bad.mjs
+out=$(tools/commit-mine --card c -m m --expect-hunks 1 bad.mjs 2>&1); check "unparseable mjs exit" "$?" 6
+check "unparseable mjs named" "$(grep -c 'bad.mjs' <<<"$out")" 1
+check "unparseable mjs not committed" "$(git log --format=%s -1 --name-only -- bad.mjs | grep -c bad.mjs)" 0
+check "unparseable mjs leaves index clean" "$(git diff --cached --name-only)" ""
+tools/commit-mine --card c -m m --expect-hunks 1 ok.mjs >/dev/null 2>&1; check "valid mjs exit" "$?" 0
+printf '%s\nmodule.exports = {\n' "$W" > bad.cjs
+tools/commit-mine --card c -m m --expect-hunks 1 bad.cjs >/dev/null 2>&1; check "unparseable cjs exit" "$?" 6
+rm bad.mjs bad.cjs
+# docs/ and .claude/ are committed only on the owner's word.
+mkdir -p docs .claude; echo d > docs/a.md; echo c > .claude/s.json
+out=$(tools/commit-mine --card c -m m --expect-hunks 1 docs/a.md 2>&1); check "docs refused exit" "$?" 1
+check "docs refusal text" "$(grep -c 'docs/ and .claude/ are committed only when the owner says so' <<<"$out")" 1
+tools/commit-mine --card c -m m --expect-hunks 1 .claude/s.json >/dev/null 2>&1; check ".claude refused exit" "$?" 1
+tools/commit-mine --card c -m m --expect-hunks --owner-said x docs/a.md >/dev/null 2>&1; check "owner-said swallowing exit" "$?" 1
+tools/commit-mine --card c -m m --owner-said c2 --expect-hunks 1 docs/a.md >/dev/null 2>&1; check "docs with --owner-said exit" "$?" 0
 exit $fail

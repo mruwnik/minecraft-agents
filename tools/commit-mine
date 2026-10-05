@@ -7,6 +7,8 @@
 #   must cover every file in the patch (else exit 3, listing the others); N must equal the patch's
 #   hunk count (else exit 5); the tool prints each hunk's path and first changed line, check them.
 #   Optional: --approved-core <card-id> (takes the id of the card holding the owner's approval; needed for engine-core paths).
+#   Optional: --owner-said <card-id> (the owner said to commit docs/ or .claude/ paths, which are refused otherwise).
+#   Refuses (exit 6) a commit whose .js/.mjs/.cjs blob does not pass node --check.
 #   Every flag that takes a value refuses one starting with "--" (so a missing value never swallows the next flag).
 # See tools/README.md. Never stashes, resets, amends or pushes.
 set -euo pipefail
@@ -22,7 +24,7 @@ die() { echo "commit-mine: $*" >&2; exit "${2:-1}"; }
 # A flag's value must exist and must not look like another flag.
 val() { case "$2" in ""|--*) die "$1 needs a value, got '${2:-<nothing>}' (a value may not start with --)" ;; esac; printf '%s' "$2"; }
 
-card=""; msg=""; hunks=""; approved=""; expect=""; paths=()
+card=""; msg=""; hunks=""; approved=""; owner_said=""; expect=""; paths=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --card) card="$(val --card "${2-}")"; shift 2 ;;
@@ -30,6 +32,7 @@ while [ $# -gt 0 ]; do
     --hunks) hunks="$(val --hunks "${2-}")"; shift 2 ;;
     --expect-hunks) expect="$(val --expect-hunks "${2-}")"; shift 2 ;;
     --approved-core) approved="$(val --approved-core "${2-}")"; shift 2 ;;
+    --owner-said) owner_said="$(val --owner-said "${2-}")"; shift 2 ;;
     --) shift; paths+=("$@"); break ;;
     -*) die "unknown option $1" ;;
     *) paths+=("$1"); shift ;;
@@ -89,6 +92,12 @@ for a in "${allowed[@]}"; do
   [[ "$a" =~ $CORE_RE ]] || continue
   [ -n "$approved" ] || die "engine-core path $a needs --approved-core <card> (owner approval)"
   flags+=("engine-core $a approved-by $approved")
+done
+# docs/ and .claude/ go in only on the owner's word.
+for a in "${allowed[@]}"; do
+  [[ "$a" =~ ^(docs|\.claude)(/|$) ]] || continue
+  [ -n "$owner_said" ] || die "docs/ and .claude/ are committed only when the owner says so ($a; --owner-said <card-id> if he did)"
+  flags+=("owner-said $a by $owner_said")
 done
 [ -z "$hunks" ] || flags+=("hunks-mode")
 
@@ -167,6 +176,22 @@ while IFS=$'\t' read -r add del f; do
   [ "$large" = 1 ] || continue
   git show ":$f" | grep -q 'Why JavaScript:' || die "new or largely changed JS file $f needs a '// Why JavaScript:' line"
 done < <(git diff --cached --numstat -- "${allowed[@]}")
+
+# Check: every committed JS file parses (a hunk-mode commit can leave HEAD with a file that never existed on disk).
+parses() { # $1 = path, blob on stdin; module syntax for .mjs, .js/.cjs as either flavour
+  local tmp ext="${1##*.}" rc=0
+  tmp="$(mktemp -d)"; cat > "$tmp/f.$ext"
+  case "$ext" in
+    mjs) node --check "$tmp/f.mjs" 2>/dev/null || rc=1 ;;
+    cjs) node --check "$tmp/f.cjs" 2>/dev/null || rc=1 ;;
+    *) node --check "$tmp/f.js" 2>/dev/null || { cp "$tmp/f.js" "$tmp/f.mjs"; node --check "$tmp/f.mjs" 2>/dev/null || rc=1; } ;;
+  esac
+  rm -rf "$tmp"; return $rc
+}
+while IFS= read -r f; do
+  [[ "$f" =~ \.(js|mjs|cjs)$ ]] || continue
+  git show ":$f" | parses "$f" || die "the committed version of $f does not pass node --check (a partial commit left a file that never existed on disk?); fix it or commit the whole file" 6
+done < <(git diff --cached --name-only --diff-filter=AM -- "${allowed[@]}")
 
 # Check: owner name as a whole word in added lines (paths under /home/<user>/ ignored).
 if git diff --cached -U0 -- "${allowed[@]}" | grep -E '^\+' | grep -vE '^\+\+\+ ' \
