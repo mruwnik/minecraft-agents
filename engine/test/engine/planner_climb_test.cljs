@@ -167,6 +167,18 @@
     {:open false :facing "north"} "found" 1
     {:open false :facing "west"} "found" 1))
 
+;; going down: from the cap over the hatch, through it and down the ladder to the floor, for every facing, open or shut
+(deftest down-through-a-trapdoor-over-a-ladder
+  (are [props opens]
+       (let [r (run5 (trap-over props) {:x 13 :y 73 :z 5 :px 13.5 :pz 5.5} (near 2 64 5) {:goalFlood 0})]
+         (and (= "found" (:status r))
+              (contains? (move-set r) (m :climb-down))
+              (= opens (count (filter #(= (m :open) (:move %)) (steps r))))))
+    {:open true :facing "west"} 0
+    {:open true :facing "east"} 0
+    {:open false :facing "west"} 1
+    {:open false :facing "north"} 1))
+
 ;; the ladder faces west, so its wall is the stone east of the shaft: the step up into the trapdoor's cell aims 0.2 from it
 (deftest the-climb-into-a-trapdoor-over-a-ladder-presses-to-the-ladders-wall
   (are [props]
