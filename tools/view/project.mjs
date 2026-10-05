@@ -1,5 +1,5 @@
 // Why JavaScript (for now): maths of the Node headless pixel check (tools/view-web-check.mjs) that inverts web/camera.mjs; it moves to
-// cljs together with the camera maths (card d26c903c), not alone.
+// cljs together with the camera maths, not alone.
 // Pixel projection, the exact inverse of rayDir in web/camera.mjs. Browser-safe, no imports.
 const dot = (a, b) => a.x * b.x + a.y * b.y + a.z * b.z
 const MIN_DEPTH = 1e-6

@@ -24,7 +24,7 @@ const PATCHES = [
   ['node_modules/mineflayer-pathfinder/lib/movements.js', patchParkourFences, 'mineflayer-pathfinder no parkour over fences', 'read patchParkourFences in tools/dependency-patches/patches.mjs: a walk replanned mid-jump beside a fence row may try to jump along it and stall'],
   ['node_modules/mineflayer-pathfinder/lib/goto.js', patchGotoPartial, 'mineflayer-pathfinder goto waits out a partial search', 'read patchGotoPartial in tools/dependency-patches/patches.mjs: a goto from a dead end may fail at once and the body walk on after'],
   ['node_modules/prismarine-item/index.js', patchItemEnchants, 'prismarine-item enchants list', 'read patchItemEnchants in tools/dependency-patches/patches.mjs: an enchanted tool in hand may break harvest and slow every dig'],
-  ['node_modules/mineflayer/lib/plugins/entities.js', patchOwnBreath, 'mineflayer own air only', 'read patchOwnBreath in tools/dependency-patches/airlog.mjs: every swimmer and squid in sight may set this body\'s oxygen (card 962beec2)']
+  ['node_modules/mineflayer/lib/plugins/entities.js', patchOwnBreath, 'mineflayer own air only', 'read patchOwnBreath in tools/dependency-patches/airlog.mjs: every swimmer and squid in sight may set this body\'s oxygen']
 ]
 for (const [relative, patch, title, warning] of PATCHES) {
   const file = path.join(import.meta.dirname, '..', relative)
