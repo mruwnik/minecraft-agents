@@ -5,6 +5,7 @@
             [engine.ctx :as ctx]
             [engine.jobs.access :as access]
             [engine.jobs.util :as u]
+            [engine.jobs.reach :as reach]
             [engine.path.near :as near]
             [engine.triggers.stuck :as stuck]))
 
@@ -35,7 +36,12 @@
   lifting the body one block: it digs each solid one of H, the cell above the
   head (headroom to jump), and F1, F2, the feet and head cells one block up
   in front, which stand on the front block at feet height (left solid; if
-  it is open, the next cardinal is tried, and none solid records a reason),
+  it is open, the next cardinal is tried). When no side of the body's cell is
+  solid (it stands inside a hollow wider than a pit, so it is not \"in a
+  pit\" either), it first walks (moveTo range 0) to the nearest cell at the
+  same level with a solid side, reached through standable cells within
+  wall-search-radius (8) blocks, and digs the stair from there (none:
+  \"stair: no solid step\"; the walk falls short: \"wall: moveTo <status>\"),
   then moves to F1 with range 0 (no reason when that arrives or the feet rose,
   else \"stair: moveTo <status>\"). A cell is not dug when the one above it is
   sand or gravel or any of its six neighbours is water or lava (the reason
@@ -247,11 +253,50 @@
     (when-not (or (= "arrived" status) (> (feet-y c) before))
       (str "stair: moveTo " status))))
 
+(def wall-search-radius
+  "How far (blocks along x and along z) wall-spot looks for a wall to stair into."
+  8)
+
+(defn walled-side? [c pos] (boolean (some #(solid? c (shift pos %)) cardinals)))
+
+(defn wall-spot
+  "The nearest cell at the feet level that has a solid side at feet height (a stair step), reached by walking
+  through standable cells (breadth-first, the goal's heading tried first) no more than wall-search-radius blocks
+  away along x and z; nil when there is none. For a body in a hollow wider than a 1x1 pit, where no side of its
+  own cell is solid."
+  [c here dir]
+  (let [headings (distinct (cons dir cardinals))
+        near? (fn [p] (and (<= (js/Math.abs (- (:x p) (:x here))) wall-search-radius)
+                           (<= (js/Math.abs (- (:z p) (:z here))) wall-search-radius)))]
+    (loop [queue #queue [here] seen #{here}]
+      (when-let [p (peek queue)]
+        (if (and (not= p here) (walled-side? c p))
+          p
+          (let [nbrs (->> headings
+                          (map #(shift p %))
+                          (filter #(and (not (seen %)) (near? %) (reach/standable-cell? (:primitives c) %))))]
+            (recur (into (pop queue) nbrs) (into seen nbrs))))))))
+
+(declare dig-step!)
+
+(defn ^:async approach-wall!
+  "No side of the body's cell is solid: walk to wall-spot (moveTo range 0) and dig the stair from there. nil
+  when that did something useful, else the reason."
+  [c here dir]
+  (if-let [spot (wall-spot c here dir)]
+    (let [status (.-status (await (go! c spot)))]
+      (if (= spot (cell (u/self-pos c)))
+        (await (dig-step! c false))
+        (str "wall: moveTo " status)))
+    "stair: no solid step"))
+
 (defn ^:async dig-step!
   "Dig toward the goal: a door through a one-block wall, else a stair step that
-  lifts the body one block (then moves onto it). Returns nil when it did
+  lifts the body one block (then moves onto it). With no solid side to step on
+  (the body stands inside a hollow wider than a pit) and approach? true, it
+  first walks to the nearest wall (approach-wall!). Returns nil when it did
   something useful, else the reason it did not."
-  [c]
+  [c approach?]
   (let [here (cell (u/self-pos c))
         dir (or (forward c here) (first cardinals))
         door (door-cells c here dir)
@@ -260,6 +305,7 @@
         {:keys [cells front]} option
         stair (when front option)]
     (cond
+      (and (nil? option) approach? (not (walled-side? c here))) (await (approach-wall! c here dir))
       (nil? option) "stair: no solid step"
       :else
       (if-let [unsafe (some #(unsafe-reason c %) cells)]
@@ -400,7 +446,7 @@
         why (await (case action
                      :step-back (step-back! c)
                      :pillar (pillar! c)
-                     :dig (dig-step! c)))]
+                     :dig (dig-step! c true)))]
     (ctx/update-mem! c update :reasons (fnil into []) (keep identity [skipped why])))
   (let [y (feet-y c)
         rose? (> y (:best-y (ctx/mem c)))]

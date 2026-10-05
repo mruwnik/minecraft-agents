@@ -754,6 +754,24 @@
           (is (nil? (failed-event seen)) "no give-up although 8 stair steps exceed :max-attempts 6")
           (is (= 8 (count (filter #(zero? (:range %)) (call-args p "moveTo")))) "one stair step per round"))))))
 
+(def wide-hollow
+  "A 2-deep 5x5 hollow in solid dirt (x 3..7, z -2..2, open at y 65 and 66, floor y 64, surface feet at y 67):
+  no cell inside has three walls, and from the middle no side at feet height is solid."
+  (dirt-box (for [x (range 3 8) z (range -2 3) y [65 66]] (str x "," y "," z))))
+
+(deftest unstick-walks-to-a-wall-and-stairs-out-of-a-wide-hollow
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:pos {:x 5 :y 65 :z 0}} :blocks wide-hollow
+                                           :inventory [{:name "dirt" :count 4}]})]
+          (lifting-moveTo! p 67)
+          (await (run-attempts! eng p 8 :free))
+          (is (nil? (failed-event seen)) "no give-up: not a 1x1 pit, but still a way out")
+          (is (= [] (:list (core/state eng))) "out of the hollow, the spell is over")
+          (is (seq (dig-positions p)) "it dug stair steps into a wall")
+          (is (= 67 (.-y (.-pos (.self p)))) "feet back at the surface"))))))
+
 (deftest unstick-bedrock-pit-gives-up-after-max-attempts-rounds
   (async done
     (tu/run-async done
