@@ -1,0 +1,2 @@
+;; ProbePlace live cases for place replaceable cells and interactable reference faces (cards e738a236, 83e75e86): idle, driven with tools/world.mjs
+{:register [] :queue []}
