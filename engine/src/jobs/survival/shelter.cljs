@@ -5,6 +5,7 @@
             [engine.jobs.tidy :as tidy]
             [engine.jobs.util :as u]
             [engine.memory :as mem]
+            [engine.places :as places]
             [engine.triggers.hungry :as hungry]
             [engine.triggers.night-unsafe :as night-unsafe]
             [jobs.survival.dig-in :as dig-in]
@@ -23,8 +24,7 @@
   round by day ends :done (after a dig-in it first gets the body out of the pit, below); a first round that finds
   the body asleep, or roofed other than in its own shelter, ends :done at once. A first round (no child run yet) that finds the body
   shut in its own latest :shelter at night holds as after a dig-in (:sheltered :dug-in): the job keeps nothing it
-  needs to resume, so a shelter cut by a higher reflex is fired again by night-unsafe and simply holds. A first round that finds the body roofed (its hut, not a shelter it dug) at night with a known bed within :bed-radius and no :slept entry
-  within half an in-game day runs jobs.survival.sleep alone (:sheltered :slept once asleep; a sleep that fails ends the round :done). A roofed first round like that with no known bed in reach but a bed item carried puts the bed down on a free cell beside the body (head cell free too, both permitted by access/may?), records it as :bed (kept for good) and sleeps in it; no room ends the round :done and writes a :bed-place-failed entry (10 minutes). Otherwise it tries, in order, and the first that does not decline
+  needs to resume, so a shelter cut by a higher reflex is fired again by night-unsafe and simply holds. A first round that finds the body roofed in a room (its hut: roofed, its cell part of a 2x2 square of free cells, so not a one-wide tunnel) at night, with a bed of the room (the remembered :bed within 12 blocks, else a bed it sees in the room) and no :slept entry within half an in-game day and no :sleep-failed entry, runs jobs.survival.sleep alone on that bed (:sheltered :slept once asleep; a sleep that fails writes a :sleep-failed entry, 5 minutes, and ends the round :done). A roofed first round like that with no bed of the room but a bed item carried puts the bed down on a free cell beside the body (a row of three, none in a doorway; the click faces along the row; head cell free too, both permitted by access/may?), records it as :bed unless a live :bed is recorded (kept) and sleeps in it; no room ends the round :done and writes a :bed-place-failed entry (10 minutes). Otherwise it tries, in order, and the first that does not decline
   decides:
   1. jobs.survival.sleep, with a known bed within :bed-radius;
   2. jobs.survival.log-out {:others :online}, when another player is in the server's player list (the tab list):
@@ -73,7 +73,7 @@
   recorded shelter (the shut-in-by-day condition)."
   [c]
   (let [p (:primitives c)]
-    (or (night-unsafe/holds? p (ctx/view c) (:roof-height (:args c)) (:bed-radius (:args c)))
+    (or (night-unsafe/holds? p (ctx/view c) (:roof-height (:args c)))
         (sh/shut-in-by-day? p (:data (ctx/latest c :shelter)) (:data (ctx/latest c :shelter-trapped))))))
 
 (defn overdue? [c]
@@ -160,16 +160,22 @@
             (await (log-out-step c a)))))))
 
 (defn ^:async sleep-when-roofed
-  "A body roofed other than in a shelter it dug (its hut) at night with a bed in reach and no sleep tonight: jobs.survival.sleep
-  alone (no log-out, no dig-in). :continue while it works; asleep it is :sheltered :slept and holds; a sleep that ends
-  without sleeping marks :sleep-failed and the round ends :done."
-  [c started]
+  "A body roofed in a room (its hut) at night with a bed of the room (bed: remembered near, seen, or just put down) and
+  no sleep tonight: jobs.survival.sleep alone on that bed (no log-out, no dig-in). :continue while it works; asleep it
+  is :sheltered :slept and holds; a sleep that ends without sleeping marks :sleep-failed, writes a body-memory
+  :sleep-failed entry (5 minutes, so night-unsafe does not refire all night on a taken bed or a monster nearby) and
+  the round ends :done."
+  [c started bed]
   (let [p (:primitives c)
-        s (await (ctx/call-child c :sleep 'jobs.survival.sleep {:bed-radius (:bed-radius (:args c))}))]
+        s (await (ctx/call-child c :sleep 'jobs.survival.sleep {:bed bed}))]
     (cond
       (= :continue s) :continue
       (or (sh/sleeping? p) (seq (ctx/since c :slept started))) (do (sheltered! c :slept) :continue)
-      :else (do (ctx/update-mem! c assoc :sleep-failed true) :done))))
+      (not (sh/night? p)) :done
+      :else (do (ctx/update-mem! c assoc :sleep-failed true)
+                (ctx/remember! c :sleep-failed {:pos bed} sh/sleep-failed-policy)
+                (ctx/emit! c :shelter.sleep_failed :warn {:pos bed :text "could not sleep in the bed here; not trying again for a while"})
+                :done))))
 
 (def bed-dirs [[1 0] [-1 0] [0 1] [0 -1]])
 
@@ -187,7 +193,7 @@
         air? #(#{"air" "cave_air"} (u/block-name p %))
         free? (fn [pos] (and (air? pos) (sh/solid-at? p (update pos :y dec))))
         roofed? (fn [pos] (some #(sh/solid-at? p (update pos :y + %)) (range 1 (inc roof))))
-        permitted? #(nil? (access/trespass-refusal in :place %))
+        permitted? #(and (nil? (access/trespass-refusal in :place %)) (not (sh/doorway? p %)))
         stands (sort-by (fn [[dx dz]] (+ (js/Math.abs dx) (js/Math.abs dz)))
                         (for [dx (range -3 4) dz (range -3 4)] [dx dz]))]
     (first (for [[sx sz] stands
@@ -202,33 +208,52 @@
                             (not= foot (sh/feet p)))]
              {:stand stand :foot foot :head head}))))
 
+(defn click-for
+  "The place click that sets a bed on the foot cell facing from the stand cell toward it, so the head cell is the one
+  after the foot: against the floor under the foot, looking along the row."
+  [{:keys [stand foot]}]
+  (let [dx (- (:x foot) (:x stand))
+        dz (- (:z foot) (:z stand))]
+    {:against (update foot :y dec) :cursor {:x 0.5 :y 1 :z 0.5}
+     :yaw (js/Math.atan2 (- dx) (- dz)) :pitch -1}))
+
+(defn ^:async bed-visible?
+  "Whether a bed block stands at pos: a block update can arrive a moment after the place act, so look a few times."
+  [c pos]
+  (loop [tries 0]
+    (cond
+      (.endsWith (or (u/block-name (:primitives c) pos) "") "_bed") true
+      (<= 4 tries) false
+      :else (do (await (ctx/act c :wait #js {:ms 250}))
+                (recur (inc tries))))))
+
 (defn ^:async put-down-bed!
-  "Walk to the layout's stand cell if the body is not on it, then place the carried bed on the foot cell and record it
-  as :bed. :continue while walking (and once arrived, for the next round to place); true when a bed block stands at the foot cell after; else nil."
+  "Walk to the layout's stand cell if the body is not on it, then place the carried bed on the foot cell (facing along
+  the row) and record it as :bed unless a live :bed is recorded (places/offer!: a known bed farther away is kept).
+  :continue while walking (and once arrived, for the next round to place); the foot cell when a bed block stands there
+  after; else nil."
   [c]
   (let [p (:primitives c)
         item (sh/carried-bed p)
-        {:keys [stand foot]} (bed-layout c)]
+        {:keys [stand foot] :as layout} (bed-layout c)]
     (when foot
       (if (= stand (sh/feet p))
-        (let [r (await (tidy/place! c foot item))]
-          (when (and (= "placed" (.-status r)) (.endsWith (or (u/block-name p foot) "") "_bed"))
-            (ctx/remember! c :bed {:pos foot} mem/place-policy)
-            (ctx/emit! c :place.set :info {:name :bed :pos foot :was nil :auto true
-                                           :text (str "put the carried bed down at " (pr-str foot))})
-            true))
+        (let [r (await (tidy/place! c foot item false (click-for layout)))]
+          (when (and (= "placed" (.-status r)) (await (bed-visible? c foot)))
+            (places/offer! c :bed foot)
+            foot))
         (let [w (await (ctx/call-child c :bed-walk 'jobs.movement.go-to {:pos stand :range 0}))]
           (when (or (= :continue w) (:arrived (ctx/child-result c :bed-walk))) :continue))))))
 
 (defn ^:async place-bed-and-sleep
-  "Roofed at night with a bed carried and none known in reach: set the carried bed down beside the body (kept: it is
-  now the body's bed and holds its respawn point) and sleep in it. No room, or a failed placement, writes a
+  "Roofed in a room at night with a bed carried and none of the room's known: set the carried bed down beside the body
+  and sleep in it (it is recorded as :bed when no live one is). No room, or a failed placement, writes a
   :bed-place-failed entry (10 minutes, so the trigger does not refire) and ends the round :done."
   [c]
   (let [r (await (put-down-bed! c))]
    (cond
     (= :continue r) :continue
-    r (await (sleep-when-roofed c (ctx/now c)))
+    r (await (sleep-when-roofed c (ctx/now c) r))
     :else
     (do (ctx/remember! c :bed-place-failed {} sh/bed-place-failed-policy)
         (ctx/emit! c :shelter.bed_place_failed :warn {:text "no room or permission to put the carried bed down; not sleeping in it"})
@@ -274,10 +299,10 @@
       (and covered (empty? (:children (ctx/mem c))) (not (sh/sleeping? p)) (dig-in/sheltered-in c))
       (do (sheltered! c :dug-in) (await (hold c)))
       (and covered (not (sh/sleeping? p)) (not (:sleep-failed (ctx/mem c)))
-           (sh/sleep-wanted p (ctx/view c) (:bed-radius (:args c))))
-      (await (sleep-when-roofed c (ctx/now c)))
+           (sh/sleep-wanted p (ctx/view c) (:roof-height (:args c))))
+      (await (sleep-when-roofed c (ctx/now c) (sh/sleep-wanted p (ctx/view c) (:roof-height (:args c)))))
       (and (sh/roofed? p (:roof-height (:args c))) (not (sh/sleeping? p))
-           (sh/bed-place-wanted? p (ctx/view c) (:roof-height (:args c)) (:bed-radius (:args c))))
+           (sh/bed-place-wanted? p (ctx/view c) (:roof-height (:args c))))
       (await (place-bed-and-sleep c))
       covered :done
       :else (let [r (await (choose-round c))]

@@ -4,6 +4,7 @@
   gone, and dig-in mends a hole in the roof of a closed room instead of walling the body in at feet and head height."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
+            [engine.jobs.shelter :as sh]
             [engine.memory :as mem]
             [engine.scenario :as scenario]
             [engine.shelter-test :as st]
@@ -210,11 +211,20 @@
           (is (= (st/arg-pos (first (st/calls p "place"))) (:pos (first (st/entries eng :bed)))))
           (is (= 1 (count (st/entries eng :slept)))))))))
 
-(deftest shelter-in-a-hut-with-no-room-for-the-bed-gives-up-once
+(deftest shelter-in-a-closet-with-no-room-for-the-bed-does-nothing-and-is-not-refired
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [boxed (into {} (for [x [4 5 6] z [-1 0 1] :when (not= [x z] [5 0])] [(str x ",64," z) "cobblestone"]))
+              world (merge (hut-world {:x 5 :y 64 :z 0} boxed) {:time st/night :inventory [{:name "red_bed" :count 1}]})
+              {:keys [eng p]} (st/setup world)]
+          (is (false? (boolean ((:when (get triggers/all :night-unsafe)) p (mem/view (:store eng)) {}))) "one free cell is no room"))))))
+
+(deftest shelter-in-a-hut-with-no-room-for-the-bed-gives-up-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [boxed (into {} (for [x [4 5 6] z [-1 0 1] :when (not (#{[5 0] [4 0] [5 -1] [4 -1]} [x z]))] [(str x ",64," z) "cobblestone"]))
               {:keys [eng p]} (st/setup (merge (hut-world {:x 5 :y 64 :z 0} boxed)
                                                {:time st/night :inventory [{:name "red_bed" :count 1}]}))]
           (core/submit! eng '(jobs.survival.shelter) {})
@@ -222,3 +232,110 @@
           (is (= [] (st/calls p "place")))
           (is (= [] (st/calls p "sleep")))
           (is (= 1 (count (st/entries eng :bed-place-failed)))))))))
+
+;; ------------------------------------------------------------------ bed review findings (card d9c87329)
+
+(defn holds-with
+  "The night-unsafe condition in world after seed! ran on a fresh engine's store."
+  [world seed!]
+  (let [{:keys [eng]} (st/setup {})]
+    (seed! eng)
+    (boolean ((:when (get triggers/all :night-unsafe)) (tu/fake world) (mem/view (:store eng)) {}))))
+
+(def sleep-failed-policy {:cap 1 :ttl 300000})
+
+(deftest a-recent-failed-sleep-stops-night-unsafe-from-holding-the-roofed-body
+  (let [night-world (merge (hut-world {:x 5 :y 64 :z 0} bed-block) {:time st/night})
+        carrying (assoc (merge (hut-world {:x 5 :y 64 :z 0} {}) {:time st/night}) :inventory [{:name "red_bed" :count 1}])
+        failed (fn [eng] (mem/write! (:store eng) :sleep-failed {:pos {:x 6 :y 64 :z 0}} sleep-failed-policy))]
+    (is (true? (holds-with night-world (fn [eng] (st/know-bed! eng {:x 6 :y 64 :z 0})))))
+    (is (false? (holds-with night-world (fn [eng] (st/know-bed! eng {:x 6 :y 64 :z 0}) (failed eng)))) "known bed")
+    (is (false? (holds-with (merge night-world {:blocks (:blocks night-world)}) failed)) "seen bed")
+    (is (true? (holds-with carrying (fn [_]))))
+    (is (false? (holds-with carrying failed)) "a carried bed")))
+
+(deftest a-sleep-that-ends-without-sleeping-writes-a-short-sleep-failed-entry
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (st/setup (merge (hut-world {:x 5 :y 64 :z 0} bed-block) {:time st/night}))]
+          (st/know-bed! eng {:x 6 :y 64 :z 0})
+          (set! (.-sleep p) (fn [& _] (js/Promise.resolve #js {:status "occupied"})))
+          (core/submit! eng '(jobs.survival.shelter) {})
+          (await (st/tick-n eng 12))
+          (is (= [{:pos {:x 6 :y 64 :z 0}}] (st/entries eng :sleep-failed)))
+          (is (false? (boolean ((:when (get triggers/all :night-unsafe)) p (mem/view (:store eng)) {})))
+              "night-unsafe no longer holds on the taken bed"))))))
+
+;; a one-wide tunnel (x 0..20, z 0, y 64..65) through stone: roofed, but no room
+
+(def tunnel
+  (into {} (remove (fn [[k _]] (let [[x y z] (map js/Number (.split k ","))] (and (<= 0 x 20) (<= 64 y 65) (= z 0)))))
+        (box 0 64 -1 20 66 1 "stone")))
+
+(deftest a-miner-in-a-tunnel-is-not-pulled-to-a-bed-nor-puts-one-down
+  (let [world (fn [extra] (merge {:floor tu/walk-floor :self {:pos {:x 5 :y 64 :z 0}} :time st/night
+                                  :blocks (merge tunnel {"10,64,0" "red_bed"})} extra))
+        know (fn [eng] (st/know-bed! eng {:x 10 :y 64 :z 0}))]
+    (is (false? (holds-with (world {}) know)) "a bed 5 blocks along the tunnel")
+    (is (false? (holds-with (world {:inventory [{:name "red_bed" :count 1}]}) (fn [_]))) "a carried bed")))
+
+(deftest a-bed-far-from-the-hut-room-is-not-the-bed-of-the-room
+  (let [world (merge (hut-world {:x 5 :y 64 :z 0} {"30,64,0" "red_bed"}) {:time st/night})]
+    (is (false? (holds-with world (fn [eng] (st/know-bed! eng {:x 30 :y 64 :z 0})))) "remembered 25 blocks away")))
+
+(deftest a-hut-bed-memory-does-not-know-is-found-and-slept-in-before-any-second-bed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (merge (hut-world {:x 5 :y 64 :z 0} bed-block)
+                           {:time st/night :inventory [{:name "red_bed" :count 1}]})
+              {:keys [eng p]} (st/setup world)]
+          (is (true? (boolean ((:when (get triggers/all :night-unsafe)) p (mem/view (:store eng)) {}))) "holds for the seen bed")
+          (core/submit! eng '(jobs.survival.shelter) {})
+          (await (st/tick-n eng 8))
+          (is (= [] (st/calls p "place")) "no second bed")
+          (is (= 1 (count (st/calls p "sleep"))))
+          (is (= [{:pos {:x 6 :y 64 :z 0}}] (st/entries eng :bed)) "the seen bed is recorded"))))))
+
+(deftest a-bed-behind-a-wall-is-not-seen
+  (let [p (tu/fake (merge (hut-world {:x 5 :y 64 :z 0} {}) {:blocks (assoc (:blocks (hut-world {:x 5 :y 64 :z 0} {})) "9,64,0" "red_bed")}))]
+    (is (nil? (sh/seen-bed p)))))
+
+(deftest a-placed-bed-does-not-overwrite-a-known-bed-beyond-the-radius
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [far {:x 80 :y 64 :z 0}
+              {:keys [eng p seen]} (st/setup (merge (hut-world {:x 5 :y 64 :z 0} {"80,64,0" "red_bed"})
+                                                    {:time st/night :inventory [{:name "red_bed" :count 1}]}))]
+          (st/know-bed! eng far)
+          (core/submit! eng '(jobs.survival.shelter) {})
+          (await (st/tick-n eng 8))
+          (is (= 1 (count (st/calls p "place"))) "put the carried one down")
+          (is (= 1 (count (st/calls p "sleep"))))
+          (is (= far (mem/place (mem/view (:store eng)) :bed)) "the known bed is kept")
+          (is (seq (st/emitted seen :place.kept)) "and one place.kept event says so"))))))
+
+(deftest a-placed-bed-is-set-with-a-click-facing-along-the-row
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (st/setup (merge (hut-world {:x 5 :y 64 :z 0} {})
+                                               {:time st/night :inventory [{:name "red_bed" :count 1}]}))]
+          (core/submit! eng '(jobs.survival.shelter) {})
+          (await (st/tick-n eng 8))
+          (let [call (first (st/calls p "place"))
+                foot (st/arg-pos call)
+                click (js->clj (.-click (.-args call)) :keywordize-keys true)
+                stand (js->clj (.-pos (.self p)) :keywordize-keys true)
+                dx (- (:x foot) (:x stand)) dz (- (:z foot) (:z stand))]
+            (is (= (update foot :y dec) (:against click)) "against the floor under the foot cell")
+            (is (< (js/Math.abs (- (:yaw click) (js/Math.atan2 (- dx) (- dz)))) 1e-9) "yaw along the row")
+            (is (= "red_bed" (block-at p [(+ (:x foot) dx) (:y foot) (+ (:z foot) dz)])) "the head cell is the one after the foot")))))))
+
+(deftest a-gap-in-a-wall-is-a-doorway-and-a-cell-in-the-room-is-not
+  (let [p (tu/fake (hut-world {:x 5 :y 64 :z 0} {"5,64,2" "air" "5,65,2" "air"}))]
+    (is (true? (sh/doorway? p {:x 5 :y 64 :z 2})))
+    (is (false? (sh/doorway? p {:x 5 :y 64 :z 1})))
+    (is (false? (sh/doorway? p {:x 4 :y 64 :z 0})))))

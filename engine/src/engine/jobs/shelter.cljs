@@ -98,19 +98,84 @@
     (when (and pos (<= (u/dist (u/self-pos {:primitives p}) pos) radius))
       pos)))
 
-;; A :slept entry younger than this counts as "slept tonight".
-(def slept-tonight-ms (/ ms-per-day 2))
+(def slept-tonight-ms
+  "A :slept entry younger than this counts as \"slept tonight\" (half an in-game day)."
+  (/ ms-per-day 2))
+
+(def hut-radius
+  "How near a bed must be for a roofed body to count it as the bed of the room it stands in (blocks)."
+  12)
+
+(defn walkable-at?
+  "Whether the cell at pos is one a body stands or walks in: not solid, or a bed."
+  [p pos]
+  (let [n (u/block-name p pos)]
+    (and (some? n) (or (not (solid? n)) (.endsWith n "_bed")))))
+
+(defn in-room?
+  "Whether the body stands in a room, not a one-wide tunnel: its cell is one of a 2x2 square of free cells at feet
+  height. A one-wide tunnel (a miner's), its bends and junctions have no such square; a hut has."
+  [p]
+  (let [{:keys [x y z]} (feet p)]
+    (boolean (some (fn [[ox oz]]
+                     (every? #(walkable-at? p {:x (+ x (first %)) :y y :z (+ z (second %))})
+                             [[ox oz] [(+ ox 1) oz] [ox (+ oz 1)] [(+ ox 1) (+ oz 1)]]))
+                   [[0 0] [-1 0] [0 -1] [-1 -1]]))))
+
+(defn doorway?
+  "Whether the cell is a gap in a wall: solid on both sides along one horizontal axis and free on both ends of the other."
+  [p {:keys [x y z]}]
+  (let [solid (fn [dx dz] (solid-at? p {:x (+ x dx) :y y :z (+ z dz)}))
+        free (fn [dx dz] (not (solid dx dz)))]
+    (boolean (or (and (solid 1 0) (solid -1 0) (free 0 1) (free 0 -1))
+                 (and (solid 0 1) (solid 0 -1) (free 1 0) (free -1 0))))))
+
+(def seen-bed-radius 6)
+
+(defn seen-bed
+  "A bed block the body can see in its room: found by a flood fill from its feet over free cells at feet height, within
+  seen-bed-radius (a bed behind a wall is not seen). The nearest cell of it, or nil."
+  [p]
+  (let [{:keys [x y z] :as start} (feet p)]
+    (loop [queue [start] seen #{start}]
+      (when-let [pos (first queue)]
+        (let [named (u/block-name p pos)]
+          (if (and (some? named) (.endsWith named "_bed") (not= pos start))
+            pos
+            (let [next (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
+                             :let [n {:x (+ (:x pos) dx) :y y :z (+ (:z pos) dz)}]
+                             :when (and (not (seen n))
+                                        (<= (max (js/Math.abs (- (:x n) x)) (js/Math.abs (- (:z n) z))) seen-bed-radius)
+                                        (walkable-at? p n))]
+                         n)]
+              (recur (into (subvec (vec queue) 1) next) (into seen next)))))))))
+
+(defn hut-bed
+  "The bed of the room the body stands in: roofed within roof-height and in a room (not a tunnel), then the remembered
+  :bed within hut-radius, else a bed it sees in the room; nil otherwise. A bed the body does not remember is found
+  here, so a second one is not put down beside it."
+  [p view roof-height]
+  (when (and (roofed? p roof-height) (in-room? p))
+    (or (let [pos (mem/place view :bed)]
+          (when (and pos (<= (u/dist (u/self-pos {:primitives p}) pos) hut-radius)) pos))
+        (seen-bed p))))
+
+(def sleep-failed-policy
+  "The :sleep-failed entry a shelter writes when a roofed sleep ended without sleeping (bed taken, monsters near, ...):
+  one, five minutes, so night-unsafe does not refire on the same bed every cooldown."
+  {:cap 1 :ttl 300000})
 
 (defn sleep-wanted
-  "The remembered bed within radius when the body is awake at night, has not slept tonight (no :slept entry within half
-  a day) and has not given up on that bed (no unexpired :bed-unreachable entry). The roof is not asked: this is for a
-  body already sheltered."
-  [p view radius]
+  "The bed of the room a roofed body at night, awake, should sleep in (see hut-bed): none slept in tonight (no :slept
+  entry within half an in-game day), not given up on (no unexpired :bed-unreachable at it) and no unexpired
+  :sleep-failed entry; else nil."
+  [p view roof-height]
   (when (and (night? p) (not (sleeping? p)))
-    (let [bed (bed-in-view p view radius)]
+    (let [bed (hut-bed p view roof-height)]
       (when (and bed
                  (zero? (mem/count-in view :slept slept-tonight-ms))
-                 (not-any? #(= bed (:pos (:data %))) (mem/entries view :bed-unreachable)))
+                 (not-any? #(= bed (:pos (:data %))) (mem/entries view :bed-unreachable))
+                 (empty? (mem/entries view :sleep-failed)))
         bed))))
 
 (def bed-place-failed-policy
@@ -123,15 +188,18 @@
   (some #(when (.endsWith (:name %) "_bed") (:name %)) (u/inventory p)))
 
 (defn bed-place-wanted?
-  "Whether a sheltered body should put a carried bed down: night, awake, roofed within roof-height, no remembered bed
-  within radius, a bed item carried, no sleep tonight and no :bed-place-failed entry."
-  [p view roof-height radius]
+  "Whether a sheltered body should put a carried bed down: night, awake, roofed within roof-height and in a room, no bed
+  of the room (remembered near or seen), a bed item carried, no sleep tonight, and no :bed-place-failed or
+  :sleep-failed entry."
+  [p view roof-height]
   (boolean (and (night? p) (not (sleeping? p))
                 (roofed? p roof-height)
-                (nil? (bed-in-view p view radius))
                 (some? (carried-bed p))
                 (zero? (mem/count-in view :slept slept-tonight-ms))
-                (empty? (mem/entries view :bed-place-failed)))))
+                (empty? (mem/entries view :bed-place-failed))
+                (empty? (mem/entries view :sleep-failed))
+                (in-room? p)
+                (nil? (hut-bed p view roof-height)))))
 
 (defn bed
   "The remembered bed position when it is within radius of the body, else nil."

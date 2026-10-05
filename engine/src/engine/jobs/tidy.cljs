@@ -52,13 +52,21 @@
   (let [pos (.-pos (.self p))]
     (contains? (body-cells {:x (.-x pos) :y (.-y pos) :z (.-z pos)}) (vec cell))))
 
+(defn place-item
+  "The carried item that puts back dug entry e: its :was block, else the first carried of :any-of (what the block
+  drops, go-to escalation holes), or nil."
+  [p {:keys [was any-of]}]
+  (first (filter #(carried? p %) (distinct (cons was any-of)))))
+
 (defn why-not
-  "Why entry cannot be restored now, or nil: :changed (the cell no longer holds what was recorded), :not-carried (the
-  dug block is not carried) or :occupied (the block would be placed into the body)."
-  [p {:keys [cell now action was]}]
+  "Why entry cannot be restored now, or nil: :changed (the cell no longer holds what was recorded), :not-carried (no
+  place-item carried), :shut-in (a go-to escalation hole, :escalation, while the body is shut in: the hole is its way
+  on) or :occupied (the block would be placed into the body)."
+  [p {:keys [cell now action escalation] :as e}]
   (cond
     (not= now (block-now p cell)) :changed
-    (and (= :dig action) (not (carried? p was))) :not-carried
+    (and (= :dig action) (nil? (place-item p e))) :not-carried
+    (and (= :dig action) escalation (reach/enclosed? p)) :shut-in
     (and (= :dig action) (in-body? p cell)) :occupied))
 
 (defn unreachable?
@@ -122,10 +130,12 @@
      r)))
 
 (defn ^:async place!
-  "ctx/act :place of item at pos, noting a placed block of another's (see noting?). Resolves to the act's result."
+  "ctx/act :place of item at pos, noting a placed block of another's (see noting?). A click ({:against :cursor :yaw
+  :pitch}) is passed on to the place act. Resolves to the act's result."
   ([c pos item] (place! c pos item false))
-  ([c pos item last-resort?]
+  ([c pos item last-resort?] (place! c pos item last-resort? nil))
+  ([c pos item last-resort? click]
    (let [pend (when (noting? c last-resort?) (pending c :place pos))
-         r (await (ctx/act c :place (clj->js {:pos pos :item item})))]
+         r (await (ctx/act c :place (clj->js (cond-> {:pos pos :item item} click (assoc :click click)))))]
      (when (= "placed" (.-status r)) (record! c pend item))
      r)))
