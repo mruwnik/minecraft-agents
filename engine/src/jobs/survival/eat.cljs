@@ -7,7 +7,7 @@
   "Eat the best food carried, one item per round, until food reaches :until
   or nothing edible is left. Foods come from minecraft-data (engine.foods): best by hunger points then saturation.
   Harmful foods (rotten flesh, spider eyes, pufferfish, poisonous potatoes, raw chicken) need :allow-bad; golden
-  apples and golden carrots are eaten only when named or at low health; chorus fruit and suspicious stew only when
+  apples are eaten only when named or at low health; chorus fruit and suspicious stew only when
   named. A named item that is not food is refused at once (:not-food). Writes a :fed
   entry (item, food after) for each meal.")
 

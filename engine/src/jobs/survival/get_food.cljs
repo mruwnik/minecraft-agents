@@ -55,7 +55,7 @@
 
 (def harvest-items
   "What the drops of a harvest or a kill may be called."
-  (into (set (filter foods/edible? (keys foods/table))) #{"wheat" "wheat_seeds" "beetroot_seeds" "poisonous_potato"}))
+  (into (set (filter foods/edible? (keys (foods/table)))) #{"wheat" "wheat_seeds" "beetroot_seeds" "poisonous_potato"}))
 
 (def hungry-policy {:cap 10 :ttl (* 60 60 1000)})
 

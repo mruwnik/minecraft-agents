@@ -35,6 +35,7 @@
             [engine.backoff :as backoff]
             [engine.events :as events]
             [engine.expr :as expr]
+            [engine.foods :as foods]
             [engine.fsutil :as fsu]
             [engine.memory :as mem]
             [engine.triggers.stuck :as stuck]
@@ -1201,7 +1202,8 @@
            backoff backoff-alert-ms]
     :or {now js/Date.now stall-rounds default-stall-rounds sweep-ms default-sweep-ms
          stats-ms default-stats-ms backoff-alert-ms default-backoff-alert-ms}}]
-  (let [file (path/join dir "engine.edn")
+  (let [_ (foods/select! primitives)
+        file (path/join dir "engine.edn")
         saved (fsu/read-edn file)
         username (or body (.-username (.self primitives)))
         initial-state (if saved (restore saved) empty-state)

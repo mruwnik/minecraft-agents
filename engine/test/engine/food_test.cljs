@@ -4,6 +4,7 @@
             [engine.registry :as registry]
             [engine.core :as core]
             [engine.events :as events]
+            [engine.foods :as foods]
             [engine.memory :as mem]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
@@ -169,15 +170,51 @@
           (core/submit! eng '(jobs.survival.eat {:item "golden_apple"}) {})
           (await (core/tick! eng))
           (is (= ["golden_apple"] (call-args p "eat" "item")) "named"))
-        (let [{:keys [eng p]} (setup {:self {:food 4 :health 4} :inventory [{:name "golden_carrot" :count 1}]})]
+        (let [{:keys [eng p]} (setup {:self {:food 4 :health 4} :inventory [{:name "golden_apple" :count 1}]})]
           (core/submit! eng '(jobs.survival.eat) {})
           (await (core/tick! eng))
-          (is (= ["golden_carrot"] (call-args p "eat" "item")) "low health"))
+          (is (= ["golden_apple"] (call-args p "eat" "item")) "low health"))
         (let [{:keys [eng p]} (setup {:self {:food 4 :health 4}
-                                      :inventory [{:name "golden_carrot" :count 1} {:name "bread" :count 1}]})]
+                                      :inventory [{:name "golden_apple" :count 1} {:name "bread" :count 1}]})]
           (core/submit! eng '(jobs.survival.eat) {})
           (await (core/tick! eng))
           (is (= ["bread"] (call-args p "eat" "item")) "a common food still goes first"))))))
+
+(deftest eat-golden-carrot-is-a-normal-best-food
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:food 4 :health 20}
+                                      :inventory [{:name "golden_carrot" :count 1} {:name "bread" :count 1}]})]
+          (core/submit! eng '(jobs.survival.eat) {})
+          (await (core/tick! eng))
+          (is (= ["golden_carrot"] (call-args p "eat" "item")) "unnamed, healthy, and best by points"))))))
+
+(deftest foods-follow-the-version-the-body-is-connected-with
+  (is (contains? (foods/table-for "26.1") "honey_bottle"))
+  (is (not (contains? (foods/table-for "1.12") "honey_bottle")))
+  (is (= "26.1" (foods/version-of (tu/fake {}))) "no rawWorld (tests): the connect default")
+  (is (= "1.12" (foods/version-of #js {:rawWorld #js {:version (fn [] "1.12")}})))
+  (is (= "26.1" (foods/version-of #js {:rawWorld #js {:version (fn [] nil)}})) "no bot yet: the default"))
+
+(deftest an-engine-takes-its-foods-from-its-bodys-version
+  (let [p (tu/fake {})]
+    (set! (.-rawWorld p) #js {:version (fn [] "1.12")})
+    (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)})
+    (is (not (foods/food? "honey_bottle")))
+    (is (foods/food? "bread"))
+    (core/create {:primitives (tu/fake {}) :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)})
+    (is (foods/food? "honey_bottle") "the next engine without a version: the default")))
+
+(deftest eat-keeps-chorus-fruit-and-stew-for-a-named-meal
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [item ["chorus_fruit" "suspicious_stew"]]
+          (let [{:keys [eng p]} (setup {:self {:food 4 :health 4} :inventory [{:name item :count 1}]})]
+            (core/submit! eng '(jobs.survival.eat) {})
+            (await (core/tick! eng))
+            (is (= [] (calls p "eat")) "unnamed: not eaten")))))))
 
 (deftest eat-raw-chicken-is-harmful-food
   (async done
@@ -199,6 +236,10 @@
           (is (= [] (:list (core/state eng))))
           (is (= [] (calls p "eat")))
           (is (= 1 (count (filter #(and (= :refused (:kind %)) (= :not-food (:reason %))) @seen)))))))))
+
+(deftest eat-keeps-harmful-and-precious-food-last-whatever-their-points
+  (is (= "dried_kelp" (eat/best-food [{:name "spider_eye"} {:name "dried_kelp"}] true nil 20)) "harmful last")
+  (is (= "dried_kelp" (eat/best-food [{:name "golden_apple"} {:name "dried_kelp"}] false nil 4)) "precious after common"))
 
 (deftest eat-chooses-by-saturation-when-points-tie
   (is (= "cooked_mutton" (eat/best-food [{:name "cooked_chicken"} {:name "cooked_mutton"}] false nil 20)))
@@ -535,8 +576,8 @@
     (is (not (holds? {:food 16 :health 8 :inventory []})) "no food carried: no top-up")
     (is (not (holds? {:food 18 :health 8 :inventory bread})) "regeneration already works")
     (is (not (holds? {:food 16 :health 20 :inventory bread})) "healthy")
-    (is (not (holds? {:food 16 :health 8 :inventory [{:name "golden_carrot" :count 1}]})) "rare food kept")
+    (is (holds? {:food 16 :health 8 :inventory [{:name "golden_carrot" :count 1}]}) "a common food")
     (is (not (holds? {:food 16 :health 8 :inventory [{:name "golden_apple" :count 1}]})))))
 
-(deftest eat-prefers-common-food-over-golden-carrot
-  (is (= "bread" (eat/best-food [{:name "golden_carrot"} {:name "bread"}] false nil 20))))
+(deftest eat-prefers-common-food-over-golden-apple
+  (is (= "bread" (eat/best-food [{:name "golden_apple"} {:name "bread"}] false nil 20))))
