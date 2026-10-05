@@ -1,0 +1,139 @@
+#!/usr/bin/env bash
+# Commit exactly your own paths in a shared checkout, under a lock, with a ledger row.
+# Usage: tools/commit-mine --card <id-or-prefix> -m <msg-file-or-text> [--hunks <patchfile>]
+#                          [--approved-core <card>] <paths...>
+# See tools/README.md. Never stashes, resets, amends or pushes.
+set -euo pipefail
+
+CORE_RE='^engine/src/engine/(core|expr|triggers|takeover|trigger_api)\.cljs$|^engine/src/engine/registry\.(clj|cljs)$'
+# Built from pieces so this file does not trip its own owner-name check.
+NAME_WORD='d''an'
+LOCK_TIMEOUT="${COMMIT_LOCK_TIMEOUT:-600}"
+LARGE_JS_LINES=40
+
+die() { echo "commit-mine: $*" >&2; exit "${2:-1}"; }
+
+card=""; msg=""; hunks=""; approved=""; paths=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --card) card="${2:?}"; shift 2 ;;
+    -m) msg="${2:?}"; shift 2 ;;
+    --hunks) hunks="${2:?}"; shift 2 ;;
+    --approved-core) approved="${2:?}"; shift 2 ;;
+    --) shift; paths+=("$@"); break ;;
+    -*) die "unknown option $1" ;;
+    *) paths+=("$1"); shift ;;
+  esac
+done
+[ -n "$card" ] || die "--card is required"
+[ -n "$msg" ] || die "-m is required"
+[ -z "$hunks" ] || [ -f "$hunks" ] || die "no such patch file: $hunks"
+[ ${#paths[@]} -gt 0 ] || [ -n "$hunks" ] || die "give paths or --hunks"
+
+ROOT="$(git rev-parse --show-toplevel)"; cd "$ROOT"
+GITDIR="$(cd "$(git rev-parse --git-common-dir)" && pwd)"
+LOCK="$GITDIR/commit-lock"
+LEDGER="$GITDIR/commit-ledger.jsonl"
+
+# Allowed set: given paths (relative to repo root) plus files touched by the patch.
+allowed=()
+for p in "${paths[@]}"; do
+  p="$(realpath -m --relative-to="$ROOT" -- "$p")"
+  allowed+=("${p%/}")
+done
+if [ -n "$hunks" ]; then
+  while IFS= read -r f; do allowed+=("$f"); done < <(git apply --numstat -z "$hunks" | tr '\0' '\n' | awk -F'\t' 'NF>=3{print $3}')
+fi
+[ ${#allowed[@]} -gt 0 ] || die "nothing to commit"
+
+is_allowed() { local f="$1" a; for a in "${allowed[@]}"; do [ "$f" = "$a" ] || [[ "$f" == "$a"/* ]] && return 0; done; return 1; }
+
+flags=()
+# Engine-core gate (before locking).
+for a in "${allowed[@]}"; do
+  [[ "$a" =~ $CORE_RE ]] || continue
+  [ -n "$approved" ] || die "engine-core path $a needs --approved-core <card> (owner approval)"
+  flags+=("engine-core $a approved-by $approved")
+done
+[ -z "$hunks" ] || flags+=("hunks-mode")
+
+# Message.
+if [ -f "$msg" ]; then message="$(cat "$msg")"; else message="$msg"; fi
+trailer='Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>'
+grep -qF "$trailer" <<<"$message" || message="$message"$'\n\n'"$trailer"
+
+# Lock with backoff.
+waited=0; delay=0.2
+until mkdir "$LOCK" 2>/dev/null; do
+  [ "$waited" -lt "$LOCK_TIMEOUT" ] || die "could not take $LOCK in ${LOCK_TIMEOUT}s (stale lock? remove it only if no committer is running)" 4
+  sleep "$delay"
+  waited=$((waited + 1))
+  delay=$(awk -v d="$delay" 'BEGIN{d*=1.5; if(d>5)d=5; print d}')
+done
+staged_by_me=0
+cleanup() {
+  local rc=$?
+  if [ "$staged_by_me" = 1 ] && [ "${committed:-0}" != 1 ]; then unstage; fi
+  rmdir "$LOCK" 2>/dev/null || true
+  exit $rc
+}
+unstage() {
+  [ -z "$hunks" ] || git apply --cached -R "$hunks" 2>/dev/null || true
+  local p; for p in "${paths[@]}"; do git restore --staged -- "$p" 2>/dev/null || true; done
+}
+trap cleanup EXIT INT TERM HUP
+
+# Stage.
+staged_by_me=1
+[ ${#paths[@]} -eq 0 ] || git add -A -- "${paths[@]}"
+[ -z "$hunks" ] || git apply --cached "$hunks"
+
+# Foreign staged paths.
+foreign=()
+while IFS= read -r f; do is_allowed "$f" || foreign+=("$f"); done < <(git diff --cached --name-only)
+if [ ${#foreign[@]} -gt 0 ]; then
+  [ -z "$hunks" ] || die "index holds foreign staged paths (${foreign[*]}); someone staged outside the lock. Hunks mode cannot use --only: retry later" 3
+  flags+=("foreign-staged: ${foreign[*]} (left out via --only)")
+  echo "commit-mine: warning: foreign staged paths left uncommitted: ${foreign[*]}" >&2
+fi
+
+git diff --cached --quiet -- "${allowed[@]}" && die "nothing staged for the given paths"
+
+# Check: Why JavaScript.
+while IFS=$'\t' read -r add del f; do
+  [[ "$f" =~ \.(js|mjs|cjs)$ ]] || continue
+  [[ "$add" =~ ^[0-9]+$ ]] || continue
+  total=$(git show ":$f" 2>/dev/null | wc -l)
+  new=0; git cat-file -e "HEAD:$f" 2>/dev/null || new=1
+  large=0
+  [ "$new" = 1 ] && large=1
+  [ "$add" -ge "$LARGE_JS_LINES" ] && [ $((add * 2)) -ge "$total" ] && large=1
+  [ "$large" = 1 ] || continue
+  git show ":$f" | grep -q 'Why JavaScript:' || die "new or largely changed JS file $f needs a '// Why JavaScript:' line"
+done < <(git diff --cached --numstat -- "${allowed[@]}")
+
+# Check: owner name as a whole word in added lines (paths under /home/<user>/ ignored).
+if git diff --cached -U0 -- "${allowed[@]}" | grep -E '^\+' | grep -vE '^\+\+\+ ' \
+    | sed -E 's#/home/[A-Za-z0-9_.-]+/#/home/USER/#g' | grep -iwq -- "$NAME_WORD"; then
+  die "an added line contains the owner's name as a word; use a label or neutral name"
+fi
+# Commit message gets the same check.
+if grep -iwq -- "$NAME_WORD" <<<"$message"; then die "commit message contains the owner's name as a word"; fi
+
+# Commit.
+if [ -n "$hunks" ] || [ ${#foreign[@]} -eq 0 ]; then
+  git commit -q -m "$message"
+else
+  git commit -q --only -m "$message" -- "${allowed[@]}"
+fi
+committed=1
+
+hash="$(git rev-parse HEAD)"
+read -r ins del < <(git show --numstat --format= HEAD | awk '{i+=$1; d+=$2} END{print i+0, d+0}')
+[ "$del" -lt 500 ] || flags+=("large-deletion $del")
+files="$(git show --name-only --format= HEAD)"
+jq -nc --arg time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg hash "$hash" --arg card "$card" \
+  --arg files "$files" --argjson ins "$ins" --argjson del "$del" --arg flags "$(printf '%s\n' "${flags[@]:-}")" \
+  '{time:$time,hash:$hash,card:$card,paths:($files|split("\n")|map(select(.!=""))),insertions:$ins,deletions:$del,flags:($flags|split("\n")|map(select(.!="")))}' \
+  >> "$LEDGER"
+git show --stat --format='%h %s' HEAD | head -20

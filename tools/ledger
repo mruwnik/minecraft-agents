@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Read the commit ledger written by tools/commit-mine (.git/commit-ledger.jsonl).
+# Usage: tools/ledger [--since <hash|ISO-time>] [--flagged]
+set -euo pipefail
+ROOT="$(git rev-parse --show-toplevel)"
+LEDGER="${LEDGER_FILE:-$(cd "$ROOT" && cd "$(git rev-parse --git-common-dir)" && pwd)/commit-ledger.jsonl}"
+since=""; flagged=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --since) since="${2:?--since needs a value}"; shift 2 ;;
+    --flagged) flagged=1; shift ;;
+    *) echo "ledger: unknown arg $1" >&2; exit 2 ;;
+  esac
+done
+[ -f "$LEDGER" ] || exit 0
+revs=""
+if [ -n "$since" ] && git -C "$ROOT" rev-parse -q --verify "$since^{commit}" >/dev/null 2>&1; then
+  revs="$(git -C "$ROOT" rev-list "$since..HEAD" | tr '\n' ' ')"; since=""
+  [ -n "$revs" ] || exit 0
+fi
+jq -c --arg since "$since" --arg revs "$revs" --argjson flagged "$flagged" -s '
+  (if $revs != "" then ($revs|split(" ")) as $r | map(select(.hash as $h | $r|index($h)))
+   elif $since != "" then map(select(.time >= $since))
+   else . end)
+  | map(select($flagged==0 or (.flags|length>0))) | .[]' "$LEDGER" |
+jq -r '"\(.time) \(.hash[0:8]) card=\(.card) +\(.insertions)/-\(.deletions) \(.paths|join(",")) \(if (.flags|length)>0 then "FLAGS: "+(.flags|join("; ")) else "" end)"'

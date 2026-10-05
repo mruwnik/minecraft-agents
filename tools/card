@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Differ board helper (HTTP API; the differ UI has no auth).
+# Usage:
+#   tools/card id <prefix|title words...>   print the full card id
+#   tools/card show <id|prefix>             title, status, worker, last 3 notes
+#   tools/card note <id> <text>             add a note
+#   tools/card move <id> <status> [note]    set status (optionally with a note)
+#   tools/card claim <id> <worker>          status in_progress + "claimed by <worker>" note
+# Env: DIFFER_URL (default http://localhost:8576), CARD_AUTHOR (default: worker from claim, else "agent"),
+#      CARD_REPO (default: this repo's root).
+set -euo pipefail
+
+URL="${DIFFER_URL:-http://localhost:8576}"
+REPO="${CARD_REPO:-$(cd "$(dirname "$0")/.." && pwd)}"
+AUTHOR="${CARD_AUTHOR:-agent}"
+UUID_RE='^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+
+die() { echo "card: $*" >&2; exit 1; }
+api() { curl -sS -m 10 --fail-with-body "$@" || die "request failed (see body above)"; }
+
+repo_enc() { jq -rn --arg r "$REPO" '$r|@uri'; }
+
+all_tasks() { api "$URL/api/boards/$(repo_enc)/tasks?show_done=true"; }
+
+# Resolve a prefix or title words to a full id. Dies on none/ambiguous.
+resolve() {
+  local q="$*"
+  [[ "$q" =~ $UUID_RE ]] && { echo "$q"; return; }
+  local hits
+  hits=$(all_tasks | jq -r --arg q "$q" '
+    .tasks[] | select((.id|startswith($q)) or (.title|ascii_downcase|contains($q|ascii_downcase)))
+    | "\(.id)\t\(.status)\t\(.title)"')
+  local n
+  n=$(printf '%s' "$hits" | grep -c . || true)
+  [ "$n" -eq 1 ] || { [ "$n" -eq 0 ] && die "no card matches '$q'"; echo "$hits" >&2; die "$n cards match '$q'"; }
+  cut -f1 <<<"$hits"
+}
+
+patch() { # id json
+  api -X PATCH -H 'Content-Type: application/json' -d "$2" "$URL/api/tasks/$1" | jq -r '.task|"\(.id) \(.status) \(.title)"'
+}
+
+cmd="${1:-}"; shift || true
+case "$cmd" in
+  id) [ $# -ge 1 ] || die "usage: id <prefix|title words>"; resolve "$*" ;;
+  show)
+    [ $# -eq 1 ] || die "usage: show <id>"
+    id=$(resolve "$1")
+    api "$URL/api/tasks/$id" | jq -r '.task as $t |
+      "\($t.id)\n\($t.title)\nstatus: \($t.status)  worker: \($t["worker-name"] // "-")",
+      ($t.notes|sort_by(.["created-at"])|.[-3:][]|"--- \(.author) \(.["created-at"])\n\(.content|.[0:600])")'
+    ;;
+  note)
+    [ $# -ge 2 ] || die "usage: note <id> <text>"
+    id=$(resolve "$1"); shift
+    api -X POST -H 'Content-Type: application/json' \
+      -d "$(jq -n --arg c "$*" --arg a "$AUTHOR" '{content:$c,author:$a}')" \
+      "$URL/api/tasks/$id/notes" | jq -r '.note.id'
+    ;;
+  move)
+    [ $# -ge 2 ] || die "usage: move <id> <status> [note]"
+    id=$(resolve "$1"); st="$2"; shift 2
+    patch "$id" "$(jq -n --arg s "$st" --arg n "${*:-}" --arg a "$AUTHOR" \
+      '{status:$s} + (if $n=="" then {} else {note:$n,author:$a} end)')"
+    ;;
+  claim)
+    [ $# -eq 2 ] || die "usage: claim <id> <worker>"
+    id=$(resolve "$1")
+    # The HTTP API cannot set worker fields, so a claim is in_progress plus a note naming the worker.
+    patch "$id" "$(jq -n --arg w "$2" '{status:"in_progress",note:"claimed by \($w)",author:$w}')"
+    ;;
+  *) die "usage: card id|show|note|move|claim ... (see header of $0)" ;;
+esac
