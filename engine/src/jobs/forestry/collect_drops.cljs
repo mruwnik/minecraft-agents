@@ -9,7 +9,8 @@
 
 (def args
   {:radius {:doc "search radius in blocks" :default default-radius}
-   :filter {:doc "item names to collect; everything when nil" :default nil}})
+   :filter {:doc "item names to collect; everything when nil" :default nil}
+   :visible-only {:doc "skip items the body has no line of sight to (a player cannot see through walls)" :default false}})
 
 (defn check [_c] true)
 
@@ -27,11 +28,12 @@
   and :collected counts the items gained, also on a round that gave up.
   Done when none are left in radius."
   [c]
-  (let [{:keys [radius]} (:args c)
+  (let [{:keys [radius visible-only]} (:args c)
         wanted (some-> (:filter (:args c)) set)
         skipped (set (:skipped (ctx/mem c)))
         item (->> (array-seq (.entities (:primitives c) #js {:radius radius :kind "item" :max 32}))
                   (remove #(skipped (.-id %)))
+                  (remove #(and visible-only (false? (.-visible %))))
                   (filter #(or (nil? wanted) (wanted (some-> (.-item %) .-name))))
                   first)]
     (if-not item

@@ -282,6 +282,47 @@
           (is (= {:decision :abandoned :items 0 :reason :nothing-found}
                  (select-keys (recovered eng) [:decision :items :reason]))))))))
 
+(defn iron-drop [id x]
+  {:id id :name "item" :kind "item" :pos {:x x :y 64 :z 0} :item {:name "raw_iron" :count 10}})
+
+(def iron-pile [{:name "raw_iron" :count 20 :slot 0}])
+
+(deftest recover-drops-collects-a-pile-scattered-eight-blocks-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities [(iron-drop 1 27) (iron-drop 2 28)]})]
+          (die! eng {:pos death-pos :inventory iron-pile})
+          (core/submit! eng job {})
+          (is (< (await (run-until-empty eng 20)) 20))
+          (is (= {"raw_iron" 20} (inv p)))
+          (is (= {:decision :collected :items 20} (select-keys (recovered eng) [:decision :items]))))))))
+
+(deftest recover-drops-leaves-a-foreign-pile-eight-blocks-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [foreign {:id 3 :name "item" :kind "item" :pos {:x 28 :y 64 :z 0} :item {:name "diamond" :count 5}}
+              {:keys [eng p]} (setup {:floor tu/walk-floor :entities [(iron-drop 1 27) foreign]})]
+          (die! eng {:pos death-pos :inventory [{:name "raw_iron" :count 10 :slot 0}]})
+          (core/submit! eng job {})
+          (is (< (await (run-until-empty eng 20)) 20))
+          (is (= {"raw_iron" 10} (inv p)) "the foreign diamonds stay on the ground")
+          (is (= [3] (map :id (filter #(= 3 (:id %)) (fake/entities p))))))))))
+
+(deftest recover-drops-ignores-items-behind-a-wall
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [wall (into {} (for [z (range -3 4) y [64 65 66]] [(str "24," y "," z) "stone"]))
+              {:keys [eng p]} (setup {:floor tu/walk-floor :blocks wall :entities [(iron-drop 1 27) (iron-drop 2 28)]})]
+          (die! eng {:pos death-pos :inventory iron-pile})
+          (core/submit! eng job {})
+          (await (run-until-empty eng 20))
+          (is (= [] (calls p "collect")))
+          (is (= {:decision :abandoned :items 0 :reason :nothing-found}
+                 (select-keys (recovered eng) [:decision :items :reason]))))))))
+
 (deftest recover-drops-yields-to-a-hostile-and-resumes
   (async done
     (tu/run-async done

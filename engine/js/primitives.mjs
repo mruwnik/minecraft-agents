@@ -518,7 +518,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
         ...(k !== 'item' && k !== 'player' && mobFields(bot, e)),
         ...(k !== 'item' && k !== 'player' && leashFields(bot, e)),
         ...(k !== 'item' && vehicleFields(bot, e)),
-        ...(k === 'hostile' && { visible: canSee(e) }),
+        ...((k === 'hostile' || k === 'item') && { visible: canSee(e) }),
         ...(k !== 'item' && distance <= HIT_RANGE && { hittable: canHit(e) }),
         ...(k === 'item' && { item: droppedItem(bot, e) }),
         ...(k === 'player' && { username: e.username, sleeping: lyingDown(bot, e) }),

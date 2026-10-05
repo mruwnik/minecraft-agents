@@ -582,7 +582,7 @@
   (let [distance (dist (body-pos w) (:pos e))
         o (entity-js (dissoc e :offers :busy))]
     (aset o "distance" distance)
-    (when (= "hostile" (:kind e)) (aset o "visible" (if (some? (:visible e)) (:visible e) (can-see? w e))))
+    (when (#{"hostile" "item"} (:kind e)) (aset o "visible" (if (some? (:visible e)) (:visible e) (can-see? w e))))
     (when-not (or (= "item" (:kind e)) (> distance hit-range))
       (aset o "hittable" (if (some? (:hittable e)) (:hittable e) (can-hit? w e))))
     o))

@@ -1210,6 +1210,12 @@ test('glass and unloaded cells do not block sight', () => {
 
 test('only hostiles carry visible', () => {
   const { p } = rig({ blocks: wall, entities: { ...zombieAt5, 7: { id: 7, name: 'cow', type: 'passive', position: at(5, 64, 1) } } })
+test('a dropped item behind a wall is not visible, and is once the wall is gone', () => {
+  const item = { 7: { id: 7, name: 'item', type: 'object', position: at(5, 64, 0), getDroppedItem: () => ({ name: 'stick', count: 1 }) } }
+  assert.equal(rig({ blocks: wall, entities: item }).p.entities({ kind: 'item' })[0].visible, false)
+  assert.equal(rig({ entities: item }).p.entities({ kind: 'item' })[0].visible, true)
+})
+
   assert.equal('visible' in p.entities({ kind: 'passive' })[0], false)
 })
 

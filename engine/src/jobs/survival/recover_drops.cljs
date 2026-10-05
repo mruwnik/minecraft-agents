@@ -9,8 +9,10 @@
   the latest :died entry with no newer :recovered. Skip (a :recovered entry
   with :decision :skip) when engine.value/inventory-value of what was carried
   is at most engine.value/retrieval-cost plus :margin. Otherwise walk to the
-  death point (jobs.movement.go-to), then collect everything within
-  :collect-radius (jobs.forestry.collect-drops) and record :collected with the
+  death point (jobs.movement.go-to), then collect the items of the pile
+  (the carried item names) it can see within :collect-radius, 10 as a pile
+  rolls up to 8 blocks on open ground (jobs.forestry.collect-drops; never other items, never ones out of
+  line of sight) and record :collected with the
   count of the pile's items that entered the inventory since the decision (those
   picked up on the walk count; a pile already carried again ends :collected
   without a collect step). Gives
@@ -25,7 +27,7 @@
 (def args
   {:margin {:doc "added to the retrieval cost before comparing it to the value" :default 0}
    :danger-radius {:doc "a hostile this close makes the job yield without acting" :default 8}
-   :collect-radius {:doc "collect drops within this many blocks of the death point" :default 6}})
+   :collect-radius {:doc "collect the pile's drops within this many blocks of the death point (a pile on open ground rolls 6-8 out)" :default 10}})
 
 (def arrive-range 2)
 (def settle-ms
@@ -105,7 +107,7 @@
 (defn ^:async collect! [c radius pile]
   (let [r (if (>= (recovered-items c pile) (reduce + 0 (map :count pile)))
             :done
-            (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius radius})))
+            (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius radius :filter (vec (distinct (map :name pile))) :visible-only true})))
         items (recovered-items c pile)]
     (cond
       (= :continue r) :continue
