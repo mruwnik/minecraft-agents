@@ -72,8 +72,13 @@
   The adults on the pen's cells are counted before the exit and again after the shut from outside; fewer is an
   escape (warn herd.escaped), and the result carries :escaped, their total; an animal is booked brought once. A run
   that ends with the gate open and the body on a pen cell or the gate cell goes out the exit's way first (twice at
-  most), so the body ends outside; a shut that failed and then took is judged by the count. A started run holds the
-  body until it is done (hold): no other listed job gets a round in between; reflexes still cut it.")
+  most), so the body ends outside; a shut that failed and then took is judged by the count. A round ends only in a
+  safe state (safe?: the gate shut, the body outside the pen and the gate cell, no animal on this body's lead): through
+  the unsafe stretch, from the lead on to the shut from outside, the round goes on step by step, so no other listed job
+  gets a round in between. A cut (a reflex, an agent's do-now) can still end it there; a round that starts unsafe
+  restarts from what it sees (restart!): an animal on the lead with the body in the pen steps on from the nearest axis
+  cell, with the body outside goes back to out-1, shuts and lines up again; nobody led and the body in the pen goes
+  out; nobody led and the gate open shuts it; a run that was ending ends.")
 
 (def args
   {:mob {:doc "the animal's name, such as \"cow\"" :default nil}
@@ -82,11 +87,6 @@
    :gate {:doc "the fence gate {:x :y :z} to bring them through; the pen's usable gate nearest the body when nil" :default nil}
    :radius {:doc "animals within this many blocks of the body are fetched" :default 24}
    :timeout-s {:doc "seconds one animal may take from its lead on until it is let go" :default 180}})
-
-(def hold
-  "A started herd keeps the body until it is done (engine.core/holds?): another listed job given a round between two of
-  its rounds would walk off with an animal on the lead or leave the gate open. Reflexes still cut it."
-  true)
 
 (def near-pen 16)
 (def approach-range 12)
@@ -768,14 +768,81 @@
                    (set-phase! c :exit {:leaves (inc (:leaves m 0)) :stepped-back false})
                    :else (await (shut-when-clear! c 3 shut-look-ms :shut-gate nil #(shut-failed! c)))))))
 
-(defn ^:async round [c]
-  (let [now (ctx/now c)]
-    (ctx/update-mem! c update :started #(or % now))
-    (let [{:keys [phase animal-started gate]} (ctx/mem c)
-          phase (or phase :survey)
-          lead-phase? (contains? leading phase)]
-      (when (and gate (gate-open? c)) (hold-gate! c))
+(defn ^:async step-once!
+  "One step of the run: the timeout and the lead looked at, the :gate-held entry kept fresh, then the phase's step."
+  [c]
+  (let [now (ctx/now c)
+        {:keys [phase animal-started gate]} (ctx/mem c)
+        phase (or phase :survey)
+        lead-phase? (contains? leading phase)]
+    (when (and gate (gate-open? c)) (hold-gate! c))
+    (cond
+      (and lead-phase? animal-started (>= (- now animal-started) (* 1000 (:timeout-s (:args c))))) (end! c :timeout)
+      (and lead-phase? (pos? (prune-led! c)) (empty? (:led (ctx/mem c)))) (regather-or-lose! c)
+      :else (await (step! c phase)))))
+
+;; ------------------------------------------------------------------ the round: safe at its end
+
+(defn led-by-me
+  "The keys of the adults of :mob on this body's lead now, as the world shows them (not the memory)."
+  [c]
+  (into [] (comp (filter animals/led-by-me?) (map animals/key-of)) (adults c)))
+
+(defn safe?
+  "True when the body may be given away: before the survey has chosen the gate (nothing touched yet), else no animal
+  on this body's lead, the gate shut and the body neither on a pen cell nor on the gate cell. Read from the world."
+  [c]
+  (or (nil? (:gate (ctx/mem c)))
+      (and (empty? (led-by-me c)) (not (gate-open? c)) (not (body-in-pen? c)))))
+
+(defn nearest-axis-index
+  "The index of the axis cell between the gate cell and the deepest step position nearest (flat) to the body."
+  [c]
+  (let [axis (:axis (ctx/mem c))
+        here (u/self-pos c)]
+    (apply min-key #(flat-dist here (cell-middle (nth axis %))) (range gate-index (inc (min deepest (dec (count axis))))))))
+
+(defn restart!
+  "The round starts unsafe: the last one was cut there (or the world changed). Go on from what the world shows, the
+  leads taken from it and the walk and wait state, children included, dropped: a run that was ending ends (end!); an
+  animal led with the body in the pen steps on from the nearest axis cell; led with the body outside goes back to
+  out-1, shuts the gate and lines up again (the retry's way, its one retry not used up); nobody led with the body in
+  the pen goes out (:exit); else the open gate is shut (:shut-gate)."
+  [c]
+  (let [m (ctx/mem c)
+        led (led-by-me c)
+        inside? (body-in-pen? c)
+        open? (gate-open? c)]
+    (ctx/emit! c :herd.restarted :info {:led led :inside inside? :gate-open open? :phase (:phase m)
+                                        :text (str "herd restarts from what it sees: " (count led) " led, body "
+                                                   (if inside? "in the pen" "outside") ", gate " (if open? "open" "shut"))})
+    (ctx/update-mem! c #(-> (apply dissoc % :releasing :release-tried transient-keys)
+                            (assoc :children {} :led led :animal (first led))
+                            (cond-> (and (seq led) (nil? (:animal-started %))) (assoc :animal-started (ctx/now c)))))
+    (cond
+      (:ending m) (end! c (:ending m))
+      (and (seq led) inside?) (set-phase! c :step {:pos-index (nearest-axis-index c) :back-step false :backs 0
+                                                   :deepest-tried false})
+      (seq led) (set-phase! c :retry-back {:backs 0 :deepest-tried false})
+      inside? (set-phase! c :exit {:stepped-back false})
+      :else (set-phase! c :shut-gate))))
+
+(def pace-ms "An unsafe step that changed nothing and took less than this is followed by a wait of settle-ms." 100)
+
+(defn ^:async round
+  "Steps until the run ends or the world is safe again (safe?), so the round never ends in the unsafe stretch. A round
+  that starts unsafe restarts first (restart!). A step that changed no memory and took under pace-ms is followed by a
+  wait, so a step that keeps answering at once never spins."
+  [c]
+  (ctx/update-mem! c update :started #(or % (ctx/now c)))
+  (when-not (safe? c) (restart! c))
+  (loop []
+    (let [before (ctx/mem c)
+          from (ctx/now c)
+          r (await (step-once! c))]
       (cond
-        (and lead-phase? animal-started (>= (- now animal-started) (* 1000 (:timeout-s (:args c))))) (end! c :timeout)
-        (and lead-phase? (pos? (prune-led! c)) (empty? (:led (ctx/mem c)))) (regather-or-lose! c)
-        :else (await (step! c phase))))))
+        (not= :continue r) r
+        (safe? c) :continue
+        :else (do (when (and (= before (ctx/mem c)) (< (- (ctx/now c) from) pace-ms))
+                    (await (ctx/act c :wait #js {:ms settle-ms})))
+                  (recur))))))

@@ -427,7 +427,7 @@
 
 ;; ------------------------------------------------------------------ ctx and rounds
 
-(declare submit! call-child self-pos)
+(declare submit! call-child self-pos wait-reason)
 
 (defn owner? [eng token]
   (and (some? token) (.isOwner (:primitives eng) token)))
@@ -502,7 +502,8 @@
   [eng {:keys [root slots chain token args round reflex] :as base}]
   (let [store (:store eng)
         results (or (:results base) (atom {}))
-        base (assoc base :results results)
+        child-wait (or (:child-wait base) (atom nil))
+        base (assoc base :results results :child-wait child-wait)
         id (mem/path->id root slots)
         check! #(when-not (owner? eng token) (throw (cut-error)))
         wrote! (fn [kind] (emit! eng {:source :job :kind :memory_written :level :debug :job id
@@ -572,12 +573,17 @@
     (swap! (:results base) dissoc child-id)
     (when (empty? (mem/job-mem (mem/view store) (:root base) slots))
       (mem/update-job! store (:root base) slots assoc :args args :children {}))
-    (let [c (child-ctx eng base slot args)]
-      (if-not ((:check def) c)
-:declined
+    (let [c (child-ctx eng base slot args)
+          wait (atom nil)
+          child-wait (:child-wait base)]
+      (reset! child-wait nil)
+      (if-not ((:check def) (assoc c :wait wait))
+        (do (reset! child-wait (when @wait (wait-reason @wait)))
+            :declined)
         (let [{:keys [status error]} (normalize-result (await ((:round def) c)))]
           (when-not (owner? eng (:token base)) (throw (cut-error)))
           (when (= status :error) (throw error))
+          (when-not (= status :declined) (reset! child-wait nil))
           (if (= status :done)
             (clear!)
             (swap! (:results base) dissoc child-id))
@@ -586,10 +592,13 @@
 (defn ^:async run-round [eng run inst]
   (let [[def args] (job-of eng inst)
         results (atom {})
+        child-wait (atom nil)
         c (make-ctx eng {:root (:id run) :slots [] :chain [(:id run)] :token (:token run)
-                         :args args :round (:round run) :reflex (:reflex run) :results results})]
+                         :args args :round (:round run) :reflex (:reflex run) :results results
+                         :child-wait child-wait})]
     (try
-      (assoc (normalize-result (await ((:round def) c))) :result (get @results (:id run)))
+      (assoc (normalize-result (await ((:round def) c))) :result (get @results (:id run))
+             :child-wait @child-wait)
       (catch :default e
         (if (cut? e) {:status :cut :error e} {:status :error :error e})))))
 
@@ -627,7 +636,7 @@
   [eng id reason]
   (let [before (get @(:waiting eng) id)]
     (if (= ::passed reason)
-      (when before (swap! (:waiting eng) dissoc id))
+      (when (and before (not (:child (meta before)))) (swap! (:waiting eng) dissoc id))
       (let [r (wait-reason reason)]
         (when (not= before r)
           (swap! (:waiting eng) #(assoc (select-keys % (:list (state eng))) id r))
@@ -651,14 +660,6 @@
     (note-waiting! eng id (if ok? ::passed @wait))
     ok?))
 
-(defn holds?
-  "Whether listed instance inst holds the body: submitted with (hold e) or :hold?, or a started run (one round or more)
-  of a job whose namespace defines (def hold true): a job that must not give the body away until it is done (herd).
-  Reflexes still cut it."
-  [eng inst]
-  (boolean (or (:hold? inst)
-               (and (pos? (:round inst 0)) (true? (:hold (first (job-of eng inst))))))))
-
 (defn choose-listed
   "The listed job to run next, never a failed one: a holder (or nothing, while its check declines),
   else the cut job, else round-robin from the cursor over passing checks."
@@ -667,7 +668,7 @@
         n (count list)
         failed? (fn [id] (contains? (:failed (state eng)) id))
         runnable? (fn [id] (and (not (failed? id)) (not (pass-over? eng id)) (check-passes? eng id)))
-        holder (some #(when (and (holds? eng (instances %)) (not (failed? %))) %) list)]
+        holder (some #(when (and (:hold? (instances %)) (not (failed? %))) %) list)]
     (cond
       holder (when (runnable? holder) holder)
       (and resume (some #{resume} list) (runnable? resume)) resume
@@ -682,7 +683,23 @@
   [result]
   (and (map? result) (= :stopped (:status result))))
 
-(defn settle-listed! [eng {:keys [id]} {:keys [status error result]}]
+(defn note-child-wait!
+  "A listed job's round returned :declined because its child's check waits (reason, or nil when the child gave none):
+  the job waits with that reason, told once. Any other round result drops a wait taken from a child."
+  [eng id status reason]
+  (let [before (get @(:waiting eng) id)]
+    (cond
+      (and (= :declined status) reason)
+      (let [r (with-meta (wait-reason reason) {:child true})]
+        (when (not= before r)
+          (swap! (:waiting eng) #(assoc (select-keys % (:list (state eng))) id r))
+          (emit! eng (merge (job-fields eng id)
+                            {:source :job :kind :waiting :level :info :data r :text (waiting-text r)}))))
+      (:child (meta before))
+      (swap! (:waiting eng) dissoc id))))
+
+(defn settle-listed! [eng {:keys [id]} {:keys [status error result child-wait]}]
+  (note-child-wait! eng id status child-wait)
   (let [idx (.indexOf (:list (state eng)) id)
         fields (job-fields eng id)]
     (case status
