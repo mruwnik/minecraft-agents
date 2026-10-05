@@ -631,12 +631,13 @@ read and written with `cljs.reader` and `pr-str`, so keywords survive. It is
 
 - An **entry** is `{:t wall-clock-ms :wt world-time :data ...}`, newest
   last. `:wt` is the body's `timeOfDay` when written. No provenance field.
-- **Kinds** are an open vocabulary keyed by what the observation is about:
-  `:hurt`, `:died`, `:chat`, `:restart`, `:bed`, `:chest`, `:looked`,
-  `:moved`, `:picked-up`, `:forestry/replant`, `:job/j7`. The survival jobs write `:breathe`,
-  `:extinguish`, `:hazard`, `:hostile`, `:fed`, `:hungry`, `:slept`,
-  `:shelter`, `:log-out`, `:stuck`, `:recovered` and `:chest-unusable` (make-room: a chest that failed it) and read `:home` and
-  `:food-source`, which an agent sets with `jobs.memory.set-place` (see Named places below). `jobs.access.pillar` writes `:scaffold`, the scaffold ledger (`engine.access.ledger`). `jobs.access.cleanup` drops its entries and writes `:scaffold-held`.
+- **Kinds** are an open vocabulary keyed by what the observation is about, such as `:hurt`, `:died`, `:chat`,
+  `:restart`, `:bed`, `:chest`, `:looked`, `:moved`, `:picked-up`, `:forestry/replant`, `:job/j7`.
+  - The survival jobs write `:breathe`, `:extinguish`, `:hazard`, `:hostile`, `:fed`, `:hungry`, `:slept`,
+    `:shelter`, `:log-out`, `:stuck`, `:recovered` and `:chest-unusable` (a chest make-room failed on).
+  - They read `:home` and `:food-source`, which an agent sets with `jobs.memory.set-place` (see Named places).
+  - `jobs.access.pillar` writes `:scaffold`, the scaffold ledger (`engine.access.ledger`).
+    `jobs.access.cleanup` drops its entries and writes `:scaffold-held`.
 - **Policy** `{:cap n :ttl ms}` is passed with a write and stored beside the
   kind. A new kind written without one gets the default, cap 50 and ttl one
   hour; a later write without one keeps the kind's policy. Forever is the
@@ -654,20 +655,20 @@ read and written with `cljs.reader` and `pr-str`, so keywords survive. It is
   the last `ms`), `policy`, and `place` (`(mem/place view :bed)` is the
   `:pos` of the latest `:bed` entry; places use `mem/place-policy`, cap 1,
   forever).
-- **Named places** (`engine.places`): a place is a kind named after it (`:bed`, `:chest`,
-  `:home`, `:food-source`, any name of 1 to 32 lowercase letters, digits and dashes) with one
-  entry `{:pos {:x :y :z}}` under `place-policy`; a retracted one is `{:gone true :was pos}`.
-  Nothing else has to be hand-edited: `jobs.memory.set-place` records, moves or (with
-  `:block`) verifies one, `jobs.memory.forget-place` removes one, both one round, both
-  submittable over the control route (`POST /jobs` `{:op :submit :front? true :spec
-  (jobs.memory.set-place {:name :home :pos [x y z]})}`); the outcome is in the event stream
-  (`place.set`, `place.forgotten`, or a `place.refused` warn with `:reason`), not in the route's
-  reply. Names of kinds the engine uses (`:hurt :slept :moved ...`, `engine.places/reserved`)
-  and kinds that hold other memory are refused. Self-recording: `jobs.survival.sleep` with a
-  `:bed` arg and `jobs.storage.deposit` with a `:chest` arg record the bed slept in / chest
-  deposited into when none is recorded or the recorded one is gone, never over a different
-  live one (one `place.kept` info event says so); a deposit or withdraw that finds the recorded
-  chest missing retracts it (warn `chest_missing`), as sleep does a bed (`bed_missing`).
+- **Named places** (`engine.places`): a place is a kind named after it (`:bed`, `:chest`, `:home`,
+  `:food-source`, or any name of 1 to 32 lowercase letters, digits and dashes) with one entry
+  `{:pos {:x :y :z}}` under `place-policy`. A retracted place is `{:gone true :was pos}`.
+  - `jobs.memory.set-place` records, moves or (with `:block`) verifies a place. `jobs.memory.forget-place`
+    removes one. Each takes one round and can be submitted over the control route (`POST /jobs`
+    `{:op :submit :front? true :spec (jobs.memory.set-place {:name :home :pos [x y z]})}`). The outcome
+    is in the event stream (`place.set`, `place.forgotten`, or a `place.refused` warn with `:reason`),
+    not in the route's reply.
+  - Names the engine uses (`engine.places/reserved`) and kinds that hold other memory are refused.
+  - Self-recording: `jobs.survival.sleep` with a `:bed` arg and `jobs.storage.deposit` with a `:chest` arg
+    record the bed or chest used when none is recorded or the recorded one is gone. They never write over a
+    different live one (a `place.kept` info event says so).
+  - A deposit or withdraw that finds the recorded chest missing retracts it (warn `chest_missing`), as
+    sleep does a bed (`bed_missing`).
 - **Body events** become entries of their kind (`:hurt` with
   `{:health :food}`, `:died`, `:chat`, ...). Every start appends `:restart`.
   The handling job clears them with `forget-until!` up to a timestamp, so a
@@ -1349,9 +1350,9 @@ in turn and that the body goes back to looking around.
 
 ## Zones and claims
 
-Zones (`worlds/<world>/zones.edn`) and claims (`claims.edn`) are a social rule that jobs consult, never one the engine
-enforces: `act!` and the primitives check neither, and a job may ignore them (the rules of the game allow it). The helper
-is `engine.jobs.access` (`may?` for `:dig :place :sow :harvest :take :put`, `choose` and `trespass!` for survival jobs,
+Zones (`worlds/<world>/zones.edn`) and claims (`claims.edn`) are a social rule that jobs consult. The engine never
+enforces them: `act!` and the primitives check neither, and a job may ignore them. The helper is
+`engine.jobs.access` (`may?` for `:dig :place :sow :harvest :take :put`, `choose` and `trespass!` for survival jobs,
 `container-refusal` for chests and furnaces) over the pure `engine.access.zones/verdict`. The verdict, first match wins:
 
 1. no zone list read: `:no-zones`;
@@ -1362,16 +1363,21 @@ is `engine.jobs.access` (`may?` for `:dig :place :sow :harvest :take :put`, `cho
 4. an active, unexpired claim of another owner holds the cell (a claim has no `:allow`): `:claim`;
 5. else ok: `:own-zone`, `:own-claim` or `:open`.
 
-Three decisions are named defaults at the top of `engine.access.zones`, one line each: `deposit-into-foreign-chest?`
-(false: `:put` into another's chest is refused), `plan-footprint-beats-zone?` (true: a plan's own builder works over a
-foreign zone), `unknown-owner-foreign?` (true).
+Three switches sit at the top of `engine.access.zones`: `deposit-into-foreign-chest?` (false: `:put` into another's
+chest is refused), `plan-footprint-beats-zone?` (true: a plan's own builder works over a foreign zone) and
+`unknown-owner-foreign?` (true).
 
-Every job that digs, places or takes accepts `:ignore-zones? true` (default false: act regardless of zones and claims).
-By default a job skips a target the verdict refuses, with one warn naming the zone, claim or plan; `withdraw`, `deposit`,
-`smelt` and the jobs built on them give up `:refused {:zones :claims}` on a foreign container. Survival jobs (`breathe`,
-`extinguish`, `dig-in`, `maintenance.unstick`, the crop dig of `get-food`) take a permitted option first and break
-another's block only as a last resort, with one `<job>.trespass-last-resort` warn; they never take from a foreign
-container (`get-food` skips such a chest). A missing zone list never blocks a survival job. A plan's footprint counts as another's only when the plan is not this body's own: a plan whose `:metadata :by` equals the body's username (case-insensitive) is its own (`plans.mjs add`/`edit` stamp `:metadata :by` with `--by`, so the last writer is the maker; `plan.shape/author`, `with-author`), and a plan without it stays another's (`engine.jobs.access/trespass-refusal`, `:own-plans` of the rules input, `engine.world/plan-authors`).
+How jobs use it:
+- Every job that digs, places or takes accepts `:ignore-zones? true` (default false).
+- By default a job skips a target the verdict refuses, with one warn naming the zone, claim or plan.
+- `withdraw`, `deposit`, `smelt` and the jobs built on them give up `:refused {:zones :claims}` on a foreign container.
+- Survival jobs (`breathe`, `extinguish`, `dig-in`, `maintenance.unstick`, the crop dig of `get-food`) take a permitted
+  option first and break another's block only as a last resort, with one `<job>.trespass-last-resort` warn. They never
+  take from a foreign container (`get-food` skips such a chest). A missing zone list never blocks a survival job.
+- A plan's footprint is another's unless the plan is this body's own: its `:metadata :by` equals the body's username,
+  case-insensitive. `plans.mjs add`/`edit` stamp `:metadata :by` with `--by`, so the last writer is the maker. A plan
+  without `:by` stays another's (`plan.shape/author`, `with-author`, `engine.jobs.access/trespass-refusal`, `:own-plans`
+  of the rules input, `engine.world/plan-authors`).
 
 Tidying up (`engine.jobs.tidy`): a dig or place that breaks another's block is noted as a `:tidy` entry `{:cell :action :was :now :zone/:claim/:plan :tries :job}` in body memory (`:job` is the top-level job that recorded it). This covers a survival last resort (`breathe`, `dig-in`, `maintenance.unstick`) and any act of `mine` and `clear-box` run with `:ignore-zones? true`. `jobs.survival.restore-broken` puts the cells back when the body is safe and reports what it could not. The `:tidy-pending` trigger (`engine.triggers.tidy-pending`, last in `scenarios/survival.edn`) starts it on its own. Not noted: `extinguish`, `get-food` and the other `:ignore-zones?` jobs.
 
