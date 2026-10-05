@@ -1,0 +1,32 @@
+;; engine.jobs.watch (card 943cac28): a digging body looks round so the view cone sees danger. A 1-wide strip tunnel in
+;; a stone block, the body at its open end facing north, a creeper (NoAI, so it never blows) behind it in the corridor.
+;; Lit corridor: the creeper is made known by the first look round (about 1-2 s) and the hostile-near reflex fires.
+;; Dark corridor: a creeper 6 behind stays unseen (a mob in the dark is seen only within 4); 3 behind it is seen.
+;; Hand-run first on 2026-10-05 in a private area (see the card), not yet run by the runner.
+{:defaults
+ {:tags [:hostile :mining :watch]
+  :time :any
+  :register [{:trigger :hostile-near :args {:radius 16 :ranged-radius 16}
+              :job (jobs.survival.respond-to-hostile {:radius 16 :ranged-radius 16})}]
+  :plot {:height 8}
+  :blocks [[:fill [10 0 4] [22 5 31] "stone"]
+           [:fill [16 0 20] [16 1 29] "air"]]
+  :body {:at [16.5 0 26.5] :inventory [["diamond_pickaxe" 1]] :effects [["resistance" 600 4]]}
+  :limit-s 40}
+ :cases
+ [{:name "lit-creeper-behind-seen-then-reflex"
+   :blocks [[:set [16 2 20] "sea_lantern"] [:set [16 2 24] "sea_lantern"] [:set [16 2 28] "sea_lantern"]]
+   :act [[:job (jobs.gather.mine {:block "diamond_ore" :direction :n :tunnel-length 12 :count 1})]
+         [:wait-s 3]
+         [:summon "creeper" [16.5 0 29.5] "{NoAI:1b}"]]
+   :expect [{:event {:kind :watch.saw :data {:name "creeper"}} :within-s 8}
+            {:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 9}]}
+  {:name "dark-creeper-6-behind-unseen"
+   :body {:at [16.5 0 23.5]}
+   :act [[:summon "creeper" [16.5 0 29.5] "{NoAI:1b}"]
+         [:job (jobs.gather.mine {:block "diamond_ore" :direction :n :tunnel-length 12 :count 1})]]
+   :expect [{:no-event {:kind :watch.saw} :for-s 12}]}
+  {:name "dark-creeper-3-behind-seen"
+   :act [[:summon "creeper" [16.5 0 29.5] "{NoAI:1b}"]
+         [:job (jobs.gather.mine {:block "diamond_ore" :direction :n :tunnel-length 12 :count 1})]]
+   :expect [{:event {:kind :watch.saw :data {:name "creeper"}} :within-s 6}]}]}
