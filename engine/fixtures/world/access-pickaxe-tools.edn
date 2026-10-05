@@ -14,6 +14,13 @@
    :expect [{:event {:source :job :kind :tool.low} :within-s 40}
             {:event {:source :job :kind :waiting :data {:reason :no-tool}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :stair.done} :for-s 5}]}
+  {:name "pickaxe-breaks-mid-stair"
+   :body {:inventory [["stone_pickaxe" 1]]}
+   :act [[:rcon "item replace entity $BODY container.0 with minecraft:stone_pickaxe[minecraft:damage=130]"]
+         [:job (jobs.access.stair {:dir :down :heading :east :steps 3})]]
+   :expect [{:event {:source :job :kind :tool.broke} :within-s 30}
+            {:event {:source :job :kind :tool.none} :within-s 30}
+            {:event {:source :job :kind :waiting :data {:reason :no-tool}} :within-s 40 :of-job true}]}
   {:name "diamond-ore-stone-pickaxe-no-tool"
    :blocks [[:set [17 9 16] "diamond_ore"]]
    :body {:inventory [["stone_pickaxe" 1]]}

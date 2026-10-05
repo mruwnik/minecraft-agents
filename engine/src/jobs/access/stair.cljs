@@ -263,6 +263,7 @@
               (ctx/update-mem! c #(-> % (assoc :digging {:cell cell :block block}) (update-in [:tries cell] (fnil inc 0))))
               (let [[x y z] cell
                     status (.-status (await (ctx/act c :dig #js {:pos #js {:x x :y y :z z}})))]
+                (await (tools/note-wear! c))
                 (ctx/update-mem! c record-dug (:block-at in))
                 (if (#{"dug" "missing"} status)
                   :continue

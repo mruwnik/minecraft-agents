@@ -10,6 +10,7 @@
             [engine.jobs.access :as access]
             [engine.jobs.combat :as combat]
             [engine.jobs.reach :as reach]
+            [engine.jobs.tools :as tools]
             [engine.jobs.util :as u]))
 
 (def tidy-policy
@@ -115,7 +116,8 @@
   ([c pos] (dig! c pos false))
   ([c pos last-resort?]
    (let [pend (when (noting? c last-resort?) (pending c :dig pos))
-         r (await (ctx/act c :dig (clj->js {:pos pos})))]
+         r (await (ctx/act c :dig (clj->js {:pos pos})))
+         _ (await (tools/note-wear! c))]
      (when (= "dug" (.-status r)) (record! c pend "air"))
      r)))
 

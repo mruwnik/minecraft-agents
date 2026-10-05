@@ -62,4 +62,7 @@
     {:name "stone_pickaxe" :durability 14 :max 131 :n 1} {:name "stone_pickaxe" :durability 13 :max 131 :n 1} :tool-low
     {:name "stone_pickaxe" :durability 2 :max 131 :n 2} {:name "stone_pickaxe" :durability 100 :max 131 :n 1} :tool-broke
     {:name "stone_pickaxe" :durability 2 :max 131 :n 1} {:name "stone_pickaxe" :n 0} :tool-broke
-    {:name "stone_pickaxe" :durability 60 :max 131 :n 2} {:name "stone_pickaxe" :n 1} nil))
+    {:name "stone_pickaxe" :durability 60 :max 131 :n 2} {:name "stone_pickaxe" :n 1} nil
+    ;; already low at the first hold: told once; not again once :low-seen
+    {:name "stone_pickaxe" :durability 10 :max 131 :n 1} {:name "stone_pickaxe" :durability 9 :max 131 :n 1} :tool-low
+    {:name "stone_pickaxe" :durability 10 :max 131 :n 1 :low-seen true} {:name "stone_pickaxe" :durability 9 :max 131 :n 1} nil))

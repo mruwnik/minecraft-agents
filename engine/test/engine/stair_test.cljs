@@ -219,6 +219,22 @@
           (is (= [6 65 0] (:at @out)) "on the surface")
           (is (every? #(<= 59 (get-in % [:cell 1])) (:dug @out)) "never digs below the start"))))))
 
+(deftest a-pickaxe-that-breaks-mid-stair-says-tool-broke-and-tool-none
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [prep (fn [p]
+                     (let [world (.-world p)]
+                       (.override world "dig"
+                                  (fn ^:async f [token a impl]
+                                    (let [r (await (impl token a))]
+                                      (swap! (.. world -state) assoc :inventory [])
+                                      r)))))
+              s (await (stair! {:blocks ground :inventory [{:name "stone_pickaxe" :count 1 :durability 1}]}
+                               east prep))]
+          (is (= 1 (count (events-of s :tool.broke))))
+          (is (= 1 (count (events-of s :tool.none)))))))))
+
 (deftest lava-two-ahead-stops-before-opening-it
   (async done
     (tu/run-async done
