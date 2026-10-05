@@ -81,4 +81,22 @@ check "docs refusal text" "$(grep -c 'docs/ and .claude/ are committed only when
 tools/commit-mine --card c -m m --expect-hunks 1 .claude/s.json >/dev/null 2>&1; check ".claude refused exit" "$?" 1
 tools/commit-mine --card c -m m --expect-hunks --owner-said x docs/a.md >/dev/null 2>&1; check "owner-said swallowing exit" "$?" 1
 tools/commit-mine --card c -m m --owner-said c2 --expect-hunks 1 docs/a.md >/dev/null 2>&1; check "docs with --owner-said exit" "$?" 0
+# Foreign hunks must not ride along. A change already staged in the same file: hunks mode refuses, HEAD unchanged.
+printf 'a\nb\nc\nd\ne\nf\ng\nh\ni\nj\n' > k.txt; git add k.txt; git commit -q -m k
+printf 'a\nb\nc\nd\ne\nf\ng\nh\ni\nJ\n' > k.txt; git add k.txt   # foreign agent staged this
+printf 'A\nb\nc\nd\ne\nf\ng\nh\ni\nJ\n' > k.txt
+printf 'diff --git a/k.txt b/k.txt\n--- a/k.txt\n+++ b/k.txt\n@@ -1 +1 @@\n-a\n+A\n' > k.patch
+before=$(git rev-parse HEAD)
+tools/commit-mine --card c -m m --hunks k.patch --expect-hunks 1 k.txt >/dev/null 2>&1; check "pre-staged foreign hunk exit" "$?" 3
+check "pre-staged foreign hunk: HEAD unchanged" "$(git rev-parse HEAD)" "$before"
+check "pre-staged foreign hunk left staged" "$(git diff --cached --name-only)" "k.txt"
+git restore --staged k.txt; git checkout -q k.txt; rm k.patch
+# Path mode: a file edited between the hunk check and staging is refused, nothing committed.
+seq 1 20 > r.txt; git add r.txt; git commit -q -m r
+seq 1 20 | sed 's/^1$/y/' > r.txt; before=$(git rev-parse HEAD)
+COMMIT_MINE_TEST_BEFORE_STAGE='echo q >> r.txt' \
+  tools/commit-mine --card c -m m --expect-hunks 1 r.txt >/dev/null 2>&1; check "edit during commit exit" "$?" 7
+check "edit during commit: HEAD unchanged" "$(git rev-parse HEAD)" "$before"
+check "edit during commit: index clean" "$(git diff --cached --name-only)" ""
+git checkout -q r.txt
 exit $fail

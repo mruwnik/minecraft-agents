@@ -9,6 +9,8 @@
 #   Optional: --approved-core <card-id> (takes the id of the card holding the owner's approval; needed for engine-core paths).
 #   Optional: --owner-said <card-id> (the owner said to commit docs/ or .claude/ paths, which are refused otherwise).
 #   Refuses (exit 6) a commit whose .js/.mjs/.cjs blob does not pass node --check.
+#   Refuses (exit 3) a hunks-mode commit while the index holds anything staged; refuses (exit 7) when the staged diff
+#   is not exactly the patch's changed lines (hunks mode) or the staged hunk count is not the confirmed N (path mode).
 #   Every flag that takes a value refuses one starting with "--" (so a missing value never swallows the next flag).
 # See tools/README.md. Never stashes, resets, amends or pushes.
 set -euo pipefail
@@ -134,6 +136,9 @@ if [ -z "$hunks" ]; then
     git diff -- "${paths[@]}" | awk '/^diff --git /{f=$4; sub(/^b\//,"",f)} /^@@/{n[f]++} /^Binary files/{n[f]++} END{for(k in n)print n[k], k}'
     git ls-files --others --exclude-standard -- "${paths[@]}" | awk '{print 1, $0}'
   }
+  count_staged() { # same count, from the index: what is about to be committed
+    git diff --cached -- "${allowed[@]}" | awk '/^diff --git /{f=$4; sub(/^b\//,"",f)} /^(new|deleted) file mode/{z[f]=1} /^@@/{n[f]++} /^Binary files/{n[f]++} END{t=0; for(k in z) if(!n[k]) n[k]=1; for(k in n)t+=n[k]; print t}'
+  }
   per="$(count_hunks | sort -k2)"
   total=$(awk '{t+=$1} END{print t+0}' <<<"$per")
   if [ -z "$expect" ] || [ "$expect" != "$total" ]; then
@@ -149,9 +154,30 @@ if [ -z "$hunks" ]; then
   fi
 fi
 
+# Hunks mode: the index must equal HEAD, else anything staged by someone else would ride along.
+if [ -n "$hunks" ] && ! git diff --cached --quiet; then
+  die "index is not clean (staged: $(git diff --cached --name-only | tr '\n' ' ')); someone staged outside the lock. Retry later" 3
+fi
+
+# Test-only seam: a command run after the checks and before staging (simulates another agent editing).
+[ -z "${COMMIT_MINE_TEST_BEFORE_STAGE:-}" ] || eval "$COMMIT_MINE_TEST_BEFORE_STAGE"
+
 # Stage.
 staged_by_me=1
 if [ -n "$hunks" ]; then git apply --cached "$hunks"; else git add -A -- "${paths[@]}"; fi
+
+# The staged diff must be exactly what the caller named; otherwise refuse (cleanup unstages).
+patch_sig() { # "<file>\t<+/- line>" for every changed line inside a hunk, from a diff on stdin
+  awk '/^diff --git /{f=$4; sub(/^b\//,"",f); inh=0; next} /^@@/{inh=1; next} inh && /^[-+]/{print f "\t" $0}'
+}
+if [ -n "$hunks" ]; then
+  want="$(patch_sig < "$hunks")"
+  got="$(git diff --cached -U0 | patch_sig)"
+  [ "$want" = "$got" ] || die "staged diff differs from the patch (it must hold exactly the patch's changed lines); nothing committed" 7
+else
+  staged_total="$(count_staged)"
+  [ "$staged_total" = "$total" ] || die "staged $staged_total hunk(s) but $total were confirmed: a file changed while committing; nothing committed. Recheck 'git diff' and rerun" 7
+fi
 
 # Foreign staged paths.
 foreign=()
