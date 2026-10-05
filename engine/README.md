@@ -1492,7 +1492,8 @@ unstartable (`engine.single`; only two starts racing over the same stale file wi
 - `:retreat` walks `:step` blocks away from the nearest hostile per round,
   leaning towards the latest `:bed` or `:home` when that is not through the
   hostile, and turning up to 120 degrees to keep clear of `:hazard` cells and
-  of walls (feet and head cells along the way must be passable; the probe
+  of walls (feet and head cells along the way must be passable, and a diagonal
+  step never squeezes between two blocked columns; the probe
   starts at the body's cell centre and steps one block up or down where a
   walker would, so a stair dug behind the body is a way back; a column with
   no floor, a drop of two or more blocks, is not walked, so a void edge ends

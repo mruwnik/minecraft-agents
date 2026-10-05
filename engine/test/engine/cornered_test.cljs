@@ -320,3 +320,17 @@
   (is (= [1 2 3] (mapv :x (retreat/walk-cells (edge-world 3) {:x 0.5 :y 64 :z 0.5} [1 0] 6))) "the cells past the edge have no floor")
   (is (= [1 2 3] (mapv :x (retreat/walk-cells (edge-world 3) {:x 0.5 :y 64 :z 0.5} [1 0] 3))))
   (is (= [1 2 3 4 5 6] (mapv :x (retreat/walk-cells (edge-world 9) {:x 0.5 :y 64 :z 0.5} [1 0] 6)))))
+
+(defn sealed-world
+  "Floor at y 63 everywhere, stone at feet and head height on the four sides of cell 0,0 only: the diagonals open."
+  [{:keys [x y z]}]
+  (cond
+    (= y 63) "stone"
+    (and (#{64 65} y) (#{[1 0] [-1 0] [0 1] [0 -1]} [x z])) "stone"
+    :else "air"))
+
+(deftest walk-cells-do-not-cut-a-corner-between-two-blocks
+  (is (= [] (retreat/walk-cells sealed-world {:x 0.5 :y 64 :z 0.5} (retreat/unit 1 1) 2))
+      "a body walled in on four sides cannot squeeze out diagonally")
+  (is (= 2 (count (retreat/walk-cells (fn [{:keys [y]}] (if (= y 63) "stone" "air")) {:x 0.5 :y 64 :z 0.5} (retreat/unit 1 1) 2)))
+      "past no corner, the diagonal is open"))

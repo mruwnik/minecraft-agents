@@ -171,17 +171,30 @@
     (and (free-at? block-at x (inc y) z) (passable? (block-at {:x px :y (+ y 2) :z pz}))) (inc y)
     :else nil))
 
+(defn corner-shut?
+  "Whether a diagonal step from column [px pz] to [x z] at feet height y passes between two blocked columns: a body
+  0.6 wide cannot squeeze through that corner."
+  [block-at [px pz] [x z] y]
+  (and (not= px x) (not= pz z)
+       (not (free-at? block-at px y z))
+       (not (free-at? block-at x y pz))))
+
 (defn walk-cells
   "The feet cells {:x :y :z}, one per block along [ux uz] from from, up to n,
   that a walker passes before the first column it cannot enter, per block-at
-  (a cell -> block name or nil). A column met twice (a diagonal) repeats its cell."
+  (a cell -> block name or nil). A column met twice (a diagonal) repeats its cell;
+  a diagonal step between two blocked columns (corner-shut?) is not taken."
   [block-at from dir n]
   (loop [k 1
          prev [(js/Math.floor (:x from)) (js/Math.floor (:z from))]
          y (js/Math.floor (:y from))
          out []]
     (let [col (column-along from dir k)
-          ny (when (<= k n) (if (= col prev) y (next-y block-at prev col y)))]
+          ny (when (<= k n)
+               (cond
+                 (= col prev) y
+                 (corner-shut? block-at prev col y) nil
+                 :else (next-y block-at prev col y)))]
       (if (nil? ny)
         out
         (recur (inc k) col ny (conj out {:x (first col) :y ny :z (second col)}))))))
