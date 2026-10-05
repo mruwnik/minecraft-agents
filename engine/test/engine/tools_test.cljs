@@ -22,3 +22,14 @@
     ["iron_shovel"] "stone" nil
     [] "dirt" nil
     ["stone" "dirt"] "dirt" nil))
+
+(deftest harvest-need-is-the-cheapest-listed-tool-no-carried-item-matches
+  (are [carried harvest expected] (= expected (tools/harvest-need carried harvest))
+    [] nil nil
+    ["stone_pickaxe"] nil nil
+    [] ["wooden_pickaxe" "stone_pickaxe" "iron_pickaxe"] "wooden_pickaxe"
+    ["wooden_pickaxe"] ["copper_pickaxe" "stone_pickaxe" "iron_pickaxe"] "stone_pickaxe"
+    ["stone_pickaxe"] ["copper_pickaxe" "stone_pickaxe" "iron_pickaxe"] nil
+    ["iron_pickaxe"] ["diamond_pickaxe" "netherite_pickaxe"] "diamond_pickaxe"
+    ["golden_pickaxe"] ["iron_pickaxe" "golden_pickaxe"] nil
+    ["golden_pickaxe"] ["iron_pickaxe" "diamond_pickaxe"] "iron_pickaxe"))

@@ -2618,3 +2618,29 @@ test('place releases sneak when the placement throws', async () => {
   assert.equal((await p.place('t1', { pos: at(5, 70, 5), item: 'cobblestone' })).status, 'failed')
   assert.equal(bot.controlState.sneak, false)
 })
+
+// dig's time bound is the expected dig time (bot.digTime with the held tool) plus a margin, not a fixed 10 s
+test('a dig that takes longer than the old fixed bound is not cut off when digTime says it takes that long', async () => {
+  const { bot, p } = rig(world)
+  bot.digTime = () => 12000
+  bot.dig = () => new Promise(resolve => setTimeout(resolve, 12000 * SCALE))
+  const r = await p.dig('t1', { pos: at(2, 64, 0) })
+  assert.equal(r.status, 'dug')
+})
+
+test('a dig that overruns its expected time by far still hits the bound', async () => {
+  const { bot, p } = rig({ ...world, hang: ['dig'] })
+  bot.digTime = () => 12000
+  const r = await p.dig('t1', { pos: at(2, 64, 0) })
+  assert.equal(r.status, 'timeout')
+})
+
+// harvestTools names the items minecraft-data lists as able to harvest a block; null when any tool (or the hand) does
+test('harvestTools lists the harvesting item names, null when the block lists none', () => {
+  const { bot, p } = rig(world)
+  bot.registry.items = { 1: { name: 'stone_pickaxe' }, 2: { name: 'iron_pickaxe' } }
+  bot.registry.blocksByName = { iron_ore: { harvestTools: { 1: true, 2: true } }, dirt: {} }
+  assert.deepEqual(p.harvestTools('iron_ore'), ['stone_pickaxe', 'iron_pickaxe'])
+  assert.equal(p.harvestTools('dirt'), null)
+  assert.equal(p.harvestTools('no_such_block'), null)
+})

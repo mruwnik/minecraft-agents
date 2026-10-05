@@ -74,6 +74,7 @@ const DROP_RADIUS = 2
 const DROP_WAIT_S = 1
 const POLL_MS = 50
 const HURT_WAIT_MS = 300 // attack waits this long for the server's entityHurt on the target
+const DIG_MARGIN_S = 5 // slack over the expected dig time (latency, a tick of lag)
 const CONTAINER = /chest|barrel|shulker_box|furnace|smoker|hopper|dispenser|dropper|brewing_stand/
 const DESTS = ['hand', 'off-hand', 'head', 'torso', 'legs', 'feet']
 const SETTLE_QUIET_MS = 150 // transfer closes its window only after this long without a slot update...
@@ -714,9 +715,24 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     if (!isOwner(token)) throw cutError()
     need(isPos(a.pos), 'dig needs pos {x, y, z}')
     const p = cell(a.pos)
-    return act(token, { boundS: 10 }, async ctx => {
+    return act(token, { boundS: digBoundS(p) }, async ctx => {
       const block = bot.blockAt(vec(p))
       if (!block || isAir(block.name)) return { status: 'missing' }
+  // the bound of a dig: the time the server needs with the held tool (bot.digTime) plus a margin and the drop wait
+  const digBoundS = p => {
+    const block = bot.blockAt(vec(p))
+    const ms = block && !isAir(block.name) && block.diggable ? bot.digTime?.(block) : 0
+    return (Number.isFinite(ms) ? ms / 1000 : 0) + DIG_MARGIN_S + DROP_WAIT_S
+  }
+
+  // the item names minecraft-data lists as able to harvest a block (its drops are lost otherwise); null when the
+  // block lists none, i.e. any tool or the hand harvests it
+  const harvestTools = blockName => {
+    const ids = bot.registry?.blocksByName?.[blockName]?.harvestTools
+    if (!ids) return null
+    return Object.keys(ids).map(id => bot.registry.items?.[id]?.name).filter(Boolean)
+  }
+
       if (dist(eye(), center(p)) > REACH) return { status: 'unreachable' }
       if (!block.diggable) return { status: 'cannot' }
       ctx.onAbort(() => bot.stopDigging())
@@ -1450,7 +1466,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     .map(([name, fn]) => [name, whenUp(fn)]))
   // the raw world engine.perception looks at (stateAt, lightAt, eye, block changes): body-side only, never a job's
   const rawWorld = createRawWorld({ getBot: () => bot, isOffline: () => isOffline() || down, lightOverlay: (cx, cz, s) => view?.lightOverlay?.(cx, cz, s) })
-  return { setOwner, isOwner, drive: driveNow, stopDriving, self, entities, blocks, blockAt, pathWorld, ...acting, chatDirect, wait, isOffline, isSettling, offline, onBodyEvent, entityObservation, onEntityDeath, rawWorld, close }
+  return { setOwner, isOwner, drive: driveNow, stopDriving, self, entities, blocks, blockAt, harvestTools, pathWorld, ...acting, chatDirect, wait, isOffline, isSettling, offline, onBodyEvent, entityObservation, onEntityDeath, rawWorld, close }
 }
 
 const REPO_ROOT = join(import.meta.dirname, '..', '..')

@@ -186,7 +186,7 @@
   (let [p (:primitives eng)
         block (some-> (.blockAt p (clj->js (:pos args))) .-name)
         names (map :name (js->clj (.-inventory (.self p)) :keywordize-keys true))
-        needed (when block (tools/harvest-need names block))
+        needed (when block (tools/harvest-need names (some-> (.harvestTools p block) (js->clj))))
         tool (when block (tools/best-tool names block))]
     (if needed
       #js {:status "no-tool" :block block :needed needed

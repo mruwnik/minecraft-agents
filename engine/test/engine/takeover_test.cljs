@@ -411,13 +411,28 @@
           (is (= "dug" (get-in op [:result :status])))
           (is (nil? (.-held (.self p)))))))))
 
+(deftest world-dig-of-a-block-a-carried-pickaxe-harvests-digs
+  (doseq [[block tool] [["iron_ore" "stone_pickaxe"] ["iron_ore" "copper_pickaxe"] ["amethyst_block" "wooden_pickaxe"]
+                        ["obsidian" "diamond_pickaxe"] ["dirt" "wooden_pickaxe"]]]
+    (async done
+      (tu/run-async done
+        (fn ^:async t []
+          (let [{:keys [eng]} (setup (dig-world block [{:name tool :count 1}]))
+                op (await (dig-and-wait! eng {:x 1 :y 64 :z 0}))]
+            (is (= "dug" (get-in op [:result :status])) (str block " with " tool))))))))
+
 (deftest world-dig-refuses-a-block-no-carried-tool-can-harvest
   (doseq [[block inventory needed]
           [["stone" [] "pickaxe"]
            ["iron_ore" [] "stone_pickaxe"]
            ["iron_ore" [{:name "wooden_pickaxe" :count 1}] "stone_pickaxe"]
            ["diamond_ore" [{:name "stone_pickaxe" :count 1}] "iron_pickaxe"]
-           ["obsidian" [{:name "iron_pickaxe" :count 1}] "diamond_pickaxe"]]]
+           ["obsidian" [{:name "iron_pickaxe" :count 1}] "diamond_pickaxe"]
+           ["amethyst_block" [] "wooden_pickaxe"]
+           ["magma_block" [] "wooden_pickaxe"]
+           ["dispenser" [] "wooden_pickaxe"]
+           ["bone_block" [] "wooden_pickaxe"]
+           ["copper_block" [{:name "wooden_pickaxe" :count 1}] "stone_pickaxe"]]]
     (async done
       (tu/run-async done
         (fn ^:async t []

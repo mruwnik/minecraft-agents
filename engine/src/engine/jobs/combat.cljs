@@ -35,7 +35,7 @@
   (or (true? (.-creeper e)) (= "creeper" (.-name e))))
 
 (def material-rank
-  {"netherite" 5 "diamond" 4 "iron" 3 "stone" 2 "golden" 1 "wooden" 0})
+  {"netherite" 5 "diamond" 4 "iron" 3 "stone" 2 "copper" 2 "golden" 1 "wooden" 0})
 
 (defn weapon-score
   "Higher is better: the material, and swords over axes of the same material."

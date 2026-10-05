@@ -18,7 +18,8 @@
   read and change it. The mechanics (interact, leads, tempt, steer, furnace, enchant, trade, use-on, rails, placing,
   doors) are the engine.fake.* namespaces; this one holds the rest (walk, dig, place, craft, ...), the owner token,
   hold/override and the offline timing, and converts to and from the JS contract. Test-only."
-  (:require [clojure.string :as str]
+  (:require ["minecraft-data" :as minecraft-data]
+            [clojure.string :as str]
             [clojure.walk :as walk]
             [engine.fake.animals :as animals]
             [engine.fake.enchant :as enchant]
@@ -846,3 +847,8 @@
        (aset p k f))
      (aset p "world" world)
      p)))
+              "harvestTools"
+              (fn [block]
+                (let [data (minecraft-data "26.1")
+                      ids (some-> (aget (.-blocksByName data) block) .-harvestTools js/Object.keys)]
+                  (when ids (to-array (map #(.-name (aget (.-items data) %)) ids)))))
