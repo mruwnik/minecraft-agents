@@ -1,5 +1,6 @@
 (ns jobs.forestry.fell-tree
   (:require [engine.ctx :as ctx]
+            [engine.jobs.watch :as watch]
             [engine.jobs.blocks :as blocks]
             [engine.jobs.gate :as gate]
             [engine.jobs.forestry :refer [scan-logs tree-near trees-near tree-at logs-at unreachable-set debts replant-kind
@@ -212,7 +213,8 @@
       (let [logs (tree-logs c radius)]
         (if (empty? logs)
           :done
-          (let [r (await (dig-log! c (first logs)))]
+          (let [_ (await (watch/watch! c {:before-dig (:pos (first logs))}))
+                r (await (dig-log! c (first logs)))]
             (case r
               :ok (do (ctx/update-mem! c assoc :partials 0) :continue)
               (:partial :blocked) (walk-failed! c r)

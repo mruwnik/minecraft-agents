@@ -6,6 +6,7 @@
             [engine.jobs.tidy :as tidy]
             [engine.jobs.tools :as tools]
             [engine.jobs.util :as u]
+            [engine.jobs.watch :as watch]
             [jobs.build.clear-box :as clear-box]
             [engine.path.near :as near]
             [engine.placement :as placement]
@@ -516,7 +517,8 @@
                 dig-near (in-dig-reach c digs)
                 nearest #(first (sort-by (fn [cell] (u/dist (u/self-pos c) (zipmap [:x :y :z] (:pos cell)))) %))]
             (cond
-              (seq near) (do (loop [left near]
+              (seq near) (do (await (watch/watch! c {}))
+                             (loop [left near]
                                (when (seq left)
                                  (await (place-one! c (first left)))
                                  (recur (rest left))))

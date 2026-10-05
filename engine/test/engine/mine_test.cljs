@@ -854,3 +854,30 @@
           (await (run-ticks s 30))
           (is (nil? (get (inv s) "raw_iron")))
           (is (= [{:pos [8 62 0] :count 1}] (:left (done-event s)))))))))
+
+;; ------------------------------------------------------------------ looking round while digging (card 943cac28)
+
+(defn watched [{:keys [eng]}] (mem/entries (mem/view (:store eng)) :watched))
+
+(deftest a-strip-tunnel-looks-round-between-steps
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "iron_ore" :count 1 :direction "east" :mend false}
+                                 (rock-world {"3,64,1" "iron_ore"}) 80))]
+          (is (seq (watched s)) "the tunnel watched, lit or not: torches do not stop a creeper walking up it"))))))
+
+(deftest a-vein-dig-in-a-lit-place-does-not-look-round-and-in-the-dark-does
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [lit (await (scenario {:block "iron_ore" :count 1 :tunnel-length 0} (rock-world {"1,64,0" "iron_ore"}) 20))
+              p (tu/fake-on-floor (assoc (rock-world {"1,64,0" "iron_ore"}) :floor-block floor-block))
+              _ (swap! (fake/state p) assoc :light-default [0 0])
+              dark (start {:p p})]
+          (core/submit! (:eng dark) (spec {:block "iron_ore" :count 1 :tunnel-length 0}) {})
+          (await (run-ticks dark 20))
+          (is (= [[1 64 0]] (dug-cells lit)))
+          (is (empty? (watched lit)))
+          (is (= [[1 64 0]] (dug-cells dark)))
+          (is (seq (watched dark))))))))

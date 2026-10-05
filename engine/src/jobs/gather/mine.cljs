@@ -9,6 +9,7 @@
             [engine.jobs.util :as u]
             [engine.path.near :as near]
             [engine.path.targets :as targets]
+            [engine.jobs.watch :as watch]
             [engine.jobs.look :refer [cell-of headings heading-name facing glance! look-around!]]
             [jobs.survival.dig-in :as dig-in]))
 
@@ -401,7 +402,8 @@
       (not (await (step-to! c from))) (tunnel-end! c :walk-failed from)
       hazard (tunnel-end! c (:reason hazard) (:at hazard) next)
       (not (rules/solid-floor? name-at (update next :y dec))) (tunnel-end! c :no-floor next)
-      :else (let [r (await (cut! c (remove #(air (name-at %)) cut)))]
+      :else (let [_ (await (watch/watch! c {:risky? true :before-dig (first (remove #(air (name-at %)) cut))}))
+                  r (await (cut! c (remove #(air (name-at %)) cut)))]
               (if (not= :ok r)
                 (tunnel-end! c r next)
                 (do (await (glance! c [(headings heading)]))
@@ -446,6 +448,7 @@
                       (= :blocked walked) (do (skip-failed! c pos) :continue)
                       (= :partial walked) (partial! c pos)
                       :else (do (ctx/update-mem! c dissoc :partials :partial-pos)
+                                (await (watch/watch! c {:before-dig pos}))
                                 (await (dig! c pos)))))
       (not= looked (cell-of (u/self-pos c))) (await (look-around! c))
       :else (do (when (seq refused)
