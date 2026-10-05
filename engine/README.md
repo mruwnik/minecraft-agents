@@ -206,6 +206,12 @@ The nearest-of-many bench (`npx shadow-cljs compile planner-bench`, then `node b
 target, cost/true p95 2.14; one search over the goal set found a target in all 43, cost/true p95 1.00 max 1.03, p50 1.1
 ms, p95 9 ms, max 93 ms (the one set with none reachable, on the 20000-node cap); one search per target took p50 49 ms,
 p95 1.2 s, max 5.6 s.
+The region map bench (`npx shadow-cljs compile planner-bench`, then `node --expose-gc bench-lang/regions.mjs`; see
+`engine.path.regions`): on the frozen world (2026-10-05, load ~9) the 400 columns within 160 blocks of a start (a view
+distance of 10) build in 9.3 s (23 ms a column), 4.2 MB of typed arrays and +9.7 MB of heap for the map; a route on a
+built map p50 1.2 ms, p95 5.6, max 9.5 ms (160 world queries: 136 reachable, 24 proved unreachable); cold (a fresh map
+building what the query needs) p50 255 ms, max 1.2 s; a block change (invalidate and rebuild the dropped sections) p50
+8.8 ms, p95 22, max 32 ms.
 
 Remembered places (a known bed, a known chest) are not primitives. They are
 `:bed` and `:chest` entries in body memory; see `engine.memory/place` below.
@@ -1799,6 +1805,28 @@ search not over answers `{:status :searching}` and goes on at the next call from
 body and `:tag`). It answers `{:status :found :target :index :cost}` or `{:status :none :reason :proved}` (proved: the
 search ran out of land with no frontier, so no target is walkable; not on the node cap). One target is not searched.
 `jobs.forestry.fell-tree` and `jobs.gather.mine` choose their target with it.
+
+`engine.path.regions` is the region map: per 16x16x16 section, the planner's nodes grouped into the strongly connected
+components of the planner's own moves within the section (regions), each with its edges out (the cheapest move per
+target region or node ref in another section). The moves are the planner's: `planner-tuned/capture-search` is a Search
+whose `captureAt` runs `expandAt` from a node with no history and pushes each move's target and cost (seconds + 2 x
+risk) instead of searching; while capturing, every cell reads as in the goal (a portal is standable, every dive worth
+it), so the captured moves are a superset of any search's and no region path is a proof for every planner variant.
+`route(map, from, goals)` answers `{:status :reachable :regions :waypoints :cost :estimate :goal}`, `{:status
+:unreachable :why :goal-not-standable|:goal-enclosed|:exhausted}` (`:goal-enclosed`: the backward closure of the goal
+regions, at most 256, met no start and no region by unloaded land) or `{:status :unknown :why :start-unloaded|
+:start-not-standable|:goal-unloaded|:unloaded|:building}`; a section it needs that is not built is built then (`:max-builds`
+bounds that: `:building`). On the bench (`path_regions_agreement_test`) every course and world query the planner walks is
+`:reachable`, every course it does not is proved unreachable but the one whose start is not standable, and the one world
+query the map calls reachable that the planner did not find ran into the planner's search box. Encoding: typed arrays per
+section (node keys and regions, region representatives, flags open/water, CSR edges), one shared object for a section
+with no node. Updates: `invalidate!` per changed block drops the sections whose moves may read it (5 columns round, 4
+below, 5 above; with water at or below it within a drop into water, up to 69 above) and queues them; `column-changed!`
+drops a loaded or unloaded column's sections and its 8 neighbours'; `path_regions_test` checks that a map so updated equals
+one built afresh after placing, digging and water changes. `attach!` keeps a map over a source (`js/path/region-source.mjs`
+over a bot: one live snapshot kept for the session, block updates written into it, columns loaded or unloaded forgotten)
+and builds the queue in the background, 8 ms slices every 25 ms. Nothing uses it yet: go-to's use of it (and attaching it
+to each body) is the next step.
 
 A partial plan ends at the node nearest the goal that the body can come back from. A step is one-way when the planner cannot plan
 its undoing: a gap jump down, a drop of more than a jump up (1.25 blocks), or a drop with no step-up move back from the lower

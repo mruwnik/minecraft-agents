@@ -76,3 +76,19 @@ test('setState overrides a copied block', () => {
   snapshot.setState(3, 70, 4, id('dirt'))
   assert.equal(snapshot.stateAt(3, 70, 4), id('dirt'))
 })
+
+test('forgetColumn reads a column loaded since again, and one unloaded since as unloaded', () => {
+  const column = new ChunkColumn()
+  column.setBlockStateId(new Vec3(3, 70, 4), id('stone'))
+  let present = false
+  const world = { getColumn: (cx, cz) => present && cx === 0 && cz === 0 ? column : undefined }
+  const snapshot = liveSnapshot(world, SIZE)
+  assert.equal(snapshot.hasColumn(0, 0), false)
+  present = true
+  snapshot.forgetColumn(0, 0)
+  assert.equal(snapshot.stateAt(3, 70, 4), id('stone'))
+  present = false
+  snapshot.forgetColumn(0, 0)
+  assert.equal(snapshot.hasColumn(0, 0), false)
+  assert.equal(snapshot.stateAt(3, 70, 4), UNLOADED)
+})

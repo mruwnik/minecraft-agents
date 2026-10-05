@@ -295,7 +295,11 @@
    ^:mutable ^js lf-seen ^:mutable ^js lf-queue ^:mutable lf-head ^:mutable lf-budget ^:mutable ^boolean lf-active
    ^:mutable ^boolean lf-open ^:mutable ^boolean lf-seed-open ^:mutable ^boolean lf-end
    ;; the walker's limits (options.limits) refused some move: a search without them could have gone further
-   ^:mutable ^boolean limit-refused]
+   ^:mutable ^boolean limit-refused
+   ;; edge capture (engine.path.regions, capture-search): capturing makes the goal-dependent rules a superset (every cell
+   ;; reads as in the goal: a portal is standable, every dive is worth it); while capture-out is an array, each move's edge
+   ;; is pushed there as x y z region cost (seconds + risk-weight * risk) instead of going to the search
+   ^:mutable ^boolean capturing ^:mutable ^js capture-out]
 
   Object
 
@@ -518,13 +522,27 @@
   ;; ---- goal ----
 
   (reached [s x y z]
-    (if (pos? n-goals)
+    (cond
+      capturing true
+      (pos? n-goals)
       (>= (.goalAt s x y z) 0)
+      :else
       (let [dx (- x goal-x)
             dz (- z goal-z)]
         (if near
           (<= (+ (* dx dx) (* (- y goal-y) (- y goal-y)) (* dz dz)) (* goal-range goal-range))
           (<= (+ (* dx dx) (* dz dz)) (* goal-range goal-range))))))
+
+  (capturing! [s] (set! capturing true))
+
+  ;; the moves out of node (x, y, z, region; h its stand height, region -1 for a cell the body fits only once something
+  ;; is opened) as the search would make them from a node with no history (no air used, not slowed, not reached by an
+  ;; exit: what history only takes away), pushed onto out as x y z region cost; for engine.path.regions
+  (captureAt [s x y z h region ^js out]
+    (set! capture-out out)
+    (.expandAt s x y z h 0 -1 region)
+    (set! capture-out nil)
+    out)
 
   ;; the index of the first goal of the set whose area holds the cell, -1 for none
   (goalAt [s x y z]
@@ -785,6 +803,7 @@
   ;; where moves go: into the search, or the goal flood's probe
   (sink [s x y z h move parent-node dsec drisk slow-to corner shape]
     (cond
+      (some? capture-out) (.push capture-out x y z (bit-and shape 15) (+ dsec (* risk-weight drisk)))
       (some? flood-out) (.push flood-out (.keyOf s x y z (bit-and shape 15)) (- -1 (.keyOf s x y z 0)))
       flooding
       (when (and (== x fx) (== y fy) (== z fz) (or (neg? fr) (== fr (bit-and shape 15)))) (set! hit true))
@@ -2703,7 +2722,9 @@
      ;; returnable held replaying
      (true? (option options "returnable" false)) #js [] false
      ;; lf-seen lf-queue lf-head lf-budget lf-active lf-open lf-seed-open lf-end limit-refused
-     nil nil 0 0 false false false false false)))
+     nil nil 0 0 false false false false false
+     ;; capturing capture-out
+     false nil)))
 
 (defn- clean-options
   "The options of the returnable search behind a one-way step of search: options.returnable, no goal flood, and no more
@@ -2725,6 +2746,18 @@
         (.init clean)
         (.step clean js/Infinity)
         (.resultFrom search node (.nearest clean))))))
+
+(defn capture-search
+  "A Search for engine.path.regions: no query of its own (its start and goal are `centre`), capturing (see captureAt).
+  Its key and caches are relative to centre (keyOf packs x and z within 2048 of it) and assume the world does not change:
+  the caller makes a new one far from centre and after any block change. options as plan's (table, space)."
+  ^Search [snapshot ^js centre options]
+  (let [^Search search (new-search snapshot
+                                   #js {:from centre :goal #js {:kind "near" :x (.-x centre) :y (.-y centre) :z (.-z centre) :range 1}}
+                                   (js/Object.assign #js {} options #js {:goalFlood 0 :maxNodes 16}))]
+    (.init search)
+    (.capturing! search)
+    search))
 
 (defn create-search
   "{step, result, nearest} as create-search returns them. options.table and options.space are required."

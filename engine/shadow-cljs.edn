@@ -40,6 +40,14 @@
                   :exports {:planTuned engine.path.planner-tuned/plan
                             :createSearchTuned engine.path.planner-tuned/create-search
                             :planAlternatives engine.path.alternatives/plan-alternatives
+                            :regionsCreate engine.regions-bench/create
+                            :regionsRoute engine.regions-bench/route
+                            :regionsQueueColumn engine.regions-bench/queue-column
+                            :regionsBuildStep engine.regions-bench/build-step
+                            :regionsPending engine.regions-bench/pending
+                            :regionsInvalidate engine.regions-bench/invalidate
+                            :regionsMemory engine.regions-bench/memory
+                            :regionsStats engine.regions-bench/stats
                             :MOVE engine.path.planner-tuned/MOVE
                             :DEFAULT_COSTS engine.path.planner-tuned/DEFAULT-COSTS}
                   :output-to "out/planner-bench.cjs"
