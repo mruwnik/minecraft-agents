@@ -4,7 +4,7 @@
 ;; Not covered here (needs a zone entry): a chest in another body's zone without :take is never used.
 {:defaults
  {:tags [:fetch :mining]
-  :plot {:height 8}
+  :plot {:height 12}
   :blocks [[:set [18 0 19] "stone"] [:set [18 1 19] "stone"]]
   :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}
   :limit-s 90}
@@ -37,10 +37,25 @@
   {:name "chest-without-pickaxe-fails-once"
    :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:dirt\",count:3}]}"]]
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
-         [:job (jobs.blocks.dig {:pos #at [18 0 19] :fetch true})]]
+         [:job (jobs.blocks.dig {:pos #at [18 0 19] :fetch true})]
+         [:await {:source :job :kind :waiting :data {:reason :no-tool}} 40] [:wait-s 30]]
    :expect [{:event {:source :job :kind :fetch.failed :data {:failed :no-source}} :within-s 40 :of-job true}
             {:event {:source :job :kind :waiting :data {:reason :no-tool :fetch {:failed :no-source}}} :within-s 50 :of-job true}]
    :after [[:block [18 0 19] "stone"] [:item "dirt" 0]]}
+  {:name "stair-fetches-pickaxe-and-walks-back"
+   ;; dirt on top (y 7..9) needs no tool, stone below does: the body is 3 steps down the stair when it lacks the pickaxe,
+   ;; walks up to the chest at the surface (20 0 16 on the plot's level 10), then back to where it left off.
+   :blocks [[:fill [8 0 8] [24 6 24] "stone"] [:fill [8 7 8] [24 9 24] "dirt"]
+            [:set [18 10 16] "chest{Items:[{Slot:0b,id:\"minecraft:wooden_pickaxe\",count:1}]}"]]
+   :body {:at [10.5 10 16.5]}
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 20"] [:wait-s 2]
+         [:job (jobs.access.stair {:dir :down :heading :east :steps 6 :fetch true})]]
+   :expect [{:event {:source :job :kind :fetch.started} :within-s 40 :of-job true}
+            {:event {:source :job :kind :fetch.done} :within-s 90 :of-job true}
+            {:event {:source :job :kind :stair.done :data {:steps 6}} :within-s 150 :of-job true}
+            {:event {:context {:job-id [:contains "fetch-back"]}} :within-s 150}]
+   :limit-s 160
+   :after [[:item "wooden_pickaxe" 1] [:body-near [16.5 4 16.5] 2.5]]}
   {:name "place-fetches-block-from-seen-chest"
    :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:cobblestone\",count:5}]}"]]
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
