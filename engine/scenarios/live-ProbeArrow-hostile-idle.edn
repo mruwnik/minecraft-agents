@@ -1,0 +1,4 @@
+;; ProbeArrow hostile-near line-of-fire cases (card b3eabdf4): ranged mobs fire the trigger only with an arrow line
+{:register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+             :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+ :queue []}
