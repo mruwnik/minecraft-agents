@@ -28,8 +28,8 @@
   the dig's drops (jobs.forestry.collect-drops child, filtered to their names, radius 4).
   Ends with info blocks.dig.done and the result {:dug true|false :pos :block :reason :collected n}; :reason is
   :dug, :already-clear (air there, nothing done), :fluid (a fluid is not dug), :cannot (bedrock and the like), or
-  :bad-args (with a blocks.dig.declined warn). A dig that the primitive refuses three times ends :failed with its
-  :status.
+  :bad-args (with a blocks.dig.declined warn). A dig the primitive refuses (a timeout, a failure) ends :failed with
+  its :status at once: the caller decides whether to try again.
   Fetching a missing tool is not done yet: a :fetch option (items.get-tool as a child) will hook in where the :no-tool
   wait is made (needs).")
 
@@ -42,7 +42,6 @@
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
 (def collect-radius 4)
-(def max-tries 3)
 
 (defn needs
   "What the body lacks to dig block-name with these args: {:tool item} or nil. The hook for a :fetch option (B2):
@@ -121,10 +120,7 @@
       "missing" (finish! c {:dug false :pos pos :block block :reason :already-clear})
       "cannot" (finish! c {:dug false :pos pos :block block :reason :cannot})
       "unreachable" (do (ctx/update-mem! c assoc :unreachable {:from (b/feet-cell c) :why :out-of-reach}) :continue)
-      (let [n (inc (:tries (ctx/mem c) 0))]
-        (if (>= n max-tries)
-          (finish! c {:dug false :pos pos :block block :reason :failed :status status})
-          (do (ctx/update-mem! c assoc :tries n) :continue))))))
+      (finish! c {:dug false :pos pos :block block :reason :failed :status status}))))
 
 (defn ^:async round [c]
   (let [{:keys [pos error]} (b/parse (:args c))]

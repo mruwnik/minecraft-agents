@@ -25,7 +25,8 @@
   places through engine.jobs.tidy/place!, so a block placed in another's zone with :ignore-zones? is recorded for
   jobs.survival.restore-broken. Ends with info blocks.place.done and the result {:placed true|false :pos :item :reason};
   :reason is :placed, :already (the cell holds the block: nothing done), :bad-args (with a blocks.place.declined warn),
-  :clear-failed (the plant could not be dug) or :failed after three refused places (with their :status).
+  :clear-failed (the plant could not be dug) or :failed (the primitive refused the place, with its :status: the
+  caller decides whether to try again).
   Fetching a missing item is not done yet: a :fetch option (items.obtain as a child) will hook in where the :need
   wait is made (needs).")
 
@@ -35,8 +36,6 @@
    :any-of {:doc "block items, the first carried one is placed (instead of :item)" :default nil}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
-
-(def max-tries 3)
 
 (defn wanted [{:keys [item any-of]}]
   (vec (if item [item] any-of)))
@@ -138,10 +137,7 @@
     (case status
       "placed" (finish! c {:placed true :pos pos :item item :reason :placed})
       "unreachable" (do (ctx/update-mem! c assoc :unreachable {:from (b/feet-cell c) :why :out-of-reach}) :continue)
-      (let [n (inc (:tries (ctx/mem c) 0))]
-        (if (>= n max-tries)
-          (finish! c {:placed false :pos pos :item item :reason :failed :status status})
-          (do (ctx/update-mem! c assoc :tries n) :continue))))))
+      (finish! c {:placed false :pos pos :item item :reason :failed :status status}))))
 
 (defn ^:async round [c]
   (let [{:keys [pos items error]} (parse (:args c))]
