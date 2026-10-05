@@ -2521,6 +2521,42 @@ for (const name of interactables) {
   })
 }
 
+
+// dig reports the drops the dig produced, not a pile that already lay there
+const pile = { name: 'item', type: 'object', position: at(2, 64, 0), getDroppedItem: () => ({ name: 'raw_iron', count: 1 }) }
+const fresh = { name: 'item', type: 'object', position: at(2, 64, 0), getDroppedItem: () => ({ name: 'cobblestone', count: 1 }) }
+
+const digWithDrop = async (entities, spawn) => {
+  const { bot, p } = rig({ ...world, blocks: { '2,64,0': 'stone' }, entities })
+  const original = bot.dig
+  bot.dig = async (...args) => {
+    const r = await original(...args)
+    for (const [id, e] of Object.entries(spawn)) bot.entities[id] = e
+    return r
+  }
+  return p.dig('t1', { pos: at(2, 64, 0) })
+}
+
+test('dig lists only the drops that appeared with it, not items already lying there', async () => {
+  const r = await digWithDrop({ 21: { id: 21, ...pile } }, { 22: { id: 22, ...fresh } })
+  assert.deepEqual(r.drops.map(d => [d.id, d.name]), [[22, 'cobblestone']])
+})
+
+test('dig reports no drops when the cell only had an old pile and nothing new came', async () => {
+  const r = await digWithDrop({ 21: { id: 21, ...pile } }, {})
+  assert.equal(r.status, 'dug')
+  assert.deepEqual(r.drops, [])
+})
+
+test('dig counts a drop that merged into an old stack as new', async () => {
+  const stack = { count: 1 }
+  const merging = { id: 21, ...pile, getDroppedItem: () => ({ name: 'cobblestone', count: stack.count }) }
+  const { bot, p } = rig({ ...world, blocks: { '2,64,0': 'stone' }, entities: { 21: merging } })
+  const original = bot.dig
+  bot.dig = async (...args) => { const r = await original(...args); stack.count = 2; return r }
+  const r = await p.dig('t1', { pos: at(2, 64, 0) })
+  assert.deepEqual(r.drops.map(d => [d.id, d.name]), [[21, 'cobblestone']])
+})
 test('place releases sneak when the placement throws', async () => {
   const { bot, p } = rig({ blocks: { '5,69,5': 'oak_door' }, items: [{ name: 'cobblestone', count: 2, slot: 36 }], pos: [5.5, 70, 5.5], hang: [] })
   bot.placeBlock = () => Promise.reject(new Error('refused'))

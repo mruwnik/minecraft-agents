@@ -701,6 +701,9 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   const dropsNear = p => liveEntities(bot)
     .filter(e => entityKind(e) === 'item' && dist(center(p), e.position) <= DROP_RADIUS)
     .map(e => ({ id: e.id, ...droppedItem(bot, e), pos: xyz(e.position) }))
+  // an item already lying near the cell is not this dig's drop, unless its stack grew (a drop that merged into it)
+  const lyingBefore = p => new Map(dropsNear(p).map(d => [d.id, d.count]))
+  const newDrops = (p, before) => dropsNear(p).filter(d => !(before.get(d.id) >= d.count))
 
   const dig = async (token, a = {}) => {
     if (!isOwner(token)) throw cutError()
@@ -713,14 +716,15 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       if (!block.diggable) return { status: 'cannot' }
       ctx.onAbort(() => bot.stopDigging())
       ctx.alive()
+      const before = lyingBefore(p)
       await bot.dig(block, true)
       ctx.alive()
       const deadline = Date.now() + DROP_WAIT_S * 1000 * timeScale
-      let drops = dropsNear(p)
+      let drops = newDrops(p, before)
       while (drops.length === 0 && Date.now() < deadline) {
         await sleepMs(POLL_MS * timeScale)
         ctx.alive()
-        drops = dropsNear(p)
+        drops = newDrops(p, before)
       }
       return { status: 'dug', block: block.name, drops }
     })
