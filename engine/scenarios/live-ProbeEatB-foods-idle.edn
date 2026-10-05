@@ -1,0 +1,2 @@
+;; ProbeEatB live cases for the food table from minecraft-data: idle, jobs are submitted with tools/jobs.mjs
+{:register [] :queue []}
