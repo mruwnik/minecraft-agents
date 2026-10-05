@@ -198,3 +198,23 @@
     (is (= 200 (.-status (seen/request c "GET"))))
     ((:stop c))
     (is (= 0 @listeners))))
+
+(deftest a-loaded-mob-that-leaves-the-senses-is-dropped-at-once
+  (let [wall (for [y (range 64 70) z (range -3 4)] [5 y z])
+        bot #js {:entity #js {:id 1 :type "player" :username "Probe" :position #js {:x 0.5 :y 64 :z 0.5}}}
+        cow (mob 2 "cow" 64 12.5 0.5)
+        c (seen/open {:world "w" :body "Probe" :sense (partial seen/sense (ground-world wall))})
+        types (fn [t] (into #{} (map :type) (:entities (seen/snapshot c t))))]
+    (seen/observe! c (sample bot [(.-entity bot) cow]) 0)
+    (is (= #{"player" "cow"} (types 0)))
+    ;; the cow is teleported 40 blocks behind the wall: still loaded, no longer sensed
+    (set! (.-x (.-position cow)) 40.5)
+    (seen/observe! c (sample bot [(.-entity bot) cow]) 1000)
+    (is (= #{"player"} (types 1000)))))
+
+(deftest an-unloaded-mob-keeps-its-last-observation
+  (let [bot #js {:entity #js {:id 1 :type "player" :username "Probe" :position #js {:x 0.5 :y 64 :z 0.5}}}
+        c (seen/open {:world "w" :body "Probe" :sense (partial seen/sense (ground-world))})]
+    (seen/observe! c (sample bot [(.-entity bot) (mob 2 "cow" 64 12.5 0.5)]) 0)
+    (seen/observe! c (sample bot [(.-entity bot)]) 1000)
+    (is (= #{"player" "cow"} (into #{} (map :type) (:entities (seen/snapshot c 1000)))))))

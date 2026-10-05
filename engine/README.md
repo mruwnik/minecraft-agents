@@ -1025,7 +1025,9 @@ itself, an entity heard within 16 blocks of the eye (through walls; drops, xp
 orbs and other silent things are never heard), or one within 64 blocks with a
 clear line from the eye to its middle or head under the raw world's sight table
 (no view cone or light rule: turning would show it). Each row carries `:sense`
-(`:self`, `:seen` or `:heard`). Mobs in the rock under the body are not listed.
+(`:self`, `:seen` or `:heard`). Mobs in the rock under the body are not listed. A mob that is still loaded but no longer sensed at its new position
+(behind a wall, teleported out of range) is dropped at the next sample (1 s), not kept as a ghost for the
+two minutes; one that unloads keeps its last row until it expires.
 The engine's reflexes and `entities()` do not read this cache. By default it centers
 a 64-block, 3D radius on the newest unexpired self observation, uses that
 observation's dimension, and returns the nearest 10 rows. Players and other
