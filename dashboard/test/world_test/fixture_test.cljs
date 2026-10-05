@@ -103,3 +103,10 @@
 
 (deftest plan-files-carry-the-runner-prefix
   (is (= "{:id \"test-probefixture-pen\", :parts []}" (f/plan-file-text {:id "pen" :parts []} "test-probefixture-"))))
+
+(deftest body-start-plan-gives-each-case-clean-memory
+  (is (= :restart-clean (f/body-start-plan {} true)))
+  (is (= :restart-clean (f/body-start-plan {} false)))
+  (is (= :restart-keep (f/body-start-plan {:keep-memory true} true)))
+  (is (= :keep (f/body-start-plan {:keep-memory true} false)))
+  (is (= :restart-clean (f/body-start-plan {:keep-memory false} false))))

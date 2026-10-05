@@ -3,7 +3,8 @@
   test server with one probe body. Per case and run: a fresh plot of the reserved grid is cleared and built, the body
   is put at its start, the act steps run, the body's event log is read until every expectation is decided, the
   :after checks ask the server, and the plot is cleaned up. The body is started once per distinct :register (the
-  scenario) and stopped at the end. Pure parts: world-test.fixture and world-test.expect."
+  scenario) and restarted before every case with its engine/memory.edn deleted (a case with :keep-memory true keeps
+  the memory: the body goes on from the case before it). Stopped at the end. Pure parts: world-test.fixture and world-test.expect."
   (:require ["child_process" :as cp]
             ["fs" :as fs]
             ["os" :as os]
@@ -135,9 +136,14 @@
   (str/includes? (or (.-stdout (cp/spawnSync "pgrep" #js ["-af" (str "out/body.cjs --agent " body " ")] #js {:encoding "utf8"})) "")
                  (str "--agent " body " ")))
 
+(defn memory-file [opts] (path/join (body-dir opts) "engine" "memory.edn"))
+
 (defn start-body!
-  "Starts the body with a scenario holding register, --fresh; resolves once it logged :system :started."
-  [opts register]
+  "Starts the body with a scenario holding register, --fresh; resolves once it logged :system :started. The body's own
+  engine/memory.edn is deleted first unless keep-memory? (--fresh only drops engine.edn)."
+  [opts register keep-memory?]
+  (when (and (not keep-memory?) (fs/existsSync (memory-file opts)))
+    (fs/unlinkSync (memory-file opts)))
   (let [dir (path/join (os/tmpdir) (str "world-test-" (:body opts)))
         scenario (path/join dir "scenario.edn")
         out (path/join dir "body.log")
@@ -383,16 +389,20 @@
         results (atom [])]
     (-> (reduce (fn [p [register group]]
                   (.then p (fn []
-                             (-> (start-body! opts register)
-                                 (.then (fn []
-                                          (reduce (fn [p2 [c run]]
-                                                    (.then p2 (fn []
-                                                                (let [i (acquire-plot! (:first-plot opts))]
-                                                                  (-> (run-case! opts c i run)
-                                                                      (.then (fn [r] (report! r) (swap! results conj r)))
-                                                                      (.finally #(release-plot! i)))))))
-                                                  (js/Promise.resolve nil)
-                                                  (for [run (range 1 (inc (:repeat opts))) c group] [c run]))))
+                             (-> (reduce (fn [p2 [n [c run]]]
+                                           (.then p2 (fn []
+                                                       (let [plan (f/body-start-plan c (zero? n))]
+                                                         (-> (if (= :keep plan)
+                                                               (js/Promise.resolve nil)
+                                                               (-> (stop-body! opts)
+                                                                   (.then #(start-body! opts register (= :restart-keep plan)))))
+                                                             (.then (fn []
+                                                                      (let [i (acquire-plot! (:first-plot opts))]
+                                                                        (-> (run-case! opts c i run)
+                                                                            (.then (fn [r] (report! r) (swap! results conj r)))
+                                                                            (.finally #(release-plot! i))))))))))
+                                         (js/Promise.resolve nil)
+                                         (map-indexed vector (for [run (range 1 (inc (:repeat opts))) c group] [c run])))
                                  (.finally #(stop-body! opts))))))
                 (js/Promise.resolve nil)
                 groups)

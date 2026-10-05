@@ -18,7 +18,7 @@ Options: `--body` (default `ProbeFixture`, created and whitelisted when missing)
 `--allow-time` (a case whose `:time` is not the server's may `time set 14000`/`1000`; every set is appended to
 `--time-log` as local ISO with offset, naming `--card ID`; without it such a case is skipped), `--results FILE` (all results as EDN). Each run leases its plot (a file per plot index in `<tmpdir>/world-test-plot-leases/`, created exclusively, released after the run, a dead PID's lease reclaimed): runners started together never share a plot, and `--first-plot` is only where the search starts. Exit code 0 when every run
 passed. The runner refuses to start when another player is within 500 blocks of the grid's centre or the body already
-runs. The body is started (`--fresh`) once per distinct `:register` and stopped (SIGTERM to its own child) at the end.
+runs. The body is stopped (SIGTERM to its own child) and started again (`--fresh`, and its own `engine/memory.edn` deleted, since `--fresh` only drops `engine.edn`) before every case, so no case sees another's memory (`:slept`, `:futile`, ...); `:keep-memory true` opts out. It is stopped at the end.
 
 Per run: forceload the plot, kill every non-player entity in it, clear it to air up to `:plot :height`, lay the
 floor; build `:blocks`; write `:plans`; put the body at its start (survival, cleared, healed, fed, inventory,
@@ -41,6 +41,7 @@ patterns write `#at [x y z]` (absolute `[x y z]`) or `#xyz [x y z]` (absolute `{
 | `:tags` | keywords for `--tag` | none |
 | `:time` | `:day`, `:night` or `:any` | `:day` |
 | `:register` | the body's scenario register (triggers), as in `engine/scenarios/*.edn` | `[]` |
+| `:keep-memory` | `true`: the body's `engine/memory.edn` is not deleted before this case, and when a case follows another in the same register group the body is not restarted (it goes on with the memory it has); for cases that test memory across runs | `false` (every case starts a restarted body with its `memory.edn` deleted) |
 | `:plot` | `{:height 2..31 :floor "block"}` | `{:height 16 :floor "stone"}` |
 | `:blocks` | `[:fill a b "block" (:hollow/:outline/...)]`, `[:set p "block[state]"]` | `[]` |
 | `:plans` | plan maps (`:id`, `:parts`); written as `worlds/<world>/plans/test-<body>-<id>.edn`, deleted after | `[]` |

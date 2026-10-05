@@ -65,6 +65,16 @@
              (merge-with (fn [a b] (if (map? a) (merge a b) b)) defaults file-defaults)
              c))
 
+(defn body-start-plan
+  "What the runner does with the body before a case: :restart-clean (stop it, delete its engine/memory.edn, start with
+  --fresh), :restart-keep (restart but keep memory.edn; a :keep-memory case that opens a group) or :keep (a
+  :keep-memory case after another case: the running body goes on with the memory it has)."
+  [c first-in-group?]
+  (cond
+    (not (:keep-memory c)) :restart-clean
+    first-in-group? :restart-keep
+    :else :keep))
+
 (def step-kinds #{:summon :rcon :job :wait-s :await :kill-body :time-set})
 (def after-kinds #{:block :not-block :body-near :item :entities})
 
