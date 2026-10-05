@@ -1,7 +1,8 @@
 ;; jobs.gather.mine, ore across a 2-wide 5-deep trench in the line (card 61a0396f item 4): the ore at x 22 is in view from
-;; the open cut [16..19]. Underground and dark the ore is out of sight beyond 2 blocks (sensing like a player's: light rule in
-;; engine.perception, :near 2), so the unlit case never targets it (the tunnel stops at the trench, :no-floor); a torch at
-;; the cut's end lights it, it is seen from the start and dug from the cut's end (drop on the far side, left behind).
+;; the open cut [16..19]. Underground and dark an ore is out of sight beyond 4 blocks (sensing like a player's: light rule in
+;; engine.perception, :near 4): the ore 3 blocks from the cut's end is seen and dug from there (drop on the far side, left
+;; behind); an ore 7 blocks from the cut's end (trench extended, x 26) is never targeted (the tunnel stops at the trench,
+;; :no-floor); a torch at the cut's end lights the near ore, which is seen from the start.
 ;; Stone mass x 2..30, z 8..24, y -6..6; body in a 1x2 cell at [16 0 16] facing east, stone pickaxe.
 {:defaults
  {:tags [:mine :jobs] :time :any
@@ -12,10 +13,15 @@
   :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 8})]]
   :limit-s 110}
  :cases
- [{:name "dark-ore-beyond-2-blocks-not-seen-tunnel-stops-at-trench"
+ [{:name "dark-ore-3-blocks-from-the-cut-end-is-seen-and-dug"
+   :expect [{:event {:source :job :kind :mine.left-behind} :within-s 90 :of-job true}
+            {:event {:source :job :kind :mine.done} :within-s 100 :of-job true}]
+   :after [[:not-block [22 0 16] "iron_ore"] [:body-near [16.5 0 16.5] 1.5]]}
+  {:name "dark-ore-7-blocks-from-the-cut-end-not-seen-tunnel-stops-at-trench"
+   :blocks [[:set [22 0 16] "stone"] [:fill [20 -4 16] [25 1 16] "air"] [:set [26 0 16] "iron_ore"]]
    :expect [{:event {:source :job :kind :mine.tunnel-end :data {:reason :no-floor}} :within-s 60 :of-job true}
             {:event {:source :job :kind :mine.done :data {:got 0}} :within-s 90 :of-job true}]
-   :after [[:block [22 0 16] "iron_ore"]]}
+   :after [[:block [26 0 16] "iron_ore"]]}
   {:name "lit-ore-is-seen-and-dug-from-the-cut-end"
    :blocks [[:set [19 1 16] "torch"]]
    :expect [{:event {:source :job :kind :mine.left-behind} :within-s 90 :of-job true}

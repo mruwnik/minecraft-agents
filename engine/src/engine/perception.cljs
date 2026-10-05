@@ -50,7 +50,7 @@
    :move-blocks 0.5
    :turn-deg 2
    :seeing-min 0.2
-   :near 2
+   :near 4
    :cap-bytes (* 32 1024 1024)
    :save-ms 60000
    :stats-ms 60000

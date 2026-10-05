@@ -40,11 +40,11 @@
     (is (= "diamond_ore" (seen-name per [0 65 8])))
     (is (= "air" (seen-name per [0 65 6])))))
 
-(deftest in-the-dark-nothing-past-two-blocks-is-named-and-a-torch-lit-block-is
-  (let [{:keys [p per]} (rig {"-1,65,2" "gold_block" "1,65,7" "gold_block"})]
+(deftest in-the-dark-nothing-past-four-blocks-is-named-and-a-torch-lit-block-is
+  (let [{:keys [p per]} (rig {"-1,65,2" "gold_block" "1,65,3" "gold_block" "0,65,5" "gold_block" "1,65,7" "gold_block"})]
     (light! p {:light-default [0 0]})
     (perception/pass! per)
-    (is (= ["gold_block" nil nil] (mapv #(seen-name per %) [[-1 65 2] [1 65 7] [0 65 5]])))
+    (is (= ["gold_block" "gold_block" nil nil] (mapv #(seen-name per %) [[-1 65 2] [1 65 3] [0 65 5] [1 65 7]])))
     (light! p {:light {[1 65 6] [0 14] [1 66 6] [0 13] [0 65 7] [0 13] [1 66 7] [0 13]}})
     (perception/pass! per)
     (is (= "gold_block" (seen-name per [1 65 7])))))
@@ -249,7 +249,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p per]} (rig {"0,65,3" "stone" "0,64,3" "stone"})
+        (let [{:keys [p per]} (rig {"0,65,3" "stone" "0,64,3" "stone"} {:near 1})
               _ (.setOwner p "t1")
               wrapped (perception/wrap p per)
               _ (light! p {:light-default [0 0]})
