@@ -2556,6 +2556,7 @@ test('dig counts a drop that merged into an old stack as new', async () => {
   bot.dig = async (...args) => { const r = await original(...args); stack.count = 2; return r }
   const r = await p.dig('t1', { pos: at(2, 64, 0) })
   assert.deepEqual(r.drops.map(d => [d.id, d.name, d.count]), [[21, 'cobblestone', 1]])
+})
 test('place releases sneak when the placement throws', async () => {
   const { bot, p } = rig({ blocks: { '5,69,5': 'oak_door' }, items: [{ name: 'cobblestone', count: 2, slot: 36 }], pos: [5.5, 70, 5.5], hang: [] })
   bot.placeBlock = () => Promise.reject(new Error('refused'))
