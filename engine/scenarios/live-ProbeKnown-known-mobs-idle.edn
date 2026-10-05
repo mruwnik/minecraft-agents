@@ -1,0 +1,4 @@
+;; ProbeKnown live cases for known mobs (cards 80f25a40, 01b5462f): hostile-near and respond-to-hostile only, jobs idle
+{:register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+             :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+ :queue []}
