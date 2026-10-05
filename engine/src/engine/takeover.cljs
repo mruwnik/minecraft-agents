@@ -194,15 +194,23 @@
 (def dig-margin-s "Slack over the expected dig time: the look, the equip, the drop wait and latency." 8)
 (def dig-cap-s "The longest lease a dig is given, whatever digTime says." 60)
 
+(defn dig-need
+  "The tool name a dig at pos lacks: no carried tool can harvest the block there (nil when one can, or no block)."
+  [p pos]
+  (let [block (some-> (.blockAt p pos) .-name)
+        names (map :name (js->clj (.-inventory (.self p)) :keywordize-keys true))]
+    (when block (tools/harvest-need names (some-> (.harvestTools p block) (js->clj))))))
+
 (defn dig-timeout-s
   "The lease seconds a world dig needs: the expected dig time of the tool the dig will hold (primitives digTime, the
-  carried best tool for the block) plus dig-margin-s, at least dig-floor-s and at most dig-cap-s."
+  carried best tool for the block) plus dig-margin-s, at least dig-floor-s and at most dig-cap-s. A dig that answers
+  no-tool at once digs nothing, so it needs only dig-floor-s."
   [eng args]
   (let [p (:primitives eng)
         pos (clj->js (:pos args))
         block (some-> (.blockAt p pos) .-name)
         names (map :name (js->clj (.-inventory (.self p)) :keywordize-keys true))
-        ms (or (.digTime p pos (when block (tools/best-tool names block))) 0)]
+        ms (if (dig-need p pos) 0 (or (.digTime p pos (when block (tools/best-tool names block))) 0))]
     (-> (+ (/ ms 1000) dig-margin-s) (max dig-floor-s) (min dig-cap-s) js/Math.ceil)))
 
 (defn ^:async dig-with-tool!

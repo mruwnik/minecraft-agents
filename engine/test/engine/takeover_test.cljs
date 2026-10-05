@@ -464,6 +464,12 @@
       (is (= accepted? (true? (get-in reply [:edn :ok]))) (str dig-ms " ms, idleS " idle-s))
       (is (= minimum (get-in reply [:edn :detail :minimum-idleS])) (str dig-ms " ms, idleS " idle-s)))))
 
+(deftest world-dig-no-tool-answer-comes-before-the-lease-check
+  (doseq [[block inventory] [["obsidian" [{:name "iron_pickaxe" :count 1}]]
+                             ["obsidian" []]]]
+    (let [reply (submit-dig-with-digtime (setup (dig-world block inventory)) 11 250000)]
+      (is (true? (get-in reply [:edn :ok])) (str block " " (count inventory) " tools: accepted at the floor lease")))))
+
 (deftest a-twelve-second-world-dig-is-not-cut-by-the-lease
   (async done
     (tu/run-async done
