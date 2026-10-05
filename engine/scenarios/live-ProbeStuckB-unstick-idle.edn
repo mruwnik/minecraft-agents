@@ -1,0 +1,5 @@
+;; ProbeStuckB live cases for card d3ceae43 (stuck needs recent bad moves near here; unstick stops when out; digs recorded for restore-broken via tidy-pending)
+{:register [{:trigger :stuck :persistence :cooldown :cooldown-s 60 :job (jobs.maintenance.unstick)}
+            {:trigger :door-left :persistence :cooldown :cooldown-s 5 :job (jobs.maintenance.shut-doors)}
+            {:trigger :tidy-pending :persistence :cooldown :cooldown-s 10}]
+ :queue [(repeat (jobs.movement.look-around))]}
