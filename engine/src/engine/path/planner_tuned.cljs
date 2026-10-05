@@ -111,6 +111,8 @@
 (def ^:const REGIONS 16) ; regions of one cell that can be nodes (4 bits of the key)
 (def ^:const AIR-STEP 1) ; seconds of air that make an arrival at a node already reached worth a record of its own
 (def ^:const TABLE 8192) ; slots of the direct-mapped tight-cell caches
+(def ^:const FLOOD-TABLE 65536) ; slots of the direct-mapped cache of the goal flood's stand heights
+(def ^:const FLOOD-MEMO 40000) ; cells whose moves the flood keeps (flood-moves) before it starts the memo afresh
 (def ^:const SNAP 6) ; a blocked boundary point takes the region of the nearest free position within this many 1/16
 (def ^:const DROP-INSET 5) ; a body walking off a ledge falls once its 0.31 half-width clears it: 5/16 past the edge
 (def ^:const NONE -1e9) ; surfaceY of a water column that does not reach open air
@@ -265,6 +267,12 @@
    ;; the goal flood: moves go to the probe instead of the search while it runs; fr the probed cell's region (-1 any)
    ^:mutable ^boolean flooding ^:mutable fx ^:mutable fy ^:mutable fz ^:mutable fr ^:mutable ^boolean hit ^:mutable flooded ^:mutable pre-flooded
    ^:mutable ^boolean flood-pending ^:mutable ^boolean leaked
+   ;; the moves out of each cell the flood has expanded (key -> array of the keys its moves enter, see floodNode), for the
+   ;; whole search: the world does not change under it, so a cell is expanded once however many floods ask about it
+   ^js flood-moves ^:mutable ^js flood-out
+   ;; floodH of the cells the floods have looked at: a direct-mapped cache (key of region 0, stored +1 -> h; made by the
+   ;; first flood), and the key the moves must enter to reach the flood's current node (see floodMovesOf)
+   ^:mutable ^js flood-h-keys ^:mutable ^js flood-h-vals ^:mutable flood-target
    ;; progress
    ^:mutable ^boolean started ^:mutable ^boolean finished ^:mutable reason ^:mutable ^boolean over-budget
    ^:mutable ^boolean boxed ; some node was refused by the box
@@ -732,8 +740,11 @@
 
   ;; where moves go: into the search, or the goal flood's probe
   (sink [s x y z h move parent-node dsec drisk slow-to corner shape]
-    (if flooding
+    (cond
+      (some? flood-out) (.push flood-out (.keyOf s x y z (bit-and shape 15)) (- -1 (.keyOf s x y z 0)))
+      flooding
       (when (and (== x fx) (== y fy) (== z fz) (or (neg? fr) (== fr (bit-and shape 15)))) (set! hit true))
+      :else
       (.consider s x y z h move parent-node dsec drisk slow-to corner shape)))
 
   ;; the edge of a move: straight to the sink, or through one of the passes over an expansion near a door (see expandAt)
@@ -1808,6 +1819,19 @@
   ;; the cell's stand height as the search can reach it: as it stands, or with a closed door, gate or trapdoor in its column
   ;; read as open (the opening pass makes nodes the body only fits in once something is opened)
   (floodH [s x y z]
+    (when (nil? flood-h-keys)
+      (set! flood-h-keys (js/Float64Array. FLOOD-TABLE))
+      (set! flood-h-vals (js/Int16Array. FLOOD-TABLE)))
+    (let [key (inc (.keyOf s x y z 0))
+          slot (bit-and (.hashOf s x y z 0) (dec FLOOD-TABLE))]
+      (if (== (aget flood-h-keys slot) key)
+        (aget flood-h-vals slot)
+        (let [h (.floodHeight s x y z)]
+          (aset flood-h-keys slot key)
+          (aset flood-h-vals slot h)
+          h))))
+
+  (floodHeight [s x y z]
     (let [h (.nodeH s x y z)]
       (if (or (>= h 0)
               (not (or (pos? (aget tbl-openable (.stateAt snapshot x (dec y) z)))
@@ -1845,6 +1869,22 @@
                     ^boolean (.floodNode s seen queue start-key x y z h r) true
                     :else (recur (inc r) n)))))))
 
+  ;; what the moves out of region r of the cell (-1: every region) enter, run once per search (flood-moves): an array of
+  ;; the entered nodes' keys, each followed by -1 - the key of its cell's region 0 (so a probe of any region matches). A
+  ;; flood visits a cell from every flooded cell within a gap jump of it, so without the memo it expands it again each time.
+  (floodMovesOf [s x y z h r key]
+    (let [memo-key (if (neg? r) (- -1 key) key)
+          known (.get flood-moves memo-key)]
+      (if (some? known)
+        known
+        (let [out #js []]
+          (set! flood-out out)
+          (.expandAt s x y z h 0 -1 r)
+          (set! flood-out nil)
+          (when (>= (.-size flood-moves) FLOOD-MEMO) (.clear flood-moves)) ; bounded memory; a flood's front is what asks again
+          (.set flood-moves memo-key out)
+          out))))
+
   ;; adds region r of the cell (-1: every region, as one node) when a forward move out of it reaches the flood's current
   ;; node; true when it is the start
   (floodNode [s ^js seen ^js queue start-key x y z h r]
@@ -1852,8 +1892,7 @@
       (if (true? (.has seen key))
         false
         (do
-          (set! hit false)
-          (.expandAt s x y z h 0 -1 r)
+          (set! hit (.includes (.floodMovesOf s x y z h r key) flood-target))
           (if hit
             (do (.add seen key)
                 (.push queue x y z r)
@@ -1900,6 +1939,7 @@
           (set! fy (aget queue (+ head 1)))
           (set! fz (aget queue (+ head 2)))
           (set! fr (aget queue (+ head 3)))
+          (set! flood-target (if (neg? fr) (- -1 (.keyOf s fx fy fz 0)) (.keyOf s fx fy fz fr)))
           (if (or ^boolean (.floodColumn s seen queue start-key) ^boolean (.floodAround s seen queue start-key))
             true
             (recur (+ head 4))))
@@ -2477,6 +2517,8 @@
      ;; the goal flood: flooding fx fy fz fr hit flooded pre-flooded flood-pending leaked
      false 0 0 0 -1 false 0 0
      (and near (pos? (option options "goalFlood" 4000))) false
+     ;; flood-moves flood-out flood-h-keys flood-h-vals flood-target
+     (js/Map.) nil nil nil 0
      ;; progress: started finished reason over-budget boxed goal-node best-node
      false false nil false false -1 -1
      ;; best-distance start-distance expanded t0 elapsed start-h start-slow

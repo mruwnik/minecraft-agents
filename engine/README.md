@@ -1755,7 +1755,10 @@ the budget (at most `maxNodes`), so the floods cost about half the search and a 
 on a sealed platform at y 151 needed ~12000 flood nodes and were given up after 50-190 s of `budget` search; now
 `goal-enclosed` after ~15000 expanded). A search that runs out of nodes with its late flood still due floods once more (with
 `goalFlood`, or no more than it expanded when a late flood already ran; not after a ladder gap or a swim refused for air, whose
-reasons say more), so a goal on a small platform's pen is `goal-enclosed`, not the partial end's one-way drop. A result that
+reasons say more), so a goal on a small platform's pen is `goal-enclosed`, not the partial end's one-way drop. The
+flood expands each candidate cell's moves once per search, not once for each flooded neighbour that asks (a flood looks at
+about 90 cells per node). Its stand heights sit in a direct-mapped cache. A 200000-node flood over the plains bench world
+now takes 4.5-5.4 s instead of 7.5-10 s; a sealed 111x111 deck takes 230-270 ms instead of 260-307 ms. A result that
 is not `found` and ran out of land (`exhausted`, `box`, `ladder-gap`, `air`) carries `frontier` `{x y z path}` when a searched
 node stands within 2 columns of unloaded land and within `options.frontierReach` (default 256) of the goal along x and z: the
 one with the least cost plus heuristic to the goal. The early
