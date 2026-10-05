@@ -27,9 +27,10 @@
 
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
 
-(defn last-move [p]
-  (let [a (.-args (peek (calls p "moveTo")))]
-    {:x (.. a -pos -x) :y (.. a -pos -y) :z (.. a -pos -z)}))
+(defn last-move
+  "The target of the latest walk of the engine walker."
+  [eng]
+  (select-keys (peek (tu/walked-to eng)) [:x :y :z]))
 
 (defn placed-cells [p]
   (mapv #(let [pos (.. % -args -pos)] [(.-x pos) (.-y pos) (.-z pos)]) (calls p "place")))
@@ -60,9 +61,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p seen]} (await (first-round retreat {:blocks stair :entities [(skeleton 3 67 0)]}))
-              m (last-move p)]
-          (is (= 1 (count (calls p "moveTo"))) "the stair behind is open: it walks")
+        (let [{:keys [eng seen]} (await (first-round retreat {:blocks stair :entities [(skeleton 3 67 0)]}))
+              m (last-move eng)]
+          (is (= 1 (count (tu/walked-to eng))) "the stair behind is open: it walks")
           (is (< (:x m) -3) "away from the skeleton at the top")
           (is (< (:y m) 61) "down the steps, not along its own height")
           (is (= 0 (:z m)) "in the stair's own column")
@@ -72,11 +73,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p]} (await (first-round '(jobs.survival.respond-to-hostile)
+        (let [{:keys [p eng]} (await (first-round '(jobs.survival.respond-to-hostile)
                                               {:blocks stair :inventory [{:name "stone_pickaxe" :count 1}]
                                                :entities [(skeleton 3 67 0)]}))]
           (is (zero? (count (calls p "attack"))) "a pickaxe is no weapon: it flees first")
-          (is (< (:y (last-move p)) 61) "down the stair"))))))
+          (is (< (:y (last-move eng)) 61) "down the stair"))))))
 
 (def tunnel-cells
   "A flat 1-wide tunnel along x on z 0, feet and head height, x -8..8."
@@ -86,11 +87,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p]} (await (first-round retreat {:self {:pos [0.5 64 0.5]}
-                                                       :blocks (rock [-9 9] [62 67] tunnel-cells)
-                                                       :entities [(assoc (skeleton 5.5 64 0.5) :visible true)]}))
-              m (last-move p)]
-          (is (= 1 (count (calls p "moveTo"))) "x 0.5 is column 0, the tunnel, not column 1")
+        (let [{:keys [eng]} (await (first-round retreat {:self {:pos [0.5 64 0.5]}
+                                                         :blocks (rock [-9 9] [62 67] tunnel-cells)
+                                                         :entities [(assoc (skeleton 5.5 64 0.5) :visible true)]}))
+              m (last-move eng)]
+          (is (= 1 (count (tu/walked-to eng))) "x 0.5 is column 0, the tunnel, not column 1")
           (is (= {:x -6 :y 64 :z 0} m)))))))
 
 (def dead-end-cells
@@ -108,7 +109,7 @@
                                                                       :entities [(skeleton 4 64 0)]}))]
           (is (= [[1 64 0] [1 65 0]] (placed-cells p)) "the open side towards the skeleton, feet then head")
           (is (zero? (count (calls p "attack"))))
-          (is (zero? (count (calls p "moveTo"))))
+          (is (= [0 64 0] (mapv js/Math.floor (:pos (fake/self p)))) "no walk: at most a step to the middle of its own cell")
           (swap! clock + 1000)
           (await (core/tick! eng))
           (is (= 2 (count (calls p "place"))) "sealed: nothing more to place")

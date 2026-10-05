@@ -205,3 +205,11 @@
   ([p radius opts] (dangers p radius opts {}))
   ([p radius opts danger-opts]
    (filterv #(danger? p % danger-opts) (combat/hostiles p radius (dissoc opts :sight)))))
+
+(defn nearest-danger
+  "The nearest of combat/hostiles (same opts) that is a real danger, nil when none; danger-opts as danger?, plus :skip, a
+  set of ids left out. It stops at the first danger found, so the walk search runs for no mob farther off."
+  [p radius opts {:keys [skip] :as danger-opts}]
+  (let [skip (set skip)]
+    (some #(when (and (not (contains? skip (.-id %))) (danger? p % (dissoc danger-opts :skip))) %)
+          (combat/hostiles p radius (dissoc opts :sight)))))

@@ -5,19 +5,18 @@
             [engine.jobs.util :as u]))
 
 (def doc
-  "A hostile is near: fight it (jobs.survival.fight-back) when healthy, armed,
-  and no creeper is near and at most :max-fight hostiles are; otherwise
-  retreat (jobs.survival.retreat). A fight once chosen is kept until health
-  drops below :min-health, and below that too while the target is nearly
-  dead (one more hit of the weapon carried likely kills it, from the hits
-  fight-back has landed). Writes one :hostile entry per encounter.")
+  "A hostile is near: fight it (jobs.survival.fight-back, the best weapon
+  carried equipped) when the odds are fair, else retreat (jobs.survival.retreat).
+  Decided afresh every round: never against a creeper; otherwise fight when the
+  damage the fight is expected to cost (engine.jobs.combat/fight-damage: the
+  weapon, the armour worn, each mob's kind and what is left of it after the
+  hits landed, the dangers killed nearest first) leaves at least :reserve
+  health. Writes one :hostile entry per encounter.")
 
 (def args
   {:radius {:doc "hostiles within this many blocks count" :default 8}
    :ranged-radius {:doc "ranged hostiles (skeletons and the like) within this many blocks count" :default 16}
-   :fight-health {:doc "least health to start a fight" :default 12}
-   :min-health {:doc "a fight already chosen is kept down to this health" :default 8}
-   :max-fight {:doc "most hostiles to fight at once" :default 2}
+   :reserve {:doc "health a fight must be expected to leave" :default 4}
    :weapons {:doc "item name substrings that count as weapons" :default combat/default-weapons}})
 
 (def hostile-policy {:cap 50 :ttl (* 60 60 1000)})
@@ -35,10 +34,9 @@
   (boolean (seq (near c))))
 
 (defn decide
-  "Pure: :fight or :flee from health, whether a weapon is carried, whether a
-  creeper is near, the number of hostiles and the health threshold in force."
-  [{:keys [health armed? creeper? hostile-count max-fight threshold]}]
-  (if (and (>= health threshold) armed? (not creeper?) (<= hostile-count max-fight))
+  "Pure: :flee from any creeper, else :fight when the expected damage leaves at least reserve health, else :flee."
+  [{:keys [health damage creeper? reserve]}]
+  (if (and (not creeper?) (<= damage (- health reserve)))
     :fight
     :flee))
 
@@ -46,10 +44,10 @@
 
 (def child-jobs {:fight 'jobs.survival.fight-back :flee 'jobs.survival.retreat})
 
-(defn ^:async run-child [c decision {:keys [radius ranged-radius min-health weapons]}]
+(defn ^:async run-child [c decision {:keys [radius ranged-radius weapons]}]
   (let [child-args (case decision
-                     :fight {:range radius :ranged-range ranged-radius :min-health min-health :weapons weapons}
-                     :flee {:radius radius :ranged-radius ranged-radius})]
+                     :fight {:range radius :ranged-range ranged-radius :min-health 0 :weapons weapons}
+                     :flee {:radius radius :ranged-radius ranged-radius :weapons weapons})]
     (await (ctx/call-child c decision (child-jobs decision) child-args))))
 
 (defn log-encounter! [c threat decision]
@@ -58,31 +56,25 @@
                    hostile-policy)
     (ctx/update-mem! c assoc :logged true)))
 
-(defn finishing?
-  "Whether a fight is under way and its target (the nearest hostile) is
-  nearly dead by the hits fight-back has landed."
-  [c near weapon]
-  (let [target (first near)
-        struck (when target (get-in (ctx/mem c) [:children :fight :struck (.-id target)]))]
-    (boolean (and struck weapon (= :fight (:decision (ctx/mem c)))
-                  (combat/nearly-dead? (assoc struck :damage (combat/weapon-damage weapon)))))))
+(defn mob-of
+  "What fight-damage needs of hostile e: its name, distance and the hits fight-back has landed on it."
+  [c e]
+  (let [struck (get-in (ctx/mem c) [:children :fight :struck (.-id e)])]
+    (cond-> {:name (.-name e) :distance (.-distance e) :hits (:hits struck 0)}
+      (number? (:health struck)) (assoc :health (:health struck)))))
 
 (defn ^:async respond [c near]
-  (let [{:keys [fight-health min-health max-fight weapons] :as a} (:args c)
+  (let [{:keys [reserve weapons] :as a} (:args c)
         p (:primitives c)
-        previous (:decision (ctx/mem c))
-        weapon (combat/best-weapon p weapons)
-        finish? (finishing? c near weapon)
-        decision (cond
-                   (empty? near) :flee ; retreat tracks its own cooldown after the hostile is out of sight
-                   (and finish? (not (some combat/creeper? near))) :fight
-                   :else (decide {:health (.-health (.self p))
-                                  :armed? (some? weapon)
-                                  :creeper? (boolean (some combat/creeper? near))
-                                  :hostile-count (count near)
-                                  :max-fight max-fight
-                                  :threshold (if (= :fight previous) min-health fight-health)}))
-        a (cond-> a finish? (assoc :min-health 0))]
+        self (.self p)
+        decision (if (empty? near)
+                   :flee ; retreat tracks its own cooldown after the hostile is out of sight
+                   (decide {:health (.-health self)
+                            :creeper? (boolean (some combat/creeper? near))
+                            :reserve reserve
+                            :damage (combat/fight-damage {:weapon (combat/best-weapon p weapons)
+                                                          :armour (combat/armour-points (.-equipment self))
+                                                          :mobs (map #(mob-of c %) near)})}))]
     (when (seq near) (log-encounter! c (first near) decision))
     (ctx/update-mem! c assoc :decision decision)
     (let [result (await (run-child c decision a))]

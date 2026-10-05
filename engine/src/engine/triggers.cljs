@@ -52,9 +52,9 @@
   {:name :hostile-near
    :when (fn [world memory args]
            (boolean (and (not (died/dead? memory))
-                         (seq (reach/dangers world (:radius args hostile-radius)
-                                             {:ranged-radius (:ranged-radius args ranged-radius)}
-                                             {:sight? (:visible-only args true)})))))
+                         (some? (reach/nearest-danger world (:radius args hostile-radius)
+                                                      {:ranged-radius (:ranged-radius args ranged-radius)}
+                                                      {:sight? (:visible-only args true)})))))
    :job '(jobs.survival.respond-to-hostile)
    :args {:radius hostile-radius :ranged-radius ranged-radius}
    :persistence :cooldown

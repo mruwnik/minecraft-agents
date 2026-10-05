@@ -5,10 +5,12 @@
             [engine.jobs.reach :as reach]
             [engine.jobs.shelter :as sh]
             [engine.jobs.util :as u]
+            [engine.path.near :as near]
             [jobs.survival.dig-in :as dig-in]))
 
 (def doc
-  "Walk a short step away from the nearest hostile each round, leaning
+  "Walk a short step away from the nearest hostile each round with the engine
+  walker (engine.path.near/walk-near!, doors opened and shut behind), leaning
   towards the latest :bed or :home when that is not through the hostile,
   avoiding :hazard positions and turning towards open ground when a wall is
   behind. A direction is probed column by column from the body's own cell,
@@ -19,7 +21,8 @@
   (no open direction, or the walk is blocked) it escalates, never repeating a
   failed round: armed, it fights back with the best weapon whatever its health
   and keeps that fight while the hostile stays within :radius (no running back
-  into the corner); unarmed with :blocks carried, it seals itself in (the open
+  into the corner); unarmed with :blocks carried, it seals itself in (first stepping to the
+  middle of its cell when its hitbox reaches into a cell to fill; the open
   sides at feet and head height and the roof, dig-in's 1x1 cells, at most
   :max-places a round; one retreat_sealed warn) and waits there until the
   flight is over or for :max-hide-ms; a cell a hostile stands in, or a refused
@@ -31,7 +34,8 @@
   (jobs.survival.eat up to 20) so health can regenerate on the run. Done when
   no real danger (engine.jobs.reach: one with no walkable way to the body, or a
   ranged one with no line of fire, is none) has been within :clear-radius for
-  :cooldown-ms.")
+  :cooldown-ms. Each round looks for the nearest real danger only, so a mob far
+  off costs no search while one is close.")
 
 (def args
   {:radius {:doc "hostiles within this many blocks start a flight" :default 8}
@@ -50,6 +54,10 @@
   ["_pickaxe" "_shovel" "_hoe"])
 
 (def hazard-clearance 2.5)
+
+(def flight-timeout-s
+  "Bound of one step of the flight: the mob moves, so the next round aims again."
+  5)
 
 (def turns
   "Angles to try, in degrees from the preferred direction, best first."
@@ -249,6 +257,20 @@
                   (recur (rest cells))
                   :failed))))))
 
+(defn off-centre?
+  "Whether the body's hitbox (0.6 wide) reaches out of its cell into a side cell."
+  [p]
+  (let [{:keys [x z]} (u/self-pos {:primitives p})
+        frac #(- % (js/Math.floor %))]
+    (boolean (some #(or (< (frac %) 0.3) (> (frac %) 0.7)) [x z]))))
+
+(defn ^:async centre!
+  "Step to the middle of the body's own cell, so the side cells around it can take blocks."
+  [c]
+  (let [{:keys [x y z]} (sh/feet (:primitives c))]
+    ;; raw moveTo kept: a step inside the body's own cell, range 0.15; the planner has no goal finer than a cell.
+    (await (ctx/act c :moveTo #js {:pos #js {:x (+ x 0.5) :y y :z (+ z 0.5)} :range 0.15}))))
+
 (defn ^:async seal!
   "Fill the open cells around the body (dig-in's 1x1: sides at feet and head
   height, a roof support, the roof) with carried :blocks, at most
@@ -264,7 +286,8 @@
       (some (hostile-cells p radius) cells) :failed
       (nil? (dig-in/pick c blocks)) :failed
       :else
-      (do (access/trespass! c "retreat" (some #(access/trespass-refusal (access/rules-input c) :place %) cells))
+      (do (when (off-centre? p) (await (centre! c)))
+          (access/trespass! c "retreat" (some #(access/trespass-refusal (access/rules-input c) :place %) cells))
           (if (= :failed (await (place-seal! c (take max-places cells))))
             :failed
             (if (empty? (dig-in/open-cells p (sh/feet p))) :sealed :continue))))))
@@ -311,9 +334,9 @@
         now (ctx/now c)
         fleeing? (some? (:last-seen (ctx/mem c)))
         dead (set (dead-ids c))
-        threat (first (remove #(contains? dead (.-id %)) (reach/dangers p (if fleeing? (max clear-radius radius) radius)
+        threat (reach/nearest-danger p (if fleeing? (max clear-radius radius) radius)
                                      {:ranged-radius (if fleeing? (max clear-radius ranged-radius) ranged-radius)}
-                                     {:sight? false})))]
+                                     {:sight? false :skip dead})]
     (cond
       (and (nil? threat) fleeing? (>= (- now (:last-seen (ctx/mem c))) cooldown-ms)) :done
       (and (nil? threat) fleeing?) :continue
@@ -330,8 +353,7 @@
         (ctx/update-mem! c assoc :last-seen now)
         (if (nil? target)
           (await (cornered! c "no open way away from the hostile"))
-          ;; raw moveTo kept: a flight from a danger; planning with doors would cost the time the retreat needs, and a shut door in the way ends the retreat as :blocked.
-          (let [r (await (ctx/act c :moveTo (clj->js {:pos target :range 1})))]
-            (if (= "blocked" (.-status r))
+          (let [r (await (near/walk-near! c target 1 {:timeout-s flight-timeout-s}))]
+            (if (= :blocked r)
               (await (cornered! c "the way away from the hostile is blocked"))
               :continue)))))))

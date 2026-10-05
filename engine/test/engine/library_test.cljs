@@ -535,7 +535,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 1 :y 64 :z 0}}]})]
-          (.override (.-world p) "moveTo" (fn ^:async f [_ _ _] #js {:status "blocked"}))
+          (.override (.-world p) "steer" (fn [_ _ _] (js/Promise.resolve #js {:status "timeout" :pose #js {}})))
           (core/submit! eng (list 'jobs.survival.retreat {:radius 8 :clear-radius 8}) {})
           (await (core/tick! eng))
           (is (= 1 (count (calls p "attack"))) "unarmed and nothing to seal with: the fist, not a repeated failed round")

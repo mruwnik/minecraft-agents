@@ -1360,7 +1360,7 @@ unstartable (`engine.single`; only two starts racing over the same stale file wi
 | `jobs.survival.breathe` | `{:min-oxygen 12 :radius 2 :reach 10 :shore-radius 6 :far-radius 24}` | drowning (swims up, or walks sideways to a column with air, then swims toward the nearest land within `:shore-radius`, else walks with the walk driver to land within `:far-radius`; with no way out it stays afloat, jump held, and warns `:afloat` once instead of ending and sinking), enclosed (the suffocating condition: a sideways step first, else dig), or surfaced and still in water | `:noted`, `:surfaced`, `:side-tried`, `:failures`, `:afloat` | writes `:breathe` (cap 20, 1 h) |
 | `jobs.survival.extinguish` | `{:water-radius 6 :step 4 :scan-radius 8}` | on fire or in lava, without fire resistance; stands still (info `:extinguish_wait`, done) when on fire with no bucket use, no water in `:water-radius` and no hazard within 1.5 blocks; after pouring a carried water bucket it remembers `:poured` and, once the fire is out, scoops the water back with `bucket` (waits up to 10 rounds for the poured cell to read as water, the block read can lag the pour; warn `extinguish.scoop_failed` naming the cell if the scoop is not placed; gives up waiting after 8 rounds) | none | writes `:extinguish` (cap 20, 1 h), `:hazard` for lava seen (cap 50, 6 h) |
 | `jobs.survival.recover` | `{:health 7 :healed 16 :sight 16}` | health below `:health`, or below `:healed` with a `:hurt` in the last 5 min, or a spell under way | `:spell-started`, children `:flee`, `:safety`, `:eat` | writes one `:hurt` per spell; reads `:bed`, `:home` |
-| `jobs.survival.respond-to-hostile` | `{:radius 8 :fight-health 12 :min-health 8 :max-fight 2 :weapons ["_sword" "_axe"]}` | a hostile within `:radius` | `:decision`, `:logged`, child `:fight` or `:flee` | writes one `:hostile` per encounter (cap 50, 1 h) |
+| `jobs.survival.respond-to-hostile` | `{:radius 8 :ranged-radius 16 :reserve 4 :weapons ["_sword" "_axe"]}` | a hostile within `:radius` | `:decision` (re-decided every round: no creeper and `combat/fight-damage` of the best weapon carried, the armour worn and the dangers nearest first, with the hits already landed, at most health less `:reserve` is `:fight`, else `:flee`), `:logged`, child `:fight` or `:flee` | writes one `:hostile` per encounter (cap 50, 1 h) |
 | `jobs.survival.fight-back` | `{:range 4 :min-health 8 :weapons ["_sword" "_axe"] :skip [] :attack-gap-ms 600}` | health at least `:min-health` and a hostile within `:range` | `:last-attack`, `:struck`, `:killed` | none |
 | `jobs.combat.attack` | `{:targets [] :radius 16 :weapons :attack-gap-ms nil :lost-s 5 :timeout-s 120 :no-damage-hits 4 :max-hits 40 :walk-timeout-s 5 :absent :done}` | a listed target within `:radius`, or started, or `:absent` is `:done` | `:started :last-seen :last-attack :seen :hits :quiet :health :fails :given-up :killed :killed-players` | none; walks with `engine.path.near/walk-near!` (range 2, range 1 to close in on a target it cannot hit; `:doors :shut`, so a body in a doored room goes out through the door and shuts it), each steer bounded by `:walk-timeout-s` so a moving target is aimed at again from where it is now; hands over `{:reason :killed :given-up}`; emits info `attack.done`, warns `attack.gave-up`, `attack.timeout` |
 | `jobs.survival.get-food` | `{:food 6 :food-when-hurt 14 :source-radius 64 :hunt-radius 24 :farm-radius 6 :take 16 :attack-gap-ms 600 :ask-cooldown-ms 600000}` | hungry (as the hungry trigger, including the top-up of a hurt body carrying common food below 18; the top-up never starts a hunt), or a meal under way | `:eating`, `:dead-source`, `:last-swing`, `:skipped-animals`, `:skipped-blocks`, children `:eat`, `:goto`, `:collect` | reads `:food-source` (forgets one found empty or unreachable); writes `:hungry` when nothing is found; during `:ask-cooldown-ms` after that it still eats and harvests/hunts what is in sight (no wheat) but skips the remembered sources it already knew when it gave up (one learned since is still tried first) and returns `:declined` when nothing is in sight |
@@ -1483,7 +1483,8 @@ unstartable (`engine.single`; only two starts racing over the same stale file wi
   goes on while one is within `:clear-radius`, and is done once none has been
   for `:cooldown-ms`. Cornered (no open direction, or the walk is blocked) it
   escalates instead of repeating: armed, `fight-back` with `:min-health 0`;
-  unarmed with `:blocks` carried, it seals itself in (dig-in's 1x1 cells, at
+  unarmed with `:blocks` carried, it seals itself in (first a `moveTo` to the
+  middle of its own cell when its hitbox reaches into a cell to fill; dig-in's 1x1 cells, at
   most `:max-places` a round, warn `retreat_sealed`; a cell in another's zone
   is a last resort, `retreat.trespass-last-resort`) and waits there until the
   flight is over or `:max-hide-ms` has passed; when it cannot seal (a hostile
@@ -1493,9 +1494,10 @@ unstartable (`engine.single`; only two starts racing over the same stale file wi
   fight killed is remembered (`:dead`) and no longer counts as a threat or a
   target while its corpse stays listed: a won fight neither swings again nor warns.
   Once per flight, with at least `:eat-gap` blocks to the hostile, it eats
-  (up to 20 food) so health regenerates on the run. `:respond-to-hostile`
-  keeps a fight going below `:min-health` while the target is nearly dead by
-  the hits `fight-back` landed (`combat/nearly-dead?`).
+  (up to 20 food) so health regenerates on the run. Each step of the flight
+  is a walk of the engine walker (`walk-near!`, 5 s a steer, doors opened and
+  shut behind), and each round asks for the nearest real danger only
+  (`reach/nearest-danger`), so mobs far off cost no walk search.
 - `:sleep` walks within 2 of the known bed (go-to as a child) and calls
   `sleep`, and remembers a bed it gave up on as `:bed-unreachable` for ten minutes. `sleeping` and `not-night` are done; a go-to that hands over
   `{:arrived false}`, a taken bed or a nearby monster is a failed round
@@ -1508,8 +1510,10 @@ unstartable (`engine.single`; only two starts racing over the same stale file wi
   its feet, else walks into water or to the safest dry cell nearby;
   `:recover` flees, walks to a bed or home, eats and waits (a 2 s `wait` per
   round) for health to reach `:healed`, giving up below 18 food with nothing
-  to eat; `:respond-to-hostile` fights (`fight-back`) when healthy, armed,
-  not facing a creeper and outnumbered by at most `:max-fight`, else retreats;
+  to eat; `:respond-to-hostile` fights (`fight-back`) when the odds are fair
+  (no creeper, and the expected damage of `combat/fight-damage`, from the
+  weapon, armour, mob kinds, count and what is left of them, leaves
+  `:reserve` health), else retreats;
   `:get-food` climbs a ladder of eat, known source, hunt or harvest, then
   gives up with a `food.none` warn; `:shelter` owns the night: it tries sleep, then log-out until morning
   when another player is online, then dig-in, holds the body asleep or dug in until day (queued jobs wait), by day

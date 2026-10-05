@@ -44,7 +44,10 @@
     s))
 
 (defn fought? [{:keys [p]}] (pos? (count (calls p "attack"))))
-(defn fled? [{:keys [p]}] (and (zero? (count (calls p "attack"))) (pos? (count (calls p "moveTo")))))
+(defn fled?
+  "No swing, and a walk with the engine walker."
+  [{:keys [p eng]}]
+  (and (zero? (count (calls p "attack"))) (pos? (count (tu/walked-to eng)))))
 
 ;; ------------------------------------------------------------- the chooser
 
@@ -68,8 +71,10 @@
                                                 :entities [(zombie 7 3 0) (zombie 8 3 1) (zombie 9 3 -1)]})))
             "outnumbered: retreat")
         (is (fought? (await (first-round respond {:self {:health 20} :inventory sword
+                                                  :equipment {:torso {:name "iron_chestplate" :count 1}
+                                                              :legs {:name "iron_leggings" :count 1}}
                                                   :entities [(zombie 7 3 0) (zombie 8 3 1)]})))
-            "two is still fightable")))))
+            "two are fightable in armour (11 points: 22.5 expected damage becomes 12.6)")))))
 
 (deftest respond-fights-a-hostile-beyond-melee-by-walking-up
   (async done
@@ -78,7 +83,7 @@
         (let [s (await (first-round respond {:inventory sword :entities [(zombie 7 0)]}))]
           (is (fought? s) "the hostile at 7 blocks is walked up to and hit"))))))
 
-(deftest respond-keeps-a-chosen-fight-down-to-min-health
+(deftest respond-keeps-a-fight-while-what-is-left-of-the-mob-is-worth-it
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -86,12 +91,12 @@
           (fake/swap-self! p assoc :health 10)
           (swap! clock + 1000)
           (await (core/tick! eng))
-          (is (= 2 (count (calls p "attack"))) "10 is below fight-health 12 but above min-health 8: still fighting")
+          (is (= 2 (count (calls p "attack"))) "health 10, the zombie at 15: 5.6 expected damage leaves the reserve of 4: still fighting")
           (fake/swap-self! p assoc :health 6)
           (swap! clock + 1000)
           (await (core/tick! eng))
-          (is (= 2 (count (calls p "attack"))) "below min-health: no more attacks")
-          (is (pos? (count (calls p "moveTo"))) "it retreats instead"))))))
+          (is (= 2 (count (calls p "attack"))) "health 6: 5.6 more would eat into the reserve: no more attacks")
+          (is (pos? (count (tu/walked-to eng))) "it retreats instead"))))))
 
 (deftest respond-writes-one-hostile-entry-per-encounter
   (async done
@@ -151,19 +156,20 @@
 
 (def retreat '(jobs.survival.retreat))
 
-(defn last-move [p]
-  (let [a (.-args (peek (calls p "moveTo")))]
-    {:x (.. a -pos -x) :z (.. a -pos -z)}))
+(defn last-move
+  "The x and z of the latest walk's target."
+  [eng]
+  (select-keys (peek (tu/walked-to eng)) [:x :z]))
 
 (deftest retreat-moves-away-and-finishes-after-the-cooldown
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p clock]} (await (first-round '(jobs.survival.retreat {:clear-radius 8}) {:entities [(zombie 5 0)]}))]
-          (is (= {:x -6 :z 0} (last-move p)) "a step of 6 directly away")
+          (is (= {:x -6 :z 0} (last-move eng)) "a step of 6 directly away")
           (swap! clock + 1000)
           (await (core/tick! eng))
-          (is (= 1 (count (calls p "moveTo"))) "the hostile is out of radius: no more walking")
+          (is (= 1 (count (tu/walked-to eng))) "the hostile is out of radius: no more walking")
           (is (= ["j1"] (:list (core/state eng))) "but not done before the cooldown")
           (swap! clock + 5000)
           (await (core/tick! eng))
@@ -177,7 +183,7 @@
           (swap! clock + 4000)
           (set-entities! p [(assoc (zombie 5 0) :pos {:x -6 :y 64 :z 3})])
           (await (core/tick! eng))
-          (is (= 2 (count (calls p "moveTo"))) "seen again after 4 s: walks again")
+          (is (= 2 (count (tu/walked-to eng))) "seen again after 4 s: walks again")
           (swap! clock + 4000)
           (set-entities! p [])
           (await (core/tick! eng))
@@ -196,14 +202,14 @@
           (remember! eng :bed {:pos {:x -20 :y 64 :z -20}})
           (core/submit! eng retreat {})
           (await (core/tick! eng))
-          (let [m (last-move p)]
+          (let [m (last-move eng)]
             (is (< (:x m) -1) "pulled towards the bed's side")
             (is (< (:z m) -1) "still away from the hostile")))
         (let [{:keys [eng p]} (setup {:entities [(zombie 0 5)]})]
           (remember! eng :home {:pos {:x 0 :y 64 :z 20}})
           (core/submit! eng retreat {})
           (await (core/tick! eng))
-          (is (= {:x 0 :z -6} (last-move p)) "a home beyond the hostile is ignored"))))))
+          (is (= {:x 0 :z -6} (last-move eng)) "a home beyond the hostile is ignored"))))))
 
 (deftest retreat-avoids-hazard-entries
   (async done
@@ -213,7 +219,7 @@
           (mem/write! (:store eng) :hazard {:kind :lava :pos {:x -6 :y 64 :z 0}} {:cap 50 :ttl :forever})
           (core/submit! eng retreat {})
           (await (core/tick! eng))
-          (let [m (last-move p)]
+          (let [m (last-move eng)]
             (is (not= 0 (:z m)) "turned off the straight line through the lava")
             (is (< (:x m) 0) "and still away")))))))
 
@@ -228,20 +234,25 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen clock]} (setup {:blocks stone-box :entities [(zombie 6 0)]})]
-          (.override (.-world p) "moveTo" (fn ^:async f [_ _ _] #js {:status "blocked"}))
+          (.override (.-world p) "steer" (fn [_ _ _] (js/Promise.resolve #js {:status "timeout" :pose #js {}})))
           (core/submit! eng retreat {})
           (dotimes [_ 8] (swap! clock + 60000) (await (core/tick! eng)))
           (is (zero? (count (filter #(= :retreat_blocked (:kind %)) @seen))) "it cannot reach the body: not a danger, no warn")
           (is (zero? (count (calls p "attack"))))
-          (is (zero? (count (calls p "moveTo"))) "and no flight")
+          (is (zero? (count (tu/walked-to eng))) "and no flight")
           (is (= [] (:list (core/state eng)))))))))
+
+(defn stuck-walks!
+  "Make every walk of the engine walker get no nearer: :blocked."
+  [p]
+  (.override (.-world p) "steer" (fn [_ _ _] (js/Promise.resolve #js {:status "timeout" :pose #js {}}))))
 
 (deftest retreat-whose-every-walk-is-blocked-fights-with-the-fist
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:entities [(zombie 2 0)]})]
-          (.override (.-world p) "moveTo" (fn ^:async f [_ _ _] #js {:status "blocked"}))
+          (stuck-walks! p)
           (core/submit! eng retreat {})
           (await (core/tick! eng))
           (is (= 1 (count (calls p "attack"))) "unarmed and nothing to seal with: it hits back")
@@ -310,7 +321,7 @@
             (await (core/tick! eng))
             (swap! clock + 1000))
           (is (= 3 (walks-to {:p p :eng eng} {:x 6 :z 0})) "three blocked walks towards the zombie")
-          (is (< (:x (last-move p)) 0) "then it walks away instead")
+          (is (< (:x (last-move eng)) 0) "then it walks away instead")
           (dotimes [_ 3]
             (await (core/tick! eng))
             (swap! clock + 1000))
@@ -350,8 +361,8 @@
           (set-entities! p [(zombie 6 0)])
           (swap! clock + 1000)
           (await (core/tick! eng))
-          (is (= 2 (count (calls p "moveTo"))) "12 blocks behind is out of radius 8 but within 24: walk on")
-          (is (< (:x (last-move p)) -6)))))))
+          (is (= 2 (count (tu/walked-to eng))) "12 blocks behind is out of radius 8 but within 24: walk on")
+          (is (< (:x (last-move eng)) -6)))))))
 
 (defn wall-cells
   "Stone at feet and head height on the given [x z] cells."
@@ -366,7 +377,7 @@
                                       :blocks (wall-cells (for [z (range -2 3)] [-3 z]))})]
           (core/submit! eng retreat {})
           (await (core/tick! eng))
-          (let [m (last-move p)]
+          (let [m (last-move eng)]
             (is (>= (js/Math.abs (:z m)) 3) "not straight back into the wall")
             (is (<= (:x m) 0) "and not towards the zombie")))))))
 
@@ -393,8 +404,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p]} (await (first-round retreat {:inventory sword :blocks dead-end :entities [(zombie 0 3)]}))]
-          (is (zero? (count (calls p "moveTo"))) "a two-block side step gains nothing on the zombie")
+        (let [{:keys [p eng]} (await (first-round retreat {:inventory sword :blocks dead-end :entities [(zombie 0 3)]}))]
+          (is (zero? (count (tu/walked-to eng))) "a two-block side step gains nothing on the zombie")
           (is (= 1 (count (calls p "attack")))))))))
 
 ;; ------------------------------------------------------- sight
@@ -406,7 +417,7 @@
         (let [{:keys [eng p]} (setup {:inventory sword :blocks wall :entities [(zombie 5 0)]})]
           (core/submit! eng respond {})
           (is (nil? (core/tick! eng)) "only a zombie behind the wall: nothing to respond to")
-          (is (zero? (count (calls p "moveTo")))))))))
+          (is (zero? (count (tu/walked-to eng)))))))))
 
 (deftest fight-back-goes-for-a-visible-hostile-first
   (async done
@@ -477,7 +488,7 @@
           (swap! clock + 1000)
           (await (core/tick! eng))
           (is (= 2 (count (calls p "attack"))) "the pen opened up, but the zombie is still at 2: keep fighting")
-          (is (zero? (count (calls p "moveTo"))) "no running back and forth"))))))
+          (is (zero? (count (tu/walked-to eng))) "no running back and forth"))))))
 
 ;; ------------------------------------------------- only a real danger fires hostile-near
 
@@ -522,3 +533,72 @@
   (is (not (holds? {:blocks dividing-wall :entities [(skeleton 1 8 0)]} danger-args)) "behind a wall with no opening")
   (is (holds? {:blocks (dissoc dividing-wall "3,65,0") :entities [(skeleton 1 8 0)]} danger-args)
       "through a 1x1 window it can shoot"))
+
+;; ------------------------------------------------- the odds: a response the body can survive
+
+(def iron-armour
+  {:head {:name "iron_helmet" :count 1} :torso {:name "iron_chestplate" :count 1}
+   :legs {:name "iron_leggings" :count 1} :feet {:name "iron_boots" :count 1}})
+
+(deftest combat-counts-armour-points-from-equipment
+  (is (= 0 (combat/armour-points nil)))
+  (is (= 15 (combat/armour-points (clj->js {:head {:name "iron_helmet"} :torso {:name "iron_chestplate"}
+                                            :legs {:name "iron_leggings"} :feet {:name "iron_boots"}}))))
+  (is (= 5 (combat/armour-points (clj->js {:torso {:name "golden_chestplate"} :mainHand {:name "iron_sword"}})))
+      "only worn slots count"))
+
+(deftest combat-fight-damage-weighs-weapon-mobs-and-armour
+  (let [z {:name "zombie" :distance 3}]
+    (is (= 7.5 (combat/fight-damage {:weapon "iron_sword" :armour 0 :mobs [z]})) "4 hits at 0.625 s while it hits 3/s")
+    (is (= 30 (combat/fight-damage {:weapon nil :armour 0 :mobs [z]})) "the fist: 20 hits at 0.5 s")
+    (is (= 22.5 (combat/fight-damage {:weapon "iron_sword" :armour 0 :mobs [z z]})) "the second hits until it dies too")
+    (is (= 3 (combat/fight-damage {:weapon "iron_sword" :armour 15 :mobs [z]})) "iron armour (15 points) takes 60% off")
+    (is (= 3.75 (combat/fight-damage {:weapon "iron_sword" :armour 0 :mobs [(assoc z :hits 2)]})) "a struck mob has less left")
+    (is (= 10 (combat/fight-damage {:weapon "iron_sword" :armour 0 :mobs [{:name "skeleton" :distance 13}]}))
+        "a skeleton shoots while the body closes 10 blocks")))
+
+(defn walked? [{:keys [eng]}] (pos? (count (tu/walked-to eng))))
+(defn fled-by-walker? [{:keys [p] :as s}]
+  (and (zero? (count (calls p "attack"))) (zero? (count (calls p "moveTo"))) (walked? s)))
+
+(deftest respond-picks-a-response-the-body-can-survive
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[why spec want] [["no weapon vs one zombie" {:entities [(zombie 3 0)]} :flee]
+                                 ["sword vs one zombie" {:inventory sword :entities [(zombie 3 0)]} :fight]
+                                 ["no weapon vs three zombies" {:entities [(zombie 7 3 0) (zombie 8 3 1) (zombie 9 3 -1)]} :flee]
+                                 ["sword vs a creeper" {:inventory sword :entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 3 :y 64 :z 0}}]} :flee]
+                                 ["sword vs a skeleton at range" {:inventory sword :entities [(assoc (skeleton 7 12 0) :visible true)]} :fight]
+                                 ["no weapon vs a skeleton at range" {:entities [(assoc (skeleton 7 12 0) :visible true)]} :flee]
+                                 ["sword vs two zombies, no armour" {:inventory sword :entities [(zombie 7 3 0) (zombie 8 3 1)]} :flee]
+                                 ["sword vs two zombies in iron armour" {:inventory sword :equipment iron-armour
+                                                                         :entities [(zombie 7 3 0) (zombie 8 3 1)]} :fight]]]
+          (let [s (await (first-round respond spec))
+                got (:decision (first (hostile-entries (:eng s))))]
+            (is (= want got) why)
+            (is (= (= :flee want) (fled-by-walker? s)) (str why ": flees with the engine walker, no swing"))))))))
+
+(deftest respond-fights-with-the-best-weapon-equipped
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (first-round respond {:inventory [{:name "stone_sword" :count 1} {:name "diamond_sword" :count 1}]
+                                                       :entities [(zombie 3 0)]}))]
+          (is (= ["diamond_sword"] (mapv #(.-item (.-args %)) (calls p "equip"))))
+          (is (= 1 (count (calls p "attack")))))))))
+
+(def stair-exit
+  "A dead-end corridor one wide along +z, closed behind the body (z -1): the way out of a dug-in cell, the zombie in it."
+  (wall-cells (concat (for [z (range -1 4)] [-1 z]) (for [z (range -1 4)] [1 z]) [[0 -1]])))
+
+(deftest a-cornered-unarmed-body-off-centre-seals-itself-in-instead-of-punching
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (first-round retreat {:bodyHitbox true :self {:pos [0.5 64 0.75]}
+                                                       :inventory [{:name "cobblestone" :count 16}]
+                                                       :blocks stair-exit :entities [(zombie 0 2)]}))]
+          (is (zero? (count (calls p "attack"))) "no fist fight")
+          (is (= "cobblestone" (.-name (.blockAt p #js {:x 0 :y 64 :z 1})))
+              "the side cell its hitbox overlapped is filled: it stood in the middle of its cell first"))))))
