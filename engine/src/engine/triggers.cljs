@@ -23,13 +23,47 @@
 
 (def default-health 7)
 
+(def default-healed 16)
+
+(def spell-ms
+  "A :hurt entry (written by recover when a spell starts) older than this no longer keeps a spell going; the same
+  window as recover's own check."
+  (* 5 60 1000))
+
+(def regen-food "Natural regeneration needs at least this much food." 18)
+
+(defn spell-under-way?
+  "A recover spell started (the latest :hurt entry, younger than spell-ms) and has not ended (no :heal-ended entry
+  newer than it)."
+  [view]
+  (let [hurt (:t (mem/latest view :hurt))
+        ended (:t (mem/latest view :heal-ended))]
+    (boolean (and hurt
+                  (< (- (:now view) hurt) spell-ms)
+                  (not (and ended (>= ended hurt)))))))
+
+(defn cannot-heal?
+  "recover gave up (the latest :heal-ended says :cannot-heal) and healing still cannot work: food below regen-food and
+  nothing to eat carried."
+  [self view]
+  (boolean (and (= :cannot-heal (:why (:data (mem/latest view :heal-ended))))
+                (< (.-food self) regen-food)
+                (not (hungry/carries-food? self)))))
+
 (def health-low
-  "Holds when health is below :health (args, default 7 of 20). Runs recover,
-  which flees, eats and waits for regeneration."
+  "Holds when health is below :health (args, default 7 of 20), or a recover spell is under way (spell-under-way?)
+  and health is still below :healed (default 16): a recover cut by a higher reflex is fired again until the body is
+  healed. It rests while recover's give-up stands (cannot-heal?: a cannot_heal warn said so) until food is carried
+  or food reaches 18. Runs recover, which flees, eats and waits for regeneration."
   {:name :health-low
-   :when (fn [world _memory args] (< (.-health (.self world)) (:health args default-health)))
+   :when (fn [world memory args]
+           (let [self (.self world)
+                 health (.-health self)]
+             (and (or (< health (:health args default-health))
+                      (and (< health (:healed args default-healed)) (spell-under-way? memory)))
+                  (not (cannot-heal? self memory)))))
    :job '(jobs.survival.recover)
-   :args {:health default-health}
+   :args {:health default-health :healed default-healed}
    :persistence :cooldown
    :cooldown-s 10})
 
@@ -76,32 +110,10 @@
    :persistence :cooldown
    :cooldown-s 120})
 
-(def default-interval-s 60)
-
-(def every-interval
-  "Holds when the latest :looked entry (written by the look-around job, so it
-  survives a restart) is at least :seconds old. With none it holds at once,
-  so the first firing is not delayed. Once the job has written the entry it
-  stops holding, so there is no cooldown to wait out."
-  {:name :every-interval
-   :when (fn [_world memory args]
-           (let [last (:t (mem/latest memory :looked))]
-             (or (nil? last)
-                 (>= (- (:now memory) last) (* 1000 (:seconds args default-interval-s))))))
-   :job '(jobs.movement.look-around)
-   :args {:seconds default-interval-s}
-   :persistence :cooldown
-   :cooldown-s 0})
-
-(def night-and-bed-known
-  "Alias of night-unsafe under its old name, which the shipped scenarios
-  still register (they are not edited here). It now fires shelter."
-  (assoc night-unsafe/trigger :name :night-and-bed-known))
-
 (def all
   "Every trigger by name, listed in the order a survival scenario registers
   them (the register is ordered by the scenario, not by this map)."
   (into {} (map (juxt :name identity))
         [suffocating/suffocating burning/burning hostile-near health-low hungry/hungry
-         night-unsafe/trigger shut-in-by-day/trigger player-sleeping-nearby/trigger night-and-bed-known stuck/stuck died/died pen-gate/trigger
-         door-left/trigger inventory-nearly-full every-interval scaffold-left/trigger tidy-pending/trigger mounted/trigger player-joined/trigger]))
+         night-unsafe/trigger shut-in-by-day/trigger player-sleeping-nearby/trigger stuck/stuck died/died pen-gate/trigger
+         door-left/trigger inventory-nearly-full scaffold-left/trigger tidy-pending/trigger mounted/trigger player-joined/trigger]))

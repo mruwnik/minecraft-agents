@@ -1,25 +1,27 @@
 ;; Stay alive and otherwise idle. The reflexes are registered in priority
-;; order, most urgent first: air, fire, hostiles, health, food, night (shelter, then logging out when another player sleeps), being
-;; stuck, a door a walk left open, then a death's drops, then a full inventory. Between reflexes the
-;; body looks around, one look per round, so it visibly idles. A reflex job gets one chance: when its
-;; round declines or is done it is dropped, and the trigger fires it again once
-;; its cooldown (counted from the job ending) has passed. Hostiles sit above
-;; health: respond-to-hostile already flees when hurt and fights only when
-;; healthy (or cornered), so recover runs once no visible hostile is near.
-{:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12}
+;; order, most urgent first: air, fire, hostiles, night (the shelter, and getting out of it by day), health, food,
+;; logging out when another player sleeps, being stuck, a door a walk left open, then a death's drops, then a full
+;; inventory, then the safety nets: scaffold a job left (taken back only once its job is no longer live, so it
+;; never cuts the job that built it) and trespass digs to restore. Between reflexes the body looks around, one look per round, so it visibly idles. A reflex job that
+;; declines or is done is dropped, and the trigger fires it again once its cooldown (counted from the job ending)
+;; has passed; the dangers (air, fire) have none. A reflex job cut by a higher one is fired again by its trigger,
+;; whose condition holds until the work is done. Hostiles sit above health: respond-to-hostile already flees when
+;; hurt and fights only when healthy (or cornered), so recover runs once no visible hostile is near. The night sits
+;; above health and food: the shelter eats while it holds, and recover or get-food must not walk off at night.
+{:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 0 :args {:min-oxygen 12}
              :job (jobs.survival.breathe {:min-oxygen 12})}
-            {:trigger :burning :persistence :cooldown :cooldown-s 2
+            {:trigger :burning :persistence :cooldown :cooldown-s 0
              :job (jobs.survival.extinguish {:water-radius 6})}
             {:trigger :hostile-near :persistence :cooldown :cooldown-s 5 :args {:radius 8 :ranged-radius 16}
              :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}
-            {:trigger :health-low :persistence :cooldown :cooldown-s 10 :args {:health 7}
-             :job (jobs.survival.recover {:health 7 :healed 16 :sight 16})}
-            {:trigger :hungry :persistence :cooldown :cooldown-s 90 :args {:food 6 :food-when-hurt 14}
-             :job (jobs.survival.get-food {:food 6 :food-when-hurt 14})}
             {:trigger :night-unsafe :persistence :cooldown :cooldown-s 10 :args {:roof-height 4}
              :job (jobs.survival.shelter {:roof-height 4})}
             {:trigger :shut-in-by-day :persistence :cooldown :cooldown-s 10
              :job (jobs.survival.shelter {:roof-height 4})}
+            {:trigger :health-low :persistence :cooldown :cooldown-s 10 :args {:health 7 :healed 16}
+             :job (jobs.survival.recover {:health 7 :healed 16 :sight 16})}
+            {:trigger :hungry :persistence :cooldown :cooldown-s 90 :args {:food 6 :food-when-hurt 14}
+             :job (jobs.survival.get-food {:food 6 :food-when-hurt 14})}
             {:trigger :player-sleeping-nearby :persistence :cooldown :cooldown-s 30 :job (jobs.survival.log-out)}
             {:trigger :stuck :persistence :cooldown :cooldown-s 60
              :job (jobs.maintenance.unstick)}
@@ -28,5 +30,6 @@
              :job (jobs.survival.recover-drops {:collect-radius 6})}
             {:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 120 :args {:free 2}
              :job (jobs.storage.make-room {:free 4 :chest-range 32})}
+            {:trigger :scaffold-left :persistence :stop}
             {:trigger :tidy-pending :persistence :cooldown :cooldown-s 10}]
  :queue [(repeat (jobs.movement.look-around))]}

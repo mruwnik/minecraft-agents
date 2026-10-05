@@ -8,7 +8,12 @@
             [engine.scenario :as scenario]
             [engine.fake :as fake]
             [engine.test-util :as tu]
+            [engine.trigger-api :as trigger-api]
             [engine.triggers :as triggers]))
+
+(def all-triggers
+  "The shipped triggers plus the condition language, as a body has them (ad hoc :when entries)."
+  (trigger-api/with-conditions triggers/all trigger-api/compile-condition))
 
 (defn tree [x z height]
   (merge
@@ -22,11 +27,11 @@
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         p (tu/fake-on-floor world)
-        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+        eng (core/create {:primitives p :jobs registry/jobs :triggers all-triggers :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})
         s (scenario/read-file file)]
-    (is (= [] (scenario/problems registry/jobs triggers/all s)))
-    (core/load-scenario! eng s)
+    (is (= [] (scenario/problems registry/jobs all-triggers s)))
+    (trigger-api/load-scenario! eng s)
     {:eng eng :p p :seen seen :clock clock}))
 
 (defn ^:async run-ticks [eng clock n step-ms]
@@ -66,7 +71,7 @@
         (let [{:keys [eng p seen clock]} (boot "scenarios/pace-cuts.edn" {:self {:pos {:x -78 :y 69 :z -40}}})
               world (.-world p)]
           (await (core/tick! eng))
-          (is (= ["jobs.movement.look-around"] (vec (names-started seen))) "every-interval fires at once")
+          (is (= ["jobs.movement.look-around"] (vec (names-started seen))) "the look timer fires at once")
           (let [release (.hold world "moveTo")
                 pacing (core/tick! eng)]
             (swap! clock + 21000)
@@ -91,8 +96,8 @@
                                                 :self {:experience {:level 3 :points 40 :progress 0}}
                                                 :inventory [{:name "bread" :count 4}]})
               food #(:food (fake/self p))]
-          (is (= [:suffocating :burning :hostile-near :health-low :hungry :night-unsafe :shut-in-by-day :player-sleeping-nearby :stuck :door-left
-                  :died :inventory-nearly-full :tidy-pending]
+          (is (= [:suffocating :burning :hostile-near :night-unsafe :shut-in-by-day :health-low :hungry :player-sleeping-nearby :stuck :door-left
+                  :died :inventory-nearly-full :scaffold-left :tidy-pending]
                  (mapv :id (:register (core/state eng)))))
           (await (run-ticks eng clock 3 1000))
           (is (= [] (fired seen)) "a healthy body in daylight fires nothing")
@@ -136,7 +141,7 @@
               "no errors besides the death itself"))))))
 
 (def survival-cooldowns
-  {:suffocating 2 :burning 2 :health-low 10 :hostile-near 5 :hungry 90 :night-unsafe 10 :shut-in-by-day 10 :player-sleeping-nearby 30 :stuck 60 :door-left 5 :died 30 :inventory-nearly-full 120 :tidy-pending 10})
+  {:suffocating 0 :burning 0 :health-low 10 :hostile-near 5 :hungry 90 :night-unsafe 10 :shut-in-by-day 10 :player-sleeping-nearby 30 :stuck 60 :door-left 5 :died 30 :inventory-nearly-full 120 :tidy-pending 10})
 
 (deftest survival-triggers-wait-a-cooldown-after-their-job-ends
   (let [{:keys [eng]} (boot "scenarios/survival.edn" {})

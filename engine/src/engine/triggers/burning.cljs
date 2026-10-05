@@ -10,11 +10,11 @@
 
 (def burning
   "Holds when the body is on fire or in lava and has no fire_resistance
-  effect. After its job ends with the
-  body still burning, fires again after 2 s."
+  effect. A danger reflex: no cooldown (and extinguish has no backoff), so
+  a job that ends with the body still burning is fired again at once."
   {:name :burning
    :when (fn [world _memory _args] (burning? (.self world)))
    :job '(jobs.survival.extinguish)
    :args {}
    :persistence :cooldown
-   :cooldown-s 2})
+   :cooldown-s 0})

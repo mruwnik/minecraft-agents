@@ -10,6 +10,7 @@
             [engine.memory :as mem]
             [engine.scenario :as scenario]
             [engine.test-util :as tu]
+            [engine.trigger-api :as trigger-api]
             [engine.triggers :as triggers]
             [engine.world :as ew]
             [jobs.movement.look-around :as look-around]
@@ -523,7 +524,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p clock]} (setup {:entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 5 :y 64 :z 0}}]})]
-          (core/submit! eng (list 'jobs.survival.retreat {:radius 8 :clear-radius 8}) {})
+          (core/submit! eng (list 'jobs.survival.retreat {:radius 8}) {})
           (await (core/tick! eng))
           (is (< (.-x (.-pos (.self p))) 0) "moved away from the zombie, along x")
           (swap! clock + 6000)
@@ -536,7 +537,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 1 :y 64 :z 0}}]})]
           (.override (.-world p) "steer" (fn [_ _ _] (js/Promise.resolve #js {:status "timeout" :pose #js {}})))
-          (core/submit! eng (list 'jobs.survival.retreat {:radius 8 :clear-radius 8}) {})
+          (core/submit! eng (list 'jobs.survival.retreat {:radius 8}) {})
           (await (core/tick! eng))
           (is (= 1 (count (calls p "attack"))) "unarmed and nothing to seal with: the fist, not a repeated failed round")
           (is (empty? (filter #(= :retreat_blocked (:kind %)) @seen))))))))
@@ -573,13 +574,13 @@
           (is (some #(= :fired (:kind %)) @seen))
           (is (some #(= "jobs.survival.respond-to-hostile" (:name %)) @seen)))))))
 
-(deftest night-and-bed-known-fires-sleep
+(deftest night-unsafe-fires-sleep-with-a-known-bed
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:floor tu/walk-floor :time 14000 :blocks {"6,64,0" "red_bed"}})]
           (know-place! eng :bed {:x 6 :y 64 :z 0})
-          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night-and-bed-known}]}"))
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night-unsafe}]}"))
           (await (run-until-empty eng 1))
           (await (core/tick! eng))
           (is (= 1 (count (calls p "sleep")))))))))
@@ -601,7 +602,7 @@
 (deftest woodcutter-scenario-is-valid-and-registers-the-library
   (let [s (scenario/parse (fs/readFileSync "scenarios/woodcutter.edn" "utf8"))]
     (is (= [] (scenario/problems registry/jobs triggers/all s)))
-    (is (= [:hostile-near :health-low :night-and-bed-known] (mapv :trigger (:register s))))
+    (is (= [:hostile-near :night-unsafe :health-low] (mapv :trigger (:register s))) "the night above health")
     (is (= '[jobs.forestry.harvest-wood jobs.storage.deposit] (mapv first (:queue s))))))
 
 ;; ---------------------------------------------------------------------- pace
@@ -644,7 +645,7 @@
           (is (= [] (:list (core/state eng))))
           (is (= 12 (count (tu/walked-to eng)))))))))
 
-;; ------------------------------------------------- look-around, every-interval
+;; ------------------------------------------------------------- look-around
 
 (deftest look-around-looks-once-and-records-when
   (async done
@@ -671,52 +672,34 @@
   (let [here {:x 0 :y 64 :z 0}]
     (is (not= (look-around/look-point here 0.1 0.2) (look-around/look-point here 0.6 0.9)))))
 
-(def interval-ms 45000)
-
 (defn view-with
   "A memory view at now-ms holding one entry of kind written at t, or none."
   [kind t data now-ms]
   {:data (if t (mem/add-entry mem/empty-data kind {:t t :data data} mem/place-policy) mem/empty-data)
    :now now-ms})
 
-(defn holds-with [last now-ms]
-  ((:when triggers/every-interval) nil (view-with :looked last {} now-ms) {:seconds 45}))
+(def look-timer-45
+  '{:id :look-timer :when (or (not (known? (since :looked))) (>= (since :looked) 45)) :job (jobs.movement.look-around)})
 
-(deftest every-interval-holds-without-a-record-and-after-the-interval
-  (is (true? (holds-with nil 1000)) "no record: fire at once")
-  (is (false? (holds-with 1000 (+ 1000 interval-ms -1))))
-  (is (true? (holds-with 1000 (+ 1000 interval-ms))))
-  (is (true? (holds-with 1000 (+ 1000 (* 2 interval-ms))))))
+(deftest there-is-no-timer-trigger
+  (is (nil? (get triggers/all :every-interval)))
+  (is (nil? (get triggers/all :night-and-bed-known))))
 
-(deftest every-interval-survives-a-restart-through-body-memory
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [dir (tu/tmp-dir)
-              {:keys [eng p clock]} (setup {} dir)
-              spec "{:register [{:trigger :every-interval :args {:seconds 45}}]}"]
-          (core/load-scenario! eng (scenario/parse spec))
-          (await (core/tick! eng))
-          (is (= 1 (count (calls p "look"))))
-          (is (nil? (core/tick! eng)) "recorded: the trigger stopped holding, so no refire")
-          (let [{again :eng p2 :p clock2 :clock} (setup {} dir)]
-            (is (nil? (core/tick! again)) "the record was restored from disk")
-            (reset! clock2 (+ @clock interval-ms))
-            (await (core/tick! again))
-            (is (= 1 (count (calls p2 "look"))))))))))
+(def with-conditions (trigger-api/with-conditions triggers/all trigger-api/compile-condition))
 
-(deftest woodcutter-cuts-scenario-puts-every-interval-on-top
+(deftest woodcutter-cuts-scenario-puts-a-look-timer-on-top
   (let [s (scenario/parse (fs/readFileSync "scenarios/woodcutter-cuts.edn" "utf8"))
         base (scenario/parse (fs/readFileSync "scenarios/woodcutter.edn" "utf8"))]
-    (is (= [] (scenario/problems registry/jobs triggers/all s)))
-    (is (= {:trigger :every-interval :args {:seconds 45}} (first (:register s))))
+    (is (= [] (scenario/problems registry/jobs with-conditions s)))
+    (is (= look-timer-45 (first (:register s))))
     (is (= (:register base) (rest (:register s))))
     (is (= (:queue base) (:queue s)))))
 
-(deftest pace-cuts-scenario-puts-every-interval-first-and-queues-pace
+(deftest pace-cuts-scenario-puts-a-look-timer-first-and-queues-pace
   (let [s (scenario/parse (fs/readFileSync "scenarios/pace-cuts.edn" "utf8"))]
-    (is (= [] (scenario/problems registry/jobs triggers/all s)))
-    (is (= [:every-interval :hostile-near :health-low] (mapv :trigger (:register s))))
+    (is (= [] (scenario/problems registry/jobs with-conditions s)))
+    (is (= [:look-timer nil nil] (mapv :id (:register s))))
+    (is (= [nil :hostile-near :health-low] (mapv :trigger (:register s))))
     (is (= '[jobs.movement.pace] (mapv first (:queue s))))))
 
 (deftest fell-tree-keeps-walking-on-a-partial-move-instead-of-digging

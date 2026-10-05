@@ -5,7 +5,7 @@
 (def doc
   "Face a point look-ahead blocks away in a random direction (any yaw, a
   height up to a block below or 1.5 above the body), write a :looked entry to body
-  memory (which the :every-interval trigger reads), then wait :every-ms before
+  memory (a condition can read it: (since :looked)), then wait :every-ms before
   the next round, so an idle body does not spin.")
 
 (def args

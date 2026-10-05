@@ -31,6 +31,11 @@
   gives up. Each round writes an :extinguish entry with position and cause (cap 20,
   1 hour). Done once the body is neither on fire nor in lava.")
 
+(def backoff
+  "Off: a danger reflex (rule: no cooldown and no backoff while the danger lasts); fruitless rounds while no water or safe cell is
+  in reach must not mute it."
+  false)
+
 (def args
   {:water-radius {:doc "on fire, water within this many blocks is walked into" :default 6}
    :step {:doc "candidate cells lie within this many blocks (horizontally) of the body" :default 4}

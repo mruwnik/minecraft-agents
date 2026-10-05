@@ -3,7 +3,6 @@
             [engine.condition :as c]
             [engine.condition.facts :as facts]
             [engine.memory :as mem]
-            [engine.triggers :as triggers]
             [engine.test-util :as tu]))
 
 (def ? c/unknown)
@@ -409,23 +408,6 @@
 
 (deftest since-does-not-see-an-expired-entry
   (is (= ? (value '(> (since :looked) 0) (env (tu/fake) (memory-at 7200000 :looked [1000] {:cap 5 :ttl 3600000}))))))
-
-(deftest since-agrees-with-the-every-interval-trigger
-  (let [form '(or (not (known? (since :looked))) (>= (since :looked) 60))
-        both (fn [now ts]
-               (let [m (memory-at now :looked ts mem/place-policy)]
-                 [((:when triggers/every-interval) nil m {:seconds 60})
-                  (value form (env (tu/fake) m))]))]
-    (are [now ts] (let [[trigger cond] (both now ts)] (= trigger cond))
-      1000 []
-      60999 [1000]
-      61000 [1000]
-      61001 [1000]
-      200000 [1000 150000]
-      209000 [1000 150000]
-      210000 [1000 150000])
-    (is (= [[true true] [false false] [true true]]
-           [(both 1000 []) (both 60999 [1000]) (both 61000 [1000])]))))
 
 (deftest since-takes-one-keyword-literal
   (are [form reason at] (let [r (refusal form)]

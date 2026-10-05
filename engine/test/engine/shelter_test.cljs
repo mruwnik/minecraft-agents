@@ -156,7 +156,35 @@
   (let [t (get triggers/all :night-unsafe)]
     (is (= '(jobs.survival.shelter) (:job t)))
     (is (= 4 (get-in t [:args :roof-height])))
-    (is (= (dissoc t :name) (dissoc (get triggers/all :night-and-bed-known) :name)) "the old name is an alias")))
+    (is (nil? (get triggers/all :night-and-bed-known)) "the old alias is gone")))
+
+(def own-shelter {:pos {:x 0 :y 64 :z 0} :roof {:x 0 :y 66 :z 0} :state :built})
+
+(deftest night-unsafe-holds-at-night-while-shut-in-its-own-shelter
+  (let [{:keys [eng]} (setup {})
+        holds? (fn [world] (boolean ((:when (get triggers/all :night-unsafe)) (tu/fake world) (mem/view (:store eng)) {})))]
+    (mem/write! (:store eng) :shelter own-shelter {:cap 10 :ttl day-ms})
+    (is (holds? {:time night :blocks {"0,66,0" "stone"}}) "the night's work is not done: the shelter holds the body")
+    (is (not (holds? {:time night :blocks {"0,66,0" "stone"} :self {:isSleeping true}})) "asleep")
+    (is (not (holds? {:time noon :blocks {"0,66,0" "stone"}})) "by day it is shut-in-by-day's")
+    (is (not (holds? {:time night :blocks {"0,66,0" "stone" "3,66,0" "stone"} :self {:pos {:x 3 :y 64 :z 0}}}))
+        "roofed elsewhere, out of its shelter")))
+
+;; A shelter cut after it dug in (a higher reflex) is fired again by night-unsafe and holds from its first round,
+;; eating as it holds, rather than ending :done and leaving the night to the hungry reflex.
+(deftest a-fresh-shelter-in-its-own-shelter-holds-the-night-and-eats
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:time night :blocks {"0,66,0" "stone"} :self {:food 4}
+                                           :inventory [{:name "bread" :count 2}]})]
+          (mem/write! (:store eng) :shelter own-shelter {:cap 10 :ttl day-ms})
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night-unsafe} {:trigger :hungry}]}"))
+          (await (tick-n eng 4))
+          (is (= [:night-unsafe] (mapv :reflex (filterv #(= [:reflex :fired] [(:source %) (:kind %)]) @seen)))
+              "the shelter holds; the hungry reflex below it does not get the body")
+          (is (seq (emitted seen :shelter.ate)) "the shelter ate while holding")
+          (is (empty? (filterv #(= [:reflex :ended :night-unsafe] [(:source %) (:kind %) (:reflex %)]) @seen))))))))
 
 ;; -------------------------------------------------------------------- sleep
 

@@ -1,10 +1,12 @@
 ;; The woodcutter scenario plus a look-around every 45 s, first in the register,
-;; so the reflex cuts the running job on a schedule.
+;; so the reflex cuts the running job on a schedule. The schedule is an ad hoc
+;; condition on the :looked entry look-around writes (there is no timer trigger).
 ;; Cut and replant oak, then put the wood in a known chest. Deposit declines
 ;; until body memory has a :chest entry, and sleep needs a :bed entry.
-{:register [{:trigger :every-interval :args {:seconds 45}}
+{:register [{:id :look-timer :when (or (not (known? (since :looked))) (>= (since :looked) 45))
+             :job (jobs.movement.look-around)}
             {:trigger :hostile-near}
-            {:trigger :health-low}
-            {:trigger :night-and-bed-known}]
+            {:trigger :night-unsafe}
+            {:trigger :health-low}]
  :queue [(jobs.forestry.harvest-wood {:species "oak" :radius 16})
          (jobs.storage.deposit)]}

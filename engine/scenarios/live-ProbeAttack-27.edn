@@ -1,4 +1,4 @@
 ;; batch-craft live: give 5 bread while a look-around reflex cuts every 3 s; ProbeMove's inventory is full at the toss and emptied 12 s later, so the drop lies through several cuts before it is taken
-{:register [{:trigger :every-interval :args {:seconds 3} :job (jobs.movement.look-around {:every-ms 300})}]
+{:register [{:id :look-timer :when (or (not (known? (since :looked))) (>= (since :looked) 3)) :job (jobs.movement.look-around {:every-ms 300})}]
  :queue [(hold (seq (jobs.movement.look-around {:every-ms 2000})
                     (jobs.items.give {:player "ProbeMove" :item "bread" :count 5 :wait-s 30})))]}

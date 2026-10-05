@@ -35,6 +35,11 @@
   :no_way_out warn) after three failed rounds when drowning with no air in reach; the
   suffocating trigger then fires it again.")
 
+(def backoff
+  "Off: a danger reflex (rule: no cooldown and no backoff while the danger lasts); fruitless rounds while air is
+  out of reach must not mute it."
+  false)
+
 (def args
   {:min-oxygen {:doc "oxygen (of 20) below which being in water with the head submerged is drowning"
                 :default s/default-min-oxygen}

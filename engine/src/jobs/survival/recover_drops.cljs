@@ -1,5 +1,6 @@
 (ns jobs.survival.recover-drops
   (:require [engine.ctx :as ctx]
+            [engine.jobs.reach :as reach]
             [engine.jobs.util :as u]
             [engine.triggers.died :as died]
             [engine.value :as value]))
@@ -19,10 +20,14 @@
   up as :abandoned when the point is unreachable, nothing is left there, or
   the five minute despawn window closes. Nothing is decided or walked until
   a :respawned entry newer than the death exists (the body is alive again); the
-  window still closes meanwhile. A hostile within :danger-radius
-  makes the round yield without acting, so a reflex can deal with it; the
-  trip resumes afterwards. The check holds while a death is unrecovered,
-  however old, so an expired trip still gets to write :abandoned.")
+  window still closes meanwhile. A real danger (engine.jobs.reach/nearest-danger: a mob that can reach the body, or a
+  ranged one with a line of fire) within :danger-radius makes the round yield without acting, so a reflex can deal
+  with it; a walled-off mob does not. The check holds while a death is unrecovered,
+  however old, so an expired trip still gets to write :abandoned.
+  Restart-safe: the decision, the baseline of carried items and the phase live in a :recover-trip body-memory entry
+  keyed to the death, not only in job memory, so a run cut by a higher reflex (and fired again by the died trigger,
+  which holds until :recovered is written) or a restarted body goes on with the same trip: what was picked up before
+  the cut still counts.")
 
 (def args
   {:margin {:doc "added to the retrieval cost before comparing it to the value" :default 0}
@@ -36,6 +41,7 @@
   2000)
 (def day-ms (* 24 60 60 1000))
 (def recovered-policy {:cap 10 :ttl day-ms})
+(def trip-policy {:cap 1 :ttl value/despawn-ms})
 
 (defn check [c] (some? (died/unrecovered-death (ctx/view c))))
 
@@ -66,11 +72,25 @@
                   (> (:t respawned) (:t entry))
                   (< (- (ctx/now c) (:t respawned)) settle-ms)))))
 
+(defn saved-trip
+  "The :recover-trip entry's data for the death at death-t, else nil."
+  [c death-t]
+  (let [trip (:data (ctx/latest c :recover-trip))]
+    (when (= death-t (:death-t trip)) trip)))
+
 (defn key-to-death!
-  "Reset the job memory when it belongs to another death than entry."
+  "Reset the job memory when it belongs to another death than entry: start from the saved trip of this death (a run
+  cut before, or a restart), else afresh."
   [c entry]
   (when (not= (:t entry) (:death-t (ctx/mem c)))
-    (ctx/update-mem! c (constantly {:death-t (:t entry)}))))
+    (ctx/update-mem! c (constantly (merge {:death-t (:t entry)}
+                                          (select-keys (saved-trip c (:t entry)) [:decided :baseline :phase]))))))
+
+(defn save-trip!
+  "Write the trip so far (job memory :decided :baseline :phase) to the :recover-trip entry."
+  [c]
+  (let [m (ctx/mem c)]
+    (ctx/remember! c :recover-trip (select-keys m [:death-t :decided :baseline :phase]) trip-policy)))
 
 (defn entity-positions [p radius kind max]
   (map (fn [e] (u/pos-of (.-pos e))) (array-seq (.entities p #js {:radius radius :kind kind :max max}))))
@@ -87,7 +107,7 @@
     (cond
       (not= :done r) :continue
       (not (:arrived (ctx/child-result c :go))) (finish! c :abandoned (assoc (:decided (ctx/mem c)) :reason :unreachable))
-      :else (do (ctx/update-mem! c assoc :phase :collect) :continue))))
+      :else (do (ctx/update-mem! c assoc :phase :collect) (save-trip! c) :continue))))
 
 (defn carried-counts
   "{item name total} of what the body carries."
@@ -118,7 +138,7 @@
   (let [{:keys [margin danger-radius collect-radius]} (:args c)
         entry (died/unrecovered-death (ctx/view c))
         elapsed (- (ctx/now c) (:t entry))
-        threatened? (seq (entity-positions (:primitives c) danger-radius "hostile" 1))]
+        threatened? (some? (reach/nearest-danger (:primitives c) danger-radius {} {}))]
     (when entry (key-to-death! c entry))
     (cond
       (nil? entry) :done
@@ -131,6 +151,7 @@
                         (let [e (estimate c (:data entry) elapsed)]
                           (ctx/update-mem! c assoc :decided {:value (:value e) :cost (finite (:cost e))}
                                            :baseline (carried-counts c))
+                          (save-trip! c)
                           {:value (:value e) :cost (finite (:cost e))}))
             pos (:pos (:data entry))]
         (cond

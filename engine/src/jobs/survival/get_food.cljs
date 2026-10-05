@@ -291,7 +291,10 @@
 
 (defn none! [c]
   (let [food (.-food (.self (:primitives c)))]
-    (ctx/emit! c :food.none :warn {:food food :text (none-text c)})
+    (ctx/emit! c :food.none :warn {:food food
+                                   :text (str (none-text c) "; the hungry reflex rests for "
+                                              (js/Math.round (/ (:ask-cooldown-ms (:args c)) 60000))
+                                              " min unless food is carried, wheat to bake is, or a food source is learned")})
     (ctx/remember! c :hungry {:food food} hungry-policy)
     :done))
 

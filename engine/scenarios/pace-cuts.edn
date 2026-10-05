@@ -1,7 +1,9 @@
-;; A long, harmless job under the every-interval reflex, first in the register.
+;; A long, harmless job under a look-around every 20 s (an ad hoc condition on
+;; the :looked entry look-around writes), first in the register.
 ;; The coordinates are inside the ClaudeProbe test cell; the scenario exists to
 ;; show a reflex cutting a long round (pace walks between two points).
-{:register [{:trigger :every-interval :args {:seconds 20}}
+{:register [{:id :look-timer :when (or (not (known? (since :looked))) (>= (since :looked) 20))
+             :job (jobs.movement.look-around)}
             {:trigger :hostile-near}
             {:trigger :health-low}]
  :queue [(jobs.movement.pace {:a {:x -80 :y 69 :z -41} :b {:x -76 :y 69 :z -38} :laps 3 :rounds 12})]}

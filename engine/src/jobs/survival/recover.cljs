@@ -2,7 +2,8 @@
   (:require [engine.ctx :as ctx]
             [engine.jobs.util :as u]
             [engine.memory :as mem]
-            [engine.jobs.combat :as combat]))
+            [engine.jobs.combat :as combat]
+            [engine.triggers.hungry :as hungry]))
 
 (def doc
   "A hurt body flees and heals; it does not fight. Starts when health is
@@ -15,7 +16,10 @@
   carrying food, then wait idle-ms (2 s) per round so health regenerates. Done once health reaches :healed.
   Health only regenerates at 18 food or more, so below that with nothing to
   eat it gives up (a warn of kind cannot_heal) instead of holding the body.
-  One :hurt entry is written per spell.")
+  One :hurt entry is written per spell, and a :heal-ended entry {:why :healed|:cannot-heal} when it ends: the
+  health-low trigger fires recover again while a spell is under way (a recover cut by a higher reflex resumes from
+  scratch, nothing kept in job memory but the once-per-spell latch), and rests after :cannot-heal until food is
+  carried or food reaches 18.")
 
 (def args
   {:health {:doc "start recovering when health is below this" :default 7}
@@ -35,11 +39,6 @@
 (def regen-food
   "Natural regeneration needs at least this much food."
   18)
-
-(def food-names
-  #{"cooked_beef" "cooked_porkchop" "cooked_mutton" "cooked_chicken" "cooked_rabbit" "cooked_salmon" "cooked_cod"
-    "bread" "baked_potato" "carrot" "golden_carrot" "apple" "golden_apple" "sweet_berries" "melon_slice"
-    "beef" "porkchop" "mutton" "chicken" "potato" "pumpkin_pie" "mushroom_stew" "beetroot" "cookie"})
 
 (defn health-of [c] (.-health (.self (:primitives c))))
 
@@ -61,8 +60,18 @@
       (mem/place (ctx/view c) :home)
       (u/self-pos c)))
 
-(defn has-food? [c]
-  (boolean (some (comp food-names :name) (u/inventory (:primitives c)))))
+(defn has-food?
+  "Carries something jobs.survival.eat {} would eat (the trigger's own test)."
+  [c]
+  (hungry/carries-food? (.self (:primitives c))))
+
+(def heal-ended-policy {:cap 5 :ttl (* 60 60 1000)})
+
+(defn ended!
+  "End the spell: a :heal-ended entry saying why, then :done."
+  [c why]
+  (ctx/remember! c :heal-ended {:why why :health (health-of c)} heal-ended-policy)
+  :done)
 
 (defn start-spell!
   "Once per spell (a job instance), record why we are hurt."
@@ -89,7 +98,7 @@
   (let [{:keys [sight healed]} (:args c)
         threat (first (combat/hostiles (:primitives c) sight))]
     (cond
-      (>= (health-of c) healed) :done
+      (>= (health-of c) healed) (ended! c :healed)
       :else
       (do (start-spell! c threat)
           (if (= :continue (await (flee! c threat sight)))
@@ -99,9 +108,11 @@
               (do (when (and (< (.-food (.self (:primitives c))) 20) (has-food? c))
                     (await (ctx/call-child c :eat 'jobs.survival.eat {})))
                   (cond
-                    (>= (health-of c) healed) :done
+                    (>= (health-of c) healed) (ended! c :healed)
                     (and (< (.-food (.self (:primitives c))) regen-food) (not (has-food? c)))
-                    (do (ctx/emit! c :cannot_heal :warn {:text "too hungry to regenerate and nothing to eat"})
-                        :done)
+                    (do (ctx/emit! c :cannot_heal :warn {:text (str "too hungry to regenerate and nothing to eat; the "
+                                                                    "health-low reflex rests until food is carried or "
+                                                                    "food reaches " regen-food)})
+                        (ended! c :cannot-heal))
                     :else (do (await (ctx/act c :wait #js {:ms idle-ms}))
                               :continue)))))))))

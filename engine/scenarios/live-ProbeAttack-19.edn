@@ -1,4 +1,4 @@
 ;; batch-craft live: items.craft cut by a look-around reflex every 6 s while walking 20 blocks to a table and crafting 40 bread; it resumes and finishes
-{:register [{:trigger :every-interval :args {:seconds 6} :job (jobs.movement.look-around {:every-ms 500})}]
+{:register [{:id :look-timer :when (or (not (known? (since :looked))) (>= (since :looked) 6)) :job (jobs.movement.look-around {:every-ms 500})}]
  :queue [(hold (seq (jobs.movement.look-around {:every-ms 4500})
                     (jobs.items.craft {:item "bread" :count 40})))]}

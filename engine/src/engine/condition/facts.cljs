@@ -55,8 +55,8 @@
 
 (defn seconds-since
   "Seconds from the latest unexpired entry of kind to the view's now, or
-  unknown when there is none. The clock and the entry are the ones the
-  :every-interval trigger uses."
+  unknown when there is none. The clock is the view's :now, the one body memory
+  stamps entries with."
   [view kind]
   (if-let [t (:t (mem/latest view kind))]
     (/ (- (:now view) t) 1000)

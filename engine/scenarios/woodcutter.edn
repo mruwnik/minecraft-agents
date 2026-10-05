@@ -1,7 +1,7 @@
 ;; Cut and replant oak, then put the wood in a known chest. Deposit declines
 ;; until body memory has a :chest entry, and sleep needs a :bed entry.
 {:register [{:trigger :hostile-near}
-            {:trigger :health-low}
-            {:trigger :night-and-bed-known}]
+            {:trigger :night-unsafe}
+            {:trigger :health-low}]
  :queue [(jobs.forestry.harvest-wood {:species "oak" :radius 16})
          (jobs.storage.deposit)]}

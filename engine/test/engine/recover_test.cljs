@@ -202,6 +202,70 @@
   (is (false? (holds? 7 {:health 7})))
   (is (true? (holds? 9 {:health 10}))))
 
+(defn view-with [now & entries]
+  {:data (reduce (fn [d [kind t data]] (mem/add-entry d kind {:t t :data data} nil)) mem/empty-data entries)
+   :now now})
+
+(defn holds-with? [self inventory view]
+  ((:when triggers/health-low) (tu/fake {:self self :inventory inventory}) view {}))
+
+(deftest health-low-holds-until-a-started-spell-is-healed
+  (let [hurt [:hurt (- t0 minute) {:health 5}]]
+    (is (true? (holds-with? {:health 10} [] (view-with t0 hurt))) "a spell under way, not yet healed")
+    (is (false? (holds-with? {:health 16} [] (view-with t0 hurt))) "healed")
+    (is (false? (holds-with? {:health 10} [] (view-with t0 hurt [:heal-ended (- t0 1000) {:why :healed}])))
+        "the spell ended")
+    (is (false? (holds-with? {:health 10} [] (view-with (+ t0 (* 10 minute)) hurt))) "an old spell")))
+
+(deftest health-low-rests-after-recover-gave-up-until-healing-can-work
+  (let [gave-up [:heal-ended (- t0 1000) {:why :cannot-heal}]]
+    (is (false? (holds-with? {:health 5 :food 10} [] (view-with t0 gave-up))) "nothing to eat, no regeneration")
+    (is (true? (holds-with? {:health 5 :food 10} [{:name "bread" :count 1}] (view-with t0 gave-up))) "food carried")
+    (is (true? (holds-with? {:health 5 :food 18} [] (view-with t0 gave-up))) "fed enough to regenerate")))
+
+(deftest a-cut-recover-fires-again-and-heals-to-the-end
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen clock]} (setup {:self {:health 5}})
+              fired #(vec (keep (fn [e] (when (= [:reflex :fired] [(:source e) (:kind e)]) (:reflex e))) @seen))]
+          (core/register-reflex! eng {:trigger :burning})
+          (core/register-reflex! eng {:trigger :health-low})
+          (await (core/tick! eng))
+          (fake/swap-self! p assoc :onFire true :health 10)
+          (await (core/tick! eng))
+          (fake/swap-self! p assoc :onFire false)
+          (dotimes [_ 5]
+            (swap! clock + 1000)
+            (await (core/tick! eng)))
+          (is (= [:health-low :burning :health-low] (take 3 (fired))) "health 10 after the cut: the spell goes on")
+          (fake/swap-self! p assoc :health 16)
+          (dotimes [_ 3]
+            (swap! clock + 1000)
+            (await (core/tick! eng)))
+          (is (= :healed (:why (:data (mem/latest (mem/view (:store eng)) :heal-ended)))))
+          (swap! clock + 20000)
+          (fake/swap-self! p assoc :health 12)
+          (await (core/tick! eng))
+          (is (= [:health-low :burning :health-low] (fired)) "a finished spell is not resumed"))))))
+
+(deftest a-recover-that-gave-up-is-not-fired-again-while-nothing-changed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen clock]} (setup {:self {:health 5 :food 10}})
+              fired #(count (filter (fn [e] (= [:reflex :fired :health-low] [(:source e) (:kind e) (:reflex e)])) @seen))]
+          (core/register-reflex! eng {:trigger :health-low})
+          (dotimes [_ 60]
+            (swap! clock + 1000)
+            (await (core/tick! eng)))
+          (is (= 1 (fired)) "gave up once; a minute on it has not fired again")
+          (is (re-find #"until" (:text (first (filter #(= :cannot_heal (:kind %)) @seen)))) "the warn says what wakes it")
+          (fake/add-item! p "bread" 2)
+          (swap! clock + 1000)
+          (await (core/tick! eng))
+          (is (= 2 (fired)) "food at hand: it fires again"))))))
+
 (deftest health-low-runs-recover-by-default
   (is (= '(jobs.survival.recover) (:job triggers/health-low))))
 

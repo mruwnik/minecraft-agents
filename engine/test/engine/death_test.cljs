@@ -339,6 +339,41 @@
           (await (run-until-empty eng 10))
           (is (= :collected (:decision (recovered eng)))))))))
 
+;; ------------------------------------------- cut by a higher reflex, fired again
+
+(defn ^:async tick-n! [eng clock n]
+  (dotimes [_ n]
+    (swap! clock + 500)
+    (await (core/tick! eng))))
+
+(defn fired-reflexes [seen]
+  (keep #(when (= [:reflex :fired] [(:source %) (:kind %)]) (:reflex %)) @seen))
+
+;; The owner's case: a death trip cut by a higher reflex resumes once that reflex ends, because the died trigger
+;; still holds; the fresh recover-drops keeps the decision and the baseline taken before the cut, so what was
+;; picked up on the walk still counts.
+(deftest recover-drops-fires-again-after-a-higher-reflex-cuts-it-and-keeps-its-trip
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen clock]} (setup {:floor tu/walk-floor :entities drops})
+              iron [{:name "raw_iron" :count 20 :slot 0}]]
+          (core/register-reflex! eng {:trigger :burning})
+          (core/register-reflex! eng {:trigger :died})
+          (die! eng {:pos death-pos :inventory iron})
+          (loop [n 0]
+            (when (and (< n 30) (empty? (tu/walk-calls p)))
+              (await (core/tick! eng))
+              (recur (inc n))))
+          (swap! (fake/state p) #(-> % (assoc :entities []) (assoc :inventory [{:name "raw_iron" :count 20}])))
+          (fake/swap-self! p assoc :onFire true)
+          (await (core/tick! eng))
+          (is (= [:died :burning] (vec (fired-reflexes seen))) "burning cuts the trip")
+          (fake/swap-self! p assoc :onFire false)
+          (await (tick-n! eng clock 20))
+          (is (= [:died :burning :died] (vec (take 3 (fired-reflexes seen)))) "the died trigger fires the trip again")
+          (is (= {:decision :collected :items 20} (select-keys (recovered eng) [:decision :items]))))))))
+
 ;; ------------------------------------------- keyed to the death, settling, reporting
 
 (def second-death-pos {:x -30 :y 64 :z 0})

@@ -61,6 +61,47 @@
     (is (not (holds? {:food 18})))
     (is (holds? {:food 10 :health 12}))))
 
+;; ------------------------------------------- the hungry reflex with nothing to eat
+
+(defn hungry-fired [seen]
+  (filterv #(and (= [:reflex :fired] [(:source %) (:kind %)]) (= :hungry (:reflex %))) @seen))
+
+(defn ^:async tick-for! [eng clock seconds]
+  (dotimes [_ seconds]
+    (swap! clock + 1000)
+    (await (core/tick! eng))))
+
+;; Owner: eat "should not continuously fire with no food at hand". After get-food finds nothing (food.none, which
+;; says why), the trigger rests: not every tick, not every cooldown.
+(deftest hungry-reflex-rests-after-finding-no-food-and-says-why
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen clock]} (setup {:self {:food 3}})]
+          (core/register-reflex! eng {:trigger :hungry})
+          (await (tick-for! eng clock 5))
+          (is (= 1 (count (hungry-fired seen))))
+          (let [none (filterv #(= :food.none (:kind %)) @seen)]
+            (is (= 1 (count none)))
+            (is (re-find #"hungry reflex rests" (:text (first none))) "the agent is told why it stops"))
+          (await (tick-for! eng clock 300))
+          (is (= 1 (count (hungry-fired seen))) "five minutes on, no food at hand: not fired again"))))))
+
+(deftest hungry-reflex-wakes-when-food-is-carried-or-learned-or-the-rest-ends
+  (let [when-fn (:when (get triggers/all :hungry))
+        gave-up {:food 3}
+        view (fn [now & entries]
+               {:data (reduce (fn [d [kind t data]] (mem/add-entry d kind {:t t :data data} nil)) mem/empty-data entries)
+                :now now})
+        holds? (fn [inventory memory] (when-fn (tu/fake {:self {:food 3} :inventory inventory}) memory {}))]
+    (is (holds? [] (view 1000)) "never gave up")
+    (is (not (holds? [] (view 100000 [:hungry 1000 gave-up]))) "gave up 99 s ago, nothing at hand")
+    (is (holds? [{:name "bread" :count 1}] (view 100000 [:hungry 1000 gave-up])) "food carried")
+    (is (holds? [{:name "wheat" :count 3}] (view 100000 [:hungry 1000 gave-up])) "bread can be baked")
+    (is (holds? [] (view 100000 [:hungry 1000 gave-up] [:food-source 2000 {:pos {:x 1 :y 64 :z 1} :kind :farm}]))
+        "a source learned since")
+    (is (holds? [] (view 602000 [:hungry 1000 gave-up])) "the rest is over")))
+
 ;; ---------------------------------------------------------------- eat
 
 (deftest eat-picks-the-best-food-and-writes-fed
