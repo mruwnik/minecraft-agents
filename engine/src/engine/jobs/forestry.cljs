@@ -25,29 +25,40 @@
 (defn scan-logs [p radius species]
   (scan p radius (if species #(= % (str species "_log")) log-name?)))
 
-(defn find-tree
-  "The nearest log column whose top log has leaves close by, as
-  {:column {:x :z} :base pos :species name}, or nil. logs and leaves come
-  nearest first from scan; columns in excluded (a set of [x z]) are skipped."
+(defn find-trees
+  "The log columns whose top log has leaves close by, nearest first (lazily), each as
+  {:column {:x :z} :base pos :species name}. logs and leaves come nearest first from scan; columns in excluded (a set
+  of [x z]) are skipped."
   [logs leaves excluded]
   (let [logs (remove (fn [{:keys [pos]}] (excluded [(:x pos) (:z pos)])) logs)
         columns (group-by (fn [{:keys [pos]}] [(:x pos) (:z pos)]) logs)
         tree? (fn [col]
                 (let [top (apply max-key #(get-in % [:pos :y]) col)]
                   (some #(<= (u/dist (:pos top) (:pos %)) leaf-reach) leaves)))]
-    (some (fn [{:keys [pos]}]
-            (let [col (get columns [(:x pos) (:z pos)])]
+    (keep (fn [[x z :as k]]
+            (let [col (get columns k)]
               (when (tree? col)
                 (let [base (apply min-key #(get-in % [:pos :y]) col)]
-                  {:column {:x (:x pos) :z (:z pos)}
+                  {:column {:x x :z z}
                    :base (:pos base)
                    :species (species-of (:name base))}))))
-          logs)))
+          (distinct (map (fn [{:keys [pos]}] [(:x pos) (:z pos)]) logs)))))
+
+(defn find-tree
+  "The nearest tree of find-trees, or nil."
+  [logs leaves excluded]
+  (first (find-trees logs leaves excluded)))
+
+(defn trees-near
+  "The trees of species (any when nil) within radius, nearest first (find-trees)."
+  ([p radius species] (trees-near p radius species #{}))
+  ([p radius species excluded]
+   (find-trees (scan-logs p radius species) (scan p (+ radius 4) leaves-name?) excluded)))
 
 (defn tree-near
   ([p radius species] (tree-near p radius species #{}))
   ([p radius species excluded]
-   (find-tree (scan-logs p radius species) (scan p (+ radius 4) leaves-name?) excluded)))
+   (first (trees-near p radius species excluded))))
 
 (def max-column
   "How far up a column logs-at looks, in blocks."

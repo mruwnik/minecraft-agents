@@ -139,6 +139,38 @@
               "no debt for the tree that was never felled")
           (is (not-any? #(= :tree_blocked (:kind %)) @seen)))))))
 
+(defn ring
+  "A 3-high stone ring round the column x z, 4 out (on a floor of its own): nothing walks in or out."
+  [x z]
+  (into {} (for [dx (range -4 5) dz (range -4 5)
+                 :when (or (= 4 (abs dx)) (= 4 (abs dz)))
+                 y [63 64 65 66]]
+             [(str (+ x dx) "," y "," (+ z dz)) "stone"])))
+
+(defn moved-entries [eng] (mem/entries (mem/view (:store eng)) :moved))
+
+(deftest fell-tree-passes-over-a-walled-off-nearest-tree-for-a-reachable-farther-one
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:blocks (merge (tree 8 0 "oak" 3) (ring 8 0) (tree 20 0 "oak" 3))})]
+          (core/submit! eng (list 'jobs.forestry.fell-tree {:radius 30}) {})
+          (await (core/tick! eng))
+          (is (= [20] (dig-xs p)) "the first round walks to the reachable tree and digs its base log")
+          (is (every? #(= "arrived" (get-in % [:data :status])) (moved-entries eng)) "no walk toward the walled-off tree"))))))
+
+(deftest fell-tree-with-every-tree-walled-off-warns-without-walking
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:blocks (merge (tree 8 0 "oak" 3) (ring 8 0) (tree 20 0 "oak" 3) (ring 20 0))})]
+          (core/submit! eng (list 'jobs.forestry.fell-tree {:radius 30}) {})
+          (is (pos? (await (run-until-empty eng 10))))
+          (is (= [] (:list (core/state eng))))
+          (is (= [] (calls p "dig")))
+          (is (= [] (moved-entries eng)) "the search proved both walled off: no walk")
+          (is (= 1 (count (filter #(= :tree_blocked (:kind %)) @seen)))))))))
+
 (deftest fell-tree-warns-and-finishes-when-every-tree-is-blocked
   (async done
     (tu/run-async done

@@ -91,6 +91,19 @@
           (is (every? #(= "dirt" %) (for [x (range -2 3) y [62 63] z (range -2 3)] (block-at s x y z))))
           (is (finished? s)))))))
 
+;; sand on a 5-high stone pillar (in sight, out of every stand's reach) is nearer in a line than sand on the floor (off
+;; the pillar's line of sight)
+(deftest the-reachable-target-is-walked-to-before-a-nearer-one-out-of-reach
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pillar (merge (cells "stone" [5] (range 63 68) [0]) {"5,68,0" "sand"})
+              s (await (scenario {:block "sand" :count 1 :tunnel-length 0} {:blocks (merge floor pillar {"12,64,4" "sand"})} 30))]
+          (is (= [12 64 4] (first (dug-cells s))))
+          (is (= {:x 12 :y 64 :z 4} (:target (first (moved s)))) "the first walk is to the floor sand")
+          (is (not-any? #(= {:x 5 :y 68 :z 0} (:target %)) (moved s)) "no walk toward the pillar")
+          (is (finished? s)))))))
+
 (deftest digging-the-floor-it-stands-on-is-mended
   (async done
     (tu/run-async done

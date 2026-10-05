@@ -8,6 +8,7 @@
             [engine.access.rules :as rules]
             [engine.jobs.util :as u]
             [engine.path.near :as near]
+            [engine.path.targets :as targets]
             [engine.jobs.look :refer [cell-of headings heading-name facing glance! look-around!]]
             [jobs.survival.dig-in :as dig-in]))
 
@@ -29,8 +30,10 @@
   there afterwards (out of reach) are reported once each, info mine.left-behind {:items [{:pos :count}]}, and listed
   in the result's :left (re-checked at the end, after the walk home: only drops still lying then stay in it); (2) carrying the goal ends :count; (3) :max-failures failures end :gave-up (warn
   mine.gave-up); :dry-digs digs in a row after which the carried count of the item did not rise end :no-drops (warn
-  mine.gave-up with :reason :no-drops); (4) the nearest target (those over the ground snapshot only after all
-  others, so the floor under the start is dug last) is walked to (within 3: blocked skips it and counts a failure,
+  mine.gave-up with :reason :no-drops); (4) the nearest target by walking (one bounded search over the targets,
+  engine.path.targets: ~100 ms a round, going on the next round; a seen block out of every stand's reach is passed over
+  for a reachable one; the nearest in a line when none is found reachable) is walked to (those over the ground snapshot
+  only after all others, so the floor under the start is dug last) (within 3: blocked skips it and counts a failure,
   partial tries again, the third partial in a row skips it like blocked), the best carried tool of the kind is
   equipped and the block dug: dug resets the failures and starts collecting, missing does nothing, cannot (bedrock)
   skips it without a failure, anything else skips it and counts one; (5) with no target the body looks around from
@@ -409,11 +412,27 @@
 
 ;; ------------------------------------------------------------------ the dig phase
 
+(defn ^:async next-target!
+  "The target to walk to next: of the targets off the ground snapshot (else those over it), the one the body walks to
+  soonest (targets/nearest!), :searching while that search goes on, the nearest in a line when none is found reachable
+  (its walk decides, as before); nil with no targets."
+  [c targets]
+  (let [ground (into #{} (map :pos) (:ground (ctx/mem c)))
+        off (vec (remove ground targets))
+        group (if (seq off) off targets)]
+    (when (seq group)
+      (let [a (await (targets/nearest! c group reach {:tag :mine}))]
+        (case (:status a)
+          :found (:target a)
+          :searching :searching
+          (first group))))))
+
 (defn ^:async dig-round! [c]
   (let [{:keys [goal failures dry looked]} (ctx/mem c)
         {:keys [max-failures wet dry-digs tunnel-length]} (:args c)
         {:keys [targets refused wet?]} (scan c)
-        pos (first targets)]
+        ready? (and (< (carried c) goal) (< (or dry 0) dry-digs) (< failures max-failures) (some? looked))
+        pos (when ready? (await (next-target! c targets)))]
     (cond
       (>= (carried c) goal) (to-mend! c :count)
       (>= (or dry 0) dry-digs) (do (ctx/emit! c :mine.gave-up :warn {:reason :no-drops :dry dry :text (str "mine gave up: " dry " digs brought nothing")})
@@ -421,6 +440,7 @@
       (>= failures max-failures) (do (ctx/emit! c :mine.gave-up :warn {:failures failures :text (str "mine gave up after " failures " failures")})
                                      (to-mend! c :gave-up))
       (nil? looked) (await (look-around! c))
+      (= :searching pos) :continue
       (some? pos) (let [walked (await (near/walk-near! c pos reach))]
                     (cond
                       (= :blocked walked) (do (skip-failed! c pos) :continue)

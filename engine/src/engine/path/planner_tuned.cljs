@@ -13,6 +13,11 @@
    Called through interop, not written in the search: the snapshot (stateAt, sectionHas, hasColumn), the state table's arrays and the
    free-space masks of space.mjs (options.space: boxesNear, freeMask, labelRegions).
 
+   Goal sets: query.goals, an array of goals ({kind x y z range} as query.goal), plans to the nearest of them by cost in
+   one search: the goal test is the cell in any goal's area, the heuristic the least of the goals' (admissible and
+   consistent as each is), and a found result's goal is the index of the goal reached. A goal set runs no goal flood and
+   answers no goal-not-standable or goal-unloaded (they prove things of one goal); query.goal is then not read.
+
    Options: options.avoid {kinds, cells, factor}, which engine.path.alternatives sets to search for another path
    (see avoidCost), and options.limits {kinds, gap, corner}, what the walker can do: kinds (the same bits) are never planned,
    gap(x, y, z, h, move, lx, ly, lz, lh) -> false refuses a gap jump from the takeoff node (feet cell x,y,z, stand h in 1/16,
@@ -213,6 +218,9 @@
    tbl-attach tbl-farmland min-y
    ;; the query
    from-x from-y from-z from-px from-pz goal-x goal-y goal-z goal-range slack ^boolean near ^boolean goal-unloaded
+   ;; a goal set (query.goals; n-goals 0: the one goal above): each goal's cell, squared range, octile slack, and 1 for a
+   ;; sphere (near) or 0 for an x-z disc
+   n-goals ^js g-xs ^js g-ys ^js g-zs ^js g-r2 ^js g-slack ^js g-near
    ;; options
    max-nodes max-drop weight risk-weight ^:mutable goal-flood ^:mutable flood-after pre-flood frontier-reach
    ;; a search for an alternative path (options.avoid, see avoidCost): kinds of move refused, cells near earlier paths
@@ -510,23 +518,52 @@
   ;; ---- goal ----
 
   (reached [s x y z]
-    (let [dx (- x goal-x)
-          dz (- z goal-z)]
-      (if near
-        (<= (+ (* dx dx) (* (- y goal-y) (- y goal-y)) (* dz dz)) (* goal-range goal-range))
-        (<= (+ (* dx dx) (* dz dz)) (* goal-range goal-range)))))
+    (if (pos? n-goals)
+      (>= (.goalAt s x y z) 0)
+      (let [dx (- x goal-x)
+            dz (- z goal-z)]
+        (if near
+          (<= (+ (* dx dx) (* (- y goal-y) (- y goal-y)) (* dz dz)) (* goal-range goal-range))
+          (<= (+ (* dx dx) (* dz dz)) (* goal-range goal-range))))))
+
+  ;; the index of the first goal of the set whose area holds the cell, -1 for none
+  (goalAt [s x y z]
+    (loop [i 0]
+      (if (< i n-goals)
+        (let [dx (- x (aget g-xs i))
+              dy (if (== 1 (aget g-near i)) (- y (aget g-ys i)) 0)
+              dz (- z (aget g-zs i))]
+          (if (<= (+ (* dx dx) (* dy dy) (* dz dz)) (aget g-r2 i))
+            i
+            (recur (inc i))))
+        -1)))
 
   ;; the cell, or the one under it (a head cell), is within the goal: where a portal may be entered
   (inGoal [s x y z]
     (or ^boolean (.reached s x y z) ^boolean (.reached s x (dec y) z)))
 
-  (distanceTo [s x z]
-    (let [a (js/Math.abs (- x goal-x))
-          b (js/Math.abs (- z goal-z))]
+  (octileTo [s x z gx gz]
+    (let [a (js/Math.abs (- x gx))
+          b (js/Math.abs (- z gz))]
       (+ (js/Math.max a b) (* (- SQRT2 1) (js/Math.min a b)))))
 
+  ;; octile x-z distance to the goal; to the nearest goal of a set
+  (distanceTo [s x z]
+    (if (pos? n-goals)
+      (loop [i 0 best js/Infinity]
+        (if (< i n-goals)
+          (recur (inc i) (js/Math.min best (.octileTo s x z (aget g-xs i) (aget g-zs i))))
+          best))
+      (.octileTo s x z goal-x goal-z)))
+
+  ;; a goal set's heuristic is the least of its goals' (each admissible and consistent, so their least is too)
   (heuristic [s x z]
-    (* (js/Math.max 0 (- (.distanceTo s x z) slack)) WALK-S))
+    (if (pos? n-goals)
+      (loop [i 0 best js/Infinity]
+        (if (< i n-goals)
+          (recur (inc i) (js/Math.min best (js/Math.max 0 (- (.octileTo s x z (aget g-xs i) (aget g-zs i)) (aget g-slack i)))))
+          (* best WALK-S)))
+      (* (js/Math.max 0 (- (.distanceTo s x z) slack)) WALK-S)))
 
   ;; ---- node storage ----
 
@@ -2517,7 +2554,11 @@
   (resultFrom [s one-way-node ^js clean-end]
     (cond
       (or (identical? reason "start-not-standable") (identical? reason "goal-not-standable")) (.outcome s "none" reason nil nil)
-      (nil? reason) (.outcome s "found" reason (.pathTo s goal-node) nil)
+      (nil? reason) (let [^js r (.outcome s "found" reason (.pathTo s goal-node) nil)]
+                      ;; a goal set's result names the goal reached (the first whose area holds the end)
+                      (when (pos? n-goals)
+                        (set! (.-goal r) (.goalAt s (aget xs goal-node) (aget ys goal-node) (aget zs goal-node))))
+                      r)
       :else
       (let [clean (not (neg? one-way-node))
             end-path (cond clean (.-path clean-end) (== best-node -1) nil :else (.pathTo s best-node))
@@ -2537,10 +2578,30 @@
 
 (defn- or-else [v default] (if (some? v) v default))
 
+(defn- goal-bounds
+  "#js [x0 x1 z0 z1 y0 y1]: the extent of the start and the goals (y: the start's and the sphere goals')."
+  [^js from ^js goals]
+  (let [b #js [(.-x from) (.-x from) (.-z from) (.-z from) (.-y from) (.-y from)]]
+    (doseq [^js g (array-seq goals)]
+      (aset b 0 (js/Math.min (aget b 0) (.-x g)))
+      (aset b 1 (js/Math.max (aget b 1) (.-x g)))
+      (aset b 2 (js/Math.min (aget b 2) (.-z g)))
+      (aset b 3 (js/Math.max (aget b 3) (.-z g)))
+      (when (identical? (.-kind g) "near")
+        (aset b 4 (js/Math.min (aget b 4) (.-y g)))
+        (aset b 5 (js/Math.max (aget b 5) (.-y g)))))
+    b))
+
+(defn- goal-array [ctor ^js goals f] (new ctor (.map goals f)))
+
 (defn- new-search ^Search [^js snapshot ^js query ^js options]
   (let [^js table (.-table options)
         ^js from (.-from query)
-        ^js goal (.-goal query)
+        ^js set-goals (.-goals query)
+        n-goals (if (some? set-goals) (.-length set-goals) 0)
+        multi (pos? n-goals)
+        ^js goal (if multi (aget set-goals 0) (.-goal query))
+        ^js bounds (goal-bounds from (if multi set-goals #js [goal]))
         ^js costs (js/Object.assign #js {} DEFAULT-COSTS (.-costs options))
         max-nodes (option options "maxNodes" 200000)
         ^js avoid (.-avoid options)
@@ -2548,12 +2609,15 @@
         margin (option options "margin" 64)
         y-margin (option options "yMargin" 48)
         goal-range (or-else (.-range goal) 0)
-        near (identical? (.-kind goal) "near")
-        goal-unloaded (if near
-                        (== (.stateAt snapshot (.-x goal) (.-y goal) (.-z goal)) UNLOADED)
-                        (false? (.hasColumn snapshot (bit-shift-right (.-x goal) 4) (bit-shift-right (.-z goal) 4))))
-        y-low (if near (js/Math.min (.-y from) (.-y goal)) (.-y from))
-        y-high (if near (js/Math.max (.-y from) (.-y goal)) (.-y from))
+        ;; a goal set has no goal flood and no goal-not-standable or goal-unloaded answers (near false): those prove
+        ;; things of one goal
+        near (and (not multi) (identical? (.-kind goal) "near"))
+        goal-unloaded (cond
+                        multi false
+                        near (== (.stateAt snapshot (.-x goal) (.-y goal) (.-z goal)) UNLOADED)
+                        :else (false? (.hasColumn snapshot (bit-shift-right (.-x goal) 4) (bit-shift-right (.-z goal) 4))))
+        y-low (aget bounds 4)
+        y-high (aget bounds 5)
         cap (js/Math.min max-nodes 1024)
         slots (next-pow2 (* cap 2))]
     (->Search
@@ -2567,6 +2631,14 @@
      ;; the query
      (.-x from) (.-y from) (.-z from) (or-else (.-px from) (+ (.-x from) 0.5)) (or-else (.-pz from) (+ (.-z from) 0.5))
      (.-x goal) (.-y goal) (.-z goal) goal-range (* OCTILE-SLACK goal-range) near goal-unloaded
+     ;; the goal set
+     n-goals
+     (when multi (goal-array js/Int32Array set-goals (fn [^js g] (.-x g))))
+     (when multi (goal-array js/Int32Array set-goals (fn [^js g] (or-else (.-y g) 0))))
+     (when multi (goal-array js/Int32Array set-goals (fn [^js g] (.-z g))))
+     (when multi (goal-array js/Float64Array set-goals (fn [^js g] (let [r (or-else (.-range g) 0)] (* r r)))))
+     (when multi (goal-array js/Float64Array set-goals (fn [^js g] (* OCTILE-SLACK (or-else (.-range g) 0)))))
+     (when multi (goal-array js/Uint8Array set-goals (fn [^js g] (if (identical? (.-kind g) "near") 1 0))))
      ;; options
      max-nodes (option options "maxDrop" 3) (option options "weight" 1) (option options "riskWeight" 2)
      (option options "goalFlood" 4000) (option options "floodAfter" 3000) (option options "preFlood" 24)
@@ -2583,8 +2655,8 @@
      (unchecked-get costs "airSupply") (unchecked-get costs "airLimit") (unchecked-get costs "maxWaterDrop")
      (unchecked-get costs "dripleaf") (unchecked-get costs "dripleafRisk")
      ;; search box
-     (- (js/Math.min (.-x from) (.-x goal)) margin) (+ (js/Math.max (.-x from) (.-x goal)) margin)
-     (- (js/Math.min (.-z from) (.-z goal)) margin) (+ (js/Math.max (.-z from) (.-z goal)) margin)
+     (- (aget bounds 0) margin) (+ (aget bounds 1) margin)
+     (- (aget bounds 2) margin) (+ (aget bounds 3) margin)
      (- y-low y-margin) (+ y-high y-margin)
      ;; directions
      (js/Int8Array. #js [1 -1 0 0 1 1 -1 -1]) (js/Int8Array. #js [0 0 1 -1 1 -1 1 -1])

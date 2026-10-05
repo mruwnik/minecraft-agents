@@ -2,14 +2,20 @@
   (:require [engine.ctx :as ctx]
             [engine.jobs.blocks :as blocks]
             [engine.jobs.gate :as gate]
-            [engine.jobs.forestry :refer [scan-logs tree-near tree-at logs-at unreachable-set debts replant-kind
+            [engine.jobs.forestry :refer [scan-logs tree-near trees-near tree-at logs-at unreachable-set debts replant-kind
                                           replant-policy default-radius max-partials eye-dist dig-reach log-name?]]
             [engine.jobs.util :as u]
-            [engine.path.near :as near]))
+            [engine.path.near :as near]
+            [engine.path.targets :as targets]))
 
 (def doc
-  "Fell the nearest tree (a log column with leaves near its top), one log a
+  "Fell the nearest tree (a log column with leaves near its top) by walking, one log a
   round, lowest first; write a :forestry/replant debt before the base log is dug.
+  The tree is chosen by one bounded search over the candidates (engine.path.targets, at most 32, nearest in a line
+  first): the one the body walks to soonest, so a walled-off or cliff-top tree is passed over for a reachable one. The
+  search runs at most ~100 ms a round and goes on the next round; one that proves every candidate out of reach marks
+  them all unreachable (the job warns tree_blocked and finishes, no walk); one that runs out of nodes takes the nearest
+  in a line, and its walk decides as before.
   Each log is dug by a jobs.blocks.dig child (:dig), which holds the best carried axe, records a log of another's
   dug with :ignore-zones? for tidying, and leaves the drop on the ground (jobs.forestry.harvest-wood collects it).
 
@@ -115,6 +121,21 @@
             t
             (recur (conj excluded [(:x (:column t)) (:z (:column t))]))))))))
 
+(def approach-range
+  "Blocks from a tree's base the search for the tree to fell counts as reaching it: approach!'s looser range."
+  3)
+
+(defn candidates
+  "The trees the job may fell, nearest in a line first (lazily): the one at :at (none once marked unreachable), else
+  those of species within radius not marked unreachable; a tree whose base log the zones refuse is left out."
+  [c radius species]
+  (let [p (:primitives c)
+        excluded (unreachable-set (ctx/mem c))]
+    (if-let [at (:at (:args c))]
+      (when-let [t (tree-at p at)]
+        (when-not (or (excluded [(:x at) (:z at)]) (not (log-allowed? c (:base t)))) [t]))
+      (filter #(log-allowed? c (:base %)) (trees-near p radius species excluded)))))
+
 (defn tree-logs
   "The logs of the chosen column: read from :at up when the job was given one, else those in radius."
   [c radius]
@@ -123,12 +144,32 @@
       (logs-at (:primitives c) at (:species m))
       (column-logs (:primitives c) radius m))))
 
-(defn choose-tree!
-  "Commit the column, species and base of the tree to fell (see candidate); nil when no candidate is in sight."
+(defn commit-tree!
+  "Commit the column, species and base of the tree t to fell."
+  [c t]
+  (ctx/update-mem! c #(-> % (merge (select-keys t [:column :species :base])) (assoc :partials 0)))
+  t)
+
+(defn mark-all-unreachable!
+  "Remember the columns of trees as unreachable."
+  [c trees]
+  (ctx/update-mem! c update :unreachable (fnil into []) (map (fn [t] [(get-in t [:column :x]) (get-in t [:column :z])]) trees)))
+
+(defn ^:async choose-tree!
+  "Choose the tree to fell among the candidates (at most targets/max-targets): the one the body walks to soonest
+  (targets/nearest!), committed (commit-tree!). :searching while that search goes on; nil when no candidate is in
+  sight, or when the search proved every one out of reach (all marked unreachable); the nearest in a line when it ran
+  out of nodes (the walk decides)."
   [c radius species]
-  (when-let [t (candidate c radius species)]
-    (ctx/update-mem! c #(-> % (merge (select-keys t [:column :species :base])) (assoc :partials 0)))
-    t))
+  (let [ts (vec (take targets/max-targets (candidates c radius species)))]
+    (when (seq ts)
+      (let [a (await (targets/nearest! c (mapv :base ts) approach-range {:tag :fell-tree}))]
+        (case (:status a)
+          :found (commit-tree! c (nth ts (:index a)))
+          :searching :searching
+          (if (:proved a)
+            (do (mark-all-unreachable! c ts) nil)
+            (commit-tree! c (first ts))))))))
 
 (defn mark-unreachable!
   "Remember the chosen column as unreachable and forget the choice."
@@ -157,8 +198,10 @@
   finishes. Done when the column holds no logs."
   [c]
   (let [{:keys [species radius]} (:args c)
-        chosen (or (:column (ctx/mem c)) (choose-tree! c radius species))]
+        chosen (or (:column (ctx/mem c)) (await (choose-tree! c radius species)))]
     (cond
+      (= :searching chosen) :continue
+
       (and (not chosen) (seq (:unreachable (ctx/mem c))))
       (do (ctx/emit! c :tree_blocked :warn {:text "no reachable tree"})
           :done)
