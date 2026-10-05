@@ -1653,6 +1653,14 @@ is taken instead; where the jump is the only way it is still planned.
 fence) is judged where the body falls: 5/16 past the edge it walked off (`DROP-INSET`, its 0.31 half-width clear of the
 ledge), so stepping down out of a door that stands a block above the ground outside is planned. A gap jump or a drop never lands on farmland (vanilla tramples farmland under a
 fall of over 0.5 blocks); a jump up one block onto it is allowed (it falls about 0.3 from the top of the arc).
+A move into or out of a tight cell is planned only where the executor's straight legs are free in the cell's mask: the
+region's stand point to the crossing, and the crossing to the next region's stand point (`lineFree`). A free region need not
+be convex: the cell of a fence post beside a gap is one U-shaped region (a strip each side of the line, joined along the
+gap) whose stand point lies on one strip, and a crossing on the other strip lies behind the post (live, ProbePen: go-to into
+a pen with a post missing walked head-on into the post beside the gap and stuck). In prismarine-physics the replayed bamboo
+and fence courses stuck the body the same way on 12 of 13 found plans before the check, and arrive on all of them after it
+(`courses_physics_test`); a solid block of offset bamboo (`full-walled`, `target-in-full`), which the body could pass
+only by weaving inside cells, now has no plan.
 
 The tuned planner also takes `options.limits {kinds, gap, corner}`: what the walker can do. `kinds` (the
 `AVOID-*` bits: climbing, water, doors) are never planned; `gap(x, y, z, h, move, lx, ly, lz, lh)` returning anything but

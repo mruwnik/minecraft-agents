@@ -915,10 +915,32 @@
           (recur (inc k))))
       out))
 
+  ;; The walker goes in a straight line from a cell's representative point to the crossing point of the next move, and from
+  ;; a crossing point to the representative point it leads to, so a move is only as good as those lines. A fence post
+  ;; beside a gap leaves its cell a U-shaped region (a strip each side of the line, joined along the gap) with its point on
+  ;; one strip: a crossing on the other strip lies behind the post, and the body walks head-on into it and sticks (live,
+  ;; ProbePen: pressed on the post at x .065, :stuck). A ring of free space round a bamboo stalk is the same: in
+  ;; prismarine-physics the body stuck on a stalk on 7 of 8 replayed courses until these lines were checked. Is every
+  ;; mask point the segment (ai, aj) - (bi, bj) passes (one per 1/16 along its longer axis, rounded) free? An end that is
+  ;; itself blocked (a boundary point snapped to the nearest region, at a step or a climbable) leaves the leg unjudged.
+  (lineFree [s ^js mask ai aj bi bj]
+    (let [di (- bi ai)
+          dj (- bj aj)
+          n (js/Math.max (js/Math.abs di) (js/Math.abs dj))]
+      (if (or (zero? (aget mask (+ (* aj GRID) ai))) (zero? (aget mask (+ (* bj GRID) bi))))
+        true
+        (loop [k 1]
+          (cond
+            (>= k n) true
+            (not (zero? (aget mask (+ (* (js/Math.round (+ aj (/ (* dj k) n))) GRID) (js/Math.round (+ ai (/ (* di k) n)))))))
+            (recur (inc k))
+            :else false)))))
+
   ;; pick[rb]: for each region of B a boundary point free for both cells leads to from region `label` of A, the point
   ;; nearest the line between the two representative points; -1 where none does. A drop (inset DROP-INSET, else 0)
   ;; falls from the point `inset` into B, where the body has cleared the ledge it walked off: it must pass there at the
-  ;; joint height, and the fall and the landing are judged there.
+  ;; joint height, and the fall and the landing are judged there. The legs either side of the crossing must be straight
+  ;; and free in their cell (lineFree), from A's point to the crossing and from where it enters B to B's point.
   (crossings [s c label ^js rep-a ^boolean tight-b ^js own-a ^js own-b ^js joint-a ^js joint-b snap-a snap-b ^js falls inset]
     (let [mask-a (.-mask joint-a)
           mask-b (.-mask joint-b)]
@@ -930,14 +952,17 @@
                 pf (if (zero? inset) pb (.insetB s c t inset))]
             (when (and (not (zero? (aget mask-a pa))) (not (zero? (aget mask-b pb))) (not (zero? (aget mask-b pf)))
                        (== (.regionNear s own-a pa snap-a) label)
-                       (not ^boolean (.fallBlocked s falls pf)))
+                       (not ^boolean (.fallBlocked s falls pf))
+                       ^boolean (.lineFree s (.-mask own-a) (.-px rep-a) (.-pz rep-a) (js-mod pa GRID) (js/Math.floor (/ pa GRID))))
               (let [lb (.regionNear s own-b pf snap-b)
                     rb (if tight-b lb (if (== lb (.-centre own-b)) 0 -1))]
                 (when (and (>= rb 0) (< rb REGIONS))
                   (let [^js rep-b (if tight-b (aget (.-regs own-b) rb) CENTRE)
                         along (if (< c 2) (/ (+ (.-pz rep-a) (.-pz rep-b)) 2) (/ (+ (.-px rep-a) (.-px rep-b)) 2))
                         picked (aget pick rb)]
-                    (when (or (== picked -1) (< (js/Math.abs (- t along)) (js/Math.abs (- picked along))))
+                    (when (and ^boolean (.lineFree s (.-mask own-b) (js-mod pf GRID) (js/Math.floor (/ pf GRID))
+                                                   (.-px rep-b) (.-pz rep-b))
+                               (or (== picked -1) (< (js/Math.abs (- t along)) (js/Math.abs (- picked along)))))
                       (aset pick rb t)))))))
           (recur (inc t))))))
 

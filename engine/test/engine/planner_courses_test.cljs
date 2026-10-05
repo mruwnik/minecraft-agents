@@ -20,7 +20,7 @@
    "cocoa-a0-both-feethead" "cocoa-a1-both-feethead" "cocoa-a2-both-feethead"
    "cocoa-a2-one-feethead" "cocoa-a2-both-head" "cocoa-a2-both-feethead-diag"
    "cocoa-open-a2-both-feethead" "cocoa-open-a2-one-feethead" "cocoa-farm-across" "cocoa-farm-along"
-   "checker-we" "rand50-we" "rand50-ew" "target-in-rand50" "full-walled"
+   "checker-we" "rand50-we" "rand50-ew" "target-in-rand50"
    "fence-diag" "trap-ceil-top"])
 
 (deftest courses-found
@@ -139,4 +139,7 @@
            (is (= status (:status (plan-course name))) name))
     "fence-diag" [2870 3205 2890 3225] [2879.5 3217.5] [2882.5 3216.5] 32 true "found"
     "wall-diag" [2870 3205 2890 3225] [2879.5 3217.5] [2882.5 3216.5] 32 false "partial"
-    "full-walled" [2855 3209 2905 3224] [2857.5 3216.5] [2902.5 3216.5] 16 true "found"))
+    ;; the body fits through a solid block of offset bamboo only by weaving inside cells, which one stand point per free
+    ;; region (and straight legs from it) cannot say: no plan, where the plan before the legs were checked stuck the body
+    ;; at its first stalk (engine.courses-physics-test)
+    "full-walled" [2855 3209 2905 3224] [2857.5 3216.5] [2902.5 3216.5] 16 true "partial"))

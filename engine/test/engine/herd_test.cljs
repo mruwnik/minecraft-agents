@@ -349,7 +349,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:target 1} {:entities [(cow 1 4 3)] :states {gate-key {:open true}}} 200))]
+        (let [s (await (scenario {:target 1} {:entities [(cow 1 4 3)] :states {gate-key {:open true :facing "east"}}} 200))]
           (is (= :brought (:reason (done-event s))))
           (is (not (gate-open? s))))))))
 
