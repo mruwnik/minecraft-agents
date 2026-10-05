@@ -79,17 +79,6 @@
     {[1 65 0] "melon_stem"} [1 65 0] "melon_stem"
     {[1 65 0] "attached_pumpkin_stem"} [1 65 0] "attached_pumpkin_stem"))
 
-(deftest a-stair-queued-in-a-farm-stops-before-digging-the-crop
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [out p]} (await (stair! {:blocks (assoc ground "1,64,0" "wheat")} east (fn [_])))]
-          (is (= :crop (:reason @out)))
-          (is (= [1 64 0] (:cell @out)))
-          (is (= "wheat" (:block @out)))
-          (is (= 0 (:steps @out)))
-          (is (empty? (digs p))))))))
-
 (deftest off-stair-says-where-the-body-is-against-the-start
   (async done
     (tu/run-async done
@@ -183,6 +172,17 @@
                      (filter #(= "dig" (.-name %)) (.-calls (.-world p)))))
 (defn block-at [p [x y z]] (.-name (.blockAt p #js {:x x :y y :z z})))
 (defn events-of [{:keys [seen]} kind] (filter #(= kind (:kind %)) @seen))
+
+(deftest a-stair-queued-in-a-farm-stops-before-digging-the-crop
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (stair! {:blocks (assoc ground "1,64,0" "wheat")} east (fn [_])))]
+          (is (= :crop (:reason @out)))
+          (is (= [1 64 0] (:cell @out)))
+          (is (= "wheat" (:block @out)))
+          (is (= 0 (:steps @out)))
+          (is (empty? (digs p))))))))
 
 (deftest three-steps-down-east-in-stone
   (async done
