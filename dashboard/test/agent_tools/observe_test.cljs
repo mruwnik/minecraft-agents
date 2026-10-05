@@ -602,6 +602,29 @@
                      (is (= :history-unavailable (:reason wake)))
                      (is (= ["j4"] (:jobs wake))))))))))
 
+(deftest a-cursor-from-before-a-restart-resets-once-without-old-jobs-and-the-watched-job-is-still-found
+  (with-fixture ["1s"]
+    (fn [f]
+      (let [req (assoc-in (:req f) [:wait-options :watch] ["j2"])
+            wait! #(observe/wait-observe req (:get! f) nil (fn [_] (js/Promise.resolve nil)))]
+        (-> (wait!)
+            (.then (fn [_]
+                     (push! f (job-event 1 "j1" :completed)
+                            (assoc (event :system :restored) :seq 2 :generation-id "g")
+                            (job-event 3 "j2" :queued)
+                            (job-event 4 "j2" :completed))
+                     (wait!)))
+            (.then (fn [restarted]
+                     (is (= :reset (:wake restarted)))
+                     (is (= :engine-restarted (:reason restarted)))
+                     (is (not (contains? restarted :summary)) "old jobs from before the restart are not summarised")
+                     (wait!)))
+            (.then (fn [watched]
+                     (is (= :job-finished (:wake watched)))
+                     (is (= "j2" (:job watched)))
+                     (wait!)))
+            (.then (fn [quiet] (is (= :timeout (:wake quiet))))))))))
+
 (deftest a-fresh-watch-for-a-live-job-without-events-keeps-waiting
   (with-fixture []
     (fn [f]

@@ -1782,7 +1782,10 @@ folder. An initial baseline survives cancellation, while consumed cursors advanc
 only after output is accepted by stdout. Cancellation/crashes can replay already
 printed events; delivery is at least once, not exactly once. `SIGINT`/`SIGTERM`
 cancel and release the lock, and dead-process locks are reclaimed. Stream gaps
-and engine start/restore events return a small `:reset` notice. No cursor or UUID
+and engine start/restore events return a small `:reset` notice, once for a cursor older
+than the restart (the notice carries no summary of the skipped old events; the next call
+looks watched jobs up in the history, so a job submitted after the restart is still
+reported). No cursor or UUID
 appears in normal model-facing output.
 
 The tool can only expose events the body emits. Older body builds without a

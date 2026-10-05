@@ -352,7 +352,7 @@
                      (checkpoint! file (select-keys @st [:cursor :generation :seen :lookup])))
                    (vreset! timeout-finish timeout!)
                    (if (and saved (not= (:generation saved) generation))
-                     (do (swap! st assoc :cursor (:cursor snap) :seen {} :pending [] :lookup false)
+                     (do (swap! st assoc :cursor (:cursor snap) :seen {} :pending [] :lookup true)
                          (reset-with-status! :engine-restarted))
                      (let [body (or (:body snap) (:agent request))
                            watching? (or (seq (:watch-actions opts)) (seq (:watch opts)))]
@@ -390,7 +390,10 @@
                                      (swap! st update-in [:snap :outstanding] #(drop-id (or % {})))))
                                  (if (and (= :system (:source event)) (#{:started :restored} (:kind event)))
                                    (js-await [snap (read! "/snapshot")]
-                                     (swap! st assoc :snap snap :cursor (:cursor snap) :seen {})
+                                     ;; The restart wake says nothing of the events skipped before it (old jobs); the
+                                     ;; watched jobs are looked up in the history on the next call.
+                                     (reset! summary {:counts {} :items [] :more false})
+                                     (swap! st assoc :snap snap :cursor (:cursor snap) :seen {} :pending [] :lookup true)
                                      (finish! (array-map :wake :reset :reason :engine-restarted)))
                                    (if-let [immediate (classify event opts body)]
                                      (finish! immediate)
