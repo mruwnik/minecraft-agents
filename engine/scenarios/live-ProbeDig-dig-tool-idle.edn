@@ -1,0 +1,2 @@
+;; ProbeDig live cases for world submit dig tool choice: idle, driven with tools/world.mjs
+{:register [] :queue []}
