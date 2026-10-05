@@ -1,0 +1,40 @@
+;; Extinguish with no water (card 0fd16298): the body stands on a burning netherrack cell (fire above it), the burning reflex
+;; fires jobs.survival.extinguish. With no water within 6 it steps off the fire, then stands still (one extinguish_wait, no
+;; walking while burning, the job stays alive) and the interrupted go-to resumes only once the fire is out. With a cover block
+;; carried it places it on an adjacent lava source; with water in reach it walks into the water instead of standing.
+{:defaults
+ {:tags [:survival :fire] :time :any
+  :plot {:height 6}
+  :register [{:trigger :burning :persistence :cooldown :cooldown-s 0 :job (jobs.survival.extinguish {:water-radius 6})}]
+  :blocks [[:set [10 -1 16] "netherrack"] [:set [10 0 16] "fire"]]
+  :body {:at [10.5 0 16.5] :settle-s 1}
+  :limit-s 90}
+ :cases
+ [{:name "stands-still-then-go-to-arrives-1"
+   :act [[:job (jobs.movement.go-to {:pos #at [26 0 16] :range 1})]]
+   :expect [{:no-event {:source :action :kind :started :data {:name "steer"}} :for-s 20 :until {:source :reflex :kind :ended}}
+            {:event {:source :job :kind :result :data {:arrived true}} :within-s 80 :of-job true}]
+   :after [[:body-near [26.5 0 16.5] 2]]}
+  {:name "stands-still-then-go-to-arrives-2"
+   :blocks [[:set [8 -1 10] "netherrack"] [:set [8 0 10] "fire"]]
+   :body {:at [8.5 0 10.5]}
+   :act [[:job (jobs.movement.go-to {:pos #at [26 0 22] :range 1})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 80 :of-job true}]
+   :after [[:body-near [26.5 0 22.5] 2]]}
+  {:name "covers-adjacent-lava-1"
+   :blocks [[:set [11 -1 16] "lava"]]
+   :body {:inventory [["cobblestone" 8]]}
+   :act [[:wait-s 6]]
+   :after [[:not-block [11 -1 16] "lava"] [:block [11 -1 16] "cobblestone"]]
+   :limit-s 30}
+  {:name "covers-adjacent-lava-2"
+   :blocks [[:set [8 -1 10] "netherrack"] [:set [8 0 10] "fire"] [:set [8 -1 11] "lava"]]
+   :body {:at [8.5 0 10.5] :inventory [["cobblestone" 8]]}
+   :act [[:wait-s 6]]
+   :after [[:not-block [8 -1 11] "lava"] [:block [8 -1 11] "cobblestone"]]
+   :limit-s 30}
+  {:name "water-within-6-walks-into-it"
+   :blocks [[:set [14 -2 16] "stone"] [:set [14 -1 16] "water"]]
+   :expect [{:no-event {:source :job :kind :extinguish_wait} :for-s 20}]
+   :after [[:body-near [14.5 -1 16.5] 1.5]]
+   :limit-s 30}]}
