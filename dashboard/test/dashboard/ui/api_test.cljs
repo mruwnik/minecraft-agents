@@ -60,18 +60,28 @@
                       (is (= [[:ok {:a 1}]] @events))
                       (done)))))))
 
-(deftest a-second-post-to-the-same-url-is-dropped-while-one-is-in-flight
+(deftest an-identical-post-is-never-dropped
   (async done
     (let [calls (atom 0)]
       (with-fake-fetch
         (fn [_ _] (swap! calls inc) (js/Promise.resolve (fake-response 200 {:ok true})))
-        (fn [] (let [first-post (api/post-edn! {:url "/api/restart" :body {} :on-ok [:ok] :on-err [:err]})]
-                 (api/post-edn! {:url "/api/restart" :body {} :on-ok [:ok] :on-err [:err]})
-                 first-post))
+        (fn [] (js/Promise.all #js [(api/post-edn! {:url "/api/restart" :body {} :on-ok [:ok] :on-err [:err]})
+                                    (api/post-edn! {:url "/api/restart" :body {} :on-ok [:ok] :on-err [:err]})]))
         done
         (fn [events]
-          (is (= 1 @calls))
-          (is (= [[:ok {:ok true}]] events)))))))
+          (is (= 2 @calls))
+          (is (= [[:ok {:ok true}] [:ok {:ok true}]] events)))))))
+
+(deftest a-slow-post-is-not-aborted-by-the-timeout
+  (async done
+    (with-redefs [api/request-timeout-ms 20]
+      (with-fake-fetch
+        (fn [_ opts] (js/Promise. (fn [resolve reject]
+                                    (some-> (.-signal opts) (.addEventListener "abort" #(reject (doto (js/Error. "aborted") (set! -name "AbortError")))))
+                                    (js/setTimeout #(resolve (fake-response 200 {:ok true})) 100))))
+        #(api/post-edn! {:url "/api/drive" :body {} :on-ok [:ok] :on-err [:err]})
+        done
+        (fn [events] (is (= [[:ok {:ok true}]] events)))))))
 
 (deftest a-different-post-to-the-same-url-is-not-dropped
   (async done
