@@ -289,7 +289,12 @@
     (is (seq (ps [[:rcon-until "kill @e[type=zombie]" {:until {:kind :x} :every-s 1 :limit-s 5}]])))
     (is (empty? (ps [[:rcon "kill @e[type=zombie,$BOX]"]])))
     (is (empty? (ps [[:rcon "kill @e[type=zombie,x=$X,y=$Y,z=$Z,dx=5,dy=3,dz=5]"]])))
-    (is (empty? (ps [[:rcon "tp @e[type=cow,tag=wt,distance=..5] ~ ~ ~3"]])) "only kills are bounded")))
+    (is (seq (ps [[:rcon "kill @e"]])) "a bare kill")
+    (is (seq (ps [[:rcon "tp @e[type=cow,tag=wt,distance=..5] ~ ~ ~3"]])) "tp with a radius")
+    (is (seq (ps [[:rcon "execute as @e[type=cow,distance=..9] run effect give @s speed"]])))
+    (is (empty? (ps [[:rcon "tp @e[type=cow,tag=wt,$BOX] ~ ~ ~3"]])))
+    (is (empty? (ps [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"]])) "@s is the body")
+    (is (empty? (ps [[:rcon "execute if entity @e[type=cow,distance=..5] run say hi"]])))))
 
 (deftest substitute-fills-the-plot-box
   (is (= "kill @e[type=zombie,x=20000,y=149,z=20000,dx=31,dy=7,dz=31]"

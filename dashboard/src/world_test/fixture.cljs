@@ -116,14 +116,17 @@
 (def step-kinds #{:summon :rcon :rcon-until :job :wait-s :await :kill-body :time-set})
 (def after-kinds #{:block :not-block :body-near :item :entities})
 
-(defn unbounded-kills
-  "The :rcon / :rcon-until commands of the act steps with a kill selector that is not a box (no dx=): a radius or an
-  unbounded selector reaches the neighbouring plots' mobs. Write $BOX (the plot's box) instead."
+(defn unbounded-selectors
+  "The :rcon / :rcon-until commands of the act steps with an @e selector that is not a box (no dx= or $BOX), bare or
+  bracketed: a radius or an unbounded selector reaches the neighbouring plots' mobs (kill, tp, effect, ...). Write $BOX
+  (the plot's box) instead. @p/@s/@a target the test's own body and are not checked; `if entity` reads are allowed."
   [c]
   (->> (:act c)
        (filter (comp #{:rcon :rcon-until} first))
        (map second)
-       (filter #(some (fn [[_ sel]] (not (or (str/includes? sel "dx=") (str/includes? sel "$BOX")))) (re-seq #"kill @e(?:\[([^\]]*)\])?" (str %))))))
+       (remove #(re-find #"(?:if|unless) entity @e" (str %)))
+       (filter #(some (fn [[_ sel]] (not (or (str/includes? (or sel "") "dx=") (str/includes? (or sel "") "$BOX"))))
+                      (re-seq #"@e(?:\[([^\]]*)\])?" (str %))))))
 
 (defn problems
   "Why a merged case cannot run, as a vector of strings (empty when it can)."
@@ -142,7 +145,7 @@
       (and (seq (:memory c)) (:keep-memory c)) (conj ":memory cannot be combined with :keep-memory")
       (not (vector? (get-in c [:body :at]))) (conj ":body :at must be [x y z]")
       (some #(not (step-kinds (first %))) (:act c)) (conj (str ":act steps must be one of " (sort step-kinds)))
-      (seq (unbounded-kills c)) (conj "a kill selector must be bounded to the plot: use $BOX (x,y,z,dx,dy,dz), not distance")
+      (seq (unbounded-selectors c)) (conj "an @e selector must be bounded to the plot: use $BOX (x,y,z,dx,dy,dz), not distance")
       (some #(not (after-kinds (first %))) (:after c)) (conj (str ":after checks must be one of " (sort after-kinds)))
       (and (empty? (:expect c)) (empty? (:after c))) (conj "the case checks nothing: it needs an :expect or :after")
       (and (empty? (:after c)) (seq (:expect c)) (not-any? #(or (:event %) (:from-event %)) (:expect c)))

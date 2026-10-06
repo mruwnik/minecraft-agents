@@ -9,7 +9,7 @@
  [{:name "rider-dies-after-horse-moves-east"
    :act [[:summon "skeleton_horse" [19.5 0 16.5] "{NoAI:1b,Passengers:[{id:\"minecraft:skeleton\",NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}]}"]
          [:wait-s 1]
-         [:rcon "execute at $BODY run tp @e[type=skeleton_horse,tag=wt,distance=..20] ~8 ~ ~"]
+         [:rcon "execute at $BODY run tp @e[type=skeleton_horse,tag=wt,$BOX] ~8 ~ ~"]
          [:wait-s 20]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 10}
             {:no-event {:kind :fight_no_damage} :for-s 20}]
@@ -18,7 +18,7 @@
   {:name "rider-dies-after-horse-moves-south"
    :act [[:summon "skeleton_horse" [16.5 0 19.5] "{NoAI:1b,Passengers:[{id:\"minecraft:skeleton\",NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}]}"]
          [:wait-s 1]
-         [:rcon "execute at $BODY run tp @e[type=skeleton_horse,tag=wt,distance=..20] ~ ~ ~-8"]
+         [:rcon "execute at $BODY run tp @e[type=skeleton_horse,tag=wt,$BOX] ~ ~ ~-8"]
          [:wait-s 20]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 10}
             {:no-event {:kind :fight_no_damage} :for-s 20}]
