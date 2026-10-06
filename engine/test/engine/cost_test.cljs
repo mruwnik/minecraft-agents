@@ -54,3 +54,15 @@
         rate #(cost/danger-rate (assoc body :equipment {:torso %}) "zombie")
         plain {:name "iron_chestplate"}]
     (is (< (rate (assoc plain :enchants [{:name "protection" :level 4}])) (rate plain)))))
+
+(defn stack [& pairs] (mapv (fn [[n c]] {:name n :count c}) (partition 2 pairs)))
+
+(deftest food-reserve-keeps-three-days-of-food-best-first
+  (is (= 36 cost/food-reserve-points) "3 days at 12 hunger points a day")
+  (is (= {"bread" 8} (cost/food-reserve (stack "bread" 20))))
+  (is (= {"bread" 3} (cost/food-reserve (stack "bread" 3))))
+  (is (= {"bread" 2 "apple" 7} (cost/food-reserve (stack "apple" 9 "bread" 2))))
+  (is (= {"bread" 8} (cost/food-reserve (stack "bread" 5 "bread" 15))))
+  (is (= {"carrot" 12} (cost/food-reserve (stack "carrot" 30 "dirt" 64))))
+  (is (= {} (cost/food-reserve (stack "rotten_flesh" 9 "dirt" 3 "iron_hoe" 1))))
+  (is (= {} (cost/food-reserve []))))

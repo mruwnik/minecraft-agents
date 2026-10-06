@@ -25,3 +25,12 @@
           (let [result (await (wt/child-outcome eng job {:chest chest :items ["dirt"]} 12))]
             (is (= true (:gave-up result)))
             (is (<= (count (wt/calls p "transfer")) 3))))))))
+
+(deftest deposit-of-everything-keeps-the-three-day-food-reserve
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (wt/setup {:inventory [{:name "dirt" :count 5} {:name "bread" :count 12}] :containers {"10,64,0" []}})
+              result (await (wt/child-outcome eng job {:chest chest} 16))]
+          (is (= {"bread" 8} (wt/inv p)) "bread 8 is 40 of the 36 points; dirt and the 4 spare bread go")
+          (is (= {:gave-up false} result)))))))

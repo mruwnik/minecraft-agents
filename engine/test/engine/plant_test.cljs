@@ -90,12 +90,24 @@
 (deftest pick-seed-takes-the-named-seed-or-the-largest-carried-stack
   (are [seed carried expected] (= expected (plant/pick-seed seed (apply inv carried)))
     nil ["wheat_seeds" 4] "wheat_seeds"
-    nil ["wheat_seeds" 4 "carrot" 9 "potato" 1] "carrot"
+    nil ["wheat_seeds" 4 "carrot" 9 "potato" 1 "bread" 8] "carrot"
     nil ["dirt" 64 "beetroot_seeds" 2] "beetroot_seeds"
     "wheat_seeds" ["wheat_seeds" 1 "carrot" 9] "wheat_seeds"
     "potato" ["wheat_seeds" 1] nil
     nil ["dirt" 64] nil
     nil [] nil))
+
+(deftest pick-seed-never-sows-the-food-reserve
+  (are [carried expected] (= expected (plant/pick-seed nil (apply inv carried)))
+    ["carrot" 12] nil
+    ["carrot" 13] "carrot"
+    ["carrot" 12 "wheat_seeds" 1] "wheat_seeds"
+    ["carrot" 20 "bread" 8] "carrot"
+    ["carrot" 9 "potato" 20] "potato"
+    ["carrot" 9 "potato" 9] nil
+    ["potato" 3 "bread" 8] "potato")
+  (is (nil? (plant/pick-seed "carrot" (inv "carrot" 12))) "a named food seed too")
+  (is (= "wheat_seeds" (plant/pick-seed "wheat_seeds" (inv "wheat_seeds" 1 "carrot" 3)))))
 
 (deftest count-fail-skips-a-cell-at-the-third-fail
   (let [pos {:x 1 :y 63 :z 1}
@@ -139,11 +151,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (start (field-world (inv "carrot" 5)))
+        (let [{:keys [eng p]} (start (field-world (inv "carrot" 5 "bread" 8)))
               result (await (child-outcome eng job {:box field-box} 100))]
           (is (= {:planted 5 :skipped [] :reason :no-seed} result))
           (is (= 5 (count (filter (fn [[x z]] (= "carrots" (block-at p x 64 z))) (for [x (range 2 5) z (range 2 5)] [x z])))))
-          (is (= {} (inv-of p))))))))
+          (is (= {"bread" 8} (inv-of p))))))))
 
 (deftest a-field-wider-than-reach-is-walked
   (async done
@@ -185,19 +197,19 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (start (field-world (inv "wheat_seeds" 20 "potato" 3)))
+        (let [{:keys [eng p]} (start (field-world (inv "wheat_seeds" 20 "potato" 3 "bread" 8)))
               result (await (child-outcome eng job {:box field-box :seed "potato"} 100))]
           (is (= {:planted 3 :reason :no-seed} (select-keys result [:planted :reason])))
-          (is (= {"wheat_seeds" 20} (inv-of p))))))))
+          (is (= {"wheat_seeds" 20 "bread" 8} (inv-of p))))))))
 
 (deftest the-largest-stack-is-sown-when-no-seed-is-named
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (start (field-world (inv "wheat_seeds" 2 "carrot" 9)))
+        (let [{:keys [eng p]} (start (field-world (inv "wheat_seeds" 2 "carrot" 9 "bread" 8)))
               result (await (child-outcome eng job {:box field-box} 100))]
           (is (= {:planted 9 :reason :done} (select-keys result [:planted :reason])))
-          (is (= {"wheat_seeds" 2} (inv-of p))))))))
+          (is (= {"wheat_seeds" 2 "bread" 8} (inv-of p))))))))
 
 (deftest a-cell-whose-place-is-refused-three-times-is-skipped-and-reported
   (async done

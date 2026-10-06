@@ -6,6 +6,7 @@
             [jobs.lib.gate :as gate]
             [jobs.lib.util :as u]
             [jobs.farm.fertilize :as fertilize]
+            [jobs.lib.cost :as cost]
             [jobs.lib.crops :as crops]
             [jobs.farm.harvest :as harvest]
             [jobs.farm.plant :as plant]
@@ -23,12 +24,14 @@
     more seed is carried than there is bare farmland. It tills one cell at a time, nearest first.
   - :plant (jobs.farm.plant): bare farmland lies in the box and a seed is carried.
   - :fertilize (jobs.farm.fertilize): :fertilize is true, bone meal is carried and an unripe crop lies in the box.
-  - :compost (jobs.farm.compost): a :composter is given and seed above the reserve is carried.
+  - :compost (jobs.farm.compost): a :composter is given and seed above the keep is carried.
   - :deposit (jobs.storage.deposit): a :chest is given and farm goods are carried above the keep. Farm goods are
-    seeds, crops (carrots and potatoes above the seed reserve too), melon, pumpkin, hay and cocoa. Tools, bread and other
-    food are never stored.
-  The seed reserve is twice the number of beds (farmland or untilled ground cells), spread over the carried seeds.
-  The keep for compost and deposit is that reserve or the :keep entry, whichever is larger.
+    seeds, crops (carrots, potatoes and beetroot too), melon, pumpkin, hay and cocoa. Tools, bread and other
+    non-crop food are never stored.
+  The keep for compost and deposit, per name, is the largest of: the sowing reserve (twice the number of beds, farmland or
+  untilled ground cells, spread over the carried seeds), a backup stack (64) of each seed type, the body's food reserve
+  (jobs.lib.cost/food-reserve: 3 days of food, 36 hunger points, best food first; carrots and potatoes count toward it
+  first) and the :keep entry. Harvested crops above it are stored; seed above it is composted.
   Skipped steps are booked as {:skipped reason}: :no-ripe, :till-off, :no-hoe, :nothing-to-till, :no-seed,
   :no-bare, :fertilize-off, :no-bone-meal, :none-unripe, :no-composter, :no-surplus-seed, :no-chest,
   :nothing-to-store or :declined (the child declined).
@@ -84,6 +87,8 @@
 (def seed-items ["wheat_seeds" "carrot" "potato" "beetroot_seeds"])
 
 (def waste-seeds ["wheat_seeds" "beetroot_seeds" "melon_seeds" "pumpkin_seeds"])
+
+(def seed-backup "A stack of each seed type stays carried; the rest is composted." 64)
 
 (def farm-goods
   ["wheat_seeds" "beetroot_seeds" "melon_seeds" "pumpkin_seeds" "carrot" "potato" "wheat" "beetroot" "melon_slice"
@@ -146,6 +151,12 @@
   (let [have (carried inventory)]
     (filterv #(> (get have % 0) (get keep % 0)) names)))
 
+(defn keeps
+  "{name count} kept carried: the sowing reserve, a backup stack of each seed type, the body's 3-day food
+  (cost/food-reserve) and the :keep entries, whichever is largest for a name."
+  [sow inventory keep]
+  (merge-with max sow (zipmap waste-seeds (repeat seed-backup)) (cost/food-reserve inventory) keep))
+
 (defn untilled?
   "A ground cell {:name :above} of dirt or grass with nothing but air or ground cover over it."
   [{:keys [name above]}]
@@ -193,7 +204,7 @@
         tried (:till-tried (ctx/mem c) #{})
         ground (ground-layer p box)
         bare (count (box-permitted c :sow (plant/bare-cells p box [])))
-        res (reserve (beds ground) inventory)]
+        keep-of (keeps (reserve (beds ground) inventory) inventory keep)]
     {:mid mid
      :radius R
      :ripe (count (box-permitted c :harvest (filter #(in-box? box %) (harvest/ripe-crops p {:radius R :crops nil} mid []))))
@@ -210,9 +221,9 @@
      :seed (some? (plant/pick-seed nil inventory))
      :meal (boolean (fertilize/has-meal? p))
      :unripe (if fertilize (count (unripe-in-box p box mid R)) 0)
-     :keep (merge-with max res keep)
-     :waste (surplus inventory (merge-with max res keep) waste-seeds)
-     :stored (surplus inventory (merge-with max res keep) farm-goods)}))
+     :keep keep-of
+     :waste (surplus inventory keep-of waste-seeds)
+     :stored (surplus inventory keep-of farm-goods)}))
 
 (defn box-census
   "The live {:crops :bare :untilled} of the box."
@@ -325,7 +336,7 @@
         bare-of (frequencies (map :seed bare))
         sowing (plant/sowing c crops)
         [mid R] (harvest/plan-field crops)
-        keep (merge-with max (seed-reserve crops) keep)
+        keep (keeps (seed-reserve crops) inventory keep)
         untilled-cells (->> (ground-cells answer crops)
                             (remove (fn [[pos _]] (tried pos)))
                             (filter (fn [[pos _]] (untilled? (ground-cell p pos)))))

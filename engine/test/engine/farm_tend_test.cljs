@@ -204,8 +204,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:chest chest} goods-world 40))]
-          (is (= {"wheat" 5 "wheat_seeds" 6} (chest-items s)))
-          (is (= {"wheat_seeds" 4 "iron_hoe" 1 "bread" 2} (inv s)))
+          (is (= {"wheat" 5} (chest-items s)) "a stack of backup seed and the 3-day food stay carried")
+          (is (= {"wheat_seeds" 10 "iron_hoe" 1 "bread" 2} (inv s)))
           (is (= {:gave-up false} (select-keys (step s :deposit) [:gave-up])))
           (is (true? (finished? s))))))))
 
@@ -214,18 +214,20 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:chest chest :keep {"wheat" 2 "wheat_seeds" 1}} goods-world 40))]
-          (is (= {"wheat" 3 "wheat_seeds" 6} (chest-items s)))
+          (is (= {"wheat" 3} (chest-items s)))
           (is (= 2 (get (inv s) "wheat")))
-          (is (= 4 (get (inv s) "wheat_seeds"))))))))
+          (is (= 10 (get (inv s) "wheat_seeds"))))))))
 
-(deftest only-seed-above-the-reserve-is-composted
+(deftest only-seed-above-the-backup-stack-is-composted
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:composter {:x 6 :y 64 :z 2}}
-                                 (world goods-world {:blocks {"6,64,2" "composter"}}) 60))]
+                                 (world goods-world {:blocks {"6,64,2" "composter"}}
+                                        {:inventory [(item "wheat" 5) (item "wheat_seeds" 70) (item "bread" 2)]}) 60))]
           (is (= {"wheat_seeds" 6} (:fed (step s :compost))))
-          (is (= 4 (get (inv s) "wheat_seeds")))
+          (is (= 64 (get (inv s) "wheat_seeds")))
+          (is (= 2 (get (inv s) "bread")))
           (is (= 5 (get (inv s) "wheat")) "crops are not fed")
           (is (= {:skipped :no-chest} (step s :deposit))))))))
 
@@ -316,9 +318,30 @@
     {"wheat_seeds" 3} 5 [(item "wheat_seeds" 1) (item "wheat_seeds" 2)]
     {} 4 [(item "bread" 5) (item "melon_seeds" 3)]))
 
+(deftest the-keep-holds-sowing-seed-a-backup-stack-per-seed-and-the-food-reserve
+  (are [expected sow inventory keep] (= expected (tend/keeps sow inventory keep))
+    {"wheat_seeds" 64 "beetroot_seeds" 64 "melon_seeds" 64 "pumpkin_seeds" 64} {} [] {}
+    {"wheat_seeds" 100 "beetroot_seeds" 64 "melon_seeds" 64 "pumpkin_seeds" 64} {"wheat_seeds" 100} [] {}
+    {"wheat_seeds" 64 "beetroot_seeds" 64 "melon_seeds" 64 "pumpkin_seeds" 64 "bread" 4 "carrot" 6}
+    {"carrot" 2} [(item "bread" 4) (item "carrot" 9)] {}
+    {"wheat_seeds" 64 "beetroot_seeds" 64 "melon_seeds" 64 "pumpkin_seeds" 70} {} [] {"pumpkin_seeds" 70}))
+
+(deftest food-crops-are-farm-goods-but-the-reserve-stays-carried
+  (is (every? (set tend/farm-goods) ["carrot" "potato" "beetroot" "melon_slice" "wheat"])))
+
 (deftest tools-food-and-meal-are-never-farm-goods
   (are [name] (not (some #{name} tend/farm-goods))
     "stone_hoe" "iron_hoe" "shears" "bread" "bone_meal" "water_bucket"))
+
+(deftest crops-are-stored-down-to-the-food-reserve
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:chest chest}
+                                 (world (farm "wheat" 3 [[2 2]] [[2 2]])
+                                        {:inventory [(item "carrot" 20) (item "bread" 3)] :containers {"10,64,0" []}}) 40))]
+          (is (= {"carrot" 13} (chest-items s)) "bread 3 is 15 of the 36 points, so 7 carrots (21 points) stay")
+          (is (= {"carrot" 7 "bread" 3} (inv s))))))))
 
 (deftest surplus-lists-names-above-their-keep
   (are [expected inventory keep names] (= expected (tend/surplus inventory keep names))

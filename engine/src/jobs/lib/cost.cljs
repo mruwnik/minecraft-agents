@@ -8,11 +8,13 @@
     fight    fight-damage, decide: the damage of a fight with the current kit, :fight or :flee (jobs.lib.cost.fight).
     danger   route-danger, straight-route: the danger of a walk past mobs; stance, danger-rate, danger-list: go-to's
              planner dangers (jobs.lib.cost.danger).
+    food     food-reserve: the food a body keeps carried, 3 days of it (jobs.lib.cost.food).
     value    item-value, fetch-cost, walk-cost: what items are worth, what fetching them or walking costs (jobs.lib.cost.value);
              per-dark, dark-factor: the one price of a dark block, which go-to's planner costs."
   (:require [jobs.lib.cost.armour :as armour]
             [jobs.lib.cost.danger :as danger]
             [jobs.lib.cost.fight :as fight]
+            [jobs.lib.cost.food :as food]
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.cost.value :as value]))
 
@@ -38,3 +40,6 @@
 (def walk-cost value/walk-cost)
 (def per-dark value/per-dark)
 (def dark-factor value/dark-factor)
+
+(def food-reserve food/food-reserve)
+(def food-reserve-points food/reserve-points)

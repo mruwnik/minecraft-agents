@@ -2,6 +2,7 @@
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
+            [jobs.lib.cost :as cost]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.util :as u]
             [engine.memory :as mem]
@@ -10,7 +11,7 @@
 
 (def doc
   "Walk to the chest and deposit one stack per round: the named :items in the order named, or everything but tools
-  and armour (saplings included) in inventory order. :keep leaves at least that many of a name carried.
+  and armour (saplings included) and the body's 3-day food reserve (jobs.lib.cost/food-reserve) in inventory order. :keep leaves at least that many of a name carried.
   Ends with {:gave-up false} when nothing is left to put away, or {:gave-up true :reason r} after three failed
   transfers (warn chest_unusable). r is the transfer status or \"unreachable\".
   Memory: a :chest argument that took at least one item and finished clean is offered to the :chest place. It is
@@ -90,7 +91,8 @@
   [c]
   (let [{:keys [items keep]} (:args c)
         chest (chest-of (ctx/view c) (:args c))
-        pick (to-deposit (u/inventory (:primitives c)) items keep)]
+        inventory (u/inventory (:primitives c))
+        pick (to-deposit inventory items (if items keep (merge-with max (cost/food-reserve inventory) keep)))]
     (cond
       (nil? pick) (do (when (and (:chest (:args c)) (pos? (:deposited (ctx/mem c) 0)))
                         (places/offer! c :chest (:chest (:args c))))
