@@ -465,7 +465,7 @@
                     (not in-water)
                     (= 3 (count window))
                     (every? #(contains? sprint-moves (:move %)) window)
-                    (not-any? #(some? (:cx %)) window))))))
+                    (not-any? #(or (some? (:cx %)) (:bend %)) window))))))
 
 (defn yaw-to
   "Mineflayer's yaw: 0 faces -z, pi/2 faces -x."

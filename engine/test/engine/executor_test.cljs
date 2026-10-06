@@ -366,7 +366,8 @@
 (deftest sprint-conditions
   (let [walk-then-jump (assoc straight 3 (step 3 65 3 :jump))
         short-end (subvec straight 0 3)
-        crossing (assoc straight 2 (step 2 64 3 :walk {:cx 2.0 :cz 3.5}))]
+        crossing (assoc straight 2 (step 2 64 3 :walk {:cx 2.0 :cz 3.5}))
+        bending (assoc straight 2 (step 2 64 3 :walk {:bend true}))]
     (are [st ps sprint?] (= sprint? (:sprint (controls-of (ex/tick p st ps))))
       (state-at straight 1) (pose 0.6 64 3.5) true
       (state-at straight 1) (pose 0.6 64 3.5 {:on-ground false}) false
@@ -374,6 +375,7 @@
       (state-at walk-then-jump 2) (pose 1.6 64 3.5) false
       (state-at short-end 1) (pose 0.6 64 3.5) false
       (state-at crossing 1) (pose 0.6 64 3.5) false
+      (state-at bending 1) (pose 0.6 64 3.5) false
       (state-at straight 1) (pose 0.6 64 3.5) true)
     (is (false? (:sprint (controls-of (ex/tick (assoc p :sprint false) (state-at straight 1) (pose 0.6 64 3.5))))))))
 
