@@ -305,9 +305,8 @@
   [c]
   (let [p (:primitives c)
         me (u/self-pos c)]
-    (->> (look/seen-blocks p {:names container-names :radius chest-radius :max 32})
-         (keep (fn [{:keys [name pos age-ms]}]
-                 (when (or (> age-ms view-age-ms) (= name (u/block-name p pos))) pos)))
+    (->> (look/seen-blocks p {:names container-names :radius chest-radius :max 32 :live? true :live-within-ms view-age-ms})
+         (map :pos)
          (sort-by #(u/dist me %)))))
 
 (defn usable-chests

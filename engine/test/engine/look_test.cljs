@@ -1,6 +1,7 @@
 (ns engine.look-test
   "jobs.lib.look sight helpers over a real perception on the fake world: nothing is sensed through walls."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.fake :as fake]
             [engine.fake.raw-world :as fake-raw]
             [engine.perception :as perception]
             [engine.test-util :as tu]
@@ -72,3 +73,64 @@
           (let [n (count (.-calls (.-world p)))]
             (is (empty? (await (look/find-seen! c (assoc q :names ["gold_ore"])))))
             (is (= 8 (- (count (.-calls (.-world p))) n)) "one look around, four headings by two glances")))))))
+
+(deftest seen-blocks-rejects-a-query-that-is-not-names-or-match
+  (let [p (seeing {:blocks {"0,64,2" "iron_ore"}})]
+    (is (thrown? js/Error (look/seen-blocks p {:names (fn [n] (= n "iron_ore"))})) "names must be a coll")
+    (is (thrown? js/Error (look/seen-blocks p {:match #{"iron_ore"}})) "match must be a fn")
+    (is (thrown? js/Error (look/seen-blocks p {:names ["iron_ore"] :match any?})) "not both")
+    (is (thrown? js/Error (look/seen-blocks p {:radius 8})) "every block must be asked for")
+    (is (= ["iron_ore"] (names-of (look/seen-blocks p {:names #{"iron_ore"}}))))
+    (is (= ["iron_ore"] (names-of (look/seen-blocks p {:match #(= % "iron_ore")}))))
+    (is (some #{"iron_ore"} (names-of (look/seen-blocks p {:all? true :radius 3}))))))
+
+(defn change-unseen!
+  "The block at pos is air now, without the body having looked."
+  [p pos]
+  (swap! (fake/state p) update :blocks dissoc pos))
+
+(deftest a-seen-block-changed-out-of-view-keeps-its-old-name-and-age
+  (let [p (seeing {:blocks {"0,64,2" "iron_ore"}})
+        pos {:x 0 :y 64 :z 2}]
+    (change-unseen! p [0 64 2])
+    (is (= "iron_ore" (:name (look/seen-block p pos))) "memory is what was seen")
+    (is (number? (:age-ms (look/seen-block p pos))))
+    (is (= ["iron_ore"] (names-of (look/seen-blocks p {:names ["iron_ore"]}))))
+    (is (empty? (look/seen-blocks p {:names ["iron_ore"] :live? true})))))
+
+(deftest live-within-checks-only-cells-seen-that-recently
+  (let [p (seeing {:blocks {"0,64,2" "iron_ore"}})
+        q {:names ["iron_ore"] :live? true}]
+    (change-unseen! p [0 64 2])
+    (is (empty? (look/seen-blocks p (assoc q :live-within-ms 600000))) "seen just now: checked, gone")
+    (is (= 1 (count (look/seen-blocks p (assoc q :live-within-ms -1)))) "older than the window: trusted")))
+
+(defn hostile-ids [p o]
+  (set (map :id (filter #(= "hostile" (:kind %)) (look/seen-entities p o)))))
+
+(defn mob-stub
+  "Primitives whose entities() lists raw and whose knownMobs() lists known (JS maps as perception returns them)."
+  [raw known]
+  #js {:entities (fn [_] (clj->js raw)) :knownMobs (fn [] (clj->js known))})
+
+(def known-rows
+  [{:id 10 :name "zombie" :kind "hostile" :pos [3 64 0] :distance 3 :visible false :remembered true :ageMs 4000}
+   {:id 11 :name "skeleton" :kind "hostile" :pos [9 64 0] :distance 9 :visible true :seen true}
+   {:id 12 :name "creeper" :kind "hostile" :pos [20 64 0] :distance 20 :visible false :heard true}])
+
+(deftest seen-entities-lists-known-hostiles-and-filters-them
+  (let [p (mob-stub [{:id 4 :name "cow" :kind "passive" :pos [0 64 3]}
+                     {:id 99 :name "zombie" :kind "hostile" :pos [5 64 5] :visible false}] known-rows)
+        ids (fn [o] (set (map :id (look/seen-entities p o))))]
+    (is (= #{4 10 11 12} (ids {})) "raw hostiles are replaced by the known ones, a remembered one included")
+    (is (= #{4 10 11} (ids {:radius 10})))
+    (is (= #{10} (hostile-ids p {:radius 5})))
+    (is (= #{11} (hostile-ids p {:names ["skeleton"]})))
+    (is (= 3 (count (filter #(= "hostile" (:kind %)) (look/seen-entities p {:max 1})))) "max is not applied to known")
+    (is (= 4000 (:ageMs (first (filter #(= 10 (:id %)) (look/seen-entities p {}))))))))
+
+(deftest seen-blocks-properties-are-the-last-seen-ones
+  (let [p (seeing {:blocks {"0,64,2" "iron_ore"}})
+        b (first (look/seen-blocks p {:names ["iron_ore"] :properties? true}))]
+    (is (contains? b :properties))
+    (is (nil? (:properties (first (look/seen-blocks p {:names ["iron_ore"]})))))))

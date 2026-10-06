@@ -75,15 +75,22 @@
 (defn seen-blocks
   "The blocks the body has seen (perception's memory, radius capped at 64, never x-ray), nearest first, as
   {:name :pos :age-ms (:properties)}. q: :names (coll) or :match (name -> truthy), :radius (default 16), :max (64);
-  :live? drops cells whose block now differs from what was seen; :properties? adds the properties as last seen.
-  Empty without a perception."
-  [p {:keys [names match radius max live? properties?]}]
+  :live? drops cells whose block now differs from what was seen (with :live-within-ms only those seen that recently;
+  an older memory is trusted); :properties? adds the properties as last seen. One of :names, :match or :all? true
+  is required. Empty without a perception."
+  [p {:keys [names match radius max live? live-within-ms properties? all?]}]
+  (assert (or (nil? names) (sequential? names) (set? names) (array? names)) ":names is a coll of block names")
+  (assert (or (nil? match) (fn? match)) ":match is a fn of a block name")
+  (assert (not (and names match)) ":names or :match, not both")
+  (assert (or names match all?) "name the blocks wanted (:names or :match), or pass :all? true")
   (if-let [f (aget p "seenBlocks")]
     (let [q (cond-> {} names (assoc :names (vec names)) match (assoc :match match) radius (assoc :radius radius) max (assoc :max max))]
       (->> (array-seq (.call f p (clj->js q)))
            (keep (fn [b]
                    (let [pos (u/pos-of (.-pos b))]
-                     (when (or (not live?) (= (.-name b) (u/block-name p pos)))
+                     (when (or (not live?)
+                             (and live-within-ms (> (aget b "age-ms") live-within-ms))
+                             (= (.-name b) (u/block-name p pos)))
                        (cond-> {:name (.-name b) :pos pos :age-ms (aget b "age-ms")}
                          properties? (assoc :properties (some-> (.call (aget p "seenBlockAt") p (clj->js pos)) .-properties
                                                                 (js->clj :keywordize-keys true))))))))
