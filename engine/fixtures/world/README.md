@@ -57,7 +57,7 @@ patterns write `#at [x y z]` (absolute `[x y z]`) or `#xyz [x y z]` (absolute `{
 Act steps: `[:summon "type" p "{NBT}"]` (the runner adds `Tags:["wt"]` and `PersistenceRequired`), `[:job (spec) [:now]]`
 (submitted with `engine/tools/jobs.mjs`; its id joins the run's jobs), `[:wait-s n]`, `[:await pattern s]` (wait for an
 event since t0, error after s), `[:kill-body]`, `[:time-set ticks]` (needs `--allow-time`), `[:rcon "text"]` (with
-`$BODY $X $Y $Z` = the body and the plot origin).
+`$BODY $X $Y $Z $BOX` = the body, the plot origin and the plot box; every `@e` selector must be a plot box, e.g. `kill @e[type=zombie,$BOX]`).
 
 Expectations: `{:event pattern :within-s n}` passes when a matching event is logged within n s of t0;
 `{:no-event pattern :for-s n}` passes when none is logged for n s, or, with `:until pattern`, until the first event
