@@ -44,7 +44,7 @@
   ([spec plans zones jobs]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake-on-floor spec)
+        p (tu/seeing-all (tu/fake-on-floor spec))
         w (world/of-data plans {} zones)
         eng (core/create {:primitives p :jobs jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})

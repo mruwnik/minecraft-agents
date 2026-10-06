@@ -2,6 +2,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.gate :as gate]
             [jobs.lib.util :as u]
+            [jobs.lib.look :as look]
             [jobs.lib.near :as near]))
 
 (def doc
@@ -33,6 +34,13 @@
         age (when b (age-of b))]
     (boolean (and ripe age (< age ripe)))))
 
+(defn seen-crops
+  "The crops of the given names the body has seen within radius, still standing, nearest first, as {:name :pos :age}
+  (the age as last seen)."
+  [p names radius max]
+  (->> (look/seen-blocks p {:names names :radius radius :max max :live? true :properties? true})
+       (map (fn [b] (assoc b :age (some-> (get-in b [:properties :age]) js/Number))))))
+
 (defn targets
   "The unripe crop positions to fertilize, nearest first, minus the refused ones."
   [c]
@@ -45,9 +53,9 @@
         found (if at
                 (let [b (u/block-at p at)]
                   (if (unripe? b) [at] []))
-                (->> (array-seq (.blocks p #js {:radius reach :names (clj->js (vec (keys ripe-age))) :max 4096}))
-                     (filter unripe?)
-                     (map #(u/pos-of (.-pos %)))
+                (->> (seen-crops p (keys ripe-age) reach 4096)
+                     (filter #(some-> (:age %) (< (ripe-age (:name %)))))
+                     (map :pos)
                      (filter #(<= (u/dist mid %) radius))))]
     (->> (remove refused found)
          (gate/allowed c :fertilize.declined "fertilize" :harvest)
@@ -70,6 +78,8 @@
   [c]
   (let [p (:primitives c)
         used (:used (ctx/mem c) 0)
+        _ (when (and (empty? (targets c)) (not (look/looked-here? c)))
+            (await (look/look-around! c)))
         todo (targets c)]
     (if (or (empty? todo) (>= used (:max (:args c))) (not (has-meal? p)))
       (do (ctx/emit! c :fertilize.done :info {:used used :text (str "fertilized with " used " bone meal")})

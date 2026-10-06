@@ -167,10 +167,9 @@
 (defn unripe-in-box
   "The unripe crop cells of the box, read around its centre."
   [p box mid R]
-  (->> (array-seq (.blocks p #js {:radius (+ R (u/dist (u/pos-of (.-pos (.self p))) mid))
-                                  :names (clj->js (vec (keys fertilize/ripe-age))) :max 4096}))
-       (filter fertilize/unripe?)
-       (map #(u/pos-of (.-pos %)))
+  (->> (fertilize/seen-crops p (keys fertilize/ripe-age) (+ R (u/dist (u/pos-of (.-pos (.self p))) mid)) 4096)
+       (filter #(some-> (:age %) (< (fertilize/ripe-age (:name %)))))
+       (map :pos)
        (filter #(in-box? box %))
        vec))
 

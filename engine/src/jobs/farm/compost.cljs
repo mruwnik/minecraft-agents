@@ -1,6 +1,7 @@
 (ns jobs.farm.compost
   (:require [engine.ctx :as ctx]
             [jobs.lib.gate :as gate]
+            [jobs.lib.look :as look]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]))
 
@@ -70,8 +71,8 @@
   "The nearest composter within :radius that the zone rules let the job use."
   [c]
   (let [me (u/self-pos c)]
-    (->> (array-seq (.blocks (:primitives c) #js {:radius (:radius (:args c)) :names #js ["composter"]}))
-         (map #(u/pos-of (.-pos %)))
+    (->> (look/seen-blocks (:primitives c) {:names ["composter"] :radius (:radius (:args c)) :live? true})
+         (map :pos)
          (gate/allowed c :compost.declined "compost" :harvest)
          (sort-by #(u/dist me %))
          first)))
@@ -96,7 +97,7 @@
 (defn meal-near
   "The nearest bone_meal item entity within 3 blocks of the composter, or nil."
   [c at]
-  (->> (array-seq (.entities (:primitives c) #js {:kind "item" :radius 20}))
+  (->> (look/seen-items (:primitives c) {:radius 20})
        (filter #(= "bone_meal" (some-> (.-item %) .-name)))
        (filter #(<= (u/dist at (u/pos-of (.-pos %))) 3))
        first))

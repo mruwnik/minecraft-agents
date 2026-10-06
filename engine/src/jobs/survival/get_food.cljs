@@ -3,6 +3,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.child :as child]
+            [jobs.farm.fertilize :as fertilize]
             [jobs.lib.look :as look]
             [jobs.lib.result :as r]
             [jobs.lib.util :as u]
@@ -166,9 +167,9 @@
   body first, minus the ones that proved undiggable (a lazy seq)."
   [c ripe-ages center radius]
   (let [skipped (set (:skipped-blocks (ctx/mem c)))]
-    (->> (array-seq (.blocks (:primitives c) #js {:radius radius :names (clj->js (keys ripe-ages)) :max 64}))
-         (filter #(some-> (.-age %) (>= (ripe-ages (.-name %)))))
-         (map #(u/pos-of (.-pos %)))
+    (->> (fertilize/seen-crops (:primitives c) (keys ripe-ages) radius 64)
+         (filter #(some-> (:age %) (>= (ripe-ages (:name %)))))
+         (map :pos)
          (filter #(<= (u/dist % center) radius))
          (remove skipped))))
 
@@ -176,6 +177,8 @@
   "Dig the nearest ripe block, permitted ones first (blocks.dig walks there and collects the drops): :again, or nil
   when there is none. A block not dug is skipped from then on."
   [c ripe-ages center radius]
+  (when (and (empty? (ripe-blocks c ripe-ages center radius)) (not (look/looked-here? c)))
+    (await (look/look-around! c)))
   (let [{pos :option trespass :trespass} (access/choose c :dig (ripe-blocks c ripe-ages center radius) vector)]
     (when pos
       (access/trespass! c "get-food" trespass)

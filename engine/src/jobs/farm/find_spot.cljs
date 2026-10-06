@@ -1,5 +1,6 @@
 (ns jobs.farm.find-spot
   (:require [engine.ctx :as ctx]
+            [jobs.lib.look :as look]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]))
 
@@ -95,8 +96,8 @@
   [p {:keys [w h range depth limit]} from {:keys [next-x found]} budget]
   (let [reads (volatile! 0)
         name-fn (fn [pos] (vswap! reads inc) (u/block-name p pos))
-        waters (->> (array-seq (.blocks p #js {:radius (+ range w h 4) :names #js ["water"] :max 4096}))
-                    (into #{} (map (fn [b] [(.. b -pos -x) (.. b -pos -y) (.. b -pos -z)]))))
+        waters (->> (look/seen-blocks p {:names ["water"] :radius (+ range w h 4) :max 4096 :live? true})
+                    (into #{} (map (fn [{{:keys [x y z]} :pos}] [x y z]))))
         memo (fn [f] (let [cache (volatile! {})]
                        (fn [& k] (if-let [e (find @cache k)]
                                    (val e)

@@ -20,7 +20,7 @@
   "An engine over primitives p (made from world when not given) on dir."
   [{:keys [world p dir shared]}]
   (let [[seen sink] (tu/legacy-capture-sink)
-        p (or p (tu/fake-on-floor world))
+        p (or p (tu/seeing-all (tu/fake-on-floor world)))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (or dir (tu/tmp-dir)) :now #(deref clock)
                           :world (or shared (ew/of-data {} {} []))
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -86,9 +86,9 @@
 (defn plain-args [p] (merge {:radius 12 :crops nil :give-up 4 :reach 4.2 :replant true} p))
 
 (deftest ripe-crops-picks-ripe-wanted-cells-near-the-centre
-  (let [p (tu/fake {:blocks {"1,64,0" "wheat" "2,64,0" "wheat" "3,64,0" "carrots" "4,64,0" "carrots"
+  (let [p (tu/seeing-all (tu/fake {:blocks {"1,64,0" "wheat" "2,64,0" "wheat" "3,64,0" "carrots" "4,64,0" "carrots"
                              "5,64,0" "beetroots" "6,64,0" "beetroots" "7,64,0" "potatoes" "30,64,0" "wheat"}
-                    :ages {"1,64,0" 7 "2,64,0" 6 "3,64,0" 7 "4,64,0" 6 "5,64,0" 3 "6,64,0" 2 "7,64,0" 7 "30,64,0" 7}})
+                    :ages {"1,64,0" 7 "2,64,0" 6 "3,64,0" 7 "4,64,0" 6 "5,64,0" 3 "6,64,0" 2 "7,64,0" 7 "30,64,0" 7}}))
         xs (fn [cells] (mapv :x cells))]
     (are [args center skipped expected] (= expected (xs (harvest/ripe-crops p (plain-args args) center skipped)))
       {} origin [] [1 3 5 7]
@@ -386,8 +386,8 @@
 (deftest ripe-crops-finds-a-ripe-cell-past-hundreds-of-nearer-unripe-ones
   (let [xs (range -8 9)
         cells (for [x xs z xs] (cell-key x 64 z))
-        p (tu/fake {:blocks (assoc (zipmap cells (repeat "wheat")) "12,64,0" "wheat")
-                    :ages (assoc (zipmap cells (repeat 3)) "12,64,0" 7)})]
+        p (tu/seeing-all (tu/fake {:blocks (assoc (zipmap cells (repeat "wheat")) "12,64,0" "wheat")
+                    :ages (assoc (zipmap cells (repeat 3)) "12,64,0" 7)}))]
     (is (= [12] (mapv :x (harvest/ripe-crops p (plain-args {}) origin []))))))
 
 (deftest a-place-that-is-unreachable-leaves-the-cell-bare-after-three-tries

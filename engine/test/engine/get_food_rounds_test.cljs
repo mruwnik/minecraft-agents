@@ -19,7 +19,7 @@
   [world & {:keys [step-ms] :or {step-ms 0}}]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake (merge {:floor tu/walk-floor} world))
+        p (tu/seeing-all (tu/fake (merge {:floor tu/walk-floor} world)))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(swap! clock + step-ms)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen :clock clock}))

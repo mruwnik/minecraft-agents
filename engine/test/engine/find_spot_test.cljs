@@ -13,7 +13,7 @@
 (defn setup [world]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake world)
+        p (tu/seeing-all (tu/fake world))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen}))
@@ -200,7 +200,7 @@
           (is (= 1 (count (kinds seen :find-spot.found)))))))))
 
 (defn scan-at [world self args from]
-  (let [p (tu/fake {:blocks world :self {:pos self}})]
+  (let [p (tu/seeing-all (tu/fake {:blocks world :self {:pos self}}))]
     (fs/scan p (merge {:w 3 :h 3 :range 6 :depth 12 :limit 50} args) from)))
 
 (deftest scan-reports-sky-for-open-ground-and-not-under-a-roof

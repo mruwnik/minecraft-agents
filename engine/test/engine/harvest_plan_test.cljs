@@ -14,7 +14,7 @@
   "An engine over the fake world spec with the plans {id plan} as its world data."
   [spec plans]
   (let [[seen sink] (tu/legacy-capture-sink)
-        p (tu/fake-on-floor spec)
+        p (tu/seeing-all (tu/fake-on-floor spec))
         w (world/of-data plans {})
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref h/clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref h/clock)})

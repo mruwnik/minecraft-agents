@@ -1,7 +1,9 @@
 (ns jobs.farm.harvest
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
+            [jobs.farm.fertilize :as fertilize]
             [jobs.lib.gate :as gate]
+            [jobs.lib.look :as look]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
             [jobs.lib.walk :as walk]
@@ -119,9 +121,9 @@
         skipped (set skipped)
         here (u/pos-of (.-pos (.self p)))
         radius (+ (:radius args) (u/dist here center))]
-    (->> (array-seq (.blocks p #js {:radius radius :names (clj->js crops) :max 4096}))
-         (filter #(some-> (.-age %) (>= (ripe-age (.-name %)))))
-         (map #(u/pos-of (.-pos %)))
+    (->> (fertilize/seen-crops p crops radius 4096)
+         (filter #(some-> (:age %) (>= (ripe-age (:name %)))))
+         (map :pos)
          (filter #(<= (u/dist % center) (:radius args)))
          (remove skipped))))
 
@@ -398,6 +400,8 @@
   [c]
   (let [p (:primitives c)
         m (ctx/mem c)
+        _ (when (and (cutting? c) (empty? (ripe-of c (:skipped m))) (not (look/looked-here? c)))
+            (await (look/look-around! c)))
         ripe (when (cutting? c) (ripe-of c (:skipped m)))]
     (when (seq ripe)
       (let [here (u/self-pos c)

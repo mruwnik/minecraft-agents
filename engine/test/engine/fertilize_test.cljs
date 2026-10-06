@@ -13,7 +13,7 @@
 (defn setup [world & [shared]]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake-on-floor world)
+        p (tu/seeing-all (tu/fake-on-floor world))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :world (or shared (ew/of-data {} {} []))
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
