@@ -20,6 +20,7 @@
 # Memory: a missing server starts only with MIN_START_MB (3500) available; the compile itself uses the server's heap.
 # A server started outside the main checkout (a git worktree: integration batches, test copies) runs under a `server` slot of
 # tools/res-slot (held for the server's life, so its JVM counts against the memory floor; kind apart from compiles, max 4); no free slot in ~2 min exits 75 (retry).
+# A worktree server stops itself after MC_COMPILE_SERVER_IDLE_S (default 1200) s without a compile (a watcher started with it; the next compile restarts it).
 # That start waits before queueing (under <lock>.start only), so the global compile lock is free meanwhile.
 # A build that prints an :undeclared-var or :undeclared-ns warning exits 1 (shadow-cljs itself exits 0).
 # Env: MC_COMPILE_LOG=1 prints "waited Ns, compiled Ns".
@@ -81,16 +82,22 @@ start_server() {
   for _ in $(seq 1 300); do
     p=$(server_pid) && [ -s "$dir/.shadow-cljs/nrepl.port" ] && [ -s "$dir/.shadow-cljs/http.port" ] && break
     if ! kill -0 "$bg" 2>/dev/null && grep -q '^res-slot: busy' "$dir/.shadow-cljs/server.log" 2>/dev/null; then
-      echo "tools/compile: no free compile slot for a worktree $project server, retry later ($(grep '^res-slot: busy' "$dir/.shadow-cljs/server.log" | tail -n1))" >&2
+      echo "tools/compile: no free server slot for a worktree $project server, retry later ($(grep '^res-slot: busy' "$dir/.shadow-cljs/server.log" | tail -n1))" >&2
       exit 75
     fi
     sleep 0.5
   done
   server_pid >/dev/null || { echo "tools/compile: the $project server did not start (see $dir/.shadow-cljs/server.log)" >&2; exit 1; }
+  if [ ${#slot[@]} -gt 0 ]; then  # idle watcher: a worktree server must not outlive its use (it holds a server slot)
+    touch "$dir/.shadow-cljs/last-use"
+    (exec 8>&- 9>&-; exec setsid nohup bash -c 'while kill -0 "$1" 2>/dev/null; do
+      [ $(( $(date +%s) - $(stat -c %Y "$2" 2>/dev/null || echo 0) )) -gt "$3" ] && { kill "$1"; exit; }
+      sleep "$4"; done' _ "$(server_pid)" "$dir/.shadow-cljs/last-use" "${MC_COMPILE_SERVER_IDLE_S:-1200}" "${MC_COMPILE_IDLE_POLL_S:-30}" >/dev/null 2>&1 </dev/null) &
+  fi
   sleep 3
 }
 
-# A worktree's server start waits up to ~2 min for a compile slot: do it before queueing, under a lock of its own, so the
+# A worktree's server start waits up to ~2 min for a server slot: do it before queueing, under a lock of its own, so the
 # global compile lock is never held meanwhile. The start lock keeps two compiles from both starting a server; the queued
 # part then finds the server running.
 if [ "$stop" = 0 ] && [ "$(cd "$repo" && git rev-parse --git-dir)" != "$(cd "$repo" && git rev-parse --git-common-dir)" ]; then
@@ -135,6 +142,7 @@ fi
 server_pid >/dev/null || start_server
 
 cd "$dir" || exit 1
+[ ! -e .shadow-cljs/last-use ] || touch .shadow-cljs/last-use  # keeps a worktree server's idle watcher off
 # the server (and any detached child) must not inherit the lock fd
 out=$(mktemp)
 npx shadow-cljs "$verb" "${builds[@]}" 9>&- 2>&1 | tee "$out"

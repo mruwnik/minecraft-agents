@@ -91,4 +91,15 @@ MC_COMPILE_MIN_START_MB=0 "$T/wt/tools/compile" engine test >/dev/null 2>&1 & WP
 sleep 1.5
 flock -n "$MC_COMPILE_LOCK" true; check "lock free while a worktree waits for a slot" "$?" 0
 wait $WP; check "worktree without a slot exits 75" "$?" 75
+
+# a worktree's server stops after an idle time (no compile): the slot frees; a compile within the time keeps it
+printf '#!/bin/sh\nshift\nexec "$@"\n' > "$T/wt/tools/res-slot"; chmod +x "$T/wt/tools/res-slot"
+rm -f "$T/wt/engine/.shadow-cljs/"*
+printf '#!/bin/sh\ncase "$1 $2" in "shadow-cljs server") echo $$ > .shadow-cljs/server.pid; echo 1 > .shadow-cljs/nrepl.port; echo 1 > .shadow-cljs/http.port; exec sleep 300;; esac\n' > "$T/bin/npx"
+export MC_COMPILE_MIN_START_MB=0 MC_COMPILE_SERVER_IDLE_S=3 MC_COMPILE_IDLE_POLL_S=1
+timeout 30 "$T/wt/tools/compile" engine test >/dev/null 2>&1; check "worktree compile rc" "$?" 0
+WSRV=$(cat "$T/wt/engine/.shadow-cljs/server.pid")
+sleep 1; kill -0 "$WSRV" 2>/dev/null; check "worktree server alive right after a compile" "$?" 0
+sleep 6; kill -0 "$WSRV" 2>/dev/null; check "worktree server gone after the idle time" "$?" 1
+unset MC_COMPILE_MIN_START_MB MC_COMPILE_SERVER_IDLE_S MC_COMPILE_IDLE_POLL_S
 exit $fail

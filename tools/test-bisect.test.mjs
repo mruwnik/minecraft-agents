@@ -87,7 +87,7 @@ test('worktree setup busy past the deadline: exit 75 with a message, no worktree
   try {
     const r = run(d, ['engine.a-test', '--good', shas[0], '--bad', shas[5]], { WT_BUSY_N: '1000', TEST_BISECT_RETRY_SLEEP: '0', TEST_BISECT_SLOT_WAIT: '1' })
     assert.equal(r.status, 75, r.stdout + r.stderr)
-    assert.match(r.stderr, /no free compile slot/)
+    assert.match(r.stderr, /no free server slot/)
     assert.equal(sh(d, 'git', 'worktree', 'list').split('\n').length, 1)
   } finally { rmSync(d, { recursive: true, force: true }) }
 })

@@ -3,7 +3,7 @@
 # Finds the first commit where the engine test namespaces fail: one detached worktree (tools/integration-worktree.sh), `git bisect run` there,
 # each step compiles and runs tools/test-engine <ns>... of THAT commit (res-slot server and tests slots, as test-engine does).
 # Verdicts per step: pass = good, test failure = bad, compile failure / namespace missing / timeout / busy slot / killed (75, 137, 143) = skipped (exit 125).
-# Worktree setup waits for a free compile slot (retry every TEST_BISECT_RETRY_SLEEP s, default 20, up to TEST_BISECT_SLOT_WAIT s, default 1800), then exits 75.
+# Worktree setup waits for a free server slot (retry every TEST_BISECT_RETRY_SLEEP s, default 20, up to TEST_BISECT_SLOT_WAIT s, default 1800), then exits 75.
 # The per-step explicit compile stays: test-engine passes a compile failure on as a plain exit 1, which would score bad.
 # Defaults: bad = HEAD, good = HEAD~20. Prints the first bad commit, its failing tests and the step count. TEST_EVENTS=1: @@test phase lines per step.
 # The worktree (and its shadow servers) is removed on exit, error, INT and TERM.
@@ -64,7 +64,7 @@ while true; do
   [ -d "$wt" ] && "$wt_sh" --remove "$wt" >/dev/null 2>&1
   git -C "$repo" worktree prune
   if [ $rc -eq 75 ]; then
-    [ "$(date +%s)" -lt "$deadline" ] || { cat "$work/setup.log" >&2; echo "test-bisect: no free compile slot for the worktree after ${TEST_BISECT_SLOT_WAIT:-1800} s, retry later" >&2; exit 75; }
+    [ "$(date +%s)" -lt "$deadline" ] || { cat "$work/setup.log" >&2; echo "test-bisect: no free server slot for the worktree after ${TEST_BISECT_SLOT_WAIT:-1800} s, retry later" >&2; exit 75; }
     sleep "${TEST_BISECT_RETRY_SLEEP:-20}"
     continue
   fi
