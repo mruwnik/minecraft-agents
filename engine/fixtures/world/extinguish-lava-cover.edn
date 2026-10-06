@@ -2,7 +2,8 @@
 ;; lava covers it with a carried non-falling block: one cover per adjacent lava cell, at most 3 per run, never sand or
 ;; gravel (they fall into the lava). Resistance V so the fire cannot kill the probe. The body stands on a stone
 ;; platform (y 0) at [16 1 16]; each lava source (placed with the fire, right before the job) sits above a one-cell pit,
-;; so it flows down, not sideways into the body's cell; a stone block behind each source is the support the place clicks. :time :any (short runs on a lit-or-not open plot).
+;; so it flows down first; once the pit fills it spreads sideways, so a slow job start finds the body in lava (four-lava
+;; case); a stone block behind each source is the support the place clicks. :time :any (short runs on a lit-or-not open plot).
 {:defaults
  {:tags [:survival :lava :extinguish]
   :time :any

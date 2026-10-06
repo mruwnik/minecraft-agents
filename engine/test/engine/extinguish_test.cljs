@@ -485,12 +485,12 @@
           (is (= 1 (count (of-kind seen :extinguish_stuck)))))))))
 
 (defn setup-blocked
-  "A body on fire beside a fire cell, every raw moveTo blocked, go-to replaced by (step c p n) for its n-th call
-  (it returns the round's value). {:eng :p :seen :go-tos (atom of calls)}."
-  [step]
+  "A body on fire beside a fire cell (or in world), every raw moveTo blocked, go-to replaced by (step c p n) for its
+  n-th call (it returns the round's value). {:eng :p :seen :go-tos (atom of calls)}."
+  [step & [world]]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake {:self {:onFire true} :blocks (merge (floor 8) {"1,64,0" "fire"})})
+        p (tu/fake (or world {:self {:onFire true} :blocks (merge (floor 8) {"1,64,0" "fire"})}))
         n (atom 0)
         go-to {:check (fn [_] true)
                :round (fn ^:async go-to-round [c] (step c p (swap! n inc)))}
@@ -512,6 +512,29 @@
           (is (= [] (:list (core/state eng))))
           (is (= 1 @go-tos))
           (is (= 1 (count (calls p "moveTo"))) "one blocked step, then go-to, not three stalled walks")
+          (is (= [] (of-kind seen :extinguish_stuck)))
+          (is (= 1 (count (of-kind seen :completed)))))))))
+
+(deftest in-lava-ringed-by-lava-a-blocked-step-covers-the-lava-before-the-go-to
+  ;; four-lava live case: the sources spread into the fire cell before the run starts, so the body is in lava with
+  ;; no way out until covers give it a step
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [places-at-go-to (atom nil)
+              world {:self {:onFire true :inLava true} :inventory [{:name "cobblestone" :count 8}]
+                     :blocks (merge (floor 8) {"0,64,0" "lava" "1,64,0" "lava" "-1,64,0" "lava" "0,64,1" "lava" "0,64,-1" "lava"})}
+              {:keys [eng p seen go-tos]} (setup-blocked (fn [c p _]
+                                                           (reset! places-at-go-to (count (calls p "place")))
+                                                           (swap! (fake/state p) update :self assoc :onFire false :inLava false)
+                                                           ((:result c) {:status :done :arrived true})
+                                                           :done)
+                                                         world)]
+          (await (run-until-empty eng 3))
+          (is (= extinguish/max-covers @places-at-go-to) "covers first, then the go-to")
+          (is (= (repeat extinguish/max-covers "cobblestone") (mapv (comp :item call-args) (calls p "place"))))
+          (is (= 1 @go-tos))
+          (is (= 1 (count (calls p "moveTo"))) "one blocked step")
           (is (= [] (of-kind seen :extinguish_stuck)))
           (is (= 1 (count (of-kind seen :completed)))))))))
 

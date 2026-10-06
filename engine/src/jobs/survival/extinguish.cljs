@@ -22,7 +22,7 @@
   4. In lava, or with no water in reach, walks to the best nearby cell within :step blocks.
      It must be passable, solid underfoot and not fire, lava, magma or a campfire.
      Scoring favours distance from those hazards (up to 4 blocks) and height, and charges a small cost per block walked.
-  Water also counts powder snow. Not in lava, with a cover block carried (cobblestone, stone, dirt, ...) it first
+  Water also counts powder snow. Not in lava (or in lava once a walk was blocked), with a cover block carried (cobblestone, stone, dirt, ...) it first
   places one on a lava cell next to the feet (side or below) with open air above it, so the body does not step past it. Never sand, gravel or
   other falling blocks, never in another's zone or claim, and at most 3 covers per run.
   5. On fire, not in lava, with no water in reach and no hazard within 1.5 blocks, there is nothing useful to do.
@@ -324,7 +324,7 @@
           water
           (do (await (move! c (:pos water))) :again)
 
-          (and (not lava?) (< (:covers (ctx/mem c) 0) max-covers) (cover-item p)
+          (and (or (not lava?) (:blocked (ctx/mem c))) (< (:covers (ctx/mem c) 0) max-covers) (cover-item p)
                (let [lava (:pos (adjacent-lava pos (exposed-lava p pos scanned)))]
                  (and lava
                       (nil? (access/trespass-refusal c :place lava))
@@ -350,9 +350,12 @@
               (await (stand-pass! c))
 
               :else
-              (let [status (if (:blocked (ctx/mem c)) "blocked" (await (move! c target)))]
+              (let [blocked? (:blocked (ctx/mem c))
+                    status (if blocked? "blocked" (await (move! c target)))]
                 (cond
                   (clear? c) :done
+                  ;; in lava the first blocked step covers the lava around first (next passes): the go-to needs a step
+                  (and lava? (not blocked?) (= "blocked" status)) (do (ctx/update-mem! c assoc :blocked true) :again)
                   (= "blocked" status) (await (escape! c target))
                   :else :again)))))))))
 
