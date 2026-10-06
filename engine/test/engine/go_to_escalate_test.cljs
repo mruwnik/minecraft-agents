@@ -8,6 +8,7 @@
             [engine.fake :as fake]
             [engine.memory :as mem]
             [engine.jobs.escape :as escape]
+            [jobs.movement.go-to :as go-to]
             [engine.registry :as registry]
             [engine.test-util :as tu :refer [box]]
             [engine.triggers :as triggers]
@@ -477,3 +478,23 @@
           (is (= #{[[1 62 0] "cobblestone"] [[1 63 0] "cobblestone"]}
                  (set (map (comp (juxt :cell :block) :data) (mem/entries (mem/view (:store eng)) :escalation-placed)))
                )))))))
+
+(deftest escape-choose-walks-along-the-wall-when-the-wall-in-line-is-an-iron-door
+  (let [iron (-> room (assoc "3,64,0" "iron_door" "3,65,0" "iron_door"))
+        c (escape/choose (tu/fake (merge in-room {:blocks iron :self {:pos {:x 2 :y 64 :z 0}}})) [2 64 0] [8 64 0])]
+    (is (= :approach (:step c)))
+    (is (not= [2 64 0] (:pos c)))))
+
+(deftest go-to-escalates-on-a-door-that-doors-never-refuses
+  (let [ok? (fn [result doors] (go-to/escalate-reason? result doors))]
+    (is (true? (ok? {:reason :exhausted} :shut)))
+    (is (true? (ok? {:reason :abilities :kind :open} :never)) "the planner's way through a door, refused as a wall")
+    (is (false? (ok? {:reason :abilities :kind :open} :shut)))
+    (is (false? (ok? {:reason :abilities :kind :break} :never)))
+    (is (false? (ok? {:reason :stuck} :never)))))
+
+(deftest escape-enclosed-counts-doors-as-walls-under-doors-never
+  (let [wide (merge room (box -20 63 -20 30 63 20 "stone"))
+        p (tu/fake (merge in-room {:blocks (assoc wide "3,64,0" "oak_door" "3,65,0" "oak_door")}))]
+    (is (false? (escape/enclosed? p :shut)) "a wooden door is a way out")
+    (is (true? (escape/enclosed? p :never)) "doors :never: the room is shut")))

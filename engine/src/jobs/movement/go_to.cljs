@@ -120,6 +120,14 @@
   never escalates: changing the world there would hide a go-to bug."
   #{:exhausted :goal-enclosed})
 
+(defn escalate-reason?
+  "Whether a walk result's reason proves the way needs the world changed (escalate-reasons), or is the planner's way
+  through a door that :doors :never refuses (:abilities of kind :open): such a door is a wall."
+  [result doors]
+  (let [reason (some-> (:reason result) keyword)]
+    (boolean (or (contains? escalate-reasons reason)
+                 (and (= :abilities reason) (= :never doors) (= :open (some-> (:kind result) keyword)))))))
+
 (defn feet-cell [c]
   (let [{:keys [x y z]} (u/self-pos c)]
     [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]))
@@ -212,9 +220,9 @@
   the body's own shelter: it is shut in on purpose."
   [c result]
   (and (:escalate (:args c))
-       (contains? escalate-reasons (some-> (:reason result) keyword))
+       (escalate-reason? result (some-> (:doors (:args c)) keyword))
        (not (sh/sheltered-in c))
-       (reach/enclosed? (:primitives c))
+       (escape/enclosed? (:primitives c) (some-> (:doors (:args c)) keyword))
        (not (escape/door-beside? (:primitives c) (feet-cell c) (some-> (:doors (:args c)) keyword)))))
 
 (defn ^:async give-up-or-escalate! [c pos tries status result]

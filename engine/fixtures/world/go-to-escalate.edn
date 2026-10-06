@@ -46,17 +46,106 @@
             {:no-event {:source :job :kind :go-to.escalated :data {:step :stair}} :for-s 30}
             {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 30}]
    :after [[:block [20 1 16] "oak_planks"] [:block [20 2 16] "oak_planks"]]}
-  {:name "walled-yard-with-an-iron-door-does-not-dig"
-   ;; a stone-walled yard (no roof) with a shut iron door in the east wall: the door is the way out, nothing is dug
+  {:name "walled-yard-iron-door-in-line-digs-out"
+   ;; a stone-walled yard (no roof), a shut iron door in the east wall straight toward the goal: an iron door is a wall,
+   ;; not an exit, so the body must dig out (never give up, never end :stuck without escalating)
    :blocks [[:fill [10 0 10] [22 3 22] "air"] [:fill [8 0 8] [26 0 26] "stone"]
             [:fill [12 1 12] [20 3 20] "stone" :outline] [:fill [13 1 13] [19 3 19] "air"]
             [:set [20 1 16] "iron_door[facing=east,half=lower]"] [:set [20 2 16] "iron_door[facing=east,half=upper]"]]
    :body {:at [16.5 1 16.5] :inventory [["stone_pickaxe" 1] ["dirt" 8]]}
    :act [[:job (jobs.movement.go-to {:pos #at [24 1 16] :range 1})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 90 :of-job true}
-            {:no-event {:source :job :kind :go-to.escalated} :for-s 30}
+   :expect [{:event {:source :job :kind :go-to.escalated} :within-s 60 :of-job true}
+            {:event {:source :job :kind :result :data {:arrived true}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :result :data {:escalation {:why :no-dig}}} :for-s 20}]
+   :after [[:body-near [24.5 1 16.5] 2] [:block [20 1 16] "iron_door"]]}
+  {:name "walled-yard-iron-door-beside-digs-natural-wall"
+   ;; the iron door is in the north wall, off the line to the goal: the stone wall east is dug
+   :blocks [[:fill [10 0 10] [22 3 22] "air"] [:fill [8 0 8] [26 0 26] "stone"]
+            [:fill [12 1 12] [20 3 20] "stone" :outline] [:fill [13 1 13] [19 3 19] "air"]
+            [:set [16 1 12] "iron_door[facing=north,half=lower]"] [:set [16 2 12] "iron_door[facing=north,half=upper]"]]
+   :body {:at [16.5 1 16.5] :inventory [["stone_pickaxe" 1] ["dirt" 8]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [24 1 16] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.escalated} :within-s 60 :of-job true}
+            {:event {:source :job :kind :result :data {:arrived true}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :result :data {:escalation {:why :no-dig}}} :for-s 20}]
+   :after [[:body-near [24.5 1 16.5] 2] [:block [16 1 12] "iron_door"]]}
+  {:name "oak-door-with-doors-never-digs"
+   ;; stone room, an oak door in the east wall and :doors :never (a wall for the walk): the room is dug out, no :no-dig
+   :blocks [[:fill [10 0 10] [22 3 22] "air"] [:fill [8 0 8] [26 0 26] "stone"]
+            [:fill [12 0 12] [20 3 20] "stone" :hollow]
+            [:set [20 1 16] "oak_door[facing=east,half=lower]"] [:set [20 2 16] "oak_door[facing=east,half=upper]"]]
+   :body {:at [16.5 1 16.5] :inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [24 1 16] :range 1 :doors :never})]]
+   :expect [{:event {:source :job :kind :go-to.escalated} :within-s 60 :of-job true}
+            {:event {:source :job :kind :result :data {:arrived true}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :result :data {:escalation {:why :no-dig}}} :for-s 20}]
+   :after [[:body-near [24.5 1 16.5] 2]]}
+  {:name "cobblestone-wall-room-is-never-dug"
+   :blocks [[:fill [10 0 10] [22 3 22] "air"] [:fill [8 0 8] [26 0 26] "stone"]
+            [:fill [12 0 12] [20 3 20] "cobblestone" :hollow]]
+   :body {:at [16.5 1 16.5] :inventory [["stone_pickaxe" 1] ["dirt" 8]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [24 1 16] :range 1})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false :escalation {:step :none :why :no-dig}}} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :go-to.escalated :data {:step :clear-path}} :for-s 30}
             {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 30}]
-   :after [[:block [20 1 16] "iron_door"] [:not-block [19 1 16] "air"]]}
+   :after [[:block [20 1 16] "cobblestone"] [:block [20 2 16] "cobblestone"]]}
+  {:name "oak-log-wall-room-is-never-dug"
+   :blocks [[:fill [10 0 10] [22 3 22] "air"] [:fill [8 0 8] [26 0 26] "stone"]
+            [:fill [12 0 12] [20 3 20] "oak_log" :hollow]]
+   :body {:at [16.5 1 16.5] :inventory [["stone_pickaxe" 1] ["iron_axe" 1] ["dirt" 8]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [24 1 16] :range 1})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false :escalation {:step :none :why :no-dig}}} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :go-to.escalated :data {:step :clear-path}} :for-s 30}
+            {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 30}]
+   :after [[:block [20 1 16] "oak_log"] [:block [20 2 16] "oak_log"]]}
+  {:name "pillar-refused-by-others-plan-stairs-out-and-restores"
+   ;; another plan's footprint holds the shaft cells above the floor: the pillar's places are refused, so the body stairs
+   ;; out east and its holes are put back
+   :plans [{:id "other" :parts [{:id "shaft" :cells [#at [16 0 16] #at [16 1 16] #at [16 2 16] #at [16 3 16]] :want [:any "cobblestone"]}]}]
+   :body {:inventory [["dirt" 8] ["stone_pickaxe" 1]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 90 :of-job true}
+            {:event {:source :job :kind :go-to.restored} :within-s 140 :of-job true}
+            {:event {:source :job :kind :result :data {:arrived true}} :within-s 160 :of-job true}]
+   :after [[:not-block [17 1 16] "air"] [:body-near [20.5 4 16.5] 2]]
+   :limit-s 200}
+  {:name "stair-wall-in-others-plan-is-never-dug"
+   ;; natural stone, but another plan's footprint covers the whole east side of the shaft: nothing may be dug
+   :plans [{:id "other" :parts [{:id "wall" :cells [#at [17 0 16] #at [17 1 16] #at [17 2 16] #at [17 3 16]
+                                                     #at [15 0 16] #at [15 1 16] #at [15 2 16] #at [15 3 16]
+                                                     #at [16 0 17] #at [16 1 17] #at [16 2 17] #at [16 3 17]
+                                                     #at [16 0 15] #at [16 1 15] #at [16 2 15] #at [16 3 15]]
+                                           :want [:any "stone"]}]}]
+   :body {:inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false :escalation {:step :none :why :no-dig}}} :within-s 90 :of-job true}
+            {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 30}]
+   :after [[:block [17 1 16] "stone"] [:body-near [16.5 0 16.5] 1]]}
+  {:name "trapped-again-digs-its-own-cobble"
+   ;; the first stair out is put back with cobblestone (what stone drops); the body is moved into the shaft again and the
+   ;; second go-to digs those own cobble cells (not natural, but go-to put them there)
+   :body {:inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1})]
+         [:await {:source :job :kind :result :data {:arrived true}} 150]
+         [:wait-s 15]
+         [:rcon "execute positioned $X $Y $Z run tp $BODY ~16.5 ~ ~16.5"]
+         [:wait-s 3]
+         [:job (jobs.movement.go-to {:pos #at [20 4 17] :range 1})]
+         [:wait-s 60]]
+   :expect [{:event {:source :job :kind :go-to.restored} :within-s 150 :of-job true}]
+   :after [[:body-near [20.5 4 17.5] 2]]
+   :limit-s 300}
+  {:name "own-shelter-does-not-dig"
+   ;; dig-in seals the body in a pit; a go-to from inside its own shelter gives up instead of digging out
+   :plot {:height 12}
+   :blocks [[:fill [10 0 10] [22 3 22] "dirt"] [:fill [16 0 16] [16 3 16] "air"]]
+   :body {:inventory [["stone_pickaxe" 1] ["iron_shovel" 1]]}
+   :act [[:job (jobs.survival.dig-in {})]
+         [:await {:source :job :kind :dig-in.sealed} 90]
+         [:job (jobs.movement.go-to {:pos #at [24 4 16] :range 1})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :go-to.escalated} :for-s 30}]
+   :limit-s 160}
   {:name "stair-cut-short-keeps-its-holes-in-the-ledger"
    ;; the body dies after the first stair step: the job is cancelled, nothing is refilled under it, and the dug cells
    ;; stay as :tidy entries with :escalation true (check worlds/.../memory.edn) for restore-broken

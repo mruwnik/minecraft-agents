@@ -12,6 +12,7 @@
   Cells are [x y z]. block-at maps a cell to its block name (nil when not loaded)."
   (:require [engine.access.rules :as rules]
             [engine.jobs.reach :as reach]
+            [engine.jobs.shelter :as sh]
             [engine.jobs.util :as u]))
 
 (def max-depth 8)
@@ -91,6 +92,19 @@
          cell)))
 
 (def usable-door #"^(?!iron_door$)[a-z_]+_door$|_fence_gate$")
+
+(def door-block #"_door$|_fence_gate$|_trapdoor$")
+
+(defn enclosed?
+  "reach/enclosed?, with every door, gate and trapdoor a wall when doors is :never (the walk will not open them)."
+  [p doors]
+  (if (not= :never doors)
+    (reach/enclosed? p)
+    (let [base (reach/lookup p reach/body-kind-of)
+          block-at (block-at-of p)
+          kind-at (fn [x y z] (if (some->> (block-at [x y z]) (re-find door-block)) :solid (base x y z)))
+          {:keys [x y z]} (sh/feet p)]
+      (= :closed (reach/flood (partial reach/forward kind-at) [x y z] reach/room-cells)))))
 
 (defn open-door-beside?
   "door-beside? without the :doors check."
@@ -191,6 +205,24 @@
 
 (def max-door 3)
 
+(defn door-spot
+  "The nearest cell (breadth-first through standable cells, within wall-search-radius) other than feet from which a
+  wall straight along dir is a door (door) whose every cell is diggable?: where to walk when the wall at feet cannot be
+  dug (an iron door or another's build in line). nil when none."
+  [p feet dir diggable]
+  (let [block-at (block-at-of p)
+        [hx _ hz] feet
+        near? (fn [[x _ z]] (and (<= (js/Math.abs (- x hx)) wall-search-radius)
+                                 (<= (js/Math.abs (- z hz)) wall-search-radius)))
+        standable? (fn [[x y z]] (reach/standable-cell? p {:x x :y y :z z}))
+        ok? (fn [cell] (when-let [gap (door block-at cell dir max-door)] (every? diggable (:cells gap))))]
+    (loop [queue #queue [feet] seen #{feet}]
+      (when-let [cell (peek queue)]
+        (if (and (not= cell feet) (ok? cell))
+          cell
+          (let [nbrs (->> cardinals (map #(ahead cell % 1)) (filter #(and (not (seen %)) (near? %) (standable? %))))]
+            (recur (into (pop queue) nbrs) (into seen nbrs))))))))
+
 (def heading-dirs (into {} (map (fn [[k v]] [v k])) heading-names))
 
 (defn choose
@@ -227,6 +259,10 @@
 
        (and gap (every? #(diggable? block-at may-dig? own? %) (:cells gap)))
        {:step :clear-path :heading (heading-names dir)}
+
+       (and dir (not (skip :approach)) (walled-side? block-at feet)
+            (door-spot p feet dir #(diggable? block-at may-dig? own? %)))
+       {:step :approach :pos (door-spot p feet dir #(diggable? block-at may-dig? own? %))}
 
        (and (not (skip :approach)) (not (walled-side? block-at feet)))
        (if-let [spot (wall-spot p feet dir)] {:step :approach :pos spot} {:step :none :why :no-wall})
