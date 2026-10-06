@@ -16,6 +16,8 @@
 #   Every flag that takes a value refuses one starting with "--" (so a missing value never swallows the next flag).
 # See tools/README.md. Never stashes, resets, amends or pushes.
 set -euo pipefail
+# An unexpected failure always says which command failed (git prints its own message first).
+trap 'echo "commit-mine: command failed (exit $?) at line $LINENO: $BASH_COMMAND" >&2' ERR
 
 CORE_RE='^engine/src/engine/(core|expr|triggers|takeover|trigger_api)\.cljs$|^engine/src/engine/registry\.(clj|cljs)$'
 # Built from pieces so this file does not trip its own owner-name check.
@@ -26,18 +28,18 @@ LARGE_JS_LINES=40
 die() { echo "commit-mine: $*" >&2; exit "${2:-1}"; }
 
 # A flag's value must exist and must not look like another flag.
-val() { case "$2" in ""|--*) die "$1 needs a value, got '${2:-<nothing>}' (a value may not start with --)" ;; esac; printf '%s' "$2"; }
+val() { case "$2" in ""|--*) die "$1 needs a value, got '${2:-<nothing>}' (a value may not start with --)" ;; esac; REPLY="$2"; }
 
 card=""; msg=""; hunks=""; approved=""; owner_said=""; expect=""; expect_lines=""; paths=()
 while [ $# -gt 0 ]; do
   case "$1" in
-    --card) card="$(val --card "${2-}")"; shift 2 ;;
-    -m) msg="$(val -m "${2-}")"; shift 2 ;;
-    --hunks) hunks="$(val --hunks "${2-}")"; shift 2 ;;
-    --expect-hunks) expect="$(val --expect-hunks "${2-}")"; shift 2 ;;
-    --expect-lines) expect_lines="$(val --expect-lines "${2-}")"; shift 2 ;;
-    --approved-core) approved="$(val --approved-core "${2-}")"; shift 2 ;;
-    --owner-said) owner_said="$(val --owner-said "${2-}")"; shift 2 ;;
+    --card) val --card "${2-}"; card="$REPLY"; shift 2 ;;
+    -m) val -m "${2-}"; msg="$REPLY"; shift 2 ;;
+    --hunks) val --hunks "${2-}"; hunks="$REPLY"; shift 2 ;;
+    --expect-hunks) val --expect-hunks "${2-}"; expect="$REPLY"; shift 2 ;;
+    --expect-lines) val --expect-lines "${2-}"; expect_lines="$REPLY"; shift 2 ;;
+    --approved-core) val --approved-core "${2-}"; approved="$REPLY"; shift 2 ;;
+    --owner-said) val --owner-said "${2-}"; owner_said="$REPLY"; shift 2 ;;
     --) shift; paths+=("$@"); break ;;
     -*) die "unknown option $1" ;;
     *) paths+=("$1"); shift ;;
@@ -136,13 +138,13 @@ trap cleanup EXIT INT TERM HUP
 # Require the caller to state how many hunks `git diff <paths>` shows (untracked file = 1).
 if [ -z "$hunks" ]; then
   count_hunks() { # prints "<hunks> <path>" per changed file
-    git diff -- "${paths[@]}" | awk '/^diff --git /{f=$4; sub(/^b\//,"",f)} /^@@/{n[f]++} /^Binary files/{n[f]++} END{for(k in n)print n[k], k}'
+    git diff HEAD -- "${paths[@]}" | awk '/^diff --git /{f=$4; sub(/^b\//,"",f)} /^@@/{n[f]++} /^Binary files/{n[f]++} END{for(k in n)print n[k], k}'
     git ls-files --others --exclude-standard -- "${paths[@]}" | awk '{print 1, $0}'
   }
   numstat_lines() { awk -F'\t' '{ if ($1 == "-") t += 1; else t += $1 + $2 } END{print t+0}'; }
   count_lines() { # added+deleted lines in the working tree for the given paths (untracked files count their lines)
     {
-      git diff --numstat -- "${paths[@]}"
+      git diff HEAD --numstat -- "${paths[@]}"
       git ls-files --others --exclude-standard -z -- "${paths[@]}" | while IFS= read -r -d '' f; do
         printf '%s\t0\t%s\n' "$(awk 'END{print NR}' "$f")" "$f"
       done
@@ -177,7 +179,14 @@ fi
 
 # Stage.
 staged_by_me=1
-if [ -n "$hunks" ]; then git apply --cached "$hunks"; else git add -A -- "${paths[@]}"; fi
+if [ -n "$hunks" ]; then
+  git apply --cached "$hunks"
+else
+  # Only what differs from the index: a pathspec that matches nothing (all deleted and already staged by git rm) makes git add fail.
+  git ls-files -m -d -o --exclude-standard -z -- "${paths[@]}" > "$LOCK/todo"
+  [ ! -s "$LOCK/todo" ] || git add -A --pathspec-from-file="$LOCK/todo" --pathspec-file-nul
+  rm -f "$LOCK/todo"
+fi
 
 # The staged diff must be exactly what the caller named; otherwise refuse (cleanup unstages).
 patch_sig() { # "<file>\t<+/- line>" for every changed line inside a hunk, from a diff on stdin

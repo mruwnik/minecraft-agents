@@ -109,4 +109,24 @@ out=$(tools/commit-mine --card c -m m --expect-hunks 1 --expect-lines 2 m.txt 2>
 check "adjacent foreign hunk: HEAD unchanged" "$(git rev-parse HEAD)" "$before"
 check "adjacent foreign hunk: counts shown" "$(grep -c 'Total: 4 line' <<<"$out")" 1
 tools/commit-mine --card c -m m --expect-lines 4 m.txt >/dev/null 2>&1; check "right line count commits" "$?" 0
+# Deleted files: staged (git rm) or not, many, a whole directory, mixed with an edit.
+mkdir -p gone/sub; for i in $(seq 1 120); do echo $i > gone/f$i.txt; done; echo s > gone/sub/s.txt; seq 1 5 > e.txt
+git add gone e.txt; git commit -q -m gone
+git rm -rq gone; printf '%s\n' x >> e.txt
+files=$(for i in $(seq 1 120); do printf 'gone/f%s.txt ' $i; done)
+out=$(tools/commit-mine --card c -m rmmany --expect-lines 122 $files gone/sub/s.txt e.txt 2>&1); check "staged deletes + edit exit" "$?" 0
+check "staged deletes + edit: 121 deletions in HEAD" "$(git show --numstat --format= HEAD | grep -c '	gone/')" 121
+check "staged deletes + edit: edit in HEAD" "$(git show --name-only --format= HEAD | grep -c '^e.txt$')" 1
+check "staged deletes: index clean" "$(git diff --cached --name-only)" ""
+git checkout -q HEAD~1 -- gone; git commit -q -m restore; rm -rf gone
+out=$(tools/commit-mine --card c -m rmdir --expect-lines 121 gone 2>&1); check "unstaged dir delete exit" "$?" 0
+check "unstaged dir delete: gone from HEAD" "$(git ls-tree -r HEAD --name-only | grep -c '^gone/')" 0
+git checkout -q HEAD~1 -- gone; git commit -q -m restore2
+git rm -rq gone
+out=$(tools/commit-mine --card c -m rmdir2 --expect-lines 121 gone 2>&1); check "staged dir delete exit" "$?" 0
+check "staged dir delete: gone from HEAD" "$(git ls-tree -r HEAD --name-only | grep -c '^gone/')" 0
+# A git failure prints git's message and exits non-zero (stray pathspec that matches nothing, nothing deleted).
+out=$(tools/commit-mine --card c -m m --expect-lines 0 nosuchfile 2>&1); rc=$?
+check "git failure exits non-zero" "$((rc != 0))" 1
+check "git failure prints a message" "$((${#out} > 0))" 1
 exit $fail
