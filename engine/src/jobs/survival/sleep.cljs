@@ -7,7 +7,7 @@
 
 (def doc
   "Walk to a bed and sleep in it.
-  Declines unless it is night and a bed is known: the :bed argument, else the remembered :bed within :bed-radius.
+  Waits unless it is night and a bed is known (reasons :not-night, :no-bed, :bed-unreachable, :bed-occupied): the :bed argument, else the remembered :bed within :bed-radius.
   Also declines while the bed is in :bed-unreachable (an unexpired entry with the same position), and for a bed
   another player occupies (sh/bed-permit).
   Ends when asleep, or when it turns day.
@@ -51,13 +51,17 @@
     (:pos (places/parse-pos given))
     (sh/bed c (:bed-radius (:args c)))))
 
-(defn check [c]
+(defn check
+  "Night and a bed that is not given up on and not occupied; else false, with the reason the job waits."
+  [c]
   (let [bed (bed-of c)
         p (:primitives c)]
-    (and (sh/night? p)
-         (some? bed)
-         (not (unreachable-bed? c bed))
-         ((sh/bed-permit p (:world (:engine c)) (ctx/now c)) bed))))
+    (cond
+      (not (sh/night? p)) (ctx/wait c :not-night)
+      (nil? bed) (ctx/wait c {:reason :no-bed :text "no bed given or remembered within the bed radius"})
+      (unreachable-bed? c bed) (ctx/wait c {:reason :bed-unreachable :pos bed})
+      (not ((sh/bed-permit p (:world (:engine c)) (ctx/now c)) bed)) (ctx/wait c {:reason :bed-occupied :pos bed})
+      :else true)))
 
 (defn give-up-unreachable! [c bed]
   (let [r (u/fail! c :bed_unreachable "cannot reach the bed")]

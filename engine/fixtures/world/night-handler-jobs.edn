@@ -1,0 +1,42 @@
+;; One night handler, live cases that fit a fixture (card 3db292e6): jobs.survival.night is submitted as a job in :act (the
+;; runner starts the body with its register before the time and the plot are set, so a registered :night trigger fires in the
+;; empty air at the stale start position and holds :exposed; the trigger's condition is covered by unit tests). Two-body cases
+;; (a sleeping second body: log-out stints, sleep-status count, occupied bed, sleeper behind a wall) are hand-run.
+;; Needs night: run with --allow-time --time-log <the shared time log>. Hut: stone shell x 8..16, z 8..16, roof y 3.
+{:defaults
+ {:tags [:night :survival :sleep]
+  :time :night-exclusive
+  :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
+           [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]]
+  :body {:at [13.5 0 13.5] :effects [["resistance" 600 4]] :settle-s 8}}
+ :cases
+ [{:name "remembered-bed-out-of-sight-walked-to-and-slept"
+   :blocks [[:fill [2 0 2] [28 3 28] "stone" :hollow] [:fill [3 0 3] [27 2 27] "air"]
+            [:set [3 1 3] "torch"] [:set [27 1 27] "torch"] [:set [14 1 14] "torch"] [:set [20 1 14] "torch"]
+            [:set [16 0 14] "red_bed[facing=east,part=foot]"] [:set [17 0 14] "red_bed[facing=east,part=head]"]]
+   :body {:at [6.5 0 14.5]}
+   :act [[:job (jobs.memory.set-place {:name :bed :pos #at [16 0 14]}) [:now]]
+         [:job (jobs.survival.night)]]
+   :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 60}
+            {:no-event {:source :action :kind :done :data {:name "place"}} :for-s 20}]
+   :after [[:body-near [16.5 0 14.5] 4]]
+   :limit-s 80}
+  {:name "carried-bed-outside-own-zone-is-picked-up-at-day"
+   :act [[:rcon "give $BODY red_bed 1"]
+         [:job (jobs.survival.night)]
+         [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 60]
+         [:wait-s 3]
+         [:time-set 1000]]
+   :expect [{:event {:source :action :kind :done :data {:name "place" :status "placed"}} :within-s 60}
+            {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 60}
+            {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 120 :of-job true}]
+   :after [[:item "red_bed" 1]]
+   :limit-s 150}
+  {:name "occupied-remembered-bed-is-refused"
+   :blocks [[:set [10 0 12] "red_bed[facing=east,part=foot,occupied=true]"] [:set [11 0 12] "red_bed[facing=east,part=head,occupied=true]"]]
+   :act [[:job (jobs.memory.set-place {:name :bed :pos #at [10 0 12]}) [:now]]
+         [:job (jobs.survival.sleep {:bed #at [10 0 12]})]]
+   :expect [{:no-event {:source :action :kind :started :data {:name "sleep"}} :for-s 30}
+            {:event {:source :job :kind :waiting :data {:reason :bed-occupied}} :within-s 30 :of-job true}]
+   :after [[:body-near [13.5 0 13.5] 1.5]]
+   :limit-s 50}]}

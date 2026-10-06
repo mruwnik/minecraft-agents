@@ -6,6 +6,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.fake :as fake]
+            [engine.job-api :as job-api]
             [engine.memory :as mem]
             [engine.scenario :as scenario]
             [engine.shelter-test :as st]
@@ -121,6 +122,17 @@
     (st/know-bed! eng {:x 6 :y 64 :z 0})
     (core/submit! eng '(jobs.survival.sleep) {})
     (is (nil? (core/tick! eng)))))
+
+(deftest sleep-says-why-it-waits
+  (let [reason (fn [world know?]
+                 (let [{:keys [eng]} (st/setup world)]
+                   (when know? (st/know-bed! eng {:x 6 :y 64 :z 0}))
+                   (let [id (core/submit! eng '(jobs.survival.sleep) {})]
+                     (core/tick! eng)
+                     (:reason (:waiting (job-api/summary eng id))))))]
+    (is (= :bed-occupied (reason {:time night :blocks {"6,64,0" "red_bed"} :states {"6,64,0" {:occupied true}}} true)))
+    (is (= :no-bed (reason {:time night} false)))
+    (is (= :not-night (reason {:time noon :blocks {"6,64,0" "red_bed"}} true)))))
 
 (deftest the-night-puts-a-carried-bed-down-in-the-open-sleeps-and-picks-it-up-by-day
   (async done
