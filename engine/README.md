@@ -50,7 +50,7 @@ Agent command-line tools run ahead-of-time compiled JavaScript directly in Node,
 Layout:
 
 - `js/primitives.mjs` the real mineflayer layer; `js/connect.mjs` makes the bot; `js/stub-bot.mjs` is a bare stub for primitive
-  tests; `js/view.mjs` writes the view dump for the renderer (`BODY_VIEW=0` disables; format in `docs/view-format.md`).
+  tests; `js/view.mjs` writes the view dump for the renderer (skips a reloaded column whose content is unchanged; `BODY_VIEW=0` disables; format in `docs/view-format.md`).
   Other `js/*.mjs` files are helpers per primitive (furnace, enchant, trade, vehicle, leash, light, sight, ...).
 - `src/engine/` the engine: `core` (list, register, scheduler, act wrapper, call-child), `memory`, `events`, `ctx`,
   `expr` (job expressions), `composite` (combinators as jobs), `registry` (compile-time job registry), `triggers` and

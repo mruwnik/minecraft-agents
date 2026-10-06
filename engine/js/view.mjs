@@ -5,6 +5,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import zlib from 'node:zlib'
+import { createHash } from 'node:crypto'
 import { promisify } from 'node:util'
 import prismarineRegistry from 'prismarine-registry'
 import { lightTable, relightBox } from './light.mjs'
@@ -639,10 +640,15 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     })
   }
 
-  const writeColumn = async (key, raw) => {
+  // content hash (header excluded: it holds the timestamp) of the last column file written, so a reloaded unchanged column is not rewritten
+  const written = new Map()
+  const contentHash = raw => createHash('sha1').update(raw.subarray(4 + raw.readUInt32LE(0))).digest('hex')
+
+  const writeColumn = async (key, raw, hash) => {
     const [cx, cz] = key.split(',').map(Number)
     const data = await deflate(raw, { level: 1 })
     await writeAtomic(columnFile(stateDir, world, cx, cz), data)
+    written.set(key, hash)
     stats.columns++
     stats.bytes += data.length
   }
@@ -666,8 +672,10 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
         } catch (err) { reportError(err); return null }
       })()
       if (!raw) continue
+      const hash = contentHash(raw)
+      if (written.get(key) === hash) continue
       inflight.add(key)
-      writes.push(writeColumn(key, raw).catch(reportError).finally(() => inflight.delete(key)))
+      writes.push(writeColumn(key, raw, hash).catch(reportError).finally(() => inflight.delete(key)))
     }
     return track(Promise.all(writes))
   }
