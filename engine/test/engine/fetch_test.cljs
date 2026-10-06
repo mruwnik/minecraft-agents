@@ -381,3 +381,98 @@
           (core/submit! (:eng s) (list 'jobs.items.fetch-limits {:clear true}) {})
           (await (run-ticks s 2))
           (is (= {} (fetch/body-limits (mem/view (:store (:eng s)))))))))))
+
+;; ------------------------------------------------------------------ the craft source
+
+(defn bare
+  "A world with no chest and no stone, the body carrying inv."
+  [inv]
+  (-> (world {}) (update :blocks dissoc chest-at stone-at) (assoc :inventory inv)))
+
+(defn ^:async get-tool! [s args n]
+  (let [id (core/submit! (:eng s) (list 'jobs.items.get-tool args) {})]
+    (await (run-ticks s n))
+    id))
+
+(defn tables [s]
+  (filterv (fn [[_ n]] (= "crafting_table" n)) (:blocks @(fake/state (:p s)))))
+
+(deftest get-tool-crafts-a-wooden-pickaxe-from-logs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (bare [{:name "oak_log" :count 12}]) [own-zone])]
+          (await (get-tool! s {:kind "pickaxe"} 60))
+          (is (empty? (listed s)))
+          (is (= 1 (get (inv s) "wooden_pickaxe")))
+          (is (= 1 (count (tables s))) "one table was put down")
+          (is (nil? (get (inv s) "crafting_table"))))))))
+
+(deftest dig-with-fetch-and-only-logs-crafts-the-pickaxe-then-digs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (-> (world {}) (update :blocks dissoc chest-at) (assoc :inventory [{:name "oak_log" :count 12}])) [own-zone])]
+          (core/submit! (:eng s) (dig-spec {:fetch true}) {})
+          (await (run-ticks s 80))
+          (is (empty? (listed s)) "the dig ended")
+          (is (= "air" (block-at s 2 64 3)))
+          (is (= 1 (get (inv s) "wooden_pickaxe")))
+          (is (= 1 (count (events-of s :fetch.done)))))))))
+
+(deftest get-tool-crafts-from-sticks-and-planks-and-uses-a-seen-table
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (-> (bare [{:name "oak_planks" :count 3} {:name "stick" :count 2}])
+                           (assoc-in [:blocks "1,64,2"] "crafting_table")) [own-zone])]
+          (await (get-tool! s {:item "wooden_pickaxe"} 60))
+          (is (empty? (listed s)))
+          (is (= 1 (get (inv s) "wooden_pickaxe")))
+          (is (= 1 (count (tables s))) "the seen table, no second one"))))))
+
+(deftest get-tool-from-sticks-and-planks-without-a-table-puts-one-down
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (bare [{:name "oak_planks" :count 7} {:name "stick" :count 2}]) [own-zone])]
+          (await (get-tool! s {:kind "pickaxe"} 60))
+          (is (= 1 (get (inv s) "wooden_pickaxe")))
+          (is (= 1 (count (tables s)))))))))
+
+(deftest get-tool-with-nothing-usable-waits-no-source
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (bare [{:name "dirt" :count 5}]) [own-zone])
+              id (await (get-tool! s {:kind "pickaxe"} 6))]
+          (is (= :no-source (:reason (core/waiting (:eng s) id))))
+          (is (empty? (calls s "craft"))))))))
+
+(deftest a-stone-pickaxe-without-cobblestone-waits-no-source
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (bare [{:name "wooden_pickaxe" :count 1} {:name "stick" :count 2} {:name "oak_log" :count 3}]) [own-zone])
+              id (await (get-tool! s {:item "stone_pickaxe"} 6))]
+          (is (= :no-source (:reason (core/waiting (:eng s) id)))))))))
+
+(deftest crafting-is-off-when-how-leaves-it-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (bare [{:name "oak_log" :count 12}]) [own-zone])
+              id (await (get-tool! s {:kind "pickaxe" :how #{:chest}} 6))]
+          (is (= :no-source (:reason (core/waiting (:eng s) id))))
+          (is (empty? (calls s "craft"))))))))
+
+(deftest a-craft-that-does-nothing-three-times-ends-no-source
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (bare [{:name "oak_log" :count 12}]) [own-zone])]
+          (swap! (fake/state (:p s)) assoc-in [:recipes "oak_planks"] {:count 4 :needs {"oak_log" 1000}})
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "oak_planks" :count 4}) {})
+          (await (run-ticks s 30))
+          (is (empty? (listed s)))
+          (is (= :no-source (:reason (first (events-of s :stopped))))))))))
