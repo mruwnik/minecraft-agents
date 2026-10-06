@@ -424,7 +424,11 @@
     :else
     (let [body-map (js->clj body :keywordize-keys true)]
       (cond
-        (and (= path "/drive") (= method "POST") (contains? #{"set" "stop"} (:op body-map)) (own-lease? eng (:who body-map))
+        (and (= path "/drive") (= method "POST") (= "stop" (:op body-map)) (own-lease? eng (:who body-map))
+             (core/running eng) (core/manual-job eng))
+        (do (core/cancel! eng (core/manual-job eng) :driver)
+            (handle eng opts method path body content-type))
+        (and (= path "/drive") (= method "POST") (= "set" (:op body-map)) (own-lease? eng (:who body-map))
              (core/running eng) (core/manual-job eng))
         #js {:status 409 :json #js {:ok false :reason "job-running" :job (core/manual-job eng)}}
         (and (= path "/drive") (= method "POST") (:active @(:world-ops eng))
@@ -440,10 +444,12 @@
           #js {:status (:status reply) :json (clj->js (:json reply))})))))
 
 (defn tick!
-  "Time passing for the lease: apply what lease/tick decides (idle, offline, due holds, the dead-man)."
+  "Time passing for the lease: apply what lease/tick decides (idle, offline, due holds, the dead-man). A listed slot job
+  that has not failed (running or waiting) counts as the driver's activity and beats the lease."
   [eng opts]
-  (when (core/manual-job eng)
-    (swap! (:manual eng) #(some-> % (assoc :last-beat (core/now eng)))))
+  (when-let [id (core/manual-job eng)]
+    (when-not (contains? (:failed (core/state eng)) id)
+      (swap! (:manual eng) #(some-> % (assoc :last-beat (core/now eng))))))
   (let [{:keys [lease effects]} (lease/tick @(:manual eng) (core/now eng) (world-of eng) opts)]
     (run! #(apply-effect! eng %) effects)
     (store! eng lease)))

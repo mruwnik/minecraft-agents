@@ -21,6 +21,7 @@
   (merge registry/jobs
          {'walk {:check (constantly true) :round walk-round}
           'spin {:check (constantly true) :round (fn [_] :continue)}
+          'boom {:check (constantly true) :round (fn [_] (throw (js/Error. "boom")))}
           'nop {:check (constantly true) :round (fn [_] :done)}}))
 
 (def triggers
@@ -224,3 +225,57 @@
     (takeover/release! eng {:who "claude" :reason "released" :held-ms 1})
     (is (nil? (core/manual-job eng)))
     (is (empty? (:list (core/state eng))) "release cancelled it")))
+
+(deftest a-failed-slot-job-does-not-keep-the-lease-alive
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng clock]} (setup)]
+          (takeover/handle eng opts "POST" "/drive" #js {:op "take" :who "claude" :why "x" :idleS 5} nil)
+          (submit-as eng "claude" '(boom))
+          (await (core/tick! eng))
+          (is (contains? (:failed (core/state eng)) (core/manual-job eng)) "the job is listed and failed")
+          (swap! clock + 6000)
+          (takeover/tick! eng opts)
+          (is (false? (core/manual? eng))))))))
+
+(deftest a-waiting-slot-job-keeps-the-lease-alive
+  (let [{:keys [eng clock]} (setup)]
+    (takeover/handle eng opts "POST" "/drive" #js {:op "take" :who "claude" :why "x" :idleS 5} nil)
+    (submit-as eng "claude" '(spin))
+    (swap! clock + 20000)
+    (takeover/tick! eng opts)
+    (is (true? (core/manual? eng)))))
+
+(deftest drive-stop-cancels-the-running-slot-job-and-stops-the-body
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen world] :as s} (setup)]
+          (takeover/take! eng me)
+          (.hold world "moveTo")
+          (submit-as eng "claude" '(walk))
+          (let [round (core/tick! eng)]
+            (await (settle-ms))
+            (let [r (takeover/handle eng opts "POST" "/drive" #js {:op "stop" :who "claude"} nil)]
+              (is (= 200 (.-status r)))
+              (await round))
+            (is (= ["j1"] (mapv :job (kinds seen :cancelled))) "the slot job is cancelled")
+            (is (nil? (core/manual-job eng)))
+            (is (true? (core/manual? eng)) "the lease stays")
+            (is (owns? s (token eng)) "the lease token owns the body again")
+            (is (= 200 (:status (drive-set eng))))))))))
+
+(deftest drive-set-still-409s-while-the-slot-job-runs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng world] :as s} (setup)]
+          (takeover/take! eng me)
+          (.hold world "moveTo")
+          (submit-as eng "claude" '(walk))
+          (let [round (core/tick! eng)]
+            (await (settle-ms))
+            (is (= "job-running" (:reason (drive-set eng))))
+            (takeover/release! eng {:who "claude" :reason "released" :held-ms 1})
+            (await round)))))))
