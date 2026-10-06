@@ -138,13 +138,26 @@
 (defn owner? [eng token]
   (and (some? token) (.isOwner (:primitives eng) token)))
 
+(def guard-warned
+  "[dir what] -> {:msg :t} of the last call-guarded warn, so one broken predicate warns once, not every tick."
+  (atom {}))
+
+(def guard-repeat-ms 60000)
+
 (defn call-guarded
-  "Call f; on a throw emit a warn and return fallback. For user predicates."
+  "Call f; on a throw emit a warn and return fallback. For user predicates. The same error from the same
+  caller warns again only after a minute."
   [eng what fallback f]
   (try
     (f)
     (catch :default e
-      (emit! eng {:source :system :kind :error :level :warn :text (str what " threw: " e)})
+      (let [k [(:dir eng) what]
+            msg (str e)
+            t (now eng)
+            {last-msg :msg last-t :t} (get @guard-warned k)]
+        (when (or (not= msg last-msg) (>= (- t last-t) guard-repeat-ms))
+          (swap! guard-warned assoc k {:msg msg :t t})
+          (emit! eng {:source :system :kind :error :level :warn :text (str what " threw: " msg)})))
       fallback)))
 
 (defn wait-reason

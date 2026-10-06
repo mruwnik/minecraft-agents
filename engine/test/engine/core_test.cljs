@@ -113,8 +113,11 @@
 
 (def declining-round-job {:name :declining-round-child :check always :round declining-round-child})
 
+(defn throwing-check [_] (throw (js/Error. "broken check")))
+
 (def registry
   {'count {:check always :round count-round}
+   'bad-check {:check throwing-check :round count-round}
    'walk {:check always :round walk-round}
    'parent-walk {:check always :round parent-walk-round}
    'eat {:check always :round eat-round}
@@ -1023,6 +1026,39 @@
           (is (some #(and (= :failed (:kind %)) (= :required (:attention %))) @seen)
               "the failure parks the job with a required attention request")
           (is (<= 2 (count (filter #(= :round_started (:kind %)) @seen))) "the loop kept ticking"))))))
+
+(deftest the-tick-loop-survives-a-failing-hook-whose-report-also-fails
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [clock (atom 1000000)
+              calls (atom 0)
+              logdir (path/join (tu/tmp-dir) "log")
+              _ (fs/mkdirSync logdir)
+              eng (core/create {:primitives (tu/fake {}) :jobs registry :triggers triggers :dir (tu/tmp-dir)
+                                :now #(deref clock)
+                                :events (events/make {:body "Fake" :file (path/join logdir "events.edn") :now #(deref clock)})})
+              _ (fs/rmSync logdir #js {:recursive true})
+              stop (core/start! eng {:tick-ms 5 :before-tick #(do (swap! calls inc) (throw (js/Error. "hook")))})]
+          (await (js/Promise. (fn [resolve] (js/setTimeout resolve 60))))
+          (stop)
+          (is (<= 3 @calls) "the timer is re-armed although the error report threw"))))))
+
+(deftest a-throwing-check-warns-once-per-error-not-every-tick
+  (let [{:keys [eng seen clock]} (setup {})]
+    (core/submit! eng '(bad-check) {})
+    (dotimes [_ 40]
+      (swap! clock + 250)
+      (core/tick! eng))
+    (is (= 1 (count (filter #(and (= :error (:kind %)) (re-find #"check of" (str (:text %)))) @seen)))
+        "10 s of the same failure is one warn")))
+
+(deftest a-failed-state-write-warns-but-does-not-break-the-change
+  (let [dir (tu/tmp-dir)
+        {:keys [eng seen]} (setup {} dir)]
+    (fs/mkdirSync (path/join dir "engine.edn.tmp")) ; the atomic write cannot create its temp file
+    (is (= "j1" (core/submit! eng '(count) {})) "the submit goes through")
+    (is (some #(= :save-failed (:kind %)) @seen) "the failed write is told")))
 
 (deftest picked-up-is-a-debug-event-and-an-entry-of-its-own
   (let [{:keys [eng p seen]} (setup)]

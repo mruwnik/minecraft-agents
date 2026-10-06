@@ -228,7 +228,10 @@
              :last-stats (atom (now))
              :save-stats (atom empty-save-stats)}]
     (add-watch st ::persist (fn [_ _ old new]
-                              (when (not= old new) (save-file! eng file #(fsu/write-edn! file new)))))
+                              (when (not= old new)
+                                ;; save-file! already told the failure; it must not break the swap! that caused it.
+                                (try (save-file! eng file #(fsu/write-edn! file new))
+                                     (catch :default _ nil)))))
     (save-file! eng file #(fsu/write-edn! file (state eng)))
     (set-owner! eng nil)
     (.onBodyEvent primitives #(record-body-event! eng %))
@@ -265,8 +268,13 @@
       (drop-reflex-job! eng (:id h) (:reflex h) :dropped {:how :dropped :by :shutdown})))
   (emit! eng {:source :system :kind :stopping :level :info :job (:current (state eng))}))
 
-(defn report-tick-failure! [eng e]
-  (emit! eng {:source :system :kind :error :level :error :text (str "tick failed: " e)}))
+(defn report-tick-failure!
+  "Emit the error event. A failing log (disk full) goes to stderr: the tick loop must survive it."
+  [eng e]
+  (try
+    (emit! eng {:source :system :kind :error :level :error :text (str "tick failed: " e)})
+    (catch :default e2
+      (.write js/process.stderr (str "tick failed: " e " (and the log failed: " e2 ")\n")))))
 
 (defn start!
   "Tick every tick-ms until the returned stop fn is called. A tick that throws,
