@@ -355,17 +355,20 @@
   (let [{:keys [stream-id last-seq]} @stream]
     {:stream-id stream-id :seq last-seq}))
 
+(def line-probe-bytes 512)
+
 (defn line-end
-  "Byte offset of the newline ending the line that holds position pos, or size."
+  "Byte offset of the newline ending the line that holds position pos, or size.
+  Reads small first, doubling up to a chunk, so a probe stays cheap."
   [fd size pos]
-  (loop [at pos]
+  (loop [at pos len line-probe-bytes]
     (if (>= at size)
       size
-      (let [buf (read-bytes fd at read-chunk-bytes)
+      (let [buf (read-bytes fd at len)
             i (.indexOf buf 10)]
         (cond
           (zero? (.-length buf)) size
-          (neg? i) (recur (+ at (.-length buf)))
+          (neg? i) (recur (+ at (.-length buf)) (min read-chunk-bytes (* 2 len)))
           :else (+ at i))))))
 
 (defn record-at
