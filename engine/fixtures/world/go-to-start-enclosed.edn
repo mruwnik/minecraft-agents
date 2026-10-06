@@ -13,6 +13,13 @@
    :expect [{:event {:source :job :kind :result :data {:arrived false :reason :unreachable :why :start-enclosed}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :planned :data {:why "goal-unloaded"}} :for-s 10}]
    :after [[:body-near [3.5 0 17.5] 2] [:block [1 0 18] "stone"]]}
+  {:name "sealed-pen-with-pickaxe-far-unloaded-goal-escalates"
+   ;; card 5a822a99: with escalate on and a pickaxe the pen is dug out; it does not end :start-enclosed
+   :blocks [[:fill [1 -1 16] [5 4 20] "stone" :hollow]]
+   :body {:at [3.5 0 17.5] :inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [-1000 0 17] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.escalated} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :result :data {:why :start-enclosed}} :for-s 20}]}
   {:name "open-field-unloaded-goal-never-start-enclosed"
    :act [[:job (jobs.movement.go-to {:pos #at [-1000 0 17] :range 1 :escalate false})]]
    :expect [{:event {:source :job :kind :planned :data {:why "searching" :status "partial"}} :within-s 20 :of-job true}

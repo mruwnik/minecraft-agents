@@ -117,8 +117,9 @@
 
 (def escalate-reasons
   "Planner reasons that prove the way needs the world changed. A stuck or off-plan walk is the walker's fault and
-  never escalates: changing the world there would hide a go-to bug."
-  #{:exhausted :goal-enclosed})
+  never escalates: changing the world there would hide a go-to bug. :start-enclosed is the search running out of land
+  with no loaded edge reached (a sealed pen, the goal far and unloaded)."
+  #{:exhausted :goal-enclosed :start-enclosed})
 
 (defn escalate-reason?
   "Whether a walk result's reason proves the way needs the world changed (escalate-reasons), or is the planner's way

@@ -128,7 +128,7 @@
    :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1})]
          [:await {:source :job :kind :result :data {:arrived true}} 150]
          [:wait-s 15]
-         [:rcon "execute positioned $X $Y $Z run tp $BODY ~16.5 ~ ~16.5"]
+         [:rcon "execute positioned $X $Y $Z run tp $BODY ~16 ~ ~16"]
          [:wait-s 3]
          [:job (jobs.movement.go-to {:pos #at [20 4 17] :range 1})]
          [:wait-s 60]]
@@ -136,13 +136,14 @@
    :after [[:body-near [20.5 4 17.5] 2]]
    :limit-s 300}
   {:name "own-shelter-does-not-dig"
+   :time :night
    ;; dig-in seals the body in a pit; a go-to from inside its own shelter gives up instead of digging out
-   :plot {:height 12}
-   :blocks [[:fill [10 0 10] [22 3 22] "dirt"] [:fill [16 0 16] [16 3 16] "air"]]
-   :body {:inventory [["stone_pickaxe" 1] ["iron_shovel" 1]]}
+   :plot {:height 20}
+   :blocks [[:fill [8 0 8] [24 9 24] "dirt"]]
+   :body {:at [16.5 10 16.5] :effects [["resistance" 600 4]] :inventory [["stone_pickaxe" 1] ["iron_shovel" 1]]}
    :act [[:job (jobs.survival.dig-in {})]
          [:await {:source :job :kind :dig-in.sealed} 90]
-         [:job (jobs.movement.go-to {:pos #at [24 4 16] :range 1})]]
+         [:job (jobs.movement.go-to {:pos #at [22 10 16] :range 1})]]
    :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :go-to.escalated} :for-s 30}]
    :limit-s 160}
