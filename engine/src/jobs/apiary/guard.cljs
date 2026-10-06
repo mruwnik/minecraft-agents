@@ -170,9 +170,7 @@
 (defn ^:async collect-carpet!
   "Pick up the carpet that was dug up."
   [c carpet]
-  (loop [tries 0]
-    (when (and (< tries 8) (= :continue (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius 6 :filter [carpet]}))))
-      (recur (inc tries)))))
+  (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius 6 :filter [carpet]})))
 
 (defn abandon!
   "Give up the sink: clear it and skip the fire."

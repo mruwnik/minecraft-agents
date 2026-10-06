@@ -7,7 +7,7 @@
 (def doc
   "Collect the nearest matching dropped item, in one call, until none is left within :radius of where the job began (the work area: a walk to an item
   does not move it, so drops far away, e.g. other bodies', are never chased).
-  An item that cannot be reached or picked up is skipped.
+  An item is tried once; one that is gone, cannot be reached or picked up is skipped.
   Result: {:collected n}, the number of items that entered the inventory.")
 
 (def args
@@ -41,7 +41,7 @@
 
 (defn ^:async round
   "One whole attempt: collects the nearest matching dropped item again and again until none is left in radius.
-  Items that could not be reached (or were in reach and not picked up) are remembered in job memory and skipped,
+  Each item is tried once (picked up, gone, unreachable or not): its id is remembered in job memory and skipped,
   and :collected counts the items gained, also on a round that gave up.
   :ids limits it to those entity ids (a dig's own drops)."
   [c]
@@ -50,10 +50,10 @@
     (loop []
       (let [item (when (ctx/alive? c) (nearest-item c anchor))]
         (if-not item
-          (do (ctx/result! c {:collected (:collected (ctx/mem c) 0)})
+          (do (ctx/result! c (cond-> {:collected (:collected (ctx/mem c) 0)}
+                               (not (ctx/alive? c)) (assoc :reason :cut)))
               :done)
           (let [r (await (ctx/act c :collect #js {:id (.-id item)}))]
             (ctx/update-mem! c update :collected (fnil + 0) (gained-count r))
-            (when (#{"unreachable" "timeout"} (.-status r))
-              (ctx/update-mem! c update :skipped (fnil conj []) (.-id item)))
+            (ctx/update-mem! c update :skipped (fnil conj []) (.-id item))
             (recur)))))))

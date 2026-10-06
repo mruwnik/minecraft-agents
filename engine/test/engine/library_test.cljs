@@ -377,6 +377,17 @@
                  (await (child-outcome (:eng (setup {:entities [(stack 1 2 5) (stack 2 3 2)]}))
                                        'jobs.forestry.collect-drops {:radius 10} 8)))))))))
 
+(deftest collect-drops-tries-each-item-once-when-collect-says-gone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [item (fn [id x] {:id id :name "item" :kind "item" :pos {:x x :y 64 :z 0} :item {:name "dirt" :count 1}})
+              {:keys [eng p]} (setup {:entities [(item 1 2) (item 2 3)]})]
+          (.override (.-world p) "collect" (fn ^:async f [_ _ _] #js {:status "gone" :gained #js []}))
+          (core/submit! eng (list 'jobs.forestry.collect-drops {:radius 10}) {})
+          (is (<= (await (run-until-empty eng 8)) 2) "an item collect calls gone does not loop")
+          (is (= [1 2] (sort (mapv #(.-id (.-args %)) (calls p "collect")))) "each item once"))))))
+
 ;; ------------------------------------------------------------ plant-sapling
 
 (deftest plant-sapling-reads-the-debt-places-and-clears-it
