@@ -41,3 +41,11 @@
   (let [pre {:offset 10 :from-ms 1000} post {:offset 90 :from-ms 9000}]
     (is (= pre (r/watch-window true pre post)) "a trigger firing inside the settle is counted")
     (is (= post (r/watch-window false pre post)) "no register: the settle still hides leftover events")))
+
+(deftest stop-on-fail-is-an-option-and-ends-the-batch-after-a-non-pass
+  (is (true? (:stop-on-fail (r/parse-args #js ["--stop-on-fail"]))))
+  (is (nil? (:stop-on-fail (r/parse-args #js []))))
+  (is (r/stop-batch? {:stop-on-fail true} [{:status :pass} {:status :fail}]))
+  (is (r/stop-batch? {:stop-on-fail true} [{:status :error}]))
+  (is (not (r/stop-batch? {:stop-on-fail true} [{:status :pass} {:status :skipped}])))
+  (is (not (r/stop-batch? {} [{:status :fail}]))))

@@ -67,7 +67,7 @@
    :blocks []
    :memory []
    :plans []
-   :body {:at [16.5 0 16.5] :inventory [] :effects [] :settle-s 3}
+   :body {:at [16.5 0 16.5] :inventory [] :effects [] :settle-s 1}
    :act []
    :expect []
    :after []

@@ -80,6 +80,18 @@
 
 (defn decided? [results] (not-any? #(= :pending (:status %)) results))
 
+(defn failed?
+  "Whether some expectation already failed for good (a forbidden event came, or an :event one ran out of time)."
+  [results] (boolean (some #(= :fail (:status %)) results)))
+
+(defn stop-early
+  "results of a run that ends at its first failure: the ones still pending become failures saying they were not judged."
+  [results]
+  (mapv #(if (= :pending (:status %))
+           (assoc % :status :fail :evidence "not judged: the run stopped at the first failure")
+           %)
+        results))
+
 (defn passed? [results] (every? #(= :pass (:status %)) results))
 
 (defn deadline-s

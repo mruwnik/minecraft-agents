@@ -19,7 +19,7 @@
 
 (def usage
   (str "usage: node tools/world-test.mjs [fixture.edn|dir ...] [--tag T] [--match TEXT] [--repeat N] [--body NAME]\n"
-       "         [--world claude] [--first-plot I] [--card ID] [--allow-time --time-log FILE] [--results FILE] [--list]\n"
+       "         [--world claude] [--first-plot I] [--card ID] [--allow-time --time-log FILE] [--results FILE] [--stop-on-fail] [--list]\n"
        "Runs world fixtures (default dir engine/fixtures/world) on the reserved plot grid x/z 20000..20640, y 150 (large plots: lanes south of it, to z 22240).\n"
        "--allow-time lets a case that needs night or day set the time (each set appended to --time-log); without it\n"
        "such a case is skipped. A case that depends on the time of day holds a time lock shared by phase (day cases together,\n"
@@ -38,6 +38,7 @@
       (= a "--time-log") (recur more (assoc opts :time-log b))
       (= a "--card") (recur more (assoc opts :card b))
       (= a "--results") (recur more (assoc opts :results b))
+      (= a "--stop-on-fail") (recur (rest all) (assoc opts :stop-on-fail true))
       (= a "--allow-time") (recur (rest all) (assoc opts :allow-time true))
       (= a "--list") (recur (rest all) (assoc opts :list true))
       (str/starts-with? a "--") (throw (js/Error. (str "unknown option " a)))
@@ -187,6 +188,18 @@
   [opts scenario]
   #js ["--max-semi-space-size=4" "out/body.cjs" "--agent" (:body opts) "--world" (:world opts) "--scenario" scenario "--fresh"])
 
+(defn await-online!
+  "Polls the server's player list (every 250 ms, up to 10 s) until the body is on it, then lets it settle 500 ms."
+  [opts]
+  (let [until (+ (js/Date.now) 10000)]
+    (letfn [(poll []
+              (.then (rcon! ["list"])
+                     (fn [[reply]]
+                       (if (or (str/includes? (or reply "") (:body opts)) (> (js/Date.now) until))
+                         (sleep 500)
+                         (.then (sleep 250) poll)))))]
+      (poll))))
+
 (defn start-body!
   "Starts the body with a scenario holding register, --fresh; resolves once it logged :system :started. The body's own
   engine/memory.edn is deleted first unless keep-memory? (--fresh only drops engine.edn), then written from
@@ -214,7 +227,7 @@
       (.then (await-event opts offset {:source :system :kind :started} since 90000)
              (fn [ev]
                (when-not ev (throw (js/Error. (str "the body did not start within 90 s (see " out ")"))))
-               (sleep 2000))))))
+               (await-online! opts))))))
 
 (defn stop-body!
   "Stops the body this runner started (its own child, by PID) and waits for it to exit."
@@ -439,8 +452,11 @@
               (let [now (js/Date.now)
                     events (filterv #(>= (:time-ms % 0) from) (read-events-from (events-file opts) offset))
                     results (x/judge-all (:expect c) events {:t0-ms t0 :now-ms now :job-ids ids})]
-                (if (or (x/decided? results) (> now limit))
+                (cond
+                  (x/failed? results) (js/Promise.resolve (x/stop-early results))
+                  (or (x/decided? results) (> now limit))
                   (js/Promise.resolve (mapv #(if (= :pending (:status %)) (assoc % :status :fail :evidence "undecided at the case's limit") %) results))
+                  :else
                   (.then (sleep 500) poll))))]
       (poll))))
 
@@ -576,6 +592,11 @@
                (str "another player is within 500 blocks of the plot grid (not a leased test body): "
                     (str/join ", " (lease/strangers (lease/parse-online listing) (:body opts) leased))))))))
 
+(defn stop-batch?
+  "Whether --stop-on-fail ends the batch: some result so far failed or errored."
+  [{:keys [stop-on-fail]} results]
+  (boolean (and stop-on-fail (some #(#{:fail :error} (:status %)) results))))
+
 (defn run-all! [opts cases]
   (let [groups (group-by :register cases)
         results (atom [])]
@@ -583,6 +604,7 @@
                   (.then p (fn []
                              (-> (reduce (fn [p2 [n [c run]]]
                                            (.then p2 (fn []
+                                                      (when-not (stop-batch? opts @results)
                                                        (let [plan (f/body-start-plan c (zero? n))
                                                              [from end] (f/plot-range (f/case-grid c))
                                                              i (acquire-plot! (max from (:first-plot opts)) end)
@@ -595,7 +617,7 @@
                                                                    (.then #(start-body! opts register (= :restart-keep plan) memory))))
                                                              (.then #(run-case! opts c i run (when-not (= :keep plan) register)))
                                                              (.then (fn [r] (report! r) (swap! results conj r)))
-                                                             (.finally #(release-plot! i)))))))
+                                                             (.finally #(release-plot! i))))))))
                                          (js/Promise.resolve nil)
                                          (map-indexed vector (for [run (range 1 (inc (:repeat opts))) c group] [c run])))
                                  (.finally #(stop-body! opts))))))

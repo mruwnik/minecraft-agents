@@ -8,7 +8,7 @@
  {:tags [:night :survival :sleep]
   :time :night-exclusive
   :register [{:trigger :night}]
-  :body {:effects [["resistance" 600 4]] :settle-s 8}}
+  :body {:effects [["resistance" 600 4]] :settle-s 2}}
  :cases
  [{:name "bed-put-down-in-3x3-room-and-slept-in"
    :blocks [[:fill [10 0 10] [14 3 14] "stone" :hollow] [:fill [11 0 11] [13 2 13] "air"] [:set [12 2 10] "glowstone"]]

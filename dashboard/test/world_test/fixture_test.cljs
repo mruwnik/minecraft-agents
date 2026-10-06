@@ -82,7 +82,7 @@
     (is (= 2 (count (:expect open))) "expectations append too")
     (is (= [["resistance" 3600 4]] (get-in glass [:body :effects])) "body merges key by key")
     (is (= [["bread" 3]] (get-in glass [:body :inventory])))
-    (is (= 3 (get-in glass [:body :settle-s])) "the global defaults fill the rest")
+    (is (= 1 (get-in glass [:body :settle-s])) "the global defaults fill the rest")
     (is (= :day (:time open)))
     (is (nil? (:problems open)))
     (is (some #(re-find #":name" %) (:problems bad)))))

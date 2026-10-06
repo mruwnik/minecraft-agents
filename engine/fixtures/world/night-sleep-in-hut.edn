@@ -12,7 +12,7 @@
            [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]
            [:set [10 0 12] "red_bed[facing=east,part=foot]"] [:set [11 0 12] "red_bed[facing=east,part=head]"]]
   :register [{:trigger :night}]
-  :body {:at [13.5 0 13.5] :effects [["resistance" 600 4]] :settle-s 8}}
+  :body {:at [13.5 0 13.5] :effects [["resistance" 600 4]] :settle-s 2}}
  :cases
  [{:name "roofed-body-sleeps-in-its-bed-and-respawns-there"
    :act [[:job (jobs.memory.set-place {:name :bed :pos #at [10 0 12]})]

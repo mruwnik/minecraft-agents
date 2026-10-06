@@ -73,3 +73,20 @@
     (is (and (x/decided? late) (x/passed? late)))
     (is (and (x/decided? bad) (not (x/passed? bad))))
     (is (= 120 (x/deadline-s es)))))
+
+(deftest a-failed-expectation-is-final-so-the-run-can-stop-before-the-others-are-decided
+  (let [es [{:event {:kind :herd.done} :within-s 120}
+            {:no-event {:source :reflex :kind :fired} :for-s 60}]
+        results (x/judge-all es [fired] (assoc opts :now-ms 3000))]
+    (is (not (x/decided? results)) "the first is still pending")
+    (is (x/failed? results) "the forbidden event was seen")
+    (is (not (x/failed? (x/judge-all es [] (assoc opts :now-ms 3000)))) "nothing failed yet")
+    (is (not (x/failed? (x/judge-all [(first es)] [] (assoc opts :now-ms 3000)))) "a pending event is not a failure")))
+
+(deftest the-undecided-ones-of-a-stopped-run-say-so
+  (let [es [{:event {:kind :herd.done} :within-s 120}
+            {:no-event {:source :reflex :kind :fired} :for-s 60}]
+        stopped (x/stop-early (x/judge-all es [fired] (assoc opts :now-ms 3000)))]
+    (is (= [:fail :fail] (mapv :status stopped)))
+    (is (= "not judged: the run stopped at the first failure" (:evidence (first stopped))))
+    (is (re-find #"unwanted" (:evidence (second stopped))))))
