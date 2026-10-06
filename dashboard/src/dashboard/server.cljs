@@ -255,9 +255,14 @@
         (swap! live-refreshing assoc name promise)
         promise)))
 
+(def no-socket-error "no events socket")
+
+;; Only a body whose events.sock exists is asked. One without is down: marked once, and asked again the poll its socket appears.
 (defn refresh-live-engines-in! [entries]
-  (let [targets (->> entries (map body-key) (filter canonical-engine?) vec)]
-     (js/Promise.all (clj->js (map refresh-live-engine! targets)))))
+  (let [targets (->> entries (map body-key) (filter canonical-engine?) vec)
+        {asked true down false} (group-by #(file-exists? (events-socket %)) targets)]
+    (doseq [body down] (swap! live-errors assoc body no-socket-error))
+    (js/Promise.all (clj->js (map refresh-live-engine! asked)))))
 
 ;; engine.edn is re-read and re-parsed only when its mtime or size changed: {:text :read} (read = engine-edn/read-text)
 (defn read-edn-file [body]
@@ -439,6 +444,15 @@
        (.on req "error" reject)
        (.end req)))))
 
+(def unsupported-error "This body has no /entities endpoint. Restart it with the current engine build to enable entity observations.")
+
+(defn entity-failure
+  "The cache entry after a failed request: previous entities stay until they expire. reason: :unsupported, or a short text."
+  [entry reason]
+  (assoc entry :online? nil
+         :status (if (= :unsupported reason) :unsupported :unavailable)
+         :error (if (= :unsupported reason) unsupported-error (str reason))))
+
 (defn refresh-entities-in! [world-name entries]
   (let [now (js/Date.now)
         targets (->> entries (filter #(and (= world-name (:world %)) (engine-folder? %)))
@@ -448,19 +462,21 @@
     (doseq [body (take room (filter #(and (not (contains? @entity-in-flight (body-key %)))
                                          (>= (- now (get-in @entity-cache [(body-key %) :requested-at] 0)) entity-refresh-ms)) targets))
             :let [key (body-key body)]]
-      (swap! entity-in-flight conj key)
       (swap! entity-cache update key #(assoc % :body key :requested-at now :status (or (:status %) :loading)))
-      (-> (entity-request! body)
-          (.then (fn [payload]
-                   (swap! entity-cache assoc key (entities/body-snapshot body payload (js/Date.now)))
-                   (swap! entity-cache #(entities/bound % (js/Date.now)))))
-          (.catch (fn [e]
-                    (swap! entity-cache update key
-                           #(assoc % :online? nil :status (if (= 404 (:status (ex-data e))) :unsupported :unavailable)
-                                     :error (if (= 404 (:status (ex-data e)))
-                                              "This body has no /entities endpoint. Restart it with the current engine build to enable entity observations."
-                                              (subs (str (ex-message e)) 0 (min 384 (count (str (ex-message e))))))))))
-          (.finally #(swap! entity-in-flight disj key))))
+      (if-not (file-exists? (entity-socket body))
+        (swap! entity-cache update key entity-failure no-socket-error)
+        (do
+          (swap! entity-in-flight conj key)
+          (-> (entity-request! body)
+              (.then (fn [payload]
+                       (swap! entity-cache assoc key (entities/body-snapshot body payload (js/Date.now)))
+                       (swap! entity-cache #(entities/bound % (js/Date.now)))))
+              (.catch (fn [e]
+                        (swap! entity-cache update key entity-failure
+                               (if (= 404 (:status (ex-data e)))
+                                 :unsupported
+                                 (or (.-code e) (subs (str (ex-message e)) 0 (min 80 (count (str (ex-message e))))))))))
+              (.finally #(swap! entity-in-flight disj key))))))
     (when (> (count @entity-cache) entity-source-cap)
       (swap! entity-cache #(into {} (take entity-source-cap (sort-by (comp - :requested-at val) %)))))))
 
@@ -489,10 +505,9 @@
                          {:worlds (mapv :name worlds) :worlds-dir worlds-dir :blueprint-dir (.join path repo-root "blueprints")}))
 
 ;; ---------------------------------------------------------------- state
-(defn world-entry [bodies entries world]
-  (let [own (filterv #(= (:name world) (:world %)) bodies)
-        observations (entity-snapshot-in (:name world) "overworld" entries)]
-    (assoc world :bodies own :humans []
+(defn world-entry [entries world]
+  (let [observations (entity-snapshot-in (:name world) "overworld" entries)]
+    (assoc world :humans []
            :entities (:entities observations) :entity-sources (:sources observations)
            :entity-truncated? (:truncated? observations))))
 
@@ -516,7 +531,7 @@
         full {:at now
               :agents names
               :bodies all-bodies
-              :worlds (mapv #(world-entry all-bodies entries %) with-villages)
+              :worlds (mapv #(world-entry entries %) with-villages)
               :villageError error}]
     (assoc (worlds/scope-snapshot full world-name)
            :worldList (read-world-list)

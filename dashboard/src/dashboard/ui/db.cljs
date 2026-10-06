@@ -35,7 +35,7 @@
 (defn world-of [db] (first (get-in db [:state :worlds])))
 
 (defn all-bodies [db]
-  (or (get-in db [:state :bodies]) (:bodies (world-of db)) []))
+  (or (get-in db [:state :bodies]) []))
 
 (defn shown-bodies
   "The bodies the status chips let through, plus the selected one and the one open in the detail."

@@ -5,11 +5,16 @@
 (def world
   {:places [{:name "home" :x 0 :z 0} {:name "farm" :x 100 :z 50}]
    :zones []
-   :humans []
-   :bodies [{:name "Near" :up true :state {:pos {:x 20 :z 20}}}
-            {:name "Far" :up true :state {:pos {:x 5000 :z -4000}}}]})
+   :humans []})
 
-(defn model [] {:canvas {:w 1000 :h 500} :state {:worlds [world]}})
+(def bodies [{:name "Near" :up true :state {:pos {:x 20 :z 20}}}
+             {:name "Far" :up true :state {:pos {:x 5000 :z -4000}}}])
+
+(defn model [] {:canvas {:w 1000 :h 500} :state {:bodies bodies :worlds [world]}})
+
+(deftest bodies-come-from-the-top-level-list-only
+  (is (= bodies (db/all-bodies (model))))
+  (is (= [] (db/all-bodies {:state {:worlds [{:bodies bodies}]}}))))
 
 (defn visible-blocks [view w]
   (/ w (:scale view)))
@@ -52,7 +57,7 @@
     (is (= 8 (:scale (:user-view m))))))
 
 (deftest focus-body-without-a-position-or-canvas-changes-nothing
-  (let [no-pos (assoc-in (model) [:state :worlds 0 :bodies] [{:name "Lost" :up false}])]
+  (let [no-pos (assoc-in (model) [:state :bodies] [{:name "Lost" :up false}])]
     (are [m name] (= m (db/focus-body m name))
       no-pos "Lost"
       (model) "Nobody"
@@ -76,12 +81,12 @@
   (is (= true (:places-open? (db/initial-db "" "who"))))
   (is (= false (:players-open? (db/initial-db "" "who")))))
 
-(def mixed-world
-  {:bodies [{:name "Work" :up true :state {:pos {:x 0 :z 0}} :engine {:job {:id "j" :name "dig"}}}
-            {:name "Idle" :up true :state {:pos {:x 10 :z 10}} :engine {}}
-            {:name "Gone" :up false :engine {}}]})
+(def mixed-bodies
+  [{:name "Work" :up true :state {:pos {:x 0 :z 0}} :engine {:job {:id "j" :name "dig"}}}
+   {:name "Idle" :up true :state {:pos {:x 10 :z 10}} :engine {}}
+   {:name "Gone" :up false :engine {}}])
 
-(defn mixed [extra] (merge {:canvas {:w 1000 :h 500} :state {:at 5 :worlds [mixed-world]}} extra))
+(defn mixed [extra] (merge {:canvas {:w 1000 :h 500} :state {:at 5 :bodies mixed-bodies :worlds [{}]}} extra))
 
 (defn shown-names [m] (mapv :name (db/shown-bodies m)))
 

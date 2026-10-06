@@ -102,3 +102,72 @@
            (.rmSync fs root #js {:recursive true :force true})
            (done))
          400)))))
+
+(defn with-root-async
+  "Like with-root; f returns a promise, and the root and the redefs stay until it settles."
+  [n f done]
+  (let [root (.mkdtempSync fs (.join path (os/tmpdir) "dashboard-poll-test-"))
+        engines (mapv #(make-body! root "w" (str "B" %)) (range n))
+        live-engines (atom {}) live-errors (atom {})
+        restore (juxt (constantly server/state-dir) (constantly server/live-engines) (constantly server/live-errors)
+                      (constantly server/edn-cache) (constantly server/body-cache) (constantly server/view-cache))
+        [old-state old-live old-errors old-edn old-body old-view] (restore)]
+    (set! server/state-dir root)
+    (set! server/live-engines live-engines)
+    (set! server/live-errors live-errors)
+    (set! server/edn-cache (atom {}))
+    (set! server/body-cache (atom {}))
+    (set! server/view-cache (atom {}))
+    (-> (js/Promise.resolve) (.then #(f root engines))
+        (.catch (fn [e] (is (nil? e) (str "async test failed: " e))))
+        (.finally (fn []
+                    (set! server/state-dir old-state) (set! server/live-engines old-live) (set! server/live-errors old-errors)
+                    (set! server/edn-cache old-edn) (set! server/body-cache old-body) (set! server/view-cache old-view)
+                    (.rmSync fs root #js {:recursive true :force true})
+                    (done))))))
+
+(deftest bodies-without-an-events-socket-get-no-socket-request
+  (async done
+    (with-root-async 3
+      (fn [_ engines]
+        (let [requests (atom []) entries (server/agent-entries)]
+          (.writeFileSync fs (.join path (second engines) "events.sock") "")
+          (with-redefs [server/event-socket-request! (fn [body & _] (swap! requests conj (:name body)) (js/Promise.reject (js/Error. "down")))]
+            (-> (server/refresh-live-engines-in! entries)
+                (.then (fn [_]
+                         (is (= ["B1"] @requests) "only the body with a socket file is asked")
+                         (is (= #{"B0" "B1" "B2"} (set (map :name (keys @server/live-errors))))
+                             "offline bodies are marked down without a request")
+                         (is (every? false? (map :up (server/bodies-in 1000 entries))))))))))
+      done)))
+
+(deftest a-body-coming-online-is-asked-on-the-next-poll
+  (async done
+    (with-root-async 1
+      (fn [_ engines]
+        (let [requests (atom 0) entries (server/agent-entries) original server/event-socket-request!]
+          (set! server/event-socket-request! (fn [& _] (swap! requests inc) (js/Promise.reject (js/Error. "down"))))
+          (-> (server/refresh-live-engines-in! entries)
+              (.then (fn [_]
+                       (is (= 0 @requests))
+                       (.writeFileSync fs (.join path (first engines) "events.sock") "")
+                       (server/refresh-live-engines-in! entries)))
+              (.then (fn [_] (is (= 1 @requests))))
+              (.finally #(set! server/event-socket-request! original)))))
+      done)))
+
+(deftest bodies-without-a-control-socket-get-no-entity-request
+  (with-root 2
+    (fn [_ engines]
+      (let [requests (atom []) entries (server/agent-entries)]
+        (.writeFileSync fs (.join path (first engines) "control.sock") "")
+        (with-redefs [server/entity-cache (atom {}) server/entity-in-flight (atom #{})
+                      server/entity-request! (fn [body] (swap! requests conj (:name body)) (js/Promise.reject (js/Error. "down")))]
+          (server/refresh-entities-in! "w" entries)
+          (is (= ["B0"] @requests))
+          (is (= :unavailable (get-in @server/entity-cache [{:world "w" :name "B1"} :status])))
+          (is (< (count (get-in @server/entity-cache [{:world "w" :name "B1"} :error])) 60)))))))
+
+(deftest world-entry-does-not-repeat-the-bodies
+  (let [entry (server/world-entry [] {:name "w"})]
+    (is (not (contains? entry :bodies)))))
