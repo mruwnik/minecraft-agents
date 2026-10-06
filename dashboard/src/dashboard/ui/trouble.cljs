@@ -88,13 +88,18 @@
 (defn short-name [s]
   (str/replace (str s) #"(^|[ (])jobs\." "$1"))
 
+(defn hhmm [t] (subs (logic/clock-ms-text t) 0 5))
+
 (defn job-text
-  "One line for the job: its spec label and round from engine.edn when known, else the name from events."
+  "One line for the job: its spec label and round from engine.edn when known, else the name from events,
+  then its declared hold."
   [job edn-job]
-  (cond
-    (and (nil? job) (nil? edn-job)) nil
-    edn-job (str (short-name (:label edn-job)) (when (:round edn-job) (str ", round " (:round edn-job))))
-    :else (str/replace (short-name (:name job)) #"^\((.*)\)$" "$1")))
+  (let [{:keys [reason since]} (:holding job)
+        hold (when reason (str ", holding: " reason " since " (hhmm since)))]
+    (cond
+      (and (nil? job) (nil? edn-job)) nil
+      edn-job (str (short-name (:label edn-job)) (when (:round edn-job) (str ", round " (:round edn-job))) hold)
+      :else (str (str/replace (short-name (:name job)) #"^\((.*)\)$" "$1") hold))))
 
 (defn offline-text [age-ms]
   (if-not (number? age-ms)

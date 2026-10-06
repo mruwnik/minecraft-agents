@@ -13,8 +13,7 @@
       :name "go-to"
       :file "engine/src/jobs/movement/go_to.cljs")
     (are [k] (string? (get job k))
-      :doc :args)
-    (is (boolean? (:backoff job)))))
+      :doc :args)))
 
 (deftest every-entry-is-well-formed
   (is (every? #(and (string? (:id %)) (string? (:category %)) (string? (:file %))

@@ -4,7 +4,7 @@
   (:require-macros [dashboard.jobs-registry :refer [compile-entries]]))
 
 (def entries
-  "[{:kind :job|:trigger :id :category :name :file :ns-doc :doc :args :backoff}] in path order."
+  "[{:kind :job|:trigger :id :category :name :file :ns-doc :doc :args}] in path order."
   (compile-entries))
 
 (defn pretty

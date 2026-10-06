@@ -66,7 +66,10 @@
           [[nil nil nil]
            [{:id "j1" :name "(repeat jobs.movement.look-around)"} nil "repeat movement.look-around"]
            [{:id "j1" :name "jobs.combat.attack"} {:label "attack" :round 7} "attack, round 7"]
-           [{:id "j1" :name "dig"} {:label "dig"} "dig"]]]
+           [{:id "j1" :name "dig"} {:label "dig"} "dig"]
+           [{:id "j1" :name "dig" :holding {:reason "waiting-for-boat" :since 0}} {:label "dig" :round 2}
+            (str "dig, round 2, holding: waiting-for-boat since " (t/hhmm 0))]
+           [{:id "j1" :name "dig" :holding {:reason "x" :since 0}} nil (str "dig, holding: x since " (t/hhmm 0))]]]
     (is (= expected (t/job-text job edn-job)))))
 
 (deftest offline-label

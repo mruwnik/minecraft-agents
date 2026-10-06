@@ -73,6 +73,15 @@
            ["system.started clears it"
             [(ev 1 {:name "a"}) (ev 2 {:source "system" :kind "started" :job nil :chain nil})]
             nil]
+           ["a hold shows on the job"
+            [(ev 1 {:name "a"}) (ev 2 {:kind "holding" :name "a" :reason "waiting-for-boat" :since (+ t0 2000)})]
+            {:id "j1" :name "a" :holding {:reason "waiting-for-boat" :since (+ t0 2000)}}]
+           ["the next round ends the hold"
+            [(ev 1 {:name "a"}) (ev 2 {:kind "holding" :name "a" :reason "x" :since t0}) (ev 3 {:name "a"})]
+            {:id "j1" :name "a"}]
+           ["a child's hold is not the job's"
+            [(ev 1 {:name "a"}) (ev 2 {:kind "holding" :name "c" :reason "x" :since t0 :chain ["j1" "j1/c0"] :job "j1/c0"})]
+            {:id "j1" :name "a"}]
            ["a new job replaces it"
             [(ev 1 {:name "a"}) (ev 2 {:name "b" :job "j2" :chain ["j2"]})]
             {:id "j2" :name "b"}]]]

@@ -29,10 +29,9 @@
        (sort-by key)
        (mapv (fn [[category items]] {:category category :jobs (vec (sort-by :id items))}))))
 
-(defn badges [{:keys [running reflex backoff]}]
+(defn badges [{:keys [running reflex]}]
   (vec (concat (when (seq running) [{:kind :running :text (str "running on: " (str/join ", " running))}])
-               (when (seq reflex) [{:kind :reflex :text (str "reflex on: " (str/join ", " reflex))}])
-               (when backoff [{:kind :backoff :text "backoff"}]))))
+               (when (seq reflex) [{:kind :reflex :text (str "reflex on: " (str/join ", " reflex))}]))))
 
 (defn count-text [shown total needle]
   (let [noun (if (= 1 total) "job" "jobs")]

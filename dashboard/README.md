@@ -53,14 +53,13 @@ The compile JVM is capped (`:jvm-opts ["-Xmx1G"]` in `shadow-cljs.edn`) because 
 - `POST /api/whisper/<world>/<body>` `{"text": ...}`: a private message to one body, sent through RCON as `tellraw <body>` of the vanilla whisper line from the chat sender (the body records it as a `whisper` event; the chat panel reads it from `events.edn`). The target must match `[A-Za-z0-9_]{3,16}` (400), be an engine body (404) and be up (409); the text is cleaned and cut like chat; the rate limit is shared with `POST /api/chat/send`. The body popup has the input.
 - `POST /api/attention/<world>/<body>/resolve`: EDN request `{:request-id "..." :reason :handled}` to acknowledge an outstanding request. This only marks that request handled; it does not retry or restart its job.
 - `/api/item-icon/<item>.png`: an item's picture from the repo's `textures/`.
-- `/api/jobs`: `{at, jobs: [{kind, id, category, name, file, ns-doc, doc, args, backoff, running, reflex}]}`: every job
+- `/api/jobs`: `{at, jobs: [{kind, id, category, name, file, ns-doc, doc, args, running, reflex}]}`: every job
   namespace of `engine/src/jobs/**/*.cljs` (`kind` job, `id` `jobs.<dir>.<name>`) and every trigger of
   the default set `engine/src/triggers/defaults.edn` (`kind` trigger, category `triggers`, `id` the trigger id). The list is
   **fixed at dashboard build time**: the macro `dashboard.jobs-registry/compile-entries` (src/dashboard/jobs_registry.clj)
   calls `engine.registry` (`jobs-dir`, `job-files`, `expected-ns`, `read-forms`, the engine's own lenient reader; `../engine/src`
   is on `:source-paths`, only its `.clj` is loaded) and emits a literal vector, so a new or changed job needs `npm run build`.
-  `doc` is the `(def doc ...)` string, `args` the `(def args ...)` map printed as EDN (one entry per line), `backoff` whether
-  the namespace defines `backoff`; a file the reader rejects has `error` instead. `running` and `reflex` are the bodies whose
+  `doc` is the `(def doc ...)` string, `args` the `(def args ...)` map printed as EDN (one entry per line); a file the reader rejects has `error` instead. `running` and `reflex` are the bodies whose
   job list or reflex register mentions the job, computed per request.
 - POST `/api/chat/send`, body `{text}` (JSON, at most 4 KB): sends the fixed command `tellraw @a {"text":"<dashboard> <text>"}`
   over RCON, so engine bodies hear it as a chat event. There is no target: a `target` (or any other) field gets 400.

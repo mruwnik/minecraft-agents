@@ -65,8 +65,9 @@
     (system-started? e) nil
     (or (not= "job" (:source e)) (kind-is? e "queued") (not (:job e)) (not= (first (:chain e)) (:job e))) job
     (kind-is? e "completed" "failed" "cancelled") (when-not (= (:id job) (:job e)) job)
-    :else {:id (:job e)
-           :name (or (:name e) (when (= (:id job) (:job e)) (:name job)))}))
+    :else (cond-> {:id (:job e)
+                   :name (or (:name e) (when (= (:id job) (:job e)) (:name job)))}
+            (kind-is? e "holding") (assoc :holding {:reason (:reason e) :since (:since e)}))))
 
 (defn next-reflex [reflex e]
   (cond

@@ -5,7 +5,7 @@
 
 (def jobs
   [{:id "jobs.movement.pace" :category "movement" :name "pace" :doc "Walk a, b." :args "{:laps {}}" :running ["ProbeView"] :reflex []}
-   {:id "jobs.combat.attack" :category "combat" :name "attack" :doc "Kill things." :args nil :running [] :reflex ["ProbeDrive"] :backoff true}
+   {:id "jobs.combat.attack" :category "combat" :name "attack" :doc "Kill things." :args nil :running [] :reflex ["ProbeDrive"]}
    {:id "jobs.movement.go-to" :category "movement" :name "go-to" :doc nil :ns-doc "Go." :args nil :running [] :reflex []}])
 
 (deftest paragraph-splitting
@@ -36,7 +36,7 @@
     {:running [] :reflex []} []
     {:running ["A" "B"] :reflex []} [{:kind :running :text "running on: A, B"}]
     {:running [] :reflex ["A"]} [{:kind :reflex :text "reflex on: A"}]
-    {:running ["A"] :reflex ["B"] :backoff true} [{:kind :running :text "running on: A"} {:kind :reflex :text "reflex on: B"} {:kind :backoff :text "backoff"}]))
+    {:running ["A"] :reflex ["B"]} [{:kind :running :text "running on: A"} {:kind :reflex :text "reflex on: B"}]))
 
 (deftest summary-text
   (are [needle shown total expected] (= expected (jm/count-text shown total needle))
