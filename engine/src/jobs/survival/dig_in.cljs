@@ -3,6 +3,8 @@
             [jobs.lib.click :as click]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
+            [jobs.lib.child :as child]
+            [jobs.lib.result :as result]
             [jobs.lib.shelter :as sh]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]))
@@ -11,13 +13,14 @@
   "Roof the body in for the night.
   Declines (waiting) with :day, :already-sealed {:pos} (something solid within :roof-height above),
   or :futile {:pos :why} (a :dig-in-futile entry within 8 blocks that blocks it, see below).
-  Ends when roofed. Returns :continue until then.
+  One call is a whole attempt. It ends with the result {:pos :mode :roof} when the world shows the body shut in, else
+  stopped {:reason :text :pos}: the :dig-in-futile reasons below, :no-blocks, :no-tool, :unsealed or :no-progress.
   The mode is the first of these whose cells the zone rules permit. If none is permitted it takes the first
   as a last resort, with one dig-in.trespass-last-resort warning.
   - plug: the body is in a closed room with a door and a hole in the roof over it. One carried block mends the hole.
   - walls: enough :blocks are carried for every open cell. Places the four sides at feet height, the four at head height,
-    a support beside the roof cell, then the roof cell, at most :max-places per round.
-    Every round it recomputes the open cells from the current feet cell. If the blocks run out, it chooses again.
+    a support beside the roof cell, then the roof cell, at most :max-places per step.
+    Every step it recomputes the open cells from the current feet cell. If the blocks run out, it chooses again.
   - dig: digs a pit two deep (three on flat ground, where the start cell has no solid side to roof against),
     then places one block at the roof cell from a carried or dug block.
     It digs only where the block under is solid, the feet and head cells are dry, and no fluid borders the cell
@@ -53,7 +56,7 @@
 (def args
   {:roof-height {:doc "a solid block within this many blocks above counts as a roof" :default sh/default-roof-height}
    :blocks {:doc "names of the blocks it may place" :default building-blocks}
-   :max-places {:doc "placements per round" :default 4}})
+   :max-places {:doc "placements per step" :default 4}})
 
 (def shelter-policy {:cap 10 :ttl sh/ms-per-day})
 
@@ -82,10 +85,22 @@
 
 (defn pick [c blocks] (:name (first (carried c blocks))))
 
+(defn stop-reason!
+  "Note in job memory why this call ends without a roof: the call's stopped result."
+  [c reason]
+  (ctx/update-mem! c assoc :stop reason))
+
 (defn remember-failed-site! [c reason]
+  (stop-reason! c reason)
   (ctx/remember! c :dig-in-futile
                  {:pos (or (:roof (ctx/mem c)) (sh/feet (:primitives c))) :reason reason}
                  futile-policy))
+
+(defn remember-material!
+  "A lack of blocks (data {:pos}) or of a tool (data {:pos :needs}): a :dig-in-futile entry retried once that changes."
+  [c data]
+  (stop-reason! c (if (:needs data) :no-tool :no-blocks))
+  (ctx/remember! c :dig-in-futile data futile-policy))
 
 (defn fail-site! [c reason text]
   (let [result (u/fail! c :dig_in_failed text)]
@@ -276,7 +291,7 @@
           (ctx/emit! c :dig_in_failed :warn {:text (str (or under "an unloaded cell") " under the floor; not digging through it")})
           :done)
       (and (sh/solid-at? p below) (nil? (pick c blocks)) (not (tools/can-harvest? p name)))
-      (do (ctx/remember! c :dig-in-futile {:pos (:roof (ctx/mem c)) :needs name} futile-policy)
+      (do (remember-material! c {:pos (:roof (ctx/mem c)) :needs name})
           (ctx/emit! c :dig_in_failed :warn
                      {:text (str "cannot harvest " name " without a "
                                  (tools/harvest-need (map :name (u/inventory p)) (js->clj (.harvestTools p name)))
@@ -296,7 +311,7 @@
                   (await (collect-drops! c blocks (.-drops r)))
                   (if (or placeable (some? (pick c blocks)))
                     :continue
-                    (do (ctx/remember! c :dig-in-futile {:pos (:roof (ctx/mem c))} futile-policy)
+                    (do (remember-material! c {:pos (:roof (ctx/mem c))})
                         (ctx/emit! c :dig_in_failed :warn {:text "nothing to roof the pit with"})
                         :done)))
                 (fail-site! c :dig-failed (str "cannot dig down: " (.-status r))))))))
@@ -308,7 +323,7 @@
         item (pick c blocks)
         roof (:roof (ctx/mem c))]
     (if (nil? item)
-      (do (ctx/remember! c :dig-in-futile {:pos roof} futile-policy) :done)
+      (do (remember-material! c {:pos roof}) :done)
       (let [r (await (tidy/place! c roof item true))]
         (if (#{"placed" "occupied"} (.-status r))
           (do (when (= "placed" (.-status r)) (ctx/update-mem! c update :placed (fnil conj #{}) roof))
@@ -519,46 +534,65 @@
   (and (sh/roofed? p roof-height)
        (or (not= :walls mode) (empty? (open-cells p (sh/feet p))))))
 
-(defn ^:async round [c]
-  (let [r (await (step c))]
-    (when (= :done r)
-      (note-unroofed! c)
-      (let [p (:primitives c)
-            feet (sh/feet p)
-            placed (:placed (ctx/mem c) #{})
-            mode (:mode (ctx/mem c))
-            roof (case mode
-                   :walls (update feet :y + 2)
-                   :plug (:plug (ctx/mem c))
-                   (:roof (ctx/mem c)))
-            door (when (= :walls (:mode (ctx/mem c))) (door placed feet))
-            start (when (#{:dig :walls} (:mode (ctx/mem c))) (:start (ctx/mem c)))
-            prev (:data (ctx/latest c :shelter))
-            resealed (= feet (:pos prev))
-            start (or start (when resealed (:start prev)))
-            door (or door (when resealed (:door prev)))]
-        (when (and (seq placed) (not (sealed-in? p mode (:roof-height (:args c)))))
-          (let [open (open-cells p feet)]
-            (ctx/emit! c :dig-in.unsealed :warn
-                       {:pos feet :placed (vec placed) :open open
-                        :text (str "NOT sealed in: placed " (count placed) " blocks at " (pr-str (mapv (juxt :x :y :z) placed))
-                                   ", but the world still shows " (open-text open) (when (empty? open) " (no roof)"))})))
-        (when (and (seq placed) (sealed-in? p mode (:roof-height (:args c))))
-          (ctx/emit! c :dig-in.sealed (if resealed :warn :info)
-                     {:pos feet :placed (vec placed) :resealed resealed
-                      :text (str (cond
-                                   (= :plug mode) "mended the roof of a closed room over the body: "
-                                   resealed "sealed the shelter again: "
-                                   :else "sealed in for the night: ")
-                                 "placed " (count placed) " blocks at " (pr-str (mapv (juxt :x :y :z) placed))
-                                 ". At night an open shelter is closed again; it is left by day")}))
-        (ctx/remember! c :shelter (cond-> {:pos feet :state :built}
-                                    (contains? placed roof) (assoc :roof roof)
-                                    door (assoc :door door)
-                                    start (assoc :start start)
-                                    (= :plug mode) (assoc :room true))
-                       shelter-policy)))
-    r))
+(defn end!
+  "The call's end: a :dig-in-futile entry when unroofed, the sealed/unsealed event, the :shelter entry; then the result:
+  {:pos :roof :mode} when the world shows the body shut in, else stopped with the reason noted (:unsealed when none)."
+  [c]
+  (note-unroofed! c)
+  (let [p (:primitives c)
+        feet (sh/feet p)
+        placed (:placed (ctx/mem c) #{})
+        mode (:mode (ctx/mem c))
+        roof (case mode
+               :walls (update feet :y + 2)
+               :plug (:plug (ctx/mem c))
+               (:roof (ctx/mem c)))
+        door (when (= :walls (:mode (ctx/mem c))) (door placed feet))
+        start (when (#{:dig :walls} (:mode (ctx/mem c))) (:start (ctx/mem c)))
+        prev (:data (ctx/latest c :shelter))
+        resealed (= feet (:pos prev))
+        start (or start (when resealed (:start prev)))
+        door (or door (when resealed (:door prev)))]
+    (when (and (seq placed) (not (sealed-in? p mode (:roof-height (:args c)))))
+      (let [open (open-cells p feet)]
+        (ctx/emit! c :dig-in.unsealed :warn
+                   {:pos feet :placed (vec placed) :open open
+                    :text (str "NOT sealed in: placed " (count placed) " blocks at " (pr-str (mapv (juxt :x :y :z) placed))
+                               ", but the world still shows " (open-text open) (when (empty? open) " (no roof)"))})))
+    (when (and (seq placed) (sealed-in? p mode (:roof-height (:args c))))
+      (ctx/emit! c :dig-in.sealed (if resealed :warn :info)
+                 {:pos feet :placed (vec placed) :resealed resealed
+                  :text (str (cond
+                               (= :plug mode) "mended the roof of a closed room over the body: "
+                               resealed "sealed the shelter again: "
+                               :else "sealed in for the night: ")
+                             "placed " (count placed) " blocks at " (pr-str (mapv (juxt :x :y :z) placed))
+                             ". At night an open shelter is closed again; it is left by day")}))
+    (ctx/remember! c :shelter (cond-> {:pos feet :state :built}
+                                (contains? placed roof) (assoc :roof roof)
+                                door (assoc :door door)
+                                start (assoc :start start)
+                                (= :plug mode) (assoc :room true))
+                   shelter-policy)
+    (if (sealed-in? p mode (:roof-height (:args c)))
+      (result/finish! c (cond-> {:pos feet :mode mode} (contains? placed roof) (assoc :roof roof)))
+      (let [reason (or (:stop (ctx/mem c)) :unsealed)]
+        (result/stop! c reason (str "no roof over the body: " (name reason)) :pos feet)))))
+
+(def max-steps
+  "Steps one call takes at most (walls or a pit take about ten); past it the call stops :no-progress."
+  64)
+
+(defn ^:async round
+  "One call is a whole attempt: steps (a placement batch, a dig, a descent, the roof) until the body is roofed or the
+  site fails, a timer between steps."
+  [c]
+  (ctx/update-mem! c dissoc :stop)
+  (loop [i 0]
+    (let [r (if (< i max-steps) (await (step c)) (do (stop-reason! c :no-progress) :done))]
+      (if (= :continue r)
+        (do (await (child/pace!)) (recur (inc i)))
+        (end! c)))))
 
 ;; ------------------------------------------------------------------ leaving the shelter (leave!)
 

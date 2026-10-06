@@ -135,12 +135,11 @@
         (let [{:keys [eng p]} (st/setup (merge (hut-world {:x 5 :y 64 :z 0} {"5,67,0" "air"})
                                                {:time st/night :inventory st/dirt-stack}))]
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
-          (await (st/tick-n eng 6))
+          (let [held (st/mid-night! p 2 #(some? (core/holder eng)))]
+            (await (st/tick-n eng 6))
+            (is (true? @held) "the shelter holds the body at night"))
           (is (= [{:x 5 :y 67 :z 0}] (mapv st/arg-pos (st/calls p "place"))))
-          (is (some? (:pending-reflex (core/state eng))) "the shelter holds the body at night")
-          (.setTime (.-world p) st/noon)
-          (await (st/tick-n eng 6))
-          (is (nil? (:pending-reflex (core/state eng))) "the shelter ended at day")
+          (is (nil? (core/holder eng)) "the shelter ended at day")
           (is (= [] (st/calls p "dig")) "nothing dug to leave: the room's door is the way out")
           (is (= {} (room-blocks p))))))))
 
@@ -194,11 +193,14 @@
           (st/know-bed! eng {:x 6 :y 64 :z 0})
           (set! (.-sleep p) (fn [& _] (swap! (fake/state p) assoc-in [:self :isSleeping] true)
                               (js/Promise.resolve #js {:status "sleeping"})))
-          (await (st/tick-n eng 7))
-          (is (some #{id} (:list (core/state eng))) "still listed while asleep at night")
-          (is (nil? (core/waiting eng id)) "not parked waiting while asleep")
-          (swap! (fake/state p) #(-> % (assoc :time st/noon) (assoc-in [:self :isSleeping] false)))
-          (await (st/tick-n eng 4))
+          (let [mid (atom nil)]
+            (st/on-wait! p (fn [n] (case n
+                                     2 (reset! mid {:listed (boolean (some #{id} (:list (core/state eng))))
+                                                    :holding (:reason (core/holding eng id))})
+                                     3 (swap! (fake/state p) #(-> % (assoc :time st/noon) (assoc-in [:self :isSleeping] false)))
+                                     nil)))
+            (await (st/tick-n eng 4))
+            (is (= {:listed true :holding :sleeping} @mid) "still listed while asleep at night, a declared hold"))
           (is (not-any? #{id} (:list (core/state eng))) "ended once it is day"))))))
 
 (deftest night-holds-for-a-roofed-body-carrying-a-bed-and-knowing-none
@@ -220,16 +222,14 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (st/setup (merge (hut-world {:x 5 :y 64 :z 0} {})
                                                {:time st/night :skipNight false :inventory [{:name "red_bed" :count 1}]}))]
-          (core/submit! eng '(jobs.survival.night) {})
-          (await (st/tick-n eng 8))
-          
-          (is (= 1 (count (st/calls p "place"))) "one bed placed")
-          (is (= "red_bed" (.-item (.-args (first (st/calls p "place"))))))
-          (is (= [] (st/calls p "dig")))
-          (is (= 1 (count (st/calls p "sleep"))) "slept in it")
-          (is (= 1 (count (st/entries eng :bed))) "recorded as the bed")
-          (is (= (st/arg-pos (first (st/calls p "place"))) (:pos (first (st/entries eng :bed)))))
-          (is (= 1 (count (st/entries eng :slept)))))))))
+          (let [mid (st/mid-night! p 1 #(hash-map :digs (count (st/calls p "dig")) :bed (mapv :pos (st/entries eng :bed))))]
+            (core/submit! eng '(jobs.survival.night) {})
+            (await (st/tick-n eng 8))
+            (is (= 1 (count (st/calls p "place"))) "one bed placed")
+            (is (= "red_bed" (.-item (.-args (first (st/calls p "place"))))))
+            (is (= {:digs 0 :bed [(st/arg-pos (first (st/calls p "place")))]} @mid) "recorded as the bed, nothing dug at night")
+            (is (= 1 (count (st/calls p "sleep"))) "slept in it")
+            (is (= 1 (count (st/entries eng :slept))))))))))
 
 (deftest shelter-in-a-closet-with-no-room-for-the-bed-does-nothing-and-is-not-refired
   (async done
@@ -441,16 +441,19 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (st/setup (merge (hut-world {:x 5 :y 64 :z 0} {})
                                                {:time st/night :skipNight false :inventory [{:name "red_bed" :count 1}]}))]
-          (core/submit! eng '(jobs.survival.night) {})
-          (await (st/tick-n eng 8))
-          (let [call (first (st/calls p "place"))
-                foot (st/arg-pos call)
-                click (js->clj (.-click (.-args call)) :keywordize-keys true)
-                stand (js->clj (.-pos (.self p)) :keywordize-keys true)
-                dx (- (:x foot) (:x stand)) dz (- (:z foot) (:z stand))]
-            (is (= (update foot :y dec) (:against click)) "against the floor under the foot cell")
-            (is (< (js/Math.abs (- (:yaw click) (js/Math.atan2 (- dx) (- dz)))) 1e-9) "yaw along the row")
-            (is (= "red_bed" (block-at p [(+ (:x foot) dx) (:y foot) (+ (:z foot) dz)])) "the head cell is the one after the foot")))))))
+          (let [mid (st/mid-night! p 1 #(let [call (first (st/calls p "place"))
+                                              foot (st/arg-pos call)
+                                              stand (js->clj (.-pos (.self p)) :keywordize-keys true)
+                                              dx (- (:x foot) (:x stand)) dz (- (:z foot) (:z stand))]
+                                          {:call call :foot foot :dx dx :dz dz
+                                           :head (block-at p [(+ (:x foot) dx) (:y foot) (+ (:z foot) dz)])}))]
+            (core/submit! eng '(jobs.survival.night) {})
+            (await (st/tick-n eng 8))
+            (let [{:keys [call foot dx dz head]} @mid
+                  click (js->clj (.-click (.-args call)) :keywordize-keys true)]
+              (is (= (update foot :y dec) (:against click)) "against the floor under the foot cell")
+              (is (< (js/Math.abs (- (:yaw click) (js/Math.atan2 (- dx) (- dz)))) 1e-9) "yaw along the row")
+              (is (= "red_bed" head) "the head cell is the one after the foot"))))))))
 
 (deftest a-gap-in-a-wall-is-a-doorway-and-a-cell-in-the-room-is-not
   (let [p (tu/fake (hut-world {:x 5 :y 64 :z 0} {"5,64,2" "air" "5,65,2" "air"}))]

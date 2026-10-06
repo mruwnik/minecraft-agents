@@ -143,6 +143,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup night-world [(whole-zone "Miles")])]
+          (st/dawn-after! p 2)
           (core/submit! eng '(jobs.survival.night) {})
           (await (run-until-empty eng 12))
           (is (= 10 (count (calls p "place"))))

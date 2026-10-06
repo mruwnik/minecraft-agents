@@ -163,6 +163,10 @@
         (let [{:keys [eng p seen clock]} (boot "scenarios/survival.edn"
                                                {:time 14000
                                                 :inventory [{:name "dirt" :count 16}]})]
+          ;; the night is one round until morning: day comes at its first hold
+          (.override (.-world p) "wait" (fn ^:async g [token a impl]
+                                          (when (= 5000 (.-ms a)) (.setTime (.-world p) 1000))
+                                          (await (impl token a))))
           (await (run-ticks eng clock 6 1000))
           (is (some #{:night} (fired seen)) "night in the open fires the night reflex with no job submitted")
           (is (contains? (names-started seen) "jobs.survival.night") "the reflex ran the night job")

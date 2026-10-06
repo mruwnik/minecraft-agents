@@ -119,10 +119,10 @@
         (let [{:keys [eng p]} (st/setup {:time st/night :blocks st/floor :inventory [{:name "bread" :count 3}]
                                          :self {:food 4}})]
           (st/refuse-placing! p)
-          (core/submit! eng '(jobs.survival.night) {})
-          (await (st/tick-n eng 12))
-          (is (< 4 (food-of p)) "exposed hold: it ate")
-          (is (= 1 (count (:list (core/state eng)))) "and still holds"))))))
+          (let [mid (st/mid-night! p 3 #(hash-map :ate (< 4 (food-of p)) :listed (count (:list (core/state eng)))))]
+            (core/submit! eng '(jobs.survival.night) {})
+            (await (st/tick-n eng 12))
+            (is (= {:ate true :listed 1} @mid) "exposed hold: it ate, and still holds")))))))
 
 (deftest a-held-body-with-enough-food-does-not-eat
   (async done
