@@ -349,10 +349,12 @@
   (let [wall (into {} (for [[x z] [[4 0] [6 0] [5 1] [5 -1]] y [64 65]] [(str x "," y "," z) "stone"]))
         zombie {:id 1 :kind "hostile" :name "zombie" :pos {:x 5 :y 64 :z 0} :visible true}
         skeleton {:id 2 :kind "hostile" :name "skeleton" :pos {:x 0 :y 64 :z 10} :visible true}
-        near? (fn [world] (value '(hostile-near 8) (env (tu/seeing-all (tu/fake-on-floor (assoc world :self {:pos {:x 0 :y 64 :z 0}}))))))]
+        near? (fn [world] (value '(hostile-near 8) (env (tu/seeing-all (tu/fake-on-floor (assoc world :self {:pos {:x 0 :y 64 :z 0}}))))))
+        near-12? (fn [world] (value '(hostile-near 12) (env (tu/seeing-all (tu/fake-on-floor (assoc world :self {:pos {:x 0 :y 64 :z 0}}))))))]
     (is (true? (near? {:entities [zombie]})))
     (is (false? (near? {:blocks wall :entities [zombie]})) "a melee mob walled off is no danger")
-    (is (true? (near? {:entities [skeleton]})) "a ranged mob with a line of fire beyond the melee radius is")))
+    (is (false? (near? {:entities [skeleton]})) "a ranged mob beyond the written radius is not")
+    (is (true? (near-12? {:entities [skeleton]})) "a ranged mob with a line of fire within the radius is")))
 
 (deftest blocks-near-counts-only-blocks-the-body-has-seen
   (let [fresh #(tu/fake {:blocks {"3,64,4" "diamond_ore" "3,60,4" "diamond_ore"}})
