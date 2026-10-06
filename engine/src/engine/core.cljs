@@ -544,11 +544,13 @@
      :resolve-attention (fn [request-id reason]
                           (check!)
                           (resolve-attention! eng request-id reason))
+     :alive? #(or (nil? token) (owner? eng token))
      :emit (fn [kind level fields]
              (let [notice? (and (#{:warn :error} level) (not (contains? fields :attention)))]
-               (emit! eng (cond-> (merge fields {:source :job :kind kind :level level :job id
-                                                 :chain chain :round round :reflex reflex})
-                            notice? (assoc :attention :notice)))))}))
+               (when (or (nil? token) (owner? eng token))
+                 (emit! eng (cond-> (merge fields {:source :job :kind kind :level level :job id
+                                                   :chain chain :round round :reflex reflex})
+                              notice? (assoc :attention :notice))))))}))
 
 (defn child-ctx
   "The ctx of the child in slot under parent base, with args."

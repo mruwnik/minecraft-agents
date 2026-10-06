@@ -1105,6 +1105,32 @@
                            (catch :default e (when (core/cut? e) :cut)))))
           (is (= 0 (.-length (.-calls (.-world p))))))))))
 
+(deftest a-stale-token-drops-the-rounds-events
+  (let [{:keys [eng p seen]} (setup)
+        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "old" :args {} :round 1})]
+    (.setOwner p "old")
+    (ctx/emit! c :said :info {:n 1})
+    (.setOwner p "new")
+    (ctx/emit! c :said :info {:n 2})
+    (is (= [1] (mapv :n (filter #(= :said (:kind %)) @seen))) "only the event emitted while the round owned the body")))
+
+(deftest a-check-ctx-still-emits
+  (let [{:keys [eng seen]} (setup)
+        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token nil :args {} :round 1})]
+    (ctx/emit! c :said :info {})
+    (is (= 1 (count (filter #(= :said (:kind %)) @seen))))))
+
+(deftest alive-says-whether-the-round-still-owns-the-body
+  (let [{:keys [eng p]} (setup)
+        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "old" :args {} :round 1})
+        check (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token nil :args {} :round 1})]
+    (.setOwner p "old")
+    (is (true? (ctx/alive? c)))
+    (.setOwner p "new")
+    (is (false? (ctx/alive? c)) "cut: a search loop stops")
+    (is (true? (ctx/alive? check)) "a check has no token and runs synchronously")
+    (is (true? (ctx/alive? {})) "a ctx with no engine behind it (a unit test) is alive")))
+
 ;; ---------------------------------------------------------------- no progress
 
 (defn ^:async spin-round [_] :continue)

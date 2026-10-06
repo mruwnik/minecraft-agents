@@ -111,8 +111,14 @@
   [ctx request-id reason]
   ((:resolve-attention ctx) request-id reason))
 
+(defn alive?
+  "Whether this round still owns the body (a check, or a ctx with no engine behind it, always does). A cut round's
+  code runs on until its next act, write or emit: a search loop with no act checks this and stops."
+  [ctx]
+  (if-let [f (:alive? ctx)] (f) true))
+
 (defn emit!
-  "Emit an event with :source :job and this job's envelope fields."
+  "Emit an event with :source :job and this job's envelope fields. A cut round's events are dropped."
   ([ctx kind level] (emit! ctx kind level {}))
   ([ctx kind level fields] ((:emit ctx) kind level fields)))
 
