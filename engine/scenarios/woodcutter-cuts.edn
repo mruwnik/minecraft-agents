@@ -6,7 +6,7 @@
 {:register [{:id :look-timer :when (or (not (known? (since :looked))) (>= (since :looked) 45))
              :job (jobs.movement.look-around)}
             {:trigger :hostile-near}
-            {:trigger :night-unsafe}
+            {:trigger :night}
             {:trigger :hungry}]
  :queue [(jobs.forestry.harvest-wood {:species "oak" :radius 16})
          (jobs.storage.deposit)]}

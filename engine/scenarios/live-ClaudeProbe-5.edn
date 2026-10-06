@@ -3,8 +3,7 @@
 ;; hungry notify to see a reflex fire after the return.
 {:register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :args {:food 6}
              :job (jobs.debug.notify {:text "hungry fired"})}
-            {:trigger :night-unsafe :persistence :cooldown :cooldown-s 10 :args {:roof-height 4}
-             :job (jobs.survival.shelter {:roof-height 4})}
-            {:trigger :player-sleeping-nearby :persistence :cooldown :cooldown-s 30
-             :job (jobs.survival.log-out)}]
+            {:trigger :night :persistence :cooldown :cooldown-s 10 :args {:roof-height 4}
+             :job (jobs.survival.night {:roof-height 4})}
+            ]
  :queue [(repeat (jobs.movement.look-around))]}

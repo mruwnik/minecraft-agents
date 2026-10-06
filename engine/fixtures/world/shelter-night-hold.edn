@@ -1,4 +1,4 @@
-;; jobs.survival.shelter holds the body at night and lets it out at day (card 79be43a4; the shelter-level hold was not ported in
+;; jobs.survival.night holds the body at night and lets it out at day (card 79be43a4; the shelter-level hold was not ported in
 ;; card 8aa80fca). Night case: on open ground with a remembered bed the shelter sleeps (step 1: a known bed within :bed-radius
 ;; comes before log-out and dig-in), and each round waits: the job does not complete and the body does not walk off while it
 ;; is night. (The release at day and the queued-job hold are the known-failing fixture shelter-night-hold-queued-job.) (Without a bed, with another player online, it logs the body out until
@@ -15,17 +15,17 @@
    :tags [:night]
    :blocks [[:set [20 0 16] "red_bed[facing=east,part=foot]"] [:set [21 0 16] "red_bed[facing=east,part=head]"]]
    :act [[:job (jobs.memory.set-place {:name :bed :pos #at [20 0 16]})]
-         [:job (jobs.survival.shelter {})]
+         [:job (jobs.survival.night {})]
          [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 60]
          [:wait-s 30]]
    :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 60}
-            {:no-event {:source :job :kind :completed :data {:name "jobs.survival.shelter"}} :for-s 30}
+            {:no-event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :for-s 30}
             {:no-event {:source :body :kind :woke} :for-s 30}]
    :after [[:body-near [20.5 0 16.5] 3]]
    :limit-s 100}
   {:name "day-shelter-does-nothing"
    :time :day
-   :act [[:job (jobs.survival.shelter {})]]
+   :act [[:job (jobs.survival.night {})]]
    :expect [{:event {:source :job :kind #{:completed :declined :waiting}} :within-s 20 :of-job true}
             {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 10}]
    ;; no :after body check: another runner's night set while the job is parked would make it log the body out

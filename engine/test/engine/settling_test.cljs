@@ -8,6 +8,7 @@
             [engine.events :as events]
             [engine.registry :as registry]
             [engine.fake :as fake]
+            [engine.jobs.shelter :as sh]
             [engine.test-util :as tu]
             [engine.triggers :as real-triggers]))
 
@@ -37,7 +38,9 @@
   (merge real-triggers/all
          {:pest {:name :pest :job '(respawn-away) :persistence :cooldown :cooldown-s 30
                  :when (fn [w _ _] (pest-near? w))}
-          :probe {:name :probe :job '(nop) :when (fn [_ _ _] (swap! probes inc) false)}}))
+          :probe {:name :probe :job '(nop) :when (fn [_ _ _] (swap! probes inc) false)}
+          :sleeper-out {:name :sleeper-out :job '(jobs.survival.log-out {:offline-ms 20000 :news-ms 0}) :persistence :cooldown :cooldown-s 30
+                         :when (fn [w _ _] (boolean (seq (sh/sleeping-players w 128))))}}))
 
 (defn setup [spec]
   (let [clock (atom t0)
@@ -60,7 +63,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen clock state] :as r} (setup {:time 14000 :entities [sleeper] :offlineScale 0.01 :settles true})]
-          (core/register-reflex! eng {:trigger :player-sleeping-nearby})
+          (core/register-reflex! eng {:trigger :sleeper-out})
           (let [round (core/tick! eng)]
             (await (pause 5))
             (is (true? (.isOffline p)) "the log-out took the body away")

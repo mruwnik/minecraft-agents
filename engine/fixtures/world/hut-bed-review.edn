@@ -8,7 +8,7 @@
 {:defaults
  {:tags [:night :survival :sleep]
   :time :night-exclusive
-  :register [{:trigger :night-unsafe}]
+  :register [{:trigger :night}]
   :body {:effects [["resistance" 600 4]] :settle-s 8}}
  :cases
  [{:name "seen-unknown-bed-slept-and-recorded-no-second-bed"

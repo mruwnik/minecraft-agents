@@ -1,5 +1,5 @@
 (ns engine.shelter-test
-  "Surviving the night: the night-unsafe trigger and the shelter, sleep,
+  "Surviving the night: the night trigger and the night, sleep,
   log-out and dig-in jobs against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.registry :as registry]
@@ -65,7 +65,7 @@
   (filterv #(= [:reflex :declined reflex] [(:source %) (:kind %) (:reflex %)]) @seen))
 
 (def always-shelter
-  {:name :always-shelter :job '(jobs.survival.shelter) :args {:roof-height 4}
+  {:name :always-shelter :job '(jobs.survival.night) :args {:roof-height 4}
    :persistence :cooldown :cooldown-s 10 :when (constantly true)})
 
 (defn refuse-placing! [p]
@@ -74,9 +74,9 @@
 ;; ------------------------------------------------------------------ trigger
 
 (defn fires? [world args]
-  (boolean ((:when (get triggers/all :night-unsafe)) (tu/fake world) {} args)))
+  (boolean ((:when (get triggers/all :night)) (tu/fake world) {} args)))
 
-(deftest night-unsafe-holds-at-night-in-the-open
+(deftest night-holds-at-night-in-the-open
   (are [world args held] (= held (fires? world args))
     {:time night} {} true
     {:time noon} {} false
@@ -100,9 +100,9 @@
   (let [raw-p (tu/fake (dissoc world :light-default :light))
         _ (swap! (fake/state raw-p) merge (select-keys world [:light-default :light]))
         per (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)})]
-    (boolean ((:when (get triggers/all :night-unsafe)) (perception/wrap raw-p per) {} {}))))
+    (boolean ((:when (get triggers/all :night)) (perception/wrap raw-p per) {} {}))))
 
-(deftest night-unsafe-is-silent-when-sealed-from-the-sky
+(deftest night-is-silent-when-sealed-from-the-sky
   (are [world held] (= held (fires-with-light? (merge {:time night} world)))
     ;; sky light 0 at feet and head: buried, whatever the column looks like
     (merge dark {:blocks (stone-above 10 5)}) false
@@ -118,96 +118,46 @@
     ;; torchlight is not sky light
     (merge dark {:light {[0 64 0] [0 14]}}) false))
 
-(deftest night-unsafe-without-light-data-falls-back-to-the-column
+(deftest night-without-light-data-falls-back-to-the-column
   (let [p (tu/fake {:time night :blocks (stone-above 10 5)})]
     (is (sh/buried-by-column? p))
     (is (not (sh/buried-by-column? (tu/fake {:time night :blocks (stone-above 10 2)}))))))
 
-(defn sleeping-nearby?
-  ([world args] (sleeping-nearby? world args nil))
-  ([world args bed]
-   (let [{:keys [eng]} (setup {})]
-     (when bed (know-bed! eng bed))
-     (boolean ((:when (get triggers/all :player-sleeping-nearby)) (tu/fake world) (mem/view (:store eng)) args)))))
-
-(defn sleeping-nearby-after-unsupported? [world]
-  (let [{:keys [eng]} (setup {})]
-    (mem/write! (:store eng) :log-out {:ms 0 :status "unsupported"} {:cap 10 :ttl day-ms})
-    (boolean ((:when (get triggers/all :player-sleeping-nearby)) (tu/fake world) (mem/view (:store eng)) {}))))
-
-(deftest player-sleeping-nearby-holds-at-night-with-a-sleeper-and-no-bed
-  (are [world args bed held] (= held (sleeping-nearby? world args bed))
-    {:time night :entities [sleeper]} {} nil true
-    {:time night :entities [sleeper] :blocks {"0,66,0" "stone"}} {} nil true
-    {:time noon :entities [sleeper]} {} nil false
-    {:time night :entities [awake]} {} nil false
-    {:time night} {} nil false
-    {:time night :entities [sleeper]} {} {:x 6 :y 64 :z 0} false
-    {:time night :entities [sleeper]} {} {:x 80 :y 64 :z 0} true
-    {:time night :entities [sleeper]} {:bed-radius 100} {:x 80 :y 64 :z 0} false
-    {:time night :entities [sleeper]} {:offline-allowed false} nil false
-    {:time night :entities [sleeper]} {:player-radius 5} nil false))
-
-(deftest player-sleeping-nearby-does-not-hold-after-an-unsupported-log-out
-  (is (false? (sleeping-nearby-after-unsupported? {:time night :entities [sleeper]}))))
-
-(defn sleeping-nearby-after-log-out-ago?
-  ([ago-s args] (sleeping-nearby-after-log-out-ago? ago-s args "returned"))
-  ([ago-s args status]
-  (let [{:keys [eng clock]} (setup {})]
-    (mem/write! (:store eng) :log-out {:ms 20000 :status status} {:cap 10 :ttl day-ms})
-    (swap! clock + (* 1000 ago-s))
-    (boolean ((:when (get triggers/all :player-sleeping-nearby))
-              (tu/fake {:time night :entities [sleeper]}) (mem/view (:store eng)) args)))))
-
-(deftest a-failed-log-out-does-not-block-but-unsupported-is-permanent
-  (are [status ago-s held] (= held (sleeping-nearby-after-log-out-ago? ago-s {} status))
-    "closed" 10 true
-    "cut" 10 true
-    "unsupported" 31 false
-    "unsupported" 1100 false))
-
-(deftest player-sleeping-nearby-is-registered-and-fires-log-out
-  (let [t (get triggers/all :player-sleeping-nearby)]
-    (is (= '(jobs.survival.log-out {:offline-ms 20000}) (:job t)))
-    (is (= [:cooldown 30] ((juxt :persistence :cooldown-s) t)))
-    (is (= {:player-radius 128 :bed-radius 48 :offline-allowed true} (:args t)))))
-
-(deftest a-roofed-body-still-logs-out-for-a-sleeper-from-the-register
+(deftest a-roofed-body-logs-out-for-a-sleeper-from-the-register
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:time night :entities [sleeper] :blocks {"0,66,0" "stone"}})]
-          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night-unsafe} {:trigger :player-sleeping-nearby}]}"))
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
           (await (tick-n eng 3))
-          (is (= 1 (count (calls p "offline"))) "night-unsafe is silent under the roof, the log-out reflex fired")
-          (is (= 1 (count (entries eng :log-out)))))))))
+          (is (< 1 (count (calls p "offline"))) "the roof does not matter; out again while the sleeper sleeps")
+          (is (= (count (calls p "offline")) (count (entries eng :log-out)))))))))
 
-(deftest night-unsafe-ignores-a-built-shelter-by-day
+(deftest night-ignores-a-built-shelter-by-day
   (let [{:keys [eng]} (setup {})]
     (mem/write! (:store eng) :shelter {:pos {:x 0 :y 64 :z 0} :roof {:x 0 :y 66 :z 0} :state :built} {:cap 10 :ttl day-ms})
-    (is (not (boolean ((:when (get triggers/all :night-unsafe)) (tu/fake {:time noon}) (mem/view (:store eng)) {})))
+    (is (not (boolean ((:when (get triggers/all :night)) (tu/fake {:time noon}) (mem/view (:store eng)) {})))
         "night-only: a built shelter at day does not hold it")))
 
-(deftest night-unsafe-is-registered-and-fires-shelter
-  (let [t (get triggers/all :night-unsafe)]
-    (is (= '(jobs.survival.shelter) (:job t)))
+(deftest night-is-registered-and-fires-shelter
+  (let [t (get triggers/all :night)]
+    (is (= '(jobs.survival.night) (:job t)))
     (is (= 4 (get-in t [:args :roof-height])))
     (is (nil? (get triggers/all :night-and-bed-known)) "the old alias is gone")))
 
 (def own-shelter {:pos {:x 0 :y 64 :z 0} :roof {:x 0 :y 66 :z 0} :state :built})
 
-(deftest night-unsafe-holds-at-night-while-shut-in-its-own-shelter
+(deftest night-holds-at-night-while-shut-in-its-own-shelter
   (let [{:keys [eng]} (setup {})
-        holds? (fn [world] (boolean ((:when (get triggers/all :night-unsafe)) (tu/fake world) (mem/view (:store eng)) {})))]
+        holds? (fn [world] (boolean ((:when (get triggers/all :night)) (tu/fake world) (mem/view (:store eng)) {})))]
     (mem/write! (:store eng) :shelter own-shelter {:cap 10 :ttl day-ms})
     (is (holds? {:time night :blocks {"0,66,0" "stone"}}) "the night's work is not done: the shelter holds the body")
     (is (not (holds? {:time night :blocks {"0,66,0" "stone"} :self {:isSleeping true}})) "asleep")
-    (is (not (holds? {:time noon :blocks {"0,66,0" "stone"}})) "by day it is shut-in-by-day's")
+    (is (holds? {:time noon :blocks {"0,66,0" "stone"}}) "by day it lets the body out")
     (is (not (holds? {:time night :blocks {"0,66,0" "stone" "3,66,0" "stone"} :self {:pos {:x 3 :y 64 :z 0}}}))
         "roofed elsewhere, out of its shelter")))
 
-;; A shelter cut after it dug in (a higher reflex) is fired again by night-unsafe and holds from its first round,
+;; A shelter cut after it dug in (a higher reflex) is fired again by night and holds from its first round,
 ;; eating as it holds, rather than ending :done and leaving the night to the hungry reflex.
 (deftest a-fresh-shelter-in-its-own-shelter-holds-the-night-and-eats
   (async done
@@ -216,12 +166,12 @@
         (let [{:keys [eng p seen]} (setup {:time night :blocks {"0,66,0" "stone"} :self {:food 4}
                                            :inventory [{:name "bread" :count 2}]})]
           (mem/write! (:store eng) :shelter own-shelter {:cap 10 :ttl day-ms})
-          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night-unsafe} {:trigger :hungry}]}"))
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night} {:trigger :hungry}]}"))
           (await (tick-n eng 4))
-          (is (= [:night-unsafe] (mapv :reflex (filterv #(= [:reflex :fired] [(:source %) (:kind %)]) @seen)))
+          (is (= [:night] (mapv :reflex (filterv #(= [:reflex :fired] [(:source %) (:kind %)]) @seen)))
               "the shelter holds; the hungry reflex below it does not get the body")
           (is (seq (emitted seen :shelter.ate)) "the shelter ate while holding")
-          (is (empty? (filterv #(= [:reflex :ended :night-unsafe] [(:source %) (:kind %) (:reflex %)]) @seen))))))))
+          (is (empty? (filterv #(= [:reflex :ended :night] [(:source %) (:kind %) (:reflex %)]) @seen))))))))
 
 (deftest a-held-shelter-eats-below-the-health-line-though-not-hungry
   (async done
@@ -230,7 +180,7 @@
         (let [{:keys [eng seen]} (setup {:time night :blocks {"0,66,0" "stone"} :self {:food 19 :health 5}
                                          :inventory [{:name "bread" :count 2}]})]
           (mem/write! (:store eng) :shelter own-shelter {:cap 10 :ttl day-ms})
-          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night-unsafe}]}"))
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
           (await (tick-n eng 2))
           (is (seq (emitted seen :shelter.ate)) "below 7 hp it eats up to a full bar"))))))
 
@@ -329,29 +279,27 @@
 
 ;; ----------------------------------------------------------------- log-out
 
-(deftest log-out-goes-offline-when-another-player-sleeps-and-no-bed-is-known
+(deftest log-out-goes-offline-for-a-short-stint
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:time night :entities [sleeper]})]
+        (let [{:keys [eng p]} (setup {:time night})]
           (core/submit! eng '(jobs.survival.log-out) {})
           (await (run-until-empty eng 3))
-          (is (= [475050] (mapv #(.-ms (.-args %)) (calls p "offline"))) "until morning by default")
+          (is (= [30000] (mapv #(.-ms (.-args %)) (calls p "offline"))))
           (is (= ["logged-out-for-sleeping-player"] (mapv #(.-why (.-args %)) (calls p "offline"))))
-          (is (= [{:ms 475050 :status "ok"}] (entries eng :log-out)))
+          (is (= [{:ms 30000 :status "ok"}] (entries eng :log-out)))
           (is (= {:cap 10 :ttl day-ms} (mem/policy (mem/view (:store eng)) :log-out))))))))
 
-(deftest log-out-declines-without-a-sleeper-with-a-bed-or-when-not-allowed
-  (are [world bed? spec]
+(deftest log-out-declines-by-day-when-not-allowed-or-unsupported
+  (are [world unsupported? spec]
        (let [{:keys [eng]} (setup world)]
-         (when bed? (know-bed! eng {:x 6 :y 64 :z 0}))
+         (when unsupported? (mem/write! (:store eng) :log-out {:ms 0 :status "unsupported"} {:cap 10 :ttl day-ms}))
          (core/submit! eng spec {})
          (nil? (core/tick! eng)))
-    {:time night :entities [awake]} false '(jobs.survival.log-out)
-    {:time night} false '(jobs.survival.log-out)
-    {:time noon :entities [sleeper]} false '(jobs.survival.log-out)
-    {:time night :entities [sleeper] :blocks {"6,64,0" "red_bed"}} true '(jobs.survival.log-out)
-    {:time night :entities [sleeper]} false '(jobs.survival.log-out {:offline-allowed false})))
+    {:time noon} false '(jobs.survival.log-out)
+    {:time night} true '(jobs.survival.log-out)
+    {:time night} false '(jobs.survival.log-out {:offline-allowed false})))
 
 ;; ------------------------------------------------------------------ dig-in
 
@@ -653,7 +601,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:time night :entities [sleeper] :players ["Alex"] :blocks {"6,64,0" "red_bed"}})]
           (know-bed! eng {:x 6 :y 64 :z 0})
-          (core/submit! eng '(jobs.survival.shelter) {})
+          (core/submit! eng '(jobs.survival.night) {})
           (await (run-until-empty eng 8))
           (is (= 1 (count (calls p "sleep"))))
           (is (= [] (calls p "offline")))
@@ -674,7 +622,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:time night :inventory dirt-stack :blocks floor})]
-          (core/submit! eng '(jobs.survival.shelter) {})
+          (core/submit! eng '(jobs.survival.night) {})
           (await (tick-n eng 8))
           (is (= [] (calls p "offline")) "nobody else online: no log-out")
           (is (= 10 (count (calls p "place"))) "dug in")
@@ -682,43 +630,23 @@
 
 (def ms-of-offline (fn [p] (mapv #(.-ms (.-args %)) (calls p "offline"))))
 
-(deftest shelter-logs-out-until-morning-when-another-player-is-online-and-no-bed-is-known
+(deftest another-player-online-and-awake-is-no-reason-to-log-out
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:time night :players ["Alex"] :inventory dirt-stack :blocks floor})]
-          (core/submit! eng '(jobs.survival.shelter) {})
-          (await (run-until-empty eng 8))
-          (is (= [475050] (ms-of-offline p)) "away until the night is over")
-          (is (= [{:ms 475050 :status "ok"}] (entries eng :log-out)))
-          (is (= [] (calls p "place")) "did not dig in")
-          (is (true? (.-isDay (.self p))) "back by day")
-          (is (= [] (:list (core/state eng))) "the shelter ended at day"))))))
-
-(deftest shelter-logs-out-again-when-it-comes-back-at-night
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:time night :players ["Alex"] :inventory dirt-stack :blocks floor})
-              n (atom 0)]
-          (.override (.-world p) "offline"
-                     (fn ^:async f [token a impl]
-                       (let [r (await (impl token a))]
-                         (when (= 1 (swap! n inc)) (.setTime (.-world p) 20000))
-                         r)))
-          (core/submit! eng '(jobs.survival.shelter) {})
-          (await (run-until-empty eng 12))
-          (is (= [475050 175050] (ms-of-offline p)) "the second log-out lasts the rest of the night")
-          (is (= [] (calls p "place")))
-          (is (= [] (:list (core/state eng)))))))))
+        (let [{:keys [eng p]} (setup {:time night :players ["Alex"] :entities [awake] :inventory dirt-stack :blocks floor})]
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (tick-n eng 8))
+          (is (= [] (calls p "offline")))
+          (is (= 10 (count (calls p "place"))) "dug in"))))))
 
 (deftest shelter-digs-in-when-the-log-out-fails
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:time night :players ["Alex"] :inventory dirt-stack :blocks floor})]
+        (let [{:keys [eng p]} (setup {:time night :entities [sleeper] :inventory dirt-stack :blocks floor})]
           (.override (.-world p) "offline" (fn [_ _ _] #js {:status "unsupported"}))
-          (core/submit! eng '(jobs.survival.shelter) {})
+          (core/submit! eng '(jobs.survival.night) {})
           (await (tick-n eng 8))
           (is (= 1 (count (calls p "offline"))) "tried once; unsupported is not tried again")
           (is (= ["unsupported"] (mapv :status (entries eng :log-out))))
@@ -728,9 +656,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:time night :entities [sleeper]})]
+        (let [{:keys [eng p]} (setup {:time night :entities [awake]})]
           (know-bed! eng {:x 6 :y 64 :z 0})
-          (core/submit! eng '(jobs.survival.shelter) {})
+          (core/submit! eng '(jobs.survival.night) {})
           (await (run-until-empty eng 8))
           (is (= [{:gone true :was {:x 6 :y 64 :z 0}}] (entries eng :bed)))
           (is (= [] (calls p "offline")) "nobody else online: no log-out"))))))
@@ -742,7 +670,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:time night :inventory dirt-stack :blocks floor :entities [awake]})]
-          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night-unsafe}]}"))
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
           (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
           (await (tick-n eng 20))
           (is (= 10 (count (calls p "place"))) "dug in")
@@ -765,7 +693,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:time night :blocks ground})]
-          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night-unsafe}]}"))
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
           (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
           (await (tick-n eng 20))
           (is (< (:y (pos-of p)) 64) "in the pit")
@@ -785,7 +713,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:time night :blocks stone-ground :inventory [{:name "dirt" :count 1}]})]
-          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night-unsafe}]}"))
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
           (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
           (await (tick-n eng 20))
           (is (< (:y (pos-of p)) 64) "in the pit")
@@ -805,7 +733,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:time night :blocks ground})]
-          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night-unsafe}]}"))
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
           (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
           (await (tick-n eng 20))
           (fake/add-entity! p {:id 7 :name "zombie" :kind "hostile" :pos {:x 2 :y 64 :z 0}})
@@ -823,7 +751,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:time night :skipNight false :blocks {"6,64,0" "red_bed"}})]
           (know-bed! eng {:x 6 :y 64 :z 0})
-          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night-unsafe}]}"))
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
           (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
           (await (tick-n eng 20))
           (is (true? (.-isSleeping (.self p))) "asleep in the bed, the night not skipped")
@@ -864,7 +792,7 @@
         (let [{:keys [eng p seen]} (setup {:time night :inventory dirt-stack :blocks floor :entities [awake]
                                            :unreachable ["6,64,0"]})]
           (know-bed! eng {:x 6 :y 64 :z 0})
-          (core/submit! eng '(jobs.survival.shelter) {})
+          (core/submit! eng '(jobs.survival.night) {})
           (loop [i 0]
             (when (and (< i 60) (empty? (emitted seen :bed_unreachable)))
               (await (core/tick! eng))
@@ -883,7 +811,7 @@
           (know-bed! eng {:x 80 :y 64 :z 0})
           (mem/write! (:store eng) :slept {:pos {:x 0 :y 64 :z 0}} {:cap 10 :ttl (* 7 day-ms)})
           (reset! clock (+ 1000000 (* 4 day-ms)))
-          (core/submit! eng '(jobs.survival.shelter) {})
+          (core/submit! eng '(jobs.survival.night) {})
           (await (run-until-empty eng 10))
           (is (= 1 (count (calls p "sleep"))) "an 80 block walk is worth it after four days awake")
           (is (= 1 (count (emitted seen :needs_bed)))))))))
@@ -894,17 +822,17 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:time night :blocks (merge floor {"80,64,0" "red_bed"})})]
           (know-bed! eng {:x 80 :y 64 :z 0})
-          (core/submit! eng '(jobs.survival.shelter) {})
+          (core/submit! eng '(jobs.survival.night) {})
           (await (run-until-empty eng 3))
           (is (= [] (calls p "sleep"))))))))
 
-(deftest night-unsafe-fires-shelter-from-the-register
+(deftest night-fires-shelter-from-the-register
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:time night :blocks {"6,64,0" "red_bed"}})]
           (know-bed! eng {:x 6 :y 64 :z 0})
-          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night-unsafe}]}"))
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
           (await (tick-n eng 4))
           (is (= 1 (count (calls p "sleep")))))))))
 
@@ -913,7 +841,7 @@
 (def shelter-policy {:cap 10 :ttl day-ms})
 
 (defn ^:async tick-nights
-  "n batches of ticks, the clock 11 s on after each (past the night-unsafe cooldown, so a dropped reflex would fire again)."
+  "n batches of ticks, the clock 11 s on after each (past the night cooldown, so a dropped reflex would fire again)."
   [eng clock n]
   (loop [i 0]
     (when (< i n)
@@ -927,11 +855,11 @@
       (fn ^:async t []
         (let [{:keys [eng p seen clock]} (setup {:time night :inventory dirt-stack :blocks floor})]
           (refuse-placing! p)
-          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night-unsafe}]}"))
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
           (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
           (await (tick-nights eng clock 6))
-          (is (= [] (declined-events seen :night-unsafe)) "never declined, so never dropped and fired again")
-          (is (= 1 (count (filter #(= :fired (:kind %)) (emitted-by seen :reflex :night-unsafe)))) "fired once")
+          (is (= [] (declined-events seen :night)) "never declined, so never dropped and fired again")
+          (is (= 1 (count (filter #(= :fired (:kind %)) (emitted-by seen :reflex :night)))) "fired once")
           (is (some? (:pending-reflex (core/state eng))) "the shelter holds the body at night")
           (is (= 3 (count (calls p "place"))) "the walls are not tried again every round")
           (is (= 1 (count (emitted seen :shelter.exposed))) "one warn that the body is unsheltered")
@@ -949,25 +877,25 @@
                                  [{"0,63,0" "stone" "0,62,0" "water"} :no-floor]
                                  [{"0,63,0" "water"} :hazard-below]]]
           (let [{:keys [eng p seen]} (setup {:time night :blocks blocks :inventory [{:name "dirt" :count 1}]})]
-            (core/submit! eng '(jobs.survival.shelter) {})
+            (core/submit! eng '(jobs.survival.night) {})
             (await (tick-n eng 30))
             (is (= [] (calls p "dig")) (pr-str blocks))
             (is (= 1 (count (emitted seen :dig_in_failed))) (pr-str blocks))
             (is (= [reason] (mapv :reason (entries eng :dig-in-futile))) (pr-str blocks))
             (is (= 1 (count (:list (core/state eng)))) "still holding")))))))
 
-(deftest an-unsheltered-hold-logs-out-once-another-player-comes-online
+(deftest an-unsheltered-hold-logs-out-once-someone-falls-asleep
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:time night :inventory dirt-stack :blocks floor})]
           (refuse-placing! p)
-          (core/submit! eng '(jobs.survival.shelter) {})
+          (core/submit! eng '(jobs.survival.night) {})
           (await (tick-n eng 10))
-          (is (= [] (calls p "offline")) "alone: nobody to skip the night for")
-          (swap! (fake/state p) assoc :players ["Sam"])
+          (is (= [] (calls p "offline")) "nobody asleep")
+          (.emit (.-world p) #js {:kind "sleep-status" :sleeping 1 :needed 2})
           (await (tick-n eng 4))
-          (is (= 1 (count (calls p "offline"))) "the hold chose again and logged out"))))))
+          (is (pos? (count (calls p "offline"))) "the hold chose again and logged out"))))))
 
 (deftest an-unsheltered-hold-after-a-futile-dig-ends-by-day
   (async done
@@ -975,7 +903,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:time night :drops {"iron_ore" "raw_iron"} :inventory [{:name "iron_pickaxe" :count 1}]
                                            :blocks (merge ground {"0,63,0" "iron_ore" "0,62,0" "iron_ore" "0,61,0" "stone"})})]
-          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night-unsafe}]}"))
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
           (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
           (await (tick-n eng 20))
           (is (= 1 (count (calls p "dig"))) "nothing to roof the pit with: one dig")
@@ -991,7 +919,7 @@
       (fn ^:async t []
         (let [{:keys [eng]} (setup {:time night :blocks floor})]
           (mem/write! (:store eng) :shelter {:pos {:x 0 :y 64 :z 0} :state :built} shelter-policy)
-          (core/register-reflex! eng {:trigger :night-unsafe})
+          (core/register-reflex! eng {:trigger :night})
           (await (tick-n eng 4))
           (is (not (nil? eng))))))))
 
@@ -1014,7 +942,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:time night :blocks floor :inventory [{:name "dirt" :count 16}]})]
           (mem/write! (:store eng) :shelter {:pos {:x 0 :y 64 :z 0} :state :built} shelter-policy)
-          (core/submit! eng '(jobs.survival.shelter) {})
+          (core/submit! eng '(jobs.survival.night) {})
           (await (tick-n eng 4))
           (is (seq (calls p "place")) "dig-in was tried again, not a bare decline"))))))
 

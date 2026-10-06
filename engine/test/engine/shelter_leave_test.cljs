@@ -11,7 +11,7 @@
             [engine.triggers :as triggers]
             [engine.fake :as fake]))
 
-(def shut-in-trigger :shut-in-by-day)
+(def shut-in-trigger :night)
 
 (defn fires? [world memory]
   (boolean ((:when (get triggers/all shut-in-trigger)) (tu/fake world) memory {})))
@@ -29,21 +29,21 @@
     (.setTime (.-world (:p s)) st/noon)
     s))
 
-(deftest shut-in-by-day-holds-only-by-day-in-the-recorded-shelter
+(deftest the-night-trigger-holds-a-body-in-its-recorded-shelter
   (let [{:keys [eng]} (st/setup {})
         write! (fn [e] (mem/write! (:store eng) :shelter e {:cap 10 :ttl st/day-ms}))
         _ (write! (shelter-entry :built))
         view (mem/view (:store eng))]
     (is (true? (fires? {:time st/noon :blocks {"0,66,0" "stone"}} view)) "day, roofed in its own shelter")
-    (is (false? (fires? {:time st/night :blocks {"0,66,0" "stone"}} view)) "never at night")
+    (is (true? (fires? {:time st/night :blocks {"0,66,0" "stone"}} view)) "at night it holds the body in it")
     (is (false? (fires? {:time st/noon} view)) "not shut in: nothing overhead")
     (is (false? (fires? {:time st/noon :blocks {"0,66,0" "stone"} :self {:pos {:x 3 :y 64 :z 0}}} view)) "elsewhere than the shelter")
     (is (false? (fires? {:time st/noon :blocks {"0,66,0" "stone"}} (mem/view (:store (:eng (st/setup {}))))))
         "no shelter entry")))
 
-(deftest shut-in-by-day-is-registered-in-the-survival-scenario
+(deftest the-night-trigger-lets-a-shut-in-body-out
   (let [t (get triggers/all shut-in-trigger)]
-    (is (= '(jobs.survival.shelter) (:job t)))
+    (is (= '(jobs.survival.night) (:job t)))
     (is (= :cooldown (:persistence t)))))
 
 (deftest a-body-sealed-by-a-direct-dig-in-is-let-out-by-day
@@ -119,7 +119,7 @@
         (let [{:keys [eng p]} (st/setup {:time st/night :blocks st/floor :inventory [{:name "bread" :count 3}]
                                          :self {:food 4}})]
           (st/refuse-placing! p)
-          (core/submit! eng '(jobs.survival.shelter) {})
+          (core/submit! eng '(jobs.survival.night) {})
           (await (st/tick-n eng 12))
           (is (< 4 (food-of p)) "exposed hold: it ate")
           (is (= 1 (count (:list (core/state eng)))) "and still holds"))))))
@@ -131,7 +131,7 @@
         (let [{:keys [eng p]} (st/setup {:time st/night :blocks st/floor :inventory [{:name "bread" :count 3}]
                                          :self {:food 20}})]
           (st/refuse-placing! p)
-          (core/submit! eng '(jobs.survival.shelter) {})
+          (core/submit! eng '(jobs.survival.night) {})
           (await (st/tick-n eng 12))
           (is (= [] (st/calls p "eat"))))))))
 

@@ -1,4 +1,4 @@
 ;; Log-out live test, body B: the player-sleeping-nearby trigger alone, against notify.
-{:register [{:trigger :player-sleeping-nearby :persistence :cooldown :cooldown-s 30
+{:register [{:trigger :night :persistence :cooldown :cooldown-s 30
              :job (jobs.debug.notify {:text "player-sleeping-nearby fired"})}]
  :queue [(repeat (jobs.movement.look-around))]}

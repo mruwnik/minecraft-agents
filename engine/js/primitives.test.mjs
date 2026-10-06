@@ -390,6 +390,20 @@ test('body events: another player joining or leaving is reported, the body itsel
   assert.deepEqual(seen, [{ kind: 'player-joined', player: 'Ann' }, { kind: 'player-left', player: 'Ann' }])
 })
 
+const sleepBar = (key, ...counts) => ({ translate: key, with: counts.map(n => ({ text: String(n) })), toString: () => key })
+
+test('body events: the action bar sleep count is a sleep-status event; other action bar lines are not', () => {
+  const { bot, p } = rig(world)
+  const seen = []
+  p.onBodyEvent(e => seen.push(e))
+  bot.emit('actionBar', sleepBar('sleep.players_sleeping', 1, 7))
+  bot.emit('actionBar', sleepBar('sleep.skipping_night'))
+  bot.emit('actionBar', sleepBar('item.minecraft.bread'))
+  bot.emit('actionBar', sleepBar('sleep.players_sleeping', 0, 7))
+  assert.deepEqual(seen, [{ kind: 'sleep-status', sleeping: 1, needed: 7 }, { kind: 'sleep-status', skipping: true },
+    { kind: 'sleep-status', sleeping: 0, needed: 7 }])
+})
+
 test('close quits the bot', async () => {
   const { bot, p } = rig(world)
   await p.close()
@@ -485,6 +499,18 @@ test('entities tells sleeping players from standing ones and gives usernames', (
   const p = withBot(bot => { bot.entities = { 1: player(1, 2), 2: player(2, 0), 3: player(3) } })
   const found = p.entities({ kind: 'player' })
   assert.deepEqual(found.map(e => [e.username, e.sleeping]), [['P1', true], ['P2', false], ['P3', false]])
+})
+
+test('entities counts a sleeping player only with a line of sight: one behind a wall is not seen asleep', () => {
+  const player = (id, x) => ({ id, type: 'player', name: 'player', username: `P${id}`, position: at(x, 64, 0), metadata: [0, 0, 0, 0, 0, 0, 2] })
+  const p = withBot(bot => { bot.entities = { 1: player(1, 1), 5: player(5, 5) } }, { ...world, blocks: { ...world.blocks, '2,65,0': 'stone' } })
+  assert.deepEqual(p.entities({ kind: 'player' }).map(e => [e.username, e.sleeping]), [['P1', true], ['P5', false]])
+})
+
+test('a player asleep in a bed is seen over the foot of the bed', () => {
+  const sleeper = { id: 5, type: 'player', name: 'player', username: 'P5', position: at(5, 64.6875, 0), height: 0.2, metadata: [0, 0, 0, 0, 0, 0, 2] }
+  const p = withBot(bot => { bot.entities = { 5: sleeper } }, { ...world, blocks: { '4,64,0': 'red_bed', '5,64,0': 'red_bed' } })
+  assert.deepEqual(p.entities({ kind: 'player' }).map(e => e.sleeping), [true])
 })
 
 test('entities finds the pose index through the registry', () => {
@@ -662,6 +688,19 @@ test('offline reports its ms in the events and the online event carries the posi
   const { p, seen } = await online()
   await p.offline('t1', { ms: 1000 })
   assert.deepEqual(seen, [{ kind: 'offline', ms: 1000 }, { kind: 'online', pos: at(0, 64, 0) }])
+})
+
+test('a sleep count the server sends while the rejoining bot loads its world is reported after the online event', async () => {
+  const bots = []
+  const connect = async () => { const b = stubBot({ ...world, unloaded: bots.length > 0 }); bots.push(b); return b }
+  const { p, seen } = await online({ connect })
+  const away = p.offline('t1', { ms: 1000 })
+  while (bots.length < 2) await new Promise(resolve => setTimeout(resolve, 1))
+  bots[1].emit('actionBar', sleepBar('sleep.players_sleeping', 1, 2))
+  bots[1].loadWorld()
+  await away
+  assert.deepEqual(seen.map(e => e.kind), ['offline', 'online', 'sleep-status'])
+  assert.deepEqual(seen[2], { kind: 'sleep-status', sleeping: 1, needed: 2 })
 })
 
 test('events of the new bot reach listeners and the old bot goes quiet', async () => {

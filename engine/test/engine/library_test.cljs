@@ -606,13 +606,13 @@
           (is (some #(= :fired (:kind %)) @seen))
           (is (some #(= "jobs.survival.respond-to-hostile" (:name %)) @seen)))))))
 
-(deftest night-unsafe-fires-sleep-with-a-known-bed
+(deftest night-fires-sleep-with-a-known-bed
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:floor tu/walk-floor :time 14000 :blocks {"6,64,0" "red_bed"}})]
           (know-place! eng :bed {:x 6 :y 64 :z 0})
-          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night-unsafe}]}"))
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
           (await (run-until-empty eng 1))
           (await (core/tick! eng))
           (is (= 1 (count (calls p "sleep")))))))))
@@ -634,7 +634,7 @@
 (deftest woodcutter-scenario-is-valid-and-registers-the-library
   (let [s (scenario/parse (fs/readFileSync "scenarios/woodcutter.edn" "utf8"))]
     (is (= [] (scenario/problems registry/jobs triggers/all s)))
-    (is (= [:hostile-near :night-unsafe :hungry] (mapv :trigger (:register s))) "the night above food")
+    (is (= [:hostile-near :night :hungry] (mapv :trigger (:register s))) "the night above food")
     (is (= '[jobs.forestry.harvest-wood jobs.storage.deposit] (mapv first (:queue s))))))
 
 ;; ---------------------------------------------------------------------- pace

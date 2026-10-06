@@ -1,6 +1,6 @@
-;; ProbeNight trigger tests: :hungry and :night-unsafe against the notify job only.
+;; ProbeNight trigger tests: :hungry and :night against the notify job only.
 {:register [{:trigger :hungry :args {:food 6}
              :job (jobs.debug.notify {:text "hungry fired"})}
-            {:trigger :night-unsafe :args {:roof-height 4}
+            {:trigger :night :args {:roof-height 4}
              :job (jobs.debug.notify {:text "night-unsafe fired"})}]
  :queue [(repeat (jobs.movement.look-around))]}

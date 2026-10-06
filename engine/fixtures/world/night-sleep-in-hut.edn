@@ -1,5 +1,5 @@
 ;; A roofed body at night sleeps in its bed (card 07d5a79f): night-unsafe holds for a sheltered body with a bed in reach
-;; and no sleep tonight, jobs.survival.shelter runs jobs.survival.sleep, and the respawn point is set at the bed
+;; and no sleep tonight, jobs.survival.night runs jobs.survival.sleep, and the respawn point is set at the bed
 ;; (the death after it respawns at the hut, not at the world spawn). Not run yet: needs night, run with
 ;; --allow-time --time-log <the shared time log>; a live tester checks it (RCON `data get entity <body> SpawnX/SpawnZ`
 ;; may be read in an :after step once the runner supports it; the respawn position is the check here).
@@ -11,7 +11,7 @@
            [:fill [9 0 9] [15 2 15] "air"]
            [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]
            [:set [10 0 12] "red_bed[facing=east,part=foot]"] [:set [11 0 12] "red_bed[facing=east,part=head]"]]
-  :register [{:trigger :night-unsafe}]
+  :register [{:trigger :night}]
   :body {:at [13.5 0 13.5] :effects [["resistance" 600 4]] :settle-s 8}}
  :cases
  [{:name "roofed-body-sleeps-in-its-bed-and-respawns-there"

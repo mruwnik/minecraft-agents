@@ -110,7 +110,7 @@
                  :doc "drowning or enclosed (the suffocating trigger, default oxygen)"
                  :read (online (fn [p _] (some? (suffocating/situation p suffocating/default-min-oxygen))))}
    'night-unsafe {:args [] :type :boolean :cost :cheap
-                  :doc "night, awake and nothing overhead (the night-unsafe trigger)"
+                  :doc "night, awake, nothing overhead and not buried"
                   :read (online (fn [p _] (sh/unsafe-night? p sh/default-roof-height)))}
    'stuck {:args [] :type :boolean :cost :cheap
            :doc "the last moves all failed and the body is really held (the stuck trigger, default args)"

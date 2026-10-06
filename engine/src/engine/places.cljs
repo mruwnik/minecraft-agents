@@ -18,7 +18,7 @@
     :dependency-patches-missing :world-not-loaded :physics-stalled :picked-up
     :restart :moved :slept :fed :hungry :hostile :hazard :stuck :looked :recovered :breathe :extinguish :log-out
     :needs-bed :shelter :dig-in-futile :gate-gave-up :no-bake :no-craft :notify :bed-unreachable :chest-unusable
-    :scaffold :heal-ended :recover-trip})
+    :scaffold :heal-ended :recover-trip :sleep-status :bed-placed})
 
 (def owned-kinds
   "Every unnamespaced memory kind the engine or a job writes for itself, and the place names: jobs.memory.remember

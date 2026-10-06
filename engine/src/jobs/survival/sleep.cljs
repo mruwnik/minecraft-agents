@@ -8,7 +8,8 @@
 (def doc
   "Walk to a bed and sleep in it.
   Declines unless it is night and a bed is known: the :bed argument, else the remembered :bed within :bed-radius.
-  Also declines while the bed is in :bed-unreachable (an unexpired entry with the same position).
+  Also declines while the bed is in :bed-unreachable (an unexpired entry with the same position), and for a bed
+  another player occupies (sh/bed-permit).
   Ends when asleep, or when it turns day.
   A :bed argument that is not a position declines too.
   Retries three times, then warns and ends: a taken bed, a monster nearby, an unreachable bed.
@@ -51,10 +52,12 @@
     (sh/bed c (:bed-radius (:args c)))))
 
 (defn check [c]
-  (let [bed (bed-of c)]
-    (and (sh/night? (:primitives c))
+  (let [bed (bed-of c)
+        p (:primitives c)]
+    (and (sh/night? p)
          (some? bed)
-         (not (unreachable-bed? c bed)))))
+         (not (unreachable-bed? c bed))
+         ((sh/bed-permit p (:world (:engine c)) (ctx/now c)) bed))))
 
 (defn give-up-unreachable! [c bed]
   (let [r (u/fail! c :bed_unreachable "cannot reach the bed")]

@@ -1,6 +1,6 @@
 ;; Log-out live test, body B: the real shelter (log-out after 60 s offline) and a hungry notify.
 {:register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :args {:food 6}
              :job (jobs.debug.notify {:text "hungry fired"})}
-            {:trigger :night-unsafe :persistence :cooldown :cooldown-s 10 :args {:roof-height 4}
-             :job (jobs.survival.shelter {:roof-height 4})}]
+            {:trigger :night :persistence :cooldown :cooldown-s 10 :args {:roof-height 4}
+             :job (jobs.survival.night {:roof-height 4})}]
  :queue [(repeat (jobs.movement.look-around))]}

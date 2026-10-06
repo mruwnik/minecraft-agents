@@ -41,7 +41,7 @@
   :roof is the cell it placed above the body, absent if none. Walls mode adds :door, the feet and head cells of one side it placed.
   Pit mode adds :start, the cell dug from. Walls mode at the bottom of a shaft has :start at the shaft's top.
   Plug mode adds :room true. A shelter sealed again where the latest entry stood keeps that entry's :start and :door.
-  Leaving is the function leave!, which jobs.survival.shelter calls by day.")
+  Leaving is the function leave!, which jobs.survival.night calls by day.")
 
 (def building-blocks
   ["dirt" "cobblestone" "cobbled_deepslate" "stone" "andesite" "diorite" "granite" "netherrack"
@@ -627,7 +627,7 @@
   "One stair attempt out of a pit (jobs.access.stair :up, a child of the caller): to the :start height, or with no
   :start one step at a time until nothing solid is within sh/default-roof-height above, at most max-climb steps. A
   stopped stair books its reason and the next heading is tried; so does a declined one (it lacks a tool or a slot:
-  booked :declined) instead of waiting, because the caller (jobs.survival.shelter) must end failed, not wait, when trapped."
+  booked :declined) instead of waiting, because the caller (jobs.survival.night) must end failed, not wait, when trapped."
   [c {:keys [start]} toward]
   (let [{:keys [i order tries climbed] :or {i 0 tries [] climbed 0}} (leave-mem c)
         order (or order (heading-order (sh/feet (:primitives c)) toward))

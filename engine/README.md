@@ -104,7 +104,7 @@ Notes:
   mineflayer's stale `bot.vehicle`). `isDay` is `timeOfDay < 12542 || timeOfDay > 23460`.
 - `chunkLoaded` false means the column under the body is not loaded (physics then emits no tick). `settling` is true while
   the body is connected but its senses are not yet trustworthy.
-- Entities: items carry `item {name, count}`; players `username`, `sleeping`; mobs `uuid`, `baby`, sheep `sheared`; leashed
+- Entities: items carry `item {name, count}`; players `username`, `sleeping` (only in sight); mobs `uuid`, `baby`, sheep `sheared`; leashed
   mobs `leashed`, `leashedToMe`, `leashHolder`; riders `passengers` and `vehicle`. Creepers carry `creeper: true`. Every
   hostile carries `visible` (a raycast from the eye to the entity's middle; glass, water, fire and the like do not block, an
   unloaded cell never blocks). Raw entity lists go through `js/live-entities.mjs` (drops bare, never-spawned entities).
@@ -172,7 +172,8 @@ never dig or build; hazards (powder snow, cobweb, magma, campfires) add cost, an
 
 `primitives.onBodyEvent(listener)` delivers `{kind, ...}` objects: `hurt` (health, food, amount, cause, attacker), `died`
 (pos, inventory, experience, cause), `respawned`, `chat`, `picked-up`, `woke`, `player-joined`/`player-left`, `spawned`,
-`disconnected`, `error`, `reconnect-failed`, `world-not-loaded`, `physics-stalled`, `offline`, `online`. The engine
+`disconnected`, `error`, `reconnect-failed`, `world-not-loaded`, `physics-stalled`, `offline`, `online`, `sleep-status`
+(the action bar's sleep count: `sleeping`, `needed`, or `skipping`). The engine
 turns each into a body-memory entry of that kind. `hurt` events are merged into one per second in the event log. A death
 drops every listed job (cancelled `:by :death`) and every reflex job; register entries stay, so a trigger that still
 holds (`died` starts recover-drops) runs its job again.
@@ -334,9 +335,7 @@ Built-in triggers, in the order `scenarios/survival.edn` registers them (most ur
 | `:wedged` | a full block fills the cell of the feet (sand fallen on the body); quiet while a recent `:unwedge-blocked` entry names the cell | `survival.unwedge` | 0 |
 | `:hostile-near` | a real danger (see Sensing) within `:radius` 8, ranged within `:ranged-radius` 16; `:visible-only false` counts heard mobs | `respond-to-hostile` | none (retry) |
 | `:hungry` | food below `:food` 6 plus one per missing hp (at most 18: below 18 nothing heals); or hurt, below 18 and common food carried; or health below `:health` 7 and food carried (eats to 20) | `get-food` | 90 s |
-| `:night-unsafe` | night, awake, and not safely roofed or shut in | `shelter` | 10 s |
-| `:shut-in-by-day` | day, and still shut in the cell of its own latest `:shelter` | `shelter` | 10 s |
-| `:player-sleeping-nearby` | night, another player within 128 asleep, no known bed within 48 | `log-out` (20 s) | 30 s |
+| `:night` | night, awake, and a bed to use or carried, someone asleep, unroofed, or shut in its shelter; by day shut in its shelter or a bed it put down outside its zone still stands | `survival.night` | 10 s |
 | `:pen-gate` | a planned fence gate within 8 stands open, body more than 2 away, for 4 s | `animals.shut-gate` | 5 s |
 | `:door-left` | a door a walk opened and meant to shut still stands open after 10 s | `maintenance.shut-doors` | 5 s |
 | `:stuck` | the last 4 `:moved` entries all moved under 1.5 blocks, newest under 60 s old, body really held | `maintenance.unstick` | 60 s |
@@ -564,8 +563,8 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 | `survival.respond-to-hostile` | Fights (`fight-back`) when the odds are fair, else `retreat` |
 | `survival.retreat` | Flees from the nearest real danger; never ends while one stands. Cornered it fights, seals itself in, pillars, or digs down, then hides until the way is closed |
 | `survival.fight-back` | Equips the best weapon and hits the nearest hostile within `:range` |
-| `survival.shelter` | Owns the night: sleep (any bed in reach, in any zone or claim, but an occupied one unless in the body's own zone), else log-out when another player is online, else dig-in; holds until day and exits a dug-in shelter by day |
-| `survival.sleep`, `survival.dig-in`, `survival.log-out` | Walk to a known bed and sleep; roof the body in; leave the server for a while and come back |
+| `survival.night` | Owns the night: sleep (a seen bed, the known one within 48, or a carried one put down; never an occupied one unless in the body's own zone), else while anyone sleeps log out in 30 s stints until morning, else roofed or buried ends, else dig-in; by day leaves a dug-in shelter and picks up a bed it put down outside its zone. Opt out: mute `:night` |
+| `survival.sleep`, `survival.dig-in`, `survival.log-out` | Walk to a known bed and sleep; roof the body in; leave the server for a stint and wait for the sleep count |
 | `survival.recover-drops` | After death, weighs the drops' value against the trip's danger (`engine.jobs.value`, `engine.jobs.danger`) and fetches or skips them |
 | `survival.restore-broken` | Puts back what a job broke in another's zone, and the holes go-to's escalation dug |
 | `survival.unwedge` | Steps out of a full block at the feet cell, else digs it (warn `unwedge.blocked` for bedrock or three failed digs) |

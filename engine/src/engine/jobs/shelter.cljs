@@ -1,6 +1,6 @@
 (ns engine.jobs.shelter
-  "What the night-survival jobs (shelter, sleep, log-out, dig-in) and the night-unsafe and player-sleeping-nearby
-  triggers share: night and roof tests, the known bed, the log-out condition, the shelter entry."
+  "What the night jobs (night, sleep, log-out, dig-in) and the night trigger share: night and roof tests, the bed to
+  use, who sleeps on the server, the shelter entry."
   (:require [engine.ctx :as ctx]
             [engine.access.zones :as zones]
             [engine.jobs.util :as u]
@@ -104,25 +104,11 @@
   "A :slept entry younger than this counts as \"slept tonight\" (half an in-game day)."
   (/ ms-per-day 2))
 
-(def hut-radius
-  "How near a bed must be for a roofed body to count it as the bed of the room it stands in (blocks)."
-  12)
-
 (defn walkable-at?
   "Whether the cell at pos is one a body stands or walks in: not solid, or a bed."
   [p pos]
   (let [n (u/block-name p pos)]
     (and (some? n) (or (not (solid? n)) (.endsWith n "_bed")))))
-
-(defn in-room?
-  "Whether the body stands in a room, not a one-wide tunnel: its cell is one of a 2x2 square of free cells at feet
-  height. A one-wide tunnel (a miner's), its bends and junctions have no such square; a hut has."
-  [p]
-  (let [{:keys [x y z]} (feet p)]
-    (boolean (some (fn [[ox oz]]
-                     (every? #(walkable-at? p {:x (+ x (first %)) :y y :z (+ z (second %))})
-                             [[ox oz] [(+ ox 1) oz] [ox (+ oz 1)] [(+ ox 1) (+ oz 1)]]))
-                   [[0 0] [-1 0] [0 -1] [-1 -1]]))))
 
 (defn doorway?
   "Whether the cell is a gap in a wall: solid on both sides along one horizontal axis and free on both ends of the other."
@@ -149,16 +135,20 @@
                              (<= (js/Math.abs (- (.-y (.-pos %)) y)) 1.5))
                        (array-seq (.entities p #js {:radius 6 :kind "player" :max 32})))))))
 
+(defn in-own-zone?
+  "Whether pos lies in a zone the body owns. kn is the engine world (nil: no zone known)."
+  [p kn {:keys [x y z]}]
+  (let [me (.-username (.self p))]
+    (boolean (some #(and (zones/in-box? [x y z] %) (zones/same-owner? (:owner %) me)) (when kn (world/zones kn))))))
+
 (defn bed-permit
   "A predicate (fn [pos]) for whether the body may use the bed at pos: any bed, in anyone's zone or claim (sleeping sets
   only the sleeper's own spawn), unless it is occupied; a bed in a zone the body owns is always a candidate (the server
   refuses an occupied one, which is a failed sleep). kn is the engine world (nil: no zone known)."
   [p kn _now]
-  (let [zones (when kn (world/zones kn))
-        me (.-username (.self p))]
-    (fn [{:keys [x y z] :as pos}]
-      (or (boolean (some #(and (zones/in-box? [x y z] %) (zones/same-owner? (:owner %) me)) zones))
-          (not (bed-occupied? p pos))))))
+  (fn [pos]
+    (or (in-own-zone? p kn pos)
+        (not (bed-occupied? p pos)))))
 
 (defn seen-bed
   "A bed block the body can see in its room: found by a flood fill from its feet over free cells at feet height, within
@@ -180,40 +170,50 @@
                          n)]
               (recur (into (subvec (vec queue) 1) next) (into seen next))))))))))
 
-(defn hut-bed
-  "The bed of the room the body stands in: roofed within roof-height and in a room (not a tunnel), then the remembered
-  :bed within hut-radius, else a bed it sees in the room; nil otherwise. A bed the body does not remember is found
-  here, so a second one is not put down beside it. A bed permit? refuses (an occupied one, see
-  bed-permit; default all permitted) is not the bed of the room."
-  ([p view roof-height] (hut-bed p view roof-height (constantly true)))
-  ([p view roof-height permit?]
-   (when (and (roofed? p roof-height) (in-room? p))
-     (or (let [pos (mem/place view :bed)]
-           (when (and pos (<= (u/dist (u/self-pos {:primitives p}) pos) hut-radius) (permit? pos)) pos))
-         (seen-bed p permit?)))))
-
 (def sleep-failed-policy
-  "The :sleep-failed entry a shelter writes when a roofed sleep ended without sleeping (bed taken, monsters near, ...):
-  one, five minutes, so night-unsafe does not refire on the same bed every cooldown."
+  "The :sleep-failed entry the night job writes when a sleep ended without sleeping (bed taken, monsters near, ...):
+  one, five minutes, so the night trigger does not refire on the same bed every cooldown."
   {:cap 1 :ttl 300000})
 
-(defn sleep-wanted
-  "The bed of the room a roofed body at night, awake, should sleep in (see hut-bed): none slept in tonight (no :slept
-  entry within half an in-game day), not given up on (no unexpired :bed-unreachable at it) and no unexpired
-  :sleep-failed entry; else nil. permit? as in hut-bed."
-  ([p view roof-height] (sleep-wanted p view roof-height (constantly true)))
-  ([p view roof-height permit?]
-   (when (and (night? p) (not (sleeping? p)))
-     (let [bed (hut-bed p view roof-height permit?)]
-       (when (and bed
-                  (zero? (mem/count-in view :slept slept-tonight-ms))
-                  (not-any? #(= bed (:pos (:data %))) (mem/entries view :bed-unreachable))
-                  (empty? (mem/entries view :sleep-failed)))
-         bed)))))
+(def urgent-bed-radius 128)
+
+(def max-days-awake 3)
+
+(defn days-awake-in
+  "In-game days since the latest :slept entry in view, or nil when none is remembered."
+  [view]
+  (when-let [t (:t (mem/latest view :slept))]
+    (/ (- (:now view) t) ms-per-day)))
+
+(defn bed-radius
+  "How far a remembered bed may be: :bed-radius, or :urgent-bed-radius once the latest :slept entry is :max-days-awake
+  in-game days old (phantoms come). No :slept entry is never overdue."
+  [view {:keys [bed-radius urgent-bed-radius max-days-awake]
+         :or {bed-radius default-bed-radius urgent-bed-radius urgent-bed-radius max-days-awake max-days-awake}}]
+  (let [days (days-awake-in view)]
+    (if (and days (>= days max-days-awake)) urgent-bed-radius bed-radius)))
+
+(defn bed-to-use
+  "The bed a body awake at night sleeps in: one it sees (seen-bed), else the remembered :bed within radius, under any
+  roof or none. Never one permit? refuses (occupied) or one in an unexpired :bed-unreachable entry; none after a sleep
+  tonight (:slept within half an in-game day) or while a :sleep-failed entry is unexpired. nil otherwise."
+  [p view radius permit?]
+  (when (and (night? p) (not (sleeping? p))
+             (zero? (mem/count-in view :slept slept-tonight-ms))
+             (empty? (mem/entries view :sleep-failed)))
+    (let [ok? (fn [pos] (and (permit? pos) (not-any? #(= pos (:pos (:data %))) (mem/entries view :bed-unreachable))))]
+      (or (seen-bed p ok?)
+          (when-let [pos (bed-in-view p view radius)]
+            (when (ok? pos) pos))))))
 
 (def bed-place-failed-policy
-  "Policy of the :bed-place-failed entry the shelter writes when it could not set up a carried bed: one, ten minutes."
+  "Policy of the :bed-place-failed entry the night job writes when it could not set up a carried bed: one, ten
+  minutes."
   {:cap 1 :ttl 600000})
+
+(def bed-placed-policy
+  "Policy of the :bed-placed entries: a bed the night job put down outside the body's own zones, picked up by day."
+  {:cap 4 :ttl (* 7 ms-per-day)})
 
 (defn carried-bed
   "The name of a bed item the body carries (any colour), or nil."
@@ -221,19 +221,23 @@
   (some #(when (.endsWith (:name %) "_bed") (:name %)) (u/inventory p)))
 
 (defn bed-place-wanted?
-  "Whether a sheltered body should put a carried bed down: night, awake, roofed within roof-height and in a room, no bed
-  of the room (remembered near or seen), a bed item carried, no sleep tonight, and no :bed-place-failed or
-  :sleep-failed entry. permit? as in hut-bed."
-  ([p view roof-height] (bed-place-wanted? p view roof-height (constantly true)))
-  ([p view roof-height permit?]
+  "Whether to put a carried bed down: night, awake, a bed item carried, no bed-to-use, no sleep tonight, and no
+  :bed-place-failed or :sleep-failed entry. Roofed or in the open."
+  [p view radius permit?]
   (boolean (and (night? p) (not (sleeping? p))
-                (roofed? p roof-height)
                 (some? (carried-bed p))
                 (zero? (mem/count-in view :slept slept-tonight-ms))
                 (empty? (mem/entries view :bed-place-failed))
                 (empty? (mem/entries view :sleep-failed))
-                (in-room? p)
-                (nil? (hut-bed p view roof-height permit?))))))
+                (nil? (bed-to-use p view radius permit?)))))
+
+(defn bed-to-collect
+  "By day: the latest :bed-placed position while a bed block still stands there, else nil."
+  [p view]
+  (when-not (night? p)
+    (let [pos (:pos (:data (mem/latest view :bed-placed)))]
+      (when (and pos (.endsWith (or (u/block-name p pos) "") "_bed"))
+        pos))))
 
 (defn bed
   "The remembered bed position when it is within radius of the body, else nil."
@@ -241,7 +245,7 @@
   (bed-in-view (:primitives c) (ctx/view c) radius))
 
 (defn sleeping-players
-  "Other players within radius that are asleep."
+  "Other players within radius the body sees asleep (the primitives report a sleeping pose only in sight)."
   [p radius]
   (let [me (.-username (.self p))]
     (filterv #(and (.-sleeping %) (not= me (.-username %)))
@@ -252,16 +256,13 @@
   [view]
   (= "unsupported" (:status (:data (mem/latest view :log-out)))))
 
-(defn other-players-online
-  "Usernames of the other players in the server's player list (the tab list a player sees), from self().players."
-  [p]
-  (let [s (.self p)
-        me (.-username s)]
-    (filterv #(not= me %) (array-seq (or (.-players s) #js [])))))
-
 (def morning-tick
   "The first time of day (ticks) that self().isDay counts as day again after a night."
   23461)
+
+(def dusk-tick
+  "The first time of day (ticks) that self().isDay counts as night."
+  12542)
 
 (def ms-per-tick 50)
 
@@ -270,32 +271,53 @@
   2000)
 
 (defn ms-until-morning
-  "Milliseconds until the night ends at time of day t (ticks), plus morning-margin-ms; 0 by day. A whole night is
-  about 9 minutes, under the offline primitive's ten-minute cap."
+  "Milliseconds until the night ends at time of day t (ticks), plus morning-margin-ms; 0 by day."
   [t]
-  (if (or (< t 12542) (>= t morning-tick))
+  (if (or (< t dusk-tick) (>= t morning-tick))
     0
     (+ (* ms-per-tick (- morning-tick t)) morning-margin-ms)))
 
-(defn log-out-wanted?
-  "Whether logging out is wanted. All of: night; no bed remembered within :bed-radius; :offline-allowed not false;
-  the last log-out was not unsupported; and :others holds. :asleep-nearby (default) wants another player within
-  :player-radius asleep. :online wants another player in the server's player list. A roof does not matter.
-  Args missing keys take their defaults."
-  [p view args]
-  (boolean (and (not= false (:offline-allowed args))
-                (night? p)
-                (nil? (bed-in-view p view (:bed-radius args default-bed-radius)))
-                (not (log-out-unsupported? view))
-                (seq (if (= :online (:others args))
-                       (other-players-online p)
-                       (sleeping-players p (:player-radius args default-player-radius)))))))
+(defn ms-since-dusk
+  "Milliseconds since this night began at time of day t (ticks); 0 by day."
+  [t]
+  (if (or (< t dusk-tick) (>= t morning-tick)) 0 (* ms-per-tick (- t dusk-tick))))
+
+(defn tonight
+  "The engine time this night began: entries written since are tonight's."
+  [p view]
+  (- (:now view) (ms-since-dusk (.-timeOfDay (.self p)))))
+
+(defn latest-since [view kind t]
+  (let [e (mem/latest view kind)]
+    (when (and e (>= (:t e) t)) e)))
+
+(defn others-asleep?
+  "Whether someone on the server sleeps tonight, as a player can tell: the latest :sleep-status entry tonight (the
+  action bar's count, sent when it changes) counts a sleeper or says the night is skipped; or a sleeping player is
+  in sight; or the body is back from a log-out tonight and no count has come since its return (:online): unknown is
+  taken as still asleep."
+  [p view]
+  (let [since (tonight p view)
+        status (latest-since view :sleep-status since)
+        out (latest-since view :log-out since)
+        back (:t (mem/latest view :online))]
+    (boolean (or (and out back (#{"ok" "cut"} (:status (:data out))) (or (nil? status) (< (:t status) back)))
+                 (and status (or (:skipping (:data status)) (pos? (:sleeping (:data status) 0))))
+                 (seq (sleeping-players p default-player-radius))))))
+
+(defn log-out-for-sleepers?
+  "Night, awake, someone else asleep (others-asleep?), and no log-out tonight that failed (unsupported, closed)."
+  [p view]
+  (let [out (latest-since view :log-out (tonight p view))]
+    (and (night? p) (not (sleeping? p))
+         (not (log-out-unsupported? view))
+         (or (nil? out) (contains? #{"ok" "cut"} (:status (:data out))))
+         (others-asleep? p view))))
 
 (defn days-awake
   "In-game days since the latest :slept entry, or nil when none is remembered."
   [c]
-  (when-let [t (:t (ctx/latest c :slept))]
-    (/ (- (ctx/now c) t) ms-per-day)))
+  (days-awake-in (ctx/view c)))
 
 (defn shut-in?
   "Whether the body is still shut in by its shelter entry. Never for a mended :room (its door is the way out). With a
@@ -338,4 +360,4 @@
   (when-let [{{:keys [x y z]} :pos :as entry} (sheltered-in c)]
     {:inside-own-shelter (:pos entry)
      :hint (str "the body is sealed in its own shelter at [" x " " y " " z "]: the shelter job lets it out by day "
-                "(jobs.survival.shelter), or run jobs.survival.dig-in leave")}))
+                "(jobs.survival.night), or run jobs.survival.dig-in leave")}))

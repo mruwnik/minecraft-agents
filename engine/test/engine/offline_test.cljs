@@ -5,6 +5,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.jobs.shelter :as sh]
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as real-triggers]))
@@ -101,10 +102,11 @@
         (let [clock (atom 1000000)
               [seen sink] (tu/legacy-capture-sink)
               p (tu/fake {:time 14000 :entities [sleeper] :offlineScale 0.01})
-              eng (core/create {:primitives p :jobs registry/jobs :triggers real-triggers/all :dir (tu/tmp-dir)
+              eng (core/create {:primitives p :jobs registry/jobs :triggers (assoc real-triggers/all :sleeper-out {:name :sleeper-out :job '(jobs.survival.log-out {:offline-ms 20000 :news-ms 0}) :persistence :cooldown :cooldown-s 30
+                         :when (fn [w _ _] (boolean (seq (sh/sleeping-players w 128))))}) :dir (tu/tmp-dir)
                                 :now #(deref clock)
                                 :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-          (core/register-reflex! eng {:trigger :player-sleeping-nearby})
+          (core/register-reflex! eng {:trigger :sleeper-out})
           (let [round (core/tick! eng)]
             (await (js/Promise. (fn [resolve] (js/setTimeout resolve 20))))
             (is (true? (.isOffline p)) "the log-out reflex took the body offline")

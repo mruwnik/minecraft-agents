@@ -84,7 +84,7 @@ const CONTAINER = /chest|barrel|shulker_box|furnace|smoker|hopper|dispenser|drop
 const DESTS = ['hand', 'off-hand', 'head', 'torso', 'legs', 'feet']
 const DEFAULT_RADIUS = 16
 const HIT_RANGE = 6 // melee reach checked by entities: hittable is reported within it
-const SEE_THROUGH = /glass|^water$|^fire$|grass$|^snow$|^vine$|^ladder$|torch$|^lava$/
+const SEE_THROUGH = /glass|^water$|^fire$|grass$|^snow$|^vine$|^ladder$|torch$|^lava$|_bed$/
 const KINDS = ['hostile', 'passive', 'player', 'item', 'other']
 const OFFLINE_DEFAULT_MS = 5 * 60 * 1000
 const OFFLINE_MAX_MS = 10 * 60 * 1000
@@ -199,6 +199,17 @@ const burning = (bot, e) => ((metaValue(bot, e, 'shared_flags', 0) ?? 0) & FLAG_
 const lyingDown = (bot, e) => metaValue(bot, e, 'pose', 6) === POSE_SLEEPING
 
 const attempt = f => { try { return f() } catch { return null } }
+
+// The night's sleep count every player sees in the action bar ("1/7 players sleeping"; "Sleeping through this night"
+// once enough sleep): {sleeping, needed} or {skipping: true}; null for any other line. The server sends it only when
+// the count changes (a join changes it).
+const countOf = w => Number(typeof w === 'object' && w !== null && w.text !== undefined && w.text !== '' ? w.text : String(w))
+export const sleepStatusOf = msg => {
+  if (msg?.translate === 'sleep.skipping_night') return { skipping: true }
+  if (msg?.translate !== 'sleep.players_sleeping') return null
+  const [sleeping, needed] = (msg.with ?? []).map(countOf)
+  return Number.isFinite(sleeping) && Number.isFinite(needed) ? { sleeping, needed } : null
+}
 
 // getDroppedItem throws or returns null when the library cannot read the slot (it reads one fixed metadata index),
 // so fall back to scanning the metadata for any slot-shaped value.
@@ -535,7 +546,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
         ...((k === 'hostile' || k === 'item') && { visible: canSee(e) }),
         ...(k !== 'item' && distance <= HIT_RANGE && { hittable: canHit(e) }),
         ...(k === 'item' && { item: droppedItem(bot, e) }),
-        ...(k === 'player' && { username: e.username, sleeping: lyingDown(bot, e) }),
+        ...(k === 'player' && { username: e.username, sleeping: lyingDown(bot, e) && canSee(e) }),
         ...(e.name === 'creeper' && { creeper: true })
       }))
   }
@@ -1299,6 +1310,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       chat: (from, message) => { if (from !== target.username) emit({ kind: 'chat', from, message }) },
       whisper: (from, message) => { if (from !== target.username) emit({ kind: 'whisper', from, message }) },
       wake: () => emit({ kind: 'woke' }),
+      actionBar: msg => { const status = sleepStatusOf(msg); if (status) emit({ kind: 'sleep-status', ...status }) },
       playerJoined: player => { if (player?.username && player.username !== target.username) emit({ kind: 'player-joined', player: player.username }) },
       playerLeft: player => { if (player?.username && player.username !== target.username) emit({ kind: 'player-left', player: player.username }) },
       playerCollect: (collector, collected) => {
@@ -1381,6 +1393,8 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     // after a kick) would throw uncaught and end the process. Kept for good: the bot may be dropped, and a bound one reports
     // errors through its own handler.
     fresh.on('error', () => {})
+    // the server announces the sleep count on the join, before the world is loaded and the bot bound: kept for adopt
+    fresh.on('actionBar', msg => { if (fresh !== bot) fresh.sleepStatusAtJoin = sleepStatusOf(msg) ?? fresh.sleepStatusAtJoin })
     fresh.once('end', mark)
     fresh.once('kicked', mark)
     const loaded = await waitForWorld(fresh, { timeoutMs: worldTimeoutMs, stop: () => ended })
@@ -1419,6 +1433,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     view?.attach(bot)
     down = false
     emit({ kind: 'online', pos: here() })
+    if (fresh.sleepStatusAtJoin) emit({ kind: 'sleep-status', ...fresh.sleepStatusAtJoin })
   }
 
   // a backoff wait that close() ends early and that never keeps the process alive

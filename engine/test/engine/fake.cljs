@@ -623,6 +623,7 @@
         o (entity-js (dissoc e :offers :busy))]
     (aset o "distance" distance)
     (when (#{"hostile" "item"} (:kind e)) (aset o "visible" (if (some? (:visible e)) (:visible e) (can-see? w e))))
+    (when (= "player" (:kind e)) (aset o "sleeping" (boolean (and (:sleeping e) (can-see? w e)))))
     (when-not (or (= "item" (:kind e)) (> distance hit-range))
       (aset o "hittable" (if (some? (:hittable e)) (:hittable e) (can-hit? w e))))
     o))
