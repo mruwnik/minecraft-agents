@@ -15,17 +15,17 @@
             [jobs.explore.search :as search]))
 
 (def ground
-  "Grass at y 63 under every column within 100 of the origin: every leg the patterns choose from the origin stands
-  there, and the planner has a floor to walk over between them."
-  (tu/box -100 63 -100 100 63 100 "grass_block"))
+  "Grass at y 63 under every column within r of the origin (r a little past the search's :max-distance): every leg the
+  patterns choose from the origin stands there, and the planner has a floor to walk over between them."
+  (memoize (fn [r] (tu/box (- r) 63 (- r) r 63 r "grass_block"))))
 
 (defn setup
-  "An engine over the fake world spec (ground added) with a notes store for body Fake in a temp world folder."
-  [spec]
+  "An engine over the fake world spec (ground of radius ground-r added, default 64) with a notes store for body Fake in a temp world folder."
+  [spec & [ground-r]]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         dir (tu/tmp-dir)
-        p (tu/fake (update spec :blocks #(merge ground %)))
+        p (tu/fake (update spec :blocks #(merge (ground (or ground-r 64)) %)))
         store (notes/open {:world-dir dir :body "Fake" :emit (fn [_])})
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :world (assoc (world/of-data {} {}) :notes store)
@@ -46,7 +46,7 @@
 
 (defn ^:async search!
   [args spec & [n before]]
-  (let [s (setup spec)]
+  (let [s (setup spec (some-> (:max-distance args) (+ 8)))]
     (when before (before s))
     (core/submit! (:eng s) (list 'jobs.explore.search args) {})
     (await (run-until-done s (or n 400)))))
@@ -195,7 +195,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (setup {:unloaded ring-1-cells})]
+        (let [s (setup {:unloaded ring-1-cells} 28)]
           (core/submit! (:eng s) '(jobs.explore.search {:target "diamond_block" :max-distance 20}) {})
           (dotimes [_ 20] (swap! (:clock s) + 700) (await (core/tick! (:eng s))))
           (is (not (finished? s)) "still waiting for the chunks")
