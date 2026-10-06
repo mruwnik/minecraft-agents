@@ -37,14 +37,23 @@
         listed-ids (set (map :id listed))]
     (concat listed (remove #(listed-ids (:id %)) (vals instances)))))
 
+(defn read-text
+  "read-edn of a file's text; nil or blank text is an error result."
+  [edn-text]
+  (if (str/blank? edn-text) {:error "engine.edn is empty"} (read-edn edn-text)))
+
+(defn summarize-read
+  "summarize over an already parsed read-text result (the parse is the costly part and can be cached)."
+  [{:keys [value error]} now]
+  (cond
+    error {:error error}
+    (not (map? value)) {:error "engine.edn is not a map"}
+    :else
+    {:jobs (mapv #(summarize-job (:current value) %) (ordered-instances value))
+     :reflexes (mapv #(summarize-reflex (:reflex-state value) now %) (:register value))
+     :current (:current value)
+     :failed-count (count (:failed value))
+     :pending-reflex (:pending-reflex value)}))
+
 (defn summarize [edn-text now]
-  (let [{:keys [value error]} (if (str/blank? edn-text) {:error "engine.edn is empty"} (read-edn edn-text))]
-    (cond
-      error {:error error}
-      (not (map? value)) {:error "engine.edn is not a map"}
-      :else
-      {:jobs (mapv #(summarize-job (:current value) %) (ordered-instances value))
-       :reflexes (mapv #(summarize-reflex (:reflex-state value) now %) (:register value))
-       :current (:current value)
-       :failed-count (count (:failed value))
-       :pending-reflex (:pending-reflex value)})))
+  (summarize-read (read-text edn-text) now))

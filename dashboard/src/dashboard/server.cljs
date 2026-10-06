@@ -255,12 +255,12 @@
         (swap! live-refreshing assoc name promise)
         promise)))
 
-(defn refresh-live-engines! []
-  (let [targets (->> (agent-entries) (map body-key) (filter canonical-engine?) vec)]
-    (js/Promise.all (clj->js (map refresh-live-engine! targets)))))
+(defn refresh-live-engines-in! [entries]
+  (let [targets (->> entries (map body-key) (filter canonical-engine?) vec)]
+     (js/Promise.all (clj->js (map refresh-live-engine! targets)))))
 
-;; engine.edn is re-read when its mtime or size changed
-(defn read-edn-text [body]
+;; engine.edn is re-read and re-parsed only when its mtime or size changed: {:text :read} (read = engine-edn/read-text)
+(defn read-edn-file [body]
   (let [file (.join path (engine-dir body) "engine.edn")
         k (body-key body)]
     (try
@@ -268,14 +268,17 @@
             stamp [(.-mtimeMs st) (.-size st)]
             cached (get @edn-cache k)]
         (if (= stamp (:stamp cached))
-          (:text cached)
-          (let [text (.readFileSync fs file "utf8")]
-            (swap! edn-cache assoc k {:stamp stamp :text text})
-            text)))
+          cached
+          (let [text (.readFileSync fs file "utf8")
+                entry {:stamp stamp :text text :read (engine-edn/read-text text)}]
+            (swap! edn-cache assoc k entry)
+            entry)))
       (catch :default _ nil))))
 
+(defn read-edn-text [body] (:text (read-edn-file body)))
+
 (defn edn-fields [body now]
-  (let [summary (engine-edn/summarize (read-edn-text body) now)]
+  (let [summary (engine-edn/summarize-read (or (:read (read-edn-file body)) (engine-edn/read-text nil)) now)]
     (if (:error summary)
       {:edn-error (:error summary)}
       summary)))
@@ -312,13 +315,13 @@
         hud (read-view-file body "hud.json" #(some-> % (js->clj :keywordize-keys true)))]
     (view-info/summarize (:value pose) (:value hud) (:mtime pose))))
 
-(defn engine-body [agent now]
+(defn build-engine-body [agent now]
   (let [body (body-key agent)
         live (get @live-engines body)
         canonical? (canonical-engine? body)
         live-error (get @live-errors body)
         persisted-state (when canonical?
-                          (let [{:keys [value]} (engine-edn/read-edn (read-edn-text body))]
+                          (let [{:keys [value]} (:read (read-edn-file body))]
                             (when (map? value) value)))
         folded (if canonical?
                  (or (:folded live) ee/empty-engine)
@@ -328,7 +331,7 @@
         snap (:snapshot live)
         authoritative-state (if (and snap (not live-error)) (:state snap) persisted-state)
         scheduler-summary (if (and canonical? (map? authoritative-state))
-                            (engine-edn/summarize (pr-str authoritative-state) now)
+                            (engine-edn/summarize-read {:value authoritative-state} now)
                             (edn-fields body now))
         outstanding (if (and snap (not live-error))
                       (or (:outstanding snap) {})
@@ -350,17 +353,51 @@
            :outstanding outstanding
            :view pose-view)))
 
+;; A body with no events.sock is built again only when an input changed: the agent, its live state, a stamp of each file
+;; the build reads, or the minute (ages and cooldowns are shown coarse for an offline body).
+(def body-cache (atom {}))
+(def offline-cache-ms 60000)
+
+(defn file-stamp [file]
+  (try (let [st (.statSync fs file)] [(.-mtimeMs st) (.-size st)]) (catch :default _ nil)))
+
+(defn offline-key [agent body now]
+  (let [dir (engine-dir body)]
+    [agent (quot now offline-cache-ms) (get @live-engines body) (get @live-errors body)
+     (mapv #(file-stamp (.join path dir %)) ["engine.edn" "events.edn" "events.jsonl" "events.sock"])
+     (mapv #(file-stamp (view-file body %)) ["pose.json" "hud.json"])]))
+
+(defn engine-body [agent now]
+  (let [body (body-key agent)]
+    (if (file-exists? (events-socket body))
+      (build-engine-body agent now)
+      (let [k (offline-key agent body now)
+            cached (get @body-cache body)]
+        (if (= k (:key cached))
+          (:value cached)
+          (let [value (build-engine-body agent now)]
+            (swap! body-cache assoc body {:key k :value value})
+            value))))))
+
+(defn prune-cache
+  "The cache without the bodies that no longer have a folder (entries: one listing of the bodies)."
+  [cache entries]
+  (let [live (set (map body-key entries))]
+    (into {} (filter (fn [[key _]] (contains? live key))) cache)))
+
 ;; every body folder of every world: {:world :name :text raw config.json}
 (defn agent-entries []
   (mapv (fn [{:keys [world name dir]}] {:world world :name name :text (read-text (.join path dir "config.json"))})
         (bodies/list-bodies state-dir)))
 
-(defn bodies [now]
-  (let [entries (agent-entries)
-        engine? (filter engine-folder? entries)
-        other (remove engine-folder? entries)]
-    (vec (concat (map #(engine-body % now) (ee/parse-engine-agents engine?))
-                 (map ee/unsupported-body (ee/parse-engine-agents other))))))
+(defn bodies-in [now entries]
+  (let [engine? (filter engine-folder? entries)
+         other (remove engine-folder? entries)]
+     (swap! body-cache #(prune-cache % entries))
+     (vec (concat (map #(engine-body % now) (ee/parse-engine-agents engine?))
+                  (map ee/unsupported-body (ee/parse-engine-agents other))))))
+
+(defn bodies [now] (bodies-in now (agent-entries)))
 
 (defn agent-names [bodies]
   (vec (distinct (mapcat (juxt :name :username) bodies))))
@@ -402,15 +439,8 @@
        (.on req "error" reject)
        (.end req)))))
 
-(defn prune-cache
-  "The cache without the bodies that no longer have a folder (entries: one listing of the bodies)."
-  [cache entries]
-  (let [live (set (map body-key entries))]
-    (into {} (filter (fn [[key _]] (contains? live key))) cache)))
-
-(defn refresh-entities! [world-name]
+(defn refresh-entities-in! [world-name entries]
   (let [now (js/Date.now)
-        entries (agent-entries)
         targets (->> entries (filter #(and (= world-name (:world %)) (engine-folder? %)))
                      (sort-by (fn [b] [(get-in @entity-cache [(body-key b) :requested-at] 0) (:name b)])))
         room (max 0 (- entity-request-cap (count @entity-in-flight)))]
@@ -434,8 +464,10 @@
     (when (> (count @entity-cache) entity-source-cap)
       (swap! entity-cache #(into {} (take entity-source-cap (sort-by (comp - :requested-at val) %)))))))
 
-(defn entity-snapshot [world-name dimension]
-  (let [targets (filter #(and (= world-name (:world %)) (engine-folder? %)) (agent-entries))
+(defn refresh-entities! [world-name] (refresh-entities-in! world-name (agent-entries)))
+
+(defn entity-snapshot-in [world-name dimension entries]
+  (let [targets (filter #(and (= world-name (:world %)) (engine-folder? %)) entries)
         scoped (into {} (for [body (take entity-source-cap (sort-by :name targets))
                               :let [key (body-key body)]]
                           [key (or (get @entity-cache key) {:body key :status :loading :entities []})]))
@@ -443,6 +475,8 @@
         truncated? (> (count targets) entity-source-cap)]
     (assoc snapshot :source-count (count targets) :source-cap entity-source-cap
            :sources-truncated? truncated? :truncated? (or truncated? (:truncated? snapshot)))))
+
+(defn entity-snapshot [world-name dimension] (entity-snapshot-in world-name dimension (agent-entries)))
 
 ;; ---------------------------------------------------------------- saved village observations
 (defn to-js [x] (clj->js x :keyword-fn #(subs (str %) 1)))
@@ -455,9 +489,9 @@
                          {:worlds (mapv :name worlds) :worlds-dir worlds-dir :blueprint-dir (.join path repo-root "blueprints")}))
 
 ;; ---------------------------------------------------------------- state
-(defn world-entry [bodies agent-names world]
+(defn world-entry [bodies entries world]
   (let [own (filterv #(= (:name world) (:world %)) bodies)
-        observations (entity-snapshot (:name world) "overworld")]
+        observations (entity-snapshot-in (:name world) "overworld" entries)]
     (assoc world :bodies own :humans []
            :entities (:entities observations) :entity-sources (:sources observations)
            :entity-truncated? (:truncated? observations))))
@@ -472,9 +506,9 @@
 
 (declare send-edn!)
 
-(defn snapshot [world-name]
+(defn snapshot [world-name entries]
   (let [now (js/Date.now)
-        all-bodies (bodies now)
+        all-bodies (bodies-in now entries)
         names (agent-names all-bodies)
         all-worlds (read-worlds)
         {:keys [villages error]} (village-snapshot all-worlds)
@@ -482,19 +516,20 @@
         full {:at now
               :agents names
               :bodies all-bodies
-              :worlds (mapv #(world-entry all-bodies names %) with-villages)
+              :worlds (mapv #(world-entry all-bodies entries %) with-villages)
               :villageError error}]
     (assoc (worlds/scope-snapshot full world-name)
            :worldList (read-world-list)
            :selected world-name)))
 
 (defn send-state! [res world-name]
-  (refresh-entities! world-name)
-  (-> (refresh-live-engines!)
-      (.then (fn [_] (send-edn! res 200 (assoc (snapshot world-name) :build-id restart/build-id))))
+  (let [entries (agent-entries)]
+  (refresh-entities-in! world-name entries)
+  (-> (refresh-live-engines-in! entries)
+      (.then (fn [_] (send-edn! res 200 (assoc (snapshot world-name entries) :build-id restart/build-id))))
       (.catch (fn [e]
                 (when-not (.-headersSent res)
-                  (send-edn! res 500 {:error (str (ex-message e))}))))))
+                  (send-edn! res 500 {:error (str (ex-message e))})))))))
 
 ;; ---------------------------------------------------------------- chat
 (defn talk-lines-of [text]
