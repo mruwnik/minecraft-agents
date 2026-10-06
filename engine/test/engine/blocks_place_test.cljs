@@ -41,6 +41,16 @@
           (is (:placed result))
           (is (= "cobblestone" (bd/block-at p {:x 12 :y 64 :z 0}))))))))
 
+(deftest a-zone-appearing-during-the-walk-declines-the-place
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (bd/zone-on-first-step (bd/setup {:self body :inventory cobble}))
+              r (await (bd/waiting-after env (list job {:pos [12 64 0] :item "cobblestone"}) 2))]
+          (is (= {:reason :not-allowed :by :zone :zone "farm"} (select-keys r [:reason :by :zone])))
+          (is (empty? (bd/calls (:p env) "place")))
+          (is (= 4 (bd/carried (:p env) "cobblestone"))))))))
+
 (deftest a-cell-holding-the-block-already-is-left
   (async done
     (tu/run-async done

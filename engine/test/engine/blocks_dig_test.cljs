@@ -132,6 +132,26 @@
                  (await (waiting-after env (list job {:pos at}) 3))))
           (is (empty? (calls (:p env) "dig"))))))))
 
+(defn zone-on-first-step
+  "env whose world gains farm-zone (over x 11..13) when the first walk step is taken; nil world zones before."
+  [env]
+  (let [w (:world (:eng env))]
+    (.override (.-world (:p env)) "steer"
+               (fn [token args impl]
+                 (world/set-zones! w [(assoc farm-zone :min [11 60 -1] :max [13 70 1])])
+                 (impl token args)))
+    env))
+
+(deftest a-zone-appearing-during-the-walk-declines-the-dig
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (zone-on-first-step (setup {:self body :blocks {"12,64,0" "dirt"}}))
+              r (await (waiting-after env (list job {:pos [12 64 0]}) 2))]
+          (is (= {:reason :not-allowed :by :zone :zone "farm"} (select-keys r [:reason :by :zone])))
+          (is (empty? (calls (:p env) "dig")))
+          (is (= "dirt" (block-at (:p env) {:x 12 :y 64 :z 0}))))))))
+
 (deftest no-zone-list-waits-not-allowed-no-zones
   (async done
     (tu/run-async done
