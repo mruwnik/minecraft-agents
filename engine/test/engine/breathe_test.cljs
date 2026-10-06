@@ -302,12 +302,23 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4} :blocks water-column})]
+        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4} :blocks (assoc water-column "0,63,0" "stone")})]
           (core/register-reflex! eng {:trigger :suffocating})
           (dotimes [_ 4] (await (core/tick! eng)))
           (set-self! p {"inWater" false "onGround" true})
           (await (core/tick! eng))
           (is (= 1 (count (filter #(= :ended (:kind %)) @seen)))))))))
+
+(deftest a-body-pressed-against-a-wall-over-water-is-not-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4} :blocks (assoc water-column "0,63,0" "water")})]
+          (core/register-reflex! eng {:trigger :suffocating})
+          (dotimes [_ 4] (await (core/tick! eng)))
+          (set-self! p {"inWater" false "onGround" true})
+          (dotimes [_ 3] (await (core/tick! eng)))
+          (is (empty? (filter #(= :ended (:kind %)) @seen)) "water below: not a footing"))))))
 
 (deftest hold-presses-jump-until-its-ticks-are-spent-or-the-body-stands-out-of-the-water
   (doseq [[label pose ticks done?] [["in water, first tick" {:onGround false :inWater true} 1 false]

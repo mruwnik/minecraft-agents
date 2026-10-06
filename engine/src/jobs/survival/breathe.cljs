@@ -17,7 +17,7 @@
   - A dig that fails (cannot, timeout, unreachable) is a failed round.
   After a swim that surfaced, a body still in water heads for land instead of bobbing:
   it swims to the nearest land cell within :shore-radius, else walks to land within :far-radius.
-  Ends when the head is clear and the body stands out of the water.
+  Ends when the head is clear and the body stands on land (solid ground under the feet) out of the water.
   A body that cannot get out stays afloat (it holds jump for a few seconds each round) instead of ending,
   because a body with no job sinks and the trigger would fire again for ever. One :afloat warning says so.
   Gives up with a :no_air, :no_way_out or :no_shore warning after three failed rounds.
@@ -39,15 +39,25 @@
 
 (def breathe-policy {:cap 20 :ttl (* 60 60 1000)})
 
+(declare unsafe-below)
+
+(defn land-footing?
+  "The block under the feet cell is solid ground: not air, water, lava, fire or magma, and loaded. A body pressed
+  against a wall over water is onGround for a tick without it."
+  [p self]
+  (let [below (u/block-name p {:x (js/Math.floor (.. self -pos -x)) :y (dec (js/Math.floor (.. self -pos -y)))
+                               :z (js/Math.floor (.. self -pos -z))})]
+    (boolean (and below (not (s/air? below)) (not (contains? unsafe-below below))))))
+
 (defn surfaced-in-water?
-  "A swim surfaced earlier in this job and the body is still in water, or not standing yet: a body bobbing at the
-  surface or climbing out is out of the water for a moment on every crest. A ctx without job memory (no :view) has
-  not surfaced."
+  "A swim surfaced earlier in this job and the body is still in water, or not standing on land yet: a body bobbing
+  at the surface or climbing out is out of the water for a moment on every crest, and one pressed against a wall
+  over water is onGround without a footing. A ctx without job memory (no :view) has not surfaced."
   [c]
   (boolean (and (:view c)
                 (:surfaced (ctx/mem c))
                 (let [self (.self (:primitives c))]
-                  (or (.-inWater self) (not (.-onGround self)))))))
+                  (or (.-inWater self) (not (.-onGround self)) (not (land-footing? (:primitives c) self)))))))
 
 (defn check [c]
   (or (some? (s/situation (:primitives c) (:min-oxygen (:args c))))
