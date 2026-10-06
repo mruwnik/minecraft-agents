@@ -2,7 +2,9 @@
 # tools/test-bisect <ns>... [--good <rev>] [--bad <rev>]
 # Finds the first commit where the engine test namespaces fail: one detached worktree (tools/integration-worktree.sh), `git bisect run` there,
 # each step compiles and runs tools/test-engine <ns>... of THAT commit (res-slot compile and tests slots, as test-engine does).
-# Verdicts per step: pass = good, test failure = bad, compile failure / namespace missing / timeout = skipped (exit 125).
+# Verdicts per step: pass = good, test failure = bad, compile failure / namespace missing / timeout / busy slot / killed (75, 137, 143) = skipped (exit 125).
+# Worktree setup waits for a free compile slot (retry every TEST_BISECT_RETRY_SLEEP s, default 20, up to TEST_BISECT_SLOT_WAIT s, default 1800), then exits 75.
+# The per-step explicit compile stays: test-engine passes a compile failure on as a plain exit 1, which would score bad.
 # Defaults: bad = HEAD, good = HEAD~20. Prints the first bad commit, its failing tests and the step count. TEST_EVENTS=1: @@test phase lines per step.
 # The worktree (and its shadow servers) is removed on exit, error, INT and TERM.
 # Why not JS: a thin shell wrapper around git bisect, like tools/test-engine.
@@ -24,6 +26,7 @@ if [ "${1:-}" = --step ]; then
   case $rc in
     0) echo "step $n $rev: good"; exit 0;;
     2|124) echo "step $n $rev: skipped (exit $rc: namespace missing or timeout)"; exit 125;;
+    75|137|143) echo "step $n $rev: skipped (exit $rc: busy slot or killed, not a verdict)"; exit 125;;
     *) echo "step $n $rev: bad"; exit 1;;
   esac
 fi
@@ -54,7 +57,19 @@ trap cleanup EXIT
 trap 'exit 130' INT TERM
 
 event "worktree"
-"$wt_sh" "$bad_sha" "$wt" >"$work/setup.log" 2>&1 || { cat "$work/setup.log" >&2; echo "test-bisect: worktree setup failed" >&2; exit 2; }
+deadline=$(( $(date +%s) + ${TEST_BISECT_SLOT_WAIT:-1800} ))
+while true; do
+  "$wt_sh" "$bad_sha" "$wt" >"$work/setup.log" 2>&1 && break
+  rc=$?
+  [ -d "$wt" ] && "$wt_sh" --remove "$wt" >/dev/null 2>&1
+  git -C "$repo" worktree prune
+  if [ $rc -eq 75 ]; then
+    [ "$(date +%s)" -lt "$deadline" ] || { cat "$work/setup.log" >&2; echo "test-bisect: no free compile slot for the worktree after ${TEST_BISECT_SLOT_WAIT:-1800} s, retry later" >&2; exit 75; }
+    sleep "${TEST_BISECT_RETRY_SLEEP:-20}"
+    continue
+  fi
+  cat "$work/setup.log" >&2; echo "test-bisect: worktree setup failed" >&2; exit 2
+done
 cd "$wt" || exit 2
 git bisect start "$bad_sha" "$good_sha" >/dev/null || exit 2
 echo "test-bisect: ${nss[*]} between $(git rev-parse --short "$good_sha") (good) and $(git rev-parse --short "$bad_sha") (bad)"

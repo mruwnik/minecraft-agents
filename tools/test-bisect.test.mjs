@@ -11,8 +11,8 @@ const sh = (cwd, ...a) => execFileSync(a[0], a.slice(1), { cwd, encoding: 'utf8'
 
 // Fake repo: tools/compile fails while file BROKEN exists, tools/test-engine fails (printing a FAIL line) while file BAD exists.
 const COMPILE = '#!/bin/sh\n[ -n "$BISECT_SLOW" ] && sleep 30\n[ -e "$(dirname "$0")/../BROKEN" ] && exit 1\nexit 0\n'
-const TEST_ENGINE = '#!/bin/sh\n[ "$1" = engine.nope-test ] && exit 2\nif [ -e "$(dirname "$0")/../BAD" ]; then echo "FAIL in (a-test)"; exit 1; fi\nexit 0\n'
-const WT = '#!/bin/sh\nrepo="$(cd "$(dirname "$0")/.." && pwd)"\nif [ "$1" = --remove ]; then echo removed >> "$WT_LOG"; git -C "$repo" worktree remove --force "$2"; exit; fi\ngit -C "$repo" worktree add --detach "$2" "$1"\n'
+const TEST_ENGINE = '#!/bin/sh\n[ "$1" = engine.nope-test ] && exit 2\n[ -n "$FAKE_TE_RC" ] && exit "$FAKE_TE_RC"\nif [ -e "$(dirname "$0")/../BAD" ]; then echo "FAIL in (a-test)"; exit 1; fi\nexit 0\n'
+const WT = '#!/bin/sh\nif [ "$1" != --remove ] && [ -n "$WT_BUSY_N" ]; then n=$(cat "$WT_LOG.busy" 2>/dev/null || echo 0); echo $((n + 1)) > "$WT_LOG.busy"; [ "$n" -lt "$WT_BUSY_N" ] && exit 75; fi\nrepo="$(cd "$(dirname "$0")/.." && pwd)"\nif [ "$1" = --remove ]; then echo removed >> "$WT_LOG"; git -C "$repo" worktree remove --force "$2"; exit; fi\ngit -C "$repo" worktree add --detach "$2" "$1"\n'
 
 function fakeRepo() {
   const d = mkdtempSync(join(process.env.TMPDIR || '/tmp', 'bisect-test-'))
@@ -70,4 +70,37 @@ test('killed by TERM mid-run: the worktree is still removed', () => {
 test('no namespace: usage, exit 2', () => {
   const { d } = fakeRepo()
   try { assert.equal(run(d, []).status, 2) } finally { rmSync(d, { recursive: true, force: true }) }
+})
+
+test('worktree setup busy (exit 75): waits and retries, then bisects', () => {
+  const { d, shas } = fakeRepo()
+  try {
+    const r = run(d, ['engine.a-test', '--good', shas[0], '--bad', shas[5]], { WT_BUSY_N: '2', TEST_BISECT_RETRY_SLEEP: '0' })
+    assert.equal(r.status, 0, r.stdout + r.stderr)
+    assert.match(r.stdout, new RegExp(`FIRST BAD: ${shas[3]} c3 culprit`))
+    assert.equal(sh(d, 'git', 'worktree', 'list').split('\n').length, 1)
+  } finally { rmSync(d, { recursive: true, force: true }) }
+})
+
+test('worktree setup busy past the deadline: exit 75 with a message, no worktree left', () => {
+  const { d, shas } = fakeRepo()
+  try {
+    const r = run(d, ['engine.a-test', '--good', shas[0], '--bad', shas[5]], { WT_BUSY_N: '1000', TEST_BISECT_RETRY_SLEEP: '0', TEST_BISECT_SLOT_WAIT: '1' })
+    assert.equal(r.status, 75, r.stdout + r.stderr)
+    assert.match(r.stderr, /no free compile slot/)
+    assert.equal(sh(d, 'git', 'worktree', 'list').split('\n').length, 1)
+  } finally { rmSync(d, { recursive: true, force: true }) }
+})
+
+test('test-engine busy (75) or killed (137, 143) never scores a commit bad: every step skipped, no verdict', () => {
+  for (const rc of ['75', '137', '143']) {
+    const { d, shas } = fakeRepo()
+    try {
+      const r = run(d, ['engine.a-test', '--good', shas[0], '--bad', shas[5]], { FAKE_TE_RC: rc })
+      assert.notEqual(r.status, 0, r.stdout + r.stderr)
+      assert.doesNotMatch(r.stdout, /: bad/)
+      assert.match(r.stdout, /skipped \(exit /)
+      assert.doesNotMatch(r.stdout, /FIRST BAD/)
+    } finally { rmSync(d, { recursive: true, force: true }) }
+  }
 })
