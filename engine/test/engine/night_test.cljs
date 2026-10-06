@@ -525,20 +525,6 @@
           (is (seq (st/calls p "place")) "loaded light of unseen cells is not read: dug in")
           (is (< (:x (st/pos-of p)) 5)))))))
 
-(def walled-home
-  (into home-roof (for [x [9 10 11] y [64 65] z [-1 0 1] :when (not= [x z] [10 0])] [(str x "," y "," z) "stone"])))
-
-(deftest a-roof-walk-that-does-not-arrive-digs-in-and-is-not-retried-tonight
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (await (night-at-home (update lit-world :blocks merge walled-home) {:x 10 :y 64 :z 0}))]
-          (await (st/run-until-empty eng 60))
-          (is (seq (st/calls p "place")) "the night dug in after the walk failed")
-          (is (< (:x (st/pos-of p)) 9) "and did not walk to the home again"))))))
-
-;; ------------------------------------------------------------------ flee somewhere safer
-
 (defn ^:async with-child-log
   "Run (f), a promise, with ctx/call-child logging [key sym args] of every child call; the log. (on-call c k sym a) may
   answer a result to stand for the child."
@@ -553,6 +539,32 @@
      (await (f))
      (set! ctx/call-child orig)
      @log)))
+
+(def walled-home
+  (into home-roof (for [x [9 10 11] y [64 65] z [-1 0 1] :when (not= [x z] [10 0])] [(str x "," y "," z) "stone"])))
+
+(deftest a-roof-walk-that-does-not-arrive-digs-in-and-is-not-retried-tonight
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (await (night-at-home (update lit-world :blocks merge walled-home) {:x 10 :y 64 :z 0}))]
+          (let [log (await (with-child-log #(st/run-until-empty eng 60)))]
+            (is (= 1 (count (filter #(= :roof-walk (first %)) log))) "one walk attempted, never repeated"))
+          (is (seq (st/calls p "place")) "the night dug in after the walk failed")
+          (is (< (:x (st/pos-of p)) 9) "and did not walk to the home again"))))))
+
+(deftest a-roof-walk-that-arrives-but-is-still-not-roofed-is-not-repeated
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (await (night-at-home lit-world {:x 10 :y 64 :z 0}))
+              beside {:x 10 :y 64 :z 1}
+              log (await (with-child-log #(st/run-until-empty eng 60)
+                           (fn [c k sym a] (when (:place a) (ctx/call-child c k sym (-> a (dissoc :place) (assoc :pos beside)))))))]
+          (is (= 1 (count (filter #(and (= :roof-walk (first %)) (:place (nth % 2))) log))) "walked once, arrived unroofed, then dug in")
+          (is (seq (st/calls p "place")) "the night dug in"))))))
+
+;; ------------------------------------------------------------------ flee somewhere safer
 
 (def dark-world (assoc lit-world :light-default [15 0]))
 

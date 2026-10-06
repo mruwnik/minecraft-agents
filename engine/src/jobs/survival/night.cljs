@@ -63,8 +63,8 @@
   trigger's condition holds (hungry?, or below 7 hp; not asleep).
   An overdue body (no sleep for :max-days-awake in-game days) warns needs_bed once an in-game day (:needs-bed).
   Memory: job memory :enclose (the cave cell being walled in), :sheltered (:slept, :dug-in, :logged-out, :exposed), :log-out-failed, :relocating, :digging (the
-  site of a dig-in in flight), :pit-trapped and leave!'s :dig-out; body memory :night-site (failed sites, forgotten whenever the night ends, at most a day), so a
-  firing after a cut does not dig a failed site again, :roof-walk-failed.
+  site of a dig-in in flight), :pit-trapped and leave!'s :dig-out; :roof-walk-failed (no second walk to a roofed place tonight); body memory :night-site (failed sites, forgotten whenever the night ends, at most a day), so a
+  firing after a cut does not dig a failed site again.
   Muting :night does not end a running night job: the agent cancels it too.")
 
 (def args
@@ -361,11 +361,12 @@
     (and (not (:roof-walk-failed m)) (not (:digging m)) (empty? (failed-sites c)))))
 
 (defn ^:async roof-walk!
-  "Walk (go-to :place) to the roofed place; :again. A walk that ends without arriving is marked :roof-walk-failed."
+  "Walk (go-to :place) to the roofed place; :again. A walk that ends without arriving, or arrives and is still not roofed, is marked :roof-walk-failed."
   [c {:keys [name]}]
   (busy! c)
   (let [w (await (ctx/call-child c :roof-walk 'jobs.movement.go-to {:place name :range 0}))]
-    (when (and (not= :continue w) (not (:arrived (ctx/child-result c :roof-walk))))
+    (when (and (not= :continue w)
+               (not (and (:arrived (ctx/child-result c :roof-walk)) (sh/roofed? (:primitives c) (:roof-height (:args c))))))
       (ctx/update-mem! c assoc :roof-walk-failed true))
     :again))
 
