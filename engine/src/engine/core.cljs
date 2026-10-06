@@ -465,7 +465,7 @@
   "Why listed or reflex job id holds the body still on purpose, {:reason :since}, while its round runs: a
   ctx/hold-still! reason, else the :why of the act :wait in flight. Nil otherwise."
   [eng id]
-  (let [a @(:activity eng)]
+  (let [a (some-> (:activity eng) deref)]
     (when (and a (= id (:id a)) (= (:token a) (:token (running eng))))
       (or (:hold a) (:wait-hold a)))))
 
@@ -804,6 +804,7 @@
       (do (resolve-job-attention! eng id :job-completed
                                   #(assoc (remove-listed % id) :cursor (max idx 0)))
           (forget-backoff! eng id)
+          (swap! (:fruitless eng) dissoc id)
           (mem/delete-job! (:store eng) id)
           (emit! eng (if (stopped-result? result)
                        (merge fields {:source :job :kind :stopped :level :warn :attention :notice
@@ -934,6 +935,32 @@
         (end-reflex! eng run (if (= :cut status) :cut :failed)))
     (end-reflex! eng run :done)))
 
+(def fruitless-rounds
+  "Rounds in a row in which every act failed before a listed job's job.fruitless warn."
+  3)
+
+(defn note-fruitless!
+  "After a round of listed job id that ended with status: count rounds in a row in which every act failed (round is
+  its act tracker, see engine.backoff). The third raises job.fruitless, a required attention request, once per spell; a round
+  with progress ends the spell and resolves the request. It only flags: nothing is held against the job."
+  [eng id status round]
+  (when-not (#{:cut :error} status)
+    (if (backoff/fruitless-round? round)
+      (let [n (get (swap! (:fruitless eng) update id (fnil inc 0)) id)]
+        (when (= n fruitless-rounds)
+          (let [{:keys [act status reason]} (:last round)
+                text (str "every act failed in " n " rounds in a row; last " (some-> act name) ": " status
+                          (when reason (str " (" reason ")")))]
+            (request-attention! eng {:job-id id :reason :fruitless :kind :fruitless
+                                     :context (select-keys (job-fields eng id) [:round :chain])
+                                     :data {:rounds n :act act :status status :why reason}
+                                     :message (str "Job " id " makes no progress: " text)}))))
+      (when (get @(:fruitless eng) id)
+        (swap! (:fruitless eng) dissoc id)
+        (doseq [[request-id request] (:attention (state eng))
+                :when (same-request? request id :fruitless)]
+          (resolve-attention! eng request-id :progress))))))
+
 (defn settle!
   "Book a finished round, unless it was cut (its token is no longer current)."
   [eng run outcome]
@@ -944,7 +971,8 @@
       (if (and (book-round! eng run (:status outcome)) (= :continue (:status outcome)))
         (end-reflex! eng run :backoff)
         (settle-reflex! eng run outcome))
-      (do (book-round! eng run (:status outcome))
+      (do (note-fruitless! eng (:id run) (:status outcome) (get @(:rounds eng) (:id run)))
+          (book-round! eng run (:status outcome))
           (settle-listed! eng run outcome)))
     (save-memory! eng))
   nil)
@@ -1129,6 +1157,7 @@
       (reset! (:running eng) nil))
     (resolve-job-attention! eng id :job-cancelled #(remove-listed % id))
     (forget-backoff! eng id)
+    (swap! (:fruitless eng) dissoc id)
     (mem/delete-job! (:store eng) id)
     (save-memory! eng)
     (emit! eng {:source :job :kind :cancelled :level :info :job id :chain [id] :by by})))
@@ -1443,6 +1472,7 @@
              :waiting (atom {})
              :world-ops (atom {:active nil :records {} :order [] :queue []})
              :activity (atom nil)
+             :fruitless (atom {})
              :said (atom [])
              :rounds (atom {})
              :passes (atom {})

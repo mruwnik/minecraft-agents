@@ -647,3 +647,35 @@
            jobs.survival.respond-to-hostile}
          (set (keep (fn [[k v]] (when (false? (:backoff v)) k)) registry/jobs)))
       "a new :backoff false must be added to this set deliberately, with its reason in the job's docstring (README, Jobs, backoff)"))
+
+;; ---------------------------------------------------------------- job.fruitless (listed jobs only flag)
+
+(defn fruitless-requests [eng]
+  (filterv #(= :fruitless (:reason %)) (vals (:attention (core/state eng)))))
+
+(deftest three-fruitless-rounds-of-a-listed-job-warn-once-and-ask-for-attention
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen] :as r} (setup)]
+          (core/submit! eng '(bump) {})
+          (dotimes [i 2] (await (tick-at r (+ t0 (* i 60000)))))
+          (is (= [] (of-kind seen :fruitless)))
+          (await (tick-at r (+ t0 120000)))
+          (is (= [["j1" 3 :moveTo "blocked"]] (mapv (juxt :job :rounds :act :status) (of-kind seen :fruitless))))
+          (is (= 1 (count (fruitless-requests eng))))
+          (await (tick-at r (+ t0 180000)))
+          (is (= 1 (count (of-kind seen :fruitless))) "once per spell")
+          (is (= ["j1"] (:list (core/state eng))) "it only flags: the job stays listed")
+          (reset! status "arrived")
+          (await (tick-at r (+ t0 240000)))
+          (is (= [] (fruitless-requests eng)) "a round with progress resolves the request"))))))
+
+(deftest a-round-with-no-act-is-not-fruitless
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen eng] :as r} (setup)]
+          (core/submit! eng '(idle) {})
+          (dotimes [i 4] (await (tick-at r (+ t0 (* i 60000)))))
+          (is (= [] (of-kind seen :fruitless))))))))
