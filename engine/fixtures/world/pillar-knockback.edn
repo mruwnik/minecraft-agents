@@ -1,0 +1,39 @@
+;; Card 973d4d68: pillar rides out knockback (lands, walks back into its column, retries). Open stone plot, height 20.
+;; A zombie is summoned beside the body a moment after the job starts, so it hits mid-pillar (:mobs :keep: the runner
+;; does not clear hostiles). Should-fail cases: no blocks (waits :too-few-blocks), stone above the head (:ceiling).
+{:defaults
+ {:tags [:access :survival :hostile]
+  :mobs :keep
+  :time :any
+  :plot {:height 20}
+  :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}}
+ :cases
+ [{:name "zombie-hit-mid-pillar-done"
+   :body {:inventory [["dirt" 12]]}
+   :act [[:summon "zombie" [17.5 0 16.5] "{}"]
+         [:job (jobs.access.pillar {:height 8})]]
+   :expect [{:event {:source :job :kind :pillar.done} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :pillar.gave-up} :for-s 90 :until {:source :job :kind :pillar.done}}]
+   :after [[:body-near [16.5 8 16.5] 2]]
+   :limit-s 100}
+  {:name "four-zombies-hit-mid-pillar-done"
+   :body {:inventory [["dirt" 12]]}
+   :act [[:summon "zombie" [15.5 0 16.5] "{}"]
+         [:summon "zombie" [16.5 0 18.5] "{}"]
+         [:summon "zombie" [16.5 0 14.5] "{}"]
+         [:summon "zombie" [17.5 0 17.5] "{}"]
+         [:job (jobs.access.pillar {:height 8})]]
+   :expect [{:event {:source :job :kind :pillar.done} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :pillar.gave-up} :for-s 90 :until {:source :job :kind :pillar.done}}]
+   :limit-s 100}
+  {:name "no-blocks-waits-too-few"
+   :act [[:job (jobs.access.pillar {:height 5})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :too-few-blocks :short 5}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :pillar.done} :for-s 10}]
+   :limit-s 40}
+  {:name "ceiling-two-above-head"
+   :blocks [[:set [16 3 16] "stone"]]
+   :body {:inventory [["dirt" 12]]}
+   :act [[:job (jobs.access.pillar {:height 5})]]
+   :expect [{:event {:source :job :kind :pillar.gave-up :data {:reason :ceiling}} :within-s 40 :of-job true}]
+   :limit-s 50}]}
