@@ -4,6 +4,7 @@
             [engine.main :as main]
             [engine.single :as single]
             [engine.test-util :as tu]
+            [clojure.string :as str]
             ["child_process" :as cp]
             ["fs" :as fs]
             ["net" :as net]
@@ -117,65 +118,11 @@
             (is (= 1 (count held)) "exactly one start wins; the other sees it running")
             (doseq [c held] (await ((:held c))))))))))
 
-(defn lock-for [] (str (path/join (tu/tmp-dir) "body.sock") ".lock"))
-
-(defn dead-pid
-  "The pid of a process that has exited."
-  []
-  (.-pid (cp/spawnSync "node" #js ["-e" "0"])))
-
-(defn age! [lock secs]
-  (let [old (- (/ (js/Date.now) 1000) secs)]
-    (fs/utimesSync lock old old)))
-
-(defn held-by!
-  "Make lock a directory held by pid (written the way a holder writes it, or as a bare pid)."
-  [lock pid]
-  (fs/mkdirSync lock)
-  (fs/writeFileSync (path/join lock "holder") (str pid)))
-
-(deftest reclaiming-a-lock-with-no-holder-file-leaves-a-fresh-one-alone
-  (let [lock (lock-for)]
-    (fs/mkdirSync lock)
-    (single/reclaim-stale! lock)
-    (is (fs/existsSync lock) "a crashed starter's lock is stale only after the timeout")))
-
-(deftest a-lock-with-no-holder-file-is-reclaimed-after-the-timeout
-  (let [lock (lock-for)]
-    (fs/mkdirSync lock)
-    (age! lock 60)
-    (single/reclaim-stale! lock)
-    (is (not (fs/existsSync lock)))
-    (is (empty? (filter #(re-find #"\.dead-" %) (js->clj (fs/readdirSync (path/dirname lock))))) "no tomb left")))
-
-(deftest a-lock-held-by-a-live-pid-is-never-reclaimed-whatever-its-age
-  (let [lock (lock-for)]
-    (fs/mkdirSync lock)
-    (single/write-holder! lock)
-    (age! lock 100000)
-    (is (not (single/lock-stale? lock)))
-    (single/reclaim-stale! lock)
-    (is (fs/existsSync lock))))
-
-(deftest a-lock-whose-recorded-start-time-differs-is-a-reused-pid-and-stale
-  (let [lock (lock-for)]
-    (fs/mkdirSync lock)
-    (fs/writeFileSync (path/join lock "holder") (str js/process.pid " 1"))
-    (is (single/lock-stale? lock))))
-
-(deftest a-lock-held-by-a-dead-pid-is-reclaimed-even-when-fresh
-  (let [lock (lock-for)]
-    (held-by! lock (dead-pid))
-    (is (single/lock-stale? lock))
-    (single/reclaim-stale! lock)
-    (is (not (fs/existsSync lock)))))
-
-(deftest three-waiters-over-one-dead-lock-enter-one-at-a-time
+(deftest three-waiters-in-one-process-enter-one-at-a-time
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [lock (lock-for)
-              sock (subs lock 0 (- (count lock) 5))
+        (let [sock (path/join (tu/tmp-dir) "body.sock")
               inside (atom 0)
               max-inside (atom 0)
               entered (atom 0)
@@ -185,11 +132,9 @@
                       (swap! entered inc)
                       (await (js/Promise. (fn [r] (js/setTimeout r 30))))
                       (swap! inside dec))]
-          (held-by! lock (dead-pid))
           (await (js/Promise.all (clj->js (repeatedly 3 #(single/with-replace-lock sock enter)))))
           (is (= 3 @entered))
-          (is (= 1 @max-inside))
-          (is (not (fs/existsSync lock))))))))
+          (is (= 1 @max-inside)))))))
 
 (deftest every-connection-gets-an-error-listener-so-an-early-reset-cannot-crash-the-body
   (async done
@@ -204,3 +149,130 @@
           (is (pos? (await listeners)))
           (.destroy client)
           (await (js/Promise. (fn [resolve] (.close server resolve)))))))))
+
+;; Cross-process lock tests: each child re-runs this test bundle with --test=engine.single-test/lock-child and its
+;; part in SINGLE_LOCK_CHILD. Inside the lock a holder keeps a marker directory; finding it made already means two
+;; processes were inside at once.
+
+(def child-env "SINGLE_LOCK_CHILD")
+
+(defn sleep [ms] (js/Promise. (fn [r] (js/setTimeout r ms))))
+
+(defn ^:async inside-alone?
+  "Hold the lock's inside for ms behind marker; false when another holder's marker was already there."
+  [marker ms]
+  (if (try (fs/mkdirSync marker) true (catch :default e (if (= "EEXIST" (.-code e)) false (throw e))))
+    (do (await (sleep ms)) (fs/rmdirSync marker) true)
+    false))
+
+(defn stdin-closed [] (js/Promise. (fn [r] (.on js/process.stdin "end" r) (.resume js/process.stdin))))
+
+(defn ^:async run-child
+  "One child's part: :loop takes the lock iterations times (dying inside on the crash-at'th), :hold keeps it until
+  stdin closes, :die dies inside it."
+  [{:keys [mode sock marker iterations crash-at hold-ms]}]
+  (case mode
+    "loop" (do (loop [i 0]
+                 (when (< i iterations)
+                   (await (single/with-replace-lock
+                            sock (fn ^:async inside []
+                                   (when-not (await (inside-alone? marker hold-ms)) (println "LOCK:overlap"))
+                                   (when (= i crash-at) (.kill js/process js/process.pid "SIGKILL")))))
+                   (recur (inc i))))
+               (println "LOCK:done"))
+    "hold" (await (single/with-replace-lock
+                    sock (fn ^:async inside []
+                           (fs/mkdirSync marker)
+                           (println "LOCK:in")
+                           (await (stdin-closed))
+                           (fs/rmdirSync marker))))
+    "die" (await (single/with-replace-lock
+                   sock (fn [] (println "LOCK:in") (.kill js/process js/process.pid "SIGKILL"))))))
+
+(deftest lock-child
+  ;; Not a test: the body of the child processes below; does nothing without SINGLE_LOCK_CHILD.
+  (when-let [cfg (some-> (aget js/process.env child-env) js/JSON.parse (js->clj :keywordize-keys true))]
+    (async done (tu/run-async done (fn ^:async t [] (await (run-child cfg)))))))
+
+(defn child-command [] [(.-execPath js/process) (aget js/process.argv 1) "--test=engine.single-test/lock-child"])
+
+(defn start-child
+  "Start a child with cfg. {:proc :out (atom of stdout) :exit (promise of [code signal])}. With zombie? the child runs
+  under a shell that execs a long sleep, which never reaps it: once dead it stays a zombie until that sleep dies."
+  ([cfg] (start-child cfg false))
+  ([cfg zombie?]
+   (let [env (js/Object.assign #js {} js/process.env (js-obj child-env (js/JSON.stringify (clj->js cfg))))
+         [node & args] (child-command)
+         proc (if zombie?
+                (cp/spawn "sh" (clj->js (into ["-c" "\"$0\" \"$@\" & exec sleep 600" node] args)) #js {:env env})
+                (cp/spawn node (clj->js args) #js {:env env}))
+         out (atom "")]
+     (.on (.-stdout proc) "data" (fn [d] (swap! out str d)))
+     {:proc proc :out out
+      :exit (js/Promise. (fn [r] (.on proc "exit" (fn [code signal] (r [code signal])))))})))
+
+(defn ^:async seen
+  "Wait until child printed line (or exited)."
+  [{:keys [out exit]} line]
+  (let [exited (atom false)]
+    (.then exit #(reset! exited true))
+    (loop []
+      (when-not (or (str/includes? @out line) @exited)
+        (await (sleep 10))
+        (recur)))
+    (str/includes? @out line)))
+
+(deftest three-processes-dying-inside-the-lock-never-share-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [dir (tu/tmp-dir)
+              sock (path/join dir "body.sock")
+              marker (path/join (tu/tmp-dir) "inside")
+              iterations 15]
+          (doseq [round (range 4)]
+            (let [kids (mapv #(start-child {:mode "loop" :sock sock :marker marker :iterations iterations
+                                            :hold-ms 2 :crash-at (if (zero? %) (rand-int iterations) -1)})
+                             (range 3))
+                  exits (await (js/Promise.all (clj->js (map :exit kids))))]
+              (is (= [[nil "SIGKILL"] [0 nil] [0 nil]] (js->clj exits)) (str "round " round))
+              (doseq [k kids] (is (not (str/includes? @(:out k) "LOCK:overlap")) (str "round " round)))
+              (doseq [k (rest kids)] (is (str/includes? @(:out k) "LOCK:done")))))
+          (await (single/with-replace-lock sock (fn [] nil)))
+          (is (= [] (js->clj (fs/readdirSync dir))) "nothing is left beside the socket"))))))
+
+(deftest a-holder-that-died-but-is-not-yet-reaped-frees-the-lock
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [sock (path/join (tu/tmp-dir) "body.sock")
+              zombie (start-child {:mode "die" :sock sock} true)]
+          (is (await (seen zombie "LOCK:in")))
+          (let [attempt (.then (single/with-replace-lock sock (fn [] nil)) (fn [_] :entered))
+                result (await (js/Promise.race #js [attempt (.then (sleep 20000) (fn [_] :still-waiting))]))]
+            (is (= :entered result) "the zombie's parent is still alive, so the zombie still exists")
+            (.kill (:proc zombie) "SIGKILL")
+            (await attempt)))))))
+
+(deftest a-live-holder-in-another-process-keeps-the-lock-however-long-it-holds
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [sock (path/join (tu/tmp-dir) "body.sock")
+              marker (path/join (tu/tmp-dir) "inside")
+              holder (start-child {:mode "hold" :sock sock :marker marker})]
+          (is (await (seen holder "LOCK:in")))
+          (let [shared (atom nil)
+                attempt (single/with-replace-lock sock (fn [] (reset! shared (fs/existsSync marker))))]
+            (await (sleep 300))
+            (.end (.-stdin (:proc holder)))
+            (await attempt)
+            (is (= false @shared) "entered only after the holder left")
+            (is (= [0 nil] (js->clj (await (:exit holder)))))))))))
+
+(deftest a-symlinked-route-to-the-body-takes-the-same-lock
+  (let [dir (tu/tmp-dir)
+        link (path/join (tu/tmp-dir) "worlds")]
+    (fs/symlinkSync dir link)
+    (is (= (single/lock-name (path/join dir "body.sock")) (single/lock-name (path/join link "body.sock"))))
+    (is (not= (single/lock-name (path/join dir "body.sock")) (single/lock-name (path/join (tu/tmp-dir) "body.sock"))))))
