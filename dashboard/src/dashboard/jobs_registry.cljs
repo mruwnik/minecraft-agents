@@ -1,4 +1,4 @@
-(ns dashboard.jobs-registry
+(ns ^:dev/always dashboard.jobs-registry
   "The engine's jobs and triggers, fixed at build time (see jobs_registry.clj), and the usage join (which bodies
   run a job)."
   (:require-macros [dashboard.jobs-registry :refer [compile-entries]]))
