@@ -86,6 +86,13 @@
     (is (= [1 2] (mapv :fruitless (take 2 (rest entries)))) "counting before the threshold")
     (is (= [nil nil nil 1000 2000 4000 8000 16000 30000 30000] (mapv :delay-ms entries)))))
 
+(deftest a-fruitless-round-long-after-the-backoff-ended-starts-the-count-again
+  (let [cfg (backoff/config)
+        e (backoff/fruitless {:fruitless 5 :delay-ms 8000 :until 8000 :since 0} cfg 8000 blocked)
+        later (backoff/fruitless {:fruitless 5 :delay-ms 8000 :until 8000 :since 0} cfg (+ 8000 30000) blocked)]
+    (is (= 16000 (:delay-ms e)) "straight after the wait the delay doubles")
+    (is (= [1 nil nil] ((juxt :fruitless :delay-ms :since) later)) "a quiet max-s later it starts over")))
+
 (deftest backing-off-lasts-until-the-delay-has-passed
   (let [e (backoff/fruitless {:fruitless 2} (backoff/config) 5000 blocked)]
     (are [t backing?] (= backing? (backoff/backing-off? e t))

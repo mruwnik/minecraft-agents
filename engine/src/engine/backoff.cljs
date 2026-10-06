@@ -88,11 +88,18 @@
 
 ;; ------------------------------------------------------------------ the entry
 
+(defn stale?
+  "Whether the backoff of entry ended :max-s or more ago: it is over and must not count against a new failure."
+  [entry max-s now]
+  (boolean (some-> (:until entry) (+ (* 1000 max-s)) (<= now))))
+
 (defn fruitless
   "The backoff entry (nil: none yet) after one more fruitless round at now: the
-  count, and once it reaches :after the wait, doubled each time up to :max-s."
+  count, and once it reaches :after the wait, doubled each time up to :max-s. An entry whose backoff ended
+  :max-s ago starts over."
   [entry {:keys [after first-s max-s]} now last]
-  (let [n (inc (:fruitless entry 0))
+  (let [entry (when-not (stale? entry max-s now) entry)
+        n (inc (:fruitless entry 0))
         e (assoc entry :fruitless n :last last)]
     (if (< n after)
       e

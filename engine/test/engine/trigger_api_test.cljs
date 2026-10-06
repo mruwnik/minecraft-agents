@@ -265,6 +265,21 @@
           (api/tick! eng)
           (is (= [] (requests)) "resolved when the entry goes"))))))
 
+(deftest the-backoff-request-resolves-when-the-delay-ends-and-the-trigger-no-longer-holds
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng] :as r} (setup)
+              requests #(filterv (fn [[_ q]] (= :reflex-backoff (:reason q))) (core/outstanding eng))]
+          (api/request! eng (assoc adhoc :job '(bump) :persistence :cooldown :cooldown-s 0))
+          (swap! flags conj :low)
+          (dotimes [_ 3] (await (tick-at r t0)))
+          (await (tick-at r (+ t0 500)))
+          (is (= 1 (count (requests))))
+          (swap! flags disj :low)
+          (await (tick-at r (+ t0 60000)))
+          (is (= [] (requests)) "the backoff is over; the request does not outlive it"))))))
+
 (deftest the-backoff-request-resolves-when-the-job-recovers
   (async done
     (tu/run-async done
@@ -323,7 +338,9 @@
     (let [{again :eng seen :seen} (setup {:dir (:dir eng) :compile refuse-all})]
       (is (= [:high-3] (register-ids again)))
       (is (= [:bread-low] (mapv :reflex (of-kind seen :system :dropped))))
-      (is (re-find #"no longer known" (:text (first (of-kind seen :system :dropped))))))))
+      (is (re-find #"no longer known" (:text (first (of-kind seen :system :dropped)))))
+      (is (= ["reflex:bread-low"] (mapv (comp :job-id val) (core/outstanding again)))
+          "an agent's entry that vanished is asked about, not just warned"))))
 
 (deftest a-scenario-loads-its-register-through-put
   (async done

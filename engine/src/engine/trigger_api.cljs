@@ -415,6 +415,11 @@
 
 ;; ------------------------------------------------------------------ boot and every tick
 
+(defn agent-added?
+  "Whether entry e was put over the route (not by the scenario)."
+  [e]
+  (and (some? (:by e)) (not= :scenario (:by e))))
+
 (defn drop-entry! [eng e message]
   (let [id (:id e)]
     (swap! (:state eng) (fn [s] (-> s
@@ -422,7 +427,12 @@
                                     (update :changes dissoc id)
                                     (update :reflex-state dissoc id))))
     (core/emit! eng {:source :system :kind :dropped :level :warn :reflex id :error message
-                     :text (str "reflex " id " dropped on restore: condition " (pr-str (:when e)) ": " message)})))
+                     :text (str "reflex " id " dropped on restore: condition " (pr-str (:when e)) ": " message)})
+    (when (agent-added? e)
+      (core/request-attention! eng {:job-id (attention-job id) :reason :reflex-dropped :kind :reflex-dropped
+                                    :context {:reflex-id id}
+                                    :data {:reflex id :by (:by e) :error message}
+                                    :message (str "trigger " (name id) " was dropped on restore: " message)}))))
 
 (defn restore-conditions!
   "After a restore: compile each ad hoc entry's condition again (the condition
@@ -445,11 +455,6 @@
                        :text (str (name (:id e)) " expired")})
       (remove! eng (:id e)))))
 
-(defn agent-added?
-  "Whether entry e was put over the route (not by the scenario)."
-  [e]
-  (and (some? (:by e)) (not= :scenario (:by e))))
-
 (defn watch-backoffs!
   "One required request per agent-added entry that is backing off (its job keeps
   failing while its trigger holds); resolved when the backoff ends or the entry goes."
@@ -458,7 +463,7 @@
         open (set (keep (fn [[_ q]] (when (= :reflex-backoff (:reason q)) (:job-id q))) (:attention s)))
         backing (into {} (keep (fn [e]
                                  (let [bo (core/backoff-entry eng (:id e))]
-                                   (when (and (agent-added? e) (:since bo))
+                                   (when (and (agent-added? e) (backoff/backing-off? bo (core/now eng)))
                                      [(attention-job (:id e)) [e bo]]))))
                       (:register s))]
     (doseq [[job-id [e bo]] backing
