@@ -1,0 +1,31 @@
+;; Card 2d8e72f2: a pit whose dug block is not placeable (coal_ore drops coal) is roofed with a carried log; with no log
+;; it stops "nothing to roof the pit with". Coal pad y -6..-1 under the body (the plot floor is over void).
+;; Night: --allow-time --time-log <shared log>.
+{:defaults
+ {:tags [:night :survival :dig-in]
+  :time :night
+  :blocks [[:fill [8 -6 8] [24 -1 24] "coal_ore"]
+           [:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 4] "torch"] [:set [28 0 28] "torch"]
+           [:set [16 0 4] "torch"] [:set [16 0 28] "torch"] [:set [4 0 16] "torch"] [:set [28 0 16] "torch"]]
+  :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}}
+ :cases
+ [{:name "carried-logs-roof-the-pit"
+   :body {:inventory [["iron_pickaxe" 1] ["oak_log" 5]]}
+   :act [[:job (jobs.survival.dig-in {})]]
+   :expect [{:event {:source :job :kind :dig-in.sealed} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :dig_in_failed} :for-s 60 :until {:source :job :kind :dig-in.sealed}}]
+   :after [[:block [16 -1 16] "oak_log"] [:item "oak_log" 4]]
+   :limit-s 70}
+  {:name "night-trigger-roofs-with-carried-logs"
+   :register [{:trigger :night}]
+   :body {:inventory [["iron_pickaxe" 1] ["oak_log" 5]]}
+   :expect [{:event {:source :job :kind :dig-in.sealed} :within-s 60}
+            {:event {:source :job :kind :holding :data {:reason :sheltered}} :within-s 70}]
+   :after [[:block [16 -1 16] "oak_log"]]
+   :limit-s 80}
+  {:name "no-logs-nothing-to-roof"
+   :body {:inventory [["iron_pickaxe" 1]]}
+   :act [[:job (jobs.survival.dig-in {})]]
+   :expect [{:event {:source :job :kind :dig_in_failed :message [:contains "nothing to roof the pit with"]} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :dig-in.sealed} :for-s 5}]
+   :limit-s 50}]}
