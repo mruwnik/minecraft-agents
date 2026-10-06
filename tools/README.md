@@ -68,6 +68,7 @@ whose repo path is this checkout, override with `CARD_REPO`). `CARD_AUTHOR` sets
 - A targeted run (`tools/test-run.mjs`) uses a private copy of the bundle, needs `900 + 60 x namespaces` MB, and is killed (exit 124, `TIMEOUT ... last finished test`) after `60 s + 5 x` its prior timing (180-1200 s; `MC_TEST_TIMEOUT_S` overrides). Shards are timed out the same way.
 - `tools/test-engine --golden` runs the opt-in planner pins (`*-golden` namespaces, not in `--full`).
 - `tools/test-engine --changed [<git-rev>]` runs only the cljs test namespaces that (transitively) require, or name by quoted symbol, the changed files, plus own/changed test files and the JS tests covering changed JS; changed = working tree + staged + untracked vs HEAD (or vs `<git-rev>`). Prints the list and count first. Build config changes (`shadow-cljs.edn`, `package.json`) run the full suite.
+- `tools/test-bisect <ns>... [--good <rev>] [--bad <rev>]` finds the first commit where the namespaces fail (bad = HEAD, good = HEAD~20): `git bisect run` in a throwaway worktree, each step compiles and runs that commit's test-engine; compile failures and missing namespaces are skipped; prints the first bad commit, its failing tests and the step count; removes the worktree on exit, error and kill.
 - Never hold the lock while testing; a waiting compile is not stuck, a `flock` wrapper is.
 
 ### res-slot

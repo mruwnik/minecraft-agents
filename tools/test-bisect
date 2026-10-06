@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# tools/test-bisect <ns>... [--good <rev>] [--bad <rev>]
+# Finds the first commit where the engine test namespaces fail: one detached worktree (tools/integration-worktree.sh), `git bisect run` there,
+# each step compiles and runs tools/test-engine <ns>... of THAT commit (res-slot compile and tests slots, as test-engine does).
+# Verdicts per step: pass = good, test failure = bad, compile failure / namespace missing / timeout = skipped (exit 125).
+# Defaults: bad = HEAD, good = HEAD~20. Prints the first bad commit, its failing tests and the step count. TEST_EVENTS=1: @@test phase lines per step.
+# The worktree (and its shadow servers) is removed on exit, error, INT and TERM.
+# Why not JS: a thin shell wrapper around git bisect, like tools/test-engine.
+set -u
+repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+self="$repo/tools/test-bisect"
+wt_sh="${TEST_BISECT_WORKTREE_SH:-$repo/tools/integration-worktree.sh}"
+event() { [ "${TEST_EVENTS:-}" = 1 ] && printf '@@test {"event":"phase","name":"%s"}\n' "$1"; return 0; }
+
+# One bisect step, run inside the worktree: BISECT_WORK holds the step counter and per-commit logs.
+if [ "${1:-}" = --step ]; then
+  shift
+  wt="$(git rev-parse --show-toplevel)"; rev="$(git rev-parse --short HEAD)"
+  n=$(( $(cat "$BISECT_WORK/steps" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$BISECT_WORK/steps"
+  log="$BISECT_WORK/log-$rev"
+  event "step $n: $rev"
+  "$wt/tools/compile" engine test > "$log" 2>&1 || { echo "step $n $rev: compile failed, skipped"; exit 125; }
+  "$wt/tools/test-engine" "$@" >> "$log" 2>&1; rc=$?
+  case $rc in
+    0) echo "step $n $rev: good"; exit 0;;
+    2|124) echo "step $n $rev: skipped (exit $rc: namespace missing or timeout)"; exit 125;;
+    *) echo "step $n $rev: bad"; exit 1;;
+  esac
+fi
+
+nss=(); good=""; bad=HEAD
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --good) good="${2:-}"; shift 2;;
+    --bad) bad="${2:-}"; shift 2;;
+    -*) echo "usage: tools/test-bisect <ns>... [--good <rev>] [--bad <rev>]" >&2; exit 2;;
+    *) nss+=("$1"); shift;;
+  esac
+done
+[ ${#nss[@]} -ge 1 ] || { echo "usage: tools/test-bisect <ns>... [--good <rev>] [--bad <rev>]" >&2; exit 2; }
+[ -n "$good" ] || good="$bad~20"
+bad_sha="$(git -C "$repo" rev-parse --verify -q "$bad^{commit}")" || { echo "test-bisect: unknown rev $bad" >&2; exit 2; }
+good_sha="$(git -C "$repo" rev-parse --verify -q "$good^{commit}")" || { echo "test-bisect: unknown rev $good" >&2; exit 2; }
+
+work="$(mktemp -d "${TMPDIR:-/tmp}/mc-bisect-XXXXXX")"
+wt="$work/wt"; child=""
+cleanup() {
+  [ -n "$child" ] && kill "$child" 2>/dev/null
+  [ -d "$wt" ] && "$wt_sh" --remove "$wt" >/dev/null 2>&1
+  git -C "$repo" worktree prune
+  rm -rf "$work"
+}
+trap cleanup EXIT
+trap 'exit 130' INT TERM
+
+event "worktree"
+"$wt_sh" "$bad_sha" "$wt" >"$work/setup.log" 2>&1 || { cat "$work/setup.log" >&2; echo "test-bisect: worktree setup failed" >&2; exit 2; }
+cd "$wt" || exit 2
+git bisect start "$bad_sha" "$good_sha" >/dev/null || exit 2
+echo "test-bisect: ${nss[*]} between $(git rev-parse --short "$good_sha") (good) and $(git rev-parse --short "$bad_sha") (bad)"
+BISECT_WORK="$work" git bisect run "$self" --step "${nss[@]}" > "$work/run.log" 2>&1 &
+child=$!
+tail -f "$work/run.log" --pid=$child 2>/dev/null | grep --line-buffered '^step ' &
+tailpid=$!
+wait $child; child=""; wait $tailpid 2>/dev/null
+
+first="$(git bisect log | sed -n 's/^# first .\{0,1\}bad.\{0,1\} commit: \[\([0-9a-f]*\)\].*/\1/p' | tail -n1)"
+if [ -z "$first" ]; then
+  cp "$work/run.log" "${BISECT_DEBUG:-/dev/null}"; echo "test-bisect: no first bad commit found (is the good rev really good, and the bad rev bad?)"; tail -n 8 "$work/run.log"; exit 1
+fi
+short="$(git rev-parse --short "$first")"
+[ -f "$work/log-$short" ] || { git checkout -q --detach "$first" && BISECT_WORK="$work" "$self" --step "${nss[@]}" >/dev/null; }
+echo "FIRST BAD: $(git log -1 --format='%h %s' "$first")"
+echo "steps: $(cat "$work/steps" 2>/dev/null || echo 0)"
+echo "failing tests at $short:"
+grep -E '^(FAIL|ERROR) in' "$work/log-$short" | sort -u | sed 's/^/  /'
+exit 0
