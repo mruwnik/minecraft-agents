@@ -20,7 +20,7 @@
   Ends when the head is clear and the body stands on land (solid ground under the feet) out of the water.
   A body that cannot get out stays afloat (it holds jump for a few seconds each round) instead of ending,
   because a body with no job sinks and the trigger would fire again for ever. One :afloat warning says so.
-  Gives up with a :no_air, :no_way_out or :no_shore warning after three failed rounds.
+  Gives up with a :no_air or :no_way_out warning after three failed rounds, with :no_shore once every shore in reach failed.
   The suffocating trigger then fires it again.
   Memory: writes one :breathe entry per job.")
 
@@ -252,15 +252,14 @@
           :else (do (afloat! c (or (:reason result) (:status result))) :continue))))))
 
 (defn ^:async give-up-shore!
-  "A swim toward a shore failed (or every shore in reach failed): count it; after the last try warn :no_shore and hold afloat."
+  "Every shore in reach failed (each failed swim excluded its direction): warn :no_shore once and hold afloat."
   [c]
-  (let [outcome (u/fail! c :no_shore "could not reach a shore")]
-    (if (= :done outcome)
-      (do (afloat! c nil) (await (hold-afloat! c)))
-      outcome)))
+  (ctx/emit! c :no_shore :warn {:tries (count (:failed-shores (ctx/mem c))) :text "could not reach a shore"})
+  (afloat! c nil)
+  (await (hold-afloat! c)))
 
 (defn ^:async head-for-land!
-  "Surfaced and still in water. Afloat already: hold. Else swim toward the nearest land cell within :shore-radius, then the next nearest in another direction after a failed swim (the
+  "Surfaced and still in water. Afloat already: hold. Else swim toward the nearest land cell within :shore-radius, then the next nearest in another direction after each failed swim, until every shore failed (the
   swim primitive with toward climbs out onto a rim the pathfinder cannot path to); with none, walk to land within
   :far-radius; a body that cannot get out stays afloat. :done when out of the water."
   [c]
@@ -277,7 +276,7 @@
         (if (or (= "landed" (status r)) (not (.-inWater (.self p))))
           :done
           (do (ctx/update-mem! c update :failed-shores (fnil conj []) target)
-              (await (give-up-shore! c))))))))
+              :continue))))))
 
 (defn note!
   "Write the :breathe entry once per job instance."

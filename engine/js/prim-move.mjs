@@ -115,7 +115,7 @@ export function createMove (env) {
         if (toward) {
           // climb out toward the target: the pathfinder has no move from floating feet onto a rim just above
           const there = center(cell(toward))
-          const arrived = () => standing() || (dry() && dist(here(), there) <= 1.5)
+          const arrived = standing
           if (arrived()) return result('landed')
           await env.bot.lookAt(vec(there), true)
           ctx.alive()

@@ -423,7 +423,28 @@
           (is (= {:x 3 :y 65 :z 0} (core/self-pos p)) "the east ledge is reached after the west swim timed out")
           (is (empty? (filter #(= :no_shore (:kind %)) @seen))))))))
 
-(deftest surfaced-with-a-failing-shore-swim-warns-no-shore-after-three-rounds-and-stays-afloat
+;; a pond with a ledge in every direction: the swims west, north and south time out, then the east ledge is tried
+(deftest every-shore-direction-is-tried-before-no-shore
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4}
+                                           :blocks (merge pool {"-2,64,0" "stone" "-2,63,0" "stone"
+                                                                "0,64,-2" "stone" "0,63,-2" "stone"
+                                                                "0,64,2" "stone" "0,63,2" "stone"
+                                                                "3,64,0" "stone" "3,63,0" "stone"
+                                                                "2,64,0" "water" "2,65,0" "water"})})]
+          (.override (.-world p) "swim"
+                     (fn ^:async f [_ args impl]
+                       (if (and (.-toward args) (< (.-x (.-toward args)) 3))
+                         #js {:status "timeout"}
+                         (await (impl _ args)))))
+          (core/submit! eng (list breathe defaults) {})
+          (dotimes [_ 7] (await (core/tick! eng)))
+          (is (= {:x 3 :y 65 :z 0} (core/self-pos p)) "reached the east ledge after three failed shores")
+          (is (empty? (filter #(= :no_shore (:kind %)) @seen))))))))
+
+(deftest surfaced-with-a-failing-shore-swim-warns-no-shore-once-its-direction-is-spent-and-stays-afloat
   (async done
     (tu/run-async done
       (fn ^:async t []

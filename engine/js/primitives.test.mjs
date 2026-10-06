@@ -1632,10 +1632,10 @@ test('swim toward: looks at the target, holds jump and forward until the feet st
   assert.deepEqual(controls(bot), [['jump', true], ['forward', true], ['jump', false], ['forward', false]])
 })
 
-test('swim toward: within a block of the target counts as landed', async () => {
+test('swim toward: clear of the water within a block of the target but with no footing is not landed', async () => {
   const { bot, p } = rig({ blocks: pool() })
   setTimeout(() => { bot.entity.position = new Vec3(3.2, 65, 0.3) }, 5)
-  assert.equal((await p.swim('t1', { ms: 3000, toward: rim })).status, 'landed')
+  assert.equal((await p.swim('t1', { ms: 3000, toward: rim })).status, 'timeout')
 })
 
 test('swim toward: already standing on solid ground lands at once without pressing anything', async () => {
