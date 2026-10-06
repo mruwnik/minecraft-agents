@@ -188,9 +188,9 @@ Add and put both create or replace a custom entry; built-in entries cannot be re
      (:backing-off e) (conj [:backing-off true]))))
 
 (defn compact-list [{:keys [offset limit]} value]
-  (let [all (vec (:items value))
+  (let [ranks (into {} (map-indexed (fn [index id] [id (inc index)])) (:order value))
+        all (vec (sort-by #(get ranks (:id %) js/Infinity) (:items value)))
         selected (vec (take limit (drop offset all)))
-        ranks (into {} (map-indexed (fn [index id] [id (inc index)])) (:order value))
         next-offset (+ offset (count selected))]
     (ordered-map
      (cond-> [[:total (or (:total value) (count all))]

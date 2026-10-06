@@ -62,7 +62,7 @@
     (is (re-find #":when \(and \(< \(inventory \"bread\"\) 8\)" (data/write-edn paged)))
     (is (not (contains? paged :generation-id)))
     (is (= 1 (:priority item))))
-  (is (= [2 1] (mapv :priority (:items (triggers/compact (request "list") (assoc listing :order [:second :first]))))))
+  (is (= [1 2] (mapv :priority (:items (triggers/compact (request "list") (assoc listing :order [:second :first]))))))
   (is (not (contains? (second (:items (triggers/compact (request "list") (assoc listing :order [:first])))) :priority)))
   (let [shown (triggers/compact (request "show" "first") (assoc listing :explain {:terms (vec (repeat 100 {:form true :value true}))}))
         timed (triggers/compact (request "show" "first")
@@ -74,6 +74,14 @@
   (is (= {:ok true :id :first :op :mute :muted true}
          (triggers/compact (request "mute" "first")
                            {:ok true :id :first :op :mute :trigger {:muted {:until 123} :job (vec (repeat 100 "large"))}}))))
+
+(deftest list-is-in-priority-order-with-unranked-last
+  (let [ids #(mapv :id (:items (triggers/compact (request "list") %)))]
+    (is (= [:second :first] (ids (assoc listing :order [:second :first]))))
+    (is (= [:first :second] (ids (assoc listing :order [:first]))))
+    (is (= [:second :first] (ids (assoc listing :order [:second]))))
+    (is (= [:second] (ids (assoc listing :order [:second] :items [{:id :second}])))))
+  (is (= :first (:id (first (:items (triggers/compact (request "list" "--limit" "1") (assoc listing :order [:first :second]))))))))
 
 (deftest structured-compiler-errors-remain-data-but-bounded
   (let [r (triggers/compact (request "add" "x" "--when" "(unknown)" "--job" "(jobs.movement.look-around)")
