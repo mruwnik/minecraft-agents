@@ -81,6 +81,7 @@ test('all tool routing preserves arguments and binds shared tools without a body
     const expected = [...(bodyTools.has(command) ? ['B'] : []), '--world', 'w', '--worlds', f.worlds]
     if (['plans', 'blueprints'].includes(command)) expected.push('--repo', path.resolve(repo))
     if (['map', 'world-changes'].includes(command)) expected.push('--repo-root', path.resolve(repo))
+    if (command === 'world-changes') expected.push('--observer', 'B')
     if (command === 'snapshot') expected.push('--workspace', f.workspace)
     if (['drive', 'world'].includes(command)) expected.push('--who', 'B')
     assert.deepEqual(tools.workspaceRoute(f.context, command, input), [...expected, ...input])
