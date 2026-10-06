@@ -121,7 +121,7 @@
         (is (= 1 (count @looks)))))))
 
 (deftest a-turn-to-a-heard-mob-emits-watch-turned-once
-  (check (fn ^:async t [] (let [{:keys [c clock events]}
+  (check (fn ^:async t [] (let [{:keys [c clock events looks]}
             (rig {:entities [(mob 1 "zombie" 6 -3)] :blocks (tu/box 5 64 -6 5 65 -1 "stone")})]
         (await (watch/watch! c {}))
         (later! clock 1000)
@@ -129,8 +129,11 @@
         (let [ev (filterv #(= :watch.turned (:kind %)) @events)]
           (is (= 1 (count ev)))
           (is (= "zombie" (:name (first ev))))
-          (is (some? (:pos (first ev))))
-          (is (number? (:distance (first ev)))))))))
+          (is (not (contains? (first ev) :pos)) "heard only: no exact place")
+          (is (not (contains? (first ev) :distance)))
+          (is (= :north-east (:direction (first ev))))
+          (is (= :near (:band (first ev))))
+          (is (not= {:x 6.5 :y 64 :z -2.5} (:pos (first @looks))) "the body faces the direction, not the mob"))))))
 
 (deftest a-long-dig-is-preceded-by-a-scan
   (check (fn ^:async t [] (let [{:keys [c looks]} (rig {:dig-ms 3000 :light [0 0]})]

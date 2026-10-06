@@ -19,6 +19,7 @@
   Only headings with a clear line at feet and eye height are looked at.
   It never turns back; the job's next act aims itself. A body with no perception does nothing."
   (:require [engine.ctx :as ctx]
+            [engine.entity-observations :as obs]
             [engine.perception :as perception]
             [jobs.lib.look :as look]))
 
@@ -126,6 +127,22 @@
   [c before]
   (filterv #(not (before (.-id ^js %))) (known-mobs c)))
 
+;; A heard mob gives a compass direction and a band, never its place: a player hears roughly where.
+
+(defn mob-pos [^js m] (js->clj (.-pos m) :keywordize-keys true))
+
+(defn rough
+  "{:direction :band} of a heard mob from the eye."
+  [c ^js m]
+  (let [^js e (eye-of c)]
+    (obs/rough-hearing {:x (.-x e) :y (.-y e) :z (.-z e)} (mob-pos m))))
+
+(defn direction-point
+  "A point 4 blocks from the eye toward a compass direction, at eye height."
+  [^js eye direction]
+  (let [a (* (/ js/Math.PI 4) (.indexOf obs/directions direction))]
+    {:x (+ (.-x eye) (* 4 (js/Math.sin a))) :y (.-y eye) :z (- (.-z eye) (* 4 (js/Math.cos a)))}))
+
 (defn ^:async scan!
   "Look along each open heading with a mob sample after each. Returns :saw (and emits :watch.saw) when a new mob became known, else :scanned."
   [c open]
@@ -136,9 +153,11 @@
       (if-let [h (first hs)]
         (do (await (ctx/act c :look (clj->js {:pos (look-point (eye-of c) h)})))
             (if-let [^js m (first (sample! c before))]
-              (do (ctx/emit! c :watch.saw :info {:name (.-name m) :pos (js->clj (.-pos m) :keywordize-keys true)
-                                                 :distance (.-distance m) :how (if (.-heard m) :heard :seen)
-                                                 :after-ms (- (ctx/now c) started)})
+              (do (ctx/emit! c :watch.saw :info
+                             (merge {:name (.-name m) :after-ms (- (ctx/now c) started)}
+                                    (if (.-seen m)
+                                      {:pos (mob-pos m) :distance (.-distance m) :how :seen}
+                                      (assoc (rough c m) :how :heard))))
                   :saw)
               (recur (rest hs))))
         :scanned))))
@@ -149,9 +168,9 @@
   (let [before (set (map #(.-id ^js %) (known-mobs c)))]
     (ctx/remember! c :watch-turned {:id (.-id m)} turn-policy)
     (ctx/remember! c :watched {:open (get-in (last-scan c) [:data :open] 0)} memory-policy)
-    (ctx/emit! c :watch.turned :info {:name (.-name m) :pos (js->clj (.-pos m) :keywordize-keys true)
-                                      :distance (.-distance m)})
-    (await (ctx/act c :look (clj->js {:pos (js->clj (.-pos m) :keywordize-keys true)})))
+    (let [{:keys [direction] :as heard} (rough c m)]
+      (ctx/emit! c :watch.turned :info (assoc heard :name (.-name m)))
+      (await (ctx/act c :look (clj->js {:pos (direction-point (eye-of c) direction)}))))
     (sample! c before)
     :turned))
 
