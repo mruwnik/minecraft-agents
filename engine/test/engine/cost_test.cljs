@@ -48,3 +48,9 @@
     (is (= (fire nil) (fire diamond-8)) "nor toughness")
     (is (< (fire (enchanted iron-set "fire_protection")) (fire nil)) "fire protection still counts")
     (is (< (cost/after-armour (cost/armour-stats iron-set) :melee 10 1) (cost/after-armour (cost/armour-stats nil) :melee 10 1)))))
+
+(deftest an-enchanted-worn-chestplate-lowers-the-danger-rate
+  (let [body {:health 20 :weapon "diamond_sword"}
+        rate #(cost/danger-rate (assoc body :equipment {:torso %}) "zombie")
+        plain {:name "iron_chestplate"}]
+    (is (< (rate (assoc plain :enchants [{:name "protection" :level 4}])) (rate plain)))))

@@ -91,6 +91,7 @@
 (def inventory-stack-limit 46)
 (def armour-slots #{:head :torso :legs :feet})
 (def equipment-slots [:head :torso :legs :feet :offHand :mainHand])
+(def enchant-limit 8)
 
 (defn short-text [x n]
   (when (string? x) (subs x 0 (min n (count x)))))
@@ -101,9 +102,14 @@
     (cond-> {:name (short-text (:name stack) 80) :count (:count stack)}
       (and (integer? (:slot stack)) (<= 0 (:slot stack) 45)) (assoc :slot (:slot stack)))))
 
+(defn enchant-entry [e]
+  (when (and (map? e) (string? (:name e)) (integer? (:level e)))
+    {:name (short-text (:name e) 40) :level (:level e)}))
+
 (defn equipment-item [item]
   (when (and (map? item) (string? (:name item)))
     (cond-> {:name (short-text (:name item) 80)}
+      (seq (:enchants item)) (assoc :enchants (->> (:enchants item) (keep enchant-entry) (take enchant-limit) vec))
       (and (integer? (:count item)) (pos? (:count item))) (assoc :count (:count item))
       (and (number? (:durability item)) (not (neg? (:durability item)))) (assoc :durability (:durability item)))))
 

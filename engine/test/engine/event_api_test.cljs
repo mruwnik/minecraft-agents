@@ -361,3 +361,13 @@
                         (is (string? (:message (first logged))))
                         (is (string? (get-in (first logged) [:data :stack]))))))
              (.finally (fn [] ((:close server))))))))))
+
+(deftest inventory-view-keeps-a-short-list-of-enchants-on-worn-gear
+  (let [enchants (mapv (fn [i] {:name (str "enchant-" i) :level i}) (range 1 15))
+        eng {:primitives #js {:self (fn [] #js {:inventory #js []
+                                                :equipment (clj->js {:torso {:name "iron_chestplate" :count 1
+                                                                             :enchants (conj enchants {:name 5 :level 1})}})})
+                              :isOffline (fn [] false)}}
+        shown (get-in (event-api/inventory-view eng) [:equipment :torso :enchants])]
+    (is (= {:name "enchant-1" :level 1} (first shown)))
+    (is (= 8 (count shown)) "capped")))
