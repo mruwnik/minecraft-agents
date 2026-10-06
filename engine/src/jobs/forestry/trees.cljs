@@ -7,7 +7,6 @@
             [jobs.lib.util :as u]))
 
 (def default-radius 16)
-(def logs-per-round 2)
 (def leaf-reach 3.5)
 (def max-partials
   "Consecutive partial walks toward one tree before it counts as unreachable."
@@ -53,11 +52,6 @@
                    :species (species-of (:name base))}))))
           (distinct (map (fn [{:keys [pos]}] [(:x pos) (:z pos)]) logs)))))
 
-(defn find-tree
-  "The nearest tree of find-trees, or nil."
-  [logs leaves excluded]
-  (first (find-trees logs leaves excluded)))
-
 (defn trees-near
   "The trees of species (any when nil) within radius, nearest first (find-trees)."
   ([p radius species] (trees-near p radius species #{}))
@@ -90,7 +84,7 @@
          vec)))
 
 (defn tree-at
-  "The tree whose base log is at pos, as find-tree gives it, or nil when pos holds no seen log. Leaves are not asked for."
+  "The tree whose base log is at pos, as find-trees gives it, or nil when pos holds no seen log. Leaves are not asked for."
   [p pos]
   (let [n (seen-name p pos)]
     (when (some-> n log-name?)
@@ -145,14 +139,20 @@
     (when-let [d (pick-debt debts (:species args) (:near args) (:within args))]
       {:pos (:pos d) :species (or (:species args) (:species d)) :debt d})))
 
+(defn sapling-of [species]
+  (case species
+    "mangrove" "mangrove_propagule"
+    ("crimson" "warped") (str species "_fungus")
+    (str species "_sapling")))
+
 (defn sapling-for
   "The name of a sapling carried, of species when given."
   [items species]
-  (let [want (when species (str species "_sapling"))]
+  (let [want (when species (sapling-of species))]
     (->> items
          (map :name)
-         (filter #(if want (= want %) (str/ends-with? % "_sapling")))
+         (filter #(if want (= want %) (or (str/ends-with? % "_sapling") (= "mangrove_propagule" %))))
          first)))
 
 (defn drop-filter [species]
-  (when species [(str species "_log") (str species "_sapling") "stick" "apple"]))
+  (when species [(str species "_log") (sapling-of species) "stick" "apple"]))

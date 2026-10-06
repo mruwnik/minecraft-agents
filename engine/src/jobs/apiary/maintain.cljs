@@ -76,11 +76,11 @@
     (filterv #(apiary/in-area? a (u/pos-of (.-pos %))) (animals/herd (:primitives c) "bee" (reach c center)))))
 
 (defn unsafe-fires
-  "The fires smoking a ripe hive that still lack what guard gives: a sink or a carpet."
+  "The open fires smoking a ripe hive: harvest declines only those (a raised but carpeted fire is worked)."
   [block-at ripe-hives]
   (->> ripe-hives
        (keep #(apiary/smoke-source block-at %))
-       (filter #(seq (apiary/needs block-at %)))
+       (filter #(apiary/open-fire? block-at %))
        distinct
        vec))
 

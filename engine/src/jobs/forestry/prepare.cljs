@@ -113,7 +113,7 @@
   (let [n (u/block-name p pos)]
     (cond
       (nil? n) {:state :unloaded}
-      (= n (maintain/sapling-of species)) {:state :growing}
+      (= n (forestry/sapling-of species)) {:state :growing}
       (= n (str species "_log")) {:state :grown}
       (or (plant-like? n) (forestry/log-name? n) (tidy/keep-why n)) {:state :wrong :found n})))
 
@@ -229,7 +229,7 @@
   "assess before the tool rule."
   [p pos species {:keys [carried over] :as world}]
   (let [n (u/block-name p pos)
-        sapling (maintain/sapling-of species)]
+        sapling (forestry/sapling-of species)]
     (or (when-not (headroom-of species over) {:state :unsupported})
         (when (= "water" n) (wet-state p pos species carried))
         (own-cell p pos species)
@@ -334,7 +334,7 @@
     (doseq [[species cells] (group-by :species (filter #(= :short (:state %)) (vals states)))]
       (ctx/warn-once! c [:short species (count cells)] :prepare.short
                       {:species species :missing (count cells)
-                       :text (str "prepare has no " (maintain/sapling-of species) " for " (count cells) " cells")}))))
+                       :text (str "prepare has no " (forestry/sapling-of species) " for " (count cells) " cells")}))))
 
 ;; ------------------------------------------------------------------ check
 

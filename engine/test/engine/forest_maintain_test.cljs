@@ -242,11 +242,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[blocks found] [[{"3,64,0" "oak_sapling"} nil]
-                                [{"3,64,0" "birch_sapling"} "birch_sapling"]
-                                [(lt/tree 3 0 "birch" 4) "birch_log"]
-                                [{"3,64,0" "stone"} "stone"]]]
-          (is (= [[] [] {:forest.foreign (if found [{:pos {:x 3 :y 64 :z 0} :found found :wanted "oak"}] [])} true]
+        (doseq [[blocks warns] [[{"3,64,0" "oak_sapling"} []]
+                                [{"3,64,0" "birch_sapling"} [{:pos {:x 3 :y 64 :z 0} :found "birch_sapling" :wanted "oak"}]]
+                                [(lt/tree 3 0 "birch" 4) [{:pos {:x 3 :y 64 :z 0} :found "birch_log" :wanted "oak"}]]
+                                [{"3,64,0" "stone"} [{:pos {:x 3 :y 64 :z 0} :found "stone" :wanted "oak"}]]]]
+          (is (= [[] [] {:forest.foreign warns} true]
                  (await (cell-case blocks [(item "oak_sapling" 3)] [:forest.foreign])))
               (pr-str blocks)))))))
 

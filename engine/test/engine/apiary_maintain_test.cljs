@@ -78,16 +78,14 @@
           (is (= 1 (:harvested (step s :harvest))))
           (is (true? (finished? s))))))))
 
-(deftest an-unsafe-fire-keeps-the-shears-off-its-hive-and-the-pass-ends
+(deftest a-raised-but-carpeted-fire-is-harvested-as-the-harvest-job-allows
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {} (world {:inventory kit :raised? true}) 40))]
           (is (= 1 (:carpeted (step s :guard))))
           (is (= :no-campfire (:reason (step s :guard))))
-          (is (= {:skipped :unsafe-fire} (step s :harvest)))
-          (is (empty? (calls s "useOn")))
-          (is (= 5 (honey s)))
+          (is (= 1 (:harvested (step s :harvest))))
           (is (true? (finished? s))))))))
 
 (deftest nothing-that-can-be-done-declines-the-job

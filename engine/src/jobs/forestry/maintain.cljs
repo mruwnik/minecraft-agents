@@ -95,12 +95,6 @@
 (defn soil-for [species]
   (if (= "mangrove" species) (into soil ["mud" "clay" "muddy_mangrove_roots"]) soil))
 
-(defn sapling-of [species]
-  (case species
-    "mangrove" "mangrove_propagule"
-    ("crimson" "warped") (str species "_fungus")
-    (str species "_sapling")))
-
 (defn up [pos] (update pos :y inc))
 (defn down [pos] (update pos :y dec))
 
@@ -114,7 +108,7 @@
     (cond
       (nil? here) :unloaded
       (= here (str species "_log")) :ripe
-      (= here (sapling-of species)) :growing
+      (= here (forestry/sapling-of species)) :growing
       (not (rules/air here)) :foreign
       (nil? below) :unloaded
       (not ((soil-for species) below)) :no-ground
@@ -177,12 +171,12 @@
                                                :text (str "forest cannot plant " species " at " (pr-str (cell-vec pos)) ": " (name kind))})
         nil))
     (let [missing (->> classes
-                       (filter (fn [[_ [kind species]]] (and (= :bare kind) (not (have (sapling-of species))))))
+                       (filter (fn [[_ [kind species]]] (and (= :bare kind) (not (have (forestry/sapling-of species))))))
                        (group-by (comp second val)))]
       (doseq [[species cells] missing]
         (ctx/warn-once! c [:no-sapling species] :forest.no-sapling
                         {:species species :cells (mapv key cells)
-                         :text (str "forest has no " (sapling-of species) " for " (count cells) " bare planned cells")})))))
+                         :text (str "forest has no " (forestry/sapling-of species) " for " (count cells) " bare planned cells")})))))
 
 (defn classes-of
   "{pos [kind species]} of every planned cell."
@@ -219,7 +213,7 @@
   "The owed cells whose sapling is carried."
   [c owed]
   (let [have (carried-names (:primitives c))]
-    (filterv #(have (sapling-of (:species %))) owed)))
+    (filterv #(have (forestry/sapling-of (:species %))) owed)))
 
 ;; ------------------------------------------------------------------ check
 
@@ -346,7 +340,7 @@
   (let [under (body-cells c)
         owed (sort-by #(contains? under (cell-vec (:pos %))) (plantable c (owed-cells c classes)))]
     (when-let [{:keys [pos species]} (first owed)]
-      (let [item (sapling-of species)
+      (let [item (forestry/sapling-of species)
             w (await (near/walk-near! c pos 3))]
         (cond
           (= :partial w) :continue

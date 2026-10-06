@@ -167,3 +167,15 @@
           (is (= [] (filterv #(= :stopped (:kind %)) @seen)) "the logs are in the inventory: not stopped")
           (is (= "oak_sapling" (.-name (.blockAt p #js {:x 3 :y 64 :z 0}))) "the replant is done")
           (is (= [] (lt/debts eng))))))))
+
+(deftest a-foreign-block-on-the-planting-spot-fails-and-keeps-the-debt
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (lt/setup {:blocks {"3,64,0" "stone" "3,63,0" "grass_block"} :inventory [{:name "oak_sapling" :count 1}]})]
+          (mem/write! (:store eng) :forestry/replant {:pos {:x 3 :y 64 :z 0} :species "oak"} {:cap 50 :ttl :forever})
+          (core/submit! eng '(jobs.forestry.plant-sapling) {})
+          (await (lt/run-until-empty eng 12))
+          (is (= 1 (count (lt/debts eng))) "the replant stays owed")
+          (is (= ["cannot plant: occupied"]
+                 (mapv :text (filterv #(= :plant_blocked (:kind %)) @seen)))))))))

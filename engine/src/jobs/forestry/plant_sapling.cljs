@@ -119,7 +119,7 @@
             :else
             (do (await (ctx/act c :equip (clj->js {:item sapling})))
               (let [r (await (ctx/act c :place (clj->js {:pos (:pos t) :item sapling})))]
-                (if (#{"placed" "occupied"} (.-status r))
+                (if (= "placed" (.-status r))
                   (let [n (:bone-meal (:args c))]
                     (ctx/forget-where! c replant-kind #(= (:pos t) (:pos %)))
                     (if (and (pos? n) (has-meal? (:primitives c)))
