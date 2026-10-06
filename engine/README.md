@@ -410,7 +410,7 @@ the token so the in-flight round is never booked; the job stays listed.
 
 **Doing nothing.**
 - `job.idle` (warn, once per spell): a round holds the body with no act in flight, no declared hold, and its last act (or
-  start) more than `:idle-s` (10) ago. An act ends the spell.
+  start) more than `:idle-s` (10) ago. An act or clearing a hold ends the spell.
 - `job.holding` (info): a declared hold (`ctx/hold-still!`, `act :wait` with `:why`); `jobs show` gives
   `:holding {:reason :since}`.
 - `job.fruitless`: a required attention request when every act of a listed job failed in 3 rounds in a row (a round that

@@ -45,12 +45,12 @@
 
 (defn hold-still!
   "The round of token (of job root) holds the body still on purpose, for reason, until its round ends; nil clears it.
-  A new reason emits job.holding."
+  A new reason emits job.holding. Clearing restarts the idle clock."
   [eng token root reason]
   (let [t (now eng)
         before (:hold @(:activity eng))]
     (if (nil? reason)
-      (note-activity! eng token dissoc :hold)
+      (note-activity! eng token #(-> (dissoc % :hold) (assoc :last-at t)))
       (when (not= reason (:reason before))
         (note-activity! eng token assoc :hold {:reason reason :since t})
         (emit-holding! eng root reason t)))))

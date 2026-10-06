@@ -1233,8 +1233,18 @@
   (await (ctx/act c :wait #js {:ms 1000 :why "daylight"}))
   :continue)
 
+(defn ^:async hold-then-clear-round
+  "Holds :night until @gate, clears the hold, then parks with no act until @gate again."
+  [c]
+  (ctx/hold-still! c :night)
+  (await (js/Promise. (fn [resolve] (reset! gate resolve))))
+  (ctx/hold-still! c nil)
+  (await (js/Promise. (fn [resolve] (reset! gate resolve))))
+  :continue)
+
 (def idle-registry
-  (merge registry {'parked {:check always :round parked-round :args {:hold {:default nil} :act-after {:default false}}}
+  (merge registry {'hold-clear {:check always :round hold-then-clear-round}
+                   'parked {:check always :round parked-round :args {:hold {:default nil} :act-after {:default false}}}
                    'why-wait {:check always :round why-wait-round}}))
 
 (defn idle-setup [opts]
@@ -1300,6 +1310,25 @@
           (@gate nil)
           (await round)
           (is (nil? (core/holding eng "j1")) "a hold ends with its round"))))))
+
+(deftest clearing-a-hold-restarts-the-idle-clock
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen clock]} (idle-setup {:idle-s 5})
+              _ (core/submit! eng '(hold-clear) {})
+              round (core/tick! eng)]
+          (swap! clock + 60000)
+          (let [first-gate @gate]
+            (first-gate nil)
+            (await (settle-until #(not= first-gate @gate) 50)))
+          (core/tick! eng)
+          (is (= [] (idles seen)) "the hold's 60 s are not idle time")
+          (swap! clock + 5001)
+          (core/tick! eng)
+          (is (= 1 (count (idles seen))) "idle-s after the clear it warns")
+          (@gate nil)
+          (await round))))))
 
 (deftest a-wait-with-why-is-a-declared-hold
   (async done
