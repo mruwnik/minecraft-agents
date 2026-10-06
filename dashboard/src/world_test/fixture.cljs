@@ -306,6 +306,12 @@
 
 (defn block-commands [origin c] (mapv #(block-command origin %) (:blocks c)))
 
+(defn build-failure
+  "The first RCON reply of a setup or block command that says the plot was not built (a position not loaded yet or outside
+  the world), else nil. \"No blocks were filled\" is not one: a fill over identical blocks says that too."
+  [replies]
+  (first (filter #(re-find #"(?i)not loaded|outside (of )?the world|out of the world" (or % "")) replies)))
+
 (defn register-put-argvs
   "The `triggers.mjs` argument vectors that put each register entry on a running body, in order. The runner starts the
   body with an empty register and puts these once the plot, the time and the body are in place, so no trigger fires

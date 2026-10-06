@@ -567,6 +567,22 @@
                            :else (.then (send [tp]) (fn [_] (.then (sleep 1000) #(check (dec retries))))))))))]
       (.then (sleep 300) #(check 3)))))
 
+(defn build-plot!
+  "Sends the plot's setup and block commands (idempotent), then checks the replies: a plot whose chunks were not loaded
+  yet is built again after a pause, up to 3 times. Resolves to nil when built, else to the failure message (a setup
+  error, not a job failure). io: {:send cmds->promise of replies, :sleep ms->promise}."
+  [{:keys [send sleep]} grid origin c]
+  (letfn [(attempt [retries]
+            (-> (send (f/setup-commands grid origin c))
+                (.then (fn [setup] (.then (sleep 1000) (fn [_] (.then (send (f/block-commands origin c)) #(into setup %))))))
+                (.then (fn [replies]
+                         (let [bad (f/build-failure replies)]
+                           (cond
+                             (nil? bad) nil
+                             (zero? retries) (str "plot not built: " bad " (tried 4 times)")
+                             :else (.then (sleep 1000) #(attempt (dec retries)))))))))]
+    (attempt 3)))
+
 (defn run-case!
   "One run of case c on plot i (leased by the caller before the body starts); resolves to a result map. register: the entries to put on the body once it stands in
   the built plot (the body was just started with none), nil when it keeps the register it has."
@@ -586,9 +602,8 @@
         (.then (fn [ok]
                  (if-not ok
                    (result {:status :skipped :why (str "needs " (name (:time rc)) " (no --allow-time)")})
-                   (-> (do (ev/emit! (ev/phase :setup)) (rcon! (f/setup-commands grid origin rc)))
-                       (.then #(sleep 1000))
-                       (.then #(rcon! (f/block-commands origin rc)))
+                   (-> (do (ev/emit! (ev/phase :setup)) (build-plot! {:send rcon! :sleep sleep} grid origin rc))
+                       (.then (fn [why] (when why (throw (js/Error. why)))))
                        (.then #(reset! plan-files (write-plans! opts rc)))
                        (.then #(rcon! (f/body-commands origin (:body opts) rc)))
                        (.then #(ensure-at-start! {:send rcon! :sleep sleep} origin (:body opts) rc))

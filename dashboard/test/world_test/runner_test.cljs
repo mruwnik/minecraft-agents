@@ -14,6 +14,34 @@
     (is (= ["--agent" "B" "--world" "w" "--scenario" "/tmp/s.edn" "--fresh"]
            (vec (drop (inc (.indexOf argv "out/body.cjs")) argv))))))
 
+(deftest build-plot-retries-an-unloaded-plot-then-fails-as-a-setup-error
+  (let [origin [20000 150 20000]
+        c {:plot {:height 4 :floor "stone"} :blocks [[:fill [0 0 0] [1 1 1] "water"]]}
+        unloaded "That position is not loaded"
+        run (fn [bad-rounds]
+              (let [sent (atom []) left (atom bad-rounds)]
+                (.then (r/build-plot!
+                        {:send (fn [cmds] (swap! sent into cmds)
+                                 (js/Promise.resolve
+                                  (mapv (fn [cmd] (if (and (re-find #"^fill .* water" cmd) (pos? @left)) (do (swap! left dec) unloaded) "ok")) cmds)))
+                         :sleep (fn [_] (js/Promise.resolve nil))}
+                        f/default-grid origin c)
+                       (fn [res] {:res res :sent @sent}))))]
+    (async done
+      (-> (js/Promise.resolve)
+          (.then #(run 0))
+          (.then (fn [{:keys [res sent]}]
+                   (is (nil? res))
+                   (is (= 1 (count (filter #(re-find #"water" %) sent))))))
+          (.then #(run 2))
+          (.then (fn [{:keys [res sent]}]
+                   (is (nil? res) "loaded on the third try")
+                   (is (= 3 (count (filter #(re-find #"water" %) sent))))))
+          (.then #(run 9))
+          (.then (fn [{:keys [res]}]
+                   (is (re-find #"plot not built.*not loaded" res))
+                   (done)))))))
+
 (deftest ensure-at-start-retries-the-tp-then-fails-with-a-message
   (let [origin [20000 150 20000]
         c {:body {:at [16.5 0 16.5]}}
