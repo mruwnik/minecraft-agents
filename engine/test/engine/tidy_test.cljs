@@ -1,7 +1,7 @@
 (ns engine.tidy-test
   "Tidying up after trespassing: a dig or place in another's zone is recorded in body memory, and
   jobs.survival.restore-broken puts the cells back when the body is safe."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [deftest is async use-fixtures]]
             [engine.zones-survival-test :as zs]
             [engine.fake :as fake]
             [engine.core :as core]
@@ -237,6 +237,17 @@
           (is (= [] (tidy-entries eng)))
           (is (= [[[0 65 0] [0 66 0]]] (mapv :cells (zs/trespass seen :tidy.restored)))))))))
 
+(deftest a-run-counts-its-try-when-it-starts-walking
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (restore! (merge with-hitbox {:floor [-60 -8 60 8] :self {:pos [-50 64 0]}
+                                                         :inventory [{:name "stone" :count 2}]})
+                                      [(zs/whole-zone "Miles")] [(dug-cell [50 64 0])])]
+          (.override (.-world p) "steer" (fn ^:async f [_ _ _] #js {:status "failed" :reason "no controls"}))
+          (await (core/tick! eng))
+          (is (= [1] (mapv :tries (tidy-entries eng))) "a first round of walking is a try"))))))
+
 ;; ------------------------------------------------------------------ the tidy-pending trigger
 
 (def with-stone (merge aside {:inventory [{:name "stone" :count 2}]}))
@@ -247,6 +258,7 @@
   (default none)."
   ([world memory] (holds? world memory #{}))
   ([world memory live]
+   (tidy-pending/forget-attempts!)
    (let [s (mem/open (tu/tmp-dir) {:now (constantly 1000)})]
      (doseq [[kind data] memory] (mem/write! s kind data tidy/tidy-policy))
      (tidy-pending/tidy-pending (tu/fake world) (mem/view s) tidy-pending/defaults nil live))))
@@ -275,6 +287,33 @@
            [with-stone [[:tidy (assoc dug :tries tidy/max-tries)] reported] false "given up and reported"]
            [(assoc with-stone :unloaded ["0,65,0"]) [[:tidy dug]] false "cell not loaded"]]]
     (is (= expected (holds? world memory)) why)))
+
+(use-fixtures :each {:before tidy-pending/forget-attempts!})
+
+(deftest the-trigger-does-not-hold-while-airborne
+  (is (false? (holds? (assoc-in with-stone [:self :onGround] false) [[:tidy dug]])) "mid-jump")
+  (is (true? (holds? (assoc-in with-stone [:self :onGround] true) [[:tidy dug]])) "landed"))
+
+(defn holds-at
+  "tidy-pending on a fresh view of memory at time now-s seconds, the body at pos."
+  [world memory now-s pos]
+  (let [s (mem/open (tu/tmp-dir) {:now (constantly (* 1000 now-s))})]
+    (doseq [[kind data] memory] (mem/write! s kind data tidy/tidy-policy))
+    (tidy-pending/tidy-pending (tu/fake (assoc-in world [:self :pos] pos)) (mem/view s) tidy-pending/defaults nil #{})))
+
+(deftest an-attempted-cell-is-not-tried-again-until-the-body-moves-far-or-the-window-passes
+  (let [at (fn [t pos] (holds-at with-stone [[:tidy (update dug :tries inc)]] t pos))]
+    (is (true? (holds-at with-stone [[:tidy dug]] 990 [2 64 0])) "never tried: held, and not counted as tried")
+    (is (true? (holds-at with-stone [[:tidy dug]] 991 [2 64 0])) "still held")
+    (is (false? (at 1000 [2 64 0])) "a try was counted since: wait")
+    (is (false? (at 1010 [2 64 0])) "same place, soon after")
+    (is (false? (at 1010 [4 64 0])) "moved a little")
+    (is (true? (at 1010 [40 64 0])) "moved far")
+    (is (true? (at (+ 1000 tidy-pending/retry-s) [2 64 0])) "window passed")))
+
+(deftest a-new-cell-is-tried-at-once
+  (is (false? (holds-at with-stone [[:tidy (update dug :tries inc)]] 1000 [2 64 0])))
+  (is (true? (holds-at with-stone [[:tidy (update dug :tries inc)] [:tidy (assoc dug :cell [0 65 1])]] 1001 [2 64 0])) "other cell too"))
 
 (deftest the-trigger-is-a-builtin-with-a-cooldown
   (is (= tidy-pending/tidy-pending (:when (:tidy-pending triggers/all))))
@@ -379,8 +418,8 @@
           (seed! eng [(assoc dug :job "j9")])
           (await (ticks-over! eng clock 60 1000))
           (is (= [] (filterv #(= 0 (:x %)) (mapv zs/arg-pos (zs/calls p "place")))) "no stone carried")
-          (is (= [[{:cell [1 65 0] :was "wheat_seeds" :why :gave-up} {:cell [0 65 0] :was "stone" :why :not-carried}]]
-                 (mapv :cells (zs/trespass seen :tidy.not-restored)))
+          (is (= [#{{:cell [1 65 0] :was "wheat_seeds" :why :gave-up} {:cell [0 65 0] :was "stone" :why :not-carried}}]
+                 (mapv (comp set :cells) (zs/trespass seen :tidy.not-restored)))
               "one warn: the seeds given up, the stone not carried")
           (let [n (firings seen)]
             (await (ticks-over! eng clock 60 1000))

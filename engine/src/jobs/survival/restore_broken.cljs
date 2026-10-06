@@ -117,15 +117,20 @@
     (contains? #{"placed" "dug"} (.-status res))))
 
 (defn ^:async restore-one!
-  "One step towards putting entry e back: :continue while walking, else :next once it was tried."
+  "One step towards putting entry e back: :continue while walking, else :next once it was tried. A try is counted when
+  the walk starts, so a run cut short while walking (a backoff on an unreachable cell) still uses one."
   [c {:keys [cell tries] :as e} reach]
-  (let [w (await (walk-near! c cell reach))]
+  (let [started? (contains? (:started (ctx/mem c) #{}) cell)
+        _ (when-not started?
+            (tidy/count-try! c cell)
+            (ctx/update-mem! c update :started (fnil conj #{}) cell))
+        tries (if started? tries (inc tries))
+        w (await (walk-near! c cell reach))]
     (when-not (= :continue w)
-      (tidy/count-try! c cell)
       (if (and (= :done w) (await (put-back! c e)))
         (do (ctx/update-mem! c update :restored (fnil conj []) cell)
             (ctx/update-mem! c update :seen (fnil conj #{}) cell))
-        (when (>= (inc tries) tidy/max-tries)
+        (when (>= tries tidy/max-tries)
           (skip! c e :gave-up))))
     :continue))
 

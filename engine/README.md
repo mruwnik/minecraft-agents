@@ -349,7 +349,7 @@ Built-in triggers, in the order of `triggers/defaults.edn` (the default register
 | `:died` | a `:died` under 5 minutes old with a newer `:respawned` and no `:recovered` | `recover-drops` | 30 s |
 | `:inventory-nearly-full` | at most `:free` 2 of 36 main and hotbar slots empty | `storage.make-room` | 120 s |
 | `:scaffold-left` | the scaffold ledger holds blocks whose job is gone | `access.cleanup` | stop |
-| `:tidy-pending` | body safe and a `:tidy` entry is pending | `survival.restore-broken` | 10 s |
+| `:tidy-pending` | body safe and on the ground, a `:tidy` entry pending; a cell a run tried waits 2 min or until the body moves 8 blocks | `survival.restore-broken` | 10 s |
 | `:pen-gate` | a planned fence gate within 8 stands open, body more than 2 away, for 4 s | `animals.shut-gate` | 5 s |
 | `:mounted` | the body rides something and no live job holds a vehicle | `movement.leave-vehicle` | stop |
 | `:player-joined` | a `:player-joined` entry under `:window-s` 10 old | `debug.notify` | 10 s |
