@@ -10,6 +10,7 @@
             [agent-tools.jobs :as jobs]
             [agent-tools.map :as map-tool]
             [agent-tools.observe :as observe]
+            [agent-tools.observe.request :as observe-request]
             [agent-tools.plans :as plans]
             [agent-tools.say :as say]
             [agent-tools.time :as time-tool]
@@ -75,9 +76,9 @@
 (defn jobs-request-for [argv] (compat/to-js (jobs/request-for (vec argv))))
 (defn jobs-main [argv] (jobs/main! (vec argv)))
 
-(def observe-usage observe/usage)
+(def observe-usage observe-request/usage)
 (defn observe-request-for [argv]
-  (compat/to-js (clojure.set/rename-keys (observe/request-for (vec argv)) {:socket-path :socketPath})))
+  (compat/to-js (clojure.set/rename-keys (observe-request/request-for (vec argv)) {:socket-path :socketPath})))
 (defn observe-main [argv] (observe/main! (vec argv)))
 
 (def triggers-usage triggers/usage)

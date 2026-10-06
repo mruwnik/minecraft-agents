@@ -3,13 +3,16 @@
             [agent-tools.fake-socket :as fake]
             [agent-tools.job-results :as job-results]
             [agent-tools.observe :as observe]
+            [agent-tools.observe.lock :as observe-lock]
+            [agent-tools.observe.request :as observe-request]
+            [agent-tools.observe.status :as observe-status]
             [agent-tools.world-data :as data]
             [clojure.string :as str]
             ["node:fs" :as fs]
             ["node:os" :as os]
             ["node:path" :as path]))
 
-(defn request [& args] (observe/request-for (vec args)))
+(defn request [& args] (observe-request/request-for (vec args)))
 
 (defn finish!
   "Report an unexpected rejection as a failure, then end the async test."
@@ -41,14 +44,14 @@
 
 (deftest observe-distinguishes-an-older-engine-missing-the-projection-routes
   (doseq [[response expected] unsupported-cases]
-    (is (= expected (observe/unsupported-route? response)) (pr-str response))))
+    (is (= expected (observe-request/unsupported-route? response)) (pr-str response))))
 
 (deftest legacy-observe-guidance-preserves-a-nondefault-state-root
-  (let [notice (observe/legacy-notice (request "--world" "w" "ProbeBody" "--state" "/tmp/custom state"))]
+  (let [notice (observe-request/legacy-notice (request "--world" "w" "ProbeBody" "--state" "/tmp/custom state"))]
     (is (re-find #":reason :observe-unavailable" notice))
     (is (re-find #":action :restart-with-current-build" notice))
     (is (re-find #":fallback \{:op :status :raw true :world \"w\" :state \"/tmp/custom state\"\}" notice)))
-  (is (nil? (re-find #":fallback" (observe/legacy-notice (request "--world" "w" "ProbeBody" "inventory"))))))
+  (is (nil? (re-find #":fallback" (observe-request/legacy-notice (request "--world" "w" "ProbeBody" "inventory"))))))
 
 (deftest observe-defaults-to-bounded-status-and-targets-the-engine-event-socket
   (is (= {:agent "ProbeBody" :world "w" :state (.resolve path "/tmp/state")
@@ -205,7 +208,7 @@
 
 (deftest compact-status-is-bounded-and-keeps-edn-keywords
   (doseq [[label text expected] compact-cases]
-    (is (= expected (data/write-edn (observe/compact-status (data/read-edn text)))) label)))
+    (is (= expected (data/write-edn (observe-status/compact-status (data/read-edn text)))) label)))
 
 ;; Wake classification
 
@@ -235,7 +238,7 @@
 
 (deftest classify-wakes-only-for-what-was-asked
   (doseq [[label e opts expected] classify-cases]
-    (is (= expected (:wake (observe/classify e opts "Probe"))) label)))
+    (is (= expected (:wake (observe-status/classify e opts "Probe"))) label)))
 
 (def action-done
   (assoc (event :action :done {:status :arrived :result {:status "arrived" :pos {:x 1.234 :y 64 :z 2} :distance 1.234
@@ -245,11 +248,11 @@
 (deftest an-explicitly-watched-action-completion-wakes-with-a-bounded-result
   (let [opts (assoc defaults :watch-actions ["move-1"])]
     (is (= {:wake :action-finished :action "move-1" :result {:status "arrived" :pos [1.2 64 2] :distance 1.2}}
-           (observe/classify action-done opts "Probe")))
-    (is (nil? (observe/classify (assoc action-done :source :job) opts "Probe")))
-    (is (nil? (observe/classify (assoc action-done :kind :started) opts "Probe")))
-    (is (nil? (observe/classify action-done (assoc opts :watch-actions ["other"]) "Probe")))
-    (is (nil? (observe/classify action-done defaults "Probe")))))
+           (observe-status/classify action-done opts "Probe")))
+    (is (nil? (observe-status/classify (assoc action-done :source :job) opts "Probe")))
+    (is (nil? (observe-status/classify (assoc action-done :kind :started) opts "Probe")))
+    (is (nil? (observe-status/classify action-done (assoc opts :watch-actions ["other"]) "Probe")))
+    (is (nil? (observe-status/classify action-done defaults "Probe")))))
 
 ;; Attention
 
@@ -257,20 +260,20 @@
               :event {:kind :blocked :message "No food" :data {:pos {:x 1}}}})
 
 (deftest attention-deduplication-ignores-timestamps-and-position-and-reports-semantic-changes
-  (let [first-pass (observe/attention-changes {"r" blocked} {})]
+  (let [first-pass (observe-status/attention-changes {"r" blocked} {})]
     (is (= 1 (count (:changed first-pass))))
-    (is (= 0 (count (:changed (observe/attention-changes
+    (is (= 0 (count (:changed (observe-status/attention-changes
                                {"r" (-> blocked (assoc :updated-at 456) (assoc-in [:event :data :pos] {:x 2}))}
                                (:seen first-pass))))))
-    (is (= 1 (count (:changed (observe/attention-changes
+    (is (= 1 (count (:changed (observe-status/attention-changes
                                {"r" (assoc-in blocked [:event :message] "No tools")} (:seen first-pass))))))
-    (is (= {} (:seen (observe/attention-changes {} (:seen first-pass)))))
+    (is (= {} (:seen (observe-status/attention-changes {} (:seen first-pass)))))
     (is (= [{:id "r" :job "j1" :reason :blocked :message "No food"}] (:changed first-pass)))))
 
 (defn pass-sizes
   "How many attention requests each successive pass delivers, until a pass delivers none."
   [requests]
-  (->> (iterate #(observe/attention-changes requests (:seen %)) {:seen {}})
+  (->> (iterate #(observe-status/attention-changes requests (:seen %)) {:seen {}})
        rest
        (map (comp count :changed))
        (take-while pos?)
@@ -282,11 +285,11 @@
     129 (conj (vec (repeat 32 4)) 1)))
 
 (deftest keyword-keyed-requests-are-reported-by-their-name
-  (is (= "r1" (:id (first (:changed (observe/attention-changes {:r1 blocked} {})))))))
+  (is (= "r1" (:id (first (:changed (observe-status/attention-changes {:r1 blocked} {})))))))
 
 (deftest too-many-attention-requests-fail-with-a-code
   (let [many (into {} (map (fn [i] [(str "r" i) blocked])) (range 4097))]
-    (is (= "EATTENTIONLIMIT" (try (observe/attention-changes many {}) nil (catch :default e (.-code e)))))))
+    (is (= "EATTENTIONLIMIT" (try (observe-status/attention-changes many {}) nil (catch :default e (.-code e)))))))
 
 ;; The signature digests are stored in observer checkpoint files: they must not change.
 (def digest-cases
@@ -297,28 +300,28 @@
 
 (deftest attention-signatures-keep-the-digests-saved-checkpoints-hold
   (doseq [[r digest] digest-cases]
-    (is (= {"q" digest} (:seen (observe/attention-changes {"q" r} {}))))))
+    (is (= {"q" digest} (:seen (observe-status/attention-changes {"q" r} {}))))))
 
 ;; Summaries
 
 (deftest summaries-are-bounded-and-discard-routine-ticks
   (let [summary (atom {:counts {} :items [] :more false})]
-    (dotimes [_ 1000] (swap! summary observe/collect (event :body :physics-tick)))
+    (dotimes [_ 1000] (swap! summary observe-status/collect (event :body :physics-tick)))
     (is (= {} (:counts @summary)))
-    (dotimes [_ 1000] (swap! summary observe/collect (event :body :picked-up {:item "wheat" :count 1})))
+    (dotimes [_ 1000] (swap! summary observe-status/collect (event :body :picked-up {:item "wheat" :count 1})))
     (is (= 4 (count (:items @summary))))
     (is (= 1000 (get-in @summary [:counts :picked-up])))
     (is (true? (:more @summary)))
     (is (= {:event :picked-up :item "wheat" :count 1} (first (:items @summary))))))
 
 (deftest make-room-tosses-are-summarised-with-item-and-count
-  (let [summary (observe/collect {:counts {} :items [] :more false}
+  (let [summary (observe-status/collect {:counts {} :items [] :more false}
                                  (event :job :make-room.tossed {:item "coal" :count 4}))]
     (is (= 1 (get-in summary [:counts :tossed])))
     (is (= {:event :make-room.tossed :item "coal" :count 4} (first (:items summary))))))
 
 (deftest an-action-completion-is-not-summarised
-  (is (= {} (:counts (observe/collect {:counts {} :items [] :more false} action-done)))))
+  (is (= {} (:counts (observe-status/collect {:counts {} :items [] :more false} action-done)))))
 
 ;; The wait loop
 
@@ -697,26 +700,26 @@
 
 (deftest compact-status-keeps-why-and-return-of-an-offline-body
   (is (= {:by :shelter :job "j563" :why :logged-out-for-night :back-at 1020000 :back-in-s 0}
-         (:offline (observe/compact-status {:mode :offline :offline {:by :shelter :job "j563" :why :logged-out-for-night :back-at 1020000}} 1020000))))
-  (is (not (contains? (observe/compact-status {:mode :scheduled}) :offline))))
+         (:offline (observe-status/compact-status {:mode :offline :offline {:by :shelter :job "j563" :why :logged-out-for-night :back-at 1020000}} 1020000))))
+  (is (not (contains? (observe-status/compact-status {:mode :scheduled}) :offline))))
 
 (deftest compact-status-says-how-long-until-a-planned-return-and-marks-last-known-readings
   (let [s {:mode :offline :offline {:by :shelter :why :logged-out-for-night :back-at 1020000}
            :position {:x 1.04 :y 64 :z 2} :health 18 :food 15 :last-known true}
-        out (observe/compact-status s 960000)]
+        out (observe-status/compact-status s 960000)]
     (is (= 60 (get-in out [:offline :back-in-s])))
     (is (= [1 64 2] (:pos out)))
     (is (= 18 (:health out)))
     (is (true? (:last-known out))))
-  (is (not (contains? (:offline (observe/compact-status {:mode :offline :offline {:by :connection :why :connection-lost}} 5)) :back-in-s))))
+  (is (not (contains? (:offline (observe-status/compact-status {:mode :offline :offline {:by :connection :why :connection-lost}} 5)) :back-in-s))))
 
 (deftest a-reconnect-failure-wakes-once-per-outage-and-never-after-the-body-is-back
   (let [failed (fn [attempt] (event :body :reconnect-failed {:attempt attempt :reason "ECONNREFUSED"}))
         online (event :body :online)]
-    (is (false? (observe/stale-reconnect? (failed 1) [])))
-    (is (true? (observe/stale-reconnect? (failed 2) [])) "later tries of one outage stay in the summary")
-    (is (true? (observe/stale-reconnect? (failed 1) [(failed 2) online])) "the body came back later in the backlog")
-    (is (false? (observe/stale-reconnect? (event :body :reconnect-failed) [])))))
+    (is (false? (observe-status/stale-reconnect? (failed 1) [])))
+    (is (true? (observe-status/stale-reconnect? (failed 2) [])) "later tries of one outage stay in the summary")
+    (is (true? (observe-status/stale-reconnect? (failed 1) [(failed 2) online])) "the body came back later in the backlog")
+    (is (false? (observe-status/stale-reconnect? (event :body :reconnect-failed) [])))))
 
 (defn with-lock-dir [f]
   (let [dir (.mkdtempSync fs (.join path (os/tmpdir) "observe-lock-"))]
@@ -729,7 +732,7 @@
       (let [lock (.join path dir "obs.lock")]
         (.mkdirSync fs lock)
         (.utimesSync fs lock 1 1)
-        (let [release (observe/acquire! dir "obs")]
+        (let [release (observe-lock/acquire! dir "obs")]
           (is (= (str (.-pid js/process)) (.readFileSync fs (.join path lock "pid") "utf8")))
           (is (= ["obs.lock"] (vec (.readdirSync fs dir))) "the stale lock is renamed away and removed")
           (release))))))
@@ -738,15 +741,15 @@
   (with-lock-dir
     (fn [dir]
       (.mkdirSync fs (.join path dir "obs.lock"))
-      (is (= "EOBSERVERBUSY" (try (observe/acquire! dir "obs") nil (catch :default e (.-code e))))))))
+      (is (= "EOBSERVERBUSY" (try (observe-lock/acquire! dir "obs") nil (catch :default e (.-code e))))))))
 
 (defn kill-failing [code] (fn [_] (throw (doto (js/Error. "kill") (aset "code" code)))))
 
 (deftest a-process-owned-by-another-user-counts-as-alive
-  (is (true? (observe/process-alive? 1 (kill-failing "EPERM"))))
-  (is (false? (observe/process-alive? 1 (kill-failing "ESRCH"))))
-  (is (true? (observe/process-alive? 1 (fn [_] nil))))
-  (is (= "EINVAL" (try (observe/process-alive? 1 (kill-failing "EINVAL")) (catch :default e (.-code e))))))
+  (is (true? (observe-lock/process-alive? 1 (kill-failing "EPERM"))))
+  (is (false? (observe-lock/process-alive? 1 (kill-failing "ESRCH"))))
+  (is (true? (observe-lock/process-alive? 1 (fn [_] nil))))
+  (is (= "EINVAL" (try (observe-lock/process-alive? 1 (kill-failing "EINVAL")) (catch :default e (.-code e))))))
 
 (deftest reclaim-puts-back-a-live-lock-that-replaced-the-stale-one
   (with-lock-dir
@@ -754,7 +757,7 @@
       (let [lock (.join path dir "obs.lock")]
         (.mkdirSync fs lock)
         (.writeFileSync fs (.join path lock "pid") (str (.-pid js/process)))
-        (is (= "EEXIST" (try (observe/reclaim-stale-lock! lock) nil (catch :default e (.-code e)))))
+        (is (= "EEXIST" (try (observe-lock/reclaim-stale-lock! lock) nil (catch :default e (.-code e)))))
         (is (= (str (.-pid js/process)) (.readFileSync fs (.join path lock "pid") "utf8")) "the live lock is back, untouched")
         (is (= ["obs.lock"] (vec (.readdirSync fs dir))) "no aside left behind")))))
 
@@ -768,9 +771,9 @@
         (.mkdirSync fs lock)
         (.writeFileSync fs (.join path lock "pid") (str (.-pid js/process)))
         (is (= "EEXIST" (code-thrown
-                          #(observe/reclaim-stale-lock!
+                          #(observe-lock/reclaim-stale-lock!
                              lock (fn [step]
-                                    (swap! seen conj [step (.existsSync fs lock) (code-thrown (fn [] (observe/acquire! dir "obs")))]))))))
+                                    (swap! seen conj [step (.existsSync fs lock) (code-thrown (fn [] (observe-lock/acquire! dir "obs")))]))))))
         (is (seq @seen) "the interleaving ran")
         (is (every? (fn [[_ present? third]] (and present? (= "EOBSERVERBUSY" third))) @seen))
         (is (= (str (.-pid js/process)) (.readFileSync fs (.join path lock "pid") "utf8")))
@@ -784,7 +787,7 @@
         (.mkdirSync fs lock)
         (.writeFileSync fs (.join path lock "pid") "99999999")
         (is (= "EEXIST" (code-thrown
-                          #(observe/reclaim-stale-lock!
+                          #(observe-lock/reclaim-stale-lock!
                              lock (fn [step]
                                     (when (= :lock-removed step)
                                       (reset! fired true)
@@ -803,8 +806,8 @@
         (.mkdirSync fs lock)
         (.writeFileSync fs (.join path lock "pid") "99999999")
         (.mkdirSync fs mutex)
-        (is (= "EEXIST" (code-thrown #(observe/reclaim-stale-lock! lock))) "another reclaimer is working")
+        (is (= "EEXIST" (code-thrown #(observe-lock/reclaim-stale-lock! lock))) "another reclaimer is working")
         (is (.existsSync fs lock) "the lock was not touched")
         (.utimesSync fs mutex 1 1)
-        (is (nil? (code-thrown #(observe/reclaim-stale-lock! lock))) "a long-dead reclaimer's mutex is cleared")
+        (is (nil? (code-thrown #(observe-lock/reclaim-stale-lock! lock))) "a long-dead reclaimer's mutex is cleared")
         (is (= ["obs.lock"] (vec (.readdirSync fs dir))))))))

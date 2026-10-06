@@ -4,6 +4,7 @@
             [agent-tools.http :as http]
             [agent-tools.map :as map-tool]
             [agent-tools.observe :as observe]
+            [agent-tools.observe.request :as observe-request]
             [agent-tools.world-data :as data]
             [engine.bodies :as bodies]
             [clojure.string :as str]
@@ -100,7 +101,7 @@
       (and (not= command "submit") (some #(some? (% values)) action-options)) {:error "action options are only valid with submit"}
       (and (:wait values) (not= command "submit")) {:error "--wait requires submit"}
       (and (:timeout values) (not (:wait values))) {:error "--timeout requires --wait"}
-      :else (do (when (:wait values) (observe/wait-options {:timeout (:timeout values)}))
+      :else (do (when (:wait values) (observe-request/wait-options {:timeout (:timeout values)}))
                 (cond-> {:agent agent :world world :state (bodies/storage-root values map-tool/default-state-dir) :who who
                          :body (command-body command action (vec args) who values)}
                   (:wait values) (assoc :wait {:timeout (:timeout values)}))))))

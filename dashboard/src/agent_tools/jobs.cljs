@@ -5,6 +5,7 @@
             [agent-tools.job-results :as job-results]
             [agent-tools.map :as map-tool]
             [agent-tools.observe :as observe]
+            [agent-tools.observe.request :as observe-request]
             [agent-tools.world-data :as data]
             [clojure.string :as str]
             ["node:fs" :as fs]
@@ -81,7 +82,7 @@
       (when (and (:timeout values) (not (:wait values)))
         (throw (js/Error. "--timeout requires --wait")))
       (when (:wait values)
-        (observe/wait-options {:timeout (:timeout values)}))
+        (observe-request/wait-options {:timeout (:timeout values)}))
       (when (and (= op :resolve) (not (#{"handled" "condition-recovered"} (:reason values))))
         (throw (js/Error. "resolve requires --reason handled or condition-recovered")))
       (when (and (not= op :resolve) (:reason values))
