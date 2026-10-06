@@ -206,6 +206,18 @@
              (.then (js/Promise.resolve (output (str (data/write-edn outcome) "\n")))
                     (fn [_] (if (false? (:ok outcome)) 1 0)))))))
 
+(def finished-hint "no such job in the list: it may have finished already (finished jobs leave it); jobs show <jID> gives its outcome")
+
+(def hold-hint "--hold holds the body, it does not pause the job: it runs now; cancel <jID> stops it while it is listed")
+
+(defn with-hint
+  "The mutation answer plus a :hint where its meaning is easily misread: a cancel/retry of a job that is gone, a held submit."
+  [r value]
+  (cond
+    (and (:mutating r) (= :job-not-found (:reason value))) (assoc value :hint finished-hint)
+    (and (:mutating r) (true? (get-in value [:job :hold?]))) (assoc value :hint hold-hint)
+    :else value))
+
 (defn deliver! [r output {:keys [status content-type text] :as response} & [opts]]
   (when-not (http/edn-response? content-type) (throw (js/Error. "unexpected response format")))
   (let [value (data/read-edn text)
@@ -222,6 +234,9 @@
 
       (and (:mutating r) (= :request-uncertain (:reason value)))
       (do (print! (assoc value :request-id (get-in r [:request :request-id]))) 1)
+
+      (not= value (with-hint r value))
+      (do (print! (with-hint r value)) (if (= 200 status) 0 1))
 
       :else (do (output (line text)) (if (= 200 status) 0 1)))))
 

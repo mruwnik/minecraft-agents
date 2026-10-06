@@ -197,6 +197,25 @@
                    (is (true? (:finished? (data/read-edn out))))))
           (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
 
+(deftest cancel-or-retry-of-a-finished-job-says-it-is-gone-and-a-held-submit-says-it-runs
+  (let [state (state-dir)
+        snap "{:generation-id \"generation\"}"
+        gone (fn [{:keys [path]}] (if (= "/snapshot" path) {:text snap} {:status 404 :text "{:ok false :reason :job-not-found}"}))]
+    (async done
+      (-> (run-main! state ["cancel" "j5"] gone)
+          (.then (fn [{:keys [code out]}]
+                   (is (= 1 code))
+                   (is (= :job-not-found (:reason (data/read-edn out))))
+                   (is (string? (:hint (data/read-edn out))) out)))
+          (.then (fn [_] (run-main! state ["retry" "j5"] gone)))
+          (.then (fn [{:keys [out]}] (is (string? (:hint (data/read-edn out))) out)))
+          (.then (fn [_] (run-main! state ["submit" "(jobs.x {})" "--hold"]
+                                    (fn [{:keys [path]}] {:text (if (= "/snapshot" path) snap "{:ok true :job {:id \"j5\" :status :queued :hold? true}}")}))))
+          (.then (fn [{:keys [code out]}]
+                   (is (= 0 code))
+                   (is (string? (:hint (data/read-edn out))) out)))
+          (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
+
 (deftest an-uncertain-mutation-reports-its-request-id
   (let [state (state-dir)]
     (async done
