@@ -236,6 +236,11 @@
                          (.then (sleep 250) poll)))))]
       (poll))))
 
+(defn reset-body-log!
+  "Drops the body.log an earlier run kept, so this run's log holds only this run (start-body! appends across restarts)."
+  [opts]
+  (fs/rmSync (path/join (run-dir opts) "body.log") #js {:force true}))
+
 (defn start-body!
   "Starts the body with a scenario holding register, --fresh; resolves once it logged :system :started. The body's own
   engine/memory.edn is deleted first unless keep-memory? (--fresh only drops engine.edn), then written from
@@ -677,6 +682,7 @@
         report-fixtures! (fn []
                            (let [n (count (ev/fixtures-done expected @results))]
                              (when (> n @done) (reset! done n) (ev/emit! (ev/progress n (count expected))))))]
+    (reset-body-log! opts)
     (ev/emit! (ev/plan cases (:repeat opts)))
     (-> (reduce (fn [p [register group]]
                   (.then p (fn []

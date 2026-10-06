@@ -162,3 +162,14 @@
           (.then (fn [errored] (is errored) (keeps? nil)))
           (.then (fn [broken] (is broken)))
           (.finally (fn [] (fs/rmSync dir #js {:recursive true :force true}) (done)))))))
+
+(deftest a-new-run-starts-the-body-log-empty
+  (let [body (str "WtLog" (.-pid js/process))
+        dir (r/run-dir {:body body})
+        log (path/join dir "body.log")]
+    (fs/mkdirSync dir #js {:recursive true})
+    (fs/writeFileSync log "the previous run")
+    (r/reset-body-log! {:body body})
+    (let [left (fs/existsSync log)]
+      (fs/rmSync dir #js {:recursive true :force true})
+      (is (not left) "the kept log of an earlier run does not mix with this one"))))

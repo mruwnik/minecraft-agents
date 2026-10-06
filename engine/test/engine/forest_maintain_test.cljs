@@ -12,6 +12,7 @@
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as world]
             [jobs.forestry.maintain :as maintain]
+            [jobs.forestry.trees :as trees]
             [plan.shape :as shape]))
 
 (def job 'jobs.forestry.maintain)
@@ -160,6 +161,30 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= [] (await (fell-at {:blocks (lt/tree 3 0 "oak" 3)} {:radius 10 :at {:x 5 :y 64 :z 0}}))))))))
+
+;; ------------------------------------------------------------------ what the body has seen
+
+(defn seen-below
+  "p whose perception has seen only the cells below y-limit and answers the rest as unknown, with no properties."
+  [p y-limit]
+  (let [at (.-seenBlockAt p)]
+    (aset p "seenBlockAt" (fn [pos] (if (< (.-y pos) y-limit) (at pos) #js {:unknown true :pos pos})))
+    p))
+
+(deftest logs-at-counts-only-the-logs-the-body-has-seen
+  (let [p (seen-below (tu/seeing-all (tu/fake-on-floor {:blocks (lt/tree 3 0 "oak" 5)})) 66)]
+    (is (= [[3 64 0] [3 65 0]] (mapv (comp (juxt :x :y :z) :pos) (trees/logs-at p {:x 3 :y 64 :z 0} "oak")))
+        "the real logs above the seen ones are not read")))
+
+(deftest tree-at-needs-a-seen-log
+  (let [p (seen-below (tu/seeing-all (tu/fake-on-floor {:blocks (lt/tree 3 0 "oak" 5)})) 64)]
+    (is (nil? (trees/tree-at p {:x 3 :y 64 :z 0})) "a log in the real world the body has not seen is no tree")))
+
+(deftest tree-at-copes-with-a-seen-block-without-properties
+  (let [p (tu/seeing-all (tu/fake-on-floor {:blocks (lt/tree 3 0 "oak" 5)}))
+        at (.-seenBlockAt p)]
+    (aset p "seenBlockAt" (fn [pos] (let [b (at pos)] #js {:name (.-name b) :pos pos})))
+    (is (= "oak" (:species (trees/tree-at p {:x 3 :y 64 :z 0}))))))
 
 ;; ------------------------------------------------------------------ the job
 

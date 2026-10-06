@@ -73,21 +73,26 @@
   "How far up a column logs-at looks, in blocks."
   40)
 
+(defn seen-name
+  "The name of the block at pos as the body last saw it, nil for a cell it has not seen."
+  [p pos]
+  (:name (look/seen-block p pos)))
+
 (defn logs-at
-  "The logs of species in the column over pos, lowest first, read cell by cell up from pos. Skips the air where the
+  "The logs of species in the column over pos, lowest first, read cell by cell up from pos (as seen). Skips the air where the
   lowest logs were dug and ends at the first other block above the first log."
   [p {:keys [x y z]} species]
   (let [log (str species "_log")]
     (->> (range max-column)
-         (map (fn [dy] (let [pos {:x x :y (+ y dy) :z z}] {:name (u/block-name p pos) :pos pos})))
+         (map (fn [dy] (let [pos {:x x :y (+ y dy) :z z}] {:name (seen-name p pos) :pos pos})))
          (drop-while #(not= log (:name %)))
          (take-while #(= log (:name %)))
          vec)))
 
 (defn tree-at
-  "The tree whose base log is at pos, as find-tree gives it, or nil when pos holds no log. Leaves are not asked for."
+  "The tree whose base log is at pos, as find-tree gives it, or nil when pos holds no seen log. Leaves are not asked for."
   [p pos]
-  (let [n (u/block-name p pos)]
+  (let [n (seen-name p pos)]
     (when (some-> n log-name?)
       {:column {:x (:x pos) :z (:z pos)} :base pos :species (species-of n)})))
 
