@@ -38,7 +38,7 @@ test('decide gets a pose of the body each tick and its controls and look are app
   const { result } = await start(p, bot, pose => { poses.push(pose); return poses.length > 1 ? { done: {} } : walking })
   bot.emit('physicsTick')
   assert.equal(poses.length, 1)
-  assert.deepEqual({ ...poses[0], t: 0 }, { x: 1.5, y: 64, z: 2.5, vy: -0.1, onGround: true, onClimbable: false, inWater: undefined, collided: undefined, yaw: 0.5, t: 0 })
+  assert.deepEqual({ ...poses[0], t: 0 }, { x: 1.5, y: 64, z: 2.5, vx: 0, vy: -0.1, vz: 0, onGround: true, onClimbable: false, inWater: undefined, collided: undefined, yaw: 0.5, t: 0 })
   assert.deepEqual(bot.controlState, { forward: true, sprint: true })
   assert.deepEqual([bot.entity.yaw, bot.entity.pitch], [1.5, 0.25])
   bot.emit('physicsTick')

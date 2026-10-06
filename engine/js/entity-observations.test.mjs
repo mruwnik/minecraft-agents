@@ -53,7 +53,7 @@ test('the physics watchdog stops refreshing before the stale connection deadline
   } finally { await primitives.close() }
 })
 
-test('explicit deaths pass raw identity and dimension once; unload is not death and cleanup unregisters', async () => {
+test('deaths pass raw identity and dimension once; unload and pickup are relayed with their removal kind and cleanup unregisters', async () => {
   const e = { id: 1, uuid: 'villager-id', name: 'villager', position: { x: 0, y: 64, z: 0 } }
   const bot = stubBot({ entities: { 1: e } })
   bot.game = { dimension: 'the_nether' }
@@ -61,12 +61,12 @@ test('explicit deaths pass raw identity and dimension once; unload is not death 
   const events = []
   const stop = primitives.onEntityDeath(sample => events.push(sample))
   bot.emit('entityGone', e)
-  assert.equal(events.length, 0)
+  assert.deepEqual(events, [{ entity: e, source: bot, dimension: 'the_nether', removal: 'gone' }])
   bot.emit('entityDead', e)
-  assert.deepEqual(events, [{ entity: e, source: bot, dimension: 'the_nether' }])
+  assert.deepEqual(events[1], { entity: e, source: bot, dimension: 'the_nether', removal: undefined })
   stop()
   bot.emit('entityDead', e)
-  assert.equal(events.length, 1)
+  assert.equal(events.length, 2)
   await primitives.close()
   assert.equal(bot.listenerCount('entityDead'), 0)
 })
@@ -87,7 +87,7 @@ test('reconnect rebinds observations and deaths to the fresh bot and cleans the 
     const e = { uuid: 'reconnected-cow' }
     old.emit('entityDead', e)
     fresh.emit('entityDead', e)
-    assert.deepEqual(deaths, [{ entity: e, source: fresh, dimension: 'the_nether' }])
+    assert.deepEqual(deaths, [{ entity: e, source: fresh, dimension: 'the_nether', removal: undefined }])
     stop()
     assert.equal(fresh.listenerCount('entityDead'), 0)
   } finally { await primitives.close() }
