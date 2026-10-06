@@ -296,3 +296,9 @@
     (fs/appendFileSync file "{:seq 3 :pad\n")
     (fs/appendFileSync file (str (pr-str {:seq 4}) "\n"))
     (is (thrown-with-msg? js/Error #"malformed complete event record" (seqs-after file 0 10)))))
+
+(deftest a-line-ending-at-a-probe-size-is-read-whole
+  (doseq [pad [500 520 1000 1030 2000 40000]]
+    (let [file (write-lines! (range 1 6) pad)]
+      (is (= [1 2 3 4 5] (seqs-after file 0 10)) (str "pad " pad))
+      (is (= [3 4 5] (seqs-after file 2 10)) (str "pad " pad)))))
