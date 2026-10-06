@@ -1,0 +1,13 @@
+;; jobs.animals.lead-to with the only cow 35 blocks away and the default :radius 8 stops with a text (card 595c4b6c).
+{:defaults
+ {:tags [:animals :jobs]
+  :time :any
+  :plot {:floor "grass_block" :length 64 :width 32 :height 8}
+  :body {:at [4.5 0 16.5] :inventory [["lead" 2]] :effects [["resistance" 900 4]]}
+  :limit-s 60}
+ :cases
+ [{:name "only-cow-35-away-stops-with-radius-text"
+   :act [[:summon "cow" [40.5 0 16.5]]
+         [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [8 0 16]})]]
+   :expect [{:event {:source :job :kind :lead-to.done :data {:reason :none}} :within-s 30 :of-job true}]
+   :after [[:item "lead" 2]]}]}
