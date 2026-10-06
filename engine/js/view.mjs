@@ -33,12 +33,17 @@ export const ERROR_EVERY_MS = 60000
 
 // ---- files ----
 
-// the overworld keeps 'chunks'; another dimension has its own folder (chunks-the_nether), so its columns never overwrite the overworld's
+// the overworld keeps 'chunks'; another dimension has its own folder (chunks-the_nether), so its columns never overwrite the overworld's.
+// The name comes from the server: ':' becomes '_', anything but [a-z0-9_] gets no folder (null) and nothing is written.
 const chunksFolder = dimension => {
-  const name = (dimension ?? 'overworld').replace(/^minecraft:/, '')
-  return name === 'overworld' ? 'chunks' : `chunks-${name}`
+  const name = (dimension ?? 'overworld').replace(/^minecraft:/, '').replace(/:/g, '_')
+  if (name === 'overworld') return 'chunks'
+  return /^[a-z0-9_]+$/.test(name) ? `chunks-${name}` : null
 }
-export const columnFile = (stateDir, world, cx, cz, dimension) => path.join(worldsDir(stateDir), world, chunksFolder(dimension), `${cx}.${cz}.bin`)
+export const columnFile = (stateDir, world, cx, cz, dimension) => {
+  const folder = chunksFolder(dimension)
+  return folder && path.join(worldsDir(stateDir), world, folder, `${cx}.${cz}.bin`)
+}
 export const biomesFile = (stateDir, world) => path.join(worldsDir(stateDir), world, 'biomes.json')
 export const poseFile = (stateDir, world, agent) => path.join(bodyDir(stateDir, world, agent), 'view', 'pose.json')
 export const hudFile = (stateDir, world, agent) => path.join(bodyDir(stateDir, world, agent), 'view', 'hud.json')
@@ -331,8 +336,10 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
 
   const writeColumn = async (key, raw, hash, dimension) => {
     const [cx, cz] = key.split(',').map(Number)
+    const file = columnFile(stateDir, world, cx, cz, dimension)
+    if (!file) return
     const data = await deflate(raw, { level: 1 })
-    await writeAtomic(columnFile(stateDir, world, cx, cz, dimension), data)
+    await writeAtomic(file, data)
     written.set(key, hash)
     stats.columns++
     stats.bytes += data.length

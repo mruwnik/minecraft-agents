@@ -129,6 +129,14 @@ test('column files of another dimension go to their own folder, so they never ov
   assert.equal(columnFile('/s', 'w', 1, 2, 'minecraft:the_end'), path.join('/s', 'worlds', 'w', 'chunks-the_end', '1.2.bin'))
 })
 
+test('a dimension name that is not a safe folder name gets no column file; a namespaced one is flattened', () => {
+  assert.equal(columnFile('/s', 'w', 1, 2, '../x'), null)
+  assert.equal(columnFile('/s', 'w', 1, 2, 'minecraft:../../x'), null)
+  assert.equal(columnFile('/s', 'w', 1, 2, 'a/b'), null)
+  assert.equal(columnFile('/s', 'w', 1, 2, ''), null)
+  assert.equal(columnFile('/s', 'w', 1, 2, 'mod:dim'), path.join('/s', 'worlds', 'w', 'chunks-mod_dim', '1.2.bin'))
+})
+
 test('a body in the nether writes its columns outside the overworld folder', async () => {
   const bot = fakeBot({ columns: { '0,0': makeColumn() } })
   bot.game.dimension = 'minecraft:the_nether'
