@@ -1,0 +1,58 @@
+;; Card a5ca4ed3: a reflex (hostile-near) cuts jobs.blocks.dig and jobs.blocks.place while they walk to a far cell; the
+;; reflex runs, the zombie is killed, the job restarts, re-reads the world and finishes (dig: block gone and collected;
+;; place: block there, item spent once). Body starts 24 blocks from the target.
+{:defaults
+ {:tags [:blocks :hostile]
+  :mobs :keep
+  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+              :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+  :plot {:height 12}
+  :body {:at [3.5 0 16.5] :effects [["resistance" 900 4]]}
+  :limit-s 150}
+ :cases
+ [{:name "dig-cut-then-finishes-a"
+   :blocks [[:set [27 0 16] "stone"]]
+   :body {:inventory [["iron_pickaxe" 1]]}
+   :act [[:job (jobs.blocks.dig {:pos #at [27 0 16]})]
+         [:wait-s 3]
+         [:rcon "execute at $BODY run summon zombie ~4 ~ ~ {Tags:[\"wt\"],PersistenceRequired:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:await {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} 30]
+         [:wait-s 2]
+         [:rcon "kill @e[type=zombie,tag=wt,$BOX]"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 40}
+            {:event {:source :job :kind :blocks.dig.done :data {:reason :dug}} :within-s 140 :of-job true}]
+   :after [[:block [27 0 16] "air"] [:item "cobblestone" [:>= 1]]]}
+  {:name "dig-cut-then-finishes-b"
+   :blocks [[:set [27 0 18] "stone"]]
+   :body {:inventory [["iron_pickaxe" 1]]}
+   :act [[:job (jobs.blocks.dig {:pos #at [27 0 18]})]
+         [:wait-s 3]
+         [:rcon "execute at $BODY run summon zombie ~4 ~ ~ {Tags:[\"wt\"],PersistenceRequired:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:await {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} 30]
+         [:wait-s 2]
+         [:rcon "kill @e[type=zombie,tag=wt,$BOX]"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 40}
+            {:event {:source :job :kind :blocks.dig.done :data {:reason :dug}} :within-s 140 :of-job true}]
+   :after [[:block [27 0 18] "air"] [:item "cobblestone" [:>= 1]]]}
+  {:name "place-cut-then-finishes-a"
+   :body {:inventory [["cobblestone" 4]]}
+   :act [[:job (jobs.blocks.place {:pos #at [27 0 16] :item "cobblestone"})]
+         [:wait-s 3]
+         [:rcon "execute at $BODY run summon zombie ~4 ~ ~ {Tags:[\"wt\"],PersistenceRequired:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:await {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} 30]
+         [:wait-s 2]
+         [:rcon "kill @e[type=zombie,tag=wt,$BOX]"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 40}
+            {:event {:source :job :kind :blocks.place.done :data {:placed true :reason :placed}} :within-s 140 :of-job true}]
+   :after [[:block [27 0 16] "cobblestone"] [:item "cobblestone" 3]]}
+  {:name "place-cut-then-finishes-b"
+   :body {:inventory [["cobblestone" 4]]}
+   :act [[:job (jobs.blocks.place {:pos #at [27 0 18] :item "cobblestone"})]
+         [:wait-s 3]
+         [:rcon "execute at $BODY run summon zombie ~4 ~ ~ {Tags:[\"wt\"],PersistenceRequired:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:await {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} 30]
+         [:wait-s 2]
+         [:rcon "kill @e[type=zombie,tag=wt,$BOX]"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 40}
+            {:event {:source :job :kind :blocks.place.done :data {:placed true :reason :placed}} :within-s 140 :of-job true}]
+   :after [[:block [27 0 18] "cobblestone"] [:item "cobblestone" 3]]}]}

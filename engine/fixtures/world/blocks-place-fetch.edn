@@ -1,0 +1,47 @@
+;; Card a5ca4ed3: jobs.blocks.place with no item carried. :fetch true gets the item first (a seen chest, as in fetch-f1);
+;; without :fetch, or with nothing fetchable, the job waits :need and places nothing (a fetch takes just the one block it places; a failed fetch is remembered,
+;; the wait then carries {:fetch {:failed ..}}). Zone and footprint refusals: own-plan-footprint.edn and blocks-place-zone.edn.
+{:defaults
+ {:tags [:blocks :fetch]
+  :plot {:height 12}
+  :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "fetch-from-seen-chest-then-place-a"
+   :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:cobblestone\",count:8}]}"]]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+         [:job (jobs.blocks.place {:pos #at [20 0 14] :item "cobblestone" :fetch true})]]
+   :expect [{:event {:source :job :kind :fetch.started} :within-s 20 :of-job true}
+            {:event {:source :job :kind :fetch.done} :within-s 60 :of-job true}
+            {:event {:source :job :kind :blocks.place.done :data {:placed true :reason :placed}} :within-s 80 :of-job true}]
+   :after [[:block [20 0 14] "cobblestone"] [:item "cobblestone" 0]]}
+  {:name "fetch-from-seen-chest-then-place-b"
+   :blocks [[:set [18 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:dirt\",count:8}]}"]]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+         [:job (jobs.blocks.place {:pos #at [12 0 14] :item "dirt" :fetch true})]]
+   :expect [{:event {:source :job :kind :fetch.started} :within-s 20 :of-job true}
+            {:event {:source :job :kind :fetch.done} :within-s 60 :of-job true}
+            {:event {:source :job :kind :blocks.place.done :data {:placed true :reason :placed}} :within-s 80 :of-job true}]
+   :after [[:block [12 0 14] "dirt"] [:item "dirt" 0]]}
+  {:name "no-fetch-waits-need"
+   :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:cobblestone\",count:8}]}"]]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+         [:job (jobs.blocks.place {:pos #at [20 0 14] :item "cobblestone"})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :need :item "cobblestone"}} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind :blocks.place.done} :for-s 20}
+            {:no-event {:source :job :kind :fetch.started} :for-s 20}]
+   :after [[:not-block [20 0 14] "cobblestone"] [:item "cobblestone" 0]]}
+  {:name "fetch-nothing-fetchable-fails-clearly"
+   :act [[:job (jobs.blocks.place {:pos #at [20 0 14] :item "cobblestone" :fetch {:how #{:chest}}})]]
+   :expect [{:event {:source :job :kind :fetch.failed} :within-s 40 :of-job true}
+            {:event {:source :job :kind :waiting :data {:reason :need :item "cobblestone" :fetch {:failed [:any]}}} :within-s 50 :of-job true}
+            {:no-event {:source :job :kind :blocks.place.done} :for-s 30}]
+   :after [[:not-block [20 0 14] "cobblestone"] [:item "cobblestone" 0]]}
+  {:name "chest-never-seen-not-used"
+   :blocks [[:fill [13 0 18] [15 2 20] "stone" :outline]
+            [:set [14 1 19] "chest{Items:[{Slot:0b,id:\"minecraft:cobblestone\",count:8}]}"]]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+         [:job (jobs.blocks.place {:pos #at [20 0 14] :item "cobblestone" :fetch {:how #{:chest}}})]]
+   :expect [{:event {:source :job :kind :fetch.failed} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :blocks.place.done} :for-s 30}]
+   :after [[:not-block [20 0 14] "cobblestone"] [:item "cobblestone" 0]]}]}

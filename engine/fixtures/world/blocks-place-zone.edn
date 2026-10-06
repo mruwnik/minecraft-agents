@@ -1,0 +1,32 @@
+;; Card a5ca4ed3: jobs.blocks.place against another body's claim on a cell (a plan footprint, :metadata :by someone else;
+;; the plot is outside every zones.edn box, so real zone boxes are hand-run). Refused: waits :not-allowed :by :footprint,
+;; places nothing, keeps the item. :for-plan names the plan the job works, so its footprint does not refuse (the own-plot case).
+{:defaults
+ {:tags [:blocks :access]
+  :plot {:height 12}
+  :body {:at [16.5 0 16.5] :inventory [["cobblestone" 8]] :effects [["resistance" 600 4]]}
+  :plans [{:id "w" :metadata {:by "SomeoneElse"} :parts [{:id "w" :cells [#at [20 0 14]] :want [:any "cobblestone"]}]}]
+  :limit-s 60}
+ :cases
+ [{:name "other-bodys-plan-refuses-a"
+   :act [[:job (jobs.blocks.place {:pos #at [20 0 14] :item "cobblestone"})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :not-allowed :by :footprint}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :blocks.place.done} :for-s 20}]
+   :after [[:not-block [20 0 14] "cobblestone"] [:item "cobblestone" 8]]}
+  {:name "other-bodys-plan-refuses-b"
+   :act [[:job (jobs.blocks.place {:pos #at [20 0 14] :item "cobblestone" :fetch true})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :not-allowed :by :footprint}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :blocks.place.done} :for-s 20}]
+   :after [[:not-block [20 0 14] "cobblestone"] [:item "cobblestone" 8]]}
+  {:name "for-plan-places-a"
+   :act [[:job (jobs.blocks.place {:pos #at [20 0 14] :item "cobblestone" :for-plan "$plan:w"})]]
+   :expect [{:event {:source :job :kind :blocks.place.done :data {:placed true :reason :placed}} :within-s 40 :of-job true}]
+   :after [[:block [20 0 14] "cobblestone"] [:item "cobblestone" 7]]}
+  {:name "for-plan-places-b"
+   :act [[:job (jobs.blocks.place {:pos #at [20 0 14] :item "cobblestone" :for-plan "$plan:w"})]]
+   :expect [{:event {:source :job :kind :blocks.place.done :data {:placed true :reason :placed}} :within-s 40 :of-job true}]
+   :after [[:block [20 0 14] "cobblestone"] [:item "cobblestone" 7]]}
+  {:name "free-cell-outside-the-plan-places"
+   :act [[:job (jobs.blocks.place {:pos #at [12 0 14] :item "cobblestone"})]]
+   :expect [{:event {:source :job :kind :blocks.place.done :data {:placed true :reason :placed}} :within-s 40 :of-job true}]
+   :after [[:block [12 0 14] "cobblestone"] [:item "cobblestone" 7]]}]}
