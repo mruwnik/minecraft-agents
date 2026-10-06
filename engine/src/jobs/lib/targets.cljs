@@ -29,29 +29,33 @@
   searches (atom {}))
 
 (defn query
-  "The planner query from the body's cell to within range of any of targets ({:x :y :z} cells)."
+  "The planner query from the body's cell to within range of any of targets ({:x :y :z (:range)} cells; a target's own
+  :range replaces range)."
   [c targets range]
-  (let [{:keys [x y z]} (first targets)
-        ^js q (walk/plan-query c [x y z] range)]
-    (set! (.-goals q) (to-array (map (fn [t] #js {:kind "near" :x (:x t) :y (:y t) :z (:z t) :range range}) targets)))
+  (let [{:keys [x y z] :as t} (first targets)
+        ^js q (walk/plan-query c [x y z] (or (:range t) range))]
+    (set! (.-goals q) (to-array (map (fn [t] #js {:kind "near" :x (:x t) :y (:y t) :z (:z t) :range (or (:range t) range)}) targets)))
     q))
 
-(defn new-search [c pw targets range key]
+(defn new-search
+  "A search over targets of the world costed as go-to's plans are (walk/costed-world: known dangers and darkness; opts
+  :dangers and :dark, default true)."
+  [c pw targets range key {:keys [dangers dark] :or {dangers true dark true}}]
   {:key key :t (js/Date.now)
    :plan (planner/create-plan (.-snapshot pw) (query c targets range)
-                              (walk/plan-options pw walk/default-weight
+                              (walk/plan-options (walk/costed-world c pw {:dangers? dangers :dark? dark}) walk/default-weight
                                                  (executor/planner-limits (walk/body-policy c) (walk/solid-fn pw))
                                                  (assoc walk/wide-box :maxNodes max-nodes)))})
 
 (defn answer
   "The answer of a search that is over, from its planner result r: {:status :found :target :index :cost} (cost in
-  seconds of walking, risk counted as the planner does), or {:status :none :reason :proved}: proved when the search ran
+  seconds of walking, risk and darkness counted as the planner does), or {:status :none :reason :proved}: proved when the search ran
   out of land with no frontier into unloaded land (no target is reachable for this walker), false when it ran out of nodes."
   [targets ^js r]
   (if (= "found" (.-status r))
     (let [i (.-goal r)
           ^js cost (.. r -path -cost)]
-      {:status :found :target (nth targets i) :index i :cost (+ (.-seconds cost) (* 2 (.-risk cost)))})
+      {:status :found :target (nth targets i) :index i :cost (+ (.-seconds cost) (* 2 (.-risk cost)) (.-darkSeconds cost))})
     (let [reason (keyword (.-reason r))]
       {:status :none :reason reason :proved (and (contains? proof-reasons reason) (nil? (.-frontier r)))})))
 
@@ -59,10 +63,11 @@
   "The target of targets ({:x :y :z} cells, nearest first; the first max-targets are searched) the body reaches soonest
   by walking to within range of it: {:status :found :target :index :cost}, {:status :searching} (the search goes on at
   the next call), or {:status :none :reason :proved} (answer). One target is not searched ({:status :found :target t
-  :index 0}): the walk to it decides. opts {:tag :budget}: tag keeps searches of different callers of one body apart
-  (default :default), budget the expansions of one call (default walk/round-budget)."
+  :index 0}): the walk to it decides. A target may carry its own :range. opts {:tag :budget :dangers :dark}: tag keeps
+  searches of different callers of one body apart (default :default), budget the expansions of one call (default
+  walk/round-budget), dangers and dark (default true) whether known dangers and darkness are costed (new-search)."
   ([c targets range] (nearest! c targets range nil))
-  ([c targets range {:keys [tag budget] :or {tag :default budget walk/round-budget}}]
+  ([c targets range {:keys [tag budget] :or {tag :default budget walk/round-budget} :as opts}]
    (let [targets (vec (take max-targets targets))
          pw (walk/path-world (:primitives c))]
      (cond
@@ -75,7 +80,7 @@
              kept (get @searches who)
              search (if (and (= k (:key kept)) (< (- (js/Date.now) (:t kept)) walk/search-max-age-ms))
                       kept
-                      (new-search c pw targets range k))
+                      (new-search c pw targets range k opts))
              ^js p (:plan search)
              t0 (js/performance.now)]
          (loop [used walk/chunk-expansions]

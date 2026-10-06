@@ -3,16 +3,14 @@
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.child :as child]
-            [jobs.lib.cost :as cost]
             [jobs.lib.escape :as escape]
             [jobs.lib.look :as look]
-            [jobs.lib.reach :as reach]
             [jobs.lib.result :as result]
             [jobs.lib.shelter :as sh]
+            [jobs.lib.targets :as targets]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
-            [engine.game :as game]
             [engine.memory :as mem]
             [jobs.lib.places :as places]
             [triggers.survival.night :as night]
@@ -51,13 +49,13 @@
     out of a failed pit first; never a tool fetched in the dark), else flees somewhere safer, else holds exposed until day (one shelter.exposed
     warn, hold :exposed), still taking a bed or a sleeper's log-out when one turns up. A body held exposed digs in again (failed sites
     forgotten) when it has moved off its spot or retry-after-ms passed, at most max-retries times.
-  Fleeing (:flee-radius, 0 never): to the cheapest candidate within the radius that is not tried tonight, at most max-flees
-  walks (go-to, its known mobs costed; the route need not be lit): a known bed farther than :bed-radius, a :roofed-places
+  Fleeing (:flee-radius, 0 never): to the candidate within the radius that is not tried tonight which go-to reaches soonest
+  (one planner search over them, jobs.lib.targets/nearest!: known mobs and darkness costed), at most max-flees
+  walks (the route need not be lit): a known bed farther than :bed-radius, a :roofed-places
   place with a seen roof, a seen cave or overhang cell (a seen solid floor and roof, two free dry cells, within about 16
   blocks: only those seen, and only while the carried blocks (dig-in's) cover every wall cell still open; none whose
   wall a zone refuses), or seen natural ground (never sand or gravel) the carried tools dig, 9+ from every failed
-  site, with standing room (pit-site?). Cost: jobs.lib.cost/walk-cost with the route danger past the hostiles the body knows of;
-  ties :bed, :roofed-place, :cave, :ground. Arrived at a cave cell it walls itself in (dig-in :enclose, walls only, never a
+  site, with standing room (pit-site?). While that search goes on the night holds its pass. Arrived at a cave cell it walls itself in (dig-in :enclose, walls only, never a
   pit): sealed, it holds :dug-in until morning; a refusal marks the site failed and the roofed body ends the night :roofed. shelter.fled info on arrival, shelter.flee_failed when not arrived; a walk cut by a
   reflex resumes the same target. Arrived: the next pass sleeps, is roofed, or digs in there (a niche is tried again).
   Done {:night how :fled n} (stopped :exposed {:fled n}) when it fled.
@@ -430,29 +428,6 @@
 
 (def ground-candidates "Seen ground cells costed per flee: the nearest ones." 16)
 
-(defn route-danger
-  "Route danger (jobs.lib.cost/route-danger) of the straight walk from the feet to pos past the hostiles the body knows of."
-  [c pos]
-  (let [p (:primitives c)
-        kind-at (reach/lookup p)
-        route (cost/straight-route kind-at (sh/feet p) pos)]
-    (if route
-      (:danger (cost/route-danger (game/version-of p) kind-at route (reach/seen-hostiles p) (.-equipment (.self p))))
-      0)))
-
-(def kind-rank {:bed 0 :roofed-place 1 :cave 2 :ground 3})
-
-(defn rank-flees
-  "cands ([{:kind :pos ...}]) from here, each with :distance and :cost (jobs.lib.cost/walk-cost with (danger-of pos)),
-  cheapest first, ties :bed, :roofed-place, :cave, :ground."
-  [here cands danger-of]
-  (->> cands
-       (map (fn [{:keys [pos] :as cand}]
-              (let [d (u/dist here pos)]
-                (assoc cand :distance d :cost (:cost (cost/walk-cost {:distance d :danger (danger-of pos)}))))))
-       (sort-by (juxt :cost (comp kind-rank :kind)))
-       vec))
-
 (defn ground-sites
   "Natural ground the body has seen within radius that the carried tools dig and that is no sand or gravel, as feet
   cells ({:kind :ground :pos}) a pit can be dug at (pit-site?), clear of failed sites, the nearest ground-candidates."
@@ -500,22 +475,34 @@
          (take cave-candidates)
          vec)))
 
-(defn flee-target
-  "The cheapest place not yet tried tonight that is somewhere safer than here (see the doc), or nil: none with
-  :flee-radius 0 or after max-flees."
+(defn ^:async flee-target
+  "The place not yet tried tonight, somewhere safer than here (see the doc), that go-to reaches soonest (jobs.lib.targets/
+  nearest!: one planner search over the candidates, costed as go-to plans: known dangers and darkness), as the candidate
+  with its :distance and :cost; :searching while that search goes on; nil when there is none (none with :flee-radius 0
+  or after max-flees). Candidates: the bed, :roofed-places, caves, ground, the nearest max-targets of them."
   [c]
   (let [m (ctx/mem c)
         p (:primitives c)
         flee-radius (:flee-radius (:args c))
         tried (set (:flee-failed m))]
     (when (and (pos? flee-radius) (< (or (:flees m) 0) max-flees))
-      (let [bed (when-let [pos (sh/bed-to-use p (ctx/view c) flee-radius (bed-permit c))]
-                  (when (> (u/dist (sh/feet p) pos) (radius c)) [{:kind :bed :pos pos}]))
-            places (map #(assoc % :kind :roofed-place) (roofed-places-in c flee-radius false))]
-        (->> (concat bed places (cave-sites c flee-radius) (ground-sites c flee-radius))
-             (remove #(contains? tried (:pos %)))
-             (#(rank-flees (sh/feet p) % (partial route-danger c)))
-             first)))))
+      (let [here (sh/feet p)
+            bed (when-let [pos (sh/bed-to-use p (ctx/view c) flee-radius (bed-permit c))]
+                  (when (> (u/dist here pos) (radius c)) [{:kind :bed :pos pos}]))
+            places (map #(assoc % :kind :roofed-place) (roofed-places-in c flee-radius false))
+            cands (->> (concat bed places (cave-sites c flee-radius) (ground-sites c flee-radius))
+                       (remove #(contains? tried (:pos %)))
+                       (sort-by #(u/dist here (:pos %)))
+                       (take targets/max-targets)
+                       vec)]
+        (when (seq cands)
+          (let [a (await (targets/nearest! c (mapv (fn [{:keys [kind pos]}] (cond-> pos (= :bed kind) (assoc :range 2))) cands) 0
+                                           {:tag :night-flee}))]
+            (case (:status a)
+              :searching :searching
+              :found (let [cand (nth cands (:index a))]
+                       (assoc cand :distance (u/dist here (:pos cand)) :cost (:cost a)))
+              nil)))))))
 
 (defn flee-args [{:keys [kind name pos]}]
   (case kind
@@ -575,7 +562,11 @@
     (cond
       (:pit-trapped (ctx/mem c)) (await (hold-exposed! c))
       (and (nil? site) (not= :tried (:niche (ctx/mem c)))) (await (niche! c pit))
-      (nil? site) (if-let [t (flee-target c)] (await (flee! c t)) (await (hold-exposed! c)))
+      (nil? site) (let [t (await (flee-target c))]
+                    (cond
+                      (= :searching t) :again
+                      t (await (flee! c t))
+                      :else (await (hold-exposed! c))))
       pit (do (busy! c)
               (ctx/update-mem! c assoc :relocating site)
               (let [r (await (dig-in/climb! c {:start pit} site))]

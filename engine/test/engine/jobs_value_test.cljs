@@ -129,3 +129,7 @@
     (is (= 26 (:cost w)))
     (is (= (+ v/trip (:cost w)) (:cost f)) "a fetch is a trip plus the walk")
     (is (= (assoc (:parts w) :trip v/trip) (:parts f)))))
+
+(deftest a-dark-block-costs-twice-a-lit-one
+  (is (= 1 v/dark-factor) "per-dark over per-block")
+  (is (= v/per-dark v/per-block)))

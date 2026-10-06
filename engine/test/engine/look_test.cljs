@@ -134,3 +134,33 @@
         b (first (look/seen-blocks p {:names ["iron_ore"] :properties? true}))]
     (is (contains? b :properties))
     (is (nil? (:properties (first (look/seen-blocks p {:names ["iron_ore"]})))))))
+
+;; ---- dark-fn: the planner's test of a feet cell
+
+(def day 6000)
+(def midnight 18000)
+
+(defn dark-of
+  "1 or 0: dark-fn's call on cell x y z of a body that looks round a walled-off room at time t, with the light
+  [sky block] given for the cell."
+  [t cell light]
+  (let [p (seeing {:time t :blocks wall})]
+    (when light (swap! (fake/state p) assoc :light {cell light}))
+    ((:at (look/dark-fn p)) (first cell) (second cell) (nth cell 2))))
+
+(deftest dark-fn-needs-a-perception
+  (is (nil? (look/dark-fn (tu/fake {})))))
+
+(deftest an-unseen-cell-is-dark-at-night-only
+  (is (= 1 (dark-of midnight [6 64 0] nil)))
+  (is (= 0 (dark-of day [6 64 0] nil))))
+
+(deftest a-seen-cell-is-lit-by-block-light-or-by-day-sky
+  (is (= 0 (dark-of midnight [0 64 5] [0 1])) "a torch's light 1 at night")
+  (is (= 1 (dark-of midnight [0 64 5] [15 0])) "open sky at night")
+  (is (= 0 (dark-of day [0 64 5] [15 0])) "open sky by day")
+  (is (= 1 (dark-of day [0 64 5] [0 0])) "a seen cave cell is dark by day"))
+
+(deftest dark-fn-says-whether-the-sky-is-dark
+  (is (true? (:night? (look/dark-fn (seeing {:time midnight})))))
+  (is (false? (:night? (look/dark-fn (seeing {:time day}))))))

@@ -19,9 +19,9 @@
   Only headings with a clear line at feet and eye height are looked at.
   It never turns back; the job's next act aims itself. A body with no perception does nothing."
   (:require [engine.ctx :as ctx]
-            [engine.perception :as perception]))
+            [engine.perception :as perception]
+            [jobs.lib.look :as look]))
 
-(def dark-light "A feet cell under this effective light is dark: hostiles spawn and walk in from it." 8)
 (def alert-radius 24)
 (def alert-ms 30000)
 (def default-every-ms 3000)
@@ -37,24 +37,13 @@
 
 (defn perception-of [c] (aget (:primitives c) "perception"))
 
-(defn effective-light
-  "Light at cell x y z of raw: the brighter of block light and sky light less the sky darkening. Only for the body's own cell."
-  [raw x y z]
-  (let [packed (.lightAt raw x y z)
-        sky (bit-shift-right packed 4)
-        block (bit-and packed 15)
-        s (.sky raw)
-        darken (perception/sky-darken (.-timeOfDay s) (.-rain s) (.-thunder s))
-        subtract (js/Math.round (* 11 (/ (- 1 darken) 0.8)))]
-    (max block (- sky subtract))))
-
 (defn dark-here? [c]
   (let [per (perception-of c)
         raw (:raw per)
         ^js pos (.-pos (.self (:primitives c)))]
     (and raw
-         (< (effective-light raw (js/Math.floor (.-x pos)) (js/Math.floor (.-y pos)) (js/Math.floor (.-z pos)))
-            dark-light))))
+         (< (look/effective-light raw (js/Math.floor (.-x pos)) (js/Math.floor (.-y pos)) (js/Math.floor (.-z pos)))
+            look/dark-light))))
 
 (defn known-mobs [c]
   (when-let [f (aget (:primitives c) "knownMobs")]

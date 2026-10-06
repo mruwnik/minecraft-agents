@@ -225,6 +225,10 @@
 (def despawn-ms game/despawn-ms)
 (def trip "Any fetch: turning round, finding the pile, the risk of the place one died at." 10)
 (def per-block "One block walked, there and back about a second of a player's time per 3 blocks." 0.3)
+(def per-dark "One block walked in the dark, on top of per-block: a dark block costs twice a lit one." 0.3)
+(def dark-factor
+  "The planner's extra cost of a dark cell as a share of its own seconds (options.dark.factor): per-dark over per-block."
+  (/ per-dark per-block))
 (def per-danger "One expected point of damage (jobs.lib.cost/route-danger): about 10 s of healing and risk." 10)
 (def walk-blocks-per-s "Walking speed with slack for detours (4.3 flat out, 1.5x the way)." 2.9)
 (def lethal-causes ["lava" "fire" "burn" "void" "out_of_world"])

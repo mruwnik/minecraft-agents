@@ -1,6 +1,7 @@
 (ns engine.path-targets-test
   "jobs.lib.targets: the nearest of many targets by walking cost, one bounded search a call, against the fake world."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.memory :as mem]
             [jobs.lib.targets :as targets]
             [jobs.lib.walk :as walk]
             [engine.test-util :as tu]))
@@ -26,7 +27,7 @@
   "nearest! called (chunk-expansions 16) from start over blocks until it answers more than :searching: [answer calls]."
   [blocks ts range opts]
   (let [p (tu/fake {:blocks blocks :self {:pos start}})
-        c {:primitives p}
+        c {:primitives p :view (fn [] {:data mem/empty-data :now 0})}
         chunk walk/chunk-expansions]
     (reset! targets/searches {})
     (set! walk/chunk-expansions 16)

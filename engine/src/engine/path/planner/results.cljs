@@ -186,6 +186,7 @@
           n (.-length steps)
           cost #js {:seconds (aget (.-secs s) node)
                     :risk (aget (.-risks s) node)
+                    :darkSeconds (aget (.-darks s) node)
                     :maxDrop (loop [k 1 best 0]
                                (if (< k n)
                                  (let [^js st (aget steps k) ^js p (aget steps (dec k))]

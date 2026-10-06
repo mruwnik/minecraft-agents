@@ -6,7 +6,8 @@
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.util :as u]
-            [engine.perception :as perception]))
+            [engine.perception :as perception]
+            [engine.perception.store :as store]))
 
 (def headings {"north" [0 -1] "south" [0 1] "east" [1 0] "west" [-1 0]})
 (def heading-short {"n" "north" "s" "south" "e" "east" "w" "west"})
@@ -139,3 +140,42 @@
       hits
       (do (await (look-around! c))
           (seen-blocks p q)))))
+
+;; ------------------------------------------------------------------ light
+
+(def dark-light "A feet cell under this effective light is dark: hostiles spawn and walk in from it." 8)
+
+(defn sky-subtract
+  "What the sky's light is reduced by now (0 at noon, 11 at a clear midnight): time of day, rain and thunder of raw."
+  [raw]
+  (let [s (.sky raw)
+        darken (perception/sky-darken (.-timeOfDay s) (.-rain s) (.-thunder s))]
+    (js/Math.round (* 11 (/ (- 1 darken) 0.8)))))
+
+(defn effective-light
+  "Light at cell x y z of raw: the brighter of block light and sky light less the sky darkening."
+  [raw x y z]
+  (let [packed (.lightAt raw x y z)]
+    (max (bit-and packed 15) (- (bit-shift-right packed 4) (sky-subtract raw)))))
+
+(defn dark-fn
+  "The planner's test of a feet cell (options.dark.at), {:at (fn [x y z] 1 dark, 0 lit) :night? whether the sky is dark},
+  for the body of primitives p; nil without a perception. A cell the body has seen is lit by block light of 1 or more
+  (mobs do not spawn there) or by sky light still at dark-light after the sky darkening; a seen cave stays dark by day.
+  A cell never seen is dark only when the sky is (night?): by day it costs like a lit one. Light is read only for cells
+  seen, as a player would know them."
+  [p]
+  (when-let [per (aget p "perception")]
+    (when-let [raw (:raw per)]
+      (let [^js st (:st per)
+            subtract (sky-subtract raw)
+            night? (< (- 15 subtract) dark-light)
+            unseen (if night? 1 0)
+            ^js sections (store/store-of st (.-dim st))]
+        {:night? night?
+         :at (fn [x y z]
+               (let [^js sec (.get sections (store/section-key (bit-shift-right x 4) (bit-shift-right y 4) (bit-shift-right z 4)))]
+                 (if (or (nil? sec) (zero? (aget (.-ids sec) (store/cell-index x y z))))
+                   unseen
+                   (let [packed (.lightAt ^js raw x y z)]
+                     (if (or (pos? (bit-and packed 15)) (>= (- (bit-shift-right packed 4) subtract) dark-light)) 0 1)))))}))))

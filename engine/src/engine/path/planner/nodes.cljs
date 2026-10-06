@@ -56,8 +56,8 @@
       (loop [i 0 best js/Infinity]
         (if (< i (.-n-goals s))
           (recur (inc i) (js/Math.min best (js/Math.max 0 (- (.octileTo s x z (aget ^js (.-g-xs s) i) (aget ^js (.-g-zs s) i)) (aget ^js (.-g-slack s) i)))))
-          (* best WALK-S)))
-      (* (js/Math.max 0 (- (.distanceTo s x z) (.-slack s))) WALK-S)))
+          (* best WALK-S (.-h-scale s))))
+      (* (js/Math.max 0 (- (.distanceTo s x z) (.-slack s))) WALK-S (.-h-scale s))))
 
   ;; ---- node storage ----
   (hashOf [s x y z region]
@@ -100,6 +100,7 @@
     (set! (.-parents s) (grown (.-parents s) (.-cap s)))
     (set! (.-secs s) (grown (.-secs s) (.-cap s)))
     (set! (.-risks s) (grown (.-risks s) (.-cap s)))
+    (set! (.-darks s) (grown (.-darks s) (.-cap s)))
     (set! (.-airs s) (grown (.-airs s) (.-cap s)))
     (set! (.-peaks s) (grown (.-peaks s) (.-cap s)))
     (set! (.-wsecs s) (grown (.-wsecs s) (.-cap s)))
@@ -180,7 +181,7 @@
       node))
 
   ;; set the node's way in and put it in its place in the heap
-  (relax [s node x z h move parent-node sec risk g slow-to corner shape]
+  (relax [s node x z h move parent-node sec risk dark g slow-to corner shape]
     (aset (.-hs s) node h)
     (aset (.-moves s) node move)
     (aset (.-slows s) node slow-to)
@@ -189,6 +190,7 @@
     (aset (.-parents s) node parent-node)
     (aset (.-secs s) node sec)
     (aset (.-risks s) node risk)
+    (aset (.-darks s) node dark)
     (aset (.-airs s) node (.-move-air s))
     (aset (.-peaks s) node (js/Math.max (aget (.-peaks s) parent-node) (.-move-peak s)))
     (aset (.-wsecs s) node (+ (aget (.-wsecs s) parent-node) (.-move-water s)))
@@ -201,10 +203,10 @@
       (.siftUp s (aget (.-heap-pos s) node) node)))
 
   ;; a record of its own for a node: unless the node budget is spent
-  (insertNode [s x y z h move parent-node sec risk g slow-to corner shape region key slot]
+  (insertNode [s x y z h move parent-node sec risk dark g slow-to corner shape region key slot]
     (if (== (.-n-nodes s) (.-max-nodes s))
       (set! (.-over-budget s) true)
-      (.relax s (.addNode s x y z region key slot) x z h move parent-node sec risk g slow-to corner shape)))
+      (.relax s (.addNode s x y z region key slot) x z h move parent-node sec risk dark g slow-to corner shape)))
 
   ;; relax the edge to a node: insert it, or lower its cost if this way is cheaper. Known dangers add to the move's risk
   ;; (dangerRisk), after holdsBack: a held drop replayed through here is charged once.
@@ -224,7 +226,8 @@
         ^boolean (.refusedKind s (.-limit-kinds s) x y z move) (do (set! (.-limit-refused s) true) nil)
         :else
         (let [drisk (if (pos? (.-n-dangers s)) (+ drisk (.dangerRisk s x y z dsec)) drisk)
-              extra (if ^boolean (.-avoiding s) (.avoidCost s x y z move dsec drisk) 0)]
+              extra (if ^boolean (.-avoiding s) (.avoidCost s x y z move dsec drisk) 0)
+              ddark (if (some? (.-dark-at s)) (* (.-dark-factor s) dsec (.darkOf s x y z)) 0)]
           (when-not (neg? extra)
             (let [key (.keyOf s x y z region)
                   slot (.findSlot s key (bit-and (.hashOf s x y z region) (dec (.-slots s))))
@@ -232,18 +235,19 @@
                   sec (+ (aget (.-secs s) parent-node) dsec)
                   risk (+ (aget (.-risks s) parent-node) drisk)
                   ;; an alternative's search orders by its penalised cost; secs and risks stay the true cost of the walk
-                  g (if ^boolean (.-avoiding s) (+ (aget (.-gs s) parent-node) dsec (* (.-risk-weight s) drisk) extra) (+ sec (* (.-risk-weight s) risk)))]
+                  dark (+ (aget (.-darks s) parent-node) ddark)
+                  g (if ^boolean (.-avoiding s) (+ (aget (.-gs s) parent-node) dsec (* (.-risk-weight s) drisk) extra ddark) (+ sec (* (.-risk-weight s) risk) dark))]
               (if (== found -1)
-                (.insertNode s x y z h move parent-node sec risk g slow-to corner shape region key slot)
+                (.insertNode s x y z h move parent-node sec risk dark g slow-to corner shape region key slot)
                 (let [d-air (- (.-move-air s) (aget (.-airs s) found))
                       g-found (aget (.-gs s) found)]
                   (cond
                     (and (< g g-found) (<= d-air AIR-STEP))
                     (when-not (== (aget (.-heap-pos s) found) -2)
-                      (.relax s found x z h move parent-node sec risk g slow-to corner shape))
+                      (.relax s found x z h move parent-node sec risk dark g slow-to corner shape))
 
                     (or (< g g-found) (< d-air (- AIR-STEP)))
-                    (.insertNode s x y z h move parent-node sec risk g slow-to corner shape region key slot)
+                    (.insertNode s x y z h move parent-node sec risk dark g slow-to corner shape region key slot)
 
                     :else nil)))))))))
 

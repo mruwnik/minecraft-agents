@@ -4,6 +4,9 @@
   namespace; walk-to! is the whole loop, the other functions are its pieces."
   (:require [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
+            [jobs.lib.cost :as cost]
+            [jobs.lib.look :as look]
+            [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
             [engine.path.executor :as executor]
             [engine.path.planner-tuned :as planner]))
@@ -101,7 +104,7 @@
           wall? (wall-cells snapshot (.-table pw) walls)
           walled (js/Object.create snapshot)]
       (set! (.-stateAt walled) (fn [x y z] (if (contains? wall? [x y z]) id (.stateAt snapshot x y z))))
-      #js {:snapshot walled :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw) :avoid (.-avoid pw)})))
+      #js {:snapshot walled :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw) :avoid (.-avoid pw) :dark (.-dark pw)})))
 
 (def wide-box
   "The planner's search box (options margin and yMargin, blocks round start and goal) of the walks' searches. A way
@@ -149,9 +152,10 @@
 
 (defn plan-options
   "The planner options over pw with weight, limits and the search box (nil: the planner's default); pw's dangers
-  (with-dangers) as options.dangers."
+  (with-dangers) as options.dangers and its dark (with-dark) as options.dark."
   [pw weight limits box]
-  (js/Object.assign #js {:table (.-table pw) :space (.-space pw) :weight weight :limits limits :dangers (.-dangers pw) :avoid (.-avoid pw)}
+  (js/Object.assign #js {:table (.-table pw) :space (.-space pw) :weight weight :limits limits :dangers (.-dangers pw) :avoid (.-avoid pw)
+                         :dark (.-dark pw)}
                     (clj->js box)))
 
 (defn with-dangers
@@ -159,7 +163,24 @@
   [pw dangers]
   (if (nil? dangers)
     pw
-    #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers dangers :avoid (.-avoid pw)}))
+    #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers dangers :avoid (.-avoid pw) :dark (.-dark pw)}))
+
+(defn with-dark
+  "pw whose plans cost dark cells more (the planner's options.dark): dark is look/dark-fn's {:at :night?} (nil: pw). A dark
+  cell costs cost/dark-factor times its own seconds more."
+  [pw dark]
+  (if (nil? dark)
+    pw
+    #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw) :avoid (.-avoid pw)
+         :dark #js {:at (:at dark) :factor cost/dark-factor :night (:night? dark)}}))
+
+(defn costed-world
+  "pw (the primitives' pathWorld) costed the way go-to plans: with the dangers the body knows of now (dangers?, jobs.lib.threats)
+  and with dark cells (dark?, look/dark-fn). Every search that ranks routes by cost plans over this."
+  [c pw {:keys [dangers? dark?]}]
+  (cond-> pw
+    dangers? (with-dangers (threats/planner-dangers c))
+    dark? (with-dark (look/dark-fn (:primitives c)))))
 
 (def avoid-factor
   "How many times a cell's own cost an avoided cell costs more (the planner's options.avoid.factor): a detour is taken
@@ -172,7 +193,7 @@
   (if (empty? cells)
     pw
     (let [sorted (vec (sort cells))]
-      #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw)
+      #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw) :dark (.-dark pw)
            :avoid #js {:kinds 0 :factor avoid-factor :list sorted
                        :cells (js/Set. (clj->js (mapv (fn [[x y z]] (planner/cell-key x y z)) sorted)))}})))
 

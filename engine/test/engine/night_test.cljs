@@ -18,6 +18,7 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.shelter :as sh]
+            [jobs.lib.targets :as targets]
             [jobs.survival.night :as night]))
 
 (def night st/night)
@@ -653,13 +654,45 @@
           (is (= [:ground] (mapv :target (st/emitted seen :shelter.fled))))
           (is (some #(<= 27 (:x (st/arg-pos %))) (st/calls p "place")) "the pit's roof is placed at the patch"))))))
 
-(deftest the-cheapest-flee-candidate-pays-for-the-danger-on-its-route
-  (let [cands [{:kind :roofed-place :name :a :pos {:x 10 :y 64 :z 0}}
-               {:kind :roofed-place :name :b :pos {:x 0 :y 64 :z 14}}]
-        danger-of (fn [pos] (if (= 10 (:x pos)) 3 0))
-        ranked (night/rank-flees {:x 0 :y 64 :z 0} cands danger-of)]
-    (is (= [:b :a] (mapv :name ranked)) "the nearer one has a mob on the way")
-    (is (every? number? (map :cost ranked)))))
+(defn ^:async flee-with
+  "The home flee night (a roofed home beyond the walk radius) with targets/nearest! answering by answer-of (a fn of the
+  targets it is given); [log seen calls]: the child log, the events and the targets each call was given."
+  [answer-of]
+  (let [calls (atom [])
+        real targets/nearest!]
+    (set! targets/nearest! (fn ([c ts r] (targets/nearest! c ts r nil))
+                               ([_ ts _ _] (swap! calls conj ts) (js/Promise.resolve (answer-of ts)))))
+    (try
+      (let [{:keys [eng seen]} (await (flee-home-night (update dark-world :blocks merge {"10,66,0" "stone"}) {}))]
+        [(await (with-child-log #(st/run-until-empty eng 80))) seen @calls])
+      (finally (set! targets/nearest! real)))))
+
+(deftest the-flee-walks-to-the-target-go-to-costs-cheapest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[log seen calls] (await (flee-with (fn [_] {:status :found :index 0 :cost 7})))]
+          (is (seq (filter #(= :flee (first %)) log)))
+          (is (= [7] (mapv :cost (st/emitted seen :shelter.fled))) "the planner's cost is reported")
+          (is (every? #(and (:x %) (:z %)) (first calls)) "the candidates are given as cells"))))))
+
+(deftest a-flee-search-still-going-walks-nowhere-until-it-answers
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [n (atom 0)
+              [log seen calls] (await (flee-with (fn [_] (if (< (swap! n inc) 4) {:status :searching} {:status :found :index 0 :cost 3}))))]
+          (is (= 4 (count calls)) "asked again after each :searching")
+          (is (= 1 (count (filter #(= :flee (first %)) log))) "walks once, after the answer")
+          (is (= [3] (mapv :cost (st/emitted seen :shelter.fled)))))))))
+
+(deftest with-no-reachable-target-the-night-holds-exposed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[log seen] (await (flee-with (fn [_] {:status :none :reason :exhausted :proved true})))]
+          (is (empty? (filter #(= :flee (first %)) log)))
+          (is (= 1 (count (st/emitted seen :shelter.exposed)))))))))
 
 ;; ------------------------------------------------------------------ caves and overhangs
 

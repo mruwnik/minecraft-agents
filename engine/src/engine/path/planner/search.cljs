@@ -108,4 +108,8 @@
    ^boolean stop-at-edge ^:mutable edge-node
    ;; known dangers (options.dangers, see dangerRisk): x y z close radius rate each (nil: none), their count, the most risk
    ;; a second of walking takes from all of them (options.dangerCap), and the box round every danger's radius
-   ^js dangers n-dangers danger-cap dbx0 dbx1 dby0 dby1 dbz0 dbz1])
+   ^js dangers n-dangers danger-cap dbx0 dbx1 dby0 dby1 dbz0 dbz1
+   ;; options.dark (see darkOf): the test of a cell (nil: none), the extra cost of a dark cell as a share of its own
+   ;; seconds, the factor the heuristic is scaled by, a direct-mapped cache of the test (keys stored +1, flags 1 lit and
+   ;; 2 dark) and the seconds of dark cells on the path to each node
+   ^js dark-at dark-factor h-scale ^js dark-keys ^js dark-flags ^:mutable darks])
