@@ -243,6 +243,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       death: () => { stopWalking(target); emit({
         kind: 'died',
         pos: here(),
+        dimension: target.game?.dimension,
         inventory: inventoryNow().length > 0 ? inventoryNow() : snapshot,
         experience: { level: target.experience?.level ?? 0, points: target.experience?.points ?? 0 },
         ...causeNow()

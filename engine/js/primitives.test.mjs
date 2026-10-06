@@ -573,12 +573,14 @@ test('the died event carries the death position, the inventory and the experienc
   p.onBodyEvent(e => seen.push(e))
   bot.entity.position = new Vec3(4, 70, 2)
   bot.experience = { level: 5, points: 120, progress: 0.3 }
+  bot.game = { dimension: 'the_nether' }
   bot.emit('death')
   bot.entity.position = new Vec3(0, 64, 0)
   bot.experience = { level: 0, points: 0, progress: 0 }
   assert.deepEqual(seen, [{
     kind: 'died',
     pos: at(4, 70, 2),
+    dimension: 'the_nether',
     inventory: [{ name: 'bread', count: 2, slot: 36 }, { name: 'cobblestone', count: 4, slot: 37 }],
     experience: { level: 5, points: 120 }
   }])

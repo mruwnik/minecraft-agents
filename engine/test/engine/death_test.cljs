@@ -9,6 +9,7 @@
             [engine.takeover :as takeover]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [jobs.survival.recover-drops :as recover-drops]
             [triggers.survival.died :as died]))
 
 ;; The value and cost functions are jobs.lib.cost (jobs_value_test, cost_test); route danger jobs_danger_test.
@@ -624,3 +625,33 @@
           id (core/submit! eng job {})]
       (.emit (.-world p) event)
       (is (= [id] (:list (core/state eng))) (.-kind event)))))
+
+;; ------------------------------------------------------------ death places
+
+(defn deaths [eng] (mem/entries (mem/view (:store eng)) :deaths))
+
+(deftest recover-drops-records-the-death-position-in-memory
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:floor tu/walk-floor :entities drops})]
+          (die! eng {:pos death-pos :inventory junk :cause "lava" :dimension "the_nether"})
+          (core/submit! eng job {})
+          (await (run-until-empty eng 5))
+          (is (= [{:pos death-pos :dimension "the_nether" :cause "lava"}]
+                 (map #(dissoc (:data %) :death-t) (deaths eng))))
+          (is (= :forever (:ttl (mem/policy (mem/view (:store eng)) :deaths)))))))))
+
+(deftest recover-drops-records-each-death-once-and-caps-the-list
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:floor tu/walk-floor :entities drops})]
+          (die! eng {:pos death-pos :inventory junk})
+          (core/submit! eng job {})
+          (await (run-until-empty eng 5))
+          (is (= 1 (count (deaths eng))) "one death, one entry")
+          (doseq [i (range 12)]
+            (mem/write! (:store eng) :deaths {:pos {:x i :y 64 :z 0} :death-t i} recover-drops/deaths-policy))
+          (is (= 10 (count (deaths eng))))
+          (is (= {:x 11 :y 64 :z 0} (:pos (:data (last (deaths eng)))))))))))
