@@ -13,6 +13,8 @@
 #   Refuses (exit 6) a commit whose .js/.mjs/.cjs blob does not pass node --check.
 #   Refuses (exit 3) a hunks-mode commit while the index holds anything staged; refuses (exit 7) when the staged diff
 #   is not exactly the patch's changed lines (hunks mode) or the staged hunk count is not the confirmed N (path mode).
+#   Refuses (exit 8) a message that lacks "Card <first 8 chars of --card>" (also "card", "(card ...)", "cards").
+#   After the commit: the stat goes in the ledger and, best effort, as a note on the card (tools/card note; a failure only warns).
 #   Every flag that takes a value refuses one starting with "--" (so a missing value never swallows the next flag).
 # See tools/README.md. Never stashes, resets, amends or pushes.
 set -euo pipefail
@@ -114,6 +116,10 @@ done
 if [ -f "$msg" ]; then message="$(cat "$msg")"; else message="$msg"; fi
 trailer='Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>'
 grep -qiE '^Co-Authored-By:' <<<"$message" || message="$message"$'\n\n'"$trailer"
+
+# The message must name the card: "Card <id8>", "card <id8>", "(card <id8>)" or "cards <id8>" (a longer id also matches).
+card_id8="${card:0:8}"
+grep -qiE "cards? +$card_id8" <<<"$message" || die "the commit message must name the card, e.g. 'Card $card_id8' (--card $card)" 8
 
 # Lock with backoff. The lock dir holds the owner's pid; a lock whose owner is dead is reclaimed. Reclaimers and the owner's release take turns under a flock guard (the kernel frees it on death), so the owner read, the death check and the removal see one lock: nobody removes a fresh one.
 reclaim_dead() {
@@ -287,8 +293,16 @@ hash="$(git rev-parse HEAD)"
 read -r ins del < <(git show --numstat --format= HEAD | awk '{i+=$1; d+=$2} END{print i+0, d+0}')
 [ "$del" -lt 500 ] || flags+=("large-deletion $del")
 files="$(git show --name-only --format= HEAD)"
+stat="$(git show --stat --format= HEAD | tail -1 | sed 's/^ *//')"
 jq -nc --arg time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg hash "$hash" --arg card "$card" \
-  --arg files "$files" --argjson ins "$ins" --argjson del "$del" --arg flags "$(printf '%s\n' "${flags[@]:-}")" \
-  '{time:$time,hash:$hash,card:$card,paths:($files|split("\n")|map(select(.!=""))),insertions:$ins,deletions:$del,flags:($flags|split("\n")|map(select(.!="")))}' \
+  --arg files "$files" --arg stat "$stat" --argjson ins "$ins" --argjson del "$del" --arg flags "$(printf '%s\n' "${flags[@]:-}")" \
+  '{time:$time,hash:$hash,card:$card,paths:($files|split("\n")|map(select(.!=""))),insertions:$ins,deletions:$del,stat:$stat,flags:($flags|split("\n")|map(select(.!="")))}' \
   >> "$LEDGER"
-git show --stat --format='%h %s' HEAD | sed -n '1,20p'
+# Stat on stdout and, best effort, on the card: the commit exists already, so a board failure only warns.
+stat_text="$(git show --stat --format='%h %s' HEAD | sed -n '1,20p')"
+printf '%s\n' "$stat_text"
+card_tool="$ROOT/tools/card"
+[ -x "$card_tool" ] || card_tool="$(dirname "$0")/card"
+timeout "${COMMIT_MINE_NOTE_TIMEOUT:-15}" "$card_tool" note "$card" "$stat_text" >/dev/null 2>&1 \
+  || echo "commit-mine: warning: could not post the commit stat to card $card (the commit is done)" >&2
+exit 0

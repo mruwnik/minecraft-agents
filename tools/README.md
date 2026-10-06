@@ -33,9 +33,11 @@ Refuses (exit 1, nothing left staged) when:
 Foreign staged paths (someone staged outside the lock): in path mode they are left out via `commit --only` and
 flagged; in `--hunks` mode the run refuses (exit 3) and unstages its own hunks, so retry later.
 Exit 4: the lock could not be taken. Exit 6: a staged `.js/.mjs/.cjs` blob fails `node --check` (nothing committed).
+Exit 8: the message lacks `Card <first 8 chars of --card>` (also `card`, `(card ...)`, `cards`; a longer id matches).
+After the commit the stat is printed and posted as a note on the card (`COMMIT_MINE_NOTE_TIMEOUT` s, default 15); a board failure only warns.
 
 Every commit appends a JSON line to `.git/commit-ledger.jsonl`:
-`time, hash, card, paths, insertions, deletions, flags` (flags: hunks-mode, engine-core approvals,
+`time, hash, card, paths, insertions, deletions, stat, flags` (flags: hunks-mode, engine-core approvals,
 foreign-staged, large-deletion >= 500).
 
 ### ledger
