@@ -1,0 +1,70 @@
+;; Card 6039c7c5: go-to costs sensed hostiles and remembered :threat spots (planner danger cost, finite). A NoAI zombie 20
+;; (18-20 for the gap case) blocks ahead on the straight line, goal 68 blocks east. Unarmed: the walk skirts it (the reflex never fires); armed:
+;; may pass nearer. A zombie the body cannot see (behind thick stone) or cannot reach (fenced pad) costs nothing.
+;; Case verdicts that need the path (min distance to the zombie) are read from the body's moved events by hand.
+{:defaults
+ {:tags [:movement :hostile :planner]
+  :mobs :keep
+  :plot {:height 12 :length 80 :width 48}
+  :body {:at [2.5 0 24.5] :effects [["resistance" 900 4]]}
+  :limit-s 120}
+ :cases
+ [{:name "unarmed-skirts-zombie"
+   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+               :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+   :act [[:summon "zombie" [22.5 0 24.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ -90 0"]
+         [:wait-s 4]
+         [:job (jobs.movement.go-to {:pos #at [70 0 24] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 100 :of-job true}
+            {:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 100
+             :until {:source :job :kind :result :data {:arrived true}}}]
+   :after [[:body-near [70.5 0 24.5] 3]]}
+  {:name "armed-arrives"
+   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+               :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+   :body {:inventory [["diamond_sword" 1]]}
+   :act [[:summon "zombie" [22.5 0 24.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ -90 0"]
+         [:wait-s 4]
+         [:job (jobs.movement.go-to {:pos #at [70 0 24] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 100 :of-job true}]
+   :after [[:body-near [70.5 0 24.5] 3]]}
+  {:name "threat-memory-detour"
+   :memory [{:kind :threat :data {:mob "zombie" :id 99 :uuid "00000000-0000-0000-0000-000000000099" :key "00000000-0000-0000-0000-000000000099"
+                                  :pos #xyz [22.5 0 24.5] :ended :far}}]
+   :act [[:job (jobs.movement.go-to {:pos #at [70 0 24] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 100 :of-job true}]
+   :after [[:body-near [70.5 0 24.5] 3]]}
+  {:name "threat-memory-expired-straight"
+   :memory [{:kind :threat :policy {:ttl 2000}
+             :data {:mob "zombie" :id 99 :uuid "00000000-0000-0000-0000-000000000099" :key "00000000-0000-0000-0000-000000000099"
+                    :pos #xyz [22.5 0 24.5] :ended :far}}]
+   :act [[:wait-s 6]
+         [:job (jobs.movement.go-to {:pos #at [70 0 24] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 100 :of-job true}]
+   :after [[:body-near [70.5 0 24.5] 3]]}
+  {:name "one-wide-gap-still-arrives"
+   :blocks [[:fill [26 0 0] [26 5 47] "stone"] [:fill [26 0 24] [26 5 24] "air"]]
+   :act [[:summon "zombie" [20.5 0 24.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ -90 0"]
+         [:wait-s 4]
+         [:job (jobs.movement.go-to {:pos #at [70 0 24] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 100 :of-job true}]
+   :after [[:body-near [70.5 0 24.5] 3]]}
+  {:name "unseen-zombie-behind-stone-straight"
+   :blocks [[:fill [18 0 28] [26 4 36] "stone"] [:fill [22 0 32] [22 1 32] "air"]]
+   :act [[:summon "zombie" [22.5 0 32.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ -90 0"]
+         [:wait-s 4]
+         [:job (jobs.movement.go-to {:pos #at [70 0 24] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 100 :of-job true}]
+   :after [[:body-near [70.5 0 24.5] 3]]}
+  {:name "fenced-zombie-straight"
+   :blocks [[:fill [21 0 28] [23 0 30] "oak_fence" :outline]]
+   :act [[:summon "zombie" [22.5 0 29.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ -90 0"]
+         [:wait-s 4]
+         [:job (jobs.movement.go-to {:pos #at [70 0 24] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 100 :of-job true}]
+   :after [[:body-near [70.5 0 24.5] 3]]}]}

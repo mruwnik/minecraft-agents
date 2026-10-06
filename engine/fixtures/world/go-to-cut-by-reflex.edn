@@ -26,13 +26,14 @@
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 50}
             {:event {:source :job :kind :result :data {:arrived true}} :within-s 280 :of-job true}]
    :after [[:body-near [310.5 0 16.5] 3]]}
-  ;; Card 67437419: the zombie is left alive. Each flight is whole (until the zombie gives up: 35 blocks or 4 s out of
-  ;; line), so no flight/resume ping-pong of 6-block steps; after the third flight from it, hostile.chased warns.
-  ;; Arrival needs the danger-aware path cost (card 6039c7c5); without it this case only proves the long flights.
+  ;; Cards 67437419 / 6039c7c5: the zombie is left alive. The flight is whole (until the zombie gives up: 35 blocks or 4 s out
+  ;; of line), not 6-block steps; the resumed go-to then costs the remembered :threat spot and arrives without a second flight
+  ;; before it. (A later flight at the goal, when the zombie walks up, is fine and not judged.)
   {:name "zombie-left-alive-whole-flights"
    :act [[:job (jobs.movement.go-to {:pos #at [310 0 16] :range 1 :escalate false})]
          [:wait-s 6]
          [:rcon "execute at $BODY run summon zombie ~4 ~ ~ {Tags:[\"wt\"],PersistenceRequired:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 40}
             {:event {:source :reflex :kind :ended :context {:reflex-id :hostile-near}} :within-s 200}
-            {:event {:source :job :kind :hostile.chased} :within-s 290}]}]}
+            {:event {:source :job :kind :result :data {:arrived true}} :within-s 290 :of-job true}]
+   :after [[:body-near [310.5 0 16.5] 3]]}]}

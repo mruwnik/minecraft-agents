@@ -1,0 +1,31 @@
+;; Card 67437419: the hostile reflex runs one whole flight per firing (no :continue, no 6-block steps). Armed: fights at once,
+;; no flight. Creeper: flees, never fights. Body with its back to the plot's west wall and a chaser between it and the open
+;; ground: the flight goes along the wall, not back past the zombie (read the path from the log by hand: the body's z moves first).
+{:defaults
+ {:tags [:hostile :movement]
+  :mobs :keep
+  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+              :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+  :plot {:height 12 :length 64 :width 64}
+  :body {:at [4.5 0 32.5] :effects [["resistance" 900 4]]}
+  :limit-s 100}
+ :cases
+ [{:name "armed-fights-no-flight"
+   :body {:inventory [["diamond_sword" 1]]}
+   :act [[:summon "zombie" [11.5 0 32.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 20}
+            {:event {:source :reflex :kind :ended :context {:reflex-id :hostile-near}} :within-s 60}
+            {:no-event {:source :job :kind :child_started :data {:slot :flee}} :for-s 30}
+            {:no-event {:source :job :kind :hostile.chased} :for-s 30}]
+   :after [[:entities "type=zombie,tag=wt" [[0 0 0] [63 5 63]] 0]]}
+  {:name "creeper-flees-never-fights"
+   :act [[:summon "creeper" [11.5 0 32.5] "{}"]]
+   :expect [{:event {:source :job :kind :child_started :data {:slot :flee}} :within-s 20}
+            {:no-event {:source :job :kind :child_started :data {:slot :fight}} :for-s 30}]}
+  {:name "chaser-between-body-and-open-ground"
+   :act [[:summon "zombie" [10.5 0 32.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 20}
+            {:event {:source :job :kind :child_started :data {:slot :flee}} :within-s 20}
+            {:no-event {:source :job :kind :yielded :context {:reflex-id :hostile-near}} :for-s 45}
+            {:event {:source :job :kind :hostile.chased :data {:mob "zombie" :flights 3}} :within-s 85}]}
+]}
