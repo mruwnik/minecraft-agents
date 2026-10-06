@@ -1,0 +1,37 @@
+;; jobs.animals.lead-to walks in legs of a few path steps and looks at the animal after each (card af0984f9).
+;; Long plot, body at the west end, cow 3 away.
+{:defaults
+ {:tags [:animals :jobs :go-to]
+  :time :any
+  :plot {:floor "grass_block" :length 80 :width 32 :height 8}
+  :body {:at [4.5 0 16.5] :inventory [["lead" 2] ["stick" 1]] :effects [["resistance" 900 4]]}
+  :limit-s 200}
+ :cases
+ [{:name "long-lead-tie-fence"
+   :blocks [[:set [60 0 16] "oak_fence"]]
+   :act [[:summon "cow" [6.5 0 18.5]]
+         [:job (jobs.animals.lead-to {:mob "cow" :fence #xyz [60 0 16]})]]
+   :expect [{:event {:source :job :kind :lead-to.done :data {:reason :tied}} :within-s 180 :of-job true}]
+   :after [[:entities "type=cow,tag=wt" [[50 0 6] [70 3 26]] 1]]}
+  {:name "long-lead-unleash-gathered"
+   :act [[:summon "cow" [6.5 0 18.5]]
+         [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [45 0 12]})]]
+   :expect [{:event {:source :job :kind :lead-to.done :data {:reason :unleashed}} :within-s 180 :of-job true}]
+   :after [[:item "lead" 2]]}
+  {:name "lead-broken-mid-walk"
+   :act [[:summon "cow" [6.5 0 18.5]]
+         [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [70 0 16]})]
+         [:wait-s 4]
+         [:rcon "execute as @e[type=cow,tag=wt,x=$X,y=$Y,z=$Z,distance=..100] run data remove entity @s leash"]]
+   :expect [{:event {:source :job :kind :lead-to.done :data {:reason :lead-broke}} :within-s 60 :of-job true}]}
+  {:name "cow-teleported-away-mid-walk"
+   :act [[:summon "cow" [6.5 0 18.5]]
+         [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [70 0 16]})]
+         [:wait-s 4]
+         [:rcon "execute as @e[type=cow,tag=wt,x=$X,y=$Y,z=$Z,distance=..100] run tp @s ~ ~ ~-13"]]
+   :expect [{:event {:source :job :kind :lead-to.done :data {:reason [:any]}} :within-s 60 :of-job true}]}
+  {:name "jammed-cow-lagging"
+   :blocks [[:fill [5 0 17] [7 0 19] "oak_fence" :outline]]
+   :act [[:summon "cow" [6.5 0 18.5]]
+         [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [70 0 16]})]]
+   :expect [{:event {:source :job :kind :lead-to.done :data {:reason :lagging :still-led true}} :within-s 90 :of-job true}]}]}
