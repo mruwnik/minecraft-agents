@@ -1,6 +1,6 @@
 ;; shadow-cljs builds for the dashboard. See README.md.
 {:jvm-opts ["-Xmx1G"]
- :source-paths ["src" "test" "bench-src" "../engine/src"]
+ :source-paths ["src" "test" "bench-src" "../engine/src" "../engine/test-support"]
  :dependencies [[reagent "1.3.0"]
                 [re-frame "1.4.3"]]
  :builds

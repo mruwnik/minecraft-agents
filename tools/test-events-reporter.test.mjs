@@ -1,0 +1,38 @@
+// Why JavaScript: node --test file for tools/test-events-reporter.mjs (a node:test reporter).
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
+
+const reporter = path.resolve(import.meta.dirname, 'test-events-reporter.mjs')
+
+const run = (env) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'test-events-reporter-'))
+  const file = path.join(dir, 'sample.test.mjs')
+  fs.writeFileSync(file, `import test from 'node:test'
+import assert from 'node:assert/strict'
+test('adds', () => assert.equal(1 + 1, 2))
+test('breaks', () => assert.equal(1, 2))
+test('later', { skip: true }, () => {})
+`)
+  try {
+    const r = spawnSync(process.execPath, ['--test', `--test-reporter=${reporter}`, file], { encoding: 'utf8', env: { ...process.env, NODE_TEST_CONTEXT: undefined, ...env } })
+    return r.stdout.split('\n').filter((l) => l.startsWith('@@test ')).map((l) => JSON.parse(l.slice(7)))
+  } finally { fs.rmSync(dir, { recursive: true }) }
+}
+
+test('TEST_EVENTS=1: one result line per test with its outcome', () => {
+  const results = run({ TEST_EVENTS: '1' }).filter((e) => e.event === 'result')
+  assert.deepEqual(results.map((e) => [e.name, e.outcome]), [['adds', 'passed'], ['breaks', 'failed'], ['later', 'skipped']])
+})
+
+test('TEST_EVENTS=1: a failing result carries the failure message', () => {
+  const failed = run({ TEST_EVENTS: '1' }).find((e) => e.outcome === 'failed')
+  assert.match(failed.message, /1 !== 2|Expected values/)
+})
+
+test('without TEST_EVENTS: no @@test lines', () => {
+  assert.deepEqual(run({ TEST_EVENTS: '' }), [])
+})
