@@ -7,6 +7,7 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [jobs.lib.reach :as reach]
             [jobs.lib.world-files :as world]
             [jobs.build.from-plan :as build]))
 
@@ -456,3 +457,19 @@
           (is (re-find #"30 wrong" (:text wrong)))
           (is (not (re-find #"…|\.\.\." (:text wrong))))
           (is (< (count (:text wrong)) 240)))))))
+
+(def wide-ground (into {} (for [x (range -4 12) z (range -4 12)] [(h/cell-key x 63 z) "stone"])))
+
+(deftest a-body-inside-a-closed-plan-is-never-sealed-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "box" :parts [{:id "walls" :outline [[1 64 1] [4 65 4]] :want "dirt"}
+                                      {:id "roof" :box [[1 66 1] [4 66 4]] :want "dirt"}]}
+              {:keys [eng p]} (start {:blocks wide-ground :inventory [{:name "dirt" :count 64}]
+                                      :self {:pos {:x 2.5 :y 64 :z 2.5}}}
+                                     {"box" plan} [])]
+          (await (h/child-outcome eng job {:plan "box"} 400))
+          (let [pos (.-pos (.self p))]
+            (is (not (reach/enclosed? p)))
+            (is (not (and (<= 1 (js/Math.floor (.-x pos)) 4) (<= 1 (js/Math.floor (.-z pos)) 4))))))))))

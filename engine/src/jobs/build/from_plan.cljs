@@ -10,6 +10,7 @@
             [jobs.build.clear-box :as clear-box]
             [jobs.lib.near :as near]
             [jobs.lib.placement :as placement]
+            [jobs.lib.reach :as reach]
             [plan.rail :as rail]
             [plan.shape :as shape]
             [jobs.lib.world :as known]))
@@ -26,6 +27,9 @@
   A door's upper half, a bed's head and a tall plant's upper half are never targets: the lower or foot cell places
   the whole item. :clear cells, crops and trees are not this job's.
   Each round re-reads the plan and the world, then takes the first step that applies:
+  0. A place that would shut the body in (it has a way out and would have none) is held back; the body first walks
+     out of the plan's footprint (go-to child), then places from outside. Held back :give-up times, a cell is given
+     up as :unreachable.
   1. Place every buildable cell within :reach of the eye, lowest first. A cell is buildable when its block is
      carried, the cell below it is not itself still owed, and it is not the body's own feet or head cell.
      jobs.lib.placement picks the click (neighbour, face, cursor, look, sneak) that gives the wanted state. A
@@ -435,6 +439,45 @@
          (filter #(and (<= (eye-dist body (:pos %)) (:reach (:args c))) (not (mine (:pos %)))))
          (sort-by (juxt #(get (:pos %) 1) #(eye-dist body (:pos %)))))))
 
+;; ------------------------------------------------------------------ keeping a way out
+
+(defn seals?
+  "Whether placing at cell would shut the body in: it has a way out now (jobs.lib.reach/enclosed?) and would have none
+  with the cell solid. Only a cell at the body's own height band (feet to a block above the head) can; the flood is
+  bounded (reach/room-cells)."
+  [c cell]
+  (let [p (:primitives c)
+        by (js/Math.floor (:y (u/self-pos c)))
+        cy (second cell)]
+    (boolean (and (<= by cy (+ by 2))
+                  (not (reach/enclosed? p))
+                  (reach/enclosed? p #{(vec cell)})))))
+
+(defn exit-point
+  "A cell two blocks outside the box of the planned cells, on the side nearest the body, at its feet height."
+  [cells body]
+  (let [xs (map #(nth (:pos %) 0) cells)
+        zs (map #(nth (:pos %) 2) cells)
+        y (js/Math.floor (:y body))
+        [x0 x1 z0 z1] [(apply min xs) (apply max xs) (apply min zs) (apply max zs)]
+        bx (js/Math.floor (:x body))
+        bz (js/Math.floor (:z body))
+        clamp (fn [v lo hi] (max lo (min hi v)))]
+    (->> [[(- x0 2) y (clamp bz z0 z1)] [(+ x1 2) y (clamp bz z0 z1)]
+          [(clamp bx x0 x1) y (- z0 2)] [(clamp bx x0 x1) y (+ z1 2)]]
+         (sort-by (fn [[x _ z]] (+ (js/Math.abs (- x bx)) (js/Math.abs (- z bz)))))
+         first)))
+
+(defn ^:async leave!
+  "One go-to round (child :leave) out of the plan's footprint to the :leave cell; dropped once the walk ends (arrived
+  or not: the next round judges where the body stands). :continue."
+  [c]
+  (let [[x y z] (:leave (ctx/mem c))
+        r (await (ctx/call-child c :leave 'jobs.movement.go-to {:pos {:x x :y y :z z} :range 1 :escalate false}))]
+    (when-not (= :continue r)
+      (ctx/update-mem! c dissoc :leave))
+    :continue))
+
 (defn ^:async walk-to!
   "Walk to a stand cell beside cell; a cell that cannot be walked to, or is still out of reach (or unseen, as
   :unloaded) on arrival, counts a failure."
@@ -531,11 +574,15 @@
                 dig-near (in-dig-reach c digs)
                 nearest #(first (sort-by (fn [cell] (u/dist (u/self-pos c) (zipmap [:x :y :z] (:pos cell)))) %))]
             (cond
+              (:leave (ctx/mem c)) (await (leave! c))
               (seq near) (do (await (watch/watch! c {}))
                              (loop [left near]
                                (when (seq left)
-                                 (await (place-one! c (first left)))
-                                 (recur (rest left))))
+                                 (if (seals? c (:pos (first left)))
+                                   (ctx/update-mem! c #(-> (count-fail % (:pos (first left)) :unreachable (:give-up (:args c)))
+                                                           (assoc :leave (exit-point cells (u/self-pos c)))))
+                                   (do (await (place-one! c (first left)))
+                                       (recur (rest left))))))
                              :continue)
               (seq dig-near) (do (loop [left dig-near]
                                    (when (seq left)
