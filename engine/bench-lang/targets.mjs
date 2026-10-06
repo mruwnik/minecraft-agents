@@ -1,5 +1,5 @@
 // Why JavaScript: bench harness over binary chunk files and prismarine block names; the searches it times are the
-// ClojureScript planner's (out/planner-bench.cjs, `npx shadow-cljs compile planner-bench`).
+// ClojureScript planner's (out/planner-bench.cjs, `tools/compile engine planner-bench`).
 // The nearest-of-many bench: bodies at every 4th planner-bench query start, targets the logs (and, separately, the ores)
 // with an air face within --radius blocks (at most 32, nearest in a line first), each reached within 3 blocks. Compared:
 //   line  - the straight-line nearest target, then one search to it (what the jobs did)

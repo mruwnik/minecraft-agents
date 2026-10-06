@@ -164,7 +164,7 @@ test('integration: a waiter and a busy exit name the slot holder (pid, age, comm
   fs.rmSync(dir, { recursive: true, force: true })
 })
 
-test('config: shadow-cljs servers have their own slot kind, with room for a worktree per project', () => {
+test('config: shadow-cljs servers have their own slot kind, with room for several worktrees', () => {
   const res = JSON.parse(fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), 'res-slot.json'), 'utf8'))
   assert.equal(res.kinds.compile, undefined)
   assert.equal(res.kinds.server.needMb, 2000)

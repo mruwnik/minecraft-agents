@@ -1,11 +1,72 @@
-;; shadow-cljs builds for the dashboard. See README.md.
+;; shadow-cljs builds for the dashboard and the body engine (one server per checkout). See README.md.
+;; Both engine builds run from `compile` (never :advanced), so externs inference is off. Engine outputs go to ../engine/out.
 ;; Idle servers return heap and malloc memory (measured 1.75 GB -> ~0.6-0.8 GB); compile times unchanged. Not TieredStopAtLevel=1 (2.5x slower).
 {:jvm-opts ["-Xmx1G" "-XX:G1PeriodicGCInterval=20000" "-XX:MinHeapFreeRatio=10" "-XX:MaxHeapFreeRatio=30" "-XX:TrimNativeHeapInterval=10000"]
- :source-paths ["src" "test" "bench-src" "../engine/src" "../engine/test-support"]
+ :source-paths ["src" "test" "bench-src" "../engine/src" "../engine/test" "../engine/test-support"] ; ../engine/src before ../engine/test: the registry finds jobs/ and triggers/ on the first path that has them
  :dependencies [[reagent "1.3.0"]
                 [re-frame "1.4.3"]]
  :builds
- {:server {:target :node-script
+ {:body {:target :node-script
+         :main engine.main/main
+         :output-to "../engine/out/body.cjs"
+         :output-dir "../engine/out/body"
+         :build-hooks [(engine.build-hooks/add-job-namespaces)]
+         :compiler-options {:infer-externs false}}
+  :test {:target :node-test
+         :output-to "../engine/out/test.cjs"
+         :output-dir "../engine/out/test"
+         :ns-regexp "^(engine|jobs|plan)\\..*-test$"
+         :autorun false
+         :build-hooks [(engine.build-hooks/add-job-namespaces)]
+         :compiler-options {:infer-externs false}}
+  ;; Opt-in: the planner's recorded pins (planner-*-golden namespaces), run when planner code changes: `tools/test-engine --golden`.
+  :test-golden {:target :node-test
+                :output-to "../engine/out/test-golden.cjs"
+                :output-dir "../engine/out/test-golden"
+                :ns-regexp "-golden$|^engine\\.timing-test$"
+                :autorun false
+                :build-hooks [(engine.build-hooks/add-job-namespaces)]
+                :compiler-options {:infer-externs false}}
+  ;; Re-records test/planner-bench.json (`npm run record:planner-bench`).
+  :planner-record {:target :node-script
+                   :main engine.planner-record/main
+                   :output-to "../engine/out/planner-record.cjs"
+                   :output-dir "../engine/out/planner-record"
+                   :compiler-options {:infer-externs false}}
+  ;; The planner bench harness (bench-lang/): the ClojureScript path planner as a library the JS harness loads. planner-bench is compiled like :body (`shadow-cljs compile planner-bench`); planner-bench-release is
+  ;; the same code under :advanced (`shadow-cljs release planner-bench-release`).
+  :planner-bench {:target :node-library
+                  :exports {:planTuned engine.path.planner-tuned/plan
+                            :createSearchTuned engine.path.planner-tuned/create-search
+                            :MOVE engine.path.planner-tuned/MOVE
+                            :DEFAULT_COSTS engine.path.planner-tuned/DEFAULT-COSTS}
+                  :output-to "../engine/out/planner-bench.cjs"
+                  :output-dir "../engine/out/planner-bench"
+                  :compiler-options {:infer-externs false}}
+  ;; The search bench (bench-lang/search.mjs): the job-side reach searches as a library over a recorded world.
+  :search-bench {:target :node-library
+                 :exports {:walkableWay engine.search-bench/walkable-way
+                           :enclosed engine.search-bench/enclosed
+                           :nearestDanger engine.search-bench/nearest-danger
+                           :dangers engine.search-bench/dangers}
+                 :output-to "../engine/out/search-bench.cjs"
+                 :output-dir "../engine/out/search-bench"
+                 :compiler-options {:infer-externs false}}
+  ;; The go-to bench (bench-lang/goto.mjs): go-to's round planning over the planner bench's courses.
+  :goto-bench {:target :node-library
+               :exports {:simulate engine.goto-bench/simulate}
+               :output-to "../engine/out/goto-bench.cjs"
+               :output-dir "../engine/out/goto-bench"
+               :compiler-options {:infer-externs false}}
+  :planner-bench-release {:target :node-library
+                          :exports {:planTuned engine.path.planner-tuned/plan
+                                    :createSearchTuned engine.path.planner-tuned/create-search
+                                    :MOVE engine.path.planner-tuned/MOVE
+                                    :DEFAULT_COSTS engine.path.planner-tuned/DEFAULT-COSTS}
+                          :output-to "../engine/out/planner-bench-release.cjs"
+                          :output-dir "../engine/out/planner-bench-release"
+                          :compiler-options {:infer-externs :auto}}
+  :server {:target :node-script
            :main dashboard.server/main
            :output-to "out/server.cjs"
            :output-dir "out/server-js"
@@ -154,9 +215,9 @@
        :modules {:main {:entries [dashboard.ui]
                         :init-fn dashboard.ui/init}}
        :compiler-options {:infer-externs false}}
-  :test {:target :node-test
+  :dashboard-test {:target :node-test
          :output-to "out/test.cjs"
          :output-dir "out/test"
-         :ns-regexp "-test$"
+         :ns-regexp "^(agent-tools|dashboard|drive|view|world-test)\\..*-test$"
          :autorun false
          :compiler-options {:infer-externs false}}}}

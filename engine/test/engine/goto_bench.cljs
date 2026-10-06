@@ -1,6 +1,6 @@
 (ns engine.goto-bench
   "go-to's planning as a library for the go-to bench (bench-lang/goto.mjs): the rounds go-to plans for a course, the body
-  moved to the end of each walked plan (a static world, no physics). Compiled by `shadow-cljs compile goto-bench`."
+  moved to the end of each walked plan (a static world, no physics). Compiled by `tools/compile engine goto-bench`."
   (:require [jobs.lib.util :as u]
             [engine.path.executor :as executor]
             [engine.path.planner-tuned :as planner]

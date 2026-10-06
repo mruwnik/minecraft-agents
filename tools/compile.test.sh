@@ -10,12 +10,12 @@ gone() { local i; for ((i=0; i<${2:-20}*10; i++)); do kill -0 "$1" 2>/dev/null |
 check() { if [ "$2" = "$3" ]; then echo "ok   $1"; else echo "FAIL $1: want [$3] got [$2]"; fail=1; fi; }
 
 # Fake repo: tools copied in, stub npx, a live "server" pid so no server start.
-mkdir -p "$T/repo/tools" "$T/repo/engine/.shadow-cljs" "$T/repo/engine/out/test/cljs-runtime" "$T/bin" "$T/res"
+mkdir -p "$T/repo/tools" "$T/repo/dashboard/.shadow-cljs" "$T/repo/engine/out/test/cljs-runtime" "$T/bin" "$T/res"
 cp "$TOOLS/compile" "$TOOLS/test-engine" "$TOOLS/test-run.mjs" "$TOOLS/res-slot" "$TOOLS/res-slot.mjs" "$TOOLS/res-slot.json" "$TOOLS/compile-idle-watch" "$T/repo/tools/" 2>/dev/null
 printf '{"floorMb":0,"kinds":{"tests":{"needMb":1,"max":1}}}' > "$T/res/cfg.json"
 export RES_SLOT_DIR="$T/res" RES_SLOT_CONFIG="$T/res/cfg.json"
 sleep 300 & SRV=$!; trap 'kill $SRV 2>/dev/null; rm -rf "$T"' EXIT
-echo $SRV > "$T/repo/engine/.shadow-cljs/server.pid"
+echo $SRV > "$T/repo/dashboard/.shadow-cljs/server.pid"
 printf '#!/bin/sh\necho "npx $*" >> "%s/npx.log"\n' "$T" > "$T/bin/npx"; chmod +x "$T/bin/npx"
 printf 'console.log("NODE", process.argv.slice(1).join(" "), process.execArgv.join(" ")); if (process.argv.join(" ").includes("hang-test")) setInterval(() => {}, 1000)\n' > "$T/repo/engine/out/test.cjs"
 export PATH="$T/bin:$PATH"
@@ -24,6 +24,7 @@ C="$T/repo/tools/compile"
 # plain compile works and takes the lock itself
 timeout 20 "$C" engine test >/dev/null 2>&1; check "plain compile rc" "$?" 0
 check "stub npx ran" "$(grep -c 'shadow-cljs compile test' "$T/npx.log")" 1
+timeout 20 "$C" dashboard test >/dev/null 2>&1; check "dashboard test is the :dashboard-test build" "$(grep -c "shadow-cljs compile dashboard-test" "$T/npx.log")" 1
 
 # an undeclared-var / undeclared-ns warning fails the build; other warnings do not
 printf '#!/bin/sh\necho "npx $*" >> "%s/npx.log"\necho "$WARN"\n' "$T" > "$T/bin/npx"
@@ -86,7 +87,7 @@ timeout 5 "$T/repo/tools/test-engine" >/dev/null 2>&1; check "no args usage exit
 
 # a worktree's server start waits for a compile slot without holding the global compile lock
 git init -q "$T/main" && git -C "$T/main" -c user.name=t -c user.email=t@t commit -q --allow-empty -m x && git -C "$T/main" worktree add -q "$T/wt" 2>/dev/null
-mkdir -p "$T/wt/tools" "$T/wt/engine/.shadow-cljs"
+mkdir -p "$T/wt/tools" "$T/wt/dashboard/.shadow-cljs"
 cp "$TOOLS/compile" "$TOOLS/compile-idle-watch" "$T/wt/tools/"
 printf '#!/bin/sh\nsleep 4\necho "res-slot: busy"\nexit 75\n' > "$T/wt/tools/res-slot"; chmod +x "$T/wt/tools/res-slot"
 MC_COMPILE_MIN_START_MB=0 "$T/wt/tools/compile" engine test >/dev/null 2>&1 & WP=$!
@@ -96,25 +97,25 @@ wait $WP; check "worktree without a slot exits 75" "$?" 75
 
 # a worktree's server stops after an idle time (no compile): the slot frees; a compile within the time keeps it
 printf '#!/bin/sh\nshift\nexec "$@"\n' > "$T/wt/tools/res-slot"; chmod +x "$T/wt/tools/res-slot"
-rm -f "$T/wt/engine/.shadow-cljs/"*
+rm -f "$T/wt/dashboard/.shadow-cljs/"*
 printf '#!/bin/sh\ncase "$1 $2" in "shadow-cljs server") echo $$ > .shadow-cljs/server.pid; echo 1 > .shadow-cljs/nrepl.port; echo 1 > .shadow-cljs/http.port; exec sleep 300;; esac\n' > "$T/bin/npx"
 export MC_COMPILE_MIN_START_MB=0 MC_COMPILE_SERVER_IDLE_S=3 MC_COMPILE_IDLE_POLL_S=1
 timeout 30 "$T/wt/tools/compile" engine test >/dev/null 2>&1; check "worktree compile rc" "$?" 0
-WSRV=$(cat "$T/wt/engine/.shadow-cljs/server.pid")
+WSRV=$(cat "$T/wt/dashboard/.shadow-cljs/server.pid")
 sleep 1; kill -0 "$WSRV" 2>/dev/null; check "worktree server alive right after a compile" "$?" 0
 gone "$WSRV"; check "worktree server gone after the idle time" "$?" 0
 unset MC_COMPILE_MIN_START_MB MC_COMPILE_SERVER_IDLE_S MC_COMPILE_IDLE_POLL_S
 
 # the main checkout's server stops after its own (longer) idle time too, with no server slot
-mkdir -p "$T/main/tools" "$T/main/engine/.shadow-cljs"
+mkdir -p "$T/main/tools" "$T/main/dashboard/.shadow-cljs"
 cp "$TOOLS/compile" "$TOOLS/compile-idle-watch" "$T/main/tools/"
 export MC_COMPILE_MIN_START_MB=0 MC_COMPILE_MAIN_IDLE_S=3 MC_COMPILE_SERVER_IDLE_S=1000 MC_COMPILE_IDLE_POLL_S=1
 timeout 30 "$T/main/tools/compile" engine test >/dev/null 2>&1; check "main compile rc" "$?" 0
-MSRV=$(cat "$T/main/engine/.shadow-cljs/server.pid")
+MSRV=$(cat "$T/main/dashboard/.shadow-cljs/server.pid")
 sleep 1; kill -0 "$MSRV" 2>/dev/null; check "main server alive right after a compile" "$?" 0
 gone "$MSRV"; check "main server gone after the main idle time" "$?" 0
 timeout 30 "$T/main/tools/compile" engine test >/dev/null 2>&1; check "main compile restarts the server" "$?" 0
-kill "$(cat "$T/main/engine/.shadow-cljs/server.pid")" 2>/dev/null
+kill "$(cat "$T/main/dashboard/.shadow-cljs/server.pid")" 2>/dev/null
 unset MC_COMPILE_MIN_START_MB MC_COMPILE_MAIN_IDLE_S MC_COMPILE_SERVER_IDLE_S MC_COMPILE_IDLE_POLL_S
 
 # the idle watcher kills only the server it was started for (pid + start time), and never while a compile runs

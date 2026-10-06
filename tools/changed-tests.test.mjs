@@ -54,7 +54,7 @@ test('a deleted source file is mapped by its path', () => {
   assert.deepEqual(sel(['engine/src/lib/b_two.cljs'], files).cljs, ['engine.a-test', 'engine.b-test'])
 })
 test('build config changes run the full suite', () => {
-  for (const f of ['engine/shadow-cljs.edn', 'engine/package.json', 'engine/deps.edn'])
+  for (const f of ['dashboard/shadow-cljs.edn', 'engine/package.json', 'engine/deps.edn'])
     assert.ok(sel([f]).full, f)
   assert.equal(sel(['engine/src/lib/a.cljs']).full, null)
 })

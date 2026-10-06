@@ -7,7 +7,7 @@ import path from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-const FULL_FILES = ['engine/shadow-cljs.edn', 'engine/package.json', 'engine/package-lock.json', 'engine/deps.edn']
+const FULL_FILES = ['dashboard/shadow-cljs.edn', 'engine/package.json', 'engine/package-lock.json', 'engine/deps.edn']
 const CLJ = /\.clj[sc]?$/
 const isTestNs = (n) => /-test$/.test(n)
 

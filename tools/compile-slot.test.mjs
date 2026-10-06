@@ -19,7 +19,7 @@ const setup = (t) => {
   fs.writeFileSync(path.join(main, 'tools', 'x'), '')
   const git = (...a) => sh(main, 'git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...a])
   git('init', '-q'); git('add', '.'); git('commit', '-q', '-m', 'i'); git('worktree', 'add', '-q', '--detach', wt)
-  for (const d of [main, wt]) fs.mkdirSync(path.join(d, 'engine', '.shadow-cljs'), { recursive: true })
+  for (const d of [main, wt]) fs.mkdirSync(path.join(d, 'dashboard', '.shadow-cljs'), { recursive: true })
   fs.writeFileSync(path.join(bin, 'npx'), `#!/bin/sh
 if [ "$2" = server ]; then echo $$ > .shadow-cljs/server.pid; echo 1 > .shadow-cljs/nrepl.port; echo 1 > .shadow-cljs/http.port; exec sleep 40; fi
 exit 0
@@ -27,7 +27,7 @@ exit 0
   fs.writeFileSync(path.join(res, 'cfg.json'), JSON.stringify({ floorMb: 0, kinds: { server: { needMb: 1, max: 1 } } }))
   const env = { PATH: `${bin}:${process.env.PATH}`, MC_COMPILE_LOCK: path.join(T, 'lock'), MC_COMPILE_QUEUE: path.join(T, 'queue'), MC_COMPILE_MIN_START_MB: '0', RES_SLOT_DIR: res, RES_SLOT_CONFIG: path.join(res, 'cfg.json'), RES_SLOT_MAX_WAIT_MS: '1500', RES_SLOT_POLL_MS: '200' }
   t.after(() => {
-    for (const d of [main, wt]) { try { process.kill(Number(fs.readFileSync(path.join(d, 'engine/.shadow-cljs/server.pid'), 'utf8'))) } catch {} }
+    for (const d of [main, wt]) { try { process.kill(Number(fs.readFileSync(path.join(d, 'dashboard/.shadow-cljs/server.pid'), 'utf8'))) } catch {} }
     fs.rmSync(T, { recursive: true, force: true })
   })
   return { main, wt, env, status: () => sh(main, 'node', ['tools/res-slot.mjs', 'status'], env).stdout }
@@ -43,9 +43,9 @@ test('a server started in a worktree holds a server slot', (t) => {
 test('a worktree server with no free slot makes the compile exit 75, busy', (t) => {
   const a = setup(t)
   assert.equal(sh(a.wt, 'bash', ['tools/compile', 'engine', 'test'], a.env).status, 0)
-  const first = Number(fs.readFileSync(path.join(a.wt, 'engine/.shadow-cljs/server.pid'), 'utf8'))
+  const first = Number(fs.readFileSync(path.join(a.wt, 'dashboard/.shadow-cljs/server.pid'), 'utf8'))
   t.after(() => { try { process.kill(first) } catch {} })
-  fs.rmSync(path.join(a.wt, 'engine/.shadow-cljs/server.pid'))  // pretend no server there: the slot is still held by the first
+  fs.rmSync(path.join(a.wt, 'dashboard/.shadow-cljs/server.pid'))  // pretend no server there: the slot is still held by the first
   const r = sh(a.wt, 'bash', ['tools/compile', 'engine', 'test'], a.env)
   assert.equal(r.status, 75, r.stderr)
   assert.match(r.stderr, /busy/)

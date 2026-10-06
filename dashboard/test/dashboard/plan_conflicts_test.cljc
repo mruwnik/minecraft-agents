@@ -1,4 +1,4 @@
-(ns plan.conflicts-test
+(ns dashboard.plan-conflicts-test
   (:require [clojure.test :refer [deftest are is]]
             [plan.conflicts :as conflicts]
             [plan.shape :as shape]))

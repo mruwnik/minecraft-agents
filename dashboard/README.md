@@ -3,7 +3,7 @@
 Replacement for `tools/dashboard.mjs`, for ENGINE bodies (agent folders with `engine/events.sock` or legacy event files).
 
     npm install
-    npm test          # shadow-cljs compile test && node out/test.cjs
+    npm test          # shadow-cljs compile dashboard-test && node out/test.cjs
     npm run build     # compiles :server (out/server.cjs) and :ui (out/public/js)
     npm start         # launcher (start.mjs): build, then run out/server.cjs on PORT (default 3701, 127.0.0.1 only); stays in the foreground
     npm run restart   # ask the running launcher to rebuild and restart the server (POST /api/restart)

@@ -1,5 +1,5 @@
 // Why JavaScript: bench harness over binary chunk files; the planning it times is the ClojureScript one
-// (out/goto-bench.cjs, `npx shadow-cljs compile goto-bench`).
+// (out/goto-bench.cjs, `tools/compile engine goto-bench`).
 // The go-to bench: go-to's rounds of planning over the planner bench's courses (bench-lang/courses.mjs), the body moved
 // to the end of each walked plan. Per course: the answer (arrived, blocked, or the no-walk reason), the rounds, and each
 // round's planning ms and planner searches. The summary gives max and p95 of the round ms and of the single searches.

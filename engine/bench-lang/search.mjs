@@ -1,5 +1,5 @@
 // Why JavaScript: bench harness over binary chunk files and prismarine blocks; the searches it times are the
-// ClojureScript ones (out/search-bench.cjs, `npx shadow-cljs compile search-bench`).
+// ClojureScript ones (out/search-bench.cjs, `tools/compile engine search-bench`).
 // The search bench: times the job-side reach searches (jobs.lib.reach: walkable-way?, enclosed?, nearest-danger,
 // dangers) on the recorded world of the planner bench, with blockAt answered the way the body's primitives answer it
 // (a prismarine Block per read, its state properties copied), or with --raw from a rawWorld as the body's (state ids of

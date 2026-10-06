@@ -1,6 +1,6 @@
 // The planner versions the bench times: the ClojureScript planner from the dev build (compiled the way the engine
 // ships: `shadow-cljs compile`) and from the :advanced build (`shadow-cljs release`).
-//   cd engine && npx shadow-cljs compile planner-bench && npx shadow-cljs release planner-bench-release
+//   tools/compile engine planner-bench && tools/compile engine planner-bench-release --release
 import fs from 'node:fs'
 import path from 'node:path'
 import { createRequire } from 'node:module'

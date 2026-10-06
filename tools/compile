@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
 # tools/compile <engine|dashboard> <build>... [--priority] [--release]
 # tools/compile <engine|dashboard> --stop
+# Both project words use the one shadow-cljs project in dashboard/ (engine builds write to engine/out); `dashboard test` is the :dashboard-test build.
 #
 # Every cljs compile in this repo goes through here: it queues on /tmp/mc-compile.lock (the machine-wide compile lock, taken
-# here, so never wrap this in flock) and runs `npx shadow-cljs compile|release <build>` in the project. The shadow-cljs CLI
-# connects to the project's long-lived `shadow-cljs server` when one runs (no JVM per compile, ~2 s instead of ~30 s); this
+# here, so never wrap this in flock) and runs `npx shadow-cljs compile|release <build>` in dashboard/. The shadow-cljs CLI
+# connects to the checkout's long-lived `shadow-cljs server` when one runs (no JVM per compile, ~2 s instead of ~30 s); this
 # script starts that server first, detached, when it is not running and memory allows.
 #
 #   --priority  jump the queue: ahead of every waiting normal compile (it still waits for the compile now running).
 #               For the owner's UI rebuilds (dashboard ui/server) and nothing else.
 #   --release   `shadow-cljs release` instead of `compile` (the :viewer build).
-#   --stop      stop the project's server (needs the lock; for restarts; no build argument).
+#   --stop      stop the checkout's server (needs the lock; for restarts; no build argument).
 #
 # Queue: a ticket file <lane>-<ns>-<pid> per waiter in /tmp/mc-compile.queue (lane 0 priority, 1 normal); the first live
 # ticket waits on the flock in 2 s blocking slices (so it wakes the moment the lock frees, competing fairly with any plain
@@ -30,12 +31,12 @@ lock=${MC_COMPILE_LOCK:-/tmp/mc-compile.lock}   # env overrides are for tools/co
 queue=${MC_COMPILE_QUEUE:-/tmp/mc-compile.queue}
 MIN_START_MB=${MC_COMPILE_MIN_START_MB:-3500}
 
-usage() { echo "usage: tools/compile <engine|dashboard> <build>... [--priority] [--release] | <project> --stop" >&2; exit 2; }
+usage() { echo "usage: tools/compile <engine|dashboard> <build>... [--priority] [--release] | <engine|dashboard> --stop" >&2; exit 2; }
 
 [ $# -ge 2 ] || usage
 project=$1; shift
 case "$project" in engine|dashboard) ;; *) usage ;; esac
-dir="$repo/$project"
+dir="$repo/dashboard"   # one shadow-cljs project (dashboard/shadow-cljs.edn) holds both; one server per checkout
 lane=1; verb=compile; stop=0; builds=()
 for a in "$@"; do
   case "$a" in
@@ -47,6 +48,8 @@ for a in "$@"; do
   esac
 done
 [ "$stop" = 1 ] || [ ${#builds[@]} -gt 0 ] || usage
+# the dashboard's own unit-test build is :dashboard-test (:test is the engine's)
+[ "$project" = dashboard ] && for i in "${!builds[@]}"; do [ "${builds[$i]}" = test ] && builds[$i]=dashboard-test; done
 
 available_mb() { awk '/MemAvailable/ {print int($2/1024)}' /proc/meminfo; }
 server_pid() { local p; p=$(cat "$dir/.shadow-cljs/server.pid" 2>/dev/null) && [ -n "$p" ] && kill -0 "$p" 2>/dev/null && echo "$p"; }
@@ -65,14 +68,14 @@ if [ -e "$lock" ]; then
   done
 fi
 
-# Starts the project's server when none runs (callers check server_pid first).
+# Starts the checkout's server when none runs (callers check server_pid first).
 start_server() {
   mb=$(available_mb)
   if [ "$mb" -lt "$MIN_START_MB" ]; then
-    echo "tools/compile: no $project shadow-cljs server and only $mb MB available ($MIN_START_MB needed to start one)" >&2
+    echo "tools/compile: no shadow-cljs server and only $mb MB available ($MIN_START_MB needed to start one)" >&2
     exit 1
   fi
-  echo "tools/compile: starting the $project shadow-cljs server" >&2
+  echo "tools/compile: starting the shadow-cljs server" >&2
   # the background subshell must drop the lock fds (8, 9) too, or it holds the lock until the server dies
   slot=()
   idle=${MC_COMPILE_MAIN_IDLE_S:-1800}
@@ -83,12 +86,12 @@ start_server() {
   for _ in $(seq 1 300); do
     p=$(server_pid) && [ -s "$dir/.shadow-cljs/nrepl.port" ] && [ -s "$dir/.shadow-cljs/http.port" ] && break
     if ! kill -0 "$bg" 2>/dev/null && grep -q '^res-slot: busy' "$dir/.shadow-cljs/server.log" 2>/dev/null; then
-      echo "tools/compile: no free server slot for a worktree $project server, retry later ($(grep '^res-slot: busy' "$dir/.shadow-cljs/server.log" | tail -n1))" >&2
+      echo "tools/compile: no free server slot for a worktree server, retry later ($(grep '^res-slot: busy' "$dir/.shadow-cljs/server.log" | tail -n1))" >&2
       exit 75
     fi
     sleep 0.5
   done
-  server_pid >/dev/null || { echo "tools/compile: the $project server did not start (see $dir/.shadow-cljs/server.log)" >&2; exit 1; }
+  server_pid >/dev/null || { echo "tools/compile: the shadow-cljs server did not start (see $dir/.shadow-cljs/server.log)" >&2; exit 1; }
   # idle watcher: a server must not outlive its use (a worktree's holds a server slot; every JVM holds ~2 GB)
   touch "$dir/.shadow-cljs/last-use"
   sp=$(server_pid)
@@ -135,7 +138,7 @@ t1=$(date +%s.%N)
 rm -f "$ticket"
 
 if [ "$stop" = 1 ]; then
-  p=$(server_pid) || { echo "no $project server running" >&2; exit 0; }
+  p=$(server_pid) || { echo "no shadow-cljs server running" >&2; exit 0; }
   kill "$p"; exit 0
 fi
 

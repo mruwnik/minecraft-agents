@@ -1,5 +1,5 @@
 // The rules that keep the planner fast, checked on the compiled files (engine.path.planner-tuned and engine.path.planner.*; see the ns docstring of planner_tuned.cljs): no truthiness
-// check in the search. The one allowed is in the cold count-steps. Build first: cd engine && npx shadow-cljs compile planner-bench
+// check in the search. The one allowed is in the cold count-steps. Build first: tools/compile engine planner-bench
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
