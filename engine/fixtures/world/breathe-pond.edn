@@ -2,7 +2,7 @@
 ;; Walled all round (wall 2 above the water, ground outside level with the water): it never reaches a shore and the pond is narrower than a swim leg,
 ;; so the reflex ends stopped :no_land_in_range (no :afloat warning, no hold) and the body stays in the pond; it never drowns. With a ledge cut into one wall
 ;; (the ground outside is level with the water) it climbs out and the reflex ends :cleared once, also when the ledge's top is a slab, a path block or farmland.
-;; ledge-east-hostile-cuts-then-refire-lands: a zombie on the ledge, hostile-near above suffocating, drops the breathe run; once it is killed breathe fires again and lands.
+;; ledge-east-hostile-cuts-then-refire-lands: a zombie summoned once suffocating has fired, hostile-near above suffocating, drops the breathe run; once it is killed breathe fires again and lands.
 {:defaults
  {:tags [:survival :water] :time :any
   :plot {:height 10}
@@ -75,7 +75,8 @@
    :register [{:trigger :hostile-near :persistence :retry :backoff false :job (jobs.survival.respond-to-hostile)}
               {:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12} :job (jobs.survival.breathe {:min-oxygen 12})}]
    :body {:at [18.5 2 15.5]}
-   :act [[:summon "zombie" [22.5 4 15.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+   :act [[:await {:source :reflex :kind :fired :context {:reflex-id :suffocating}} 40]
+         [:summon "zombie" [22.5 4 15.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:wait-s 12]
          [:rcon "kill @e[type=zombie,tag=wt]"]]
    :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :suffocating} :data {:outcome :dropped :by :hostile-near}} :within-s 40}
