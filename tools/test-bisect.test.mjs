@@ -125,3 +125,47 @@ test('a busy test-engine step is retried, then gives its verdict', () => {
     assert.match(r.stdout, /FAIL in \(a-test\)/)
   } finally { rmSync(d, { recursive: true, force: true }) }
 })
+
+const events = (out) => out.split('\n').filter((l) => l.startsWith('@@test ')).map((l) => JSON.parse(l.slice(7)))
+
+test('TEST_EVENTS=1: plan, per-step phases, results, progress and a failed verdict result reach stdout', () => {
+  const { d, shas } = fakeRepo()
+  try {
+    const r = run(d, ['engine.a-test', '--good', shas[0], '--bad', shas[5]], { TEST_EVENTS: '1' })
+    assert.equal(r.status, 0, r.stdout + r.stderr)
+    const ev = events(r.stdout)
+    assert.deepEqual(ev.find((e) => e.event === 'plan'), { event: 'plan', total: 4 })
+    const phases = ev.filter((e) => e.event === 'phase').map((e) => e.name)
+    assert.ok(phases.some((p) => /^step 1\/4 [0-9a-f]+: compiling$/.test(p)), phases.join('|'))
+    assert.ok(phases.some((p) => /^step 1\/4 [0-9a-f]+: testing$/.test(p)), phases.join('|'))
+    const results = ev.filter((e) => e.event === 'result')
+    assert.ok(results.some((e) => e.outcome === 'passed' && /c2 fine$/.test(e.name)), JSON.stringify(results))
+    assert.ok(results.some((e) => e.outcome === 'failed' && /c3 culprit$/.test(e.name)), JSON.stringify(results))
+    const progress = ev.filter((e) => e.event === 'progress')
+    assert.ok(progress.length >= 2)
+    assert.deepEqual(progress[0], { event: 'progress', done: 1, total: 4, unit: 'steps' })
+    const verdict = results.at(-1)
+    assert.equal(verdict.outcome, 'failed')
+    assert.match(verdict.name, new RegExp(`^FIRST BAD ${shas[3]}`))
+    assert.match(verdict.message, /FAIL in \(a-test\)/)
+  } finally { rmSync(d, { recursive: true, force: true }) }
+})
+
+test('TEST_EVENTS=1: an inconclusive run ends with an error result', () => {
+  const { d, shas } = fakeRepo()
+  try {
+    const r = run(d, ['engine.a-test', '--good', shas[4], '--bad', shas[5]], { TEST_EVENTS: '1', FAKE_TE_RC: '75', TEST_BISECT_BUSY_RETRIES: '1', TEST_BISECT_RETRY_SLEEP: '0' })
+    const verdict = events(r.stdout).filter((e) => e.event === 'result').at(-1)
+    assert.ok(events(r.stdout).some((e) => e.event === 'result' && e.outcome === 'skipped'))
+    assert.equal(verdict.outcome, 'error')
+    assert.match(verdict.name, /^INCONCLUSIVE/)
+  } finally { rmSync(d, { recursive: true, force: true }) }
+})
+
+test('without TEST_EVENTS no @@test line is printed', () => {
+  const { d, shas } = fakeRepo()
+  try {
+    const r = run(d, ['engine.a-test', '--good', shas[0], '--bad', shas[5]])
+    assert.doesNotMatch(r.stdout, /@@test/)
+  } finally { rmSync(d, { recursive: true, force: true }) }
+})

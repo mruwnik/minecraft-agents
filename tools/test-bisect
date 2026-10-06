@@ -6,14 +6,18 @@
 # Worktree setup waits for a free server slot (retry every TEST_BISECT_RETRY_SLEEP s, default 20, up to TEST_BISECT_SLOT_WAIT s, default 1800), then exits 75.
 # A busy step (75) is retried up to TEST_BISECT_BUSY_RETRIES times (default 30, same sleep); a commit that still cannot be run is never named: INCONCLUSIVE, exit 1.
 # The per-step explicit compile stays: test-engine passes a compile failure on as a plain exit 1, which would score bad.
-# Defaults: bad = HEAD, good = HEAD~20. Prints the first bad commit, its failing tests and the step count. TEST_EVENTS=1: @@test phase lines per step.
+# Defaults: bad = HEAD, good = HEAD~20. Prints the first bad commit, its failing tests and the step count. TEST_EVENTS=1: @@test plan, phase, result and progress lines per step and a verdict result.
 # The worktree (and its shadow servers) is removed on exit, error, INT and TERM.
 # Why not JS: a thin shell wrapper around git bisect, like tools/test-engine.
 set -u
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 self="$repo/tools/test-bisect"
 wt_sh="${TEST_BISECT_WORKTREE_SH:-$repo/tools/integration-worktree.sh}"
-event() { [ "${TEST_EVENTS:-}" = 1 ] && printf '@@test {"event":"phase","name":"%s"}\n' "$1"; return 0; }
+jesc() { sed 's/\\/\\\\/g; s/"/\\"/g' | awk 'BEGIN{ORS="\\n"}1' | sed 's/\\n$//'; }
+emit() { [ "${TEST_EVENTS:-}" = 1 ] && printf '@@test %s\n' "$1"; return 0; }
+event() { emit "{\"event\":\"phase\",\"name\":\"$(printf %s "$1" | jesc)\"}"; }
+# result <name> <outcome> [message]
+result() { emit "{\"event\":\"result\",\"name\":\"$(printf %s "$1" | jesc)\",\"outcome\":\"$2\",\"message\":\"$(printf %s "${3:-}" | jesc)\"}"; }
 
 # One bisect step, run inside the worktree: BISECT_WORK holds the step counter and per-commit logs.
 if [ "${1:-}" = --step ]; then
@@ -21,8 +25,12 @@ if [ "${1:-}" = --step ]; then
   wt="$(git rev-parse --show-toplevel)"; rev="$(git rev-parse --short HEAD)"
   n=$(( $(cat "$BISECT_WORK/steps" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$BISECT_WORK/steps"
   log="$BISECT_WORK/log-$rev"
-  event "step $n: $rev"
-  "$wt/tools/compile" engine test > "$log" 2>&1 || { echo "step $n $rev: compile failed, skipped"; exit 125; }
+  total="${BISECT_TOTAL:-$n}"; rname="step $n $rev $(git log -1 --format=%s)"
+  # done: report the step's result and progress, then exit with its code
+  done_step() { result "$rname" "$1"; emit "{\"event\":\"progress\",\"done\":$n,\"total\":$total,\"unit\":\"steps\"}"; exit "$2"; }
+  event "step $n/$total $rev: compiling"
+  "$wt/tools/compile" engine test > "$log" 2>&1 || { echo "step $n $rev: compile failed, skipped"; done_step skipped 125; }
+  event "step $n/$total $rev: testing"
   tries=0
   while true; do
     "$wt/tools/test-engine" "$@" >> "$log" 2>&1; rc=$?
@@ -31,10 +39,10 @@ if [ "${1:-}" = --step ]; then
   done
   echo "$rc" > "$BISECT_WORK/rc-$rev"
   case $rc in
-    0) echo "step $n $rev: good"; exit 0;;
-    2|124) echo "step $n $rev: skipped (exit $rc: namespace missing or timeout)"; exit 125;;
-    75|137|143) echo "step $n $rev: skipped (exit $rc: busy slot or killed, not a verdict)"; exit 125;;
-    *) echo "step $n $rev: bad"; exit 1;;
+    0) echo "step $n $rev: good"; done_step passed 0;;
+    2|124) echo "step $n $rev: skipped (exit $rc: namespace missing or timeout)"; done_step skipped 125;;
+    75|137|143) echo "step $n $rev: skipped (exit $rc: busy slot or killed, not a verdict)"; done_step skipped 125;;
+    *) echo "step $n $rev: bad"; done_step failed 1;;
   esac
 fi
 
@@ -79,24 +87,29 @@ while true; do
 done
 cd "$wt" || exit 2
 git bisect start "$bad_sha" "$good_sha" >/dev/null || exit 2
+count="$(git rev-list --count "$good_sha..$bad_sha")"; BISECT_TOTAL=1; while [ $(( 1 << (BISECT_TOTAL - 1) )) -lt "$count" ]; do BISECT_TOTAL=$((BISECT_TOTAL + 1)); done
+export BISECT_TOTAL
+emit "{\"event\":\"plan\",\"total\":$BISECT_TOTAL}"
 echo "test-bisect: ${nss[*]} between $(git rev-parse --short "$good_sha") (good) and $(git rev-parse --short "$bad_sha") (bad)"
 BISECT_WORK="$work" git bisect run "$self" --step "${nss[@]}" > "$work/run.log" 2>&1 &
 child=$!
-tail -f "$work/run.log" --pid=$child 2>/dev/null | grep --line-buffered '^step ' &
+tail -f "$work/run.log" --pid=$child 2>/dev/null | grep --line-buffered -E '^(step |@@test )' &
 tailpid=$!
 wait $child; child=""; wait $tailpid 2>/dev/null
 
 first="$(git bisect log | sed -n 's/^# first .\{0,1\}bad.\{0,1\} commit: \[\([0-9a-f]*\)\].*/\1/p' | tail -n1)"
 if [ -z "$first" ]; then
-  cp "$work/run.log" "${BISECT_DEBUG:-/dev/null}"; echo "test-bisect: no first bad commit found (is the good rev really good, and the bad rev bad?)"; tail -n 8 "$work/run.log"; exit 1
+  cp "$work/run.log" "${BISECT_DEBUG:-/dev/null}"; result "INCONCLUSIVE no first bad commit" error "is the good rev really good, and the bad rev bad?"; echo "test-bisect: no first bad commit found (is the good rev really good, and the bad rev bad?)"; tail -n 8 "$work/run.log"; exit 1
 fi
 short="$(git rev-parse --short "$first")"
 if [ "$(cat "$work/rc-$short" 2>/dev/null)" != 1 ]; then
   git checkout -q --detach "$first" && BISECT_WORK="$work" "$self" --step "${nss[@]}" >/dev/null
-  [ "$(cat "$work/rc-$short" 2>/dev/null)" = 1 ] || { echo "INCONCLUSIVE: $short has no failing verdict (never tested, skipped or passing), so it is not named"; exit 1; }
+  [ "$(cat "$work/rc-$short" 2>/dev/null)" = 1 ] || { result "INCONCLUSIVE $short" error "no failing verdict (never tested, skipped or passing)"; echo "INCONCLUSIVE: $short has no failing verdict (never tested, skipped or passing), so it is not named"; exit 1; }
 fi
 echo "FIRST BAD: $(git log -1 --format='%h %s' "$first")"
 echo "steps: $(cat "$work/steps" 2>/dev/null || echo 0)"
 echo "failing tests at $short:"
-grep -E '^(FAIL|ERROR) in' "$work/log-$short" | sort -u | sed 's/^/  /'
+failing="$(grep -E '^(FAIL|ERROR) in' "$work/log-$short" | sort -u)"
+printf '%s\n' "$failing" | sed 's/^/  /'
+result "FIRST BAD $(git log -1 --format='%h %s' "$first")" failed "$failing"
 exit 0
