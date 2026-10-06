@@ -71,7 +71,7 @@
 
 (defn drop-reflex-job!
   "Drop reflex job id (instance and memory) and emit its one reflex.ended with
-  outcome (:done :declined :cut :dropped :failed) and any extra fields."
+  outcome (:done :stopped :declined :cut :dropped :failed) and any extra fields."
   [eng id reflex outcome extra]
   (let [text (reflex-text reflex (get-in (state eng) [:instances id :spec]))]
     (drop-instance! eng id)
@@ -83,7 +83,7 @@
   "Classify a reflex end now and apply the entry's persistence when its trigger
   still holds, the cooldown counted from the end's :ended-at; emit its one
   reflex.ended with extra fields."
-  [eng {:keys [reflex job outcome ended-at text]} extra]
+  [eng {:keys [reflex job outcome reason ended-at text]} extra]
   (let [entry (some #(when (= reflex (:id %)) %) (:register (state eng)))
         still? (and entry (trigger-holds? eng entry (:primitives eng) (mem/view (:store eng))))]
     (when still?
@@ -95,15 +95,18 @@
     (emit! eng (merge {:source :reflex :kind :ended :level :info :reflex reflex :job job
                        :outcome outcome :text (str text ": " (name outcome))
                        :how (if still? :completed_not_cleared :cleared)}
+                      (when reason {:reason reason})
                       extra))))
 
 (defn end-reflex!
   "A reflex job ended on its own with outcome; classify and apply the entry's
   persistence. While the body is settling, offline or under manual control the
-  senses cannot say whether the trigger still holds: the end is deferred to the first ready tick."
-  [eng {:keys [id reflex]} outcome]
-  (let [end {:reflex reflex :job id :outcome outcome :ended-at (now eng)
-             :text (reflex-text reflex (get-in (state eng) [:instances id :spec]))}]
+  senses cannot say whether the trigger still holds: the end is deferred to the first ready tick. A :stopped
+  outcome carries the result's reason."
+  [eng {:keys [id reflex]} outcome reason]
+  (let [end (cond-> {:reflex reflex :job id :outcome outcome :ended-at (now eng)
+                     :text (reflex-text reflex (get-in (state eng) [:instances id :spec]))}
+              reason (assoc :reason reason))]
     (drop-instance! eng id)
     (if (paused? eng)
       (swap! (:state eng) update :deferred-ends conj end)
@@ -135,18 +138,22 @@
 
 (defn settle-reflex!
   "End reflex job run after its one round."
-  [eng run {:keys [status error]}]
+  [eng run {:keys [status error result]}]
   (case status
     :declined
     (do (emit! eng {:source :reflex :kind :declined :level :info :reflex (:reflex run) :job (:id run)
                     :text (str "reflex " (name (:reflex run)) ": job " (:id run)
                                " declined; dropped, it may fire again after the trigger's cooldown")})
-        (end-reflex! eng run :declined))
+        (end-reflex! eng run :declined nil))
     (:error :cut)
     (do (emit! eng {:source :job :kind :failed :level :warn :job (:id run) :reflex (:reflex run)
                     :error (str error)})
-        (end-reflex! eng run (if (= :cut status) :cut :failed)))
-    (end-reflex! eng run :done)))
+        (end-reflex! eng run (if (= :cut status) :cut :failed) nil))
+    (if (stopped-result? result)
+      (do (emit! eng {:source :job :kind :stopped :level :warn :job (:id run) :reflex (:reflex run)
+                      :data (dissoc result :dug) :text (stopped-text result)})
+          (end-reflex! eng run :stopped (:reason result)))
+      (end-reflex! eng run :done nil))))
 
 (defn settle!
   "Book a finished round, unless it was cut (its token is no longer current)."
