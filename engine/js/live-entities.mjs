@@ -1,6 +1,7 @@
 // Why JavaScript: Mineflayer boundary; reads the raw entity table and the collect packet Mineflayer only half uses.
 // Mineflayer creates a bare entity for any packet naming an id it no longer holds (a late velocity or teleport after
 // the removal), and it keeps a picked-up drop until the removal packet arrives. Neither is something a player sees.
+// A mob that died stays listed for its death animation (about a second): it is no longer a mob to fight or fear.
 const collected = new WeakMap()
 
 export function trackLiveEntities (bot) {
@@ -11,6 +12,7 @@ export function trackLiveEntities (bot) {
     const stack = bot.entities?.[collectedEntityId]?.getDroppedItem?.()
     if (stack && pickupItemCount >= (stack.count ?? Infinity)) ids.add(collectedEntityId)
   })
+  bot._client.on('entity_status', ({ entityId, entityStatus }) => { if (entityStatus === 3) ids.add(entityId) }) // 3: death
   // ids are reused later, so forget one as soon as its entity is removed
   bot.on('entityGone', e => ids.delete(e.id))
 }

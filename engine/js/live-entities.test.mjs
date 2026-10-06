@@ -36,3 +36,18 @@ test('a reused id is listed again once the old entity is gone', () => {
   bot.entities[1] = drop(1, 1)
   assert.deepEqual(ids(bot), [1])
 })
+
+test('a mob that died is not listed during its death animation', () => {
+  const bot = botWith({ 1: { id: 1, name: 'skeleton', position: { x: 0, y: 0, z: 0 } }, 2: { id: 2, name: 'zombie', position: { x: 1, y: 0, z: 0 } } })
+  trackLiveEntities(bot)
+  bot._client.emit('entity_status', { entityId: 1, entityStatus: 3 })
+  assert.deepEqual(ids(bot), [2])
+})
+
+test('a reused id is listed again once the dead mob is gone', () => {
+  const bot = botWith({ 1: { id: 1, name: 'skeleton', position: { x: 0, y: 0, z: 0 } } })
+  trackLiveEntities(bot)
+  bot._client.emit('entity_status', { entityId: 1, entityStatus: 3 })
+  bot.emit('entityGone', bot.entities[1])
+  assert.deepEqual(ids(bot), [1])
+})
