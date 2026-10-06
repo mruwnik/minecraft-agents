@@ -41,7 +41,7 @@
   and walks its steps. Each run step is judged again right before each dig (:hazard :zone :no-tool
   :inventory-full :refills :dig-failed). Before each further run step, and at the stand, the way back to the
   entry is planned on a fresh pathWorld and must be whole and walkable, else :no-way-back and the body stays
-  where it is.
+  where it is (a kept tunnel; a dead end goes through leave-tunnel below, which digs its own way out).
 
   After any other stop once the body has entered, it walks back to the entry first (:out true when it arrived).
   A dead end (:keep false) goes through jobs.access.leave-tunnel as a child (result in :leave). A kept tunnel
@@ -440,9 +440,10 @@
       :else (finish! c (:reason stop) (assoc (dissoc stop :reason) :out (= (:entry plan) (feet-of c)) :leave r)))))
 
 (defn stop!
-  "After a stop: finish where the body is (outside, at the entry, or no way back), else walk out first."
+  "After a stop: finish where the body is (outside, at the entry, or no way back in a kept tunnel), else walk out first;
+  a dead end with no way back goes through leave-tunnel, which digs its own way out."
   [c {:keys [reason outside] :as stop}]
-  (if (or outside (= :no-way-back reason) (= (feet-of c) (:entry (:plan (ctx/mem c)))))
+  (if (or outside (and (= :no-way-back reason) (:keep (:args c))) (= (feet-of c) (:entry (:plan (ctx/mem c)))))
     (finish! c reason (cond-> (dissoc stop :reason :outside) outside (assoc :inside false)))
     (do (ctx/update-mem! c assoc :stop stop :way-out (way-out c)) :continue)))
 

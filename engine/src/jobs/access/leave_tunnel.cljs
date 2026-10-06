@@ -38,7 +38,8 @@
   :ignore-zones? as the last resort. The new stair is left as dug, nothing is placed. Once out, torches that
   cannot be reached are left (:walk-failed in :left) and the mouth is sealed. If the entry itself is
   unreachable it ends :done :open with :escaped true. If every attempt fails it ends :stopped :walk-failed
-  with :escape (the stair results).
+  with :escape (the stair results). The ledger entries of torches the stair or the fill destroyed are dropped
+  when the job ends.
 
   Result {:status :done|:stopped :reason :sealed|:open|:walk-failed|:bad-args :at [x y z] :taken [cells] :left
   [{:cell :site :reason}] :filled [cells] :open [{:cell :reason}]}. :left holds torches not taken, including
@@ -99,6 +100,17 @@
          (filter #(and (tunnel/torch-blocks (block-at (:cell %))) (not (left (:cell %)))))
          (sort-by (comp - :site)))))
 
+(defn forget-gone!
+  "Drop the ledger entries of the tunnel's torches whose cell holds no torch any more (the escape stair or the
+  mouth's fill dug or covered it)."
+  [c tunnel block-at]
+  (let [l (ledger/open-entries (ctx/view c))
+        gone (->> (:torches tunnel)
+                  (map :cell)
+                  (filter #(and (ledger/entry-at l %) (not (tunnel/torch-blocks (block-at %))))))]
+    (when (seq gone)
+      (ledger/remember! c (reduce ledger/drop-cell l gone)))))
+
 (defn finish!
   "Hand the result over and end, with the event of its reason; on a stop the torches still standing are left too."
   [c status reason detail]
@@ -106,6 +118,7 @@
         m (ctx/mem c)
         block-at (:block-at (stair/rules-in c (feet-of c)))
         stopped? (= :stopped status)
+        _ (forget-gone! c tunnel block-at)
         still (when stopped?
                 (map (fn [{:keys [cell site]}] {:cell cell :site site :reason reason}) (standing block-at tunnel m)))
         result (merge {:status status :reason reason :at (feet-of c) :taken (:taken m []) :left (into (:left m []) still)

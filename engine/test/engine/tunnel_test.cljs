@@ -377,7 +377,8 @@
               {:keys [out p]} (await (tunnel! {:blocks (assoc ground "6,57,0" "iron_ore")} {:target [6 57 0]} prep))]
           (is (= :stopped (:status @out)))
           (is (= :no-way-back (:reason @out)))
-          (is (not= [-3 65 0] (feet p)) "no retreat over a blocked way"))))))
+          (is (some? (:leave @out)) "a dead end goes through leave-tunnel, which digs its own way out")
+          (is (not= :walk-failed (:reason (:leave @out))) "the escape got the body out, or the walk did"))))))
 
 (deftest a-way-back-blocked-on-the-run-stops-at-the-stand
   (async done

@@ -258,7 +258,9 @@
           (is (= 1 (count (events-of s :leave-tunnel.escape))))
           (is (= :sealed (:reason res)))
           (is (>= (second (feet p)) 65) "the body stands at the entry's height or above")
-          (is (= 0 (count (events-of s :leave-tunnel.stopped)))))))))
+          (is (= 0 (count (events-of s :leave-tunnel.stopped))))
+          (is (every? #(#{"torch" "wall_torch"} (block-at p (:cell %))) (the-ledger (:eng s)))
+              "no ledger entry for a torch the escape stair dug through"))))))
 
 (deftest a-body-without-a-pickaxe-cannot-dig-out-and-waits-for-one
   (async done
