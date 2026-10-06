@@ -198,7 +198,7 @@
   "End the job for a bad :fetch arg."
   [c text]
   (ctx/emit! c :fetch.bad-args :warn {:text text})
-  (ctx/result! c {:status :stopped :reason :bad-args :why text})
+  (ctx/result! c {:status :stopped :reason :bad-args :why text :text text})
   :done)
 
 (defn ^:async round!

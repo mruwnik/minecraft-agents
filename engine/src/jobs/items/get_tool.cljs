@@ -68,7 +68,7 @@
         names (tools-for p (:args c))]
     (cond
       (map? names) (do (ctx/emit! c :get-tool.declined :warn {:reason :bad-args :text (str "items.get-tool " (:error names))})
-                       (ctx/result! c {:status :stopped :reason :bad-args :why (:error names)})
+                       (ctx/result! c {:status :stopped :reason :bad-args :why (:error names) :text (str "items.get-tool " (:error names))})
                        :done)
       (empty? names) (do (ctx/result! c {:status :done :needed false}) :done)
       (carried-tool p names) (do (ctx/result! c {:status :done :tool (carried-tool p names)}) :done)

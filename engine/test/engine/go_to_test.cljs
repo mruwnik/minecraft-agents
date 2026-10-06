@@ -133,7 +133,7 @@
               _ (await (tick-out! eng 30))
               ev (filter #(and (= :job (:source %)) (#{:stopped :completed} (:kind %))) @seen)]
           (is (= [:stopped] (mapv :kind ev)))
-          (is (= "stopped: unreachable" (:text (first ev))))
+          (is (re-find #"^gave up walking to" (:text (first ev))))
           (is (re-find #"^gave up walking to \[10 65 1\]: it needs a step up" (:text (first (filter #(= :unreachable (:kind %)) @seen))))))))))
 
 (deftest go-to-reports-an-unreachable-fake-cell-as-unreachable

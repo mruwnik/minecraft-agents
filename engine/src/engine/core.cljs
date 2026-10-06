@@ -683,6 +683,14 @@
   [result]
   (and (map? result) (= :stopped (:status result))))
 
+(defn stopped-text
+  "The words of a :stopped event: the result's own :text (clipped to 200 chars), else \"stopped: <reason>\"."
+  [{:keys [text reason cell]}]
+  (cond
+    (and (string? text) (> (count text) 200)) (str (subs text 0 199) "…")
+    (and (string? text) (seq text)) text
+    :else (str "stopped: " (some-> reason name) (some->> cell pr-str (str " at ")))))
+
 (defn note-child-wait!
   "A listed job's round returned :declined because its child's check waits (reason, or nil when the child gave none):
   the job waits with that reason, told once. Any other round result drops a wait taken from a child."
@@ -711,8 +719,7 @@
           (emit! eng (if (stopped-result? result)
                        (merge fields {:source :job :kind :stopped :level :warn :attention :notice
                                       :data (dissoc result :dug)
-                                      :text (str "stopped: " (name (:reason result))
-                                                 (some->> (:cell result) pr-str (str " at ")))})
+                                      :text (stopped-text result)})
                        (merge fields {:source :job :kind :completed :level :info
                                       :attention :notice
                                       :data {:status :completed}}))))

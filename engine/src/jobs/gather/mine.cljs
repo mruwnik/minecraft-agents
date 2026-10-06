@@ -251,7 +251,9 @@
                                                               (str ", walked back to " (str/join "," back-at))
                                                               ", did not get back to its origin"))))}
                                          why))
-    (ctx/result! c (merge (when (zero? got) {:status :stopped}) {:got got :reason reason} why))
+    (ctx/result! c (merge (when (zero? got) {:status :stopped :text (str "mine got nothing: " (name reason)
+                                                                       (when (= :no-stone-found reason) (str "; dug down " (:steps descent 0) " blocks through soil, found no stone")))})
+                          {:got got :reason reason} why))
     :done))
 
 (defn wrap-up!

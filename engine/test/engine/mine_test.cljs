@@ -1032,7 +1032,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out]} (await (as-child {:block "iron_ore" :count 2 :tunnel-length 0} (rock-world {}) nil 30))]
-          (is (= {:status :stopped :got 0 :reason :none} out)))))))
+          (is (= {:status :stopped :got 0 :reason :none} (dissoc out :text))))))))
 
 (deftest a-missing-pickaxe-is-fetched-then-the-stone-is-dug
   (async done
