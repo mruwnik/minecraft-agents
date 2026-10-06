@@ -87,17 +87,39 @@
           (is (= ["beef"] (call-args p "eat" "item")))
           (is (= 7 (food p))))))))
 
-(defn attack-calls [seen] (count (filter #(and (= :child_ended (:kind %)) (= :attack (:slot %))) @seen)))
-
 (deftest the-attack-child-keeps-the-gap-between-swings
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[gap waits?] [[0 false] [600 true]]]
-          (let [{:keys [eng p seen]} (setup {:self {:food 2} :entities [cow]} :step-ms 5)]
+        (doseq [gap [0 600]]
+          (let [{:keys [eng p clock]} (setup {:self {:food 2} :entities [cow]} :step-ms 5)
+                swings (atom [])]
+            (.override (.-world p) "attack" (fn [token args impl] (swap! swings conj @clock) (impl token args)))
             (await (one-round! eng {:attack-gap-ms gap}))
-            (is (= [7 7 7 7] (call-args p "attack" "id")) (str "gap " gap))
-            (is (= waits? (> (attack-calls seen) 5)) (str "gap " gap ": calls without a swing while the gap runs, " (attack-calls seen)))))))))
+            (is (= ["beef"] (call-args p "eat" "item")) (str "gap " gap ": the cow died and was eaten"))
+            (is (= 4 (count @swings)) (str "gap " gap))
+            (is (every? #(>= % gap) (map - (rest @swings) @swings)) (str "gap " gap ": swings spaced by the gap " @swings))))))))
+
+(deftest a-chest-that-cannot-be-read-is-skipped-for-this-job-but-not-forgotten
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:food 0}
+                                      :containers {"20,64,0" [{:name "bread" :count 4}]}})]
+          (know-source! eng {:x 20 :y 64 :z 0} :chest)
+          (.override (.-world p) "inspectContainer" (fn [_ _ _] #js {:status "busy"}))
+          (await (one-round! eng {}))
+          (is (= 1 (count (calls p "inspectContainer"))) "not asked again in this job")
+          (is (= [{:pos {:x 20 :y 64 :z 0} :kind :chest}] (entries eng :food-source)) "still remembered"))))))
+
+(deftest a-chest-seen-gone-is-forgotten
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:self {:food 0}})]
+          (know-source! eng {:x 20 :y 64 :z 0} :chest)
+          (await (one-round! eng {}))
+          (is (= [] (entries eng :food-source))))))))
 
 (deftest one-round-harvests-the-ripe-crops-of-a-known-farm
   (async done

@@ -232,10 +232,12 @@
     :continue :continue
     :far (bury-source! c pos)
     (let [seen (await (ctx/act c :inspectContainer (clj->js {:pos pos})))
-          items (when (= "ok" (.-status seen)) (array-seq (.-items seen)))
+          status (.-status seen)
+          items (when (= "ok" status) (array-seq (.-items seen)))
           best (best-in-chest items)
           wheat (wheat-to-take c (chest-wheat items))]
       (cond
+        (not (#{"ok" "missing"} status)) (do (pass-over! c pos) :again)
         best (await (withdraw! c pos (.-name best) (min (.-count best) (:take (:args c)))))
         (pos? wheat) (await (withdraw! c pos "wheat" wheat))
         :else (bury-source! c pos)))))
