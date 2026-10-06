@@ -575,7 +575,7 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 | `movement.look-around` `{:every-ms 2000}` | Faces a random point; writes `:looked` |
 | `movement.pace` `{:a :b :laps :rounds}` | Walks a, b, a, b; a test job |
 | `movement.follow` `{:player :range :radius}` | Keeps within range of a player |
-| `movement.leave-vehicle` | Gets off a boat, minecart or mount (run by `:mounted`) |
+| `movement.leave-vehicle` | Gets off a boat, minecart or mount (run by `:mounted`; one run, retries inside, stopped when still aboard) |
 | `time.wait-for-day`, `time.wait-for-dusk` | Done once it is day / evening; waits `:day-not-come` / `:dusk-not-come` |
 
 **Survival (reflex and need jobs)**
@@ -592,8 +592,8 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 | `survival.sleep`, `survival.dig-in`, `survival.log-out` | Walk to a known bed and sleep; roof the body in (one call: walls, a plug or a pit; ends `{:pos :mode :roof}` or stopped with the site's reason); leave the server for a stint and wait for the sleep count |
 | `survival.recover-drops` | After death, weighs the drops' value against the trip's danger (`jobs.lib.cost`) and fetches or skips them |
 | `survival.restore-broken` | Puts back what a job broke in another's zone, and the holes go-to's escalation dug |
-| `survival.unwedge` | Steps out of a full block at the feet cell, else digs it (warn `unwedge.blocked` for bedrock or three failed digs) |
-| `maintenance.unstick`, `maintenance.shut-doors` | Walk to the stuck job's goal with go-to; shut doors a walk left open |
+| `survival.unwedge` | Steps out of a full block at the feet cell, else digs it, all in one run (stopped + warn `unwedge.blocked` for bedrock or three failed digs) |
+| `maintenance.unstick`, `maintenance.shut-doors` | Walk to the stuck job's goal with go-to in one run (stopped + warn `unstick.failed` when it does not arrive); shut doors a walk left open |
 | `combat.attack` `{:targets :radius :absent :done}` | Kills named targets (ids, usernames, mob types); ends `:cleared`, `:gave-up`, `:lost`, `:timeout` or `:absent`. `:absent :wait` makes a standing guard |
 | `combat.hunt`, `animals.cull` | Kill adults of a mob kind, never the last `:keep`, and collect drops |
 

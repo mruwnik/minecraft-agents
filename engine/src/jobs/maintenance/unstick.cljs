@@ -1,6 +1,8 @@
 (ns jobs.maintenance.unstick
   (:require [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.reach :as reach]
+            [jobs.lib.result :as result]
             [jobs.lib.util :as u]
             [triggers.survival.stuck :as stuck]))
 
@@ -12,7 +14,7 @@
     puts back what it dug.
   - Done when go-to arrives, or when the body was shut in at the start and is not any more (it is out, though
     the goal may stay out of reach).
-  - Else it gives up: warn unstick.failed {:pos :why :escalation :text}, a :stuck memory entry (cap 10, ttl 1 hour)
+  - Else it gives up (ends stopped with the reason): warn unstick.failed {:pos :why :escalation :text}, a :stuck memory entry (cap 10, ttl 1 hour)
     that keeps the trigger quiet for :quiet-ms, and it ends so the job list resumes. With no goal in the latest
     :moved entry it gives up at once (:why :no-goal).
   The check is the stuck trigger's condition (triggers.survival.stuck), or a spell already begun.")
@@ -51,7 +53,7 @@
   (let [pos (u/self-pos c)]
     (ctx/emit! c :unstick.failed :warn (merge {:pos pos :text (str "still stuck: " (name (:why fields)))} fields))
     (ctx/remember! c :stuck {:pos pos} stuck-policy)
-    :done))
+    (result/stop! c (:why fields) (str "still stuck: " (name (:why fields))))))
 
 (defn check [c]
   (or (contains? (ctx/mem c) :goal)
@@ -64,11 +66,10 @@
   (let [{:keys [goal enclosed]} (ctx/mem c)]
     (if-not goal
       (give-up! c {:why :no-goal})
-      (let [r (await (ctx/call-child c :go 'jobs.movement.go-to {:pos goal :range 1 :escalate true}))
+      (let [r (await (child/run! c :go 'jobs.movement.go-to {:pos goal :range 1 :escalate true}))
             res (ctx/child-result c :go)]
         (cond
-          (= :continue r) :continue
           (:arrived res) :done
           (and enclosed (not (reach/enclosed? (:primitives c)))) :done
-          :else (give-up! c (merge {:why (or (:why res) (:reason res) :declined)}
+          :else (give-up! c (merge {:why (if (= :continue r) :yielded (or (:why res) (:reason res) :declined))}
                                    (select-keys res [:escalation :kind :detail]))))))))

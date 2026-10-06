@@ -56,8 +56,7 @@
           (await (core/tick! eng))
           (is (not= {:x 0 :y 64 :z 0} (core/self-pos p)))
           (is (= ["moveTo"] (call-names p)) "no dig")
-          (await (core/tick! eng))
-          (is (= [] (:list (core/state eng)))))))))
+          (is (= [] (:list (core/state eng))) "free in one run"))))))
 
 (def boxed
   (into floor (for [[x z] [[1 0] [-1 0] [0 1] [0 -1]]] [(str x ",64," z) "stone"])))
@@ -70,8 +69,7 @@
           (core/submit! eng (list unwedge) {})
           (await (core/tick! eng))
           (is (= "air" (.-name (.blockAt p (tu/pos 0 64 0)))))
-          (await (core/tick! eng))
-          (is (= [] (:list (core/state eng)))))))))
+          (is (= [] (:list (core/state eng))) "free in one run"))))))
 
 (deftest bedrock-at-the-feet-warns-blocked-once-and-the-trigger-stays-quiet
   (async done
@@ -79,8 +77,8 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:blocks (merge boxed {"0,64,0" "bedrock"})})]
           (core/submit! eng (list unwedge) {})
-          (dotimes [_ 4] (await (core/tick! eng)))
-          (is (= 1 (count (filter #(= :unwedge.blocked (:kind %)) @seen))))
+          (await (core/tick! eng))
+          (is (= 1 (count (filter #(= :unwedge.blocked (:kind %)) @seen))) "in one run")
           (is (= [] (:list (core/state eng))))
           (is (false? (holds? p (mem/view (:store eng)))) "no refire while the entry lasts")
           (is (true? (holds? p nil)) "without the entry it would"))))))
@@ -128,7 +126,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:blocks (merge boxed {"0,64,0" "sand" "0,65,0" "lava"})})]
           (core/submit! eng (list unwedge) {})
-          (dotimes [_ 4] (await (core/tick! eng)))
+          (await (core/tick! eng))
           (is (= "sand" (.-name (.blockAt p (tu/pos 0 64 0)))) "no dig")
           (is (not (some #{"dig"} (call-names p))))
           (is (= 1 (count (filter #(= :unwedge.blocked (:kind %)) @seen))) "final after three refusals"))))))

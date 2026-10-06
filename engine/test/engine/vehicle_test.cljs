@@ -147,15 +147,16 @@
           (is (= [{}] (dismount-args p)))
           (is (some #{[:result {:pos {:x 2.5 :y 64 :z 0.5} :landed :in-water}]} seen)))))))
 
-(deftest a-failed-dismount-is-retried-then-given-up
+(deftest a-failed-dismount-is-retried-in-the-run-then-given-up
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [p (setup-owner (aboard {:dismountFails true}))
               c (bare-ctx p {:max-tries 2})
-              first-round (await (leave/round c))
-              second-round (await (leave/round c))]
-          (is (= [:continue :done] [first-round second-round]))
+              r (await (leave/round c))]
+          (is (= :done r))
+          (is (= [[:result {:status :stopped :reason :dismount-failed :text "could not get off the vehicle: timeout" :tries 2}]]
+                 (filterv #(= :result (first %)) @(:seen c))))
           (is (= 2 (count (calls p "dismount"))))
           (is (= [[:vehicle.dismount_failed :warn {:tries 2 :status "timeout"}]]
                  (filterv #(= :vehicle.dismount_failed (first %)) @(:seen c)))))))))
