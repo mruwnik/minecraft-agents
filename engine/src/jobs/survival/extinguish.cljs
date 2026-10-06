@@ -28,8 +28,8 @@
   5. On fire, not in lava, with no water in reach and no hazard within 1.5 blocks, there is nothing useful to do.
      It holds still (:burning-wait): emits info extinguish_wait once, eats when food is under 18 and food is carried
      (to keep regenerating), and waits a second per pass; still burning after 20 seconds ends stopped :still-burning.
-  A walk that is blocked (boxed in, perhaps by its own covers) is retried at once as a go-to, which pillars, stairs or digs
-  out when shut in. Three failed walks (no safe cell, or the way blocked) give an extinguish_stuck warning and end stopped :stuck.
+  A walk that is blocked (boxed in, perhaps by its own covers) goes through a go-to from then on (it pillars, stairs or digs
+  out when shut in); a go-to still working is not a failure. Three failures (no safe cell, or a go-to that fails, with its reason) give an extinguish_stuck warning and end stopped :stuck.
   Still burning after max-passes passes ends stopped :still-burning. Never :continue.
   Memory: writes :extinguish {:pos :cause} each pass (cap 20, one hour),
   and lava seen within :scan-radius as :hazard entries (cap 50, six hours) for retreat logic.")
@@ -278,14 +278,18 @@
 
 (defn ^:async escape!
   "The emergency step is blocked (boxed in, perhaps by own covers): one go-to to pos, which plans the way and, when
-  shut in, pillars, stairs or digs out. :again when it arrives, else stuck!."
+  shut in, pillars, stairs or digs out. :again while it works or when it arrives; a go-to that fails or is declined
+  counts toward stuck!, which carries its reason."
   [c pos]
   (ctx/hold-still! c nil)
-  (await (ctx/call-child c :go 'jobs.movement.go-to {:pos pos :range 0}))
-  (cond
-    (clear? c) :done
-    (<= (u/dist (u/self-pos c) pos) 1.5) :again
-    :else (stuck! c "the way to a safe cell is blocked")))
+  (ctx/update-mem! c assoc :blocked true)
+  (let [r (await (ctx/call-child c :go 'jobs.movement.go-to {:pos pos :range 0}))
+        res (ctx/child-result c :go)]
+    (cond
+      (clear? c) :done
+      (= :continue r) :again
+      (and (= :done r) (:arrived res)) :again
+      :else (stuck! c (str "the way to a safe cell is blocked" (some->> (:text res) (str ": ")))))))
 
 (defn ^:async pass!
   "One try at putting the body out. :again for another pass, else :done (perhaps stopped)."
@@ -335,7 +339,7 @@
             (if-not target
               (or (when refusal (await (pour-last-resort! c pos refusal)))
                   (stuck! c "no safe cell within reach"))
-              (let [status (await (move! c target))]
+              (let [status (if (:blocked (ctx/mem c)) "blocked" (await (move! c target)))]
                 (cond
                   (clear? c) :done
                   (= "blocked" status) (await (escape! c target))

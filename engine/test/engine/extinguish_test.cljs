@@ -170,7 +170,7 @@
           (core/submit! eng '(jobs.survival.extinguish) {})
           (.override (.-world p) "moveTo" (fn ^:async f [_ _ _] #js {:status "blocked"}))
           (await (core/tick! eng))
-          (is (= 3 (count (calls p "moveTo"))) "three blocked walks in one run")
+          (is (= 1 (count (calls p "moveTo"))) "one blocked walk, then go-to for every pass")
           (is (= 9 (count (entries eng :hazard)))))))))
 
 ;; ------------------------------------------------------------------- bucket
@@ -469,19 +469,75 @@
           (is (= :stuck (stopped-reason seen)))
           (is (= 1 (count (of-kind seen :extinguish_stuck)))))))))
 
-(deftest a-blocked-emergency-step-escapes-through-go-to-at-once
+(defn setup-blocked
+  "A body on fire beside a fire cell, every raw moveTo blocked, go-to replaced by (step c p n) for its n-th call
+  (it returns the round's value). {:eng :p :seen :go-tos (atom of calls)}."
+  [step]
+  (let [clock (atom 1000000)
+        [seen sink] (tu/legacy-capture-sink)
+        p (tu/fake {:self {:onFire true} :blocks (merge (floor 8) {"1,64,0" "fire"})})
+        n (atom 0)
+        go-to {:check (fn [_] true)
+               :round (fn ^:async go-to-round [c] (step c p (swap! n inc)))}
+        eng (core/create {:primitives p :jobs (assoc registry/jobs 'jobs.movement.go-to go-to) :triggers triggers/all
+                          :dir (tu/tmp-dir) :now #(deref clock)
+                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+    (.override (.-world p) "moveTo" (fn ^:async f [_ _ _] #js {:status "blocked"}))
+    (core/submit! eng '(jobs.survival.extinguish) {})
+    {:eng eng :p p :seen seen :go-tos n}))
+
+(defn put-out! [p] (swap! (fake/state p) assoc-in [:self :onFire] false))
+
+(deftest a-blocked-emergency-step-escapes-through-go-to-and-an-arrival-ends-the-run
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:self {:onFire true} :blocks (merge (floor 8) {"1,64,0" "fire"})})]
-          (.override (.-world p) "moveTo" (fn ^:async f [_ _ _] #js {:status "blocked"}))
-          (on-wait! p (fn [_ _] (swap! (fake/state p) assoc-in [:self :onFire] false)))
-          (core/submit! eng '(jobs.survival.extinguish) {})
+        (let [{:keys [eng p seen go-tos]} (setup-blocked (fn [c p _] (put-out! p) ((:result c) {:status :done :arrived true}) :done))]
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))))
+          (is (= 1 @go-tos))
           (is (= 1 (count (calls p "moveTo"))) "one blocked step, then go-to, not three stalled walks")
           (is (= [] (of-kind seen :extinguish_stuck)))
           (is (= 1 (count (of-kind seen :completed)))))))))
+
+(deftest a-go-to-that-is-still-working-is-not-a-failure
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [many (inc extinguish/max-passes)
+              {:keys [eng p seen go-tos]} (setup-blocked (fn [c p n]
+                                                           (if (< n 6)
+                                                             :continue
+                                                             (do (put-out! p) ((:result c) {:status :done :arrived true}) :done))))]
+          (await (run-until-empty eng many))
+          (is (= [] (:list (core/state eng))))
+          (is (= 6 @go-tos) "continued five times, arrived on the sixth")
+          (is (= [] (of-kind seen :extinguish_stuck)))
+          (is (= 1 (count (of-kind seen :completed)))))))))
+
+(deftest a-go-to-that-fails-ends-stopped-stuck-with-its-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen go-tos]} (setup-blocked (fn [c _ _]
+                                                           ((:result c) {:status :stopped :arrived false :reason :unreachable :text "walled in"})
+                                                           :done))]
+          (await (core/tick! eng))
+          (is (= [] (:list (core/state eng))))
+          (is (= :stuck (stopped-reason seen)))
+          (is (= u/max-failures @go-tos) "each failed go-to counts once")
+          (is (= 1 (count (calls p "moveTo"))) "after a blocked step, later passes go straight to go-to")
+          (is (re-find #"walled in" (:text (first (of-kind seen :extinguish_stuck))))))))))
+
+(deftest a-go-to-that-arrives-with-the-fire-still-on-is-bounded
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen go-tos]} (setup-blocked (fn [c _ _] ((:result c) {:status :done :arrived true}) :done))]
+          (await (core/tick! eng))
+          (is (= [] (:list (core/state eng))))
+          (is (= :still-burning (stopped-reason seen)))
+          (is (= extinguish/max-passes @go-tos)))))))
 
 (defn ^:async pour-then-flee
   "A cut run poured at the origin, then the body (out of the fire) stands at x blocks away; runs to the end."
