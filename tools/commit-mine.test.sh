@@ -141,12 +141,10 @@ rm -f nolabel.mjs
 out=$(tools/commit-mine --card c -m m --expect-lines 0 nosuchfile 2>&1); rc=$?
 check "git failure exits non-zero" "$((rc != 0))" 1
 check "git failure prints a message" "$((${#out} > 0))" 1
-# SIGPIPE: a commit with many files (>20 stat lines) should not exit 141 (pipefail + head early close).
-# Create 100+ files to ensure output is longer than 20 lines.
-mkdir -p many; for i in $(seq 1 100); do echo "file $i" > many/file$i.txt; done
-git add many; git commit -q -m "many files"
-# Now modify some files to create changes and commit them.
-for i in $(seq 1 5); do echo "file $i modified" > many/file$i.txt; done
-out=$(tools/commit-mine --card c -m "many changes" --expect-lines 10 many/file1.txt many/file2.txt many/file3.txt many/file4.txt many/file5.txt 2>&1); rc=$?
-check "large commit output exit" "$rc" 0
+# A commit of 1000 files prints a stat longer than a pipe buffer (64 KB); a tail that closes the pipe early makes the tool exit 141 under pipefail.
+mkdir -p many; for i in $(seq 1 1000); do echo "file $i" > many/file$i.txt; done
+out=$(tools/commit-mine --card c -m "many files" --expect-lines 1000 many 2>&1); rc=$?
+check "1000-file commit exit" "$rc" 0
+check "1000-file commit: all in HEAD" "$(git show --name-only --format= HEAD | wc -l)" 1000
+check "1000-file commit: output capped at 20 lines" "$(wc -l <<<"$out")" 20
 exit $fail
