@@ -21,8 +21,8 @@ export const POSE_HZ = 0
 export const POSE_REFRESH_MS = 2000
 // a pose whose only change is the surroundings (mobs, time, rain) is written at most this often; the body's own move is capped by POSE_BODY_MS
 export const POSE_SURROUND_MS = 500
-// the body's own small moves are written at most this often (the viewer interpolates); a jump past POSE_JUMP blocks or a dimension change goes out at once
-export const POSE_BODY_MS = 100
+// the body's own small moves are written at most this often (the viewer interpolates); kept under 2 physics ticks (100 ms) less ~20 ms of tick jitter, so a write lands on every 2nd tick; a jump past POSE_JUMP blocks or a dimension change goes out at once
+export const POSE_BODY_MS = 80
 export const POSE_JUMP = 2.5
 export const HUD_MS = 1000
 export const STATS_MS = 60000

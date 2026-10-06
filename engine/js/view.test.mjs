@@ -11,7 +11,7 @@ import prismarineChunk from 'prismarine-chunk'
 import prismarineRegistry from 'prismarine-registry'
 import {
   encodeColumn, decodeColumnFile, restoreColumn, writeAtomic, columnFile,
-  poseSnapshot, poseKey, hudSnapshot, createView, poseHzFromEnv, coalescedWriter, STATS_MS, POSE_REFRESH_MS,
+  poseSnapshot, poseKey, hudSnapshot, createView, poseHzFromEnv, coalescedWriter, STATS_MS, POSE_REFRESH_MS, POSE_BODY_MS,
   packNibbles, decodeColumnLight, mergeOverlapping, columnLightSection, columnStateSection
 } from './view.mjs'
 import { lightTable, relightBox } from './light.mjs'
@@ -455,7 +455,7 @@ test('hz 0 writes on physics ticks with no interval, at most one per POSE_BODY_M
   let ticks = 0
   const poses = await posesIn(0, 1, bot => { ticks++; bot.emit('physicsTick') })
   assert.equal(ticks, 100)
-  assert.ok(Math.abs(poses - 10) <= 1, `poses ${poses}`)
+  assert.ok(Math.abs(poses - 1000 / POSE_BODY_MS) <= 1, `poses ${poses}`)
 })
 
 test('default mode writes one pose per changed physics tick (spaced POSE_BODY_MS), none for an unchanged one', async () => {
@@ -1155,4 +1155,27 @@ test('a written pose has numbers rounded to 4 decimals (smaller file, fewer page
   assert.equal(readJson(file).pos.x, 108.5)
   assert.equal(readJson(file).yaw, 3.1416)
   assert.doesNotMatch(text, /\d\.\d{5,}/)
+})
+
+test('physics ticks jittering by 10 ms give no pose gap of 150 ms (cap sits under two ticks)', async () => {
+  const bot = fakeBot()
+  let clock = 1000
+  const { view } = makeView(bot, { now: () => clock })
+  const writes = []
+  let seen = 0
+  let seed = 7
+  const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648
+  for (let i = 0; i < 400; i++) {
+    clock += 50 + Math.round((rnd() - 0.5) * 20)
+    bot.entity.position.x += 0.2
+    bot.emit('physicsTick')
+    await view.idle()
+    const n = view.stats().poses
+    if (n > seen) writes.push(clock)
+    seen = n
+  }
+  view.stop()
+  const gaps = writes.slice(1).map((t, i) => t - writes[i])
+  assert.ok(gaps.length > 100)
+  assert.ok(Math.max(...gaps) < 140, `max gap ${Math.max(...gaps)}`)
 })
