@@ -23,6 +23,7 @@
 (set! *warn-on-infer* true)
 
 (def ^:const MAX-IN-FLIGHT 8) ; column fetches at once, per scene
+(def ^:const FETCH-RETRIES 4) ; retries of a failed column fetch before the column counts as missing
 (def ^:const MAX-DECODING 12) ; columns fetched and waiting for a decode, per scene
 (def ^:const UPLOAD-BUDGET-MS 4) ; GPU uploads per frame, at least one
 (def ^:const COLUMN-DRAWN-KEEP 500)
@@ -276,6 +277,23 @@
                              (when (identical? (.get (.-columns st) k) column) (settle! k column result mtime))
                              (pump!)))))
 
+        ;; a failed fetch (network, HTTP 5xx) is retried after a doubling delay, FETCH-RETRIES times; a 404 is not an error
+        retries (volatile! {})
+        retry-ms (option options "retryMs" 500)
+        retry-later! (fn [k ^js column sq mtime]
+                       (let [n (get @retries k 0)]
+                         (if (>= n FETCH-RETRIES)
+                           (do (vswap! retries dissoc k)
+                               (settle! k column nil mtime))
+                           (do (vswap! retries assoc k (inc n))
+                               (js/setTimeout
+                                (fn []
+                                  (when (and (not (.-closed st)) (identical? (.get (.-columns st) k) column) (not (.has (.-needs st) k)))
+                                    (when (some? mtime) (.set (.-eventMtimes st) k mtime))
+                                    (.set (.-needs st) k (next-seq!))
+                                    (pump!)))
+                                (* retry-ms (js/Math.pow 2 n)))))))
+
         start-fetch! (fn [k]
                        (let [^js column (.get (.-columns st) k)
                              sq (.get (.-needs st) k)
@@ -283,15 +301,16 @@
                          (.delete (.-eventMtimes st) k)
                          (.add (.-inFlight st) k)
                          (-> (fetch-column (.-world ^js (.-pose st)) (.-cx column) (.-cz column))
-                             (.catch (fn [error] (js/console.error (str "column " k ":") error) nil))
+                             (.catch (fn [error] (js/console.error (str "column " k ":") error) ::failed))
                              (.then (fn [bytes]
                                       (.delete (.-inFlight st) k)
                                       (when-not (.-closed st)
                                         (when (= sq (.get (.-needs st) k)) (.delete (.-needs st) k))
                                         (cond
                                           (not (identical? (.get (.-columns st) k) column)) (pump!)
-                                          (nil? bytes) (do (settle! k column nil mtime) (pump!))
-                                          :else (decode! k column bytes sq mtime))))))))
+                                          (= ::failed bytes) (do (retry-later! k column sq mtime) (pump!))
+                                          (nil? bytes) (do (vswap! retries dissoc k) (settle! k column nil mtime) (pump!))
+                                          :else (do (vswap! retries dissoc k) (decode! k column bytes sq mtime)))))))))
 
         ;; fetches the nearest needed columns while the fetch and decode limits allow
         pump (fn []

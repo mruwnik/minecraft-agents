@@ -46,11 +46,23 @@
       (= column-status :never) (js/Promise. (fn [_ _]))
       :else (js/Promise.resolve (response column-status)))))
 
-(defn make-scene [{:keys [radius decode column-status calls urls burn-ms] :or {radius 1 decode :now column-status 200 burn-ms 0}}]
+(defn flaky-fetch
+  "Column urls fail `failures` times (reject, or HTTP 500 for :http) before answering 200."
+  [failures mode urls]
+  (let [left (volatile! failures)]
+    (fn [url]
+      (vswap! urls conj url)
+      (cond
+        (not (.includes url "/columns/")) (js/Promise.resolve (response 404))
+        (pos? @left) (do (vswap! left dec)
+                         (if (= mode :http) (js/Promise.resolve (response 500)) (js/Promise.reject (js/Error. "blip"))))
+        :else (js/Promise.resolve (response 200))))))
+
+(defn make-scene [{:keys [radius decode column-status calls urls burn-ms fetch] :or {radius 1 decode :now column-status 200 burn-ms 0}}]
   (scene/create-scene #js {:agent "w/Bob" :radius radius :interp false :ownStream false
                            :world (fake-world calls burn-ms) :decoder (fake-decoder decode calls)
                            :tables #js {:ensure (fn [_] (js/Promise.resolve #js {}))}
-                           :fetch (fake-fetch column-status urls)
+                           :fetch (or fetch (fake-fetch column-status urls)) :retryMs 1
                            :cameraBasis (fn [cam] cam) :sceneTime (fn [_ _] #js {:time 0 :rain 0}) :skyDarken (fn [_ _] 0)}))
 
 (defn pose [x z] #js {:mtime (js/Date.now) :pose #js {:t (js/Date.now) :status "online" :world "w" :mcVersion "1.21" :eye #js {:x x :y 70 :z z} :yaw 0 :pitch 0}})
@@ -139,6 +151,37 @@
                    (.frame s 0 nil)
                    (is (empty? (filter #(= :upload (first %)) @calls)))
                    (is (= {:loaded 0 :wanted 9} (select-keys (js->clj (.stats s) :keywordize-keys true) [:loaded :wanted])))
+                   (is (= 0 (:needs (counts s))))
+                   (.close s)
+                   (done)))))))
+
+(deftest a-failed-fetch-is-retried-and-the-column-loads
+  (doseq [mode [:reject :http]]
+    (async done
+      (let [calls (volatile! [])
+            urls (volatile! [])
+            ^js s (make-scene {:radius 0 :calls calls :urls urls :fetch (flaky-fetch 2 mode urls)})]
+        (.feed s "pose" (pose 8 8))
+        (-> (js/Promise. (fn [resolve] (js/setTimeout resolve 60)))
+            (.then (fn []
+                     (.frame s 0 nil)
+                     (is (= 3 (count (filter #(.includes % "/columns/") @urls))) (str mode))
+                     (is (= 1 (count (of-kind calls :upload))))
+                     (is (= 1 (:loaded (js->clj (.stats s) :keywordize-keys true))))
+                     (.close s)
+                     (done))))))))
+
+(deftest a-fetch-that-keeps-failing-gives-up-as-missing
+  (async done
+    (let [calls (volatile! [])
+          urls (volatile! [])
+          ^js s (make-scene {:radius 0 :calls calls :urls urls :fetch (flaky-fetch 1000 :reject urls)})]
+      (.feed s "pose" (pose 8 8))
+      (-> (js/Promise. (fn [resolve] (js/setTimeout resolve 150)))
+          (.then (fn []
+                   (.frame s 0 nil)
+                   (is (= 5 (count (filter #(.includes % "/columns/") @urls))))
+                   (is (empty? (of-kind calls :upload)))
                    (is (= 0 (:needs (counts s))))
                    (.close s)
                    (done)))))))
