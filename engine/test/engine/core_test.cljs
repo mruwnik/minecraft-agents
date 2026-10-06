@@ -563,6 +563,19 @@
                      :reason :no-way}]
                    (child-events seen)))))))))
 
+(deftest a-child-returning-a-bad-result-emits-child-ended-error-and-throws
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup)
+              c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
+              failing {:name :failing :check always :round (fn [_] :bogus)}]
+          (.setOwner (:primitives eng) "tx")
+          (is (thrown-with-msg? js/Error #"not :done, :continue or :declined" (await (ctx/call-child c :f failing {}))))
+          (is (= [{:kind :child_started :job "j9/f" :slot :f :chain ["j9" "j9/f"]}
+                  {:kind :child_ended :job "j9/f" :slot :f :chain ["j9" "j9/f"] :status :error}]
+                 (child-events seen))))))))
+
 (deftest a-done-child-hands-its-result-to-the-parent-for-the-round
   (async done
     (tu/run-async done
@@ -1286,7 +1299,7 @@
         c (core/make-ctx eng {:root "j1" :slots [] :chain ["j1"] :token nil :args {} :round 0})]
     (is (thrown? js/Error (ctx/hold-still! c :night)))))
 
-;; ---------------------------------------------------------------- sweep timer;; ---------------------------------------------------------------- sweep timer
+;; ---------------------------------------------------------------- sweep timer
 
 (deftest ticks-sweep-memory-on-a-timer
   (let [{:keys [eng clock dir]} (setup)

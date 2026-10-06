@@ -414,7 +414,7 @@ the token so the in-flight round is never booked; the job stays listed.
 - `job.holding` (info): a declared hold (`ctx/hold-still!`, `act :wait` with `:why`); `jobs show` gives
   `:holding {:reason :since}`.
 - `job.fruitless`: a required attention request when every act of a listed job failed in 3 rounds in a row (a round that
-  ends the job does not count); resolved by a round with progress. It only flags.
+  ends the job does not count; a round with no act neither counts nor resets); resolved by a round with progress. It only flags.
 - `job.round_started` and `job.yielded` are debug.
 
 **Backoff.** Register entries only: a reflex whose runs keep failing would fire as fast as the tick, so its entry waits.

@@ -151,6 +151,15 @@
   (await (ctx/act c :useOn #js {:status @status}))
   :done)
 
+(def alt-rounds (atom 0))
+
+(defn ^:async alternating-round
+  "A failed moveTo on odd rounds, no act on even ones."
+  [c]
+  (when (odd? (swap! alt-rounds inc))
+    (await (ctx/act c :moveTo #js {:pos #js {:x 0 :y 64 :z 0} :status "blocked"})))
+  :continue)
+
 (def always (constantly true))
 
 (def jobs
@@ -160,6 +169,7 @@
           'use-on {:check always :round use-on-round}
           'bump-once {:check always :round bump-once-round}
           'idle {:check always :round idle-round}
+          'alternating {:check always :round alternating-round}
           'quick {:check always :round (fn [_] :done)}
           'planned {:check always :round planned-round}}))
 
@@ -575,6 +585,17 @@
           (core/submit! eng '(idle) {})
           (dotimes [i 4] (await (tick-at r (+ t0 (* i 60000)))))
           (is (= [] (of-kind seen :fruitless))))))))
+
+(deftest a-no-act-round-neither-counts-nor-resets-the-fruitless-spell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (reset! alt-rounds 0)
+        (let [{:keys [seen eng] :as r} (setup)]
+          (core/submit! eng '(alternating) {})
+          (dotimes [i 6] (await (tick-at r (+ t0 (* i 60000)))))
+          (is (= [["j1" 3]] (mapv (juxt :job :rounds) (of-kind seen :fruitless)))
+              "three failed rounds raise it although yielded no-act rounds lie between"))))))
 
 (def calls (atom 0))
 

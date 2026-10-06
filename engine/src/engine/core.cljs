@@ -932,7 +932,7 @@
 (defn note-fruitless!
   "After a round of listed job id that ended with status: count rounds in a row in which every act failed (round is
   its act tracker, see engine.backoff; a round that ends the job, is cut or fails is not counted). The third raises job.fruitless, a required attention request, once per spell; a round
-  with progress ends the spell and resolves the request. It only flags: nothing is held against the job."
+  with progress ends the spell and resolves the request; a round with no act neither counts nor ends it. It only flags: nothing is held against the job."
   [eng id status round]
   (when-not (#{:cut :error :done} status)
     (if (backoff/fruitless-round? round)
@@ -945,7 +945,7 @@
                                      :context (select-keys (job-fields eng id) [:round :chain])
                                      :data {:rounds n :act act :status status :why reason}
                                      :message (str "Job " id " makes no progress: " text)}))))
-      (when (get @(:fruitless eng) id)
+      (when (and (pos? (:acts round 0)) (get @(:fruitless eng) id))
         (swap! (:fruitless eng) dissoc id)
         (doseq [[request-id request] (:attention (state eng))
                 :when (same-request? request id :fruitless)]
