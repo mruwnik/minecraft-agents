@@ -25,6 +25,9 @@
     to, or not at all while it goes on; every iteration awaits a pace-ms timer. A goal in unloaded land is walked
     toward walk by walk, and to the edge of loaded land when that is the only way on. It returns :continue only while
     an escalation or put-back child is waiting on the world.
+  - :dangers false plans straight past known dangers (default: the plans keep away from them, jobs.lib.threats). :leg-s n
+    walks one leg of at most n s and, when it got more than 1 block nearer, ends {:arrived false :leg true} (job :done)
+    for a caller chasing a moving target to call again; a leg that got no nearer goes on as any round.
   - A call starts afresh from the world: its counters are per call, and a saved escalation is dropped when the body
     is already there (a cut call's memory is a hint).
   - A walk that gets more than 1 block nearer is progress. Three walks in a row without progress give up, and so
@@ -61,6 +64,8 @@
            :default :shut}
    :escalate {:doc "when shut in with no way out, pillar, stair or dig a door to get out (and put back what was dug); false: give up"
               :default true}
+   :dangers {:doc "false: plan straight past known dangers (a walk up to the hostile being fought); true: keep away from them" :default true}
+   :leg-s {:doc "walk one leg of at most this many seconds, then end {:arrived false :leg true} so the caller can re-aim at a moving target; nil: the whole way" :default nil}
    :warn {:doc "false: a give-up or refusal is an info event, not a warn, for a caller that reports the failure itself"
           :default true}
    :ignore-zones? {:doc "act regardless of zones and claims in the escalation (pillar, stair, clear-path); the rules of the game allow it" :default false}})
@@ -502,6 +507,8 @@
       :else
       (let [_ (forget-known-land! c)
             {walked :result status :status to :to} (await (near/walk-round! c pos range {:doors doors :explore true
+                                                                                          :dangers (not (false? (:dangers (:args c))))
+                                                                                          :timeout-s (or (:leg-s (:args c)) near/walk-timeout-s)
                                                                                           :shut-also (shut-foreign c)
                                                                                           :budget walk/round-budget
                                                                                           :avoid (set (:fault-cells (ctx/mem c)))
@@ -521,6 +528,9 @@
         (cond
           (= "arrived" status)
           (if (:restore-pending (ctx/mem c)) (restore-next! c) (arrived! c))
+
+          (and (:leg-s (:args c)) (< left (dec d)))
+          (finish! c {:arrived false :leg true})
 
           (= "searching" status)
           (let [n (cond-> (:searching (ctx/mem c) 0) (:fresh walked) inc)]

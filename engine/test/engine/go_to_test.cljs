@@ -10,6 +10,7 @@
             [engine.perception :as perception]
             [engine.fake.raw-world :as fake-raw]
             [jobs.lib.walk :as walk]
+            [jobs.lib.threats :as threats]
             [engine.takeover :as takeover]
             [engine.test-util :as tu :refer [box floor]]
             [engine.triggers :as triggers]
@@ -641,3 +642,24 @@
             (is (re-find #"place" (:text @out)))
             (is (= [0 64 0] (at p)) "did not walk")
             (is (= 1 (count (events-of {:seen seen} :refused))))))))))
+
+(deftest go-to-plans-with-dangers-unless-told-not-to
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[args want] [[{} true] [{:dangers false} false]]]
+          (let [planned (atom 0)]
+            (with-redefs [threats/planner-dangers (fn [_] (swap! planned inc) nil)]
+              (await (go! {:blocks flat} (assoc args :pos [10 64 0]))))
+            (is (= want (pos? @planned)) (str "args " args))))))))
+
+(deftest go-to-leg-s-walks-one-short-leg-and-ends-for-the-caller-to-re-aim
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (go! {:blocks flat} {:pos [35 64 0] :range 0 :leg-s 1}))]
+          (is (= {:arrived false :leg true} (select-keys @out [:arrived :leg])) "a leg, not an arrival or a give-up")
+          (is (< 0 (first (at p)) 35) (str "moved on toward the goal, at " (at p))))
+        (let [{:keys [out p]} (await (go! {:blocks flat} {:pos [35 64 0] :range 0}))]
+          (is (= {:arrived true} @out) "without :leg-s the whole way is walked")
+          (is (= 35 (first (at p)))))))))
