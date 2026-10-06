@@ -65,6 +65,7 @@
    :register []
    :plot {:height 16 :floor "stone"}
    :blocks []
+   :memory []
    :plans []
    :body {:at [16.5 0 16.5] :inventory [] :effects [] :settle-s 3}
    :act []
@@ -74,7 +75,7 @@
 
 (def concatenated
   "Keys a case adds to its file's :defaults instead of replacing them."
-  #{:blocks :act :expect :after :plans})
+  #{:blocks :memory :act :expect :after :plans})
 
 (defn merge-case
   "A case over its file's defaults: :body and :plot merge key by key, the concatenated keys append, the rest replace."
@@ -97,6 +98,21 @@
     first-in-group? :restart-keep
     :else :keep))
 
+(def default-memory-policy
+  "The engine's default policy for a memory kind (engine.memory/default-policy): 50 entries, one hour."
+  {:cap 50 :ttl (* 60 60 1000)})
+
+(defn memory-seed
+  "The body's memory data (what engine/memory.edn holds) for a case's :memory entries, positions already absolute:
+  each {:kind k :data {...}} (optionally :policy {:cap :ttl}) becomes an entry written at now-ms, in order."
+  [entries now-ms]
+  (reduce (fn [acc {:keys [kind data policy]}]
+            (-> acc
+                (update-in [:entries kind] (fnil conj []) {:t now-ms :data data})
+                (assoc-in [:policies kind] (or policy default-memory-policy))))
+          {:entries {} :policies {}}
+          entries))
+
 (def step-kinds #{:summon :rcon :job :wait-s :await :kill-body :time-set})
 (def after-kinds #{:block :not-block :body-near :item :entities})
 
@@ -112,6 +128,8 @@
       (not (string? (:name c))) (conj ":name must be a string")
       (not (#{:day :night :night-exclusive :any} (:time c))) (conj ":time must be :day, :night, :night-exclusive or :any")
       (not (and (int? h) (< 1 h 32))) (conj ":plot :height must be an integer 2..31")
+      (not (every? #(and (keyword? (:kind %)) (map? (:data %))) (:memory c))) (conj ":memory entries need a keyword :kind and a map :data")
+      (and (seq (:memory c)) (:keep-memory c)) (conj ":memory cannot be combined with :keep-memory")
       (not (vector? (get-in c [:body :at]))) (conj ":body :at must be [x y z]")
       (some #(not (step-kinds (first %))) (:act c)) (conj (str ":act steps must be one of " (sort step-kinds)))
       (some #(not (after-kinds (first %))) (:after c)) (conj (str ":after checks must be one of " (sort after-kinds)))

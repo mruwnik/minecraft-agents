@@ -158,13 +158,17 @@
 
 (defn start-body!
   "Starts the body with a scenario holding register, --fresh; resolves once it logged :system :started. The body's own
-  engine/memory.edn is deleted first unless keep-memory? (--fresh only drops engine.edn)."
-  [opts register keep-memory?]
+  engine/memory.edn is deleted first unless keep-memory? (--fresh only drops engine.edn), then written from
+  memory-data when given (the case's :memory seed; the body reads the file as it starts)."
+  [opts register keep-memory? memory-data]
   (when-not keep-memory?
     (doseq [name f/clean-start-files
             :let [file (path/join (body-dir opts) "engine" name)]
             :when (fs/existsSync file)]
-      (fs/unlinkSync file)))
+      (fs/unlinkSync file))
+    (when memory-data
+      (fs/mkdirSync (path/join (body-dir opts) "engine") #js {:recursive true})
+      (fs/writeFileSync (path/join (body-dir opts) "engine" "memory.edn") (pr-str memory-data))))
   (let [dir (path/join (os/tmpdir) (str "world-test-" (:body opts)))
         scenario (path/join dir "scenario.edn")
         out (path/join dir "body.log")
@@ -404,7 +408,7 @@
           (f/register-put-argvs (:body opts) (:world opts) register)))
 
 (defn run-case!
-  "One run of case c on plot i; resolves to a result map. register: the entries to put on the body once it stands in
+  "One run of case c on plot i (leased by the caller before the body starts); resolves to a result map. register: the entries to put on the body once it stands in
   the built plot (the body was just started with none), nil when it keeps the register it has."
   [opts c i run register]
   (let [grid (f/case-grid c)
@@ -504,18 +508,19 @@
                   (.then p (fn []
                              (-> (reduce (fn [p2 [n [c run]]]
                                            (.then p2 (fn []
-                                                       (let [plan (f/body-start-plan c (zero? n))]
+                                                       (let [plan (f/body-start-plan c (zero? n))
+                                                             [from end] (f/plot-range (f/case-grid c))
+                                                             i (acquire-plot! (max from (:first-plot opts)) end)
+                                                             memory (when (seq (:memory c))
+                                                                      (f/memory-seed (:memory (f/resolve-tags c (f/plot-origin (f/case-grid c) i))) (js/Date.now)))]
                                                          (-> (if (= :keep plan)
                                                                (js/Promise.resolve nil)
                                                                (-> (stop-body! opts)
                                                                    (.then #(when-not (= :restart-keep plan) (reset-last-plot! opts)))
-                                                                   (.then #(start-body! opts register (= :restart-keep plan)))))
-                                                             (.then (fn []
-                                                                      (let [[from end] (f/plot-range (f/case-grid c))
-                                                                            i (acquire-plot! (max from (:first-plot opts)) end)]
-                                                                        (-> (run-case! opts c i run (when-not (= :keep plan) register))
-                                                                            (.then (fn [r] (report! r) (swap! results conj r)))
-                                                                            (.finally #(release-plot! i)))))))))))
+                                                                   (.then #(start-body! opts register (= :restart-keep plan) memory))))
+                                                             (.then #(run-case! opts c i run (when-not (= :keep plan) register)))
+                                                             (.then (fn [r] (report! r) (swap! results conj r)))
+                                                             (.finally #(release-plot! i)))))))
                                          (js/Promise.resolve nil)
                                          (map-indexed vector (for [run (range 1 (inc (:repeat opts))) c group] [c run])))
                                  (.finally #(stop-body! opts))))))

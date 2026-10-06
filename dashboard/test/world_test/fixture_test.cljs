@@ -182,3 +182,21 @@
                                [{:trigger :wedged :persistence :cooldown :cooldown-s 0
                                  :job '(jobs.survival.unwedge) :args {:radius 8}}])))
   (is (= [] (f/register-put-argvs "Probe" "claude" []))))
+
+(deftest memory-seed-makes-memory-data-from-case-entries
+  (let [c (f/resolve-tags (f/read-edn "{:memory [{:kind :food-source :data {:pos #at [3 0 4] :kind :chest}}
+                                                {:kind :food-source :data {:pos #at [5 0 4] :kind :chest}}
+                                                {:kind :bed :data {:pos #at [1 0 1]} :policy {:cap 1 :ttl :forever}}]}")
+                          [100 150 200])
+        data (f/memory-seed (:memory c) 5000)]
+    (is (= [[103 150 204] [105 150 204]] (mapv #(get-in % [:data :pos]) (get-in data [:entries :food-source]))))
+    (is (= [5000 5000] (mapv :t (get-in data [:entries :food-source]))))
+    (is (= {:cap 1 :ttl :forever} (get-in data [:policies :bed])))
+    (is (= {:cap 50 :ttl 3600000} (get-in data [:policies :food-source])))
+    (is (= {:entries {} :policies {}} (f/memory-seed nil 5000)))))
+
+(deftest memory-seed-problems
+  (let [ps #(f/problems (merge {:name "a" :time :day :plot {:height 6} :body {:at [1 0 1]} :act [] :after [] :expect []} %))]
+    (is (empty? (ps {:memory [{:kind :food-source :data {:pos [1 0 1]}}]})))
+    (is (some #(re-find #":memory" %) (ps {:memory [{:data {}}]})))
+    (is (some #(re-find #":memory" %) (ps {:memory [{:kind :bed :data {}}] :keep-memory true})))))

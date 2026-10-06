@@ -1,0 +1,18 @@
+;; Card 667e9cdb: a :food-source entry seeded into the body's memory (:memory, written before the body starts), so the case
+;; needs no walk to learn the chest. The chest block is in :blocks too: the body can only have "seen" what is there.
+;; Food 8 (hunger 5 s amp 255) and hp 15 (damage 5): hungry below min(18, 6 + 5).
+{:defaults
+ {:tags [:survival :hungry :memory-seed] :time :day
+  :plot {:height 6}
+  :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {})}]
+  :body {:at [16.5 0 16.5] :settle-s 2}
+  :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:wait-s 7]
+        [:rcon "damage $BODY 5 minecraft:generic"] [:wait-s 5]]
+  :limit-s 90}
+ :cases
+ [{:name "seeded-chest-12-blocks-away-walks-withdraws-eats"
+   :blocks [[:set [28 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:bread\",count:8}]}"]]
+   :memory [{:kind :food-source :data {:pos #xyz [28 0 16] :kind :chest}}]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 30}
+            {:event {:source :reflex :kind :ended :context {:reflex-id :hungry} :data {:outcome :done}} :within-s 60}]
+   :after [[:body-near [27.5 0 16.5] 3]]}]}
