@@ -37,19 +37,21 @@
    :memory [{:kind :food-source :data {:pos #xyz [28 0 24] :kind :chest}}]
    :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :hungry} :data {:outcome :done}} :within-s 70}]
    :after [[:item "cooked_beef" [:>= 1]]]}
+  ;; s3: the cow is killed and its raw beef eaten (a body that cannot cook is still hungry when the beef is gone), so the run
+  ;; ends :stopped :no-food (it was reported :done before card ccd231df).
   {:name "s3-hunt-cow-a"
    :body {:inventory [["iron_sword" 1]]}
    :act [[:summon "cow" [14.5 0 16.5] "{NoAI:1b}"]
          [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
          [:rcon "damage $BODY 5 minecraft:generic"]]
-   :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :hungry} :data {:outcome :done}} :within-s 80}]
+   :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :hungry} :data {:outcome :stopped :reason :no-food}} :within-s 80}]
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 0]]}
   {:name "s3-hunt-cow-b"
    :body {:inventory [["iron_sword" 1]]}
    :act [[:summon "cow" [10.5 0 24.5] "{NoAI:1b}"]
          [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
          [:rcon "damage $BODY 5 minecraft:generic"]]
-   :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :hungry} :data {:outcome :done}} :within-s 80}]
+   :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :hungry} :data {:outcome :stopped :reason :no-food}} :within-s 80}]
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 0]]}
   {:name "f1-no-food-stops-no-food-then-declines-quietly"
    :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:wait-s 7]
