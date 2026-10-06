@@ -402,6 +402,16 @@
           (is (= 1 (count (filter #(= {:x 10 :y 64 :z 0} (js->clj (.-pos (.-args %)) :keywordize-keys true)) (h/calls p "dig")))))
           (is (= [] (h/events-of seen :rail-build.broken))))))))
 
+(deftest a-wrong-rail-beside-lava-is-not-dug-and-is-given-up-as-shape
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (built-line-world l-route {} flat-top {"10,64,1" "lava"} {"10,64,0" {:shape "north_south"}})
+              [result _ p] (await (build-route! l-route {} world {:all-carried false}))]
+          (is (false? (:ok? result)))
+          (is (= 0 (count (h/calls p "dig"))))
+          (is (= {[10 64 0] :shape} (get-in result [:built :given-up]))))))))
+
 (deftest a-rail-that-cannot-come-out-right-is-given-up-as-shape-after-the-fixes-are-spent
   (async done
     (tu/run-async done

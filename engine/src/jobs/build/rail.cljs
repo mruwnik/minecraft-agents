@@ -11,6 +11,7 @@
   Placing, access rules, refusals, give-ups and the result are jobs.build.from-plan's functions over this job's
   memory. Every dig and place asks jobs.lib.access.rules right before it acts."
   (:require [jobs.lib.access.rules :as rules]
+            [jobs.lib.declined :as declined]
             [engine.ctx :as ctx]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
@@ -133,20 +134,26 @@
       {:placed n})))
 
 (defn ^:async dig-away!
-  "Dig the rail at pos if the rules agree, pick up the drops and count one fix."
+  "Dig the rail at pos through the jobs.blocks.dig child (hazards, tidy record, tool, drops) if the rules agree, and
+  count one fix when it is dug. Water beside is taken as :accept says, lava never. A hazard or a failed dig counts a :shape failure. Resolves to the child's :continue
+  or :declined, else :continue."
   [c pos]
   (let [v (rules/may-dig? (assoc (build/rules-input c) :cell pos))
-        [x y z] pos]
+        [x y z] pos
+        lava? (some #{:lava-adjacent} (build/hazards (:block-at (build/rules-input c)) pos))
+        args (merge (select-keys (:args c) [:ignore-zones?])
+                    {:accept (if lava? [] (filter #{:fluid-adjacent} (:accept (:args c))))}
+                    {:pos {:x x :y y :z z} :need-drop false :collect true :on-fluid :fail :for-plan (:plan (:args c))})]
     (if-not (:ok v)
-      (ctx/update-mem! c build/refuse pos (select-keys v [:reason :zone :plan :claim]))
-      (let [r (await (ctx/act c :dig #js {:pos #js {:x x :y y :z z}}))]
-        (if-not (= "dug" (.-status r))
-          (ctx/update-mem! c build/count-fail pos :shape (:give-up (:args c)))
-          (do (ctx/update-mem! c update-in [:fixes pos] (fnil inc 0))
-              (loop [drops (array-seq (or (.-drops r) #js []))]
-                (when-let [d (first drops)]
-                  (await (ctx/act c :collect #js {:id (.-id d)}))
-                  (recur (rest drops))))))))))
+      (do (ctx/update-mem! c build/refuse pos (select-keys v [:reason :zone :plan :claim]))
+          :continue)
+      (let [r (await (declined/call-child! c :dig 'jobs.blocks.dig args))]
+        (if (#{:continue :declined} r)
+          r
+          (do (if (:dug (ctx/child-result c :dig))
+                (ctx/update-mem! c update-in [:fixes pos] (fnil inc 0))
+                (ctx/update-mem! c build/count-fail pos :shape (:give-up (:args c))))
+              :continue))))))
 
 (defn ^:async fix-step!
   "Deal with the settled wrong rail at pos: give up as :shape once the fixes are spent, else dig it (walking into
@@ -157,8 +164,7 @@
       (>= (get-in (ctx/mem c) [:fixes pos] 0) (fix-budget c)) (do (ctx/update-mem! c assoc-in [:given-up pos] :shape)
                                                                    :continue)
       (empty? (build/in-reach c [cell])) (await (walk-to! c ps from cells cell))
-      :else (do (await (dig-away! c pos))
-                :continue))))
+      :else (await (dig-away! c pos)))))
 
 (defn finish!
   "End the build: keep the result, emit its events and move on to switching levers."
