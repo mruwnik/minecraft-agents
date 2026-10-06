@@ -884,8 +884,8 @@
           (let [mid (mid-night! p 6 #(hash-map :holder (some? (core/holder eng)) :places (count (calls p "place"))
                                                :exposed (count (emitted seen :shelter.exposed)) :notified (notified seen)))]
             (await (tick-nights eng clock 2))
-            (is (= {:holder true :places 3 :exposed 1 :notified 0} @mid)
-                "held at night; the walls are not tried again; one warn that the body is unsheltered; the queued job waits"))
+            (is (= {:holder true :places 12 :exposed 1 :notified 0} @mid)
+                "held at night; each of max-sites sites tried once; one warn that the body is unsheltered; the queued job waits"))
           (is (= [] (declined-events seen :night)) "never declined, so never dropped and fired again")
           (is (= 1 (count (filter #(= :fired (:kind %)) (emitted-by seen :reflex :night)))) "fired once")
           (is (nil? (core/holder eng)) "the shelter ended at day")
@@ -903,24 +903,20 @@
             (core/submit! eng '(jobs.survival.night) {})
             (await (tick-n eng 3))
             (is (= [] (calls p "dig")) (pr-str blocks))
-            (is (= 1 (count (emitted seen :dig_in_failed))) (pr-str blocks))
-            (is (= [reason] (mapv :reason (entries eng :dig-in-futile))) (pr-str blocks))
+            (is (= 4 (count (emitted seen :dig_in_failed))) (str (pr-str blocks) ": one try at the site, then max-sites sites in all"))
+            (is (= reason (:reason (first (entries eng :dig-in-futile)))) (pr-str blocks))
             (is (= 1 @mid) "held exposed at night")))))))
 
-(def solid-column
-  (into {} (for [y (range 60 64)] [(str "12," y ",0") "stone"])))
-
-(deftest night-over-an-open-floor-walks-to-a-site-with-solid-ground-before-holding
+(deftest night-over-an-open-floor-walks-to-another-site-before-holding
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:time night :inventory [{:name "dirt" :count 1}]
-                                           :blocks (merge {"0,63,0" "stone" "0,62,0" "air"} solid-column)})]
+                                           :blocks {"0,63,0" "stone" "0,62,0" "air"}})]
           (core/submit! eng '(jobs.survival.night) {})
           (await (tick-n eng 30))
           (let [pos (pos-of p)]
-            (is (> (:x pos) 9) "left the site whose floor is hollow")
-            (is (<= (js/Math.abs (- (:x pos) 12)) 2) "and stands on the solid column")))))))
+            (is (> (js/Math.hypot (:x pos) (:z pos)) 9) "left the site whose floor is hollow (a player cannot see that, dig-in finds out)")))))))
 
 (deftest an-unsheltered-hold-logs-out-once-someone-falls-asleep
   (async done
@@ -969,7 +965,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p clock]} (setup {:time night :blocks (merge floor {"3,64,0" "red_bed"})})
+        (let [{:keys [eng p clock]} (setup {:time night :blocks (merge floor {"3,64,0" "red_bed"}) :floor [-4 -4 4 4]})
               tries (atom 0)]
           (set! (.-sleep p) (fn [& _] (swap! tries inc) (js/Promise.resolve #js {:status "occupied"})))
           (let [at2 (atom nil)
@@ -1046,7 +1042,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen clock]} (setup futile-world)
+        (let [{:keys [eng p seen clock]} (setup (assoc futile-world :floor [-4 -4 4 4]))
               eng (update eng :triggers assoc :always-shelter always-shelter)]
           (core/register-reflex! eng {:trigger :always-shelter})
           (await (tick-n eng 6))
@@ -1191,7 +1187,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p clock]} (setup {:time night :blocks floor :inventory dirt-stack})
+        (let [{:keys [eng p clock]} (setup {:time night :blocks floor :inventory dirt-stack :floor [-4 -4 4 4]})
               eng (update eng :triggers assoc :always-shelter always-shelter)]
           (refuse-placing! p)
           (core/register-reflex! eng {:trigger :always-shelter})

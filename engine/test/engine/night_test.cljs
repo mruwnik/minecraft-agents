@@ -5,13 +5,15 @@
   dig in."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.fake :as fake]
             [engine.job-api :as job-api]
             [engine.memory :as mem]
             [engine.scenario :as scenario]
             [engine.shelter-test :as st]
             [engine.test-util :as tu]
-            [engine.triggers :as triggers]))
+            [engine.triggers :as triggers]
+            [jobs.survival.night :as night]))
 
 (def night st/night)
 (def noon st/noon)
@@ -152,6 +154,7 @@
             (is (= [{:pos foot}] (:placed @mid)) "outside any own zone: remembered for the morning")
             (is (= [foot] (mapv st/arg-pos (st/calls p "dig"))) "picked up by day, in the same round")
             (is (= [] (st/entries eng :bed-placed)))
+            (is (empty? (st/calls p "moveTo")) "the drop is walked to by go-to, not a direct move")
             (is (= [] (:list (core/state eng))))))))))
 
 ;; ------------------------------------------------------------------ job: sleepers
@@ -318,7 +321,8 @@
           (let [[s & more] (st/emitted seen :stopped)]
             (is (empty? more))
             (is (= :exposed (:reason s)) "a night with no shelter is no success")
-            (is (= [:roof-failed] (mapv :reason (:sites s)))))
+            (is (= [:roof-failed] (take 1 (mapv :reason (:sites s)))) "the first site's reason is dig-in's")
+          (is (= 4 (count (:sites s))) "max-sites tried, then exposed"))
           (is (= [] (:list (core/state eng)))))))))
 
 (deftest dig-in-is-one-call-and-stops-with-the-site-reason
@@ -337,3 +341,61 @@
           (is (= 3 (count (st/calls p "dig"))))
           (is (= [:roof-failed] (mapv :reason (st/emitted seen :stopped))))
           (is (= [] (:list (core/state eng)))))))))
+
+;; ------------------------------------------------------------------ review follow-ups
+
+(deftest a-roofed-end-forgets-tonights-failed-sites
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (st/setup {:time night :blocks st/floor})
+              call-child ctx/call-child]
+          ;; the dig-in leaves the body roofed some other way (a passer-by built over it), the night then ends :roofed
+          (set! ctx/call-child (fn ^:async f [c k sym a]
+                                 (swap! (.-state (.-world p)) assoc-in [:blocks [0 66 0]] "stone")
+                                 :declined))
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (core/tick! eng))
+          (set! ctx/call-child call-child)
+          (is (= [] (st/entries eng :night-site)) "no entry outlives the night that wrote it"))))))
+
+(deftest a-dig-in-that-yields-is-not-a-failed-site
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (st/setup {:time night :inventory st/dirt-stack :blocks st/floor})
+              calls (atom 0)
+              seen-sites (atom nil)
+              call-child ctx/call-child]
+          (set! ctx/call-child (fn ^:async f [c k sym a]
+                                 (let [n (swap! calls inc)]
+                                   (when (= 2 n)
+                                     (reset! seen-sites (mapv :reason (st/entries eng :night-site)))
+                                     (.setTime (.-world p) st/noon))
+                                   (if (= :dig-in k) :continue (await (call-child c k sym a))))))
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (core/tick! eng))
+          (set! ctx/call-child call-child)
+          (is (= [:interrupted] @seen-sites) "the yield left only the in-flight mark, and the next call resumed the dig-in"))))))
+
+(deftest a-body-held-exposed-tries-to-dig-in-again-later
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (st/setup {:time night :blocks st/floor})
+              tries (atom 0)
+              call-child ctx/call-child]
+          (st/refuse-placing! p)
+          (st/on-wait! p (fn [n] (if (< n 10) (swap! clock + 660000) (.setTime (.-world p) st/noon))))
+          (set! ctx/call-child (fn ^:async f [c k sym a]
+                                 (when (= :dig-in k) (swap! tries inc))
+                                 (await (call-child c k sym a))))
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (core/tick! eng))
+          (set! ctx/call-child call-child)
+          (is (= (inc night/max-retries) @tries) "one dig-in, then one more per retry of the exposed hold"))))))
+
+(deftest a-pit-site-is-judged-by-the-surface-a-player-sees
+  (let [p (tu/fake {:blocks (into {} (for [x (range -2 3) z (range -2 3)] [(str x ",63," z) "dirt"]))})]
+    (is (night/pit-site? p {:x 1 :y 64 :z 1}) "one layer of dirt shows nothing against a pit; dig-in finds out")
+    (is (not (night/pit-site? p {:x 9 :y 64 :z 9})) "no ground to stand on")))
