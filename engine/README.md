@@ -467,7 +467,7 @@ lease is not saved; restart or going offline ends it.
 
 - `POST /drive` body `{op, who, ...}`: `take` (`why`, optional `idleS` 1..3600), `set` (`controls`, `look`, `ms`), `stop`,
   `ping`, `release` (`force` reclaims). `GET /drive` reads the state without resetting the silence clock.
-  Refusals: `offline`, `settling`, `held-by <who>`, `not-taken`, `not-driver`, `bad-args`.
+  Refusals: `offline`, `settling`, `held-by <who>`, `not-taken`, `not-driver` (world ops too: `detail {:holder :idle-left-s}`), `bad-args`.
 - Dead-man: untimed controls are released after 1 s without an op. The takeover ends after 15 s of silence by default
   (`--drive-idle-s`, or `idleS` on `take`); `ping` keeps the lease. Timed holds last at most 10 s.
 - `POST /world` runs bounded primitive actions under the same lease: `move-to`, `dig`, `place`, `use-on`, `interact`,

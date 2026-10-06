@@ -120,6 +120,14 @@
 (defn own-lease? [eng who]
   (and (core/manual? eng) (= who (:who @(:manual eng)))))
 
+(defn not-driver-refusal
+  "not-driver with {:holder :idle-left-s} of the current lease; not-taken when nobody drives."
+  [eng]
+  (if-not (core/manual? eng)
+    (op-refuse "not-taken")
+    (let [view (lease/view @(:manual eng) (core/now eng))]
+      (op-refuse "not-driver" {:holder (:who view) :idle-left-s (:idleLeftS view)}))))
+
 (defn rotate-token!
   "Give the lease a new ownership token synchronously: primitives cut the old promise and clear held controls."
   [eng]
@@ -155,9 +163,9 @@
 (defn cancel-world-op! [eng who id]
   (let [record (world-record eng id)]
     (cond
-      (not (own-lease? eng who)) (op-refuse (if (core/manual? eng) "not-driver" "not-taken"))
+      (not (own-lease? eng who)) (not-driver-refusal eng)
       (nil? record) (op-refuse "operation-not-found")
-      (not= who (:who record)) (op-refuse "not-driver")
+      (not= who (:who record)) (op-refuse "not-driver" {:holder (:who record)})
       (= :queued (:status record)) (do (drop-queued! eng id "cancelled") {:ok true :operation (op-view (world-record eng id))})
       (not= :running (:status record)) {:ok true :operation (op-view record)}
       :else (do (cancel-active! eng "cancelled")
@@ -349,7 +357,7 @@
               {:ok true :operation (op-view prior) :duplicate true}
               (op-refuse "request-id-conflict"))
       (core/offline? eng) (op-refuse "offline")
-      (not (own-lease? eng who)) (op-refuse (if (core/manual? eng) "not-driver" "not-taken"))
+      (not (own-lease? eng who)) (not-driver-refusal eng)
       (not (contains? world-actions action)) (op-refuse "unknown-action")
       (action-args-error action args) (op-refuse "bad-args" (action-args-error action args))
       (< idle-ms (+ (* timeout-s 1000) 1000)) (op-refuse "lease-too-short" {:minimum-idleS (inc timeout-s)})
@@ -387,11 +395,11 @@
                                (op-refuse "bad-who")
                                (if-let [record (world-record eng request-id)]
                                (if (= who (:who record)) {:ok true :operation (op-view record)}
-                                   (op-refuse "not-driver"))
+                                   (op-refuse "not-driver" {:holder (:who record)}))
                                (op-refuse "operation-not-found")))
                      :cancel (cancel-world-op! eng who request-id)
                      :inventory (if (own-lease? eng who) {:ok true :body (compact-inventory eng)}
-                                    (op-refuse (if (core/manual? eng) "not-driver" "not-taken")))
+                                    (not-driver-refusal eng))
                      (op-refuse "bad-op" {:allowed [:submit :status :cancel :inventory]}))]
         (world-reply (if (:ok result) 200 (case (:reason result) "unknown-action" 400 "bad-args" 400 "bad-op" 400 409)) result)))))
 

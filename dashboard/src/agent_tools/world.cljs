@@ -128,22 +128,6 @@
                                              :timeout (get-in parsed [:wait :timeout])} get!))]
     (assoc answer :wait wake)))
 
-;; The engine's not-driver refusal carries no detail: ask GET /drive who holds the body and add it.
-(defn ^:async name-holder
-  "A not-driver answer with :detail {:holder :idle-left-s} from the drive state; any other answer unchanged."
-  [answer socket who request-fn]
-  (if-not (= "not-driver" (data/name (:reason answer)))
-    answer
-    (let [state (try (let [response (await (http/request (cond-> {:socket-path socket :method "GET" :path "/drive" :label "drive"
-                                                                 :timeout-ms request-timeout-ms :max-bytes max-response-bytes}
-                                                          request-fn (assoc :request-fn request-fn))))]
-                       (when (http/edn-response? (:content-type response)) (data/read-edn (:text response))))
-                     (catch :default _ nil))
-          holder (get-in state [:manual :who])]
-      (if (and holder (not= holder who))
-        (assoc answer :detail {:holder holder :idle-left-s (get-in state [:manual :idleLeftS])})
-        answer))))
-
 (defn no-body-text [socket-path]
   (if (.existsSync fs socket-path)
     "no running body (connection refused)"
@@ -190,8 +174,7 @@
                       (.then (wait-after! parsed answer request-fn)
                              (fn [result] (output (str (data/write-edn result) "\n")) 0))
                       ok? (do (output text) 0)
-                      :else (.then (name-holder answer socket (:who parsed) request-fn)
-                                   (fn [named] (output (str (data/write-edn named) "\n")) 1)))))))
+                      :else (do (output (str (data/write-edn answer) "\n")) 1))))))
              (.catch (fn [error]
                        (js/console.error (str "the command was accepted, but reporting its result failed: "
                                               (or (aget error "code") (.-message error))))

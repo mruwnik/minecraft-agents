@@ -329,6 +329,17 @@
     (is (= "lease-too-short" (get-in (world-call eng request) [:edn :reason])))
     (is (= "bad-args" (get-in (world-call eng (assoc request :request-id "bad" :args {:pos {:x 1 :y 64 :z 0} :unexpected true})) [:edn :reason])))))
 
+(deftest world-ops-by-a-non-driver-name-the-holder
+  (let [{:keys [eng]} (setup {})
+        request {:op :submit :who "other" :request-id "r1" :action :move-to :args {:pos {:x 1 :y 64 :z 0}}}]
+    (is (nil? (get-in (world-call eng request) [:edn :detail :holder])) "no driver: not-taken, no holder")
+    (post eng {:op "take" :who "claude" :why "hold" :idleS 30})
+    (doseq [req [request {:op :cancel :who "other" :request-id "r1"} {:op :inventory :who "other"}]]
+      (let [edn (:edn (world-call eng req))]
+        (is (= "not-driver" (:reason edn)))
+        (is (= "claude" (get-in edn [:detail :holder])))
+        (is (number? (get-in edn [:detail :idle-left-s])))))))
+
 (deftest lease-expiry-cuts-an-inflight-world-action
   (let [{:keys [eng world clock]} (setup {})]
     (post eng {:op "take" :who "claude" :why "expiry" :idleS 2})
