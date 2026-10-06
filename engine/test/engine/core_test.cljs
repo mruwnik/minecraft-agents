@@ -1726,6 +1726,15 @@
                 (await round)
                 (is (= [:dropped] (outcomes seen)))
                 (is (= {} (:instances (core/state eng)))))))
+          (testing "death mid-round"
+            (let [{:keys [eng seen p]} (setup hostile-world)]
+              (core/register-reflex! eng {:trigger :near})
+              (.hold (.-world p) "moveTo")
+              (let [round (core/tick! eng)]
+                (core/record-body-event! eng #js {:kind "died"})
+                (await round)
+                (is (= [:dropped] (outcomes seen)))
+                (is (= {} (:instances (core/state eng)))))))
           (testing "a crash left a reflex job behind"
             (let [dir (tu/tmp-dir)
                   {:keys [eng p]} (setup hostile-world dir)]

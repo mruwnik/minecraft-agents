@@ -445,16 +445,6 @@
                        :text (str (name (:id e)) " expired")})
       (remove! eng (:id e)))))
 
-(defn drop-orphan-reflex-job!
-  "A reflex job between rounds whose entry was removed gets no further round:
-  the round in flight at the removal finished, now the job goes."
-  [eng]
-  (let [s (core/state eng)
-        id (:pending-reflex s)
-        reflex (get-in s [:instances id :reflex])]
-    (when (and id reflex (not (find-entry s reflex)))
-      (core/drop-reflex-job! eng id reflex :dropped {:how :removed}))))
-
 (defn agent-added?
   "Whether entry e was put over the route (not by the scenario)."
   [e]
@@ -483,9 +473,7 @@
       (core/resolve-job-attention! eng job-id :condition-recovered))))
 
 (defn tick!
-  "Run before every engine tick (also while paused): expire entries, drop the
-  job of a removed entry, keep the backoff requests current."
+  "Run before every engine tick (also while paused): expire entries, keep the backoff requests current."
   [eng]
   (expire-entries! eng)
-  (drop-orphan-reflex-job! eng)
   (watch-backoffs! eng))

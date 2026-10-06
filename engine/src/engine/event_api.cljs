@@ -157,7 +157,6 @@
     (or (= id (:current s)) (= id running-id)) :running
     (= id (:resume s)) :resuming
     (some #{id} (:list s)) :queued
-    (= id (:pending-reflex s)) :reflex
     :else :unknown)))
 
 (defn job-summary

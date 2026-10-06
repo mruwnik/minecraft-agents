@@ -15,7 +15,7 @@
         current (:current s)]
     (-> s
         (update :failed select-keys (:list s))
-        (dissoc :backoff :pending-reflex)
+        (dissoc :backoff)
         (assoc :resume (if (some #{current} (:list s)) current (:resume s))
                :current nil)
         (update :instances #(apply dissoc % reflex-ids)))))

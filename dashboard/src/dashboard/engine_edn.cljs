@@ -52,8 +52,7 @@
     {:jobs (mapv #(summarize-job (:current value) %) (ordered-instances value))
      :reflexes (mapv #(summarize-reflex (:reflex-state value) now %) (:register value))
      :current (:current value)
-     :failed-count (count (:failed value))
-     :pending-reflex (:pending-reflex value)}))
+     :failed-count (count (:failed value))}))
 
 (defn summarize [edn-text now]
   (summarize-read (read-text edn-text) now))
