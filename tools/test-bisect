@@ -81,7 +81,11 @@ work="$(mktemp -d "${TMPDIR:-/tmp}/mc-bisect-XXXXXX")"
 wt="$work/wt"; child=""
 cleanup() {
   # TERM the bisect's whole group (own session): each step's trap stops its legacy servers; wait for that before the worktree goes
-  [ -n "$child" ] && { kill -TERM -- "-$child" 2>/dev/null; wait "$child" 2>/dev/null; }
+  # (git bisect may exit before its step scripts do, so wait for the whole group, at most 120 s)
+  if [ -n "$child" ]; then
+    kill -TERM -- "-$child" 2>/dev/null; wait "$child" 2>/dev/null
+    for _ in $(seq 1 1200); do kill -0 -- "-$child" 2>/dev/null || break; sleep 0.1; done
+  fi
   [ -d "$wt" ] && "$wt_sh" --remove "$wt" >/dev/null 2>&1
   git -C "$repo" worktree prune
   rm -rf "$work"

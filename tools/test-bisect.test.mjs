@@ -10,7 +10,7 @@ const tools = dirname(fileURLToPath(import.meta.url))
 const sh = (cwd, ...a) => execFileSync(a[0], a.slice(1), { cwd, encoding: 'utf8' }).trim()
 
 // Fake repo: tools/compile fails while file BROKEN exists, tools/test-engine fails (printing a FAIL line) while file BAD exists.
-const COMPILE = '#!/bin/sh\n[ -n "$COMPILE_LOG" ] && echo "compile $*" >> "$COMPILE_LOG"\n[ -n "$BISECT_SLOW" ] && [ "$2" != --stop ] && sleep 30\n[ -n "$FAKE_COMPILE_BUSY_N" ] && { n=$(cat "$(dirname "$0")/../c.busy" 2>/dev/null || echo 0); echo $((n + 1)) > "$(dirname "$0")/../c.busy"; [ "$n" -lt "$FAKE_COMPILE_BUSY_N" ] && { echo "no free compile slot"; exit 75; }; }\n[ -e "$(dirname "$0")/../BROKEN" ] && { echo "boom: undeclared var"; exit 1; }\nexit 0\n'
+const COMPILE = '#!/bin/sh\n[ -n "$COMPILE_LOG" ] && echo "compile $*" >> "$COMPILE_LOG"\n[ -n "$BISECT_SLOW" ] && [ "$2" != --stop ] && sleep 30\n[ "$2" = --stop ] && [ -n "$COMPILE_LOG" ] && { sleep 2; echo "stop-done $1" >> "$COMPILE_LOG"; }\n[ -n "$FAKE_COMPILE_BUSY_N" ] && { n=$(cat "$(dirname "$0")/../c.busy" 2>/dev/null || echo 0); echo $((n + 1)) > "$(dirname "$0")/../c.busy"; [ "$n" -lt "$FAKE_COMPILE_BUSY_N" ] && { echo "no free compile slot"; exit 75; }; }\n[ -e "$(dirname "$0")/../BROKEN" ] && { echo "boom: undeclared var"; exit 1; }\nexit 0\n'
 const TEST_ENGINE = '#!/bin/sh\n[ "$1" = engine.nope-test ] && exit 2\n[ -n "$FAKE_TE_BUSY_N" ] && { n=$(cat "$(dirname "$0")/../te.busy" 2>/dev/null || echo 0); echo $((n + 1)) > "$(dirname "$0")/../te.busy"; [ "$n" -lt "$FAKE_TE_BUSY_N" ] && exit 75; }\n[ -n "$FAKE_TE_RC" ] && exit "$FAKE_TE_RC"\nif [ -e "$(dirname "$0")/../BAD" ]; then if [ -n "$FAKE_TE_CTRL" ]; then printf "FAIL in (a-test\\t\\033[31mred\\033[0m)\\n"; else echo "FAIL in (a-test)"; fi; exit "${FAKE_TE_BADRC:-1}"; fi\nexit 0\n'
 // the main checkout's res-slot: logs "<kind> -- <cmd>" to RES_LOG, then runs cmd
 const RES_SLOT = '#!/bin/sh\n[ -n "$RES_LOG" ] && echo "$*" >> "$RES_LOG"\nshift 2\nexec "$@"\n'
@@ -73,12 +73,14 @@ test('killed by TERM mid-run: the worktree is still removed', () => {
 test('a legacy step killed by TERM mid-compile still stops the legacy shadow servers', () => {
   const { d, shas } = fakeRepo({ legacyUpTo: 5 })
   try {
-    const p = spawnSync('sh', ['-c', `"${d}/tools/test-bisect" engine.a-test --good ${shas[0]} --bad ${shas[5]} & p=$!; sleep 3; kill -TERM $p; wait $p; echo rc=$?; sleep 2`], {
+    const p = spawnSync('sh', ['-c', `"${d}/tools/test-bisect" engine.a-test --good ${shas[0]} --bad ${shas[5]} & p=$!; sleep 3; kill -TERM $p; wait $p; echo rc=$?`], {
       cwd: d, encoding: 'utf8', env: { ...process.env, BISECT_SLOW: '1', COMPILE_LOG: join(d, 'compile.log'), TEST_BISECT_WORKTREE_SH: join(d, 'tools/wt.sh'), WT_LOG: join(d, 'wt.log'), TMPDIR: d }, timeout: 60000 })
     assert.match(p.stdout, /rc=130/)
     const calls = readFileSync(join(d, 'compile.log'), 'utf8')
     assert.match(calls, /compile engine --stop/)
     assert.match(calls, /compile dashboard --stop/)
+    assert.match(calls, /stop-done engine/)
+    assert.match(calls, /stop-done dashboard/)
   } finally { rmSync(d, { recursive: true, force: true }) }
 })
 

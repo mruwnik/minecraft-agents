@@ -119,13 +119,23 @@ const runInSlot = async (slots, cmd, opts, onOut = () => {}, onWait = () => {}) 
   }
 }
 
+// A missing, empty or half-written file (another part writing it right now) is no prior timings.
+export const readPrior = (file) => {
+  try { return JSON.parse(fs.readFileSync(file, 'utf8')) } catch { return {} }
+}
+// Write-then-rename: a reader sees the old file or the new one, never half.
+export const writeAtomic = (file, text) => {
+  const tmp = `${file}.${process.pid}.tmp`
+  fs.writeFileSync(tmp, text); fs.renameSync(tmp, file)
+}
+
 const main = async ({ compile = () => spawnSync(path.join(repo, 'tools/compile'), ['engine', 'test'], { stdio: 'inherit' }) } = {}) => {
   const argv = process.argv.slice(2)
   const opt = (name, d) => { const i = argv.indexOf(name); return i < 0 ? d : Number(argv[i + 1]) }
   const shards = opt('--shards', 4), slots = opt('--slots', memSlots(availableMb())), top = opt('--slowest', 15)
   fs.mkdirSync(slotDir(), { recursive: true })
   const nsFile = path.join(engine, 'out/test-ns-ms.json'), timingFile = path.join(engine, 'out/test-timings.jsonl')
-  const prior = fs.existsSync(nsFile) ? JSON.parse(fs.readFileSync(nsFile, 'utf8')) : {}
+  const prior = readPrior(nsFile)
   const partIdx = argv.indexOf('--part')
   const part = partIdx < 0 ? null : parsePart(argv[partIdx + 1])
   const all = testNamespaces()
@@ -162,7 +172,7 @@ const main = async ({ compile = () => spawnSync(path.join(repo, 'tools/compile')
   }
   cleanup()
   if (!part) fs.writeFileSync(timingFile, lines.filter(Boolean).join('\n') + '\n')
-  if (bad === 0 && parse(lines).some((r) => r.var)) fs.writeFileSync(nsFile, JSON.stringify({ ...(part ? prior : {}), ...nsMs(lines) }))
+  if (bad === 0 && parse(lines).some((r) => r.var)) writeAtomic(nsFile, JSON.stringify({ ...(part ? readPrior(nsFile) : {}), ...nsMs(lines) }))
   const peaks = parse(lines).filter((r) => r['peak-rss-kb']).map((r) => r['peak-rss-kb'])
   const tests = parse(lines).filter((r) => r.var).length
   console.log(`test-shards: ${tests} tests, wall ${((Date.now() - t0) / 1000).toFixed(0)} s, shard peak RSS MB: ${peaks.map((k) => Math.round(k / 1024)).join(' ')} (sum ${Math.round(peaks.reduce((a, b) => a + b, 0) / 1024)})`)

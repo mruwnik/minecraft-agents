@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { splitShards, partOf, parsePart, testNamespaces, slowest, memSlots, eventForwarder, shardOutcome, failureDump } from './test-shards.mjs'
+import { splitShards, partOf, parsePart, testNamespaces, slowest, memSlots, eventForwarder, shardOutcome, failureDump, readPrior, writeAtomic } from './test-shards.mjs'
 
 test('splitShards: every namespace exactly once, loads balanced by prior timing', () => {
   const nss = ['a-test', 'b-test', 'c-test', 'd-test', 'e-test']
@@ -146,8 +146,46 @@ test('failureDump: long output is cut to its tail, short output kept whole', () 
   assert.ok(d.length < 200 && d.endsWith('TAIL'))
 })
 
-test('main end: a large stdout write before exit reaches a pipe reader intact', () => {
-  const src = "process.stdout.write('y'.repeat(300000) + 'END\\n'); process.exitCode = 1"
-  const r = spawnSync(process.execPath, ['-e', src], { maxBuffer: 1e7 })
-  assert.equal(r.stdout.length, 300004)
+test('readPrior: a missing, empty or half-written timings file is no prior timings', () => {
+  const d = fs.mkdtempSync(path.join(process.env.TMPDIR || '/tmp', 'shards-prior-'))
+  try {
+    const f = path.join(d, 'ns.json')
+    assert.deepEqual(readPrior(f), {})
+    fs.writeFileSync(f, ''); assert.deepEqual(readPrior(f), {})
+    fs.writeFileSync(f, '{"a-test":12'); assert.deepEqual(readPrior(f), {})
+    fs.writeFileSync(f, '{"a-test":12}'); assert.deepEqual(readPrior(f), { 'a-test': 12 })
+  } finally { fs.rmSync(d, { recursive: true, force: true }) }
+})
+
+test('writeAtomic: the file is replaced by rename, no temp file is left', () => {
+  const d = fs.mkdtempSync(path.join(process.env.TMPDIR || '/tmp', 'shards-atomic-'))
+  try {
+    const f = path.join(d, 'ns.json')
+    writeAtomic(f, '{"a":1}')
+    const ino = fs.statSync(f).ino
+    writeAtomic(f, '{"a":2}')
+    assert.equal(fs.readFileSync(f, 'utf8'), '{"a":2}')
+    assert.notEqual(fs.statSync(f).ino, ino)
+    assert.deepEqual(fs.readdirSync(d), ['ns.json'])
+  } finally { fs.rmSync(d, { recursive: true, force: true }) }
+})
+
+test('main end: a failing shard with a large output reaches a pipe reader through main\'s own exit path (tail kept, exit 1)', () => {
+  const root = fs.mkdtempSync(path.join(process.env.TMPDIR || '/tmp', 'shards-main-'))
+  try {
+    const here = path.dirname(fileURLToPath(import.meta.url))
+    fs.mkdirSync(path.join(root, 'tools'))
+    for (const f of ['test-shards.mjs', 'res-slot.mjs', 'test-run.mjs', 'res-slot.json']) fs.copyFileSync(path.join(here, f), path.join(root, 'tools', f))
+    fs.writeFileSync(path.join(root, 'tools/compile'), '#!/bin/sh\nexit 0\n', { mode: 0o755 })
+    fs.mkdirSync(path.join(root, 'engine/out/test/cljs-runtime'), { recursive: true })
+    fs.mkdirSync(path.join(root, 'engine/node_modules'))
+    fs.mkdirSync(path.join(root, 'engine/test'))
+    fs.writeFileSync(path.join(root, 'engine/test/x_test.cljs'), '(ns x-test)\n')
+    fs.writeFileSync(path.join(root, 'engine/out/test.cjs'), "process.stdout.write('y'.repeat(300000) + 'END\\n'); process.exitCode = 1\n")
+    const r = spawnSync(process.execPath, [path.join(root, 'tools/test-shards.mjs'), '--shards', '1', '--slots', '1'], {
+      cwd: root, maxBuffer: 1e7, encoding: 'utf8', env: { ...process.env, RES_SLOT_DIR: path.join(root, 'slots'), TEST_EVENTS: '' } })
+    assert.equal(r.status, 1, r.stdout + r.stderr)
+    assert.match(r.stdout, /shard 0 FAILED/)
+    assert.match(r.stdout, /END\n/)
+  } finally { fs.rmSync(root, { recursive: true, force: true }) }
 })
