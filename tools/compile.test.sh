@@ -8,12 +8,14 @@ fail=0
 check() { if [ "$2" = "$3" ]; then echo "ok   $1"; else echo "FAIL $1: want [$3] got [$2]"; fail=1; fi; }
 
 # Fake repo: tools copied in, stub npx, a live "server" pid so no server start.
-mkdir -p "$T/repo/tools" "$T/repo/engine/.shadow-cljs" "$T/repo/engine/out" "$T/bin"
-cp "$TOOLS/compile" "$TOOLS/test-engine" "$T/repo/tools/" 2>/dev/null
+mkdir -p "$T/repo/tools" "$T/repo/engine/.shadow-cljs" "$T/repo/engine/out/test/cljs-runtime" "$T/bin" "$T/res"
+cp "$TOOLS/compile" "$TOOLS/test-engine" "$TOOLS/test-run.mjs" "$TOOLS/res-slot" "$TOOLS/res-slot.mjs" "$TOOLS/res-slot.json" "$T/repo/tools/" 2>/dev/null
+printf '{"floorMb":0,"kinds":{"tests":{"needMb":1,"max":1}}}' > "$T/res/cfg.json"
+export RES_SLOT_DIR="$T/res" RES_SLOT_CONFIG="$T/res/cfg.json"
 sleep 300 & SRV=$!; trap 'kill $SRV 2>/dev/null; rm -rf "$T"' EXIT
 echo $SRV > "$T/repo/engine/.shadow-cljs/server.pid"
 printf '#!/bin/sh\necho "npx $*" >> "%s/npx.log"\n' "$T" > "$T/bin/npx"; chmod +x "$T/bin/npx"
-printf 'console.log("NODE", process.argv.slice(2).join(" "), process.execArgv.join(" "))\n' > "$T/repo/engine/out/test.cjs"
+printf 'console.log("NODE", process.argv.slice(1).join(" "), process.execArgv.join(" ")); if (process.argv.join(" ").includes("hang-test")) setInterval(() => {}, 1000)\n' > "$T/repo/engine/out/test.cjs"
 export PATH="$T/bin:$PATH"
 C="$T/repo/tools/compile"
 
@@ -40,11 +42,13 @@ timeout 20 "$C" engine test >/dev/null 2>&1; check "waits for unrelated holder" 
 timeout 20 "$C" engine test >/dev/null 2>&1; check "compile with blocking waiter" "$?" 0
 wait %+ 2>/dev/null
 
-# test-engine: compile for build test, then node outside the lock, namespaces comma-joined
+# test-engine: compile for build test, then node outside the lock on a private copy, namespaces comma-joined
 out=$(timeout 30 "$T/repo/tools/test-engine" engine.a-test engine.b-test 2>&1); check "test-engine rc" "$?" 0
 check "test-engine ns args" "$(grep -c -- '--test=engine.a-test,engine.b-test' <<<"$out")" 1
-out=$(timeout 30 "$T/repo/tools/test-engine" --full 2>&1)
-check "full has heap flag" "$(grep -c -- '--max-old-space-size=4096' <<<"$out")" 1
-check "full has no --test" "$(grep -c -- '--test=' <<<"$out")" 0
+check "test-engine heap flag" "$(grep -c -- '--max-old-space-size=4096' <<<"$out")" 1
+check "test-engine private copy" "$(grep -c -- '/tmp/mc-test-run-[0-9]*/out/test.cjs' <<<"$out")" 1
+# a hung run is killed after the timeout (exit 124) and says so
+out=$(MC_TEST_TIMEOUT_S=2 timeout 30 "$T/repo/tools/test-engine" engine.hang-test 2>&1); check "hung run rc" "$?" 124
+check "hung run message" "$(grep -c 'TIMEOUT, killed after 2 s' <<<"$out")" 1
 timeout 5 "$T/repo/tools/test-engine" >/dev/null 2>&1; check "no args usage exit" "$?" 2
 exit $fail

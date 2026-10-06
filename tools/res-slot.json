@@ -2,7 +2,7 @@
   "floorMb": 6144,
   "kinds": {
     "body": { "needMb": 700, "max": 6 },
-    "tests": { "needMb": 2800, "max": 3 },
+    "tests": { "needMb": 2800, "max": 5, "shardMax": 3 },
     "browser": { "needMb": 600, "max": 2 }
   }
 }

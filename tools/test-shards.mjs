@@ -2,17 +2,19 @@
 // Why JavaScript: a thin Node launcher (spawns the compiled test runner in shards, takes a machine-wide flock slot per shard); no engine behaviour.
 // Usage: tools/test-engine --full [--shards N] [--slots M] [--slowest K]
 //  Splits the engine test namespaces over N node processes (default 4), balanced by the per-namespace ms of the previous run (engine/out/test-ns-ms.json).
-//  At most M shard processes run at once machine-wide (default: (MemAvailable - 6 GB) / 2.8 GB, 1..3): each takes `flock` on /tmp/mc-res/tests.<i>, so parallel agents cannot OOM the machine.
+//  At most M shard processes run at once machine-wide (default: (MemAvailable - 6 GB) / 2.8 GB, 1..shardMax): each takes res-slot's 'tests' slot tests.<i> (i < M; slots above shardMax stay for targeted runs), so parallel agents cannot OOM the machine.
+//  Each shard is killed after runTimeoutS of its prior timing (tools/test-run.mjs), so a hung test frees its slot; the failure names the last finished test.
 //  Per-test timings: engine/out/test-timings.jsonl (one {"var","ms"} line per test, {"peak-rss-kb"} per shard); the K slowest are printed.
 //  Isolation: after the compile, out/test.cjs and out/test/cljs-runtime are copied to /tmp/mc-test-run-<pid>/out (engine/test and node_modules symlinked beside it) and the shards run that copy (a concurrent compile cannot swap it); per-shard files carry the pid; a failing shard's output is kept in /tmp/mc-test-run-<pid>-shard-<i>.log (path printed).
 import fs from 'node:fs'
 import path from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { slotArgs, logRun, slotDir } from './res-slot.mjs'
+import { expectedMs, runTimeoutS, lastFinished, isolate } from './test-run.mjs'
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const engine = path.join(repo, 'engine')
-const SLOT_DIR = '/tmp/mc-res' // the res-slot 'tests' kind: slot files tests.<i>
 
 const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(path.join(dir, e.name)) : [path.join(dir, e.name)])
 
@@ -44,21 +46,26 @@ export const nsMs = (lines) => {
 
 const RES = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'res-slot.json'), 'utf8'))
 const FLOOR_MB = RES.floorMb, SHARD_MB = RES.kinds.tests.needMb // shared with tools/res-slot: floor kept for others; worst shard peak seen
-export const memSlots = (availableMb, max = RES.kinds.tests.max) => Math.max(1, Math.min(max, Math.floor((availableMb - FLOOR_MB) / SHARD_MB)))
+export const memSlots = (availableMb, max = RES.kinds.tests.shardMax) => Math.max(1, Math.min(max, Math.floor((availableMb - FLOOR_MB) / SHARD_MB)))
 const availableMb = () => Number(fs.readFileSync('/proc/meminfo', 'utf8').match(/MemAvailable:\s+(\d+)/)[1]) / 1024
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 // Runs cmd under the first free slot; polls until one is free.
-const runInSlot = async (slots, cmd, args, opts) => {
+const runInSlot = async (slots, cmd, opts) => {
+  const t0 = Date.now()
   for (;;) for (let i = 0; i < slots; i++) {
+    const t1 = Date.now()
     const r = await new Promise((res) => {
       let out = ''
-      const p = spawn('flock', ['-n', '-E', '99', path.join(SLOT_DIR, `tests.${i}`), cmd, ...args], { ...opts, stdio: ['ignore', 'pipe', 'pipe'] })
+      const p = spawn('flock', slotArgs('tests', i, cmd, 99), { ...opts, stdio: ['ignore', 'pipe', 'pipe'] })
       p.stdout.on('data', (d) => { out += d }); p.stderr.on('data', (d) => { out += d })
       p.on('close', (code) => res({ code, out }))
     })
-    if (r.code !== 99) return r
+    if (r.code !== 99) {
+      logRun({ kind: 'tests', needMb: SHARD_MB, waitedS: Math.round((t1 - t0) / 1000), ranS: Math.round((Date.now() - t1) / 1000), code: r.code, cmd: cmd.join(' ') })
+      return r
+    }
     await sleep(1000 + Math.random() * 500)
   }
 }
@@ -67,17 +74,11 @@ const main = async () => {
   const argv = process.argv.slice(2)
   const opt = (name, d) => { const i = argv.indexOf(name); return i < 0 ? d : Number(argv[i + 1]) }
   const shards = opt('--shards', 4), slots = opt('--slots', memSlots(availableMb())), top = opt('--slowest', 15)
-  fs.mkdirSync(SLOT_DIR, { recursive: true })
+  fs.mkdirSync(slotDir(), { recursive: true })
   const c = spawnSync(path.join(repo, 'tools/compile'), ['engine', 'test'], { stdio: 'inherit' })
   if (c.status !== 0) process.exit(c.status ?? 1)
   const nsFile = path.join(engine, 'out/test-ns-ms.json'), timingFile = path.join(engine, 'out/test-timings.jsonl')
-  const runDir = `/tmp/mc-test-run-${process.pid}`
-  fs.mkdirSync(path.join(runDir, 'out/test'), { recursive: true })
-  fs.copyFileSync(path.join(engine, 'out/test.cjs'), path.join(runDir, 'out/test.cjs'))
-  fs.cpSync(path.join(engine, 'out/test/cljs-runtime'), path.join(runDir, 'out/test/cljs-runtime'), { recursive: true })
-  fs.symlinkSync(path.join(engine, 'node_modules'), path.join(runDir, 'node_modules'))
-  fs.symlinkSync(path.join(engine, 'test'), path.join(runDir, 'test')) // fixtures resolve as <out>/../test
-  const cleanup = () => fs.rmSync(runDir, { recursive: true, force: true })
+  const { runDir, cleanup } = isolate(engine, process.pid)
   const prior = fs.existsSync(nsFile) ? JSON.parse(fs.readFileSync(nsFile, 'utf8')) : {}
   const split = splitShards(testNamespaces(), prior, shards)
   const t0 = Date.now()
@@ -85,7 +86,9 @@ const main = async () => {
   const results = await Promise.all(split.map(async (nss, i) => {
     const file = `${timingFile}.${process.pid}.${i}`
     fs.writeFileSync(file, '')
-    const r = await runInSlot(slots, 'node', ['--max-old-space-size=4096', path.join(runDir, 'out/test.cjs'), `--test=${nss.join(',')}`], { cwd: engine, env: { ...process.env, MC_TEST_TIMINGS: file, NODE_PATH: path.join(repo, 'node_modules') } })
+    const limit = runTimeoutS(expectedMs(nss, prior))
+    const r = await runInSlot(slots, ['timeout', '-k', '10', String(limit), 'node', '--max-old-space-size=4096', path.join(runDir, 'out/test.cjs'), `--test=${nss.join(',')}`], { cwd: engine, env: { ...process.env, MC_TEST_TIMINGS: file, NODE_PATH: path.join(repo, 'node_modules') } })
+    if (r.code === 124 || r.code === 137) r.out += `\ntest-shards: TIMEOUT, shard ${i} killed after ${limit} s; last finished test: ${lastFinished(fs.readFileSync(file, 'utf8').split('\n')) ?? 'none'}\n`
     return { i, nss, file, ...r }
   }))
   let bad = 0

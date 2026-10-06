@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { spawnSync, spawn } from 'node:child_process'
-import { decide } from './res-slot.mjs'
+import { decide, loadConfig } from './res-slot.mjs'
 
 const base = { freeSlots: 1, availableMb: 10000, needMb: 700, floorMb: 6144, waitedMs: 0, maxWaitMs: 540000 }
 
@@ -52,4 +52,21 @@ test('integration: a held slot makes the next command busy (75), then it runs on
   assert.equal(ok.status, 3)
   assert.match(ok.stdout, /ran/)
   fs.rmSync(dir, { recursive: true, force: true })
+})
+
+test('config: full runs leave tests slots free for targeted runs', () => {
+  const t = loadConfig().kinds.tests
+  assert.ok(t.shardMax >= 1 && t.shardMax <= t.max - 2, JSON.stringify(t))
+})
+
+test('integration: each run appends kind, need, waited, ran and exit to log.jsonl', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'res-slot-test-'))
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
+  const cfg = path.join(dir, 'cfg.json')
+  fs.writeFileSync(cfg, JSON.stringify({ floorMb: 0, kinds: { t: { needMb: 1, max: 1 } } }))
+  const r = run(['t', '--need', '5', '--', 'sh', '-c', 'exit 4'], { RES_SLOT_DIR: dir, RES_SLOT_CONFIG: cfg })
+  assert.equal(r.status, 4)
+  const [entry] = fs.readFileSync(path.join(dir, 'log.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l))
+  assert.equal(entry.kind, 't'); assert.equal(entry.needMb, 5); assert.equal(entry.code, 4)
+  assert.ok(entry.waitedS >= 0 && entry.ranS >= 0); assert.match(entry.cmd, /sh -c exit 4/)
 })
