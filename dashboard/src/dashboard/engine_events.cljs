@@ -10,7 +10,7 @@
 
 ;; job.round_started / job.yielded arrive at info every 0.25-10 s per running job: noise in a "what happened" list
 (def heartbeats #{"round-started" "yielded"})
-(def job-ends #{"completed" "failed" "cancelled"})
+(def job-ends #{"completed" "failed" "cancelled" "stopped"})
 (def levels-shown #{"info" "warn" "error"})
 
 (def empty-engine {:last nil :pos nil :job nil :reflex nil :recent [] :warns [] :signals {}})
@@ -64,7 +64,7 @@
   (cond
     (system-started? e) nil
     (or (not= "job" (:source e)) (kind-is? e "queued") (not (:job e)) (not= (first (:chain e)) (:job e))) job
-    (kind-is? e "completed" "failed" "cancelled") (when-not (= (:id job) (:job e)) job)
+    (kind-is? e "completed" "failed" "cancelled" "stopped") (when-not (= (:id job) (:job e)) job)
     :else (cond-> {:id (:job e)
                    :name (or (:name e) (when (= (:id job) (:job e)) (:name job)))}
             (kind-is? e "holding") (assoc :holding {:reason (:reason e) :since (:since e)}))))
@@ -109,7 +109,7 @@
   (let [source (:source e)
         kind (kind-name e)]
     (or (not= "none" (or (:attention e) "none"))
-        (and (= "job" source) (kind-is? e "completed" "failed" "cancelled" "backoff" "recovered"))
+        (and (= "job" source) (kind-is? e "completed" "failed" "cancelled" "stopped" "backoff" "recovered"))
         (and (= "action" source) (kind-is? e "started" "done" "failed" "cancelled"))
         (and (#{"system" "body" "reflex"} source)
              (not (and (= "body" source) (= "view.stats" (:kind e))))))))

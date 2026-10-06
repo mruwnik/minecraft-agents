@@ -29,14 +29,22 @@
     (.respawn world)
     :done))
 
+(defn ^:async respawn-stopped-round [c]
+  (await (respawn-round c))
+  (ctx/result! c {:status :stopped :reason :no_land})
+  :done)
+
 (def jobs
   (merge registry/jobs
-         {'respawn-away {:check (constantly true) :round respawn-round}
+         {'respawn-stopped {:check (constantly true) :round respawn-stopped-round}
+          'respawn-away {:check (constantly true) :round respawn-round}
           'nop {:check (constantly true) :round (fn [_] :done)}}))
 
 (def triggers
   (merge real-triggers/all
-         {:pest {:name :pest :job '(respawn-away) :persistence :cooldown :cooldown-s 30
+         {:pest-stops {:name :pest-stops :job '(respawn-stopped) :persistence :cooldown :cooldown-s 30
+                       :when (fn [w _ _] (pest-near? w))}
+          :pest {:name :pest :job '(respawn-away) :persistence :cooldown :cooldown-s 30
                  :when (fn [w _ _] (pest-near? w))}
           :probe {:name :probe :job '(nop) :when (fn [_ _ _] (swap! probes inc) false)}
           :sleeper-out {:name :sleeper-out :job '(jobs.survival.log-out {:offline-ms 20000 :news-ms 0}) :persistence :cooldown :cooldown-s 30
@@ -103,6 +111,22 @@
           (is (= [:completed_not_cleared] (mapv :how (kinds-of seen :ended))))
           (await (tick-at r (+ t0 29999)))
           (is (= 1 (fired seen)) "no immediate re-fire: the cooldown counts from the job end"))))))
+
+(deftest a-reflex-stopped-while-settling-keeps-its-reason-on-the-deferred-end
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng world seen state] :as r} (setup {:entities [pest] :settles true})]
+          (core/register-reflex! eng {:trigger :pest-stops})
+          (await (tick-at r t0))
+          (is (= [] (kinds-of seen :ended)) "no judgement while settling")
+          (swap! state assoc :entities [(fake/entity-in pest)])
+          (.settle world false)
+          (await (tick-at r (+ t0 250)))
+          (let [[ended] (kinds-of seen :ended)]
+            (is (= :stopped (:outcome ended)))
+            (is (= :no_land (:reason ended)))
+            (is (= 250 (:deferred-ms ended)))))))))
 
 (deftest a-condition-really-gone-after-settling-is-cleared-and-may-fire-at-once
   (async done

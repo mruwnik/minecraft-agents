@@ -23,7 +23,7 @@
     :failed {id {:error text :t ms}}  listed jobs whose round threw; they keep
                             their place and memory, the scheduler skips them
                             until retry! or cancel!
-    :deferred-ends [{:reflex :job :outcome :ended-at ms :text}]  reflex jobs that ended while
+    :deferred-ends [{:reflex :job :outcome :reason :ended-at ms :text}]  reflex jobs that ended while
                             the body was settling or offline, judged on the first ready tick
     :next-id n
   Not persisted:

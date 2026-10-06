@@ -61,6 +61,7 @@
             [(ev 1 {:name "outer"}) (ev 2 {:name "inner" :chain ["j1" "j1/c0"] :job "j1/c0"})]
             {:id "j1" :name "outer"}]
            ["a queued job is not current" [(ev 1 {:kind "queued" :name "pace"})] nil]
+           ["stopped clears it" [(ev 1 {:name "a"}) (ev 2 {:kind "stopped" :name "a"})] nil]
            ["completed clears it" [(ev 1 {:name "a"}) (ev 2 {:kind "completed" :name "a"})] nil]
            ["failed clears it" [(ev 1 {:name "a"}) (ev 2 {:kind "failed" :name "a" :error "x" :level "warn"})] nil]
            ["cancelled clears it" [(ev 1 {:name "a"}) (ev 2 {:kind "cancelled" :name "a"})] nil]
@@ -260,6 +261,7 @@
 (deftest log-entries
   (doseq [[title e worthy?]
           [["a job completing" (ev 1 {:kind "completed"}) true]
+           ["a job stopping" (ev 1 {:kind "stopped"}) true]
            ["a heartbeat" (ev 1 {:kind "round_started"}) false]
            ["a yield" (ev 1 {:kind "yielded"}) false]
            ["memory saves" (ev 1 {:source "memory" :kind "saved" :level "debug"}) false]
