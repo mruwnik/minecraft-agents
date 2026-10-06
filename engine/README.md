@@ -195,7 +195,7 @@ built-in recipe table, and instant, deterministic behaviour (`moveTo` jumps to t
 
 ## Jobs
 
-A job is a namespace under `src/jobs/` exporting `check` and `round`, and optionally `doc`, `args` and `backoff`. The
+A job is a namespace under `src/jobs/` exporting `check` and `round`, and optionally `doc` and `args`. The
 namespace follows the path (`src/jobs/forestry/fell_tree.cljs` is `jobs.forestry.fell-tree`).
 
 ```clojure
@@ -212,8 +212,8 @@ namespace follows the path (`src/jobs/forestry/fell_tree.cljs` is `jobs.forestry
 
 An arg may declare `:type` (`:keyword :int :number :bool :string :item :pos`, or `:enum` with `:values`; numbers take `:min`/`:max`); a value that does not fit is refused at submit, naming job, arg, type and value. `:pos` also normalises `[x y z]` to `{:x :y :z}`. No `:type` = unchecked; nil = unset.
 
-There is no catalog to edit: adding the file adds the job. `engine.registry/jobs` is `{ns-symbol {:check :round :doc :args
-:backoff}}`, built at compile time. The build hook `engine.build-hooks/add-job-namespaces` lists every file under `jobs`
+There is no catalog to edit: adding the file adds the job. `engine.registry/jobs` is `{ns-symbol {:check :round :doc :args}}`,
+built at compile time. The build hook `engine.build-hooks/add-job-namespaces` lists every file under `jobs`
 that defines both `check` and `round` (others are helpers), fails the compile when such a file's `ns` does not match its
 path, and the macro `engine.registry/job-registry` emits the map. `check` and `round` must be top-level `def`/`defn` forms, and a job must not
 require `engine.registry`.
@@ -223,10 +223,9 @@ require `engine.registry`.
 - **round**: returns `:done` (the job leaves the list, its memory is deleted), `:continue`, or `:declined` (not now; see
   Triggers). Anything else, or a throw, is a failure: the job stays listed, marked failed, with a `job.failed` warn, and
   the scheduler skips it until `retry!` clears the mark. A reflex job that fails is dropped. A cut is never a failure.
-- Long waits are not loops: a job waiting for daylight returns `:continue` and declines in its check
-  (`jobs.time.wait-for-day`).
+- A round works at its goal for as long as it can do useful work; `:continue` means yield (nothing useful to do now,
+  e.g. waiting for crops or daylight), not "next step". Holding still on purpose is declared with `ctx/hold-still!`.
 - **args**: `{key {:doc :default}}`; the engine merges the spec's args over the defaults. Undeclared keys are refused.
-- **backoff**: the job's own config `{:after :first-s :max-s}` or `false` (see Backoff).
 
 ### Job expressions
 
@@ -240,7 +239,6 @@ Wherever a job is named (scenarios, register entries, `submit!`, `do-now!`, the 
 | `(any e1 e2 ...)` | each round, call the first child whose check passes |
 | `(repeat e)` | when the child is done, start it fresh; never done |
 | `(hold e)` | like `e`, but the list entry holds the body; around a whole spec only, not in a register entry |
-| `(backoff cfg e)` | top-level wrapper that overrides backoff for the entry |
 
 An unknown symbol, a wrong arity, an undeclared arg, a bad position arg (`[x y z]` or `{:x :y :z}`) or a nested `hold`
 is refused at load with a message naming the spec. Specs are limited to 256 nodes and depth 24. Memory nests by child
@@ -262,7 +260,9 @@ The one argument of a check and a round. Helpers are in `engine.ctx`:
 | `(ctx/wait ctx reason)` | in a check: false, noting why the job waits |
 | `(ctx/result! ctx data)`, `(ctx/child-result ctx slot)` | hand data to the parent in the round that ends `:done` |
 | `(ctx/submit! ctx spec opts)` | put a peer job at the end of the list; returns its id |
-| `(ctx/emit! ctx kind level fields)` | an event; `:warn`/`:error` without `:attention` stores `:notice`. Warn only for a give-up |
+| `(ctx/emit! ctx kind level fields)` | an event (dropped once the round is cut); `:warn`/`:error` without `:attention` stores `:notice`. Warn only for a give-up |
+| `(ctx/hold-still! ctx reason)` | the round holds the body still on purpose until it ends (`nil` clears); `act :wait` with `:why` does the same while it waits |
+| `(ctx/alive? ctx)` | false once the round is cut: a search loop with no act checks it and stops |
 | `(ctx/warn-once! ctx key kind fields)` | a warn once per job per process |
 
 **act.** Every acting call goes through `act`: it checks the token, saves memory, emits `action.started`/`action.done`
@@ -273,6 +273,7 @@ read by the stuck trigger.
 **call-child.** The child's memory is the parent's `[:children slot]` sub-map. The same slot resumes the same child while
 it returns `:continue` or `:declined`; on `:done` the sub-map is cleared so the next call starts fresh. A cut anywhere ends
 the whole chain's round; cancel and done take the subtree. `submit!` is delegation (a peer on the list), not a child.
+Each call emits debug `job.child_started` and `job.child_ended` (`:slot :chain :status :reason`; a stopped result is `:stopped`).
 
 **World knowledge.** `jobs.lib.world-files` reads the plans (`worlds/<world>/plans/<id>.edn`), blueprints
 (`blueprints/<id>.edn`), zones and claims read-only, re-stat-ed at most every 3 s; a file that turns invalid keeps its last
@@ -355,7 +356,7 @@ Built-in triggers, in the order of `triggers/defaults.edn` (the default register
 | `:mounted` | the body rides something and no live job holds a vehicle | `movement.leave-vehicle` | stop |
 | `:player-joined` | a `:player-joined` entry under `:window-s` 10 old | `debug.notify` | 10 s |
 
-The dangers (`:suffocating`, `:burning`) have no cooldown and their jobs have no backoff. Needs rest with a reason the agent
+The dangers (`:suffocating`, `:burning`) have no cooldown and no backoff. Needs rest with a reason the agent
 sees (`:hungry` after `food.none`). There is no timer trigger: periodic work is a job.
 To see a trigger fire without its real job, register it against `jobs.debug.notify`.
 
@@ -396,7 +397,7 @@ scheduler emits one `job.waiting` when a check first declines and again only whe
 `:waiting` in `jobs show`/`list` and `observe`. A parent whose round returns a child's `:declined` keeps the child's reason;
 `jobs.lib.declined` parks such a parent until the child's check passes.
 
-**List edits** (agent): `submit!` (appends; opts `:hold?`, `:front?`, `:now?`, `:backoff`, `:by`), `cancel!`, `retry!`
+**List edits** (agent): `submit!` (appends; opts `:hold?`, `:front?`, `:now?`, `:by`), `cancel!`, `retry!`
 (clears a failed mark), `do-now!` (cuts the running listed job, never a reflex, lists the new job directly before it as a
 holder; the cut job continues afterwards with its memory). `:front?` lists the job directly after the current one so it gets
 the very next round, without cutting anything.
@@ -407,25 +408,32 @@ saved args hold keys its job no longer declares is kept with those keys removed 
 an entry whose trigger or job is gone is dropped with a `system.dropped` warn. `core/shutdown!` (SIGINT/SIGTERM) rotates
 the token so the in-flight round is never booked; the job stays listed.
 
-**No progress.** After `:stall-rounds` (20) rounds of a holding listed job with no act calls and no memory change, one
-`job.stalled` warn. Nothing is capped.
+**Doing nothing.**
+- `job.idle` (warn, once per spell): a round holds the body with no act in flight, no declared hold, and its last act (or
+  start) more than `:idle-s` (10) ago. An act ends the spell.
+- `job.holding` (info): a declared hold (`ctx/hold-still!`, `act :wait` with `:why`); `jobs show` gives
+  `:holding {:reason :since}`.
+- `job.fruitless`: a required attention request when every act of a listed job failed in 3 rounds in a row (a round that
+  ends the job does not count); resolved by a round with progress. It only flags.
+- `job.round_started` and `job.yielded` are debug.
 
-**Backoff.** A job whose rounds keep failing at once would spin, so the engine backs it off (never removes it) and alerts.
+**Backoff.** Register entries only: a reflex whose runs keep failing would fire as fast as the tick, so its entry waits.
+Listed jobs are never backed off.
 
 - `act!` classifies each act result. Failure statuses are `blocked failed unreachable cannot timeout gone out-of-reach
   no-item no-support no-headroom occupied full disconnected unsupported not-night monsters-near no-effect unchanged
   no-room missing`; anything else is progress. `look`, `wait`, `equip` and `steer` are neutral. A walk round
   (`jobs.lib.near`) counts as one `:walk` act: `arrived` is progress, `partial` and long detours are neutral, a blocked
   walk is a failure.
-- A **fruitless round** ran at least one act and every act failed. Rounds with no act, cut rounds, throws and `:declined`
-  neither count nor reset. The first progress act resets everything.
-- Schedule `{:after 3 :first-s 1 :max-s 30}`: after `:after` fruitless rounds the job gets no round for `:first-s` seconds,
-  doubling per further fruitless round up to `:max-s`. A job in backoff is passed over as if its check declined.
-- Config, most specific wins: engine default < the job's `backoff` var < the register entry's `:backoff` or the listed job's
-  (`submit!` opt or `(backoff cfg e)`). `false` turns it off. Jobs with `backoff false`: `sleep`, `shelter`, `unstick`,
-  `breathe`, `extinguish`. A reflex that ends `:backoff` is dropped.
+- A **fruitless run** made no progress and every act failed, or it declined or stopped. Cut runs and throws do not count.
+  The first progress act resets everything.
+- Schedule `{:after 3 :first-s 1 :max-s 30}`: after `:after` fruitless runs the entry does not fire for `:first-s`
+  seconds, doubling per further fruitless run up to `:max-s`.
+- Config, most specific wins: engine `:backoff` < the trigger's `:backoff` in `triggers/defaults.edn` < the entry's.
+  `false` turns it off (`:suffocating`, `:burning`, `:hostile-near`, `:night`, `:stuck`). A reflex job that continues into
+  a backoff ends `:backoff`.
 - State is the non-persisted `:backoffs` atom, cleared after every pause (offline, settling, manual control).
-- Events: warn `job.backoff` (`reflex.backoff`), repeated at most every `:backoff-alert-ms` (300000); info `job.recovered`.
+- Events: warn `reflex.backoff`, repeated at most every `:backoff-alert-ms` (300000); info `reflex.recovered`.
 
 ## Events and the local API
 
