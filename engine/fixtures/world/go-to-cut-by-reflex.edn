@@ -1,0 +1,28 @@
+;; Cards eae53e30 / 2d4b380e: a far go-to (plot 340 long, goal 310 east) is cut by hostile-near (a zombie summoned ahead of the
+;; body mid-walk, killed once the reflex fired): the reflex runs, then the go-to resumes and arrives. The uncut walk (long-walk.edn) is the control.
+{:defaults
+ {:tags [:movement :hostile :large]
+  :mobs :keep
+  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+              :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+  :plot {:height 12 :length 340 :width 32}
+  :body {:at [1.5 0 16.5] :effects [["resistance" 900 4]]}
+  :limit-s 300}
+ :cases
+ [{:name "zombie-cuts-far-walk-then-arrives"
+   :act [[:job (jobs.movement.go-to {:pos #at [310 0 16] :range 1 :escalate false})]
+         [:wait-s 6]
+         [:rcon "execute at $BODY run summon zombie ~4 ~ ~ {Tags:[\"wt\"],PersistenceRequired:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:await {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} 30]
+         [:wait-s 2]
+         [:rcon "kill @e[type=zombie,tag=wt,x=$X,y=$Y,z=$Z,distance=..400]"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 40}
+            {:event {:source :job :kind :result :data {:arrived true}} :within-s 280 :of-job true}]
+   :after [[:body-near [310.5 0 16.5] 3]]}
+  {:name "zombie-cuts-far-walk-then-arrives-b"
+   :act [[:job (jobs.movement.go-to {:pos #at [310 0 16] :range 1 :escalate false})]
+         [:wait-s 15]
+         [:rcon "execute at $BODY run summon zombie ~-4 ~ ~ {Tags:[\"wt\"],PersistenceRequired:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 50}
+            {:event {:source :job :kind :result :data {:arrived true}} :within-s 280 :of-job true}]
+   :after [[:body-near [310.5 0 16.5] 3]]}]}

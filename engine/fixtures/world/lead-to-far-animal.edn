@@ -1,0 +1,15 @@
+;; Cards eae53e30 / 2d4b380e live check: lead-to an animal 35 blocks away (plot 64 long), then back to a spot near the body.
+{:defaults
+ {:tags [:animals :jobs :go-to :large]
+  :time :any
+  :plot {:floor "grass_block" :length 64 :width 32}
+  :body {:at [4.5 0 16.5] :inventory [["lead" 2]] :effects [["resistance" 900 4]]}
+  :limit-s 200}
+ :cases
+ [{:name "far-cow-led-home"
+   :act [[:summon "cow" [40.5 0 16.5]]
+         [:wait-s 4]
+         [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [8 0 16] :radius 60})]]
+   :expect [{:event {:source :job :kind :lead-to.done :data {:reason :unleashed}} :within-s 150 :of-job true}]
+   :after [[:entities "type=cow,tag=wt" [[2 0 10] [16 2 22]] 1]
+           [:item "lead" 2]]}]}
