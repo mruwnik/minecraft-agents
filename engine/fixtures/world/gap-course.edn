@@ -1,4 +1,4 @@
-;; Card a3418585: gap jumps over 2 or 3 cells need a sprint (food > 6). One-wide stone strip along x at z 10, pit floor at y -5.
+;; Card a3418585: a gap jump over 3 cells needs a sprint (food > 6); a walking jump clears 2. One-wide stone strip along x at z 10, pit floor at y -5.
 ;; Food 20 arrives over a 3 or level 2 gap; food <= 6 (hunger effect, then cleared) walks round when a detour exists, else stops
 ;; without jumping (:gap-sprint / :abilities); a 1 gap is still jumped. gap2-food6-level (no detour): live result 5 of 5 arrive (a walking 2-gap jump works).
 {:defaults

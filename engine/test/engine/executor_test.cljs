@@ -401,11 +401,10 @@
   (let [hungry (assoc p :sprint false)]
     (are [steps] (nil? (ex/refusal hungry steps))
       (gap-steps 1)
+      (gap-steps 2)
       (gap-steps 2 :landing-y 63))
-    (are [n] (= {:status :refused :kind :gap-sprint :at [(+ 11 n) 64 0]
-                 :reason (str "gap jump at " (pr-str [(+ 11 n) 64 0]) " over " n " cells needs a sprint")}
-                (ex/refusal hungry (gap-steps n)))
-      2 3)))
+    (is (= {:status :refused :kind :gap-sprint :at [14 64 0] :reason "gap jump at [14 64 0] over 3 cells needs a sprint"}
+           (ex/refusal hungry (gap-steps 3))))))
 
 (deftest refusal-gap-kinds-and-reasons
   (are [steps kind reason at]
@@ -496,7 +495,7 @@
   (let [gap (fn [n ly] ((.-gap (ex/planner-limits (assoc p :sprint false) (solid-set #{}))) 10 64 0 0 1 (+ 11 n) ly 0 0))]
     (are [n ly allowed?] (= allowed? (gap n ly))
       1 64 true
-      2 64 false
+      2 64 true
       3 64 false
       2 63 true
       3 63 false)))
@@ -522,8 +521,8 @@
   (are [n x expected] (= expected (gap-jump-of (gap-steps n) (pose x 64 0.5)))
     1 10.7 false
     1 10.85 true
-    2 10.55 false
-    2 10.65 true
+    2 10.7 false
+    2 10.85 true
     3 10.85 false
     3 10.95 true
     1 11.4 false
@@ -558,7 +557,7 @@
 (deftest gap-sprint-by-width
   (are [n ps expected] (= expected (:sprint (controls-of (ex/tick p (state-at (gap-steps n) 2) ps))))
     1 (pose 10.5 64 0.5) false
-    2 (pose 10.5 64 0.5) true
+    2 (pose 10.5 64 0.5) false
     3 (pose 10.5 64 0.5) true
     3 (pose 11.5 64.4 0.5 {:on-ground false}) true
     1 (pose 11.5 64.4 0.5 {:on-ground false}) false)
