@@ -40,7 +40,7 @@
          [:summon "zombie" [27.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:await {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} 30]
          [:wait-s 8]
-         [:rcon "kill @e[type=zombie,tag=wt,x=$X,y=$Y,z=$Z,distance=..40]"]
+         [:rcon "kill @e[type=zombie,tag=wt,$BOX]"]
          [:wait-s 2]
          [:job (jobs.movement.go-to {:pos #xyz [8 0 16] :range 0})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"} :context {:chain [[:any]]}}

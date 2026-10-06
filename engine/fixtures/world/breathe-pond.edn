@@ -78,7 +78,7 @@
    :act [[:await {:source :reflex :kind :fired :context {:reflex-id :suffocating}} 40]
          [:summon "zombie" [22.5 4 15.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:wait-s 12]
-         [:rcon "kill @e[type=zombie,tag=wt]"]]
+         [:rcon "kill @e[type=zombie,tag=wt,$BOX]"]]
    :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :suffocating} :data {:outcome :dropped :by :hostile-near}} :within-s 40}
             {:event {:source :reflex :kind :ended :context {:reflex-id :suffocating} :data {:how :cleared}} :within-s 90}
             {:no-event {:source :job :kind :afloat} :for-s 90 :until {:source :reflex :kind :ended :context {:reflex-id :suffocating} :data {:how :cleared}}}]

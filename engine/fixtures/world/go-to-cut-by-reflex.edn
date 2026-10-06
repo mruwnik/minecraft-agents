@@ -15,7 +15,7 @@
          [:rcon "execute at $BODY run summon zombie ~4 ~ ~ {Tags:[\"wt\"],PersistenceRequired:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:await {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} 30]
          [:wait-s 2]
-         [:rcon "kill @e[type=zombie,tag=wt,x=$X,y=$Y,z=$Z,distance=..400]"]]
+         [:rcon "kill @e[type=zombie,tag=wt,$BOX]"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 40}
             {:event {:source :job :kind :result :data {:arrived true}} :within-s 280 :of-job true}]
    :after [[:body-near [310.5 0 16.5] 3]]}

@@ -15,7 +15,7 @@
  :cases
  [{:name "plain-run-no-park"
    :act [[:summon "cow" [10.5 0 18.5]]
-         [:wait-s 2] [:rcon "execute at $BODY run kill @e[type=zombie,distance=..40]"] [:rcon "execute at $BODY run kill @e[type=skeleton,distance=..40]"] [:rcon "execute at $BODY run kill @e[type=spider,distance=..40]"] [:rcon "execute at $BODY run kill @e[type=creeper,distance=..40]"]
+         [:wait-s 2] [:rcon "kill @e[type=zombie,$BOX]"] [:rcon "kill @e[type=skeleton,$BOX]"] [:rcon "kill @e[type=spider,$BOX]"] [:rcon "kill @e[type=creeper,$BOX]"]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
    :expect [{:event {:source :job :kind :herd.done :data {:reason :brought}} :within-s 240 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason [:not :ready]}} :for-s 240 :until {:source :job :kind :herd.done :data {:reason :brought}}}]
@@ -24,7 +24,7 @@
   {:name "two-cows-no-park"
    :act [[:summon "cow" [10.5 0 18.5]]
          [:summon "cow" [10.5 0 14.5]]
-         [:wait-s 2] [:rcon "execute at $BODY run kill @e[type=zombie,distance=..40]"] [:rcon "execute at $BODY run kill @e[type=skeleton,distance=..40]"] [:rcon "execute at $BODY run kill @e[type=spider,distance=..40]"] [:rcon "execute at $BODY run kill @e[type=creeper,distance=..40]"]
+         [:wait-s 2] [:rcon "kill @e[type=zombie,$BOX]"] [:rcon "kill @e[type=skeleton,$BOX]"] [:rcon "kill @e[type=spider,$BOX]"] [:rcon "kill @e[type=creeper,$BOX]"]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 2})]]
    :expect [{:event {:source :job :kind :herd.done :data {:reason :brought}} :within-s 280 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason [:not :ready]}} :for-s 280 :until {:source :job :kind :herd.done :data {:reason :brought}}}]

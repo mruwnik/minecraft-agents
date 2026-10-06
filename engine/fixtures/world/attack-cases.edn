@@ -1,4 +1,3 @@
-;; Note: a fixture beside this plot that runs `kill @e[type=zombie,distance=..40]` (herd-*) removes these mobs too: rerun on another --first-plot.
 ;; jobs.combat.attack: kill what :targets names (an id, a username or a mob type) and end with attack.done {:reason ...}.
 ;; Mobs are NoAI with an iron helmet (no sun burn, no fight back); the body holds an iron sword and the middle [16.5 0 16.5].
 ;; Should-succeed: a type kills every mob of it and leaves the others; a list of types; a cow that walks away (AI on);

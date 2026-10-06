@@ -469,9 +469,9 @@
 (defn rcon-until!
   "Sends cmd every every-s seconds until an event matching pattern (since t0) is logged or limit-s passes; resolves to true
   when the event came. For shoves that must outlast a job whose pace is not fixed."
-  [opts origin offset t0 cmd {:keys [until every-s limit-s]}]
+  [opts origin box offset t0 cmd {:keys [until every-s limit-s]}]
   (let [stop (+ (js/Date.now) (* 1000 limit-s))
-        text (f/substitute cmd (:body opts) origin)]
+        text (f/substitute cmd (:body opts) origin box)]
     (letfn [(tick []
               (if (some #(and (>= (:time-ms % 0) t0) (x/matches? until %)) (read-events-from (events-file opts) offset))
                 (js/Promise.resolve true)
@@ -484,13 +484,14 @@
   "Runs the act steps in order; resolves to the set of submitted job ids. :await and :rcon-until see events from
   offset/since (the watch window: a trigger firing inside the settle counts, as it does for :expect)."
   [opts origin c offset t0]
-  (reduce (fn [p [op a b :as step]]
+  (let [box (f/box-selector (f/case-grid c) origin (get-in c [:plot :height]))]
+   (reduce (fn [p [op a b :as step]]
             (.then p (fn [ids]
                        (case op
                          :summon (.then (rcon! [(f/summon-command origin step)]) (constantly ids))
-                         :rcon (.then (rcon! [(f/substitute a (:body opts) origin)]) (constantly ids))
+                         :rcon (.then (rcon! [(f/substitute a (:body opts) origin box)]) (constantly ids))
                          :kill-body (.then (rcon! [(str "kill " (:body opts))]) (constantly ids))
-                         :rcon-until (.then (rcon-until! opts origin offset t0 a b) (constantly ids))
+                         :rcon-until (.then (rcon-until! opts origin box offset t0 a b) (constantly ids))
                          :wait-s (.then (sleep (* 1000 a)) (constantly ids))
                          :time-set (.then (set-time! opts a (str (:id c) " step"))
                                           (fn [ok] (if ok ids (throw (js/Error. "a :time-set step needs --allow-time")))))
@@ -498,7 +499,7 @@
                                        (fn [ev] (if ev ids (throw (js/Error. (str ":await " (pr-str a) " timed out after " b " s"))))))
                          :job (.then (submit-job! opts (f/resolve-plan-refs a (plan-prefix opts)) (vec (map #(str "--" (name %)) b))) #(conj ids %))))))
           (js/Promise.resolve #{})
-          (:act c)))
+          (:act c))))
 
 (defn watch-window
   "Where watch! starts counting events: {:offset :from-ms}. A case with a register counts from just before the register

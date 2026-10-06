@@ -281,3 +281,16 @@
                  [[:block [1 0 1] "stone"] [:not-block [1 0 1] "stone"] [:item "dirt" 0] [:entities "type=cow" [[0 0 0] [1 1 1]] 0]])))
     (is (every? #(re-find #"unrecognised reply" (:evidence %))
                 (map judge [[:block [1 0 1] "stone"] [:not-block [1 0 1] "stone"] [:item "dirt" 0]])))))
+
+(deftest rcon-kills-must-be-plot-bounded
+  (let [ps (fn [act] (f/problems (f/merge-case {} {:name "a" :act act :after [[:block [1 0 1] "stone"]]})))]
+    (is (seq (ps [[:rcon "kill @e[type=zombie,tag=wt,x=$X,y=$Y,z=$Z,distance=..40]"]])) "a radius reaches the next plot")
+    (is (seq (ps [[:rcon "execute at $BODY run kill @e[type=zombie,distance=..40]"]])))
+    (is (seq (ps [[:rcon-until "kill @e[type=zombie]" {:until {:kind :x} :every-s 1 :limit-s 5}]])))
+    (is (empty? (ps [[:rcon "kill @e[type=zombie,$BOX]"]])))
+    (is (empty? (ps [[:rcon "kill @e[type=zombie,x=$X,y=$Y,z=$Z,dx=5,dy=3,dz=5]"]])))
+    (is (empty? (ps [[:rcon "tp @e[type=cow,tag=wt,distance=..5] ~ ~ ~3"]])) "only kills are bounded")))
+
+(deftest substitute-fills-the-plot-box
+  (is (= "kill @e[type=zombie,x=20000,y=149,z=20000,dx=31,dy=7,dz=31]"
+         (f/substitute "kill @e[type=zombie,$BOX]" "B" [20000 150 20000] (f/box-selector f/default-grid [20000 150 20000] 6)))))
