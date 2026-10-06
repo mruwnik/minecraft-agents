@@ -19,7 +19,7 @@
    :body {:at [13.5 0 13.5] :inventory [["red_bed" 1]]}
    :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 90}
             {:event {:source :job :kind :place.set :data {:name :bed :auto true}} :within-s 90}
-            {:no-event {:source :action :kind :done :data {:name "place" :status "placed"}} :for-s 40}]
+            {:no-event {:source :action :kind :done :data {:name "place" :status "placed"}} :for-s 90}]
    :after [[:item "red_bed" 1] [:body-near [10.5 0 12.5] 6]]
    :limit-s 100}
    {:name "seen-unknown-bed-nothing-carried-slept"
@@ -38,7 +38,7 @@
    :memory [{:kind :bed :data {:pos #xyz [16 0 14]} :policy {:cap 1 :ttl :forever}}]
    :body {:at [6.5 0 14.5]}
    :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 60}
-            {:no-event {:source :action :kind :done :data {:name "place"}} :for-s 20}]
+            {:no-event {:source :action :kind :done :data {:name "place"}} :for-s 60 :until {:source :action :kind :done :data {:name "sleep" :status "sleeping"}}}]
    :after [[:body-near [16.5 0 14.5] 4]]
    :limit-s 70}
   {:name "tunnel-miner-remembered-bed-8-away-walked-to-and-slept"
@@ -79,6 +79,6 @@
          [:rcon "give $BODY red_bed 1"]]
    :expect [{:event {:source :action :kind :done :data {:name "place" :status "placed"}} :within-s 40}
             {:event {:source :job :kind :place.kept :data {:name :bed :kept {:x [:any] :y 150}}} :within-s 90}
-            {:no-event {:source :job :kind :place.set :data {:name :bed :auto true}} :for-s 30}]
+            {:no-event {:source :job :kind :place.set :data {:name :bed :auto true}} :for-s 90 :until {:source :job :kind :place.kept :data {:name :bed :kept {:x [:any] :y 150}}}}]
    :after [[:item "red_bed" 0]]
    :limit-s 100}]}

@@ -19,14 +19,16 @@
             [:set [10 4 16] "torch"] [:set [16 4 16] "torch"] [:set [22 4 16] "torch"] [:set [27 4 16] "torch"]]
    :body {:at [28.5 4 16.5] :inventory [["cobblestone" 16]]}
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :night}} :for-s 25}
-            {:no-event {:source :job :kind :log-out} :for-s 25}]}
+            {:no-event {:source :job :kind :log-out} :for-s 25}]
+   :after [[:body-near [28.5 4 16.5] 1.5]]}
   {:name "deep-diagonal-stair-silent"
    ;; a 1-wide stair of 12 steps down from the top of a 29-high mass (the shape jobs.access.stair cuts): the body at its
    ;; bottom has sky light 0 at feet and head although the stair is open overhead along its length
    :plot {:height 31}
    :blocks [[:fill [2 0 8] [30 28 24] "stone"] [:fill [5 28 16] [5 30 16] "air"] [:fill [6 27 16] [6 29 16] "air"] [:fill [7 26 16] [7 28 16] "air"] [:fill [8 25 16] [8 27 16] "air"] [:fill [9 24 16] [9 26 16] "air"] [:fill [10 23 16] [10 25 16] "air"] [:fill [11 22 16] [11 24 16] "air"] [:fill [12 21 16] [12 23 16] "air"] [:fill [13 20 16] [13 22 16] "air"] [:fill [14 19 16] [14 21 16] "air"] [:fill [15 18 16] [15 20 16] "air"] [:fill [16 17 16] [16 19 16] "air"]]
    :body {:at [16.5 17 16.5] :inventory [["cobblestone" 16]]}
-   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :night}} :for-s 25}]}
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :night}} :for-s 25}]
+   :after [[:body-near [16.5 17 16.5] 1.5]]}
   {:name "shallow-diagonal-stair-shelters"
    :plot {:height 31}
    :blocks [[:fill [2 0 8] [30 28 24] "stone"] [:fill [5 28 16] [5 30 16] "air"] [:fill [6 27 16] [6 29 16] "air"] [:fill [7 26 16] [7 28 16] "air"]]
@@ -74,5 +76,5 @@
          [:job (jobs.survival.night {})]]
    :expect [{:event {:source :job :kind :dig-in.trapped} :within-s 60 :of-job true}
             {:event {:source :job :kind :shelter.failed :data {:reason :no-way-out}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :waiting :data {:reason :no-tool}} :for-s 10}]
+            {:no-event {:source :job :kind :waiting :data {:reason :no-tool}} :for-s 60 :until {:source :job :kind :shelter.failed :data {:reason :no-way-out}}}]
    :limit-s 150}]}

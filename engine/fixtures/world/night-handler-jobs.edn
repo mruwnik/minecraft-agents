@@ -18,7 +18,7 @@
    :act [[:job (jobs.memory.set-place {:name :bed :pos #at [16 0 14]}) [:now]]
          [:job (jobs.survival.night)]]
    :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 60}
-            {:no-event {:source :action :kind :done :data {:name "place"}} :for-s 20}]
+            {:no-event {:source :action :kind :done :data {:name "place"}} :for-s 60 :until {:source :action :kind :done :data {:name "sleep" :status "sleeping"}}}]
    :after [[:body-near [16.5 0 14.5] 4]]
    :limit-s 80}
   {:name "carried-bed-outside-own-zone-is-picked-up-at-day"

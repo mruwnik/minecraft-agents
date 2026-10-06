@@ -15,7 +15,7 @@
          [:wait-s 36]
          [:rcon "give $BODY stone_pickaxe 1"]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-tool}} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :round_started :round [:> 6]} :for-s 36 :of-job true}
+            {:no-event {:source :job :kind :round_started :round [:> 6]} :for-s 150 :of-job true :until {:source :job :kind :tunnel.done}}
             {:event {:source :job :kind :tunnel.done} :within-s 150 :of-job true}]
    :limit-s 170}
   ;; leave-tunnel inside a tunnel whose stair is filled: the walk to the entry fails, the way out is its own stair up
@@ -36,7 +36,7 @@
          [:wait-s 36]
          [:rcon "give $BODY stone_pickaxe 1"]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-tool}} :within-s 90 :of-job true}
-            {:no-event {:source :job :kind :round_started :round [:> 8]} :for-s 36 :of-job true}
+            {:no-event {:source :job :kind :round_started :round [:> 8]} :for-s 150 :of-job true :until {:source :job :kind :leave-tunnel.escape}}
             {:event {:source :job :kind :leave-tunnel.escape} :within-s 150 :of-job true}]
    :limit-s 170}
   ;; the control: a toggle that can never succeed is NOT parked for ever; its own decline ends the herd (:short, a few

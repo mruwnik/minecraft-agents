@@ -26,7 +26,8 @@
    :body {:at [16.5 0 23.5]}
    :act [[:summon "creeper" [16.5 0 29.5] "{NoAI:1b}"]
          [:job (jobs.gather.mine {:block "diamond_ore" :direction :n :tunnel-length 12 :count 1})]]
-   :expect [{:no-event {:kind :watch.saw} :for-s 12}]}
+   :expect [{:event {:source :action :kind :started :data {:name "dig"}} :within-s 15 :of-job true}
+            {:no-event {:kind :watch.saw} :for-s 12}]}
   {:name "dark-creeper-3-behind-reflex-at-once"
    :act [[:summon "creeper" [16.5 0 29.5] "{NoAI:1b}"]
          [:job (jobs.gather.mine {:block "diamond_ore" :direction :n :tunnel-length 12 :count 1})]]

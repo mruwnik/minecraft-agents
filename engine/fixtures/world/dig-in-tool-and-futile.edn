@@ -22,7 +22,7 @@
    :body {:at [16.5 0 16.5]}
    :act [[:job (jobs.survival.dig-in {})]]
    :expect [{:event {:source :job :kind #{:dig_in_failed :waiting}} :within-s 20 :of-job true}
-            {:no-event {:source :action :kind :started :data {:name "dig"}} :for-s 10}]
+            {:no-event {:source :action :kind :started :data {:name "dig"}} :for-s 20 :until {:source :job :kind #{:dig_in_failed :waiting}}}]
    :after [[:block [16 -1 16] "stone"]]
    :limit-s 30}
   {:name "one-thick-floor-over-void-is-not-dug-through"
@@ -31,6 +31,6 @@
    :plot {:height 12}
    :act [[:job (jobs.survival.dig-in {})]]
    :expect [{:event {:source :job :kind #{:dig_in_failed :waiting}} :within-s 20 :of-job true}
-            {:no-event {:source :action :kind :started :data {:name "dig"}} :for-s 10}]
+            {:no-event {:source :action :kind :started :data {:name "dig"}} :for-s 20 :until {:source :job :kind #{:dig_in_failed :waiting}}}]
    :after [[:block [25 5 25] "stone"]]
    :limit-s 30}]}

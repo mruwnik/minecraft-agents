@@ -26,5 +26,5 @@
    :blocks [[:fill [8 0 8] [24 9 24] "stone"]]
    :act [[:job (jobs.survival.dig-in {})]]
    :expect [{:event {:source :job :kind :dig_in_failed :message [:contains "cannot harvest stone"]} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :dig-in.sealed} :for-s 5}]
+            {:no-event {:source :job :kind :dig-in.sealed} :for-s 40 :until {:source :job :kind :dig_in_failed :message [:contains "cannot harvest stone"]}}]
    :limit-s 60}]}

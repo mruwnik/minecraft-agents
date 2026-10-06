@@ -16,14 +16,14 @@
    :act [[:summon "falling_block" [16.5 4 16.5] "{BlockState:{Name:\"minecraft:sand\"},Time:1}"]]
    :expect [{:event {:source :reflex :kind :fired} :within-s 15}
             {:event {:source :reflex :kind :ended} :within-s 30}
-            {:no-event {:source :job :kind :unwedge.blocked} :for-s 10}]
+            {:no-event {:source :job :kind :unwedge.blocked} :for-s 30 :until {:source :reflex :kind :ended}}]
    :after [[:block [16 0 16] "sand"]]}
   {:name "s1-steps-to-free-side-2"
    :blocks [[:set [17 -1 16] "stone"] [:set [15 0 16] "stone"] [:set [15 1 16] "stone"] [:set [16 0 17] "stone"] [:set [16 1 17] "stone"] [:set [16 0 15] "stone"] [:set [16 1 15] "stone"]]
    :act [[:summon "falling_block" [16.5 4 16.5] "{BlockState:{Name:\"minecraft:sand\"},Time:1}"]]
    :expect [{:event {:source :reflex :kind :fired} :within-s 15}
             {:event {:source :reflex :kind :ended} :within-s 30}
-            {:no-event {:source :job :kind :unwedge.blocked} :for-s 10}]
+            {:no-event {:source :job :kind :unwedge.blocked} :for-s 30 :until {:source :reflex :kind :ended}}]
    :after [[:block [16 0 16] "sand"]]}
   {:name "s2-digs-out-no-side-1"
    :blocks [[:fill [15 0 15] [17 1 17] "stone"] [:fill [16 0 16] [16 1 16] "air"]]
@@ -52,19 +52,23 @@
   {:name "n1-slab"
    :blocks [[:set [16 0 16] "stone_slab[type=bottom]"]]
    :act [[:wait-s 13] [:rcon "tp $BODY $X $Y $Z"]]
-   :expect [{:no-event {:source :reflex :kind :fired} :for-s 12}]}
+   :expect [{:no-event {:source :reflex :kind :fired} :for-s 12}]
+   :after [[:block [16 0 16] "stone_slab[type=bottom]"] [:body-near [16.5 0 16.5] 1.5]]}
   {:name "n1-farmland"
    :blocks [[:set [16 -1 16] "farmland"]]
    :act [[:wait-s 13] [:rcon "tp $BODY $X $Y $Z"]]
-   :expect [{:no-event {:source :reflex :kind :fired} :for-s 12}]}
+   :expect [{:no-event {:source :reflex :kind :fired} :for-s 12}]
+   :after [[:block [16 -1 16] "farmland"] [:body-near [16.5 0 16.5] 1.5]]}
   {:name "n1-snow-layer"
    :blocks [[:set [16 0 16] "snow[layers=1]"]]
    :act [[:wait-s 13] [:rcon "tp $BODY $X $Y $Z"]]
-   :expect [{:no-event {:source :reflex :kind :fired} :for-s 12}]}
+   :expect [{:no-event {:source :reflex :kind :fired} :for-s 12}]
+   :after [[:block [16 0 16] "snow[layers=1]"] [:body-near [16.5 0 16.5] 1.5]]}
   {:name "n1-soul-sand"
    :blocks [[:set [16 -1 16] "soul_sand"]]
    :act [[:wait-s 13] [:rcon "tp $BODY $X $Y $Z"]]
-   :expect [{:no-event {:source :reflex :kind :fired} :for-s 12}]}
+   :expect [{:no-event {:source :reflex :kind :fired} :for-s 12}]
+   :after [[:block [16 -1 16] "soul_sand"] [:body-near [16.5 0 16.5] 1.5]]}
  {:name "n2-pillar-up-no-false-wedge-1"
    :body {:inventory [["dirt" 8]]}
    :act [[:job (jobs.access.pillar {:height 4})] [:await {:source :job :kind :pillar.done} 60] [:wait-s 4]]

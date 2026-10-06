@@ -52,7 +52,7 @@
    :body {:at [16.5 3 16.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [20 8 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 90 :of-job true}
-            {:no-event {:source :job :kind :result :data {:escalation {:why :cave-below}}} :for-s 5}
+            {:no-event {:source :job :kind :result :data {:escalation {:why :cave-below}}} :for-s 180 :until {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}}}
             {:event {:source :job :kind :go-to.restored} :within-s 150 :of-job true}
             {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 180 :of-job true}]
    :after [[:body-near [20.5 8 16.5] 2]]}]}

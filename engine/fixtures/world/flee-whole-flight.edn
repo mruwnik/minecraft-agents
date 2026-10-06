@@ -15,8 +15,8 @@
    :act [[:summon "zombie" [11.5 0 32.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 20}
             {:event {:source :reflex :kind :ended :context {:reflex-id :hostile-near}} :within-s 60}
-            {:no-event {:source :job :kind :child_started :data {:slot :flee}} :for-s 30}
-            {:no-event {:source :job :kind :hostile.chased} :for-s 30}]
+            {:no-event {:source :job :kind :child_started :data {:slot :flee}} :for-s 60 :until {:source :reflex :kind :ended :context {:reflex-id :hostile-near}}}
+            {:no-event {:source :job :kind :hostile.chased} :for-s 60 :until {:source :reflex :kind :ended :context {:reflex-id :hostile-near}}}]
    :after [[:entities "type=zombie,tag=wt" [[0 0 0] [63 5 63]] 0]]}
   {:name "creeper-flees-never-fights"
    :act [[:summon "creeper" [11.5 0 32.5] "{}"]]

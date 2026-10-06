@@ -27,5 +27,5 @@
    :body {:inventory [["iron_pickaxe" 1]]}
    :act [[:job (jobs.survival.dig-in {})]]
    :expect [{:event {:source :job :kind :dig_in_failed :message [:contains "nothing to roof the pit with"]} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :dig-in.sealed} :for-s 5}]
+            {:no-event {:source :job :kind :dig-in.sealed} :for-s 40 :until {:source :job :kind :dig_in_failed :message [:contains "nothing to roof the pit with"]}}]
    :limit-s 50}]}

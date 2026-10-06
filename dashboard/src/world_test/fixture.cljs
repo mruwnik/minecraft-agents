@@ -135,6 +135,8 @@
       (some #(not (step-kinds (first %))) (:act c)) (conj (str ":act steps must be one of " (sort step-kinds)))
       (some #(not (after-kinds (first %))) (:after c)) (conj (str ":after checks must be one of " (sort after-kinds)))
       (and (empty? (:expect c)) (empty? (:after c))) (conj "the case checks nothing: it needs an :expect or :after")
+      (and (empty? (:after c)) (seq (:expect c)) (not-any? #(or (:event %) (:from-event %)) (:expect c)))
+      (conj "the case has no positive anchor: silence on an empty log passes; add an :event expectation, :from-event or an :after check")
       (some #(not (or (:event %) (:no-event %))) (:expect c)) (conj ":expect entries need :event or :no-event")
       (some #(and (:event %) (not (number? (:within-s %)))) (:expect c)) (conj ":event expectations need :within-s")
       (some #(and (:no-event %) (not (number? (:for-s %)))) (:expect c)) (conj ":no-event expectations need :for-s"))))

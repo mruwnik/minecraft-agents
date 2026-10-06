@@ -15,7 +15,7 @@
   {:name "stair-down-no-pickaxe-waits"
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 3})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-tool}} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind :stair.done} :for-s 8}]
+            {:no-event {:source :job :kind :stair.done} :for-s 30 :until {:source :job :kind :waiting :data {:reason :no-tool}}}]
    :after [[:not-block [17 9 16] "air"] [:not-block [17 8 16] "air"]]}
   {:name "tunnel-with-pickaxe"
    :body {:inventory [["stone_pickaxe" 1] ["torch" 8] ["cobblestone" 8]]}
@@ -26,7 +26,7 @@
    :body {:inventory [["torch" 8] ["cobblestone" 8]]}
    :act [[:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :keep true})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-tool}} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :tunnel.done} :for-s 10}]
+            {:no-event {:source :job :kind :tunnel.done} :for-s 40 :until {:source :job :kind :waiting :data {:reason :no-tool}}}]
    :after [[:not-block [16 9 16] "air"]]}
   {:name "stair-stops-at-crop"
    :blocks [[:set [17 9 16] "farmland[moisture=7]"] [:set [17 10 16] "wheat[age=7]"]]
@@ -46,4 +46,4 @@
          [:await {:source :job :kind :stair.done} 60]]
    :expect [{:event {:source :job :kind :stair.done} :within-s 60 :of-job true}
             {:event {:source :action :kind :started :data {:args {"item" "stone_pickaxe"}}} :within-s 60}
-            {:no-event {:source :action :kind :started :data {:args {"item" "iron_pickaxe"}}} :for-s 3}]}]}
+            {:no-event {:source :action :kind :started :data {:args {"item" "iron_pickaxe"}}} :for-s 60 :until {:source :job :kind :stair.done}}]}]}

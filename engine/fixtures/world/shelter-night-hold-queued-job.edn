@@ -18,7 +18,7 @@
          [:job (jobs.movement.go-to {:pos #xyz [8 0 16] :range 0})]
          [:wait-s 30]
          [:time-set 1000]]
-   :expect [{:no-event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :for-s 30}
+   :expect [{:no-event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :for-s 120 :until {:source :job :kind :completed :data {:name "jobs.movement.go-to"}}}
             {:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 120 :of-job true}]
    :after [[:body-near [8.5 0 16.5] 1.5]]
    :limit-s 160}]}

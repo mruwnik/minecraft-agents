@@ -16,7 +16,7 @@
    :body {:inventory [["cobblestone" 20]]}
    :act [[:summon "skeleton" [10.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :retreat_sealed} :within-s 40}
-            {:no-event {:source :job :kind :retreat_blocked} :for-s 5}]
+            {:no-event {:source :job :kind :retreat_blocked} :for-s 40 :until {:source :job :kind :retreat_sealed}}]
    :after [[:block [6 0 16] "cobblestone"] [:block [6 1 16] "cobblestone"] [:body-near [5.5 0 16.5] 1.5]]
    :limit-s 60}
   {:name "pickaxe-fight-when-no-blocks"

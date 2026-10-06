@@ -14,7 +14,7 @@
    :act [[:job (jobs.build.from-plan {:plan "$plan:box"})]]
    :expect [{:event {:source :job :kind :build.done :data {:missing 0}} :within-s 120}
             {:event {:source :job :kind :result :data {:arrived true}} :within-s 120}
-            {:no-event {:source :job :kind :build.wrong} :for-s 5}]
+            {:no-event {:source :job :kind :build.wrong} :for-s 120 :until {:source :job :kind :result :data {:arrived true}}}]
    :after [[:block [10 0 10] "dirt"] [:block [13 0 13] "dirt"] [:block [12 2 12] "dirt"] [:block [11 0 13] "dirt"]
            [:not-block [11 0 11] "dirt"] [:not-block [12 1 12] "dirt"]
            [:not-block [11.5 0 11.5] "dirt"]]}
@@ -31,7 +31,7 @@
    ;; roof [13 3 10] was given up :unreachable on the slope (stand cells at the body's feet height lay inside the hill).
    :expect [{:event {:source :job :kind :build.done :data {:placed 40 :missing 0}} :within-s 120}
             {:event {:source :job :kind :result :data {:arrived true}} :within-s 120}
-            {:no-event {:source :job :kind :build.wrong} :for-s 5}]
+            {:no-event {:source :job :kind :build.wrong} :for-s 120 :until {:source :job :kind :result :data {:arrived true}}}]
    :after [[:block [10 1 10] "dirt"] [:block [13 2 13] "dirt"] [:block [13 3 10] "dirt"] [:block [11 2 13] "dirt"]
            [:not-block [11 2 11] "dirt"] [:not-block [12 2 12] "dirt"]]}
   {:name "clear-doorway-leaves"
@@ -47,7 +47,7 @@
    :body {:at [11.5 0 17.5]}
    :act [[:job (jobs.build.from-plan {:plan "$plan:hut"})]]
    :expect [{:event {:source :job :kind :build.done} :within-s 140}
-            {:no-event {:source :job :kind :build.wrong} :for-s 5}]
+            {:no-event {:source :job :kind :build.wrong} :for-s 140 :until {:source :job :kind :build.done}}]
    :after [[:block [11 1 13] "air"] [:block [11 0 13] "air"] [:block [10 0 10] "dirt"] [:block [13 2 13] "dirt"] [:block [12 1 13] "dirt"]]
    :limit-s 170}
   {:name "pit-cannot-walk-out"

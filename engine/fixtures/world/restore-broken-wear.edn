@@ -30,5 +30,5 @@
    :act [[:job (jobs.blocks.place {:pos #at [18 0 16] :item "cobblestone" :ignore-zones? true})] [:wait-s 10]
          [:job (jobs.survival.restore-broken {})]]
    :expect [{:event {:source :job :kind :tidy.restored} :within-s 60}
-            {:no-event {:source :job :kind #{:tool.broke :tool.none :tool.low}} :for-s 15}]
+            {:no-event {:source :job :kind #{:tool.broke :tool.none :tool.low}} :for-s 60 :until {:source :job :kind :tidy.restored}}]
    :after [[:block [18 0 16] "air"] [:item "iron_pickaxe" 1]]}]}

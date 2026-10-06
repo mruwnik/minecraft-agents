@@ -58,7 +58,7 @@
   {:name "no-blocks-waits-too-few"
    :act [[:job (jobs.access.pillar {:height 5})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :too-few-blocks :short 5}} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind :pillar.done} :for-s 10}]
+            {:no-event {:source :job :kind :pillar.done} :for-s 30 :until {:source :job :kind :waiting :data {:reason :too-few-blocks :short 5}}}]
    :limit-s 40}
   {:name "ceiling-two-above-head"
    :blocks [[:set [16 3 16] "stone"]]

@@ -22,8 +22,8 @@
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
          [:job (jobs.blocks.dig {:pos #at [18 0 19]})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-tool}} :within-s 20 :of-job true}
-            {:no-event {:source :job :kind :fetch.started} :for-s 15}
-            {:no-event {:source :action :kind :started :data {:name "inspectContainer"}} :for-s 15}]
+            {:no-event {:source :job :kind :fetch.started} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-tool}}}
+            {:no-event {:source :action :kind :started :data {:name "inspectContainer"}} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-tool}}}]
    :after [[:block [18 0 19] "stone"] [:item "wooden_pickaxe" 0]]}
   {:name "chest-never-seen-not-used"
    :blocks [[:fill [13 0 18] [15 2 20] "stone" :outline]
@@ -32,7 +32,7 @@
          [:job (jobs.blocks.dig {:pos #at [18 0 19] :fetch true})]]
    :expect [{:event {:source :job :kind :fetch.failed :data {:failed :no-source}} :within-s 30 :of-job true}
             {:event {:source :job :kind :waiting :data {:reason :no-tool :fetch {:failed :no-source}}} :within-s 40 :of-job true}
-            {:no-event {:source :action :kind :started :data {:name "inspectContainer"}} :for-s 20}]
+            {:no-event {:source :action :kind :started :data {:name "inspectContainer"}} :for-s 40 :until {:source :job :kind :waiting :data {:reason :no-tool :fetch {:failed :no-source}}}}]
    :after [[:block [18 0 19] "stone"] [:item "wooden_pickaxe" 0]]}
   {:name "chest-without-pickaxe-fails-once"
    :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:dirt\",count:3}]}"]]
@@ -53,7 +53,7 @@
    :expect [{:event {:source :job :kind :fetch.started} :within-s 30 :of-job true}
             {:event {:source :job :kind :fetch.failed} :within-s 60 :of-job true}
             {:event {:source :job :kind :waiting :data {:reason :no-tool :fetch {:failed [:any]}}} :within-s 70 :of-job true}
-            {:no-event {:source :action :kind :started :data {:name "inspectContainer"}} :for-s 10}]
+            {:no-event {:source :action :kind :started :data {:name "inspectContainer"}} :for-s 70 :until {:source :job :kind :waiting :data {:reason :no-tool :fetch {:failed [:any]}}}}]
    :after [[:block [18 0 19] "stone"] [:item "wooden_pickaxe" 0]]}
   {:name "stair-fetches-pickaxe-and-walks-back"
    ;; dirt on top (y 7..9) needs no tool, stone below does: the body is 3 steps down the stair when it lacks the pickaxe,

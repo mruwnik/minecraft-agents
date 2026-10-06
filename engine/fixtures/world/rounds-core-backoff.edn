@@ -26,10 +26,11 @@
    :body {:at [16.5 0 18.5] :inventory [["stick" 5]]}
    :act [[:job (repeat (jobs.storage.deposit {:chest #at [16 0 11]}))]]
    :expect [{:event {:source :job :kind :fruitless} :within-s 90 :of-job true}
-            {:no-event {:source :job :kind :backoff} :for-s 30}]}
+            {:no-event {:source :job :kind :backoff} :for-s 90 :until {:source :job :kind :fruitless}}]}
   {:name "burning-never-backs-off"
    :register [{:trigger :burning :persistence :cooldown :cooldown-s 0 :job (jobs.survival.extinguish {:water-radius 6})}]
    :blocks [[:set [10 -1 22] "netherrack"] [:set [10 0 22] "fire"]]
    :body {:at [10.5 0 22.5] :settle-s 1}
-   :expect [{:no-event {:source :reflex :kind :backoff} :for-s 45}]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :burning}} :within-s 20}
+            {:no-event {:source :reflex :kind :backoff} :for-s 45}]
    :limit-s 80}]}

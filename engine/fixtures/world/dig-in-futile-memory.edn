@@ -39,7 +39,7 @@
    :body {:at [25.5 6 25.5] :inventory [["stone_pickaxe" 1] ["cobblestone" 16]]}
    :act [[:job (jobs.survival.dig-in {})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :futile}} :within-s 30 :of-job true}
-            {:no-event {:source :action :kind :started :data {:name "dig"}} :for-s 10}]
+            {:no-event {:source :action :kind :started :data {:name "dig"}} :for-s 30 :until {:source :job :kind :waiting :data {:reason :futile}}}]
    :after [[:block [25 5 25] "stone"]]
    :limit-s 40}
   {:name "c5-entry-elsewhere-does-not-block"

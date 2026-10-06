@@ -42,7 +42,7 @@
          [:job (jobs.blocks.dig {:pos #at [24 1 5] :ignore-zones? true})] [:wait-s 10]
          [:job (jobs.survival.restore-broken {})]]
    :expect [{:event {:source :job :kind :tidy.restored :data {:cells [[:any] [:any]]}} :within-s 80}
-            {:no-event {:source :job :kind :tidy.not-restored} :for-s 20}]
+            {:no-event {:source :job :kind :tidy.not-restored} :for-s 80 :until {:source :job :kind :tidy.restored :data {:cells [[:any] [:any]]}}}]
    :after [[:block [24 0 5] "cobblestone"] [:block [24 1 5] "cobblestone"]]}
   {:name "window-in-hut-with-doorway-restored"
    :blocks [[:set [12 0 10] "air"] [:set [12 1 10] "air"]]
@@ -50,5 +50,5 @@
    :act [[:job (jobs.blocks.dig {:pos #at [8 1 10] :ignore-zones? true})] [:wait-s 10]
          [:job (jobs.survival.restore-broken {})]]
    :expect [{:event {:source :job :kind :tidy.restored :data {:cells [[:any]]}} :within-s 70}
-            {:no-event {:source :job :kind :tidy.not-restored} :for-s 20}]
+            {:no-event {:source :job :kind :tidy.not-restored} :for-s 70 :until {:source :job :kind :tidy.restored :data {:cells [[:any]]}}}]
    :after [[:block [8 1 10] "cobblestone"]]}]}

@@ -12,13 +12,13 @@
    :blocks [[:fill [3 0 3] [28 3 28] "stone" :hollow]]
    :act [[:job (jobs.movement.go-to {:pos #at [16 0 16] :range 1 :escalate false})]]
    :expect [{:event {:source :job :kind :result :data {:arrived false :why :goal-enclosed}} :within-s 90 :of-job true}
-            {:no-event {:source :action :kind :done :data {:name "walkTo"}} :for-s 20}]
+            {:no-event {:source :action :kind :done :data {:name "walkTo"}} :for-s 90 :until {:source :job :kind :result :data {:arrived false :why :goal-enclosed}}}]
    :after [[:body-near [1.5 0 16.5] 3]]}
   {:name "big-yard-with-a-gap-in-the-wall-arrives"
    :blocks [[:fill [3 0 3] [28 3 28] "stone" :hollow] [:fill [3 0 16] [3 3 17] "air"]]
    :act [[:job (jobs.movement.go-to {:pos #at [16 0 16] :range 1 :escalate false})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 120 :of-job true}
-            {:no-event {:source :job :kind :result :data {:why :goal-enclosed}} :for-s 20}]
+            {:no-event {:source :job :kind :result :data {:why :goal-enclosed}} :for-s 120 :until {:source :job :kind :result :data {:arrived true}}}]
    :after [[:body-near [16.5 0 16.5] 3]]}
   {:name "gateless-fence-pen-is-enclosed-in-round-1"
    :blocks [[:fill [10 0 10] [21 0 10] "oak_fence"] [:fill [10 0 21] [21 0 21] "oak_fence"] [:fill [10 0 10] [10 0 21] "oak_fence"] [:fill [21 0 10] [21 0 21] "oak_fence"]]

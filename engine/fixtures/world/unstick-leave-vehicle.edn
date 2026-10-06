@@ -16,7 +16,7 @@
    :act [[:job (jobs.movement.go-to {:pos #at [20 0 16] :range 1 :escalate false})] [:job (jobs.movement.go-to {:pos #at [20 0 16] :range 1 :escalate false})] [:job (jobs.movement.go-to {:pos #at [20 0 16] :range 1 :escalate false})] [:job (jobs.movement.go-to {:pos #at [20 0 16] :range 1 :escalate false})] [:job (jobs.movement.go-to {:pos #at [20 0 16] :range 1 :escalate false})] [:job (jobs.movement.go-to {:pos #at [20 0 16] :range 1 :escalate false})]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :stuck}} :within-s 80}
             {:event {:source :reflex :kind :ended :data {:outcome :done}} :within-s 120}
-            {:no-event {:source :job :kind :unstick.failed} :for-s 3}]
+            {:no-event {:source :job :kind :unstick.failed} :for-s 120 :until {:source :reflex :kind :ended :data {:outcome :done}}}]
    :limit-s 150}
   {:name "unstick-sealed-in-obsidian-gives-up"
    :register [{:trigger :stuck :persistence :cooldown :cooldown-s 60 :job (jobs.maintenance.unstick)}]
@@ -31,10 +31,10 @@
    :act [[:summon "oak_boat" [10.5 0 16.5] "{}"]
          [:rcon "execute at $BODY run ride $BODY mount @e[type=oak_boat,tag=wt,distance=..5,limit=1]"]]
    :expect [{:event {:source :job :kind :vehicle.left :data {:landed :dry}} :within-s 40}
-            {:no-event {:source :job :kind :vehicle.dismount_failed} :for-s 3}]}
+            {:no-event {:source :job :kind :vehicle.dismount_failed} :for-s 40 :until {:source :job :kind :vehicle.left :data {:landed :dry}}}]}
   {:name "leave-minecart-on-land"
    :register [{:trigger :mounted :persistence :stop :job (jobs.movement.leave-vehicle)}]
    :act [[:summon "minecart" [10.5 0 16.5] "{}"]
          [:rcon "execute at $BODY run ride $BODY mount @e[type=minecart,tag=wt,distance=..5,limit=1]"]]
    :expect [{:event {:source :job :kind :vehicle.left :data {:landed :dry}} :within-s 40}
-            {:no-event {:source :job :kind :vehicle.dismount_failed} :for-s 3}]}]}
+            {:no-event {:source :job :kind :vehicle.dismount_failed} :for-s 40 :until {:source :job :kind :vehicle.left :data {:landed :dry}}}]}]}

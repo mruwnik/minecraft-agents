@@ -16,11 +16,11 @@
    :body {:inventory [["iron_axe" 1] ["oak_sapling" 1]]}
    :expect [{:event {:source :job :kind :completed :data {:status :completed}} :within-s 100 :of-job true}
             {:event {:source :job :kind :harvest-wood.debts-owed} :within-s 100 :of-job true}
-            {:no-event {:kind :failed} :for-s 10}]
+            {:no-event {:kind :failed} :for-s 100 :until {:source :job :kind :harvest-wood.debts-owed}}]
    :after [[:block [16 0 16] "oak_sapling"] [:body-near [16.5 0 16.5] 45]]}
   {:name "no-sapling-debts-owed"
    :body {:inventory [["iron_axe" 1]]}
    :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}
             {:event {:source :job :kind :harvest-wood.replant-owed :data {:reason :no-sapling}} :within-s 100 :of-job true}
-            {:no-event {:kind :failed} :for-s 10}]
+            {:no-event {:kind :failed} :for-s 100 :until {:source :job :kind :harvest-wood.replant-owed :data {:reason :no-sapling}}}]
    :after [[:not-block [16 0 16] "oak_sapling"] [:body-near [16.5 0 16.5] 45]]}]}

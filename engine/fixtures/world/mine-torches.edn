@@ -14,7 +14,7 @@
  [{:name "torches-in-the-bag-hang-at-steps-1-11-21-and-the-end"
    :body {:inventory [["stone_pickaxe" 1] ["cobblestone" 16] ["torch" 8]]}
    :expect [{:event {:source :job :kind :mine.done} :within-s 190 :of-job true}
-            {:no-event {:source :job :kind :mine.no-torches} :for-s 3}]
+            {:no-event {:source :job :kind :mine.no-torches} :for-s 190 :until {:source :job :kind :mine.done}}]
    :after [[:block [2 1 16] "wall_torch"] [:block [12 1 16] "wall_torch"] [:block [22 1 16] "wall_torch"]
            [:block [26 1 16] "wall_torch"] [:not-block [7 1 16] "wall_torch"] [:not-block [17 1 16] "wall_torch"]]}
   {:name "torches-in-the-bag-hang-twice-over"
@@ -25,7 +25,7 @@
   {:name "coal-and-sticks-are-crafted-into-torches-and-hung"
    :body {:inventory [["stone_pickaxe" 1] ["cobblestone" 16] ["coal" 4] ["stick" 4]]}
    :expect [{:event {:source :job :kind :mine.done} :within-s 190 :of-job true}
-            {:no-event {:source :job :kind :mine.no-torches} :for-s 3}]
+            {:no-event {:source :job :kind :mine.no-torches} :for-s 190 :until {:source :job :kind :mine.done}}]
    :after [[:block [2 1 16] "wall_torch"] [:block [12 1 16] "wall_torch"] [:block [22 1 16] "wall_torch"]]}
   {:name "no-torches-no-materials-tunnel-reaches-length-one-no-torches-event"
    :expect [{:event {:source :job :kind :mine.no-torches} :within-s 60 :of-job true}

@@ -15,7 +15,7 @@
    :act [[:job (jobs.blocks.dig {:pos #at [20 1 18]})] [:job (jobs.blocks.place {:item "dirt" :pos #at [21 0 18]})]]
    :expect [{:event {:source :job :kind :blocks.dig.done :data {:reason :dug}} :within-s 60 :of-job true}
             {:event {:source :job :kind :blocks.place.done} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :waiting :data {:reason :not-allowed}} :for-s 10}]
+            {:no-event {:source :job :kind :waiting :data {:reason :not-allowed}} :for-s 60 :until {:source :job :kind :blocks.place.done}}]
    :after [[:block [20 1 18] "air"] [:block [21 0 18] "dirt"]]
    :limit-s 90}
   {:name "own-plan-dig-and-place-b" :body {:inventory [["stone_pickaxe" 1] ["dirt" 8]]}
@@ -25,7 +25,7 @@
    :act [[:job (jobs.blocks.place {:item "dirt" :pos #at [13 0 12]})] [:job (jobs.blocks.dig {:pos #at [12 0 12]})]]
    :expect [{:event {:source :job :kind :blocks.dig.done :data {:reason :dug}} :within-s 60 :of-job true}
             {:event {:source :job :kind :blocks.place.done} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :waiting :data {:reason :not-allowed}} :for-s 10}]
+            {:no-event {:source :job :kind :waiting :data {:reason :not-allowed}} :for-s 60 :until {:source :job :kind :blocks.place.done}}]
    :after [[:block [12 0 12] "air"] [:block [13 0 12] "dirt"]]
    :limit-s 90}
   {:name "other-plan-dig-refused"
@@ -34,7 +34,7 @@
    :blocks [[:set [20 1 18] "dirt"]]
    :act [[:job (jobs.blocks.dig {:pos #at [20 1 18]})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :not-allowed}} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind :blocks.dig.done} :for-s 15}]
+            {:no-event {:source :job :kind :blocks.dig.done} :for-s 30 :until {:source :job :kind :waiting :data {:reason :not-allowed}}}]
    :after [[:block [20 1 18] "dirt"]]
    :limit-s 60}
   {:name "other-plan-place-refused" :body {:inventory [["stone_pickaxe" 1] ["dirt" 8]]}
@@ -42,7 +42,7 @@
             :parts [{:id "w" :cells [#at [20 0 18]] :want [:any "dirt"]}]}]
    :act [[:job (jobs.blocks.place {:item "dirt" :pos #at [20 0 18]})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :not-allowed}} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind :blocks.place.done} :for-s 15}]
+            {:no-event {:source :job :kind :blocks.place.done} :for-s 30 :until {:source :job :kind :waiting :data {:reason :not-allowed}}}]
    :after [[:block [20 0 18] "air"]]
    :limit-s 60}
   {:name "shut-in-own-walls-go-to-stairs-out-a"
@@ -55,7 +55,7 @@
    :blocks [[:fill [10 0 10] [22 3 22] "stone"] [:fill [16 0 16] [16 3 16] "air"]]
    :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 90 :of-job true}
-            {:no-event {:source :job :kind :stair.stopped :data {:reason :footprint}} :for-s 5}
+            {:no-event {:source :job :kind :stair.stopped :data {:reason :footprint}} :for-s 180 :until {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}}}
             {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 180 :of-job true}]
    :after [[:body-near [20.5 4 16.5] 2]]
    :limit-s 200}
@@ -69,7 +69,7 @@
    :blocks [[:fill [10 0 10] [22 3 22] "stone"] [:fill [16 0 16] [16 3 16] "air"]]
    :act [[:job (jobs.movement.go-to {:pos #at [12 4 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 90 :of-job true}
-            {:no-event {:source :job :kind :stair.stopped :data {:reason :footprint}} :for-s 5}
+            {:no-event {:source :job :kind :stair.stopped :data {:reason :footprint}} :for-s 180 :until {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}}}
             {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 180 :of-job true}]
    :after [[:body-near [12.5 4 16.5] 2]]
    :limit-s 200}

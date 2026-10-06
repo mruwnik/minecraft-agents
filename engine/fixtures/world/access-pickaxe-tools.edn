@@ -14,7 +14,7 @@
          [:job (jobs.access.stair {:dir :down :heading :east :steps 6})]]
    :expect [{:event {:source :job :kind :tool.low} :within-s 40}
             {:event {:source :job :kind :waiting :data {:reason :no-tool}} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :stair.done} :for-s 5}]}
+            {:no-event {:source :job :kind :stair.done} :for-s 40 :until {:source :job :kind :waiting :data {:reason :no-tool}}}]}
   {:name "pickaxe-already-low-at-first-hold"
    :body {:inventory [["stone_pickaxe" 1]]}
    :act [[:rcon "item replace entity $BODY container.0 with minecraft:stone_pickaxe[minecraft:damage=125]"]

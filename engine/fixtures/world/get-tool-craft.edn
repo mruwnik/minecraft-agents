@@ -42,23 +42,23 @@
    :body {:inventory [["dirt" 20]]}
    :act [[:job (jobs.items.get-tool {:kind "pickaxe"})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-source}} :within-s 20 :of-job true}
-            {:no-event {:source :job :kind :completed} :for-s 15}]
+            {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-source}}}]
    :after [[:item "wooden_pickaxe" 0] [:item "dirt" 20]]}
   {:name "only-dirt-pick-by-item"
    :body {:inventory [["dirt" 5]]}
    :act [[:job (jobs.items.get-tool {:item "wooden_pickaxe"})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-source}} :within-s 20 :of-job true}
-            {:no-event {:source :job :kind :completed} :for-s 15}]
+            {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-source}}}]
    :after [[:item "wooden_pickaxe" 0]]}
   {:name "two-logs-no-source"
    :body {:inventory [["oak_log" 2]]}
    :act [[:job (jobs.items.get-tool {:kind "pickaxe"})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-source}} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :completed} :for-s 15}]
+            {:no-event {:source :job :kind :completed} :for-s 40 :until {:source :job :kind :waiting :data {:reason :no-source}}}]
    :after [[:item "wooden_pickaxe" 0]]}
   {:name "stone-pick-no-cobble"
    :body {:inventory [["oak_log" 12] ["stick" 4]]}
    :act [[:job (jobs.items.get-tool {:item "stone_pickaxe"})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-source}} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :completed} :for-s 15}]
+            {:no-event {:source :job :kind :completed} :for-s 40 :until {:source :job :kind :waiting :data {:reason :no-source}}}]
    :after [[:item "stone_pickaxe" 0]]}]}

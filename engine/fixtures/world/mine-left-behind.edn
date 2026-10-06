@@ -17,7 +17,7 @@
    :blocks [[:set [20 0 16] "iron_ore"] [:set [20 -1 16] "air"]]
    :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 8})]]
    :expect [{:event {:source :job :kind :mine.done :data {:got 1}} :within-s 120 :of-job true}
-            {:no-event {:source :job :kind :mine.left-behind} :for-s 5}]
+            {:no-event {:source :job :kind :mine.left-behind} :for-s 120 :until {:source :job :kind :mine.done :data {:got 1}}}]
    :after [[:item "raw_iron" 1] [:body-near [16.5 0 16.5] 1.5]]
    :limit-s 140}
   {:name "drop-across-a-trench-left-behind-body-goes-home"
@@ -27,6 +27,6 @@
    :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 8})]]
    :expect [{:event {:source :job :kind :mine.left-behind} :within-s 60 :of-job true}
             {:event {:source :job :kind :mine.done} :within-s 90 :of-job true}
-            {:no-event {:source :job :kind :mine.not-home} :for-s 5}]
+            {:no-event {:source :job :kind :mine.not-home} :for-s 90 :until {:source :job :kind :mine.done}}]
    :after [[:body-near [16.5 0 16.5] 1.5] [:item "raw_iron" 0]]
    :limit-s 100}]}

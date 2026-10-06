@@ -18,7 +18,7 @@
    :body {:inventory [["cobblestone" 4]]}
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :tidy-pending}} :within-s 20}
             {:event {:source :job :kind :tidy.restored :data {:cells [[:any]]}} :within-s 60}
-            {:no-event {:source :job :kind :tidy.not-restored} :for-s 15}]
+            {:no-event {:source :job :kind :tidy.not-restored} :for-s 60 :until {:source :job :kind :tidy.restored :data {:cells [[:any]]}}}]
    :after [[:block [14 0 6] "cobblestone"]]
    :limit-s 70}
   {:name "stair-walk-then-hold-no-cut-while-airborne"
@@ -37,10 +37,12 @@
    :memory [{:kind :tidy :data {:cell #at [25 3 25] :action :dig :was "cobblestone" :now "air" :tries 0}}]
    :body {:inventory [["cobblestone" 4]]}
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :tidy-pending}} :from-s 3 :for-s 130}]
+   :after [[:block [25 3 25] "air"]]
    :limit-s 170}
   {:name "floating-cell-one-run-then-quiet"
    :blocks [[:set [25 5 25] "air"]]
    :memory [{:kind :tidy :data {:cell #at [25 5 25] :action :dig :was "cobblestone" :now "air" :tries 0}}]
    :body {:inventory [["cobblestone" 4]]}
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :tidy-pending}} :from-s 3 :for-s 130}]
+   :after [[:block [25 5 25] "air"]]
    :limit-s 170}]}

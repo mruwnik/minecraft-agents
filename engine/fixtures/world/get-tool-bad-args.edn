@@ -10,12 +10,12 @@
  [{:name "no-args-a"
    :act [[:job (jobs.items.get-tool {})]]
    :expect [{:event {:source :job :kind :stopped :data {:status :stopped :reason :bad-args :text [:contains "items.get-tool"]}} :within-s 20 :of-job true}
-            {:no-event {:source :job :kind :completed} :for-s 5}]}
+            {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :stopped :data {:status :stopped :reason :bad-args :text [:contains "items.get-tool"]}}}]}
   {:name "block-not-text-b"
    :act [[:job (jobs.items.get-tool {:block 5})]]
    :expect [{:event {:source :job :kind :stopped :data {:status :stopped :reason :bad-args :text [:contains "items.get-tool"]}} :within-s 20 :of-job true}
-            {:no-event {:source :job :kind :completed} :for-s 5}]}
+            {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :stopped :data {:status :stopped :reason :bad-args :text [:contains "items.get-tool"]}}}]}
   {:name "kind-not-text-c"
    :act [[:job (jobs.items.get-tool {:kind 5})]]
    :expect [{:event {:source :job :kind :stopped :data {:status :stopped :reason :bad-args :text [:contains "items.get-tool"]}} :within-s 20 :of-job true}
-            {:no-event {:source :job :kind :completed} :for-s 5}]}]}
+            {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :stopped :data {:status :stopped :reason :bad-args :text [:contains "items.get-tool"]}}}]}]}

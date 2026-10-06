@@ -13,14 +13,14 @@
    :act [[:job (jobs.movement.go-to {:pos #at [17 12 17] :range 1 :escalate false})]]
    :expect [{:event {:source :job :kind :result :data {:arrived false :reason :unreachable :why :goal-enclosed :at [:any] :near [:any]}} :within-s 30 :of-job true}
             {:event {:source :job :kind :stopped :data {:status :stopped :arrived false :text [:contains "walled in"]}} :within-s 30 :of-job true}
-            {:no-event {:source :action :kind :done :data {:name "walkTo"}} :for-s 10}]
+            {:no-event {:source :action :kind :done :data {:name "walkTo"}} :for-s 30 :until {:source :job :kind :stopped :data {:status :stopped :arrived false :text [:contains "walled in"]}}}]
    :after [[:body-near [2.5 0 16.5] 3]]}
   {:name "deck-with-pool-is-goal-enclosed"
    :blocks [[:fill [13 11 13] [19 11 19] "stone"] [:fill [14 10 14] [15 10 15] "stone"] [:fill [14 11 14] [15 11 15] "water"]]
    :act [[:job (jobs.movement.go-to {:pos #at [17 12 17] :range 1 :escalate false})]]
    :expect [{:event {:source :job :kind :result :data {:arrived false :reason :unreachable :why :goal-enclosed :at [:any] :near [:any]}} :within-s 30 :of-job true}
             {:event {:source :job :kind :stopped :data {:status :stopped :arrived false :text [:contains "walled in"]}} :within-s 30 :of-job true}
-            {:no-event {:source :action :kind :done :data {:name "walkTo"}} :for-s 10}]
+            {:no-event {:source :action :kind :done :data {:name "walkTo"}} :for-s 30 :until {:source :job :kind :stopped :data {:status :stopped :arrived false :text [:contains "walled in"]}}}]
    :after [[:body-near [2.5 0 16.5] 3]]}
   {:name "deck-with-ramp-arrives"
    :blocks [[:fill [10 0 16] [10 0 16] "stone"] [:fill [11 0 16] [11 1 16] "stone"] [:fill [12 0 12] [20 2 20] "stone"]]

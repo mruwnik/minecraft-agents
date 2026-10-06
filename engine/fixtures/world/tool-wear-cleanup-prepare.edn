@@ -23,7 +23,7 @@
          [:await {:source :job :kind :pillar.done} 60]
          [:job (jobs.access.cleanup {:job :all :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :cleanup.done} :within-s 60}
-            {:no-event {:source :job :kind #{:tool.broke :tool.none :tool.low}} :for-s 15}]
+            {:no-event {:source :job :kind #{:tool.broke :tool.none :tool.low}} :for-s 60 :until {:source :job :kind :cleanup.done}}]
    :after [[:item "iron_pickaxe" 1]]}
   {:name "cleanup-no-pick-no-tool-event"
    :body {:inventory [["cobblestone" 4]]}
@@ -32,7 +32,7 @@
          [:job (jobs.access.cleanup {:job :all :ignore-zones? true})]]
    ;; no pick: the cobblestone pillar stays (entries open :no-tool), nothing dug, no tool event
    :expect [{:event {:source :job :kind :cleanup.done} :within-s 30}
-            {:no-event {:source :job :kind #{:tool.broke :tool.none :tool.low}} :for-s 20}]
+            {:no-event {:source :job :kind #{:tool.broke :tool.none :tool.low}} :for-s 30 :until {:source :job :kind :cleanup.done}}]
    :after [[:block [16 0 16] "cobblestone"] [:block [16 1 16] "cobblestone"]]}
   {:name "prepare-last-durability-pick-breaks"
    :blocks [[:set [16 0 16] "cobblestone"]]
@@ -48,7 +48,7 @@
    :body {:at [16.5 0 12.5] :inventory [["iron_pickaxe" 1] ["oak_sapling" 1] ["dirt" 2]]}
    :act [[:job (jobs.forestry.prepare {:plan "$plan:wood"})]]
    :expect [{:event {:source :job :kind :prepare.done} :within-s 60}
-            {:no-event {:source :job :kind #{:tool.broke :tool.none :tool.low}} :for-s 15}]
+            {:no-event {:source :job :kind #{:tool.broke :tool.none :tool.low}} :for-s 60 :until {:source :job :kind :prepare.done}}]
    :after [[:item "iron_pickaxe" 1] [:block [16 0 16] "oak_sapling"]]}
   {:name "prepare-no-pick-digs-by-hand-no-tool-event"
    :blocks [[:set [16 0 16] "cobblestone"]]

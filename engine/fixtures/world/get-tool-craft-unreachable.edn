@@ -30,6 +30,6 @@
          [:rcon "execute as $BODY at @s run tp @s ~-10 ~ ~"] [:wait-s 2]
          [:job (jobs.items.get-tool {:kind "pickaxe"})]]
    :expect [{:event {:source :job :data {:reason :table-unreachable}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :completed} :for-s 15}]
+            {:no-event {:source :job :kind :completed} :for-s 60 :until {:source :job :data {:reason :table-unreachable}}}]
    :after [[:item "wooden_pickaxe" 0] [:item "crafting_table" 0] [:item "oak_planks" 3] [:item "stick" 2]
            [:entities "type=item" [[0 -1 0] [32 5 32]] 0]]}]}

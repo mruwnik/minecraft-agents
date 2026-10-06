@@ -8,9 +8,9 @@
    :body {:inventory [["gravel" 64] ["sand" 64] ["tuff" 20] ["coal" 30] ["diamond" 3] ["wooden_pickaxe" 1] ["stone_pickaxe" 1] ["iron_pickaxe" 1] ["golden_pickaxe" 1] ["diamond_pickaxe" 1] ["netherite_pickaxe" 1] ["wooden_axe" 1] ["stone_axe" 1] ["iron_axe" 1] ["golden_axe" 1] ["diamond_axe" 1] ["netherite_axe" 1] ["wooden_shovel" 1] ["stone_shovel" 1] ["iron_shovel" 1] ["golden_shovel" 1] ["diamond_shovel" 1] ["netherite_shovel" 1] ["wooden_hoe" 1] ["stone_hoe" 1] ["iron_hoe" 1] ["golden_hoe" 1] ["diamond_hoe" 1] ["netherite_hoe" 1]]}
    :act [[:job (jobs.storage.make-room {:free 9})]]
    :expect [{:event {:source :job :kind :make-room.done :data {:tossed [:any :any]}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :idle} :for-s 5}
-            {:no-event {:source :job :kind :yielded} :for-s 5}
-            {:no-event {:source :job :kind :make-room.tossed :data {:item "coal"}} :for-s 5}]
+            {:no-event {:source :job :kind :idle} :for-s 60 :until {:source :job :kind :make-room.done :data {:tossed [:any :any]}}}
+            {:no-event {:source :job :kind :yielded} :for-s 60 :until {:source :job :kind :make-room.done :data {:tossed [:any :any]}}}
+            {:no-event {:source :job :kind :make-room.tossed :data {:item "coal"}} :for-s 60 :until {:source :job :kind :make-room.done :data {:tossed [:any :any]}}}]
    :after [[:item "gravel" 0] [:item "sand" 0] [:item "coal" 30] [:item "diamond" 3]]
    :limit-s 80}
   {:name "full-chest-refuses-diamonds-only-nothing-to-go"
@@ -19,8 +19,8 @@
    :body {:inventory [["wooden_pickaxe" 1] ["stone_pickaxe" 1] ["iron_pickaxe" 1] ["golden_pickaxe" 1] ["diamond_pickaxe" 1] ["netherite_pickaxe" 1] ["wooden_axe" 1] ["stone_axe" 1] ["iron_axe" 1] ["golden_axe" 1] ["diamond_axe" 1] ["netherite_axe" 1] ["wooden_shovel" 1] ["stone_shovel" 1] ["iron_shovel" 1] ["golden_shovel" 1] ["diamond_shovel" 1] ["netherite_shovel" 1] ["wooden_hoe" 1] ["stone_hoe" 1] ["iron_hoe" 1] ["golden_hoe" 1] ["diamond_hoe" 1] ["netherite_hoe" 1] ["wooden_sword" 1] ["stone_sword" 1] ["iron_sword" 1] ["golden_sword" 1] ["diamond_sword" 1] ["netherite_sword" 1] ["bucket" 1] ["water_bucket" 1] ["lava_bucket" 1] ["diamond" 64] ["netherite_ingot" 9]]}
    :act [[:job (jobs.storage.make-room {:free 2})]]
    :expect [{:event {:source :job :kind :make-room.stopped :data {:reason :nothing-to-go}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :make-room.tossed} :for-s 3}
-            {:no-event {:source :job :kind :make-room.done} :for-s 3}]
+            {:no-event {:source :job :kind :make-room.tossed} :for-s 60 :until {:source :job :kind :make-room.stopped :data {:reason :nothing-to-go}}}
+            {:no-event {:source :job :kind :make-room.done} :for-s 60 :until {:source :job :kind :make-room.stopped :data {:reason :nothing-to-go}}}]
    :after [[:item "diamond" 64]]
    :limit-s 70}
   {:name "hostile-reflex-first-then-make-room-ends-done"
@@ -34,6 +34,6 @@
          [:rcon "kill @e[type=zombie,tag=wt,x=$X,y=$Y,z=$Z,distance=..40]"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 40}
             {:event {:source :job :kind :make-room.done} :within-s 120 :of-job true}
-            {:no-event {:source :job :kind :idle} :for-s 5}]
+            {:no-event {:source :job :kind :idle} :for-s 120 :until {:source :job :kind :make-room.done}}]
    :after [[:item "coal" 30] [:item "diamond" 3] [:item "tuff" 0] [:item "calcite" 0] [:item "sand" 0]]
    :limit-s 140}]}

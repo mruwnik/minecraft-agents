@@ -18,7 +18,7 @@
          [:time-set 1000]]
    :expect [{:event {:source :job :kind :dig-in.sealed} :within-s 60}
             {:event {:source :job :kind :holding :data {:reason :sheltered}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :idle} :for-s 60}
+            {:no-event {:source :job :kind :idle} :for-s 120 :until {:source :job :kind :completed :data {:name "jobs.survival.night"}}}
             {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 120 :of-job true}]
    :limit-s 140}
   {:name "wet-site-is-left-for-another-pit-site"

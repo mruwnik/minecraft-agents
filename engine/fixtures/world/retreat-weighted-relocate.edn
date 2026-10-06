@@ -50,6 +50,6 @@
    :body {:inventory [["stone_pickaxe" 1]] :effects [["resistance" 600 4]]}
    :act [[:job (jobs.survival.night {})]]
    :expect [{:event {:source :job :kind :shelter.exposed} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :shelter.relocated} :for-s 20}
-            {:no-event {:source :job :kind :completed} :for-s 20}]
+            {:no-event {:source :job :kind :shelter.relocated} :for-s 60}
+            {:no-event {:source :job :kind :completed} :for-s 60}]
    :limit-s 90}]}

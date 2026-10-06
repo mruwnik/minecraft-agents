@@ -19,14 +19,14 @@
          [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 60]
          [:wait-s 30]]
    :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 60}
-            {:no-event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :for-s 30}
-            {:no-event {:source :body :kind :woke} :for-s 30}]
+            {:no-event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :for-s 60}
+            {:no-event {:source :body :kind :woke} :for-s 60}]
    :after [[:body-near [20.5 0 16.5] 3]]
    :limit-s 100}
   {:name "day-shelter-does-nothing"
    :time :day
    :act [[:job (jobs.survival.night {})]]
    :expect [{:event {:source :job :kind #{:completed :declined :waiting}} :within-s 20 :of-job true}
-            {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 10}]
+            {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 20 :until {:source :job :kind #{:completed :declined :waiting}}}]
    ;; no :after body check: another runner's night set while the job is parked would make it log the body out
    :limit-s 40}]}

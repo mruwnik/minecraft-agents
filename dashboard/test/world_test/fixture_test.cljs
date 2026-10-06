@@ -99,6 +99,13 @@
     (is (seq (ps {:name "a" :expect [{:no-event {:kind :x}}]})) "a :no-event needs :for-s")
     (is (seq (ps {:name "a" :plot {:height 40}})))))
 
+(deftest a-case-of-only-unanchored-no-events-checks-nothing
+  (let [ps (fn [c] (f/problems (f/merge-case {} (merge {:name "a"} c))))]
+    (is (seq (ps {:expect [{:no-event {:kind :x} :for-s 5}]})) "silence on an empty log proves nothing")
+    (is (empty? (ps {:expect [{:no-event {:kind :x} :for-s 5 :from-event {:kind :start}}]})))
+    (is (empty? (ps {:expect [{:no-event {:kind :x} :for-s 5} {:event {:kind :start} :within-s 3}]})))
+    (is (empty? (ps {:expect [{:no-event {:kind :x} :for-s 5}] :after [[:block [1 0 1] "stone"]]})))))
+
 (deftest tags-resolve-against-the-plot-origin
   (let [[_ glass] (f/file-cases text "hostile")
         [[_ spec]] (:act (f/resolve-tags glass [100 150 200]))]
