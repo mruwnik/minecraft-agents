@@ -104,4 +104,7 @@
    ^:mutable ^boolean searched-out
    ;; options.stopAtEdge with the goal unloaded: the search ends at the first node it expands at the loaded edge (edgeStop),
    ;; edge-node (-1: none yet), which is then its frontier
-   ^boolean stop-at-edge ^:mutable edge-node])
+   ^boolean stop-at-edge ^:mutable edge-node
+   ;; known dangers (options.dangers, see dangerRisk): x y z close radius rate each (nil: none), their count, the most risk
+   ;; a second of walking takes from all of them (options.dangerCap), and the box round every danger's radius
+   ^js dangers n-dangers danger-cap dbx0 dbx1 dby0 dby1 dbz0 dbz1])

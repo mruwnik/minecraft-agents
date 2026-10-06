@@ -100,7 +100,7 @@
           wall? (wall-cells snapshot (.-table pw) walls)
           walled (js/Object.create snapshot)]
       (set! (.-stateAt walled) (fn [x y z] (if (contains? wall? [x y z]) id (.stateAt snapshot x y z))))
-      #js {:snapshot walled :table (.-table pw) :space (.-space pw)})))
+      #js {:snapshot walled :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw)})))
 
 (def wide-box
   "The planner's search box (options margin and yMargin, blocks round start and goal) of the walks' searches. A way
@@ -147,9 +147,25 @@
          :goal #js {:kind "near" :x gx :y gy :z gz :range range}}))
 
 (defn plan-options
-  "The planner options over pw with weight, limits and the search box (nil: the planner's default)."
+  "The planner options over pw with weight, limits and the search box (nil: the planner's default); pw's dangers
+  (with-dangers) as options.dangers."
   [pw weight limits box]
-  (js/Object.assign #js {:table (.-table pw) :space (.-space pw) :weight weight :limits limits} (clj->js box)))
+  (js/Object.assign #js {:table (.-table pw) :space (.-space pw) :weight weight :limits limits :dangers (.-dangers pw)}
+                    (clj->js box)))
+
+(defn with-dangers
+  "pw with dangers (the planner's options.dangers, a JS array; nil for none) for plan-options to pass on."
+  [pw dangers]
+  (if (nil? dangers)
+    pw
+    #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers dangers}))
+
+(defn danger-key
+  "What a kept search's key holds of pw's dangers: the mob and place of each, rounded to 4 blocks (a mob that moved on,
+  died or came along is a new search)."
+  [pw]
+  (some->> (.-dangers pw) array-seq
+           (mapv (fn [^js d] [(.-mob d) (js/Math.round (/ (.-x d) 4)) (js/Math.round (/ (.-y d) 4)) (js/Math.round (/ (.-z d) 4))]))))
 
 (defn plan-from
   "Plan from the body's cell to the goal in wide-box, within limits (the planner's options.limits, nil for none); the
@@ -411,9 +427,10 @@
         (swap! goal-floods assoc who {:key k :t (js/Date.now) :memo memo})
         memo))))
 
-(defn search-key [c to range weight policy walls]
+(defn search-key [c to range weight policy walls & [pw]]
   (let [{:keys [x y z]} (body-cell c)]
-    [[x y z] to range weight policy walls]))
+    (cond-> [[x y z] to range weight policy walls]
+      pw (conj (danger-key pw)))))
 
 (defn goal-unloaded?
   "Whether the snapshot reads the goal cell to [x y z] as unloaded (the planner's goal-unloaded: no goal flood runs)."
@@ -509,7 +526,7 @@
   [c pw to range weight {:keys [policy walls one-way frontier budget progress] :or {progress true}}]
   (let [t (js/performance.now)
         who (body-name c)
-        k (search-key c to range weight policy walls)
+        k (search-key c to range weight policy walls pw)
         kept (get @searches who)
         known (when frontier (known-cells! c to range))
         fresh? (not (go-on? kept k pw to))

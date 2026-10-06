@@ -659,7 +659,10 @@ the recorded pins (`planner_{bench,options,goals,courses}_golden.cljs`, `js/path
   the goal than the start.
 - The walker watches the way ahead and replans when the world under the plan changed, when a mob blocks a leg, and every 4 s
   for a partial plan.
-- Risks are priced rather than banned: gap jumps over pits, corner slides over lava or fire. Farmland is never fallen onto: no drop or gap jump lands on it, and no diagonal
+- Risks are priced rather than banned: gap jumps over pits, corner slides over lava or fire, time near known dangers
+  (`options.dangers`: the walks of `jobs.lib.near` pass the sensed real dangers and remembered `:threat` spots of
+  `jobs.lib.threats`, dear when the hostile reflex would flee the mob, cheap when it would fight; `walk-near!`
+  `:dangers false` for a walk up to the mob fought). Farmland is never fallen onto: no drop or gap jump lands on it, and no diagonal
   passes a pit floored with it. The planner
   takes `options.limits` for what the walker can do.
 

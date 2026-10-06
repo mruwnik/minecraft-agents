@@ -206,7 +206,8 @@
       (set! (.-over-budget s) true)
       (.relax s (.addNode s x y z region key slot) x z h move parent-node sec risk g slow-to corner shape)))
 
-  ;; relax the edge to a node: insert it, or lower its cost if this way is cheaper.
+  ;; relax the edge to a node: insert it, or lower its cost if this way is cheaper. Known dangers add to the move's risk
+  ;; (dangerRisk), after holdsBack: a held drop replayed through here is charged once.
   ;; a tight cell's node also has its region, the region's point and the crossing the move came in by: `shape`
   ;; A node reached again with a very different air use gets a record of its own: the hash points at the newest.
   (consider [s x y z h move parent-node dsec drisk slow-to corner shape]
@@ -222,7 +223,8 @@
         (and ^boolean (.-returnable s) (not ^boolean (.-replaying s)) ^boolean (.holdsBack s x y z h move parent-node dsec drisk slow-to corner shape)) nil
         ^boolean (.refusedKind s (.-limit-kinds s) x y z move) (do (set! (.-limit-refused s) true) nil)
         :else
-        (let [extra (if ^boolean (.-avoiding s) (.avoidCost s x y z move dsec drisk) 0)]
+        (let [drisk (if (pos? (.-n-dangers s)) (+ drisk (.dangerRisk s x y z dsec)) drisk)
+              extra (if ^boolean (.-avoiding s) (.avoidCost s x y z move dsec drisk) 0)]
           (when-not (neg? extra)
             (let [key (.keyOf s x y z region)
                   slot (.findSlot s key (bit-and (.hashOf s x y z region) (dec (.-slots s))))

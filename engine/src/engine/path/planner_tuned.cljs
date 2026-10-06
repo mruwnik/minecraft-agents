@@ -37,6 +37,9 @@
    - options.knownEdges: a Set of the cells (knownKey) earlier searches found at the loaded edge that no search has
      known to its end since. When it is empty, a frontier in known land is never taken: every edge was searched past,
      and the result says so as searchedOut true (the way on, if any, is not in the land this goal's searches can reach).
+   - options.dangers: known hostiles, an array of {x y z close radius rate} (at most 8): a move adds to its risk rate
+     (hp a second) times its seconds within close blocks of a danger's point, falling linearly to 0 at radius; all the
+     dangers together add at most options.dangerCap (4) a second (see dangerRisk). jobs.lib.threats builds them.
    - options.stopAtEdge: with the goal unloaded, the search ends at the first node it expands at the loaded edge (edgeStop)
      and names it as its frontier, not after searching all loaded land. go-to's budgeted searches set it (walk/new-search)."
   (:require [engine.path.planner.base :as base :refer [OCTILE-SLACK REGIONS TABLE WHOLE next-pow2]]
@@ -50,7 +53,8 @@
             [engine.path.planner.doors]
             [engine.path.planner.flood]
             [engine.path.planner.run]
-            [engine.path.planner.results]))
+            [engine.path.planner.results]
+            [engine.path.planner.danger]))
 
 (set! *warn-on-infer* true)
 
@@ -94,6 +98,39 @@
 
 (defn- goal-array [ctor ^js goals f] (new ctor (.map goals f)))
 
+(def ^:const DANGER-STRIDE 6)
+(def ^:const MAX-DANGERS 8)
+
+(defn- danger-array
+  "options.dangers ({x y z close radius rate}, at most MAX-DANGERS used) as a Float64Array of DANGER-STRIDE numbers per
+  danger; nil for none."
+  [^js ds]
+  (when (and (some? ds) (pos? (.-length ds)))
+    (let [n (js/Math.min MAX-DANGERS (.-length ds))
+          a (js/Float64Array. (* n DANGER-STRIDE))]
+      (dotimes [i n]
+        (let [^js d (aget ds i)
+              o (* i DANGER-STRIDE)]
+          (aset a o (.-x d)) (aset a (+ o 1) (.-y d)) (aset a (+ o 2) (.-z d))
+          (aset a (+ o 3) (.-close d)) (aset a (+ o 4) (.-radius d)) (aset a (+ o 5) (.-rate d))))
+      a)))
+
+(defn- danger-box
+  "#js [x0 x1 y0 y1 z0 z1]: the box round every danger's radius (an empty box for none)."
+  [^js a]
+  (let [b #js [js/Infinity js/-Infinity js/Infinity js/-Infinity js/Infinity js/-Infinity]]
+    (when (some? a)
+      (dotimes [i (/ (.-length a) DANGER-STRIDE)]
+        (let [o (* i DANGER-STRIDE)
+              r (aget a (+ o 4))]
+          (aset b 0 (js/Math.min (aget b 0) (- (aget a o) r)))
+          (aset b 1 (js/Math.max (aget b 1) (+ (aget a o) r)))
+          (aset b 2 (js/Math.min (aget b 2) (- (aget a (+ o 1)) r)))
+          (aset b 3 (js/Math.max (aget b 3) (+ (aget a (+ o 1)) r)))
+          (aset b 4 (js/Math.min (aget b 4) (- (aget a (+ o 2)) r)))
+          (aset b 5 (js/Math.max (aget b 5) (+ (aget a (+ o 2)) r))))))
+    b))
+
 (defn- search-from ^Search [^js snapshot ^js query ^js options]
   (let [^js table (.-table options)
         ^js from (.-from query)
@@ -119,7 +156,10 @@
         y-low (aget bounds 4)
         y-high (aget bounds 5)
         cap (js/Math.min max-nodes 1024)
-        slots (next-pow2 (* cap 2))]
+        slots (next-pow2 (* cap 2))
+        ^js dangers (danger-array (.-dangers options))
+        n-dangers (if (some? dangers) (/ (.-length dangers) DANGER-STRIDE) 0)
+        ^js dbox (danger-box dangers)]
     (->Search
      ;; the world
      snapshot table (.-space options)
@@ -199,7 +239,10 @@
      ;; searched-out
      false
      ;; stop-at-edge edge-node
-     (and goal-unloaded (true? (option options "stopAtEdge" false))) -1)))
+     (and goal-unloaded (true? (option options "stopAtEdge" false))) -1
+     ;; dangers n-dangers danger-cap dbx0 dbx1 dby0 dby1 dbz0 dbz1
+     dangers n-dangers (option options "dangerCap" 4)
+     (aget dbox 0) (aget dbox 1) (aget dbox 2) (aget dbox 3) (aget dbox 4) (aget dbox 5))))
 
 ;; the body's hitbox reaches this far from its centre in x and z
 (def ^:const HITBOX-HALF 0.3)

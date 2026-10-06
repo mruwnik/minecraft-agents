@@ -88,7 +88,7 @@
   [c target]
   (let [tpos (u/pos-of (.-pos target))
         r (if (> (u/dist (u/self-pos c) tpos) reach)
-            (await (near/walk-near! c tpos 2 {:timeout-s chase-timeout-s}))
+            (await (near/walk-near! c tpos 2 {:timeout-s chase-timeout-s :dangers false}))
             :there)]
     (when (= :blocked r) (note-blocked! c target))
     (when (= :there r)
