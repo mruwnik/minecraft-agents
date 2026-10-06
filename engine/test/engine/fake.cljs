@@ -549,19 +549,21 @@
     :else [(assoc-in w [:self :isSleeping] true) {:status "sleeping"}]))
 
 (defn swim
-  "Rises to the top water cell above the body and refills oxygen; swimFails makes it time out unmoved."
+  "Rises to the top water cell above the body and refills oxygen; swimFails makes it time out unmoved. With :toward it
+  swims there by the steer's kinematics (steer/swim-lands?): landed on the target, else timed out on a jump crest
+  where it was, out of the water and off the ground."
   [w {:keys [toward]}]
   (let [before (get-in w [:self :oxygen])
         head #(block-name % (update (body-pos %) 1 + 1))
         risen (loop [w w] (if (= "water" (head w)) (recur (update-in w [:self :pos 1] inc)) w))
         w' (assoc-in risen [:self :oxygen] 20)
-        under (when toward (block-name w' (update toward 1 dec)))
-        standable (and toward (= "air" (block-name w' toward)) (not (#{"air" "water" "lava"} under)))]
+        oxygen {:before before :after 20}
+        crest #(-> % (assoc-in [:self :inWater] false) (assoc-in [:self :onGround] false))]
     (cond
       (:swim-fails w) [w {:status "timeout" :oxygen {:before before :after before}}]
-      (not toward) [w' {:status "surfaced" :oxygen {:before before :after 20}}]
-      (or (not standable) (> (dist (body-pos w') toward) 6)) [w' {:status "timeout" :oxygen {:before before :after 20}}]
-      :else [(-> w' (assoc-in [:self :pos] toward) settle) {:status "landed" :oxygen {:before before :after 20}}])))
+      (not toward) [(assoc-in w' [:self :inWater] true) {:status "surfaced" :oxygen oxygen}]
+      (or (> (dist (body-pos w') toward) 6) (not (steer/swim-lands? w' toward))) [(crest w') {:status "timeout" :oxygen oxygen}]
+      :else [(-> w' (assoc-in [:self :pos] toward) settle (assoc-in [:self :onGround] true)) {:status "landed" :oxygen oxygen}])))
 
 (declare vehicle-of)
 

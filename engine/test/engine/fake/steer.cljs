@@ -100,10 +100,15 @@
       (if (and (= cx (floor (:x body))) (= cz (floor (:z body))))
         (assoc body :x x :z z :collided false)
         (let [g (ground-at w cx (:y body) cz)
-              rise (if (nil? g) js/Infinity (- g (:y body)))]
-          (if (or (<= rise step) (and (<= rise jump-step) jump))
-            (assoc body :x x :y g :z z :collided false)
-            (assoc body :collided true))))))))
+              rise (if (nil? g) js/Infinity (- g (:y body)))
+              cell (floor (:y body))
+              wet? (fn [y] (= "water" (name-at w cx y cz)))]
+          (cond
+            ;; a swimmer moves through open water, or over its surface, with no floor under it
+            (and (or (wet? cell) (wet? (dec cell))) (not (solid? w cx cell cz)) (not (solid? w cx (inc cell) cz)))
+            (assoc body :x x :z z :collided false)
+            (or (<= rise step) (and (<= rise jump-step) jump)) (assoc body :x x :y g :z z :collided false)
+            :else (assoc body :collided true))))))))
 
 (defn vertical
   "The body after the vertical part of a tick. A jump without forward, on the ground out of water, lifts the body to the
@@ -145,6 +150,20 @@
   "One tick of the walker: horizontal then vertical."
   [w body controls yaw]
   (vertical w (horizontal w body controls yaw) controls))
+
+(declare start-body)
+
+(def swim-ticks 60)
+
+(defn swim-lands?
+  "Does a body in the water swim to the cell `toward` and stand in it? It holds forward and jump every tick, through
+  the same step-body as a walk: the water branch of vertical bobs it a cell, and the horizontal step climbs at most
+  jump-step, so a rim up to about one block over the surface is reached and walls or a higher rim are not."
+  [w [tx ty tz]]
+  (let [start (start-body w)
+        yaw (js/Math.atan2 (- (- (+ tx 0.5) (:x start))) (- (- (+ tz 0.5) (:z start))))
+        arrived? (fn [b] (and (= [tx tz] [(floor (:x b)) (floor (:z b))]) (= ty (:y b)) (solid? w tx (dec ty) tz)))]
+    (boolean (some arrived? (take swim-ticks (iterate #(step-body w % {:forward true :jump true} yaw) start))))))
 
 (defn pose-of [w body yaw]
   (let [[cx cz] [(floor (:x body)) (floor (:z body))]

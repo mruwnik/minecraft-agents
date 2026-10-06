@@ -594,24 +594,54 @@
                  (is (= "water" b2) name)))
              ["fire" "soul_fire" "short_grass" "tall_grass" "grass" "snow"])))))
 
-(deftest swim-toward-moves-the-body-onto-a-standable-target-within-6-blocks-and-lands
-  (async-test
-   (fn ^:async t []
-     (let [p (owned (update sea :blocks assoc "3,64,0" "stone"))
-           r (await (act p "swim" {:ms 3000 :toward (at 3 65 0)}))]
-       (is (= "landed" (.-status r)))
-       (is (= (at 3 65 0) (:pos (self-of p))))))))
+(def pool
+  "Water at y 62 and 63 for x -1..2, z -1..1 over a stone floor at y 61; the body at the surface of column 0."
+  {:self {:pos (at 0 63 0) :oxygen 20 :inWater true :onGround false}
+   :blocks (into {} (for [x (range -1 3) z (range -1 2) [y n] [[61 "stone"] [62 "water"] [63 "water"]]]
+                      [(str x "," y "," z) n]))})
 
-(deftest swim-toward-a-target-that-is-far-in-water-or-not-given-leaves-the-body-to-surface-only
+(defn ^:async swim-toward [world target]
+  (let [p (owned world)
+        r (await (act p "swim" {:ms 3000 :toward target}))]
+    [(.-status r) (self-of p)]))
+
+(defn ledge
+  "Stone in column x 3, z 0, from y 61 up to top."
+  [top]
+  (into {} (for [y (range 61 (inc top))] [(str "3," y ",0") "stone"])))
+
+(deftest swim-toward-lands-on-a-rim-at-most-one-block-above-the-water
   (async-test
    (fn ^:async t []
-     (let [far (owned (update sea :blocks assoc "9,64,0" "stone"))
-           far-r (await (act far "swim" {:ms 3000 :toward (at 9 65 0)}))
-           wet (owned (update sea :blocks assoc "3,64,0" "water"))
-           wet-r (await (act wet "swim" {:ms 3000 :toward (at 3 64 0)}))]
-       (is (= "timeout" (.-status far-r)))
-       (is (= (at 0 63 0) (:pos (self-of far))))
-       (is (= "timeout" (.-status wet-r)))))))
+     (doseq [[label top] [["flush with the water" 62] ["one above the water" 63] ["rim one block over the surface" 64]]]
+       (let [[status s] (await (swim-toward (update pool :blocks merge (ledge top)) (at 3 (inc top) 0)))]
+         (is (= "landed" status) label)
+         (is (= (at 3 (inc top) 0) (:pos s)) label)
+         (is (= [false true] [(:inWater s) (:onGround s)]) label))))))
+
+(deftest swim-toward-a-rim-too-high-or-land-behind-a-wall-times-out-on-a-crest
+  (async-test
+   (fn ^:async t []
+     (doseq [[label blocks target]
+             [["rim two blocks over the surface" (ledge 65) (at 3 66 0)]
+              ["land behind a wall two above the water"
+               (merge (ledge 63) {"2,62,0" "stone" "2,63,0" "stone" "2,64,0" "stone" "2,65,0" "stone"})
+               (at 3 64 0)]
+              ["a pillar two over the surface in the way" (merge (ledge 63) {"1,63,0" "stone" "1,64,0" "stone" "1,65,0" "stone"}) (at 3 64 0)]
+              ["the target is not land" {} (at 2 63 0)]
+              ["too far" {"9,63,0" "stone"} (at 9 64 0)]]]
+       (let [[status s] (await (swim-toward (update pool :blocks merge blocks) target))]
+         (is (= "timeout" status) label)
+         (is (= (at 0 63 0) (:pos s)) (str label ": still at the surface"))
+         (is (= [false false] [(:inWater s) (:onGround s)]) (str label ": on a jump crest")))))))
+
+(deftest swim-surfacing-is-back-in-the-water
+  (async-test
+   (fn ^:async t []
+     (let [p (owned (update pool :self assoc :inWater false :onGround false))
+           r (await (act p "swim" {:ms 3000}))]
+       (is (= "surfaced" (.-status r)))
+       (is (true? (:inWater (self-of p))))))))
 
 (deftest fake-jump-place-raises-the-body-one-block-per-placement-and-consumes-the-items
   (async-test
