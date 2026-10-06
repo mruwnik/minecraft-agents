@@ -298,7 +298,7 @@
 (defn hostile-cells
   "The cells the hostiles within radius overlap: no block goes there."
   [p radius]
-  (set (mapcat #(hitbox-cells (u/pos-of (.-pos %))) (combat/hostiles p radius))))
+  (set (mapcat #(hitbox-cells (u/pos-of (.-pos %))) (reach/known-hostiles p radius {}))))
 
 (defn occupied? [c cell] (contains? (:seal-occupied (ctx/mem c)) cell))
 
@@ -393,12 +393,16 @@
     creeper? [:back-off :seal :pillar :pit :fight]
     :else (into (if ranged? [:seal] [:seal :pillar]) [:back-off :pit :fight])))
 
+(defn near-known
+  "The hostiles p can be said to know within radius (ranged ones within ranged-radius), the dead skipped."
+  [p dead radius ranged-radius]
+  (remove #(contains? dead (.-id %)) (reach/known-hostiles p radius {:ranged-radius ranged-radius})))
+
 (defn near-hostiles
   "The hostiles a cornered body weighs: within :radius, ranged ones within :ranged-radius, the dead skipped."
   [c]
-  (let [{:keys [radius ranged-radius]} (:args c)
-        dead (set (dead-ids c))]
-    (remove #(dead (.-id %)) (combat/hostiles (:primitives c) radius {:ranged-radius ranged-radius}))))
+  (let [{:keys [radius ranged-radius]} (:args c)]
+    (near-known (:primitives c) (set (dead-ids c)) radius ranged-radius)))
 
 (defn fight-wins?
   "Whether fighting hostiles with the best weapon carried is expected to leave :reserve health

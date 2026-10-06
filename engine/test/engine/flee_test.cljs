@@ -192,6 +192,16 @@
     (is (= [7] (mapv #(.-id %) (retreat/known-chasers p))) "no perception: every tracked mob")
     (is (= [] (mapv #(.-id %) (retreat/known-chasers wrapped))) "30 blocks off, unseen and unheard: not known")))
 
+(deftest the-cornered-body-weighs-only-the-hostiles-it-knows
+  (let [p (tu/fake-on-floor {:floor big-floor :entities [(zombie 7 30 {})]})
+        per (perception/create (fake-raw/create p) {:now (constantly 1000000)})
+        wrapped (perception/wrap p per)
+        ids #(mapv (fn [e] (.-id e)) %)]
+    (is (= [7] (ids (retreat/near-known p #{} 40 nil))) "no perception: every tracked mob")
+    (is (= [] (ids (retreat/near-known wrapped #{} 40 nil))) "unseen and unheard: not weighed")
+    (is (= [] (vec (retreat/hostile-cells wrapped 40))) "no cell is kept clear for an unknown mob")
+    (is (= [] (ids (retreat/near-known p #{7} 40 nil))) "a corpse is skipped")))
+
 (deftest a-flight-resumed-after-a-gap-starts-its-clocks-afresh
   (let [mem {:flight-start 0 :last-step 1000 :chasers {7 {:id 7 :seen-t 1000}}}]
     (is (= mem (retreat/resume-flight mem 3000)) "a short gap: as it was")
