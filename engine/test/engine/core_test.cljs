@@ -2,6 +2,7 @@
   (:require [cljs.test :refer [deftest is are async testing]]
             [cljs.reader :as reader]
             [engine.core :as core]
+            [engine.core.base :as base]
             [engine.ctx :as ctx]
             [engine.hurt :as hurt]
             [engine.job-api :as job-api]
@@ -213,12 +214,12 @@
       (fn ^:async t []
         (let [{:keys [eng]} (setup)
               raw (atom [])
-              emit core/emit!]
-          (set! core/emit! (fn [eng e] (swap! raw conj e) (emit eng e)))
+              emit base/emit!]
+          (set! base/emit! (fn [eng e] (swap! raw conj e) (emit eng e)))
           (try
             (core/submit! eng '(count) {})
             (await (core/tick! eng))
-            (finally (set! core/emit! emit)))
+            (finally (set! base/emit! emit)))
           (is (= [[:round_started :debug] [:yielded :debug]]
                  (->> @raw (filter #(#{:round_started :yielded} (:kind %))) (mapv (juxt :kind :level))))
               "the canonical log drops :level; the emitted event carries it"))))))

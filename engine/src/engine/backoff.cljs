@@ -1,6 +1,6 @@
 (ns engine.backoff
   "Backoff for jobs whose rounds keep failing at once: pure functions; the
-  wiring is in engine.core. See README.md, Backoff.
+  wiring is in engine.core.fruitless. See README.md, Backoff.
 
   A round is fruitless when it ran at least one act and every act failed
   (a failure status below). After :after fruitless rounds in a row the job gets
