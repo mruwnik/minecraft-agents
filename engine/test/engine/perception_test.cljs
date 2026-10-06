@@ -329,3 +329,88 @@
   (is (= ["gold_block" nil] (dark-seen {:held "torch"})))
   (is (= ["gold_block" nil] (dark-seen {:held "soul_torch"})))
   (is (= [nil nil] (dark-seen {}))))
+
+;; ---- equivalence: the seen set of a pass on fixed worlds (jitter fixed), pinned so speed work cannot change it
+
+(defn memory-digest
+  "[cells-remembered checksum] over every remembered cell of every section."
+  [per]
+  (let [^js st (:st per)]
+    (reduce (fn [[n sum] ^js sec]
+              (let [ids (.-ids sec)]
+                (loop [i 0 n n sum sum]
+                  (if (>= i 4096)
+                    [n sum]
+                    (let [id (aget ids i)]
+                      (if (zero? id)
+                        (recur (inc i) n sum)
+                        (recur (inc i) (inc n)
+                               (mod (+ sum (* id (+ 1 i (* 4099 (.-cx sec)) (* 7919 (.-cz sec)) (* 104729 (.-sy sec))))) 1000000007))))))))
+            [0 0]
+            (mapcat #(es6-iterator-seq (.values ^js %)) (es6-iterator-seq (.values (.-stores st)))))))
+
+(defn fixed-jitter [f]
+  (let [orig js/Math.random]
+    (set! js/Math.random (fn [] 0.5))
+    (try (f) (finally (set! js/Math.random orig)))))
+
+(def pinned-world
+  (merge (tu/box -12 58 -12 12 58 12 "stone")
+         (wall 7 9 ["0,65,7" "1,65,7" "0,66,7"] {"0,65,9" "diamond_ore" "3,60,5" "gold_block"})
+         {"-4,65,3" "glass" "5,64,4" "dirt" "-6,66,-2" "stone"}))
+
+(deftest pass-seen-set-is-pinned-lit-world
+  (let [{:keys [per]} (rig pinned-world)]
+    (fixed-jitter #(perception/pass! per))
+    (is (= [674 565560582] (memory-digest per)))))
+
+(deftest pass-seen-set-is-pinned-dark-world-turned
+  (let [{:keys [p per]} (rig pinned-world)]
+    (light! p {:light-default [0 0]})
+    (turn! p 90)
+    (fixed-jitter #(perception/pass! per))
+    (is (= [109 43201189] (memory-digest per)))))
+
+;; ---- a still body in an unchanged world looks again only every :still-ms
+
+(defn passes-after
+  "Steps a rig (clock starts at 0, pass at once), then moves the clock to each of times and steps; the pass counts."
+  [{:keys [per clock]} times]
+  (perception/pass! per)
+  (mapv (fn [t]
+          (reset! clock t)
+          (perception/step! per)
+          (while (.-pass ^js (:st per)) (perception/step! per))
+          (:passes (perception/stats per)))
+        times))
+
+(defn clocked-rig [blocks]
+  (let [clock (atom 0)]
+    (assoc (rig blocks {:now #(deref clock) :pass-ms 50 :still-ms 30000}) :clock clock)))
+
+(deftest an-unchanged-still-body-skips-idle-passes-until-still-ms
+  (let [r (clocked-rig {"0,65,4" "gold_block"})]
+    (is (= [1 1 2] (passes-after r [3001 29999 30001])))))
+
+(deftest a-block-change-brings-the-next-idle-pass-forward
+  (let [{:keys [p] :as r} (clocked-rig {"0,65,4" "gold_block"})]
+    (perception/pass! (:per r))
+    (fake/set-block! p [0 65 -40] "stone")
+    (reset! (:clock r) 3001)
+    (perception/step! (:per r))
+    (while (.-pass ^js (:st (:per r))) (perception/step! (:per r)))
+    (is (= 2 (:passes (perception/stats (:per r)))))))
+
+(deftest a-turn-or-a-change-of-daylight-starts-a-pass-at-once
+  (let [{:keys [p clock per]} (clocked-rig {"0,65,4" "gold_block"})]
+    (perception/pass! per)
+    (reset! clock 100)
+    (turn! p 90)
+    (perception/step! per)
+    (while (.-pass ^js (:st per)) (perception/step! per))
+    (is (= 2 (:passes (perception/stats per))))
+    (swap! (fake/state p) assoc :time 18000)
+    (reset! clock 3200)
+    (perception/step! per)
+    (while (.-pass ^js (:st per)) (perception/step! per))
+    (is (= 3 (:passes (perception/stats per))))))

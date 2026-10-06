@@ -9,6 +9,8 @@ import { columnLightSection, hasSkyLight } from './view.mjs'
 export const UNLOADED = -1
 export const EYE_HEIGHT = 1.62
 const CACHE_MAX = 2048 // section copies kept before the caches are dropped
+const EPOCH_RANGE = 50 // a block update or chunk change this near the body (a little over the sight radius) moves epoch
+const hereY = bot => bot?.entity?.position?.y ?? 0
 const LIGHT_TTL_MS = 1000 // light changes arrive without an event: a light copy is re-read after this long
 
 // Same rule as primitives.mjs canSee: a full collision box blocks sight unless it is one of these.
@@ -56,6 +58,11 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
   let lastStates = null
   let lastLightKey = -1
   let lastLight = null
+  let epoch = 0 // counts block updates and chunk loads/unloads within EPOCH_RANGE of the body: "what it can see may differ"
+  const near = (bot, x, y, z, range) => {
+    const e = bot?.entity?.position
+    return !e || (Math.abs(x - e.x) <= range && Math.abs(z - e.z) <= range && Math.abs(y - e.y) <= range)
+  }
 
   const forget = () => {
     states.clear()
@@ -66,6 +73,7 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
 
   // a column's sections (world section indices 0..63) leave the caches; the arg is mineflayer's corner Vec3 in blocks
   const forgetColumn = corner => {
+    if (near(getBot(), corner.x + 8, hereY(getBot()), corner.z + 8, EPOCH_RANGE + 8)) epoch++
     const cx = corner.x >> 4
     const cz = corner.z >> 4
     for (let s = 0; s < 64; s++) {
@@ -80,6 +88,7 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
   const onUpdate = (oldBlock, newBlock) => {
     const p = (newBlock ?? oldBlock)?.position
     if (!p) return
+    if (near(getBot(), p.x, p.y, p.z, EPOCH_RANGE)) epoch++
     const bot = getBot()
     const s = (p.y - (bot.game?.minY ?? -64)) >> 4
     const key = keyOf(p.x >> 4, p.z >> 4, s)
@@ -154,9 +163,10 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
     if (ry < 0 || ry >= heightOf(bot)) return ry < 0 ? 0 : 0xF0
     const s = ry >> 4
     const key = keyOf(x >> 4, z >> 4, s)
-    if (key !== lastLightKey || (lastLight && now() - lastLight.at > lightTtlMs)) {
+    const t = now()
+    if (key !== lastLightKey || (lastLight && t - lastLight.at > lightTtlMs)) {
       const cached = lights.get(key)
-      lastLight = cached && now() - cached.at <= lightTtlMs ? cached : sectionLight(bot, x >> 4, z >> 4, s, key)
+      lastLight = cached && t - cached.at <= lightTtlMs ? cached : sectionLight(bot, x >> 4, z >> 4, s, key)
       lastLightKey = key
     }
     if (lastLight === null) return 0
@@ -188,6 +198,8 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
       const bot = follow()
       return { timeOfDay: bot?.time?.timeOfDay ?? 6000, rain: bot?.rainState ?? 0, thunder: bot?.thunderState ?? 0 }
     },
+    // changes whenever a block, chunk column or the hooked bot changes (light-only changes are not counted)
+    epoch: () => { follow(); return epoch },
     version: () => follow()?.version ?? null,
     // null while the bot has no registry yet (the perception waits and asks again)
     sightTable: () => { const bot = follow(); return bot?.registry ? tablesOf(bot).sight : null },

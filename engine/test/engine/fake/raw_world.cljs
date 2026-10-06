@@ -43,9 +43,13 @@
   [p]
   (let [state (.-state (.-world p))
         watch-key (keyword (gensym "raw-world"))
-        listeners (atom #{})]
+        listeners (atom #{})
+        epoch (atom 0)]
     (add-watch state watch-key
                (fn [_ _ old new]
+                 (when (not= (select-keys old [:blocks :unloaded :light :light-default])
+                             (select-keys new [:blocks :unloaded :light :light-default]))
+                   (swap! epoch inc))
                  (doseq [[x y z :as pos] (changed-cells (:blocks old) (:blocks new))
                          f @listeners]
                    (f x y z (state-of (get (:blocks new) pos "air"))))))
@@ -56,6 +60,7 @@
          :heldItem (fn [] (get-in @state [:self :held]))
          :sky (fn [] (let [w @state]
                        #js {:timeOfDay (:time w) :rain (if (:raining w) 1 0) :thunder (if (:thundering w) 1 0)}))
+         :epoch (fn [] @epoch)
          :version (fn [] fx/MC-VERSION)
          :sightTable (fn [] @sight)
          :stateInfo (fn [id] (@info id))

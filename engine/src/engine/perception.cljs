@@ -12,7 +12,8 @@
     A sight-blocking cell is lit by the brighter of itself and the cell the ray came from.
     A dark cell is not recorded and the ray goes on, so a lit room is seen across a dark gap.
     A pass is spread over `:pass-ms` (1.5 s) in slices of `:step-ms` (one game tick).
-    A new pass starts when the eye moved or turned, or every `:idle-ms`.
+    A new pass starts when the eye moved or turned, every `:idle-ms` if the world changed (a block or chunk update, the
+    daylight, a torch in hand), else every `:still-ms`.
     What is behind the body is seen only once it turns.
 
   Block memory. Per dimension and 16^3 section: a Uint16Array of stateId + 1 (0 = unknown), a Uint8Array of each
@@ -46,7 +47,8 @@
    :ray-deg 1             ; ray spacing at the centre of the view
    :pass-ms 1500
    :step-ms 50
-   :idle-ms 3000          ; a still body looks again this often
+   :idle-ms 3000          ; a still body looks again this often, when the world around it changed
+   :still-ms 30000        ; ... and this often when nothing did (no block or chunk change, same daylight and torch)
    :move-blocks 0.5
    :turn-deg 2
    :seeing-min 0.2
@@ -109,9 +111,12 @@
       (when (>= (seeing (bit-shift-right i 4) (bit-and i 15) darken) seeing-min) (aset out i 1)))
     out))
 
-(defn table-now [raw seeing-min]
+(defn darken-now [raw]
   (let [sky (.sky ^js raw)]
-    (visible-table (sky-darken (.-timeOfDay sky) (.-rain sky) (.-thunder sky)) seeing-min)))
+    (sky-darken (.-timeOfDay sky) (.-rain sky) (.-thunder sky))))
+
+(defn table-now [raw seeing-min]
+  (visible-table (darken-now raw) seeing-min))
 
 (defn max-light
   "Per channel, the brighter of two packed lights."
@@ -298,12 +303,29 @@
       (>= (* (/ 180 js/Math.PI) (max (js/Math.abs (- (.-yaw eye) (.-yaw last))) (js/Math.abs (- (.-pitch eye) (.-pitch last)))))
           (:turn-deg opts))))
 
+(defn epoch-of
+  "The raw world's change counter, or nil when it has none."
+  [raw]
+  (when-let [f (aget ^js raw "epoch")] (f)))
+
+(defn idle-due?
+  "A still body (not moved or turned) looks again after :idle-ms if the world around it changed since the last pass
+  started, else after :still-ms. Without a raw-world change counter every :idle-ms."
+  [{:keys [raw opts] :as per} ^js last now]
+  (let [waited (- now (.-at last))]
+    (and (>= waited (:idle-ms opts))
+         (or (>= waited (:still-ms opts))
+             (nil? (.-epoch last))
+             (not= (.-epoch last) (epoch-of raw))
+             (not= (.-darken last) (darken-now raw))
+             (not= (.-near last) (near-of per))))))
+
 (defn start-pass!
   "Starts a pass, unless the sight table is not ready yet (the next step tries again)."
   [{:keys [raw opts] :as per} ^js st ^js eye now]
   (when (sight-of per st)
     (set! (.-visible st) (table-now raw (:seeing-min opts)))
-    (set! (.-lastStart st) #js {:at now :eye eye})
+    (set! (.-lastStart st) #js {:at now :eye eye :epoch (epoch-of raw) :darken (darken-now raw) :near (near-of per)})
     (set! (.-pass st) #js {:next 0 :jx (js/Math.random) :jy (js/Math.random)})))
 
 (defn cast-slice!
@@ -341,7 +363,7 @@
        (when (and (nil? (.-pass st))
                   (or force?
                       (nil? (.-lastStart st))
-                      (>= (- now (.-at (.-lastStart st))) (:idle-ms opts))
+                      (idle-due? per (.-lastStart st) now)
                       (moved? per (.-eye (.-lastStart st)) eye)))
          (start-pass! per st eye now))
        (when-let [^js pass (.-pass st)]

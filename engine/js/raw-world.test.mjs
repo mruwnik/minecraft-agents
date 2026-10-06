@@ -160,3 +160,19 @@ test('offHand reads slot 45 and heldItem the main hand, null when empty', () => 
   bot.heldItem = { name: 'torch' }
   assert.deepEqual([raw.offHand(), raw.heldItem()], ['soul_torch', 'torch'])
 })
+
+test('epoch counts block updates and chunk loads and unloads, not reads', () => {
+  const { bot } = makeBot()
+  const raw = createRawWorld({ getBot: () => bot })
+  const e0 = raw.epoch()
+  raw.stateAt(3, 70, 4)
+  raw.lightAt(3, 71, 4)
+  assert.equal(raw.epoch(), e0)
+  bot.emit('blockUpdate', { position: new Vec3(3, 70, 4), stateId: id('stone') }, { position: new Vec3(3, 70, 4), stateId: id('dirt') })
+  assert.equal(raw.epoch(), e0 + 1)
+  bot.emit('chunkColumnLoad', new Vec3(0, 0, 0))
+  assert.equal(raw.epoch(), e0 + 2)
+  bot.emit('blockUpdate', { position: new Vec3(300, 70, 4), stateId: id('stone') }, { position: new Vec3(300, 70, 4), stateId: id('dirt') })
+  bot.emit('chunkColumnUnload', new Vec3(320, 0, 0))
+  assert.equal(raw.epoch(), e0 + 2)
+})
