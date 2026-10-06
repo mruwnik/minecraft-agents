@@ -1,0 +1,41 @@
+;; Night as one whole attempt (cards 3df7476d, 65b99a04): one round from the start to the morning leave, every hold
+;; declared (job.holding), a site where dig-in stops is left for another pit site 9+ blocks away, and a night with no
+;; site holds exposed and ends stopped :exposed at day. Dirt pad y -6..-1 (the plot floor is over void).
+;; jobs.survival.night is submitted in :act. Needs night: --allow-time --time-log <the shared time log>, one case per call.
+{:defaults
+ {:tags [:night :survival :dig-in]
+  :time :night-exclusive
+  :blocks [[:fill [8 -6 8] [24 -1 24] "dirt"]
+           [:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 4] "torch"] [:set [28 0 28] "torch"]
+           [:set [16 0 4] "torch"] [:set [16 0 28] "torch"] [:set [4 0 16] "torch"] [:set [28 0 16] "torch"]]
+  :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]] :settle-s 3}}
+ :cases
+ [{:name "dug-in-holds-declared-then-leaves-by-day-in-one-round"
+   :act [[:job (jobs.survival.night)]
+         [:await {:source :job :kind :holding :data {:reason :sheltered}} 60]
+         [:wait-s 10]
+         [:time-set 1000]]
+   :expect [{:event {:source :job :kind :dig-in.sealed} :within-s 60}
+            {:event {:source :job :kind :holding :data {:reason :sheltered}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :idle} :for-s 60}
+            {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 120 :of-job true}]
+   :limit-s 140}
+  {:name "wet-site-is-left-for-another-pit-site"
+   :blocks [[:set [17 -1 16] "water"]]
+   :act [[:job (jobs.survival.night)]]
+   :expect [{:event {:source :job :kind :dig_in_failed :message [:contains "beside the descent cell"]} :within-s 30}
+            {:event {:source :job :kind :shelter.relocated} :within-s 60}
+            {:event {:source :job :kind :dig-in.sealed} :within-s 120}
+            {:no-event {:source :job :kind :shelter.exposed} :for-s 120}]
+   :after [[:block [16 -1 16] "dirt"]]
+   :limit-s 140}
+  {:name "no-site-holds-exposed-then-stops-at-day"
+   :blocks [[:fill [8 -6 8] [24 -1 24] "air"] [:fill [12 -1 12] [20 -1 20] "stone"]]
+   :act [[:job (jobs.survival.night)]
+         [:await {:source :job :kind :shelter.exposed} 60]
+         [:wait-s 15]
+         [:time-set 1000]]
+   :expect [{:event {:source :job :kind :shelter.exposed} :within-s 60}
+            {:event {:source :job :kind :holding :data {:reason :exposed}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :stopped :data {:reason :exposed}} :within-s 120 :of-job true}]
+   :limit-s 140}]}
