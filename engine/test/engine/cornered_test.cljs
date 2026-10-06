@@ -253,6 +253,21 @@
           (is (= [] (:list (core/state eng))) "done once the zombie has gone")
           (is (empty? (blocked-events seen))))))))
 
+(deftest a-pillar-that-gives-up-short-abandons-the-refuge-and-fights
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup {:blocks doorway :inventory [{:name "cobblestone" :count 20}] :entities [(zombie 0 64 1)]})
+              {:keys [eng p seen]} s]
+          (.override (.-world p) "jumpPlace"
+                     (fn [_token _args _impl] (js/Promise.resolve #js {:status "failed" :placed 0 :reason "not-raised"})))
+          (core/submit! eng retreat {})
+          (await (core/tick! eng))
+          (is (= 3 (count (calls p "jumpPlace"))) "the one-call pillar tried and gave up")
+          (is (empty? (pillar-entries eng)) "no block went in")
+          (is (not (hiding? seen)) "built under 2: not hidden")
+          (is (pos? (count (calls p "attack"))) "the pillar option is spent: it fights the zombie in the doorway"))))))
+
 (deftest a-pillared-body-is-done-once-the-zombie-has-gone
   (async done
     (tu/run-async done

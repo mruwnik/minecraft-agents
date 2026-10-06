@@ -149,6 +149,27 @@
           (is (await (bd/ended-in-one-tick? env (list job {:pos [12 64 0] :item "cobblestone"}))))
           (is (= "cobblestone" (bd/block-at (:p env) {:x 12 :y 64 :z 0}))))))))
 
+(deftest a-walk-that-fails-twice-in-one-call-waits-unreachable
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [walks (atom 0)
+              env (bd/failing-walks (bd/setup {:self body :inventory cobble}) walks)
+              r (await (bd/waiting-after env (list job {:pos [12 64 0] :item "cobblestone"}) 2))]
+          (is (= 2 @walks) "one more try, then it declines")
+          (is (= {:reason :unreachable :why :no-path} (select-keys r [:reason :why]))))))))
+
+(deftest a-cut-at-the-place-is-resumed-and-the-block-placed-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (bd/setup {:self body :inventory cobble})
+              left (await (bd/cut-at-act-then-resume env (list job {:pos at :item "cobblestone"}) "place"))]
+          (is (< left 40) "the job ended")
+          (is (= "cobblestone" (bd/block-at (:p env) at)))
+          (is (= 3 (bd/carried (:p env) "cobblestone")) "one block went in")
+          (is (= 2 (count (bd/calls (:p env) "place"))) "the cut place and the resumed one"))))))
+
 (deftest a-plant-is-cleared-and-the-cell-filled-in-one-call
   (async done
     (tu/run-async done

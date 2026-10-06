@@ -572,3 +572,22 @@
           (is (seq (events-of seen :go-to.escalated)) "a body shut in by the panel escalates")
           (is (= {:arrived true} @out))
           (is (< 6 (first (feet p)))))))))
+
+;; ------------------------------------------------------------------ rounds follow-ups (card be8f7a88)
+
+(deftest a-put-back-that-declines-at-the-call-is-skipped-and-stays-in-the-ledger
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls* (atom 0)
+              place (get registry/jobs 'jobs.blocks.place)
+              ;; the wait pre-check passes (odd calls), the child's own check declines (even calls)
+              flaky (assoc place :check (fn [c] (or (odd? (swap! calls* inc)) (do (ctx/wait c :flaky) false))))
+              {:keys [out p seen eng]} (with-redefs [registry/jobs (assoc registry/jobs 'jobs.blocks.place flaky)]
+                                         (await (run-job! (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 2}]})
+                                                          {:pos [10 64 0] :range 1})))
+              skipped (:cells (first (events-of seen :go-to.restore-skipped)))]
+          (is (= {:arrived true} @out))
+          (is (some #{:declined} (map :why skipped)) "a declined child is a skip with the reason :declined")
+          (is (= [[1 62 0] [1 63 0] [2 63 0]] (sort (mapv :cell skipped))) "every hole is left for restore-broken")
+          (is (= "air" (block p [1 62 0])) "nothing was put back"))))))

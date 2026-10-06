@@ -6,6 +6,7 @@
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.registry :as registry]
+            [engine.takeover :as takeover]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as world]
@@ -232,6 +233,51 @@
           (is (= {:reason :unreachable :pos {:x 3 :y 55 :z 0}} (select-keys r [:reason :pos])))
           (is (keyword? (:why r)))
           (is (empty? (calls (:p env) "dig"))))))))
+
+(defn failing-walks
+  "env with jobs.movement.go-to replaced by a walk that never arrives (why :no-path); walks counts its calls."
+  [env walks]
+  (let [go-to (get (:jobs (:eng env)) 'jobs.movement.go-to)
+        stub (fn ^:async failing-walk [c]
+               (swap! walks inc)
+               (ctx/result! c {:arrived false :why :no-path})
+               :done)]
+    (assoc-in env [:eng :jobs 'jobs.movement.go-to] (assoc go-to :round stub))))
+
+(deftest a-walk-that-fails-twice-in-one-call-waits-unreachable
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [walks (atom 0)
+              env (failing-walks (setup {:self body :blocks {"12,64,0" "dirt"}}) walks)
+              r (await (waiting-after env (list job {:pos [12 64 0]}) 2))]
+          (is (= 2 @walks) "one more try, then it declines")
+          (is (= {:reason :unreachable :why :no-path} (select-keys r [:reason :why]))))))))
+
+(defn ^:async cut-at-act-then-resume
+  "Run spec as a top-level job; hold the primitive act, cut the tick while it is held, release, and run on until the
+  list is empty (at most 40 ticks)."
+  [{:keys [eng p]} spec act]
+  (core/submit! eng spec {})
+  (.hold (.-world p) act)
+  (let [running (core/tick! eng)]
+    (await (js/Promise. (fn [resolve] (js/setTimeout resolve 20))))
+    (takeover/take! eng {:who "claude" :why "cut"})
+    (await running))
+  (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
+  (await (run-until-empty eng 40)))
+
+(deftest a-cut-at-the-dig-is-resumed-and-the-block-dug-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (setup {:self body :blocks {"2,64,0" "dirt"}})
+              left (await (cut-at-act-then-resume env (list job {:pos [2 64 0]}) "dig"))]
+          (is (< left 40) "the job ended")
+          (is (= 2 (count (calls (:p env) "dig"))) "the cut dig and the resumed one")
+          (is (empty? (:list (core/state (:eng env)))))
+          (is (= "air" (block-at (:p env) at)))
+          (is (= 1 (carried (:p env) "dirt")) "the drop was picked up once"))))))
 
 (deftest a-far-block-is-walked-to-and-dug-in-one-call
   (async done
