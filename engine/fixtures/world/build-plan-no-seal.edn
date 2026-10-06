@@ -1,0 +1,74 @@
+;; Cards 44a6972e / 35197ebf: build.from-plan never shuts the body in (a place that closes its last way out is held back, the body
+;; walks out of the footprint first) and digs a non-replaceable block (leaves) in a :clear cell. Run with --body ProbePlanSeal.
+;; Box: walls outline [10 0 10]-[13 1 13] + roof y2, body inside at [11.5 0 11.5], 64 dirt.
+{:defaults
+ {:tags [:build] :time :any
+  :plot {:height 14}
+  :limit-s 150
+  :body {:at [11.5 0 11.5] :inventory [["dirt" 64]] :effects [["resistance" 600 4]] :settle-s 4}}
+ :cases
+ [{:name "closed-box-body-inside"
+   :plans [{:id "box" :metadata {:by "ProbePlanSeal"}
+            :parts [{:id "walls" :outline [#at [10 0 10] #at [13 1 13]] :want "dirt"}
+                    {:id "roof" :box [#at [10 2 10] #at [13 2 13]] :want "dirt"}]}]
+   :act [[:job (jobs.build.from-plan {:plan "test-probeplanseal-box"})]]
+   :expect [{:event {:source :job :kind :build.done :data {:missing 0}} :within-s 120}
+            {:event {:source :job :kind :result :data {:arrived true}} :within-s 120}
+            {:no-event {:source :job :kind :build.wrong} :for-s 5}]
+   :after [[:block [10 0 10] "dirt"] [:block [13 0 13] "dirt"] [:block [12 2 12] "dirt"] [:block [11 0 13] "dirt"]
+           [:not-block [11 0 11] "dirt"] [:not-block [12 1 12] "dirt"]
+           [:not-block [11.5 0 11.5] "dirt"]]}
+  {:name "closed-box-body-inside-slope"
+   ;; plan one up (walls y 1..2, roof y 3) on a hillside: stone y0 from x 5, one higher from x 15; interior bumps so the body stands at feet y2
+   :plans [{:id "box" :metadata {:by "ProbePlanSeal"}
+            :parts [{:id "walls" :outline [#at [10 1 10] #at [13 2 13]] :want "dirt"}
+                    {:id "roof" :box [#at [10 3 10] #at [13 3 13]] :want "dirt"}]}]
+   :blocks [[:fill [5 0 5] [22 0 22] "stone"] [:fill [15 1 5] [22 1 22] "stone"]
+            [:set [11 1 11] "stone"] [:set [12 1 11] "stone"] [:set [11 1 12] "stone"]]
+   :body {:at [11.5 2 11.5]}
+   :act [[:job (jobs.build.from-plan {:plan "test-probeplanseal-box"})]]
+   ;; known: the 3 interior roof cells are given up :refused from outside (card Bug: from-plan slope roof)
+   :expect [{:event {:source :job :kind :build.done} :within-s 120}
+            {:event {:source :job :kind :result :data {:arrived true}} :within-s 120}
+            {:no-event {:source :job :kind :build.wrong} :for-s 5}]
+   :after [[:block [10 1 10] "dirt"] [:block [13 2 13] "dirt"] [:block [13 3 10] "dirt"] [:block [11 2 13] "dirt"]
+           [:not-block [11 2 11] "dirt"] [:not-block [12 2 12] "dirt"]]}
+  {:name "clear-doorway-leaves"
+   :plans [{:id "hut" :metadata {:by "ProbePlanSeal"}
+            :parts [{:id "walls" :box [#at [10 0 10] #at [13 1 10]] :want "dirt"}
+                    {:id "wall-w" :box [#at [10 0 11] #at [10 1 12]] :want "dirt"}
+                    {:id "wall-e" :box [#at [13 0 11] #at [13 1 12]] :want "dirt"}
+                    {:id "south-a" :box [#at [10 0 13] #at [10 1 13]] :want "dirt"}
+                    {:id "south-b" :box [#at [12 0 13] #at [13 1 13]] :want "dirt"}
+                    {:id "door" :cells [#at [11 0 13] #at [11 1 13]] :want :clear}
+                    {:id "roof" :box [#at [10 2 10] #at [13 2 13]] :want "dirt"}]}]
+   :blocks [[:set [11 1 13] "oak_leaves[persistent=true]"] [:set [11 0 13] "oak_leaves[persistent=true]"]]
+   :body {:at [11.5 0 17.5]}
+   :act [[:job (jobs.build.from-plan {:plan "test-probeplanseal-hut"})]]
+   :expect [{:event {:source :job :kind :build.done} :within-s 140}
+            {:no-event {:source :job :kind :build.wrong} :for-s 5}]
+   :after [[:block [11 1 13] "air"] [:block [11 0 13] "air"] [:block [10 0 10] "dirt"] [:block [13 2 13] "dirt"] [:block [12 1 13] "dirt"]]
+   :limit-s 170}
+  {:name "pit-cannot-walk-out"
+   ;; stone mass x 4..19, z 4..19 y 0..4 with an open 8x8 pit x 8..15 z 8..15 (4 deep); plan walls in the pit floor; no pickaxe.
+   ;; The pit is already no way out for the walker, but open to the sky: nothing is held back, the last roof cells are :refused.
+   :plans [{:id "box" :metadata {:by "ProbePlanSeal"}
+            :parts [{:id "walls" :outline [#at [10 0 10] #at [13 1 13]] :want "dirt"}
+                    {:id "roof" :box [#at [10 2 10] #at [13 2 13]] :want "dirt"}]}]
+   :blocks [[:fill [4 0 4] [19 4 19] "stone"] [:fill [8 0 8] [15 4 15] "air"]]
+   :act [[:job (jobs.build.from-plan {:plan "test-probeplanseal-box"})]]
+   :expect [{:event {:source :job :kind :build.done} :within-s 140}]
+   :after [[:not-block [11 0 11] "dirt"]]
+   :limit-s 170}
+  {:name "island-exit-unwalkable"
+   ;; box on a 6x6 stone platform in the air (floor layer removed around it): the flood sees a way out, the walk to the exit
+   ;; point (2 outside the box = over the void) cannot arrive; the sealing cells must be given up :unreachable, never placed
+   :plans [{:id "box" :metadata {:by "ProbePlanSeal"}
+            :parts [{:id "walls" :outline [#at [10 0 10] #at [13 1 13]] :want "dirt"}
+                    {:id "roof" :box [#at [10 2 10] #at [13 2 13]] :want "dirt"}]}]
+   :blocks [[:fill [0 -1 0] [31 -1 31] "air"] [:fill [9 -1 9] [14 -1 14] "stone"]]
+   :act [[:job (jobs.build.from-plan {:plan "test-probeplanseal-box"})]]
+   :expect [{:event {:source :job :kind :build.gave-up :message [:contains "unreachable"]} :within-s 140}
+            {:event {:source :job :kind :build.done} :within-s 140}]
+   :after [[:not-block [11 0 11] "dirt"] [:not-block [13 2 10] "dirt"] [:block [10 0 10] "dirt"]]
+   :limit-s 170}]}
