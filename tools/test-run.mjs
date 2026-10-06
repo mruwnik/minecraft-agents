@@ -6,7 +6,7 @@
 //  Only the requested -test namespaces are loaded (narrowBundle: imports and shadow.test registry cut in the private copy; engine.timing-test, the timing / TEST_EVENTS=1 @@test reporter, always stays); full and shard runs keep the whole bundle.
 import fs from 'node:fs'
 import path from 'node:path'
-import { spawnSync } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 const tools = path.dirname(fileURLToPath(import.meta.url))
@@ -32,8 +32,8 @@ export const lastFinished = (lines) =>
   lines.filter(Boolean).map((l) => JSON.parse(l)).filter((r) => r.var).at(-1)?.var ?? null
 
 // Private copy of the bundle; fixtures resolve as <out>/../test, npm deps through node_modules.
-export const isolate = (engineDir, tag) => {
-  const runDir = `/tmp/mc-test-run-${tag}`
+export const isolate = (engineDir, tag, root = '/tmp') => {
+  const runDir = path.join(root, `mc-test-run-${tag}`)
   fs.rmSync(runDir, { recursive: true, force: true })
   fs.mkdirSync(path.join(runDir, 'out/test'), { recursive: true })
   fs.copyFileSync(path.join(engineDir, 'out/test.cjs'), path.join(runDir, 'out/test.cjs'))
@@ -41,6 +41,31 @@ export const isolate = (engineDir, tag) => {
   fs.symlinkSync(path.join(engineDir, 'node_modules'), path.join(runDir, 'node_modules'))
   fs.symlinkSync(path.join(engineDir, 'test'), path.join(runDir, 'test'))
   return { runDir, cleanup: () => fs.rmSync(runDir, { recursive: true, force: true }) }
+}
+
+const pidAlive = (pid) => {
+  try { process.kill(pid, 0); return true } catch (e) { return e.code === 'EPERM' }
+}
+
+// Removes the run dirs of dead pids (a SIGKILLed run leaves its copy in RAM); only <root>/mc-test-run-<digits>, never a live pid.
+export const sweepStale = (root = '/tmp', alive = pidAlive) => {
+  const removed = []
+  for (const name of fs.readdirSync(root)) {
+    const m = /^mc-test-run-(\d+)$/.exec(name)
+    if (!m || alive(Number(m[1]))) continue
+    fs.rmSync(path.join(root, name), { recursive: true, force: true })
+    removed.push(name)
+  }
+  return removed
+}
+
+// Runs cleanup once on the proc's exit or on SIGINT/SIGTERM (then exits 128+signal); returns the once-only cleanup.
+export const cleanupOnExit = (proc, cleanup, onSignal = () => {}) => {
+  let done = false
+  const once = () => { if (!done) { done = true; cleanup() } }
+  proc.on('exit', once)
+  for (const [sig, n] of [['SIGINT', 2], ['SIGTERM', 15]]) proc.on(sig, () => { onSignal(sig); once(); proc.exit(128 + n) })
+  return once
 }
 
 // Index just past the bracket that closes the one at s[i], skipping double-quoted strings.
@@ -117,7 +142,7 @@ export const missingNss = (engineDir, nss) =>
 
 const readJson = (f, d) => fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')) : d
 
-const main = () => {
+const main = async () => {
   const nss = parseNss(process.argv.slice(2))
   if (!nss.length) { console.error('usage: tools/test-run.mjs <ns>...'); process.exit(2) }
   const missing = missingNss(engine, nss)
@@ -128,18 +153,20 @@ const main = () => {
   const res = readJson(path.join(tools, 'res-slot.json'), null)
   const expected = expectedMs(nss, readJson(path.join(engine, 'out/test-ns-ms.json'), {}))
   const limit = Number(process.env.MC_TEST_TIMEOUT_S) || runTimeoutS(expected)
+  sweepStale()
   const { runDir, cleanup } = isolate(engine, process.pid)
+  let child = null
+  cleanupOnExit(process, cleanup, (sig) => child?.kill(sig))
   narrowBundle(runDir, nss)
   const timings = path.join(runDir, 'timings.jsonl')
   fs.writeFileSync(timings, '')
-  const r = spawnSync(path.join(tools, 'res-slot'),
+  child = spawn(path.join(tools, 'res-slot'),
     ['tests', '--need', String(needMb(nss.length, res.kinds.tests)), '--',
       'timeout', '-k', '10', String(limit), 'node', '--max-old-space-size=4096', path.join(runDir, 'out/test.cjs'), `--test=${nss.join(',')}`],
     { cwd: engine, stdio: 'inherit', env: { ...process.env, MC_TEST_TIMINGS: timings, NODE_PATH: path.join(repo, 'node_modules') } })
-  const code = r.status ?? 1
+  const code = await new Promise((resolve) => child.on('exit', (status) => resolve(status ?? 1)))
   if (code === 124 || code === 137)
     console.error(`test-engine: TIMEOUT, killed after ${limit} s (prior timing ~${Math.round(expected / 1000)} s); last finished test: ${lastFinished(fs.readFileSync(timings, 'utf8').split('\n')) ?? 'none'}`)
-  cleanup()
   process.exit(code)
 }
 

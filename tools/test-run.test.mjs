@@ -1,9 +1,10 @@
 // Why JavaScript: node --test file for tools/test-run.mjs (a Node launcher).
 import fs from 'node:fs'
 import path from 'node:path'
+import { EventEmitter } from 'node:events'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { parseNss, expectedMs, runTimeoutS, needMb, lastFinished, isolate, narrowBundle, missingNss } from './test-run.mjs'
+import { parseNss, expectedMs, runTimeoutS, needMb, lastFinished, isolate, narrowBundle, missingNss, sweepStale, cleanupOnExit } from './test-run.mjs'
 
 test('parseNss: space- and comma-separated namespaces, blanks dropped', () => {
   assert.deepEqual(parseNss(['engine.a-test,engine.b-test', 'engine.c-test', '']), ['engine.a-test', 'engine.b-test', 'engine.c-test'])
@@ -118,4 +119,40 @@ test('narrowBundle: always keeps engine.timing_test (the per-test timing and @@t
   assert.equal(narrowBundle(dir, ['engine.a-test']), 1)
   assert.deepEqual(fs.readFileSync(`${dir}/out/test.cjs`, 'utf8').split('\n').filter(Boolean),
     ['engine.a_test', 'engine.timing_test', 'shadow.test.node'].map(imp).concat('})();'))
+})
+
+test('sweepStale: removes only mc-test-run-<digits> dirs of dead pids from the given root', (t) => {
+  const root = fs.mkdtempSync('/tmp/test-run-sweep-')
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  for (const d of ['mc-test-run-111', 'mc-test-run-222', 'mc-test-run-abc', 'mc-test-run-333-x', 'other-444', 'mc-test-run']) fs.mkdirSync(`${root}/${d}/out`, { recursive: true })
+  fs.writeFileSync(`${root}/mc-test-run-999`, 'a file of that name')
+  const removed = sweepStale(root, (pid) => pid === 222)
+  assert.deepEqual(removed.sort(), ['mc-test-run-111', 'mc-test-run-999'])
+  assert.deepEqual(fs.readdirSync(root).sort(), ['mc-test-run', 'mc-test-run-222', 'mc-test-run-333-x', 'mc-test-run-abc', 'other-444'])
+})
+
+test('sweepStale: a really dead pid is swept, the own pid is kept', (t) => {
+  const root = fs.mkdtempSync('/tmp/test-run-sweep-')
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  fs.mkdirSync(`${root}/mc-test-run-${process.pid}`)
+  fs.mkdirSync(`${root}/mc-test-run-4194303`)
+  sweepStale(root)
+  assert.deepEqual(fs.readdirSync(root), [`mc-test-run-${process.pid}`])
+})
+
+test('cleanupOnExit: cleans once on exit, and on SIGTERM / SIGINT it stops the child, cleans and exits 128+signal', () => {
+  for (const [sig, code] of [['SIGTERM', 143], ['SIGINT', 130]]) {
+    const proc = Object.assign(new EventEmitter(), { exit: (c) => { proc.exited = c } })
+    const calls = []
+    cleanupOnExit(proc, () => calls.push('clean'), (s) => calls.push(`kill ${s}`))
+    proc.emit(sig)
+    proc.emit('exit')
+    assert.deepEqual(calls, [`kill ${sig}`, 'clean'])
+    assert.equal(proc.exited, code)
+  }
+  const proc = new EventEmitter()
+  const calls = []
+  cleanupOnExit(proc, () => calls.push('clean'))
+  proc.emit('exit')
+  assert.deepEqual(calls, ['clean'])
 })
