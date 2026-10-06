@@ -615,7 +615,7 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 
 | job | what it does |
 |---|---|
-| `farm.till`, `plant`, `harvest`, `fertilize` (crops, or open grass with `:grass`; bone meal is fetched unless `:fetch false`), `compost`, `tidy`, `find-spot`, `tend` | Field work; `tend` keeps one field in order: crops stored, a 64-seed backup per seed type kept, the rest composted, crops stored down to the 3-day food reserve (60 hunger points, golden apples excluded); a field's own cells are always replanted |
+| `farm.till`, `plant`, `harvest`, `fertilize` (crops, or open grass with `:grass`; bone meal is fetched unless `:fetch false`), `compost`, `tidy`, `find-spot`, `tend` | Field work; `tend` keeps one field in order: crops stored, a 64-seed backup per seed type kept, the rest composted, crops stored down to the 3-day food reserve (60 hunger points, golden apples excluded); a harvested cell is always replanted, but new sowing and tilling of carrots and potatoes only above the reserve |
 | `animals.breed`, `leash`, `unleash`, `lead-to`, `herd`, `shear`, `pen-check`, `shut-gate` (shuts every open planned gate in one run; stopped `:left` when any stays open), `tend` | Animal care; `tend` keeps one pen in order; `cull`, `shear`, `breed`, `leash` (so `lead-to`, `herd`) skip animals in another's zone or claim (`:ignore-zones?`) |
 | `apiary.guard`, `harvest`, `maintain` | Keep campfire columns, take honey, keep an apiary in order; fires and hives come from what the body has seen (harvest looks around once when it knows none); harvest shears from the side the body stands on so the comb lies in view |
 | `build.from-plan`, `pen`, `rail-line`, `clear-box` | Build what a plan wants; build a pen's fence or a rail line; dig out a box |
