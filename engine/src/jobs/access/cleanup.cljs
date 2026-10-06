@@ -31,7 +31,7 @@
   Then one step, passes repeated (paced) until nothing is left to do:
   - Dig the highest (then nearest) cell within :reach of the eye that may be dug. The entry is marked
     :removing before the dig, so a cut or restart is decided from the cell.
-  - Else walk to within 3 of the nearest (jobs.debug.walk-plan as a child, never digging a way).
+  - Else walk to within 3 of the nearest (jobs.movement.go-to as a child, :escalate false: never digging a way).
   - Else finish.
 
   The body's own column is dug only from on top: the block under the feet when the cell below is solid floor
@@ -41,7 +41,7 @@
   Every dig asks jobs.lib.access.rules/may-dig? (zones, plan footprints, ledger cells) when chosen and again
   right before the dig. A refusal (:zone :footprint :no-zones :not-loaded) or a hazard :accept does not name
   (:hazard; lava beside is :lava-adjacent) keeps the entry open, and so does :no-tool (the block needs a tool no
-  carried one is: dug by hand it drops nothing). A walk with no plan holds the cell
+  carried one is: dug by hand it drops nothing). A go-to that proves no way (see permanent-walk?) holds the cell
   :unreachable at once. After :give-up walks ending out of reach the cell is held :out-of-reach, after
   :give-up failed digs :dig-failed.
 
@@ -197,26 +197,28 @@
             (ctx/update-mem! c count-fail cell {:reason :dig-failed :dig status} (:give-up (:args c))))
           :again)))))
 
-(def permanent-no-path #{:abilities :goal-enclosed :goal-cut-off :one-way :goal-not-standable :exhausted})
+(def permanent-why "go-to's :why of a give-up that is a verdict on the cell." #{:abilities :goal-enclosed :goal-cut-off :one-way :goal-not-standable :exhausted})
 
 (defn permanent-walk?
-  "Whether a walk result is a verdict on the cell (held :unreachable), not something that may pass: a refused or
-  malformed plan, or a :no-path whose reason is permanent (a door stuck, a budget, a move while searching are not)."
-  [{:keys [status reason]}]
-  (or (contains? #{:refused :unsupported :bad-args} status)
-      (and (= :no-path status) (contains? permanent-no-path reason))))
+  "Whether a go-to result is a verdict on the cell (held :unreachable), not something that may pass: a refused call
+  (:bad-pos, :unsupported) or an :unreachable whose :why is permanent (a door stuck, a stuck step, no progress, a move
+  while searching are not)."
+  [{:keys [status reason why]}]
+  (and (= :stopped status)
+       (or (contains? #{:bad-pos :unsupported} reason)
+           (and (= :unreachable reason) (contains? permanent-why why)))))
 
 (defn ^:async walk!
   "Walk to within 3 of cell; a permanent verdict holds it :unreachable, an end out of reach, a walk that did not end or
-  a passing no-path counts a failure."
+  a go-to that gave up for a passing reason counts a failure."
   [c {:keys [cell]}]
-  (let [r (await (ctx/call-child c :walk 'jobs.debug.walk-plan {:to cell :range walk-range}))
+  (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos cell :range walk-range :escalate false}))
         result (when (= :done r) (ctx/child-result c :walk))
         status (:status result)]
     (cond
       (permanent-walk? result)
       (ctx/update-mem! c assoc-in [:held cell] {:reason :unreachable :walk status})
-      (or (not= :done r) (= :no-path status) (> (distance (eye-of c) (centre cell)) (:reach (:args c))))
+      (or (not= :done r) (= :stopped status) (> (distance (eye-of c) (centre cell)) (:reach (:args c))))
       (ctx/update-mem! c count-fail cell {:reason :out-of-reach :walk status} (:give-up (:args c))))
     :again))
 

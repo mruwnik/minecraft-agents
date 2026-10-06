@@ -190,7 +190,7 @@
 (defn setup
   "An engine over the fake world with the ledger written into body memory; a recording parent (j1) runs cleanup with
   args as its child and keeps its result in :out. :make starts another engine on the same body."
-  [{:keys [self blocks entries zones args drops] :or {zones []}}]
+  [{:keys [self blocks entries zones args drops jobs] :or {zones []}}]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         dir (tu/tmp-dir)
@@ -202,7 +202,7 @@
                          (let [r (await (ctx/call-child c :kid job (or args {})))]
                            (when (= :done r) (reset! out (ctx/child-result c :kid)))
                            r))}
-        make (fn [] (core/create {:primitives p :jobs (assoc registry/jobs 'recording-parent parent)
+        make (fn [] (core/create {:primitives p :jobs (merge registry/jobs jobs {'recording-parent parent})
                                   :triggers triggers/all :dir dir :now #(deref clock) :world w
                                   :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}))
         eng (make)
@@ -519,14 +519,57 @@
 
 (deftest only-a-permanent-walk-verdict-holds-a-cell-unreachable
   (are [result permanent?] (= permanent? (cleanup/permanent-walk? result))
-    {:status :no-path :reason :abilities} true
-    {:status :no-path :reason :goal-enclosed} true
-    {:status :no-path :reason :one-way} true
-    {:status :refused} true
-    {:status :bad-args} true
-    {:status :no-path :reason :door-stuck} false
-    {:status :no-path :reason :moved-while-searching} false
-    {:status :no-path :reason :budget} false
-    {:status :no-path :reason :start-not-standable} false
-    {:status :no-path} false
-    {:status :arrived} false))
+    {:status :stopped :reason :unreachable :why :abilities} true
+    {:status :stopped :reason :unreachable :why :goal-enclosed} true
+    {:status :stopped :reason :unreachable :why :goal-cut-off} true
+    {:status :stopped :reason :unreachable :why :one-way} true
+    {:status :stopped :reason :unreachable :why :exhausted} true
+    {:status :stopped :reason :bad-pos} true
+    {:status :stopped :reason :unsupported} true
+    {:status :stopped :reason :unreachable :why :door-stuck} false
+    {:status :stopped :reason :unreachable :why :moved-while-searching} false
+    {:status :stopped :reason :unreachable :why :stuck} false
+    {:status :stopped :reason :unreachable :why :no-progress} false
+    {:status :stopped :reason :unreachable} false
+    {:arrived true} false))
+
+(defn stub-go-to
+  "A go-to that records its args in calls and ends with result."
+  [calls result]
+  {:check (constantly true)
+   :round (fn [c] (swap! calls conj (:args c)) (ctx/result! c result) :done)})
+
+(defn ^:async walk-run
+  "Cleanup of one entry 9 cells away with go-to stubbed to end with result: {:calls go-to's args :open reasons}."
+  [result]
+  (let [calls (atom [])
+        cells [[9 64 0]]
+        {:keys [eng out] :as s} (setup {:self {:x 0.5 :y 64 :z 0.5} :blocks (pillar-blocks cells) :entries (mapv entry cells)
+                                        :jobs {'jobs.movement.go-to (stub-go-to calls result)}})]
+    (core/submit! eng '(recording-parent) {})
+    (await (ticks s eng 40))
+    {:calls @calls :open (mapv :reason (:open @out))}))
+
+(deftest cleanup-walks-through-go-to-never-digging-a-way
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [calls]} (await (walk-run {:status :stopped :arrived false :reason :unreachable :why :door-stuck}))]
+          (is (seq calls))
+          (is (every? #(= {:pos [9 64 0] :range 3 :escalate false} (select-keys % [:pos :range :escalate])) calls)))))))
+
+(deftest a-permanent-go-to-failure-holds-the-cell-unreachable-after-one-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [calls open]} (await (walk-run {:status :stopped :arrived false :reason :unreachable :why :goal-enclosed}))]
+          (is (= 1 (count calls)))
+          (is (= [:unreachable] open)))))))
+
+(deftest a-transient-go-to-failure-is-retried-until-give-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [calls open]} (await (walk-run {:status :stopped :arrived false :reason :unreachable :why :door-stuck}))]
+          (is (= 2 (count calls)))
+          (is (= [:out-of-reach] open)))))))
