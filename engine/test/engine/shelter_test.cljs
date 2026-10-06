@@ -897,6 +897,58 @@
           (await (tick-n eng 4))
           (is (pos? (count (calls p "offline"))) "the hold chose again and logged out"))))))
 
+(deftest an-unsheltered-hold-sleeps-in-a-bed-given-or-seen-later
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[how change] [[:carried #(swap! (fake/state %) assoc :inventory [{:name "red_bed" :count 1}])]
+                              [:seen #(swap! (fake/state %) update :blocks assoc "3,64,0" "red_bed")]]]
+          (let [{:keys [eng p seen clock]} (setup {:time night :inventory dirt-stack :blocks floor})]
+            (refuse-placing! p)
+            (core/submit! eng '(jobs.survival.night) {})
+            (await (tick-nights eng clock 3))
+            (is (= 1 (count (emitted seen :shelter.exposed))) (str how " held exposed first"))
+            (change p)
+            (await (tick-nights eng clock 3))
+            (is (pos? (count (concat (calls p "sleep") (calls p "place")))) (str how " the hold looked for a bed again"))))))))
+
+(deftest an-unsheltered-hold-does-not-thrash-while-nothing-changes
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (setup {:time night :inventory dirt-stack :blocks floor})]
+          (refuse-placing! p)
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (tick-nights eng clock 3))
+          (let [n (count (.-calls (.-world p)))]
+            (await (tick-nights eng clock 6))
+            (is (every? #{"wait"} (map #(.-name %) (drop n (.-calls (.-world p))))) "only waits while nothing changes")))))))
+
+(deftest a-failed-sleep-is-tried-again-once-the-entry-expires
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (setup {:time night :blocks (merge floor {"3,64,0" "red_bed"})})
+              tries (atom 0)]
+          (set! (.-sleep p) (fn [& _] (swap! tries inc) (js/Promise.resolve #js {:status "occupied"})))
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (tick-nights eng clock 3))
+          (let [first-stint @tries]
+            (is (pos? first-stint))
+            (await (tick-nights eng clock 3))
+            (is (= first-stint @tries) "the failed entry holds it off")
+            (swap! clock + (:ttl sh/sleep-failed-policy))
+            (await (tick-nights eng clock 3))
+            (is (< first-stint @tries) "after the entry expired the bed is tried again")))))))
+
+(deftest a-place-failure-holds-only-near-where-it-happened
+  (let [p (tu/fake {:time night})]
+    (are [data held] (= held (sh/near-failed-place? p {:data data}))
+      {:pos {:x 0 :y 64 :z 0}} true
+      {:pos {:x 3 :y 64 :z 0}} true
+      {:pos {:x 20 :y 64 :z 0}} false
+      {} true)))
+
 (deftest an-unsheltered-hold-after-a-futile-dig-ends-by-day
   (async done
     (tu/run-async done

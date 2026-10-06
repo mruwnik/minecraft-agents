@@ -220,6 +220,12 @@
   [p]
   (some #(when (.endsWith (:name %) "_bed") (:name %)) (u/inventory p)))
 
+(defn near-failed-place?
+  "Whether a :bed-place-failed entry still holds: the body is within 6 blocks of where it failed (no position: always)."
+  [p entry]
+  (let [pos (:pos (:data entry))]
+    (or (nil? pos) (< (u/dist (u/self-pos {:primitives p}) pos) 6))))
+
 (defn bed-place-wanted?
   "Whether to put a carried bed down: night, awake, a bed item carried, no bed-to-use, no sleep tonight, and no
   :bed-place-failed or :sleep-failed entry. Roofed or in the open."
@@ -227,7 +233,7 @@
   (boolean (and (night? p) (not (sleeping? p))
                 (some? (carried-bed p))
                 (zero? (mem/count-in view :slept slept-tonight-ms))
-                (empty? (mem/entries view :bed-place-failed))
+                (not-any? #(near-failed-place? p %) (mem/entries view :bed-place-failed))
                 (empty? (mem/entries view :sleep-failed))
                 (nil? (bed-to-use p view radius permit?)))))
 

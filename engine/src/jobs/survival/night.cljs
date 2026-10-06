@@ -24,17 +24,18 @@
      A first round shut in its own latest :shelter holds as dug in.
   2. a bed (sh/bed-to-use: seen, or remembered within :bed-radius, :urgent-bed-radius once :max-days-awake days without
      sleep, under any roof or none; never an occupied one or one given up on): jobs.survival.sleep on it. A sleep that
-     ends without sleeping writes :sleep-failed (5 minutes, shelter.sleep_failed warn) and the next round chooses again.
+     ends without sleeping writes :sleep-failed (5 minutes, shelter.sleep_failed warn); rounds (exposed holds too) look again
+     and try a bed once it expires.
      A bed item carried and no bed to use: put down beside the body (roofed cells first, else in the open; never in a
      doorway or another's zone), slept in, recorded as :bed unless a live :bed is; outside its own zones also as
-     :bed-placed for the morning. No room writes :bed-place-failed (10 minutes).
+     :bed-placed for the morning. No room writes :bed-place-failed (10 minutes, or until the body is 6+ blocks from there).
   3. someone else asleep (sh/log-out-for-sleepers?: the action bar's sleep count tonight, a sleeper in sight, or no
      count since the body's return): jobs.survival.log-out, a 30 s stint at most until morning, again each round
      while anyone sleeps or nothing is known; until morning. A log-out that is not ok or cut is not tried again.
   4. roofed or buried: :done (the queue runs). Otherwise jobs.survival.dig-in; nothing roofs it: held exposed
      (:sheltered :exposed, one shelter.exposed warn), each round choosing again.
   An overdue body (no sleep for :max-days-awake in-game days) warns needs_bed once an in-game day (:needs-bed).
-  Job memory: :sheltered (:slept, :dug-in, :exposed), :sleep-failed, :log-out-failed and leave!'s :dig-out.")
+  Job memory: :sheltered (:slept, :dug-in, :exposed), :log-out-failed and leave!'s :dig-out.")
 
 (def args
   {:roof-height {:doc "a solid block within this many blocks above counts as a roof" :default sh/default-roof-height}
@@ -123,7 +124,7 @@
 
 (defn ^:async sleep-step
   "jobs.survival.sleep on bed. :continue while it works; asleep it is :sheltered :slept and holds; a sleep that ends
-  without sleeping marks :sleep-failed (job memory and a body-memory entry, 5 minutes) and the next round chooses again."
+  without sleeping marks :sleep-failed (a body-memory entry, 5 minutes) and the next round chooses again."
   [c bed]
   (let [p (:primitives c)
         started (ctx/now c)
@@ -132,8 +133,7 @@
       (= :continue s) :continue
       (or (sh/sleeping? p) (seq (ctx/since c :slept started))) (do (sheltered! c :slept) :continue)
       (not (sh/night? p)) :done
-      :else (do (ctx/update-mem! c assoc :sleep-failed true)
-                (ctx/remember! c :sleep-failed {:pos bed} sh/sleep-failed-policy)
+      :else (do (ctx/remember! c :sleep-failed {:pos bed} sh/sleep-failed-policy)
                 (ctx/emit! c :shelter.sleep_failed :warn {:pos bed :text "could not sleep in the bed; not trying again for a while"})
                 :continue))))
 
@@ -215,7 +215,7 @@
       (= :continue r) :continue
       r (await (sleep-step c r))
       :else
-      (do (ctx/remember! c :bed-place-failed {} sh/bed-place-failed-policy)
+      (do (ctx/remember! c :bed-place-failed {:pos (sh/feet (:primitives c))} sh/bed-place-failed-policy)
           (ctx/emit! c :shelter.bed_place_failed :warn {:text "no room or permission to put the carried bed down; not sleeping in it"})
           :continue))))
 
@@ -277,10 +277,10 @@
       (and roofed (empty? (:children (ctx/mem c))) (dig-in/sheltered-in c)) (do (sheltered! c :dug-in) (await (hold c)))
       (and roofed sheltered) (if (log-out-wanted? c) (await (log-out-step c)) (await (hold c)))
       :else
-      (let [bed (when-not (:sleep-failed (ctx/mem c)) (sh/bed-to-use p (ctx/view c) (radius c) (bed-permit c)))]
+      (let [bed (sh/bed-to-use p (ctx/view c) (radius c) (bed-permit c))]
         (cond
           bed (await (sleep-step c bed))
-          (and (not (:sleep-failed (ctx/mem c))) (sh/bed-place-wanted? p (ctx/view c) (radius c) (bed-permit c)))
+          (sh/bed-place-wanted? p (ctx/view c) (radius c) (bed-permit c))
           (await (place-bed-and-sleep c))
           (log-out-wanted? c) (await (log-out-step c))
           (or roofed (sh/buried? p)) :done
