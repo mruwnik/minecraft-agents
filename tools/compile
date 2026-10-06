@@ -20,6 +20,7 @@
 # Memory: a missing server starts only with MIN_START_MB (3500) available; the compile itself uses the server's heap.
 # A server started outside the main checkout (a git worktree: integration batches, test copies) runs under a `compile` slot of
 # tools/res-slot (held for the server's life, so its JVM counts against the memory floor); no free slot in ~2 min exits 75 (retry).
+# A build that prints an :undeclared-var or :undeclared-ns warning exits 1 (shadow-cljs itself exits 0).
 # Env: MC_COMPILE_LOG=1 prints "waited Ns, compiled Ns".
 set -u
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -120,8 +121,15 @@ fi
 
 cd "$dir" || exit 1
 # the server (and any detached child) must not inherit the lock fd
-npx shadow-cljs "$verb" "${builds[@]}" 9>&-
-code=$?
+out=$(mktemp)
+npx shadow-cljs "$verb" "${builds[@]}" 9>&- 2>&1 | tee "$out"
+code=${PIPESTATUS[0]}
+# shadow-cljs only warns on a call to a missing var or namespace (a moved function): the build passes and the job throws at run time.
+if [ "$code" = 0 ] && grep -qE 'WARNING #[0-9]+ - :undeclared-(var|ns)' "$out"; then
+  echo "tools/compile: failing the build: undeclared-var/undeclared-ns warning above (a call to a var or namespace that does not exist)" >&2
+  code=1
+fi
+rm -f "$out"
 t2=$(date +%s.%N)
 [ -z "${MC_COMPILE_LOG:-}" ] || awk -v a="$t0" -v b="$t1" -v c="$t2" 'BEGIN{printf "tools/compile: waited %.1fs, compiled %.1fs\n", b-a, c-b}' >&2
 exit $code

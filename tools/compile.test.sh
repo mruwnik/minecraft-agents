@@ -23,6 +23,13 @@ C="$T/repo/tools/compile"
 timeout 20 "$C" engine test >/dev/null 2>&1; check "plain compile rc" "$?" 0
 check "stub npx ran" "$(grep -c 'shadow-cljs compile test' "$T/npx.log")" 1
 
+# an undeclared-var / undeclared-ns warning fails the build; other warnings do not
+printf '#!/bin/sh\necho "npx $*" >> "%s/npx.log"\necho "$WARN"\n' "$T" > "$T/bin/npx"
+WARN='------ WARNING #1 - :undeclared-var ---' timeout 20 "$C" engine test >/dev/null 2>&1; check "undeclared-var fails" "$?" 1
+WARN='------ WARNING #1 - :undeclared-ns ---' timeout 20 "$C" engine test >/dev/null 2>&1; check "undeclared-ns fails" "$?" 1
+WARN='------ WARNING #1 - :redef ---' timeout 20 "$C" engine test >/dev/null 2>&1; check "other warning passes" "$?" 0
+printf '#!/bin/sh\necho "npx $*" >> "%s/npx.log"\n' "$T" > "$T/bin/npx"
+
 # wrapped in flock: exits at once with a clear message (would poll forever otherwise)
 out=$(timeout 10 flock "$MC_COMPILE_LOCK" "$C" engine test 2>&1); rc=$?
 check "flock-wrapped exit" "$rc" 2
