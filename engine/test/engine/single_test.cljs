@@ -6,6 +6,7 @@
             [engine.test-util :as tu]
             ["child_process" :as cp]
             ["fs" :as fs]
+            ["net" :as net]
             ["path" :as path]))
 
 (def who {:pid 4242 :world "w" :body "Bob"})
@@ -104,3 +105,28 @@
             (is (not (:stop result)))
             (is (= before (files-of (bodies/body-dir dir "w" "Bob"))) (str "fresh? " fresh?))
             (await ((:held holder)))))))))
+
+(deftest two-starts-over-one-stale-socket-never-both-hold-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [sock (path/join (tu/tmp-dir) "body.sock")]
+          (stale-socket! sock)
+          (let [results (await (js/Promise.all #js [(single/claim! sock who) (single/claim! sock who)]))
+                held (filterv :held results)]
+            (is (= 1 (count held)) "exactly one start wins; the other sees it running")
+            (doseq [c held] (await ((:held c))))))))))
+
+(deftest every-connection-gets-an-error-listener-so-an-early-reset-cannot-crash-the-body
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [sock (path/join (tu/tmp-dir) "body.sock")
+              server (await (single/listen! sock who))
+              listeners (js/Promise. (fn [resolve]
+                                       (.on server "connection" (fn [conn] (resolve (.listenerCount conn "error"))))))
+              client (.createConnection net #js {:path sock})]
+          (.on client "error" (fn []))
+          (is (pos? (await listeners)))
+          (.destroy client)
+          (await (js/Promise. (fn [resolve] (.close server resolve)))))))))

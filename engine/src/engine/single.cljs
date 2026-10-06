@@ -49,7 +49,9 @@
   (js/Promise.
    (fn [resolve reject]
      (fs/mkdirSync (path/dirname sock) #js {:recursive true})
-     (let [server (net/createServer (fn [conn] (.end conn (str (js/JSON.stringify (clj->js info)) "\n"))))]
+     (let [server (net/createServer (fn [conn]
+                                      (.on conn "error" (fn [_])) ; a client that resets early must not crash the body
+                                      (.end conn (str (js/JSON.stringify (clj->js info)) "\n"))))]
        (.once server "error" (fn [e] (if (= "EADDRINUSE" (.-code e)) (resolve :in-use) (reject e))))
        (.listen server sock (fn []
                               (try (fs/chmodSync sock 384)
@@ -66,6 +68,24 @@
            (do (reset! done? true)
                (.close server (fn [] (fs/rmSync sock #js {:force true}) (resolve true))))))))))
 
+(def lock-stale-ms 5000)
+
+(defn ^:async with-replace-lock
+  "Run (f) while holding <sock>.lock, a directory made atomically: replacing a stale socket is probe, rm, listen,
+  and two starts doing that at once would both bind. A lock older than lock-stale-ms is a crashed starter's."
+  [sock f]
+  (let [lock (str sock ".lock")]
+    (loop [tries 0]
+      (let [made? (try (fs/mkdirSync lock) true
+                       (catch :default e (if (= "EEXIST" (.-code e)) false (throw e))))]
+        (cond
+          made? nil
+          (and (fs/existsSync lock) (> (- (js/Date.now) (.-mtimeMs (fs/statSync lock))) lock-stale-ms))
+          (do (fs/rmSync lock #js {:recursive true :force true}) (recur tries))
+          :else (do (await (js/Promise. (fn [r] (js/setTimeout r 20)))) (recur (inc tries))))))
+    (try (await (f))
+         (finally (fs/rmSync lock #js {:recursive true :force true})))))
+
 (defn ^:async claim!
   "Take the body's place at sock, naming info to anyone who asks. Resolves to {:held release} (release is a thunk
   returning a promise) or {:running info} when a live process already holds it."
@@ -73,13 +93,20 @@
   (let [seen (if (fs/existsSync sock) (await (probe sock)) :free)]
     (if (not= :free seen)
       seen
-      (do
-        (fs/rmSync sock #js {:force true})
-        (let [server (await (listen! sock info))]
-          (if (= :in-use server)
-            (let [again (await (probe sock))]
-              (if (= :free again) (throw (js/Error. (str "cannot take " sock))) again))
-            {:held (releaser server sock)}))))))
+      (await
+       (with-replace-lock
+         sock
+         (fn ^:async replace! []
+           (let [again (if (fs/existsSync sock) (await (probe sock)) :free)]
+             (if (not= :free again)
+               again
+               (do
+                 (fs/rmSync sock #js {:force true})
+                 (let [server (await (listen! sock info))]
+                   (if (= :in-use server)
+                     (let [again (await (probe sock))]
+                       (if (= :free again) (throw (js/Error. (str "cannot take " sock))) again))
+                     {:held (releaser server sock)})))))))))))
 
 (defn refusal
   "The one line printed when a start is refused."
