@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.library-test :as lt]
+            [engine.memory :as mem]
             [engine.test-util :as tu]))
 
 (def harvest '(jobs.forestry.harvest-wood {:species "oak" :radius 10}))
@@ -39,3 +40,24 @@
           (is (= [{:reason :no-tree :radius 2}]
                  (mapv #(select-keys % [:reason :radius :species]) (filterv #(= :waiting (:kind %)) @seen)))
               "one job.waiting naming the reason"))))))
+
+(deftest any-species-wide-radius-no-sapling-ends-with-the-debt-owed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3)})]
+          (core/submit! eng '(jobs.forestry.harvest-wood {:radius 32}) {})
+          (is (< (await (lt/run-until-empty eng 40)) 40))
+          (is (= [] (filterv #(= :failed (:kind %)) @seen)) "no crash")
+          (is (= 3 (get (lt/inv p) "oak_log")))
+          (is (= 1 (count (lt/debts eng)))))))))
+
+(deftest a-debt-on-unloaded-land-does-not-crash-the-check
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (lt/setup {:inventory [{:name "oak_sapling" :count 1}] :unloaded ["1500,66,1500"]})]
+          (mem/write! (:store eng) :forestry/replant {:pos {:x 1500 :y 66 :z 1500} :species "oak"} {:cap 50 :ttl :forever})
+          (core/submit! eng '(jobs.forestry.plant-sapling) {})
+          (await (lt/run-until-empty eng 5))
+          (is (= [] (filterv #(#{:error :failed} (:kind %)) @seen)) "no crash"))))))

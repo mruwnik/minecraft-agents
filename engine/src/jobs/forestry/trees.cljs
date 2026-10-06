@@ -12,8 +12,8 @@
   "Consecutive partial walks toward one tree before it counts as unreachable."
   3)
 
-(defn log-name? [n] (str/ends-with? n "_log"))
-(defn leaves-name? [n] (str/ends-with? n "_leaves"))
+(defn log-name? [n] (boolean (some-> n (str/ends-with? "_log"))))
+(defn leaves-name? [n] (boolean (some-> n (str/ends-with? "_leaves"))))
 (defn species-of [log-name] (str/replace log-name #"_log$" ""))
 
 (defn scan
