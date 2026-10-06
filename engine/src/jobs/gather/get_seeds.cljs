@@ -50,7 +50,7 @@
    :radius {:doc "source blocks within this many blocks of the body count" :default 16}
    :sources {:doc "block names to break for the item; nil: the material's own (grass for wheat_seeds)" :default nil}
    :per-round {:doc "blocks dug per round at most" :default 4}
-   :chest {:doc "chest position: take the item from it instead of breaking blocks" :default nil}
+   :chest {:doc "chest position: take the item from it instead of breaking blocks" :type :pos :default nil}
    :plan {:doc "id of a plan: take the item from the chest cell (want \"chest\") of the plan" :default nil}
    :collect-radius {:doc "how far around to collect drops after a batch" :default 8}
    :dry-digs {:doc "digs in a row that brought no new item before giving up" :default 40}

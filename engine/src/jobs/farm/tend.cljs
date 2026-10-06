@@ -62,7 +62,7 @@
    :part {:doc "with :plan, only the cells of this part" :default nil}
    :till {:doc "hoe untilled dirt and grass in the ground layer when seed and a hoe are carried" :default true}
    :fertilize {:doc "use bone meal on unripe crops" :default false}
-   :composter {:doc "composter position {:x :y :z} for seed above the reserve; nil: do not compost" :default nil}
+   :composter {:doc "composter position {:x :y :z} for seed above the reserve; nil: do not compost" :type :pos :default nil}
    :chest {:doc "chest position {:x :y :z} for the farm goods; nil: do not store" :type :pos :default nil}
    :keep {:doc "{item-name count}: how many of an item compost and deposit leave carried, at least the seed reserve" :default {}}
    :ignore-zones? {:doc "act regardless of zones and claims (passed to harvest, till, plant, fertilize and compost); the rules of the game allow it" :default false}})

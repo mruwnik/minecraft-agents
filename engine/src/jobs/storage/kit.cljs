@@ -38,7 +38,7 @@
   {:tools {:doc "tool kinds to carry, e.g. [\"hoe\" \"pickaxe\"]" :default ["hoe"]}
    :spare {:doc "extra of each tool kind beyond the one in use" :default 1}
    :food {:doc "food items to carry" :default 12}
-   :chest {:doc "chest position; the known :chest place when nil" :default nil}
+   :chest {:doc "chest position; the known :chest place when nil" :type :pos :default nil}
    :craft {:doc "craft what the chest cannot supply" :default true}
    :craft-tiers {:doc "tool tiers to craft, in order; iron or diamond only when listed" :default ["stone" "wooden"]}
    :radius {:doc "how far to look for a crafting table" :default 32}

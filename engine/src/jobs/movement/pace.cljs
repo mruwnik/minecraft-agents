@@ -5,11 +5,12 @@
 (def doc
   "Walk a, b, a, b (:laps times each) per round, one walk per leg (jobs.lib.near/walk-near!, doors :shut).
   Ends after :rounds rounds, or at once with a :leg-unfinished warning (target, status) when a leg does not arrive.
+  Points are [x y z] or {:x :y :z}; a bad one is refused at submit (:type :pos).
   A harmless long job, for showing that a reflex cuts a running one.")
 
 (def args
-  {:a {:doc "first point" :default nil}
-   :b {:doc "second point" :default nil}
+  {:a {:doc "first point" :type :pos :default nil}
+   :b {:doc "second point" :type :pos :default nil}
    :laps {:doc "a-b laps per round" :default 3}
    :rounds {:doc "rounds before done" :default 8}
    :range {:doc "walk range" :default 1}})

@@ -9,6 +9,7 @@
             [engine.memory :as mem]
             [engine.path.executor :as executor]
             [jobs.lib.pass :as pass]
+            [jobs.lib.places :as places]
             [jobs.lib.walk :as walk]))
 
 (def walk-timeout-s
@@ -124,14 +125,17 @@
       (ctx/note-walk! c status (u/dist from to)))
     {:result result :status status :from from :to to}))
 
-(defn cell-of [pos] (into {} (map (fn [k] [k (js/Math.floor (k pos))])) [:x :y :z]))
+(defn cell-of
+  "The cell {:x :y :z} (floored) of pos, [x y z] or {:x :y :z} of finite numbers, else nil (never the origin)."
+  [pos]
+  (:pos (places/parse-pos pos)))
 
 (defn ^:async walk-near!
   "Walk until the body's cell is within range cells of pos's cell (u/within?). Does nothing when it already is.
   One round of plan and walk (walk-round!, at most 60 s). Resolves to:
   - :there
   - :partial: ended more than 1 closer, call again
-  - :blocked: no path, a walk that got no nearer, or a body with no pathWorld sensing (booked as a failed walk)
+  - :blocked: a pos that is neither [x y z] nor {:x :y :z} (refused, :bad-pos event), no path, a walk that got no nearer, or a body with no pathWorld sensing (booked as a failed walk)
   opts:
   - :doors, the door policy of jobs.lib.pass. Default :shut (open a shut door, gate or trapdoor on the way, pass,
     shut it again). A job that works gates itself passes :never (a shut one is a wall).
@@ -144,6 +148,8 @@
   ([c pos range {:keys [doors timeout-s] :or {doors :shut timeout-s walk-timeout-s}}]
    (let [cell (cell-of pos)]
      (cond
+       (nil? cell) (do (ctx/emit! c :refused :warn {:reason :bad-pos :text (:message (places/parse-pos pos))})
+                       :blocked)
        (u/within? (u/self-pos c) cell range) :there
        (nil? (walk/path-world (:primitives c))) (do (ctx/note-walk! c "blocked" 0) :blocked)
        :else (case (:status (await (walk-round! c cell range {:doors doors :timeout-s timeout-s :one-way nil})))

@@ -78,7 +78,7 @@
   {:mob {:doc "the animal's name, such as \"cow\"" :default nil}
    :box {:doc "the pen: {:min {:x :y :z} :max {:x :y :z}}, inclusive, the feet cells of its floor" :default nil}
    :target {:doc "grown animals of :mob the pen should hold" :default 2}
-   :gate {:doc "the fence gate {:x :y :z} to bring them through; the pen's usable gate nearest the body when nil" :default nil}
+   :gate {:doc "the fence gate {:x :y :z} to bring them through; the pen's usable gate nearest the body when nil" :type :pos :default nil}
    :radius {:doc "animals within this many blocks of the body are fetched" :default 24}
    :timeout-s {:doc "seconds one animal may take from its lead on until it is let go" :default 180}})
 

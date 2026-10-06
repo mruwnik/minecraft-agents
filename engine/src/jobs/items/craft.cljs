@@ -18,7 +18,7 @@
 (def args
   {:item {:doc "item name to craft" :default nil}
    :count {:doc "how many more to end up with" :default 1}
-   :table {:doc "crafting table position; the nearest within :radius when nil and the recipe needs one" :default nil}
+   :table {:doc "crafting table position; the nearest within :radius when nil and the recipe needs one" :type :pos :default nil}
    :radius {:doc "how far to look for a crafting table" :default 32}})
 
 (defn check

@@ -208,6 +208,8 @@ namespace follows the path (`src/jobs/forestry/fell_tree.cljs` is `jobs.forestry
   :done)
 ```
 
+An arg that holds a position declares `:type :pos`: `[x y z]` is normalised to `{:x :y :z}`, anything else is refused at submit.
+
 There is no catalog to edit: adding the file adds the job. `engine.registry/jobs` is `{ns-symbol {:check :round :doc :args
 :backoff}}`, built at compile time. The build hook `engine.build-hooks/add-job-namespaces` lists every file under `jobs`
 that defines both `check` and `round` (others are helpers), fails the compile when such a file's `ns` does not match its

@@ -24,7 +24,7 @@
 
 (def args
   {:item {:doc "name of the item to enchant, from the inventory" :default nil}
-   :table {:doc "the enchanting table position {:x :y :z}; the nearest within :radius when nil" :default nil}
+   :table {:doc "the enchanting table position {:x :y :z}; the nearest within :radius when nil" :type :pos :default nil}
    :radius {:doc "how far to look for a table" :default 16}
    :max-level-cost {:doc "highest level cost of an offer to take; nil for no limit" :default nil}
    :slot {:doc "take exactly offer 1, 2 or 3; nil to choose by :choice" :default nil}

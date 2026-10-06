@@ -25,7 +25,7 @@
 (def args
   {:bed-radius {:doc "a remembered bed farther than this many blocks from the body is not used"
                 :default sh/default-bed-radius}
-   :bed {:doc "bed position [x y z] or {:x :y :z} to sleep in instead of the remembered :bed (no radius); it is recorded as :bed when that is unset or gone"
+   :bed {:doc "bed position [x y z] or {:x :y :z} to sleep in instead of the remembered :bed (no radius); it is recorded as :bed when that is unset or gone" :type :pos
          :default nil}})
 
 (def backoff

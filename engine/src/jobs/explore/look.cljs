@@ -12,7 +12,7 @@
    :max-blocks {:doc "nearest blocks to return, 0..16; zero skips scan" :default 6}
    :max-entities {:doc "nearest entities to return, 0..8; zero skips scan" :default 2}
    :properties? {:doc "include nearby block state properties" :default false}
-   :at {:doc "optional exact block position [x y z] or {:x :y :z}" :default nil}})
+   :at {:doc "optional exact block position [x y z] or {:x :y :z}" :type :pos :default nil}})
 (defn check [_] true)
 (defn names [v]
   (cond (nil? v) nil (string? v) [v] (or (vector? v) (set? v)) (vec v) :else ::bad))
