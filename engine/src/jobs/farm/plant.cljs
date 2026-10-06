@@ -24,7 +24,7 @@
   the plan is missing, unreadable, has no crop cells, or no zone list has been read.
   Box mode zones: a cell in another owner's zone or claim, or in a plan's footprint, is left bare. If every
   cell is refused the job ends with :none. The job warns plant.declined once, with :reason :refused (or
-  :no-zones when no zone list was read). :ignore-zones? true skips the check.")
+  :no-zones when no zone list was read). :ignore-zones? true skips the check, so cells shared with another plan are sown too.")
 
 (def args
   {:box {:doc "the field: {:min {:x :y :z} :max {:x :y :z}}, inclusive; the ground layer is y = (:y :min); required (without it the check declines)" :default nil}

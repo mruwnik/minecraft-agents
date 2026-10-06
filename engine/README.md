@@ -548,7 +548,7 @@ them: `act!` and the primitives check neither, and a job may ignore them. The he
 5. else ok (`:own-zone`, `:own-claim`, `:open`).
 
 - Every job that digs, places or takes accepts `:ignore-zones? true` (default false). By default it skips a refused target
-  with one warn naming the zone, claim or plan.
+  with one warn naming the zone, claim or plan; a cell two plans share is such a target, and `:ignore-zones? true` acts on it anyway.
 - `withdraw`, `deposit`, `smelt` and jobs built on them give up `:refused` on a foreign container.
 - Survival jobs (`breathe`, `extinguish`, `dig-in`, the crop dig of `get-food`) prefer a permitted option and break
   another's block only as a last resort (warn `<job>.trespass-last-resort`). They never take from a foreign container. A
