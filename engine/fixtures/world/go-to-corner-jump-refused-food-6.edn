@@ -1,0 +1,16 @@
+;; Card f94d8bfe: go-to's refusal of a corner jump a body cannot sprint (food <= 6) ends :stopped with the reason in words.
+;; Floating platform: start floor [10 -1 10], a 2-high column at [11 0..1 10], landing floor [11 0 11] (goal [11 1 11]); the only
+;; way is a diagonal jump out of a corner as high as the landing. Food is lowered by a hunger effect (amp 255), then the effect is
+;; cleared.
+{:defaults
+ {:tags [:movement]
+  :time :any
+  :plot {:height 12 :floor "air"}
+  :blocks [[:set [10 -1 10] "stone"] [:fill [11 0 10] [11 1 10] "stone"] [:set [11 0 11] "stone"]]
+  :body {:at [10.5 0 10.5]}
+  :limit-s 60}
+ :cases
+ [{:name "food-6-refuses-corner-jump"
+   :act [[:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:wait-s 9] [:rcon "effect clear $BODY"]
+         [:job (jobs.movement.go-to {:pos #at [11 1 11] :range 0 :escalate false})]]
+   :expect [{:event {:source :job :kind :stopped :data {:status :stopped :arrived false :reason :unreachable :kind :corner-jump :text [:contains "sprint jump past a corner and food is too low"]}} :within-s 40 :of-job true}]}]}
