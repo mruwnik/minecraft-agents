@@ -1,0 +1,29 @@
+;; Card 9e81132f: a body standing in the free part of a shut iron door's cell counts as shut in (the panel is not a way out), so go-to escalates.
+;; Hut: stone hollow x 14..18, z 14..18, y 0..3; iron door in its south wall at [16 1 18]; goal outside south.
+{:defaults
+ {:tags [:movement :access]
+  :plot {:height 8}
+  :blocks [[:fill [8 0 8] [26 0 26] "stone"] [:fill [14 0 14] [18 3 18] "stone" :hollow]
+           [:set [16 1 18] "iron_door[facing=north,half=lower,open=false]"]
+           [:set [16 2 18] "iron_door[facing=north,half=upper,open=false]"]]
+  :body {:at [16.5 1 15.5] :inventory [["stone_pickaxe" 1]]}
+  :limit-s 200 :time :any}
+ :cases
+ [{:name "inside-hut-escalates-and-arrives"
+   :act [[:job (jobs.movement.go-to {:pos #at [16 1 22] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.escalated} :within-s 90 :of-job true}
+            {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 180 :of-job true}]
+   :after [[:body-near [16.5 1 22.5] 2]]}
+  {:name "in-the-door-cell-free-part-escalates-and-arrives"
+   :body {:at [16.5 1 18.4]}
+   :act [[:job (jobs.movement.go-to {:pos #at [16 1 22] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.escalated} :within-s 90 :of-job true}
+            {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 180 :of-job true}]
+   :after [[:body-near [16.5 1 22.5] 2]]}
+  {:name "control-door-facing-south-free-part-outside-walks-out"
+   :blocks [[:set [16 1 18] "iron_door[facing=south,half=lower,open=false]"]
+            [:set [16 2 18] "iron_door[facing=south,half=upper,open=false]"]]
+   :body {:at [16.5 1 18.6]}
+   :act [[:job (jobs.movement.go-to {:pos #at [16 1 22] :range 1})]]
+   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 60 :of-job true}]
+   :after [[:body-near [16.5 1 22.5] 2]]}]}
