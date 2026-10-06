@@ -8,17 +8,28 @@
 
 (defn restore
   "Saved state after a restart: the in-flight round is lost (its job resumes
-  first) and reflex jobs are dropped."
+  first); reflex jobs and the manual slot job (the lease is not saved) are dropped."
   [saved]
   (let [s (merge empty-state saved)
         reflex-ids (keep (fn [[id inst]] (when (:reflex inst) id)) (:instances s))
+        slot-ids (set (keep (fn [[id inst]] (when (:slot? inst) id)) (:instances s)))
         current (:current s)]
     (-> s
+        (update :list #(filterv (complement slot-ids) %))
         (update :failed select-keys (:list s))
         (dissoc :backoff)
-        (assoc :resume (if (some #{current} (:list s)) current (:resume s))
+        (assoc :resume (if (and (some #{current} (:list s)) (not (slot-ids current))) current (:resume s))
                :current nil)
-        (update :instances #(apply dissoc % reflex-ids)))))
+        (update :instances #(apply dissoc % (concat reflex-ids slot-ids))))))
+
+(defn drop-leftover-slot-jobs!
+  "After a restore: end the manual slot job saved held (restore unlisted it) with one stopped event, reason :restart."
+  [eng saved]
+  (doseq [[id inst] (:instances saved)
+          :when (:slot? inst)]
+    (mem/delete-job! (:store eng) id)
+    (emit! eng {:source :job :kind :stopped :level :warn :job id :chain [id] :reason :restart
+                :text "stopped: restart (manual jobs end with the lease)"})))
 
 (defn unknown-job
   "The message why inst's spec no longer resolves against the registry, or nil."

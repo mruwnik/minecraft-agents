@@ -113,6 +113,7 @@
 (def tick! schedule/tick!)
 (def waiting schedule/waiting)
 (def drop-leftover-reflex-jobs! restart/drop-leftover-reflex-jobs!)
+(def drop-leftover-slot-jobs! restart/drop-leftover-slot-jobs!)
 (def drop-unknown-jobs! restart/drop-unknown-jobs!)
 (def repair-entries! restart/repair-entries!)
 (def restore restart/restore)
@@ -249,6 +250,7 @@
     (set-owner! eng nil)
     (.onBodyEvent primitives #(record-body-event! eng %))
     (drop-leftover-reflex-jobs! eng saved)
+    (drop-leftover-slot-jobs! eng saved)
     (let [notices (into (filterv some? (drop-unknown-jobs! eng)) (repair-entries! eng))]
       (doseq [[request-id request] (:attention (state eng))
               :when (and (:job-id request) (not (some #{(:job-id request)} (:list (state eng)))))]

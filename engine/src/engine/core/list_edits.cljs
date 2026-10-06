@@ -67,7 +67,7 @@
         _ (when-let [old (and slot? (manual-job eng))] (cancel! eng old by))
         id (new-id! eng)]
     (when slot? (reset! (:manual-job eng) id))
-    (swap! (:state eng) #(let [s (add-instance % id node {:hold? hold?})]
+    (swap! (:state eng) #(let [s (add-instance % id node (cond-> {:hold? hold?} slot? (assoc :slot? true)))]
                            (cond
                              now? (insert-now s id)
                              front? (insert-front s id)

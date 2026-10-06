@@ -314,3 +314,24 @@
             (is (= "job-running" (:reason (drive-set eng))))
             (takeover/release! eng {:who "claude" :reason "released" :held-ms 1})
             (await round)))))))
+
+(deftest a-saved-slot-job-is-ended-on-restart-and-not-listed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [dir (tu/tmp-dir)
+              make (fn [] (let [[seen sink] (tu/legacy-capture-sink)
+                                eng (core/create {:primitives (tu/fake {}) :jobs jobs :triggers triggers :dir dir :now (constantly t0)
+                                                  :events (events/make {:body "Fake" :sinks [sink] :now (constantly t0)})})]
+                            {:eng eng :seen seen}))
+              first-run (make)]
+          (takeover/take! (:eng first-run) me)
+          (submit-as (:eng first-run) "claude" '(spin))
+          (is (= ["j1"] (:list (core/state (:eng first-run)))) "the slot job is listed before the restart")
+          (await (settle-ms))
+          (let [{:keys [eng seen]} (make)]
+            (is (= [] (:list (core/state eng))) "the slot job is not listed after the restart")
+            (is (empty? (:instances (core/state eng))))
+            (is (= [:restart] (mapv :reason (filter #(= "j1" (:job %)) (kinds seen :stopped)))))
+            (core/tick! eng)
+            (is (= [] (ran seen)) "it never runs again")))))))
