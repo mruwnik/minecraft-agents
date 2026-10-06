@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "npm run test:cljs && npm run test:js",
+    "test": "npm run test:cljs && ../tools/compile dashboard agent-tools --release && npm run test:js",
     "test:cljs": "../tools/compile engine test && node --max-old-space-size=4096 out/test.cjs",
     "test:js": "node --test 'js/**/*.test.mjs' 'test/tools/**/*.test.mjs'",
     "test:golden": "../tools/compile engine test-golden && node --max-old-space-size=4096 out/test-golden.cjs && node --test js/path/bench.golden.mjs",
