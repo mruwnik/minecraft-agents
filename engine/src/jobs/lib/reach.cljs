@@ -36,7 +36,7 @@
 (def arrow-passes
   "Blocks, besides shelter's non-solid and walk-through ones, that an arrow flies through and a walker walks through
   (fences and gates are :tall to a walker first): plants, torches, ladders."
-  #"_(sapling|flower|tulip|roots|torch|fence|fence_gate|bush)$|^(poppy|dandelion|blue_orchid|allium|azure_bluet|oxeye_daisy|cornflower|lily_of_the_valley|wither_rose|sunflower|lilac|rose_bush|peony|torchflower|pitcher_plant|brown_mushroom|red_mushroom|sugar_cane|kelp|kelp_plant|lily_pad|ladder|nether_sprout|wheat|carrots|potatoes|beetroots|bubble_column|pink_petals|wildflowers|leaf_litter|short_dry_grass|tall_dry_grass|hanging_roots|glow_lichen|moss_carpet|redstone_torch|soul_torch|light|structure_void)$")
+  #"_(sapling|flower|tulip|torch|fence|fence_gate|bush)$|^(poppy|dandelion|blue_orchid|allium|azure_bluet|oxeye_daisy|cornflower|lily_of_the_valley|wither_rose|sunflower|lilac|rose_bush|peony|torchflower|pitcher_plant|brown_mushroom|red_mushroom|sugar_cane|kelp|kelp_plant|lily_pad|ladder|nether_sprout|wheat|carrots|potatoes|beetroots|bubble_column|pink_petals|wildflowers|leaf_litter|short_dry_grass|tall_dry_grass|warped_roots|crimson_roots|hanging_roots|glow_lichen|moss_carpet|redstone_torch|soul_torch|light|structure_void)$")
 
 (defn kind-of
   "What a block is to a walker: :open, :water, :solid, or :tall (solid and too high to step onto: fence, wall, shut

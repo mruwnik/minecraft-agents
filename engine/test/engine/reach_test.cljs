@@ -171,3 +171,10 @@
   (doseq [facing ["north" "south" "east" "west"]]
     (is (false? (reach/enclosed? (tu/fake (door-cell-world facing "iron_door" true)))) (str "open " facing))
     (is (false? (reach/enclosed? (tu/fake (door-cell-world facing "oak_door" false)))) (str "wooden " facing))))
+
+(deftest roots-block-a-walker-only-where-their-collision-box-is-solid
+  (let [kinds (into {} (map (fn [n] [n (reach/kind-of #js {:name n})])
+                            ["mangrove_roots" "muddy_mangrove_roots" "warped_roots" "crimson_roots" "hanging_roots"]))]
+    (is (= {"mangrove_roots" :solid "muddy_mangrove_roots" :solid
+            "warped_roots" :open "crimson_roots" :open "hanging_roots" :open}
+           kinds))))
