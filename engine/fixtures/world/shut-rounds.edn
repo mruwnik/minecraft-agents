@@ -17,7 +17,7 @@
  :cases
  [{:name "two-open-gates-one-run"
    :expect [{:event {:source :job :kind :shut-doors.done :data {:shut 2 :left []}} :within-s 80}
-            {:no-event {:source :job :kind :shut-doors.stopped} :for-s 1}]
+            {:no-event {:source :job :kind :shut-doors.stopped} :for-s 80 :until {:source :job :kind :shut-doors.done :data {:shut 2 :left []}}}]
    :after [[:block [10 0 16] "oak_fence_gate[open=false]"]
            [:block [16 0 16] "oak_fence_gate[open=false]"]]}
   {:name "one-gate-unreachable-run-stops"
