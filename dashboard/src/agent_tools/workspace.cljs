@@ -42,6 +42,10 @@
                  ;; plans check judges one body's seen memory: always the agent's own
                  (and (= "plans" command) (= "check" (first argv))) (into ["--body" (:body ctx)])
                  (#{"map" "world-changes"} command) (into ["--repo-root" (:repo ctx)])
+                 ;; one change cursor per body: the default observer name is shared by every agent
+                 (and (= "world-changes" command)
+                      (not (some #(re-matches #"^--(?:observer|cursor)(?:=.*)?$" %) (take-while #(not= "--" %) argv))))
+                 (into ["--observer" (:body ctx)])
                  (= "snapshot" command) (into ["--workspace" (:dir ctx)])
                  ;; drive and world must agree on who drives: default to the body, so take then submit match
                  (and (#{"drive" "world"} command) (not (some #(re-matches #"^--who(?:=.*)?$" %) (take-while #(not= "--" %) argv))))

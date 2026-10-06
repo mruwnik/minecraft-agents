@@ -40,3 +40,13 @@
          (workspace/player-error "failed at /repo/engine/tools/foo.mjs:12\n    at x (/repo/engine/tools/bar.mjs:3:4)")))
   (is (= "usage: ./bin/check <id>\nbad /repo/a.mjs"
          (workspace/player-error "usage: check.mjs <id> --body <name>\nbad /repo/a.mjs"))))
+
+(deftest world-changes-defaults-to-the-body-as-observer
+  (are [argv expected] (= expected (some #{"--observer" "--cursor"} (workspace/route ctx "world-changes" argv)))
+    [] "--observer"
+    ["--wait"] "--observer"
+    ["--observer" "mine"] "--observer"
+    ["--cursor" "{:seq 1}"] "--cursor")
+  (is (= ["--world" "w" "--worlds" "/x" "--repo-root" "/r" "--observer" "Probe" "--wait"]
+         (workspace/route ctx "world-changes" ["--wait"])))
+  (is (not-any? #{"--observer"} (workspace/route ctx "world-changes" ["--cursor" "{:seq 1}"]))))
