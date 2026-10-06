@@ -95,3 +95,19 @@
             "no way to get the item")
         (is (= :nothing-in-range (:reason (:waiting (await (waiting-after '(jobs.gather.get-seeds {:item "sugar_cane"}) {})))))
             "no source block near")))))
+
+(def lead-item [{:name "lead" :count 1}])
+
+(defn ^:async reason-of [spec world]
+  (:reason (:waiting (await (waiting-after spec world)))))
+
+(deftest lead-to-says-what-it-lacks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [no-mob (await (reason-of '(jobs.animals.lead-to {:pos {:x 3 :y 64 :z 0}}) {:inventory lead-item}))
+              no-dest (await (reason-of '(jobs.animals.lead-to {:mob "cow"}) {:inventory lead-item}))
+              no-lead (await (reason-of '(jobs.animals.lead-to {:mob "cow" :pos {:x 3 :y 64 :z 0}}) {:inventory []}))
+              ready (await (waiting-after '(jobs.animals.lead-to {:mob "cow" :pos {:x 3 :y 64 :z 0}}) {:inventory lead-item}))]
+          (is (= [:no-mob :no-destination :no-lead] [no-mob no-dest no-lead]))
+          (is (nil? (:waiting ready)) "mob, destination and lead given: it runs"))))))

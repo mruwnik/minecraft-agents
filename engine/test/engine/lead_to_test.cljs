@@ -98,12 +98,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[label cow-spec gathered] [["at the spot" {} true]
-                                           ["trailing, pulled in" {:trail 5} true]]]
+        (doseq [[label cow-spec] [["at the spot" {}] ["trailing, pulled in" {:trail 5}]]]
           (let [s (await (scenario {} {:inventory lead :entities [(cow 1 3 cow-spec)]} 24))]
             (is (= :unleashed (:reason (done-event s))) label)
-            (is (= gathered (:gathered (done-event s))) label)
-            (is (= (if gathered 0 1) (count (events-of s :lead-to.gather-short))) label)))
+            (is (true? (:gathered (done-event s))) label)
+            (is (empty? (events-of s :lead-to.gather-short)) label)))
         (let [s (await (scenario-slow-at-the-end 10 nil))]
           (is (= :unleashed (:reason (done-event s))) "too far out to pull")
           (is (false? (:gathered (done-event s))) "too far out to pull")
@@ -225,8 +224,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[label args world reason]
-                [["no lead" {} {:entities [(cow 1 3)]} :no-lead]
-                 ["no cow" {} {:inventory lead :entities []} :none]
+                [["no cow" {} {:inventory lead :entities []} :none]
                  ["no fence at the named cell" {:fence {:x 31 :y 64 :z 0}} {:inventory lead :entities [(cow 1 3)]} :no-fence]
                  ["a block that is not a fence" {:fence {:x 31 :y 64 :z 0}} {:inventory lead :blocks {"31,64,0" "stone"} :entities [(cow 1 3)]} :no-fence]]]
           (let [s (await (scenario args world 5))]

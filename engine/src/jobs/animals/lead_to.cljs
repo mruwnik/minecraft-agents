@@ -10,7 +10,7 @@
 
 (def doc
   "Put a lead on one animal of type :mob, walk to :pos with it following, then tie it to the fence post :fence
-  or let it go. A one-shot order that starts and ends itself. The check always passes.
+  or let it go. A one-shot order that starts and ends itself. Declines (waits) with :no-mob, :no-destination or :no-lead (no lead carried) until all are given; a started job always passes.
 
   Phases, each by a child job:
   - :leash: jobs.animals.leash (radius :radius).
@@ -63,7 +63,20 @@
 
 (def max-ties 2)
 
-(defn check [_c] true)
+(defn lead-carried? [c]
+  (some #(= "lead" (:name %)) (u/inventory (:primitives c))))
+
+(defn check
+  "A started job passes. Else :mob, a destination (:pos or :fence) and a lead in the inventory are needed: a missing
+  one waits with that reason."
+  [c]
+  (let [{:keys [mob pos fence]} (:args c)]
+    (cond
+      (:started (ctx/mem c)) true
+      (nil? mob) (ctx/wait c :no-mob)
+      (not (or pos fence)) (ctx/wait c :no-destination)
+      (not (lead-carried? c)) (ctx/wait c :no-lead)
+      :else true)))
 
 (defn stop-text
   "The words for a leading that ended without success."
@@ -164,11 +177,11 @@
 
 (defn plan-or-nil
   "The walk plan to the cell of target (floored by places/parse-pos, as go-to does), nil when there is none or
-  planning throws: the check never fails the job."
+  planning throws a RangeError (a far target the planner cannot index): the check never fails the job."
   [c pw target]
   (when-let [{:keys [x y z]} (:pos (places/parse-pos target))]
     (try (walk/plan-walk c pw [x y z] 1 walk/default-weight)
-         (catch :default _ nil))))
+         (catch js/RangeError _ nil))))
 
 (defn path-leaves-reach?
   "True when the walk the body would now take to target passes farther than path-reach from the animal. A body
