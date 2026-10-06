@@ -9,7 +9,7 @@
     "test:js": "node --test 'js/**/*.test.mjs' 'test/tools/**/*.test.mjs'",
     "record:planner-bench": "shadow-cljs compile planner-record && node out/planner-record.cjs",
     "build": "shadow-cljs compile body",
-    "body": "shadow-cljs compile body && node out/body.cjs",
+    "body": "shadow-cljs compile body && node --max-semi-space-size=4 out/body.cjs",
     "test:agent-tools": "npm --prefix ../dashboard run build-agent-tools && node --test 'test/tools/**/*.test.mjs'"
   },
   "devDependencies": {
