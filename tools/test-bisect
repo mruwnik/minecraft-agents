@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tools/test-bisect <ns>... [--good <rev>] [--bad <rev>]
 # Finds the first commit where the engine test namespaces fail: one detached worktree (tools/integration-worktree.sh), `git bisect run` there,
-# each step compiles and runs tools/test-engine <ns>... of THAT commit (res-slot compile and tests slots, as test-engine does).
+# each step compiles and runs tools/test-engine <ns>... of THAT commit (res-slot server and tests slots, as test-engine does).
 # Verdicts per step: pass = good, test failure = bad, compile failure / namespace missing / timeout / busy slot / killed (75, 137, 143) = skipped (exit 125).
 # Worktree setup waits for a free compile slot (retry every TEST_BISECT_RETRY_SLEEP s, default 20, up to TEST_BISECT_SLOT_WAIT s, default 1800), then exits 75.
 # The per-step explicit compile stays: test-engine passes a compile failure on as a plain exit 1, which would score bad.

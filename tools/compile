@@ -18,8 +18,8 @@
 # Dead waiters' tickets are pruned. Running under a process that holds the lock (an ancestor with the lock file open, e.g.
 # `flock /tmp/mc-compile.lock tools/compile ...`) would wait for itself for ever: it exits 2 at once instead.
 # Memory: a missing server starts only with MIN_START_MB (3500) available; the compile itself uses the server's heap.
-# A server started outside the main checkout (a git worktree: integration batches, test copies) runs under a `compile` slot of
-# tools/res-slot (held for the server's life, so its JVM counts against the memory floor); no free slot in ~2 min exits 75 (retry).
+# A server started outside the main checkout (a git worktree: integration batches, test copies) runs under a `server` slot of
+# tools/res-slot (held for the server's life, so its JVM counts against the memory floor; kind apart from compiles, max 4); no free slot in ~2 min exits 75 (retry).
 # That start waits before queueing (under <lock>.start only), so the global compile lock is free meanwhile.
 # A build that prints an :undeclared-var or :undeclared-ns warning exits 1 (shadow-cljs itself exits 0).
 # Env: MC_COMPILE_LOG=1 prints "waited Ns, compiled Ns".
@@ -75,7 +75,7 @@ start_server() {
   # the background subshell must drop the lock fds (8, 9) too, or it holds the lock until the server dies
   slot=()
   [ "$(cd "$repo" && git rev-parse --git-dir)" = "$(cd "$repo" && git rev-parse --git-common-dir)" ] || \
-    slot=(env RES_SLOT_MAX_WAIT_MS=${RES_SLOT_MAX_WAIT_MS:-120000} "$repo/tools/res-slot" compile --)
+    slot=(env RES_SLOT_MAX_WAIT_MS=${RES_SLOT_MAX_WAIT_MS:-120000} "$repo/tools/res-slot" server --)
   (exec 8>&- 9>&-; cd "$dir" && exec setsid nohup "${slot[@]}" npx shadow-cljs server >"$dir/.shadow-cljs/server.log" 2>&1 </dev/null) &
   bg=$!
   for _ in $(seq 1 300); do

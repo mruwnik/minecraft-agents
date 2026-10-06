@@ -82,6 +82,13 @@ const withGate = async (f) => {
   try { return f() } finally { fs.rmSync(gate, { recursive: true, force: true }) }
 }
 
+// "t.0 pid 12 340s sleep 30; ..." for the slots of <kind> that are held (who a waiter is waiting for).
+const holders = (kind, max) => heldSlots(kind, max).map((i) => {
+  const info = lockFile(kind, i) + '.info'
+  const [pid, start, ...c] = (fs.existsSync(info) ? fs.readFileSync(info, 'utf8').trim() : '? ? ?').split(' ')
+  return `${kind}.${i} pid ${pid} ${start === '?' ? '?' : Math.round(Date.now() / 1000 - Number(start))}s ${c.join(' ')}`.slice(0, 160)
+}).join('; ')
+
 const status = (cfg) => {
   console.log(`MemAvailable ${Math.round(availableMb())} MB, floor ${cfg.floorMb} MB`)
   for (const [kind, k] of Object.entries(cfg.kinds)) {
@@ -127,10 +134,10 @@ const main = async () => {
         process.exit(code)
       }
       dropGrant()
-    } else if (d.action === 'busy') { console.error(`res-slot: busy (${d.why}), retry later`); process.exit(75) }
+    } else if (d.action === 'busy') { console.error(`res-slot: busy (${d.why}${free.length ? '' : `; held by ${holders(kind, k.max)}`}), retry later`); process.exit(75) }
     else if (Date.now() - lastLine >= (Number(process.env.RES_SLOT_STATUS_MS) || 60000)) {
       lastLine = Date.now()
-      console.error(`res-slot: waiting for ${kind} (${heldSlots(kind, k.max).length}/${k.max} slots in use, ${Math.round(availableMb())} MB free, ${d.why}), ${Math.round((Date.now() - t0) / 1000)}s`)
+      console.error(`res-slot: waiting for ${kind} (${heldSlots(kind, k.max).length}/${k.max} slots in use, ${Math.round(availableMb())} MB free, ${d.why}${free.length ? '' : `; held by ${holders(kind, k.max)}`}), ${Math.round((Date.now() - t0) / 1000)}s`)
     }
     await sleep(pollMs + Math.random() * 300)
   }

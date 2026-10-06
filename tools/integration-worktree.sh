@@ -3,7 +3,7 @@
 # Usage: tools/integration-worktree.sh <commit> <dir> | --remove <dir>
 # Checks out <commit> at <dir>, then adds what a clean checkout lacks (all git-ignored): node_modules (symlinked to the main
 # checkout's), the .shadow-cljs dirs, worlds/claude/biomes.json, textures/, engine/test/fixtures/pathfinding, the built agent-tools.cjs and the viewer cljs.
-# Any failing step fails the script. The builds there start shadow servers (each under a res-slot `compile` slot, 1-2 GB);
+# Any failing step fails the script. The builds there start shadow servers (each under a res-slot `server` slot, 1-2 GB);
 # remove the worktree afterwards with `tools/integration-worktree.sh --remove <dir>`: it kills those servers by PID, then removes it.
 set -euo pipefail
 

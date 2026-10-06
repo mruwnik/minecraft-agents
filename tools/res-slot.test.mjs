@@ -128,3 +128,25 @@ test('integration: a command exiting 213 with its slot raced still reports 213 a
   assert.deepEqual(fs.readdirSync(dir).filter((f) => f.includes('.run.')), [])
   fs.rmSync(dir, { recursive: true, force: true })
 })
+
+test('integration: a waiter and a busy exit name the slot holder (pid, age, command)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'res-slot-test-'))
+  const cfg = path.join(dir, 'cfg.json')
+  fs.writeFileSync(cfg, JSON.stringify({ floorMb: 0, kinds: { t: { needMb: 1, max: 1 } } }))
+  const env = { RES_SLOT_DIR: dir, RES_SLOT_CONFIG: cfg, RES_SLOT_MAX_WAIT_MS: '1500', RES_SLOT_POLL_MS: '200', RES_SLOT_STATUS_MS: '300' }
+  const holder = spawn('node', ['tools/res-slot.mjs', 't', '--', 'sleep', '31'], { cwd: new URL('..', import.meta.url).pathname, env: { ...process.env, ...env }, stdio: 'ignore', detached: true })
+  try {
+    await new Promise((r) => setTimeout(r, 1000))
+    const busy = run(['t', '--', 'echo', 'ran'], env)
+    assert.match(busy.stderr, /waiting for t .*held by t\.0 pid \d+ \d+s sleep 31/)
+    assert.match(busy.stderr, /busy \(.*held by t\.0 pid \d+ \d+s sleep 31/)
+  } finally { process.kill(-holder.pid, 'SIGKILL') }
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+
+test('config: shadow-cljs servers have their own slot kind, with room for a worktree per project', () => {
+  const res = JSON.parse(fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), 'res-slot.json'), 'utf8'))
+  assert.equal(res.kinds.compile, undefined)
+  assert.equal(res.kinds.server.needMb, 2000)
+  assert.ok(res.kinds.server.max >= 4)
+})

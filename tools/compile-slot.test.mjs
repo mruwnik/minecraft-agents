@@ -24,7 +24,7 @@ const setup = (t) => {
 if [ "$2" = server ]; then echo $$ > .shadow-cljs/server.pid; echo 1 > .shadow-cljs/nrepl.port; echo 1 > .shadow-cljs/http.port; exec sleep 40; fi
 exit 0
 `, { mode: 0o755 })
-  fs.writeFileSync(path.join(res, 'cfg.json'), JSON.stringify({ floorMb: 0, kinds: { compile: { needMb: 1, max: 1 } } }))
+  fs.writeFileSync(path.join(res, 'cfg.json'), JSON.stringify({ floorMb: 0, kinds: { server: { needMb: 1, max: 1 } } }))
   const env = { PATH: `${bin}:${process.env.PATH}`, MC_COMPILE_LOCK: path.join(T, 'lock'), MC_COMPILE_QUEUE: path.join(T, 'queue'), MC_COMPILE_MIN_START_MB: '0', RES_SLOT_DIR: res, RES_SLOT_CONFIG: path.join(res, 'cfg.json'), RES_SLOT_MAX_WAIT_MS: '1500', RES_SLOT_POLL_MS: '200' }
   t.after(() => {
     for (const d of [main, wt]) { try { process.kill(Number(fs.readFileSync(path.join(d, 'engine/.shadow-cljs/server.pid'), 'utf8'))) } catch {} }
@@ -33,11 +33,11 @@ exit 0
   return { main, wt, env, status: () => sh(main, 'node', ['tools/res-slot.mjs', 'status'], env).stdout }
 }
 
-test('a server started in a worktree holds a compile slot', (t) => {
+test('a server started in a worktree holds a server slot', (t) => {
   const s = setup(t)
   const r = sh(s.wt, 'bash', ['tools/compile', 'engine', 'test'], s.env)
   assert.equal(r.status, 0, r.stderr)
-  assert.match(s.status(), /compile: 1\/1 in use/)
+  assert.match(s.status(), /server: 1\/1 in use/)
 })
 
 test('a worktree server with no free slot makes the compile exit 75, busy', (t) => {
@@ -55,5 +55,5 @@ test('the main checkout starts its server without a slot', (t) => {
   const s = setup(t)
   const r = sh(s.main, 'bash', ['tools/compile', 'engine', 'test'], s.env)
   assert.equal(r.status, 0, r.stderr)
-  assert.match(s.status(), /compile: 0\/1 in use/)
+  assert.match(s.status(), /server: 0\/1 in use/)
 })

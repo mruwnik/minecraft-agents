@@ -3,7 +3,7 @@
   "kinds": {
     "body": { "needMb": 700, "max": 6 },
     "tests": { "needMb": 2950, "baseMb": 700, "perNsMb": 40, "goldenMb": 940, "max": 5, "shardMax": 3 },
-    "compile": { "needMb": 2000, "max": 2 },
+    "server": { "needMb": 2000, "max": 4 },
     "browser": { "needMb": 600, "max": 2 },
     "time": { "needMb": 1, "max": 1 }
   }
