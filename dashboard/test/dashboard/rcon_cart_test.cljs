@@ -79,3 +79,12 @@
   (is (thrown-with-msg? js/Error #"exactly one" (cart/parse-args #js [])))
   (is (thrown-with-msg? js/Error #"name" (cart/parse-args #js ["--rider" "a b; op"])))
   (is (thrown-with-msg? js/Error #"unknown" (cart/parse-args #js ["--bogus"]))))
+
+(deftest windowed-speed-is-path-length-round-a-corner
+  ;; 0.4 b/tick, 5 ticks east then 5 ticks south: the 10-tick displacement is 0.4*5*sqrt2/10 = 0.28, the path is 0.40
+  (let [east (map (fn [i] [(* 0.4 i) 64 0.5]) (range 6))
+        south (map (fn [i] [2.0 64 (+ 0.5 (* 0.4 i))]) (range 1 6))
+        samples (vec (map-indexed (fn [t p] {:t t :pos p}) (concat east south)))
+        w (cart/windowed-speeds samples 10)]
+    (is (< 0.27 (/ (cart/distance (:pos (last samples)) (:pos (first samples))) 10) 0.29) "displacement per tick is the artifact")
+    (is (< (js/Math.abs (- 0.4 (:speed (last w)))) 1e-9))))

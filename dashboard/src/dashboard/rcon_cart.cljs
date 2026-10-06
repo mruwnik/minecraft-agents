@@ -1,7 +1,7 @@
 (ns dashboard.rcon-cart
   "tools/cart-sample.mjs: follows one minecart over RCON, samples game time, Pos and Motion as fast as RCON allows, writes
   JSON lines and prints the windowed-speed summary (minimum and where, per-cell speeds, recovery distance). The maths is
-  pure and tested; main does the I/O. Speeds are blocks per game tick over a window of ticks (3D distance)."
+  pure and tested; main does the I/O. Speeds are blocks per game tick over a window of ticks (3D path length)."
   (:require ["fs" :as fs]
             [clojure.string :as str]
             [dashboard.rcon :as rcon]))
@@ -51,9 +51,13 @@
 (defn distance [a b]
   (js/Math.sqrt (reduce + (map #(let [d (- %1 %2)] (* d d)) a b))))
 
+(defn path-length [samples]
+  (reduce + 0.0 (map #(distance (:pos %1) (:pos %2)) samples (rest samples))))
+
 (defn windowed-speeds
   "One entry per sample that has an earlier sample at least `window` game ticks before it: {:t :pos :ticks :speed}, speed
-  = distance from the latest such earlier sample / ticks between them, attributed to this sample's position."
+  = path length (sum of the per-sample step lengths, so bends do not read short) from the latest such earlier sample /
+  ticks between them, attributed to this sample's position."
   [samples window]
   (let [v (vec samples)]
     (loop [j 0, i 0, out []]
@@ -65,7 +69,7 @@
               ticks (- (:t sj) (:t (v i)))]
           (recur (inc j) i
                  (if (and (< i j) (>= ticks window))
-                   (conj out {:t (:t sj) :pos (:pos sj) :ticks ticks :speed (/ (distance (:pos sj) (:pos (v i))) ticks)})
+                   (conj out {:t (:t sj) :pos (:pos sj) :ticks ticks :speed (/ (path-length (subvec v i (inc j))) ticks)})
                    out)))))))
 
 (defn min-window
