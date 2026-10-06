@@ -242,3 +242,22 @@
                                                             (await (impl t a))))))))]
           (is (nil? (:reason result)) "two blocked reads, a good one, two more: never three in a row")
           (is (not (contains? (kinds seen) :bake.gave-up))))))))
+
+(deftest blocked-reads-count-across-good-reads-that-take-nothing-more
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [blocks (atom 0)
+              moves (atom 0)
+              [result p seen] (await (bake {:containers {"10,64,0" [{:name "wheat" :count 12}]} :blocks beside} {}
+                                           (fn [p]
+                                             (.override (.-world p) "inspectContainer"
+                                                        (fn ^:async f [t a impl]
+                                                          (if (= @moves @blocks)
+                                                            (do (swap! blocks inc) #js {:status "blocked"})
+                                                            (await (impl t a)))))
+                                             (.override (.-world p) "transfer"
+                                                        (fn ^:async f [_ _ _] (swap! moves inc) #js {:status "ok" :moved 1})))))]
+          (is (= 3 @blocks) "a blocked read, then a good one and a withdraw that finishes nothing, three times")
+          (is (string? (:reason result)))
+          (is (contains? (kinds seen) :bake.gave-up)))))))
