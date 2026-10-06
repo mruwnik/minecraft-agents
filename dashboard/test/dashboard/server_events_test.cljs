@@ -6,7 +6,9 @@
             ["os" :as os]
             ["path" :as path]
             ["stream" :as stream]
-            [dashboard.server :as server]))
+            [dashboard.server.engine-state :as srv-engine-state]
+            [dashboard.server.events :as srv-events]
+            [dashboard.server.files :as srv-files]))
 
 (defn run [done f]
   (-> (js/Promise.resolve)
@@ -69,7 +71,7 @@
         response (response-recorder)]
     (set! (.-method request) "POST")
     (set! (.-headers request) #js {:host "127.0.0.1:3701" :content-type "application/edn"})
-    (server/resolve-attention! request (:response response) body)
+    (srv-events/resolve-attention! request (:response response) body)
     (.end request (pr-str {:request-id "r1" :reason :handled :extra "not for the engine"}))
     (-> (:promise response)
         (.then (fn [{:keys [status body]}]
@@ -81,7 +83,7 @@
 (defn check-dashboard-event-routes! [body received]
   (let [events-res (response-recorder)
         query (js/URLSearchParams. "?limit=10")]
-    (-> (server/send-events! (:response events-res) body query)
+    (-> (srv-events/send-events! (:response events-res) body query)
         (.then (fn [_]
                  (let [{:keys [status body]} @(:result events-res)
                        response (reader/read-string body)]
@@ -96,13 +98,13 @@
 (deftest canonical-dashboard-events-proxy-over-unix-socket
   (async done
     (let [root (.mkdtempSync fs (.join path (os/tmpdir) "dashboard-events-test-"))
-          original-state-dir server/state-dir
+          original-state-dir srv-files/state-dir
           body {:world "w" :name "Mock"}
           engine-dir (.join path root "worlds" "w" "agents" (:name body) "engine")
           socket-path (.join path engine-dir "events.sock")
           received (atom {})]
       (.mkdirSync fs engine-dir #js {:recursive true})
-      (set! server/state-dir root)
+      (set! srv-files/state-dir root)
       (run done
            (fn []
              (-> (mock-engine! socket-path received)
@@ -110,7 +112,7 @@
                           (-> (check-dashboard-event-routes! body received)
                               (.finally #(close-mock! mock)))))
                  (.finally (fn []
-                             (set! server/state-dir original-state-dir)
+                             (set! srv-files/state-dir original-state-dir)
                              (.rmSync fs root #js {:recursive true :force true})))))))))
 
 (deftest canonical-offline-keeps-persisted-attention-without-reading-jsonl
@@ -128,10 +130,10 @@
     (.writeFileSync fs (.join path engine-dir "events.jsonl") "{\"source\":\"job\",\"kind\":\"failed\",\"level\":\"error\",\"text\":\"stale legacy event\"}\n")
     (.writeFileSync fs (.join path engine-dir "engine.edn") (pr-str state))
     (try
-      (with-redefs [server/state-dir root
-                    server/live-engines (atom {})
-                    server/live-errors (atom {{:world "w" :name name} "socket unavailable"})]
-        (let [body (server/engine-body {:name name :username name :world "w"} 1000)]
+      (with-redefs [srv-files/state-dir root
+                    srv-engine-state/live-engines (atom {})
+                    srv-engine-state/live-errors (atom {{:world "w" :name name} "socket unavailable"})]
+        (let [body (srv-engine-state/engine-body {:name name :username name :world "w"} 1000)]
           (is (= inbox (:outstanding body)))
           (is (false? (:up body)))
           (is (not= "stale legacy event" (get-in body [:engine :recent 0 :text])))))
@@ -140,26 +142,26 @@
 (deftest live-refresh-reads-only-events-after-the-cached-cursor
   (async done
     (let [root (.mkdtempSync fs (.join path (os/tmpdir) "dashboard-refresh-test-"))
-          original-state-dir server/state-dir
+          original-state-dir srv-files/state-dir
           body {:world "w" :name "Mock"}
           engine-dir (.join path root "worlds" "w" "agents" (:name body) "engine")
           received (atom {})]
       (.mkdirSync fs engine-dir #js {:recursive true})
-      (set! server/state-dir root)
+      (set! srv-files/state-dir root)
       (run done
            (fn []
              (-> (mock-engine! (.join path engine-dir "events.sock") received)
                  (.then (fn [mock]
-                          (with-redefs [server/live-engines (atom {})]
-                            (-> (server/refresh-live-engine! body)
-                                (.then (fn [_] (server/refresh-live-engine! body)))
+                          (with-redefs [srv-engine-state/live-engines (atom {})]
+                            (-> (srv-engine-state/refresh-live-engine! body)
+                                (.then (fn [_] (srv-engine-state/refresh-live-engine! body)))
                                 (.then (fn [_]
                                          (is (= ["?stream-id=s4&after=0&limit=1000"
                                                  "?stream-id=s4&after=2&limit=1000"]
                                                 (:events-queries @received)))))
                                 (.finally #(close-mock! mock))))))
                  (.finally (fn []
-                             (set! server/state-dir original-state-dir)
+                             (set! srv-files/state-dir original-state-dir)
                              (.rmSync fs root #js {:recursive true :force true})))))))))
 
 (deftest an-oversized-engine-event-response-is-refused
@@ -172,15 +174,15 @@
            (fn []
              (-> (mock-engine! (.join path engine-dir "events.sock") (atom {}))
                  (.then (fn [mock]
-                          (let [original-state-dir server/state-dir
-                                original-cap server/event-response-bytes]
-                            (set! server/state-dir root)
-                            (set! server/event-response-bytes 10)
-                            (-> (server/event-socket-request! body "GET" "/snapshot" nil)
+                          (let [original-state-dir srv-files/state-dir
+                                original-cap srv-engine-state/event-response-bytes]
+                            (set! srv-files/state-dir root)
+                            (set! srv-engine-state/event-response-bytes 10)
+                            (-> (srv-engine-state/event-socket-request! body "GET" "/snapshot" nil)
                                 (.then (fn [_] (is false "an over-cap response must be rejected"))
                                        (fn [e] (is (re-find #"exceeds" (ex-message e)))))
                                 (.finally (fn []
-                                            (set! server/state-dir original-state-dir)
-                                            (set! server/event-response-bytes original-cap)
+                                            (set! srv-files/state-dir original-state-dir)
+                                            (set! srv-engine-state/event-response-bytes original-cap)
                                             (close-mock! mock)))))))
                  (.finally #(.rmSync fs root #js {:recursive true :force true}))))))))

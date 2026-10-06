@@ -3,6 +3,10 @@
             [cljs.test :refer [deftest is async]]
             ["stream" :as stream]
             [dashboard.server :as server]
+            [dashboard.server.entities :as srv-entities]
+            [dashboard.server.files :as srv-files]
+            [dashboard.server.posts :as srv-posts]
+            [dashboard.server.snapshot :as srv-snapshot]
             [dashboard.village-data :as village-data]))
 
 (defn response-recorder []
@@ -23,9 +27,9 @@
   (let [request (stream/PassThrough.)
         response (response-recorder)]
     (set! (.-method request) "POST")
-    (set! (.-headers request) #js {:host (str "127.0.0.1:" server/port)
+    (set! (.-headers request) #js {:host (str "127.0.0.1:" srv-files/port)
                                  :content-type content-type})
-    (server/preview! request (:response response))
+    (srv-posts/preview! request (:response response))
     (.end request body)
     (:promise response)))
 
@@ -52,12 +56,12 @@
 (deftest villagers-route-preserves-uuid-string-keys-over-edn
   (let [uuid "12345678-aaaa-bbbb-cccc-123456789abc"
         response (response-recorder)]
-    (with-redefs [server/refresh-entities! (fn [world] (is (= "a" world)))
-                  server/entity-snapshot (fn [world dimension]
+    (with-redefs [srv-entities/refresh-entities! (fn [world] (is (= "a" world)))
+                  srv-entities/entity-snapshot (fn [world dimension]
                                            (is (= "a" world))
                                            {:world world :dimension dimension :sources []
                                             :entities [{:uuid uuid :type "villager" :observed-at 10 :expires-at 20}]})
-                  server/world-names (fn [] ["a" "b"])]
+                  srv-files/world-names (fn [] ["a" "b"])]
       (server/handle! #js {:url "/api/villagers?world=a"} (:response response)))
     (is (= 200 (:status @(:answer response))))
     (is (= uuid (get-in @(:answer response) [:body :villagers uuid :uuid])))
@@ -70,7 +74,7 @@
                   {:name "home" :world nil :state "historical"}]]
     (with-redefs [village-data/attach-status (fn [places observations]
                                              (mapv #(assoc % :village (first observations)) places))]
-      (let [[a b] (server/attach-villages worlds villages)]
+      (let [[a b] (srv-snapshot/attach-villages worlds villages)]
         (is (= "a" (get-in a [:places 0 :village :world])))
         (is (= "b" (get-in b [:places 0 :village :world])))
         (is (= "observed" (get-in a [:places 0 :village :state])))
@@ -78,8 +82,8 @@
 
 (deftest villagers-route-refuses-another-world-before-reading-entities
   (let [response (response-recorder)]
-    (with-redefs [server/refresh-entities! (fn [& _] (throw (js/Error. "must not read an unknown world")))
-                  server/world-names (fn [] ["a"])]
+    (with-redefs [srv-entities/refresh-entities! (fn [& _] (throw (js/Error. "must not read an unknown world")))
+                  srv-files/world-names (fn [] ["a"])]
       (server/handle! #js {:url "/api/villagers?world=b"} (:response response)))
     (is (= 400 (:status @(:answer response))))
     (is (= "no world called b" (get-in @(:answer response) [:body :error])))
