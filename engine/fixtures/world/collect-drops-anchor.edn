@@ -1,0 +1,19 @@
+;; jobs.forestry.collect-drops (card 54e4987c): the search is anchored where the job began, so a walk to an item does
+;; not extend it. Items 6 and 12 blocks from the start with :radius 8: the near one is collected, the far one (reachable
+;; only by chaining from the near one) is left lying. A drop thrown a few blocks away is still collected.
+{:defaults
+ {:tags [:forestry :collect-drops :jobs] :time :any
+  :plot {:height 8}
+  :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}}
+ :cases
+ [{:name "far-item-left-lying"
+   :act [[:summon "item" [22.5 0 16.5] "{Item:{id:\"minecraft:cobblestone\",count:1}}"]
+         [:summon "item" [28.5 0 16.5] "{Item:{id:\"minecraft:cobblestone\",count:1}}"]
+         [:job (jobs.forestry.collect-drops {:radius 8})]]
+   :expect [{:event {:source :job :kind :completed :data {:status :completed}} :within-s 60 :of-job true}]
+   :after [[:item "cobblestone" 1] [:entities "type=item,tag=wt" [[0 -1 0] [31 4 31]] 1]]}
+  {:name "thrown-drop-collected"
+   :act [[:summon "item" [17.5 0.5 16.5] "{Item:{id:\"minecraft:cobblestone\",count:1},Motion:[0.3d,0.2d,0.0d]}"]
+         [:job (jobs.forestry.collect-drops {:radius 8})]]
+   :expect [{:event {:source :job :kind :completed :data {:status :completed}} :within-s 60 :of-job true}]
+   :after [[:item "cobblestone" 1] [:entities "type=item,tag=wt" [[0 -1 0] [31 4 31]] 0]]}]}
