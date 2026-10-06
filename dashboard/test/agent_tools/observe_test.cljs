@@ -674,19 +674,32 @@
          (:offline (observe/compact-status {:mode :offline :offline {:by :shelter :job "j563" :why :logged-out-for-night :back-at 1020000}}))))
   (is (not (contains? (observe/compact-status {:mode :scheduled}) :offline))))
 
+(defn with-lock-dir [f]
+  (let [dir (.mkdtempSync fs (.join path (os/tmpdir) "observe-lock-"))]
+    (try (f dir)
+         (finally (.rmSync fs dir #js {:recursive true :force true})))))
+
 (deftest acquire-reclaims-a-lock-whose-owner-died-before-writing-its-pid
-  (let [dir (.mkdtempSync fs (.join path (os/tmpdir) "observe-lock-"))
-        lock (.join path dir "obs.lock")]
-    (.mkdirSync fs lock)
-    (.utimesSync fs lock 1 1)
-    (let [release (observe/acquire! dir "obs")]
-      (is (= (str (.-pid js/process)) (.readFileSync fs (.join path lock "pid") "utf8")))
-      (release))
-    (.rmSync fs dir #js {:recursive true :force true})))
+  (with-lock-dir
+    (fn [dir]
+      (let [lock (.join path dir "obs.lock")]
+        (.mkdirSync fs lock)
+        (.utimesSync fs lock 1 1)
+        (let [release (observe/acquire! dir "obs")]
+          (is (= (str (.-pid js/process)) (.readFileSync fs (.join path lock "pid") "utf8")))
+          (is (= ["obs.lock"] (vec (.readdirSync fs dir))) "the stale lock is renamed away and removed")
+          (release))))))
 
 (deftest acquire-refuses-a-fresh-lock-with-no-pid-yet
-  (let [dir (.mkdtempSync fs (.join path (os/tmpdir) "observe-lock-"))
-        outcome (do (.mkdirSync fs (.join path dir "obs.lock"))
-                    (try (observe/acquire! dir "obs") nil (catch :default e (.-code e))))]
-    (.rmSync fs dir #js {:recursive true :force true})
-    (is (= "EOBSERVERBUSY" outcome))))
+  (with-lock-dir
+    (fn [dir]
+      (.mkdirSync fs (.join path dir "obs.lock"))
+      (is (= "EOBSERVERBUSY" (try (observe/acquire! dir "obs") nil (catch :default e (.-code e))))))))
+
+(defn kill-failing [code] (fn [_] (throw (doto (js/Error. "kill") (aset "code" code)))))
+
+(deftest a-process-owned-by-another-user-counts-as-alive
+  (is (true? (observe/process-alive? 1 (kill-failing "EPERM"))))
+  (is (false? (observe/process-alive? 1 (kill-failing "ESRCH"))))
+  (is (true? (observe/process-alive? 1 (fn [_] nil))))
+  (is (= "EINVAL" (try (observe/process-alive? 1 (kill-failing "EINVAL")) (catch :default e (.-code e))))))

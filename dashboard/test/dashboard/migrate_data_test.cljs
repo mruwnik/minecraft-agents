@@ -66,6 +66,13 @@
     (is (= source (.readFileSync fs (.join path root "worlds/claude/places.json") "utf8")))
     (is (not (.existsSync fs (.join path root "worlds/claude/notes"))))))
 
+(deftest a-non-village-place-with-a-village-s-name-is-not-the-marker
+  (let [root (fixture)
+        same-name {:name "old-village" :kind "shelter" :x 99 :y 64 :z 99 :note "not the village"}]
+    (put root "worlds/claude/places.json" [marker same-name] true)
+    (migration/execute {:root root :world "claude" :apply? true})
+    (is (= marker (get-in (data/read-file (.join path root "worlds/claude/plans/old-village.edn")) [:metadata :legacy-place])))))
+
 (deftest metadata-conflicts-prevent-all-mutations
   (let [root (fixture)]
     (put root "worlds/claude/plans/inspected-village.edn"

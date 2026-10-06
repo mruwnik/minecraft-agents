@@ -1,5 +1,5 @@
 (ns agent-tools.world-test
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [deftest is are async]]
             [agent-tools.fake-socket :as fake]
             [agent-tools.world :as world]
             [agent-tools.world-data :as data]
@@ -52,9 +52,31 @@
                           [#"needs x y z" ["--world" "w" "Probe" "submit" "dig" "1" "64"]]
                           [#"needs x y z item" ["--world" "w" "Probe" "submit" "place" "1" "64" "2"]]
                           [#"x must be a finite number" ["--world" "w" "Probe" "submit" "dig" "x" "64" "2"]]
+                          [#"x must be a finite number" ["--world" "w" "Probe" "submit" "dig" "" "64" "2"]]
+                          [#"--range must be a finite number" ["--world" "w" "Probe" "submit" "move-to" "1" "64" "2" "--range" " "]]
                           [#"request-id" ["--world" "w" "Probe" "status"]]
                           [#"unknown command" ["--world" "w" "Probe" "dance"]]]]
     (is (fails-with pattern argv) (pr-str argv))))
+
+(deftest failure-text-does-not-claim-a-reset-body-is-absent
+  (are [code expected] (= expected (world/failure-text (doto (js/Error. "x") (aset "code" code)) "/no/such/socket"))
+    "ECONNRESET" "connection was reset"
+    "EWHATEVER" "request failed (EWHATEVER)"
+    "ENOENT" "no running body (no socket at /no/such/socket)"))
+
+(deftest a-handler-failure-after-a-sent-submit-is-reported-as-unconfirmed
+  (let [argv ["--world" "w" "Probe" "submit" "dig" "1" "64" "2" "--request-id" "dig-9"]
+        [bad-edn] (fake/request-fn (fn [_] {:text "{:ok"}))
+        [good-edn] (fake/request-fn (fn [_] {:text "{:ok true}"}))
+        lines (atom [])]
+    (async done
+      (-> (world/main! argv {:request-fn bad-edn :output #(swap! lines conj %)})
+          (.then (fn [code]
+                   (is (= 1 code))
+                   (is (re-find #"world-unavailable" (apply str @lines)))))
+          (.then (fn [_] (world/main! argv {:request-fn good-edn :output (fn [_] (throw (js/Error. "EPIPE")))})))
+          (.then (fn [code] (is (= 2 code))))
+          (.then (fn [_] (done)))))))
 
 (deftest a-body-is-addressed-in-its-world
   (is (fails-with #"missing --world <world>" ["Probe" "inventory"]))

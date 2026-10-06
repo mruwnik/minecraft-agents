@@ -70,7 +70,7 @@
     (set! (.-method request) "POST")
     (set! (.-headers request) #js {:host "127.0.0.1:3701" :content-type "application/edn"})
     (server/resolve-attention! request (:response response) body)
-    (.end request (pr-str {:request-id "r1" :reason :handled}))
+    (.end request (pr-str {:request-id "r1" :reason :handled :extra "not for the engine"}))
     (-> (:promise response)
         (.then (fn [{:keys [status body]}]
                  (is (= 200 status))
@@ -161,3 +161,26 @@
                  (.finally (fn []
                              (set! server/state-dir original-state-dir)
                              (.rmSync fs root #js {:recursive true :force true})))))))))
+
+(deftest an-oversized-engine-event-response-is-refused
+  (async done
+    (let [root (.mkdtempSync fs (.join path (os/tmpdir) "dashboard-events-cap-"))
+          body {:world "w" :name "Mock"}
+          engine-dir (.join path root "worlds" "w" "agents" (:name body) "engine")]
+      (.mkdirSync fs engine-dir #js {:recursive true})
+      (run done
+           (fn []
+             (-> (mock-engine! (.join path engine-dir "events.sock") (atom {}))
+                 (.then (fn [mock]
+                          (let [original-state-dir server/state-dir
+                                original-cap server/event-response-bytes]
+                            (set! server/state-dir root)
+                            (set! server/event-response-bytes 10)
+                            (-> (server/event-socket-request! body "GET" "/snapshot" nil)
+                                (.then (fn [_] (is false "an over-cap response must be rejected"))
+                                       (fn [e] (is (re-find #"exceeds" (ex-message e)))))
+                                (.finally (fn []
+                                            (set! server/state-dir original-state-dir)
+                                            (set! server/event-response-bytes original-cap)
+                                            (close-mock! mock)))))))
+                 (.finally #(.rmSync fs root #js {:recursive true :force true}))))))))

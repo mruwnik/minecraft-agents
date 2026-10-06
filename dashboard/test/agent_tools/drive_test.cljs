@@ -63,7 +63,9 @@
   (are [code expected] (= expected (drive/failure-text (coded code) "Bob" "/no/such/socket"))
     "ETIMEDOUT" "drive request to Bob timed out after 3 s"
     "ERESPONSETOOLARGE" "drive response from Bob exceeded 64 KB"
-    "ECONNRESET" "no running body Bob (no control socket at /no/such/socket)"
+    "ECONNRESET" "connection to Bob was reset"
+    "EWHATEVER" "drive request to Bob failed (EWHATEVER)"
+    "ENOENT" "no running body Bob (no control socket at /no/such/socket)"
     "ECONNREFUSED" "no running body Bob (no control socket at /no/such/socket)"))
 
 (deftest request-options-bound-time-and-reply-size

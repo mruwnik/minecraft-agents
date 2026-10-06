@@ -212,6 +212,25 @@
 ;; a lock dir with no pid file this old was left by a process that died between mkdir and writing its pid
 (def pidless-lock-stale-ms 5000)
 
+(defn process-alive?
+  "kill -0: ESRCH means gone, EPERM means it exists under another user."
+  ([pid] (process-alive? pid #(.kill js/process % 0)))
+  ([pid kill!]
+   (try (kill! pid) true
+        (catch :default e
+          (case (code-of e) "ESRCH" false "EPERM" true (throw e))))))
+
+(defn reclaim-stale-lock!
+  "Move the stale lock aside atomically (the loser of a race gets ENOENT) and delete it; then make a fresh one.
+  Throws EEXIST when another observer made its own lock first."
+  [lock]
+  (let [aside (str lock ".stale-" (.-pid js/process) "-" (js/Math.floor (* (js/Math.random) 1e9)))]
+    (try (.renameSync fs lock aside)
+         (.rmSync fs aside #js {:recursive true :force true})
+         (catch :default error
+           (when-not (= "ENOENT" (code-of error)) (throw error))))
+    (.mkdirSync fs lock #js {:mode private-dir-mode})))
+
 (defn acquire!
   "Take the observer's lock directory; the function that gives it back. Throws EOBSERVERBUSY while a live process holds it."
   [dir observer]
@@ -225,11 +244,11 @@
                  pid? (and pid (js/Number.isInteger pid) (not= 0 pid))]
              (when (and (not pid?) (< (- (js/Date.now) (.-mtimeMs (.statSync fs lock))) pidless-lock-stale-ms))
                (throw (busy)))
-             (when (and pid? (try (.kill js/process pid 0) true
-                                  (catch :default e (if (= "ESRCH" (code-of e)) false (throw e)))))
+             (when (and pid? (process-alive? pid))
                (throw (busy)))
-             (.rmSync fs lock #js {:recursive true})
-             (.mkdirSync fs lock #js {:mode private-dir-mode}))))
+             (try (reclaim-stale-lock! lock)
+                  (catch :default e
+                    (throw (if (= "EEXIST" (code-of e)) (busy) e)))))))
     (.writeFileSync fs (.join path lock "pid") (str (.-pid js/process)) #js {:mode private-file-mode})
     #(.rmSync fs lock #js {:recursive true :force true})))
 

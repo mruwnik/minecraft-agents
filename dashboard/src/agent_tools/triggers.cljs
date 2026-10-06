@@ -76,7 +76,7 @@ Add and put both create or replace a custom entry; built-in entries cannot be re
                       (keyword (:persistence v)))
         cooldown (when (some? (:cooldown-s v))
                    (let [n (js/Number (:cooldown-s v))]
-                     (when-not (and (js/Number.isFinite n) (>= n 0)) (fail "cooldown must be nonnegative"))
+                     (when-not (and (not (str/blank? (:cooldown-s v))) (js/Number.isFinite n) (>= n 0)) (fail "cooldown must be nonnegative"))
                      n))
         backoff (when (some? (:backoff v)) (one-form (:backoff v)))]
     (cond-> {}

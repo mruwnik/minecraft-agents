@@ -42,6 +42,7 @@
     (is (string? (:error (apply request argv))) (pr-str argv)))
   (doseq [text ["(one) (two)" "1) (2" (apply str (repeat 13000 "x"))]]
     (is (thrown? js/Error (triggers/one-form text)) text))
+  (is (string? (:error (apply request ["add" "x" "--when" "true" "--job" "(jobs.movement.look-around)" "--cooldown-s" ""]))))
   (is (= 'x (triggers/one-form "x")))
   (doseq [text ["0s" "forever"]]
     (is (thrown? js/Error (triggers/duration text)) text))

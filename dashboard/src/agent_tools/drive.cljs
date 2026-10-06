@@ -113,15 +113,21 @@
 
 (defn send! [socket-path req] (http/request (request-options socket-path req)))
 
+(defn no-body-text [agent socket]
+  (str "no running body " agent " ("
+       (if (.existsSync fs socket)
+         (str "connection failed at " socket)
+         (str "no control socket at " socket))
+       ")"))
+
 (defn failure-text [error agent socket]
   (case (aget error "code")
     "ETIMEDOUT" (str "drive request to " agent " timed out after 3 s")
     "ERESPONSETOOLARGE" (str "drive response from " agent " exceeded 64 KB")
-    (str "no running body " agent " ("
-         (if (.existsSync fs socket)
-           (str "connection failed at " socket)
-           (str "no control socket at " socket))
-         ")")))
+    "ECONNRESET" (str "connection to " agent " was reset")
+    "ENOENT" (no-body-text agent socket)
+    "ECONNREFUSED" (no-body-text agent socket)
+    (str "drive request to " agent " failed (" (or (aget error "code") (.-message error)) ")")))
 
 (defn main!
   ([] (main! (vec (.slice (.-argv js/process) 2))))

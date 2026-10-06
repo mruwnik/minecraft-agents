@@ -52,7 +52,11 @@
 (defn system-started? [e]
   (and (= "system" (:source e)) (contains? #{"started" "run_started" "restored"} (:kind e))))
 
-(defn kind-name [e] (str/replace (:kind e) "_" "-"))
+(defn dashed
+  "A kind with dashes for underscores; a legacy line may have none."
+  [kind] (str/replace (str kind) "_" "-"))
+
+(defn kind-name [e] (dashed (:kind e)))
 (defn kind-is? [e & kinds] (contains? (set kinds) (kind-name e)))
 
 ;; only a top-level job (its own id is the head of its chain) is "the current job"; a queued job is not running yet
@@ -75,7 +79,7 @@
 ;; The last lifecycle event that says the body is gone: a stop (system.stopping), a disconnect or kick of the session,
 ;; a failed reconnect. A later body.spawned / body.online or system.started ends it.
 (defn offline-event? [{:keys [source kind]}]
-  (let [kind (str/replace kind "_" "-")]
+  (let [kind (dashed kind)]
     (or (and (= "system" source) (= "stopping" kind))
         (and (= "body" source) (contains? #{"disconnected" "kicked"} kind))
         (= "reconnect-failed" kind))))
@@ -264,7 +268,7 @@
 ;; What a body's popup lists: the events people read, not memory saves, heartbeats and path debug.
 (defn log-worthy? [e]
   (let [{:keys [source kind attention]} (canonical-event e)
-        kind (str/replace kind "_" "-")]
+        kind (dashed kind)]
     (cond
       (= "memory" source) false
       (= "memory-written" kind) false
@@ -279,7 +283,7 @@
     (if (:time-ms e)
       e
       {:seq (:seq event) :generation-id "legacy" :time-ms (:t event)
-       :source (keyword (:source event)) :kind (keyword (str/replace (:kind event) "_" "-"))
+       :source (keyword (:source event)) :kind (keyword (dashed (:kind event)))
        :context (cond-> {} (:job event) (assoc :job-id (:job event)) (:chain event) (assoc :chain (:chain event))
                   (:round event) (assoc :round (:round event)) (:reflex event) (assoc :reflex-id (:reflex event)))
        :data (dissoc event :seq :t :source :kind :job :chain :round :reflex :text :message :attention :request-id :level :inventory)

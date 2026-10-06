@@ -41,7 +41,7 @@
 (defn fail [message] (throw (js/Error. message)))
 
 (defn num [text name]
-  (when-not (and (some? text) (js/Number.isFinite (js/Number text)))
+  (when-not (and (some? text) (not (str/blank? text)) (js/Number.isFinite (js/Number text)))
     (fail (str name " must be a finite number")))
   (js/Number text))
 
@@ -128,13 +128,19 @@
                                              :timeout (get-in parsed [:wait :timeout])} get!))]
     (assoc answer :wait wake)))
 
+(defn no-body-text [socket-path]
+  (if (.existsSync fs socket-path)
+    "no running body (connection refused)"
+    (str "no running body (no socket at " socket-path ")")))
+
 (defn failure-text [error socket-path]
   (case (aget error "code")
     "ETIMEDOUT" "request timed out after 3s"
     "ERESPONSETOOLARGE" "engine response exceeded 64 KB"
-    (if (.existsSync fs socket-path)
-      (str "connection failed (" (or (aget error "code") (.-message error)) ")")
-      (str "no running body (no socket at " socket-path ")"))))
+    "ECONNRESET" "connection was reset"
+    "ENOENT" (no-body-text socket-path)
+    "ECONNREFUSED" (no-body-text socket-path)
+    (str "request failed (" (or (aget error "code") (.-message error)) ")")))
 
 (defn print-text! [text] (.write (.-stdout js/process) text))
 
@@ -146,10 +152,11 @@
      (if (:error parsed)
        (do (js/console.error (str (:error parsed) "\n" usage)) (js/Promise.resolve 2))
        (let [socket (drive/socket-path-for parsed)]
-         (.then (send! socket (:body parsed) request-fn)
+         (.catch
+          (.then (send! socket (:body parsed) request-fn)
                 (fn [{:keys [status content-type text]}]
                   (let [ok? (and (>= status 200) (< status 300))
-                        answer (when (http/edn-response? content-type) (data/read-edn text))]
+                        answer (when (http/edn-response? content-type) (try (data/read-edn text) (catch :default _ nil)))]
                     (cond
                       (nil? answer)
                       (do (output (str "{:ok false :reason :world-unavailable :http-status " status
@@ -158,8 +165,8 @@
                       (and (:wait parsed) ok? (:ok answer))
                       (.then (wait-after! parsed answer request-fn)
                              (fn [result] (output (str (data/write-edn result) "\n")) 0))
-                      :else (do (output text) (if ok? 0 1)))))
-                (fn [error]
+                      :else (do (output text) (if ok? 0 1))))))
+          (fn [error]
                   (let [request-id (get-in parsed [:body :request-id])]
                     (js/console.error (str (failure-text error socket) "; command was not confirmed"
                                            (when request-id (str "; retry/query with --request-id " request-id))))

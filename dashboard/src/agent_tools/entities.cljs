@@ -17,7 +17,8 @@
 (def future-origin-skew-ms 5000)
 
 (defn- number [value]
-  (let [n (js/Number value)] (when (js/Number.isFinite n) n)))
+  (when-not (str/blank? (str value))
+    (let [n (js/Number value)] (when (js/Number.isFinite n) n))))
 
 (defn- dimension-name [value]
   (let [value (str value)]
@@ -255,11 +256,11 @@
      (let [request (try (options argv) (catch :default error error))]
        (if (instance? js/Error request)
          (do (output (data/write-edn (error-result request))) (js/Promise.resolve 2))
-         (-> (execute request get-fn)
-             (.then (fn [result]
-                      (let [text (data/write-edn result)]
-                        (if (> (byte-length text) max-output-bytes)
-                          (do (output (data/write-edn (failure "output-too-large" "entity output exceeds 65536 bytes; lower --limit or omit --raw")))
-                              1)
-                          (do (output text) (if (:ok result) 0 1))))))
-             (.catch (fn [error] (output (data/write-edn (transport-failure error))) 1))))))))
+         (.then (execute request get-fn)
+                (fn [result]
+                  (let [text (data/write-edn result)]
+                    (if (> (byte-length text) max-output-bytes)
+                      (do (output (data/write-edn (failure "output-too-large" "entity output exceeds 65536 bytes; lower --limit or omit --raw")))
+                          1)
+                      (do (output text) (if (:ok result) 0 1)))))
+                (fn [error] (output (data/write-edn (transport-failure error))) 2)))))))

@@ -45,6 +45,7 @@
       (is (= :invalid-limit (error-reason #(entities/options ["ProbeMove" "--world" "w" "--state" state "--limit" "51"]))))
       (is (= :invalid-center (error-reason #(entities/options ["ProbeMove" "--world" "w" "--state" state "--center" "1,2"]))))
       (is (= :invalid-center (error-reason #(entities/options ["ProbeMove" "--world" "w" "--state" state "--center" "1,,3"]))))
+      (is (= :invalid-radius (error-reason #(entities/options ["ProbeMove" "--world" "w" "--state" state "--radius" ""]))))
       (finally (close)))))
 
 (deftest compact-query-centres-on-self-includes-players-and-uses-real-ages
@@ -179,6 +180,14 @@
   (let [lines (atom [])]
     (-> (entities/main! argv #(swap! lines conj %) get-fn)
         (.then (fn [code] {:code code :out (apply str @lines)})))))
+
+(deftest transport-failure-exits-2-like-the-other-tools
+  (let [{:keys [state close]} (fixture)]
+    (async done
+      (-> (run-main! ["ProbeMove" "--world" "w" "--state" state]
+                     (fn [_ _ _] (js/Promise.reject (doto (js/Error. "boom") (aset "code" "ECONNREFUSED")))))
+          (.then (fn [{:keys [code]}] (is (= 2 code))))
+          (.then (fn [_] (close) (done)))))))
 
 (deftest main-validates-arguments-compactly-and-maps-transport-errors
   (let [{:keys [state close]} (fixture)

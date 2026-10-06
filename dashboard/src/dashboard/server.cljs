@@ -136,6 +136,7 @@
 (def live-errors (atom {}))
 (def event-page-size 1000)
 (def event-socket-timeout-ms 1500)
+(def event-response-bytes (* 4 1024 1024))
 (declare agent-entries)
 
 (defn edn-response [text]
@@ -150,8 +151,14 @@
            req (.request
                 http options
                 (fn [res]
-                  (let [chunks (atom [])]
-                    (.on res "data" #(swap! chunks conj %))
+                  (let [chunks (atom []) size (atom 0)]
+                    (.on res "error" reject)
+                    (.on res "data"
+                         (fn [chunk]
+                           (swap! size + (.-length chunk))
+                           (if (> @size event-response-bytes)
+                             (.destroy res (js/Error. "engine event response exceeds 4 MiB"))
+                             (swap! chunks conj chunk))))
                     (.on res "end"
                          (fn []
                            (let [status (.-statusCode res)
@@ -395,12 +402,19 @@
        (.on req "error" reject)
        (.end req)))))
 
+(defn prune-cache
+  "The cache without the bodies that no longer have a folder (entries: one listing of the bodies)."
+  [cache entries]
+  (let [live (set (map body-key entries))]
+    (into {} (filter (fn [[key _]] (contains? live key))) cache)))
+
 (defn refresh-entities! [world-name]
   (let [now (js/Date.now)
-        targets (->> (agent-entries) (filter #(and (= world-name (:world %)) (engine-folder? %)))
+        entries (agent-entries)
+        targets (->> entries (filter #(and (= world-name (:world %)) (engine-folder? %)))
                      (sort-by (fn [b] [(get-in @entity-cache [(body-key b) :requested-at] 0) (:name b)])))
         room (max 0 (- entity-request-cap (count @entity-in-flight)))]
-    (swap! entity-cache #(entities/bound (into {} (filter (fn [[key _]] (some (fn [b] (= key (body-key b))) (agent-entries))) %)) now))
+    (swap! entity-cache #(entities/bound (prune-cache % entries) now))
     (doseq [body (take room (filter #(and (not (contains? @entity-in-flight (body-key %)))
                                          (>= (- now (get-in @entity-cache [(body-key %) :requested-at] 0)) entity-refresh-ms)) targets))
             :let [key (body-key body)]]
@@ -615,7 +629,8 @@
 
 (defn send-thumbs-stats! [res]
   (-> @thumbnailer
-      (.then (fn [t] (send-json! res 200 ((:stats t)))))))
+      (.then (fn [t] (send-json! res 200 ((:stats t)))))
+      (.catch (fn [e] (when-not (.-headersSent res) (send-json! res 500 {:error (str (ex-message e))}))))))
 
 ;; ---------------------------------------------------------------- the live view, on this origin
 ;; js/viewmount.mjs builds tools/view/serve.mjs's request handler without listening; its paths (/view, /pose/, /hud/,
@@ -738,7 +753,7 @@
                      (let [request (try (reader/read-string text) (catch :default _ nil))]
                        (if-not (and (map? request) (string? (:request-id request)) (= :handled (:reason request)))
                          (send-edn! res 400 {:error "expected {:request-id string :reason :handled}"})
-                         (-> (event-socket-request! body "POST" "/attention/resolve" request)
+                         (-> (event-socket-request! body "POST" "/attention/resolve" (select-keys request [:request-id :reason]))
                              (.then #(send-edn! res 200 %))
                              (.catch (fn [e] (when-not (.-headersSent res)
                                                (send-edn! res 503 {:error (ee/socket-failure-text e)})))))))))))))
@@ -764,13 +779,20 @@
   "Calls on-done once with the body text, or nil when it is over the limit or the request broke off."
   [req limit on-done]
   (let [chunks (atom []) size (atom 0) done? (atom false)
-        finish! (fn [text] (when-not @done? (reset! done? true) (on-done text)))]
-    (.on req "data" (fn [chunk]
-                      (swap! size + (.-length chunk))
-                      (when (<= @size limit) (swap! chunks conj chunk))))
-    (.on req "error" #(finish! nil))
-    (.on req "aborted" #(finish! nil))
-    (.on req "end" #(finish! (when (<= @size limit) (.toString (js/Buffer.concat (to-array @chunks)) "utf8"))))))
+        finish! (fn [text] (when-not @done? (reset! done? true) (on-done text)))
+        refuse! (fn []
+                  (finish! nil)
+                  (some-> (.-socket req) (.destroySoon)))
+        declared (js/Number (or (some-> (.-headers req) (aget "content-length")) 0))]
+    (if (> declared limit)
+      (refuse!)
+      (do (.on req "data" (fn [chunk]
+                            (when-not @done?
+                              (swap! size + (.-length chunk))
+                              (if (> @size limit) (refuse!) (swap! chunks conj chunk)))))
+          (.on req "error" #(finish! nil))
+          (.on req "aborted" #(finish! nil))
+          (.on req "end" #(finish! (.toString (js/Buffer.concat (to-array @chunks)) "utf8")))))))
 
 ;; ---------------------------------------------------------------- state-changing routes
 ;; Every POST route goes through dashboard.guard (Host, Origin, Content-Type, method) and a body limit.
@@ -1048,7 +1070,12 @@
         :unsupported (send-json! res 404 {:error "unsupported for engine bodies"})
         (send-json! res 404 {:error route-list})))))
 
-(defn handler [req res]
+(defn request-url
+  "The parsed request target, or nil when it is malformed."
+  [req]
+  (try (js/URL. (.-url req) "http://dashboard") (catch :default _ nil)))
+
+(defn dispatch! [req res]
   (try
     (if (view-request? req)
       (.handle @view-mount req res)
@@ -1056,8 +1083,17 @@
     (catch :default e
       (if (.-headersSent res)
         (.end res)
+        ;; the target parsed in handler, so routing it again cannot throw
         ((if (edn-library-kinds (:kind (routes/route (.-url req)))) send-edn! send-json!)
          res 500 {:error (str (ex-message e))})))))
+
+(defn handler
+  "Every request needs a loopback Host (DNS rebinding) and a parseable target before any route sees it."
+  [req res]
+  (cond
+    (not (guard/local-host? (some-> (.-headers req) (.-host)) port)) (send-json! res 403 {:error "bad Host"})
+    (nil? (request-url req)) (send-json! res 400 {:error "bad request target"})
+    :else (dispatch! req res)))
 
 (defn close-all!
   "Ends the thumbnail worker and the view server's scan worker (those that were started); resolves when done."

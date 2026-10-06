@@ -241,8 +241,8 @@
 
 (deftest signals-takeover-who-and-since
   (doseq [[title events expected]
-          [["started" [(ev 1 {:source "system" :kind "takeover_started" :who "dan"})] {:takeover? true :takeover-who "dan" :takeover-t (+ t0 1000)}]
-           ["ended clears who and since" [(ev 1 {:source "system" :kind "takeover_started" :who "dan"}) (ev 2 {:source "system" :kind "takeover_ended"})] {:takeover? false}]
+          [["started" [(ev 1 {:source "system" :kind "takeover_started" :who "operator"})] {:takeover? true :takeover-who "operator" :takeover-t (+ t0 1000)}]
+           ["ended clears who and since" [(ev 1 {:source "system" :kind "takeover_started" :who "operator"}) (ev 2 {:source "system" :kind "takeover_ended"})] {:takeover? false}]
            ["a new holder replaces" [(ev 1 {:source "system" :kind "takeover_started" :who "a"}) (ev 3 {:source "system" :kind "takeover_started" :who "b"})]
             {:takeover? true :takeover-who "b" :takeover-t (+ t0 3000)}]]]
     (testing title
@@ -406,3 +406,11 @@
         v (view events (+ t0 5000))]
     (is (nil? (:job v)))
     (is (nil? (:reflex v)))))
+
+(deftest a-legacy-line-without-a-kind-folds-and-is-kept
+  (let [text "{\"source\":\"job\",\"t\":1000}\n{\"source\":\"job\",\"kind\":\"round_started\",\"t\":2000}\n"
+        state (ee/fold-text ee/empty-engine text)]
+    (is (= 2000 (get-in state [:last :t])))
+    (is (false? (boolean (ee/offline-event? {:source "job"}))))
+    (is (boolean? (ee/log-worthy? {:source "job"})))
+    (is (map? (ee/log-entry {:source "job" :t 1})))))

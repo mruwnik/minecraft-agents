@@ -130,19 +130,19 @@
 (deftest manual-text-table
   (let [at (.getTime (js/Date. 2026 9 3 14 30 0))]
     (are [b expected] (= expected (t/manual-text b))
-      (body {:signals {:takeover? true :takeover-who "dan" :takeover-t at}}) "driven by dan since 14:30"
-      (body {:signals {:takeover? true :takeover-who "dan"}}) "driven by dan"
+      (body {:signals {:takeover? true :takeover-who "operator" :takeover-t at}}) "driven by operator since 14:30"
+      (body {:signals {:takeover? true :takeover-who "operator"}}) "driven by operator"
       (body {:signals {:takeover? true}}) "driven by someone"
-      (body {:signals {:takeover? false :takeover-who "dan" :takeover-t at}}) nil
-      (body {:up false :signals {:takeover? true :takeover-who "dan"}}) nil
+      (body {:signals {:takeover? false :takeover-who "operator" :takeover-t at}}) nil
+      (body {:up false :signals {:takeover? true :takeover-who "operator"}}) nil
       (body) nil)))
 
 (deftest card-model-manual
   (let [at (.getTime (js/Date. 2026 9 3 14 30 0))
-        card (t/card-model (body {:signals {:takeover? true :takeover-who "dan" :takeover-t at :hurt-t now}}) now)]
+        card (t/card-model (body {:signals {:takeover? true :takeover-who "operator" :takeover-t at :hurt-t now}}) now)]
     (are [k expected] (= expected (k card))
       :status :manual
-      :manual "driven by dan since 14:30"
+      :manual "driven by operator since 14:30"
       :reason "hurt 0s ago")))
 
 (deftest card-model-mine

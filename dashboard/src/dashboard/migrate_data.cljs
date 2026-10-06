@@ -85,7 +85,7 @@
         places (if (.existsSync fs places-file) (read-json places-file) [])
         _ (when-not (and (vector? places) (<= (count places) 10000)) (throw (js/Error. "places must be a bounded vector")))
         markers (filter #(= "village" (:kind %)) places)
-        all-by-name (into {} (map (juxt :name identity)) places)
+        by-name (into {} (map (juxt :name identity)) markers)
         inspections (inspection-inputs state)
         duplicates (->> inspections (group-by #(get-in % [:value :place])) (filter #(> (count (val %)) 1)))]
     (when (seq duplicates) (throw (js/Error. "multiple inspections for one place need deliberate merge; no migration writes")))
@@ -96,7 +96,7 @@
           places-ref (when (.existsSync fs places-file) (source-ref state places-file))]
       (mapv (fn [name]
               (let [{:keys [value source]} (get inspection-by-name name)
-                    marker (get all-by-name name)]
+                    marker (get by-name name)]
                 (when (and marker value (not= (anchor marker) (anchor (:at value))))
                   (throw (js/Error. (str "place/inspection anchors disagree for " name "; no migration writes"))))
                 (intent-plan world marker value (concat (when marker [places-ref]) (when source [source]))))) names))))
