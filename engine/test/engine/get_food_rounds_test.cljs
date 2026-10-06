@@ -8,6 +8,7 @@
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.memory :as mem]
+            [engine.scenario :as scenario]
             [engine.takeover :as takeover]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
@@ -132,6 +133,24 @@
           (is (= [] (:list (core/state eng))) "one round")
           (is (= [] (entries eng :food-source)) "the empty chest is forgotten")
           (is (= ["beef"] (call-args p "eat" "item")) "then it hunted"))))))
+
+;; ---------------------------------------------------------------- as the hungry reflex
+
+(defn reflex-events [seen kind] (filterv #(and (= :reflex (:source %)) (= kind (:kind %))) @seen))
+
+(deftest the-hungry-reflex-runs-one-round-and-never-continues
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[world fed?] [[{:self {:food 3} :inventory [{:name "bread" :count 5}]} true]
+                              [{:self {:food 3} :entities [cow]} true]
+                              [{:self {:food 3}} false]]]
+          (let [{:keys [eng p seen]} (setup world :step-ms 5)]
+            (core/load-scenario! eng (scenario/parse "{:register [{:trigger :hungry}]}"))
+            (await (core/tick! eng))
+            (is (= 1 (count (reflex-events seen :ended))) (pr-str world))
+            (is (= fed? (> (food p) 3)) (pr-str world))
+            (is (= [] (reflex-events seen :continued)) "a reflex job that yields is a bug (C1 turns it into :declined)")))))))
 
 ;; ---------------------------------------------------------------- cut and resume
 
