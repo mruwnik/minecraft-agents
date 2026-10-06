@@ -20,6 +20,12 @@ test('slotArgv: without --allow-time only the body slot wraps it', () => {
   assert.deepEqual(slotArgv(['x.edn'], '/rs', 'node', 'wt.mjs'), ['/rs', 'body', '--', 'node', 'wt.mjs', 'x.edn'])
 })
 
+test('slotKinds: a kind an outer res-slot already holds (RES_SLOT_HELD) is not taken again', () => {
+  assert.deepEqual(slotKinds(['--allow-time'], 'body'), ['time'])
+  assert.deepEqual(slotKinds(['a.edn'], 'body'), [])
+  assert.deepEqual(slotArgv(['a.edn'], '/rs', 'node', 'wt.mjs', 'body'), ['node', 'wt.mjs', 'a.edn'])
+})
+
 test('bodyName: --body NAME, else the runner default', () => {
   assert.equal(bodyName(['a.edn', '--body', 'ProbeX']), 'ProbeX')
   assert.equal(bodyName(['a.edn']), 'ProbeFixture')

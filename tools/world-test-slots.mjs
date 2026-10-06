@@ -1,11 +1,11 @@
 // Why JavaScript: thin helper for the tools/world-test.mjs launcher (which res-slot kinds a run holds).
 import fs from 'node:fs'
 import path from 'node:path'
-// A run holds the body slot; with --allow-time it takes the time slot first (only one world-time-changing run at a time).
-export const slotKinds = (args) => (args.includes('--allow-time') ? ['time', 'body'] : ['body'])
+// A run holds the body slot (unless an outer res-slot already does: RES_SLOT_HELD lists those kinds); with --allow-time it takes the time slot first (only one world-time-changing run at a time).
+export const slotKinds = (args, heldKinds = '') => (args.includes('--allow-time') ? ['time', 'body'] : ['body']).filter((k) => !heldKinds.split(',').includes(k))
 
-export const slotArgv = (args, resSlot, node, script) =>
-  [...slotKinds(args).flatMap((k) => [resSlot, k, '--']), node, script, ...args]
+export const slotArgv = (args, resSlot, node, script, heldKinds = '') =>
+  [...slotKinds(args, heldKinds).flatMap((k) => [resSlot, k, '--']), node, script, ...args]
 
 // One body name = one account and one plot: a second concurrent run on it would kick the first. A claim file <dir>/world-body.<name>.pid holds the run's pid; a dead holder is stale.
 export const bodyName = (args) => (args.includes('--body') ? args[args.indexOf('--body') + 1] : 'ProbeFixture')

@@ -20,7 +20,7 @@ if (!process.env.WORLD_TEST_SLOT_HELD && !args.includes('--list')) {
   const claim = claimBody(claimDir, body, process.pid, (pid) => { try { process.kill(pid, 0); return true } catch (e) { return e.code === 'EPERM' } })
   if (!claim.ok) { console.error(`world-test: ${claim.why}`); process.exit(75) }
   process.on('exit', () => releaseBody(claimDir, body, process.pid))
-  const [cmd, ...argv] = slotArgv(args, path.join(import.meta.dirname, 'res-slot'), process.execPath, process.argv[1])
+  const [cmd, ...argv] = slotArgv(args, path.join(import.meta.dirname, 'res-slot'), process.execPath, process.argv[1], process.env.RES_SLOT_HELD ?? '')
   // async, so INT/TERM reach us: pass them on to the run and exit (releasing the claim) when it ends
   const child = spawn(cmd, argv, { stdio: 'inherit', env: { ...process.env, WORLD_TEST_SLOT_HELD: '1' } })
   for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => child.kill(sig))
