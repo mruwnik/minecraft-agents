@@ -14,12 +14,34 @@
 
 (defn setup [world]
   (let [clock (atom 1000000)
-        [_ sink] (tu/legacy-capture-sink)
+        [seen sink] (tu/legacy-capture-sink)
         p (tu/fake world)
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
                           :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    {:eng eng :p p}))
+    {:eng eng :p p :seen seen}))
+
+(defn of-kind [seen kind] (filterv #(= kind (:kind %)) @seen))
+
+(defn stopped-reason [seen] (:reason (first (of-kind seen :stopped))))
+
+(defn on-place!
+  "Run f (state, args) after each place of item, the fake's own place first."
+  [p item f]
+  (.override (.-world p) "place"
+             (fn ^:async g [tok a impl]
+               (let [r (await (impl tok a))]
+                 (when (= item (.-item a)) (f (fake/state p) a))
+                 r))))
+
+(defn on-wait!
+  "Run f with the wait's number (from 1) and ms before each wait."
+  [p f]
+  (let [n (atom 0)]
+    (.override (.-world p) "wait"
+               (fn ^:async g [tok a impl]
+                 (f (swap! n inc) (.-ms a))
+                 (await (impl tok a))))))
 
 (defn floor
   "Stone at y 63 for every x and z within n of the origin."
@@ -92,8 +114,7 @@
           (await (core/tick! eng))
           (is (= [{:x 3 :y 64 :z 0}] (mapv (comp :pos call-args) (calls p "moveTo"))))
           (is (not (.-onFire (.self p))))
-          (await (run-until-empty eng 3))
-          (is (= [] (:list (core/state eng))) "done once the fire is out")
+          (is (= [] (:list (core/state eng))) "done in one run once the fire is out")
           (is (= [{:pos {:x 0 :y 64 :z 0} :cause :fire}] (entries eng :extinguish))))))))
 
 (deftest water-beyond-the-radius-is-ignored
@@ -149,7 +170,7 @@
           (core/submit! eng '(jobs.survival.extinguish) {})
           (.override (.-world p) "moveTo" (fn ^:async f [_ _ _] #js {:status "blocked"}))
           (await (core/tick! eng))
-          (await (core/tick! eng))
+          (is (= 3 (count (calls p "moveTo"))) "three blocked walks in one run")
           (is (= 9 (count (entries eng :hazard)))))))))
 
 ;; ------------------------------------------------------------------- bucket
@@ -163,11 +184,11 @@
                                       :blocks (floor 6)})]
           (core/submit! eng '(jobs.survival.extinguish) {})
           (await (core/tick! eng))
-          (is (= [{:pos {:x 0 :y 64 :z 0} :item "water_bucket"}] (mapv call-args (calls p "place"))))
+          (is (= {:pos {:x 0 :y 64 :z 0} :item "water_bucket"} (call-args (first (calls p "place")))))
           (is (= [] (calls p "moveTo")) "no walking needed")
           (is (not (.-onFire (.self p))))
-          (await (run-until-empty eng 3))
-          (is (= [] (:list (core/state eng)))))))))
+          (is (= [] (:list (core/state eng))) "poured and scooped in one run")
+          (is (= [] (entries eng :extinguish-pour)) "the pour is forgotten once scooped"))))))
 
 (deftest scoops-the-poured-water-back-once-the-fire-is-out
   (async done
@@ -177,7 +198,7 @@
                                       :inventory [{:name "water_bucket" :count 1}]
                                       :blocks (floor 6)})]
           (core/submit! eng '(jobs.survival.extinguish) {})
-          (await (run-until-empty eng 5))
+          (await (core/tick! eng))
           (is (= [] (:list (core/state eng))))
           (is (= [{:pos {:x 0 :y 64 :z 0} :item "water_bucket"}
                   {:pos {:x 0 :y 64 :z 0} :item "bucket"}]
@@ -192,13 +213,12 @@
         (let [{:keys [eng p]} (setup {:self {:onFire true}
                                       :inventory [{:name "water_bucket" :count 1}]
                                       :blocks (floor 6)})]
+          (on-place! p "water_bucket" (fn [s _] (fake/remove-block! p [0 64 0])))
           (core/submit! eng '(jobs.survival.extinguish) {})
           (await (core/tick! eng))
-          (is (= 1 (count (:list (core/state eng)))) "still listed after the pour")
-          (fake/remove-block! p [0 64 0])
-          (await (run-until-empty eng 15))
           (is (= [] (:list (core/state eng))))
-          (is (= 1 (count (calls p "place")))))))))
+          (is (= 1 (count (calls p "place"))))
+          (is (= extinguish/max-water-waits (count (calls p "wait"))) "waited the bound for the water block"))))))
 
 (deftest no-safe-cell-gives-up-after-three-rounds-with-one-warning
   (async done
@@ -211,9 +231,10 @@
                                 :now #(deref clock)
                                 :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
           (core/submit! eng '(jobs.survival.extinguish) {})
-          (dotimes [_ 3] (await (core/tick! eng)))
-          (is (= [] (:list (core/state eng))))
-          (is (= 1 (count (filter #(= :extinguish_stuck (:kind %)) @seen)))))))))
+          (await (core/tick! eng))
+          (is (= [] (:list (core/state eng))) "gives up in one run")
+          (is (= 1 (count (filter #(= :extinguish_stuck (:kind %)) @seen))))
+          (is (= :stuck (stopped-reason seen)) "ends stopped, not completed"))))))
 
 (deftest does-not-pour-water-into-lava
   (async done
@@ -237,25 +258,29 @@
               eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
                                 :now #(deref clock)
                                 :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-          (core/submit! eng '(jobs.survival.extinguish) {})
-          (dotimes [_ 3] (await (core/tick! eng)))
-          (is (= [] (calls p "moveTo")) "does not walk")
-          (is (= 1 (count (:list (core/state eng)))) "still running while the fire burns, so no walk resumes")
-          (is (= 1 (count (filter #(= :extinguish_wait (:kind %)) @seen))) "the agent is told once")
-          (is (pos? (count (calls p "wait"))))
-          (swap! (fake/state p) assoc-in [:self :onFire] false)
-          (await (run-until-empty eng 10))
-          (is (= [] (:list (core/state eng))))
-          (is (not-any? #(or (= :required (:attention %)) (= :failed (:kind %))) @seen)))))))
+          (let [holds (atom [])]
+            (on-wait! p (fn [n _]
+                          (swap! holds conj (:reason (core/holding eng (:id (core/holder eng)))))
+                          (when (= n 3) (swap! (fake/state p) assoc-in [:self :onFire] false))))
+            (core/submit! eng '(jobs.survival.extinguish) {})
+            (await (core/tick! eng))
+            (is (= [] (calls p "moveTo")) "does not walk")
+            (is (= 1 (count (filter #(= :extinguish_wait (:kind %)) @seen))) "the agent is told once")
+            (is (= [:burning-wait :burning-wait :burning-wait] @holds) "a declared hold while it waits")
+            (is (= [] (:list (core/state eng))) "one run until the fire is out")
+            (is (= 1 (count (filter #(= :completed (:kind %)) @seen))))
+            (is (not-any? #(or (= :required (:attention %)) (= :failed (:kind %))) @seen))))))))
 
 (deftest standing-still-gives-up-after-the-wait-cap
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (setup {:self {:onFire true} :blocks (floor 8)})]
+        (let [{:keys [eng p seen]} (setup {:self {:onFire true} :blocks (floor 8)})]
           (core/submit! eng '(jobs.survival.extinguish) {})
-          (await (run-until-empty eng (+ 5 extinguish/max-stand-waits)))
-          (is (= [] (:list (core/state eng)))))))))
+          (await (core/tick! eng))
+          (is (= [] (:list (core/state eng))))
+          (is (= extinguish/max-stand-waits (count (calls p "wait"))))
+          (is (= :still-burning (stopped-reason seen)) "still burning is stopped, not completed"))))))
 
 (deftest standing-still-eats-to-keep-regenerating
   (async done
@@ -265,7 +290,7 @@
                                       :blocks (floor 8)})]
           (core/submit! eng '(jobs.survival.extinguish) {})
           (await (core/tick! eng))
-          (is (= 1 (count (calls p "eat")))))))))
+          (is (pos? (count (calls p "eat")))))))))
 
 (deftest powder-snow-counts-as-water
   (async done
@@ -275,7 +300,7 @@
                                       :blocks (merge (floor 8) {"3,64,0" "powder_snow"})})]
           (core/submit! eng '(jobs.survival.extinguish) {})
           (await (core/tick! eng))
-          (is (= [{:pos {:x 3 :y 64 :z 0} :range 0}] (mapv call-args (calls p "moveTo")))))))))
+          (is (= {:pos {:x 3 :y 64 :z 0} :range 0} (call-args (first (calls p "moveTo"))))))))))
 
 (deftest covers-an-adjacent-lava-source-with-a-carried-block
   (async done
@@ -307,13 +332,11 @@
         (let [{:keys [eng p]} (setup {:self {:onFire true}
                                       :inventory [{:name "water_bucket" :count 1}]
                                       :blocks (floor 6)})]
+          (on-place! p "water_bucket" (fn [s _] (fake/remove-block! p [0 64 0]))) ; the block update lags
+          (on-wait! p (fn [n _] (when (= n 2) (fake/set-block! p [0 64 0] "water")))) ; now it arrives
           (core/submit! eng '(jobs.survival.extinguish) {})
           (await (core/tick! eng))
-          (fake/remove-block! p [0 64 0])      ; the server's block update has not arrived yet
-          (await (core/tick! eng))
-          (is (= 1 (count (:list (core/state eng)))) "still waiting for the water block")
-          (fake/set-block! p [0 64 0] "water")  ; now it arrives
-          (await (run-until-empty eng 5))
+          (is (= 2 (count (calls p "wait"))) "waited for the water block")
           (is (= [] (:list (core/state eng))))
           (is (= ["water_bucket" "bucket"] (mapv :item (map call-args (calls p "place")))))
           (is (not= "water" (.-name (.blockAt p #js {:x 0 :y 64 :z 0}))))
@@ -329,10 +352,9 @@
               eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
                                 :now #(deref clock)
                                 :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+          (on-place! p "water_bucket" (fn [s _] (swap! s assoc :inventory [])))   ; no empty bucket to scoop with
           (core/submit! eng '(jobs.survival.extinguish) {})
           (await (core/tick! eng))
-          (swap! (fake/state p) assoc :inventory [])   ; no empty bucket to scoop with
-          (await (run-until-empty eng 5))
           (let [[e & more] (filter #(= :extinguish.scoop_failed (:kind %)) @seen)]
             (is (empty? more))
             (is (some? e))
@@ -353,28 +375,28 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [item ["sand" "gravel" "red_sand" "white_concrete_powder"]]
-          (is (= [] (await (cover-run [{:name item :count 8}] ["1,64,0"] 2))) item))
+          (is (= [] (await (cover-run [{:name item :count 8}] ["1,64,0"] 1))) item))
         (is (= 1 (count (await (cover-run [{:name "cobblestone" :count 8}] ["1,64,0"] 1)))))))))
 
 (deftest a-cover-is-not-placed-in-anothers-zone
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= [] (await (cover-run [{:name "cobblestone" :count 4}] ["1,64,0"] 2 [(zs/whole-zone "Miles")]))))))))
+        (is (= [] (await (cover-run [{:name "cobblestone" :count 4}] ["1,64,0"] 1 [(zs/whole-zone "Miles")]))))))))
 
 (deftest covers-per-run-are-capped
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [placed (await (cover-run [{:name "cobblestone" :count 20}]
-                                       ["1,64,0" "-1,64,0" "0,64,1" "0,64,-1" "1,64,1" "2,64,0" "-2,64,0" "0,64,2"] 12))]
+                                       ["1,64,0" "-1,64,0" "0,64,1" "0,64,-1" "1,64,1" "2,64,0" "-2,64,0" "0,64,2"] 1))]
           (is (<= (count (filter #(= "cobblestone" (:item %)) placed)) extinguish/max-covers)))))))
 
 (deftest lava-under-an-already-covered-cell-is-not-covered-again
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [placed (await (cover-run [{:name "cobblestone" :count 8}] ["1,64,0" "1,63,0"] 4))]
+        (let [placed (await (cover-run [{:name "cobblestone" :count 8}] ["1,64,0" "1,63,0"] 1))]
           (is (= [{:pos {:x 1 :y 64 :z 0} :item "cobblestone"}] placed)))))))
 
 (deftest lava-beside-the-feet-under-an-overhang-is-covered
@@ -385,5 +407,40 @@
                  :blocks (merge (floor 8) {"1,64,0" "lava" "1,65,0" "stone"})}
               {:keys [eng p]} (setup w)]
           (core/submit! eng '(jobs.survival.extinguish) {})
-          (dotimes [_ 3] (await (core/tick! eng)))
+          (await (core/tick! eng))
           (is (= [{:pos {:x 1 :y 64 :z 0} :item "cobblestone"}] (mapv call-args (calls p "place")))))))))
+
+;; ------------------------------------------------------------------- one run, cuts
+
+(deftest a-cut-while-waiting-on-a-pour-leaves-the-pour-in-body-memory-and-the-next-run-scoops-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:onFire true}
+                                      :inventory [{:name "water_bucket" :count 1}]
+                                      :blocks (floor 6)})]
+          ;; the fire burns on after the pour (the server has not put it out yet); a hostile cuts the wait
+          (on-place! p "water_bucket" (fn [s _] (swap! s assoc-in [:self :onFire] true)))
+          (on-wait! p (fn [n _] (when (= n 1) (core/cut! eng (core/holder eng) :test nil))))
+          (core/submit! eng '(jobs.survival.extinguish) {})
+          (await (core/tick! eng))
+          (is (= [{:pos {:x 0 :y 64 :z 0}}] (entries eng :extinguish-pour)) "the pour outlives the cut")
+          (swap! (fake/state p) assoc-in [:self :onFire] false)
+          (await (run-until-empty eng 3))
+          (is (= [] (:list (core/state eng))))
+          (is (= ["water_bucket" "bucket"] (mapv (comp :item call-args) (calls p "place"))) "scooped by the next run")
+          (is (= [] (entries eng :extinguish-pour))))))))
+
+(deftest every-ending-of-a-run-is-done-never-continue
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[label w] [[:stand {:self {:onFire true} :blocks (floor 8)}]
+                           [:stuck {:self {:onFire true} :blocks {"0,63,0" "stone" "1,64,0" "fire"}}]
+                           [:water {:self {:onFire true} :blocks (merge (floor 8) {"3,64,0" "water"})}]
+                           [:bucket {:self {:onFire true} :inventory [{:name "water_bucket" :count 1}] :blocks (floor 6)}]]]
+          (let [{:keys [eng seen]} (setup w)]
+            (core/submit! eng '(jobs.survival.extinguish) {})
+            (await (core/tick! eng))
+            (is (= [] (:list (core/state eng))) label)
+            (is (= [] (of-kind seen :yielded)) label)))))))

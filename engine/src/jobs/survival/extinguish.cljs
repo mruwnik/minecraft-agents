@@ -1,19 +1,22 @@
 (ns jobs.survival.extinguish
   (:require [engine.ctx :as ctx]
             [jobs.lib.access :as access]
+            [jobs.lib.pace :as pace]
+            [jobs.lib.result :as result]
             [jobs.lib.util :as u]
             [jobs.survival.eat :as eat]
             [triggers.survival.burning :as burning]))
 
 (def doc
-  "Put the body out when it is on fire or in lava.
-  Each round, in this order:
-  1. With a water bucket carried and the body not in lava, pours water at the feet and notes the cell as :poured.
+  "Put the body out when it is on fire or in lava. One run, re-reading the world before each pass, until the body is
+  neither burning nor in lava (:done). Each pass, in this order:
+  1. With a water bucket carried and the body not in lava, pours water at the feet and notes the cell in body memory
+     (:extinguish-pour, ten minutes), so a run cut before the scoop leaves it for the next run.
      A cell in another's zone or claim is skipped while another way exists. As a last resort it pours there anyway,
      with one extinguish.trespass-last-resort warning.
   2. Once the fire is out, scoops the water back up with the empty bucket so no source block stays.
-     It waits up to 10 rounds for the poured cell to read as water, and up to 8 rounds while still burning.
-     A scoop that fails warns extinguish.scoop_failed with the cell.
+     It waits (a declared :burning-wait hold) up to 10 quarter seconds for the poured cell to read as water, and up to
+     8 while still burning. A scoop that fails warns extinguish.scoop_failed with the cell.
   3. With no bucket, on fire and with water within :water-radius, walks into the nearest water.
   4. In lava, or with no water in reach, walks to the best nearby cell within :step blocks.
      It must be passable, solid underfoot and not fire, lava, magma or a campfire.
@@ -22,12 +25,11 @@
   places one on a lava cell next to the feet (side or below) with open air above it, so the body does not step past it. Never sand, gravel or
   other falling blocks, never in another's zone or claim, and at most 3 covers per run.
   5. On fire, not in lava, with no water in reach and no hazard within 1.5 blocks, there is nothing useful to do.
-     It stands still: emits info extinguish_wait once, eats when food is under 18 and food is carried (to keep
-     regenerating), and waits a second per round for up to 20 rounds. The job stays alive meanwhile, so an
-     interrupted walk does not resume into more hazards; it ends when the fire is out or after the 20 rounds.
-  Ends when the body is neither burning nor in lava.
-  Three failed rounds (no safe cell, or the walk blocked while burning) give an extinguish_stuck warning, then it gives up.
-  Memory: writes :extinguish {:pos :cause} each round (cap 20, one hour),
+     It holds still (:burning-wait): emits info extinguish_wait once, eats when food is under 18 and food is carried
+     (to keep regenerating), and waits a second per pass; still burning after 20 seconds ends stopped :still-burning.
+  Three failed walks (no safe cell, or the way blocked) give an extinguish_stuck warning and end stopped :stuck.
+  Still burning after max-passes passes ends stopped :still-burning. Never :continue.
+  Memory: writes :extinguish {:pos :cause} each pass (cap 20, one hour),
   and lava seen within :scan-radius as :hazard entries (cap 50, six hours) for retreat logic.")
 
 (def args
@@ -49,7 +51,7 @@
 (def walk-cost 0.5)
 (def hazard-touch 1.5)
 
-(def max-stand-waits 20)
+(def max-stand-waits "One-second waits standing still before the run stops :still-burning." 20)
 (def stand-wait-ms 1000)
 (def eat-below 18)
 (def water-like ["water" "powder_snow"])
@@ -62,7 +64,14 @@
 
 (defn body-burning? [c] (burning/burning? (.self (:primitives c))))
 
-(defn check [c] (boolean (or (body-burning? c) (:poured (ctx/mem c)) (:stand-waits (ctx/mem c)))))
+(def pour-policy "Body memory of the cell poured: it outlives a cut run so the next run scoops it." {:cap 1 :ttl (* 10 60 1000)})
+
+(defn poured
+  "The cell a run poured water at and has not scooped yet, or nil."
+  [c]
+  (some-> (ctx/latest c :extinguish-pour) :data :pos))
+
+(defn check [c] (boolean (or (body-burning? c) (poured c))))
 
 (defn floor-cell [pos] (into {} (map (fn [[k v]] [k (js/Math.floor v)])) pos))
 
@@ -149,62 +158,72 @@
 
 (defn clear? [c] (not (body-burning? c)))
 
-(defn finish
-  "After acting: done when the body is out, else continue."
-  [c]
-  (if (clear? c) :done :continue))
+(def pour-wait-ms "A wait for the server to put the fire out or show the poured water." 250)
+(def max-passes "Passes in one run before it stops :still-burning." 60)
 
 (defn ^:async pour-water!
-  "Pour a carried water bucket at the feet. True when the water was placed."
+  "Pour a carried water bucket at the feet. True when the water was placed (then noted in body memory)."
   [c pos]
-  (let [r (await (ctx/act c :place (clj->js {:pos pos :item "water_bucket"})))]
-    (= "placed" (.-status r))))
+  (ctx/hold-still! c nil)
+  (let [placed (= "placed" (.-status (await (ctx/act c :place (clj->js {:pos pos :item "water_bucket"})))))]
+    (when placed (ctx/remember! c :extinguish-pour {:pos pos} pour-policy))
+    placed))
 
 (defn has-bucket? [p] (boolean (some #(= "water_bucket" (:name %)) (u/inventory p))))
 
 (defn clear-pour! [c]
-  (ctx/update-mem! c dissoc :poured :pour-waits :water-waits))
+  (ctx/forget-where! c :extinguish-pour (constantly true))
+  (ctx/update-mem! c dissoc :pour-waits :water-waits))
 
-(defn ^:async scoop-round
-  "The water was poured at poured. Wait while burning (up to max-pour-waits
-  rounds); once out scoop the water back up and finish."
-  [c poured]
+(defn ^:async burning-wait!
+  "Hold still on purpose for ms."
+  [c ms]
+  (ctx/hold-still! c :burning-wait)
+  (await (ctx/act c :wait (clj->js {:ms ms}))))
+
+(defn ^:async scoop-pass
+  "The water was poured at cell. Wait while burning (up to max-pour-waits), nil after that so the pass tries
+  another way; once out, wait for the water to show (up to max-water-waits), scoop it back up and end."
+  [c cell]
   (let [p (:primitives c)]
     (cond
       (body-burning? c)
       (let [waits (inc (:pour-waits (ctx/mem c) 0))]
         (if (> waits max-pour-waits)
           (do (clear-pour! c) nil)
-          (do (ctx/update-mem! c assoc :pour-waits waits) :continue)))
+          (do (ctx/update-mem! c assoc :pour-waits waits)
+              (await (burning-wait! c pour-wait-ms))
+              :again)))
 
-      (not= "water" (u/block-name p poured))
+      (not= "water" (u/block-name p cell))
       (let [waits (inc (:water-waits (ctx/mem c) 0))]
         (if (> waits max-water-waits)
           (do (clear-pour! c) :done)
-          (do (ctx/update-mem! c assoc :water-waits waits) :continue)))
+          (do (ctx/update-mem! c assoc :water-waits waits)
+              (await (burning-wait! c pour-wait-ms))
+              :again)))
 
       :else
-      (let [r (await (ctx/act c :place (clj->js {:pos poured :item "bucket"})))
-            status (.-status r)]
-        (clear-pour! c)
-        (when-not (= "placed" status)
-          (ctx/emit! c :extinguish.scoop_failed :warn
-                     {:text (str "could not scoop the poured water at " (pr-str poured) ": " status)
-                      :pos poured :status status}))
-        :done))))
+      (do (ctx/hold-still! c nil)
+          (let [status (.-status (await (ctx/act c :place (clj->js {:pos cell :item "bucket"}))))]
+            (clear-pour! c)
+            (when-not (= "placed" status)
+              (ctx/emit! c :extinguish.scoop_failed :warn
+                         {:text (str "could not scoop the poured water at " (pr-str cell) ": " status)
+                          :pos cell :status status}))
+            :done)))))
 
 (defn ^:async pour-last-resort!
-  "No permitted way out is left and the feet cell is refused: pour there anyway, with the warn. :continue when poured,
+  "No permitted way out is left and the feet cell is refused: pour there anyway, with the warn. :again when poured,
   else nil."
   [c pos refusal]
   (access/trespass! c "extinguish" refusal)
   (when (await (pour-water! c pos))
-    (ctx/update-mem! c assoc :poured pos)
-    :continue))
+    :again))
 
-(defn ^:async stand-round!
+(defn ^:async stand-pass!
   "On fire, nothing to do but wait it out off the fire: eat to keep regenerating, tell the agent once, wait a second.
-  The job stays alive (so an interrupted walk does not resume into more hazards) up to max-stand-waits rounds."
+  Stopped :still-burning after max-stand-waits."
   [c]
   (let [p (:primitives c)
         waits (inc (:stand-waits (ctx/mem c) 0))
@@ -212,23 +231,44 @@
     (ctx/update-mem! c assoc :stand-waits waits)
     (when (= 1 waits)
       (ctx/emit! c :extinguish_wait :info {:text "no water near; standing still off the fire until it goes out"}))
+    (ctx/hold-still! c :burning-wait)
     (when (and food (< (.-food (.self p)) eat-below))
       (await (ctx/act c :equip #js {:item food}))
       (await (ctx/act c :eat #js {:item food})))
     (await (ctx/act c :wait (clj->js {:ms stand-wait-ms})))
-    (if (or (clear? c) (>= waits max-stand-waits))
-      :done
-      :continue)))
+    (cond
+      (clear? c) :done
+      (>= waits max-stand-waits) (result/stop! c :still-burning "still burning after standing still off the fire")
+      :else :again)))
 
-(defn ^:async round [c]
+(defn stuck!
+  "One failed walk: :again until u/max-failures, then a warn and stopped :stuck."
+  [c text]
+  (let [tries (inc (:failures (ctx/mem c) 0))]
+    (ctx/update-mem! c assoc :failures tries)
+    (if (< tries u/max-failures)
+      :again
+      (do (ctx/emit! c :extinguish_stuck :warn {:tries tries :text text})
+          (result/stop! c :stuck text)))))
+
+(defn ^:async move!
+  "An emergency step to pos (range 0). The walk's status."
+  [c pos]
+  (ctx/hold-still! c nil)
+  ;; raw moveTo kept: an emergency step into water or out of fire (range 0), a few blocks, no time for a plan.
+  (.-status (await (ctx/act c :moveTo (clj->js {:pos pos :range 0})))))
+
+(defn ^:async pass!
+  "One try at putting the body out. :again for another pass, else :done (perhaps stopped)."
+  [c]
   (let [p (:primitives c)
         me (.self p)
-        poured (:poured (ctx/mem c))
-        scooped (when poured (await (scoop-round c poured)))]
+        cell (poured c)
+        scooped (when cell (await (scoop-pass c cell)))]
     (cond
       scooped scooped
 
-      (and (not poured) (not (burning/burning? me)))
+      (not (burning/burning? me))
       :done
 
       :else
@@ -243,34 +283,41 @@
         (remember-hazards! c scanned)
         (cond
           (and pour? (nil? refusal) (await (pour-water! c pos)))
-          (do (ctx/update-mem! c assoc :poured pos)
-              :continue)
+          :again
 
           water
-          ;; raw moveTo kept: an emergency step into water or out of fire (range 0), a few blocks, no time for a plan.
-          (do (await (ctx/act c :moveTo (clj->js {:pos (:pos water) :range 0})))
-              (finish c))
+          (do (await (move! c (:pos water))) :again)
 
           (and (not lava?) (< (:covers (ctx/mem c) 0) max-covers) (cover-item p)
                (let [lava (:pos (adjacent-lava pos (exposed-lava p pos scanned)))]
                  (and lava
                       (nil? (access/trespass-refusal c :place lava))
-                      (= "placed" (.-status (await (ctx/act c :place (clj->js {:pos lava :item (cover-item p)}))))))))
+                      (do (ctx/hold-still! c nil)
+                          (= "placed" (.-status (await (ctx/act c :place (clj->js {:pos lava :item (cover-item p)})))))))))
           (do (ctx/update-mem! c update :covers (fnil inc 0))
-              :continue)
+              :again)
 
           (and (not lava?) (not (hazard-near? pos scanned)))
           (or (when refusal (await (pour-last-resort! c pos refusal)))
-              (await (stand-round! c)))
+              (await (stand-pass! c)))
 
           :else
           (let [target (best-cell p pos step (map :pos scanned))]
             (if-not target
               (or (when refusal (await (pour-last-resort! c pos refusal)))
-                  (u/fail! c :extinguish_stuck "no safe cell within reach"))
-              ;; raw moveTo kept: an emergency step into water or out of fire (range 0), a few blocks, no time for a plan.
-              (let [r (await (ctx/act c :moveTo (clj->js {:pos target :range 0})))]
+                  (stuck! c "no safe cell within reach"))
+              (let [status (await (move! c target))]
                 (cond
                   (clear? c) :done
-                  (= "blocked" (.-status r)) (u/fail! c :extinguish_stuck "the way to a safe cell is blocked")
-                  :else :continue)))))))))
+                  (= "blocked" status) (stuck! c "the way to a safe cell is blocked")
+                  :else :again)))))))))
+
+(defn ^:async round [c]
+  (loop [i 0]
+    (cond
+      (not (ctx/alive? c)) :done
+      (<= max-passes i) (result/stop! c :still-burning "still burning after many tries")
+      :else (let [r (await (pass! c))]
+              (if (= :again r)
+                (do (await (pace/pace!)) (recur (inc i)))
+                r)))))

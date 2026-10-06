@@ -107,7 +107,7 @@
           (let [{:keys [eng p seen]} (setup (assoc burning-with-bucket :blocks {}) zones)]
             (core/submit! eng '(jobs.survival.extinguish) {})
             (await (core/tick! eng))
-            (is (= [{:x 0 :y 64 :z 0}] (mapv arg-pos (calls p "place"))) (pr-str zones))
+            (is (= [{:x 0 :y 64 :z 0} {:x 0 :y 64 :z 0}] (mapv arg-pos (calls p "place"))) (str (pr-str zones) " poured, then scooped back"))
             (is (= warns (mapv :zones (trespass seen :extinguish.trespass-last-resort))) (pr-str zones))))))))
 
 ;; ------------------------------------------------------------------ dig-in
