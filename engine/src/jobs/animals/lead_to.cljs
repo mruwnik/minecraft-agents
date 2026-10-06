@@ -50,6 +50,9 @@
   - :tie-failed: the post did not take the animal (still on the lead).
   - :timeout: :timeout-s from the first round (a cut walk leaves the animal on the lead).
   - :no-fence.
+
+  Zones: the leash child refuses an animal standing in another owner's zone or claim (see jobs.animals.leash);
+  :ignore-zones? true is passed to it.
   - :no-lead: no lead carried and obtain could not get one (the :text says why).
   - The reason of jobs.animals.leash (:no-lead, :none, :unreachable, :refused, :all-leashed, :timeout) when no
     animal got on the lead, or of jobs.animals.unleash (:refused, :unreachable, :none, :timeout) when the lead would not come off.")
@@ -63,7 +66,8 @@
    :gather-radius {:doc "without :fence the animal is let go once it is within this many blocks of :pos" :default 3}
    :gather-tries {:doc "without :fence how many times the body walks on to pull a trailing animal nearer" :default 3}
    :watch-radius {:doc "how far from the body the led animal is looked for" :default 64}
-   :timeout-s {:doc "seconds from the first round before the job gives up" :default 180}})
+   :timeout-s {:doc "seconds from the first round before the job gives up" :default 180}
+   :ignore-zones? animals/ignore-zones-arg})
 
 (def max-ties 2)
 
@@ -136,7 +140,8 @@
 
 (defn ^:async leash! [c]
   (let [{:keys [mob radius]} (:args c)
-        r (await (ctx/call-child c :leash 'jobs.animals.leash {:mob mob :radius radius}))]
+        r (await (ctx/call-child c :leash 'jobs.animals.leash
+                                 (cond-> {:mob mob :radius radius} (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))]
     (if-not (= :done r)
       :continue
       (let [res (ctx/child-result c :leash)]

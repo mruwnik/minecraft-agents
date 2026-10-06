@@ -384,3 +384,20 @@
           (await (run-ticks s 6 700))
           (is (finished? s))
           (is (= ["u1" "u2"] (sort (:refused (done-event s))))))))))
+
+(deftest breed-follows-zones-and-claims
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[owner extra acted declined]
+                [["Fake" {} [1 2] []]
+                 ["Miles" {} [2] [:refused]]
+                 ["Miles" {:ignore-zones? true} [1 2] []]
+                 [nil {} [] [:no-zones]]]]
+          (let [{:keys [eng] :as s} (h/setup {:inventory (wheat 2) :entities [(cow 1 2) (cow 2 3)]} 0 (h/zone-store 2 owner))]
+            (core/submit! eng (list 'jobs.animals.breed (merge {:mob "cow"} extra)) {})
+            (dotimes [_ 20]
+              (swap! (:clock s) + 700)
+              (await (core/tick! eng)))
+            (is (= acted (vec (sort (map #(.-id (.-args %)) (interacts s))))) (pr-str owner extra))
+            (is (= declined (mapv :reason (events-of s :breed.declined))) (pr-str owner extra))))))))

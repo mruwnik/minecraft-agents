@@ -38,14 +38,18 @@
   when nothing was fed. A cut job restores the hand when it resumes and ends. A job cancelled while cut does not.
 
   A run that fed at least two animals writes one memory entry of kind :bred/<mob> (data {:fed [uuids]}, default
-  one hour). A trigger can use it, e.g. (or (not (known? (since :bred/cow))) (> (since :bred/cow) 1200)).")
+  one hour). A trigger can use it, e.g. (or (not (known? (since :bred/cow))) (> (since :bred/cow) 1200)).
+
+  Zones: an animal standing in another owner's zone or claim, or in a plan's footprint, is left alone (warn
+  breed.declined once, :reason :refused, or :no-zones when no zone list was read). :ignore-zones? true skips the check.")
 
 (def args
   {:mob {:doc "the mob type to breed, such as \"cow\"" :default nil}
    :count {:doc "animals to feed" :default 2}
    :radius {:doc "animals within this many blocks count" :default 16}
    :walk-timeout-s {:doc "bound of one walk towards an animal" :default 5}
-   :timeout-s {:doc "seconds from the first round before the job gives up" :default 120}})
+   :timeout-s {:doc "seconds from the first round before the job gives up" :default 120}
+   :ignore-zones? animals/ignore-zones-arg})
 
 (def reach 3)
 (def max-in-row 3)
@@ -112,7 +116,9 @@
   (let [{:keys [mob radius]} (:args c)
         {:keys [fed refused given-up]} (ctx/mem c)
         skip (into (set fed) (concat refused (keys given-up)))]
-    (filterv #(not (contains? skip (animals/key-of %))) (animals/adults (:primitives c) mob radius))))
+    (->> (animals/adults (:primitives c) mob radius)
+         (filterv #(not (contains? skip (animals/key-of %))))
+         (animals/allowed c :breed.declined "breed" :harvest))))
 
 (defn out-reason
   "Why the job ends with no candidate to feed."

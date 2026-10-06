@@ -131,3 +131,20 @@
           (is (finished? s))
           (is (= :leashed (:reason (done-event s))))
           (is (= [2] (on-lead s))))))))
+
+(deftest leash-follows-zones-and-claims
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[owner extra acted declined]
+                [["Fake" {} [1] []]
+                 ["Miles" {} [2] [:refused]]
+                 ["Miles" {:ignore-zones? true} [1] []]
+                 [nil {} [] [:no-zones]]]]
+          (let [{:keys [eng] :as s} (h/setup {:inventory lead :entities [(cow 1 2) (cow 2 4)]} 0 (h/zone-store 2 owner))]
+            (core/submit! eng (list 'jobs.animals.leash (merge {:mob "cow"} extra)) {})
+            (dotimes [_ 20]
+              (swap! (:clock s) + 700)
+              (await (core/tick! eng)))
+            (is (= acted (vec (sort (map #(.-id (.-args %)) (calls-of s "interact"))))) (pr-str owner extra))
+            (is (= declined (mapv :reason (events-of s :leash.declined))) (pr-str owner extra))))))))

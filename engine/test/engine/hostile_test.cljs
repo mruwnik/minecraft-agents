@@ -12,7 +12,8 @@
             [engine.perception :as perception]
             [engine.fake.raw-world :as fake-raw]
             [engine.test-util :as tu]
-            [engine.triggers :as triggers]))
+            [engine.triggers :as triggers]
+            [jobs.lib.world-files :as ew]))
 
 (defn set-entities!
   "Replace the fake's entities with the spec-style entity maps."
@@ -25,16 +26,25 @@
   [-50 -45 50 45])
 
 (defn setup
-  "An engine over a fake on the flight floor. Its clock moves ms (default 0) with every primitive call."
+  "An engine over a fake on the flight floor. Its clock moves ms (default 0) with every primitive call. Its world store
+  is the given one (default: an empty zone list, so zone-checking jobs act)."
   ([world] (setup world 0))
-  ([world ms]
+  ([world ms] (setup world ms (ew/of-data {} {} [])))
+  ([world ms store]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         p (tu/fake-on-floor (merge {:floor flight-floor} world))
         now (tu/act-clock clock p ms)
-        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
+        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now :world store
                           :events (events/make {:body "Fake" :sinks [sink] :now now})})]
     {:eng eng :p p :seen seen :clock clock})))
+
+(defn zone-store
+  "A world store whose only zone is a column of cells at x (owner as given; nil: no zone list was read)."
+  [x owner]
+  (if (nil? owner)
+    (ew/of-data {} {} nil)
+    (ew/of-data {} {} [{:name "farm" :owner owner :min [x 60 -5] :max [x 70 5]}])))
 
 (defn setup-flight
   "As setup, the clock moving a second with every primitive call: a whole flight ends by time (out of line, its bound)."

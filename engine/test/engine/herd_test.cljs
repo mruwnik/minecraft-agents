@@ -988,3 +988,13 @@
           (is (some? (done-event s)) (str "the run ends, it is not parked on the toggle's :standing-in wait: " (pr-str (first (events-of s :waiting)))))
           (is (not (gate-open? s)))
           (is (< (self-x s) 10) "the body ends outside"))))))
+
+(deftest an-animal-in-anothers-zone-is-not-led-unless-ignored
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[extra clicked reasons] [[{} #{} [:refused]] [{:ignore-zones? true} #{1} []]]]
+          (let [s (submit! (clock-on-wait! (h/setup (world {:entities [(cow 1 4 3)]}) 0 (h/zone-store 4 "Miles"))) (merge {:target 1} extra))]
+            (await (run-ticks s 60))
+            (is (= clicked (clicked-ids s)) (pr-str extra))
+            (is (= reasons (mapv :reason (events-of s :leash.declined))) (pr-str extra))))))))

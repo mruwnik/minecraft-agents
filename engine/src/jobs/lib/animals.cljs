@@ -1,6 +1,7 @@
 (ns jobs.lib.animals
   "Helpers for the animal jobs: what each mob breeds on, and the herd near the body."
-  (:require [jobs.lib.util :as u]))
+  (:require [jobs.lib.gate :as gate]
+            [jobs.lib.util :as u]))
 
 (def breeding-food
   "Mob name -> the foods that put it in love, in the order the body prefers them."
@@ -25,6 +26,18 @@
   "The JS entities named mob within radius of the body, nearest first, as a vector."
   [p mob radius]
   (vec (array-seq (.entities p #js {:radius radius :names #js [mob] :max 64}))))
+
+(def ignore-zones-arg
+  {:doc "act regardless of zones and claims; the rules of the game allow it" :default false})
+
+(defn allowed
+  "The animals of es (JS entities) the zone rules let the job act on with action (:harvest :take), judged at the cell
+  each stands in. One decline warn of kind (for job-name) names what refuses, or :no-zones. :ignore-zones? lets all."
+  [c kind job-name action es]
+  (let [cell-of (fn [e] (let [{:keys [x y z]} (u/pos-of (.-pos e))]
+                          {:x (js/Math.floor x) :y (js/Math.floor (+ y 0.01)) :z (js/Math.floor z)}))
+        ok (set (gate/allowed c kind job-name action (map cell-of es)))]
+    (filterv #(contains? ok (cell-of %)) es)))
 
 (defn adults
   "The herd's members that are not babies."

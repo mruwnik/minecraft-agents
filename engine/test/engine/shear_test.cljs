@@ -130,3 +130,20 @@
           (is (= 1 (count-of s "white_wool")))
           (is (= 1 (:collected (done-event s))))
           (is (= [:shear.gave-up] (mapv :kind (events-of s :shear.gave-up)))))))))
+
+(deftest shear-follows-zones-and-claims
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[owner extra acted declined]
+                [["Fake" {} [1 2] []]
+                 ["Miles" {} [2] [:refused]]
+                 ["Miles" {:ignore-zones? true} [1 2] []]
+                 [nil {} [] [:no-zones]]]]
+          (let [{:keys [eng] :as s} (h/setup {:inventory shears :entities [(sheep 1 2) (sheep 2 3)]} 0 (h/zone-store 2 owner))]
+            (core/submit! eng (list 'jobs.animals.shear (merge {:collect false} extra)) {})
+            (dotimes [_ 20]
+              (swap! (:clock s) + 700)
+              (await (core/tick! eng)))
+            (is (= acted (vec (sort (map #(.-id (.-args %)) (calls-of s "interact"))))) (pr-str owner extra))
+            (is (= declined (mapv :reason (events-of s :shear.declined))) (pr-str owner extra))))))))

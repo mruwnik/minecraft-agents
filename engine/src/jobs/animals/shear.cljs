@@ -27,14 +27,18 @@
   - :timeout: :timeout-s from the first round (no collecting).
   - :no-shears: none carried and none shorn.
   - With nothing shorn: :unreachable if one was given up as unreachable, else :all-sheared (adults present but
-    all sheared or refused) or :none.")
+    all sheared or refused) or :none.
+
+  Zones: a sheep standing in another owner's zone or claim, or in a plan's footprint, is left alone (warn
+  shear.declined once, :reason :refused, or :no-zones when no zone list was read). :ignore-zones? true skips the check.")
 
 (def args
   {:count {:doc "sheep to shear; every one in radius when nil" :default nil}
    :radius {:doc "sheep within this many blocks count" :default 16}
    :walk-timeout-s {:doc "bound of one walk towards a sheep" :default 5}
    :timeout-s {:doc "seconds from the first round before the job gives up" :default 120}
-   :collect {:doc "pick up the wool afterwards" :default true}})
+   :collect {:doc "pick up the wool afterwards" :default true}
+   :ignore-zones? animals/ignore-zones-arg})
 
 (def reach 3)
 (def max-in-row 3)
@@ -76,10 +80,11 @@
   [c]
   (let [{:keys [shorn given-up]} (ctx/mem c)
         skip (into (set shorn) (keys given-up))]
-    (filterv #(and (not (true? (.-baby %)))
-                   (not (true? (.-sheared %)))
-                   (not (contains? skip (animals/key-of %))))
-             (sheep-in-radius c))))
+    (->> (sheep-in-radius c)
+         (filterv #(and (not (true? (.-baby %)))
+                        (not (true? (.-sheared %)))
+                        (not (contains? skip (animals/key-of %)))))
+         (animals/allowed c :shear.declined "shear" :harvest))))
 
 (defn none-reason
   "Why the job ends with no sheep left to shear."

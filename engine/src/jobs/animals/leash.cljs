@@ -24,14 +24,18 @@
   - :timeout: :timeout-s from the first round.
   - When no candidate is left: :unreachable if one was given up as unreachable, else :refused (others given
     up), :all-leashed (animals present but all led) or :none.
-  - The same reasons after three fruitless rounds in a row.")
+  - The same reasons after three fruitless rounds in a row.
+
+  Zones: an animal standing in another owner's zone or claim, or in a plan's footprint, is not led (taking it out of the zone) (warn
+  leash.declined once, :reason :refused, or :no-zones when no zone list was read). :ignore-zones? true skips the check.")
 
 (def args
   {:mob {:doc "the animal's name, such as \"cow\"" :default nil}
    :radius {:doc "animals within this many blocks count" :default 8}
    :skip {:doc "keys (uuids, else ids) of animals never to leash" :default []}
    :walk-timeout-s {:doc "bound of one walk towards the animal" :default 5}
-   :timeout-s {:doc "seconds from the first round before the job gives up" :default 30}})
+   :timeout-s {:doc "seconds from the first round before the job gives up" :default 30}
+   :ignore-zones? animals/ignore-zones-arg})
 
 (def reach 3)
 (def max-in-row 3)
@@ -58,7 +62,9 @@
   "The animals within radius not on a lead, not given up on and not in :skip, nearest first."
   [c]
   (let [skip (into (set (:skip (:args c))) (keys (:given-up (ctx/mem c))))]
-    (filterv #(and (not (animals/leashed? %)) (not (contains? skip (animals/key-of %)))) (herd c))))
+    (->> (herd c)
+         (filterv #(and (not (animals/leashed? %)) (not (contains? skip (animals/key-of %)))))
+         (animals/allowed c :leash.declined "leash" :take))))
 
 (defn none-reason
   "Why the job ends with no animal left to leash."

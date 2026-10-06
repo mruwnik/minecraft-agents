@@ -1,5 +1,6 @@
 (ns jobs.animals.cull
   (:require [engine.ctx :as ctx]
+            [jobs.lib.animals :as animals]
             [jobs.lib.combat :as combat]
             [jobs.lib.util :as u]
             [jobs.combat.hunt :as hunt]))
@@ -27,7 +28,10 @@
   - :keep: at most :keep adults remain. The census is live every round, so the last :keep are never taken.
   - :unreachable: no candidate is left, some were skipped (warn cull.gave-up).
   - :none: no candidate on two rounds in a row, with a 1 s wait between (warn cull.gave-up).
-  - :gave-up: too many skips in a row.")
+  - :gave-up: too many skips in a row.
+
+  Zones: an adult standing in another owner's zone or claim, or in a plan's footprint, is left alone (warn
+  cull.declined once, :reason :refused, or :no-zones when no zone list was read). :ignore-zones? true skips the check.")
 
 (def args
   {:mob {:doc "mob type name of the animals to thin" :default "cow"}
@@ -39,7 +43,8 @@
    :collect-radius {:doc "how far around to collect drops after a kill" :default 8}
    :drops {:doc "item names to collect after a kill; nil: the kind's entry in the drops table, else every item" :default nil}
    :weapons {:doc "item name substrings that count as weapons" :default combat/default-weapons}
-   :max-skips {:doc "animals skipped in a row before the cull gives up" :default 3}})
+   :max-skips {:doc "animals skipped in a row before the cull gives up" :default 3}
+   :ignore-zones? animals/ignore-zones-arg})
 
 (defn corners
   "The eight corners of a box."
@@ -88,7 +93,7 @@
   [c adults]
   (let [skipped (set (:skipped (ctx/mem c)))
         here (u/self-pos c)]
-    (->> adults
+    (->> (animals/allowed c :cull.declined "cull" :harvest adults)
          (remove #(contains? skipped (.-id %)))
          (sort-by (juxt #(if (false? (.-hittable %)) 1 0)
                         #(u/dist here (u/pos-of (.-pos %))))))))

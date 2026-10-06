@@ -72,7 +72,10 @@
   :no-pen, :leaky, :no-gate, :too-shallow, :unreachable (a walk was blocked), :gate-stuck, :lost, :timeout,
   or the leash reason when nobody could be led. The body ends outside with the gate shut. The job ends completed
   when the pen holds :target or is :full, or when some animals were brought (a partial run, :short or another reason);
-  when none was brought it fails with the reason, after the result and herd.done were given.")
+  when none was brought it fails with the reason, after the result and herd.done were given.
+
+  Zones: the leash child refuses an animal standing in another owner's zone or claim (see jobs.animals.leash);
+  :ignore-zones? true is passed to it.")
 
 (def args
   {:mob {:doc "the animal's name, such as \"cow\"" :default nil}
@@ -80,7 +83,8 @@
    :target {:doc "grown animals of :mob the pen should hold" :default 2}
    :gate {:doc "the fence gate {:x :y :z} to bring them through; the pen's usable gate nearest the body when nil" :type :pos :default nil}
    :radius {:doc "animals within this many blocks of the body are fetched" :default 24}
-   :timeout-s {:doc "seconds one animal may take from its lead on until it is let go" :default 180}})
+   :timeout-s {:doc "seconds one animal may take from its lead on until it is let go" :default 180}
+   :ignore-zones? animals/ignore-zones-arg})
 
 (def near-pen 16)
 (def approach-range 12)
@@ -650,7 +654,8 @@
         m (ctx/mem c)]
     (if (>= (count (in-pen-adults c (read-pen c))) target)
       (finish! c nil)
-      (let [r (await (ctx/call-child c :leash 'jobs.animals.leash {:mob mob :radius radius :skip (skip-keys c)}))
+      (let [r (await (ctx/call-child c :leash 'jobs.animals.leash
+                                 (cond-> {:mob mob :radius radius :skip (skip-keys c)} (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))
             res (when (= :done r) (ctx/child-result c :leash))]
         (cond
           (nil? res) :continue

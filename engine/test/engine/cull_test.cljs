@@ -151,3 +151,20 @@
 (deftest check-and-round-are-exported
   (is (fn? cull/check))
   (is (fn? cull/round)))
+
+(deftest cull-follows-zones-and-claims
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[owner extra acted declined]
+                [["Fake" {} [1 2] []]
+                 ["Miles" {} [2] [:refused]]
+                 ["Miles" {:ignore-zones? true} [1 2] []]
+                 [nil {} [] [:no-zones]]]]
+          (let [{:keys [eng] :as s} (h/setup {:inventory h/sword :entities [(cow 1 2) (cow 2 3)]} 0 (h/zone-store 2 owner))]
+            (core/submit! eng (list 'jobs.animals.cull (merge {:keep 0} extra)) {})
+            (dotimes [_ 20]
+              (swap! (:clock s) + 700)
+              (await (core/tick! eng)))
+            (is (= acted (vec (sort (distinct (attacked s))))) (pr-str owner extra))
+            (is (= declined (mapv :reason (events-of s :cull.declined))) (pr-str owner extra))))))))
