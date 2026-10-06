@@ -45,6 +45,11 @@
                           (catch :default e (reject e)))))
        (.on req "error" reject)))))
 
+(defn engine-failed!
+  "Answer 500 :engine-error for a failure of the engine itself (not of the request), unless the answer has begun."
+  [res]
+  (when-not (.-headersSent res) (bad! res 500 :engine-error)))
+
 (defn parse-edn [text]
   (try {:value (reader/read-string text)}
        (catch :default _ {:error :bad-edn})))
@@ -349,8 +354,10 @@
                               (.then (fn [text]
                                        (let [{:keys [value error]} (parse-edn text)]
                                          (if error (bad! res 400 error)
-                                           (let [result ((if (= pathname "/jobs") job-api/mutate! trigger-api/request!) eng value)]
-                                             (respond! res (if (:ok result) 200 409) result))))))
+                                           (try
+                                             (let [result ((if (= pathname "/jobs") job-api/mutate! trigger-api/request!) eng value)]
+                                               (respond! res (if (:ok result) 200 409) result))
+                                             (catch :default _ (engine-failed! res)))))))
                               (.catch (fn [e] (bad! res (if (= "body too large" (.-message e)) 413 400)
                                                        (if (= "body too large" (.-message e)) :too-large :bad-request))))))
 
@@ -435,10 +442,12 @@
                                                (contains? reasons (:reason value))))
                                      (bad! res 400 :bad-request)
                                      :else
-                                     (let [result (core/resolve-attention! eng (:request-id value) (:reason value))]
-                                       (respond! res 200 {:ok true :request-id (:request-id value)
-                                                          :resolved (= result :resolved)
-                                                          :already-resolved (= result :already-resolved)}))))))
+                                     (try
+                                       (let [result (core/resolve-attention! eng (:request-id value) (:reason value))]
+                                         (respond! res 200 {:ok true :request-id (:request-id value)
+                                                            :resolved (= result :resolved)
+                                                            :already-resolved (= result :already-resolved)}))
+                                       (catch :default _ (engine-failed! res)))))))
                               (.catch (fn [e]
                                         (bad! res (if (= "body too large" (.-message e)) 413 400)
                                               (if (= "body too large" (.-message e)) :too-large :bad-edn))))))
@@ -460,11 +469,13 @@
                                      (not (and (map? value) (string? message) (<= 1 (count message) 256) to-valid?))
                                      (bad! res 400 :bad-request)
                                      :else
-                                     (.then (chat/direct! eng message to)
-                                            (fn [result]
-                                              (respond! res 200 {:ok true :body (.-username (.self (:primitives eng)))
-                                                                 :result (if (map? result) result
-                                                                           (js->clj result :keywordize-keys true))})))))))
+                                     (-> (js/Promise.resolve) ; a sync throw of direct! is an engine failure too
+                                         (.then #(chat/direct! eng message to))
+                                         (.then (fn [result]
+                                                  (respond! res 200 {:ok true :body (.-username (.self (:primitives eng)))
+                                                                     :result (if (map? result) result
+                                                                               (js->clj result :keywordize-keys true))}))
+                                                (fn [_] (engine-failed! res))))))))
                               (.catch (fn [e]
                                         (bad! res (if (= "body too large" (.-message e)) 413 400)
                                               (if (= "body too large" (.-message e)) :too-large :bad-edn))))))

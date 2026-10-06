@@ -327,3 +327,17 @@
                                  (is (= 400 (:status response)))
                                  (is (= :bad-request (:reason (edn-response response)))))))]
            (.finally work (fn [] ((:close server))))))))))
+
+(deftest an-engine-error-in-a-post-is-a-500-not-a-bad-request
+  (async done
+    (let [socket-path (path/join (tu/tmp-dir) "events.sock")
+          server (event-api/create socket-path {:events (events/make {:generation-id "g"})})]
+      (tu/run-async
+       done
+       (fn []
+         (-> ((:listen server))
+             (.then (fn [_] (request socket-path "POST" "/jobs" {"Content-Type" "application/edn"} "{:op :cancel-all}")))
+             (.then (fn [response]
+                      (is (= 500 (:status response)))
+                      (is (= :engine-error (:reason (edn-response response))))))
+             (.finally (fn [] ((:close server))))))))))
