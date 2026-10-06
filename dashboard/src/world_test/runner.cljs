@@ -112,7 +112,8 @@
 
 (defn read-events-from
   "The events logged after cursor, oldest first. When the engine rotated the log since (events.edn.N), the tail of the
-  segment that was the active file at cursor, the newer segments, then the active file."
+  segment that was the active file at cursor, the newer segments, then the active file. When that segment is gone, every
+  kept segment (all newer) then the active file."
   [file {:keys [ino pos]}]
   (let [segments (mapv #(str file "." %) (range 3 0 -1))
         cur-ino (when (fs/existsSync file) (.-ino (fs/statSync file)))]
@@ -124,7 +125,7 @@
           (vec (concat (read-from (nth live from) pos)
                        (mapcat #(read-from % 0) (subvec live (inc from)))
                        (read-from file 0)))
-          (read-from file 0))))))
+          (vec (concat (mapcat #(read-from % 0) live) (read-from file 0))))))))
 
 (defn await-event
   "Polls the log from offset until an event matching pattern with :time-ms >= since-ms comes; resolves to it or nil

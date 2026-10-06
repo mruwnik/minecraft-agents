@@ -71,7 +71,17 @@
       (fs/renameSync seg (str file ".2"))
       (fs/renameSync file seg)
       (fs/writeFileSync file (ev 12))
-      (is (= [3 4 5 6 7 8 9 10 11 12] (ks (r/read-events-from file cur))) "rotated twice"))
+      (is (= [3 4 5 6 7 8 9 10 11 12] (ks (r/read-events-from file cur))) "rotated twice")
+      (let [rotate! (fn [n]
+                      (fs/rmSync (str file ".3") #js {:force true})
+                      (fs/renameSync (str file ".2") (str file ".3"))
+                      (fs/renameSync seg (str file ".2"))
+                      (fs/renameSync file seg)
+                      (fs/writeFileSync file (ev n)))]
+        (rotate! 13)
+        (rotate! 14)
+        (is (= [4 5 6 7 8 9 10 11 12 13 14] (ks (r/read-events-from file cur)))
+            "the segment active at the cursor was rotated out: every kept segment oldest first, then the active file")))
     (fs/rmSync dir #js {:recursive true :force true})))
 
 (deftest an-await-step-counts-events-from-the-watch-window
