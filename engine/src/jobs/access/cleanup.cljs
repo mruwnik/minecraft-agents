@@ -197,16 +197,26 @@
             (ctx/update-mem! c count-fail cell {:reason :dig-failed :dig status} (:give-up (:args c))))
           :again)))))
 
+(def permanent-no-path #{:abilities :goal-enclosed :goal-cut-off :one-way :goal-not-standable :exhausted})
+
+(defn permanent-walk?
+  "Whether a walk result is a verdict on the cell (held :unreachable), not something that may pass: a refused or
+  malformed plan, or a :no-path whose reason is permanent (a door stuck, a budget, a move while searching are not)."
+  [{:keys [status reason]}]
+  (or (contains? #{:refused :unsupported :bad-args} status)
+      (and (= :no-path status) (contains? permanent-no-path reason))))
+
 (defn ^:async walk!
-  "Walk to within 3 of cell; no plan holds it :unreachable, an end out of reach (or a walk that did not end) counts
-  a failure."
+  "Walk to within 3 of cell; a permanent verdict holds it :unreachable, an end out of reach, a walk that did not end or
+  a passing no-path counts a failure."
   [c {:keys [cell]}]
   (let [r (await (ctx/call-child c :walk 'jobs.debug.walk-plan {:to cell :range walk-range}))
-        status (when (= :done r) (:status (ctx/child-result c :walk)))]
+        result (when (= :done r) (ctx/child-result c :walk))
+        status (:status result)]
     (cond
-      (#{:no-path :refused :unsupported :bad-args} status)
+      (permanent-walk? result)
       (ctx/update-mem! c assoc-in [:held cell] {:reason :unreachable :walk status})
-      (or (not= :done r) (> (distance (eye-of c) (centre cell)) (:reach (:args c))))
+      (or (not= :done r) (= :no-path status) (> (distance (eye-of c) (centre cell)) (:reach (:args c))))
       (ctx/update-mem! c count-fail cell {:reason :out-of-reach :walk status} (:give-up (:args c))))
     :again))
 
