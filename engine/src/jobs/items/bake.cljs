@@ -3,6 +3,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
             [jobs.lib.look :as look]
+            [jobs.lib.blocks :as b]
             [jobs.storage.deposit :as deposit]))
 
 (def doc
@@ -15,7 +16,7 @@
   Ends with {:baked n :deposited n}. No wheat for a loaf is a success (info bake.nothing).
   A stop adds :reason, after a warn (bake.no-table, bake.gave-up, bake.deposit-failed, bake.withdraw-failed,
   bake.craft-failed). :reason is \"no-table\" (before anything was taken), \"unreachable\", \"inventory-full\",
-  \"chest <status>\", \"deposit <reason>\", \"withdraw <reason>\", \"craft <reason>\" or :refused (a zone or claim
+  \"chest <status>\", \"deposit <reason>\", \"withdraw <reason>\", \"craft <reason>\", \"<child> declined\" (a child's check failed three rounds in a row) or :refused (a zone or claim
   refuses the chest; bake.refused).")
 
 (def args
@@ -99,13 +100,19 @@
       0
       (min (* 3 (quot (+ chest-wheat cw) 3)) per-trip-max (+ cw room)))))
 
+(defn declined!
+  "A child declined (its check failed): count it as a failed round, with the child's wait reason, and finish when that
+  makes max-failures."
+  [c slot job args]
+  (let [why (:reason (b/child-wait c slot job args))]
+    (give-up! c (str (name slot) " declined: " (name (or why :not-ready))) (str (name slot) " declined"))))
+
 (defn ^:async deposit-spare!
   "Bread above :keep goes back into the chest through the deposit child."
   [c chest bread]
   (let [{:keys [keep]} (:args c)
-        r (await (ctx/call-child c :deposit 'jobs.storage.deposit
-                                 (merge (select-keys (:args c) [:ignore-zones?])
-                                        {:chest chest :items ["bread"] :keep {"bread" keep}})))
+        dargs (merge (select-keys (:args c) [:ignore-zones?]) {:chest chest :items ["bread"] :keep {"bread" keep}})
+        r (await (ctx/call-child c :deposit 'jobs.storage.deposit dargs))
         out (ctx/child-result c :deposit)]
     (cond
       (and (= :done r) (= :refused (:reason out))) (refused! c :bake.refused out)
@@ -118,17 +125,19 @@
       (do (ctx/update-mem! c update :deposited (fnil + 0) (max 0 (- bread (carried (:primitives c) "bread"))))
           :continue)
 
+      (= :declined r) (declined! c :deposit 'jobs.storage.deposit dargs)
+
       :else :continue)))
 
 (defn ^:async craft-carried!
   "Craft the carried wheat into bread through the craft child."
   [c table wheat]
   (ctx/update-mem! c assoc :started true)
-  (let [r (await (ctx/call-child c :craft 'jobs.items.craft
-                                 {:item "bread" :count (quot wheat 3) :table table}))
+  (let [cargs {:item "bread" :count (quot wheat 3) :table table}
+        r (await (ctx/call-child c :craft 'jobs.items.craft cargs))
         out (ctx/child-result c :craft)]
     (if-not (= :done r)
-      :continue
+      (if (= :declined r) (declined! c :craft 'jobs.items.craft cargs) :continue)
       (do (if (:reason out)
             (stop! c :bake.craft-failed (str "cannot craft the bread: " (:reason out))
                    (str "craft " (:reason out)))
@@ -138,15 +147,15 @@
   "Take the wheat out through the withdraw child, carrying target in all."
   [c chest target]
   (ctx/update-mem! c assoc :started true)
-  (let [r (await (ctx/call-child c :withdraw 'jobs.storage.withdraw
-                                 (merge (select-keys (:args c) [:ignore-zones?])
-                                        {:chest chest :items {"wheat" target}})))
+  (let [wargs (merge (select-keys (:args c) [:ignore-zones?]) {:chest chest :items {"wheat" target}})
+        r (await (ctx/call-child c :withdraw 'jobs.storage.withdraw wargs))
         out (ctx/child-result c :withdraw)]
     (cond
       (and (= :done r) (= :refused (:reason out))) (refused! c :bake.refused out)
       (and (= :done r) (:gave-up out)) (stop! c :bake.withdraw-failed (str "cannot take the wheat out: " (:reason out))
                                               (str "withdraw " (:reason out)))
       (= :done r) (do (u/progress! c) :continue)
+      (= :declined r) (declined! c :withdraw 'jobs.storage.withdraw wargs)
       :else :continue)))
 
 (defn finish-done!
@@ -164,9 +173,8 @@
     (if-not (and (pos? held) (< (carried p "bread") keep))
       (finish-done! c)
       (let [before (carried p "bread")
-            r (await (ctx/call-child c :topup 'jobs.storage.withdraw
-                                     (merge (select-keys (:args c) [:ignore-zones?])
-                                            {:chest chest :items {"bread" keep}})))
+            targs (merge (select-keys (:args c) [:ignore-zones?]) {:chest chest :items {"bread" keep}})
+            r (await (ctx/call-child c :topup 'jobs.storage.withdraw targs))
             out (ctx/child-result c :topup)]
         (ctx/update-mem! c update :topped (fnil + 0) (max 0 (- (carried p "bread") before)))
         (cond
@@ -174,6 +182,7 @@
           (and (= :done r) (:gave-up out)) (stop! c :bake.withdraw-failed (str "cannot take the bread out: " (:reason out))
                                                   (str "withdraw " (:reason out)))
           (= :done r) (finish-done! c)
+          (= :declined r) (declined! c :topup 'jobs.storage.withdraw targs)
           :else :continue)))))
 
 (defn ^:async inspect!
@@ -204,27 +213,29 @@
           :else (await (top-up! c chest items)))))))
 
 (defn ^:async round
-  "One bounded step: reach the chest, find the table, put spare bread away,
-  craft carried wheat, else look in the chest."
+  "One bounded step: find the table (walking to the chest to see it, once), put spare bread away, craft carried wheat,
+  else walk to the chest and look in it. The deposit and craft children walk themselves, so the body is not drawn back
+  to the chest between the table and the bread."
   [c]
   (let [p (:primitives c)
         chest (deposit/chest-of (ctx/view c) (:args c))
         _ (when-not (contains? (ctx/mem c) :bread0)
             (ctx/update-mem! c assoc :bread0 (carried p "bread")))
-        w (await (near/walk-near! c chest 3))]
+        bread (carried p "bread")
+        wheat (carried p "wheat")
+        spare? (> bread (:keep (:args c)))
+        craft? (and (not spare?) (>= wheat 3))
+        w (if (and (:table (ctx/mem c)) (or spare? craft?))
+            :arrived
+            (await (near/walk-near! c chest 3)))]
     (case w
       :partial :continue
       :blocked (give-up! c "cannot reach the chest" "unreachable")
-      (let [table (or (:table (ctx/mem c)) (nearest-table p chest (:table-radius (:args c))))
-            bread (carried p "bread")
-            wheat (carried p "wheat")]
-        (cond
-          (nil? table)
+      (let [table (or (:table (ctx/mem c)) (nearest-table p chest (:table-radius (:args c))))]
+        (if (nil? table)
           (stop! c :bake.no-table "no crafting table near the chest" "no-table")
-
-          :else
           (do (ctx/update-mem! c assoc :table table)
               (cond
-                (> bread (:keep (:args c))) (await (deposit-spare! c chest bread))
-                (>= wheat 3) (await (craft-carried! c table wheat))
+                spare? (await (deposit-spare! c chest bread))
+                craft? (await (craft-carried! c table wheat))
                 :else (await (inspect! c chest)))))))))

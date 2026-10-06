@@ -638,3 +638,12 @@
 
 (deftest obtain-plan-puts-a-table-down-once-the-table-is-unreachable
   (is (some #{:place} (plan-ops {:table [1 64 0] :craft {:table-unreachable true}}))))
+
+(deftest get-tool-for-an-unknown-block-is-bad-args-not-a-hand-block
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (world pickaxe-stock) [own-zone])]
+          (await (get-tool! s {:block "not_a_block"} 5))
+          (is (= 1 (count (events-of s :get-tool.declined))))
+          (is (empty? (inspects s))))))))

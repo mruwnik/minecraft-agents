@@ -17,8 +17,8 @@
   It gives up with {:enchanted false :reason r :levels-spent n :lapis-spent n} and warn enchant.gave-up.
   Reasons: no-table, not-a-table, no-item, already-enchanted (every copy carried is enchanted),
   not-enchantable, no-lapis, too-few-levels, no-offer (the :slot has none), no-offer-within-cost,
-  inventory-full, window (did not open, three times), window-stalled, not-confirmed (the item came back
-  unenchanted), offer-changed (three times), unreachable.
+  inventory-full, enchant-failed (an answer not understood after the call), window (did not open, three times),
+  window-stalled, not-confirmed (the item came back unenchanted), offer-changed (three times), unreachable.
   A failed enchant is never repeated, as it may have taken the price. The attempt is written to memory before the
   call. After a restart that finds the item enchanted, the job reports it (:resumed true, enchants unknown).")
 
@@ -140,7 +140,7 @@
       "no-item" (give-up! c "no-item" {})
       "missing" (give-up! c "no-table" {})
       "unreachable" (fail-up! c "unreachable")
-      (fail-up! c (str "enchant " (:status r))))))
+      (give-up! c "enchant-failed" {}))))
 
 (defn ^:async consider!
   "Read the offers and choose, or give up."

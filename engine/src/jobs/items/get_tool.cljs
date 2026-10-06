@@ -1,6 +1,8 @@
 (ns jobs.items.get-tool
-  (:require [clojure.string :as str]
+  (:require ["minecraft-data" :as minecraft-data]
+            [clojure.string :as str]
             [engine.ctx :as ctx]
+            [engine.game :as game]
             [jobs.lib.blocks :as b]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.tools :as tools]
@@ -15,7 +17,7 @@
   The check passes when a tool is carried, the obtain has begun, or the obtain's check passes; else it waits with the
   obtain's reason ({:reason :no-source :any-of [..]}: nothing seen to get one from).
   Ends {:status :done :tool name} ({:status :done :needed false} for a block the hand harvests) or {:status :stopped
-  :reason r ...} with the obtain's reason and :tried, or :bad-args.")
+  :reason r ...} with the obtain's reason and :tried, or :bad-args (also an unknown :block).")
 
 (def args
   {:block {:doc "a block name: get a tool that harvests it" :default nil}
@@ -33,10 +35,16 @@
   (let [i (.indexOf tools/cheapness (first (str/split n #"_")))]
     (if (neg? i) (count tools/cheapness) i)))
 
+(defn known-block?
+  "Whether minecraft-data lists the block for the body's version."
+  [p name]
+  (.hasOwnProperty (.-blocksByName (minecraft-data (game/version-of p))) name))
+
 (defn tools-for
   "The tool names that will do, cheapest first, or {:error text}. Empty for a block the hand harvests."
   [p {:keys [block item kind]}]
   (cond
+    (and (string? block) (not (known-block? p block))) {:error (str "unknown block " block)}
     (string? block) (vec (sort-by rank (or (some-> (.harvestTools p block) js->clj) [])))
     (string? item) [item]
     (and (string? kind) (tiered kind)) (mapv #(str % "_" kind) tools/cheapness)

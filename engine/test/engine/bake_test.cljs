@@ -265,3 +265,32 @@
           (is (= 3 @blocks) "a blocked read, then a good one and a withdraw that finishes nothing, three times")
           (is (string? (:reason result)))
           (is (contains? (kinds seen) :bake.gave-up)))))))
+
+(defn ^:async bake-with-craft
+  "Like bake, but jobs.items.craft is the given definition; [result p seen]."
+  [world craft-def]
+  (let [{:keys [eng p seen]} (setup world)
+        eng (assoc eng :jobs (assoc (:jobs eng) 'jobs.items.craft craft-def))]
+    [(await (child-outcome eng job {:chest chest :keep 4} 60)) p seen]))
+
+(deftest a-declined-craft-child-is-counted-and-ends-the-bake
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p seen] (await (bake-with-craft {:inventory [{:name "wheat" :count 6}]
+                                                       :containers {"10,64,0" [{:name "wheat" :count 9}]} :blocks beside}
+                                                      {:check (constantly false) :round (fn [_] :done)}))]
+          (is (string? (:reason result)))
+          (is (contains? (kinds seen) :bake.gave-up))
+          (is (empty? (calls p "craft"))))))))
+
+(deftest the-body-is-not-drawn-back-to-the-chest-between-the-table-and-the-craft
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (bake {:inventory [{:name "wheat" :count 6}]
+                                       :containers {"10,64,0" [{:name "wheat" :count 9}]} :blocks {"17,64,0" "crafting_table"}} {}))
+              names (mapv #(.-name %) (.-calls (.-world p)))
+              to-second-craft (vec (take 4 (filter #{"steer" "craft"} names)))]
+          (is (= {:baked 5 :deposited 1} result))
+          (is (= ["steer" "craft" "steer" "craft"] to-second-craft) "chest, craft (too far), table, craft: no walk back between"))))))

@@ -249,6 +249,18 @@
           (is (= "offer-changed" (:reason r)))
           (is (= 3 (count (filter #{"enchant"} (ops p))))))))))
 
+(deftest an-unknown-status-after-the-enchant-call-gives-up-and-is-not-repeated
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[r p] (await (enchant! table-world {}
+                                     (fn [p] (override! p (fn ^:async f [token args impl]
+                                                            (if (= "enchant" (.-op args))
+                                                              #js {:status "weird"}
+                                                              (await (impl token args))))))))]
+          (is (= "enchant-failed" (:reason r)))
+          (is (= 1 (count (filter #{"enchant"} (ops p)))) "never tried again"))))))
+
 (deftest a-restart-after-the-enchant-landed-reports-it-and-does-not-enchant-again
   (async done
     (tu/run-async done
