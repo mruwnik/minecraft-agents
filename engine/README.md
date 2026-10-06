@@ -435,6 +435,8 @@ round, reflex id, action-call id), `:data`, `:message`, `:attention` (omitted/`:
 `events.edn` and `.1` to `.3` (`--events-max-bytes` or `engine.events.maxBytes`); a cursor is `{:stream-id :seq}` and a
 rotated-away cursor gets an explicit gap.
 
+A job that ends with a result of `:status :stopped` gets a `:stopped` warn event; its text is the result's `:text` (clipped to 200 chars), else `stopped: <reason>`.
+
 HTTP over `worlds/<world>/agents/<name>/engine/events.sock` (mode 0600; all bodies and responses are EDN):
 
 | request | behaviour |
