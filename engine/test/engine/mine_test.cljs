@@ -174,6 +174,8 @@
               dry (await (scenario {:block "sand" :count 2 :tunnel-length 0} world 30))
               wet (await (scenario {:block "sand" :count 2 :wet true} world 30))]
           (is (= :wet (:reason (done-event dry))))
+          (is (= 1 (:wet-skipped (done-event dry))))
+          (is (re-find #"1 .*water.*:wet" (:text (done-event dry))))
           (is (= 1 (dig-count dry)))
           (is (= :count (:reason (done-event wet))))
           (is (= 2 (dig-count wet))))))))

@@ -110,7 +110,7 @@
 
   Hands over {:got n :reason r} (with :status :stopped when :got is 0: never completed) plus
   :dig-reason, :resumes, :tunnel and :left when set; info mine.done with
-  :mended, the cells filled. Its text says the reason, :got and :mended, and for a tunnel its length, heading, end cell
+  :mended, the cells filled. With reason :wet, :wet-skipped counts the seen blocks left for water beside them. Its text says the reason, :got and :mended, and for a tunnel its length, heading, end cell
   and whether the body walked back. :got is how many more are carried than at the start, at least 0. :tunnel is
   {:origin :heading :steps :stop :end :back-at :walked-back?}, :end the cell it ended on before the walk back.")
 
@@ -188,7 +188,7 @@
 
 (defn scan
   "{:targets [pos] nearest first (the higher of two as near), those over the ground snapshot after all others, :refused [verdict] of blocks a
-  zone or plan refuses, :wet? true when an unskipped block was rejected only for water}. Only seen blocks that are
+  zone or plan refuses, :wet? true when an unskipped block was rejected only for water, :wet-n how many}. Only seen blocks that are
   still there count."
   [c]
   (let [{:keys [block radius wet accept]} (:args c)
@@ -206,7 +206,8 @@
                     (map (fn [[pos]] (let [v (access/may-dig? in pos)] [pos v (access/judge v accept)]))))]
     {:targets (->> judged (filter #(= :ok (nth % 2))) (map first) (sort-by (juxt #(if (ground %) 1 0) #(u/dist here %) #(- (:y %)))) vec)
      :refused (into [] (comp (filter #(= :refused (nth % 2))) (map second)) judged)
-     :wet? (boolean (some #(= :wet (second %)) graded))}))
+     :wet? (boolean (some #(= :wet (second %)) graded))
+     :wet-n (count (filter #(= :wet (second %)) graded))}))
 
 (defn off-ground?
   "Whether a target is not one of the ground snapshot's cells."
@@ -236,14 +237,15 @@
 (defn finish!
   "Emit the outcome, hand it to the parent and end the job."
   [c]
-  (let [{:keys [goal reason mended dig-reason resumes tunnel left descent]} (ctx/mem c)
+  (let [{:keys [goal reason mended dig-reason resumes tunnel left descent wet-skipped]} (ctx/mem c)
         got (max 0 (- (carried c) (- goal (:count (:args c)))))
-        why (cond-> {} dig-reason (assoc :dig-reason dig-reason) (= :no-stone-found reason) (assoc :descent descent) resumes (assoc :resumes resumes)
+        why (cond-> {} dig-reason (assoc :dig-reason dig-reason) (= :no-stone-found reason) (assoc :descent descent) (= :wet reason) (assoc :wet-skipped (or wet-skipped 0)) resumes (assoc :resumes resumes)
               (pos? (:steps tunnel 0)) (assoc :tunnel (-> tunnel (select-keys [:origin :heading :steps :stop :end :back-at :walked-back?]) (update :origin access/cell)))
               (seq left) (assoc :left (mapv (fn [[pos n]] {:pos pos :count n}) left)))]
     (ctx/emit! c :mine.done :info (merge {:got got :reason reason :mended (or mended 0)
                                           :text (str "mine done: " (name reason) ", got " got ", mended " (or mended 0)
                                                      (when (= :no-stone-found reason) (str "; dug down " (:steps descent 0) " blocks through soil, found no stone"))
+                                                     (when (= :wet reason) (str "; " (or wet-skipped 0) " seen blocks beside water skipped, pass :wet true to dig them"))
                                                      (when-let [{:keys [end back-at walked-back?]} (when (pos? (:steps tunnel 0)) tunnel)]
                                                        (str "; tunnel " (:steps tunnel) " blocks " (:heading tunnel)
                                                             (when end (str ", ended at " (str/join "," end)))
@@ -620,7 +622,7 @@
 (defn ^:async dig-round! [c]
   (let [{:keys [goal failures dry looked]} (ctx/mem c)
         {:keys [max-failures wet dry-digs tunnel-length]} (:args c)
-        {:keys [targets refused wet?]} (scan c)
+        {:keys [targets refused wet? wet-n]} (scan c)
         ready? (and (< (carried c) goal) (< (or dry 0) dry-digs) (< failures max-failures) (some? looked))
         pos (when ready? (await (next-target! c targets)))]
     (cond
@@ -645,7 +647,8 @@
                   (and (empty? refused) (descend-due? c)) (await (descend-round! c))
                   (pos? tunnel-length) (await (tunnel-round! c))
                   (seq refused) (to-mend! c :refused)
-                  :else (to-mend! c (if (and wet? (not wet)) :wet :none)))))))
+                  :else (do (when (and wet? (not wet)) (ctx/update-mem! c assoc :wet-skipped wet-n))
+                        (to-mend! c (if (and wet? (not wet)) :wet :none))))))))
 
 ;; ------------------------------------------------------------------ mend
 

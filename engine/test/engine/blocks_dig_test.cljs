@@ -201,6 +201,20 @@
         (let [{:keys [eng]} (setup {:self body :blocks {"2,64,0" "dirt" "3,64,0" "water"}})]
           (is (:dug (await (child-outcome eng job {:pos at :accept #{:fluid-adjacent}} 5)))))))))
 
+(deftest on-fluid-fail-ends-at-once-with-a-hint-instead-of-waiting
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self body :blocks {"2,64,0" "dirt" "3,64,0" "water"}})
+              r (await (child-outcome eng job {:pos at :on-fluid :fail} 5))]
+          (is (= {:dug false :reason :fluid-adjacent :hazards [:fluid-adjacent]} (select-keys r [:dug :reason :hazards])))
+          (is (string? (:hint r)))
+          (is (empty? (calls p "dig"))))
+        (let [{:keys [eng]} (setup {:self body :blocks {"2,64,0" "dirt" "3,64,0" "water"}})]
+          (is (:dug (await (child-outcome eng job {:pos at :on-fluid :fail :accept #{:fluid-adjacent}} 5)))))
+        (let [{:keys [eng]} (setup {:self body :blocks {"2,64,0" "dirt"}})]
+          (is (:dug (await (child-outcome eng job {:pos at :on-fluid :fail} 5)))))))))
+
 (deftest a-block-the-walk-cannot-reach-waits-unreachable
   (async done
     (tu/run-async done

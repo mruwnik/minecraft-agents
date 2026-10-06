@@ -16,7 +16,7 @@
     footprint refuse the dig (jobs.lib.access). :for-plan's own footprint does not. :ignore-zones? skips the
     rule.
   - {:reason :hazard :pos :hazards [kw ..]}: a dig hazard not in :accept (:fluid-adjacent :falling-block
-    :under-feet).
+    :under-feet). With :on-fluid :fail a :fluid-adjacent hazard ends the job instead (see below).
   - {:reason :no-tool :needs item :block name}: with :need-drop, no carried tool harvests the block
     (tools/can-harvest?). :needs is the cheapest tool that does.
   - {:reason :inventory-full :pos}: with :collect, no free slot and no carried stack of the block's drop to
@@ -31,7 +31,7 @@
   (jobs.forestry.collect-drops child, only the item entities that appeared with this dig, by id).
 
   Ends with info blocks.dig.done and {:dug true|false :pos :block :reason :collected n}. :reason is :dug,
-  :already-clear (air there, nothing done), :fluid (a fluid is not dug), :cannot (bedrock and the like) or
+  :already-clear (air there, nothing done), :fluid (a fluid is not dug), :fluid-adjacent (:on-fluid :fail, with :hazards and a :hint), :cannot (bedrock and the like) or
   :bad-args (with a blocks.dig.declined warn). A dig the primitive refuses (a timeout, a failure) ends :failed
   with its :status at once. The caller decides whether to try again.
 
@@ -44,6 +44,7 @@
    :collect {:doc "pick up what the dig dropped (needs a free slot)" :default true}
    :need-drop {:doc "wait :no-tool when no carried tool harvests the block; false digs anyway and the drop is lost (clearing)" :default true}
    :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent :falling-block :under-feet)" :default #{}}
+   :on-fluid {:doc ":wait: a block beside a fluid that :accept does not take waits :hazard; :fail: the job ends at once, reason :fluid-adjacent, with a :hint" :default :wait}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
    :fetch {:doc "get a missing tool instead of waiting :no-tool (jobs.lib.fetch): true, a set of kinds or a map of limits" :default false}})
@@ -92,8 +93,15 @@
               :not-loaded {:reason :not-loaded :pos pos}
               (or (b/not-allowed pos v) {:reason (:reason v) :pos pos}))))))))
 
+(defn fluid-refusal
+  "With :on-fluid :fail, the hazard wait of a block beside a fluid, else nil."
+  [c]
+  (let [r (problem c)]
+    (when (and (= :fail (:on-fluid (:args c))) (= :hazard (:reason r)) (some #{:fluid-adjacent} (:hazards r)))
+      r)))
+
 (defn check [c]
-  (if-let [r (problem c)]
+  (if-let [r (when-not (fluid-refusal c) (problem c))]
     (fetch/check c 'jobs.blocks.dig r)
     true))
 
@@ -139,8 +147,11 @@
           :done)
       (let [_ (when-not (= pos (:for (ctx/mem c))) (ctx/update-mem! c b/fresh-mem pos))
             block (u/block-name (:primitives c) pos)
-            r (await (fetch/step! c 'jobs.blocks.dig (problem c)))]
+            refused (fluid-refusal c)
+            r (when-not refused (await (fetch/step! c 'jobs.blocks.dig (problem c))))]
         (cond
+          refused (finish! c {:dug false :pos pos :block block :reason :fluid-adjacent :hazards (:hazards refused)
+                              :hint "pass :accept #{:fluid-adjacent} to dig beside water, or :on-fluid :wait to wait for it to drain"})
           r r
           (:dug (ctx/mem c)) (await (collect! c pos))
           (b/air block) (finish! c {:dug false :pos pos :block block :reason :already-clear})
