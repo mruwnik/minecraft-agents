@@ -159,10 +159,36 @@
   [file]
   (boolean (some-> (.lstatSync fs file #js {:throwIfNoEntry false}) (.isSymbolicLink))))
 
-(defn- unsafe-dir-problem [workspace]
-  (when (some symlink? [workspace (.join path workspace "snapshots")])
-    {:reason :unsafe-snapshots-dir
-     :message "the workspace or its snapshots/ folder is a symbolic link; refusing to write or prune through it"}))
+(defn- real-target
+  "`file` with its deepest existing ancestor resolved through symbolic links (the file itself need not exist)."
+  [file]
+  (loop [rest-parts [] cur file]
+    (let [real (try (.realpathSync fs cur) (catch :default _ nil))
+          parent (.dirname path cur)]
+      (cond
+        real (apply (.-join path) real rest-parts)
+        (= parent cur) file
+        :else (recur (cons (.basename path cur) rest-parts) parent)))))
+
+(def unsafe-dir
+  {:reason :unsafe-snapshots-dir
+   :message "the workspace or its snapshots/ folder is a symbolic link, or a folder on its path changed; refusing to write or prune through it"})
+
+(defn- unsafe-dir-problem
+  "unsafe-dir when the workspace or snapshots/ is a link, or when snapshots/ no longer resolves to `expected` (its real path when the run began)."
+  [workspace expected]
+  (when (or (some symlink? [workspace (.join path workspace "snapshots")])
+            (not= expected (real-target (.join path workspace "snapshots"))))
+    unsafe-dir))
+
+(defn- write-snapshot!
+  "Writes `png` as a new file in the verified real folder `dir` (never following a link at the file) and prunes old ones."
+  [dir name png]
+  (let [fd (.openSync fs (.join path dir name)
+                      (bit-or (.. fs -constants -O_WRONLY) (.. fs -constants -O_CREAT) (.. fs -constants -O_EXCL) (.. fs -constants -O_NOFOLLOW)))]
+    (try (.writeSync fs fd png) (finally (.closeSync fs fd))))
+  (doseq [old (prune (array-seq (.readdirSync fs dir)) keep-count)]
+    (.rmSync fs (.join path dir old) #js {:force true})))
 
 (defn- center-of [center]
   (when center (js->clj center :keywordize-keys true)))
@@ -170,8 +196,9 @@
 (defn execute!
   "Renders and writes one snapshot; `render` is renderView of tools/view/render.mjs. Resolves to the result map."
   [{:keys [ctx body workspace width height max-dist] :as opts} render now]
-  (let [pose (read-pose ctx body)]
-    (if-let [problem (or (pose-problem pose (:world ctx) now) (unsafe-dir-problem workspace))]
+  (let [pose (read-pose ctx body)
+        expected (real-target (.join path workspace "snapshots"))]
+    (if-let [problem (or (pose-problem pose (:world ctx) now) (unsafe-dir-problem workspace expected))]
       (js/Promise.resolve (merge {:ok false :body body} problem))
       (let [cam (camera pose opts)]
         (-> (js/Promise.resolve
@@ -180,18 +207,22 @@
                           :width width :height height :maxDist max-dist
                           :override #js {:yaw (:yaw cam) :pitch (:pitch cam)} :aim true}))
             (.then (fn [out]
-                     (let [dir (.join path workspace "snapshots")
-                           file (.join path dir (file-name now))]
-                       (.mkdirSync fs dir #js {:recursive true})
-                       (.writeFileSync fs file (unchecked-get out "png"))
-                       (doseq [old (prune (array-seq (.readdirSync fs dir)) keep-count)]
-                         (.rmSync fs (.join path dir old) #js {:force true}))
-                       (merge {:ok true :body body :png (.relative path workspace file) :size [width height]}
-                              (summary {:pose pose :camera cam :width width :height height
-                                        :center (center-of (unchecked-get out "center"))
-                                        :seen (js->clj (unchecked-get out "seen") :keywordize-keys true)})
-                              {:eye (mapv #(round1 (get-in pose [:eye %])) [:x :y :z])
-                               :columns (unchecked-get out "columns") :render-ms (js/Math.round (unchecked-get out "ms"))})))))))))
+                     (if-let [problem (unsafe-dir-problem workspace expected)]
+                       (merge {:ok false :body body} problem)
+                       (let [dir (.join path workspace "snapshots")
+                             _ (.mkdirSync fs dir #js {:recursive true})
+                             real (.realpathSync fs dir)
+                             name (file-name now)]
+                         (if (or (not= real expected) (symlink? dir))
+                           (merge {:ok false :body body} unsafe-dir)
+                           (do
+                             (write-snapshot! real name (unchecked-get out "png"))
+                             (merge {:ok true :body body :png (.relative path workspace (.join path dir name)) :size [width height]}
+                                    (summary {:pose pose :camera cam :width width :height height
+                                              :center (center-of (unchecked-get out "center"))
+                                              :seen (js->clj (unchecked-get out "seen") :keywordize-keys true)})
+                                    {:eye (mapv #(round1 (get-in pose [:eye %])) [:x :y :z])
+                                     :columns (unchecked-get out "columns") :render-ms (js/Math.round (unchecked-get out "ms"))}))))))))))))
 
 (defn main!
   "Exit code 0 drawn, 1 refused (body offline, no pose), 2 bad arguments or a failure."

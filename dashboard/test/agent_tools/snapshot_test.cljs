@@ -175,6 +175,85 @@
                    (is (= ["old"] (map #(str (.readFileSync fs (.join path target %))) (array-seq (.readdirSync fs target)))))))
           (.finally (fn [] (.rmSync fs target #js {:recursive true :force true}) (done)))))))
 
+(defn- swapping-render
+  "A fake render that runs `swap!` (the folder swap) while the picture is being drawn."
+  [swap!]
+  (fn [_] (swap!) #js {:png (js/Buffer.from "PNGDATA") :ms 1 :columns 1 :center nil :seen #js []}))
+
+(deftest main-refuses-a-snapshots-folder-swapped-for-a-link-during-the-render
+  (async done
+    (let [{:keys [worlds workspace] :as f} (world-fixture)
+          target (.mkdtempSync fs (.join path (.tmpdir os) "snap-target-"))
+          dir (.join path workspace "snapshots")]
+      (.mkdirSync fs dir #js {:recursive true})
+      (write-pose! f (pose {:t (js/Date.now)}))
+      (-> (capture-stdout #(snap/main! (into base ["--worlds" worlds "--workspace" workspace])
+                                        (swapping-render (fn [] (.rmSync fs dir #js {:recursive true}) (.symlinkSync fs target dir)))))
+          (.then (fn [[code out]]
+                   (is (= 1 code) out)
+                   (is (str/includes? out ":reason :unsafe-snapshots-dir"))
+                   (is (empty? (array-seq (.readdirSync fs target))))))
+          (.finally (fn [] (.rmSync fs target #js {:recursive true :force true}) (done)))))))
+
+(deftest main-refuses-a-workspace-swapped-for-a-link-during-the-render
+  (async done
+    (let [{:keys [worlds workspace] :as f} (world-fixture)
+          target (.mkdtempSync fs (.join path (.tmpdir os) "snap-target-"))]
+      (.mkdirSync fs workspace #js {:recursive true})
+      (write-pose! f (pose {:t (js/Date.now)}))
+      (-> (capture-stdout #(snap/main! (into base ["--worlds" worlds "--workspace" workspace])
+                                        (swapping-render (fn [] (.rmSync fs workspace #js {:recursive true}) (.symlinkSync fs target workspace)))))
+          (.then (fn [[code out]]
+                   (is (= 1 code) out)
+                   (is (str/includes? out ":reason :unsafe-snapshots-dir"))
+                   (is (empty? (array-seq (.readdirSync fs target))))))
+          (.finally (fn [] (.rmSync fs target #js {:recursive true :force true}) (done)))))))
+
+(deftest main-refuses-an-ancestor-swapped-for-a-link-during-the-render
+  (async done
+    (let [{:keys [worlds dir] :as f} (world-fixture)
+          parent (.join path dir "parent")
+          workspace (.join path parent "ws")
+          moved (.join path dir "moved")
+          target (.mkdtempSync fs (.join path (.tmpdir os) "snap-target-"))]
+      (.mkdirSync fs workspace #js {:recursive true})
+      (write-pose! f (pose {:t (js/Date.now)}))
+      (-> (capture-stdout #(snap/main! (into base ["--worlds" worlds "--workspace" workspace])
+                                        (swapping-render (fn [] (.renameSync fs parent moved) (.symlinkSync fs target parent)))))
+          (.then (fn [[code out]]
+                   (is (= 1 code) out)
+                   (is (str/includes? out ":reason :unsafe-snapshots-dir"))
+                   (is (empty? (array-seq (.readdirSync fs target))))))
+          (.finally (fn [] (.rmSync fs target #js {:recursive true :force true}) (done)))))))
+
+(deftest main-refuses-a-symlinked-workspace
+  (async done
+    (let [{:keys [worlds workspace] :as f} (world-fixture)
+          target (.mkdtempSync fs (.join path (.tmpdir os) "snap-target-"))
+          calls (atom [])]
+      (.symlinkSync fs target workspace)
+      (write-pose! f (pose {:t (js/Date.now)}))
+      (-> (capture-stdout #(snap/main! (into base ["--worlds" worlds "--workspace" workspace]) (fake-render calls)))
+          (.then (fn [[code out]]
+                   (is (= 1 code) out)
+                   (is (empty? (array-seq (.readdirSync fs target))))))
+          (.finally (fn [] (.rmSync fs target #js {:recursive true :force true}) (done)))))))
+
+(deftest main-writes-through-a-symlinked-ancestor-that-was-there-from-the-start
+  (async done
+    (let [{:keys [worlds dir] :as f} (world-fixture)
+          real (.join path dir "real")
+          link (.join path dir "link")
+          workspace (.join path link "ws")]
+      (.mkdirSync fs real #js {:recursive true})
+      (.symlinkSync fs real link)
+      (write-pose! f (pose {:t (js/Date.now)}))
+      (-> (capture-stdout #(snap/main! (into base ["--worlds" worlds "--workspace" workspace]) (fake-render (atom []))))
+          (.then (fn [[code out]]
+                   (is (= 0 code) out)
+                   (is (= 1 (count (array-seq (.readdirSync fs (.join path real "ws" "snapshots"))))))))
+          (.finally done)))))
+
 (deftest main-refuses-an-offline-body-and-bad-arguments-without-rendering
   (async done
     (let [{:keys [worlds workspace] :as f} (world-fixture) calls (atom [])]
