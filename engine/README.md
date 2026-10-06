@@ -713,7 +713,7 @@ return EDN, cap pages at 10 records (100 with `--limit`, `--offset` pages on), a
 ```
 node engine/tools/plans.mjs --world claude list | find home | show home --raw
 node engine/tools/plans.mjs --world claude validate home --edn '{:id "home" :parts []}'
-node engine/tools/plans.mjs --world claude check home --inventory '{:stone 24}'     # material needs and conflicts vs dumped chunks
+node engine/tools/plans.mjs --world claude check home --body Wren --inventory '{:stone 24}'     # material needs and conflicts vs what that body has seen (its seen memory); never-seen cells count unknown
 node engine/tools/plans.mjs --world claude add|edit home --edn '...' --by builder [--revision <digest>]
 node engine/tools/blueprints.mjs --world claude find hut | show starter-hut | validate hut --edn '...' | save hut --edn '...' --by builder
 node engine/tools/map.mjs --world claude find --type marker --text farm

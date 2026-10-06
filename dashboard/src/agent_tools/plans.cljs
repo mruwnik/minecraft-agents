@@ -5,7 +5,6 @@
             [clojure.string :as str]
             [agent-tools.world-data :as data]
             [dashboard.agent-plan-tools :as checks]
-            [dashboard.plan-compare :as cmp]
             [plan.parse :as parse]
             [plan.shape :as shape]
             ["node:fs" :as fs]
@@ -16,7 +15,7 @@
 (def names #"^[A-Za-z0-9_-]{1,100}$")
 (def repo-root (.resolve path js/__dirname "../.."))
 (def usage
-  {:plan "usage: plans.mjs --world <world> <command> [options]\n  list [--limit 10 --offset 0] [--raw [--large]]\n  find <text> [--limit 10 --offset 0] [--raw [--large]] | show <id> [--raw [--large]] [--geometry [--large]]\n  add <id> --edn '<plan-map>' --by <name> [--dry-run] [--raw]\n  edit <id> --edn '<plan-map>' --by <name> --revision <digest> [--dry-run] [--raw]\n  remove <id> --by <name> --revision <digest> [--dry-run] [--raw]   (every submitted plan is active; remove retires one)\n  validate <id> --edn '<plan-map>' [--blueprint <id>=<blueprint-map>]... [--raw] [--geometry [--large]]\n  check <id> [--inventory '<block-count-map>'] [--blueprint <id>=<blueprint-map>]... [--raw] [--geometry [--large]]\n  Common: --worlds <dir> --state <legacy-parent> --repo <dir> --limit 1..100 --offset 0..10000\n  Large raw output is opt-in with --large; raw output otherwise stops at 64 KiB. Plan/world edits need --by."
+  {:plan "usage: plans.mjs --world <world> <command> [options]\n  list [--limit 10 --offset 0] [--raw [--large]]\n  find <text> [--limit 10 --offset 0] [--raw [--large]] | show <id> [--raw [--large]] [--geometry [--large]]\n  add <id> --edn '<plan-map>' --by <name> [--dry-run] [--raw]\n  edit <id> --edn '<plan-map>' --by <name> --revision <digest> [--dry-run] [--raw]\n  remove <id> --by <name> --revision <digest> [--dry-run] [--raw]   (every submitted plan is active; remove retires one)\n  validate <id> --edn '<plan-map>' [--blueprint <id>=<blueprint-map>]... [--raw] [--geometry [--large]]\n  check <id> --body <name> [--inventory '<block-count-map>'] [--blueprint <id>=<blueprint-map>]... [--raw] [--geometry [--large]]\n  Common: --worlds <dir> --state <legacy-parent> --repo <dir> --limit 1..100 --offset 0..10000\n  check judges only what that body has seen (its seen memory); cells never seen count unknown and :checked :unseen. Large raw output is opt-in with --large; raw output otherwise stops at 64 KiB. Plan/world edits need --by."
    :blueprint "usage: blueprints.mjs --world <world> <command> [options]\n  list [--limit 10 --offset 0] [--raw [--large]] | find <text> [--limit 10 --offset 0] [--raw [--large]]\n  show <id> [--raw [--large]] | save <id> --edn '<blueprint-map>' --by <name> [--revision <digest>] [--dry-run] [--raw]\n  validate <id> --edn '<blueprint-map>' [--raw] [--large]\n  Common: --worlds <dir> --state <legacy-parent> --repo <dir> --limit 1..100 --offset 0..10000\n  Blueprints are shared globally; each result reports :scope :global. Writes need --by."})
 
 (defn fail! [reason message] (throw (data/fail reason message)))
@@ -48,7 +47,7 @@
 
 (defn parsed-args [kind argv]
   (let [options (merge (into {} (map (fn [k] [k {:type "string"}])
-                                    [:world :by :revision :edn :status :limit :offset :query :inventory]))
+                                    [:world :by :revision :edn :status :limit :offset :query :inventory :body]))
                        {:state {:type "string"} :worlds {:type "string"}
                         :repo {:type "string" :default repo-root}
                         :blueprint {:type "string" :multiple true}}
@@ -65,13 +64,15 @@
                   (= command "show") (into [:raw :geometry :large])
                   (= command "validate") (into [:edn :limit :offset :raw :geometry :large])
                   (and (= command "validate") (= kind :plan)) (conj :blueprint)
-                  (= command "check") (into [:inventory :blueprint :raw :geometry :large :limit :offset])
+                  (= command "check") (into [:body :inventory :blueprint :raw :geometry :large :limit :offset])
                   (mutations command) (into [:by :revision :dry-run :raw :large])
                   (#{"add" "edit" "save"} command) (conj :edn))]
     (when-not (and (:world v) (re-matches #"^[A-Za-z0-9_-]{1,64}$" (:world v)))
       (fail! :invalid-world "supply an explicit valid --world"))
     (when (and (= kind :plan) (= command "status"))
       (fail! :usage "plans have no status: every submitted plan is active, and a draft is a plan you keep locally; to retire a plan use `remove <id> --by <name> --revision <digest>`"))
+    (when (and (= command "check") (not (re-matches #"^[A-Za-z0-9_-]{1,64}$" (str (:body v)))))
+      (fail! :body-required "check needs --body <name>: the body whose seen memory is judged"))
     (when (and (= kind :plan) (:status v))
       (fail! :bad-option "plans have no status field; every submitted plan is active"))
     (when-not (commands command) (fail! :usage (str "unknown " (name kind) " command " command)))
@@ -181,41 +182,43 @@
   (try (.readFileSync fs (data/document-path ctx :zone "collection") "utf8")
        (catch :default e (if (= "ENOENT" (.-code e)) nil (throw e)))))
 
+(defn seen-checked
+  "What a check rests on: how many of the cells the body has seen, how many never, and the age of the oldest and
+  newest seen cell (seen-times: ms of each seen cell)."
+  [cell-count seen-times memory]
+  (let [now (js/Date.now)]
+    {:cells cell-count :seen (count seen-times) :unseen (- cell-count (count seen-times)) :now now
+     :memory-sections (.-sections memory) :memory-file? (.-found memory)
+     :oldest (when (seq seen-times) (apply min seen-times)) :newest (when (seq seen-times) (apply max seen-times))}))
+
 (defn check-plan [ctx text id inline req]
   (let [prepared (prepare ctx text id inline (read-zone-text ctx) (mapv :value (current-docs ctx :claim)))]
     (if (or (not (:ok prepared)) (nil? (:expansion prepared)))
-      (js/Promise.resolve (assoc prepared :world (:world ctx) :worldEvidence "saved-column-dumps" :liveLoaded false))
+      (js/Promise.resolve (assoc prepared :world (:world ctx) :evidence :seen-memory :live-loaded? false))
       (do
         (geometry-check! (:cells prepared) (:large req))
         (-> ((:load-worldblocks req))
-            (.then (fn [worldblocks]
-                     (let [columns ((aget worldblocks "createWorldBlocks") #js {:stateDir (clj->js (:state ctx)) :world (:world ctx)})
-                           blocks (atom {}) mtimes (atom {})
+            (.then (fn [seen-module]
+                     (let [memory ((aget seen-module "createSeenBlocks") #js {:stateDir (clj->js (:state ctx)) :world (:world ctx) :body (:body req)})
+                           blocks (atom {}) seen-times (atom [])
                            inventory (inventory-value (:inventory req))]
                        (try
                          (doseq [[x y z :as pos] (:cells prepared)]
-                           (when-let [block (.call (aget columns "blockAt") columns x y z)]
-                             (swap! blocks assoc pos {:name (aget block "name") :state (js->clj (aget block "state"))}))
-                           (let [cx (js/Math.floor (/ x 16)) cz (js/Math.floor (/ z 16)) key [cx cz]]
-                             (when-not (contains? @mtimes key)
-                               (swap! mtimes assoc key
-                                      (try (.-mtimeMs (.statSync fs (.join path (:columns-dir ctx) (str cx "." cz ".bin"))))
-                                           (catch :default e (if (= "ENOENT" (.-code e)) nil (throw e))))))))
-                         (let [score (checks/score-native (:expansion prepared) #(get @blocks %) #(get @mtimes [%1 %2])
+                           (when-let [block (.call (aget memory "blockAt") memory x y z)]
+                             (swap! blocks assoc pos {:name (aget block "name") :state (js->clj (aget block "state"))})
+                             (swap! seen-times conj (.call (aget memory "seenAt") memory x y z))))
+                         (let [score (checks/score-native (:expansion prepared) #(get @blocks %) (constantly nil)
                                                          (or inventory {}) (some? inventory)
                                                          (js/Number (or (:offset req) 0)) (js/Number (or (:limit req) 10)))
-                               checked (:checked score)
-                               stale (cmp/stale-note checked cmp/stale-ms)]
+                               checked (seen-checked (count (:cells prepared)) @seen-times memory)]
                            (cond-> (assoc (dissoc prepared :expansion :cells)
-                                          :world (:world ctx) :evidence :saved-column-dumps :live-loaded? false
+                                          :world (:world ctx) :evidence :seen-memory :body (:body req) :live-loaded? false
                                           :score (assoc score :checked
-                                                        (cond-> (assoc checked :newest-age-ms (when (js/Number.isFinite (:newest checked)) (max 0 (- (:now checked) (:newest checked))))
-                                                                       :freshness (if (< (:dumped checked) (:chunks checked)) :incomplete-saved-dumps :saved-dumps)
-                                                                       :oldest-age-ms (when (js/Number.isFinite (:oldest checked)) (max 0 (- (:now checked) (:oldest checked)))))
-                                                          stale (assoc :stale stale))))
+                                                        (assoc checked :newest-age-ms (when (:newest checked) (max 0 (- (:now checked) (:newest checked))))
+                                                                       :oldest-age-ms (when (:oldest checked) (max 0 (- (:now checked) (:oldest checked)))))))
                              (:geometry req) (assoc :cells (:cells prepared))
                              (:large req) (assoc :large true)))
-                         (finally (.call (aget columns "close") columns)))))))))))
+                         (finally (.call (aget memory "close") memory)))))))))))
 
 (defn validate-revision! [revision]
   (when (and (some? revision) (not (re-matches #"^[a-f0-9]{24}$" revision)))

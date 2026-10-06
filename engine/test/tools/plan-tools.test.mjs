@@ -5,6 +5,8 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { createRequire } from 'node:module'
+import prismarineRegistry from 'prismarine-registry'
+import { saveSeen } from '../../js/seen-file.mjs'
 import { execute } from '../../tools/plan-tools-lib.mjs'
 import { readEDN, keyword } from './edn.mjs'
 import { revision } from '../../tools/world-data.mjs'
@@ -113,15 +115,51 @@ test('blueprint tools validate inline, report global scope, and save with CAS', 
   } finally { fx.close() }
 })
 
-test('check marks absent column data unknown and includes bounded offline evidence', async () => {
+// A body's seen-block memory (engine/js/seen-file.mjs) holding the given [x, y, z, blockName] cells at one seen time.
+async function writeSeen (fx, body, cells, seenAt) {
+  const version = '1.20.4'
+  const registry = prismarineRegistry(version)
+  const dir = path.join(fx.state, 'worlds', 'fixture', 'agents', body, 'engine')
+  fs.mkdirSync(dir, { recursive: true })
+  const sections = new Map()
+  for (const [x, y, z, name] of cells) {
+    const key = [x >> 4, y >> 4, z >> 4].join()
+    if (!sections.has(key)) sections.set(key, { dim: 'minecraft:overworld', cx: x >> 4, sy: y >> 4, cz: z >> 4, seen: seenAt, base: seenAt, ids: new Uint16Array(4096), times: new Uint8Array(4096) })
+    sections.get(key).ids[((y & 15) << 8) | ((z & 15) << 4) | (x & 15)] = registry.blocksByName[name].defaultState + 1
+  }
+  await saveSeen(path.join(dir, 'seen.bin'), { version, sections: [...sections.values()] })
+}
+
+test('check scores only cells the body has seen: a never-seen cell is unseen, a seen wrong block is wrong', async () => {
   const fx = fixture()
   try {
     await invoke('plan', fx, ['add', 'house', '--edn', planText('house'), '--by', 'tester'])
-    const checked = await invoke('plan', fx, ['check', 'house', '--inventory', '{:stone 1}'])
+    await writeSeen(fx, 'Probe', [[0, 64, 0, 'stone'], [1, 64, 0, 'dirt']], Date.now() - 120000)
+    const checked = await invoke('plan', fx, ['check', 'house', '--body', 'Probe'])
     assert.equal(checked.code, 0)
-    assert.deepEqual(checked.value.evidence, keyword('saved-column-dumps'))
+    assert.deepEqual(checked.value.evidence, keyword('seen-memory'))
+    assert.equal(checked.value.score.counts.match, 1)
+    assert.equal(checked.value.score.counts.wrong, 1)
+    assert.equal(checked.value.score.counts.unknown, 1)
+    assert.equal(checked.value.score.checked.unseen, 1)
+    assert.equal(checked.value.score.checked.seen, 2)
+    assert.ok(checked.value.score.checked['oldest-age-ms'] >= 120000)
+  } finally { fx.close() }
+})
+
+test('check without a seen memory file reports every cell unseen; check needs --body', async () => {
+  const fx = fixture()
+  try {
+    await invoke('plan', fx, ['add', 'house', '--edn', planText('house'), '--by', 'tester'])
+    const missing = await invoke('plan', fx, ['check', 'house'])
+    assert.equal(missing.code, 2)
+    assert.deepEqual(missing.value.reason, keyword('body-required'))
+    const checked = await invoke('plan', fx, ['check', 'house', '--body', 'Nobody', '--inventory', '{:stone 1}'])
+    assert.equal(checked.code, 0)
+    assert.deepEqual(checked.value.evidence, keyword('seen-memory'))
     assert.equal(checked.value['live-loaded?'], false)
     assert.equal(checked.value.score.counts.unknown, 3)
+    assert.equal(checked.value.score.checked.unseen, 3)
     assert.deepEqual(checked.value.score.materials.availability, keyword('provided-name-counts'))
     assert.equal(checked.value.score.materials.required.stone, 3)
     assert.equal(checked.value.score.materials['unknown-cells'], 3)
@@ -133,7 +171,7 @@ test('check pages part and score-element details with actionable offsets', async
   try {
     const parts = Array.from({ length: 12 }, (_, i) => `{:id "p${i}" :cells [[${i} 64 0]] :want "stone"}`).join(' ')
     await invoke('plan', fx, ['add', 'paged', '--edn', `{:id "paged" :parts [${parts}]}`, '--by', 'tester'])
-    const checked = await invoke('plan', fx, ['check', 'paged', '--limit', '3', '--offset', '3'])
+    const checked = await invoke('plan', fx, ['check', 'paged', '--body', 'Probe', '--limit', '3', '--offset', '3'])
     assert.equal(checked.value.parts.total, 12)
     assert.equal(checked.value.parts.items.length, 3)
     assert.equal(checked.value.parts['next-offset'], 6)
@@ -228,7 +266,7 @@ test('native plan checks report overlapping saved claims', async () => {
     assert.equal((await invoke('plan', fx, ['add', 'claimed', '--edn', planText('claimed'), '--by', 'tester'])).code, 0)
     fs.writeFileSync(path.join(fx.state, 'worlds', 'fixture', 'claims.edn'),
       `[{:id "extension" :owner "another-agent" :min [0 64 0] :max [2 64 0] :status :active :until ${Date.now() + 60000}}]`)
-    const checked = await invoke('plan', fx, ['check', 'claimed'])
+    const checked = await invoke('plan', fx, ['check', 'claimed', '--body', 'Probe'])
     assert.equal(checked.code, 0, checked.output)
     assert.equal(checked.value.claims.total, 1)
     assert.equal(checked.value.claims.items[0].id, 'extension')
