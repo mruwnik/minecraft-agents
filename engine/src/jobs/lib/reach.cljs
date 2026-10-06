@@ -29,15 +29,21 @@
   "Blocks a walker treats as walls and never stands on."
   #{"lava" "fire" "soul_fire" "magma_block" "cactus" "sweet_berry_bush"})
 
+(def tall-block
+  "Blocks with a 1.5-block collision box: nothing walking jumps onto them (fences, walls, shut fence gates)."
+  #"_(fence|fence_gate|wall)$")
+
 (defn kind-of
-  "What a block is to a walker: :open, :water or :solid. An unloaded cell (nil) is open."
+  "What a block is to a walker: :open, :water, :solid, or :tall (solid and too high to step onto: fence, wall, shut
+  fence gate). An unloaded cell (nil) is open."
   [b]
   (let [name (some-> b .-name)]
     (cond
       (nil? name) :open
       (= "water" name) :water
       (hazard-blocks name) :solid
-      (openable? name) (if (open-prop? b) :open :solid)
+      (openable? name) (if (open-prop? b) :open (if (re-find tall-block name) :tall :solid))
+      (re-find tall-block name) :tall
       (str/ends-with? name "_leaves") :solid
       (sh/solid? name) :solid
       :else :open)))
@@ -89,7 +95,9 @@
                (.set cache k v)
                v))))))))
 
-(defn passable? [kind-at x y z] (not (keyword-identical? :solid (kind-at x y z))))
+(defn passable? [kind-at x y z]
+  (let [k (kind-at x y z)]
+    (not (or (keyword-identical? :solid k) (keyword-identical? :tall k)))))
 
 (defn standable?
   "Feet and head cells free and something to stand on (a floor, or water)."
@@ -116,7 +124,8 @@
   to max-drop), or nil."
   [kind-at x y z nx nz]
   (cond
-    (and (not (passable? kind-at nx y nz)) (passable? kind-at x (+ y 2) z) (standable? kind-at nx (inc y) nz))
+    (and (not (passable? kind-at nx y nz)) (not (keyword-identical? :tall (kind-at nx y nz)))
+         (passable? kind-at x (+ y 2) z) (standable? kind-at nx (inc y) nz))
     #js [nx (inc y) nz]
     (and (passable? kind-at nx y nz) (passable? kind-at nx (inc y) nz))
     (loop [k 0]

@@ -85,3 +85,26 @@
   (let [[p reads] (counting (tu/fake {:self {:pos body} :floor [-30 -30 30 30]}))]
     (is (false? (reach/enclosed? p)))
     (is (= 1 (most-reads reads)))))
+
+(defn ring
+  "One-high ring of block name at radius 1 around the cell (6 64 0)."
+  [name]
+  (into {} (for [x [5 6 7] z [-1 0 1] :when (not= 0 (- x 6) z)] [(str x ",64," z) name])))
+
+(def mob-in-ring {:x 6.5 :y 64 :z 0.5})
+
+(deftest a-mob-hops-out-of-a-one-high-ring
+  (let [p (tu/fake {:self {:pos body} :floor [-20 -20 20 20] :blocks (ring "stone")})]
+    (is (true? (reach/walkable-way? p mob-in-ring body)))))
+
+(deftest a-mob-cannot-jump-a-fence-ring-or-a-wall-ring
+  (doseq [name ["oak_fence" "cobblestone_wall" "oak_fence_gate"]]
+    (let [p (tu/fake {:self {:pos body} :floor [-20 -20 20 20] :blocks (ring name)})]
+      (is (false? (reach/walkable-way? p mob-in-ring body)) name))))
+
+(deftest a-fenced-in-zombie-is-no-danger-but-a-skeleton-behind-the-fence-is
+  (let [skel {:id 9 :name "skeleton" :kind "hostile" :pos {:x 6.5 :y 64 :z 0.5}}
+        p (tu/fake {:self {:pos body} :floor [-20 -20 20 20] :blocks (ring "oak_fence") :entities [(zed 1 6 0)]})
+        q (tu/fake {:self {:pos body} :floor [-20 -20 20 20] :blocks (ring "oak_fence") :entities [skel]})]
+    (is (= [] (reach/dangers p 8 {} {:sight? false})))
+    (is (= [9] (map #(.-id %) (reach/dangers q 16 {:ranged-radius 16} {:sight? false}))))))
