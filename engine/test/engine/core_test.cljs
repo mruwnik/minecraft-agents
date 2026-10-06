@@ -812,6 +812,13 @@
           (core/cancel! eng "j1")
           (is (not (contains? @(:rounds eng) "j1")) "cancelled: nothing left to resume")))))) 
 
+(deftest dropping-a-reflex-job-clears-its-round-entry
+  (let [{:keys [eng]} (setup)]
+    (swap! (:state eng) assoc-in [:instances "r1"] {:spec {:op :leaf :job 'night}})
+    (swap! (:rounds eng) assoc "r1" {:acts {}})
+    (core/drop-reflex-job! eng "r1" :night :dropped {:how :dropped :by :death})
+    (is (not (contains? @(:rounds eng) "r1")) "cut, death and shutdown drops leave no round entry behind")))
+
 (deftest an-interrupted-job-continues-right-after-the-jobs-done-now-before-it
   ;; X and A take turns; A is cut by B, B by C. Each job done now goes directly before the one it cut, so once C and
   ;; B are done the next round is A's again, not the round-robin's next pick (X).

@@ -126,6 +126,7 @@
 
 (defn drop-instance! [eng id]
   (swap! (:state eng) update :instances dissoc id)
+  (swap! (:rounds eng) dissoc id)
   (mem/delete-job! (:store eng) id)
   (save-memory! eng))
 
