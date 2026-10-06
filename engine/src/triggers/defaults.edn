@@ -19,4 +19,4 @@
   {:id :scaffold-left :when triggers.access.scaffold-left/scaffold-left :job (jobs.access.cleanup) :args {} :persistence :stop}
   {:id :tidy-pending :when triggers.survival.tidy-pending/tidy-pending :job (jobs.survival.restore-broken) :args triggers.survival.tidy-pending/defaults :persistence :cooldown :cooldown-s 10}
   {:id :pen-gate :when triggers.animals.pen-gate/pen-gate :job (jobs.animals.shut-gate) :args triggers.animals.pen-gate/defaults :persistence :cooldown :cooldown-s 5 :backoff {:after 9}}
-  {:id :mounted :when triggers.movement.mounted/mounted :job (jobs.movement.leave-vehicle) :args {} :persistence :stop :cooldown-s 0}]}
+  {:id :mounted :when triggers.movement.mounted/mounted :job (jobs.movement.leave-vehicle) :args {} :persistence :cooldown :cooldown-s 30}]}

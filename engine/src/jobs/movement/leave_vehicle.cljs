@@ -11,7 +11,7 @@
   Then it uses the dismount primitive (sneak).
   On success: info vehicle.left {:pos :landed}, :landed being :dry or :in-water. The result is the same map.
   A failed dismount is retried in the same run, the wait doubling from :wait-ms up to 1 s. After :max-tries it warns vehicle.dismount_failed {:tries :status}
-  and ends stopped :dismount-failed, with the body still aboard. Never :continue. The :mounted trigger runs it.")
+  and ends stopped :dismount-failed, with the body still aboard. Never :continue. The :mounted trigger runs it (cooldown persistence: a body still aboard is tried again 30 s later).")
 
 (def args
   {:toward {:doc "a position {:x :y :z} to face when getting off (its cell's centre); nil picks a dry cell" :default nil}

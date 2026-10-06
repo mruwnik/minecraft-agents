@@ -98,7 +98,7 @@
 (deftest mounted-is-registered-with-leave-vehicle
   (is (= mounted/mounted (:when (:mounted triggers/all))))
   (is (= '(jobs.movement.leave-vehicle) (:job (:mounted triggers/all))))
-  (is (= :stop (:persistence (:mounted triggers/all)))))
+  (is (= :cooldown (:persistence (:mounted triggers/all)))))
 
 ;; ------------------------------------------------------------------- leave-vehicle
 

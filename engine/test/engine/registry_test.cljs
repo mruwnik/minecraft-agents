@@ -70,6 +70,11 @@
          (dissoc (:scaffold-left triggers/all) :when))
       "a line without :cooldown-s has none"))
 
+(deftest mounted-never-latches-after-a-failed-dismount
+  (let [t (:mounted triggers/all)]
+    (is (= :cooldown (:persistence t)) "a body still aboard fires again after the cooldown, not only after being off once")
+    (is (pos? (:cooldown-s t)))))
+
 (deftest the-facts-table-is-the-one-the-defaults-name
   (is (contains? triggers/facts 'health))
   (is (fn? (:read (get triggers/facts 'stuck)))))
