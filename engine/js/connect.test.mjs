@@ -1,0 +1,16 @@
+// Why JavaScript: tests the Mineflayer connection adapter (connect.mjs), which is JS.
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { botOptions, DEFAULTS } from './connect.mjs'
+
+test('botOptions passes the default view distance to mineflayer', () => {
+  assert.equal(botOptions({ host: 'h', port: 1, username: 'u' }).viewDistance, DEFAULTS.viewDistance)
+})
+
+test('botOptions passes a configured view distance', () => {
+  assert.equal(botOptions({ host: 'h', port: 1, username: 'u', viewDistance: 5 }).viewDistance, 5)
+})
+
+test('botOptions keeps the connection settings', () => {
+  assert.deepEqual(botOptions({ host: 'h', port: 1, username: 'u' }), { host: 'h', port: 1, username: 'u', auth: 'offline', version: '26.1', viewDistance: DEFAULTS.viewDistance })
+})

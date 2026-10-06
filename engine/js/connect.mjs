@@ -9,15 +9,21 @@ import { fixDigMaterials } from './dig-materials.mjs'
 const { pathfinder } = pf
 
 // same defaults as src/config.mjs: the newest protocol mineflayer speaks, offline auth
-export const DEFAULTS = { version: '26.1', auth: 'offline' }
+// viewDistance: chunks loaded around the body (mineflayer's own default 'far' is 12; ~80-100 KB heap per column)
+export const DEFAULTS = { version: '26.1', auth: 'offline', viewDistance: 8 }
 export const SPAWN_TIMEOUT_MS = 60000
+
+// The mineflayer createBot options for a body's connection settings.
+export function botOptions ({ host, port, username, auth = DEFAULTS.auth, version = DEFAULTS.version, viewDistance = DEFAULTS.viewDistance }) {
+  return { host, port, username, auth, version, viewDistance }
+}
 
 // Resolves with the bot once it has spawned and the pathfinder has movements that never dig or build and
 // steer clear of hazards (see movements.mjs): a primitive that walks must not quietly break blocks or wade into
 // lava. Rejects when the server refuses, drops the connection or stays silent.
-export function connectBot ({ host, port, username, auth = DEFAULTS.auth, version = DEFAULTS.version }, { timeoutMs = SPAWN_TIMEOUT_MS } = {}) {
+export function connectBot (params, { timeoutMs = SPAWN_TIMEOUT_MS } = {}) {
   return new Promise((resolve, reject) => {
-    const bot = mineflayer.createBot({ host, port, username, auth, version })
+    const bot = mineflayer.createBot(botOptions(params))
     bot.loadPlugin(pathfinder)
     // Mineflayer does not keep the damage_type registry; primitives names a damage packet's type from it.
     bot._client.on('registry_data', packet => {
