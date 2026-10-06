@@ -355,7 +355,6 @@ Built-in triggers, in the order of `triggers/defaults.edn` (the default register
 | `:tidy-pending` | body safe and on the ground, a `:tidy` entry pending; a cell a run tried waits 2 min or until the body moves 8 blocks | `survival.restore-broken` | 10 s |
 | `:pen-gate` | a planned fence gate within 8 stands open, body more than 2 away, for 4 s | `animals.shut-gate` | 5 s |
 | `:mounted` | the body rides something and no live job holds a vehicle | `movement.leave-vehicle` | stop |
-| `:player-joined` | a `:player-joined` entry under `:window-s` 10 old | `debug.notify` | 10 s |
 
 The dangers (`:suffocating`, `:burning`) have no cooldown and no backoff. Needs rest with a reason the agent
 sees (`:hungry` after `food.none`). There is no timer trigger: periodic work is a job.

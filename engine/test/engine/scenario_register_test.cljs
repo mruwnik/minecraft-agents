@@ -22,7 +22,7 @@
 
 (deftest missing-register-gives-the-defaults-in-order
   (is (= [:suffocating :burning :wedged :hostile-near :night :hungry :stuck :door-left :died
-          :inventory-nearly-full :scaffold-left :tidy-pending :pen-gate :mounted :player-joined]
+          :inventory-nearly-full :scaffold-left :tidy-pending :pen-gate :mounted]
          (loaded-ids {})
          (loaded-ids '{:queue [(jobs.movement.look-around)]}))))
 

@@ -10,12 +10,6 @@
          :output-dir "out/body"
          :build-hooks [(engine.build-hooks/add-job-namespaces)]
          :compiler-options {:infer-externs false}}
-  ;; One-off: drops the removed plan :status field from a plans directory (plan.drop-status-cli).
-  :drop-plan-status {:target :node-script
-                     :main plan.drop-status-cli/main
-                     :output-to "out/drop-plan-status.cjs"
-                     :output-dir "out/drop-plan-status"
-                     :compiler-options {:infer-externs false}}
   :test {:target :node-test
          :output-to "out/test.cjs"
          :output-dir "out/test"
