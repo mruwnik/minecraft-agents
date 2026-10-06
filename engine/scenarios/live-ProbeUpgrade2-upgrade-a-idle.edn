@@ -1,0 +1,1 @@
+{:register [{:id :scn-a :when (> (inventory "gold_ingot") 5000) :job (jobs.debug.notify {:text "scn-a"})}] :queue []}
