@@ -355,7 +355,7 @@ Built-in triggers, in the order of `triggers/defaults.edn` (the default register
 | `:scaffold-left` | the scaffold ledger holds blocks whose job is gone | `access.cleanup` | stop |
 | `:tidy-pending` | body safe and on the ground, a `:tidy` entry pending; a cell a run tried (the entry's `:tried` stamp) waits 2 min or until the body moves 8 blocks | `survival.restore-broken` | 10 s |
 | `:pen-gate` | a planned fence gate within 8 was last seen open, body more than 2 away; no `:opened`/`:gate-held`/`:gate-gave-up` entry for it | `animals.shut-gate` (waits `:open-s`, 4 s, before shutting; a gate it left for an animal or an interrupted walk is paused 30 s) | 5 s |
-| `:mounted` | the body rides something and no live job holds a vehicle | `movement.leave-vehicle` | stop |
+| `:mounted` | the body rides something and no live job holds a vehicle | `movement.leave-vehicle` | cooldown 30 s |
 
 The dangers (`:suffocating`, `:burning`) have no cooldown and no backoff. Needs rest with a reason the agent
 sees (`:hungry` after `food.none`). There is no timer trigger: periodic work is a job.
@@ -573,7 +573,7 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 | `movement.look-around` `{:every-ms 2000}` | Faces a random point; writes `:looked` |
 | `movement.pace` `{:a :b :laps :rounds}` | Walks a, b, a, b; a test job |
 | `movement.follow` `{:player :range :radius}` | Keeps within range of a player |
-| `movement.leave-vehicle` | Gets off a boat, minecart or mount (run by `:mounted`; one run, retries inside, stopped when still aboard) |
+| `movement.leave-vehicle` | Gets off a boat, minecart or mount (run by `:mounted`; one run, retries inside, stopped when still aboard, fired again after the cooldown) |
 | `time.wait-for-day`, `time.wait-for-dusk` | Done once it is day / evening; waits `:day-not-come` / `:dusk-not-come` |
 
 **Survival (reflex and need jobs)**
