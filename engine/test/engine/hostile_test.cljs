@@ -683,8 +683,8 @@
   (is (= :retry (:persistence (:hostile-near triggers/all))))
   (is (zero? (:cooldown-s (:hostile-near triggers/all) 0))))
 
-(deftest respond-to-hostile-is-never-backed-off
-  (is (false? (:backoff (registry/jobs 'jobs.survival.respond-to-hostile)))))
+(deftest the-hostile-entry-is-never-backed-off
+  (is (false? (:backoff (:hostile-near triggers/all)))))
 
 (deftest a-far-walkable-zombie-does-not-hold-the-body
   (async done

@@ -24,11 +24,6 @@
   The suffocating trigger then fires it again.
   Memory: writes one :breathe entry per job.")
 
-(def backoff
-  "Off: a danger reflex (rule: no cooldown and no backoff while the danger lasts); fruitless rounds while air is
-  out of reach must not mute it."
-  false)
-
 (def args
   {:min-oxygen {:doc "oxygen (of 20) below which being in water with the head submerged is drowning"
                 :default s/default-min-oxygen}

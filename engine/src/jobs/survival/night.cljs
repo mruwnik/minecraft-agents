@@ -45,10 +45,6 @@
    :urgent-bed-radius {:doc "the bed radius once the body is overdue for sleep" :default sh/urgent-bed-radius}
    :max-days-awake {:doc "in-game days without sleep before finding a bed becomes urgent" :default sh/max-days-awake}})
 
-(def backoff
-  "Off: it bounds itself and is time-critical at night, so a backoff would leave the body unsheltered longer."
-  false)
-
 (defn bed-permit
   "Whether the body may use a bed (sh/bed-permit over the job's world and clock)."
   [c]

@@ -1,12 +1,13 @@
 (ns engine.backoff-test
-  "Backoff: a job whose rounds all fail at once is not given rounds as fast as
-  the scheduler can; see engine.backoff and README.md, Backoff."
+  "Backoff: a reflex whose runs keep failing is not fired as fast as the scheduler can (register entries only;
+  listed jobs are never backed off, job.fruitless only flags them); see engine.backoff and README.md, Backoff."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.backoff :as backoff]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.registry :as registry]
+            [engine.triggers :as trigger-defaults]
             [engine.fake :as fake]
             [engine.test-util :as tu]))
 
@@ -112,12 +113,14 @@
 
 (defn ^:async script-round
   "One moveTo per entry of :statuses (the fake answers with that status), then
-  :end (:continue, :done or :throw)."
+  :end (:continue, :done, :declined, :stopped or :throw)."
   [c]
   (doseq [s (:statuses (:args c))]
     (await (ctx/act c :moveTo #js {:pos #js {:x 0 :y 64 :z 0} :status s})))
-  (when (= :throw (:end (:args c))) (throw (js/Error. "boom")))
-  (:end (:args c) :continue))
+  (case (:end (:args c))
+    :throw (throw (js/Error. "boom"))
+    :stopped (do (ctx/result! c {:status :stopped :reason :no-way}) :done)
+    (:end (:args c) :done)))
 
 (defn ^:async bump-round
   "One moveTo, answered with whatever status holds."
@@ -129,10 +132,6 @@
   (await (ctx/act c :moveTo #js {:pos #js {:x 0 :y 64 :z 0} :status @status}))
   :done)
 
-(defn ^:async bump-decline-round [c]
-  (await (ctx/act c :moveTo #js {:pos #js {:x 0 :y 64 :z 0} :status @status}))
-  :declined)
-
 (def plan (atom []))
 
 (defn ^:async planned-round
@@ -140,7 +139,7 @@
   [c]
   (doseq [[a s m] @plan]
     (await (ctx/act c a #js {:pos #js {:x 0 :y 64 :z 0} :status s :move m})))
-  :continue)
+  :done)
 
 (defn ^:async idle-round [c]
   (ctx/update-mem! c update :n (fnil inc 0))
@@ -150,28 +149,28 @@
   "One useOn, answered with whatever status holds."
   [c]
   (await (ctx/act c :useOn #js {:status @status}))
-  :continue)
+  :done)
 
 (def always (constantly true))
 
 (def jobs
   (merge registry/jobs
-         {'script {:check always :round script-round :args {:statuses {:default []} :end {:default :continue}}}
+         {'script {:check always :round script-round :args {:statuses {:default []} :end {:default :done}}}
           'bump {:check always :round bump-round}
           'use-on {:check always :round use-on-round}
           'bump-once {:check always :round bump-once-round}
-          'bump-decline {:check always :round bump-decline-round}
           'idle {:check always :round idle-round}
           'quick {:check always :round (fn [_] :done)}
-          'planned {:check always :round planned-round}
-          'bump-fast {:check always :round bump-round :backoff {:after 1}}
-          'bump-never {:check always :round bump-round :backoff false}}))
+          'planned {:check always :round planned-round}}))
 
 (def triggers
   {:always {:name :always :job '(bump-once) :persistence :retry :when always}
-   :declining {:name :declining :job '(bump-decline) :persistence :retry :when always}
    :holding {:name :holding :job '(bump) :persistence :retry :when always}
-   :low {:name :low :job '(quick) :persistence :stop :when always}})
+   :low {:name :low :job '(quick) :persistence :stop :when always}
+   :fast {:name :fast :job '(bump-once) :persistence :retry :when always :backoff {:after 1}}
+   :never {:name :never :job '(bump-once) :persistence :retry :when always :backoff false}
+   :use-on {:name :use-on :job '(use-on) :persistence :retry :when always}
+   :planned {:name :planned :job '(planned) :persistence :retry :when always}})
 
 (defn setup
   ([] (setup {}))
@@ -194,6 +193,7 @@
 
 (defn ran [seen] (->> @seen (filter #(= :round_started (:kind %))) (mapv :job)))
 (defn of-kind [seen kind] (filterv #(= kind (:kind %)) @seen))
+(defn fired [seen] (count (of-kind seen :fired)))
 (defn entry [eng k] (core/backoff-entry eng k))
 
 (defn ^:async tick-at [{:keys [eng clock]} t]
@@ -201,23 +201,29 @@
   (await (core/tick! eng)))
 
 (defn ^:async fruitless-after
-  "The fruitless count of j1 after one round of (script ...)."
+  "The fruitless count of reflex :t after one run of (script {:statuses statuses :end end})."
   [statuses end]
-  (let [{:keys [eng] :as r} (setup)]
-    (core/submit! eng (list 'script {:statuses statuses :end end}) {})
+  (let [{:keys [eng] :as r} (setup {:triggers {:t {:name :t :job (list 'script {:statuses statuses :end end})
+                                                   :persistence :retry :when always}}})]
+    (core/register-reflex! eng {:trigger :t})
     (await (tick-at r t0))
-    (:fruitless (entry eng "j1") 0)))
+    (:fruitless (entry eng :t) 0)))
 
-(deftest only-rounds-whose-acts-all-failed-count
+(deftest a-run-is-fruitless-when-every-act-failed-or-it-gave-up-with-no-progress
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[statuses end expected] [[[] :continue 0]
-                                         [["blocked"] :continue 1]
-                                         [["blocked" "timeout"] :continue 1]
-                                         [["blocked" "arrived"] :continue 0]
-                                         [["arrived" "blocked"] :continue 0]
-                                         [["blocked"] :throw 0]]]
+        (doseq [[statuses end expected] [[[] :done 0]
+                                         [["blocked"] :done 1]
+                                         [["blocked" "timeout"] :done 1]
+                                         [["blocked" "arrived"] :done 0]
+                                         [["arrived" "blocked"] :done 0]
+                                         [["blocked"] :throw 0]
+                                         [[] :declined 1]
+                                         [["arrived"] :declined 0]
+                                         [[] :stopped 1]
+                                         [["blocked"] :stopped 1]
+                                         [["arrived"] :stopped 0]]]
           (is (= expected (await (fruitless-after statuses end))) (str statuses end)))))))
 
 (deftest backoff-starts-after-three-and-the-delay-doubles-up-to-the-cap
@@ -226,13 +232,13 @@
       (fn ^:async t []
         (let [{:keys [eng] :as r} (setup)
               delays (atom [])]
-          (core/submit! eng '(bump) {})
+          (core/register-reflex! eng {:trigger :always})
           (await (tick-at r t0))
           (await (tick-at r t0))
-          (is (nil? (:until (entry eng "j1"))) "two fruitless rounds: no backoff yet")
+          (is (nil? (:until (entry eng :always))) "two fruitless runs: no backoff yet")
           (loop [t t0 i 0]
             (await (tick-at r t))
-            (let [d (:delay-ms (entry eng "j1"))]
+            (let [d (:delay-ms (entry eng :always))]
               (swap! delays conj d)
               (when (< i 6) (recur (+ t d) (inc i)))))
           (is (= [1000 2000 4000 8000 16000 30000 30000] @delays)))))))
@@ -246,71 +252,31 @@
             (.override (.-world p) "useOn"
                        (fn [_ args _] (js/Promise. (fn [resolve] (resolve #js {:status (.-status args)})))))
             (reset! status st)
-            (core/submit! eng '(use-on) {})
+            (core/register-reflex! eng {:trigger :use-on})
             (dotimes [_ 3] (await (tick-at r t0)))
-            (is (= backs-off? (some? (:until (entry eng "j1")))) st)))))))
+            (is (= backs-off? (some? (:until (entry eng :use-on)))) st)))))))
 
-(deftest a-backing-off-job-gets-no-round-and-the-others-do
+(deftest a-listed-job-is-never-backed-off
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen] :as r} (setup)]
           (core/submit! eng '(bump) {})
-          (core/submit! eng '(idle) {})
-          (dotimes [_ 6] (await (tick-at r t0)))
-          (is (= ["j1" "j2" "j1" "j2" "j1" "j2"] (ran seen)))
-          (dotimes [_ 3] (await (tick-at r (+ t0 999))))
-          (is (= ["j2" "j2" "j2"] (drop 6 (ran seen))) "j1 is passed over, never removed")
-          (is (= ["j1" "j2"] (:list (core/state eng))))
-          (await (tick-at r (+ t0 1000)))
-          (is (= "j1" (last (ran seen))) "its delay has passed")
-          (is (= 2000 (:delay-ms (entry eng "j1")))))))))
+          (dotimes [_ 10] (await (tick-at r t0)))
+          (is (= 10 (count (ran seen))) "every round failed and every tick gave it a round")
+          (is (= {} (core/backoff-entries eng)))
+          (is (empty? (of-kind seen :backoff))))))))
 
-(deftest a-holding-job-in-backoff-leaves-the-body-idle
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen] :as r} (setup)]
-          (core/submit! eng '(bump) {:hold? true})
-          (core/submit! eng '(idle) {})
-          (dotimes [_ 6] (await (tick-at r t0)))
-          (is (= ["j1" "j1" "j1"] (ran seen)) "the holder is passed over like a declining one: the body idles"))))))
-
-(deftest a-progress-act-resets-and-says-so
+(deftest a-listed-job-done-after-fruitless-rounds-completes
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen] :as r} (setup)]
           (core/submit! eng '(bump) {})
-          (dotimes [_ 3] (await (tick-at r t0)))
-          (is (some? (entry eng "j1")))
-          (reset! status "arrived")
-          (await (tick-at r (+ t0 1000)))
-          (is (nil? (entry eng "j1")))
-          (is (= [[:job "j1"]]
-                 (mapv (juxt :source :job) (of-kind seen :recovered))))
-          (is (= [:recovered :yielded] (->> @seen (map :kind) (filter #{:recovered :yielded}) (take-last 2)))
-              "at the act, not at the end of the round"))))))
-
-(deftest a-repeat-keeps-its-count-across-child-restarts
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen] :as r} (setup)]
-          (core/submit! eng '(repeat (bump-once)) {})
-          (dotimes [_ 4] (await (tick-at r t0)))
-          (is (= ["j1" "j1" "j1"] (ran seen)))
-          (is (= 3 (:fruitless (entry eng "j1"))))
-          (is (= ["j1"] (:list (core/state eng)))))))))
-
-(deftest cancelling-a-backing-off-job-drops-its-entry
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng] :as r} (setup)]
-          (core/submit! eng '(bump) {})
-          (dotimes [_ 3] (await (tick-at r t0)))
-          (core/cancel! eng "j1")
+          (dotimes [_ 2] (await (tick-at r t0)))
+          (core/submit! eng (list 'script {:statuses ["blocked"] :end :done}) {})
+          (dotimes [_ 2] (await (tick-at r t0)))
+          (is (= 1 (count (of-kind seen :completed))))
           (is (= {} (core/backoff-entries eng))))))))
 
 (deftest a-reflex-in-backoff-ends-its-job-and-does-not-fire-until-the-delay-ends
@@ -318,41 +284,17 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen] :as r} (setup)
-              fired #(count (of-kind seen :fired))
               outcomes #(mapv :outcome (filterv (fn [e] (= :reflex (:source e))) (of-kind seen :ended)))]
           (core/register-reflex! eng {:trigger :always})
           (dotimes [_ 3] (await (tick-at r t0)))
-          (is (= [:done :done :done] (outcomes)) "a round that ended the job keeps its own outcome")
+          (is (= [:done :done :done] (outcomes)) "a run that ended the job keeps its own outcome")
           (is (= 3 (:fruitless (entry eng :always))) "keyed by the reflex id across firings")
           (dotimes [_ 3] (await (tick-at r (+ t0 999))))
-          (is (= 3 (fired)))
+          (is (= 3 (fired seen)))
           (await (tick-at r (+ t0 1000)))
-          (is (= 4 (fired)))
+          (is (= 4 (fired seen)))
           (is (= [:done :done :done :done] (outcomes)))
           (is (= 2000 (:delay-ms (entry eng :always)))))))))
-
-(deftest a-declined-round-never-counts-for-a-reflex
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen] :as r} (setup)
-              fired #(count (of-kind seen :fired))]
-          (core/register-reflex! eng {:trigger :declining})
-          (dotimes [_ 3] (await (tick-at r t0)))
-          (is (= 3 (fired)))
-          (is (nil? (entry eng :declining)) "no fruitless count, no backoff")
-          (await (tick-at r t0))
-          (is (= 4 (fired)) "it fires again at once"))))))
-
-(deftest a-declined-round-never-counts-for-a-listed-job
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen] :as r} (setup)]
-          (core/submit! eng '(bump-decline) {})
-          (dotimes [_ 4] (await (tick-at r t0)))
-          (is (nil? (entry eng "j1")) "no fruitless count, no backoff")
-          (is (= 4 (count (ran seen)))))))))
 
 (deftest a-continuing-fruitless-round-reaching-backoff-ends-backoff
   (async done
@@ -364,7 +306,7 @@
           (dotimes [_ 3] (await (tick-at r t0)))
           (is (= :backoff (last (outcomes)))))))))
 
-(deftest a-progress-act-in-any-job-of-a-reflex-resets-it
+(deftest a-progress-act-in-any-job-of-a-reflex-resets-it-and-says-so
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -376,33 +318,32 @@
           (is (nil? (entry eng :always)))
           (is (= [[:reflex :always]] (mapv (juxt :source :reflex) (of-kind seen :recovered)))))))))
 
-(defn ^:async rounds-before-backoff
-  "How many rounds j1 got in 10 ticks at one instant, for a job submitted with spec and opts."
-  [engine-opts spec opts]
-  (let [{:keys [eng seen] :as r} (setup engine-opts)]
-    (core/submit! eng spec opts)
+(defn ^:async fires-in-ten-ticks
+  "How often reflex :t fires in 10 ticks at one instant: trigger :t from trigger (merged over a bump-once one),
+  registered with entry, on an engine made with engine-opts."
+  [engine-opts trigger entry]
+  (let [{:keys [eng seen] :as r} (setup (merge engine-opts
+                                               {:triggers {:t (merge {:name :t :job '(bump-once) :persistence :retry
+                                                                      :when always}
+                                                                     trigger)}}))]
+    (core/register-reflex! eng (merge {:trigger :t} entry))
     (dotimes [_ 10] (await (tick-at r t0)))
-    (count (ran seen))))
+    (fired seen)))
 
 (deftest config-levels-the-most-specific-wins
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[label engine-opts spec opts expected]
-                [["default" {} '(bump) {} 3]
-                 ["engine" {:backoff {:after 2}} '(bump) {} 2]
-                 ["engine off" {:backoff false} '(bump) {} 10]
-                 ["job def" {} '(bump-fast) {} 1]
-                 ["job def off" {} '(bump-never) {} 10]
-                 ["job def, engine override loses to it" {:backoff {:after 5}} '(bump-fast) {} 1]
-                 ["submit opt over job def" {} '(bump-fast) {:backoff {:after 4}} 4]
-                 ["submit opt false" {} '(bump) {:backoff false} 10]
-                 ["wrapper" {} '(backoff {:after 2} (bump)) {} 2]
-                 ["wrapper false" {} '(backoff false (bump)) {} 10]
-                 ["wrapper in hold" {} '(hold (backoff {:after 2} (bump))) {} 2]
-                 ["hold in wrapper" {} '(backoff {:after 2} (hold (bump))) {} 2]
-                 ["opt over wrapper" {} '(backoff {:after 2} (bump)) {:backoff {:after 4}} 4]]]
-          (is (= expected (await (rounds-before-backoff engine-opts spec opts))) label))))))
+        (doseq [[label engine-opts trigger entry expected]
+                [["default" {} {} {} 3]
+                 ["engine" {:backoff {:after 2}} {} {} 2]
+                 ["engine off" {:backoff false} {} {} 10]
+                 ["trigger default" {} {:backoff {:after 1}} {} 1]
+                 ["trigger default off" {} {:backoff false} {} 10]
+                 ["trigger default over the engine" {:backoff {:after 5}} {:backoff {:after 1}} {} 1]
+                 ["entry over trigger default" {} {:backoff {:after 1}} {:backoff {:after 4}} 4]
+                 ["entry off" {} {} {:backoff false} 10]]]
+          (is (= expected (await (fires-in-ten-ticks engine-opts trigger entry))) label))))))
 
 (deftest a-register-entry-takes-backoff
   (async done
@@ -414,7 +355,7 @@
           (let [{:keys [eng seen] :as r} (setup)]
             (core/register-reflex! eng (merge {:trigger :always} spec))
             (dotimes [_ 8] (await (tick-at r t0)))
-            (is (= expected (count (of-kind seen :fired))) label)))
+            (is (= expected (fired seen)) label)))
         (let [{:keys [eng]} (setup)]
           (is (thrown? js/Error (core/register-reflex! eng {:trigger :always :backoff {:after 0}}))))))))
 
@@ -424,11 +365,11 @@
       (fn ^:async t []
         (let [{:keys [eng seen] :as r} (setup {:backoff {:after 1 :first-s 1 :max-s 1} :backoff-alert-ms 5000})
               warns #(of-kind seen :backoff)]
-          (core/submit! eng '(bump) {})
+          (core/register-reflex! eng {:trigger :always})
           (await (tick-at r t0))
           (let [w (first (warns))]
-            (is (= [:job "j1" :moveTo "blocked" "no path" 1000 1]
-                   ((juxt :source :job :act :status :reason :delay-ms :fruitless) w)))
+            (is (= [:reflex :always :moveTo "blocked" "no path" 1000 1]
+                   ((juxt :source :reflex :act :status :reason :delay-ms :fruitless) w)))
             (is (string? (:text w))))
           (doseq [s (range 1 5)]
             (await (tick-at r (+ t0 (* 1000 s) -500)))
@@ -438,7 +379,7 @@
           (is (= 2 (count (warns))))
           (let [w (second (warns))]
             (is (= [6 t0] ((juxt :fruitless :since) w)))
-            (is (pos? (:passes w)) "ticks that skipped the job")))))))
+            (is (pos? (:passes w)) "ticks that skipped the reflex")))))))
 
 (deftest the-alert-interval-defaults-to-five-minutes
   (is (= 300000 core/default-backoff-alert-ms)))
@@ -449,9 +390,9 @@
       (fn ^:async t []
         (let [dir (tu/tmp-dir)
               {:keys [eng] :as r} (setup {:dir dir})]
-          (core/submit! eng '(bump) {})
+          (core/register-reflex! eng {:trigger :always})
           (dotimes [_ 3] (await (tick-at r t0)))
-          (is (some? (entry eng "j1")))
+          (is (some? (entry eng :always)))
           (let [again (:eng (setup {:dir dir}))]
             (is (= {} (core/backoff-entries again)))
             (is (nil? (:backoff (core/state again))))))))))
@@ -469,34 +410,34 @@
                                  [[[:moveTo "timeout" 0.2]] 1]]]
           (let [{:keys [eng] :as r} (setup)]
             (reset! plan acts)
-            (core/submit! eng '(planned) {})
+            (core/register-reflex! eng {:trigger :planned})
             (await (tick-at r t0))
-            (is (= expected (:fruitless (entry eng "j1") 0)) (pr-str acts))))))))
+            (is (= expected (:fruitless (entry eng :planned) 0)) (pr-str acts))))))))
 
-(deftest a-round-of-neutral-acts-does-not-reset-a-backoff
+(deftest a-run-of-neutral-acts-does-not-reset-a-backoff
   (async done
     (tu/run-async done
       (fn ^:async t []
         (doseq [acts [[[:look "ok"]] [[:wait "ok"]] [[:equip "ok"]] [[:moveTo "timeout" 1.5]]]]
           (let [{:keys [eng seen] :as r} (setup)]
             (reset! plan [[:moveTo "blocked"]])
-            (core/submit! eng '(planned) {})
+            (core/register-reflex! eng {:trigger :planned})
             (dotimes [_ 3] (await (tick-at r t0)))
             (reset! plan acts)
             (await (tick-at r (+ t0 1000)))
-            (is (= 3 (:fruitless (entry eng "j1"))) (pr-str acts))
+            (is (= 3 (:fruitless (entry eng :planned))) (pr-str acts))
             (is (empty? (of-kind seen :recovered)))))))))
 
-(deftest a-job-that-looks-and-then-gets-a-blocked-walk-backs-off
+(deftest a-reflex-that-looks-and-then-gets-a-blocked-walk-backs-off
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen] :as r} (setup)]
           (reset! plan [[:look "ok"] [:moveTo "blocked"]])
-          (core/submit! eng '(planned) {})
+          (core/register-reflex! eng {:trigger :planned})
           (dotimes [_ 6] (await (tick-at r t0)))
           (is (= 3 (count (ran seen))))
-          (is (some? (:until (entry eng "j1")))))))))
+          (is (some? (:until (entry eng :planned)))))))))
 
 (deftest a-delay-is-not-persisted-and-ends-when-the-engine-leaves-a-pause
   (async done
@@ -504,19 +445,19 @@
       (fn ^:async t []
         (let [{:keys [eng p seen] :as r} (setup)
               world (.-world p)]
-          (core/submit! eng '(bump) {})
+          (core/register-reflex! eng {:trigger :always})
           (dotimes [_ 3] (await (tick-at r t0)))
-          (is (some? (:until (entry eng "j1"))))
+          (is (some? (:until (entry eng :always))))
           (dotimes [_ 2] (await (tick-at r t0)))
           (is (= 3 (count (ran seen))) "backing off, no pause")
           (.settle world true)
           (await (tick-at r t0))
-          (is (some? (:until (entry eng "j1"))) "while paused nothing is cleared")
+          (is (some? (:until (entry eng :always))) "while paused nothing is cleared")
           (.settle world false)
           (await (tick-at r t0))
-          (is (= 4 (count (ran seen))) "the first ready tick gives the job a round again")
-          (is (= 1 (:fruitless (entry eng "j1"))))
-          (is (nil? (:until (entry eng "j1")))))))))
+          (is (= 4 (count (ran seen))) "the first ready tick lets it fire again")
+          (is (= 1 (:fruitless (entry eng :always))))
+          (is (nil? (:until (entry eng :always)))))))))
 
 (deftest a-pause-clears-every-count-not-only-the-delays
   (async done
@@ -524,22 +465,22 @@
       (fn ^:async t []
         (let [{:keys [eng p] :as r} (setup)
               world (.-world p)]
-          (core/submit! eng '(bump) {})
+          (core/register-reflex! eng {:trigger :always})
           (dotimes [_ 2] (await (tick-at r t0)))
-          (is (= 2 (:fruitless (entry eng "j1"))))
+          (is (= 2 (:fruitless (entry eng :always))))
           (.settle world true)
           (await (tick-at r t0))
           (.settle world false)
           (reset! status "arrived")
           (await (tick-at r t0))
-          (is (nil? (entry eng "j1"))))))))
+          (is (nil? (entry eng :always))))))))
 
 (deftest reset-backoff-empties-the-entries
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng] :as r} (setup)]
-          (core/submit! eng '(bump) {})
+          (core/register-reflex! eng {:trigger :always})
           (dotimes [_ 3] (await (tick-at r t0)))
           (core/reset-backoff! eng)
           (is (= {} (core/backoff-entries eng))))))))
@@ -565,88 +506,43 @@
 
 ;; ------------------------------------------------------- the job's own conclusion wins
 
-(def conclusion-triggers
-  {:once {:name :once :job '(script {:statuses ["blocked"] :end :done}) :persistence :retry :when always}
-   :decline {:name :decline :job '(script {:statuses ["blocked"] :end :declined}) :persistence :retry :when always}
-   :throws {:name :throws :job '(script {:statuses ["blocked"] :end :throw}) :persistence :retry :when always}})
-
 (defn reflex-outcomes [seen]
   (mapv :outcome (filterv #(= :reflex (:source %)) (of-kind seen :ended))))
 
-(deftest a-reflex-done-on-its-third-fruitless-round-ends-done-and-still-waits
+(defn conclusion-setup [end]
+  (setup {:triggers {:t {:name :t :job (list 'script {:statuses ["blocked"] :end end}) :persistence :retry
+                         :when always}}}))
+
+(deftest a-reflex-ending-on-its-third-fruitless-run-keeps-its-outcome-and-still-waits
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen] :as r} (setup {:triggers conclusion-triggers})
-              fired #(count (of-kind seen :fired))]
-          (core/register-reflex! eng {:trigger :once})
-          (dotimes [_ 3] (await (tick-at r t0)))
-          (is (= [:done :done :done] (reflex-outcomes seen)) "never :backoff")
-          (is (= 3 (:fruitless (entry eng :once))))
-          (is (= 1000 (:delay-ms (entry eng :once))))
-          (await (tick-at r (+ t0 999)))
-          (is (= 3 (fired)) "cannot re-fire before the delay")
-          (await (tick-at r (+ t0 1000)))
-          (is (= 4 (fired))))))))
+        (doseq [end [:done :declined :stopped]]
+          (let [{:keys [eng seen] :as r} (conclusion-setup end)]
+            (core/register-reflex! eng {:trigger :t})
+            (dotimes [_ 3] (await (tick-at r t0)))
+            (is (= (vec (repeat 3 (if (= :declined end) :declined :done))) (reflex-outcomes seen)) "never :backoff")
+            (is (= 3 (:fruitless (entry eng :t))) (str end))
+            (is (= 1000 (:delay-ms (entry eng :t))))
+            (await (tick-at r (+ t0 999)))
+            (is (= 3 (fired seen)) "cannot re-fire before the delay")
+            (await (tick-at r (+ t0 1000)))
+            (is (= 4 (fired seen)))))))))
 
-(deftest a-reflex-declined-on-its-third-round-ends-declined-without-backoff
+(deftest a-reflex-run-that-throws-fails-and-does-not-count
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen] :as r} (setup {:triggers conclusion-triggers})]
-          (core/register-reflex! eng {:trigger :decline})
-          (dotimes [_ 3] (await (tick-at r t0)))
-          (is (= [:declined :declined :declined] (reflex-outcomes seen)))
-          (is (nil? (entry eng :decline)) "declined never counts"))))))
-
-(def calls (atom 0))
-
-(defn ^:async third-round
-  "A fruitless round that continues twice, then ends with (:end args) on the third call."
-  [c]
-  (await (ctx/act c :moveTo #js {:pos #js {:x 0 :y 64 :z 0} :status "blocked"}))
-  (when (and (= 3 (swap! calls inc)) (= :throw (:end (:args c)))) (throw (js/Error. "boom")))
-  (if (< @calls 3) :continue (:end (:args c))))
-
-(def third-jobs
-  (assoc jobs 'third {:check always :round third-round :args {:end {:default :done}}}))
-
-(defn third-setup [opts]
-  (reset! calls 0)
-  (setup (merge {:jobs third-jobs} opts)))
-
-(deftest a-listed-job-done-on-its-third-fruitless-round-completes-with-no-backoff
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen] :as r} (third-setup {})]
-          (core/submit! eng '(third) {})
-          (dotimes [_ 2] (await (tick-at r t0)))
-          (is (= 2 (:fruitless (entry eng "j1"))))
-          (await (tick-at r t0))
-          (is (= 1 (count (of-kind seen :completed))))
-          (is (nil? (entry eng "j1")))
-          (is (not (some #{"j1"} (:list (core/state eng))))))))))
-
-(deftest a-round-that-throws-on-the-third-fruitless-round-fails
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen] :as r} (third-setup {})]
-          (core/submit! eng '(third {:end :throw}) {})
-          (dotimes [_ 3] (await (tick-at r t0)))
-          (is (= 1 (count (of-kind seen :failed))))
-          (is (contains? (:failed (core/state eng)) "j1")))
-        (let [{:keys [eng seen] :as r} (third-setup {:triggers {:t {:name :t :job '(third {:end :throw}) :persistence :retry :when always}}})]
+        (let [{:keys [eng seen] :as r} (conclusion-setup :throw)]
           (core/register-reflex! eng {:trigger :t})
           (dotimes [_ 3] (await (tick-at r t0)))
-          (is (= [:failed] (reflex-outcomes seen))))))))
+          (is (= [:failed :failed :failed] (reflex-outcomes seen)))
+          (is (nil? (entry eng :t))))))))
 
-(deftest only-the-documented-registry-jobs-opt-out-of-backoff
-  (is (= '#{jobs.survival.sleep jobs.survival.night jobs.maintenance.unstick jobs.survival.breathe jobs.survival.extinguish
-           jobs.survival.respond-to-hostile}
-         (set (keep (fn [[k v]] (when (false? (:backoff v)) k)) registry/jobs)))
-      "a new :backoff false must be added to this set deliberately, with its reason in the job's docstring (README, Jobs, backoff)"))
+(deftest only-the-documented-default-triggers-opt-out-of-backoff
+  (is (= #{:suffocating :burning :hostile-near :night :stuck}
+         (set (keep (fn [[k v]] (when (false? (:backoff v)) k)) trigger-defaults/all)))
+      "a new :backoff false in triggers/defaults.edn must be added here deliberately, with its reason beside it"))
 
 ;; ---------------------------------------------------------------- job.fruitless (listed jobs only flag)
 
@@ -679,3 +575,22 @@
           (core/submit! eng '(idle) {})
           (dotimes [i 4] (await (tick-at r (+ t0 (* i 60000)))))
           (is (= [] (of-kind seen :fruitless))))))))
+
+(def calls (atom 0))
+
+(defn ^:async third-round
+  "A blocked moveTo each round; :continue twice, then :done on the third."
+  [c]
+  (await (ctx/act c :moveTo #js {:pos #js {:x 0 :y 64 :z 0} :status "blocked"}))
+  (if (< (swap! calls inc) 3) :continue :done))
+
+(deftest a-round-that-ends-the-job-is-not-fruitless
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (reset! calls 0)
+        (let [{:keys [seen eng] :as r} (setup {:jobs (assoc jobs 'third {:check always :round third-round})})]
+          (core/submit! eng '(third) {})
+          (dotimes [i 3] (await (tick-at r (+ t0 (* i 60000)))))
+          (is (= 1 (count (of-kind seen :completed))))
+          (is (= [] (of-kind seen :fruitless)) "the job reached its goal on its third fruitless-looking round"))))))

@@ -23,10 +23,6 @@
    :window-ms {:doc "the newest of the bad moves must be at most this many ms old" :default (:window-ms stuck/defaults)}
    :quiet-ms {:doc "after giving up, the trigger stays quiet this many ms" :default (:quiet-ms stuck/defaults)}})
 
-(def backoff
-  "Off: go-to bounds the spell, and the give-up writes a :stuck entry that quiets the trigger."
-  false)
-
 (def stuck-policy {:cap 10 :ttl (* 60 60 1000)})
 
 (def land-step-ms 50)

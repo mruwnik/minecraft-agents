@@ -6,10 +6,9 @@
   The state atom holds plain EDN, written on every change. Memory (engine.memory)
   is saved at every round end and whenever the engine itself writes to it.
     :list [id]              listed instance ids, in cycle order
-    :instances {id inst}    {:id :spec :round :hold? :reflex :backoff}; :spec is a parsed
-                            job expression node (engine.expr); :backoff is the
-                            job's own backoff config (a map, or false), when given
-    :register [entry]       {:id :trigger :job :args :persistence :cooldown-s :builtin?}
+    :instances {id inst}    {:id :spec :round :hold? :reflex}; :spec is a parsed
+                            job expression node (engine.expr)
+    :register [entry]       {:id :trigger :job :args :persistence :cooldown-s :backoff :builtin?}
     :seen-triggers #{id}    every trigger id the body has had, removed or declined ones too; never offered as new
     :new-defaults [entry]   scenario triggers the last restart offered, until upgraded or declined
     :scenario-order [id]    the scenario's trigger order, for placing upgraded entries
@@ -27,11 +26,10 @@
     :next-id n
   Not persisted:
     the in-flight round ({:id :token :reflex :round})
-    the backoff: the :backoffs atom {key entry} (see engine.backoff). The key is a
-      listed job's instance id or a reflex's id (a keyword). The entry is
-      {:fruitless n :last {:act :status :reason}}, plus :delay-ms :until :since
-      :alerted (ms of the last warn) once backing off. An entry goes on progress
-      or when the job goes, and all go when the engine leaves a pause."
+    the backoff: the :backoffs atom {reflex-id entry} (see engine.backoff); register entries only, listed jobs
+      have none. The entry is {:fruitless n :last {:act :status :reason}}, plus :delay-ms :until :since
+      :alerted (ms of the last warn) once backing off. An entry goes on progress, and all go when the engine
+      leaves a pause."
   (:require [engine.composite :as composite]
             [engine.hurt :as hurt]
             [engine.chat :as chat]
@@ -310,27 +308,14 @@
   "Least gap between two job.backoff warns of one job."
   300000)
 
-(defn backoff-key
-  "What a job's backoff is counted under: its reflex id for a reflex job (each
-  firing is a new instance), else its instance id."
-  [inst]
-  (or (:reflex inst) (:id inst)))
-
 (defn backoff-config
-  "The backoff config of instance inst (false: off): the engine's, then the job's
-  own backoff var (a leaf spec only), then the register entry's or the instance's."
-  [eng inst]
-  (let [[def _] (job-of eng inst)
-        entry (when (:reflex inst)
-                (some #(when (= (:reflex inst) (:id %)) %) (:register (state eng))))]
-    (backoff/config (:backoff eng) (:backoff def) (if (:reflex inst) (:backoff entry) (:backoff inst)))))
+  "The backoff config of register entry rid (false: off): the engine's, then its trigger's default
+  (triggers/defaults.edn), then the entry's own."
+  [eng rid]
+  (let [entry (some #(when (= rid (:id %)) %) (:register (state eng)))]
+    (backoff/config (:backoff eng) (get-in eng [:triggers (:trigger entry) :backoff]) (:backoff entry))))
 
-(defn backoff-fields
-  "The event fields naming the job (or reflex) behind backoff key k."
-  [eng k]
-  (if (keyword? k)
-    {:source :reflex :reflex k}
-    (assoc (job-fields eng k) :source :job)))
+(defn backoff-fields [_eng k] {:source :reflex :reflex k})
 
 (defn backoff-entries [eng] @(:backoffs eng))
 
@@ -368,11 +353,10 @@
                                   (when reason (str " (" reason ")")))}))))
 
 (defn fruitless!
-  "Count one more fruitless round for instance inst; start the backoff or double
+  "Count one more fruitless run for reflex k; start the backoff or double
   its delay, warning when one is due. Returns the entry."
-  [eng inst cfg last]
-  (let [k (backoff-key inst)
-        t (now eng)
+  [eng k cfg last]
+  (let [t (now eng)
         entry (backoff/fruitless (backoff-entry eng k) cfg t last)
         due? (backoff/alert-due? entry t (:backoff-alert-ms eng))
         entry (cond-> entry due? (assoc :alerted t))]
@@ -380,21 +364,28 @@
     (when due? (alert-backoff! eng k entry))
     entry))
 
+(declare stopped-result?)
+
+(defn fruitless-run?
+  "Whether a reflex job's run (round, its act tracker) that ended with outcome counts toward its entry's backoff:
+  no act made progress, and every act failed or the job gave up (declined, or stopped). A cut or failed run
+  does not count."
+  [round {:keys [status result]}]
+  (let [{:keys [acts failed]} round]
+    (and (not (#{:cut :error} status))
+         (= acts failed)
+         (or (pos? acts) (= :declined status) (stopped-result? result)))))
+
 (defn book-round!
-  "After a round of run ended with status: a fruitless round counts toward its
-  job's backoff (a cut or failed round, a declined round, and a listed job that
-  is done, do not: :declined is the job saying not now, on purpose).
-  True when the job is now backing off."
-  [eng {:keys [id reflex]} status]
+  "After a round of run ended with outcome: a fruitless run of a reflex job counts toward its register entry's
+  backoff. Listed jobs have none. True when the entry is now backing off."
+  [eng {:keys [id reflex]} outcome]
   (let [round (get @(:rounds eng) id)
-        inst (get-in (state eng) [:instances id])
-        cfg (when inst (backoff-config eng inst))]
+        cfg (when reflex (backoff-config eng reflex))]
     (swap! (:rounds eng) dissoc id)
     (boolean
-     (when (and cfg
-                (backoff/fruitless-round? round)
-                (contains? (if reflex #{:done :continue} #{:continue}) status))
-       (backoff/backing-off? (fruitless! eng inst cfg (:last round)) (now eng))))))
+     (when (and cfg round (fruitless-run? round outcome))
+       (backoff/backing-off? (fruitless! eng reflex cfg (:last round)) (now eng))))))
 
 (defn recovered!
   "A progress act of key k: forget its backoff, and say so when it was backing off."
@@ -413,12 +404,12 @@
 (defn record-act!
   "Book the result r of act k of the round of root (moved: blocks a moveTo moved
   the body): a failure status counts toward a fruitless round, any other status
-  is progress and resets the backoff at once; a neutral act is neither."
+  is progress and resets a reflex's backoff at once; a neutral act is neither."
   [eng {:keys [root reflex]} k r moved]
   (let [status (.-status r)]
     (swap! (:rounds eng) #(cond-> % (contains? % root) (update root backoff/note-act k status (.-reason r) moved)))
-    (when-not (or (backoff/failure? status) (backoff/neutral? k status moved))
-      (recovered! eng (or reflex root)))))
+    (when (and reflex (not (or (backoff/failure? status) (backoff/neutral? k status moved))))
+      (recovered! eng reflex))))
 
 (defn distance
   "Straight-line distance between positions a and b ({:x :y :z}); nil when either is."
@@ -756,7 +747,7 @@
   (let [{:keys [list instances resume cursor]} (state eng)
         n (count list)
         failed? (fn [id] (contains? (:failed (state eng)) id))
-        runnable? (fn [id] (and (not (failed? id)) (not (pass-over? eng id)) (check-passes? eng id)))
+        runnable? (fn [id] (and (not (failed? id)) (check-passes? eng id)))
         holder (some #(when (and (:hold? (instances %)) (not (failed? %))) %) list)]
     (cond
       holder (when (runnable? holder) holder)
@@ -803,7 +794,6 @@
       :done
       (do (resolve-job-attention! eng id :job-completed
                                   #(assoc (remove-listed % id) :cursor (max idx 0)))
-          (forget-backoff! eng id)
           (swap! (:fruitless eng) dissoc id)
           (mem/delete-job! (:store eng) id)
           (emit! eng (if (stopped-result? result)
@@ -941,10 +931,10 @@
 
 (defn note-fruitless!
   "After a round of listed job id that ended with status: count rounds in a row in which every act failed (round is
-  its act tracker, see engine.backoff). The third raises job.fruitless, a required attention request, once per spell; a round
+  its act tracker, see engine.backoff; a round that ends the job, is cut or fails is not counted). The third raises job.fruitless, a required attention request, once per spell; a round
   with progress ends the spell and resolves the request. It only flags: nothing is held against the job."
   [eng id status round]
-  (when-not (#{:cut :error} status)
+  (when-not (#{:cut :error :done} status)
     (if (backoff/fruitless-round? round)
       (let [n (get (swap! (:fruitless eng) update id (fnil inc 0)) id)]
         (when (= n fruitless-rounds)
@@ -968,11 +958,11 @@
     (reset! (:running eng) nil)
     (set-owner! eng nil)
     (if (:reflex run)
-      (if (and (book-round! eng run (:status outcome)) (= :continue (:status outcome)))
+      (if (and (book-round! eng run outcome) (= :continue (:status outcome)))
         (end-reflex! eng run :backoff)
         (settle-reflex! eng run outcome))
       (do (note-fruitless! eng (:id run) (:status outcome) (get @(:rounds eng) (:id run)))
-          (book-round! eng run (:status outcome))
+          (swap! (:rounds eng) dissoc (:id run))
           (settle-listed! eng run outcome)))
     (save-memory! eng))
   nil)
@@ -1126,18 +1116,15 @@
   "Put a job spec (an expression, see engine.expr) on the list. Returns the instance id; throws on a bad spec.
   opts:
     :hold?     hold the body (same as wrapping the spec in (hold e))
-    :backoff   backoff config, a map or false (wins over a (backoff cfg e) wrapper)
     :front?    list it directly after the current job, so it gets the next round
     :now?      list it directly before the current job (do-now!)
     :by        who asked, for the event"
   [eng spec {:keys [front? now? by] :as opts}]
-  (let [{:keys [node hold?] :as parsed} (expr/parse-spec (:jobs eng) spec)
+  (let [{:keys [node hold?]} (expr/parse-spec (:jobs eng) spec)
         hold? (boolean (or hold? (:hold? opts)))
-        bo (if (contains? opts :backoff) (:backoff opts) (:backoff parsed))
-        _ (backoff/validate! bo)
         args (second (job-of eng {:spec node}))
         id (new-id! eng)]
-    (swap! (:state eng) #(let [s (add-instance % id node (cond-> {:hold? hold?} (some? bo) (assoc :backoff bo)))]
+    (swap! (:state eng) #(let [s (add-instance % id node {:hold? hold?})]
                            (cond
                              now? (insert-now s id)
                              front? (insert-front s id)
@@ -1156,7 +1143,6 @@
       (set-owner! eng nil)
       (reset! (:running eng) nil))
     (resolve-job-attention! eng id :job-cancelled #(remove-listed % id))
-    (forget-backoff! eng id)
     (swap! (:fruitless eng) dissoc id)
     (mem/delete-job! (:store eng) id)
     (save-memory! eng)
@@ -1328,7 +1314,6 @@
     (cond
       (not (symbol? head)) [form []]
       (#{'seq 'any 'repeat 'hold} head) (let [[out stale] (kids parts)] [(apply list head out) stale])
-      (= 'backoff head) (let [[out stale] (kids (rest parts))] [(apply list head (first parts) out) stale])
       (not (map? (first parts))) [form []]
       :else (let [args (first parts)
                   ks (stale-keys registry head args)]
@@ -1433,7 +1418,7 @@
     :jobs        the registry {sym {:check :round :doc :args}}
     :triggers    {name trigger}
     :world       the body's world store (hooks :world/open; :world/blank when not given)
-    :backoff     engine-wide backoff config, a map or false (see engine.backoff)
+    :backoff     engine-wide backoff config of register entries, a map or false (see engine.backoff)
     :backoff-alert-ms  least gap between two job.backoff warns (300000)
     :idle-s            seconds with no act and no declared hold before job.idle (10)
     :sweep-ms          memory sweep interval (60000)

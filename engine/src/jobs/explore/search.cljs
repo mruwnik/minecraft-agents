@@ -50,11 +50,6 @@
    :searched-ttl-s {:doc "how long a note of searched ground lasts" :default 86400}
    :load-wait-s {:doc "how long to wait for unloaded leg columns to load when no loaded leg is left" :default 30}})
 
-(def backoff
-  "A failed leg is up to three fruitless go-to rounds and three failed legs in a row end the search, so it
-  concludes within nine."
-  {:after 9})
-
 (def max-failed-in-row 3)
 (def wait-ms 2000)
 (def reach 12)

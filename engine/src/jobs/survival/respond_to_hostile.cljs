@@ -17,11 +17,6 @@
   Memory: writes one :hostile entry {:mob :pos :decision} per encounter.
   A danger reflex: never backed off.")
 
-(def backoff
-  "Off: a danger reflex reacts every round the danger is there; fruitless rounds (a blocked walk, a cornered body
-  trying its escapes) must not mute it."
-  false)
-
 (def args
   {:radius {:doc "hostiles within this many blocks count" :default 8}
    :ranged-radius {:doc "ranged hostiles (skeletons and the like) within this many blocks count" :default 16}

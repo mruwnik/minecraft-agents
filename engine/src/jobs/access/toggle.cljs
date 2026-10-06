@@ -43,8 +43,6 @@
    :reach {:doc "walk until within this many cells of the block (the click reaches 4.5 from the eye)" :default 3}})
 
 ;; a walk the go-to child gives up on is three fruitless rounds
-(def backoff {:after 9})
-
 (def valid-states
   {:openable #{:open :closed} :lever #{:on :off} :button #{:press}})
 

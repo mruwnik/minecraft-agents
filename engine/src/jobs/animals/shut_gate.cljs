@@ -29,9 +29,6 @@
    :reach {:doc "walk until within this many cells of the gate (the click reaches 4.5 from the eye)" :default 3}
    :tries {:doc "failed rounds on one gate before it is given up" :default 3}})
 
-;; Two unreachable gates are six fruitless rounds in a row; the default backoff of 3 would cut that short.
-(def backoff {:after 9})
-
 (def quiet-ttl-ms (* 1000 (:quiet-s pg/defaults)))
 
 (defn cell-pos [[x y z]] {:x x :y y :z z})

@@ -24,8 +24,6 @@
    :tries {:doc "rounds on one block before it is given up" :default 3}})
 
 ;; a few left blocks that cannot be shut are several fruitless rounds in a row, each given up after :tries
-(def backoff {:after 9})
-
 (defn cell-key [{:keys [x y z]}] [x y z])
 
 (defn targets

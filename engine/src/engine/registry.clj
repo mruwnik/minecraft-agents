@@ -10,7 +10,7 @@
 
 (def exports
   "What a job namespace may define, and whether it must."
-  {'check true 'round true 'doc false 'args false 'backoff false})
+  {'check true 'round true 'doc false 'args false})
 
 (defn jobs-dir
   "The jobs/ directory on the classpath (engine/src/jobs), or nil."
@@ -105,7 +105,7 @@
   (str "engine/src/" (second (re-find #"/engine/src/(.+)$" (str/replace (.getPath file) "\\" "/")))))
 
 (defn file-metadata
-  "{:id :file :ns-doc :doc :args :backoff}, with :args the (def args ...) value itself, for the source file of
+  "{:id :file :ns-doc :doc :args}, with :args the (def args ...) value itself, for the source file of
   namespace id. A file that cannot be read gets {:id :file :error \"...\"} instead of throwing."
   [id file]
   (let [base {:id (str id) :file (repo-path file)}]
@@ -115,8 +115,7 @@
         (assoc base
                :ns-doc (ns-doc forms)
                :doc (when (string? doc) doc)
-               :args (def-value "args" forms)
-               :backoff (boolean (some #(defining? "backoff" %) forms))))
+               :args (def-value "args" forms)))
       (catch Exception e
         (assoc base :error (str "unreadable: " (ex-message e)))))))
 
@@ -131,14 +130,13 @@
     []))
 
 (defmacro job-registry
-  "{ns-symbol {:check :round :doc :args :backoff}} for every job namespace under jobs/."
+  "{ns-symbol {:check :round :doc :args}} for every job namespace under jobs/."
   []
   (into {}
         (map (fn [{:keys [ns defines]}]
                (let [ref (fn [k] (when (defines k) (symbol (str ns) (str k))))]
                  [(list 'quote ns) {:check (ref 'check) :round (ref 'round)
-                                    :doc (ref 'doc) :args (ref 'args)
-                                    :backoff (ref 'backoff)}])))
+                                    :doc (ref 'doc) :args (ref 'args)}])))
         (job-namespaces)))
 
 ;; ------------------------------------------------------------------ triggers and hooks
@@ -183,7 +181,7 @@
 
 (defn trigger-defaults
   "The default trigger set, resource triggers/defaults.edn: {:facts sym :triggers [{:id :when :job :args
-  :persistence :cooldown-s} ...]}, checked: every :when names a fn that exists, in a namespace under triggers/ once
+  :persistence :cooldown-s :backoff} ...]}, checked: every :when names a fn that exists, in a namespace under triggers/ once
   that folder holds any; ids unique. {} when absent."
   []
   (let [{:keys [facts triggers] :as data} (or (read-edn-resource "triggers/defaults.edn") {})

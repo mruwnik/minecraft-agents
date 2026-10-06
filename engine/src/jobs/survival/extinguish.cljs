@@ -30,11 +30,6 @@
   Memory: writes :extinguish {:pos :cause} each round (cap 20, one hour),
   and lava seen within :scan-radius as :hazard entries (cap 50, six hours) for retreat logic.")
 
-(def backoff
-  "Off: a danger reflex (rule: no cooldown and no backoff while the danger lasts); fruitless rounds while no water or safe cell is
-  in reach must not mute it."
-  false)
-
 (def args
   {:water-radius {:doc "on fire, water within this many blocks is walked into" :default 6}
    :step {:doc "candidate cells lie within this many blocks (horizontally) of the body" :default 4}
