@@ -1,11 +1,27 @@
 #!/usr/bin/env bash
 # tools/test-engine <ns>... | --full
 # Compiles the engine :test build through tools/compile (it takes the compile lock itself), then runs the tests OUTSIDE the lock.
+# tools/test-engine --changed [<git-rev>]: only the tests affected by the changed files (working tree + staged + untracked vs HEAD, or vs <git-rev>; use <sha>^ to test a commit); see tools/changed-tests.mjs.
 # <ns>: engine namespaces, e.g. engine.go-to-test (comma-joined into --test=). --full: the whole suite (shared-code changes only).
 # Why not JS: a thin shell wrapper; runs node with --max-old-space-size=4096.
 set -u
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-[ $# -ge 1 ] || { echo "usage: tools/test-engine <ns>... | --full" >&2; exit 2; }
+[ $# -ge 1 ] || { echo "usage: tools/test-engine <ns>... | --full | --changed [<git-rev>]" >&2; exit 2; }
+if [ "$1" = "--changed" ]; then
+  sel="$(node "$repo/tools/changed-tests.mjs" "${2:-HEAD}")" || exit $?
+  if [ "${sel%% *}" = "FULL" ]; then echo "test-engine --changed: running the full suite (${sel#FULL })"; set -- --full
+  else
+    mapfile -t nss < <(grep '^cljs ' <<<"$sel" | cut -d' ' -f2)
+    mapfile -t jss < <(grep '^js ' <<<"$sel" | cut -d' ' -f2)
+    echo "test-engine --changed: ${#nss[@]} cljs namespaces, ${#jss[@]} js files"
+    printf '  %s\n' "${nss[@]}" "${jss[@]}" | grep -v '^  $'
+    rc=0
+    if [ ${#jss[@]} -gt 0 ]; then (cd "$repo" && node --test "${jss[@]}") || rc=$?; fi
+    [ ${#nss[@]} -gt 0 ] || exit $rc
+    "$0" "${nss[@]}" || rc=$?
+    exit $rc
+  fi
+fi
 if [ "$1" = "--full" ]; then args=(); else args=("--test=$(IFS=,; echo "$*")"); fi
 "$repo/tools/compile" engine test || exit $?
 cd "$repo/engine" && exec node --max-old-space-size=4096 out/test.cjs "${args[@]}"
