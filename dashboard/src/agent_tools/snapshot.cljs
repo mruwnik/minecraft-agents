@@ -16,7 +16,7 @@
        "prints EDN: :png (relative to the workspace), :facing, :crosshair (the block the centre of the view hits, its\n"
        "cell and distance), :entities (mobs/players in the picture, nearest first, left/centre/right) and :text.\n"
        "Default direction: where the body faces. --yaw/--pitch in degrees (yaw 0 north, 90 west, 180 south, 270 east;\n"
-       "pitch +90 straight up), either alone; --look-at aims at the centre of block X,Y,Z. Only the picture turns: the\n"
+       "pitch +90 straight up), either alone; --look-at aims at the centre of block X,Y,Z (or X Y Z). Only the picture turns: the\n"
        "body never moves. Needs the body online (pose.json written in the last " 10 " s). Drawn from the chunks the\n"
        "body has seen; unloaded terrain shows as sky. Sizes 16..1920 x 16..1080, --max-dist 4..96 blocks."))
 
@@ -42,13 +42,15 @@
       (vec nums))))
 
 (defn- joined-negatives
-  "`--pitch -30` as `--pitch=-30`: Node's parseArgs reads a value starting with a dash as a missing value."
+  "`--pitch -30` as `--pitch=-30`: Node's parseArgs reads a value starting with a dash as a missing value. `--look-at X Y Z` as `--look-at=X,Y,Z`."
   [argv]
-  (loop [[a b & more :as args] argv out []]
+  (loop [[a b c d & more :as args] argv out []]
     (cond
       (empty? args) out
+      (and (= "--look-at" a) (every? #(and (string? %) (re-matches #"-?[\d.]+" %)) [b c d]))
+      (recur more (conj out (str a "=" b "," c "," d)))
       (and (#{"--width" "--height" "--yaw" "--pitch" "--look-at" "--max-dist"} a) (string? b) (re-matches #"-[\d.].*" b))
-      (recur more (conj out (str a "=" b)))
+      (recur (drop 2 args) (conj out (str a "=" b)))
       :else (recur (rest args) (conj out a)))))
 
 (defn options [argv]

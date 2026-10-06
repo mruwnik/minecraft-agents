@@ -39,6 +39,7 @@
                              (snap/options (into argv ["--width" "800" "--height" "450" "--pitch" "-30" "--yaw" "90"])))))
     (is (= [1 2 -3] (:look-at (snap/options (into argv ["--look-at" "1,2,-3"])))))
     (is (= [-1 2 3] (:look-at (snap/options (into argv ["--look-at" "-1,2,3"])))))
+    (is (= [-1526 54 -1508] (:look-at (snap/options (into argv ["--look-at" "-1526" "54" "-1508"])))) "three separate numbers")
     (are [extra] (= "invalid-option" (.-reason (try (snap/options (into argv extra)) nil (catch :default e e))))
       ["--width" "0"] ["--width" "1921"] ["--height" "abc"] ["--width" "12.5"]
       ["--pitch" "91"] ["--yaw" "x"] ["--max-dist" "200"]
