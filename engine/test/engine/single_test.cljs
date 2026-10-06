@@ -117,33 +117,79 @@
             (is (= 1 (count held)) "exactly one start wins; the other sees it running")
             (doseq [c held] (await ((:held c))))))))))
 
-(deftest reclaiming-a-lock-judged-stale-earlier-leaves-a-fresh-one-alone
-  (let [lock (str (path/join (tu/tmp-dir) "body.sock") ".lock")]
+(defn lock-for [] (str (path/join (tu/tmp-dir) "body.sock") ".lock"))
+
+(defn dead-pid
+  "The pid of a process that has exited."
+  []
+  (.-pid (cp/spawnSync "node" #js ["-e" "0"])))
+
+(defn age! [lock secs]
+  (let [old (- (/ (js/Date.now) 1000) secs)]
+    (fs/utimesSync lock old old)))
+
+(defn held-by!
+  "Make lock a directory held by pid (written the way a holder writes it, or as a bare pid)."
+  [lock pid]
+  (fs/mkdirSync lock)
+  (fs/writeFileSync (path/join lock "holder") (str pid)))
+
+(deftest reclaiming-a-lock-with-no-holder-file-leaves-a-fresh-one-alone
+  (let [lock (lock-for)]
     (fs/mkdirSync lock)
     (single/reclaim-stale! lock)
-    (is (fs/existsSync lock) "a waiter that saw the old lock must not remove the lock made since")))
+    (is (fs/existsSync lock) "a crashed starter's lock is stale only after the timeout")))
 
-(deftest a-stale-lock-is-reclaimed
-  (let [lock (str (path/join (tu/tmp-dir) "body.sock") ".lock")
-        old (- (/ (js/Date.now) 1000) 60)]
+(deftest a-lock-with-no-holder-file-is-reclaimed-after-the-timeout
+  (let [lock (lock-for)]
     (fs/mkdirSync lock)
-    (fs/utimesSync lock old old)
+    (age! lock 60)
+    (single/reclaim-stale! lock)
+    (is (not (fs/existsSync lock)))
+    (is (empty? (filter #(re-find #"\.dead-" %) (js->clj (fs/readdirSync (path/dirname lock))))) "no tomb left")))
+
+(deftest a-lock-held-by-a-live-pid-is-never-reclaimed-whatever-its-age
+  (let [lock (lock-for)]
+    (fs/mkdirSync lock)
+    (single/write-holder! lock)
+    (age! lock 100000)
+    (is (not (single/lock-stale? lock)))
+    (single/reclaim-stale! lock)
+    (is (fs/existsSync lock))))
+
+(deftest a-lock-whose-recorded-start-time-differs-is-a-reused-pid-and-stale
+  (let [lock (lock-for)]
+    (fs/mkdirSync lock)
+    (fs/writeFileSync (path/join lock "holder") (str js/process.pid " 1"))
+    (is (single/lock-stale? lock))))
+
+(deftest a-lock-held-by-a-dead-pid-is-reclaimed-even-when-fresh
+  (let [lock (lock-for)]
+    (held-by! lock (dead-pid))
+    (is (single/lock-stale? lock))
     (single/reclaim-stale! lock)
     (is (not (fs/existsSync lock)))))
 
-(deftest a-lock-held-longer-than-the-stale-age-is-kept-by-the-holder
+(deftest three-waiters-over-one-dead-lock-enter-one-at-a-time
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [lock (str (path/join (tu/tmp-dir) "body.sock") ".lock")]
-          (let [sock (str (subs lock 0 (- (count lock) 5)))
-                old (- (/ (js/Date.now) 1000) 60)]
-            (await (single/with-replace-lock
-                     sock
-                     (fn ^:async hold []
-                       (fs/utimesSync lock old old)
-                       (await (js/Promise. (fn [r] (js/setTimeout r (+ 50 (/ single/lock-stale-ms 5))))))
-                       (is (not (single/lock-stale? lock)) "the heartbeat refreshed the lock"))))))))))
+        (let [lock (lock-for)
+              sock (subs lock 0 (- (count lock) 5))
+              inside (atom 0)
+              max-inside (atom 0)
+              entered (atom 0)
+              enter (fn ^:async enter []
+                      (swap! inside inc)
+                      (swap! max-inside max @inside)
+                      (swap! entered inc)
+                      (await (js/Promise. (fn [r] (js/setTimeout r 30))))
+                      (swap! inside dec))]
+          (held-by! lock (dead-pid))
+          (await (js/Promise.all (clj->js (repeatedly 3 #(single/with-replace-lock sock enter)))))
+          (is (= 3 @entered))
+          (is (= 1 @max-inside))
+          (is (not (fs/existsSync lock))))))))
 
 (deftest every-connection-gets-an-error-listener-so-an-early-reset-cannot-crash-the-body
   (async done

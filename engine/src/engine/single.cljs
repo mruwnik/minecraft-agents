@@ -9,7 +9,8 @@
   - Any other error while probing refuses the start, because unknown is not 'not running'."
   (:require ["fs" :as fs]
             ["net" :as net]
-            ["path" :as path]))
+            ["path" :as path]
+            [clojure.string :as str]))
 
 (def exit-code 3)
 
@@ -70,39 +71,62 @@
 
 (def lock-stale-ms 5000)
 
-(defn lock-stale? [lock]
-  (try (> (- (js/Date.now) (.-mtimeMs (fs/statSync lock))) lock-stale-ms)
-       (catch :default _ false)))
+(defn start-time
+  "Start time of pid (field 22 of /proc/<pid>/stat), or nil where /proc is unavailable. Guards against pid reuse."
+  [pid]
+  (try (let [stat (fs/readFileSync (str "/proc/" pid "/stat") "utf8")]
+         (nth (str/split (subs stat (inc (str/last-index-of stat ")"))) #"\s+") 20 nil))
+       (catch :default _ nil)))
+
+(defn holder-file [lock] (path/join lock "holder"))
+
+(defn write-holder!
+  "Record this process (pid and start time) in lock."
+  [lock]
+  (fs/writeFileSync (holder-file lock)
+                    (str/join " " (remove nil? [js/process.pid (start-time js/process.pid)]))))
+
+(defn pid-alive? [pid]
+  (try (.kill js/process pid 0) true
+       (catch :default e (= "EPERM" (.-code e)))))
+
+(defn lock-stale?
+  "A lock is stale when the process recorded in it is gone (dead pid, or a pid now running since another start
+  time). A lock with no readable holder file is a starter that crashed between mkdir and the write, or is about
+  to write: stale only once older than lock-stale-ms."
+  [lock]
+  (let [holder (try (fs/readFileSync (holder-file lock) "utf8") (catch :default _ nil))]
+    (if-let [[pid started] (some-> holder str/trim not-empty (str/split #"\s+"))]
+      (let [pid (js/parseInt pid 10)]
+        (or (not (pid-alive? pid))
+            (boolean (and started (not= started (start-time pid))))))
+      (try (> (- (js/Date.now) (.-mtimeMs (fs/statSync lock))) lock-stale-ms)
+           (catch :default _ false)))))
 
 (defn reclaim-stale!
-  "Remove lock if it is stale. Renames it to a unique name first (atomic: one of several waiters wins), then
-  re-checks the moved dir: a waiter that judged the lock stale just before another reclaimed and re-made it
-  would otherwise remove that fresh lock; a fresh one is put back."
+  "Remove lock if it is stale: rename it to a unique name (atomic: one of several waiters wins), then delete that.
+  Never put it back; a live holder's lock is never judged stale, so only a crashed holder's is renamed."
   [lock]
-  (let [tomb (str lock ".dead-" js/process.pid "-" (js/Date.now) "-" (rand-int 1000000))]
-    (when (try (fs/renameSync lock tomb) true (catch :default _ false))
-      (when-not (lock-stale? tomb)
-        (try (fs/renameSync tomb lock) (catch :default _ nil)))
-      (fs/rmSync tomb #js {:recursive true :force true}))))
+  (when (lock-stale? lock)
+    (let [tomb (str lock ".dead-" js/process.pid "-" (js/Date.now) "-" (rand-int 1000000))]
+      (when (try (fs/renameSync lock tomb) true (catch :default _ false))
+        (fs/rmSync tomb #js {:recursive true :force true})))))
 
 (defn ^:async with-replace-lock
   "Run (f) while holding <sock>.lock, a directory made atomically: replacing a stale socket is probe, rm, listen,
-  and two starts doing that at once would both bind. A lock older than lock-stale-ms is a crashed starter's; the holder touches it while f runs."
+  and two starts doing that at once would both bind. The holder's pid is written into the lock; a lock is
+  reclaimed only when that process is dead (see lock-stale?)."
   [sock f]
   (let [lock (str sock ".lock")]
-    (loop [tries 0]
+    (loop []
       (let [made? (try (fs/mkdirSync lock) true
                        (catch :default e (if (= "EEXIST" (.-code e)) false (throw e))))]
         (cond
-          made? nil
-          (lock-stale? lock)
-          (do (reclaim-stale! lock) (recur tries))
-          :else (do (await (js/Promise. (fn [r] (js/setTimeout r 20)))) (recur (inc tries))))))
-    (let [beat (js/setInterval #(try (let [t (/ (js/Date.now) 1000)] (fs/utimesSync lock t t)) (catch :default _ nil))
-                               (/ lock-stale-ms 5))]
-      (try (await (f))
-           (finally (js/clearInterval beat)
-                    (fs/rmSync lock #js {:recursive true :force true}))))))
+          made? (try (write-holder! lock) (catch :default _ nil))
+          (lock-stale? lock) (do (reclaim-stale! lock) (recur))
+          :else (do (await (js/Promise. (fn [r] (js/setTimeout r 20)))) (recur)))))
+    (try (await (f))
+         (finally (fs/rmSync lock #js {:recursive true :force true})))))
 
 (defn ^:async claim!
   "Take the body's place at sock, naming info to anyone who asks. Resolves to {:held release} (release is a thunk
