@@ -86,3 +86,12 @@ Runs world fixtures (live cases as EDN, `engine/fixtures/world/`, format in its 
 (x/z 20000..20640, y 150) with one probe body (`ProbeFixture` by default): builds each case's plot, starts the body
 per register, runs the act, judges expectations from the body's event log plus RCON checks, cleans up, prints PASS/FAIL
 with evidence. Logic in cljs (`dashboard/src/world_test/`), compiled ahead of time: `tools/compile dashboard world-test`.
+
+### cart-sample.mjs
+
+    node tools/cart-sample.mjs (--uuid U | --rider PLAYER | --near X Y Z) [--secs 30] [--until-stop] [--window 10] [--cell X Z --threshold 0.3] [--out F.jsonl]
+
+Follows one minecart over RCON (game time, Pos, Motion each tick; `--near` pins the nearest minecart once, `--rider` the cart
+the player rides). JSON lines to `--out` or stdout; prints the minimum windowed speed (blocks/tick, 3D, over `--window` ticks)
+and where, per-cell speeds, and the path distance from `--cell` until the speed is back at `--threshold`. Logic in
+`dashboard/src/dashboard/rcon_cart.cljs`; rebuild the bundle with `npm --prefix dashboard run build-rcon-tools`.
