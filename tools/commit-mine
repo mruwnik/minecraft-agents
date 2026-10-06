@@ -117,9 +117,9 @@ if [ -f "$msg" ]; then message="$(cat "$msg")"; else message="$msg"; fi
 trailer='Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>'
 grep -qiE '^Co-Authored-By:' <<<"$message" || message="$message"$'\n\n'"$trailer"
 
-# The message must name the card: "Card <id8>", "card <id8>", "(card <id8>)" or "cards <id8>" (a longer id also matches).
+# The message must name the card: "Card <id8>", "card: <id8>", "Card #<id8>", "(card <id8>)" or a list "cards <a8>, <id8>" / "cards <a8> and <id8>" (a longer id also matches).
 card_id8="${card:0:8}"
-grep -qiE "cards? +$card_id8" <<<"$message" || die "the commit message must name the card, e.g. 'Card $card_id8' (--card $card)" 8
+grep -qiE "(^|[^[:alpha:]])cards?[: #]+([[:alnum:]]{8}[^[:alnum:]]+(and +)?)*$card_id8" <<<"$message" || die "the commit message must name the card, e.g. 'Card $card_id8' (--card $card)" 8
 
 # Lock with backoff. The lock dir holds the owner's pid; a lock whose owner is dead is reclaimed. Reclaimers and the owner's release take turns under a flock guard (the kernel frees it on death), so the owner read, the death check and the removal see one lock: nobody removes a fresh one.
 reclaim_dead() {

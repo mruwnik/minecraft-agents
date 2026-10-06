@@ -2,7 +2,9 @@
 # Tests for tools/commit-mine trailer handling and exit codes, in a throwaway repo.
 set -uo pipefail
 SRC="$(cd "$(dirname "$0")" && pwd)/commit-mine"
-T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+T="$(mktemp -d)"; pids=()
+cleanup() { [ ${#pids[@]} -eq 0 ] || kill "${pids[@]}" 2>/dev/null; rm -rf "$T"; }
+trap cleanup EXIT; trap 'exit 143' INT TERM
 cd "$T" && git init -q . && git config user.email t@t && git config user.name t
 mkdir tools && cp "$SRC" tools/commit-mine
 echo 0 > f.txt && git add f.txt && git commit -q -m init
@@ -179,6 +181,12 @@ check "id format 'cards x'" "$(idtest abcd1234 'Fix, cards abcd1234')" 0
 check "id format 'Card x' on line 2" "$(idtest abcd1234 $'Fix\n\nCard abcd1234')" 0
 check "longer --card prefix matches first 8" "$(idtest abcd1234-5678-aaaa 'Card abcd1234')" 0
 check "longer id in message matches" "$(idtest abcd1234 'Card abcd1234-5678')" 0
+check "id format 'Card: x'" "$(idtest abcd1234 'Fix. Card: abcd1234')" 0
+check "id format 'Card #x'" "$(idtest abcd1234 'Fix. Card #abcd1234')" 0
+check "id second in 'cards A, B'" "$(idtest abcd1234 'Fix, cards 11112222, abcd1234')" 0
+check "id second in 'cards A and B'" "$(idtest abcd1234 'Fix, cards 11112222 and abcd1234')" 0
+check "'discards x' is not a card reference" "$(idtest abcd1234 'Fix, discards abcd1234')" 8
+check "id after another card's id only" "$(idtest abcd1234 'Card 11112222 and abcd1234 later')" 0
 check "bare id without the word card" "$(idtest abcd1234 'abcd1234 fix')" 8
 echo "Card abcd1234 from file" > msg.txt; echo "$RANDOM$RANDOM" > f.txt
 tools/commit-mine --card abcd1234 -m msg.txt --expect-lines 2 f.txt >/dev/null 2>&1; check "message file with id exit" "$?" 0
@@ -241,10 +249,11 @@ check "foreign lock left in place" "$(ls .git | grep -c '^commit-lock$')" 1
 rm -rf .git/commit-lock; git checkout -q f.txt
 # Reclaim race: 3 contenders take the lock in turn after a dead holder; two inside the critical section at once is a violation.
 rdir=$(mktemp -d); LOCK=$rdir/lock; eval "$(sed -n '/^reclaim_dead() {/,/^}/p;/^release_lock() /p' tools/commit-mine)"; export LOCK
+# The contenders give up after 60 s; a killed run kills them (they are background children, not reached by the EXIT trap alone).
 contender() {
-  local n
+  local n deadline=$((SECONDS + 60))
   for n in 1 2 3 4 5; do
-    until mkdir "$LOCK" 2>/dev/null; do reclaim_dead && continue; sleep 0.001; done
+    until mkdir "$LOCK" 2>/dev/null; do reclaim_dead && continue; [ $SECONDS -lt $deadline ] || exit 1; sleep 0.001; done
     echo $BASHPID > "$LOCK/pid"
     mkdir "$rdir/cs" 2>/dev/null || echo x >> "$rdir/violations"
     sleep 0.002; rmdir "$rdir/cs" 2>/dev/null; release_lock
@@ -252,7 +261,8 @@ contender() {
 }
 for round in $(seq 1 60); do
   mkdir "$LOCK"; echo 99999999 > "$LOCK/pid"
-  contender & contender & contender & contender & wait
+  pids=(); for _ in 1 2 3 4; do contender & pids+=($!); done
+  wait "${pids[@]}"
 done
 check "reclaim race: no two holders" "$(cat "$rdir/violations" 2>/dev/null | wc -l)" 0
 rm -rf "$rdir"; unset LOCK

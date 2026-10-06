@@ -6,6 +6,6 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 test('commit-mine.test.sh passes', () => {
-  const r = spawnSync('bash', [join(dirname(fileURLToPath(import.meta.url)), 'commit-mine.test.sh')], { encoding: 'utf8' })
+  const r = spawnSync('bash', [join(dirname(fileURLToPath(import.meta.url)), 'commit-mine.test.sh')], { encoding: 'utf8', timeout: 300000, killSignal: 'SIGKILL' })
   assert.equal(r.status, 0, (r.stdout.match(/^FAIL.*$/gm) || []).join('\n') + r.stderr)
 })
