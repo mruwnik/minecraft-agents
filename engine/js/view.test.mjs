@@ -1143,3 +1143,16 @@ test('an idle body with jittering mobs writes at most 2 poses a second; a body m
     mock.timers.reset()
   }
 })
+
+test('a written pose has numbers rounded to 4 decimals (smaller file, fewer pages written)', async () => {
+  const bot = fakeBot()
+  bot.entity.position.x = 108.50000000000004
+  bot.entity.yaw = 3.141592653589793
+  const { view, dir } = makeView(bot, { now: () => 10000 })
+  const file = path.join(dir, 'worlds', 'w', 'agents', 'Bob', 'view', 'pose.json')
+  await view.tickPose()
+  const text = fs.readFileSync(file, 'utf8')
+  assert.equal(readJson(file).pos.x, 108.5)
+  assert.equal(readJson(file).yaw, 3.1416)
+  assert.doesNotMatch(text, /\d\.\d{5,}/)
+})

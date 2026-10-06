@@ -33,6 +33,9 @@ export const RELIGHT_REACH = 16
 const SECTION_VOLUME = 4096
 
 const round2 = n => Math.round(n * 100) / 100
+const round4 = n => Math.round(n * 10000) / 10000
+// pose.json is rewritten about 10 times a second: short numbers keep it within one or two 4 KB pages
+const poseJson = pose => JSON.stringify(pose, (k, v) => typeof v === 'number' ? round4(v) : v)
 const xyz = v => ({ x: v.x, y: v.y, z: v.z })
 
 // ---- files ----
@@ -691,7 +694,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
         lastBodyKey = body
         lastPoseAt = t
         lastPose = pose
-        return JSON.stringify(pose)
+        return poseJson(pose)
       } catch (err) { reportError(err); return null }
     })()
     stats.poseMs += performance.now() - start

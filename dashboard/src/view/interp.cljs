@@ -28,7 +28,7 @@
 (def ^:const DEFAULT-INTERVAL 100)
 (def ^:const RISE-PER-SECOND 0.2) ; the delay rises slowly ...
 (def ^:const FALL-PER-SECOND 1) ; ... and falls fast, so playback catches up when walking resumes
-(def ^:const INTERVAL-QUANTILE 0.25) ; a moving body writes at its rate cap; longer gaps are pauses
+(def ^:const INTERVAL-QUANTILE 0.9) ; a body at a write-rate cap steps 1 or 2 ticks apart; the longer step sets the delay (gaps over MAX-INTERVAL-GAP are pauses)
 
 (defn clamp ^number [^number v ^number lo ^number hi] (min hi (max lo v)))
 (defn lerp ^number [^number a ^number b ^number f] (+ a (* (- b a) f)))

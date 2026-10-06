@@ -224,3 +224,15 @@
   (let [it (interp/pose-interpolator #js {:minDelay 120 :maxDelay 130})]
     (.push it (mk T0 0) (+ T0 SKEW))
     (is (<= 120 (.delay it) 130))))
+
+;; the body writes a pose when a 50 ms physics tick finds 100 ms passed since the last one: gaps of 100 or 150 ms
+(defn capped-walk [n]
+  (let [gaps [100 100 150 100 150 100 100 100 150 100 100 150]
+        ts (reductions + T0 (map #(nth gaps (mod % (count gaps))) (range n)))]
+    (vec (map-indexed (fn [k t] {:pose (mk t (* 0.43 (/ (- t T0) 100)))
+                                 :arrival (+ t SKEW (mod (* k 7919) 31))}) ts))))
+
+(deftest a-10-hz-walk-with-100-or-150-ms-gaps-does-not-underrun
+  (let [frames (filterv #(> (:now %) (+ T0 SKEW 8000)) (playback (interp/pose-interpolator) (capped-walk 300) (+ T0 SKEW) (+ T0 SKEW 28000)))]
+    (is (= 0 (- (:underruns (peek frames)) (:underruns (first frames)))))
+    (is (<= (:delay (peek frames)) 180))))
