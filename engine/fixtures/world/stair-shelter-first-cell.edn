@@ -1,0 +1,27 @@
+;; Card 4de7e95d: a stair down from inside a closed two-high 3x3 shelter on grass cut its first cell, then go-to (the stair's
+;; walk) answered :goal-enclosed once on a live BaseMiner run (not reproduced offline). Ground y 0..5 dirt, grass top y 5; shelter
+;; walls y 6..7 over x 8..12, z 8..12, roof y 8, interior x 9..11, z 9..11. Cases: the stair (must finish, never :goal-enclosed),
+;; and a first cell opened by a command with a go-to right after (the stale-read order).
+{:defaults
+ {:tags [:planner :access :movement]
+  :plot {:height 14}
+  :blocks [[:fill [0 0 0] [31 4 31] "dirt"] [:fill [0 5 0] [31 5 31] "grass_block"]
+           [:fill [8 6 8] [12 8 12] "stone_bricks"] [:fill [9 6 9] [11 7 11] "air"]
+           [:set [10 7 10] "torch"]]
+  :body {:at [10.5 6 9.5] :inventory [["iron_pickaxe" 1]]}
+  :limit-s 90}
+ :cases
+ [{:name "stair-down-south-from-shelter-a"
+   :act [[:job (jobs.access.stair {:dir :down :heading :south :steps 3})]]
+   :expect [{:event {:source :job :kind :stair.done :data {:steps 3}} :within-s 80 :of-job true}
+            {:no-event {:source :job :kind :result :data {:why :goal-enclosed}} :for-s 80 :until {:source :job :kind :stair.done}}]
+   :after [[:block [10 5 10] "air"]]}
+  {:name "stair-down-south-from-shelter-b"
+   :act [[:job (jobs.access.stair {:dir :down :heading :south :steps 3})]]
+   :expect [{:event {:source :job :kind :stair.done :data {:steps 3}} :within-s 80 :of-job true}
+            {:no-event {:source :job :kind :result :data {:why :goal-enclosed}} :for-s 80 :until {:source :job :kind :stair.done}}]}
+  {:name "cell-opened-then-go-to-at-once"
+   :act [[:rcon "execute positioned $X $Y $Z run setblock ~10 ~5 ~10 air"]
+         [:job (jobs.movement.go-to {:pos #at [10 5 10] :range 0 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 40 :of-job true}]
+   :after [[:body-near [10.5 5 10.5] 1.5]]}]}
