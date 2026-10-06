@@ -60,7 +60,15 @@ const connect = async wsUrl => {
   return { send, logs, close: () => socket.close() }
 }
 
+// Takes a browser slot (tools/res-slot) for as long as the returned release() is not called: the holder is `cat` on a pipe, so a crash of this process frees the slot too.
+const takeBrowserSlot = () => new Promise((resolve, reject) => {
+  const holder = spawn(path.join(import.meta.dirname, '..', 'res-slot'), ['browser', '--', 'sh', '-c', 'echo ready; cat >/dev/null'], { stdio: ['pipe', 'pipe', 'inherit'] })
+  holder.stdout.once('data', () => resolve(() => holder.stdin.end()))
+  holder.on('close', code => reject(new Error(`no browser slot (res-slot exit ${code}); retry later`)))
+})
+
 export const withPage = async ({ url, width, height, timeoutMs = 90000 }, fn) => {
+  const releaseSlot = await takeBrowserSlot()
   const port = await freePort()
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'view-headless-'))
   const chromium = spawn(CHROMIUM, [
@@ -93,5 +101,6 @@ export const withPage = async ({ url, width, height, timeoutMs = 90000 }, fn) =>
     cdp?.close()
     chromium.kill('SIGKILL')
     fs.rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }) // the killed browser may still be writing
+    releaseSlot()
   }
 }

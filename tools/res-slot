@@ -1,0 +1,3 @@
+#!/usr/bin/env sh
+# Launcher: see tools/res-slot.mjs
+exec node "$(dirname "$0")/res-slot.mjs" "$@"

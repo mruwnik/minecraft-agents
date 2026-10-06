@@ -2,7 +2,7 @@
 // Why JavaScript: a thin Node launcher (spawns the compiled test runner in shards, takes a machine-wide flock slot per shard); no engine behaviour.
 // Usage: tools/test-engine --full [--shards N] [--slots M] [--slowest K]
 //  Splits the engine test namespaces over N node processes (default 4), balanced by the per-namespace ms of the previous run (engine/out/test-ns-ms.json).
-//  At most M shard processes run at once machine-wide (default: (MemAvailable - 6 GB) / 2.8 GB, 1..3): each takes `flock` on /tmp/mc-test-slots/slot-<i>, so parallel agents cannot OOM the machine.
+//  At most M shard processes run at once machine-wide (default: (MemAvailable - 6 GB) / 2.8 GB, 1..3): each takes `flock` on /tmp/mc-res/tests.<i>, so parallel agents cannot OOM the machine.
 //  Per-test timings: engine/out/test-timings.jsonl (one {"var","ms"} line per test, {"peak-rss-kb"} per shard); the K slowest are printed.
 //  Isolation: after the compile, out/test.cjs and out/test/cljs-runtime are copied to /tmp/mc-test-run-<pid>/out (engine/test and node_modules symlinked beside it) and the shards run that copy (a concurrent compile cannot swap it); per-shard files carry the pid; a failing shard's output is kept in /tmp/mc-test-run-<pid>-shard-<i>.log (path printed).
 import fs from 'node:fs'
@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url'
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const engine = path.join(repo, 'engine')
-const SLOT_DIR = '/tmp/mc-test-slots'
+const SLOT_DIR = '/tmp/mc-res' // the res-slot 'tests' kind: slot files tests.<i>
 
 const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(path.join(dir, e.name)) : [path.join(dir, e.name)])
 
@@ -42,8 +42,9 @@ export const nsMs = (lines) => {
   return out
 }
 
-const FLOOR_MB = 6144, SHARD_MB = 2800 // free-memory floor kept for others; worst shard peak seen
-export const memSlots = (availableMb, max = 3) => Math.max(1, Math.min(max, Math.floor((availableMb - FLOOR_MB) / SHARD_MB)))
+const RES = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'res-slot.json'), 'utf8'))
+const FLOOR_MB = RES.floorMb, SHARD_MB = RES.kinds.tests.needMb // shared with tools/res-slot: floor kept for others; worst shard peak seen
+export const memSlots = (availableMb, max = RES.kinds.tests.max) => Math.max(1, Math.min(max, Math.floor((availableMb - FLOOR_MB) / SHARD_MB)))
 const availableMb = () => Number(fs.readFileSync('/proc/meminfo', 'utf8').match(/MemAvailable:\s+(\d+)/)[1]) / 1024
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -53,7 +54,7 @@ const runInSlot = async (slots, cmd, args, opts) => {
   for (;;) for (let i = 0; i < slots; i++) {
     const r = await new Promise((res) => {
       let out = ''
-      const p = spawn('flock', ['-n', '-E', '99', path.join(SLOT_DIR, `slot-${i}`), cmd, ...args], { ...opts, stdio: ['ignore', 'pipe', 'pipe'] })
+      const p = spawn('flock', ['-n', '-E', '99', path.join(SLOT_DIR, `tests.${i}`), cmd, ...args], { ...opts, stdio: ['ignore', 'pipe', 'pipe'] })
       p.stdout.on('data', (d) => { out += d }); p.stderr.on('data', (d) => { out += d })
       p.on('close', (code) => res({ code, out }))
     })

@@ -62,10 +62,18 @@ whose repo path is this checkout, override with `CARD_REPO`). `CARD_AUTHOR` sets
     tools/compile engine|dashboard <build>      tools/test-engine <ns>... | --full | --golden | --changed [<git-rev>]
 
 - `tools/compile` is the only user of `/tmp/mc-compile.lock`: never `flock` it or wrap it in `flock` (it exits 2 if you do).
-- Run tests with `tools/test-engine engine.<ns>-test ...` (queues the compile, then runs node outside the lock; `--full` = whole suite in 4 shards, at most as many node processes at once machine-wide as free memory allows (flock slots in /tmp/mc-test-slots; `--shards N --slots M --slowest K`); per-test ms in `engine/out/test-timings.jsonl`).
+- Run tests with `tools/test-engine engine.<ns>-test ...` (queues the compile, then runs node outside the lock; `--full` = whole suite in 4 shards, at most as many node processes at once machine-wide as free memory allows (flock slots in /tmp/mc-res; `--shards N --slots M --slowest K`); per-test ms in `engine/out/test-timings.jsonl`).
 - `tools/test-engine --golden` runs the opt-in planner pins (`*-golden` namespaces, not in `--full`).
 - `tools/test-engine --changed [<git-rev>]` runs only the cljs test namespaces that (transitively) require, or name by quoted symbol, the changed files, plus own/changed test files and the JS tests covering changed JS; changed = working tree + staged + untracked vs HEAD (or vs `<git-rev>`). Prints the list and count first. Build config changes (`shadow-cljs.edn`, `package.json`) run the full suite.
 - Never hold the lock while testing; a waiting compile is not stuck, a `flock` wrapper is.
+
+### res-slot
+
+    tools/res-slot <body|tests|browser> [--need MB] -- <cmd...>      tools/res-slot status
+
+- Heavy commands run under a machine-wide slot: waits for a free `/tmp/mc-res/<kind>.<n>` flock AND `MemAvailable - need >= floor`; prints a status line every 60 s; after ~9 min exits 75 `busy, retry later` (just run it again). Slot is held by the command's process, so it frees on exit or crash.
+- Kinds, need, max and the floor: `tools/res-slot.json` (body 700 MB x6, tests 2800 MB x3, browser 600 MB x2). `status` lists holders (pid, command, age).
+- Already wrapped: `world-test.mjs` (one body slot for the whole run), `test-engine` (tests), `tools/view/headless.mjs` (browser). Wrap other manual body starts and headless browsers yourself.
 
 ## Live testing
 
