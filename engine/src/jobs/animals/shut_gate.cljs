@@ -12,8 +12,9 @@
   (triggers.animals.pen-gate/gate-cells). A gate in no plan is never touched.
 
   - Without :plan: the open planned gates within :radius of the body. This is the job of the pen-gate trigger,
-    which waits until a gate has stood open for 4 s with the body more than 2 blocks away, so a job that holds a
-    gate open on purpose is not fought.
+    which fires for a gate seen open with the body more than 2 blocks away, so a job that holds a gate open on
+    purpose is not fought. When one stands open the run first waits :open-s (4 s), so a gate a player just opened
+    is not shut on them, and reads the gates again.
   - With :plan: every open gate of that plan, wherever it is.
 
   One run shuts them all, nearest first. For each it walks within :reach (a jobs.movement.go-to child, doors :never),
@@ -30,6 +31,7 @@
 (def args
   {:plan {:doc "id of a plan whose open gates are all shut; nil: the open planned gates of every active plan within :radius" :default nil}
    :radius {:doc "without :plan, how far from the body a gate is looked for, in blocks" :default 8}
+   :open-s {:doc "without :plan, seconds to wait before shutting a gate that stands open (0: shut at once)" :default 4}
    :reach {:doc "walk until within this many cells of the gate (the click reaches 4.5 from the eye)" :default 3}
    :tries {:doc "failed clicks on one gate before it is given up" :default 3}})
 
@@ -150,20 +152,29 @@
   [_c]
   true)
 
+(defn ^:async grace!
+  "Without :plan, wait :open-s seconds once when a watched gate stands open now."
+  [c cells]
+  (let [{:keys [plan open-s]} (:args c)]
+    (when (and (not plan) (pos? open-s) (seq (open-now c cells [])))
+      (await (ctx/act c :wait #js {:ms (* 1000 open-s)})))))
+
 (defn ^:async round [c]
   (let [[cells trouble] (watched-cells c)]
     (if trouble
       (decline! c trouble)
-      (loop [shut 0 left []]
-        (let [here (u/self-pos c)
-              open (open-now c cells left)
-              under (filter #(pg/standing-in? here %) open)
-              todo (remove (set under) open)
-              left (into left (map (fn [cell] {:cell cell :reason :standing-in})) under)]
-          (if-let [cell (nearest c todo)]
-            (let [reason (await (shut-once! c cell))]
-              (cond
-                (nil? reason) (recur (inc shut) left)
-                (#{:animal-in-the-way :walk-interrupted} reason) (recur shut (conj left (leave! c cell reason)))
-                :else (recur shut (conj left (give-up! c cell reason)))))
-            (finish! c shut left)))))))
+      (do
+        (await (grace! c cells))
+        (loop [shut 0 left []]
+          (let [here (u/self-pos c)
+                open (open-now c cells left)
+                under (filter #(pg/standing-in? here %) open)
+                todo (remove (set under) open)
+                left (into left (map (fn [cell] {:cell cell :reason :standing-in})) under)]
+            (if-let [cell (nearest c todo)]
+              (let [reason (await (shut-once! c cell))]
+                (cond
+                  (nil? reason) (recur (inc shut) left)
+                  (#{:animal-in-the-way :walk-interrupted} reason) (recur shut (conj left (leave! c cell reason)))
+                  :else (recur shut (conj left (give-up! c cell reason)))))
+              (finish! c shut left))))))))

@@ -211,6 +211,33 @@
           (is (empty? (:list (core/state (:eng s)))))
           (is (= 1 (:shut (first (events-of s :shut-gate.done)))) "one gate shut, reported"))))))
 
+(defn waited-ms-before-click
+  "The ms of the wait calls the body made before its first click on the gate."
+  [s]
+  (->> (.-calls (.-world (:p s))) (take-while #(not= "useOn" (.-name %))) (filter #(= "wait" (.-name %)))
+       (map #(aget (.-args %) "ms")) (reduce + 0)))
+
+(deftest a-gate-just-opened-is-given-its-grace-before-the-job-shuts-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (run-job (pen-world true 2 -7) {"pen-a" pen-a} {} 30))]
+          (is (>= (waited-ms-before-click s) 4000) "without :plan the job waits :open-s (4 s) first")
+          (is (not (gate-open? (:p s) 2 64 0))))
+        (let [s (await (run-job (pen-world true 2 -7) {"pen-a" pen-a} {:open-s 0} 30))]
+          (is (< (waited-ms-before-click s) 1000) ":open-s 0: no grace")
+          (is (not (gate-open? (:p s) 2 64 0))))
+        (let [s (await (run-job (pen-world true 2 -7) {"pen-a" pen-a} {:plan "pen-a"} 30))]
+          (is (< (waited-ms-before-click s) 1000) "with :plan the caller asked: no grace"))))))
+
+(deftest a-gate-a-player-shuts-in-the-grace-is-left-alone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (run-job (pen-world false 2 -7) {"pen-a" pen-a} {} 30))]
+          (is (zero? (waited-ms-before-click s)) "nothing open: no wait")
+          (is (= 0 (:shut (first (events-of s :shut-gate.done))))))))))
+
 (deftest from-the-far-side-the-job-walks-round-the-ring-and-shuts-the-gate
   (async done
     (tu/run-async done
