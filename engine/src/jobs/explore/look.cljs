@@ -1,5 +1,5 @@
 (ns jobs.explore.look
-  (:require [engine.ctx :as ctx] [jobs.lib.look :as look] [jobs.lib.places :as places]))
+  (:require ["minecraft-data" :as minecraft-data] [engine.ctx :as ctx] [engine.game :as game] [jobs.lib.look :as look] [jobs.lib.places :as places]))
 (def doc
   "Observe the nearby blocks and entities the body has seen, once, without moving or changing the world. Emits
   look.observed, available through observe --wait --watch or observe result after completion. :at inspects one exact
@@ -21,18 +21,29 @@
 (defn valid-names? [v]
   (or (nil? v) (and (vector? v) (<= 1 (count v) 16)
                     (every? #(and (string? %) (re-matches #"[a-z0-9_]{1,80}" %)) v))))
-(defn options [a]
-  (let [a (merge (into {} (map (fn [[k v]] [k (:default v)]) args)) a)
+(defn block-name-checker
+  "A fn of a block name: does minecraft-data list it for the body's version?"
+  [p]
+  (let [by-name (.-blocksByName (minecraft-data (game/version-of p)))]
+    (fn [n] (some? (aget by-name n)))))
+(defn options
+  "The validated args, or {:error text}. known-block? (optional) refuses block names minecraft-data does not list."
+  ([a] (options a nil))
+  ([a known-block?]
+  (let [unknown-keys (remove (set (keys args)) (keys a))
+        a (merge (into {} (map (fn [[k v]] [k (:default v)]) args)) a)
         blocks (names (:block-names a)) entities (names (:entity-names a))
         at (when (:at a) (places/parse-pos (:at a)))]
     (cond
+      (seq unknown-keys) {:error (str "unknown args: " (pr-str (vec (sort unknown-keys))))}
       (not (and (number? (:radius a)) (js/isFinite (:radius a)) (<= 1 (:radius a) 32))) {:error "radius must be 1..32"}
       (not (count-bound? (:max-blocks a) 16)) {:error "max-blocks must be an integer 0..16"}
       (not (count-bound? (:max-entities a) 8)) {:error "max-entities must be an integer 0..8"}
       (not (and (valid-names? blocks) (valid-names? entities))) {:error "names must be nil, a name, or up to 16 block/entity names"}
+      (and known-block? (seq (remove known-block? blocks))) {:error (str "unknown block names: " (pr-str (vec (remove known-block? blocks))))}
       (not (boolean? (:properties? a))) {:error "properties? must be true or false"}
       (:reason at) {:error (:message at)}
-      :else (assoc a :block-names blocks :entity-names entities :at (:pos at)))))
+      :else (assoc a :block-names blocks :entity-names entities :at (:pos at))))))
 (defn pos [p]
   (mapv #(/ (js/Math.round (* 10 %)) 10) (if (map? p) [(:x p) (:y p) (:z p)] [(.-x p) (.-y p) (.-z p)])))
 (defn block [b]
@@ -61,7 +72,7 @@
                       {:pos (pos at) :unknown true}
                       (assoc (block exact) :seen? true))))))
 (defn round [c]
-  (let [a (options (:args c))]
+  (let [a (options (:args c) (block-name-checker (:primitives c)))]
     (if-let [error (:error a)]
       (do (ctx/emit! c :look.refused :warn {:reason :bad-args :text error})
           (ctx/result! c {:status :stopped :observed false :reason :bad-args :text error}))

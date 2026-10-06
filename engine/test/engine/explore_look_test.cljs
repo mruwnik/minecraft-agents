@@ -10,6 +10,24 @@
   (is (:error (look/options {:entity-names ["sheep" 3]})))
   (is (:error (look/options {:properties? "true"})))
   (is (:error (look/options {:at [1 nil 3]}))))
+(deftest unknown-keys-and-block-names-are-refused-by-name
+  (is (re-find #"bogus" (:error (look/options {:bogus 1}))))
+  (is (re-find #"stone_bricks_x" (:error (look/options {:block-names ["stone" "stone_bricks_x"]} (fn [n] (= n "stone"))))))
+  (is (nil? (:error (look/options {:block-names ["stone"]} (fn [n] (= n "stone"))))))
+  (is (nil? (:error (look/options {:block-names ["nonsense"]})))))
+(deftest a-queued-look-with-a-bad-key-or-block-emits-bad-args
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/seeing-all (tu/fake {:blocks (tu/box 1 64 0 3 64 0 "stone")}))
+              [seen sink] (tu/capture-sink)
+              eng (core/create {:primitives p :jobs registry/jobs :dir (tu/tmp-dir)
+                                :events (events/make {:sinks [sink]})})]
+          (core/submit! eng '(jobs.explore.look {:block-names ["no_such_block"]}) {})
+          (await (core/tick! eng))
+          (let [event (first (filter #(= :look.refused (:kind %)) @seen))]
+            (is (= :bad-args (get-in event [:data :reason])))
+            (is (re-find #"no_such_block" (or (:text event) (get-in event [:data :text]) (:message event) "")))))))))
 (deftest loaded-air-unloaded-cell-and-exact-properties-have-distinct-evidence
   (let [p (tu/seeing-all (tu/fake {:blocks {"1,64,0" "wheat"} :ages {"1,64,0" 7} :states {"1,64,0" {:age 7}} :unloaded ["4,64,0"]}))]
     (is (= {:name "wheat" :pos [1 64 0] :properties {:age 7} :seen? true}
