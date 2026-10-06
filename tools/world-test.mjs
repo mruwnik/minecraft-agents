@@ -6,16 +6,20 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { createRequire } from 'node:module'
 import { spawnSync } from 'node:child_process'
-import { slotArgv } from './world-test-slots.mjs'
+import { slotArgv, bodyName, claimBody, releaseBody } from './world-test-slots.mjs'
 
 const bundle = path.join(import.meta.dirname, '..', 'dashboard', 'out', 'world-test.cjs')
 if (!fs.existsSync(bundle)) {
   console.error(`the world-test bundle is not built (${bundle}); build it with: tools/compile dashboard world-test`)
   process.exit(2)
 }
-// One body slot for the whole run (a run keeps one probe body at a time, restarted per case), plus the time slot with --allow-time: it re-executes itself under tools/res-slot.
+// A second run on the same --body is refused (exit 75, like a busy slot). One body slot for the whole run (a run keeps one probe body at a time, restarted per case), plus the time slot with --allow-time: it re-executes itself under tools/res-slot.
 const args = process.argv.slice(2)
 if (!process.env.WORLD_TEST_SLOT_HELD && !args.includes('--list')) {
+  const claimDir = process.env.RES_SLOT_DIR ?? '/tmp/mc-res', body = bodyName(args)
+  const claim = claimBody(claimDir, body, process.pid, (pid) => { try { process.kill(pid, 0); return true } catch (e) { return e.code === 'EPERM' } })
+  if (!claim.ok) { console.error(`world-test: ${claim.why}`); process.exit(75) }
+  process.on('exit', () => releaseBody(claimDir, body, process.pid))
   const [cmd, ...argv] = slotArgv(args, path.join(import.meta.dirname, 'res-slot'), process.execPath, process.argv[1])
   const r = spawnSync(cmd, argv, { stdio: 'inherit', env: { ...process.env, WORLD_TEST_SLOT_HELD: '1' } })
   process.exit(r.status ?? 1)
