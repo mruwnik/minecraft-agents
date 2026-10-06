@@ -39,11 +39,11 @@
           (let [event (await (emitted level fields))]
             (is (= expected (:attention event)) (str "level " level " fields " fields))))))))
 
-(deftest job-emits-keep-no-level-field
+(deftest job-emits-keep-level-field
   (async done
     (tu/run-async done
       (fn ^:async run []
         (doseq [level [:warn :error :info nil]]
           (let [event (await (emitted level {:reason :x}))]
             (is (= :x (:reason event)))
-            (is (not (contains? event :level)) (str "level " level))))))))
+            (is (= level (:level event)) (str "level " level))))))))
