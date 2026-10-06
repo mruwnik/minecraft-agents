@@ -15,14 +15,31 @@
 
 (defn ranged? [e] (contains? ranged-mobs (.-name e)))
 
+(defn known-or-raw
+  "Hostiles within radius as JS entities: the perception's known mobs (seen or heard) when p has them, else the raw
+  entities()."
+  [p radius]
+  (if-let [known (.-knownMobs p)]
+    (filter #(and (= "hostile" (.-kind %)) (<= (.-distance %) radius)) (array-seq (.call known p)))
+    (array-seq (.entities p #js {:radius radius :kind "hostile" :max 16}))))
+
+(defn sensed
+  "The entities a player would place within radius (opts :radius, :max), as JS entities: known hostiles (seen or
+  heard), and every other kind only when not hidden (visible false). Items included. Nearest first."
+  [p {:keys [radius max] :as opts}]
+  (let [others (->> (array-seq (.entities p (clj->js opts)))
+                    (remove #(= "hostile" (.-kind %)))
+                    (remove #(false? (.-visible %))))]
+    (vec (sort-by #(.-distance %) (concat others (take (or max 64) (known-or-raw p radius)))))))
+
 (defn hostiles
-  "The hostile mobs within radius of the body, nearest first, as JS entities.
+  "The hostile mobs within radius of the body that it knows of (seen or heard), nearest first, as JS entities.
   opts: :sight :only keeps the visible ones; :sight :prefer lists visible ones first, each group nearest first;
-  without :sight visibility is ignored. :ranged-radius r counts ranged mobs out to r instead of radius."
+  without :sight the known ones all count. :ranged-radius r counts ranged mobs out to r instead of radius."
   ([p radius] (hostiles p radius {}))
   ([p radius {:keys [sight ranged-radius]}]
    (let [rr (or ranged-radius radius)
-         all (->> (array-seq (.entities p #js {:radius (max radius rr) :kind "hostile" :max 16}))
+         all (->> (known-or-raw p (max radius rr))
                   (filter #(<= (.-distance %) (if (ranged? %) rr radius))))]
      (case sight
        :only (filterv #(.-visible %) all)

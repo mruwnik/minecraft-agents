@@ -624,7 +624,7 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 | `memory.set-place`, `forget-place`, `remember` | Write named places or entries of your own kind |
 | `debug.notify`, `debug.access-check`, `debug.walk-plan` | Test helpers |
 
-**Seeing** (`jobs.lib.look`): jobs find blocks and entities through `seen-blocks` (memory of what the body saw; `:live?` drops changed cells, `:live-within-ms` only for recent ones; ask for `:names`, `:match` or `:all?`), `seen-block` (`{:unknown true}` if never seen), `seen-entities` (players, known hostiles, visible others) and `find-seen!` (one look around when nothing is seen), never a scan through walls.
+**Seeing** (`jobs.lib.look`): jobs find blocks and entities through `seen-blocks` (memory of what the body saw; `:live?` drops changed cells, `:live-within-ms` only for recent ones; ask for `:names`, `:match` or `:all?`), `seen-block` (`{:unknown true}` if never seen), `seen-entities` (players, known hostiles, visible others), `seen-items` (item entities not hidden behind a wall; jobs never count a drop they cannot see) and `find-seen!` (one look around when nothing is seen), never a scan through walls (`jobs.lib.combat/hostiles` and `sensed` list hostiles as known: seen or heard).
 
 **Fetching what a job lacks** (`jobs.lib.fetch`): `blocks.dig`, `blocks.place` and `access.stair` take `:fetch` (default
 false: they wait with the reason). `true` allows every kind (`:tool :item :station`) and source (`:chest :craft :gather`); a

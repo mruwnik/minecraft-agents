@@ -749,14 +749,14 @@
             (is (= (set (for [[x z] cells-at y [64 65]] [x y z])) (set (dug-cells s))) (pr-str args yaw))))))))
 
 (defn drop-away!
-  "The fake's digs throw their drops to cell at (as a drop that bounced off), instead of the dug cell."
+  "The fake's digs throw their drops to cell at (as a drop that bounced off), instead of the dug cell (in sight)."
   [p at]
   (.override (.-world p) "dig"
              (fn [token args impl]
                (.then (impl token args)
                       (fn [r]
                         (swap! (fake/state p) update :entities
-                               (fn [es] (mapv #(if (= "item" (:kind %)) (assoc % :pos at) %) es)))
+                               (fn [es] (mapv #(if (= "item" (:kind %)) (assoc % :pos at :visible true) %) es)))
                         r)))))
 
 (deftest drops-that-land-away-are-walked-to-and-picked-up

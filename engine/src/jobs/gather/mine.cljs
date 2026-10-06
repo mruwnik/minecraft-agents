@@ -304,7 +304,7 @@
     (into {}
           (comp (filter #(= item (some-> (.-item %) .-name)))
                 (map (fn [e] [(access/cell (cell-of (u/pos-of (.-pos e)))) (or (some-> (.-item e) .-count) 1)])))
-          (array-seq (.entities (:primitives c) #js {:radius radius :kind "item" :max 32}))))))
+          (look/seen-items (:primitives c) {:radius radius :max 32})))))
 
 (def pickup-grace-ms 400)
 

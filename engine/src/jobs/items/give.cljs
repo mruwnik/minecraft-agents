@@ -1,6 +1,7 @@
 (ns jobs.items.give
   (:require [engine.ctx :as ctx]
             [jobs.lib.util :as u]
+            [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.storage.deposit :as deposit]))
 
@@ -57,7 +58,7 @@
 (defn drops
   "Item entities of name within radius as [{:id :pos}], nearest first."
   [p name radius]
-  (->> (array-seq (.entities p #js {:radius radius :kind "item" :max 32}))
+  (->> (look/seen-items p {:radius radius :max 32})
        (filter #(= name (some-> (.-item %) .-name)))
        (mapv (fn [e] {:id (.-id e) :pos (u/pos-of (.-pos e))}))))
 

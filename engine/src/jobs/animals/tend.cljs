@@ -1,6 +1,7 @@
 (ns jobs.animals.tend
   (:require [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
+            [jobs.lib.look :as look]
             [jobs.lib.util :as u]
             [jobs.animals.cull :as cull]
             [jobs.combat.hunt :as hunt]))
@@ -70,7 +71,7 @@
 (defn drops-in-box
   "The distinct names of the items lying inside the box."
   [c]
-  (->> (array-seq (.entities (:primitives c) #js {:radius (cull/reach c) :kind "item" :max 32}))
+  (->> (look/seen-items (:primitives c) {:radius (cull/reach c) :max 32})
        (filter #(cull/in-bound? c (u/pos-of (.-pos %))))
        (keep #(some-> (.-item %) .-name))
        distinct

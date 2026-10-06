@@ -123,6 +123,13 @@
       (vec (concat (remove hostile? (filter shown? raw)) (filter hostile? known)))
       (vec (filter shown? raw)))))
 
+(defn seen-items
+  "The item entities within opts (:radius, :max) the body can see, as JS entities of entities(): not those hidden
+  behind a wall (visible false)."
+  [p opts]
+  (->> (array-seq (.entities p (clj->js (assoc opts :kind "item"))))
+       (remove #(false? (.-visible %)))))
+
 (defn ^:async find-seen!
   "seen-blocks for q; when it is empty, one look-around! (four headings, a sight pass after each) and again."
   [c q]

@@ -239,7 +239,7 @@
         (if (empty? ids)
           (finish-collect! c pile ids)
           (let [r (await (child/run! c :collect 'jobs.forestry.collect-drops
-                                     {:radius (+ radius stray-range 4) :ids ids :filter names :visible-only true}
+                                     {:radius (+ radius stray-range 4) :ids ids :filter names}
                                      {:max-calls (:collect-calls (:args c))}))]
             (cond
               (= :continue r) (decline! c :collect-waiting "the collect of the pile is waiting" {:pos pos})

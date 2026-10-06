@@ -1,6 +1,7 @@
 (ns jobs.storage.make-room
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
+            [jobs.lib.look :as look]
             [jobs.lib.shelter :as sh]
             [jobs.lib.util :as u]
             [engine.memory :as mem]
@@ -203,7 +204,7 @@
 (defn ground-items
   "Item entities within radius, nearest first: [{:id :name :count :pos}]."
   [c radius]
-  (->> (array-seq (.entities (:primitives c) #js {:radius radius :kind "item" :max 32}))
+  (->> (look/seen-items (:primitives c) {:radius radius :max 32})
        (keep (fn [e] (when-let [i (.-item e)]
                        {:id (.-id e) :name (.-name i) :count (.-count i) :pos (u/pos-of (.-pos e))})))))
 

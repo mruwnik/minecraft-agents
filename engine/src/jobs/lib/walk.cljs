@@ -3,6 +3,7 @@
   again when the body ends off it. Jobs that walk (jobs.debug.walk-plan, the stair, tunnel and cleanup jobs) call this
   namespace; walk-to! is the whole loop, the other functions are its pieces."
   (:require [engine.ctx :as ctx]
+            [jobs.lib.combat :as combat]
             [jobs.lib.util :as u]
             [engine.path.executor :as executor]
             [engine.path.planner-tuned :as planner]))
@@ -806,7 +807,7 @@
         here (.-pos (.self p))
         legs (into #{} (mapcat (fn [j] (when (< 0 j (count steps)) (step-cells (nth steps (dec j)) (nth steps j)))))
                    [k (inc k)])]
-    (vec (for [^js e (array-seq (.entities p #js {:radius 8 :max 64}))
+    (vec (for [^js e (combat/sensed p {:radius 8 :max 64})
                :let [pos (.-pos e)
                      cell [(js/Math.floor (.-x pos)) (js/Math.floor (.-y pos)) (js/Math.floor (.-z pos))]]
                :when (and (not= "item" (.-kind e)) (not= me (.-username e)) (contains? legs cell)

@@ -85,7 +85,7 @@
         {:keys [killed killed-players]} (ctx/mem c)
         dead-ids (set killed)
         self-name (.-username (.self p))]
-    (->> (array-seq (.entities p #js {:radius radius :max 64}))
+    (->> (combat/sensed p {:radius radius :max 64})
          (remove #(contains? dead-ids (.-id %)))
          (filterv #(matches? (target-list targets) self-name (set killed-players) %)))))
 

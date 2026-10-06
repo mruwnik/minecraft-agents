@@ -20,6 +20,7 @@
   click did nothing) keeps its entry and gets one :door-left-open warn."
   (:require [jobs.lib.click :as click]
             [engine.ctx :as ctx]
+            [jobs.lib.combat :as combat]
             [jobs.lib.util :as u]
             [engine.memory :as mem]
             [jobs.lib.walk :as walk]))
@@ -121,7 +122,7 @@
                  (and (not= "item" (.-kind e)) (not= me (.-username e))
                       (= x (js/Math.floor (.-x pos))) (= z (js/Math.floor (.-z pos)))
                       (<= low (js/Math.floor (.-y pos)) high))))
-             (array-seq (.entities p #js {:radius 8 :max 64})))))
+             (combat/sensed p {:radius 8 :max 64}))))
 
 (defn left-open!
   "Warn that the block at cell stays open, and why."

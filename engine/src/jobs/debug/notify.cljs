@@ -1,7 +1,8 @@
 (ns jobs.debug.notify
   (:require [clojure.string :as str]
             [engine.chat :as chat]
-            [engine.ctx :as ctx]))
+            [engine.ctx :as ctx]
+            [jobs.lib.combat :as combat]))
 
 (def doc
   "For testing triggers: does nothing but report. Register it against a trigger to see that the trigger fires
@@ -25,7 +26,7 @@
   [p]
   (let [s (.self p)
         pos (.-pos s)
-        hostiles (count (.entities p #js {:radius hostile-radius :kind "hostile"}))]
+        hostiles (count (combat/known-or-raw p hostile-radius))]
     (str "health " (.-health s) ", food " (.-food s) ", oxygen " (.-oxygen s)
          ", on-fire " (boolean (.-onFire s))
          ", pos " (js/Math.round (.-x pos)) " " (js/Math.round (.-y pos)) " " (js/Math.round (.-z pos))
