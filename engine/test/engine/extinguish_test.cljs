@@ -271,6 +271,21 @@
             (is (= 1 (count (filter #(= :completed (:kind %)) @seen))))
             (is (not-any? #(or (= :required (:attention %)) (= :failed (:kind %))) @seen))))))))
 
+(deftest burning-on-a-ledge-with-one-other-cell-stands-still-instead-of-pacing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [lava (apply dissoc (cells "lava" [64] (range -3 4) (range -3 4)) ["0,64,0" "2,64,-2"])
+              {:keys [eng p]} (setup {:self {:onFire true} :blocks (merge (floor 3) lava)})
+              holds (atom [])]
+          (on-wait! p (fn [n _]
+                        (swap! holds conj (:reason (core/holding eng (:id (core/holder eng)))))
+                        (when (= n 4) (swap! (fake/state p) assoc-in [:self :onFire] false))))
+          (core/submit! eng '(jobs.survival.extinguish) {})
+          (await (core/tick! eng))
+          (is (<= (count (calls p "moveTo")) 1) "the other cell is no better: it does not walk back and forth")
+          (is (= [:burning-wait :burning-wait :burning-wait :burning-wait] @holds)))))))
+
 (deftest standing-still-gives-up-after-the-wait-cap
   (async done
     (tu/run-async done

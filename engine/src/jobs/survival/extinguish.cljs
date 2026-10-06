@@ -119,6 +119,11 @@
     (when (seq cells)
       (apply max-key #(score from hazard-poss %) cells))))
 
+(defn better-cell?
+  "Whether cell scores higher than staying at from."
+  [from cell hazard-poss]
+  (> (score from hazard-poss cell) (score from hazard-poss from)))
+
 (defn remember-hazards!
   "Write the lava among scanned hazards that memory does not know yet."
   [c scanned]
@@ -333,10 +338,18 @@
               (await (stand-pass! c)))
 
           :else
-          (let [target (best-cell p pos step (map :pos scanned))]
-            (if-not target
+          (let [hazard-poss (map :pos scanned)
+                target (best-cell p pos step hazard-poss)]
+            (cond
+              (not target)
               (or (when refusal (await (pour-last-resort! c pos refusal)))
                   (stuck! c "no safe cell within reach"))
+
+              ;; out of the lava a move is a must; otherwise a cell that is no better is not worth the walk back and forth
+              (and (not lava?) (not (better-cell? pos target hazard-poss)))
+              (await (stand-pass! c))
+
+              :else
               (let [status (if (:blocked (ctx/mem c)) "blocked" (await (move! c target)))]
                 (cond
                   (clear? c) :done
