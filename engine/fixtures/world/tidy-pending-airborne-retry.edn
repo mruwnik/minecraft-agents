@@ -15,7 +15,7 @@
  [{:name "reachable-cell-restored-promptly"
    :blocks [[:fill [14 0 6] [14 1 6] "cobblestone"] [:set [14 0 6] "air"]]
    :memory [{:kind :tidy :data {:cell #at [14 0 6] :action :dig :was "cobblestone" :now "air" :tries 0}}]
-   :act [[:wait-s 2] [:rcon "give $BODY cobblestone 4"]]
+   :body {:inventory [["cobblestone" 4]]}
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :tidy-pending}} :within-s 20}
             {:event {:source :job :kind :tidy.restored :data {:cells [[:any]]}} :within-s 60}
             {:no-event {:source :job :kind :tidy.not-restored} :for-s 15}]
