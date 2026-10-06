@@ -12,7 +12,7 @@
 
 (defn reg-key-sub [k] (rf/reg-sub k (fn [d _] (get d k))))
 
-(doseq [k [:status :selected :chat-open? :places-open? :players-open? :chat-filter :hide-whispers? :detail-body :detail-events :detail-stream :detail-chip :detail-text :attention-outstanding :attention-error :detail-notices :drive :notices :chat :worlds :detail-stats? :chat-send :chat-sender :who :status-filter]]
+(doseq [k [:status :selected :chat-open? :places-open? :players-open? :chat-filter :hide-whispers? :detail-body :detail-events :detail-stream :detail-chip :detail-text :detail-debug? :attention-outstanding :attention-error :detail-notices :drive :notices :chat :worlds :detail-stats? :chat-send :chat-sender :who :status-filter]]
   (reg-key-sub k))
 
 (rf/reg-sub :whisper-send (fn [d [_ name]] (get-in d [:whisper-send name] cs/initial)))
@@ -138,8 +138,9 @@
  :<- [:detail-events]
  :<- [:detail-chip]
  :<- [:detail-text]
+ :<- [:detail-debug?]
  :<- [:attention-outstanding]
- (fn [[events chip text outstanding] _] (eventlog/rows events outstanding {:chip chip :text text})))
+ (fn [[events chip text debug? outstanding] _] (eventlog/rows events outstanding {:chip chip :text text :debug? debug?})))
 
 (rf/reg-sub
  :drive-banner

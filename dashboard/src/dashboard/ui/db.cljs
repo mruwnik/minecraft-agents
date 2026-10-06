@@ -29,6 +29,7 @@
    :detail-events []
    :detail-chip :all
    :detail-text ""
+   :detail-debug? false
    :drive {}
    :notices {}})
 

@@ -49,3 +49,9 @@
     [(ev 1 :action :started {:name "wait"})] "wait"
     [(ev 1 :action :started {:name "wait"}) (ev 2 :action :done {:name "wait"})] nil
     [(ev 1 :action :started {:name "wait"}) (ev 2 :job :yielded {})] "wait"))
+
+(deftest debug-events-are-hidden-unless-asked
+  (let [info {:seq 1 :time-ms 1 :source :job :kind :queued :level :info}
+        dbg {:seq 2 :time-ms 2 :source :job :kind :round_started :level :debug}]
+    (is (= [1] (mapv :seq (log/rows [info dbg] {}))))
+    (is (= [2 1] (mapv :seq (log/rows [info dbg] {} {:debug? true}))))))

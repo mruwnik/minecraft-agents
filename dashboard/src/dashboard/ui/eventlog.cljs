@@ -74,12 +74,13 @@
    :source-kind (str (source e) "." (kind e)) :text (summary e)})
 
 (defn rows
-  "Newest first, after the chip and text filter; events arrive oldest first."
+  "Newest first, after the chip and text filter; :debug events only with :debug?; events arrive oldest first."
   ([events opts] (rows events {} opts))
-  ([events outstanding {:keys [chip text]}]
+  ([events outstanding {:keys [chip text debug?]}]
    (let [needle (str/lower-case (or text ""))
          hit? (fn [r] (or (str/blank? needle) (str/includes? (str/lower-case (str (:source-kind r) " " (:text r))) needle)))]
      (->> (rseq (vec events))
+          (remove #(and (not debug?) (= :debug (some-> (:level %) field-name keyword))))
           (map #(row % outstanding))
           (filter #(matches-chip? chip %))
           (filter hit?)

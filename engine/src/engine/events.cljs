@@ -137,8 +137,8 @@
   (js/Buffer.byteLength text "utf8"))
 
 (defn canonical-event
-  "The canonical event for internal event map event, numbered n. :level and :body are
-  dropped. Other fields outside the known set fold into :data."
+  "The canonical event for internal event map event, numbered n. :body is dropped,
+  :level is kept. Other fields outside the known set fold into :data."
   [{:keys [generation-id run-id now pos-fn]} n event]
   (let [source (:source event)
         kind (:kind event)
@@ -174,6 +174,7 @@
       (seq context) (assoc :context context)
       (seq data) (assoc :data data)
       (or (:message event) (:text event)) (assoc :message (or (:message event) (:text event)))
+      (:level event) (assoc :level (:level event))
       (:attention event) (assoc :attention (:attention event))
       (:request-id event) (assoc :request-id (:request-id event))
       (and started? run-id) (assoc :run-id run-id))))

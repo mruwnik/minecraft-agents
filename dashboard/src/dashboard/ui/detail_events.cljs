@@ -112,6 +112,7 @@
    (if (= name (:detail-body db)) (assoc db :attention-error (str error)) db)))
 
 (rf/reg-event-db :detail-chip (fn [db [_ chip]] (assoc db :detail-chip chip)))
+(rf/reg-event-db :detail-debug? (fn [db [_ on?]] (assoc db :detail-debug? on?)))
 (rf/reg-event-db :detail-text (fn [db [_ text]] (assoc db :detail-text text)))
 
 ;; ---------------------------------------------------------------- takeover

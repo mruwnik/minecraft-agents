@@ -29,14 +29,20 @@
                                    :chain "c1" :reflex "r1" :name "go-to"})))
     (let [event (first @seen)]
       (is (= {:seq 1 :generation-id "generation-a" :time-ms 1234
-              :source :job :kind :queued
+              :source :job :kind :queued :level :info
               :context {:job-id "j1" :round 7 :chain "c1" :reflex-id "r1"}
               :data {:name "go-to" :pos {:x 1.7 :y 64 :z -0.2}}}
              event))
       (is (not (contains? event :body)))
-      (is (not (contains? event :level)))
       (is (= {:stream-id (:stream-id (events/cursor stream)) :seq 1}
              (events/cursor stream))))))
+
+(deftest a-debug-event-keeps-its-level
+  (let [[seen sink] (tu/capture-sink)
+        stream (events/make {:generation-id "g" :sinks [sink] :now (constantly 1)})]
+    (events/emit! stream {:source :job :kind :round_started :level :debug})
+    (events/emit! stream {:source :job :kind :queued})
+    (is (= [:debug nil] (mapv :level @seen)))))
 
 (deftest edn-file-restarts-with-stable-stream-and-new-generation
   (let [file (path/join (tu/tmp-dir) "events.edn")

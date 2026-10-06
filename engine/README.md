@@ -260,7 +260,7 @@ The one argument of a check and a round. Helpers are in `engine.ctx`:
 | `(ctx/wait ctx reason)` | in a check: false, noting why the job waits |
 | `(ctx/result! ctx data)`, `(ctx/child-result ctx slot)` | hand data to the parent in the round that ends `:done` |
 | `(ctx/submit! ctx spec opts)` | put a peer job at the end of the list; returns its id |
-| `(ctx/emit! ctx kind level fields)` | an event (dropped once the round is cut); `:warn`/`:error` without `:attention` stores `:notice`. Warn only for a give-up |
+| `(ctx/emit! ctx kind level fields)` | an event, `:level` kept in the log (the dashboard hides `:debug` unless ticked; dropped once the round is cut); `:warn`/`:error` without `:attention` stores `:notice`. Warn only for a give-up |
 | `(ctx/hold-still! ctx reason)` | the round holds the body still on purpose until it ends (`nil` clears); `act :wait` with `:why` does the same while it waits |
 | `(ctx/alive? ctx)` | false once the round is cut: a search loop with no act checks it and stops |
 | `(ctx/warn-once! ctx key kind fields)` | a warn once per job per process |

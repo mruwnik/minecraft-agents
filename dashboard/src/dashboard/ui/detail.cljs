@@ -224,12 +224,14 @@
 (defn log-panel []
   (let [rows @(rf/subscribe [:detail-rows])
         current @(rf/subscribe [:detail-chip])
-        text @(rf/subscribe [:detail-text])]
+        text @(rf/subscribe [:detail-text])
+        debug? @(rf/subscribe [:detail-debug?])]
     [:section.dlog
      [:div.logbar
       [:h3 "Action log"]
       (into [:div.chips] (map #(chip current %)) eventlog/chips)
       [:input {:type "search" :placeholder "filter text" :value text :on-change #(rf/dispatch [:detail-text (.. % -target -value)])}]
+      [:label.dim [:input {:type "checkbox" :checked (boolean debug?) :on-change #(rf/dispatch [:detail-debug? (.. % -target -checked)])}] " debug"]
       [:span.dim (str (count rows) " shown")]]
      (into [:div.logbody]
            (if (empty? rows) [[:div.dim.lempty "no events"]] (map log-row rows)))]))
