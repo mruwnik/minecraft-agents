@@ -4,7 +4,8 @@
             [jobs.lib.gate :as gate]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
-            [jobs.lib.step-off :as step-off]))
+            [jobs.lib.step-off :as step-off]
+            [jobs.lib.access :as access]))
 
 (def doc
   "Keep the lit campfires of an apiary in the standard column: the fire one block underground with ground on all
@@ -131,7 +132,7 @@
   "Move off the fire's cell once when standing in it. Resolves to true when clear."
   [c {:keys [x y z] :as fire}]
   (when (on-fire? c fire)
-    (await (step-off/step-off! c fire {:avoid #{[x y z]}})))
+    (await (step-off/step-off! c fire {:avoid #{[x y z]} :ok? (step-off/zone-ok (access/rules-input c))})))
   (not (on-fire? c fire)))
 
 ;; ------------------------------------------------------------------ carpet

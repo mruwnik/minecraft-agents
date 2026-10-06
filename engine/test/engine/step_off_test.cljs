@@ -31,3 +31,22 @@
 
 (deftest nothing-to-stand-on-gives-no-candidate
   (is (empty? (step-off/candidates (tu/fake {:blocks {"2,63,0" "stone"}}) cell {}))))
+
+(deftest a-campfire-is-no-goal-below-in-or-above
+  (are [blocks] (not (contains? (goals blocks) [3 64 0]))
+    {"3,63,0" "campfire"}
+    {"3,63,0" "soul_campfire"}
+    {"3,64,0" "campfire" "3,63,0" "stone"}
+    {"3,65,0" "campfire" "3,63,0" "stone"}))
+
+(def foreign {:name "farm" :min [3 60 -1] :max [3 70 1] :owner "Miles"})
+
+(defn zone-goals [in]
+  (goals {"3,63,0" "stone" "3,63,1" "stone" "3,63,-1" "stone"} {:ok? (step-off/zone-ok in)}))
+
+(deftest a-cell-in-a-foreign-zone-is-skipped-unless-ignore-zones
+  (is (not-any? #(and (= 3 (first %)) (<= -1 (nth % 2) 1)) (zone-goals {:zones [foreign] :self "Fake"})))
+  (is (seq (zone-goals {:zones [foreign] :self "Fake"})))
+  (is (contains? (zone-goals {:zones [foreign] :self "Fake" :ignore-zones? true}) [3 64 0]))
+  (is (contains? (zone-goals {:zones [(assoc foreign :owner "Fake")] :self "Fake"}) [3 64 0]))
+  (is (contains? (zone-goals {:zones nil :self "Fake"}) [3 64 0]) "no zone list: standing is no act"))

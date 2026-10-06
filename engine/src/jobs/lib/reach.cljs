@@ -27,7 +27,7 @@
 
 (def hazard-blocks
   "Blocks a walker treats as walls and never stands on."
-  #{"lava" "fire" "soul_fire" "magma_block" "cactus" "sweet_berry_bush"})
+  #{"lava" "fire" "soul_fire" "magma_block" "cactus" "sweet_berry_bush" "campfire" "soul_campfire"})
 
 (def tall-block
   "Blocks with a 1.5-block collision box: nothing walking jumps onto them (fences, walls, shut fence gates)."

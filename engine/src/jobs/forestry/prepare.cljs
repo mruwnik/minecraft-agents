@@ -7,6 +7,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
             [jobs.lib.step-off :as step-off]
+            [jobs.lib.access :as access]
             [jobs.farm.tidy :as tidy]
             [jobs.forestry.maintain :as maintain]
             [jobs.lib.world :as known]))
@@ -407,7 +408,7 @@
 (defn ^:async step-off!
   "Walk off the column of pos, which the body stands in (jobs.lib.step-off). :continue."
   [c pos]
-  (let [r (await (step-off/step-off! c pos {}))]
+  (let [r (await (step-off/step-off! c pos {:ok? (step-off/zone-ok (access/rules-input c))}))]
     (when (:unreachable r)
       (fail! c pos :unreachable))
     :continue))

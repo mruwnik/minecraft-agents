@@ -185,7 +185,7 @@
         xs (map :x box) zs (map :z box)
         reach (max 2 (inc (max (- (apply max xs) (apply min xs)) (- (apply max zs) (apply min zs)))))
         feet {:x (js/Math.floor (:x me)) :y (js/Math.floor (:y me)) :z (js/Math.floor (:z me))}
-        r (await (step-off/step-off! c feet {:avoid (into #{} (map (juxt :x :y :z)) box) :reach reach}))]
+        r (await (step-off/step-off! c feet {:avoid (into #{} (map (juxt :x :y :z)) box) :reach reach :ok? (step-off/zone-ok (access/rules-input c))}))]
     (when (:unreachable r)
       (bump! c (first (apply min-key #(u/dist me (first %)) todo)) :unreachable))
     :continue))
