@@ -536,3 +536,36 @@
           (is (= [] (:list (core/state eng))) "one tick ends the run")
           (is (= 2 (count (zs/calls p "place"))))
           (is (= [] (tidy-entries eng))))))))
+
+;; ------------------------------------------------------------------ cuts and the pass cap
+
+(def open-floor-world (assoc with-hitbox :self {:pos [0 64 0]}))
+
+(deftest a-cut-between-the-put-back-and-the-forget-does-not-place-twice
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (restore! open-floor-world [(zs/whole-zone "Miles")] [(dug-cell [3 64 0])])]
+          (.override (.-world p) "place"
+                     (fn ^:async f [token args impl]
+                       (let [r (await (impl token args))]
+                         (core/cut! eng (core/holder eng) :test nil)
+                         r)))
+          (await (core/tick! eng))
+          (is (= 1 (count (zs/calls p "place"))))
+          (core/submit! eng '(jobs.survival.restore-broken) {})
+          (await (zs/run-until-empty eng 6))
+          (is (= 1 (count (zs/calls p "place"))) "the cell holds what the job left: no second place")
+          (is (= [] (tidy-entries eng))))))))
+
+(deftest a-run-that-hits-the-pass-cap-with-cells-waiting-ends-stopped-not-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (with-redefs [restore-broken/max-passes 2]
+          (let [{:keys [eng seen]} (restore! open-floor-world [(zs/whole-zone "Miles")]
+                                             [(dug-cell [3 64 0]) (dug-cell [3 64 2]) (dug-cell [3 64 -2])])]
+            (await (core/tick! eng))
+            (is (= [] (:list (core/state eng))))
+            (is (= :not-restored (:reason (first (zs/trespass seen :stopped)))) "not :done while a cell waits")
+            (is (= 1 (count (tidy-entries eng))) "the waiting cell keeps its entry")))))))

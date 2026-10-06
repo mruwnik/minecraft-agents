@@ -1,6 +1,7 @@
 (ns engine.unstick-test
   "The :moved memory entry written by act, the stuck trigger and the unstick job."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.ctx :as ctx]
             [engine.registry :as registry]
             [engine.core :as core]
             [jobs.lib.ledger :as ledger]
@@ -404,3 +405,58 @@
           (is (nil? (failed-event seen)) "the wall is 10 blocks away, but there is a way out")
           (is (= [] (:list (core/state eng))))
           (is (= 67 (second (feet p))) "feet back at the surface"))))))
+
+;; ---------------------------------------------------------------- one run, how it ends
+
+(defn setup-with-go-to
+  "Like setup, with jobs.movement.go-to replaced by go-to-def."
+  [world go-to-def]
+  (let [clock (atom t0)
+        [seen sink] (tu/legacy-capture-sink)
+        p (tu/fake world)
+        eng (core/create {:primitives p :jobs (assoc registry/jobs 'jobs.movement.go-to go-to-def) :triggers triggers/all
+                          :dir (tu/tmp-dir) :now #(deref clock) :backoff false
+                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+    {:eng eng :p p :seen seen}))
+
+(defn stopped-reason [seen] (:reason (first (filter #(= :stopped (:kind %)) @seen))))
+
+(deftest a-go-to-that-still-answers-continue-ends-the-run-stopped-yielded
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup-with-go-to {:self {:pos at5} :blocks (tu/floor -3 -3 20 3)}
+                                                   {:check (constantly true) :round (fn ^:async f [_] :continue)})]
+          (await (run-unstick! eng at5 goal))
+          (is (= [] (:list (core/state eng))) "one run, no re-ask")
+          (is (= :yielded (:why (failed-event seen))))
+          (is (= :yielded (stopped-reason seen)))
+          (is (= 1 (count (mem/entries (mem/view (:store eng)) :stuck)))))))))
+
+(deftest a-go-to-that-ends-without-arriving-passes-its-why-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup-with-go-to {:self {:pos at5} :blocks (tu/floor -3 -3 20 3)}
+                                                   {:check (constantly true)
+                                                    :round (fn ^:async f [c] (ctx/result! c {:arrived false :why :no-path}) :done)})]
+          (await (run-unstick! eng at5 goal))
+          (is (= :no-path (:why (failed-event seen))))
+          (is (= :no-path (stopped-reason seen))))))))
+
+(deftest a-cut-run-writes-no-stuck-entry-and-no-failed-event
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [engine (atom nil)
+              {:keys [eng seen]} (setup-with-go-to {:self {:pos at5} :blocks (tu/floor -3 -3 20 3)}
+                                                   {:check (constantly true)
+                                                    :round (fn ^:async f [_]
+                                                             (core/cut! @engine (core/holder @engine) :test nil)
+                                                             :continue)})]
+          (reset! engine eng)
+          (seed-moved! eng (repeat 4 (bad-move-at at5 goal)))
+          (core/submit! eng '(jobs.maintenance.unstick) {})
+          (await (core/tick! eng))
+          (is (nil? (failed-event seen)) "a cut run says nothing")
+          (is (= [] (mem/entries (mem/view (:store eng)) :stuck)) "and quiets nothing"))))))

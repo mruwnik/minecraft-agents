@@ -444,3 +444,46 @@
             (await (core/tick! eng))
             (is (= [] (:list (core/state eng))) label)
             (is (= [] (of-kind seen :yielded)) label)))))))
+
+;; ------------------------------------------------------------------- how a run ends
+
+(deftest a-body-that-burns-on-while-standing-ends-stopped-still-burning
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:onFire true} :blocks (floor 8)})]
+          (core/submit! eng '(jobs.survival.extinguish) {})
+          (await (core/tick! eng))
+          (is (= [] (:list (core/state eng))))
+          (is (= :still-burning (stopped-reason seen)))
+          (is (= extinguish/max-stand-waits (count (calls p "wait"))) "one wait per stand pass"))))))
+
+(deftest a-body-with-no-safe-cell-ends-stopped-stuck-after-three-failed-walks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:self {:onFire true} :blocks {"0,63,0" "stone" "1,64,0" "fire"}})]
+          (core/submit! eng '(jobs.survival.extinguish) {})
+          (await (core/tick! eng))
+          (is (= [] (:list (core/state eng))))
+          (is (= :stuck (stopped-reason seen)))
+          (is (= 1 (count (of-kind seen :extinguish_stuck)))))))))
+
+(deftest a-pour-left-by-a-cut-run-far-away-is-dropped-not-scooped-from-afar
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:onFire true}
+                                           :inventory [{:name "water_bucket" :count 1}]
+                                           :blocks (floor 40)})]
+          (on-place! p "water_bucket" (fn [s _] (swap! s assoc-in [:self :onFire] true)))
+          (on-wait! p (fn [n _] (when (= n 1) (core/cut! eng (core/holder eng) :test nil))))
+          (core/submit! eng '(jobs.survival.extinguish) {})
+          (await (core/tick! eng))
+          (is (= 1 (count (entries eng :extinguish-pour))))
+          (swap! (fake/state p) assoc-in [:self :onFire] false)
+          (swap! (fake/state p) assoc-in [:self :pos] [30 64 0])
+          (await (run-until-empty eng 3))
+          (is (= [] (:list (core/state eng))))
+          (is (= [] (entries eng :extinguish-pour)) "the entry is gone")
+          (is (= ["water_bucket"] (mapv (comp :item call-args) (calls p "place"))) "no scoop attempted from 30 blocks away"))))))

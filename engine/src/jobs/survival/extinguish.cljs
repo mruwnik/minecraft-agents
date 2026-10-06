@@ -16,7 +16,8 @@
      with one extinguish.trespass-last-resort warning.
   2. Once the fire is out, scoops the water back up with the empty bucket so no source block stays.
      It waits (a declared :burning-wait hold) up to 10 quarter seconds for the poured cell to read as water, and up to
-     8 while still burning. A scoop that fails warns extinguish.scoop_failed with the cell.
+     8 while still burning. A scoop that fails, or a pour left more than 5 blocks away, warns extinguish.scoop_failed
+     with the cell (the entry is dropped).
   3. With no bucket, on fire and with water within :water-radius, walks into the nearest water.
   4. In lava, or with no water in reach, walks to the best nearby cell within :step blocks.
      It must be passable, solid underfoot and not fire, lava, magma or a campfire.
@@ -59,6 +60,7 @@
 ;; solid blocks that do not fall (sand, gravel and concrete powder would drop into the lava)
 (def cover-blocks ["cobblestone" "stone" "dirt" "netherrack" "cobbled_deepslate" "deepslate" "andesite" "diorite" "granite"])
 
+(def max-scoop-distance "A pour left farther than this (a cut run, then a flight) is dropped, not walked back to." 5)
 (def max-pour-waits 8)
 (def max-water-waits 10)
 
@@ -202,6 +204,12 @@
           (do (ctx/update-mem! c assoc :water-waits waits)
               (await (burning-wait! c pour-wait-ms))
               :again)))
+
+      (> (u/dist (u/self-pos c) cell) max-scoop-distance)
+      (do (clear-pour! c)
+          (ctx/emit! c :extinguish.scoop_failed :warn
+                     {:text (str "left the poured water at " (pr-str cell) ": too far to scoop") :pos cell :status "far"})
+          :done)
 
       :else
       (do (ctx/hold-still! c nil)

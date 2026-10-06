@@ -130,3 +130,32 @@
           (is (= "sand" (.-name (.blockAt p (tu/pos 0 64 0)))) "no dig")
           (is (not (some #{"dig"} (call-names p))))
           (is (= 1 (count (filter #(= :unwedge.blocked (:kind %)) @seen))) "final after three refusals"))))))
+
+(defn stopped-reason [seen] (:reason (first (filter #(= :stopped (:kind %)) @seen))))
+
+(deftest a-body-still-wedged-after-max-passes-ends-stopped-still-wedged
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:blocks (merge boxed {"0,64,0" "sand"})})]
+          ;; every dig reports success but the block stays: no failure is counted, only passes
+          (.override (.-world p) "dig" (fn ^:async f [_ _ _] #js {:status "dug"}))
+          (core/submit! eng (list unwedge) {})
+          (await (core/tick! eng))
+          (is (= [] (:list (core/state eng))))
+          (is (= :still-wedged (stopped-reason seen)))
+          (is (= 8 (count (filter #{"dig"} (call-names p)))) "max-passes tries"))))))
+
+(deftest a-cut-stops-the-unwedge-loop
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:blocks (merge boxed {"0,64,0" "sand"})})]
+          (.override (.-world p) "dig"
+                     (fn ^:async f [_ _ _]
+                       (core/cut! eng (core/holder eng) :test nil)
+                       #js {:status "timeout"}))
+          (core/submit! eng (list unwedge) {})
+          (await (core/tick! eng))
+          (is (= 1 (count (filter #{"dig"} (call-names p)))) "no try after the cut")
+          (is (empty? (filter #(= :unwedge.blocked (:kind %)) @seen)) "a cut is not a failed dig"))))))

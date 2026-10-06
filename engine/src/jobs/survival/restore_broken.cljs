@@ -19,7 +19,7 @@
   a failed try is repeated until the cell gave up. A cell not restored for now (unsafe, item not carried) keeps its
   entry. The others are forgotten.
   Ends with one info tidy.restored (the cells put back, none if none were), :done when every cell was settled,
-  else stopped :not-restored {:restored n :failed n}. Never :continue.
+  else (also when max-passes ran out with cells unvisited) stopped :not-restored {:restored n :failed n}. Never :continue.
   If cells are left it also emits one warning tidy.not-restored {:cells [{:cell :was :why}]}.
   Memory: reads :tidy. Writes :tidy-reported, the cells still waiting, which the :tidy-pending trigger reads
   to warn once per set of cells.")
@@ -137,16 +137,17 @@
   "Forget the cells that are settled (changed, given up), emit the two events, end: :done, or stopped
   :not-restored while a cell was not put back (its entry kept unless it changed or was given up)."
   [c]
-  (let [{:keys [restored failed]} (ctx/mem c)]
+  (let [{:keys [restored failed seen]} (ctx/mem c)
+        unvisited (count (remove #(contains? (or seen #{}) (:cell %)) (tidy/entries c)))]
     (doseq [{:keys [cell why]} failed :when (#{:changed :gave-up} why)] (tidy/forget-cell! c cell))
     (when (seq restored)
       (ctx/emit! c :tidy.restored :info {:cells (vec restored) :text (str "restored " (count restored) " broken blocks")}))
     (when (seq failed)
       (ctx/emit! c :tidy.not-restored :warn {:cells (vec failed) :text (str (count failed) " broken blocks not restored")}))
     (ctx/remember! c :tidy-reported {:cells (mapv :cell (tidy/entries c))} tidy/reported-policy)
-    (if (seq (remove #(= :changed (:why %)) failed))
-      (result/stop! c :not-restored (str (count failed) " broken blocks not restored, " (count restored) " restored")
-                    :restored (count restored) :failed (count failed))
+    (if (or (pos? unvisited) (seq (remove #(= :changed (:why %)) failed)))
+      (result/stop! c :not-restored (str (+ unvisited (count failed)) " broken blocks not restored, " (count restored) " restored")
+                    :restored (count restored) :failed (+ unvisited (count failed)))
       :done)))
 
 (defn skip! [c {:keys [cell was]} why]
