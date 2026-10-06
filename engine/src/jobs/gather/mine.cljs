@@ -10,6 +10,7 @@
             [jobs.lib.near :as near]
             [jobs.lib.targets :as targets]
             [jobs.lib.watch :as watch]
+            [jobs.lib.reach :as reach-lib]
             [jobs.lib.look :as look :refer [cell-of headings heading-name facing glance! look-around!]]
             [jobs.lib.torch :as torch]
             [jobs.build.from-plan :as from-plan]
@@ -50,7 +51,7 @@
   4. Dig the nearest target by walking (one bounded search, jobs.lib.targets, going on next round; a seen
      block out of every stand's reach is passed over; when the search finds none reachable, the nearest in a straight
      line is tried; targets over the ground snapshot come last, so the floor
-     under the start is dug last). Walk within 3: blocked skips the target and counts a failure, partial tries
+     under the start is dug last; targets whose drop lies in a clear line from the eye come first, and a body whose line is blocked walks to within 1 when it can). Walk within 3: blocked skips the target and counts a failure, partial tries
      again and the third partial in a row skips it. The best carried tool is equipped. Dug resets the failures
      and starts collecting. Missing does nothing. Cannot (bedrock) skips without a failure. Anything else skips
      and counts one.
@@ -579,14 +580,42 @@
 
 ;; ------------------------------------------------------------------ the dig phase
 
+(defn drop-in-line?
+  "Whether the line from the body's eye to where the drop of the block at pos will lie crosses no solid block (one behind
+  another cannot be aimed at, nor its item seen)."
+  [c pos]
+  (let [p (:primitives c)
+        {:keys [x y z]} (u/self-pos c)
+        kind-at (fn [x y z] (reach-lib/arrow-kind-of (u/block-at p {:x x :y y :z z})))]
+    (reach-lib/ray-clear? kind-at
+                          [(+ (js/Math.floor x) 0.5) (+ y reach-lib/eye-height) (+ (js/Math.floor z) 0.5)]
+                          [(+ (:x pos) 0.5) (+ (:y pos) 0.25) (+ (:z pos) 0.5)])))
+
+(defn in-line
+  "The targets whose drop lies in a clear line from the body's eye, else all of them."
+  [c targets]
+  (let [clear (filterv #(drop-in-line? c %) targets)]
+    (if (seq clear) clear targets)))
+
+(defn ^:async walk-to-dig!
+  "Walk toward pos until the body is within reach of it, and close enough to see its drop (range 1) when the line to it
+  is blocked from here; a body within reach that cannot get closer digs from there. :there, :partial or :blocked
+  (jobs.lib.near/walk-near!)."
+  [c pos]
+  (let [walked (await (near/walk-near! c pos (if (drop-in-line? c pos) reach 1)))]
+    (if (and (not= :there walked) (u/within? (u/self-pos c) (cell-of pos) reach))
+      :there
+      walked)))
+
 (defn ^:async next-target!
-  "The target to walk to next: of the targets off the ground snapshot (else those over it), the one the body walks to
+  "The target to walk to next: of the targets off the ground snapshot (else those over it) that the body sees in a
+  clear line when any does, the one the body walks to
   soonest (targets/nearest!), :searching while that search goes on, the nearest in a line when none is found reachable
   (its walk decides); nil with no targets."
   [c targets]
   (let [ground (into #{} (map :pos) (:ground (ctx/mem c)))
         off (vec (remove ground targets))
-        group (if (seq off) off targets)]
+        group (in-line c (if (seq off) off targets))]
     (when (seq group)
       (let [a (await (targets/nearest! c group reach {:tag :mine}))]
         (case (:status a)
@@ -643,7 +672,7 @@
                                      (to-mend! c :gave-up))
       (nil? looked) (await (look-around! c))
       (= :searching pos) :continue
-      (some? pos) (let [walked (await (near/walk-near! c pos reach))]
+      (some? pos) (let [walked (await (walk-to-dig! c pos))]
                     (cond
                       (= :blocked walked) (do (skip-failed! c pos) :continue)
                       (= :partial walked) (partial! c pos)
