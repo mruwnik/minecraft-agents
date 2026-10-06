@@ -1,0 +1,27 @@
+;; card adecf598: herd that brought none FAILS with its reason; a hostile seen through a fence it cannot cross
+;; (fences no longer block sight) must not fire hostile-near.
+{:defaults
+ {:tags [:herd :animals :jobs]
+  :plot {:floor "grass_block"}
+  :blocks [[:fill [18 0 13] [24 0 19] "oak_fence"]
+           [:fill [19 0 14] [23 0 18] "air"]
+           [:set [18 0 16] "oak_fence_gate[facing=east,open=false]"]]
+  :limit-s 200}
+ :cases
+ [{:name "no-lead-fails"
+   :body {:at [12.5 0 16.5]}
+   :act [[:summon "cow" [10.5 0 18.5]]
+         [:wait-s 2]
+         [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
+   :expect [{:event {:source :job :kind :herd.done :data {:reason [:not :brought]}} :within-s 120 :of-job true}
+            {:event {:source :job :kind :failed} :within-s 130 :of-job true}]}
+  {:name "zombie-behind-fence-quiet"
+   :tags [:hostile :triggers] :mobs :keep
+   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+               :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+   :blocks [[:fill [18 0 13] [24 0 19] "air"]
+            [:fill [20 0 14] [24 0 18] "oak_fence" :outline]]
+   :body {:at [14.5 0 16.5] :effects [["resistance" 600 4]]}
+   :act [[:summon "zombie" [22.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 20}]
+   :after [[:entities "type=zombie,tag=wt" [[20 0 14] [24 2 18]] 1]]}]}
