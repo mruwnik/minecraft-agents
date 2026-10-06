@@ -4,6 +4,7 @@
             [engine.chat :as chat]
             [engine.event-api :as event-api]
             [engine.events :as events]
+            [engine.job-api :as job-api]
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
@@ -59,6 +60,54 @@
   (is (= :running (event-api/instance-status {:list ["j1"] :current nil} "j1" "j1")) "the round in flight, state :current not yet set")
   (is (= :queued (event-api/instance-status {:list ["j1"]} "j1" "j2")))
   (is (= :failed (event-api/instance-status {:failed {"j1" {}}} "j1" "j1"))))
+
+(defn status-engine
+  "A minimal engine for event-api/status: the primitives and state given."
+  [primitives state running]
+  {:events (events/make {:generation-id "g"})
+   :store (atom {:now js/Date.now :data {}})
+   :state (atom (merge {:generation-id "g" :list [] :instances {}} state))
+   :primitives primitives
+   :jobs registry/jobs
+   :triggers triggers/all
+   :running (atom running)
+   :manual (atom nil)
+   :now (constantly 123)})
+
+(deftest status-of-an-offline-body-shows-its-last-known-position-health-and-food
+  (let [view (event-api/status
+              (status-engine #js {:isOffline (fn [] true) :isSettling (fn [] false)
+                                  :self (fn [] #js {:status "offline"})
+                                  :lastKnown (fn [] #js {:username "Probe" :pos #js {:x 1.5 :y 64 :z -2.5 :yaw 3} :health 11 :food 7})}
+                             {} nil)
+              nil)]
+    (is (= :offline (:mode view)))
+    (is (= true (:last-known view)))
+    (is (= {:x 1.5 :y 64 :z -2.5} (:position view)))
+    (is (= 11 (:health view)))
+    (is (= 7 (:food view)))))
+
+(deftest status-of-an-offline-body-with-nothing-read_has_no_last-known
+  (let [view (event-api/status
+              (status-engine #js {:isOffline (fn [] true) :isSettling (fn [] false)
+                                  :self (fn [] #js {:status "offline"}) :lastKnown (fn [] nil)}
+                             {} nil)
+              nil)]
+    (is (nil? (:last-known view)))
+    (is (nil? (:position view)))
+    (is (nil? (:health view)))))
+
+(deftest a-job-just-started-reads-the-same-in-status-job-detail-and-the-list
+  (let [inst {"j1" {:id "j1" :round 0 :spec {:op :leaf :job 'jobs.movement.look-around :args {}}}}
+        eng (status-engine #js {:isOffline (fn [] false) :isSettling (fn [] false)
+                                :self (fn [] #js {:username "Probe" :pos #js {:x 0 :y 64 :z 0} :health 20 :food 20})}
+                           {:list ["j1"] :current nil :instances inst}
+                           {:id "j1" :round 1})
+        status (event-api/status eng nil)]
+    (is (= :running (get-in status [:current :status])))
+    (is (= :running (get-in status [:jobs :items 0 :status])))
+    (is (= :running (:status (event-api/job-detail eng "j1" 4))))
+    (is (= :running (get-in (job-api/list-jobs eng 0 10) [:items 0 :status])))))
 
 (deftest inventory-view-is-read-only-bounded-and-shows-empty-armour-slots-and-omits-other-empty-ones
   (let [stacks (mapv (fn [slot] {:name (str "item-" slot) :count 2 :slot slot}) (range 50))

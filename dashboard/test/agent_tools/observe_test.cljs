@@ -337,7 +337,9 @@
                               (= "/status" endpoint) {:mode :scheduled :current nil}
                               :else (let [after (js/Number (.get (.-searchParams (js/URL. (str "http://x" endpoint))) "after"))]
                                       {:gap? gap :stream-id "s" :latest-seq (count events) :cursor cursor
-                                       :events (filterv #(> (:seq %) after) events)}))]
+                                       :events (cond->> (filterv #(> (:seq %) after) events)
+                                                 (:page-limit @world) (take (:page-limit @world))
+                                                 true vec)}))]
                   (js/Promise.resolve {:status 200 :content-type "application/edn" :text (data/write-edn value)})))]
      {:dir dir :req req :world world :get! get! :queries queries
       :file (.join path dir "worlds" "w" "observers" "Probe" "agent.edn")
@@ -376,6 +378,28 @@
                    (is (= 2 (get-in (saved f) [:cursor :seq])))
                    ((:wait! f))))
           (.then (fn [quiet] (is (false? (:changed quiet)))))))))
+
+(deftest a-reconnect-failure-is-not-woken-for-when-the-body-is-back-on-a-later-page
+  (with-fixture []
+    (fn [f]
+      (swap! (:world f) assoc :page-limit 1)
+      (-> ((:wait! f))
+          (.then (fn [_]
+                   (push! f (assoc (event :body :reconnect-failed {:attempt 1}) :seq 1)
+                          (assoc (event :body :online) :seq 2))
+                   ((:wait! f))))
+          (.then (fn [result] (is (= :timeout (:wake result)) "the :online on the next page stales the failure")))))))
+
+(deftest a-reconnect-failure-still-wakes-when-nothing-recovers-it
+  (with-fixture []
+    (fn [f]
+      (swap! (:world f) assoc :page-limit 1)
+      (-> ((:wait! f))
+          (.then (fn [_]
+                   (push! f (assoc (event :body :reconnect-failed {:attempt 1}) :seq 1)
+                          (assoc (event :body :picked-up {:item "wheat" :count 1}) :seq 2))
+                   ((:wait! f))))
+          (.then (fn [result] (is (= :reconnect-failed (:wake result)))))))))
 
 (deftest outstanding-requests-remain-unresolved-wake-once-and-wake-again-on-change
   (with-fixture []

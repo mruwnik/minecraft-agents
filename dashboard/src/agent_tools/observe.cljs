@@ -160,12 +160,17 @@
                :pos (position (:pos r))
                :distance (when (number? (:distance r)) (round1 (:distance r)))))
 
+(defn recovered?
+  "Whether an event says the body is back."
+  [e]
+  (and (= :body (:source e)) (boolean (#{:online :spawned :respawned} (:kind e)))))
+
 (defn stale-reconnect?
   "Whether a reconnect-failed event is not worth a wake: a later try of the same outage (only the first wakes; the
   rest are counted in the summary) or one the body has since recovered from (a later online/spawned in the backlog)."
   [e later]
   (boolean (or (> (or (get-in e [:data :attempt]) 1) 1)
-               (some #(and (= :body (:source %)) (#{:online :spawned :respawned} (:kind %))) later))))
+               (some recovered? later))))
 
 (defn classify
   "The wake an event causes under the options, or nil. Options: :from :chatter :watch :watch-actions :danger :disconnect."
@@ -458,9 +463,9 @@
                                            (swap! st assoc :seen (:seen update))
                                            (if (seq (:changed update))
                                              (finish! (attention-wake update))
-                                             (continue-event event more (rest events)))))
-                                       (continue-event event more (rest events))))))
-                               (continue-event [event more later]
+                                             (continue-event event more (rest events) page))))
+                                       (continue-event event more (rest events) page)))))
+                               (continue-event [event more later page]
                                  (when (and (= :attention (:source event)) (= :resolved (:kind event)))
                                    (let [id (id-str (:request-id event))
                                          drop-id (fn [m] (into (empty m) (remove (fn [[k _]] (= id (id-str k)))) m))]
@@ -473,11 +478,25 @@
                                      (reset! summary {:counts {} :items [] :more false})
                                      (swap! st assoc :snap snap :cursor (:cursor snap) :seen {} :pending [] :lookup true)
                                      (finish! (array-map :wake :reset :reason :engine-restarted)))
-                                   (if-let [immediate (when-not (and (= :reconnect-failed (:kind event)) (stale-reconnect? event later))
-                                                         (classify event opts body))]
-                                     (finish! immediate)
-                                     (do (swap! summary collect event)
-                                         (more)))))
+                                   (let [failed? (= :reconnect-failed (:kind event))
+                                         immediate (when-not (and failed? (stale-reconnect? event later))
+                                                     (classify event opts body))
+                                         skip! (fn [] (swap! summary collect event) (more))]
+                                     (cond
+                                       (nil? immediate) (skip!)
+                                       (and failed? (empty? later) (< (:seq event) (:latest-seq page)))
+                                       (js-await [back? (recovered-later? event page)]
+                                         (if back? (skip!) (finish! immediate)))
+                                       :else (finish! immediate)))))
+                               (recovered-later? [event page]
+                                 ;; the batch is one page: look at the following pages for the body coming back
+                                 (letfn [(from [after pages]
+                                           (js-await [p (read! (events-query (:stream-id page) after 256))]
+                                             (let [evs (:events p)]
+                                               (cond (some recovered? evs) true
+                                                     (or (empty? evs) (zero? pages) (:gap? p)) false
+                                                     :else (from (:seq (last evs)) (dec pages))))))]
+                                   (from (:seq event) 8)))
                                (after-lookup []
                                  (swap! st assoc :lookup false)
                                  (swap! st update :pending

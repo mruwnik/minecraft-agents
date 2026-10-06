@@ -847,6 +847,7 @@ test('while offline lastKnown has what self read just before leaving; online it 
   assert.equal(p.isOffline(), true)
   assert.equal(p.lastKnown().health, 11)
   assert.deepEqual(p.lastKnown().pos, at(0, 64, 0))
+  assert.deepEqual(Object.keys(p.lastKnown()).sort(), ['equipment', 'food', 'health', 'inventory', 'pos'])
   assert.deepEqual(p.self(), { status: 'offline' })
   await untilSeen(seen, 'online')
   assert.equal(p.lastKnown(), null)

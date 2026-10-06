@@ -159,7 +159,7 @@ rebinds the library bot, emits `online`. While offline: `self()` is `{status: 'o
 `blockAt` returns `null`, `isOffline()` is true, the register and list are paused (no trigger evaluated, no round
 started), and acting calls resolve `{status: 'offline'}`. A cut ends the wait early but the body reconnects first. `close()`
 cancels it. Only `createPrimitives` supports it. The engine records why in its `:away` atom (`engine.core/away`); a
-log-out (`jobs.survival.log-out`) gives `:why`, otherwise it is `:connection-lost`. `lastKnown()` is what `self()` read just
+log-out (`jobs.survival.log-out`) gives `:why`, otherwise it is `:connection-lost`. `lastKnown()` is the position, health, food, inventory and equipment `self()` read just
 before the body left (null online); offline status and inventory show it marked `:last-known`.
 
 An unplanned disconnect (kick, socket end, restart) emits `disconnected` and reconnects by itself: one try, then after
@@ -665,7 +665,7 @@ node engine/tools/time.mjs --world claude clock | dawn --timeout 1200   # world 
 - `observe --wait` blocks until addressed chat, new attention, a watched job or action finishing, an engine restart or the
   timeout (default 60 s). Each named observer (`--observer`) keeps its cursor in `worlds/<world>/observers/<body>/`; delivery
   is at least once. `--chatter none|addressed|all`, `--danger` and `--disconnect` choose what wakes it. Only the first `reconnect-failed` of an
-  outage wakes it (later tries are summarised; none once the body is back). Status of an offline body adds `:back-in-s`.
+  outage wakes it (later tries are summarised). Status of an offline body adds `:back-in-s`.
 - `jobs.mjs show jID` of a job the scheduler no longer holds answers from the event history, as `observe job` does.
 - `jobs.mjs submit` appends to the list; `--front` lists after the current job without cutting; `--now` cuts the current
   listed job and runs the new one as a holder (a running reflex is not cut); `--hold` keeps the body while the check

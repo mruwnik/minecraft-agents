@@ -474,10 +474,15 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
 
   const self = () => isOffline() ? { status: 'offline' } : readSelf()
 
-  // What self() read just before the body went away (a log-out or a dropped connection), for status and inventory
+  // Position, health, food, inventory and equipment self() read just before the body went away (a log-out or a dropped connection), for status and inventory
   // views while it is offline; null when online or when nothing could be read.
   let lastSelf = null
-  const rememberSelf = () => { try { lastSelf = readSelf() } catch { lastSelf = null } }
+  const rememberSelf = () => {
+    try {
+      const { pos, health, food, equipment, inventory } = readSelf()
+      lastSelf = { pos, health, food, equipment, inventory }
+    } catch { lastSelf = null }
+  }
   const lastKnown = () => isOffline() ? lastSelf : null
 
   const readSelf = () => {
