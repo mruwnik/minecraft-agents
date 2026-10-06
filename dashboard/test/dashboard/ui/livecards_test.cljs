@@ -1,5 +1,5 @@
 (ns dashboard.ui.livecards-test
-  (:require [cljs.test :refer [deftest are]]
+  (:require [cljs.test :refer [deftest are is]]
             [dashboard.ui.livecards :as lc]))
 
 (deftest flags-from-search
@@ -100,3 +100,13 @@
     :manual :live
     :offline :img
     :idle :live))
+
+(deftest add-scene-returns-nil-when-the-hub-is-full
+  (let [hub #js {:addScene (fn [_] (throw (js/Error. "too many scenes")))}]
+    (is (nil? (lc/add-scene hub "w" "Bot")))))
+
+(deftest add-scene-addresses-the-body-as-world-slash-name
+  (let [seen (atom nil)
+        hub #js {:addScene (fn [opts] (reset! seen (.-agent opts)) :scene)}]
+    (is (= :scene (lc/add-scene hub "w" "Bot")))
+    (is (= "w/Bot" @seen))))

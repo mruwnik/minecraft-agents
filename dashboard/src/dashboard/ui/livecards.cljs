@@ -101,6 +101,13 @@
   (when-not (:nogl? flags) @hub-poll)
   (render-mode @hub-state flags))
 
+(defn add-scene
+  "A hub scene for one body, or nil when the hub refuses (it holds at most maxScenes): that card keeps its still image.
+  The hub addresses a body as <world>/<name>."
+  [hub world name]
+  (try (.addScene hub #js {:agent (str world "/" name) :radius 2 :fov 70 :interp true})
+       (catch :default e (js/console.warn "no live scene for" name (str e)) nil)))
+
 (defn live-canvas
   "A canvas for one body with a scene in the hub, open while it is mounted; draws nothing until the hub has something for it.
   `on-stats` is called with the scene stats every poll-ms."
@@ -112,9 +119,7 @@
       (fn [this]
         (let [canvas (:canvas @state)
               {:keys [name world]} (r/props this)
-              ;; the view hub addresses a body as <world>/<name>
-              scene (some-> (view-hub)
-                            (.addScene #js {:agent (str world "/" name) :radius 2 :fov 70 :interp true}))]
+              scene (some-> (view-hub) (add-scene world name))]
           (some-> scene (.attach canvas (clj->js canvas-size)))
           (swap! state assoc
                  :canvas canvas

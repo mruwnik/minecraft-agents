@@ -335,9 +335,11 @@
     (.restore ctx)
     mode))
 
-(defn canvas-size! [canvas w h dpr]
-  (set! (.-width canvas) (* w dpr))
-  (set! (.-height canvas) (* h dpr)))
+(defn canvas-size!
+  "Sets the backing size only when it changes: any width write reallocates and clears the canvas."
+  [canvas w h dpr]
+  (when-not (= (* w dpr) (.-width canvas)) (set! (.-width canvas) (* w dpr)))
+  (when-not (= (* h dpr) (.-height canvas)) (set! (.-height canvas) (* h dpr))))
 
 (defonce drawn-layout (atom nil))
 

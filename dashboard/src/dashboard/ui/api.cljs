@@ -9,12 +9,6 @@
 ;; a hung GET is aborted after this, so in-flight clears and the error is reported
 (def request-timeout-ms 20000)
 
-(defn fetch-with-timeout [url opts]
-  (let [controller (js/AbortController.)
-        timer (js/setTimeout #(.abort controller) request-timeout-ms)]
-    (-> (js/fetch url (doto (or opts (js-obj)) (aset "signal" (.-signal controller))))
-        (.finally #(js/clearTimeout timer)))))
-
 (defn request!
   "One guarded request (a POST is neither guarded nor timed out). read turns the response into [:ok data] or
   [:err message] (a promise of it or a value); a failed fetch or read is [:err]. The handler is dispatched outside
@@ -23,15 +17,18 @@
   (let [post? (= "POST" (some-> opts (aget "method")))]
     (when (or post? (not (contains? @in-flight [key url])))
       (when-not post? (swap! in-flight conj [key url]))
-      (-> (if post? (js/fetch url opts) (fetch-with-timeout url opts))
-          (.then read)
-          (.catch (fn [e] [:err (if (= "AbortError" (.-name e)) "request timed out" (str e))]))
-          (.then (fn [[outcome value]] (rf/dispatch (case outcome
-                                                        :ok (conj on-ok value)
-                                                        :unsupported on-unsupported
-                                                        (conj on-err value)))))
-          (.finally (fn [] (swap! in-flight disj [key url])))))))
-
+      (let [controller (js/AbortController.)
+            timer (when-not post? (js/setTimeout #(.abort controller) request-timeout-ms))]
+        ;; the timeout covers the body read too, so a stalled body aborts as well
+        (-> (js/fetch url (if post? opts (doto (or opts (js-obj)) (aset "signal" (.-signal controller)))))
+            (.then read)
+            (.catch (fn [e] [:err (if (= "AbortError" (.-name e)) "request timed out" (str e))]))
+            (.then (fn [[outcome value]] (rf/dispatch (case outcome
+                                                          :ok (conj on-ok value)
+                                                          :unsupported on-unsupported
+                                                          (conj on-err value)))))
+            (.finally (fn [] (js/clearTimeout timer) (swap! in-flight disj [key url]))))))))
+  
 (defn json-outcome
   "An error field in a 2xx body counts as an error when error-field? is set."
   [res error-field?]

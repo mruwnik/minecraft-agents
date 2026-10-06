@@ -94,3 +94,17 @@
         (fn [events]
           (is (= 2 @calls))
           (is (= 2 (count events))))))))
+
+(deftest a-stalled-body-read-is-aborted-and-reported
+  (async done
+    (with-redefs [api/request-timeout-ms 20]
+      (with-fake-fetch
+        (fn [_ opts]
+          (js/Promise.resolve
+           #js {:ok true :status 200
+                :text (fn [] (js/Promise. (fn [_ reject] (.addEventListener (.-signal opts) "abort" #(reject (doto (js/Error. "aborted") (set! -name "AbortError")))))))}))
+        #(api/fetch-edn! {:key :k :url "/x" :on-ok [:ok] :on-err [:err]})
+        done
+        (fn [events]
+          (is (= [[:err "request timed out"]] events))
+          (is (empty? @api/in-flight)))))))

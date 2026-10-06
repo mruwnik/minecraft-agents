@@ -39,3 +39,16 @@
         (is (not (identical? p1 p3)) "a different index rebuilds")
         (is (= 2 @calls)))
       (finally (aset js/globalThis "Path2D" original) (reset! map/coverage-path-cache before)))))
+
+(deftest canvas-size-is-only-set-when-it-changes
+  (let [sets (atom 0)
+        canvas (js-obj)]
+    (doseq [k ["width" "height"]]
+      (let [v (atom 0)]
+        (js/Object.defineProperty canvas k #js {:get (fn [] @v) :set (fn [x] (swap! sets inc) (reset! v x))})))
+    (map/canvas-size! canvas 100 50 2)
+    (is (= 2 @sets))
+    (map/canvas-size! canvas 100 50 2)
+    (is (= 2 @sets) "same size: no reallocation")
+    (map/canvas-size! canvas 120 50 2)
+    (is (= 3 @sets))))
