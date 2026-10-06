@@ -501,10 +501,10 @@ test('entities tells sleeping players from standing ones and gives usernames', (
   assert.deepEqual(found.map(e => [e.username, e.sleeping]), [['P1', true], ['P2', false], ['P3', false]])
 })
 
-test('entities counts a sleeping player only with a line of sight: one behind a wall is not seen asleep', () => {
+test('entities counts a sleeping player only with a line of sight: one behind a wall is not listed at all', () => {
   const player = (id, x) => ({ id, type: 'player', name: 'player', username: `P${id}`, position: at(x, 64, 0), metadata: [0, 0, 0, 0, 0, 0, 2] })
   const p = withBot(bot => { bot.entities = { 1: player(1, 1), 5: player(5, 5) } }, { ...world, blocks: { ...world.blocks, '2,65,0': 'stone' } })
-  assert.deepEqual(p.entities({ kind: 'player' }).map(e => [e.username, e.sleeping]), [['P1', true], ['P5', false]])
+  assert.deepEqual(p.entities({ kind: 'player' }).map(e => [e.username, e.sleeping]), [['P1', true]])
 })
 
 test('a player asleep in a bed is seen over the foot of the bed', () => {
