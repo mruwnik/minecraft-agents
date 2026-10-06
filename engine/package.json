@@ -7,6 +7,7 @@
     "test": "npm run test:cljs && npm run test:js",
     "test:cljs": "shadow-cljs compile test && node --max-old-space-size=4096 out/test.cjs",
     "test:js": "node --test 'js/**/*.test.mjs' 'test/tools/**/*.test.mjs'",
+    "test:golden": "shadow-cljs compile test-golden && node --max-old-space-size=4096 out/test-golden.cjs && node --test js/path/bench.golden.mjs",
     "record:planner-bench": "shadow-cljs compile planner-record && node out/planner-record.cjs",
     "build": "shadow-cljs compile body",
     "body": "shadow-cljs compile body && node --max-semi-space-size=4 out/body.cjs",

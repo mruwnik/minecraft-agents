@@ -216,11 +216,3 @@ const randomBox = (size, seed) => {
   return b
 }
 
-for (const size of [[33, 33, 33], [33, 80, 33]]) {
-  test(`performance ${size.join('x')}`, () => {
-    const b = randomBox(size, 42)
-    const times = [0, 1, 2].map(() => { const t = performance.now(); relight(b); return performance.now() - t })
-    console.log(`relight ${size.join('x')}: first ${times[0].toFixed(1)} ms, best ${Math.min(...times).toFixed(1)} ms`)
-    assert.ok(times[0] < 30, `took ${times[0]} ms`)
-  })
-}

@@ -23,6 +23,13 @@
          :autorun false
          :build-hooks [(engine.build-hooks/add-job-namespaces)]
          :compiler-options {:infer-externs false}}
+  ;; Opt-in: the planner's recorded pins (planner-*-golden namespaces), run when planner code changes: `tools/test-engine --golden`.
+  :test-golden {:target :node-test
+                :output-to "out/test-golden.cjs"
+                :output-dir "out/test-golden"
+                :ns-regexp "-golden$"
+                :autorun false
+                :compiler-options {:infer-externs false}}
   ;; Re-records test/planner-bench.json (`npm run record:planner-bench`).
   :planner-record {:target :node-script
                    :main engine.planner-record/main

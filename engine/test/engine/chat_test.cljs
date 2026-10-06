@@ -174,10 +174,11 @@
               clock (atom (js/Date.now))
               _ (.setOwner p 1)
               eng (assoc eng :now #(deref clock))
+              slept (atom [])
               _ (await (chat/gate! eng p 1 #js {:message "a"}))
-              t0 (js/Date.now)
-              _ (await (chat/gate! eng p 1 #js {:message "b"}))]
-          (is (>= (- (js/Date.now) t0) 70)))))))
+              _ (with-redefs [chat/sleep (fn [ms] (swap! slept conj ms) (js/Promise.resolve nil))]
+                  (await (chat/gate! eng p 1 #js {:message "b"})))]
+          (is (= [80] @slept) "the second line waits out the whole gap"))))))
 
 (deftest direct-chat-shares-rate-limits-with-job-chat-and-validates-before-sending
   (async done

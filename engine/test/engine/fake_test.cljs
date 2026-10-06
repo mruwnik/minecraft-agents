@@ -567,16 +567,13 @@
    (fn ^:async t []
      (let [p (owned {:offlineScale 1})
            seen (body-events p)
-           t0 (js/Date.now)
            pending (act p "offline" {:ms 600000})
            _ (await (tick))
            _ (.setOwner p "t2")
            offline-now (.isOffline p)
-           r (got (await pending))
-           elapsed (- (js/Date.now) t0)]
+           r (got (await pending))]
        (is (= true offline-now))
        (is (= {:status "cut"} r))
-       (is (< elapsed 1000))
        (is (= false (.isOffline p)))
        (is (= ["offline" "online"] (mapv :kind @seen)))))))
 

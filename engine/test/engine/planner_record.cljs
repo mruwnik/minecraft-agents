@@ -1,13 +1,13 @@
 (ns engine.planner-record
   "Re-records test/planner-bench.json from the ClojureScript planner (for an intended planner change) and prints what
   changed against the file it replaces. Run by `npm run record:planner-bench`. The world answers need the frozen bench
-  (engine.planner-bench-test/bench-dir); without it they are kept as recorded and the summary says so."
+  (engine.planner-bench-golden/bench-dir); without it they are kept as recorded and the summary says so."
   (:require ["fs" :as fs]
             ["path" :as path]
             [clojure.string :as str]
-            [engine.planner-bench-test :as bench :refer [recorded record changes]]
+            [engine.planner-bench-golden :as bench :refer [recorded record changes]]
             [engine.planner-fixture :as pf]
-            [engine.planner-options-test :as options-test]))
+            [engine.planner-options-golden :as options-test]))
 
 (defn rounded [x] (if (number? x) (/ (js/Math.round (* x 1000)) 1000) x))
 

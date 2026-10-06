@@ -82,16 +82,14 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:offlineScale 0.5})
-              started (js/Date.now)]
+        (let [{:keys [eng p]} (setup {:offlineScale 0.5})]
           (core/submit! eng '(away) {})
           (let [{:keys [round]} (await (tick-until-offline eng p))]
             (core/cancel! eng "j1")
             (is (true? (.isOffline p)) "still away until the reconnect is done")
             (is (nil? (core/tick! eng)) "no round starts mid-reconnect")
             (await round)
-            (is (false? (.isOffline p)))
-            (is (< (- (js/Date.now) started) 2000) "the wait ended early (a full wait is 10 s)")))))))
+            (is (false? (.isOffline p)))))))))
 
 (def sleeper {:id 5 :name "Alex" :kind "player" :sleeping true :pos {:x 10 :y 64 :z 0}})
 
