@@ -57,7 +57,14 @@
              :port (:port world)
              :world world-name
              :events-max-bytes (get-in config [:engine :events :maxBytes])
+             :view-distance (:viewDistance config)
              :engine-dir (path/join dir "engine")})))
+
+(defn connect-options
+  "The connection part of createPrimitives' options; viewDistance only when the config sets it (connect.mjs defaults it)."
+  [{:keys [host port username view-distance]}]
+  (cond-> #js {:host host :port port :username username}
+    (some? view-distance) (doto (unchecked-set "viewDistance" view-distance))))
 
 (defn missing-primitives-message [file]
   (str "engine: " file " does not exist. The body needs the real primitives layer"
@@ -158,9 +165,9 @@
                         (when-let [eng @eng-ref]
                           (core/emit! eng (-> (js->clj e :keywordize-keys true)
                                               (update :kind keyword) (update :source keyword) (update :level keyword)))))
-        raw-p (await (create-primitives #js {:host (:host cfg) :port (:port cfg) :username (:username cfg)
-                                             :view #js {:stateDir (clj->js state-dir) :agent (:agent opts) :world (:world cfg)
-                                                        :onEvent on-view-event}}))
+        raw-p (await (create-primitives (doto (connect-options cfg)
+                                             (unchecked-set "view" #js {:stateDir (clj->js state-dir) :agent (:agent opts) :world (:world cfg)
+                                                                        :onEvent on-view-event}))))
         ;; what the body has seen (engine.perception); BODY_PERCEPTION=0 runs without it
         per (when (and (.-rawWorld raw-p) (not= "0" (.. js/process -env -BODY_PERCEPTION)))
               (perception/create (.-rawWorld raw-p) {}))

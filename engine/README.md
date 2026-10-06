@@ -523,7 +523,7 @@ A scenario is EDN read with `cljs.reader`:
 ```
 
 `npm run body -- --agent <name> --world <world> --scenario <file>` loads `worlds/<world>/agents/<name>/config.json`
-(`username`) and `worlds/<world>/world.json` (`host`, `port`). It refuses to start when `--world` is missing, and with exit
+(`username`, optional `viewDistance` chunks, default 8) and `worlds/<world>/world.json` (`host`, `port`). It refuses to start when `--world` is missing, and with exit
 code 3 when that body is already running (it binds `engine/body.sock` first). If `engine/engine.edn` exists the saved list
 and register are restored as they are; `--fresh` discards saved engine state (memory is kept). The scenario is validated
 before connecting; on a restart an unknown trigger in it is skipped with a warn and an attention request, and scenario triggers the

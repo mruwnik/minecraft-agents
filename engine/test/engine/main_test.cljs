@@ -28,11 +28,19 @@
 
 (deftest load-agent-reads-config-and-world
   (let [dir (agent-state-dir)]
-    (is (= {:username "Bob" :host "h" :port 7 :world "w" :events-max-bytes nil
+    (is (= {:username "Bob" :host "h" :port 7 :world "w" :events-max-bytes nil :view-distance nil
             :engine-dir (path/join dir "worlds" "w" "agents" "Bob" "engine")}
            (main/load-agent dir "w" "Bob")))
     (is (= :no-config (:error (main/load-agent dir "w" "Nobody"))))
     (is (= :no-config (:error (main/load-agent dir "other" "Bob"))))))
+
+(deftest view-distance-comes-from-the-config
+  (let [dir (agent-state-dir)
+        cfg-file (path/join (bodies/body-dir dir "w" "Bob") "config.json")]
+    (fs/writeFileSync cfg-file "{\"username\":\"Bob\",\"viewDistance\":4}")
+    (is (= 4 (:view-distance (main/load-agent dir "w" "Bob"))))
+    (is (= 4 (.-viewDistance (main/connect-options (main/load-agent dir "w" "Bob")))))
+    (is (not (contains? (js->clj (main/connect-options {:host "h" :port 7 :username "Bob"})) "viewDistance")))))
 
 (deftest the-world-comes-from-the-flag-not-the-config
   (let [dir (agent-state-dir)]
