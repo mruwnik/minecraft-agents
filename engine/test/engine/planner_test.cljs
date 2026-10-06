@@ -246,6 +246,15 @@
     (is (= [[(:start MOVE) 2 63 2 0] [(:jump MOVE) 3 63 2 15]]
            (mapv (juxt :move :x :y :z :h) (take 2 (get-in r [:path :steps])))))))
 
+;; a diagonal past a pit whose floor is farmland: the body brushes the pit's corner and can slip in, so the way goes round it
+(deftest diagonal-never-passes-a-pit-floored-with-farmland
+  (are [pit] (not= [3 64 3] (second (cells (run (world {:fill pit}) (near 3 64 3) {} {:x 2 :y 64 :z 2}))))
+    [[3 63 2 3 63 2 "air"] [3 62 2 3 62 2 "farmland"]]
+    [[2 63 3 2 63 3 "air"] [2 62 3 2 62 3 "farmland"]]))
+
+(deftest diagonal-past-a-pit-with-another-floor-is-kept
+  (is (= [3 64 3] (second (cells (run (world {:fill [[3 63 2 3 63 2 "air"]]}) (near 3 64 3) {} {:x 2 :y 64 :z 2}))))))
+
 ;; ---- gaps up ----
 
 (defn gap-up [gap & [extra]]

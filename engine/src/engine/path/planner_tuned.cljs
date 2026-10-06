@@ -410,6 +410,18 @@
                   (recur (inc y) 1)
                   (recur (inc y) blocked)))))))))
 
+  ;; true when the column x,z, open at the body's level y, drops to farmland at least a cell down: a body brushing it on a
+  ;; diagonal can slip in and trample it (a landing from over half a block up)
+  (slipsOnFarmland [s x z y]
+    (loop [y2 (dec y)]
+      (when (>= y2 (- y max-drop 1))
+        (let [id (.stateAt s x y2 z)]
+          (cond
+            (== id UNLOADED) false
+            (== (aget tbl-farmland id) 1) (< y2 (dec y))
+            (pos? (aget tbl-top id)) false
+            :else (recur (dec y2)))))))
+
   ;; DAMAGE_TOUCH cells (berry bush, wither rose, cactus) in column x,z over lo..hi (1/16 absolute): a diagonal brushes both
   ;; side columns, so each one hurts as one in the body's own column does (`fits`' touch)
   (sideTouch [s x z lo hi]
@@ -1611,6 +1623,8 @@
                   sb (.side s x z2 lo hi)
                   slide (+ sa sb)] ; 1 when exactly one side is blocked
               (when (and (< slide 2)
+                         (not ^boolean (.slipsOnFarmland s x2 z y))
+                         (not ^boolean (.slipsOnFarmland s x z2 y))
                          ;; a step up lifts the body: its start column must have the room
                          (or (<= h2 h0) ^boolean (.clear s x z (if jump h0 (+ h0 BODY)) hi))
                          ;; (the walker's test of a jump that slides along a corner: limit-corner)

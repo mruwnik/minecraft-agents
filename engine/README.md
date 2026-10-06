@@ -658,7 +658,8 @@ the recorded pins (`planner_{bench,options,goals,courses}_golden.cljs`, `js/path
   the goal than the start.
 - The walker watches the way ahead and replans when the world under the plan changed, when a mob blocks a leg, and every 4 s
   for a partial plan.
-- Risks are priced rather than banned: gap jumps over pits, corner slides over lava or fire, drops onto farmland. The planner
+- Risks are priced rather than banned: gap jumps over pits, corner slides over lava or fire. Farmland is never fallen onto: no drop or gap jump lands on it, and no diagonal
+  passes a pit floored with it. The planner
   takes `options.limits` for what the walker can do.
 
 ## Agent command-line tools
