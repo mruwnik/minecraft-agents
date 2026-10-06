@@ -240,4 +240,7 @@
           (core/submit! eng '(jobs.maintenance.shut-doors) {})
           (await (tick-until s #(empty? (:list (core/state eng))) 3))
           (is (= [:walk-interrupted] (mapv :reason (:left (first (filter #(= :shut-doors.stopped (:kind %)) @seen))))))
-          (is (= [gate-cell] (mapv :cell (opened eng))) "the entry stays for a later run"))))))
+          (is (= [gate-cell] (mapv :cell (opened eng))) "the entry stays for a later run")
+          (is (empty? (filter #(and (= :warn (:level %)) (= :job (:source %)) (not= :stopped (:kind %))) @seen)) "the job adds no warn of its own for an interrupted walk")
+          (is (= [@(:clock s)] (mapv :t (mem/entries (mem/view (:store eng)) :opened)))
+              "the entry is stamped afresh, so the trigger waits open-s again"))))))

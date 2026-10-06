@@ -15,8 +15,8 @@
   it opens nothing on the way), then shuts it as the walker does (pass/shut-column!). An animal in the cell is waited
   out, never pushed. A block that cannot be reached, that the body stands in the column of, or that is not shut after
   :tries clicks is given up with one warn (shut-doors.gave-up) and its entry dropped, so the trigger leaves it. A
-  block the body stands in the column of, or whose walk was interrupted (:walk-interrupted), is left with the warn
-  but keeps its entry: a later run shuts it.
+  block the body stands in the column of, or whose walk was interrupted (:walk-interrupted, info only), is left and
+  keeps its entry, stamped afresh so the trigger waits :open-s again: a later run shuts it.
   Ends done with info shut-doors.done {:shut n :left []} when every block was shut (or none stood open); with any
   left, stopped :left with warn shut-doors.stopped and {:shut n :left [{:cell :reason}]}.")
 
@@ -61,11 +61,17 @@
           (< n (:tries (:args c))) (recur (inc n))
           :else :shut-failed)))))
 
-(defn give-up! [c {:keys [cell]} reason]
+(defn give-up!
+  "Record why the target stays open. A kept entry is stamped afresh (the trigger waits :open-s again); a walk that was
+  interrupted is not a failure, so it only gets an info."
+  [c {:keys [cell by]} reason]
   (let [k (cell-key cell)]
-    (when-not (keep-entry reason) (ctx/forget-where! c :opened #(= cell (:cell %))))
-    (ctx/emit! c :shut-doors.gave-up :warn {:cell k :reason reason
-                                            :text (str "the block at " k " stays open: " (name reason))})
+    (if (keep-entry reason)
+      (do (ctx/forget-where! c :opened #(= cell (:cell %)))
+          (ctx/remember! c :opened {:cell cell :by by :t (ctx/now c) :shut? true} pass/opened-policy))
+      (ctx/forget-where! c :opened #(= cell (:cell %))))
+    (ctx/emit! c :shut-doors.gave-up (if (= :walk-interrupted reason) :info :warn)
+               {:cell k :reason reason :text (str "the block at " k " stays open: " (name reason))})
     {:cell k :reason reason}))
 
 (defn finish! [c shut left]
@@ -73,8 +79,9 @@
     (if (empty? left)
       (do (ctx/emit! c :shut-doors.done :info (assoc result :text (str "shut " shut " left open by a walk")))
           (res/finish! c result))
-      (let [text (str "shut " shut " left open by a walk, gave up on " (count left))]
-        (ctx/emit! c :shut-doors.stopped :warn (assoc result :text text))
+      (let [text (str "shut " shut " left open by a walk, gave up on " (count left))
+            level (if (every? #(= :walk-interrupted (:reason %)) left) :info :warn)]
+        (ctx/emit! c :shut-doors.stopped level (assoc result :text text))
         (res/stop! c :left text :shut shut :left left)))))
 
 (defn ^:async round [c]

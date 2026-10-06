@@ -355,7 +355,7 @@ Built-in triggers, in the order of `triggers/defaults.edn` (the default register
 | `:inventory-nearly-full` | at most `:free` 2 of 36 main and hotbar slots empty | `storage.make-room` | 120 s |
 | `:scaffold-left` | the scaffold ledger holds blocks whose job is gone | `access.cleanup` | stop |
 | `:tidy-pending` | body safe and on the ground, a `:tidy` entry pending; a cell a run tried (the entry's `:tried` stamp) waits 2 min or until the body moves 8 blocks | `survival.restore-broken` | 10 s |
-| `:pen-gate` | a planned fence gate within 8 was last seen open, body more than 2 away; no `:opened`/`:gate-held`/`:gate-gave-up` entry for it | `animals.shut-gate` (waits `:open-s`, 4 s, before shutting) | 5 s |
+| `:pen-gate` | a planned fence gate within 8 was last seen open, body more than 2 away; no `:opened`/`:gate-held`/`:gate-gave-up` entry for it | `animals.shut-gate` (waits `:open-s`, 4 s, before shutting; a gate it left for an animal or an interrupted walk is paused 30 s) | 5 s |
 | `:mounted` | the body rides something and no live job holds a vehicle | `movement.leave-vehicle` | stop |
 
 The dangers (`:suffocating`, `:burning`) have no cooldown and no backoff. Needs rest with a reason the agent
