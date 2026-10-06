@@ -626,8 +626,7 @@ gap jumps, climbing, water, doors), with costs in seconds plus risk. Tests are `
 - `engine.path.walk` plans and walks one round (`plan-walk`, `walk-to!`, `follow!`). `engine.path.executor` steers a plan
   tick by tick. `engine.path.near` (`walk-round!` for go-to, `walk-near!` for walks to something visible) opens and
   re-shuts doors via `engine.path.pass`. `engine.path.targets/nearest!` finds the soonest-reachable of many targets in one
-  bounded, resumable search (used by `fell-tree` and `mine`). `engine.path.regions` is a region map for routing and
-  reachability proofs; nothing uses it yet.
+  bounded, resumable search (used by `fell-tree` and `mine`).
 - A search is bounded per round (about 100 ms) and resumable; a search that needs more rounds walks toward where it has
   got to, or waits. A start closed in the loaded world, with the goal unloaded, ends `start-enclosed` (not `goal-unloaded`). An enclosed goal is found by a small backward flood before any walking (`goal-enclosed`; `options.preFlood`, default 256 cells), and go-to keeps its flood between searches toward one goal (`goalFloodMemo`).
 - A partial plan ends at the node nearest the goal that the body can come back from (one-way drops and gap jumps are not
@@ -701,9 +700,3 @@ node engine/tools/world-changes.mjs --world claude --wait --type claim --observe
   anything; jobs consult them as above.
 - Markers keep the `places.json` format; zones use the strict `zones.edn` schema.
 - `world-changes` keeps a named cursor outside engine state and returns grouped changes (latest 2048; `:cursor-gap` after loss).
-
-## Migrating old bots
-
-`npx shadow-cljs compile migrate`, then `node out/migrate.cjs --world <world> [--dry-run] Name...`. It converts only bodies
-without `engine/`: it carries the body's own `bed` and `chest` places from `places.json` as memory kinds and an offline pose
-from `events.jsonl`; it never overwrites or deletes and refuses a body that looks connected.
