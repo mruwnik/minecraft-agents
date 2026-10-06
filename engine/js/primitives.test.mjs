@@ -1960,7 +1960,7 @@ test('jumpPlace raises the body one block per repetition: look down, jump, place
   assert.deepEqual(controls(bot), [['jump', true], ['jump', false], ['jump', true], ['jump', false]])
 })
 
-test('jumpPlace centres an off-centre body in its cell, sneaking, before it jumps', async () => {
+test('jumpPlace centres an off-centre body in its cell, sneaking, before it jumps', () => virtually(async () => {
   const { bot, p } = pillarRig({ pos: [0.35, 64, 0.5] })
   const ticker = setInterval(() => bot.emit('physicsTick'), 2)
   try {
@@ -1971,16 +1971,16 @@ test('jumpPlace centres an off-centre body in its cell, sneaking, before it jump
   const order = controls(bot).map(c => c.join(':'))
   assert.ok(order.indexOf('sneak:true') >= 0 && order.indexOf('sneak:true') < order.indexOf('jump:true'), `controls: ${order}`)
   assert.ok(order.indexOf('sneak:false') < order.indexOf('jump:true'), 'sneak released before the jump')
-})
+}))
 
-test('jumpPlace places with forceLook ignore, never through placeBlock (its unforced look delays the packet ~1 s)', async () => {
+test('jumpPlace places with forceLook ignore, never through placeBlock (its unforced look delays the packet ~1 s)', () => virtually(async () => {
   const { bot, p } = pillarRig()
   await p.jumpPlace('t1', { item: 'dirt', count: 2 })
   assert.deepEqual(bot.calls.filter(c => c.name === '_placeBlockWithOptions').map(c => c.args[2]), [{ swingArm: 'right', forceLook: 'ignore' }, { swingArm: 'right', forceLook: 'ignore' }])
   assert.deepEqual(names(bot).filter(n => n === 'placeBlock'), [])
-})
+}))
 
-test('jumpPlace ignores a failure to centre: a body that cannot be centred still jumps and places', async () => {
+test('jumpPlace ignores a failure to centre: a body that cannot be centred still jumps and places', () => virtually(async () => {
   const { bot, p } = pillarRig({ pos: [0.35, 64, 0.5], pinned: true })
   const ticker = setInterval(() => bot.emit('physicsTick'), 2)
   try {
@@ -1991,9 +1991,9 @@ test('jumpPlace ignores a failure to centre: a body that cannot be centred still
   const order = controls(bot).map(c => c.join(':'))
   assert.equal(order.includes('jump:true'), true)
   assert.equal(order.lastIndexOf('forward:false') > order.lastIndexOf('forward:true'), true)
-})
+}))
 
-test('jumpPlace ends not-raised when the body cannot be centred and cannot rise', async () => {
+test('jumpPlace ends not-raised when the body cannot be centred and cannot rise', () => virtually(async () => {
   const { bot, p } = pillarRig({ pos: [0.35, 64, 0.5], pinned: true, rise: false })
   const ticker = setInterval(() => bot.emit('physicsTick'), 2)
   try {
@@ -2001,7 +2001,7 @@ test('jumpPlace ends not-raised when the body cannot be centred and cannot rise'
   } finally {
     clearInterval(ticker)
   }
-})
+}))
 
 test('jumpPlace waits for a body inside the tolerance to stop moving before it jumps', async () => {
   const { bot, p } = pillarRig({ pos: [0.5, 64, 0.5] })
@@ -2026,10 +2026,10 @@ test('jumpPlace without the item fails at once, without pressing anything', asyn
   assert.deepEqual(controls(bot), [])
 })
 
-test('jumpPlace runs out of items part way and reports partial', async () => {
+test('jumpPlace runs out of items part way and reports partial', () => virtually(async () => {
   const { p } = pillarRig({ items: [{ name: 'dirt', count: 2, slot: 36 }] })
   assert.deepEqual(await p.jumpPlace('t1', { item: 'dirt', count: 4 }), { status: 'partial', placed: 2, reason: 'no-item' })
-})
+}))
 
 test('jumpPlace refuses a pit whose ceiling is within two blocks of the feet, and a start with nothing solid under it', async () => {
   const low = pillarRig({ blocks: { '0,66,0': 'stone' } })
@@ -2595,7 +2595,7 @@ const emitEvery = (win, ms, times, stamps) => {
   for (let i = 1; i <= times; i++) setTimeout(() => { stamps.push(Date.now()); win.emit('updateSlot', 0) }, ms * i)
 }
 
-test('transfer does not close the window until the slot updates stop', async () => {
+test('transfer does not close the window until the slot updates stop', () => virtually(async () => {
   const stamps = []
   const { p, closedAt } = transferRig({ onClick: win => emitEvery(win, 5, 4, stamps) })
   const result = await p.transfer('t1', withdraw12)
@@ -2603,7 +2603,7 @@ test('transfer does not close the window until the slot updates stop', async () 
   assert.equal(closedAt.length, 2)
   assert.ok(closedAt[0] - stamps.at(-1) >= 12, `closed ${closedAt[0] - stamps.at(-1)} ms after the last update`)
   assert.deepEqual(result, { status: 'ok', moved: 12 })
-})
+}))
 
 test('transfer measures moved from the container: a click that moves 5 of 12 reports 5', async () => {
   const { p } = transferRig({ onClick: () => {}, moveCap: 5 })
@@ -2615,14 +2615,14 @@ test('transfer measures a deposit from the container too', async () => {
   assert.deepEqual(await p.transfer('t1', { ...withdraw12, direction: 'deposit' }), { status: 'ok', moved: 3 })
 })
 
-test('transfer closes at the cap when updates never stop, within the 5 s bound', async () => {
+test('transfer closes at the cap when updates never stop, within the 5 s bound', () => virtually(async () => {
   const { p, closedAt } = transferRig({ onClick: win => { const t = setInterval(() => win.emit('updateSlot', 0), 5); setTimeout(() => clearInterval(t), 400) } })
   const start = Date.now()
   const result = await p.transfer('t1', withdraw12)
   assert.equal(result.status, 'ok')
   assert.equal(closedAt.length, 2)
   assert.ok(closedAt[0] - start >= 140 && closedAt[0] - start < 400, `closed at ${closedAt[0] - start} ms`)
-})
+}))
 
 test('a cut during the settle wait rejects with cut and still closes the window', async () => {
   const { p, bot } = transferRig({ onClick: win => { const t = setInterval(() => win.emit('updateSlot', 0), 5); setTimeout(() => clearInterval(t), 400) } })
