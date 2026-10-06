@@ -35,6 +35,11 @@
    :expect [{:event {:source :job :kind :mine.done :data {:got 0 :reason :wet :wet-skipped [:>= 1]}} :within-s 60 :of-job true}]
    :after [[:block [18 0 16] "stone"]]
    :limit-s 70}
+  {:name "mine-wet-stone-tunnel-4-says-wet-skipped"
+   :act [[:job (jobs.gather.mine {:block "stone" :count 1 :tunnel-length 4})]]
+   :expect [{:event {:source :job :kind :mine.done :data {:got 0 :reason :wet :wet-skipped [:>= 1]}} :within-s 120 :of-job true}]
+   :after [[:block [18 0 16] "stone"]]
+   :limit-s 140}
   {:name "mine-wet-true-digs"
    :act [[:job (jobs.gather.mine {:block "stone" :count 1 :tunnel-length 0 :wet true})]]
    :expect [{:event {:source :job :kind :mine.done :data {:got [:>= 1]}} :within-s 120 :of-job true}]

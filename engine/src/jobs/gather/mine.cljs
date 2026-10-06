@@ -110,7 +110,7 @@
 
   Hands over {:got n :reason r} (with :status :stopped when :got is 0: never completed) plus
   :dig-reason, :resumes, :tunnel and :left when set; info mine.done with
-  :mended, the cells filled. With reason :wet, :wet-skipped counts the seen blocks left for water beside them. Its text says the reason, :got and :mended, and for a tunnel its length, heading, end cell
+  :mended, the cells filled. With reason :wet (also when a tunnel dug nothing and seen blocks were skipped for water), :wet-skipped counts the seen blocks left for water beside them. Its text says the reason, :got and :mended, and for a tunnel its length, heading, end cell
   and whether the body walked back. :got is how many more are carried than at the start, at least 0. :tunnel is
   {:origin :heading :steps :stop :end :back-at :walked-back?}, :end the cell it ended on before the walk back.")
 
@@ -237,8 +237,9 @@
 (defn finish!
   "Emit the outcome, hand it to the parent and end the job."
   [c]
-  (let [{:keys [goal reason mended dig-reason resumes tunnel left descent wet-skipped]} (ctx/mem c)
+  (let [{:keys [goal mended dig-reason resumes tunnel left descent wet-skipped] :as m} (ctx/mem c)
         got (max 0 (- (carried c) (- goal (:count (:args c)))))
+        reason (if (and (zero? got) (pos? (or wet-skipped 0)) (#{:none :no-drops :tunnel-length :tunnel-stopped} (:reason m))) :wet (:reason m))
         why (cond-> {} dig-reason (assoc :dig-reason dig-reason) (= :no-stone-found reason) (assoc :descent descent) (= :wet reason) (assoc :wet-skipped (or wet-skipped 0)) resumes (assoc :resumes resumes)
               (pos? (:steps tunnel 0)) (assoc :tunnel (-> tunnel (select-keys [:origin :heading :steps :stop :end :back-at :walked-back?]) (update :origin access/cell)))
               (seq left) (assoc :left (mapv (fn [[pos n]] {:pos pos :count n}) left)))]
@@ -641,14 +642,14 @@
                                 (await (watch/watch! c {:before-dig pos}))
                                 (await (dig! c pos)))))
       (not= looked (cell-of (u/self-pos c))) (await (look-around! c))
-      :else (do (when (seq refused)
+      :else (do (when (and wet? (not wet)) (ctx/update-mem! c update :wet-skipped #(max (or % 0) wet-n)))
+                (when (seq refused)
                   (access/decline! c :mine.declined "mine" (assoc (access/refusal-fields refused) :reason :refused)))
                 (cond
                   (and (empty? refused) (not (and wet? (not wet))) (descend-due? c)) (await (descend-round! c))
                   (pos? tunnel-length) (await (tunnel-round! c))
                   (seq refused) (to-mend! c :refused)
-                  :else (do (when (and wet? (not wet)) (ctx/update-mem! c assoc :wet-skipped wet-n))
-                        (to-mend! c (if (and wet? (not wet)) :wet :none))))))))
+                  :else (to-mend! c (if (and wet? (not wet)) :wet :none)))))))
 
 ;; ------------------------------------------------------------------ mend
 
