@@ -277,7 +277,11 @@
       (do (ctx/update-mem! c assoc :releasing k)
           (when (= :done (await (ctx/call-child c :unleash 'jobs.animals.unleash
                                                 {:mob (:mob (:args c)) :animal k :radius release-radius})))
-            (ctx/update-mem! c #(-> % (update :release-tried (fnil conj []) k) (dissoc :releasing))))
+            (let [reason (:reason (ctx/child-result c :unleash))]
+              (ctx/update-mem! c #(-> %
+                                      (update :release-tried (fnil conj []) k)
+                                      (cond-> (not= :unleashed reason) (update :unleash-failed assoc k (or reason :refused)))
+                                      (dissoc :releasing)))))
           :continue))))
 
 ;; ------------------------------------------------------------------ the pen and its gate
@@ -690,16 +694,18 @@
 ;; ------------------------------------------------------------------ the trip
 
 (defn released!
-  "The led animal is let go: booked :brought when it stands on a pen cell, else given up :outside; on to phase next."
+  "The led animal is let go: booked :brought when it stands on a pen cell, else given up :outside (or with the unleash child's reason when its lead stayed on); on to phase next."
   [c next]
   (let [k (:animal (ctx/mem c))
         there (animal-pos c)
-        in? (boolean (and there (pen/in-pen? (read-pen c) there)))]
+        in? (boolean (and there (pen/in-pen? (read-pen c) there)))
+        failed (get (:unleash-failed (ctx/mem c)) k)]
     (ctx/update-mem! c #(-> %
-                            (dissoc :release-tried :releasing)
+                            (dissoc :release-tried :releasing :unleash-failed)
                             (assoc :led [] :animal nil)
-                            (cond-> (and in? (not (some #{k} (:brought %)))) (update :brought (fnil conj []) k))
-                            (cond-> (and (not in?) (not (contains? (:given-up %) k))) (update :given-up assoc k :outside))))
+                            (cond-> (and in? (not failed) (not (some #{k} (:brought %)))) (update :brought (fnil conj []) k))
+                            (cond-> (and (or failed (not in?)) (not (contains? (:given-up %) k)))
+                              (update :given-up assoc k (or failed :outside)))))
     (set-phase! c next)))
 
 (defn pinned!

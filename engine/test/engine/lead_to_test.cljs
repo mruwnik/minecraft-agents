@@ -83,6 +83,35 @@
           (is (= goal (last (tu/walked-to (:eng s)))) "the legs end at the spot")
           (is (every? #(<= (:x %) 30) (tu/walked-to (:eng s))) "no pull"))))))
 
+(defn stall-steers-from!
+  "Steers from x on only creep 0.5 and time out (counted in steers); earlier ones go through."
+  [p x steers]
+  (.override (.-world p) "steer"
+             (fn [token args impl]
+               (if (< (first (:pos (fake/self p))) x)
+                 (impl token args)
+                 (do (swap! steers inc)
+                     (fake/swap-self! p update-in [:pos 0] + 0.5)
+                     (js/Promise.resolve #js {:status "timeout" :pose #js {}}))))))
+
+(defn lose-cow-past!
+  "After a steer that leaves the body beyond x, the first entity (the cow) is gone."
+  [p x]
+  (.override (.-world p) "steer"
+             (fn [token args impl]
+               (let [r (impl token args)]
+                 (when (< x (first (:pos (fake/self p))))
+                   (swap! (fake/state p) update :entities subvec 1))
+                 r))))
+
+(defn slow-clock-from!
+  "Each steer from x on takes 25 s of the clock."
+  [p x clock]
+  (.override (.-world p) "steer"
+             (fn [token args impl]
+               (when (<= x (first (:pos (fake/self p)))) (swap! clock + 25000))
+               (impl token args))))
+
 (defn ^:async scenario-slow-at-the-end
   "A cow that keeps up until the body is within a leg of the spot, then is trail blocks behind the spot (more is
   :break-at). The body would wait for such a cow on the way; at the end it is the gather phase's business."
@@ -177,13 +206,7 @@
         (let [{:keys [p eng] :as s} (h/setup {:floor tu/walk-floor :inventory lead :entities [(cow 1 3 {:trail 6})]})
               steers (atom 0)
               pull-slot #(get-in (mem/job-mem (mem/view (:store eng)) "j1" []) [:children :pull])]
-          (.override (.-world p) "steer"
-                     (fn [token args impl]
-                       (if (< (first (:pos (fake/self p))) 27)
-                         (impl token args)
-                         (do (swap! steers inc)
-                             (fake/swap-self! p update-in [:pos 0] + 0.5)
-                             (js/Promise.resolve #js {:status "timeout" :pose #js {}})))))
+          (stall-steers-from! p 27 steers)
           (core/submit! eng (list 'jobs.animals.lead-to {:mob "cow" :pos goal}) {})
           (await (run-ticks s 20 700))
           (is (pos? @steers) "a pull was walked")
@@ -197,12 +220,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p] :as s} (h/setup {:floor tu/walk-floor :inventory lead :entities [(cow 1 3 {:trail 6})]})]
-          (.override (.-world p) "steer"
-                     (fn [token args impl]
-                       (let [r (impl token args)]
-                         (when (< 29.5 (first (:pos (fake/self p))))
-                           (swap! (fake/state p) update :entities subvec 1))
-                         r)))
+          (lose-cow-past! p 29.5)
           (await (submit s {} 40))
           (is (finished? s))
           (is (= :lost (:reason (done-event s)))))))))
@@ -340,10 +358,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p eng clock] :as s} (h/setup {:floor tu/walk-floor :inventory lead :entities [(cow 1 3 {:trail 5})]})]
-          (.override (.-world p) "steer"
-                     (fn [token args impl]
-                       (when (<= 28 (first (:pos (fake/self p)))) (swap! clock + 25000))
-                       (impl token args)))
+          (slow-clock-from! p 28 clock)
           (core/submit! eng (list 'jobs.animals.lead-to {:mob "cow" :pos goal :gather-radius 0}) {})
           (await (run-ticks s 60 700))
           (is (finished? s))

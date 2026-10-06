@@ -57,6 +57,11 @@
 
 (defn on-step! [s f] (swap! (:steps s) conj f) s)
 
+(defn on-step-when!
+  "At each step of the run, call (f) when (pred) holds."
+  [s pred f]
+  (on-step! s #(when (pred) (f))))
+
 (defn setup [w] (clock-on-wait! (h/setup w)))
 
 (defn ^:async run-ticks
@@ -85,6 +90,12 @@
 (defn entities-of [{:keys [p]}] (fake/entities p))
 (defn cow-of [s id] (first (filter #(= id (:id %)) (entities-of s))))
 (defn in-pen? [c] (let [[x _ z] (:pos c)] (and (<= 11 x 15) (<= 1 z 5))))
+(defn cows-in-pen [s] (set (map :id (filter #(and (= "cow" (:name %)) (in-pen? %)) (entities-of s)))))
+(defn open-since
+  "The clock the gate has stood open since, nil while it is shut: the earlier value kept while it stays open."
+  [since open? now]
+  (when open? (or since now)))
+(defn when-do [pred f] (when pred (f)))
 (defn on-lead [s] (mapv :id (filter #(true? (:leashed-to-me %)) (entities-of s))))
 (defn update-entity!
   "Apply f to the fake's entity with the id."
@@ -177,7 +188,7 @@
       (fn ^:async t []
         (let [s (submit! (setup (world {:entities [(cow 1 4 3)]})) {:target 1})
               while-open (atom nil)]
-          (on-step! s #(when (and (gate-open? s) (nil? @while-open)) (reset! while-open (held-entries s))))
+          (on-step-when! s #(and (gate-open? s) (nil? @while-open)) #(reset! while-open (held-entries s)))
           (await (run-ticks s 100))
           (is (some? @while-open) "the gate stood open at a step")
           (is (= [{:cell [10 64 3]}] (mapv #(select-keys (:data %) [:cell]) (map #(update % :data (fn [d] (update d :cell vec))) @while-open)))))))))
@@ -189,12 +200,11 @@
         (let [s (submit! (setup (world {:entities [(cow 1 4 3) (cow 2 5 5)]})) {:target 2})
               log (watch-gate! s)
               stayed (atom true)]
-          (loop [n 0 seen #{}]
-            (when (< n 500)
-              (await (run-ticks s 1))
-              (let [now (set (map :id (filter #(and (= "cow" (:name %)) (in-pen? %)) (entities-of s))))]
-                (when-not (every? now seen) (reset! stayed false))
-                (recur (inc n) now))))
+          (on-step! s (let [seen (atom #{})]
+                        #(let [now (cows-in-pen s)]
+                           (swap! stayed (fn [ok] (and ok (every? now @seen))))
+                           (reset! seen now))))
+          (await (run-ticks s 500))
           (is (finished? s))
           (is (= :brought (:reason (done-event s))))
           (is (every? in-pen? [(cow-of s 1) (cow-of s 2)]))
@@ -266,8 +276,7 @@
       (fn ^:async t []
         (let [s (submit! (setup (world {:entities [(cow 1 4 3) (cow 8 10.2 3.5)]})) {:target 2})
               log (watch-gate! s)]
-          (on-step! s #(when (and (>= (self-x s) 14) (< (first (:pos (cow-of s 8))) 11.5))
-                         (set-x! s 8 13.5)))
+          (on-step-when! s #(and (>= (self-x s) 14) (< (first (:pos (cow-of s 8))) 11.5)) #(set-x! s 8 13.5))
           (await (run-ticks s 500))
           (is (finished? s))
           (is (= :brought (:reason (done-event s))))
@@ -311,9 +320,8 @@
       (fn ^:async t []
         (let [{:keys [eng make] :as s} (restartable {:entities [(cow 1 4 3)]} {:target 1})
               stopped (atom false)]
-          (on-step! s #(when (and (not @stopped) (>= (self-x s) 12))
-                         (reset! stopped true)
-                         (core/shutdown! eng)))
+          (on-step-when! s #(and (not @stopped) (>= (self-x s) 12))
+                         (fn [] (reset! stopped true) (core/shutdown! eng)))
           (await (run-until s (fn [_] @stopped) 200))
           (is @stopped)
           (is (gate-open? s) "cut with the gate open and the body in the pen")
@@ -331,7 +339,7 @@
       (fn ^:async t []
         (let [s (submit! (setup (world {:entities [(cow 1 4 3 {:pin true})]})) {:target 1 :timeout-s 40})
               opened (atom false)]
-          (on-step! s #(when (gate-open? s) (reset! opened true)))
+          (on-step-when! s #(gate-open? s) #(reset! opened true))
           (await (run-ticks s 400))
           (is @opened "the gate was opened")
           (is (failed-error s))
@@ -457,6 +465,15 @@
                    (impl token args))))
     refused))
 
+(defn refuse-shuts-from!
+  "Every gate click is refused out of reach while the gate is open and the body stands at x or beyond."
+  [s x]
+  (.override (.-world (:p s)) "useOn"
+             (fn [token args impl]
+               (if (and (gate-open? s) (>= (self-x s) x))
+                 (js/Promise.resolve #js {:status "unreachable" :reason "too-far" :distance 4.6})
+                 (impl token args)))))
+
 (deftest a-shut-click-out-of-reach-from-in-4-walks-closer-and-shuts
   (async done
     (tu/run-async done
@@ -477,11 +494,7 @@
       (fn ^:async t []
         (let [s (submit! (setup (world {:entities [(cow 1 4 3)]})) {:target 1})]
           ;; every shut click from a pen cell is refused out of reach, however close the body walks
-          (.override (.-world (:p s)) "useOn"
-                     (fn [token args impl]
-                       (if (and (gate-open? s) (>= (self-x s) 11))
-                         (js/Promise.resolve #js {:status "unreachable" :reason "too-far" :distance 4.6})
-                         (impl token args))))
+          (refuse-shuts-from! s 11)
           (await (run-ticks s 600))
           (is (finished? s))
           (is (< (self-x s) 10) "the body ends outside")
@@ -496,15 +509,10 @@
         (let [s (submit! (setup (world {:entities [(cow 1 4 3 {:pin true})]})) {:target 1 :timeout-s 600})
               opened-at (atom nil)
               longest (atom 0)]
-          (loop [n 0]
-            (when (< n 900)
-              (await (run-ticks s 1))
-              (let [now @(:clock s)]
-                (if (gate-open? s)
-                  (do (when-not @opened-at (reset! opened-at now))
-                      (swap! longest max (- now @opened-at)))
-                  (reset! opened-at nil)))
-              (recur (inc n))))
+          (on-step! s #(let [now @(:clock s)
+                             since (swap! opened-at open-since (gate-open? s) now)]
+                         (swap! longest max (- now (or since now)))))
+          (await (run-ticks s 900))
           (is (failed-error s))
           (is (= {"u1" :jammed} (:given-up (done-event s))))
           (is (< @longest 40000) "the gate is never left open through the walk out and the second line-up")
@@ -657,6 +665,17 @@
           (is (empty? (held-entries s)))
           (is (= 1 (count (events-of s :herd.gave-up)))))))))
 
+(defn ignore-clicks-while-open!
+  "Every gate click is counted in clicks and changes nothing while the gate is open."
+  [s clicks]
+  (.override (.-world (:p s)) "useOn"
+             (fn [token args impl]
+               (if (gate-open? s)
+                 (do (swap! clicks inc)
+                     (js/Promise.resolve #js {:status "unchanged" :before #js {:name "oak_fence_gate" :properties #js {:open true}}
+                                              :after #js {:name "oak_fence_gate" :properties #js {:open true}}}))
+                 (impl token args)))))
+
 (deftest a-gate-that-will-not-shut-lets-the-animal-go-retries-twice-and-warns-once-with-the-position
   (async done
     (tu/run-async done
@@ -664,13 +683,7 @@
         (let [s (submit! (setup (world {:entities [(cow 1 4 3)]})) {:target 1})
               shut-clicks (atom 0)]
           ;; the gate opens as usual and then ignores every click: a shut never takes
-          (.override (.-world (:p s)) "useOn"
-                     (fn [token args impl]
-                       (if (gate-open? s)
-                         (do (swap! shut-clicks inc)
-                             (js/Promise.resolve #js {:status "unchanged" :before #js {:name "oak_fence_gate" :properties #js {:open true}}
-                                                      :after #js {:name "oak_fence_gate" :properties #js {:open true}}}))
-                         (impl token args))))
+          (ignore-clicks-while-open! s shut-clicks)
           (await (run-ticks s 600))
           (let [warns (events-of s :herd.gate-open)]
             (is (failed-error s))
@@ -679,6 +692,27 @@
             (is (= gate (:gate (first warns))))
             (is (= "the gate at 10 64 3 could not be shut and stays open" (:text (first warns))))
             (is (>= @shut-clicks 3) "the shut was tried again after each failure")))))))
+
+(def unleash-no-effect
+  "A fake interact result: nothing happened."
+  #js {:status "no-effect" :consumed 0 :worn 0 :love false :leash nil :changed #js {}})
+
+(defn refuse-unleash-clicks!
+  "Clicks without an item (the unleash job's) change nothing; the leash clicks (item lead) work."
+  [s]
+  (.override (.-world (:p s)) "interact"
+             (fn [token args impl] ((if (.-item args) impl (constantly unleash-no-effect)) token args))))
+
+(deftest an-animal-whose-lead-stays-on-is-not-booked-brought
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (submit! (setup (world {:entities [(cow 1 4 3)]})) {:target 1})]
+          (refuse-unleash-clicks! s)
+          (await (run-ticks s 400))
+          (let [e (done-event s)]
+            (is (= [] (:brought e)) "still on the lead: not brought")
+            (is (= {"u1" :refused} (:given-up e)) "the unleash child's reason")))))))
 
 (deftest the-escape-census-counts-the-animals-gone-from-the-pen
   (doseq [[before after escaped] [[3 3 0] [3 2 1] [2 0 2] [1 2 0]]]
@@ -693,9 +727,8 @@
           ;; the first gate click after the hand is emptied (the exit's open) lets the cow out
           (.override (.-world (:p s)) "useOn"
                      (fn [token args impl]
-                       (when (and (seq (calls-of s "unequip")) (not @pushed) (not (gate-open? s)))
-                         (reset! pushed true)
-                         (set-x! s 1 8))
+                       (when-do (and (seq (calls-of s "unequip")) (not @pushed) (not (gate-open? s)))
+                                #(do (reset! pushed true) (set-x! s 1 8)))
                        (impl token args)))
           (await (run-ticks s 400))
           (let [escaped (first (events-of s :herd.escaped))]
@@ -740,6 +773,14 @@
           (is (finished? s))
           (is (nil? (failed-error s))))))))
 
+(defn drop-leads!
+  "The leads come off the animals on this body's lead and lie on the ground where they stood."
+  [s]
+  (doseq [c (filter (fn [e] (true? (:leashed-to-me e))) (entities-of s))]
+    (update-entity! s (:id c) assoc :leashed false :leashed-to-me false)
+    (fake/add-entity! (:p s) {:id (+ 100 (:id c)) :name "item" :kind "item" :pos (:pos c)
+                              :item {:name "lead" :count 1}})))
+
 (deftest leads-dropped-mid-way-are-picked-up-and-the-animals-leashed-again
   (async done
     (tu/run-async done
@@ -747,12 +788,8 @@
         (let [s (submit! (setup (world {:entities [(cow 1 4 3)]})) {:target 1})
               dropped (atom false)]
           ;; what a log-out does, at the first step with the cow on the lead: the lead comes off and lies on the ground
-          (on-step! s #(when (and (not @dropped) (= 1 (count (on-lead s))))
-                         (reset! dropped true)
-                         (doseq [c (filter (fn [e] (true? (:leashed-to-me e))) (entities-of s))]
-                           (update-entity! s (:id c) assoc :leashed false :leashed-to-me false)
-                           (fake/add-entity! (:p s) {:id (+ 100 (:id c)) :name "item" :kind "item" :pos (:pos c)
-                                                     :item {:name "lead" :count 1}}))))
+          (on-step-when! s #(and (not @dropped) (= 1 (count (on-lead s))))
+                         #(do (reset! dropped true) (drop-leads! s)))
           (await (run-ticks s 200))
           (is @dropped "on the lead before the leads came off")
           (is (finished? s))
@@ -850,10 +887,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (submit! (setup (world {:entities [(cow 1 4 3)]})) {:target 1})]
-          (loop [n 0]
-            (when (< n 400)
-              (await (run-ticks s 1))
-              (recur (inc n))))
+          (await (run-ticks s 400))
           (let [acts (filterv #(and (= :action (:source %)) (= :started (:kind %))) @(:seen s))
                 after (rest (drop-while #(not= "unequip" (:name %)) acts))
                 clicks (filterv #(= "useOn" (:name %)) after)
@@ -881,16 +915,11 @@
       (fn ^:async t []
         (let [s (submit! (setup (world {:entities [(cow 1 4 3) (cow 8 14.5 5.5)]})) {:target 2})
               placed (atom false)]
-          (loop [n 0]
-            (when (< n 900)
-              (await (run-ticks s 1))
-              (let [pen-cow (cow-of s 8)]
-                (when (and (seq (calls-of s "unequip")) (not @placed))
-                  (reset! placed true)
-                  (update-entity! s 8 assoc :pos [10.6 64 3.5]))
-                (when (and @placed (gate-open? s) (>= (self-x s) 11) (< (first (:pos pen-cow)) 11.5))
-                  (set-x! s 8 13.5)))
-              (recur (inc n))))
+          (on-step-when! s #(and (seq (calls-of s "unequip")) (not @placed))
+                         #(do (reset! placed true) (update-entity! s 8 assoc :pos [10.6 64 3.5])))
+          (on-step-when! s #(and @placed (gate-open? s) (>= (self-x s) 11) (< (first (:pos (cow-of s 8))) 11.5))
+                         #(set-x! s 8 13.5))
+          (await (run-ticks s 900))
           (is (finished? s))
           (is (< (self-x s) 10) "the body is outside")
           (is (not (gate-open? s)) "the gate is shut"))))))

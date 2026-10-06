@@ -1,11 +1,12 @@
 (ns engine.cull-test
   "jobs.animals.cull against the fake world."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
             [engine.hostile-test :as h]
             [engine.fake :as fake]
             [engine.test-util :as tu]
-            [jobs.animals.cull :as cull]))
+            [jobs.animals.cull :as cull]
+            [jobs.lib.animals :as animals]))
 
 (defn spec [args] (list 'jobs.animals.cull args))
 
@@ -106,6 +107,19 @@
                                  {:inventory h/sword :entities [(cow 1 6.5 0.5) (cow 2 6.9 0.2) (cow 3 6.2 0.8)]} 200))]
           (is (= {:killed 2 :remaining 1 :reason :keep}
                  (select-keys (done-event s) [:killed :remaining :reason]))))))))
+
+(deftest in-box-floors-each-axis-and-includes-the-max-cells
+  (let [box {:min {:x 0 :y 64 :z 0} :max {:x 6 :y 64 :z 5}}]
+    (are [in? pos] (= in? (animals/in-box? box pos))
+      true {:x 6.9 :y 64 :z 0.5}
+      false {:x 7.0 :y 64 :z 0.5}
+      false {:x -0.1 :y 64 :z 0.5}
+      true {:x 0.5 :y 64 :z 5.9}
+      false {:x 0.5 :y 64 :z 6.0}
+      false {:x 0.5 :y 64 :z -0.1}
+      true {:x 0.5 :y 64.9 :z 0.5}
+      false {:x 0.5 :y 65 :z 0.5}
+      false {:x 0.5 :y 63.5 :z 0.5})))
 
 (deftest a-centre-and-radius-bound-the-herd
   (async done
