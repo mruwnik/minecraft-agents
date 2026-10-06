@@ -388,7 +388,7 @@
         (let [dir (tu/tmp-dir)
               p (tu/seeing-all (tu/fake-on-floor {:blocks (merge (stand "sugar_cane" 3 0 3) (stand "sugar_cane" 5 2 3) (stand "sugar_cane" 7 4 3))}))
               s (start {:p p :dir dir})]
-          (core/submit! (:eng s) (spec {:item "sugar_cane" :count 3}) {})
+          (core/submit! (:eng s) (spec {:item "sugar_cane" :count 3 :per-round 1}) {})
           (await (run-ticks s 3 700))
           (is (not (finished? s)))
           (is (= 3 (:goal (job-mem s))))
