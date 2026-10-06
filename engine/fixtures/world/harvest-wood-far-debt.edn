@@ -3,7 +3,7 @@
 ;; harvest-wood.debts-owed. Without a sapling it ends with the debt owed and no :failed.
 {:defaults
  {:tags [:forestry :harvest-wood :memory-seed] :time :day
-  :plot {:height 10 :floor "grass_block"}
+  :plot {:height 10 :floor "grass_block" :length 64 :width 32}
   :blocks [[:fill [16 0 16] [16 3 16] "oak_log"]
            [:fill [14 3 14] [18 4 18] "oak_leaves[persistent=true]"]
            [:fill [16 3 16] [16 3 16] "oak_log"]]
@@ -21,5 +21,6 @@
   {:name "no-sapling-debts-owed"
    :body {:inventory [["iron_axe" 1]]}
    :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}
+            {:event {:source :job :kind :harvest-wood.replant-owed :data {:reason :no-sapling}} :within-s 100 :of-job true}
             {:no-event {:kind :failed} :for-s 10}]
    :after [[:not-block [16 0 16] "oak_sapling"] [:body-near [16.5 0 16.5] 45]]}]}
