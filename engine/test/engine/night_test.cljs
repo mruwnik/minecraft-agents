@@ -8,7 +8,11 @@
             [engine.ctx :as ctx]
             [engine.fake :as fake]
             [engine.job-api :as job-api]
+            [engine.events :as events]
+            [engine.fake.raw-world :as fake-raw]
             [engine.memory :as mem]
+            [engine.perception :as perception]
+            [engine.registry :as registry]
             [engine.scenario :as scenario]
             [engine.shelter-test :as st]
             [engine.test-util :as tu]
@@ -448,3 +452,60 @@
               "the opening, feet and head, plugged")
           (is (empty? (st/emitted seen :shelter.exposed)))
           (is (empty? (st/emitted seen :stopped)) "the night ended done"))))))
+
+;; ------------------------------------------------------------------ job: a roofed place close by
+
+(def home-roof {"10,66,0" "stone"})
+(def lit-world {:time night :inventory st/dirt-stack :blocks (merge wide-ground home-roof) :light-default [15 4]})
+
+(defn know-home! [eng pos] (mem/write! (:store eng) :home {:pos pos} mem/place-policy))
+
+(defn night-at-home
+  "Run the night job in world with :home at pos, the body seeing through its perception: {:eng :p}."
+  [world pos]
+  (let [raw-p (tu/fake (merge {:offlineScale 0.0001 :floor tu/walk-floor} (dissoc world :light-default :light)))
+        _ (swap! (fake/state raw-p) merge (select-keys world [:light-default :light]))
+        p (perception/wrap raw-p (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)}))
+        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
+                          :now (constantly 1000000)
+                          :events (events/make {:body "Fake" :sinks [(second (tu/legacy-capture-sink))] :now (constantly 1000000)})})]
+    (st/dawn-after! p st/default-dawn)
+    (know-home! eng pos)
+    (core/submit! eng '(jobs.survival.night) {})
+    (js/Promise.resolve {:eng eng :p p})))
+
+(deftest a-lit-route-to-a-close-roofed-home-is-walked-instead-of-digging-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (await (night-at-home lit-world {:x 10 :y 64 :z 0}))]
+          (await (st/run-until-empty eng 40))
+          (is (= [] (st/calls p "place")) "no pit dug")
+          (is (= {:x 10 :y 64 :z 0} (select-keys (st/pos-of p) [:x :y :z]))))))))
+
+(deftest an-unlit-route-is-dug-in-where-the-body-is
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (await (night-at-home (assoc lit-world :light-default [15 0]) {:x 10 :y 64 :z 0}))]
+          (await (core/tick! eng))
+          (is (seq (st/calls p "place")) "dark route: dug in")
+          (is (< (:x (st/pos-of p)) 5)))))))
+
+(deftest a-home-beyond-the-walk-radius-is-not-walked-to
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (await (night-at-home (assoc lit-world :blocks (assoc wide-ground "40,66,0" "stone")) {:x 40 :y 64 :z 0}))]
+          (await (core/tick! eng))
+          (is (seq (st/calls p "place")))
+          (is (< (:x (st/pos-of p)) 5)))))))
+
+(deftest a-home-with-no-seen-roof-is-not-walked-to
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (await (night-at-home (assoc lit-world :blocks wide-ground) {:x 10 :y 64 :z 0}))]
+          (await (core/tick! eng))
+          (is (seq (st/calls p "place")))
+          (is (< (:x (st/pos-of p)) 5)))))))

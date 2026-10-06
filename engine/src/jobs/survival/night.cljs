@@ -32,6 +32,10 @@
   - someone else asleep (sh/log-out-for-sleepers?): jobs.survival.log-out, a 30 s stint at most until morning, again
     while anyone sleeps or nothing is known. A log-out that is not ok or cut is not tried again tonight.
   - roofed or buried: done {:night :roofed} (the queue runs).
+  - else, before any pit and while no site has failed tonight: a remembered roofed place (:roofed-places, nearest first)
+    within :walk-radius whose roof the body has seen, and whose route (the straight line, sampled every 2 blocks) is lit
+    as far as the body has seen it (block light >= :lit-light; an unseen cell is not lit): walk there (go-to :place). A walk
+    that does not arrive is not tried again tonight, and the night digs in; arrived, the next pass is roofed.
   - else a safe place: jobs.survival.dig-in here, unless a site tonight failed within 8 blocks. A dig-in that does not
     roof the body (stopped, or declined) writes a :night-site {:pos :reason} entry, and the body walks (go-to) to the
     nearest cell within 16 blocks, 9+ from every failed site, that looks dry and solid from the surface (shelter.relocated info; dig-in finds out the
@@ -43,12 +47,16 @@
   An overdue body (no sleep for :max-days-awake in-game days) warns needs_bed once an in-game day (:needs-bed).
   Memory: job memory :sheltered (:slept, :dug-in, :logged-out, :exposed), :log-out-failed, :relocating, :digging (the
   site of a dig-in in flight), :pit-trapped and leave!'s :dig-out; body memory :night-site (failed sites, forgotten whenever the night ends, at most a day), so a
-  firing after a cut does not dig a failed site again.")
+  firing after a cut does not dig a failed site again, :roof-walk-failed.
+  Muting :night does not end a running night job: the agent cancels it too.")
 
 (def args
   {:roof-height {:doc "a solid block within this many blocks above counts as a roof" :default sh/default-roof-height}
    :bed-radius {:doc "a remembered bed farther than this is not used" :default sh/default-bed-radius}
    :urgent-bed-radius {:doc "the bed radius once the body is overdue for sleep" :default sh/urgent-bed-radius}
+   :roofed-places {:doc "place names walked to at night, when close and the route is lit, before digging in" :default [:home]}
+   :walk-radius {:doc "a roofed place farther than this is not walked to" :default 32}
+   :lit-light {:doc "block light a route cell needs to count as lit (mobs do not spawn at 1+)" :default 1}
    :max-days-awake {:doc "in-game days without sleep before finding a bed becomes urgent" :default sh/max-days-awake}})
 
 (defn bed-permit
@@ -286,6 +294,52 @@
                   [0 -1 1 -2 2]))
           offsets)))
 
+
+(defn route-lit?
+  "Whether every sample (every 2 blocks along the straight line from a to b, over the cells around that height) has some
+  seen cell with block light >= min-light. A cell the body has not seen (no light data) is not lit."
+  [p a b min-light]
+  (let [raw (some-> (aget p "perception") :raw)
+        n (max 1 (js/Math.ceil (/ (u/dist a b) 2)))
+        lit-at (fn [x y z] (and (<= 0 (.stateAt ^js raw x y z))
+                                (<= min-light (bit-and (.lightAt ^js raw x y z) 15))))]
+    (boolean
+     (and raw
+          (every? (fn [i]
+                    (let [t (/ i n)
+                          at (fn [k] (js/Math.floor (+ (k a) (* t (- (k b) (k a))))))]
+                      (some #(lit-at (at :x) (+ (at :y) %) (at :z)) [-1 0 1 2])))
+                  (range 0 (inc n)))))))
+
+(defn roofed-place
+  "The nearest remembered place of :roofed-places within :walk-radius, roofed by blocks the body has seen (within
+  :roof-height) and reached over a lit route, as {:name :pos}, or nil."
+  [c]
+  (let [p (:primitives c)
+        {:keys [roofed-places walk-radius roof-height lit-light]} (:args c)
+        here (sh/feet p)
+        roofed? (fn [pos] (some #(sh/solid-at? p (update pos :y + %)) (range 1 (inc roof-height))))]
+    (->> roofed-places
+         (keep (fn [nm] (when-let [pos (mem/place (ctx/view c) nm)] {:name nm :pos pos})))
+         (filter (fn [{:keys [pos]}] (and (<= (u/dist here pos) walk-radius) (roofed? pos) (route-lit? p here pos lit-light))))
+         (sort-by #(u/dist here (:pos %)))
+         first)))
+
+(defn roof-walk-wanted?
+  "Whether to walk to a roofed place before digging in: none failed tonight, no dig-in in flight, no walk failed."
+  [c]
+  (let [m (ctx/mem c)]
+    (and (not (:roof-walk-failed m)) (not (:digging m)) (empty? (failed-sites c)))))
+
+(defn ^:async roof-walk!
+  "Walk (go-to :place) to the roofed place; :again. A walk that ends without arriving is marked :roof-walk-failed."
+  [c {:keys [name]}]
+  (busy! c)
+  (let [w (await (ctx/call-child c :roof-walk 'jobs.movement.go-to {:place name :range 0}))]
+    (when (and (not= :continue w) (not (:arrived (ctx/child-result c :roof-walk))))
+      (ctx/update-mem! c assoc :roof-walk-failed true))
+    :again))
+
 (defn ^:async hold-exposed!
   "Nothing shelters the body tonight: hold it anyway until day (:exposed; the first time one shelter.exposed warn).
   Each pass still looks for a bed or a sleeper first."
@@ -483,7 +537,9 @@
                                          (result/finish! c {:night (if (= :logged-out sheltered) :logged-out :roofed)}))
           (and (= :exposed sheltered) (retry-due? c)) (do (retry-dig-in! c) (await (shelter! c)))
           (= :exposed sheltered) (await (hold! c :exposed))
-          :else (await (shelter! c)))))))
+          :else (if-let [place (and (roof-walk-wanted? c) (roofed-place c))]
+                  (await (roof-walk! c place))
+                  (await (shelter! c))))))))
 
 (defn ^:async round
   "The whole night in one round (see doc): passes until one ends it."
