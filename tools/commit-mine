@@ -121,10 +121,11 @@ grep -qiE '^Co-Authored-By:' <<<"$message" || message="$message"$'\n\n'"$trailer
 card_id8="${card:0:8}"
 grep -qiE "(^|[^[:alpha:]])cards?[: #]+([[:alnum:]]{8}[^[:alnum:]]+(and +)?)*$card_id8" <<<"$message" || die "the commit message must name the card, e.g. 'Card $card_id8' (--card $card)" 8
 
-# Lock with backoff. The lock dir holds the owner's pid; a lock whose owner is dead is reclaimed. Reclaimers and the owner's release take turns under a flock guard (the kernel frees it on death), so the owner read, the death check and the removal see one lock: nobody removes a fresh one.
+# Lock with backoff. The lock dir holds the owner's pid; a lock whose owner is dead is reclaimed.  A pid-less lock older than 10 s counts as dead. Reclaimers and the owner's release take turns under a flock guard (the kernel frees it on death), so the owner read, the death check and the removal see one lock: nobody removes a fresh one.
 reclaim_dead() {
   (
     flock 8
+    if [ -d "$LOCK" ] && [ ! -e "$LOCK/pid" ] && [ -n "$(find "$LOCK" -maxdepth 0 -mmin +0.17 2>/dev/null)" ]; then rm -rf "$LOCK"; exit 0; fi # owner died between mkdir and writing its pid (a fresh lock is the owner still writing)
     owner="$(cat "$LOCK/pid" 2>/dev/null)" || exit 1
     [[ "$owner" =~ ^[0-9]+$ ]] && ! kill -0 "$owner" 2>/dev/null || exit 1
     rm -rf "$LOCK"

@@ -247,6 +247,14 @@ check "live-owner lock times out exit" "$rc" 4
 check "timeout is in seconds" "$((SECONDS - t0 >= 3 && SECONDS - t0 <= 6))" 1
 check "foreign lock left in place" "$(ls .git | grep -c '^commit-lock$')" 1
 rm -rf .git/commit-lock; git checkout -q f.txt
+# A lock with no pid file (owner died between mkdir and writing it) is reclaimed once older than 10 s; a fresh one is waited on.
+echo y > f.txt
+mkdir .git/commit-lock; touch -d '1 minute ago' .git/commit-lock
+out=$(COMMIT_LOCK_TIMEOUT=5 tools/commit-mine --card abcd1234 -m "$C nopid" --expect-lines 2 f.txt 2>&1); check "old pid-less lock reclaimed exit" "$?" 0
+echo yy > f.txt
+mkdir .git/commit-lock
+out=$(COMMIT_LOCK_TIMEOUT=2 tools/commit-mine --card abcd1234 -m "$C fresh" --expect-lines 2 f.txt 2>&1); check "fresh pid-less lock waited on (timeout)" "$?" 4
+rm -rf .git/commit-lock; git checkout -q f.txt
 # Reclaim race: 3 contenders take the lock in turn after a dead holder; two inside the critical section at once is a violation.
 rdir=$(mktemp -d); LOCK=$rdir/lock; eval "$(sed -n '/^reclaim_dead() {/,/^}/p;/^release_lock() /p' tools/commit-mine)"; export LOCK
 # The contenders give up after 60 s; a killed run kills them (they are background children, not reached by the EXIT trap alone).
