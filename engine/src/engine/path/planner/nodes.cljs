@@ -56,8 +56,8 @@
       (loop [i 0 best js/Infinity]
         (if (< i (.-n-goals s))
           (recur (inc i) (js/Math.min best (js/Math.max 0 (- (.octileTo s x z (aget ^js (.-g-xs s) i) (aget ^js (.-g-zs s) i)) (aget ^js (.-g-slack s) i)))))
-          (* best WALK-S (.-h-scale s))))
-      (* (js/Math.max 0 (- (.distanceTo s x z) (.-slack s))) WALK-S (.-h-scale s))))
+          (* best WALK-S)))
+      (* (js/Math.max 0 (- (.distanceTo s x z) (.-slack s))) WALK-S)))
 
   ;; ---- node storage ----
   (hashOf [s x y z region]

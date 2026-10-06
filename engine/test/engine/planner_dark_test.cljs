@@ -19,8 +19,7 @@
 
 (defn crosses? [r z] (boolean (some #{[20 64 z]} (pf/cells r))))
 
-;; night? scales the heuristic by 1 + factor (a route that is dark all the way): exact here without it, so these two
-;; tests run by day with a test that still calls cells dark (a seen cave)
+;; these two run by day with a test that still calls cells dark (a seen cave)
 (deftest a-dark-direct-way-loses-to-a-lit-detour
   (let [plain (pf/run world-a goal {} from)
         night (pf/run world-a goal (dark dark-band false) from)]
@@ -28,6 +27,14 @@
     (is (= "found" (:status night)))
     (is (crosses? night 6) "dark costs twice a lit block: the lit gap wins")
     (is (not (crosses? night 20)))))
+
+(deftest at-night-a-lit-detour-cheaper-than-the-dark-way-wins
+  (let [night (pf/run world-a goal (dark dark-band true) from)
+        by-day (pf/run world-a goal (dark dark-band false) from)]
+    (is (= "found" (:status night)))
+    (is (crosses? night 6) "the heuristic never overestimates the lit way: the lit gap wins at night too")
+    (is (not (crosses? night 20)))
+    (is (= (get-in by-day [:path :cost :seconds]) (get-in night [:path :cost :seconds])))))
 
 (deftest a-lit-way-far-longer-still-loses
   (let [short-band (fn [x _y z] (if (and (<= 14 x 24) (> z 6)) 1 0))

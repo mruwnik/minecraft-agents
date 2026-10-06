@@ -41,8 +41,7 @@
      (hp a second) times its seconds within close blocks of a danger's point, falling linearly to 0 at radius; all the
      dangers together add at most options.dangerCap (4) a second (see dangerRisk). jobs.lib.threats builds them.
    - options.dark {at, factor, night}: a cell that at(x, y, z) calls dark (returns 1) costs factor times its own seconds
-     more, in g and in cost.darkSeconds (see darkOf; jobs.lib.look builds at). At night (options.dark.night) the
-     heuristic is scaled by 1 + factor, as most of a far route is then dark.
+     more, in g and in cost.darkSeconds (see darkOf; jobs.lib.look builds at).
    - options.stopAtEdge: with the goal unloaded, the search ends at the first node it expands at the loaded edge (edgeStop)
      and names it as its frontier, not after searching all loaded land. go-to's budgeted searches set it (walk/new-search)."
   (:require [engine.path.planner.base :as base :refer [OCTILE-SLACK REGIONS TABLE WHOLE next-pow2]]
@@ -250,8 +249,8 @@
      ;; dangers n-dangers danger-cap dbx0 dbx1 dby0 dby1 dbz0 dbz1
      dangers n-dangers (option options "dangerCap" 4)
      (aget dbox 0) (aget dbox 1) (aget dbox 2) (aget dbox 3) (aget dbox 4) (aget dbox 5)
-     ;; dark-at dark-factor h-scale dark-keys dark-flags darks
-     dark-at dark-factor (if (and (some? dark-at) (true? (.-night dark))) (+ 1 dark-factor) 1)
+     ;; dark-at dark-factor dark-keys dark-flags darks
+     dark-at dark-factor
      (when (some? dark-at) (js/Float64Array. TABLE)) (when (some? dark-at) (js/Uint8Array. TABLE)) (js/Float64Array. cap))))
 
 ;; the body's hitbox reaches this far from its centre in x and z

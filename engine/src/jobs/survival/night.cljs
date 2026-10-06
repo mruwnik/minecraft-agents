@@ -502,7 +502,7 @@
             (case (:status a)
               :searching :searching
               :found (let [cand (nth cands (:index a))]
-                       (assoc cand :distance (u/dist here (:pos cand)) :cost (:cost a)))
+                       (cond-> (assoc cand :distance (u/dist here (:pos cand))) (:cost a) (assoc :cost (:cost a))))
               nil)))))))
 
 (defn flee-args [{:keys [kind name pos]}]
