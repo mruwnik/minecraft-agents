@@ -84,12 +84,12 @@
 
 (defn setup
   "An engine over a fake world with a stone floor under the base; :make starts another engine on the same body."
-  [{:keys [inventory blocks zones] :or {zones []}}]
+  [{:keys [inventory blocks zones hitbox] :or {zones []}}]
   (let [clock (atom 1000000)
         w (world/of-data {} {} zones)
         dir (tu/tmp-dir)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake {:self {:pos {:x 0 :y 64 :z 0}}
+        p (tu/fake {:bodyHitbox (boolean hitbox) :self {:pos {:x 0 :y 64 :z 0}}
                     :blocks (merge {"0,63,0" "stone"} blocks)
                     :inventory (or inventory [{:name "dirt" :count 64}])})
         make (fn [] (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir dir :now #(deref clock) :world w
@@ -282,6 +282,20 @@
           (is (empty? (of-kind seen :pillar.gave-up)))
           (is (= [0 67 0] (feet p)))
           (is (= (repeat 3 "dirt") (blocks-at p (column base 3)))))))))
+
+(deftest shoved-onto-the-column-edge-it-is-centred-again-and-finishes
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup {:hitbox true})]
+          (fake/swap-self! p assoc :pos [0.5 64 0.5])
+          (knock! p 3 [1.1 64 0.5] false)
+          (core/submit! eng (list job {:height 2}) {})
+          (await (ticks s eng 30))
+          (is (finished? eng))
+          (is (empty? (of-kind seen :pillar.gave-up)))
+          (is (= 66 (second (feet p))))
+          (is (<= (js/Math.abs (- 0.5 (first (feet p)))) 0.2) "centred over the column"))))))
 
 (deftest knocked-into-the-air-it-waits-to-land-before-judging-the-floor
   (async done

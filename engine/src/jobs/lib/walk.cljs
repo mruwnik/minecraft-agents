@@ -52,6 +52,26 @@
   (doto (js-obj "timeoutS" (min max-timeout-s timeout-s))
     (js/Object.defineProperty "decide" #js {:value decide})))
 
+(def centre-tolerance "How near (blocks, each axis) a centring nudge ends to its target." 0.2)
+(def centre-max-ticks "Ticks a centring nudge walks before it gives up." 30)
+
+(defn centre-decider
+  "A steer decide function that walks straight at [tx tz], done within centre-tolerance of it or after centre-max-ticks."
+  [tx tz]
+  (let [ticks (volatile! 0)]
+    (fn [js-pose]
+      (let [dx (- tx (.-x js-pose)) dz (- tz (.-z js-pose))]
+        (if (or (and (<= (js/Math.abs dx) centre-tolerance) (<= (js/Math.abs dz) centre-tolerance))
+                (>= (vswap! ticks inc) centre-max-ticks))
+          #js {:done true}
+          #js {:controls #js {:forward true} :yaw (js/Math.atan2 (- dx) (- dz))})))))
+
+(defn ^:async centre!
+  "A short walk (no planning, no jump) to within centre-tolerance of [tx tz] on the cell the body is in: the step a
+  go-to to a cell cannot make, since a body on the edge of the cell already counts as in it."
+  [c tx tz]
+  (await (ctx/act c :steer (steer-args 3 (centre-decider tx tz)))))
+
 (defn wall-id
   "A state id of a full block with no collision tricks (stone, the first state that is one), of a state table."
   [table]

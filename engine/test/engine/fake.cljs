@@ -387,13 +387,15 @@
                   [w (cond-> {:status (cond (= placed total) "done" (pos? placed) "partial" :else "failed") :placed placed}
                        reason (assoc :reason reason))])]
     (loop [w w placed 0]
-      (let [[x y z :as at] (body-pos w)
-            under (block-name w [x (dec y) z])]
+      (let [[x y z] (body-pos w)
+            at [(js/Math.floor x) y (js/Math.floor z)]     ; a body-hitbox position is fractional: the cell it is over
+            [cx _ cz] at
+            under (block-name w [cx (dec y) cz])]
         (cond
           (= placed total) (outcome w placed nil)
           (zero? (carried (:inventory w) item)) (outcome w placed "no-item")
           (#{"air" "water" "lava"} under) (outcome w placed "no-support")
-          (not= "air" (block-name w [x (+ y 2) z])) (outcome w placed "no-headroom")
+          (not= "air" (block-name w [cx (+ y 2) cz])) (outcome w placed "no-headroom")
           :else (recur (-> w (take-one item) (put-block at item) (assoc-in [:self :pos] [x (inc y) z])) (inc placed)))))))
 
 (defn collect [w {:keys [id]}]

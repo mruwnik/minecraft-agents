@@ -3,6 +3,8 @@
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
+            [jobs.lib.reach :as reach]
+            [jobs.lib.walk :as walk]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -21,8 +23,8 @@
   - a block is carried: :item, or without it dirt while any is carried, then cobblestone
   - the cell passes jobs.lib.access.rules/may-place?
 
-  A knockback (a failed jump with the body airborne or off the column) is not a refusal: the round waits to land,
-  walks back into the column (go-to child) and tries again; up to 8 per pillar, then :off-column.
+  A knockback (a failed jump with the body airborne or more than 0.2 off its start point) is not a refusal: the round waits to land,
+  walks back to where it began (go-to child if off the column, then a short centring nudge) and tries again; up to 8 per pillar, then :off-column.
 
   The check waits (:too-few-blocks, with :short) when blocks are missing. Every other give-up is left to the
   round, so a parent running this as a child reads the result.
@@ -182,17 +184,29 @@
       (await (ctx/act c :wait (clj->js {:ms land-step-ms})))
       (recur (inc i)))))
 
+(defn centred?
+  "True when the body is in the cell [x z] and within walk/centre-tolerance of the point [hx hz] (where the pillar began)."
+  [c [x z] [hx hz]]
+  (let [{px :x pz :z} (u/self-pos c)]
+    (and (= [x z] [(js/Math.floor px) (js/Math.floor pz)])
+         (<= (js/Math.abs (- px hx)) walk/centre-tolerance)
+         (<= (js/Math.abs (- pz hz)) walk/centre-tolerance))))
+
 (defn ^:async recentre!
-  "Walk back to the middle of the cell [x y z] the pillar last stood in, after a shove. :in when the body is in its
-  column again, :continue while the walk is still going, :failed otherwise."
-  [c [x y z]]
-  (let [in-column? #(let [[fx _ fz] (feet-cell c)] (= [x z] [fx fz]))]
-    (if (in-column?)
-      :in
-      (let [r (await (ctx/call-child c :recentre 'jobs.movement.go-to {:pos {:x (+ x 0.5) :y y :z (+ z 0.5)} :range 0 :escalate false}))]
-        (cond (in-column?) :in
-              (= :continue r) :continue
-              :else :failed)))))
+  "Walk back to [hx hz], the point the pillar began at, after a shove. :in when the body is over its column again,
+  :continue while a go-to is still going, :failed otherwise. A body still standing on the column (its edge) is only
+  nudged to the centre; a body off it goes back by go-to first."
+  [c [x y z] [hx hz]]
+  (if (centred? c [x z] [hx hz])
+    :in
+    (let [{sx :x sz :z} (reach/standing-cell (:primitives c))
+          on-column? (= [x z] [sx sz])
+          r (when-not on-column?
+              (await (ctx/call-child c :recentre 'jobs.movement.go-to {:pos {:x hx :y y :z hz} :range 0 :escalate false})))]
+      (if (= :continue r)
+        :continue
+        (do (await (walk/centre! c hx hz))
+            (if (centred? c [x z] [hx hz]) :in :failed))))))
 
 (defn ^:async place!
   "Write the intent, jump-place one block, confirm it when the cell shows it. Three failed jumps in a row give up;
@@ -221,17 +235,17 @@
   "Before a round: a body off the base column (whatever the last place did) counts one knockback and walks back
   (up to max-displacements). :continue while the walk goes on, else nil."
   [c]
-  (let [{:keys [stand base counted walking displaced]} (ctx/mem c)
+  (let [{:keys [stand base counted walking displaced home]} (ctx/mem c)
         [bx _ bz] base
         [fx _ fz] (feet-cell c)
-        off? (and base (not= [bx bz] [fx fz]))
+        off? (and base home (not (centred? c [bx bz] home)))
         displaced (cond-> (or displaced 0) (and off? (not counted) (not walking)) inc)]
     (ctx/update-mem! c #(-> % (assoc :displaced displaced) (dissoc :counted) (assoc :walking (boolean (and off? (<= displaced max-displacements))))))
     (when (and off? stand (<= displaced max-displacements))
       (let [[x y z] stand
             block-at (block-at-of (:primitives c))
             top (or (first (filter #(clear? (block-at [x % z])) (range y (+ y 3)))) y)
-            r (await (recentre! c [x top z]))]
+            r (await (recentre! c [x top z] home))]
         (when (= :continue r) :continue)))))
 
 (defn ^:async round [c]
@@ -249,7 +263,7 @@
                                  {:feet feet :base base :height height :block-at block-at :carried (carried p)
                                   :item item :ledger (ledger/cells l)}))]
       (when (not= l seen) (ledger/remember! c l))
-      (ctx/update-mem! c assoc :base base :stand feet)
+      (ctx/update-mem! c #(-> % (assoc :base base :stand feet) (update :home (fn [h] (or h (let [{:keys [x z]} (u/self-pos c)] [x z]))))))
       (if (= :place (:step step))
         (await (place! c l block-at step))
         (finish! c l step)))))
