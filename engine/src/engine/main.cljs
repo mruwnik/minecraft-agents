@@ -101,7 +101,7 @@
       (not (fs/existsSync prims-file)) {:error (missing-primitives-message prims-file)}
       (nil? max-bytes) {:error "engine: --events-max-bytes and engine.events.maxBytes must be safe integers >= 1024"}
       (and scenario (nil? read)) {:error (str "no scenario file " scenario)}
-      (seq issues) {:error (str "scenario problems: " (pr-str issues))}
+      (seq issues) {:error (str "scenario problems: " (pr-str issues) "; fix or remove them in " scenario)}
       :else {:root root :cfg cfg :plan plan :stale stale :state-dir state-dir :events-max-bytes max-bytes})))
 
 (defn ^:async start-control!
@@ -131,6 +131,19 @@
                                      :emit emit})
            :notes (notes/open {:world-dir dir :body agent :emit emit}))))
 
+(defn boot-scenario!
+  "A first start loads the scenario. A restore keeps the saved register: dropped (stale) entries are reported, and
+  resume-scenario! offers or adds the new defaults; with no scenario it closes any offer saved from an earlier run."
+  [eng {:keys [plan stale restoring? upgrade?]}]
+  (if-not restoring?
+    (when plan (trigger-api/load-scenario! eng plan))
+    (do (doseq [{:keys [id message]} stale]
+          (let [text (str "scenario names " (pr-str id) ", which is not a known trigger (renamed or misspelt); skipped")]
+            (core/emit! eng {:source :system :kind :dropped :level :warn :reflex id :error message :text text})
+            (core/request-attention! eng {:job-id (str "reflex:" (name id)) :reason :reflex-dropped
+                                          :kind :reflex-dropped :data {:reflex id :error message} :message text})))
+        (trigger-api/resume-scenario! eng plan upgrade?))))
+
 (defn ^:async start
   "Open the body's files, log in and run, once the one-process guard is held (release frees it).
   Resolves to {:engine eng :stop f}."
@@ -158,14 +171,7 @@
                                :body (:username cfg) :max-event-bytes events-max-bytes :world world})
         _ (reset! eng-ref base-eng)
         _ (trigger-api/restore-conditions! base-eng)
-        _ (when (and plan (not restoring?)) (trigger-api/load-scenario! base-eng plan))
-        _ (when (and plan restoring?)
-            (doseq [{:keys [id message]} stale]
-              (let [text (str "scenario entry " id " dropped, the body no longer has that trigger: " message)]
-                (core/emit! base-eng {:source :system :kind :dropped :level :warn :reflex id :error message :text text})
-                (core/request-attention! base-eng {:job-id (str "reflex:" (name id)) :reason :reflex-dropped
-                                                   :kind :reflex-dropped :data {:reflex id :error message} :message text})))
-            (trigger-api/resume-scenario! base-eng plan upgrade?))
+        _ (boot-scenario! base-eng {:plan plan :stale stale :restoring? restoring? :upgrade? upgrade?})
         seen (entity-observations/start! p {:world (:world cfg) :body (:agent opts)})
         eng (assoc base-eng :seen-entities seen)
         _ (reset! eng-ref eng)

@@ -1,7 +1,11 @@
 (ns engine.main-test
   (:require [cljs.test :refer [deftest is async]]
             [engine.bodies :as bodies]
+            [engine.core :as core]
+            [engine.events :as events]
             [engine.main :as main]
+            [engine.registry :as registry]
+            [engine.trigger-api :as api]
             [engine.test-util :as tu]
             ["fs" :as fs]
             ["path" :as path]))
@@ -96,7 +100,7 @@
   (let [dir (agent-state-dir)
         _ (save-engine! dir)
         r (main/preflight {:agent "Bob" :world "w" :state-dir dir :scenario (scenario-file "{:register [{:trigger :hungry :cooldown-s -1}]}")})]
-    (is (re-find #"scenario problems" (:error r)))))
+    (is (re-find #"scenario problems.*; fix or remove them in .*s\.edn" (:error r)))))
 
 (deftest fresh-treats-a-restart-as-a-first-start
   (let [dir (agent-state-dir)
@@ -106,3 +110,68 @@
 
 (deftest parse-args-reads-upgrade
   (is (true? (:upgrade? (main/parse-args ["--upgrade"])))))
+
+;; ---------------------------------------------------------------- boot-scenario! (what start does with the scenario)
+
+(defn body-engine
+  "A body engine on dir (a saved one when dir is reused), with the events it emitted."
+  ([] (body-engine (tu/tmp-dir)))
+  ([dir]
+   (let [[seen sink] (tu/legacy-capture-sink)
+         eng (core/create {:primitives (tu/fake {}) :jobs registry/jobs :triggers (main/body-triggers) :dir dir
+                           :events (events/make {:body "Fake" :sinks [sink]})})]
+     {:eng eng :dir dir :seen seen})))
+
+(def two '{:register [{:trigger :hungry} {:trigger :burning}]})
+(def one '{:register [{:trigger :hungry}]})
+(defn ids [eng] (mapv :id (:register (core/state eng))))
+(defn attention-reasons [eng] (set (map :reason (vals (:attention (core/state eng))))))
+
+(deftest a-first-start-loads-the-scenario-and-offers-nothing
+  (let [{:keys [eng]} (body-engine)]
+    (main/boot-scenario! eng {:plan two :stale [{:id :gone :message "m"}] :restoring? false :upgrade? true})
+    (is (= [:hungry :burning] (ids eng)))
+    (is (empty? (:attention (core/state eng))))))
+
+(deftest a-restore-with-a-stale-entry-warns-and-asks-and-does-not-exit
+  (let [{:keys [eng seen]} (body-engine)]
+    (main/boot-scenario! eng {:plan one :stale [{:id :gone :message "unknown trigger"}] :restoring? true :upgrade? false})
+    (is (re-find #"scenario names :gone, which is not a known trigger \(renamed or misspelt\); skipped" (str (some #(when (= :dropped (:kind %)) (:text %)) @seen))))
+    (is (contains? (attention-reasons eng) :reflex-dropped))))
+
+(deftest only-a-restore-resumes-the-scenario
+  (let [{:keys [eng dir]} (body-engine)]
+    (main/boot-scenario! eng {:plan one :restoring? false :upgrade? false})
+    (core/shutdown! eng)
+    (let [{again :eng} (body-engine dir)]
+      (main/boot-scenario! again {:plan two :restoring? true :upgrade? false})
+      (is (= [:hungry] (ids again)) "the saved register is kept")
+      (is (= #{:new-default-triggers} (attention-reasons again))))
+    (let [{fresh :eng} (body-engine)]
+      (main/boot-scenario! fresh {:plan two :restoring? false :upgrade? false})
+      (is (empty? (:attention (core/state fresh))) "a first start offers nothing"))))
+
+(deftest the-upgrade-flag-reaches-the-resume
+  (let [{:keys [eng dir]} (body-engine)]
+    (main/boot-scenario! eng {:plan one :restoring? false :upgrade? false})
+    (core/shutdown! eng)
+    (let [{again :eng} (body-engine dir)]
+      (main/boot-scenario! again {:plan two :restoring? true :upgrade? true})
+      (is (= [:hungry :burning] (ids again)))
+      (is (empty? (:attention (core/state again)))))))
+
+(deftest a-restart-without-a-scenario-closes-an-old-offer
+  (let [{:keys [eng dir]} (body-engine)]
+    (main/boot-scenario! eng {:plan one :restoring? false :upgrade? false})
+    (core/shutdown! eng)
+    (let [{second-run :eng} (body-engine dir)]
+      (main/boot-scenario! second-run {:plan two :restoring? true :upgrade? false})
+      (is (some? (:new-defaults (core/state second-run))))
+      (core/shutdown! second-run)
+      (let [{third :eng} (body-engine dir)]
+        (main/boot-scenario! third {:plan nil :stale nil :restoring? true :upgrade? false})
+        (is (nil? (:new-defaults (core/state third))))
+        (is (nil? (:scenario-order (core/state third))))
+        (is (empty? (:attention (core/state third))))
+        (is (= {:ok true :op :upgrade :added [] :offered []} (api/upgrade! third)) "nothing stale is added")
+        (is (= [:hungry] (ids third)))))))

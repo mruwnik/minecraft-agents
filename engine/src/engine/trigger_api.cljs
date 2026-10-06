@@ -31,7 +31,8 @@
    :mute (conj common-keys :ttl-s)
    :move (conj common-keys :above :below :ttl-s)
    :clear (conj common-keys :property)
-   :upgrade common-keys})
+   :upgrade (conj common-keys :ids)
+   :decline (conj common-keys :ids)})
 
 (def properties #{:mute :position})
 
@@ -193,7 +194,9 @@
       (and (contains? r :generation-id) (not= (:generation-id r) (:generation-id s)))
       (refuse :generation-mismatch [:generation-id] "the body's engine state was replaced; read it again")
       (and (contains? r :by) (not (job-api/valid-by? (:by r)))) (refuse :bad-by [:by] ":by is a short string or keyword naming who asks")
-      (= :upgrade op) nil
+      (and (#{:upgrade :decline} op) (contains? r :ids) (not (and (vector? (:ids r)) (every? id? (:ids r)))))
+      (refuse :bad-ids [:ids] ":ids is a vector of trigger ids")
+      (#{:upgrade :decline} op) nil
       (= :put op) (or (entry-problem (:jobs eng) (:triggers eng) (dissoc r :op :generation-id :request-id))
                       (when (:builtin? (find-entry s id))
                         (refuse :builtin [:id] (str id " is built in; mute or move it, or put another id"))))
@@ -321,19 +324,45 @@
                      at (if before (inc at) at)]
                  (assoc s :register (vec (concat (take at rest-reg) [entry] (drop at rest-reg))))))))))
 
+(defn settle-offer!
+  "Mark ids seen and take them off the offer; the request closes when nothing is left offered. Returns the ids still offered."
+  [eng ids]
+  (let [gone (set ids)
+        left (filterv #(not (gone (scenario-id %))) (:new-defaults (core/state eng)))]
+    (swap! (:state eng) (fn [s] (cond-> (update s :seen-triggers (fnil into #{}) ids)
+                                  (seq left) (assoc :new-defaults left)
+                                  (empty? left) (dissoc :new-defaults :scenario-order))))
+    (when (empty? left) (core/resolve-job-attention! eng (:job-id upgrade-attention) :upgraded))
+    (mapv scenario-id left)))
+
+(defn offered-named
+  "The offered entries ids name (all of them when ids is empty)."
+  [eng ids]
+  (let [wanted (when (seq ids) (set ids))]
+    (filterv #(or (nil? wanted) (wanted (scenario-id %))) (:new-defaults (core/state eng)))))
+
 (defn upgrade!
-  "Add the new default triggers the last start offered, each at its scenario priority; closes the request."
-  [eng]
-  (let [{:keys [new-defaults scenario-order]} (core/state eng)
-        added (vec (for [e new-defaults
-                         :when (nil? (entry-problem (:jobs eng) (:triggers eng) e))
-                         :let [id (scenario-id e)]]
-                     (do (put! eng (assoc e :id id :by :upgrade))
-                         (insert-at-priority! eng id scenario-order)
-                         id)))]
-    (swap! (:state eng) dissoc :new-defaults :scenario-order)
-    (core/resolve-job-attention! eng (:job-id upgrade-attention) :upgraded)
-    {:ok true :op :upgrade :added added}))
+  "Add the offered default triggers named by ids (all when none), each at its scenario priority, unless the register
+  already has that id; they are not offered again."
+  ([eng] (upgrade! eng nil))
+  ([eng ids]
+   (let [picked (offered-named eng ids)
+         order (:scenario-order (core/state eng))
+         added (vec (for [e picked
+                          :let [id (scenario-id e)]
+                          :when (and (nil? (find-entry (core/state eng) id))
+                                     (nil? (entry-problem (:jobs eng) (:triggers eng) e)))]
+                      (do (put! eng (assoc e :id id :by :upgrade))
+                          (insert-at-priority! eng id order)
+                          id)))]
+     {:ok true :op :upgrade :added added :offered (settle-offer! eng (map scenario-id picked))})))
+
+(defn decline!
+  "Mark the offered default triggers named by ids (all when none) seen without adding them: never offered again."
+  ([eng] (decline! eng nil))
+  ([eng ids]
+   (let [picked (mapv scenario-id (offered-named eng ids))]
+     {:ok true :op :decline :declined picked :offered (settle-offer! eng picked)})))
 
 (defn resume-scenario!
   "On a restart with a scenario: the register stays as saved. Ids the body has never had are the new defaults; they are
@@ -351,7 +380,7 @@
                 (if upgrade?
                   (upgrade! eng)
                   (let [text (str "new default triggers available: " (str/join ", " (map pr-str ids))
-                                  "; ./bin/triggers upgrade adds them")]
+                                  "; ./bin/triggers upgrade [ids] adds them, decline [ids] never offers them again")]
                     (core/emit! eng {:source :system :kind :new-default-triggers :level :warn :ids ids :text text})
                     (core/request-attention! eng (assoc upgrade-attention :data {:ids ids} :message text))))
                 ids))))
@@ -366,7 +395,8 @@
             id (:id r)]
         (case op
           :put (put! eng r)
-          :upgrade (upgrade! eng)
+          :upgrade (upgrade! eng (:ids r))
+          :decline (decline! eng (:ids r))
           :remove (remove! eng id)
           :mute (do (core/mute! eng id ttl-s) (changed eng op id))
           :move (do (core/move! eng id (select-keys r [:above :below]) ttl-s) (changed eng op id))

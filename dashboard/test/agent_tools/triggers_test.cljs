@@ -144,5 +144,14 @@
 (deftest upgrade-is-a-mutation-without-an-id
   (is (= {:op :upgrade :by "agent"} (:request (request "upgrade"))))
   (is (true? (:mutating (request "upgrade"))))
-  (is (string? (:error (request "upgrade" "night"))))
   (is (string? (:error (request "upgrade" "--for" "1m")))))
+
+(deftest upgrade-and-decline-take-optional-ids
+  (is (= {:op :upgrade :by "agent" :ids [:night :wedged]} (:request (request "upgrade" "night" ":wedged"))))
+  (is (= {:op :decline :by "agent" :ids [:wedged]} (:request (request "decline" "wedged"))))
+  (is (= {:op :decline :by "agent"} (:request (request "decline"))))
+  (is (string? (:error (request "decline" "Bad Id")))))
+
+(deftest upgrade-and-decline-replies-show-what-is-left-offered
+  (is (= {:ok true :op :decline :declined [:wedged] :offered [:night]}
+         (into {} (triggers/compact {:command :decline} {:ok true :declined [:wedged] :offered [:night]})))))

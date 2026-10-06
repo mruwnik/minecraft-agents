@@ -10,6 +10,9 @@
                             job expression node (engine.expr); :backoff is the
                             job's own backoff config (a map, or false), when given
     :register [entry]       {:id :trigger :job :args :persistence :cooldown-s :builtin?}
+    :seen-triggers #{id}    every trigger id the body has had, removed or declined ones too; never offered as new
+    :new-defaults [entry]   scenario triggers the last restart offered, until upgraded or declined
+    :scenario-order [id]    the scenario's trigger order, for placing upgraded entries
     :changes {rid {prop {:value v :until ms-or-nil}}}  prop is :mute or :position
     :reflex-state {rid {:cooldown-until ms :stopped? bool}}
     :cursor n               where the next round-robin scan starts

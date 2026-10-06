@@ -470,13 +470,13 @@
     (is (= [:high :bread-low] (register-ids eng)) "offered, not added")
     (is (= [[:wedge :night]] (offered seen)))
     (is (= 1 (count (filter #(= :new-default-triggers (:reason %)) (vals (:attention (core/state eng)))))))
-    (is (re-find #"new default triggers available: :wedge, :night; ./bin/triggers upgrade adds them"
+    (is (re-find #"new default triggers available: :wedge, :night; ./bin/triggers upgrade \[ids\] adds them, decline \[ids\] never offers them again"
                  (:message (:event (first (vals (:attention (core/state eng))))))))))
 
 (deftest upgrade-adds-the-offered-defaults-at-their-scenario-priority
   (let [{:keys [eng]} (restarted identity)]
     (api/resume-scenario! eng day2 false)
-    (is (= {:ok true :op :upgrade :added [:wedge :night]} (api/request! eng {:op :upgrade})))
+    (is (= {:ok true :op :upgrade :added [:wedge :night] :offered []} (api/request! eng {:op :upgrade})))
     (is (= [:high :wedge :bread-low :night] (register-ids eng)))
     (is (empty? (:attention (core/state eng))) "the request is closed")
     (is (= [] (api/resume-scenario! eng day2 false)) "not offered again")))
@@ -497,3 +497,37 @@
 (deftest a-body-saved-before-seen-triggers-existed-treats-its-register-as-seen
   (let [{:keys [eng]} (restarted #(swap! (:state %) dissoc :seen-triggers))]
     (is (= [:wedge :night] (api/resume-scenario! eng day2 false)))))
+
+(deftest upgrade-skips-an-id-the-register-already-has
+  (let [{:keys [eng]} (restarted identity)]
+    (api/resume-scenario! eng day2 false)
+    (api/request! eng {:op :put :id :night :when '(flag :other) :job '(quick) :by "agent"})
+    (is (= [:wedge] (:added (api/request! eng {:op :upgrade}))))
+    (is (= '(flag :other) (:when (entry eng :night))) "the hand-made entry is kept")
+    (is (= "agent" (:by (entry eng :night))))
+    (is (empty? (:attention (core/state eng))))))
+
+(deftest upgrade-with-ids-adds-only-those-and-keeps-the-rest-offered
+  (let [{:keys [eng]} (restarted identity)]
+    (api/resume-scenario! eng day2 false)
+    (is (= {:ok true :op :upgrade :added [:night] :offered [:wedge]} (api/request! eng {:op :upgrade :ids [:night]})))
+    (is (= [:high :bread-low :night] (register-ids eng)))
+    (is (= 1 (count (:attention (core/state eng)))) "the request stays for :wedge")))
+
+(deftest decline-marks-seen-without-adding-and-is-never-offered-again
+  (let [{:keys [eng]} (restarted identity)]
+    (api/resume-scenario! eng day2 false)
+    (is (= {:ok true :op :decline :declined [:wedge] :offered [:night]} (api/request! eng {:op :decline :ids [:wedge]})))
+    (is (= [:high :bread-low] (register-ids eng)))
+    (is (= [:night] (api/resume-scenario! eng day2 false)) "still offered only :night")
+    (api/request! eng {:op :decline})
+    (is (empty? (:attention (core/state eng))))
+    (core/shutdown! eng)
+    (let [{again :eng seen :seen} (setup {:dir (:dir eng)})]
+      (is (= [] (api/resume-scenario! again day2 false)) "declined ids stay declined across a restart")
+      (is (empty? (offered seen))))))
+
+(deftest upgrade-and-decline-refuse-bad-ids
+  (let [{:keys [eng]} (restarted identity)]
+    (is (= :bad-ids (:reason (api/request! eng {:op :decline :ids "night"}))))
+    (is (= :bad-ids (:reason (api/request! eng {:op :upgrade :ids [:Night]}))))))
