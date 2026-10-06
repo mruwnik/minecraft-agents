@@ -1,0 +1,21 @@
+;; Card f94d8bfe: a stopped job event's :text is the job's own words. items.get-tool with arguments it cannot use
+;; ends :stopped :bad-args, and the :stopped event carries the job's own message, not "stopped: bad-args".
+{:defaults
+ {:tags [:fetch :jobs]
+  :time :any
+  :plot {:height 12}
+  :body {:at [16.5 0 16.5] :settle-s 3}
+  :limit-s 40}
+ :cases
+ [{:name "no-args-a"
+   :act [[:job (jobs.items.get-tool {})]]
+   :expect [{:event {:source :job :kind :stopped :data {:status :stopped :reason :bad-args :text [:contains "items.get-tool"]}} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 5}]}
+  {:name "block-not-text-b"
+   :act [[:job (jobs.items.get-tool {:block 5})]]
+   :expect [{:event {:source :job :kind :stopped :data {:status :stopped :reason :bad-args :text [:contains "items.get-tool"]}} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 5}]}
+  {:name "kind-not-text-c"
+   :act [[:job (jobs.items.get-tool {:kind 5})]]
+   :expect [{:event {:source :job :kind :stopped :data {:status :stopped :reason :bad-args :text [:contains "items.get-tool"]}} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 5}]}]}
