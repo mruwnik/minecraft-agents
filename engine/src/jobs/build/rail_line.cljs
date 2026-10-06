@@ -28,6 +28,7 @@
   :hazards lists falling beds (gravel, sand). Sound gives info rail-build.done. Not sound gives one warn
   rail-build.broken with :breaks {:pos :why} (:gap :shape :unlit :lit-brake :no-bed :blocked :wet :no-buffer
   :launch-trap :unloaded; at most 12) and what the build left (:refused :given-up :short).
+  Two corners under 4 cells apart give one warn rail-build.tight-bend {:plan :corners} (cart dips to ~0.28 b/tick there).
   A line that is sound already ends at once with rail-build.done (placed 0).
   The job declines with one rail-build.declined warn (:plan :reason) while:
   - the plan is missing or unreadable (:plan).
@@ -78,6 +79,12 @@
                                                     (when (:at chain) (str " at " (pr-str (:at chain)))))}
                                         (select-keys chain [:at]))
                   (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) {:reason :no-zones :text "no zone list has been read"})]
+    (when-not trouble
+      (doseq [[a b] (rail/tight-bends chain)]
+        (ctx/warn-once! c [plan :tight-bend a] :rail-build.tight-bend
+                        {:plan plan :corners [a b]
+                         :text (str "corners " (pr-str a) " and " (pr-str b) " are under 4 cells apart: the cart slows to about 0.28 blocks per tick there (under the 0.30 floor, accepted); "
+                                    "lit rails on both sides bring it back to cruise speed")})))
     (if-not trouble
       {:cells cells}
       (do (decline! c trouble)
