@@ -9,5 +9,6 @@
  [{:name "only-cow-35-away-stops-with-radius-text"
    :act [[:summon "cow" [40.5 0 16.5]]
          [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [8 0 16]})]]
-   :expect [{:event {:source :job :kind :lead-to.done :data {:reason :none}} :within-s 30 :of-job true}]
+   :expect [{:event {:source :job :kind :lead-to.done :data {:reason :none}} :within-s 30 :of-job true}
+            {:event {:source :job :kind :lead-to.gave-up :data {:reason :none :text "no cow seen within 8 blocks to lead"}} :within-s 30 :of-job true}]
    :after [[:item "lead" 2]]}]}

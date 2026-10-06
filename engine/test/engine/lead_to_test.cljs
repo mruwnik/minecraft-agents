@@ -359,8 +359,9 @@
 
 (defn ^:async hide-cow-for-legs
   "A scenario where the cow goes out of sight at the first leg's steer and is back in sight n-hidden ticks later."
-  [n-hidden]
-  (let [{:keys [p] :as s} (h/setup {:floor tu/walk-floor :inventory lead :entities [(cow 1 3)]})
+  [n-hidden & [step]]
+  (let [step (or step 700)
+        {:keys [p] :as s} (h/setup {:floor tu/walk-floor :inventory lead :entities [(cow 1 3)]})
         steers (atom 0)
         saved (atom nil)]
     (.override (.-world p) "steer"
@@ -372,8 +373,8 @@
                    r)))
     (core/submit! (:eng s) (list 'jobs.animals.lead-to {:mob "cow" :pos goal}) {})
     (loop [hidden 0 i 0]
-      (when (< i 80)
-        (await (run-ticks s 1 700))
+      (when (< i (* 80 (quot 700 step)))
+        (await (run-ticks s 1 step))
         (cond
           (nil? @saved) (recur 0 (inc i))
           (= hidden n-hidden) (do (when (empty? (:entities @(fake/state p)))
@@ -387,6 +388,13 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (hide-cow-for-legs 1))]
+          (is (= :unleashed (:reason (done-event s)))))))))
+
+(deftest a-cow-out-of-sight-for-three-rounds-within-300-ms-is-not-lost
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (hide-cow-for-legs 3 100))]
           (is (= :unleashed (:reason (done-event s)))))))))
 
 (deftest a-cow-out-of-sight-for-good-is-lost-and-the-body-did-not-walk-on-without-it

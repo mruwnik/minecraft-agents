@@ -17,7 +17,7 @@
   - :walk: jobs.movement.go-to to :pos (the :fence cell when no :pos), range :range, in legs of a few blocks along
     the planned path (one round, no :continue between legs). After each leg the animal is looked at: off the lead
     :lead-broke; unseen or more than 7 blocks behind, the body waits (the job yields) for it to come into sight or
-    catch up; unseen three looks in a row (a ledge or tree can hide it) :lost; more than 10 behind, or still waiting
+    catch up; unseen for 3 s (a ledge or tree can hide it) :lost; more than 10 behind, or still waiting
     after 20 rounds, :lagging.
   - :gather (no :fence only): see below.
   - :arrive: with :fence, walk within 2 of the post and click it with an empty hand (useOn), tried twice.
@@ -27,7 +27,7 @@
   A tie counts only when the sensing then shows the animal held by something else than this body.
 
   Before each walking round the animal is looked up (within :watch-radius). Seen off this body's lead: ends
-  :lead-broke. Not seen: ends :lost after three looks in a row (see :walk), in every phase.
+  :lead-broke. Not seen: ends :lost after 3 s unseen (see :walk), in every phase.
 
   Gather: a led animal trails about a lead length behind the body. On arrival, if the animal is farther than
   :gather-radius from :pos, the body walks on past :pos (range 1) so the lead pulls it in. It waits for the
@@ -218,21 +218,23 @@
   "Rounds spent waiting for an animal to catch up or come into sight before the job gives it up as :lagging."
   20)
 
-(def max-unseen
-  "Looks in a row after a leg that may find the animal out of sight before it counts as :lost. A led animal behind a
-  ledge or a tree is not in the sensing, though it is still on the lead."
-  3)
+(def unseen-lost-ms
+  "Time the animal must stay out of sight, from the first look that missed it, before it counts as :lost. A led animal
+  behind a ledge or a tree is not in the sensing, though it is still on the lead; rounds can come within ms, so time
+  rather than looks decides."
+  3000)
 
 (defn escort-problem
-  "Why the walk must stop after a leg: :lost (not seen max-unseen looks in a row), :lead-broke or :lagging (the animal
+  "Why the walk must stop after a leg: :lost (not seen for unseen-lost-ms), :lead-broke or :lagging (the animal
   farther than follow-reach), :wait (not seen yet, or seen more than gap behind: the body holds still), else nil."
   [c gap]
   (let [a (animal-now c)]
     (if (nil? a)
-      (let [n (inc (:unseen (ctx/mem c) 0))]
-        (ctx/update-mem! c assoc :unseen n)
-        (if (<= max-unseen n) :lost :wait))
-      (do (ctx/update-mem! c dissoc :unseen)
+      (let [now (ctx/now c)
+            since (or (:unseen-since (ctx/mem c)) now)]
+        (ctx/update-mem! c assoc :unseen-since since)
+        (if (<= unseen-lost-ms (- now since)) :lost :wait))
+      (do (ctx/update-mem! c dissoc :unseen-since)
           (let [d (flat-dist (u/pos-of (.-pos a)) (u/self-pos c))]
             (cond
               (not (animals/led-by-me? a)) :lead-broke
@@ -388,7 +390,7 @@
     (ctx/update-mem! c update :started #(or % now))
     (let [{:keys [phase started animal]} (ctx/mem c)
           a (when animal (animal-now c))]
-      (when a (ctx/update-mem! c dissoc :unseen))
+      (when a (ctx/update-mem! c dissoc :unseen-since))
       (cond
         (and (nil? phase) fence (not (fence-block? c))) (finish! c :no-fence)
         (>= (- now started) (* 1000 timeout-s)) (finish! c :timeout)
