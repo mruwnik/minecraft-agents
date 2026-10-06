@@ -516,7 +516,7 @@
           (dotimes [_ 10]
             (swap! clock + 700)
             (await (core/tick! eng)))
-          (is (= {:got 0 :reason :no-tool :tool "pickaxe"} @out)))))))
+          (is (= {:status :stopped :got 0 :reason :no-tool :tool "pickaxe"} @out)))))))
 
 (deftest no-tool-warns-and-never-digs
   (async done
@@ -993,3 +993,72 @@
           (is (= 1 (count (events-of s :mine.no-torches))))
           (is (= 22 (:steps (:tunnel (done-event s)))) "the tunnel went on")
           (is (= :tunnel-length (:reason (done-event s)))))))))
+
+;; ------------------------------------------------------------------ honest ends, soil, fetching the pickaxe
+
+(defn ^:async as-child
+  "Run the job with args under a parent for n ticks; {:s setup :out the child's result :fetch the get-tool calls}.
+  get-tool is a stub that records its args and, when give is set, hands over that pickaxe (else stops :no-source)."
+  [args world give n]
+  (let [s (start {:world world})
+        out (atom nil)
+        fetched (atom [])
+        stub {:check (constantly true)
+              :round (fn ^:async get-tool [c]
+                       (swap! fetched conj (:args c))
+                       (if give
+                         (do (fake/add-item! (:p s) give 1)
+                             (ctx/result! c {:status :done :tool give}))
+                         (ctx/result! c {:status :stopped :reason :no-source}))
+                       :done)
+              :args {:block {:default nil} :item {:default nil} :kind {:default nil} :how {:default nil} :depth {:default nil}
+                     :minutes {:default nil} :fail-minutes {:default nil} :chain {:default []}}}
+        parent {:check (constantly true)
+                :round (fn ^:async mining-parent [c]
+                         (let [r (await (ctx/call-child c :kid 'jobs.gather.mine args))]
+                           (when (= :done r) (reset! out (ctx/child-result c :kid)))
+                           r))}
+        eng (assoc (:eng s) :jobs (assoc (:jobs (:eng s)) 'mining-parent parent 'jobs.items.get-tool stub))]
+    (core/submit! eng '(mining-parent) {})
+    (dotimes [_ n]
+      (swap! (:clock s) + 700)
+      (await (core/tick! eng)))
+    {:s s :out @out :fetch @fetched}))
+
+(deftest getting-none-of-the-block-is-stopped-not-completed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out]} (await (as-child {:block "iron_ore" :count 2 :tunnel-length 0} (rock-world {}) nil 30))]
+          (is (= {:status :stopped :got 0 :reason :none} out)))))))
+
+(deftest a-missing-pickaxe-is-fetched-then-the-stone-is-dug
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [s out fetch]} (await (as-child {:block "stone" :count 1} {:blocks {"3,64,0" "stone"} :drops cobble} "stone_pickaxe" 40))]
+          (is (= ["stone"] (mapv :block fetch)))
+          (is (= :count (:reason out)))
+          (is (= 1 (get (inv s) "cobblestone"))))))))
+
+(deftest a-pickaxe-that-cannot-be-fetched-ends-stopped-no-tool
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [s out fetch]} (await (as-child {:block "stone" :count 1} {:blocks {"3,64,0" "stone"} :drops cobble} nil 20))]
+          (is (= 1 (count fetch)))
+          (is (= {:status :stopped :got 0 :reason :no-tool :tool "pickaxe"} out))
+          (is (zero? (dig-count s))))))))
+
+(deftest soil-in-the-tunnel-is-not-dug-with-the-pickaxe
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks (merge (cells "dirt" (range 0 6) [63] [0]) (cells "dirt" (range 1 6) [64 65] [0]))
+                                :inventory [{:name "stone_pickaxe" :count 1}]}})]
+          (fake/swap-self! (:p s) assoc :held "stone_pickaxe")
+          (core/submit! (:eng s) (spec {:block "stone" :count 1 :direction "east" :tunnel-length 3 :mend false}) {})
+          (await (run-ticks s 60))
+          (is (pos? (dig-count s)) "it did dig the soil")
+          (is (nil? (.-held (.self (:p s)))) "by hand")
+          (is (= 1 (count (calls s "unequip")))))))))

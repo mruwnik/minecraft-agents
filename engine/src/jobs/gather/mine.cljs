@@ -26,8 +26,11 @@
   tunnels.
 
   Declines and ends early:
-  - A pickaxe block (jobs.lib.tools/tool-kind) with no *_pickaxe carried ends at once, before any dig: warn
-    mine.no-tool, {:got 0 :reason :no-tool :tool \"pickaxe\"}. Shovel and axe blocks drop by hand.
+  - A pickaxe block (jobs.lib.tools/tool-kind) with no *_pickaxe carried, at the start or later (the pick broke),
+    runs jobs.items.get-tool as a child first. Nothing got: before any dig it ends at once, warn mine.no-tool,
+    {:status :stopped :got 0 :reason :no-tool :tool \"pickaxe\"}; in the dig phase the mend and walk home follow with
+    :reason :no-tool. Shovel and axe blocks drop by hand. Soil or wood dug with only a pickaxe held empties the
+    hand first (no wear on the pickaxe).
   - The check passes when a phase is in memory, or :block is named, unless every seen target is refused.
   - No zone list (zones.edn missing or never valid) declines with one warn mine.declined {:reason :no-zones},
     also in the middle of the job. Nothing is dug or placed then.
@@ -100,7 +103,8 @@
   first round the check declines. In the job the tunnel goes on (with :tunnel-length 0 the dig phase ends
   :refused). One warn mine.declined per job names the zones and plans ({:reason :refused :zones :plans}).
 
-  Hands over {:got n :reason r} plus :dig-reason, :resumes, :tunnel and :left when set; info mine.done with
+  Hands over {:got n :reason r} (with :status :stopped when :got is 0: never completed) plus
+  :dig-reason, :resumes, :tunnel and :left when set; info mine.done with
   :mended, the cells filled. Its text says the reason, :got and :mended, and for a tunnel its length, heading, end cell
   and whether the body walked back. :got is how many more are carried than at the start, at least 0. :tunnel is
   {:origin :heading :steps :stop :end :back-at :walked-back?}, :end the cell it ended on before the walk back.")
@@ -234,7 +238,7 @@
                                                               (str ", walked back to " (str/join "," back-at))
                                                               ", did not get back to its origin"))))}
                                          why))
-    (ctx/result! c (merge {:got got :reason reason} why))
+    (ctx/result! c (merge (when (zero? got) {:status :stopped}) {:got got :reason reason} why))
     :done))
 
 (defn wrap-up!
@@ -253,11 +257,21 @@
 
 (defn skip! [c pos] (ctx/update-mem! c update :skipped (fnil conj []) pos))
 
+(defn hand-better?
+  "Whether the body should dig block bare-handed: it is not a pickaxe block, no tool of its kind is carried, and a
+  pickaxe is held (soil by hand, never wearing the pickaxe out on it)."
+  [p block]
+  (let [held (.-held (.self p))]
+    (boolean (and block held (str/ends-with? held "_pickaxe") (not= "pickaxe" (tools/tool-kind block))
+                  (nil? (tools/pick p block))))))
+
 (defn ^:async equip!
   "Hold the best carried tool for block (the mined block when not given)."
   ([c] (equip! c (:block (:args c))))
   ([c block]
-   (await (tools/equip-for! c block))))
+   (await (tools/equip-for! c block))
+   (when (hand-better? (:primitives c) block)
+     (await (ctx/act c :unequip #js {})))))
 
 (defn drop-radius
   "The entity search radius that covers :collect-radius around the last dug cell, seen from the body: the body
@@ -717,18 +731,31 @@
        (not-any? #(str/ends-with? (:name %) "_pickaxe") (u/inventory (:primitives c)))))
 
 (defn no-tool!
-  "End at once, before any dig: warn and hand over {:got 0 :reason :no-tool :tool \"pickaxe\"}."
+  "End at once, before any dig: warn and hand over {:status :stopped :got 0 :reason :no-tool :tool \"pickaxe\"}."
   [c]
   (ctx/emit! c :mine.no-tool :warn {:tool "pickaxe" :text (str "mine has no pickaxe for " (:block (:args c)))})
   (ctx/emit! c :mine.done :info {:got 0 :reason :no-tool :tool "pickaxe" :mended 0 :text "mine done: no-tool, got 0, mended 0"})
-  (ctx/result! c {:got 0 :reason :no-tool :tool "pickaxe"})
+  (ctx/result! c {:status :stopped :got 0 :reason :no-tool :tool "pickaxe"})
   :done)
+
+(defn ^:async fetch-pickaxe!
+  "A pickaxe is owed: run jobs.items.get-tool for the block (child :tool). :continue while it runs and once it has
+  got one; else the end: before any dig (no phase) at once, in the dig phase the mend first, with :no-tool."
+  [c]
+  (let [r (await (ctx/call-child c :tool 'jobs.items.get-tool {:block (:block (:args c))}))
+        got? (and (= :done r) (= :done (:status (ctx/child-result c :tool))))]
+    (cond
+      (= :continue r) :continue
+      got? :continue
+      (nil? (:phase (ctx/mem c))) (no-tool! c)
+      :else (do (ctx/emit! c :mine.no-tool :warn {:tool "pickaxe" :text (str "mine has no pickaxe for " (:block (:args c)) " and could not get one")})
+                (to-mend! c :no-tool)))))
 
 (defn ^:async round [c]
   (let [m (ctx/mem c)
         heading (heading-name (:direction (:args c)))]
     (cond
-      (and (nil? (:phase m)) (no-tool? c)) (no-tool! c)
+      (and (contains? #{nil :dig} (:phase m)) (no-tool? c)) (await (fetch-pickaxe! c))
 
       (and (nil? (:phase m)) (:direction (:args c)) (nil? heading))
       (do (ctx/emit! c :mine.done :warn {:got 0 :reason :bad-direction :direction (:direction (:args c))
