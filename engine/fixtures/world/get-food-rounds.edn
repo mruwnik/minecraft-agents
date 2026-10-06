@@ -1,0 +1,80 @@
+;; Card c5373d1a: survival.get-food as one round, run by the :hungry reflex (cooldown 30 s).
+;; Food is drained by RCON (hunger 5 s amp 255 -> food 8) and damage sets hp 15, so hungry = food < min(18, 6 + 5).
+;; Should-succeed: carried bread eaten in one run; a seeded far chest (memory + block) walked to and emptied of food; a cow hunted.
+;; Should-fail: nothing anywhere -> stopped :no-food with food.none, then a quiet decline inside the ask cooldown (no 2nd
+;; food.none); a cut while walking to a chest (hostile-near fires) with the chest emptied meanwhile -> :no-food afterwards.
+{:defaults
+ {:tags [:survival :hungry :get-food :rounds] :time :day
+  :plot {:height 6}
+  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+              :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}
+             {:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {})}]
+  :body {:at [4.5 0 16.5] :settle-s 2}
+  :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
+        [:rcon "damage $BODY 5 minecraft:generic"]]
+  :limit-s 90}
+ :cases
+ [{:name "s1-carried-bread-eats-in-one-run-a"
+   :body {:inventory [["bread" 5]]}
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 30}
+            {:event {:source :reflex :kind :ended :context {:reflex-id :hungry} :data {:outcome :done}} :within-s 40}
+            {:no-event {:source :reflex :kind :continued} :for-s 15}
+            {:no-event {:source :action :kind :started :data {:name "steer"}} :for-s 15}]
+   :after [[:item "bread" [:<= 4]] [:item "bread" [:>= 1]]]}
+  {:name "s1-carried-bread-eats-in-one-run-b"
+   :body {:inventory [["bread" 5]]}
+   :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :hungry} :data {:outcome :done}} :within-s 40}
+            {:no-event {:source :reflex :kind :continued} :for-s 15}]
+   :after [[:item "bread" [:<= 4]] [:item "bread" [:>= 1]]]}
+  {:name "s2-far-chest-a"
+   :blocks [[:set [28 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:bread\",count:8}]}"]]
+   :memory [{:kind :food-source :data {:pos #xyz [28 0 16] :kind :chest}}]
+   :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :hungry} :data {:outcome :done}} :within-s 70}
+            {:no-event {:source :reflex :kind :continued} :for-s 5}]
+   :after [[:body-near [27.5 0 16.5] 3] [:item "bread" [:>= 1]]]}
+  {:name "s2-far-chest-b"
+   :blocks [[:set [28 0 24] "chest{Items:[{Slot:3b,id:\"minecraft:cooked_beef\",count:6}]}"]]
+   :memory [{:kind :food-source :data {:pos #xyz [28 0 24] :kind :chest}}]
+   :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :hungry} :data {:outcome :done}} :within-s 70}]
+   :after [[:item "cooked_beef" [:>= 1]]]}
+  {:name "s3-hunt-cow-a"
+   :body {:inventory [["iron_sword" 1]]}
+   :act [[:summon "cow" [14.5 0 16.5] "{NoAI:1b}"]
+         [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
+         [:rcon "damage $BODY 5 minecraft:generic"]]
+   :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :hungry} :data {:outcome :done}} :within-s 80}]
+   :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 0]]}
+  {:name "s3-hunt-cow-b"
+   :body {:inventory [["iron_sword" 1]]}
+   :act [[:summon "cow" [10.5 0 24.5] "{NoAI:1b}"]
+         [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
+         [:rcon "damage $BODY 5 minecraft:generic"]]
+   :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :hungry} :data {:outcome :done}} :within-s 80}]
+   :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 0]]}
+  {:name "f1-no-food-stops-no-food-then-declines-quietly"
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:wait-s 7]
+         [:rcon "damage $BODY 5 minecraft:generic"] [:wait-s 75]]
+   :expect [{:event {:source :job :kind :food.none :level :warn} :within-s 30}
+            {:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 30}
+            {:no-event {:source :job :kind :food.none :context {:job-id "j2"}} :for-s 60}]
+   :limit-s 100}
+  ;; chest 58 blocks away (a long walk): the zombie cuts the walk, the chest is emptied meanwhile, the round starts again from the world
+  {:name "f2-cut-while-walking-chest-emptied"
+   :mobs :keep
+   :plot {:height 6 :length 80 :width 32}
+   :body {:at [2.5 0 16.5]}
+   :blocks [[:set [60 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:bread\",count:8}]}"]]
+   :memory [{:kind :food-source :data {:pos #xyz [60 0 16] :kind :chest}}]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
+         [:rcon "damage $BODY 5 minecraft:generic"]
+         [:await {:source :reflex :kind :fired :context {:reflex-id :hungry}} 30]
+         [:wait-s 1]
+         [:rcon "execute positioned $X $Y $Z run item replace block ~60 ~ ~16 container.0 with air"]
+         [:rcon "execute at $BODY run summon zombie ~3 ~ ~ {Tags:[\"wt\"],PersistenceRequired:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:await {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} 20]
+         [:wait-s 60]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 40}
+            {:event {:source :reflex :kind :ended :context {:reflex-id :hungry} :data {:outcome :dropped :by :hostile-near}} :within-s 40}
+            {:event {:source :job :kind :food.none :level :warn} :within-s 100}]
+   :after [[:item "bread" 0]]
+   :limit-s 140}]}
