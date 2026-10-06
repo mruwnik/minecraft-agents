@@ -1,7 +1,7 @@
 ;; Card c5d2cded part 1: tool wear after digs in jobs.access.cleanup and jobs.forestry.prepare. A pickaxe with 1 durability
 ;; left (damage=249) breaks in the dig: warn tool.broke then tool.none; a healthy pick gives no tool event; no pick at all
 ;; gives none either (nothing is dug: prepare and cleanup leave a block that needs a pick). Cleanup digs the cobblestone pillar the same body placed; prepare digs a
-;; cobblestone stray in the planned oak cell. Torches keep hostiles away. Run: node tools/world-test.mjs <file> --match <name> --first-plot N
+;; cobblestone stray in the planned oak cell. Torches keep hostiles away. Prepare cases name the plan test-probewear-wood, so run with --body ProbeWear. Run: node tools/world-test.mjs <file> --body ProbeWear --match <name> --first-plot N
 {:defaults
  {:tags [:tool-wear :cleanup :prepare]
   :time :any
