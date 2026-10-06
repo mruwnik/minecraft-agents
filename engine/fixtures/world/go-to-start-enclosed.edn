@@ -1,6 +1,9 @@
 ;; Card 61a0396f item 5: a body sealed in a 3x3 pen at the plot's west edge (the chunk side; the land west of the plot is
 ;; unloaded) with a far unloaded goal ends :unreachable :start-enclosed (not :goal-unloaded); an open start with the same
-;; goal walks toward the loaded edge and never reports :start-enclosed. The goal is 1000 blocks west of the plot (#at is plot-relative).
+;; goal walks west as far as the floor goes and never reports :start-enclosed. The goal is 1000 blocks west of the plot (#at is plot-relative).
+;; Plots float at y 150 over open air (floor y 149, grid from x 20000): west of the grid is a fall far past maxDrop 3, so
+;; the open case cannot arrive; with :escalate false it ends :unreachable :goal-unloaded once its loaded land holds no
+;; way on. Far-goal arrival on real terrain is not testable on this grid.
 {:defaults
  {:tags [:movement :planner]
   :plot {:height 10}
@@ -21,8 +24,9 @@
    :expect [{:event {:source :job :kind :go-to.escalated} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :result :data {:why :start-enclosed}} :for-s 20}]}
   {:name "open-field-unloaded-goal-never-start-enclosed"
+   ;; a plot further east first walks the floors of used plots west to the grid's edge, hence 60 s
    :act [[:job (jobs.movement.go-to {:pos #at [-1000 0 17] :range 1 :escalate false})]]
-   :expect [{:event {:source :job :kind :planned :data {:why "searching" :status "partial"}} :within-s 20 :of-job true}
-            {:no-event {:source :job :kind :planned :data {:why "start-enclosed"}} :for-s 30}
-            {:no-event {:source :job :kind :result} :for-s 30}]
+   :expect [{:event {:source :job :kind :result :data {:arrived false :reason :unreachable :why :goal-unloaded}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :planned :data {:why "start-enclosed"}} :for-s 60}
+            {:no-event {:source :job :kind :result :data {:why :start-enclosed}} :for-s 60}]
    :after []}]}
