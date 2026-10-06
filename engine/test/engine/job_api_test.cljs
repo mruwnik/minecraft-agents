@@ -186,3 +186,28 @@
           (is (= 1 (count (:register (core/state eng)))) "the trigger stays registered")
           (core/shutdown! eng)
           (await round))))))
+
+
+(deftest core-cancel-ends-a-reflex-job-like-a-listed-one
+  (async done
+    (tu/run-async done
+      (fn ^:async run []
+        (let [p (tu/fake {})
+              [seen sink] (tu/legacy-capture-sink)
+              jobs {'wait {:args {:ms {:default 1000}} :check (constantly true)
+                           :round (fn ^:async round [ctx] (await (ctx/act ctx :wait #js {:ms 1000})) :continue)}}
+              eng (core/create {:primitives p :jobs jobs :dir (tu/tmp-dir)
+                                :triggers {:probe {:name :probe :job '(wait) :when (fn [_ _ _] true)}}
+                                :events (events/make {:stdout? false :sinks [sink]})})
+              _ (core/register-reflex! eng {:trigger :probe})
+              round (core/tick! eng)
+              id (:id (core/running eng))
+              reflex (get-in (core/state eng) [:instances id :reflex])
+              _ (core/cancel! eng id :agent)]
+          (is (= :probe reflex) "the running job is the reflex's")
+                    (is (nil? (get-in (core/state eng) [:instances id])) "the instance is gone")
+          (is (= 1 (count (filter #(and (= :reflex (:source %)) (= :ended (:kind %)) (= :cancelled (:outcome %))) @seen))) "one reflex.ended :cancelled")
+          (is (nil? (core/running eng)) "the round is cut")
+          (is (= 1 (count (:register (core/state eng)))) "the trigger stays registered")
+          (core/shutdown! eng)
+          (await round))))))

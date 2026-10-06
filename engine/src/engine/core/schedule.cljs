@@ -1,13 +1,13 @@
 (ns engine.core.schedule
   "The scheduling pass: readiness of listed jobs (checks, job.waiting, the next one to run), who holds
   the body, cuts, firing reflexes, tick! and do-now!."
-  (:require [engine.core.base :refer [add-instance call-guarded emit! flush-save-stats! free-owner! job-fields job-of manual-job manual? new-id! now paused? reflex-text running save-memory! state wait-reason waiting-text]]
+  (:require [engine.core.base :refer [add-instance call-guarded drop-reflex-job! emit! flush-save-stats! free-owner! job-fields job-of manual-job manual? new-id! now paused? reflex-text running save-memory! state wait-reason waiting-text]]
             [engine.core.fruitless :refer [reset-backoff!]]
             [engine.core.register :refer [effective-register evaluate-register! expire-changes! preempts?]]
             [engine.core.activity :refer [check-idle!]]
             [engine.core.list-edits :refer [submit!]]
             [engine.core.round :refer [check-ctx]]
-            [engine.core.settle :refer [drop-reflex-job! judge-deferred-ends! start-round!]]
+            [engine.core.settle :refer [judge-deferred-ends! start-round!]]
             [engine.expr :as expr]
             [engine.memory :as mem]))
 

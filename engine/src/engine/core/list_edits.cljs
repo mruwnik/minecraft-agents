@@ -1,6 +1,6 @@
 (ns engine.core.list-edits
   "Edits of the job list: submit! (at the end, front or now), cancel! and retry!."
-  (:require [engine.core.base :refer [add-instance driver? emit! free-owner! job-of manual-job new-id! remove-listed running save-memory! state]]
+  (:require [engine.core.base :refer [add-instance driver? drop-reflex-job! emit! free-owner! job-of manual-job new-id! remove-listed running save-memory! state]]
             [engine.core.attention :refer [resolve-job-attention!]]
             [engine.expr :as expr]
             [engine.memory :as mem]))
@@ -32,18 +32,21 @@
       (< pos cursor) (update :cursor inc))))
 
 (defn cancel!
-  "Remove listed job id (cutting its round if it is the one running). by names who asked."
+  "End job id (cutting its round if it is the one running): a listed job is removed; a reflex job
+  ends with reflex.ended :cancelled and its trigger may fire again. by names who asked."
   ([eng id] (cancel! eng id :agent))
   ([eng id by]
-    (when (= id (:id (running eng)))
-      (free-owner! eng)
-      (reset! (:running eng) nil))
-    (resolve-job-attention! eng id :job-cancelled #(remove-listed % id))
-    (swap! (:fruitless eng) dissoc id)
-    (swap! (:rounds eng) dissoc id)
-    (mem/delete-job! (:store eng) id)
-    (save-memory! eng)
-    (emit! eng {:source :job :kind :cancelled :level :info :job id :chain [id] :by by})))
+   (when (= id (:id (running eng)))
+     (free-owner! eng)
+     (reset! (:running eng) nil))
+   (if-let [reflex (get-in (state eng) [:instances id :reflex])]
+     (drop-reflex-job! eng id reflex :cancelled {:how :cancelled :by by})
+     (do (resolve-job-attention! eng id :job-cancelled #(remove-listed % id))
+         (swap! (:fruitless eng) dissoc id)
+         (swap! (:rounds eng) dissoc id)
+         (mem/delete-job! (:store eng) id)
+         (save-memory! eng)))
+   (emit! eng {:source :job :kind :cancelled :level :info :job id :chain [id] :by by})))
 
 (defn submit!
   "Put a job spec (an expression, see engine.expr) on the list. Returns the instance id; throws on a bad spec.

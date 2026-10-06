@@ -106,7 +106,7 @@
 (def submit! list-edits/submit!)
 (def act! round/act!)
 (def make-ctx round/make-ctx)
-(def drop-reflex-job! settle/drop-reflex-job!)
+(def drop-reflex-job! base/drop-reflex-job!)
 (def cut! schedule/cut!)
 (def do-now! schedule/do-now!)
 (def holder schedule/holder)
@@ -137,15 +137,6 @@
         (contains? warn-kinds kind) :warn
         (contains? debug-kinds kind) :debug
         :else :info))
-
-(defn cancel-reflex!
-  "End reflex job id by request (cutting its round): reflex.ended :cancelled; its trigger may fire again."
-  [eng id by]
-  (when (= id (:id (running eng)))
-    (free-owner! eng)
-    (reset! (:running eng) nil))
-  (drop-reflex-job! eng id (get-in (state eng) [:instances id :reflex]) :cancelled {:how :cancelled :by by})
-  (emit! eng {:source :job :kind :cancelled :level :info :job id :chain [id] :by by}))
 
 (defn drop-jobs-on-death!
   "A job does not survive its body's death: cancel every listed job (queued, held,

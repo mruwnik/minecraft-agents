@@ -182,6 +182,16 @@
   [reflex node]
   (str (name reflex) " → " (expr/label node)))
 
+(defn drop-reflex-job!
+  "Drop reflex job id (instance and memory) and emit its one reflex.ended with
+  outcome (:done :stopped :declined :cut :dropped :failed) and any extra fields."
+  [eng id reflex outcome extra]
+  (let [text (reflex-text reflex (get-in (state eng) [:instances id :spec]))]
+    (drop-instance! eng id)
+    (emit! eng (merge {:source :reflex :kind :ended :level :info :reflex reflex :job id
+                       :outcome outcome :text (str text ": " (name outcome))}
+                      extra))))
+
 (defn offline?
   "Whether the body is away from the server (the offline primitive). The register
   and the list are paused meanwhile: sensing would only say offline."

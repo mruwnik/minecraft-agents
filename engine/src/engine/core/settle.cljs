@@ -1,7 +1,7 @@
 (ns engine.core.settle
   "Settling a round: booking a listed job's or a reflex job's outcome, judging reflex ends against the
   entry's persistence, and starting a round."
-  (:require [engine.core.base :refer [drop-instance! emit! free-owner! job-fields manual? now paused? reflex-text remove-listed running save-memory! set-owner! state stopped-result? wait-reason waiting-text]]
+  (:require [engine.core.base :refer [drop-instance! drop-reflex-job! emit! free-owner! job-fields manual? now paused? reflex-text remove-listed running save-memory! set-owner! state stopped-result? wait-reason waiting-text]]
             [engine.core.attention :refer [request-attention! resolve-job-attention!]]
             [engine.core.fruitless :refer [book-round! note-fruitless!]]
             [engine.core.register :refer [trigger-holds?]]
@@ -68,16 +68,6 @@
       (do (swap! (:state eng) assoc :cursor (inc idx) :current nil)
           (emit! eng (merge (job-fields eng id)
                             {:source :job :kind :yielded :level :debug :status status}))))))
-
-(defn drop-reflex-job!
-  "Drop reflex job id (instance and memory) and emit its one reflex.ended with
-  outcome (:done :stopped :declined :cut :dropped :failed) and any extra fields."
-  [eng id reflex outcome extra]
-  (let [text (reflex-text reflex (get-in (state eng) [:instances id :spec]))]
-    (drop-instance! eng id)
-    (emit! eng (merge {:source :reflex :kind :ended :level :info :reflex reflex :job id
-                       :outcome outcome :text (str text ": " (name outcome))}
-                      extra))))
 
 (defn judge-end!
   "Classify a reflex end now and apply the entry's persistence when its trigger
