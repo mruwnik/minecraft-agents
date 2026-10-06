@@ -193,6 +193,8 @@
           (is (= false (:arrived @out)))
           (is (= {:step :stair :reason :no-tool} (select-keys (:escalation @out) [:step :reason]))
               "stone walls, no pickaxe, no blocks: the stair waits for a pickaxe, and go-to says so")
+          (is (= :stopped (:status @out)))
+          (is (= "gave up walking to [10 64 0]: shut in here; could not dig a stair out: no pickaxe" (:text @out)))
           (is (empty? (calls p "dig"))))))))
 
 (deftest go-to-on-open-ground-never-escalates

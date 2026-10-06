@@ -299,11 +299,15 @@
       (fn ^:async t []
         (let [refused {:outcome {:arrived false :reason :bad-pos}
                        :refusals [{:reason :bad-pos}]
-                       :walks 0}]
-          (is (= refused (await (go-to-with {:pos "9 64 9"}))) "a string")
-          (is (= refused (await (go-to-with {:pos [9 64]}))) "two numbers")
-          (is (= refused (await (go-to-with {:pos {:x "9" :y 64 :z 9}}))) "a non-number")
-          (is (= refused (await (go-to-with {}))) "no pos at all")
+                       :walks 0}
+              bare (fn ^:async b [args] (let [r (await (go-to-with args))]
+                                          (is (= :stopped (get-in r [:outcome :status])))
+                                          (is (string? (get-in r [:outcome :text])))
+                                          (update r :outcome dissoc :status :text)))]
+          (is (= refused (await (bare {:pos "9 64 9"}))) "a string")
+          (is (= refused (await (bare {:pos [9 64]}))) "two numbers")
+          (is (= refused (await (bare {:pos {:x "9" :y 64 :z 9}}))) "a non-number")
+          (is (= refused (await (bare {}))) "no pos at all")
           (is (= {:outcome {:arrived true} :refusals [] :walks 1}
                  (await (go-to-with {:pos [5 64 0]})))
               "the vector form of a position walks"))))))

@@ -1,5 +1,6 @@
 (ns jobs.movement.go-to
-  (:require [engine.ctx :as ctx]
+  (:require [clojure.string :as str]
+            [engine.ctx :as ctx]
             [jobs.lib.blocks :as b]
             [jobs.lib.escape :as escape]
             [jobs.lib.reach :as reach]
@@ -16,7 +17,7 @@
   "Walk to :pos ([x y z] or {:x :y :z}, fractions floored to the cell) until the body's cell is within :range cells of
   it (range 0: in that cell, 1: next to it).
   - Refused at once, before any walk: a :pos that is not one (:bad-pos), a body with no pathWorld sensing
-    (:unsupported). Both give a :refused warn and {:arrived false :reason <it>}.
+    (:unsupported). Both give a :refused warn and {:status :stopped :arrived false :reason <it> :text}.
   - One round is one plan and one walk (jobs.lib.walk, about 100 ms of search, at most 60 s of walking). A search
     that needs more rounds walks on toward where it has got to, or not at all while it goes on. A goal in unloaded
     land is walked toward round by round, and to the edge of loaded land when that is the only way on.
@@ -31,7 +32,7 @@
     carried): info go-to.restored, warn go-to.restore-skipped for cells it could not. Pillar blocks are left to
     jobs.access.cleanup. Its children's walks never escalate. Jobs that must not change the world on the way pass
     :escalate false.
-  - Gives up with {:arrived false :reason :unreachable :why ...} and an :unreachable warn: :why is the planner's
+  - Gives up with {:status :stopped :arrived false :reason :unreachable :why ... :text words} (the job ends :stopped) and an :unreachable warn: :why is the planner's
     reason (:exhausted, :goal-enclosed, :door-stuck with :cells, :one-way with :near and :one-way ...), or :stuck
     (:kind the step, :detail the executor's text), :off-plan, :steer-failed, :no-progress or :moved-while-searching; :at is the
     body's feet cell and :near its blocks from the goal. A failed
@@ -102,21 +103,62 @@
                                              (select-keys result [:kind :cells :near :one-way]))
       :else {:why :no-progress})))
 
+(def kind-words
+  {:corner-jump "needs a sprint jump past a corner and food is too low"
+   :gap-up "needs a step up the body cannot make"
+   :gap-down "needs a drop the body cannot survive"
+   :gap "needs a jump across a gap the body cannot make"})
+
+(def step-words {:stair "dig a stair out" :pillar "pillar out" :clear-path "dig through the wall"})
+
+(def escalation-reason-words
+  {:no-tool "no pickaxe" :no-dig "nothing it may dig" :no-headroom "no room above the head"})
+
+(defn escalation-words
+  "A failed way out of a shut-in body in words: {:step :reason|:why :n}."
+  [{:keys [step reason why n]}]
+  (let [r (some-> (or reason why) (as-> k (or (escalation-reason-words k) (str/replace (name k) "-" " "))))]
+    (case step
+      :spent (str "gave up after " n " ways out")
+      :none (str "no way out" (some->> r (str ": ")))
+      (str "could not " (or (step-words step) "make a way out") (some->> r (str ": "))))))
+
+(defn give-up-words
+  "The give-up reason in words, for the :text of the :unreachable event and the result: no map dumps."
+  [pos {:keys [why kind detail escalation]}]
+  (str "gave up walking to " (if (map? pos) (let [{:keys [x y z]} pos] [x y z]) pos) ": "
+       (if escalation
+         (str "shut in here; " (escalation-words escalation))
+         (case why
+           :abilities (str "it " (or (kind-words kind) (str "needs a " (some-> kind name) " move the body cannot make")))
+           :goal-enclosed "the goal is walled in with no way through"
+           :start-enclosed "the body is shut in and nothing it can walk reaches out"
+           :exhausted "no walkable way leads there from here"
+           :no-progress "the walk ended no nearer"
+           :stuck (str "the body got stuck" (some->> kind name (str " on ")) (some->> detail (str ": ")))
+           :off-plan (or detail "the walk left its plan")
+           :steer-failed (str "steering failed" (some->> detail (str ": ")))
+           :moved-while-searching "the body was pushed about while the path was searched"
+           :one-way "the way back is one-way"
+           :door-stuck "a door in the way will not open"
+           (str "no path (" (some-> why name) ")")))))
+
 (defn give-up!
   ([c pos tries status result] (give-up! c pos tries status result nil))
   ([c pos tries status result extra]
    (let [{:keys [why kind] :as fields} (merge {:at (feet-cell c) :near (js/Math.round (u/dist (u/self-pos c) pos))}
                                               (give-up-fields result) (sh/shelter-hint c) extra)
-         more (dissoc fields :why :kind)]
+         more (dissoc fields :why :kind)
+         text (give-up-words pos fields)]
      (ctx/emit! c :unreachable :warn (cond-> (merge {:target pos :tries tries :status status :why why
-                                                     :text (str "gave up walking to " pos)}
+                                                     :text text}
                                                     more)
                                        kind (assoc :refused-kind kind)))
-     (finish! c (merge {:arrived false :reason :unreachable} fields)))))
+     (finish! c (merge {:status :stopped :arrived false :reason :unreachable :text text} fields)))))
 
 (defn refuse! [c {:keys [reason message]}]
   (ctx/emit! c :refused :warn {:reason reason :text message})
-  (finish! c {:arrived false :reason reason}))
+  (finish! c {:status :stopped :arrived false :reason reason :text message}))
 
 ;; ------------------------------------------------------------------ escalation
 
