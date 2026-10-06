@@ -13,7 +13,9 @@
 
   Phases, each by a child job:
   - :leash: jobs.animals.leash (radius :radius).
-  - :walk: jobs.movement.go-to to :pos (the :fence cell when no :pos), range :range.
+  - :walk: jobs.movement.go-to to :pos (the :fence cell when no :pos), range :range, in legs of a few blocks along
+    the planned path (one round, no :continue between legs). After each leg the animal is looked at: gone ends
+    :lost, off the lead :lead-broke, more than 10 blocks behind (the lead breaks past 12) :lagging.
   - :gather (no :fence only): see below.
   - :arrive: with :fence, walk within 2 of the post and click it with an empty hand (useOn), tried twice.
     Without :fence, jobs.animals.unleash lets the animal go and picks the lead up.
@@ -27,7 +29,7 @@
   Gather: a led animal trails about a lead length behind the body. On arrival, if the animal is farther than
   :gather-radius from :pos, the body walks on past :pos (range 1) so the lead pulls it in. It waits for the
   animal to settle between pulls, at most :gather-tries pulls. A pull stays within 11 blocks of the animal (the
-  lead breaks past 12). It is given up after 20 s, or before it starts when the planned walk strays more than 11
+  lead breaks past 12). A pull walks in the same legs; it is given up after 20 s (checked after each leg), or before it starts when the planned walk strays more than 11
   blocks from the animal (a wall in the way). An animal 10 or more blocks from :pos is never pulled. None of
   this is a failure: the animal is let go where it is, with a warn
   lead-to.gather-short (:distance from :pos) and :gathered false. :gathered is true when the animal was within
@@ -36,7 +38,7 @@
   Ends with info lead-to.done and a warn lead-to.gave-up unless the reason is :tied or :unleashed. Result
   {:reason :animal key :still-led bool :at pos :gathered bool}. Reasons:
   - :tied, :unleashed: success.
-  - :lead-broke, :lost: as above.
+  - :lead-broke, :lost, :lagging (the animal is still on the lead): as above.
   - :unreachable: the walk gave up (the animal is still on the lead).
   - :tie-failed: the post did not take the animal (still on the lead).
   - :timeout: :timeout-s from the first round (a cut walk leaves the animal on the lead).
@@ -100,14 +102,6 @@
           (do (ctx/update-mem! c assoc :animal (:animal res) :still-led true :phase :walk)
               :continue))))))
 
-(defn ^:async walk! [c]
-  (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos (destination c) :range (:range (:args c)) :doors :leave-open :escalate false}))]
-    (if-not (= :done r)
-      :continue
-      (if (:arrived (ctx/child-result c :walk))
-        (do (set-phase! c (if (:fence (:args c)) :arrive :gather)) :continue)
-        (finish! c :unreachable)))))
-
 (defn flat-dist [a b]
   (js/Math.hypot (- (:x a) (:x b)) (- (:z a) (:z b))))
 
@@ -169,6 +163,62 @@
      (some #(> (js/Math.hypot (- (:px %) (:x animal-pos)) (- (:pz %) (:z animal-pos))) path-reach)
            (:steps plan)))))
 
+(def leg-steps
+  "How many path steps one leg of a walk covers."
+  4)
+
+(def follow-reach
+  "The animal trailing the body by more than this many blocks is about to break the lead (it breaks past 12)."
+  10)
+
+(defn leg-target
+  "Where the next leg of a walk to target (within range) goes: the planned path's cell leg-steps on, or nil when the
+  rest is within one leg, there is no plan, or the leg would not move the body (the caller walks the whole way)."
+  [c target range]
+  (let [pw (walk/path-world (:primitives c))
+        steps (when pw (:steps (plan-or-nil c pw target)))
+        step (when (< leg-steps (count steps)) (nth steps leg-steps))
+        me (u/self-pos c)]
+    (when (and step (< 1 (flat-dist me {:x (:px step) :z (:pz step)})))
+      (select-keys step [:x :y :z]))))
+
+(defn escort-problem
+  "Why the walk must stop after a leg: :lost, :lead-broke or :lagging (the animal farther than follow-reach), else nil."
+  [c]
+  (let [a (animal-now c)]
+    (cond
+      (nil? a) :lost
+      (not (animals/led-by-me? a)) :lead-broke
+      (> (flat-dist (u/pos-of (.-pos a)) (u/self-pos c)) follow-reach) :lagging)))
+
+(defn ^:async walk-legs!
+  "Walk to target (within range) in short go-to legs in child slot, looking at the animal after each. Answer
+  :arrived, :failed (a leg did not arrive), :limit (limit-ms from started passed), :waiting (a leg's child is waiting
+  on the world: the round goes on later) or {:problem :lost|:lead-broke|:lagging}."
+  [c slot target range started limit-ms]
+  (loop []
+    (let [leg (leg-target c target range)
+          r (await (ctx/call-child c slot 'jobs.movement.go-to
+                                   {:pos (or leg target) :range (if leg 1 range) :doors :leave-open :escalate false}))]
+      (cond
+        (not= :done r) :waiting
+        (not (:arrived (ctx/child-result c slot))) :failed
+        :else (if-let [problem (escort-problem c)]
+                {:problem problem}
+                (cond
+                  (not leg) :arrived
+                  (and limit-ms (>= (- (ctx/now c) started) limit-ms)) :limit
+                  :else (recur)))))))
+
+(defn ^:async walk! [c]
+  (let [r (await (walk-legs! c :walk (destination c) (:range (:args c)) nil nil))]
+    (cond
+      (= :waiting r) :continue
+      (= :arrived r) (do (set-phase! c (if (:fence (:args c)) :arrive :gather)) :continue)
+      (= :failed r) (finish! c :unreachable)
+      :else (do (ctx/update-mem! c assoc :still-led (= :lagging (:problem r)))
+                (finish! c (:problem r))))))
+
 (defn stop-gathering!
   "Give up pulling: the animal is let go where it is, :gathered false at distance d from the spot."
   [c d]
@@ -187,13 +237,14 @@
       (>= (- now started) (* 1000 pull-timeout-s)) (stop-gathering! c d)
       (path-leaves-reach? c target animal-pos) (stop-gathering! c d)
       :else
-      (let [r (await (ctx/call-child c :pull 'jobs.movement.go-to {:pos target :range 1 :doors :leave-open :escalate false}))]
-        (if-not (= :done r)
-          :continue
-          (let [arrived (:arrived (ctx/child-result c :pull))]
-            (ctx/update-mem! c dissoc :pull-target :pull-started)
-            (ctx/update-mem! c update :pulls (fnil inc 0))
-            (if arrived :continue (stop-gathering! c d))))))))
+      (let [r (await (walk-legs! c :pull target 1 started (* 1000 pull-timeout-s)))]
+        (cond
+          (= :waiting r) :continue
+          (map? r) (do (ctx/update-mem! c assoc :still-led (= :lagging (:problem r)))
+                       (finish! c (:problem r)))
+          :else (do (ctx/update-mem! c dissoc :pull-target :pull-started)
+                    (ctx/update-mem! c update :pulls (fnil inc 0))
+                    (if (= :arrived r) :continue (stop-gathering! c d))))))))
 
 (defn ^:async gather!
   "Without :fence: let the animal catch up. A pull in progress is carried on with its stored target;

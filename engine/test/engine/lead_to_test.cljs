@@ -71,7 +71,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {} {:inventory lead :entities [(cow 1 3 {:trail 6})]} 20))]
-          (is (< 30 (:x (second (tu/walked-to (:eng s))))) "the walk after the one to the spot goes on past it, so the lead drags the cow to it"))))))
+          (is (some #(< 30 (:x %)) (tu/walked-to (:eng s))) "a walk after the one to the spot goes on past it, so the lead drags the cow to it"))))))
 
 (deftest does-not-pull-a-cow-that-is-already-at-the-spot
   (async done
@@ -79,7 +79,8 @@
       (fn ^:async t []
         (let [s (await (scenario {} {:inventory lead :entities [(cow 1 3 {:trail 1})]} 12))]
           (is (= :unleashed (:reason (done-event s))))
-          (is (= [goal] (tu/walked-to (:eng s))) "one walk to the spot, no pull"))))))
+          (is (= goal (last (tu/walked-to (:eng s)))) "the legs end at the spot")
+          (is (every? #(<= (:x %) 30) (tu/walked-to (:eng s))) "no pull"))))))
 
 (deftest reports-whether-the-cow-was-gathered
   (async done
@@ -128,8 +129,9 @@
         (let [s (await (scenario {:gather-tries 1 :gather-radius 0.5} {:inventory lead :entities [(cow 1 3 {:trail 5})]} 40))]
           (is (= :unleashed (:reason (done-event s))))
           (is (false? (:gathered (done-event s))))
-          (is (= [30 33] (mapv :x (take 2 (tu/walked-to (:eng s))))) "the walk to the spot and one pull, no second")
-          (is (= 3 (count (tu/walked-to (:eng s)))) "the third walk is the body going to the cow to take the lead off")
+          (let [xs (mapv :x (tu/walked-to (:eng s)))]
+            (is (= [32 33 27] (take-last 3 xs)) "the legs of one pull, then the body goes to the cow to take the lead off")
+            (is (= 33 (apply max xs)) "no second pull"))
           (is (= 1 (count (events-of s :lead-to.gather-short)))))))))
 
 (deftest a-pull-that-cannot-arrive-lets-the-cow-go-and-says-so
@@ -141,7 +143,7 @@
           (is (= :unleashed (:reason (done-event s))))
           (is (false? (:gathered (done-event s))))
           (is (= 1 (count (events-of s :lead-to.gather-short))))
-          (is (= [30 32 32 32 22] (mapv :x (tu/walked-to (:eng s)))) "the walk to the spot, one pull that go-to gives up after its three fruitless rounds, no second pull, then the body goes to the cow to take the lead off"))))))
+          (is (= [30 32 32 32 22] (take-last 5 (mapv :x (tu/walked-to (:eng s))))) "the walk to the spot, one pull that go-to gives up after its three fruitless rounds, no second pull, then the body goes to the cow to take the lead off"))))))
 
 (deftest a-lead-that-breaks-during-the-pull-is-reported
   (async done
@@ -295,3 +297,45 @@
           (is (empty? (watched lit)))
           (is (seq (watched dark)))
           (is (= :unleashed (:reason (done-event dark)))))))))
+
+;; ------------------------------------------------------- short go-to legs (card af0984f9)
+
+(deftest the-walk-to-the-spot-is-short-legs-toward-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {} {:inventory lead :entities [(cow 1 3)]} 40))
+              legs (tu/walked-to (:eng s))]
+          (is (= :unleashed (:reason (done-event s))))
+          (is (< 4 (count legs)) "more than a few legs")
+          (is (every? #(<= % 5) (map #(- (:x %2) (:x %1)) legs (rest legs))) "each leg is a few blocks long")
+          (is (= 30 (:x (last (take-while #(<= (:x %) 30) legs)))) "the last leg ends at the spot"))))))
+
+(deftest a-lead-that-breaks-on-the-first-leg-is-noticed-after-that-leg-not-at-arrival
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {} {:inventory lead :entities [(cow 1 3 {:snaps true})]} 40))
+              legs (tu/walked-to (:eng s))]
+          (is (= :lead-broke (:reason (done-event s))))
+          (is (< (first (:pos (fake/self (:p s)))) 15) "the body did not walk on to the spot")
+          (is (every? #(< (:x %) 15) legs)))))))
+
+(deftest a-pull-over-20-s-is-given-up-even-while-each-leg-makes-progress
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng clock] :as s} (h/setup {:floor tu/walk-floor :inventory lead :entities [(cow 1 3 {:trail 5})]})]
+          (.override (.-world p) "steer"
+                     (fn [token args impl]
+                       (when (<= 28 (first (:pos (fake/self p)))) (swap! clock + 25000))
+                       (impl token args)))
+          (core/submit! eng (list 'jobs.animals.lead-to {:mob "cow" :pos goal :gather-radius 0}) {})
+          (await (run-ticks s 60 700))
+          (is (finished? s))
+          (is (= :unleashed (:reason (done-event s))))
+          (is (false? (:gathered (done-event s))))
+          (is (= 1 (count (events-of s :lead-to.gather-short))))
+          (let [pull-legs (filter #(< 30 (:x %)) (tu/walked-to eng))]
+            (is (= 1 (count pull-legs)) "the pull was cut after one leg")
+            (is (every? #(< (:x %) 34) pull-legs) "that leg is short of the pull's end")))))))
