@@ -532,7 +532,7 @@
           (let [{:keys [eng seen] :as r} (conclusion-setup end)]
             (core/register-reflex! eng {:trigger :t})
             (dotimes [_ 3] (await (tick-at r t0)))
-            (is (= (vec (repeat 3 (if (= :declined end) :declined :done))) (reflex-outcomes seen)) "never :backoff")
+            (is (= (vec (repeat 3 end)) (reflex-outcomes seen)) "never :backoff")
             (is (= 3 (:fruitless (entry eng :t))) (str end))
             (is (= 1000 (:delay-ms (entry eng :t))))
             (await (tick-at r (+ t0 999)))

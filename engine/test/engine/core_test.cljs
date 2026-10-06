@@ -133,6 +133,7 @@
    'any-gated {:check always :round (fn ^:async any-gated-round [c]
                                       (let [r (await (ctx/call-child c :g gated-job {}))]
                                         (if (= :done r) :done :continue)))}
+   'give-up {:check always :round (fn [c] (ctx/result! c {:status :stopped :reason :no-way}) :done)}
    'no-check {:round count-round}})
 
 (def triggers
@@ -976,6 +977,20 @@
           (swap! clock + 3600000)
           (await (core/tick! eng))
           (is (= 2 (count (continued-warns seen))) "and again after an hour"))))))
+
+(deftest a-reflex-job-that-stops-ends-stopped-with-its-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:self {:health 5}})]
+          (core/register-reflex! eng {:trigger :hurt :job '(give-up)})
+          (await (core/tick! eng))
+          (let [ended (->> @seen (filter #(= [:reflex :ended] [(:source %) (:kind %)])) first)
+                stopped (->> @seen (filter #(= [:job :stopped] [(:source %) (:kind %)])) first)]
+            (is (= [:stopped :no-way] ((juxt :outcome :reason) ended)))
+            (is (= :completed_not_cleared (:how ended)) "the trigger still holds")
+            (is (= [:hurt "j1" :no-way] ((juxt :reflex :job :reason) stopped))
+                "a job.stopped event carries the reflex and the reason")))))))
 
 (deftest the-tick-loop-parks-a-failed-round-and-keeps-ticking
   (async done

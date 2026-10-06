@@ -19,14 +19,14 @@
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
             {:event {:source :job :kind :afloat} :within-s 40}
             {:event {:source :job :kind :holding :data {:reason :afloat}} :within-s 40}
-            {:event {:source :reflex :kind :ended} :within-s 70}]
+            {:event {:source :reflex :kind :ended :data {:outcome :stopped :reason :no_land}} :within-s 70}]
    :after [[:body-near [15.5 3.5 15.5] 6]]}
   {:name "walled-stays-afloat-2"
    :body {:at [13.5 2 17.5]}
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
             {:event {:source :job :kind :afloat} :within-s 40}
             {:event {:source :job :kind :holding :data {:reason :afloat}} :within-s 40}
-            {:event {:source :reflex :kind :ended} :within-s 70}]
+            {:event {:source :reflex :kind :ended :data {:outcome :stopped :reason :no_land}} :within-s 70}]
    :after [[:body-near [13.5 3.5 17.5] 6]]}
   {:name "ledge-east-lands-1"
    :blocks [[:fill [21 4 11] [21 5 20] "air"]]

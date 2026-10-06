@@ -732,7 +732,7 @@
           (stuck-walks! p)
           (core/register-reflex! eng {:trigger :hostile-near})
           (await (core/tick! eng))
-          (is (= [[:done :completed_not_cleared]] (mapv (juxt :outcome :how) (reflex-ended seen)))
+          (is (= [[:stopped :completed_not_cleared]] (mapv (juxt :outcome :how) (reflex-ended seen)))
               "held the whole flight, then stopped still chased, the zombie still there")
           (await (core/tick! eng))
           (is (= 2 (count (reflex-fired seen))) "fired again at once: the zombie still stands")
