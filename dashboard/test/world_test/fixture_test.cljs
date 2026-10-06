@@ -55,6 +55,18 @@
     (is (re-find #"dx=399,dy=17,dz=31" (some #(when (re-find #"^kill" %) %) cmds)))
     (is (= (count loads) (count (filter #(re-find #"^forceload remove" %) (f/cleanup-commands g origin "B" {:plot {:height 16 :floor "stone"}})))))))
 
+(deftest large-plot-setup-removes-a-wider-left-over-floor
+  (let [g (f/case-grid {:plot {:length 400 :width 32}})
+        origin (f/plot-origin g 400)
+        cmds (f/setup-commands g origin {:plot {:height 16 :floor "stone"}})
+        air-floor (filter #(re-find #"^fill \d+ 149 20704 \d+ 149 20767 air$" %) cmds)
+        floor-idx (fn [pred] (first (keep-indexed #(when (pred %2) %1) cmds)))]
+    (is (seq air-floor))
+    (is (< (floor-idx #(re-find #"149 20704 \d+ 149 20767 air$" %)) (floor-idx #(re-find #"149 20735 stone$" %))))
+    (is (= (count (filter #(re-find #"^forceload add" %) cmds))
+           (count (filter #(re-find #"^forceload remove" %) (f/cleanup-commands g origin "B" {:plot {:height 16 :floor "stone"}})))))
+    (is (every? #(re-find #"20767$" %) (filter #(re-find #"^forceload add" %) cmds)))))
+
 (deftest a-plot-must-fit-its-lane
   (let [ps #(f/problems (merge {:name "a" :time :day :body {:at [1 0 1]} :act [] :after [] :expect []} %))]
     (is (empty? (ps {:plot {:height 16 :length 1024 :width 64}})))

@@ -208,10 +208,17 @@
   [ox len n]
   (for [x (range ox (+ ox len) n)] [x (min (+ ox (dec len)) (+ x (dec n)))]))
 
-(defn forceload-commands
-  "One forceload per 128-block slice of the plot (a command takes at most 256 chunks)."
-  [op grid [ox _ oz]]
+(defn lane-grid
+  "The grid a plot's footprint is cleared and loaded over: a large plot (it lies in a lane) takes the lane's full width,
+  so the floor an earlier, wider plot left beside it is removed."
+  [grid]
   (let [[sx sz] (dims grid)]
+    (if (or (> sx 32) (> sz 32)) (assoc grid :size-z (:max-width large-lanes)) grid)))
+
+(defn forceload-commands
+  "One forceload per 128-block slice of the plot (a command takes at most 256 chunks); a large plot loads its lane's width."
+  [op grid [ox _ oz]]
+  (let [[sx sz] (dims (lane-grid grid))]
     (for [[x0 x1] (segments ox sx 128)]
       (str "forceload " op " " x0 " " oz " " x1 " " (+ oz (dec sz))))))
 
@@ -248,11 +255,15 @@
       (vec (for [t hostile-types] (str "kill @e[type=minecraft:" t ",x=" x ",y=" y ",z=" z ",distance=..32]"))))))
 
 (defn setup-commands
-  "Forceload the plot, kill every non-player entity in it, clear it to air and lay the floor."
+  "Forceload the plot, kill every non-player entity in it, clear it to air and lay the floor (a large plot first drops
+  the floor of its whole lane width)."
   [grid origin c]
-  (let [{:keys [height floor]} (:plot c)]
-    (into (conj (vec (forceload-commands "add" grid origin)) (kill-command grid origin height))
-          (clear-commands grid origin height floor))))
+  (let [{:keys [height floor]} (:plot c)
+        lane (lane-grid grid)]
+    (-> (vec (forceload-commands "add" grid origin))
+        (conj (kill-command grid origin height))
+        (cond-> (not= lane grid) (into (clear-commands lane origin 0 "air")))
+        (into (clear-commands grid origin height floor)))))
 
 (defn reset-plot-commands
   "Clear a plot that may hold a left-over case (its full height), without a body connected: forceload, kill, clear,
