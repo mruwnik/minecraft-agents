@@ -42,6 +42,8 @@ timeout 20 "$C" engine test >/dev/null 2>&1; check "waits for unrelated holder" 
 timeout 20 "$C" engine test >/dev/null 2>&1; check "compile with blocking waiter" "$?" 0
 wait %+ 2>/dev/null
 
+# stub bundle files so the namespaces count as built (test-run.mjs refuses a namespace missing from the bundle)
+for n in engine.a-test engine.b-test engine.hang-test; do : > "$T/repo/engine/out/test/cljs-runtime/${n//-/_}.js"; done
 # test-engine: compile for build test, then node outside the lock on a private copy, namespaces comma-joined
 out=$(timeout 30 "$T/repo/tools/test-engine" engine.a-test engine.b-test 2>&1); check "test-engine rc" "$?" 0
 check "test-engine ns args" "$(grep -c -- '--test=engine.a-test,engine.b-test' <<<"$out")" 1
@@ -50,5 +52,7 @@ check "test-engine private copy" "$(grep -c -- '/tmp/mc-test-run-[0-9]*/out/test
 # a hung run is killed after the timeout (exit 124) and says so
 out=$(MC_TEST_TIMEOUT_S=2 timeout 30 "$T/repo/tools/test-engine" engine.hang-test 2>&1); check "hung run rc" "$?" 124
 check "hung run message" "$(grep -c 'TIMEOUT, killed after 2 s' <<<"$out")" 1
+out=$(timeout 30 "$T/repo/tools/test-engine" engine.nope-test 2>&1); check "missing ns rc" "$?" 2
+check "missing ns message" "$(grep -c 'not in the :test bundle' <<<"$out")" 1
 timeout 5 "$T/repo/tools/test-engine" >/dev/null 2>&1; check "no args usage exit" "$?" 2
 exit $fail
