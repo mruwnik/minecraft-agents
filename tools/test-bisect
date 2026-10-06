@@ -4,6 +4,7 @@
 # each step compiles and runs tools/test-engine <ns>... of THAT commit (res-slot server and tests slots, as test-engine does).
 # Verdicts per step: pass = good, test failure = bad, compile failure / namespace missing / timeout / busy slot / killed (75, 137, 143) = skipped (exit 125).
 # Worktree setup waits for a free server slot (retry every TEST_BISECT_RETRY_SLEEP s, default 20, up to TEST_BISECT_SLOT_WAIT s, default 1800), then exits 75.
+# A busy step (75) is retried up to TEST_BISECT_BUSY_RETRIES times (default 30, same sleep); a commit that still cannot be run is never named: INCONCLUSIVE, exit 1.
 # The per-step explicit compile stays: test-engine passes a compile failure on as a plain exit 1, which would score bad.
 # Defaults: bad = HEAD, good = HEAD~20. Prints the first bad commit, its failing tests and the step count. TEST_EVENTS=1: @@test phase lines per step.
 # The worktree (and its shadow servers) is removed on exit, error, INT and TERM.
@@ -22,7 +23,13 @@ if [ "${1:-}" = --step ]; then
   log="$BISECT_WORK/log-$rev"
   event "step $n: $rev"
   "$wt/tools/compile" engine test > "$log" 2>&1 || { echo "step $n $rev: compile failed, skipped"; exit 125; }
-  "$wt/tools/test-engine" "$@" >> "$log" 2>&1; rc=$?
+  tries=0
+  while true; do
+    "$wt/tools/test-engine" "$@" >> "$log" 2>&1; rc=$?
+    [ $rc -eq 75 ] && [ $tries -lt "${TEST_BISECT_BUSY_RETRIES:-30}" ] || break
+    tries=$((tries + 1)); sleep "${TEST_BISECT_RETRY_SLEEP:-20}"
+  done
+  echo "$rc" > "$BISECT_WORK/rc-$rev"
   case $rc in
     0) echo "step $n $rev: good"; exit 0;;
     2|124) echo "step $n $rev: skipped (exit $rc: namespace missing or timeout)"; exit 125;;
@@ -84,7 +91,10 @@ if [ -z "$first" ]; then
   cp "$work/run.log" "${BISECT_DEBUG:-/dev/null}"; echo "test-bisect: no first bad commit found (is the good rev really good, and the bad rev bad?)"; tail -n 8 "$work/run.log"; exit 1
 fi
 short="$(git rev-parse --short "$first")"
-[ -f "$work/log-$short" ] || { git checkout -q --detach "$first" && BISECT_WORK="$work" "$self" --step "${nss[@]}" >/dev/null; }
+if [ "$(cat "$work/rc-$short" 2>/dev/null)" != 1 ]; then
+  git checkout -q --detach "$first" && BISECT_WORK="$work" "$self" --step "${nss[@]}" >/dev/null
+  [ "$(cat "$work/rc-$short" 2>/dev/null)" = 1 ] || { echo "INCONCLUSIVE: $short has no failing verdict (never tested, skipped or passing), so it is not named"; exit 1; }
+fi
 echo "FIRST BAD: $(git log -1 --format='%h %s' "$first")"
 echo "steps: $(cat "$work/steps" 2>/dev/null || echo 0)"
 echo "failing tests at $short:"
