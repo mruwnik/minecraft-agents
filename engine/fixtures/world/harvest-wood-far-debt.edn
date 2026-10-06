@@ -1,0 +1,25 @@
+;; Cards 1edeb7fd, 89224ce6: harvest-wood with a replant debt seeded far away on unloaded land (:memory, x/z 22500).
+;; It must not crash or walk there: it fells the near oak, plants the near spot, leaves the far debt owed and warns
+;; harvest-wood.debts-owed. Without a sapling it ends with the debt owed and no :failed.
+{:defaults
+ {:tags [:forestry :harvest-wood :memory-seed] :time :day
+  :plot {:height 10 :floor "grass_block"}
+  :blocks [[:fill [16 0 16] [16 3 16] "oak_log"]
+           [:fill [14 3 14] [18 4 18] "oak_leaves[persistent=true]"]
+           [:fill [16 3 16] [16 3 16] "oak_log"]]
+  :memory [{:kind :forestry/replant :data {:pos #xyz [22500 70 22500] :species "oak"}}]
+  :body {:at [10.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :act [[:job (jobs.forestry.harvest-wood {:radius 32})]]
+  :limit-s 120}
+ :cases
+ [{:name "near-planted-far-owed"
+   :body {:inventory [["iron_axe" 1] ["oak_sapling" 1]]}
+   :expect [{:event {:source :job :kind :completed :data {:status :completed}} :within-s 100 :of-job true}
+            {:event {:source :job :kind :harvest-wood.debts-owed} :within-s 100 :of-job true}
+            {:no-event {:kind :failed} :for-s 10}]
+   :after [[:block [16 0 16] "oak_sapling"] [:body-near [16.5 0 16.5] 45]]}
+  {:name "no-sapling-debts-owed"
+   :body {:inventory [["iron_axe" 1]]}
+   :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}
+            {:no-event {:kind :failed} :for-s 10}]
+   :after [[:not-block [16 0 16] "oak_sapling"] [:body-near [16.5 0 16.5] 45]]}]}
