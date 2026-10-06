@@ -610,3 +610,14 @@
           (is (= 1 (count (listed s))) "still queued")
           (is (= 1 (count (events-of s :fetch.failed))))
           (is (= :no-sapling (:reason (last (events-of s :waiting))))))))))
+
+(deftest plant-sapling-fetches-a-mangrove-propagule-for-the-species
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (world {chest-at [{:name "mangrove_propagule" :count 2}]}) [own-zone])]
+          (core/submit! (:eng s) (list 'jobs.forestry.plant-sapling {:at sapling-spot :species "mangrove"}) {})
+          (await (run-ticks s 40))
+          (is (empty? (listed s)) "the job ended")
+          (is (= "mangrove_propagule" (block-at s 4 64 3)))
+          (is (= 1 (count (events-of s :fetch.done)))))))))

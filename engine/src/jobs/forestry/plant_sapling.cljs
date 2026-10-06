@@ -2,7 +2,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.gate :as gate]
-            [jobs.forestry.trees :refer [debts target-of sapling-for log-name? replant-kind]]
+            [jobs.forestry.trees :refer [debts target-of sapling-for sapling-of log-name? replant-kind]]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]))
 
@@ -12,7 +12,8 @@
   With :near and :within only the debts within :within blocks of :near count; the others stay owed.
   A missing sapling is fetched (jobs.lib.fetch: a seen chest, a craft) unless :fetch is false; then, or when the
   fetch failed, it waits (check) with :reason :no-sapling (:species). It also waits :log-on-spot when the spot still
-  holds a log. Ends at once when there is nothing to plant or the spot is refused (a debt stays owed).
+  holds a log. The sapling kind is the species' (mangrove propagule, fungus too); the same one already on the spot
+  counts as planted. Ends at once when there is nothing to plant or the spot is refused (a debt stays owed).
   Zones: a spot in another owner's zone or claim, or in a plan's footprint (but :for-plan's own), is not planted.
   The job warns plant-sapling.declined once, with :reason :refused (or :no-zones when no zone list was read).
   :ignore-zones? true skips the check.")
@@ -33,9 +34,10 @@
   (gate/allowed? c :plant-sapling.declined "plant-sapling" :place pos {:except (:for-plan (:args c))}))
 
 (defn sapling-at?
-  "True when the block at pos ends in _sapling."
+  "True when the block at pos is a sapling, mangrove propagule or fungus."
   [p pos]
-  (boolean (some-> (u/block-name p pos) (.endsWith "_sapling"))))
+  (boolean (some-> (u/block-name p pos)
+                   (as-> n (or (.endsWith n "_sapling") (= "mangrove_propagule" n) (.endsWith n "_fungus"))))))
 
 (defn has-meal? [p]
   (some #(= "bone_meal" (:name %)) (u/inventory p)))
@@ -62,9 +64,9 @@
         species (:species t)]
     (when (and t (nil? (sapling-for (u/inventory (:primitives c)) species)))
       (cond-> {:reason :no-sapling :species species}
-        species (assoc :item (str species "_sapling"))))))
+        species (assoc :item (sapling-of species))))))
 
-(def saplings ["oak_sapling" "spruce_sapling" "birch_sapling" "jungle_sapling" "acacia_sapling" "dark_oak_sapling" "cherry_sapling"])
+(def saplings (mapv sapling-of ["oak" "spruce" "birch" "jungle" "acacia" "dark_oak" "cherry" "mangrove" "crimson" "warped"]))
 
 (defn fetch-wait
   "The :need wait a fetch of w's sapling answers."
@@ -125,4 +127,6 @@
                     (if (and (pos? n) (has-meal? (:primitives c)))
                       (do (ctx/update-mem! c assoc :meal {:pos (:pos t) :left n}) :continue)
                       :done))
-                  (u/fail! c :plant_blocked (str "cannot plant: " (.-status r))))))))))))
+                  (if (and (= "occupied" (.-status r)) (= sapling (u/block-name (:primitives c) (:pos t))))
+                    (do (ctx/forget-where! c replant-kind #(= (:pos t) (:pos %))) :done)
+                    (u/fail! c :plant_blocked (str "cannot plant: " (.-status r)))))))))))))
