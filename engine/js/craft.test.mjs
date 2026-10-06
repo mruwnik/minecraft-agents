@@ -92,14 +92,14 @@ const lateOpts = { timeScale: 0.1 }
 
 test('craftItem: leftovers that come back late are not mistaken for a shortfall', async () => {
   const { bot, carried } = setup({ items: inv(['wheat', 12]), blocks: tableBlocks, mode: 'late' })
-  const r = await craftItem(bot, ctx, { item: 'bread', count: 4 }, lateOpts)
+  const r = await craftItem(bot, ctx, { item: 'bread', count: 4, table }, lateOpts)
   assert.deepEqual(r, { status: 'crafted', item: 'bread', made: 4, used: { wheat: 12 } })
   assert.equal(carried('wheat'), 0)
 })
 
 test('craftItem: used counts leftovers that came back late', async () => {
   const { bot, carried } = setup({ items: inv(['wheat', 7]), blocks: tableBlocks, mode: 'late' })
-  const r = await craftItem(bot, ctx, { item: 'bread', count: 2 }, lateOpts)
+  const r = await craftItem(bot, ctx, { item: 'bread', count: 2, table }, lateOpts)
   assert.deepEqual(r, { status: 'crafted', item: 'bread', made: 2, used: { wheat: 6 } })
   assert.equal(carried('wheat'), 1)
 })
@@ -124,7 +124,7 @@ test('craftItem: 2x2 planks from a log', async () => {
 
 test('craftItem: table recipe with table in reach', async () => {
   const { bot } = setup({ items: inv(['wheat', 6]), blocks: tableBlocks })
-  const r = await craftItem(bot, ctx, { item: 'bread', count: 2 }, opts)
+  const r = await craftItem(bot, ctx, { item: 'bread', count: 2, table }, opts)
   assert.deepEqual(r, { status: 'crafted', item: 'bread', made: 2, used: { wheat: 6 } })
 })
 
@@ -137,8 +137,8 @@ test('craftItem: explicit table position', async () => {
 const tableCases = [
   ['table recipe with no table', { item: 'bread' }, {}, { status: 'unreachable', reason: 'no-table' }],
   ['table too far', { item: 'bread', table: { x: 9, y: 64, z: 0 } }, { '9,64,0': 'crafting_table' }, { status: 'out-of-reach', reason: 'too-far', table: { x: 9, y: 64, z: 0 } }],
-  ['table known but out of reach', { item: 'bread' }, { '20,64,0': 'crafting_table' }, { status: 'out-of-reach', reason: 'too-far', table: { x: 20, y: 64, z: 0 } }],
-  ['table beyond 32 is not known', { item: 'bread' }, { '40,64,0': 'crafting_table' }, { status: 'unreachable', reason: 'no-table' }],
+  ['table within 32 not handed over is never found', { item: 'bread' }, { '20,64,0': 'crafting_table' }, { status: 'unreachable', reason: 'no-table' }],
+  ['table in reach not handed over is never found', { item: 'bread' }, { '2,64,0': 'crafting_table' }, { status: 'unreachable', reason: 'no-table' }],
   ['table arg is not a table', { item: 'bread', table }, { '2,64,0': 'stone' }, { status: 'unreachable', reason: 'not-a-table' }]
 ]
 for (const [name, a, blocks, expected] of tableCases) {
@@ -149,7 +149,7 @@ for (const [name, a, blocks, expected] of tableCases) {
 }
 
 const shortCases = [
-  ['missing ingredients', [['wheat', 1]], { item: 'bread' }, [{ wheat: 3 }], { wheat: 1 }],
+  ['missing ingredients', [['wheat', 1]], { item: 'bread', table }, [{ wheat: 3 }], { wheat: 1 }],
   ['every candidate recipe and the carried counts', [['oak_planks', 1]], { item: 'stick' }, [{ oak_planks: 2 }, { cherry_planks: 2 }], { oak_planks: 1 }],
   ['nothing held', [], { item: 'stick' }, [{ oak_planks: 2 }, { cherry_planks: 2 }], {}]
 ]
@@ -175,13 +175,13 @@ test('craftItem: full inventory but the stack has room', async () => {
 
 test('craftItem: at a table one empty slot is not enough', async () => {
   const { bot, state } = setup({ items: inv(['wheat', 9]), blocks: tableBlocks, slots: 1 })
-  const r = await craftItem(bot, ctx, { item: 'bread', count: 3 }, opts)
+  const r = await craftItem(bot, ctx, { item: 'bread', count: 3, table }, opts)
   assert.deepEqual([r.status, state.crafts], ['full', 0])
 })
 
 test('craftItem: at a table no empty slot is not enough even beside a stack with room', async () => {
   const { bot, state } = setup({ items: inv(['bread', 5], ['wheat', 9]), blocks: tableBlocks, slots: 0 })
-  const r = await craftItem(bot, ctx, { item: 'bread', count: 3 }, opts)
+  const r = await craftItem(bot, ctx, { item: 'bread', count: 3, table }, opts)
   assert.deepEqual([r.status, state.crafts], ['full', 0])
 })
 
@@ -269,7 +269,7 @@ const clickStub = (items, bot) => {
 test('craftItem: the result stacks are merged into one', async () => {
   const { bot, items } = setup({ items: inv(['bread', 34], ['bread', 1], ['bread', 1], ['wheat', 3]), blocks: tableBlocks })
   clickStub(items, bot)
-  const r = await craftItem(bot, ctx, { item: 'bread' }, opts)
+  const r = await craftItem(bot, ctx, { item: 'bread', table }, opts)
   assert.deepEqual(r, { status: 'crafted', item: 'bread', made: 1, used: { wheat: 3 } })
   assert.deepEqual(items.filter(i => i.name === 'bread').map(i => i.count), [37])
 })
@@ -283,7 +283,7 @@ test('craftItem: the window is resynced between the last craft and the first mer
   bot.craft = async (...a) => { log.push('craft'); return craft(...a) }
   bot._syncWindow = async () => { log.push('sync') }
   bot.clickWindow = async s => { log.push('click'); return click(s) }
-  await craftItem(bot, ctx, { item: 'bread' }, opts)
+  await craftItem(bot, ctx, { item: 'bread', table }, opts)
   assert.deepEqual(log.slice(log.lastIndexOf('craft'), log.indexOf('click') + 1).slice(-2), ['sync', 'click'])
 })
 
@@ -300,14 +300,14 @@ test('craftItem: with little room the result stacks are merged after every craft
     bread.count--
     items.push({ name: 'bread', count: 1, type: bread.type, slot: 60 + stacksSeen.length })
   }
-  await craftItem(bot, ctx, { item: 'bread', count: 3 }, opts)
+  await craftItem(bot, ctx, { item: 'bread', count: 3, table }, opts)
   assert.deepEqual(stacksSeen, [1, 1, 1])
 })
 
 test('craftItem: a merge error still returns crafted', async () => {
   const { bot } = setup({ items: inv(['bread', 34], ['bread', 1], ['wheat', 3]), blocks: tableBlocks })
   bot.clickWindow = async () => { throw new Error('window gone') }
-  const r = await craftItem(bot, ctx, { item: 'bread' }, opts)
+  const r = await craftItem(bot, ctx, { item: 'bread', table }, opts)
   assert.deepEqual(r, { status: 'crafted', item: 'bread', made: 1, used: { wheat: 3 } })
 })
 
@@ -315,20 +315,20 @@ test('craftItem: no merge while another window is open', async () => {
   const { bot, items } = setup({ items: inv(['bread', 34], ['bread', 1], ['wheat', 3]), blocks: tableBlocks })
   clickStub(items, bot)
   bot.currentWindow = { other: true }
-  await craftItem(bot, ctx, { item: 'bread' }, opts)
+  await craftItem(bot, ctx, { item: 'bread', table }, opts)
   assert.equal(items.filter(i => i.name === 'bread').length, 2)
 })
 
 test('craftItem: resyncs the inventory window at entry', async () => {
   const { bot, state } = setup({ items: inv(['wheat', 3]), blocks: tableBlocks })
-  await craftItem(bot, ctx, { item: 'bread' }, opts)
+  await craftItem(bot, ctx, { item: 'bread', table }, opts)
   assert.ok(state.syncs >= 1)
 })
 
 test('craftItem: a stale local view is fixed by the entry resync', async () => {
   const { bot, items } = setup({ items: [], blocks: tableBlocks })
   bot._syncWindow = async () => { if (!items.some(i => i.name === 'wheat')) items.push({ name: 'wheat', count: 6, type: ID.wheat, slot: 36 }) }
-  const r = await craftItem(bot, ctx, { item: 'bread', count: 2 }, opts)
+  const r = await craftItem(bot, ctx, { item: 'bread', count: 2, table }, opts)
   assert.equal(r.status, 'crafted')
   assert.equal(r.made, 2)
 })
@@ -338,7 +338,7 @@ test('craftItem: a batch that did not land is followed by a resync before the re
   const syncsAtCraft = []
   const craft = bot.craft
   bot.craft = async (...args) => { syncsAtCraft.push(state.syncs); return craft(...args) }
-  await craftItem(bot, ctx, { item: 'bread', count: 1 }, opts)
+  await craftItem(bot, ctx, { item: 'bread', count: 1, table }, opts)
   assert.ok(syncsAtCraft.length >= 2)
   assert.ok(syncsAtCraft[1] > syncsAtCraft[0])
 })
@@ -351,7 +351,7 @@ test('craftItem: a cursor holding something at entry closes the open window befo
   bot.inventory.selectedItem = { name: 'wheat', count: 1 }
   bot.closeWindow = w => log.push(['close', w])
   bot._syncWindow = async () => { state.syncs++; log.push(['sync']) }
-  await craftItem(bot, ctx, { item: 'bread' }, opts)
+  await craftItem(bot, ctx, { item: 'bread', table }, opts)
   assert.deepEqual(log[0], ['close', win])
   assert.deepEqual(log[1], ['sync'])
 })

@@ -893,11 +893,9 @@
     {:status "unreachable" :reason "not-a-table"}]
    ["table given but far" {:inventory wheat3 :blocks {"9,64,0" "crafting_table"}} {:item "bread" :table (at 9 64 0)}
     {:status "out-of-reach" :reason "too-far" :table (at 9 64 0)}]
-   ["table known but far" {:inventory wheat3 :blocks {"20,64,0" "crafting_table"}} {:item "bread"}
-    {:status "out-of-reach" :reason "too-far" :table (at 20 64 0)}]
-   ["table beyond 32" {:inventory wheat3 :blocks {"40,64,0" "crafting_table"}} {:item "bread"}
+   ["table not handed over is never found" {:inventory wheat3 :blocks table} {:item "bread"}
     {:status "unreachable" :reason "no-table"}]
-   ["table near" {:inventory wheat3 :blocks table} {:item "bread"}
+   ["table near" {:inventory wheat3 :blocks table} {:item "bread" :table (at 1 64 0)}
     {:status "crafted" :item "bread" :made 1 :used {:wheat 3}}]
    ["spec recipes merge" {:inventory [{:name "dirt" :count 1}] :recipes {"gravel" {:count 2 :needs {"dirt" 1}}}}
     {:item "gravel"} {:status "crafted" :item "gravel" :made 2 :used {:dirt 1}}]

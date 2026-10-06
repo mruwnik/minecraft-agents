@@ -22,27 +22,16 @@ const eyeDistance = (bot, block) => {
 
 const isTable = block => block?.name === 'crafting_table'
 
-const findTable = (bot, reach) => bot.findBlocks({ matching: isTable, maxDistance: reach + 1, count: 8 })
-  .map(pos => bot.blockAt(pos))
-  .find(b => isTable(b) && eyeDistance(bot, b) <= reach) ?? null
-
 const posOf = block => ({ x: block.position.x, y: block.position.y, z: block.position.z })
 
-// { table } (a block or null) or { error } (an unreachable or out-of-reach result)
+// { table } (a block or null) or { error } (an unreachable or out-of-reach result). Only the table the caller hands
+// over counts: a body knows the tables it has seen, which the job keeps; a scan here would see through walls.
 const resolveTable = (bot, a, reach) => {
-  if (!a.table) return { table: findTable(bot, reach) }
+  if (!a.table) return { table: null }
   const block = bot.blockAt(new Vec3(a.table.x, a.table.y, a.table.z))
   if (!isTable(block)) return { error: { status: 'unreachable', reason: 'not-a-table' } }
   if (eyeDistance(bot, block) > reach) return { error: { status: 'out-of-reach', reason: 'too-far', table: posOf(block) } }
   return { table: block }
-}
-
-// no table in reach: the nearest known one (out of reach), or none
-const missingTable = bot => {
-  const pos = bot.findBlocks({ matching: isTable, maxDistance: 32, count: 1 })[0]
-  return pos
-    ? { status: 'out-of-reach', reason: 'too-far', table: { x: pos.x, y: pos.y, z: pos.z } }
-    : { status: 'unreachable', reason: 'no-table' }
 }
 
 // every candidate recipe ({name: n} of ingredients) and what is carried: jobs.items.shortfall chooses what to report as missing
@@ -173,7 +162,7 @@ export async function craftItem (bot, ctx, a, { timeScale = 1, reach = 4.5 } = {
   const found = resolveTable(bot, a, reach)
   if (found.error) return found.error
   const table = found.table
-  if (!table && bot.recipesAll(id, null, null).length === 0) return missingTable(bot)
+  if (!table && bot.recipesAll(id, null, null).length === 0) return { status: 'unreachable', reason: 'no-table' }
 
   ctx.onAbort(() => { if (bot.currentWindow) bot.closeWindow(bot.currentWindow) })
 

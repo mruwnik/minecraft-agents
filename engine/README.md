@@ -138,7 +138,7 @@ Statuses below are the common ones; `reason` and extra fields are in `js/primiti
 | `transfer` | `{pos, direction: deposit/withdraw, item, count}` | `ok` (`moved`), `missing`, `unreachable`, `no-item`, `full` |
 | `equip` / `unequip` | `{item, dest='hand'}` / `{}` | `equipped`, `no-item` / `ok`, `empty`, `full` |
 | `toss` | `{item, count?, slot?}` | `tossed`, `no-item` |
-| `craft` | `{item, count=1, table?}`; one recipe per call, never walks | `crafted`, `partial`, `no-item`, `out-of-reach`, `unreachable`, `full`, `cannot` (`jobs.items.shortfall` turns shortages into `short` and `alternatives`) |
+| `craft` | `{item, count=1, table?}`; one recipe per call, never walks; only the handed `table` counts (the job passes a seen one) | `crafted`, `partial`, `no-item`, `out-of-reach`, `unreachable`, `full`, `cannot` (`jobs.items.shortfall` turns shortages into `short` and `alternatives`) |
 | `furnace` | `{pos, op: read/load/take, input?, fuel?, output?}` | `ok`, `missing`, `unreachable`, `cannot`, `no-item`, `busy`, `rejected`, `full`; never waits for cooking |
 | `enchant` | `{pos, op: offers/enchant, item, choice?, levelCost?}` | `ok`, `enchanted`, `cannot`, `no-item`, `no-lapis`, `no-levels`, `full`, `failed` |
 | `chat` | `{message, to?}` validated by `engine.chat/validate` | `sent`, `gone`, `cannot` (`bad-name`, `empty`, `command`, `too-long`), `blocked` (rate), `failed` |

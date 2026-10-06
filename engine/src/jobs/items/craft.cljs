@@ -18,7 +18,7 @@
 (def args
   {:item {:doc "item name to craft" :default nil}
    :count {:doc "how many more to end up with" :default 1}
-   :table {:doc "crafting table position; the nearest within :radius when nil and the recipe needs one" :type :pos :default nil}
+   :table {:doc "crafting table position; the nearest seen within :radius when nil and the recipe needs one" :type :pos :default nil}
    :radius {:doc "how far to look for a crafting table" :default 32}})
 
 (defn check
@@ -56,12 +56,13 @@
   [c made]
   (let [{:keys [table radius]} (merge (:args c) (ctx/mem c))
         p (:primitives c)
+        handed? (some? table)
         table (or table (nearest-table p radius))]
     (if (nil? table)
       (no-table! c made)
       (do (ctx/update-mem! c assoc :table table)
           (if (u/within? (u/self-pos c) table 3)
-            (give-up! c made "unreachable")
+            (if handed? (give-up! c made "unreachable") :continue)
             (case (await (near/walk-near! c table 3))
               :blocked (give-up! c made "unreachable")
               :continue))))))

@@ -77,6 +77,16 @@
             (is (= {:made 1} result))
             (is (= 1 (count (tu/walked-to eng))))))))))
 
+(deftest craft-uses-a-seen-table-in-reach-without-walking
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p seen eng] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks {"2,64,0" "crafting_table"}} {:item "bread"}))]
+          (is (not-any? #(= :craft.gave-up (:kind %)) @seen))
+          (is (= {"bread" 1} (inv p)))
+          (is (= {:made 1} result))
+          (is (empty? (tu/walked-to eng))))))))
+
 (deftest craft-without-a-table-in-radius
   (async done
     (tu/run-async done

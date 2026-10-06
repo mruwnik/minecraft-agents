@@ -15,7 +15,7 @@
 (defn setup [world]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake (merge {:floor tu/walk-floor} world))
+        p (tu/seeing-all (tu/fake (merge {:floor tu/walk-floor} world)))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen :clock clock}))
@@ -547,8 +547,8 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:self {:food 12} :inventory [{:name "wheat" :count 30}] :blocks table-near})]
           (await (run-food! eng))
-          (is (= ["bread"] (call-args p "craft" "item")))
-          (is (= [2] (call-args p "craft" "count")))
+          (is (= "bread" (last (call-args p "craft" "item"))))
+          (is (= 2 (last (call-args p "craft" "count"))))
           (is (= 24 (carried p "wheat")))
           (is (= 0 (carried p "bread")) "eaten by the next rounds")
           (is (> (food p) 12)))))))
@@ -608,7 +608,7 @@
           (await (run-food! eng))
           (is (= ["wheat"] (call-args p "transfer" "item")))
           (is (= [6] (call-args p "transfer" "count")))
-          (is (= [2] (call-args p "craft" "count")))
+          (is (= 2 (last (call-args p "craft" "count"))))
           (is (> (food p) 12) "baked and eaten"))))))
 
 ;; ---------------------------------------------------------------- top-up

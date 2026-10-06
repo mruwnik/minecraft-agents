@@ -452,18 +452,13 @@
   (let [recipe (get (:recipes w) item)
         inv #(:inventory %)
         crafting-table-near? (fn [pos] (and (= "crafting_table" (block-name w pos)) (<= (dist (body-pos w) pos) craft-reach)))
-        table-near (some crafting-table-near? (keys (:blocks w)))
-        far-table (->> (keys (:blocks w))
-                       (filter #(and (= "crafting_table" (block-name w %)) (<= (dist (body-pos w) %) 32)))
-                       (sort-by #(dist (body-pos w) %)) first)
         short-of (fn [w] (into {} (keep (fn [[n c]] (let [m (- c (carried (inv w) n))] (when (pos? m) [n m])))) (:needs recipe)))
         shortage (fn [w] {:recipes [(:needs recipe)] :have (into {} (map (fn [i] [(:name i) (carried (inv w) (:name i))])) (inv w))})]
     (cond
       (nil? recipe) [w {:status "cannot" :reason "no-recipe"}]
       (and (:table recipe) table (not= "crafting_table" (block-name w table))) [w {:status "unreachable" :reason "not-a-table"}]
       (and (:table recipe) table (not (crafting-table-near? table))) [w {:status "out-of-reach" :reason "too-far" :table table}]
-      (and (:table recipe) (not table) (not table-near) far-table) [w {:status "out-of-reach" :reason "too-far" :table far-table}]
-      (and (:table recipe) (not table) (not table-near)) [w {:status "unreachable" :reason "no-table"}]
+      (and (:table recipe) (not table)) [w {:status "unreachable" :reason "no-table"}]
       (and (empty? (short-of w)) (>= (clojure.core/count (inv w)) 36) (zero? (carried (inv w) item))) [w {:status "full" :made 0 :used {}}]
       :else
       (let [[w' made used] (loop [w w made 0 used {} batches (js/Math.ceil (/ count (:count recipe)))]
