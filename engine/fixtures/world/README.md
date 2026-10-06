@@ -3,7 +3,7 @@
 Live test cases as data. Each case gets a fresh 32x32 plot of a reserved grid on the test server (x/z 20000..20640,
 floor at y 149, body level y 150), is built, run with one probe body and judged from the body's event log and a few
 RCON checks. Run them with `node tools/world-test.mjs` (runner: `dashboard/src/world_test/`, build
-`tools/compile dashboard world-test`; unit tests `tools/compile dashboard world-test-unit && node dashboard/out/world-test-unit.cjs`).
+`tools/compile dashboard world-test`; unit tests `tools/compile dashboard world-test-unit && node dashboard/out/world-test-unit.cjs`). Before starting the body it runs `tools/compile engine body` when `engine/out/body.cjs` is older than a file under `engine/src` or `engine/js`.
 
 ```
 node tools/world-test.mjs                                  # every file here, once

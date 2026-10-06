@@ -12,6 +12,7 @@
             [cljs.reader :as reader]
             [clojure.string :as str]
             [dashboard.rcon :as rcon]
+            [world-test.build :as build]
             [world-test.expect :as x]
             [world-test.fixture :as f]
             [world-test.lease :as lease]))
@@ -130,6 +131,31 @@
                                                       :note "temporary test body"}})
                                 nil 1)))
     (rcon! [(str "whitelist add " body)])))
+
+(defn source-mtimes
+  "mtimes (ms) of every file under the dirs."
+  [dirs]
+  (letfn [(walk [dir]
+            (mapcat (fn [e]
+                      (let [p (path/join dir (.-name e))]
+                        (cond (.isDirectory e) (walk p)
+                              (.isFile e) [(.-mtimeMs (fs/statSync p))]
+                              :else [])))
+                    (array-seq (fs/readdirSync dir #js {:withFileTypes true}))))]
+    (mapcat #(when (fs/existsSync %) (walk %)) dirs)))
+
+(defn refresh-body-build!
+  "Rebuilds engine/out/body.cjs (tools/compile engine body) when it is older than a file under engine/src or engine/js.
+  Returns true when the build is current (or was refreshed), false when the compile failed."
+  []
+  (let [bundle (repo-path "engine" "out" "body.cjs")
+        built (when (fs/existsSync bundle) (.-mtimeMs (fs/statSync bundle)))]
+    (if-not (build/stale? built (source-mtimes [(repo-path "engine" "src") (repo-path "engine" "js")]))
+      true
+      (let [r (cp/spawnSync (repo-path "tools" "compile") #js ["engine" "body"] #js {:encoding "utf8"})]
+        (if (zero? (.-status r))
+          (do (log! "engine/out/body.cjs was stale: rebuilt with tools/compile engine body") true)
+          (do (log! "engine/out/body.cjs is stale and tools/compile engine body failed:\n" (.-stdout r) (.-stderr r)) false))))))
 
 (def bodies (atom {}))
 
@@ -547,6 +573,7 @@
                    (empty? cases) (do (log! "no cases selected") 2)
                    (seq bad) (do (run! #(log! (:id %) ": " (str/join "; " (:problems %))) bad) 2)
                    (running? opts) (do (log! "the body " (:body opts) " already runs; stop it first") 2)
+                   (not (refresh-body-build!)) 2
                    :else
                    (.then (players-near opts)
                           (fn [refusal]
