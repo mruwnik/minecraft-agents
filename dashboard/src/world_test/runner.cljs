@@ -87,11 +87,17 @@
 
 (defn file-size [file] (if (fs/existsSync file) (.-size (fs/statSync file)) 0))
 
-(defn read-events-from
-  "The events logged in file from byte offset on (the whole file when it shrank), parsed; unreadable lines skipped."
-  [file offset]
-  (let [size (file-size file)
-        start (if (< size offset) 0 offset)]
+(defn log-cursor
+  "Where the log stands now: {:ino :pos}. The inode lets a reader find the file again after the engine rotates it."
+  [file]
+  (if (fs/existsSync file)
+    (let [st (fs/statSync file)] {:ino (.-ino st) :pos (.-size st)})
+    {:ino nil :pos 0}))
+
+(defn read-from
+  "The parsed events of file from byte start on; unreadable lines skipped."
+  [file start]
+  (let [size (file-size file)]
     (if (<= size start)
       []
       (let [fd (fs/openSync file "r")
@@ -102,6 +108,22 @@
              (keep #(try (reader/read-string {:default (fn [_ v] v)} %) (catch :default _ nil)))
              (filter map?)
              vec)))))
+
+(defn read-events-from
+  "The events logged after cursor, oldest first. When the engine rotated the log since (events.edn.N), the tail of the
+  segment that was the active file at cursor, the newer segments, then the active file."
+  [file {:keys [ino pos]}]
+  (let [segments (mapv #(str file "." %) (range 3 0 -1))
+        cur-ino (when (fs/existsSync file) (.-ino (fs/statSync file)))]
+    (if (or (nil? ino) (= ino cur-ino))
+      (read-from file pos)
+      (let [live (filterv fs/existsSync segments)
+            from (first (keep-indexed #(when (= ino (.-ino (fs/statSync %2))) %1) live))]
+        (if from
+          (vec (concat (read-from (nth live from) pos)
+                       (mapcat #(read-from % 0) (subvec live (inc from)))
+                       (read-from file 0)))
+          (read-from file 0))))))
 
 (defn await-event
   "Polls the log from offset until an event matching pattern with :time-ms >= since-ms comes; resolves to it or nil
@@ -217,7 +239,7 @@
         scenario (path/join dir "scenario.edn")
         out (path/join dir "body.log")
         since (js/Date.now)
-        offset (file-size (events-file opts))]
+        offset (log-cursor (events-file opts))]
     (fs/mkdirSync dir #js {:recursive true})
     (fs/writeFileSync scenario (pr-str {:register [] :queue []}))
     (let [fd (fs/openSync out "a")
@@ -519,12 +541,12 @@
                        (.then #(rcon! (f/body-commands origin (:body opts) rc)))
                        (.then #(ensure-at-start! {:send rcon! :sleep sleep} origin (:body opts) rc))
                        (.then (fn [why] (when why (throw (js/Error. why)))))
-                       (.then #(reset! pre-register {:offset (file-size (events-file opts)) :from-ms (js/Date.now)}))
+                       (.then #(reset! pre-register {:offset (log-cursor (events-file opts)) :from-ms (js/Date.now)}))
                        (.then #(when register (put-register! opts register)))
                        (.then #(sleep (* 1000 (get-in rc [:body :settle-s]))))
                        (.then #(rcon! (f/clear-hostiles-commands grid origin rc)))
                        (.then (fn []
-                                (let [offset (file-size (events-file opts))
+                                (let [offset (log-cursor (events-file opts))
                                       t0 (js/Date.now)]
                                   (-> (run-steps! opts origin rc offset t0)
                                       (.then (fn [ids]

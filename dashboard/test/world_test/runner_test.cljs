@@ -1,5 +1,8 @@
 (ns world-test.runner-test
   (:require [cljs.test :refer [deftest is async]]
+            ["fs" :as fs]
+            ["os" :as os]
+            ["path" :as path]
             [world-test.runner :as r]))
 
 (deftest the-body-launch-argv-caps-new-space
@@ -49,3 +52,22 @@
   (is (r/stop-batch? {:stop-on-fail true} [{:status :error}]))
   (is (not (r/stop-batch? {:stop-on-fail true} [{:status :pass} {:status :skipped}])))
   (is (not (r/stop-batch? {} [{:status :fail}]))))
+
+(deftest the-event-reader-follows-a-log-rotation
+  (let [dir (fs/mkdtempSync (path/join (os/tmpdir) "wt-rot-"))
+        file (path/join dir "events.edn")
+        seg (str file ".1")
+        ev (fn [& ks] (apply str (map #(str "{:k " % "}\n") ks)))
+        ks (fn [evs] (mapv :k evs))]
+    (fs/writeFileSync file (ev 1 2))
+    (let [cur (r/log-cursor file)]
+      (fs/appendFileSync file (ev 3))
+      (is (= [3] (ks (r/read-events-from file cur))) "no rotation: the tail")
+      (fs/renameSync file seg)
+      (fs/writeFileSync file (ev 4 5 6 7 8 9 10 11))
+      (is (= [3 4 5 6 7 8 9 10 11] (ks (r/read-events-from file cur))) "rotated, new file longer than the offset: tail of .1 then the new file")
+      (fs/renameSync seg (str file ".2"))
+      (fs/renameSync file seg)
+      (fs/writeFileSync file (ev 12))
+      (is (= [3 4 5 6 7 8 9 10 11 12] (ks (r/read-events-from file cur))) "rotated twice"))
+    (fs/rmSync dir #js {:recursive true :force true})))
