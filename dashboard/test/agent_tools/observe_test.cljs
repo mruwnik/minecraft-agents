@@ -811,3 +811,53 @@
         (.utimesSync fs mutex 1 1)
         (is (nil? (code-thrown #(observe-lock/reclaim-stale-lock! lock))) "a long-dead reclaimer's mutex is cleared")
         (is (= ["obs.lock"] (vec (.readdirSync fs dir))))))))
+
+;; Submit waits are ephemeral: no observer lock, no checkpoint, only attention raised after they start
+
+(defn wait-for! [f opts]
+  (observe/wait-for! (select-keys (:req f) [:agent :world :state :socket-path]) (merge {:timeout "1s"} opts) (:get! f)))
+
+(defn observer-files [f]
+  (let [dir (.dirname path (:file f))]
+    (if (.existsSync fs dir) (vec (.readdirSync fs dir)) [])))
+
+(deftest a-submit-wait-does-not-contend-with-an-observer-wait
+  (with-fixture ["1s"]
+    (fn [f]
+      (let [release (observe-lock/acquire! (.dirname path (:file f)) "agent")]
+        (js/setTimeout #(apply push! f search-job) 20)
+        (-> (wait-for! f {:watch ["j4"]})
+            (.then (fn [wake]
+                     (is (= :job-finished (:wake wake)))
+                     (js/setTimeout #(push! f (assoc (event :action :done {:name "dig"}) :seq 4 :context {:action-id "a1"})) 20)
+                     (wait-for! f {:watch-actions ["a1"]})))
+            (.then (fn [wake] (is (not= :observer-busy (:reason wake))) (is (= :action-finished (:wake wake)))))
+            (.finally release))))))
+
+(deftest two-submit-waits-at-once-both-finish
+  (with-fixture ["1s"]
+    (fn [f]
+      (js/setTimeout #(apply push! f search-job) 20)
+      (-> (js/Promise.all #js [(wait-for! f {:watch ["j4"]}) (wait-for! f {:watch ["j4"]})])
+          (.then (fn [wakes] (is (= [:job-finished :job-finished] (mapv :wake wakes)))))))))
+
+(deftest a-submit-wait-ignores-attention-outstanding-at-its-start-but-wakes-on-new
+  (with-fixture ["1s"]
+    (fn [f]
+      (swap! (:world f) assoc-in [:outstanding :r] blocked)
+      (js/setTimeout (fn []
+                       (swap! (:world f) assoc-in [:outstanding :r2] blocked)
+                       (push! f (assoc (event :attention :raised) :seq 1 :attention :required)))
+                     60)
+      (-> (wait-for! f {:watch ["j9"]})
+          (.then (fn [wake]
+                   (is (= :attention (:wake wake)))
+                   (is (= ["r2"] (mapv :id (:requests wake))) "only the request raised after the start wakes")))))))
+
+(deftest a-submit-wait-leaves-no-files-after-success-timeout-or-abort
+  (with-fixture ["1s"]
+    (fn [f]
+      (js/setTimeout #(apply push! f search-job) 20)
+      (-> (wait-for! f {:watch ["j4"]})
+          (.then (fn [_] (wait-for! f {:timeout "50ms" :watch ["j9"]})))
+          (.then (fn [_] (is (= [] (observer-files f)))))))))
