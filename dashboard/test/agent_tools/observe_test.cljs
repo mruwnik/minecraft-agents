@@ -804,3 +804,40 @@
       (-> (wait-for! f {:watch ["j4"]})
           (.then (fn [_] (wait-for! f {:timeout "50ms" :watch ["j9"]})))
           (.then (fn [_] (is (= [] (observer-files f)))))))))
+
+;; Deaths through the wait loop
+
+(defn died-item [result] (->> (get-in result [:summary :items]) (filter #(= :died (:event %))) first))
+
+(defn plain-job-event-at [kind id seq data] (assoc (plain-job-event kind id data) :seq seq))
+
+(deftest a-death-names-a-job-queued-before-the-call-and-a-second-death-does-not-repeat-the-first
+  (with-fixture []
+    (fn [f]
+      (swap! (:world f) assoc :instances {"j1" {:spec {:op :leaf :job 'jobs.explore.search}}})
+      (-> ((:wait! f))
+          (.then (fn [_]
+                   (push! f (plain-job-event-at :cancelled "j1" 1 {:by :death}) (assoc (event :body :died {}) :seq 2))
+                   ((:wait! f))))
+          (.then (fn [first-death]
+                   (is (= [{:id "j1" :name "jobs.explore.search"}] (:cancelled-jobs (died-item first-death))))
+                   (push! f (assoc (event :body :died {}) :seq 3))
+                   ((:wait! f))))
+          (.then (fn [second-death]
+                   (is (= :died (:event (died-item second-death))))
+                   (is (not (contains? (died-item second-death) :cancelled-jobs)))))))))
+
+(deftest cancels-from-an-earlier-call-are-kept-for-the-death-in-a-later-one
+  (with-fixture []
+    (fn [f]
+      (swap! (:world f) assoc :instances {"j1" {:spec {:op :leaf :job 'jobs.explore.search}}})
+      (-> ((:wait! f))
+          (.then (fn [_]
+                   (push! f (plain-job-event-at :cancelled "j1" 1 {:by :death}))
+                   ((:wait! f))))
+          (.then (fn [_]
+                   (swap! (:world f) assoc :instances {})
+                   (push! f (assoc (event :body :died {}) :seq 2))
+                   ((:wait! f))))
+          (.then (fn [death]
+                   (is (= [{:id "j1" :name "jobs.explore.search"}] (:cancelled-jobs (died-item death))))))))))

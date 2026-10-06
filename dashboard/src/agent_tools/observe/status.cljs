@@ -173,9 +173,23 @@
       (clean-pairs :wake :job-finished :job (get-in e [:context :job-id]) :result (:kind e)
                    :message (clip (or (:message e) (:error d)))))))
 
+(defn spec-label
+  "The job name of a spec node as the engine prints it (a leaf's job, else the combinator form)."
+  [{:keys [op job children child]}]
+  (case op
+    :leaf (str job)
+    :repeat (str "(repeat " (spec-label child) ")")
+    (str "(" (some-> op name) " " (str/join " " (map spec-label children)) ")")))
+
+(defn instance-names
+  "Job id -> name for the scheduler instances in a snapshot (jobs queued before the observer's call began)."
+  [snap]
+  (into {} (keep (fn [[id inst]] (when (:spec inst) [(id-str id) (clip (spec-label (:spec inst)) 120)])))
+        (get-in snap [:state :instances])))
+
 (defn track-deaths
   "Fold an event into the death tracker {:names :cancelled}: job names from :queued events, and the jobs a death
-  cancelled (the engine emits those before the :died event)."
+  cancelled (the engine emits those before the :died event; clear-reported drops them once reported)."
   [tracker e]
   (let [id (get-in e [:context :job-id])]
     (cond
@@ -183,6 +197,12 @@
       (and (= :job (:source e)) (= :cancelled (:kind e)) (= :death (get-in e [:data :by])))
       (update tracker :cancelled (fnil conj []) (clean-pairs :id id :name (get-in tracker [:names id])))
       :else tracker)))
+
+(defn clear-reported
+  "The tracker without its cancelled jobs once the :died event they belong to has been seen."
+  [tracker e]
+  (cond-> tracker
+    (and (= :body (:source e)) (= :died (:kind e))) (dissoc :cancelled)))
 
 (defn death-jobs
   "The jobs the tracker saw cancelled by death when e is the :died event, else nil."

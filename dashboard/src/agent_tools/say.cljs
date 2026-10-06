@@ -46,7 +46,7 @@
     ("ENOENT" "ECONNREFUSED")
     {:ok false :reason :no-running-body
      :message "The body is not running (no event socket answers); the message was not sent."}
-    {:ok false :reason :transport-error :confirmation :unknown
+    {:ok false :reason (http/transport-reason error) :confirmation :unknown
      :message "Chat confirmation is unknown; inspect server chat before sending again."}))
 
 (defn print-edn! [value] (.write (.-stdout js/process) (str (data/write-edn value) "\n")))

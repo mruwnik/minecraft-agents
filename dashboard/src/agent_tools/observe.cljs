@@ -8,7 +8,7 @@
             ["node:path" :as path]
             [clojure.string :as str]
             ["node:timers/promises" :as timers]
-            [agent-tools.observe.status :refer [attention-changes classify code-of coded collect compact-status death-jobs id-str recovered? signature stale-reconnect? summary-result track-deaths with-death-jobs]]
+            [agent-tools.observe.status :refer [attention-changes classify code-of coded collect compact-status death-jobs clear-reported id-str instance-names recovered? signature stale-reconnect? summary-result track-deaths with-death-jobs]]
             [agent-tools.observe.lock :refer [acquire! checkpoint! observer-count saved-checkpoint]]
             [agent-tools.observe.request :refer [legacy-notice request-for usage wait-options]]
             [shadow.cljs.modern :refer [js-await]]))
@@ -86,14 +86,14 @@
           ephemeral? (:ephemeral request)
           release (if ephemeral? (fn []) (acquire! dir (:observer opts)))
           file (.join path dir (str (:observer opts) ".edn"))
-          save! #(when-not ephemeral? (checkpoint! file %))
+          deaths (atom {})
+          save! #(when-not ephemeral? (checkpoint! file (assoc % :cancelled (:cancelled @deaths))))
           seen-now (fn [snap] (if ephemeral? (into {} (map (fn [[id r]] [(id-str id) (signature r)])) (:outstanding snap)) {}))
           aborted? #(and signal (aget signal "aborted"))
           deadline (volatile! nil)
           timeout-finish (volatile! nil)
           st (atom nil)
           summary (atom {:counts {} :items [] :more false})
-          deaths (atom {})
           read! (fn [endpoint]
                   (js-await [response (get! (:socket-path request) endpoint
                                             {:signal signal :timeout-ms (max 1 (min request-timeout-ms (- @deadline (js/Date.now))))})]
@@ -128,11 +128,13 @@
                        lookup (or (nil? saved) (true? (:lookup saved)))]
                    (reset! st {:cursor (or (:cursor saved) (:cursor snap)) :generation generation
                                :seen (or (:seen saved) (seen-now snap)) :lookup lookup :pending (vec (:pending saved)) :snap snap})
+                   (reset! deaths {:names (instance-names snap) :cancelled (vec (:cancelled saved))})
                    (when-not saved
                      (save! (select-keys @st [:cursor :generation :seen :lookup])))
                    (vreset! timeout-finish timeout!)
                    (if (and saved (not= (:generation saved) generation))
                      (do (swap! st assoc :cursor (:cursor snap) :seen {} :pending [] :lookup true)
+                         (swap! deaths dissoc :cancelled)
                          (reset-with-status! :engine-restarted))
                      (let [body (or (:body snap) (:agent request))
                            watching? (seq (:watch opts))]
@@ -173,11 +175,13 @@
                                      ;; The restart wake says nothing of the events skipped before it (old jobs); the
                                      ;; watched jobs are looked up in the history on the next call.
                                      (reset! summary {:counts {} :items [] :more false})
+                                     (swap! deaths dissoc :cancelled)
                                      (swap! st assoc :snap snap :cursor (:cursor snap) :seen {} :pending [] :lookup true)
                                      (finish! (array-map :wake :reset :reason :engine-restarted)))
                                    (let [failed? (= :reconnect-failed (:kind event))
                                          _ (swap! deaths track-deaths event)
                                          dead-jobs (death-jobs @deaths event)
+                                         _ (swap! deaths clear-reported event)
                                          immediate (when-not (and failed? (stale-reconnect? event later))
                                                      (some-> (classify event opts body) (with-death-jobs dead-jobs)))
                                          skip! (fn [] (swap! summary collect event dead-jobs) (more))]

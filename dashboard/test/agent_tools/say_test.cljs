@@ -30,7 +30,7 @@
       (is (re-find #"not sent" (:message absent))))))
 
 (deftest every-other-failure-leaves-delivery-unknown
-  (doseq [[code reason] [["ETIMEDOUT" :transport-error] ["ECONNRESET" :transport-error]]]
+  (doseq [[code reason] [["ETIMEDOUT" :timeout] ["ECONNRESET" :transport-error]]]
     (let [uncertain (say/failure-for (coded code))]
       (is (= reason (:reason uncertain)) code)
       (is (= :unknown (:confirmation uncertain))))))

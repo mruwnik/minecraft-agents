@@ -273,10 +273,9 @@ Add and put both create or replace a custom entry; built-in entries cannot be re
                  (post! (:socketPath r) (assoc (:request r) :generation-id generation) opts)))))))
 
 (defn failure-for [error sent?]
-  (do
-    (cond-> {:ok false :reason (http/transport-reason error)}
-      sent? (assoc :confirmation :unknown
-                   :message "Inspect trigger show/list before retrying; mutations are not automatically retried."))))
+  (cond-> {:ok false :reason (http/transport-reason error)}
+    sent? (assoc :confirmation :unknown
+                 :message "Inspect trigger show/list before retrying; mutations are not automatically retried.")))
 
 (defn print-text! [text] (.write (.-stdout js/process) text))
 
