@@ -1,0 +1,35 @@
+;; Card 6dbb8337 (items.obtain :craft, a seen table the craft cannot reach). The body stands in a sealed 3x3 hut (walls
+;; 2 thick); a crafting table stands 15 blocks east of it in the open. The body starts beside the table, looks at it
+;; (the table must be seen), then is moved into the hut with a teleport.
+{:defaults
+ {:tags [:fetch :crafting]
+  :time :any
+  :plot {:height 12}
+  :blocks [[:fill [1 0 13] [7 3 19] "stone"] [:fill [3 0 15] [5 1 17] "air"]
+           [:set [19 0 16] "crafting_table"]]
+  :body {:at [14.5 0 16.5] :settle-s 3}
+  :limit-s 90}
+ :cases
+ [{:name "planks-new-table-placed"
+   :body {:inventory [["oak_planks" 7] ["stick" 4]]}
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"] [:wait-s 3]
+         [:rcon "execute as $BODY at @s run tp @s ~-10 ~ ~"] [:wait-s 2]
+         [:job (jobs.items.get-tool {:kind "pickaxe"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
+   :after [[:item "wooden_pickaxe" 1] [:block [19 0 16] "crafting_table"]]}
+  {:name "carried-table-used"
+   :body {:inventory [["crafting_table" 1] ["oak_planks" 3] ["stick" 2]]}
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"] [:wait-s 3]
+         [:rcon "execute as $BODY at @s run tp @s ~-10 ~ ~"] [:wait-s 2]
+         [:job (jobs.items.get-tool {:kind "pickaxe"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
+   :after [[:item "wooden_pickaxe" 1] [:item "oak_planks" 0]]}
+  {:name "three-planks-two-sticks-table-unreachable"
+   :body {:inventory [["oak_planks" 3] ["stick" 2]]}
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"] [:wait-s 3]
+         [:rcon "execute as $BODY at @s run tp @s ~-10 ~ ~"] [:wait-s 2]
+         [:job (jobs.items.get-tool {:kind "pickaxe"})]]
+   :expect [{:event {:source :job :data {:reason :table-unreachable}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 15}]
+   :after [[:item "wooden_pickaxe" 0] [:item "crafting_table" 0] [:item "oak_planks" 3] [:item "stick" 2]
+           [:entities "type=item" [[0 -1 0] [32 5 32]] 0]]}]}
