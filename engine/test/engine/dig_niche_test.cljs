@@ -160,3 +160,25 @@
           (await (run! s {}))
           (is (= :place-failed (:reason (failed seen))))
           (is (not (contains? (kinds-seen seen) :dig-niche.sealed))))))))
+
+(deftest scan-reports-refusals-and-stops-at-the-first-allowed-site
+  (let [p (tu/fake {:blocks (merge ground hill) :inventory [{:name "iron_pickaxe" :count 1}]})
+        asked (atom 0)]
+    (is (= {:site nil :refused? true} (niche/scan p 16 (fn [_ _] false))))
+    (is (= {:site nil :refused? false} (niche/scan (tu/fake {:blocks ground}) 16 (fn [_ _] true))))
+    (is (= {:stand {:x 3 :y 64 :z 0} :dir [1 0]}
+           (:site (niche/scan p 16 (fn [_ _] (swap! asked inc) true)))))
+    (is (= 1 @asked) "stops at the first allowed site")))
+
+(deftest a-fully-refused-hill-is-scanned-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen] :as s} (setup [hill-zone])
+              scans (atom 0)
+              scan niche/scan]
+          (with-redefs [niche/scan (fn [& args] (swap! scans inc) (apply scan args))
+                        niche/find-site (fn [& _] (swap! scans inc) nil)]
+            (await (run! s {})))
+          (is (= :refused (:reason (failed seen))))
+          (is (= 1 @scans)))))))

@@ -80,22 +80,40 @@
   (not (or (some #(access/trespass-refusal in :dig %) (dug-cells f dir))
            (some #(access/trespass-refusal in :place %) (door-cells f dir)))))
 
-(defn find-site
-  "The nearest {:stand :dir} within reach of the feet cell where a niche can be cut (and (ok? stand dir) holds, default
-  always), or nil."
-  ([p reach] (find-site p reach (constantly true)))
-  ([p reach ok?]
+(defn stand-ok?
+  "Cheap per-cell part of niche-ok?: dry standing room on solid ground, whatever the direction."
+  [p f]
+  (let [solid? #(sh/solid? (u/block-name p %))
+        up (assoc f :y (inc (:y f)))]
+    (and (solid? (assoc f :y (dec (:y f)))) (not (solid? f)) (not (solid? up))
+         (not (dig-in/wet? p f)) (not (dig-in/wet? p up)))))
+
+(defn scan
+  "One nearest-first pass within reach of the feet cell, stopping at the first {:stand :dir} where a niche can be cut and
+  (ok? stand dir) holds. Returns {:site that-or-nil :refused? whether a niche that would do was turned down by ok?}."
+  [p reach ok?]
   (let [{:keys [x y z]} (sh/feet p)
         offsets (sort-by (fn [[dx dz]] (+ (* dx dx) (* dz dz)))
                          (for [dx (range (- reach) (inc reach)) dz (range (- reach) (inc reach))
                                :when (<= (+ (* dx dx) (* dz dz)) (* reach reach))]
-                           [dx dz]))]
-    (some (fn [[dx dz]]
-            (some (fn [dy]
-                    (let [f {:x (+ x dx) :y (+ y dy) :z (+ z dz)}]
-                      (some #(when (and (niche-ok? p f %) (ok? f %)) {:stand f :dir %}) [[1 0] [-1 0] [0 1] [0 -1]])))
-                  [0 -1 1 -2 2 -3 3]))
-          offsets))))
+                           [dx dz]))
+        refused (volatile! false)
+        try-dir (fn [f dir]
+                  (when (niche-ok? p f dir)
+                    (if (ok? f dir) {:stand f :dir dir} (do (vreset! refused true) nil))))
+        site (some (fn [[dx dz]]
+                     (some (fn [dy]
+                             (let [f {:x (+ x dx) :y (+ y dy) :z (+ z dz)}]
+                               (when (stand-ok? p f) (some #(try-dir f %) [[1 0] [-1 0] [0 1] [0 -1]]))))
+                           [0 -1 1 -2 2 -3 3]))
+                   offsets)]
+    {:site site :refused? @refused}))
+
+(defn find-site
+  "The nearest {:stand :dir} within reach of the feet cell where a niche can be cut (and (ok? stand dir) holds, default
+  always), or nil."
+  ([p reach] (find-site p reach (constantly true)))
+  ([p reach ok?] (:site (scan p reach ok?))))
 
 (def dig-reach "How far from a cell the body digs it without walking closer." 4)
 
@@ -159,9 +177,10 @@
         ok? (partial permitted? in)
         saved (:site (ctx/mem c))
         reach (:reach (:args c))
-        site (or (when (and saved (ok? (:stand saved) (:dir saved))) saved) (find-site p reach ok?))]
+        kept (when (and saved (ok? (:stand saved) (:dir saved))) saved)
+        {:keys [site refused?]} (if kept {:site kept} (scan p reach ok?))]
     (if (nil? site)
-      (if (find-site p reach)
+      (if refused?
         (fail! c :refused "every hillside or wall that would do is another's (zone, claim or plan)")
         (fail! c :no-site "no hillside or wall to cut a niche into"))
       (let [_ (ctx/update-mem! c assoc :site site)
