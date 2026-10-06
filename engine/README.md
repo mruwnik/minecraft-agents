@@ -59,6 +59,7 @@ Layout:
   A still body in an unchanged world looks again every `:still-ms` (30 s); unchanged means no block or chunk update within 50 blocks, same daylight, and same torch in hand.
 - `src/jobs/` the jobs, one namespace each (`jobs.survival.eat`); the build finds them. Helpers: `jobs.lib.*` (shared,
   including the walker `jobs.lib.walk`/`near`/`pass`), `jobs.<area>.*` (one area's). `jobs/hooks.edn` names the hooks.
+  Results: `jobs.lib.result` (`stop!` gives up with reason/text/`:cause`, `cause-of` nests a child's stop, `finish!` hands success data).
 - `src/triggers/` the triggers, plain fns by area (`triggers.survival.hungry`); `defaults.edn` is the default set.
 - `scenarios/*.edn` scenarios (`survival.edn`, `woodcutter.edn`, `pace-cuts.edn`, ...; `live-*.edn` are live-test scenarios).
 - `test/engine/` cljs tests (helpers in `engine.test-util`); `test/engine/fake.cljs` is the scriptable fake world.
