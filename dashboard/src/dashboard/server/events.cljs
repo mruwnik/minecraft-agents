@@ -1,37 +1,18 @@
 (ns dashboard.server.events
   "One body's action log, the paged canonical event feed and attention resolution."
   (:require [dashboard.engine-events :as ee]
-            ["fs" :as fs]
             [dashboard.guard :as guard]
             [dashboard.edn :as edn]
-            [dashboard.server.files :refer [file-exists? read-range]]
             [dashboard.server.responses :refer [guarded-post! send-edn!]]
-            [dashboard.server.engine-state :refer [body-key canonical-engine? engine-folder? event-page! event-page-size event-socket-request! events-file state-cursor]]))
+            [dashboard.server.engine-state :refer [canonical-engine? engine-folder? event-page! event-page-size event-socket-request! state-cursor]]))
 
 ;; ---------------------------------------------------------------- one body's action log
-;; the last bytes of events.jsonl, filtered to what the popup lists; cached per folder until the file's size changes
-(def log-tail-bytes (* 1024 1024))
-(def log-cache (atom {}))
 (def default-log-limit 300)
 (def max-log-limit 2000)
 
 (defn log-limit [text]
   (let [n (js/parseInt text 10)]
     (if (and (not (js/isNaN n)) (pos? n)) (min n max-log-limit) default-log-limit)))
-
-(defn read-log [body]
-  (let [file (events-file body)
-        size (.-size (.statSync fs file))
-        k (body-key body)
-        cached (get @log-cache k)]
-    (if (= size (:size cached))
-      (:events cached)
-      (let [start (max 0 (- size log-tail-bytes))
-            bytes (read-range file start size)
-            whole (if (pos? start) (ee/drop-torn-head bytes) bytes)
-            events (mapv ee/log-entry (filter ee/log-worthy? (ee/parse-event-lines (ee/decode-bytes whole))))]
-        (swap! log-cache assoc k {:size size :events events})
-        events))))
 
 (defn query-int [query key fallback]
   (let [n (js/parseInt (.get query key) 10)]
@@ -84,15 +65,7 @@
         (.catch (fn [e] (when-not (.-headersSent res)
                           (send-edn! res 503 {:error (ee/socket-failure-text e)})))))
 
-    ;; Compatibility for old running bodies only. A body with events.edn/events.sock never also reads JSONL.
-    (not (file-exists? (events-file body)))
-    (send-edn! res 404 {:error "no event stream"})
-
-    :else
-    (send-edn! res 200 {:body (:name body) :generation-id "legacy" :stream-id "legacy"
-                        :cursor {:stream-id "legacy" :seq (or (:seq (peek (read-log body))) 0)}
-                        :events (vec (take-last (log-limit (.get query "limit")) (read-log body)))
-                        :outstanding {} :gap? false :more? false})))
+    :else (send-edn! res 404 {:error "no event stream"})))
 
 (defn resolve-attention! [req res body]
   (guarded-post!

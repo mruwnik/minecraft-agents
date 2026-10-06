@@ -1,6 +1,6 @@
 (ns dashboard.engine-events
   "What the dashboard knows about an ENGINE body: everything comes from the events it appends to
-  worlds/<world>/agents/<name>/engine/events.jsonl for legacy bodies, or the engine-owned EDN event service. Pure."
+  the engine-owned EDN event service. Pure."
   (:require [clojure.string :as str]))
 
 ;; The longest gap between two events inside one run was ~10 s (a restart gap is 60 s+), so 30 s is 3x margin.
@@ -248,7 +248,7 @@
          :state (when (:pos view) {:pos (:pos view)})
          :engine view))
 
-;; an agent folder with no engine/events.jsonl is an old HTTP-API body: listed, never contacted
+;; an agent folder with no engine files is an old HTTP-API body: listed, never contacted
 (defn unsupported-body [agent]
   (assoc agent :up false :error "not an engine body (unsupported)" :at nil :state nil :engine nil))
 

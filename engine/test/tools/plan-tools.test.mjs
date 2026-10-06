@@ -4,7 +4,6 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { createRequire } from 'node:module'
 import prismarineRegistry from 'prismarine-registry'
 import { saveSeen } from '../../js/seen-file.mjs'
 import { execute } from '../../tools/plan-tools-lib.mjs'
@@ -28,7 +27,6 @@ async function invoke (kind, fx, args) {
 
 const planText = id => `{:id "${id}" :parts [{:id "base" :cells [[0 64 0] [1 64 0] [2 64 0]] :want "stone"}]}`
 const blueprintText = id => `{:id "${id}" :front :north :key {"S" "stone"} :layers [ ["S"] ]}`
-const require = createRequire(import.meta.url)
 
 test('a plan written by the tools names its maker in :metadata :by; an edit by another keeps the maker', async () => {
   const fx = fixture()
@@ -233,67 +231,6 @@ test('check pages part and score-element details with actionable offsets', async
     assert.equal(checked.value.score.elements.length, 3)
     assert.equal(checked.value.score['elements-next-offset'], 6)
   } finally { fx.close() }
-})
-
-test('score bridge preserves coordinate, material and block-property string keys', async () => {
-  const bridge = require('../../../dashboard/out/agent-tools.cjs')
-  const prepared = bridge.prepare(planText('score'), 'score', '[]', '[]', null, '[]')
-  assert.equal(prepared.ok, true)
-  const blocks = {
-    '0,64,0': { name: 'stone', state: {} },
-    '1,64,0': { name: 'dirt', state: {} },
-    '2,64,0': { name: 'air', state: {} }
-  }
-  const withInventory = bridge.score(prepared['expansion-edn'], JSON.stringify(blocks), JSON.stringify({ '0,0': 1 }), JSON.stringify({ stone: 1 }), true, 0, 10)
-  assert.equal(withInventory.counts.match, 1)
-  assert.equal(withInventory.counts.wrong, 1)
-  assert.equal(withInventory.counts.missing, 1)
-  assert.equal(withInventory.materials.required.stone, 3)
-  assert.equal(withInventory.materials.remaining.stone.shortage, 1)
-  const unknown = bridge.score(prepared['expansion-edn'], JSON.stringify({}), JSON.stringify({}), '{}', false, 0, 10)
-  assert.equal(unknown.counts.unknown, 3)
-  assert.equal(unknown.materials.availability, 'unknown')
-})
-
-test('candidate checks report conflicts with every stored plan', () => {
-  const bridge = require('../../../dashboard/out/agent-tools.cjs')
-  const candidate = '{:id "candidate" :parts [{:id "a" :cells [[4 64 9]] :want "dirt"}]}'
-  const active = '{:id "active" :parts [{:id "b" :cells [[4 64 9]] :want "stone"}]}'
-  const prepared = bridge.prepare(candidate, 'candidate', '[]', JSON.stringify([{ id: 'active', text: active }]), null, '[]')
-  assert.equal(prepared.ok, true)
-  assert.equal(prepared.conflicts.length, 1)
-  assert.equal(prepared.conflicts[0].with, 'active')
-  assert.equal(prepared.conflicts[0].count, 1)
-})
-
-test('the aggregate cell budget counts every stored plan', () => {
-  const bridge = require('../../../dashboard/out/agent-tools.cjs')
-  const big = id => `{:id "${id}" :parts [{:id "all" :cells [${Array.from({ length: 60000 }, (_, x) => `[${x} 64 0]`).join(' ')}] :want "stone"}]}`
-  const candidate = '{:id "candidate" :parts [{:id "a" :cells [[0 70 0]] :want "dirt"}]}'
-  const prepared = bridge.prepare(candidate, 'candidate', '[]', JSON.stringify([{ id: 'one', text: big('one') }, { id: 'two', text: big('two') }]), null, '[]')
-  assert.equal(prepared.ok, false)
-  assert.match(prepared.errors.join(' '), /exceeds 100000/)
-})
-
-test('bridge rejects oversized plan geometry before expanding cells', () => {
-  const bridge = require('../../../dashboard/out/agent-tools.cjs')
-  const cells = Array.from({ length: 100001 }, (_, x) => `[${x} 64 0]`).join(' ')
-  const plan = `{:id "large" :parts [{:id "all" :cells [${cells}] :want "stone"}]}`
-  const result = bridge.prepare(plan, 'large', '[]', '[]', null, '[]')
-  assert.equal(result.ok, false)
-  assert.match(result.errors.join(' '), /aggregate plan conflict index exceeds 100000/)
-  assert.equal(result.cells.length, 0)
-})
-
-test('bridge estimates wide shallow blueprint placements by width before expansion', () => {
-  const bridge = require('../../../dashboard/out/agent-tools.cjs')
-  const row = 'S'.repeat(100001)
-  const blueprint = `{:id "wide" :front :north :key {"S" "stone"} :layers [["${row}"]]}`
-  const plan = '{:id "wide-plan" :parts [{:id "p" :blueprint "wide" :at [0 64 0]}]}'
-  const result = bridge.prepare(plan, 'wide-plan', JSON.stringify([{ id: 'wide', text: blueprint }]), '[]', null, '[]')
-  assert.equal(result.ok, false)
-  assert.match(result.errors.join(' '), /exceeds 100000/)
-  assert.equal(result.cells.length, 0)
 })
 
 test('compiled CLJS preserves trailing EDN comments and rejects additional forms', async () => {

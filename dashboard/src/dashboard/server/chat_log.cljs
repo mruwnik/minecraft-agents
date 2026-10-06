@@ -5,12 +5,9 @@
             [dashboard.engine-events :as ee]
             ["fs" :as fs]
             [dashboard.server.files :refer [chat-keep chat-tail-bytes reduce-lines]]
-            [dashboard.server.engine-state :refer [agent-entries agent-names body-key canonical-engine? canonical-events-file engine-folder? events-file tails]]))
+            [dashboard.server.engine-state :refer [agent-entries agent-names body-key canonical-events-file engine-folder? tails]]))
 
 ;; ---------------------------------------------------------------- chat
-(defn talk-lines-of [text]
-  (filterv chat/talk? (ee/parse-event-lines text chat/maybe-talk-line?)))
-
 (defn edn-talk-lines-of [text]
   (into [] (comp (filter chat/maybe-edn-talk-line?) (keep chat/edn-talk-line)) (.split text "\n")))
 
@@ -28,14 +25,13 @@
     {:size size :rest rest :lines acc}))
 
 (defn chat-lines [body]
-  (let [canonical? (canonical-engine? body)
-        file (if canonical? (canonical-events-file body) (events-file body))
+  (let [file (canonical-events-file body)
         size (.-size (.statSync fs file))
         k (body-key body)
         cached (get @tails k)]
     (if (= size (:size cached))
       (:lines cached)
-      (let [tail (read-chat-tail file (if canonical? edn-talk-lines-of talk-lines-of) cached)]
+      (let [tail (read-chat-tail file edn-talk-lines-of cached)]
         (swap! tails assoc k tail)
         (:lines tail)))))
 

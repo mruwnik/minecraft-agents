@@ -15,7 +15,6 @@
 (def state-dir (clj->js (bodies/storage-root {} root)))
 (def worlds-dir (bodies/worlds-dir state-dir))
 
-(def first-read-bytes (* 4 1024 1024)) ; ~10 minutes of debug-heavy engine events
 (def chat-tail-bytes (* 4 1024 1024))
 (def read-chunk-bytes (* 256 1024)) ; a big first read is processed this much at a time
 (def chat-keep 2000)

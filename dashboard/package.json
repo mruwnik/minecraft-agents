@@ -9,8 +9,7 @@
     "build-agent-tools": "shadow-cljs release agent-tools",
     "start": "node start.mjs",
     "restart": "node restart.mjs",
-    "build-agent-tools:dev": "shadow-cljs compile agent-tools",
-    "build-migrate-data": "shadow-cljs release migrate-data"
+    "build-agent-tools:dev": "shadow-cljs compile agent-tools"
   },
   "devDependencies": {
     "shadow-cljs": "3.5.4"

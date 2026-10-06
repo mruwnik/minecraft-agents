@@ -140,3 +140,6 @@
     {} "/home/x" "/home/x/minecraft/claude/server.properties"
     {"MINECRAFT_SERVER_PROPERTIES" ""} "/home/x" "/home/x/minecraft/claude/server.properties"
     {"MINECRAFT_SERVER_PROPERTIES" "/srv/mc/server.properties"} "/home/x" "/srv/mc/server.properties"))
+
+(deftest configured-port-without-a-properties-file-is-the-default
+  (is (= tools/default-port (tools/configured-port "/nonexistent/server.properties"))))

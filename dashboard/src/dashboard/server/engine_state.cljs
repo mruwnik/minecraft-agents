@@ -8,7 +8,7 @@
             ["path" :as path]
             [cljs.reader :as reader]
             [dashboard.view-info :as view-info]
-            [dashboard.server.files :refer [file-exists? first-read-bytes read-text reduce-lines state-dir]]))
+            [dashboard.server.files :refer [file-exists? read-text state-dir]]))
 
 ;; ---------------------------------------------------------------- engine bodies
 ;; A body is addressed by {:world :name} (a name is unique only within a world); agent entries carry both, and every
@@ -16,20 +16,17 @@
 (defn body-key [body] (select-keys body [:world :name]))
 (defn body-dir [{:keys [world name]}] (bodies/body-dir state-dir world name))
 
-;; Per body: how far into events.jsonl we have read, the folded state, and the bytes of a line still being written.
-(def engines (atom {}))
+;; Per body: the parsed engine.edn, and how far into events.edn the chat reader has read.
 (def edn-cache (atom {}))
 (def tails (atom {}))
 
 (defn engine-dir [body] (.join path (body-dir body) "engine"))
-(defn events-file [body] (.join path (engine-dir body) "events.jsonl"))
 (defn canonical-events-file [body] (.join path (engine-dir body) "events.edn"))
 (defn events-socket [body] (.join path (engine-dir body) "events.sock"))
 (defn engine-folder? [body]
   (or (file-exists? (.join path (engine-dir body) "engine.edn"))
       (file-exists? (canonical-events-file body))
-      (file-exists? (events-socket body))
-      (file-exists? (events-file body))))
+      (file-exists? (events-socket body))))
 (defn canonical-engine? [body]
   (or (file-exists? (canonical-events-file body)) (file-exists? (events-socket body))))
 
@@ -101,24 +98,6 @@
                                       tail-after (max (dec oldest) (- newest (dec event-page-size)))]
                                   (-> (event-page! body new-stream tail-after event-page-size)
                                       (.then (fn [tail] {:page tail :after tail-after :snapshot fresh :reset? true})))))))))))))
-
-(defn advance-engine
-  "Reads only what was appended since; a file that shrank starts over from its tail."
-  [cached file]
-  (let [size (.-size (.statSync fs file))
-        fresh? (or (nil? cached) (< size (:offset cached)))
-        from (if fresh? (max 0 (- size first-read-bytes)) (:offset cached))
-        previous (if fresh? {:state ee/empty-engine :rest (js/Uint8Array. 0)} cached)]
-    (if (and (not fresh?) (= size (:offset cached)))
-      cached
-      (let [{:keys [acc rest]} (reduce-lines file from size (and fresh? (pos? from)) (:rest previous) ee/fold-text (:state previous))]
-        {:offset size :state acc :rest rest}))))
-
-(defn read-engine [body]
-  (let [k (body-key body)
-        entry (advance-engine (get @engines k) (events-file body))]
-    (swap! engines assoc k entry)
-    (:state entry)))
 
 (defn last-seq [events fallback]
   (or (:seq (peek (vec events))) fallback 0))
@@ -232,9 +211,7 @@
         persisted-state (when canonical?
                           (let [{:keys [value]} (:read (read-edn-file body))]
                             (when (map? value) value)))
-        folded (if canonical?
-                 (or (:folded live) ee/empty-engine)
-                 (try (read-engine body) (catch :default _ ee/empty-engine)))
+        folded (or (:folded live) ee/empty-engine)
         engine-view (ee/engine-view folded now)
         pose-view (read-view body)
         snap (:snapshot live)
@@ -274,7 +251,7 @@
 (defn offline-key [agent body now sock-stamp]
   (let [dir (engine-dir body)]
     [agent (quot now offline-cache-ms) (get @live-engines body) (get @live-errors body)
-     (mapv #(file-stamp (.join path dir %)) ["engine.edn" "events.edn" "events.jsonl"])
+     (mapv #(file-stamp (.join path dir %)) ["engine.edn" "events.edn"])
      sock-stamp
      (mapv #(file-stamp (view-file body %)) ["pose.json" "hud.json"])]))
 

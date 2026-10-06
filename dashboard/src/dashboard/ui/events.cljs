@@ -4,6 +4,7 @@
             [dashboard.ui.buildid :as buildid]
             [dashboard.ui.chatsend :as cs]
             [dashboard.ui.db :as db]
+            [dashboard.ui.detail-events :as detail-events]
             [dashboard.ui.drive :as drive]
             [dashboard.ui.listprefs :as listprefs]
             [dashboard.ui.logic :as logic]
@@ -86,12 +87,14 @@
 (rf/reg-event-fx
  :set-world
  (fn [{:keys [db]} [_ world]]
-   {:db (assoc db :world world :state nil :chat [] :user-view nil :selected nil :detail-body nil :status "connecting..."
-               :villages nil :villagers nil)
-    :push-url (logic/with-world (.-pathname js/location) world)
-    :fx [[:dispatch [:poll-state]] [:dispatch [:poll-chat]] [:dispatch [:plans/world-changed]]
-         (when (= :villages (logic/page-for-path (.-pathname js/location))) [:dispatch [:villages/fetch]])
-         (when (= :villagers (logic/page-for-path (.-pathname js/location))) [:dispatch [:villagers/fetch]])]}))
+   (let [closed (detail-events/close-fx db)]
+     (assoc (select-keys closed [:stop-timers :drive-invoke])
+            :db (assoc (:db closed) :world world :state nil :chat [] :user-view nil :selected nil :status "connecting..."
+                       :villages nil :villagers nil)
+            :push-url (logic/with-world (.-pathname js/location) world)
+            :fx [[:dispatch [:poll-state]] [:dispatch [:poll-chat]] [:dispatch [:plans/world-changed]]
+                  (when (= :villages (logic/page-for-path (.-pathname js/location))) [:dispatch [:villages/fetch]])
+                  (when (= :villagers (logic/page-for-path (.-pathname js/location))) [:dispatch [:villagers/fetch]])]))))
 
 (rf/reg-event-db :canvas-size (fn [db [_ w h]] (db/apply-pending-show (assoc db :canvas {:w w :h h}))))
 (rf/reg-event-db :fit-home (fn [db _] (assoc db :user-view nil)))

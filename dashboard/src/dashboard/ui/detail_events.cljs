@@ -45,16 +45,19 @@
          [:dispatch [:poll-detail-log]]
          [:dispatch [:poll-drive]]]}))
 
-;; a body we drive is released before the popup goes away: through the view page when it can, else straight to the socket
+;; a body we drive is released before the popup goes away: through the view page when it can, else straight to the socket.
+;; The effects of dropping the popup (also used when the world changes): db without the body's state, timers stopped, the release.
+(defn close-fx [db]
+  (let [name (:detail-body db)
+        driving? (drive/driving-now? (:drive db) (:who db))]
+    (cond-> {:db (assoc db :detail-body nil :detail-events [] :drive {})
+             :stop-timers [:detail-log :detail-drive]}
+      (and name driving?) (assoc :drive-invoke {:op :release :world (db/current-world db) :name name :request (drive/release-request (:drive db) (:who db)) :both? true}))))
+
 (rf/reg-event-fx
  :close-detail
  (fn [{:keys [db]} _]
-   (let [name (:detail-body db)
-         driving? (drive/driving-now? (:drive db) (:who db))]
-     (cond-> {:db (assoc db :detail-body nil :detail-events [] :drive {})
-              :replace-url (body-url nil)
-              :stop-timers [:detail-log :detail-drive]}
-       (and name driving?) (assoc :drive-invoke {:op :release :world (db/current-world db) :name name :request (drive/release-request (:drive db) (:who db)) :both? true})))))
+   (assoc (close-fx db) :replace-url (body-url nil))))
 
 ;; Esc: stop driving first, close when nobody is driven by us
 (rf/reg-event-fx
@@ -130,8 +133,11 @@
 
 (rf/reg-event-db :drive-poll-ok (fn [db [_ name data]] (drive-polled db name (:manual data) (js/Date.now))))
 
-;; no body listening (offline) or no reply: nobody drives it
-(rf/reg-event-db :drive-poll-err (fn [db [_ name _]] (drive-polled db name nil (js/Date.now))))
+;; no body listening (offline) or no reply: nobody drives it, unless we do: a lost reply must not drop our own lease
+(defn drive-poll-failed [db name now]
+  (if (drive/driving-now? (:drive db) (:who db)) db (drive-polled db name nil now)))
+
+(rf/reg-event-db :drive-poll-err (fn [db [_ name _]] (drive-poll-failed db name (js/Date.now))))
 
 (rf/reg-event-db
  :drive-message

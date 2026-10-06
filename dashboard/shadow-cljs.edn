@@ -71,11 +71,6 @@
            :output-to "out/server.cjs"
            :output-dir "out/server-js"
            :compiler-options {:infer-externs false}}
-  :migrate-data {:target :node-script
-                 :main dashboard.migrate-data/main
-                 :output-to "out/migrate-data.cjs"
-                 :output-dir "out/migrate-data-js"
-                 :compiler-options {:infer-externs true}}
   :agent-tools {:target :node-library
                      :exports {:workspaceGenerate agent-tools.workspace/generate!
                                :workspaceRoute agent-tools.workspace/route-js
@@ -135,11 +130,7 @@
                                :jobResultRead agent-tools.job-results/js-read
                                :jobResultHistory agent-tools.job-results/js-history
                                :inventorySummary agent-tools.api/inventory-summary
-                               :planExecute agent-tools.plans/execute
-                               :prepare dashboard.agent-plan-tools/prepare
-                               :score dashboard.agent-plan-tools/score
-                               :validatePlan dashboard.agent-plan-tools/validate-plan
-                               :validateBlueprint dashboard.agent-plan-tools/validate-blueprint}
+                               :planExecute agent-tools.plans/execute}
                      :output-to "out/agent-tools.cjs"
                      :output-dir "out/agent-tools-js"
                      :compiler-options {:infer-externs true}}

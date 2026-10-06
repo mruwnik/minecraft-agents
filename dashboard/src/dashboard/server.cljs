@@ -1,6 +1,6 @@
 (ns dashboard.server
-  "The dashboard server: plain node http on 127.0.0.1; this file routes requests. Engine bodies are read from their local event service,
-  with an events.jsonl/engine.edn fallback for legacy body directories."
+  "The dashboard server: plain node http on 127.0.0.1; this file routes requests. Engine bodies are read from their local event service
+  and engine.edn."
   (:require [dashboard.blueprint-library :as blueprint-lib]
             [dashboard.chat :as chat]
             [dashboard.chat-send :as chat-send]

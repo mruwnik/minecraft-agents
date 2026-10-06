@@ -1,19 +1,10 @@
 (ns dashboard.agent-plan-tools
-  "Shared native plan checks plus compatibility exports for the Node bridge."
-  (:require [cljs.reader :as reader]
-            [jobs.lib.zone-file :as zones]
+  "Native plan checks: geometry, zone and claim overlaps, conflicts, and scoring against the world."
+  (:require [jobs.lib.zone-file :as zones]
             [plan.conflicts :as conflicts]
             [plan.parse :as parse]
             [plan.shape :as shape]
             [dashboard.plan-compare :as cmp]))
-
-(defn json-value [text fallback]
-  (try (js->clj (.parse js/JSON (or text fallback)) :keywordize-keys true)
-       (catch :default _ [])))
-
-(defn json-object [text fallback]
-  (try (js->clj (.parse js/JSON (or text fallback)))
-       (catch :default _ {})))
 
 (defn parse-docs [docs parser key]
   (reduce (fn [{:keys [values errors]} {:keys [id text]}]
@@ -147,9 +138,6 @@
               :claims (claim-overlaps cells parsed-claims (js/Date.now))}
        (seq errors) (dissoc :expansion))))
 
-(defn pos-key [[x y z]] (str x "," y "," z))
-(defn chunk-key [[x _ z]] (str (bit-shift-right x 4) "," (bit-shift-right z 4)))
-
 (defn exact-material [want]
   (cond
     (string? want) want
@@ -192,25 +180,3 @@
               :region (cmp/bounds (:cells expansion))
               :checked checked
               :materials (material-summary judged inventory (true? inventory-supplied))}))
-
-(defn prepare [plan-text id blueprints-json plans-json zones-text claims-json]
-  (let [result (prepare-native plan-text id (json-value blueprints-json "[]")
-                               (json-value plans-json "[]") zones-text (json-value claims-json "[]"))]
-    (clj->js (cond-> (dissoc result :expansion)
-               (:expansion result) (assoc :expansion-edn (pr-str (:expansion result)))))))
-
-(defn score [expansion-edn blocks-json mtimes-json inventory-json inventory-supplied offset limit]
-  (let [blocks (json-object blocks-json "{}")
-        mtimes (json-object mtimes-json "{}")
-        block-at (fn [pos]
-                   (when-let [block (get blocks (pos-key pos))]
-                     {:name (get block "name") :state (get block "state")}))]
-    (clj->js (score-native (reader/read-string expansion-edn) block-at
-                          (fn [cx cz] (get mtimes (str cx "," cz)))
-                          (json-object inventory-json "{}") inventory-supplied offset limit))))
-
-(defn validate-plan [text id]
-  (clj->js (parse/parse text id)))
-
-(defn validate-blueprint [text id]
-  (clj->js (parse/parse-blueprint text id)))

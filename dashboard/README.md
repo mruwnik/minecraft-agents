@@ -49,7 +49,7 @@ The compile JVM is capped (`:jvm-opts ["-Xmx1G"]` in `shadow-cljs.edn`) because 
 - Body cards (hub mode): online bodies get a live textured scene from the view hub (`ui/livecards.cljs`); an offline body shows the server's still
   (`/api/thumb`, greyed by CSS) with no scene. Debug flags on the page URL: `?fps=1` labels live cards with their fps, `?nogl=1` forces the server stills,
   `?allive=1` gives every card with a view a live scene, offline ones too (the hub holds at most 12 scenes).
-- `/api/events/<world>/<body>?limit=&stream-id=&after=`: EDN page of canonical events (default tail 300, maximum 1000), the current outstanding attention map, and a cursor. `after` is exclusive. On `:gap? true`, the dashboard refreshes the snapshot and replaces its retained log tail before resuming. Legacy bodies without `events.edn` or an event socket may use their old `events.jsonl` as historical best-effort input.
+- `/api/events/<world>/<body>?limit=&stream-id=&after=`: EDN page of canonical events (default tail 300, maximum 1000), the current outstanding attention map, and a cursor. `after` is exclusive. On `:gap? true`, the dashboard refreshes the snapshot and replaces its retained log tail before resuming.
 - `POST /api/whisper/<world>/<body>` `{"text": ...}`: a private message to one body, sent through RCON as `tellraw <body>` of the vanilla whisper line from the chat sender (the body records it as a `whisper` event; the chat panel reads it from `events.edn`). The target must match `[A-Za-z0-9_]{3,16}` (400), be an engine body (404) and be up (409); the text is cleaned and cut like chat; the rate limit is shared with `POST /api/chat/send`. The body popup has the input.
 - `POST /api/attention/<world>/<body>/resolve`: EDN request `{:request-id "..." :reason :handled}` to acknowledge an outstanding request. This only marks that request handled; it does not retry or restart its job.
 - `/api/item-icon/<item>.png`: an item's picture from the repo's `textures/`.
@@ -90,8 +90,7 @@ off screen gets an arrow on the edge, click it to pan there), `/plans` (plan fil
 ## Differs from the old dashboard
 
 - Engine bodies with the canonical event service are read from their local `events.sock` for snapshots, paginated event replay
-  and attention resolution; the socket is separate from the viewer control socket. Old bodies can still be read from
-  `events.jsonl` as best-effort history. `engine.edn` remains a legacy fallback for jobs and reflexes. Folders without recognized
+  and attention resolution; the socket is separate from the viewer control socket. `engine.edn` remains a legacy fallback for jobs and reflexes. Folders without recognized
   engine data are listed as down, "not an engine body (unsupported)".
 - One `/api/state` lists the bodies once. A body with no `events.sock` is rebuilt only when its `engine.edn`, event files, `pose.json`/`hud.json`, config or the minute changed; `engine.edn` is parsed once per change. Village plan files are parsed once per mtime/size change, and an unchanged body's EDN text is printed once. A body without `events.sock` (or `control.sock` for entities) gets no socket request: it is shown down, and asked on the poll its socket appears. Bodies are sent once, top-level in `:bodies`, not again inside each `:worlds` entry.
 - No look/screen/actions/whisper/icon endpoints, and `/api/world` is 501.

@@ -27,6 +27,11 @@
 (defn read-port [properties-file]
   (port-from-properties (.readFileSync fs properties-file "utf8")))
 
+(defn configured-port
+  "read-port, or the default when there is no properties file."
+  [properties-file]
+  (if (.existsSync fs properties-file) (read-port properties-file) default-port))
+
 ;; ---- rcon.mjs: whitelist add only ----
 
 (defn valid-name [value]
@@ -202,7 +207,7 @@
     (cond
       (nil? command) (js/Promise.resolve 2)
       (not (.existsSync fs password-file)) (do (js/console.error "rcon password file missing") (js/Promise.resolve 1))
-      :else (-> (rcon/send-commands! {:port default-port} [command])
+      :else (-> (rcon/send-commands! {:port (configured-port server-properties)} [command])
                 (.then (fn [replies] (js/console.log (first replies)) 0))
                 (.catch (fn [e] (js/console.error (str "rcon-raw failed: " (.-message e))) 1))))))
 
