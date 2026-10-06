@@ -681,3 +681,29 @@
           (await (core/tick! eng))
           (is (= 2 @swims) "the refire swims up")
           (is (= {:x 0 :y 67 :z 0} (core/self-pos p))))))))
+
+(deftest a-run-cut-mid-swim-by-a-higher-reflex-is-ended-cut-and-the-refire-surfaces-from-the-world
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4} :blocks (merge pool {"2,64,0" "stone" "2,63,0" "stone"})})
+              reflex-events (fn [kind] (filterv #(and (= :reflex (:source %)) (= kind (:kind %))) @seen))]
+          (core/register-reflex! eng {:trigger :burning})
+          (core/register-reflex! eng {:trigger :suffocating})
+          (let [release (.hold (.-world p) "swim")
+                run (core/tick! eng)]
+            (await (js/Promise. (fn [r] (js/setTimeout r 50))))
+            (is (= [:suffocating] (mapv :reflex (reflex-events :fired))) "breathe is swimming")
+            (fake/swap-self! p assoc :onFire true)
+            (let [cutter (core/tick! eng)]
+              (release)
+              (await run)
+              (await cutter)))
+          (is (some #(and (= :suffocating (:reflex %)) (= :dropped (:outcome %)) (= :burning (:by %))) (reflex-events :ended)) "the swim's run was dropped by the fire reflex")
+          (is (empty? (of-kind seen :afloat)) "a cut is not an afloat give-up")
+          (fake/swap-self! p assoc :onFire false)
+          (await (core/tick! eng))
+          (await (core/tick! eng))
+          (is (>= (count (filter #(= :suffocating (:reflex %)) (reflex-events :fired))) 2) "breathe fired again")
+          (is (= {:x 2 :y 65 :z 0} (core/self-pos p)) "the refire re-read the world and landed on the ledge")
+          (is (not (.-inWater (.self p)))))))))
