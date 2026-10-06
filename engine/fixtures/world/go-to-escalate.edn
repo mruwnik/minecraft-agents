@@ -17,13 +17,13 @@
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :pillar}} :within-s 60 :of-job true}
             {:event {:source :job :kind :result :data {:arrived true}} :within-s 120 :of-job true}]
    :after [[:body-near [20.5 4 16.5] 2]]}
-  {:name "pit-stair-arrives-and-restores"
+  {:name "pit-stair-arrives-and-leaves-holes-for-restore-broken"
    :body {:inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 60 :of-job true}
-            {:event {:source :job :kind :go-to.restored} :within-s 120 :of-job true}
+            {:event {:source :job :kind :go-to.restore-skipped} :within-s 120 :of-job true}
             {:event {:source :job :kind :result :data {:arrived true}} :within-s 140 :of-job true}]
-   :after [[:not-block [17 1 16] "air"] [:body-near [20.5 4 16.5] 2]]}
+   :after [[:block [17 1 16] "air"] [:body-near [20.5 4 16.5] 2]]}
   {:name "sealed-room-clear-path-arrives-and-shuts-the-door"
    ;; a hollow stone room x 12..20, z 12..20, y 0..3 on a stone platform x 8..26 (y -1 is the plot floor), the
    ;; body inside at feet y 1; the goal outside to the east
@@ -98,16 +98,16 @@
             {:no-event {:source :job :kind :go-to.escalated :data {:step :clear-path}} :for-s 30}
             {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 30}]
    :after [[:block [20 1 16] "oak_log"] [:block [20 2 16] "oak_log"]]}
-  {:name "pillar-refused-by-others-plan-stairs-out-and-restores"
+  {:name "pillar-refused-by-others-plan-stairs-out-and-leaves-holes"
    ;; another plan's footprint holds the shaft cells above the floor: the pillar's places are refused, so the body stairs
-   ;; out east and its holes are put back
+   ;; out east and its holes stay for restore-broken
    :plans [{:id "other" :parts [{:id "shaft" :cells [#at [16 0 16] #at [16 1 16] #at [16 2 16] #at [16 3 16]] :want [:any "cobblestone"]}]}]
    :body {:inventory [["dirt" 8] ["stone_pickaxe" 1]]}
    :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 90 :of-job true}
-            {:event {:source :job :kind :go-to.restored} :within-s 140 :of-job true}
+            {:event {:source :job :kind :go-to.restore-skipped} :within-s 140 :of-job true}
             {:event {:source :job :kind :result :data {:arrived true}} :within-s 160 :of-job true}]
-   :after [[:not-block [17 1 16] "air"] [:body-near [20.5 4 16.5] 2]]
+   :after [[:block [17 1 16] "air"] [:body-near [20.5 4 16.5] 2]]
    :limit-s 200}
   {:name "stair-wall-in-others-plan-is-never-dug"
    ;; natural stone, but another plan's footprint covers the whole east side of the shaft: nothing may be dug
