@@ -9,6 +9,8 @@ import {
   buildRequiredEdn,
   buildRequiredMessage,
   missingExports,
+  newerSource,
+  staleBundleMessage,
 } from '../../tools/agent-tools-bundle-check.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -80,4 +82,46 @@ test('the launcher whose export is missing reports a stale bundle naming only it
   assert.equal(result.status, 2)
   assert.match(result.stderr, /stale; missing exports: snapshotMain, snapshotUsage\./)
   assert.match(result.stdout, /:reason :build-required :missing-exports \["snapshotMain" "snapshotUsage"\]/)
+})
+
+test('a source newer than the bundle is reported as stale, with the rebuild command', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'at-stale-'))
+  try {
+    const bundle = path.join(dir, 'agent-tools.cjs')
+    const src = path.join(dir, 'src')
+    fs.mkdirSync(path.join(src, 'sub'), { recursive: true })
+    fs.writeFileSync(bundle, '')
+    fs.writeFileSync(path.join(src, 'sub', 'a.cljs'), '')
+    fs.writeFileSync(path.join(src, 'notes.txt'), '')
+    const t = Date.now() / 1000
+    fs.utimesSync(bundle, t - 100, t - 100)
+    fs.utimesSync(path.join(src, 'sub', 'a.cljs'), t - 200, t - 200)
+    fs.utimesSync(path.join(src, 'notes.txt'), t, t)
+    assert.equal(newerSource(bundle, [src]), null)
+    fs.utimesSync(path.join(src, 'sub', 'a.cljs'), t - 10, t - 10)
+    assert.equal(newerSource(bundle, [src]), path.join(src, 'sub', 'a.cljs'))
+    assert.equal(newerSource(bundle, [path.join(dir, 'missing')]), null)
+    assert.match(staleBundleMessage(path.join(src, 'sub', 'a.cljs')), /older than .*a\.cljs.*tools\/compile dashboard agent-tools/)
+  } finally {
+    fs.rmSync(dir, { recursive: true })
+  }
+})
+
+test('the loader warns on stderr, not stdout, when a source is newer than the bundle', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'at-stale-'))
+  try {
+    const bundle = path.join(dir, 'agent-tools.cjs')
+    fs.writeFileSync(bundle, 'module.exports = {}')
+    const t = Date.now() / 1000 - 1e6
+    fs.utimesSync(bundle, t, t)
+    const r = spawnSync('node', ['-e', "import('./engine/tools/agent-tools-loader.mjs')"], {
+      cwd: path.join(here, '..', '..', '..'),
+      env: { ...process.env, AGENT_TOOLS_BUNDLE: bundle },
+      encoding: 'utf8',
+    })
+    assert.match(r.stderr, /older than/)
+    assert.equal(r.stdout, '')
+  } finally {
+    fs.rmSync(dir, { recursive: true })
+  }
 })
