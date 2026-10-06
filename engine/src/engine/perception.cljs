@@ -51,6 +51,7 @@
    :turn-deg 2
    :seeing-min 0.2
    :near 4
+   :near-torch 7          ; the same, while a torch (or soul torch) is held in the off hand
    :cap-bytes (* 32 1024 1024)
    :save-ms 60000
    :stats-ms 60000
@@ -245,10 +246,16 @@
 
 ;; ---- the sight pass
 
+(defn near-of
+  "How close a dark cell must be to count as seen: :near-torch with a torch in the off hand, else :near."
+  [{:keys [raw opts]}]
+  (let [held (when-let [f (.-offHand ^js raw)] (f))]
+    (if (contains? #{"torch" "soul_torch"} held) (max (:near opts) (:near-torch opts)) (:near opts))))
+
 (defn cast!
   "One ray from (ox oy oz) along the unit vector (dx dy dz). Returns the number of cells entered."
   [{:keys [raw opts]} ^js st store ox oy oz dx dy dz now]
-  (let [radius (:radius opts) near (:near opts)
+  (let [radius (:radius opts) near (.-near st)
         ^js sight (.-sight st) ^js visible (.-visible st)
         sx (if (pos? dx) 1 -1) sy (if (pos? dy) 1 -1) sz (if (pos? dz) 1 -1)
         tdx (if (zero? dx) js/Infinity (js/Math.abs (/ 1 dx)))
@@ -307,6 +314,7 @@
         store (store-of st (.-dimension eye))
         ox (.-x eye) oy (.-y eye) oz (.-z eye)
         du (/ (* 2 hx) cols) dv (/ (* 2 hy) rows)]
+    (set! (.-near st) (near-of per))
     (loop [k from cells 0]
       (if (>= k to)
         cells
@@ -395,7 +403,7 @@
              (if (and (== cx x) (== cy y) (== cz z))
                (let [light (.lightAt ^js raw x y z)
                      shown (if (== 1 (aget sight id)) (max-light light prev) light)]
-                 (or (== 1 (aget visible shown)) (<= dist (:near opts))))
+                 (or (== 1 (aget visible shown)) (<= dist (near-of per))))
                (let [t (min tmx tmy tmz)
                      ax (== t tmx) ay (and (not ax) (== t tmy)) az (and (not ax) (not ay))
                      nx (if ax (+ cx sx) cx) ny (if ay (+ cy sy) cy) nz (if az (+ cz sz) cz)

@@ -180,6 +180,8 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
       if (!e?.position || isOffline()) return null
       return { x: e.position.x, y: e.position.y + EYE_HEIGHT, z: e.position.z, yaw: e.yaw ?? 0, pitch: e.pitch ?? 0, dimension: bot.game?.dimension ?? 'overworld' }
     },
+    // the name of the item in the off hand (slot 45), or null
+    offHand: () => follow()?.inventory?.slots?.[45]?.name ?? null,
     sky: () => {
       const bot = follow()
       return { timeOfDay: bot?.time?.timeOfDay ?? 6000, rain: bot?.rainState ?? 0, thunder: bot?.thunderState ?? 0 }

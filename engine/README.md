@@ -56,6 +56,7 @@ Layout:
   `expr` (job expressions), `composite` (combinators as jobs), `registry` (compile-time job registry), `triggers` and
   `triggers/*`, `condition`, `scenario`, `takeover`/`lease`, `world`, `zones`, `perception`, `main`; `engine.path.*` is the
   planner and walker; `engine.jobs.*` holds helpers shared by jobs.
+  Perception sees dark cells within `:near` (4) blocks, within `:near-torch` (7) with a torch in the off hand.
 - `src/jobs/` the jobs, one namespace each (`jobs.survival.eat`). Nothing registers them: the build finds them.
 - `scenarios/*.edn` scenarios (`survival.edn`, `woodcutter.edn`, `pace-cuts.edn`, ...; `live-*.edn` are live-test scenarios).
 - `test/engine/` cljs tests (helpers in `engine.test-util`); `test/engine/fake.cljs` is the scriptable fake world.

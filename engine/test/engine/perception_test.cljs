@@ -311,3 +311,20 @@
               _ (perception/load! fresh @seen-file file)]
           (is (= ["stone" 120000] ((juxt :name :age-ms) (perception/seen-block per [0 64 0]))))
           (is (= ["stone" 120000] ((juxt :name :age-ms) (perception/seen-block fresh [0 64 0])))))))))
+
+(defn dark-seen
+  "Names seen at 6 and 8 blocks south in the dark, with the self map merged in."
+  [self]
+  (let [{:keys [p per]} (rig {"0,65,6" "gold_block" "0,65,8" "gold_block"})]
+    (swap! (fake/state p) update :self merge self)
+    (light! p {:light-default [0 0]})
+    (perception/pass! per)
+    (mapv #(seen-name per %) [[0 65 6] [0 65 8]])))
+
+(deftest an-off-hand-torch-widens-dark-sight-to-seven-blocks
+  (is (= ["gold_block" nil] (dark-seen {:offhand "torch"})))
+  (is (= ["gold_block" nil] (dark-seen {:offhand "soul_torch"}))))
+
+(deftest a-main-hand-torch-or-none-keeps-dark-sight-at-near
+  (is (= [nil nil] (dark-seen {:held "torch"})))
+  (is (= [nil nil] (dark-seen {}))))
