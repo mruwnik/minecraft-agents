@@ -151,3 +151,12 @@ test('the sight table is null while the bot has no registry, and real once it ha
   bot.registry = reg
   assert.deepEqual([before, raw.sightTable()?.length > 0], [null, true])
 })
+
+test('offHand reads slot 45 and heldItem the main hand, null when empty', () => {
+  const { bot } = makeBot()
+  const raw = createRawWorld({ getBot: () => bot })
+  assert.deepEqual([raw.offHand(), raw.heldItem()], [null, null])
+  bot.inventory = { slots: { 45: { name: 'soul_torch' } } }
+  bot.heldItem = { name: 'torch' }
+  assert.deepEqual([raw.offHand(), raw.heldItem()], ['soul_torch', 'torch'])
+})

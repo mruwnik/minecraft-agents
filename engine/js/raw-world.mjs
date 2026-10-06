@@ -182,6 +182,8 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
     },
     // the name of the item in the off hand (slot 45), or null
     offHand: () => follow()?.inventory?.slots?.[45]?.name ?? null,
+    // the name of the held (main hand) item, or null
+    heldItem: () => follow()?.heldItem?.name ?? null,
     sky: () => {
       const bot = follow()
       return { timeOfDay: bot?.time?.timeOfDay ?? 6000, rain: bot?.rainState ?? 0, thunder: bot?.thunderState ?? 0 }

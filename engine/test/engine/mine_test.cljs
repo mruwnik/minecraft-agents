@@ -907,6 +907,26 @@
                                  (rock-world (merge open trench {"6,64,0" "iron_ore"})) 60))]
           (is (some #{[6 64 0]} (dug-cells s)) (pr-str (dug-cells s))))))))
 
+(defn ^:async dark-ore-dug
+  "A dark open corridor with ore 6 blocks east of the body (no tunnel), the self map merged in: the cells dug."
+  [self]
+  (let [world (rock-world (merge (cells "air" (range 1 6) [64 65] [0]) {"6,64,0" "iron_ore"}))
+        p (tu/fake-on-floor (assoc world :floor-block floor-block))
+        _ (swap! (fake/state p) update :self merge self)
+        _ (swap! (fake/state p) assoc :light-default [0 0])
+        s (start {:p p})]
+    (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 0 :mend false}) {})
+    (await (run-ticks s 120))
+    (dug-cells s)))
+
+(deftest a-torch-in-either-hand-lets-a-dark-ore-six-away-be-seen-and-dug
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (some #{[6 64 0]} (await (dark-ore-dug {:offhand "torch"}))) "off hand")
+        (is (some #{[6 64 0]} (await (dark-ore-dug {:held "torch"}))) "main hand")
+        (is (not-any? #{[6 64 0]} (await (dark-ore-dug {}))) "no torch")))))
+
 ;; ------------------------------------------------------------------ torches
 
 (def long-rock

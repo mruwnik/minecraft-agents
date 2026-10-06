@@ -325,6 +325,7 @@
   (is (= ["gold_block" nil] (dark-seen {:offhand "torch"})))
   (is (= ["gold_block" nil] (dark-seen {:offhand "soul_torch"}))))
 
-(deftest a-main-hand-torch-or-none-keeps-dark-sight-at-near
-  (is (= [nil nil] (dark-seen {:held "torch"})))
+(deftest a-main-hand-torch-widens-dark-sight-and-none-keeps-near
+  (is (= ["gold_block" nil] (dark-seen {:held "torch"})))
+  (is (= ["gold_block" nil] (dark-seen {:held "soul_torch"})))
   (is (= [nil nil] (dark-seen {}))))

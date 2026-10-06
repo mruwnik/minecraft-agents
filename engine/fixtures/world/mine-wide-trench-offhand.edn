@@ -1,20 +1,28 @@
-;; jobs.gather.mine, dark ore 6 blocks from the cut end (mine-wide-trench trench, ore at x 25; 7 away is marginal: eye-to-cell distance is over 7): unseen in the dark (:near 4),
-;; seen from the cut end with a torch or soul torch in the OFF hand (engine.perception :near-torch 7, card 50602363/c0a17cad);
+;; jobs.gather.mine (no tunnel), dark ore 6 blocks east in an open floored corridor (a pit would make it unreachable, not unseen):
+;; unseen without a torch (engine.perception :near 4), seen and dug with a torch or soul torch in either hand (:near-torch 7, cards 50602363/10d96ca4).
 {:defaults
  {:tags [:mine :jobs] :time :any
   :plot {:height 12}
-  :blocks [[:fill [2 -6 8] [30 6 24] "stone"] [:fill [16 0 16] [19 1 16] "air"]
-           [:fill [20 -4 16] [24 1 16] "air"] [:set [25 0 16] "iron_ore"]]
+  :blocks [[:fill [2 -6 8] [30 6 24] "stone"] [:fill [16 0 16] [24 1 16] "air"] [:set [25 0 16] "iron_ore"]]
   :body {:at [19.5 0 16.5] :inventory [["stone_pickaxe" 1] ["cobblestone" 16]] :effects [["resistance" 600 4]]}
-  :limit-s 110}
+  :limit-s 60}
  :cases
- [{:name "offhand-torch-sees-and-digs-ore-6-away"
+ [{:name "no-torch-ore-6-away-unseen"
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 0})]]
+   :expect [{:event {:source :job :kind :mine.done :data {:got 0}} :within-s 40 :of-job true}]
+   :after [[:block [25 0 16] "iron_ore"]]}
+  {:name "offhand-torch-sees-and-digs-ore-6-away"
    :act [[:rcon "item replace entity $BODY weapon.offhand with torch"] [:wait-s 2]
-         [:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 8})]]
-   :expect [{:event {:source :job :kind :mine.done} :within-s 100 :of-job true}]
+         [:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 0})]]
+   :expect [{:event {:source :job :kind :mine.done} :within-s 50 :of-job true}]
    :after [[:not-block [25 0 16] "iron_ore"]]}
   {:name "offhand-soul-torch-sees-and-digs-ore-6-away"
    :act [[:rcon "item replace entity $BODY weapon.offhand with soul_torch"] [:wait-s 2]
-         [:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 8})]]
-   :expect [{:event {:source :job :kind :mine.done} :within-s 100 :of-job true}]
+         [:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 0})]]
+   :expect [{:event {:source :job :kind :mine.done} :within-s 50 :of-job true}]
+   :after [[:not-block [25 0 16] "iron_ore"]]}
+  {:name "mainhand-torch-sees-and-digs-ore-6-away"
+   :act [[:rcon "item replace entity $BODY inventory.0 with stone_pickaxe"] [:rcon "item replace entity $BODY weapon.mainhand with torch"] [:wait-s 2]
+         [:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 0})]]
+   :expect [{:event {:source :job :kind :mine.done} :within-s 50 :of-job true}]
    :after [[:not-block [25 0 16] "iron_ore"]]}]}

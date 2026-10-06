@@ -51,7 +51,7 @@
    :turn-deg 2
    :seeing-min 0.2
    :near 4
-   :near-torch 7          ; the same, while a torch (or soul torch) is held in the off hand
+   :near-torch 7          ; the same, while a torch (or soul torch) is held in either hand
    :cap-bytes (* 32 1024 1024)
    :save-ms 60000
    :stats-ms 60000
@@ -247,10 +247,10 @@
 ;; ---- the sight pass
 
 (defn near-of
-  "How close a dark cell must be to count as seen: :near-torch with a torch in the off hand, else :near."
+  "How close a dark cell must be to count as seen: :near-torch with a torch in either hand, else :near."
   [{:keys [raw opts]}]
-  (let [held (when-let [f (.-offHand ^js raw)] (f))]
-    (if (contains? #{"torch" "soul_torch"} held) (max (:near opts) (:near-torch opts)) (:near opts))))
+  (let [name-in (fn [k] (when-let [f (aget ^js raw k)] (f)))]
+    (if (some #{"torch" "soul_torch"} [(name-in "offHand") (name-in "heldItem")]) (max (:near opts) (:near-torch opts)) (:near opts))))
 
 (defn cast!
   "One ray from (ox oy oz) along the unit vector (dx dy dz). Returns the number of cells entered."
