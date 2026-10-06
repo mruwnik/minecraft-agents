@@ -1,4 +1,6 @@
 // Why JavaScript: node --test file for tools/test-shards.mjs (a Node launcher).
+import fs from 'node:fs'
+import path from 'node:path'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { splitShards, testNamespaces, slowest, memSlots } from './test-shards.mjs'
@@ -33,4 +35,13 @@ test('memSlots: (available - 6 GB floor) / shard peak, at least 1, at most 3', (
   assert.equal(memSlots(5900), 1)
   assert.equal(memSlots(12000), 2)
   assert.equal(memSlots(30000), 3)
+})
+
+test('testNamespaces covers every file under engine/test that contains deftest', () => {
+  const root = path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'engine', 'test')
+  const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)])
+  const nss = testNamespaces()
+  const missing = walk(root).filter((f) => /\(deftest\s/.test(fs.readFileSync(f, 'utf8')))
+    .filter((f) => !nss.includes(fs.readFileSync(f, 'utf8').match(/^\(ns\s+(?:\^\S+\s+)*([^\s()]+)[\s)]/m)?.[1]))
+  assert.deepEqual(missing, [])
 })

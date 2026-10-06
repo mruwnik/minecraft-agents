@@ -4,6 +4,7 @@
 //  Splits the engine test namespaces over N node processes (default 4), balanced by the per-namespace ms of the previous run (engine/out/test-ns-ms.json).
 //  At most M shard processes run at once machine-wide (default: (MemAvailable - 6 GB) / 2.8 GB, 1..3): each takes `flock` on /tmp/mc-test-slots/slot-<i>, so parallel agents cannot OOM the machine.
 //  Per-test timings: engine/out/test-timings.jsonl (one {"var","ms"} line per test, {"peak-rss-kb"} per shard); the K slowest are printed.
+//  Isolation: after the compile, out/test.cjs and out/test/cljs-runtime are copied to /tmp/mc-test-run-<pid>/out (engine/test and node_modules symlinked beside it) and the shards run that copy (a concurrent compile cannot swap it); per-shard files carry the pid; a failing shard's output is kept in /tmp/mc-test-run-<pid>-shard-<i>.log (path printed).
 import fs from 'node:fs'
 import path from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
@@ -16,7 +17,7 @@ const SLOT_DIR = '/tmp/mc-test-slots'
 const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(path.join(dir, e.name)) : [path.join(dir, e.name)])
 
 export const testNamespaces = (root = path.join(engine, 'test')) =>
-  walk(root).filter((f) => /\.cljs$/.test(f))
+  walk(root).filter((f) => /\.clj[cs]$/.test(f))
     .map((f) => fs.readFileSync(f, 'utf8').match(/^\(ns\s+(?:\^\S+\s+)*([^\s()]+-test)[\s)]/m)?.[1])
     .filter(Boolean).sort()
 
@@ -69,15 +70,21 @@ const main = async () => {
   const c = spawnSync(path.join(repo, 'tools/compile'), ['engine', 'test'], { stdio: 'inherit' })
   if (c.status !== 0) process.exit(c.status ?? 1)
   const nsFile = path.join(engine, 'out/test-ns-ms.json'), timingFile = path.join(engine, 'out/test-timings.jsonl')
+  const runDir = `/tmp/mc-test-run-${process.pid}`
+  fs.mkdirSync(path.join(runDir, 'out/test'), { recursive: true })
+  fs.copyFileSync(path.join(engine, 'out/test.cjs'), path.join(runDir, 'out/test.cjs'))
+  fs.cpSync(path.join(engine, 'out/test/cljs-runtime'), path.join(runDir, 'out/test/cljs-runtime'), { recursive: true })
+  fs.symlinkSync(path.join(engine, 'node_modules'), path.join(runDir, 'node_modules'))
+  fs.symlinkSync(path.join(engine, 'test'), path.join(runDir, 'test')) // fixtures resolve as <out>/../test
+  const cleanup = () => fs.rmSync(runDir, { recursive: true, force: true })
   const prior = fs.existsSync(nsFile) ? JSON.parse(fs.readFileSync(nsFile, 'utf8')) : {}
   const split = splitShards(testNamespaces(), prior, shards)
-  fs.writeFileSync(timingFile, '')
   const t0 = Date.now()
   console.log(`test-shards: ${split.length} shards, at most ${slots} at once machine-wide`)
   const results = await Promise.all(split.map(async (nss, i) => {
-    const file = `${timingFile}.${i}`
+    const file = `${timingFile}.${process.pid}.${i}`
     fs.writeFileSync(file, '')
-    const r = await runInSlot(slots, 'node', ['--max-old-space-size=4096', 'out/test.cjs', `--test=${nss.join(',')}`], { cwd: engine, env: { ...process.env, MC_TEST_TIMINGS: file } })
+    const r = await runInSlot(slots, 'node', ['--max-old-space-size=4096', path.join(runDir, 'out/test.cjs'), `--test=${nss.join(',')}`], { cwd: engine, env: { ...process.env, MC_TEST_TIMINGS: file, NODE_PATH: path.join(repo, 'node_modules') } })
     return { i, nss, file, ...r }
   }))
   let bad = 0
@@ -85,8 +92,11 @@ const main = async () => {
   for (const r of results) {
     lines.push(...fs.readFileSync(r.file, 'utf8').split('\n')); fs.unlinkSync(r.file)
     if (r.code === 0) { console.log(`shard ${r.i}: ok (${r.nss.length} ns)`); continue }
-    bad++; console.log(`--- shard ${r.i} FAILED (exit ${r.code}) ---\n${r.out}`)
+    const log = `/tmp/mc-test-run-${process.pid}-shard-${r.i}.log`
+    fs.writeFileSync(log, r.out)
+    bad++; console.log(`--- shard ${r.i} FAILED (exit ${r.code}), output kept in ${log} ---\n${r.out}`)
   }
+  cleanup()
   fs.writeFileSync(timingFile, lines.filter(Boolean).join('\n') + '\n')
   if (bad === 0) fs.writeFileSync(nsFile, JSON.stringify(nsMs(lines)))
   const peaks = parse(lines).filter((r) => r['peak-rss-kb']).map((r) => r['peak-rss-kb'])
