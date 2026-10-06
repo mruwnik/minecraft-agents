@@ -3,7 +3,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.child :as child]
-            [jobs.farm.fertilize :as fertilize]
+            [jobs.lib.crops :as crops]
             [jobs.lib.look :as look]
             [jobs.lib.result :as r]
             [jobs.lib.util :as u]
@@ -167,7 +167,7 @@
   body first, minus the ones that proved undiggable (a lazy seq)."
   [c ripe-ages center radius]
   (let [skipped (set (:skipped-blocks (ctx/mem c)))]
-    (->> (fertilize/seen-crops (:primitives c) (keys ripe-ages) radius 64)
+    (->> (crops/seen-crops (:primitives c) (keys ripe-ages) radius 64)
          (filter #(some-> (:age %) (>= (ripe-ages (:name %)))))
          (map :pos)
          (filter #(<= (u/dist % center) radius))

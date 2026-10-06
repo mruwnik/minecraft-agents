@@ -110,3 +110,15 @@
           (aset p "seenBlockAt" (fn [pos] (let [b (.blockAt p pos)] #js {:name (.-name b) :properties (.-properties b) :pos pos :age-ms 0})))
           (await (child-outcome eng 'jobs.farm.fertilize {} 12))
           (is (seq (calls p "useOn"))))))))
+
+(defn look-then-see
+  "Make p see no block until it has looked around (a look call)."
+  [p]
+  (tu/blind p)
+  (aset p "seenBlocks" (fn [q] (if (seq (calls p "look")) (.blocks p q) #js [])))
+  (aset p "seenBlockAt" (fn [pos] (let [b (.blockAt p pos)] #js {:name (.-name b) :properties (.-properties b) :pos pos :age-ms 0}))))
+
+(deftest get-food-looks-around-once-then-digs-what-it-sees
+  (async done
+    (tu/run-async done
+      (fn ^:async t [] (is (seq (await (get-food-digs look-then-see))))))))

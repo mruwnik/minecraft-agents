@@ -1,8 +1,8 @@
 (ns jobs.farm.harvest
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
-            [jobs.farm.fertilize :as fertilize]
             [jobs.lib.gate :as gate]
+            [jobs.lib.crops :as crops]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
@@ -121,7 +121,7 @@
         skipped (set skipped)
         here (u/pos-of (.-pos (.self p)))
         radius (+ (:radius args) (u/dist here center))]
-    (->> (fertilize/seen-crops p crops radius 4096)
+    (->> (crops/seen-crops p crops radius 4096)
          (filter #(some-> (:age %) (>= (ripe-age (:name %)))))
          (map :pos)
          (filter #(<= (u/dist % center) (:radius args)))

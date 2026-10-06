@@ -2,6 +2,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.gate :as gate]
             [jobs.lib.util :as u]
+            [jobs.lib.crops :as crops]
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]))
 
@@ -34,13 +35,6 @@
         age (when b (age-of b))]
     (boolean (and ripe age (< age ripe)))))
 
-(defn seen-crops
-  "The crops of the given names the body has seen within radius, still standing, nearest first, as {:name :pos :age}
-  (the age as last seen)."
-  [p names radius max]
-  (->> (look/seen-blocks p {:names names :radius radius :max max :live? true :properties? true})
-       (map (fn [b] (assoc b :age (some-> (get-in b [:properties :age]) js/Number))))))
-
 (defn targets
   "The unripe crop positions to fertilize, nearest first, minus the refused ones."
   [c]
@@ -53,7 +47,7 @@
         found (if at
                 (let [b (u/block-at p at)]
                   (if (unripe? b) [at] []))
-                (->> (seen-crops p (keys ripe-age) reach 4096)
+                (->> (crops/seen-crops p (keys ripe-age) reach 4096)
                      (filter #(some-> (:age %) (< (ripe-age (:name %)))))
                      (map :pos)
                      (filter #(<= (u/dist mid %) radius))))]

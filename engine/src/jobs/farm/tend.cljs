@@ -6,6 +6,7 @@
             [jobs.lib.gate :as gate]
             [jobs.lib.util :as u]
             [jobs.farm.fertilize :as fertilize]
+            [jobs.lib.crops :as crops]
             [jobs.farm.harvest :as harvest]
             [jobs.farm.plant :as plant]
             [jobs.farm.tidy :as tidy]
@@ -167,7 +168,7 @@
 (defn unripe-in-box
   "The unripe crop cells of the box, read around its centre."
   [p box mid R]
-  (->> (fertilize/seen-crops p (keys fertilize/ripe-age) (+ R (u/dist (u/pos-of (.-pos (.self p))) mid)) 4096)
+  (->> (crops/seen-crops p (keys fertilize/ripe-age) (+ R (u/dist (u/pos-of (.-pos (.self p))) mid)) 4096)
        (filter #(some-> (:age %) (< (fertilize/ripe-age (:name %)))))
        (map :pos)
        (filter #(in-box? box %))
