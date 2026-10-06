@@ -200,3 +200,21 @@
     (is (empty? (ps {:memory [{:kind :food-source :data {:pos [1 0 1]}}]})))
     (is (some #(re-find #":memory" %) (ps {:memory [{:data {}}]})))
     (is (some #(re-find #":memory" %) (ps {:memory [{:kind :bed :data {}}] :keep-memory true})))))
+
+(deftest clear-hostiles-kills-only-hostile-types-near-the-plot
+  (let [cmds (f/clear-hostiles-commands grid [100 149 200] {:plot {:height 6}})]
+    (is (seq cmds))
+    (is (every? #(re-find #"^kill @e\[type=minecraft:[a-z_]+,x=116,y=149,z=216,distance=\.\.32\]$" %) cmds))
+    (is (some #(re-find #"type=minecraft:enderman," %) cmds))
+    (is (some #(re-find #"type=minecraft:spider," %) cmds))
+    (is (some #(re-find #"type=minecraft:zombie," %) cmds))
+    (is (not-any? #(re-find #"player|type=minecraft:villager|cow|iron_golem|wolf" %) cmds))))
+
+(deftest mobs-keep-is-the-opt-out
+  (is (seq (f/clear-hostiles-commands grid [0 0 0] {})))
+  (is (empty? (f/clear-hostiles-commands grid [0 0 0] {:mobs :keep}))))
+
+(deftest mobs-problems
+  (let [ps #(f/problems (merge {:name "a" :time :day :plot {:height 6} :body {:at [1 0 1]} :act [] :after [] :expect []} %))]
+    (is (empty? (ps {:mobs :keep})))
+    (is (some #(re-find #":mobs" %) (ps {:mobs :bogus})))))

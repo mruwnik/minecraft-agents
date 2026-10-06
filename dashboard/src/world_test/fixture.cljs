@@ -125,6 +125,7 @@
     (cond-> []
       (not (or (nil? length) (and (int? length) (<= min-length length max-length)))) (conj (str ":plot :length must be an integer " min-length ".." max-length))
       (not (or (nil? width) (and (int? width) (<= 16 width max-width)))) (conj (str ":plot :width must be an integer 16.." max-width))
+      (not (contains? #{nil :keep} (:mobs c))) (conj ":mobs must be :keep (or absent)")
       (not (string? (:name c))) (conj ":name must be a string")
       (not (#{:day :night :night-exclusive :any} (:time c))) (conj ":time must be :day, :night, :night-exclusive or :any")
       (not (and (int? h) (< 1 h 32))) (conj ":plot :height must be an integer 2..31")
@@ -230,6 +231,21 @@
 
 (defn kill-command [grid origin height]
   (str "kill @e[type=!player," (box-selector grid origin height) "]"))
+
+(def hostile-types
+  "Hostile mob types the runner kills near a plot (never players, bodies or animals)."
+  ["zombie" "zombie_villager" "husk" "drowned" "skeleton" "stray" "bogged" "spider" "cave_spider" "creeper" "enderman"
+   "endermite" "witch" "slime" "phantom" "silverfish" "pillager" "vindicator" "evoker" "vex" "ravager" "guardian"
+   "breeze" "wither_skeleton" "blaze" "ghast" "hoglin" "zoglin" "piglin_brute"])
+
+(defn clear-hostiles-commands
+  "One kill per hostile type within 32 blocks of the plot's centre; none when the case has :mobs :keep."
+  [grid origin c]
+  (if (= :keep (:mobs c))
+    []
+    (let [[sx sz] (dims grid)
+          [x y z] (abs-pos origin [(quot sx 2) 0 (quot sz 2)])]
+      (vec (for [t hostile-types] (str "kill @e[type=minecraft:" t ",x=" x ",y=" y ",z=" z ",distance=..32]"))))))
 
 (defn setup-commands
   "Forceload the plot, kill every non-player entity in it, clear it to air and lay the floor."

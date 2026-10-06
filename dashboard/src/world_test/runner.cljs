@@ -437,6 +437,7 @@
                        (.then #(rcon! (f/body-commands origin (:body opts) rc)))
                        (.then #(when register (put-register! opts register)))
                        (.then #(sleep (* 1000 (get-in rc [:body :settle-s]))))
+                       (.then #(rcon! (f/clear-hostiles-commands grid origin rc)))
                        (.then (fn []
                                 (let [offset (file-size (events-file opts))
                                       t0 (js/Date.now)]

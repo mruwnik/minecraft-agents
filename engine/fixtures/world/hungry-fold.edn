@@ -1,7 +1,7 @@
 ;; Card 2909cf46 (4f8f3aa0: health-low folded into :hungry). Food is set by RCON: the runner starts the body at food 20 and
 ;; saturation 20; a hunger effect of 4 s amp 255 leaves food 15, 5 s amp 211 food 14, 5 s amp 255 food 8, 5 s amp 243 food 9-10, 4 s amp 214 food 19;
 ;; then `damage` sets the health (20 - n). The drain runs first (health 20), the damage last.
-;; Not here: hp 10, food 14, no food carried, a known chest with food (a :food-source memory entry no job can write; hand-run with a memory.edn seeded).
+;; Not here: hp 10, food 14, no food carried. The known-chest case is hungry-memory-seed.edn (a :memory seed).
 ;; Rules: look for food when food < min(18, 6 + missing hp); eat at once when hp < 7, food < 20 and food is carried;
 ;; a hurt body never goes to bed or stands still to heal, it keeps working (a bed is known in every case).
 {:defaults

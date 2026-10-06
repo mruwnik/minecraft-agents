@@ -1,7 +1,8 @@
 ;; hostile-near line of fire (card b3eabdf4, hand-tested in d834ad64): a ranged mob is a danger only with an arrow
 ;; line, a melee mob only with a way to the body. Body in the plot's middle, the mob 6 east, a wall 3 east.
+;; :mobs :keep: the runner does not clear hostile mobs near the plot before :act (it does by default).
 {:defaults
- {:tags [:hostile :triggers]
+ {:tags [:hostile :triggers] :mobs :keep
   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
               :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
   :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}}
