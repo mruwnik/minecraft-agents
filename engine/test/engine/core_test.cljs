@@ -1541,6 +1541,20 @@
           (dotimes [_ 3] (await (core/tick! eng)))
           (is (= ["j2" "j2" "j2"] (ran seen))))))))
 
+(deftest held-repeat-runs-a-round-per-tick-and-is-never-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (expr-setup)]
+          (core/submit! eng '(count) {})
+          (core/submit! eng '(hold (repeat (twice))) {})
+          (dotimes [_ 6] (await (core/tick! eng)))
+          (is (= (repeat 6 "j2") (ran seen)) "the held repeat takes every round, the other job waits")
+          (is (= ["j1" "j2"] (listed eng)) "the held repeat is never done")
+          (core/cancel! eng "j2")
+          (await (core/tick! eng))
+          (is (= "j1" (last (ran seen))) "cancelling the holder frees the body"))))))
+
 (deftest combinators-nest-and-survive-a-restart
   (async done
     (tu/run-async done
