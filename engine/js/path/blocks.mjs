@@ -19,7 +19,8 @@ export const DAMAGE_TOUCH = 3 // hurts when walked into
 export const SLOW = 4 // slows walking
 export const PORTAL = 5 // nether portal, end portal, end gateway: stepping in sends the body elsewhere
 
-const MC_VERSION = '26.1'
+// the planner's block table is built for this version; a body on another version would plan on the wrong states
+export const MC_VERSION = '26.1'
 
 const WATER_NAMES = new Set(['water', 'bubble_column', 'kelp', 'kelp_plant', 'seagrass', 'tall_seagrass'])
 const CLIMB_NAMES = /^(ladder|vine|scaffolding|(weeping|twisting)_vines(_plant)?|cave_vines(_plant)?)$/

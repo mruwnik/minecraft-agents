@@ -5,16 +5,18 @@ import mineflayer from 'mineflayer'
 import pf from 'mineflayer-pathfinder'
 import { SafeMovements } from './movements.mjs'
 import { fixDigMaterials } from './dig-materials.mjs'
+import { MC_VERSION } from './path/blocks.mjs'
 
 const { pathfinder } = pf
 
 // same defaults as src/config.mjs: the newest protocol mineflayer speaks, offline auth
 // viewDistance: chunks loaded around the body (mineflayer's own default 'far' is 12; ~80-100 KB heap per column)
-export const DEFAULTS = { version: '26.1', auth: 'offline', viewDistance: 8 }
+export const DEFAULTS = { version: MC_VERSION, auth: 'offline', viewDistance: 8 }
 export const SPAWN_TIMEOUT_MS = 60000
 
 // The mineflayer createBot options for a body's connection settings.
 export function botOptions ({ host, port, username, auth = DEFAULTS.auth, version = DEFAULTS.version, viewDistance = DEFAULTS.viewDistance }) {
+  if (version !== MC_VERSION) throw new Error(`minecraft version ${version} is not supported: the planner block table is built for ${MC_VERSION}`)
   return { host, port, username, auth, version, viewDistance }
 }
 

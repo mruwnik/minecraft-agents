@@ -19,7 +19,7 @@ test('a missing marker names its title', () => {
 test('a missing file names every title in it', () => {
   const path = 'node_modules/mineflayer-pathfinder/index.js'
   const read = p => p === path ? null : allPresent(p)
-  assert.deepEqual(missingPatches(read), ['centred gate waypoints', 'gate fix', 'scaffold descent driver'])
+  assert.deepEqual(missingPatches(read), ['centred gate waypoints', 'gate fix', 'scaffold descent driver', 'immutable search nodes', 'terrain waypoints', 'terrain start', 'terrain stops'])
 })
 
 test('the real repo files are patched', () => {
@@ -36,4 +36,10 @@ test('only a required patch is named by missingRequired', () => {
 
 test('every required patch is a known title', () => {
   assert.deepEqual(REQUIRED.filter(t => !PATCHES.some(([, , title]) => title === t)), [])
+})
+
+test('every patch tools/patch-deps.mjs applies has a marker here', () => {
+  const root = join(import.meta.dirname, '..', '..')
+  const applied = readFileSync(join(root, 'tools', 'patch-deps.mjs'), 'utf8').match(/^ {2}\['node_modules\//gm)
+  assert.equal(PATCHES.length, applied.length)
 })

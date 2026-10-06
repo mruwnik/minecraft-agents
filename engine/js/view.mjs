@@ -9,7 +9,7 @@ import { createHash } from 'node:crypto'
 import { promisify } from 'node:util'
 import { relightBox } from './light.mjs'
 import { bodyDir, worldsDir } from './bodies.mjs'
-import { RELIGHT_BUDGET_MS, RELIGHT_MAX_POINTS, RELIGHT_REACH, columnLightSection, columnStateSection, tableFor, mergeOverlapping } from './view-light.mjs'
+import { RELIGHT_BUDGET_MS, RELIGHT_MAX_POINTS, RELIGHT_REACH, columnLightSection, columnStateSection, hasSkyLight, tableFor, mergeOverlapping } from './view-light.mjs'
 import { VIEW_VERSION, encodeColumn } from './view-column.mjs'
 import { poseJson, poseSnapshot, bodyKey, poseKey, offlinePose, hudSnapshot, hudKey } from './view-pose.mjs'
 export * from './view-light.mjs'
@@ -33,7 +33,12 @@ export const ERROR_EVERY_MS = 60000
 
 // ---- files ----
 
-export const columnFile = (stateDir, world, cx, cz) => path.join(worldsDir(stateDir), world, 'chunks', `${cx}.${cz}.bin`)
+// the overworld keeps 'chunks'; another dimension has its own folder (chunks-the_nether), so its columns never overwrite the overworld's
+const chunksFolder = dimension => {
+  const name = (dimension ?? 'overworld').replace(/^minecraft:/, '')
+  return name === 'overworld' ? 'chunks' : `chunks-${name}`
+}
+export const columnFile = (stateDir, world, cx, cz, dimension) => path.join(worldsDir(stateDir), world, chunksFolder(dimension), `${cx}.${cz}.bin`)
 export const biomesFile = (stateDir, world) => path.join(worldsDir(stateDir), world, 'biomes.json')
 export const poseFile = (stateDir, world, agent) => path.join(bodyDir(stateDir, world, agent), 'view', 'pose.json')
 export const hudFile = (stateDir, world, agent) => path.join(bodyDir(stateDir, world, agent), 'view', 'hud.json')
@@ -177,6 +182,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
 
   const relightChanges = (target, queued, start, blocked) => {
     const table = tableFor(target)
+    const hasSky = hasSkyLight(target.game?.dimension)
     const infosByKey = new Map()
     // a loaded column with its section caches (states and light decoded lazily, once per flush), or null
     const columnAt = (cx, cz) => {
@@ -188,7 +194,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
       return info
     }
     const statesOf = (info, s) => info.states[s] ??= columnStateSection(info.column, s)
-    const lightOf = (info, s) => info.light[s] ??= columnLightSection(info.column, s)
+    const lightOf = (info, s) => info.light[s] ??= columnLightSection(info.column, s, hasSky)
     const stateAt = (x, y, z) => {
       const info = columnAt(x >> 4, z >> 4)
       if (!info) return null
@@ -255,7 +261,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
           for (let x = 0; x < sx; x++) {
             const i = (real * sz + z) * sx + x
             states[i] = table.air
-            sky[i] = 15
+            sky[i] = hasSky ? 15 : 0
           }
         }
       }
@@ -323,10 +329,10 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
   const written = new Map()
   const contentHash = raw => createHash('sha1').update(raw.subarray(4 + raw.readUInt32LE(0))).digest('hex')
 
-  const writeColumn = async (key, raw, hash) => {
+  const writeColumn = async (key, raw, hash, dimension) => {
     const [cx, cz] = key.split(',').map(Number)
     const data = await deflate(raw, { level: 1 })
-    await writeAtomic(columnFile(stateDir, world, cx, cz), data)
+    await writeAtomic(columnFile(stateDir, world, cx, cz, dimension), data)
     written.set(key, hash)
     stats.columns++
     stats.bytes += data.length
@@ -354,7 +360,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
       const hash = contentHash(raw)
       if (written.get(key) === hash) continue
       inflight.add(key)
-      writes.push(writeColumn(key, raw, hash).catch(reportError).finally(() => inflight.delete(key)))
+      writes.push(writeColumn(key, raw, hash, target.game?.dimension).catch(reportError).finally(() => inflight.delete(key)))
     }
     return track(Promise.all(writes))
   }

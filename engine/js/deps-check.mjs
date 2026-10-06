@@ -10,7 +10,13 @@ export const PATCHES = Object.freeze([
   ['node_modules/prismarine-physics/index.js', 'patched by bot/patch-deps.mjs: open trapdoor over a ladder', 'trapdoor over a ladder'],
   ['node_modules/mineflayer/lib/plugins/entities.js', 'patched by bot/patch-deps.mjs: my own air', 'own air only'],
   ['node_modules/mineflayer-pathfinder/lib/physics.js', 'patched by bot/patch-deps.mjs: scaffold descent preview', 'scaffold descent preview'],
-  ['node_modules/mineflayer-pathfinder/index.js', 'patched by bot/patch-deps.mjs: scaffold descent driver', 'scaffold descent driver']
+  ['node_modules/mineflayer-pathfinder/index.js', 'patched by bot/patch-deps.mjs: scaffold descent driver', 'scaffold descent driver'],
+  ['node_modules/mineflayer-pathfinder/index.js', '// copy search nodes before rendering execution waypoints', 'immutable search nodes'],
+  ['node_modules/mineflayer-pathfinder/index.js', '// terrain-aware waypoint adapter', 'terrain waypoints'],
+  ['node_modules/mineflayer-pathfinder/index.js', '// terrain-aware grounded start adapter', 'terrain start'],
+  ['node_modules/mineflayer-pathfinder/index.js', '// preserve checked terrain stance on stopping v2', 'terrain stops'],
+  ['node_modules/prismarine-item/index.js', '// patched by patch-deps.mjs', 'item enchants list'],
+  ['node_modules/minecraft-data/minecraft-data/data/pc/26.1/protocol.json', '"0": "minecraft:armor"', 'attribute wire ids']
 ].map(Object.freeze))
 
 // `read(relPath)` returns the file's text or null; the titles whose marker is absent (or whose file is missing).

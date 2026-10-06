@@ -123,6 +123,22 @@ test('column file names allow negative chunk coordinates', () => {
   assert.equal(columnFile('/s', 'w', -3, 12), path.join('/s', 'worlds', 'w', 'chunks', '-3.12.bin'))
 })
 
+test('column files of another dimension go to their own folder, so they never overwrite the overworld', () => {
+  assert.equal(columnFile('/s', 'w', 1, 2, 'minecraft:overworld'), columnFile('/s', 'w', 1, 2))
+  assert.equal(columnFile('/s', 'w', 1, 2, 'minecraft:the_nether'), path.join('/s', 'worlds', 'w', 'chunks-the_nether', '1.2.bin'))
+  assert.equal(columnFile('/s', 'w', 1, 2, 'minecraft:the_end'), path.join('/s', 'worlds', 'w', 'chunks-the_end', '1.2.bin'))
+})
+
+test('a body in the nether writes its columns outside the overworld folder', async () => {
+  const bot = fakeBot({ columns: { '0,0': makeColumn() } })
+  bot.game.dimension = 'minecraft:the_nether'
+  const { view, dir } = makeView(bot)
+  bot.emit('chunkColumnLoad', new Vec3(0, 0, 0))
+  await view.flushColumns()
+  assert.equal(fs.existsSync(worldChunks(dir)), false)
+  assert.ok(fs.existsSync(path.join(dir, 'worlds', 'w', 'chunks-the_nether', '0.0.bin')))
+})
+
 test('writeAtomic leaves the final file and no temp file', async () => {
   const dir = tmp()
   const file = path.join(dir, 'a', 'b.json')
@@ -662,16 +678,16 @@ const worldBot = world => {
 }
 
 // what the dump says now about one column: the file written last, or the column's own light if never written
-const dumpedCells = (world, dir, cx, cz) => {
-  const file = columnFile(dir, 'w', cx, cz)
+const dumpedCells = (world, dir, cx, cz, dimension) => {
+  const file = columnFile(dir, 'w', cx, cz, dimension)
   const { light } = fs.existsSync(file)
     ? decodeColumnFile(fs.readFileSync(file))
     : decodeColumnFile(zlib.deflateSync(encodeColumn({ column: world.map.get(`${cx},${cz}`), x: cx, z: cz, t: 0, body: 'Bob', mcVersion: VERSION })))
   return decodeLight(light.buffer, light.meta, SECTIONS)
 }
 
-const cellAt = (world, dir, x, y, z) => {
-  const cells = dumpedCells(world, dir, x >> 4, z >> 4)
+const cellAt = (world, dir, x, y, z, dimension) => {
+  const cells = dumpedCells(world, dir, x >> 4, z >> 4, dimension)
   const v = cells[(y >> 4) * 4096 + ((y & 15) << 8 | (z & 15) << 4 | (x & 15))]
   return { sky: v >> 4, block: v & 15 }
 }
@@ -779,6 +795,21 @@ test('relight: a change at a column border writes the neighbour column too, and 
   await view.flushColumns()
   await view.idle()
   assert.deepEqual(fs.readdirSync(worldChunks(dir)).sort(), ['1.1.bin', '2.1.bin'])
+})
+
+test('relight: in the nether (no sky) open air never gets sky light', async () => {
+  const world = makeWorld()
+  // the server sends a skyless dimension no sky light at all: no data and no empty flag
+  const blockLight = Array.from({ length: SECTIONS }, () => Buffer.from(packNibbles(new Uint8Array(4096))))
+  for (const column of world.map.values()) column.loadParsedLight([], blockLight, [[0, 0]], [[0, ((1 << SECTIONS) - 1) << 1]], [[0, 0]], [[0, 0]])
+  const bot = worldBot(world)
+  bot.game = { dimension: 'minecraft:the_nether' }
+  const { view, dir } = makeView(bot)
+  applyEdits(world, bot, [[23, 62, 23, 'torch']])
+  await view.flushColumns()
+  await view.idle()
+  assert.equal(cellAt(world, dir, 23, 64, 23, 'minecraft:the_nether').sky, 0)
+  assert.equal(cellAt(world, dir, 23, 62, 24, 'minecraft:the_nether').block, 13)
 })
 
 test('relight: a block update that does not change the state costs nothing', async () => {

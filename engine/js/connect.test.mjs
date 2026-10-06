@@ -14,3 +14,7 @@ test('botOptions passes a configured view distance', () => {
 test('botOptions keeps the connection settings', () => {
   assert.deepEqual(botOptions({ host: 'h', port: 1, username: 'u' }), { host: 'h', port: 1, username: 'u', auth: 'offline', version: '26.1', viewDistance: DEFAULTS.viewDistance })
 })
+
+test('botOptions refuses a version the planner block table is not built for', () => {
+  assert.throws(() => botOptions({ host: 'h', port: 1, username: 'u', version: '1.20.4' }), /not supported/)
+})
