@@ -1,0 +1,82 @@
+;; Card 2909cf46 (4f8f3aa0: health-low folded into :hungry). Food is set by RCON: the runner starts the body at food 20 and
+;; saturation 20; a hunger effect of 4 s amp 255 leaves food 15, 5 s amp 211 food 14, 5 s amp 255 food 8, 5 s amp 243 food 9-10, 4 s amp 214 food 19;
+;; then `damage` sets the health (20 - n). The drain runs first (health 20), the damage last.
+;; Not here: hp 10, food 14, no food carried, a known chest with food (a :food-source memory entry no job can write; hand-run with a memory.edn seeded).
+;; Rules: look for food when food < min(18, 6 + missing hp); eat at once when hp < 7, food < 20 and food is carried;
+;; a hurt body never goes to bed or stands still to heal, it keeps working (a bed is known in every case).
+{:defaults
+ {:tags [:survival :hungry] :time :day
+  :plot {:height 6}
+  :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {})}]
+  :blocks [[:set [8 0 16] "red_bed[facing=east,part=foot]"] [:set [9 0 16] "red_bed[facing=east,part=head]"]]
+  :body {:at [16.5 0 16.5] :settle-s 2}
+  :limit-s 60}
+ :cases
+ [{:name "hp5-food9-bread-eats-in-place"
+   :body {:inventory [["bread" 6]]}
+   :act [[:job (jobs.memory.set-place {:name :bed :pos #at [8 0 16]})]
+         [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
+         [:rcon "damage $BODY 15 minecraft:generic"] [:wait-s 12]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 30}
+            {:event {:source :reflex :kind :ended :context {:reflex-id :hungry} :data {:outcome :done}} :within-s 40}
+            {:no-event {:source :action :kind :started :data {:name "steer"}} :for-s 12}
+            {:no-event {:source :action :kind :started :data {:name "sleep"}} :for-s 12}]
+   :after [[:body-near [16.5 0 16.5] 1.5] [:item "bread" [:<= 5]]]}
+  {:name "hp5-food19-bread-eats-to-20"
+   :body {:inventory [["bread" 6]]}
+   :act [[:job (jobs.memory.set-place {:name :bed :pos #at [8 0 16]})]
+         [:rcon "effect give $BODY minecraft:hunger 4 214 true"] [:wait-s 6]
+         [:rcon "damage $BODY 15 minecraft:generic"] [:wait-s 10]]
+   :expect [{:event {:source :body :kind :hurt :data {:health 5 :food [:>= 18]}} :within-s 30}
+            {:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 30}
+            {:event {:source :reflex :kind :ended :context {:reflex-id :hungry} :data {:outcome :done}} :within-s 40}
+            {:no-event {:source :action :kind :started :data {:name "steer"}} :for-s 10}
+            {:no-event {:source :action :kind :started :data {:name "sleep"}} :for-s 10}]
+   :after [[:body-near [16.5 0 16.5] 1.5] [:item "bread" [:>= 4]] [:item "bread" [:<= 5]]]}
+  {:name "hp18-food19-scratch-nothing-fires-body-keeps-working"
+   :act [[:rcon "effect give $BODY minecraft:hunger 4 214 true"] [:wait-s 6]
+         [:rcon "damage $BODY 2 minecraft:generic"]
+         [:job (jobs.movement.go-to {:pos #at [28 0 16] :range 1})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 40 :of-job true}
+            {:no-event {:source :reflex :kind :fired} :for-s 20}]
+   :after [[:body-near [28.5 0 16.5] 2]]}
+  ;; at food 19 the top-up rule (hp < 20, food < 18, common food carried) does not hold; regenerating costs food, so within seconds
+  ;; the food falls below 18, the body is still below 20 hp and it eats one bread where it stands (never walks off)
+  {:name "hp18-food19-bread-carried-regen-then-top-up-eats"
+   :body {:inventory [["bread" 6]]}
+   :act [[:rcon "effect give $BODY minecraft:hunger 4 214 true"] [:wait-s 6]
+         [:rcon "damage $BODY 2 minecraft:generic"] [:wait-s 12]]
+   :expect [{:event {:source :body :kind :hurt :data {:health 18 :food [:>= 18]}} :within-s 20}
+            {:no-event {:source :reflex :kind :fired} :for-s 3}
+            {:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 20}
+            {:no-event {:source :action :kind :started :data {:name "steer"}} :for-s 12}]
+   :after [[:body-near [16.5 0 16.5] 1.5] [:item "bread" [:<= 5]]]}
+  {:name "hp20-food10-bread-nothing-fires"
+   :body {:inventory [["bread" 6]]}
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 18]]
+   :expect [{:no-event {:source :reflex :kind :fired} :for-s 16}]
+   :after [[:item "bread" 6]]}
+  {:name "hp19-food8-nothing-carried-nothing-fires"
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:wait-s 7]
+         [:rcon "damage $BODY 1 minecraft:generic"] [:wait-s 12]]
+   :expect [{:event {:source :body :kind :hurt :data {:health 19 :food [:<= 9]}} :within-s 20}
+            {:no-event {:source :reflex :kind :fired} :for-s 18}]}
+  {:name "hurt-hp5-food9-keeps-working-no-bed-no-standing"
+   :body {:inventory [["bread" 6]]}
+   :act [[:job (jobs.memory.set-place {:name :bed :pos #at [8 0 16]})]
+         [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
+         [:rcon "damage $BODY 15 minecraft:generic"]
+         [:job (jobs.movement.go-to {:pos #at [28 0 16] :range 1})]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 30}
+            {:event {:source :job :kind :result :data {:arrived true}} :within-s 50 :of-job true}
+            {:no-event {:source :action :kind :started :data {:name "sleep"}} :for-s 30 :until {:source :job :kind :result :data {:arrived true}}}]
+   :after [[:body-near [28.5 0 16.5] 2]]
+   :limit-s 80}
+  {:name "hurt-hp5-full-bar-no-food-keeps-working"
+   :act [[:job (jobs.memory.set-place {:name :bed :pos #at [8 0 16]})]
+         [:rcon "damage $BODY 15 minecraft:generic"] [:wait-s 1]
+         [:job (jobs.movement.go-to {:pos #at [28 0 16] :range 1})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 40 :of-job true}
+            {:no-event {:source :reflex :kind :fired} :for-s 15 :until {:source :job :kind :result :data {:arrived true}}}
+            {:no-event {:source :action :kind :started :data {:name "sleep"}} :for-s 15}]
+   :after [[:body-near [28.5 0 16.5] 2]]}]}
