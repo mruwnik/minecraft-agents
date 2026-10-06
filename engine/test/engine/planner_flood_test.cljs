@@ -544,3 +544,12 @@
   (are [options] (= {:status "found" :reason nil} (plan-over shelter-stair [0 63 1] options))
     {}
     {:preFlood 0 :floodAfter 0}))
+
+;; the start sealed in a stone box (feet y 64..65 inside), the floor outside open
+(def start-box (hollow -2 63 -2 2 67 2))
+
+(deftest a-sealed-start-is-start-enclosed-whatever-the-goal
+  (are [spec goal reason] (= reason (:reason (plan-over spec goal)))
+    {:blocks (merge flat start-box room)} [7 64 0] "start-enclosed"
+    {:blocks (merge flat start-box)} [20 64 0] "start-enclosed"
+    {:blocks (merge flat room)} [7 64 0] "goal-enclosed"))

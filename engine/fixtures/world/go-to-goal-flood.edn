@@ -14,6 +14,11 @@
    :expect [{:event {:source :job :kind :result :data {:arrived false :why :goal-enclosed}} :within-s 90 :of-job true}
             {:no-event {:source :action :kind :done :data {:name "walkTo"}} :for-s 90 :until {:source :job :kind :result :data {:arrived false :why :goal-enclosed}}}]
    :after [[:body-near [1.5 0 16.5] 3]]}
+  {:name "sealed-start-with-enclosed-goal-is-start-enclosed"
+   :body {:at [16.5 0 16.5]}
+   :blocks [[:fill [3 0 3] [28 3 28] "stone" :hollow] [:fill [14 0 14] [18 3 18] "stone" :hollow] [:fill [40 0 3] [50 3 13] "stone" :hollow]]
+   :act [[:job (jobs.movement.go-to {:pos #at [45 0 8] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false :why :start-enclosed}} :within-s 30 :of-job true}]}
   {:name "big-yard-with-a-gap-in-the-wall-arrives"
    :blocks [[:fill [3 0 3] [28 3 28] "stone" :hollow] [:fill [3 0 16] [3 3 17] "air"]]
    :act [[:job (jobs.movement.go-to {:pos #at [16 0 16] :range 1 :escalate false})]]

@@ -19,10 +19,10 @@
 
 (defn record
   "[status reason seconds risk end-cell expanded] of a planner result, as the recorded answers have them (the JS planner
-  knew no :start-enclosed: it said goal-unloaded)."
+  knew no :start-enclosed: it said goal-unloaded, or the goal's own enclosed/cut-off reason, see same-answer?)."
   [r]
   (let [cost (get-in r [:path :cost])]
-    [(:status r) (if (= "start-enclosed" (:reason r)) "goal-unloaded" (:reason r)) (:seconds cost) (:risk cost) (pf/last-cell r) (:expanded r)]))
+    [(:status r) (:reason r) (:seconds cost) (:risk cost) (pf/last-cell r) (:expanded r)]))
 
 (defn close? [a b]
   (or (and (nil? a) (nil? b))
@@ -31,7 +31,9 @@
 (defn same-answer?
   "does the planner's record equal the recorded one: status, reason, end cell and expanded exactly, costs within rounding"
   [[s1 r1 sec1 risk1 end1 e1] [s2 r2 sec2 risk2 end2 e2]]
-  (and (= [s1 r1 end1 e1] [s2 r2 end2 e2]) (close? sec1 sec2) (close? risk1 risk2)))
+  (and (= [s1 end1 e1] [s2 end2 e2])
+       (or (= r1 r2) (and (= "start-enclosed" r1) (#{"goal-unloaded" "goal-enclosed" "goal-cut-off"} r2)))
+       (close? sec1 sec2) (close? risk1 risk2)))
 
 (defn disagreements
   "ids whose planned record differs from the recorded one: [[id got expected] ...]"

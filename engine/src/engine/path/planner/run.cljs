@@ -5,6 +5,8 @@
 
 (set! *warn-on-infer* true)
 
+(def ^:const START-DRAIN 512) ; forward expansions finishEnclosed spends to see whether the start is sealed
+
 (extend-type Search
   Object
 
@@ -13,6 +15,30 @@
     (set! (.-finished s) true)
     (set! (.-reason s) why)
     (set! (.-elapsed s) (- (js/performance.now) (.-t0 s))))
+
+  ;; The goal flood proved the goal walled in or cut off: finish so, unless the start's own region is sealed (the forward search
+  ;; drains within a small budget, no loaded-edge node), when the start is what keeps the body from the goal.
+  (finishEnclosed [s why]
+    (set! (.-flood-pending s) false)
+    (let [expanded (.-expanded s) best-distance (.-best-distance s) best-node (.-best-node s)]
+      (loop [n 0]
+        (cond
+          (and (not ^boolean (.-finished s)) (< n START-DRAIN)) (do (.expandNext s) (recur (inc n)))
+          (and ^boolean (.-finished s) (nil? (.-reason s))) nil
+          :else (let [sealed (and ^boolean (.-finished s) (identical? (.-reason s) "exhausted") ^boolean (.startEnclosed s) (not ^boolean (.startCliff s)))]
+                  (when-not sealed ; the drain only labels: the partial plan is the one the search had
+                    (set! (.-expanded s) expanded)
+                    (set! (.-best-distance s) best-distance)
+                    (set! (.-best-node s) best-node))
+                  (.finish s (if sealed "start-enclosed" why)))))))
+
+  ;; does any node the search expanded stand beside a cliff or gap (a way off the start's land, so its walls are not what holds it)?
+  (startCliff [s]
+    (loop [i 0]
+      (cond
+        (>= i (.-n-nodes s)) false
+        ^boolean (.cliffBeside s (aget (.-xs s) i) (aget (.-ys s) i) (aget (.-zs s) i) (aget (.-hs s) i)) true
+        :else (recur (inc i)))))
 
   ;; the free position nearest where the body is, as an index of the mask; -1 when none is free
   (nearestFree [s ^js mask want-x want-z]
@@ -209,7 +235,7 @@
       (.begin s)
       (.takeSchedule s)
       (when (and (not ^boolean (.-finished s)) ^boolean (.goalEnclosedEarly s))
-        (.finish s "goal-enclosed")))
+        (.finishEnclosed s "goal-enclosed")))
     (loop [n 0]
       (when (and (< n max-expansions) (not ^boolean (.-finished s)))
         (cond
@@ -228,10 +254,12 @@
                                                         (set! (.-verifying s) true)
                                                         (recur (+ n used)))
                   ^boolean (.-lf-end s) (do (set! (.-flood-pending s) false)
-                             (.finish s (cond enclosed (if ^boolean (.-cut-off s) "goal-cut-off" "goal-enclosed") ^boolean (.-boxed s) "box" :else "exhausted")))
+                             (if enclosed
+                               (.finishEnclosed s (if ^boolean (.-cut-off s) "goal-cut-off" "goal-enclosed"))
+                               (.finish s (if ^boolean (.-boxed s) "box" "exhausted"))))
                   :else (do (.growFlood s (.-lf-budget s))
                             (if enclosed
-                              (.finish s (if ^boolean (.-cut-off s) "goal-cut-off" "goal-enclosed"))
+                              (.finishEnclosed s (if ^boolean (.-cut-off s) "goal-cut-off" "goal-enclosed"))
                               (do (.expandNext s)
                                   (recur (+ n used)))))))))
 
