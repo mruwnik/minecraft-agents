@@ -63,9 +63,10 @@
   (<= (forestry/eye-dist (u/self-pos c) pos) forestry/dig-reach))
 
 (defn rules-in
-  "The rules input for this job: zones, claims, every plan's footprint but :for-plan's, and :ignore-zones?."
+  "The rules input for this job: zones, claims, every plan's footprint but :for-plan's and the
+  body's own plans', and :ignore-zones?."
   [c]
-  (access/rules-input c {:except (:for-plan (:args c))}))
+  (access/rules-input c {:except (:for-plan (:args c)) :own-plans-ok? true}))
 
 (def social #{:zone :claim :footprint :no-zones})
 

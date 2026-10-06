@@ -187,7 +187,7 @@
   "The social half of the rules' input (jobs.lib.access/zone-input): zones, claims, footprints, the body's name and
   the clock, and the job's :ignore-zones? arg."
   [c]
-  (access/zone-input c {:ignore-zones? (:ignore-zones? (:args c))}))
+  (access/zone-input c {:ignore-zones? (:ignore-zones? (:args c)) :own-plans-ok? true}))
 
 (defn feet-of
   "The cell [x y z] the body stands on (jobs.lib.reach/standing-cell: the planner's start on a block's edge)."

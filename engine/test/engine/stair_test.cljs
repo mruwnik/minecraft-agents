@@ -12,7 +12,8 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as world]
-            [jobs.access.stair :as stair]))
+            [jobs.access.stair :as stair]
+            [plan.shape :as shape]))
 
 (def job 'jobs.access.stair)
 
@@ -592,6 +593,15 @@
           (is (= :refills (:reason @out)))
           (is (= 3 (count (digs p))))
           (is (= [{:cell [1 64 0] :block "stone"}] (:dug @out)) "a dig that left the same block is not recorded"))))))
+
+(deftest the-bodys-own-plan-footprint-ahead-is-cut-through
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan (shape/with-author {:id "wall" :parts [{:id "w" :cells [[2 63 0]] :want "stone"}]} "Fake")
+              {:keys [out p]} (await (stair! {:blocks ground :plans {"wall" plan}} east (fn [_])))]
+          (is (not= :footprint (:reason @out)))
+          (is (some #(= {:x 2 :y 63 :z 0} %) (digs p))))))))
 
 (deftest another-plans-footprint-ahead-stops-and-names-the-plan
   (async done

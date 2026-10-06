@@ -31,12 +31,13 @@
    :radius {:doc "search radius in blocks" :default default-radius}
    :at {:doc "{:x :y :z} of a base log: fell that one column, wherever the body is (the radius and species are not used), instead of the nearest tree" :type :pos :default nil}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :default nil}
+   :spare-own-builds {:doc "a log in a plan this body made is not felled; false: it may be" :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
 (defn log-allowed?
   "Whether the job may dig the log at pos (one warn per job when refused)."
   [c pos]
-  (gate/allowed? c :fell-tree.declined "fell-tree" :dig pos {:except (:for-plan (:args c))}))
+  (gate/allowed? c :fell-tree.declined "fell-tree" :dig pos {:except (:for-plan (:args c)) :own-plans-ok? (false? (:spare-own-builds (:args c)))}))
 
 (defn column-logs
   "Logs standing in the chosen column, lowest first."

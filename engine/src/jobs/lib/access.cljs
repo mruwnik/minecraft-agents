@@ -11,22 +11,29 @@
 
 (defn cell [{:keys [x y z]}] [x y z])
 
+(defn own-plans
+  "The ids of the plans this body made (plan :metadata :by names it)."
+  [c]
+  (into #{} (keep (fn [[id by]] (when (zones/same-owner? by (ctx/self-name c)) id))) (known/plan-authors c)))
+
 (defn zone-input
   "The social half of the rules' input: {:zones :footprints :plan-cells :claims :self :own-plans :now :ignore-zones?}.
   opts:
   :except is a plan id for a job working that plan. Its footprint is left out of :footprints and its cells are given
   as :plan-cells, because the plan is the permission (see jobs.lib.access.zones/verdict).
+  :own-plans-ok? drops the footprints of plans this body made too (a body's own plan never blocks its own work).
   :ignore-zones? defaults to the job's own :ignore-zones? arg."
   ([c] (zone-input c {}))
-  ([c {:keys [except] :as opts}]
+  ([c {:keys [except own-plans-ok?] :as opts}]
    {:zones (known/zones c)
-    :footprints (known/footprints c {:except except})
+    :footprints (cond->> (known/footprints c {:except except})
+                  own-plans-ok? (into {} (remove (comp (own-plans c) val))))
    :plan-cells (if (nil? except)
                  #{}
                  (into #{} (keep (fn [[cell id]] (when (= id except) cell))) (known/footprints c)))
     :claims (known/claims c)
     :self (ctx/self-name c)
-    :own-plans (into #{} (keep (fn [[id by]] (when (zones/same-owner? by (ctx/self-name c)) id))) (known/plan-authors c))
+    :own-plans (own-plans c)
     :now (ctx/now c)
     :ignore-zones? (boolean (if (contains? opts :ignore-zones?) (:ignore-zones? opts) (:ignore-zones? (:args c))))}))
 

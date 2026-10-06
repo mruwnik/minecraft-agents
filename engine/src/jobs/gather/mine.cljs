@@ -121,6 +121,7 @@
    :radius {:doc "seen blocks within this many blocks of the body count" :default 16}
    :wet {:doc "dig blocks that touch water, and tunnel beside water" :default false}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
+   :spare-own-builds {:doc "a cell of a plan this body made is never a target; false: it may be dug" :default true}
    :mend {:doc "fill the ground under the start again afterwards" :default true}
    :collect-radius {:doc "how far around to collect drops after a dig" :default 6}
    :max-failures {:doc "failures in a row before giving up" :default 3}
@@ -180,6 +181,11 @@
     (mapv #(u/pos-of (.-pos %)) (array-seq (.call f p #js {:radius radius :names #js [block] :max 128})))
     []))
 
+(defn rules-in
+  "The rules input: another's plans always refuse, this body's own too unless :spare-own-builds is false."
+  [c]
+  (access/rules-input c {:own-plans-ok? (false? (:spare-own-builds (:args c)))}))
+
 (defn scan
   "{:targets [pos] nearest first (the higher of two as near), those over the ground snapshot after all others, :refused [verdict] of blocks a
   zone or plan refuses, :wet? true when an unskipped block was rejected only for water}. Only seen blocks that are
@@ -194,7 +200,7 @@
                    (remove skipped)
                    (filter #(= block (u/block-name p %))))
         graded (map (juxt identity #(classify c wet %)) cells)
-        in (access/rules-input c)
+        in (rules-in c)
         judged (->> graded
                     (filter #(= :ok (second %)))
                     (map (fn [[pos]] (let [v (access/may-dig? in pos)] [pos v (access/judge v accept)]))))]
@@ -346,7 +352,7 @@
 
 (defn ^:async dig! [c pos]
   (await (equip! c))
-  (let [v (access/may-dig? (access/rules-input c) pos)
+  (let [v (access/may-dig? (rules-in c) pos)
         verdict (access/judge v (:accept (:args c)))]
     (if (not= :ok verdict)
       (refused! c pos v verdict)
@@ -431,7 +437,7 @@
     (if-let [pos (first cells)]
       (let [block (u/block-name (:primitives c) pos)
             _ (await (equip! c block))
-            v (access/may-dig? (access/rules-input c) pos)
+            v (access/may-dig? (rules-in c) pos)
             verdict (access/judge v (:accept (:args c)))
             status (when (= :ok verdict) (.-status (await (tidy/dig! c pos))))]
         (cond

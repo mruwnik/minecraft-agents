@@ -11,7 +11,8 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as world]
-            [jobs.forestry.maintain :as maintain]))
+            [jobs.forestry.maintain :as maintain]
+            [plan.shape :as shape]))
 
 (def job 'jobs.forestry.maintain)
 
@@ -351,6 +352,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[zones plans reason] [[[] {"forest" oak-cell "other" other-plan} :footprint]
+                                      [[] {"forest" oak-cell "other" (shape/with-author other-plan "Fake")} :footprint]
                                       [[{:name "vault" :min [3 65 0] :max [3 65 0] :allow #{:place}}] {"forest" oak-cell} :zone]]]
           (let [{:keys [p seen]} (await (with-zones zones #(run oak-world plans {:plan "forest"} 20)))]
             (is (= [] (digs p)) (str reason))
@@ -438,3 +440,14 @@
           (is (= [[3 64 0] [3 65 0] [3 66 0] [3 67 0]] (digs p)))
           (is (= [[3 64 0 "oak_sapling"]] (places p)) "no double replant"))))))
 
+
+(deftest fell-tree-spares-logs-of-the-bodys-own-plan-unless-told-not-to
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [spec {:blocks (lt/tree 3 0 "oak" 3)}
+              own (shape/with-author (forest-plan ["a" [[3 64 0] [3 65 0] [3 66 0]] "oak"]) "Fake")]
+          (doseq [[args n] [[{:radius 10} 0] [{:radius 10 :spare-own-builds false} 3]]]
+            (let [{:keys [eng p]} (start spec {"forest" own})]
+              (await (h/child-outcome eng 'jobs.forestry.fell-tree args 60))
+              (is (= n (count (digs p))) (pr-str args)))))))))

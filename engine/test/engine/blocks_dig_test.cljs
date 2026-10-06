@@ -8,15 +8,16 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [jobs.lib.world-files :as world]))
+            [jobs.lib.world-files :as world]
+            [plan.shape :as shape]))
 
 (defn setup
   "An engine over a fake world on the stone walk floor; world-spec :zones (default []) is the zone list."
   [world-spec]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake-on-floor (dissoc world-spec :zones))
-        w (world/of-data {} {} (get world-spec :zones []))
+        p (tu/fake-on-floor (dissoc world-spec :zones :plans))
+        w (world/of-data (get world-spec :plans {}) {} (get world-spec :zones []))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :world w
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -218,3 +219,16 @@
               result (await (child-outcome eng job {:pos "here"} 3))]
           (is (= {:dug false :reason :bad-args} (select-keys result [:dug :reason])))
           (is (= 1 (count (filter #(= :blocks.dig.declined (:kind %)) @seen)))))))))
+
+(def hut {:id "hut" :parts [{:id "w" :cells [[2 64 0]] :want "stone"}]})
+
+(deftest a-cell-of-the-bodys-own-plan-is-dug-another-bodys-plan-refuses
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [own (setup {:self body :blocks {"2,64,0" "dirt"} :plans {"hut" (shape/with-author hut "Fake")}})
+              other (setup {:self body :blocks {"2,64,0" "dirt"} :plans {"hut" (shape/with-author hut "Miles")}})]
+          (is (= {:dug true :reason :dug} (select-keys (await (child-outcome (:eng own) job {:pos [2 64 0]} 10)) [:dug :reason])))
+          (is (= {:reason :not-allowed :pos at :by :footprint :plan "hut"}
+                 (select-keys (await (waiting-after other (list job {:pos at}) 3)) [:reason :pos :by :plan])))
+          (is (empty? (calls (:p other) "dig"))))))))

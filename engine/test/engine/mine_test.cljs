@@ -13,7 +13,8 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
-            [jobs.gather.mine :as mine]))
+            [jobs.gather.mine :as mine]
+            [plan.shape :as shape]))
 
 (defn spec [args] (list 'jobs.gather.mine args))
 
@@ -581,7 +582,8 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[w blocks expected] [[(ew/of-data {} {} [farm-zone]) {"3,64,0" "sand"} {:zones ["farm"] :plans []}]
-                                     [(ew/of-data {"pad" pad-plan} {} []) {"6,64,0" "sand"} {:zones [] :plans ["pad"]}]]]
+                                     [(ew/of-data {"pad" pad-plan} {} []) {"6,64,0" "sand"} {:zones [] :plans ["pad"]}]
+                                     [(ew/of-data {"pad" (shape/with-author pad-plan "Fake")} {} []) {"6,64,0" "sand"} {:zones [] :plans ["pad"]}]]]
           (let [s (await (zoned {:block "sand" :tunnel-length 0} {:blocks blocks :yaw 270} w 5))]
             (is (zero? (count (.-calls (.-world (:p s))))))
             (is (not (finished? s)))

@@ -60,7 +60,7 @@
   "The zones, claims, footprints, the body's name, the clock and the job's :ignore-zones? arg, as jobs.lib.access.rules
   takes them (jobs.lib.access/zone-input)."
   [c]
-  (access/zone-input c {:ignore-zones? (:ignore-zones? (:args c))}))
+  (access/zone-input c {:ignore-zones? (:ignore-zones? (:args c)) :own-plans-ok? true}))
 
 (def zone-keys [:zones :footprints :claims :self :now :ignore-zones?])
 

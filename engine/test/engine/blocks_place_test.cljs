@@ -3,7 +3,8 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.blocks-dig-test :as bd]
             [engine.memory :as mem]
-            [engine.test-util :as tu]))
+            [engine.test-util :as tu]
+            [plan.shape :as shape]))
 
 (def job 'jobs.blocks.place)
 (def at {:x 2 :y 64 :z 0})
@@ -128,3 +129,14 @@
       (fn ^:async t []
         (let [{:keys [eng]} (bd/setup {:self body :inventory cobble})]
           (is (= {:placed false :reason :bad-args} (select-keys (await (bd/child-outcome eng job {:pos at} 3)) [:placed :reason]))))))))
+
+(deftest a-cell-of-the-bodys-own-plan-is-placed-another-bodys-plan-refuses
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "hut" :parts [{:id "w" :cells [[2 64 0]] :want "cobblestone"}]}
+              own (bd/setup {:self body :inventory cobble :plans {"hut" (shape/with-author plan "Fake")}})
+              other (bd/setup {:self body :inventory cobble :plans {"hut" (shape/with-author plan "Miles")}})]
+          (is (:placed (await (bd/child-outcome (:eng own) job {:pos at :item "cobblestone"} 5))))
+          (is (= {:reason :not-allowed :by :footprint :plan "hut"}
+                 (select-keys (await (bd/waiting-after other (list job {:pos at :item "cobblestone"}) 3)) [:reason :by :plan]))))))))
