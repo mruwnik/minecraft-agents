@@ -208,6 +208,14 @@
           (core/submit! eng fight {})
           (is (nil? (core/tick! eng)) "6 blocks is beyond range 4"))))))
 
+(deftest fight-back-ignores-a-hidden-ranged-mob
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:inventory sword :entities [{:id 7 :name "skeleton" :kind "hostile" :visible false :pos {:x 10 :y 64 :z 0}}]})]
+          (core/submit! eng '(jobs.survival.fight-back {:ranged-range 16}) {})
+          (is (nil? (core/tick! eng)) "no line of fire: not a target, the job declines"))))))
+
 (defn invulnerable-zombie [] (assoc (zombie 7 3 0) :invulnerable true))
 
 (deftest fight-back-counts-no-hit-without-damage

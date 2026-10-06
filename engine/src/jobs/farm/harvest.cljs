@@ -69,7 +69,7 @@
 (defn ripe-at?
   "Whether p shows crop ripe at pos (nil, an unloaded cell, is not)."
   [p pos crop]
-  (let [b (.blockAt p (clj->js pos))]
+  (let [b (u/block-at p pos)]
     (boolean (and b (= crop (.-name b)) (some-> (.-age b) (>= (ripe-age crop)))))))
 
 (defn planned-ripe
@@ -334,6 +334,10 @@
         "no-item" nil
         (ctx/update-mem! c fail-debt pos)))))
 
+(def max-per-round
+  "Most crops one round cuts or plants; the rest wait for the next round."
+  8)
+
 (defn ^:async replant!
   "Step 1: :continue when a seed was planted or a walk made, else nil."
   [c]
@@ -352,7 +356,7 @@
           :partial :continue
           :no-path (do (ctx/update-mem! c bare-debt (:pos (first targets))) :continue)
           :blocked (do (ctx/update-mem! c walk-fail-debt (:pos (first targets))) :continue)
-          (loop [todo targets]
+          (loop [todo (take max-per-round targets)]
             (if (empty? todo)
               :continue
               (do (await (plant-one! c (first todo)))
@@ -409,7 +413,7 @@
                        (warn-gave-up! c)
                        :continue)
           (do (ctx/update-mem! c assoc :collect true)
-              (loop [todo (still-planned c targets)]
+              (loop [todo (take max-per-round (still-planned c targets))]
                 (when (seq todo)
                   (await (cut-cell! c (first todo)))
                   (recur (rest todo))))

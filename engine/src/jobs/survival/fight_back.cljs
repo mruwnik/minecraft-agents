@@ -33,12 +33,13 @@
 
 (defn in-range
   "The hostiles within :range (ranged ones within :ranged-range): the visible
-  ones nearest first, then the hidden ones."
+  ones nearest first, then the hidden melee ones (a ranged mob without a line of fire is no danger)."
   [c]
   (let [{:keys [range ranged-range skip]} (:args c)
         dead (into (set skip) (:killed (ctx/mem c)))]
-    (remove #(contains? dead (.-id %))
-            (combat/hostiles (:primitives c) range {:ranged-radius (max range ranged-range) :sight :prefer}))))
+    (->> (combat/hostiles (:primitives c) range {:ranged-radius (max range ranged-range) :sight :prefer})
+         (remove #(contains? dead (.-id %)))
+         (remove #(and (combat/ranged? %) (not (.-visible %)))))))
 
 (defn targets
   "The hostiles in range not given up on, nearest first."

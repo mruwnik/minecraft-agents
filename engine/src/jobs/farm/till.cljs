@@ -80,9 +80,9 @@
   [c]
   (let [skipped (:skipped (ctx/mem c) {})
         p (:primitives c)
-        todo? (try (some #(not (or (contains? skipped %) (= "farmland" (u/block-name p %))))
-                         (cells (:args c)))
-                   (catch :default _ nil))]
+        cs (try (cells (:args c))
+                (catch :default _ nil))
+        todo? (some #(not (or (contains? skipped %) (= "farmland" (u/block-name p %)))) cs)]
     (and (or (:ignore-zones? (:args c)) (some? (known/zones c))
              (access/decline! c :till.declined "till" {:reason :no-zones}))
          (or (nil? todo?) (some? (hoe-of p))))))

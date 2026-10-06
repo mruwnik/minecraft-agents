@@ -290,3 +290,12 @@
                        (if (< (swap! digs inc) 50) #js {:status "dug"} #js {:status "failed"})))
           (await (child-outcome eng job {} 60))
           (is (<= (count (calls p "dig")) 10)))))))
+
+(deftest a-sink-digs-the-ground-below-before-the-fire
+  (let [cells {{:x 2 :y 64 :z 0} "campfire" {:x 2 :y 63 :z 0} "stone"}
+        block-at (fn [pos] (when-let [n (get cells pos "air")] #js {:name n}))
+        s {:fire {:x 2 :y 64 :z 0} :kind "campfire"}]
+    (is (= {:op :dig :pos {:x 2 :y 63 :z 0}} (guard/next-step block-at s))
+        "a failed dig of the ground leaves the fire standing")
+    (is (= {:op :dig :pos {:x 2 :y 64 :z 0}}
+           (guard/next-step (fn [pos] (when-let [n (get (assoc cells {:x 2 :y 63 :z 0} "air") pos "air")] #js {:name n})) s)))))

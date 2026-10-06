@@ -399,3 +399,15 @@
           (let [result (await (child-outcome eng job {} 100))]
             (is (= [{:x 3 :y 64 :z 0}] (:bare result)))
             (is (= 3 (count (place-calls-at p 3))))))))))
+
+(deftest a-round-cuts-and-replants-a-bounded-number-of-crops
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [xs (range 1 4) zs (range -2 3)
+              {:keys [eng p]} (start {:world {:blocks (field "wheat" 7 xs zs) :ages (ages 7 xs zs) :drops wheat-drops}})]
+          (core/submit! eng (list job {}) {})
+          (swap! clock + 700)
+          (await (core/tick! eng))
+          (is (<= (count (calls p "dig")) harvest/max-per-round) "15 ripe crops in reach: one round cuts only some")
+          (is (pos? (count (calls p "dig")))))))))
