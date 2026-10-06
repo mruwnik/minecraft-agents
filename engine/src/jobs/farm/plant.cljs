@@ -19,7 +19,8 @@
   Every planned cell standing bare is sown with the seed of the crop the plan wants there, when it is carried.
   Zones and the footprints of other active plans are asked before choosing a cell and again before the place.
   The result adds :refused [{:pos :reason}] and :short [seeds not carried]. :reason is :no-seed when the
-  only cells left lack a seed. The job declines (one plant.declined warn naming the plan and the reason) while
+  only cells left lack a seed. Cells another plan also claims are refused; one plant.declined warn (:reason :refused,
+  :plans) names it, also when no cell is left to sow. The job declines (one plant.declined warn naming the plan and the reason) while
   the plan is missing, unreadable, has no crop cells, or no zone list has been read.
   Box mode zones: a cell in another owner's zone or claim, or in a plan's footprint, is left bare. If every
   cell is refused the job ends with :none. The job warns plant.declined once, with :reason :refused (or
@@ -125,21 +126,27 @@
 
 (defn sowing
   "How the planned bare cells divide: {:ready [{:pos :seed}] (seed carried, not skipped, permitted) :short #{seed}
-  (carried none) :refused [{:pos :reason}]}."
+  (carried none) :refused [{:pos :reason}]}. One plant.declined warn names what refuses the refused cells."
   [c cells]
   (let [plan (:plan (:args c))
         have (set (map :name (u/inventory (:primitives c))))
-        skipped (set (:skipped (ctx/mem c)))]
-    (reduce (fn [acc {:keys [pos seed] :as debt}]
-              (cond
-                (skipped pos) acc
-                (not (have seed)) (update acc :short conj seed)
-                (permit/ok? c plan :sow pos) (update acc :ready conj debt)
-                :else (if-let [reason (permit/refusal c plan :sow pos)]
-                        (update acc :refused conj {:pos pos :reason reason})
-                        acc)))
-            {:ready [] :short #{} :refused []}
-            (harvest/planned-bare (:primitives c) cells))))
+        skipped (set (:skipped (ctx/mem c)))
+        {:keys [short seeded]} (reduce (fn [acc {:keys [pos seed] :as debt}]
+                                         (cond
+                                           (skipped pos) acc
+                                           (not (have seed)) (update acc :short conj seed)
+                                           :else (update acc :seeded conj debt)))
+                                       {:short #{} :seeded []}
+                                       (harvest/planned-bare (:primitives c) cells))
+        ok (set (gate/allowed c :plant.declined "plant" :sow (map :pos seeded) {:except plan}))]
+    (reduce (fn [acc {:keys [pos] :as debt}]
+              (if (ok pos)
+                (update acc :ready conj debt)
+                (if-let [reason (permit/refusal c plan :sow pos)]
+                  (update acc :refused conj {:pos pos :reason reason})
+                  acc)))
+            {:ready [] :short short :refused []}
+            seeded)))
 
 (defn ^:async plan-place!
   "Place the seed of debt at its cell after asking the rules once more; a failure is counted against the cell."

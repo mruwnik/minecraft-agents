@@ -242,3 +242,35 @@
           (await (run-until-empty eng 20))
           (is (empty? (calls p "place")))
           (is (= [:no-zones] (mapv :reason (events-of seen :plant.declined)))))))))
+
+(defn shared-plans
+  "Plan mix wants wheat at (2,64,2) and (3,64,2); plan other claims the cells of other-cells."
+  [other-cells]
+  {"mix" {:id "mix" :parts [{:id "w" :cells [[2 64 2] [3 64 2]] :want {:crop "wheat"}}]}
+   "other" {:id "other" :parts [{:id "o" :cells other-cells :want {:crop "wheat"}}]}})
+
+(defn ^:async run-plan [other-cells]
+  (let [{:keys [eng p seen]} (start {:blocks (farmland (range 2 4) [2]) :inventory (inv "wheat_seeds" 6) :floor tu/walk-floor}
+                                    (ew/of-data (shared-plans other-cells) {} []))]
+    (core/submit! eng (list job {:plan "mix"}) {})
+    (await (run-until-empty eng 40))
+    {:p p :seen seen}))
+
+(deftest cells-shared-with-another-plan-are-left-bare-and-named-in-one-warn
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen]} (await (run-plan [[3 64 2]]))
+              declined (events-of seen :plant.declined)]
+          (is (= "wheat" (block-at p 2 64 2)))
+          (is (= "air" (block-at p 3 64 2)))
+          (is (= [[:refused ["other"]]] (mapv (juxt :reason :plans) declined))))))))
+
+(deftest every-cell-refused-by-another-plan-warns-once-though-the-job-never-starts
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen]} (await (run-plan [[2 64 2] [3 64 2]]))
+              declined (events-of seen :plant.declined)]
+          (is (= "air" (block-at p 2 64 2)))
+          (is (= [[:refused ["other"]]] (mapv (juxt :reason :plans) declined))))))))
