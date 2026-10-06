@@ -13,13 +13,16 @@
 
 (def breathe 'jobs.survival.breathe)
 
-(defn setup [world]
-  (let [clock (atom 1000000)
-        [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake world)
-        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
-                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    {:eng eng :p p :seen seen}))
+(defn setup
+  "An engine over a fake body; raw (an atom) also collects the canonical events, with their levels."
+  ([world] (setup world (atom [])))
+  ([world raw]
+   (let [clock (atom 1000000)
+         [seen sink] (tu/legacy-capture-sink)
+         p (tu/fake world)
+         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                           :events (events/make {:body "Fake" :sinks [sink #(swap! raw conj %)] :now #(deref clock)})})]
+     {:eng eng :p p :seen seen})))
 
 (defn holds? [p args]
   ((:when (get triggers/all :suffocating)) p nil args))
@@ -362,23 +365,36 @@
 ;; a go-to swims over a floor: the fake's walker needs ground under the water
 (def pool-floor (into {} (for [x (range -1 2) z (range -1 2)] [(str x ",63," z) "stone"])))
 
-(deftest a-failed-shore-swim-falls-through-to-a-go-to-and-arriving-without-standing-on-land-is-not-done
+(defn ^:async failed-shore-swim-run!
+  "A shore swim that times out with the body out of the water (on-ground as given), then the go-to onto the ledge."
+  [on-ground]
+  (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4}
+                                     :blocks (merge pool pool-floor {"2,64,0" "stone" "2,63,0" "stone"})})]
+    (.override (.-world p) "swim"
+               (fn ^:async f [_ args impl]
+                 (if (.-toward args)
+                   (do (set-self! p {"inWater" false "onGround" on-ground}) #js {:status "timeout"})
+                   (await (impl _ args)))))
+    (await (one-run! eng defaults))
+    {:ended (ended seen) :pos (core/self-pos p) :holding (of-kind seen :holding)}))
+
+(deftest a-failed-shore-swim-falls-through-to-a-go-to-and-standing-on-the-ledge-is-out
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [on-ground [false true]]
-          (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4}
-                                             :blocks (merge pool pool-floor {"2,64,0" "stone" "2,63,0" "stone"})})]
-            (.override (.-world p) "swim"
-                       (fn ^:async f [_ args impl]
-                         (if (.-toward args)
-                           (do (set-self! p {"inWater" false "onGround" on-ground}) #js {:status "timeout"})
-                           (await (impl _ args)))))
-            (await (one-run! eng defaults))
-            (is (= (if on-ground [[:completed nil]] [[:stopped :no_land_in_range]]) (ended seen))
-                (str "the go-to arrives on the ledge, but only standing on it (onGround) is out, onGround " on-ground))
-            (is (= {:x 2 :y 65 :z 0} (core/self-pos p)) (str "stands on the ledge, onGround " on-ground))
-            (is (empty? (of-kind seen :holding)) (str "no hold, onGround " on-ground))))))))
+        (let [r (await (failed-shore-swim-run! true))]
+          (is (= [[:completed nil]] (:ended r)))
+          (is (= {:x 2 :y 65 :z 0} (:pos r)) "stands on the ledge")
+          (is (empty? (:holding r)) "no hold"))))))
+
+(deftest a-go-to-arriving-without-standing-on-land-is-not-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (await (failed-shore-swim-run! false))]
+          (is (= [[:stopped :no_land_in_range]] (:ended r)) "the go-to arrives on the ledge, but not onGround")
+          (is (= {:x 2 :y 65 :z 0} (:pos r)))
+          (is (empty? (:holding r)) "no hold"))))))
 
 (deftest enclosed-with-a-free-neighbour-steps-sideways-without-digging
   (async done
@@ -545,12 +561,6 @@
     (is (= #{[1 0] [0 1]} (:failed-headings stuck)))
     (is (= 1 (:legs stuck)))))
 
-(deftest a-later-run-near-a-remembered-spot-starts-with-its-headings-failed
-  (let [entries [{:data {:pos {:x 100 :y 65 :z 100} :headings [[1 0] [0 1]]}}
-                 {:data {:pos {:x 5 :y 65 :z 5} :headings [[-1 0]]}}]]
-    (is (= #{[-1 0]} (b/initial-failed entries {:x 8 :z 8})))
-    (is (= #{} (b/initial-failed entries {:x 50 :z 50})))))
-
 (deftest a-cut-during-the-go-to-ends-the-run-and-the-refire-lands
   (async done
     (tu/run-async done
@@ -569,6 +579,73 @@
           (set-self! p {"oxygen" 4 "pos" [0 62 0] "inWater" true})
           (await (core/tick! eng))
           (is (>= (:x (core/self-pos p)) 7) "the refire starts from the world and lands"))))))
+
+;; ---------------------------------------------------------------- follow-ups: travel bound, child results, refire, warns
+
+(deftest the-travel-bound-stops-a-run-whose-go-tos-used-it-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [ring (into {} (for [x (range -15 16) z (range -15 16) y [65 66]
+                                  :when (= 15 (max (js/Math.abs x) (js/Math.abs z)))]
+                              [(str x "," y "," z) "stone"]))
+              {:keys [eng seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}}
+                                         :blocks (merge (lake -14 14 14) (bank 15 15 14) (bank -15 -15 14) ring)})
+              args (assoc no-shore-args :swim-range 9 :leg-length 9 :search-radius 16)]
+          (await (one-run! eng args))
+          (is (= [[:stopped :no_land_in_range]] (ended seen)))
+          (is (= 2 (unreachable-count seen)) "two walled banks tried (2 x 15 blocks, beyond 3 x swim-range), not a third try"))))))
+
+(defn stub-child-ctx
+  "A ctx whose go-to child call resolves to r, with a go-to registry entry; child-result gives res."
+  [r res]
+  {:engine {:jobs {'jobs.movement.go-to {:check (fn [_] true) :round (fn [_] nil) :args nil}}}
+   :call-child (fn [_slot _def _args] (js/Promise.resolve r))
+   :child-result (fn [_slot] res)})
+
+(deftest a-go-to-child-that-continues-or-is-declined-is-a-failed-try
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [r [:continue :declined]]
+          (is (false? (await (b/go! (stub-child-ctx r {:arrived true}) :leg {:x 0 :y 64 :z 0} 2))) (str r)))
+        (is (true? (await (b/go! (stub-child-ctx :done {:arrived true}) :leg {:x 0 :y 64 :z 0} 2))))
+        (is (false? (await (b/go! (stub-child-ctx :done {:arrived false}) :leg {:x 0 :y 64 :z 0} 2))))))))
+
+(deftest a-refire-after-a-stop-keeps-the-searched-area
+  (let [entries [{:data {:start {:x 0 :y 64 :z 0} :pos {:x 100 :y 65 :z 100} :headings []}}
+                 {:data {:start {:x 5 :y 64 :z 5} :pos {:x 8 :y 65 :z 8} :headings [[1 0]]}}]]
+    (is (= {:start {:x 5 :y 64 :z 5} :failed #{[1 0]}} (b/initial-search entries {:x 10 :z 10})) "the start is the earlier run's")
+    (is (= {:start nil :failed #{}} (b/initial-search entries {:x 50 :z 50})))))
+
+(deftest a-refire-in-the-searched-lake-stops-at-once-without-new-legs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}}
+                                           :blocks (lake -60 60 14)})]
+          (await (one-run! eng small-args))
+          (is (pos? (:legs (stopped-data seen))) "the first run swam legs")
+          (let [{:keys [x z]} (core/self-pos p)]
+            (reset! seen [])
+            (set-self! p {"oxygen" 4 "pos" [x 62 z] "inWater" true})
+            (await (one-run! eng small-args))
+            (is (= [[:stopped :no_land_in_range]] (ended seen)))
+            (is (= 0 (:legs (stopped-data seen))) "no leg repeats the first run's")))))))
+
+(deftest children-of-a-breathe-run-leave-no-unreachable-warning
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [raw (atom [])
+              {:keys [eng seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}}
+                                         :blocks (merge (lake -6 6 6) (bank 7 7 6) (bank -7 -7 6) wall-all-round)}
+                                        raw)
+              unreachable #(= :unreachable (:kind %))]
+          (await (one-run! eng small-args))
+          (is (= [[:stopped :no_land_in_range]] (ended seen)))
+          (is (pos? (count (filter unreachable @raw))) "the children still report, quietly")
+          (is (empty? (filter #(and (unreachable %) (= :warn (:level %))) @raw))))))))
 
 ;; ---------------------------------------------------------------- as a reflex: one run, cut, refire
 

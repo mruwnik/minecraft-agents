@@ -21,7 +21,7 @@
     start only, inside :swim-range of it, at most :max-legs legs (a leg that moved starts afresh at its end).
   Completed when the head is clear and, after a swim, the body stands on solid ground out of the water. Stopped
   :no_land_in_range (fields :searched :swum :legs :headings-failed) when every way is spent or the run has gone
-  3 x :swim-range blocks; the spot's failed headings are remembered (:breathe-afloat, 5 min) for a refire. Stopped
+  3 x :swim-range blocks; the searched area (the start and the failed headings) is remembered (:breathe-afloat, 5 min), so a refire there swims no leg the run already did. Stopped
   :no_air or :no_way_out (with a warn) after three failed tries in the run. It never holds still while afloat.
   Memory: one :breathe entry per run.")
 
@@ -39,7 +39,7 @@
 (def land-tries "Go-to targets one spot tries before it swims a leg." 3)
 (def min-leg "Blocks a swim leg must move to count as moved." 8)
 (def max-passes "Passes one run makes before it stops :no_way_out, a safety net against a world that never changes." 120)
-(def afloat-near "Blocks around a spot in which a later run starts with the failed headings of an earlier stop." 16)
+(def afloat-near "Blocks around a spot in which a later run takes over the start and failed headings of an earlier stop." 16)
 (def afloat-policy {:cap 5 :ttl (* 5 60 1000)})
 
 (def breathe-policy {:cap 20 :ttl (* 60 60 1000)})
@@ -255,11 +255,13 @@
     (-> m (dissoc :failed-shores :failed-land :land-tries :failed-headings) (update :legs (fnil inc 0)))
     (update m :failed-headings (fnil conj #{}) heading)))
 
-(defn initial-failed
-  "The headings the :breathe-afloat entries within afloat-near of pos remember as failed."
+(defn initial-search
+  "{:start :failed} from the latest :breathe-afloat entry within afloat-near of pos: the start of the run that stopped
+  there (its swim-range still bounds the swim) and the headings it found failed; {:start nil :failed #{}} for none."
   [entries pos]
-  (into #{} (comp (map :data) (filter #(<= (hdist pos (:pos %)) afloat-near)) (mapcat :headings) (map vec))
-        entries))
+  (let [near (last (filter #(<= (hdist pos (:pos (:data %))) afloat-near) entries))
+        d (:data near)]
+    {:start (:start d) :failed (into #{} (map vec) (:headings d))}))
 
 (defn leg-target
   "The farthest loaded surface water cell along heading, min-leg to :leg-length blocks out, inside :swim-range of
@@ -276,7 +278,7 @@
   "One go-to child call to target: true when it reports arrival. A call that waits or is declined is a failed try
   (go-to with :escalate false waits on nothing)."
   [c slot target range]
-  (let [r (await (ctx/call-child c slot 'jobs.movement.go-to {:pos target :range range :escalate false}))]
+  (let [r (await (ctx/call-child c slot 'jobs.movement.go-to {:pos target :range range :escalate false :warn false}))]
     (and (= :done r) (boolean (:arrived (ctx/child-result c slot))))))
 
 (defn stop-afloat!
@@ -286,7 +288,7 @@
         m (ctx/mem c)
         pos (u/self-pos c)
         failed (:failed-headings m #{})]
-    (ctx/remember! c :breathe-afloat {:pos pos :reason :no_land_in_range :headings (vec failed)} afloat-policy)
+    (ctx/remember! c :breathe-afloat {:pos pos :start (:start m pos) :reason :no_land_in_range :headings (vec failed)} afloat-policy)
     (result/stop! c :no_land_in_range
                   (str "afloat; no land within " search-radius " blocks or a swim of " swim-range)
                   :searched search-radius :swum (js/Math.round (hdist pos (:start m pos))) :legs (:legs m 0)
@@ -320,8 +322,8 @@
         {:keys [reach shore-radius search-radius swim-range max-legs]} (:args c)
         pos (surface-pos p (u/self-pos c) reach)
         _ (when-not (:start (ctx/mem c))
-            (ctx/update-mem! c assoc :start (u/self-pos c)
-                             :failed-headings (initial-failed (ctx/entries c :breathe-afloat) pos)))
+            (let [{:keys [start failed]} (initial-search (ctx/entries c :breathe-afloat) pos)]
+              (ctx/update-mem! c assoc :start (or start (u/self-pos c)) :failed-headings failed)))
         m (ctx/mem c)
         shore (nearest-land p pos shore-radius (:failed-shores m) shore-cell?)
         in-budget? (< (:travelled m 0) (* 3 swim-range))

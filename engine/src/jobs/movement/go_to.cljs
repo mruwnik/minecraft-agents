@@ -55,7 +55,9 @@
    :doors {:doc "what to do at shut doors, gates and trapdoors: :shut (open, pass, shut again what the walk opened), :leave-open (open and pass), :never (walls)"
            :default :shut}
    :escalate {:doc "when shut in with no way out, pillar, stair or dig a door to get out (and put back what was dug); false: give up"
-              :default true}})
+              :default true}
+   :warn {:doc "false: a give-up or refusal is an info event, not a warn, for a caller that reports the failure itself"
+          :default true}})
 
 (def max-blocked 3)
 
@@ -156,6 +158,8 @@
            :door-stuck "a door in the way will not open"
            (str "no path (" (some-> why name) ")")))))
 
+(defn warn-level [c] (if (false? (:warn (:args c))) :info :warn))
+
 (defn give-up!
   ([c pos tries status result] (give-up! c pos tries status result nil))
   ([c pos tries status result extra]
@@ -163,14 +167,14 @@
                                               (give-up-fields result) (sh/shelter-hint c) extra)
          more (dissoc fields :why :kind)
          text (give-up-words pos fields)]
-     (ctx/emit! c :unreachable :warn (cond-> (merge {:target pos :tries tries :status status :why why
+     (ctx/emit! c :unreachable (warn-level c) (cond-> (merge {:target pos :tries tries :status status :why why
                                                      :text text}
                                                     more)
                                        kind (assoc :refused-kind kind)))
      (finish! c (merge {:status :stopped :arrived false :reason :unreachable :text text} fields)))))
 
 (defn refuse! [c {:keys [reason message]}]
-  (ctx/emit! c :refused :warn {:reason reason :text message})
+  (ctx/emit! c :refused (warn-level c) {:reason reason :text message})
   (finish! c {:status :stopped :arrived false :reason reason :text message}))
 
 ;; ------------------------------------------------------------------ escalation
