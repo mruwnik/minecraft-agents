@@ -39,6 +39,8 @@
                  (body-tools command) (conj (:body ctx))
                  true (into ["--world" (:world ctx) "--worlds" (:worlds ctx)])
                  (#{"plans" "blueprints"} command) (into ["--repo" (:repo ctx)])
+                 ;; plans check judges one body's seen memory: always the agent's own
+                 (and (= "plans" command) (= "check" (first argv))) (into ["--body" (:body ctx)])
                  (#{"map" "world-changes"} command) (into ["--repo-root" (:repo ctx)])
                  (= "snapshot" command) (into ["--workspace" (:dir ctx)])
                  ;; drive and world must agree on who drives: default to the body, so take then submit match
@@ -58,7 +60,8 @@
    [#" \[--worlds (?:DIR|<dir>)\]| \[--state (?:LEGACY_PARENT|<legacy-parent>)\]" ""]
    [#" \[--worlds <dir>\]| \[--state <legacy-parent>\]| --worlds <dir>| --state <legacy-parent>| --repo <dir>" ""]
    [#" (?:<agent>|<body>|BODY)(?= )" ""]
-   [#" --world (?:<world>|WORLD)" ""]])
+   [#" --world (?:<world>|WORLD)" ""]
+   [#"(check <id>) --body <name>" "$1"]])
 (defn player-usage [text]
   (reduce (fn [t [from to]] (str/replace t (js/RegExp. (.-source from) "g") to)) text player-cuts))
 

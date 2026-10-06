@@ -23,3 +23,15 @@
   (are [command argv] (= "Other" (who-of command argv))
     "drive" ["take" "--who" "Other"]
     "world" ["inventory" "--who" "Other"]))
+
+(deftest plans-check-gets-the-workspace-body
+  (is (= ["--world" "w" "--worlds" "/x" "--repo" "/r" "--body" "Probe" "check" "p1"]
+         (workspace/route ctx "plans" ["check" "p1"])))
+  (is (= ["--world" "w" "--worlds" "/x" "--repo" "/r" "list"]
+         (workspace/route ctx "plans" ["list"]))))
+
+(deftest plans-check-cannot-read-another-body
+  (is (thrown? js/Error (workspace/route ctx "plans" ["check" "p1" "--body" "Other"]))))
+
+(deftest player-help-hides-plans-check-body
+  (is (not (re-find #"--body" (workspace/player-usage "  check <id> --body <name> [--inventory X]")))))
