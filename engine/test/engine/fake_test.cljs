@@ -1019,3 +1019,21 @@
        (is (= {:name "oak_log" :properties {:axis "y"}} log))
        (is (= ["north" "bottom"]
               [(get-in stairs [:placed :properties :facing]) (get-in stairs [:placed :properties :half])]))))))
+
+;; pathWorld reuses its snapshot while no block changed; every write must show in the next call
+(defn path-state [p x y z] (.stateAt ^js (.-snapshot (.pathWorld p)) x y z))
+
+(deftest path-world-sees-a-dug-and-a-placed-block-in-the-next-call
+  (async-test
+   (fn ^:async t []
+     (let [p (owned {:blocks {"1,64,0" "stone" "5,64,0" "stone"} :inventory [{:name "stone" :count 1}]})
+           stone (path-state p 1 64 0)
+           same (identical? (.-snapshot (.pathWorld p)) (.-snapshot (.pathWorld p)))
+           _ (await (act p "dig" {:pos (at 1 64 0)}))
+           dug (path-state p 1 64 0)
+           _ (await (act p "place" {:pos (at 2 64 0) :item "stone"}))
+           placed (path-state p 2 64 0)]
+       (is (pos? stone))
+       (is same)
+       (is (zero? dug))
+       (is (= stone placed))))))

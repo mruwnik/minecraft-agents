@@ -186,7 +186,7 @@
              (<= (js/Math.abs (- (bit-shift-right z 4) bcz)) n))))
     (constantly true)))
 
-(defn path-world
+(defn path-world-build
   "{:snapshot :table :space}: the fake's blocks as the planner reads them. The fixture joins fences, walls and panes
   to their neighbours, as the server does: a lone post is a gap a body slips through. With :view-chunks only the
   columns near the body are loaded (in-view-fn)."
@@ -196,6 +196,27 @@
     {:snapshot (fx/fixture-snapshot {:blocks blocks})
      :table (.defaultStateTable ^js @blocks-mod)
      :space @space}))
+
+(def path-world-cache
+  "The last path-world: [inputs result]. A world is an immutable map, so the snapshot is rebuilt only when a map that
+  path-world reads is no longer the identical one (any block, state or marker write replaces it), or the body moved
+  while its position matters (a view window, or buried cells that skip the body's own)."
+  (atom nil))
+
+(defn path-world-inputs [w]
+  (let [pos-matters (or (:view-chunks w) (seq (:unreachable w)) (seq (:no-path w)))]
+    [(:blocks w) (:states w) (:unreachable w) (:no-path w) (:view-chunks w) (when pos-matters (get-in w [:self :pos]))]))
+
+(defn path-world
+  "path-world-build, reused while its inputs are the identical values (callers do not mutate the snapshot)."
+  [w]
+  (let [inputs (path-world-inputs w)
+        [last-inputs result] @path-world-cache]
+    (if (and last-inputs (every? true? (map identical? inputs last-inputs)))
+      result
+      (let [result (path-world-build w)]
+        (reset! path-world-cache [inputs result])
+        result))))
 
 (defn local-blocks
   "[x y z name props] for the cells within 2 of (cx, cz), rows cy-1 .. cy+2, air where the world holds nothing (so every

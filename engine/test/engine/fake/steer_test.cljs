@@ -229,6 +229,31 @@
         stone (state-id "stone" {})]
     (is (= [0 0 stone stone] (mapv #(at-state snapshot %) [[0 64 0] [0 65 0] [1 64 0] [0 66 0]])))))
 
+;; path-world reuses its snapshot; any write to a map it reads, or a body move that matters, must rebuild it
+(deftest path-world-is-reused-until-a-block-is-dug-or-placed
+  (let [{:keys [state]} (rig {[3 64 0] "stone"} [0 64 0])
+        at-3 #(at-state (:snapshot (steer/path-world @state)) [3 64 0])
+        first-pw (steer/path-world @state)
+        stone (state-id "stone" {})]
+    (is (identical? first-pw (steer/path-world @state)))
+    (is (= stone (at-3)))
+    (swap! state update :blocks dissoc [3 64 0])
+    (is (= 0 (at-3)))
+    (swap! state assoc-in [:blocks [3 64 0]] "stone")
+    (is (= stone (at-3)))
+    (swap! state assoc-in [:states [3 64 0]] {:open true})
+    (is (not (identical? first-pw (steer/path-world @state))))))
+
+(deftest path-world-follows-the-body-only-where-its-position-matters
+  (let [{:keys [state]} (rig {} [0 64 0] {:unreachable #{[2 64 0]}})
+        stone (state-id "stone" {})
+        beside #(at-state (:snapshot (steer/path-world @state)) [1 64 0])]
+    (is (= stone (beside)))
+    (swap! state assoc-in [:self :pos] [5 64 0])
+    (is (= stone (at-state (:snapshot (steer/path-world @state)) [0 64 0])))
+    (swap! state assoc-in [:self :pos] [1 64 0])
+    (is (= 0 (beside)))))
+
 ;; ---- what the fake moveTo did around a walk: the after-walk hook
 
 (deftest the-after-walk-hook-runs-once-with-the-start-when-a-walk-is-over
