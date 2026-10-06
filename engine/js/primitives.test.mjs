@@ -836,6 +836,22 @@ test('a fresh bot that is not bound yet survives a late socket error (write EPIP
   await p.close()
 })
 
+test('while offline lastKnown has what self read just before leaving; online it is null', async () => {
+  let calls = 0
+  const first = stubBot(world)
+  const connect = async () => { calls += 1; if (calls > 1 && calls <= 5) throw new Error('refused'); return calls === 1 ? first : stubBot(world) }
+  const { p, seen } = await online({ connect })
+  assert.equal(p.lastKnown(), null)
+  first.health = 11
+  await assert.rejects(p.offline('t1', { ms: 1000 }), /refused/)
+  assert.equal(p.isOffline(), true)
+  assert.equal(p.lastKnown().health, 11)
+  assert.deepEqual(p.lastKnown().pos, at(0, 64, 0))
+  assert.deepEqual(p.self(), { status: 'offline' })
+  await untilSeen(seen, 'online')
+  assert.equal(p.lastKnown(), null)
+})
+
 test('a reconnect that keeps failing rejects, reports the body disconnected, then the body keeps trying by itself', async () => {
   let calls = 0
   const connect = async () => {

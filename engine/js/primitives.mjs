@@ -472,8 +472,15 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     return Date.now() < readyAt
   }
 
-  const self = () => {
-    if (isOffline()) return { status: 'offline' }
+  const self = () => isOffline() ? { status: 'offline' } : readSelf()
+
+  // What self() read just before the body went away (a log-out or a dropped connection), for status and inventory
+  // views while it is offline; null when online or when nothing could be read.
+  let lastSelf = null
+  const rememberSelf = () => { try { lastSelf = readSelf() } catch { lastSelf = null } }
+  const lastKnown = () => isOffline() ? lastSelf : null
+
+  const readSelf = () => {
     const timeOfDay = bot.time.timeOfDay
     return {
       username: bot.username,
@@ -1474,6 +1481,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   // quit never lands here): the body is down and starts bringing itself back.
   const dropped = reason => {
     if (closed) return
+    if (!isOffline()) rememberSelf()
     down = true
     emit({ kind: 'disconnected', reason })
     // a call still waiting on the dead bot would sit until its time bound: cut it now so its job resumes after the reconnect
@@ -1504,6 +1512,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     const ms = Math.floor(Math.min(a.ms ?? OFFLINE_DEFAULT_MS, OFFLINE_MAX_MS))
     const call = { token, cut: () => call.wake?.(), wake: null }
     let release
+    rememberSelf()
     away = new Promise(resolve => { release = resolve })
     inflight.add(call)
     emit({ kind: 'offline', ms })
@@ -1578,7 +1587,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     .map(([name, fn]) => [name, whenUp(fn)]))
   // the raw world engine.perception looks at (stateAt, lightAt, eye, block changes): body-side only, never a job's
   const rawWorld = createRawWorld({ getBot: () => bot, isOffline: () => isOffline() || down, lightOverlay: (cx, cz, s) => view?.lightOverlay?.(cx, cz, s) })
-  return { setOwner, isOwner, drive: driveNow, stopDriving, self, entities, blocks, blockAt, harvestTools, digTime, pathWorld, ...acting, chatDirect, wait, isOffline, isSettling, offline, onBodyEvent, entityObservation, onEntityDeath, rawWorld, close }
+  return { setOwner, isOwner, drive: driveNow, stopDriving, self, entities, blocks, blockAt, harvestTools, digTime, pathWorld, ...acting, chatDirect, wait, isOffline, isSettling, lastKnown, offline, onBodyEvent, entityObservation, onEntityDeath, rawWorld, close }
 }
 
 const REPO_ROOT = join(import.meta.dirname, '..', '..')

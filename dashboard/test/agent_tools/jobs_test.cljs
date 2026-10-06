@@ -3,6 +3,7 @@
             [agent-tools.fake-socket :as fake]
             [agent-tools.jobs :as jobs]
             [agent-tools.world-data :as data]
+            [clojure.string :as str]
             ["node:fs" :as fs]
             ["node:os" :as os]
             ["node:path" :as path]))
@@ -177,6 +178,23 @@
           (.then (fn [{:keys [code out]}]
                    (is (= 2 code))
                    (is (= {:ok false :reason :jobs-unavailable :action :restart-with-current-build} (data/read-edn out)))))
+          (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
+
+(deftest show-of-a-job-the-scheduler-no-longer-holds-answers-from-the-event-history
+  (let [state (state-dir)
+        ev (fn [n kind] {:seq n :generation-id "g" :time-ms n :source :job :kind kind :context {:job-id "j7"}})
+        handler (fn [{:keys [path]}]
+                  (cond
+                    (str/starts-with? path "/job?") {:status 404 :text "{:ok false :reason :job-not-found}"}
+                    (= "/snapshot" path) {:text (data/write-edn {:generation-id "g" :cursor {:stream-id "s" :seq 3}})}
+                    :else {:text (data/write-edn {:stream-id "s" :latest-seq 3 :gap? false
+                                                  :events [(ev 1 :queued) (ev 2 :round_started) (ev 3 :completed)]})}))]
+    (async done
+      (-> (run-main! state ["show" "j7"] handler)
+          (.then (fn [{:keys [code out]}]
+                   (is (= 0 code) out)
+                   (is (= :completed (:status (data/read-edn out))) out)
+                   (is (true? (:finished? (data/read-edn out))))))
           (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
 
 (deftest an-uncertain-mutation-reports-its-request-id

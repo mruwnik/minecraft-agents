@@ -94,12 +94,20 @@
       (and (integer? (:count item)) (pos? (:count item))) (assoc :count (:count item))
       (and (number? (:durability item)) (not (neg? (:durability item)))) (assoc :durability (:durability item)))))
 
+(defn last-known
+  "What the body last read before it went offline (position, health, food, inventory, equipment), or nil."
+  [p]
+  (when (fn? (.-lastKnown p))
+    (some-> (.lastKnown p) (js->clj :keywordize-keys true))))
+
 (defn inventory-view
   "Read-only player inventory and worn slots, bounded to the vanilla player-window capacity."
   [eng]
-  (if (core/offline? eng)
-    {:ok false :reason :offline :offline (core/away eng)}
-    (let [self (js->clj (.self (:primitives eng)) :keywordize-keys true)
+  (let [offline? (core/offline? eng)
+        known (when offline? (last-known (:primitives eng)))]
+    (if (and offline? (nil? known))
+      {:ok false :reason :offline :offline (core/away eng)}
+      (let [self (or known (js->clj (.self (:primitives eng)) :keywordize-keys true))
           all-stacks (or (:inventory self) [])
           stacks (->> all-stacks (take inventory-stack-limit) (keep inventory-stack) vec)
           equipment (into {} (keep (fn [slot]
@@ -108,7 +116,8 @@
                                        (when (armour-slots slot) [slot :empty])))) equipment-slots)]
       (cond-> {:ok true :inventory stacks}
         (seq equipment) (assoc :equipment equipment)
-        (> (count all-stacks) inventory-stack-limit) (assoc :more? true)))))
+        (> (count all-stacks) inventory-stack-limit) (assoc :more? true)
+        offline? (assoc :last-known true :offline (core/away eng)))))))
 
 (defn bounded-value
   "A small EDN-safe copy of user-supplied job args or specs: depth at most 4, strings cut to 160
@@ -139,23 +148,26 @@
             (recur (next items) (conj out (bounded-value (first items) (inc depth) budget))))))
     :else (do (vswap! budget dec) (short-text (pr-str value) 160))))
 
-(defn instance-status [s id]
+(defn instance-status
+  "A job's status; running-id is the instance whose round is in flight now (the state's :current can lag it)."
+  ([s id] (instance-status s id nil))
+  ([s id running-id]
   (cond
     (contains? (:failed s) id) :failed
-    (= id (:current s)) :running
+    (or (= id (:current s)) (= id running-id)) :running
     (= id (:resume s)) :resuming
     (some #{id} (:list s)) :queued
     (= id (:pending-reflex s)) :reflex
-    :else :unknown))
+    :else :unknown)))
 
 (defn job-summary
   "A queue row; waiting is why the job waits (its check's reason), or nil."
-  [s id waiting]
+  [s id waiting running-id]
   (when-let [inst (get-in s [:instances id])]
     (cond-> {:id id
              :name (short-text (expr/label (:spec inst)) 160)
              :round (:round inst)
-             :status (instance-status s id)
+             :status (instance-status s id running-id)
              :hold? (boolean (:hold? inst))
              :reflex (:reflex inst)}
       waiting (assoc :waiting (bounded-value waiting 0 (volatile! 32))))))
@@ -191,13 +203,14 @@
   (let [s (core/state eng)
         p (:primitives eng)
         self (.self p)
+        known (when (core/offline? eng) (last-known p))
         current (or (core/holder eng)
                     (when-let [id (:resume s)] {:id id}))
         current-id (:id current)
         manual @(:manual eng)
         limit (or requested-limit status-job-limit)
         queue-count (count (:list s))
-        queue (mapv #(job-summary s % (core/waiting eng %)) (take limit (:list s)))
+        queue (mapv #(job-summary s % (core/waiting eng %) (:id (core/running eng))) (take limit (:list s)))
         attention (->> (:attention s)
                        (sort-by (fn [[id req]] [(- (or (:updated-at req) 0)) id]))
                        (take attention-limit)
@@ -214,13 +227,14 @@
                (cond-> (select-keys manual [:who :why :since])
                  (:who manual) (update :who #(short-text (str %) 80))
                  (string? (:why manual)) (update :why #(short-text % 160))))
-     :position (core/self-pos p)
+     :position (or (core/self-pos p) (some-> known :pos (select-keys [:x :y :z])))
+     :last-known (when known true)
      :died (let [view (mem/view (:store eng))]
              (death-summary (mem/latest view :died) (:now view) (mem/latest view :recovered)))
-     :health (when (number? (.-health self)) (.-health self))
-     :food (when (number? (.-food self)) (.-food self))
+     :health (let [h (if known (:health known) (.-health self))] (when (number? h) h))
+     :food (let [f (if known (:food known) (.-food self))] (when (number? f) f))
      :current (when current
-                (when-let [summary (job-summary s current-id nil)]
+                (when-let [summary (job-summary s current-id nil (:id (core/running eng)))]
                   (assoc summary
                          :status (cond (core/running eng) :running
                                        (:reflex current) :reflex
@@ -255,7 +269,7 @@
         {:ok true :generation-id (:generation-id s) :id id :name (short-text (expr/label (:spec inst)) 160)
          :spec (bounded-value (:spec inst) 0 budget)
          :args (bounded-value args 0 budget) :bounded? true :round (:round inst) :hold? (boolean (:hold? inst))
-         :reflex (:reflex inst) :status (instance-status s id)
+         :reflex (:reflex inst) :status (instance-status s id (:id (core/running eng)))
          :waiting (some-> (core/waiting eng id) (bounded-value 0 (volatile! 32)))
          :current? (= id (:id (core/holder eng)))
          :failure (when failure {:error (short-text (:error failure) 1000) :at (:t failure)})

@@ -2,6 +2,7 @@
   "Job command validation and native EDN requests; HTTP remains a Node boundary."
   (:require [engine.bodies :as bodies]
             [agent-tools.http :as http]
+            [agent-tools.job-results :as job-results]
             [agent-tools.map :as map-tool]
             [agent-tools.observe :as observe]
             [agent-tools.world-data :as data]
@@ -192,11 +193,26 @@
 
 (defn line [text] (if (str/ends-with? text "\n") text (str text "\n")))
 
-(defn deliver! [r output {:keys [status content-type text]}]
+(defn history-outcome!
+  "show of a job the scheduler no longer holds (finished or dropped): its outcome from the retained event history, as
+  observe job prints it. A promise of the exit code."
+  [r output {:keys [request-fn]}]
+  (let [get! (fn [socket endpoint options]
+               (observe/get! socket endpoint (cond-> options request-fn (assoc :request-fn request-fn))))
+        id (second (re-find #"id=(j[0-9]+)" (:path r)))]
+    (.then (job-results/read! get! (:socketPath r) id {})
+           (fn [outcome]
+             (.then (js/Promise.resolve (output (str (data/write-edn outcome) "\n")))
+                    (fn [_] (if (false? (:ok outcome)) 1 0)))))))
+
+(defn deliver! [r output {:keys [status content-type text] :as response} & [opts]]
   (when-not (http/edn-response? content-type) (throw (js/Error. "unexpected response format")))
   (let [value (data/read-edn text)
         print! #(output (str (data/write-edn %) "\n"))]
     (cond
+      (and (not (:mutating r)) (str/starts-with? (:path r) "/job?") (= 404 status) (= :job-not-found (:reason value)))
+      (history-outcome! r output (or opts {}))
+
       (and (= 404 status) (= :not-found (:reason value)))
       (do (print! {:ok false :reason :jobs-unavailable :action :restart-with-current-build}) 2)
 
@@ -250,7 +266,7 @@
      (if (:error r)
        (do (js/console.error (str (:error r) "\n" usage)) (js/Promise.resolve 2))
        (-> (js/Promise.resolve nil)
-           (.then #(if (:wait r) (submit-and-wait! r output opts) (.then (exchange! r opts) (fn [response] (deliver! r output response)))))
+           (.then #(if (:wait r) (submit-and-wait! r output opts) (.then (exchange! r opts) (fn [response] (deliver! r output response opts)))))
            (.catch (fn [error]
                      (output (str (data/write-edn (failure-for r error)) "\n"))
                      2)))))))

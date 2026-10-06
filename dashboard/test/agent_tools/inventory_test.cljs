@@ -27,3 +27,9 @@
   (is (= {:equipment :none} (inventory/compact {:ok true :equipment {}} :equipment)))
   (is (= {:ok false :reason :offline}
          (inventory/compact {:ok false :reason :offline} :inventory))))
+
+(deftest compact-inventory-of-an-offline-body-is-the-last-known-one
+  (is (= {:total-items 5 :kinds 1 :counts (sorted-map "bread" 5) :last-known true
+          :offline {:by :connection :why :connection-lost}}
+         (inventory/compact {:ok true :last-known true :offline {:by :connection :why :connection-lost}
+                             :inventory [{:name "bread" :count 5 :slot 9}]} :inventory))))

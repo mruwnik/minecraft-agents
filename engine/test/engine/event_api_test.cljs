@@ -55,6 +55,11 @@
   (is (= :resuming (event-api/instance-status {:resume "j1" :list ["j1"]} "j1")))
   (is (= :queued (event-api/instance-status {:list ["j1"]} "j1"))))
 
+(deftest the-running-round-is-running-in-every-view
+  (is (= :running (event-api/instance-status {:list ["j1"] :current nil} "j1" "j1")) "the round in flight, state :current not yet set")
+  (is (= :queued (event-api/instance-status {:list ["j1"]} "j1" "j2")))
+  (is (= :failed (event-api/instance-status {:failed {"j1" {}}} "j1" "j1"))))
+
 (deftest inventory-view-is-read-only-bounded-and-shows-empty-armour-slots-and-omits-other-empty-ones
   (let [stacks (mapv (fn [slot] {:name (str "item-" slot) :count 2 :slot slot}) (range 50))
         eng {:primitives #js {:self (fn [] #js {:inventory (clj->js stacks)
@@ -71,6 +76,17 @@
             :torso :empty :legs :empty :feet :empty
             :mainHand {:name "iron_sword" :count 1}}
            (:equipment view)))))
+
+(deftest inventory-view-of-an-offline-body-is-its-last-known-one
+  (let [eng {:primitives #js {:isOffline (fn [] true)
+                              :lastKnown (fn [] #js {:inventory #js [#js {:name "bread" :count 5 :slot 9}]
+                                                     :equipment #js {:mainHand #js {:name "iron_sword" :count 1}}})}}
+        view (event-api/inventory-view eng)]
+    (is (= true (:ok view)))
+    (is (= true (:last-known view)))
+    (is (= {:by :connection :why :connection-lost} (:offline view)))
+    (is (= [{:name "bread" :count 5 :slot 9}] (:inventory view)))
+    (is (= "iron_sword" (get-in view [:equipment :mainHand :name])))))
 
 (deftest inventory-view-reports-offline-without-reading-primitives
   (let [eng {:primitives #js {:isOffline (fn [] true)}}]

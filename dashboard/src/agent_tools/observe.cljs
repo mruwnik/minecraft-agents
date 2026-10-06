@@ -78,9 +78,17 @@
                  :pile-at (when-not picked-up? at)
                  :despawns-in-s (when-not picked-up? (js/Math.round (/ despawns-in-ms 1000))))))
 
+(defn offline-view
+  "The away record with :back-in-s (seconds until a planned return) beside the epoch :back-at."
+  [away now]
+  (when away
+    (cond-> away
+      (number? (:back-at away)) (assoc :back-in-s (max 0 (js/Math.round (/ (- (:back-at away) now) 1000)))))))
+
 (defn compact-status
   "Status without metadata or empty collections: positions rounded, queued jobs apart from the current one."
-  [s]
+  ([s] (compact-status s (js/Date.now)))
+  ([s now]
   (if (false? (:ok s))
     s
     (let [{:keys [current jobs failed outstanding manual]} s
@@ -89,7 +97,8 @@
           queued-total (- (or (:total jobs) 0) (if (some #(= (:id %) (:id current)) items) 1 0))]
       (clean-pairs
        :mode (:mode s)
-       :offline (:offline s)
+       :offline (offline-view (:offline s) now)
+       :last-known (when (:last-known s) true)
        :idle (when-not current true)
        :pos (position (:position s))
        :died (when (:died s) (died-view (:died s)))
@@ -103,7 +112,7 @@
        :failed (when (nonzero (:total failed))
                  (array-map :total (:total failed) :items (mapv failure-view (:items failed))))
        :attention (when (nonzero (:total outstanding))
-                    (array-map :total (:total outstanding) :items (mapv attention-item (:items outstanding))))))))
+                    (array-map :total (:total outstanding) :items (mapv attention-item (:items outstanding)))))))))
 
 ;; Attention
 
@@ -150,6 +159,13 @@
                :block (clip (:block r) 80) :consumed (:consumed r) :hurt (:hurt r) :health (:health r)
                :pos (position (:pos r))
                :distance (when (number? (:distance r)) (round1 (:distance r)))))
+
+(defn stale-reconnect?
+  "Whether a reconnect-failed event is not worth a wake: a later try of the same outage (only the first wakes; the
+  rest are counted in the summary) or one the body has since recovered from (a later online/spawned in the backlog)."
+  [e later]
+  (boolean (or (> (or (get-in e [:data :attempt]) 1) 1)
+               (some #(and (= :body (:source %)) (#{:online :spawned :respawned} (:kind %))) later))))
 
 (defn classify
   "The wake an event causes under the options, or nil. Options: :from :chatter :watch :watch-actions :danger :disconnect."
@@ -442,9 +458,9 @@
                                            (swap! st assoc :seen (:seen update))
                                            (if (seq (:changed update))
                                              (finish! (attention-wake update))
-                                             (continue-event event more))))
-                                       (continue-event event more)))))
-                               (continue-event [event more]
+                                             (continue-event event more (rest events)))))
+                                       (continue-event event more (rest events))))))
+                               (continue-event [event more later]
                                  (when (and (= :attention (:source event)) (= :resolved (:kind event)))
                                    (let [id (id-str (:request-id event))
                                          drop-id (fn [m] (into (empty m) (remove (fn [[k _]] (= id (id-str k)))) m))]
@@ -457,7 +473,8 @@
                                      (reset! summary {:counts {} :items [] :more false})
                                      (swap! st assoc :snap snap :cursor (:cursor snap) :seen {} :pending [] :lookup true)
                                      (finish! (array-map :wake :reset :reason :engine-restarted)))
-                                   (if-let [immediate (classify event opts body)]
+                                   (if-let [immediate (when-not (and (= :reconnect-failed (:kind event)) (stale-reconnect? event later))
+                                                         (classify event opts body))]
                                      (finish! immediate)
                                      (do (swap! summary collect event)
                                          (more)))))

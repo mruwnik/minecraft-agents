@@ -30,7 +30,8 @@
      (let [stacks (->> (:inventory value) (keep stack-view) (take 46) vec)
            equipment (equipment-view (:equipment value))]
        (if (= mode :equipment)
-         {:equipment (if (seq equipment) equipment :none)}
+         (cond-> {:equipment (if (seq equipment) equipment :none)}
+           (:last-known value) (assoc :last-known true :offline (:offline value)))
          (let [counts (reduce (fn [result {:keys [name count]}]
                                 (update result name (fnil + 0) count)) (sorted-map) stacks)
                total (reduce + 0 (vals counts))]
@@ -38,4 +39,5 @@
              (seq counts) (assoc :counts counts)
              (seq equipment) (assoc :equipment equipment)
              (and include-slots? (seq stacks)) (assoc :slots stacks)
-             (true? (:more? value)) (assoc :more? true))))))))
+             (true? (:more? value)) (assoc :more? true)
+             (:last-known value) (assoc :last-known true :offline (:offline value)))))))))

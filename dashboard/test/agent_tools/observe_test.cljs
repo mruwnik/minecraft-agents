@@ -670,9 +670,27 @@
                           (is (= search-found (get-in (data/read-edn (:out result)) [:events 0 :data :found])))))))))
 
 (deftest compact-status-keeps-why-and-return-of-an-offline-body
-  (is (= {:by :shelter :job "j563" :why :logged-out-for-night :back-at 1020000}
-         (:offline (observe/compact-status {:mode :offline :offline {:by :shelter :job "j563" :why :logged-out-for-night :back-at 1020000}}))))
+  (is (= {:by :shelter :job "j563" :why :logged-out-for-night :back-at 1020000 :back-in-s 0}
+         (:offline (observe/compact-status {:mode :offline :offline {:by :shelter :job "j563" :why :logged-out-for-night :back-at 1020000}} 1020000))))
   (is (not (contains? (observe/compact-status {:mode :scheduled}) :offline))))
+
+(deftest compact-status-says-how-long-until-a-planned-return-and-marks-last-known-readings
+  (let [s {:mode :offline :offline {:by :shelter :why :logged-out-for-night :back-at 1020000}
+           :position {:x 1.04 :y 64 :z 2} :health 18 :food 15 :last-known true}
+        out (observe/compact-status s 960000)]
+    (is (= 60 (get-in out [:offline :back-in-s])))
+    (is (= [1 64 2] (:pos out)))
+    (is (= 18 (:health out)))
+    (is (true? (:last-known out))))
+  (is (not (contains? (:offline (observe/compact-status {:mode :offline :offline {:by :connection :why :connection-lost}} 5)) :back-in-s))))
+
+(deftest a-reconnect-failure-wakes-once-per-outage-and-never-after-the-body-is-back
+  (let [failed (fn [attempt] (event :body :reconnect-failed {:attempt attempt :reason "ECONNREFUSED"}))
+        online (event :body :online)]
+    (is (false? (observe/stale-reconnect? (failed 1) [])))
+    (is (true? (observe/stale-reconnect? (failed 2) [])) "later tries of one outage stay in the summary")
+    (is (true? (observe/stale-reconnect? (failed 1) [(failed 2) online])) "the body came back later in the backlog")
+    (is (false? (observe/stale-reconnect? (event :body :reconnect-failed) [])))))
 
 (defn with-lock-dir [f]
   (let [dir (.mkdtempSync fs (.join path (os/tmpdir) "observe-lock-"))]
