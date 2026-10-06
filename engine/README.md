@@ -461,7 +461,7 @@ HTTP over `worlds/<world>/agents/<name>/engine/events.sock` (mode 0600; all bodi
 | `GET /catalog?kind=jobs\|triggers&prefix=` / `kind=job\|trigger&name=` | names page / one description |
 | `GET /triggers[?id=]` | the register with live mute/move/cooldown/backoff state (`?id=` adds `:explain`) |
 | `POST /triggers` | one register edit |
-| `GET/POST /jobs` | list, `:submit`, `:interrupt`, `:cancel`, `:cancel-all`, `:retry` (used by `tools/jobs.mjs`) |
+| `GET/POST /jobs` | list, `:submit`, `:interrupt`, `:cancel` (also a running reflex job: ends `reflex.ended :cancelled`, its trigger may fire again), `:cancel-all`, `:retry` (used by `tools/jobs.mjs`) |
 
 Register edits (`POST /triggers`, applied between ticks; a refusal is `{:ok false :reason :at :message}` and changes
 nothing; `:by` names who asks, `:generation-id` is checked when given):

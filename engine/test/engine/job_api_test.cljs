@@ -164,7 +164,7 @@
     (is (= :bad-field (:reason (command eng "z" :cancel-all {:id "j1"}))) ":cancel-all takes no id")
     (core/shutdown! eng)))
 
-(deftest cancel-refuses-a-reflex-job-which-belongs-to-its-trigger
+(deftest cancel-ends-a-reflex-job-and-its-trigger-stays
   (async done
     (tu/run-async done
       (fn ^:async run []
@@ -180,7 +180,9 @@
               reflex (get-in (core/state eng) [:instances id :reflex])
               r (command eng "cancel-reflex" :cancel {:id id})]
           (is (= :probe reflex) "the running job is the reflex's")
-          (is (= [false :reflex-job] [(:ok r) (:reason r)]))
-          (is (some? (get-in (core/state eng) [:instances id])) "the instance is untouched")
+          (is (= [true :cancelled] [(:ok r) (:status r)]))
+          (is (nil? (get-in (core/state eng) [:instances id])) "the instance is gone")
+          (is (nil? (core/running eng)) "the round is cut")
+          (is (= 1 (count (:register (core/state eng)))) "the trigger stays registered")
           (core/shutdown! eng)
           (await round))))))

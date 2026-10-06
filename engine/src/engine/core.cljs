@@ -135,6 +135,15 @@
         (contains? debug-kinds kind) :debug
         :else :info))
 
+(defn cancel-reflex!
+  "End reflex job id by request (cutting its round): reflex.ended :cancelled; its trigger may fire again."
+  [eng id by]
+  (when (= id (:id (running eng)))
+    (set-owner! eng nil)
+    (reset! (:running eng) nil))
+  (drop-reflex-job! eng id (get-in (state eng) [:instances id :reflex]) :cancelled {:how :cancelled :by by})
+  (emit! eng {:source :job :kind :cancelled :level :info :job id :chain [id] :by by}))
+
 (defn drop-jobs-on-death!
   "A job does not survive its body's death: cancel every listed job (queued, held,
   cut or running) and drop every reflex job. Register entries stay, so a trigger
