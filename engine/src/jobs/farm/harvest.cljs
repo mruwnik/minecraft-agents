@@ -4,6 +4,7 @@
             [jobs.lib.gate :as gate]
             [jobs.lib.crops :as crops]
             [jobs.lib.look :as look]
+            [jobs.lib.result :as result]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
             [jobs.lib.walk :as walk]
@@ -18,8 +19,8 @@
      After :give-up such crops it stops cutting (warn harvest.gave-up); replanting and collecting go on.
   3. Collect the drops.
   4. Finish.
-  With no crop seen at all (ripe or not) it looks around once from where it stands first; if still none it ends with
-  result :reason :no-crop-seen (warn harvest.no-crop-seen).
+  With no crop seen at all (ripe or not) it looks around once from where it stands first; if still none it ends
+  :stopped :no-crop-seen (warn harvest.no-crop-seen).
   Result: {:cut :replanted :bare :lost :gave-up}. Cells that could not be replanted, or stopped being a crop
   afterwards, are named in a harvest.bare warn.
   Each cell it cuts is written to memory with its seed before the dig, because bare farmland does not show
@@ -477,8 +478,7 @@
         lost (lost-cells (:primitives c) (:planted m))
         bare (vec (distinct (concat (:bare m) (map :pos (:replant m)) lost)))
         no-crop? (and (not (:plan-cells c)) (zero? (:cut m 0)) (empty? (:replant m)) (not (crop-seen? c)))
-        result (cond-> {:cut (:cut m 0) :replanted (:replanted m 0) :bare bare :lost lost :gave-up (gave-up? c)}
-                 no-crop? (assoc :reason :no-crop-seen))]
+        result {:cut (:cut m 0) :replanted (:replanted m 0) :bare bare :lost lost :gave-up (gave-up? c)}]
     (when no-crop?
       (ctx/emit! c :harvest.no-crop-seen :warn
                  {:text (str "harvest saw no crop within " (:radius (:args c)) " of " (pr-str (center-of c)) " after looking around")}))
@@ -487,11 +487,15 @@
                  {:cells bare :lost lost
                   :text (str "harvest could not replant " (count bare) " cells: " (str/join ", " (map pr-str bare))
                              (when (seq lost) (str "; lost after replanting: " (str/join ", " (map pr-str lost)))))}))
-    (ctx/emit! c :harvest.done :info
+    (when-not no-crop?
+      (ctx/emit! c :harvest.done :info
                {:cut (:cut result) :replanted (:replanted result) :bare-count (count bare) :gave-up (:gave-up result)
-                :text (str "harvest done: cut " (:cut result) ", replanted " (:replanted result) ", bare " (count bare))})
-    (ctx/result! c result)
-    :done))
+                :text (str "harvest done: cut " (:cut result) ", replanted " (:replanted result) ", bare " (count bare))}))
+    (if no-crop?
+      (result/stop! c :no-crop-seen (str "harvest saw no crop within " (:radius (:args c)) " of " (pr-str (center-of c)))
+                    :cut 0 :replanted 0 :bare bare :lost lost :gave-up (:gave-up result))
+      (do (ctx/result! c result)
+          :done))))
 
 (defn sync-plan-debts!
   "With :plan and replanting, the debts are the planned cells standing bare (written only when they change)."

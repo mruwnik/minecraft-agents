@@ -237,11 +237,14 @@
       (fn ^:async t []
         (let [p (tu/fake-on-floor {:blocks {}})
               _ (look-then-see p)
-              {:keys [eng]} (start {:p p})
-              result (await (child-outcome eng job {} 50))]
+              {:keys [eng seen]} (start {:p p})]
+          (core/submit! eng '(jobs.farm.harvest {}) {})
+          (await (run-until-empty eng 50))
           (is (seq (calls p "look")))
-          (is (= :no-crop-seen (:reason result)))
-          (is (= 0 (:cut result))))))))
+          (let [stopped (events-of seen :stopped)]
+            (is (= [:no-crop-seen] (mapv :reason stopped)) "nothing to cut: stopped, not completed")
+            (is (string? (:text (first stopped))))
+            (is (empty? (events-of seen :completed)))))))))
 
 (def one-cell
   {:blocks (field "wheat" 7 [3] [0]) :ages (ages 7 [3] [0]) :drops wheat-drops})
