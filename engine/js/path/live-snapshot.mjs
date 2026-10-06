@@ -52,7 +52,7 @@ export function liveSnapshot (world, { minY, height }) {
     },
     hasColumn: (cx, cz) => columnAt(cx, cz) !== null,
     // a column loaded or unloaded since it was read: forget the copy, read it again when next asked (a snapshot kept
-    // across plans, engine/js/path/region-source.mjs)
+    // across plans)
     forgetColumn: (cx, cz) => {
       columns.delete(`${cx},${cz}`)
       for (let sy = 0; sy < height >> 4; sy++) tried.delete(`${cx},${sy},${cz}`)
