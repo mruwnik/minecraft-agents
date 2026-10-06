@@ -231,3 +231,29 @@
           (is (= {:given 5 :reason "unconfirmed"} @out))
           (is (<= 3000 (- @clock 1000000)))
           (is (has-event? s :give.unconfirmed)))))))
+
+(defn stray-bread-and-player-takes-the-drop
+  "A hook: the tick after the toss a bread entity far away appears, the tick after that the player takes the
+  drops near them."
+  []
+  (let [ticks (atom 0)]
+    (fn [p _]
+      (when (seq (calls p "toss"))
+        (let [n (swap! ticks inc)]
+          (when (= 1 n)
+            (swap! (fake/state p) update :entities conj
+                   {:id 99 :name "item" :kind "item" :pos [25 64 0] :item {:name "bread" :count 3}}))
+          (when (= 3 n)
+            (swap! (fake/state p) update :entities
+                   (fn [es] (filterv #(not (and (= "item" (:kind %)) (< (first (:pos %)) 15))) es)))))))))
+
+(deftest an-unrelated-drop-far-from-the-toss-is-not-the-toss
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p out] :as s} (await (give (assoc bread :entities [(steve 10)])
+                                                {:player "Steve" :item "bread" :count 5} 20 false
+                                                nil (stray-bread-and-player-takes-the-drop)))]
+          (is (= {:given 5} @out) "the player took the toss; the stray bread is not it")
+          (is (empty? (calls p "collect")) "the body does not walk to the stray")
+          (is (has-event? s :give.done)))))))

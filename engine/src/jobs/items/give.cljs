@@ -14,7 +14,7 @@
   - three walks in a row are blocked: \"unreachable\" (warn give.unreachable).
   - three arrivals in a row are still out of reach: \"out-of-range\" (warn give.out-of-range).
   A player farther than :reach is walked to (doors :shut). In reach the body looks at the player's head and tosses.
-  The item entities within :radius that were not there before are the drop.
+  The item entities of that name within 10 blocks of the toss spot that were not there before are the drop.
   After the toss:
   - The drop is gone once seen: {:given n} (info give.done).
   - The drop is never seen within 3 s: {:given tossed :reason \"unconfirmed\"} (info give.unconfirmed).
@@ -55,12 +55,17 @@
            .-pos
            u/pos-of))
 
+(def toss-reach 10)
+
 (defn drops
-  "Item entities of name within radius as [{:id :pos}], nearest first."
-  [p name radius]
-  (->> (look/seen-items p {:radius radius :max 32})
-       (filter #(= name (some-> (.-item %) .-name)))
-       (mapv (fn [e] {:id (.-id e) :pos (u/pos-of (.-pos e))}))))
+  "Item entities of name within radius as [{:id :pos}], nearest first; only those within toss-reach of near
+  (a position) when given."
+  ([p name radius] (drops p name radius nil))
+  ([p name radius near]
+   (->> (look/seen-items p {:radius radius :max 32})
+        (filter #(= name (some-> (.-item %) .-name)))
+        (mapv (fn [e] {:id (.-id e) :pos (u/pos-of (.-pos e))}))
+        (filterv #(or (nil? near) (u/within? near (:pos %) toss-reach))))))
 
 (defn finish!
   "Hand the parent result and return :done."
@@ -108,7 +113,7 @@
     (let [r (await (ctx/act c :toss (clj->js {:item item :count n})))
           status (.-status r)]
       (if (= "tossed" status)
-        (do (ctx/update-mem! c assoc :tossed (.-count r) :tossed-t (ctx/now c))
+        (do (ctx/update-mem! c assoc :tossed (.-count r) :tossed-t (ctx/now c) :toss-at (u/self-pos c))
             (u/progress! c)
             :continue)
         (let [v (u/fail! c :give.gave-up (str "give gave up: " status))]
@@ -139,9 +144,9 @@
   have arrived yet); a drop never seen within unseen-ms ends as unconfirmed."
   [c]
   (let [{:keys [item radius wait-s]} (:args c)
-        {:keys [tossed tossed-t before had collecting seen-drop]} (ctx/mem c)
+        {:keys [tossed tossed-t toss-at before had collecting seen-drop]} (ctx/mem c)
         p (:primitives c)
-        lying (remove #(contains? before (:id %)) (drops p item radius))
+        lying (remove #(contains? before (:id %)) (drops p item radius toss-at))
         back (max 0 (- (deposit/carried (u/inventory p) item) (- had tossed)))
         given (- tossed back)
         since (- (ctx/now c) tossed-t)]

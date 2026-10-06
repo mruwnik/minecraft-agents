@@ -40,6 +40,10 @@
     "stick" 0.5
     "dirt" nil))
 
+(deftest nether-wood-is-no-fuel
+  (are [item] (nil? (smelt/fuel-per-unit "furnace" item))
+    "crimson_planks" "warped_planks" "crimson_stem" "warped_hyphae"))
+
 (deftest the-quick-kinds-smelt-twice-the-items-per-fuel-item
   (are [kind item per] (= per (smelt/fuel-per-unit kind item))
     "blast_furnace" "coal" 16
@@ -88,6 +92,14 @@
   (are [kind item expected] (= expected (plan {:carried (inv item 20 "coal" 3) :item item :count 20 :state (assoc empty-furnace :kind kind)}))
     "blast_furnace" "raw_iron" {:item "raw_iron" :count 20 :fuel {:item "coal" :count 2}}
     "furnace" "raw_iron" {:item "raw_iron" :count 20 :fuel {:item "coal" :count 3}}))
+
+(deftest real-fuel-is-chosen-over-nether-wood
+  (is (= {:item "raw_iron" :count 3 :fuel {:item "oak_planks" :count 2}}
+         (plan {:carried (inv "raw_iron" 3 "crimson_planks" 4 "oak_planks" 4) :item "raw_iron" :count 3}))))
+
+(deftest the-fuel-is-cut-to-what-the-fuel-slot-holds
+  (is (= {:item "raw_iron" :count 32 :fuel {:item "stick" :count 64}}
+         (plan {:carried (inv "raw_iron" 64 "stick" 100) :item "raw_iron" :count 64}))))
 
 (deftest the-item-is-chosen-from-what-is-carried-when-not-given
   (are [m expected] (= expected (:item (plan m)))
@@ -625,6 +637,17 @@
           (is (= {:x -1 :y 64 :z 4} (:furnace (first (of-kind seen :smelt.furnace))))
               "the chosen furnace is told")
           (is (= [:cooking] (mapv :reason (of-kind seen :waiting))) "while it cooks the job says why it waits"))))))
+
+(deftest without-a-furnace-or-item-it-uses-the-nearest-one-that-cooks-what-is-carried
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (seeing-setup {:blocks {"1,64,2" "smoker" "-1,64,4" "furnace"}
+                                                         :inventory iron-and-coal})]
+          (core/submit! eng '(jobs.items.smelt {:count 3}) {})
+          (await (seeing-ticks s 3))
+          (is (= {:x -1 :y 64 :z 4} (:furnace (first (of-kind seen :smelt.furnace))))
+              "the nearer smoker cannot cook the carried iron"))))))
 
 (deftest without-a-furnace-and-none-seen-it-ends-with-a-reason
   (async done

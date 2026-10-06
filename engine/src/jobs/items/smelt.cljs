@@ -9,7 +9,7 @@
   "Smelt :count of an item in a furnace, blast furnace or smoker without standing by it.
   The first round walks to the furnace, reads it, takes any output already there (it does not count) and loads
   the input and the fuel. Fuel is worked out from the count: in a furnace one fuel item smelts 8 items for coal
-  or charcoal, 1.5 for wood, 0.5 for a stick (twice that in a blast furnace or smoker). It is taken from what is carried when :fuel is nil, coal and charcoal first.
+  or charcoal, 1.5 for overworld wood (crimson and warped do not burn), 0.5 for a stick (twice that in a blast furnace or smoker). It is taken from what is carried when :fuel is nil, coal and charcoal first.
   The job then ends its round and waits (check reason :cooking, with :furnace and :ready-at) so the body can do
   other jobs. The next round takes the output.
   The wait is decided by the clock: ready-at is now plus the cook time of the items loaded (200 ticks each in a
@@ -30,7 +30,7 @@
     :put (loading) or :take (collecting, or the output already there). Nothing is loaded or taken. :ignore-zones? true skips the check.")
 
 (def args
-  {:furnace {:doc "furnace, blast furnace or smoker position {:x :y :z}; when nil the nearest one the body has seen within 32 blocks that cooks :item is chosen (smelt.furnace says which), or the job ends with no-furnace-seen" :default nil}
+  {:furnace {:doc "furnace, blast furnace or smoker position {:x :y :z}; when nil the nearest one the body has seen within 32 blocks that cooks :item (or anything carried) is chosen (smelt.furnace says which), or the job ends with no-furnace-seen" :default nil}
    :item {:doc "what to smelt; the first smeltable thing carried when nil" :default nil}
    :count {:doc "how many; all carried (at most one stack) when nil" :default nil}
    :fuel {:doc "fuel item to load; the best carried when nil" :default nil}
@@ -65,6 +65,11 @@
                    (boolean (re-find #"_(log|wood)$" name)))
      false)))
 
+(defn wood-fuel?
+  "Overworld planks, logs and wood burn; the nether ones (crimson, warped) do not."
+  [name]
+  (boolean (and (re-find #"_(planks|log|wood)$" name) (not (re-find #"^(crimson|warped)_" name)))))
+
 (defn fuel-per-unit
   "How many items one fuel item smelts in a kind of furnace (the quick kinds cook twice as many), or nil when it
   is no fuel this job knows."
@@ -74,7 +79,7 @@
                    (= "coal_block" name) 80
                    (= "blaze_rod" name) 12
                    (= "dried_kelp_block" name) 20
-                   (re-find #"_(planks|log|wood)$" name) 1.5
+                   (wood-fuel? name) 1.5
                    (= "stick" name) 0.5)]
     (* per (/ (cook-ticks "furnace") (cook-ticks kind)))))
 
@@ -82,7 +87,7 @@
   "Lower burns first: coal and charcoal, then wood, then sticks, then the rest."
   [name]
   (cond (#{"coal" "charcoal"} name) 0
-        (re-find #"_(planks|log|wood)$" name) 1
+        (wood-fuel? name) 1
         (= "stick" name) 2
         :else 3))
 
@@ -129,7 +134,7 @@
           (:give-up picked) picked
           (and slot (not= (:name slot) name)) {:give-up "fuel-busy"}
           :else (let [per (fuel-per-unit kind name)
-                      units (min (js/Math.ceil (/ deficit per)) (carried-count carried name))
+                      units (min (js/Math.ceil (/ deficit per)) (carried-count carried name) (- slot-max (:count slot 0)))
                       covered (- (js/Math.floor (+ existing (* units per))) e)
                       n' (max 0 (min n covered))]
                   (if (and (pos? n) (zero? n'))
@@ -186,12 +191,17 @@
   [c]
   (or (:furnace (:args c)) (:furnace (ctx/mem c))))
 
+(defn carried [c] (u/inventory (:primitives c)))
+
 (defn nearest-furnace
   "The nearest furnace, blast furnace or smoker the body has seen within seen-radius, still that block now, that
-  cooks item (any kind when item is nil); nil when none."
+  cooks item (or, when item is nil, anything carried; any kind when nothing carried is smeltable); nil when none."
   [c item]
-  (->> (look/seen-blocks (:primitives c) {:names furnace-block? :radius seen-radius :max 16 :live? true})
-       (some #(when (or (nil? item) (smelts? (:name %) item)) (:pos %)))))
+  (let [names (if item [item] (map :name (carried c)))
+        kinds (filter (fn [kind] (some #(smelts? kind %) names)) (keys cook-ticks))
+        ok? (if (or item (seq kinds)) (set kinds) furnace-block?)]
+    (->> (look/seen-blocks (:primitives c) {:names furnace-block? :radius seen-radius :max 16 :live? true})
+         (some #(when (ok? (:name %)) (:pos %))))))
 
 (defn needs-attention?
   "Whether the block at pos is loaded and is no longer a lit furnace: it is not lit (the fuel ran out, or the cook
@@ -265,8 +275,6 @@
   (if (u/count-fail! c)
     (stop! c reason)
     :continue))
-
-(defn carried [c] (u/inventory (:primitives c)))
 
 (defn ^:async load!
   "Put the planned input and fuel in. :continue when they are in, else the reason it gives up."
