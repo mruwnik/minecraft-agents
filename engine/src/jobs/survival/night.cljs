@@ -2,6 +2,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.child :as child]
+            [jobs.lib.look :as look]
             [jobs.lib.result :as result]
             [jobs.lib.shelter :as sh]
             [jobs.lib.tidy :as tidy]
@@ -34,7 +35,7 @@
   - roofed or buried: done {:night :roofed} (the queue runs).
   - else, before any pit and while no site has failed tonight: a remembered roofed place (:roofed-places, nearest first)
     within :walk-radius whose roof the body has seen, and whose route (the straight line, sampled every 2 blocks) is lit
-    as far as the body has seen it (block light >= :lit-light; an unseen cell is not lit): walk there (go-to :place). A walk
+    as far as the body has seen it (a seen cell with block light >= :lit-light; an unseen cell is not lit; the line approximates go-to's route): walk there (go-to :place). A walk
     that does not arrive is not tried again tonight, and the night digs in; arrived, the next pass is roofed.
   - else a safe place: jobs.survival.dig-in here, unless a site tonight failed within 8 blocks. A dig-in that does not
     roof the body (stopped, or declined) writes a :night-site {:pos :reason} entry, and the body walks (go-to) to the
@@ -297,11 +298,13 @@
 
 (defn route-lit?
   "Whether every sample (every 2 blocks along the straight line from a to b, over the cells around that height) has some
-  seen cell with block light >= min-light. A cell the body has not seen (no light data) is not lit."
+  cell the body has seen (look/seen-block) with block light >= min-light; an unseen cell is not lit. The straight line
+  approximates the route go-to walks (one planner call per candidate is not worth it)."
   [p a b min-light]
   (let [raw (some-> (aget p "perception") :raw)
         n (max 1 (js/Math.ceil (/ (u/dist a b) 2)))
-        lit-at (fn [x y z] (and (<= 0 (.stateAt ^js raw x y z))
+        lit-at (fn [x y z] (and (not (:unknown (look/seen-block p {:x x :y y :z z})))
+                                (<= 0 (.stateAt ^js raw x y z))
                                 (<= min-light (bit-and (.lightAt ^js raw x y z) 15))))]
     (boolean
      (and raw

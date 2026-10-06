@@ -469,6 +469,7 @@
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
                           :now (constantly 1000000)
                           :events (events/make {:body "Fake" :sinks [(second (tu/legacy-capture-sink))] :now (constantly 1000000)})})]
+    (aset p "seenBlockAt" (fn [pos] #js {:name (.-name (.blockAt raw-p pos)) :pos pos :age-ms 0}))
     (st/dawn-after! p st/default-dawn)
     (know-home! eng pos)
     (core/submit! eng '(jobs.survival.night) {})
@@ -509,3 +510,26 @@
           (await (core/tick! eng))
           (is (seq (st/calls p "place")))
           (is (< (:x (st/pos-of p)) 5)))))))
+
+(deftest a-route-the-body-has-not-seen-is-not-lit
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (await (night-at-home lit-world {:x 10 :y 64 :z 0}))
+              at (.-seenBlockAt p)]
+          (aset p "seenBlockAt" (fn [pos] (let [b (.call at p pos)] (if (and (>= (.-x pos) 3) (not= "stone" (.-name b))) #js {:unknown true :pos pos} b))))
+          (await (core/tick! eng))
+          (is (seq (st/calls p "place")) "loaded light of unseen cells is not read: dug in")
+          (is (< (:x (st/pos-of p)) 5)))))))
+
+(def walled-home
+  (into home-roof (for [x [9 10 11] y [64 65] z [-1 0 1] :when (not= [x z] [10 0])] [(str x "," y "," z) "stone"])))
+
+(deftest a-roof-walk-that-does-not-arrive-digs-in-and-is-not-retried-tonight
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (await (night-at-home (update lit-world :blocks merge walled-home) {:x 10 :y 64 :z 0}))]
+          (await (st/run-until-empty eng 60))
+          (is (seq (st/calls p "place")) "the night dug in after the walk failed")
+          (is (< (:x (st/pos-of p)) 9) "and did not walk to the home again"))))))
