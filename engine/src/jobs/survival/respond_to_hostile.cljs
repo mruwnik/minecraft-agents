@@ -27,6 +27,7 @@
    :ranged-radius {:doc "ranged hostiles (skeletons and the like) within this many blocks count" :default 16}
    :reserve {:doc "health a fight must be expected to leave" :default 4}
    :max-attempt-s {:doc "an attempt with a danger still near after this many seconds stops :still-near" :default 300}
+   :quiet-s {:doc "passed to the retreat: a hidden body keeps its refuge this many seconds after the last danger" :default 30}
    :weapons {:doc "item name substrings that count as weapons" :default combat/default-weapons}})
 
 (def hostile-policy {:cap 50 :ttl (* 60 60 1000)})
@@ -45,10 +46,10 @@
 
 (def child-jobs {:fight 'jobs.survival.fight-back :flee 'jobs.survival.retreat})
 
-(defn ^:async run-child [c decision {:keys [radius ranged-radius weapons reserve]}]
+(defn ^:async run-child [c decision {:keys [radius ranged-radius weapons reserve quiet-s]}]
   (let [child-args (case decision
                      :fight {:range radius :ranged-range ranged-radius :min-health 0 :weapons weapons}
-                     :flee {:radius radius :ranged-radius ranged-radius :weapons weapons :reserve reserve})]
+                     :flee {:radius radius :ranged-radius ranged-radius :weapons weapons :reserve reserve :quiet-s quiet-s})]
     (await (ctx/call-child c decision (child-jobs decision) child-args))))
 
 (defn log-encounter! [c threat decision]

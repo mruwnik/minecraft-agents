@@ -247,6 +247,18 @@
           (is (>= waits 25) "about 30 s of holds after the zombie is gone")
           (is (= [] (:list (core/state eng)))))))))
 
+(deftest respond-to-hostile-passes-quiet-s-to-the-retreat
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[q ok?] [[0 #(< % 5)] [120 #(>= % 100)]]]
+          (let [{:keys [waits]}
+                (await (hide-steps (list 'jobs.survival.respond-to-hostile {:quiet-s q})
+                                   {:blocks long-dead-end :inventory [{:name "cobblestone" :count 20}]
+                                    :entities [(zombie-at 4)]}
+                                   [[[] 0]]))]
+            (is (ok? waits) (str ":quiet-s " q " held " waits " waits"))))))))
+
 (deftest a-walled-off-hostile-ends-the-hide-only-after-the-quiet-period
   (async done
     (tu/run-async done
