@@ -694,9 +694,9 @@
 ;; corner jumps: a diagonal jump that slides along a corner needs the side cells clear at the landing's level
 
 (defn corner-allowed?
-  "The planner-limits corner test for a jump from (10 64 0) to (11 65 1) with solid cells."
+  "The planner-limits corner test (a body that cannot sprint) for a jump from (10 64 0) to (11 65 1) with solid cells."
   [solid]
-  ((.-corner (ex/planner-limits p (solid-set solid))) 10 64 0 0 11 65 1 0))
+  ((.-corner (ex/planner-limits (assoc p :sprint false) (solid-set solid))) 10 64 0 0 11 65 1 0))
 
 (deftest planner-limits-corner-test-is-the-high-corner-rule
   (are [solid allowed?] (= allowed? (corner-allowed? solid))
@@ -719,10 +719,28 @@
   (let [steps [(step 10 64 0 :start) (step 11 65 1 :jump) (step 12 65 1 :walk {:corner true})]]
     (is (= steps (ex/with-high-corners p steps (solid-set #{[11 65 0] [12 65 0]}))))))
 
+;; a corner jump past a high side block is sprinted; a body that cannot sprint (policy :sprint false) refuses it
+
+(def high-corner-steps (ex/with-high-corners p corner-jump-steps (solid-set #{[11 65 0]})))
+
+(deftest a-high-corner-jump-is-sprinted
+  (is (true? (ex/sprint? p high-corner-steps 1 {:on-ground true :in-water false})))
+  (is (false? (ex/sprint? p high-corner-steps 1 {:on-ground false :in-water false})))
+  (is (false? (ex/sprint? p high-corner-steps 1 {:on-ground true :in-water true})))
+  (is (false? (ex/sprint? p corner-jump-steps 1 {:on-ground true :in-water false}))))
+
+(deftest a-high-corner-jump-is-refused-only-without-sprint
+  (let [no-sprint (assoc p :sprint false)]
+    (is (nil? (ex/refusal p high-corner-steps)))
+    (is (= :corner-jump (:kind (ex/refusal no-sprint high-corner-steps))))
+    (is (true? ((.-corner (ex/planner-limits p (solid-set #{[11 65 0]}))) 10 64 0 0 11 65 1 0)))
+    (is (false? ((.-corner (ex/planner-limits no-sprint (solid-set #{[11 65 0]}))) 10 64 0 0 11 65 1 0)))))
+
 (deftest refusal-names-a-high-corner-jump
-  (let [steps (ex/with-high-corners p corner-jump-steps (solid-set #{[11 65 0]}))]
-    (is (= {:status :refused :kind :corner-jump :at [11 65 1]} (select-keys (ex/refusal p steps) [:status :kind :at])))
-    (is (nil? (ex/refusal p corner-jump-steps)))))
+  (let [no-sprint (assoc p :sprint false)
+        steps (ex/with-high-corners no-sprint corner-jump-steps (solid-set #{[11 65 0]}))]
+    (is (= {:status :refused :kind :corner-jump :at [11 65 1]} (select-keys (ex/refusal no-sprint steps) [:status :kind :at])))
+    (is (nil? (ex/refusal no-sprint corner-jump-steps)))))
 
 ;; a rise jumped straight up when pressed on its wall
 
@@ -758,7 +776,7 @@
 (deftest planner-limits-answer-as-the-executor-refusals
   (let [limits (ex/planner-limits ex/door-policy ceiling-world)
         gap (.-gap limits)
-        corner (.-corner limits)
+        corner (.-corner (ex/planner-limits (assoc ex/door-policy :sprint false) ceiling-world))
         gap-cases (for [move (range (count ex/move-names)) h [0 8] [dx dz] [[1 0] [-1 0] [0 1] [0 -1] [1 1]] n (range 1 6)
                         dy [-1 0 1] lh [0 4]]
                     [move h (* dx n) dy (* dz n) lh])

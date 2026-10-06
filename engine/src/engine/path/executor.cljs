@@ -128,9 +128,10 @@
                                     (:gap-headroom policy) " blocks")))))
 
 (defn corner-refused
-  "The refusal for a :jump step that slides along a corner and has a :high-corner mark, or nil."
-  [{:keys [x y z high-corner]}]
-  (when high-corner
+  "The refusal for a :jump step that slides along a corner and has a :high-corner mark, or nil. A sprint jump clears such a
+  corner, so only a policy that cannot sprint (:sprint false, a body at food 6 or less) refuses it."
+  [policy {:keys [x y z high-corner]}]
+  (when (and high-corner (not (:sprint policy)))
     {:status :refused :kind :corner-jump :at [x y z]
      :reason (str "corner jump at " (pr-str [x y z]) " past a block as high as the landing")}))
 
@@ -144,7 +145,7 @@
            :reason (str "unsupported step kind " kind " at " (pr-str [x y z]))})
         (when (and (= :gap (:move s)) (some? prev))
           (gap-refused policy prev s))
-        (corner-refused s))))
+        (corner-refused policy s))))
 
 (defn refusal
   "nil when every step can be walked, else the refusal for the first one that cannot."
@@ -208,7 +209,7 @@
   "The planner's options.limits for this policy: kinds, the planner kinds with a step the policy cannot walk; gap, a
   test of each gap jump (takeoff cell x y z, stand h in 1/16, reached by move code; landing lx ly lz lh) by gap-refused
   with the takeoff's ceiling; corner, a test of each jump that slides along a corner (takeoff x y z h, landing lx ly lz lh)
-  by high-corner?. solid? is a fn [x y z] -> bool."
+  by high-corner? (only for a policy that cannot sprint). solid? is a fn [x y z] -> bool."
   [policy solid?]
   ;; The planner calls these for every gap and corner jump it looks at. They repeat gap-refused (with low-ceiling?)
   ;; and high-corner? over plain numbers: the map and refusal-text forms made a limited search a third slower.
@@ -239,8 +240,9 @@
                                (solid-run? (+ x (* k sx)) (+ z (* k sz)) (+ y 2) top) false
                                :else (recur (inc k)))))))
          :corner (fn [x _y z _h lx ly lz lh]
-                   (let [top (dec (Math/ceil (+ ly (/ lh 16) body)))]
-                     (not (or (solid-run? lx z ly top) (solid-run? x lz ly top)))))}))
+                   (or (boolean (:sprint policy))
+                       (let [top (dec (Math/ceil (+ ly (/ lh 16) body)))]
+                         (not (or (solid-run? lx z ly top) (solid-run? x lz ly top))))))}))
 
 ;; ---------------------------------------------------------------- corner slides
 
@@ -432,11 +434,19 @@
         (jump? policy step pose dist))))
 
 (defn sprint?
-  "Never in water: sprinting there is the server's swimming pose, a body one block high."
+  "Never in water: sprinting there is the server's swimming pose, a body one block high. A jump past a high corner block
+  is sprinted on the ground (a walking jump clears it 4 times in 10, a sprint jump always)."
   [policy steps i {:keys [on-ground in-water]}]
-  (let [window (take 3 (drop i steps))]
-    (boolean (if (= :gap (:move (first window)))
+  (let [window (take 3 (drop i steps))
+        step (first window)]
+    (boolean (cond
+               (= :gap (:move step))
                (and (:sprint policy) (:sprint (gap-rule policy steps i)))
+
+               (:high-corner step)
+               (and (:sprint policy) on-ground (not in-water))
+
+               :else
                (and (:sprint policy)
                     on-ground
                     (not in-water)

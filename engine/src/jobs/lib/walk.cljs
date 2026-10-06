@@ -171,12 +171,20 @@
   [r]
   (and (not= "found" (.-status r)) (true? (.-limited r))))
 
+(defn body-policy
+  "executor/policy for the body: with food 6 or less the client does not sprint, so :sprint is false (a corner jump past
+  a high block is then refused)."
+  [c]
+  (let [food (.-food (.self (:primitives c)))]
+    (cond-> executor/policy
+      (and (number? food) (<= food 6)) (assoc :sprint false))))
+
 (defn plan-within
   "Plan within the executor's abilities (policy, default executor/policy): {:r :steps} (steps nil when r has no path). When
   that finds no whole path, and the limits turned a move away (beyond-needed?), but a search without the limits finds one,
   also :beyond, the executor's refusal of that path: no path within abilities, and the kind of step that would have made
   one."
-  ([c pw to range weight] (plan-within c pw to range weight executor/policy))
+  ([c pw to range weight] (plan-within c pw to range weight (body-policy c)))
   ([c pw to range weight policy]
    (let [r (plan-from c pw to range weight (executor/planner-limits policy (solid-fn pw)))
          within (within-of pw r)]
@@ -278,7 +286,7 @@
   - :frontier true, so a search that ran out of loaded land walks to its frontier (walk-plan), with
     :frontier-taken {:at [x y z]}."
   ([c pw to range weight] (plan-walk c pw to range weight nil))
-  ([c pw to range weight {:keys [policy walls one-way frontier] :or {policy executor/policy}}]
+  ([c pw to range weight {:keys [policy walls one-way frontier] :or {policy (body-policy c)}}]
    (let [walled (with-walls pw walls)]
      (walk-plan c pw walled to one-way frontier (plan-within c walled to range weight policy)))))
 
@@ -496,7 +504,7 @@
   that many expansions (plan-walk-budgeted!): a search that needs more walks to where it has got to, or nowhere
   (\"searching\"), and goes on at the next call; with :progress false only nowhere until the search ends."
   ([c pw to range weight] (plan-walk! c pw to range weight nil))
-  ([c pw to range weight {:keys [policy walls one-way frontier budget] :or {policy executor/policy} :as opts}]
+  ([c pw to range weight {:keys [policy walls one-way frontier budget] :or {policy (body-policy c)} :as opts}]
    (if budget
      (await (plan-walk-budgeted! c pw to range weight (assoc opts :policy policy)))
      (let [walled (with-walls pw walls)]
@@ -676,13 +684,14 @@
   boundary with {:status :replan ...} when the way ahead changed or a partial plan is due a refresh."
   ([c steps timeout-s] (walk! c steps timeout-s nil))
   ([c steps timeout-s watch]
-  (let [state (volatile! (executor/start steps 0 (let [pos (.-pos (.self (:primitives c)))] {:x (.-x pos) :z (.-z pos)})))
+  (let [policy (body-policy c)
+        state (volatile! (executor/start steps 0 (let [pos (.-pos (.self (:primitives c)))] {:x (.-x pos) :z (.-z pos)})))
         last-done (volatile! nil)
         decide (fn [js-pose]
                  (let [pose (pose-of js-pose)
                        i (:i @state)
                        {:keys [state' done controls yaw pitch]}
-                       (let [r (executor/tick executor/policy @state pose)]
+                       (let [r (executor/tick policy @state pose)]
                          {:state' (:state r) :done (:done r) :controls (:controls r) :yaw (:yaw r) :pitch (:pitch r)})
                        done (or done (when watch (watch-stop watch steps i state' pose)))]
                    (vreset! state state')
@@ -766,7 +775,7 @@
   :announce! (fn [:replan data]) per replan, data {:why :ms :kept :replans :at :text}.
   {:done :plan :ms :walked :replans}: done the last walk's done map, or the no-walk result of a replan that has no way; plan
   the plan in force at the end; ms the time in walks; walked the blocks of plan walked."
-  [c plan {:keys [plan-fn walk-fn to policy announce!] :or {policy executor/policy announce! (fn [_ _])}}]
+  [c plan {:keys [plan-fn walk-fn to policy announce!] :or {policy (body-policy c) announce! (fn [_ _])}}]
   (let [walkable? (fn [pl] (nil? (no-walk pl 0 policy)))
         cut-length (fn [steps k] (path-length (subvec steps 0 (min (count steps) (max 1 k)))))]
     (loop [plan plan steps (:steps plan) n 0 ms 0 walked 0]

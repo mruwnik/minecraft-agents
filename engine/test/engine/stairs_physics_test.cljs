@@ -197,8 +197,8 @@
 (deftest a-corner-jump-past-a-low-corner-block-arrives
   (is (= :arrived (status-of (into [corner-floor (corner-wall 1) corner-hole corner-landing] corner-walls) [2 64 2] [3 65 3]))))
 
-(deftest a-corner-jump-past-a-high-corner-block-is-not-planned
-  (are [height] (= :no-plan (status-of (into [corner-floor (corner-wall height) corner-hole corner-landing] corner-walls) [2 64 2] [3 65 3]))
+(deftest a-corner-jump-past-a-high-corner-block-arrives
+  (are [height] (= :arrived (status-of (into [corner-floor (corner-wall height) corner-hole corner-landing] corner-walls) [2 64 2] [3 65 3]))
     2
     3))
 
