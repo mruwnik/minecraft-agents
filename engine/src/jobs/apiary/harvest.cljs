@@ -30,7 +30,6 @@
    :center {:doc "centre of the search; the body's position when the job first runs when nil" :type :pos :default nil}
    :radius {:doc "hives within this many blocks of the centre count, when :box is nil" :default 12}
    :max {:doc "hives to harvest in one run, at most" :default 8}
-   :walk-timeout-s {:doc "bound of one walk towards a hive" :default 8}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
 (def ripe-level 5)
