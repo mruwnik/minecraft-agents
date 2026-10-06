@@ -213,14 +213,14 @@
 
 (defn ^:async shut-leftovers!
   "At the start of a round: shut the blocks an earlier round of this job opened and left (a walk cut between the open and the
-  shut) that are within leftover-reach, when the policy doors (or shut-also) says so and the body is out of their column."
-  [c doors shut-also]
+  shut) that are within leftover-reach, when the entry says it was to be shut and the body is out of their column."
+  [c]
   (let [mine (filterv #(= (:id c) (:by %)) (map :data (mem/entries (ctx/view c) :opened)))]
     (loop [todo mine]
-      (when-let [{:keys [cell]} (first todo)]
+      (when-let [{:keys [cell shut?]} (first todo)]
         (let [b (block-at c cell)
               col (column-of cell (click/props-of b))]
-          (when (and (shut? doors shut-also cell)
+          (when (and shut?
                      (<= (u/dist (u/self-pos c) cell) leftover-reach)
                      (not (in-column? col (walk/body-cell c))))
             (await (shut-column! c col)))

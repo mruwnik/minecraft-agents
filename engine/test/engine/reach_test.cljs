@@ -111,6 +111,13 @@
     (is (= [] (reach/dangers p 8 {} {:sight? false})))
     (is (= [9] (map #(.-id %) (reach/dangers q 16 {:ranged-radius 16} {:sight? false}))))))
 
+(deftest a-mob-walks-through-plants-a-body-stands-behind
+  (doseq [name ["wheat" "poppy" "sugar_cane" "kelp" "soul_torch" "oak_sapling"]]
+    (let [plants (into {} (map (fn [[k _]] [k name])) walls)
+          p (tu/fake {:self {:pos body} :floor [-20 -20 20 20] :blocks plants :entities [(zed 1 6 0)]})]
+      (is (true? (reach/walkable-way? p {:x 6.5 :y 64 :z 0.5} body)) name)
+      (is (= [1] (map #(.-id %) (reach/dangers p 8 {} {:sight? false}))) name))))
+
 ;; ---------------------------------------------------------------- the cell a body on a block's edge stands on
 
 (def edge-body

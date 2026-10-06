@@ -63,15 +63,15 @@
 (defn ^:async leftover-run
   "A job that records an :opened entry for the open gate at 5 64 0 as made by `by` (:self for itself) and runs
   shut-leftovers! with doors; the gate's open state afterwards and the :opened entries left."
-  [by doors]
+  [by doors & [shut?]]
   (let [clock (atom 1000000)
         [_ sink] (tu/legacy-capture-sink)
         p (tu/fake gate-world)
         cell {:x 5 :y 64 :z 0}
         job {:check (constantly true)
              :round (fn ^:async leftover-round [c]
-                      (ctx/remember! c :opened {:cell cell :by (if (= :self by) (:id c) by) :t 0} pass/opened-policy)
-                      (await (pass/shut-leftovers! c doors nil))
+                      (ctx/remember! c :opened {:cell cell :by (if (= :self by) (:id c) by) :t 0 :shut? (not (false? shut?))} pass/opened-policy)
+                      (await (pass/shut-leftovers! c))
                       :done)}
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'leftover job) :triggers triggers/all :dir (tu/tmp-dir)
                           :now #(deref clock) :world (world/of-data {} {} [])
@@ -96,7 +96,14 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[by doors] [["other-job" :shut] [:self :leave-open]]]
-          (let [r (await (leftover-run by doors))]
-            (is (true? (:open r)) (str by doors))
-            (is (= 1 (count (:entries r))) (str by doors))))))))
+        (let [r (await (leftover-run "other-job" :shut))]
+          (is (true? (:open r)))
+          (is (= 1 (count (:entries r)))))))))
+
+(deftest a-round-keeps-open-what-its-entry-says-was-left-open-on-purpose
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (await (leftover-run :self :shut false))]
+          (is (true? (:open r)))
+          (is (= 1 (count (:entries r)))))))))

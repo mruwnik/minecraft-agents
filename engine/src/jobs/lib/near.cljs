@@ -78,7 +78,7 @@
                   (if (= :never doors)
                     (walk/walk! c steps timeout-s watch)
                     (pass/walk! c steps {:timeout-s timeout-s :doors doors :shut-also shut-also :watch watch})))]
-    (when-not (= :never doors) (await (pass/shut-leftovers! c doors shut-also)))
+    (when-not (= :never doors) (await (pass/shut-leftovers! c)))
     (let [result (loop [walls [] stuck nil]
                    (let [plan (await (plan! c to range doors (policy-of) walls explore one-way budget progress dangers))]
                      (if-let [no (walk/no-walk plan 0 (policy-of))]
@@ -95,7 +95,7 @@
                            stuck (door-stuck (:cells done))
                            :else (recur (into walls (:cells done)) (:cells done)))))))]
       ;; however the walk ended, what it opened and could not shut yet (the body was in its column) is shut when in reach
-      (when-not (= :never doors) (await (pass/shut-leftovers! c doors shut-also)))
+      (when-not (= :never doors) (await (pass/shut-leftovers! c)))
       result)))
 
 (defn move-status
