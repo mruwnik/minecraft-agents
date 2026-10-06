@@ -4,6 +4,7 @@
   or the fist) instead of failing the same round again and again."
   (:require [cljs.test :refer [deftest is async]]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.world-files :as ew]
             [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.core :as core]
@@ -16,12 +17,14 @@
 (defn setup
   "An engine over a fake; its clock moves a second with every primitive call (a whole flight ends by time)."
   [world]
-  (let [clock (atom 1000000)
+  (let [zones (:zones world)
+        clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake-on-floor world)
+        p (tu/fake-on-floor (dissoc world :zones))
         now (tu/act-clock clock p 1000)
-        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
-                          :events (events/make {:body "Fake" :sinks [sink] :now now})})]
+        eng (core/create (cond-> {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
+                                  :events (events/make {:body "Fake" :sinks [sink] :now now})}
+                           zones (assoc :world (ew/of-data {} {} zones))))]
     {:eng eng :p p :seen seen :clock clock}))
 
 (defn ^:async first-round [spec world]
@@ -143,6 +146,20 @@
           (is (= 1 (count (filter #(= :retreat_sealed (:kind %)) @seen))) "one notice that it walled itself in")
           (is (= [] (:list (core/state eng))) "done once the skeleton is gone"))))))
 
+(deftest a-seal-in-anothers-zone-is-recorded-for-tidying
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]}
+              (await (hidden-round retreat {:blocks dead-end :inventory [{:name "cobblestone" :count 20}]
+                                            :entities [(skeleton 4 64 0)]
+                                            :zones [{:name "vault" :min [1 60 -1] :max [1 70 1] :owner "Miles"}]}
+                                   1000 (constantly nil)))]
+          (is (= [[1 64 0] [1 65 0]] (placed-cells p)))
+          (is (= [[1 64 0] [1 65 0]]
+                 (mapv #(:cell (:data %)) (mem/entries (mem/view (:store eng)) :tidy)))
+              "both seal cells are on the tidy list"))))))
+
 (deftest a-sealed-respond-to-hostile-stays-hidden-while-the-hostile-waits-outside
   (async done
     (tu/run-async done
@@ -168,14 +185,34 @@
           (is (= ["j1"] while-hidden) "sealed, the skeleton in the tunnel")
           (is (= [] (:list (core/state eng))) "a zombie walled off in the rock is no danger even with the seal gone"))))))
 
-(deftest a-cornered-body-without-blocks-fights-with-its-pickaxe
+(def hard-sided-dead-end
+  "dead-end with obsidian beside and behind the tunnel: a stone pickaxe digs no pocket into it."
+  (into dead-end (concat (for [x (range -3 10) y [64 65] z [-1 1]] [(key-of x y z) "obsidian"])
+                         (for [y [64 65]] [(key-of -1 y 0) "obsidian"]))))
+
+(deftest a-cornered-body-without-blocks-digs-a-side-pocket-and-seals-itself-in
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p seen]} (await (first-round retreat {:blocks dead-end
+        (let [{:keys [eng p while-hidden]}
+              (await (hidden-round retreat {:blocks dead-end :inventory [{:name "stone_pickaxe" :count 1}]
+                                            :entities [(skeleton 4 64 0)]}
+                                   120000 (fn [{:keys [eng]}] (:list (core/state eng)))))]
+          (is (zero? (count (calls p "attack"))) "a pocket beats a pickaxe fight")
+          (is (= #{[-1 64 0] [-1 65 0]} (set (mapv #(let [pos (.. % -args -pos)] [(.-x pos) (.-y pos) (.-z pos)])
+                                                 (calls p "dig")))) "feet and head cell of the pocket")
+          (is (= #{[0 64 0] [0 65 0]} (set (placed-cells p))) "the dug blocks seal the way in")
+          (is (= ["j1"] while-hidden) "hiding in the pocket")
+          (is (= [] (:list (core/state eng)))))))))
+
+(deftest a-cornered-body-with-a-pickaxe-fights-when-no-side-can-be-dug
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen]} (await (first-round retreat {:blocks hard-sided-dead-end
                                                             :inventory [{:name "stone_pickaxe" :count 1}]
                                                             :entities [(skeleton 2 64 0)]}))]
-          (is (= 4 (count (calls p "attack"))) "no blocks: it hits back until the skeleton (20, 5 a hit) dies")
+          (is (= 4 (count (calls p "attack"))) "no blocks, no pocket: it hits back until the skeleton (20, 5 a hit) dies")
           (is (= ["stone_pickaxe"] (mapv #(.. % -args -item) (calls p "equip"))) "with the pickaxe in hand")
           (is (empty? (blocked-events seen))))))))
 

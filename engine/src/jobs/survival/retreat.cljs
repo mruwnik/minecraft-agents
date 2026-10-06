@@ -45,8 +45,10 @@
      - dig down and plug: dig-in's pit, then a carried or dug block over the head (ledger purpose :retreat-plug).
        The pit is 2 deep under a solid side, else 3.
        Every cell must be solid, harvestable with what is carried, with no fluid beside and solid under it.
+     - side pocket: with no block to seal with, dig a pocket beside the body (feet and head cell, solid on every other side,
+       harvestable with what is carried), step in and seal the way in with the dug blocks (the seal option again).
      - last of all, fight with the best weapon or tool (pickaxe, shovel, hoe) or the fist.
-     Order: fight if it wins, then seal, pillar (not against a ranged mob), back off, pit, fight.
+     Order: fight if it wins, then seal, pillar (not against a ranged mob), back off, pit, pocket, fight.
      Against a creeper back off comes first.
      An option that fails is not tried again until all have failed. Then, after a second's hold, all are tried again
      (one retreat_blocked warning per flight).
@@ -316,7 +318,7 @@
         (dig-in/sealed? (:primitives c) cell) (recur (rest cells))
         (nil? item) :failed
         :else (let [door (await (dig-in/shut-open! c cell))
-                    status (when-not door (.-status (await (ctx/act c :place (clj->js {:pos cell :item item})))))]
+                    status (when-not door (.-status (await (tidy/place! c cell item true))))]
                 (cond
                   (or (= :shut door) (= "placed" status)) (recur (rest cells))
                   (or (= :open door) (= "occupied" status))
@@ -390,8 +392,8 @@
   [{:keys [win? creeper? ranged?]}]
   (cond
     win? [:fight]
-    creeper? [:back-off :seal :pillar :pit :fight]
-    :else (into (if ranged? [:seal] [:seal :pillar]) [:back-off :pit :fight])))
+    creeper? [:back-off :seal :pillar :pit :pocket :fight]
+    :else (into (if ranged? [:seal] [:seal :pillar]) [:back-off :pit :pocket :fight])))
 
 (defn near-known
   "The hostiles p can be said to know within radius (ranged ones within ranged-radius), the dead skipped."
@@ -517,6 +519,48 @@
       (await (start-refuge! c (assoc plan :kind :pit :anchor feet
                                      :cells (mapv #(vector (:x feet) % (:z feet)) (range target-y (inc (:y feet))))))))))
 
+(defn pocket-cells
+  "The two cells [feet head] of a side pocket dug from feet towards [dx dz], or nil: both solid, harvestable with what is
+  carried, with no hazard or fluid in or beside them, solid all round them except the way in (floor, roof and the three
+  far sides), and a dug block that can seal the way in (carried or dropped)."
+  [c feet [dx dz]]
+  (let [p (:primitives c)
+        blocks (:blocks (:args c))
+        at (fn [dy] {:x (+ (:x feet) dx) :y (+ (:y feet) dy) :z (+ (:z feet) dz)})
+        [lo hi] [(at 0) (at 1)]
+        walls (concat [(at -1) (at 2)]
+                      (for [c [lo hi] [sx sz] dig-in/sides :when (not= [sx sz] [(- dx) (- dz)])]
+                        (assoc c :x (+ (:x c) sx) :z (+ (:z c) sz))))
+        names (map #(u/block-name p %) [lo hi])]
+    (when (and (every? #(sh/solid-at? p %) (concat [lo hi] walls))
+               (not-any? dig-in/hazards names)
+               (not-any? #(dig-in/lateral-fluid p %) [lo hi])
+               (every? #(tools/can-harvest? p %) names)
+               (or (dig-in/pick c blocks) (some (set blocks) (map #(get drop-of % %) names))))
+      [lo hi])))
+
+(defn ^:async pocket!
+  "Dig a side pocket (feet and head cell beside the body, closed on every other side), collecting the blocks, and step
+  into it: :again, so the next step seals the way in with them. nil when no side fits or a dig fails."
+  [c]
+  (let [p (:primitives c)
+        feet (sh/feet p)]
+    (when-let [cells (some #(pocket-cells c feet %) dig-in/sides)]
+      (let [in (access/rules-input c)]
+        (access/trespass! c "retreat" (some #(access/trespass-refusal in :dig %) cells)))
+      (tried! c :pocket)
+      (loop [[cell & more] cells]
+        (if (nil? cell)
+          (do (ctx/update-mem! c update :tried disj :seal)
+              ;; raw moveTo kept: a step into the body's own pocket, as the pit's drop; the planner has no standable goal there.
+              (await (ctx/act c :moveTo (clj->js {:pos (first cells) :range 0.5})))
+              :again)
+          (let [_ (await (tools/equip-for! c (u/block-name p cell) {:fast true}))
+                r (await (tidy/dig! c cell true))]
+            (when (= "dug" (.-status r))
+              (await (dig-in/collect-drops! c (:blocks (:args c)) (.-drops r)))
+              (recur more))))))))
+
 (defn ^:async blocked!
   "Every option failed: forget them all, warn once a flight, hold a moment (wait, why cornered) and go on: the next step
   tries them again from the start (the danger still stands)."
@@ -545,7 +589,8 @@
                   :seal (await (hide! c))
                   :pillar (await (pillar! c))
                   :back-off (when threat (await (back-off! c threat)))
-                  :pit (await (pit! c))))]
+                  :pit (await (pit! c))
+                  :pocket (await (pocket! c))))]
         (cond
           (some? r) r
           (seq more) (recur more)
