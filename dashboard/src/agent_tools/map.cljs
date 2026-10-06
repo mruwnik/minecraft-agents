@@ -8,7 +8,7 @@
             ["node:path" :as path]
             ["node:util" :refer [parseArgs]]))
 
-(def usage "map.mjs --world WORLD find|show|add|edit|remove|renew|release [marker|zone|claim] [ID] [--data EDN --revision REV --by ACTOR --for 30m --dry-run --raw --center EDN --place ID --radius 128 --type TYPE --owner OWNER --status STATUS --text TEXT --limit 10 --offset 0 --worlds DIR --state LEGACY_PARENT]\nShared map of markers (a point), zones (a box others avoid) and claims (a timed hold). :box is [[x y z] [x y z]] corner to corner; :total counts all matches, :next-offset pages.")
+(def usage "map.mjs --world WORLD find|show|add|edit|remove|renew|release [marker|zone|claim] [ID] [--data EDN --revision REV --by ACTOR --for 30m --dry-run --raw --center EDN --place ID --radius 128 --type TYPE --owner OWNER --status STATUS --text TEXT --limit 10 --offset 0 --worlds DIR --state LEGACY_PARENT]\nShared map of markers (a point: {:x :y :z :kind :note}, kind is free text such as :base or :farm, default :place, note up to 80 characters), zones (a box others avoid) and claims (a timed hold). :box is [[x y z] [x y z]] corner to corner; :total counts all matches, :next-offset pages.")
 (def default-state-dir (.resolve path js/__dirname "../.."))
 
 (defn coalesce [& values] (first (filter some? values)))
@@ -139,6 +139,8 @@
 
 (defn marker-value [previous patch value id actor]
   (when (and (contains? patch :name) (not= (:name patch) id)) (throw (data/fail :validation "name must match ID")))
+  (when (contains? patch :type)
+    (throw (data/fail :validation "a marker has no :type; what it is goes in :kind (free text, e.g. :base :farm :mine, default :place). Nothing was marked")))
   (let [source (data/name (coalesce (:source patch) (:source previous) :intent))
         type (if (string? (:kind value)) (:kind value) (if (some? (:kind value)) (data/name (:kind value)) "place"))
         note (str (coalesce (:note value) (:note previous) ""))
