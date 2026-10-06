@@ -6,6 +6,7 @@
             [engine.fake :as fake]
             [engine.library-test :refer [setup run-until-empty calls inv]]
             [engine.memory :as mem]
+            [engine.takeover :as takeover]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [triggers.survival.died :as died]))
@@ -97,6 +98,8 @@
            #(-> % (mem/add-entry :died (entry (- now 5000) data) nil)
                 (mem/add-entry :respawned (entry (- now 3000) {:pos {:x 0 :y 64 :z 0}}) nil)))))
 
+(defn recovered-trip [eng] (:data (mem/latest (mem/view (:store eng)) :recover-trip)))
+
 (defn recovered [eng] (:data (mem/latest (mem/view (:store eng)) :recovered)))
 
 (def job '(jobs.survival.recover-drops))
@@ -141,6 +144,18 @@
           (is (= {:decision :collected :items 2} (select-keys (recovered eng) [:decision :items])))
           (is (pos? (:value (recovered eng))))
           (is (false? (died-holds (mem/view (:store eng)))) "the trigger is cleared"))))))
+
+(deftest recover-drops-collects-in-one-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities drops})]
+          (die! eng {:pos death-pos :inventory diamonds})
+          (core/submit! eng job {})
+          (await (core/tick! eng))
+          (is (= [] (:list (core/state eng))) "one round walks, collects and ends")
+          (is (= {"diamond_pickaxe" 1 "diamond_sword" 1} (inv p)))
+          (is (= :collected (:decision (recovered eng)))))))))
 
 (deftest recover-drops-retries-a-blocked-walk-and-then-collects
   (async done
@@ -216,20 +231,36 @@
           (await (run-until-empty eng 5))
           (is (= {:decision :abandoned :items 0} (select-keys (recovered eng) [:decision :items]))))))))
 
+(defn ^:async cut-at-the-walk!
+  "Run the job until it is held at its first walk act, cut it by a takeover, call between, then release the body."
+  [eng p between]
+  (.hold (.-world p) "moveTo")
+  (.hold (.-world p) "steer")
+  (let [running (core/tick! eng)]
+    (loop [i 0]
+      (when (and (empty? (tu/walk-calls p)) (< i 400))
+        (await (js/Promise. (fn [r] (js/setTimeout r 5))))
+        (recur (inc i))))
+    (takeover/take! eng {:who "claude" :why "cut"})
+    (await running)
+    (between)
+    (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})))
+
 (deftest recover-drops-counts-items-picked-up-on-the-walk
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities drops})
-              iron [{:name "raw_iron" :count 20 :slot 0}]]
+              iron [{:name "raw_iron" :count 20 :slot 0}]
+              picked-up (fn ^:async picked [t a impl]
+                          (let [r (await (impl t a))]
+                            (swap! (fake/state p) #(-> % (assoc :entities []) (assoc :inventory [{:name "raw_iron" :count 20}])))
+                            r))]
           (die! eng {:pos death-pos :inventory iron})
+          (.override (.-world p) "moveTo" picked-up)
+          (.override (.-world p) "steer" picked-up)
           (core/submit! eng job {})
-          (loop [n 0]
-            (when (and (< n 30) (empty? (tu/walk-calls p)))
-              (await (core/tick! eng))
-              (recur (inc n))))
-          (swap! (fake/state p) #(-> % (assoc :entities []) (assoc :inventory [{:name "raw_iron" :count 20}])))
-          (is (< (await (run-until-empty eng 10)) 10))
+          (await (core/tick! eng))
           (is (= {:decision :collected :items 20} (select-keys (recovered eng) [:decision :items]))))))))
 
 (deftest recover-drops-counts-only-the-pile-items-picked-up
@@ -316,29 +347,20 @@
 (defn fired-reflexes [seen]
   (keep #(when (= [:reflex :fired] [(:source %) (:kind %)]) (:reflex %)) @seen))
 
-;; The owner's case: a death trip cut by a higher reflex resumes once that reflex ends, because the died trigger
-;; still holds; the fresh recover-drops keeps the decision and the baseline taken before the cut, so what was
+;; A death trip cut mid-walk resumes with the decision and the baseline taken before the cut, so what was
 ;; picked up on the walk still counts.
-(deftest recover-drops-fires-again-after-a-higher-reflex-cuts-it-and-keeps-its-trip
+(deftest recover-drops-resumes-a-cut-trip-and-keeps-its-baseline
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen clock]} (setup {:floor tu/walk-floor :entities drops})
+        (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities drops})
               iron [{:name "raw_iron" :count 20 :slot 0}]]
-          (core/register-reflex! eng {:trigger :burning})
-          (core/register-reflex! eng {:trigger :died})
           (die! eng {:pos death-pos :inventory iron})
-          (loop [n 0]
-            (when (and (< n 30) (empty? (tu/walk-calls p)))
-              (await (core/tick! eng))
-              (recur (inc n))))
-          (swap! (fake/state p) #(-> % (assoc :entities []) (assoc :inventory [{:name "raw_iron" :count 20}])))
-          (fake/swap-self! p assoc :onFire true)
-          (await (core/tick! eng))
-          (is (= [:died :burning] (vec (fired-reflexes seen))) "burning cuts the trip")
-          (fake/swap-self! p assoc :onFire false)
-          (await (tick-n! eng clock 20))
-          (is (= [:died :burning :died] (vec (take 3 (fired-reflexes seen)))) "the died trigger fires the trip again")
+          (core/submit! eng job {})
+          (await (cut-at-the-walk! eng p #(swap! (fake/state p) (fn [w] (-> w (assoc :entities []) (assoc :inventory [{:name "raw_iron" :count 20}]))))))
+          (is (= 1 (count (:list (core/state eng)))) "the cut job stays listed")
+          (is (nil? (recovered eng)))
+          (await (run-until-empty eng 5))
           (is (= {:decision :collected :items 20} (select-keys (recovered eng) [:decision :items]))))))))
 
 ;; ------------------------------------------- keyed to the death, settling, reporting
@@ -357,34 +379,33 @@
         (let [{:keys [eng p clock]} (setup {:floor tu/walk-floor :entities (into drops second-drops)})]
           (die! eng {:pos death-pos :inventory diamonds})
           (core/submit! eng job {})
-          (await (core/tick! eng))
-          (await (core/tick! eng))
-          (is (= [death-pos] (tu/walked-to eng)))
-          (swap! clock + 10)
-          (die! eng {:pos second-death-pos :inventory diamonds})
+          (await (cut-at-the-walk! eng p (fn [] (swap! clock + 10) (die! eng {:pos second-death-pos :inventory diamonds}))))
           (await (run-until-empty eng 15))
           (is (= second-death-pos (last (tu/walked-to eng))))
           (is (= :collected (:decision (recovered eng))))
           (is (= 2 (:items (recovered eng))) "the second death got its own :collected, not a stale :abandoned"))))))
 
+(defn later!
+  "After ms real time: advance the fake clock by clock-ms, then f."
+  [clock clock-ms ms f]
+  (js/setTimeout (fn [] (swap! clock + clock-ms) (f)) ms))
+
 (deftest recover-drops-waits-for-the-respawn-to-settle
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p clock]} (setup {:floor tu/walk-floor :entities drops})]
+        (let [{:keys [eng p clock]} (setup {:floor tu/walk-floor :entities drops})
+              walked-at (atom nil)]
           (die! eng {:pos death-pos :inventory diamonds})
           (swap! clock + 100)
           (mem/write! (:store eng) :respawned {:pos {:x 0 :y 64 :z 0}})
           (swap! clock + 500)
           (core/submit! eng job {})
+          (later! clock 2000 120 #(reset! walked-at (count (tu/walk-calls p))))
           (await (core/tick! eng))
-          (await (core/tick! eng))
-          (is (nil? (:decided (job-memory eng))) "500 ms after the respawn: not yet")
-          (is (= [] (tu/walk-calls p)))
-          (swap! clock + 2000)
-          (await (core/tick! eng))
-          (is (some? (:decided (job-memory eng))) "2500 ms after the respawn: decided")
-          (await (run-until-empty eng 10))
+          (is (= 0 @walked-at) "500 ms after the respawn: held, no walk")
+          (is (some? (:decided (recovered-trip eng))) "2500 ms after the respawn: decided")
+          (is (= [] (:list (core/state eng))))
           (is (= :collected (:decision (recovered eng)))))))))
 
 ;; The field race: the died reflex fired before :respawned was recorded, go-to "arrived" as the dead
@@ -393,23 +414,38 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p clock]} (setup {:floor tu/walk-floor :entities drops})]
+        (let [{:keys [eng p clock]} (setup {:floor tu/walk-floor :entities drops})
+              walked-at (atom nil)]
           (die-unrespawned! eng {:pos death-pos :inventory diamonds})
           (core/submit! eng job {})
+          (later! clock 500 80 #(reset! walked-at (count (tu/walk-calls p))))
+          (js/setTimeout (fn [] (mem/write! (:store eng) :respawned {:pos {:x 0 :y 64 :z 0}}) (swap! clock + 3000)) 160)
           (await (core/tick! eng))
-          (await (core/tick! eng))
-          (swap! clock + 500)
-          (await (core/tick! eng))
-          (is (nil? (:decided (job-memory eng))) "dead: no decision")
-          (is (= [] (tu/walk-calls p)) "dead: no walking")
-          (is (= [] (calls p "collect")))
-          (is (= 1 (count (:list (core/state eng)))) "the job stays listed")
-          (swap! clock + 500)
-          (mem/write! (:store eng) :respawned {:pos {:x 0 :y 64 :z 0}})
-          (swap! clock + 3000)
-          (await (run-until-empty eng 15))
+          (is (= 0 @walked-at) "dead: no walking")
           (is (= [death-pos] (tu/walked-to eng)))
           (is (= {:decision :collected :items 2} (select-keys (recovered eng) [:decision :items]))))))))
+
+(deftest recover-drops-holds-while-waiting-for-the-respawn-and-says-so
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng clock seen]} (setup {:floor tu/walk-floor :entities drops})]
+          (die-unrespawned! eng {:pos death-pos :inventory diamonds})
+          (core/submit! eng job {})
+          (js/setTimeout (fn [] (swap! clock + 500) (mem/write! (:store eng) :respawned {:pos {:x 0 :y 64 :z 0}}) (swap! clock + 3000)) 120)
+          (await (core/tick! eng))
+          (is (some #(and (= :holding (:kind %)) (= :respawning (:reason %))) @seen)))))))
+
+(deftest recover-drops-gives-up-waiting-when-the-window-closes
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng clock]} (setup {:floor tu/walk-floor :entities drops})]
+          (die-unrespawned! eng {:pos death-pos :inventory diamonds})
+          (core/submit! eng job {})
+          (later! clock 300000 80 identity)
+          (await (core/tick! eng))
+          (is (= {:decision :abandoned :reason :window-closed} (select-keys (recovered eng) [:decision :reason]))))))))
 
 (deftest recover-drops-reports-a-skip
   (async done

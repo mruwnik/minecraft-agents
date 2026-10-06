@@ -1,7 +1,9 @@
 (ns jobs.survival.recover-drops
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
+            [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
             [jobs.lib.util :as u]
             [triggers.survival.died :as died]
@@ -11,8 +13,10 @@
   "After a death, go back for the drops when they are worth it.
   Takes the latest :died entry with no newer :recovered. The check holds while a death is unrecovered, however old,
   so an expired trip still gets to write :abandoned.
-  Waits (no decision, no walk) until a :respawned entry newer than the death exists.
-  Yields without acting while a real danger is within :danger-radius, so a reflex can deal with it.
+  One run is the whole trip: it holds still (declared :respawning, then :settling) until a :respawned entry newer than
+  the death exists and its 2 s have passed (no decision, no walk), decides, walks, collects and writes :recovered.
+  It ends :declined, without acting, while a real danger is within :danger-radius, so a reflex can deal with it
+  (the died trigger fires it again), and when go-to does not arrive; the despawn window ends it :abandoned.
   A real danger is a mob that can reach the body, or a ranged one with a line of fire (jobs.lib.reach/nearest-danger).
   Decision: skips when the value of what was carried is at most the fetch cost plus :margin.
   - Value: jobs.lib.cost/item-value (with :value-overrides), plus 5 per level of experience.
@@ -20,14 +24,13 @@
     past the hostiles the body knows of (seen or heard, jobs.lib.reach/known-hostiles; :danger-overrides, after armour).
   - Infinite when lava, fire or the void took the pile, or the walk would end after the despawn.
   A fetch emits recover-drops.fetching. A skip emits recover-drops.decided. Both texts give the value, the cost and their parts.
-  Fetch: walks to the death point (jobs.movement.go-to), then collects the pile's items it can see within :collect-radius
+  Fetch: walks to the death point (jobs.movement.go-to), then collects (passes, up to 3) the pile's items it can see within :collect-radius
   (jobs.forestry.collect-drops; only the carried item names, never items out of sight).
   Ends by writing a :recovered entry {:decision :skip|:collected|:partial|:abandoned}.
   :collected counts the pile's items that entered the inventory since the decision, those picked up on the walk too.
   :abandoned with :reason :unreachable (the walk was blocked), :nothing-found or :window-closed (the five minute
   despawn window closed). :partial carries :left and :reason :unreachable or :not-visible.
   A pile already carried again ends :collected without a collect step.
-  The window keeps running while the body waits.
   Restart-safe: the decision, the baseline of carried items and the phase are kept in a :recover-trip entry keyed to the death.
   A run cut by a higher reflex, or a restarted body, goes on with the same trip.
   Memory: reads :died, :respawned, :recover-trip. Writes :recovered and :recover-trip.")
@@ -161,14 +164,14 @@
 (def stray-range "A body this far from the death point in the collect phase (a flee cut the trip) walks back first." 5)
 
 (defn ^:async go!
-  "Walk to the death point. A walk that does not arrive (a fire or a mob in the way, a door) is retried on the next
-  round while the pile is worth it: round writes :abandoned itself when the window closes."
+  "Walk to the death point by one go-to call: :next once there (the collect phase), else :declined (go-to waits on the
+  world, or it did not arrive: the next run walks again while the pile is worth it, and the window closes it)."
   [c pos]
   (let [r (await (ctx/call-child c :go 'jobs.movement.go-to {:pos pos :range arrive-range}))]
     (cond
-      (not= :done r) :continue
-      (not (:arrived (ctx/child-result c :go))) (do (ctx/update-mem! c assoc :blocked true) :continue)
-      :else (do (ctx/update-mem! c assoc :phase :collect :blocked false) (save-trip! c) :continue))))
+      (not= :done r) :declined
+      (not (:arrived (ctx/child-result c :go))) (do (ctx/update-mem! c assoc :blocked true) :declined)
+      :else (do (ctx/update-mem! c assoc :phase :collect :blocked false) (save-trip! c) :next))))
 
 (defn carried-counts
   "{item name total} of what the body carries."
@@ -214,7 +217,10 @@
       (zero? items) (finish! c :abandoned (assoc decided :items 0 :reason :nothing-found))
       :else (finish! c :partial (assoc decided :items items :left left :reason (if (seq ids) :unreachable :not-visible))))))
 
-(defn ^:async collect! [c pos radius pile]
+(defn ^:async collect!
+  "One collect pass over the pile's visible items: :next after a pass that left some in sight (walk back, at most
+  max-collect-passes), else the job's end."
+  [c pos radius pile]
   (let [names (vec (distinct (map :name pile)))
         total (reduce + 0 (map :count pile))]
     (if (>= (recovered-items c pile) total)
@@ -222,48 +228,95 @@
       (let [ids (pile-ids c pos names radius)]
         (if (empty? ids)
           (finish-collect! c pile ids)
-          (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops
-                                         {:radius (+ radius stray-range 4) :ids ids :filter names :visible-only true}))]
+          (let [r (await (child/run! c :collect 'jobs.forestry.collect-drops
+                                     {:radius (+ radius stray-range 4) :ids ids :filter names :visible-only true}))]
             (cond
-              (= :continue r) :continue
+              (= :continue r) :declined
               (empty? (left-over c pile)) (finish-collect! c pile [])
               :else
               (let [again (pile-ids c pos names radius)
                     passes (:passes (ctx/mem c) 0)]
                 (if (and (seq again) (< passes max-collect-passes))
-                  (do (ctx/update-mem! c assoc :passes (inc passes) :phase :go) (save-trip! c) :continue)
+                  (do (ctx/update-mem! c assoc :passes (inc passes) :phase :go) (save-trip! c) :next)
                   (finish-collect! c pile again))))))))))
 
-(defn ^:async round [c]
-  (let [{:keys [margin danger-radius collect-radius]} (:args c)
-        entry (died/unrecovered-death (ctx/view c))
-        elapsed (- (ctx/now c) (:t entry))
-        threatened? (some? (reach/nearest-danger (:primitives c) danger-radius {} {}))]
-    (when entry (key-to-death! c entry))
+(defn window-closed?
+  "True once the despawn window of the death entry has passed."
+  [c entry]
+  (>= (- (ctx/now c) (:t entry)) game/despawn-ms))
+
+(defn threatened? [c]
+  (some? (reach/nearest-danger (:primitives c) (:danger-radius (:args c)) {} {})))
+
+(defn ^:async wait-while!
+  "Hold still (reason) while (pending?) is true: nil when it clears, else :declined for a danger within
+  :danger-radius or a cut, :closed when the despawn window passes."
+  [c entry reason pending?]
+  (loop []
     (cond
-      (nil? entry) :done
-      (>= elapsed game/despawn-ms) (finish! c :abandoned (assoc (:decided (ctx/mem c)) :reason (if (:blocked (ctx/mem c)) :unreachable :window-closed)))
-      threatened? :continue
-      (not (died/respawned-since? (ctx/view c) entry)) :continue
-      (and (nil? (:decided (ctx/mem c))) (settling? c entry)) :continue
-      :else
-      (let [decided (or (:decided (ctx/mem c))
-                        (let [e (update (estimate c (:data entry) elapsed) :cost finite)
-                              fetch? (> (:value e) (+ (if (= :infinite (:cost e)) js/Infinity (:cost e)) margin))]
-                          (ctx/update-mem! c assoc :decided e :baseline (carried-counts c))
-                          (save-trip! c)
-                          (when fetch?
-                            (ctx/emit! c :recover-drops.fetching :info
-                                       (assoc (select-keys e [:value :cost :parts :top-items :top-mobs])
-                                              :pos (:pos (:data entry)) :text (decision-text :fetch e margin))))
-                          e))
-            pos (:pos (:data entry))]
-        (cond
-          (<= (:value decided) (+ (if (= :infinite (:cost decided)) js/Infinity (:cost decided)) margin))
-          (finish! c :skip decided)
+      (not (pending?)) (do (ctx/hold-still! c nil) nil)
+      (not (ctx/alive? c)) :declined
+      (window-closed? c entry) (do (ctx/hold-still! c nil) :closed)
+      (threatened? c) (do (ctx/hold-still! c nil) :declined)
+      :else (do (ctx/hold-still! c reason) (await (pace/pace!)) (recur)))))
 
-          (and (= :collect (:phase (ctx/mem c))) (> (u/dist (u/self-pos c) pos) stray-range))
-          (do (ctx/update-mem! c assoc :phase :go) :continue)
+(defn decide!
+  "The decision of this trip: the saved one, else estimate, save and report it."
+  [c entry]
+  (or (:decided (ctx/mem c))
+      (let [margin (:margin (:args c))
+            e (update (estimate c (:data entry) (- (ctx/now c) (:t entry))) :cost finite)
+            fetch? (> (:value e) (+ (if (= :infinite (:cost e)) js/Infinity (:cost e)) margin))]
+        (ctx/update-mem! c assoc :decided e :baseline (carried-counts c))
+        (save-trip! c)
+        (when fetch?
+          (ctx/emit! c :recover-drops.fetching :info
+                     (assoc (select-keys e [:value :cost :parts :top-items :top-mobs])
+                            :pos (:pos (:data entry)) :text (decision-text :fetch e margin))))
+        e)))
 
-          (= :collect (:phase (ctx/mem c))) (await (collect! c pos collect-radius (:inventory (:data entry))))
-          :else (await (go! c pos)))))))
+(defn ^:async trip!
+  "The decision, then the walk and the collect passes of a trip inside its window."
+  [c entry]
+  (let [{:keys [margin collect-radius]} (:args c)
+        decided (decide! c entry)
+        pos (:pos (:data entry))]
+    (cond
+      (<= (:value decided) (+ (if (= :infinite (:cost decided)) js/Infinity (:cost decided)) margin))
+      (finish! c :skip decided)
+
+      (threatened? c) :declined
+
+      (and (= :collect (:phase (ctx/mem c))) (> (u/dist (u/self-pos c) pos) stray-range))
+      (do (ctx/update-mem! c assoc :phase :go) :next)
+
+      (= :collect (:phase (ctx/mem c))) (await (collect! c pos collect-radius (:inventory (:data entry))))
+      :else (await (go! c pos)))))
+
+(defn ^:async step!
+  "One step of the trip: :next to go on, or the round's end (:done, :declined)."
+  [c entry]
+  (cond
+    (not (ctx/alive? c)) :declined
+    (window-closed? c entry)
+    (finish! c :abandoned (assoc (:decided (ctx/mem c)) :reason (if (:blocked (ctx/mem c)) :unreachable :window-closed)))
+    :else (await (trip! c entry))))
+
+(defn ^:async round
+  "One whole run: wait for the respawn and its settling (declared holds), decide, walk, collect, write :recovered.
+  :declined when a danger is within :danger-radius (the hostile reflex acts, the trigger fires again) or the walk
+  did not arrive."
+  [c]
+  (let [entry (died/unrecovered-death (ctx/view c))]
+    (when entry (key-to-death! c entry))
+    (if (nil? entry)
+      :done
+      (let [waited (or (await (wait-while! c entry :respawning #(not (died/respawned-since? (ctx/view c) entry))))
+                       (when (nil? (:decided (ctx/mem c)))
+                         (await (wait-while! c entry :settling #(settling? c entry)))))]
+        (if (= :declined waited)
+          :declined
+          (loop []
+            (let [entry (died/unrecovered-death (ctx/view c))
+                  r (if entry (await (step! c entry)) :done)]
+              (if (= :next r) (recur) r))))))))

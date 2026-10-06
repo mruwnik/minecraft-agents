@@ -136,6 +136,7 @@
           (await (run-ticks eng clock 3 1000))
           (is (= [:hungry :hostile-near] (fired seen)) "a dead body fires nothing")
           (.respawn (.-world p))
+          (swap! clock + 2500) ; the job holds still until the respawn has settled; this clock only moves between ticks
           (await (run-ticks eng clock 3 1000))
           (is (= [:hungry :hostile-near :died] (fired seen)) "the respawn lets a death fire recover-drops")
           (await (run-ticks eng clock 10 1000))
