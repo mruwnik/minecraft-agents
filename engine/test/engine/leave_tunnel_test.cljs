@@ -259,8 +259,53 @@
           (is (= :sealed (:reason res)))
           (is (>= (second (feet p)) 65) "the body stands at the entry's height or above")
           (is (= 0 (count (events-of s :leave-tunnel.stopped))))
-          (is (every? #(#{"torch" "wall_torch"} (block-at p (:cell %))) (the-ledger (:eng s)))
-              "no ledger entry for a torch the escape stair dug through"))))))
+          (is (= [] (the-ledger (:eng s))) "every torch was taken or destroyed: no entry is left"))))))
+
+(defn creeper!
+  "A blast: the stair is blocked and the torches in the middle of the tunnel are gone."
+  [p]
+  (block-stair! p)
+  (let [blocks (:blocks @(fake/state p))
+        torches (take 2 (filter #(#{"torch" "wall_torch"} (blocks %)) (keys blocks)))]
+    (doseq [t torches]
+      (swap! (fake/state p) assoc-in [:blocks t] "air"))))
+
+(deftest a-creeper-blast-leaves-no-ledger-entry-for-a-torch-it-destroyed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out] :as s} (await (run-out! (setup {:blocks eight-down :inventory (inventory)}
+                                                              {:target [6 57 0]} {} :between creeper!)))]
+          (is (= :done (:status @out)))
+          (is (= [] (the-ledger (:eng s))) "every torch was taken or destroyed: no entry is left"))))))
+
+(deftest an-escape-that-overrides-zones-warns
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [zone {:name "keep" :min [-12 50 -3] :max [12 64 3] :allow #{:walk}}
+              {:keys [out] :as s} (await (run-out! (setup {:blocks eight-down :inventory (inventory) :zones [zone]}
+                                                          {:target [6 57 0] :ignore-zones? true} {} :between block-stair!)))
+              escapes (events-of s :leave-tunnel.escape)]
+          (is (= :done (:status @out)))
+          (is (= 1 (count escapes)))
+          (is (= [:warn true] ((juxt :level :ignore-zones?) (first escapes)))
+              "the last-resort override is a warn"))))))
+
+(deftest an-escape-that-respects-zones-is-info
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (run-out! (setup {:blocks eight-down :inventory (inventory)}
+                                        {:target [6 57 0]} {} :between block-stair!)))
+              escapes (events-of s :leave-tunnel.escape)]
+          (is (= [[:info false]] (map (juxt :level :ignore-zones?) escapes))))))))
+
+(deftest a-nil-read-does-not-forget-a-standing-torch
+  (let [tunnel {:torches [{:cell [1 64 0]} {:cell [2 64 0]} {:cell [3 64 0]}]}
+        l [{:cell [1 64 0]} {:cell [2 64 0]} {:cell [3 64 0]}]
+        reads {[1 64 0] nil [2 64 0] "air" [3 64 0] "wall_torch"}]
+    (is (= [[2 64 0]] (leave-tunnel/gone-cells l tunnel reads)))))
 
 (deftest a-body-without-a-pickaxe-cannot-dig-out-and-waits-for-one
   (async done

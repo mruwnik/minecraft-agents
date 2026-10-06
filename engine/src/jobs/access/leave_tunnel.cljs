@@ -33,9 +33,9 @@
 
   A walk that does not arrive (stair broken by an explosion or cave-in, a hole in its floor) is not the end. The
   body digs its own way out with jobs.access.stair to the entry's height (opposite the tunnel's :dir), first back along the tunnel's
-  heading, then the other three (info leave-tunnel.escape; warn for each stair that stopped). Only when a
+  heading, then the other three (leave-tunnel.escape: info, warn when it overrode zones; warn for each stair that stopped). Only when a
   heading stopped for an access reason (:zone :claim :footprint) does it try them all again with
-  :ignore-zones? as the last resort. The new stair is left as dug, nothing is placed. Once out, torches that
+  :ignore-zones? as the last resort. The new stair is left as dug, nothing is placed (it is the body's own way out; sealing it risks walling in a body that returns). Once out, torches that
   cannot be reached are left (:walk-failed in :left) and the mouth is sealed. If the entry itself is
   unreachable it ends :done :open with :escaped true. If every attempt fails it ends :stopped :walk-failed
   with :escape (the stair results). The ledger entries of torches the stair or the fill destroyed are dropped
@@ -100,14 +100,20 @@
          (filter #(and (tunnel/torch-blocks (block-at (:cell %))) (not (left (:cell %)))))
          (sort-by (comp - :site)))))
 
+(defn gone-cells
+  "The cells of the tunnel's torches that have a ledger entry l and are read as something other than a torch. An
+  unread cell (nil: not loaded) is not gone."
+  [l tunnel block-at]
+  (->> (:torches tunnel)
+       (map :cell)
+       (filter #(and (ledger/entry-at l %) (let [n (block-at %)] (and n (not (tunnel/torch-blocks n))))))))
+
 (defn forget-gone!
   "Drop the ledger entries of the tunnel's torches whose cell holds no torch any more (the escape stair or the
   mouth's fill dug or covered it)."
   [c tunnel block-at]
   (let [l (ledger/open-entries (ctx/view c))
-        gone (->> (:torches tunnel)
-                  (map :cell)
-                  (filter #(and (ledger/entry-at l %) (not (tunnel/torch-blocks (block-at %))))))]
+        gone (gone-cells l tunnel block-at)]
     (when (seq gone)
       (ledger/remember! c (reduce ledger/drop-cell l gone)))))
 
@@ -190,7 +196,7 @@
           (= :declined r) :declined
           (nil? res) :continue
           (= :done (:status res))
-          (do (ctx/emit! c :leave-tunnel.escape :info {:at (feet-of c) :heading (:heading attempt) :ignore-zones? (:ignore-zones? attempt)
+          (do (ctx/emit! c :leave-tunnel.escape (if (and (:ignore-zones? attempt) (not ignore?)) :warn :info) {:at (feet-of c) :heading (:heading attempt) :ignore-zones? (:ignore-zones? attempt)
                                                       :text (str "leave-tunnel dug its own way out " (name (:heading attempt)))})
               (ctx/update-mem! c #(-> % (dissoc :escape) (assoc :escaped true)))
               :continue)
