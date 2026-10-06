@@ -48,5 +48,5 @@
             [:fill [14 0 2] [18 3 6] "stone"]
             [:set [16 0 4] "oak_fence_gate[facing=south,open=true]"]]
    :body {:at [16.5 0 10.5]}
-   :expect [{:event {:source :job :kind :shut-gate.gave-up :data {:cell [16 0 4]}} :within-s 50}]
+   :expect [{:event {:source :job :kind :shut-gate.gave-up :data {:cell #at [16 0 4]}} :within-s 50}]
    :after [[:block [16 0 4] "oak_fence_gate[open=true]"]]}]}
