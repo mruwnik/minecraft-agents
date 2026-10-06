@@ -3,7 +3,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   initial, onRestartRequest, onBuildDone, onServerExit, onQuit, buildSteps, buildOutcome, stopsBuild, stepCommand, parseMemAvailableMb, enoughMemory, minMemoryMb,
-  terminateGroup, launcherStatus, restartVerdict, queuePosition, restartDeadline,
+  terminateGroup, launcherStatus, restartVerdict, queuePosition, restartDeadline, groupPids,
 } from './launcher.mjs'
 
 test('a request while idle starts a build', () => {
@@ -176,6 +176,19 @@ test('queuePosition counts the tickets ahead of the build, null when it has none
   assert.equal(queuePosition(33, tickets), 2)
   assert.equal(queuePosition(44, tickets), null)
   assert.equal(queuePosition(undefined, tickets), null)
+})
+
+test('queuePosition takes the pids of a build group: the first ticket of any of them counts (the viewer step queues in a child)', () => {
+  const tickets = ['0-100-11', '1-90-22', '1-95-33']
+  assert.equal(queuePosition([55, 33], tickets), 2)
+  assert.equal(queuePosition([22, 33], tickets), 1)
+  assert.equal(queuePosition([], tickets), null)
+})
+
+test('groupPids lists the processes whose process group is the build (stat field 5, comm may hold spaces and parens)', () => {
+  const stats = { 100: '100 (node) S 1 100 100 0', 101: '101 (tools/compile) S 100 100 100 0', 102: '102 (a b) c) S 101 100 100 0', 200: '200 (bash) S 1 200 200 0' }
+  assert.deepEqual(groupPids(100, stats), [100, 101, 102])
+  assert.deepEqual(groupPids(999, stats), [])
 })
 
 test('launcherStatus carries the queue position', () => {

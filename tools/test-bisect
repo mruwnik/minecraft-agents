@@ -13,7 +13,7 @@ set -u
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 self="$repo/tools/test-bisect"
 wt_sh="${TEST_BISECT_WORKTREE_SH:-$repo/tools/integration-worktree.sh}"
-jesc() { sed 's/\\/\\\\/g; s/"/\\"/g' | awk 'BEGIN{ORS="\\n"}1' | sed 's/\\n$//'; }
+jesc() { sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g; s/\x1b/\\u001b/g' | awk 'BEGIN{ORS="\\n"}1' | sed 's/\\n$//'; }
 emit() { [ "${TEST_EVENTS:-}" = 1 ] && printf '@@test %s\n' "$1"; return 0; }
 event() { emit "{\"event\":\"phase\",\"name\":\"$(printf %s "$1" | jesc)\"}"; }
 # result <name> <outcome> [message]
@@ -42,7 +42,8 @@ if [ "${1:-}" = --step ]; then
     0) echo "step $n $rev: good"; done_step passed 0;;
     2|124) echo "step $n $rev: skipped (exit $rc: namespace missing or timeout)"; done_step skipped 125;;
     75|137|143) echo "step $n $rev: skipped (exit $rc: busy slot or killed, not a verdict)"; done_step skipped 125;;
-    *) echo "step $n $rev: bad"; done_step failed 1;;
+    1) echo "step $n $rev: bad"; echo "$rc" > "$BISECT_WORK/bad-$rev"; done_step failed 1;;
+    *) echo "step $n $rev: bad (exit $rc)"; echo "$rc" > "$BISECT_WORK/bad-$rev"; done_step failed 1;;
   esac
 fi
 
@@ -102,14 +103,15 @@ if [ -z "$first" ]; then
   cp "$work/run.log" "${BISECT_DEBUG:-/dev/null}"; result "INCONCLUSIVE no first bad commit" error "is the good rev really good, and the bad rev bad?"; echo "test-bisect: no first bad commit found (is the good rev really good, and the bad rev bad?)"; tail -n 8 "$work/run.log"; exit 1
 fi
 short="$(git rev-parse --short "$first")"
-if [ "$(cat "$work/rc-$short" 2>/dev/null)" != 1 ]; then
+if [ ! -e "$work/bad-$short" ]; then
   git checkout -q --detach "$first" && BISECT_WORK="$work" "$self" --step "${nss[@]}" >/dev/null
-  [ "$(cat "$work/rc-$short" 2>/dev/null)" = 1 ] || { result "INCONCLUSIVE $short" error "no failing verdict (never tested, skipped or passing)"; echo "INCONCLUSIVE: $short has no failing verdict (never tested, skipped or passing), so it is not named"; exit 1; }
+  [ -e "$work/bad-$short" ] || { result "INCONCLUSIVE $short" error "no failing verdict (never tested, skipped or passing)"; echo "INCONCLUSIVE: $short has no failing verdict (never tested, skipped or passing), so it is not named"; exit 1; }
 fi
 echo "FIRST BAD: $(git log -1 --format='%h %s' "$first")"
 echo "steps: $(cat "$work/steps" 2>/dev/null || echo 0)"
-echo "failing tests at $short:"
+echo "failing tests at $short (test-engine exit $(cat "$work/bad-$short")):"
 failing="$(grep -E '^(FAIL|ERROR) in' "$work/log-$short" | sort -u)"
 printf '%s\n' "$failing" | sed 's/^/  /'
-result "FIRST BAD $(git log -1 --format='%h %s' "$first")" failed "$failing"
+result "FIRST BAD $(git log -1 --format='%h %s' "$first")" failed "exit $(cat "$work/bad-$short")
+$failing"
 exit 0

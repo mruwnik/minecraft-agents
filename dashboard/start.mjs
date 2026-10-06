@@ -9,7 +9,7 @@ import { readFileSync, readdirSync, writeFileSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
-  initial, onRestartRequest, onBuildDone, onServerExit, onQuit, buildSteps, buildOutcome, stopsBuild, stepCommand, parseMemAvailableMb, enoughMemory, minMemoryMb, terminateGroup, launcherStatus, queuePosition,
+  initial, onRestartRequest, onBuildDone, onServerExit, onQuit, buildSteps, buildOutcome, stopsBuild, stepCommand, parseMemAvailableMb, enoughMemory, minMemoryMb, terminateGroup, launcherStatus, queuePosition, groupPids,
 } from './js/launcher.mjs'
 
 const dir = dirname(fileURLToPath(import.meta.url))
@@ -31,12 +31,22 @@ const publishStatus = () => {
   } catch (e) { say(`could not write ${statusFile}: ${e.message}`) }
 }
 
-// Where the running compile stands on tools/compile's queue (its ticket is named after the compile's pid); republished on change.
+// Where the running build stands on tools/compile's queue (tickets are named after the compile's pid, which for the viewer step
+// is a child of the build); republished on change.
 const queueDir = process.env.MC_COMPILE_QUEUE || '/tmp/mc-compile.queue'
+const groupStats = (pgid) => {
+  const stats = {}
+  try {
+    for (const pid of readdirSync('/proc').filter((f) => /^\d+$/.test(f))) {
+      try { stats[pid] = readFileSync(`/proc/${pid}/stat`, 'utf8') } catch { /* exited meanwhile */ }
+    }
+  } catch { /* no /proc: only the build's own pid is matched */ }
+  return stats
+}
 const refreshQueued = () => {
   let tickets = []
   try { tickets = readdirSync(queueDir) } catch { /* no queue dir: nothing waits */ }
-  const now = build ? queuePosition(build.pid, tickets) : null
+  const now = build ? queuePosition([build.pid, ...groupPids(build.pid, groupStats(build.pid))], tickets) : null
   if (now === queued) return
   queued = now
   publishStatus()

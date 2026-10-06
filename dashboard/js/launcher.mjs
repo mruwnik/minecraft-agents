@@ -86,12 +86,19 @@ export const launcherStatus = (state, done, queued = null) => ({
   phase: state.phase, pending: state.pending, seq: done.seq, last: done.last, failed: done.failed, queued,
 })
 
-// Tickets ahead of the compile with this pid in tools/compile's queue (names `<lane>-<ns>-<pid>`, served in `ls` order);
-// null when it holds none (running, or not a compile).
-export const queuePosition = (pid, tickets) => {
-  const i = [...tickets].sort().findIndex((t) => t.endsWith(`-${pid}`))
+// Tickets ahead of the compile in tools/compile's queue (names `<lane>-<ns>-<pid>`, served in `ls` order); pids: the compile's
+// pid or the pids of a build's whole process group (a step may spawn tools/compile as a child). null when none holds a ticket.
+export const queuePosition = (pids, tickets) => {
+  const own = [pids].flat()
+  const i = [...tickets].sort().findIndex((t) => own.some((pid) => t.endsWith(`-${pid}`)))
   return i < 0 ? null : i
 }
+
+// Pids whose process group is pgid, from /proc stat texts keyed by pid (field 5 follows the parenthesised comm, which may hold spaces).
+export const groupPids = (pgid, stats) =>
+  Object.entries(stats)
+    .filter(([, text]) => Number(text.slice(text.lastIndexOf(')') + 1).trim().split(/\s+/)[2]) === pgid)
+    .map(([pid]) => Number(pid))
 
 // restart.mjs's give-up time: a build queued on the compile lock restarts the wait, so only a build that runs counts.
 export const restartDeadline = (status, { now, deadline, waitMs }) =>

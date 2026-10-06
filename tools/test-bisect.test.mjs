@@ -11,7 +11,7 @@ const sh = (cwd, ...a) => execFileSync(a[0], a.slice(1), { cwd, encoding: 'utf8'
 
 // Fake repo: tools/compile fails while file BROKEN exists, tools/test-engine fails (printing a FAIL line) while file BAD exists.
 const COMPILE = '#!/bin/sh\n[ -n "$BISECT_SLOW" ] && sleep 30\n[ -e "$(dirname "$0")/../BROKEN" ] && exit 1\nexit 0\n'
-const TEST_ENGINE = '#!/bin/sh\n[ "$1" = engine.nope-test ] && exit 2\n[ -n "$FAKE_TE_BUSY_N" ] && { n=$(cat "$(dirname "$0")/../te.busy" 2>/dev/null || echo 0); echo $((n + 1)) > "$(dirname "$0")/../te.busy"; [ "$n" -lt "$FAKE_TE_BUSY_N" ] && exit 75; }\n[ -n "$FAKE_TE_RC" ] && exit "$FAKE_TE_RC"\nif [ -e "$(dirname "$0")/../BAD" ]; then echo "FAIL in (a-test)"; exit 1; fi\nexit 0\n'
+const TEST_ENGINE = '#!/bin/sh\n[ "$1" = engine.nope-test ] && exit 2\n[ -n "$FAKE_TE_BUSY_N" ] && { n=$(cat "$(dirname "$0")/../te.busy" 2>/dev/null || echo 0); echo $((n + 1)) > "$(dirname "$0")/../te.busy"; [ "$n" -lt "$FAKE_TE_BUSY_N" ] && exit 75; }\n[ -n "$FAKE_TE_RC" ] && exit "$FAKE_TE_RC"\nif [ -e "$(dirname "$0")/../BAD" ]; then if [ -n "$FAKE_TE_CTRL" ]; then printf "FAIL in (a-test\\t\\033[31mred\\033[0m)\\n"; else echo "FAIL in (a-test)"; fi; exit "${FAKE_TE_BADRC:-1}"; fi\nexit 0\n'
 const WT = '#!/bin/sh\nif [ "$1" != --remove ] && [ -n "$WT_BUSY_N" ]; then n=$(cat "$WT_LOG.busy" 2>/dev/null || echo 0); echo $((n + 1)) > "$WT_LOG.busy"; [ "$n" -lt "$WT_BUSY_N" ] && exit 75; fi\nrepo="$(cd "$(dirname "$0")/.." && pwd)"\nif [ "$1" = --remove ]; then echo removed >> "$WT_LOG"; git -C "$repo" worktree remove --force "$2"; exit; fi\ngit -C "$repo" worktree add --detach "$2" "$1"\n'
 
 function fakeRepo() {
@@ -148,6 +148,27 @@ test('TEST_EVENTS=1: plan, per-step phases, results, progress and a failed verdi
     assert.equal(verdict.outcome, 'failed')
     assert.match(verdict.name, new RegExp(`^FIRST BAD ${shas[3]}`))
     assert.match(verdict.message, /FAIL in \(a-test\)/)
+  } finally { rmSync(d, { recursive: true, force: true }) }
+})
+
+test('TEST_EVENTS=1: tabs and ESC in a failing-test line keep every @@test line valid JSON', () => {
+  const { d, shas } = fakeRepo()
+  try {
+    const r = run(d, ['engine.a-test', '--good', shas[0], '--bad', shas[5]], { TEST_EVENTS: '1', FAKE_TE_CTRL: '1' })
+    assert.equal(r.status, 0, r.stdout + r.stderr)
+    const verdict = events(r.stdout).filter((e) => e.event === 'result').at(-1)
+    assert.match(verdict.message, /a-test\t\x1b\[31mred\x1b\[0m\)/)
+  } finally { rmSync(d, { recursive: true, force: true }) }
+})
+
+test('a step exit code other than 1 still scores bad and is named in the step line and the verdict', () => {
+  const { d, shas } = fakeRepo()
+  try {
+    const r = run(d, ['engine.a-test', '--good', shas[0], '--bad', shas[5]], { TEST_EVENTS: '1', FAKE_TE_BADRC: '3' })
+    assert.match(r.stdout, /step \d+ [0-9a-f]+: bad \(exit 3\)/)
+    assert.match(r.stdout, /FIRST BAD/)
+    assert.match(r.stdout, /exit 3/)
+    assert.ok(events(r.stdout).filter((e) => e.event === 'result').some((e) => e.outcome === 'failed' && /exit 3/.test(e.message)))
   } finally { rmSync(d, { recursive: true, force: true }) }
 })
 
