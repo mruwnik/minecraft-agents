@@ -16,7 +16,7 @@
 (def repo-root (.resolve path js/__dirname "../.."))
 (def usage
   {:plan "usage: plans.mjs --world <world> <command> [options]\n  list [--limit 10 --offset 0] [--raw [--large]]\n  find <text> [--limit 10 --offset 0] [--raw [--large]] | show <id> [--raw [--large]] [--geometry [--large]]\n  add <id> --edn '<plan-map>' --by <name> [--dry-run] [--raw]\n  edit <id> --edn '<plan-map>' --by <name> --revision <digest> [--dry-run] [--raw]\n  remove <id> --by <name> --revision <digest> [--dry-run] [--raw]   (every submitted plan is active; remove retires one)\n  validate <id> --edn '<plan-map>' [--blueprint <id>=<blueprint-map>]... [--raw] [--geometry [--large]]\n  check <id> --body <name> [--inventory '<block-count-map>'] [--blueprint <id>=<blueprint-map>]... [--raw] [--geometry [--large]]\n  Common: --worlds <dir> --state <legacy-parent> --repo <dir> --limit 1..100 --offset 0..10000\n  check judges only what that body has seen (its seen memory); cells never seen count unknown and :checked :unseen. Large raw output is opt-in with --large; raw output otherwise stops at 64 KiB. Plan/world edits need --by."
-   :blueprint "usage: blueprints.mjs --world <world> <command> [options]\n  list [--limit 10 --offset 0] [--raw [--large]] | find <text> [--limit 10 --offset 0] [--raw [--large]]\n  show <id> [--raw [--large]] | save <id> --edn '<blueprint-map>' --by <name> [--revision <digest>] [--dry-run] [--raw]\n  validate <id> --edn '<blueprint-map>' [--raw] [--large]\n  Common: --worlds <dir> --state <legacy-parent> --repo <dir> --limit 1..100 --offset 0..10000\n  Blueprints are shared globally; each result reports :scope :global. Writes need --by."})
+   :blueprint "usage: blueprints.mjs --world <world> <command> [options]\n  list [--limit 10 --offset 0] [--raw [--large]] | find <text> [--limit 10 --offset 0] [--raw [--large]]\n  show <id> [--raw [--large]] | save <id> --edn '<blueprint-map>' --by <name> [--revision <digest>] [--dry-run] [--raw]\n  remove <id> --by <name> --revision <digest> [--dry-run] [--raw]   (deletes the global blueprint file)\n  validate <id> --edn '<blueprint-map>' [--raw] [--large]\n  Common: --worlds <dir> --state <legacy-parent> --repo <dir> --limit 1..100 --offset 0..10000\n  Blueprints are shared globally; each result reports :scope :global. Writes need --by."})
 
 (defn fail! [reason message] (throw (data/fail reason message)))
 
@@ -57,7 +57,7 @@
         [command id & extra] (:positionals parsed)
         v (:values parsed)
         commands (if (= kind :plan) #{"list" "find" "show" "add" "edit" "remove" "validate" "check"}
-                     #{"list" "find" "show" "save" "validate"})
+                     #{"list" "find" "show" "save" "remove" "validate"})
         mutations #{"add" "edit" "save" "remove"}
         allowed (cond-> #{:world :worlds :state :repo}
                   (#{"list" "find"} command) (into [:limit :offset :raw :large])
@@ -255,6 +255,13 @@
                               (:dry-run req) (assoc :next :review-preview)
                               (and (:raw req) raw) (assoc :document (raw-edn raw)))) 0)))))))
 
+(defn remove-blueprint [req ctx write]
+  (when-not (data/read-document ctx :blueprint (:id req)) (fail! :not-found (str "no global blueprint " (:id req))))
+  (validate-revision! (:revision req))
+  (-> (data/mutate-document ctx {:kind :blueprint :id (:id req) :value nil :by (:by req)
+                                 :expected-revision (:revision req) :dry-run (boolean (:dry-run req))})
+      (.then (fn [result] (write (cond-> result (:dry-run req) (assoc :next :review-preview))) 0))))
+
 (defn mutate-blueprint [req ctx write]
   (let [old (data/read-document ctx :blueprint (:id req))
         value (edn-value (:edn req) "edn")]
@@ -316,6 +323,7 @@
                             (when-not doc (fail! :not-found (str "no global blueprint " (:id req))))
                             (write (blueprint-output doc (:raw req))) 0)
       (= command "save") (mutate-blueprint req ctx write)
+      (= command "remove") (remove-blueprint req ctx write)
       (= command "validate") (let [value (edn-value (:edn req) "edn")]
                                 (when-not (= (:id value) (:id req)) (fail! :bad-blueprint (str "blueprint :id must be \"" (:id req) "\"")))
                                 (let [errors (:errors (parse/parse-blueprint (:edn req) (:id req)))

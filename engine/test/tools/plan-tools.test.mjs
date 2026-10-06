@@ -115,6 +115,29 @@ test('blueprint tools validate inline, report global scope, and save with CAS', 
   } finally { fx.close() }
 })
 
+test('blueprint remove needs the revision, deletes the file and drops it from list', async () => {
+  const fx = fixture()
+  try {
+    await invoke('blueprints', fx, ['save', 'stone', '--edn', blueprintText('stone'), '--by', 'tester'])
+    const file = path.join(fx.repo, 'blueprints', 'stone.edn')
+    const rev = revision(fs.readFileSync(file, 'utf8'))
+    const noRevision = await invoke('blueprints', fx, ['remove', 'stone', '--by', 'tester'])
+    assert.deepEqual(noRevision.value.reason, keyword('revision-required'))
+    const stale = await invoke('blueprints', fx, ['remove', 'stone', '--by', 'tester', '--revision', '0'.repeat(24)])
+    assert.deepEqual(stale.value.reason, keyword('revision-conflict'))
+    assert.ok(fs.existsSync(file))
+    const dry = await invoke('blueprints', fx, ['remove', 'stone', '--by', 'tester', '--revision', rev, '--dry-run'])
+    assert.equal(dry.code, 0)
+    assert.ok(fs.existsSync(file))
+    const removed = await invoke('blueprints', fx, ['remove', 'stone', '--by', 'tester', '--revision', rev])
+    assert.equal(removed.code, 0)
+    assert.ok(!fs.existsSync(file))
+    assert.equal((await invoke('blueprints', fx, ['list'])).value.total, 0)
+    const missing = await invoke('blueprints', fx, ['remove', 'stone', '--by', 'tester', '--revision', rev])
+    assert.deepEqual(missing.value.reason, keyword('not-found'))
+  } finally { fx.close() }
+})
+
 // A body's seen-block memory (engine/js/seen-file.mjs) holding the given [x, y, z, blockName, dimension = overworld] cells at one seen time.
 async function writeSeen (fx, body, cells, seenAt) {
   const version = '1.20.4'
