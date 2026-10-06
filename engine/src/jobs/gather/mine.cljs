@@ -587,7 +587,7 @@
 (def stone-types #{"stone" "cobblestone" "deepslate" "andesite" "granite" "diorite" "tuff"})
 
 (defn descend-due?
-  "Whether the dig phase should first stair down: the block is stone-type, no seen target, the strip tunnel not begun."
+  "Whether the dig phase should first stair down: the block is stone-type, no seen target (nor seen block skipped for water), the strip tunnel not begun."
   [c]
   (let [{:keys [block descend-limit]} (:args c)]
     (and (contains? stone-types block) (pos? descend-limit) (nil? (:tunnel (ctx/mem c))))))
@@ -644,7 +644,7 @@
       :else (do (when (seq refused)
                   (access/decline! c :mine.declined "mine" (assoc (access/refusal-fields refused) :reason :refused)))
                 (cond
-                  (and (empty? refused) (descend-due? c)) (await (descend-round! c))
+                  (and (empty? refused) (not (and wet? (not wet))) (descend-due? c)) (await (descend-round! c))
                   (pos? tunnel-length) (await (tunnel-round! c))
                   (seq refused) (to-mend! c :refused)
                   :else (do (when (and wet? (not wet)) (ctx/update-mem! c assoc :wet-skipped wet-n))

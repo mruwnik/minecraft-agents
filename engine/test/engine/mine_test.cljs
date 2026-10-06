@@ -180,6 +180,16 @@
           (is (= :count (:reason (done-event wet))))
           (is (= 2 (dig-count wet))))))))
 
+(deftest wet-stone-seen-is-reported-not-descended-past
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:blocks {"3,64,0" "stone" "3,64,1" "water"} :inventory [{:name "iron_pickaxe" :count 1}]}
+              s (await (scenario {:block "stone" :count 1 :tunnel-length 0} world 30))]
+          (is (= :wet (:reason (done-event s))))
+          (is (= 1 (:wet-skipped (done-event s))))
+          (is (zero? (dig-count s))))))))
+
 (deftest lava-next-to-a-block-always-skips-it
   (async done
     (tu/run-async done
