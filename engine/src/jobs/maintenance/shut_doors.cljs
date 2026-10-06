@@ -14,14 +14,16 @@
   One run shuts them all, nearest first. For each it walks within :reach (a jobs.movement.go-to child, doors :never:
   it opens nothing on the way), then shuts it as the walker does (pass/shut-column!). An animal in the cell is waited
   out, never pushed. A block that cannot be reached, that the body stands in the column of, or that is not shut after
-  :tries clicks is given up with one warn (shut-doors.gave-up) and its entry dropped, so the trigger leaves it.
+  :tries clicks is given up with one warn (shut-doors.gave-up) and its entry dropped, so the trigger leaves it. A
+  block the body stands in the column of, or whose walk was interrupted (:walk-interrupted), is left with the warn
+  but keeps its entry: a later run shuts it.
   Ends done with info shut-doors.done {:shut n :left []} when every block was shut (or none stood open); with any
   left, stopped :left with warn shut-doors.stopped and {:shut n :left [{:cell :reason}]}.")
 
 (def args
   {:radius {:doc "how far from the body a left block is looked for, in blocks" :default 16}
    :reach {:doc "walk until within this many cells of the block (a click reaches 4.5 from the eye)" :default 3}
-   :tries {:doc "rounds on one block before it is given up" :default 3}})
+   :tries {:doc "clicks on one block before it is given up" :default 3}})
 
 ;; the blocks given up in this run are skipped; a later run starts afresh from the world and the :opened entries
 (defn cell-key [{:keys [x y z]}] [x y z])
@@ -32,27 +34,36 @@
   (let [given-up (set (map :cell left))]
     (remove #(given-up (cell-key (:cell %))) (dl/left-open (:primitives c) (ctx/view c) (:args c) 0))))
 
-(defn ^:async walk! [c {:keys [cell]}]
+(defn ^:async walk!
+  "nil when the body stands within reach, else why not: :walk-interrupted (the walk ended :continue) or :unreachable."
+  [c {:keys [cell]}]
   (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos cell :range (:reach (:args c)) :doors :never :escalate false}))]
-    (and (= :done r) (:arrived (ctx/child-result c :walk)))))
+    (cond
+      (= :continue r) :walk-interrupted
+      (and (= :done r) (:arrived (ctx/child-result c :walk))) nil
+      :else :unreachable)))
+
+(def keep-entry
+  "Reasons that leave the :opened entry: the block may well be shut by a later run."
+  #{:standing-in :walk-interrupted})
 
 (defn ^:async shut-once!
   "Shut the target: nil when shut, else the reason it stays open."
   [c {:keys [cell column dist]}]
-  (cond
-    (pass/in-column? column (dl/feet-cell (u/self-pos c))) :standing-in
-    (and (> dist pass/leftover-reach) (not (await (walk! c {:cell cell})))) :unreachable
-    :else
-    (loop [n 1]
-      (await (pass/shut-column! c column))
-      (cond
-        (not (dl/open-block (:primitives c) cell)) nil
-        (< n (:tries (:args c))) (recur (inc n))
-        :else :shut-failed))))
+  (if (pass/in-column? column (dl/feet-cell (u/self-pos c)))
+    :standing-in
+    (if-let [why (when (> dist pass/leftover-reach) (await (walk! c {:cell cell})))]
+      why
+      (loop [n 1]
+        (await (pass/shut-column! c column))
+        (cond
+          (not (dl/open-block (:primitives c) cell)) nil
+          (< n (:tries (:args c))) (recur (inc n))
+          :else :shut-failed)))))
 
 (defn give-up! [c {:keys [cell]} reason]
   (let [k (cell-key cell)]
-    (ctx/forget-where! c :opened #(= cell (:cell %)))
+    (when-not (keep-entry reason) (ctx/forget-where! c :opened #(= cell (:cell %))))
     (ctx/emit! c :shut-doors.gave-up :warn {:cell k :reason reason
                                             :text (str "the block at " k " stays open: " (name reason))})
     {:cell k :reason reason}))

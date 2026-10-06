@@ -177,19 +177,19 @@
 
 (def clock (atom 1000000))
 
-(defn start [spec plans]
+(defn start [spec plans & [extra-jobs]]
   (let [[seen sink] (tu/legacy-capture-sink)
         p (tu/fake-on-floor spec)
         w (world/of-data plans {})
-        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+        eng (core/create {:primitives p :jobs (merge registry/jobs extra-jobs) :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})
                           :world w})]
     {:eng eng :p p :seen seen}))
 
 (defn ^:async run-job
   "Submit the job with args and tick up to n times until the list is empty; {:eng :p :seen :ticks}."
-  [spec plans args n]
-  (let [s (start spec plans)]
+  [spec plans args n & [extra-jobs]]
+  (let [s (start spec plans extra-jobs)]
     (core/submit! (:eng s) (list 'jobs.animals.shut-gate args) {})
     (loop [i 0]
       (if (or (>= i n) (empty? (:list (core/state (:eng s)))))
@@ -368,3 +368,23 @@
         ask (fn [ts] (holds-over (fake-at true 2 5) (knowledge pen-a) ts data))]
     (is (= [false false false false false false false] (ask times)) "entry 0-6 s old: left alone")
     (is (= [false false false false true true true] (ask (range 31000 38000 1000))) "entry 31 s old: fires after 4 s")))
+
+(defn gave-up-cells [s] (mapv (comp :cell :data) (mem/entries (mem/view (:store (:eng s))) :gate-gave-up)))
+
+(deftest a-cow-that-stays-leaves-a-short-gave-up-entry-so-the-trigger-does-not-refire-at-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cow {:id 7 :name "cow" :kind "passive" :pos {:x 2.5 :y 64 :z 0.5}}
+              s (await (run-job (pen-world true 2 -6 {:entities [cow]}) {"pen-a" pen-a} {} 1))]
+          (is (= [[2 64 0]] (gave-up-cells s))))))))
+
+(deftest a-walk-that-ends-continue-is-not-read-as-unreachable
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [stub {'jobs.movement.go-to {:check (constantly true) :args {} :round (fn ^:async r [_c] :continue)}}
+              s (await (run-job (pen-world true 2 7) {"pen-a" pen-a} {} 1 stub))]
+          (is (= [:walk-interrupted] (mapv :reason (:left (first (events-of s :shut-gate.stopped))))))
+          (is (empty? (events-of s :shut-gate.gave-up)) "no warn: it is not a verdict on the gate")
+          (is (= [[2 64 0]] (gave-up-cells s)) "a short entry"))))))

@@ -67,11 +67,12 @@
 
 (defn setup
   ([world] (setup world [{:x 10 :y 64 :z 0} 0]))
-  ([world walk-args]
+  ([world walk-args] (setup world walk-args {}))
+  ([world walk-args extra-jobs]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         p (tu/fake world)
-        eng (core/create {:primitives p :jobs (assoc registry/jobs 'walker (walker walk-args))
+        eng (core/create {:primitives p :jobs (assoc (merge registry/jobs extra-jobs) 'walker (walker walk-args))
                           :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :clock clock :seen seen})))
@@ -204,3 +205,30 @@
           (let [e (first (filter #(= :shut-doors.stopped (:kind %)) @seen))]
             (is (= 1 (:shut e)))
             (is (= [[5 64 0]] (mapv :cell (:left e))))))))))
+
+(def continuing-go-to
+  "A go-to whose every round ends :continue, as one waiting on its own child does."
+  {'jobs.movement.go-to {:check (constantly true) :args {} :round (fn ^:async r [_c] :continue)}})
+
+(deftest a-block-the-body-stands-in-stays-left-with-its-entry-for-a-later-run
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup (gate-world true 5 0))]
+          (remember-opened! s)
+          (core/submit! eng '(jobs.maintenance.shut-doors) {})
+          (await (tick-until s #(empty? (:list (core/state eng))) 3))
+          (is (open? p gate-cell))
+          (is (= [[[5 64 0] :standing-in]] (mapv (juxt :cell :reason) (:left (first (filter #(= :shut-doors.stopped (:kind %)) @seen))))))
+          (is (= [gate-cell] (mapv :cell (opened eng))) "the entry stays, so a later run shuts it"))))))
+
+(deftest a-walk-that-ends-continue-is-not-read-as-unreachable
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen] :as s} (setup (gate-world true 14 0) [{:x 10 :y 64 :z 0} 0] continuing-go-to)]
+          (remember-opened! s)
+          (core/submit! eng '(jobs.maintenance.shut-doors) {})
+          (await (tick-until s #(empty? (:list (core/state eng))) 3))
+          (is (= [:walk-interrupted] (mapv :reason (:left (first (filter #(= :shut-doors.stopped (:kind %)) @seen))))))
+          (is (= [gate-cell] (mapv :cell (opened eng))) "the entry stays for a later run"))))))
