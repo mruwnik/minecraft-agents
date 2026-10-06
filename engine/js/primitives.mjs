@@ -532,6 +532,9 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       .filter(e => e !== bot.entity && e.position)
       .map(e => ({ e, distance: dist(me, e.position), kind: entityKind(e) }))
       .filter(({ e, distance, kind: k }) => distance <= radius && (!kind || k === kind) && (!names || names.includes(e.name ?? e.username)))
+      // like a player: a passive mob, a villager or another player behind a wall is not listed (hostiles and items stay
+      // listed with `visible`, which the danger and fetch code reads)
+      .filter(({ e, kind: k }) => k === 'hostile' || k === 'item' || canSee(e))
       .sort((a, b) => a.distance - b.distance)
       .slice(0, max)
       .map(({ e, distance, kind: k }) => ({

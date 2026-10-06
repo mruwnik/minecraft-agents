@@ -92,7 +92,7 @@ nobody may act. `isOwner(token)` reports whether a token is current.
 | method | returns |
 |---|---|
 | `self()` | `{username, pos, health, food, foodSaturation, oxygen, onFire, inWater, inLava, onGround, chunkLoaded, settling, isSleeping, vehicle, effects, experience, dimension, timeOfDay, isDay, raining, thundering, players, held, equipment, inventory}` |
-| `entities({radius=16, kind?, names?, max=32})` | `[{id, name, kind, pos, distance, visible?, ...}]` by distance; `kind` is `hostile`, `passive`, `player`, `item` or `other` |
+| `entities({radius=16, kind?, names?, max=32})` | `[{id, name, kind, pos, distance, visible?, ...}]` by distance; `kind` is `hostile`, `passive`, `player`, `item` or `other`; all but hostiles and items are listed only with a clear line of sight (hostiles and items carry `visible`) |
 | `blocks({radius=16, names?, match?, max=64, properties=false})` | `[{name, pos, age?, properties?, distance}]` by distance |
 | `blockAt(pos)` | `{name, pos, age?, properties?}`, or `null` when the chunk is not loaded |
 
@@ -362,7 +362,7 @@ An ad hoc `:when` can be a condition: an EDN list read by `engine.condition` aga
 ```
 
 - Operators: `and or not < > <= >= =`, `(held-for seconds cond)`, `(known? x)`.
-- Facts: numbers `(health) (food) (inventory "item") (free-slots) (distance-to pos) (blocks-near "name" r)
+- Facts: numbers `(health) (food) (inventory "item") (free-slots) (distance-to pos) (blocks-near "name" r) (seen blocks only)
   (since :kind)`; a position `(place :kind)`; booleans `(daytime) (in-water) (hostile-near r) (burning) (suffocating)
   (night-unsafe) (stuck) (wearing "item")`. `(since :kind)` is the seconds since body memory last recorded an unexpired
   entry of that kind (unknown when none).

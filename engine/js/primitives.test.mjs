@@ -496,7 +496,7 @@ for (const [label, entityFlags, blocks, expected] of liquidCases) {
 
 test('entities tells sleeping players from standing ones and gives usernames', () => {
   const player = (id, pose) => ({ id, type: 'player', name: 'player', username: `P${id}`, position: at(id, 64, 0), metadata: pose === undefined ? [] : [0, 0, 0, 0, 0, 0, pose] })
-  const p = withBot(bot => { bot.entities = { 1: player(1, 2), 2: player(2, 0), 3: player(3) } })
+  const p = withBot(bot => { bot.entities = { 1: player(1, 2), 2: player(2, 0), 3: player(3) } }, { ...world, blocks: {} })
   const found = p.entities({ kind: 'player' })
   assert.deepEqual(found.map(e => [e.username, e.sleeping]), [['P1', true], ['P2', false], ['P3', false]])
 })
@@ -534,7 +534,7 @@ const mobCases = [
 ]
 for (const [label, fields, kind, creeper] of mobCases) {
   test(`entities classifies ${label}`, () => {
-    const p = withBot(bot => { bot.entities = { 5: { id: 5, position: at(3, 64, 0), ...fields } } })
+    const p = withBot(bot => { bot.entities = { 5: { id: 5, position: at(3, 64, 0), ...fields } } }, { ...world, blocks: {} })
     const [e] = p.entities({})
     assert.deepEqual([e.kind, e.name, Boolean(e.creeper)], [kind, fields.name, creeper])
   })
@@ -1384,7 +1384,7 @@ test('a bucket not carried is no-item', async () => {
 
 // ---- line of sight: entities reports `visible` for hostiles ----
 
-const wall = Object.fromEntries([2, 3].flatMap(x => [64, 65, 66].map(y => [`${x},${y},0`, 'stone'])))
+const wall = Object.fromEntries([2, 3].flatMap(x => [-1, 0].flatMap(z => [64, 65, 66].map(y => [`${x},${y},${z}`, 'stone']))))
 const zombieAt5 = { 9: { id: 9, name: 'zombie', type: 'hostile', position: at(5, 64, 0), height: 1.9, health: 20 } }
 
 test('a hostile behind a two-thick wall is not visible, and is once the wall is gone', () => {
@@ -1407,7 +1407,7 @@ test('glass and unloaded cells do not block sight', () => {
 })
 
 test('only hostiles carry visible', () => {
-  const { p } = rig({ blocks: wall, entities: { ...zombieAt5, 7: { id: 7, name: 'cow', type: 'passive', position: at(5, 64, 1) } } })
+  const { p } = rig({ blocks: {}, entities: { ...zombieAt5, 7: { id: 7, name: "cow", type: "passive", position: at(5, 64, 1) } } })
 test('a dropped item behind a wall is not visible, and is once the wall is gone', () => {
   const item = { 7: { id: 7, name: 'item', type: 'object', position: at(5, 64, 0), getDroppedItem: () => ({ name: 'stick', count: 1 }) } }
   assert.equal(rig({ blocks: wall, entities: item }).p.entities({ kind: 'item' })[0].visible, false)
@@ -1415,6 +1415,16 @@ test('a dropped item behind a wall is not visible, and is once the wall is gone'
 })
 
   assert.equal('visible' in p.entities({ kind: 'passive' })[0], false)
+})
+
+test('a sheep, a villager and a player behind a wall are not listed, and are once the wall is gone', () => {
+  const others = {
+    11: { id: 11, name: 'sheep', type: 'passive', position: at(5, 64, 0), height: 1.3 },
+    12: { id: 12, name: 'villager', type: 'passive', position: at(5, 64, 0.5), height: 1.95 },
+    13: { id: 13, type: 'player', username: 'Ann', position: at(5, 64, -0.5), height: 1.8, metadata: [] }
+  }
+  assert.deepEqual(rig({ blocks: wall, entities: others }).p.entities({}).map(e => e.id), [])
+  assert.deepEqual(rig({ blocks: {}, entities: others }).p.entities({}).map(e => e.id).sort(), [11, 12, 13])
 })
 
 // the stub's blocks carry no collision shapes: give the solid ones their shapes for the melee check

@@ -67,8 +67,12 @@
     (u/dist (u/pos-of (.-pos s)) pos)
     unknown))
 
-(defn blocks-near [p _ item radius]
-  (count (.blocks p #js {:radius (min radius max-scan-radius) :names #js [item] :max max-scan-count})))
+(defn blocks-near
+  "How many blocks of that name the body has seen (perception's seenBlocks, never x-ray); 0 without perception."
+  [p _ item radius]
+  (if-let [seen (aget p "seenBlocks")]
+    (count (.call seen p #js {:radius (min radius max-scan-radius) :names #js [item] :max max-scan-count}))
+    0))
 
 (def table
   "Every fact by symbol: {:args [type ...] :type type :cost :cheap|:scan
@@ -116,5 +120,5 @@
            :doc "the last moves all failed and the body is really held (the stuck trigger, default args)"
            :read (fn [{:keys [world memory]}] (stuck/body-stuck? world memory {}))}
    'blocks-near {:args [:string :number] :type :number :cost :scan :refresh-s 5
-                 :doc "how many blocks of that name are within the radius (at most 32), counted up to 256"
+                 :doc "how many blocks of that name the body has seen within the radius (at most 32), counted up to 256"
                  :read (online blocks-near)}})

@@ -197,8 +197,8 @@
 
 (deftest a-scanning-fact-is-served-from-the-cache-until-its-refresh
   (let [calls (atom 0)
-        p (tu/fake {:blocks {"1,64,0" "oak_log" "2,64,0" "oak_log"}})
-        counting (js/Object.assign #js {} p #js {:blocks (fn [o] (swap! calls inc) (.blocks p o))})
+        p (tu/seeing-all (tu/fake {:blocks {"1,64,0" "oak_log" "2,64,0" "oak_log"}}))
+        counting (js/Object.assign #js {} p #js {:seenBlocks (fn [o] (swap! calls inc) (.seenBlocks p o))})
         n (node '(> (blocks-near "oak_log" 16) 1))
         step (fn [state now] (c/evaluate n (env counting (view now)) state))
         r0 (step {} 0)
@@ -322,7 +322,7 @@
                                {:kind "hostile" :name "zombie" :pos {:x 3 :y 64 :z 20} :visible true}
                                {:kind "hostile" :name "skeleton" :pos {:x 3 :y 64 :z 6} :visible false}]
                     :blocks {"3,66,4" "stone"}})
-        e (env p (view 0 {:home [{:pos {:x 0 :y 64 :z 0}}]}))]
+        e (env (tu/seeing-all p) (view 0 {:home [{:pos {:x 0 :y 64 :z 0}}]}))]
     (are [form expected] (= expected (value form e))
       '(= (health) 12) true
       '(= (food) 9) true
@@ -344,6 +344,15 @@
       '(night-unsafe) false
       '(stuck) false
       '(= (blocks-near "stone" 8) 1) true)))
+
+(deftest blocks-near-counts-only-blocks-the-body-has-seen
+  (let [fresh #(tu/fake {:blocks {"3,64,4" "diamond_ore" "3,60,4" "diamond_ore"}})
+        count-of (fn [p] (first (filter #(value (list '= '(blocks-near "diamond_ore" 8) %) (env p)) (range 5))))]
+    (is (= 0 (count-of (tu/blind (fresh)))))
+    (is (= 2 (count-of (tu/seeing-all (fresh)))))
+    (let [only-top (doto (fresh)
+                     (aset "seenBlocks" (fn [q] (.filter (.blocks (fresh) q) (fn [b] (= 64 (.-y (.-pos b))))))))]
+      (is (= 1 (count-of only-top))))))
 
 (deftest facts-are-unknown-when-the-body-is-offline
   (are [form] (= ? (value form (env offline)))
