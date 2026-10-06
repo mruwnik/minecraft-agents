@@ -183,13 +183,16 @@
       (recur (inc i)))))
 
 (defn ^:async recentre!
-  "Walk back to the middle of the cell [x y z] the pillar last stood in, after a shove. True when the body is in its
-  column again."
+  "Walk back to the middle of the cell [x y z] the pillar last stood in, after a shove. :in when the body is in its
+  column again, :continue while the walk is still going, :failed otherwise."
   [c [x y z]]
   (let [in-column? #(let [[fx _ fz] (feet-cell c)] (= [x z] [fx fz]))]
-    (when-not (in-column?)
-      (await (ctx/call-child c :recentre 'jobs.movement.go-to {:pos {:x (+ x 0.5) :y y :z (+ z 0.5)} :range 0 :escalate false})))
-    (in-column?)))
+    (if (in-column?)
+      :in
+      (let [r (await (ctx/call-child c :recentre 'jobs.movement.go-to {:pos {:x (+ x 0.5) :y y :z (+ z 0.5)} :range 0 :escalate false}))]
+        (cond (in-column?) :in
+              (= :continue r) :continue
+              :else :failed)))))
 
 (defn ^:async place!
   "Write the intent, jump-place one block, confirm it when the cell shows it. Three failed jumps in a row give up;
@@ -203,7 +206,7 @@
           (ctx/update-mem! c assoc :failures 0)
           :continue)
       (let [shoved? (displaced? c (:base (ctx/mem c)))
-            _ (when shoved? (ctx/update-mem! c update :displaced (fnil inc 0)))
+            _ (when shoved? (ctx/update-mem! c #(-> % (update :displaced (fnil inc 0)) (assoc :counted true))))
             failures (if shoved? (:failures (ctx/mem c) 0) (inc (:failures (ctx/mem c) 0)))]
         (ctx/update-mem! c assoc :failures failures)
         (if (and (< failures max-failures) (<= (:displaced (ctx/mem c) 0) max-displacements))
@@ -214,23 +217,39 @@
                                  (give-up :off-column :at (feet-cell c) :detail (.-reason r))
                                  (give-up :place-failed :detail (.-reason r))))))))))
 
+(defn ^:async shoved-back!
+  "Before a round: a body off the base column (whatever the last place did) counts one knockback and walks back
+  (up to max-displacements). :continue while the walk goes on, else nil."
+  [c]
+  (let [{:keys [stand base counted walking displaced]} (ctx/mem c)
+        [bx _ bz] base
+        [fx _ fz] (feet-cell c)
+        off? (and base (not= [bx bz] [fx fz]))
+        displaced (cond-> (or displaced 0) (and off? (not counted) (not walking)) inc)]
+    (ctx/update-mem! c #(-> % (assoc :displaced displaced) (dissoc :counted) (assoc :walking (boolean (and off? (<= displaced max-displacements))))))
+    (when (and off? stand (<= displaced max-displacements))
+      (let [[x y z] stand
+            block-at (block-at-of (:primitives c))
+            top (or (first (filter #(clear? (block-at [x % z])) (range y (+ y 3)))) y)
+            r (await (recentre! c [x top z]))]
+        (when (= :continue r) :continue)))))
+
 (defn ^:async round [c]
   (await (land! c))
-  (let [{:keys [stand displaced]} (ctx/mem c)]
-    (when (and stand (pos? (or displaced 0)))
-      (await (recentre! c stand))))
-  (let [p (:primitives c)
-        block-at (block-at-of p)
-        seen (ledger/open-entries (ctx/view c))
-        l (ledger/reconcile seen block-at)
-        feet (feet-cell c)
-        base (or (:base (ctx/mem c)) feet)
-        {:keys [height item]} (:args c)
-        step (next-step (merge (access-inputs c)
-                               {:feet feet :base base :height height :block-at block-at :carried (carried p)
-                                :item item :ledger (ledger/cells l)}))]
-    (when (not= l seen) (ledger/remember! c l))
-    (ctx/update-mem! c assoc :base base :stand feet)
-    (if (= :place (:step step))
-      (await (place! c l block-at step))
-      (finish! c l step))))
+  (if (= :continue (await (shoved-back! c)))
+    :continue
+    (let [p (:primitives c)
+          block-at (block-at-of p)
+          seen (ledger/open-entries (ctx/view c))
+          l (ledger/reconcile seen block-at)
+          feet (feet-cell c)
+          base (or (:base (ctx/mem c)) feet)
+          {:keys [height item]} (:args c)
+          step (next-step (merge (access-inputs c)
+                                 {:feet feet :base base :height height :block-at block-at :carried (carried p)
+                                  :item item :ledger (ledger/cells l)}))]
+      (when (not= l seen) (ledger/remember! c l))
+      (ctx/update-mem! c assoc :base base :stand feet)
+      (if (= :place (:step step))
+        (await (place! c l block-at step))
+        (finish! c l step)))))

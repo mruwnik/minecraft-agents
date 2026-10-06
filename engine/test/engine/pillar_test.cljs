@@ -309,3 +309,32 @@
           (await (ticks s eng 60))
           (is (finished? eng))
           (is (= :off-column (:reason (first (of-kind seen :pillar.gave-up))))))))))
+
+(defn shove-after-place!
+  "Override jumpPlace so that after each real placement the body is moved by the next of offsets [dx dy dz]."
+  [p offsets]
+  (let [left (atom offsets)]
+    (.override (.-world p) "jumpPlace"
+               (fn [token args impl]
+                 (let [r (impl token args)]
+                   (if (seq @left)
+                     (.then r (fn [res]
+                                (let [[dx dy dz] (first @left)
+                                      [x y z] (feet p)]
+                                  (swap! left rest)
+                                  (fake/swap-self! p assoc :pos [(+ x dx) (+ y dy) (+ z dz)]))
+                                res))
+                     r))))))
+
+(deftest shoved-after-a-good-place-it-walks-back-and-finishes
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup {:blocks {"1,63,0" "stone" "0,64,1" "stone"}})]
+          (shove-after-place! p [[1 -1 0] [0 -1 1]])
+          (core/submit! eng (list job {:height 3}) {})
+          (await (ticks s eng 40))
+          (is (finished? eng))
+          (is (empty? (of-kind seen :pillar.gave-up)))
+          (is (= [0 67 0] (feet p)))
+          (is (= (repeat 3 "dirt") (blocks-at p (column base 3)))))))))
