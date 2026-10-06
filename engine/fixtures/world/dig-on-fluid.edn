@@ -1,0 +1,42 @@
+;; jobs.blocks.dig :on-fluid and jobs.gather.mine :wet (card d5e3748c): stone beside a water source (a sealed one-cell
+;; pocket at [19 0 16], every stone cell touches it), a dry stone at [14 0 16]; bedrock floor so mine sees only that stone.
+{:defaults
+ {:tags [:blocks :mine :jobs] :time :any
+  :plot {:height 8 :floor "bedrock"}
+  :blocks [[:set [18 0 16] "stone"] [:set [20 0 16] "stone"] [:set [19 1 16] "stone"]
+           [:set [19 0 15] "stone"] [:set [19 0 17] "stone"] [:set [19 0 16] "water"]]
+  :body {:at [16.5 0 16.5] :inventory [["iron_pickaxe" 1]]}}
+ :cases
+ [{:name "default-waits-on-hazard"
+   :act [[:job (jobs.blocks.dig {:pos #at [18 0 16]})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :hazard}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :blocks.dig.done} :for-s 15}]
+   :after [[:block [18 0 16] "stone"]]}
+  {:name "fail-ends-at-once-with-hint"
+   :act [[:job (jobs.blocks.dig {:pos #at [18 0 16] :on-fluid :fail})]]
+   :expect [{:event {:source :job :kind :blocks.dig.done :data {:dug false :reason :fluid-adjacent}} :within-s 30 :of-job true}]
+   :after [[:block [18 0 16] "stone"]]}
+  {:name "fail-with-accept-digs"
+   :act [[:job (jobs.blocks.dig {:pos #at [18 0 16] :on-fluid :fail :accept #{:fluid-adjacent}})]]
+   :expect [{:event {:source :job :kind :blocks.dig.done :data {:dug true :reason :dug}} :within-s 60 :of-job true}]
+   :after [[:item "cobblestone" [:>= 1]]]}
+  {:name "fail-on-dry-block-digs"
+   :blocks [[:set [14 0 16] "stone"]]
+   :act [[:job (jobs.blocks.dig {:pos #at [14 0 16] :on-fluid :fail})]]
+   :expect [{:event {:source :job :kind :blocks.dig.done :data {:dug true :reason :dug}} :within-s 60 :of-job true}]
+   :after [[:block [14 0 16] "air"] [:item "cobblestone" [:>= 1]]]}
+  {:name "mine-only-wet-stone-says-wet-skipped"
+   :act [[:job (jobs.gather.mine {:block "stone" :count 1 :tunnel-length 0})]]
+   :expect [{:event {:source :job :kind :mine.done :data {:got 0 :reason :wet :wet-skipped [:>= 1]}} :within-s 90 :of-job true}]
+   :after [[:block [18 0 16] "stone"]]
+   :limit-s 100}
+  {:name "mine-wet-stone-no-descent-says-wet-skipped"
+   :act [[:job (jobs.gather.mine {:block "stone" :count 1 :tunnel-length 0 :descend-limit 0})]]
+   :expect [{:event {:source :job :kind :mine.done :data {:got 0 :reason :wet :wet-skipped [:>= 1]}} :within-s 60 :of-job true}]
+   :after [[:block [18 0 16] "stone"]]
+   :limit-s 70}
+  {:name "mine-wet-true-digs"
+   :act [[:job (jobs.gather.mine {:block "stone" :count 1 :tunnel-length 0 :wet true})]]
+   :expect [{:event {:source :job :kind :mine.done :data {:got [:>= 1]}} :within-s 120 :of-job true}]
+   :after [[:item "cobblestone" [:>= 1]]]
+   :limit-s 140}]}
