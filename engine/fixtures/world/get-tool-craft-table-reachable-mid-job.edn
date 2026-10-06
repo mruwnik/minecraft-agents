@@ -1,0 +1,23 @@
+;; Card 7c371db9: a table seen but unreachable (hut wall) becomes reachable mid-job (wall removed 1 s after submit); 3 planks + 2 sticks need that table. Without the wall removal the job stops :table-unreachable.
+{:defaults
+ {:tags [:fetch :crafting] :time :any :plot {:height 12}
+  :blocks [[:fill [1 0 13] [7 3 19] "stone"] [:fill [3 0 15] [5 1 17] "air"]
+           [:set [19 0 16] "crafting_table"]]
+  :body {:at [14.5 0 16.5] :settle-s 3} :limit-s 90}
+ :cases
+ [{:name "wall-removed-mid-job-table-used"
+   :body {:inventory [["oak_planks" 3] ["stick" 2]]}
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"] [:wait-s 3]
+         [:rcon "execute as $BODY at @s run tp @s ~-10 ~ ~"] [:wait-s 2]
+         [:job (jobs.items.get-tool {:kind "pickaxe"})]
+         [:wait-s 1]
+         [:rcon "execute positioned $X $Y $Z run fill ~1 ~ ~13 ~7 ~3 ~19 air"]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
+   :after [[:item "wooden_pickaxe" 1]]}
+  {:name "wall-kept-stops-unreachable"
+   :body {:inventory [["oak_planks" 3] ["stick" 2]]}
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"] [:wait-s 3]
+         [:rcon "execute as $BODY at @s run tp @s ~-10 ~ ~"] [:wait-s 2]
+         [:job (jobs.items.get-tool {:kind "pickaxe"})]]
+   :expect [{:event {:source :job :data {:reason :table-unreachable}} :within-s 60 :of-job true}]
+   :after [[:item "wooden_pickaxe" 0]]}]}
