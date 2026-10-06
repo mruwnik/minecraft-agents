@@ -157,7 +157,7 @@
   "The targets the body has seen (never through walls): blocks {:what :pos}, entities {:what :pos :id}."
   [p names radius]
   (concat (map (fn [b] {:what (:name b) :pos (cell-of (:pos b))})
-               (look/seen-blocks p {:names names :radius radius :max 64 :live? true}))
+               (mapcat #(look/seen-blocks p {:names [%] :radius radius :max 64 :live? true}) names))
           (map (fn [e] (cond-> {:what (:name e) :pos (cell-of (:pos e))} (:uuid e) (assoc :id (:uuid e))))
                (look/seen-entities p {:names names :radius radius :max 32}))))
 

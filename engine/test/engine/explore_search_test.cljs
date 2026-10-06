@@ -295,3 +295,8 @@
                                                                (seen-blocks q)))))))]
           (is (nil? (event-of s :search.done)))
           (is (not-any? #(= :seen (:kind %)) (file-notes s))))))))
+
+(deftest a-name-with-many-sightings-does-not-fill-the-scan-cap-for-the-others
+  (let [p (tu/seeing-all (tu/fake {:blocks (merge (tu/box 1 64 1 10 64 7 "hay_block") {"14,64,0" "diamond_block"})}))
+        seen (set (map :what (search/sense p ["hay_block" "diamond_block"] 20)))]
+    (is (= #{"hay_block" "diamond_block"} seen))))
