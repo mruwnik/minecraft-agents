@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { spawnSync, spawn } from 'node:child_process'
-import { decide, loadConfig } from './res-slot.mjs'
+import { decide, loadConfig, reservedMb } from './res-slot.mjs'
 
 const base = { freeSlots: 1, availableMb: 10000, needMb: 700, floorMb: 6144, waitedMs: 0, maxWaitMs: 540000 }
 
@@ -69,4 +69,41 @@ test('integration: each run appends kind, need, waited, ran and exit to log.json
   const [entry] = fs.readFileSync(path.join(dir, 'log.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l))
   assert.equal(entry.kind, 't'); assert.equal(entry.needMb, 5); assert.equal(entry.code, 4)
   assert.ok(entry.waitedS >= 0 && entry.ranS >= 0); assert.match(entry.cmd, /sh -c exit 4/)
+})
+
+test('reservedMb: counts only grants still ramping whose owner lives', () => {
+  const grants = [{ pid: 1, needMb: 700, t: 1000 }, { pid: 2, needMb: 500, t: 100 }, { pid: 3, needMb: 300, t: 1000 }]
+  assert.equal(reservedMb(grants, 1500, 600, (pid) => pid !== 3), 700)
+})
+test('decide: reserved memory counts as used', () => {
+  const d = decide({ ...base, availableMb: 7000, reservedMb: 1000 })
+  assert.equal(d.action, 'wait'); assert.match(d.why, /reserved/)
+})
+
+const tmpEnv = (cfgObj, extra = {}) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'res-slot-test-'))
+  const cfg = path.join(dir, 'cfg.json')
+  fs.writeFileSync(cfg, JSON.stringify(cfgObj))
+  return { dir, env: { RES_SLOT_DIR: dir, RES_SLOT_CONFIG: cfg, RES_SLOT_MAX_WAIT_MS: '1500', RES_SLOT_POLL_MS: '200', ...extra } }
+}
+
+test('integration: simultaneous waiters do not all pass one MemAvailable reading', async () => {
+  const { dir, env } = tmpEnv({ floorMb: 0, kinds: { t: { needMb: 600, max: 3 } } })
+  const meminfo = path.join(dir, 'meminfo')
+  fs.writeFileSync(meminfo, `MemAvailable: ${1000 * 1024} kB\n`)
+  const e = { ...env, RES_SLOT_MEMINFO: meminfo, RES_SLOT_RAMP_MS: '60000' }
+  const cwd = new URL('..', import.meta.url).pathname
+  const procs = [0, 1, 2].map(() => spawn('node', ['tools/res-slot.mjs', 't', '--', 'sleep', '4'], { cwd, env: { ...process.env, ...e }, stdio: 'ignore' }))
+  const codes = await Promise.all(procs.map((p) => new Promise((r) => p.on('close', r))))
+  assert.deepEqual(codes.slice().sort(), [0, 75, 75])
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+
+test('integration: a command that exits 213 itself is not rerun as a taken slot', () => {
+  const { dir, env } = tmpEnv({ floorMb: 0, kinds: { t: { needMb: 1, max: 2 } } })
+  const out = path.join(dir, 'runs')
+  const r = run(['t', '--', 'sh', '-c', `echo x >> ${out}; exit 213`], env)
+  assert.equal(r.status, 213)
+  assert.equal(fs.readFileSync(out, 'utf8'), 'x\n')
+  fs.rmSync(dir, { recursive: true, force: true })
 })

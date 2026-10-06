@@ -7,7 +7,7 @@
   [files alive-pids]
   {:create! (fn [i pid] (if (contains? @files i) false (do (swap! files assoc i pid) true)))
    :holder (fn [i] (get @files i))
-   :reclaim! (fn [i] (swap! files dissoc i))
+   :reclaim! (fn [i _holder] (swap! files dissoc i))
    :alive? (fn [pid] (contains? alive-pids pid))})
 
 (deftest a-free-plot-is-taken-from-the-first-index
@@ -36,6 +36,26 @@
                                                   (fn [i pid] (if (zero? (swap! n inc)) false (do (swap! files assoc i pid) true))))
                  :holder (fn [_] nil))]
     (is (= 0 (l/acquire d {:pid 5 :first 0 :total 400})))))
+
+(deftest reclaim-is-told-which-dead-holder-it-may-remove
+  (let [files (atom {0 99})
+        seen (atom [])
+        d (assoc (fake-dir files #{11}) :reclaim! (fn [i h] (swap! seen conj [i h]) (swap! files dissoc i)))]
+    (is (= 0 (l/acquire d {:pid 11 :first 0 :total 400})))
+    (is (= [[0 99]] @seen))))
+
+(deftest an-empty-lease-file-is-waited-on-a-while-then-reclaimed-not-spun-on-forever
+  (let [files (atom {0 :empty})
+        settles (atom 0)
+        d (assoc (fake-dir files #{11}) :settle! (fn [] (swap! settles inc)))]
+    (is (= 0 (l/acquire d {:pid 11 :first 0 :total 400})))
+    (is (pos? @settles))
+    (is (= {0 11} @files))))
+
+(deftest an-empty-lease-that-gets-its-pid-meanwhile-is-skipped
+  (let [files (atom {0 :empty})
+        d (assoc (fake-dir files #{10 11}) :settle! (fn [] (swap! files assoc 0 10)))]
+    (is (= 1 (l/acquire d {:pid 11 :first 0 :total 400})))))
 
 (deftest no-free-plot-is-an-error
   (let [files (atom {0 10 1 10})]

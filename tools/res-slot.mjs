@@ -12,11 +12,13 @@ import { fileURLToPath } from 'node:url'
 
 const CONFIG = process.env.RES_SLOT_CONFIG ?? path.join(path.dirname(fileURLToPath(import.meta.url)), 'res-slot.json')
 export const loadConfig = (file = CONFIG) => JSON.parse(fs.readFileSync(file, 'utf8'))
-export const availableMb = () => Number(fs.readFileSync('/proc/meminfo', 'utf8').match(/MemAvailable:\s+(\d+)/)[1]) / 1024
+export const availableMb = () => Number(fs.readFileSync(process.env.RES_SLOT_MEMINFO ?? '/proc/meminfo', 'utf8').match(/MemAvailable:\s+(\d+)/)[1]) / 1024
 
 // Pure: run when a slot is free and memory leaves the floor intact; else wait, or busy once waited past the limit.
-export const decide = ({ freeSlots, availableMb, needMb, floorMb, waitedMs, maxWaitMs }) => {
-  const why = [freeSlots <= 0 && 'no free slot', availableMb - needMb < floorMb && `memory ${Math.round(availableMb)} MB free, need ${needMb} + floor ${floorMb}`].filter(Boolean).join(', ')
+// reservedMb: need of recent grants whose processes have not ramped up yet (see reservedMb below); it counts as already used.
+export const decide = ({ freeSlots, availableMb, needMb, floorMb, waitedMs, maxWaitMs, reservedMb = 0 }) => {
+  const free = availableMb - reservedMb
+  const why = [freeSlots <= 0 && 'no free slot', free - needMb < floorMb && `memory ${Math.round(availableMb)} MB free${reservedMb ? `, ${Math.round(reservedMb)} reserved for starting runs` : ''}, need ${needMb} + floor ${floorMb}`].filter(Boolean).join(', ')
   if (!why) return { action: 'run' }
   return { action: waitedMs >= maxWaitMs ? 'busy' : 'wait', why }
 }
@@ -34,11 +36,46 @@ export const slotArgs = (kind, i, cmd, busyCode = 213) =>
   ['-n', '-E', String(busyCode), lockFile(kind, i), 'sh', '-c', 'printf "%s %s %s\\n" "$$" "$(date +%s)" "$1" > "$0.info"; shift; exec "$@"', lockFile(kind, i), cmd.join(' '), ...cmd]
 const tryRun = (kind, i, cmd) => new Promise((res) => {
   const p = spawn('flock', slotArgs(kind, i, cmd), { stdio: 'inherit' })
-  p.on('close', (code, sig) => res(code === 213 ? null : code ?? 128 + (sig ? 9 : 0)))
+  // flock exits 213 itself only when the slot was taken; a command that started has rewritten <slot>.info since the spawn, so a 213 after that is the command's own exit code.
+  const t0 = Date.now() - 50
+  const started = () => { try { return fs.statSync(lockFile(kind, i) + '.info').mtimeMs >= t0 } catch { return false } }
+  p.on('close', (code, sig) => res(code === 213 && !started() ? null : code ?? 128 + (sig ? 9 : 0)))
 })
 
 // One line per finished run in <dir>/log.jsonl, so queue waits can be measured.
 export const logRun = (entry) => fs.appendFileSync(path.join(dir(), 'log.jsonl'), JSON.stringify({ t: new Date().toISOString(), ...entry, cmd: entry.cmd.slice(0, 200) }) + '\n')
+
+// Grants: <dir>/grants/<pid>.json = {needMb, t}. A grant reserves its need until rampMs after it started or its owner died.
+// Pure: total need of grants still ramping.
+export const reservedMb = (grants, now, rampMs, alive = () => true) =>
+  grants.filter((g) => now - g.t < rampMs && alive(g.pid)).reduce((a, g) => a + g.needMb, 0)
+const grantDir = () => path.join(dir(), 'grants')
+const pidAlive = (pid) => { try { process.kill(pid, 0); return true } catch (e) { return e.code === 'EPERM' } }
+const readGrants = () => {
+  if (!fs.existsSync(grantDir())) return []
+  return fs.readdirSync(grantDir()).flatMap((f) => {
+    try { return [{ ...JSON.parse(fs.readFileSync(path.join(grantDir(), f), 'utf8')), pid: Number(f.split('.')[0]), file: f }] } catch { return [] }
+  })
+}
+const rampMs = () => Number(process.env.RES_SLOT_RAMP_MS ?? 60000)
+const currentReserved = () => {
+  const grants = readGrants()
+  const live = grants.filter((g) => Date.now() - g.t < rampMs() && pidAlive(g.pid))
+  for (const g of grants) if (!live.includes(g)) fs.rmSync(path.join(grantDir(), g.file), { force: true })
+  return reservedMb(live, Date.now(), rampMs())
+}
+// Short mkdir lock so check and grant are one step across waiters; a lock older than 10 s is stale.
+const withGate = async (f) => {
+  const gate = path.join(dir(), 'gate.lock')
+  for (;;) {
+    try { fs.mkdirSync(gate); break } catch (e) {
+      if (e.code !== 'EEXIST') throw e
+      try { if (Date.now() - fs.statSync(gate).mtimeMs > 10000) fs.rmdirSync(gate) } catch {}
+      await sleep(20 + Math.random() * 50)
+    }
+  }
+  try { return f() } finally { fs.rmSync(gate, { recursive: true, force: true }) }
+}
 
 const status = (cfg) => {
   console.log(`MemAvailable ${Math.round(availableMb())} MB, floor ${cfg.floorMb} MB`)
@@ -68,15 +105,23 @@ const main = async () => {
   let lastLine = t0
   for (;;) {
     const free = [...Array(k.max).keys()].filter((i) => !held(kind, i))
-    const d = decide({ freeSlots: free.length, availableMb: availableMb(), needMb, floorMb: cfg.floorMb, waitedMs: Date.now() - t0, maxWaitMs })
+    const gated = await withGate(() => {
+      const reserved = currentReserved()
+      const d = decide({ freeSlots: free.length, availableMb: availableMb(), needMb, floorMb: cfg.floorMb, waitedMs: Date.now() - t0, maxWaitMs, reservedMb: reserved })
+      if (d.action === 'run') fs.mkdirSync(grantDir(), { recursive: true }), fs.writeFileSync(path.join(grantDir(), `${process.pid}.json`), JSON.stringify({ needMb, t: Date.now() }))
+      return d
+    })
+    const d = gated
     if (d.action === 'run') {
       const t1 = Date.now()
+      const dropGrant = () => fs.rmSync(path.join(grantDir(), `${process.pid}.json`), { force: true })
       for (const i of free) {
         const code = await tryRun(kind, i, cmd)
         if (code === null) continue
         logRun({ kind, needMb, waitedS: Math.round((t1 - t0) / 1000), ranS: Math.round((Date.now() - t1) / 1000), code, cmd: cmd.join(' ') })
         process.exit(code)
       }
+      dropGrant()
     } else if (d.action === 'busy') { console.error(`res-slot: busy (${d.why}), retry later`); process.exit(75) }
     else if (Date.now() - lastLine >= (Number(process.env.RES_SLOT_STATUS_MS) || 60000)) {
       lastLine = Date.now()

@@ -115,19 +115,29 @@ if [ -f "$msg" ]; then message="$(cat "$msg")"; else message="$msg"; fi
 trailer='Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>'
 grep -qiE '^Co-Authored-By:' <<<"$message" || message="$message"$'\n\n'"$trailer"
 
-# Lock with backoff.
-waited=0; delay=0.2
+# Lock with backoff. The lock dir holds the owner's pid; a lock whose owner is dead is reclaimed (moved aside first, so only one waiter wins).
+reclaim_dead() {
+  local owner; owner="$(cat "$LOCK/pid" 2>/dev/null)" || return 1
+  [[ "$owner" =~ ^[0-9]+$ ]] && ! kill -0 "$owner" 2>/dev/null || return 1
+  local aside="$LOCK.dead.$$"
+  mv "$LOCK" "$aside" 2>/dev/null || return 1
+  if [ "$(cat "$aside/pid" 2>/dev/null)" = "$owner" ]; then rm -rf "$aside"; return 0; fi
+  mv "$aside" "$LOCK" 2>/dev/null || rm -rf "$aside" # we moved a fresh lock: put it back
+  return 1
+}
+start=$SECONDS; delay=0.2
 until mkdir "$LOCK" 2>/dev/null; do
-  [ "$waited" -lt "$LOCK_TIMEOUT" ] || die "could not take $LOCK in ${LOCK_TIMEOUT}s (stale lock? remove it only if no committer is running)" 4
+  reclaim_dead && continue
+  [ $((SECONDS - start)) -lt "$LOCK_TIMEOUT" ] || die "could not take $LOCK in ${LOCK_TIMEOUT}s (held by pid $(cat "$LOCK/pid" 2>/dev/null || echo '?'))" 4
   sleep "$delay"
-  waited=$((waited + 1))
   delay=$(awk -v d="$delay" 'BEGIN{d*=1.5; if(d>5)d=5; print d}')
 done
+echo $$ > "$LOCK/pid"
 staged_by_me=0
 cleanup() {
   local rc=$?
   if [ "$staged_by_me" = 1 ] && [ "${committed:-0}" != 1 ]; then unstage; fi
-  rmdir "$LOCK" 2>/dev/null || true
+  rm -rf "$LOCK"
   exit $rc
 }
 unstage() {

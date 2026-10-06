@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { splitShards, testNamespaces, slowest, memSlots, eventForwarder } from './test-shards.mjs'
+import { splitShards, testNamespaces, slowest, memSlots, eventForwarder, shardOutcome } from './test-shards.mjs'
 
 test('splitShards: every namespace exactly once, loads balanced by prior timing', () => {
   const nss = ['a-test', 'b-test', 'c-test', 'd-test', 'e-test']
@@ -31,6 +31,14 @@ test('testNamespaces finds -test ns forms under engine/test', () => {
 test('slowest sorts timing lines descending', () => {
   const lines = ['{"var":"x/a","ms":5}', '{"var":"x/b","ms":50}', '{"peak-rss-kb":1}']
   assert.deepEqual(slowest(lines, 1), [{ var: 'x/b', ms: 50 }])
+})
+
+test('shardOutcome: exit 0 with no test logged is a failure; a failed exit keeps its code', () => {
+  const ok = ['{"var":"x/a","ms":5}']
+  assert.deepEqual(shardOutcome(0, ok), { ok: true })
+  assert.equal(shardOutcome(0, ['{"peak-rss-kb":1}']).ok, false)
+  assert.match(shardOutcome(0, []).why, /no test/)
+  assert.equal(shardOutcome(1, ok).ok, false)
 })
 
 test('memSlots: (available - 6 GB floor) / shard peak, at least 1, at most 3', () => {

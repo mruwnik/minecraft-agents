@@ -161,4 +161,17 @@ out=$(tools/commit-mine --card c -m "many files" --expect-lines 1000 many 2>&1);
 check "1000-file commit exit" "$rc" 0
 check "1000-file commit: all in HEAD" "$(git show --name-only --format= HEAD | wc -l)" 1000
 check "1000-file commit: output capped at 20 lines" "$(wc -l <<<"$out")" 20
+# Lock: the timeout counts seconds; a lock whose owner pid is dead is reclaimed; one held by a live pid is waited on.
+echo z > f.txt
+mkdir .git/commit-lock; echo 99999999 > .git/commit-lock/pid
+out=$(tools/commit-mine --card c -m dead --expect-lines 2 f.txt 2>&1); check "dead-owner lock reclaimed exit" "$?" 0
+check "lock gone after commit" "$(ls .git | grep -c '^commit-lock')" 0
+echo zz > f.txt
+mkdir .git/commit-lock; echo $$ > .git/commit-lock/pid
+t0=$SECONDS
+out=$(COMMIT_LOCK_TIMEOUT=3 tools/commit-mine --card c -m live --expect-lines 2 f.txt 2>&1); rc=$?
+check "live-owner lock times out exit" "$rc" 4
+check "timeout is in seconds" "$((SECONDS - t0 >= 3 && SECONDS - t0 <= 6))" 1
+check "foreign lock left in place" "$(ls .git | grep -c '^commit-lock')" 1
+rm -rf .git/commit-lock; git checkout -q f.txt
 exit $fail

@@ -39,6 +39,9 @@ export const splitShards = (nss, ms, n) => {
 
 const parse = (lines) => lines.filter(Boolean).map((l) => JSON.parse(l))
 export const slowest = (lines, k) => parse(lines).filter((r) => r.var).sort((a, b) => b.ms - a.ms).slice(0, k)
+// A shard that exits 0 but logged no test (crash before the first test, empty namespace list) is a failure, not a pass.
+export const shardOutcome = (code, lines) =>
+  code !== 0 ? { ok: false, why: `exit ${code}` } : parse(lines).some((r) => r.var) ? { ok: true } : { ok: false, why: 'exit 0 but no test was logged' }
 export const nsMs = (lines) => {
   const out = {}
   for (const r of parse(lines)) if (r.var) { const ns = r.var.replace(/^#'/, '').split('/')[0]; out[ns] = (out[ns] ?? 0) + r.ms }
@@ -130,15 +133,17 @@ const main = async ({ compile = () => spawnSync(path.join(repo, 'tools/compile')
   let bad = 0
   const lines = []
   for (const r of results) {
-    lines.push(...fs.readFileSync(r.file, 'utf8').split('\n')); fs.unlinkSync(r.file)
-    if (r.code === 0) { console.log(`shard ${r.i}: ok (${r.nss.length} ns)`); continue }
+    const mine = fs.readFileSync(r.file, 'utf8').split('\n'); fs.unlinkSync(r.file)
+    lines.push(...mine)
+    const o = shardOutcome(r.code, mine)
+    if (o.ok) { console.log(`shard ${r.i}: ok (${r.nss.length} ns)`); continue }
     const log = `/tmp/mc-test-run-${process.pid}-shard-${r.i}.log`
     fs.writeFileSync(log, r.out)
-    bad++; console.log(`--- shard ${r.i} FAILED (exit ${r.code}), output kept in ${log} ---\n${r.out}`)
+    bad++; console.log(`--- shard ${r.i} FAILED (${o.why}), output kept in ${log} ---\n${r.out}`)
   }
   cleanup()
   fs.writeFileSync(timingFile, lines.filter(Boolean).join('\n') + '\n')
-  if (bad === 0) fs.writeFileSync(nsFile, JSON.stringify(nsMs(lines)))
+  if (bad === 0 && parse(lines).some((r) => r.var)) fs.writeFileSync(nsFile, JSON.stringify(nsMs(lines)))
   const peaks = parse(lines).filter((r) => r['peak-rss-kb']).map((r) => r['peak-rss-kb'])
   const tests = parse(lines).filter((r) => r.var).length
   console.log(`test-shards: ${tests} tests, wall ${((Date.now() - t0) / 1000).toFixed(0)} s, shard peak RSS MB: ${peaks.map((k) => Math.round(k / 1024)).join(' ')} (sum ${Math.round(peaks.reduce((a, b) => a + b, 0) / 1024)})`)

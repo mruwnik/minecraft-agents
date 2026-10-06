@@ -2,17 +2,27 @@
   "Plot leases for parallel world-test runners (pure parts). A lease is one file per plot index holding the owner's
   PID, created exclusively; a lease whose PID is dead is reclaimed. The file and process access is in the runner.")
 
+(def empty-tries
+  "How often a lease file with no PID yet is re-read (settle! between) before it counts as abandoned."
+  40)
+
 (defn acquire
   "Takes the first free plot index from `first` below `total`, returning it. dir: {:create! (i pid -> true when this
-  call made the lease) :holder (i -> pid or nil) :reclaim! (i -> removes the lease) :alive? (pid -> bool)}."
-  [{:keys [create! holder reclaim! alive?]} {:keys [pid first total]}]
-  (loop [i first]
+  call made the lease) :holder (i -> pid, :empty for a file without a PID yet, nil for none) :reclaim! (i holder ->
+  removes that lease only if it still holds `holder`) :alive? (pid -> bool) :settle! (optional, a short pause)}."
+  [{:keys [create! holder reclaim! alive? settle!]} {:keys [pid first total]}]
+  (loop [i first, empties 0]
     (when (>= i total) (throw (js/Error. (str "no free plot from " first " below " total))))
-    (cond
-      (create! i pid) i
-      (let [h (holder i)] (and h (not (alive? h)))) (do (reclaim! i) (recur i))
-      (nil? (holder i)) (recur i)
-      :else (recur (inc i)))))
+    (if (create! i pid)
+      i
+      (let [h (holder i)]
+        (cond
+          (nil? h) (recur i 0)
+          (= :empty h) (if (< empties empty-tries)
+                         (do (when settle! (settle!)) (recur i (inc empties)))
+                         (do (reclaim! i :empty) (recur i 0)))
+          (not (alive? h)) (do (reclaim! i h) (recur i 0))
+          :else (recur (inc i) 0))))))
 
 (defn- pad [n width] (let [s (str n)] (str (apply str (repeat (max 0 (- width (count s))) "0")) s)))
 

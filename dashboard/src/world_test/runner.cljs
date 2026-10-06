@@ -274,6 +274,8 @@
 
 ;; ------------------------------------------------------------------ plot leases (parallel runners)
 
+(defn pause-sync [ms] (js/Atomics.wait (js/Int32Array. (js/SharedArrayBuffer. 4)) 0 0 ms))
+
 (def lease-dir (path/join (os/tmpdir) "world-test-plot-leases"))
 
 (defn lease-file [i] (path/join lease-dir (str "plot-" i ".lease")))
@@ -282,9 +284,24 @@
   (try (.kill js/process pid 0) true
        (catch :default e (= "EPERM" (.-code e)))))
 
-(defn read-holder [i]
-  (try (let [n (js/parseInt (str/trim (fs/readFileSync (lease-file i) "utf8")) 10)] (when-not (js/isNaN n) n))
+(defn read-pid-file
+  "The PID in file; :empty when it exists without a PID (a writer between create and write, or a crashed one); nil when absent."
+  [file]
+  (try (let [n (js/parseInt (str/trim (fs/readFileSync file "utf8")) 10)] (if (js/isNaN n) :empty n))
        (catch :default _ nil)))
+
+(defn read-holder [i] (read-pid-file (lease-file i)))
+
+(defn reclaim-file!
+  "Removes file only while it still holds `holder` (a dead PID or :empty): it is renamed aside first, so of several
+  reclaimers one wins, and a fresh lease taken meanwhile is linked back."
+  [file holder]
+  (let [aside (str file ".reclaim." (.-pid js/process))]
+    (when (try (fs/renameSync file aside) true (catch :default _ false))
+      (if (= holder (read-pid-file aside))
+        (try (fs/unlinkSync aside) (catch :default _ nil))
+        (do (try (fs/linkSync aside file) (catch :default _ nil))
+            (try (fs/unlinkSync aside) (catch :default _ nil)))))))
 
 (defn acquire-plot!
   "Leases the first free plot index from `first` (exclusive lease file holding this PID; leases of dead PIDs are
@@ -295,8 +312,9 @@
    {:create! (fn [i pid] (try (fs/writeFileSync (lease-file i) (str pid) #js {:flag "wx"}) true
                               (catch :default e (if (= "EEXIST" (.-code e)) false (throw e)))))
     :holder read-holder
-    :reclaim! (fn [i] (try (fs/unlinkSync (lease-file i)) (catch :default _ nil)))
-    :alive? pid-alive?}
+    :reclaim! (fn [i holder] (reclaim-file! (lease-file i) holder))
+    :alive? pid-alive?
+    :settle! #(pause-sync 5)}
    {:pid (.-pid js/process) :first first :total total}))
 
 (defn release-plot! [i]
@@ -308,8 +326,6 @@
 (def time-lock-dir (path/join (os/tmpdir) "mc-time-lock"))
 (def time-guard-file (path/join (os/tmpdir) "mc-time-lock.guard"))
 
-(defn pause-sync [ms] (js/Atomics.wait (js/Int32Array. (js/SharedArrayBuffer. 4)) 0 0 ms))
-
 (defn with-guard
   "Runs thunk holding a short-lived exclusive guard file (a dead holder's guard is reclaimed)."
   [thunk]
@@ -319,9 +335,10 @@
                       (catch :default e (if (= "EEXIST" (.-code e)) false (throw e))))]
         (if made
           (try (thunk) (finally (try (fs/unlinkSync time-guard-file) (catch :default _ nil))))
-          (let [h (try (js/parseInt (str/trim (fs/readFileSync time-guard-file "utf8")) 10) (catch :default _ nil))]
-            (when (and h (not (js/isNaN h)) (not (pid-alive? h)))
-              (try (fs/unlinkSync time-guard-file) (catch :default _ nil)))
+          (let [h (read-pid-file time-guard-file)
+                age-ms (try (- (js/Date.now) (.-mtimeMs (fs/statSync time-guard-file))) (catch :default _ 0))]
+            (when (or (and (number? h) (not (pid-alive? h))) (and (= :empty h) (> age-ms 2000)))
+              (reclaim-file! time-guard-file h))
             (pause-sync 5)
             (recur (inc tries))))))))
 
