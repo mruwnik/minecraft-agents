@@ -1,0 +1,35 @@
+;; Extinguish, a pour left by a cut run (cards 360a4a04, 36577cd4, 02f59f2c): the body is not burning and carries an empty
+;; bucket; body memory holds :extinguish-pour for a water source. Within 16 blocks the run walks back (one go-to) and
+;; scoops it up, so no source is left. Farther away, or when the walk fails (cell walled in thick stone), the entry is
+;; dropped with an extinguish.scoop_failed warn and the source stays.
+{:defaults
+ {:tags [:survival :fire] :time :any
+  :plot {:height 6}
+  :body {:at [4.5 0 16.5] :inventory [["bucket" 1]] :settle-s 1}
+  :limit-s 60}
+ :cases
+ [{:name "pour-10-away-is-walked-back-to-and-scooped"
+   :blocks [[:set [14 0 16] "water"]]
+   :memory [{:kind :extinguish-pour :data {:pos #xyz [14 0 16]}}]
+   :act [[:job (jobs.survival.extinguish {:water-radius 6})]]
+   :expect [{:no-event {:source :job :kind :extinguish.scoop_failed} :for-s 15}]
+   :after [[:not-block [14 0 16] "water"] [:item "water_bucket" 1] [:body-near [14.5 0 16.5] 6]]}
+  {:name "pour-6-away-is-walked-back-to-and-scooped"
+   :blocks [[:set [10 0 16] "water"]]
+   :memory [{:kind :extinguish-pour :data {:pos #xyz [10 0 16]}}]
+   :act [[:job (jobs.survival.extinguish {:water-radius 6})]]
+   :expect [{:no-event {:source :job :kind :extinguish.scoop_failed} :for-s 15}]
+   :after [[:not-block [10 0 16] "water"] [:item "water_bucket" 1]]}
+  {:name "pour-20-away-is-dropped-with-a-warn"
+   :blocks [[:set [24 0 16] "water"]]
+   :memory [{:kind :extinguish-pour :data {:pos #xyz [24 0 16]}}]
+   :act [[:job (jobs.survival.extinguish {:water-radius 6})]]
+   :expect [{:event {:source :job :kind :extinguish.scoop_failed :data {:status "far"}} :within-s 20}]
+   :after [[:block [24 0 16] "water"] [:body-near [4.5 0 16.5] 2]]}
+  {:name "pour-walled-in-fails-the-walk-and-is-dropped"
+   :blocks [[:fill [17 0 11] [27 4 21] "stone"] [:set [22 0 16] "water"]]
+   :memory [{:kind :extinguish-pour :data {:pos #xyz [22 0 16]}}]
+   :body {:at [8.5 0 16.5]}
+   :act [[:job (jobs.survival.extinguish {:water-radius 6})]]
+   :expect [{:event {:source :job :kind :extinguish.scoop_failed} :within-s 40}]
+   :after [[:block [22 0 16] "water"]]}]}
