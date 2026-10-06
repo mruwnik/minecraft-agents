@@ -30,7 +30,7 @@
          [:wait-s 4]
          [:rcon "execute as @e[type=cow,tag=wt,x=$X,y=$Y,z=$Z,distance=..100] run tp @s ~ ~ ~-13"]]
    :expect [{:event {:source :job :kind :lead-to.done :data {:reason :lost}} :within-s 60 :of-job true}
-            {:event {:source :job :kind :lead-to.gave-up :data {:reason :lost :text "leading stopped: lost"}} :within-s 60 :of-job true}]}
+            {:event {:source :job :kind :lead-to.gave-up :data {:reason :lost} :message "leading stopped: lost"} :within-s 60 :of-job true}]}
   {:name "jammed-cow-lagging"
    :blocks [[:fill [5 0 17] [7 0 19] "oak_fence" :outline]]
    :act [[:summon "cow" [6.5 0 18.5]]
