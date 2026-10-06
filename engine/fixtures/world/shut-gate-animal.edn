@@ -1,0 +1,22 @@
+;; jobs.animals.shut-gate (card 85e1dd07): an animal standing in the gate is waited out, never pushed.
+;; Should-succeed: a cow that is free to walk leaves the gate cell -> gate shut, run done.
+;; Should-fail: a cow that never moves (NoAI) -> run stopped :left :animal-in-the-way, gate left open.
+{:defaults
+ {:tags [:animals :triggers :pen-gate]
+  :time :any
+  :plot {:floor "grass_block"}
+  :register [{:trigger :pen-gate}]
+  :blocks [[:fill [10 0 12] [22 0 12] "oak_fence"]
+           [:set [16 0 12] "oak_fence_gate[facing=south,open=true]"]]
+  :plans [{:id "pen" :parts [{:id "gate" :cells [#at [16 0 12]] :want [:any "oak_fence_gate"]}]}]
+  :body {:at [16.5 0 18.5]}
+  :limit-s 90}
+ :cases
+ [{:name "cow-in-gate-wanders-off"
+   :act [[:summon "cow" [16.5 0 12.5] "{}"]]
+   :expect [{:event {:source :job :kind :shut-gate.done :data {:shut 1 :left []}} :within-s 80}]
+   :after [[:block [16 0 12] "oak_fence_gate[open=false]"]]}
+  {:name "cow-stuck-in-gate-stops"
+   :act [[:summon "cow" [16.5 0 12.5] "{NoAI:1b}"]]
+   :expect [{:event {:source :job :kind :shut-gate.stopped :data {:shut 0}} :within-s 80}]
+   :after [[:block [16 0 12] "oak_fence_gate[open=true]"]]}]}

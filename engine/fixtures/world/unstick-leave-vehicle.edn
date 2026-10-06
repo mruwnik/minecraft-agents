@@ -1,0 +1,40 @@
+;; Rounds migration of unstick and leave-vehicle (card 8aa49e24): one run each, never :continue.
+;; The stuck trigger needs 4 fresh bad :moved entries (seeded: from = to = where the body stands).
+;; Should-succeed: unstick walks to the goal of the latest move and ends done; leave-vehicle gets off a boat on land
+;; (vehicle.left, landed :dry), twice (boat, minecart).
+;; Should-fail: no goal in the latest move -> unstick.failed :no-goal, stopped; goal sealed in obsidian -> unstick.failed.
+{:defaults
+ {:tags [:survival :unstick] :time :any
+  :plot {:height 8 :floor "stone"}
+  :body {:at [10.5 0 16.5]}
+  :limit-s 90}
+ :cases
+ [{:name "unstick-digs-out-of-cell"
+   :register [{:trigger :stuck :persistence :cooldown :cooldown-s 60 :job (jobs.maintenance.unstick)}]
+   :blocks [[:fill [9 0 15] [11 1 17] "stone"] [:fill [10 0 16] [10 1 16] "air"]]
+   :body {:at [10.5 0 16.5] :inventory [["iron_pickaxe" 1]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [20 0 16] :range 1 :escalate false})] [:job (jobs.movement.go-to {:pos #at [20 0 16] :range 1 :escalate false})] [:job (jobs.movement.go-to {:pos #at [20 0 16] :range 1 :escalate false})] [:job (jobs.movement.go-to {:pos #at [20 0 16] :range 1 :escalate false})] [:job (jobs.movement.go-to {:pos #at [20 0 16] :range 1 :escalate false})] [:job (jobs.movement.go-to {:pos #at [20 0 16] :range 1 :escalate false})]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :stuck}} :within-s 80}
+            {:event {:source :reflex :kind :ended :data {:outcome :done}} :within-s 120}
+            {:no-event {:source :job :kind :unstick.failed} :for-s 3}]
+   :limit-s 150}
+  {:name "unstick-sealed-in-obsidian-gives-up"
+   :register [{:trigger :stuck :persistence :cooldown :cooldown-s 60 :job (jobs.maintenance.unstick)}]
+   :blocks [[:fill [8 0 14] [12 3 18] "obsidian"] [:fill [10 0 16] [10 1 16] "air"]]
+   :body {:at [10.5 0 16.5]}
+   :act [[:job (jobs.movement.go-to {:pos #at [20 0 16] :range 1 :escalate false})] [:job (jobs.movement.go-to {:pos #at [20 0 16] :range 1 :escalate false})] [:job (jobs.movement.go-to {:pos #at [20 0 16] :range 1 :escalate false})] [:job (jobs.movement.go-to {:pos #at [20 0 16] :range 1 :escalate false})] [:job (jobs.movement.go-to {:pos #at [20 0 16] :range 1 :escalate false})] [:job (jobs.movement.go-to {:pos #at [20 0 16] :range 1 :escalate false})]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :stuck}} :within-s 80}
+            {:event {:source :job :kind :unstick.failed} :within-s 120}]
+   :limit-s 150}
+  {:name "leave-boat-on-land"
+   :register [{:trigger :mounted :persistence :stop :job (jobs.movement.leave-vehicle)}]
+   :act [[:summon "oak_boat" [10.5 0 16.5] "{}"]
+         [:rcon "execute at $BODY run ride $BODY mount @e[type=oak_boat,tag=wt,distance=..5,limit=1]"]]
+   :expect [{:event {:source :job :kind :vehicle.left :data {:landed :dry}} :within-s 40}
+            {:no-event {:source :job :kind :vehicle.dismount_failed} :for-s 3}]}
+  {:name "leave-minecart-on-land"
+   :register [{:trigger :mounted :persistence :stop :job (jobs.movement.leave-vehicle)}]
+   :act [[:summon "minecart" [10.5 0 16.5] "{}"]
+         [:rcon "execute at $BODY run ride $BODY mount @e[type=minecart,tag=wt,distance=..5,limit=1]"]]
+   :expect [{:event {:source :job :kind :vehicle.left :data {:landed :dry}} :within-s 40}
+            {:no-event {:source :job :kind :vehicle.dismount_failed} :for-s 3}]}]}

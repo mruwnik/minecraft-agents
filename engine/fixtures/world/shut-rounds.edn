@@ -1,0 +1,28 @@
+;; Rounds migration of the door-left and pen-gate reflexes (card 85e1dd07): one run shuts every target; a target the
+;; run could not shut ends it :stopped (shut-doors.stopped), never :done and never :continue. The :opened entries are
+;; seeded as a cut walk leaves them (written when the walk opens a block, 10 s old by the time the reflex looks).
+;; Should-succeed: two gates left open -> one shut-doors run shuts both.
+;; Should-fail: one of two encased in a block of stone -> the other shut, the run stopped with :left.
+{:defaults
+ {:tags [:triggers :doors]
+  :time :any
+  :plot {:floor "grass_block"}
+  :register [{:trigger :door-left :persistence :cooldown :cooldown-s 5 :job (jobs.maintenance.shut-doors)}]
+  :blocks [[:fill [10 0 0] [10 0 31] "oak_fence"] [:fill [16 0 0] [16 0 31] "oak_fence"]
+           [:set [10 0 16] "oak_fence_gate[facing=east,open=true]"] [:set [16 0 16] "oak_fence_gate[facing=east,open=true]"]]
+  :memory [{:kind :opened :data {:cell #xyz [10 0 16] :by "j0" :shut? true}}
+           {:kind :opened :data {:cell #xyz [16 0 16] :by "j0" :shut? true}}]
+  :body {:at [13.5 0 13.5]}
+  :limit-s 90}
+ :cases
+ [{:name "two-open-gates-one-run"
+   :expect [{:event {:source :job :kind :shut-doors.done :data {:shut 2 :left []}} :within-s 80}
+            {:no-event {:source :job :kind :shut-doors.stopped} :for-s 1}]
+   :after [[:block [10 0 16] "oak_fence_gate[open=false]"]
+           [:block [16 0 16] "oak_fence_gate[open=false]"]]}
+  {:name "one-gate-unreachable-run-stops"
+   :blocks [[:fill [5 0 11] [15 5 21] "stone"] [:set [10 0 16] "oak_fence_gate[facing=east,open=true]"]]
+   :body {:at [19.5 0 13.5]}
+   :expect [{:event {:source :job :kind :shut-doors.stopped :data {:shut 1}} :within-s 80}]
+   :after [[:block [16 0 16] "oak_fence_gate[open=false]"]
+           [:block [10 0 16] "oak_fence_gate[open=true]"]]}]}
