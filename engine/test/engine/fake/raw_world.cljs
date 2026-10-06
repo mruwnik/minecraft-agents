@@ -16,15 +16,46 @@
 (def max-y 320)
 (def eye-height 1.62)
 
-(defn state-at [w x y z]
+(defn state-at-slow [w x y z]
   (cond
     (or (< y min-y) (>= y max-y)) -1
     (contains? (:unloaded w) [x y z]) -1
     :else (state-of (get (:blocks w) [x y z] "air"))))
 
-(defn light-at [w x y z]
+(defn light-at-slow [w x y z]
   (let [[sky block] (or (get (:light w) [x y z]) (:light-default w) [15 0])]
     (bit-or (bit-shift-left sky 4) block)))
+
+(def coord-limit 1048576)
+
+(defn packed-key
+  "x, y, z as one number (21 + 9 + 21 bits), or nil outside that range: numbers hash far faster than vector keys."
+  [x y z]
+  (when (and (< -1 (+ x coord-limit) (* 2 coord-limit)) (< -1 (+ z coord-limit) (* 2 coord-limit))
+             (<= min-y y max-y))
+    (+ (* (+ x coord-limit) 1073741824) (* (+ z coord-limit) 512) (- y min-y))))
+
+(defn lookup-cache
+  "A lazy per-key cache for fn f over the world values (selected by sel); reset when any selected value changes."
+  [sel slow]
+  (let [seen (volatile! nil) cache (volatile! (js/Map.))]
+    (fn [w x y z]
+      (let [vals (sel w)]
+        (when-not (and (identical? (nth @seen 0 nil) (nth vals 0)) (identical? (nth @seen 1 nil) (nth vals 1)))
+          (vreset! seen vals)
+          (vreset! cache (js/Map.)))
+        (if-let [k (packed-key x y z)]
+          (let [^js m @cache v (.get m k)]
+            (if (undefined? v)
+              (let [v (slow w x y z)] (.set m k v) v)
+              v))
+          (slow w x y z))))))
+
+(defn state-at-fn []
+  (lookup-cache (fn [w] [(:blocks w) (:unloaded w)]) state-at-slow))
+
+(defn light-at-fn []
+  (lookup-cache (fn [w] [(:light w) (:light-default w)]) light-at-slow))
 
 (defn eye [w]
   (when-not (:offline w)
@@ -44,7 +75,9 @@
   (let [state (.-state (.-world p))
         watch-key (keyword (gensym "raw-world"))
         listeners (atom #{})
-        epoch (atom 0)]
+        epoch (atom 0)
+        state-at (state-at-fn)
+        light-at (light-at-fn)]
     (add-watch state watch-key
                (fn [_ _ old new]
                  (when (not= (select-keys old [:blocks :unloaded :light :light-default])
