@@ -26,6 +26,7 @@
    ["a snow layer at the feet" {:blocks {"0,64,0" "snow"}} false]
    ["soul sand at the feet" {:blocks {"0,64,0" "soul_sand"}} false]
    ["a path at the feet" {:blocks {"0,64,0" "dirt_path"}} false]
+   ["sand at the feet and the eyes: suffocating owns it" {:blocks {"0,64,0" "sand" "0,65,0" "sand"}} false]
    ["only the eye cell solid" {:blocks {"0,65,0" "sand"}} false]
    ["standing on a full block" {:blocks {"0,63,0" "stone"}} false]])
 

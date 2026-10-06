@@ -9,6 +9,7 @@
     Bad moves made somewhere else (the body was carried, teleported or fell away since) do not hold it here."
   (:require [jobs.lib.reach :as reach]
             [jobs.lib.util :as u]
+            [triggers.survival.wedged :as wedged]
             [engine.memory :as mem]))
 
 (def defaults
@@ -64,6 +65,7 @@
   [p view args]
   (let [moves (counted-moves view args)]
     (and (stuck? view args)
+         (or (nil? p) (nil? (wedged/wedged-cell p)))
          (or (nil? p) (held-here? p moves (:min-move (merge defaults args))))
          (or (not-every? :no-path moves)
              (and (some? p) (reach/enclosed? p))))))

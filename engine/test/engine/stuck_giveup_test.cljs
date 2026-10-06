@@ -29,6 +29,9 @@
   (doseq [[here expected] [[{:x 20 :y 64 :z 0} false] [ut/at5 true]]]
     (is (= expected (stuck-in? {:self {:pos here} :floor tu/walk-floor} (repeat 4 (ut/bad-move)))) (pr-str here))))
 
+(deftest a-wedged-body-is-the-wedged-triggers-not-stuck
+  (is (false? (stuck-in? {:self {:pos ut/at5} :blocks {"5,64,0" "sand"} :floor tu/walk-floor} (repeat 4 (ut/bad-move))))))
+
 ;; ------------------------------------------------------------------ walk-near! and a drop it cannot climb back
 
 (def cliff-island

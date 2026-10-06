@@ -2,9 +2,10 @@
   "The wedged trigger: the cell holding the feet holds a block whose collision shape fills the cell (blockAt's
   :fullCube), e.g. sand that fell on the body. Farmland, slabs, snow layers, soul sand, paths, plants and fluids
   never do, so a body standing on or in them is not wedged. The eye cell is the suffocating trigger's business
-  (it is registered first and wins); an unloaded cell reads as not wedged.
+  (it owns the body when both are solid); an unloaded cell reads as not wedged.
   Sensing only: the block the body stands in, as a player feels it."
-  (:require [engine.memory :as mem]))
+  (:require [engine.memory :as mem]
+            [triggers.survival.suffocating :as suffocating]))
 
 (def blocked-policy
   "Policy of the :unwedge-blocked entries written by jobs.survival.unwedge: one per cell it could not free."
@@ -23,6 +24,12 @@
   (let [cell (feet-cell (.self p))]
     (when (some-> (.blockAt p (clj->js cell)) .-fullCube) cell)))
 
+(defn only-feet-cell
+  "wedged-cell, unless the eye cell is solid too (suffocating's business, breathe digs out); else nil."
+  [p]
+  (when-not (suffocating/suffocates? p (suffocating/eye-cell (.self p)))
+    (wedged-cell p)))
+
 (defn blocked-here?
   "Whether the job already reported cell as one it cannot free (a recent :unwedge-blocked entry): no refire then."
   [memory cell]
@@ -32,5 +39,5 @@
   "Holds when the feet cell holds a full block, unless unwedge recently found it cannot free that cell.
   A danger reflex: cooldown 0; the :unwedge-blocked entry (10 min) is what stops a refire flood."
   [world memory _args]
-  (let [cell (wedged-cell world)]
+  (let [cell (only-feet-cell world)]
     (and (some? cell) (not (blocked-here? memory cell)))))
