@@ -8,7 +8,7 @@
             ["node:path" :as path]
             [clojure.string :as str]
             ["node:timers/promises" :as timers]
-            [agent-tools.observe.status :refer [attention-changes classify code-of coded collect compact-status id-str recovered? stale-reconnect? summary-result]]
+            [agent-tools.observe.status :refer [attention-changes classify code-of coded collect compact-status id-str recovered? signature stale-reconnect? summary-result]]
             [agent-tools.observe.lock :refer [acquire! checkpoint! observer-count saved-checkpoint]]
             [agent-tools.observe.request :refer [legacy-notice request-for usage wait-options]]
             [shadow.cljs.modern :refer [js-await]]))
@@ -79,13 +79,17 @@
   "Wait for the next thing worth reporting: a promise of the result map. get! is (get! socket-path path options) and
   answers a promise of {:status :content-type :text}; deliver is called with the result before the checkpoint
   moves, so a failed delivery leaves the checkpoint where it was. Rejects with coded errors (EOBSERVERBUSY,
-  EOBSERVERLIMIT, EATTENTIONLIMIT, EOBSERVEUNAVAILABLE, ABORT_ERR, ...)."
+  EOBSERVERLIMIT, EATTENTIONLIMIT, EOBSERVEUNAVAILABLE, ABORT_ERR, ...). With (:ephemeral request) the wait takes no lock and keeps no checkpoint file, and
+  attention outstanding at its start counts as seen (a submit wait is about its own job)."
   [request get! signal deliver]
   (try
     (let [opts (:wait-options request)
           dir (.join path (bodies/worlds-dir (:state request)) (:world request) "observers" (:agent request))
-          release (acquire! dir (:observer opts))
+          ephemeral? (:ephemeral request)
+          release (if ephemeral? (fn []) (acquire! dir (:observer opts)))
           file (.join path dir (str (:observer opts) ".edn"))
+          save! #(when-not ephemeral? (checkpoint! file %))
+          seen-now (fn [snap] (if ephemeral? (into {} (map (fn [[id r]] [(id-str id) (signature r)])) (:outstanding snap)) {}))
           aborted? #(and signal (aget signal "aborted"))
           deadline (volatile! nil)
           timeout-finish (volatile! nil)
@@ -108,7 +112,7 @@
                     (js-await [result (job-history result)]
                       (let [output (summary-result @summary result)]
                         (js-await [_ (js/Promise.resolve (deliver output))]
-                          (checkpoint! file @st)
+                          (save! @st)
                           output))))
           timeout! (fn [] (finish! (if (seq (:counts @summary)) (array-map :wake :timeout) (array-map :wake :timeout :changed false))))
           reset-with-status! (fn [reason]
@@ -117,16 +121,16 @@
       (-> (js/Promise.resolve nil)
           (.then
            (fn []
-             (let [saved (saved-checkpoint file)]
-               (when (> (observer-count dir) 64) (throw (coded "EOBSERVERLIMIT" "observer limit")))
+             (let [saved (when-not ephemeral? (saved-checkpoint file))]
+               (when (and (not ephemeral?) (> (observer-count dir) 64)) (throw (coded "EOBSERVERLIMIT" "observer limit")))
                (vreset! deadline (+ (js/Date.now) (:timeout-ms opts)))
                (js-await [snap (read! "/snapshot")]
                  (let [generation (:generation-id snap)
                        lookup (or (nil? saved) (true? (:lookup saved)))]
                    (reset! st {:cursor (or (:cursor saved) (:cursor snap)) :generation generation
-                               :seen (or (:seen saved) {}) :lookup lookup :pending (vec (:pending saved)) :snap snap})
+                               :seen (or (:seen saved) (seen-now snap)) :lookup lookup :pending (vec (:pending saved)) :snap snap})
                    (when-not saved
-                     (checkpoint! file (select-keys @st [:cursor :generation :seen :lookup])))
+                     (save! (select-keys @st [:cursor :generation :seen :lookup])))
                    (vreset! timeout-finish timeout!)
                    (if (and saved (not= (:generation saved) generation))
                      (do (swap! st assoc :cursor (:cursor snap) :seen {} :pending [] :lookup true)
@@ -271,14 +275,14 @@
 (defn wait-for!
   "Wait as observe --wait does, watching the jobs watch and the world actions watch-actions (ID lists): a promise of
   the wake map, or of {:ok false :reason r} when the wait could not run. base is {:agent :world :state :socket-path};
-  timeout and observer as on the command line (default 60s and agent). SIGINT and SIGTERM cancel it."
+  timeout as on the command line (default 60s). The wait is ephemeral: no observer lock or checkpoint (so it never contends with an observe --wait), and attention outstanding at its start does not wake it. SIGINT and SIGTERM cancel it."
   [base {:keys [watch watch-actions timeout observer]} get!]
   (let [controller (js/AbortController.)
         cancel #(.abort controller)
         opts (wait-options {:timeout timeout :observer observer :watch (clj->js watch) :watch-action (clj->js watch-actions)})]
     (.once js/process "SIGINT" cancel)
     (.once js/process "SIGTERM" cancel)
-    (-> (wait-observe (assoc base :wait-options opts) get! (.-signal controller) identity)
+    (-> (wait-observe (assoc base :wait-options opts :ephemeral true) get! (.-signal controller) identity)
         (.catch (fn [error] {:ok false :reason (get failure-reasons (code-of error) :transport-error)}))
         (.finally (fn []
                     (.removeListener js/process "SIGINT" cancel)
