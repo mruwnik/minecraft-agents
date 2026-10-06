@@ -47,12 +47,19 @@
         0
         id)))
 
-  ;; a cell the body must not be in: an AVOID hazard, or a portal unless the cell (or the one under it) is in the goal
+  ;; the body already stands in its start cell: fire or lava flowing in there is no reason to refuse the plan out of it
+  (atStart [s x y z]
+    (and (== x (.-from-x s)) (== y (.-from-y s)) (== z (.-from-z s))))
+
+  ;; lava, unless in the start cell
+  (lavaIn [s kd x y z]
+    (and (== kd LAVA) (not ^boolean (.atStart s x y z))))
+
+  ;; a cell the body must not be in: an AVOID hazard (but the start cell), or a portal unless the cell (or the one under
+  ;; it) is in the goal
   (avoids [s id x y z]
     (let [hz (aget (.-tbl-hazard s) id)]
-      (or (and (== hz HAZARD-AVOID)
-               ;; the body already stands in its start cell: fire there is no reason to refuse the plan out of it
-               (not (and (== x (.-from-x s)) (== y (.-from-y s)) (== z (.-from-z s)))))
+      (or (and (== hz HAZARD-AVOID) (not ^boolean (.atStart s x y z)))
           (and (== hz PORTAL) (not ^boolean (.inGoal s x y z))))))
 
   ;; is the column at x,z free for a body spanning lo..hi (1/16 absolute)? Also false for fluid, NARROW, AVOID, unloaded.
@@ -67,7 +74,7 @@
               (let [t (aget (.-tbl-top s) id)
                     k (aget (.-tbl-kind s) id)]
                 (if (or (and (pos? t) (> (+ (* y 16) t) lo) (< (+ (* y 16) (aget (.-tbl-base s) id)) hi))
-                        (== k WATER) (== k LAVA) (== k NARROW) ^boolean (.avoids s id x y z))
+                        (== k WATER) ^boolean (.lavaIn s k x y z) (== k NARROW) ^boolean (.avoids s id x y z))
                   false
                   (recur (inc y))))))))))
 
@@ -127,7 +134,7 @@
               (let [ct (aget (.-tbl-top s) cid)
                     kd (aget (.-tbl-kind s) cid)]
                 (cond
-                  (or (== kd WATER) (== kd LAVA) ^boolean (.avoids s cid x k z)) false
+                  (or (== kd WATER) ^boolean (.lavaIn s kd x k z) ^boolean (.avoids s cid x k z)) false
                   (and (zero? (aget (.-tbl-partial s) cid))
                        (or (and (pos? ct) (> (+ (* k 16) ct) lo) (< (+ (* k 16) (aget (.-tbl-base s) cid)) hi))
                            (== kd NARROW))) false

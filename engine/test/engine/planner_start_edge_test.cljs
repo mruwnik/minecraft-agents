@@ -52,3 +52,18 @@
          ((juxt :status :reason)
           (run (world {:fill [[2 64 4 2 64 4 "fire"] [3 64 4 3 64 4 "lava"] [1 64 4 1 64 4 "lava"] [2 64 5 2 64 5 "lava"] [2 64 3 2 64 3 "lava"]]})
                (near 8 64 8) {} fire-start)))))
+
+;; extinguish live (four-lava): the open lava source next to a filled pit flows sideways into the body's cell, replacing
+;; the fire at its feet; a body standing in flowing lava must still plan out of it
+(def lava-feet [2 64 4 "lava" {"level" "2"}])
+
+(deftest start-in-flowing-lava-plans-out-of-it
+  (are [fill goal want]
+       (= want ((juxt :status :reason) (run (world {:fill fill :blocks [lava-feet]}) goal {} fire-start)))
+    ;; three covers and one open source: up onto a cover and on to the stone beyond
+    [[1 64 4 1 64 4 "cobblestone"] [3 64 4 3 64 4 "cobblestone"] [2 64 5 2 64 5 "cobblestone"] [2 64 3 2 64 3 "lava"]
+     [4 64 4 4 64 4 "stone"]]
+    (near 4 65 4) ["found" nil]
+    ;; lava on all four sides: enclosed, so go-to escalates
+    [[1 64 4 1 64 4 "lava"] [3 64 4 3 64 4 "lava"] [2 64 5 2 64 5 "lava"] [2 64 3 2 64 3 "lava"]]
+    (near 8 64 8) ["none" "goal-enclosed"]))
