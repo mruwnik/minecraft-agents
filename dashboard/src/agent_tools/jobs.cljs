@@ -291,11 +291,13 @@
                (deliver! r output response)
                (let [get! (fn [socket endpoint options]
                             (observe/get! socket endpoint (cond-> options request-fn (assoc :request-fn request-fn))))]
-                 (.then (observe/wait-for! {:agent (:body r) :world (:world r) :state (:state r) :socket-path (:socketPath r)}
-                                           {:watch [id] :timeout (get-in r [:wait :timeout])} get!)
-                        (fn [wake]
-                          (output (str (data/write-edn (wait-result answer id wake)) "\n"))
-                          0))))))))
+                 (.then (manual-for r response opts)
+                        (fn [manual]
+                          (.then (observe/wait-for! {:agent (:body r) :world (:world r) :state (:state r) :socket-path (:socketPath r)}
+                                                    {:watch [id] :timeout (get-in r [:wait :timeout])} get!)
+                                 (fn [wake]
+                                   (output (str (data/write-edn (with-hint r (wait-result answer id wake) (when (:follow (wait-result answer id wake)) manual))) "\n"))
+                                   0))))))))))
 
 (defn main!
   ([] (main! (vec (.slice (.-argv js/process) 2))))

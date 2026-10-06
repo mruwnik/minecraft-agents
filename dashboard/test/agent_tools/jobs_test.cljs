@@ -286,6 +286,21 @@
                      (is (= "./bin/observe --wait --watch j7" (:follow result))))))
           (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
 
+(deftest a-waited-submit-under-manual-control-says-who-holds-the-body
+  (let [state (state-dir)
+        events (atom [(event-of 1 :system :started {})])
+        held {:who "Wren" :why "probing" :since 5}
+        engine (fn [req] (if (= "/status" (:path req))
+                           {:text (str "{:mode :manual :manual " (pr-str held) "}")}
+                           ((waiting-engine events) req)))]
+    (async done
+      (-> (run-main! state ["submit" "(jobs.time.wait-for-day)" "--wait" "--timeout" "100ms"] engine)
+          (.then (fn [{:keys [out]}]
+                   (let [result (data/read-edn out)]
+                     (is (re-find #"manual control held by Wren" (str (:hint result))) out)
+                     (is (= :timeout (get-in result [:wait :wake]))))))
+          (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
+
 (deftest a-refused-submit-does-not-wait
   (let [state (state-dir)]
     (async done
