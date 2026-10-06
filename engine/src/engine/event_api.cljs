@@ -46,8 +46,16 @@
        (.on req "error" reject)))))
 
 (defn engine-failed!
-  "Answer 500 :engine-error for a failure of the engine itself (not of the request), unless the answer has begun."
-  [res]
+  "Log the failure e (message and stack) as an :error event, then answer 500 :engine-error
+  for a failure of the engine itself (not of the request), unless the answer has begun.
+  A failing log goes to stderr: the answer is still sent."
+  [eng res e]
+  (try
+    (events/emit! (:events eng) {:source :system :kind :engine-error :level :error
+                                 :text (str "event api: " (or (some-> e .-message) e))
+                                 :stack (some-> e .-stack str)})
+    (catch :default e2
+      (.write js/process.stderr (str "event api failure: " e " (and the log failed: " e2 ")\n"))))
   (when-not (.-headersSent res) (bad! res 500 :engine-error)))
 
 (defn parse-edn [text]
@@ -357,7 +365,7 @@
                                            (try
                                              (let [result ((if (= pathname "/jobs") job-api/mutate! trigger-api/request!) eng value)]
                                                (respond! res (if (:ok result) 200 409) result))
-                                             (catch :default _ (engine-failed! res)))))))
+                                             (catch :default e (engine-failed! eng res e)))))))
                               (.catch (fn [e] (bad! res (if (= "body too large" (.-message e)) 413 400)
                                                        (if (= "body too large" (.-message e)) :too-large :bad-request))))))
 
@@ -447,7 +455,7 @@
                                          (respond! res 200 {:ok true :request-id (:request-id value)
                                                             :resolved (= result :resolved)
                                                             :already-resolved (= result :already-resolved)}))
-                                       (catch :default _ (engine-failed! res)))))))
+                                       (catch :default e (engine-failed! eng res e)))))))
                               (.catch (fn [e]
                                         (bad! res (if (= "body too large" (.-message e)) 413 400)
                                               (if (= "body too large" (.-message e)) :too-large :bad-edn))))))
@@ -475,7 +483,7 @@
                                                   (respond! res 200 {:ok true :body (.-username (.self (:primitives eng)))
                                                                      :result (if (map? result) result
                                                                                (js->clj result :keywordize-keys true))}))
-                                                (fn [_] (engine-failed! res))))))))
+                                                (fn [e] (engine-failed! eng res e))))))))
                               (.catch (fn [e]
                                         (bad! res (if (= "body too large" (.-message e)) 413 400)
                                               (if (= "body too large" (.-message e)) :too-large :bad-edn))))))

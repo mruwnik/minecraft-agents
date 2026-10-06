@@ -341,3 +341,23 @@
                       (is (= 500 (:status response)))
                       (is (= :engine-error (:reason (edn-response response))))))
              (.finally (fn [] ((:close server))))))))))
+
+(deftest an-engine-error-in-a-post-is-logged-with-message-and-stack
+  (async done
+    (let [socket-path (path/join (tu/tmp-dir) "events.sock")
+          stream (events/make {:generation-id "g"})
+          server (event-api/create socket-path {:events stream})]
+      (tu/run-async
+       done
+       (fn []
+         (-> ((:listen server))
+             (.then (fn [_] (request socket-path "POST" "/jobs" {"Content-Type" "application/edn"} "{:op :cancel-all}")))
+             (.then (fn [response]
+                      (let [logged (->> (:events (events/read-after stream {:stream-id (:stream-id @stream) :after 0}))
+                                        (filter #(= :engine-error (:kind %))))]
+                        (is (= 500 (:status response)))
+                        (is (= 1 (count logged)))
+                        (is (= :error (:level (first logged))))
+                        (is (string? (:message (first logged))))
+                        (is (string? (get-in (first logged) [:data :stack]))))))
+             (.finally (fn [] ((:close server))))))))))
