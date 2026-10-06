@@ -108,10 +108,11 @@
             (let [r (await (ctx/act c :transfer (clj->js {:pos chest :direction "deposit"
                                                            :item (:name (:stack pick)) :count (:count pick)})))]
               (if (= "ok" (.-status r))
-                (do (when (pos? (or (.-moved r) 0))
-                      (ctx/update-mem! c update :deposited (fnil inc 0))
+                (if (pos? (or (.-moved r) 0))
+                  (do (ctx/update-mem! c update :deposited (fnil inc 0))
                       (u/progress! c)
-                      (fetch/note-moved! c chest (:name (:stack pick)) (.-moved r)))
-                    :continue)
+                      (fetch/note-moved! c chest (:name (:stack pick)) (.-moved r))
+                      :continue)
+                  (give-up! c :chest_unusable "nothing moved into the chest" "nothing-moved"))
                 (do (places/retract-if-missing! c :chest chest (.-status r))
                     (give-up! c :chest_unusable (str "chest not usable: " (.-status r)) (.-status r)))))))))))

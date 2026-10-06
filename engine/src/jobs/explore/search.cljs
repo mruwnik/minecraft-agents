@@ -143,10 +143,12 @@
   (> (:wait-until m 0) now))
 
 (defn check
-  "A target is named, and the job is not waiting for leg columns to load."
+  "A target is named, and the job is not waiting for leg columns to load; says which it waits for."
   [c]
-  (and (boolean (seq (targets c)))
-       (not (waiting? (ctx/mem c) (ctx/now c)))))
+  (cond
+    (empty? (targets c)) (ctx/wait c {:reason :no-target})
+    (waiting? (ctx/mem c) (ctx/now c)) (ctx/wait c {:reason :chunks-loading :until (:wait-until (ctx/mem c))})
+    :else true))
 
 (defn cell [p] (mapv js/Math.floor [(.-x p) (.-y p) (.-z p)]))
 (defn here [c] (cell (.-pos (.self (:primitives c)))))

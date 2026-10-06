@@ -681,3 +681,19 @@
           (await (run-reflex eng {:free 3} {}))
           (is (pos? (count (calls p "transfer"))))
           (is (= 0 (count (calls p "toss")))))))))
+
+(deftest a-toss-spot-far-from-the-body-is-forgotten-without-a-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:inventory (same "diamond" 35 1)})
+              walks (atom 0)
+              go-to {:check (constantly true)
+                     :round (fn ^:async go-to-round [_c] (swap! walks inc) :done)}
+              spots #(mem/entries (mem/view (:store eng)) :make-room-tossed)
+              eng (assoc eng :jobs (assoc (:jobs eng) 'jobs.movement.go-to go-to))]
+          (mem/write! (:store eng) :make-room-tossed {:at {:x 400 :y 64 :z 400} :dir [1 0]} mr/tossed-policy)
+          (core/submit! eng '(jobs.storage.make-room) {})
+          (await (tick-out! eng 10))
+          (is (zero? @walks) "the old toss site is not walked back to")
+          (is (empty? (spots))))))))

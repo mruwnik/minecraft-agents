@@ -8,7 +8,7 @@
     high       25  diamond and netherite anything, ancient debris, elytra,
                    totem of undying, nether star, beacon, shulker boxes
     medium      5  iron tools and armour, bow, crossbow, shield, redstone,
-                   ender pearls, golden apples
+                   ender pearls, golden apples, emeralds (trade currency)
     metal       2  each raw iron, iron ingot, gold ingot, coal block and iron
                    block: it takes mining, smelting and time to replace, so a
                    stack is worth its count times 2
@@ -26,7 +26,7 @@
   :each (the stack's worth is :each per item)."
   [{:tier :high :match #"^(diamond|netherite)(_|$)|^(ancient_debris|elytra|totem_of_undying|nether_star|beacon)$|shulker_box$"}
    {:tier :medium :match #"^iron_(pickaxe|axe|shovel|hoe|sword|helmet|chestplate|leggings|boots)$"}
-   {:tier :medium :match #"^(bow|crossbow|shield|redstone|ender_pearl|golden_apple)$"}
+   {:tier :medium :match #"^(bow|crossbow|shield|redstone|ender_pearl|golden_apple|emerald|emerald_block)$"}
    {:each metal-each :match #"^(coal_block|iron_block|iron_ingot|gold_ingot|raw_iron)$"}
    {:tier :low :match #"^(cooked_.*|bread|apple|carrot|baked_potato|golden_carrot|melon_slice|sweet_berries)$"}
    {:tier :low :match #"_(log|planks|wood)$"}

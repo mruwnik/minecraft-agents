@@ -15,7 +15,7 @@
 (def doc
   "Make room in a nearly full inventory (the inventory-nearly-full reflex) until :free slots are free. One round is
   the whole attempt: it re-reads the inventory before every step and puts away, swaps or tosses until enough is free
-  or nothing more may go. It never yields (:continue).
+  or nothing more may go. It yields (:continue) only while its walk away yields.
   What is thrown, like a player: plain junk blocks first (junk-blocks: cobblestone, cobbled deepslate, granite,
   tuff, dirt, gravel...), whole big stacks before partial, then the rest by worth; ores, fuel and the like
   only after the junk. Never put away or thrown: tools, weapons, armour and buckets. Food is never thrown and is put away only above
@@ -273,6 +273,13 @@
   [c]
   (:data (ctx/latest c :make-room-tossed)))
 
+(defn near-spot?
+  "Whether the body is still within :away + 8 blocks (XZ) of the toss spot: a spot left far behind is stale."
+  [c {:keys [at]}]
+  (let [pos (.-pos (.self (:primitives c)))
+        reach (+ 8 (:away (:args c)))]
+    (<= (js/Math.hypot (- (.-x pos) (:x at)) (- (.-z pos) (:z at))) reach)))
+
 (defn ^:async walk-away!
   "Walk :away blocks back from spot, where the items were thrown (a go-to child), so they are not picked up again. Best
   effort: a walk that does not arrive is not retried. A walk that yields (:continue) keeps the spot; returns the child's
@@ -356,10 +363,13 @@
         (res/stop! c reason text :free free-now :tossed tossed)))))
 
 (defn ^:async end!
-  "Walk away from what was tossed, then end: done when :free slots are free (reason nil), else stopped with reason.
+  "Walk away from a toss spot the body is still near, then end: done when :free slots are free (reason nil), else stopped with reason.
   :stalled and :toss-failed are warns (make-room.<reason>), the others info make-room.stopped."
   [c reason]
-  (let [walked (when-let [spot (tossed-spot c)] (await (walk-away! c spot)))]
+  (let [spot (tossed-spot c)
+        near? (and spot (near-spot? c spot))
+        _ (when (and spot (not near?)) (ctx/forget-where! c :make-room-tossed (constantly true)))
+        walked (when near? (await (walk-away! c spot)))]
     (if (= :continue walked)
       :continue
       (await (finish-end! c reason)))))

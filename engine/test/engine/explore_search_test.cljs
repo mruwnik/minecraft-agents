@@ -255,6 +255,11 @@
     (is (not (search/check c)))
     (is (not (search/check {:args {:target []}})))))
 
+(deftest it-states-why-it-declines-without-a-target
+  (let [c {:args {:target nil} :wait (atom nil)}]
+    (search/check c)
+    (is (= :no-target (:reason @(:wait c))))))
+
 (deftest it-waits-only-until-the-wait-is-over
   (are [m now expected] (= expected (search/waiting? m now))
     {} 5000 false

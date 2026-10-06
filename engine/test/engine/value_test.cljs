@@ -8,6 +8,7 @@
     {:name "mystery_thing" :count 1} 0
     {:name "cobblestone" :count 64} 0
     {:name "dirt" :count 3} 0
+    {:name "emerald" :count 3} 5
     {:name "bread" :count 2} 1
     {:name "oak_log" :count 5} 1
     {:name "iron_ingot" :count 3} 6
