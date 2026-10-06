@@ -564,3 +564,38 @@
           (is (empty? (listed s)) "the job ended")
           (is (= 1 (count (calls s "useOn"))))
           (is (= 1 (count (events-of s :fetch.done)))))))))
+
+(def sapling-spot {:x 4 :y 64 :z 3})
+
+(deftest plant-sapling-fetches-a-sapling-from-an-own-seen-chest-then-plants
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (world {chest-at [{:name "oak_sapling" :count 2}]}) [own-zone])]
+          (core/submit! (:eng s) (list 'jobs.forestry.plant-sapling {:at sapling-spot :species "oak"}) {})
+          (await (run-ticks s 40))
+          (is (empty? (listed s)) "the job ended")
+          (is (= "oak_sapling" (block-at s 4 64 3)))
+          (is (= 1 (count (events-of s :fetch.done)))))))))
+
+(deftest plant-sapling-without-fetch-waits-no-sapling-and-touches-no-chest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (world {chest-at [{:name "oak_sapling" :count 2}]}) [own-zone])]
+          (core/submit! (:eng s) (list 'jobs.forestry.plant-sapling {:at sapling-spot :species "oak" :fetch false}) {})
+          (await (run-ticks s 10))
+          (is (= 1 (count (listed s))) "still queued")
+          (is (empty? (transfers s)))
+          (is (= [:no-sapling] (mapv :reason (events-of s :waiting)))))))))
+
+(deftest plant-sapling-with-nothing-to-fetch-waits-no-sapling-with-the-failure
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (world {}) [own-zone])]
+          (core/submit! (:eng s) (list 'jobs.forestry.plant-sapling {:at sapling-spot :species "oak"}) {})
+          (await (run-ticks s 20))
+          (is (= 1 (count (listed s))) "still queued")
+          (is (= 1 (count (events-of s :fetch.failed))))
+          (is (= :no-sapling (:reason (last (events-of s :waiting))))))))))

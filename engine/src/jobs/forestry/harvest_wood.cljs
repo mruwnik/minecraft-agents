@@ -14,7 +14,7 @@
   warns harvest-wood.debts-owed with their :count and the :nearest one's :pos.
   Debts within the radius that stay unplanted (no sapling carried, spot refused) warn harvest-wood.replant-owed
   with :count, :pos, :reason (:no-sapling or :not-planted) and :text. The status stays :completed (the wood is
-  the goal); the result is {:replant-owed n} then. No sapling is fetched: plant-sapling only plants what is carried.")
+  the goal); the result is {:replant-owed n} then. A missing sapling is fetched by plant-sapling (a seen chest, a craft); when none can be got it stays owed.")
 
 (def args
   {:species {:doc "log species; any when nil" :default nil}
