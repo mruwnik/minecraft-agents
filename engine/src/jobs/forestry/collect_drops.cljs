@@ -1,5 +1,6 @@
 (ns jobs.forestry.collect-drops
   (:require [engine.ctx :as ctx]
+            [jobs.lib.look :as look]
             [jobs.lib.util :as u]
             [jobs.forestry.trees :refer [default-radius]]))
 
@@ -13,8 +14,7 @@
   {:radius {:doc "search radius in blocks" :default default-radius}
    :filter {:doc "item names to collect; everything when nil" :default nil}
    :near {:doc "{:x :y :z} the work area is centred on, instead of where the body stands when the job begins" :type :pos :default nil}
-   :ids {:doc "entity ids to collect (only those); any item when nil" :default nil}
-   :visible-only {:doc "skip items the body has no line of sight to (a player cannot see through walls)" :default false}})
+   :ids {:doc "entity ids to collect (only those); any item when nil" :default nil}})
 
 (defn check [_c] true)
 
@@ -28,15 +28,14 @@
 (defn nearest-item
   "The nearest wanted item within :radius of the anchor that is not skipped, or nil."
   [c anchor]
-  (let [{:keys [radius visible-only ids]} (:args c)
+  (let [{:keys [radius ids]} (:args c)
         only-ids (some-> ids set)
         wanted (some-> (:filter (:args c)) set)
         skipped (set (:skipped (ctx/mem c)))]
-    (->> (array-seq (.entities (:primitives c) #js {:radius (+ radius (u/dist anchor (u/self-pos c))) :kind "item" :max (if (or only-ids wanted) 1024 32)}))
+    (->> (look/seen-items (:primitives c) {:radius (+ radius (u/dist anchor (u/self-pos c))) :max (if (or only-ids wanted) 1024 32)})
          (filter #(if-let [p (.-pos %)] (<= (u/dist anchor (u/pos-of p)) radius) true))
          (remove #(skipped (.-id %)))
          (filter #(or (nil? only-ids) (only-ids (.-id %))))
-         (remove #(and visible-only (false? (.-visible %))))
          (filter #(or (nil? wanted) (wanted (some-> (.-item %) .-name))))
          first)))
 

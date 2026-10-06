@@ -897,3 +897,13 @@
           (core/submit! eng (list 'jobs.forestry.collect-drops {:radius 10 :filter ["oak_log"]}) {})
           (await (core/tick! eng))
           (is (= [100] (mapv #(.-id (.-args %)) (calls p "collect")))))))))
+
+(deftest collect-drops-leaves-an-item-behind-a-wall
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [item (fn [id x vis] {:id id :name "item" :kind "item" :visible vis :pos {:x x :y 64 :z 0} :item {:name "dirt" :count 1}})
+              {:keys [eng p]} (setup {:entities [(item 1 3 false) (item 2 5 true)]})]
+          (core/submit! eng (list 'jobs.forestry.collect-drops {:radius 10}) {})
+          (await (run-until-empty eng 10))
+          (is (= [2] (mapv #(.-id (.-args %)) (calls p "collect")))))))))
