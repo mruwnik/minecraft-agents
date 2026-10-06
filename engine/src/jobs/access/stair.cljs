@@ -287,7 +287,7 @@
       (not (room-for? p (mine/item-name {:block block}))) {:reason :inventory-full :cell cell :block block}
       :else
       (do
-        (await (tools/equip-for! c block))
+        (await (mine/equip! c block))
         (let [v (cell-verdict (assoc in :cell cell) cut)
               block ((:block-at in) cell)]
           (cond
