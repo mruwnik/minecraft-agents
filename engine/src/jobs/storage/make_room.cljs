@@ -274,13 +274,16 @@
 
 (defn ^:async walk-away!
   "Walk :away blocks back from spot, where the items were thrown (a go-to child), so they are not picked up again. Best
-  effort: a walk that does not arrive is not retried."
+  effort: a walk that does not arrive is not retried. A walk that yields (:continue) keeps the spot; returns the child's
+  result."
   [c {:keys [at dir]}]
   (let [away (:away (:args c))
         [dx dz] dir
         goal {:x (- (:x at) (* away dx)) :y (:y at) :z (- (:z at) (* away dz))}]
-    (await (ctx/call-child c :away 'jobs.movement.go-to {:pos goal :range 1 :escalate false}))
-    (ctx/forget-where! c :make-room-tossed (constantly true))))
+    (let [r (await (ctx/call-child c :away 'jobs.movement.go-to {:pos goal :range 1 :escalate false}))]
+      (when (not= :continue r)
+        (ctx/forget-where! c :make-room-tossed (constantly true)))
+      r)))
 
 (defn ^:async put-away!
   "One call of the deposit child with names. Once it ends (all put away, or it gave up: that chest is remembered as
@@ -336,11 +339,9 @@
    :stalled "still short of room after its :max-steps steps"
    :toss-failed "three tosses failed"})
 
-(defn ^:async end!
-  "Walk away from what was tossed, then end: done when :free slots are free (reason nil), else stopped with reason.
-  :stalled and :toss-failed are warns (make-room.<reason>), the others info make-room.stopped."
+(defn ^:async finish-end!
+  "The summary event and the :done or :stopped result."
   [c reason]
-  (when-let [spot (tossed-spot c)] (await (walk-away! c spot)))
   (let [m (ctx/mem c)
         free-now (u/free-slots (:primitives c))
         {:keys [tossed text] :as summary} (tossed-summary m free-now)]
@@ -352,6 +353,15 @@
           (ctx/emit! c (keyword (str "make-room." (name reason))) :warn (assoc summary :text text :status (:toss-status m)))
           (ctx/emit! c :make-room.stopped :info (assoc summary :reason reason :text text)))
         (res/stop! c reason text :free free-now :tossed tossed)))))
+
+(defn ^:async end!
+  "Walk away from what was tossed, then end: done when :free slots are free (reason nil), else stopped with reason.
+  :stalled and :toss-failed are warns (make-room.<reason>), the others info make-room.stopped."
+  [c reason]
+  (let [walked (when-let [spot (tossed-spot c)] (await (walk-away! c spot)))]
+    (if (= :continue walked)
+      :continue
+      (await (finish-end! c reason)))))
 
 (defn ^:async step!
   "One unit of work on a fresh look at the inventory: a deposit child call, a swap or a toss (:again), or the end

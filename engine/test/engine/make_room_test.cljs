@@ -599,6 +599,24 @@
           (is (empty? (calls p "collect")) "nothing picked up again")
           (is (empty? (spots)) "the walk away was made, the spot is forgotten"))))))
 
+(deftest a-walk-away-that-yields-keeps-the-spot-and-yields-too
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:inventory (many "junk" 35)})
+              walks (atom 0)
+              go-to {:check (constantly true)
+                     :round (fn ^:async go-to-round [_c] (if (= 1 (swap! walks inc)) :continue :done))}
+              returns (atom [])
+              spots #(mem/entries (mem/view (:store eng)) :make-room-tossed)
+              eng (assoc eng :jobs (assoc (:jobs eng) 'jobs.movement.go-to go-to
+                                          'returns-parent (returns-parent (atom nil) returns {} nil)))]
+          (core/submit! eng '(returns-parent) {})
+          (await (tick-out! eng 30))
+          (is (= [:continue :done] @returns) "the yield of the walk is the yield of make-room")
+          (is (= 2 @walks))
+          (is (empty? (spots)) "the spot is forgotten only once the walk is done"))))))
+
 (deftest a-refused-chest-and-nothing-to-toss-is-nothing-to-go
   (async done
     (tu/run-async done
