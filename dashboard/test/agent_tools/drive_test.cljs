@@ -1,11 +1,7 @@
 (ns agent-tools.drive-test
-  (:require [cljs.test :refer [deftest is are async]]
+  (:require [cljs.test :refer [deftest is are]]
             [agent-tools.drive :as drive]
-            [agent-tools.fake-socket :as fake]
             [agent-tools.map :as map-tool]
-            [agent-tools.world-data :as data]
-            ["node:fs" :as fs]
-            ["node:os" :as os]
             ["node:path" :as path]))
 
 (defn coded [code] (doto (js/Error. "x") (aset "code" code)))
@@ -76,35 +72,3 @@
   (let [options (drive/request-options "/s" {:method "GET" :path "/drive" :body nil})]
     (is (= 3000 (:timeout-ms options)))
     (is (= 65536 (:max-bytes options)))))
-
-(defn run-main! [argv handler]
-  (let [[request-fn seen] (fake/request-fn handler)
-        lines (atom [])
-        state (.mkdtempSync fs (.join path (.tmpdir os) "drive-cli-"))]
-    (-> (drive/main! (into argv ["--world" "w" "--state" state]) {:request-fn request-fn :output #(swap! lines conj %)})
-        (.then (fn [code] (.rmSync fs state #js {:recursive true :force true}) {:code code :out (apply str @lines) :seen @seen})))))
-
-(deftest stop-cancels-the-running-slot-job-then-stops
-  (let [stops (atom 0)]
-    (async done
-      (-> (run-main! ["Bob" "stop" "--who" "Wren"]
-                     (fn [{:keys [path]}]
-                       (case path
-                         "/drive" (if (= 1 (swap! stops inc))
-                                    {:status 409 :content-type "application/json" :text "{\"ok\":false,\"reason\":\"job-running\",\"job\":\"j3\"}"}
-                                    {:content-type "application/json" :text "{\"ok\":true}"})
-                         "/snapshot" {:text "{:generation-id \"g\"}"}
-                         {:text "{:ok true}"})))
-          (.then (fn [{:keys [code seen]}]
-                   (is (= 0 code))
-                   (is (= ["/drive" "/snapshot" "/jobs" "/drive"] (mapv :path seen)))
-                   (is (= {:op :cancel :id "j3" :by "Wren"} (select-keys (data/read-edn (:body (nth seen 2))) [:op :id :by])))
-                   (done)))))))
-
-(deftest a-stop-that-is-not-refused-sends-no-cancel
-  (async done
-    (-> (run-main! ["Bob" "stop"] (fn [_] {:content-type "application/json" :text "{\"ok\":true}"}))
-        (.then (fn [{:keys [code seen]}]
-                 (is (= 0 code))
-                 (is (= ["/drive"] (mapv :path seen)))
-                 (done))))))

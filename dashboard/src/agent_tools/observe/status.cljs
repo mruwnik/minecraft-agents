@@ -135,13 +135,6 @@
     (or (= :whisper (:kind e)) (true? (:whisper d)) (= (lower (:to d)) (lower body))
         (.test (js/RegExp. (str "(^|[^A-Za-z0-9_])" body "([^A-Za-z0-9_]|$)") "i") (or (:message e) "")))))
 
-(defn action-result [r d]
-  (clean-pairs :status (or (:status r) (:status d))
-               :reason (clip (first (filter some? [(:reason r) (:reason d) (:error d)])))
-               :block (clip (:block r) 80) :consumed (:consumed r) :hurt (:hurt r) :health (:health r)
-               :pos (position (:pos r))
-               :distance (when (number? (:distance r)) (round1 (:distance r)))))
-
 (defn recovered?
   "Whether an event says the body is back."
   [e]
@@ -155,7 +148,7 @@
                (some recovered? later))))
 
 (defn classify
-  "The wake an event causes under the options, or nil. Options: :from :chatter :watch :watch-actions :danger :disconnect."
+  "The wake an event causes under the options, or nil. Options: :from :chatter :watch :danger :disconnect."
   [e opts body]
   (let [{:keys [source kind]} e
         d (or (:data e) {})]
@@ -175,9 +168,6 @@
 
       (and (= :body source) (:disconnect opts) (= :disconnected kind))
       (clean-pairs :wake :disconnected :reason (clip (:reason d)))
-
-      (and (= :action source) (= :done kind) (some #{(get-in e [:context :action-id])} (:watch-actions opts)))
-      (array-map :wake :action-finished :action (get-in e [:context :action-id]) :result (action-result (or (:result d) {}) d))
 
       (and (= :job source) (job-results/terminal-kinds kind) (some #{(get-in e [:context :job-id])} (:watch opts)))
       (clean-pairs :wake :job-finished :job (get-in e [:context :job-id]) :result (:kind e)

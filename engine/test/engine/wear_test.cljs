@@ -7,7 +7,6 @@
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.registry :as registry]
-            [engine.takeover :as takeover]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]))
 
@@ -97,10 +96,3 @@
       (fn ^:async t []
         (let [{:keys [out]} (await (wear (stacks "dirt") {:item "iron_helmet"}))]
           (is (= {:worn [] :reason "no-item"} @out)))))))
-
-(deftest the-wear-world-action-takes-only-an-armour-item
-  (are [args ok?] (= ok? (nil? (takeover/action-args-error :wear args)))
-    {} true
-    {:item "iron_helmet"} true
-    {:item "iron_helmet" :pos {:x 1 :y 2 :z 3}} false
-    {:item 5} false))

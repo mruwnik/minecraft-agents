@@ -225,7 +225,6 @@
              :manual-job (atom nil)
              :away (atom nil)
              :waiting (atom {})
-             :world-ops (atom {:active nil :records {} :order [] :queue []})
              :activity (atom nil)
              :fruitless (atom {})
              :said (atom [])

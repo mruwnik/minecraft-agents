@@ -96,12 +96,12 @@
 
 (defn tick-manual!
   "One pass under manual control: no trigger, no loop. Only the driver's slot job runs (a round per tick until it
-  ends); with it gone the body idles. A world action still running (engine.takeover) holds the body first."
+  ends); with it gone the body idles."
   [eng]
   (housekeep! eng)
   (if (running eng)
     (check-idle! eng)
-    (when-let [id (and (not (:active @(:world-ops eng))) (manual-job eng))]
+    (when-let [id (manual-job eng)]
       (when (and (not (contains? (:failed (state eng)) id)) (check-passes? eng id))
         (start-round! eng id)))))
 

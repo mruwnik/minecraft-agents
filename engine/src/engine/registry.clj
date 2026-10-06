@@ -242,13 +242,7 @@
 (def hook-keys
   "Every hook the engine calls, and what for."
   {:world/open "the world store over a world folder's files (engine.main)"
-   :world/blank "an empty world store (engine.core, when none is given)"
-   :manual/cell-of "the cell of a position (manual move-to)"
-   :manual/plannable? "whether the body can sense the world for path planning (manual move-to)"
-   :manual/walk-round! "one walk round toward a cell (manual move-to)"
-   :manual/dig-timeout-s "the lease seconds a manual dig needs"
-   :manual/dig! "a manual dig holding the best carried tool"
-   :manual/wear! "a manual wear"})
+   :world/blank "an empty world store (engine.core, when none is given)"})
 
 (defn hook-defs
   "The hooks, resource jobs/hooks.edn: {hook-key qualified-fn-symbol}, checked: every key of hook-keys given, no

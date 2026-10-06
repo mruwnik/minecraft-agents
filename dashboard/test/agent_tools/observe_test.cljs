@@ -240,20 +240,6 @@
   (doseq [[label e opts expected] classify-cases]
     (is (= expected (:wake (observe-status/classify e opts "Probe"))) label)))
 
-(def action-done
-  (assoc (event :action :done {:status :arrived :result {:status "arrived" :pos {:x 1.234 :y 64 :z 2} :distance 1.234
-                                                          :drops (vec (repeat 10000 "wheat"))}})
-         :context {:action-id "move-1"}))
-
-(deftest an-explicitly-watched-action-completion-wakes-with-a-bounded-result
-  (let [opts (assoc defaults :watch-actions ["move-1"])]
-    (is (= {:wake :action-finished :action "move-1" :result {:status "arrived" :pos [1.2 64 2] :distance 1.2}}
-           (observe-status/classify action-done opts "Probe")))
-    (is (nil? (observe-status/classify (assoc action-done :source :job) opts "Probe")))
-    (is (nil? (observe-status/classify (assoc action-done :kind :started) opts "Probe")))
-    (is (nil? (observe-status/classify action-done (assoc opts :watch-actions ["other"]) "Probe")))
-    (is (nil? (observe-status/classify action-done defaults "Probe")))))
-
 ;; Attention
 
 (def blocked {:job-id "j1" :reason :blocked :updated-at 123
@@ -319,9 +305,6 @@
                                  (event :job :make-room.tossed {:item "coal" :count 4}))]
     (is (= 1 (get-in summary [:counts :tossed])))
     (is (= {:event :make-room.tossed :item "coal" :count 4} (first (:items summary))))))
-
-(deftest an-action-completion-is-not-summarised
-  (is (= {} (:counts (observe-status/collect {:counts {} :items [] :more false} action-done)))))
 
 ;; The wait loop
 
@@ -483,16 +466,12 @@
                 ["--wait" "--verbose"]
                 ["--timeout" "1s"]
                 ["--danger"]
-                ["--watch-action" "move-1"]
-                ["--wait" "--watch-action" "bad/name"]
-                ["--wait" "--watch-action" (str/join "," (repeat 33 "move-1"))]]]
+                ["--watch" "j1"]]]
     (is (string? (:error (apply request "--world" "w" "Probe" argv))) (pr-str argv)))
   (is (string? (:error (request "--world" "w" "Probe" "inventory" "--wait")))))
 
 (deftest watchers-accept-repeated-and-comma-separated-options
-  (let [r (request "--world" "w" "Probe" "--wait" "--watch-action" "move-1,place-1" "--watch-action" "dig-1"
-                   "--watch" "j1,j2" "--watch" "j3")]
-    (is (= ["move-1" "place-1" "dig-1"] (get-in r [:wait-options :watch-actions])))
+  (let [r (request "--world" "w" "Probe" "--wait" "--watch" "j1,j2" "--watch" "j3")]
     (is (= ["j1" "j2" "j3"] (get-in r [:wait-options :watch])))))
 
 (deftest the-first-cancelled-wait-preserves-the-baseline-so-events-before-retry-are-not-missed
@@ -525,57 +504,6 @@
                      (is (= :engine-restarted (:reason restarted)))
                      ((:wait! f))))
             (.then (fn [quiet] (is (= :timeout (:wake quiet))))))))))
-
-(deftest an-explicitly-watched-action-completion-wakes-once-through-the-loop
-  (with-fixture []
-    (fn [f]
-      (let [req (assoc-in (:req f) [:wait-options :watch-actions] ["move-1"])
-            wait! #(observe/wait-observe req (:get! f) nil (fn [_] (js/Promise.resolve nil)))]
-        (-> ((:wait! f))
-            (.then (fn [_]
-                     (push! f (assoc action-done :seq 1))
-                     (wait!)))
-            (.then (fn [result]
-                     (is (= :action-finished (:wake result)))
-                     (is (= "move-1" (:action result)))
-                     (wait!)))
-            (.then (fn [quiet] (is (= :timeout (:wake quiet))))))))))
-
-(deftest first-use-catches-recently-completed-watched-actions-while-ignoring-historical-chat
-  (with-fixture []
-    (fn [f]
-      (push! f (assoc (event :body :chat {:from "Alex"} "Probe historical chat") :seq 1 :generation-id "g")
-             (assoc (event :action :done {:status :dug}) :context {:action-id "dig-1"} :seq 2 :generation-id "g")
-             (assoc (event :action :done {:status :placed}) :context {:action-id "place-1"} :seq 3 :generation-id "g"))
-      (let [req (assoc-in (:req f) [:wait-options :watch-actions] ["dig-1" "place-1"])
-            wait! #(observe/wait-observe req (:get! f) nil (fn [_] (js/Promise.resolve nil)))]
-        (-> (series [wait! wait! wait!])
-            (.then (fn [[first-wake second-wake third]]
-                     (is (= "dig-1" (:action first-wake)))
-                     (is (= "place-1" (:action second-wake)))
-                     (is (= :timeout (:wake third)))
-                     (is (= 3 (get-in (saved f) [:cursor :seq]))))))))))
-
-(deftest historical-lookup-ignores-prior-generations-and-newly-started-attempts-and-reports-unavailable-history
-  (with-fixture []
-    (fn [f]
-      (let [req (assoc-in (:req f) [:wait-options :watch-actions] ["move-1"])
-            wait! #(observe/wait-observe req (:get! f) nil (fn [_] (js/Promise.resolve nil)))
-            done-event (assoc (event :action :done {:status :arrived}) :context {:action-id "move-1"} :seq 1)]
-        (push! f (assoc done-event :generation-id "older"))
-        (-> (wait!)
-            (.then (fn [result]
-                     (is (= :timeout (:wake result)))
-                     (.unlinkSync fs (:file f))
-                     (swap! (:world f) assoc :events [(assoc done-event :generation-id "g")
-                                                      (assoc (event :action :started) :context {:action-id "move-1"} :seq 2 :generation-id "g")])
-                     (wait!)))
-            (.then (fn [result]
-                     (is (= :timeout (:wake result)))
-                     (.unlinkSync fs (:file f))
-                     (swap! (:world f) assoc :gap true)
-                     (wait!)))
-            (.then (fn [result] (is (= :history-unavailable (:reason result))))))))))
 
 (deftest resolved-attention-does-not-wake-again
   (with-fixture []
@@ -829,9 +757,7 @@
         (-> (wait-for! f {:watch ["j4"]})
             (.then (fn [wake]
                      (is (= :job-finished (:wake wake)))
-                     (js/setTimeout #(push! f (assoc (event :action :done {:name "dig"}) :seq 4 :context {:action-id "a1"})) 20)
-                     (wait-for! f {:watch-actions ["a1"]})))
-            (.then (fn [wake] (is (not= :observer-busy (:reason wake))) (is (= :action-finished (:wake wake)))))
+                     (is (not= :observer-busy (:reason wake)))))
             (.finally release))))))
 
 (deftest two-submit-waits-at-once-both-finish

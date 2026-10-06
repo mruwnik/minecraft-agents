@@ -24,17 +24,15 @@
   (str "/events?stream-id=" (js/encodeURIComponent stream-id) "&after=" after "&limit=" limit))
 
 (defn watched-event
-  "The key under which the latest lifecycle event of a watched action or job is kept, or nil."
+  "The key under which the latest lifecycle event of a watched job is kept, or nil."
   [e opts]
   (let [{:keys [source kind context]} e]
     (cond
-      (and (= :action source) (some #{(:action-id context)} (:watch-actions opts)) (#{:started :done} kind))
-      (str "action:" (:action-id context))
       (and (= :job source) (some #{(:job-id context)} (:watch opts)) (or (#{:queued :round_started} kind) (job-results/terminal-kinds kind)))
       (str "job:" (:job-id context)))))
 
 (defn recent-results
-  "Classified results of the watched actions and jobs among past events, oldest first."
+  "Classified results of the watched jobs among past events, oldest first."
   [events cursor generation opts body]
   (->> events
        (filter #(and (<= (:seq %) (:seq cursor)) (= generation (:generation-id %))))
@@ -136,7 +134,7 @@
                      (do (swap! st assoc :cursor (:cursor snap) :seen {} :pending [] :lookup true)
                          (reset-with-status! :engine-restarted))
                      (let [body (or (:body snap) (:agent request))
-                           watching? (or (seq (:watch-actions opts)) (seq (:watch opts)))]
+                           watching? (seq (:watch opts))]
                        (letfn [(poll []
                                  (let [{:keys [cursor]} @st]
                                    (js-await [page (read! (events-query (:stream-id cursor) (:seq cursor) 256))]
@@ -198,10 +196,7 @@
                                (after-lookup []
                                  (swap! st assoc :lookup false)
                                  (swap! st update :pending
-                                        (fn [pending] (filterv #(if (= :action-finished (:wake %))
-                                                                  (some #{(:action %)} (:watch-actions opts))
-                                                                  (some #{(:job %)} (:watch opts)))
-                                                               pending)))
+                                        (fn [pending] (filterv #(some #{(:job %)} (:watch opts)) pending)))
                                  (if-let [pending (seq (:pending @st))]
                                    (do (swap! st assoc :pending (vec (rest pending)))
                                        (finish! (first pending)))
@@ -273,13 +268,13 @@
 (defn line [text] (if (str/ends-with? text "\n") text (str text "\n")))
 
 (defn wait-for!
-  "Wait as observe --wait does, watching the jobs watch and the world actions watch-actions (ID lists): a promise of
+  "Wait as observe --wait does, watching the jobs watch (an ID list): a promise of
   the wake map, or of {:ok false :reason r} when the wait could not run. base is {:agent :world :state :socket-path};
   timeout as on the command line (default 60s). The wait is ephemeral: no observer lock or checkpoint (so it never contends with an observe --wait), and attention outstanding at its start does not wake it. SIGINT and SIGTERM cancel it."
-  [base {:keys [watch watch-actions timeout observer]} get!]
+  [base {:keys [watch timeout observer]} get!]
   (let [controller (js/AbortController.)
         cancel #(.abort controller)
-        opts (wait-options {:timeout timeout :observer observer :watch (clj->js watch) :watch-action (clj->js watch-actions)})]
+        opts (wait-options {:timeout timeout :observer observer :watch (clj->js watch)})]
     (.once js/process "SIGINT" cancel)
     (.once js/process "SIGTERM" cancel)
     (-> (wait-observe (assoc base :wait-options opts :ephemeral true) get! (.-signal controller) identity)

@@ -1,11 +1,9 @@
 (ns agent-tools.drive
   "Manual control of a body over its control socket: drive.mjs <agent> <op> ..."
   (:require [agent-tools.http :as http]
-            [agent-tools.jobs :as jobs]
             [agent-tools.map :as map-tool]
             [engine.bodies :as bodies]
             [clojure.string :as str]
-            ["node:crypto" :as crypto]
             ["node:fs" :as fs]
             ["node:path" :as path]))
 
@@ -132,28 +130,6 @@
     "ECONNREFUSED" (no-body-text agent socket)
     (str "drive request to " agent " failed (" (or (aget error "code") (.-message error)) ")")))
 
-(defn cancel-slot-job!
-  "Cancel job (the driver's running manual job) through the jobs API as who; a promise of the jobs response."
-  [req job opts]
-  (let [state (:state req)]
-    (jobs/exchange! {:body (:agent req) :world (:world req) :state state :mutating true :path "/jobs"
-                     :socketPath (.join path (bodies/body-dir state (:world req) (:agent req)) "engine" "events.sock")
-                     :request {:op :cancel :id job :request-id (str "stop-" (.randomUUID crypto)) :by (get-in req [:body :who])}}
-                    opts)))
-
-(defn job-running? [{:keys [status text]}]
-  (and (= 409 status) (= "job-running" (:reason (parse-json text)))))
-
-(defn send-stop!
-  "Send req; a stop refused because the driver's job runs cancels that job, then stops."
-  [socket req opts]
-  (.then (send! socket req (:request-fn opts))
-         (fn [response]
-           (if-not (and (= "stop" (get-in req [:body :op])) (job-running? response))
-             response
-             (.then (cancel-slot-job! req (:job (parse-json (:text response))) opts)
-                    (fn [_] (send! socket req (:request-fn opts))))))))
-
 (defn print-text! [text] (js/console.log text))
 
 (defn main!
@@ -164,7 +140,7 @@
      (if (:error req)
        (do (js/console.error (str (:error req) "\n" usage)) (js/Promise.resolve 2))
        (let [socket (socket-path-for req)]
-         (.then (send-stop! socket req opts)
+         (.then (send! socket req (:request-fn opts))
                 (fn [{:keys [status text]}]
                   (output text)
                   (exit-code-for {:status status :json (parse-json text)}))

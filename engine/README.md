@@ -494,14 +494,9 @@ lease is not saved; restart or going offline ends it.
   Refusals: `offline`, `settling`, `held-by <who>`, `not-taken`, `not-driver` (world ops too: `detail {:holder :idle-left-s}`), `bad-args`.
 - Dead-man: untimed controls are released after 1 s without an op. The takeover ends after 15 s of silence by default
   (`--drive-idle-s`, or `idleS` on `take`); `ping` keeps the lease. Timed holds last at most 10 s.
-- `POST /world` runs bounded primitive actions under the same lease: `move-to`, `dig`, `place`, `use-on`, `interact`,
-  `wear`, `inventory`. They run one at a time (at most 8 queued), have deadlines of at most 10 s, and need a lease with at
-  least 1 s of idle time left. `move-to` walks as go-to does (opens doors) within `--max-distance`. `dig` first holds the
-  best carried tool and refuses a block no carried tool can harvest (`no-tool`).
 - `world.mjs submit <move-to|dig|place|use-on|interact|wear>` submits the job of that action (`go-to`, `blocks.dig`, `blocks.place`,
   `blocks.use-on`, `items.interact`, `items.wear`) with `:by` = `--who`: under manual control it is the slot job.
-- Rules live in `engine.lease` (pure); `engine.takeover` applies them, walking, digging and wearing through the
-  `:manual/*` hooks (`jobs.lib.manual`); `engine/js/control.mjs` is a stateless socket adapter.
+- Rules live in `engine.lease` (pure); `engine.takeover` applies them; `engine/js/control.mjs` is a stateless socket adapter.
 - Events: `system.takeover_started`, `system.takeover_ended` (reason `released`, `forced`, `idle`, `offline`, `shutdown`),
   `system.drive_deadman`.
 
@@ -511,7 +506,6 @@ node engine/tools/drive.mjs ProbeDrive --world claude look 270 0 --who claude   
 node engine/tools/drive.mjs ProbeDrive --world claude hold forward,jump 2000 --who claude
 node engine/tools/drive.mjs ProbeDrive --world claude state | stop | release [--force]
 node engine/tools/world.mjs ProbeDrive --world claude submit move-to -5 64 -7 --who claude [--wait --timeout 60s]
-node engine/tools/world.mjs ProbeDrive --world claude status|cancel <request-id> --who claude
 ```
 
 Exit codes: 0 ok, 1 refused, 2 no running body or bad usage. The view page can drive too (`docs/view-format.md`).
@@ -682,7 +676,7 @@ noted. Most run a prebuilt bundle: build it once with `cd dashboard && npm run b
 
 ```
 node engine/tools/observe.mjs Bob --world claude                       # compact status (--raw: full snapshot, --verbose)
-node engine/tools/observe.mjs Bob --world claude --wait [--timeout 30s] [--watch j17] [--watch-action <id>]
+node engine/tools/observe.mjs Bob --world claude --wait [--timeout 30s] [--watch j17]
 node engine/tools/observe.mjs Bob --world claude job j17 | result j17
 node engine/tools/observe.mjs Bob --world claude catalog jobs jobs.farm. --limit 10 | catalog job <name> | catalog trigger <name>
 node engine/tools/observe.mjs Bob --world claude inventory [--slots] | equipment

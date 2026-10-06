@@ -8,7 +8,7 @@
             [clojure.string :as str]
             [agent-tools.observe.status :refer [truthy-text?]]))
 
-(def usage "usage: observe.mjs <agent> --world <world> [status [--raw|--verbose] [--wait --timeout 60s --chatter addressed --observer agent --watch j12 --watch-action move-home] | inventory [--raw] [--slots] | equipment [--raw] | job <id> | result <id> | catalog <job|trigger> <name> | catalog <jobs|triggers> [prefix]] [--limit <n>] [--offset <n>] [--worlds <dir>] [--state <legacy-parent>]\nstatus: :pos [x y z], :health and :food 0-20, :current the running job, :mode scheduled or manual. job <id>: its state and outcome; an unknown id answers :unknown-job.")
+(def usage "usage: observe.mjs <agent> --world <world> [status [--raw|--verbose] [--wait --timeout 60s --chatter addressed --observer agent --watch j12] | inventory [--raw] [--slots] | equipment [--raw] | job <id> | result <id> | catalog <job|trigger> <name> | catalog <jobs|triggers> [prefix]] [--limit <n>] [--offset <n>] [--worlds <dir>] [--state <legacy-parent>]\nstatus: :pos [x y z], :health and :food 0-20, :current the running job, :mode scheduled or manual. job <id>: its state and outcome; an unknown id answers :unknown-job.")
 
 ;; Requests
 
@@ -21,7 +21,7 @@
    :raw {:type "boolean" :default false} :slots {:type "boolean" :default false}
    :verbose {:type "boolean" :default false} :wait {:type "boolean" :default false}
    :timeout {:type "string"} :chatter {:type "string"} :observer {:type "string"}
-   :watch {:type "string" :multiple true} :watch-action {:type "string" :multiple true}
+   :watch {:type "string" :multiple true}
    :from {:type "string"} :poll-ms {:type "string"}
    :danger {:type "boolean" :default false} :disconnect {:type "boolean" :default false}})
 
@@ -43,23 +43,20 @@
 
 (def duration-units {"ms" 1 "s" 1000 "m" 60000})
 
-(defn wait-options [{:keys [timeout observer chatter watch watch-action from poll-ms danger disconnect]}]
+(defn wait-options [{:keys [timeout observer chatter watch from poll-ms danger disconnect]}]
   (let [[_ amount unit] (re-matches #"^(\d+(?:\.\d+)?)(ms|s|m)?$" (or timeout "60s"))
         timeout-ms (if amount (* (js/Number amount) (duration-units (or unit "s"))) js/NaN)
         observer (or observer "agent")
         chatter (or chatter "addressed")
         watch (listed (some-> watch array-seq))
-        watch-actions (listed (some-> watch-action array-seq))
         poll (js/Number (or poll-ms 250))]
     (check (not (and (js/Number.isFinite timeout-ms) (<= 10 timeout-ms 3600000))) "--timeout must be between 10ms and 60m")
     (check (not (re-matches body-name observer)) "--observer must be 1-40 letters, digits, underscores or hyphens")
     (check (not (#{"none" "addressed" "all"} chatter)) "--chatter must be none, addressed, or all")
     (check (or (some #(not (re-matches #"j[0-9]+" %)) watch) (> (count watch) 32)) "--watch needs up to 32 comma-separated job IDs")
-    (check (or (some #(not (re-matches #"[A-Za-z0-9_.:-]{1,80}" %)) watch-actions) (> (count watch-actions) 32))
-           "--watch-action needs up to 32 comma-separated action request IDs")
     (check (and (truthy-text? from) (not (re-matches body-name from))) "--from must be a player name")
     (check (not (integer-in? poll 50 5000)) "--poll-ms must be 50-5000")
-    {:timeout-ms timeout-ms :observer observer :chatter chatter :watch watch :watch-actions watch-actions
+    {:timeout-ms timeout-ms :observer observer :chatter chatter :watch watch
      :poll-ms poll :from from :danger danger :disconnect disconnect}))
 
 (defn endpoint-for
@@ -141,7 +138,7 @@
                            (wait-options values))
             query (query-string params)]
         (when-not (:wait values)
-          (check (or (some #(some? (get values %)) [:timeout :chatter :observer :watch :watch-action :from :poll-ms])
+          (check (or (some #(some? (get values %)) [:timeout :chatter :observer :watch :from :poll-ms])
                      (:danger values) (:disconnect values))
                  "wait options require --wait"))
         (check (and (:verbose values) (or (not= "status" op) (:raw values)))
