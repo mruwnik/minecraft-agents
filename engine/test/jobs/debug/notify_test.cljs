@@ -44,7 +44,7 @@
           (let [[e :as evs] (notify-events seen)
                 text (:message e)]
             (is (= 1 (count evs)))
-            (is (not (contains? e :level)))
+            (is (= :info (:level e)))
             (is (= :job (:source e)))
             (is (= :notice (:attention e)) "explicit notification is surfaced as a notice")
             (is (re-find #"^burning fired" text))
@@ -111,7 +111,7 @@
               failed (filterv #(= :notify.chat-failed (:kind %)) @seen)]
           (is (empty? (:list (core/state eng))) "done")
           (is (= 1 (count failed)))
-          (is (not (contains? (first failed) :level)))
+          (is (= :info (:level (first failed))))
           (is (re-find #"blocked" (:message (first failed))))
           (is (re-find #"rate" (:message (first failed)))))))))
 

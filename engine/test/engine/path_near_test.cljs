@@ -175,7 +175,10 @@
 (def walled-in (merge (box 9 64 -1 11 65 -1 "stone") (box 9 64 1 11 65 1 "stone")
                       (box 9 64 0 9 65 0 "stone") (box 11 64 0 11 65 0 "stone")))
 
-(deftest walks-that-get-nowhere-three-times-back-off
+(defn fruitless-requests [eng]
+  (filterv #(= :fruitless (:reason %)) (vals (:attention (core/state eng)))))
+
+(deftest walks-that-get-nowhere-three-times-flag-the-job-fruitless
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -183,7 +186,8 @@
                                     ["a steer that does not move" {:blocks flat} still-steer]]]
           (let [{:keys [eng p]} (await (walk-rounds! world [{:x 10 :y 64 :z 0} 0] prep 3))]
             (is (= [0 64 0] (mapv js/Math.floor (at p))) label)
-            (is (backing-off? eng) label)))))))
+            (is (not (backing-off? eng)) (str label ": a listed job is never backed off"))
+            (is (= 1 (count (fruitless-requests eng))) label)))))))
 
 ;; a pen of fence with no gate (live: a breed walk at a gateless pen searched the whole wide box for ~25 s a round): the
 ;; round knows the goal is walled in once the goal flood runs, it does not search every way round, and it does not walk
