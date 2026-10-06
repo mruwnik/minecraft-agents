@@ -331,7 +331,7 @@ Each tick the engine fires the first entry whose `:when` holds and which is not 
 - Agent-only edits (`engine.core`): `register-reflex!`, `remove-reflex!` (not built-ins), `mute!` (with TTL), `move!`
   (`{:above id}`/`{:below id}`), `clear-change!`. A change expires back to the default and emits `reflex.reverted`.
 
-Built-in triggers, in the order `scenarios/survival.edn` registers them (most urgent first):
+Built-in triggers, in the order of `triggers/defaults.edn` (the default register's priority, most urgent first). A scenario with no `:register` key registers all of them in that order; `:register []` registers none; a list registers exactly that list:
 
 | trigger | holds when | job | cooldown |
 |---|---|---|---|
@@ -341,15 +341,15 @@ Built-in triggers, in the order `scenarios/survival.edn` registers them (most ur
 | `:hostile-near` | a real danger (see Sensing) within `:radius` 8, ranged within `:ranged-radius` 16; `:visible-only false` counts heard mobs | `respond-to-hostile` | none (retry) |
 | `:hungry` | food below `:food` 6 plus one per missing hp (at most 18: below 18 nothing heals); or hurt, below 18 and common food carried; or health below `:health` 7 and food carried (eats to 20) | `get-food` | 90 s |
 | `:night` | night, awake, and a bed to use or carried, someone asleep, unroofed, or shut in its shelter; by day shut in its shelter or a bed it put down outside its zone still stands | `survival.night` | 10 s |
-| `:pen-gate` | a planned fence gate within 8 stands open, body more than 2 away, for 4 s | `animals.shut-gate` | 5 s |
 | `:door-left` | a door a walk opened and meant to shut still stands open after 10 s | `maintenance.shut-doors` | 5 s |
 | `:stuck` | the last 4 `:moved` entries all moved under 1.5 blocks, newest under 60 s old, body really held | `maintenance.unstick` | 60 s |
 | `:died` | a `:died` under 5 minutes old with a newer `:respawned` and no `:recovered` | `recover-drops` | 30 s |
 | `:inventory-nearly-full` | at most `:free` 2 of 36 main and hotbar slots empty | `storage.make-room` | 120 s |
 | `:scaffold-left` | the scaffold ledger holds blocks whose job is gone | `access.cleanup` | stop |
 | `:tidy-pending` | body safe and a `:tidy` entry is pending | `survival.restore-broken` | 10 s |
+| `:pen-gate` | a planned fence gate within 8 stands open, body more than 2 away, for 4 s | `animals.shut-gate` | 5 s |
 | `:mounted` | the body rides something and no live job holds a vehicle | `movement.leave-vehicle` | stop |
-| `:player-joined` | a `:player-joined` entry under `:window-s` 10 old (registered by no scenario) | `debug.notify` | 10 s |
+| `:player-joined` | a `:player-joined` entry under `:window-s` 10 old | `debug.notify` | 10 s |
 
 The dangers (`:suffocating`, `:burning`) have no cooldown and their jobs have no backoff. Needs rest with a reason the agent
 sees (`:hungry` after `food.none`). There is no timer trigger: periodic work is a job.
@@ -514,7 +514,7 @@ and register are restored and the scenario is ignored; `--fresh` discards saved 
 is validated against the job registry and triggers before connecting. Other flags: `--worlds <dir>`, `--drive-idle-s <s>`,
 `--events-max-bytes <n>`.
 
-`survival.edn` registers every survival trigger in the order above and queues `(repeat (jobs.movement.look-around))`.
+`survival.edn` lists the survival triggers and queues `(repeat (jobs.movement.look-around))`.
 `woodcutter-cuts.edn` and `pace-cuts.edn` register an ad hoc `:look-timer` condition to cut a long job on a schedule.
 `test/engine/scenarios_test.cljs` runs `woodcutter`, `pace-cuts` and `survival` end to end against the fake.
 

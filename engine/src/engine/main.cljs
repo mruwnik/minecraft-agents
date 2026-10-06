@@ -78,7 +78,8 @@
         names-ok? (and (string? agent) (string? world) (re-matches bodies/name-re agent) (re-matches bodies/name-re world))
         cfg (when names-ok? (load-agent state-dir world agent))
         max-bytes (when-not (:error cfg) (event-cap events-max-bytes (:events-max-bytes cfg)))
-        plan (when (and scenario (fs/existsSync scenario)) (scenario/read-file scenario))
+        read (when (and scenario (fs/existsSync scenario)) (scenario/read-file scenario))
+        plan (scenario/with-defaults read)
         issues (when plan (scenario/problems registry/jobs (body-triggers) plan))]
     (cond
       (nil? agent) {:error usage}
@@ -87,7 +88,7 @@
       (:error cfg) {:error (:text cfg)}
       (not (fs/existsSync prims-file)) {:error (missing-primitives-message prims-file)}
       (nil? max-bytes) {:error "engine: --events-max-bytes and engine.events.maxBytes must be safe integers >= 1024"}
-      (and scenario (nil? plan)) {:error (str "no scenario file " scenario)}
+      (and scenario (nil? read)) {:error (str "no scenario file " scenario)}
       (seq issues) {:error (str "scenario problems: " (pr-str issues))}
       :else {:root root :cfg cfg :plan plan :state-dir state-dir :events-max-bytes max-bytes})))
 

@@ -3,10 +3,20 @@
   (:require [cljs.reader :as reader]
             [engine.expr :as expr]
             [engine.trigger-api :as trigger-api]
+            [engine.triggers :as triggers]
             ["fs" :as fs]))
 
 (defn parse [text]
   (reader/read-string text))
+
+(defn with-defaults
+  "Scenario s (nil is {}) with the default trigger set as its :register when it has no :register key; an explicit
+  :register (even []) stays as it is."
+  [s]
+  (let [s (or s {})]
+    (if (contains? s :register)
+      s
+      (assoc s :register (mapv (fn [id] {:trigger id}) triggers/order)))))
 
 (defn read-file [file]
   (parse (fs/readFileSync file "utf8")))

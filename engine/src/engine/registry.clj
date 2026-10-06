@@ -219,6 +219,11 @@
                      (contains? line :job) (assoc :job (list 'quote job)))]))
         (:triggers (trigger-defaults))))
 
+(defmacro trigger-order
+  "The ids of the default trigger set, in its listed order (the default register's priority)."
+  []
+  (mapv :id (:triggers (trigger-defaults))))
+
 (defmacro facts-table
   "The facts table the default trigger set names (:facts), or {}."
   []

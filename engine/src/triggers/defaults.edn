@@ -1,20 +1,20 @@
 {:facts triggers.facts/table
 
- ;; The default trigger set: id -> trigger fn, default job, args and persistence. Order means nothing;
- ;; a body's register (its config) orders its triggers.
+ ;; The default trigger set: id -> trigger fn, default job, args and persistence. The order here is the default
+ ;; register's priority (most urgent first), used when a scenario has no :register; an explicit :register orders its own.
  :triggers
  [{:id :suffocating :when triggers.survival.suffocating/suffocating :job (jobs.survival.breathe) :args triggers.survival.suffocating/defaults :persistence :cooldown :cooldown-s 0}
   {:id :burning :when triggers.survival.burning/burning :job (jobs.survival.extinguish) :args {} :persistence :cooldown :cooldown-s 0}
   {:id :wedged :when triggers.survival.wedged/wedged :job (jobs.survival.unwedge) :args {} :persistence :cooldown :cooldown-s 0}
   {:id :hostile-near :when triggers.survival.hostile-near/hostile-near :job (jobs.survival.respond-to-hostile) :args triggers.survival.hostile-near/defaults :persistence :retry}
-  {:id :hungry :when triggers.survival.hungry/hungry :job (jobs.survival.get-food) :args triggers.survival.hungry/defaults :persistence :cooldown :cooldown-s 90}
   {:id :night :when triggers.survival.night/night :job (jobs.survival.night) :args triggers.survival.night/defaults :persistence :cooldown :cooldown-s 10}
+  {:id :hungry :when triggers.survival.hungry/hungry :job (jobs.survival.get-food) :args triggers.survival.hungry/defaults :persistence :cooldown :cooldown-s 90}
   {:id :stuck :when triggers.survival.stuck/stuck :job (jobs.maintenance.unstick) :args triggers.survival.stuck/defaults :persistence :cooldown :cooldown-s 60}
-  {:id :died :when triggers.survival.died/died :job (jobs.survival.recover-drops) :args {} :persistence :cooldown :cooldown-s 30}
-  {:id :pen-gate :when triggers.animals.pen-gate/pen-gate :job (jobs.animals.shut-gate) :args triggers.animals.pen-gate/defaults :persistence :cooldown :cooldown-s 5}
   {:id :door-left :when triggers.maintenance.door-left/door-left :job (jobs.maintenance.shut-doors) :args triggers.maintenance.door-left/defaults :persistence :cooldown :cooldown-s 5}
+  {:id :died :when triggers.survival.died/died :job (jobs.survival.recover-drops) :args {} :persistence :cooldown :cooldown-s 30}
   {:id :inventory-nearly-full :when triggers.storage.inventory-nearly-full/inventory-nearly-full :job (jobs.storage.make-room) :args triggers.storage.inventory-nearly-full/defaults :persistence :cooldown :cooldown-s 120}
   {:id :scaffold-left :when triggers.access.scaffold-left/scaffold-left :job (jobs.access.cleanup) :args {} :persistence :stop}
   {:id :tidy-pending :when triggers.survival.tidy-pending/tidy-pending :job (jobs.survival.restore-broken) :args triggers.survival.tidy-pending/defaults :persistence :cooldown :cooldown-s 10}
+  {:id :pen-gate :when triggers.animals.pen-gate/pen-gate :job (jobs.animals.shut-gate) :args triggers.animals.pen-gate/defaults :persistence :cooldown :cooldown-s 5}
   {:id :mounted :when triggers.movement.mounted/mounted :job (jobs.movement.leave-vehicle) :args {} :persistence :stop :cooldown-s 0}
   {:id :player-joined :when triggers.debug.player-joined/player-joined :job (jobs.debug.notify {:text "player joined"}) :args triggers.debug.player-joined/defaults :persistence :cooldown :cooldown-s triggers.debug.player-joined/default-window-s}]}
