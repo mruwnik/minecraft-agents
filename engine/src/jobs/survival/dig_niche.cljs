@@ -1,5 +1,6 @@
 (ns jobs.survival.dig-niche
   (:require [engine.ctx :as ctx]
+            [jobs.lib.access :as access]
             [jobs.lib.child :as child]
             [jobs.lib.result :as result]
             [jobs.lib.shelter :as sh]
@@ -16,12 +17,13 @@
   walks there (go-to), digs the four cells (opening first, head before feet), steps to the far cell and places one block
   at each opening cell (feet, then head) from the blocks the dig dropped or carried ones.
   Declines (waiting) with :day or :already-sealed. Ends done {:pos :door [feet head cells plugged]} with a :shelter entry {:pos :door} (jobs.survival.dig-in/leave! digs
-  the door out by day), or stopped :no-site, :unreachable, :dig-failed, :no-blocks or :place-failed.
+  the door out by day), or stopped :no-site, :refused (every site would dig or plug another's zone, claim or plan footprint), :unreachable, :dig-failed, :no-blocks or :place-failed.
   Events: dig-niche.sealed (info).")
 
 (def args
   {:reach {:doc "how far from the body to look for a face" :default 16}
    :blocks {:doc "names of the blocks it may place" :default dig-in/shelter-blocks}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
    :roof-height {:doc "a solid block within this many blocks above counts as a roof" :default sh/default-roof-height}})
 
 (defn check
@@ -72,9 +74,17 @@
          (not (falling? (name (at f dir 1 0 2))))
          (not (falling? (name (at f dir 2 0 2)))))))
 
+(defn permitted?
+  "Whether the zone rules (input in, see jobs.lib.access/rules-input) let the job dig the niche's cells and plug its opening."
+  [in f dir]
+  (not (or (some #(access/trespass-refusal in :dig %) (dug-cells f dir))
+           (some #(access/trespass-refusal in :place %) (door-cells f dir)))))
+
 (defn find-site
-  "The nearest {:stand :dir} within reach of the feet cell where a niche can be cut, or nil."
-  [p reach]
+  "The nearest {:stand :dir} within reach of the feet cell where a niche can be cut (and (ok? stand dir) holds, default
+  always), or nil."
+  ([p reach] (find-site p reach (constantly true)))
+  ([p reach ok?]
   (let [{:keys [x y z]} (sh/feet p)
         offsets (sort-by (fn [[dx dz]] (+ (* dx dx) (* dz dz)))
                          (for [dx (range (- reach) (inc reach)) dz (range (- reach) (inc reach))
@@ -83,9 +93,9 @@
     (some (fn [[dx dz]]
             (some (fn [dy]
                     (let [f {:x (+ x dx) :y (+ y dy) :z (+ z dz)}]
-                      (some #(when (niche-ok? p f %) {:stand f :dir %}) [[1 0] [-1 0] [0 1] [0 -1]])))
+                      (some #(when (and (niche-ok? p f %) (ok? f %)) {:stand f :dir %}) [[1 0] [-1 0] [0 1] [0 -1]])))
                   [0 -1 1 -2 2 -3 3]))
-          offsets)))
+          offsets))))
 
 (def dig-reach "How far from a cell the body digs it without walking closer." 4)
 
@@ -145,9 +155,15 @@
 
 (defn ^:async step [c]
   (let [p (:primitives c)
-        site (or (:site (ctx/mem c)) (find-site p (:reach (:args c))))]
+        in (access/rules-input c)
+        ok? (partial permitted? in)
+        saved (:site (ctx/mem c))
+        reach (:reach (:args c))
+        site (or (when (and saved (ok? (:stand saved) (:dir saved))) saved) (find-site p reach ok?))]
     (if (nil? site)
-      (fail! c :no-site "no hillside or wall to cut a niche into")
+      (if (find-site p reach)
+        (fail! c :refused "every hillside or wall that would do is another's (zone, claim or plan)")
+        (fail! c :no-site "no hillside or wall to cut a niche into"))
       (let [_ (ctx/update-mem! c assoc :site site)
             [what cell] (let [s (stage p site)] (if (vector? s) s [s]))]
         (case what
