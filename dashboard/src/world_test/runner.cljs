@@ -441,7 +441,8 @@
       (tick))))
 
 (defn run-steps!
-  "Runs the act steps in order; resolves to the set of submitted job ids."
+  "Runs the act steps in order; resolves to the set of submitted job ids. :await and :rcon-until see events from
+  offset/since (the watch window: a trigger firing inside the settle counts, as it does for :expect)."
   [opts origin c offset t0]
   (reduce (fn [p [op a b :as step]]
             (.then p (fn [ids]
@@ -541,16 +542,17 @@
                        (.then #(rcon! (f/body-commands origin (:body opts) rc)))
                        (.then #(ensure-at-start! {:send rcon! :sleep sleep} origin (:body opts) rc))
                        (.then (fn [why] (when why (throw (js/Error. why)))))
+                       (.then #(rcon! (f/clear-hostiles-commands grid origin rc)))
                        (.then #(reset! pre-register {:offset (log-cursor (events-file opts)) :from-ms (js/Date.now)}))
                        (.then #(when register (put-register! opts register)))
                        (.then #(sleep (* 1000 (get-in rc [:body :settle-s]))))
                        (.then #(rcon! (f/clear-hostiles-commands grid origin rc)))
                        (.then (fn []
-                                (let [offset (log-cursor (events-file opts))
-                                      t0 (js/Date.now)]
-                                  (-> (run-steps! opts origin rc offset t0)
+                                (let [t0 (js/Date.now)
+                                      window (watch-window (some? register) @pre-register {:offset (log-cursor (events-file opts)) :from-ms t0})]
+                                  (-> (run-steps! opts origin rc (:offset window) (:from-ms window))
                                       (.then (fn [ids]
-                                               (.then (watch! opts rc (watch-window (some? register) @pre-register {:offset offset :from-ms t0}) t0 ids)
+                                               (.then (watch! opts rc window t0 ids)
                                                       (fn [expects]
                                                         (.then (after-checks! opts origin rc)
                                                                (fn [afters]

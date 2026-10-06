@@ -22,7 +22,8 @@ runs. The body is stopped (SIGTERM to its own child) and started again (`--fresh
 
 Per run: forceload the plot, kill every non-player entity in it, clear it to air up to `:plot :height`, lay the
 floor; build `:blocks`; write `:plans`; put the body at its start (survival, cleared, healed, fed, inventory,
-effects, spawn point); wait `:settle-s`; note the event log's end (t0); run `:act`; poll the log until every
+effects, spawn point); kill hostiles within 32 blocks; put the `:register`; wait `:settle-s`; kill hostiles again; note
+t0; run `:act` (its `:await` steps, like `:expect`, count from just before the register); poll the log until every
 `:expect` is decided (or `:limit-s`); run the `:after` checks; then `jobs.mjs cancel-all`, kill the plot's
 entities, clear the plot again (so the next restarted body does not start beside this case's hut or bed), put the body on it, clear the body, delete the plans, remove the forceload.
 
