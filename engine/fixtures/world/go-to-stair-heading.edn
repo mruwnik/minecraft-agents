@@ -1,0 +1,58 @@
+;; Card 4ad29ed7: a stair heading the stair refuses rules out only that heading; the other headings are tried and a failed stair
+;; does not count toward the 3 escalations; stair :up ignores air under its solid floor.
+;; The two obsidian-east cases fail since a restore bug (the body is walked back into the stair and shut in, see board card Bug: go-to restore walks into the stair).
+;; Pit mass: stone x 10..22, z 10..22, y 0..3 (top feet y 4), a 1x1 shaft at x 16, z 16 from y 0 up; goal east on top.
+{:defaults
+ {:tags [:movement :access]
+  :plot {:height 14}
+  :blocks [[:fill [10 0 10] [22 3 22] "stone"] [:fill [16 0 16] [16 3 16] "air"]]
+  :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1]]}
+  :limit-s 200 :time :any}
+ :cases
+ [{:name "control-goal-west-no-obstacle"
+   :act [[:job (jobs.movement.go-to {:pos #at [12 4 16] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.restored} :within-s 150 :of-job true}
+            {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 180 :of-job true}]
+   :after [[:body-near [12.5 4 16.5] 2]]}
+  {:name "control-obsidian-east-goal-west"
+   :blocks [[:fill [17 0 16] [17 3 16] "obsidian"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [12 4 16] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.restored} :within-s 150 :of-job true}
+            {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 180 :of-job true}]
+   :after [[:body-near [12.5 4 16.5] 2]]}
+  {:name "obsidian-east-other-heading-arrives"
+   :blocks [[:fill [17 0 16] [17 3 16] "obsidian"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 90 :of-job true}
+            {:event {:source :job :kind :go-to.restored} :within-s 150 :of-job true}
+            {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 180 :of-job true}]
+   :after [[:block [17 1 16] "obsidian"] [:body-near [20.5 4 16.5] 2]]}
+  {:name "obsidian-east-and-north-arrives"
+   :blocks [[:fill [17 0 16] [17 3 16] "obsidian"] [:fill [16 0 15] [16 3 15] "obsidian"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 90 :of-job true}
+            {:event {:source :job :kind :go-to.restored} :within-s 150 :of-job true}
+            {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 180 :of-job true}]
+   :after [[:body-near [20.5 4 16.5] 2]]}
+  {:name "obsidian-all-four-gives-up"
+   :blocks [[:fill [14 0 14] [18 3 18] "obsidian"] [:fill [16 0 16] [16 3 16] "air"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1})]]
+   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived false}} :within-s 150 :of-job true}]
+   :after [[:body-near [16.5 0 16.5] 1]]}
+  {:name "bedrock-all-four-gives-up"
+   :blocks [[:fill [14 0 14] [18 3 18] "bedrock"] [:fill [16 0 16] [16 3 16] "air"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false :escalation {:step :none}}} :within-s 60 :of-job true}]
+   :after [[:body-near [16.5 0 16.5] 1]]}
+  {:name "up-stair-over-air-under-floor"
+   ;; mass y 2..7, shaft y 3..7, body at y 3; [17 2] (under the first step's floor [17 3]) is air; other walls bedrock so east is the only heading
+   :plot {:height 14}
+   :blocks [[:fill [10 0 10] [22 3 22] "air"] [:fill [10 2 10] [22 7 22] "stone"] [:fill [16 3 16] [16 7 16] "air"]
+            [:set [17 2 16] "air"] [:fill [15 3 16] [15 7 16] "bedrock"] [:fill [16 3 15] [16 7 15] "bedrock"] [:fill [16 3 17] [16 7 17] "bedrock"]]
+   :body {:at [16.5 3 16.5]}
+   :act [[:job (jobs.movement.go-to {:pos #at [20 8 16] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :result :data {:escalation {:why :cave-below}}} :for-s 5}
+            {:event {:source :job :kind :go-to.restored} :within-s 150 :of-job true}
+            {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 180 :of-job true}]
+   :after [[:body-near [20.5 8 16.5] 2]]}]}
