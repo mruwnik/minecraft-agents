@@ -12,14 +12,14 @@
   :limit-s 120}
  :cases
  ;; shut-gate quiets every gate it gave up on for 10 min and ends in one run, so a pen-gate reflex runs once and never backs off;
- ;; the backoff case is a persistently true trigger (:hungry, food 8) whose job fails every act on an unreachable chest
+ ;; the backoff case is a persistently true trigger (:hungry: hunger leaves food 8 and damage hp 15, so food < 6 + 5) whose job fails every act on an unreachable chest
  ;; (deposit is a listed job, so it also warns reflex.continued once: expected here).
  [{:name "hungry-failing-job-backs-off-after-three-runs"
    :register [{:trigger :hungry :persistence :cooldown :cooldown-s 0 :backoff {:after 3}
                :job (jobs.storage.deposit {:chest #at [16 0 11]})}]
    :blocks [[:set [16 0 11] "chest"]]
    :body {:at [16.5 0 18.5] :inventory [["stick" 5]]}
-   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"]]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:wait-s 7] [:rcon "damage $BODY 5 minecraft:generic"]]
    :expect [{:event {:source :reflex :kind :backoff :context {:reflex-id :hungry} :data {:fruitless 3}} :within-s 60}]}
   {:name "listed-job-blocked-is-flagged-not-backed-off"
    :blocks [[:set [16 0 11] "chest"]]
