@@ -219,15 +219,9 @@
     (not (#{:left :right} power-side)) :power-side
     (not (and (set? fill) (seq fill) (every? string? fill))) :fill))
 
-(def tight-run
-  "Lit powered rails in a row on each outer side of corners under 4 apart (an S bend or a U). The cart drops below the
-  0.30 blocks per tick floor there (0.28 measured, accepted); four lit rails take it from 0.28 back to 0.35 and over,
-  as the live trace of the S with two lit rails each side showed it back at 0.35 after four 10-tick windows."
-  4)
-
 (defn powered-indices
   "The indices of a line of n rails that are lit powered rails. shape ({:corners set :slopes set :lits set} of indices,
-  default none) is what the route holds: a lit rail beside each corner, and tight-run lit rails in a row outside a pair of corners under 4 apart (the corner itself is a normal rail, so are
+  default none) is what the route holds: a lit rail beside each corner (the corner itself is a normal rail, so are
   slope cells that are not in :lits). Spaced: the launch groups, the corner neighbours and :lits are fixed, and between
   two fixed rails a lit one every power-every cells, counted from the earlier one, so the count restarts at each."
   ([n o] (powered-indices n o {}))
@@ -235,10 +229,7 @@
    (let [limit (- n 2)
          first-group (range 2 (+ 2 launch))
          far-group (when (= :both launch-ends) (range (- limit launch) limit))
-         sorted-corners (sort corners)
-         tight (filter (fn [[a b]] (< (- b a) 4)) (partition 2 1 sorted-corners))
-         beside (remove #(or (contains? corners %) (< % 2) (>= % limit)) (concat (mapcat (fn [c] [(dec c) (inc c)]) corners)
-                        (mapcat (fn [[a b]] (concat (range (- a tight-run) a) (range (inc b) (+ b 1 tight-run)))) tight)))]
+         beside (mapcat (fn [c] [(dec c) (inc c)]) corners)]
      (if (= :all-powered style)
        (set (remove corners (range 2 limit)))
        (let [fixed (sort (distinct (concat first-group far-group beside lits)))
@@ -247,16 +238,6 @@
                           :when (not (or (contains? corners t) (contains? slopes t)))]
                       t)]
          (set (concat fixed spaced)))))))
-
-(def curved #{:south_west :south_east :north_west :north_east})
-
-(defn tight-bends
-  "The pairs of corner positions [[a b] ...] of a chain (plan.rail/line) that lie under 4 cells apart: the cart slows
-  there to about 0.28 blocks per tick, under the 0.30 floor of the rest of the line, which is accepted; layout lights
-  tight-run rails on each outer side so it is back at cruise speed."
-  [chain]
-  (let [corners (keep-indexed (fn [i c] (when (curved (get-in c [:want :shape])) [i (:pos c)])) chain)]
-    (vec (for [[[i a] [j b]] (partition 2 1 corners) :when (< (- j i) 4)] [a b]))))
 
 (defn consecutive-runs
   "The runs of consecutive numbers in the ascending indices, as vectors."
