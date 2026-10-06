@@ -1,6 +1,7 @@
 (ns jobs.access.clear-path
   (:require [engine.ctx :as ctx]
             [jobs.lib.blocks :as b]
+            [jobs.access.stair :as stair]
             [jobs.lib.escape :as escape]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]))
@@ -33,9 +34,7 @@
 
 (defn check [_c] true)
 
-(defn feet-of [c]
-  (let [{:keys [x y z]} (u/self-pos c)]
-    [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]))
+(defn feet-of [c] (stair/feet-of c))
 
 (defn finish!
   [c reason detail]
@@ -79,11 +78,13 @@
         done! (fn [] (ctx/update-mem! c dissoc :digging))]
     (cond
       (escape/protected? block) (finish! c :protected {:cell cell :block block})
-      (>= (get-in (ctx/mem c) [:tries cell] 0) max-cell-digs) (finish! c :refills {:cell cell :block block})
+      (and (not (:started (:digging (ctx/mem c)))) (>= (get-in (ctx/mem c) [:tries cell] 0) max-cell-digs)) (finish! c :refills {:cell cell :block block})
       :else
       (if-let [wait (when-not (:started (:digging (ctx/mem c))) (b/child-wait c :dig 'jobs.blocks.dig args))]
         (finish! c :dig-waits {:cell cell :block block :wait wait})
-        (let [_ (ctx/update-mem! c #(-> % (assoc-in [:digging :started] true) (update-in [:tries cell] (fnil inc 0))))
+        (let [resumed? (:started (:digging (ctx/mem c)))
+              _ (ctx/update-mem! c #(cond-> (assoc-in % [:digging :started] true)
+                                      (not resumed?) (update-in [:tries cell] (fnil inc 0))))
               r (await (ctx/call-child c :dig 'jobs.blocks.dig args))
               res (ctx/child-result c :dig)]
           (cond

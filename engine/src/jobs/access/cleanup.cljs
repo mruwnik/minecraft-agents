@@ -1,5 +1,7 @@
 (ns jobs.access.cleanup
-  (:require [jobs.lib.ledger :as ledger]
+  (:require [jobs.access.stair :as stair]
+            [jobs.lib.escape :as escape]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
@@ -135,11 +137,7 @@
 
 ;; ------------------------------------------------------------------ reading the world
 
-(defn block-at-of [p] (fn [[x y z]] (u/block-name p {:x x :y y :z z})))
-
-(defn feet-of [c]
-  (let [{:keys [x y z]} (u/self-pos c)]
-    [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]))
+(defn feet-of [c] (stair/feet-of c))
 
 (defn eye-of [c]
   (let [{:keys [x y z]} (u/self-pos c)]
@@ -150,7 +148,7 @@
   [c l entries zones]
   (let [{:keys [accept reach]} (:args c)]
     (merge (access/zone-input c {:ignore-zones? (:ignore-zones? (:args c))})
-           {:feet (feet-of c) :eye (eye-of c) :block-at (block-at-of (:primitives c)) :entries entries
+           {:feet (feet-of c) :eye (eye-of c) :block-at (escape/block-at-of (:primitives c)) :entries entries
             :can-harvest? #(tools/can-harvest? (:primitives c) %)
             :ledger (ledger/cells l) :zones zones :accept (set accept) :reach reach
             :held (:held (ctx/mem c) {})})))
@@ -166,7 +164,7 @@
                         {:reason "no zone list has been read" :text "cleanup declines: no zone list has been read"})
         false)
     (:started (ctx/mem c)) true
-    :else (boolean (seq (ledger/offered (ctx/view c) (block-at-of (:primitives c)) (:job (:args c)))))))
+    :else (boolean (seq (ledger/offered (ctx/view c) (escape/block-at-of (:primitives c)) (:job (:args c)))))))
 
 ;; ------------------------------------------------------------------ steps
 
@@ -260,7 +258,7 @@
   "Settle the entries this cleanup works on from their cells; store the ledger when it changed, book removed and
   dropped entries (one cleanup.dropped info each). The ledger after."
   [c l picked]
-  (let [{:keys [ledger removed dropped]} (ledger/settle l #(picked (:cell %)) (block-at-of (:primitives c)))]
+  (let [{:keys [ledger removed dropped]} (ledger/settle l #(picked (:cell %)) (escape/block-at-of (:primitives c)))]
     (when (not= ledger l) (ledger/remember! c ledger))
     (doseq [{:keys [cell item found job]} dropped]
       (ctx/emit! c :cleanup.dropped :info {:cell cell :item item :found found :job job
@@ -294,7 +292,7 @@
       (bad-job? job) (do (ctx/result! c {:status :bad-args :text ":job must be nil, :all or an instance id"}) :done)
       (and (nil? zones) (not (:ignore-zones? (:args c)))) :declined
       (and (not (:started (ctx/mem c)))
-           (empty? (ledger/offered (ctx/view c) (block-at-of (:primitives c)) job))) :declined
+           (empty? (ledger/offered (ctx/view c) (escape/block-at-of (:primitives c)) job))) :declined
       :else (do (ctx/update-mem! c assoc :started true)
                 (loop [i 0]
                   (cond

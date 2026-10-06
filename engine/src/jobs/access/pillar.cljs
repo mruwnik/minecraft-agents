@@ -1,5 +1,6 @@
 (ns jobs.access.pillar
-  (:require [jobs.lib.ledger :as ledger]
+  (:require [jobs.lib.escape :as escape]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
@@ -120,11 +121,12 @@
 
 ;; ------------------------------------------------------------------ the round
 
-(defn feet-cell [c]
+(defn feet-cell
+  "The cell the body's centre is in: the pillar's column is the cell it began in (recentre! walks back to it), not
+  the planner's start cell on a block's edge."
+  [c]
   (let [{:keys [x y z]} (u/self-pos c)]
     [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]))
-
-(defn block-at-of [p] (fn [[x y z]] (u/block-name p {:x x :y y :z z})))
 
 (defn carried [p]
   (reduce (fn [m {:keys [name count]}] (update m name (fnil + 0) count)) {} (u/inventory p)))
@@ -160,7 +162,7 @@
   whose parent reads the result."
   [c]
   (let [p (:primitives c)
-        block-at (block-at-of p)
+        block-at (escape/block-at-of p)
         l (ledger/reconcile (ledger/open-entries (ctx/view c)) block-at)
         feet (feet-cell c)
         {:keys [height item]} (:args c)
@@ -244,7 +246,7 @@
     (ctx/update-mem! c #(-> % (assoc :displaced displaced) (dissoc :counted) (assoc :walking (boolean (and off? (<= displaced max-displacements))))))
     (when (and off? stand (<= displaced max-displacements))
       (let [[x y z] stand
-            block-at (block-at-of (:primitives c))
+            block-at (escape/block-at-of (:primitives c))
             top (or (first (filter #(clear? (block-at [x % z])) (range y (+ y 3)))) y)
             r (await (recentre! c [x top z] home))]
         (when (= :continue r) :continue)))))
@@ -256,7 +258,7 @@
   (if (= :continue (await (shoved-back! c)))
     :continue
     (let [p (:primitives c)
-          block-at (block-at-of p)
+          block-at (escape/block-at-of p)
           seen (ledger/open-entries (ctx/view c))
           l (ledger/reconcile seen block-at)
           feet (feet-cell c)

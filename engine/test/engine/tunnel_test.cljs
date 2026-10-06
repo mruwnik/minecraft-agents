@@ -447,7 +447,7 @@
             (is (= keep? (:keep @out)) (str keep?))
             (is (= n (count l)) (str keep?))
             (is (every? #(and (= :placed (:state %)) (= :tunnel-torch (:purpose %))) l) (str keep?))
-            (is (= (set (map :cell l)) (set (when-not keep? (map :cell (:torches @out))))) (str keep?))))))))
+            (is (= (set (map :cell l)) (set ({false (map :cell (:torches @out)) true []} keep?))) (str keep?))))))))
 
 (deftest no-pickaxe-waits-with-the-stairs-reason-and-digs-nothing
   (async done

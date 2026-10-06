@@ -53,6 +53,11 @@
                  [:west true] [:north true] [:east true] [:south true]]
     :north true [[:south true] [:north true] [:east true] [:west true]]))
 
+(deftest the-escape-stair-runs-opposite-to-the-tunnels-own-stair
+  (are [line-dir expected] (= expected (leave-tunnel/escape-stair {:dir line-dir} 65))
+    :down {:dir :up :y 65}
+    :up {:dir :down :y 65}))
+
 (deftest only-an-access-reason-warrants-the-override
   (are [results expected] (= expected (leave-tunnel/zones-blocked? results))
     [{:reason :zone} {:reason :no-floor}] true

@@ -150,6 +150,11 @@
   [results]
   (boolean (some #(access-reasons (:reason %)) results)))
 
+(defn escape-stair
+  "The stair args out of a tunnel back to the entry's height: the other way than the tunnel's own stair."
+  [{:keys [dir]} entry-y]
+  {:dir (if (= :up dir) :down :up) :y entry-y})
+
 (defn ^:async escape!
   "One attempt of the way out: a stair up to the entry's height along the next heading; done, the body is out and the
   rounds go on; stopped, the next heading; none left, the walk failure stands; the stair declined (:declined: its
@@ -166,8 +171,8 @@
       (finish! c :stopped :walk-failed {:cell cell :walk walk :escape results})
       :else
       (let [r (await (declined/call-child! c (keyword (str "escape-" i)) 'jobs.access.stair
-                                     {:dir :up :heading (:heading attempt) :y entry-y
-                                      :ignore-zones? (:ignore-zones? attempt)}))
+                                     (assoc (escape-stair (:line tunnel) entry-y)
+                                            :heading (:heading attempt) :ignore-zones? (:ignore-zones? attempt))))
             res (when (= :done r) (ctx/child-result c (keyword (str "escape-" i))))]
         (cond
           (= :declined r) :declined
