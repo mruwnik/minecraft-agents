@@ -577,3 +577,49 @@
           (is (= 1 (count (calls p "transfer"))) "one try finds it missing")
           (is (nil? (mem/place (mem/view (:store eng)) :chest)) "the missing chest is no longer known")
           (is (seq (of-kind seen :chest_missing))))))))
+
+(deftest a-reflex-cut-after-a-toss-keeps-the-spot-in-body-memory-and-walks-away-after-the-refire
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory (many "junk" 35)})
+              looks (atom 0)
+              spots #(mem/entries (mem/view (:store eng)) :make-room-tossed)]
+          (core/register-reflex! eng {:trigger :inventory-nearly-full :args {} :job (list 'jobs.storage.make-room {})})
+          (.override (.-world p) "look" (fn ^:async f [token a impl]
+                                          (when (= 2 (swap! looks inc)) (takeover/take! eng {:who "claude" :why "cut"}))
+                                          (await (impl token a))))
+          (await (core/tick! eng))
+          (is (= 1 (count (spots))) "the first toss's spot outlives the cut reflex")
+          (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
+          (loop [i 0]
+            (await (core/tick! eng))
+            (when (and (< i 60) (seq (:instances (core/state eng)))) (recur (inc i))))
+          (is (= 3 (count (calls p "toss"))) "no stack thrown twice")
+          (is (empty? (calls p "collect")) "nothing picked up again")
+          (is (empty? (spots)) "the walk away was made, the spot is forgotten"))))))
+
+(deftest a-refused-chest-and-nothing-to-toss-is-nothing-to-go
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p out returns]} (with-parent {:inventory (same "diamond" 35 1) :containers {"10,64,0" []}} {})]
+          (.override (.-world p) "transfer" (fn ^:async f [_ _ _] #js {:status "full" :moved 0}))
+          (know-chest! eng chest-pos)
+          (await (tick-out! eng 30))
+          (is (= [:done] @returns))
+          (is (= [:stopped :nothing-to-go] ((juxt :status :reason) @out))))))))
+
+(deftest toss-failures-count-in-a-row
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:inventory (many "junk" 35)})
+              n (atom 0)]
+          (.override (.-world p) "toss" (fn ^:async f [token a impl]
+                                          (if (odd? (swap! n inc))
+                                            #js {:status "failed"}
+                                            (await (impl token a)))))
+          (await (run-reflex eng {} {}))
+          (is (empty? (of-kind seen :make-room.toss-failed)) "a failure between successes does not add up")
+          (is (= 1 (count (of-kind seen :make-room.done)))))))))
