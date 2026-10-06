@@ -82,7 +82,7 @@
 
 ;; ---------------------------------------------------------------- the body's side
 
-(defn block-at [c {:keys [x y z]}] (.blockAt (:primitives c) #js {:x x :y y :z z}))
+(defn block-at [c {:keys [x y z]}] (u/block-at (:primitives c) {:x x :y y :z z}))
 
 (defn self-name [c] (.-username (.self (:primitives c))))
 

@@ -2,7 +2,8 @@
   "Working a door, gate, trapdoor, lever or button with one click of an empty hand: which blocks a hand works, the state of a
   block read back, and the click itself. jobs.access.toggle and the walk driver (jobs.lib.pass) share it."
   (:require [clojure.string :as str]
-            [engine.ctx :as ctx]))
+            [engine.ctx :as ctx]
+            [jobs.lib.util :as u]))
 
 (defn kind-of
   "What works block name: :iron (a hand cannot), :openable, :lever, :button, or nil."
@@ -56,7 +57,7 @@
         status (.-status r)
         before (js->clj (some-> r .-before .-properties) :keywordize-keys true)
         after (js->clj (some-> r .-after .-properties) :keywordize-keys true)
-        b (.blockAt (:primitives c) (clj->js pos))
+        b (u/block-at (:primitives c) pos)
         now (props-of b)
         facts {:block block :was before :now now}
         out (fn [outcome & {:as more}] (merge {:outcome outcome :facts facts} more))]

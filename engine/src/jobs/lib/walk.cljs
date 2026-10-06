@@ -27,7 +27,7 @@
         grounded? (fn []
                     (let [s (.self p)
                           pos (.-pos s)
-                          b (.blockAt p #js {:x (js/Math.floor (.-x pos)) :y (js/Math.floor (.-y pos)) :z (js/Math.floor (.-z pos))})]
+                          b (u/block-at p {:x (js/Math.floor (.-x pos)) :y (js/Math.floor (.-y pos)) :z (js/Math.floor (.-z pos))})]
                       (or (.-onGround s) (contains? held-in (some-> b .-name)))))]
     (loop [n 0]
       (when (and (< n max-settle-waits) (not (grounded?)))

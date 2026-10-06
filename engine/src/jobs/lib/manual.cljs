@@ -2,6 +2,7 @@
   "What manual takeover (engine.takeover) does as the jobs do, called through engine.hooks: a move-to walks as go-to
   walks (jobs.lib.near), a dig holds the best carried tool, a wear wears as the wear job does."
   (:require [jobs.lib.armour :as armour]
+            [jobs.lib.util :as u]
             [jobs.lib.tools :as tools]
             [jobs.lib.near :as near]
             [jobs.lib.walk :as walk]))
@@ -22,8 +23,8 @@
 (defn dig-need
   "The tool name a dig at pos lacks: no carried tool can harvest the block there (nil when one can, or no block)."
   [p pos]
-  (let [block (some-> (.blockAt p pos) .-name)
-        names (map :name (js->clj (.-inventory (.self p)) :keywordize-keys true))]
+  (let [block (u/block-name p pos)
+        names (map :name (u/inventory p))]
     (when block (tools/harvest-need names (some-> (.harvestTools p block) (js->clj))))))
 
 (defn dig-timeout-s
@@ -32,8 +33,8 @@
   no-tool at once digs nothing, so it needs only dig-floor-s."
   [p args]
   (let [pos (clj->js (:pos args))
-        block (some-> (.blockAt p pos) .-name)
-        names (map :name (js->clj (.-inventory (.self p)) :keywordize-keys true))
+        block (u/block-name p pos)
+        names (map :name (u/inventory p))
         ms (if (dig-need p pos) 0 (or (.digTime p pos (when block (tools/best-tool names block))) 0))]
     (-> (+ (/ ms 1000) dig-margin-s) (max dig-floor-s) (min dig-cap-s) js/Math.ceil)))
 
@@ -41,8 +42,8 @@
   "A manual dig as a job digs: the best carried tool for the block is held first. A block no carried tool can harvest is
   not dug (the dig would lose its drop): {:status \"no-tool\" :block :needed :reason}. Resolves to a JS result."
   [p token args]
-  (let [block (some-> (.blockAt p (clj->js (:pos args))) .-name)
-        names (map :name (js->clj (.-inventory (.self p)) :keywordize-keys true))
+  (let [block (some-> (u/block-at p (:pos args)) .-name)
+        names (map :name (u/inventory p))
         needed (when block (tools/harvest-need names (some-> (.harvestTools p block) (js->clj))))
         tool (when block (tools/best-tool names block))]
     (if needed
@@ -59,7 +60,7 @@
   \"not-armour\"|\"no-item\"}, or {:status \"failed\" ...} when the server did not take a piece."
   [p token args]
   (let [self (.self p)
-        names (map :name (js->clj (.-inventory self) :keywordize-keys true))
+        names (map :name (u/inventory p))
         r (await (armour/wear! (fn [item slot] (.equip p token (clj->js {:item item :dest slot})))
                                (armour/worn-of (.-equipment self)) names (:item args)))]
     (clj->js (cond

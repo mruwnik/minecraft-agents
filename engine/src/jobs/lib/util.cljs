@@ -5,16 +5,21 @@
 
 (def max-failures 3)
 
+(defn block-at
+  "The block at cell pos (a cljs or JS {x y z}) as the JS object, or nil when the chunk is not loaded."
+  [p pos]
+  (.blockAt p (clj->js pos)))
+
 (defn block-name
   "The block name at cell pos, or nil when the chunk is not loaded."
   [p pos]
-  (some-> (.blockAt p (clj->js pos)) .-name))
+  (some-> (block-at p pos) .-name))
 
 (defn block-facts
   "What a cell holds as cljs facts {:name :full-cube? :waterlogged?} (full-cube?: its collision shape fills the cell), or
   nil when the chunk is not loaded."
   [p pos]
-  (when-let [b (.blockAt p (clj->js pos))]
+  (when-let [b (block-at p pos)]
     (let [logged (some-> b .-properties .-waterlogged)]
       {:name (.-name b)
        :full-cube? (boolean (.-fullCube b))
@@ -42,7 +47,7 @@
   [p]
   (mapv (fn [i] (cond-> {:name (.-name i) :count (.-count i) :slot (.-slot i)}
                   (some? (.-durability i)) (assoc :durability (.-durability i) :max (.-maxDurability i))))
-        (array-seq (.-inventory (.self p)))))
+        (some-> (.self p) .-inventory array-seq)))
 
 (def inventory-slots
   "Main and hotbar slots: what the inventory list holds (armour and off-hand are not in it)."

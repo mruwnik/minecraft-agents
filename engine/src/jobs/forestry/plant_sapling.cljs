@@ -61,7 +61,7 @@
       (:meal (ctx/mem c)) true
       (nil? t) true
       (nil? (sapling-for (u/inventory p) (:species t))) (ctx/wait c {:reason :no-sapling :species (:species t)})
-      (log-name? (some-> (.blockAt p (clj->js (:pos t))) .-name)) (ctx/wait c {:reason :log-on-spot :pos (:pos t)})
+      (log-name? (some-> (u/block-at p (:pos t)) .-name)) (ctx/wait c {:reason :log-on-spot :pos (:pos t)})
       :else true)))
 
 (defn ^:async round

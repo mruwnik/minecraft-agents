@@ -49,7 +49,7 @@
       :else :ok)))
 
 (defn block-at-fn [p]
-  (fn [pos] (.blockAt p (clj->js pos))))
+  (fn [pos] (u/block-at p pos)))
 
 ;; ------------------------------------------------------------------ guarding
 

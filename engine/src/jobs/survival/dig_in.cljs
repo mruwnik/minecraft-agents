@@ -129,7 +129,7 @@
 (defn open-openable
   "The block at cell when it is a door, gate or trapdoor (wooden, copper or iron) standing open, else nil."
   [p cell]
-  (let [b (.blockAt p (clj->js cell))]
+  (let [b (u/block-at p cell)]
     (when (and b (#{:openable :iron} (click/kind-of (.-name b))) (click/reached? :open (click/props-of b)))
       b)))
 
@@ -139,7 +139,7 @@
   plates, buttons, levers, carpets, torches, plants, slabs and stairs let a mob walk or step through (or leave a gap
   it fits through), so they are not sealed; nor is an unloaded cell."
   [p cell]
-  (let [b (.blockAt p (clj->js cell))]
+  (let [b (u/block-at p cell)]
     (boolean (and b
                   (not (open-openable p cell))
                   (or (.-fullCube b) (re-find mob-proof-shapes (.-name b)))))))
@@ -177,7 +177,7 @@
     (when side [(at side 0) (at side 1)])))
 
 (defn full-cube? [c cell]
-  (boolean (some-> (.blockAt (:primitives c) (clj->js cell)) .-fullCube)))
+  (boolean (some-> (u/block-at (:primitives c) cell) .-fullCube)))
 
 (defn ^:async place-all!
   "Place blocks at cells in order. Resolves to :ok, or the first status that is not placed or occupied.
@@ -382,7 +382,7 @@
 (defn room-wall?
   "Whether a cell bounds a room against mobs: sealed?, and not an openable door, gate or trapdoor standing open."
   [p cell]
-  (let [b (.blockAt p (clj->js cell))]
+  (let [b (u/block-at p cell)]
     (and (sealed? p cell)
          (not (and (= :openable (click/kind-of (.-name b))) (click/reached? :open (click/props-of b)))))))
 
@@ -400,7 +400,7 @@
       (cond
         (> (count seen) room-limit) nil
         (< room-reach (max (js/Math.abs (- x fx)) (js/Math.abs (- y fy)) (js/Math.abs (- z fz)))) nil
-        (nil? (.blockAt p (clj->js cell))) nil
+        (nil? (u/block-at p cell)) nil
         :else (let [next (for [d neighbours
                                :let [n (shift cell d)]
                                :when (and (not (seen n)) (not= n plug) (not (room-wall? p n)))]

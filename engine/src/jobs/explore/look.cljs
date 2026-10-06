@@ -1,5 +1,5 @@
 (ns jobs.explore.look
-  (:require [engine.ctx :as ctx] [jobs.lib.places :as places]))
+  (:require [engine.ctx :as ctx] [jobs.lib.places :as places] [jobs.lib.util :as u]))
 (def doc
   "Observe nearby loaded blocks and entities once without moving or changing the world. Emits look.observed,
   available through observe --wait --watch or observe result after completion. :at inspects one exact block
@@ -47,7 +47,7 @@
   (let [self (.self p)
         blocks (if (pos? max-blocks) (vec (array-seq (.blocks p #js {:radius radius :names (clj->js block-names) :max (inc max-blocks) :properties properties?}))) [])
         entities (if (pos? max-entities) (vec (array-seq (.entities p #js {:radius radius :names (clj->js entity-names) :max (inc max-entities)}))) [])
-        exact (when at (.blockAt p (clj->js at)))]
+        exact (when at (u/block-at p at))]
     (cond-> {:center (pos (.-pos self)) :radius radius :scope :loaded-chunks
              :blocks (mapv block (take max-blocks blocks)) :entities (mapv entity (take max-entities entities))}
       (> (count blocks) max-blocks) (assoc :more-blocks? true)

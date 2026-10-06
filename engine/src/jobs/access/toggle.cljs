@@ -94,7 +94,7 @@
   (let [{:keys [pos state error]} (parse (:args c))]
     (if error
       true
-      (let [b (.blockAt (:primitives c) (clj->js pos))
+      (let [b (u/block-at (:primitives c) pos)
             props (some-> b click/props-of)]
         (cond
           (nil? b) (ctx/wait c {:reason :not-loaded :pos pos})
@@ -147,7 +147,7 @@
   (let [{:keys [pos state error]} (parse (:args c))]
     (if error
       (decline! c :bad-args nil nil error)
-      (let [b (.blockAt (:primitives c) (clj->js pos))
+      (let [b (u/block-at (:primitives c) pos)
             block (some-> b .-name)
             kind (click/kind-of block)
             text (str block " at " (pr-str pos))]

@@ -124,7 +124,7 @@
   "Whether the bed at pos is occupied as a player sees it: the bed block's occupied state, or another player lying within
   a block of it (a bed is two cells)."
   [p {:keys [x y z] :as pos}]
-  (let [b (.blockAt p (clj->js pos))
+  (let [b (u/block-at p pos)
         props (when b (or (.-properties b) (some-> (.-getProperties b) (.call b))))
         me (.-username (.self p))]
     (boolean (or (true? (some-> props .-occupied))

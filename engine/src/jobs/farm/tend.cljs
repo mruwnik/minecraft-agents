@@ -266,7 +266,7 @@
   "The planned cells holding their crop, not yet ripe."
   [p crops]
   (filterv (fn [[pos crop]]
-             (let [b (.blockAt p (clj->js pos))]
+             (let [b (u/block-at p pos)]
                (and b (= crop (.-name b)) (some-> (.-age b) (< (harvest/ripe-age crop))))))
            crops))
 

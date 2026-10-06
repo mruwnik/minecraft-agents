@@ -234,7 +234,7 @@
 (defn world-block
   "The block at [x y z] in plan.shape's shape: nil when unloaded, else {:name n} with :state when it has properties."
   [p pos]
-  (when-let [b (.blockAt p (clj->js (zipmap [:x :y :z] pos)))]
+  (when-let [b (u/block-at p (zipmap [:x :y :z] pos))]
     (cond-> {:name (.-name b)}
       (.-properties b) (assoc :state (js->clj (.-properties b) :keywordize-keys true)))))
 

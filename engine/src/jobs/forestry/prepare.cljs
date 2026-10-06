@@ -179,7 +179,7 @@
 (defn water-level
   "The level of the water at pos (a number), nil for any other block, unloaded, or water without a level."
   [p pos]
-  (let [b (.blockAt p (clj->js pos))]
+  (let [b (u/block-at p pos)]
     (when (= "water" (some-> b .-name))
       (let [l (some-> b .-properties .-level)]
         (when (number? l) l)))))

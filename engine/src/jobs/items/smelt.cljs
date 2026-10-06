@@ -208,7 +208,7 @@
   "Whether the block at pos is loaded and is no longer a lit furnace: it is not lit (the fuel ran out, or the cook
   is over) or it is not a furnace any more (broken, replaced)."
   [p pos]
-  (let [block (.blockAt p (clj->js pos))]
+  (let [block (u/block-at p pos)]
     (and (some? block)
          (or (not (furnace-block? (.-name block)))
              (false? (some-> (.-properties block) .-lit))))))

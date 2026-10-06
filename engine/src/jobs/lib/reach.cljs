@@ -97,7 +97,7 @@
                hit (.get cache k)]
            (if (some? hit)
              hit
-             (let [v (block-kind (.blockAt p #js {:x x :y y :z z}))]
+             (let [v (block-kind (u/block-at p {:x x :y y :z z}))]
                (.set cache k v)
                v))))))))
 
@@ -118,7 +118,7 @@
   torch, plant, rail, lava, fire, cactus or water)."
   [p {:keys [x y z]}]
   (let [kind-at (lookup p)
-        below (.blockAt p #js {:x x :y (dec y) :z z})]
+        below (u/block-at p {:x x :y (dec y) :z z})]
     (and (passable? kind-at x y z) (passable? kind-at x (inc y) z)
          (keyword-identical? :solid (kind-at x (dec y) z))
          (not (hazard-blocks (some-> below .-name))))))
@@ -453,7 +453,7 @@
   there is a shut door, else nil. A body standing in the free part of that cell cannot walk through the panel."
   [p kind-at {:keys [x y z]}]
   (when (keyword-identical? :solid (kind-at x y z))
-    (let [b (.blockAt p #js {:x x :y y :z z})
+    (let [b (u/block-at p {:x x :y y :z z})
           name (some-> b .-name)]
       (when (and name (str/ends-with? name "_door") (not (open-prop? b)))
         (door-panel-step (some-> b .-properties .-facing))))))

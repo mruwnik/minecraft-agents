@@ -43,7 +43,7 @@
         mid (or center me)
         reach (+ radius (u/dist me mid))
         found (if at
-                (let [b (.blockAt p (clj->js at))]
+                (let [b (u/block-at p at)]
                   (if (unripe? b) [at] []))
                 (->> (array-seq (.blocks p #js {:radius reach :names (clj->js (vec (keys ripe-age))) :max 4096}))
                      (filter unripe?)
