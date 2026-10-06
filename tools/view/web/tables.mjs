@@ -23,7 +23,7 @@ const fetchTable = async ({ renderer, decoder, baseUrl, debugLevel }, version) =
   const table = { materialOf: decodeBase64U16(json.materialOf), materials: json.materials, format: json.format }
   decoder.setTable({ format: json.format, materialOf: table.materialOf })
   renderer.setMaterials(json.materials.map(m => ({ ...m, issue: ISSUE_LEVELS.indexOf(m.issue) >= 0 && ISSUE_LEVELS.indexOf(m.issue) <= debugLevel })))
-  renderer.setTextures({ bytes: new Uint8Array(bytes), layers: json.textures.names.length, size: json.textures.size, levels: json.textures.levels })
+  renderer.setTextures({ bytes: new Uint8Array(bytes), names: json.textures.names, layers: json.textures.names.length, size: json.textures.size, levels: json.textures.levels })
   return table
 }
 

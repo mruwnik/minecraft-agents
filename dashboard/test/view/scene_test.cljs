@@ -236,6 +236,10 @@
     {:name "bat" :kind "Hostile mobs"} ["bat" nil "hostile"]
     {:name "pig" :kind "Passive mobs"} ["pig" nil nil]))
 
+(deftest entity-boxes-carry-the-yaw-the-views-turn-a-model-by
+  (let [boxes (scene/entity-boxes (into-array [#js {:pos #js {:x 1 :y 2 :z 3} :name "cow" :yaw 1.5}]) #js {:x 0 :y 0 :z 0} #js {:x 0 :y 0 :z 0})]
+    (is (= 1.5 (.-yaw ^js (aget boxes 0))))))
+
 (deftest entity-colors
   (are [e expected] (= expected (vec (scene/entity-color (clj->js e))))
     {:type "player"} [0.2 0.4 0.95]

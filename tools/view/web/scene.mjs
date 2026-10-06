@@ -10,12 +10,20 @@ import { cameraBasis } from './camera.mjs'
 import { createSceneCore, decodePriority } from './cljs/viewer.mjs'
 import { skyDarken, sceneTime } from './shading.mjs'
 import { paletteFor } from './mobs.mjs'
+import { modelFor, worldBox } from './mob-models.mjs'
 import { tablesFor } from './tables.mjs'
 
 export { decodePriority }
 
-// each mob box takes its species' colour (the software renderers' palettes, tools/view/web/mobs.mjs); the box carries name and kind
-const speciesColored = boxes => boxes.map(box => ({ ...box, color: paletteFor(box)[0].map(v => v / 255) }))
+// each mob box takes its species' colour (the software renderers' palettes, tools/view/web/mobs.mjs); the box carries name and kind.
+// A mob with a model (web/mob-models.mjs) also carries it, turned to its yaw, and its box becomes the one round the model.
+export const speciesColored = boxes => boxes.map(box => {
+  const colored = { ...box, color: paletteFor(box)[0].map(v => v / 255) }
+  const model = modelFor({ name: box.name, height: box.max[1] - box.min[1], yaw: box.yaw })
+  if (!model) return colored
+  const at = { x: (box.min[0] + box.max[0]) / 2, y: box.min[1], z: (box.min[2] + box.max[2]) / 2 }
+  return { ...colored, ...worldBox(model, at), model: { parts: model.parts, right: model.right, origin: [at.x, at.y, at.z] } }
+})
 
 export const createScene = ({ renderer, decoder, baseUrl = '', debugLevel = 0, ...options }) => {
   const core = createSceneCore({

@@ -8,6 +8,7 @@ import prismarineBlock from 'prismarine-block'
 import { textureBytes, SIX_FACES, OVER_CAP, ELEMENT_CAP } from '../tools/view/materials.mjs'
 import { findClientJar } from '../tools/view/jar-read.mjs'
 import { unpackList, TABLE_WIDTH } from '../tools/view/element-table.mjs'
+import { modelLayers } from '../tools/view/web/mob-models.mjs'
 
 const VERSION = '26.1'
 const textureDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'textures')
@@ -139,7 +140,9 @@ test('a lectern with a book and the enchanting table add their book to the jar m
 test('entity layers stay within the budget and no sheet region is named twice', { skip }, () => {
   const names = build.table.textures.names.filter(n => n.startsWith('entity/'))
   assert.equal(new Set(names).size, names.length)
-  assert.ok(names.length <= 400, `${names.length} entity layers`)
+  const mobs = new Set(modelLayers())
+  const blockEntities = names.filter(n => !mobs.has(n))
+  assert.ok(blockEntities.length <= 400, `${blockEntities.length} block entity layers`)
 })
 
 test('the element table is whole rows and every list fits in it', { skip }, () => {
@@ -154,4 +157,9 @@ test('layers: every layer a material names exists and the layer count fits the i
   assert.ok(count < 4095)
   assert.ok(build.table.materials.flatMap(m => [...(m.tex ?? []), ...(m.tex6 ?? [])]).every(l => l < count))
   assert.equal(build.textures.layers, count)
+})
+
+test('the texture array holds the mobs\' model faces', { skip }, () => {
+  const names = new Set(build.table.textures.names)
+  assert.deepEqual(modelLayers().filter(layer => !names.has(layer)), [])
 })

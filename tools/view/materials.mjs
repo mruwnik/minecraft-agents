@@ -11,6 +11,7 @@ import { findClientJar, zipEntries, entryContent, openJar } from './jar-read.mjs
 import { loadModels } from './block-models.mjs'
 import { bakeAll, classify } from './block-bake.mjs'
 import { blockEntityElements, ADDS_TO_MODEL } from './block-entity-models.mjs'
+import { modelLayers } from './web/mob-models.mjs'
 import { tintRef, tintTable, dryFoliageColor, APPROXIMATE_GROUPS, TINT_GROUPS } from './tints.mjs'
 import { packElementTable, FACE_DIRS, TABLE_WIDTH } from './element-table.mjs'
 
@@ -237,6 +238,8 @@ export function textureBytes (version, textureDir, { jarPath = findClientJar() }
     const block = Block.fromStateId(id, 0)
     materialOf[id] = AIR.has(block.name) ? 0 : materialIndex(block, id)
   }
+  // the mobs' model faces (web/mob-models.mjs) are layers too: the browser view textures them from this array
+  if (jarFiles) for (const name of modelLayers()) if (sheet(name.split('#')[0])) layerFor(name)
   if (layerNames.length > MAX_LAYER) throw new Error(`${layerNames.length} texture layers: the info texture packs at most ${MAX_LAYER}`)
   const packed = lists.length ? packElementTable(lists) : null
   materials.forEach(material => {

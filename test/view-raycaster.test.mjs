@@ -26,7 +26,7 @@ export const syntheticGrid = () => {
 const eye = { x: 0.5, y: 65.6, z: 4.5 }
 const entities = [
   { name: 'zombie', kind: 'hostile', x: -2, y: 64, z: -2, width: 0.6, height: 1.95, yaw: 0.7 },
-  { name: 'cow', x: 3, y: 64, z: -7.7, width: 0.9, height: 1.4, yaw: 0 },
+  { name: 'cow', x: 3, y: 64, z: -7.2, width: 0.9, height: 1.4, yaw: 0 },
   { name: 'item', kind: 'item', x: 0.5, y: 64, z: 0, width: 0.25, height: 0.25 },
   { name: 'creeper', kind: 'hostile', x: 0.5, y: 64, z: 10, width: 0.6, height: 1.7 },
   { name: 'pig', x: 0.5, y: 64, z: -60, width: 0.9, height: 0.9 }

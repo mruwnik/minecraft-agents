@@ -2,7 +2,9 @@
 // Eyes for the bot: a small software raycaster over the chunk data mineflayer already holds.
 // Everything here is pure (no bot, no disk) so it can be tested without a server; the body feeds it the world.
 import zlib from 'node:zlib'
-import { canSee, paletteFor, placeLabels } from './web/mobs.mjs'
+import { canSee, placeLabels } from './web/mobs.mjs'
+import { mobFor, mobPaint } from './mob-draw.mjs'
+import { mobImage } from './mob-textures.mjs'
 import { drawLabels } from './labels.mjs'
 import { lightColor, skyDarken } from './web/shading.mjs'
 
@@ -492,65 +494,11 @@ const screenRect = (project, eye, box, width, height) => {
   return [Math.max(0, Math.floor(x1) - PAD), Math.max(0, Math.floor(y1) - PAD), Math.min(width - 1, Math.ceil(x2) + PAD), Math.min(height - 1, Math.ceil(y2) + PAD)]
 }
 
-// ---------------------------------------------------------------- mobs
-// A mob is drawn as a few boxes in its own frame: x across and z forward in widths, y up in heights, so one table
-// serves a chicken and a ravager. The last number picks the palette entry: 0 body, 1 head, 2 limbs.
-const FAMILIES = {
-  biped: [[-0.42, 0.75, -0.42, 0.42, 1, 0.42, 1], [-0.42, 0.375, -0.21, 0.42, 0.75, 0.21, 0], [-0.83, 0.375, -0.21, -0.42, 0.75, 0.21, 0],
-    [0.42, 0.375, -0.21, 0.83, 0.75, 0.21, 0], [-0.42, 0, -0.21, 0, 0.375, 0.21, 2], [0, 0, -0.21, 0.42, 0.375, 0.21, 2]],
-  quadruped: [[-0.5, 0.4, -0.8, 0.5, 0.8, 0.55, 0], [-0.33, 0.55, 0.55, 0.33, 1, 0.95, 1], [-0.45, 0, -0.75, -0.15, 0.4, -0.45, 2],
-    [0.15, 0, -0.75, 0.45, 0.4, -0.45, 2], [-0.45, 0, 0.2, -0.15, 0.4, 0.5, 2], [0.15, 0, 0.2, 0.45, 0.4, 0.5, 2]],
-  creeper: [[-0.42, 0.7, -0.42, 0.42, 1, 0.42, 1], [-0.42, 0.25, -0.25, 0.42, 0.7, 0.25, 0], [-0.42, 0, 0.25, 0, 0.25, 0.6, 2],
-    [0, 0, 0.25, 0.42, 0.25, 0.6, 2], [-0.42, 0, -0.6, 0, 0.25, -0.25, 2], [0, 0, -0.6, 0.42, 0.25, -0.25, 2]],
-  spider: [[-0.3, 0.25, -0.55, 0.3, 0.8, 0, 0], [-0.2, 0.25, 0, 0.2, 0.65, 0.3, 1], ...[-0.25, -0.1, 0.05, 0.2].map(z => [-0.5, 0.05, z, 0.5, 0.4, z + 0.06, 2])],
-  bird: [[-0.5, 0.3, -0.5, 0.5, 0.75, 0.4, 0], [-0.3, 0.6, 0.25, 0.3, 1, 0.65, 1], [-0.3, 0, -0.05, -0.1, 0.3, 0.1, 2], [0.1, 0, -0.05, 0.3, 0.3, 0.1, 2]],
-  blob: [[-0.5, 0, -0.5, 0.5, 1, 0.5, 1]]
-}
-const FAMILY_OF = Object.fromEntries(Object.entries({
-  biped: 'player zombie husk drowned skeleton stray bogged parched wither_skeleton villager wandering_trader pillager vindicator evoker illusioner witch piglin piglin_brute zombified_piglin zombie_villager enderman iron_golem snow_golem creaking warden',
-  quadruped: 'cow mooshroom pig sheep goat horse donkey mule skeleton_horse zombie_horse llama trader_llama camel camel_husk wolf fox cat ocelot polar_bear panda hoglin zoglin ravager sniffer armadillo turtle',
-  creeper: 'creeper',
-  spider: 'spider cave_spider',
-  bird: 'chicken parrot'
-}).flatMap(([family, names]) => names.split(' ').map(name => [name, family])))
-
-// The mob's parts sized to it, the eye turned into its frame (rays are turned per pixel), and the world-space box
-// round its turned parts for screenRect. Turning keeps lengths, so a hit's t compares with the terrain's directly.
-const mobFor = (e, eye) => {
-  const parts = FAMILIES[FAMILY_OF[e.name] ?? (e.height >= 2 * e.width ? 'biped' : 'blob')]
-    .map(([x1, y1, z1, x2, y2, z2, paint]) => [x1 * e.width, y1 * e.height, z1 * e.width, x2 * e.width, y2 * e.height, z2 * e.width, paint])
-  const hull = [0, 1, 2].map(i => Math.min(...parts.map(p => p[i]))).concat([3, 4, 5].map(i => Math.max(...parts.map(p => p[i]))))
-  const yaw = e.yaw ?? 0
-  const right = { x: Math.cos(yaw), z: -Math.sin(yaw) }
-  const forward = { x: -Math.sin(yaw), z: -Math.cos(yaw) }
-  const corners = [[hull[0], hull[2]], [hull[3], hull[2]], [hull[0], hull[5]], [hull[3], hull[5]]]
-    .map(([x, z]) => [e.x + x * right.x + z * forward.x, e.z + x * right.z + z * forward.z])
-  const ox = eye.x - e.x
-  const oz = eye.z - e.z
-  return {
-    e,
-    parts,
-    hull,
-    right,
-    forward,
-    palette: paletteFor(e),
-    eye: { x: ox * right.x + oz * right.z, y: eye.y - e.y, z: ox * forward.x + oz * forward.z },
-    box: [Math.min(...corners.map(c => c[0])), e.y + hull[1], Math.min(...corners.map(c => c[1])), Math.max(...corners.map(c => c[0])), e.y + hull[4], Math.max(...corners.map(c => c[1]))],
-    pixels: 0,
-    sumX: 0,
-    sumY: 0,
-    x1: Infinity,
-    y1: Infinity,
-    x2: -Infinity,
-    y2: -Infinity
-  }
-}
-
 // Draw the world. `near` is the fraction of the picture closer than NEAR. `texture(blockName, face, props)` returns {width,height,rgba,tint?} or null; entities are
 // {name, kind?, x, y, z, width, height, yaw?}, drawn as their family's parts. Returns {width,height,rgba,seen} where `seen` lists the entities
 // that actually ended up on screen (not hidden behind blocks) with the pixel they are centred on and the box of pixels
 // they cover.
-export function render ({ grid, info, texture, eye, entities = [], timeOfDay, rain = 0, width, height, maxDist = 64, ...camera }) {
+export function render ({ grid, info, texture, eye, entities = [], timeOfDay, rain = 0, width, height, maxDist = 64, mobPictures = mobImage, ...camera }) {
   const cam = cameraFor({ ...camera, width, height })
   const light = daylight(timeOfDay)
   const table = lightTable(timeOfDay, rain)
@@ -580,6 +528,7 @@ export function render ({ grid, info, texture, eye, entities = [], timeOfDay, ra
   }
   const d = { x: 0, y: 0, z: 0 }
   const local = { x: 0, y: 0, z: 0 }
+  const nearestLocal = { x: 0, y: 0, z: 0 }
   for (let py = 0; py < height; py++) {
     const rowMobs = mobs.filter(m => py >= m.rect[1] && py <= m.rect[3])
     for (let px = 0; px < width; px++) {
@@ -594,7 +543,7 @@ export function render ({ grid, info, texture, eye, entities = [], timeOfDay, ra
       let nearest = null
       let nearestT = Infinity
       let nearestFace = null
-      let nearestPaint = 0
+      let nearestPart = null
       for (const m of rowMobs) {
         if (px < m.rect[0] || px > m.rect[2]) continue
         local.x = d.x * m.right.x + d.z * m.right.z
@@ -604,7 +553,7 @@ export function render ({ grid, info, texture, eye, entities = [], timeOfDay, ra
         if (!rayBox(m.eye, local, h[0], h[1], h[2], h[3], h[4], h[5], boxHit) || boxHit.t >= limit || boxHit.t >= nearestT) continue
         for (const p of m.parts) {
           if (!rayBox(m.eye, local, p[0], p[1], p[2], p[3], p[4], p[5], boxHit)) continue
-          if (boxHit.t < limit && boxHit.t < nearestT) { nearest = m; nearestT = boxHit.t; nearestFace = boxHit.face; nearestPaint = p[6] }
+          if (boxHit.t < limit && boxHit.t < nearestT) { nearest = m; nearestT = boxHit.t; nearestFace = boxHit.face; nearestPart = p; nearestLocal.x = local.x; nearestLocal.y = local.y; nearestLocal.z = local.z }
         }
       }
       let r = skyR
@@ -620,7 +569,7 @@ export function render ({ grid, info, texture, eye, entities = [], timeOfDay, ra
         if (py < nearest.y1) nearest.y1 = py
         if (py > nearest.y2) nearest.y2 = py
         // 'south' is the mob's own front: the ray came in through its +z face
-        const base = nearest.palette[nearestPaint === 1 && nearestFace === 'south' ? 3 : nearestPaint]
+        const base = mobPaint(nearest, nearestPart, nearestFace, nearestT, nearestLocal, mobPictures)
         const lit = table[nearest.light]
         r = base[0] * FACE_SHADE[nearestFace] * lit[0]
         g = base[1] * FACE_SHADE[nearestFace] * lit[1]

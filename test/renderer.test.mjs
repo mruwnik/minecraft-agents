@@ -188,6 +188,7 @@ for (const [name, yaw, pitch, expected] of directionCases) {
 // ---------------------------------------------------------------- render
 const solid = (r, g, b) => ({ width: 1, height: 1, rgba: Uint8Array.from([r, g, b, 255]) })
 const scene = {
+  mobPictures: null, // the flat-colour mobs: pictures from the client jar depend on the machine
   // a red wall to the north, a green floor below
   grid: world([...[-2, -1, 0, 1, 2].flatMap(x => [-1, 0, 1, 2].map(y => [x, y, -4, 1])), ...[-3, -2, -1, 0, 1, 2, 3].flatMap(x => [-3, -2, -1, 0, 1, 2, 3].map(z => [x, -2, z, 2]))]),
   info: id => [null, { kind: 'cube', name: 'wall' }, { kind: 'cube', name: 'floor' }][id],
@@ -274,11 +275,11 @@ const pinned = {
 const sha = img => crypto.createHash('sha256').update(img.rgba).digest('hex').slice(0, 16)
 test('render: the pinned view is drawn as pinned', () => {
   const img = render({ ...pinned, yaw: 0, pitch: 0, width: 64, height: 40, fov: 100, maxDist: 12 })
-  assert.deepEqual([sha(img), img.seen.map(e => e.name)], ['edae299000cdce66', ['cow', 'item']])
+  assert.deepEqual([sha(img), img.seen.map(e => e.name)], ['1c8c2f3fb2fc45b6', ['cow', 'item']])
 })
 test('render: the pinned panorama is drawn as pinned', () => {
   const img = render({ ...pinned, panorama: true, width: 96, height: 24, maxDist: 12 })
-  assert.deepEqual([sha(img), img.seen.map(e => e.name).sort()], ['d894513612815aa8', ['cow', 'item', 'sheep', 'zombie']])
+  assert.deepEqual([sha(img), img.seen.map(e => e.name).sort()], ['63fd0c11d2bdf6ed', ['cow', 'item', 'sheep', 'zombie']])
 })
 
 test('render: an entity whose box is wholly behind the eye is neither drawn nor seen', () => {
@@ -308,16 +309,16 @@ for (const [name, yaw, east, west] of [['east', -Math.PI / 2, true, false], ['we
 
 // the mean colour of the pixels an entity changed, standing three blocks north facing the eye
 const entityColour = entity => {
-  const img = render({ ...scene, ...view64, entities: [{ x: 0.5, y: -1, z: -2.5, yaw: Math.PI, ...entity }] })
+  const img = render({ ...scene, ...view64, entities: [{ x: 0.5, y: -1, z: -2.5, yaw: Math.PI, label: '', ...entity }] }) // no name label: its plate would change the colour
   const changed = []
   for (let y = 0; y < 64; y++) for (let x = 0; x < 64; x++) if (covers(img, [x, y])) changed.push(pixel(img, x, y))
   return [0, 1, 2].map(i => changed.reduce((s, c) => s + c[i], 0) / changed.length)
 }
 for (const [name, entity, looks] of [
   ['a creeper is green', { name: 'creeper', kind: 'hostile', width: 0.6, height: 1.7 }, ([r, g, b]) => g > r && g > b],
-  ['a skeleton is pale', { name: 'skeleton', kind: 'hostile', width: 0.6, height: 1.99 }, c => Math.min(...c) > 120],
-  ['a spider is dark', { name: 'spider', kind: 'hostile', width: 1.4, height: 0.9 }, c => Math.max(...c) < 90],
-  ['a hostile without colours of its own is red', { name: 'breeze', kind: 'hostile', width: 0.6, height: 1.77 }, ([r, g, b]) => r > 2 * g && r > 2 * b],
+  ['a skeleton is pale', { name: 'skeleton', kind: 'hostile', width: 0.6, height: 1.99 }, c => Math.min(...c) > 110],
+  ['a spider is dark red-brown', { name: 'spider', kind: 'hostile', width: 1.4, height: 0.9 }, ([r, g, b]) => r < 130 && r > 2 * g && r > 2 * b],
+  ['a hostile without colours of its own is red', { name: 'no_such_mob', kind: 'hostile', width: 0.6, height: 1.77 }, ([r, g, b]) => r > 2 * g && r > 2 * b],
   ['a player is magenta', { name: 'player', kind: 'player', width: 0.6, height: 1.8 }, ([r, g, b]) => r > g && b > g]
 ]) test(`render: ${name}`, () => assert.ok(looks(entityColour(entity)), String(entityColour(entity))))
 

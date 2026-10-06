@@ -5,6 +5,8 @@ import { SHADING_GLSL } from './shading.mjs'
 import { LABEL_MARGIN, MAX_LABELS, SEEING_MIN, SEE_NEAR, labelWidth, placeLabels, projectorFor } from './mobs.mjs'
 
 export const MAX_ENTITIES = 64
+export const MAX_PART_ROWS = 1024 // parts of all the mobs drawn with models at once; the shader loops at most 24 parts a mob
+const PART_UNIT = 10 // texture unit of the parts table
 export const KINDS = { cube: 0, box: 1, cross: 2, water: 3, lava: 4, model: 5 }
 export const ELEMENT_CAP = 24 // elements looped per model voxel; tools/view/materials.mjs caps a state at the same number
 const MATERIAL_COLUMNS = 4 // top, side, bottom, kind
@@ -55,6 +57,9 @@ uniform int uEntCount;
 uniform vec3 uEntMin[${MAX_ENTITIES}];
 uniform vec3 uEntMax[${MAX_ENTITIES}];
 uniform vec3 uEntCol[${MAX_ENTITIES}];
+uniform vec4 uEntRot[${MAX_ENTITIES}]; // a mob with a model: its right (x, z) in the world, then the first row and the count of its parts in uParts (count 0: a plain box)
+uniform vec3 uEntOrg[${MAX_ENTITIES}]; // where its model's origin (feet) is
+uniform sampler2D uParts; // a part per row, 4 texels: box min, box max, layers top bottom south north, layers east west (-1: none)
 uniform int uLabelCount;
 uniform vec4 uLabelRect[${MAX_LABELS}]; // x0, y0, x1, y1 in framebuffer pixels from the bottom left
 uniform float uLabelDepth[${MAX_LABELS}]; // a label shows where the terrain and mobs are farther than this
@@ -505,6 +510,65 @@ void main () {
     if (ten > tef || tef < 0.0) continue;
     float te = max(ten, 0.0);
     if (te >= bestT) continue;
+    vec4 rot = uEntRot[i];
+    if (rot.w > 0.5) {
+      // a model: its parts in the mob's own frame (x its right, z its front), found by turning the ray into it
+      vec2 right = rot.xy;
+      vec2 front = vec2(rot.y, -rot.x);
+      vec3 ro = o - uEntOrg[i];
+      vec3 lo = vec3(dot(ro.xz, right), ro.y, dot(ro.xz, front));
+      vec3 ld = vec3(dot(dd.xz, right), dd.y, dot(dd.xz, front));
+      ld = vec3(abs(ld.x) < 1e-7 ? 1e-7 : ld.x, abs(ld.y) < 1e-7 ? 1e-7 : ld.y, abs(ld.z) < 1e-7 ? 1e-7 : ld.z);
+      vec3 linv = 1.0 / ld;
+      float pt = bestT;
+      int row = -1;
+      int pax = 0;
+      for (int k = 0; k < 24; k++) {
+        if (float(k) >= rot.w) break;
+        int r = int(rot.z) + k;
+        vec3 p1 = (texelFetch(uParts, ivec2(0, r), 0).xyz - lo) * linv;
+        vec3 p2 = (texelFetch(uParts, ivec2(1, r), 0).xyz - lo) * linv;
+        vec3 pn = min(p1, p2);
+        vec3 pf = max(p1, p2);
+        float pin = max(max(pn.x, pn.y), pn.z);
+        float pout = min(min(pf.x, pf.y), pf.z);
+        if (pin > pout || pout < 0.0) continue;
+        pin = max(pin, 0.0);
+        if (pin >= pt) continue;
+        pt = pin;
+        row = r;
+        pax = pn.x >= pn.y && pn.x >= pn.z ? 0 : (pn.y >= pn.z ? 1 : 2);
+      }
+      if (row < 0) continue;
+      vec4 a = texelFetch(uParts, ivec2(0, row), 0);
+      vec4 b = texelFetch(uParts, ivec2(1, row), 0);
+      vec3 f = (lo + ld * pt - a.xyz) / (b.xyz - a.xyz);
+      float layer;
+      vec2 uv;
+      float shade;
+      if (pax == 1) {
+        bool top = ld.y < 0.0;
+        layer = top ? texelFetch(uParts, ivec2(2, row), 0).x : texelFetch(uParts, ivec2(2, row), 0).y;
+        uv = top ? vec2(f.x, 1.0 - f.z) : vec2(f.x, f.z);
+        shade = top ? 1.0 : 0.5;
+      } else if (pax == 2) {
+        bool frontFace = ld.z < 0.0;
+        layer = frontFace ? texelFetch(uParts, ivec2(2, row), 0).z : texelFetch(uParts, ivec2(2, row), 0).w;
+        uv = frontFace ? vec2(1.0 - f.x, 1.0 - f.y) : vec2(f.x, 1.0 - f.y);
+        shade = 0.8;
+      } else {
+        bool rightFace = ld.x < 0.0;
+        layer = rightFace ? texelFetch(uParts, ivec2(3, row), 0).x : texelFetch(uParts, ivec2(3, row), 0).y;
+        uv = rightFace ? vec2(f.z, 1.0 - f.y) : vec2(1.0 - f.z, 1.0 - f.y);
+        shade = 0.62;
+      }
+      float texels = pt * (2.0 * uHalf / uRes.x) * 16.0 * 2.0;
+      vec4 px = textureLod(uTex, vec3(clamp(uv, 0.0, 1.0), layer), clamp(log2(max(texels, 1e-6)), 0.0, uLodMax));
+      bestT = pt;
+      float pfog = clamp((pt / uDist - 0.6) / 0.4, 0.0, 1.0);
+      color = mix((px.a < 0.5 ? uEntCol[i] : px.rgb) * shade * cellColor(ivec3(floor(o + dd * max(pt - 0.01, 0.0)))), sky, pfog);
+      continue;
+    }
     bestT = te;
     int eax = en.x >= en.y && en.x >= en.z ? 0 : (en.y >= en.z ? 1 : 2);
     float fog = clamp((te / uDist - 0.6) / 0.4, 0.0, 1.0);
@@ -549,6 +613,23 @@ const nearestTexture = (gl, target, unit) => {
   gl.texParameteri(target, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
   gl.texParameteri(target, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
   return texture
+}
+
+// The uniforms and the parts table for the entities with models (`model`: {parts: [{box, layers}], right: {x, z}, origin: [x, y, z]}, web/mob-models.mjs):
+// rot per entity as (right x, right z, first row, part count) and org its origin, both zero for a plain box, and `rows` the table, 16 floats a part
+// (see uParts). A model whose faces are not all layers of the texture array, or that no longer fits the table, is drawn as its plain box.
+export const modelUniforms = (entities, layerIndex) => {
+  const rot = new Float32Array(MAX_ENTITIES * 4)
+  const org = new Float32Array(MAX_ENTITIES * 3)
+  const rows = []
+  entities.slice(0, MAX_ENTITIES).forEach((e, i) => {
+    const layers = e.model?.parts.map(p => p.layers.map(l => layerIndex.get(l) ?? -1))
+    if (!layers || layers.some(l => l.includes(-1)) || rows.length / 16 + layers.length > MAX_PART_ROWS) return
+    rot.set([e.model.right.x, e.model.right.z, rows.length / 16, layers.length], i * 4)
+    org.set(e.model.origin, i * 3)
+    e.model.parts.forEach((p, k) => rows.push(...p.box.slice(0, 3), 0, ...p.box.slice(3), p.paint, ...layers[k], 0, 0))
+  })
+  return { rot, org, rows: Float32Array.from(rows) }
 }
 
 // RGBA8 texture, 4 columns by one row per material: top, side, bottom colour, then the kind in red
@@ -652,7 +733,7 @@ export function createRenderer (canvasOrGl) {
   const debugInfo = gl.getExtension('WEBGL_debug_renderer_info')
   const renderer = debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)
   const program = link(gl)
-  const uniform = Object.fromEntries(['uBlocks', 'uCoarse', 'uMats', 'uInfo', 'uElems', 'uElemBase', 'uTintGroups', 'uTintConst', 'uTex', 'uLodMax', 'uRes', 'uEye', 'uFwd', 'uRight', 'uUp', 'uHalf', 'uSize', 'uSlotOff', 'uDist', 'uDarken', 'uDebug', 'uLightTex', 'uBiomes', 'uBiomeColors', 'uHasBiomeColors', 'uEntCount', 'uEntMin', 'uEntMax', 'uEntCol', 'uLabelCount', 'uLabelRect', 'uLabelDepth', 'uLabelAt', 'uLabelDist', 'uLabels']
+  const uniform = Object.fromEntries(['uBlocks', 'uCoarse', 'uMats', 'uInfo', 'uElems', 'uElemBase', 'uTintGroups', 'uTintConst', 'uTex', 'uLodMax', 'uRes', 'uEye', 'uFwd', 'uRight', 'uUp', 'uHalf', 'uSize', 'uSlotOff', 'uDist', 'uDarken', 'uDebug', 'uLightTex', 'uBiomes', 'uBiomeColors', 'uHasBiomeColors', 'uEntCount', 'uEntMin', 'uEntMax', 'uEntCol', 'uEntRot', 'uEntOrg', 'uParts', 'uLabelCount', 'uLabelRect', 'uLabelDepth', 'uLabelAt', 'uLabelDist', 'uLabels']
     .map(name => [name, gl.getUniformLocation(program, name)]))
   gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1)
   gl.bindVertexArray(gl.createVertexArray())
@@ -665,6 +746,7 @@ export function createRenderer (canvasOrGl) {
   const labelTexture = nearestTexture(gl, gl.TEXTURE_2D, 9)
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+  const partsTexture = nearestTexture(gl, gl.TEXTURE_2D, PART_UNIT)
   let labelAtlasKey = null // the texts the atlas holds, so it is redrawn and uploaded only when they change
   let elemBase = 0
   let tintGroups = new Float32Array(6 * 3).fill(1)
@@ -713,7 +795,9 @@ export function createRenderer (canvasOrGl) {
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, 1024, 1, 0, gl.RGBA, gl.FLOAT, new Float32Array(1024 * 4))
 
   // once per page: texStorage is immutable
-  const setTextures = ({ bytes, layers, size, levels }) => {
+  let layerIndex = new Map() // texture layer name -> layer, for the mobs' model faces
+  const setTextures = ({ bytes, layers, size, levels, names = [] }) => {
+    layerIndex = new Map(names.map((name, i) => [name, i]))
     gl.activeTexture(gl.TEXTURE4)
     gl.bindTexture(gl.TEXTURE_2D_ARRAY, tex)
     gl.texStorage3D(gl.TEXTURE_2D_ARRAY, levels, gl.RGBA8, size, size, layers)
@@ -854,6 +938,10 @@ export function createRenderer (canvasOrGl) {
     }
     const shown = labelUniforms(labels, height)
     const count = Math.min(entities.length, MAX_ENTITIES)
+    const models = modelUniforms(entities, layerIndex)
+    gl.activeTexture(gl.TEXTURE0 + PART_UNIT)
+    gl.bindTexture(gl.TEXTURE_2D, partsTexture)
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, 4, Math.max(1, models.rows.length / 16), 0, gl.RGBA, gl.FLOAT, models.rows.length ? models.rows : new Float32Array(16))
     const flat = key => new Float32Array(MAX_ENTITIES * 3).map((_, i) => (entities[Math.floor(i / 3)]?.[key]?.[i % 3]) ?? 0)
     world.bind()
     gl.viewport(0, 0, width, height)
@@ -886,6 +974,9 @@ export function createRenderer (canvasOrGl) {
     gl.uniform3fv(uniform.uEntMin, flat('min'))
     gl.uniform3fv(uniform.uEntMax, flat('max'))
     gl.uniform3fv(uniform.uEntCol, flat('color'))
+    gl.uniform4fv(uniform.uEntRot, models.rot)
+    gl.uniform3fv(uniform.uEntOrg, models.org)
+    gl.uniform1i(uniform.uParts, PART_UNIT)
     gl.uniform1i(uniform.uLabels, 9)
     gl.uniform1i(uniform.uLabelCount, shown.count)
     gl.uniform4fv(uniform.uLabelRect, shown.rects)
