@@ -9,12 +9,12 @@ import { slotKinds, slotArgv, bodyName, claimBody, releaseBody } from './world-t
 test('slotKinds: a run holds the body slot only', () => {
   assert.deepEqual(slotKinds(['a.edn', '--tag', 'x']), ['body'])
 })
-test('slotKinds: --allow-time takes the time slot first, then the body slot', () => {
-  assert.deepEqual(slotKinds(['a.edn', '--allow-time', '--time-log', 'f']), ['time', 'body'])
+test('slotKinds: --allow-time takes the body slot first, then the time slot (same order as under an outer body slot)', () => {
+  assert.deepEqual(slotKinds(['a.edn', '--allow-time', '--time-log', 'f']), ['body', 'time'])
 })
 test('slotArgv: nests res-slot commands outermost first and ends with the runner', () => {
   assert.deepEqual(slotArgv(['--allow-time'], '/rs', 'node', 'wt.mjs'),
-    ['/rs', 'time', '--', '/rs', 'body', '--', 'node', 'wt.mjs', '--allow-time'])
+    ['/rs', 'body', '--', '/rs', 'time', '--', 'node', 'wt.mjs', '--allow-time'])
 })
 test('slotArgv: without --allow-time only the body slot wraps it', () => {
   assert.deepEqual(slotArgv(['x.edn'], '/rs', 'node', 'wt.mjs'), ['/rs', 'body', '--', 'node', 'wt.mjs', 'x.edn'])
