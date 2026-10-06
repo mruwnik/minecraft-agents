@@ -95,6 +95,7 @@ export const narrowBundle = (runDir, nss) => {
       if (!keep.has(dep)) { keep.add(dep); queue.push(dep) }
   }
   const nodeJs = path.join(runtime, 'shadow.test.node.js')
+  if (!fs.existsSync(nodeJs)) return 0
   const narrowed = narrowRegistry(fs.readFileSync(nodeJs, 'utf8'), keep)
   if (narrowed === null) return 0
   fs.writeFileSync(nodeJs, narrowed)
