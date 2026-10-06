@@ -1,5 +1,5 @@
 (ns agent-tools.job-results-test
-  (:require [cljs.test :refer [deftest is]]
+  (:require [cljs.test :refer [deftest is async]]
             [agent-tools.job-results :as results]))
 
 (defn event [n id kind data]
@@ -41,3 +41,26 @@
   (let [result (results/project "j4" "g" [(event 1 "j4" :queued {}) (event 2 "j4" :round_started {})] false)]
     (is (= :running (:state result))))
   (is (true? (:finished? (results/project "j4" "g" [(event 1 "j4" :queued {}) (event 2 "j4" :completed {})] false)))))
+
+(defn fake-get
+  "A get! over a log of n filler events, with j1's events at seq 1-2 and a terminal event for j1 at seq 3."
+  [n]
+  (let [log (into [(event 1 "j1" :queued {}) (event 2 "j1" :round_started {}) (event 3 "j1" :completed {})]
+                  (map #(event % "filler" :memory_written {})) (range 4 (inc n)))
+        edn (fn [v] (js/Promise.resolve {:status 200 :content-type "application/edn" :text (pr-str v)}))]
+    (fn [_ path _]
+      (if (= "/snapshot" path)
+        (edn {:generation-id "g" :cursor {:stream-id "s" :seq n}})
+        (let [after (js/parseInt (second (re-find #"after=(\d+)" path)))
+              size (js/parseInt (second (re-find #"limit=(\d+)" path)))]
+          (edn {:gap? false :events (vec (take size (drop after log)))}))))))
+
+(deftest a-job-older-than-the-default-window-is-still-found
+  (async done
+    (.then (results/read! (fake-get 3000) "sock" "j1" {})
+           (fn [result] (is (= :completed (:status result))) (done)))))
+
+(deftest a-job-beyond-every-window-is-unavailable-not-unknown
+  (async done
+    (.then (results/read! (fake-get 20000) "sock" "j1" {})
+           (fn [result] (is (= :job-history-unavailable (:reason result))) (done)))))

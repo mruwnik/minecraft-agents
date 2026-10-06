@@ -5,6 +5,7 @@
             [agent-tools.storage-compat :as compat]))
 
 (def history-limit 1000)
+(def result-limit 8000) ; Events a result read scans back (a job's outcome sits among scheduler noise).
 (def event-limit 8)
 (def internal-kinds #{:queued :round_started :completed :failed :cancelled :cut
                       :yielded :memory_written :backoff :check_failed :declined})
@@ -46,7 +47,7 @@
                                        (:message e) (assoc :message (:message e))
                                        (seq (:data e)) (assoc :data (:data e)))) selected))]
     (if (empty? matching)
-      {:ok false :id id :reason (if partial? :job-history-unavailable :unknown-job) :history-window history-limit}
+      {:ok false :id id :reason (if partial? :job-history-unavailable :unknown-job) :history-window result-limit}
       (cond-> (merge {:ok true :id id :status (or (:kind terminal) :unfinished)
                       :finished? (some? terminal)
                       :history (if (or partial? (not queued?)) :partial :complete)}
@@ -63,7 +64,7 @@
    :max-bytes}), a promise of {:status :content-type :text}. snap, when given, is the snapshot whose :cursor ends
    the read (read from /snapshot when nil). A shared deadline limits the whole read; reducing a read-only page after
    its byte cap is safe."
-  [get! socket-path {:keys [signal deadline snap]}]
+  [get! socket-path {:keys [signal deadline snap limit] :or {limit history-limit}}]
   (let [deadline (or deadline (+ (js/Date.now) 3000))
         read (fn [endpoint]
                (when (>= (js/Date.now) deadline)
@@ -80,7 +81,7 @@
         target (:seq cursor)
         query (fn [after size] (str "/events?stream-id=" (js/encodeURIComponent (:stream-id cursor))
                                     "&after=" after "&limit=" size))]
-    (loop [after (max 0 (- target history-limit)) size 128 events [] partial? false]
+    (loop [after (max 0 (- target limit)) size 128 events [] partial? false]
       (let [attempt (try {:page (await (read (query after size)))}
                          (catch :default e
                            (if (and (= "ERESPONSETOOLARGE" (.-code e)) (> size 1)) {:smaller? true} (throw e))))]
@@ -90,17 +91,18 @@
             (if (and (:gap? page) (number? (:oldest-seq page)) (< after (dec (:oldest-seq page))))
               (recur (dec (:oldest-seq page)) size events true)
               (let [batch (filterv #(<= (:seq %) target) (:events page))
-                    combined (into events (take (- history-limit (count events)) batch))
+                    combined (into events (take (- limit (count events)) batch))
                     next-seq (or (:seq (last batch)) after)]
-                (if (or (:gap? page) (empty? batch) (>= next-seq target) (>= (count combined) history-limit))
-                  {:snapshot snap :events combined :gap? (boolean (:gap? page)) :partial? (or partial? (:gap? page))}
+                (if (or (:gap? page) (empty? batch) (>= next-seq target) (>= (count combined) limit))
+                  {:snapshot snap :events combined :gap? (boolean (:gap? page)) :partial? (or partial? (:gap? page))
+                   :truncated? (> target limit)}
                   (recur next-seq size combined partial?))))))))))
 
 (defn ^:async read!
   "The projected outcome of job id from the retained history (see history! for get!)."
   [get! socket-path id {:keys [signal deadline]}]
-  (let [history (await (history! get! socket-path {:signal signal :deadline deadline}))]
-    (project id (get-in history [:snapshot :generation-id]) (:events history) (:partial? history))))
+  (let [history (await (history! get! socket-path {:signal signal :deadline deadline :limit result-limit}))]
+    (project id (get-in history [:snapshot :generation-id]) (:events history) (or (:partial? history) (:truncated? history)))))
 
 (defn js-get
   "A cljs get! over a JavaScript one: (get-fn socket path #js {:signal :timeoutMs :maxBytes}), a promise of
