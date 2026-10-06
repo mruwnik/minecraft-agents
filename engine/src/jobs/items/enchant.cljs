@@ -80,13 +80,11 @@
   (finish! c (assoc extra :reason reason)))
 
 (defn fail-up!
-  "Count a failed round in job memory: :continue until u/max-failures, then give up with the reason."
+  "Count a failed round in a row: :continue until u/max-failures, then give up with the reason."
   [c reason]
-  (let [tries (inc (:failures (ctx/mem c) 0))]
-    (ctx/update-mem! c assoc :failures tries)
-    (if (< tries u/max-failures)
-      :continue
-      (give-up! c reason {}))))
+  (if (u/count-fail! c)
+    (give-up! c reason {})
+    :continue))
 
 (defn find-table
   "The position of the nearest enchanting table the body has seen within radius, or nil."

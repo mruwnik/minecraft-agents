@@ -98,4 +98,6 @@
                       (not= "ok" (.-status r)) (do (places/retract-if-missing! c :chest chest (.-status r))
                                                    (give-up! c (.-status r) short))
                       (zero? (.-moved r)) (give-up! c "nothing-moved" short)
-                      :else (do (fetch/note-moved! c chest name (- (.-moved r))) :continue))))))))))))
+                      :else (do (fetch/note-moved! c chest name (- (.-moved r)))
+                            (u/progress! c)
+                            :continue))))))))))))

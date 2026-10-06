@@ -103,6 +103,7 @@
     (ctx/update-mem! c (fn [m] (-> m
                                    (update :bought (fnil + 0) gained)
                                    (update :paid #(merge-with + % (js->clj (.-paid r)))))))
+    (when (pos? gained) (u/progress! c))
     (cond
       (>= (:bought (ctx/mem c) 0) count) (done! c)
       (contains? stopped-reason stopped) (give-up! c (stopped-reason stopped) (str "stopped buying: " stopped))

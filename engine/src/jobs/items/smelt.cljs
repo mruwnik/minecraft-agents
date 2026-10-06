@@ -260,13 +260,11 @@
     (finish! c (select-keys fields [:zones :claims :reason]) )))
 
 (defn give-up!
-  "Count a failed round in job memory: :continue until u/max-failures, then stop with the reason."
+  "Count a failed round in a row: :continue until u/max-failures, then stop with the reason."
   [c reason]
-  (let [tries (inc (:failures (ctx/mem c) 0))]
-    (ctx/update-mem! c assoc :failures tries)
-    (if (< tries u/max-failures)
-      :continue
-      (stop! c reason))))
+  (if (u/count-fail! c)
+    (stop! c reason)
+    :continue))
 
 (defn carried [c] (u/inventory (:primitives c)))
 
@@ -284,7 +282,8 @@
                fuel (assoc :fuel {:item (:item fuel) :count (:count fuel)}))
         r (if (empty? load) {:status "ok"} (await (visit! c "load" load)))]
     (case (:status r)
-      "ok" (do (ctx/emit! c :smelt.loaded :info {:text (str "smelting " target " " item) :item item :count target :fuel (:item fuel)})
+      "ok" (do (u/progress! c)
+               (ctx/emit! c :smelt.loaded :info {:text (str "smelting " target " " item) :item item :count target :fuel (:item fuel)})
                (wait-until! c (+ slack-ms (* tick-ms target (cook-ticks (:kind state))))))
       "busy" (stop! c (if (= "input" (:slot r)) "furnace-busy" "fuel-busy"))
       "no-item" (stop! c "no-item")
@@ -312,6 +311,7 @@
   (let [r (await (visit! c "take" {}))
         got (reduce + 0 (map :count (:taken r)))]
     (ctx/update-mem! c update :got (fnil + 0) got)
+    (when (pos? got) (u/progress! c))
     r))
 
 (defn ^:async feed!

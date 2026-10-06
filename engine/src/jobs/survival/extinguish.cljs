@@ -260,14 +260,12 @@
       :else :again)))
 
 (defn stuck!
-  "One failed walk: :again until u/max-failures, then a warn and stopped :stuck."
+  "One failed walk: :again until u/max-failures in a row, then a warn and stopped :stuck."
   [c text]
-  (let [tries (inc (:failures (ctx/mem c) 0))]
-    (ctx/update-mem! c assoc :failures tries)
-    (if (< tries u/max-failures)
-      :again
-      (do (ctx/emit! c :extinguish_stuck :warn {:tries tries :text text})
-          (result/stop! c :stuck text)))))
+  (if-not (u/count-fail! c)
+    :again
+    (do (ctx/emit! c :extinguish_stuck :warn {:tries u/max-failures :text text})
+        (result/stop! c :stuck text))))
 
 (defn ^:async move!
   "An emergency step to pos (range 0). The walk's status."
@@ -288,7 +286,7 @@
     (cond
       (clear? c) :done
       (= :continue r) :again
-      (and (= :done r) (:arrived res)) (do (ctx/update-mem! c dissoc :failures) :again)
+      (and (= :done r) (:arrived res)) (do (u/progress! c) :again)
       :else (stuck! c (str "the way to a safe cell is blocked" (some->> (:text res) (str ": ")))))))
 
 (defn ^:async pass!

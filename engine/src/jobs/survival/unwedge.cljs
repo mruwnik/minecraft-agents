@@ -39,11 +39,9 @@
         [{:x 1 :y 0 :z 0} {:x -1 :y 0 :z 0} {:x 0 :y 0 :z 1} {:x 0 :y 0 :z -1} {:x 0 :y 1 :z 0}]))
 
 (defn ^:async fail!
-  "One failed dig on cell: counted, final after u/max-failures. Resolves :again or :done (stopped)."
+  "One failed dig on cell: final after u/max-failures in a row. Resolves :again or :done (stopped)."
   [c cell why]
-  (let [tries (inc (:failures (ctx/mem c) 0))]
-    (ctx/update-mem! c assoc :failures tries)
-    (if (< tries u/max-failures) :again (await (block! c cell (keyword why))))))
+  (if (u/count-fail! c) (await (block! c cell (keyword why))) :again))
 
 (defn ^:async dig-feet!
   [c cell]
@@ -55,7 +53,7 @@
             _ (await (tools/equip-tool! c block {:fast true}))
             status (.-status (await (tidy/dig! c cell true)))]
         (cond
-          (or (= "dug" status) (= "missing" status)) :again
+          (or (= "dug" status) (= "missing" status)) (do (u/progress! c) :again)
           (= "cannot" status) (await (block! c cell :cannot))
           :else (await (fail! c cell status)))))))
 

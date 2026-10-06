@@ -193,6 +193,21 @@
           (is (= 3 (count (calls p "collect"))))
           (is (has-event? s :give.gave-up)))))))
 
+(deftest collects-that-fail-in-a-row-give-up-but-a-collect-between-resets-the-count
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [statuses (atom (cycle ["unreachable" "unreachable" "collected"]))
+              {:keys [p out] :as s} (await (give (assoc bread :entities [(steve 10)])
+                                                {:player "Steve" :item "bread" :count 5} 80 false
+                                                (fn [p] (.override (.-world p) "collect"
+                                                                   (fn ^:async f [_ _ _]
+                                                                     (let [st (first @statuses)]
+                                                                       (swap! statuses rest)
+                                                                       #js {:status st :gained #js []}))))))]
+          (is (= :not-done @out) "two fails, a collect, two fails do not end it")
+          (is (> (count (calls p "collect")) 4)))))))
+
 (deftest a-drop-that-spawns-late-is-not-reported-as-taken
   (async done
     (tu/run-async done

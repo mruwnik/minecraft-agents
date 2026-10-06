@@ -322,7 +322,7 @@
                       (= :refused fail) (refused! c res (into {} still))
                       fail (give-up! c fail (into {} still))
                       end (finish-craft! c still end)
-                      :else :continue)))))))))))
+                      :else (do (u/progress! c) :continue))))))))))))
 
 (defn ^:async round
   "One bounded step; see doc. Early returns: nothing needed, walk, inspect,
@@ -361,4 +361,4 @@
                       (= :refused (:reason res)) (refused! c res (merge (into {} still) short))
                       (:gave-up res) (do (ctx/result! c {:gave-up true :reason (:reason res) :short (merge (into {} still) short)})
                                          :done)
-                      :else :continue)))))))))))
+                      :else (do (when (= :done r) (u/progress! c)) :continue))))))))))))

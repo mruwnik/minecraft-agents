@@ -209,7 +209,9 @@
           (let [_ (await (watch/watch! c {:before-dig (:pos (first logs))}))
                 r (await (dig-log! c (first logs)))]
             (case r
-              :ok (do (ctx/update-mem! c assoc :partials 0) :continue)
+              :ok (do (ctx/update-mem! c assoc :partials 0)
+                      (u/progress! c)
+                      :continue)
               (:partial :blocked) (walk-failed! c r)
               (:unreachable :cannot :out-of-reach :refused) (do (mark-unreachable! c) :continue)
               (u/fail! c :tree_blocked (str "cannot dig the tree: " (name r))))))))))

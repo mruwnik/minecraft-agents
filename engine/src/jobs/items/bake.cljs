@@ -185,7 +185,8 @@
       (let [r (u/fail! c :bake.gave-up (str "chest " (.-status seen)))]
         (when (= :done r) (finish! c {:reason (str "chest " (.-status seen))}))
         r)
-      (let [items (.-items seen)
+      (let [_ (u/progress! c)
+            items (.-items seen)
             wheat (reduce + 0 (map #(.-count %) (filter #(= "wheat" (.-name %)) (array-seq items))))
             target (wheat-target p wheat)
             whole (* 3 (quot (+ wheat (carried p "wheat")) 3))]

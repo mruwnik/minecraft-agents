@@ -98,7 +98,7 @@
           "no-item" (short! c item r made)
           "partial" (if (= "no-item" (.-reason r))
                       (short! c item r made)
-                      :continue)
+                      (do (u/progress! c) :continue))
           "out-of-reach" (let [handed (u/pos-of (.-table r))]
                            (cond
                              (:table (:args c)) (await (reach-table! c made))

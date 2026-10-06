@@ -20,7 +20,7 @@
   - The drop still lies after :wait-s: it is collected back, never left as litter. The result is {:given (tossed -
     back) :reason \"not-taken\" :returned back} (info give.returned). The same happens if the body picks it up on
     its own.
-  A toss refused three times, or three collects that change nothing, end through u/fail! (warn give.gave-up)
+  A toss refused three times in a row, or three collects in a row that change nothing, end through u/fail! (warn give.gave-up)
   with the status or \"litter\" as the reason.
   A cut after the toss leaves the drop where it lies.")
 
@@ -108,6 +108,7 @@
           status (.-status r)]
       (if (= "tossed" status)
         (do (ctx/update-mem! c assoc :tossed (.-count r) :tossed-t (ctx/now c))
+            (u/progress! c)
             :continue)
         (let [v (u/fail! c :give.gave-up (str "give gave up: " status))]
           (when (= :done v) (finish! c {:given 0 :reason status}))
@@ -126,7 +127,7 @@
   (let [r (await (ctx/act c :collect (clj->js {:id (:id (first lying))})))]
     (ctx/update-mem! c assoc :collecting true)
     (if (= "collected" (.-status r))
-      :continue
+      (do (u/progress! c) :continue)
       (let [v (u/fail! c :give.gave-up "give gave up: litter")]
         (when (= :done v) (finish! c {:given given :reason "litter" :returned back}))
         v))))

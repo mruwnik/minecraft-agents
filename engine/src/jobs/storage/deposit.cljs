@@ -85,7 +85,7 @@
     :done))
 
 (defn ^:async round
-  "Done when nothing is left to put away. Three failed transfers (full,
+  "Done when nothing is left to put away. Three failed transfers in a row (full,
   missing, unreachable) give up with a chest_unusable warn."
   [c]
   (let [{:keys [items keep]} (:args c)
@@ -110,6 +110,7 @@
               (if (= "ok" (.-status r))
                 (do (when (pos? (or (.-moved r) 0))
                       (ctx/update-mem! c update :deposited (fnil inc 0))
+                      (u/progress! c)
                       (fetch/note-moved! c chest (:name (:stack pick)) (.-moved r)))
                     :continue)
                 (do (places/retract-if-missing! c :chest chest (.-status r))

@@ -58,12 +58,23 @@
   [p]
   (max 0 (- inventory-slots (.-length (.-inventory (.self p))))))
 
-(defn fail!
-  "Count a failed round in job memory. Returns :continue until max-failures, then emits a warn of kind and returns :done."
-  [c kind text]
+(defn progress!
+  "The act the failures counted against succeeded: the failures in a row start again from none."
+  [c]
+  (ctx/update-mem! c dissoc :failures)
+  nil)
+
+(defn count-fail!
+  "Count one more failure in a row in job memory. True when that makes max-failures."
+  [c]
   (let [tries (inc (:failures (ctx/mem c) 0))]
     (ctx/update-mem! c assoc :failures tries)
-    (if (< tries max-failures)
-      :continue
-      (do (ctx/emit! c kind :warn {:tries tries :text text})
-          :done))))
+    (>= tries max-failures)))
+
+(defn fail!
+  "Count a failed round in a row (progress! resets). Returns :continue until max-failures in a row, then emits a warn of kind and returns :done."
+  [c kind text]
+  (if-not (count-fail! c)
+    :continue
+    (do (ctx/emit! c kind :warn {:tries max-failures :text text})
+        :done)))

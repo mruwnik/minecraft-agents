@@ -36,7 +36,7 @@
   A cell occupied by a block a mob walks through (torch, sapling, cobweb) is dug once and placed again.
   A door, gate or trapdoor beside the body counts as a wall only when shut. An open one is shut with one click.
   An iron one cannot be shut by hand and is given up on.
-  Fails (dig_in_failed warning) after three failures to place or dig, or at once when:
+  Fails (dig_in_failed warning) after three failures in a row to place or dig, or at once when:
   a hazard is below, no floor is under the pit, no block can roof the pit, or the carried tools cannot harvest the block below.
   Every end with no roof over the body leaves a :dig-in-futile {:pos :reason} entry,
   and the check declines while one lies within 8 blocks. An entry with no :reason (a lack of blocks or tools)
@@ -313,12 +313,13 @@
             ;; raw moveTo kept: a step into the cell the job is digging, range 0.5, inside its own pit; the planner has no standable goal there.
             r (await (ctx/act c :moveTo (clj->js {:pos below :range 0.5})))]
         (if (< (:y (sh/feet p)) before)
-          (do (ctx/update-mem! c dissoc :failures) :continue)
+          (do (u/progress! c) :continue)
           (fail-site! c :descent-stalled (str "cannot descend into the pit: " (.-status r)))))
       :else (let [_ (await (tools/equip-for! c name {:fast true}))
                   r (await (tidy/dig! c below true))]
               (if (= "dug" (.-status r))
                 (let [placeable (some #(some #{(.-name %)} blocks) (array-seq (.-drops r)))]
+                  (u/progress! c)
                   (await (collect-drops! c blocks (.-drops r)))
                   (if (or placeable (some? (pick c blocks)))
                     :continue
