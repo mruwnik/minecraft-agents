@@ -1,0 +1,71 @@
+;; Note: a fixture beside this plot that runs `kill @e[type=zombie,distance=..40]` (herd-*) removes these mobs too: rerun on another --first-plot.
+;; jobs.combat.attack: kill what :targets names (an id, a username or a mob type) and end with attack.done {:reason ...}.
+;; Mobs are NoAI with an iron helmet (no sun burn, no fight back); the body holds an iron sword and the middle [16.5 0 16.5].
+;; Should-succeed: a type kills every mob of it and leaves the others; a list of types; a cow that walks away (AI on);
+;; :absent :wait starts when a husk turns up 8 s later.
+;; Should-fail: nothing of the type (:absent), an entity id that does not exist (:absent), the body's own name
+;; (:absent, no swing), a zombie in a glass box (given up :unreachable), an invulnerable zombie (given up :no-damage).
+{:defaults
+ {:tags [:combat :attack :jobs]
+  :plot {:floor "stone"}
+  :body {:at [16.5 0 16.5] :inventory [["iron_sword" 1]] :effects [["resistance" 900 4]]}
+  :limit-s 100}
+ :cases
+ [{:name "type-zombie-kills-all-leaves-skeletons"
+   :act [[:summon "zombie" [10.5 0 10.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "zombie" [22.5 0 11.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "zombie" [12.5 0 22.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "skeleton" [24.5 0 22.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "skeleton" [8.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:wait-s 2]
+         [:job (jobs.combat.attack {:targets "zombie"})]]
+   :expect [{:event {:source :job :kind :attack.done :data {:reason :cleared :given-up {}}} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :attack.gave-up} :for-s 3}]
+   :after [[:entities "type=zombie,tag=wt" [[0 0 0] [31 3 31]] 0]
+           [:entities "type=skeleton,tag=wt" [[0 0 0] [31 3 31]] 2]]}
+  {:name "type-list-kills-both-types"
+   :act [[:summon "zombie" [10.5 0 10.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "husk" [22.5 0 11.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "skeleton" [24.5 0 22.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:wait-s 2]
+         [:job (jobs.combat.attack {:targets ["husk" "zombie"]})]]
+   :expect [{:event {:source :job :kind :attack.done :data {:reason :cleared}} :within-s 90 :of-job true}]
+   :after [[:entities "type=zombie,tag=wt" [[0 0 0] [31 3 31]] 0]
+           [:entities "type=husk,tag=wt" [[0 0 0] [31 3 31]] 0]
+           [:entities "type=skeleton,tag=wt" [[0 0 0] [31 3 31]] 1]]}
+  {:name "fleeing-cow-killed"
+   :act [[:summon "cow" [12.5 0 12.5]]
+         [:wait-s 2]
+         [:job (jobs.combat.attack {:targets "cow"})]]
+   :expect [{:event {:source :job :kind :attack.done :data {:reason :cleared}} :within-s 90 :of-job true}]
+   :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 0]]}
+  {:name "absent-wait-attacks-husk-that-turns-up"
+   :act [[:job (jobs.combat.attack {:targets "husk" :absent :wait})]
+         [:wait-s 8]
+         [:summon "husk" [12.5 0 12.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :attack.done :data {:reason :cleared}} :within-s 60 :of-job true}]
+   :after [[:entities "type=husk,tag=wt" [[0 0 0] [31 3 31]] 0]]}
+  {:name "no-such-type-absent"
+   :act [[:job (jobs.combat.attack {:targets "blaze"})]]
+   :expect [{:event {:source :job :kind :attack.done :data {:reason :absent :killed []}} :within-s 20 :of-job true}]}
+  {:name "no-such-entity-id-absent"
+   :act [[:job (jobs.combat.attack {:targets 99999999})]]
+   :expect [{:event {:source :job :kind :attack.done :data {:reason :absent :killed []}} :within-s 20 :of-job true}]}
+  {:name "own-name-never-attacked"
+   :act [[:job (jobs.combat.attack {:targets ["ProbeFixtures"]})]]
+   :expect [{:event {:source :job :kind :attack.done :data {:reason :absent :killed []}} :within-s 20 :of-job true}]}
+  {:name "zombie-in-glass-box-given-up-unreachable"
+   :blocks [[:fill [20 0 20] [24 3 24] "glass" :hollow]]
+   :act [[:summon "zombie" [22.5 0 22.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:wait-s 2]
+         [:job (jobs.combat.attack {:targets "zombie" :lost-s 3})]]
+   :expect [{:event {:source :job :kind :attack.gave-up :data {:reason :unreachable}} :within-s 90 :of-job true}
+            {:event {:source :job :kind :attack.done :data {:reason :gave-up :killed []}} :within-s 100 :of-job true}]
+   :after [[:entities "type=zombie,tag=wt" [[20 0 20] [24 3 24]] 1]]}
+  {:name "invulnerable-zombie-given-up-no-damage"
+   :act [[:summon "zombie" [12.5 0 12.5] "{NoAI:1b,Invulnerable:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:wait-s 2]
+         [:job (jobs.combat.attack {:targets "zombie" :lost-s 3})]]
+   :expect [{:event {:source :job :kind :attack.gave-up :data {:reason :no-damage}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :attack.done :data {:reason :gave-up :killed []}} :within-s 90 :of-job true}]
+   :after [[:entities "type=zombie,tag=wt" [[0 0 0] [31 3 31]] 1]]}]}
