@@ -476,3 +476,37 @@
           (await (run-ticks s 30))
           (is (empty? (listed s)))
           (is (= :no-source (:reason (first (events-of s :stopped))))))))))
+
+(defn far-table-world [inv]
+  (-> (bare inv)
+      (assoc-in [:blocks "1,64,8"] "crafting_table")
+      (assoc :unreachable (vec (for [x (range -2 5) y (range 62 68) z (range 5 12)] (str x "," y "," z))))))
+
+(deftest get-tool-puts-down-a-carried-table-when-the-seen-one-is-unreachable
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (far-table-world [{:name "oak_planks" :count 3} {:name "stick" :count 2} {:name "crafting_table" :count 1}]) [own-zone])]
+          (await (get-tool! s {:kind "pickaxe"} 80))
+          (is (empty? (listed s)))
+          (is (= 1 (get (inv s) "wooden_pickaxe")))
+          (is (nil? (get (inv s) "crafting_table")) "the carried table was put down"))))))
+
+(deftest get-tool-makes-a-table-when-the-seen-one-is-unreachable
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (far-table-world [{:name "oak_planks" :count 7} {:name "stick" :count 2}]) [own-zone])]
+          (await (get-tool! s {:kind "pickaxe"} 80))
+          (is (= 1 (get (inv s) "wooden_pickaxe")))
+          (is (= 2 (count (tables s)))))))))
+
+(deftest get-tool-stops-table-unreachable-when-it-cannot-put-one-down
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (far-table-world [{:name "oak_planks" :count 3} {:name "stick" :count 2}]) [own-zone])
+              id (await (get-tool! s {:kind "pickaxe"} 80))
+              reason (or (:reason (core/waiting (:eng s) id)) (:reason (first (events-of s :stopped))))]
+          (is (= :table-unreachable reason))
+          (is (nil? (get (inv s) "wooden_pickaxe"))))))))

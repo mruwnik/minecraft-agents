@@ -89,7 +89,9 @@
   [c names n]
   (let [p (:primitives c)
         have (carried-counts p)
-        table? (boolean (or (:table (ctx/mem c)) (craft/nearest-table p craft-radius)))
+        mem (ctx/mem c)
+        table? (boolean (or (:table mem)
+                            (and (not (get-in mem [:craft :table-unreachable])) (craft/nearest-table p craft-radius))))
         version (game/version-of p)]
     (some (fn [name]
             (when-let [pl (recipes/plan version have name n {:table? table?})]
@@ -186,7 +188,9 @@
                   (let [res (ctx/child-result c :place)]
                     (ctx/update-mem! c update :craft dissoc :step :spot)
                     (if (and (= :done r) (:placed res))
-                      (do (ctx/update-mem! c assoc :table spot) :continue)
+                      (do (ctx/update-mem! c assoc :table spot)
+                          (ctx/update-mem! c update :craft dissoc :table-unreachable)
+                          :continue)
                       (fruitless! c (or (:reason res) :place-declined)))))))))
 
       :else
@@ -197,8 +201,14 @@
               :continue
               (let [res (ctx/child-result c :craft)]
                 (ctx/update-mem! c update :craft dissoc :step)
-                (if (and (= :done r) (pos? (:made res 0)))
-                  :continue
+                (cond
+                  (and (= :done r) (pos? (:made res 0))) :continue
+
+                  ;; the seen table cannot be reached: plan again without it, so a carried or new table is put down
+                  (and (#{"unreachable" "no-table"} (:reason res)) (not (:table-unreachable mem)))
+                  (do (ctx/update-mem! c assoc-in [:craft :table-unreachable] true) :continue)
+
+                  :else
                   (fruitless! c (or (:reason res) (when (:short res) {:short (:short res)}) :declined))))))))))
 
 (defn ^:async round [c]
@@ -211,6 +221,7 @@
       (do (ctx/emit! c :obtain.declined :warn {:reason :bad-args :text (str "items.obtain " e)})
           (stop! c :bad-args {:why e}))
       (let [_ (when-not (:start (ctx/mem c))
+                (ctx/update-mem! c update :craft dissoc :table-unreachable)
                 (ctx/update-mem! c assoc :start {:have have :target (+ have (min 64 (:count a))) :t now}))
             {:keys [target t] :as start} (:start (ctx/mem c))
             got (max 0 (- have (:have start)))
@@ -232,4 +243,5 @@
                         :continue)))
           (and (contains? (:how o) :craft) (not (get-in m [:tried :craft])))
           (await (craft-step! c names have target))
-          :else (stop! c :no-source {:got got :tried (:tried m)}))))))
+          :else (stop! c (if (and (get-in m [:craft :table-unreachable]) (get-in m [:tried :craft])) :table-unreachable :no-source)
+                       {:got got :tried (:tried m)}))))))
