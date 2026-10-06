@@ -7,6 +7,9 @@
 (def history-limit 1000)
 (def result-limit 8000) ; Events a result read scans back (a job's outcome sits among scheduler noise).
 (def event-limit 8)
+(def terminal-kinds
+  "Every event kind that ends a job (the engine's end statuses); one definition for results and observe wakes."
+  #{:completed :failed :cancelled :stopped})
 (def internal-kinds #{:queued :round_started :completed :failed :cancelled :cut
                       :yielded :memory_written :backoff :check_failed :declined :child_started :child_ended})
 
@@ -39,7 +42,7 @@
   [id generation events partial?]
   (let [matching (->> events (filter #(and (= generation (:generation-id %)) (belongs? id %))) (sort-by :seq) vec)
         terminal (last (filter #(and (= id (get-in % [:context :job-id]))
-                                     (#{:completed :failed :cancelled} (:kind %))) matching))
+                                     (terminal-kinds (:kind %))) matching))
         queued? (some #(and (= id (get-in % [:context :job-id])) (= :queued (:kind %))) matching)
         observations (filterv #(not (internal-kinds (:kind %))) matching)
         selected (take-last event-limit observations)

@@ -64,3 +64,10 @@
   (async done
     (.then (results/read! (fake-get 20000) "sock" "j1" {})
            (fn [result] (is (= :job-history-unavailable (:reason result))) (done)))))
+
+(deftest every-terminal-event-ends-the-job
+  (doseq [kind [:completed :failed :cancelled :stopped]]
+    (let [result (results/project "j5" "g" [(event 1 "j5" :queued {}) (event 2 "j5" :round_started {}) (event 3 "j5" kind {})] false)]
+      (is (= kind (:status result)) (str kind))
+      (is (true? (:finished? result)) (str kind))
+      (is (nil? (:state result)) (str kind)))))

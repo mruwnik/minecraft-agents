@@ -197,7 +197,7 @@
       (and (= :action source) (= :done kind) (some #{(get-in e [:context :action-id])} (:watch-actions opts)))
       (array-map :wake :action-finished :action (get-in e [:context :action-id]) :result (action-result (or (:result d) {}) d))
 
-      (and (= :job source) (#{:completed :failed} kind) (some #{(get-in e [:context :job-id])} (:watch opts)))
+      (and (= :job source) (job-results/terminal-kinds kind) (some #{(get-in e [:context :job-id])} (:watch opts)))
       (clean-pairs :wake :job-finished :job (get-in e [:context :job-id]) :result (:kind e)
                    :message (clip (or (:message e) (:error d)))))))
 
@@ -207,7 +207,7 @@
   (let [{:keys [source kind]} e
         d (or (:data e) {})
         category (cond
-                   (and (= :job source) (#{:completed :failed} kind)) kind
+                   (and (= :job source) (job-results/terminal-kinds kind)) kind
                    (and (= :reflex source) (= :fired kind)) :reflexes
                    (= :make-room.tossed kind) :tossed
                    (#{:picked-up :hurt :died :disconnected :online :reconnect-failed} kind) kind
@@ -336,7 +336,7 @@
     (cond
       (and (= :action source) (some #{(:action-id context)} (:watch-actions opts)) (#{:started :done} kind))
       (str "action:" (:action-id context))
-      (and (= :job source) (some #{(:job-id context)} (:watch opts)) (#{:queued :round_started :completed :failed} kind))
+      (and (= :job source) (some #{(:job-id context)} (:watch opts)) (or (#{:queued :round_started} kind) (job-results/terminal-kinds kind)))
       (str "job:" (:job-id context)))))
 
 (defn recent-results

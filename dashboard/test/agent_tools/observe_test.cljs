@@ -229,7 +229,9 @@
    ["disconnection wakes when asked" (event :body :disconnected) (assoc defaults :disconnect true) :disconnected]
    ["exhausted reconnection always wakes" (event :body :reconnect-failed) defaults :reconnect-failed]
    ["an unwatched job stays quiet" (assoc (event :job :completed) :context {:job-id "j1"}) defaults nil]
-   ["a watched job wakes" (assoc (event :job :completed) :context {:job-id "j1"}) (assoc defaults :watch ["j1"]) :job-finished]])
+   ["a watched job wakes" (assoc (event :job :completed) :context {:job-id "j1"}) (assoc defaults :watch ["j1"]) :job-finished]
+   ["a watched job wakes when stopped" (assoc (event :job :stopped) :context {:job-id "j1"}) (assoc defaults :watch ["j1"]) :job-finished]
+   ["a watched job wakes when cancelled" (assoc (event :job :cancelled) :context {:job-id "j1"}) (assoc defaults :watch ["j1"]) :job-finished]])
 
 (deftest classify-wakes-only-for-what-was-asked
   (doseq [[label e opts expected] classify-cases]
