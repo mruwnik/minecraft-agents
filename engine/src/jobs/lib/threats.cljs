@@ -5,6 +5,7 @@
   planner-dangers: the known dangers go-to's searches cost (the planner's options.dangers), costed by
   jobs.lib.cost/danger-list."
   (:require [engine.ctx :as ctx]
+            [engine.entity-observations :as obs]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
             [jobs.lib.reach :as reach]
@@ -25,6 +26,27 @@
 
 (def chased-flights "Flights from one mob within the ttl that tell the agent." 3)
 
+(defn place-of
+  "Where the body knows mob e of primitives p to be: {:pos} for one it has seen, else (heard only) what a sound tells,
+  {:direction :band :from} (obs/rough-hearing from the body's place), never the exact place."
+  [p e]
+  (if (reach/seen-only? e)
+    {:pos (u/pos-of (.-pos e))}
+    (let [from (u/pos-of (.-pos (.self p)))]
+      (assoc (obs/rough-hearing from (u/pos-of (.-pos e))) :from from))))
+
+(def band-distance "Blocks a heard mob's band stands for when a cost needs a place." {:near 4 :far 16})
+
+(defn rough-pos
+  "The place a remembered :threat entry stands for: its :pos, else the point its band away from :from toward its
+  direction (nil when it has neither)."
+  [{:keys [pos direction band from]}]
+  (or pos
+      (when (and direction band from)
+        (let [a (* (/ js/Math.PI 4) (.indexOf obs/directions direction))
+              d (band-distance band)]
+          (assoc from :x (+ (:x from) (* d (js/Math.sin a))) :z (- (:z from) (* d (js/Math.cos a))))))))
+
 (defn mob-key [e] (or (.-uuid e) (.-id e)))
 
 (defn flights
@@ -33,17 +55,19 @@
   (count (filter #(= k (:key (:data %))) (ctx/entries c :threat))))
 
 (defn remember!
-  "Write the :threat entry for a mob fled ({:mob :id :uuid :pos :ended}); at the chased-flights-th from it, warn
+  "Write the :threat entry for a mob fled ({:mob :id :uuid :ended and :pos, or :direction :band :from}); at the chased-flights-th from it, warn
   hostile.chased."
-  [c {:keys [mob id uuid pos ended]}]
-  (let [k (or uuid id)]
-    (ctx/remember! c :threat {:mob mob :id id :uuid uuid :key k :pos pos :ended ended} threat-policy)
+  [c {:keys [mob id uuid ended] :as t}]
+  (let [k (or uuid id)
+        place (select-keys t [:pos :direction :band :from])]
+    (ctx/remember! c :threat (merge {:mob mob :id id :uuid uuid :key k :ended ended} place) threat-policy)
     (let [n (flights c k)]
       (when (= chased-flights n)
         (ctx/emit! c :hostile.chased :warn
-                   {:mob mob :id id :flights n :pos pos
-                    :text (str "the " mob " " id " has chased the body " n " times in "
-                               (/ (:ttl threat-policy) 60000) " min")})))))
+                   (merge {:mob mob :id id :flights n}
+                          (select-keys place [:pos :direction :band])
+                          {                    :text (str "the " mob " " id " has chased the body " n " times in "
+                               (/ (:ttl threat-policy) 60000) " min")}))))))
 
 ;; ---------------------------------------------------------------- dangers for the planner
 
@@ -67,5 +91,6 @@
   "The planner's options.dangers for the body of c (JS array, nil for none): known-dangers with the :threat spots its
   flights left."
   [c]
-  (let [ds (known-dangers (:primitives c) (map :data (ctx/entries c :threat)))]
+  (let [spots (keep #(when-let [pos (rough-pos (:data %))] (assoc (:data %) :pos pos)) (ctx/entries c :threat))
+        ds (known-dangers (:primitives c) spots)]
     (when (seq ds) (clj->js ds))))

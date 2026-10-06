@@ -665,7 +665,10 @@
     (cond-> (assoc mem :flight-start now :last-step now)
       (:chasers mem) (update :chasers update-vals #(assoc % :seen-t now)))))
 
-(defn chaser-entry [e now] {:id (.-id e) :uuid (.-uuid e) :mob (.-name e) :pos (u/pos-of (.-pos e)) :seen-t now})
+(defn chaser-entry
+  "A chaser's flight entry: its id, uuid, name and place (threats/place-of: exact only when seen)."
+  [p e now]
+  (merge {:id (.-id e) :uuid (.-uuid e) :mob (.-name e) :seen-t now} (threats/place-of p e)))
 
 (defn look!
   "Update the flight's chasers (job memory :chasers, by id): the real dangers within :radius (ranged :ranged-radius)
@@ -679,11 +682,11 @@
         live (remove #(dead (.-id %)) (known-chasers p))
         listed (into {} (map (juxt #(.-id %) identity)) live)
         joining (remove #(dead (.-id %)) (reach/dangers p radius {:ranged-radius ranged-radius} {:sight? false}))
-        chasers (merge (:chasers (ctx/mem c)) (into {} (map (juxt #(.-id %) #(chaser-entry % now))) joining))
+        chasers (merge (:chasers (ctx/mem c)) (into {} (map (juxt #(.-id %) #(chaser-entry p % now))) joining))
         judged (for [[id ch] chasers
                      :let [e (listed id)
                            seen-t (if (and e (true? (.-visible e))) now (:seen-t ch))
-                           ch (cond-> (assoc ch :seen-t seen-t) e (assoc :pos (u/pos-of (.-pos e))))]]
+                           ch (cond-> (assoc ch :seen-t seen-t) e (-> (dissoc :pos :direction :band :from) (merge (threats/place-of p e))))]]
                  {:id id :ch ch :e e :why (stopped-chasing (some->> e (seen-now p)) seen-t now (* 1000 lost-s))})
         on (filter #(nil? (:why %)) judged)
         off (remove #(nil? (:why %)) judged)]

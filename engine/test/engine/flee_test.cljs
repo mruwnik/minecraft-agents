@@ -191,6 +191,36 @@
           (await (flight! s "a"))
           (is (= 1 (count (chased-events seen))) "flights past the ttl do not count"))))))
 
+(deftest a-heard-only-chaser-leaves-a-direction-and-band-never-an-exact-place
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen] :as s} (setup {})]
+          (await (flight! s "a"))
+          (await (flight! s "a"))
+          (await (flight! s "a"))
+          (let [entry (first (threat-entries (:eng s)))
+                chased (first (chased-events seen))]
+            (is (not (contains? entry :pos)) "heard only: no exact :pos in the :threat memory")
+            (is (every? entry [:direction :band :from]))
+            (is (not (contains? chased :pos)) "nor in the :hostile.chased event")
+            (is (every? chased [:direction :band]))))))))
+
+(deftest a-seen-chaser-leaves-its-place
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng] :as s} (setup {:entities [(zombie 7 5 {:visible true :chase {:speed 0.7}})]})
+              out (await (run-job! s 'jobs.survival.retreat {}))]
+          (is (number? (:x (:pos (first (threat-entries (:eng out)))))) "seen: the :pos is kept"))))))
+
+(deftest rough-pos-is-the-band-away-toward-the-direction
+  (let [from {:x 10 :y 64 :z 10}]
+    (is (= {:x 14 :y 64 :z 10} (update (threats/rough-pos {:direction :east :band :near :from from}) :x js/Math.round)))
+    (is (= {:x 10 :y 64 :z -6} (update (threats/rough-pos {:direction :north :band :far :from from}) :x js/Math.round)))
+    (is (= {:x 1 :y 2 :z 3} (threats/rough-pos {:pos {:x 1 :y 2 :z 3}})))
+    (is (nil? (threats/rough-pos {:mob "zombie"})))))
+
 ;; ------------------------------------------------------------------ hiding holds in the round
 
 (defn key-of [x y z] (str x "," y "," z))

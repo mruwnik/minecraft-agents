@@ -5,6 +5,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
             [jobs.lib.result :as r]
+            [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -19,7 +20,7 @@
   (:ranged-radius for ranged mobs) and the retreat is not hiding (sealed in, up a pillar or down a pit).
   A child that stops (a retreat that cannot escape) stops it with that cause; three calls in a row that change
   neither the body's cell nor the dangers near stop it :no_response; never :continue.
-  Memory: writes one :hostile entry {:mob :pos :decision} per encounter.
+  Memory: writes one :hostile entry {:mob :decision} plus :pos (seen) or :direction :band :from (heard only) per encounter.
   A danger reflex: never backed off.")
 
 (def args
@@ -53,7 +54,7 @@
 
 (defn log-encounter! [c threat decision]
   (when-not (:logged (ctx/mem c))
-    (ctx/remember! c :hostile {:mob (.-name threat) :pos (u/pos-of (.-pos threat)) :decision decision}
+    (ctx/remember! c :hostile (assoc (threats/place-of (:primitives c) threat) :mob (.-name threat) :decision decision)
                    hostile-policy)
     (ctx/update-mem! c assoc :logged true)))
 
