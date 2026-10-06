@@ -610,3 +610,34 @@
     (is (= (walk/avoid-key avoided) (walk/avoid-key (walk/with-walls avoided [[1 64 1]]))) "walls keep the avoided cells")
     (is (= 2 (.-size (.-cells (.-avoid (walk/plan-options avoided 1 nil nil))))))
     (is (nil? (.-avoid (walk/plan-options pw 1 nil nil))))))
+
+(defn ^:async go-place!
+  "Run go-to with args as a child over flat after writing the places in memory; {:out :p :seen}."
+  [places args]
+  (let [{:keys [eng] :as s} (setup {:blocks flat})
+        out (atom :not-done)
+        eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out args)))]
+    (doseq [[k pos] places] (mem/write! (:store eng) k {:pos pos} mem/place-policy))
+    (core/submit! eng '(recording-parent) {})
+    (await (tick-out! eng 30))
+    (assoc s :out out)))
+
+(deftest go-to-walks-to-a-named-place
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (go-place! {:home {:x 10 :y 64 :z 0}} {:place :home :range 0}))]
+          (is (= {:arrived true} @out))
+          (is (= [10 64 0] (at p))))))))
+
+(deftest go-to-refuses-an-unknown-or-bad-place-name-at-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[place reason] [[:nowhere :unknown-place] ["Bad Name" :bad-name]]]
+          (let [{:keys [out p seen]} (await (go-place! {:home {:x 10 :y 64 :z 0}} {:place place}))]
+            (is (= reason (:reason @out)) (str place))
+            (is (= :stopped (:status @out)))
+            (is (re-find #"place" (:text @out)))
+            (is (= [0 64 0] (at p)) "did not walk")
+            (is (= 1 (count (events-of {:seen seen} :refused))))))))))

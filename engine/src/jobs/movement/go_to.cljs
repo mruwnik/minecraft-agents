@@ -1,6 +1,7 @@
 (ns jobs.movement.go-to
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
+            [engine.memory :as mem]
             [jobs.lib.blocks :as b]
             [jobs.lib.escape :as escape]
             [jobs.lib.reach :as reach]
@@ -15,9 +16,10 @@
 
 (def doc
   "Walk to :pos ([x y z] or {:x :y :z}, fractions floored to the cell) until the body's cell is within :range cells of
-  it (range 0: in that cell, 1: next to it).
-  - Refused at once, before any walk: a :pos that is not one (:bad-pos), a body with no pathWorld sensing
-    (:unsupported). Both give a :refused warn and {:status :stopped :arrived false :reason <it> :text}.
+  it (range 0: in that cell, 1: next to it). :place (a name such as :home, set by jobs.memory.set-place) walks to
+  that place's recorded position instead of :pos.
+  - Refused at once, before any walk: a :pos that is not one (:bad-pos), a :place that is not a valid name (:bad-name)
+    or has no recorded position (:unknown-place), a body with no pathWorld sensing (:unsupported). Both give a :refused warn and {:status :stopped :arrived false :reason <it> :text}.
   - One call is one whole attempt: it plans and walks (jobs.lib.walk: slices of about 100 ms of search, walks of at
     most 60 s each) until it arrives or gives up. A search that needs more slices walks on toward where it has got
     to, or not at all while it goes on; every iteration awaits a pace-ms timer. A goal in unloaded land is walked
@@ -53,6 +55,7 @@
 
 (def args
   {:pos {:doc "target position {:x :y :z}" :default nil}
+   :place {:doc "name of a place in body memory (:home, :bed, ...) to walk to instead of :pos" :default nil}
    :range {:doc "how close counts as there, in cells" :default 1}
    :doors {:doc "what to do at shut doors, gates and trapdoors: :shut (open, pass, shut again what the walk opened), :leave-open (open and pass), :never (walls)"
            :default :shut}
@@ -562,11 +565,24 @@
                             (await (escalate! c pos nil)))
       :else (await (walk! c pos (:range (:args c)) (some-> (:doors (:args c)) keyword))))))
 
+(defn target
+  "{:pos {:x :y :z}} to walk to: the recorded position of :place when given, else :pos; else a refusal."
+  [c]
+  (let [{:keys [place pos]} (:args c)]
+    (if (nil? place)
+      (places/parse-pos pos)
+      (let [named (places/parse-name place)
+            there (when-not (:reason named) (mem/place (ctx/view c) (:name named)))]
+        (cond
+          (:reason named) named
+          (nil? there) (places/refusal :unknown-place (str "no place called " (name (:name named)) " is recorded in memory"))
+          :else (places/parse-pos there))))))
+
 (defn ^:async round
   "One whole attempt: step! until it arrives, gives up, or waits on a child (:continue), with pace! between steps. A
   cut ends it at once (ctx/alive? per iteration, else at the next memory write or act, which throws)."
   [c]
-  (let [parsed (places/parse-pos (:pos (:args c)))
+  (let [parsed (target c)
         pos (:pos parsed)]
     (if (:reason parsed)
       (refuse! c parsed)
