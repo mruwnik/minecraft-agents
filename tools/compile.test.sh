@@ -73,5 +73,22 @@ check "missing ns message" "$(grep -c 'not in the :test bundle' <<<"$out")" 1
 # --golden whose run fails exits with that failure, never falling through to the normal path
 out=$(timeout 30 "$T/repo/tools/test-engine" --golden 2>&1); rc=$?
 check "golden failure no fall-through" "$(grep -c 'not in the :test bundle' <<<"$out")" 0
+# --golden asks res-slot for the golden need from res-slot.json (goldenMb), not the shard need
+mv "$T/repo/tools/res-slot" "$T/repo/tools/res-slot.real"
+printf '#!/bin/sh\necho "RES-SLOT $*"\n' > "$T/repo/tools/res-slot"; chmod +x "$T/repo/tools/res-slot"
+out=$(timeout 30 "$T/repo/tools/test-engine" --golden 2>&1)
+gmb=$(node -e 'console.log(require(process.argv[1]).kinds.tests.goldenMb)' "$T/repo/tools/res-slot.json")
+check "golden need from goldenMb" "$(grep -cF -e "RES-SLOT tests --need $gmb --" <<<"$out")" 1
+mv "$T/repo/tools/res-slot.real" "$T/repo/tools/res-slot"
 timeout 5 "$T/repo/tools/test-engine" >/dev/null 2>&1; check "no args usage exit" "$?" 2
+
+# a worktree's server start waits for a compile slot without holding the global compile lock
+git init -q "$T/main" && git -C "$T/main" -c user.name=t -c user.email=t@t commit -q --allow-empty -m x && git -C "$T/main" worktree add -q "$T/wt" 2>/dev/null
+mkdir -p "$T/wt/tools" "$T/wt/engine/.shadow-cljs"
+cp "$TOOLS/compile" "$T/wt/tools/"
+printf '#!/bin/sh\nsleep 4\necho "res-slot: busy"\nexit 75\n' > "$T/wt/tools/res-slot"; chmod +x "$T/wt/tools/res-slot"
+MC_COMPILE_MIN_START_MB=0 "$T/wt/tools/compile" engine test >/dev/null 2>&1 & WP=$!
+sleep 1.5
+flock -n "$MC_COMPILE_LOCK" true; check "lock free while a worktree waits for a slot" "$?" 0
+wait $WP; check "worktree without a slot exits 75" "$?" 75
 exit $fail

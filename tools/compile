@@ -20,6 +20,7 @@
 # Memory: a missing server starts only with MIN_START_MB (3500) available; the compile itself uses the server's heap.
 # A server started outside the main checkout (a git worktree: integration batches, test copies) runs under a `compile` slot of
 # tools/res-slot (held for the server's life, so its JVM counts against the memory floor); no free slot in ~2 min exits 75 (retry).
+# That start waits before queueing (under <lock>.start only), so the global compile lock is free meanwhile.
 # A build that prints an :undeclared-var or :undeclared-ns warning exits 1 (shadow-cljs itself exits 0).
 # Env: MC_COMPILE_LOG=1 prints "waited Ns, compiled Ns".
 set -u
@@ -63,6 +64,42 @@ if [ -e "$lock" ]; then
   done
 fi
 
+# Starts the project's server when none runs (callers check server_pid first).
+start_server() {
+  mb=$(available_mb)
+  if [ "$mb" -lt "$MIN_START_MB" ]; then
+    echo "tools/compile: no $project shadow-cljs server and only $mb MB available ($MIN_START_MB needed to start one)" >&2
+    exit 1
+  fi
+  echo "tools/compile: starting the $project shadow-cljs server" >&2
+  # the background subshell must drop the lock fds (8, 9) too, or it holds the lock until the server dies
+  slot=()
+  [ "$(cd "$repo" && git rev-parse --git-dir)" = "$(cd "$repo" && git rev-parse --git-common-dir)" ] || \
+    slot=(env RES_SLOT_MAX_WAIT_MS=${RES_SLOT_MAX_WAIT_MS:-120000} "$repo/tools/res-slot" compile --)
+  (exec 8>&- 9>&-; cd "$dir" && exec setsid nohup "${slot[@]}" npx shadow-cljs server >"$dir/.shadow-cljs/server.log" 2>&1 </dev/null) &
+  bg=$!
+  for _ in $(seq 1 300); do
+    p=$(server_pid) && [ -s "$dir/.shadow-cljs/nrepl.port" ] && [ -s "$dir/.shadow-cljs/http.port" ] && break
+    if ! kill -0 "$bg" 2>/dev/null && grep -q '^res-slot: busy' "$dir/.shadow-cljs/server.log" 2>/dev/null; then
+      echo "tools/compile: no free compile slot for a worktree $project server, retry later ($(grep '^res-slot: busy' "$dir/.shadow-cljs/server.log" | tail -n1))" >&2
+      exit 75
+    fi
+    sleep 0.5
+  done
+  server_pid >/dev/null || { echo "tools/compile: the $project server did not start (see $dir/.shadow-cljs/server.log)" >&2; exit 1; }
+  sleep 3
+}
+
+# A worktree's server start waits up to ~2 min for a compile slot: do it before queueing, under a lock of its own, so the
+# global compile lock is never held meanwhile. The start lock keeps two compiles from both starting a server; the queued
+# part then finds the server running.
+if [ "$stop" = 0 ] && [ "$(cd "$repo" && git rev-parse --git-dir)" != "$(cd "$repo" && git rev-parse --git-common-dir)" ]; then
+  exec 8>>"$lock.start"
+  flock 8
+  server_pid >/dev/null || start_server
+  exec 8>&-
+fi
+
 mkdir -p "$queue"
 ticket="$queue/$lane-$(date +%s%N)-$$"
 : > "$ticket"
@@ -95,30 +132,7 @@ if [ "$stop" = 1 ]; then
   kill "$p"; exit 0
 fi
 
-if ! server_pid >/dev/null; then
-  mb=$(available_mb)
-  if [ "$mb" -lt "$MIN_START_MB" ]; then
-    echo "tools/compile: no $project shadow-cljs server and only $mb MB available ($MIN_START_MB needed to start one)" >&2
-    exit 1
-  fi
-  echo "tools/compile: starting the $project shadow-cljs server" >&2
-  # the background subshell must drop the lock fd too, or it holds the lock until the server dies
-  slot=()
-  [ "$(cd "$repo" && git rev-parse --git-dir)" = "$(cd "$repo" && git rev-parse --git-common-dir)" ] || \
-    slot=(env RES_SLOT_MAX_WAIT_MS=${RES_SLOT_MAX_WAIT_MS:-120000} "$repo/tools/res-slot" compile --)
-  (exec 9>&-; cd "$dir" && exec setsid nohup "${slot[@]}" npx shadow-cljs server >"$dir/.shadow-cljs/server.log" 2>&1 </dev/null) &
-  bg=$!
-  for _ in $(seq 1 300); do
-    p=$(server_pid) && [ -s "$dir/.shadow-cljs/nrepl.port" ] && [ -s "$dir/.shadow-cljs/http.port" ] && break
-    if ! kill -0 "$bg" 2>/dev/null && grep -q '^res-slot: busy' "$dir/.shadow-cljs/server.log" 2>/dev/null; then
-      echo "tools/compile: no free compile slot for a worktree $project server, retry later ($(grep '^res-slot: busy' "$dir/.shadow-cljs/server.log" | tail -n1))" >&2
-      exit 75
-    fi
-    sleep 0.5
-  done
-  server_pid >/dev/null || { echo "tools/compile: the $project server did not start (see $dir/.shadow-cljs/server.log)" >&2; exit 1; }
-  sleep 3
-fi
+server_pid >/dev/null || start_server
 
 cd "$dir" || exit 1
 # the server (and any detached child) must not inherit the lock fd

@@ -36,6 +36,11 @@ test('res-slot.json holds the one table of tests needs: shard 2950, golden 940, 
   assert.deepEqual([res.kinds.tests.needMb, res.kinds.tests.goldenMb, res.floorMb], [2950, 940, 6144])
 })
 
+test('res-slot.json: a compile slot needs 2000 MB (a shadow-cljs server JVM)', () => {
+  const res = JSON.parse(fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), 'res-slot.json'), 'utf8'))
+  assert.equal(res.kinds.compile.needMb, 2000)
+})
+
 test('lastFinished: the last test var in a timing file, or none', () => {
   const lines = ['{"var":"#\'engine.a-test/one","ms":3}', '{"var":"#\'engine.a-test/two","ms":5}', '']
   assert.equal(lastFinished(lines), "#'engine.a-test/two")

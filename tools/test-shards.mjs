@@ -81,6 +81,7 @@ export const eventForwarder = (write, shardNs) => {
       partial[i] = lines.pop()
       lines.forEach((l) => feedLine(i, l))
     },
+    end: (i) => { feedLine(i, partial[i] ?? ''); partial[i] = '' },
   }
 }
 
@@ -129,6 +130,7 @@ const main = async ({ compile = () => spawnSync(path.join(repo, 'tools/compile')
     fs.writeFileSync(file, '')
     const limit = runTimeoutS(expectedMs(nss, prior))
     const r = await runInSlot(slots, ['timeout', '-k', '10', String(limit), 'node', '--max-old-space-size=4096', path.join(runDir, 'out/test.cjs'), `--test=${nss.join(',')}`], { cwd: engine, env: { ...process.env, MC_TEST_TIMINGS: file, NODE_PATH: path.join(repo, 'node_modules') } }, events ? (chunk) => events.feed(i, chunk) : undefined, events ? () => events.waiting(i) : undefined)
+    events?.end(i)
     if (r.code === 124 || r.code === 137) r.out += `\ntest-shards: TIMEOUT, shard ${i} killed after ${limit} s; last finished test: ${lastFinished(fs.readFileSync(file, 'utf8').split('\n')) ?? 'none'}\n`
     return { i, nss, file, ...r }
   }))

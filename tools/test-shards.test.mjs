@@ -70,6 +70,15 @@ test('eventForwarder: result and phase lines pass through, other output is dropp
   assert.deepEqual(parsed(out), [{ event: 'result', name: 'a/b', outcome: 'passed' }, { event: 'phase', name: 'x' }])
 })
 
+test('eventForwarder: a last line without a newline is forwarded by end()', () => {
+  const out = []
+  const f = eventForwarder((l) => out.push(l), [1])
+  f.feed(0, ev({ event: 'result', name: 'z', outcome: 'passed' }))
+  assert.deepEqual(parsed(out), [])
+  f.end(0)
+  assert.deepEqual(parsed(out), [{ event: 'result', name: 'z', outcome: 'passed' }])
+})
+
 test('eventForwarder: one plan, emitted once every shard has reported its own, with the summed total', () => {
   const out = []
   const f = eventForwarder((l) => out.push(l), [4, 6])
