@@ -1,0 +1,31 @@
+;; Primitives smoke after the primitives.mjs split (card 8da5f374): go-to (moveTo), dig, place, deposit into a chest, eat,
+;; then a kick: the body reconnects by itself and a go-to after it arrives (the env.bot getter follows the new bot).
+{:defaults
+ {:tags [:primitives :jobs] :time :any
+  :body {:at [16.5 0 16.5] :inventory [["iron_pickaxe" 1] ["cobblestone" 8] ["bread" 4]] :effects [["hunger" 30 40]]}}
+ :cases
+ [{:name "walk-dig-place-deposit-eat"
+   :blocks [[:set [22 0 16] "stone"] [:set [12 0 20] "chest[facing=east]"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [20 0 20] :range 1 :escalate false})]
+         [:await {:source :job :kind :result :data {:arrived true}} 40]
+         [:job (jobs.blocks.dig {:pos #at [22 0 16]})]
+         [:await {:source :job :kind :blocks.dig.done :data {:dug true}} 40]
+         [:job (jobs.blocks.place {:pos #at [18 0 18] :item "cobblestone"})]
+         [:await {:source :job :kind :blocks.place.done} 40]
+         [:job (jobs.storage.deposit {:chest #at [12 0 20] :items ["cobblestone"]})]
+         [:await {:source :job :kind :completed :data {:name "jobs.storage.deposit"}} 60]
+         [:job (jobs.survival.eat {:until 20})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 40 :of-job true}
+            {:event {:source :job :kind :blocks.dig.done :data {:dug true}} :within-s 90 :of-job true}
+            {:event {:source :job :kind :blocks.place.done} :within-s 130 :of-job true}
+            {:event {:source :job :kind :completed :data {:name "jobs.storage.deposit"}} :within-s 190 :of-job true}
+            {:event {:source :job :kind :completed :data {:name "jobs.survival.eat"}} :within-s 200 :of-job true}]
+   :after [[:block [18 0 18] "cobblestone"] [:item "cobblestone" 0] [:item "bread" [:< 4]]]
+   :limit-s 220}
+  {:name "kick-reconnects-then-walks"
+   :act [[:rcon "kick $BODY"]
+         [:wait-s 25]
+         [:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 120 :of-job true}]
+   :after [[:body-near [24.5 0 16.5] 2]]
+   :limit-s 140}]}
