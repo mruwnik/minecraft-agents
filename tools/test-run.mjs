@@ -91,7 +91,8 @@ export const narrowBundle = (runDir, nss) => {
   while (queue.length) {
     const f = path.join(runtime, `${queue.pop()}.js`)
     if (!fs.existsSync(f)) continue
-    for (const [, dep] of fs.readFileSync(f, 'utf8').matchAll(/goog\.require\('([^']+_test)'\)/g))
+    // The dev output has no goog.require lines: a required test namespace shows as a qualified reference (engine.go_to_test.go_BANG_).
+    for (const [, dep] of fs.readFileSync(f, 'utf8').matchAll(/\b((?:\w+\.)+\w*_test)(?=[.'"])/g))
       if (!keep.has(dep)) { keep.add(dep); queue.push(dep) }
   }
   const nodeJs = path.join(runtime, 'shadow.test.node.js')

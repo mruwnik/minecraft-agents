@@ -68,6 +68,19 @@ test('narrowBundle: drops unrequested -test namespaces from the imports and the 
   assert.equal(fs.readFileSync(nodeJs, 'utf8'), `var x = 1;\n${testData(['engine.a_test', 'engine.c_test'])}\nvar y = 2;\n`)
 })
 
+test('narrowBundle: keeps a test namespace the requested one only references (no goog.require line in the dev output)', (t) => {
+  const dir = fs.mkdtempSync('/tmp/test-run-narrow-')
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
+  fs.mkdirSync(`${dir}/out/test/cljs-runtime`, { recursive: true })
+  const imp = (f) => `SHADOW_IMPORT("${f}.js");`
+  fs.writeFileSync(`${dir}/out/test.cjs`, ['engine.a_test', 'engine.b_test', 'engine.c_test', 'shadow.test.node'].map(imp).join('\n') + '\n})();\n')
+  fs.writeFileSync(`${dir}/out/test/cljs-runtime/engine.a_test.js`, 'goog.provide("engine.a_test");\nawait engine.c_test.go_BANG_(1);')
+  fs.writeFileSync(`${dir}/out/test/cljs-runtime/shadow.test.node.js`, `${testData(['engine.a_test', 'engine.b_test', 'engine.c_test'])}\n`)
+  assert.equal(narrowBundle(dir, ['engine.a-test']), 1)
+  assert.deepEqual(fs.readFileSync(`${dir}/out/test.cjs`, 'utf8').split('\n').filter(Boolean),
+    ['engine.a_test', 'engine.c_test', 'shadow.test.node'].map(imp).concat('})();'))
+})
+
 test('narrowBundle: an unrecognised registry leaves the bundle untouched', (t) => {
   const dir = fs.mkdtempSync('/tmp/test-run-narrow-')
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
