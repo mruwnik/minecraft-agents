@@ -526,3 +526,18 @@
     (is (= "found" (:status (result-over spec [0 64 0] [11 70 14] {:goalFlood 0 :preFlood 0}))))
     (is (not= "goal-enclosed"
               (:reason (result-over spec [0 64 0] [11 70 14] {:maxNodes 300 :preFlood 0 :floodAfter 0 :goalFlood 100000}))))))
+
+;; a two-high shelter (interior x -1..1, z 0..2, roof y 66) on grass; the first stair cell (0 63 1) is dug out of the floor
+;; in front of the body at (0 64 0): one step down, the table and chest beside it
+(def shelter-stair
+  {:blocks (-> (merge (box -6 62 -6 6 63 8 "stone")
+                      (hollow -2 63 -1 2 66 3)
+                      {"-1,64,2" "crafting_table" "1,64,0" "chest"})
+               (dissoc "0,63,1")
+               (assoc "0,64,-1" "oak_door" "0,65,-1" "oak_door"))
+   :states {"0,64,-1" {:open false :half "lower" :facing "north"} "0,65,-1" {:open false :half "upper" :facing "north"}}})
+
+(deftest a-first-stair-cell-in-a-shelter-is-not-enclosed
+  (are [options] (= {:status "found" :reason nil} (plan-over shelter-stair [0 63 1] options))
+    {}
+    {:preFlood 0 :floodAfter 0}))
