@@ -72,3 +72,15 @@
         (fn [events]
           (is (= 1 @calls))
           (is (= [[:ok {:ok true}]] events)))))))
+
+(deftest a-different-post-to-the-same-url-is-not-dropped
+  (async done
+    (let [calls (atom 0)]
+      (with-fake-fetch
+        (fn [_ _] (swap! calls inc) (js/Promise.resolve (fake-response 200 {:ok true})))
+        (fn [] (js/Promise.all #js [(api/post-edn! {:url "/api/chat" :body {:text "a"} :on-ok [:ok] :on-err [:err]})
+                                    (api/post-edn! {:url "/api/chat" :body {:text "b"} :on-ok [:ok] :on-err [:err]})]))
+        done
+        (fn [events]
+          (is (= 2 @calls))
+          (is (= 2 (count events))))))))

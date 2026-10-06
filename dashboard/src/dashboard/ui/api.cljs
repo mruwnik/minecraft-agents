@@ -2,7 +2,7 @@
   (:require [dashboard.edn :as edn]
             [re-frame.core :as rf]))
 
-;; [key url] of requests still in flight: a slow response never piles up behind the next poll tick (or a double
+;; [key url] of requests still in flight (a POST's key includes its body, so only true duplicates drop): a slow response never piles up behind the next poll tick (or a double
 ;; click), but a request for another url (new world, new body) is not dropped behind the old one
 (defonce in-flight (atom #{}))
 
@@ -62,7 +62,7 @@
 (rf/reg-fx :fetch-edn fetch-edn!)
 
 (defn post-json! [{:keys [url body on-ok on-err on-unsupported]}]
-  (request! {:key :post :url url
+  (request! {:key [:post (js/JSON.stringify body)] :url url
              :opts #js {:method "POST" :headers #js {"content-type" "application/json"} :body (js/JSON.stringify body)}
              :read (fn [res]
                      (if (= 501 (.-status res))
@@ -73,7 +73,7 @@
 (rf/reg-fx :post-json post-json!)
 
 (defn post-edn! [{:keys [url body on-ok on-err]}]
-  (request! {:key :post :url url
+  (request! {:key [:post (pr-str body)] :url url
              :opts #js {:method "POST" :headers #js {"content-type" "application/edn"} :body (pr-str body)}
              :read (fn [res]
                      (-> (.text res)
