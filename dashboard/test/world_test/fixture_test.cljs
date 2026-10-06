@@ -230,3 +230,18 @@
   (let [ps #(f/problems (merge {:name "a" :time :day :plot {:height 6} :body {:at [1 0 1]} :act [] :after [] :expect []} %))]
     (is (empty? (ps {:mobs :keep})))
     (is (some #(re-find #":mobs" %) (ps {:mobs :bogus})))))
+
+(deftest the-start-check-reads-the-body-position-and-judges-it-against-the-start
+  (let [origin [20000 150 20000]
+        c {:body {:at [16.5 0 16.5]}}]
+    (is (= "data get entity ProbeFixture Pos" (f/start-check-command "ProbeFixture")))
+    (is (:pass? (f/judge-start origin c "ProbeFixture has the following entity data: [20016.5d, 150.0d, 20016.5d]")))
+    (is (:pass? (f/judge-start origin c "ProbeFixture has the following entity data: [20017.2d, 148.0d, 20015.9d]"))
+        "a few blocks off is still at the start")
+    (let [r (f/judge-start origin c "ProbeFixture has the following entity data: [9.5d, 68.0d, 0.5d]")]
+      (is (not (:pass? r)) "world spawn is not the start")
+      (is (re-find #"9\.5 68 0\.5" (:why r)) "the message names where the body is")
+      (is (re-find #"20016\.5 150 20016\.5" (:why r)) "and where it should be"))
+    (is (not (:pass? (f/judge-start origin c "No entity was found")))
+        "no position at all is a failure")
+    (is (re-find #"No entity" (:why (f/judge-start origin c "No entity was found"))))))

@@ -321,6 +321,21 @@
                 (str "effect give " body " " effect " " (or seconds 600) " " (or amp 0) " true")))
         (cond-> spawnpoint (conj (str "spawnpoint " body " " (xyz-str (abs-pos origin spawnpoint))))))))
 
+(declare reply-pos)
+
+(defn start-check-command [body] (str "data get entity " body " Pos"))
+
+(defn judge-start
+  "Is the body at the case's start (within 4 blocks of :body :at) given the reply of start-check-command? {:pass? :why}."
+  [origin c reply]
+  (let [want (abs-pos origin (get-in c [:body :at]))
+        p (reply-pos reply)
+        d (when p (js/Math.hypot (- (p 0) (want 0)) (- (p 1) (want 1)) (- (p 2) (want 2))))]
+    (if (and d (<= d 4))
+      {:pass? true}
+      {:pass? false
+       :why (str "the body is not at its start: it is at " (if p (xyz-str p) (str/trim reply)) ", the start is " (xyz-str want))})))
+
 (defn summon-command [origin [_ type pos nbt]]
   (str "summon " type " " (xyz-str (abs-pos origin pos)) " " (nbt-with-tag nbt)))
 

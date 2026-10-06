@@ -453,6 +453,23 @@
           (js/Promise.resolve nil)
           (f/register-put-argvs (:body opts) (:world opts) register)))
 
+(defn ensure-at-start!
+  "Checks the body stands at the case's start after body-commands; when it does not (a tp that did not take), repeats
+  the tp up to 3 times. Resolves to nil when it stands there, else to the failure message. io: {:send cmds->promise of
+  replies, :sleep ms->promise}."
+  [{:keys [send sleep]} origin body c]
+  (let [{:keys [at]} (:body c)
+        tp (str "tp " body " " (f/xyz-str (f/abs-pos origin at)) " 0 0")]
+    (letfn [(check [retries]
+              (.then (send [(f/start-check-command body)])
+                     (fn [[reply]]
+                       (let [{:keys [pass? why]} (f/judge-start origin c (or reply ""))]
+                         (cond
+                           pass? nil
+                           (zero? retries) (str why " (tp repeated 3 times)")
+                           :else (.then (send [tp]) (fn [_] (.then (sleep 1000) #(check (dec retries))))))))))]
+      (.then (sleep 300) #(check 3)))))
+
 (defn run-case!
   "One run of case c on plot i (leased by the caller before the body starts); resolves to a result map. register: the entries to put on the body once it stands in
   the built plot (the body was just started with none), nil when it keeps the register it has."
@@ -476,6 +493,8 @@
                        (.then #(rcon! (f/block-commands origin rc)))
                        (.then #(reset! plan-files (write-plans! opts rc)))
                        (.then #(rcon! (f/body-commands origin (:body opts) rc)))
+                       (.then #(ensure-at-start! {:send rcon! :sleep sleep} origin (:body opts) rc))
+                       (.then (fn [why] (when why (throw (js/Error. why)))))
                        (.then #(when register (put-register! opts register)))
                        (.then #(sleep (* 1000 (get-in rc [:body :settle-s]))))
                        (.then #(rcon! (f/clear-hostiles-commands grid origin rc)))
