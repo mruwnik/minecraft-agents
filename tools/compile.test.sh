@@ -54,5 +54,8 @@ out=$(MC_TEST_TIMEOUT_S=2 timeout 30 "$T/repo/tools/test-engine" engine.hang-tes
 check "hung run message" "$(grep -c 'TIMEOUT, killed after 2 s' <<<"$out")" 1
 out=$(timeout 30 "$T/repo/tools/test-engine" engine.nope-test 2>&1); check "missing ns rc" "$?" 2
 check "missing ns message" "$(grep -c 'not in the :test bundle' <<<"$out")" 1
+# --golden whose run fails exits with that failure, never falling through to the normal path
+out=$(timeout 30 "$T/repo/tools/test-engine" --golden 2>&1); rc=$?
+check "golden failure no fall-through" "$(grep -c 'not in the :test bundle' <<<"$out")" 0
 timeout 5 "$T/repo/tools/test-engine" >/dev/null 2>&1; check "no args usage exit" "$?" 2
 exit $fail

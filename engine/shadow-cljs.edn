@@ -29,6 +29,7 @@
                 :output-dir "out/test-golden"
                 :ns-regexp "-golden$"
                 :autorun false
+                :build-hooks [(engine.build-hooks/add-job-namespaces)]
                 :compiler-options {:infer-externs false}}
   ;; Re-records test/planner-bench.json (`npm run record:planner-bench`).
   :planner-record {:target :node-script

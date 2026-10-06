@@ -25,7 +25,8 @@ if [ "$1" = "--changed" ]; then
 fi
 if [ "$1" = "--golden" ]; then
   "$repo/tools/compile" engine test-golden || exit $?
-  cd "$repo/engine" && node --max-old-space-size=4096 out/test-golden.cjs && exec node --test js/path/bench.golden.mjs
+  cd "$repo/engine" && node --max-old-space-size=4096 out/test-golden.cjs || exit $?
+  exec node --test js/path/bench.golden.mjs
 fi
 if [ "$1" = "--full" ]; then
   # sharded, machine-wide slot limit, per-test timings in engine/out/test-timings.jsonl (see tools/test-shards.mjs); options after --full: --shards N --slots M --slowest K
