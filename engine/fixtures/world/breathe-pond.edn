@@ -1,0 +1,41 @@
+;; Breathe over a 10x10 pond, 4 deep (card 94ae4756): the body is put in the water, its air runs out, the breathe reflex fires.
+;; Walled all round (wall 2 above the water, ground outside level with the water): it never reaches a shore, so the reflex must not end :cleared against the wall,
+;; the body stays afloat (one :no_shore warning, held afloat, no end). With a ledge cut into one wall (the ground outside is level with the water) it climbs out and the
+;; reflex ends :cleared once.
+{:defaults
+ {:tags [:survival :water] :time :any
+  :plot {:height 10}
+  :register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12}
+              :job (jobs.survival.breathe {:min-oxygen 12})}]
+  :blocks [[:fill [0 0 0] [31 3 31] "stone"]
+           [:fill [10 4 10] [21 5 21] "stone"]
+           [:fill [11 4 11] [20 5 20] "air"]
+           [:fill [11 0 11] [20 3 20] "water"]]
+  :body {:at [15.5 2 15.5] :settle-s 1}
+  :limit-s 90}
+ :cases
+ [{:name "walled-stays-afloat-1"
+   :expect [{:event {:source :reflex :kind :fired} :within-s 30}
+            {:event {:source :job :kind :no_shore} :within-s 40}
+            {:no-event {:source :reflex :kind :ended} :for-s 70}]
+   :after [[:body-near [15.5 3.5 15.5] 6]]}
+  {:name "walled-stays-afloat-2"
+   :body {:at [13.5 2 17.5]}
+   :expect [{:event {:source :reflex :kind :fired} :within-s 30}
+            {:event {:source :job :kind :no_shore} :within-s 40}
+            {:no-event {:source :reflex :kind :ended} :for-s 70}]
+   :after [[:body-near [13.5 3.5 17.5] 6]]}
+  {:name "ledge-east-lands-1"
+   :blocks [[:fill [21 4 11] [21 5 20] "air"]]
+   :body {:at [18.5 2 15.5]}
+   :expect [{:event {:source :reflex :kind :fired} :within-s 30}
+            {:event {:source :reflex :kind :ended :data {:how :cleared}} :within-s 60}
+            {:no-event {:source :job :kind :no_shore} :for-s 30}]
+   :after [[:body-near [22.5 4 15.5] 4]]}
+  {:name "ledge-west-lands-2"
+   :blocks [[:fill [10 4 11] [10 5 20] "air"]]
+   :body {:at [12.5 2 13.5]}
+   :expect [{:event {:source :reflex :kind :fired} :within-s 30}
+            {:event {:source :reflex :kind :ended :data {:how :cleared}} :within-s 60}
+            {:no-event {:source :job :kind :no_shore} :for-s 30}]
+   :after [[:body-near [8.5 4 13.5] 4]]}]}
