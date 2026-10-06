@@ -13,12 +13,15 @@
             [engine.triggers :as triggers]
             [jobs.survival.retreat :as retreat]))
 
-(defn setup [world]
+(defn setup
+  "An engine over a fake; its clock moves a second with every primitive call (a whole flight ends by time)."
+  [world]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         p (tu/fake-on-floor world)
-        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
-                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+        now (tu/act-clock clock p 1000)
+        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
+                          :events (events/make {:body "Fake" :sinks [sink] :now now})})]
     {:eng eng :p p :seen seen :clock clock}))
 
 (defn ^:async first-round [spec world]
@@ -29,10 +32,35 @@
 
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
 
-(defn last-move
-  "The target of the latest walk of the engine walker."
+(defn hiding? [seen] (some #(and (= :holding (:kind %)) (= "hiding" (some-> (:reason %) name))) @seen))
+
+(defn sleep [ms] (js/Promise. (fn [r] (js/setTimeout r ms))))
+
+(defn ^:async hidden-round
+  "Submit spec over world and run its round, which hides (a hold) while the mob stays. Once it hides the clock jumps
+  jump-ms, (look setup-map) is noted, and the mobs leave (or give way to after, entity specs). (prep p) runs first.
+  The setup map plus :while-hidden, what look saw."
+  ([spec world jump-ms look] (hidden-round spec world jump-ms look []))
+  ([spec world jump-ms look after] (hidden-round spec world jump-ms look after (constantly nil)))
+  ([spec world jump-ms look after prep]
+   (let [{:keys [eng p seen clock] :as s} (setup world)
+         noted (atom nil)]
+     (prep p)
+     (core/submit! eng spec {})
+     (let [round (core/tick! eng)]
+       (loop [i 0] (when (and (not (hiding? seen)) (< i 250)) (await (sleep 20)) (recur (inc i))))
+       (swap! clock + jump-ms)
+       (await (sleep 60))
+       (reset! noted (look s))
+       (swap! (fake/state p) assoc :entities [])
+       (doseq [e after] (fake/add-entity! p e))
+       (await round))
+     (assoc s :while-hidden @noted))))
+
+(defn first-move
+  "The target of the first walk of the engine walker."
   [eng]
-  (select-keys (peek (tu/walked-to eng)) [:x :y :z]))
+  (select-keys (first (tu/walked-to eng)) [:x :y :z]))
 
 (defn placed-cells [p]
   (mapv #(let [pos (.. % -args -pos)] [(.-x pos) (.-y pos) (.-z pos)]) (calls p "place")))
@@ -64,8 +92,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (await (first-round retreat {:blocks stair :entities [(skeleton 3 67 0)]}))
-              m (last-move eng)]
-          (is (= 1 (count (tu/walked-to eng))) "the stair behind is open: it walks")
+              m (first-move eng)]
           (is (< (:x m) -3) "away from the skeleton at the top")
           (is (< (:y m) 61) "down the steps, not along its own height")
           (is (= 0 (:z m)) "in the stair's own column")
@@ -79,7 +106,7 @@
                                               {:blocks stair :inventory [{:name "stone_pickaxe" :count 1}]
                                                :entities [(skeleton 3 67 0)]}))]
           (is (zero? (count (calls p "attack"))) "a pickaxe is no weapon: it flees first")
-          (is (< (:y (last-move eng)) 61) "down the stair"))))))
+          (is (< (:y (first-move eng)) 61) "down the stair"))))))
 
 (def tunnel-cells
   "A flat 1-wide tunnel along x on z 0, feet and head height, x -8..8."
@@ -91,10 +118,8 @@
       (fn ^:async t []
         (let [{:keys [eng]} (await (first-round retreat {:self {:pos [0.5 64 0.5]}
                                                          :blocks (rock [-9 9] [62 67] tunnel-cells)
-                                                         :entities [(assoc (skeleton 5.5 64 0.5) :visible true)]}))
-              m (last-move eng)]
-          (is (= 1 (count (tu/walked-to eng))) "x 0.5 is column 0, the tunnel, not column 1")
-          (is (= {:x -6 :y 64 :z 0} m)))))))
+                                                         :entities [(assoc (skeleton 5.5 64 0.5) :visible true)]}))]
+          (is (= {:x -6 :y 64 :z 0} (first-move eng)) "x 0.5 is column 0, the tunnel, not column 1"))))))
 
 (def dead-end-cells
   "A 1-wide tunnel along x on z 0 closed at x -1 behind the body: x 0..8."
@@ -106,60 +131,41 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen clock]} (await (first-round retreat {:blocks dead-end
-                                                                      :inventory [{:name "cobblestone" :count 20}]
-                                                                      :entities [(skeleton 4 64 0)]}))]
+        (let [{:keys [eng p seen while-hidden]}
+              (await (hidden-round retreat {:blocks dead-end :inventory [{:name "cobblestone" :count 20}]
+                                            :entities [(skeleton 4 64 0)]}
+                                   120000 (fn [{:keys [eng p]}] {:list (:list (core/state eng)) :places (count (calls p "place"))})))]
           (is (= [[1 64 0] [1 65 0]] (placed-cells p)) "the open side towards the skeleton, feet then head")
           (is (zero? (count (calls p "attack"))))
           (is (= [0 64 0] (mapv js/Math.floor (:pos (fake/self p)))) "no walk: at most a step to the middle of its own cell")
-          (swap! clock + 1000)
-          (await (core/tick! eng))
-          (is (= 2 (count (calls p "place"))) "sealed: nothing more to place")
-          (is (= ["j1"] (:list (core/state eng))) "it waits in the seal while the skeleton is near")
+          (is (= {:list ["j1"] :places 2} while-hidden) "no timer: still sealed two minutes on, nothing more placed")
           (is (empty? (blocked-events seen)) "never a blocked retreat")
-          (dotimes [_ 4]
-            (swap! clock + 30000)
-            (await (core/tick! eng)))
-          (is (= ["j1"] (:list (core/state eng))) "no timer: still sealed two minutes on while the skeleton waits outside")
-          (is (= [0 64 0] (mapv js/Math.floor (:pos (fake/self p)))))
           (is (= 1 (count (filter #(= :retreat_sealed (:kind %)) @seen))) "one notice that it walled itself in")
-          (swap! (fake/state p) assoc :entities [])
-          (swap! clock + 1000)
-          (await (core/tick! eng))
-          (is (= [] (:list (core/state eng))) "done the first round the skeleton is gone"))))))
+          (is (= [] (:list (core/state eng))) "done once the skeleton is gone"))))))
 
 (deftest a-sealed-respond-to-hostile-stays-hidden-while-the-hostile-waits-outside
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p clock]} (await (first-round '(jobs.survival.respond-to-hostile)
-                                                        {:blocks dead-end
-                                                         :inventory [{:name "cobblestone" :count 20}]
-                                                         :entities [(assoc (skeleton 4 64 0) :name "zombie")]}))]
+        (let [{:keys [eng p while-hidden]}
+              (await (hidden-round '(jobs.survival.respond-to-hostile)
+                                   {:blocks dead-end :inventory [{:name "cobblestone" :count 20}]
+                                    :entities [(assoc (skeleton 4 64 0) :name "zombie")]}
+                                   100000 (fn [{:keys [eng]}] (:list (core/state eng)))))]
           (is (= [[1 64 0] [1 65 0]] (placed-cells p)) "unarmed: sealed in")
-          (dotimes [_ 5]
-            (swap! clock + 20000)
-            (await (core/tick! eng)))
-          (is (= ["j1"] (:list (core/state eng))) "the zombie cannot reach the sealed body, but would were it to leave: it stays")
-          (swap! (fake/state p) assoc :entities [])
-          (swap! clock + 1000)
-          (await (core/tick! eng))
+          (is (= ["j1"] while-hidden) "the zombie cannot reach the sealed body, but would were it to leave: it stays")
           (is (= [] (:list (core/state eng))) "the zombie gone: done"))))))
 
 (deftest a-sealed-body-is-done-once-the-hostile-has-gone
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p clock]} (await (first-round retreat {:blocks dead-end
-                                                                 :inventory [{:name "cobblestone" :count 20}]
-                                                                 :entities [(skeleton 4 64 0)]}))]
-          (swap! clock + 1000)
-          (await (core/tick! eng))
-          (is (= ["j1"] (:list (core/state eng))) "sealed, the skeleton in the tunnel")
-          (swap! (fake/state p) assoc :entities [])
-          (fake/add-entity! p {:id 3 :name "zombie" :kind "hostile" :pos {:x 0 :y 64 :z 5} :health 20})
-          (swap! clock + 1000)
-          (await (core/tick! eng))
+        (let [{:keys [eng p while-hidden]}
+              (await (hidden-round retreat {:blocks dead-end :inventory [{:name "cobblestone" :count 20}]
+                                            :entities [(skeleton 4 64 0)]}
+                                   1000 (fn [{:keys [eng]}] (:list (core/state eng)))
+                                   [{:id 3 :name "zombie" :kind "hostile" :pos {:x 0 :y 64 :z 5} :health 20}]))]
+          (is (= ["j1"] while-hidden) "sealed, the skeleton in the tunnel")
           (is (= [] (:list (core/state eng))) "a zombie walled off in the rock is no danger even with the seal gone"))))))
 
 (deftest a-cornered-body-without-blocks-fights-with-its-pickaxe
@@ -169,7 +175,7 @@
         (let [{:keys [p seen]} (await (first-round retreat {:blocks dead-end
                                                             :inventory [{:name "stone_pickaxe" :count 1}]
                                                             :entities [(skeleton 2 64 0)]}))]
-          (is (= 1 (count (calls p "attack"))) "no blocks: it hits back")
+          (is (= 4 (count (calls p "attack"))) "no blocks: it hits back until the skeleton (20, 5 a hit) dies")
           (is (= ["stone_pickaxe"] (mapv #(.. % -args -item) (calls p "equip"))) "with the pickaxe in hand")
           (is (empty? (blocked-events seen))))))))
 
@@ -177,11 +183,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen clock]} (await (first-round retreat {:blocks dead-end :entities [(skeleton 2 64 0)]}))]
-          (is (= 1 (count (calls p "attack"))))
-          (swap! clock + 1000)
-          (await (core/tick! eng))
-          (is (= 2 (count (calls p "attack"))) "it keeps hitting; no failed rounds")
+        (let [{:keys [eng p seen]} (await (first-round retreat {:blocks dead-end :entities [(skeleton 2 64 0)]}))]
+          (is (= 4 (count (calls p "attack"))) "it keeps hitting; no failed rounds")
+          (is (= [] (:list (core/state eng))))
           (is (empty? (blocked-events seen))))))))
 
 (deftest a-cornered-body-that-cannot-place-fights-instead
@@ -191,7 +195,8 @@
         (let [{:keys [p]} (await (first-round retreat {:blocks dead-end
                                                        :inventory [{:name "cobblestone" :count 20}]
                                                        :entities [(assoc (skeleton 1 64 0) :name "zombie")]}))]
-          (is (= 1 (count (calls p "attack"))) "the zombie stands in the gap: the seal fails, it hits back"))))))
+          (is (zero? (count (calls p "place"))))
+          (is (= 4 (count (calls p "attack"))) "the zombie stands in the gap: the seal fails, it hits back"))))))
 
 (def corpse-zombie
   "A zombie one hit from death whose corpse stays listed after it dies (a death animation)."
@@ -201,16 +206,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen clock]} (await (first-round retreat {:blocks dead-end :entities [corpse-zombie]}))]
-          (is (= 1 (count (calls p "attack"))) "one hit kills it")
-          (dotimes [_ 3]
-            (swap! clock + 1000)
-            (await (core/tick! eng)))
-          (is (= 1 (count (calls p "attack"))) "the dead id is not attacked again")
+        (let [{:keys [eng p seen]} (await (first-round retreat {:blocks dead-end :entities [corpse-zombie]}))]
+          (is (= 1 (count (calls p "attack"))) "one hit kills it; the dead id is not attacked again")
           (is (empty? (blocked-events seen)) "the fight succeeded: no warn")
-          (swap! clock + 6000)
-          (await (core/tick! eng))
-          (is (= [] (:list (core/state eng))) "done once it has been gone for the cooldown"))))))
+          (is (= [] (:list (core/state eng))) "done: the corpse chases no one"))))))
 
 ;; ---------------------------------------------- the cornered fallback picks the safest option
 
@@ -241,28 +240,26 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen] :as s} (await (first-round retreat {:blocks doorway
-                                                                      :inventory [{:name "cobblestone" :count 20}]
-                                                                      :entities [(zombie 0 64 1)]}))]
-          (await (ticks! s 5))
+        (let [{:keys [eng p seen while-hidden]}
+              (await (hidden-round retreat {:blocks doorway :inventory [{:name "cobblestone" :count 20}]
+                                            :entities [(zombie 0 64 1)]}
+                                   1000 (fn [{:keys [eng p]}] {:list (:list (core/state eng))
+                                                               :y (js/Math.floor (second (:pos (fake/self p))))})))]
           (is (zero? (count (calls p "attack"))) "no fist fight")
-          (is (= 3 (count (calls p "jumpPlace"))) "a pillar three high, one block a round")
-          (is (= 67 (js/Math.floor (second (:pos (fake/self p))))) "on top of it, out of the zombie's reach")
+          (is (= 3 (count (calls p "jumpPlace"))) "a pillar three high, one block a step")
+          (is (= {:list ["j1"] :y 67} while-hidden) "on top of it, out of the zombie's reach, while the zombie is below")
           (is (= #{[0 64 0] [0 65 0] [0 66 0]} (set (map :cell (pillar-entries eng))))
               "every pillar block is in the scaffold ledger, for the cleanup")
-          (is (= ["j1"] (:list (core/state eng))) "it stays up while the zombie is below")
+          (is (= [] (:list (core/state eng))) "done once the zombie has gone")
           (is (empty? (blocked-events seen))))))))
 
 (deftest a-pillared-body-is-done-once-the-zombie-has-gone
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p] :as s} (await (first-round retreat {:blocks doorway
-                                                                 :inventory [{:name "cobblestone" :count 20}]
-                                                                 :entities [(zombie 0 64 1)]}))]
-          (await (ticks! s 4))
-          (swap! (fake/state p) assoc :entities [])
-          (await (ticks! s 7))
+        (let [{:keys [eng p]} (await (hidden-round retreat {:blocks doorway :inventory [{:name "cobblestone" :count 20}]
+                                                            :entities [(zombie 0 64 1)]}
+                                                   1000 (constantly nil)))]
           (is (= [] (:list (core/state eng))))
           (is (zero? (count (calls p "attack")))))))))
 
@@ -278,14 +275,14 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p] :as s} (await (first-round retreat {:blocks deep-dead-end
-                                                             :inventory [{:name "stone_pickaxe" :count 1}]
-                                                             :entities [(zombie 1 64 0)]}))]
-          (await (ticks! s 6))
+        (let [{:keys [p while-hidden]}
+              (await (hidden-round retreat {:blocks deep-dead-end :inventory [{:name "stone_pickaxe" :count 1}]
+                                            :entities [(zombie 1 64 0)]}
+                                   1000 (fn [{:keys [p]}] (.-name (.blockAt p #js {:x 0 :y 64 :z 0})))))]
           (is (zero? (count (calls p "attack"))) "a pickaxe and a hole beat a pickaxe fight")
           (is (= [[0 63 0] [0 62 0]] (mapv #(let [pos (.. % -args -pos)] [(.-x pos) (.-y pos) (.-z pos)]) (calls p "dig"))))
           (is (= 62 (js/Math.floor (second (:pos (fake/self p))))) "two down")
-          (is (some #{"stone" "cobblestone"} [(.-name (.blockAt p #js {:x 0 :y 64 :z 0}))]) "plugged over the head"))))))
+          (is (#{"stone" "cobblestone"} while-hidden) "plugged over the head"))))))
 
 (def room
   "A room three wide (z -1..1) closed at x -2 behind the body, open far towards +x."
@@ -295,12 +292,14 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p eng]} (await (first-round retreat {:inventory [{:name "iron_sword" :count 1}]
-                                                           :blocks room
-                                                           :entities [(creeper 3 64 0)]}))]
+        (let [{:keys [eng p]} (setup {:inventory [{:name "iron_sword" :count 1}] :blocks room :entities [(creeper 3 64 0)]})]
+          (.override (.-world p) "steer"
+                     (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r)))))
+          (core/submit! eng retreat {})
+          (await (core/tick! eng))
           (is (zero? (count (calls p "attack"))) "no melee with a creeper")
-          (is (= 1 (count (tu/walked-to eng))) "one step back, into the last cell of the room")
-          (is (= -1 (:x (peek (tu/walked-to eng))))))))))
+          (is (= 1 (count (tu/walked-to eng))) "one step back, into the last cell of the room (then the creeper leaves)")
+          (is (= -1 (:x (first-move eng)))))))))
 
 (defn stuck-walks!
   "Make every walk of the engine walker get no nearer: :blocked."
@@ -314,6 +313,8 @@
         (let [{:keys [eng p]} (setup {:inventory [{:name "iron_sword" :count 1} {:name "dirt" :count 16}]
                                       :entities [(creeper 2.5 64 0.5)]})]
           (stuck-walks! p)
+          (.override (.-world p) "place"
+                     (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r)))))
           (core/submit! eng retreat {})
           (await (core/tick! eng))
           (is (zero? (count (calls p "attack"))) "no melee with a creeper")
@@ -323,9 +324,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p]} (await (first-round retreat {:self {:health 4}
-                                                       :inventory [{:name "iron_sword" :count 1} {:name "cobblestone" :count 20}]
-                                                       :blocks dead-end :entities [(zombie 3 64 0)]}))]
+        (let [{:keys [p]} (await (hidden-round retreat {:self {:health 4}
+                                                        :inventory [{:name "iron_sword" :count 1} {:name "cobblestone" :count 20}]
+                                                        :blocks dead-end :entities [(zombie 3 64 0)]}
+                                               1000 (constantly nil)))]
           (is (zero? (count (calls p "attack"))) "4 health against a zombie: the sword is no answer")
           (is (= [[1 64 0] [1 65 0]] (placed-cells p))))))))
 
@@ -335,7 +337,7 @@
       (fn ^:async t []
         (let [{:keys [p]} (await (first-round retreat {:inventory [{:name "iron_sword" :count 1} {:name "cobblestone" :count 20}]
                                                        :blocks dead-end :entities [(zombie 1 64 0)]}))]
-          (is (= 1 (count (calls p "attack"))) "full health and a sword against one zombie: fight"))))))
+          (is (= 4 (count (calls p "attack"))) "full health and a sword against one zombie: fight it to the end"))))))
 
 (defn edge-world
   "Floor (stone at y 63) for x <= edge on z 0 and air everywhere else."

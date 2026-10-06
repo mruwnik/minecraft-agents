@@ -258,7 +258,23 @@
   (let [f (/ maxd (dist from to))]
     (mapv (fn [a b] (js/Math.round (+ a (* (- b a) f)))) from to)))
 
-(defn after-walk [w from] (-> w (animals/drag-leashed from) animals/tempt-follow))
+(declare can-see?)
+
+(defn chase-body
+  "Hostiles with :chase {:speed s :follow r} move s blocks per block the body walked, straight toward it, while it is
+  within r (default 35) and in sight (:visible when given); else they stay."
+  [w from]
+  (let [to (body-pos w)
+        walked (dist from to)
+        chase (fn [e]
+                (let [{:keys [speed follow] :or {follow 35}} (:chase e)
+                      d (dist (:pos e) to)]
+                  (if (and (:chase e) (pos? d) (<= d follow) (if (some? (:visible e)) (:visible e) (can-see? w e)))
+                    (assoc e :pos (mapv (fn [a b] (+ a (* (- b a) (min 1 (/ (* speed walked) d))))) (:pos e) to))
+                    e)))]
+    (update w :entities #(mapv chase %))))
+
+(defn after-walk [w from] (-> w (animals/drag-leashed from) animals/tempt-follow (chase-body from)))
 
 (defn properties-of
   "A cell's block properties: the rail's, its state and its crop age."

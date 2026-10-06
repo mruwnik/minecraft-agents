@@ -288,7 +288,7 @@ calls job code only through `engine.hooks`, named in `src/jobs/hooks.edn` (world
 One EDN store per body: `worlds/<world>/agents/<name>/engine/memory.edn`, `{:entries {kind [entry]} :policies {kind policy}}`.
 
 - An **entry** is `{:t wall-clock-ms :wt world-time :data ...}`, newest last. **Kinds** are an open vocabulary: `:hurt`, `:died`,
-  `:chat`, `:restart`, `:bed`, `:chest`, `:home`, `:looked`, `:moved`, `:picked-up`, `:fed`, `:slept`, `:shelter`, `:stuck`,
+  `:chat`, `:restart`, `:bed`, `:chest`, `:home`, `:looked`, `:moved`, `:picked-up`, `:fed`, `:slept`, `:shelter`, `:stuck`, `:threat`,
   `:tidy`, `:scaffold`, `:forestry/replant`, `:job/j7`, and so on. Body events become entries of their kind; every start
   appends `:restart`.
 - **Policy** `{:cap n :ttl ms}` is stored beside the kind. A new kind gets cap 50 and ttl one hour unless a write gives
@@ -585,8 +585,8 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 | `survival.eat` `{:item :until 18}` | Eats the best carried food (points, then saturation); harmful food only with `:allow-bad` |
 | `survival.get-food` | One round: eat carried food; while hungry take the next way (bake, known source, drops, hunt, wild crops; withdraw/attack/dig children) and eat again. Fed: `{:food n}`; nothing left: stopped `:no-food` with warn `food.none`; inside its ask cooldown it declines |
 | `survival.breathe`, `survival.extinguish` | Swim up or dig the head free; pour water or reach water. Never trespass except as a last resort |
-| `survival.respond-to-hostile` | Fights (`fight-back`) when the odds are fair, else `retreat` |
-| `survival.retreat` | Flees away from all real dangers in range (nearer ones weigh more), leaning to a bed or home within `:home-range` (64); never ends while one stands. Cornered (no open way, rechecked each round) it fights, seals itself in, pillars, or digs down, then hides until the way is closed |
+| `survival.respond-to-hostile` | Fights (`fight-back`) when the odds are fair, else `retreat`, deciding afresh each call; one round until no danger is near (stopped when the retreat stops) |
+| `survival.retreat` | One whole flight per round: flees away from its chasers (nearer ones weigh more), leaning to a bed or home within `:home-range` (64), until none chases (gone, beyond its follow range, out of line for `:lost-s` 4, no way); stopped `:still-chased` after `:max-flight-s` 180. Cornered (rechecked each step) it fights, seals itself in, pillars, or digs down, then hides (a declared hold) until the way is closed. Writes a `:threat` entry per mob fled (5 min); the third from one mob warns `hostile.chased` |
 | `survival.fight-back` | Equips the best weapon and hits the nearest hostile within `:range` |
 | `survival.night` | Owns the night in one round, re-choosing from the world each pass: sleep (a seen bed, the known one within 48, or a carried one put down; never an occupied one unless in the body's own zone), else while anyone sleeps log out in 30 s stints, else roofed or buried ends, else dig-in; a site where dig-in stops is remembered (`:night-site`, until morning) and it walks to a pit site within 16 blocks, at most 4 sites, then holds exposed. Every hold is declared (`:sleeping`, `:sheltered`, `:exposed`). By day leaves a dug-in shelter and picks up a bed it put down outside its zone; ends done `{:night how}` or stopped (`:exposed`, `:no-way-out`). Opt out: mute `:night` |
 | `survival.sleep`, `survival.dig-in`, `survival.log-out` | Walk to a known bed and sleep; roof the body in (one call: walls, a plug or a pit; ends `{:pos :mode :roof}` or stopped with the site's reason); leave the server for a stint and wait for the sleep count |

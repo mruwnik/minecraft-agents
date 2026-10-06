@@ -22,17 +22,20 @@
     (str (inc x) "," (+ 63 height) "," z) "oak_leaves"}))
 
 (defn boot
-  "An engine over the fake world loaded with the scenario file."
-  [file world]
+  "An engine over the fake world loaded with the scenario file. Its clock moves ms-per-call (default 0) with every
+  primitive call: a round that ends by time (a whole flight) needs it."
+  ([file world] (boot file world 0))
+  ([file world ms-per-call]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         p (tu/fake-on-floor world)
-        eng (core/create {:primitives p :jobs registry/jobs :triggers all-triggers :dir (tu/tmp-dir) :now #(deref clock)
-                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})
+        now (tu/act-clock clock p ms-per-call)
+        eng (core/create {:primitives p :jobs registry/jobs :triggers all-triggers :dir (tu/tmp-dir) :now now
+                          :events (events/make {:body "Fake" :sinks [sink] :now now})})
         s (scenario/read-file file)]
     (is (= [] (scenario/problems registry/jobs all-triggers s)))
     (trigger-api/load-scenario! eng s)
-    {:eng eng :p p :seen seen :clock clock}))
+    {:eng eng :p p :seen seen :clock clock})))
 
 (defn ^:async run-ticks [eng clock n step-ms]
   (loop [i 0]
@@ -93,8 +96,10 @@
       (fn ^:async t []
         (let [{:keys [eng p seen clock]} (boot "scenarios/survival.edn"
                                                {:time 1000
+                                                :floor [-45 -10 40 10]
                                                 :self {:experience {:level 3 :points 40 :progress 0}}
-                                                :inventory [{:name "bread" :count 4}]})
+                                                :inventory [{:name "bread" :count 4}]}
+                                               1000)
               food #(:food (fake/self p))]
           (is (= [:suffocating :burning :wedged :hostile-near :night :hungry :stuck :door-left
                   :died :inventory-nearly-full :scaffold-left :tidy-pending]
@@ -115,7 +120,7 @@
 
           (fake/add-entity! p {:id 50 :name "zombie" :kind "hostile" :pos [4 64 0] :health 20})
           (await (run-ticks eng clock 3 1000))
-          (is (= [:hungry :hostile-near] (fired seen)) "a hostile fires respond-to-hostile")
+          (is (= [:hungry :hostile-near] (fired seen)) "a hostile fires respond-to-hostile (a whole flight)")
           (swap! (fake/state p) assoc :entities [])
           (await (run-ticks eng clock 10 1000))
           (is (some #(= [:reflex :ended :hostile-near] [(:source %) (:kind %) (:reflex %)]) @seen)

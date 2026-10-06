@@ -576,27 +576,37 @@
 
 ;; --------------------------------------------------------- retreat / sleep
 
+(defn flight-setup
+  "As setup, the clock moving a second with every primitive call: a whole flight ends by time."
+  [world]
+  (let [clock (atom 1000000)
+        [seen sink] (tu/legacy-capture-sink)
+        p (tu/fake-on-floor world)
+        now (tu/act-clock clock p 1000)
+        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
+                          :events (events/make {:body "Fake" :sinks [sink] :now now})})]
+    {:eng eng :p p :seen seen :clock clock}))
+
 (deftest retreat-walks-away-until-no-hostile-within-radius
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p clock]} (setup {:entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 5 :y 64 :z 0}}]})]
+        (let [{:keys [eng p]} (flight-setup {:floor [-40 -10 10 10]
+                                             :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 5 :y 64 :z 0}}]})]
           (core/submit! eng (list 'jobs.survival.retreat {:radius 8}) {})
           (await (core/tick! eng))
-          (is (< (.-x (.-pos (.self p))) 0) "moved away from the zombie, along x")
-          (swap! clock + 6000)
-          (await (run-until-empty eng 4))
-          (is (= [] (:list (core/state eng)))))))))
+          (is (< (.-x (.-pos (.self p))) -30) "moved away from the zombie, along x, beyond its follow range")
+          (is (= [] (:list (core/state eng))) "one round"))))))
 
 (deftest retreat-hits-back-when-the-way-is-blocked
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 1 :y 64 :z 0}}]})]
+        (let [{:keys [eng p seen]} (flight-setup {:entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 1 :y 64 :z 0}}]})]
           (.override (.-world p) "steer" (fn [_ _ _] (js/Promise.resolve #js {:status "timeout" :pose #js {}})))
           (core/submit! eng (list 'jobs.survival.retreat {:radius 8}) {})
           (await (core/tick! eng))
-          (is (= 1 (count (calls p "attack"))) "unarmed and nothing to seal with: the fist, not a repeated failed round")
+          (is (= 4 (count (calls p "attack"))) "unarmed and nothing to seal with: the fist until the zombie dies")
           (is (empty? (filter #(= :retreat_blocked (:kind %)) @seen))))))))
 
 (deftest sleep-walks-to-the-bed-and-sleeps-at-night
@@ -625,7 +635,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 5 :y 64 :z 0}}]})]
+        (let [{:keys [eng p seen]} (flight-setup {:floor [-40 -10 10 10]
+                                                  :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 5 :y 64 :z 0}}]})]
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :hostile-near}]}"))
           (await (core/tick! eng))
           (is (some #(= :fired (:kind %)) @seen))

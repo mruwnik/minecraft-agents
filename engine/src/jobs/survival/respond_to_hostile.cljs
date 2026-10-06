@@ -1,19 +1,22 @@
 (ns jobs.survival.respond-to-hostile
   (:require [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
+            [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
+            [jobs.lib.result :as r]
             [jobs.lib.util :as u]))
 
 (def doc
   "A hostile is near: fight it (jobs.survival.fight-back, best weapon equipped) when the odds are fair,
   else retreat (jobs.survival.retreat).
-  Decided afresh every round. Never fights a creeper. Otherwise fights when the damage the fight is expected to cost
+  One whole attempt per round: decides afresh before each call of the child, while a danger is near.
+  Never fights a creeper. Otherwise fights when the damage the fight is expected to cost
   leaves at least :reserve health (jobs.lib.combat/fight-damage: weapon, armour worn, each mob's kind
   and what is left of it after the hits landed, the dangers killed nearest first).
   If the chosen child declines, the other one runs.
-  Ends the first round no real danger (as the hostile-near trigger, jobs.lib.reach, in sight) is within :radius
-  (:ranged-radius for ranged mobs).
-  Exception: while the retreat is hiding (sealed in, up a pillar or down a pit), the retreat says when the danger is gone.
+  Done once no real danger (as the hostile-near trigger, jobs.lib.reach, in sight) is within :radius
+  (:ranged-radius for ranged mobs) and the retreat is not hiding (sealed in, up a pillar or down a pit).
+  A child that stops (a retreat still chased after its bound) stops it with that cause; never :continue.
   Memory: writes one :hostile entry {:mob :pos :decision} per encounter.
   A danger reflex: never backed off.")
 
@@ -34,13 +37,6 @@
   (let [{:keys [radius ranged-radius]} (:args c)]
     (reach/dangers (:primitives c) radius {:ranged-radius ranged-radius} {})))
 
-
-(defn decide
-  "Pure: :flee from any creeper, else :fight when the expected damage leaves at least reserve health, else :flee."
-  [{:keys [health damage creeper? reserve]}]
-  (if (and (not creeper?) (<= damage (- health reserve)))
-    :fight
-    :flee))
 
 (def other {:fight :flee :flee :fight})
 
@@ -69,12 +65,12 @@
   (let [{:keys [reserve weapons] :as a} (:args c)
         p (:primitives c)
         self (.self p)
-        decision (decide {:health (.-health self)
-                          :creeper? (boolean (some combat/creeper? near))
-                          :reserve reserve
-                          :damage (combat/fight-damage {:weapon (combat/best-weapon p weapons)
-                                                        :armour (combat/armour-points (.-equipment self))
-                                                        :mobs (map #(mob-of c %) near)})})]
+        decision (combat/decide {:health (.-health self)
+                                 :creeper? (boolean (some combat/creeper? near))
+                                 :reserve reserve
+                                 :damage (combat/fight-damage {:weapon (combat/best-weapon p weapons)
+                                                               :armour (combat/armour-points (.-equipment self))
+                                                               :mobs (map #(mob-of c %) near)})})]
     (log-encounter! c (first near) decision)
     (ctx/update-mem! c assoc :decision decision)
     (let [result (await (run-child c decision a))]
@@ -93,9 +89,22 @@
   [c]
   (or (hiding? c) (boolean (seq (near c)))))
 
-(defn ^:async round [c]
-  (let [hs (near c)]
-    (cond
-      (hiding? c) (await (run-child c :flee (:args c)))
-      (empty? hs) :done
-      :else (await (respond c hs)))))
+(defn stopped-child
+  "[slot result] of the child that stopped in this round's last call, or nil."
+  [c]
+  (some #(let [res (ctx/child-result c %)] (when (= :stopped (:status res)) [% res])) [:flee :fight]))
+
+(defn ^:async round
+  "One whole attempt: respond (or let the retreat hide on) while a danger is near; stopped when a child stops."
+  [c]
+  (loop []
+    (let [hs (near c)]
+      (cond
+        (hiding? c) (await (run-child c :flee (:args c)))
+        (empty? hs) nil
+        :else (await (respond c hs)))
+      (if-let [[slot res] (stopped-child c)]
+        (r/stop! c (:reason res) (:text res) :cause (r/cause-of slot res))
+        (if (or (seq hs) (hiding? c))
+          (do (await (pace/pace!)) (recur))
+          :done)))))

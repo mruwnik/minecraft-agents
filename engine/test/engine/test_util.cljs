@@ -61,6 +61,12 @@
                      (apply floor (:floor spec walk-floor)))]
     (fake (-> spec (dissoc :floor :floor-block) (assoc :blocks (merge ground (:blocks spec)))))))
 
+(defn act-clock
+  "A now fn for an engine over fake p: the clock atom's ms plus ms for every primitive call p has recorded, so time
+  moves with the body's acts (a whole flight ends by time: out of line, its bound)."
+  [clock p ms]
+  #(+ @clock (* ms (.-length (.-calls (.-world p))))))
+
 (defn seeing-all
   "p with seenBlocks answering every block in range as seen (stands in for perception's memory); leave it off to
   test a body that has seen nothing."

@@ -146,3 +146,10 @@
         ends (rest (reductions + 0 (map #(+ (approach %) (kill-s %)) mobs)))
         taken (reduce + (map (fn [m end] (* (get mob-dps (:name m) 3) end)) mobs ends))]
     (/ (* taken (- 100 (* 4 (min 20 (or armour 0))))) 100)))
+
+(defn decide
+  "Pure: :flee from any creeper, else :fight when the expected damage leaves at least reserve health, else :flee."
+  [{:keys [health damage creeper? reserve]}]
+  (if (and (not creeper?) (<= damage (- health reserve)))
+    :fight
+    :flee))

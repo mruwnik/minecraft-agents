@@ -31,12 +31,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p clock]} (await (ct/first-round ct/retreat (open-hut {:inventory [{:name "cobblestone" :count 20}]})))]
+        (let [{:keys [eng p]} (await (ct/first-round ct/retreat (open-hut {:inventory [{:name "cobblestone" :count 20}]})))]
           (is (false? (hs/door-open? p)) "the door is shut on the skeleton")
           (is (= 1 (count (filter #(door-cell? (.. % -args -pos)) (ct/calls p "useOn")))) "one click on the door")
           (is (empty? (places-at-door p)) "no block placed into the doorway")
-          (swap! clock + 1000)
-          (await (core/tick! eng))
           (is (= [] (:list (core/state eng))) "the shut door stops the arrows: the flight is over")
           (is (= {} (hs/room-blocks p)) "no block left in the hut"))))))
 
@@ -44,15 +42,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p clock seen]} (await (ct/first-round '(jobs.survival.respond-to-hostile)
-                                                           (open-hut {:self {:pos {:x 5.5 :y 64 :z 1.5} :health 4.8 :food 13}
-                                                                      :inventory [{:name "cobbled_deepslate" :count 20}]})))]
+        (let [{:keys [eng p]} (await (ct/first-round '(jobs.survival.respond-to-hostile)
+                                                (open-hut {:self {:pos {:x 5.5 :y 64 :z 1.5} :health 4.8 :food 13}
+                                                           :inventory [{:name "cobbled_deepslate" :count 20}]})))]
           (is (false? (hs/door-open? p)))
           (is (empty? (ct/calls p "attack")))
-          (swap! clock + 1000)
-          (await (core/tick! eng))
-          (is (= {:kind :waiting :reason :not-ready} (select-keys (last @seen) [:kind :reason]))
-              "no danger left once the door is shut: its check no longer holds (as a reflex, the trigger clears)")
+          (is (= [] (:list (core/state eng))) "no danger left once the door is shut: done in the one round")
           (is (empty? (ct/calls p "place")))
           (is (= {} (hs/room-blocks p))))))))
 
@@ -60,14 +55,19 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p clock seen]} (await (ct/first-round ct/retreat (open-hut {:inventory [{:name "cobblestone" :count 20}]})))]
-          (swap! (fake/state p) assoc-in [:states [5 64 2] :open] true)
-          (swap! (fake/state p) assoc-in [:states [5 65 2] :open] true)
-          (swap! clock + 1000)
-          (await (core/tick! eng))
+        (let [world (open-hut {:inventory [{:name "cobblestone" :count 20}]})
+              reopen! (fn [p]
+                        (swap! (fake/state p) assoc-in [:states [5 64 2] :open] true)
+                        (swap! (fake/state p) assoc-in [:states [5 65 2] :open] true))
+              {:keys [seen]} (await (ct/hidden-round ct/retreat world 1000 (constantly nil) []
+                                                     (fn [p]
+                                                       (let [n (atom 0)]
+                                                         (.override (.-world p) "useOn"
+                                                                    (fn [token a impl]
+                                                                      (-> (impl token a)
+                                                                          (.then (fn [r] (when (= 1 (swap! n inc)) (reopen! p)) r)))))))))]
           (is (= 1 (count (filter #(= :retreat.door-shut (:kind %)) @seen)))
-              "opened again (the door does not stay shut): the flight does not click it again but goes on")
-          (is (= ["j1"] (:list (core/state eng)))))))))
+              "opened again (the door does not stay shut): the flight does not click it again but goes on"))))))
 
 (deftest sealed-means-shut-for-doors-gates-and-trapdoors
   (let [p (tu/fake {:blocks {"1,64,0" "oak_door" "2,64,0" "oak_fence_gate" "3,64,0" "oak_fence" "4,64,0" "stone"}
@@ -86,12 +86,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p clock]} (await (ct/first-round ct/retreat {:blocks torch-tunnel
-                                                                       :inventory [{:name "cobblestone" :count 20}]
-                                                                       :entities [(ct/skeleton 3 64 0)]}))]
-          (dotimes [_ 3]
-            (swap! clock + 1000)
-            (await (core/tick! eng)))
+        (let [{:keys [p]} (await (ct/first-round ct/retreat {:blocks torch-tunnel
+                                                           :inventory [{:name "cobblestone" :count 20}]
+                                                           :entities [(ct/skeleton 3 64 0)]}))]
           (is (<= (count (ct/calls p "place")) 2) "each torch cell is tried once")
           (is (pos? (count (ct/calls p "attack"))) "the seal failed: it fights back"))))))
 
