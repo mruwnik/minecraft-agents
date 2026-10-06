@@ -369,19 +369,6 @@
             (is (= :unreachable (:reason e)))
             (is (seq (:text e)))))))))
 
-(deftest recover-drops-declines-with-collect-waiting-when-the-collect-waits
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:floor tu/walk-floor :entities drops})]
-          (die! eng {:pos death-pos :inventory diamonds})
-          (core/submit! eng job {:collect-calls 2})
-          (.override (.-world p) "collect" (fn ^:async g [tok a impl] #js {:status "ok" :collected 0}))
-          (await (core/tick! eng))
-          (let [e (first (declined-events seen))]
-            (is (= :collect-waiting (:reason e)))
-            (is (seq (:text e)))))))))
-
 ;; ------------------------------------------- cut by a higher reflex, fired again
 
 (defn ^:async tick-n! [eng clock n]

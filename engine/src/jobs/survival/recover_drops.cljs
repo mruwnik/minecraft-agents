@@ -15,7 +15,7 @@
   so an expired trip still gets to write :abandoned.
   One run is the whole trip: it holds still (declared :respawning, then :settling) until a :respawned entry newer than
   the death exists and its 2 s have passed (no decision, no walk), decides, walks, collects and writes :recovered.
-  Every :declined emits recover-drops.declined with a :reason (:danger with :mob and :mob-pos, :unreachable, :collect-waiting) and a text.
+  Every :declined emits recover-drops.declined with a :reason (:danger with :mob and :mob-pos, :unreachable) and a text.
   It ends :declined, without acting, while a real danger is within :danger-radius, so a reflex can deal with it
   (the died trigger fires it again), and when go-to does not arrive; the despawn window ends it :abandoned.
   A real danger is a mob that can reach the body, or a ranged one with a line of fire (jobs.lib.reach/nearest-danger).
@@ -42,7 +42,6 @@
    :value-overrides {:doc "jobs.lib.cost/item-value overrides, a map: item name or group (ore tool armor food block unknown) -> worth of one item, or {:times n}; e.g. {\"raw_iron\" 500}" :default {}}
    :danger-overrides {:doc "jobs.lib.cost/route-danger overrides, a map: mob name -> threat in points of damage before armour, or {:times n}; e.g. {\"creeper\" 100 \"zombie\" 0}" :default {}}
    :danger-radius {:doc "a hostile this close makes the job yield without acting" :default 8}
-   :collect-calls {:doc "calls of the collect child in one pass before the run declines :collect-waiting" :default child/default-max-calls}
    :collect-radius {:doc "collect the pile's drops within this many blocks of the death point (a pile on open ground rolls 6-8 out)" :default 10}})
 
 (def arrive-range 2)
@@ -247,13 +246,11 @@
       (let [ids (pile-ids c pos names radius)]
         (if (empty? ids)
           (finish-collect! c pile ids)
-          (let [r (await (child/run! c :collect 'jobs.forestry.collect-drops
-                                     {:radius (+ radius stray-range 4) :ids ids :filter names}
-                                     {:max-calls (:collect-calls (:args c))}))]
-            (cond
-              (= :continue r) (decline! c :collect-waiting "the collect of the pile is waiting" {:pos pos})
-              (empty? (left-over c pile)) (finish-collect! c pile [])
-              :else
+          (do
+            (await (child/run! c :collect 'jobs.forestry.collect-drops
+                               {:radius (+ radius stray-range 4) :ids ids :filter names}))
+            (if (empty? (left-over c pile))
+              (finish-collect! c pile [])
               (let [again (pile-ids c pos names radius)
                     passes (:passes (ctx/mem c) 0)]
                 (if (and (seq again) (< passes max-collect-passes))
