@@ -295,15 +295,16 @@
 (def time-jump-tolerance-ticks 200)
 
 (defn time-disturbed?
-  "Whether the day time moved by more than the elapsed real time allows (someone ran `time set`) between two readings
-  (ticks, nil when unread); false for a case with a :time-set step."
+  "Whether the day time jumped between two readings (ticks, nil when unread): forward by more than the elapsed real
+  time allows at 20 TPS plus a margin, or backward. Standing still or running slow (low TPS, daylight cycle off) is
+  not a jump. False for a case with a :time-set step."
   [c t0 t1 elapsed-ms]
   (boolean
    (and t0 t1
         (not-any? #(= :time-set (first %)) (:act c))
-        (let [moved (mod (- t1 t0) 24000)
-              diff (js/Math.abs (- moved (* elapsed-ms 0.02)))]
-          (> (min diff (- 24000 diff)) time-jump-tolerance-ticks)))))
+        (let [moved (mod (- t1 t0) 24000)]
+          (and (> moved (+ (* elapsed-ms 0.02) time-jump-tolerance-ticks))
+               (< moved (- 24000 time-jump-tolerance-ticks)))))))
 
 (defn mark-time-disturbed
   "A failed result becomes :inconclusive when the time was disturbed during the case."

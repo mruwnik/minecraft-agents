@@ -234,6 +234,11 @@
     (is (true? (r/time-disturbed? c 14000 1000 30000)) "set back")
     (is (false? (r/time-disturbed? c 23900 500 30000)) "wraps at 24000")
     (is (false? (r/time-disturbed? c nil 500 30000)) "no reading")
+    (is (false? (r/time-disturbed? c 1000 1000 300000)) "a stopped daylight cycle is no jump")
+    (is (false? (r/time-disturbed? c 1000 4240 180000)) "18 TPS over 3 min is no jump")
+    (is (false? (r/time-disturbed? c 1000 1000 30000)) "no movement")
+    (is (true? (r/time-disturbed? c 1000 6000 30000)) "forward jump")
+    (is (true? (r/time-disturbed? c 6000 1000 300000)) "back jump after a stopped cycle")
     (is (false? (r/time-disturbed? {:act [[:time-set 14000]]} 1000 14000 30000)) "the case set it itself")))
 
 (deftest a-failed-case-in-a-disturbed-world-is-inconclusive
