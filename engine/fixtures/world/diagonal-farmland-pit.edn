@@ -1,0 +1,36 @@
+;; Card 6a73121f (fix 750e01d3): a diagonal step never passes a one-deep pit floored with farmland (the body brushes the
+;; corner and can slip in, trampling it); the way goes round.  The plan has 3 nodes (round the pit), 2 for the stone control (the diagonal). Ground = stone up to y 0 (body level 1). A pit cell at y 0 beside
+;; the diagonal from [10 1 10] to [11 1 11]; farmland floor in the first two cases, stone in the control (still diagonal-able).
+;; Water at [13 0 8] keeps the farmland wet (dry farmland turns to dirt by itself). The shelf case: a one-high stone shelf corner over a farmland field; walking off diagonally must not land on the farmland.
+{:defaults {:tags [:movement :planner :farm]
+            :plot {:height 8}
+            :blocks [[:fill [0 0 0] [31 0 31] "stone"] [:set [13 0 8] "water"] [:set [13 1 8] "stone"]]
+            :limit-s 60}
+ :cases
+ [{:name "pit-east-of-diagonal-farmland-kept"
+   :blocks [[:set [11 0 10] "air"] [:set [11 -1 10] "farmland[moisture=7]"]]
+   :body {:at [10.5 1 10.5]}
+   :act [[:job (jobs.movement.go-to {:pos #at [11 1 11] :range 0 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 40 :of-job true}
+            {:event {:source :job :kind :planned :data {:nodes 3}} :within-s 40 :of-job true}]
+   :after [[:block [11 -1 10] "farmland"] [:body-near [11.5 1 11.5] 1.5]]}
+  {:name "pit-south-of-diagonal-farmland-kept"
+   :blocks [[:set [10 0 11] "air"] [:set [10 -1 11] "farmland[moisture=7]"]]
+   :body {:at [10.5 1 10.5]}
+   :act [[:job (jobs.movement.go-to {:pos #at [11 1 11] :range 0 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 40 :of-job true}
+            {:event {:source :job :kind :planned :data {:nodes 3}} :within-s 40 :of-job true}]
+   :after [[:block [10 -1 11] "farmland"] [:body-near [11.5 1 11.5] 1.5]]}
+  {:name "stone-floored-pit-diagonal-still-arrives"
+   :blocks [[:set [11 0 10] "air"]]
+   :body {:at [10.5 1 10.5]}
+   :act [[:job (jobs.movement.go-to {:pos #at [11 1 11] :range 0 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 40 :of-job true}
+            {:event {:source :job :kind :planned :data {:nodes 2}} :within-s 40 :of-job true}]
+   :after [[:block [11 -1 10] "stone"] [:body-near [11.5 1 11.5] 1.5]]}
+  {:name "shelf-corner-over-farmland-kept"
+   :blocks [[:fill [8 1 8] [11 1 11] "stone"] [:fill [12 0 12] [16 0 16] "farmland[moisture=7]"] [:set [14 0 17] "water"] [:set [14 1 17] "stone"]]
+   :body {:at [11.5 2 11.5]}
+   :act [[:job (jobs.movement.go-to {:pos #at [18 1 18] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 50 :of-job true}]
+   :after [[:block [12 0 12] "farmland"] [:block [13 0 13] "farmland"] [:body-near [18.5 1 18.5] 2.5]]}]}
