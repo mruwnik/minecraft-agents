@@ -145,6 +145,13 @@ test('setOwner to the same token does not cut', async () => {
   assert.equal(result.status, 'timeout')
 })
 
+test('dig of air says what is there and what to do', async () => {
+  const { p } = rig(world)
+  const r = await p.dig('t1', { pos: at(9, 64, 9) })
+  assert.equal(r.status, 'missing')
+  assert.match(r.reason, /nothing to dig at 9 64 9 \(air\)/)
+})
+
 test('plain results are plain objects', async () => {
   const { p } = rig(world)
   const r = await p.look('t1', { yaw: 1, pitch: 0 })

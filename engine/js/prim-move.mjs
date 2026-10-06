@@ -75,8 +75,9 @@ export function createMove (env) {
       const base = { pos: here(), distance, ...(hop && { hop }) }
       if (reached.reached && satisfied()) return { status: 'arrived', ...base }
       const { reason } = reached
-      if (distance < before - 1) return { status: 'partial', ...(reason && { reason }), ...base }
-      return { status: 'blocked', ...(reason && { reason }), ...base }
+      const hint = reason === 'noPath' ? `no walkable route to ${target.x} ${target.y} ${target.z} (a 1-high gap, a sealed or unloaded goal?): dig or place to open one, or submit jobs.movement.go-to` : undefined
+      if (distance < before - 1) return { status: 'partial', ...(reason && { reason }), ...(hint && { hint }), ...base }
+      return { status: 'blocked', ...(reason && { reason }), ...(hint && { hint }), ...base }
     }
     return act(token, { boundS: Math.min(timeoutS, 60), onTimeout: () => outcome({ reached: false, reason: 'timeout' }) }, async ctx => {
       const first = await walk(ctx, goal)

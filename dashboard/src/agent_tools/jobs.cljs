@@ -14,6 +14,7 @@
 
 (def usage
   (str "usage: jobs.mjs <body> --world <world> list [--limit 8 --offset 0] | show <jID> | submit <EDN-spec> [--hold] [--front | --now] [--wait [--timeout 60s]] | cancel <jID> | cancel-all | retry <jID> | resolve <request-id> --reason handled|condition-recovered [--worlds DIR --state LEGACY_PARENT]\n"
+       "While manual control holds the body (drive.mjs take) no job runs: jobs stay :queued and list/submit say who holds it; drive.mjs <body> release frees it.\n"
        "submit appends the job to the end of the list (jobs take turns). --hold makes the job hold the body: no other job gets a round until it ends or fails (reflexes still come first).\n"
        "  --front  list it directly after the current job: it gets the next round, nothing is cut\n"
        "  --now    cut the current job and run this one at once (it holds the body, as --hold does, until it ends); the cut job keeps its memory and\n"
@@ -210,13 +211,35 @@
 
 (def hold-hint "--hold holds the body, it does not pause the job: it runs now; cancel <jID> stops it while it is listed")
 
+(defn manual-hint [{:keys [who why]}]
+  (str "waiting: manual control held by " who (when (seq why) (str " (" why ")"))
+       "; queued jobs run after drive.mjs <body> release"))
+
+(defn queued? [value]
+  (or (= :queued (get-in value [:job :status]))
+      (some #(= :queued (:status %)) (:items value))))
+
 (defn with-hint
-  "The mutation answer plus a :hint where its meaning is easily misread: a cancel/retry of a job that is gone, a held submit."
-  [r value]
+  "The mutation answer plus a :hint where its meaning is easily misread: a cancel/retry of a job that is gone, a held submit,
+  a queued job while manual (the :manual map of /status) holds the body."
+  ([r value] (with-hint r value nil))
+  ([r value manual]
   (cond
+    (and manual (queued? value)) (assoc value :hint (manual-hint manual))
     (and (:mutating r) (= :job-not-found (:reason value))) (assoc value :hint finished-hint)
     (and (:mutating r) (true? (get-in value [:job :hold?]))) (assoc value :hint hold-hint)
-    :else value))
+    :else value)))
+
+(defn manual-for
+  "A promise of /status's :manual map when the answer has queued jobs (a list, or a submit), else nil; nil when status is unreadable."
+  [r response opts]
+  (let [value (when (http/edn-response? (:content-type response)) (try (data/read-edn (:text response)) (catch :default _ nil)))]
+    (if-not (and (= 200 (:status response)) (queued? value)
+                 (or (str/starts-with? (:path r) "/jobs?") (= :submit (get-in r [:request :op]))))
+      (js/Promise.resolve nil)
+      (-> (get! (:socketPath r) "/status" opts)
+          (.then (fn [status] (when (http/edn-response? (:content-type status)) (:manual (data/read-edn (:text status))))))
+          (.catch (fn [_] nil))))))
 
 (defn deliver! [r output {:keys [status content-type text] :as response} & [opts]]
   (when-not (http/edn-response? content-type) (throw (js/Error. "unexpected response format")))
@@ -235,8 +258,8 @@
       (and (:mutating r) (= :request-uncertain (:reason value)))
       (do (print! (assoc value :request-id (get-in r [:request :request-id]))) 1)
 
-      (not= value (with-hint r value))
-      (do (print! (with-hint r value)) (if (= 200 status) 0 1))
+      (not= value (with-hint r value (:manual opts)))
+      (do (print! (with-hint r value (:manual opts))) (if (= 200 status) 0 1))
 
       :else (do (output (line text)) (if (= 200 status) 0 1)))))
 
@@ -282,7 +305,7 @@
      (if (:error r)
        (do (js/console.error (str (:error r) "\n" usage)) (js/Promise.resolve 2))
        (-> (js/Promise.resolve nil)
-           (.then #(if (:wait r) (submit-and-wait! r output opts) (.then (exchange! r opts) (fn [response] (deliver! r output response opts)))))
+           (.then #(if (:wait r) (submit-and-wait! r output opts) (.then (exchange! r opts) (fn [response] (.then (manual-for r response opts) (fn [manual] (deliver! r output response (assoc opts :manual manual))))))))
            (.catch (fn [error]
                      (output (str (data/write-edn (failure-for r error)) "\n"))
                      2)))))))

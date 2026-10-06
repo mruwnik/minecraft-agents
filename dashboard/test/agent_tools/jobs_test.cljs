@@ -298,3 +298,32 @@
                    (is (= {:ok false :reason :bad-spec} (data/read-edn out)))
                    (is (= ["GET" "POST"] (mapv :method seen)) "no event reads")))
           (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
+
+(defn manual-engine [manual]
+  (fn [{:keys [path]}]
+    {:text (cond (= "/snapshot" path) "{:generation-id \"generation\"}"
+                 (= "/status" path) (str "{:mode :manual :manual " (pr-str manual) "}")
+                 (str/starts-with? path "/jobs?") "{:total 1 :items [{:id \"j1\" :name \"go\" :status :queued}]}"
+                 :else "{:ok true :job {:id \"j2\" :status :queued}}")}))
+
+(deftest queued-jobs-under-manual-control-say-who-holds-the-body
+  (let [state (state-dir)
+        held {:who "Wren" :why "probing" :since 5}]
+    (async done
+      (-> (run-main! state ["list"] (manual-engine held))
+          (.then (fn [{:keys [out]}]
+                   (let [hint (:hint (data/read-edn out))]
+                     (is (re-find #"manual control" hint) out)
+                     (is (re-find #"Wren" hint) out)
+                     (is (re-find #"drive.mjs.*release" hint) out))))
+          (.then (fn [_] (run-main! state ["submit" "(jobs.x {})"] (manual-engine held))))
+          (.then (fn [{:keys [out]}] (is (re-find #"Wren" (str (:hint (data/read-edn out)))) out)))
+          (.then (fn [_] (run-main! state ["list"] (fn [{:keys [path]}]
+                                                     {:text (if (= "/status" path)
+                                                              "{:mode :scheduled :manual nil}"
+                                                              "{:total 1 :items [{:id \"j1\" :status :queued}]}")}))))
+          (.then (fn [{:keys [out]}] (is (nil? (:hint (data/read-edn out))) out)))
+          (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
+
+(deftest usage-says-jobs-wait-under-manual-control
+  (is (re-find #"manual control" jobs/usage)))
