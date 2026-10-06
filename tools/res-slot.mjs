@@ -114,7 +114,7 @@ const main = async () => {
   const maxWaitMs = Number(process.env.RES_SLOT_MAX_WAIT_MS ?? 540000), pollMs = Number(process.env.RES_SLOT_POLL_MS ?? 1000)
   fs.mkdirSync(dir(), { recursive: true })
   const t0 = Date.now()
-  let lastLine = t0
+  let lastLine = t0, lastReason = ''
   for (;;) {
     const free = [...Array(k.max).keys()].filter((i) => !held(kind, i))
     const gated = await withGate(() => {
@@ -134,8 +134,14 @@ const main = async () => {
         process.exit(code)
       }
       dropGrant()
-    } else if (d.action === 'busy') { console.error(`res-slot: busy (${d.why}${free.length ? '' : `; held by ${holders(kind, k.max)}`}), retry later`); process.exit(75) }
-    else if (Date.now() - lastLine >= (Number(process.env.RES_SLOT_STATUS_MS) || 60000)) {
+    } else if (d.action === 'busy') { console.error(`res-slot: busy (${d.why}${free.length ? '' : `; held by ${holders(kind, k.max)}`}), retry later (gave up waiting after ${Math.round((Date.now() - t0) / 1000)}s)`); process.exit(75) }
+    else {
+      // live-tests phase line (TEST_EVENTS=1), once per change of reason (digits ignored: free MB drifts)
+      const reason = d.why.replace(/\d+/g, '#')
+      if (process.env.TEST_EVENTS && reason !== lastReason) console.log(`@@test ${JSON.stringify({ event: 'phase', name: `waiting: ${d.why}${free.length ? '' : `; held by ${holders(kind, k.max)}`}`.slice(0, 300) })}`)
+      lastReason = reason
+    }
+    if (d.action === 'wait' && Date.now() - lastLine >= (Number(process.env.RES_SLOT_STATUS_MS) || 60000)) {
       lastLine = Date.now()
       console.error(`res-slot: waiting for ${kind} (${heldSlots(kind, k.max).length}/${k.max} slots in use, ${Math.round(availableMb())} MB free, ${d.why}${free.length ? '' : `; held by ${holders(kind, k.max)}`}), ${Math.round((Date.now() - t0) / 1000)}s`)
     }

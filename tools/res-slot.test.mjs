@@ -54,6 +54,26 @@ test('integration: a held slot makes the next command busy (75), then it runs on
   fs.rmSync(dir, { recursive: true, force: true })
 })
 
+test('waiting: TEST_EVENTS prints one phase line per change of reason; exit 75 says it gave up waiting', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'res-slot-test-'))
+  const cfg = path.join(dir, 'cfg.json')
+  fs.writeFileSync(cfg, JSON.stringify({ floorMb: 0, kinds: { t: { needMb: 1, max: 1 } } }))
+  const env = { RES_SLOT_DIR: dir, RES_SLOT_CONFIG: cfg, RES_SLOT_MAX_WAIT_MS: '1500', RES_SLOT_POLL_MS: '100', TEST_EVENTS: '1' }
+  const holder = spawn('node', ['tools/res-slot.mjs', 't', '--', 'sleep', '30'], { cwd: new URL('..', import.meta.url).pathname, env: { ...process.env, ...env }, stdio: 'ignore', detached: true })
+  try {
+    await new Promise((r) => setTimeout(r, 1000))
+    const busy = run(['t', '--', 'echo', 'ran'], env)
+    const phases = busy.stdout.split('\n').filter((l) => l.startsWith('@@test ')).map((l) => JSON.parse(l.slice(7)))
+    assert.equal(phases.length, 1)
+    assert.equal(phases[0].event, 'phase')
+    assert.match(phases[0].name, /^waiting: no free slot.*held by t\.0/)
+    assert.equal(busy.status, 75)
+    assert.match(busy.stderr, /gave up waiting/)
+    assert.equal(run(['t', '--', 'echo', 'x'], { ...env, TEST_EVENTS: '' }).stdout.includes('@@test'), false)
+  } finally { process.kill(-holder.pid, 'SIGKILL') }
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+
 test('config: full runs leave tests slots free for targeted runs', () => {
   const t = loadConfig().kinds.tests
   assert.ok(t.shardMax >= 1 && t.shardMax <= t.max - 2, JSON.stringify(t))
