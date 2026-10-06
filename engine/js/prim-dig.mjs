@@ -152,6 +152,19 @@ export function createDig (env) {
     Math.abs(c.against.x - p.x) + Math.abs(c.against.y - p.y) + Math.abs(c.against.z - p.z) === 1 &&
     [c.cursor.x, c.cursor.y, c.cursor.z].every(v => v >= 0 && v <= 1)
 
+  // What a refused place (the server left the cell as it was) can be told by: the face clicked, where the body stood and
+  // looked, and every entity whose box touches the cell (an entity in the cell makes the server refuse).
+  const refusalFacts = (p, { ref, face }) => ({
+    against: xyz(ref.position),
+    face: xyz(face),
+    stand: xyz(here()),
+    look: { yaw: env.bot.entity.yaw, pitch: env.bot.entity.pitch },
+    cell: env.bot.blockAt(vec(p))?.name,
+    entities: liveEntities(env.bot)
+      .filter(e => Math.abs(e.position.x - (p.x + 0.5)) < 1.2 && Math.abs(e.position.z - (p.z + 0.5)) < 1.2 && e.position.y > p.y - 2 && e.position.y < p.y + 1.5)
+      .map(e => ({ id: e.id, name: e.name, kind: entityKind(e), pos: xyz(e.position) }))
+  })
+
   const place = async (token, a = {}) => {
     if (!isOwner(token)) throw cutError()
     need(isPos(a.pos) && typeof a.item === 'string', 'place needs pos {x, y, z} and item')
@@ -172,8 +185,16 @@ export function createDig (env) {
       ctx.alive()
       await env.bot.equip(item, 'hand')
       ctx.alive()
-      if (a.click) await clickPlace(ctx, support, a.click)
-      else await placeSneaking(ctx, support, isInteractable(support.ref.name))
+      try {
+        if (a.click) await clickPlace(ctx, support, a.click)
+        else await placeSneaking(ctx, support, isInteractable(support.ref.name))
+      } catch (err) {
+        if (!/^Server refused/.test(err?.message ?? '')) throw err
+        const refusal = refusalFacts(p, support)
+        const near = refusal.entities.map(e => `${e.name ?? e.kind}#${e.id}`).join(', ') || 'none'
+        const at = v => `${v.x},${v.y},${v.z}`
+        return { status: 'failed', reason: `${err.message} (against ${at(refusal.against)} face ${at(refusal.face)}, body at ${at(refusal.stand)}, entities near the cell: ${near})`, refusal }
+      }
       const now = env.bot.blockAt(vec(p))
       return { status: 'placed', block: a.item, placed: { name: now?.name, properties: now ? stateProperties(now) : {} } }
     })
