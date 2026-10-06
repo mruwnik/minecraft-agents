@@ -46,10 +46,9 @@
             ["path" :as path]
             [engine.game :as game]))
 
-(def default-stall-rounds
-  "Rounds of a holding job with no act call and no change to its memory
-  before a job.stalled warn."
-  20)
+(def default-idle-s
+  "Seconds a round may hold the body with no act in flight and no declared hold before a job.idle warn."
+  10)
 
 (def default-stats-ms
   "How often tick! emits the memory.save-stats summary."
@@ -453,13 +452,80 @@
              :why (keyword (or (.-why args) "away"))}
       (number? ms) (assoc :back-at (+ now (min ms 600000))))))
 
+;; ------------------------------------------------------------------ doing nothing
+
+(defn note-activity!
+  "Apply (f activity & args) to the in-flight round's activity record when token is that round's.
+  The record: {:token :id :in-flight n :last-at ms :hold {:reason :since} :wait-hold {:reason :since}
+  :idle-warned? bool}."
+  [eng token f & args]
+  (swap! (:activity eng) #(if (and (some? token) (= token (:token %))) (apply f % args) %)))
+
+(defn holding
+  "Why listed or reflex job id holds the body still on purpose, {:reason :since}, while its round runs: a
+  ctx/hold-still! reason, else the :why of the act :wait in flight. Nil otherwise."
+  [eng id]
+  (let [a @(:activity eng)]
+    (when (and a (= id (:id a)) (= (:token a) (:token (running eng))))
+      (or (:hold a) (:wait-hold a)))))
+
+(defn emit-holding! [eng root reason t]
+  (emit! eng (merge (job-fields eng root)
+                    {:source :job :kind :holding :level :info :reason reason :since t
+                     :text (str "holding: " (if (keyword? reason) (name reason) reason))})))
+
+(defn hold-still!
+  "The round of token (of job root) holds the body still on purpose, for reason, until its round ends; nil clears it.
+  A new reason emits job.holding."
+  [eng token root reason]
+  (let [t (now eng)
+        before (:hold @(:activity eng))]
+    (if (nil? reason)
+      (note-activity! eng token dissoc :hold)
+      (when (not= reason (:reason before))
+        (note-activity! eng token assoc :hold {:reason reason :since t})
+        (emit-holding! eng root reason t)))))
+
+(defn check-idle!
+  "Warn job.idle once per spell when the running round has no act in flight, declared no hold, and its last act
+  (or its start) was more than :idle-s ago. An act ends the spell."
+  [eng]
+  (let [a @(:activity eng)
+        t (now eng)
+        idle-ms (when a (- t (:last-at a)))]
+    (when (and a (= (:token a) (:token (running eng)))
+               (zero? (:in-flight a)) (nil? (:hold a)) (not (:idle-warned? a))
+               (> idle-ms (* 1000 (:idle-s eng))))
+      (swap! (:activity eng) assoc :idle-warned? true)
+      (emit! eng (merge (job-fields eng (:id a))
+                        {:source :job :kind :idle :level :warn :idle-ms idle-ms
+                         :text (str "the round holds the body with no act for " (js/Math.round (/ idle-ms 1000))
+                                    " s and declared no hold (ctx/hold-still!)")})))))
+
+(defn act-started!
+  "Book the start of act k of the round of token: one more act in flight; a :wait with :why holds the body on
+  purpose while it lasts (job.holding when the reason is new for this round)."
+  [eng token root k args]
+  (let [why (when (= :wait k) (some-> args .-why))
+        t (now eng)
+        new-why? (and (some? why) (not= why (:last-why @(:activity eng))))]
+    (note-activity! eng token #(cond-> (update % :in-flight inc)
+                                 why (assoc :wait-hold {:reason why :since t} :last-why why)))
+    (when (and new-why? (= token (:token @(:activity eng))))
+      (emit-holding! eng root why t))))
+
+(defn act-ended! [eng token]
+  (note-activity! eng token #(-> (update % :in-flight dec)
+                                 (assoc :last-at (now eng))
+                                 (dissoc :idle-warned? :wait-hold))))
+
 (defn ^:async act!
   "Every acting primitive call from a job: check the ownership token, save
   memory, emit action.started, call, save memory again, emit action.done.
   A cut rejects here (stale token) or from the primitive."
   [eng {:keys [root token chain round reflex]} id k args]
   (when-not (owner? eng token) (throw (cut-error)))
-  (swap! (:acts eng) update root (fnil inc 0))
+  (act-started! eng token root k args)
   (save-memory! eng)
   (let [action-id (.randomUUID crypto)
         fields {:level :debug :job id :chain chain :round round :reflex reflex :name (name k)
@@ -492,6 +558,7 @@
                      (not (cut? e)) (assoc :error (str e))))
         (throw e))
       (finally
+        (act-ended! eng token)
         (when away-record (reset! (:away eng) nil))))))
 
 (defn make-ctx
@@ -545,6 +612,7 @@
                           (check!)
                           (resolve-attention! eng request-id reason))
      :alive? #(or (nil? token) (owner? eng token))
+     :hold-still (fn [reason] (check!) (hold-still! eng token root reason))
      :emit (fn [kind level fields]
              (let [notice? (and (#{:warn :error} level) (not (contains? fields :attention)))]
                (when (or (nil? token) (owner? eng token))
@@ -866,22 +934,6 @@
         (end-reflex! eng run (if (= :cut status) :cut :failed)))
     (end-reflex! eng run :done)))
 
-(defn watch-progress!
-  "After a round of a holding listed job: count rounds with no act call and
-  no change to its memory, and warn once when the count reaches the limit.
-  Any progress resets the count."
-  [eng {:keys [id acts-before mem-before]}]
-  (let [inst (get-in (state eng) [:instances id])
-        moved? (or (not= acts-before (get @(:acts eng) id 0))
-                   (not= mem-before (job-memory eng id)))
-        n (if moved? 0 (inc (get @(:stalls eng) id 0)))]
-    (when (:hold? inst)
-      (swap! (:stalls eng) assoc id n)
-      (when (= n (:stall-rounds eng))
-        (emit! eng (merge (job-fields eng id)
-                          {:source :job :kind :stalled :level :warn :rounds n
-                           :text (str "no act call and no memory change for " n " rounds")}))))))
-
 (defn settle!
   "Book a finished round, unless it was cut (its token is no longer current)."
   [eng run outcome]
@@ -893,8 +945,7 @@
         (end-reflex! eng run :backoff)
         (settle-reflex! eng run outcome))
       (do (book-round! eng run (:status outcome))
-          (settle-listed! eng run outcome)
-          (watch-progress! eng run)))
+          (settle-listed! eng run outcome)))
     (save-memory! eng))
   nil)
 
@@ -911,10 +962,9 @@
                              (= id (:resume s)) (assoc :resume nil)
                              (= id (:pending-reflex s)) (assoc :pending-reflex nil)))))
         inst (get-in s [:instances id])
-        run {:id id :token token :reflex (:reflex inst) :round (:round inst)
-             :acts-before (get @(:acts eng) id 0)
-             :mem-before (job-memory eng id)}]
+        run {:id id :token token :reflex (:reflex inst) :round (:round inst)}]
     (reset! (:running eng) run)
+    (reset! (:activity eng) {:token token :id id :in-flight 0 :last-at (now eng)})
     (emit! eng (merge (job-fields eng id) {:source :job :kind :round_started :level :debug}))
     (-> (run-round eng run inst)
         (.then #(settle! eng run %)))))
@@ -997,7 +1047,7 @@
         h (holder eng)]
     (cond
       (and firing (preempts? order h firing)) (fire! eng firing h)
-      (running eng) nil
+      (running eng) (check-idle! eng)
       (:pending-reflex (state eng)) (start-round! eng (:pending-reflex (state eng)))
       :else (when-let [id (choose-listed eng)] (start-round! eng id)))))
 
@@ -1356,14 +1406,14 @@
     :world       the body's world store (hooks :world/open; :world/blank when not given)
     :backoff     engine-wide backoff config, a map or false (see engine.backoff)
     :backoff-alert-ms  least gap between two job.backoff warns (300000)
-    :stall-rounds      rounds before job.stalled (20)
+    :idle-s            seconds with no act and no declared hold before job.idle (10)
     :sweep-ms          memory sweep interval (60000)
     :stats-ms          memory.save-stats interval (60000)
     :max-event-bytes   event log size cap (64 MiB)"
-  [{:keys [primitives jobs triggers dir now events body stall-rounds sweep-ms stats-ms world
+  [{:keys [primitives jobs triggers dir now events body idle-s sweep-ms stats-ms world
            max-event-bytes
            backoff backoff-alert-ms]
-    :or {now js/Date.now stall-rounds default-stall-rounds sweep-ms default-sweep-ms
+    :or {now js/Date.now idle-s default-idle-s sweep-ms default-sweep-ms
          stats-ms default-stats-ms backoff-alert-ms default-backoff-alert-ms}}]
   (let [_ (game/select! primitives)
         file (path/join dir "engine.edn")
@@ -1392,16 +1442,15 @@
              :away (atom nil)
              :waiting (atom {})
              :world-ops (atom {:active nil :records {} :order [] :queue []})
-             :acts (atom {})
+             :activity (atom nil)
              :said (atom [])
-             :stalls (atom {})
              :rounds (atom {})
              :passes (atom {})
              :backoffs (atom {})
              :was-paused (atom false)
              :backoff backoff
              :backoff-alert-ms backoff-alert-ms
-             :stall-rounds stall-rounds
+             :idle-s idle-s
              :sweep-ms sweep-ms
              :last-sweep (atom (now))
              :stats-ms stats-ms

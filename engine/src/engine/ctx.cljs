@@ -129,6 +129,12 @@
   [ctx status moved]
   (when-let [f (:note-walk ctx)] (f status moved)))
 
+(defn hold-still!
+  "Declare that this round holds the body still on purpose, for reason (a keyword), until the round ends; nil
+  clears it. Emits job.holding; agents see {:reason :since}; no job.idle warn while it lasts. A check cannot hold."
+  [ctx reason]
+  ((:hold-still ctx) reason))
+
 (defn act
   "Call acting primitive k (a keyword such as :moveTo) with this round's
   token, through the engine's act wrapper: token check, memory saved before

@@ -4,6 +4,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.hurt :as hurt]
+            [engine.job-api :as job-api]
             [engine.memory :as mem]
             [engine.events :as events]
             [engine.registry :as registry]
@@ -1179,76 +1180,113 @@
     (is (true? (ctx/alive? check)) "a check has no token and runs synchronously")
     (is (true? (ctx/alive? {})) "a ctx with no engine behind it (a unit test) is alive")))
 
-;; ---------------------------------------------------------------- no progress
+;; ---------------------------------------------------------------- doing nothing
 
-(defn ^:async spin-round [_] :continue)
+(def gate (atom nil))
 
-(defn ^:async look-round [c]
-  (await (ctx/act c :look #js {:pos #js {:x 0 :y 64 :z 0}}))
+(defn ^:async parked-round
+  "Awaits @gate's promise with no act (a round doing nothing), then acts once if :act-after, and ends :continue."
+  [c]
+  (when (:hold (:args c)) (ctx/hold-still! c (:hold (:args c))))
+  (await (js/Promise. (fn [resolve] (reset! gate resolve))))
+  (when (:act-after (:args c))
+    (await (ctx/act c :look #js {:pos #js {:x 0 :y 64 :z 0}}))
+    (await (js/Promise. (fn [resolve] (reset! gate resolve)))))
   :continue)
 
-(def stall-registry
-  (merge registry {'spin {:check always :round spin-round}
-                   'looker {:check always :round look-round}}))
+(defn ^:async why-wait-round [c]
+  (await (ctx/act c :wait #js {:ms 1000 :why "daylight"}))
+  :continue)
 
-(defn stall-setup [opts]
+(def idle-registry
+  (merge registry {'parked {:check always :round parked-round :args {:hold {:default nil} :act-after {:default false}}}
+                   'why-wait {:check always :round why-wait-round}}))
+
+(defn idle-setup [opts]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        eng (core/create (merge {:primitives (tu/fake {}) :jobs stall-registry :triggers triggers :dir (tu/tmp-dir)
+        p (tu/fake {})
+        eng (core/create (merge {:primitives p :jobs idle-registry :triggers triggers :dir (tu/tmp-dir)
                                  :now #(deref clock)
                                  :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}
                                 opts))]
-    {:eng eng :seen seen :clock clock}))
+    {:eng eng :seen seen :clock clock :p p}))
 
-(defn stalls [seen] (filterv #(= [:job :stalled] [(:source %) (:kind %)]) @seen))
+(defn ^:async settle-until
+  "Let timers run until (pred) holds, at most n times."
+  [pred n]
+  (loop [i 0]
+    (when (and (< i n) (not (pred)))
+      (await (js/Promise. (fn [r] (js/setTimeout r 0))))
+      (recur (inc i)))))
 
-(deftest a-holding-job-without-acts-or-memory-changes-warns-once-after-n-rounds
+(defn idles [seen] (filterv #(= [:job :idle] [(:source %) (:kind %)]) @seen))
+(defn holdings [seen] (filterv #(= [:job :holding] [(:source %) (:kind %)]) @seen))
+
+(deftest a-round-with-no-act-for-idle-s-warns-once-per-spell
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (stall-setup {:stall-rounds 3})]
-          (core/submit! eng '(spin) {:hold? true})
-          (dotimes [_ 2] (await (core/tick! eng)))
-          (is (= [] (stalls seen)))
-          (await (core/tick! eng))
-          (is (= [["j1" 3]] (mapv (juxt :job :rounds) (stalls seen))))
-          (dotimes [_ 4] (await (core/tick! eng)))
-          (is (= 1 (count (stalls seen))) "once per spell, and no cap: it keeps running")
-          (is (= ["j1"] (listed eng))))))))
+        (let [{:keys [eng seen clock]} (idle-setup {})
+              _ (core/submit! eng (list 'parked {:act-after true}) {})
+              round (core/tick! eng)]
+          (swap! clock + 10000)
+          (core/tick! eng)
+          (is (= [] (idles seen)) "10 s is not more than the default idle-s")
+          (swap! clock + 1)
+          (core/tick! eng)
+          (core/tick! eng)
+          (is (= [["j1" 10001]] (mapv (juxt :job :idle-ms) (idles seen))) "warned once")
+          (let [first-gate @gate]
+            (first-gate nil)
+            (await (settle-until #(not= first-gate @gate) 50)))
+          (swap! clock + 10001)
+          (core/tick! eng)
+          (is (= 2 (count (idles seen))) "an act ends the spell; a new one warns again")
+          (@gate nil)
+          (await round)
+          (swap! clock + 20000)
+          (core/tick! eng)
+          (is (= 2 (count (idles seen))) "no round, nothing is idle"))))))
 
-(deftest acting-or-changing-memory-is-progress
+(deftest a-declared-hold-is-not-idle-and-is-told
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (stall-setup {:stall-rounds 2})]
-          (core/submit! eng '(looker) {:hold? true})
-          (dotimes [_ 4] (await (core/tick! eng)))
-          (core/cancel! eng "j1")
-          (core/submit! eng '(count) {:hold? true})
-          (dotimes [_ 4] (await (core/tick! eng)))
-          (is (= [] (stalls seen))))))))
+        (let [{:keys [eng seen clock]} (idle-setup {:idle-s 5})
+              _ (core/submit! eng (list 'parked {:hold :night}) {})
+              round (core/tick! eng)]
+          (is (= [["j1" :night 1000000]] (mapv (juxt :job :reason :since) (holdings seen))))
+          (is (= {:reason :night :since 1000000} (core/holding eng "j1")))
+          (is (= {:reason :night :since 1000000} (:holding (job-api/summary eng "j1"))) "agents see it in jobs show")
+          (swap! clock + 60000)
+          (core/tick! eng)
+          (is (= [] (idles seen)))
+          (@gate nil)
+          (await round)
+          (is (nil? (core/holding eng "j1")) "a hold ends with its round"))))))
 
-(deftest a-job-that-is-not-holding-is-not-watched
+(deftest a-wait-with-why-is-a-declared-hold
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (stall-setup {:stall-rounds 2})]
-          (core/submit! eng '(spin) {})
-          (dotimes [_ 4] (await (core/tick! eng)))
-          (is (= [] (stalls seen))))))))
+        (let [{:keys [eng seen p]} (idle-setup {})
+              release (.hold (.-world p) "wait")
+              _ (core/submit! eng '(why-wait) {})
+              round (core/tick! eng)]
+          (await (settle-until #(seq (holdings seen)) 50))
+          (is (= [["j1" "daylight"]] (mapv (juxt :job :reason) (holdings seen))))
+          (is (= "daylight" (:reason (core/holding eng "j1"))))
+          (release)
+          (await round)
+          (is (nil? (core/holding eng "j1"))))))))
 
-(deftest the-default-is-twenty-rounds
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen]} (stall-setup {})]
-          (core/submit! eng '(spin) {:hold? true})
-          (dotimes [_ 19] (await (core/tick! eng)))
-          (is (= [] (stalls seen)))
-          (await (core/tick! eng))
-          (is (= 1 (count (stalls seen)))))))))
+(deftest a-check-ctx-cannot-hold-still
+  (let [{:keys [eng]} (idle-setup {})
+        c (core/make-ctx eng {:root "j1" :slots [] :chain ["j1"] :token nil :args {} :round 0})]
+    (is (thrown? js/Error (ctx/hold-still! c :night)))))
 
-;; ---------------------------------------------------------------- sweep timer
+;; ---------------------------------------------------------------- sweep timer;; ---------------------------------------------------------------- sweep timer
 
 (deftest ticks-sweep-memory-on-a-timer
   (let [{:keys [eng clock dir]} (setup)
@@ -1601,19 +1639,6 @@
               (await looking)
               (await reflex-round)))
           (is (= [:fired :cut] (->> @seen (map :kind) (filter #{:fired :cut})))))))))
-
-(deftest look-around-rounds-count-as-progress-so-the-job-never-stalls
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen clock]} (setup {})]
-          (core/submit! eng '(hold (repeat (jobs.movement.look-around))) {})
-          (loop [i 0]
-            (when (< i 30)
-              (await (core/tick! eng))
-              (swap! clock + 250)
-              (recur (inc i))))
-          (is (empty? (filter #(= :stalled (:kind %)) @seen))))))))
 
 ;; ---------------------------------------------------------------- reflex events
 

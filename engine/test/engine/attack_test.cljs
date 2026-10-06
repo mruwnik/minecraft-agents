@@ -342,7 +342,7 @@
           (await (run-ticks s 12 250))
           (is (pos? (count (h/calls p "wait"))))
           (is (= [1000] (distinct (mapv #(.. % -args -ms) (h/calls p "wait")))))
-          (is (not-any? #(= :stalled (:kind %)) @seen))
+          (is (not-any? #(= :idle (:kind %)) @seen))
           (is (not (finished? s)))
           (swap! clock + 6000)
           (await (core/tick! eng))
