@@ -1,0 +1,100 @@
+#!/usr/bin/env node
+// Why JavaScript: a thin Node launcher (spawns the compiled test runner in shards, takes a machine-wide flock slot per shard); no engine behaviour.
+// Usage: tools/test-engine --full [--shards N] [--slots M] [--slowest K]
+//  Splits the engine test namespaces over N node processes (default 4), balanced by the per-namespace ms of the previous run (engine/out/test-ns-ms.json).
+//  At most M shard processes run at once machine-wide (default: (MemAvailable - 6 GB) / 2.8 GB, 1..3): each takes `flock` on /tmp/mc-test-slots/slot-<i>, so parallel agents cannot OOM the machine.
+//  Per-test timings: engine/out/test-timings.jsonl (one {"var","ms"} line per test, {"peak-rss-kb"} per shard); the K slowest are printed.
+import fs from 'node:fs'
+import path from 'node:path'
+import { spawn, spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
+
+const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const engine = path.join(repo, 'engine')
+const SLOT_DIR = '/tmp/mc-test-slots'
+
+const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(path.join(dir, e.name)) : [path.join(dir, e.name)])
+
+export const testNamespaces = (root = path.join(engine, 'test')) =>
+  walk(root).filter((f) => /\.cljs$/.test(f))
+    .map((f) => fs.readFileSync(f, 'utf8').match(/^\(ns\s+(?:\^\S+\s+)*([^\s()]+-test)[\s)]/m)?.[1])
+    .filter(Boolean).sort()
+
+// Greedy longest-first onto the lightest shard. Unknown ns get the mean known cost (or 1).
+export const splitShards = (nss, ms, n) => {
+  const known = nss.map((x) => ms[x]).filter((x) => x != null)
+  const mean = known.length ? known.reduce((a, b) => a + b, 0) / known.length : 1
+  const cost = (x) => ms[x] ?? mean
+  const shards = Array.from({ length: Math.max(1, Math.min(n, nss.length)) }, () => ({ load: 0, nss: [] }))
+  for (const x of [...nss].sort((a, b) => cost(b) - cost(a) || a.localeCompare(b))) {
+    const s = shards.reduce((a, b) => (b.load < a.load ? b : a))
+    s.nss.push(x); s.load += cost(x)
+  }
+  return shards.map((s) => s.nss)
+}
+
+const parse = (lines) => lines.filter(Boolean).map((l) => JSON.parse(l))
+export const slowest = (lines, k) => parse(lines).filter((r) => r.var).sort((a, b) => b.ms - a.ms).slice(0, k)
+export const nsMs = (lines) => {
+  const out = {}
+  for (const r of parse(lines)) if (r.var) { const ns = r.var.replace(/^#'/, '').split('/')[0]; out[ns] = (out[ns] ?? 0) + r.ms }
+  return out
+}
+
+const FLOOR_MB = 6144, SHARD_MB = 2800 // free-memory floor kept for others; worst shard peak seen
+export const memSlots = (availableMb, max = 3) => Math.max(1, Math.min(max, Math.floor((availableMb - FLOOR_MB) / SHARD_MB)))
+const availableMb = () => Number(fs.readFileSync('/proc/meminfo', 'utf8').match(/MemAvailable:\s+(\d+)/)[1]) / 1024
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
+// Runs cmd under the first free slot; polls until one is free.
+const runInSlot = async (slots, cmd, args, opts) => {
+  for (;;) for (let i = 0; i < slots; i++) {
+    const r = await new Promise((res) => {
+      let out = ''
+      const p = spawn('flock', ['-n', '-E', '99', path.join(SLOT_DIR, `slot-${i}`), cmd, ...args], { ...opts, stdio: ['ignore', 'pipe', 'pipe'] })
+      p.stdout.on('data', (d) => { out += d }); p.stderr.on('data', (d) => { out += d })
+      p.on('close', (code) => res({ code, out }))
+    })
+    if (r.code !== 99) return r
+    await sleep(1000 + Math.random() * 500)
+  }
+}
+
+const main = async () => {
+  const argv = process.argv.slice(2)
+  const opt = (name, d) => { const i = argv.indexOf(name); return i < 0 ? d : Number(argv[i + 1]) }
+  const shards = opt('--shards', 4), slots = opt('--slots', memSlots(availableMb())), top = opt('--slowest', 15)
+  fs.mkdirSync(SLOT_DIR, { recursive: true })
+  const c = spawnSync(path.join(repo, 'tools/compile'), ['engine', 'test'], { stdio: 'inherit' })
+  if (c.status !== 0) process.exit(c.status ?? 1)
+  const nsFile = path.join(engine, 'out/test-ns-ms.json'), timingFile = path.join(engine, 'out/test-timings.jsonl')
+  const prior = fs.existsSync(nsFile) ? JSON.parse(fs.readFileSync(nsFile, 'utf8')) : {}
+  const split = splitShards(testNamespaces(), prior, shards)
+  fs.writeFileSync(timingFile, '')
+  const t0 = Date.now()
+  console.log(`test-shards: ${split.length} shards, at most ${slots} at once machine-wide`)
+  const results = await Promise.all(split.map(async (nss, i) => {
+    const file = `${timingFile}.${i}`
+    fs.writeFileSync(file, '')
+    const r = await runInSlot(slots, 'node', ['--max-old-space-size=4096', 'out/test.cjs', `--test=${nss.join(',')}`], { cwd: engine, env: { ...process.env, MC_TEST_TIMINGS: file } })
+    return { i, nss, file, ...r }
+  }))
+  let bad = 0
+  const lines = []
+  for (const r of results) {
+    lines.push(...fs.readFileSync(r.file, 'utf8').split('\n')); fs.unlinkSync(r.file)
+    if (r.code === 0) { console.log(`shard ${r.i}: ok (${r.nss.length} ns)`); continue }
+    bad++; console.log(`--- shard ${r.i} FAILED (exit ${r.code}) ---\n${r.out}`)
+  }
+  fs.writeFileSync(timingFile, lines.filter(Boolean).join('\n') + '\n')
+  if (bad === 0) fs.writeFileSync(nsFile, JSON.stringify(nsMs(lines)))
+  const peaks = parse(lines).filter((r) => r['peak-rss-kb']).map((r) => r['peak-rss-kb'])
+  const tests = parse(lines).filter((r) => r.var).length
+  console.log(`test-shards: ${tests} tests, wall ${((Date.now() - t0) / 1000).toFixed(0)} s, shard peak RSS MB: ${peaks.map((k) => Math.round(k / 1024)).join(' ')} (sum ${Math.round(peaks.reduce((a, b) => a + b, 0) / 1024)})`)
+  console.log(`slowest tests (full list: ${timingFile}):`)
+  for (const r of slowest(lines, top)) console.log(`  ${String(r.ms).padStart(6)} ms  ${r.var}`)
+  process.exit(bad ? 1 : 0)
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) main()

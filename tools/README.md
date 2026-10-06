@@ -62,7 +62,7 @@ whose repo path is this checkout, override with `CARD_REPO`). `CARD_AUTHOR` sets
     tools/compile engine|dashboard <build>      tools/test-engine <ns>... | --full | --changed [<git-rev>]
 
 - `tools/compile` is the only user of `/tmp/mc-compile.lock`: never `flock` it or wrap it in `flock` (it exits 2 if you do).
-- Run tests with `tools/test-engine engine.<ns>-test ...` (queues the compile, then runs node outside the lock; `--full` = whole suite).
+- Run tests with `tools/test-engine engine.<ns>-test ...` (queues the compile, then runs node outside the lock; `--full` = whole suite in 4 shards, at most as many node processes at once machine-wide as free memory allows (flock slots in /tmp/mc-test-slots; `--shards N --slots M --slowest K`); per-test ms in `engine/out/test-timings.jsonl`).
 - `tools/test-engine --changed [<git-rev>]` runs only the cljs test namespaces that (transitively) require, or name by quoted symbol, the changed files, plus own/changed test files and the JS tests covering changed JS; changed = working tree + staged + untracked vs HEAD (or vs `<git-rev>`). Prints the list and count first. Build config changes (`shadow-cljs.edn`, `package.json`) run the full suite.
 - Never hold the lock while testing; a waiting compile is not stuck, a `flock` wrapper is.
 

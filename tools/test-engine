@@ -2,7 +2,7 @@
 # tools/test-engine <ns>... | --full
 # Compiles the engine :test build through tools/compile (it takes the compile lock itself), then runs the tests OUTSIDE the lock.
 # tools/test-engine --changed [<git-rev>]: only the tests affected by the changed files (working tree + staged + untracked vs HEAD, or vs <git-rev>; use <sha>^ to test a commit); see tools/changed-tests.mjs.
-# <ns>: engine namespaces, e.g. engine.go-to-test (comma-joined into --test=). --full: the whole suite (shared-code changes only).
+# <ns>: engine namespaces, e.g. engine.go-to-test (comma-joined into --test=). --full [--shards N --slots M --slowest K]: the whole suite sharded over N node processes (default 4), at most M running machine-wide (default from free memory, 1..3, flock under /tmp/mc-test-slots), per-test ms in engine/out/test-timings.jsonl (shared-code changes only).
 # Why not JS: a thin shell wrapper; runs node with --max-old-space-size=4096.
 set -u
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -22,6 +22,10 @@ if [ "$1" = "--changed" ]; then
     exit $rc
   fi
 fi
-if [ "$1" = "--full" ]; then args=(); else args=("--test=$(IFS=,; echo "$*")"); fi
+if [ "$1" = "--full" ]; then
+  # sharded, machine-wide slot limit, per-test timings in engine/out/test-timings.jsonl (see tools/test-shards.mjs); options after --full: --shards N --slots M --slowest K
+  shift; exec node "$repo/tools/test-shards.mjs" "$@"
+fi
+args=("--test=$(IFS=,; echo "$*")")
 "$repo/tools/compile" engine test || exit $?
 cd "$repo/engine" && exec node --max-old-space-size=4096 out/test.cjs "${args[@]}"
