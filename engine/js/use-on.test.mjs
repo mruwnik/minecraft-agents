@@ -9,9 +9,11 @@ const at = (x, y, z) => ({ x, y, z })
 const hoe = { name: 'diamond_hoe', count: 1, slot: 36 }
 const key = (x, y, z) => `${x},${y},${z}`
 
-const rig = (spec) => {
+// A case that must not meet its time bound (useOn waits ~13 ms of the 50 ms bound at SCALE) runs at CALM_SCALE, so a loaded machine cannot time it out.
+const CALM_SCALE = 0.1
+const rig = (spec, timeScale = SCALE) => {
   const bot = stubBot({ blocks: { '1,64,0': 'dirt' }, items: [hoe], ...spec })
-  const p = createPrimitivesFromBot(bot, { timeScale: SCALE })
+  const p = createPrimitivesFromBot(bot, { timeScale })
   p.setOwner('t1')
   return { bot, p }
 }
@@ -194,7 +196,7 @@ test('blockAt and blocks report integer states as numbers', () => {
 })
 
 test('useOn before and after report integer states as numbers', async () => {
-  const { p } = rig({ blocks: { '1,64,0': 'composter' }, props: { [key(1, 64, 0)]: rawProps } })
+  const { p } = rig({ blocks: { '1,64,0': 'composter' }, props: { [key(1, 64, 0)]: rawProps } }, CALM_SCALE)
   const r = await p.useOn('t1', dirt)
   assert.deepEqual([r.before.properties, r.after.properties], [typedProps, typedProps])
 })

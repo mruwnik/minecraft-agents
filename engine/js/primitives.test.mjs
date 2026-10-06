@@ -11,9 +11,9 @@ const acted = bot => names(bot).filter(n => n !== 'blockAt')
 const at = (x, y, z) => ({ x, y, z })
 const SCALE = 0.01 // every time bound shrinks 100 times: 20 s becomes 200 ms
 
-const rig = (spec) => {
+const rig = (spec, timeScale = SCALE) => {
   const bot = stubBot(spec)
-  const p = createPrimitivesFromBot(bot, { timeScale: SCALE })
+  const p = createPrimitivesFromBot(bot, { timeScale })
   p.setOwner('t1')
   return { bot, p }
 }
@@ -2488,7 +2488,8 @@ test('craft and chat with a stale token reject with cut', async () => {
 
 test('craft through the wrapper crafts and chat through the wrapper sends', async () => {
   const items = [{ name: 'oak_log', count: 1, type: 7, slot: 36 }]
-  const { bot, p } = rig({ items })
+  // chat listens 10 ms inside a 30 ms bound at SCALE: a tenth-scale rig keeps that margin on a loaded machine
+  const { bot, p } = rig({ items }, 0.1)
   const reg = { 7: { id: 7, name: 'oak_log' }, 3: { id: 3, name: 'oak_planks', stackSize: 64 } }
   const r = { requiresTable: false, result: { id: 3, count: 4 }, delta: [{ id: 7, count: -1 }, { id: 3, count: 4 }] }
   Object.assign(bot, {
