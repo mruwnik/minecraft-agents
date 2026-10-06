@@ -713,3 +713,54 @@
         (is (= "EEXIST" (try (observe/reclaim-stale-lock! lock) nil (catch :default e (.-code e)))))
         (is (= (str (.-pid js/process)) (.readFileSync fs (.join path lock "pid") "utf8")) "the live lock is back, untouched")
         (is (= ["obs.lock"] (vec (.readdirSync fs dir))) "no aside left behind")))))
+
+(defn code-thrown [f] (try (f) nil (catch :default e (.-code e))))
+
+(deftest reclaim-never-leaves-a-live-lock-path-absent-and-a-third-observer-is-refused
+  (with-lock-dir
+    (fn [dir]
+      (let [lock (.join path dir "obs.lock")
+            seen (atom [])]
+        (.mkdirSync fs lock)
+        (.writeFileSync fs (.join path lock "pid") (str (.-pid js/process)))
+        (is (= "EEXIST" (code-thrown
+                          #(observe/reclaim-stale-lock!
+                             lock (fn [step]
+                                    (swap! seen conj [step (.existsSync fs lock) (code-thrown (fn [] (observe/acquire! dir "obs")))]))))))
+        (is (seq @seen) "the interleaving ran")
+        (is (every? (fn [[_ present? third]] (and present? (= "EOBSERVERBUSY" third))) @seen))
+        (is (= (str (.-pid js/process)) (.readFileSync fs (.join path lock "pid") "utf8")))
+        (is (= ["obs.lock"] (vec (.readdirSync fs dir))) "no aside or mutex left behind")))))
+
+(deftest reclaim-of-a-dead-owners-lock-leaves-one-holder-when-a-third-observer-takes-the-gap
+  (with-lock-dir
+    (fn [dir]
+      (let [lock (.join path dir "obs.lock")
+            fired (atom false)]
+        (.mkdirSync fs lock)
+        (.writeFileSync fs (.join path lock "pid") "99999999")
+        (is (= "EEXIST" (code-thrown
+                          #(observe/reclaim-stale-lock!
+                             lock (fn [step]
+                                    (when (= :lock-removed step)
+                                      (reset! fired true)
+                                      (.mkdirSync fs lock)
+                                      (.writeFileSync fs (.join path lock "pid") (str (.-pid js/process))))))))
+            "the reclaimer loses to the third observer")
+        (is @fired)
+        (is (= (str (.-pid js/process)) (.readFileSync fs (.join path lock "pid") "utf8")) "the third observer's lock stands")
+        (is (= ["obs.lock"] (vec (.readdirSync fs dir))))))))
+
+(deftest reclaimers-take-turns-and-a-crashed-reclaimers-mutex-expires
+  (with-lock-dir
+    (fn [dir]
+      (let [lock (.join path dir "obs.lock")
+            mutex (str lock ".reclaim")]
+        (.mkdirSync fs lock)
+        (.writeFileSync fs (.join path lock "pid") "99999999")
+        (.mkdirSync fs mutex)
+        (is (= "EEXIST" (code-thrown #(observe/reclaim-stale-lock! lock))) "another reclaimer is working")
+        (is (.existsSync fs lock) "the lock was not touched")
+        (.utimesSync fs mutex 1 1)
+        (is (nil? (code-thrown #(observe/reclaim-stale-lock! lock))) "a long-dead reclaimer's mutex is cleared")
+        (is (= ["obs.lock"] (vec (.readdirSync fs dir))))))))

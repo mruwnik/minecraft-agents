@@ -229,20 +229,38 @@
       (not (process-alive? pid))
       (>= (- (js/Date.now) (.-mtimeMs (.statSync fs dir))) pidless-lock-stale-ms))))
 
-(defn reclaim-stale-lock!
-  "Move the lock aside atomically (the loser of a race gets ENOENT), check that what was moved really is stale,
-  delete it and make a fresh lock. A live lock that took its place meanwhile is put back and EEXIST thrown."
-  [lock]
-  (let [aside (str lock ".stale-" (.-pid js/process) "-" (js/Math.floor (* (js/Math.random) 1e9)))]
-    (try (.renameSync fs lock aside)
+(defn take-reclaim-mutex!
+  "Reclaimers take turns through a mutex dir beside the lock. One left by a crashed reclaimer (older than
+  pidless-lock-stale-ms) is renamed away atomically, then taken again. Throws EEXIST while another reclaimer works."
+  [mutex]
+  (let [take! #(.mkdirSync fs mutex #js {:mode private-dir-mode})]
+    (try (take!)
          (catch :default error
-           (when-not (= "ENOENT" (code-of error)) (throw error))))
-    (when (.existsSync fs aside)
-      (when-not (lock-owner-gone? aside)
-        (.renameSync fs aside lock)
-        (throw (coded "EEXIST" "lock is held")))
-      (.rmSync fs aside #js {:recursive true :force true}))
-    (.mkdirSync fs lock #js {:mode private-dir-mode})))
+           (when-not (= "EEXIST" (code-of error)) (throw error))
+           (let [old? (try (>= (- (js/Date.now) (.-mtimeMs (.statSync fs mutex))) pidless-lock-stale-ms)
+                           (catch :default _ false))]
+             (when-not old? (throw error))
+             (try (.renameSync fs mutex (str mutex ".dead-" (.-pid js/process)))
+                  (catch :default e (when-not (= "ENOENT" (code-of e)) (throw e))))
+             (.rmSync fs (str mutex ".dead-" (.-pid js/process)) #js {:recursive true :force true})
+             (take!))))))
+
+(defn reclaim-stale-lock!
+  "Replace a dead owner's lock with a fresh one. Reclaimers are serialised by a mutex dir, and a lock held by a live
+  owner is never moved: only a dead owner's dir (which nobody else may touch meanwhile) is removed. Throws EEXIST
+  when the lock is live or another reclaimer or observer got there first. `step!` is a test hook called at each stage."
+  ([lock] (reclaim-stale-lock! lock (fn [_])))
+  ([lock step!]
+   (let [mutex (str lock ".reclaim")]
+     (take-reclaim-mutex! mutex)
+     (try
+       (step! :mutex-held)
+       (when (.existsSync fs lock)
+         (when-not (lock-owner-gone? lock) (throw (coded "EEXIST" "lock is held")))
+         (.rmSync fs lock #js {:recursive true :force true}))
+       (step! :lock-removed)
+       (.mkdirSync fs lock #js {:mode private-dir-mode})
+       (finally (.rmSync fs mutex #js {:recursive true :force true}))))))
 
 (defn acquire!
   "Take the observer's lock directory; the function that gives it back. Throws EOBSERVERBUSY while a live process holds it."
@@ -257,7 +275,9 @@
            (try (reclaim-stale-lock! lock)
                 (catch :default e
                   (throw (if (= "EEXIST" (code-of e)) (busy) e))))))
-    (.writeFileSync fs (.join path lock "pid") (str (.-pid js/process)) #js {:mode private-file-mode})
+    (try (.writeFileSync fs (.join path lock "pid") (str (.-pid js/process)) #js {:mode private-file-mode})
+         (catch :default error
+           (throw (if (= "ENOENT" (code-of error)) (busy) error))))
     #(.rmSync fs lock #js {:recursive true :force true})))
 
 (defn checkpoint! [file {:keys [cursor generation seen pending lookup]}]
