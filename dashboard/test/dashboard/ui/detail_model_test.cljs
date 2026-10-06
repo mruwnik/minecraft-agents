@@ -43,7 +43,7 @@
     :online? false))
 
 (deftest no-pos
-  (is (= "-" (:pos-text (m/detail-model (assoc online :view nil :engine {:up true}) now nil)))))
+  (is (= "-" (:pos-text (m/detail-model (assoc online :view nil :engine {:up true}) now nil "me")))))
 
 (deftest embed-css-hides-the-view-chrome
   (are [stats? expected-hidden] (= expected-hidden (m/hidden-selectors stats?))
