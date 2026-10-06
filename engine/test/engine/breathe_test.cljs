@@ -405,6 +405,24 @@
           (is (< (:x (core/self-pos p)) 7) "never left the pond")
           (is (= 1 (count (filter #(= :afloat (:kind %)) @seen)))))))))
 
+(deftest a-walled-nearer-shore-is-skipped-for-the-open-one-beyond
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4}
+                                           :blocks (merge pool {"-2,64,0" "stone" "-2,63,0" "stone"
+                                                                "3,64,0" "stone" "3,63,0" "stone"
+                                                                "2,64,0" "water" "2,65,0" "water"})})]
+          (.override (.-world p) "swim"
+                     (fn ^:async f [_ args impl]
+                       (if (and (.-toward args) (neg? (.-x (.-toward args))))
+                         #js {:status "timeout"}
+                         (await (impl _ args)))))
+          (core/submit! eng (list breathe defaults) {})
+          (dotimes [_ 5] (await (core/tick! eng)))
+          (is (= {:x 3 :y 65 :z 0} (core/self-pos p)) "the east ledge is reached after the west swim timed out")
+          (is (empty? (filter #(= :no_shore (:kind %)) @seen))))))))
+
 (deftest surfaced-with-a-failing-shore-swim-warns-no-shore-after-three-rounds-and-stays-afloat
   (async done
     (tu/run-async done

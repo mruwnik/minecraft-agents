@@ -122,18 +122,31 @@
   (let [cell (surface-in-column p (js/Math.floor (:x pos)) (js/Math.floor (:z pos)) (js/Math.floor (:y pos)) reach)]
     (if cell (assoc pos :y (:y cell)) pos)))
 
+(defn same-way?
+  "cell lies within 45 degrees of a failed target as seen from the offset (dx, dz): a swim toward that way already
+  failed (a wall), so its neighbours would too."
+  [dx dz failed fx fz]
+  (some (fn [t]
+          (let [tx (- (:x t) fx) tz (- (:z t) fz)
+                dot (+ (* dx tx) (* dz tz))]
+            (and (pos? dot)
+                 (>= (* dot dot) (* 0.5 (+ (* dx dx) (* dz dz)) (+ (* tx tx) (* tz tz)))))))
+        failed))
+
 (defn nearest-land
   "The nearest land cell within radius sideways of self-pos, feet y from one
-  below to two above; nil if none."
-  [p self-pos radius]
-  (let [fx (js/Math.floor (:x self-pos))
-        fy (js/Math.floor (:y self-pos))
-        fz (js/Math.floor (:z self-pos))]
-    (->> (for [[dx dz] (columns radius)
-               dy [0 -1 1 2]]
-           {:x (+ fx dx) :y (+ fy dy) :z (+ fz dz)})
-         (filter #(land-cell? p %))
-         first)))
+  below to two above; nil if none. Cells in the direction of a failed target (a seq of cells) are skipped."
+  ([p self-pos radius] (nearest-land p self-pos radius nil))
+  ([p self-pos radius failed]
+   (let [fx (js/Math.floor (:x self-pos))
+         fy (js/Math.floor (:y self-pos))
+         fz (js/Math.floor (:z self-pos))]
+     (->> (for [[dx dz] (columns radius)
+                :when (not (same-way? dx dz failed fx fz))
+                dy [0 -1 1 2]]
+            {:x (+ fx dx) :y (+ fy dy) :z (+ fz dz)})
+          (filter #(land-cell? p %))
+          first))))
 
 (defn ^:async swim-up!
   "Drowning: swim up the own column when it reaches air, else walk (through
@@ -238,25 +251,33 @@
           (= :arrived (:status result)) :continue
           :else (do (afloat! c (or (:reason result) (:status result))) :continue))))))
 
+(defn ^:async give-up-shore!
+  "A swim toward a shore failed (or every shore in reach failed): count it; after the last try warn :no_shore and hold afloat."
+  [c]
+  (let [outcome (u/fail! c :no_shore "could not reach a shore")]
+    (if (= :done outcome)
+      (do (afloat! c nil) (await (hold-afloat! c)))
+      outcome)))
+
 (defn ^:async head-for-land!
-  "Surfaced and still in water. Afloat already: hold. Else swim toward the nearest land cell within :shore-radius (the
+  "Surfaced and still in water. Afloat already: hold. Else swim toward the nearest land cell within :shore-radius, then the next nearest in another direction after a failed swim (the
   swim primitive with toward climbs out onto a rim the pathfinder cannot path to); with none, walk to land within
   :far-radius; a body that cannot get out stays afloat. :done when out of the water."
   [c]
   (let [p (:primitives c)
-        target (nearest-land p (surface-pos p (u/self-pos c) (:reach (:args c))) (:shore-radius (:args c)))]
+        failed (:failed-shores (ctx/mem c))
+        target (nearest-land p (surface-pos p (u/self-pos c) (:reach (:args c))) (:shore-radius (:args c)) failed)]
     (cond
       (:afloat (ctx/mem c)) (await (hold-afloat! c))
+      (and (not target) (seq failed)) (await (give-up-shore! c))
       (not target) (let [r (await (walk-to-far-land! c))]
                      (if (= :continue r) (await (hold-afloat! c)) r))
       :else
       (let [r (await (ctx/act c :swim (clj->js {:toward target})))]
         (if (or (= "landed" (status r)) (not (.-inWater (.self p))))
           :done
-          (let [outcome (u/fail! c :no_shore "could not reach the nearest shore")]
-            (if (= :done outcome)
-              (do (afloat! c nil) (await (hold-afloat! c)))
-              outcome)))))))
+          (do (ctx/update-mem! c update :failed-shores (fnil conj []) target)
+              (await (give-up-shore! c))))))))
 
 (defn note!
   "Write the :breathe entry once per job instance."
