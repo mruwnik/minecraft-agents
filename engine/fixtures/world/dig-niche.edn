@@ -1,0 +1,36 @@
+;; jobs.survival.dig-niche (card 7838c2f3): a niche cut into a hillside for the night. A stone hill face at x 22..30 with
+;; a pickaxe: sealed. Should-fail, each with dig_niche_failed {:reason :no-site}: flat ground, a sand hill (falls), a
+;; 3-wide hill with water beside the cut, a stone hill with no pickaxe. Night: run with --allow-time --time-log <shared time log>.
+{:defaults
+ {:tags [:night :survival]
+  :time :night
+  :plot {:height 20}
+  :register []
+  :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]] :inventory [["iron_pickaxe" 1]]}}
+ :cases
+ [{:name "stone-hill-seals"
+   :blocks [[:fill [22 0 8] [30 4 24] "stone"]]
+   :act [[:job (jobs.survival.dig-niche {})]]
+   :expect [{:event {:source :job :kind :dig-niche.sealed} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :dig_niche_failed} :for-s 90 :until {:source :job :kind :dig-niche.sealed}}]
+   :limit-s 120}
+  {:name "flat-ground-no-site"
+   :act [[:job (jobs.survival.dig-niche {})]]
+   :expect [{:event {:source :job :kind :dig_niche_failed :data {:reason :no-site}} :within-s 30 :of-job true}]
+   :limit-s 45}
+  {:name "sand-hill-no-site"
+   :blocks [[:fill [22 0 8] [30 4 24] "sand"]]
+   :act [[:job (jobs.survival.dig-niche {})]]
+   :expect [{:event {:source :job :kind :dig_niche_failed :data {:reason :no-site}} :within-s 30 :of-job true}]
+   :limit-s 45}
+  {:name "water-beside-the-cut-no-site"
+   :blocks [[:fill [22 0 15] [30 4 17] "stone"] [:set [23 0 15] "water"]]
+   :act [[:job (jobs.survival.dig-niche {})]]
+   :expect [{:event {:source :job :kind :dig_niche_failed :data {:reason :no-site}} :within-s 30 :of-job true}]
+   :limit-s 45}
+  {:name "stone-without-pickaxe-no-site"
+   :blocks [[:fill [22 0 8] [30 4 24] "stone"]]
+   :body {:inventory []}
+   :act [[:job (jobs.survival.dig-niche {})]]
+   :expect [{:event {:source :job :kind :dig_niche_failed :data {:reason :no-site}} :within-s 30 :of-job true}]
+   :limit-s 45}]}

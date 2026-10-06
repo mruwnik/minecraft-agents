@@ -127,3 +127,36 @@
     (is (false? (niche/permitted? in {:x 3 :y 64 :z 0} [1 0])))
     (is (true? (niche/permitted? (assoc in :ignore-zones? true) {:x 3 :y 64 :z 0} [1 0])))
     (is (true? (niche/permitted? (assoc in :zones []) {:x 3 :y 64 :z 0} [1 0])))))
+
+;; ------------------------------------------------------------------ failure reasons
+
+(def far-hill (blocks "stone" [10 14] [64 66] [-3 3]))
+
+(deftest a-walk-that-never-gets-there-fails-unreachable
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen] :as s} (setup [] {:blocks (merge ground (blocks "dirt" [9 14] [60 63] [-3 3]) far-hill)})]
+          (.override (.-world p) "steer"
+                     (fn [_ _ _] (js/Promise.resolve #js {:status "timeout" :pose #js {}})))
+          (await (run! s {}))
+          (is (= :unreachable (:reason (failed seen)))))))))
+
+(deftest a-dig-the-world-refuses-fails-dig-failed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen] :as s} (setup [] {})]
+          (.override (.-world (:p s)) "dig" (fn ^:async f [_ _ _] #js {:status "failed"}))
+          (await (run! s {}))
+          (is (= :dig-failed (:reason (failed seen)))))))))
+
+(deftest a-plug-the-world-refuses-fails-place-failed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen] :as s} (setup [] {})]
+          (.override (.-world p) "place" (fn ^:async f [_ _ _] #js {:status "failed"}))
+          (await (run! s {}))
+          (is (= :place-failed (:reason (failed seen))))
+          (is (not (contains? (kinds-seen seen) :dig-niche.sealed))))))))
