@@ -1297,3 +1297,49 @@
           (is (= [] (calls p "dig")))
           (is (= ["oak_fence" "glass" "iron_bars"]
                  (mapv #(.-name (.blockAt p (apply tu/pos %))) [[1 64 0] [0 64 1] [-1 64 0]]))))))))
+
+(def overhang
+  (merge floor
+         (into {} (for [x [-1 0 1] z [-1 0 1]] [(str x ",66," z) "stone"]))
+         {"-1,64,0" "stone" "-1,65,0" "stone"}))
+
+(deftest dig-in-enclose-walls-in-under-an-overhang-placing-only-the-open-sides
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:time night :inventory [{:name "dirt" :count 8}] :blocks overhang})]
+          (core/submit! eng '(jobs.survival.dig-in {:enclose true}) {})
+          (await (run-until-empty eng 8))
+          (let [placed (mapv arg-pos (calls p "place"))]
+            (is (= 6 (count placed)) "the 8 sides less the 2 wall cells already solid")
+            (is (every? #(<= (:y %) 65) placed) "roof and support already solid: none placed up there"))
+          (is (= 1 (count (emitted seen :dig-in.sealed))))
+          (is (some? (:door (last (entries eng :shelter))))))))))
+
+(deftest dig-in-enclose-with-too-few-blocks-stops-and-digs-nothing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:time night :inventory [{:name "dirt" :count 3}] :blocks overhang})]
+          (core/submit! eng '(jobs.survival.dig-in {:enclose true}) {})
+          (await (run-until-empty eng 8))
+          (is (empty? (calls p "place")))
+          (is (empty? (calls p "dig")))
+          (is (= [:no-blocks] (mapv :reason (emitted seen :stopped)))))))))
+
+(deftest fill-cells-count-the-walls-a-cell-needs-by-a-sealed-predicate
+  (let [feet {:x 0 :y 64 :z 0}
+        none (constantly false)
+        roofed #(= 66 (:y %))]
+    (is (= 10 (count (dig-in/fill-cells none feet))) "sides, support, roof")
+    (is (= 8 (count (dig-in/fill-cells roofed feet))) "a sealed roof cell needs no support")))
+
+(deftest dig-in-without-enclose-still-declines-under-a-roof
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:time night :inventory dirt-stack :blocks overhang})]
+          (core/submit! eng '(jobs.survival.dig-in) {})
+          (await (run-until-empty eng 4))
+          (is (empty? (calls p "place")))
+          (is (= [:already-sealed] (mapv :reason (emitted seen :waiting)))))))))

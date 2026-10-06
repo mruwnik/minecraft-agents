@@ -25,6 +25,19 @@
    :expect [{:event {:source :job :kind :shelter.fled :data {:target :ground}} :within-s 150}
             {:event {:source :job :kind :dig-in.sealed} :within-s 200}]
    :limit-s 230}
+  {:name "flees-to-an-overhang-and-walls-in"
+   :blocks [[:fill [22 2 14] [25 2 18] "stone"] [:fill [25 0 14] [25 1 18] "stone"]]
+   :body {:at [2.5 0 16.5] :inventory [["dirt" 8]]}
+   :act [[:job (jobs.survival.night {})]]
+   :expect [{:event {:source :job :kind :shelter.fled :data {:target :cave}} :within-s 150}
+            {:event {:source :job :kind :dig-in.sealed} :within-s 200}]
+   :limit-s 230}
+  {:name "too-few-blocks-ignore-the-overhang"
+   :blocks [[:fill [22 2 14] [25 2 18] "stone"] [:fill [25 0 14] [25 1 18] "stone"]]
+   :body {:at [2.5 0 16.5] :inventory [["dirt" 3]]}
+   :act [[:job (jobs.survival.night {})]]
+   :expect [{:no-event {:source :job :kind :shelter.fled :data {:target :cave}} :for-s 90}]
+   :limit-s 120}
   {:name "walled-home-flee-fails-honestly"
    :blocks [[:fill [28 0 14] [32 4 18] "stone" :hollow]]
    :act [[:job (jobs.memory.set-place {:name :home :pos #at [30 1 16]})]

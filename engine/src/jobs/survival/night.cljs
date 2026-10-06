@@ -53,15 +53,18 @@
     forgotten) when it has moved off its spot or retry-after-ms passed, at most max-retries times.
   Fleeing (:flee-radius, 0 never): to the cheapest candidate within the radius that is not tried tonight, at most max-flees
   walks (go-to, its known mobs costed; the route need not be lit): a known bed farther than :bed-radius, a :roofed-places
-  place with a seen roof, or seen natural ground (never sand or gravel) the carried tools dig, 9+ from every failed
+  place with a seen roof, a seen cave or overhang cell (a seen solid floor and roof, two free dry cells, within about 16
+  blocks: only those seen, and only while the carried blocks (dig-in's) cover every wall cell still open; none whose
+  wall a zone refuses), or seen natural ground (never sand or gravel) the carried tools dig, 9+ from every failed
   site, with standing room (pit-site?). Cost: jobs.lib.cost/walk-cost with the route danger past the hostiles the body knows of;
-  ties :bed, :roofed-place, :ground. shelter.fled info on arrival, shelter.flee_failed when not arrived; a walk cut by a
+  ties :bed, :roofed-place, :cave, :ground. Arrived at a cave cell it walls itself in (dig-in :enclose, walls only, never a
+  pit): sealed, it holds :dug-in until morning; a refusal marks the site failed and the roofed body ends the night :roofed. shelter.fled info on arrival, shelter.flee_failed when not arrived; a walk cut by a
   reflex resumes the same target. Arrived: the next pass sleeps, is roofed, or digs in there (a niche is tried again).
   Done {:night how :fled n} (stopped :exposed {:fled n}) when it fled.
   Every hold is declared (ctx/hold-still!) and waits hold-ms at a time, eating one carried food when the hungry
   trigger's condition holds (hungry?, or below 7 hp; not asleep).
   An overdue body (no sleep for :max-days-awake in-game days) warns needs_bed once an in-game day (:needs-bed).
-  Memory: job memory :sheltered (:slept, :dug-in, :logged-out, :exposed), :log-out-failed, :relocating, :digging (the
+  Memory: job memory :enclose (the cave cell being walled in), :sheltered (:slept, :dug-in, :logged-out, :exposed), :log-out-failed, :relocating, :digging (the
   site of a dig-in in flight), :pit-trapped and leave!'s :dig-out; body memory :night-site (failed sites, forgotten whenever the night ends, at most a day), so a
   firing after a cut does not dig a failed site again, :roof-walk-failed.
   Muting :night does not end a running night job: the agent cancels it too.")
@@ -74,7 +77,7 @@
    :walk-radius {:doc "a roofed place farther than this is not walked to" :default 32}
    :lit-light {:doc "block light a route cell needs to count as lit (mobs do not spawn at 1+)" :default 1}
    :max-days-awake {:doc "in-game days without sleep before finding a bed becomes urgent" :default sh/max-days-awake}
-   :flee-radius {:doc "when no shelter can be dug here, how far the night looks for somewhere safer (a known bed or roofed place, or seen ground the carried tools dig); 0 never flees" :default 64}})
+   :flee-radius {:doc "when no shelter can be dug here, how far the night looks for somewhere safer (a known bed or roofed place, a seen cave or overhang to wall in, or seen ground the carried tools dig); 0 never flees" :default 64}})
 
 (defn bed-permit
   "Whether the body may use a bed (sh/bed-permit over the job's world and clock)."
@@ -437,11 +440,11 @@
       (:danger (cost/route-danger (game/version-of p) kind-at route (reach/seen-hostiles p) (.-equipment (.self p))))
       0)))
 
-(def kind-rank {:bed 0 :roofed-place 1 :ground 2})
+(def kind-rank {:bed 0 :roofed-place 1 :cave 2 :ground 3})
 
 (defn rank-flees
   "cands ([{:kind :pos ...}]) from here, each with :distance and :cost (jobs.lib.cost/walk-cost with (danger-of pos)),
-  cheapest first, ties :bed, :roofed-place, :ground."
+  cheapest first, ties :bed, :roofed-place, :cave, :ground."
   [here cands danger-of]
   (->> cands
        (map (fn [{:keys [pos] :as cand}]
@@ -462,6 +465,41 @@
          (take ground-candidates)
          (mapv (fn [pos] {:kind :ground :pos pos})))))
 
+(def cave-candidates "Seen cave cells costed per flee: the nearest ones." 16)
+
+(def cave-scan "Solid blocks one cave search reads: nearest first, so it reaches about 16 blocks around the body." 2048)
+
+(defn cave-sites
+  "Feet cells the body has seen under a roof (a seen solid block 2..roof-height above), over a seen solid floor, with
+  two seen free dry cells, clear of failed sites, that dig-in's :enclose can wall in with the blocks carried: each as
+  {:kind :cave :pos :needed} (the wall cells not yet sealed; an unseen cell counts open). Nothing needing a block a
+  zone or claim refuses. The nearest cave-candidates. Reads seen blocks only: its reach is the nearest cave-scan solids."
+  [c radius]
+  (let [p (:primitives c)
+        roof-height (:roof-height (:args c))
+        solids (look/seen-blocks p {:match sh/solid? :radius (min 64 radius) :max cave-scan})
+        key-of (juxt :x :y :z)
+        solid? (into #{} (map (comp key-of :pos)) solids)
+        seen-free? (fn [cell] (and (not (solid? (key-of cell)))
+                                   (not (:unknown (look/seen-block p cell)))))
+        have (reduce + (map :count (dig-in/carried c dig-in/shelter-blocks)))
+        up (fn [{:keys [x y z]} dy] {:x x :y (+ y dy) :z z})
+        sealed? (fn [cell] (and (solid? (key-of cell)) (dig-in/sealed? p cell)))]
+    (->> solids
+         (map #(up (:pos %) 1))
+         (filter (fn [f]
+                   (and (some #(solid? (key-of (up f %))) (range 2 (inc roof-height)))
+                        (seen-free? f) (seen-free? (up f 1))
+                        (not (dig-in/wet? p f)) (not (dig-in/wet? p (up f 1)))
+                        (clear-of-failed? c f))))
+         (keep (fn [f]
+                 (let [cells (dig-in/fill-cells sealed? f)]
+                   (when (and (<= (count cells) have)
+                              (not-any? #(access/trespass-refusal c :place %) cells))
+                     {:kind :cave :pos f :needed (count cells)}))))
+         (take cave-candidates)
+         vec)))
+
 (defn flee-target
   "The cheapest place not yet tried tonight that is somewhere safer than here (see the doc), or nil: none with
   :flee-radius 0 or after max-flees."
@@ -474,7 +512,7 @@
       (let [bed (when-let [pos (sh/bed-to-use p (ctx/view c) flee-radius (bed-permit c))]
                   (when (> (u/dist (sh/feet p) pos) (radius c)) [{:kind :bed :pos pos}]))
             places (map #(assoc % :kind :roofed-place) (roofed-places-in c flee-radius false))]
-        (->> (concat bed places (ground-sites c flee-radius))
+        (->> (concat bed places (cave-sites c flee-radius) (ground-sites c flee-radius))
              (remove #(contains? tried (:pos %)))
              (#(rank-flees (sh/feet p) % (partial route-danger c)))
              first)))))
@@ -497,12 +535,34 @@
       :again
       (let [arrived (:arrived (ctx/child-result c :flee))]
         (ctx/update-mem! c #(-> % (dissoc :fleeing :niche) (update :flees (fnil inc 0)) (update :flee-failed (fnil conj []) (:pos t))))
+        (when (and arrived (= :cave (:kind t))) (ctx/update-mem! c assoc :enclose (:pos t)))
         (if arrived
-          (ctx/emit! c :shelter.fled :info (assoc (set/rename-keys (select-keys t [:kind :pos :name :distance :cost]) {:kind :target})
+          (ctx/emit! c :shelter.fled :info (assoc (set/rename-keys (select-keys t [:kind :pos :name :distance :cost :needed]) {:kind :target})
                                                   :text (str "could not shelter here; moved somewhere safer (" (name (:kind t)) ")")))
           (ctx/emit! c :shelter.flee_failed :info (assoc (set/rename-keys (select-keys t [:kind :pos :name]) {:kind :target})
                                                          :text "could not shelter here and could not reach somewhere safer")))
         :again))))
+
+(defn ^:async enclose!
+  "At a cave target (:enclose is its feet cell): wall in with dig-in :enclose, one call. Sealed in: :dug-in, held until
+  morning (dig-in/leave! opens the door). Stopped or declined: the site is marked failed with dig-in's reason, and the
+  roofed body ends the night :roofed. A body that is no longer at the cell forgets the target."
+  [c]
+  (let [p (:primitives c)
+        pos (:enclose (ctx/mem c))
+        roof-height (:roof-height (:args c))]
+    (if (not= pos (sh/feet p))
+      (do (ctx/update-mem! c dissoc :enclose) :again)
+      (let [_ (busy! c)
+            d (await (ctx/call-child c :enclose 'jobs.survival.dig-in {:roof-height roof-height :enclose true}))
+            res (ctx/child-result c :enclose)]
+        (if (= :continue d)
+          :again
+          (do (ctx/update-mem! c dissoc :enclose)
+              (if (and (= :done d) (dig-in/sealed-in? p :walls roof-height) (not= :stopped (:status res)))
+                (sheltered! c :dug-in)
+                (site-failed! c pos (or (:reason res) (if (= :declined d) :declined :unsealed))))
+              :again))))))
 
 (defn ^:async relocate!
   "Get to a nearby cell where a pit can be dug; the next pass digs in there. Out of its own failed pit first by a stair
@@ -652,6 +712,7 @@
           bed (await (sleep-step c bed))
           (sh/bed-place-wanted? p (ctx/view c) (radius c) (bed-permit c)) (await (place-bed-and-sleep c))
           (log-out-wanted? c) (await (log-out-step c))
+          (and (:enclose (ctx/mem c)) (not= :dug-in sheltered)) (await (enclose! c))
           (or roofed (sh/buried? p)) (do (ctx/forget-where! c :night-site (constantly true))
                                          (result/finish! c (cond-> {:night (if (= :logged-out sheltered) :logged-out :roofed)} (fled c) (assoc :fled (fled c)))))
           (:fleeing (ctx/mem c)) (await (flee! c (:fleeing (ctx/mem c))))

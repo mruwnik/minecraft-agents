@@ -12,7 +12,8 @@
 
 (def doc
   "Roof the body in for the night.
-  Declines (waiting) with :day, :already-sealed {:pos} (something solid within :roof-height above),
+  Declines (waiting) with :day, :already-sealed {:pos} (something solid within :roof-height above; with :enclose, only
+  when no open cell is left around the feet),
   or :futile {:pos :why} (a :dig-in-futile entry within 8 blocks that blocks it, see below).
   One call is a whole attempt. It ends with the result {:pos :mode :roof} when the world shows the body shut in, else
   stopped {:reason :text :pos}: the :dig-in-futile reasons below, :no-blocks, :no-tool, :unsealed or :no-progress.
@@ -23,6 +24,7 @@
   - walls: enough :blocks are carried for every open cell. Places the four sides at feet height, the four at head height,
     a support beside the roof cell, then the roof cell, at most :max-places per step.
     Every step it recomputes the open cells from the current feet cell. If the blocks run out, it chooses again.
+  - :enclose: walls mode only, for a body under an overhang or in a cave: the walls it needs, else stopped :no-blocks.
   - dig: digs a pit two deep (three on flat ground, where the start cell has no solid side to roof against),
     then places one block at the roof cell from a carried or dug block.
     It digs only where the block under is solid, the feet and head cells are dry, and no fluid borders the cell
@@ -64,6 +66,7 @@
   {:roof-height {:doc "a solid block within this many blocks above counts as a roof" :default sh/default-roof-height}
    :blocks {:doc "names of the blocks it may place" :default shelter-blocks}
    :max-places {:doc "placements per step" :default 4}
+   :enclose {:doc "wall in under a roof already overhead: walls only, never a pit; stops :no-blocks when too few blocks are carried" :default false}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
 (def shelter-policy {:cap 10 :ttl sh/ms-per-day})
@@ -156,15 +159,23 @@
         (if (= :changed (:outcome r)) :shut :open))
       :open)))
 
-(defn open-cells
+(defn fill-cells
   "The cells to fill around the feet cell, in placement order: sides at feet
   height, sides at head height, a support beside the roof cell (a block needs a
   solid face neighbour to be placed against, and the roof cell has none until
-  the support exists), then the roof cell above the head; only those not sealed?."
-  [p {:keys [x y z]}]
-  (filterv #(not (sealed? p %))
-           (concat (for [dy [0 1] [dx dz] sides] {:x (+ x dx) :y (+ y dy) :z (+ z dz)})
-                   [{:x (inc x) :y (+ y 2) :z z} {:x x :y (+ y 2) :z z}])))
+  the support exists; none when the roof cell is sealed already), then the roof cell above the head; only those the
+  predicate sealed? (cell -> bool) does not hold for."
+  [sealed? {:keys [x y z]}]
+  (let [roof {:x x :y (+ y 2) :z z}]
+    (filterv #(not (sealed? %))
+             (concat (for [dy [0 1] [dx dz] sides] {:x (+ x dx) :y (+ y dy) :z (+ z dz)})
+                     (when-not (sealed? roof) [{:x (inc x) :y (+ y 2) :z z}])
+                     [roof]))))
+
+(defn open-cells
+  "The fill-cells around the feet cell that are not sealed? in the world."
+  [p feet]
+  (fill-cells #(sealed? p %) feet))
 
 (defn door
   "The door cells [feet head] of one side among the placed cells: the first side
@@ -244,6 +255,13 @@
 (defn open-text [cells]
   (str "open cells " (pr-str (mapv (juxt :x :y :z) cells))))
 
+(defn sealed-in?
+  "Whether the world shows the body shut in: a roof within roof-height above and, for walls mode, no open cell around
+  the feet (checked from the blocks, not from what was placed)."
+  [p mode roof-height]
+  (and (sh/roofed? p roof-height)
+       (or (not= :walls mode) (empty? (open-cells p (sh/feet p))))))
+
 (defn ^:async walls-round
   "One round of walls mode. Out of blocks (the carried ones were used up or lost, or the body moved to a cell with more
   open cells than blocks) it forgets the mode so the next round chooses again: a pit dug with what it can harvest."
@@ -258,7 +276,7 @@
                          :done)
       (= "no-item" status) (do (ctx/update-mem! c dissoc :mode :start) :continue)
       (not= :ok status) (fail-site! c :walls-failed (str "cannot place a block: " status "; " (open-text open)))
-      (sh/roofed? p roof-height) :done
+      (sealed-in? p :walls roof-height) :done
       :else :continue)))
 
 (defn ^:async collect-drops!
@@ -456,11 +474,16 @@
     (when (or moved (not mode))
       (let [cells (open-cells p start)
             have (reduce + (map :count (carried c (:blocks (:args c)))))
-            plan (dig-plan p start)
-            plug (when (pos? have) (room-plug p start (:roof-height (:args c))))
-            [chosen refusal] (mode-choice c start cells (>= have (count cells)) plan plug)]
+            enclose (:enclose (:args c))
+            plan (when-not enclose (dig-plan p start))
+            plug (when (and (pos? have) (not enclose)) (room-plug p start (:roof-height (:args c))))
+            [chosen refusal] (if enclose
+                               [(if (>= have (count cells)) :walls :no-blocks)
+                                (some #(access/trespass-refusal (access/rules-input c) :place %) cells)]
+                               (mode-choice c start cells (>= have (count cells)) plan plug))]
         (access/trespass! c "dig-in" refusal)
         (cond
+          (= :no-blocks chosen) (ctx/update-mem! c assoc :mode :no-blocks)
           (= :plug chosen) (ctx/update-mem! c assoc :mode :plug :plug plug)
           (= :walls chosen) (ctx/update-mem! c #(cond-> (assoc % :mode :walls)
                                                   (shaft-top p start) (assoc :start {:x x :y (shaft-top p start) :z z})))
@@ -503,7 +526,8 @@
   (let [p (:primitives c)]
     (cond
       (not (sh/night? p)) (ctx/wait c {:reason :day})
-      (sh/roofed? p (:roof-height (:args c))) (ctx/wait c {:reason :already-sealed :pos (sh/feet p)})
+      (sealed-in? p (if (:enclose (:args c)) :walls :open) (:roof-height (:args c)))
+      (ctx/wait c {:reason :already-sealed :pos (sh/feet p)})
       :else (if-let [site (futile-site c)]
               (ctx/wait c (merge {:reason :futile} (select-keys site [:pos]) (when (:reason site) {:why (:reason site)})))
               true))))
@@ -537,15 +561,9 @@
       (= :plug mode) (await (plug-round c))
       (= :walls mode) (await (walls-round c))
       (= :no-roof-support mode) (no-roof-round c)
+      (= :no-blocks mode) (do (remember-material! c {:pos (sh/feet (:primitives c))}) :done)
       (> (:y (sh/feet (:primitives c))) target-y) (await (descend-round c))
       :else (await (roof-round c)))))
-
-(defn sealed-in?
-  "Whether the world shows the body shut in: a roof within roof-height above and, for walls mode, no open cell around
-  the feet (checked from the blocks, not from what was placed)."
-  [p mode roof-height]
-  (and (sh/roofed? p roof-height)
-       (or (not= :walls mode) (empty? (open-cells p (sh/feet p))))))
 
 (defn end!
   "The call's end: a :dig-in-futile entry when unroofed, the sealed/unsealed event, the :shelter entry; then the result:
@@ -556,6 +574,7 @@
         feet (sh/feet p)
         placed (:placed (ctx/mem c) #{})
         mode (:mode (ctx/mem c))
+        judged (if (:enclose (:args c)) :walls mode)
         roof (case mode
                :walls (update feet :y + 2)
                :plug (:plug (ctx/mem c))
@@ -566,13 +585,13 @@
         resealed (= feet (:pos prev))
         start (or start (when resealed (:start prev)))
         door (or door (when resealed (:door prev)))]
-    (when (and (seq placed) (not (sealed-in? p mode (:roof-height (:args c)))))
+    (when (and (seq placed) (not (sealed-in? p judged (:roof-height (:args c)))))
       (let [open (open-cells p feet)]
         (ctx/emit! c :dig-in.unsealed :warn
                    {:pos feet :placed (vec placed) :open open
                     :text (str "NOT sealed in: placed " (count placed) " blocks at " (pr-str (mapv (juxt :x :y :z) placed))
                                ", but the world still shows " (open-text open) (when (empty? open) " (no roof)"))})))
-    (when (and (seq placed) (sealed-in? p mode (:roof-height (:args c))))
+    (when (and (seq placed) (sealed-in? p judged (:roof-height (:args c))))
       (ctx/emit! c :dig-in.sealed (if resealed :warn :info)
                  {:pos feet :placed (vec placed) :resealed resealed
                   :text (str (cond
@@ -587,7 +606,7 @@
                                 start (assoc :start start)
                                 (= :plug mode) (assoc :room true))
                    shelter-policy)
-    (if (sealed-in? p mode (:roof-height (:args c)))
+    (if (sealed-in? p judged (:roof-height (:args c)))
       (result/finish! c (cond-> {:pos feet :mode mode} (contains? placed roof) (assoc :roof roof)))
       (let [reason (or (:stop (ctx/mem c)) :unsealed)]
         (result/stop! c reason (str "no roof over the body: " (name reason)) :pos feet)))))

@@ -660,3 +660,56 @@
         ranked (night/rank-flees {:x 0 :y 64 :z 0} cands danger-of)]
     (is (= [:b :a] (mapv :name ranked)) "the nearer one has a mob on the way")
     (is (every? number? (map :cost ranked)))))
+
+;; ------------------------------------------------------------------ caves and overhangs
+
+(def cave-blocks
+  "An overhang at x 22..26, z -2..2: a stone floor, a roof at y 66, a back wall at x 26."
+  (merge (into {} (for [x (range 22 27) z (range -2 3)] [(str x ",63," z) "stone"]))
+         (into {} (for [x (range 22 27) z (range -2 3)] [(str x ",66," z) "stone"]))
+         (into {} (for [y [64 65] z (range -2 3)] [(str "26," y "," z) "stone"]))))
+
+(defn cave-night
+  "A night at the origin where nothing can be placed west of x 20 (no pit there), over cave-blocks; {:eng :p :seen}."
+  [inventory]
+  (let [{:keys [p] :as r} (st/setup {:time night :inventory inventory :blocks cave-blocks})]
+    (tu/seeing-all p)
+    (.override (.-world p) "place"
+               (fn ^:async f [token a impl]
+                 (if (< (.-x (.-pos a)) 20)
+                   #js {:status "no-support"}
+                   (await (impl token a)))))
+    (st/dawn-after! p 12)
+    (core/submit! (:eng r) '(jobs.survival.night) {})
+    r))
+
+(deftest with-blocks-to-close-the-open-sides-the-night-flees-to-an-overhang-and-walls-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (cave-night [{:name "dirt" :count 8}])
+              log (await (with-child-log #(st/run-until-empty eng 160)))
+              enclose (first (filter #(and (= 'jobs.survival.dig-in (second %)) (contains? (nth % 2) :enclose)) log))]
+          (is (= [:cave] (mapv :target (st/emitted seen :shelter.fled))))
+          (is (= true (:enclose (nth enclose 2))))
+          (is (= 1 (count (st/emitted seen :dig-in.sealed))))
+          (is (some? enclose) "walls it in, never a pit")
+          (is (every? #(<= 21 (:x (st/arg-pos %))) (st/calls p "place")) "placed only at the cave"))))))
+
+(deftest with-too-few-blocks-the-night-ignores-the-overhang
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (cave-night [{:name "dirt" :count 3}])]
+          (await (st/run-until-empty eng 160))
+          (is (empty? (st/emitted seen :shelter.fled))))))))
+
+(deftest an-overhang-whose-roof-the-body-has-not-seen-is-no-flee-target
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (cave-night [{:name "dirt" :count 8}])
+              all (.-seenBlocks p)]
+          (aset p "seenBlocks" (fn [q] (.filter (all q) (fn [b] (< (.-y (.-pos b)) 66)))))
+          (await (st/run-until-empty eng 160))
+          (is (empty? (st/emitted seen :shelter.fled))))))))
