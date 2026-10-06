@@ -36,8 +36,8 @@
      jobs.lib.placement picks the click (neighbour, face, cursor, look, sneak) that gives the wanted state. A
      :facing want that is placed plainly waits until the body looks the right way, from the far side.
   2. Dig the wrong blocks within reach.
-  3. Walk to a stand cell two blocks beside the nearest buildable (or diggable) cell. The stand cell is at the
-     body's feet height, so flat ground is assumed.
+  3. Walk to a stand cell one to three blocks beside the nearest buildable (or diggable) cell, on the ground there
+     (the body's feet height, or one up or down on a slope).
   4. Walk toward the nearest unloaded cell. Unseen cells are never taken as built.
   5. Finish.
   A cell whose state no neighbour gives, or with no block to click beside it yet, waits for one. If still missing at
@@ -129,6 +129,16 @@
     (->> (concat (for [d [2 1 3] [sx sz] straight] [(+ x (* d sx)) y (+ z (* d sz))])
                  (for [d [1 2] [sx sz] diagonal] [(+ x (* d sx)) y (+ z (* d sz))]))
          (remove #(or (planned %) (planned (update % 1 inc)))))))
+
+(defn ground-stands
+  "The stand cells of cands ([x y z], from stand-cells) put on the ground: each takes the nearest feet height (y, then one
+  up, one down, two down) where a body can stand (jobs.lib.reach/standable-cell?); one with none is dropped. When none
+  of them can (unloaded land) the candidates stay as they are."
+  [p cands]
+  (let [fit (fn [[x y z]]
+              (some (fn [dy] (when (reach/standable-cell? p {:x x :y (+ y dy) :z z}) [x (+ y dy) z])) [0 1 -1 -2]))
+        found (keep fit cands)]
+    (if (seq found) found cands)))
 
 (defn shortage
   "{item n} of the missing cells' items beyond what is carried (carried {item n})."
@@ -503,7 +513,7 @@
         planned (set (map :pos cells))
         bad (set (:bad-stands (ctx/mem c)))
         facing (when-not (or (:click cell) (:dig? cell)) (facing-of (:want cell)))
-        stands (remove bad (stand-cells (:pos cell) (js/Math.floor (:y body)) facing planned))
+        stands (remove bad (ground-stands (:primitives c) (stand-cells (:pos cell) (js/Math.floor (:y body)) facing planned)))
         stand (first (sort-by #(u/dist body (zipmap [:x :y :z] %)) stands))
         give-up (:give-up (:args c))]
     (if-not stand

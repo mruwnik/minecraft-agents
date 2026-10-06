@@ -555,3 +555,27 @@
           (is (reach/enclosed? p))
           (is (not (build/seals? {:primitives p} [4 65 4])))
           (is (not (build/seals? {:primitives p} [4 64 3]))))))))
+
+(deftest a-box-on-a-slope-is-built-complete-with-the-body-starting-inside
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [ground (into {} (concat (for [x (range 5 23) z (range 5 23)] [(h/cell-key x 63 z) "stone"])
+                                      (for [x (range 15 23) z (range 5 23)] [(h/cell-key x 64 z) "stone"])
+                                      (for [c [[11 11] [12 11] [11 12]]] [(h/cell-key (first c) 64 (second c)) "stone"])))
+              plan {:id "box" :parts [{:id "walls" :outline [[10 64 10] [13 65 13]] :want "dirt"}
+                                      {:id "roof" :box [[10 66 10] [13 66 13]] :want "dirt"}]}
+              {:keys [eng]} (start {:blocks ground :inventory [{:name "dirt" :count 64}]
+                                    :self {:pos {:x 11.5 :y 65 :z 11.5}}}
+                                   {"box" plan} [])
+              result (await (h/child-outcome eng job {:plan "box"} 600))]
+          (is (= [] (:missing result)))
+          (is (= {} (:given-up result)))
+          (is (= 40 (:placed result))))))))
+
+(deftest stand-cells-are-put-on-the-ground-where-it-rises-or-falls
+  (let [ground (into {} (concat (for [x (range 5 23) z (range 5 23)] [(h/cell-key x 63 z) "stone"])
+                                (for [x (range 15 23) z (range 5 23)] [(h/cell-key x 64 z) "stone"])))
+        p (tu/fake-on-floor {:blocks ground :self {:pos {:x 12.5 :y 64 :z 14.5}}})
+        stands (build/ground-stands p [[15 64 10] [14 64 10] [13 64 8] [16 64 12]])]
+    (is (= [[15 65 10] [14 64 10] [13 64 8] [16 65 12]] (vec stands)))))

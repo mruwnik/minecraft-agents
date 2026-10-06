@@ -27,13 +27,12 @@
             [:set [11 1 11] "stone"] [:set [12 1 11] "stone"] [:set [11 1 12] "stone"]]
    :body {:at [11.5 2 11.5]}
    :act [[:job (jobs.build.from-plan {:plan "test-probeplanseal-box"})]]
-   ;; interior roof cells wait (no-support) until the ring roof is there. Known bug (card in the board, "slope corner roof cell unreachable"):
-   ;; corner roof [13 3 10] is given up :unreachable (39/40, flat ground gives 40/40); the stop text names it. Change to missing 0 when fixed.
-   :expect [{:event {:source :job :kind :build.done :data {:placed 39 :missing 1}} :within-s 120}
-            {:event {:source :job :kind :stopped :data {:reason :incomplete} :message [:contains "unreachable"]} :within-s 120}
+   ;; interior roof cells wait (no-support) until the ring roof is there. Stand cells are put on the ground (card 51beca4c): the corner
+   ;; roof [13 3 10] was given up :unreachable on the slope (stand cells at the body's feet height lay inside the hill).
+   :expect [{:event {:source :job :kind :build.done :data {:placed 40 :missing 0}} :within-s 120}
             {:event {:source :job :kind :result :data {:arrived true}} :within-s 120}
             {:no-event {:source :job :kind :build.wrong} :for-s 5}]
-   :after [[:block [10 1 10] "dirt"] [:block [13 2 13] "dirt"] [:not-block [13 3 10] "dirt"] [:block [11 2 13] "dirt"]
+   :after [[:block [10 1 10] "dirt"] [:block [13 2 13] "dirt"] [:block [13 3 10] "dirt"] [:block [11 2 13] "dirt"]
            [:not-block [11 2 11] "dirt"] [:not-block [12 2 12] "dirt"]]}
   {:name "clear-doorway-leaves"
    :plans [{:id "hut" :metadata {:by "ProbePlanSeal"}
