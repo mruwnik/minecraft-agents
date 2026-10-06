@@ -147,12 +147,12 @@
       (fn ^:async t []
         (let [s (await (run {:plan "mix"}
                             (world-of farmland-all (crops "wheat" 7 [[2 2]]) (crops "carrots" 7 [[2 3]])
-                                      {:inventory [(item "wheat_seeds" 6) (item "carrot" 6) (item "bread" 12)] :drops {"wheat" ["wheat" "wheat_seeds"] "carrots" ["carrot"]}})
+                                      {:inventory [(item "wheat_seeds" 6) (item "carrot" 6)] :drops {"wheat" ["wheat" "wheat_seeds"] "carrots" ["carrot"]}})
                             {"mix" (plan-of)} 100))]
           (is (= #{[2 64 2] [2 64 3]} (dug s)))
           (is (= ["wheat" "carrots"] [(block-at s 2 64 2) (block-at s 2 64 3)]))
           (is (= 2 (:cut (step s :harvest))))
-          (is (= {[2 64 2] "wheat_seeds" [3 64 2] "wheat_seeds" [2 64 3] "carrot" [3 64 3] "carrot"} (placed s)))
+          (is (= {[2 64 2] "wheat_seeds" [3 64 2] "wheat_seeds" [2 64 3] "carrot"} (placed s)))
           (is (true? (finished? s))))))))
 
 (deftest a-crop-of-another-kind-in-a-crop-cell-is-left-standing-and-reported

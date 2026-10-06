@@ -14,8 +14,9 @@
 
 (def doc
   "Take a kit out of the chest: :spare + 1 of each tool kind in :tools, and :food food items (by default enough to
-  hold the 3-day food reserve, jobs.lib.cost/food-reserve, counted by the real hunger points of the chest food). A name is of a tool
-  kind when it equals it or ends in _kind. Any tier counts, the best tier and best food are taken first. Food is
+  hold the 3-day food reserve, jobs.lib.cost/food-reserve, counted by the real hunger points of the chest food).
+  A name is of a tool kind when it equals it or ends in _kind. Any tier counts, the best tier and best food are
+  taken first. Food is
   any name in the eat table.
   Each round works out the needs from the inventory and the plan from the inspected chest, and hands the plan to
   jobs.storage.withdraw as carry-at-least targets.
@@ -331,6 +332,7 @@
         (if (keyword? stacks)
           stacks
           (let [inv (u/inventory (:primitives c))
+                still (needs inv a stacks)
                 [mem call] (plan-call (ctx/mem c) a still stacks inv chest)]
             (ctx/update-mem! c merge (select-keys mem craft-keys))
             (if (nil? call)
@@ -382,7 +384,7 @@
                                                  (merge (select-keys a [:ignore-zones?]) {:chest chest :items take})))
                         res (when (= :done r) (ctx/child-result c :take))]
                     (cond
-                      (= :refused (:reason res)) (refused! c res (merge (into {} still) short))
-                      (:gave-up res) (do (ctx/result! c {:gave-up true :reason (:reason res) :short (merge (into {} still) short)})
+                      (= :refused (:reason res)) (refused! c res (merge (into {} (needs inv a stacks)) short))
+                      (:gave-up res) (do (ctx/result! c {:gave-up true :reason (:reason res) :short (merge (into {} (needs inv a stacks)) short)})
                                          :done)
                       :else (do (when (= :done r) (u/progress! c)) :continue))))))))))))

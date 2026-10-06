@@ -27,7 +27,7 @@
   which seed was there. A restart or reflex in between loses nothing.
   :plan (optionally :part) makes the plan's crop cells the field instead (:radius and :center are then unused).
   The plan is read again every round. A cell is cut only when ripe and holding the crop the plan wants there.
-  Crops outside the plan are left standing. Every planned cell standing bare owes the planned crop's seed.
+  Crops outside the plan are left standing. Every planned cell standing bare owes the planned crop's seed (only the cells it cut with :replant-bare false).
   The job declines (one harvest.declined warn naming the plan and the reason) while the plan is missing,
   unreadable or has no crop cells.
   Zones: a crop or bare cell in another owner's zone or claim, or in another plan's footprint, is left alone.
@@ -38,6 +38,7 @@
   {:radius {:doc "how far around the centre to harvest, in blocks" :default 12}
    :center {:doc "centre of the field; the body's position when the job first runs when nil" :type :pos :default nil}
    :replant {:doc "replant what was cut" :default true}
+   :replant-bare {:doc "with :plan, also sow the planned cells that stood bare before; false: only the cells this run cut" :default true}
    :crops {:doc "crop block names to cut; all known crops when nil" :default nil}
    :give-up {:doc "unreachable crops after which cutting stops" :default 4}
    :reach {:doc "cells whose centre is this close to the eye (dig and place accept 4.5) are worked without walking, in blocks" :default 4.2}
@@ -280,7 +281,7 @@
 (defn sowable
   "The planned bare cells whose seed is carried, unless replanting is off or the cell was given up."
   [c]
-  (when (:replant (:args c))
+  (when (and (:replant (:args c)) (:replant-bare (:args c)))
     (let [have (carried-names (:primitives c))
           given-up (set (:bare (ctx/mem c)))]
       (->> (planned-bare (:primitives c) (:plan-cells c))
@@ -315,7 +316,7 @@
     (boolean
      (and (not (:trouble field))
           (or (:center m)
-              (if field (seq (sowable c)) (seq (:replant m)))
+              (if field (or (seq (sowable c)) (seq (:replant m))) (seq (:replant m)))
               (:collect m)
               (and (cutting? c) (seq (ripe-of c (:skipped m))))
               (and (not field) (blind? c)))))))
@@ -494,7 +495,8 @@
   [c]
   (when (and (:plan-cells c) (:replant (:args c)))
     (let [m (ctx/mem c)
-          synced (sync-debts m (planned-bare (:primitives c) (:plan-cells c)))]
+          bare (when (:replant-bare (:args c)) (planned-bare (:primitives c) (:plan-cells c)))
+          synced (sync-debts m bare)]
       (when (not= (:replant m) (:replant synced))
         (ctx/update-mem! c assoc :replant (:replant synced))))))
 

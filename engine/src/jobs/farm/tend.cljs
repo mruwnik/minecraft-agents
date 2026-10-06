@@ -391,7 +391,7 @@
     {:skip :no-ripe}
     {:call {:slot :harvest :job (jobs :harvest)
             :args (if plan
-                    {:plan plan :part part :replant false}
+                    {:plan plan :part part :replant true :replant-bare false}
                     {:center mid :radius radius :replant true})}}))
 
 (defn decide-till
