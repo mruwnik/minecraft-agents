@@ -13,7 +13,7 @@
   {"fall" "fall" "fly_into_wall" "fall" "stalagmite" "fall"
    "in_fire" "fire" "on_fire" "fire" "campfire" "fire" "hot_floor" "fire"
    "lava" "lava"
-   "drown" "drowning"
+   "drown" "drowning" "in_wall" "suffocation" "cramming" "cramming"
    "starve" "starvation"
    "explosion" "explosion" "player_explosion" "explosion"
    "out_of_world" "void"

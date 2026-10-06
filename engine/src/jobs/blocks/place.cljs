@@ -14,8 +14,6 @@
   - {:reason :need :item name :pos} or {:reason :need :any-of [names] :pos}: the item is not carried.
   - {:reason :not-allowed :pos :by :zone|:claim|:footprint|:no-zones ...}: zones, claims or another plan's
     footprint refuse the place. :for-plan's own footprint does not. :ignore-zones? skips the rule.
-  - {:reason :occupied :pos :block name}: a block that is neither air, a fluid, a plant nor a snow layer fills
-    the cell.
   - {:reason :own-body :pos}: the body stands in the cell.
   - {:reason :no-support :pos}: no solid neighbour to place against.
   - {:reason :unreachable :pos :why kw}: the go-to child gave up. The wait lasts while the body stands where it
@@ -96,6 +94,13 @@
     (access/may? (assoc in :block-at (fn [cell] (let [n (block-at cell)] (if (and (= cell at) (b/clearable n)) "air" n))))
                  :place pos)))
 
+(defn occupied-by
+  "The name of the block that fills pos and cannot be replaced (not the item wanted), or nil."
+  [c pos items]
+  (let [block (u/block-name (:primitives c) pos)
+        v (when block (place-verdict c pos))]
+    (when (and block (not (some #{block} items)) (= :not-replaceable (:reason v))) block)))
+
 (defn problem
   "Why the job cannot run now: a wait reason map (see doc), or nil. Bad args and a cell already holding the block
   pass: the round ends them."
@@ -111,7 +116,7 @@
           (= :not-loaded (:reason v)) {:reason :not-loaded :pos pos}
           (b/not-allowed pos v) (b/not-allowed pos v)
           (= :own-body (:reason v)) {:reason :own-body :pos pos}
-          (= :not-replaceable (:reason v)) {:reason :occupied :pos pos :block block}
+          (= :not-replaceable (:reason v)) nil
           (not (:ok v)) {:reason (:reason v) :pos pos}
           :else (or (when-let [n (needs c items)] (assoc n :reason :need :pos pos))
                     (when-not (support? p pos) {:reason :no-support :pos pos})
@@ -154,8 +159,10 @@
           :done)
       (let [_ (when-not (= pos (:for (ctx/mem c))) (ctx/update-mem! c b/fresh-mem pos))
             block (u/block-name (:primitives c) pos)
-            r (when-not (some #{block} items) (await (fetch/step! c 'jobs.blocks.place (problem c))))]
+            full (occupied-by c pos items)
+            r (when-not (or full (some #{block} items)) (await (fetch/step! c 'jobs.blocks.place (problem c))))]
         (cond
+          full (finish! c {:placed false :pos pos :reason :occupied :block full})
           r r
           (some #{block} items) (finish! c {:placed false :pos pos :item block :reason :already})
           (b/clearable block) (await (clear! c pos))

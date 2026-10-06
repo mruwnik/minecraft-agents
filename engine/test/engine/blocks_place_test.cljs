@@ -68,12 +68,13 @@
         (is (= {:reason :need :any-of ["cobblestone" "dirt"] :pos at}
                (await (bd/waiting-after (bd/setup {:self body}) (list job {:pos at :any-of ["cobblestone" "dirt"]}) 3))))))))
 
-(deftest a-solid-block-in-the-cell-waits-occupied
+(deftest a-solid-block-in-the-cell-ends-occupied
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [env (bd/setup {:self body :blocks {"2,64,0" "stone" "2,63,0" "stone"} :inventory cobble})]
-          (is (= {:reason :occupied :pos at :block "stone"} (await (bd/waiting-after env (list job {:pos at :item "cobblestone"}) 3))))
+          (let [r (await (bd/child-outcome (:eng env) job {:pos at :item "cobblestone"} 5))]
+            (is (= {:placed false :reason :occupied :block "stone"} (select-keys r [:placed :reason :block]))))
           (is (empty? (bd/calls (:p env) "dig"))))))))
 
 (deftest a-cell-in-anothers-zone-waits-not-allowed-and-ignore-zones-records-it
