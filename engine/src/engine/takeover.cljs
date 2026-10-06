@@ -104,12 +104,11 @@
           #js {:status (:status reply) :json (clj->js (:json reply))})))))
 
 (defn tick!
-  "Time passing for the lease: apply what lease/tick decides (idle, offline, due holds, the dead-man). A listed slot job
-  that has not failed (running or waiting) counts as the driver's activity and beats the lease."
+  "Time passing for the lease: apply what lease/tick decides (idle, offline, due holds, the dead-man). A slot round in
+  flight counts as the driver's activity and beats the lease."
   [eng opts]
-  (when-let [id (core/manual-job eng)]
-    (when-not (contains? (:failed (core/state eng)) id)
-      (swap! (:manual eng) #(some-> % (assoc :last-beat (core/now eng))))))
+  (when (:id (core/running eng))
+    (swap! (:manual eng) #(some-> % (assoc :last-beat (core/now eng)))))
   (let [{:keys [lease effects]} (lease/tick @(:manual eng) (core/now eng) (world-of eng) opts)]
     (run! #(apply-effect! eng %) effects)
     (store! eng lease)))

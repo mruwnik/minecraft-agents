@@ -1,6 +1,7 @@
 (ns engine.manual-slot-test
   "Manual control runs one slot: the driver's job. No trigger, no loop; a new driver job replaces the slot's;
-  others' jobs wait in the normal queue; release cancels the slot. The slot job beats the lease."
+  others' jobs wait in the normal queue; release cancels the slot. The slot job gets one call and leaves the slot
+  whatever it returns; only a round in flight beats the lease."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.events :as events]
@@ -17,10 +18,13 @@
   (await (.moveTo (:primitives c) (:token c) #js {:pos #js {:x 5 :y 64 :z 0}}))
   :done)
 
+(defn ctx-wait [c] (reset! (:wait c) {:reason :no-tool :need :axe}))
+
 (def jobs
   (merge registry/jobs
          {'walk {:check (constantly true) :round walk-round}
           'spin {:check (constantly true) :round (fn [_] :continue)}
+          'blocked {:check (fn [c] (ctx-wait c) false) :round (fn [_] :done)}
           'boom {:check (constantly true) :round (fn [_] (throw (js/Error. "boom")))}
           'nop {:check (constantly true) :round (fn [_] :done)}}))
 
@@ -102,32 +106,39 @@
           (await (core/tick! eng))
           (is (= ["j1" "j2"] (ran seen)) "both run in order once the lease ends"))))))
 
-(deftest a-new-driver-job-replaces-the-running-one
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen]} (setup)]
-          (takeover/take! eng me)
-          (submit-as eng "claude" '(spin))
-          (await (core/tick! eng))
-          (is (= ["j1"] (ran seen)))
-          (submit-as eng "claude" '(nop))
-          (is (= ["j2"] (:list (core/state eng))) "the first job is cancelled, the second listed")
-          (is (= [["j1" "claude"]] (mapv (juxt :job :by) (kinds seen :cancelled))))
-          (await (core/tick! eng))
-          (is (= ["j1" "j2"] (ran seen)))
-          (is (empty? (:list (core/state eng)))))))))
+(deftest a-new-driver-job-replaces-the-listed-one
+  (let [{:keys [eng seen]} (setup)]
+    (takeover/take! eng me)
+    (submit-as eng "claude" '(spin))
+    (submit-as eng "claude" '(nop))
+    (is (= ["j2"] (:list (core/state eng))) "the first job is cancelled, the second listed")
+    (is (= [["j1" "claude"]] (mapv (juxt :job :by) (kinds seen :cancelled))))))
 
-(deftest a-continuing-slot-job-runs-again-each-tick
+(deftest a-continuing-slot-job-ends-stopped-yielded-after-one-call
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (setup)]
+        (let [{:keys [eng seen] :as s} (setup)]
           (takeover/take! eng me)
           (submit-as eng "claude" '(spin))
           (await (core/tick! eng))
-          (await (core/tick! eng))
-          (is (= ["j1" "j1"] (ran seen))))))))
+          (is (empty? (:list (core/state eng))) "left the slot")
+          (is (nil? (core/manual-job eng)))
+          (is (= [:yielded] (mapv #(:reason %) (kinds seen :stopped))))
+          (is (nil? (core/tick! eng)) "then the body idles")
+          (is (= ["j1"] (ran seen)))
+          (is (true? (owns? s (token eng)))))))))
+
+(deftest a-slot-job-whose-check-fails-ends-at-once-with-the-checks-reason
+  (let [{:keys [eng seen]} (setup)]
+    (takeover/take! eng me)
+    (submit-as eng "claude" '(blocked))
+    (is (nil? (core/tick! eng)) "no round starts")
+    (is (empty? (:list (core/state eng))))
+    (is (empty? (ran seen)))
+    (let [[e] (kinds seen :stopped)]
+      (is (= :no-tool (:reason e)))
+      (is (= :axe (:need e))))))
 
 (deftest no-trigger-is-evaluated-while-a-slot-job-runs-and-a-reflex-end-is-deferred
   (async done
@@ -141,12 +152,6 @@
           (await (core/tick! eng))
           (await (core/tick! eng))
           (is (= 0 @probes) "no trigger evaluated during the slot job's ticks"))))))
-
-(deftest drive-set-409s-while-a-slot-job-waits-between-rounds
-  (let [{:keys [eng]} (setup)]
-    (takeover/take! eng me)
-    (submit-as eng "claude" '(nop))
-    (is (= "job-running" (:reason (drive-set eng))))))
 
 (deftest drive-stop-cancels-a-waiting-slot-job-and-set-works-after
   (let [{:keys [eng]} (setup)]
@@ -248,13 +253,13 @@
           (takeover/tick! eng opts)
           (is (false? (core/manual? eng))))))))
 
-(deftest a-waiting-slot-job-keeps-the-lease-alive
+(deftest a-listed-slot-job-not-yet-running-does-not-keep-the-lease-alive
   (let [{:keys [eng clock]} (setup)]
     (takeover/handle eng opts "POST" "/drive" #js {:op "take" :who "claude" :why "x" :idleS 5} nil)
     (submit-as eng "claude" '(spin))
     (swap! clock + 20000)
     (takeover/tick! eng opts)
-    (is (true? (core/manual? eng)))))
+    (is (false? (core/manual? eng)))))
 
 (deftest drive-stop-cancels-the-running-slot-job-and-stops-the-body
   (async done

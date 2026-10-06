@@ -1,7 +1,7 @@
 (ns engine.core.settle
   "Settling a round: booking a listed job's or a reflex job's outcome, judging reflex ends against the
   entry's persistence, and starting a round."
-  (:require [engine.core.base :refer [drop-instance! drop-reflex-job! emit! free-owner! job-fields manual? now paused? reflex-text remove-listed running save-memory! set-owner! state stopped-result? wait-reason waiting-text]]
+  (:require [engine.core.base :refer [drop-instance! drop-reflex-job! emit! free-owner! job-fields manual-job manual? now paused? reflex-text remove-listed running save-memory! set-owner! state stopped-result? wait-reason waiting-text]]
             [engine.core.attention :refer [request-attention! resolve-job-attention!]]
             [engine.core.fruitless :refer [book-round! note-fruitless!]]
             [engine.core.register :refer [trigger-holds?]]
@@ -32,7 +32,20 @@
       (:child (meta before))
       (swap! (:waiting eng) dissoc id))))
 
-(defn settle-listed! [eng {:keys [id]} {:keys [status error result child-wait]}]
+(defn end-slot!
+  "The driver's slot job gets one call and leaves the slot: unlisted, one job.stopped with reason (a check's reason, or
+  :yielded for a round that returned :continue or :declined) plus the wait map w it gave, if any."
+  [eng id reason w]
+  (let [data (merge {:status :stopped :reason reason} (when w (dissoc w :reason)))]
+    (resolve-job-attention! eng id :job-completed #(remove-listed % id))
+    (swap! (:waiting eng) dissoc id)
+    (swap! (:fruitless eng) dissoc id)
+    (mem/delete-job! (:store eng) id)
+    (emit! eng (merge (job-fields eng id)
+                      {:source :job :kind :stopped :level :warn :attention :notice
+                       :data data :text (stopped-text data)}))))
+
+(defn settle-listed-job! [eng {:keys [id]} {:keys [status error result child-wait]}]
   (note-child-wait! eng id status child-wait)
   (let [idx (.indexOf (:list (state eng)) id)
         fields (job-fields eng id)]
@@ -68,6 +81,15 @@
       (do (swap! (:state eng) assoc :cursor (inc idx) :current nil)
           (emit! eng (merge (job-fields eng id)
                             {:source :job :kind :yielded :level :debug :status status}))))))
+
+(defn settle-listed!
+  "Book a listed job's round. The driver's slot job gets one call: a round that returned :continue or :declined ends
+  it as stopped (see end-slot!), whatever else it returned is booked as for any listed job."
+  [eng {:keys [id] :as run} {:keys [status child-wait] :as outcome}]
+  (if (and (= id (manual-job eng)) (#{:continue :declined} status))
+    (end-slot! eng id (if (= :declined status) (or (:reason child-wait) :declined) :yielded)
+               (when (= :declined status) child-wait))
+    (settle-listed-job! eng run outcome)))
 
 (defn judge-end!
   "Classify a reflex end now and apply the entry's persistence when its trigger

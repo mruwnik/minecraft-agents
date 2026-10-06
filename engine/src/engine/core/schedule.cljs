@@ -7,7 +7,7 @@
             [engine.core.activity :refer [check-idle!]]
             [engine.core.list-edits :refer [submit!]]
             [engine.core.round :refer [check-ctx]]
-            [engine.core.settle :refer [judge-deferred-ends! start-round!]]
+            [engine.core.settle :refer [end-slot! judge-deferred-ends! start-round!]]
             [engine.expr :as expr]
             [engine.memory :as mem]))
 
@@ -95,15 +95,18 @@
     (save-memory! eng)))
 
 (defn tick-manual!
-  "One pass under manual control: no trigger, no loop. Only the driver's slot job runs (a round per tick until it
-  ends); with it gone the body idles."
+  "One pass under manual control: no trigger, no loop. The driver's slot job gets one call (see settle/end-slot!): a
+  failing check ends it at once with the check's reason. With it gone the body idles."
   [eng]
   (housekeep! eng)
   (if (running eng)
     (check-idle! eng)
     (when-let [id (manual-job eng)]
-      (when (and (not (contains? (:failed (state eng)) id)) (check-passes? eng id))
-        (start-round! eng id)))))
+      (when-not (contains? (:failed (state eng)) id)
+        (if (check-passes? eng id)
+          (start-round! eng id)
+          (do (end-slot! eng id (:reason (waiting eng id) :not-ready) (waiting eng id))
+              nil))))))
 
 (defn tick-online!
   "One scheduling pass for a body that is on the server."
