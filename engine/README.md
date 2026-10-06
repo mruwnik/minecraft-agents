@@ -596,7 +596,7 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 | `survival.unwedge` | Steps out of a full block at the feet cell, else digs it, all in one run (stopped + warn `unwedge.blocked` for bedrock or three failed digs); `:ignore-zones?` lifts the zone check |
 | `maintenance.unstick`, `maintenance.shut-doors` | Walk to the stuck job's goal with go-to in one run (stopped + warn `unstick.failed` when it does not arrive; `:ignore-zones?` goes on to go-to's escalation); shut every door a walk left open in one run (stopped `:left` with the reasons when any stays open) |
 | `combat.attack` `{:targets :radius :absent :done}` | Kills named targets (ids, usernames, mob types); ends `:cleared`, `:gave-up`, `:lost`, `:timeout` or `:absent`. `:absent :wait` makes a standing guard |
-| `combat.hunt`, `animals.cull` | Kill adults of a mob kind, never the last `:keep`, and collect drops |
+| `combat.hunt`, `animals.cull` | Kill adults of a mob kind, never the last `:keep`, and collect drops; skips animals in another's zone (`:ignore-zones?`) |
 
 **Gathering, items and storage**
 
@@ -617,7 +617,7 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 | job | what it does |
 |---|---|
 | `farm.till`, `plant`, `harvest`, `fertilize` (crops, or open grass with `:grass`; bone meal is fetched unless `:fetch false`), `compost`, `tidy`, `find-spot`, `tend` | Field work; `tend` keeps one field in order |
-| `animals.breed`, `leash`, `unleash`, `lead-to`, `herd`, `shear`, `pen-check`, `shut-gate` (shuts every open planned gate in one run; stopped `:left` when any stays open), `tend` | Animal care; `tend` keeps one pen in order |
+| `animals.breed`, `leash`, `unleash`, `lead-to`, `herd`, `shear`, `pen-check`, `shut-gate` (shuts every open planned gate in one run; stopped `:left` when any stays open), `tend` | Animal care; `tend` keeps one pen in order; `cull`, `shear`, `breed`, `leash` (so `lead-to`, `herd`) skip animals in another's zone or claim (`:ignore-zones?`) |
 | `apiary.guard`, `harvest`, `maintain` | Keep campfire columns, take honey, keep an apiary in order; fires and hives come from what the body has seen (harvest looks around once when it knows none) |
 | `build.from-plan`, `pen`, `rail-line`, `clear-box` | Build what a plan wants; build a pen's fence or a rail line; dig out a box |
 | `blocks.dig`, `blocks.place` | One block at `:pos`, one call = the whole attempt (fetch, one go-to walk, act, collect own drops); dig holds the best suited tool; `:on-fluid :fail` ends a dig beside water at once (default `:wait`). Out of reach after two walks, or a zone/hazard that appears mid-call, declines (the check waits); a missing tool/item after the fetch declines; fluid, bedrock, a refused primitive, an occupied cell end stopped |
