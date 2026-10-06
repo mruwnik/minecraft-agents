@@ -8,6 +8,22 @@ const REASON = 'Tests run only via mcp__live-tests__run_tests; a refusal means w
 const SUITE_REASON = 'use suite engine / world (live-tests runs different args of one suite in parallel)'
 const DEPRECATED_SUITES = new Set(['engine-2', 'engine-3', 'world-2', 'world-3', 'world-4'])
 
+// Index of the closing ` or ) of the substitution starting at cmd[i] (cmd.length when unclosed).
+function substitutionEnd(cmd, i) {
+  if (cmd[i] === '`') {
+    for (let j = i + 1; j < cmd.length; j++) {
+      if (cmd[j] === '\\') j++
+      else if (cmd[j] === '`') return j
+    }
+    return cmd.length
+  }
+  for (let j = i + 2, depth = 1; j < cmd.length; j++) {
+    if (cmd[j] === '(') depth++
+    else if (cmd[j] === ')' && --depth === 0) return j
+  }
+  return cmd.length
+}
+
 // Split a command line into segments of unquoted words. Separators (; && || | newline, $( and
 // backtick) only count outside quotes, so quoted text such as grep 'a; pkill' stays one word.
 export function segments(cmd) {
@@ -17,12 +33,20 @@ export function segments(cmd) {
   const endSeg = () => { endWord(); if (words.length) segs.push(words); words = [] }
   for (let i = 0; i < cmd.length; i++) {
     const c = cmd[i]
+    if (quote === '"' && (c === '`' || (c === '$' && cmd[i + 1] === '('))) {
+      // substitution inside double quotes runs a command: judge its text as its own segments
+      const end = substitutionEnd(cmd, i)
+      segs.push(...segments(cmd.slice(i + (c === '`' ? 1 : 2), end)))
+      i = end
+      continue
+    }
     if (quote) {
       if (c === quote) quote = null
       else if (c === '\\' && quote === '"' && i + 1 < cmd.length) word += cmd[++i]
       else word += c
       continue
     }
+    if (c === '$' && cmd[i + 1] === "'") continue // $'..' is quoting, not a variable
     if (c === "'" || c === '"') { quote = c; has = true; continue }
     if (c === '\\' && i + 1 < cmd.length) { word += cmd[++i]; has = true; continue }
     if (c === '<' && cmd[i + 1] === '<' && cmd[i + 2] !== '<') {
@@ -53,9 +77,10 @@ export function segments(cmd) {
 
 const base = (w) => w.split('/').pop()
 const ASSIGN = /^[A-Za-z_]\w*=/
-const WRAPPERS = new Set(['env', 'nohup', 'sudo', 'time', 'exec', 'command', 'nice', 'timeout', 'xargs'])
+const WRAPPERS = new Set(['env', 'nohup', 'sudo', 'time', 'exec', 'command', 'nice', 'timeout', 'xargs', 'setsid', 'stdbuf', 'ionice', 'doas', 'unbuffer', 'builtin', 'busybox', 'toybox'])
 // Options of each wrapper that take a separate argument word.
 const ARG_OPTS = {
+  exec: ['-a'], ionice: ['-c', '-n', '-p', '-P', '-u'], stdbuf: ['-i', '-o', '-e'], doas: ['-u', '-C'], setsid: [],
   sudo: ['-u', '-g', '-h', '-p', '-C', '-r', '-t', '-U', '-D', '-R'], env: ['-u', '-C', '-S'],
   timeout: ['-s', '-k'], nice: ['-n'], xargs: ['-n', '-I', '-P', '-L', '-d', '-E', '-s', '-a', '-l', '-i'],
 }
@@ -87,6 +112,7 @@ function blockedWords(words, relax = false) {
   if (!w.length) return false
   const cmd = base(w[0]), args = w.slice(1)
   if (cmd === 'pkill' || cmd === 'killall') return true
+  if (cmd === 'eval') return blockedCommand(args.join(' '), relax)
   if (RAW_RUNNERS.has(cmd)) return !relax
   if (cmd === 'find') {
     const i = args.findIndex((a) => ['-exec', '-execdir', '-ok', '-okdir'].includes(a))
