@@ -4,6 +4,7 @@
 // getBot at each call, so a reconnect is followed (the block-change listener moves to the new bot on the next call).
 import prismarineBlock from 'prismarine-block'
 import { sectionIds } from './path/snapshot.mjs'
+import { blocksSight } from './sight.mjs'
 import { columnLightSection, hasSkyLight } from './view.mjs'
 
 export const UNLOADED = -1
@@ -13,18 +14,12 @@ const EPOCH_RANGE = 50 // a block update or chunk change this near the body (a l
 const hereY = bot => bot?.entity?.position?.y ?? 0
 const LIGHT_TTL_MS = 1000 // light changes arrive without an event: a light copy is re-read after this long
 
-// Same rule as primitives.mjs canSee: a full collision box blocks sight unless it is one of these.
-export const SEE_THROUGH = /glass|fence|^iron_bars$|^water$|^fire$|grass$|^snow$|^vine$|^ladder$|torch$/
-// Opaque to the eye although they have no collision box: nothing is seen through a lava lake or powder snow.
-export const OPAQUE_WITHOUT_BOX = /^(lava|powder_snow)$/
-
 // Uint8Array over state ids: 1 where the state blocks sight.
 export function sightTable (registry) {
   const size = registry.blocksArray.reduce((m, b) => Math.max(m, b.maxStateId), 0) + 1
   const out = new Uint8Array(size)
   for (const block of registry.blocksArray) {
-    const blocks = OPAQUE_WITHOUT_BOX.test(block.name) || (block.boundingBox === 'block' && !SEE_THROUGH.test(block.name))
-    if (!blocks) continue
+    if (!blocksSight(block)) continue
     out.fill(1, block.minStateId, block.maxStateId + 1)
   }
   return out

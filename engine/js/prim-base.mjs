@@ -21,7 +21,6 @@ export const CONTAINER = /chest|barrel|shulker_box|furnace|smoker|hopper|dispens
 export const DESTS = ['hand', 'off-hand', 'head', 'torso', 'legs', 'feet']
 export const DEFAULT_RADIUS = 16
 export const HIT_RANGE = 6 // melee reach checked by entities: hittable is reported within it
-export const SEE_THROUGH = /glass|fence|^iron_bars$|^water$|^fire$|grass$|^snow$|^vine$|^ladder$|torch$|^lava$|_bed$/
 export const KINDS = ['hostile', 'passive', 'player', 'item', 'other']
 export const OFFLINE_DEFAULT_MS = 5 * 60 * 1000
 export const OFFLINE_MAX_MS = 10 * 60 * 1000

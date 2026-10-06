@@ -181,3 +181,8 @@ test('epoch counts block updates and chunk loads and unloads, not reads', () => 
   bot.emit('chunkColumnUnload', new Vec3(320, 0, 0))
   assert.equal(raw.epoch(), e0 + 2)
 })
+
+test('sightTable lets sight pass beds, as the entity sight check does', () => {
+  const table = sightTable(registry)
+  assert.deepEqual(['red_bed', 'white_bed'].map(n => table[id(n)]), [0, 0])
+})

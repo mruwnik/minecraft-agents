@@ -1,13 +1,13 @@
 // Why JavaScript: Mineflayer boundary; the one adapter that calls Mineflayer and the pathfinder, with tick-bound policy that lives inside their event loops.
 // Sensing for the primitives: self, entities, blocks and the settling state of a body.
 
-import { lineClear, rayClear } from './sight.mjs'
+import { lineClear, rayClear, blocksSight } from './sight.mjs'
 import { stateProperties } from './use-on.mjs'
 import { mobFields } from './interact.mjs'
 import { leashFields } from './leash.mjs'
 import { liveEntities } from './live-entities.mjs'
 import { vehicleFields, selfVehicle } from './vehicle.mjs'
-import { RAIN_LEVEL, THUNDER_LEVEL, DEFAULT_RADIUS, HIT_RANGE, SEE_THROUGH, xyz, dist, isAir, cell, vec, entityKind, burning, lyingDown, droppedItem } from './prim-base.mjs'
+import { RAIN_LEVEL, THUNDER_LEVEL, DEFAULT_RADIUS, HIT_RANGE, xyz, dist, isAir, cell, vec, entityKind, burning, lyingDown, droppedItem } from './prim-base.mjs'
 
 export function createSense (env) {
   const { here, eye, inventory, isOffline, equipment, timeScale, settleMs } = env
@@ -88,14 +88,10 @@ export function createSense (env) {
     }
   }
 
-  // Whether a block stops the eye: a full-cube bounding box, except glass. An unloaded cell never blocks, so a
-  // threat is not hidden by a gap in the map.
-  const blocksSight = p => {
-    const block = env.bot.blockAt(vec(p))
-    return Boolean(block) && block.boundingBox === 'block' && !SEE_THROUGH.test(block.name)
-  }
+  // An unloaded cell never blocks, so a threat is not hidden by a gap in the map.
+  const cellBlocksSight = p => blocksSight(env.bot.blockAt(vec(p)))
   // eye to the middle of the entity; the walk is bounded by that segment, which the caller keeps within its radius
-  const canSee = e => lineClear(eye(), { x: e.position.x, y: e.position.y + (e.height ?? 1.8) / 2, z: e.position.z }, blocksSight)
+  const canSee = e => lineClear(eye(), { x: e.position.x, y: e.position.y + (e.height ?? 1.8) / 2, z: e.position.z }, cellBlocksSight)
 
   // collision boxes of a cell, for melee: a block's shapes when it is solid; an unloaded cell has none
   const shapesAt = p => {

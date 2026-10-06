@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { lineClear, rayClear } from './sight.mjs'
+import { lineClear, rayClear, blocksSight } from './sight.mjs'
 
 const pt = ([x, y, z]) => ({ x, y, z })
 const solidSet = (...cells) => { const s = new Set(cells); return ({ x, y, z }) => s.has(`${x},${y},${z}`) }
@@ -39,3 +39,9 @@ for (const [name, from, to, shapes, clear] of [
 ]) {
   test(`rayClear: ${name}`, () => assert.equal(rayClear(pt(from), pt(to), shapes), clear))
 }
+
+test('blocksSight: lava blocks, beds and glass do not, a full stone does', () => {
+  const full = name => ({ name, boundingBox: 'block' })
+  const none = name => ({ name, boundingBox: 'empty' })
+  assert.deepEqual([full('stone'), none('lava'), full('red_bed'), full('glass'), null].map(b => blocksSight(b)), [true, true, false, false, false])
+})

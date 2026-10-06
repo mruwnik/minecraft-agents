@@ -1,6 +1,13 @@
 // Line of sight over a block grid: Amanatides-Woo traversal of the cells a segment passes through.
 // Shared by primitives.mjs (real blocks) and engine.fake (fake cells) so both agree on what blocks sight.
 
+// What stops the eye, shared by the entity check (prim-sense canSee) and block memory (raw-world sightTable): a full
+// collision box blocks unless it is one of these (beds are 9/16 high); lava and powder snow have no box but are opaque.
+export const SEE_THROUGH = /glass|fence|^iron_bars$|^water$|^fire$|grass$|^snow$|^vine$|^ladder$|torch$|_bed$/
+export const OPAQUE_WITHOUT_BOX = /^(lava|powder_snow)$/
+export const blocksSight = block => Boolean(block) &&
+  (OPAQUE_WITHOUT_BOX.test(block.name) || (block.boundingBox === 'block' && !SEE_THROUGH.test(block.name)))
+
 // Blocks the segment from `from` to `to` ({x, y, z}, world coordinates) crosses are asked of `solidAt({x, y, z})`
 // with integer cell coordinates. The start and end cells never count (the body's own cell, the target's cell).
 // True when no crossed cell is solid. The walk is bounded by the segment, so its length is the cap.
