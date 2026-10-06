@@ -31,7 +31,7 @@
   (.override (.-world p) "place"
              (fn ^:async g [tok a impl]
                (let [r (await (impl tok a))]
-                 (when (= item (.-item a)) (f (fake/state p) a))
+                 ((get {item f} (.-item a) (fn [& _])) (fake/state p) a)
                  r))))
 
 (defn on-wait!
@@ -421,7 +421,7 @@
                                       :blocks (floor 6)})]
           ;; the fire burns on after the pour (the server has not put it out yet); a hostile cuts the wait
           (on-place! p "water_bucket" (fn [s _] (swap! s assoc-in [:self :onFire] true)))
-          (on-wait! p (fn [n _] (when (= n 1) (core/cut! eng (core/holder eng) :test nil))))
+          (on-wait! p (fn [n _] ((get {1 #(core/cut! eng (core/holder eng) :test nil)} n (fn [])))))
           (core/submit! eng '(jobs.survival.extinguish) {})
           (await (core/tick! eng))
           (is (= [{:pos {:x 0 :y 64 :z 0}}] (entries eng :extinguish-pour)) "the pour outlives the cut")
@@ -469,21 +469,48 @@
           (is (= :stuck (stopped-reason seen)))
           (is (= 1 (count (of-kind seen :extinguish_stuck)))))))))
 
-(deftest a-pour-left-by-a-cut-run-far-away-is-dropped-not-scooped-from-afar
+(defn ^:async pour-then-flee
+  "A cut run poured at the origin, then the body (out of the fire) stands at x blocks away; runs to the end."
+  [x]
+  (let [{:keys [eng p seen] :as s} (setup {:self {:onFire true}
+                                           :inventory [{:name "water_bucket" :count 1}]
+                                           :blocks (floor 40)})]
+    (on-place! p "water_bucket" (fn [s _] (swap! s assoc-in [:self :onFire] true)))
+    (on-wait! p (fn [n _] ((get {1 #(core/cut! eng (core/holder eng) :test nil)} n (fn [])))))
+    (core/submit! eng '(jobs.survival.extinguish) {})
+    (await (core/tick! eng))
+    (swap! (fake/state p) assoc-in [:self :onFire] false)
+    (swap! (fake/state p) assoc-in [:self :pos] [x 64 0])
+    (await (run-until-empty eng 3))
+    s))
+
+(deftest a-pour-left-within-scoop-reach-is-scooped-in-place
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:self {:onFire true}
-                                           :inventory [{:name "water_bucket" :count 1}]
-                                           :blocks (floor 40)})]
-          (on-place! p "water_bucket" (fn [s _] (swap! s assoc-in [:self :onFire] true)))
-          (on-wait! p (fn [n _] (when (= n 1) (core/cut! eng (core/holder eng) :test nil))))
-          (core/submit! eng '(jobs.survival.extinguish) {})
-          (await (core/tick! eng))
-          (is (= 1 (count (entries eng :extinguish-pour))))
-          (swap! (fake/state p) assoc-in [:self :onFire] false)
-          (swap! (fake/state p) assoc-in [:self :pos] [30 64 0])
-          (await (run-until-empty eng 3))
-          (is (= [] (:list (core/state eng))))
-          (is (= [] (entries eng :extinguish-pour)) "the entry is gone")
-          (is (= ["water_bucket"] (mapv (comp :item call-args) (calls p "place"))) "no scoop attempted from 30 blocks away"))))))
+        (let [{:keys [eng p seen]} (await (pour-then-flee extinguish/max-scoop-distance))]
+          (is (= [] (entries eng :extinguish-pour)))
+          (is (= ["water_bucket" "bucket"] (mapv (comp :item call-args) (calls p "place"))))
+          (is (= 0 (count (calls p "moveTo"))) "no walk back")
+          (is (= [] (of-kind seen :extinguish.scoop_failed))))))))
+
+(deftest a-pour-left-just-past-scoop-reach-is-walked-back-to-and-scooped
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (await (pour-then-flee (inc extinguish/max-scoop-distance)))]
+          (is (= [] (entries eng :extinguish-pour)))
+          (is (= ["water_bucket" "bucket"] (mapv (comp :item call-args) (calls p "place"))))
+          (is (<= (u/dist (u/pos-of (.-pos (.self p))) {:x 0 :y 64 :z 0}) extinguish/max-scoop-distance) "walked back")
+          (is (= [] (of-kind seen :extinguish.scoop_failed))))))))
+
+(deftest a-pour-left-at-the-walk-back-limit-is-scooped-and-farther-is-dropped
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [near (await (pour-then-flee extinguish/max-return-distance))
+              far (await (pour-then-flee (inc extinguish/max-return-distance)))]
+          (is (= ["water_bucket" "bucket"] (mapv (comp :item call-args) (calls (:p near) "place"))))
+          (is (= ["water_bucket"] (mapv (comp :item call-args) (calls (:p far) "place"))) "no scoop attempted from afar")
+          (is (= [] (entries (:eng far) :extinguish-pour)) "the entry is gone")
+          (is (= 1 (count (of-kind (:seen far) :extinguish.scoop_failed)))))))))

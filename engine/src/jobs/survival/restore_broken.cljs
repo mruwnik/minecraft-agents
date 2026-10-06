@@ -138,12 +138,14 @@
   :not-restored while a cell was not put back (its entry kept unless it changed or was given up)."
   [c]
   (let [{:keys [restored failed seen]} (ctx/mem c)
-        unvisited (count (remove #(contains? (or seen #{}) (:cell %)) (tidy/entries c)))]
+        left (remove #(contains? (or seen #{}) (:cell %)) (tidy/entries c))
+        unvisited (count left)
+        not-restored (into (vec failed) (map (fn [{:keys [cell was]}] {:cell cell :was was :why :unvisited})) left)]
     (doseq [{:keys [cell why]} failed :when (#{:changed :gave-up} why)] (tidy/forget-cell! c cell))
     (when (seq restored)
       (ctx/emit! c :tidy.restored :info {:cells (vec restored) :text (str "restored " (count restored) " broken blocks")}))
-    (when (seq failed)
-      (ctx/emit! c :tidy.not-restored :warn {:cells (vec failed) :text (str (count failed) " broken blocks not restored")}))
+    (when (seq not-restored)
+      (ctx/emit! c :tidy.not-restored :warn {:cells not-restored :text (str (count not-restored) " broken blocks not restored")}))
     (ctx/remember! c :tidy-reported {:cells (mapv :cell (tidy/entries c))} tidy/reported-policy)
     (if (or (pos? unvisited) (seq (remove #(= :changed (:why %)) failed)))
       (result/stop! c :not-restored (str (+ unvisited (count failed)) " broken blocks not restored, " (count restored) " restored")

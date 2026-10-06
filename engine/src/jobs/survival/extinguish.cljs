@@ -16,8 +16,8 @@
      with one extinguish.trespass-last-resort warning.
   2. Once the fire is out, scoops the water back up with the empty bucket so no source block stays.
      It waits (a declared :burning-wait hold) up to 10 quarter seconds for the poured cell to read as water, and up to
-     8 while still burning. A scoop that fails, or a pour left more than 5 blocks away, warns extinguish.scoop_failed
-     with the cell (the entry is dropped).
+     8 while still burning. A pour left more than 4 blocks away is walked back to (one go-to) when within 16 blocks, else dropped.
+     A scoop that fails, or a pour dropped as too far, warns extinguish.scoop_failed with the cell (the entry is dropped).
   3. With no bucket, on fire and with water within :water-radius, walks into the nearest water.
   4. In lava, or with no water in reach, walks to the best nearby cell within :step blocks.
      It must be passable, solid underfoot and not fire, lava, magma or a campfire.
@@ -60,7 +60,9 @@
 ;; solid blocks that do not fall (sand, gravel and concrete powder would drop into the lava)
 (def cover-blocks ["cobblestone" "stone" "dirt" "netherrack" "cobbled_deepslate" "deepslate" "andesite" "diorite" "granite"])
 
-(def max-scoop-distance "A pour left farther than this (a cut run, then a flight) is dropped, not walked back to." 5)
+(def max-scoop-distance "A pour left farther than this (a cut run, then a flight) is walked back to first (a bucket reaches 4.5)." 4)
+(def max-return-distance "A pour left farther than this is dropped with a warn, not walked back to." 16)
+(def max-scoop-return-range "go-to range for the walk back to a pour." 3)
 (def max-pour-waits 8)
 (def max-water-waits 10)
 
@@ -204,6 +206,13 @@
           (do (ctx/update-mem! c assoc :water-waits waits)
               (await (burning-wait! c pour-wait-ms))
               :again)))
+
+      (and (> (u/dist (u/self-pos c) cell) max-scoop-distance)
+           (<= (u/dist (u/self-pos c) cell) max-return-distance)
+           (not (:returned (ctx/mem c))))
+      (do (ctx/update-mem! c assoc :returned true)
+          (await (ctx/call-child c :go 'jobs.movement.go-to {:pos cell :range max-scoop-return-range :escalate false}))
+          :again)
 
       (> (u/dist (u/self-pos c) cell) max-scoop-distance)
       (do (clear-pour! c)

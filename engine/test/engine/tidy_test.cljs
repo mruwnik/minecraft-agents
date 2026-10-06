@@ -568,4 +568,7 @@
             (await (core/tick! eng))
             (is (= [] (:list (core/state eng))))
             (is (= :not-restored (:reason (first (zs/trespass seen :stopped)))) "not :done while a cell waits")
-            (is (= 1 (count (tidy-entries eng))) "the waiting cell keeps its entry")))))))
+            (is (= 1 (count (tidy-entries eng))) "the waiting cell keeps its entry")
+            (let [warns (filterv #(= :tidy.not-restored (:kind %)) @seen)]
+              (is (= 1 (count warns)))
+              (is (= [(:cell (first (tidy-entries eng)))] (mapv :cell (:cells (first warns)))) "the warn lists the unvisited cell"))))))))

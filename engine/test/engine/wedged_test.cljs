@@ -8,7 +8,8 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [triggers.survival.wedged :as wedged]
-            [jobs.survival.breathe :as breathe]))
+            [jobs.survival.breathe :as breathe]
+            [jobs.survival.unwedge :as uw]))
 
 (def unwedge 'jobs.survival.unwedge)
 
@@ -144,7 +145,7 @@
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))))
           (is (= :still-wedged (stopped-reason seen)))
-          (is (= 8 (count (filter #{"dig"} (call-names p)))) "max-passes tries"))))))
+          (is (= uw/max-passes (count (filter #{"dig"} (call-names p)))) "max-passes tries"))))))
 
 (deftest a-cut-stops-the-unwedge-loop
   (async done

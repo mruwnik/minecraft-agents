@@ -481,40 +481,38 @@
           (is (every? nil? (map #(block p %) cells)))
           (is (= 6 (count (:removed @out)))))))))
 
-;; ------------------------------------------------------------------ a blocker at the dig counts toward :give-up
+;; ------------------------------------------------------------------ a failed dig counts toward :give-up
 
-(defn ^:async blocked-at-dig
-  "Cleanup of one dirt block with the rules refusing it at the dig (the checks the dig itself asks, every second call of
-  blocker) for the first refuse-n digs; resolves the run's state."
-  [refuse-n]
-  (let [orig cleanup/blocker
-        calls (atom 0)
-        refused (atom 0)
-        {:keys [eng p out] :as s} (setup {:self {:x 2.5 :y 64 :z 0.5} :blocks (merge (floor -2 5) {"0,64,0" "dirt"})
-                                          :entries [(entry [0 64 0])]})]
-    (with-redefs [cleanup/blocker (fn [in e]
-                                    (if (and (even? (swap! calls inc)) (< @refused refuse-n))
-                                      (do (swap! refused inc) {:reason :hazard :hazards [:lava-adjacent]})
-                                      (orig in e)))]
-      (core/submit! eng '(recording-parent) {})
-      (await (ticks s eng 30)))
+(defn ^:async failing-dig
+  "Cleanup of one dirt block where the world fails the first fail-n digs (a timeout); resolves the run's state."
+  [fail-n]
+  (let [{:keys [eng p out] :as s} (setup {:self {:x 2.5 :y 64 :z 0.5} :blocks (merge (floor -2 5) {"0,64,0" "dirt"})
+                                          :entries [(entry [0 64 0])]})
+        fails (fn ^:async fail [_ _ _] #js {:status "timeout"})
+        real (fn ^:async real [token args impl] (await (impl token args)))
+        digs (atom (concat (repeat fail-n fails) (repeat real)))]
+    (.override (.-world p) "dig"
+               (fn ^:async f [token args impl]
+                 (await ((ffirst (swap-vals! digs rest)) token args impl))))
+    (core/submit! eng '(recording-parent) {})
+    (await (ticks s eng 30))
     {:eng eng :p p :out out}))
 
-(deftest a-blocker-for-one-pass-does-not-hold-the-cell
+(deftest a-failed-dig-for-one-pass-does-not-hold-the-cell
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p out]} (await (blocked-at-dig 1))]
+        (let [{:keys [eng p out]} (await (failing-dig 1))]
           (is (nil? (block p [0 64 0])) "dug on the next pass")
           (is (= [] (the-ledger eng)))
           (is (= [] (:open @out)))
           (is (= #{} (ledger/held-cells (mem/view (:store eng))))))))))
 
-(deftest a-blocker-at-every-dig-holds-the-cell-after-give-up-passes
+(deftest a-failed-dig-every-pass-holds-the-cell-after-give-up-passes
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p out]} (await (blocked-at-dig 99))]
+        (let [{:keys [eng p out]} (await (failing-dig 99))]
           (is (= "dirt" (block p [0 64 0])))
-          (is (= [:hazard] (mapv :reason (:open @out))))
+          (is (= [:dig-failed] (mapv :reason (:open @out))))
           (is (= #{[0 64 0]} (ledger/held-cells (mem/view (:store eng))))))))))
