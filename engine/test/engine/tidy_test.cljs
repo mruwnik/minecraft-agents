@@ -35,6 +35,8 @@
 (def stone (:inventory {:inventory [{:name "stone" :count 2}]}))
 (def zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}})
 
+(def floor (into {} (for [x (range -5 6) z (range -5 6)] [(str x ",63," z) "stone"])))
+
 (def enclosed {"0,65,0" "stone" "0,66,0" "stone"})
 
 (def enclosed-body
@@ -110,7 +112,7 @@
         (doseq [[world entries why kept]
                 [[{:inventory []} [dug] :not-carried 1]
                  [{:inventory [{:name "stone" :count 2}] :self {:health 6}} [dug] :unsafe 1]
-                 [{:inventory [{:name "stone" :count 2}] :entities [zombie]} [dug] :unsafe 1]
+                 [{:inventory [{:name "stone" :count 2}] :entities [zombie] :blocks floor} [dug] :unsafe 1]
                  [{:inventory [{:name "stone" :count 2}] :blocks {"0,65,0" "dirt"}} [dug] :changed 0]]]
           (let [{:keys [eng p seen]} (restore! world [(zs/whole-zone "Miles")] entries)]
             (await (zs/run-until-empty eng 6))
@@ -284,6 +286,7 @@
            [{:blocks {"0,65,0" "dirt"}} [[:tidy dug]] true "changed cell is forgotten by one run"]
            [(assoc with-stone :self {:health 6}) [[:tidy dug]] false "unsafe: health"]
            [(assoc with-stone :entities [zombie]) [[:tidy dug]] false "unsafe: hostile"]
+           [(assoc with-stone :entities [(assoc-in zombie [:pos :x] 5)] :blocks (into {} (for [x [2 3] y [64 65 66]] [(str x "," y ",0") "stone"]))) [[:tidy dug]] true "a walled-off hostile is no danger"]
            [with-stone [] false "no entries"]
            [with-stone [[:tidy (assoc dug :tries tidy/max-tries)] reported] false "given up and reported"]
            [(assoc with-stone :unloaded ["0,65,0"]) [[:tidy dug]] false "cell not loaded"]]]

@@ -374,7 +374,7 @@ An ad hoc `:when` can be a condition: an EDN list read by `engine.condition` aga
 
 - Operators: `and or not < > <= >= =`, `(held-for seconds cond)`, `(known? x)`.
 - Facts: numbers `(health) (food) (inventory "item") (free-slots) (distance-to pos) (blocks-near "name" r) (seen blocks only)
-  (since :kind)`; a position `(place :kind)`; booleans `(daytime) (in-water) (hostile-near r) (burning) (suffocating)
+  (since :kind)`; a position `(place :kind)`; booleans `(daytime) (in-water) (hostile-near r, a real danger) (burning) (suffocating)
   (night-unsafe) (stuck) (wearing "item")`. `(since :kind)` is the seconds since body memory last recorded an unexpired
   entry of that kind (unknown when none).
 - A fact can be unknown (offline, no such place). Unknown propagates; `and`/`or` are three-valued; a condition holds only
