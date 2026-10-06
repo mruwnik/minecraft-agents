@@ -116,6 +116,15 @@
            (not= "water" (name-at w cx cell cz)) (not (climbable? w cx cell cz)))
       (assoc body :y (round (+ (:y body) jump-step)) :vy 0.42 :lifted true)
       (:lifted body) (dissoc body :lifted)
+      ;; swimming: a jump rises a cell, with none the body sinks a cell per tick, and a body in the air over water
+      ;; falls into it one cell at a time (it neither flies nor drops through to the floor at once)
+      (= "water" (name-at w cx cell cz))
+      (cond
+        (and jump (not (solid? w cx (inc cell) cz))) (assoc body :y (inc cell) :vy 0.3)
+        (solid? w cx (dec cell) cz) (assoc body :vy 0)
+        :else (assoc body :y (dec cell) :vy -0.3))
+      (and (not (solid? w cx (dec cell) cz)) (= "water" (name-at w cx (dec cell) cz)))
+      (assoc body :y (dec cell) :vy -0.3)
       :else
     (if (climbable? w cx cell cz)
       (if jump

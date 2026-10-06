@@ -5,7 +5,6 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.result :as result]
             [jobs.lib.util :as u]
-            [jobs.lib.walk :as walk]
             [triggers.survival.suffocating :as s]))
 
 (def doc
@@ -15,13 +14,15 @@
     :reach blocks, else step sideways, at the feet's height, to the nearest column within :radius that does.
   - Enclosed (head cell holds a suffocating block, see triggers.survival.suffocating): step to a side cell with room
     to stand, once; then dig the head block, the block above it if solid, and step up.
-  - Surfaced and still in water: swim to the nearest shore cell (land with its rim at most one block above the water)
-    within :shore-radius, another direction after each failed swim; else walk to land within :far-radius.
-  - Afloat (no way out found): hold jump (job.holding :afloat) for afloat-holds holds, then stopped :no_land; a body
-    with no job sinks and the trigger fires again. One :afloat or :no_shore warning per spot (body memory
-    :breathe-afloat, 5 min).
+  - Surfaced and still in water: each pass takes the first way left: swim to the nearest shore cell (land with its
+    rim at most one block above the water) within :shore-radius, another direction after each failed swim; a go-to
+    child onto land within :search-radius (at most 3 targets per spot, a failed target excludes its direction);
+    then a swim leg, a go-to to the farthest loaded surface water 8..:leg-length blocks out, outward from the run's
+    start only, inside :swim-range of it, at most :max-legs legs (a leg that moved starts afresh at its end).
   Completed when the head is clear and, after a swim, the body stands on solid ground out of the water. Stopped
-  :no_air or :no_way_out (with a warn) after three failed tries in the run.
+  :no_land_in_range (fields :searched :swum :legs :headings-failed) when every way is spent or the run has gone
+  3 x :swim-range blocks; the spot's failed headings are remembered (:breathe-afloat, 5 min) for a refire. Stopped
+  :no_air or :no_way_out (with a warn) after three failed tries in the run. It never holds still while afloat.
   Memory: one :breathe entry per run.")
 
 (def args
@@ -30,16 +31,15 @@
    :radius {:doc "columns this far sideways are searched for air" :default 2}
    :reach {:doc "blocks above the feet the search climbs" :default 10}
    :shore-radius {:doc "after surfacing, land this many blocks sideways is swum to" :default 6}
-   :far-radius {:doc "after surfacing, land beyond :shore-radius up to this many blocks sideways is walked to with the walk driver"
-                :default 24}})
+   :search-radius {:doc "land beyond :shore-radius up to this many blocks sideways is gone to with go-to" :default 48}
+   :leg-length {:doc "blocks one swim leg goes out at most" :default 32}
+   :swim-range {:doc "blocks from the run's start no swim leg goes beyond" :default 96}
+   :max-legs {:doc "swim legs one run makes at most" :default 6}})
 
-(def hold-ticks "Physics ticks (20 per second) one afloat hold keeps jump pressed." 100)
-(def hold-timeout-s "Bound of one hold's steer act, a little over its ticks." 8)
-(def far-timeout-s "Bound of one walk to far land." 60)
-(def far-walks "Walks to far land one run makes before the body counts as afloat." 2)
-(def afloat-holds "Holds one run keeps an afloat body up (about 20 s) before it stops :no_land." 4)
-(def max-passes "Passes one run makes before it stops :no_way_out, against a world that never changes." 40)
-(def afloat-near "Blocks around a spot warned afloat about in which a later run does not warn again." 16)
+(def land-tries "Go-to targets one spot tries before it swims a leg." 3)
+(def min-leg "Blocks a swim leg must move to count as moved." 8)
+(def max-passes "Passes one run makes before it stops :no_way_out, a safety net against a world that never changes." 120)
+(def afloat-near "Blocks around a spot in which a later run starts with the failed headings of an earlier stop." 16)
 (def afloat-policy {:cap 5 :ttl (* 5 60 1000)})
 
 (def breathe-policy {:cap 20 :ttl (* 60 60 1000)})
@@ -158,7 +158,7 @@
 
 (defn nearest-land
   "The nearest land cell within radius sideways of self-pos, feet y from one below to two above, that keep? accepts;
-  nil if none. Cells in the direction of a failed target (a seq of cells) are skipped."
+  nil if none. A failed target (a seq of cells) and the cells in its direction are skipped."
   ([p self-pos radius] (nearest-land p self-pos radius nil (constantly true)))
   ([p self-pos radius failed keep?]
    (let [fx (js/Math.floor (:x self-pos))
@@ -168,6 +168,7 @@
                 :when (not (same-way? dx dz failed fx fz))
                 dy [0 -1 1 2]]
             {:x (+ fx dx) :y (+ fy dy) :z (+ fz dz)})
+          (remove (set failed))
           (filter #(and (land-cell? p %) (keep? p %)))
           first))))
 
@@ -234,101 +235,112 @@
           ;; raw moveTo kept: an emergency step to air or out of water (range 0), where the planner may have no standable cell; no time for a plan.
           (= "arrived" (status (await (ctx/act c :moveTo (clj->js {:pos head :range 0})))))))))
 
-(defn hold-decider
-  "A steer decide function for one hold: jump pressed on every tick, done after hold-ticks ticks, or at once when
-  the body stands out of the water (on a bank, jump held would only make it hop for ever)."
-  []
-  (let [ticks (volatile! 0)]
-    (fn [pose]
-      (if (or (>= (vswap! ticks inc) hold-ticks)
-              (and (.-onGround pose) (not (.-inWater pose))))
-        #js {:done #js {}}
-        #js {:controls #js {:jump true}}))))
+(def headings
+  "Swim headings [dx dz], east first, then south, west, north, then the diagonals."
+  [[1 0] [0 1] [-1 0] [0 -1] [1 1] [-1 1] [-1 -1] [1 -1]])
 
-(defn ^:async hold-afloat!
-  "One hold: declare the :afloat hold and keep jump pressed for hold-ticks physics ticks (one steer act), which holds
-  a body at the surface (with no input it sinks). Stopped :no_land after afloat-holds holds in the run, else :held."
+(defn hdist [a b] (js/Math.hypot (- (:x a) (:x b)) (- (:z a) (:z b))))
+
+(defn legal-headings
+  "The headings not in failed and not back toward start from pos: once the body has moved, only outward ones."
+  [pos start failed]
+  (let [ox (- (:x pos) (:x start)) oz (- (:z pos) (:z start))]
+    (filterv (fn [[dx dz :as h]] (and (not (contains? failed h)) (>= (+ (* dx ox) (* dz oz)) 0))) headings)))
+
+(defn after-leg
+  "Job memory after a leg: one that moved starts afresh at its end (a way blocked before may be open from here), one
+  that did not fails its heading."
+  [m heading moved?]
+  (if moved?
+    (-> m (dissoc :failed-shores :failed-land :land-tries :failed-headings) (update :legs (fnil inc 0)))
+    (update m :failed-headings (fnil conj #{}) heading)))
+
+(defn initial-failed
+  "The headings the :breathe-afloat entries within afloat-near of pos remember as failed."
+  [entries pos]
+  (into #{} (comp (map :data) (filter #(<= (hdist pos (:pos %)) afloat-near)) (mapcat :headings) (map vec))
+        entries))
+
+(defn leg-target
+  "The farthest loaded surface water cell along heading, min-leg to :leg-length blocks out, inside :swim-range of
+  start; nil if none."
+  [p pos start [hx hz] {:keys [leg-length swim-range reach]}]
+  (let [fx (js/Math.floor (:x pos)) fy (js/Math.floor (:y pos)) fz (js/Math.floor (:z pos))]
+    (some (fn [k]
+            (let [x (+ fx (* hx k)) z (+ fz (* hz k))
+                  cell (when (<= (hdist {:x x :z z} start) swim-range) (surface-in-column p x z fy reach))]
+              (when (and cell (= "water" (u/block-name p cell))) cell)))
+          (range leg-length (dec min-leg) -1))))
+
+(defn ^:async go!
+  "One go-to child call to target: true when it reports arrival. A call that waits or is declined is a failed try
+  (go-to with :escalate false waits on nothing)."
+  [c slot target range]
+  (let [r (await (ctx/call-child c slot 'jobs.movement.go-to {:pos target :range range :escalate false}))]
+    (and (= :done r) (boolean (:arrived (ctx/child-result c slot))))))
+
+(defn stop-afloat!
+  "Every way out of the water is spent: remember the spot's failed headings and stop :no_land_in_range."
   [c]
-  (ctx/hold-still! c :afloat)
-  (await (ctx/act c :steer (walk/steer-args hold-timeout-s (hold-decider))))
-  (let [holds (inc (:holds (ctx/mem c) 0))]
-    (ctx/update-mem! c assoc :holds holds)
-    (cond
-      (on-land? (:primitives c)) :again
-      (< holds afloat-holds) :held
-      :else (result/stop! c :no_land "afloat with no land in reach; fires again if it sinks"))))
+  (let [{:keys [search-radius swim-range]} (:args c)
+        m (ctx/mem c)
+        pos (u/self-pos c)
+        failed (:failed-headings m #{})]
+    (ctx/remember! c :breathe-afloat {:pos pos :reason :no_land_in_range :headings (vec failed)} afloat-policy)
+    (result/stop! c :no_land_in_range
+                  (str "afloat; no land within " search-radius " blocks or a swim of " swim-range)
+                  :searched search-radius :swum (js/Math.round (hdist pos (:start m pos))) :legs (:legs m 0)
+                  :headings-failed (count failed))))
 
-(defn near-afloat-spot?
-  "An earlier run warned about being afloat within afloat-near blocks of pos, within afloat-policy's ttl."
-  [c pos]
-  (some (fn [{:keys [data]}]
-          (let [q (:pos data)
-                dx (- (:x pos) (:x q)) dz (- (:z pos) (:z q))]
-            (<= (+ (* dx dx) (* dz dz)) (* afloat-near afloat-near))))
-        (ctx/entries c :breathe-afloat)))
+(defn ^:async land-by-go-to!
+  "A go-to child onto land at target. :done when the body then stands on land, else :again (target excluded)."
+  [c target]
+  (ctx/update-mem! c (fn [m] (-> m (update :land-tries (fnil inc 0)) (update :travelled (fnil + 0) (hdist (u/self-pos c) target)))))
+  (await (go! c :land target 0))
+  (if (on-land? (:primitives c))
+    :done
+    (do (ctx/update-mem! c update :failed-land (fnil conj []) target)
+        :again)))
 
-(defn warn-afloat!
-  "Warn kind with fields once per spot: not when an earlier run warned near here (body memory :breathe-afloat)."
-  [c kind fields]
-  (let [pos (u/self-pos c)]
-    (when-not (near-afloat-spot? c pos)
-      (ctx/emit! c kind :warn fields)
-      (ctx/remember! c :breathe-afloat {:pos pos :kind kind} afloat-policy))))
-
-(defn afloat!
-  "The body cannot get out of the water: remember it in job memory (later passes only hold) and, when why is given,
-  warn :afloat once per spot."
-  [c why]
-  (ctx/update-mem! c assoc :afloat true)
-  (when why
-    (warn-afloat! c :afloat {:why why :text (str "afloat in water, no way out: " (name why))})))
-
-(defn ^:async walk-to-far-land!
-  "Walk to the nearest land within :far-radius with the walk driver. :done when it ended on land; :again for another
-  pass after a walk that arrived in water (far-walks per run), else after marking the body afloat (no land, no
-  pathWorld, or the driver found no way)."
-  [c]
-  (let [p (:primitives c)
-        target (when (walk/path-world p) (nearest-land p (surface-pos p (u/self-pos c) (:reach (:args c))) (:far-radius (:args c))))]
-    (if-not target
-      (do (afloat! c :no-land-in-reach) :again)
-      (let [{:keys [result]} (await (walk/walk-to! c {:to [(:x target) (:y target) (:z target)] :range 0
-                                                      :weight walk/default-weight :timeout-s far-timeout-s}))
-            walks (inc (:far-walks (ctx/mem c) 0))]
-        (ctx/update-mem! c assoc :far-walks walks)
-        (cond
-          (on-land? p) :done
-          (and (= :arrived (:status result)) (< walks far-walks)) :again
-          :else (do (afloat! c (or (:reason result) (:status result))) :again))))))
-
-(defn give-up-shore!
-  "Every shore in reach failed (each failed swim excluded its direction): warn :no_shore once per spot; the body is
-  afloat."
-  [c]
-  (warn-afloat! c :no_shore {:tries (count (:failed-shores (ctx/mem c))) :text "could not reach a shore"})
-  (afloat! c nil)
-  :again)
+(defn ^:async swim-leg!
+  "One swim leg with a go-to child to target along heading; the run's memory is updated by after-leg."
+  [c heading target]
+  (let [before (u/self-pos c)]
+    (ctx/update-mem! c update :travelled (fnil + 0) (hdist before target))
+    (await (go! c :leg target 2))
+    (ctx/update-mem! c after-leg heading (>= (hdist before (u/self-pos c)) min-leg))
+    (if (on-land? (:primitives c)) :done :again)))
 
 (defn ^:async head-for-land!
-  "Surfaced and still in water. Afloat already: hold. Else swim toward the nearest shore cell within :shore-radius,
-  then the next nearest in another direction after each failed swim, until every shore failed (the swim primitive
-  with toward climbs out onto a rim the pathfinder cannot path to); with none, walk to land within :far-radius; a
-  body that cannot get out is afloat. :done when out of the water."
+  "Surfaced and still in water: the first way left of shore swim (nearest shore cell within :shore-radius, another
+  direction after each failure; the swim primitive with toward climbs out onto a rim the planner cannot path to), a
+  go-to onto land within :search-radius, a swim leg, then stopped :no_land_in_range. :done when out of the water."
   [c]
   (let [p (:primitives c)
-        failed (:failed-shores (ctx/mem c))
-        target (when-not (:afloat (ctx/mem c))
-                 (nearest-land p (surface-pos p (u/self-pos c) (:reach (:args c))) (:shore-radius (:args c)) failed shore-cell?))]
+        {:keys [reach shore-radius search-radius swim-range max-legs]} (:args c)
+        pos (surface-pos p (u/self-pos c) reach)
+        _ (when-not (:start (ctx/mem c))
+            (ctx/update-mem! c assoc :start (u/self-pos c)
+                             :failed-headings (initial-failed (ctx/entries c :breathe-afloat) pos)))
+        m (ctx/mem c)
+        shore (nearest-land p pos shore-radius (:failed-shores m) shore-cell?)
+        in-budget? (< (:travelled m 0) (* 3 swim-range))
+        land (when (and in-budget? (< (:land-tries m 0) land-tries))
+               (nearest-land p pos search-radius (:failed-land m) (constantly true)))
+        legs (when (and in-budget? (< (:legs m 0) max-legs))
+               (some (fn [h] (when-let [t (leg-target p pos (:start m) h (:args c))] [h t]))
+                     (legal-headings pos (:start m) (:failed-headings m #{}))))]
     (cond
-      (:afloat (ctx/mem c)) (await (hold-afloat! c))
-      (and (not target) (seq failed)) (give-up-shore! c)
-      (not target) (await (walk-to-far-land! c))
-      :else
-      (let [r (await (ctx/act c :swim (clj->js {:toward target})))]
+      shore
+      (let [r (await (ctx/act c :swim (clj->js {:toward shore})))]
         (if (or (= "landed" (status r)) (on-land? p))
           :done
-          (do (ctx/update-mem! c update :failed-shores (fnil conj []) target)
-              :again))))))
+          (do (ctx/update-mem! c update :failed-shores (fnil conj []) shore)
+              :again)))
+
+      land (await (land-by-go-to! c land))
+      legs (await (swim-leg! c (first legs) (second legs)))
+      :else (stop-afloat! c))))
 
 (defn note!
   "Write the :breathe entry once per job instance."

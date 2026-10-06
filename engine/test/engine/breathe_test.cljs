@@ -117,7 +117,7 @@
   (core/submit! eng (list breathe args) {})
   (await (core/tick! eng)))
 
-(deftest drowning-run-swims-up-holds-afloat-with-no-shore-and-stops
+(deftest drowning-run-swims-up-and-stops-no-land-in-range-without-holding
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -125,11 +125,10 @@
           (await (one-run! eng defaults))
           (is (= {:x 0 :y 67 :z 0} (core/self-pos p)) "feet at the top water block, head in air")
           (is (= [] (:list (core/state eng))) "one run")
-          (is (= [[:stopped :no_land]] (ended seen)) "afloat with no land is stopped, not completed")
-          (is (= (into ["swim"] (repeat b/afloat-holds "steer")) (call-names p))
-              "the swim surfaces, then afloat-holds holds keep it up, no walk")
-          (is (= [:afloat] (mapv :reason (of-kind seen :holding))) "the hold is declared")
-          (is (= 1 (count (of-kind seen :afloat)))))))))
+          (is (= [[:stopped :no_land_in_range]] (ended seen)) "no land and no water to swim on: stopped, not completed")
+          (is (= ["swim"] (call-names p)) "the swim surfaces; nothing else to try")
+          (is (empty? (of-kind seen :holding)) "no hold")
+          (is (empty? (of-kind seen :afloat))))))))
 
 (deftest drowning-with-a-failing-swim-is-stopped-no-air-with-one-warning
   (async done
@@ -266,82 +265,6 @@
   [p fields]
   (fake/swap-self! p into (map (fn [[k v]] [(keyword k) v]) fields)))
 
-(defn on-hold!
-  "Make the nth steer act (1-based) set the body's self fields before it holds."
-  [p n fields]
-  (let [steers (atom 0)]
-    (.override (.-world p) "steer"
-               (fn ^:async f [token args impl]
-                 (when (= n (swap! steers inc)) (set-self! p fields))
-                 (await (impl token args))))))
-
-(deftest a-second-run-afloat-at-the-same-spot-does-not-warn-again
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4} :blocks water-column})]
-          (await (one-run! eng defaults))
-          (set-self! p {"oxygen" 4 "pos" [0 64 0]})
-          (await (one-run! eng defaults))
-          (is (= [[:stopped :no_land] [:stopped :no_land]] (ended seen)))
-          (is (= 1 (count (of-kind seen :afloat))) "one notice for the spot, however many runs"))))))
-
-(deftest an-afloat-body-that-bobs-out-of-the-water-is-still-afloat
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4} :blocks water-column})]
-          (on-hold! p 2 {"inWater" false "onGround" false})
-          (await (one-run! eng defaults))
-          (is (= [[:stopped :no_land]] (ended seen)) "a crest above the water does not end the run")
-          (is (= b/afloat-holds (count (filter #{"steer"} (call-names p))))))))))
-
-(deftest an-afloat-body-that-stands-on-land-is-done
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4} :blocks (assoc water-column "0,63,0" "stone")})]
-          (on-hold! p 2 {"inWater" false "onGround" true})
-          (await (one-run! eng defaults))
-          (is (= [[:completed nil]] (ended seen)))
-          (is (= 2 (count (filter #{"steer"} (call-names p)))) "no hold after it stands"))))))
-
-(deftest a-body-pressed-against-a-wall-over-water-is-not-done
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4} :blocks (assoc water-column "0,63,0" "water")})]
-          (on-hold! p 2 {"inWater" false "onGround" true})
-          (await (one-run! eng defaults))
-          (is (= [[:stopped :no_land]] (ended seen)) "water below: not a footing"))))))
-
-(deftest an-afloat-body-that-sinks-swims-up-again-in-the-same-run
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4} :blocks water-column})]
-          (.override (.-world p) "steer" (let [steers (atom 0)]
-                                           (fn ^:async f [token args impl]
-                                             (when (= 1 (swap! steers inc)) (set-self! p {"oxygen" 4 "pos" [0 64 0]}))
-                                             (await (impl token args)))))
-          (await (one-run! eng defaults))
-          (is (= ["swim" "steer" "swim"] (take 3 (call-names p))) "sunk during the first hold: swims up again")
-          (is (= {:x 0 :y 67 :z 0} (core/self-pos p)))
-          (is (= [[:stopped :no_land]] (ended seen))))))))
-
-(deftest hold-presses-jump-until-its-ticks-are-spent-or-the-body-stands-out-of-the-water
-  (doseq [[label pose ticks done?] [["in water, first tick" {:onGround false :inWater true} 1 false]
-                                    ["in water, last tick" {:onGround false :inWater true} 100 true]
-                                    ["crest above the water" {:onGround false :inWater false} 1 false]
-                                    ["standing on the bank" {:onGround true :inWater false} 1 true]
-                                    ["on the pond floor" {:onGround true :inWater true} 1 false]]]
-    (let [decide (b/hold-decider)
-          out (last (repeatedly ticks #(decide (clj->js pose))))]
-      (is (= done? (some? (.-done out))) label)
-      (is (= (not done?) (true? (some-> (.-controls out) .-jump))) label))))
-
-(def far-args (assoc defaults :shore-radius 2 :far-radius 10))
-
 (defn pond
   "Water y 62..65 over a stone floor at y 61, for x and z within r of the origin; air above."
   [r]
@@ -375,43 +298,6 @@
     (doseq [[y expected] [[62 65] [64 65] [65 65] [66 66]]]
       (is (= {:x 0 :y expected :z 0} (b/surface-pos p {:x 0 :y y :z 0} 10)) (str "feet at " y)))))
 
-(defn swim-to-bank!
-  "A steer that does what a working walk does, since the fake's walker cannot swim: the body ends on the bank cell
-  (7 65 0) and the act's decide function is asked at that pose until it is done."
-  [p args]
-  (let [pose #js {:x 7.5 :y 65 :z 0.5 :vy 0 :onGround true :onClimbable false :inWater false :collided false :yaw 0 :t 0}
-        done (->> (repeatedly #((.-decide args) pose)) (take 200) (some #(.-done %)))]
-    (fake/swap-self! p assoc :pos [7 65 0] :inWater false)
-    (if done #js {:status "done" :result done} #js {:status "timeout" :pose pose})))
-
-(deftest surfaced-with-a-bank-beyond-the-shore-radius-walks-out-with-the-walk-driver
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}}
-                                           :blocks (merge (pond 6) (bank 7 9 6))})]
-          (.override (.-world p) "steer" (fn [_ args _] (js/Promise.resolve (swim-to-bank! p args))))
-          (await (one-run! eng far-args))
-          (is (= [] (:list (core/state eng))) "done once out of the water")
-          (is (= [[:completed nil]] (ended seen)))
-          (is (>= (:x (core/self-pos p)) 7) "stands on the bank")
-          (is (not (.-inWater (.self p))))
-          (is (= ["steer"] (distinct (rest (call-names p)))) "walked with steer, no moveTo")
-          (is (empty? (of-kind seen :afloat))))))))
-
-(deftest surfaced-with-a-wall-all-round-holds-afloat-reports-once-and-stops
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [wall (into {} (for [x (range -7 8) z (range -7 8) y [65 66]
-                                  :when (= 7 (max (js/Math.abs x) (js/Math.abs z)))]
-                              [(str x "," y "," z) "stone"]))
-              {:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}}
-                                           :blocks (merge (pond 6) (bank 7 7 6) (bank -7 -7 6) wall)})]
-          (await (one-run! eng far-args))
-          (is (= [[:stopped :no_land]] (ended seen)))
-          (is (< (:x (core/self-pos p)) 7) "never left the pond")
-          (is (= 1 (count (of-kind seen :afloat)))))))))
 
 (deftest a-walled-nearer-shore-is-skipped-for-the-open-one-beyond
   (async done
@@ -471,39 +357,28 @@
           (is (= [[:completed nil]] (ended seen)))
           (is (empty? (of-kind seen :no_shore))))))))
 
-(deftest surfaced-with-a-failing-shore-swim-warns-no-shore-once-holds-afloat-and-stops
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4}
-                                           :blocks (merge pool {"2,64,0" "stone" "2,63,0" "stone"})})]
-          (.override (.-world p) "swim"
-                     (fn ^:async f [_ args impl]
-                       (if (.-toward args) #js {:status "timeout"} (await (impl _ args)))))
-          (await (one-run! eng defaults))
-          (is (= [[:stopped :no_land]] (ended seen)))
-          (is (= 1 (count (of-kind seen :no_shore))))
-          (is (empty? (of-kind seen :afloat)) "the no_shore warn is the one notice")
-          (is (= b/afloat-holds (count (filter #{"steer"} (call-names p)))))
-          (is (not (some #{"moveTo"} (call-names p)))))))))
-
 ;; live (card 95752610): a swim toward a walled shore times out with the body on a jump crest against the wall,
 ;; out of the water for that moment (inWater false, onGround true or false) but over water
-(deftest a-failed-shore-swim-ending-on-a-crest-over-water-is-not-done
+;; a go-to swims over a floor: the fake's walker needs ground under the water
+(def pool-floor (into {} (for [x (range -1 2) z (range -1 2)] [(str x ",63," z) "stone"])))
+
+(deftest a-failed-shore-swim-falls-through-to-a-go-to-and-arriving-without-standing-on-land-is-not-done
   (async done
     (tu/run-async done
       (fn ^:async t []
         (doseq [on-ground [false true]]
           (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4}
-                                             :blocks (merge pool {"2,64,0" "stone" "2,63,0" "stone"})})]
+                                             :blocks (merge pool pool-floor {"2,64,0" "stone" "2,63,0" "stone"})})]
             (.override (.-world p) "swim"
                        (fn ^:async f [_ args impl]
                          (if (.-toward args)
                            (do (set-self! p {"inWater" false "onGround" on-ground}) #js {:status "timeout"})
                            (await (impl _ args)))))
             (await (one-run! eng defaults))
-            (is (= [[:stopped :no_land]] (ended seen)) (str "not done on a crest, onGround " on-ground))
-            (is (= 1 (count (of-kind seen :no_shore))) (str "no_shore once, onGround " on-ground))))))))
+            (is (= (if on-ground [[:completed nil]] [[:stopped :no_land_in_range]]) (ended seen))
+                (str "the go-to arrives on the ledge, but only standing on it (onGround) is out, onGround " on-ground))
+            (is (= {:x 2 :y 65 :z 0} (core/self-pos p)) (str "stands on the ledge, onGround " on-ground))
+            (is (empty? (of-kind seen :holding)) (str "no hold, onGround " on-ground))))))))
 
 (deftest enclosed-with-a-free-neighbour-steps-sideways-without-digging
   (async done
@@ -536,6 +411,164 @@
           (await (core/tick! eng))
           (is (= [] (call-names p)) "no dig, no move")
           (is (= "wheat" (.-name (.blockAt p (tu/pos 0 65 0)))) "the crop is still there"))))))
+
+;; ---------------------------------------------------------------- the afloat ladder: shore, go-to land, swim legs, stop
+
+(def small-args
+  "Shrunk bounds so the fake planner stays small."
+  (assoc defaults :shore-radius 2 :search-radius 12 :leg-length 10 :swim-range 24 :max-legs 4))
+
+(def no-shore-args "No shore swims: only the go-to child and the legs move the body." (assoc small-args :shore-radius 0))
+
+(defn lake
+  "Water y 62..65 over a stone floor at y 61, x from x0 to x1, z within r; air above."
+  [x0 x1 r]
+  (into {} (for [x (range x0 (inc x1)) z (range (- r) (inc r))
+                 [y n] (cons [61 "stone"] (map (fn [y] [y "water"]) (range 62 66)))]
+             [(str x "," y "," z) n])))
+
+(defn dist-from-origin [p] (let [{:keys [x z]} (core/self-pos p)] (js/Math.hypot x z)))
+
+(defn stopped-data
+  "The data of the first job.stopped event of the run."
+  [seen]
+  (let [e (first (filter #(and (= :job (:source %)) (= :stopped (:kind %))) @seen))]
+    (merge e (:data e))))
+
+(defn unreachable-count [seen] (count (of-kind seen :unreachable)))
+
+(deftest a-bank-beyond-the-shore-radius-is-reached-with-a-go-to-child
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}}
+                                           :blocks (merge (lake -6 6 6) (bank 7 9 6))})]
+          (await (one-run! eng no-shore-args))
+          (is (= [[:completed nil]] (ended seen)))
+          (is (>= (:x (core/self-pos p)) 7) "stands on the bank")
+          (is (not (.-inWater (.self p))))
+          (is (empty? (of-kind seen :holding))))))))
+
+(def wall-all-round
+  (into {} (for [x (range -7 8) z (range -7 8) y [65 66]
+                 :when (= 7 (max (js/Math.abs x) (js/Math.abs z)))]
+             [(str x "," y "," z) "stone"])))
+
+(deftest walled-all-round-stops-no_land_in_range-with-its-fields-and-never-holds
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}}
+                                           :blocks (merge (lake -6 6 6) (bank 7 7 6) (bank -7 -7 6) wall-all-round)})]
+          (await (one-run! eng small-args))
+          (is (= [[:stopped :no_land_in_range]] (ended seen)))
+          (is (< (dist-from-origin p) 7) "never left the pond")
+          (is (empty? (of-kind seen :holding)) "no job.holding event")
+          (is (empty? (of-kind seen :afloat)))
+          (let [d (stopped-data seen)]
+            (is (= 12 (:searched d)))
+            (is (= 0 (:legs d)) "the pond is narrower than a leg")
+            (is (number? (:swum d)))
+            (is (number? (:headings-failed d)))))))))
+
+(deftest at-most-land-tries-go-tos-per-spot
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}}
+                                         :blocks (merge (lake -6 6 6) (bank 7 7 6) (bank -7 -7 6) wall-all-round)})]
+          (await (one-run! eng small-args))
+          (is (= [[:stopped :no_land_in_range]] (ended seen)))
+          (is (<= 1 (unreachable-count seen) b/land-tries)))))))
+
+(deftest open-water-with-no-land-swims-legs-inside-the-bounds-then-stops
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}}
+                                           :blocks (lake -30 30 12)})]
+          (await (one-run! eng small-args))
+          (is (= [[:stopped :no_land_in_range]] (ended seen)))
+          (let [d (stopped-data seen)]
+            (is (pos? (:legs d)) "it swam outward before it gave up")
+            (is (<= (:legs d) (:max-legs small-args))))
+          (is (<= (dist-from-origin p) (+ 2 (:swim-range small-args))) "never beyond the swim range"))))))
+
+(deftest the-leg-count-is-capped-by-max-legs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}}
+                                         :blocks (lake -50 50 12)})]
+          (await (one-run! eng (assoc small-args :max-legs 2 :swim-range 60 :search-radius 5)))
+          (is (= [[:stopped :no_land_in_range]] (ended seen)))
+          (is (= 2 (:legs (stopped-data seen)))))))))
+
+(deftest a-bank-beyond-the-search-radius-is-found-after-a-leg
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}}
+                                           :blocks (merge (lake -30 19 8) (bank 20 24 8))})]
+          (await (one-run! eng small-args))
+          (is (= [[:completed nil]] (ended seen)))
+          (is (>= (:x (core/self-pos p)) 20) "on the east bank: the first leg went east, then the go-to landed"))))))
+
+(deftest a-walled-target-is-skipped-for-the-open-bank-in-another-direction
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [east-wall (into {} (for [y [65 66] z (range -6 7)] [(str "6," y "," z) "stone"]))
+              {:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}}
+                                           :blocks (merge (lake -6 5 6) (bank 6 8 6) east-wall (bank -10 -7 6))})]
+          (await (one-run! eng small-args))
+          (is (= [[:completed nil]] (ended seen)))
+          (is (neg? (:x (core/self-pos p))) "the failed east target excluded that way: it landed west")
+          (is (pos? (unreachable-count seen)) "the east try failed first"))))))
+
+(deftest legal-headings-go-outward-only-and-skip-failed-ones
+  (let [h (fn [pos failed] (b/legal-headings pos {:x 0 :z 0} failed))]
+    (is (= 8 (count (h {:x 0 :z 0} #{}))) "all eight at the start")
+    (is (= [1 0] (first (h {:x 0 :z 0} #{}))) "east first")
+    (is (not-any? #{[-1 0] [-1 1] [-1 -1]} (h {:x 10 :z 0} #{})) "none back toward the start")
+    (is (not-any? #{[1 0]} (h {:x 0 :z 0} #{[1 0]})) "a failed one is skipped")))
+
+(deftest a-leg-that-moved-clears-the-failed-ways-a-leg-that-did-not-fails-its-heading
+  (let [m {:failed-shores [1] :failed-land [2] :land-tries 3 :failed-headings #{[1 0]} :legs 1}
+        moved (b/after-leg m [0 1] true)
+        stuck (b/after-leg m [0 1] false)]
+    (is (= 2 (:legs moved)))
+    (is (nil? (:failed-shores moved)))
+    (is (nil? (:failed-land moved)))
+    (is (nil? (:land-tries moved)))
+    (is (empty? (:failed-headings moved)) "east is tried again from the new spot")
+    (is (= #{[1 0] [0 1]} (:failed-headings stuck)))
+    (is (= 1 (:legs stuck)))))
+
+(deftest a-later-run-near-a-remembered-spot-starts-with-its-headings-failed
+  (let [entries [{:data {:pos {:x 100 :y 65 :z 100} :headings [[1 0] [0 1]]}}
+                 {:data {:pos {:x 5 :y 65 :z 5} :headings [[-1 0]]}}]]
+    (is (= #{[-1 0]} (b/initial-failed entries {:x 8 :z 8})))
+    (is (= #{} (b/initial-failed entries {:x 50 :z 50})))))
+
+(deftest a-cut-during-the-go-to-ends-the-run-and-the-refire-lands
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}}
+                                           :blocks (merge (lake -6 6 6) (bank 7 9 6))})
+              steers (atom 0)]
+          (core/register-reflex! eng {:trigger :suffocating})
+          (.override (.-world p) "steer"
+                     (fn ^:async f [token args impl]
+                       (when (= 1 (swap! steers inc)) (takeover/take! eng {:who "claude" :why "cut"}))
+                       (await (impl token args))))
+          (await (core/tick! eng))
+          (is (not-any? #{[:completed nil]} (ended seen)) "the cut run did not complete")
+          (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
+          (set-self! p {"oxygen" 4 "pos" [0 62 0] "inWater" true})
+          (await (core/tick! eng))
+          (is (>= (:x (core/self-pos p)) 7) "the refire starts from the world and lands"))))))
 
 ;; ---------------------------------------------------------------- as a reflex: one run, cut, refire
 
