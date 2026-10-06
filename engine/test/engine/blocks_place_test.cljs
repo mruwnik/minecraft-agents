@@ -2,6 +2,7 @@
   "jobs.blocks.place against the fake world."
   (:require [cljs.test :refer [deftest is async]]
             [engine.blocks-dig-test :as bd]
+            [engine.fake :as fake]
             [engine.memory :as mem]
             [engine.test-util :as tu]
             [plan.shape :as shape]))
@@ -177,3 +178,12 @@
         (let [env (bd/setup {:self body :blocks {"2,64,0" "short_grass" "2,63,0" "grass_block"} :inventory cobble})]
           (is (await (bd/ended-in-one-tick? env (list job {:pos [2 64 0] :item "cobblestone"}))))
           (is (= "cobblestone" (bd/block-at (:p env) at))))))))
+
+(deftest the-support-vanishing-during-the-walk-declines-the-place
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (bd/after-walks (bd/setup {:self body :inventory cobble}) #(fake/remove-block! % [12 63 0]))
+              r (await (bd/waiting-after env (list job {:pos [12 64 0] :item "cobblestone"}) 2))]
+          (is (= :no-support (:reason r)))
+          (is (empty? (bd/calls (:p env) "place")) "walked, then refused: nothing placed"))))))

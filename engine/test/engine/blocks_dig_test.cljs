@@ -4,6 +4,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.fake :as fake]
             [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.takeover :as takeover]
@@ -253,6 +254,28 @@
               r (await (waiting-after env (list job {:pos [12 64 0]}) 2))]
           (is (= 2 @walks) "one more try, then it declines")
           (is (= {:reason :unreachable :why :no-path} (select-keys r [:reason :why]))))))))
+
+(defn after-walks
+  "env with jobs.movement.go-to replaced by the real one followed by (f p): the world changes during the walk."
+  [env f]
+  (let [go-to (get (:jobs (:eng env)) 'jobs.movement.go-to)
+        round (:round go-to)
+        wrapped (fn ^:async walk-then-change [c]
+                  (let [r (await (round c))]
+                    (f (:p env))
+                    r))]
+    (assoc-in env [:eng :jobs 'jobs.movement.go-to] (assoc go-to :round wrapped))))
+
+(deftest lava-appearing-beside-the-block-during-the-walk-declines-the-dig
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (after-walks (setup {:self body :blocks {"12,64,0" "dirt"}})
+                               #(fake/set-block! % [12 65 0] "lava"))
+              r (await (waiting-after env (list job {:pos [12 64 0]}) 2))]
+          (is (= {:reason :hazard :pos {:x 12 :y 64 :z 0}} (select-keys r [:reason :pos])))
+          (is (some #{:fluid-adjacent} (:hazards r)))
+          (is (empty? (calls (:p env) "dig")) "walked, then refused: nothing dug"))))))
 
 (defn ^:async cut-at-act-then-resume
   "Run spec as a top-level job; hold the primitive act, cut the tick while it is held, release, and run on until the

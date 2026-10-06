@@ -268,6 +268,26 @@
           (is (not (hiding? seen)) "built under 2: not hidden")
           (is (pos? (count (calls p "attack"))) "the pillar option is spent: it fights the zombie in the doorway"))))))
 
+(deftest a-pillar-that-stops-at-two-high-still-hides
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [placed (atom 0)
+              {:keys [eng p seen while-hidden]}
+              (await (hidden-round retreat {:blocks doorway :inventory [{:name "cobblestone" :count 20}]
+                                            :entities [(zombie 0 64 1)]}
+                                   1000 (fn [{:keys [p]}] (js/Math.floor (second (:pos (fake/self p)))))
+                                   [] (fn [p]
+                                        (.override (.-world p) "jumpPlace"
+                                                   (fn [token args impl]
+                                                     (if (<= (swap! placed inc) 2)
+                                                       (impl token args)
+                                                       (js/Promise.resolve #js {:status "failed" :placed 0 :reason "not-raised"})))))))]
+          (is (= 66 while-hidden) "two blocks up, hidden there")
+          (is (= #{[0 64 0] [0 65 0]} (set (map :cell (pillar-entries eng)))))
+          (is (hiding? seen) "built 2 is enough to hide")
+          (is (zero? (count (calls p "attack")))))))))
+
 (deftest a-pillared-body-is-done-once-the-zombie-has-gone
   (async done
     (tu/run-async done

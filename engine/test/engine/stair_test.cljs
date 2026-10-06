@@ -288,6 +288,21 @@
           (is (= :done (:status @out)) "one round is the whole stair")
           (is (= [3 62 0] (:at @out))))))))
 
+(deftest a-stair-of-more-than-max-steps-gives-the-round-back-and-resumes
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (with-redefs [stair/max-steps 2]
+          (let [{:keys [eng clock out p] :as s} (setup {:blocks ground} east (fn [_]))]
+            (swap! clock + 500)
+            (await (core/tick! eng))
+            (is (= :not-done @out) "the round ended with :continue before the stair was cut")
+            (is (seq (:list (core/state eng))) "the job is still listed")
+            (is (< (count (digs p)) 6) "not all six pieces were dug in the first round")
+            (await (tick-out! s))
+            (is (= :done (:status @out)))
+            (is (= [3 62 0] (:at @out)) "the next rounds finish it from the body's cell")))))))
+
 (deftest down-by-target-y-north
   (async done
     (tu/run-async done
