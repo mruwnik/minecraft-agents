@@ -19,6 +19,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
             [jobs.lib.declined :as declined]
+            [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
             [engine.memory :as mem]))
 
@@ -243,6 +244,22 @@
              (nil? back) nil
              (= back (feet c)) (do (ctx/update-mem! c dissoc :fetch-return) nil)
              :else (await (walk-back! c back))))))))
+
+(def max-fetch-calls "Fetch rounds of one fetch! before it gives the round back with :continue." 400)
+
+(defn ^:async fetch!
+  "The fetch part of a whole attempt: step! (problem c) again, a pace! between, until nothing is due any more (the
+  thing arrived, or the fetch failed and is booked: nil, the job judges where it stands). Resolves to :done for a bad
+  :fetch arg (the job has ended) and to :continue after max-fetch-calls rounds or a cut."
+  [c job problem]
+  (loop [n 1]
+    (let [w (problem c)
+          r (await (step! c job w))]
+      (cond
+        (nil? r) nil
+        (= :done r) :done
+        (and (< n max-fetch-calls) (ctx/alive? c)) (do (await (pace/pace!)) (recur (inc n)))
+        :else :continue))))
 
 ;; ------------------------------------------------------------------ chests: seen ones and their stock
 

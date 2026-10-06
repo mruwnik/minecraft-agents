@@ -96,15 +96,35 @@
   [c pos]
   (fresh-mem (ctx/mem c) pos))
 
+(def cell-reasons
+  "Wait reasons about the cell that can appear mid-call (a zone added, a block moved in): the call declines."
+  #{:not-allowed :hazard :not-loaded :own-body :no-support})
+
+(defn refused-now
+  "Whether wait reason w (a job's problem, or nil) is one the cell turned into during the call; the wait is noted for
+  the caller's check."
+  [c w]
+  (when (contains? cell-reasons (:reason w))
+    (ctx/wait c w)
+    true))
+
+(defn unreachable!
+  "Remember the failed walk (why a keyword) as :unreachable {:from feet :why}, which the check waits on."
+  [c why]
+  (ctx/update-mem! c assoc :unreachable {:from (feet-cell c) :why why}))
+
 (defn ^:async walk!
-  "One go-to round toward pos (child :walk, range 3). Resolves to :continue. A walk that gives up, or arrives with
-  the block still out of reach, is remembered as :unreachable {:from feet :why}, which the check waits on."
+  "The walk to pos: one go-to call (child :walk, range 3), the whole walk. Resolves to :arrived (in reach), :continue
+  (go-to waits on the world) or {:unreachable why} (it gave up, or arrived with the block still out of reach)."
   [c pos]
   (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos pos :range 3 :escalate false}))
         res (ctx/child-result c :walk)]
-    (when (and (= :done r) (not (and (:arrived res) (in-reach? c pos))))
-      (ctx/update-mem! c assoc :unreachable {:from (feet-cell c) :why (if (:arrived res) :out-of-reach (:why res :unreachable))}))
-    :continue))
+    (cond
+      (= :continue r) :continue
+      (and (= :done r) (:arrived res) (in-reach? c pos)) :arrived
+      :else {:unreachable (cond (not= :done r) :declined
+                                (:arrived res) :out-of-reach
+                                :else (:why res :unreachable))})))
 
 ;; ------------------------------------------------------------------ for parents
 

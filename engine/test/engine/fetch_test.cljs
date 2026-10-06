@@ -112,6 +112,23 @@
           (is (= 1 (count (events-of s :fetch.started))))
           (is (= 1 (count (events-of s :fetch.done)))))))))
 
+(deftest dig-and-place-fetch-and-act-in-one-call
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (world pickaxe-stock) [own-zone])]
+          (core/submit! (:eng s) (dig-spec {:fetch true}) {})
+          (swap! (:clock s) + 700)
+          (await (core/tick! (:eng s)))
+          (is (empty? (listed s)))
+          (is (= "air" (block-at s 2 64 3))))
+        (let [s (start (world {chest-at [{:name "cobblestone" :count 5}]}) [own-zone])]
+          (core/submit! (:eng s) (list 'jobs.blocks.place {:pos [1 64 1] :item "cobblestone" :fetch true}) {})
+          (swap! (:clock s) + 700)
+          (await (core/tick! (:eng s)))
+          (is (empty? (listed s)))
+          (is (= "cobblestone" (block-at s 1 64 1))))))))
+
 (deftest dig-without-fetch-waits-no-tool-and-touches-no-chest
   (async done
     (tu/run-async done

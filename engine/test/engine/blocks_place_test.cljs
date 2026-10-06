@@ -140,3 +140,19 @@
           (is (:placed (await (bd/child-outcome (:eng own) job {:pos at :item "cobblestone"} 5))))
           (is (= {:reason :not-allowed :by :footprint :plan "hut"}
                  (select-keys (await (bd/waiting-after other (list job {:pos at :item "cobblestone"}) 3)) [:reason :by :plan]))))))))
+
+(deftest a-far-cell-is-walked-to-and-placed-in-one-call
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (bd/setup {:self body :inventory cobble})]
+          (is (await (bd/ended-in-one-tick? env (list job {:pos [12 64 0] :item "cobblestone"}))))
+          (is (= "cobblestone" (bd/block-at (:p env) {:x 12 :y 64 :z 0}))))))))
+
+(deftest a-plant-is-cleared-and-the-cell-filled-in-one-call
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (bd/setup {:self body :blocks {"2,64,0" "short_grass" "2,63,0" "grass_block"} :inventory cobble})]
+          (is (await (bd/ended-in-one-tick? env (list job {:pos [2 64 0] :item "cobblestone"}))))
+          (is (= "cobblestone" (bd/block-at (:p env) at))))))))

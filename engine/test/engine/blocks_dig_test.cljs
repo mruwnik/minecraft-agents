@@ -53,6 +53,14 @@
       (await (core/tick! eng)))
     (core/waiting eng id)))
 
+(defn ^:async ended-in-one-tick?
+  "Submit spec as a top-level job and run one tick: whether the job is over (one call is one whole attempt)."
+  [{:keys [eng clock]} spec]
+  (core/submit! eng spec {})
+  (swap! clock + 700)
+  (await (core/tick! eng))
+  (empty? (:list (core/state eng))))
+
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
 (defn block-at [p pos] (.-name (.blockAt p (clj->js pos))))
 (defn carried [p item] (reduce + 0 (keep #(when (= item (.-name %)) (.-count %)) (array-seq (.-inventory (.self p))))))
@@ -224,6 +232,15 @@
           (is (= {:reason :unreachable :pos {:x 3 :y 55 :z 0}} (select-keys r [:reason :pos])))
           (is (keyword? (:why r)))
           (is (empty? (calls (:p env) "dig"))))))))
+
+(deftest a-far-block-is-walked-to-and-dug-in-one-call
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (setup {:self body :blocks {"12,64,0" "dirt"}})]
+          (is (await (ended-in-one-tick? env (list job {:pos [12 64 0]}))))
+          (is (= "air" (block-at (:p env) {:x 12 :y 64 :z 0})))
+          (is (= 1 (carried (:p env) "dirt"))))))))
 
 (deftest bad-args-end-the-job-with-a-warn
   (async done

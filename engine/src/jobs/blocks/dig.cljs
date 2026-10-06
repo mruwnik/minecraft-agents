@@ -2,14 +2,16 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
+            [jobs.lib.child :as child]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]))
 
 (def doc
-  "Dig the one block at :pos ([x y z] or {:x :y :z}) and pick up what it dropped, as a player would. One act per
-  round: a jobs.movement.go-to round, an equip and the dig, or a jobs.forestry.collect-drops round.
+  "Dig the one block at :pos ([x y z] or {:x :y :z}) and pick up what it dropped, as a player would. One call is the
+  whole attempt: fetch a missing tool (:fetch), walk into reach (one jobs.movement.go-to call), dig, pick up the
+  drops (jobs.forestry.collect-drops). It yields :continue only when a child waits on the world.
 
   The check waits with a reason (ctx/wait; job.waiting and observe show it) and never digs when:
   - {:reason :not-allowed :pos :by :zone|:claim|:footprint|:no-zones ...}: zones, claims or another plan's
@@ -25,18 +27,20 @@
     The wait lasts while the body stands where it gave up, so a body moved by anyone tries again.
   - {:reason :not-loaded :pos}.
 
-  Out of reach, the round walks within 3 cells (go-to child, which opens and shuts doors). In reach it holds the
-  best carried tool (tools/equip-for!) and digs through jobs.lib.tidy/dig!, so a dig of another's block with
-  :ignore-zones? is recorded for jobs.survival.restore-broken. With :collect the next rounds pick up the drops
-  (jobs.forestry.collect-drops child, only the item entities that appeared with this dig, by id).
+  Out of reach, it walks within 3 cells (go-to child, which opens and shuts doors); a failed walk is tried once more.
+  In reach it holds the best carried tool (tools/equip-for!) and digs through jobs.lib.tidy/dig!, so a dig of
+  another's block with :ignore-zones? is recorded for jobs.survival.restore-broken. With :collect it picks up the
+  drops (only the item entities that appeared with this dig, by id).
 
-  Ends with info blocks.dig.done and {:dug true|false :pos :block :reason :collected n}. :reason is :dug,
-  :already-clear (air there, nothing done), :fluid (a fluid is not dug), :fluid-adjacent (:on-fluid :fail, with :hazards and a :hint), :cannot (bedrock and the like) or
-  :bad-args (with a blocks.dig.declined warn). A dig the primitive refuses (a timeout, a failure) ends :failed
-  with its :status at once. The caller decides whether to try again.
+  Ends with info blocks.dig.done and {:dug true|false :pos :block :reason :collected n}. :reason is :dug or
+  :already-clear (air there, nothing done): done. Stopped ({:status :stopped}, :dug false): :fluid (a fluid is not
+  dug), :fluid-adjacent (:on-fluid :fail, with :hazards and a :hint), :cannot (bedrock and the like), :bad-args (with
+  a blocks.dig.declined warn), or :failed (the primitive refused: a timeout, with its :status). Declined, the check
+  then waits: :unreachable (the walk failed twice or the dig is out of reach), a zone or hazard that appeared during
+  the call, or a tool still missing after the fetch (:no-tool). The caller decides whether to try again.
 
-  :fetch (default false; jobs.lib.fetch): a :no-tool wait is not waited out. The check passes and the rounds run
-  jobs.items.get-tool for the block (child :fetch) until a tool is carried, then dig. A fetch that fails is
+  :fetch (default false; jobs.lib.fetch): a :no-tool wait is not waited out. The check passes and the call runs
+  jobs.items.get-tool for the block (child :fetch) until a tool is carried, then digs. A fetch that fails is
   remembered for :fail-minutes; meanwhile the check waits :no-tool with {:fetch {:failed reason ...}}.")
 
 (def args
@@ -113,18 +117,24 @@
     (ctx/result! c result)
     :done))
 
+(defn stop!
+  "finish! for a dig that did not happen and could not: result :status :stopped."
+  [c result]
+  (finish! c (assoc result :status :stopped)))
+
 (defn ^:async collect!
-  "One collect-drops round over the dug block's drops; finish when it is done."
+  "Pick up the dug block's drops (jobs.forestry.collect-drops child, called until it ends); finish when it has."
   [c pos]
   (let [{:keys [block ids]} (:dug (ctx/mem c))
-        r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius collect-radius :ids ids}))]
-    (if (= :done r)
+        r (await (child/run! c :collect 'jobs.forestry.collect-drops {:radius collect-radius :ids ids}))]
+    (if (= :continue r)
+      :continue
       (finish! c {:dug true :pos pos :block block :reason :dug
-                  :collected (:collected (ctx/child-result c :collect) 0)})
-      :continue)))
+                  :collected (if (= :done r) (:collected (ctx/child-result c :collect) 0) 0)}))))
 
 (defn ^:async dig!
-  "Hold the best tool and dig; book the outcome."
+  "Hold the best tool and dig; book the outcome. Resolves to :done (finished), :collect (dug, drops to pick up) or
+  :unreachable (the primitive says out of reach)."
   [c pos block]
   (await (tools/equip-for! c block))
   (let [r (await (tidy/dig! c pos))
@@ -132,29 +142,61 @@
         ids (vec (keep #(.-id %) (array-seq (or (.-drops r) #js []))))]
     (case status
       "dug" (if (and (:collect (:args c)) (seq ids))
-              (do (ctx/update-mem! c assoc :dug {:block block :ids ids}) :continue)
+              (do (ctx/update-mem! c assoc :dug {:block block :ids ids}) :collect)
               (finish! c {:dug true :pos pos :block block :reason :dug :collected 0}))
       "missing" (finish! c {:dug false :pos pos :block block :reason :already-clear})
-      "cannot" (finish! c {:dug false :pos pos :block block :reason :cannot})
-      "unreachable" (do (ctx/update-mem! c assoc :unreachable {:from (b/feet-cell c) :why :out-of-reach}) :continue)
-      (finish! c {:dug false :pos pos :block block :reason :failed :status status}))))
+      "cannot" (stop! c {:dug false :pos pos :block block :reason :cannot})
+      "unreachable" :unreachable
+      (stop! c {:dug false :pos pos :block block :reason :failed :status status}))))
+
+(def max-walks "Failed walks of one call before it declines :unreachable." 2)
+(def max-steps "Walks, digs and fetches of one call before it gives the round back with :continue." 12)
+
+(defn unreachable!
+  "Remember why the block cannot be reached from here; the check waits on it while the body stays. :declined."
+  [c why]
+  (b/unreachable! c why)
+  :declined)
+
+(defn ^:async attempt!
+  "The whole dig: fetch a tool if due, walk into reach, dig, pick up the drops. A walk that fails or leaves the block
+  out of reach is tried once more, then the job declines :unreachable."
+  [c pos]
+  (loop [fails 0 steps 0]
+    (let [p (:primitives c)
+          block (u/block-name p pos)
+          refused (fluid-refusal c)
+          r (when-not (or refused (:dug (ctx/mem c))) (await (fetch/fetch! c 'jobs.blocks.dig problem)))
+          tool (when (and block (not (:dug (ctx/mem c))) (not (b/air block)) (not (b/fluids block))) (needs c block))]
+      (cond
+        refused (stop! c {:dug false :pos pos :block block :reason :fluid-adjacent :hazards (:hazards refused)
+                          :hint "pass :accept #{:fluid-adjacent} to dig beside water, or :on-fluid :wait to wait for it to drain"})
+        r r
+        (:dug (ctx/mem c)) (await (collect! c pos))
+        (b/air block) (finish! c {:dug false :pos pos :block block :reason :already-clear})
+        (b/fluids block) (stop! c {:dug false :pos pos :block block :reason :fluid})
+        tool :declined
+        (>= steps max-steps) :continue
+        (not (b/in-reach? c pos))
+        (let [w (await (b/walk! c pos))]
+          (cond
+            (= :continue w) :continue
+            (= :arrived w) (recur fails (inc steps))
+            (>= (inc fails) max-walks) (unreachable! c (:unreachable w))
+            :else (recur (inc fails) (inc steps))))
+        (b/refused-now c (problem c)) :declined
+        :else
+        (let [d (await (dig! c pos block))]
+          (cond
+            (= :done d) :done
+            (= :collect d) (recur fails (inc steps))
+            :else (unreachable! c :out-of-reach)))))))
 
 (defn ^:async round [c]
   (let [{:keys [pos error]} (b/parse (:args c))]
     (if error
       (do (ctx/emit! c :blocks.dig.declined :warn {:reason :bad-args :text (str "blocks.dig " error)})
-          (ctx/result! c {:dug false :reason :bad-args :text error})
+          (ctx/result! c {:status :stopped :dug false :reason :bad-args :text error})
           :done)
-      (let [_ (when-not (= pos (:for (ctx/mem c))) (ctx/update-mem! c b/fresh-mem pos))
-            block (u/block-name (:primitives c) pos)
-            refused (fluid-refusal c)
-            r (when-not refused (await (fetch/step! c 'jobs.blocks.dig (problem c))))]
-        (cond
-          refused (finish! c {:dug false :pos pos :block block :reason :fluid-adjacent :hazards (:hazards refused)
-                              :hint "pass :accept #{:fluid-adjacent} to dig beside water, or :on-fluid :wait to wait for it to drain"})
-          r r
-          (:dug (ctx/mem c)) (await (collect! c pos))
-          (b/air block) (finish! c {:dug false :pos pos :block block :reason :already-clear})
-          (b/fluids block) (finish! c {:dug false :pos pos :block block :reason :fluid})
-          (not (b/in-reach? c pos)) (await (b/walk! c pos))
-          :else (await (dig! c pos block)))))))
+      (do (when-not (= pos (:for (ctx/mem c))) (ctx/update-mem! c b/fresh-mem pos))
+          (await (attempt! c pos))))))
