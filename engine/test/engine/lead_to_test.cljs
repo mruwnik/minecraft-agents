@@ -82,23 +82,38 @@
           (is (= goal (last (tu/walked-to (:eng s)))) "the legs end at the spot")
           (is (every? #(<= (:x %) 30) (tu/walked-to (:eng s))) "no pull"))))))
 
+(defn ^:async scenario-slow-at-the-end
+  "A cow that keeps up until the body is within a leg of the spot, then is trail blocks behind the spot (more is
+  :break-at). The body would wait for such a cow on the way; at the end it is the gather phase's business."
+  [trail more]
+  (let [{:keys [p] :as s} (h/setup {:floor tu/walk-floor :inventory lead :entities [(cow 1 3 {:trail 5})]})]
+    (.override (.-world p) "steer"
+               (fn [token args impl]
+                 (when (<= 26 (first (:pos (fake/self p))))
+                   (swap! (fake/state p) update :entities (fn [es] (mapv #(merge % {:trail trail :pos [(- 30 trail) 64 0]} more) es))))
+                 (impl token args)))
+    (await (submit s {} 24))))
+
 (deftest reports-whether-the-cow-was-gathered
   (async done
     (tu/run-async done
       (fn ^:async t []
         (doseq [[label cow-spec gathered] [["at the spot" {} true]
-                                           ["trailing, pulled in" {:trail 5} true]
-                                           ["too far out to pull" {:trail 10} false]]]
+                                           ["trailing, pulled in" {:trail 5} true]]]
           (let [s (await (scenario {} {:inventory lead :entities [(cow 1 3 cow-spec)]} 24))]
             (is (= :unleashed (:reason (done-event s))) label)
             (is (= gathered (:gathered (done-event s))) label)
-            (is (= (if gathered 0 1) (count (events-of s :lead-to.gather-short))) label)))))))
+            (is (= (if gathered 0 1) (count (events-of s :lead-to.gather-short))) label)))
+        (let [s (await (scenario-slow-at-the-end 10 nil))]
+          (is (= :unleashed (:reason (done-event s))) "too far out to pull")
+          (is (false? (:gathered (done-event s))) "too far out to pull")
+          (is (= 1 (count (events-of s :lead-to.gather-short))) "too far out to pull"))))))
 
 (deftest a-cow-10-out-is-not-pulled-so-far-that-the-lead-breaks
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {} {:inventory lead :entities [(cow 1 3 {:trail 10 :breakAt 12})]} 24))
+        (let [s (await (scenario-slow-at-the-end 10 {:break-at 12}))
               c (cow-of s 1)
               [short] (events-of s :lead-to.gather-short)]
           (is (= :unleashed (:reason (done-event s))) "no snap: the body did not walk on")
@@ -343,36 +358,53 @@
 ;; ------------------------------------------------------- a led cow out of sight is not lost (card 0dd5dca8)
 
 (defn ^:async hide-cow-for-legs
-  "A scenario where the cow is out of sight after the first leg's steer and back in sight from the next one's."
+  "A scenario where the cow goes out of sight at the first leg's steer and is back in sight n-hidden ticks later."
   [n-hidden]
   (let [{:keys [p] :as s} (h/setup {:floor tu/walk-floor :inventory lead :entities [(cow 1 3)]})
         steers (atom 0)
         saved (atom nil)]
     (.override (.-world p) "steer"
                (fn [token args impl]
-                 (let [k (swap! steers inc)]
-                   (when (and @saved (= k (+ 1 n-hidden))) (swap! (fake/state p) update :entities conj @saved))
-                   (let [r (impl token args)]
-                     (when (= k 1)
-                       (reset! saved (first (:entities @(fake/state p))))
-                       (swap! (fake/state p) update :entities subvec 1))
-                     r))))
-    (await (submit s {} 60))))
+                 (let [r (impl token args)]
+                   (when (= 1 (swap! steers inc))
+                     (reset! saved (first (:entities @(fake/state p))))
+                     (swap! (fake/state p) update :entities subvec 1))
+                   r)))
+    (core/submit! (:eng s) (list 'jobs.animals.lead-to {:mob "cow" :pos goal}) {})
+    (loop [hidden 0 i 0]
+      (when (< i 80)
+        (await (run-ticks s 1 700))
+        (cond
+          (nil? @saved) (recur 0 (inc i))
+          (= hidden n-hidden) (do (when (empty? (:entities @(fake/state p)))
+                                    (swap! (fake/state p) update :entities conj @saved))
+                                  (recur (inc hidden) (inc i)))
+          :else (recur (inc hidden) (inc i)))))
+    s))
 
-(deftest a-cow-out-of-sight-for-one-leg-is-not-lost
+(deftest a-cow-out-of-sight-for-a-while-is-waited-for-not-lost
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (hide-cow-for-legs 1))]
           (is (= :unleashed (:reason (done-event s)))))))))
 
-(deftest a-cow-out-of-sight-for-good-is-lost-after-several-legs
+(deftest a-cow-out-of-sight-for-good-is-lost-and-the-body-did-not-walk-on-without-it
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (hide-cow-for-legs 100))]
           (is (= :lost (:reason (done-event s))))
-          (is (< 8 (first (:pos (fake/self (:p s))))) "it took more than one leg to give the cow up"))))))
+          (is (< (first (:pos (fake/self (:p s)))) 8) "the body waited for the cow instead of walking on"))))))
+
+(deftest a-cow-lagging-far-behind-is-waited-for-then-given-up-as-lagging
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {} {:inventory lead :entities [(cow 1 3 {:trail 9})]} 60))]
+          (is (= :lagging (:reason (done-event s))))
+          (is (true? (:still-led (done-event s))))
+          (is (< (first (:pos (fake/self (:p s)))) 14) "the body stopped when the cow fell 8 or more behind"))))))
 
 (deftest a-spot-in-the-air-is-still-walked-in-legs
   (async done
@@ -391,8 +423,8 @@
           (is (finished? s))
           (is (= :none (:reason (done-event s))))
           (is (= 1 (count (events-of s :stopped))) "the job ends stopped, not completed")
-          (is (re-find #"no cow within 8" (:text stopped)))
-          (is (re-find #":radius" (:text stopped))))))))
+          (is (re-find #"no cow seen within 8" (:text stopped)))
+          (is (not (re-find #":radius" (:text stopped))) "widening the radius does not help a cow that is not seen"))))))
 
 (deftest a-success-is-not-a-stop
   (async done
