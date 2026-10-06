@@ -87,12 +87,14 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [blocks [{} {"30,64,0" "crafting_table"}]]
-          (let [[result p seen] (await (bake {:containers {"10,64,0" [{:name "wheat" :count 30}]} :blocks blocks} {}))]
-            (is (= {:baked 0 :deposited 0 :reason "no-table"} result) (str blocks))
-            (is (= {"wheat" 30} (chest-items p)))
-            (is (contains? (kinds seen) :bake.no-table))
-            (is (empty? (calls p "transfer")))))))))
+        (await (tu/each-async
+                [{} {"30,64,0" "crafting_table"}]
+                (fn ^:async one [blocks]
+                  (let [[result p seen] (await (bake {:containers {"10,64,0" [{:name "wheat" :count 30}]} :blocks blocks} {}))]
+                    (is (= {:baked 0 :deposited 0 :reason "no-table"} result) (str blocks))
+                    (is (= {"wheat" 30} (chest-items p)))
+                    (is (contains? (kinds seen) :bake.no-table))
+                    (is (empty? (calls p "transfer")))))))))))
 
 (deftest a-table-never-seen-is-not-found
   (async done
@@ -116,11 +118,13 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [n [0 2]]
-          (let [[result p seen] (await (bake {:containers {"10,64,0" [{:name "wheat" :count n}]} :blocks beside} {}))]
-            (is (= {:baked 0 :deposited 0} result) (str n))
-            (is (empty? (calls p "craft")) (str n))
-            (is (contains? (kinds seen) :bake.nothing))))))))
+        (await (tu/each-async
+                [0 2]
+                (fn ^:async one [n]
+                  (let [[result p seen] (await (bake {:containers {"10,64,0" [{:name "wheat" :count n}]} :blocks beside} {}))]
+                    (is (= {:baked 0 :deposited 0} result) (str n))
+                    (is (empty? (calls p "craft")) (str n))
+                    (is (contains? (kinds seen) :bake.nothing))))))))))
 
 (deftest a-full-chest-ends-with-the_bread_still_carried
   (async done

@@ -115,6 +115,11 @@
       (await (core/tick! eng))
       (recur (inc i)))))
 
+(defn ^:async each-async
+  "Call the promise-returning (f row) on each of rows in turn: a table of cases without a loop in the test."
+  [rows f]
+  (doseq [row rows] (await (f row))))
+
 (defn run-async
   "Run the promise-returning thunk f inside a cljs.test async block."
   [done f]

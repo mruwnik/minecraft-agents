@@ -91,8 +91,8 @@
   (let [p (:primitives c)
         have (carried-counts p)
         mem (ctx/mem c)
-        table? (boolean (or (:table mem)
-                            (and (not (get-in mem [:craft :table-unreachable])) (craft/nearest-table p craft-radius))))
+        table? (and (not (get-in mem [:craft :table-unreachable]))
+                    (boolean (or (:table mem) (craft/nearest-table p craft-radius))))
         version (game/version-of p)]
     (some (fn [name]
             (when-let [pl (recipes/plan version have name n {:table? table?})]

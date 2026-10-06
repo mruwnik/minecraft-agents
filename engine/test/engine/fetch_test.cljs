@@ -3,9 +3,12 @@
   the fake world, slice F1: carried and chest sources only, chests the body has seen."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.fake.raw-world :as fake-raw]
+            [jobs.items.craft :as craft]
+            [jobs.items.obtain :as obtain]
             [jobs.lib.fetch :as fetch]
             [engine.memory :as mem]
             [engine.perception :as perception]
@@ -621,3 +624,17 @@
           (is (empty? (listed s)) "the job ended")
           (is (= "mangrove_propagule" (block-at s 4 64 3)))
           (is (= 1 (count (events-of s :fetch.done)))))))))
+
+(defn plan-ops
+  "The step ops craft-plan makes for a pickaxe from carried logs, with mem as the job memory and no table in sight."
+  [mem]
+  (let [s (start (-> (world {}) (assoc :inventory [{:name "oak_planks" :count 12} {:name "stick" :count 4}])) [own-zone])]
+    (with-redefs [ctx/mem (constantly mem)
+                  craft/nearest-table (constantly nil)]
+      (mapv :op (:steps (obtain/craft-plan {:primitives (:p s)} ["wooden_pickaxe"] 1))))))
+
+(deftest obtain-plan-uses-the-remembered-table
+  (is (= [:craft] (plan-ops {:table [1 64 0]}))))
+
+(deftest obtain-plan-puts-a-table-down-once-the-table-is-unreachable
+  (is (some #{:place} (plan-ops {:table [1 64 0] :craft {:table-unreachable true}}))))

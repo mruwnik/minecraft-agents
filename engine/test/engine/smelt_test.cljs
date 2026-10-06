@@ -312,12 +312,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (loop [rows [["smoker" "beef" "cooked_beef"] ["blast_furnace" "raw_iron" "iron_ingot"] ["furnace" "beef" "cooked_beef"]]]
-          (when-let [[block item out] (first rows)]
-            (let [[p _ eng] (await (smelt-to-the-end block [{:name item :count 4} {:name "coal" :count 2}] item 4))]
-              (is (= 4 (get (inv-of p) out)) block)
-              (is (empty? (:list (core/state eng))) block)
-              (recur (rest rows)))))))))
+        (await (tu/each-async
+                [["smoker" "beef" "cooked_beef"] ["blast_furnace" "raw_iron" "iron_ingot"] ["furnace" "beef" "cooked_beef"]]
+                (fn ^:async one [[block item out]]
+                  (let [[p _ eng] (await (smelt-to-the-end block [{:name item :count 4} {:name "coal" :count 2}] item 4))]
+                    (is (= 4 (get (inv-of p) out)) block)
+                    (is (empty? (:list (core/state eng))) block)))))))))
 
 (def gave-up-rows
   [["no furnace there" {:inventory [{:name "raw_iron" :count 3} {:name "coal" :count 2}]} "raw_iron" "no-furnace"]
@@ -333,18 +333,18 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (loop [rows gave-up-rows]
-          (when-let [[label world item reason] (first rows)]
-            (let [{:keys [eng p seen]} (setup world)
-                  before (inv-of p)]
-              (core/submit! eng (list 'jobs.items.smelt {:furnace {:x 1 :y 64 :z 0} :item item :count 3}) {})
-              (await (ticks eng 6))
-              (is (= reason (:reason (first (of-kind seen :smelt.gave-up)))) label)
-              (is (= 1 (count (of-kind seen :smelt.gave-up))) label)
-              (is (empty? (:list (core/state eng))) label)
-              (is (not (some #{"load"} (ops p))) label)
-              (is (= before (inv-of p)) label)
-              (recur (rest rows)))))))))
+        (await (tu/each-async
+                gave-up-rows
+                (fn ^:async one [[label world item reason]]
+                  (let [{:keys [eng p seen]} (setup world)
+                        before (inv-of p)]
+                    (core/submit! eng (list 'jobs.items.smelt {:furnace {:x 1 :y 64 :z 0} :item item :count 3}) {})
+                    (await (ticks eng 6))
+                    (is (= reason (:reason (first (of-kind seen :smelt.gave-up)))) label)
+                    (is (= 1 (count (of-kind seen :smelt.gave-up))) label)
+                    (is (empty? (:list (core/state eng))) label)
+                    (is (not (some #{"load"} (ops p))) label)
+                    (is (= before (inv-of p)) label)))))))))
 
 (deftest the-body-walks-to-a-furnace-out-of-reach
   (async done
@@ -554,21 +554,21 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (loop [rows [["read" {:status "timeout"} "furnace timeout"]
+        (await (tu/each-async
+                [["read" {:status "timeout"} "furnace timeout"]
                      ["load" {:status "busy" :slot "input" :holds {:name "beef" :count 1}} "furnace-busy"]
                      ["load" {:status "busy" :slot "fuel" :holds {:name "stick" :count 1}} "fuel-busy"]
                      ["load" {:status "rejected" :slot "fuel" :item "coal" :reason "not-accepted"} "rejected-fuel"]
                      ["load" {:status "rejected" :slot "input" :item "raw_iron" :reason "slot-full"} "furnace-full"]
                      ["load" {:status "no-item" :slot "input" :item "raw_iron"} "no-item"]
-                     ["load" {:status "weird"} "load weird"]]]
-          (when-let [[op result reason] (first rows)]
-            (let [{:keys [eng p seen]} (setup base-world)]
-              (forcing p op result)
-              (core/submit! eng iron-job {})
-              (await (ticks eng 3))
-              (is (= reason (:reason (first (of-kind seen :smelt.gave-up)))) reason)
-              (is (empty? (:list (core/state eng))) reason)
-              (recur (rest rows)))))))))
+                 ["load" {:status "weird"} "load weird"]]
+                (fn ^:async one [[op result reason]]
+                  (let [{:keys [eng p seen]} (setup base-world)]
+                    (forcing p op result)
+                    (core/submit! eng iron-job {})
+                    (await (ticks eng 3))
+                    (is (= reason (:reason (first (of-kind seen :smelt.gave-up)))) reason)
+                    (is (empty? (:list (core/state eng))) reason)))))))))
 
 (defn ^:async result-of
   "Run the job (spec args) as the child of a recording parent, cooking and advancing the clock between ticks, until the list is empty; the child's result."

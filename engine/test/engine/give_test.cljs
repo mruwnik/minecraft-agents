@@ -105,15 +105,17 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[args given left] [[{:player "Steve" :item "bread" :count 5} 5 {}]
-                                   [{:player "Steve" :item "bread" :count 2} 2 {"bread" 3}]
-                                   [{:player "Steve" :item "bread"} 5 {}]]]
-          (let [{:keys [p out] :as s} (await (give (assoc bread :entities [(steve 10)]) args 12 true))]
-            (is (= {:given given} @out))
-            (is (= 1 (count (tu/walked-to (:eng s)))))
-            (is (= 1 (count (calls p "toss"))))
-            (is (= left (inv p)))
-            (is (has-event? s :give.done))))))))
+        (await (tu/each-async
+                [[{:player "Steve" :item "bread" :count 5} 5 {}]
+                 [{:player "Steve" :item "bread" :count 2} 2 {"bread" 3}]
+                 [{:player "Steve" :item "bread"} 5 {}]]
+                (fn ^:async one [[args given left]]
+                  (let [{:keys [p out] :as s} (await (give (assoc bread :entities [(steve 10)]) args 12 true))]
+                    (is (= {:given given} @out))
+                    (is (= 1 (count (tu/walked-to (:eng s)))))
+                    (is (= 1 (count (calls p "toss"))))
+                    (is (= left (inv p)))
+                    (is (has-event? s :give.done))))))))))
 
 (deftest nothing-carried-gives-nothing
   (async done

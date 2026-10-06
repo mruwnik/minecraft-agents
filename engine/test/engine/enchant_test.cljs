@@ -137,10 +137,11 @@
     (tu/run-async done
       (fn ^:async t []
         (let [world (assoc table-world :enchantTables {spot {:shelves 15}})]
-          (doseq [[args want] [[{:slot 1} 1] [{:slot 2} 2] [{:choice "cheapest"} 1] [{:max-level-cost 25} 2] [{:max-level-cost 10} 1]]]
-            (let [[r p] (await (enchant! world args))]
-              (is (= want (:slot r)) (pr-str args))
-              (is (= (- 30 want) (level p)) (pr-str args)))))))))
+          (await (tu/each-async [[{:slot 1} 1] [{:slot 2} 2] [{:choice "cheapest"} 1] [{:max-level-cost 25} 2] [{:max-level-cost 10} 1]]
+                                (fn ^:async one [[args want]]
+                                  (let [[r p] (await (enchant! world args))]
+                                    (is (= want (:slot r)) (pr-str args))
+                                    (is (= (- 30 want) (level p)) (pr-str args)))))))))))
 
 (deftest a-table-never-seen-is-not-found
   (async done
@@ -167,18 +168,18 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (loop [rows give-up-rows]
-          (when-let [[label spec args reason] (first rows)]
-            (let [world (merge table-world spec)
-                  [r p seen] (await (enchant! world args))]
-              (is (= reason (:reason r)) label)
-              (is (= false (:enchanted r)) label)
-              (is (= [0 0] [(:levels-spent r) (:lapis-spent r)]) label)
-              (is (= reason (:reason (first (of-kind seen :enchant.gave-up)))) label)
-              (is (= 1 (count (of-kind seen :enchant.gave-up))) label)
-              (is (not (some #{"enchant"} (ops p))) label)
-              (is (= (select-keys (merge {:self {:experience {:level 30}}} spec) [:self]) (select-keys {:self {:experience {:level (level p)}}} [:self])) label)
-              (recur (rest rows)))))))))
+        (await (tu/each-async
+                give-up-rows
+                (fn ^:async one [[label spec args reason]]
+                  (let [world (merge table-world spec)
+                        [r p seen] (await (enchant! world args))]
+                    (is (= reason (:reason r)) label)
+                    (is (= false (:enchanted r)) label)
+                    (is (= [0 0] [(:levels-spent r) (:lapis-spent r)]) label)
+                    (is (= reason (:reason (first (of-kind seen :enchant.gave-up)))) label)
+                    (is (= 1 (count (of-kind seen :enchant.gave-up))) label)
+                    (is (not (some #{"enchant"} (ops p))) label)
+                    (is (= (select-keys (merge {:self {:experience {:level 30}}} spec) [:self]) (select-keys {:self {:experience {:level (level p)}}} [:self])) label)))))))))
 
 (deftest a-table-out-of-reach-is-walked-to
   (async done
