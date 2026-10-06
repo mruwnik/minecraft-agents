@@ -152,10 +152,18 @@
      (if (:error parsed)
        (do (js/console.error (str (:error parsed) "\n" usage)) (js/Promise.resolve 2))
        (let [socket (drive/socket-path-for parsed)]
-         (.catch
-          (.then (send! socket (:body parsed) request-fn)
-                (fn [{:keys [status content-type text]}]
-                  (let [ok? (and (>= status 200) (< status 300))
+         (-> (send! socket (:body parsed) request-fn)
+             (.then (fn [response] {:response response})
+                    (fn [error] {:error error}))
+             (.then
+              (fn [{:keys [response error]}]
+                (if error
+                  (let [request-id (get-in parsed [:body :request-id])]
+                    (js/console.error (str (failure-text error socket) "; command was not confirmed"
+                                           (when request-id (str "; retry/query with --request-id " request-id))))
+                    2)
+                  (let [{:keys [status content-type text]} response
+                        ok? (and (>= status 200) (< status 300))
                         answer (when (http/edn-response? content-type) (try (data/read-edn text) (catch :default _ nil)))]
                     (cond
                       (nil? answer)
@@ -165,9 +173,8 @@
                       (and (:wait parsed) ok? (:ok answer))
                       (.then (wait-after! parsed answer request-fn)
                              (fn [result] (output (str (data/write-edn result) "\n")) 0))
-                      :else (do (output text) (if ok? 0 1))))))
-          (fn [error]
-                  (let [request-id (get-in parsed [:body :request-id])]
-                    (js/console.error (str (failure-text error socket) "; command was not confirmed"
-                                           (when request-id (str "; retry/query with --request-id " request-id))))
-                    2))))))))
+                      :else (do (output text) (if ok? 0 1)))))))
+             (.catch (fn [error]
+                       (js/console.error (str "the command was accepted, but reporting its result failed: "
+                                              (or (aget error "code") (.-message error))))
+                       2))))))))

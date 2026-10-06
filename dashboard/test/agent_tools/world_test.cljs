@@ -74,8 +74,15 @@
           (.then (fn [code]
                    (is (= 1 code))
                    (is (re-find #"world-unavailable" (apply str @lines)))))
-          (.then (fn [_] (world/main! argv {:request-fn good-edn :output (fn [_] (throw (js/Error. "EPIPE")))})))
-          (.then (fn [code] (is (= 2 code))))
+          (.then (fn [_]
+                   (let [original js/console.error]
+                     (set! js/console.error #(swap! lines conj %))
+                     (-> (world/main! argv {:request-fn good-edn :output (fn [_] (throw (js/Error. "EPIPE")))})
+                         (.finally #(set! js/console.error original))))))
+          (.then (fn [code]
+                   (is (= 2 code))
+                   (is (re-find #"accepted.*EPIPE" (last @lines)))
+                   (is (not (re-find #"not confirmed" (last @lines))))))
           (.then (fn [_] (done)))))))
 
 (deftest a-body-is-addressed-in-its-world

@@ -703,3 +703,13 @@
   (is (false? (observe/process-alive? 1 (kill-failing "ESRCH"))))
   (is (true? (observe/process-alive? 1 (fn [_] nil))))
   (is (= "EINVAL" (try (observe/process-alive? 1 (kill-failing "EINVAL")) (catch :default e (.-code e))))))
+
+(deftest reclaim-puts-back-a-live-lock-that-replaced-the-stale-one
+  (with-lock-dir
+    (fn [dir]
+      (let [lock (.join path dir "obs.lock")]
+        (.mkdirSync fs lock)
+        (.writeFileSync fs (.join path lock "pid") (str (.-pid js/process)))
+        (is (= "EEXIST" (try (observe/reclaim-stale-lock! lock) nil (catch :default e (.-code e)))))
+        (is (= (str (.-pid js/process)) (.readFileSync fs (.join path lock "pid") "utf8")) "the live lock is back, untouched")
+        (is (= ["obs.lock"] (vec (.readdirSync fs dir))) "no aside left behind")))))

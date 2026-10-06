@@ -220,15 +220,28 @@
         (catch :default e
           (case (code-of e) "ESRCH" false "EPERM" true (throw e))))))
 
+(defn lock-owner-gone?
+  "True when the lock dir at `dir` belongs to nobody: its pid is dead, or it never got a pid and is old."
+  [dir]
+  (let [pid (try (js/Number (.readFileSync fs (.join path dir "pid") "utf8")) (catch :default _ nil))
+        pid? (and pid (js/Number.isInteger pid) (not= 0 pid))]
+    (if pid?
+      (not (process-alive? pid))
+      (>= (- (js/Date.now) (.-mtimeMs (.statSync fs dir))) pidless-lock-stale-ms))))
+
 (defn reclaim-stale-lock!
-  "Move the stale lock aside atomically (the loser of a race gets ENOENT) and delete it; then make a fresh one.
-  Throws EEXIST when another observer made its own lock first."
+  "Move the lock aside atomically (the loser of a race gets ENOENT), check that what was moved really is stale,
+  delete it and make a fresh lock. A live lock that took its place meanwhile is put back and EEXIST thrown."
   [lock]
   (let [aside (str lock ".stale-" (.-pid js/process) "-" (js/Math.floor (* (js/Math.random) 1e9)))]
     (try (.renameSync fs lock aside)
-         (.rmSync fs aside #js {:recursive true :force true})
          (catch :default error
            (when-not (= "ENOENT" (code-of error)) (throw error))))
+    (when (.existsSync fs aside)
+      (when-not (lock-owner-gone? aside)
+        (.renameSync fs aside lock)
+        (throw (coded "EEXIST" "lock is held")))
+      (.rmSync fs aside #js {:recursive true :force true}))
     (.mkdirSync fs lock #js {:mode private-dir-mode})))
 
 (defn acquire!
@@ -240,15 +253,10 @@
     (try (.mkdirSync fs lock #js {:mode private-dir-mode})
          (catch :default error
            (when-not (= "EEXIST" (code-of error)) (throw error))
-           (let [pid (try (js/Number (.readFileSync fs (.join path lock "pid") "utf8")) (catch :default _ nil))
-                 pid? (and pid (js/Number.isInteger pid) (not= 0 pid))]
-             (when (and (not pid?) (< (- (js/Date.now) (.-mtimeMs (.statSync fs lock))) pidless-lock-stale-ms))
-               (throw (busy)))
-             (when (and pid? (process-alive? pid))
-               (throw (busy)))
-             (try (reclaim-stale-lock! lock)
-                  (catch :default e
-                    (throw (if (= "EEXIST" (code-of e)) (busy) e)))))))
+           (when-not (lock-owner-gone? lock) (throw (busy)))
+           (try (reclaim-stale-lock! lock)
+                (catch :default e
+                  (throw (if (= "EEXIST" (code-of e)) (busy) e))))))
     (.writeFileSync fs (.join path lock "pid") (str (.-pid js/process)) #js {:mode private-file-mode})
     #(.rmSync fs lock #js {:recursive true :force true})))
 
