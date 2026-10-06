@@ -10,9 +10,10 @@
   Declines when health is below :min-health.
   Ends when no hostile is within :range, with the result {:killed [ids]}.
   A hostile the walk toward is blocked for three times is given up on, with a fight_unreachable warning, and no longer counts.
+  So is one that three swings in a row did no damage to (the attack result says hurt false), with a fight_no_damage warning.
   When no other hostile is in range the job declines, so respond-to-hostile retreats instead.
   A killed mob, or one whose id is in :skip, is not swung at again while its corpse is listed.
-  Job memory (for the parent): :struck {id {:name :hits :health}} for landed hits, and :killed.")
+  Job memory (for the parent): :struck {id {:name :hits :health}} for hits that did damage, and :killed.")
 
 (def args
   {:range {:doc "hostiles within this many blocks are fought" :default 4}
@@ -25,9 +26,10 @@
 (def reach 3)
 
 (defn given-up?
-  "Whether the walk towards hostile e has been blocked u/max-failures times."
+  "Whether the walk towards hostile e has been blocked, or swings at it done no damage, u/max-failures times."
   [c e]
-  (>= (get-in (ctx/mem c) [:blocked (.-id e)] 0) u/max-failures))
+  (or (>= (get-in (ctx/mem c) [:blocked (.-id e)] 0) u/max-failures)
+      (>= (get-in (ctx/mem c) [:no-damage (.-id e)] 0) u/max-failures)))
 
 (defn in-range
   "The hostiles within :range (ranged ones within :ranged-range): the visible
@@ -65,6 +67,17 @@
                      (fn [m] (cond-> (-> (or m {}) (assoc :name (.-name target)) (update :hits (fnil inc 0)))
                                (number? h) (assoc :health h))))))
 
+(defn note-swing!
+  "Count a swing at target that did no damage in a row (reset by one that did); warn once when it is given up on."
+  [c target result]
+  (if (.-hurt result)
+    (do (ctx/update-mem! c assoc-in [:no-damage (.-id target)] 0)
+        (note-hit! c target result))
+    (let [n (inc (get-in (ctx/mem c) [:no-damage (.-id target)] 0))]
+      (ctx/update-mem! c assoc-in [:no-damage (.-id target)] n)
+      (when (= n u/max-failures)
+        (ctx/emit! c :fight_no_damage :warn {:text (str "swings at the " (.-name target) " do no damage, giving up on it")})))))
+
 (def chase-timeout-s
   "Bound of one walk toward the mob: it moves, so the walk aims again at where it is now this often."
   10)
@@ -82,7 +95,7 @@
       (ctx/update-mem! c assoc :last-attack (ctx/now c))
       (await (ctx/act c :look #js {:pos #js {:x (:x tpos) :y (+ 1 (:y tpos)) :z (:z tpos)}}))
       (let [a (await (ctx/act c :attack #js {:id (.-id target)}))]
-        (when (= "hit" (.-status a)) (note-hit! c target a))
+        (when (= "hit" (.-status a)) (note-swing! c target a))
         (when (= "killed" (.-status a)) (ctx/update-mem! c update :killed (fnil conj []) (.-id target)))))
     r))
 

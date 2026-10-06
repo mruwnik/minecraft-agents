@@ -184,6 +184,37 @@
           (core/submit! eng fight {})
           (is (nil? (core/tick! eng)) "6 blocks is beyond range 4"))))))
 
+(defn invulnerable-zombie [] (assoc (zombie 7 3 0) :invulnerable true))
+
+(deftest fight-back-counts-no-hit-without-damage
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng clock]} (await (first-round fight {:inventory sword :entities [(invulnerable-zombie)]}))]
+          (is (nil? (:struck (core/job-memory eng "j1"))) "no damage seen: no hit recorded"))))))
+
+(deftest fight-back-gives-up-on-a-mob-it-cannot-damage
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock seen]} (await (first-round fight {:inventory sword :entities [(invulnerable-zombie)]}))]
+          (dotimes [_ 6]
+            (swap! clock + 700)
+            (await (core/tick! eng)))
+          (is (= 3 (count (calls p "attack"))) "three swings without damage, then no more")
+          (is (some #(= "fight_no_damage" (name (:kind %))) @seen) "warned, with the reason"))))))
+
+(deftest respond-flees-from-a-mob-that-takes-no-damage
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (await (first-round respond {:inventory sword :entities [(invulnerable-zombie)]}))]
+          (dotimes [_ 8]
+            (swap! clock + 700)
+            (await (core/tick! eng)))
+          (is (= 3 (count (calls p "attack"))) "the fight stops after three useless swings")
+          (is (pos? (count (tu/walked-to eng))) "and the body retreats"))))))
+
 ;; ----------------------------------------------------------------- retreat
 
 (def retreat '(jobs.survival.retreat))
