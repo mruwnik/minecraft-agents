@@ -241,9 +241,9 @@
           (.override (.-world p) "steer"
                      (fn [token args impl]
                        (let [r (impl token args)]
-                         (swap! (fake/state p) update :entities subvec 1)
+                         (swap! (fake/state p) update :entities empty)
                          r)))
-          (await (submit s {} 12))
+          (await (submit s {} 40))
           (is (finished? s))
           (is (= :lost (:reason (done-event s)))))))))
 
@@ -339,3 +339,45 @@
           (let [pull-legs (filter #(< 30 (:x %)) (tu/walked-to eng))]
             (is (= 1 (count pull-legs)) "the pull was cut after one leg")
             (is (every? #(< (:x %) 34) pull-legs) "that leg is short of the pull's end")))))))
+
+;; ------------------------------------------------------- a led cow out of sight is not lost (card 0dd5dca8)
+
+(defn ^:async hide-cow-for-legs
+  "A scenario where the cow is out of sight after the first leg's steer and back in sight from the next one's."
+  [n-hidden]
+  (let [{:keys [p] :as s} (h/setup {:floor tu/walk-floor :inventory lead :entities [(cow 1 3)]})
+        steers (atom 0)
+        saved (atom nil)]
+    (.override (.-world p) "steer"
+               (fn [token args impl]
+                 (let [k (swap! steers inc)]
+                   (when (and @saved (= k (+ 1 n-hidden))) (swap! (fake/state p) update :entities conj @saved))
+                   (let [r (impl token args)]
+                     (when (= k 1)
+                       (reset! saved (first (:entities @(fake/state p))))
+                       (swap! (fake/state p) update :entities subvec 1))
+                     r))))
+    (await (submit s {} 60))))
+
+(deftest a-cow-out-of-sight-for-one-leg-is-not-lost
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (hide-cow-for-legs 1))]
+          (is (= :unleashed (:reason (done-event s)))))))))
+
+(deftest a-cow-out-of-sight-for-good-is-lost-after-several-legs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (hide-cow-for-legs 100))]
+          (is (= :lost (:reason (done-event s))))
+          (is (< 8 (first (:pos (fake/self (:p s))))) "it took more than one leg to give the cow up"))))))
+
+(deftest a-spot-in-the-air-is-still-walked-in-legs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:pos {:x 30 :y 70 :z 0}} {:inventory lead :entities [(cow 1 3)]} 40))
+              legs (tu/walked-to (:eng s))]
+          (is (< 4 (count legs)) "more than a few legs"))))))

@@ -5,6 +5,7 @@
             [jobs.lib.watch :as watch]
             [jobs.lib.near :as near]
             [jobs.lib.walk :as walk]
+            [jobs.lib.reach :as reach]
             [jobs.lib.places :as places]))
 
 (def doc
@@ -14,8 +15,8 @@
   Phases, each by a child job:
   - :leash: jobs.animals.leash (radius :radius).
   - :walk: jobs.movement.go-to to :pos (the :fence cell when no :pos), range :range, in legs of a few blocks along
-    the planned path (one round, no :continue between legs). After each leg the animal is looked at: gone ends
-    :lost, off the lead :lead-broke, more than 10 blocks behind (the lead breaks past 12) :lagging.
+    the planned path (one round, no :continue between legs). After each leg the animal is looked at: unseen
+    three looks in a row (a ledge or tree can hide it) ends :lost, off the lead :lead-broke, more than 10 blocks behind (the lead breaks past 12) :lagging.
   - :gather (no :fence only): see below.
   - :arrive: with :fence, walk within 2 of the post and click it with an empty hand (useOn), tried twice.
     Without :fence, jobs.animals.unleash lets the animal go and picks the lead up.
@@ -24,7 +25,7 @@
   A tie counts only when the sensing then shows the animal held by something else than this body.
 
   Before each walking round the animal is looked up (within :watch-radius). Seen off this body's lead: ends
-  :lead-broke. Not seen: ends :lost.
+  :lead-broke. Not seen: ends :lost (a walk tolerates a few unseen looks, see :walk).
 
   Gather: a led animal trails about a lead length behind the body. On arrival, if the animal is farther than
   :gather-radius from :pos, the body walks on past :pos (range 1) so the lead pulls it in. It waits for the
@@ -171,25 +172,46 @@
   "The animal trailing the body by more than this many blocks is about to break the lead (it breaks past 12)."
   10)
 
+(defn snap-to-ground
+  "target with its y moved to the nearest standable cell of its column (down first, then a little up), unchanged when
+  it already is one or the column has none: a spot in the air or underground still plans legs."
+  [c target]
+  (let [{:keys [x y z]} (:pos (places/parse-pos target))
+        p (:primitives c)
+        y' (when y
+             (some #(when (reach/standable-cell? p {:x x :y % :z z}) %)
+                   (concat (range y (- y 12) -1) (range (inc y) (+ y 4)))))]
+    (if y' {:x x :y y' :z z} target)))
+
 (defn leg-target
   "Where the next leg of a walk to target (within range) goes: the planned path's cell leg-steps on, or nil when the
   rest is within one leg, there is no plan, or the leg would not move the body (the caller walks the whole way)."
   [c target range]
   (let [pw (walk/path-world (:primitives c))
-        steps (when pw (:steps (plan-or-nil c pw target)))
+        steps (when pw (:steps (plan-or-nil c pw (snap-to-ground c target))))
         step (when (< leg-steps (count steps)) (nth steps leg-steps))
         me (u/self-pos c)]
     (when (and step (< 1 (flat-dist me {:x (:px step) :z (:pz step)})))
       (select-keys step [:x :y :z]))))
 
+(def max-unseen
+  "Looks in a row after a leg that may find the animal out of sight before it counts as :lost. A led animal behind a
+  ledge or a tree is not in the sensing, though it is still on the lead."
+  3)
+
 (defn escort-problem
-  "Why the walk must stop after a leg: :lost, :lead-broke or :lagging (the animal farther than follow-reach), else nil."
+  "Why the walk must stop after a leg: :lost (not seen max-unseen looks in a row), :lead-broke or :lagging (the animal
+  farther than follow-reach), else nil."
   [c]
   (let [a (animal-now c)]
-    (cond
-      (nil? a) :lost
-      (not (animals/led-by-me? a)) :lead-broke
-      (> (flat-dist (u/pos-of (.-pos a)) (u/self-pos c)) follow-reach) :lagging)))
+    (if (nil? a)
+      (let [n (inc (:unseen (ctx/mem c) 0))]
+        (ctx/update-mem! c assoc :unseen n)
+        (when (<= max-unseen n) :lost))
+      (do (ctx/update-mem! c dissoc :unseen)
+          (cond
+            (not (animals/led-by-me? a)) :lead-broke
+            (> (flat-dist (u/pos-of (.-pos a)) (u/self-pos c)) follow-reach) :lagging)))))
 
 (defn ^:async walk-legs!
   "Walk to target (within range) in short go-to legs in child slot, looking at the animal after each. Answer
@@ -321,8 +343,8 @@
         (>= (- now started) (* 1000 timeout-s)) (finish! c :timeout)
         (nil? phase) (do (set-phase! c :leash) :continue)
         (= :leash phase) (await (leash! c))
-        (and (#{:walk :gather :arrive} phase) (nil? a)) (do (ctx/update-mem! c assoc :still-led false) (finish! c :lost))
-        (and (#{:walk :gather :arrive} phase) (not (animals/led-by-me? a))) (do (ctx/update-mem! c assoc :still-led false) (finish! c :lead-broke))
+        (and (#{:gather :arrive} phase) (nil? a)) (do (ctx/update-mem! c assoc :still-led false) (finish! c :lost))
+        (and (#{:walk :gather :arrive} phase) a (not (animals/led-by-me? a))) (do (ctx/update-mem! c assoc :still-led false) (finish! c :lead-broke))
         (= :walk phase) (do (await (watch/watch! c {})) (await (walk! c)))
         (= :gather phase) (do (await (watch/watch! c {})) (await (gather! c a)))
         (= :arrive phase) (await (arrive! c))
