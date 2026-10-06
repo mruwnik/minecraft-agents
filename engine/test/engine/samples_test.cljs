@@ -53,7 +53,7 @@
           (is (nil? (core/tick! eng)) "night: nothing ready")
           (fake/swap-self! p assoc :health 6 :food 10)
           (await (core/tick! eng))
-          (is (= 15 (.-food (.self p))) "hurt below 18 food: get-food ate where the body stands")
+          (is (= 20 (.-food (.self p))) "hurt below 18 food: get-food ate both loaves where the body stands, in one round")
           (fake/swap-self! p assoc :health 20)
           (dotimes [_ 3] (await (core/tick! eng)))
           (is (= ["j2"] (:list (core/state eng))) "fed: get-food is done")

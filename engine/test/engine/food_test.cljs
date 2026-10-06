@@ -385,19 +385,6 @@
           (is (= 7 (food p)))
           (is (not-any? #(= :food.none (:kind %)) @seen)))))))
 
-(deftest get-food-does-not-swing-faster-than-the-gap
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p clock]} (setup {:self {:food 2} :entities [cow]})]
-          (core/submit! eng '(jobs.survival.get-food) {})
-          (await (core/tick! eng))
-          (await (core/tick! eng))
-          (is (= 1 (count (calls p "attack"))) "the clock has not moved")
-          (swap! clock + 1000)
-          (await (core/tick! eng))
-          (is (= 2 (count (calls p "attack")))))))))
-
 (deftest get-food-forages-a-berry-bush-when-there-are-no-animals
   (async done
     (tu/run-async done

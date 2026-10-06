@@ -60,6 +60,7 @@ Layout:
 - `src/jobs/` the jobs, one namespace each (`jobs.survival.eat`); the build finds them. Helpers: `jobs.lib.*` (shared,
   including the walker `jobs.lib.walk`/`near`/`pass`), `jobs.<area>.*` (one area's). `jobs/hooks.edn` names the hooks.
   Results: `jobs.lib.result` (`stop!` gives up with reason/text/`:cause`, `cause-of` nests a child's stop, `finish!` hands success data).
+  `jobs.lib.child/run!` calls a child that still answers `:continue` per step until it ends (50 ms timer between calls; `:continue` after a call cap; a slot run with other args starts afresh).
 - `src/triggers/` the triggers, plain fns by area (`triggers.survival.hungry`); `defaults.edn` is the default set.
 - `scenarios/*.edn` scenarios (`survival.edn`, `woodcutter.edn`, `pace-cuts.edn`, ...; `scratch/` is git-ignored for hand-run probe starts; `idle.edn` is the idle template).
 - `test/engine/` cljs tests (helpers in `engine.test-util`); `test/engine/fake.cljs` is the scriptable fake world.
@@ -582,7 +583,7 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 | job | what it does |
 |---|---|
 | `survival.eat` `{:item :until 18}` | Eats the best carried food (points, then saturation); harmful food only with `:allow-bad` |
-| `survival.get-food` | Ladder: eat, known source, hunt or harvest; gives up with warn `food.none` |
+| `survival.get-food` | One round: eat carried food; while hungry take the next way (bake, known source, drops, hunt, wild crops; withdraw/attack/dig children) and eat again. Fed: `{:food n}`; nothing left: stopped `:no-food` with warn `food.none`; inside its ask cooldown it declines |
 | `survival.breathe`, `survival.extinguish` | Swim up or dig the head free; pour water or reach water. Never trespass except as a last resort |
 | `survival.respond-to-hostile` | Fights (`fight-back`) when the odds are fair, else `retreat` |
 | `survival.retreat` | Flees away from all real dangers in range (nearer ones weigh more), leaning to a bed or home within `:home-range` (64); never ends while one stands. Cornered (no open way, rechecked each round) it fights, seals itself in, pillars, or digs down, then hides until the way is closed |
