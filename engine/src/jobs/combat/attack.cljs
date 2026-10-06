@@ -162,7 +162,7 @@
   (let [tpos (u/pos-of (.-pos target))]
     (if (<= (u/dist (u/self-pos c) tpos) reach)
       :there
-      (case (await (near/walk-near! c tpos 2 {:doors :shut :timeout-s (:walk-timeout-s (:args c))}))
+      (case (await (near/walk-near! c tpos 2 {:doors :shut :timeout-s (:walk-timeout-s (:args c)) :dangers false}))
         :there :arrived
         :partial :partial
         :blocked))))
@@ -186,7 +186,7 @@
 (defn ^:async close-in!
   "Walk right up to a target that cannot be hit from here, and count a failure."
   [c target]
-  (await (near/walk-near! c (u/pos-of (.-pos target)) 1 {:doors :shut :timeout-s (:walk-timeout-s (:args c))}))
+  (await (near/walk-near! c (u/pos-of (.-pos target)) 1 {:doors :shut :timeout-s (:walk-timeout-s (:args c)) :dangers false}))
   (fail! c target))
 
 (defn ^:async swing-or-close-in!

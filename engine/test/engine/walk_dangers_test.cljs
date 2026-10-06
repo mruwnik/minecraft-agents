@@ -35,10 +35,7 @@
                           :triggers {} :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     (core/submit! eng '(planning-parent) {})
-    (loop [i 0]
-      (when (and (< i 20) (seq (:list (core/state eng))))
-        (await (core/tick! eng))
-        (recur (inc i))))
+    (await (tu/tick-until-idle! eng 20))
     (:steps @out)))
 
 (deftest an-unarmed-body-plans-wide-round-a-zombie-it-sees
@@ -69,9 +66,22 @@
 (deftest a-kept-search-is-new-once-a-danger-moved-died-or-came
   (let [pw #js {:snapshot nil :table nil :space nil}
         with (fn [& ds] (walk/danger-key (walk/with-dangers pw (clj->js (vec ds)))))
-        z {:mob "zombie" :x 20.5 :y 64 :z 0.5}]
+        z {:mob "zombie" :x 20.5 :y 64 :z 0.5 :rate 4}]
     (is (nil? (walk/danger-key pw)))
     (is (= (with z) (with (assoc z :x 21.2))) "a step within its 4 blocks: the same search goes on")
     (is (not= (with z) (with (assoc z :x 30.5))) "moved on")
     (is (not= (with z) (with)) "died: none left")
     (is (not= (with z) (with z (assoc z :mob "skeleton"))) "another came")))
+
+(defn key-of [world]
+  (let [p (tu/fake-on-floor (merge {:floor [-5 -20 45 20]} world))
+        pw (walk/with-dangers (walk/path-world p) (clj->js (threats/known-dangers p [])))]
+    (walk/danger-key pw)))
+
+(deftest the-search-key-follows-the-body-s-weapon-and-health
+  (let [unarmed (key-of {:entities [zombie]})
+        armed (key-of {:entities [zombie] :inventory [{:name "diamond_sword" :count 1}]})
+        hurt (key-of {:entities [zombie] :inventory [{:name "diamond_sword" :count 1}] :self {:health 6}})]
+    (is (= unarmed (key-of {:entities [zombie]})) "same body, same key")
+    (is (not= unarmed armed) "a weapon picked up: a new search")
+    (is (not= armed hurt) "health lost: a new search")))

@@ -568,6 +568,22 @@
    :way? (or (reach/walkable-way? p (u/pos-of (.-pos e)) (u/pos-of (.-pos (.self p))))
              (and (combat/ranged? e) (reach/danger? p e {:sight? false})))})
 
+(defn known-chasers
+  "The hostiles the body knows of (seen or heard, or remembered where last sensed) within the longest follow range."
+  [p]
+  (reach/known-hostiles p threats/max-follow-range {}))
+
+(def resume-gap-ms "A flight cut for longer than this starts its clocks afresh when it resumes." 5000)
+
+(defn resume-flight
+  "mem of a flight resumed at now: after a gap past resume-gap-ms since its last step, the flight starts now and every
+  chaser counts as just seen (the world is judged afresh); else as it was."
+  [mem now]
+  (if (or (nil? (:last-step mem)) (<= (- now (:last-step mem)) resume-gap-ms))
+    mem
+    (cond-> (assoc mem :flight-start now :last-step now)
+      (:chasers mem) (update :chasers update-vals #(assoc % :seen-t now)))))
+
 (defn chaser-entry [e now] {:id (.-id e) :uuid (.-uuid e) :mob (.-name e) :pos (u/pos-of (.-pos e)) :seen-t now})
 
 (defn look!
@@ -579,7 +595,7 @@
         p (:primitives c)
         now (ctx/now c)
         dead (set (dead-ids c))
-        live (remove #(dead (.-id %)) (combat/hostiles p threats/max-follow-range))
+        live (remove #(dead (.-id %)) (known-chasers p))
         listed (into {} (map (juxt #(.-id %) identity)) live)
         joining (remove #(dead (.-id %)) (reach/dangers p radius {:ranged-radius ranged-radius} {:sight? false}))
         chasers (merge (:chasers (ctx/mem c)) (into {} (map (juxt #(.-id %) #(chaser-entry % now))) joining))
@@ -797,8 +813,10 @@
 (defn ^:async round
   "One whole flight: steps (flight-step!, or the refuge's) until it ends."
   [c]
+  (ctx/update-mem! c resume-flight (ctx/now c))
   (when-not (:flight-start (ctx/mem c)) (ctx/update-mem! c assoc :flight-start (ctx/now c)))
   (loop []
+    (ctx/update-mem! c assoc :last-step (ctx/now c))
     (let [r (await (if (:refuge (ctx/mem c)) (refuge-round! c) (flight-step! c)))]
       (if (= :again r)
         (do (await (pace/pace!)) (recur))

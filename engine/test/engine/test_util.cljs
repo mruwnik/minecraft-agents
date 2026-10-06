@@ -4,6 +4,7 @@
             ["fs" :as fs]
             ["os" :as os]
             ["path" :as path]
+            [engine.core :as core]
             [engine.fake :as fake-world]
             [engine.fake.node :as node]
             [engine.fast-pace]
@@ -102,6 +103,14 @@
   (mapv (comp :target :data) (mem/entries (mem/view (:store eng)) :moved)))
 
 (defn pos [x y z] #js {:x x :y y :z z})
+
+(defn ^:async tick-until-idle!
+  "Tick eng until its job list is empty, at most max-ticks times."
+  [eng max-ticks]
+  (loop [i 0]
+    (when (and (< i max-ticks) (seq (:list (core/state eng))))
+      (await (core/tick! eng))
+      (recur (inc i)))))
 
 (defn run-async
   "Run the promise-returning thunk f inside a cljs.test async block."

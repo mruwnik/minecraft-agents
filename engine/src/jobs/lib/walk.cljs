@@ -161,11 +161,12 @@
     #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers dangers}))
 
 (defn danger-key
-  "What a kept search's key holds of pw's dangers: the mob and place of each, rounded to 4 blocks (a mob that moved on,
-  died or came along is a new search)."
+  "What a kept search's key holds of pw's dangers: the mob, place (rounded to 4 blocks) and rate (to 0.1 hp/s) of each (a
+  mob that moved on, died or came along, or a weapon picked up or health lost, is a new search)."
   [pw]
   (some->> (.-dangers pw) array-seq
-           (mapv (fn [^js d] [(.-mob d) (js/Math.round (/ (.-x d) 4)) (js/Math.round (/ (.-y d) 4)) (js/Math.round (/ (.-z d) 4))]))))
+           (mapv (fn [^js d] [(.-mob d) (js/Math.round (/ (.-x d) 4)) (js/Math.round (/ (.-y d) 4)) (js/Math.round (/ (.-z d) 4))
+                            (/ (js/Math.round (* 10 (.-rate d))) 10)]))))
 
 (defn plan-from
   "Plan from the body's cell to the goal in wide-box, within limits (the planner's options.limits, nil for none); the

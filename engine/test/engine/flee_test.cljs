@@ -7,7 +7,9 @@
             [engine.core :as core]
             [engine.events :as events]
             [engine.fake :as fake]
+            [engine.fake.raw-world :as fake-raw]
             [engine.memory :as mem]
+            [engine.perception :as perception]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.combat :as combat]
@@ -180,3 +182,32 @@
           (is (= 1 (count (holds seen "hiding"))) "a declared hold while hidden")
           (is (= :hidden (:ended out)))
           (is (= [] (:list (core/state eng)))))))))
+
+;; ------------------------------------------------------------------ what the flight senses, resume, the round's bound
+
+(deftest the-flight-judges-chasers-from-what-the-body-knows
+  (let [p (tu/fake-on-floor {:floor big-floor :entities [(zombie 7 30 {})]})
+        per (perception/create (fake-raw/create p) {:now (constantly 1000000)})
+        wrapped (perception/wrap p per)]
+    (is (= [7] (mapv #(.-id %) (retreat/known-chasers p))) "no perception: every tracked mob")
+    (is (= [] (mapv #(.-id %) (retreat/known-chasers wrapped))) "30 blocks off, unseen and unheard: not known")))
+
+(deftest a-flight-resumed-after-a-gap-starts-its-clocks-afresh
+  (let [mem {:flight-start 0 :last-step 1000 :chasers {7 {:id 7 :seen-t 1000}}}]
+    (is (= mem (retreat/resume-flight mem 3000)) "a short gap: as it was")
+    (is (= {:flight-start 100000 :last-step 100000 :chasers {7 {:id 7 :seen-t 100000}}}
+           (retreat/resume-flight mem 100000))
+        "a long gap: the flight starts now and every chaser was just seen")))
+
+(deftest respond-to-hostile-stops-when-a-danger-stays-near-past-its-bound
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup {:entities [(zombie 7 5 {:chase false})]})
+              clock (:clock s)
+              declining {:check (constantly true)
+                         :round (fn ^:async idle-flight [c] (swap! clock + 1000) :done)}
+              s (assoc-in s [:eng :jobs 'jobs.survival.retreat] declining)
+              {:keys [calls out]} (await (run-job! s 'jobs.survival.respond-to-hostile {:max-attempt-s 3}))]
+          (is (= [:done] calls))
+          (is (= {:status :stopped :reason :still-near} (select-keys out [:status :reason]))))))))

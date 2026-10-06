@@ -7,6 +7,7 @@
             [engine.fake :as fake]
             [engine.hut-shelter-test :as hut]
             [jobs.lib.reach :as reach]
+            [jobs.lib.threats :as threats]
             [engine.memory :as mem]
             [engine.shelter-test :as st]
             [engine.test-util :as tu]
@@ -90,3 +91,14 @@
           (core/submit! eng '(jobs.movement.go-to {:pos {:x 5 :y 70 :z 0}}) {})
           (await (core/tick! eng))
           (is (true? (:no-path (first (ut/moved eng)))) "the walker planned no way up into the air"))))))
+
+(deftest attack-walks-up-to-its-target-without-costing-dangers
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (ut/setup {:floor tu/walk-floor :entities [(zed 7 10 0)]})
+              planned (atom 0)]
+          (with-redefs [threats/planner-dangers (fn [_] (swap! planned inc) nil)]
+            (core/submit! eng '(jobs.combat.attack {:targets [7] :timeout-s 1000}) {})
+            (await (tu/tick-until-idle! eng 6)))
+          (is (= 0 @planned) "the walk to the mob it attacks plans with dangers off"))))))

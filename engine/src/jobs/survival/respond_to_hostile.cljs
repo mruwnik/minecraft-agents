@@ -16,7 +16,8 @@
   If the chosen child declines, the other one runs.
   Done once no real danger (as the hostile-near trigger, jobs.lib.reach, in sight) is within :radius
   (:ranged-radius for ranged mobs) and the retreat is not hiding (sealed in, up a pillar or down a pit).
-  A child that stops (a retreat still chased after its bound) stops it with that cause; never :continue.
+  A child that stops (a retreat still chased after its bound) stops it with that cause; a danger still near after
+  :max-attempt-s stops it :still-near; never :continue.
   Memory: writes one :hostile entry {:mob :pos :decision} per encounter.
   A danger reflex: never backed off.")
 
@@ -24,6 +25,7 @@
   {:radius {:doc "hostiles within this many blocks count" :default 8}
    :ranged-radius {:doc "ranged hostiles (skeletons and the like) within this many blocks count" :default 16}
    :reserve {:doc "health a fight must be expected to leave" :default 4}
+   :max-attempt-s {:doc "an attempt with a danger still near after this many seconds stops :still-near" :default 300}
    :weapons {:doc "item name substrings that count as weapons" :default combat/default-weapons}})
 
 (def hostile-policy {:cap 50 :ttl (* 60 60 1000)})
@@ -95,16 +97,20 @@
   (some #(let [res (ctx/child-result c %)] (when (= :stopped (:status res)) [% res])) [:flee :fight]))
 
 (defn ^:async round
-  "One whole attempt: respond (or let the retreat hide on) while a danger is near; stopped when a child stops."
+  "One whole attempt: respond (or let the retreat hide on) while a danger is near; stopped when a child stops or after
+  :max-attempt-s with a danger still near."
   [c]
-  (loop []
-    (let [hs (near c)]
-      (cond
-        (hiding? c) (await (run-child c :flee (:args c)))
-        (empty? hs) nil
-        :else (await (respond c hs)))
-      (if-let [[slot res] (stopped-child c)]
-        (r/stop! c (:reason res) (:text res) :cause (r/cause-of slot res))
-        (if (or (seq hs) (hiding? c))
-          (do (await (pace/pace!)) (recur))
-          :done)))))
+  (let [t0 (ctx/now c)]
+    (loop []
+      (let [hs (near c)]
+        (cond
+          (hiding? c) (await (run-child c :flee (:args c)))
+          (empty? hs) nil
+          :else (await (respond c hs)))
+        (if-let [[slot res] (stopped-child c)]
+          (r/stop! c (:reason res) (:text res) :cause (r/cause-of slot res))
+          (cond
+            (not (or (seq hs) (hiding? c))) :done
+            (> (- (ctx/now c) t0) (* 1000 (:max-attempt-s (:args c))))
+            (r/stop! c :still-near (str "a hostile is still near after " (:max-attempt-s (:args c)) " s"))
+            :else (do (await (pace/pace!)) (recur))))))))
