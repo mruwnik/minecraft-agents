@@ -56,7 +56,7 @@
     (boolean (some #(solid-at? p {:x x :y (+ y %) :z z}) (range 1 (inc height))))))
 
 (defn sky-light-at
-  "Sky light (0-15, before the night's darkening) of the cell, or nil when no light data is loaded there."
+  "Sky light (0-15, before the night's darkening) of the cell, or nil when no light data is loaded there. Only for the body's own cells (a player feels the light it stands in)."
   [p {:keys [x y z]}]
   (let [raw (some-> (aget p "perception") :raw)]
     (when (and raw (<= 0 (.stateAt ^js raw x y z)))

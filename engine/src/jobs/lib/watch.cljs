@@ -38,7 +38,7 @@
 (defn perception-of [c] (aget (:primitives c) "perception"))
 
 (defn effective-light
-  "Light at cell x y z of raw: the brighter of block light and sky light less the sky darkening."
+  "Light at cell x y z of raw: the brighter of block light and sky light less the sky darkening. Only for the body's own cell."
   [raw x y z]
   (let [packed (.lightAt raw x y z)
         sky (bit-shift-right packed 4)
