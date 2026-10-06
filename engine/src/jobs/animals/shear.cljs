@@ -26,8 +26,8 @@
   - :shears-broke: the shears were gone after some were shorn.
   - :timeout: :timeout-s from the first round (no collecting).
   - :no-shears: none carried and none shorn.
-  - With nothing shorn: :unreachable if one was given up as unreachable, else :all-sheared (adults present but
-    all sheared or refused) or :none.
+  - With nothing shorn: :unreachable if one was given up as unreachable, else :refused (or :no-zones) when the
+    zone rules refused every candidate, else :all-sheared (adults present but all sheared) or :none.
 
   Zones: a sheep standing in another owner's zone or claim, or in a plan's footprint, is left alone (warn
   shear.declined once, :reason :refused, or :no-zones when no zone list was read). :ignore-zones? true skips the check.")
@@ -91,6 +91,7 @@
   [c]
   (cond
     (some #{:unreachable} (vals (:given-up (ctx/mem c)))) :unreachable
+    (animals/refusal c) (animals/refusal c)
     (some #(not (true? (.-baby %))) (sheep-in-radius c)) :all-sheared
     :else :none))
 

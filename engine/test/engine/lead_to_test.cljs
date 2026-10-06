@@ -508,8 +508,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[extra none? declined] [[{} true [:refused]] [{:ignore-zones? true} false []]]]
+        (doseq [[extra refused? declined] [[{} true [:refused]] [{:ignore-zones? true} false []]]]
           (let [s (await (submit (h/setup {:floor tu/walk-floor :inventory lead :entities [(cow 1 3)]} 0 (h/zone-store 3 "Miles"))
                                  extra 6))]
-            (is (= none? (= :none (:reason (done-event s)))) (pr-str extra))
+            (is (= refused? (= :refused (:reason (done-event s)))) (pr-str extra))
             (is (= declined (mapv :reason (events-of s :leash.declined))) (pr-str extra))))))))

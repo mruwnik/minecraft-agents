@@ -50,12 +50,12 @@
   - :tie-failed: the post did not take the animal (still on the lead).
   - :timeout: :timeout-s from the first round (a cut walk leaves the animal on the lead).
   - :no-fence.
-
-  Zones: the leash child refuses an animal standing in another owner's zone or claim (see jobs.animals.leash);
-  :ignore-zones? true is passed to it.
   - :no-lead: no lead carried and obtain could not get one (the :text says why).
   - The reason of jobs.animals.leash (:no-lead, :none, :unreachable, :refused, :all-leashed, :timeout) when no
-    animal got on the lead, or of jobs.animals.unleash (:refused, :unreachable, :none, :timeout) when the lead would not come off.")
+    animal got on the lead, or of jobs.animals.unleash (:refused, :unreachable, :none, :timeout) when the lead would not come off.
+
+  Zones: the leash child refuses an animal standing in another owner's zone or claim (see jobs.animals.leash);
+  :ignore-zones? true is passed to it.")
 
 (def args
   {:mob {:doc "the animal's name, such as \"cow\"" :default nil}

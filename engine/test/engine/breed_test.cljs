@@ -401,3 +401,15 @@
               (await (core/tick! eng)))
             (is (= acted (vec (sort (map #(.-id (.-args %)) (interacts s))))) (pr-str owner extra))
             (is (= declined (mapv :reason (events-of s :breed.declined))) (pr-str owner extra))))))))
+
+(deftest breed-ends-refused-when-every-animal-is-refused
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[owner reason] [["Miles" :refused] [nil :no-zones]]]
+          (let [{:keys [eng] :as s} (h/setup {:inventory (wheat 2) :entities [(cow 1 2) (cow 2 2)]} 0 (h/zone-store 2 owner))]
+            (core/submit! eng (list 'jobs.animals.breed {:mob "cow"}) {})
+            (dotimes [_ 20]
+              (swap! (:clock s) + 700)
+              (await (core/tick! eng)))
+            (is (= reason (:reason (done-event s))) (pr-str owner))))))))

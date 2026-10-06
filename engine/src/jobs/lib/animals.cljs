@@ -1,6 +1,7 @@
 (ns jobs.lib.animals
   "Helpers for the animal jobs: what each mob breeds on, and the herd near the body."
-  (:require [jobs.lib.gate :as gate]
+  (:require [engine.ctx :as ctx]
+            [jobs.lib.gate :as gate]
             [jobs.lib.util :as u]))
 
 (def breeding-food
@@ -32,12 +33,20 @@
 
 (defn allowed
   "The animals of es (JS entities) the zone rules let the job act on with action (:harvest :take), judged at the cell
-  each stands in. One decline warn of kind (for job-name) names what refuses, or :no-zones. :ignore-zones? lets all."
+  each stands in. One decline warn of kind (for job-name) names what refuses, or :no-zones. :ignore-zones? lets all.
+  The last verdict is kept in the job's memory (see refusal)."
   [c kind job-name action es]
   (let [cell-of (fn [e] (let [{:keys [x y z]} (u/pos-of (.-pos e))]
                           {:x (js/Math.floor x) :y (js/Math.floor (+ y 0.01)) :z (js/Math.floor z)}))
-        ok (set (gate/allowed c kind job-name action (map cell-of es)))]
+        {:keys [allowed refusal]} (gate/judge c kind job-name action (map cell-of es))
+        ok (set allowed)]
+    (ctx/update-mem! c #(if refusal (assoc % :refusal refusal) (dissoc % :refusal)))
     (filterv #(contains? ok (cell-of %)) es)))
+
+(defn refusal
+  "Why the job found nothing to act on, when the zone rules refused animals: :refused, :no-zones, else nil."
+  [c]
+  (:refusal (ctx/mem c)))
 
 (defn adults
   "The herd's members that are not babies."

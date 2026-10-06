@@ -27,7 +27,8 @@
   - :count: :killed reached :count (nil: no cap).
   - :keep: at most :keep adults remain. The census is live every round, so the last :keep are never taken.
   - :unreachable: no candidate is left, some were skipped (warn cull.gave-up).
-  - :none: no candidate on two rounds in a row, with a 1 s wait between (warn cull.gave-up).
+  - :none: no candidate on two rounds in a row, with a 1 s wait between (warn cull.gave-up); :refused (or
+    :no-zones) instead when the zone rules refused the adults.
   - :gave-up: too many skips in a row.
 
   Zones: an adult standing in another owner's zone or claim, or in a plan's footprint, is left alone (warn
@@ -155,7 +156,7 @@
   (let [misses (inc (:misses (ctx/mem c) 0))]
     (ctx/update-mem! c assoc :misses misses)
     (if (>= misses 2)
-      (give-up! c :none)
+      (give-up! c (or (animals/refusal c) :none))
       (do (await (ctx/act c :wait #js {:ms 1000}))
           :continue))))
 

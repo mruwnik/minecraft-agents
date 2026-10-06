@@ -168,3 +168,15 @@
               (await (core/tick! eng)))
             (is (= acted (vec (sort (distinct (attacked s))))) (pr-str owner extra))
             (is (= declined (mapv :reason (events-of s :cull.declined))) (pr-str owner extra))))))))
+
+(deftest cull-ends-refused-when-every-animal-is-refused
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[owner reason] [["Miles" :refused] [nil :no-zones]]]
+          (let [{:keys [eng] :as s} (h/setup {:inventory h/sword :entities [(cow 1 2)]} 0 (h/zone-store 2 owner))]
+            (core/submit! eng (list 'jobs.animals.cull {:keep 0}) {})
+            (dotimes [_ 20]
+              (swap! (:clock s) + 700)
+              (await (core/tick! eng)))
+            (is (= reason (:reason (done-event s))) (pr-str owner))))))))

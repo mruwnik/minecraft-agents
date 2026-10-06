@@ -23,7 +23,7 @@
   - :no-lead: no lead carried, or the server found none.
   - :timeout: :timeout-s from the first round.
   - When no candidate is left: :unreachable if one was given up as unreachable, else :refused (others given
-    up), :all-leashed (animals present but all led) or :none.
+    up, or the zone rules refused the animals; :no-zones when no zone list was read), :all-leashed (animals present but all led) or :none.
   - The same reasons after three fruitless rounds in a row.
 
   Zones: an animal standing in another owner's zone or claim, or in a plan's footprint, is not led (taking it out of the zone) (warn
@@ -73,6 +73,7 @@
     (cond
       (some #{:unreachable} given-up) :unreachable
       (seq given-up) :refused
+      (animals/refusal c) (animals/refusal c)
       (some animals/leashed? (herd c)) :all-leashed
       :else :none)))
 

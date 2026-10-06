@@ -29,7 +29,7 @@
   - :bees-indoors: bees at night or in rain.
   - :no-food: none carried, or it ran out.
   - When no candidate is left, or fewer than two adults stand near before the first feeding: :unreachable if one
-    was given up as unreachable, else :unpaired (odd number fed), :refused (some refused, none ate) or :too-few.
+    was given up as unreachable, else :unpaired (odd number fed), :refused (some refused, none ate; or :no-zones, the zone rules refused the adults) or :too-few.
   - The same reasons after three fruitless rounds in a row, before the engine would back the job off.
 
   Animals follow a body holding their food, so the hand is given back. Before the first feeding the job notes
@@ -128,6 +128,7 @@
       (some #{:unreachable} (vals given-up)) :unreachable
       (odd? (count fed)) :unpaired
       (seq refused) :refused
+      (animals/refusal c) (animals/refusal c)
       :else :too-few)))
 
 (defn give-up! [c k reason]
