@@ -1,0 +1,33 @@
+;; Rounds redesign (card 978285e1): backoff belongs to register entries only, a listed job is only flagged.
+;; A stone island x 10..22, z 10..12 sits inside a 5-wide, 6-deep void ring (x 5..27, z 5..17); the body stands south of the ring (z 18.5)
+;; and cannot cross it. The gates and the chest on the island are in click range of nothing the walker can reach.
+;; Should-succeed: a pen-gate reflex whose planned gates are all unreachable backs off (reflex.backoff, :pen-gate);
+;;   a listed job that fails every act three rounds in a row raises job.fruitless and is never backed off.
+;; Should-fail (never backs off): the burning reflex (backoff off in defaults.edn) while extinguish cannot find water.
+{:defaults
+ {:tags [:rounds :backoff] :time :any
+  :plot {:height 8 :floor "stone"}
+  :blocks [[:fill [5 -6 5] [27 -1 17] "air"] [:fill [10 -6 10] [22 -1 12] "stone"]]
+  :body {:at [16.5 0 18.5]}
+  :limit-s 120}
+ :cases
+ [{:name "pen-gate-unreachable-backs-off"
+   :register [{:trigger :pen-gate}]
+   :blocks [[:set [12 0 11] "oak_fence_gate[facing=south,open=true]"] [:set [14 0 11] "oak_fence_gate[facing=south,open=true]"]
+            [:set [16 0 11] "oak_fence_gate[facing=south,open=true]"] [:set [18 0 11] "oak_fence_gate[facing=south,open=true]"]
+            [:set [20 0 11] "oak_fence_gate[facing=south,open=true]"]]
+   :plans [{:id "pen" :parts [{:id "gates" :cells [#at [12 0 11] #at [14 0 11] #at [16 0 11] #at [18 0 11] #at [20 0 11]]
+                               :want [:any "oak_fence_gate"]}]}]
+   :expect [{:event {:source :reflex :kind :backoff :context {:reflex-id :pen-gate} :data {:fruitless 9}} :within-s 60}]}
+  {:name "listed-job-blocked-is-flagged-not-backed-off"
+   :blocks [[:set [16 0 11] "chest"]]
+   :body {:at [16.5 0 18.5] :inventory [["stick" 5]]}
+   :act [[:job (repeat (jobs.storage.deposit {:chest #at [16 0 11]}))]]
+   :expect [{:event {:source :job :kind :fruitless} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :backoff} :for-s 30}]}
+  {:name "burning-never-backs-off"
+   :register [{:trigger :burning :persistence :cooldown :cooldown-s 0 :job (jobs.survival.extinguish {:water-radius 6})}]
+   :blocks [[:set [10 -1 22] "netherrack"] [:set [10 0 22] "fire"]]
+   :body {:at [10.5 0 22.5] :settle-s 1}
+   :expect [{:no-event {:source :reflex :kind :backoff} :for-s 45}]
+   :limit-s 80}]}
