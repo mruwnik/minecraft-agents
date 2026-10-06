@@ -25,7 +25,8 @@
   under :wrong. So is a block that came out of a place in the wrong state (:placed true); it is never dug or placed
   again.
   A door's upper half, a bed's head and a tall plant's upper half are never targets: the lower or foot cell places
-  the whole item. :clear cells, crops and trees are not this job's.
+  the whole item. A :clear cell holding a block that is not replaceable and no container is dug (nothing carried
+  needed). Crops and trees are not this job's.
   Each round re-reads the plan and the world, then takes the first step that applies:
   0. A place that would shut the body in (it has a way out and would have none) is held back; the body first walks
      out of the plan's footprint (go-to child), then places from outside. Held back :give-up times, a cell is given
@@ -240,12 +241,15 @@
 (defn prepared
   "Cells (as judged) ready for the rounds: a wrong cell holding a replaceable block is :missing (placed into
   directly); a companion half is marked :companion; a wrong block of another kind that the body carries the item for,
-  that is no container, not already misplaced by this job, is marked :dig? (dug, then placed)."
+  that is no container, not already misplaced by this job, is marked :dig? (dug, then placed). So is a block that is
+  no replaceable one in a :clear cell (:extra), whatever is carried."
   [cells carried misplaced]
   (mapv (fn [{:keys [answer found want item pos] :as cell}]
           (let [wrong? (= :wrong answer)
                 loose? (and wrong? (rules/replaceable found))
-                digs? (and wrong? (not loose?) item (contains? carried item) (not (contains? misplaced pos))
+                extra? (and (= :extra answer) (not (rules/replaceable found)))
+                digs? (and (or extra? (and wrong? (not loose?) item (contains? carried item)))
+                           (not (contains? misplaced pos))
                            (not (clear-box/kept? [] found)))]
             (cond-> cell
               (companion? want) (assoc :companion true)

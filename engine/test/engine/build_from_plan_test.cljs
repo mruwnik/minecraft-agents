@@ -473,3 +473,15 @@
           (let [pos (.-pos (.self p))]
             (is (not (reach/enclosed? p)))
             (is (not (and (<= 1 (js/Math.floor (.-x pos)) 4) (<= 1 (js/Math.floor (.-z pos)) 4))))))))))
+
+(deftest a-solid-block-in-a-clear-cell-is-dug-and-listed-wrong-only-when-it-stays
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (build [{:id "wall" :cells [[1 64 1]] :want "dirt"}
+                                        {:id "door" :cells [[3 64 3]] :want :clear}]
+                                       (assoc ground "3,64,3" "oak_leaves")
+                                       [{:name "dirt" :count 2}]))]
+          (is (= 1 (count (h/calls p "dig"))))
+          (is (= "air" (h/block-at p 3 64 3)))
+          (is (= {:wrong [] :missing []} (select-keys result [:wrong :missing]))))))))
