@@ -25,7 +25,8 @@
   - :fertilize (jobs.farm.fertilize): :fertilize is true, bone meal is carried and an unripe crop lies in the box.
   - :compost (jobs.farm.compost): a :composter is given and seed above the reserve is carried.
   - :deposit (jobs.storage.deposit): a :chest is given and farm goods are carried above the keep. Farm goods are
-    seeds, crops, melon, pumpkin, hay and cocoa. Tools and food are never stored.
+    seeds, crops (carrots and potatoes above the seed reserve too), melon, pumpkin, hay and cocoa. Tools, bread and other
+    food are never stored.
   The seed reserve is twice the number of beds (farmland or untilled ground cells), spread over the carried seeds.
   The keep for compost and deposit is that reserve or the :keep entry, whichever is larger.
   Skipped steps are booked as {:skipped reason}: :no-ripe, :till-off, :no-hoe, :nothing-to-till, :no-seed,
@@ -174,6 +175,12 @@
        (filter #(in-box? box %))
        vec))
 
+(defn box-permitted
+  "The poss of the box that zones, claims and footprints do not refuse for action, quietly (the child warns when it declines)."
+  [c action poss]
+  (let [in (access/rules-input c)]
+    (filterv #(not (gate/refused? (access/may? in action %))) poss)))
+
 (defn box-facts
   "What the decisions are made from for a box, read live."
   [c]
@@ -185,16 +192,17 @@
         me (u/self-pos c)
         tried (:till-tried (ctx/mem c) #{})
         ground (ground-layer p box)
-        bare (count (plant/bare-cells p box []))
+        bare (count (box-permitted c :sow (plant/bare-cells p box [])))
         res (reserve (beds ground) inventory)]
     {:mid mid
      :radius R
-     :ripe (count (filter #(in-box? box %) (harvest/ripe-crops p {:radius R :crops nil} mid [])))
+     :ripe (count (box-permitted c :harvest (filter #(in-box? box %) (harvest/ripe-crops p {:radius R :crops nil} mid []))))
      :hoe (some? (till/hoe-of p))
      :untilled (->> ground
                     (filter untilled?)
                     (map :pos)
                     (remove tried)
+                    (box-permitted c :dig)
                     (sort-by #(u/dist me %))
                     vec)
      :bare bare

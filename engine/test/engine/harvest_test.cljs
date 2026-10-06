@@ -398,12 +398,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[owner extra cut] [["Fake" {} 1] ["FAKE" {} 1] ["Miles" {} 0] ["Miles" {:ignore-zones? true} 1]]]
+        (doseq [[owner extra cut zones] [["Fake" {} 1 []] ["FAKE" {} 1 []] ["Miles" {} 0 [["farm"]]] ["Miles" {:ignore-zones? true} 1 []]]]
           (let [{:keys [eng p seen]} (start {:world zoned-world :shared (ew/of-data {} {} [(zone-over-crop owner)])})]
             (core/submit! eng (list job (merge {:radius 6} extra)) {})
             (await (run-until-empty eng 60))
             (is (= cut (count (calls p "dig"))) (pr-str [owner extra]))
-            (is (= (if (zero? cut) [["farm"]] [])
+            (is (= zones
                    (mapv :zones (events-of seen :harvest.declined))) (pr-str [owner extra]))))))))
 
 (deftest no-zone-list-declines-the-harvest

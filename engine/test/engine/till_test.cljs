@@ -250,11 +250,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[owner extra tilled] [["Fake" {} 4] ["FAKE" {} 4] ["Miles" {} 3] ["Miles" {:ignore-zones? true} 4]]]
+        (doseq [[owner extra tilled declined] [["Fake" {} 4 []] ["FAKE" {} 4 []] ["Miles" {} 3 [{:reason :refused :zones ["farm"]}]]
+                                                 ["Miles" {:ignore-zones? true} 4 []]]]
           (let [{:keys [eng seen]} (setup {:inventory hoe :blocks four} (ew/of-data {} {} [(assoc zone-over-one :owner owner)]))
                 result (await (child-outcome eng job (merge box extra) 20))]
             (is (= tilled (:tilled result)) (pr-str [owner extra]))
-            (is (= (if (= 3 tilled) [{:reason :refused :zones ["farm"]}] [])
+            (is (= declined
                    (mapv #(select-keys % [:reason :zones]) (kinds seen :till.declined))) (pr-str [owner extra]))))))))
 
 (deftest no-zone-list-declines-the-till
@@ -286,3 +287,14 @@
   (let [c (counting-ctx {:inventory hoe} sixteen (atom {}))]
     (set! (.-blockAt (:primitives c)) (fn [_] (throw (js/Error. "world read failed"))))
     (is (thrown-with-msg? js/Error #"world read failed" (till/check c)))))
+
+(deftest a-hoe-that-vanishes-at-the-use-counts-a-try-and-the-cell-is-skipped-as-no-hoe
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory hoe :blocks four})]
+          (.override (.-world p) "useOn" (fn ^:async f [_token _args _impl] #js {:status "no-item"}))
+          (let [result (await (child-outcome eng job box 40))]
+            (is (= {:tilled 0 :skipped {{:x 1 :y 63 :z 1} :no-hoe {:x 2 :y 63 :z 1} :no-hoe
+                                        {:x 1 :y 63 :z 2} :no-hoe {:x 2 :y 63 :z 2} :no-hoe}}
+                   result))))))))

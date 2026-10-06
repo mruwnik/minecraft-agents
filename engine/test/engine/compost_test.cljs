@@ -159,17 +159,19 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[owner at-arg extra meal reason] [["Fake" {:at at} {} 1 nil] ["FAKE" {} {} 1 nil]
-                                                  ["Miles" {:at at} {} 0 :no-composter] ["Miles" {} {} 0 :no-composter]
-                                                  ["Miles" {:at at} {:ignore-zones? true} 1 nil]]]
+        (doseq [[owner at-arg extra meal reason declined seeds]
+                [["Fake" {:at at} {} 1 nil [] 3] ["FAKE" {} {} 1 nil [] 3]
+                 ["Miles" {:at at} {} 0 :no-composter [{:reason :refused :zones ["farm"]}] 10]
+                 ["Miles" {} {} 0 :no-composter [{:reason :refused :zones ["farm"]}] 10]
+                 ["Miles" {:at at} {:ignore-zones? true} 1 nil [] 3]]]
           (let [{:keys [eng p seen]} (setup {:inventory (inv "wheat_seeds" 10) :blocks comp-block}
                                             (ew/of-data {} {} [(assoc zone-over-composter :owner owner)]))
                 result (await (child-outcome eng job (merge {:items ["wheat_seeds"]} at-arg extra) 40))]
             (is (= meal (:bone-meal result)) (pr-str [owner at-arg extra]))
             (is (= reason (:reason result)) (pr-str [owner at-arg extra]))
-            (is (= (if reason [{:reason :refused :zones ["farm"]}] [])
+            (is (= declined
                    (mapv #(select-keys % [:reason :zones]) (kinds seen :compost.declined))) (pr-str [owner at-arg extra]))
-            (is (= (if reason 10 3) (carried p "wheat_seeds")) (pr-str [owner at-arg extra]))))))))
+            (is (= seeds (carried p "wheat_seeds")) (pr-str [owner at-arg extra]))))))))
 
 (deftest no-zone-list-declines-the-composting
   (async done

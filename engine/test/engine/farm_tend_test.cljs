@@ -7,7 +7,8 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [jobs.farm.tend :as tend]))
+            [jobs.farm.tend :as tend]
+            [jobs.lib.world-files :as world]))
 
 (def box {:min {:x 2 :y 63 :z 2} :max {:x 4 :y 64 :z 4}})
 
@@ -38,15 +39,17 @@
 
 (defn setup
   "An engine over a fake world; every result of tend's check is logged in :checks."
-  [spec]
+  ([spec] (setup spec nil))
+  ([spec zones]
   (let [clock (atom 1000000)
         checks (atom [])
         [seen sink] (tu/legacy-capture-sink)
         p (tu/seeing-all (tu/fake-on-floor spec))
         logged (assoc-in registry/jobs ['jobs.farm.tend :check] (fn [c] (let [r (tend/check c)] (swap! checks conj r) r)))
-        eng (core/create {:primitives p :jobs logged :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
-                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    {:eng eng :p p :seen seen :clock clock :checks checks}))
+        eng (core/create (cond-> {:primitives p :jobs logged :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                                  :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}
+                           zones (assoc :world (world/of-data {} {} zones))))]
+    {:eng eng :p p :seen seen :clock clock :checks checks})))
 
 (defn ^:async scenario
   "Submit the job with args in a world; run n ticks 700 ms apart; the setup map."
@@ -374,3 +377,28 @@
            (:report (tend/plan [:till :plant] {:till true} {:hoe true :untilled [] :bare 0 :seeds 3} {:till {:tilled 2}}))))
     (is (= {:till {:skipped :nothing-to-till}}
            (:report (tend/plan [:till] {:till true} {:hoe true :untilled [] :bare 0 :seeds 3} {}))))))
+
+;; ------------------------------------------------------------------ zones
+
+(defn ^:async first-check
+  "tend's check on the first tick, in a world whose zone list is zones."
+  [args spec zones]
+  (let [{:keys [eng checks]} (setup spec zones)]
+    (core/submit! eng (list 'jobs.farm.tend (merge {:box box} args)) {})
+    (await (core/tick! eng))
+    (first @checks)))
+
+(def foreign-zone {:name "keep-out" :min [2 60 2] :max [4 70 4] :owner "Miles" :allow #{}})
+
+(def ripe-world (world (farm "wheat" 7 all-cells [[2 2]]) wheat-drops))
+
+(def bare-world (world (farm "wheat" 7 all-cells []) {:inventory [(item "wheat_seeds" 4)]}))
+
+(deftest a-field-under-a-foreign-zone-does-not-start-a-run-and-an-own-zone-does
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[spec owner start?] [[ripe-world "Miles" false] [bare-world "Miles" false]
+                                     [ripe-world "Fake" true] [bare-world "Fake" true]]]
+          (is (= start? (await (first-check {} spec [(assoc foreign-zone :owner owner)]))) (pr-str owner)))
+        (is (true? (await (first-check {} ripe-world []))) "no zones")))))

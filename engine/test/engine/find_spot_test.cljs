@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is are async]]
             [engine.registry :as registry]
             [engine.core :as core]
+            [engine.fake :as fake]
             [engine.ctx :as ctx]
             [engine.events :as events]
             [jobs.lib.util :as u]
@@ -259,3 +260,24 @@
           (is (some #(>= % fs/read-budget) @per-round) "a round ran to the budget")
           (is (= expected (:spots @out)))
           (is (= (:pos (first expected)) (:spot @out))))))))
+
+(deftest a-body-moved-mid-scan-does-not-change-the-rows-scanned
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (merge (patch 2 0 3 3 63 "dirt") (patch -4 4 3 3 63 "dirt") {"6,63,1" "water"})
+              a {:w 3 :h 3 :range 10 :depth 12 :limit 3 :walk false}
+              expected (scan-at world {:x 0 :y 64 :z 0} a {:x 0 :y 64 :z 0})
+              {:keys [eng p]} (setup {:blocks world})
+              out (atom :not-done)
+              parent {:check (constantly true)
+                      :round (fn ^:async recording-round [c]
+                               (let [r (await (ctx/call-child c :kid job a))]
+                                 (when (= :done r) (reset! out (ctx/child-result c :kid)))
+                                 r))}
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
+          (core/submit! eng '(recording-parent) {})
+          (await (core/tick! eng))
+          (swap! (fake/state p) assoc-in [:self :pos] [7 64 5])
+          (await (run-until-empty eng 40))
+          (is (= expected (:spots @out))))))))

@@ -255,7 +255,7 @@
 
 (defn split-by-decision
   "{:ready [strays] :deferred [[stray reasons]]} of the strays; a refused one is booked on the way, a stray whose
-  chunk is gone is dropped from both."
+  chunk went away since it was read is dropped from both (the next round reads the strays again)."
   [c todo]
   (reduce (fn [acc stray]
             (let [d (decide c (:pos stray))]
@@ -309,7 +309,7 @@
 (defn ^:async collect! [c cells]
   (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius (field-radius cells)}))]
     (when (= :done r)
-      (ctx/update-mem! c #(-> % (dissoc :collect) (assoc :collected (:collected (ctx/child-result c :collect) 0)))))
+      (ctx/update-mem! c #(-> % (dissoc :collect) (update :collected (fnil + 0) (:collected (ctx/child-result c :collect) 0)))))
     :continue))
 
 (defn finish! [c found]

@@ -156,12 +156,13 @@
   "One bounded scan round. :continue while rows remain (state kept in :scan),
   else the finished spots (or nil for none)."
   [c a]
-  (let [from (or (:center a) (into {} (map (fn [[k v]] [k (js/Math.floor v)])) (u/self-pos c)))
-        state (or (:scan (ctx/mem c)) {:next-x (- (:x from) (:range a)) :found []})
+  (let [saved (:scan (ctx/mem c))
+        from (or (:center a) (:from saved) (into {} (map (fn [[k v]] [k (js/Math.floor v)])) (u/self-pos c)))
+        state (or saved {:next-x (- (:x from) (:range a)) :found []})
         r (scan-rows (:primitives c) a from state read-budget)]
     (if (:done r)
       (finish-scan! c a from (:found r))
-      (do (ctx/update-mem! c assoc :scan (select-keys r [:next-x :found]))
+      (do (ctx/update-mem! c assoc :scan (assoc (select-keys r [:next-x :found]) :from from))
           :continue))))
 
 (defn ^:async round

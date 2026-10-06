@@ -224,14 +224,14 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[owner extra planted declined] [["Fake" {} 9 []] ["FAKE" {} 9 []]
-                                                ["Miles" {} 8 [{:reason :refused :zones ["farm"]}]]
-                                                ["Miles" {:ignore-zones? true} 9 []]]]
+        (doseq [[owner extra planted declined cell] [["Fake" {} 9 [] "wheat"] ["FAKE" {} 9 [] "wheat"]
+                                                ["Miles" {} 8 [{:reason :refused :zones ["farm"]}] "air"]
+                                                ["Miles" {:ignore-zones? true} 9 [] "wheat"]]]
           (let [{:keys [eng p seen]} (start (field-world (inv "wheat_seeds" 9)) (ew/of-data {} {} [(assoc zone-over-cell :owner owner)]))
                 result (await (child-outcome eng job (merge {:box field-box} extra) 100))]
             (is (= planted (:planted result)) (pr-str [owner extra]))
             (is (= declined (mapv #(select-keys % [:reason :zones]) (events-of seen :plant.declined))) (pr-str [owner extra]))
-            (is (= (if (= 8 planted) "air" "wheat") (block-at p 2 64 2)) (pr-str [owner extra]))))))))
+            (is (= cell (block-at p 2 64 2)) (pr-str [owner extra]))))))))
 
 (deftest no-zone-list-declines-the-sowing
   (async done

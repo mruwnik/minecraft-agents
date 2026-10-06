@@ -12,7 +12,8 @@
   Needs a hoe; the job declines without one. Ground cover over a cell (grass, ferns, snow layer) is dug first with
   a jobs.blocks.dig child. If that child declines or gives up, it counts a try.
   Cells are skipped with a reason: :not-tillable, :covered (something else above), :not-permitted (zone rules),
-  :unreachable, :gone, :refused (the hoe failed twice) or :cover-stuck (two failed cover digs).
+  :unreachable, :gone, :refused (the hoe failed twice), :no-hoe (the hoe is gone) or :cover-stuck (two failed cover
+  digs).
   With :for-plan (the id of the plan the cells belong to) that plan's own footprint does not refuse a cell. Zones
   and the footprints of other plans are checked when a cell is chosen and again before the hoe or cover dig.
   The job declines while no zone list has been read, unless :ignore-zones? is true.
@@ -85,7 +86,7 @@
         todo? (some #(not (or (contains? skipped %) (= "farmland" (u/block-name p %)))) cs)]
     (and (or (:ignore-zones? (:args c)) (some? (known/zones c))
              (access/decline! c :till.declined "till" {:reason :no-zones}))
-         (or (nil? todo?) (some? (hoe-of p))))))
+         (or (nil? todo?) (some? (hoe-of p)) (ctx/wait c :no-hoe)))))
 
 (defn skip!
   "Record the cells as skipped with reason and emit one :till.skipped each."
@@ -139,7 +140,8 @@
           (ctx/result! c {:tilled tilled :skipped skipped})
           :done)
 
-        (nil? hoe) :continue
+        (nil? hoe)
+        (do (skip! c (map first cands) :no-hoe) :continue)
 
         :else
         (let [[target _] (nearest c cands)
@@ -174,6 +176,6 @@
                     (ctx/update-mem! c #(-> % (update :tilled (fnil conj #{}) target) (update :tries dissoc target)))
 
                     (= "missing" status) (skip! c [target] :gone)
-                    (= "no-item" status) nil
+                    (= "no-item" status) (bump! c target :no-hoe)
                     :else (bump! c target :refused))
                   :continue)))))))))
