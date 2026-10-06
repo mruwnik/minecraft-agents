@@ -8,7 +8,7 @@
 (def result-limit 8000) ; Events a result read scans back (a job's outcome sits among scheduler noise).
 (def event-limit 8)
 (def internal-kinds #{:queued :round_started :completed :failed :cancelled :cut
-                      :yielded :memory_written :backoff :check_failed :declined})
+                      :yielded :memory_written :backoff :check_failed :declined :child_started :child_ended})
 
 (defn belongs? [id e]
   (and (= :job (:source e))

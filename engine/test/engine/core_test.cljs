@@ -514,6 +514,38 @@
           (is (= {:n 2} (ctx/child-result c :x)) "only the done round hands over its result")
           (is (= {} (job-mem eng "j9" [:x])) "done clears the resumed child's memory"))))))
 
+(def stopping-child
+  {:name :stopping-child :check always
+   :round (fn [c] (ctx/result! c {:status :stopped :reason :no-way}) :done)})
+
+(defn child-events [seen]
+  (->> @seen
+       (filter #(#{:child_started :child_ended} (:kind %)))
+       (mapv #(select-keys % [:kind :job :slot :chain :status :reason]))))
+
+(deftest every-child-call-emits-a-debug-start-and-end
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup)
+              c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})]
+          (.setOwner (:primitives eng) "tx")
+          (await (ctx/call-child c :x child-job {:rounds 2}))
+          (reset! flag false)
+          (await (ctx/call-child c :g {:name :waits :round count-round
+                                       :check (fn [c] (ctx/wait c :no-seeds))} {}))
+          (await (ctx/call-child c :s stopping-child {}))
+          (let [chain-x ["j9" "j9/x"]]
+            (is (= [{:kind :child_started :job "j9/x" :slot :x :chain chain-x}
+                    {:kind :child_ended :job "j9/x" :slot :x :chain chain-x :status :continue}
+                    {:kind :child_started :job "j9/g" :slot :g :chain ["j9" "j9/g"]}
+                    {:kind :child_ended :job "j9/g" :slot :g :chain ["j9" "j9/g"] :status :declined
+                     :reason :no-seeds}
+                    {:kind :child_started :job "j9/s" :slot :s :chain ["j9" "j9/s"]}
+                    {:kind :child_ended :job "j9/s" :slot :s :chain ["j9" "j9/s"] :status :stopped
+                     :reason :no-way}]
+                   (child-events seen)))))))))
+
 (deftest a-done-child-hands-its-result-to-the-parent-for-the-round
   (async done
     (tu/run-async done

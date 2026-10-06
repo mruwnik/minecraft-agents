@@ -429,7 +429,7 @@
 
 ;; ------------------------------------------------------------------ ctx and rounds
 
-(declare submit! call-child self-pos wait-reason)
+(declare submit! call-child self-pos wait-reason stopped-result?)
 
 (defn owner? [eng token]
   (and (some? token) (.isOwner (:primitives eng) token)))
@@ -559,19 +559,35 @@
     (make-ctx eng (assoc base :slots slots :args args
                          :chain (conj (:chain base) (mem/path->id (:root base) slots))))))
 
+(defn child-end-fields
+  "The :status and :reason of a child call's job.child_ended: a :done child whose result is :stopped is :stopped with
+  the result's reason; a declining one carries its check's wait reason."
+  [status result wait]
+  (cond
+    (and (= :done status) (stopped-result? result)) (cond-> {:status :stopped} (:reason result) (assoc :reason (:reason result)))
+    (and (= :declined status) wait) {:status :declined :reason (:reason wait)}
+    :else {:status status}))
+
 (defn ^:async call-child
   "One round of the child job def in slot under parent base (see README.md).
   The child's memory is the parent's [:children slot] sub-map. It is created
   with the args when missing and cleared only when the child is :done.
   Resolves to :declined when the child's check or round declines, else :done or :continue.
   A :done child's result! data stays readable with child-result for the rest of the parent's round.
-  The child shares the parent's token, so a cut anywhere ends the whole chain's round."
+  The child shares the parent's token, so a cut anywhere ends the whole chain's round.
+  Each call emits a debug job.child_started and, unless cut, job.child_ended."
   [eng base slot def args]
   (let [store (:store eng)
         slots (conj (:slots base) slot)
         child-id (mem/path->id (:root base) slots)
+        chain (conj (:chain base) child-id)
+        fields {:source :job :level :debug :job child-id :slot slot :chain chain :round (:round base)
+                :reflex (:reflex base)}
+        ended! (fn [status result wait]
+                 (emit! eng (merge fields {:kind :child_ended} (child-end-fields status result wait))))
         clear! #(mem/update-job! store (:root base) (:slots base) update :children dissoc slot)]
     (when-not (owner? eng (:token base)) (throw (cut-error)))
+    (emit! eng (assoc fields :kind :child_started))
     (swap! (:results base) dissoc child-id)
     (when (empty? (mem/job-mem (mem/view store) (:root base) slots))
       (mem/update-job! store (:root base) slots assoc :args args :children {}))
@@ -580,12 +596,15 @@
           child-wait (:child-wait base)]
       (reset! child-wait nil)
       (if-not ((:check def) (assoc c :wait wait))
-        (do (reset! child-wait (when @wait (wait-reason @wait)))
-            :declined)
+        (let [w (when @wait (wait-reason @wait))]
+          (reset! child-wait w)
+          (ended! :declined nil w)
+          :declined)
         (let [{:keys [status error]} (normalize-result (await ((:round def) c)))]
           (when-not (owner? eng (:token base)) (throw (cut-error)))
-          (when (= status :error) (throw error))
+          (when (= status :error) (ended! :error nil nil) (throw error))
           (when-not (= status :declined) (reset! child-wait nil))
+          (ended! status (get @(:results base) child-id) @child-wait)
           (if (= status :done)
             (clear!)
             (swap! (:results base) dissoc child-id))
