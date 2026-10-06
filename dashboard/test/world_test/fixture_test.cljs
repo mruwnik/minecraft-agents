@@ -168,6 +168,8 @@
     (is (:pass? (f/judge-after origin [:entities "type=cow" [[1 0 1] [5 1 5]] 1] "Test passed. Count: 1")))
     (is (:pass? (f/judge-after origin [:body-near [16.5 0 16.5] 1] "ProbeFixture has the following entity data: [20016.9d, 150.0d, 20016.5d]")))
     (is (not (:pass? (f/judge-after origin [:body-near [16.5 0 16.5] 1] "ProbeFixture has the following entity data: [20018.9d, 150.0d, 20016.5d]"))))
+    (is (:pass? (f/judge-after origin [:body-far [16.5 0 16.5] 25] "ProbeFixture has the following entity data: [20046.9d, 150.0d, 20016.5d]")))
+    (is (not (:pass? (f/judge-after origin [:body-far [16.5 0 16.5] 25] "ProbeFixture has the following entity data: [20018.9d, 150.0d, 20016.5d]"))))
     (is (= [-1.5 64 2.25] (f/reply-pos "X has the following entity data: [-1.5d, 64.0d, 2.25d]")))))
 
 (deftest plan-files-carry-the-runner-prefix

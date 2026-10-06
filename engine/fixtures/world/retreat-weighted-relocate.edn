@@ -18,7 +18,7 @@
          [:wait-s 25]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 10}
             {:no-event {:kind :failed} :for-s 20}]
-   :after [[:body-near [16.5 0 16.5] 20]]
+   :after [[:body-far [16.5 0 16.5] 25]]
    :limit-s 50}
   {:name "flee-two-zombies-north-south-east-ahead"
    :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
@@ -29,7 +29,7 @@
          [:wait-s 25]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 10}
             {:no-event {:kind :failed} :for-s 20}]
-   :after [[:body-near [16.5 0 16.5] 20]]
+   :after [[:body-far [16.5 0 16.5] 25]]
    :limit-s 50}
   {:name "hollow-floor-relocates-and-digs-in"
    :blocks [[:fill [0 -8 0] [31 -1 31] "stone"] [:fill [6 -3 6] [26 -2 26] "air"]]

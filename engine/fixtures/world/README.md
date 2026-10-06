@@ -66,7 +66,7 @@ starts with one). Patterns are partial: a map matches a map holding at least its
 members, `[:> n] [:>= n] [:< n] [:<= n]` numbers, `[:near p r]` a position within r, `[:contains "s"]` a substring,
 `[:not p]`, `[:any]` anything present; a vector of patterns matches a sequence of that length; else equality.
 
-After checks: `[:block p "block[state]"]` and `[:not-block p "block"]` (`execute if block`), `[:body-near p r]`,
+After checks: `[:block p "block[state]"]` and `[:not-block p "block"]` (`execute if block`), `[:body-near p r]` and `[:body-far p r]` (body within / at least r blocks from p),
 `[:item "name" n-or-[:>= n]]` (count in the body's inventory), `[:entities "selector args" [a b] n-or-[:>= n]]`
 (entities in the box a..b, e.g. `"type=cow,tag=wt"`).
 

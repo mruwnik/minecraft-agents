@@ -114,7 +114,7 @@
           entries))
 
 (def step-kinds #{:summon :rcon :rcon-until :job :wait-s :await :kill-body :time-set})
-(def after-kinds #{:block :not-block :body-near :item :entities})
+(def after-kinds #{:block :not-block :body-near :body-far :item :entities})
 
 (defn unbounded-selectors
   "The :rcon / :rcon-until commands of the act steps with an @e selector that is not a box (no dx= or $BOX), bare or
@@ -393,7 +393,7 @@
   (case op
     :block (str "execute if block " (xyz-str (abs-pos origin (first args))) " " (second args))
     :not-block (str "execute if block " (xyz-str (abs-pos origin (first args))) " " (second args))
-    :body-near (str "data get entity " body " Pos")
+    (:body-near :body-far) (str "data get entity " body " Pos")
     :item (str "execute if items entity " body " container.* " (first args))
     :entities (let [[sel [a b]] args
                     [ax ay az] (abs-pos origin a)
@@ -433,8 +433,10 @@
                    (= op :not-block) [(zero? n) reply]
                    (= op :item) [(count-ok? (second args) n) (str "count " n)]
                    :else [(count-ok? (nth args 2) n) (str "count " n)])
-                 :body-near (let [p (reply-pos reply)
-                                  [x y z] (abs-pos origin (first args))
-                                  d (when p (js/Math.hypot (- (p 0) x) (- (p 1) y) (- (p 2) z)))]
-                              [(boolean (and d (<= d (second args)))) (if d (str "distance " (.toFixed d 2)) reply)]))]
+                 (:body-near :body-far)
+                 (let [p (reply-pos reply)
+                       [x y z] (abs-pos origin (first args))
+                       d (when p (js/Math.hypot (- (p 0) x) (- (p 1) y) (- (p 2) z)))
+                       ok? (if (= op :body-far) >= <=)]
+                   [(boolean (and d (ok? d (second args)))) (if d (str "distance " (.toFixed d 2)) reply)]))]
     {:check check :pass? (first result) :evidence (second result)}))
