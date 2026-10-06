@@ -10,7 +10,8 @@
 
 (def doc
   "Sow the bare farmland of a :box. A cell is bare when (x, min.y, z) is farmland and the block above is air.
-  The seed is :seed, else the carried seed with the largest stack. That pick is kept while it is carried,
+  The seed is :seed, else the carried seed with the largest stack. Carrots and potatoes are sown only above the
+  food reserve (jobs.lib.cost/food-reserve); harvest replants its own cut cells whatever the reserve. That pick is kept while it is carried,
   so one run sows one crop.
   Each round plants the bare cells within :reach, or walks to the nearest. A cell whose place is refused or
   unreachable, or whose walk is blocked, three times is skipped (warn plant.gave-up).
@@ -50,11 +51,19 @@
          (filter #(and (= "farmland" (u/block-name p %))
                        (= "air" (u/block-name p (update % :y inc))))))))
 
+(defn sowable
+  "{name count} of the carried items that may be sown: food crops (carrots, potatoes) only above the food reserve,
+  everything else in full. A cell just harvested is replanted by jobs.farm.harvest and ignores the reserve."
+  [inventory]
+  (let [kept (cost/food-reserve inventory)
+        totals (reduce (fn [acc {:keys [name count]}] (update acc name (fnil + 0) count)) {} inventory)]
+    (reduce-kv (fn [acc name n] (assoc acc name (- n (get kept name 0)))) {} totals)))
+
 (defn pick-seed
-  "The seed to plant given the inventory: seed when it is carried, else the largest carried stack of a known seed;
-  nil when none. The food reserve never blocks it: a field's own cells are always replanted."
+  "The seed to sow given the inventory: seed when it may be sown, else the largest sowable stack of a known seed;
+  nil when none. Food crops count only above the food reserve."
   [seed inventory]
-  (let [counts (reduce (fn [acc {:keys [name count]}] (update acc name (fnil + 0) count)) {} inventory)
+  (let [counts (sowable inventory)
         carried #(get counts % 0)]
     (if seed
       (when (pos? (carried seed)) seed)
@@ -132,7 +141,7 @@
   (carried none) :refused [{:pos :reason}]}. One plant.declined warn names what refuses the refused cells."
   [c cells]
   (let [plan (:plan (:args c))
-        have (set (map :name (u/inventory (:primitives c))))
+        have (set (map key (filter (comp pos? val) (sowable (u/inventory (:primitives c))))))
         skipped (set (:skipped (ctx/mem c)))
         {:keys [short seeded]} (reduce (fn [acc {:keys [pos seed] :as debt}]
                                          (cond

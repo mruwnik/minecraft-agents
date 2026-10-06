@@ -20,7 +20,8 @@
   What is thrown, like a player: plain junk blocks first (junk-blocks: cobblestone, cobbled deepslate, granite,
   tuff, dirt, gravel...), whole big stacks before partial, then the rest by worth; ores, fuel and the like
   only after the junk. Never put away or thrown: tools, weapons, armour and buckets. Food is never thrown and is put away only above
-  :keep-food (best food-points first; the body's 3-day food reserve when nil). Golden apples are never put away. Building blocks (the dig-in list, in its order) are kept up to
+  :keep-food (best food-points first; the body's 3-day food reserve when nil). Golden apples are never put away.
+  Building blocks (the dig-in list, in its order) are kept up to
   :keep-blocks.
   Steps, in order:
   1. A chest known within :chest-range (and not marked :chest-unusable) takes what jobs.storage.deposit may put

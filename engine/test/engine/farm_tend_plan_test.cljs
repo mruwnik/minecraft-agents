@@ -37,7 +37,7 @@
 
 (def farmland-all (ground "farmland" (concat wheat-cells carrot-cells)))
 
-(def all-seed {:inventory [(item "wheat_seeds" 6) (item "carrot" 6)]})
+(def all-seed {:inventory [(item "wheat_seeds" 6) (item "carrot" 6) (item "bread" 12)]})
 
 (defn setup
   ([spec plans zones] (setup spec plans zones registry/jobs))
@@ -121,7 +121,7 @@
       (fn ^:async t []
         (let [s (await (run {:plan "mix"}
                             (world-of (ground "farmland" [[3 2]]) (ground "dirt" [[2 2] [2 3]]) (ground "farmland" [[3 3]])
-                                      {:inventory [(item "stone_hoe" 1) (item "wheat_seeds" 6) (item "carrot" 6)]})
+                                      {:inventory [(item "stone_hoe" 1) (item "wheat_seeds" 6) (item "carrot" 6) (item "bread" 12)]})
                             {"mix" (plan-of)} 100))]
           (is (= {:tilled 2} (step s :till)))
           (is (= ["farmland" "farmland"] (mapv #(block-at s 2 63 %) [2 3])))
@@ -147,7 +147,7 @@
       (fn ^:async t []
         (let [s (await (run {:plan "mix"}
                             (world-of farmland-all (crops "wheat" 7 [[2 2]]) (crops "carrots" 7 [[2 3]])
-                                      {:inventory [(item "wheat_seeds" 6) (item "carrot" 6)] :drops {"wheat" ["wheat" "wheat_seeds"] "carrots" ["carrot"]}})
+                                      {:inventory [(item "wheat_seeds" 6) (item "carrot" 6) (item "bread" 12)] :drops {"wheat" ["wheat" "wheat_seeds"] "carrots" ["carrot"]}})
                             {"mix" (plan-of)} 100))]
           (is (= #{[2 64 2] [2 64 3]} (dug s)))
           (is (= ["wheat" "carrots"] [(block-at s 2 64 2) (block-at s 2 64 3)]))
@@ -161,7 +161,7 @@
       (fn ^:async t []
         (let [s (await (run {:plan "mix"}
                             (world-of (ground "farmland" [[3 2] [2 3] [3 3]]) (crops "carrots" 7 [[2 2]])
-                                      {:inventory [(item "wheat_seeds" 6) (item "carrot" 6)] :drops {"carrots" ["carrot"]}})
+                                      {:inventory [(item "wheat_seeds" 6) (item "carrot" 6) (item "bread" 12)] :drops {"carrots" ["carrot"]}})
                             {"mix" (plan-of)} 60))]
           (is (empty? (dug s)))
           (is (= ["carrots" 7] [(block-at s 2 64 2) (age-at s 2 64 2)]))
@@ -277,7 +277,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (setup (world-of farmland-all {:inventory [(item "wheat_seeds" 6) (item "carrot" 6)]}) {"mix" (plan-of)} [])]
+        (let [s (setup (world-of farmland-all {:inventory [(item "wheat_seeds" 6) (item "carrot" 6) (item "bread" 12)]}) {"mix" (plan-of)} [])]
           (core/submit! (:eng s) (list job {:plan "mix"}) {})
           (swap! (:clock s) + 700)
           (await (core/tick! (:eng s)))
@@ -470,7 +470,7 @@
       (fn ^:async t []
         (let [s (await (run {:plan "mix" :part "carrots"}
                             (world-of farmland-all (crops "wheat" 7 [[2 2]]) (crops "carrots" 7 [[2 3]])
-                                      {:inventory [(item "carrot" 6)] :drops {"wheat" ["wheat"] "carrots" ["carrot"]}})
+                                      {:inventory [(item "carrot" 6) (item "bread" 12)] :drops {"wheat" ["wheat"] "carrots" ["carrot"]}})
                             {"mix" (plan-of)} 60))]
           (is (= #{[2 64 3]} (dug s)))
           (is (= ["wheat" 7] [(block-at s 2 64 2) (age-at s 2 64 2)])))))))

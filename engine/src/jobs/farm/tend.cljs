@@ -217,7 +217,7 @@
                     (sort-by #(u/dist me %))
                     vec)
      :bare bare
-     :seeds (transduce (map #(get (carried inventory) % 0)) + 0 seed-items)
+     :seeds (transduce (map #(get (plant/sowable inventory) % 0)) + 0 seed-items)
      :seed (some? (plant/pick-seed nil inventory))
      :meal (boolean (fertilize/has-meal? p))
      :unripe (if fertilize (count (unripe-in-box p box mid R)) 0)
@@ -329,7 +329,7 @@
         {:keys [plan fertilize keep]} (:args c)
         {:keys [answer crops]} (planned c)
         inventory (u/inventory p)
-        have (carried inventory)
+        have (plant/sowable inventory)
         me (u/self-pos c)
         tried (:till-tried (ctx/mem c) #{})
         bare (harvest/planned-bare p crops)

@@ -126,6 +126,27 @@
           (is (= 2 (count (calls s "useOn"))))
           (is (true? (finished? s))))))))
 
+(deftest food-crops-below-the-reserve-are-neither-tilled-nor-sown
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {} (world (ground "dirt" [[2 2] [3 2]]) (ground "farmland" [[4 2]])
+                                           {:inventory [(item "stone_hoe" 1) (item "carrot" 15)]}) 40))]
+          (is (empty? (calls s "useOn")))
+          (is (empty? (calls s "place")))
+          (is (= "dirt" (block-at s 2 63 2)))
+          (is (= {"stone_hoe" 1 "carrot" 15} (inv s))))))))
+
+(deftest a-harvested-food-cell-is-replanted-below-the-reserve
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {} (world (farm "carrots" 7 [[2 2] [3 2]] [[2 2]])
+                                           {:drops {"carrots" ["carrot"]}}) 80))]
+          (is (= 1 (count (calls s "place"))))
+          (is (= "carrots" (block-at s 2 64 2)))
+          (is (= "air" (block-at s 3 64 2))))))))
+
 (deftest without-a-hoe-the-dirt-is-left-and-the-bare-farmland-still-planted
   (async done
     (tu/run-async done

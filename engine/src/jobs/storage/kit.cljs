@@ -3,6 +3,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.food :as food]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
@@ -12,7 +13,8 @@
             [jobs.lib.foods :as foods]))
 
 (def doc
-  "Take a kit out of the chest: :spare + 1 of each tool kind in :tools, and :food food items (by default enough to hold the 3-day food reserve, jobs.lib.cost/food-reserve). A name is of a tool
+  "Take a kit out of the chest: :spare + 1 of each tool kind in :tools, and :food food items (by default enough to
+  hold the 3-day food reserve, jobs.lib.cost/food-reserve, counted by the real hunger points of the chest food). A name is of a tool
   kind when it equals it or ends in _kind. Any tier counts, the best tier and best food are taken first. Food is
   any name in the eat table.
   Each round works out the needs from the inventory and the plan from the inspected chest, and hands the plan to
@@ -64,17 +66,32 @@
     (transduce (comp (filter #(match? (:name %))) (map :count)) + 0 items)))
 
 (defn food-items
-  "Bread's worth of items that bring the inventory to the food reserve."
-  [inventory]
-  (js/Math.ceil (/ (cost/food-short inventory) (foods/points "bread"))))
+  "How many items bring the inventory to the food reserve: the best food of chest-items first, counted by its real
+  hunger points (bread's 5 each while the chest is unknown or runs out)."
+  ([inventory] (food-items inventory nil))
+  ([inventory chest-items]
+   (let [stocks (->> (reduce (fn [m {:keys [name count]}] (update m name (fnil + 0) count)) {} chest-items)
+                     (filter (fn [[name _]] (food/reserve-food? name)))
+                     (sort-by (fn [[name _]] (- (foods/points name)))))
+         [items left] (reduce (fn [[items left] [name n]]
+                                (if (pos? left)
+                                  (let [k (min n (js/Math.ceil (/ left (foods/points name))))]
+                                    [(+ items k) (- left (* k (foods/points name)))])
+                                  (reduced [items left])))
+                              [0 (cost/food-short inventory)]
+                              stocks)]
+     (+ items (js/Math.ceil (/ left (foods/points "bread")))))))
 
 (defn needs
-  "[[kind n] ...] still needed: the tools kinds in order, then :food; n above 0 only."
-  [inventory {:keys [tools spare food] :or {tools ["hoe"] spare 1}}]
-  (->> (concat (map (fn [k] [k (inc spare)]) tools) [[:food (or food (+ (count-of inventory :food) (food-items inventory)))]])
-       (map (fn [[kind want]] [kind (- want (count-of inventory kind))]))
-       (filter (fn [[_ n]] (pos? n)))
-       vec))
+  "[[kind n] ...] still needed: the tools kinds in order, then :food; n above 0 only. Without :food the food need
+  is what brings the inventory to the reserve; chest-items (when known) give the points of what can be taken."
+  ([inventory args] (needs inventory args nil))
+  ([inventory {:keys [tools spare food] :or {tools ["hoe"] spare 1}} chest-items]
+   (->> (concat (map (fn [k] [k (inc spare)]) tools)
+                [[:food (or food (+ (count-of inventory :food) (food-items inventory chest-items)))]])
+        (map (fn [[kind want]] [kind (- want (count-of inventory kind))]))
+        (filter (fn [[_ n]] (pos? n)))
+        vec)))
 
 (defn rank
   "Sort key, higher is better: material tier of a tool name, food points of a food."
@@ -350,7 +367,8 @@
               (give-up! c (.-status seen) (into {} still))
               (let [_ (fetch/note-stock! c chest (.-items seen))
                     inv (u/inventory (:primitives c))
-                    {:keys [take short]} (plan still inv (stacks-of (.-items seen)))]
+                    stacks (stacks-of (.-items seen))
+                    {:keys [take short]} (plan (needs inv a stacks) inv stacks)]
                 (cond
                   (and (empty? take) (:craft a) (pos? (ctx/count-in c :no-craft no-craft-ms)))
                   (finish-uncrafted! c short)

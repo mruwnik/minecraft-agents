@@ -61,6 +61,14 @@
     [{:name "bread" :count 12}] {:tools []} []
     [{:name "golden_apple" :count 4}] {:tools []} [[:food 12]]))
 
+(deftest default-food-need-counts-the-real-points-of-the-chest-food
+  (are [inventory chest expected] (= expected (kit/needs inventory {:tools []} chest))
+    [] [{:name "cooked_beef" :count 20}] [[:food 8]]
+    [] [{:name "apple" :count 30}] [[:food 15]]
+    [] [{:name "cooked_beef" :count 3} {:name "bread" :count 20}] [[:food 11]]
+    [{:name "bread" :count 12}] [{:name "bread" :count 5}] []
+    [] [] [[:food 12]]))
+
 (deftest plan-takes-the-best-and-reports-the-rest
   (are [needs inventory chest expected] (= expected (kit/plan needs inventory chest))
     [["hoe" 2]] []
