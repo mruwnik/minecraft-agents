@@ -136,6 +136,9 @@ check "moved file hunks: both paths in HEAD" "$(git show --no-renames --name-onl
 git mv mv_new.txt mv_new2.txt; echo more >> mv_new2.txt
 out=$(tools/commit-mine --card abcd1234 -m "$C mvpath" --expect-lines 242 mv_new.txt mv_new2.txt 2>&1); check "moved file path mode exit" "$?" 0
 check "moved file path mode: index clean" "$(git diff --cached --name-only)" ""
+check "moved file path mode: ledger counts both sides" "$(tail -1 .git/commit-ledger.jsonl | jq -r '.insertions + .deletions')" 242
+check "moved file path mode: ledger lists both paths" "$(tail -1 .git/commit-ledger.jsonl | jq -r '.paths | sort | join(" ")')" "mv_new.txt mv_new2.txt"
+check "moved file path mode: printed stat shows both files" "$(grep -c '2 files changed' <<<"$out")" 1
 # Deleted files: staged (git rm) or not, many, a whole directory, mixed with an edit.
 mkdir -p gone/sub; for i in $(seq 1 120); do echo $i > gone/f$i.txt; done; echo s > gone/sub/s.txt; seq 1 5 > e.txt
 git add gone e.txt; git commit -q -m gone

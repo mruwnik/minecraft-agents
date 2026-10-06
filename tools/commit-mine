@@ -291,10 +291,10 @@ fi
 committed=1
 
 hash="$(git rev-parse HEAD)"
-read -r ins del < <(git show --numstat --format= HEAD | awk '{i+=$1; d+=$2} END{print i+0, d+0}')
+read -r ins del < <(git show --no-renames --numstat --format= HEAD | awk '{i+=$1; d+=$2} END{print i+0, d+0}')
 [ "$del" -lt 500 ] || flags+=("large-deletion $del")
-files="$(git show --name-only --format= HEAD)"
-stat="$(git show --stat --format= HEAD | tail -1 | sed 's/^ *//')"
+files="$(git show --no-renames --name-only --format= HEAD)"
+stat="$(git show --no-renames --stat --format= HEAD | tail -1 | sed 's/^ *//')"
 jq -nc --arg time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg hash "$hash" --arg card "$card" \
   --arg files "$files" --arg stat "$stat" --argjson ins "$ins" --argjson del "$del" --arg flags "$(printf '%s\n' "${flags[@]:-}")" \
   '{time:$time,hash:$hash,card:$card,paths:($files|split("\n")|map(select(.!=""))),insertions:$ins,deletions:$del,stat:$stat,flags:($flags|split("\n")|map(select(.!="")))}' \
@@ -302,7 +302,7 @@ jq -nc --arg time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg hash "$hash" --arg card
 # The lock is not needed past the ledger row: release it before the note, which may take its whole timeout.
 release_lock; lock_released=1
 # Stat on stdout and, best effort, on the card: the commit exists already, so a board failure only warns.
-stat_text="$(git show --stat --format='%h %s' HEAD | sed -n '1,20p')"
+stat_text="$(git show --no-renames --stat --format='%h %s' HEAD | sed -n '1,20p')"
 printf '%s\n' "$stat_text"
 card_tool="$ROOT/tools/card"
 [ -x "$card_tool" ] || card_tool="$(dirname "$0")/card"
