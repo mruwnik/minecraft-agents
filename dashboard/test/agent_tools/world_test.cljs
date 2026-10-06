@@ -137,3 +137,21 @@
                      (is (re-find #"control\.sock$" (:socket-path (first @seen))) "submitted on the control socket")
                      (is (re-find #"events\.sock$" (:socket-path (last @seen))) "waited on the events socket"))))
           (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
+
+(deftest a-not-driver-refusal-names-the-holder-and-its-idle-time
+  (let [argv ["--world" "w" "Probe" "submit" "dig" "1" "64" "2" "--who" "Other" "--request-id" "dig-1"]
+        [request-fn seen] (fake/request-fn
+                            (fn [{:keys [method]}]
+                              {:status (if (= "POST" method) 409 200)
+                               :text (if (= "POST" method)
+                                       "{:ok false :reason \"not-driver\" :detail nil}"
+                                       "{:ok true :manual {:who \"Holder\" :idleMs 60000 :idleLeftS 42.5}}")}))
+        lines (atom [])]
+    (async done
+      (-> (world/main! argv {:request-fn request-fn :output #(swap! lines conj %)})
+          (.then (fn [code]
+                   (is (= 1 code))
+                   (is (= {:ok false :reason "not-driver" :detail {:holder "Holder" :idle-left-s 42.5}}
+                          (data/read-edn (apply str @lines))))
+                   (is (= ["POST" "GET"] (mapv :method @seen)))
+                   (done)))))))

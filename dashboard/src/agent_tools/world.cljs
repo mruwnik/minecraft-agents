@@ -20,7 +20,7 @@
        "  submit interact <entity-id> [--item <item>] [--request-id <id>]\n"
        "  submit wear [<item>]   (puts a carried armour piece on; no item: the best carried piece for each empty or weaker slot)\n"
        "  status <request-id> | cancel <request-id> | inventory\n"
-       "Acquire the body first: drive.mjs take --who NAME --why \"<text>\" --idle-s N.\n"
+       "Acquire the body first: drive.mjs take --who NAME --why \"<text>\" --idle-s N (a not-driver refusal names the holder and its idle time left).\n"
        "Actions run one at a time in the order submitted: one submitted while another runs is queued behind it\n"
        "(:status :queued, :position <place in the queue>, :behind <the running action's request-id>, at most 8 waiting); cancel drops a queued one, a release drops them all.\n"
        "Submit returns at once with the request-id; add --wait [--timeout 60s] to block until that action ends (or until\n"
@@ -128,6 +128,22 @@
                                              :timeout (get-in parsed [:wait :timeout])} get!))]
     (assoc answer :wait wake)))
 
+;; The engine's not-driver refusal carries no detail: ask GET /drive who holds the body and add it.
+(defn ^:async name-holder
+  "A not-driver answer with :detail {:holder :idle-left-s} from the drive state; any other answer unchanged."
+  [answer socket who request-fn]
+  (if-not (= "not-driver" (data/name (:reason answer)))
+    answer
+    (let [state (try (let [response (await (http/request (cond-> {:socket-path socket :method "GET" :path "/drive" :label "drive"
+                                                                 :timeout-ms request-timeout-ms :max-bytes max-response-bytes}
+                                                          request-fn (assoc :request-fn request-fn))))]
+                       (when (http/edn-response? (:content-type response)) (data/read-edn (:text response))))
+                     (catch :default _ nil))
+          holder (get-in state [:manual :who])]
+      (if (and holder (not= holder who))
+        (assoc answer :detail {:holder holder :idle-left-s (get-in state [:manual :idleLeftS])})
+        answer))))
+
 (defn no-body-text [socket-path]
   (if (.existsSync fs socket-path)
     "no running body (connection refused)"
@@ -173,7 +189,9 @@
                       (and (:wait parsed) ok? (:ok answer))
                       (.then (wait-after! parsed answer request-fn)
                              (fn [result] (output (str (data/write-edn result) "\n")) 0))
-                      :else (do (output text) (if ok? 0 1)))))))
+                      ok? (do (output text) 0)
+                      :else (.then (name-holder answer socket (:who parsed) request-fn)
+                                   (fn [named] (output (str (data/write-edn named) "\n")) 1)))))))
              (.catch (fn [error]
                        (js/console.error (str "the command was accepted, but reporting its result failed: "
                                               (or (aget error "code") (.-message error))))
