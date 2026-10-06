@@ -199,7 +199,7 @@
         (geometry-check! (:cells prepared) (:large req))
         (-> ((:load-worldblocks req))
             (.then (fn [seen-module]
-                     (let [memory ((aget seen-module "createSeenBlocks") #js {:stateDir (clj->js (:state ctx)) :world (:world ctx) :body (:body req)})
+                     (let [memory ((aget seen-module "createSeenBlocks") #js {:stateDir (clj->js (:state ctx)) :world (:world ctx) :body (:body req) :dim (:dim req)})
                            blocks (atom {}) seen-times (atom [])
                            inventory (inventory-value (:inventory req))]
                        (try
@@ -224,13 +224,24 @@
   (when (and (some? revision) (not (re-matches #"^[a-f0-9]{24}$" revision)))
     (fail! :bad-revision "--revision must be the 24-character digest from show/list")))
 
+(defn body-dimension
+  "The dimension the body named by is in now (its view/pose.json); nil when by is no body or has no pose."
+  [ctx by]
+  (when (re-matches names (str by))
+    (let [file (.join path (:world-dir ctx) "agents" by "view" "pose.json")]
+      (try (when (.existsSync fs file)
+             (let [dim (:dimension (js->clj (js/JSON.parse (.readFileSync fs file "utf8")) :keywordize-keys true))]
+               (when (string? dim) dim)))
+           (catch :default _ nil)))))
+
 (defn mutate-plan [req ctx write]
   (let [old (data/read-document ctx :plan (:id req))
         command (:command req)]
     (when (and (= command "add") old) (fail! :already-exists (str "plan " (:id req) " already exists; use edit")))
     (when (and (#{"edit" "remove"} command) (nil? old)) (fail! :not-found (str "no plan " (:id req) " in " (:world ctx))))
     (validate-revision! (:revision req))
-    (let [value (when-not (= command "remove") (some-> (edn-value (:edn req) "edn") (as-> v (if (map? v) (shape/with-author v (or (shape/author (:value old)) (:by req))) v))))
+    (let [value (when-not (= command "remove") (some-> (edn-value (:edn req) "edn") (as-> v (if (map? v) (cond-> (shape/with-author v (or (shape/author (:value old)) (:by req)))
+                                                                                                    (= command "add") (shape/with-dim (body-dimension ctx (:by req)))) v))))
           source (:edn req)]
       (when (and value (not= (:id value) (:id req))) (fail! :bad-plan (str "plan :id must be \"" (:id req) "\"")))
       (-> (data/mutate-document ctx (cond-> {:kind :plan :id (:id req) :value value :by (:by req)
@@ -290,7 +301,7 @@
         (let [value (if (= command "check") (:value doc) (edn-value source "edn"))
               inline (mapv blueprint-form (:blueprint req))]
           (when-not (= (:id value) (:id req)) (fail! :bad-plan (str "plan :id must be \"" (:id req) "\"")))
-          (-> (js/Promise.resolve (if (= command "check") (check-plan ctx source (:id req) inline req)
+          (-> (js/Promise.resolve (if (= command "check") (check-plan ctx source (:id req) inline (assoc req :dim (shape/plan-dim value)))
                                       (prepare ctx source (:id req) inline nil [])))
               (.then (fn [result]
                        (write (compact-result (cond-> result (= command "check") (assoc :revision (:revision doc))) req source))

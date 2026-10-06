@@ -47,7 +47,9 @@
       (assoc p :at nil) ":at"
       (assoc p :kind "village") ":kind"
       (assoc p :kind nil) ":kind"
-      (assoc p :metadata []) ":metadata")))
+      (assoc p :metadata []) ":metadata"
+      (assoc p :dim :nether) ":dim"
+      (assoc p :dim "") ":dim")))
 
 (deftest part-errors-name-the-part
   (are [part fragment] (= [{:part "x" :fragment true}]
@@ -368,3 +370,12 @@
     (is (= {:geometry :planned :by "Jizo"} (:metadata (shape/with-author (assoc wheat-plan :metadata {:geometry :planned}) "Jizo"))))
     (is (nil? (shape/author wheat-plan)))
     (is (nil? (shape/author nil)))))
+
+;; ---------------------------------------------------------------- which dimension a plan is in
+(deftest a-plans-dim-defaults-to-the-overworld
+  (is (= "minecraft:overworld" (shape/plan-dim wheat-plan)))
+  (is (= "minecraft:the_nether" (shape/plan-dim (assoc wheat-plan :dim "minecraft:the_nether"))))
+  (is (= [] (errors-of (assoc wheat-plan :dim "minecraft:the_nether"))))
+  (is (= "minecraft:the_nether" (shape/plan-dim (shape/with-dim wheat-plan "the_nether"))) "a short name gains the namespace")
+  (is (= "minecraft:the_end" (:dim (shape/with-dim (assoc wheat-plan :dim "minecraft:the_end") "minecraft:the_nether"))) "an existing dim is kept")
+  (is (= wheat-plan (shape/with-dim wheat-plan nil)) "no dimension known leaves the plan alone"))

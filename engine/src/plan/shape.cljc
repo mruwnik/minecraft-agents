@@ -19,7 +19,9 @@
 (def sides [:north :east :south :west])
 (def max-cells 200000)
 
-(def plan-keys #{:id :parts :assign :note :kind :at :metadata})
+(def plan-keys #{:id :parts :assign :note :kind :at :metadata :dim})
+(def overworld "minecraft:overworld")
+
 (defn author
   "The body or agent that made a plan, :metadata :by; nil when it names none."
   [plan]
@@ -29,6 +31,18 @@
   "The plan with :metadata :by set to by when it names no maker yet; an existing maker is kept (the plan tools stamp the first writer; the engine reads it back)."
   [plan by]
   (cond-> plan (nil? (author plan)) (assoc-in [:metadata :by] by)))
+
+(defn plan-dim
+  "The dimension a plan is in, a namespaced name; the overworld when it names none."
+  [plan]
+  (or (:dim plan) overworld))
+
+(defn with-dim
+  "The plan with :dim set to dim (a short name gains the minecraft: namespace) when it names none yet; nil dim leaves it alone."
+  [plan dim]
+  (cond-> plan
+    (and (nil? (:dim plan)) (not (str/blank? dim)))
+    (assoc :dim (if (str/includes? dim ":") dim (str "minecraft:" dim)))))
 
 (def where-keys [:box :outline :cells])
 (def area-part-keys #{:id :box :outline :cells :want :note})
@@ -116,6 +130,8 @@
                      (when (and (contains? plan :kind) (not (keyword? (:kind plan)))) ":kind must be a keyword")
                      (when (and (contains? plan :at) (not (anchor? (:at plan)))) ":at must be three finite coordinates [x y z]")
                      (when (and (contains? plan :metadata) (not (map? (:metadata plan)))) ":metadata must be a map")
+                     (when (and (contains? plan :dim) (not (and (string? (:dim plan)) (not (str/blank? (:dim plan))))))
+                       ":dim must be a dimension name such as \"minecraft:the_nether\"")
                      (when-not (or (nil? (:assign plan)) (and (vector? (:assign plan)) (every? #(string? (:spot %)) (:assign plan))))
                        ":assign must be a vector of {:spot name ...}")
                      (when-not (or (empty? ids) (apply distinct? ids)) "part ids must be unique")

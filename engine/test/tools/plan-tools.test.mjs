@@ -115,16 +115,16 @@ test('blueprint tools validate inline, report global scope, and save with CAS', 
   } finally { fx.close() }
 })
 
-// A body's seen-block memory (engine/js/seen-file.mjs) holding the given [x, y, z, blockName] cells at one seen time.
+// A body's seen-block memory (engine/js/seen-file.mjs) holding the given [x, y, z, blockName, dimension = overworld] cells at one seen time.
 async function writeSeen (fx, body, cells, seenAt) {
   const version = '1.20.4'
   const registry = prismarineRegistry(version)
   const dir = path.join(fx.state, 'worlds', 'fixture', 'agents', body, 'engine')
   fs.mkdirSync(dir, { recursive: true })
   const sections = new Map()
-  for (const [x, y, z, name] of cells) {
-    const key = [x >> 4, y >> 4, z >> 4].join()
-    if (!sections.has(key)) sections.set(key, { dim: 'minecraft:overworld', cx: x >> 4, sy: y >> 4, cz: z >> 4, seen: seenAt, base: seenAt, ids: new Uint16Array(4096), times: new Uint8Array(4096) })
+  for (const [x, y, z, name, dim = 'minecraft:overworld'] of cells) {
+    const key = [dim, x >> 4, y >> 4, z >> 4].join()
+    if (!sections.has(key)) sections.set(key, { dim, cx: x >> 4, sy: y >> 4, cz: z >> 4, seen: seenAt, base: seenAt, ids: new Uint16Array(4096), times: new Uint8Array(4096) })
     sections.get(key).ids[((y & 15) << 8) | ((z & 15) << 4) | (x & 15)] = registry.blocksByName[name].defaultState + 1
   }
   await saveSeen(path.join(dir, 'seen.bin'), { version, sections: [...sections.values()] })
@@ -144,6 +144,37 @@ test('check scores only cells the body has seen: a never-seen cell is unseen, a 
     assert.equal(checked.value.score.checked.unseen, 1)
     assert.equal(checked.value.score.checked.seen, 2)
     assert.ok(checked.value.score.checked['oldest-age-ms'] >= 120000)
+  } finally { fx.close() }
+})
+
+test('check judges a plan against the memory of its own :dim, the overworld when it has none', async () => {
+  const fx = fixture()
+  try {
+    const nether = '{:id "hell" :dim "minecraft:the_nether" :parts [{:id "base" :cells [[0 64 0]] :want "stone"}]}'
+    const over = '{:id "home" :parts [{:id "base" :cells [[0 64 0]] :want "stone"}]}'
+    await invoke('plan', fx, ['add', 'hell', '--edn', nether, '--by', 'tester'])
+    await invoke('plan', fx, ['add', 'home', '--edn', over, '--by', 'tester'])
+    await writeSeen(fx, 'Probe', [[0, 64, 0, 'stone'], [0, 64, 0, 'dirt', 'minecraft:the_nether']], Date.now() - 1000)
+    const hell = await invoke('plan', fx, ['check', 'hell', '--body', 'Probe'])
+    assert.equal(hell.value.score.counts.wrong, 1)
+    const home = await invoke('plan', fx, ['check', 'home', '--body', 'Probe'])
+    assert.equal(home.value.score.counts.match, 1)
+  } finally { fx.close() }
+})
+
+test('add stamps :dim from the adding body\'s current dimension; a non-body or an explicit :dim is left alone', async () => {
+  const fx = fixture()
+  try {
+    const view = path.join(fx.state, 'worlds', 'fixture', 'agents', 'Probe', 'view')
+    fs.mkdirSync(view, { recursive: true })
+    fs.writeFileSync(path.join(view, 'pose.json'), JSON.stringify({ world: 'fixture', status: 'online', dimension: 'minecraft:the_nether', t: Date.now() }))
+    const file = id => fs.readFileSync(path.join(fx.state, 'worlds', 'fixture', 'plans', id + '.edn'), 'utf8')
+    await invoke('plan', fx, ['add', 'a', '--edn', planText('a'), '--by', 'Probe'])
+    assert.match(file('a'), /:dim "minecraft:the_nether"/)
+    await invoke('plan', fx, ['add', 'b', '--edn', planText('b'), '--by', 'tester'])
+    assert.doesNotMatch(file('b'), /:dim/)
+    await invoke('plan', fx, ['add', 'c', '--edn', planText('c').replace('{:id "c"', '{:id "c" :dim "minecraft:overworld"'), '--by', 'Probe'])
+    assert.match(file('c'), /:dim "minecraft:overworld"/)
   } finally { fx.close() }
 })
 

@@ -9,11 +9,11 @@ const MINUTE_MS = 60000
 const OVERWORLD = 'minecraft:overworld'
 
 // The body's own block memory: worlds/<world>/agents/<body>/engine/seen.bin, only what it has seen.
+// dim: the dimension to read, the overworld when omitted (a plan's :dim).
 // -> {blockAt(x, y, z) -> {name, state} | null (never seen), seenAt(x, y, z) -> ms | null, sections, close()}
-export function createSeenBlocks ({ stateDir, world, body }) {
+export function createSeenBlocks ({ stateDir, world, body, dim = OVERWORLD }) {
   const file = path.join(worldsDir(stateDir), world, 'agents', body, 'engine', 'seen.bin')
   const data = loadSeen(file)
-  const dim = data?.sections.some(s => s.dim === OVERWORLD) ? OVERWORLD : data?.sections[0]?.dim
   const sections = new Map()
   for (const s of data?.sections ?? []) if (s.dim === dim) sections.set(`${s.cx},${s.sy},${s.cz}`, s)
   const Block = data ? prismarineBlock(prismarineRegistry(data.version)) : null
