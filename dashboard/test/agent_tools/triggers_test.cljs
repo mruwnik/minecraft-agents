@@ -140,3 +140,9 @@
 (deftest a-predefined-trigger-without-job-leaves-the-job-to-the-trigger-default
   (let [r (request "add" "health-watch" "--trigger" "health-low")]
     (is (= {:op :put :id :health-watch :trigger :health-low :by "agent"} (:request r)))))
+
+(deftest upgrade-is-a-mutation-without-an-id
+  (is (= {:op :upgrade :by "agent"} (:request (request "upgrade"))))
+  (is (true? (:mutating (request "upgrade"))))
+  (is (string? (:error (request "upgrade" "night"))))
+  (is (string? (:error (request "upgrade" "--for" "1m")))))

@@ -461,6 +461,7 @@ nothing; `:by` names who asks, `:generation-id` is checked when given):
 | `:mute` | `{:op :mute :id ... :ttl-s 60}` |
 | `:move` | `{:op :move :id ... :above :hostile-near :ttl-s 60}` (or `:below`) |
 | `:clear` | `{:op :clear :id ... :property :mute}` (or `:position`) |
+| `:upgrade` | `{:op :upgrade}`: adds the new default triggers the last restart offered, at their scenario priority; reply `{:ok true :added [ids]}` |
 
 `POST /jobs {:op :cancel-all ...}` cancels every listed job (running, queued, held, failed) through the single-cancel path,
 one `job.cancelled` event each; the register is untouched, so reflexes keep running.
@@ -513,9 +514,11 @@ A scenario is EDN read with `cljs.reader`:
 `npm run body -- --agent <name> --world <world> --scenario <file>` loads `worlds/<world>/agents/<name>/config.json`
 (`username`) and `worlds/<world>/world.json` (`host`, `port`). It refuses to start when `--world` is missing, and with exit
 code 3 when that body is already running (it binds `engine/body.sock` first). If `engine/engine.edn` exists the saved list
-and register are restored and the scenario is ignored; `--fresh` discards saved engine state (memory is kept). The scenario
-is validated against the job registry and triggers before connecting. Other flags: `--worlds <dir>`, `--drive-idle-s <s>`,
-`--events-max-bytes <n>`.
+and register are restored as they are; `--fresh` discards saved engine state (memory is kept). The scenario is validated against
+the job registry and triggers before connecting; on a restart a scenario entry naming a trigger that no longer exists is left out
+with a warn and an attention request instead of exiting. On a restart, scenario triggers the body has never had (state
+`:seen-triggers` records every id it had, removed ones too) raise one attention request "new default triggers available"; `./bin/triggers upgrade` (or `--upgrade`
+at start) adds them at their scenario priority. Other flags: `--worlds <dir>`, `--drive-idle-s <s>`, `--events-max-bytes <n>`.
 
 `survival.edn` lists the survival triggers and queues `(repeat (jobs.movement.look-around))`.
 `woodcutter-cuts.edn` and `pace-cuts.edn` register an ad hoc `:look-timer` condition to cut a long job on a schedule.
@@ -660,7 +663,7 @@ node engine/tools/observe.mjs Bob --world claude inventory [--slots] | equipment
 node engine/tools/entities.mjs Bob --world claude [--type zombie --radius 32 --player Alex --limit 20]
 node engine/tools/jobs.mjs Bob --world claude list | show j17 | cancel j17 | cancel-all | retry j17 | resolve <attention> --reason handled
 node engine/tools/jobs.mjs Bob --world claude submit '(jobs.movement.go-to {:pos {:x 10 :y 64 :z 20}})' [--front|--now|--hold] [--wait --timeout 5m]
-node engine/tools/triggers.mjs Bob --world claude list | show hungry | add hungry --trigger hungry | mute hungry --for 10m | unmute | move X --before Y | reset X --property position | remove X
+node engine/tools/triggers.mjs Bob --world claude list | show hungry | upgrade | add hungry --trigger hungry | mute hungry --for 10m | unmute | move X --before Y | reset X --property position | remove X
 node engine/tools/triggers.mjs Bob --world claude put near-home --when '(< (inventory "bread") 8)' --job '(jobs.movement.look-around)' --persistence cooldown --cooldown-s 30
 node engine/tools/say.mjs Bob --world claude [--to Steve] "message"       # chat, shares the engine's rate limits
 node engine/tools/snapshot.mjs Bob --world claude [--yaw 90 --pitch -20 --look-at X,Y,Z]   # PNG of the body's view

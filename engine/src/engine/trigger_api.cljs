@@ -13,7 +13,8 @@
             [engine.core :as core]
             [engine.expr :as expr]
             [engine.job-api :as job-api]
-            [engine.memory :as mem]))
+            [engine.memory :as mem]
+            [clojure.string :as str]))
 
 (def persistences #{:retry :cooldown :stop})
 
@@ -29,7 +30,8 @@
    :remove common-keys
    :mute (conj common-keys :ttl-s)
    :move (conj common-keys :above :below :ttl-s)
-   :clear (conj common-keys :property)})
+   :clear (conj common-keys :property)
+   :upgrade common-keys})
 
 (def properties #{:mute :position})
 
@@ -191,6 +193,7 @@
       (and (contains? r :generation-id) (not= (:generation-id r) (:generation-id s)))
       (refuse :generation-mismatch [:generation-id] "the body's engine state was replaced; read it again")
       (and (contains? r :by) (not (job-api/valid-by? (:by r)))) (refuse :bad-by [:by] ":by is a short string or keyword naming who asks")
+      (= :upgrade op) nil
       (= :put op) (or (entry-problem (:jobs eng) (:triggers eng) (dissoc r :op :generation-id :request-id))
                       (when (:builtin? (find-entry s id))
                         (refuse :builtin [:id] (str id " is built in; mute or move it, or put another id"))))
@@ -272,6 +275,7 @@
                                     (update :register #(if old
                                                          (mapv (fn [e] (if (= id (:id e)) entry e)) %)
                                                          (conj % entry)))
+                                    (update :seen-triggers (fnil conj #{}) id)
                                     (update :reflex-state dissoc id))))
     (when (:when entry)
       (set-condition! eng id (compile-with (:triggers eng) (:when entry))))
@@ -289,6 +293,69 @@
 (defn changed [eng op id]
   {:ok true :op op :id id :trigger (entry-view eng (find-entry (core/state eng) id))})
 
+;; ------------------------------------------------------------------ new default triggers
+;; :seen-triggers (persisted) is every id the body has had, removed ones included, so a removed default is never offered back.
+
+(defn scenario-id [e] (or (:id e) (:trigger e)))
+
+(def upgrade-attention {:job-id "triggers:upgrade" :reason :new-default-triggers :kind :new-default-triggers})
+
+(defn index-of [xs x] (or (first (keep-indexed #(when (= x %2) %1) xs)) -1))
+
+(defn insert-at-priority!
+  "Move entry id to its scenario place: just after the nearest earlier scenario entry the register has, else just
+  before the nearest later one, else it stays last."
+  [eng id scenario-ids]
+  (let [i (index-of scenario-ids id)
+        reg (:register (core/state eng))
+        ids (set (map :id reg))
+        before (first (filter ids (reverse (take i scenario-ids))))
+        after (first (filter ids (drop (inc i) scenario-ids)))
+        anchor (or before after)]
+    (when anchor
+      (swap! (:state eng)
+             (fn [s]
+               (let [entry (find-entry s id)
+                     rest-reg (filterv #(not= id (:id %)) (:register s))
+                     at (index-of (map :id rest-reg) anchor)
+                     at (if before (inc at) at)]
+                 (assoc s :register (vec (concat (take at rest-reg) [entry] (drop at rest-reg))))))))))
+
+(defn upgrade!
+  "Add the new default triggers the last start offered, each at its scenario priority; closes the request."
+  [eng]
+  (let [{:keys [new-defaults scenario-order]} (core/state eng)
+        added (vec (for [e new-defaults
+                         :when (nil? (entry-problem (:jobs eng) (:triggers eng) e))
+                         :let [id (scenario-id e)]]
+                     (do (put! eng (assoc e :id id :by :upgrade))
+                         (insert-at-priority! eng id scenario-order)
+                         id)))]
+    (swap! (:state eng) dissoc :new-defaults :scenario-order)
+    (core/resolve-job-attention! eng (:job-id upgrade-attention) :upgraded)
+    {:ok true :op :upgrade :added added}))
+
+(defn resume-scenario!
+  "On a restart with a scenario: the register stays as saved. Ids the body has never had are the new defaults; they are
+  added at once when upgrade? is set, else offered with one attention request. Returns the offered ids."
+  [eng {:keys [register]} upgrade?]
+  (swap! (:state eng) (fn [s] (update s :seen-triggers #(into (or % #{}) (map :id) (:register s)))))
+  (let [seen (:seen-triggers (core/state eng))
+        fresh (filterv #(not (contains? seen (scenario-id %))) register)
+        ids (mapv scenario-id fresh)]
+    (cond
+      (empty? fresh) (do (swap! (:state eng) dissoc :new-defaults :scenario-order)
+                         (core/resolve-job-attention! eng (:job-id upgrade-attention) :upgraded)
+                         [])
+      :else (do (swap! (:state eng) assoc :new-defaults fresh :scenario-order (mapv scenario-id register))
+                (if upgrade?
+                  (upgrade! eng)
+                  (let [text (str "new default triggers available: " (str/join ", " (map pr-str ids))
+                                  "; ./bin/triggers upgrade adds them")]
+                    (core/emit! eng {:source :system :kind :new-default-triggers :level :warn :ids ids :text text})
+                    (core/request-attention! eng (assoc upgrade-attention :data {:ids ids} :message text))))
+                ids))))
+
 (defn request!
   "Apply one POST /triggers request; the reply, or a refusal naming the
   offending part. Runs between ticks (the handler and tick! share one event
@@ -299,6 +366,7 @@
             id (:id r)]
         (case op
           :put (put! eng r)
+          :upgrade (upgrade! eng)
           :remove (remove! eng id)
           :mute (do (core/mute! eng id ttl-s) (changed eng op id))
           :move (do (core/move! eng id (select-keys r [:above :below]) ttl-s) (changed eng op id))

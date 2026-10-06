@@ -445,3 +445,55 @@
     (is (= :bread-low (get-in (api/triggers-view eng :bread-low) [:explain :id])))
     (is (string? (get-in (api/triggers-view eng "high") [:explain :message])) "a built-in has no condition to explain")
     (is (nil? (:explain (api/triggers-view eng))))))
+
+;; ---------------------------------------------------------------- restart with a newer scenario
+
+(def day1 '{:register [{:trigger :high} {:id :bread-low :when (flag :low) :job (quick)}]})
+(def day2 '{:register [{:trigger :high} {:id :wedge :when (flag :wedged) :job (quick)} {:id :bread-low :when (flag :low) :job (quick)}
+                       {:id :night :when (flag :night) :job (quick)}]})
+
+(defn restarted
+  "A body started on day1, then the agent's edit f, then restarted: the fresh setup."
+  [f]
+  (let [{:keys [eng]} (setup)]
+    (api/load-scenario! eng day1)
+    (f eng)
+    (core/shutdown! eng)
+    (setup {:dir (:dir eng)})))
+
+(defn offered [seen]
+  (mapv :ids (of-kind seen :system :new-default-triggers)))
+
+(deftest a-restart-offers-new-defaults-once-and-adds-nothing
+  (let [{:keys [eng seen]} (restarted identity)]
+    (is (= [:wedge :night] (api/resume-scenario! eng day2 false)))
+    (is (= [:high :bread-low] (register-ids eng)) "offered, not added")
+    (is (= [[:wedge :night]] (offered seen)))
+    (is (= 1 (count (filter #(= :new-default-triggers (:reason %)) (vals (:attention (core/state eng)))))))
+    (is (re-find #"new default triggers available: :wedge, :night; ./bin/triggers upgrade adds them"
+                 (:message (:event (first (vals (:attention (core/state eng))))))))))
+
+(deftest upgrade-adds-the-offered-defaults-at-their-scenario-priority
+  (let [{:keys [eng]} (restarted identity)]
+    (api/resume-scenario! eng day2 false)
+    (is (= {:ok true :op :upgrade :added [:wedge :night]} (api/request! eng {:op :upgrade})))
+    (is (= [:high :wedge :bread-low :night] (register-ids eng)))
+    (is (empty? (:attention (core/state eng))) "the request is closed")
+    (is (= [] (api/resume-scenario! eng day2 false)) "not offered again")))
+
+(deftest the-upgrade-flag-adds-them-without-asking
+  (let [{:keys [eng seen]} (restarted identity)]
+    (is (= [:wedge :night] (api/resume-scenario! eng day2 true)))
+    (is (= [:high :wedge :bread-low :night] (register-ids eng)))
+    (is (empty? (offered seen)))
+    (is (empty? (:attention (core/state eng))))))
+
+(deftest a-trigger-the-agent-removed-is-not-offered-back
+  (let [{:keys [eng]} (restarted #(api/request! % {:op :remove :id :bread-low}))
+        {again :eng} (do (core/shutdown! eng) (setup {:dir (:dir eng)}))]
+    (is (= [:high] (register-ids again)))
+    (is (= [:wedge :night] (api/resume-scenario! again day2 false)) "only the never-had ids")))
+
+(deftest a-body-saved-before-seen-triggers-existed-treats-its-register-as-seen
+  (let [{:keys [eng]} (restarted #(swap! (:state %) dissoc :seen-triggers))]
+    (is (= [:wedge :night] (api/resume-scenario! eng day2 false)))))

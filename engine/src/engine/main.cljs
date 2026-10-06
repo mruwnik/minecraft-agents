@@ -1,5 +1,5 @@
 (ns engine.main
-  "Entry point: npm run body -- --agent <name> --world <world> --scenario <file> [--fresh] [--worlds <dir>] [--state-dir <legacy-parent>]"
+  "Entry point: npm run body -- --agent <name> --world <world> --scenario <file> [--fresh] [--upgrade] [--worlds <dir>] [--state-dir <legacy-parent>]"
   (:require [engine.bodies :as bodies]
             [engine.core :as core]
             [engine.entity-observations :as entity-observations]
@@ -20,7 +20,7 @@
 
 (defn parse-args [args]
   (loop [[a b & more :as all] args
-         opts {:agent nil :world nil :scenario nil :fresh? false :state-dir nil :drive-idle-s 15 :events-max-bytes nil}]
+         opts {:agent nil :world nil :scenario nil :fresh? false :upgrade? false :state-dir nil :drive-idle-s 15 :events-max-bytes nil}]
     (cond
       (empty? all) opts
       (= a "--agent") (recur more (assoc opts :agent b))
@@ -31,6 +31,7 @@
       (= a "--drive-idle-s") (recur more (assoc opts :drive-idle-s (js/parseFloat b)))
       (= a "--events-max-bytes") (recur more (assoc opts :events-max-bytes (or b "")))
       (= a "--fresh") (recur (rest all) (assoc opts :fresh? true))
+      (= a "--upgrade") (recur (rest all) (assoc opts :upgrade? true))
       :else (recur (rest all) opts))))
 
 (def default-events-max-bytes 67108864)
@@ -67,11 +68,13 @@
   []
   (trigger-api/with-conditions triggers/all trigger-api/compile-condition))
 
-(def usage "usage: npm run body -- --agent <name> --world <world> --scenario <file> [--fresh] [--worlds <dir>] [--state-dir <legacy-parent>]")
+(def usage "usage: npm run body -- --agent <name> --world <world> --scenario <file> [--fresh] [--upgrade] [--worlds <dir>] [--state-dir <legacy-parent>]")
 
 (defn preflight
-  "Everything run needs before connecting, or {:error text}."
-  [{:keys [agent world scenario state-dir worlds engine-root events-max-bytes]}]
+  "Everything run needs before connecting, or {:error text}. On a restart (a saved engine.edn, no --fresh) a scenario
+  entry naming an unknown trigger is left out and returned as :stale [{:id :message}]; any other scenario problem,
+  and any problem on a first start, is an error."
+  [{:keys [agent world scenario state-dir worlds engine-root events-max-bytes fresh?]}]
   (let [root (or engine-root (js/process.cwd))
         state-dir (bodies/storage-root {:state state-dir :worlds worlds} (path/resolve root ".."))
         prims-file (path/join root "js" "primitives.mjs")
@@ -79,7 +82,16 @@
         cfg (when names-ok? (load-agent state-dir world agent))
         max-bytes (when-not (:error cfg) (event-cap events-max-bytes (:events-max-bytes cfg)))
         read (when (and scenario (fs/existsSync scenario)) (scenario/read-file scenario))
-        plan (scenario/with-defaults read)
+        restoring? (and (not fresh?) (not (:error cfg)) cfg (fs/existsSync (path/join (:engine-dir cfg) "engine.edn")))
+        full-plan (scenario/with-defaults read)
+        stale (when (and restoring? full-plan)
+                (vec (keep (fn [e] (let [p (trigger-api/entry-problem registry/jobs (body-triggers) e)]
+                                     (when (= :unknown-trigger (:reason p))
+                                       {:id (trigger-api/scenario-id e) :message (:message p)})))
+                           (:register full-plan))))
+        stale-ids (set (map :id stale))
+        plan (cond-> full-plan
+               (seq stale) (update :register (fn [r] (filterv #(not (stale-ids (trigger-api/scenario-id %))) r))))
         issues (when plan (scenario/problems registry/jobs (body-triggers) plan))]
     (cond
       (nil? agent) {:error usage}
@@ -90,7 +102,7 @@
       (nil? max-bytes) {:error "engine: --events-max-bytes and engine.events.maxBytes must be safe integers >= 1024"}
       (and scenario (nil? read)) {:error (str "no scenario file " scenario)}
       (seq issues) {:error (str "scenario problems: " (pr-str issues))}
-      :else {:root root :cfg cfg :plan plan :state-dir state-dir :events-max-bytes max-bytes})))
+      :else {:root root :cfg cfg :plan plan :stale stale :state-dir state-dir :events-max-bytes max-bytes})))
 
 (defn ^:async start-control!
   "Serve the manual-control socket under the engine dir; resolves to the control, or nil (with an
@@ -122,7 +134,7 @@
 (defn ^:async start
   "Open the body's files, log in and run, once the one-process guard is held (release frees it).
   Resolves to {:engine eng :stop f}."
-  [{:keys [fresh?] :as opts} {:keys [root cfg plan state-dir events-max-bytes]} release]
+  [{:keys [fresh? upgrade?] :as opts} {:keys [root cfg plan stale state-dir events-max-bytes]} release]
   (let [engine-file (path/join (:engine-dir cfg) "engine.edn")
         _ (when (and fresh? (fs/existsSync engine-file)) (fs/unlinkSync engine-file))
         restoring? (fs/existsSync engine-file)
@@ -147,6 +159,13 @@
         _ (reset! eng-ref base-eng)
         _ (trigger-api/restore-conditions! base-eng)
         _ (when (and plan (not restoring?)) (trigger-api/load-scenario! base-eng plan))
+        _ (when (and plan restoring?)
+            (doseq [{:keys [id message]} stale]
+              (let [text (str "scenario entry " id " dropped, the body no longer has that trigger: " message)]
+                (core/emit! base-eng {:source :system :kind :dropped :level :warn :reflex id :error message :text text})
+                (core/request-attention! base-eng {:job-id (str "reflex:" (name id)) :reason :reflex-dropped
+                                                   :kind :reflex-dropped :data {:reflex id :error message} :message text})))
+            (trigger-api/resume-scenario! base-eng plan upgrade?))
         seen (entity-observations/start! p {:world (:world cfg) :body (:agent opts)})
         eng (assoc base-eng :seen-entities seen)
         _ (reset! eng-ref eng)

@@ -7,9 +7,9 @@
             ["path" :as path]))
 
 (deftest parse-args-reads-flags
-  (is (= {:agent "Claude" :world "claude" :scenario "s.edn" :fresh? true :state-dir nil :drive-idle-s 15 :events-max-bytes nil}
+  (is (= {:agent "Claude" :world "claude" :scenario "s.edn" :fresh? true :upgrade? false :state-dir nil :drive-idle-s 15 :events-max-bytes nil}
          (main/parse-args ["--agent" "Claude" "--world" "claude" "--scenario" "s.edn" "--fresh"])))
-  (is (= {:agent nil :world nil :scenario nil :fresh? false :state-dir "/x" :drive-idle-s 15 :events-max-bytes nil}
+  (is (= {:agent nil :world nil :scenario nil :fresh? false :upgrade? false :state-dir "/x" :drive-idle-s 15 :events-max-bytes nil}
          (main/parse-args ["--state-dir" "/x"])))
   (is (= 5 (:drive-idle-s (main/parse-args ["--drive-idle-s" "5"]))))
   (is (= "4096" (:events-max-bytes (main/parse-args ["--events-max-bytes" "4096"]))))
@@ -66,3 +66,43 @@
           (await ((main/shutdown-handler hung-stop #(swap! log conj :exit-hung) 60)))
           (await ((main/shutdown-handler failing-stop #(swap! log conj :exit-failed) 1000)))
           (is (= [:stopped :exit :exit-hung :exit-failed] @log)))))))
+
+(defn scenario-file [text]
+  (let [f (path/join (tu/tmp-dir) "s.edn")]
+    (fs/writeFileSync f text)
+    f))
+
+(def stale-scenario "{:register [{:trigger :hungry} {:trigger :night-unsafe}]}")
+
+(defn save-engine! [dir]
+  (let [engine (path/join (bodies/body-dir dir "w" "Bob") "engine")]
+    (fs/mkdirSync engine #js {:recursive true})
+    (fs/writeFileSync (path/join engine "engine.edn") "{}")))
+
+(deftest a-first-start-exits-on-an-unknown-trigger
+  (let [dir (agent-state-dir)
+        r (main/preflight {:agent "Bob" :world "w" :state-dir dir :scenario (scenario-file stale-scenario)})]
+    (is (re-find #"unknown trigger :night-unsafe" (:error r)))))
+
+(deftest a-restart-leaves-an-unknown-trigger-out-and-reports-it
+  (let [dir (agent-state-dir)
+        _ (save-engine! dir)
+        r (main/preflight {:agent "Bob" :world "w" :state-dir dir :scenario (scenario-file stale-scenario)})]
+    (is (nil? (:error r)))
+    (is (= [:hungry] (mapv :trigger (:register (:plan r)))))
+    (is (= [:night-unsafe] (mapv :id (:stale r))))))
+
+(deftest a-restart-still-exits-on-other-scenario-problems
+  (let [dir (agent-state-dir)
+        _ (save-engine! dir)
+        r (main/preflight {:agent "Bob" :world "w" :state-dir dir :scenario (scenario-file "{:register [{:trigger :hungry :cooldown-s -1}]}")})]
+    (is (re-find #"scenario problems" (:error r)))))
+
+(deftest fresh-treats-a-restart-as-a-first-start
+  (let [dir (agent-state-dir)
+        _ (save-engine! dir)
+        r (main/preflight {:agent "Bob" :world "w" :state-dir dir :fresh? true :scenario (scenario-file stale-scenario)})]
+    (is (re-find #"unknown trigger" (:error r)))))
+
+(deftest parse-args-reads-upgrade
+  (is (true? (:upgrade? (main/parse-args ["--upgrade"])))))

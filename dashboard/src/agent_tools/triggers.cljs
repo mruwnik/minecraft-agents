@@ -10,6 +10,7 @@
 
 (def usage "usage: triggers.mjs <body> --world <world> <command> [id] [options]
   list [--limit 8 --offset 0] | show <id>
+  upgrade   (adds the new default triggers a restart offered, at their scenario priority)
   add|put <id> --trigger <predefined> [--args EDN] [--job EDN]
   add|put <id> --when EDN --job EDN
     [--persistence stop|retry|cooldown] [--cooldown-s N] [--for 10m] [--backoff EDN]
@@ -53,7 +54,7 @@ Add and put both create or replace a custom entry; built-in entries cannot be re
 (def put-options [:trigger :when :job :args :persistence :cooldown-s :for :backoff])
 (def allowed-options
   {:list [:limit :offset] :show [] :add put-options :put put-options :remove [] :mute [:for] :unmute []
-   :move [:before :after :for] :reset [:property]})
+   :move [:before :after :for] :reset [:property] :upgrade []})
 (def op-for {:add :put :put :put :unmute :clear :reset :clear})
 
 (defn put-fields
@@ -120,8 +121,8 @@ Add and put both create or replace a custom entry; built-in entries cannot be re
     (when (nil? (:world v)) (fail (bodies/missing-world-error "--world")))
     (when-not (re-matches bodies/name-re (:world v)) (fail "world must be a valid name"))
     (when-not (contains? allowed-options command) (fail "unknown command"))
-    (when (or (seq extra) (if (= command :list) (some? id-text) (nil? id-text)))
-      (fail (str (name command) (if (= command :list) " takes no ID" " needs exactly one ID"))))
+    (when (or (seq extra) (if (#{:list :upgrade} command) (some? id-text) (nil? id-text)))
+      (fail (str (name command) (if (#{:list :upgrade} command) " takes no ID" " needs exactly one ID"))))
     (doseq [k (keys v)]
       (when-not (or (#{:state :worlds :world :by} k) (some #{k} (allowed-options command)))
         (fail (str "--" (name k) " is not valid for " (name command)))))
@@ -129,8 +130,9 @@ Add and put both create or replace a custom entry; built-in entries cannot be re
     (let [state (bodies/storage-root v map-tool/default-state-dir)
           socket-path (.join path (bodies/body-dir state (:world v) body) "engine" "events.sock")
           base {:body body :world (:world v) :state state :socketPath socket-path :command command}]
-      (if (= command :list)
-        (list-request base v)
+      (case command
+        :list (list-request base v)
+        :upgrade (assoc base :path "/triggers" :id :upgrade :mutating true :request {:op :upgrade :by (:by v)})
         (let [id (identifier id-text)]
           (if (= command :show)
             (assoc base :path (str "/triggers?id=" (js/encodeURIComponent (name id))) :id id :mutating false)
@@ -210,6 +212,7 @@ Add and put both create or replace a custom entry; built-in entries cannot be re
     (false? (:ok value)) (bounded value)
     (= :list (:command r)) (compact-list r value)
     (= :show (:command r)) (compact-show r value)
+    (= :upgrade (:command r)) (ordered-map [[:ok true] [:op :upgrade] [:added (:added value)]])
     :else (compact-mutation value)))
 
 ;; Transport
