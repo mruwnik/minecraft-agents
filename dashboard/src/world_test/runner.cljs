@@ -156,6 +156,11 @@
       (rcon! (f/reset-plot-commands (let [[sx sz] dims] (if sx (assoc f/default-grid :size-x sx :size-z sz) f/default-grid)) origin))
       (js/Promise.resolve nil))))
 
+(defn body-argv
+  "node argv for a body: V8 flags must be on the command line (card 41987e8c: new-space cap, RSS 335 -> 235 MB)."
+  [opts scenario]
+  #js ["--max-semi-space-size=4" "out/body.cjs" "--agent" (:body opts) "--world" (:world opts) "--scenario" scenario "--fresh"])
+
 (defn start-body!
   "Starts the body with a scenario holding register, --fresh; resolves once it logged :system :started. The body's own
   engine/memory.edn is deleted first unless keep-memory? (--fresh only drops engine.edn), then written from
@@ -177,7 +182,7 @@
     (fs/mkdirSync dir #js {:recursive true})
     (fs/writeFileSync scenario (pr-str {:register [] :queue []}))
     (let [fd (fs/openSync out "a")
-          child (cp/spawn "node" #js ["out/body.cjs" "--agent" (:body opts) "--world" (:world opts) "--scenario" scenario "--fresh"]
+          child (cp/spawn "node" (body-argv opts scenario)
                           #js {:cwd (repo-path "engine") :stdio #js ["ignore" fd fd]})]
       (swap! bodies assoc (:body opts) child)
       (.then (await-event opts offset {:source :system :kind :started} since 90000)
