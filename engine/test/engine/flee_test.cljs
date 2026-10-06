@@ -103,6 +103,19 @@
                  (mapv #(select-keys % [:mob :id :uuid :ended]) (threat-entries eng))) "one :threat entry")
           (is (= {:cap 20 :ttl 300000} (mem/policy (mem/view (:store eng)) :threat))))))))
 
+(deftest retreat-eats-one-bite-per-flee-step
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (run-job! (setup {:self {:food 2} :inventory [{:name "bread" :count 6}]
+                                                   :entities [(zombie 7 5 {:chase {:speed 0.7}})]})
+                                           'jobs.survival.retreat {}))
+              names (mapv #(.-name %) (.-calls (.-world p)))
+              eats (keep-indexed (fn [i n] (when (= "eat" n) i)) names)]
+          (is (>= (count eats) 2) "it eats while fleeing")
+          (is (every? (fn [[a b]] (some (complement #{"eat" "equip"}) (subvec names (inc a) b))) (partition 2 1 eats))
+              "a walk between every two bites"))))))
+
 (deftest retreat-ends-when-the-zombie-is-out-of-line
   (async done
     (tu/run-async done

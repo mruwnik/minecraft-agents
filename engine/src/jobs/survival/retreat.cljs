@@ -31,7 +31,7 @@
   2. Walks a short step (:step blocks) away from all chasers (nearer ones weigh more) with the engine walker (jobs.lib.near/walk-near!),
      leaning toward the latest :bed or :home when it is within :home-range and not through the hostiles, avoiding :hazard positions.
      When a wall blocks the way away it turns up to 120 degrees towards open ground (at least 2 clear cells).
-     Eats once per flight (up to food 20) when the nearest chaser is at least :eat-gap blocks away and food is carried.
+     Eats one bite a step (up to food 20) when the nearest chaser is at least :eat-gap blocks away and food is carried.
   3. Cornered (no open direction worth a walk, or the walk is blocked; checked afresh every step) with no hostile within
      :radius: holds a second (wait, why cornered) and looks again. With one within :radius: takes the safest option it has not yet failed.
      - fight (jobs.survival.fight-back) only when jobs.lib.cost/fight-damage leaves :reserve health. Never against a creeper.
@@ -63,7 +63,7 @@
 (def args
   {:radius {:doc "hostiles within this many blocks start a flight" :default 8}
    :ranged-radius {:doc "ranged hostiles (skeletons and the like) within this many blocks start a flight" :default 16}
-   :eat-gap {:doc "with at least this many blocks to the nearest hostile, eat once per flight" :default 12}
+   :eat-gap {:doc "with at least this many blocks to the nearest hostile, eat a bite per flee step" :default 12}
    :step {:doc "blocks per walk" :default 6}
    :home-range {:doc "a flight leans towards the latest :bed or :home only when it lies within this many blocks" :default 64}
    :weapons {:doc "item name substrings that count as weapons, for a cornered fight" :default combat/default-weapons}
@@ -772,12 +772,14 @@
       :else (await (pit-round! c refuge)))))
 
 (defn ^:async eat-on-the-run!
-  "Once per flight, with the nearest hostile at least :eat-gap away, eat."
+  "One bite a flee step, with the nearest hostile at least :eat-gap away; none for the rest of the flight once
+  nothing is left to eat or a bite fails."
   [c threat]
   (when (and (not (:ate (ctx/mem c)))
              (>= (.-distance threat) (:eat-gap (:args c))))
-    (let [r (await (ctx/call-child c :eat 'jobs.survival.eat {:until 20}))]
-      (when (not= :declined r) (ctx/update-mem! c assoc :ate true)))))
+    (let [r (await (ctx/call-child c :eat 'jobs.survival.eat {:until 20 :max-bites 1}))]
+      (when (or (= :declined r) (:reason (ctx/child-result c :eat)))
+        (ctx/update-mem! c assoc :ate true)))))
 
 (def door-reach
   "Farthest (blocks, feet to the cell's middle) an open door may be for the flight to shut it: within a hand's reach."

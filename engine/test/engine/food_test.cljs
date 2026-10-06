@@ -1,6 +1,7 @@
 (ns engine.food-test
   "The eat and get-food jobs and the hungry trigger against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
+            [engine.ctx :as ctx]
             [engine.registry :as registry]
             [engine.core :as core]
             [engine.events :as events]
@@ -145,6 +146,33 @@
           (is (= [] (:list (core/state eng))) "4, 9, 14, 19 in one round")
           (is (= 19 (food p)))
           (is (= 3 (count (entries eng :fed)))))))))
+
+(deftest eat-max-bites-stops-after-that-many
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:food 4} :inventory [{:name "bread" :count 5}]})]
+          (core/submit! eng '(jobs.survival.eat {:max-bites 1}) {})
+          (await (core/tick! eng))
+          (is (= 9 (food p)) "one bite only")
+          (is (= 1 (count (calls p "eat")))))))))
+
+(deftest eat-says-why-when-the-first-bite-fails
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:food 20} :inventory [{:name "bread" :count 2}]})
+              out (atom nil)
+              parent {:check (constantly true)
+                      :round (fn ^:async r [c]
+                               (let [s (await (ctx/call-child c :kid 'jobs.survival.eat {:until 21}))]
+                                 (reset! out (ctx/child-result c :kid))
+                                 s))}
+              eng (assoc eng :jobs (assoc (:jobs eng) 'eat-parent parent))]
+          (core/submit! eng '(eat-parent) {})
+          (await (core/tick! eng))
+          (is (= 1 (count (calls p "eat"))))
+          (is (= {:ate 0 :reason :eat-failed} (select-keys @out [:ate :reason]))))))))
 
 (deftest eat-is-done-when-the-last-food-is-eaten
   (async done

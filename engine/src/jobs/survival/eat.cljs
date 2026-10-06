@@ -4,18 +4,20 @@
             [jobs.lib.util :as u]))
 
 (def doc
-  "Eat the best carried food, bite after bite in one call, until food reaches :until or nothing edible is left.
+  "Eat the best carried food, bite after bite in one call, until food reaches :until, :max-bites are eaten or nothing edible is left.
   Best means most hunger points, then most saturation (data from jobs.lib.foods).
   Harmful foods (rotten flesh, spider eyes, pufferfish, poisonous potatoes, raw chicken) need :allow-bad.
   Golden apples are eaten only when named or at low health. Chorus fruit and suspicious stew only when named.
   Declines with :not-hungry or :no-food. A named item that is not food, or is harmful without :allow-bad,
   is refused at once with a refused warning,
   reason :not-food or :bad-food, and {:ate false :reason :item}.
+  Hands over {:ate bites} and, when a bite fails, :reason :eat-failed.
   Memory: writes :fed {:item :food} for each meal.")
 
 (def args
   {:item {:doc "the food to eat; the best carried when nil" :default nil}
    :until {:doc "keep eating while food is below this (of 20)" :default 18}
+   :max-bites {:doc "eat at most this many bites; unlimited when nil" :default nil}
    :allow-bad {:doc "also eat the harmful foods when nothing else is carried" :default false}})
 
 (def fed-policy {:cap 20 :ttl (* 6 60 60 1000)})
@@ -75,18 +77,20 @@
     :else true))
 
 (defn ^:async round
-  "One whole attempt: eats the best carried food bite after bite until food reaches :until, nothing edible is left or an eat fails."
+  "One whole attempt: eats the best carried food bite after bite until food reaches :until, :max-bites are eaten,
+  nothing edible is left or a bite fails (reason :eat-failed)."
   [c]
   (if-let [r (refusal c)]
     (refuse! c r)
-    (let [{:keys [until]} (:args c)]
-      (loop []
+    (let [{:keys [until max-bites]} (:args c)]
+      (loop [bites 0]
         (let [best (carried-best c)]
-          (if (or (nil? best) (not (ctx/alive? c)) (>= (.-food (.self (:primitives c))) until))
-            :done
+          (if (or (nil? best) (not (ctx/alive? c)) (>= (.-food (.self (:primitives c))) until)
+                  (and max-bites (>= bites max-bites)))
+            (do (ctx/result! c {:ate bites}) :done)
             (let [_ (await (ctx/act c :equip #js {:item best}))
                   r (await (ctx/act c :eat #js {:item best}))]
               (if (not= "ate" (.-status r))
-                :done
+                (do (ctx/result! c {:ate bites :reason :eat-failed}) :done)
                 (do (ctx/remember! c :fed {:item best :food (.-food r)} fed-policy)
-                    (recur))))))))))
+                    (recur (inc bites)))))))))))
