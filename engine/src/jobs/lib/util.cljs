@@ -36,6 +36,14 @@
 (defn dist [a b]
   (js/Math.hypot (- (:x a) (:x b)) (- (:y a) (:y b)) (- (:z a) (:z b))))
 
+(def eye-height 1.62)
+
+(defn eye-dist
+  "Distance from the eye of a body at feet position here to the centre of cell (a [x y z] vector or an {:x :y :z} map)."
+  [here cell]
+  (let [[x y z] (if (vector? cell) cell [(:x cell) (:y cell) (:z cell)])]
+    (dist {:x (:x here) :y (+ (:y here) eye-height) :z (:z here)} {:x (+ x 0.5) :y (+ y 0.5) :z (+ z 0.5)})))
+
 (defn within?
   "True when the floored cells of a and b are within range, the measure moveTo's arrival uses."
   [a b range]

@@ -7,7 +7,6 @@
             [jobs.lib.util :as u]
             [jobs.access.stair :as stair]
             [jobs.access.tunnel :as tunnel]
-            [jobs.build.from-plan :as from-plan]
             [jobs.gather.mine :as mine]
             [jobs.survival.dig-in :as dig-in]
             [jobs.lib.world :as known]))
@@ -237,7 +236,7 @@
         block (:block (first (filter #(= cell (:cell %)) (:dug tunnel))))
         item (seal-item (map :name (filter #(pos? (:count %)) (u/inventory p))) block spare)]
     (cond
-      (> (from-plan/eye-dist (u/self-pos c) cell) reach) (book-open! c cell :out-of-reach)
+      (> (u/eye-dist (u/self-pos c) cell) reach) (book-open! c cell :out-of-reach)
       (not (:ok verdict)) (book-open! c cell (:reason verdict))
       (nil? item) (book-open! c cell :no-blocks)
       :else (do (await (ctx/act c :place (clj->js {:pos (cell-pos cell) :item item})))
@@ -259,7 +258,7 @@
     (cond
       (not= entry (feet-of c)) (await (walk-to! c entry #(finish! c :done :open {:escaped true :walk %})))
       (empty? todo) (finish! c :done (if (empty? (:open m)) :sealed :open) {})
-      :else (await (fill! c (first (sort-by (juxt #(% 1) #(- (from-plan/eye-dist body %))) todo)))))))
+      :else (await (fill! c (first (sort-by (juxt #(% 1) #(- (u/eye-dist body %))) todo)))))))
 
 (defn ^:async round [c]
   (declined/begin! c)

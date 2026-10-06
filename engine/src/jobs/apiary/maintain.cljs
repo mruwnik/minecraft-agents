@@ -51,9 +51,6 @@
 
 ;; ------------------------------------------------------------------ what is read
 
-(defn center-of [c]
-  (or (:center (:args c)) (:center (ctx/mem c)) (u/self-pos c)))
-
 (defn area [c center]
   (let [{:keys [box radius]} (:args c)]
     {:box box :center center :radius radius}))
@@ -88,7 +85,7 @@
   "What the decisions are made from, read live."
   [c]
   (let [p (:primitives c)
-        center (center-of c)
+        center (apiary/center-of c)
         inventory (u/inventory p)
         self (.self p)
         block-at (apiary/block-at-fn p)
@@ -194,7 +191,7 @@
 (defn finish!
   [c report]
   (let [{:keys [target]} (:args c)
-        out {:target target :bees (count (bees-in-area c (center-of c))) :steps report}]
+        out {:target target :bees (count (bees-in-area c (apiary/center-of c))) :steps report}]
     (ctx/emit! c :maintain.done :info (assoc out :text (str "maintain done: " (count (filter :skipped (vals report))) " steps skipped")))
     (ctx/result! c out)
     :done))
@@ -230,7 +227,7 @@
       :failed)))
 
 (defn ^:async round [c]
-  (let [center (center-of c)]
+  (let [center (apiary/center-of c)]
     (when-not (:todo (ctx/mem c))
       (ctx/update-mem! c assoc :todo steps :report {} :center center))
     (let [{:keys [call] :as p} (next-plan c)]

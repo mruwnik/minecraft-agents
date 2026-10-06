@@ -11,6 +11,7 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as world]
+            [jobs.forestry.fell-tree :as fell-tree]
             [jobs.forestry.maintain :as maintain]
             [jobs.forestry.trees :as trees]
             [plan.shape :as shape]))
@@ -476,3 +477,13 @@
             (let [{:keys [eng p]} (start spec {"forest" own})]
               (await (h/child-outcome eng 'jobs.forestry.fell-tree args 60))
               (is (= n (count (digs p))) (pr-str args)))))))))
+
+;; ------------------------------------------------------------------ :accept reaches the fell child
+
+(deftest fell-tree-digs-with-the-accept-it-was-given
+  (is (= #{} (:accept (fell-tree/log-dig-args {:args {:accept #{}}} {:x 0 :y 64 :z 0}))))
+  (is (= #{:fluid-adjacent} (:accept (fell-tree/log-dig-args {:args {:accept #{:fluid-adjacent}}} {:x 0 :y 64 :z 0})))))
+
+(deftest maintain-hands-its-accept-to-the-fell-child
+  (is (= #{:falling-block}
+         (:accept (maintain/fell-args {:args {:accept #{:falling-block}}} {:x 3 :y 64 :z 0} "oak")))))

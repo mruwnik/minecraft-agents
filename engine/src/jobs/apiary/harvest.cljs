@@ -40,16 +40,7 @@
 
 ;; ------------------------------------------------------------------ the world
 
-(defn pos-key [{:keys [x y z]}] (str x "," y "," z))
-
 (defn ripe? [b] (>= (or (get-in b [:properties :honey_level]) 0) ripe-level))
-
-(defn in-area? [{:keys [box]} center radius pos]
-  (if box
-    (let [{:keys [from to]} box
-          within (fn [k] (<= (min (k from) (k to)) (k pos) (max (k from) (k to))))]
-      (and (within :x) (within :y) (within :z)))
-    (<= (u/dist center pos) radius)))
 
 (defn hive-allowed?
   "Whether the job may take honey from the hive at pos (one warn per job when refused)."
@@ -62,11 +53,11 @@
   [c center]
   (let [p (:primitives c)
         me (u/self-pos c)
-        {:keys [radius box] :as a} (:args c)
+        {:keys [radius box]} (:args c)
         search (if box 64 (+ radius (u/dist me center)))
         found (->> (look/seen-blocks p {:radius search :names hive-names :properties? true :live? true :max 64})
                    (map (fn [b] {:pos (:pos b) :ripe (ripe? b)}))
-                   (filter #(in-area? a center radius (:pos %))))
+                   (filter #(apiary/in-area? {:box box :center center :radius radius} (:pos %))))
         ok (set (gate/allowed c :apiary.declined "apiary harvest" :harvest (map :pos found)))]
     (->> found
          (filter #(ok (:pos %)))
@@ -87,12 +78,12 @@
   [c hs]
   (let [block-at (apiary/block-at-fn (:primitives c))
         skipped (:skipped (ctx/mem c) {})
-        ripe (->> hs (filter :ripe) (remove #(contains? skipped (pos-key (:pos %)))))
+        ripe (->> hs (filter :ripe) (remove #(contains? skipped (apiary/pos-key (:pos %)))))
         verdicts (map (fn [h] [(:pos h) (apiary/hive-verdict block-at (:pos h))]) ripe)]
     {:hives (count hs)
      :ripe (count (filter :ripe hs))
      :todo (vec (keep (fn [[pos v]] (when (= :ok v) pos)) verdicts))
-     :declined (into {} (keep (fn [[pos v]] (when-not (= :ok v) [(pos-key pos) v])) verdicts))}))
+     :declined (into {} (keep (fn [[pos v]] (when-not (= :ok v) [(apiary/pos-key pos) v])) verdicts))}))
 
 (defn idle-reason
   "Why there is nothing to do: first what was skipped, then what was declined, then what was not there."
@@ -125,10 +116,7 @@
 (defn skip!
   "Leave the hive alone for the rest of the run and count a fruitless hive."
   [c pos reason]
-  (ctx/update-mem! c #(-> % (assoc-in [:skipped (pos-key pos)] reason) (update :strikes (fnil inc 0)))))
-
-(defn center-of [c]
-  (or (:center (:args c)) (:center (ctx/mem c)) (u/self-pos c)))
+  (ctx/update-mem! c #(-> % (assoc-in [:skipped (apiary/pos-key pos)] reason) (update :strikes (fnil inc 0)))))
 
 ;; ------------------------------------------------------------------ rounds
 
@@ -174,7 +162,7 @@
   finish when none can be worked, the budget is spent or three hives in a row
   failed; else harvest the nearest workable hive."
   [c]
-  (let [center (center-of c)
+  (let [center (apiary/center-of c)
         _ (when-not (:center (ctx/mem c)) (ctx/update-mem! c assoc :center center))
         m (ctx/mem c)
         _ (when (and (not= :collect (:phase m)) (empty? (hives c center)) (not (look/looked-here? c)))

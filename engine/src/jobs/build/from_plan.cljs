@@ -113,9 +113,6 @@
 
 (defn eye [body] {:x (:x body) :y (+ (:y body) eye-height) :z (:z body)})
 
-(defn eye-dist [body [x y z]]
-  (u/dist {:x (:x body) :y (+ (:y body) eye-height) :z (:z body)} {:x (+ x 0.5) :y (+ y 0.5) :z (+ z 0.5)}))
-
 (defn body-cells [{:keys [x y z]}]
   (let [fx (js/Math.floor x) fy (js/Math.floor y) fz (js/Math.floor z)]
     #{[fx fy fz] [fx (inc fy) fz]}))
@@ -452,10 +449,10 @@
   (let [body (u/self-pos c)
         mine (body-cells body)]
     (->> todo
-         (filter #(and (<= (eye-dist body (:pos %)) (:reach (:args c)))
+         (filter #(and (<= (u/eye-dist body (:pos %)) (:reach (:args c)))
                        (not (mine (:pos %)))
                        (or (:click %) (facing-ok? (facing-of (:want %)) (:pos %) body))))
-         (sort-by (juxt #(get (:pos %) 1) #(eye-dist body (:pos %)))))))
+         (sort-by (juxt #(get (:pos %) 1) #(u/eye-dist body (:pos %)))))))
 
 (defn in-dig-reach
   "The cells to dig the body can reach from where it stands, lowest first, then nearest."
@@ -463,8 +460,8 @@
   (let [body (u/self-pos c)
         mine (body-cells body)]
     (->> cells
-         (filter #(and (<= (eye-dist body (:pos %)) (:reach (:args c))) (not (mine (:pos %)))))
-         (sort-by (juxt #(get (:pos %) 1) #(eye-dist body (:pos %)))))))
+         (filter #(and (<= (u/eye-dist body (:pos %)) (:reach (:args c))) (not (mine (:pos %)))))
+         (sort-by (juxt #(get (:pos %) 1) #(u/eye-dist body (:pos %)))))))
 
 ;; ------------------------------------------------------------------ keeping a way out
 

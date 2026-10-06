@@ -5,7 +5,7 @@
             [jobs.lib.gate :as gate]
             [jobs.lib.look :as look]
             [jobs.forestry.trees :refer [scan-logs tree-near trees-near tree-at logs-at unreachable-set debts replant-kind
-                                          replant-policy default-radius max-partials eye-dist dig-reach log-name?]]
+                                          replant-policy default-radius max-partials dig-reach log-name?]]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
             [jobs.lib.targets :as targets]))
@@ -34,6 +34,7 @@
    :at {:doc "{:x :y :z} of a base log: fell that one column, wherever the body is (the radius and species are not used), instead of the nearest tree" :type :pos :default nil}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :default nil}
    :spare-own-builds {:doc "a log in a plan this body made is not felled; false: it may be" :default true}
+   :accept {:doc "dig hazards (jobs.lib.access.rules) taken: a set of :fluid-adjacent :falling-block :under-feet" :default #{:fluid-adjacent :falling-block :under-feet}}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
 (defn log-allowed?
@@ -60,7 +61,7 @@
   "Get the log at pos within reach to dig: nothing when its centre is within eye reach already, else walk to within 2
   of the column's foot (3 when that has no path: the foot may be the trunk itself). :there, :partial or :blocked."
   [c pos]
-  (if (<= (eye-dist (u/self-pos c) pos) dig-reach)
+  (if (<= (u/eye-dist (u/self-pos c) pos) dig-reach)
     :there
     (let [foot (assoc pos :y (:y (:base (ctx/mem c))))
           w (await (near/walk-near! c foot 2))]
@@ -70,10 +71,10 @@
 
 (defn log-dig-args
   "The jobs.blocks.dig args for the log at pos: no tool needed (an axe is held when carried), the drop left on the
-  ground, every dig hazard taken (as a player felling a tree does)."
+  ground, the dig hazards of :accept taken."
   [c pos]
-  (merge (select-keys (:args c) [:for-plan :ignore-zones?])
-         {:pos pos :collect false :need-drop false :accept #{:fluid-adjacent :falling-block :under-feet}}))
+  (merge (select-keys (:args c) [:for-plan :ignore-zones? :accept])
+         {:pos pos :collect false :need-drop false}))
 
 (defn outcome
   "What one round of the dig child (r, its result res, the reason its check waits with) means for the tree: :ok
@@ -109,20 +110,6 @@
           (when (and wrote? (some-> (u/block-name (:primitives c) pos) log-name?))
             (ctx/forget-where! c replant-kind #(= pos (:pos %))))
           (outcome r res waits))))))
-
-(defn candidate
-  "The tree to fell: the one at :at (nil once marked unreachable), else the nearest of species within radius."
-  [c radius species]
-  (let [p (:primitives c)
-        excluded (unreachable-set (ctx/mem c))]
-    (if-let [at (:at (:args c))]
-      (when-let [t (tree-at p at)]
-        (when-not (or (excluded [(:x at) (:z at)]) (not (log-allowed? c (:base t)))) t))
-      (loop [excluded excluded]
-        (when-let [t (tree-near p radius species excluded)]
-          (if (log-allowed? c (:base t))
-            t
-            (recur (conj excluded [(:x (:column t)) (:z (:column t))]))))))))
 
 (def approach-range
   "Blocks from a tree's base the search for the tree to fell counts as reaching it: approach!'s looser range."
@@ -194,7 +181,7 @@
 (defn ^:async round
   [c]
   (let [{:keys [species radius]} (:args c)
-        _ (when (and (not (:column (ctx/mem c))) (not (candidate c radius species)) (not (look/looked-here? c)))
+        _ (when (and (not (:column (ctx/mem c))) (not (first (candidates c radius species))) (not (look/looked-here? c)))
             (await (look/look-around! c)))
         chosen (or (:column (ctx/mem c)) (await (choose-tree! c radius species)))]
     (cond
@@ -229,6 +216,6 @@
         {:keys [radius species]} (:args c)]
     (or (boolean (or (:column m)
                      (seq (:unreachable m))
-                     (candidate c radius species)
+                     (first (candidates c radius species))
                      (not (look/looked-here? c))))
         (ctx/wait c (cond-> {:reason :no-tree :radius radius} species (assoc :species species))))))

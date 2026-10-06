@@ -116,9 +116,6 @@
   [c kind]
   (ctx/update-mem! c #(-> % (update kind (fnil inc 0)) (assoc :strikes 0))))
 
-(defn center-of [c]
-  (or (:center (:args c)) (:center (ctx/mem c)) (u/self-pos c)))
-
 ;; ------------------------------------------------------------------ the body
 
 (defn on-fire?
@@ -260,7 +257,7 @@
   budget is spent, three fires in a row failed or none can be worked; else act
   on the nearest workable fire."
   [c]
-  (let [center (center-of c)
+  (let [center (apiary/center-of c)
         _ (ctx/update-mem! c assoc :started true :center center)
         m (ctx/mem c)]
     (if (:sinking m)

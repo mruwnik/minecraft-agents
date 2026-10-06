@@ -46,7 +46,6 @@
    :give-up {:doc "failed walks, failed digs or hazard-blocked tries after which a cell is refused" :default 3}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
-(def eye-height 1.62)
 
 ;; ------------------------------------------------------------------ access
 
@@ -178,10 +177,7 @@
 
 (defn decide [c pos] (judge-verdict (permit c pos) (:accept (:args c))))
 
-(defn eye-dist [body [x y z]]
-  (u/dist {:x (:x body) :y (+ (:y body) eye-height) :z (:z body)} {:x (+ x 0.5) :y (+ y 0.5) :z (+ z 0.5)}))
-
-(defn in-reach? [c pos] (<= (eye-dist (u/self-pos c) pos) (:reach (:args c))))
+(defn in-reach? [c pos] (<= (u/eye-dist (u/self-pos c) pos) (:reach (:args c))))
 
 (defn pos-map [[x y z]] {:x x :y y :z z})
 

@@ -267,6 +267,12 @@
       (leave! c pos :unreachable)
       (ctx/update-mem! c bump :felled))))
 
+(defn fell-args
+  "The args of the fell-tree child for the tree of species at pos."
+  [c pos species]
+  {:at pos :species species :radius 16 :for-plan (:plan (:args c))
+   :accept (:accept (:args c)) :ignore-zones? (:ignore-zones? (:args c))})
+
 (defn ^:async fell!
   "Steps 2 and 4: go on with the tree begun, else begin the nearest ripe one. :continue, or nil with no tree."
   [c trees classes]
@@ -282,9 +288,7 @@
                   (leave! c pos :refused :why (second bad) :log (first bad))
                   :continue)
           :else
-          (let [r (await (ctx/call-child c (fell-slot pos) 'jobs.forestry.fell-tree
-                                                 {:at pos :species species :radius 16 :for-plan (:plan (:args c))
-                                                  :ignore-zones? (:ignore-zones? (:args c))}))]
+          (let [r (await (ctx/call-child c (fell-slot pos) 'jobs.forestry.fell-tree (fell-args c pos species)))]
             (when (not= :continue r) (finished-felling! c pos species))
             :continue)))
 

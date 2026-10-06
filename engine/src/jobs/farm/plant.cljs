@@ -181,7 +181,7 @@
     (if (empty? ready)
       (finish-plan! c found)
       (let [here (u/self-pos c)
-            near (filterv #(<= (harvest/eye-dist here (:pos %)) (:reach (:args c))) ready)
+            near (filterv #(<= (u/eye-dist here (:pos %)) (:reach (:args c))) ready)
             target (first (sort-by #(u/dist here (:pos %)) ready))
             walked (when (empty? near) (await (harvest/walk! c (:pos target) 3)))]
         (case walked
@@ -247,7 +247,7 @@
       (nil? seed) (finish! c :no-seed)
       :else
       (let [here (u/self-pos c)
-            near (filterv #(<= (harvest/eye-dist here %) (:reach (:args c))) cells)
+            near (filterv #(<= (u/eye-dist here %) (:reach (:args c))) cells)
             target (harvest/nearest p cells)
             walked (when (empty? near) (await (harvest/walk! c target 3)))]
         (case walked

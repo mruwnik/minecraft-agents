@@ -159,14 +159,6 @@
       (bare-debt m pos)
       (update m :replant (fn [debts] (mapv #(if (= pos (:pos %)) (assoc % :fails fails) %) debts))))))
 
-(def eye-height 1.62)
-
-(defn eye-dist
-  "Distance from the eye of a body at feet position here to the centre of cell, the measure dig and place accept up to 4.5."
-  [here cell]
-  (u/dist {:x (:x here) :y (+ (:y here) eye-height) :z (:z here)}
-          {:x (+ (:x cell) 0.5) :y (+ (:y cell) 0.5) :z (+ (:z cell) 0.5)}))
-
 (def failed-reach 3.0)
 
 (defn debt-reach
@@ -365,7 +357,7 @@
     (when (seq plantable)
       (let [here (u/self-pos c)
             reach (:reach (:args c))
-            near (filterv #(<= (eye-dist here (:pos %)) (debt-reach % reach)) plantable)
+            near (filterv #(<= (u/eye-dist here (:pos %)) (debt-reach % reach)) plantable)
             nearest-debt (first (sort-by #(u/dist here (:pos %)) plantable))
             walked (when (empty? near) (await (walk! c (:pos nearest-debt) (walk-range nearest-debt))))
             targets (if (seq near) near [nearest-debt])]
@@ -420,7 +412,7 @@
         ripe (when (cutting? c) (ripe-of c (:skipped m)))]
     (when (seq ripe)
       (let [here (u/self-pos c)
-            near (filterv #(<= (eye-dist here %) (:reach (:args c))) ripe)
+            near (filterv #(<= (u/eye-dist here %) (:reach (:args c))) ripe)
             walked (when (empty? near) (await (walk! c (first ripe) 3)))
             targets (if (seq near) near [(first ripe)])]
         (case walked

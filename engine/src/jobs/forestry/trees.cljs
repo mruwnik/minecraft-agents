@@ -90,16 +90,9 @@
     (when (some-> n log-name?)
       {:column {:x (:x pos) :z (:z pos)} :base pos :species (species-of n)})))
 
-(def eye-height 1.62)
 (def dig-reach
   "Eye-to-centre distance within which a block is dug without walking (the primitive accepts 4.5)."
   4.2)
-
-(defn eye-dist
-  "Distance from the eye of a body at feet position here to the centre of cell."
-  [here cell]
-  (u/dist {:x (:x here) :y (+ (:y here) eye-height) :z (:z here)}
-          {:x (+ (:x cell) 0.5) :y (+ (:y cell) 0.5) :z (+ (:z cell) 0.5)}))
 
 (defn unreachable-set [memory]
   (set (map vec (:unreachable memory))))

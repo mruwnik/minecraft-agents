@@ -60,7 +60,7 @@
   "Whether the block at pos can be dug or placed from where the body stands (eye to cell centre, within
   forestry/dig-reach, a margin under the primitive's 4.5)."
   [c pos]
-  (<= (forestry/eye-dist (u/self-pos c) pos) forestry/dig-reach))
+  (<= (u/eye-dist (u/self-pos c) pos) forestry/dig-reach))
 
 (defn rules-in
   "The rules input for this job: zones, claims, every plan's footprint but :for-plan's and the

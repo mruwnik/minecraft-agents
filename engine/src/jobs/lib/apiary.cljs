@@ -1,7 +1,8 @@
 (ns jobs.lib.apiary
   "Helpers for the apiary jobs: reading the smoke and fire under a hive, and
   the fires that stand under the hives."
-  (:require [jobs.lib.look :as look]
+  (:require [engine.ctx :as ctx]
+            [jobs.lib.look :as look]
             [jobs.lib.util :as u]))
 
 ;; ------------------------------------------------------------------ smoke (vanilla CampfireBlock.isSmokeyPos)
@@ -111,6 +112,9 @@
 (def fire-names #js ["campfire" "soul_campfire"])
 
 (defn pos-key [{:keys [x y z]}] (str x "," y "," z))
+
+(defn center-of [c]
+  (or (:center (:args c)) (:center (ctx/mem c)) (u/self-pos c)))
 
 (defn in-area?
   "True when pos is inside the area {:box {:from :to}} or {:center :radius}."
