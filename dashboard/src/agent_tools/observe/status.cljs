@@ -173,9 +173,30 @@
       (clean-pairs :wake :job-finished :job (get-in e [:context :job-id]) :result (:kind e)
                    :message (clip (or (:message e) (:error d)))))))
 
+(defn track-deaths
+  "Fold an event into the death tracker {:names :cancelled}: job names from :queued events, and the jobs a death
+  cancelled (the engine emits those before the :died event)."
+  [tracker e]
+  (let [id (get-in e [:context :job-id])]
+    (cond
+      (and (= :job (:source e)) (= :queued (:kind e))) (assoc-in tracker [:names id] (get-in e [:data :name]))
+      (and (= :job (:source e)) (= :cancelled (:kind e)) (= :death (get-in e [:data :by])))
+      (update tracker :cancelled (fnil conj []) (clean-pairs :id id :name (get-in tracker [:names id])))
+      :else tracker)))
+
+(defn death-jobs
+  "The jobs the tracker saw cancelled by death when e is the :died event, else nil."
+  [tracker e]
+  (when (and (= :body (:source e)) (= :died (:kind e)))
+    (not-empty (:cancelled tracker))))
+
+(defn with-death-jobs [result jobs]
+  (cond-> result (seq jobs) (assoc :cancelled-jobs jobs)))
+
 (defn collect
-  "Fold one routine event into the bounded quiet summary {:counts :items :more}."
-  [summary e]
+  "Fold one routine event into the bounded quiet summary {:counts :items :more}; jobs are the ones a death cancelled."
+  ([summary e] (collect summary e nil))
+  ([summary e jobs]
   (let [{:keys [source kind]} e
         d (or (:data e) {})
         category (cond
@@ -191,8 +212,9 @@
           (update summary :items conj
                   (clean-pairs :event (:kind e) :job (when-not (= :reflexes category) (get-in e [:context :job-id]))
                                :reflex (get-in e [:context :reflex-id]) :item (clip (:item d) 80) :count (:count d)
-                               :message (clip (first (filter some? [(:message e) (:error d) (:reason d)])))))
-          (assoc summary :more true))))))
+                               :message (clip (first (filter some? [(:message e) (:error d) (:reason d)])))
+                               :cancelled-jobs (not-empty jobs)))
+          (assoc summary :more true)))))))
 
 (defn summary-result [summary result]
   (if (seq (:counts summary))

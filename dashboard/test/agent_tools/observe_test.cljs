@@ -306,6 +306,23 @@
     (is (= 1 (get-in summary [:counts :tossed])))
     (is (= {:event :make-room.tossed :item "coal" :count 4} (first (:items summary))))))
 
+(defn plain-job-event [kind id data] {:source :job :kind kind :context {:job-id id} :data data})
+
+(deftest a-death-names-the-jobs-it-cancelled
+  (let [events [(plain-job-event :queued "j1" {:name "jobs.explore.search"})
+                (plain-job-event :cancelled "j1" {:by :death})
+                (plain-job-event :cancelled "j2" {:by :death})
+                (plain-job-event :cancelled "j3" {:by :agent})
+                (event :body :died {})]
+        tracker (reduce observe-status/track-deaths {} events)
+        jobs (observe-status/death-jobs tracker (last events))
+        summary (observe-status/collect {:counts {} :items [] :more false} (last events) jobs)]
+    (is (= [{:id "j1" :name "jobs.explore.search"} {:id "j2"}] jobs))
+    (is (nil? (observe-status/death-jobs tracker (first events))))
+    (is (= jobs (:cancelled-jobs (first (:items summary)))))
+    (is (= jobs (:cancelled-jobs (observe-status/with-death-jobs {:wake :danger} jobs))))
+    (is (= {:wake :danger} (observe-status/with-death-jobs {:wake :danger} nil)))))
+
 ;; The wait loop
 
 (defn fixture
