@@ -833,3 +833,9 @@
   (are [extra forward?] (= forward? (:forward (controls-of (ex/tick p (state-at rise-steps 1) (pose 2.69 64 3.5 extra)))))
     {}              false
     {:in-lava true} true))
+
+(deftest a-bend-step-is-reached-only-within-its-point
+  (let [bend (step 2 64 3 :walk {:bend true :px 2.3 :pz 3.5})]
+    (is (false? (boolean (ex/reached? p bend (pose 2.6 64 3.5)))) "in the cell but 0.3 from the corner")
+    (is (true? (boolean (ex/reached? p bend (pose 2.4 64 3.5)))) "0.1 from the corner")
+    (is (true? (boolean (ex/reached? p (dissoc bend :bend) (pose 2.6 64 3.5)))) "a plain step needs only its cell")))
