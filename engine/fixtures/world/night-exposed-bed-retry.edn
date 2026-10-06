@@ -1,0 +1,61 @@
+;; Night job after 07f65ee2 (card 6d6c329b): an exposed hold looks for a bed every round; a failed sleep is governed only by the
+;; 5-minute :sleep-failed body-memory entry (no job-memory flag); a failed bed placement holds only within 6 blocks of the failure.
+;; jobs.survival.night is submitted in :act (the runner starts the body with its register before plot and time are set).
+;; Open ground: stone floor, torches around, no roof and no blocks to build one. Hut cases: stone shell x 8..16, z 8..16.
+;; sleep_failed uses a NoAI zombie next to the bed (a block-state occupied=true bed is skipped without a sleep call, see
+;; bed-occupied-rule); the zombie is killed after the warn and the 5-minute entry must expire before the next sleep (long case).
+;; The exposed-with-no-bed case counts shelter.exposed warns by hand: exactly one in the log after the run.
+;; Needs night: run with --allow-time --time-log <the shared time log>, one case per call (--match).
+{:defaults
+ {:tags [:night :survival :sleep]
+  :time :night-exclusive
+  :blocks [[:set [8 0 8] "torch"] [:set [24 0 8] "torch"] [:set [8 0 24] "torch"] [:set [24 0 24] "torch"]
+           [:set [16 0 8] "torch"] [:set [16 0 24] "torch"] [:set [8 0 16] "torch"] [:set [24 0 16] "torch"]]
+  :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]] :settle-s 3}}
+ :cases
+ [{:name "exposed-red-bed-given-later-placed-and-slept"
+   :act [[:job (jobs.survival.night)]
+         [:await {:source :job :kind :shelter.exposed} 40]
+         [:wait-s 10]
+         [:rcon "give $BODY red_bed 1"]]
+   :expect [{:event {:source :job :kind :shelter.exposed} :within-s 40}
+            {:event {:source :action :kind :done :data {:name "place" :status "placed"}} :within-s 70}
+            {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 90}]
+   :limit-s 100}
+  {:name "exposed-white-bed-given-later-placed-and-slept"
+   :act [[:job (jobs.survival.night)]
+         [:await {:source :job :kind :shelter.exposed} 40]
+         [:wait-s 10]
+         [:rcon "give $BODY white_bed 1"]]
+   :expect [{:event {:source :job :kind :shelter.exposed} :within-s 40}
+            {:event {:source :action :kind :done :data {:name "place" :status "placed"}} :within-s 70}
+            {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 90}]
+   :limit-s 100}
+  {:name "no-bed-anywhere-stays-exposed-one-warn"
+   :act [[:job (jobs.survival.night)] [:wait-s 60]]
+   :expect [{:event {:source :job :kind :shelter.exposed} :within-s 40}
+            {:no-event {:source :action :kind :started :data {:name "sleep"}} :for-s 60}
+            {:no-event {:source :action :kind :done :data {:name "place"}} :for-s 60}
+            {:no-event {:source :job :kind :shelter.bed_place_failed} :for-s 60}]
+   :after [[:body-near [16.5 0 16.5] 1.5]]
+   :limit-s 80}
+  {:name "monster-near-sleep-failed-then-slept-after-entry-expires"
+   :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
+            [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]]
+   :body {:at [13.5 0 13.5]}
+   :act [[:summon "zombie" [14.5 0 11.5] "{NoAI:1b,Silent:1b}"]
+         [:rcon "execute positioned $X $Y $Z run setblock ~10 ~ ~12 red_bed[facing=east,part=foot]"]
+         [:rcon "execute positioned $X $Y $Z run setblock ~11 ~ ~12 red_bed[facing=east,part=head]"]
+         [:job (jobs.survival.night)]
+         [:await {:source :job :kind :shelter.sleep_failed} 60]
+         [:rcon "execute positioned $X $Y $Z run kill @e[type=zombie,distance=..20]"]
+         [:wait-s 285]
+         [:rcon "execute positioned $X $Y $Z run kill @e[type=spider,distance=..40]"]
+         [:rcon "execute positioned $X $Y $Z run kill @e[type=skeleton,distance=..40]"]
+         [:rcon "execute positioned $X $Y $Z run kill @e[type=creeper,distance=..40]"]
+         [:rcon "execute positioned $X $Y $Z run kill @e[type=zombie,distance=..40]"]
+         [:wait-s 30]]
+   :expect [{:event {:source :job :kind :shelter.sleep_failed} :within-s 60}
+            {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 400}]
+   :after [[:body-near [10.5 0 12.5] 6]]
+   :limit-s 420}]}
