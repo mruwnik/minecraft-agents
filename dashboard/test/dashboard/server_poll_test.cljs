@@ -171,3 +171,18 @@
 (deftest world-entry-does-not-repeat-the-bodies
   (let [entry (server/world-entry [] {:name "w"})]
     (is (not (contains? entry :bodies)))))
+
+(deftest state-text-matches-pr-str-and-prints-unchanged-bodies-once
+  (let [prints (atom 0)
+        body-a {:name "A" :engine {:jobs [{:id "j1"}]}}
+        body-b {:name "B" :engine {:jobs []}}
+        snap (fn [bodies] {:at 1 :bodies bodies :worlds [{:name "w" :places [{:name "p"}]}] :selected "w"})]
+    (with-redefs [server/body-texts (js/WeakMap.)
+                  server/pr-body (counting prints pr-str)]
+      (is (= (pr-str (snap [body-a body-b])) (server/state-text (snap [body-a body-b]))))
+      (is (= 2 @prints))
+      (is (= (pr-str (snap [body-a body-b])) (server/state-text (snap [body-a body-b]))))
+      (is (= 2 @prints) "the same bodies are not printed again")
+      (let [changed (assoc-in body-b [:engine :jobs] [{:id "j2"}])]
+        (is (= (pr-str (snap [body-a changed])) (server/state-text (snap [body-a changed]))))
+        (is (= 3 @prints) "only the changed body is printed again")))))

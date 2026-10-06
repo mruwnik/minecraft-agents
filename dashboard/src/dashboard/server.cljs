@@ -364,19 +364,22 @@
 (def offline-cache-ms 60000)
 
 (defn file-stamp [file]
-  (try (let [st (.statSync fs file)] [(.-mtimeMs st) (.-size st)]) (catch :default _ nil)))
+  (let [st (.statSync fs file #js {:throwIfNoEntry false})]
+    (when st [(.-mtimeMs st) (.-size st)])))
 
-(defn offline-key [agent body now]
+(defn offline-key [agent body now sock-stamp]
   (let [dir (engine-dir body)]
     [agent (quot now offline-cache-ms) (get @live-engines body) (get @live-errors body)
-     (mapv #(file-stamp (.join path dir %)) ["engine.edn" "events.edn" "events.jsonl" "events.sock"])
+     (mapv #(file-stamp (.join path dir %)) ["engine.edn" "events.edn" "events.jsonl"])
+     sock-stamp
      (mapv #(file-stamp (view-file body %)) ["pose.json" "hud.json"])]))
 
 (defn engine-body [agent now]
-  (let [body (body-key agent)]
-    (if (file-exists? (events-socket body))
+  (let [body (body-key agent)
+        sock-stamp (file-stamp (events-socket body))]
+    (if sock-stamp
       (build-engine-body agent now)
-      (let [k (offline-key agent body now)
+      (let [k (offline-key agent body now sock-stamp)
             cached (get @body-cache body)]
         (if (= k (:key cached))
           (:value cached)
@@ -603,8 +606,28 @@
 (defn send-json! [res code value]
   (send-json-js! res code (to-js value)))
 
+(def body-texts (js/WeakMap.))
+(defn pr-body [body] (pr-str body))
+
+(defn body-text
+  "pr-str of one body; an unchanged (identical) body is printed once, its text kept while the body lives."
+  [body]
+  (or (.get body-texts body)
+      (let [text (pr-body body)] (.set body-texts body text) text)))
+
+(defn state-text
+  "pr-str of an /api/state snapshot, with the bodies printed through body-text."
+  [snapshot]
+  (str "{" (str/join ", " (map (fn [[k v]]
+                                 (str (pr-str k) " "
+                                      (if (and (= k :bodies) (vector? v))
+                                        (str "[" (str/join " " (map body-text v)) "]")
+                                        (pr-str v))))
+                               snapshot))
+       "}"))
+
 (defn send-edn! [res code value]
-  (send! res code "application/edn; charset=utf-8" (pr-str value)))
+  (send! res code "application/edn; charset=utf-8" (if (:bodies value) (state-text value) (pr-str value))))
 
 (defn regular-file? [file]
   (try (.isFile (.statSync fs file)) (catch :default _ false)))

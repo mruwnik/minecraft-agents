@@ -1,6 +1,7 @@
 (ns dashboard.village-data
   "Village intentions are native world plans. Villagers are independent UUID world-map observations."
-  (:require ["path" :as path]
+  (:require ["fs" :as fs]
+            ["path" :as path]
             [clojure.string :as str]
             [dashboard.edn-data :as data]
             [plan.shape :as shape]))
@@ -57,6 +58,29 @@
   (when-not (and (string? world) (re-matches #"[A-Za-z0-9_-]{1,64}" world))
     (throw (js/Error. "invalid world"))) world)
 
+(defonce plan-cache (atom {}))
+
+(defn file-stamp [file]
+  (let [st (.statSync fs file #js {:throwIfNoEntry false})]
+    (when st [(.-mtimeMs st) (.-size st)])))
+
+(defn plan-result
+  "{:value} or {:error} of one plan file; read and checked again only when its mtime or size changed."
+  [world dir file]
+  (let [full (.join path dir file)
+        stamp (file-stamp full)
+        cached (get @plan-cache full)]
+    (if (and stamp (= stamp (:stamp cached)))
+      (:result cached)
+      (let [result (try
+                     (let [id (str/replace file #"\.edn$" "") p (data/read-file full)
+                           errors (shape/plan-errors p id)]
+                       (when (seq errors) (throw (js/Error. (str/join "; " (map :error errors)))))
+                       {:value (when (= :village (:kind p)) (plan-projection p world))})
+                     (catch :default e {:error (str world "/" file ": " (ex-message e))}))]
+        (swap! plan-cache assoc full {:stamp stamp :result result})
+        result))))
+
 (defn snapshot
   ([root places] (snapshot root places {:worlds (vec (distinct (keep :world places)))}))
   ([root _places {:keys [worlds worlds-dir]}]
@@ -64,12 +88,7 @@
      (let [results (for [world (map checked-world worlds)
                          :let [dir (.join path (or worlds-dir (.join path root "worlds")) world "plans")]
                          file (data/files dir #"[A-Za-z0-9_.-]+\.edn")]
-                     (try
-                       (let [id (str/replace file #"\.edn$" "") p (data/read-file (.join path dir file))
-                             errors (shape/plan-errors p id)]
-                         (when (seq errors) (throw (js/Error. (str/join "; " (map :error errors)))))
-                         {:value (when (= :village (:kind p)) (plan-projection p world))})
-                       (catch :default e {:error (str world "/" file ": " (ex-message e))})))
+                     (plan-result world dir file))
            errors (keep :error results)]
        {:villages (vec (sort-by (juxt :world :name) (keep :value results))) :unassigned []
         :error (when (seq errors) (str/join "; " errors))})
