@@ -7,7 +7,8 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.test-util :as tu]
-            [engine.triggers :as triggers]))
+            [engine.triggers :as triggers]
+            [jobs.movement.follow :as follow]))
 
 (def job 'jobs.movement.follow)
 
@@ -131,6 +132,11 @@
           (is (= {:reason "unreachable"} @out))
           (is (= 3 (count (tu/walked-to (:eng s)))))
           (is (has-event? s :follow.unreachable)))))))
+
+(deftest the-out-of-range-count-is-against-where-the-target-stands-after-the-walk
+  (is (= 0 (follow/next-out 2 1 {:x 0 :y 64 :z 0} {:x 30 :y 64 :z 0} 3)) "blocked resets")
+  (is (= 0 (follow/next-out 2 0 {:x 8 :y 64 :z 0} {:x 9 :y 64 :z 0} 3)) "in range of where the player is now")
+  (is (= 3 (follow/next-out 2 0 {:x 0 :y 64 :z 0} {:x 9 :y 64 :z 0} 3))))
 
 (deftest timeout-ends-the-follow
   (async done

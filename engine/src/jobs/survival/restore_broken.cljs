@@ -99,10 +99,12 @@
   (tidy/why-not (:primitives c) e))
 
 (defn ^:async walk-near!
-  "Walk to within reach of cell with one go-to call: true when it arrived."
+  "Walk to within reach of cell with one go-to call: true when it arrived, :continue when go-to yielded."
   [c cell reach]
   (let [r (await (ctx/call-child c :go 'jobs.movement.go-to {:pos (zipmap [:x :y :z] cell) :range reach :escalate false}))]
-    (and (= :done r) (boolean (:arrived (ctx/child-result c :go))))))
+    (if (= :continue r)
+      :continue
+      (and (= :done r) (boolean (:arrived (ctx/child-result c :go)))))))
 
 (defn place-item
   "The carried item that puts back the dug cell: tidy/place-item of its entry (an escalation hole takes what the
@@ -122,16 +124,20 @@
     (contains? #{"placed" "dug"} (.-status res))))
 
 (defn ^:async restore-one!
-  "One try at putting entry e back: the try is counted before the walk (a cut run still used one), the cell is
-  forgotten as soon as it is put back. A cell that failed is tried again on the next pass until it gave up."
+  "One try at putting entry e back: a walk that yields (:continue) is no try (the next pass walks again); else the
+  try is counted before the put-back (a cut run still used one), the cell is forgotten as soon as it is put back.
+  A cell that failed is tried again on the next pass until it gave up."
   [c {:keys [cell tries] :as e} reach]
-  (tidy/count-try! c cell)
-  (if (and (await (walk-near! c cell reach)) (await (put-back! c e)))
-    (do (tidy/forget-cell! c cell)
-        (ctx/update-mem! c update :restored (fnil conj []) cell)
-        (ctx/update-mem! c update :seen (fnil conj #{}) cell))
-    (when (>= (inc tries) tidy/max-tries)
-      (skip! c e :gave-up))))
+  (let [walked (await (walk-near! c cell reach))]
+    (if (= :continue walked)
+      :continue
+      (do (tidy/count-try! c cell)
+          (if (and walked (await (put-back! c e)))
+            (do (tidy/forget-cell! c cell)
+                (ctx/update-mem! c update :restored (fnil conj []) cell)
+                (ctx/update-mem! c update :seen (fnil conj #{}) cell))
+            (when (>= (inc tries) tidy/max-tries)
+              (skip! c e :gave-up)))))))
 
 (defn report!
   "Forget the cells that are settled (changed, given up), emit the two events, end: :done, or stopped
@@ -181,14 +187,13 @@
               (first waiting))]
     (cond
       (nil? e) :done
-      (unsafe? c a) (skip! c e :unsafe)
-      (= :occupied (why-not c e)) (await (step-clear! c e waiting))
-      (why-not c e) (skip! c e (why-not c e))
-      (tidy/unreachable? (:primitives c) e (:reach a)) (skip! c e :unreachable)
-      (>= (:tries e) tidy/max-tries) (skip! c e :gave-up)
-      (or (seals-body? c e) (seals-others? c e waiting)) (skip! c e :seals)
-      :else (await (restore-one! c e (:reach a))))
-    (if e :again :done)))
+      (unsafe? c a) (do (skip! c e :unsafe) :again)
+      (= :occupied (why-not c e)) (do (await (step-clear! c e waiting)) :again)
+      (why-not c e) (do (skip! c e (why-not c e)) :again)
+      (tidy/unreachable? (:primitives c) e (:reach a)) (do (skip! c e :unreachable) :again)
+      (>= (:tries e) tidy/max-tries) (do (skip! c e :gave-up) :again)
+      (or (seals-body? c e) (seals-others? c e waiting)) (do (skip! c e :seals) :again)
+      :else (do (await (restore-one! c e (:reach a))) :again))))
 
 (defn ^:async round [c]
   (loop [i 0]

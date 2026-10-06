@@ -57,6 +57,14 @@
                      ["iron_pickaxe" 500] ["stick" 500] [nil 500]]]
     (is (= ms (combat/attack-gap-ms item)) (str item))))
 
+(deftest a-mob-type-target-is-found-past-more-than-64-nearer-entities
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [sheep (mapv #(ent (+ 100 %) "sheep" "passive" 2 {:pos {:x 2 :y 64 :z (- (/ % 10) 3.5)}}) (range 70))
+              s (await (scenario {:targets ["cow"]} {:inventory h/sword :entities (conj sheep (ent 500 "cow" "passive" 9))} 4))]
+          (is (some #{500} (attacked s))))))))
+
 (deftest target-list-normalises-to-a-vector
   (doseq [[in out] [[nil []] [[] []] [7 [7]] ["zombie" ["zombie"]] [[7 "Alex"] [7 "Alex"]] ['(7 8) [7 8]]]]
     (is (= out (attack/target-list in)) (str in))))

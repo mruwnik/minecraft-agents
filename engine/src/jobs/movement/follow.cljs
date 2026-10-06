@@ -56,14 +56,22 @@
   [c pos]
   (await (ctx/act c :look (clj->js {:pos (update pos :y + head-height)}))))
 
+(defn next-out
+  "The out-of-range count after a walk: reset when blocked or when the body is within range of where the target
+  stands now, else one more."
+  [out blocked self now range]
+  (if (or (pos? blocked) (u/within? self now range)) 0 (inc out)))
+
 (defn ^:async walk!
-  "Walk to pos within range. :arrived and :partial reset the blocked count;
+  "Walk to pos within range (the target's position is read again after the walk for the range check). :arrived and :partial reset the blocked count;
   anything else counts, and the third in a row ends the job (warn
   follow.unreachable, result {:reason \"unreachable\"}). :continue or :done."
-  [c pos range]
+  ([c pos range] (walk! c pos range (constantly pos)))
+  ([c pos range target-now]
   (let [r (await (near/walk-near! c pos range {:doors :shut :timeout-s walk-timeout-s}))
         blocked (if (contains? #{:there :partial} r) 0 (inc (:blocked (ctx/mem c) 0)))
-        out (if (or (> blocked 0) (u/within? (u/self-pos c) pos range)) 0 (inc (:out-of-range (ctx/mem c) 0)))]
+        now (or (target-now) pos)
+        out (next-out (:out-of-range (ctx/mem c) 0) blocked (u/self-pos c) now range)]
     (ctx/update-mem! c assoc :blocked blocked :out-of-range out)
     (cond
       (>= out max-blocked)
@@ -74,7 +82,7 @@
       (< blocked max-blocked) :continue
       :else (do (ctx/emit! c :follow.unreachable :warn {:text (str "cannot reach " (:player (:args c)))})
                 (ctx/result! c {:reason "unreachable"})
-                :done))))
+                :done)))))
 
 (defn finish!
   "Hand the parent result and return :done."
@@ -88,7 +96,8 @@
   (if (u/within? (u/self-pos c) pos (:range (:args c)))
     (do (await (look-at-head! c pos))
         (await (idle! c)))
-    (await (walk! c pos (:range (:args c))))))
+    (await (walk! c pos (:range (:args c))
+                  #(find-player (:primitives c) (:player (:args c)) (:radius (:args c)))))))
 
 (defn ^:async follow-unseen!
   "The player is out of sight at now, seen last at seen-t at last-seen."

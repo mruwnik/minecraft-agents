@@ -29,9 +29,9 @@
   Nothing left: it stops :no-food with a food.none warning (what was searched, the nearest known source) and writes
   :hungry. For :ask-cooldown-ms after that a round still eats and still does ways 1, 3, 4 and 5, but not a source it
   already knew when it gave up (one learned since is tried first); with nothing to do it declines, quietly.
-  :continue only when go-to waits on the world, or a child is still going after jobs.lib.child's call cap.
+  Never :continue: a go-to that waits on the world, or a child still going after jobs.lib.child's call cap, is waited out in the round.
   More than 12 ways in one round without getting fed stops :still-hungry.
-  Wheat is never harvested. A chest in another's zone or claim is skipped and never taken from, even when starving
+  Wheat is never harvested. Babies and animals in another's zone or claim are never hunted (:ignore-zones? lifts the zone). A chest in another's zone or claim is skipped and never taken from, even when starving
   (one get-food.skipped warning). A crop in another's zone or claim is dug only when no other is (one
   get-food.trespass-last-resort warning). :ignore-zones? lifts both.
   A cut round starts again from the world: carried food first, then the ways.
@@ -246,11 +246,15 @@
         (pos? wheat) (await (withdraw! c pos "wheat" wheat))
         :else (bury-source! c pos)))))
 
-(defn nearest-animal [c]
+(defn nearest-animal
+  "The nearest adult food animal within :hunt-radius not skipped in this job and not in another's zone or claim."
+  [c]
   (let [skipped (set (:skipped-animals (ctx/mem c)))]
     (->> (array-seq (.entities (:primitives c) #js {:radius (:hunt-radius (:args c)) :kind "passive"
                                                     :names (clj->js food-animals) :max 16}))
          (remove #(skipped (.-id %)))
+         (remove #(true? (.-baby %)))
+         (remove #(access/container-refusal c :take (u/pos-of (.-pos %))))
          first)))
 
 (defn ^:async animal-in-sight
@@ -386,15 +390,22 @@
       (do (ctx/update-mem! c dissoc :eating) nil))))
 
 (defn ^:async round
-  "One whole attempt: eat, then while hungry take the next way and eat again."
+  "One whole attempt: eat, then while hungry take the next way and eat again. A step that yields (:continue) is
+  waited out in the round (a reflex never yields); a cut round ends :done and starts again from the world."
   [c]
   (loop [n 0]
-    (cond
-      (= :continue (await (eat-carried! c))) :continue
-      (not (hungry-now? c)) (r/finish! c {:food (food-level c)})
-      (>= n max-ways) (r/stop! c :still-hungry (str "still hungry (food " (food-level c) ") after " n " ways")
-                               :food (food-level c))
-      :else (case (await (next-way! c))
-              :again (recur (inc n))
-              :continue :continue
-              (if (gave-up-recently? c) :declined (none! c))))))
+    (let [eaten (await (eat-carried! c))
+          way (when-not (= :continue eaten)
+                (cond
+                  (not (hungry-now? c)) ::fed
+                  (>= n max-ways) ::enough
+                  :else (await (next-way! c))))]
+      (cond
+        (not (ctx/alive? c)) :done
+        (or (= :continue eaten) (= :continue way)) (do (await (child/pace!)) (recur n))
+        (= ::fed way) (r/finish! c {:food (food-level c)})
+        (= ::enough way) (r/stop! c :still-hungry (str "still hungry (food " (food-level c) ") after " n " ways")
+                                  :food (food-level c))
+        (= :again way) (recur (inc n))
+        (gave-up-recently? c) :declined
+        :else (none! c)))))

@@ -152,7 +152,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [p (setup-owner (aboard {:dismountFails true}))
-              c (bare-ctx p {:max-tries 2})
+              c (bare-ctx p {:max-tries 2 :wait-ms 1})
               r (await (leave/round c))]
           (is (= :done r))
           (is (= [[:result {:status :stopped :reason :dismount-failed :text "could not get off the vehicle: timeout" :tries 2}]]
@@ -160,6 +160,15 @@
           (is (= 2 (count (calls p "dismount"))))
           (is (= [[:vehicle.dismount_failed :warn {:tries 2 :status "timeout"}]]
                  (filterv #(= :vehicle.dismount_failed (first %)) @(:seen c)))))))))
+
+(deftest the-default-run-keeps-trying-far-longer-than-two-tries
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (setup-owner (aboard {:dismountFails true}))
+              c (bare-ctx p {:wait-ms 1})
+              _ (await (leave/round c))]
+          (is (= 8 (count (calls p "dismount")))))))))
 
 (deftest check-is-whether-the-body-rides
   (is (false? (leave/check (bare-ctx (tu/fake {}) {}))))

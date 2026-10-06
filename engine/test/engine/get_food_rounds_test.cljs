@@ -10,17 +10,20 @@
             [engine.memory :as mem]
             [engine.scenario :as scenario]
             [engine.takeover :as takeover]
+            [jobs.lib.world-files :as ew]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [jobs.lib.child :as child]))
+            [jobs.lib.child :as child]
+            [jobs.survival.get-food :as get-food]))
 
 (defn setup
   "step-ms: the engine's clock moves on by that much each time it is read (time passing while a round runs)."
-  [world & {:keys [step-ms] :or {step-ms 0}}]
+  [world & {:keys [step-ms zones] :or {step-ms 0}}]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         p (tu/seeing-all (tu/fake (merge {:floor tu/walk-floor} world)))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(swap! clock + step-ms)
+                          :world (ew/of-data {} {} zones)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen :clock clock}))
 
@@ -188,6 +191,31 @@
             (is (= 1 (count (reflex-events seen :ended))) (pr-str world))
             (is (= fed? (> (food p) 3)) (pr-str world))
             (is (= [] (reflex-events seen :continued)) "a reflex job that yields is a bug (C1 turns it into :declined)")))))))
+
+(deftest a-way-that-yields-does-not-end-the-round-continued
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [real get-food/next-way!
+              n (atom 0)]
+          (with-redefs [get-food/next-way! (fn ^:async f [c]
+                                             (if (< (swap! n inc) 3) :continue (await (real c))))]
+            (let [{:keys [eng p seen]} (setup {:self {:food 3} :entities [cow]} :step-ms 5)]
+              (await (one-round! eng {}))
+              (is (= [] (:list (core/state eng))) "the round waited and went on in one tick")
+              (is (< 3 (food p)))
+              (is (= [:completed] (mapv :kind (ended seen)))))))))))
+
+(deftest hunt-skips-babies-and-animals-in-another-zone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[ent zones attacks] [[cow nil true]
+                                     [cow [{:name "pen" :owner "Miles" :min [4 63 -1] :max [6 66 1]}] false]
+                                     [(assoc cow :baby true) nil false]]]
+          (let [{:keys [eng p]} (setup {:self {:food 1} :entities [ent]} :step-ms 5 :zones zones)]
+            (await (one-round! eng {}))
+            (is (= attacks (boolean (seq (calls p "attack")))) (pr-str [ent zones]))))))))
 
 ;; ---------------------------------------------------------------- cut and resume
 
