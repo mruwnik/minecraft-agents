@@ -43,10 +43,12 @@ test('every body command uses arbitrary canonical worlds directories and preserv
       assert.equal(request.error, undefined)
       assert.equal(request.socketPath, path.join(expected, 'events.sock'))
     }
-    for (const request of [drive(['Bob', 'state', '--world', 'a', ...flags]), world(['Bob', 'inventory', '--world', 'a', ...flags])]) {
-      assert.equal(request.error, undefined)
-      assert.equal(socketPathFor(request), path.join(expected, 'control.sock'))
-    }
+    const driven = drive(['Bob', 'state', '--world', 'a', ...flags])
+    assert.equal(driven.error, undefined)
+    assert.equal(socketPathFor(driven), path.join(expected, 'control.sock'))
+    const submitted = world(['Bob', 'submit', 'wear', '--world', 'a', ...flags])
+    assert.equal(submitted.error, undefined)
+    assert.equal(submitted.socketPath, path.join(expected, 'events.sock'))
     const requests = [tools.mapOptions(['--world', 'a', ...flags, 'find']), tools.timeOptions(['--world', 'a', ...flags, 'clock']),
       tools.changesOptions(['--world', 'a', ...flags]), tools.entitiesOptions(['Bob', '--world', 'a', ...flags])]
     for (const request of requests) assert.equal(request.ctx['world-dir'], path.dirname(path.dirname(path.dirname(expected))))

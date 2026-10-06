@@ -143,7 +143,7 @@ test('body wrappers use the bound Unix sockets; quoting reaches chat unchanged',
     req.on('end', () => {
       requests.push({ url: req.url, body })
       res.setHeader('content-type', 'application/edn')
-      res.end('{:ok true :online true}')
+      res.end(body.includes(':submit') ? '{:ok true :job {:id "j1" :status :queued}}' : '{:ok true :online true :generation-id "g1"}')
     })
   })
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(path.join(engine, 'events.sock'), resolve) })
@@ -158,6 +158,10 @@ test('body wrappers use the bound Unix sockets; quoting reaches chat unchanged',
   const listed = await runAsync(f.workspace, 'jobs', ['list'])
   assert.equal(listed.status, 0, listed.stderr)
   assert.match(requests.at(-1).url, /^\/jobs/)
+  const submitted = await runAsync(f.workspace, 'world', ['submit', 'wear'])
+  assert.equal(submitted.status, 0, submitted.stdout + submitted.stderr)
+  const submit = requests.findLast(request => request.url === '/jobs' && request.body.includes(':submit'))
+  assert.equal(readEDN(submit.body).by, 'B')
   const triggers = await runAsync(f.workspace, 'triggers', ['list'])
   assert.equal(triggers.status, 0, triggers.stdout + triggers.stderr)
   assert.equal(requests.at(-1).url, '/triggers')
@@ -180,7 +184,6 @@ test('body wrappers use the bound Unix sockets; quoting reaches chat unchanged',
   t.after(() => new Promise(resolve => control.close(resolve)))
   for (const [command, args, endpoint] of [
     ['drive', ['state'], '/drive'],
-    ['world', ['inventory'], '/world'],
     ['entities', ['--center', '1,2,3', '--dimension', 'overworld'], '/entities']
   ]) {
     const result = await runAsync(f.workspace, command, args)
