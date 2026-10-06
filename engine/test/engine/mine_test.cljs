@@ -1106,3 +1106,40 @@
           (doseq [[extra n] [[{} 0] [{:spare-own-builds false} 1]]]
             (let [s (await (zoned (merge {:block "sand" :count 1 :mend false :tunnel-length 0} extra) {:blocks {"6,64,0" "sand"}} own 20))]
               (is (= n (count (dug-cells s))) (pr-str extra)))))))))
+
+(defn ^:async descent-run
+  "A stair-down mine (mend on) of soil over stone; {:s setup :go-to the args of each go-to call}."
+  [n]
+  (let [s (start {:world {:blocks (soil-over-stone 63 59) :drops cobble :inventory [{:name "stone_pickaxe" :count 1}]}})
+        go-tos (atom [])
+        real (get-in (:eng s) [:jobs 'jobs.movement.go-to])
+        spy (assoc real :round (fn [c] (swap! go-tos conj (:args c)) ((:round real) c)))
+        eng (assoc (:eng s) :jobs (assoc (:jobs (:eng s)) 'jobs.movement.go-to spy))]
+    (fake/swap-self! (:p s) assoc :held "stone_pickaxe")
+    (core/submit! eng (spec {:block "stone" :count 1 :direction "east" :tunnel-length 4}) {})
+    (dotimes [_ n]
+      (swap! (:clock s) + 700)
+      (await (core/tick! eng)))
+    {:s s :go-to @go-tos}))
+
+(deftest after-a-descent-the-walk-home-is-a-go-to-and-ends-home
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [s go-to]} (await (descent-run 300))]
+          (is (finished? s))
+          (is (= :count (:reason (done-event s))))
+          (is (seq go-to) "home by a go-to child")
+          (is (= [0 64 0] (feet s)) "the body is back on its start cell")
+          (is (empty? (events-of s :mine.not-home))))))))
+
+(deftest the-mend-leaves-the-stair-cells-below-the-start-level
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [s]} (await (descent-run 300))
+              stair-cells (filterv (fn [[x y z]] (and (< y 63) (nil? (some #{(block-at s x y z)} ["stone" "dirt"]))))
+                                   (for [x (range -3 13) y (range 55 63) z (range -3 4)] [x y z]))]
+          (is (seq (dug-cells s)))
+          (is (seq stair-cells) "the stair cells below the start level are still open")
+          (is (every? #(#{"air" nil} (block-at s (first %) (second %) (nth % 2))) stair-cells)))))))
