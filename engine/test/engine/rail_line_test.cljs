@@ -402,6 +402,13 @@
           (is (= 1 (count (filter #(= {:x 10 :y 64 :z 0} (js->clj (.-pos (.-args %)) :keywordize-keys true)) (h/calls p "dig")))))
           (is (= [] (h/events-of seen :rail-build.broken))))))))
 
+(deftest a-stand-beside-a-rail-cell-is-put-on-the-ground-where-it-rises
+  (let [ground (into {} (concat (for [x (range 5 23) z (range 5 23)] [(h/cell-key x 63 z) "stone"])
+                                (for [x (range 15 23) z (range 5 23)] [(h/cell-key x 64 z) "stone"])))
+        p (tu/fake-on-floor {:blocks ground :self {:pos {:x 12.5 :y 64 :z 14.5}}})
+        stand (builder/beside-stand {:primitives p} {:x 12.5 :y 64 :z 14.5} [19 64 10] #{} #{})]
+    (is (= 65 (second stand)))))
+
 (deftest a-wrong-rail-beside-lava-is-not-dug-and-is-given-up-as-shape
   (async done
     (tu/run-async done

@@ -99,6 +99,15 @@
          (filter #(rail/rail-name? (:name (build/world-block (:primitives c) %))))
          first)))
 
+(defn beside-stand
+  "The stand beside pos nearest the body, on the ground there (build/ground-stands), not planned or bad; nil if none."
+  [c body pos planned bad]
+  (->> (build/stand-cells pos (js/Math.floor (:y body)) nil planned)
+       (build/ground-stands (:primitives c))
+       (remove bad)
+       (sort-by #(u/dist body (zipmap [:x :y :z] %)))
+       first))
+
 (defn ^:async walk-to!
   "Walk to a stand for cell: the rail behind it, else a cell beside it. Counts a failure when the stand cannot be
   walked to, or on arrival the cell is still out of reach or unseen (:unloaded)."
@@ -106,8 +115,7 @@
   (let [body (u/self-pos c)
         planned (set (map :pos cells))
         bad (set (:bad-stands (ctx/mem c)))
-        beside (first (sort-by #(u/dist body (zipmap [:x :y :z] %))
-                               (remove bad (build/stand-cells (:pos cell) (js/Math.floor (:y body)) nil planned))))
+        beside (beside-stand c body (:pos cell) planned bad)
         stand (or (stand-behind c ps from cell) beside)
         give-up (:give-up (:args c))]
     (if-not stand
