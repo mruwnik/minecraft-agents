@@ -173,6 +173,11 @@
       (do (tried! c :craft (or (:why mem) :failed))
           :continue)
 
+      ;; no plan without the seen table: try that table again (it may be reachable now); fruitless counts bound the retries
+      (and (nil? step) (:table-unreachable mem))
+      (do (ctx/update-mem! c update :craft dissoc :table-unreachable)
+          (fruitless! c :table-unreachable))
+
       (nil? step)
       (do (tried! c :craft :no-plan) :continue)
 
@@ -243,5 +248,5 @@
                         :continue)))
           (and (contains? (:how o) :craft) (not (get-in m [:tried :craft])))
           (await (craft-step! c names have target))
-          :else (stop! c (if (and (get-in m [:craft :table-unreachable]) (get-in m [:tried :craft])) :table-unreachable :no-source)
+          :else (stop! c (if (= :table-unreachable (get-in m [:tried :craft])) :table-unreachable :no-source)
                        {:got got :tried (:tried m)}))))))

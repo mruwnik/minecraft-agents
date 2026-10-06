@@ -510,3 +510,18 @@
               reason (or (:reason (core/waiting (:eng s) id)) (:reason (first (events-of s :stopped))))]
           (is (= :table-unreachable reason))
           (is (nil? (get (inv s) "wooden_pickaxe"))))))))
+
+(deftest a-run-that-flagged-the-table-unreachable-uses-it-once-it-is-reachable
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (far-table-world [{:name "oak_planks" :count 3} {:name "stick" :count 2}]) [own-zone])
+              _ (core/submit! (:eng s) (list 'jobs.items.get-tool {:kind "pickaxe"}) {})]
+          (loop [n 0]
+            (when (and (< n 40) (< (count (calls s "craft")) 3))
+              (await (run-ticks s 1))
+              (recur (inc n))))
+          (swap! (fake/state (:p s)) assoc :unreachable #{})
+          (await (run-ticks s 80))
+          (is (= 1 (get (inv s) "wooden_pickaxe")))
+          (is (= 1 (count (tables s)))))))))
