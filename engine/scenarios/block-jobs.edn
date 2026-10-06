@@ -1,0 +1,46 @@
+;; batch-block: bone meal live case: plant an oak sapling at 4996,100,4996 with up to 5 bone meal, then fertilize
+;; the wheat around the body (setup: dirt under the sapling spot, three age-0 wheat on farmland at z 5004)
+{:register []
+ :queue [(seq (jobs.forestry.plant-sapling {:at {:x 4996 :y 100 :z 4996} :bone-meal 5})
+              (jobs.farm.fertilize {:radius 8}))]}
+;; ---- other cases of this feature: swap the commented form in for the active one above ----
+;; -- case from live-ProbeDummy-apiary-unreachable
+;; ;; apiary.harvest live: the only ripe smoked hive is sealed inside a stone block 15 blocks away, the walk cannot get within reach
+;; {:register []
+;;  :queue [(jobs.apiary.harvest {:radius 30 :with :shears})]}
+;; -- case from live-ProbeDummy-clear-1
+;; ;; batch-block: clear-box live case: a 3x3x3 box at 4992..4994, y 100..102 (dirt with a stone layer, a chest, a bed,
+;; ;; a water source, glass kept by :keep, bedrock that cannot be dug)
+;; {:register []
+;;  :queue [(jobs.build.clear-box {:from {:x 4992 :y 100 :z 4992} :to {:x 4994 :y 102 :z 4994} :keep ["glass"]})]}
+;; -- case from live-ProbeDummy-clear-2
+;; ;; batch-block: clear-box with the body standing on the box: a 3x1x1 row at y 99 under 4999..5001, z 5000
+;; {:register []
+;;  :queue [(jobs.build.clear-box {:from {:x 4999 :y 99 :z 5000} :to {:x 5001 :y 99 :z 5000}})]}
+;; -- case from live-ProbeDummy-compost-1
+;; ;; batch-block: compost live case: feed the composter at 5003,100,4997 wheat seeds until it fills, take the bone meal
+;; {:register []
+;;  :queue [(jobs.farm.compost {:items ["wheat_seeds"]})]}
+;; -- case from live-ProbeDummy-compost-3
+;; ;; batch-block: compost fail case: no composter where :at points
+;; {:register []
+;;  :queue [(jobs.farm.compost {:at {:x 5005 :y 100 :z 5005}})]}
+;; -- case from live-ProbeDummy-meal-2
+;; ;; batch-block: bone meal fail cases: plant with :bone-meal 3 but no bone meal carried (plants, no useOn), then
+;; ;; fertilize with no bone meal (declines until some is given)
+;; {:register []
+;;  :queue [(seq (jobs.forestry.plant-sapling {:at {:x 4993 :y 100 :z 4993} :bone-meal 3})
+;;               (jobs.farm.fertilize {:radius 8}))]}
+;; -- case from live-ProbeDummy-spot-2
+;; ;; batch-block: find-spot fail case: searched around a point high in the air (no ground within :depth)
+;; {:register []
+;;  :queue [(jobs.farm.find-spot {:center {:x 5000 :y 200 :z 5000} :range 12})]}
+;; -- case from live-ProbeDummy-till-1
+;; ;; batch-block: jobs.farm.till live case on a 4x3 box at x 5001..5004, z 5001..5003, ground y 99
+;; ;; (setup: grass, grass under short_grass, farmland, stone, dirt under cobblestone, dirt_path, the rest dirt)
+;; {:register []
+;;  :queue [(jobs.farm.till {:from {:x 5001 :y 99 :z 5001} :to {:x 5004 :y 99 :z 5003}})]}
+;; -- case from live-ProbeDummy-till-2
+;; ;; batch-block: jobs.farm.till fail case, a single dirt cell floating 10 blocks above the plot (unreachable)
+;; {:register []
+;;  :queue [(jobs.farm.till {:from {:x 5000 :y 110 :z 4994} :to {:x 5000 :y 110 :z 4994}})]}

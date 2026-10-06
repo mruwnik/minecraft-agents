@@ -1,0 +1,2 @@
+;; Idle body: no reflexes, no queue. Copy to engine/scenarios/scratch/<topic>.edn (git-ignored) for a hand-run probe; jobs are submitted with tools/jobs.mjs.
+{:register [] :queue []}

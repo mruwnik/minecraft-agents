@@ -61,7 +61,7 @@ Layout:
   including the walker `jobs.lib.walk`/`near`/`pass`), `jobs.<area>.*` (one area's). `jobs/hooks.edn` names the hooks.
   Results: `jobs.lib.result` (`stop!` gives up with reason/text/`:cause`, `cause-of` nests a child's stop, `finish!` hands success data).
 - `src/triggers/` the triggers, plain fns by area (`triggers.survival.hungry`); `defaults.edn` is the default set.
-- `scenarios/*.edn` scenarios (`survival.edn`, `woodcutter.edn`, `pace-cuts.edn`, ...; `live-*.edn` are live-test scenarios).
+- `scenarios/*.edn` scenarios (`survival.edn`, `woodcutter.edn`, `pace-cuts.edn`, ...; `scratch/` is git-ignored for hand-run probe starts; `idle.edn` is the idle template).
 - `test/engine/` cljs tests (helpers in `engine.test-util`); `test/engine/fake.cljs` is the scriptable fake world.
 - `tools/*.mjs` agent CLI tools (below). `fixtures/world/` holds EDN world fixtures run by `../tools/world-test.mjs`.
 

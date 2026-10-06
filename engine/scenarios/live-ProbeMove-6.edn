@@ -1,3 +1,0 @@
-;; batch-craft: ProbeMove stands idle as the player that ProbeAttack follows and gives to (moved only by rcon tp)
-{:register []
- :queue []}

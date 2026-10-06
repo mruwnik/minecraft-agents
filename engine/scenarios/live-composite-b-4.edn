@@ -1,4 +1,0 @@
-;; withdraw live: a 5 s pause (items are given meanwhile), then withdraw (composite-b).
-{:register []
- :queue [(seq (jobs.movement.look-around {:every-ms 5000})
-              (jobs.storage.withdraw {:chest {:x -5003 :y 101 :z -5000} :items {"bread" 12 "stone_hoe" 2}}))]}

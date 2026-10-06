@@ -1,3 +1,0 @@
-;; places live run: the body only looks around; set-place / forget-place / sleep / deposit jobs are submitted by hand
-{:register []
- :queue [(repeat (jobs.movement.look-around))]}

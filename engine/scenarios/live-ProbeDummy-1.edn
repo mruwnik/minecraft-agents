@@ -1,3 +1,0 @@
-;; ProbeDummy: an idle player target for the attack job live tests
-{:register []
- :queue [(repeat (jobs.movement.look-around))]}

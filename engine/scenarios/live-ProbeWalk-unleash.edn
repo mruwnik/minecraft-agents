@@ -1,4 +1,0 @@
-;; prim-leash live case: take the lead off a led or tied cow and pick it up
-{:register []
- :queue [(jobs.animals.unleash {:mob "cow"})
-         (repeat (jobs.movement.look-around))]}

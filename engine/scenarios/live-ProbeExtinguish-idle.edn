@@ -1,2 +1,0 @@
-;; ProbeExtinguish live cases for jobs.survival.extinguish (burning on netherrack, water bucket carried): idle, jobs are submitted with tools/jobs.mjs
-{:register [] :queue []}

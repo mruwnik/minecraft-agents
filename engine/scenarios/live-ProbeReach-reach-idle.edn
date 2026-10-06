@@ -1,2 +1,0 @@
-;; ProbeReach live cases for the reach search rewrite (ca4960dd): hostile-near registered, nothing queued
-{:register [{:trigger :hostile-near :args {:radius 8}}] :queue []}

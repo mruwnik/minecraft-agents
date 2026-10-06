@@ -1,4 +1,0 @@
-;; batch-craft live: notify with :chat? sends one public line; a text that is a command is refused and the job still ends done
-{:register []
- :queue [(hold (seq (jobs.debug.notify {:text "batch-craft notify chat test (ignore)" :chat? true})
-                    (jobs.debug.notify {:text "/time set day" :chat? true})))]}

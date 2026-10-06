@@ -1,6 +1,0 @@
-;; Live test of get-food as the hungry reflex, alone, with a short cooldown so
-;; each set-up (crops by setblock, a :food-source seeded in memory) is
-;; answered quickly.
-{:register [{:trigger :hungry :persistence :cooldown :cooldown-s 15 :args {:food 6}
-             :job (jobs.survival.get-food {:food 6})}]
- :queue [(repeat (jobs.movement.look-around))]}

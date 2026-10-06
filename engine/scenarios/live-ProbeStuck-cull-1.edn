@@ -1,4 +1,0 @@
-;; ProbeStuck live case: jobs.animals.cull
-{:register []
- :queue [(repeat (jobs.animals.cull {:mob "cow" :keep 2 :radius 12}))
-         (repeat (jobs.movement.look-around))]}

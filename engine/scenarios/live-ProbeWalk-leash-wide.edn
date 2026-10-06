@@ -1,4 +1,0 @@
-;; prim-leash live case: leash a cow within 12 blocks (the fenced cow)
-{:register []
- :queue [(jobs.animals.leash {:mob "cow" :radius 12})
-         (repeat (jobs.movement.look-around))]}

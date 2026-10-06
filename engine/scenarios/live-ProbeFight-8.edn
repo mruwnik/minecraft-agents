@@ -1,3 +1,0 @@
-;; Backoff live proof: unstick gives up in a sealed bedrock pit, then the listed go-to keeps walking into it.
-{:register [{:trigger :stuck}]
- :queue [(repeat (jobs.movement.go-to {:pos {:x 1980 :y 101 :z -1979}}))]}

@@ -1,3 +1,0 @@
-;; View test: no reflexes, the body looks once then waits 10 minutes, so tp sets its facing.
-{:register []
- :queue [(repeat (jobs.movement.look-around {:every-ms 600000}))]}

@@ -1,5 +1,0 @@
-;; jobs.items.smelt live: smoker at 9002,70,9498, beef and coal in the chest; the fuel is chosen from what is carried
-{:register []
- :queue [(seq (jobs.storage.withdraw {:chest {:x 8999 :y 70 :z 9503} :items {"beef" 4 "coal" 3}})
-              (jobs.items.smelt {:furnace {:x 9002 :y 70 :z 9498} :item "beef" :count 4}))
-         (repeat (jobs.movement.look-around {:every-ms 3000}))]}

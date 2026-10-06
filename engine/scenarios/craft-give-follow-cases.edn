@@ -1,0 +1,131 @@
+;; batch-craft live: the chat limit in act! - one public line, then six whispers to itself in a burst (the 6th within 30 s is blocked/rate)
+{:register []
+ :queue [(hold (seq (jobs.debug.notify {:text "batch-craft limiter test (ignore)" :chat? true})
+                    (jobs.debug.notify {:text "w1" :chat? true :to "ProbeAttack"})
+                    (jobs.debug.notify {:text "w2" :chat? true :to "ProbeAttack"})
+                    (jobs.debug.notify {:text "w3" :chat? true :to "ProbeAttack"})
+                    (jobs.debug.notify {:text "w4" :chat? true :to "ProbeAttack"})
+                    (jobs.debug.notify {:text "w5" :chat? true :to "ProbeAttack"})))]}
+;; ---- other cases of this feature: swap the commented form in for the active one above ----
+;; -- case from live-ProbeAttack-16
+;; ;; batch-craft live: items.craft walks to a table 10 blocks off for bread, crafts planks in the pockets, then reports a shortfall
+;; {:register []
+;;  :queue [(hold (seq (jobs.movement.look-around {:every-ms 6000})
+;;                     (jobs.items.craft {:item "bread" :count 2})
+;;                     (jobs.items.craft {:item "oak_planks" :count 4})
+;;                     (jobs.items.craft {:item "stick" :count 40})))]}
+;; -- case from live-ProbeAttack-17
+;; ;; batch-craft live: items.craft with no table in radius, with an explicit table that is not one, and an unknown item
+;; {:register []
+;;  :queue [(hold (seq (jobs.movement.look-around {:every-ms 6000})
+;;                     (jobs.items.craft {:item "bread" :count 1 :radius 8})
+;;                     (jobs.items.craft {:item "bread" :count 1 :table {:x -5000 :y 100 :z 5000}})
+;;                     (jobs.items.craft {:item "no_such_thing"})))]}
+;; -- case from live-ProbeAttack-18
+;; ;; batch-craft live: items.craft with the only table up on a pillar it cannot path to (three blocked walks end it)
+;; {:register []
+;;  :queue [(hold (seq (jobs.movement.look-around {:every-ms 6000})
+;;                     (jobs.items.craft {:item "bread" :count 1})))]}
+;; -- case from live-ProbeAttack-19
+;; ;; batch-craft live: items.craft cut by a look-around reflex every 6 s while walking 20 blocks to a table and crafting 40 bread; it resumes and finishes
+;; {:register [{:id :look-timer :when (or (not (known? (since :looked))) (>= (since :looked) 6)) :job (jobs.movement.look-around {:every-ms 500})}]
+;;  :queue [(hold (seq (jobs.movement.look-around {:every-ms 4500})
+;;                     (jobs.items.craft {:item "bread" :count 40})))]}
+;; -- case from live-ProbeAttack-20
+;; ;; batch-craft live: follow ProbeMove as rcon moves it across the pad, then out of sight (lost after walking to where it was last seen)
+;; {:register []
+;;  :queue [(hold (seq (jobs.movement.look-around {:every-ms 4500})
+;;                     (jobs.movement.follow {:player "ProbeMove" :range 3 :lost-s 8})))]}
+;; -- case from live-ProbeAttack-21
+;; ;; batch-craft live: follow ProbeMove standing on top of a pillar the body cannot climb (three blocked walks end it unreachable)
+;; {:register []
+;;  :queue [(hold (seq (jobs.movement.look-around {:every-ms 4500})
+;;                     (jobs.movement.follow {:player "ProbeMove" :range 2})))]}
+;; -- case from live-ProbeAttack-22
+;; ;; batch-craft live: give 5 bread to ProbeMove 10 blocks off (taken), then everything carried of a second item
+;; {:register []
+;;  :queue [(hold (seq (jobs.movement.look-around {:every-ms 4500})
+;;                     (jobs.items.give {:player "ProbeMove" :item "bread" :count 5})
+;;                     (jobs.items.give {:player "ProbeMove" :item "apple"})))]}
+;; -- case from live-ProbeAttack-23
+;; ;; batch-craft live: give to ProbeMove with a full inventory (drop not taken, collected back), then with nothing carried, then to a player out of sight
+;; {:register []
+;;  :queue [(hold (seq (jobs.movement.look-around {:every-ms 4500})
+;;                     (jobs.items.give {:player "ProbeMove" :item "bread" :count 5})
+;;                     (jobs.items.give {:player "ProbeMove" :item "golden_apple"})
+;;                     (jobs.items.give {:player "NoSuchPlayerZz" :item "bread"})))]}
+;; -- case from live-ProbeAttack-24
+;; ;; batch-craft live: notify with :chat? sends one public line; a text that is a command is refused and the job still ends done
+;; {:register []
+;;  :queue [(hold (seq (jobs.debug.notify {:text "batch-craft notify chat test (ignore)" :chat? true})
+;;                     (jobs.debug.notify {:text "/time set day" :chat? true})))]}
+;; -- case from live-ProbeAttack-25
+;; ;; batch-craft live: bake the store chest's wheat at the table beside it, keep 4 loaves, put the rest back
+;; {:register []
+;;  :queue [(hold (seq (jobs.movement.look-around {:every-ms 4500})
+;;                     (jobs.items.bake {:chest {:x -5003 :y 101 :z 5000} :keep 4})))]}
+;; -- case from live-ProbeAttack-26
+;; ;; batch-craft live: bake while a look-around reflex cuts it every 6 s (between and during withdraw, craft and deposit)
+;; {:register [{:id :look-timer :when (or (not (known? (since :looked))) (>= (since :looked) 6)) :job (jobs.movement.look-around {:every-ms 500})}]
+;;  :queue [(hold (seq (jobs.movement.look-around {:every-ms 4500})
+;;                     (jobs.items.bake {:chest {:x -5003 :y 101 :z 5000} :keep 4})))]}
+;; -- case from live-ProbeAttack-27
+;; ;; batch-craft live: give 5 bread while a look-around reflex cuts every 3 s; ProbeMove's inventory is full at the toss and emptied 12 s later, so the drop lies through several cuts before it is taken
+;; {:register [{:id :look-timer :when (or (not (known? (since :looked))) (>= (since :looked) 3)) :job (jobs.movement.look-around {:every-ms 300})}]
+;;  :queue [(hold (seq (jobs.movement.look-around {:every-ms 2000})
+;;                     (jobs.items.give {:player "ProbeMove" :item "bread" :count 5 :wait-s 30})))]}
+;; -- case from live-ProbeAttack-29
+;; ;; batch-craft live: kit craft branch - chest with cobblestone and sticks makes a stone hoe
+;; {:register []
+;;  :queue [(hold (seq (jobs.movement.look-around {:every-ms 4500})
+;;                     (jobs.storage.kit {:chest {:x -5003 :y 101 :z 5000} :tools ["hoe"] :spare 0 :food 0})))]}
+;; -- case from live-ProbeAttack-30
+;; ;; batch-craft live: kit craft branch - chest with only logs makes a wooden hoe through planks and sticks
+;; {:register []
+;;  :queue [(hold (seq (jobs.movement.look-around {:every-ms 4500})
+;;                     (jobs.storage.kit {:chest {:x -5003 :y 101 :z 5000} :tools ["hoe"] :spare 0 :food 0})))]}
+;; -- case from live-ProbeAttack-31
+;; ;; batch-craft live: kit craft branch - chest with diamonds, cobblestone and sticks makes a stone hoe (default tiers)
+;; {:register []
+;;  :queue [(hold (seq (jobs.movement.look-around {:every-ms 4500})
+;;                     (jobs.storage.kit {:chest {:x -5003 :y 101 :z 5000} :tools ["hoe"] :spare 0 :food 0})))]}
+;; -- case from live-ProbeAttack-32
+;; ;; batch-craft live: kit craft branch - same chest with :craft-tiers [diamond] makes a diamond hoe
+;; {:register []
+;;  :queue [(hold (seq (jobs.movement.look-around {:every-ms 4500})
+;;                     (jobs.storage.kit {:chest {:x -5003 :y 101 :z 5000} :tools ["hoe"] :spare 0 :food 0 :craft-tiers ["diamond"]})))]}
+;; -- case from live-ProbeAttack-33
+;; ;; batch-craft live: kit craft branch - food short with wheat in the chest makes bread
+;; {:register []
+;;  :queue [(hold (seq (jobs.movement.look-around {:every-ms 4500})
+;;                     (jobs.storage.kit {:chest {:x -5003 :y 101 :z 5000} :tools [] :spare 0 :food 6})))]}
+;; -- case from live-ProbeAttack-34
+;; ;; batch-craft live: kit craft branch - :craft false keeps the take-only behaviour
+;; {:register []
+;;  :queue [(hold (seq (jobs.movement.look-around {:every-ms 4500})
+;;                     (jobs.storage.kit {:chest {:x -5003 :y 101 :z 5000} :tools ["hoe"] :spare 0 :food 0 :craft false})))]}
+;; -- case from live-ProbeAttack-35
+;; ;; batch-craft live: kit craft branch - cut every 5 s by a look-around reflex while making a wooden hoe from logs
+;; {:register [{:id :look-timer :when (or (not (known? (since :looked))) (>= (since :looked) 5)) :job (jobs.movement.look-around {:every-ms 300})}]
+;;  :queue [(hold (seq (jobs.movement.look-around {:every-ms 4500})
+;;                     (jobs.storage.kit {:chest {:x -5003 :y 101 :z 5000} :tools ["hoe"] :spare 0 :food 0})))]}
+;; -- case from live-ProbeAttack-36
+;; ;; batch-craft live: get-food's bread rung (the setup decides the case: wheat carried with or without a table, a wheat chest as known source, food carried as well)
+;; {:register []
+;;  :queue [(hold (seq (jobs.movement.look-around {:every-ms 4500}) (jobs.survival.get-food)))]}
+;; -- case from live-ProbeAttack-37
+;; ;; batch-craft live: get-food's bread rung cut every 5 s by a look-around reflex while it walks to the table and bakes
+;; {:register [{:id :look-timer :when (or (not (known? (since :looked))) (>= (since :looked) 5)) :job (jobs.movement.look-around {:every-ms 300})}]
+;;  :queue [(hold (seq (jobs.movement.look-around {:every-ms 4500}) (jobs.survival.get-food)))]}
+;; -- case from live-ProbeAttack-kit-food
+;; ;; kit craft live: hoe and 3 food, once
+;; {:register []
+;;  :queue [(hold (seq (jobs.movement.look-around {:every-ms 4500}) (jobs.storage.kit {:chest {:x 9000 :y 101 :z 9000} :tools ["hoe"] :spare 0 :food 3})))]}
+;; -- case from live-ProbeAttack-kit-once
+;; ;; kit craft live: kit once
+;; {:register []
+;;  :queue [(hold (seq (jobs.movement.look-around {:every-ms 4500}) (jobs.storage.kit {:chest {:x 9000 :y 101 :z 9000} :tools ["hoe"] :spare 0 :food 0})))]}
+;; -- case from live-ProbeAttack-kit-repeat
+;; ;; kit craft live: kit repeated, a failed craft must not be retried each round
+;; {:register []
+;;  :queue [(repeat (jobs.storage.kit {:chest {:x 9000 :y 101 :z 9000} :tools ["hoe"] :spare 0 :food 0}))]}

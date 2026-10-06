@@ -1,3 +1,0 @@
-;; ProbeDrive live test of route-around walks (jobs.debug.walk-plan): idle look-around, no reflexes.
-{:register []
- :queue [(repeat (jobs.movement.look-around))]}

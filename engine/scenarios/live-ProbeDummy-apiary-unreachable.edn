@@ -1,3 +1,0 @@
-;; apiary.harvest live: the only ripe smoked hive is sealed inside a stone block 15 blocks away, the walk cannot get within reach
-{:register []
- :queue [(jobs.apiary.harvest {:radius 30 :with :shears})]}

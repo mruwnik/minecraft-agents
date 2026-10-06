@@ -1,4 +1,0 @@
-;; live (engine core: :front? submit order, give-up notices): the body idles; jobs are submitted with a scratch
-;; script that posts :front? to the job socket, or with tools/jobs.mjs
-{:register []
- :queue []}

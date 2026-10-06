@@ -1,4 +1,0 @@
-;; ProbeAttack live case: ProbeDummy in creative mode (no damage, bounded give-up)
-{:register []
- :queue [(hold (jobs.combat.attack {:targets "ProbeDummy"}))
-         (repeat (jobs.movement.look-around))]}

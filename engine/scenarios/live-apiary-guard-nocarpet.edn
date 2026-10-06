@@ -1,3 +1,0 @@
-;; apiary.guard live: open lit fire, no carpet carried
-{:register []
- :queue [(jobs.apiary.guard {:box {:from {:x 6053 :y 98 :z 6038} :to {:x 6057 :y 108 :z 6042}}})]}

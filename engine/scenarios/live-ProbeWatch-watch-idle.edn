@@ -1,2 +1,0 @@
-;; ProbeWatch live cases for jobs.lib.watch (card 943cac28): idle; jobs are submitted with tools/jobs.mjs
-{:register [] :queue []}

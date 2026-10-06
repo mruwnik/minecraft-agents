@@ -1,3 +1,0 @@
-;; prim-leash live: idle, to stand in the test area
-{:register []
- :queue [(repeat (jobs.movement.look-around))]}

@@ -1,3 +1,0 @@
-;; ProbeDummy live cases for say, world and drive take-over: idle (look-around), no reflexes.
-{:register []
- :queue [(repeat (jobs.movement.look-around))]}

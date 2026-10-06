@@ -1,4 +1,0 @@
-;; ProbeStuck trigger tests: :stuck and :died against the notify job only.
-{:register [{:trigger :stuck :job (jobs.debug.notify {:text "stuck fired"})}
-            {:trigger :died :job (jobs.debug.notify {:text "died fired"})}]
- :queue [(repeat (jobs.movement.look-around))]}

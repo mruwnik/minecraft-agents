@@ -1,3 +1,0 @@
-;; jobs.forestry.prepare live: idle, jobs submitted with tools/jobs.mjs
-{:register []
- :queue [(repeat (jobs.movement.look-around))]}

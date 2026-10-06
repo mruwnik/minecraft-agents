@@ -1,3 +1,0 @@
-;; ProbeStuck: unstick with a 15 s quiet period so scenarios can follow each other.
-{:register [{:trigger :stuck :args {:quiet-ms 15000} :job (jobs.maintenance.unstick {:quiet-ms 15000})}]
- :queue [(jobs.movement.pace {:a {:x -2020 :y 68 :z -2030} :b {:x -2040 :y 68 :z -2030} :laps 1 :rounds 10000})]}

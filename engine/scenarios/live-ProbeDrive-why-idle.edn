@@ -1,3 +1,0 @@
-;; ProbeDrive live test of the go-to give-up :why after stuck walks: idle (look-around), no reflexes; jobs submitted with tools/jobs.mjs.
-{:register []
- :queue [(repeat (jobs.movement.look-around))]}

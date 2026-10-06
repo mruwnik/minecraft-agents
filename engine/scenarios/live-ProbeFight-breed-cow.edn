@@ -1,4 +1,0 @@
-;; batch-entity live case: breed two cows (also used for the failure cases: no wheat, one adult, babies only, cooldown, unreachable)
-{:register []
- :queue [(jobs.animals.breed {:mob "cow"})
-         (repeat (jobs.movement.look-around))]}

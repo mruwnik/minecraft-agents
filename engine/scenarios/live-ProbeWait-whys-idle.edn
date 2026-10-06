@@ -1,2 +1,0 @@
-;; ProbeWait live cases: job checks wait with a reason (commit d26f1afd); idle, jobs submitted with tools/jobs.mjs
-{:register [] :queue []}

@@ -1,0 +1,20 @@
+;; batch-entity live case: breed two cows (also used for the failure cases: no wheat, one adult, babies only, cooldown, unreachable)
+{:register []
+ :queue [(jobs.animals.breed {:mob "cow"})
+         (repeat (jobs.movement.look-around))]}
+;; ---- other cases of this feature: swap the commented form in for the active one above ----
+;; -- case from live-ProbeFight-breed-bee
+;; ;; batch-entity live case: breed two bees with a flower (daylight, no rain)
+;; {:register []
+;;  :queue [(jobs.animals.breed {:mob "bee"})
+;;          (repeat (jobs.movement.look-around))]}
+;; -- case from live-ProbeFight-cull
+;; ;; batch-entity live case: cull cows down to 2 adults (culling is this hunt expression)
+;; {:register []
+;;  :queue [(jobs.combat.hunt {:mob "cow" :keep 2 :count 8})
+;;          (repeat (jobs.movement.look-around))]}
+;; -- case from live-ProbeFight-shear
+;; ;; batch-entity live case: shear the sheep in radius and pick the wool up
+;; {:register []
+;;  :queue [(jobs.animals.shear)
+;;          (repeat (jobs.movement.look-around))]}

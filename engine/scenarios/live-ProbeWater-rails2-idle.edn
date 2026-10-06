@@ -1,3 +1,0 @@
-;; ProbeWater live cases for jobs.build.rail-line slice 2 (corners and slopes): idle (look-around), jobs are submitted with tools/jobs.mjs
-{:register []
- :queue [(repeat (jobs.movement.look-around))]}

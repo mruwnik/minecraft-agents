@@ -1,3 +1,0 @@
-;; harvest live: the hostile reflex cuts the harvest mid-field; the cut cells must still be replanted (composite-b).
-{:register [{:trigger :hostile-near :persistence :cooldown :cooldown-s 5}]
- :queue [(jobs.farm.harvest {:radius 12})]}

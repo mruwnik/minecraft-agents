@@ -1,3 +1,0 @@
-;; kit craft live: kit once
-{:register []
- :queue [(hold (seq (jobs.movement.look-around {:every-ms 4500}) (jobs.storage.kit {:chest {:x 9000 :y 101 :z 9000} :tools ["hoe"] :spare 0 :food 0})))]}

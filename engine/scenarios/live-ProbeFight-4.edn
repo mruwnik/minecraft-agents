@@ -1,4 +1,0 @@
-;; Backoff live proof, before: a go-to into a sealed box target under repeat with backoff off, plus look-around.
-{:register []
- :queue [(backoff false (repeat (jobs.movement.go-to {:pos {:x 1980 :y 101 :z -1979}})))
-         (repeat (jobs.movement.look-around))]}

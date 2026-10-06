@@ -1,3 +1,0 @@
-;; apiary.harvest live: ripe smoked hive near 6003,101,6000, :with either
-{:register []
- :queue [(jobs.apiary.harvest {})]}

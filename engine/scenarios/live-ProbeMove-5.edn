@@ -1,4 +1,0 @@
-;; ProbeMove live test: wait-for-day not held, look-around queued behind it (does the idle job run at night?).
-{:register []
- :queue [(jobs.time.wait-for-day)
-         (repeat (jobs.movement.look-around))]}

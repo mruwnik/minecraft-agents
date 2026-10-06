@@ -1,3 +1,0 @@
-;; hunt pair rule live case b
-{:register []
- :queue [(jobs.combat.hunt {:mob "cow" :count 10})]}

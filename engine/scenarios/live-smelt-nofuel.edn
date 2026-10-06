@@ -1,5 +1,0 @@
-;; jobs.items.smelt live: only raw iron in the chest, no fuel carried anywhere
-{:register []
- :queue [(seq (jobs.storage.withdraw {:chest {:x 8999 :y 70 :z 9503} :items {"raw_iron" 3}})
-              (jobs.items.smelt {:furnace {:x 9002 :y 70 :z 9500} :item "raw_iron" :count 3}))
-         (repeat (jobs.movement.look-around {:every-ms 3000}))]}

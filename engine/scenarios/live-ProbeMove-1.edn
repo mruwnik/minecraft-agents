@@ -1,3 +1,0 @@
-;; ProbeMove live test: look-around alone, no reflexes (movement/time job tests).
-{:register []
- :queue [(repeat (jobs.movement.look-around))]}

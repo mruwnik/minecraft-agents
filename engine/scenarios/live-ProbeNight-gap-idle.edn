@@ -1,2 +1,0 @@
-;; ProbeNight live cases for the executor gap jumps (jobs.debug.walk-plan): idle, jobs are submitted with tools/jobs.mjs
-{:register [] :queue []}

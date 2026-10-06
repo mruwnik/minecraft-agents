@@ -1,3 +1,0 @@
-;; Log-out live test, body A awake: no night reflex, only looks around.
-{:register []
- :queue [(repeat (jobs.movement.look-around))]}

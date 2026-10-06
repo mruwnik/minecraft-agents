@@ -1,3 +1,0 @@
-;; batch-block: compost default items: oak leaves are fed, wheat seeds and bread held back
-{:register []
- :queue [(jobs.farm.compost {})]}

@@ -1,3 +1,0 @@
-;; batch-entity setup run: the body only looks around (used to tp and give items before a case)
-{:register []
- :queue [(repeat (jobs.movement.look-around))]}

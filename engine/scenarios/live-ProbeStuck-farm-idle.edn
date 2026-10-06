@@ -1,3 +1,0 @@
-;; ProbeStuck live test: idle body, used to place the body and give it items
-{:register []
- :queue [(repeat (jobs.movement.look-around))]}

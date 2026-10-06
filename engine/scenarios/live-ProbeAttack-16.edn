@@ -1,6 +1,0 @@
-;; batch-craft live: items.craft walks to a table 10 blocks off for bread, crafts planks in the pockets, then reports a shortfall
-{:register []
- :queue [(hold (seq (jobs.movement.look-around {:every-ms 6000})
-                    (jobs.items.craft {:item "bread" :count 2})
-                    (jobs.items.craft {:item "oak_planks" :count 4})
-                    (jobs.items.craft {:item "stick" :count 40})))]}

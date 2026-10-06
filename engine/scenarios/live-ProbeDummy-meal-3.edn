@@ -1,4 +1,0 @@
-;; batch-block: fertilize with no bone meal near unripe wheat (declines), then one bone meal (one use, done when out),
-;; then a crop broken between rounds (target gone)
-{:register []
- :queue [(jobs.farm.fertilize {:radius 8})]}

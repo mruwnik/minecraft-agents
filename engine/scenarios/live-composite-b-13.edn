@@ -1,4 +1,0 @@
-;; harvest live: a 5 s pause (the inventory is filled meanwhile, so no seed can be picked up), then harvest (composite-b).
-{:register []
- :queue [(seq (jobs.movement.look-around {:every-ms 5000})
-              (jobs.farm.harvest {:radius 12}))]}

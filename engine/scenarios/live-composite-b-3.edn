@@ -1,3 +1,0 @@
-;; withdraw live: chest walled in bedrock (composite-b).
-{:register []
- :queue [(jobs.storage.withdraw {:chest {:x -5006 :y 102 :z -5000} :items {"bread" 12}})]}

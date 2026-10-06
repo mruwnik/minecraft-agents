@@ -1,2 +1,0 @@
-;; ProbeMine live cases for the strip-tunnel mine: idle, jobs are submitted with tools/jobs.mjs
-{:register [] :queue []}

@@ -1,3 +1,0 @@
-;; explore live: look round once for natural things (survey)
-{:register []
- :queue [(jobs.explore.search {:target ["oak_log" "birch_log" "spruce_log" "acacia_log" "dark_oak_log" "jungle_log" "cherry_log" "mangrove_log" "coal_ore" "iron_ore" "copper_ore" "pumpkin" "cactus" "sugar_cane" "water" "sand" "short_grass" "snow" "stone" "grass_block"] :count 100 :max-legs 0})]}

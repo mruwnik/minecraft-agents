@@ -1,3 +1,0 @@
-;; ProbeStuck live case: jobs.farm.tend on a 7x7 field, no chest given
-{:register []
- :queue [(jobs.farm.tend {:box {:min {:x 8500 :y 100 :z 8500} :max {:x 8506 :y 102 :z 8506}}})]}

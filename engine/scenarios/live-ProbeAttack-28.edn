@@ -1,8 +1,0 @@
-;; batch-craft live: the chat limit in act! - one public line, then six whispers to itself in a burst (the 6th within 30 s is blocked/rate)
-{:register []
- :queue [(hold (seq (jobs.debug.notify {:text "batch-craft limiter test (ignore)" :chat? true})
-                    (jobs.debug.notify {:text "w1" :chat? true :to "ProbeAttack"})
-                    (jobs.debug.notify {:text "w2" :chat? true :to "ProbeAttack"})
-                    (jobs.debug.notify {:text "w3" :chat? true :to "ProbeAttack"})
-                    (jobs.debug.notify {:text "w4" :chat? true :to "ProbeAttack"})
-                    (jobs.debug.notify {:text "w5" :chat? true :to "ProbeAttack"})))]}

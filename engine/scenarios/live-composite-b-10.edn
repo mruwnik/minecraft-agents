@@ -1,3 +1,0 @@
-;; harvest live: cut the ripe crops around the body and replant them (composite-b).
-{:register []
- :queue [(jobs.farm.harvest {:radius 12})]}

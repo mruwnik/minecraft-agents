@@ -1,6 +1,0 @@
-;; ProbeNight job tests: the real get-food and shelter reflexes only, plus idle.
-{:register [{:trigger :hungry :args {:food 6}
-             :job (jobs.survival.get-food {:food 6})}
-            {:trigger :night :args {:roof-height 4}
-             :job (jobs.survival.night {:roof-height 4})}]
- :queue [(repeat (jobs.movement.look-around))]}

@@ -1,2 +1,0 @@
-;; trade primitive live: idle body used to place the probe and its items
-{:register [] :queue []}

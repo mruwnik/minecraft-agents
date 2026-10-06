@@ -1,5 +1,0 @@
-;; transfer fix live: withdraw 12 bread, then deposit all but 4; a stale inventory view after the withdraw would make
-;; deposit put back too little (composite-b).
-{:register []
- :queue [(seq (jobs.storage.withdraw {:chest {:x -5003 :y 101 :z -5000} :items {"bread" 12}})
-              (jobs.storage.deposit {:chest {:x -5003 :y 101 :z -5000} :items ["bread"] :keep {"bread" 4}}))]}

@@ -1,5 +1,0 @@
-;; Live test of the inventory-nearly-full trigger alone: it fires notify when at
-;; most 2 of the 36 main slots are free, and never runs make-room.
-{:register [{:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 10 :args {:free 2}
-             :job (jobs.debug.notify {:text "inventory-nearly-full fired"})}]
- :queue [(repeat (jobs.movement.look-around))]}

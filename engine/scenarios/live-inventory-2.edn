@@ -1,5 +1,0 @@
-;; Live test of make-room as the inventory-nearly-full reflex, alone, with a
-;; short cooldown so each set-up is answered quickly.
-{:register [{:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 15 :args {:free 2}
-             :job (jobs.storage.make-room {:free 4 :chest-range 32})}]
- :queue [(repeat (jobs.movement.look-around))]}

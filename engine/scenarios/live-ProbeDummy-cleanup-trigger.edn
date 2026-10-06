@@ -1,3 +1,0 @@
-;; jobs.access.cleanup live: the scaffold-left trigger registered on an idle body; pillar jobs are submitted with tools/jobs.mjs.
-{:register [{:trigger :scaffold-left}]
- :queue []}

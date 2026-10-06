@@ -1,3 +1,0 @@
-;; harvest live: ripe crops sealed in a glass box: give up after 4 unreachable (composite-b).
-{:register []
- :queue [(jobs.farm.harvest {:radius 16})]}

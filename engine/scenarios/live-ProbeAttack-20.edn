@@ -1,4 +1,0 @@
-;; batch-craft live: follow ProbeMove as rcon moves it across the pad, then out of sight (lost after walking to where it was last seen)
-{:register []
- :queue [(hold (seq (jobs.movement.look-around {:every-ms 4500})
-                    (jobs.movement.follow {:player "ProbeMove" :range 3 :lost-s 8})))]}

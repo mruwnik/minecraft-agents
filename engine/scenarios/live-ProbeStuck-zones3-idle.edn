@@ -1,2 +1,0 @@
-;; ProbeStuck live cases for zones and claims (get-food, smelt, kit, extinguish, claims): idle, jobs submitted with tools/jobs.mjs
-{:register [] :queue []}

@@ -1,5 +1,0 @@
-;; batch-block: bone meal fail cases: plant with :bone-meal 3 but no bone meal carried (plants, no useOn), then
-;; fertilize with no bone meal (declines until some is given)
-{:register []
- :queue [(seq (jobs.forestry.plant-sapling {:at {:x 4993 :y 100 :z 4993} :bone-meal 3})
-              (jobs.farm.fertilize {:radius 8}))]}

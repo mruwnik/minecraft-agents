@@ -1,3 +1,0 @@
-;; ProbeDrive live check of the shared walk driver (jobs.lib.walk): idle look-around, no reflexes.
-{:register []
- :queue [(repeat (jobs.movement.look-around))]}

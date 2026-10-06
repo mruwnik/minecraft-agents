@@ -1,5 +1,0 @@
-;; ProbeNight live cases for jobs.build.rail-line resubmit: idle, jobs are submitted with tools/jobs.mjs.
-;; 30-cell default line (plan test-ProbeNight-resubmit) from [12000 100 12000] east on a stone platform at y 98:
-;; build (done placed 70), resubmit x2 (done placed 0, queue empty), break a rail and resubmit (rebuilt),
-;; no rail carried (rail-build.short, waits queued until a rail is given).
-{:register [] :queue []}

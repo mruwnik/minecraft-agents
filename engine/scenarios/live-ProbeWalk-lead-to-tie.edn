@@ -1,5 +1,0 @@
-;; prim-leash live case: lead a cow 30 blocks east, tie it to the fence post, then untie it and take the lead back
-{:register []
- :queue [(seq (jobs.animals.lead-to {:mob "cow" :pos {:x 8530 :y 64 :z 9500} :fence {:x 8531 :y 64 :z 9500}})
-              (jobs.animals.unleash {:mob "cow"}))
-         (repeat (jobs.movement.look-around))]}

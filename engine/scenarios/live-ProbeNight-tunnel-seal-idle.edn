@@ -1,4 +1,0 @@
-;; live (jobs.access.tunnel, gather.mine :buried): the body idles; cases are submitted one at a time with
-;; tools/jobs.mjs after an RCON tp onto the course: stone x 9280..9320, y 50..69, z 7685..7715, surface feet y 70
-{:register []
- :queue []}

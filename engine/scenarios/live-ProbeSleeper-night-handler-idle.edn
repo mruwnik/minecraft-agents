@@ -1,2 +1,0 @@
-;; ProbeSleeper live cases for the one night handler (card 3db292e6): idle, it sleeps when jobs.survival.sleep is submitted with tools/jobs.mjs
-{:register [] :queue []}

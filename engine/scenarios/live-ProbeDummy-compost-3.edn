@@ -1,3 +1,0 @@
-;; batch-block: compost fail case: no composter where :at points
-{:register []
- :queue [(jobs.farm.compost {:at {:x 5005 :y 100 :z 5005}})]}

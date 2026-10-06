@@ -1,0 +1,36 @@
+;; jobs.items.smelt live: blast furnace at 9002,70,9502, raw iron and planks in the chest (planks are the only fuel carried)
+{:register []
+ :queue [(seq (jobs.storage.withdraw {:chest {:x 8999 :y 70 :z 9503} :items {"raw_iron" 4 "oak_planks" 6}})
+              (jobs.items.smelt {:furnace {:x 9002 :y 70 :z 9502} :item "raw_iron" :count 4}))
+         (repeat (jobs.movement.look-around {:every-ms 3000}))]}
+;; ---- other cases of this feature: swap the commented form in for the active one above ----
+;; -- case from live-smelt-iron
+;; ;; jobs.items.smelt live: furnace at 9002,70,9500 on the platform at 9000,69,9500; chest 8999,70,9503 holds raw_iron and coal
+;; {:register []
+;;  :queue [(seq (jobs.storage.withdraw {:chest {:x 8999 :y 70 :z 9503} :items {"raw_iron" 3 "coal" 3}})
+;;               (jobs.items.smelt {:furnace {:x 9002 :y 70 :z 9500} :item "raw_iron" :count 3}))
+;;          (repeat (jobs.movement.look-around {:every-ms 3000}))]}
+;; -- case from live-smelt-nofuel
+;; ;; jobs.items.smelt live: only raw iron in the chest, no fuel carried anywhere
+;; {:register []
+;;  :queue [(seq (jobs.storage.withdraw {:chest {:x 8999 :y 70 :z 9503} :items {"raw_iron" 3}})
+;;               (jobs.items.smelt {:furnace {:x 9002 :y 70 :z 9500} :item "raw_iron" :count 3}))
+;;          (repeat (jobs.movement.look-around {:every-ms 3000}))]}
+;; -- case from live-smelt-nofurnace
+;; ;; jobs.items.smelt live: iron and coal in the chest, nothing at the furnace position 9004,70,9500
+;; {:register []
+;;  :queue [(seq (jobs.storage.withdraw {:chest {:x 8999 :y 70 :z 9503} :items {"raw_iron" 3 "coal" 3}})
+;;               (jobs.items.smelt {:furnace {:x 9004 :y 70 :z 9500} :item "raw_iron" :count 3}))
+;;          (repeat (jobs.movement.look-around {:every-ms 3000}))]}
+;; -- case from live-smelt-nothing
+;; ;; jobs.items.smelt live: only dirt and coal in the chest, no item named: nothing smeltable
+;; {:register []
+;;  :queue [(seq (jobs.storage.withdraw {:chest {:x 8999 :y 70 :z 9503} :items {"dirt" 3 "coal" 2}})
+;;               (jobs.items.smelt {:furnace {:x 9002 :y 70 :z 9500}}))
+;;          (repeat (jobs.movement.look-around {:every-ms 3000}))]}
+;; -- case from live-smelt-smoker
+;; ;; jobs.items.smelt live: smoker at 9002,70,9498, beef and coal in the chest; the fuel is chosen from what is carried
+;; {:register []
+;;  :queue [(seq (jobs.storage.withdraw {:chest {:x 8999 :y 70 :z 9503} :items {"beef" 4 "coal" 3}})
+;;               (jobs.items.smelt {:furnace {:x 9002 :y 70 :z 9498} :item "beef" :count 4}))
+;;          (repeat (jobs.movement.look-around {:every-ms 3000}))]}

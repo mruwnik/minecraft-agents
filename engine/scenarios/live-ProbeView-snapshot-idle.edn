@@ -1,2 +1,0 @@
-;; ProbeView live cases for the snapshot renderer (doors, items) and entity list filtering; idle
-{:register [] :queue []}

@@ -1,3 +1,0 @@
-;; jobs.access.pillar live: an idle body; the pillar jobs are submitted with tools/jobs.mjs after the probe is placed.
-{:register []
- :queue []}

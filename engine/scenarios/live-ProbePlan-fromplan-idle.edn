@@ -1,2 +1,0 @@
-;; ProbePlan live cases for jobs.build.from-plan: idle, jobs are submitted with tools/jobs.mjs
-{:register [] :queue []}

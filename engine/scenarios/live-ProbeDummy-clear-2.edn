@@ -1,3 +1,0 @@
-;; batch-block: clear-box with the body standing on the box: a 3x1x1 row at y 99 under 4999..5001, z 5000
-{:register []
- :queue [(jobs.build.clear-box {:from {:x 4999 :y 99 :z 5000} :to {:x 5001 :y 99 :z 5000}})]}

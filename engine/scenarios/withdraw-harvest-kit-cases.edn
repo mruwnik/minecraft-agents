@@ -1,0 +1,45 @@
+;; transfer fix live: withdraw 12 bread, then deposit all but 4; a stale inventory view after the withdraw would make
+;; deposit put back too little (composite-b).
+{:register []
+ :queue [(seq (jobs.storage.withdraw {:chest {:x -5003 :y 101 :z -5000} :items {"bread" 12}})
+              (jobs.storage.deposit {:chest {:x -5003 :y 101 :z -5000} :items ["bread"] :keep {"bread" 4}}))]}
+;; ---- other cases of this feature: swap the commented form in for the active one above ----
+;; -- case from live-composite-b-1
+;; ;; withdraw live: take bread and hoes from a chest beside the pad (composite-b).
+;; {:register []
+;;  :queue [(jobs.storage.withdraw {:chest {:x -5003 :y 101 :z -5000} :items {"bread" 12 "stone_hoe" 2}})]}
+;; -- case from live-composite-b-2
+;; ;; withdraw live: no chest given and none remembered: the listed job must never run (composite-b).
+;; {:register []
+;;  :queue [(jobs.storage.withdraw {:items {"bread" 12}})]}
+;; -- case from live-composite-b-3
+;; ;; withdraw live: chest walled in bedrock (composite-b).
+;; {:register []
+;;  :queue [(jobs.storage.withdraw {:chest {:x -5006 :y 102 :z -5000} :items {"bread" 12}})]}
+;; -- case from live-composite-b-4
+;; ;; withdraw live: a 5 s pause (items are given meanwhile), then withdraw (composite-b).
+;; {:register []
+;;  :queue [(seq (jobs.movement.look-around {:every-ms 5000})
+;;               (jobs.storage.withdraw {:chest {:x -5003 :y 101 :z -5000} :items {"bread" 12 "stone_hoe" 2}}))]}
+;; -- case from live-composite-b-6
+;; ;; kit live: a 5 s pause (items may be given meanwhile), then a hoe kit with food (composite-b).
+;; {:register []
+;;  :queue [(seq (jobs.movement.look-around {:every-ms 5000})
+;;               (jobs.storage.kit {:tools ["hoe"] :spare 1 :food 12 :chest {:x -5003 :y 101 :z -5000}}))]}
+;; -- case from live-composite-b-7
+;; ;; kit live: no chest given and none remembered: the listed job must never run (composite-b).
+;; {:register []
+;;  :queue [(jobs.storage.kit {:tools ["hoe"] :spare 1 :food 12})]}
+;; -- case from live-composite-b-8
+;; ;; kit live: chest walled in bedrock (composite-b).
+;; {:register []
+;;  :queue [(jobs.storage.kit {:tools ["hoe"] :spare 1 :food 12 :chest {:x -5006 :y 102 :z -5000}})]}
+;; -- case from live-composite-b-12
+;; ;; harvest live: the hostile reflex cuts the harvest mid-field; the cut cells must still be replanted (composite-b).
+;; {:register [{:trigger :hostile-near :persistence :cooldown :cooldown-s 5}]
+;;  :queue [(jobs.farm.harvest {:radius 12})]}
+;; -- case from live-composite-b-13
+;; ;; harvest live: a 5 s pause (the inventory is filled meanwhile, so no seed can be picked up), then harvest (composite-b).
+;; {:register []
+;;  :queue [(seq (jobs.movement.look-around {:every-ms 5000})
+;;               (jobs.farm.harvest {:radius 12}))]}

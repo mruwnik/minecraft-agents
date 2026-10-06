@@ -1,3 +1,0 @@
-;; ProbeWalk live cases for jobs.gather.get-seeds: idle (look-around), jobs are submitted with tools/jobs.mjs
-{:register []
- :queue [(repeat (jobs.movement.look-around))]}

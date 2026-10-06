@@ -1,3 +1,0 @@
-;; apiary.harvest live: idle body used to place the probe and build the test setup.
-{:register []
- :queue [(repeat (jobs.movement.look-around))]}

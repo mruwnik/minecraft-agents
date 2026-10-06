@@ -1,3 +1,0 @@
-;; apiary.maintain live: same apiary, no chest; the produce stays carried
-{:register []
- :queue [(jobs.apiary.maintain {:box {:from {:x 6096 :y 100 :z 6096} :to {:x 6104 :y 110 :z 6104}}})]}

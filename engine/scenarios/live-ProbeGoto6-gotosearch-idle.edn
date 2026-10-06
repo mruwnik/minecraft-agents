@@ -1,2 +1,0 @@
-;; ProbeGoto6 live cases for go-to one bounded search a round: idle, jobs submitted with tools/jobs.mjs
-{:register [] :queue []}

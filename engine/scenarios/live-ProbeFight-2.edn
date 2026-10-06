@@ -1,4 +1,0 @@
-;; ProbeFight job test: respond-to-hostile as in survival.edn, nothing else.
-{:register [{:trigger :hostile-near :args {:radius 8}
-             :job (jobs.survival.respond-to-hostile {:radius 8})}]
- :queue [(repeat (jobs.movement.look-around))]}

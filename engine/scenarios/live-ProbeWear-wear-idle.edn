@@ -1,2 +1,0 @@
-;; ProbeWear live cases for jobs.items.wear: idle, jobs are submitted with tools/jobs.mjs
-{:register [] :queue []}

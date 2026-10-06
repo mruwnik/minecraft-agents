@@ -1,2 +1,0 @@
-;; ProbeHerd2 live cases for jobs.animals.herd (card e8fce0d1): idle, jobs are submitted with tools/jobs.mjs
-{:register [] :queue []}

@@ -1,4 +1,0 @@
-;; batch-block: jobs.farm.till live case on a 4x3 box at x 5001..5004, z 5001..5003, ground y 99
-;; (setup: grass, grass under short_grass, farmland, stone, dirt under cobblestone, dirt_path, the rest dirt)
-{:register []
- :queue [(jobs.farm.till {:from {:x 5001 :y 99 :z 5001} :to {:x 5004 :y 99 :z 5003}})]}

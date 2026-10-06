@@ -1,3 +1,0 @@
-;; ProbeStuck: unstick on the fixed build (default 5 min quiet), pacing on the pad.
-{:register [{:trigger :stuck :job (jobs.maintenance.unstick)}]
- :queue [(jobs.movement.pace {:a {:x -2020 :y 68 :z -2030} :b {:x -2040 :y 68 :z -2030} :laps 1 :rounds 10000})]}

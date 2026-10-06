@@ -1,3 +1,0 @@
-;; apiary.guard live: every fire in the box is already safe (carpeted, in a pit)
-{:register []
- :queue [(jobs.apiary.guard {:box {:from {:x 6048 :y 98 :z 6038} :to {:x 6052 :y 108 :z 6042}}})]}

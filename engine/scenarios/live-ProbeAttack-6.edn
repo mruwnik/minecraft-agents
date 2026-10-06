@@ -1,4 +1,0 @@
-;; ProbeAttack live case: ProbeDummy by username; it respawns on the pad and is left alone
-{:register []
- :queue [(hold (jobs.combat.attack {:targets "ProbeDummy" :lost-s 15}))
-         (repeat (jobs.movement.look-around))]}

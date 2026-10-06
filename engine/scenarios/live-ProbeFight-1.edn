@@ -1,4 +1,0 @@
-;; ProbeFight trigger test: hostile-near against notify.
-{:register [{:trigger :hostile-near :args {:radius 8}
-             :job (jobs.debug.notify {:text "hostile-near fired"})}]
- :queue [(repeat (jobs.movement.look-around))]}

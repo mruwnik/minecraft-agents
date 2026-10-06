@@ -1,6 +1,0 @@
-;; ProbeWater live test: triggers only, against jobs.debug.notify.
-{:register [{:trigger :suffocating :args {:min-oxygen 12}
-             :job (jobs.debug.notify {:text "suffocating fired"})}
-            {:trigger :burning
-             :job (jobs.debug.notify {:text "burning fired"})}]
- :queue [(repeat (jobs.movement.look-around))]}

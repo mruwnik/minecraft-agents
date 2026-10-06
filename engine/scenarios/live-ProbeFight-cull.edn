@@ -1,4 +1,0 @@
-;; batch-entity live case: cull cows down to 2 adults (culling is this hunt expression)
-{:register []
- :queue [(jobs.combat.hunt {:mob "cow" :keep 2 :count 8})
-         (repeat (jobs.movement.look-around))]}

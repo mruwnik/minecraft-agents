@@ -1,2 +1,0 @@
-;; ProbeHostile live cases for respond-to-hostile decisions (0f02bf87): hostile-near registered, nothing queued
-{:register [{:trigger :hostile-near :args {:radius 8}}] :queue []}

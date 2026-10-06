@@ -1,3 +1,0 @@
-;; apiary.guard live: open fire sealed in stone, unreachable
-{:register []
- :queue [(jobs.apiary.guard {:box {:from {:x 6063 :y 98 :z 6055} :to {:x 6067 :y 108 :z 6059}}})]}

@@ -1,3 +1,0 @@
-;; ProbeStuck live cases for jobs.animals.lead-to (the :gather phase: the led cow ends near the spot): idle, jobs are submitted with tools/jobs.mjs
-{:register []
- :queue []}

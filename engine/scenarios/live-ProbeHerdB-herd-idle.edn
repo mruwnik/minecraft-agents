@@ -1,3 +1,0 @@
-;; ProbeHerdB herd live test: idle (look-around), no reflexes; used to place the body.
-{:register []
- :queue [(repeat (jobs.movement.look-around))]}

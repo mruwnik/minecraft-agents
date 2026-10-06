@@ -1,2 +1,0 @@
-;; ProbeSense live cases for the S1 perception core (card bd85207b): idle, nothing registered, driven with tools/drive.mjs
-{:register [] :queue []}

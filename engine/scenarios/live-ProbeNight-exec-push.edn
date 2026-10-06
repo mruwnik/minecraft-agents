@@ -1,3 +1,0 @@
-;; live: the flat lane (-1000 -> -970, z 3001); mid-walk the console teleports the body to (-988.5 70 3003.5), off the plan
-{:register []
- :queue [(jobs.debug.walk-plan {:to [-970 70 3001]})]}

@@ -1,0 +1,34 @@
+;; View speed test: no reflexes, walk a loop of six waypoints over the grass hills east of 2000 -2000
+;; (the wooded hills to the west have leaf litter, which the pathfinder gets stuck on).
+{:register []
+ :queue [(repeat (seq (jobs.movement.go-to {:pos {:x 2040 :y 69 :z -2010} :range 3})
+                      (jobs.movement.go-to {:pos {:x 2100 :y 66 :z -2020} :range 3})
+                      (jobs.movement.go-to {:pos {:x 2140 :y 82 :z -2080} :range 3})
+                      (jobs.movement.go-to {:pos {:x 2120 :y 69 :z -2140} :range 3})
+                      (jobs.movement.go-to {:pos {:x 2100 :y 68 :z -2100} :range 3})
+                      (jobs.movement.go-to {:pos {:x 2040 :y 65 :z -2040} :range 3})))]}
+;; ---- other cases of this feature: swap the commented form in for the active one above ----
+;; -- case from live-ProbeView-natural
+;; ;; explore live: a natural surface target with a short look
+;; {:register []
+;;  :queue [(jobs.explore.search {:target ["fern" "large_fern"] :count 25 :scan-radius 12 :max-distance 96})]}
+;; -- case from live-ProbeView-notfound
+;; ;; explore live: search for sponge
+;; {:register []
+;;  :queue [(jobs.explore.search {:target "sponge" :max-distance 40})]}
+;; -- case from live-ProbeView-placed-diamond
+;; ;; explore live: search for diamond_block
+;; {:register []
+;;  :queue [(jobs.explore.search {:target "diamond_block" :max-distance 80})]}
+;; -- case from live-ProbeView-placed-emerald
+;; ;; explore live: search for emerald_block
+;; {:register []
+;;  :queue [(jobs.explore.search {:target "emerald_block" :max-distance 80})]}
+;; -- case from live-ProbeView-survey
+;; ;; explore live: look round once for natural things (survey)
+;; {:register []
+;;  :queue [(jobs.explore.search {:target ["oak_log" "birch_log" "spruce_log" "acacia_log" "dark_oak_log" "jungle_log" "cherry_log" "mangrove_log" "coal_ore" "iron_ore" "copper_ore" "pumpkin" "cactus" "sugar_cane" "water" "sand" "short_grass" "snow" "stone" "grass_block"] :count 100 :max-legs 0})]}
+;; -- case from live-view-2
+;; ;; View test: no reflexes, the body looks once then waits 10 minutes, so tp sets its facing.
+;; {:register []
+;;  :queue [(repeat (jobs.movement.look-around {:every-ms 600000}))]}

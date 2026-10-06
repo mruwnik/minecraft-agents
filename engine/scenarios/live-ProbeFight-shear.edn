@@ -1,4 +1,0 @@
-;; batch-entity live case: shear the sheep in radius and pick the wool up
-{:register []
- :queue [(jobs.animals.shear)
-         (repeat (jobs.movement.look-around))]}

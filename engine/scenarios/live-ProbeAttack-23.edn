@@ -1,6 +1,0 @@
-;; batch-craft live: give to ProbeMove with a full inventory (drop not taken, collected back), then with nothing carried, then to a player out of sight
-{:register []
- :queue [(hold (seq (jobs.movement.look-around {:every-ms 4500})
-                    (jobs.items.give {:player "ProbeMove" :item "bread" :count 5})
-                    (jobs.items.give {:player "ProbeMove" :item "golden_apple"})
-                    (jobs.items.give {:player "NoSuchPlayerZz" :item "bread"})))]}

@@ -1,0 +1,90 @@
+;; ProbeAttack live case: type zombie: four zombies, two skeletons left alone
+{:register []
+ :queue [(hold (jobs.combat.attack {:targets "zombie"}))
+         (repeat (jobs.movement.look-around))]}
+;; ---- other cases of this feature: swap the commented form in for the active one above ----
+;; -- case from live-ProbeAttack-1
+;; ;; ProbeAttack live case: one zombie by id
+;; {:register []
+;;  :queue [(hold (jobs.combat.attack {:targets 20514}))
+;;          (repeat (jobs.movement.look-around))]}
+;; -- case from live-ProbeAttack-2
+;; ;; ProbeAttack live case: a list of three zombie ids
+;; {:register []
+;;  :queue [(hold (jobs.combat.attack {:targets [20516 20517 20518]}))
+;;          (repeat (jobs.movement.look-around))]}
+;; -- case from live-ProbeAttack-4
+;; ;; ProbeAttack live case: mixed: a pig by id, husks by type, ProbeDummy by username
+;; {:register []
+;;  :queue [(hold (jobs.combat.attack {:targets [22332 "husk" "ProbeDummy"]}))
+;;          (repeat (jobs.movement.look-around))]}
+;; -- case from live-ProbeAttack-5
+;; ;; ProbeAttack live case: a fleeing cow (with AI) by type
+;; {:register []
+;;  :queue [(hold (jobs.combat.attack {:targets "cow"}))
+;;          (repeat (jobs.movement.look-around))]}
+;; -- case from live-ProbeAttack-6
+;; ;; ProbeAttack live case: ProbeDummy by username; it respawns on the pad and is left alone
+;; {:register []
+;;  :queue [(hold (jobs.combat.attack {:targets "ProbeDummy" :lost-s 15}))
+;;          (repeat (jobs.movement.look-around))]}
+;; -- case from live-ProbeAttack-7
+;; ;; ProbeAttack live case: an entity id that does not exist (should decline)
+;; {:register []
+;;  :queue [(hold (jobs.combat.attack {:targets 99999999}))
+;;          (repeat (jobs.movement.look-around))]}
+;; -- case from live-ProbeAttack-8
+;; ;; ProbeAttack live case: a type with none in radius (should decline)
+;; {:register []
+;;  :queue [(hold (jobs.combat.attack {:targets "blaze"}))
+;;          (repeat (jobs.movement.look-around))]}
+;; -- case from live-ProbeAttack-9
+;; ;; ProbeAttack live case: a zombie on a 5-high pillar and one in a glass box (unreachable)
+;; {:register []
+;;  :queue [(hold (jobs.combat.attack {:targets [26953 26954]}))
+;;          (repeat (jobs.movement.look-around))]}
+;; -- case from live-ProbeAttack-10
+;; ;; ProbeAttack live case: an Invulnerable zombie (bounded give-up)
+;; {:register []
+;;  :queue [(hold (jobs.combat.attack {:targets 29864}))
+;;          (repeat (jobs.movement.look-around))]}
+;; -- case from live-ProbeAttack-11
+;; ;; ProbeAttack live case: ProbeDummy in creative mode (no damage, bounded give-up)
+;; {:register []
+;;  :queue [(hold (jobs.combat.attack {:targets "ProbeDummy"}))
+;;          (repeat (jobs.movement.look-around))]}
+;; -- case from live-ProbeAttack-12
+;; ;; ProbeAttack live case: a pig that leaves the radius (teleported away mid-fight)
+;; {:register []
+;;  :queue [(hold (jobs.combat.attack {:targets "pig"}))
+;;          (repeat (jobs.movement.look-around))]}
+;; -- case from live-ProbeAttack-13
+;; ;; ProbeAttack live case: its own username only (never swings at itself)
+;; {:register []
+;;  :queue [(hold (jobs.combat.attack {:targets ["ProbeAttack"]}))
+;;          (repeat (jobs.movement.look-around))]}
+;; -- case from live-ProbeAttack-14
+;; ;; ProbeAttack live case: two armed zombies with AI, survival register loaded above the attack job
+;; {:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12}
+;;              :job (jobs.survival.breathe {:min-oxygen 12})}
+;;             {:trigger :burning :persistence :cooldown :cooldown-s 2
+;;              :job (jobs.survival.extinguish {:water-radius 6})}
+;;             {:trigger :hostile-near :persistence :cooldown :cooldown-s 5 :args {:radius 8 :ranged-radius 16}
+;;              :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}
+;;             {:trigger :hungry :persistence :cooldown :cooldown-s 90 :args {:food 6}
+;;              :job (jobs.survival.get-food {:food 6})}
+;;             {:trigger :night :persistence :cooldown :cooldown-s 10 :args {:roof-height 4}
+;;              :job (jobs.survival.night {:roof-height 4})}
+;;             {:trigger :stuck :persistence :cooldown :cooldown-s 60
+;;              :job (jobs.maintenance.unstick)}
+;;             {:trigger :died :persistence :cooldown :cooldown-s 30
+;;              :job (jobs.survival.recover-drops {:collect-radius 6})}
+;;             {:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 120 :args {:free 2}
+;;              :job (jobs.storage.make-room {:free 4 :chest-range 32})}]
+;;  :queue [(hold (jobs.combat.attack {:targets "zombie"}))
+;;          (repeat (jobs.movement.look-around))]}
+;; -- case from live-ProbeAttack-15
+;; ;; ProbeAttack live case: :absent :wait, a husk summoned 10 s after the start is attacked
+;; {:register []
+;;  :queue [(hold (jobs.combat.attack {:targets "husk" :absent :wait}))
+;;          (repeat (jobs.movement.look-around))]}

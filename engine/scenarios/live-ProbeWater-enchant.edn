@@ -1,4 +1,0 @@
-;; jobs.items.enchant live: idle body; a pad at 7990-8010 y 99, tables at 7997,100,8000 (bare) and 8003,100,8000 (ring of
-;; bookshelves around it), items and levels by RCON, jobs submitted with tools/jobs.mjs, e.g.
-;; (jobs.items.enchant {:item "diamond_sword" :table {:x 8003 :y 100 :z 8000} :slot 2})
-{:register [] :queue []}

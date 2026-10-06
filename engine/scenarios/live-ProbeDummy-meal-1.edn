@@ -1,5 +1,0 @@
-;; batch-block: bone meal live case: plant an oak sapling at 4996,100,4996 with up to 5 bone meal, then fertilize
-;; the wheat around the body (setup: dirt under the sapling spot, three age-0 wheat on farmland at z 5004)
-{:register []
- :queue [(seq (jobs.forestry.plant-sapling {:at {:x 4996 :y 100 :z 4996} :bone-meal 5})
-              (jobs.farm.fertilize {:radius 8}))]}

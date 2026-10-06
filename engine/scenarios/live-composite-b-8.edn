@@ -1,3 +1,0 @@
-;; kit live: chest walled in bedrock (composite-b).
-{:register []
- :queue [(jobs.storage.kit {:tools ["hoe"] :spare 1 :food 12 :chest {:x -5006 :y 102 :z -5000}})]}

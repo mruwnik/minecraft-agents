@@ -1,3 +1,0 @@
-;; trial: build plan trial-builder-pen (a 7x7 fence pen with a gate and two torches) from what the body carries.
-{:register []
- :queue [(jobs.build.from-plan {:plan "trial-builder-pen"})]}

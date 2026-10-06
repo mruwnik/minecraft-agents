@@ -1,2 +1,0 @@
-;; ProbeFight live cases for jobs.farm.tidy: idle, jobs are submitted with tools/jobs.mjs
-{:register [] :queue []}

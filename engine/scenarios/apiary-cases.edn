@@ -1,0 +1,37 @@
+;; apiary.maintain live: open fire + ripe hive at 6100,101..103,6100, chest at 6103,101,6096; carpet and shears carried
+{:register []
+ :queue [(jobs.apiary.maintain {:box {:from {:x 6096 :y 100 :z 6096} :to {:x 6104 :y 110 :z 6104}}
+                                :chest {:x 6103 :y 101 :z 6096}})]}
+;; ---- other cases of this feature: swap the commented form in for the active one above ----
+;; -- case from live-apiary-guard-nocarpet
+;; ;; apiary.guard live: open lit fire, no carpet carried
+;; {:register []
+;;  :queue [(jobs.apiary.guard {:box {:from {:x 6053 :y 98 :z 6038} :to {:x 6057 :y 108 :z 6042}}})]}
+;; -- case from live-apiary-guard-open
+;; ;; apiary.guard live: open lit fire in a pit
+;; {:register []
+;;  :queue [(jobs.apiary.guard {:box {:from {:x 6038 :y 98 :z 6038} :to {:x 6042 :y 108 :z 6042}}})]}
+;; -- case from live-apiary-guard-raised
+;; ;; apiary.guard live: raised lit fire on the ground
+;; {:register []
+;;  :queue [(jobs.apiary.guard {:box {:from {:x 6043 :y 98 :z 6038} :to {:x 6047 :y 108 :z 6042}}})]}
+;; -- case from live-apiary-guard-safe
+;; ;; apiary.guard live: every fire in the box is already safe (carpeted, in a pit)
+;; {:register []
+;;  :queue [(jobs.apiary.guard {:box {:from {:x 6048 :y 98 :z 6038} :to {:x 6052 :y 108 :z 6042}}})]}
+;; -- case from live-apiary-guard-walled
+;; ;; apiary.guard live: open fire sealed in stone, unreachable
+;; {:register []
+;;  :queue [(jobs.apiary.guard {:box {:from {:x 6063 :y 98 :z 6055} :to {:x 6067 :y 108 :z 6059}}})]}
+;; -- case from live-apiary-maintain-breed
+;; ;; apiary.maintain live: safe apiary (both hives emptied), bees below a target of 6, flowers carried; a wide box because bees fly about
+;; {:register []
+;;  :queue [(jobs.apiary.maintain {:box {:from {:x 6090 :y 100 :z 6090} :to {:x 6115 :y 112 :z 6115}} :target 6})]}
+;; -- case from live-apiary-maintain-nochest
+;; ;; apiary.maintain live: same apiary, no chest; the produce stays carried
+;; {:register []
+;;  :queue [(jobs.apiary.maintain {:box {:from {:x 6096 :y 100 :z 6096} :to {:x 6104 :y 110 :z 6104}}})]}
+;; -- case from live-apiary-maintain-raised
+;; ;; apiary.maintain live: ripe hive over a raised fire at 6108,101..103,6100, no campfire carried
+;; {:register []
+;;  :queue [(jobs.apiary.maintain {:box {:from {:x 6105 :y 100 :z 6096} :to {:x 6112 :y 110 :z 6104}}})]}

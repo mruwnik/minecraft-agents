@@ -1,3 +1,0 @@
-;; trade primitive live case 92: unemployed villager of desert type (villager_data is sent): expect no-offers
-{:register []
- :queue [(seq (jobs.movement.pace {:a {:x 9500 :y 100 :z 9000} :b {:x 9500 :y 100 :z 8994} :laps 1 :rounds 1}) (jobs.village.trade {:villager "00002329-0000-000b-0000-000000000001" :buy "bread" :count 1}))]}

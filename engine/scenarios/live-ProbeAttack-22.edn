@@ -1,5 +1,0 @@
-;; batch-craft live: give 5 bread to ProbeMove 10 blocks off (taken), then everything carried of a second item
-{:register []
- :queue [(hold (seq (jobs.movement.look-around {:every-ms 4500})
-                    (jobs.items.give {:player "ProbeMove" :item "bread" :count 5})
-                    (jobs.items.give {:player "ProbeMove" :item "apple"})))]}

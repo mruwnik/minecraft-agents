@@ -1,2 +1,0 @@
-;; ProbeStair live cases for walker rise-first jump: idle, jobs submitted with tools/jobs.mjs
-{:register [] :queue []}
