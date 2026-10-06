@@ -716,7 +716,7 @@ node engine/tools/plans.mjs --world claude list | find home | show home --raw
 node engine/tools/plans.mjs --world claude validate home --edn '{:id "home" :parts []}'
 node engine/tools/plans.mjs --world claude check home --body Wren --inventory '{:stone 24}'     # material needs and conflicts vs what that body has seen (its seen memory, in the plan's `:dim`, default overworld; `add` by a body stamps its current dimension); never-seen cells count unknown
 node engine/tools/plans.mjs --world claude add|edit home --edn '...' --by builder [--revision <digest>]
-node engine/tools/blueprints.mjs --world claude find hut | show starter-hut | validate hut --edn '...' | save hut --edn '...' --by builder
+node engine/tools/blueprints.mjs --world claude find hut | show starter-hut | validate hut --edn '...' | save hut --edn '...' --by builder [--revision <digest>] | remove hut --by builder --revision <digest>
 node engine/tools/map.mjs --world claude find --type marker --text farm
 node engine/tools/map.mjs --world claude add zone garden --by Alice --data '{:min [10 63 20] :max [20 70 30] :allow #{:harvest}}'
 node engine/tools/map.mjs --world claude add claim extension --by Alice --for 30m --data '{:min [21 63 20] :max [30 70 30]}'
