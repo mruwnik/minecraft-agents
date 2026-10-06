@@ -13,6 +13,7 @@
             [clojure.string :as str]
             [dashboard.rcon :as rcon]
             [world-test.build :as build]
+            [world-test.events :as ev]
             [world-test.expect :as x]
             [world-test.fixture :as f]
             [world-test.lease :as lease]))
@@ -535,7 +536,7 @@
         (.then (fn [ok]
                  (if-not ok
                    (result {:status :skipped :why (str "needs " (name (:time rc)) " (no --allow-time)")})
-                   (-> (rcon! (f/setup-commands grid origin rc))
+                   (-> (do (ev/emit! (ev/phase :setup)) (rcon! (f/setup-commands grid origin rc)))
                        (.then #(sleep 1000))
                        (.then #(rcon! (f/block-commands origin rc)))
                        (.then #(reset! plan-files (write-plans! opts rc)))
@@ -544,11 +545,12 @@
                        (.then (fn [why] (when why (throw (js/Error. why)))))
                        (.then #(rcon! (f/clear-hostiles-commands grid origin rc)))
                        (.then #(reset! pre-register {:offset (log-cursor (events-file opts)) :from-ms (js/Date.now)}))
-                       (.then #(when register (put-register! opts register)))
+                       (.then #(when register (ev/emit! (ev/phase :register)) (put-register! opts register)))
                        (.then #(sleep (* 1000 (get-in rc [:body :settle-s]))))
                        (.then #(rcon! (f/clear-hostiles-commands grid origin rc)))
                        (.then (fn []
                                 (let [t0 (js/Date.now)
+                                      _ (ev/emit! (ev/phase :run))
                                       window (watch-window (some? register) @pre-register {:offset (log-cursor (events-file opts)) :from-ms t0})]
                                   (-> (run-steps! opts origin rc (:offset window) (:from-ms window))
                                       (.then (fn [ids]
@@ -575,6 +577,7 @@
        (when evidence (str " -> " evidence)) (when at-s (str " at " (.toFixed at-s 1) " s"))))
 
 (defn report! [r]
+  (ev/emit! (ev/result r))
   (log! (str/upper-case (name (:status r))) " " (:id r) " #" (:run r) " (plot " (:plot r) ", " (.toFixed (:elapsed-s r) 1) " s)"
         (when (:why r) (str ": " (:why r))))
   (when-not (= :pass (:status r))
@@ -623,7 +626,14 @@
 
 (defn run-all! [opts cases]
   (let [groups (group-by :register cases)
-        results (atom [])]
+        results (atom [])
+        expected (frequencies (map :file cases))
+        expected (into {} (map (fn [[k n]] [k (* n (:repeat opts))]) expected))
+        done (atom 0)
+        report-fixtures! (fn []
+                           (let [n (count (ev/fixtures-done expected @results))]
+                             (when (> n @done) (reset! done n) (ev/emit! (ev/progress n (count expected))))))]
+    (ev/emit! (ev/plan cases (:repeat opts)))
     (-> (reduce (fn [p [register group]]
                   (.then p (fn []
                              (-> (reduce (fn [p2 [n [c run]]]
@@ -640,7 +650,7 @@
                                                                    (.then #(when-not (= :restart-keep plan) (reset-last-plot! opts)))
                                                                    (.then #(start-body! opts register (= :restart-keep plan) memory))))
                                                              (.then #(run-case! opts c i run (when-not (= :keep plan) register)))
-                                                             (.then (fn [r] (report! r) (swap! results conj r)))
+                                                             (.then (fn [r] (report! r) (swap! results conj (assoc r :file (:file c))) (report-fixtures!)))
                                                              (.finally #(release-plot! i))))))))
                                          (js/Promise.resolve nil)
                                          (map-indexed vector (for [run (range 1 (inc (:repeat opts))) c group] [c run])))
