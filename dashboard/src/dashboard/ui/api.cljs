@@ -2,22 +2,46 @@
   (:require [dashboard.edn :as edn]
             [re-frame.core :as rf]))
 
-;; [key url] of requests still in flight: a slow response never piles up behind the next poll tick,
-;; but a request for another url (new world, new body) is not dropped behind the old one
+;; [key url] of requests still in flight: a slow response never piles up behind the next poll tick (or a double
+;; click), but a request for another url (new world, new body) is not dropped behind the old one
 (defonce in-flight (atom #{}))
 
-(defn fetch-json! [{:keys [key url on-ok on-err]}]
+;; a hung request is aborted after this, so in-flight clears and the error is reported
+(def request-timeout-ms 20000)
+
+(defn fetch-with-timeout [url opts]
+  (let [controller (js/AbortController.)
+        timer (js/setTimeout #(.abort controller) request-timeout-ms)]
+    (-> (js/fetch url (doto (or opts (js-obj)) (aset "signal" (.-signal controller))))
+        (.finally #(js/clearTimeout timer)))))
+
+(defn request!
+  "One guarded request. read turns the response into [:ok data] or [:err message] (a promise of it or a value);
+  a failed fetch or read is [:err]. The handler is dispatched outside that chain, so a handler throw is not
+  reported as a fetch error."
+  [{:keys [key url opts read on-ok on-err on-unsupported]}]
   (when-not (contains? @in-flight [key url])
     (swap! in-flight conj [key url])
-    (-> (js/fetch url)
-        (.then (fn [res]
-                 (-> (.json res)
-                     (.then (fn [data]
-                              (if (.-ok res)
-                                (rf/dispatch (conj on-ok (js->clj data :keywordize-keys true)))
-                                (rf/dispatch (conj on-err (or (.-error data) (str "http " (.-status res))))))))))) 
-        (.catch (fn [e] (rf/dispatch (conj on-err (str e)))))
+    (-> (fetch-with-timeout url opts)
+        (.then read)
+        (.catch (fn [e] [:err (if (= "AbortError" (.-name e)) "request timed out" (str e))]))
+        (.then (fn [[outcome value]] (rf/dispatch (case outcome
+                                                      :ok (conj on-ok value)
+                                                      :unsupported on-unsupported
+                                                      (conj on-err value)))))
         (.finally (fn [] (swap! in-flight disj [key url]))))))
+
+(defn json-outcome
+  "An error field in a 2xx body counts as an error when error-field? is set."
+  [res error-field?]
+  (-> (.json res)
+      (.then (fn [data]
+               (if (and (.-ok res) (not (and error-field? (.-error data))))
+                 [:ok (js->clj data :keywordize-keys true)]
+                 [:err (or (.-error data) (str "http " (.-status res)))])))))
+
+(defn fetch-json! [{:keys [key url on-ok on-err]}]
+  (request! {:key key :url url :on-ok on-ok :on-err on-err :read #(json-outcome % false)}))
 
 (rf/reg-fx :fetch-json fetch-json!)
 
@@ -32,43 +56,33 @@
       :else [:err (or (when (map? data) (:error data)) (str "http " status))])))
 
 (defn fetch-edn! [{:keys [key url on-ok on-err]}]
-  (when-not (contains? @in-flight [key url])
-    (swap! in-flight conj [key url])
-    (-> (js/fetch url)
-        (.then (fn [res]
-                 (-> (.text res)
-                     (.then (fn [text]
-                              (let [[outcome value] (edn-outcome (.-ok res) (.-status res) text)]
-                                (rf/dispatch (conj (if (= :ok outcome) on-ok on-err) value))))))))
-        (.catch (fn [e] (rf/dispatch (conj on-err (str e)))))
-        (.finally (fn [] (swap! in-flight disj [key url]))))))
+  (request! {:key key :url url :on-ok on-ok :on-err on-err
+             :read (fn [res] (-> (.text res) (.then #(edn-outcome (.-ok res) (.-status res) %))))}))
 
 (rf/reg-fx :fetch-edn fetch-edn!)
 
 (defn post-json! [{:keys [url body on-ok on-err on-unsupported]}]
-  (-> (js/fetch url #js {:method "POST" :headers #js {"content-type" "application/json"} :body (js/JSON.stringify body)})
-      (.then (fn [res]
-               (if (= 501 (.-status res))
-                 (rf/dispatch on-unsupported)
-                 (-> (.json res)
-                     (.then (fn [data]
-                              (if (or (not (.-ok res)) (.-error data))
-                                (rf/dispatch (conj on-err (or (.-error data) (str "http " (.-status res)))))
-                                (rf/dispatch (conj on-ok (js->clj data :keywordize-keys true))))))))))
-      (.catch (fn [e] (rf/dispatch (conj on-err (str e)))))))
+  (request! {:key :post :url url
+             :opts #js {:method "POST" :headers #js {"content-type" "application/json"} :body (js/JSON.stringify body)}
+             :read (fn [res]
+                     (if (= 501 (.-status res))
+                       [:unsupported nil]
+                       (json-outcome res true)))
+             :on-ok on-ok :on-err on-err :on-unsupported on-unsupported}))
 
 (rf/reg-fx :post-json post-json!)
 
 (defn post-edn! [{:keys [url body on-ok on-err]}]
-  (-> (js/fetch url #js {:method "POST" :headers #js {"content-type" "application/edn"} :body (pr-str body)})
-      (.then (fn [res]
-               (.then (.text res)
-                      (fn [text]
-                        (let [data (try (edn/one-form text) (catch :default e {:error (str e)}))]
-                          (if (and (.-ok res) (not (:error data)))
-                            (rf/dispatch (conj on-ok data))
-                            (rf/dispatch (conj on-err (or (:error data) (str "http " (.-status res)))))))))))
-      (.catch (fn [e] (rf/dispatch (conj on-err (str e)))))))
+  (request! {:key :post :url url
+             :opts #js {:method "POST" :headers #js {"content-type" "application/edn"} :body (pr-str body)}
+             :read (fn [res]
+                     (-> (.text res)
+                         (.then (fn [text]
+                                  (let [data (try (edn/one-form text) (catch :default e {:error (str e)}))]
+                                    (if (and (.-ok res) (not (:error data)))
+                                      [:ok data]
+                                      [:err (or (:error data) (str "http " (.-status res)))]))))))
+             :on-ok on-ok :on-err on-err}))
 
 (rf/reg-fx :post-edn post-edn!)
 

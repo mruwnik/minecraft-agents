@@ -3,9 +3,9 @@
   (:require [dashboard.engine-events :as ee]
             ["fs" :as fs]
             [dashboard.guard :as guard]
-            [cljs.reader :as reader]
-            [dashboard.server.files :refer [file-exists? port read-range]]
-            [dashboard.server.responses :refer [read-body send-edn!]]
+            [dashboard.edn :as edn]
+            [dashboard.server.files :refer [file-exists? read-range]]
+            [dashboard.server.responses :refer [guarded-post! send-edn!]]
             [dashboard.server.engine-state :refer [body-key canonical-engine? engine-folder? event-page! event-page-size event-socket-request! events-file state-cursor]]))
 
 ;; ---------------------------------------------------------------- one body's action log
@@ -95,23 +95,17 @@
                         :outstanding {} :gap? false :more? false})))
 
 (defn resolve-attention! [req res body]
-  (let [headers (.-headers req)
-        refused (or (guard/method-refusal (.-method req))
-                    (guard/refusal {:host (.-host headers) :origin (.-origin headers)
-                                    :content-type (aget headers "content-type") :port port
-                                    :content-types ["application/edn"]}))]
-    (cond
-      refused (send-edn! res (:status refused) {:error (:error refused)})
-      (not (canonical-engine? body)) (send-edn! res 404 {:error "no canonical engine event service"})
-      :else
-      (read-body req guard/max-body-bytes
-                 (fn [text]
-                   (if-not text
-                     (send-edn! res 413 {:error "request body too large"})
-                     (let [request (try (reader/read-string text) (catch :default _ nil))]
-                       (if-not (and (map? request) (string? (:request-id request)) (= :handled (:reason request)))
-                         (send-edn! res 400 {:error "expected {:request-id string :reason :handled}"})
-                         (-> (event-socket-request! body "POST" "/attention/resolve" (select-keys request [:request-id :reason]))
-                             (.then #(send-edn! res 200 %))
-                             (.catch (fn [e] (when-not (.-headersSent res)
-                                               (send-edn! res 503 {:error (ee/socket-failure-text e)})))))))))))))
+  (guarded-post!
+   req res guard/max-body-bytes
+   (fn [text]
+     (let [request (when text (try (edn/one-form text) (catch :default _ nil)))]
+       (cond
+         (not (canonical-engine? body)) (send-edn! res 404 {:error "no canonical engine event service"})
+         (not text) (send-edn! res 413 {:error "request body too large"})
+         (not (and (map? request) (string? (:request-id request)) (= :handled (:reason request))))
+         (send-edn! res 400 {:error "expected {:request-id string :reason :handled}"})
+         :else (-> (event-socket-request! body "POST" "/attention/resolve" (select-keys request [:request-id :reason]))
+                   (.then #(send-edn! res 200 %))
+                   (.catch (fn [e] (when-not (.-headersSent res)
+                                     (send-edn! res 503 {:error (ee/socket-failure-text e)}))))))))
+   {:content-types ["application/edn"] :send-error send-edn!}))

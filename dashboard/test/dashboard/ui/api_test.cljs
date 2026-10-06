@@ -1,6 +1,7 @@
 (ns dashboard.ui.api-test
-  (:require [cljs.test :refer [deftest are is]]
-            [dashboard.ui.api :as api]))
+  (:require [cljs.test :refer [deftest are is async]]
+            [dashboard.ui.api :as api]
+            [re-frame.core :as rf]))
 
 (deftest edn-outcome-cases
   (are [ok? status text expected] (= expected (api/edn-outcome ok? status text))
@@ -13,3 +14,61 @@
   (let [[outcome message] (api/edn-outcome true 200 "{:a")]
     (is (= :err outcome))
     (is (re-find #"^bad reply: " message))))
+
+(defn fake-response [status body]
+  #js {:ok (<= 200 status 299) :status status
+       :json (fn [] (js/Promise.resolve (clj->js body)))
+       :text (fn [] (js/Promise.resolve (pr-str body)))})
+
+(defn with-fake-fetch
+  "Runs f with js/fetch and rf/dispatch replaced; calls done with the dispatched events once the request settles."
+  [fetch-fn request-fn done check]
+  (let [original js/fetch
+        original-dispatch rf/dispatch
+        events (atom [])]
+    (reset! api/in-flight #{})
+    (set! js/fetch fetch-fn)
+    (set! rf/dispatch #(swap! events conj %))
+    (-> (request-fn)
+        (.then (fn [_] (check @events)))
+        (.catch (fn [e] (is false (str e))))
+        (.finally (fn [] (set! js/fetch original) (set! rf/dispatch original-dispatch) (done))))))
+
+(deftest a-hung-fetch-is-aborted-and-reported
+  (async done
+    (with-redefs [api/request-timeout-ms 20]
+      (with-fake-fetch
+        (fn [_ opts] (js/Promise. (fn [_ reject] (.addEventListener (.-signal opts) "abort" #(reject (doto (js/Error. "aborted") (set! -name "AbortError")))))))
+        #(api/fetch-edn! {:key :k :url "/x" :on-ok [:ok] :on-err [:err]})
+        done
+        (fn [events]
+          (is (= [[:err "request timed out"]] events))
+          (is (empty? @api/in-flight)))))))
+
+(deftest a-handler-throw-is-not-a-fetch-error
+  (async done
+    (let [events (atom [])
+          original js/fetch
+          original-dispatch rf/dispatch]
+      (reset! api/in-flight #{})
+      (set! js/fetch (fn [_ _] (js/Promise.resolve (fake-response 200 {:a 1}))))
+      (set! rf/dispatch (fn [e] (swap! events conj e) (when (= [:ok {:a 1}] e) (throw (js/Error. "handler")))))
+      (-> (api/fetch-edn! {:key :k :url "/x" :on-ok [:ok] :on-err [:err]})
+          (.catch (fn [_] nil))
+          (.finally (fn [] (set! js/fetch original)
+                      (set! rf/dispatch original-dispatch)
+                      (is (= [[:ok {:a 1}]] @events))
+                      (done)))))))
+
+(deftest a-second-post-to-the-same-url-is-dropped-while-one-is-in-flight
+  (async done
+    (let [calls (atom 0)]
+      (with-fake-fetch
+        (fn [_ _] (swap! calls inc) (js/Promise.resolve (fake-response 200 {:ok true})))
+        (fn [] (let [first-post (api/post-edn! {:url "/api/restart" :body {} :on-ok [:ok] :on-err [:err]})]
+                 (api/post-edn! {:url "/api/restart" :body {} :on-ok [:ok] :on-err [:err]})
+                 first-post))
+        done
+        (fn [events]
+          (is (= 1 @calls))
+          (is (= [[:ok {:ok true}]] events)))))))

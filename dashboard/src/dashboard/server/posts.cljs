@@ -28,11 +28,14 @@
   (js/console.error (str "RCON failed: " (ex-message e)))
   (send-json! res 502 {:error "RCON failed"}))
 
-(defn send-chat! [req res]
+(defn send-planned!
+  "Guarded POST: plan-fn takes the body text and the planner context and returns the chat-send plan; a refusal is
+  sent as is, else the command runs over RCON."
+  [req res plan-fn]
   (guarded-post!
    req res guard/max-body-bytes
    (fn [text]
-     (let [{:keys [status json command stamps]} (chat-send/plan text {:sender chat-sender :stamps @chat-stamps :now (js/Date.now)})]
+     (let [{:keys [status json command stamps]} (plan-fn text {:sender chat-sender :stamps @chat-stamps :now (js/Date.now)})]
        (reset! chat-stamps stamps)
        (if status
          (send-json! res status json)
@@ -40,22 +43,17 @@
              (.then (fn [_] (send-json! res 200 {:ok true :command command})))
              (.catch (fn [e] (send-rcon-failure! res e)))))))))
 
+(defn send-chat! [req res]
+  (send-planned! req res chat-send/plan))
+
 (defn send-whisper! [req res {target :name world :world}]
-  (guarded-post!
-   req res guard/max-body-bytes
-   (fn [text]
-     (let [engine-bodies (filter #(and (:engine %) (= world (:world %))) (bodies (js/Date.now)))
-           {:keys [status json command stamps]} (chat-send/plan-whisper
-                                                 target text
-                                                 {:sender chat-sender :stamps @chat-stamps :now (js/Date.now)
-                                                  :known (set (map :name engine-bodies))
-                                                  :online (set (map :name (filter :up engine-bodies)))})]
-       (reset! chat-stamps stamps)
-       (if status
-         (send-json! res status json)
-         (-> (run-chat-command! command)
-             (.then (fn [_] (send-json! res 200 {:ok true :command command})))
-             (.catch (fn [e] (send-rcon-failure! res e)))))))))
+  (send-planned! req res
+                 (fn [text ctx]
+                   (let [engine-bodies (filter #(and (:engine %) (= world (:world %))) (bodies (js/Date.now)))]
+                     (chat-send/plan-whisper target text
+                                             (assoc ctx
+                                                    :known (set (map :name engine-bodies))
+                                                    :online (set (map :name (filter :up engine-bodies)))))))))
 
 
 ;; ---------------------------------------------------------------- restart (POST /api/restart)
