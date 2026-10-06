@@ -1,4 +1,4 @@
-;; ProbeShutIn live cases for the shut-in-by-day trigger (card 25a5cae0): survival reflexes plus shut-in-by-day; no queue idle; jobs submitted with tools/jobs.mjs
+;; ProbeShutIn live cases for the night trigger shut-in case (card 25a5cae0): survival reflexes plus :night; no queue idle; jobs submitted with tools/jobs.mjs
 {:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12}
              :job (jobs.survival.breathe {:min-oxygen 12})}
             {:trigger :burning :persistence :cooldown :cooldown-s 2

@@ -1,4 +1,4 @@
-;; ProbeRefire night cases (d71dae2e): as the idle scenario without night-unsafe and shut-in-by-day (added at run time once dug in; other players online make shelter log out)
+;; ProbeRefire night cases (d71dae2e): as the idle scenario without :night (added at run time once dug in)
 {:register [{:trigger :burning :persistence :cooldown :cooldown-s 0
              :job (jobs.survival.extinguish {:water-radius 6})}
             {:trigger :hostile-near :persistence :cooldown :cooldown-s 5 :args {:radius 8 :ranged-radius 16}

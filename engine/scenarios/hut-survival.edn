@@ -1,4 +1,4 @@
-;; ProbeHut live cases for 5258ef00 (hut doors): the survival reflexes, but night-unsafe runs dig-in directly because jobs.survival.night logs out first while another player is online
+;; ProbeHut live cases for 5258ef00 (hut doors): the survival reflexes, with the night trigger
 ;; Stay alive and otherwise idle. The reflexes are registered in priority
 ;; order, most urgent first: air, fire, hostiles, health, food, night (shelter, then logging out when another player sleeps), being
 ;; stuck, a door a walk left open, then a death's drops, then a full inventory. Between reflexes the

@@ -1,5 +1,5 @@
 ;; Bed rule (card d9c87329, commit 2d0fa06d): a roofed body at night sleeps in a free bed it sees in its hut and skips a bed
-;; whose block state says occupied (no sleep call, no :bed written, night-unsafe does not hold for it). Zones and a second
+;; whose block state says occupied (no sleep call, no :bed written, the :night trigger does not hold for it). Zones and a second
 ;; sleeping body are not in a fixture: the own-zone refusal and the lying-player case are hand-run.
 ;; Needs night: run with --allow-time --time-log <the shared time log>.
 {:defaults

@@ -1,8 +1,7 @@
 ;; jobs.survival.night holds the body at night and lets it out at day (card 79be43a4; the shelter-level hold was not ported in
-;; card 8aa80fca). Night case: on open ground with a remembered bed the shelter sleeps (step 1: a known bed within :bed-radius
+;; card 8aa80fca). Night case: on open ground with a remembered bed the night job sleeps (a known bed within :bed-radius
 ;; comes before log-out and dig-in), and each round waits: the job does not complete and the body does not walk off while it
-;; is night. (The release at day and the queued-job hold are the known-failing fixture shelter-night-hold-queued-job.) (Without a bed, with another player online, it logs the body out until
-;; morning, and the probe server always has other probes online, so the dig-in hold is not reachable here.) Day case: a shelter
+;; is night. (The release at day and the queued-job hold are the known-failing fixture shelter-night-hold-queued-job.) Day case: a shelter
 ;; job by day does nothing and ends :done at once. Night: run with --allow-time --time-log <the shared time log>.
 {:defaults
  {:tags [:survival :shelter]

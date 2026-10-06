@@ -1,14 +1,14 @@
-;; Cards d6a489cf (night-unsafe is silent when buried: sky light 0 at feet and head), 820b2869 (dig-in walls run out of
+;; Cards d6a489cf (the night fact is silent when buried: sky light 0 at feet and head), 820b2869 (dig-in walls run out of
 ;; blocks -> pit), 555ea732 (a trapped pit shelter by day with no pickaxe fails :no-way-out once, never waits).
 ;; Night: run with --allow-time --time-log <shared time log>. Stone mass x 2..30, z 8..24, y 0..9 (cases that need a taller
-;; mass say so). The register holds night-unsafe -> a notify job (the shelter job would log the body out for the night
-;; when it fires on open ground, hand-seen live; here only whether the trigger fires is judged).
+;; mass say so). The register holds :night -> a notify job (the night job would log the body out when
+;; another player sleeps; here only whether the trigger fires is judged).
 {:defaults
  {:tags [:night :survival :access]
   :time :night
   :plot {:height 24}
   :register [{:trigger :night :persistence :cooldown :cooldown-s 2 :args {:roof-height 4}
-              :job (jobs.debug.notify {:text "night-unsafe fired"})}]
+              :job (jobs.debug.notify {:text "night fired"})}]
   :blocks [[:fill [2 0 8] [30 9 24] "stone"]]
   :body {:at [16.5 10 16.5] :effects [["resistance" 600 4]]}}
  :cases

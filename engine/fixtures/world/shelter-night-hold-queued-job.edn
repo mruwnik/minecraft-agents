@@ -1,4 +1,4 @@
-;; jobs.survival.night holds a sleeping body (cards 79be43a4, a7a49680): the shelter is a holder ((hold ...), as the night-unsafe reflex
+;; jobs.survival.night holds a sleeping body (cards 79be43a4, a7a49680): the night job is a holder ((hold ...), as the :night trigger
 ;; is), so a queued go-to does not run while it is night; once the time is set to day the shelter ends and the go-to then completes.
 ;; Without hold the list is round-robin and the go-to gets a round between the shelter's rounds, by design.
 ;; Night: run with --allow-time --time-log <the shared time log>. Another runner's day set during the 45 s makes the shelter end early (a fail not of the job).
