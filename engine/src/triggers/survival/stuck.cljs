@@ -58,6 +58,12 @@
   (let [here (u/self-pos {:primitives p})]
     (every? #(< (dist (:to %) here) (* 2 min-move)) moves)))
 
+(defn wedge-owned?
+  "Whether the wedged trigger would own the body: its feet cell is full and unwedge has not given up on that cell."
+  [p memory]
+  (let [cell (wedged/wedged-cell p)]
+    (and (some? cell) (not (wedged/blocked-here? memory cell)))))
+
 (defn body-stuck?
   "stuck?, and the body is really held where it stands (held-here?, when p is given).
   Held means some bad move had a way and still did not move the body, or every one found no path and the body is
@@ -65,7 +71,7 @@
   [p view args]
   (let [moves (counted-moves view args)]
     (and (stuck? view args)
-         (or (nil? p) (nil? (wedged/wedged-cell p)))
+         (or (nil? p) (not (wedge-owned? p view)))
          (or (nil? p) (held-here? p moves (:min-move (merge defaults args))))
          (or (not-every? :no-path moves)
              (and (some? p) (reach/enclosed? p))))))

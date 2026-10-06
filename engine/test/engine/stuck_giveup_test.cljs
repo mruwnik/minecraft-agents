@@ -32,6 +32,12 @@
 (deftest a-wedged-body-is-the-wedged-triggers-not-stuck
   (is (false? (stuck-in? {:self {:pos ut/at5} :blocks {"5,64,0" "sand"} :floor tu/walk-floor} (repeat 4 (ut/bad-move))))))
 
+(deftest a-wedged-body-unwedge-could-not-free-is-stuck-again
+  (let [{:keys [eng p]} (ut/setup {:self {:pos ut/at5} :blocks {"5,64,0" "sand"} :floor tu/walk-floor})]
+    (ut/seed-moved! eng (repeat 4 (ut/bad-move)))
+    (mem/write! (:store eng) :unwedge-blocked {:cell {:x 5 :y 64 :z 0} :why "x"} {:cap 10 :ttl 600000})
+    (is (true? ((:when (get triggers/all :stuck)) p (mem/view (:store eng)) {})))))
+
 ;; ------------------------------------------------------------------ walk-near! and a drop it cannot climb back
 
 (def cliff-island
