@@ -692,7 +692,7 @@ node engine/tools/time.mjs --world claude clock | dawn --timeout 1200   # world 
 - `observe --wait` blocks until addressed chat, new attention, a watched job or action finishing, an engine restart or the
   timeout (default 60 s). Each named observer (`--observer`) keeps its cursor in `worlds/<world>/observers/<body>/`; delivery
   is at least once. `--chatter none|addressed|all`, `--danger` and `--disconnect` choose what wakes it. Only the first `reconnect-failed` of an
-  outage wakes it (later tries are summarised). Status of an offline body adds `:back-in-s`.
+  outage wakes it (later tries are summarised). Status of an offline body adds `:back-in-s`. A `died` wake or summary item carries `:cancelled-jobs [{:id :name}]` (jobs the death cancelled, seen in the same call).
 - `jobs.mjs show jID` of a job the scheduler no longer holds answers from the event history, as `observe job` does.
 - `jobs.mjs submit` appends to the list; `--front` lists after the current job without cutting; `--now` cuts the current
   listed job and runs the new one as a holder (a running reflex is not cut); `--hold` keeps the body while the check
