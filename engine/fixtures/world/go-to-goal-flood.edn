@@ -1,0 +1,32 @@
+;; Cards 29912d63 / 59551eba: go-to's backward goal flood. A goal inside a sealed area the body stands outside of ends
+;; :unreachable :goal-enclosed (a 12x12 pen in round 1, a 26x26 = 676-cell yard after a few searching rounds, no walk);
+;; a way opened (a gap in the wall, a fence gate) while go-to is still in rounds, or a gate from the start, makes it arrive.
+;; Yard: stone wall x 3..28, z 3..28, y 0..3 (open top); pen: oak fence x 10..21, z 10..21 at y 0. Body outside west, goal at 16 0 16.
+{:defaults
+ {:tags [:movement :planner]
+  :plot {:height 10}
+  :body {:at [1.5 0 16.5]}
+  :limit-s 150}
+ :cases
+ [{:name "big-sealed-yard-is-goal-enclosed"
+   :blocks [[:fill [3 0 3] [28 3 28] "stone" :hollow]]
+   :act [[:job (jobs.movement.go-to {:pos #at [16 0 16] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false :why :goal-enclosed}} :within-s 90 :of-job true}
+            {:no-event {:source :action :kind :done :data {:name "walkTo"}} :for-s 20}]
+   :after [[:body-near [1.5 0 16.5] 3]]}
+  {:name "big-yard-with-a-gap-in-the-wall-arrives"
+   :blocks [[:fill [3 0 3] [28 3 28] "stone" :hollow] [:fill [3 0 16] [3 3 17] "air"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [16 0 16] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :result :data {:why :goal-enclosed}} :for-s 20}]
+   :after [[:body-near [16.5 0 16.5] 3]]}
+  {:name "gateless-fence-pen-is-enclosed-in-round-1"
+   :blocks [[:fill [10 0 10] [21 0 10] "oak_fence"] [:fill [10 0 21] [21 0 21] "oak_fence"] [:fill [10 0 10] [10 0 21] "oak_fence"] [:fill [21 0 10] [21 0 21] "oak_fence"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [16 0 16] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false :why :goal-enclosed}} :within-s 30 :of-job true}]
+   :after [[:body-near [1.5 0 16.5] 3]]}
+  {:name "fence-pen-with-a-gate-arrives"
+   :blocks [[:fill [10 0 10] [21 0 10] "oak_fence"] [:fill [10 0 21] [21 0 21] "oak_fence"] [:fill [10 0 10] [10 0 21] "oak_fence"] [:fill [21 0 10] [21 0 21] "oak_fence"] [:set [10 0 16] "oak_fence_gate[facing=east,open=false]"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [16 0 16] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
+   :after [[:body-near [16.5 0 16.5] 3]]}]}
