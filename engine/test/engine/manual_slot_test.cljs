@@ -142,10 +142,19 @@
           (await (core/tick! eng))
           (is (= 0 @probes) "no trigger evaluated during the slot job's ticks"))))))
 
-(deftest drive-works-while-the-slot-job-is-listed-but-not-running
+(deftest drive-set-409s-while-a-slot-job-waits-between-rounds
   (let [{:keys [eng]} (setup)]
     (takeover/take! eng me)
     (submit-as eng "claude" '(nop))
+    (is (= "job-running" (:reason (drive-set eng))))))
+
+(deftest drive-stop-cancels-a-waiting-slot-job-and-set-works-after
+  (let [{:keys [eng]} (setup)]
+    (takeover/take! eng me)
+    (submit-as eng "claude" '(nop))
+    (is (some? (core/manual-job eng)))
+    (is (= 200 (.-status (takeover/handle eng opts "POST" "/drive" #js {:op "stop" :who "claude"} nil))))
+    (is (nil? (core/manual-job eng)) "the waiting slot job is cancelled")
     (is (= 200 (:status (drive-set eng))))))
 
 (deftest release-cancels-the-running-slot-job-and-the-normal-queue-goes-on

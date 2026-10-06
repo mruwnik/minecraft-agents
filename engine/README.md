@@ -485,7 +485,7 @@ Three control modes exist: normal scheduling, `do-now!` (an urgent holder), and 
 holder and mutes all triggers and the loop until release or lease expiry: only the driver's slot job runs (the job the
 driver submits with `:by` = the lease's `who`; a new one replaces it; the body idles after it). Jobs from others queue and
 wait, `:front?`/`interrupt` from them are refused `:manual-control`, release cancels the slot job, and a running slot
-job (or a waiting one; not a failed one) keeps the lease alive; `/drive set` and `/drive stop` answer 409 `job-running` (`drive.mjs stop` cancels the job, then stops). A cut listed job stays listed; a cut
+job (or a waiting one; not a failed one) keeps the lease alive; `/drive set` answers 409 `job-running` while a non-failed slot job exists; `/drive stop` cancels the slot job (running or waiting), then stops. A cut listed job stays listed; a cut
 reflex job is dropped. Who drives is decided by a lease, first come (`take` is refused `held-by <who>` otherwise). The
 lease is not saved; restart or going offline ends it.
 
