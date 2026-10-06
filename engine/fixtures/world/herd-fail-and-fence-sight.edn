@@ -24,4 +24,22 @@
    :body {:at [14.5 0 16.5] :effects [["resistance" 600 4]]}
    :act [[:summon "zombie" [22.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 20}]
-   :after [[:entities "type=zombie,tag=wt" [[20 0 14] [24 2 18]] 1]]}]}
+   :after [[:entities "type=zombie,tag=wt" [[20 0 14] [24 2 18]] 1]]}
+  {:name "skeleton-in-fence-fires"
+   :tags [:hostile :triggers] :mobs :keep
+   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+               :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+   :blocks [[:fill [18 0 13] [24 0 19] "air"]
+            [:fill [20 0 14] [24 0 18] "oak_fence" :outline]]
+   :body {:at [14.5 0 16.5] :effects [["resistance" 600 4]]}
+   :act [[:summon "skeleton" [22.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 20}]}
+  {:name "zombie-in-low-ring-fires"
+   :tags [:hostile :triggers] :mobs :keep
+   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+               :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+   :blocks [[:fill [18 0 13] [24 0 19] "air"]
+            [:fill [20 0 14] [24 0 18] "stone" :outline]]
+   :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}
+   :act [[:summon "zombie" [22.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 20}]}]}
