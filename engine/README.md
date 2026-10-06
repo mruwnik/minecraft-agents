@@ -54,7 +54,7 @@ Layout:
   Other `js/*.mjs` files are helpers per primitive (furnace, enchant, trade, vehicle, leash, light, sight, ...).
 - `src/engine/` the engine core only: `core` (API and lifecycle; parts in `core.*`: list edits, register, scheduler, round with act wrapper and call-child, settling, backoff, restart), `memory`, `events`,
   `ctx`, `expr`, `composite`, `registry` (compile-time registries), `triggers` (the trigger registry), `hooks` (job code
-  the engine calls), `condition`, `scenario`, `takeover`/`lease`, `perception`, `main`; `engine.path.*` is the planner.
+  the engine calls), `condition`, `scenario`, `takeover`/`lease`, `perception` (+ `perception.light|store|rays|mobs|persist`), `main`; `engine.path.*` is the planner.
   Perception sees dark cells within `:near` (4) blocks, within `:near-torch` (7) with a torch in either hand.
   A still body in an unchanged world looks again every `:still-ms` (30 s); unchanged means no block or chunk update within 50 blocks, same daylight, and same torch in hand.
 - `src/jobs/` the jobs, one namespace each (`jobs.survival.eat`); the build finds them. Helpers: `jobs.lib.*` (shared,
