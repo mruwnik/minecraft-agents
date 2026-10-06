@@ -26,11 +26,8 @@
        (or (sh/shut-in-by-day? p shelter (:data (mem/latest view :shelter-trapped)))
            (some? (sh/bed-to-collect p view)))))))
 
-(def trigger
-  {:name :night
-   :when (fn [world memory args kn]
-           (holds? world memory args (sh/bed-permit world kn (:now memory))))
-   :job '(jobs.survival.night)
-   :args {:roof-height sh/default-roof-height :bed-radius sh/default-bed-radius}
-   :persistence :cooldown
-   :cooldown-s 10})
+(def defaults {:roof-height sh/default-roof-height :bed-radius sh/default-bed-radius})
+
+(defn night
+  [world memory args kn]
+  (holds? world memory args (sh/bed-permit world kn (:now memory))))

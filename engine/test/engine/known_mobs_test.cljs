@@ -34,7 +34,7 @@
 
 (defn danger-ids [p] (mapv #(.-id %) (reach/dangers p 8 {:ranged-radius 16} {})))
 (defn nearest-id [p] (some-> (reach/nearest-danger p 8 {:ranged-radius 16} {}) .-id))
-(defn hostile-near? [p] ((:when triggers/hostile-near) p {} (:args triggers/hostile-near)))
+(defn hostile-near? [p] ((:when (:hostile-near triggers/all)) p {} (:args (:hostile-near triggers/all))))
 
 (def hidden-spot
   "A creeper's hiding place east of the body, round the corner of a stone wall: no line from the eye, but a way round."

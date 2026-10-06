@@ -17,7 +17,8 @@
   (:require [clojure.string :as str]
             [cljs.tools.reader.edn :as edn]
             [cljs.tools.reader.reader-types :as rt]
-            [engine.condition.facts :as facts]))
+            [engine.condition.facts :as facts]
+            [engine.triggers :as triggers]))
 
 (def unknown facts/unknown)
 
@@ -82,11 +83,11 @@
 (defn sig [sym]
   (if-let [op (get ops sym)]
     (:sig op)
-    (fact-sig sym (get facts/table sym))))
+    (fact-sig sym (get triggers/facts sym))))
 
 (def vocabulary
   "Every signature, operators first: what a refusal for an unknown symbol lists."
-  (into (mapv :sig (vals ops)) (map (fn [[sym f]] (fact-sig sym f))) (sort-by key facts/table)))
+  (into (mapv :sig (vals ops)) (map (fn [[sym f]] (fact-sig sym f))) (sort-by key triggers/facts)))
 
 ;; ------------------------------------------------------------------ validator
 
@@ -160,7 +161,7 @@
         {:op sym :form form :type :boolean :children children}))))
 
 (defn check-fact [form sym args path]
-  (let [{:keys [type] :as fact} (get facts/table sym)
+  (let [{:keys [type] :as fact} (get triggers/facts sym)
         children (check-args args path)
         mismatch (when-not (refusal? children)
                    (first (remove (fn [[c t]] (= t (:type c))) (map vector children (:args fact)))))]
@@ -186,13 +187,13 @@
                    " numbers, strings, keywords, true or false")
               :allowed vocabulary)
 
-      (not (or (contains? ops head) (contains? facts/table head)))
+      (not (or (contains? ops head) (contains? triggers/facts head)))
       (refuse :unknown-symbol form
               (str head " is not in the condition language: no variables, arithmetic or functions of your own;"
                    " when nothing here says it, ask for a new fact")
               :allowed vocabulary)
 
-      (not (arity-ok? (or (get ops head) {:arity (count (:args (get facts/table head)))}) (count args)))
+      (not (arity-ok? (or (get ops head) {:arity (count (:args (get triggers/facts head)))}) (count args)))
       (refuse :arity form (str head " takes " (sig head) ", not " (count args) " argument(s)") :allowed [(sig head)])
 
       (= 'held-for head) (check-held-for form args path)
@@ -238,7 +239,7 @@
   "[value cache'] of fact sym with arg values vs: unknown args give unknown
   unread; a :scan fact is served from cache while younger than :refresh-s."
   [sym vs env now cache cache']
-  (let [{:keys [read cost refresh-s]} (get facts/table sym)
+  (let [{:keys [read cost refresh-s]} (get triggers/facts sym)
         k [sym vs]
         hit (get cache k)]
     (cond

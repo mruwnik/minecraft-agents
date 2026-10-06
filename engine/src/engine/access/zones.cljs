@@ -8,7 +8,7 @@
                  in the zone, the owner may always act
     :claims      [{:id :owner :status :active :until ms :min :max}]; only :active ones not yet past :until count
     :footprints  {cell plan-id} of the plans other than the one the caller builds (the caller leaves its own out,
-                 see engine.ctx/footprints :except)
+                 see engine.jobs.world/footprints :except)
     :plan-cells  the set of cells of the plan the caller builds (see engine.jobs.access/zone-input): with
                  plan-footprint-beats-zone? a cell in it is permitted over a foreign zone or claim, the plan is the
                  permission (another plan's footprint still refuses)

@@ -6,7 +6,8 @@
             [engine.jobs.tools :as tools]
             [engine.jobs.util :as u]
             [engine.placement :as placement]
-            [engine.path.walk :as walk]))
+            [engine.path.walk :as walk]
+            [engine.jobs.world :as known]))
 
 (def doc
   "Take back this body's temporary blocks: the open entries of the scaffold ledger (engine.access.ledger, body
@@ -156,7 +157,7 @@
 
 (defn check [c]
   (cond
-    (and (nil? (ctx/zones c)) (not (:ignore-zones? (:args c))))
+    (and (nil? (known/zones c)) (not (:ignore-zones? (:args c))))
     (do (ctx/warn-once! c :no-zones :cleanup.declined
                         {:reason "no zone list has been read" :text "cleanup declines: no zone list has been read"})
         false)
@@ -180,7 +181,7 @@
         l (ledger/open-entries (ctx/view c))
         e (ledger/entry-at l cell)
         under? (= cell (update (feet-of c) 1 dec))]
-    (if (or (nil? e) (blocker (inputs c l [e] (ctx/zones c)) e))
+    (if (or (nil? e) (blocker (inputs c l [e] (known/zones c)) e))
       :continue
       (do
         (await (tools/equip-tool! c item {:fast true}))
@@ -276,7 +277,7 @@
         (finish! c (:open step))))))
 
 (defn ^:async round [c]
-  (let [zones (ctx/zones c)
+  (let [zones (known/zones c)
         {:keys [job]} (:args c)]
     (cond
       (bad-job? job) (do (ctx/result! c {:status :bad-args :text ":job must be nil, :all or an instance id"}) :done)

@@ -1,7 +1,7 @@
 (ns engine.go-to-doors-test
   "jobs.movement.go-to through shut gates, doors and trapdoors against the fake world: opened by hand, passed, shut again by
   the :doors policy, and what it leaves in memory."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [deftest is are async]]
             [engine.registry :as registry]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -9,7 +9,8 @@
             [engine.memory :as mem]
             [engine.test-util :as tu :refer [box floor]]
             [engine.triggers :as triggers]
-            [engine.world :as world]))
+            [engine.world :as world]
+            [jobs.movement.go-to :as go-to]))
 
 (defn setup [world zones]
   (let [clock (atom 1000000)
@@ -229,6 +230,18 @@
           (is (zero? (clicks p))))))))
 
 ;; ------------------------------------------------------------------ zones
+
+(deftest a-zone-of-another-owner-reaches-one-block-past-its-box
+  (let [zone {:name "pen" :min [4 63 -3] :max [6 66 3] :owner "Other"}]
+    (are [zones cell expected] (= expected (go-to/foreign? zones "Fake" cell))
+      [zone] [5 64 0] true
+      [zone] [7 64 0] true
+      [zone] [8 64 0] false
+      [zone] [5 64 4] true
+      [zone] [5 64 5] false
+      [zone] [5 68 0] false
+      [(assoc zone :owner "Fake")] [5 64 0] false
+      [] [5 64 0] false)))
 
 (def foreign-zone {:name "pen" :min [4 63 -3] :max [6 66 3] :owner "Other" :allow #{}})
 (def own-zone (assoc foreign-zone :owner "Fake"))

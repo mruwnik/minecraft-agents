@@ -9,7 +9,8 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [engine.triggers.hungry :as hungry]
-            [jobs.survival.eat :as eat]))
+            [jobs.survival.eat :as eat]
+            [engine.game :as game]))
 
 (defn setup [world]
   (let [clock (atom 1000000)
@@ -250,9 +251,9 @@
 (deftest foods-follow-the-version-the-body-is-connected-with
   (is (contains? (foods/table-for "26.1") "honey_bottle"))
   (is (not (contains? (foods/table-for "1.12") "honey_bottle")))
-  (is (= "26.1" (foods/version-of (tu/fake {}))) "no rawWorld (tests): the connect default")
-  (is (= "1.12" (foods/version-of #js {:rawWorld #js {:version (fn [] "1.12")}})))
-  (is (= "26.1" (foods/version-of #js {:rawWorld #js {:version (fn [] nil)}})) "no bot yet: the default"))
+  (is (= "26.1" (game/version-of (tu/fake {}))) "no rawWorld (tests): the connect default")
+  (is (= "1.12" (game/version-of #js {:rawWorld #js {:version (fn [] "1.12")}})))
+  (is (= "26.1" (game/version-of #js {:rawWorld #js {:version (fn [] nil)}})) "no bot yet: the default"))
 
 (deftest an-engine-takes-its-foods-from-its-bodys-version
   (let [p (tu/fake {})]

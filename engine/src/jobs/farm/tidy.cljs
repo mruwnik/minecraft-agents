@@ -6,7 +6,8 @@
             [engine.jobs.tools :as tools]
             [engine.jobs.util :as u]
             [engine.path.near :as near]
-            [plan.shape :as shape]))
+            [plan.shape :as shape]
+            [engine.jobs.world :as known]))
 
 (def doc
   "Dig the stray blocks over a plan's cells (:plan, optionally only its :part) and pick up the drops.
@@ -190,7 +191,7 @@
   "{:answer plan-answer} for the plan in the args, or {:trouble text} (warned once per reason)."
   [c]
   (let [{:keys [plan part]} (:args c)
-        answer (ctx/plan c plan)
+        answer (known/plan c plan)
         trouble (or (plan-trouble answer part)
                     (let [{:keys [zones ignore-zones?]} (access-world c)]
                       (when (and (nil? zones) (not ignore-zones?)) "no zone list has been read")))]

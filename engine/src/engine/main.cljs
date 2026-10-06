@@ -13,10 +13,10 @@
             [engine.takeover :as takeover]
             [engine.trigger-api :as trigger-api]
             [engine.triggers :as triggers]
-            [engine.world :as world]
             ["fs" :as fs]
             ["path" :as path]
-            ["module" :refer [createRequire]]))
+            ["module" :refer [createRequire]]
+            [engine.hooks :as hooks]))
 
 (defn parse-args [args]
   (loop [[a b & more :as all] args
@@ -107,15 +107,15 @@
         nil))))
 
 (defn open-world
-  "The body's world (engine.world: plans, blueprints, zones) with its notes store (engine.notes) as :notes, in
-  the world folder worlds/<world>; the body's notes are written as agent's."
+  "The body's world store (the :world/open hook: plans, blueprints, zones, claims) with its notes store
+  (engine.notes) as :notes, in the world folder worlds/<world>; the body's notes are written as agent's."
   [{:keys [state-dir world agent root emit]}]
   (let [dir (path/join (bodies/worlds-dir state-dir) world)]
-    (assoc (world/open {:plans-dir (path/join dir "plans")
-                        :blueprint-dir (path/resolve root ".." "blueprints")
-                        :zones-file (path/join dir "zones.edn")
-                        :claims-file (path/join dir "claims.edn")
-                        :emit emit})
+    (assoc ((:world/open hooks/all) {:plans-dir (path/join dir "plans")
+                                     :blueprint-dir (path/resolve root ".." "blueprints")
+                                     :zones-file (path/join dir "zones.edn")
+                                     :claims-file (path/join dir "claims.edn")
+                                     :emit emit})
            :notes (notes/open {:world-dir dir :body agent :emit emit}))))
 
 (defn ^:async start

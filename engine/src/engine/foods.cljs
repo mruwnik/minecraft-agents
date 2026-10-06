@@ -3,11 +3,8 @@
   and the three short judgement lists on top of it: harmful, precious and named-only foods. The data names
   mob and fish buckets as foods (they are not eaten); those are left out."
   (:require ["minecraft-data" :as minecraft-data]
-            [clojure.string :as str]))
-
-(def default-version
-  "The minecraft-data version used when no body is connected (the connect default, engine/js/connect.mjs)."
-  "26.1")
+            [clojure.string :as str]
+            [engine.game :as game]))
 
 (def table-for
   "{item name {:points :saturation}} for every food minecraft-data lists for a version (memoised)."
@@ -18,23 +15,7 @@
           (map (fn [f] [(.-name f) {:points (.-foodPoints f) :saturation (.-saturation f)}]))
           (into {})))))
 
-(defn version-of
-  "The version the body of primitives p is connected with (the raw world's version, from the bot), else the default
-  (no bot yet, or primitives without a raw world, as in tests)."
-  [p]
-  (let [raw (some-> p .-rawWorld)]
-    (or (when (and raw (fn? (.-version raw))) (.version raw)) default-version)))
-
-(def selected
-  "The version the foods below are read for; set once per engine (select!)."
-  (atom default-version))
-
-(defn select!
-  "Read the foods for the version the body of primitives p is connected with."
-  [p]
-  (reset! selected (version-of p)))
-
-(defn table [] (table-for @selected))
+(defn table [] (table-for @game/version))
 
 (def harmful
   "Foods that hurt or only half feed (hunger, poison, a rotten stomach): eaten only with :allow-bad, last."

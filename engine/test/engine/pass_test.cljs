@@ -53,18 +53,6 @@
     {:x 5 :y 65 :z 0} {:half "upper"} 64 65
     {:x 5 :y 64 :z 0} nil 64 64))
 
-(deftest a-zone-of-another-owner-reaches-one-block-past-its-box
-  (let [zone {:name "pen" :min [4 63 -3] :max [6 66 3] :owner "Other"}]
-    (are [zones cell expected] (= expected (pass/foreign? zones "Fake" cell))
-      [zone] [5 64 0] true
-      [zone] [7 64 0] true
-      [zone] [8 64 0] false
-      [zone] [5 64 4] true
-      [zone] [5 64 5] false
-      [zone] [5 68 0] false
-      [(assoc zone :owner "Fake")] [5 64 0] false
-      [] [5 64 0] false)))
-
 ;; ------------------------------------------------------------------ leftovers of a cut walk
 
 (def gate-world
@@ -83,7 +71,7 @@
         job {:check (constantly true)
              :round (fn ^:async leftover-round [c]
                       (ctx/remember! c :opened {:cell cell :by (if (= :self by) (:id c) by) :t 0} pass/opened-policy)
-                      (await (pass/shut-leftovers! c doors))
+                      (await (pass/shut-leftovers! c doors nil))
                       :done)}
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'leftover job) :triggers triggers/all :dir (tu/tmp-dir)
                           :now #(deref clock) :world (world/of-data {} {} [])

@@ -5,7 +5,8 @@
             ["path" :as path]
             [engine.test-util :as tu]
             [engine.world :as world]
-            [plan.shape :as shape]))
+            [plan.shape :as shape]
+            [engine.file-sync :as fsync]))
 
 (def wheat {:id "field" :parts [{:id "rows" :box [[0 64 0] [1 64 0]] :want {:crop "wheat"}}]})
 (def hut-bp {:id "hut" :front :south :key {"S" "stone"} :layers [["S"]]})
@@ -14,35 +15,35 @@
 ;; ------------------------------------------------------------------ pure
 
 (deftest a-check-is-due-every-few-seconds
-  (are [checked-at now expected] (= expected (world/due? {:checked-at checked-at :every-ms 3000} now))
+  (are [checked-at now expected] (= expected (fsync/due? {:checked-at checked-at :every-ms 3000} now))
     nil 0 true
     1000 3999 false
     1000 4000 true))
 
 (deftest only-new-and-changed-files-are-read-again
   (is (= #{"b" "c"}
-         (set (world/stale-ids {"a" {:stamp [1 10]} "b" {:stamp [1 10]}}
+         (set (fsync/stale-ids {"a" {:stamp [1 10]} "b" {:stamp [1 10]}}
                                {"a" [1 10] "b" [2 10] "c" [5 3]})))))
 
 (deftest a-good-file-replaces-the-entry
-  (let [[entries warn] (world/absorb {"field" {:stamp [1 1] :value {:old true} :error "x"}} "field" [2 2] {:value wheat})]
+  (let [[entries warn] (fsync/absorb {"field" {:stamp [1 1] :value {:old true} :error "x"}} "field" [2 2] {:value wheat})]
     (is (= {"field" {:stamp [2 2] :value wheat}} entries))
     (is (nil? warn))))
 
 (deftest a-broken-edit-keeps-the-last-good-copy-and-warns-once
-  (let [[entries warn] (world/absorb {"field" {:stamp [1 1] :value wheat}} "field" [2 2] {:errors ["unreadable EDN: eof"]})]
+  (let [[entries warn] (fsync/absorb {"field" {:stamp [1 1] :value wheat}} "field" [2 2] {:errors ["unreadable EDN: eof"]})]
     (is (= wheat (get-in entries ["field" :value])))
     (is (= "unreadable EDN: eof" (get-in entries ["field" :error])))
     (is (= {:id "field" :error "unreadable EDN: eof" :kept true} warn))))
 
 (deftest a-file-never-readable-is-broken-not-absent
-  (let [[entries warn] (world/absorb {} "field" [1 1] {:errors ["a" "b"]})]
+  (let [[entries warn] (fsync/absorb {} "field" [1 1] {:errors ["a" "b"]})]
     (is (= {"field" {:stamp [1 1] :error "a; b"}} entries))
     (is (= {:id "field" :error "a; b" :kept false} warn))
     (is (= {:id "field" :broken "a; b"} (world/answer {:plans entries} "field")))))
 
 (deftest a-deleted-file-is-forgotten
-  (is (= {"a" {:stamp [1 1]}} (world/drop-gone {"a" {:stamp [1 1]} "b" {:stamp [1 1]}} {"a" [1 1]}))))
+  (is (= {"a" {:stamp [1 1]}} (fsync/drop-gone {"a" {:stamp [1 1]} "b" {:stamp [1 1]}} {"a" [1 1]}))))
 
 (deftest answer-gives-the-plan-its-status-and-cells
   (let [state (world/expand-all {:plans {"field" {:value wheat} "huts" {:value huts :error "bad edit"}}

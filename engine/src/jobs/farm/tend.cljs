@@ -10,7 +10,8 @@
             [jobs.farm.plant :as plant]
             [jobs.farm.tidy :as tidy]
             [jobs.farm.till :as till]
-            [plan.shape :as shape]))
+            [plan.shape :as shape]
+            [engine.jobs.world :as known]))
 
 (def doc
   "Keep one field of crops in order. The field is the :box (inclusive). Its lowest layer (y = min) is the
@@ -245,10 +246,10 @@
   [c]
   (when-let [id (:plan (:args c))]
     (let [part (:part (:args c))
-          answer (ctx/plan c id)
+          answer (known/plan c id)
           crops (harvest/crop-cells answer part)
           trouble (or (harvest/plan-trouble answer crops)
-                      (when (nil? (ctx/zones c)) "no zone list has been read"))]
+                      (when (nil? (known/zones c)) "no zone list has been read"))]
       (if-not trouble
         {:answer answer :crops crops}
         (do (ctx/warn-once! c [id trouble] :farm-tend.declined

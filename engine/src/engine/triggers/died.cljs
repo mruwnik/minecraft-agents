@@ -2,7 +2,7 @@
   "The died trigger: a death the body has not yet decided about, still
   inside the drops' five minute despawn window."
   (:require [engine.memory :as mem]
-            [engine.value :as value]))
+            [engine.game :as game]))
 
 (defn unrecovered-death
   "The latest :died entry when no :recovered entry is newer, else nil."
@@ -24,17 +24,12 @@
   (let [death (mem/latest view :died)]
     (boolean (and death (not (respawned-since? view death))))))
 
-(def died
+(defn died
   "Holds while the latest :died entry is newer than the latest :recovered
   entry, younger than 5 minutes and followed by a :respawned entry (a dead
   body cannot walk). The recover-drops job writes :recovered."
-  {:name :died
-   :when (fn [_world memory _args]
-           (let [d (unrecovered-death memory)]
-             (boolean (and d
-                           (respawned-since? memory d)
-                           (< (- (:now memory) (:t d)) value/despawn-ms)))))
-   :job '(jobs.survival.recover-drops)
-   :args {}
-   :persistence :cooldown
-   :cooldown-s 30})
+  [_world memory _args]
+  (let [d (unrecovered-death memory)]
+    (boolean (and d
+                  (respawned-since? memory d)
+                  (< (- (:now memory) (:t d)) game/despawn-ms)))))

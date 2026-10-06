@@ -10,12 +10,12 @@
             [engine.events :as events]
             [engine.job-api :as job-api]
             [engine.memory :as mem]
-            [engine.value :as value]
             [engine.trigger-api :as trigger-api]
             ["fs" :as fs]
             ["http" :as http]
             ["net" :as net]
-            ["path" :as path]))
+            ["path" :as path]
+            [engine.game :as game]))
 
 (def content-type "application/edn; charset=utf-8")
 (def max-body-bytes 16384)
@@ -179,8 +179,8 @@
      (let [ago (- now (:t entry))
            {:keys [pos cause]} (:data entry)
            decision (when (and recovered (> (:t recovered) (:t entry))) (:decision (:data recovered)))]
-       (when (< ago value/despawn-ms)
-         (cond-> {:pos pos :ago-ms ago :despawns-in-ms (- value/despawn-ms ago)}
+       (when (< ago game/despawn-ms)
+         (cond-> {:pos pos :ago-ms ago :despawns-in-ms (- game/despawn-ms ago)}
            cause (assoc :cause cause)
            decision (assoc :recovered decision)))))))
 

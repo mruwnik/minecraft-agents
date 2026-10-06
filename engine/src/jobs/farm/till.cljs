@@ -3,7 +3,8 @@
             [engine.jobs.access :as access]
             [engine.jobs.gate :as gate]
             [engine.jobs.util :as u]
-            [engine.path.near :as near]))
+            [engine.path.near :as near]
+            [engine.jobs.world :as known]))
 
 (def doc
   "Hoe dirt, grass_block or dirt_path into farmland over a set of ground cells, given as the box :from/:to or
@@ -82,7 +83,7 @@
         todo? (try (some #(not (or (contains? skipped %) (= "farmland" (u/block-name p %))))
                          (cells (:args c)))
                    (catch :default _ nil))]
-    (and (or (:ignore-zones? (:args c)) (some? (ctx/zones c))
+    (and (or (:ignore-zones? (:args c)) (some? (known/zones c))
              (access/decline! c :till.declined "till" {:reason :no-zones}))
          (or (nil? todo?) (some? (hoe-of p))))))
 

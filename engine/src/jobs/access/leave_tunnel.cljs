@@ -9,7 +9,8 @@
             [jobs.access.tunnel :as tunnel]
             [jobs.build.from-plan :as from-plan]
             [jobs.gather.mine :as mine]
-            [jobs.survival.dig-in :as dig-in]))
+            [jobs.survival.dig-in :as dig-in]
+            [engine.jobs.world :as known]))
 
 (def doc
   "Leave a dead-end tunnel (the result of jobs.access.tunnel: :line :dug :torches): take its torches back and
@@ -52,7 +53,7 @@
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
 (defn check [c]
-  (if (and (nil? (ctx/zones c)) (not (:ignore-zones? (:args c))))
+  (if (and (nil? (known/zones c)) (not (:ignore-zones? (:args c))))
     (access/decline! c :leave-tunnel.declined "leave-tunnel" {:reason :no-zones})
     (declined/check c)))
 

@@ -4,7 +4,8 @@
             [engine.jobs.access :as access]
             [engine.jobs.forestry :as forestry]
             [engine.jobs.util :as u]
-            [engine.path.near :as near]))
+            [engine.path.near :as near]
+            [engine.jobs.world :as known]))
 
 (def doc
   "Keep the trees a forest plan wants (cells wanting {:tree species}; a large tree is four cells).
@@ -148,10 +149,10 @@
   "{:trees {pos species}} of the plan, or {:trouble text} (warned once per reason) when it cannot be worked."
   [c]
   (let [{:keys [plan part]} (:args c)
-        answer (ctx/plan c plan)
+        answer (known/plan c plan)
         trees (tree-cells answer part)
         trouble (or (plan-trouble answer trees)
-                    (when (and (nil? (ctx/zones c)) (not (:ignore-zones? (:args c)))) "no zone list"))]
+                    (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) "no zone list"))]
     (if-not trouble
       {:trees trees}
       (do (ctx/warn-once! c [plan trouble] :forest.declined

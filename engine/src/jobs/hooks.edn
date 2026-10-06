@@ -1,0 +1,9 @@
+;; The job-side fns the engine calls (engine.hooks); engine.registry/hook-keys says what each is for.
+{:world/open engine.world/open
+ :world/blank engine.world/blank
+ :manual/cell-of engine.jobs.manual/cell-of
+ :manual/plannable? engine.jobs.manual/plannable?
+ :manual/walk-round! engine.jobs.manual/walk-round!
+ :manual/dig-timeout-s engine.jobs.manual/dig-timeout-s
+ :manual/dig! engine.jobs.manual/dig-with-tool!
+ :manual/wear! engine.jobs.manual/wear!}

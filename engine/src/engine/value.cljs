@@ -1,7 +1,6 @@
 (ns engine.value
-  "The coarse item worth tiers make-room reads to decide what may be tossed (item-worth), and the drops' despawn
-  window. What a pile is worth and what fetching it costs, as recover-drops decides it, is engine.jobs.value
-  (built from minecraft-data).
+  "The coarse item worth tiers make-room reads to decide what may be tossed (item-worth). What a pile is worth and what
+  fetching it costs, as recover-drops decides it, is engine.jobs.value (built from minecraft-data).
 
   Item value, per stack (an inventory entry), first matching rule wins:
 
@@ -53,7 +52,3 @@
             (cond (nil? r) 0
                   (:each r) (* (:each r) (or (:count item) 1))
                   :else (tier-values (:tier r))))))
-
-;; ---------------------------------------------------------------- the window
-
-(def despawn-ms "How long dropped items lie before they despawn." (* 5 60 1000))

@@ -40,7 +40,7 @@
     :now now}))
 
 (deftest the-trigger-holds-for-an-old-entry-of-an-open-block-near-a-body-out-of-its-column
-  (are [open x z now holds note] (is (= holds (boolean ((:when dl/trigger) (tu/fake (gate-world open x z)) (view-with now 0) (:args dl/trigger) nil))) note)
+  (are [open x z now holds note] (is (= holds (boolean (dl/door-left (tu/fake (gate-world open x z)) (view-with now 0) (:args (:door-left triggers/all)) nil))) note)
     true 9 0 10000 true "10 s open, 4 blocks off"
     true 9 0 9999 false "not yet open-s"
     false 9 0 60000 false "shut again"
@@ -49,13 +49,13 @@
 
 (deftest a-block-a-walk-left-open-on-purpose-is-not-the-triggers-business
   (let [p (tu/fake (gate-world true 9 0))
-        holds? #((:when dl/trigger) p (view-with 60000 0 %) (:args dl/trigger) nil)]
+        holds? #(dl/door-left p (view-with 60000 0 %) (:args (:door-left triggers/all)) nil)]
     (is (false? (holds? {:shut? false})) "a :leave-open walk's entry")
     (is (true? (holds? {})))))
 
 (deftest the-trigger-is-registered-with-the-job-that-shuts-doors
-  (is (= dl/trigger (:door-left triggers/all)))
-  (is (= '(jobs.maintenance.shut-doors) (:job dl/trigger))))
+  (is (= dl/door-left (:when (:door-left triggers/all))))
+  (is (= '(jobs.maintenance.shut-doors) (:job (:door-left triggers/all)))))
 
 ;; ---------------------------------------------------------------- a walk cut in the gate
 

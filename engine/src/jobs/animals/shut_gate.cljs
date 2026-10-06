@@ -3,7 +3,8 @@
             [engine.jobs.apiary :as apiary]
             [engine.jobs.util :as u]
             [engine.path.near :as near]
-            [engine.triggers.pen-gate :as pg]))
+            [engine.triggers.pen-gate :as pg]
+            [engine.jobs.world :as known]))
 
 (def doc
   "Shut the planned fence gates that stand open. A planned gate is a cell of a plan whose want is a fence gate
@@ -40,7 +41,7 @@
 (defn plan-gates
   "[cells trouble] for plan id: its gate cells, or nil and why the plan cannot be worked."
   [c id]
-  (let [answer (ctx/plan c id)]
+  (let [answer (known/plan c id)]
     (cond
       (nil? answer) [nil "no such plan"]
       (:broken answer) [nil (str "the plan cannot be read: " (:broken answer))]

@@ -3,7 +3,8 @@
             [engine.jobs.access :as access]
             [engine.jobs.blocks :as blocks]
             [engine.jobs.util :as u]
-            [engine.path.near :as near]))
+            [engine.path.near :as near]
+            [engine.jobs.world :as known]))
 
 (def doc
   "Dig out a box from the top down (site levelling, demolition). Beds, containers and fluids are kept (:keep adds
@@ -122,7 +123,7 @@
   [c]
   (cond
     (and (not (started? c)) (box-error (:args c))) (decline-box! c)
-    (and (nil? (ctx/zones c)) (not (:ignore-zones? (:args c)))) (access/decline! c :clear-box.declined "clear-box" {:reason :no-zones})
+    (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) (access/decline! c :clear-box.declined "clear-box" {:reason :no-zones})
     (:target (ctx/mem c)) (let [w (blocks/child-wait c :dig 'jobs.blocks.dig (dig-args c (:target (ctx/mem c))))]
                             (if (blocks/body-wait? w) (ctx/wait c w) true))
     (started? c) true

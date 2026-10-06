@@ -56,11 +56,7 @@
     (boolean (some #(not (pass/in-column? (:column %) here))
                    (left-open p view args (* 1000 open-s))))))
 
-(def trigger
+(defn door-left
   "Holds when holds? says so; args :radius :open-s. The job it starts shuts the blocks."
-  {:name :door-left
-   :when (fn [world view args _kn] (holds? world view args))
-   :job '(jobs.maintenance.shut-doors)
-   :args defaults
-   :persistence :cooldown
-   :cooldown-s 5})
+  [world view args _kn]
+  (holds? world view args))

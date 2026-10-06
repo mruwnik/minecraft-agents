@@ -7,7 +7,8 @@
             [engine.jobs.util :as u]
             [engine.jobs.torch :as torch]
             [jobs.access.stair :as stair]
-            [jobs.build.from-plan :as from-plan]))
+            [jobs.build.from-plan :as from-plan]
+            [engine.jobs.world :as known]))
 
 (def doc
   "Cut a way to stand beside a buried block :target [x y z] and stop there, with the target the next cell ahead
@@ -82,7 +83,7 @@
 (def heading-order [:north :east :south :west])
 
 (defn check [c]
-  (if (and (nil? (ctx/zones c)) (not (:ignore-zones? (:args c))))
+  (if (and (nil? (known/zones c)) (not (:ignore-zones? (:args c))))
     (access/decline! c :tunnel.declined "tunnel" {:reason :no-zones})
     (declined/check c)))
 

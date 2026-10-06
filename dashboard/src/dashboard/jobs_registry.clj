@@ -23,13 +23,12 @@
   (for [m (registry/job-metadata)]
     (entry :job (second (str/split (:id m) #"\.")) m)))
 
-(defn trigger-entries []
-  (when-let [dir (some-> (clojure.java.io/resource "engine/triggers") clojure.java.io/file)]
-    (for [file (registry/job-files dir)
-          :let [ns-sym (symbol (str "engine.triggers." (-> (.getName file)
-                                                           (str/replace #"\.clj[sc]$" "")
-                                                           (str/replace "_" "-"))))]]
-      (entry :trigger "triggers" (registry/file-metadata ns-sym file)))))
+(defn trigger-entries
+  "One entry per trigger of the engine's default trigger set (triggers/defaults.edn): the trigger fn's doc and file."
+  []
+  (for [m (registry/trigger-metadata)]
+    (merge {:kind :trigger :category "triggers" :name (:id m)}
+           (update m :args #(when (some? %) (pretty %))))))
 
 (defmacro compile-entries
   "A literal vector of every job and trigger entry, read when the build runs."

@@ -31,7 +31,7 @@
 
 (deftest player-joined-holds-for-a-recent-join
   (are [label times args expected]
-       (= expected (boolean ((:when player-joined/trigger) nil (entry-view times) args)))
+       (= expected (boolean (player-joined/player-joined nil (entry-view times) args)))
     "no entry" [] {} false
     "just now" [99000] {} true
     "inside the window" [91000] {} true
@@ -39,7 +39,7 @@
     "a narrower :window-s" [91000] {:window-s 5} false))
 
 (deftest player-joined-is-registered-with-notify
-  (is (= player-joined/trigger (:player-joined triggers/all)))
-  (is (= :player-joined (:name player-joined/trigger)))
-  (is (= 'jobs.debug.notify (first (:job player-joined/trigger))))
-  (is (= :cooldown (:persistence player-joined/trigger))))
+  (is (= player-joined/player-joined (:when (:player-joined triggers/all))))
+  (is (= :player-joined (:name (:player-joined triggers/all))))
+  (is (= 'jobs.debug.notify (first (:job (:player-joined triggers/all)))))
+  (is (= :cooldown (:persistence (:player-joined triggers/all)))))

@@ -13,11 +13,7 @@
 
 (defn block-at-of [p] (fn [[x y z]] (u/block-name p {:x x :y y :z z})))
 
-(def trigger
-  {:name :scaffold-left
-   :when (fn [p memory _args kn]
-           (boolean (and (some? (world/zones kn))
-                         (seq (ledger/offered memory (block-at-of p) nil)))))
-   :job '(jobs.access.cleanup)
-   :args {}
-   :persistence :stop})
+(defn scaffold-left
+  [p memory _args kn]
+  (boolean (and (some? (world/zones kn))
+                (seq (ledger/offered memory (block-at-of p) nil)))))

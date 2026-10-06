@@ -8,13 +8,9 @@
   (boolean (and (or (.-onFire self) (.-inLava self))
                 (not-any? #(= "fire_resistance" (.-name %)) (array-seq (.-effects self))))))
 
-(def burning
+(defn burning
   "Holds when the body is on fire or in lava and has no fire_resistance
   effect. A danger reflex: no cooldown (and extinguish has no backoff), so
   a job that ends with the body still burning is fired again at once."
-  {:name :burning
-   :when (fn [world _memory _args] (burning? (.self world)))
-   :job '(jobs.survival.extinguish)
-   :args {}
-   :persistence :cooldown
-   :cooldown-s 0})
+  [world _memory _args]
+  (burning? (.self world)))

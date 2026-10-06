@@ -22,8 +22,8 @@
   Equipment: {part {:name :enchants [{:name :lvl}]}} for head torso legs feet, default what the body wears."
   (:require [engine.jobs.combat :as combat]
             [engine.jobs.reach :as reach]
-            [engine.foods :as foods]
-            ["minecraft-data" :as minecraft-data]))
+            ["minecraft-data" :as minecraft-data]
+            [engine.game :as game]))
 
 (def default-radius 16)
 (def close 2)
@@ -150,7 +150,7 @@
   Options: :overrides, :equipment (default what the body wears), :radius (16), :version (minecraft-data, default the
   body's). See the ns doc."
   [p route mobs & {:keys [overrides equipment radius version]}]
-  (let [version (or version @foods/selected)
+  (let [version (or version @game/version)
         radius (or radius default-radius)
         overrides (into {} (map (fn [[k o]] [(if (keyword? k) (name k) (str k)) o])) overrides)
         stats (armour-stats (equipment-of (if (some? equipment) equipment (body-equipment p))))

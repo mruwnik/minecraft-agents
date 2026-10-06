@@ -74,19 +74,16 @@
                   (< (wheat-carried self) bake-wheat)
                   (not (and learned (> learned gave-up)))))))
 
-(def hungry
+(def defaults {:food default-food :health default-health :rest-s default-rest-s})
+
+(defn hungry
   "Holds when hungry? says so, top-up? does (a hurt body below 18 food carrying common food), or eat-now? does.
   Args: :food, :health, :rest-s.
   It rests (resting?) for :rest-s (600) after get-food found nothing, so a body with nothing at hand is not sent
   searching again every cooldown. The rest ends when food is carried, wheat to bake is, or a food source is learned."
-  {:name :hungry
-   :when (fn [world memory args]
-           (let [self (.self world)]
-             (and (or (hungry? (.-food self) (.-health self) args)
-                      (top-up? (.-food self) (.-health self) (carried-names self))
-                      (eat-now? self args))
-                  (not (resting? self memory args)))))
-   :job '(jobs.survival.get-food)
-   :args {:food default-food :health default-health :rest-s default-rest-s}
-   :persistence :cooldown
-   :cooldown-s 90})
+  [world memory args]
+  (let [self (.self world)]
+    (and (or (hungry? (.-food self) (.-health self) args)
+             (top-up? (.-food self) (.-health self) (carried-names self))
+             (eat-now? self args))
+         (not (resting? self memory args)))))

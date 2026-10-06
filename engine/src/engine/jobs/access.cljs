@@ -6,7 +6,8 @@
             [engine.access.rules :as rules]
             [engine.access.zones :as zones]
             [engine.ctx :as ctx]
-            [engine.jobs.util :as u]))
+            [engine.jobs.util :as u]
+            [engine.jobs.world :as known]))
 
 (defn cell [{:keys [x y z]}] [x y z])
 
@@ -18,14 +19,14 @@
   :ignore-zones? defaults to the job's own :ignore-zones? arg."
   ([c] (zone-input c {}))
   ([c {:keys [except] :as opts}]
-   {:zones (ctx/zones c)
-    :footprints (ctx/footprints c {:except except})
+   {:zones (known/zones c)
+    :footprints (known/footprints c {:except except})
    :plan-cells (if (nil? except)
                  #{}
-                 (into #{} (keep (fn [[cell id]] (when (= id except) cell))) (ctx/footprints c)))
-    :claims (ctx/claims c)
+                 (into #{} (keep (fn [[cell id]] (when (= id except) cell))) (known/footprints c)))
+    :claims (known/claims c)
     :self (ctx/self-name c)
-    :own-plans (into #{} (keep (fn [[id by]] (when (zones/same-owner? by (ctx/self-name c)) id))) (ctx/plan-authors c))
+    :own-plans (into #{} (keep (fn [[id by]] (when (zones/same-owner? by (ctx/self-name c)) id))) (known/plan-authors c))
     :now (ctx/now c)
     :ignore-zones? (boolean (if (contains? opts :ignore-zones?) (:ignore-zones? opts) (:ignore-zones? (:args c))))}))
 

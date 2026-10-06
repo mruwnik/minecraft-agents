@@ -93,12 +93,12 @@
            ["aboard" (aboard) {} true]
            ["aboard, held by a live job" (aboard) {(mem/job-kind "j1") [{}] vehicle/hold-kind [{:job "j1"}]} false]
            ["aboard, held by a gone job" (aboard) {vehicle/hold-kind [{:job "j1"}]} true]]]
-    (is (= expected ((:when mounted/trigger) p (view entries) {})) label)))
+    (is (= expected (mounted/mounted p (view entries) {})) label)))
 
 (deftest mounted-is-registered-with-leave-vehicle
-  (is (= mounted/trigger (:mounted triggers/all)))
-  (is (= '(jobs.movement.leave-vehicle) (:job mounted/trigger)))
-  (is (= :stop (:persistence mounted/trigger))))
+  (is (= mounted/mounted (:when (:mounted triggers/all))))
+  (is (= '(jobs.movement.leave-vehicle) (:job (:mounted triggers/all))))
+  (is (= :stop (:persistence (:mounted triggers/all)))))
 
 ;; ------------------------------------------------------------------- leave-vehicle
 

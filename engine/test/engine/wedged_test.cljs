@@ -12,7 +12,7 @@
 
 (def unwedge 'jobs.survival.unwedge)
 
-(defn holds? [p memory] ((:when wedged/wedged) p memory {}))
+(defn holds? [p memory] (wedged/wedged p memory {}))
 
 (def floor {"0,63,0" "stone" "1,63,0" "stone" "-1,63,0" "stone" "0,63,1" "stone" "0,63,-1" "stone"})
 

@@ -1,7 +1,7 @@
 (ns engine.condition-test
   (:require [cljs.test :refer [deftest is are]]
             [engine.condition :as c]
-            [engine.condition.facts :as facts]
+            [engine.triggers :as triggers]
             [engine.memory :as mem]
             [engine.test-util :as tu]))
 
@@ -371,8 +371,8 @@
     '(< (blocks-near "stone" 8) 1)))
 
 (deftest the-fact-table-declares-a-cost-for-every-fact
-  (is (every? #{:cheap :scan} (map :cost (vals facts/table))))
-  (is (every? pos? (keep :refresh-s (vals facts/table)))))
+  (is (every? #{:cheap :scan} (map :cost (vals triggers/facts))))
+  (is (every? pos? (keep :refresh-s (vals triggers/facts)))))
 
 ;; ------------------------------------------------------------------ since
 

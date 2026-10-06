@@ -1,10 +1,10 @@
 (ns engine.recipes-test
   "engine.jobs.recipes: crafting chains planned from minecraft-data recipes."
   (:require [cljs.test :refer [deftest is]]
-            [engine.foods :as foods]
-            [engine.jobs.recipes :as recipes]))
+            [engine.jobs.recipes :as recipes]
+            [engine.game :as game]))
 
-(defn plan [have item n & [opts]] (recipes/plan foods/default-version have item n (or opts {})))
+(defn plan [have item n & [opts]] (recipes/plan game/default-version have item n (or opts {})))
 (defn shape [p] (mapv (juxt :op :item :count) (:steps p)))
 
 (deftest logs-only-make-planks-table-sticks-and-the-pickaxe

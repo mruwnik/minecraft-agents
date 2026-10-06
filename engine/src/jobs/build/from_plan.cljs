@@ -11,7 +11,8 @@
             [engine.path.near :as near]
             [engine.placement :as placement]
             [plan.rail :as rail]
-            [plan.shape :as shape]))
+            [plan.shape :as shape]
+            [engine.jobs.world :as known]))
 
 (def doc
   "Build what a plan wants (:plan, optionally only its :part) from what the body carries.
@@ -252,12 +253,12 @@
   "{:cells judged} for the plan in the args, or {:trouble text} (warned once per reason)."
   [c]
   (let [{:keys [plan part]} (:args c)
-        answer (ctx/plan c plan)
+        answer (known/plan c plan)
         cells (when (and answer (not (:broken answer)))
                 (let [carried (set (keys (carried-counts (:primitives c))))]
                   (prepared (judged (:primitives c) answer part carried) carried (:misplaced (ctx/mem c) {}))))
         trouble (or (plan-trouble answer cells)
-                    (when (and (nil? (ctx/zones c)) (not (:ignore-zones? (:args c)))) "no zone list has been read"))]
+                    (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) "no zone list has been read"))]
     (if-not trouble
       {:cells cells}
       (do (ctx/warn-once! c [plan trouble] :build.declined

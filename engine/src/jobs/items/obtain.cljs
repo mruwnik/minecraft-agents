@@ -1,13 +1,13 @@
 (ns jobs.items.obtain
   (:require [engine.ctx :as ctx]
-            [engine.foods :as foods]
             [engine.jobs.blocks :as b]
             [engine.jobs.fetch :as fetch]
             [engine.jobs.recipes :as recipes]
             [engine.jobs.util :as u]
             [engine.path.near :as near]
             [jobs.items.craft :as craft]
-            [jobs.storage.deposit :as deposit]))
+            [jobs.storage.deposit :as deposit]
+            [engine.game :as game]))
 
 (def doc
   "Get :count more of :item (or of any of :any-of, in that order of preference) than were carried at the first round.
@@ -90,7 +90,7 @@
   (let [p (:primitives c)
         have (carried-counts p)
         table? (boolean (or (:table (ctx/mem c)) (craft/nearest-table p craft-radius)))
-        version (foods/version-of p)]
+        version (game/version-of p)]
     (some (fn [name]
             (when-let [pl (recipes/plan version have name n {:table? table?})]
               (assoc pl :item name)))

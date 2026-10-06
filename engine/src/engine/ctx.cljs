@@ -1,8 +1,7 @@
 (ns engine.ctx
   "Helpers a job's check and round call on their ctx. See README.md, section ctx."
   (:require [engine.expr :as expr]
-            [engine.memory :as mem]
-            [engine.world :as world]))
+            [engine.memory :as mem]))
 
 ;; ------------------------------------------------------------------ job memory
 
@@ -131,48 +130,18 @@
   [ctx k args]
   ((:act ctx) k args))
 
-;; ------------------------------------------------------------------ world knowledge
-
-(defn plan
-  "The body's world's plan id, from memory (engine.world/answer): nil when there is no such plan,
-  {:id :broken text} when it was never readable, else {:id :plan :cells :errors}, with :error
-  when the file is bad now and this is its last good copy."
-  [ctx id]
-  (world/plan (:world (:engine ctx)) id))
+;; ------------------------------------------------------------------ the body
 
 (defn warn-once!
   "Emit warn event kind with fields the first time this job gives key in this body process; a check
   may call it (it writes no memory)."
   [ctx key kind fields]
-  (when (world/first-time! (:world (:engine ctx)) [(:id ctx) key])
-    (emit! ctx kind :warn fields)))
-
-(defn zones
-  "The body's world's zone list [{:name :min [x y z] :max [x y z] :owner :allow #{..}} ...] (see engine.zones).
-  nil when the zone file is missing or was never readable: a dig or place job declines on nil, with one warn.
-  \"No zones\" is [], never nil."
-  [ctx]
-  (world/zones (:world (:engine ctx))))
-
-(defn claims
-  "The active, unexpired area claims of the body's world (claims.edn) at the clock: [{:id :owner :min :max :until ..}].
-  Zones and claims are a rule jobs consult (engine.access.zones); the engine enforces neither."
-  [ctx]
-  (world/live-claims (world/area-claims (:world (:engine ctx))) (now ctx)))
+  (let [k [(:id ctx) key]
+        [old _] (swap-vals! (:warned (:engine ctx)) conj k)]
+    (when-not (contains? old k)
+      (emit! ctx kind :warn fields))))
 
 (defn self-name
   "The body's own username, the owner name zones and claims are compared with."
   [ctx]
   (.-username (.self (:primitives ctx))))
-
-(defn plan-authors
-  "{plan-id by}: the body each plan names as its maker (:metadata :by); a plan without it is not listed."
-  [ctx]
-  (world/plan-authors (:world (:engine ctx))))
-
-(defn footprints
-  "{[x y z] plan-id}: the cells of every plan, as engine.access.rules takes :footprints (a refusal then names
-  the :plan). A job working plan P passes {:except P} to leave P's own cells out."
-  ([ctx] (footprints ctx {}))
-  ([ctx {:keys [except]}]
-   (world/footprints (:world (:engine ctx)) except)))

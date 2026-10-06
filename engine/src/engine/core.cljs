@@ -35,14 +35,13 @@
             [engine.backoff :as backoff]
             [engine.events :as events]
             [engine.expr :as expr]
-            [engine.foods :as foods]
             [engine.fsutil :as fsu]
             [engine.memory :as mem]
-            [engine.triggers.stuck :as stuck]
-            [engine.world :as world]
+            [engine.hooks :as hooks]
             [clojure.string :as str]
             ["crypto" :as crypto]
-            ["path" :as path]))
+            ["path" :as path]
+            [engine.game :as game]))
 
 (def default-stall-rounds
   "Rounds of a holding job with no act call and no change to its memory
@@ -477,7 +476,7 @@
           (mem/write! (:store eng) :moved (cond-> {:from from :to to :status (.-status r)
                                                    :target (js->clj (.-pos args) :keywordize-keys true)}
                                             (= "noPath" (.-reason r)) (assoc :no-path true))
-                      stuck/moved-policy))
+                      mem/moved-policy))
         (save-memory! eng)
         (record-act! eng {:root root :reflex reflex} k r (distance from to))
         (emit! eng (cond-> (merge fields {:source :action :kind :done :status (.-status r)})
@@ -1323,7 +1322,7 @@
     :primitives, :dir, :now, :events, :body
     :jobs        the registry {sym {:check :round :doc :args}}
     :triggers    {name trigger}
-    :world       an engine.world (an empty one when not given)
+    :world       the body's world store (hooks :world/open; :world/blank when not given)
     :backoff     engine-wide backoff config, a map or false (see engine.backoff)
     :backoff-alert-ms  least gap between two job.backoff warns (300000)
     :stall-rounds      rounds before job.stalled (20)
@@ -1335,7 +1334,7 @@
            backoff backoff-alert-ms]
     :or {now js/Date.now stall-rounds default-stall-rounds sweep-ms default-sweep-ms
          stats-ms default-stats-ms backoff-alert-ms default-backoff-alert-ms}}]
-  (let [_ (foods/select! primitives)
+  (let [_ (game/select! primitives)
         file (path/join dir "engine.edn")
         saved (fsu/read-edn file)
         username (or body (.-username (.self primitives)))
@@ -1353,7 +1352,8 @@
         eng {:primitives primitives :jobs jobs :triggers triggers :dir dir :now now :events ev
              :store store
              :hurt (hurt/new-state)
-             :world (or world (world/of-data {} {}))
+             :world (or world ((:world/blank hooks/all)))
+             :warned (atom #{})
              :state st
              :running (atom nil)
              :tokens (atom 0)

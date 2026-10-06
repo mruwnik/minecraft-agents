@@ -32,7 +32,7 @@
   (:require ["minecraft-data" :as minecraft-data]
             [clojure.string :as str]
             [engine.foods :as foods]
-            [engine.value :as value]))
+            [engine.game :as game]))
 
 (def unknown-each "The worth of one item minecraft-data does not know." 1)
 (def no-source-each "The worth of one item of a 64-stack that no block drops and no recipe makes." 4)
@@ -204,7 +204,7 @@
   Options: :overrides, :version (minecraft-data, default the body's). Never throws on odd entries: no name is
   worth 0, an unknown name unknown-each."
   [items & {:keys [overrides version]}]
-  (let [version (or version @foods/selected)
+  (let [version (or version @game/version)
         overrides (normal-overrides overrides)
         group-names #{"ore" "tool" "armor" "food" "block" "unknown"}
         group-overrides (select-keys overrides group-names)
@@ -222,7 +222,7 @@
 
 ;; ---------------------------------------------------------------- the cost
 
-(def despawn-ms value/despawn-ms)
+(def despawn-ms game/despawn-ms)
 (def trip "Any fetch: turning round, finding the pile, the risk of the place one died at." 10)
 (def per-block "One block walked, there and back about a second of a player's time per 3 blocks." 0.3)
 (def per-danger "One expected point of damage (engine.jobs.danger/route-danger): about 10 s of healing and risk." 10)

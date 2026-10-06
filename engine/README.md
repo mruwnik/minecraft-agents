@@ -207,9 +207,9 @@ namespace follows the path (`src/jobs/forestry/fell_tree.cljs` is `jobs.forestry
 ```
 
 There is no catalog to edit: adding the file adds the job. `engine.registry/jobs` is `{ns-symbol {:check :round :doc :args
-:backoff}}`, built at compile time. The build hook `engine.build-hooks/add-job-namespaces` lists every file under `jobs`,
-fails the compile when a file lacks `check` or `round` or its `ns` does not match its path, and the macro
-`engine.registry/job-registry` emits the map. `check` and `round` must be top-level `def`/`defn` forms, and a job must not
+:backoff}}`, built at compile time. The build hook `engine.build-hooks/add-job-namespaces` lists every file under `jobs`
+that defines both `check` and `round` (others are helpers), fails the compile when such a file's `ns` does not match its
+path, and the macro `engine.registry/job-registry` emits the map. `check` and `round` must be top-level `def`/`defn` forms, and a job must not
 require `engine.registry`.
 
 - **check**: can the job usefully run now? Cheap and side-effect free: its ctx has no token, so `act`, `update-mem!` and
@@ -257,7 +257,7 @@ The one argument of a check and a round. Helpers are in `engine.ctx`:
 | `(ctx/result! ctx data)`, `(ctx/child-result ctx slot)` | hand data to the parent in the round that ends `:done` |
 | `(ctx/submit! ctx spec opts)` | put a peer job at the end of the list; returns its id |
 | `(ctx/emit! ctx kind level fields)` | an event; `:warn`/`:error` without `:attention` stores `:notice`. Warn only for a give-up |
-| `(ctx/plan ctx id)`, `(ctx/warn-once! ctx key kind fields)` | a world plan from memory; a warn once per job per process |
+| `(ctx/warn-once! ctx key kind fields)` | a warn once per job per process |
 
 **act.** Every acting call goes through `act`: it checks the token, saves memory, emits `action.started`/`action.done`
 (debug), calls the primitive, saves again. There is no commit: a cut loses at most the work since the last save, so write a
@@ -268,9 +268,10 @@ read by the stuck trigger.
 it returns `:continue` or `:declined`; on `:done` the sub-map is cleared so the next call starts fresh. A cut anywhere ends
 the whole chain's round; cancel and done take the subtree. `submit!` is delegation (a peer on the list), not a child.
 
-**World knowledge.** `engine.world` reads the plans (`worlds/<world>/plans/<id>.edn`) and blueprints
-(`blueprints/<id>.edn`) read-only, re-stat-ed at most every 3 s; a file that turns invalid keeps its last good copy and
-warns once. `engine.notes` is what bodies saw (`worlds/<world>/notes/<body>.edn`, each body writes only its own file;
+**World knowledge.** `engine.world` reads the plans (`worlds/<world>/plans/<id>.edn`), blueprints
+(`blueprints/<id>.edn`), zones and claims read-only, re-stat-ed at most every 3 s; a file that turns invalid keeps its last
+good copy and warns once. Jobs read it through `engine.jobs.world` (`plan`, `zones`, `claims`, `footprints`). The engine
+calls job code only through `engine.hooks`, named in `src/jobs/hooks.edn` (world store, manual walk, dig and wear). `engine.notes` is what bodies saw (`worlds/<world>/notes/<body>.edn`, each body writes only its own file;
 `notes/notes`, `notes/note!`). `engine.chat` holds the chat limits (at least 1 s between lines, at most 5 in 30 s, per body).
 
 ## Memory
@@ -296,14 +297,15 @@ One EDN store per body: `worlds/<world>/agents/<name>/engine/memory.edn`, `{:ent
 
 ## Triggers and the register
 
-A trigger definition (`engine.triggers`):
+A trigger is a plain fn `(fn [world view args plans live] bool)` (view is a memory view, args the entry's). The default
+trigger set `src/triggers/defaults.edn` names each by id; `engine.triggers/all` is built from it at compile time, so a new
+trigger is a fn plus one line:
 
 ```clojure
-{:name :hostile-near
- :when (fn [world view args plans] bool)   ; view is a memory view; args are the entry's
- :job '(jobs.survival.respond-to-hostile)  ; default job spec
- :args {:radius 8}                         ; trigger defaults, merged under the entry's :args
- :persistence :retry}                      ; :retry | :cooldown (with :cooldown-s) | :stop
+{:id :hostile-near :when engine.triggers.hostile-near/hostile-near   ; the fn
+ :job (jobs.survival.respond-to-hostile)                             ; default job spec
+ :args engine.triggers.hostile-near/defaults                         ; a map or a var, merged under the entry's :args
+ :persistence :retry}                                                ; :retry | :cooldown (with :cooldown-s) | :stop
 ```
 
 The **register** is an ordered vector of entries `{:id :trigger :job :args :persistence :cooldown-s :backoff :builtin?}`.
@@ -368,7 +370,7 @@ An ad hoc `:when` can be a condition: an EDN list read by `engine.condition` aga
   entry of that kind (unknown when none).
 - A fact can be unknown (offline, no such place). Unknown propagates; `and`/`or` are three-valued; a condition holds only
   when definitely true; `known?` is how to ask about absence.
-- No variables, arithmetic or functions. What the vocabulary cannot say becomes a new fact in `engine.condition.facts`.
+- No variables, arithmetic or functions. What the vocabulary cannot say becomes a new fact in the table `defaults.edn` names (`:facts`).
 - `compile` validates once at registration; a bad form is refused as data `{:ok false :reason :at :message :allowed}`.
 
 ## The scheduler
@@ -474,7 +476,8 @@ lease is not saved; restart or going offline ends it.
   `wear`, `inventory`. They run one at a time (at most 8 queued), have deadlines of at most 10 s, and need a lease with at
   least 1 s of idle time left. `move-to` walks as go-to does (opens doors) within `--max-distance`. `dig` first holds the
   best carried tool and refuses a block no carried tool can harvest (`no-tool`).
-- Rules live in `engine.lease` (pure); `engine.takeover` applies them; `engine/js/control.mjs` is a stateless socket adapter.
+- Rules live in `engine.lease` (pure); `engine.takeover` applies them, walking, digging and wearing through the
+  `:manual/*` hooks (`engine.jobs.manual`); `engine/js/control.mjs` is a stateless socket adapter.
 - Events: `system.takeover_started`, `system.takeover_ended` (reason `released`, `forced`, `idle`, `offline`, `shutdown`),
   `system.drive_deadman`.
 
@@ -624,7 +627,7 @@ gap jumps, climbing, water, doors), with costs in seconds plus risk. Tests are `
 
 - `engine.path.walk` plans and walks one round (`plan-walk`, `walk-to!`, `follow!`). `engine.path.executor` steers a plan
   tick by tick. `engine.path.near` (`walk-round!` for go-to, `walk-near!` for walks to something visible) opens and
-  re-shuts doors via `engine.path.pass`. `engine.path.targets/nearest!` finds the soonest-reachable of many targets in one
+  re-shuts doors via `engine.path.pass`; go-to's `:shut-also` shuts doors in or next to another owner's zone. `engine.path.targets/nearest!` finds the soonest-reachable of many targets in one
   bounded, resumable search (used by `fell-tree` and `mine`).
 - A search is bounded per round (about 100 ms) and resumable; a search that needs more rounds walks toward where it has
   got to, or waits. A start closed in the loaded world, with the goal unloaded, ends `start-enclosed` (not `goal-unloaded`). An enclosed goal is found by a small backward flood before any walking (`goal-enclosed`; `options.preFlood`, default 256 cells), and go-to keeps its flood between searches toward one goal (`goalFloodMemo`).

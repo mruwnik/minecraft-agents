@@ -23,7 +23,7 @@
             ["path" :as path]
             [cljs.reader :as reader]
             [engine.ctx :as ctx]
-            [engine.world :as world]))
+            [engine.file-sync :as fsync]))
 
 (def default-every-ms 3000)
 (def default-cap 2000)
@@ -129,16 +129,16 @@
 (defn refresh!
   "Stat the other bodies' files when due and fold in what changed, a warn per newly broken file."
   [{:keys [state opts]} now]
-  (when (world/due? (assoc @state :every-ms (:every-ms opts)) now)
+  (when (fsync/due? (assoc @state :every-ms (:every-ms opts)) now)
     (let [{:keys [dir]} (paths (:world-dir opts) (:body opts))
-          stamps (dissoc (world/stamps dir) (:body opts))
+          stamps (dissoc (fsync/stamps dir) (:body opts))
           old (:files @state)
           [files warns] (reduce (fn [[entries warns] id]
-                                  (let [[entries warn] (world/absorb entries id (get stamps id)
+                                  (let [[entries warn] (fsync/absorb entries id (get stamps id)
                                                                      (read-file (path/join dir (str id ".edn"))))]
                                     [entries (cond-> warns warn (conj warn))]))
-                                [(world/drop-gone old stamps) []]
-                                (world/stale-ids old stamps))]
+                                [(fsync/drop-gone old stamps) []]
+                                (fsync/stale-ids old stamps))]
       (swap! state assoc :files files :checked-at now)
       (doseq [w warns] ((:emit opts) (warn-event (:id w) w))))))
 

@@ -23,13 +23,20 @@
   (is (= (count reg/entries) (count (set (map :id reg/entries))))))
 
 (deftest triggers-are-listed
-  (let [t (entry "engine.triggers.stuck")]
+  (let [t (entry "stuck")]
     (are [k v] (= v (get t k))
       :kind :trigger
       :category "triggers"
       :name "stuck"
-      :file "engine/src/engine/triggers/stuck.cljs")
+      :file "engine/src/engine/triggers/stuck.cljs"
+      :job "(jobs.maintenance.unstick)")
+    (is (string? (:doc t)))
     (is (string? (:ns-doc t)))))
+
+(deftest every-default-trigger-is-listed
+  (is (= #{"suffocating" "burning" "wedged" "hostile-near" "hungry" "night" "stuck" "died" "pen-gate" "door-left"
+           "inventory-nearly-full" "scaffold-left" "tidy-pending" "mounted" "player-joined"}
+         (set (map :id (filter #(= :trigger (:kind %)) reg/entries))))))
 
 (deftest pretty-args-one-entry-per-line
   (are [value out] (= out (reg/pretty value))

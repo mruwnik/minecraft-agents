@@ -6,11 +6,11 @@
             [clojure.set :as set]
             [engine.access.rules :as rules]
             [engine.ctx :as ctx]
-            [engine.foods :as foods]
             [engine.jobs.access :as access]
             [engine.jobs.forestry :as forestry]
             [engine.jobs.util :as u]
-            [engine.places :as places]))
+            [engine.places :as places]
+            [engine.game :as game]))
 
 (def air #{"air" "cave_air" "void_air"})
 (def fluids #{"water" "lava" "bubble_column"})
@@ -37,7 +37,7 @@
   "The item names block-name drops by minecraft-data (tool and enchantment ignored), or the block's own name when
   the data does not list it."
   [p block-name]
-  (get (drops-table (foods/version-of p)) block-name [block-name]))
+  (get (drops-table (game/version-of p)) block-name [block-name]))
 
 (defn parse
   "{:pos {:x :y :z}} of args' :pos (a cell, fractions floored), or {:error text}."

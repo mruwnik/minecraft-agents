@@ -768,14 +768,14 @@
 (def zombie-at-12 {:entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 12 :y 64 :z 0}}]})
 
 (deftest hostile-near-reads-its-radius-from-args
-  (is (false? (trigger-holds triggers/hostile-near zombie-at-12 {:radius 8})))
-  (is (true? (trigger-holds triggers/hostile-near zombie-at-12 {:radius 16}))))
+  (is (false? (trigger-holds (:hostile-near triggers/all) zombie-at-12 {:radius 8})))
+  (is (true? (trigger-holds (:hostile-near triggers/all) zombie-at-12 {:radius 16}))))
 
 (deftest health-low-is-gone-food-heals
   (is (nil? (triggers/all :health-low)) "low health is the hungry trigger's: eat, or look for food"))
 
 (deftest inventory-nearly-full-holds-when-few-slots-are-free
-  (are [stacks free expected] (= expected (trigger-holds triggers/inventory-nearly-full {:inventory (junk-stacks stacks)} {:free free}))
+  (are [stacks free expected] (= expected (trigger-holds (:inventory-nearly-full triggers/all) {:inventory (junk-stacks stacks)} {:free free}))
     33 2 false
     34 2 true
     36 2 true
@@ -783,8 +783,8 @@
     36 0 true))
 
 (deftest inventory-nearly-full-defaults-to-two-free-slots
-  (is (false? (trigger-holds triggers/inventory-nearly-full {:inventory (junk-stacks 33)} {})))
-  (is (true? (trigger-holds triggers/inventory-nearly-full {:inventory (junk-stacks 34)} {}))))
+  (is (false? (trigger-holds (:inventory-nearly-full triggers/all) {:inventory (junk-stacks 33)} {})))
+  (is (true? (trigger-holds (:inventory-nearly-full triggers/all) {:inventory (junk-stacks 34)} {}))))
 
 (deftest a-scenario-radius-reaches-the-trigger
   (async done

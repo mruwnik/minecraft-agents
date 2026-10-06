@@ -6,7 +6,7 @@
             [engine.jobs.util :as u]
             [engine.jobs.value :as jv]
             [engine.triggers.died :as died]
-            [engine.value :as value]))
+            [engine.game :as game]))
 
 (def doc
   "After a death, go back for the drops when they are worth it.
@@ -47,7 +47,7 @@
   2000)
 (def day-ms (* 24 60 60 1000))
 (def recovered-policy {:cap 10 :ttl day-ms})
-(def trip-policy {:cap 1 :ttl value/despawn-ms})
+(def trip-policy {:cap 1 :ttl game/despawn-ms})
 
 (defn check [c] (some? (died/unrecovered-death (ctx/view c))))
 
@@ -242,7 +242,7 @@
     (when entry (key-to-death! c entry))
     (cond
       (nil? entry) :done
-      (>= elapsed value/despawn-ms) (finish! c :abandoned (assoc (:decided (ctx/mem c)) :reason (if (:blocked (ctx/mem c)) :unreachable :window-closed)))
+      (>= elapsed game/despawn-ms) (finish! c :abandoned (assoc (:decided (ctx/mem c)) :reason (if (:blocked (ctx/mem c)) :unreachable :window-closed)))
       threatened? :continue
       (not (died/respawned-since? (ctx/view c) entry)) :continue
       (and (nil? (:decided (ctx/mem c))) (settling? c entry)) :continue

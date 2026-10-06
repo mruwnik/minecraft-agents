@@ -13,7 +13,8 @@
             [engine.jobs.look :refer [cell-of headings heading-name facing glance! look-around!]]
             [engine.jobs.torch :as torch]
             [jobs.build.from-plan :as from-plan]
-            [jobs.survival.dig-in :as dig-in]))
+            [jobs.survival.dig-in :as dig-in]
+            [engine.jobs.world :as known]))
 
 (def doc
   "Mine like a player: dig out :count more of one block kind (:block) that the body has seen, strip-tunnelling
@@ -198,7 +199,7 @@
 
 (defn check [c]
   (cond
-    (and (nil? (ctx/zones c)) (not (:ignore-zones? (:args c)))) (access/decline! c :mine.declined "mine" {:reason :no-zones})
+    (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) (access/decline! c :mine.declined "mine" {:reason :no-zones})
     (:phase (ctx/mem c)) true
     (not (:block (:args c))) false
     :else (let [{:keys [targets refused]} (scan c)]

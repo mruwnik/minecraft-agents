@@ -29,7 +29,7 @@
   {:data (reduce (fn [d [kind t data]] (mem/add-entry d kind {:t t :data data} nil)) mem/empty-data entries)
    :now now-ms})
 
-(defn died-holds [memory] ((:when died/died) nil memory {}))
+(defn died-holds [memory] (died/died nil memory {}))
 
 (def died-at [:died 1000 {:pos {:x 20 :y 64 :z 0} :inventory []}])
 (def respawned-at [:respawned 1100 {:pos {:x 0 :y 64 :z 0}}])
@@ -55,8 +55,8 @@
   (is (false? (died-holds (memory-with (+ 1000 300000) died-at respawned-at)))))
 
 (deftest died-trigger-is-registered-and-runs-the-job
-  (is (= died/died (:died triggers/all)))
-  (is (= '(jobs.survival.recover-drops) (:job died/died))))
+  (is (= died/died (:when (:died triggers/all))))
+  (is (= '(jobs.survival.recover-drops) (:job (:died triggers/all)))))
 
 ;; ---------------------------------------------------- body events to memory
 

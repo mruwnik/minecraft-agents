@@ -5,12 +5,9 @@
   take! cuts the holder like a reflex and gives the ownership token to the driver; the scheduler
   stands still (core/paused?) until the lease ends. The manual state never reaches engine.edn."
   (:require [engine.core :as core]
-            [engine.armour :as armour]
             [engine.entity-observations :as entity-observations]
+            [engine.hooks :as hooks]
             [engine.lease :as lease]
-            [engine.jobs.tools :as tools]
-            [engine.path.near :as near]
-            [engine.path.walk :as walk]
             [cljs.reader :as reader]
             [clojure.string :as str]
             ["crypto" :as crypto]))
@@ -174,7 +171,7 @@
 
 ;; ------------------------------------------------------------------ move-to through go-to's walker
 
-(defn cell-pos [pos] (near/cell-of {:x (:x pos) :y (:y pos) :z (:z pos)}))
+(defn cell-pos [pos] ((:manual/cell-of hooks/all) {:x (:x pos) :y (:y pos) :z (:z pos)}))
 
 (defn walker-result
   "The result of a walk round in moveTo's shape: {:status :pos :distance} and a :reason when it did not arrive."
@@ -191,7 +188,7 @@
   [eng args]
   (let [p (:primitives eng)
         here (js->clj (.-pos (.self p)) :keywordize-keys true)]
-    (and (some? (walk/path-world p))
+    (and ((:manual/plannable? hooks/all) p)
          (<= (core/distance here (:pos args)) (or (:maxDistance args) 64)))))
 
 (def dropped-walk
@@ -199,7 +196,7 @@
   {:status "offline" :reason "the body lost its connection; it reconnects by itself"})
 
 (defn ^:async walk-move-to!
-  "move-to as go-to walks: engine.path.near/walk-round! with doors, gates and trapdoors opened and shut again, bounded by
+  "move-to as go-to walks: the :manual/walk-round! hook (engine.hooks) with doors, gates and trapdoors opened and shut again, bounded by
   timeout-s (past it the lease's token is rotated, which cuts the walk). Resolves to a clj map in moveTo's result shape."
   [eng token {:keys [pos range]} timeout-s]
   (let [c (core/make-ctx eng {:root "manual-move-to" :slots [] :chain ["manual-move-to"] :token token :args {} :round 0 :reflex nil})
@@ -207,7 +204,7 @@
         timed-out (atom false)
         timer (js/setTimeout (fn [] (reset! timed-out true) (rotate-token! eng)) (* 1000 timeout-s))]
     (try
-      (let [round (await (near/walk-round! c cell (or range 1) {:doors :shut :timeout-s timeout-s}))]
+      (let [round (await ((:manual/walk-round! hooks/all) c cell (or range 1) {:doors :shut :timeout-s timeout-s}))]
         (if (core/offline? eng) dropped-walk (walker-result eng cell round)))
       (catch :default e
         (cond
@@ -216,69 +213,12 @@
           :else (assoc (walker-result eng cell {:status "partial"}) :reason "timeout")))
       (finally (js/clearTimeout timer)))))
 
-;; ------------------------------------------------------------------ dig holds the carried tool
-
-(def dig-floor-s "A short dig keeps the common 10 s lease." 10)
-(def dig-margin-s "Slack over the expected dig time: the look, the equip, the drop wait and latency." 8)
-(def dig-cap-s "The longest lease a dig is given, whatever digTime says." 60)
-
-(defn dig-need
-  "The tool name a dig at pos lacks: no carried tool can harvest the block there (nil when one can, or no block)."
-  [p pos]
-  (let [block (some-> (.blockAt p pos) .-name)
-        names (map :name (js->clj (.-inventory (.self p)) :keywordize-keys true))]
-    (when block (tools/harvest-need names (some-> (.harvestTools p block) (js->clj))))))
-
-(defn dig-timeout-s
-  "The lease seconds a world dig needs: the expected dig time of the tool the dig will hold (primitives digTime, the
-  carried best tool for the block) plus dig-margin-s, at least dig-floor-s and at most dig-cap-s. A dig that answers
-  no-tool at once digs nothing, so it needs only dig-floor-s."
-  [eng args]
-  (let [p (:primitives eng)
-        pos (clj->js (:pos args))
-        block (some-> (.blockAt p pos) .-name)
-        names (map :name (js->clj (.-inventory (.self p)) :keywordize-keys true))
-        ms (if (dig-need p pos) 0 (or (.digTime p pos (when block (tools/best-tool names block))) 0))]
-    (-> (+ (/ ms 1000) dig-margin-s) (max dig-floor-s) (min dig-cap-s) js/Math.ceil)))
-
-(defn ^:async dig-with-tool!
-  "A manual dig as a job digs: the best carried tool for the block is held first. A block no carried tool can harvest is
-  not dug (the dig would lose its drop): {:status \"no-tool\" :block :needed :reason}. Resolves to a JS result."
-  [eng token args]
-  (let [p (:primitives eng)
-        block (some-> (.blockAt p (clj->js (:pos args))) .-name)
-        names (map :name (js->clj (.-inventory (.self p)) :keywordize-keys true))
-        needed (when block (tools/harvest-need names (some-> (.harvestTools p block) (js->clj))))
-        tool (when block (tools/best-tool names block))]
-    (if needed
-      #js {:status "no-tool" :block block :needed needed
-           :reason (str block " needs " needed (when (not= "pickaxe" needed) " or better") "; no carried tool can harvest it")}
-      (do
-        (when (and tool (not= tool (.-held (.self p))))
-          (await (.equip p token #js {:item tool :dest "hand"})))
-        (await (.dig p token (clj->js args)))))))
-
-(defn ^:async wear!
-  "A manual wear as the wear job does it: the named carried piece, or the best carried piece for each slot that is
-  empty or worn weaker. Resolves to a JS result: {:status \"worn\" :worn [{:item :slot}]}, or {:status \"cannot\" :reason
-  \"not-armour\"|\"no-item\"}, or {:status \"failed\" ...} when the server did not take a piece."
-  [eng token args]
-  (let [p (:primitives eng)
-        self (.self p)
-        names (map :name (js->clj (.-inventory self) :keywordize-keys true))
-        r (await (armour/wear! (fn [item slot] (.equip p token (clj->js {:item item :dest slot})))
-                               (armour/worn-of (.-equipment self)) names (:item args)))]
-    (clj->js (cond
-               (= :failed (:reason r)) (assoc (select-keys r [:worn :item :status]) :status "failed" :reason (:status r))
-               (:ok r) {:status "worn" :worn (:worn r)}
-               :else {:status "cannot" :reason (name (:reason r)) :item (:item r)}))))
-
 (defn timeout-s-of
   "The lease seconds world action action with args needs."
   [eng action args]
   (cond
     (= action :move-to) (or (:timeoutS args) 10)
-    (and (= action :dig) (map? args) (valid-pos? (:pos args))) (dig-timeout-s eng args)
+    (and (= action :dig) (map? args) (valid-pos? (:pos args))) ((:manual/dig-timeout-s hooks/all) (:primitives eng) args)
     :else (:timeout (world-actions action) 10)))
 
 (defn finish-world-op!
@@ -312,8 +252,8 @@
                       (cond
                         (and (= action :move-to) (walker-applies? eng args))
                         (.then (walk-move-to! eng token args (:timeoutS call-args)) clj->js)
-                        (= action :dig) (dig-with-tool! eng token call-args)
-                        (= action :wear) (wear! eng token call-args)
+                        (= action :dig) ((:manual/dig! hooks/all) (:primitives eng) token call-args)
+                        (= action :wear) ((:manual/wear! hooks/all) (:primitives eng) token call-args)
                         :else
                         (.call (aget (:primitives eng) method) (:primitives eng) token (clj->js call-args))))
                     (catch :default e (js/Promise.reject e)))]

@@ -7,9 +7,9 @@
     :cell        [x y z] the cell to dig or fill
     :feet        [x y z] the body's feet cell (its head cell is one above)
     :zones       nil (no zone list loaded) or a vector of zones {:name :min :max :owner :allow}
-    :footprints  cells other plans claim: a set, or a map {cell plan-id} (what engine.ctx/footprints gives),
+    :footprints  cells other plans claim: a set, or a map {cell plan-id} (what engine.jobs.world/footprints gives),
                  in which case a :footprint refusal names the :plan
-    :claims      the active area claims (engine.ctx/claims)
+    :claims      the active area claims (engine.jobs.world/claims)
     :self        the body's name
     :now         the clock in ms
     :ignore-zones?  true skips the zone, claim, footprint and no-zone-list checks (a job's opt-out). The

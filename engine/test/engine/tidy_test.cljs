@@ -249,7 +249,7 @@
   ([world memory live]
    (let [s (mem/open (tu/tmp-dir) {:now (constantly 1000)})]
      (doseq [[kind data] memory] (mem/write! s kind data tidy/tidy-policy))
-     ((:when tidy-pending/trigger) (tu/fake world) (mem/view s) tidy-pending/defaults nil live))))
+     (tidy-pending/tidy-pending (tu/fake world) (mem/view s) tidy-pending/defaults nil live))))
 
 (deftest the-trigger-ignores-entries-of-a-job-that-is-still-live
   (doseq [[live expected why] [[#{"j1"} false "its job is live"]
@@ -277,9 +277,9 @@
     (is (= expected (holds? world memory)) why)))
 
 (deftest the-trigger-is-a-builtin-with-a-cooldown
-  (is (= tidy-pending/trigger (:tidy-pending triggers/all)))
-  (is (= '(jobs.survival.restore-broken) (:job tidy-pending/trigger)))
-  (is (= [:cooldown 10] ((juxt :persistence :cooldown-s) tidy-pending/trigger))))
+  (is (= tidy-pending/tidy-pending (:when (:tidy-pending triggers/all))))
+  (is (= '(jobs.survival.restore-broken) (:job (:tidy-pending triggers/all))))
+  (is (= [:cooldown 10] ((juxt :persistence :cooldown-s) (:tidy-pending triggers/all)))))
 
 (deftest a-trespass-is-restored-by-itself-through-the-trigger
   (async done

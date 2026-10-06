@@ -6,7 +6,8 @@
     worlds/<world>/zones.edn       zones (checked by engine.zones)
     worlds/<world>/claims.edn      shared-map area claims of bodies (engine.zones/parse-claims)
 
-  A world is {:state atom :said atom :opts {...}}. Jobs ask through engine.ctx (ctx/plan), which answers from memory.
+  A world is {:state atom :said atom :opts {...}}. Jobs ask through engine.jobs.world (plan, zones, claims), which
+  answers from memory.
     The files are stat-ed again at most every :every-ms, lazily, by the first read after that.
     Only files whose stamp (modification time and size) changed are read and parsed again.
     A file that turns unreadable or invalid keeps its last good copy and warns once
@@ -24,6 +25,7 @@
   (:require ["fs" :as fs]
             ["path" :as path]
             [clojure.string :as str]
+            [engine.file-sync :as fsync]
             [engine.zones :as zones]
             [plan.parse :as parse]
             [plan.shape :as shape]))
@@ -31,32 +33,6 @@
 (def default-every-ms 3000)
 
 ;; ------------------------------------------------------------------ pure bookkeeping
-
-(defn due?
-  "Whether the files should be stat-ed again: never checked, or :every-ms has passed."
-  [{:keys [checked-at every-ms]} now]
-  (or (nil? checked-at) (>= (- now checked-at) every-ms)))
-
-(defn stale-ids
-  "Ids of stamps {id stamp} that are new or whose stamp differs from the entry's."
-  [entries stamps]
-  (keep (fn [[id stamp]] (when (not= stamp (get-in entries [id :stamp])) id)) stamps))
-
-(defn drop-gone
-  "Entries without a file any more are forgotten."
-  [entries stamps]
-  (select-keys entries (keys stamps)))
-
-(defn absorb
-  "Fold one parsed file ({:value v} or {:errors [text ..]}) into entries: [entries warn], warn being nil or
-  {:id :error :kept} (kept: a last good copy is still used)."
-  [entries id stamp {:keys [value errors]}]
-  (if (empty? errors)
-    [(assoc entries id {:stamp stamp :value value}) nil]
-    (let [error (str/join "; " errors)
-          old (get-in entries [id :value])]
-      [(assoc entries id (cond-> {:stamp stamp :error error} old (assoc :value old)))
-       {:id id :error error :kept (some? old)}])))
 
 (defn claims
   "{id #{[x y z]}}: the expanded cells of each plan that has a last good copy."
@@ -95,16 +71,6 @@
 
 ;; ------------------------------------------------------------------ files
 
-(defn stamps
-  "{id [mtime size]} of the <id>.edn files of dir; a missing dir has none."
-  [dir]
-  (let [names (try (vec (.readdirSync fs dir)) (catch :default _ []))]
-    (into {} (keep (fn [f]
-                     (when (str/ends-with? f ".edn")
-                       (when-let [st (try (.statSync fs (path/join dir f)) (catch :default _ nil))]
-                         [(str/replace f #"\.edn$" "") [(.-mtimeMs st) (.-size st)]]))))
-          names)))
-
 (defn read-parsed
   "The file of id parsed with parse-fn into {:value v} or {:errors [..]}; an unreadable file is an error."
   [dir id parse-fn k]
@@ -122,12 +88,12 @@
 (defn sync-kind
   "[entries warns] for one kind of file, re-reading only what changed."
   [entries dir {:keys [parse k]}]
-  (let [now-stamps (stamps dir)]
+  (let [now-stamps (fsync/stamps dir)]
     (reduce (fn [[entries warns] id]
-              (let [[entries warn] (absorb entries id (get now-stamps id) (read-parsed dir id parse k))]
+              (let [[entries warn] (fsync/absorb entries id (get now-stamps id) (read-parsed dir id parse k))]
                 [entries (cond-> warns warn (conj warn))]))
-            [(drop-gone entries now-stamps) []]
-            (stale-ids entries now-stamps))))
+            [(fsync/drop-gone entries now-stamps) []]
+            (fsync/stale-ids entries now-stamps))))
 
 (defn file-stamp
   "[mtime size] of file, or nil when there is none."
@@ -151,7 +117,7 @@
   (cond
     (nil? stamp) [{:missing true} (when-not (:missing entry) {:missing true})]
     (= stamp (:stamp entry)) [entry nil]
-    :else (let [[entries warn] (absorb {:zones (dissoc entry :missing)} :zones stamp (parsed))]
+    :else (let [[entries warn] (fsync/absorb {:zones (dissoc entry :missing)} :zones stamp (parsed))]
             [(:zones entries) warn])))
 
 (defn read-claims
@@ -169,7 +135,7 @@
   (cond
     (nil? stamp) [{:value []} nil]
     (= stamp (:stamp entry)) [entry nil]
-    :else (let [[entries warn] (absorb {:area-claims entry} :area-claims stamp (parsed))]
+    :else (let [[entries warn] (fsync/absorb {:area-claims entry} :area-claims stamp (parsed))]
             [(:area-claims entries) warn])))
 
 (defn claims-warn-event [file {:keys [error kept]}]
@@ -196,7 +162,7 @@
   [{:keys [state opts]}]
   (when (:plans-dir opts)
     (let [now ((:now opts))]
-      (when (due? (assoc @state :every-ms (:every-ms opts)) now)
+      (when (fsync/due? (assoc @state :every-ms (:every-ms opts)) now)
         (let [old @state
               results (into {} (map (fn [[kind spec]] [kind (sync-kind (get old kind) (get opts (:dir spec)) spec)]))
                             kinds)
@@ -245,6 +211,11 @@
   ([plans blueprints zones]
    {:state (atom (assoc (data-state plans blueprints) :zones (zone-entry zones) :area-claims {:value []})) :said (atom #{}) :derived (atom {})
     :opts {}}))
+
+(defn blank
+  "A world with no plans, blueprints, zones or claims (the engine's when none is given)."
+  []
+  (of-data {} {}))
 
 (defn set-data!
   "Replace the plans and blueprints of a world made with of-data; its zones stay."

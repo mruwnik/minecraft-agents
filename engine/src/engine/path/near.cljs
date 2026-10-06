@@ -6,10 +6,10 @@
   (:require [engine.access.click :as click]
             [engine.ctx :as ctx]
             [engine.jobs.util :as u]
+            [engine.memory :as mem]
             [engine.path.executor :as executor]
             [engine.path.pass :as pass]
-            [engine.path.walk :as walk]
-            [engine.triggers.stuck :as stuck]))
+            [engine.path.walk :as walk]))
 
 (def walk-timeout-s
   "The default bound of one steer of a walk round. A caller that chases something that moves passes a shorter one, so it
@@ -65,15 +65,15 @@
   and :frontier-known true when that node lay in land earlier searches knew to their end (walk/known-land).
   With budget (go-to), each plan searches at most that many expansions (plan!): a plan still searching is the result
   {:status :searching} (walk/no-walk), nothing walked; progress false: an unfinished search walks nowhere (plan!)."
-  [c to range doors timeout-s explore one-way budget progress]
+  [c to range doors shut-also timeout-s explore one-way budget progress]
   (await (walk/settle! c))
   (let [policy (if (= :never doors) executor/policy executor/door-policy)
         announce! (fn [_kind data] (ctx/emit! c :replan :info data))
         walk-fn (fn [steps watch]
                   (if (= :never doors)
                     (walk/walk! c steps timeout-s watch)
-                    (pass/walk! c steps {:timeout-s timeout-s :doors doors :watch watch})))]
-    (when-not (= :never doors) (await (pass/shut-leftovers! c doors)))
+                    (pass/walk! c steps {:timeout-s timeout-s :doors doors :shut-also shut-also :watch watch})))]
+    (when-not (= :never doors) (await (pass/shut-leftovers! c doors shut-also)))
     (let [result (loop [walls [] stuck nil]
                    (let [plan (await (plan! c to range doors policy walls explore one-way budget progress))]
                      (if-let [no (walk/no-walk plan 0 policy)]
@@ -90,7 +90,7 @@
                            stuck (door-stuck (:cells done))
                            :else (recur (into walls (:cells done)) (:cells done)))))))]
       ;; however the walk ended, what it opened and could not shut yet (the body was in its column) is shut when in reach
-      (when-not (= :never doors) (await (pass/shut-leftovers! c doors)))
+      (when-not (= :never doors) (await (pass/shut-leftovers! c doors shut-also)))
       result)))
 
 (defn move-status
@@ -104,14 +104,14 @@
 (defn ^:async walk-round!
   "One walk-once! toward the cell pos ({:x :y :z} of whole numbers) from where the body stands (the caller has checked the
   primitives have a pathWorld), with its :moved entry {:from :to :status :target} written and the round booked for the
-  backoff as one walk (ctx/note-walk!: the status and the blocks the body moved). opts {:doors :timeout-s :explore :one-way :budget
-  :progress}: doors, explore, one-way (default :open: past a drop toward a far goal), budget and progress (default true) as walk-once!, timeout-s the bound of each steer (default walk-timeout-s). {:result :status :from :to}: result
+  backoff as one walk (ctx/note-walk!: the status and the blocks the body moved). opts {:doors :shut-also :timeout-s :explore
+  :one-way :budget :progress}: doors, shut-also (engine.path.pass), explore, one-way (default :open: past a drop toward a far goal), budget and progress (default true) as walk-once!, timeout-s the bound of each steer (default walk-timeout-s). {:result :status :from :to}: result
   is the walk's result map, status the entry's (\"partial\" too for a walk to a frontier that moved the body over a block:
   it went where a way may be, not stuck). A round whose plan is still searching (result :searching) walked nowhere and
   failed at nothing: status \"searching\", no :moved entry and no walk booked."
-  [c pos range {:keys [doors timeout-s explore one-way budget progress] :or {timeout-s walk-timeout-s one-way :open progress true}}]
+  [c pos range {:keys [doors shut-also timeout-s explore one-way budget progress] :or {timeout-s walk-timeout-s one-way :open progress true}}]
   (let [from (u/self-pos c)
-        result (await (walk-once! c [(:x pos) (:y pos) (:z pos)] range doors timeout-s explore one-way budget progress))
+        result (await (walk-once! c [(:x pos) (:y pos) (:z pos)] range doors shut-also timeout-s explore one-way budget progress))
         to (u/self-pos c)
         status (cond
                  (= :searching (:status result)) "searching"
@@ -120,7 +120,7 @@
     (when-not (= "searching" status)
       (ctx/remember! c :moved (cond-> {:from from :to to :status status :target pos}
                                 (= :no-path (:status result)) (assoc :no-path true))
-                     stuck/moved-policy)
+                     mem/moved-policy)
       (ctx/note-walk! c status (u/dist from to)))
     {:result result :status status :from from :to to}))
 

@@ -38,10 +38,6 @@
                              (and (restorable? p %) (not (tidy/unreachable? p % (:reach args)))))
                         entries)))))
 
-(def trigger
-  {:name :tidy-pending
-   :when (fn [p view args _kn live] (holds? p view args live))
-   :job '(jobs.survival.restore-broken)
-   :args defaults
-   :persistence :cooldown
-   :cooldown-s 10})
+(defn tidy-pending
+  [p view args _kn live]
+  (holds? p view args live))

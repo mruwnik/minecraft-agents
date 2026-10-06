@@ -9,7 +9,8 @@
             [engine.jobs.watch :as watch]
             [engine.path.near :as near]
             [engine.path.walk :as walk]
-            [engine.places :as places]))
+            [engine.places :as places]
+            [engine.jobs.world :as known]))
 
 (def doc
   "Walk to :pos ([x y z] or {:x :y :z}, fractions floored to the cell) until the body's cell is within :range cells of
@@ -364,6 +365,20 @@
       (:frontier-target result) (assoc :frontier-target (:frontier-target result)))
     result))
 
+(defn foreign?
+  "Whether cell [x y z] lies in, or next to, a zone of an owner other than self-name."
+  [zones self-name [x y z]]
+  (boolean (some (fn [{:keys [owner min max]}]
+                   (and (not= owner self-name)
+                        (every? true? (map (fn [v lo hi] (<= (dec lo) v (inc hi))) [x y z] min max))))
+                 zones)))
+
+(defn shut-foreign
+  "The walker's :shut-also (engine.path.pass): a block opened in or next to another owner's zone is shut again whatever
+  :doors says, so a pass through somebody's pen lets nothing out."
+  [c]
+  (fn [cell] (foreign? (known/zones c) (ctx/self-name c) cell)))
+
 (defn ^:async walk! [c pos range doors]
   (let [from (u/self-pos c)
         d (u/dist from pos)
@@ -378,6 +393,7 @@
       :else
       (let [_ (forget-known-land! c)
             {walked :result status :status to :to} (await (near/walk-round! c pos range {:doors doors :explore true
+                                                                                          :shut-also (shut-foreign c)
                                                                                           :budget walk/round-budget
                                                                                           :progress (empty? (:frontier-best (ctx/mem c)))}))
             result (known-frontier-result walked)

@@ -261,7 +261,7 @@
 
 ;; ----------------------------------------------------------------- trigger
 
-(def when-hostile-near (:when triggers/hostile-near))
+(def when-hostile-near (:when (:hostile-near triggers/all)))
 
 (defn holds? [world args]
   (when-hostile-near (tu/fake-on-floor world) {:data mem/empty-data :now 0} args))
@@ -285,7 +285,7 @@
     (is (true? (holds-with)) "never died")))
 
 (deftest hostile-near-fires-the-chooser
-  (is (= '(jobs.survival.respond-to-hostile) (:job triggers/hostile-near))))
+  (is (= '(jobs.survival.respond-to-hostile) (:job (:hostile-near triggers/all)))))
 
 ;; ------------------------------------------------------------- line of sight
 
@@ -337,7 +337,7 @@
   (is (holds? {:entities [(skeleton 1 13 0)]} {:radius 8 :ranged-radius 16}) "a skeleton at 13")
   (is (not (holds? {:entities [(zombie 13 0)]} {:radius 8 :ranged-radius 16})) "a zombie at 13 is beyond 8")
   (is (not (holds? {:entities [(skeleton 1 13 0)]} {:radius 8 :ranged-radius 10})) "beyond the ranged radius")
-  (is (= 16 (:ranged-radius (:args triggers/hostile-near))) "16 by default"))
+  (is (= 16 (:ranged-radius (:args (:hostile-near triggers/all)))) "16 by default"))
 
 (defn arrow-wall
   "Blocks of name at x 3 across z -3..3 for each y in ys, except the cells in gaps ([y z])."
@@ -630,8 +630,8 @@
   (keep (fn [[id inst]] (when (:reflex inst) id)) (:instances (core/state eng))))
 
 (deftest hostile-near-defaults-to-no-cooldown
-  (is (= :retry (:persistence triggers/hostile-near)))
-  (is (zero? (:cooldown-s triggers/hostile-near 0))))
+  (is (= :retry (:persistence (:hostile-near triggers/all))))
+  (is (zero? (:cooldown-s (:hostile-near triggers/all) 0))))
 
 (deftest respond-to-hostile-is-never-backed-off
   (is (false? (:backoff (registry/jobs 'jobs.survival.respond-to-hostile)))))

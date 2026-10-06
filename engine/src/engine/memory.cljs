@@ -107,6 +107,10 @@
   [view kind ms]
   (count (filter #(> (:t %) (- (:now view) ms)) (entries view kind))))
 
+(def moved-policy
+  "Policy of the :moved entries, written by engine.core/act after each moveTo and by the walker after each walk (go-to, walk-near!)."
+  {:cap 20 :ttl (* 10 60 1000)})
+
 (def place-policy
   "Known places (:bed, :chest): the latest one, kept until replaced."
   {:cap 1 :ttl :forever})

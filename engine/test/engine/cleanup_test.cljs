@@ -136,7 +136,7 @@
     s))
 
 (defn fires? [p s zones]
-  ((:when scaffold-left/trigger) p (mem/view s) {} (world/of-data {} {} zones)))
+  (scaffold-left/scaffold-left p (mem/view s) {} (world/of-data {} {} zones)))
 
 (deftest the-trigger-offers-cleanup-for-blocks-no-live-job-owns
   (let [p (tu/fake {:blocks {"0,64,0" "dirt"} :unloaded ["50,64,0"]})]
@@ -148,8 +148,8 @@
     (is (false? (fires? p (doto (trigger-store [(entry [0 64 0])] []) (ledger/hold! [[0 64 0]])) [])) "held")))
 
 (deftest the-trigger-is-a-builtin
-  (is (= scaffold-left/trigger (:scaffold-left triggers/all)))
-  (is (= '(jobs.access.cleanup) (:job scaffold-left/trigger))))
+  (is (= scaffold-left/scaffold-left (:when (:scaffold-left triggers/all))))
+  (is (= '(jobs.access.cleanup) (:job (:scaffold-left triggers/all)))))
 
 ;; ------------------------------------------------------------------ against the fake world
 

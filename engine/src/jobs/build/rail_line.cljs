@@ -6,7 +6,8 @@
             [engine.placement :as placement]
             [jobs.build.from-plan :as build]
             [plan.rail :as rail]
-            [plan.shape :as shape]))
+            [plan.shape :as shape]
+            [engine.jobs.world :as known]))
 
 (def doc
   "Build the rail line a plan wants (:plan, optionally only its :part) and prove a ridden cart can run it.
@@ -65,7 +66,7 @@
   [c]
   (let [{:keys [plan part]} (:args c)
         p (:primitives c)
-        answer (ctx/plan c plan)
+        answer (known/plan c plan)
         cells (when (and answer (not (:broken answer)))
                 (build/judged p answer part (set (keys (build/carried-counts p)))))
         chain (when (seq cells) (rail/line cells))
@@ -76,7 +77,7 @@
                                          :text (str "its rail cells are not one line: " (name (:error chain))
                                                     (when (:at chain) (str " at " (pr-str (:at chain)))))}
                                         (select-keys chain [:at]))
-                  (and (nil? (ctx/zones c)) (not (:ignore-zones? (:args c)))) {:reason :no-zones :text "no zone list has been read"})]
+                  (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) {:reason :no-zones :text "no zone list has been read"})]
     (if-not trouble
       {:cells cells}
       (do (decline! c trouble)

@@ -4,7 +4,8 @@
             [engine.jobs.util :as u]
             [engine.path.near :as near]
             [jobs.items.smelt :as smelt]
-            [jobs.storage.deposit :as deposit]))
+            [jobs.storage.deposit :as deposit]
+            [engine.jobs.world :as known]))
 
 (def doc
   "Carry :count more of :item (a planting material) than at the start, renewably.
@@ -86,7 +87,7 @@
 (defn plan-chest
   "{:chest [x y z]} of the plan's chest cell, or {:trouble reason}."
   [c id]
-  (let [answer (ctx/plan c id)
+  (let [answer (known/plan c id)
         cell (some #(when (chest-want? (:want %)) (:pos %)) (:cells answer))]
     (cond
       (nil? answer) {:trouble :plan-missing}
@@ -142,7 +143,7 @@
     (cond
       (= :unknown m) (decline! c :no-source)
       (= :chest m) (if-let [reason (:trouble (chest-target c))] (decline! c reason) true)
-      (and (nil? (ctx/zones c)) (not (:ignore-zones? (:args c)))) (decline! c :no-zones)
+      (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) (decline! c :no-zones)
       (or (:goal (ctx/mem c)) (seq (source-blocks c))) true
       (and (= :stalk m) (stalks-in-range? c)) (decline! c :too-short)
       :else (ctx/wait c {:reason :nothing-in-range :radius (:radius (:args c))}))))

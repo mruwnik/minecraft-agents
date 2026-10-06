@@ -126,12 +126,7 @@
         (.set clocks kn clock)
         (boolean (seq (settled clock (:now view) (* 1000 open-s))))))))
 
-(def trigger
+(defn pen-gate
   "Holds when holds? says so; args :radius :min-dist :open-s :quiet-s :held-s. The job it starts shuts the gate."
-  {:name :pen-gate
-   :when (fn [world view args kn]
-           (if kn (holds? world view args kn) false))
-   :job '(jobs.animals.shut-gate)
-   :args defaults
-   :persistence :cooldown
-   :cooldown-s 5})
+  [world view args kn]
+  (if kn (holds? world view args kn) false))

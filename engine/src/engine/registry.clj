@@ -1,7 +1,9 @@
 (ns engine.registry
-  "Compile time: find every job namespace under the jobs/ source directory,
-  check its exports, and emit the job registry. See README.md, Jobs."
-  (:require [clojure.java.io :as io]
+  "Compile time: find every job namespace under the jobs/ source directory, check its exports, and emit the job
+  registry; read the default trigger set (triggers/defaults.edn) and emit the trigger registry, and the engine
+  hooks (hooks.edn). See README.md, Jobs and Triggers."
+  (:require [clojure.edn :as edn]
+            [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.tools.reader :as reader]
             [clojure.tools.reader.reader-types :as rt]))
@@ -50,30 +52,32 @@
         (str/replace "_" "-")
         symbol)))
 
+(defn job?
+  "A job file defines check and round (the required exports); any other file under jobs/ is a helper."
+  [defines]
+  (every? (fn [[k required?]] (or (not required?) (defines k))) exports))
+
 (defn describe
-  "{:ns sym :defines #{...}} for a job file, or throws with a message naming it."
+  "{:ns sym :defines #{...}} for a job file, nil for a helper file (no check or no round), or throws when a job
+  file's ns does not match its path."
   [dir file]
   (let [forms (read-forms file)
         ns-form (first forms)
         ns-sym (when (and (seq? ns-form) (= 'ns (first ns-form))) (second ns-form))
         want (expected-ns dir file)
-        defines (defined-names forms)
-        missing (sort (keep (fn [[k required?]] (when (and required? (not (defines k))) k)) exports))]
+        defines (defined-names forms)]
     (cond
+      (not (job? defines)) nil
       (not= want ns-sym)
       (throw (ex-info (str "job file " (.getPath file) " must declare (ns " want " ...), found " (pr-str ns-sym))
                       {:file (.getPath file)}))
-      (seq missing)
-      (throw (ex-info (str "job namespace " want " must define " (str/join " and " missing)
-                           " (a job namespace exports check and round)")
-                      {:ns want :missing missing}))
       :else {:ns want :defines defines})))
 
 (defn job-namespaces
-  "Every job namespace under jobs/, checked, in path order."
+  "Every job namespace under jobs/, checked, in path order. Helper files are left out."
   []
   (if-let [dir (jobs-dir)]
-    (mapv #(describe dir %) (job-files dir))
+    (vec (keep #(describe dir %) (job-files dir)))
     []))
 
 ;; Metadata for tooling (the dashboard): what a file declares, without the export checks.
@@ -117,10 +121,13 @@
         (assoc base :error (str "unreadable: " (ex-message e)))))))
 
 (defn job-metadata
-  "file-metadata of every job file under jobs/, in path order."
+  "file-metadata of every job file under jobs/ (helpers left out), in path order."
   []
   (if-let [dir (jobs-dir)]
-    (mapv #(file-metadata (expected-ns dir %) %) (job-files dir))
+    (vec (keep (fn [f] (let [id (expected-ns dir f)]
+                         (when (job? (try (defined-names (read-forms f)) (catch Exception _ #{'check 'round})))
+                           (file-metadata id f))))
+               (job-files dir)))
     []))
 
 (defmacro job-registry
@@ -133,3 +140,133 @@
                                     :doc (ref 'doc) :args (ref 'args)
                                     :backoff (ref 'backoff)}])))
         (job-namespaces)))
+
+;; ------------------------------------------------------------------ triggers and hooks
+
+(defn read-edn-resource
+  "The EDN data of classpath resource path, or nil when there is none."
+  [path]
+  (when-let [r (io/resource path)]
+    (edn/read-string (slurp r))))
+
+(defn ns-file
+  "The source file of namespace ns-sym on the classpath, or nil."
+  [ns-sym]
+  (let [base (-> (str ns-sym) (str/replace "-" "_") (str/replace "." "/"))]
+    (some-> (some #(io/resource (str base %)) [".cljs" ".cljc"]) io/file)))
+
+(defn check-ref
+  "The qualified symbol sym, checked to name a def or defn of a namespace on the classpath; what is the key for
+  the message."
+  [what sym]
+  (let [file (when (qualified-symbol? sym) (ns-file (symbol (namespace sym))))]
+    (cond
+      (not (qualified-symbol? sym))
+      (throw (ex-info (str what " must be a qualified symbol ns/name, found " (pr-str sym)) {:what what :sym sym}))
+      (nil? file)
+      (throw (ex-info (str what " " sym ": no source file for namespace " (namespace sym)) {:what what :sym sym}))
+      (not ((defined-names (read-forms file)) (symbol (name sym))))
+      (throw (ex-info (str what " " sym ": " (namespace sym) " defines no " (name sym)) {:what what :sym sym}))
+      :else sym)))
+
+(defn triggers-dir
+  "The triggers/ directory on the classpath (engine/src/triggers), or nil."
+  []
+  (some-> (io/resource "triggers") io/file))
+
+(defn trigger-files-namespaces
+  "The namespace of each source file under triggers/."
+  []
+  (if-let [dir (triggers-dir)]
+    (mapv #(expected-ns dir %) (job-files dir))
+    []))
+
+(defn trigger-defaults
+  "The default trigger set, resource triggers/defaults.edn: {:facts sym :triggers [{:id :when :job :args
+  :persistence :cooldown-s} ...]}, checked: every :when names a fn that exists, in a namespace under triggers/ once
+  that folder holds any; ids unique. {} when absent."
+  []
+  (let [{:keys [facts triggers] :as data} (or (read-edn-resource "triggers/defaults.edn") {})
+        repeated (keep (fn [[id n]] (when (> n 1) id)) (frequencies (map :id triggers)))
+        in-dir (set (trigger-files-namespaces))]
+    (when (seq repeated)
+      (throw (ex-info (str "triggers/defaults.edn: trigger id repeated: " (str/join ", " repeated)) {:ids repeated})))
+    (doseq [{id :id when-fn :when} triggers]
+      (when-not (keyword? id)
+        (throw (ex-info (str "triggers/defaults.edn: :id must be a keyword, found " (pr-str id)) {:id id})))
+      (check-ref (str "trigger " id " :when") when-fn)
+      (when (and (seq in-dir) (not (in-dir (symbol (namespace when-fn)))))
+        (throw (ex-info (str "trigger " id " :when " when-fn ": not a namespace under triggers/") {:id id}))))
+    (when facts (check-ref "triggers/defaults.edn :facts" facts))
+    data))
+
+(defn trigger-namespaces
+  "Every namespace the trigger registry needs loaded: each file under triggers/, and the namespaces the default
+  trigger set names (:when fns and :facts)."
+  []
+  (let [{:keys [facts triggers]} (trigger-defaults)
+        named (map (comp symbol namespace) (cond-> (map :when triggers) facts (conj facts)))]
+    (vec (distinct (concat (trigger-files-namespaces) named)))))
+
+(defmacro trigger-registry
+  "{id {:name id :when fn :job '(spec) :args ... :persistence ... :cooldown-s ...}} for every trigger of the
+  default trigger set; only the keys a line gives. :args, :persistence and :cooldown-s are emitted as code (a
+  qualified symbol reads that var)."
+  []
+  (into {}
+        (map (fn [{:keys [id job] :as line}]
+               [id (cond-> (-> (dissoc line :id) (assoc :name id))
+                     (contains? line :job) (assoc :job (list 'quote job)))]))
+        (:triggers (trigger-defaults))))
+
+(defmacro facts-table
+  "The facts table the default trigger set names (:facts), or {}."
+  []
+  (or (:facts (trigger-defaults)) {}))
+
+(defn trigger-metadata
+  "For tooling (the dashboard): one entry per default trigger {:id :fn :file :ns-doc :doc :job :args}, :doc the
+  fn's docstring."
+  []
+  (for [{id :id when-fn :when job :job args :args} (:triggers (trigger-defaults))
+        :let [file (ns-file (symbol (namespace when-fn)))
+              forms (read-forms file)
+              form (first (filter #(defining? (name when-fn) %) forms))
+              doc (when (seq? form) (let [d (nth form 2 nil)] (when (string? d) d)))]]
+    {:id (name id) :fn (str when-fn) :file (repo-path file) :ns-doc (ns-doc forms) :doc doc
+     :job (pr-str job) :args args}))
+
+(def hook-keys
+  "Every hook the engine calls, and what for."
+  {:world/open "the world store over a world folder's files (engine.main)"
+   :world/blank "an empty world store (engine.core, when none is given)"
+   :manual/cell-of "the cell of a position (manual move-to)"
+   :manual/plannable? "whether the body can sense the world for path planning (manual move-to)"
+   :manual/walk-round! "one walk round toward a cell (manual move-to)"
+   :manual/dig-timeout-s "the lease seconds a manual dig needs"
+   :manual/dig! "a manual dig holding the best carried tool"
+   :manual/wear! "a manual wear"})
+
+(defn hook-defs
+  "The hooks, resource jobs/hooks.edn: {hook-key qualified-fn-symbol}, checked: every key of hook-keys given, no
+  other, each naming a def that exists."
+  []
+  (let [data (or (read-edn-resource "jobs/hooks.edn") {})
+        missing (remove (set (keys data)) (keys hook-keys))
+        unknown (remove hook-keys (keys data))]
+    (when (seq missing)
+      (throw (ex-info (str "jobs/hooks.edn lacks " (str/join ", " missing)) {:missing missing})))
+    (when (seq unknown)
+      (throw (ex-info (str "jobs/hooks.edn: unknown hook " (str/join ", " unknown)) {:unknown unknown})))
+    (doseq [[k sym] data] (check-ref (str "hook " k) sym))
+    data))
+
+(defn hook-namespaces
+  "The namespaces the hooks name."
+  []
+  (vec (distinct (map (comp symbol namespace) (vals (hook-defs))))))
+
+(defmacro hook-table
+  "{hook-key fn} of jobs/hooks.edn."
+  []
+  (hook-defs))

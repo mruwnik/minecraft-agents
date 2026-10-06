@@ -8,8 +8,9 @@
   - :shut: the walker shuts what it opened.
   - :leave-open: it leaves it open.
   - :never: the plan has no such step.
-  A block opened inside a zone of another owner, or next to one, is shut whatever the policy, so a pass through
-  somebody's pen lets nothing out. The walker only shuts a block it found shut, never one that was open already.
+  :shut-also (a fn of cell [x y z]) shuts a block whatever the policy when it says so: go-to's passes one for blocks in
+  or next to another owner's zone, so a pass through somebody's pen lets nothing out. The walker only shuts a block it
+  found shut, never one that was open already.
 
   Every block the walker opens gets an :opened memory entry {:cell {:x :y :z} :by job-id :t ms :shut? bool} before the
   click (:shut? false: the policy leaves it open). The entry is dropped when the block is shut.
@@ -79,14 +80,6 @@
         end (apply min (remove nil? [cut clear last-i]))]
     {:end end :open (when (and k (= end cut)) k)}))
 
-(defn foreign?
-  "Whether cell [x y z] lies in, or next to, a zone of an owner other than self-name."
-  [zones self-name [x y z]]
-  (boolean (some (fn [{:keys [owner min max]}]
-                   (and (not= owner self-name)
-                        (every? true? (map (fn [v lo hi] (<= (dec lo) v (inc hi))) [x y z] min max))))
-                 zones)))
-
 ;; ---------------------------------------------------------------- the body's side
 
 (defn block-at [c {:keys [x y z]}] (.blockAt (:primitives c) #js {:x x :y y :z z}))
@@ -94,9 +87,9 @@
 (defn self-name [c] (.-username (.self (:primitives c))))
 
 (defn shut?
-  "Whether the walker shuts the block at cell after passing it, under policy doors."
-  [c doors {:keys [x y z]}]
-  (or (= :shut doors) (foreign? (ctx/zones c) (self-name c) [x y z])))
+  "Whether the walker shuts the block at cell after passing it, under policy doors and the caller's shut-also."
+  [doors shut-also {:keys [x y z]}]
+  (boolean (or (= :shut doors) (and shut-also (shut-also [x y z])))))
 
 (defn ^:async open-block!
   "Open the block at cell by hand unless it is open. {:result :opened :column} (the walker opened it, its entry written,
@@ -173,13 +166,13 @@
         kept))))
 
 (defn ^:async open-all!
-  "Open each block of cells (a step's :opens), the walker's policy doors deciding which it will shut again: {:pending the
-  columns to shut, :stuck the cells that would not open}."
-  [c cells doors]
+  "Open each block of cells (a step's :opens), the walker's policy doors and shut-also deciding which it will shut again:
+  {:pending the columns to shut, :stuck the cells that would not open}."
+  [c cells doors shut-also]
   (loop [todo cells pending [] stuck []]
     (if-let [o (first todo)]
       (let [cell (select-keys o [:x :y :z])
-            will-shut? (shut? c doors cell)
+            will-shut? (shut? doors shut-also cell)
             {:keys [result column]} (await (open-block! c cell will-shut?))]
         (recur (rest todo)
                (cond-> pending (and (= :opened result) will-shut?) (conj column))
@@ -194,7 +187,7 @@
   look-ahead (engine.path.walk/watch-stop) of every segment walked with nothing left to shut behind, the rest of the plan as
   its :ahead. A walk that ends off its plan or stuck still shuts what
   it can; what it cannot (the body is in its column, or the walk was cut) keeps its :opened entry."
-  [c steps {:keys [timeout-s doors watch]}]
+  [c steps {:keys [timeout-s doors shut-also watch]}]
   (let [last-i (dec (count steps))]
     (loop [steps (with-climbs steps) s 0 pending [] ms 0]
       (let [{e :end k :open} (segment steps s pending)
@@ -213,21 +206,21 @@
           (recur steps e pending ms)
 
           :else
-          (let [{opened :pending :keys [stuck]} (await (open-all! c (:opens (nth steps k)) doors))]
+          (let [{opened :pending :keys [stuck]} (await (open-all! c (:opens (nth steps k)) doors shut-also))]
             (if (seq stuck)
               [{:status :door-stuck :cells stuck :at (body-at c)} ms]
               (recur (update steps k dissoc :opens) e (into pending opened) ms))))))))
 
 (defn ^:async shut-leftovers!
   "At the start of a round: shut the blocks an earlier round of this job opened and left (a walk cut between the open and the
-  shut) that are within leftover-reach, when the policy doors says so and the body is out of their column."
-  [c doors]
+  shut) that are within leftover-reach, when the policy doors (or shut-also) says so and the body is out of their column."
+  [c doors shut-also]
   (let [mine (filterv #(= (:id c) (:by %)) (map :data (mem/entries (ctx/view c) :opened)))]
     (loop [todo mine]
       (when-let [{:keys [cell]} (first todo)]
         (let [b (block-at c cell)
               col (column-of cell (click/props-of b))]
-          (when (and (shut? c doors cell)
+          (when (and (shut? doors shut-also cell)
                      (<= (u/dist (u/self-pos c) cell) leftover-reach)
                      (not (in-column? col (walk/body-cell c))))
             (await (shut-column! c col)))

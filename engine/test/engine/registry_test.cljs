@@ -1,7 +1,8 @@
 (ns engine.registry-test
   (:require [cljs.test :refer [deftest is]]
             [engine.expr :as expr]
-            [engine.registry :as registry]))
+            [engine.registry :as registry]
+            [engine.triggers :as triggers]))
 
 (def migrated
   '#{jobs.survival.breathe jobs.survival.unwedge jobs.survival.extinguish
@@ -50,3 +51,26 @@
   (is (re-find #"jobs.time.wait-for-dusk has no arg :bogus; it takes no args"
                (expr/problem registry/jobs '(jobs.time.wait-for-dusk {:bogus 1}))))
   (is (nil? (expr/problem registry/jobs '(jobs.movement.go-to {:pos [50 40 3]})))))
+
+(deftest the-trigger-registry-holds-the-default-trigger-set
+  (is (= #{:suffocating :burning :wedged :hostile-near :hungry :night :stuck :died :pen-gate :door-left
+           :inventory-nearly-full :scaffold-left :tidy-pending :mounted :player-joined}
+         (set (keys triggers/all))))
+  (doseq [[id t] triggers/all]
+    (is (= id (:name t)))
+    (is (fn? (:when t)) (str id))
+    (is (seq? (:job t)) (str id))
+    (is (map? (:args t)) (str id))
+    (is (#{:cooldown :retry :stop} (:persistence t)) (str id))))
+
+(deftest trigger-lines-keep-their-defaults
+  (is (= {:name :player-joined :job '(jobs.debug.notify {:text "player joined"}) :args {:window-s 10}
+          :persistence :cooldown :cooldown-s 10}
+         (dissoc (:player-joined triggers/all) :when)))
+  (is (= {:name :scaffold-left :job '(jobs.access.cleanup) :args {} :persistence :stop}
+         (dissoc (:scaffold-left triggers/all) :when))
+      "a line without :cooldown-s has none"))
+
+(deftest the-facts-table-is-the-one-the-defaults-name
+  (is (contains? triggers/facts 'health))
+  (is (fn? (:read (get triggers/facts 'stuck)))))

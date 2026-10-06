@@ -7,7 +7,8 @@
             [engine.jobs.util :as u]
             [engine.path.near :as near]
             [jobs.farm.tidy :as tidy]
-            [jobs.forestry.maintain :as maintain]))
+            [jobs.forestry.maintain :as maintain]
+            [engine.jobs.world :as known]))
 
 (def doc
   "Get the planting spots of a forest plan ready. A spot is a planned tree cell (want {:tree species}); the cell
@@ -252,10 +253,10 @@
   "{:trees {pos species} :planned #{[x y z]}} for the plan, or {:trouble text} (warned once per reason)."
   [c]
   (let [{:keys [plan part]} (:args c)
-        answer (ctx/plan c plan)
+        answer (known/plan c plan)
         trees (maintain/tree-cells answer part)
         trouble (or (maintain/plan-trouble answer trees)
-                    (when (and (nil? (ctx/zones c)) (not (:ignore-zones? (:args c)))) "no zone list"))]
+                    (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) "no zone list"))]
     (if-not trouble
       {:trees trees :planned (set (map (comp vec :pos) (:cells answer)))}
       (do (ctx/warn-once! c [plan trouble] :prepare.declined

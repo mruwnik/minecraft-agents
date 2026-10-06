@@ -115,7 +115,7 @@
 
 ;; ------------------------------------------------------------------ the trigger
 
-(def when-gate (:when pg/trigger))
+(def when-gate pg/pen-gate)
 
 (defn fake-at
   "A fake world: the gate of pen-a open or shut, the body at x z."
@@ -128,7 +128,7 @@
 (defn holds-over
   "Ask the trigger at each time in times; the answers."
   [p kn times & [data]]
-  (let [args (:args pg/trigger)]
+  (let [args (:args (:pen-gate triggers/all))]
     (mapv #(boolean (when-gate p {:data (or data mem/empty-data) :now %} args kn)) times)))
 
 (defn knowledge [& plans] (world/of-data (into {} (map (juxt :id identity)) plans) {}))
@@ -155,7 +155,7 @@
   (let [p (fake-at true 2 5)
         kn (knowledge pen-a)
         at-z (fn [z] (fake/swap-self! p assoc :pos [2 64 z]))
-        ask (fn [t] (boolean (when-gate p {:data mem/empty-data :now t} (:args pg/trigger) kn)))]
+        ask (fn [t] (boolean (when-gate p {:data mem/empty-data :now t} (:args (:pen-gate triggers/all)) kn)))]
     (is (= [false false false false] (mapv ask [0 1000 2000 3000])) "away for 3 s")
     (at-z 1)
     (is (false? (ask 3500)) "back at the gate (a job holding it open on purpose)")
@@ -169,9 +169,9 @@
            (holds-over (fake-at true 2 5) (knowledge pen-a) times data)))))
 
 (deftest the-trigger-is-registered-with-the-job-that-shuts-the-gate
-  (is (= pg/trigger (:pen-gate triggers/all)))
-  (is (= '(jobs.animals.shut-gate) (:job pg/trigger)))
-  (is (= :cooldown (:persistence pg/trigger))))
+  (is (= pg/pen-gate (:when (:pen-gate triggers/all))))
+  (is (= '(jobs.animals.shut-gate) (:job (:pen-gate triggers/all))))
+  (is (= :cooldown (:persistence (:pen-gate triggers/all)))))
 
 ;; ------------------------------------------------------------------ the job
 

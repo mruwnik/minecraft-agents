@@ -28,14 +28,9 @@
   [memory cell]
   (boolean (and memory (some #(= cell (:cell (:data %))) (mem/entries memory :unwedge-blocked)))))
 
-(def wedged
+(defn wedged
   "Holds when the feet cell holds a full block, unless unwedge recently found it cannot free that cell.
   A danger reflex: cooldown 0; the :unwedge-blocked entry (10 min) is what stops a refire flood."
-  {:name :wedged
-   :when (fn [world memory _args]
-           (let [cell (wedged-cell world)]
-             (and (some? cell) (not (blocked-here? memory cell)))))
-   :job '(jobs.survival.unwedge)
-   :args {}
-   :persistence :cooldown
-   :cooldown-s 0})
+  [world memory _args]
+  (let [cell (wedged-cell world)]
+    (and (some? cell) (not (blocked-here? memory cell)))))

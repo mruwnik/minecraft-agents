@@ -4,7 +4,8 @@
             [engine.jobs.apiary :as apiary]
             [engine.jobs.pen :as pen]
             [jobs.animals.pen-check :as pen-check]
-            [jobs.build.from-plan :as build]))
+            [jobs.build.from-plan :as build]
+            [engine.jobs.world :as known]))
 
 (def doc
   "Build the fence a plan wants (:plan, optionally only its :part) and prove it holds animals.
@@ -65,12 +66,12 @@
   [c]
   (let [{:keys [plan part]} (:args c)
         p (:primitives c)
-        answer (ctx/plan c plan)
+        answer (known/plan c plan)
         cells (when (and answer (not (:broken answer)))
                 (build/judged p answer part (set (keys (build/carried-counts p)))))
         trouble (or (build/plan-trouble answer cells)
                     (when-not (barrier-box cells) "the plan has no fence, wall or gate cells")
-                    (when (and (nil? (ctx/zones c)) (not (:ignore-zones? (:args c)))) "no zone list has been read"))]
+                    (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) "no zone list has been read"))]
     (if-not trouble
       {:cells cells}
       (do (ctx/warn-once! c [plan trouble] :pen-build.declined

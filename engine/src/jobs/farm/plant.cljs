@@ -4,7 +4,8 @@
             [engine.ctx :as ctx]
             [engine.jobs.gate :as gate]
             [engine.jobs.util :as u]
-            [jobs.farm.harvest :as harvest]))
+            [jobs.farm.harvest :as harvest]
+            [engine.jobs.world :as known]))
 
 (def doc
   "Sow the bare farmland of a :box. A cell is bare when (x, min.y, z) is farmland and the block above is air.
@@ -111,10 +112,10 @@
   [c]
   (when-let [id (:plan (:args c))]
     (let [part (:part (:args c))
-          answer (ctx/plan c id)
+          answer (known/plan c id)
           cells (harvest/crop-cells answer part)
           trouble (or (harvest/plan-trouble answer cells)
-                      (when (nil? (ctx/zones c)) "no zone list has been read"))]
+                      (when (nil? (known/zones c)) "no zone list has been read"))]
       (if-not trouble
         {:cells cells}
         (do (ctx/warn-once! c [id trouble] :plant.declined

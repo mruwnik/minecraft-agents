@@ -4,7 +4,8 @@
             [engine.jobs.gate :as gate]
             [engine.jobs.util :as u]
             [engine.path.near :as near]
-            [engine.path.walk :as walk]))
+            [engine.path.walk :as walk]
+            [engine.jobs.world :as known]))
 
 (def doc
   "Cut the ripe crops within :radius of a centre and replant them, then collect the drops.
@@ -253,7 +254,7 @@
   [c]
   (when-let [id (:plan (:args c))]
     (let [part (:part (:args c))
-          answer (ctx/plan c id)
+          answer (known/plan c id)
           cells (crop-cells answer part)
           trouble (plan-trouble answer cells)]
       (if-not trouble

@@ -14,10 +14,6 @@
 (def defaults
   {:n 4 :min-move 1.5 :window-ms 60000 :quiet-ms 300000})
 
-(def moved-policy
-  "Policy of the :moved entries, written by engine.core/act after each moveTo and by engine.path.near after each walk (go-to, walk-near!)."
-  {:cap 20 :ttl (* 10 60 1000)})
-
 (defn dist [a b]
   (js/Math.hypot (- (:x a) (:x b)) (- (:y a) (:y b)) (- (:z a) (:z b))))
 
@@ -72,14 +68,10 @@
          (or (not-every? :no-path moves)
              (and (some? p) (reach/enclosed? p))))))
 
-(def stuck
+(defn stuck
   "Holds when body-stuck? does, with :n, :min-move, :window-ms and :quiet-ms from the args.
   Starts (jobs.maintenance.unstick); see its doc for how the two interact.
   After a give-up the :stuck entry silences the trigger for :quiet-ms (5 min). The 60 s cooldown covers only a spell
   that ended well."
-  {:name :stuck
-   :when (fn [world memory args] (body-stuck? world memory args))
-   :job '(jobs.maintenance.unstick)
-   :args defaults
-   :persistence :cooldown
-   :cooldown-s 60})
+  [world memory args]
+  (body-stuck? world memory args))
