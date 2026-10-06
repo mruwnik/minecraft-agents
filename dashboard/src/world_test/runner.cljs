@@ -171,7 +171,7 @@
         since (js/Date.now)
         offset (file-size (events-file opts))]
     (fs/mkdirSync dir #js {:recursive true})
-    (fs/writeFileSync scenario (pr-str {:register register :queue []}))
+    (fs/writeFileSync scenario (pr-str {:register [] :queue []}))
     (let [fd (fs/openSync out "a")
           child (cp/spawn "node" #js ["out/body.cjs" "--agent" (:body opts) "--world" (:world opts) "--scenario" scenario "--fresh"]
                           #js {:cwd (repo-path "engine") :stdio #js ["ignore" fd fd]})]
@@ -391,9 +391,22 @@
   (let [cmds (mapv #(f/after-command origin (:body opts) (f/case-grid c) c %) (:after c))]
     (.then (rcon! cmds) (fn [replies] (mapv #(f/judge-after origin %1 %2) (:after c) replies)))))
 
+(defn put-register!
+  "Puts the case's register entries on the running body (one triggers.mjs put each); throws when one is refused."
+  [opts register]
+  (reduce (fn [p argv]
+            (.then p (fn []
+                       (.then (exec-file (into ["engine/tools/triggers.mjs"] argv))
+                              (fn [{:keys [code out]}]
+                                (when-not (zero? code)
+                                  (throw (js/Error. (str "register put failed: " (str/trim out))))))))))
+          (js/Promise.resolve nil)
+          (f/register-put-argvs (:body opts) (:world opts) register)))
+
 (defn run-case!
-  "One run of case c on plot i; resolves to a result map."
-  [opts c i run]
+  "One run of case c on plot i; resolves to a result map. register: the entries to put on the body once it stands in
+  the built plot (the body was just started with none), nil when it keeps the register it has."
+  [opts c i run register]
   (let [grid (f/case-grid c)
         origin (f/plot-origin grid i)
         rc (f/resolve-tags c origin)
@@ -413,6 +426,7 @@
                        (.then #(rcon! (f/block-commands origin rc)))
                        (.then #(reset! plan-files (write-plans! opts rc)))
                        (.then #(rcon! (f/body-commands origin (:body opts) rc)))
+                       (.then #(when register (put-register! opts register)))
                        (.then #(sleep (* 1000 (get-in rc [:body :settle-s]))))
                        (.then (fn []
                                 (let [offset (file-size (events-file opts))
@@ -499,7 +513,7 @@
                                                              (.then (fn []
                                                                       (let [[from end] (f/plot-range (f/case-grid c))
                                                                             i (acquire-plot! (max from (:first-plot opts)) end)]
-                                                                        (-> (run-case! opts c i run)
+                                                                        (-> (run-case! opts c i run (when-not (= :keep plan) register))
                                                                             (.then (fn [r] (report! r) (swap! results conj r)))
                                                                             (.finally #(release-plot! i)))))))))))
                                          (js/Promise.resolve nil)

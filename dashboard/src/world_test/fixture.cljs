@@ -243,6 +243,24 @@
 
 (defn block-commands [origin c] (mapv #(block-command origin %) (:blocks c)))
 
+(defn register-put-argvs
+  "The `triggers.mjs` argument vectors that put each register entry on a running body, in order. The runner starts the
+  body with an empty register and puts these once the plot, the time and the body are in place, so no trigger fires
+  on the body's old spot while the case is being built."
+  [body world register]
+  (mapv (fn [{:keys [id trigger persistence cooldown-s job args backoff] condition :when}]
+          (let [id (name (or id trigger))
+                opt (fn [flag v f] (when (some? v) [flag (f v)]))]
+            (-> [body "--world" world "put" id]
+                (into (if condition (opt "--when" condition pr-str) ["--trigger" (name trigger)]))
+                (into (opt "--persistence" persistence name))
+                (into (opt "--cooldown-s" cooldown-s str))
+                (into (opt "--job" job pr-str))
+                (into (opt "--args" args pr-str))
+                (into (opt "--backoff" backoff pr-str))
+                (into ["--by" "world-test"]))))
+        register))
+
 (defn body-commands
   "Put the body at its start: on the plot, survival, healed and fed, its inventory and effects as the case says."
   [origin body c]

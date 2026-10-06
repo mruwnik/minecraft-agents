@@ -172,3 +172,13 @@
 
 (deftest clean-start-forgets-memory-and-seen-blocks
   (is (= ["memory.edn" "seen.bin"] f/clean-start-files)))
+
+(deftest register-entries-become-trigger-put-commands
+  (is (= [["Probe" "--world" "claude" "put" "night" "--trigger" "night" "--by" "world-test"]]
+         (f/register-put-argvs "Probe" "claude" [{:trigger :night}])))
+  (is (= [["Probe" "--world" "claude" "put" "wedged" "--trigger" "wedged" "--persistence" "cooldown"
+           "--cooldown-s" "0" "--job" "(jobs.survival.unwedge)" "--args" "{:radius 8}" "--by" "world-test"]]
+         (f/register-put-argvs "Probe" "claude"
+                               [{:trigger :wedged :persistence :cooldown :cooldown-s 0
+                                 :job '(jobs.survival.unwedge) :args {:radius 8}}])))
+  (is (= [] (f/register-put-argvs "Probe" "claude" []))))
