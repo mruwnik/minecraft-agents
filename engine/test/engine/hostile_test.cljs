@@ -530,6 +530,8 @@
   (is (= 16 (combat/remaining-health {:name "spider" :hits 0 :damage 6})))
   (is (= 20 (combat/remaining-health {:name "unknown_mob" :hits 0 :damage 6})) "unknown mobs count as 20")
   (is (= 6 (combat/weapon-damage "iron_sword")))
+  (is (= 5 (combat/weapon-damage "copper_sword")))
+  (is (= 9 (combat/weapon-damage "copper_axe")))
   (is (= 1 (combat/weapon-damage nil)) "a fist"))
 
 (deftest respond-finishes-a-nearly-dead-hostile-below-min-health

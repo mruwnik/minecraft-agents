@@ -53,7 +53,7 @@
 (deftest attack-gap-ms-is-the-held-weapons-cooldown
   (doseq [[item ms] [["wooden_sword" 625] ["diamond_sword" 625] ["netherite_sword" 625]
                      ["wooden_axe" 1250] ["stone_axe" 1250] ["iron_axe" 1112]
-                     ["golden_axe" 1000] ["diamond_axe" 1000] ["netherite_axe" 1000]
+                     ["copper_sword" 625] ["copper_axe" 1250] ["golden_axe" 1000] ["diamond_axe" 1000] ["netherite_axe" 1000]
                      ["iron_pickaxe" 500] ["stick" 500] [nil 500]]]
     (is (= ms (combat/attack-gap-ms item)) (str item))))
 

@@ -61,7 +61,7 @@
     (await (ctx/act c :equip #js {:item weapon :dest "hand"}))))
 
 (def axe-gap-ms
-  {"wooden_axe" 1250 "stone_axe" 1250 "iron_axe" 1112 "golden_axe" 1000 "diamond_axe" 1000 "netherite_axe" 1000})
+  {"wooden_axe" 1250 "stone_axe" 1250 "copper_axe" 1250 "iron_axe" 1112 "golden_axe" 1000 "diamond_axe" 1000 "netherite_axe" 1000})
 
 (def min-gap-ms
   "Mobs ignore damage for 0.5 s after a hit, so a swing sooner than this is wasted."
@@ -82,8 +82,8 @@
    "endermite" 8 "phantom" 20 "vindicator" 24 "enderman" 40})
 
 (def weapon-damage-by-name
-  {"wooden_sword" 4 "golden_sword" 4 "stone_sword" 5 "iron_sword" 6 "diamond_sword" 7 "netherite_sword" 8
-   "wooden_axe" 7 "golden_axe" 7 "stone_axe" 9 "iron_axe" 9 "diamond_axe" 9 "netherite_axe" 10})
+  {"wooden_sword" 4 "golden_sword" 4 "stone_sword" 5 "copper_sword" 5 "iron_sword" 6 "diamond_sword" 7 "netherite_sword" 8
+   "wooden_axe" 7 "golden_axe" 7 "stone_axe" 9 "copper_axe" 9 "iron_axe" 9 "diamond_axe" 9 "netherite_axe" 10})
 
 (defn weapon-damage
   "Damage of one hit with item-name (a fist, 1, for nil or an unknown item)."
