@@ -10,6 +10,9 @@
             :args {:n {:doc "n" :default 1} :m {:doc "m" :default 2}}}
    'jobs.p {:check (constantly true) :round noop-round
             :args {:at {:doc "cell" :type :pos :default nil} :n {:doc "n" :default 1}}}
+   'jobs.t {:check (constantly true) :round noop-round
+            :args {:k {:type :keyword} :i {:type :int} :x {:type :number :min 0 :max 10} :b {:type :bool}
+                   :s {:type :string} :it {:type :item} :e {:type :enum :values [:a :b]} :u {:doc "untyped"}}}
    'jobs.b {:check (constantly true) :round noop-round :args nil}
    'jobs.free {:check (constantly true) :round noop-round}})
 
@@ -92,3 +95,26 @@
     {:x 1 :y nil :z 3}
     "1 2 3"
     5))
+
+(deftest typed-args-that-fit-pass
+  (are [k v] (nil? (problem (list 'jobs.t {k v})))
+    :k :wood :i 3 :i -2 :x 0 :x 2.5 :x 10 :b false :b true :s "" :s "hi" :it "oak_log" :e :a :u {:any 1}
+    :k nil :i nil :e nil))
+
+(deftest typed-args-that-do-not-fit-are-refused-naming-job-arg-type-and-value
+  (are [k v re] (re-find re (problem (list 'jobs.t {k v})))
+    :k "wood" #"jobs.t :k must be a keyword, got \"wood\""
+    :i 2.5 #"jobs.t :i must be a whole number, got 2.5"
+    :i "3" #"jobs.t :i must be a whole number, got \"3\""
+    :x "5" #"jobs.t :x must be a number, got \"5\""
+    :x -1 #"jobs.t :x must be a number >= 0, got -1"
+    :x 11 #"jobs.t :x must be a number <= 10, got 11"
+    :b 1 #"jobs.t :b must be true or false, got 1"
+    :s :x #"jobs.t :s must be a string, got :x"
+    :it "" #"jobs.t :it must be an item name \(non-empty string\), got \"\""
+    :it :oak_log #"jobs.t :it must be an item name"
+    :e :c #"jobs.t :e must be one of \[:a :b\], got :c"))
+
+(deftest a-default-of-the-wrong-type-is-refused-too
+  (let [r {'jobs.d {:check (constantly true) :round noop-round :args {:n {:type :int :default "x"}}}}]
+    (is (re-find #"jobs.d :n must be a whole number" (try (expr/parse-spec r '(jobs.d)) nil (catch :default e (ex-message e)))))))

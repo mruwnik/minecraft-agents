@@ -209,7 +209,7 @@ namespace follows the path (`src/jobs/forestry/fell_tree.cljs` is `jobs.forestry
   :done)
 ```
 
-An arg that holds a position declares `:type :pos`: `[x y z]` is normalised to `{:x :y :z}`, anything else is refused at submit.
+An arg may declare `:type` (`:keyword :int :number :bool :string :item :pos`, or `:enum` with `:values`; numbers take `:min`/`:max`); a value that does not fit is refused at submit, naming job, arg, type and value. `:pos` also normalises `[x y z]` to `{:x :y :z}`. No `:type` = unchecked; nil = unset.
 
 There is no catalog to edit: adding the file adds the job. `engine.registry/jobs` is `{ns-symbol {:check :round :doc :args
 :backoff}}`, built at compile time. The build hook `engine.build-hooks/add-job-namespaces` lists every file under `jobs`

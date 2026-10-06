@@ -33,17 +33,42 @@
     (and (map? v) (every? #(number? (get v %)) [:x :y :z])) (select-keys v [:x :y :z])
     (and (sequential? v) (= 3 (count v)) (every? number? v)) (zipmap [:x :y :z] v)))
 
+(def arg-types
+  "Arg :type -> [human name, predicate]; :pos and :enum are handled apart. A spec without :type is not checked."
+  {:keyword ["a keyword" keyword?]
+   :int ["a whole number" #(and (number? %) (== % (js/Math.round %)))]
+   :number ["a number" #(and (number? %) (js/isFinite %))]
+   :bool ["true or false" boolean?]
+   :string ["a string" string?]
+   :item ["an item name (non-empty string)" #(and (string? %) (seq %))]})
+
+(defn type-problem
+  "Why v does not fit spec's :type (with :values for :enum, :min/:max for numbers), or nil. A nil v is unset and fits."
+  [spec v]
+  (let [t (:type spec)
+        [human ok?] (get arg-types t)
+        {:keys [min max values]} spec]
+    (cond
+      (or (nil? v) (nil? t) (= :pos t)) nil
+      (= :enum t) (when-not (some #(= v %) values) (str "one of " (pr-str (vec values))))
+      (nil? ok?) (str "a known :type, but the spec says " (pr-str t))
+      (not (ok? v)) human
+      (and min (number? v) (< v min)) (str human " >= " min)
+      (and max (number? v) (> v max)) (str human " <= " max))))
+
 (defn normalize-positions
-  "args with every arg its spec types :pos (a nil one is left) turned into {:x :y :z}; throws when one is neither
-  [x y z] nor {:x :y :z} of numbers, so a malformed position is refused at submit rather than run as nils."
+  "args checked against their specs' :type (see arg-types; throws naming the job, arg, expected type and the value,
+  so a bad value is refused at submit rather than failing inside the job); a :pos arg becomes {:x :y :z}, a nil one is left."
   [sym entry args]
   (reduce (fn [acc [k spec]]
             (let [v (get acc k)]
               (cond
-                (not= :pos (:type spec)) acc
-                (nil? v) acc
-                (cell v) (assoc acc k (cell v))
-                :else (fail (str sym " " k " must be [x y z] or {:x :y :z} of numbers, got " (pr-str v)) args))))
+                (and (= :pos (:type spec)) (cell v)) (assoc acc k (cell v))
+                (and (= :pos (:type spec)) (some? v))
+                (fail (str sym " " k " must be [x y z] or {:x :y :z} of numbers, got " (pr-str v)) args)
+                :else (if-let [want (type-problem spec v)]
+                        (fail (str sym " " k " must be " want ", got " (pr-str v)) args)
+                        acc))))
           args (:args entry)))
 
 (defn leaf
