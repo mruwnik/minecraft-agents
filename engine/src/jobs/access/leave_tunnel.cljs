@@ -33,7 +33,7 @@
   open: :place-failed.
 
   A walk that does not arrive (stair broken by an explosion or cave-in, a hole in its floor) is not the end. The
-  body digs its own way out with jobs.access.stair :up to the entry's height, first back along the tunnel's
+  body digs its own way out with jobs.access.stair to the entry's height (opposite the tunnel's :dir), first back along the tunnel's
   heading, then the other three (info leave-tunnel.escape; warn for each stair that stopped). Only when a
   heading stopped for an access reason (:zone :claim :footprint) does it try them all again with
   :ignore-zones? as the last resort. The new stair is left as dug, nothing is placed. Once out, torches that
@@ -156,7 +156,7 @@
   {:dir (if (= :up dir) :down :up) :y entry-y})
 
 (defn ^:async escape!
-  "One attempt of the way out: a stair up to the entry's height along the next heading; done, the body is out and the
+  "One attempt of the way out: a stair to the entry's height (opposite the tunnel's :dir) along the next heading; done, the body is out and the
   rounds go on; stopped, the next heading; none left, the walk failure stands; the stair declined (:declined: its
   wait, e.g. :no-tool, reaches this job's job.waiting)."
   [c]

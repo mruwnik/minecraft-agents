@@ -34,13 +34,12 @@
 
 (defn check [_c] true)
 
-(defn feet-of [c] (stair/feet-of c))
 
 (defn finish!
   [c reason detail]
   (let [m (ctx/mem c)
         result (merge {:status (if (= :done reason) :done :stopped) :reason reason :dug (:dug m [])
-                       :at (feet-of c)}
+                       :at (stair/feet-of c)}
                       (when-let [t (:through m)] {:through t})
                       detail)]
     (ctx/result! c result)
@@ -57,11 +56,11 @@
         p (:primitives c)]
     (if-not (and dir (pos-int? max-thick))
       (finish! c :bad-args {:why "needs :heading (:north :east :south :west) and :max-thick > 0"})
-      (if-let [{:keys [cells through]} (escape/door (escape/block-at-of p) (feet-of c) dir max-thick)]
+      (if-let [{:keys [cells through]} (escape/door (escape/block-at-of p) (stair/feet-of c) dir max-thick)]
         (do (ctx/update-mem! c assoc :cells cells :through through :dug [])
             :again)
         (finish! c :no-door {:why (str "no wall at most " max-thick " thick with a floor beyond, "
-                                       (name (:heading (:args c))) " of " (pr-str (feet-of c)))})))))
+                                       (name (:heading (:args c))) " of " (pr-str (stair/feet-of c)))})))))
 
 (defn room-for-drop?
   "A free slot, or a carried stack of what block drops (b/drops-of) under 64."
@@ -78,7 +77,9 @@
         done! (fn [] (ctx/update-mem! c dissoc :digging))]
     (cond
       (escape/protected? block) (finish! c :protected {:cell cell :block block})
-      (and (not (:started (:digging (ctx/mem c)))) (>= (get-in (ctx/mem c) [:tries cell] 0) max-cell-digs)) (finish! c :refills {:cell cell :block block})
+      (and (not (:started (:digging (ctx/mem c))))
+           (>= (get-in (ctx/mem c) [:tries cell] 0) max-cell-digs))
+      (finish! c :refills {:cell cell :block block})
       :else
       (if-let [wait (when-not (:started (:digging (ctx/mem c))) (b/child-wait c :dig 'jobs.blocks.dig args))]
         (finish! c :dig-waits {:cell cell :block block :wait wait})
@@ -104,7 +105,7 @@
         r (when (= :done w) (ctx/child-result c :walk))]
     (cond
       (= :continue w) :continue
-      (and (= :arrived (:status r)) (= through (feet-of c))) (finish! c :done {})
+      (and (= :arrived (:status r)) (= through (stair/feet-of c))) (finish! c :done {})
       :else (finish! c :step-failed {:cell through :walk (if r (select-keys r [:status :reason :why]) {:status w})}))))
 
 (defn ^:async next!

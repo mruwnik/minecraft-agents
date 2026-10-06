@@ -137,7 +137,6 @@
 
 ;; ------------------------------------------------------------------ reading the world
 
-(defn feet-of [c] (stair/feet-of c))
 
 (defn eye-of [c]
   (let [{:keys [x y z]} (u/self-pos c)]
@@ -148,7 +147,7 @@
   [c l entries zones]
   (let [{:keys [accept reach]} (:args c)]
     (merge (access/zone-input c {:ignore-zones? (:ignore-zones? (:args c))})
-           {:feet (feet-of c) :eye (eye-of c) :block-at (escape/block-at-of (:primitives c)) :entries entries
+           {:feet (stair/feet-of c) :eye (eye-of c) :block-at (escape/block-at-of (:primitives c)) :entries entries
             :can-harvest? #(tools/can-harvest? (:primitives c) %)
             :ledger (ledger/cells l) :zones zones :accept (set accept) :reach reach
             :held (:held (ctx/mem c) {})})))
@@ -182,7 +181,7 @@
   (let [p (:primitives c)
         l (ledger/open-entries (ctx/view c))
         e (ledger/entry-at l cell)
-        under? (= cell (update (feet-of c) 1 dec))]
+        under? (= cell (update (stair/feet-of c) 1 dec))]
     (if-let [why (if e (blocker (inputs c l [e] (known/zones c)) e) {:reason :gone})]
       (do (ctx/update-mem! c count-fail cell why (:give-up (:args c)))
           :again)

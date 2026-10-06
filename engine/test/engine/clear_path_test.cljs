@@ -20,26 +20,26 @@
   unless args says otherwise; its result."
   ([world stub] (run-door world stub {:heading :east :max-thick 3}))
   ([world stub args]
-  (let [clock (atom 1000000)
-        [_ sink] (tu/legacy-capture-sink)
-        p (tu/fake world)
-        out (atom :not-done)
-        parent {:check (constantly true)
-                :round (fn ^:async recording-round [c]
-                         (let [r (await (ctx/call-child c :kid job args))]
-                           (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                           r))}
-        jobs (cond-> (assoc registry/jobs 'recording-parent parent)
-               stub (assoc 'jobs.blocks.dig (assoc (get registry/jobs 'jobs.blocks.dig) :round stub)))
-        eng (core/create {:primitives p :jobs jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
-                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    (core/submit! eng '(recording-parent) {})
-    (loop [i 0]
-      (when (and (< i 60) (seq (:list (core/state eng))))
-        (swap! clock + 700)
-        (await (core/tick! eng))
-        (recur (inc i))))
-    @out)))
+   (let [clock (atom 1000000)
+         [_ sink] (tu/legacy-capture-sink)
+         p (tu/fake world)
+         out (atom :not-done)
+         parent {:check (constantly true)
+                 :round (fn ^:async recording-round [c]
+                          (let [r (await (ctx/call-child c :kid job args))]
+                            (when (= :done r) (reset! out (ctx/child-result c :kid)))
+                            r))}
+         jobs (cond-> (assoc registry/jobs 'recording-parent parent)
+                stub (assoc 'jobs.blocks.dig (assoc (get registry/jobs 'jobs.blocks.dig) :round stub)))
+         eng (core/create {:primitives p :jobs jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+     (core/submit! eng '(recording-parent) {})
+     (loop [i 0]
+       (when (and (< i 60) (seq (:list (core/state eng))))
+         (swap! clock + 700)
+         (await (core/tick! eng))
+         (recur (inc i))))
+     @out)))
 
 (deftest a-dig-child-that-waits-ends-the-door-dig-waits
   (async done
