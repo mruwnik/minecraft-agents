@@ -34,3 +34,9 @@
 
 (deftest player-help-hides-plans-check-body
   (is (not (re-find #"--body" (workspace/player-usage "  check <id> --body <name> [--inventory X]")))))
+
+(deftest player-error-cuts-only-usage-lines
+  (is (= "failed at /repo/engine/tools/foo.mjs:12\n    at x (/repo/engine/tools/bar.mjs:3:4)"
+         (workspace/player-error "failed at /repo/engine/tools/foo.mjs:12\n    at x (/repo/engine/tools/bar.mjs:3:4)")))
+  (is (= "usage: ./bin/check <id>\nbad /repo/a.mjs"
+         (workspace/player-error "usage: check.mjs <id> --body <name>\nbad /repo/a.mjs"))))

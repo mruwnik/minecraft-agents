@@ -3,7 +3,7 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { loadTools } from './agent-tools-loader.mjs'
-const tools = loadTools(['ednWrite', 'workspaceGenerate', 'workspaceRoute', 'workspaceUsage', 'workspacePlayerUsage'])
+const tools = loadTools(['ednWrite', 'workspaceGenerate', 'workspaceRoute', 'workspaceUsage', 'workspacePlayerUsage', 'workspacePlayerError'])
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 
@@ -19,14 +19,14 @@ export async function runBound (context, command, argv) {
     }
     // a tool's own error text carries its raw usage line: cut the body/world plumbing from it too
     const write = process.stderr.write.bind(process.stderr)
-    process.stderr.write = (text, ...rest) => write(typeof text === 'string' ? tools.workspacePlayerUsage(text) : text, ...rest)
+    process.stderr.write = (text, ...rest) => write(typeof text === 'string' ? tools.workspacePlayerError(text) : text, ...rest)
     try {
       return await module.main(args)
     } finally {
       process.stderr.write = write
     }
   } catch (error) {
-    process.stderr.write(`${error.message}\n`)
+    process.stderr.write(`${tools.workspacePlayerError(error.message)}\n`)
     return 2
   }
 }

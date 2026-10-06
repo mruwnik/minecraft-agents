@@ -65,6 +65,12 @@
 (defn player-usage [text]
   (reduce (fn [t [from to]] (str/replace t (js/RegExp. (.-source from) "g") to)) text player-cuts))
 
+;; Error text: only "usage:" lines are cut, so file paths and stack traces stay intact.
+(defn player-error [text]
+  (->> (str/split text #"\n" -1)
+       (map #(if (re-find #"^\s*usage:" %) (player-usage %) %))
+       (str/join "\n")))
+
 (defn wrapper [repo command]
   ;; Dynamic imports work even beneath a caller's type:commonjs package.json.
   ;; No require/__dirname or top-level await: the same script also works in ESM.
