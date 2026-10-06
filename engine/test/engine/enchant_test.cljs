@@ -65,7 +65,7 @@
 
 (defn start [world]
   (let [[seen sink] (tu/legacy-capture-sink)
-        p (tu/fake-on-floor world)
+        p (tu/seeing-all (tu/fake-on-floor world))
         dir (tu/tmp-dir)
         make (fn [] (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir dir :now #(deref clock)
                                   :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}))]
@@ -141,6 +141,14 @@
             (let [[r p] (await (enchant! world args))]
               (is (= want (:slot r)) (pr-str args))
               (is (= (- 30 want) (level p)) (pr-str args)))))))))
+
+(deftest a-table-never-seen-is-not-found
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[r p] (await (enchant! table-world {} tu/blind))]
+          (is (= "no-table" (:reason r)))
+          (is (empty? (ops p))))))))
 
 (def give-up-rows
   [["no table within reach" {:blocks {"40,64,0" "enchanting_table"}} {} "no-table"]

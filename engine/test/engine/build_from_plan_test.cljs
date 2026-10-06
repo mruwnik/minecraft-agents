@@ -12,6 +12,14 @@
 
 (def job 'jobs.build.from-plan)
 
+(deftest left-text-names-what-a-build-left
+  (are [built text] (= text (build/left-text built))
+    {} ""
+    {:refused [{:pos [1 2 3] :reason :zone}]} "refused [1 2 3] zone"
+    {:given-up {[1 2 3] :shape}} "gave up [1 2 3] shape"
+    {:short {"stone" 2 "dirt" 1}} "short of stone 2, dirt 1"
+    {:refused [{:pos [1 2 3] :reason :zone}] :short {"stone" 2}} "refused [1 2 3] zone; short of stone 2"))
+
 (defn start
   "An engine over the fake world spec with the plans {id plan} and the zones (default none; nil: never read) as its
   world data."

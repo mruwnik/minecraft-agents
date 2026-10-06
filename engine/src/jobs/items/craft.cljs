@@ -2,7 +2,9 @@
   (:require [engine.craft :as craft]
             [engine.ctx :as ctx]
             [engine.jobs.util :as u]
-            [engine.path.near :as near]))
+            [engine.path.near :as near]
+            [jobs.items.smelt :as smelt]
+            [jobs.storage.deposit :as deposit]))
 
 (def doc
   "Craft :count more of :item. 2x2 recipes work anywhere. Bigger ones need a crafting table: :table, else the
@@ -24,19 +26,10 @@
   [c]
   (string? (:item (:args c))))
 
-(defn carried
-  "How many of name the inventory holds over all stacks."
-  [p name]
-  (transduce (comp (filter #(= name (:name %))) (map :count)) + 0 (u/inventory p)))
-
 (defn nearest-table
-  "The position of the nearest crafting table within radius, or nil."
+  "The position of the nearest crafting table the body has seen within radius, or nil."
   [p radius]
-  (some-> (.blocks p #js {:radius radius :names #js ["crafting_table"] :max 1})
-          array-seq
-          first
-          .-pos
-          u/pos-of))
+  (:pos (first (smelt/seen-blocks p ["crafting_table"] radius 8))))
 
 (defn finish!
   "Hand the parent a result, made so far plus extra, and return :done."
@@ -89,16 +82,16 @@
   (let [p (:primitives c)
         {:keys [item count]} (:args c)
         _ (when-not (contains? (ctx/mem c) :start)
-            (ctx/update-mem! c assoc :start (carried p item)))
+            (ctx/update-mem! c assoc :start (deposit/carried (u/inventory p) item)))
         start (:start (ctx/mem c))
         target (+ start count)
-        have (carried p item)]
+        have (deposit/carried (u/inventory p) item)]
     (if (>= have target)
       (finish! c (- have start) {})
       (let [table (or (:table (ctx/mem c)) (:table (:args c)))
             r (await (ctx/act c :craft (clj->js {:item item :count (- target have) :table table})))
             status (.-status r)
-            made (- (carried p item) start)]
+            made (- (deposit/carried (u/inventory p) item) start)]
         (when table (ctx/update-mem! c assoc :table table))
         (case status
           "crafted" (finish! c made {})
@@ -122,5 +115,5 @@
           "full" (do (ctx/emit! c :craft.full :warn {:text "inventory is full"})
                      (finish! c made {:reason "full"}))
           "cannot" (do (ctx/emit! c :craft.cannot :warn {:text (str "cannot craft " item ": " (.-reason r))})
-                       (finish! c 0 {:reason (.-reason r)}))
+                       (finish! c made {:reason (.-reason r)}))
           (give-up! c made status))))))

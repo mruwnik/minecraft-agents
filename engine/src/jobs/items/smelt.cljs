@@ -8,8 +8,8 @@
 (def doc
   "Smelt :count of an item in a furnace, blast furnace or smoker without standing by it.
   The first round walks to the furnace, reads it, takes any output already there (it does not count) and loads
-  the input and the fuel. Fuel is worked out from the count: one fuel item smelts 8 items for coal or charcoal,
-  1.5 for wood, 0.5 for a stick. It is taken from what is carried when :fuel is nil, coal and charcoal first.
+  the input and the fuel. Fuel is worked out from the count: in a furnace one fuel item smelts 8 items for coal
+  or charcoal, 1.5 for wood, 0.5 for a stick (twice that in a blast furnace or smoker). It is taken from what is carried when :fuel is nil, coal and charcoal first.
   The job then ends its round and waits (check reason :cooking, with :furnace and :ready-at) so the body can do
   other jobs. The next round takes the output.
   The wait is decided by the clock: ready-at is now plus the cook time of the items loaded (200 ticks each in a
@@ -17,7 +17,8 @@
   the furnace block is no longer lit or no longer a furnace. It reads only memory, the clock and one block. A
   woken round that finds the cook unfinished waits again from the furnace's own bars.
   What is owed is kept in memory before the load, so a restart or cut neither loses the output nor loads twice.
-  Result: {:smelted n :wanted n}, plus :reason after a warn (smelt.gave-up) when it gives up:
+  Result: {:smelted n :wanted n}: :wanted is the count this job loaded and :smelted what came of it; input
+  already in the furnace and the output already there do not count. Plus :reason after a warn (smelt.gave-up) when it gives up:
   - no-furnace-seen (no :furnace given and none seen), no-furnace, not-a-furnace, furnace-gone (broken or
     replaced meanwhile), output-gone (input and output both gone), unreachable.
   - no-item, nothing-smeltable, not-smeltable (this kind of furnace cannot cook it, also found when it never lit).
@@ -26,7 +27,7 @@
   - furnace-busy (the input slot holds another item), furnace-full, inventory-full (the output stays in the
     furnace).
   - \"refused\" (with :zones, :claims): the furnace is in another owner's zone or claim and does not allow
-    :take. Nothing is loaded or taken. :ignore-zones? true skips the check.")
+    :put (loading) or :take (collecting, or the output already there). Nothing is loaded or taken. :ignore-zones? true skips the check.")
 
 (def args
   {:furnace {:doc "furnace, blast furnace or smoker position {:x :y :z}; when nil the nearest one the body has seen within 32 blocks that cooks :item is chosen (smelt.furnace says which), or the job ends with no-furnace-seen" :default nil}
@@ -65,16 +66,17 @@
      false)))
 
 (defn fuel-per-unit
-  "How many items one fuel item smelts, in any of the three kinds, or nil
-  when it is no fuel this job knows."
-  [name]
-  (cond
-    (#{"coal" "charcoal"} name) 8
-    (= "coal_block" name) 80
-    (= "blaze_rod" name) 12
-    (= "dried_kelp_block" name) 20
-    (re-find #"_(planks|log|wood)$" name) 1.5
-    (= "stick" name) 0.5))
+  "How many items one fuel item smelts in a kind of furnace (the quick kinds cook twice as many), or nil when it
+  is no fuel this job knows."
+  [kind name]
+  (when-let [per (cond
+                   (#{"coal" "charcoal"} name) 8
+                   (= "coal_block" name) 80
+                   (= "blaze_rod" name) 12
+                   (= "dried_kelp_block" name) 20
+                   (re-find #"_(planks|log|wood)$" name) 1.5
+                   (= "stick" name) 0.5)]
+    (* per (/ (cook-ticks "furnace") (cook-ticks kind)))))
 
 (defn fuel-rank
   "Lower burns first: coal and charcoal, then wood, then sticks, then the rest."
@@ -94,16 +96,16 @@
   [kind state]
   (let [slot (:fuel state)]
     (+ (js/Math.floor (/ (get-in state [:burn :left] 0) (cook-ticks kind)))
-       (if slot (js/Math.floor (* (or (fuel-per-unit (:name slot)) 0) (:count slot))) 0))))
+       (if slot (js/Math.floor (* (or (fuel-per-unit kind (:name slot)) 0) (:count slot))) 0))))
 
 (defn pick-fuel
   "The fuel item to load: the given one, else the one already in the slot when carried, else the best carried.
   Never the item being smelted. {:give-up reason} when there is none."
-  [{:keys [carried item fuel state]}]
-  (let [usable (fn [name] (and (not= name item) (fuel-per-unit name) (pos? (carried-count carried name))))
+  [{:keys [kind carried item fuel state]}]
+  (let [usable (fn [name] (and (not= name item) (fuel-per-unit kind name) (pos? (carried-count carried name))))
         slot-name (:name (:fuel state))]
     (cond
-      fuel (cond (nil? (fuel-per-unit fuel)) {:give-up "unknown-fuel"}
+      fuel (cond (nil? (fuel-per-unit kind fuel)) {:give-up "unknown-fuel"}
                  (usable fuel) {:fuel fuel}
                  :else {:give-up "no-fuel"})
       (and slot-name (usable slot-name)) {:fuel slot-name}
@@ -126,7 +128,7 @@
           (and (:give-up picked) (> existing e)) {:count (min n (- existing e)) :fuel nil}
           (:give-up picked) picked
           (and slot (not= (:name slot) name)) {:give-up "fuel-busy"}
-          :else (let [per (fuel-per-unit name)
+          :else (let [per (fuel-per-unit kind name)
                       units (min (js/Math.ceil (/ deficit per)) (carried-count carried name))
                       covered (- (js/Math.floor (+ existing (* units per))) e)
                       n' (max 0 (min n covered))]
@@ -184,19 +186,23 @@
   [c]
   (or (:furnace (:args c)) (:furnace (ctx/mem c))))
 
+(defn seen-blocks
+  "The blocks of names the body has seen within radius (perception's seenBlocks: memory of what it saw, never
+  x-ray) that are still that block now, nearest first, as {:name :pos}; empty without perception."
+  [p names radius max]
+  (if-let [f (aget p "seenBlocks")]
+    (->> (array-seq (.call f p #js {:radius radius :names (clj->js (vec names)) :max max}))
+         (keep (fn [b] (let [pos (u/pos-of (.-pos b))]
+                         (when (= (.-name b) (u/block-name p pos))
+                           {:name (.-name b) :pos pos})))))
+    []))
+
 (defn nearest-furnace
-  "The nearest furnace, blast furnace or smoker the body has seen (perception's seenBlocks: memory of what it saw,
-  never x-ray) within seen-radius, still that block now, that cooks item (any kind when item is nil); nil when none."
+  "The nearest furnace, blast furnace or smoker the body has seen within seen-radius, still that block now, that
+  cooks item (any kind when item is nil); nil when none."
   [c item]
-  (let [p (:primitives c)]
-    (when-let [f (aget p "seenBlocks")]
-      (some (fn [b]
-              (let [pos (u/pos-of (.-pos b))
-                    kind (.-name b)]
-                (when (and (or (nil? item) (smelts? kind item))
-                           (= kind (u/block-name p pos)))
-                  pos)))
-            (array-seq (.call f p #js {:radius seen-radius :names (clj->js (vec furnace-block?)) :max 16}))))))
+  (->> (seen-blocks (:primitives c) furnace-block? seen-radius 16)
+       (some #(when (or (nil? item) (smelts? (:name %) item)) (:pos %)))))
 
 (defn needs-attention?
   "Whether the block at pos is loaded and is no longer a lit furnace: it is not lit (the fuel ran out, or the cook
@@ -240,7 +246,9 @@
   "Hand the parent what was smelted and return :done."
   [c extra]
   (let [m (ctx/mem c)]
-    (ctx/result! c (merge {:smelted (:got m 0) :wanted (:count (:owed m) 0)} extra))
+    (ctx/result! c (merge {:smelted (max 0 (- (:got m 0) (:base (:owed m) 0)))
+                           :wanted (- (:count (:owed m) 0) (:base (:owed m) 0))}
+                          extra))
     :done))
 
 (defn stop!
@@ -280,7 +288,8 @@
         m (ctx/mem c)
         e (if (= item (get-in state [:input :name])) (get-in state [:input :count]) 0)
         target (or (:target m) (+ e count))
-        _ (ctx/update-mem! c assoc :target target :owed {:item item :count target})
+        base (if (:target m) (:base (:owed m) 0) e)
+        _ (ctx/update-mem! c assoc :target target :owed {:item item :count target :base base})
         load (cond-> {}
                (pos? count) (assoc :input {:item item :count count})
                fuel (assoc :fuel {:item (:item fuel) :count (:count fuel)}))
@@ -301,10 +310,12 @@
         plan (plan-load {:state state :carried (carried c) :item item :count count :fuel fuel :target (:target m)})]
     (if (:give-up plan)
       (stop! c (:give-up plan))
-      (let [freed (when (:output state) (await (visit! c "take" {})))]
-        (if (= "full" (:status freed))
-          (stop! c "inventory-full")
-          (await (load! c state plan)))))))
+      (if-let [v (when (:output state) (access/container-refusal c :take (furnace-of c)))]
+        (refuse! c v)
+        (let [freed (when (:output state) (await (visit! c "take" {})))]
+          (if (= "full" (:status freed))
+            (stop! c "inventory-full")
+            (await (load! c state plan))))))))
 
 (defn ^:async take!
   "Take the output with one furnace visit and add what was taken to :got. Returns the visit result: status \"full\" when the inventory has no room, :input while the furnace still holds input."
@@ -339,7 +350,9 @@
               :else (do (ctx/emit! c :smelt.done :info {:text (str "smelted " (:got (ctx/mem c))) :smelted (:got (ctx/mem c))})
                         (finish! c {}))))
     :wait (wait-until! c (wait-ms (:kind state) state))
-    :out-of-fuel (await (feed! c state))
+    :out-of-fuel (if-let [v (access/container-refusal c :put (furnace-of c))]
+                   (refuse! c v)
+                   (await (feed! c state)))
     :not-smeltable (await (stop-back! c "not-smeltable"))
     :done (let [m (ctx/mem c)]
             (if (< (:got m 0) (:count (:owed m) 0))
@@ -366,8 +379,10 @@
 (defn ^:async round-with
   "The round once the furnace is known."
   [c furnace]
-  (let [owed? (some? (:owed (ctx/mem c)))]
-    (if-let [v (access/container-refusal c :take furnace)]
+  (let [m (ctx/mem c)
+        owed? (some? (:owed m))
+        action (if (and owed? (:ready-at m)) :take :put)]
+    (if-let [v (access/container-refusal c action furnace)]
       (refuse! c v)
       (await (round-at! c furnace owed?)))))
 

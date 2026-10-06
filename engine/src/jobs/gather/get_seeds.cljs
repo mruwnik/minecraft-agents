@@ -3,6 +3,7 @@
             [engine.jobs.access :as access]
             [engine.jobs.util :as u]
             [engine.path.near :as near]
+            [jobs.items.smelt :as smelt]
             [jobs.storage.deposit :as deposit]))
 
 (def doc
@@ -116,9 +117,8 @@
         names (cond stalk? [(:block (materials item))] sources sources :else (:sources (materials item)))
         skipped (set (:skipped (ctx/mem c)))
         here (u/self-pos c)]
-    (->> (array-seq (.blocks (:primitives c) #js {:radius radius :names (clj->js names)
-                                                  :max (+ (if stalk? 512 64) (count skipped))}))
-         (map #(u/pos-of (.-pos %)))
+    (->> (smelt/seen-blocks (:primitives c) names radius (+ (if stalk? 512 64) (count skipped)))
+         (map :pos)
          (remove skipped)
          (filter #(or (not stalk?) (cut-cell? c (first names) %)))
          (sort-by #(u/dist here %))
@@ -128,7 +128,7 @@
   "Whether any block of the stalk material is within :radius (a stand there may be too short to cut)."
   [c]
   (let [{:keys [radius item]} (:args c)]
-    (pos? (.-length (.blocks (:primitives c) #js {:radius radius :names #js [(:block (materials item))] :max 1})))))
+    (boolean (seq (smelt/seen-blocks (:primitives c) [(:block (materials item))] radius 8)))))
 
 (defn decline!
   "One warn per reason, then false for the check, noting the reason with ctx/wait."

@@ -60,6 +60,19 @@
                      (apply floor (:floor spec walk-floor)))]
     (fake (-> spec (dissoc :floor :floor-block) (assoc :blocks (merge ground (:blocks spec)))))))
 
+(defn seeing-all
+  "p with seenBlocks answering every block in range as seen (stands in for perception's memory); leave it off to
+  test a body that has seen nothing."
+  [p]
+  (aset p "seenBlocks" (fn [q] (.blocks p q)))
+  p)
+
+(defn blind
+  "p with no seenBlocks: a body that has seen nothing, whatever the world holds."
+  [p]
+  (js-delete p "seenBlocks")
+  p)
+
 (defn short-walks!
   "Make the fake's walks end early, as a steer that timed out after ticks ticks (the fake walks about 0.2 blocks a tick):
   a walk-near! toward a target farther than that ends :partial. Only the first n walks when n is given."

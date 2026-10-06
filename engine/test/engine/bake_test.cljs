@@ -13,7 +13,7 @@
 (defn setup [world]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake-on-floor world)
+        p (tu/seeing-all (tu/fake-on-floor world))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen}))
@@ -93,6 +93,24 @@
             (is (= {"wheat" 30} (chest-items p)))
             (is (contains? (kinds seen) :bake.no-table))
             (is (empty? (calls p "transfer")))))))))
+
+(deftest a-table-never-seen-is-not-found
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (bake {:containers {"10,64,0" [{:name "wheat" :count 30}]} :blocks beside} {} tu/blind))]
+          (is (= {:baked 0 :deposited 0 :reason "no-table"} result))
+          (is (empty? (calls p "transfer"))))))))
+
+(deftest a-withdraw-that-gives-up-in-the-top-up-stops-the-bake
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result _ seen] (await (bake {:inventory [{:name "wheat" :count 3}] :containers {"10,64,0" [{:name "bread" :count 8}]} :blocks beside} {}
+                                           (fn [p] (.override (.-world p) "transfer" (fn [_ _ _] (js/Promise.resolve #js {:status "unreachable"}))))))]
+          (is (re-find #"^withdraw " (:reason result)))
+          (is (contains? (kinds seen) :bake.withdraw-failed))
+          (is (not (contains? (kinds seen) :bake.done))))))))
 
 (deftest less-than-a-loaf-of-wheat-is-nothing-to-do
   (async done

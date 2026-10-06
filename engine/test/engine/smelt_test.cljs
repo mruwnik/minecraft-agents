@@ -32,13 +32,19 @@
     "furnace" "coal" false))
 
 (deftest fuel-values-in-items-per-fuel-item
-  (are [item per] (= per (smelt/fuel-per-unit item))
+  (are [item per] (= per (smelt/fuel-per-unit "furnace" item))
     "coal" 8
     "charcoal" 8
     "oak_planks" 1.5
     "spruce_log" 1.5
     "stick" 0.5
     "dirt" nil))
+
+(deftest the-quick-kinds-smelt-twice-the-items-per-fuel-item
+  (are [kind item per] (= per (smelt/fuel-per-unit kind item))
+    "blast_furnace" "coal" 16
+    "smoker" "oak_planks" 3
+    "smoker" "dirt" nil))
 
 (deftest cook-times-per-kind
   (are [kind ticks] (= ticks (smelt/cook-ticks kind))
@@ -77,6 +83,11 @@
 
     {:carried (inv "raw_iron" 3 "stick" 8 "oak_planks" 4) :item "raw_iron" :count 3}
     {:item "raw_iron" :count 3 :fuel {:item "oak_planks" :count 2}}))
+
+(deftest a-quick-kind-is-not-over-fuelled
+  (are [kind item expected] (= expected (plan {:carried (inv item 20 "coal" 3) :item item :count 20 :state (assoc empty-furnace :kind kind)}))
+    "blast_furnace" "raw_iron" {:item "raw_iron" :count 20 :fuel {:item "coal" :count 2}}
+    "furnace" "raw_iron" {:item "raw_iron" :count 20 :fuel {:item "coal" :count 3}}))
 
 (deftest the-item-is-chosen-from-what-is-carried-when-not-given
   (are [m expected] (= expected (:item (plan m)))
@@ -572,6 +583,10 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= {:smelted 3 :wanted 3} (await (result-of base-world {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 3}))))
+        (is (= {:smelted 3 :wanted 3}
+               (await (result-of (assoc base-world :furnaces {pos-key {:input {:name "raw_iron" :count 2}}})
+                                 {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 3})))
+            "input already in the furnace is not counted")
         (is (= {:smelted 0 :wanted 0 :reason "no-furnace"}
                (await (result-of (dissoc base-world :blocks) {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 3}))))))))
 

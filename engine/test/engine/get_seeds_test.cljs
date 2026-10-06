@@ -11,6 +11,11 @@
             [engine.triggers :as triggers]
             [engine.world :as ew]))
 
+(defn setup-seeing
+  "h/setup over a body that has seen every block in range."
+  [world]
+  (update (h/setup world) :p tu/seeing-all))
+
 (defn spec [args] (list 'jobs.gather.get-seeds args))
 
 (defn patch
@@ -29,7 +34,7 @@
 (defn ^:async scenario
   "Submit the job with args in a world; run n ticks 700 ms apart; the setup map."
   [args world n]
-  (let [s (h/setup world)]
+  (let [s (setup-seeing world)]
     (core/submit! (:eng s) (spec args) {})
     (await (run-ticks s n 700))
     s))
@@ -57,7 +62,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (h/setup {:inventory [{:name "wheat_seeds" :count 5}]
+        (let [s (setup-seeing {:inventory [{:name "wheat_seeds" :count 5}]
                           :blocks (patch "short_grass" (range 2 6) (range 0 4)) :drops seed-drops})]
           (core/submit! (:eng s) (spec {:count 2}) {})
           (await (run-ticks s 1 700))
@@ -75,17 +80,26 @@
                 [[{} {} "nothing at all"]
                  [{} {:blocks {"2,64,0" "dirt"}} "other blocks"]
                  [{:radius 5} {:blocks {"9,64,0" "short_grass"}} "grass outside the radius"]]]
-          (let [{:keys [eng p]} (h/setup world)]
+          (let [{:keys [eng p]} (setup-seeing world)]
             (core/submit! eng (spec args) {})
             (is (nil? (core/tick! eng)) note)
             (is (zero? (count (tu/walked-to eng))) note)
             (is (zero? (dig-count {:p p})) note)))))))
 
+(deftest grass-never-seen-is-not-a-source
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (update (setup-seeing {:blocks (patch "short_grass" (range 2 6) (range 0 4)) :drops seed-drops}) :p tu/blind)]
+          (core/submit! eng (spec {:count 2}) {})
+          (is (nil? (core/tick! eng)))
+          (is (zero? (dig-count {:p p}))))))))
+
 (deftest the-check-passes-with-only-a-chest
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (h/setup {})]
+        (let [{:keys [eng]} (setup-seeing {})]
           (core/submit! eng (spec {:chest {:x 10 :y 64 :z 0}}) {})
           (await (core/tick! eng))
           (is (some? (:goal (core/job-memory eng "j1")))))))))
@@ -153,7 +167,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (h/setup {:blocks (patch "short_grass" [2 3 4] [0]) :drops seed-drops})]
+        (let [s (setup-seeing {:blocks (patch "short_grass" [2 3 4] [0]) :drops seed-drops})]
           (core/submit! (:eng s) (spec {:count 1}) {})
           (await (run-ticks s 1 700))
           (fake/add-entity! (:p s) {:id 50 :kind "item" :name "item" :item {:name "dirt" :count 1}
@@ -167,7 +181,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng clock]} (h/setup {:blocks (patch "short_grass" (range 2 6) (range 0 4)) :drops seed-drops})
+        (let [{:keys [eng clock]} (setup-seeing {:blocks (patch "short_grass" (range 2 6) (range 0 4)) :drops seed-drops})
               out (atom nil)
               parent {:check (constantly true)
                       :round (fn ^:async seeding-parent [c]
@@ -186,7 +200,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p eng] :as s} (h/setup {:blocks {"6,64,0" "short_grass" "9,64,0" "short_grass"} :drops seed-drops})]
+        (let [{:keys [p eng] :as s} (setup-seeing {:blocks {"6,64,0" "short_grass" "9,64,0" "short_grass"} :drops seed-drops})]
           (tu/short-walks! p 8 1) ; the first walk, to the nearer cell at x 6, ends partial
           (core/submit! eng (spec {:count 1}) {})
           (await (run-ticks s 40 700))
@@ -221,7 +235,7 @@
 (defn ^:async in-world
   "Submit the job with args over a fake of world sharing w; run n ticks; the setup map."
   [args world w n]
-  (let [s (start {:p (tu/fake-on-floor world) :shared w})]
+  (let [s (start {:p (tu/seeing-all (tu/fake-on-floor world)) :shared w})]
     (core/submit! (:eng s) (spec args) {})
     (await (run-ticks s n 700))
     s))
@@ -289,7 +303,7 @@
         (doseq [[args world] [[{:item "bamboo"} {}]
                               [{:item "bamboo"} {:blocks (stand "sugar_cane" 3 0 3)}]
                               [{:item "bamboo" :radius 5} {:blocks (stand "bamboo" 9 0 3)}]]]
-          (let [{:keys [eng p]} (h/setup world)]
+          (let [{:keys [eng p]} (setup-seeing world)]
             (core/submit! eng (spec args) {})
             (is (nil? (core/tick! eng)))
             (is (zero? (dig-count {:p p})))))))))
@@ -357,7 +371,7 @@
         (doseq [[args world] [[{:item "sugar_cane" :count 1} {:blocks (stand "sugar_cane" 6 0 3)}]
                               [{:count 1} {:blocks (patch "short_grass" [6] [0])}]]]
           (let [w (ew/of-data {} {} [])
-                p (tu/fake-on-floor world)
+                p (tu/seeing-all (tu/fake-on-floor world))
                 _ (.override (.-world p) "steer"
                              (fn [token a impl] (ew/set-zones! w [(assoc farm-zone :min [5 60 -2] :max [7 70 2])])
                                (impl token a)))
@@ -372,7 +386,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [dir (tu/tmp-dir)
-              p (tu/fake-on-floor {:blocks (merge (stand "sugar_cane" 3 0 3) (stand "sugar_cane" 5 2 3) (stand "sugar_cane" 7 4 3))})
+              p (tu/seeing-all (tu/fake-on-floor {:blocks (merge (stand "sugar_cane" 3 0 3) (stand "sugar_cane" 5 2 3) (stand "sugar_cane" 7 4 3))}))
               s (start {:p p :dir dir})]
           (core/submit! (:eng s) (spec {:item "sugar_cane" :count 3}) {})
           (await (run-ticks s 3 700))
@@ -440,7 +454,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [item ["carrot" "potato" "beetroot_seeds"]]
-          (let [{:keys [eng p]} (h/setup {:blocks (merge (patch "short_grass" [3] [0]) (patch "carrots" [4] [0]))})]
+          (let [{:keys [eng p]} (setup-seeing {:blocks (merge (patch "short_grass" [3] [0]) (patch "carrots" [4] [0]))})]
             (core/submit! eng (spec {:item item}) {})
             (is (nil? (core/tick! eng)) item)
             (is (zero? (dig-count {:p p})))))))))
@@ -449,7 +463,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (h/setup {})]
+        (let [s (setup-seeing {})]
           (core/submit! (:eng s) (spec {:item "carrot"}) {})
           (await (run-ticks s 5 700))
           (is (= [:no-chest] (declined-reasons s)))
@@ -487,7 +501,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (h/setup {:blocks (patch "short_grass" [3] [0])})]
+        (let [s (setup-seeing {:blocks (patch "short_grass" [3] [0])})]
           (core/submit! (:eng s) (spec {:item "coffee"}) {})
           (await (run-ticks s 5 700))
           (is (= [:no-source] (declined-reasons s)))

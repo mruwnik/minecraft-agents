@@ -14,7 +14,7 @@
 (defn setup [world zones]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake (merge {:floor tu/walk-floor} world))
+        p (tu/seeing-all (tu/fake (merge {:floor tu/walk-floor} world)))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :world (ew/of-data {} {} zones)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -169,7 +169,9 @@
       (fn ^:async t []
         (doseq [[zone extra touched?] [[{:name "forge" :min [0 60 -1] :max [2 70 1] :owner "Miles"} {} false]
                                        [{:name "forge" :min [0 60 -1] :max [2 70 1] :owner "FAKE"} {} true]
-                                       [{:name "forge" :min [0 60 -1] :max [2 70 1] :owner "Miles"} {:ignore-zones? true} true]]]
+                                       [{:name "forge" :min [0 60 -1] :max [2 70 1] :owner "Miles"} {:ignore-zones? true} true]
+                                       [{:name "forge" :min [0 60 -1] :max [2 70 1] :owner "Miles" :allow #{:put}} {} true]
+                                       [{:name "forge" :min [0 60 -1] :max [2 70 1] :owner "Miles" :allow #{:take}} {} false]]]
           (let [{:keys [eng p seen]} (setup {:blocks {"1,64,0" "furnace"}
                                              :inventory [{:name "raw_iron" :count 5} {:name "coal" :count 3}]} [zone])]
             (core/submit! eng (list 'jobs.items.smelt (merge {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 3} extra)) {})

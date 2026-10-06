@@ -34,7 +34,7 @@
   - no zone list has been read (:no-zones).
   - a cell still to build is refused by the access rules (:refused, with the list [{:pos :reason :zone|:plan}]).
   - a cell wanting a redstone block holds another block (:source-blocked, :cells). The builder never digs, so on
-    natural ground use :torch or :lever, or a raised bed.
+    natural ground put a torch or lever in the plan, or use a raised bed.
   With :all-carried (the default) it also waits, with one rail-build.short warn {item n}, until the items for
   every cell still to build are carried. An :any want counts every choice carried. Only cells seen empty are owed;
   the warn's :up-to {item n} counts the unseen cells too. With :all-carried false it builds what is carried.
@@ -48,8 +48,7 @@
    :accept {:doc "as jobs.build.from-plan" :default [:fluid-adjacent]}
    :all-carried {:doc "start only while every item still to place is carried (false: build what is carried)" :default true}
    :fix {:doc "times a rail whose settled shape is wrong is dug and placed again, then given up as :shape (0 or false: given up at once)" :default 1}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
-   :dig {:doc "not used" :default false}})
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
 ;; ------------------------------------------------------------------ the plan
 
@@ -146,8 +145,8 @@
     (cond
       (seq blocked) (do (decline! c {:reason :source-blocked :cells blocked
                                      :text (str "a redstone block cannot go at " (str/join ", " (map pr-str blocked))
-                                                ": the cell holds ground and this job never digs; use :power :torch or "
-                                                ":lever, or lay the line on a raised bed")})
+                                                ": the cell holds ground and this job never digs; put a torch or lever in the plan, "
+                                                "or lay the line on a raised bed")})
                         false)
       (seq no) (do (decline! c {:reason :refused :refused no
                                 :text (str "cells refused: " (str/join ", " (map #(str (pr-str (:pos %)) " " (name (:reason %))) no)))})
@@ -217,16 +216,6 @@
 
 (defn break-text [{:keys [pos why]}] (str (name why) " " (pr-str pos)))
 
-(defn left-text
-  "What the build left, in words: refused and given-up cells, the material short."
-  [{:keys [refused given-up short]}]
-  (str/join "; " (concat (when (seq refused)
-                           [(str "refused " (str/join ", " (map #(str (pr-str (:pos %)) " " (name (:reason %))) refused)))])
-                         (when (seq given-up)
-                           [(str "gave up " (str/join ", " (map (fn [[pos why]] (str (pr-str pos) " " (name why))) given-up)))])
-                         (when (seq short)
-                           [(str "short of " (build/shortage-text short))]))))
-
 (def max-breaks 12)
 
 (defn finish!
@@ -237,7 +226,7 @@
         built (still-wrong (:built (ctx/mem c)) cells at)
         proof (rail/judge-line cells at)
         rails (count (filter rail/rail-cell? cells))
-        left (left-text built)]
+        left (build/left-text built)]
     (if (:ok? proof)
       (ctx/emit! c :rail-build.done :info {:plan plan :cells rails :placed (:placed built)
                                            :text (str "rail line " plan " is sound, " rails " rails, placed " (:placed built))})

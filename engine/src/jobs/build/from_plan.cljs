@@ -133,6 +133,16 @@
 (defn shortage-text [short]
   (str/join ", " (map (fn [[item n]] (str item " " n)) short)))
 
+(defn left-text
+  "What a build left, in words: refused and given-up cells, the material short."
+  [{:keys [refused given-up short]}]
+  (str/join "; " (concat (when (seq refused)
+                           [(str "refused " (str/join ", " (map #(str (pr-str (:pos %)) " " (name (:reason %))) refused)))])
+                         (when (seq given-up)
+                           [(str "gave up " (str/join ", " (map (fn [[pos why]] (str (pr-str pos) " " (name why))) given-up)))])
+                         (when (seq short)
+                           [(str "short of " (shortage-text short))]))))
+
 (def tall-plants #{"tall_grass" "large_fern" "sunflower" "lilac" "rose_bush" "peony" "tall_seagrass" "pitcher_plant"})
 
 (defn companion?

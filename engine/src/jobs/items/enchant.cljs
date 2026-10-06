@@ -1,7 +1,8 @@
 (ns jobs.items.enchant
   (:require [engine.ctx :as ctx]
             [engine.jobs.util :as u]
-            [engine.path.near :as near]))
+            [engine.path.near :as near]
+            [jobs.items.smelt :as smelt]))
 
 (def doc
   "Enchant one :item at an enchanting table. Walks to the table (:table, else the nearest within :radius), reads
@@ -88,13 +89,9 @@
       (give-up! c reason {}))))
 
 (defn find-table
-  "The position of the nearest enchanting table within radius, or nil."
+  "The position of the nearest enchanting table the body has seen within radius, or nil."
   [p radius]
-  (some-> (.blocks p #js {:radius radius :names #js ["enchanting_table"] :max 1})
-          array-seq
-          first
-          .-pos
-          u/pos-of))
+  (:pos (first (smelt/seen-blocks p ["enchanting_table"] radius 8))))
 
 (defn ^:async visit!
   "One table visit through act, as a cljs map."

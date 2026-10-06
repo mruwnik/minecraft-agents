@@ -107,16 +107,6 @@
 (defn leak-text [{:keys [pos why]}]
   (str (name why) " " (pr-str [(:x pos) (:y pos) (:z pos)])))
 
-(defn left-text
-  "What the build left, in words: refused and given-up cells, the material short."
-  [{:keys [refused given-up short]}]
-  (str/join "; " (concat (when (seq refused)
-                           [(str "refused " (str/join ", " (map #(str (pr-str (:pos %)) " " (name (:reason %))) refused)))])
-                         (when (seq given-up)
-                           [(str "gave up " (str/join ", " (map (fn [[pos why]] (str (pr-str pos) " " (name why))) given-up)))])
-                         (when (seq short)
-                           [(str "short of " (build/shortage-text short))]))))
-
 (defn finish!
   "Read the pen, emit the outcome, hand the answer to the parent and end."
   [c cells]
@@ -124,7 +114,7 @@
         built (:built (ctx/mem c))
         answer (pen-check/summary (read-pen c cells))
         result (assoc answer :built built)
-        left (left-text built)]
+        left (build/left-text built)]
     (if (:closed? answer)
       (ctx/emit! c :pen-build.done :info {:plan plan :cells (:cells answer) :placed (:placed built)
                                           :text (str "pen of " plan " holds, " (:cells answer) " cells, placed " (:placed built))})

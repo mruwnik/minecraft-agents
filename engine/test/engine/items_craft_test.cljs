@@ -6,12 +6,13 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.test-util :as tu]
-            [engine.triggers :as triggers]))
+            [engine.triggers :as triggers]
+            [jobs.items.craft :as craft]))
 
 (defn setup [world]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake-on-floor world)
+        p (tu/seeing-all (tu/fake-on-floor world))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen}))
@@ -92,6 +93,23 @@
         (let [[result p seen eng] (await (craft {:inventory [{:name "wheat" :count 2}] :blocks table-block} {:item "bread"}))]
           (is (= {:made 0 :short {"wheat" 1}} result))
           (is (some #(= :craft.short (:kind %)) @seen)))))))
+
+(deftest the-nearest-table-is-one-the-body-has-seen
+  (are [see expected] (= expected (craft/nearest-table (see (:p (setup {:blocks table-block}))) 32))
+    identity table
+    tu/blind nil))
+
+(deftest craft-a-cannot-after-a-partial-batch-reports-what-was-made
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory [{:name "oak_log" :count 1}]})
+              _ (.override (.-world p) "craft"
+                           (fn ^:async f [token args impl]
+                             (await (impl token args))
+                             #js {:status "cannot" :reason "boom"}))
+              result (await (child-outcome eng job {:item "oak_planks" :count 4} 8))]
+          (is (= {:made 4 :reason "boom"} result)))))))
 
 (deftest craft-an-unknown-item-cannot
   (async done

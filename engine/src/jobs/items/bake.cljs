@@ -2,6 +2,7 @@
   (:require [engine.ctx :as ctx]
             [engine.jobs.util :as u]
             [engine.path.near :as near]
+            [jobs.items.smelt :as smelt]
             [jobs.storage.deposit :as deposit]))
 
 (def doc
@@ -75,10 +76,10 @@
 
 (defn nearest-table
   "The position of the crafting table nearest the chest within radius of it
-  (found within 16 of the body), or nil."
+  (one the body has seen within 16 of it), or nil."
   [p chest radius]
-  (->> (array-seq (.blocks p #js {:radius 16 :names #js ["crafting_table"] :max 8}))
-       (map #(u/pos-of (.-pos %)))
+  (->> (smelt/seen-blocks p ["crafting_table"] 16 8)
+       (map :pos)
        (filter #(<= (u/dist % chest) radius))
        (sort-by #(u/dist % chest))
        first))
@@ -169,6 +170,8 @@
         (ctx/update-mem! c update :topped (fnil + 0) (max 0 (- (carried p "bread") before)))
         (cond
           (and (= :done r) (= :refused (:reason out))) (refused! c :bake.refused out)
+          (and (= :done r) (:gave-up out)) (stop! c :bake.withdraw-failed (str "cannot take the bread out: " (:reason out))
+                                                  (str "withdraw " (:reason out)))
           (= :done r) (finish-done! c)
           :else :continue)))))
 

@@ -5,6 +5,7 @@
             [engine.core :as core]
             [engine.harvest-test :as h]
             [engine.jobs.rail :as builder]
+            [engine.registry :as registry]
             [engine.takeover :as takeover]
             [jobs.build.rail-line :as rail-line]
             [engine.fake :as fake]
@@ -13,6 +14,9 @@
             [plan.shape :as shape]))
 
 (def job 'jobs.build.rail-line)
+
+(deftest rail-line-has-no-dig-arg
+  (is (not (contains? (:args (get registry/jobs job)) :dig))))
 
 (def from [0 64 0])
 (def to [29 64 0])
@@ -152,7 +156,7 @@
           (is (= [{:plan "line" :reason :source-blocked :cells [[3 63 0] [25 63 0]]}] (:declined r)))
           (is (= 1 (:warns r)))
           (is (= 0 (:places r)))
-          (is (every? #(re-find % (first (:texts r))) [#"\[3 63 0\]" #"\[25 63 0\]" #":torch" #":lever" #"raised"])))))))
+          (is (every? #(re-find % (first (:texts r))) [#"\[3 63 0\]" #"\[25 63 0\]" #"torch or lever" #"raised"])))))))
 
 (deftest a-redstone-block-bed-on-a-raised-line-is-not-declined
   (async done

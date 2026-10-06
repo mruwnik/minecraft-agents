@@ -1,7 +1,8 @@
 (ns jobs.items.give
   (:require [engine.ctx :as ctx]
             [engine.jobs.util :as u]
-            [engine.path.near :as near]))
+            [engine.path.near :as near]
+            [jobs.storage.deposit :as deposit]))
 
 (def doc
   "Walk to the player :player, toss them :count of :item (everything carried when nil) and confirm the drop was
@@ -43,11 +44,6 @@
   [c]
   (let [{:keys [player item]} (:args c)]
     (and (string? player) (string? item))))
-
-(defn carried
-  "How many of name the inventory holds over all stacks."
-  [p name]
-  (transduce (comp (filter #(= name (:name %))) (map :count)) + 0 (u/inventory p)))
 
 (defn find-player
   "The position {:x :y :z} of player named name within radius, or nil."
@@ -144,7 +140,7 @@
         {:keys [tossed tossed-t before had collecting seen-drop]} (ctx/mem c)
         p (:primitives c)
         lying (remove #(contains? before (:id %)) (drops p item radius))
-        back (max 0 (- (carried p item) (- had tossed)))
+        back (max 0 (- (deposit/carried (u/inventory p) item) (- had tossed)))
         given (- tossed back)
         since (- (ctx/now c) tossed-t)]
     (when (seq lying) (ctx/update-mem! c assoc :seen-drop true))
@@ -177,7 +173,7 @@
   [c now]
   (let [{:keys [player item radius reach]} (:args c)
         p (:primitives c)
-        have (carried p item)
+        have (deposit/carried (u/inventory p) item)
         pos (find-player p player radius)]
     (cond
       (zero? have)
