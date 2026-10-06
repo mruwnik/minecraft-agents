@@ -793,3 +793,16 @@
                         (= (not (ex/high-corner? ex/door-policy 0 0 lx ly lz lh ceiling-world))
                            (true? (corner 0 64 0 0 lx ly lz lh))))
                       corner-cases)))))
+
+;; a non-climb step from a vine or ladder cell: while the body is above the step's stand height pushing forward only presses
+;; it into a block over the exit (the client then climbs), so it waits, falling to the floor
+
+(def vine-exit-steps [(step 0 64 3 :start) (step 1 64 3 :walk)])
+
+(deftest no-forward-on-a-climbable-above-a-walk-step
+  (are [steps i ps forward?] (= forward? (:forward (controls-of (ex/tick p (state-at steps i) ps))))
+    vine-exit-steps 1 (pose 0.5 64.9 3.5 {:on-ground false :on-climbable true :collided true}) false
+    vine-exit-steps 1 (pose 0.5 64.05 3.5 {:on-ground false :on-climbable true}) true
+    vine-exit-steps 1 (pose 0.5 64.9 3.5 {:on-ground false :on-climbable false}) true
+    [(step 0 64 3 :start) (step 0 66 3 :climb-up {:px 0.5 :pz 3.5})] 1 (pose 0.3 64.9 3.5 {:on-ground false :on-climbable true}) true
+    [(step 0 64 3 :start) (step 1 66 3 :walk)] 1 (pose 0.5 64.9 3.5 {:on-ground false :on-climbable true}) true))

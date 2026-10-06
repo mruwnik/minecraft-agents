@@ -16,6 +16,16 @@
 
 (def max-ticks 2400)
 
+(def climbables #{"vine" "ladder" "scaffolding" "twisting_vines" "weeping_vines" "cave_vines"})
+
+(defn pose-in
+  "sp/pose-of with :on-climbable read from the block at the body's feet, as the steer pose has it."
+  [bot world]
+  (let [pose (sp/pose-of bot)
+        p (.-position (.-entity bot))
+        block (.getBlock ^js world (.floored p))]
+    (assoc pose :on-climbable (contains? climbables (.-name block)))))
+
 (defn physics-world
   "A prismarine world over the course's snapshot, bamboo and dripstone at their server offsets; unloaded reads as stone."
   [^js snapshot]
@@ -45,7 +55,7 @@
     (if (nil? steps)
       {:status (.-status r)}
       (loop [t 0 state (ex/start steps 0)]
-        (let [pose (sp/pose-of bot)
+        (let [pose (pose-in bot world)
               {:keys [done controls yaw] :as res} (ex/tick ex/policy state pose)]
           (if (or done (>= t max-ticks))
             (assoc (select-keys done [:status :why]) :at [(:x pose) (:z pose)])
@@ -64,3 +74,9 @@
 (deftest a-full-bamboo-wall-has-no-plan-rather-than-a-stuck-one
   (is (= {:status "partial"} (walk-course "full-walled")))
   (is (= {:status "none"} (walk-course "target-in-full"))))
+
+;; a vine pit entered from a ledge, leaves over its exit cell: pushing forward with the head under a block makes the client
+;; climb the vine for ever; the body has to drop to the pit's floor before it walks on
+(deftest a-vine-pit-below-a-ledge-with-leaves-over-its-exit-is-walked
+  (let [r (walk-course "vine-pit-ledge")]
+    (is (= :arrived (:status r)) (pr-str r))))

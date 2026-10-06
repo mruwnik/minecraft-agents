@@ -2900,4 +2900,11 @@
  ["tunnel15" {:family :hazards
    :start {:x 2857.5 :y 161 :z 3216.5} :to {:x 2902 :y 161 :z 3216}
    :cmds ["fill 2875 162 3214 2885 162 3218 stone_slab[type=top]"]}]
+ ["vine-pit-ledge" {:family :hazards
+   :start {:x 2860.5 :y 162 :z 3216.5} :to {:x 2890 :y 161 :z 3216}
+   :cmds ["fill 2860 161 3214 2877 161 3218 stone"
+          "fill 2878 161 3215 2878 163 3215 stone"
+          "fill 2878 161 3217 2878 163 3217 oak_log"
+          "setblock 2878 161 3216 vine[west=true,north=true,south=true]"
+          "fill 2879 163 3215 2881 163 3217 oak_leaves"]}]
 ]

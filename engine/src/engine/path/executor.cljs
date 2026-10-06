@@ -40,6 +40,7 @@
    :body-height 1.8        ; a corner jump needs the side cells clear this far over the landing's stand height
    :walk-accel 0.098       ; client physics: a walking (not sprinting) body on the ground gains this much speed per tick
                            ; along its yaw (0.1 speed x 0.98 forward)
+   :climb-settle 0.1       ; on a vine or ladder more than this above a non-climb step's stand-y: no forward (see controls-for)
    :climb-over 0.2         ; keep climbing until feet are this far above a climb step's stand-y
    :crossing-xz 0.3        ; steer at a crossing point until this close to it
    :still-xz 0.1           ; closer than this to the aim: no forward, keep the yaw
@@ -479,6 +480,14 @@
        (> (- (stand-y step) y) (:pressed-rise policy))
        (<= (wall-gap policy step pose) (:wall-gap policy))))
 
+(defn climb-hold?
+  "A body on a climbable above the stand height of a non-climb step: pushing forward there with a block over the exit makes
+  the client climb, so it holds (no forward) and falls to the floor first."
+  [policy step {:keys [y on-climbable]}]
+  (boolean (and on-climbable
+                (not (contains? climb-moves (:move step)))
+                (> y (+ (stand-y step) (:climb-settle policy))))))
+
 (defn controls-for [policy {:keys [steps i yaw] :as state} {:keys [x z] :as pose}]
   (let [step (nth steps i)
         [ax az :as aim] (aim-point policy step pose)
@@ -486,7 +495,9 @@
         moving? (>= dist (:still-xz policy))
         yaw' (if moving? (yaw-to x z ax az) (or yaw 0))
         prev (when (pos? i) (nth steps (dec i)))
-        forward? (and moving? (not (rise-first? policy prev step pose)))]
+        forward? (and moving?
+                      (not (rise-first? policy prev step pose))
+                      (not (climb-hold? policy step pose)))]
     {:state (cond-> state moving? (assoc :yaw yaw'))
      :controls {:forward forward? :back false :left false :right false
                 :jump (cond
