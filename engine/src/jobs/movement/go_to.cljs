@@ -466,11 +466,12 @@
   (or (u/within? (u/self-pos c) pos range) (u/within? (reach/standing-cell (:primitives c)) pos range)))
 
 (defn fault-cells
-  "The cells a walk that failed at the walker (:stuck at :target, :off-plan at :at) says it cannot pass, [x y z] each."
-  [{:keys [status target at]}]
+  "The cells a walk that failed at the walker (:stuck at :target, :off-plan at :at) says it cannot pass, [x y z] each.
+  A partial plan walked to its end (:partial) is a normal end."
+  [{:keys [status target at partial]}]
   (case status
     :stuck (some-> target vector)
-    :off-plan (some-> at vector)
+    :off-plan (when-not partial (some-> at vector))
     nil))
 
 (defn note-fault!

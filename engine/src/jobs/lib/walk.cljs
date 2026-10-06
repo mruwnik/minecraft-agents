@@ -788,7 +788,7 @@
 
       stop (merge stop {:at (:at done)})
 
-      :else {:status :off-plan :at (:at done) :step (dec (count steps))})))
+      :else {:status :off-plan :partial true :at (:at done) :step (dec (count steps))})))
 
 (defn watch-of
   "The look-ahead for walking plan: its own snapshot as the base, a fresh pathWorld per check, the cells the plan opens

@@ -571,6 +571,14 @@
                                    out)))]
                  (impl token (js/Object.assign #js {} a #js {:decide wrapped}))))))
 
+(deftest a-frontier-walk-ended-at-its-partial-end-is-no-walker-fault
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out] :as s} (await (go! {:blocks flat} {:pos [120 64 0]}))]
+          (is (= false (:arrived @out)))
+          (is (= 0 (count (events-of s :walker-fault))) "the partial plan's end is a normal end, no warn"))))))
+
 (deftest go-to-routes-round-a-cell-the-walker-got-stuck-on
   (async done
     (tu/run-async done
