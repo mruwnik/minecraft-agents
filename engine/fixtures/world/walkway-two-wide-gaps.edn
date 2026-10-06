@@ -1,0 +1,56 @@
+;; Cards fc019ab4 / 5a4dbe11 (soak j29 / j30, walkway at x 9700): a 2-wide walkway 220 long (floor y 12) with side walls and end caps; the
+;; south wall has a gap at each end onto a walled deck. The WEST deck has a stair down (south, 13 steps to the ground); the EAST deck is a
+;; dead end. Goal on the ground beside and below the walkway. The body starts near the east end and must try east deck, walk the whole
+;; walkway and use the west stair. The fail case fills both gaps: honest :unreachable and the body stays on the walkway.
+{:defaults
+ {:tags [:movement :planner :large]
+  :plot {:height 20 :length 280 :width 48}
+  :limit-s 300
+  :blocks
+  [[:fill [30 12 10] [250 12 11] "stone"]
+   [:fill [29 13 9] [251 14 9] "stone"]
+   [:fill [29 13 12] [29 14 12] "stone"]
+   [:fill [32 13 12] [247 14 12] "stone"]
+   [:fill [251 13 9] [251 14 12] "stone"]
+   [:fill [29 13 9] [29 14 12] "stone"]
+   ;; decks (floor y 12) behind the gaps x 30-31 and x 248-250, walled round
+   [:fill [28 12 12] [33 12 18] "stone"]
+   [:fill [27 13 12] [27 14 19] "stone"]
+   [:fill [34 13 12] [34 14 19] "stone"]
+   [:fill [28 13 19] [33 14 19] "stone"]
+   [:fill [246 12 12] [251 12 18] "stone"]
+   [:fill [245 13 12] [245 14 19] "stone"]
+   [:fill [252 13 12] [252 14 19] "stone"]
+   [:fill [246 13 19] [251 14 19] "stone"]
+   ;; the west stair: south from the west deck, opening in its south wall at x 30-31
+   [:fill [30 13 19] [31 14 19] "air"]
+    [:fill [29 11 19] [31 11 19] "stone"]
+    [:fill [29 10 20] [31 10 20] "stone"]
+    [:fill [29 9 21] [31 9 21] "stone"]
+    [:fill [29 8 22] [31 8 22] "stone"]
+    [:fill [29 7 23] [31 7 23] "stone"]
+    [:fill [29 6 24] [31 6 24] "stone"]
+    [:fill [29 5 25] [31 5 25] "stone"]
+    [:fill [29 4 26] [31 4 26] "stone"]
+    [:fill [29 3 27] [31 3 27] "stone"]
+    [:fill [29 2 28] [31 2 28] "stone"]
+    [:fill [29 1 29] [31 1 29] "stone"]
+    [:fill [29 0 30] [31 0 30] "stone"]
+    [:fill [29 -1 31] [31 -1 31] "stone"]]}
+ :cases
+ [{:name "j29-start-east-goal-below-arrives"
+   :body {:at [220.5 13 10.5]}
+   :act [[:job (jobs.movement.go-to {:pos #at [200 0 24] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 280 :of-job true}]
+   :after [[:body-near [200.5 0 24.5] 3]]}
+  {:name "j30-start-middle-goal-further-arrives"
+   :body {:at [200.5 13 10.5]}
+   :act [[:job (jobs.movement.go-to {:pos #at [226 0 30] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 280 :of-job true}]
+   :after [[:body-near [226.5 0 30.5] 3]]}
+  {:name "gaps-blocked-unreachable"
+   :body {:at [220.5 13 10.5]}
+   :blocks [[:fill [30 13 12] [31 14 12] "stone"] [:fill [248 13 12] [250 14 12] "stone"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [200 0 24] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false :reason :unreachable}} :within-s 150 :of-job true}]
+   :after [[:body-near [220.5 13 10.5] 40]]}]}

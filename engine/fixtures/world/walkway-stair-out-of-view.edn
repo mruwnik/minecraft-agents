@@ -1,0 +1,40 @@
+;; Cards fc019ab4 / 5a4dbe11 / a1ba2b0a: a walled walkway (stone y 10, 1 wide, side walls) with a dead west end and a stair down at its
+;; EAST end, 100 / 150 blocks east of the body: the way down lies out of view. The goal is on the ground below the west part.
+;; The fail case caps the east end (no way down): honest :unreachable, the body stays on the walkway (west of its start).
+{:defaults
+ {:tags [:movement :planner :large]
+  :plot {:height 16 :length 360 :width 32}
+  :limit-s 300
+  :blocks
+  [[:fill [20 10 8] [330 10 8] "stone"]
+   [:fill [19 11 7] [330 12 7] "stone"]
+   [:fill [19 11 9] [330 12 9] "stone"]
+   [:fill [19 11 8] [19 12 8] "stone"]
+    [:fill [331 9 7] [331 9 9] "stone"]
+    [:fill [332 8 7] [332 8 9] "stone"]
+    [:fill [333 7 7] [333 7 9] "stone"]
+    [:fill [334 6 7] [334 6 9] "stone"]
+    [:fill [335 5 7] [335 5 9] "stone"]
+    [:fill [336 4 7] [336 4 9] "stone"]
+    [:fill [337 3 7] [337 3 9] "stone"]
+    [:fill [338 2 7] [338 2 9] "stone"]
+    [:fill [339 1 7] [339 1 9] "stone"]
+    [:fill [340 0 7] [340 0 9] "stone"]
+    [:fill [341 -1 7] [341 -1 9] "stone"]]}
+ :cases
+ [{:name "stair-150-east-arrives"
+   :body {:at [180.5 11 8.5]}
+   :act [[:job (jobs.movement.go-to {:pos #at [60 0 16] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 280 :of-job true}]
+   :after [[:body-near [60.5 0 16.5] 3]]}
+  {:name "stair-100-east-arrives"
+   :body {:at [230.5 11 8.5]}
+   :act [[:job (jobs.movement.go-to {:pos #at [60 0 16] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 280 :of-job true}]
+   :after [[:body-near [60.5 0 16.5] 3]]}
+  {:name "stair-walled-shut-unreachable"
+   :body {:at [230.5 11 8.5]}
+   :blocks [[:fill [331 11 7] [331 12 9] "stone"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [60 0 16] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false :reason :unreachable}} :within-s 120 :of-job true}]
+   :after [[:body-near [125.5 11 8.5] 112]]}]}
