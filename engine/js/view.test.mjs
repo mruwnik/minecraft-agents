@@ -1079,3 +1079,31 @@ test('a bot without a biome registry writes no biomes.json and does not throw', 
   await view.idle()
   assert.equal(fs.existsSync(biomesPath(dir)), false)
 })
+
+test('an idle body with jittering mobs writes at most 2 poses a second; a body move is written at once', async () => {
+  mock.timers.enable({ apis: ['setInterval', 'Date'] })
+  try {
+    const mob = { id: 2, type: 'animal', name: 'cow', position: new Vec3(12, 64, -3), yaw: 0, pitch: 0, height: 1.4, width: 0.9, health: 10 }
+    const bot = fakeBot({ entities: { 2: mob } })
+    const { view, events } = makeView(bot, { now: () => Date.now() })
+    let seen = 0
+    const total = () => { seen += view.stats().poses; return seen + events.filter(e => e.kind === 'view.stats').reduce((n, e) => n + e.poses, 0) }
+    for (let i = 0; i < 1000; i++) {
+      mob.position.x = 12 + (i % 2) * 0.2
+      bot.emit('physicsTick')
+      mock.timers.tick(10)
+      await new Promise(resolve => setImmediate(resolve))
+    }
+    await view.idle()
+    assert.ok(total() <= 21, `poses ${total()}`)
+    const before = total()
+    bot.entity.position.x += 1
+    bot.emit('physicsTick')
+    await view.idle()
+    const after = total()
+    view.stop()
+    assert.equal(after, before + 1)
+  } finally {
+    mock.timers.reset()
+  }
+})

@@ -18,6 +18,8 @@ export const FLUSH_MS = 500
 export const MAX_COLUMNS_PER_FLUSH = 8
 export const POSE_HZ = 0
 export const POSE_REFRESH_MS = 2000
+// a pose whose only change is the surroundings (mobs, time, rain) is written at most this often; the body's own move goes out at once
+export const POSE_SURROUND_MS = 500
 export const HUD_MS = 1000
 export const STATS_MS = 60000
 export const ERROR_EVERY_MS = 60000
@@ -306,6 +308,7 @@ export function poseSnapshot (bot, { world, now }) {
 }
 
 // a string that changes when the pose does: time ignored, numbers rounded to two decimals
+export const bodyKey = pose => poseKey({ ...pose, entities: undefined, timeOfDay: undefined, rain: undefined })
 export const poseKey = pose => JSON.stringify(pose, (k, v) => k === 't' ? undefined : typeof v === 'number' ? round2(v) : v)
 
 // the last full pose marked offline (so a renderer still has a position), or the short record if none was ever written
@@ -421,6 +424,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
   let stats = zeroStats()
   let lastPoseKey = null
   let lastPoseAt = 0
+  let lastBodyKey = null
   let lastPose = null
   let lastHudKey = null
   let lastErrorAt = -Infinity
@@ -674,8 +678,12 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
         const t = now()
         const pose = poseSnapshot(bot, { world, now: t })
         const key = poseKey(pose)
-        if (key === lastPoseKey && t - lastPoseAt < POSE_REFRESH_MS) return null
+        const body = bodyKey(pose)
+        const sinceWrite = t - lastPoseAt
+        if (key === lastPoseKey && sinceWrite < POSE_REFRESH_MS) return null
+        if (body === lastBodyKey && sinceWrite < POSE_SURROUND_MS) return null
         lastPoseKey = key
+        lastBodyKey = body
         lastPoseAt = t
         lastPose = pose
         return JSON.stringify(pose)
@@ -778,6 +786,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     bot = target
     mcVersion = target.version
     lastPoseKey = null
+    lastBodyKey = null
     lastHudKey = null
     lastPose = null
     unhook = hook(target)
