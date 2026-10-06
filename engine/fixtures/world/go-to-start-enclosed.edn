@@ -1,0 +1,21 @@
+;; Card 61a0396f item 5: a body sealed in a 3x3 pen at the plot's west edge (the chunk side; the land west of the plot is
+;; unloaded) with a far unloaded goal ends :unreachable :start-enclosed (not :goal-unloaded); an open start with the same
+;; goal walks toward the loaded edge and never reports :start-enclosed. The goal is 1000 blocks west of the plot (#at is plot-relative).
+{:defaults
+ {:tags [:movement :planner]
+  :plot {:height 10}
+  :body {:at [3.5 0 17.5]}
+  :limit-s 90}
+ :cases
+ [{:name "sealed-pen-far-unloaded-goal-is-start-enclosed"
+   :blocks [[:fill [1 -1 16] [5 4 20] "stone" :hollow]]
+   :act [[:job (jobs.movement.go-to {:pos #at [-1000 0 17] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false :reason :unreachable :why :start-enclosed}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :planned :data {:why "goal-unloaded"}} :for-s 10}]
+   :after [[:body-near [3.5 0 17.5] 2] [:block [1 0 18] "stone"]]}
+  {:name "open-field-unloaded-goal-never-start-enclosed"
+   :act [[:job (jobs.movement.go-to {:pos #at [-1000 0 17] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :planned :data {:why "searching" :status "partial"}} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind :planned :data {:why "start-enclosed"}} :for-s 30}
+            {:no-event {:source :job :kind :result} :for-s 30}]
+   :after []}]}
