@@ -4,7 +4,7 @@
             [jobs.lib.util :as u]))
 
 (def doc
-  "Eat the best carried food, one item per round, until food reaches :until or nothing edible is left.
+  "Eat the best carried food, bite after bite in one call, until food reaches :until or nothing edible is left.
   Best means most hunger points, then most saturation (data from jobs.lib.foods).
   Harmful foods (rotten flesh, spider eyes, pufferfish, poisonous potatoes, raw chicken) need :allow-bad.
   Golden apples are eaten only when named or at low health. Chorus fruit and suspicious stew only when named.
@@ -74,18 +74,19 @@
     (nil? (carried-best c)) (ctx/wait c :no-food)
     :else true))
 
-(defn ^:async round [c]
-  (let [{:keys [until]} (:args c)
-        best (carried-best c)]
-    (if-let [r (refusal c)]
-      (refuse! c r)
-      (if (or (nil? best) (>= (.-food (.self (:primitives c))) until))
-        :done
-        (let [_ (await (ctx/act c :equip #js {:item best}))
-              r (await (ctx/act c :eat #js {:item best}))]
-          (if (not= "ate" (.-status r))
+(defn ^:async round
+  "One whole attempt: eats the best carried food bite after bite until food reaches :until, nothing edible is left or an eat fails."
+  [c]
+  (if-let [r (refusal c)]
+    (refuse! c r)
+    (let [{:keys [until]} (:args c)]
+      (loop []
+        (let [best (carried-best c)]
+          (if (or (nil? best) (not (ctx/alive? c)) (>= (.-food (.self (:primitives c))) until))
             :done
-            (do (ctx/remember! c :fed {:item best :food (.-food r)} fed-policy)
-                (if (or (>= (.-food r) until) (nil? (carried-best c)))
-                  :done
-                  :continue))))))))
+            (let [_ (await (ctx/act c :equip #js {:item best}))
+                  r (await (ctx/act c :eat #js {:item best}))]
+              (if (not= "ate" (.-status r))
+                :done
+                (do (ctx/remember! c :fed {:item best :food (.-food r)} fed-policy)
+                    (recur))))))))))

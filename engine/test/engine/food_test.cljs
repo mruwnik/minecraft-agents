@@ -130,10 +130,10 @@
                                                   {:name "rotten_flesh" :count 3}]})]
           (core/submit! eng '(jobs.survival.eat) {})
           (await (core/tick! eng))
-          (is (= ["cooked_beef"] (call-args p "equip" "item")))
-          (is (= ["cooked_beef"] (call-args p "eat" "item")))
-          (is (= [{:item "cooked_beef" :food 9}] (entries eng :fed)))
-          (is (= 1 (count (:list (core/state eng)))) "food 9 is below 18, so it goes on"))))))
+          (is (= ["cooked_beef"] (take 1 (call-args p "equip" "item"))))
+          (is (= ["cooked_beef"] (take 1 (call-args p "eat" "item"))))
+          (is (= ["cooked_beef" "carrot" "carrot"] (mapv :item (entries eng :fed))))
+          (is (= [] (:list (core/state eng))) "one call eats until :until or nothing edible is left"))))))
 
 (deftest eat-goes-on-until-fed-or-out-of-food
   (async done
@@ -141,7 +141,8 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:self {:food 4} :inventory [{:name "bread" :count 5}]})]
           (core/submit! eng '(jobs.survival.eat) {})
-          (is (= 3 (await (run-until-empty eng 10))) "4, 9, 14, 19")
+          (await (core/tick! eng))
+          (is (= [] (:list (core/state eng))) "4, 9, 14, 19 in one round")
           (is (= 19 (food p)))
           (is (= 3 (count (entries eng :fed)))))))))
 
@@ -236,7 +237,7 @@
                                       :inventory [{:name "golden_apple" :count 1} {:name "bread" :count 1}]})]
           (core/submit! eng '(jobs.survival.eat) {})
           (await (core/tick! eng))
-          (is (= ["bread"] (call-args p "eat" "item")) "a common food still goes first"))))))
+          (is (= ["bread"] (take 1 (call-args p "eat" "item"))) "a common food still goes first"))))))
 
 (deftest eat-golden-carrot-is-a-normal-best-food
   (async done
@@ -246,7 +247,7 @@
                                       :inventory [{:name "golden_carrot" :count 1} {:name "bread" :count 1}]})]
           (core/submit! eng '(jobs.survival.eat) {})
           (await (core/tick! eng))
-          (is (= ["golden_carrot"] (call-args p "eat" "item")) "unnamed, healthy, and best by points"))))))
+          (is (= ["golden_carrot"] (take 1 (call-args p "eat" "item"))) "unnamed, healthy, and best by points"))))))
 
 (deftest foods-follow-the-version-the-body-is-connected-with
   (is (contains? (foods/table-for "26.1") "honey_bottle"))

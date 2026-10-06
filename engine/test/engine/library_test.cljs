@@ -245,7 +245,7 @@
 
 ;; ------------------------------------------------------------ collect-drops
 
-(deftest collect-drops-one-per-round-nearest-first-with-filter
+(deftest collect-drops-all-in-one-round-nearest-first-with-filter
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -253,9 +253,7 @@
               {:keys [eng p]} (setup {:entities [(item 1 6 "oak_log") (item 2 2 "stick") (item 3 4 "oak_sapling") (item 4 40 "oak_log")]})]
           (core/submit! eng (list 'jobs.forestry.collect-drops {:radius 10 :filter ["oak_log" "oak_sapling"]}) {})
           (await (core/tick! eng))
-          (is (= [3] (mapv #(.-id (.-args %)) (calls p "collect"))) "nearest matching, one per round")
-          (await (run-until-empty eng 5))
-          (is (= [] (:list (core/state eng))))
+          (is (= [] (:list (core/state eng))) "every matching item in one round")
           (is (= [3 1] (mapv #(.-id (.-args %)) (calls p "collect"))))
           (is (= {"oak_sapling" 1 "oak_log" 1} (inv p)) "stick and the far log are left"))))))
 
