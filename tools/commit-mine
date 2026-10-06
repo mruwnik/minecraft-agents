@@ -157,20 +157,20 @@ trap cleanup EXIT INT TERM HUP
 # Require the caller to state how many hunks `git diff <paths>` shows (untracked file = 1).
 if [ -z "$hunks" ]; then
   count_hunks() { # prints "<hunks> <path>" per changed file
-    git diff HEAD -- "${paths[@]}" | awk '/^diff --git /{f=$4; sub(/^b\//,"",f)} /^@@/{n[f]++} /^Binary files/{n[f]++} END{for(k in n)print n[k], k}'
+    git diff HEAD --no-renames -- "${paths[@]}" | awk '/^diff --git /{f=$4; sub(/^b\//,"",f)} /^@@/{n[f]++} /^Binary files/{n[f]++} END{for(k in n)print n[k], k}'
     git ls-files --others --exclude-standard -- "${paths[@]}" | awk '{print 1, $0}'
   }
   numstat_lines() { awk -F'\t' '{ if ($1 == "-") t += 1; else t += $1 + $2 } END{print t+0}'; }
   count_lines() { # added+deleted lines in the working tree for the given paths (untracked files count their lines)
     {
-      git diff HEAD --numstat -- "${paths[@]}"
+      git diff HEAD --no-renames --numstat -- "${paths[@]}"
       git ls-files --others --exclude-standard -z -- "${paths[@]}" | while IFS= read -r -d '' f; do
         printf '%s\t0\t%s\n' "$(awk 'END{print NR}' "$f")" "$f"
       done
     } | numstat_lines
   }
   count_staged() { # same line count, from the index: what is about to be committed
-    git diff --cached --numstat -- "${allowed[@]}" | numstat_lines
+    git diff --cached --no-renames --numstat -- "${allowed[@]}" | numstat_lines
   }
   per="$(count_hunks | sort -k2)"
   total_hunks=$(awk '{t+=$1} END{print t+0}' <<<"$per")
@@ -213,7 +213,7 @@ patch_sig() { # "<file>\t<+/- line>" for every changed line inside a hunk, from 
 }
 if [ -n "$hunks" ]; then
   want="$(patch_sig < "$hunks")"
-  got="$(git diff --cached -U0 | patch_sig)"
+  got="$(git diff --cached --no-renames -U0 | patch_sig)"
   [ "$want" = "$got" ] || die "staged diff differs from the patch (it must hold exactly the patch's changed lines); nothing committed" 7
 else
   staged_total="$(count_staged)"
@@ -222,7 +222,7 @@ fi
 
 # Foreign staged paths.
 foreign=()
-while IFS= read -r f; do is_allowed "$f" || foreign+=("$f"); done < <(git diff --cached --name-only)
+while IFS= read -r f; do is_allowed "$f" || foreign+=("$f"); done < <(git diff --cached --no-renames --name-only)
 if [ ${#foreign[@]} -gt 0 ]; then
   [ -z "$hunks" ] || die "index holds foreign staged paths (${foreign[*]}); someone staged outside the lock. Hunks mode cannot use --only: retry later" 3
   flags+=("foreign-staged: ${foreign[*]} (left out via --only)")
@@ -243,7 +243,7 @@ while IFS=$'\t' read -r add del f; do
   [ "$add" -ge "$LARGE_JS_LINES" ] && [ $((add * 2)) -ge "$total" ] && large=1
   [ "$large" = 1 ] || continue
   git show ":$f" | grep -q 'Why JavaScript:' || die "new or largely changed JS file $f needs a '// Why JavaScript:' line"
-done < <(git diff --cached --numstat -- "${allowed[@]}")
+done < <(git diff --cached --no-renames --numstat -- "${allowed[@]}")
 
 # Check: every committed JS file parses (a hunk-mode commit can leave HEAD with a file that never existed on disk).
 pkg_type() { # $1 = path; "type" of the nearest package.json (staged, else HEAD), default commonjs
@@ -272,10 +272,10 @@ parses() { # $1 = path, blob on stdin; syntax checked as the file's real module 
 while IFS= read -r f; do
   [[ "$f" =~ \.(js|mjs|cjs)$ ]] || continue
   git show ":$f" | parses "$f" || die "the committed version of $f does not pass node --check (a partial commit left a file that never existed on disk?); fix it or commit the whole file" 6
-done < <(git diff --cached --name-only --diff-filter=AM -- "${allowed[@]}")
+done < <(git diff --cached --no-renames --name-only --diff-filter=AM -- "${allowed[@]}")
 
 # Check: owner name as a whole word in added lines (paths under /home/<user>/ ignored).
-if git diff --cached -U0 -- "${allowed[@]}" | grep -E '^\+' | grep -vE '^\+\+\+ ' \
+if git diff --cached --no-renames -U0 -- "${allowed[@]}" | grep -E '^\+' | grep -vE '^\+\+\+ ' \
     | sed -E 's#/home/[A-Za-z0-9_.-]+/#/home/USER/#g' | grep -iwq -- "$NAME_WORD"; then
   die "an added line contains the owner's name as a word; use a label or neutral name"
 fi

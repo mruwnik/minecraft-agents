@@ -127,6 +127,15 @@ out=$(tools/commit-mine --card abcd1234 -m "$C m" --expect-hunks 1 --expect-line
 check "adjacent foreign hunk: HEAD unchanged" "$(git rev-parse HEAD)" "$before"
 check "adjacent foreign hunk: counts shown" "$(grep -c 'Total: 4 line' <<<"$out")" 1
 tools/commit-mine --card abcd1234 -m "$C m" --expect-lines 4 m.txt >/dev/null 2>&1; check "right line count commits" "$?" 0
+# A moved file with a small edit: git's rename detection must not shrink the staged diff (both modes).
+seq 1 120 > mv_old.txt; git add mv_old.txt; git commit -q -m mvold
+git mv mv_old.txt mv_new.txt; echo extra >> mv_new.txt
+git diff --cached --no-renames HEAD > mv.patch; git restore --staged mv_old.txt mv_new.txt
+out=$(tools/commit-mine --card abcd1234 -m "$C mvhunks" --hunks mv.patch --expect-hunks 2 mv_old.txt mv_new.txt 2>&1); check "moved file hunks exit" "$?" 0
+check "moved file hunks: both paths in HEAD" "$(git show --no-renames --name-only --format= HEAD | sort | tr '\n' ' ')" "mv_new.txt mv_old.txt "
+git mv mv_new.txt mv_new2.txt; echo more >> mv_new2.txt
+out=$(tools/commit-mine --card abcd1234 -m "$C mvpath" --expect-lines 242 mv_new.txt mv_new2.txt 2>&1); check "moved file path mode exit" "$?" 0
+check "moved file path mode: index clean" "$(git diff --cached --name-only)" ""
 # Deleted files: staged (git rm) or not, many, a whole directory, mixed with an edit.
 mkdir -p gone/sub; for i in $(seq 1 120); do echo $i > gone/f$i.txt; done; echo s > gone/sub/s.txt; seq 1 5 > e.txt
 git add gone e.txt; git commit -q -m gone
