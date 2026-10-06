@@ -469,6 +469,20 @@
           (is (= :stuck (stopped-reason seen)))
           (is (= 1 (count (of-kind seen :extinguish_stuck)))))))))
 
+(deftest a-blocked-emergency-step-escapes-through-go-to-at-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:onFire true} :blocks (merge (floor 8) {"1,64,0" "fire"})})]
+          (.override (.-world p) "moveTo" (fn ^:async f [_ _ _] #js {:status "blocked"}))
+          (on-wait! p (fn [_ _] (swap! (fake/state p) assoc-in [:self :onFire] false)))
+          (core/submit! eng '(jobs.survival.extinguish) {})
+          (await (core/tick! eng))
+          (is (= [] (:list (core/state eng))))
+          (is (= 1 (count (calls p "moveTo"))) "one blocked step, then go-to, not three stalled walks")
+          (is (= [] (of-kind seen :extinguish_stuck)))
+          (is (= 1 (count (of-kind seen :completed)))))))))
+
 (defn ^:async pour-then-flee
   "A cut run poured at the origin, then the body (out of the fire) stands at x blocks away; runs to the end."
   [x]

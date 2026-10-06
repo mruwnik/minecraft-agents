@@ -30,9 +30,9 @@
          [:rcon "execute at $BODY run setblock ~ ~ ~-1 lava"]
          [:rcon "execute at $BODY run setblock ~ ~ ~ fire"]
          [:job (jobs.survival.extinguish {})]]
-   ;; three covers leave the fourth lava cell open and the fire at the feet: boxed in, the walks stall, so it ends stopped :stuck
-   :expect [{:event {:source :job :kind :stopped :data {:status :stopped :reason :stuck}} :within-s 50 :of-job true}]
-   :after [[:item "cobblestone" 5]]}
+   ;; three covers leave the fourth lava cell open and the fire at the feet: the blocked walk escapes through go-to (stepping up onto a cover or pillaring), and the run completes
+   :expect [{:event {:source :job :kind :completed} :within-s 55 :of-job true}]
+   :after [[:item "cobblestone" [:<= 5]]]}
   {:name "only-sand-and-gravel-nothing-placed"
    :body {:inventory [["sand" 8] ["gravel" 8]]}
    :act [[:rcon "execute at $BODY run setblock ~1 ~ ~ lava"]
