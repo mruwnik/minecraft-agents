@@ -5,7 +5,9 @@
             [jobs.lib.access :as access]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
+            [jobs.lib.pace :as pace]
             [jobs.lib.placement :as placement]
+            [jobs.lib.result :as result]
             [jobs.lib.walk :as walk]
             [jobs.lib.world :as known]))
 
@@ -19,12 +21,12 @@
     own id.
   - :all: every entry.
 
-  Every round first settles the entries it works on from their cells. The recorded item still there: ours. A
+  One run: every pass first settles the entries it works on from their cells. The recorded item still there: ours. A
   cell marked :removing that is now air: removed. Anything else (swapped by someone, or gone): the entry is
   dropped with an info cleanup.dropped {:cell :item :found} and the cell is never dug. An unloaded cell keeps
   its entry.
 
-  Then one step:
+  Then one step, passes repeated (paced) until nothing is left to do:
   - Dig the highest (then nearest) cell within :reach of the eye that may be dug. The entry is marked
     :removing before the dig, so a cut or restart is decided from the cell.
   - Else walk to within 3 of the nearest (jobs.debug.walk-plan as a child, never digging a way).
@@ -63,6 +65,8 @@
 (def walk-range 3)
 
 (def max-collect-radius 48)
+
+(def max-passes "Steps (dig, walk, collect) in one run before it stops." 200)
 
 ;; ------------------------------------------------------------------ the step, pure
 
@@ -181,8 +185,9 @@
         l (ledger/open-entries (ctx/view c))
         e (ledger/entry-at l cell)
         under? (= cell (update (feet-of c) 1 dec))]
-    (if (or (nil? e) (blocker (inputs c l [e] (known/zones c)) e))
-      :continue
+    (if-let [why (if e (blocker (inputs c l [e] (known/zones c)) e) {:reason :gone})]
+      (do (ctx/update-mem! c count-fail cell why (:give-up (:args c)))
+          :again)
       (do
         (await (tools/equip-tool! c item {:fast true}))
         (ledger/remember! c (ledger/begin-removal l cell))
@@ -193,32 +198,36 @@
           (if (#{"dug" "missing"} status)
             (ctx/update-mem! c assoc :collect true)
             (ctx/update-mem! c count-fail cell {:reason :dig-failed :dig status} (:give-up (:args c))))
-          :continue)))))
+          :again)))))
 
 (defn ^:async walk!
-  "Walk to within 3 of cell; no plan holds it :unreachable, an end out of reach counts a failure."
+  "Walk to within 3 of cell; no plan holds it :unreachable, an end out of reach (or a walk that did not end) counts
+  a failure."
   [c {:keys [cell]}]
-  (let [r (await (ctx/call-child c :walk 'jobs.debug.walk-plan {:to cell :range walk-range}))]
-    (when (= :done r)
-      (let [status (:status (ctx/child-result c :walk))]
-        (cond
-          (#{:no-path :refused :unsupported :bad-args} status)
-          (ctx/update-mem! c assoc-in [:held cell] {:reason :unreachable :walk status})
-          (> (distance (eye-of c) (centre cell)) (:reach (:args c)))
-          (ctx/update-mem! c count-fail cell {:reason :out-of-reach :walk status} (:give-up (:args c))))))
-    :continue))
+  (let [r (await (ctx/call-child c :walk 'jobs.debug.walk-plan {:to cell :range walk-range}))
+        status (when (= :done r) (:status (ctx/child-result c :walk)))]
+    (cond
+      (#{:no-path :refused :unsupported :bad-args} status)
+      (ctx/update-mem! c assoc-in [:held cell] {:reason :unreachable :walk status})
+      (or (not= :done r) (> (distance (eye-of c) (centre cell)) (:reach (:args c))))
+      (ctx/update-mem! c count-fail cell {:reason :out-of-reach :walk status} (:give-up (:args c))))
+    :again))
 
 (defn collect-radius [c removed]
   (let [{:keys [x y z]} (u/self-pos c)]
     (min max-collect-radius
          (+ 4 (js/Math.ceil (apply max 0 (map #(distance [x y z] (centre (:cell %))) removed)))))))
 
-(defn ^:async collect! [c removed]
+(defn ^:async collect!
+  "One collect-drops call. :continue means it waits on the world: asked again on the next pass; else the drops are
+  not asked for again."
+  [c removed]
   (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops
                                  {:radius (collect-radius c removed) :filter (vec (distinct (map (comp placement/item-of :item) removed)))}))]
-    (when (= :done r)
-      (ctx/update-mem! c #(-> % (dissoc :collect) (assoc :collected (:collected (ctx/child-result c :collect) 0)))))
-    :continue))
+    (when-not (= :continue r)
+      (ctx/update-mem! c #(-> % (dissoc :collect)
+                              (assoc :collected (if (= :done r) (:collected (ctx/child-result c :collect) 0) 0)))))
+    :again))
 
 (defn hold-open!
   "Hold the open cells, with earlier held cells that are still in the ledger."
@@ -262,7 +271,9 @@
                             (update :dropped (fnil into []) (map (fn [e] (select-keys e [:cell :item :found]))) dropped)))
     ledger))
 
-(defn ^:async work! [c zones]
+(defn ^:async work!
+  "One pass: settle, then one step. Resolves :again or :done (finished)."
+  [c zones]
   (let [view (ctx/view c)
         l (ledger/open-entries view)
         picked (set (map :cell (ledger/select l view (:job (:args c)))))
@@ -285,4 +296,9 @@
       (and (not (:started (ctx/mem c)))
            (empty? (ledger/offered (ctx/view c) (block-at-of (:primitives c)) job))) :declined
       :else (do (ctx/update-mem! c assoc :started true)
-                (await (work! c zones))))))
+                (loop [i 0]
+                  (cond
+                    (not (ctx/alive? c)) :done
+                    (<= max-passes i) (result/stop! c :too-many-passes "cleanup did not settle")
+                    (= :again (await (work! c zones))) (do (await (pace/pace!)) (recur (inc i)))
+                    :else :done))))))

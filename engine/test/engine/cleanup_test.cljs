@@ -467,3 +467,16 @@
           (await (ticks s eng 30))
           (is (= 1 (count (of-kind seen :tool.broke))))
           (is (= 1 (count (of-kind seen :tool.none)))))))))
+
+(deftest a-pillar-is-cleaned-up-in-one-run
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cells (pillar-cells [0 64 0] 6)
+              {:keys [eng p out] :as s} (setup {:self {:x 0.5 :y 70 :z 0.5} :blocks (pillar-blocks cells)
+                                                :entries (mapv entry cells)})]
+          (core/submit! eng '(recording-parent) {})
+          (await (core/tick! eng))
+          (is (= [] (:list (core/state eng))) "one tick ends the run")
+          (is (every? nil? (map #(block p %) cells)))
+          (is (= 6 (count (:removed @out)))))))))

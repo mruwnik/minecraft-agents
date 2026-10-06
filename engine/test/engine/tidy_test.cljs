@@ -237,16 +237,18 @@
           (is (= [] (tidy-entries eng)))
           (is (= [[[0 65 0] [0 66 0]]] (mapv :cells (zs/trespass seen :tidy.restored)))))))))
 
-(deftest a-run-counts-its-try-when-it-starts-walking
+(deftest a-walk-that-fails-is-a-try-and-the-cell-is-given-up-in-one-run
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (restore! (merge with-hitbox {:floor [-60 -8 60 8] :self {:pos [-50 64 0]}
+        (let [{:keys [eng p seen]} (restore! (merge with-hitbox {:floor [-60 -8 60 8] :self {:pos [-50 64 0]}
                                                          :inventory [{:name "stone" :count 2}]})
                                       [(zs/whole-zone "Miles")] [(dug-cell [50 64 0])])]
           (.override (.-world p) "steer" (fn ^:async f [_ _ _] #js {:status "failed" :reason "no controls"}))
           (await (core/tick! eng))
-          (is (= [1] (mapv :tries (tidy-entries eng))) "a first round of walking is a try"))))))
+          (is (= [[{:cell [50 64 0] :was "stone" :why :gave-up}]] (mapv :cells (zs/trespass seen :tidy.not-restored)))
+              "each failed walk is a try; after max-tries the cell is given up, all in one run")
+          (is (= [] (tidy-entries eng))))))))
 
 ;; ------------------------------------------------------------------ the tidy-pending trigger
 
@@ -387,16 +389,15 @@
 (defn firings [seen] (count (filter #(and (= :fired (:kind %)) (= :tidy-pending (:reflex %))) @seen)))
 
 (defn ^:async backed-off!
-  "A body by an unplaceable entry with the tidy-pending trigger as registered; returns the setup once the reflex ended
-  with a backoff."
+  "A body by an unplaceable entry with the tidy-pending trigger as registered; returns the setup once the reflex ended."
   [world]
   (let [{:keys [eng seen] :as s} (setup-with-backoff (merge-with into aside world {:inventory [{:name "wheat_seeds" :count 4}]})
                                                      [(zs/whole-zone "Miles")])]
     (seed! eng [unplaceable])
     (core/register-reflex! eng {:trigger :tidy-pending})
     (await (ticks-over! eng (:clock s) 12 10))
-    (is (= [:backoff] (mapv :outcome (filter #(and (= :ended (:kind %)) (= :tidy-pending (:reflex %))) @seen)))
-        "the first run ended with a backoff")
+    (is (= 1 (count (filter #(and (= :ended (:kind %)) (= :tidy-pending (:reflex %))) @seen)))
+        "the first run ended once, the entry given up inside it")
     s))
 
 (deftest after-a-backoff-a-new-entry-is-restored
@@ -418,9 +419,9 @@
           (seed! eng [(assoc dug :job "j9")])
           (await (ticks-over! eng clock 60 1000))
           (is (= [] (filterv #(= 0 (:x %)) (mapv zs/arg-pos (zs/calls p "place")))) "no stone carried")
-          (is (= [#{{:cell [1 65 0] :was "wheat_seeds" :why :gave-up} {:cell [0 65 0] :was "stone" :why :not-carried}}]
+          (is (= [#{{:cell [1 65 0] :was "wheat_seeds" :why :gave-up}} #{{:cell [0 65 0] :was "stone" :why :not-carried}}]
                  (mapv (comp set :cells) (zs/trespass seen :tidy.not-restored)))
-              "one warn: the seeds given up, the stone not carried")
+              "one warn per run: the seeds given up, then the stone not carried")
           (let [n (firings seen)]
             (await (ticks-over! eng clock 60 1000))
             (is (= n (firings seen)) "nothing changed: no firing"))
@@ -523,3 +524,15 @@
 (deftest standable-cell-is-the-rule-clear-cell-and-go-to-share
   (doseq [[below expected] [["stone" true] ["torch" false] ["lava" false] ["cactus" false] ["air" false] ["water" false]]]
     (is (= expected (reach/standable-cell? (tu/fake {:blocks {"0,63,0" below}}) {:x 0 :y 64 :z 0})) below)))
+
+(deftest restore-puts-every-cell-back-in-one-run
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (assoc-in (assoc with-hitbox :blocks dead-end) [:self :pos] [4 64 0])
+              entries [(dug-cell [3 64 0]) (dug-cell [2 64 0])]
+              {:keys [eng p]} (restore! world [(zs/whole-zone "Miles")] entries)]
+          (await (core/tick! eng))
+          (is (= [] (:list (core/state eng))) "one tick ends the run")
+          (is (= 2 (count (zs/calls p "place"))))
+          (is (= [] (tidy-entries eng))))))))
