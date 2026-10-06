@@ -1,14 +1,17 @@
 (ns jobs.forestry.harvest-wood
   (:require [engine.ctx :as ctx]
             [jobs.lib.util :as u]
-            [jobs.forestry.trees :refer [default-radius drop-filter debts near-debt?]]))
+            [jobs.forestry.trees :refer [default-radius drop-filter debts near-debt? sapling-for]]))
 
 (def doc
   "Fell a tree, collect what dropped and replant. Runs three child jobs in turn, one child round per round:
   :fell (jobs.forestry.fell-tree), :collect (collect-drops) and :plant (plant-sapling).
   Ends when :plant is done. Only replant debts within :radius of where the body stood when :plant began are
   planted; the others (and any when no sapling is carried or the spot is not clear) stay owed, and the job
-  warns harvest-wood.debts-owed with their :count and the :nearest one's :pos.")
+  warns harvest-wood.debts-owed with their :count and the :nearest one's :pos.
+  Debts within the radius that stay unplanted (no sapling carried, spot refused) warn harvest-wood.replant-owed
+  with :count, :pos, :reason (:no-sapling or :not-planted) and :text. The status stays :completed (the wood is
+  the goal); the result is {:replant-owed n} then. No sapling is fetched: plant-sapling only plants what is carried.")
 
 (def args
   {:species {:doc "log species; any when nil" :default nil}
@@ -49,6 +52,23 @@
                       {:count (count owed)
                        :nearest (:pos (apply min-key #(u/dist here (:pos %)) owed))}))))
 
+(defn warn-replant-owed!
+  "Debts of the species within the radius still owed when the job ends: warn once and hand over {:replant-owed n}."
+  [c]
+  (let [{:keys [species radius]} (:args c)
+        here (:origin (ctx/mem c))
+        owed (filterv #(and (or (nil? species) (= species (:species %))) (near-debt? here radius %)) (debts c))]
+    (when (seq owed)
+      (let [n (count owed)
+            reason (if (some #(sapling-for (u/inventory (:primitives c)) (:species %)) owed) :not-planted :no-sapling)]
+        (ctx/warn-once! c :replant-owed :harvest-wood.replant-owed
+                        {:count n
+                         :pos (:pos (apply min-key #(u/dist here (:pos %)) owed))
+                         :reason reason
+                         :text (str "felled " n (if (= 1 n) " tree" " trees") ", could not replant: "
+                                    (if (= :no-sapling reason) "no sapling" "spot not plantable"))})
+        (ctx/result! c {:replant-owed n})))))
+
 (defn ^:async round
   "Steps the current phase's child once; when the child is done the phase
   advances. Done when the :plant child is done. A declined child is
@@ -63,7 +83,7 @@
         next-phase (second (drop-while #(not= phase %) (map first (phases (:args c) nil))))]
     (cond
       (not= :done r) :continue
-      (nil? next-phase) (do (warn-owed! c) :done)
+      (nil? next-phase) (do (warn-owed! c) (warn-replant-owed! c) :done)
       :else (do (ctx/update-mem! c assoc :phase next-phase)
                 (when (= :plant next-phase) (ctx/update-mem! c assoc :origin (u/self-pos c)))
                 :continue))))

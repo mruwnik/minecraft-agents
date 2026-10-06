@@ -12,12 +12,25 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3)})]
+        (let [{:keys [eng p seen]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3)})]
           (core/submit! eng harvest {})
           (is (< (await (lt/run-until-empty eng 30)) 30) "finishes instead of waiting for a sapling")
           (is (= [] (:list (core/state eng))))
           (is (= 3 (get (lt/inv p) "oak_log")) "logs collected")
-          (is (= 1 (count (lt/debts eng))) "the replant stays owed"))))))
+          (is (= 1 (count (lt/debts eng))) "the replant stays owed")
+          (let [w (filterv #(= :harvest-wood.replant-owed (:kind %)) @seen)]
+            (is (= 1 (count w)) "the unplanted spot is reported")
+            (is (= 1 (:count (first w))))
+            (is (= :no-sapling (:reason (first w))))
+            (is (= (:pos (first (lt/debts eng))) (:pos (first w))))
+            (is (= "felled 1 tree, could not replant: no sapling" (:text (first w))))))))))
+
+(deftest no-sapling-hands-over-replant-owed-and-is-still-completed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3)})]
+          (is (= {:replant-owed 1} (await (lt/child-outcome eng 'jobs.forestry.harvest-wood {:species "oak" :radius 10} 30)))))))))
 
 (deftest a-sapling-carried-is-still-planted
   (async done
@@ -79,7 +92,8 @@
           (is (= "oak_sapling" (.-name (.blockAt p #js {:x 3 :y 64 :z 0}))) "the felled tree's spot is planted")
           (is (= [far-debt] (lt/debts eng)) "the far debt stays owed")
           (is (empty? (filterv #(< 100 (js/Math.abs (or (some-> % .-args .-pos .-x) 0))) (lt/calls p "moveTo"))) "no walk far")
-          (is (= 1 (count (filterv #(= :harvest-wood.debts-owed (:kind %)) @seen))) "the owed debt is reported"))))))
+          (is (= 1 (count (filterv #(= :harvest-wood.debts-owed (:kind %)) @seen))) "the owed debt is reported")
+          (is (= [] (filterv #(= :harvest-wood.replant-owed (:kind %)) @seen)) "nothing near is owed"))))))
 
 (deftest a-far-debt-and-no-sapling-ends-with-both-owed-and-says-so
   (async done
