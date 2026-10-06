@@ -216,6 +216,7 @@ git diff --cached --quiet -- "${allowed[@]}" && die "nothing staged for the give
 while IFS=$'\t' read -r add del f; do
   [[ "$f" =~ \.(js|mjs|cjs)$ ]] || continue
   [[ "$add" =~ ^[0-9]+$ ]] || continue
+  git cat-file -e ":$f" 2>/dev/null || continue  # deleted: no index copy to check
   total=$(git show ":$f" 2>/dev/null | wc -l)
   new=0; git cat-file -e "HEAD:$f" 2>/dev/null || new=1
   large=0

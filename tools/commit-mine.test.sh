@@ -125,6 +125,18 @@ git checkout -q HEAD~1 -- gone; git commit -q -m restore2
 git rm -rq gone
 out=$(tools/commit-mine --card c -m rmdir2 --expect-lines 121 gone 2>&1); check "staged dir delete exit" "$?" 0
 check "staged dir delete: gone from HEAD" "$(git ls-tree -r HEAD --name-only | grep -c '^gone/')" 0
+# A deleted .mjs (staged or not) with an edited file in one call commits both; a new .mjs without the line is still refused.
+big() { printf '%s\n' "$W"; seq 1 60; }
+big > del.mjs; seq 1 3 > k.txt; git add del.mjs k.txt; git commit -q -m delmjs
+rm del.mjs; echo y >> k.txt
+out=$(tools/commit-mine --card c -m delmjs --expect-lines 62 del.mjs k.txt 2>&1); check "deleted mjs + edit exit" "$?" 0
+check "deleted mjs + edit: both in HEAD" "$(git show --name-only --format= HEAD | sort | tr '\n' ' ')" "del.mjs k.txt "
+big > del2.mjs; git add del2.mjs; git commit -q -m delmjs2; git rm -q del2.mjs
+out=$(tools/commit-mine --card c -m delmjs2 --expect-lines 61 del2.mjs 2>&1); check "staged deleted mjs exit" "$?" 0
+seq 1 60 > nolabel.mjs
+out=$(tools/commit-mine --card c -m m --expect-lines 60 nolabel.mjs 2>&1); check "new mjs without Why line refused" "$?" 1
+check "refusal names the line" "$(grep -c 'Why JavaScript' <<<"$out")" 1
+rm -f nolabel.mjs
 # A git failure prints git's message and exits non-zero (stray pathspec that matches nothing, nothing deleted).
 out=$(tools/commit-mine --card c -m m --expect-lines 0 nosuchfile 2>&1); rc=$?
 check "git failure exits non-zero" "$((rc != 0))" 1
