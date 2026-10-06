@@ -1,7 +1,9 @@
 (ns engine.sensing-walls-test
   "Entities behind a wall: items are left alone (only visible ones count); hostiles count when known (seen or heard)."
   (:require [cljs.test :refer [deftest is]]
+            [engine.ctx :as ctx]
             [engine.fake :as fake]
+            [jobs.combat.attack :as attack]
             [jobs.debug.notify :as notify]
             [jobs.farm.compost :as compost]
             [jobs.items.give :as give]
@@ -40,6 +42,14 @@
     (is (= [] (mapv #(.-id %) (combat/hostiles (stub [silent] []) 8))))
     (is (re-find #"hostiles 0" (notify/snapshot (doto (stub [silent] []) (aset "self" (fn [] #js {:pos #js {:x 0 :y 64 :z 0}}))))))))
 
-(deftest attack-and-sensed-skip-an-unknown-mob-behind-a-wall
+(deftest sensed-skips-an-unknown-mob-behind-a-wall
   (let [p (stub [(zombie 1) {:id 3 :name "cow" :kind "passive" :pos {:x 1 :y 64 :z 0} :distance 1}] [])]
     (is (= [3] (mapv #(.-id %) (combat/sensed p {:radius 8}))))))
+
+(deftest a-player-behind-a-wall-is-still-sensed
+  (let [alex {:id 9 :name "Alex" :username "Alex" :kind "player" :pos behind}
+        p (world alex)]
+    (is (= false (.-visible (first (array-seq (.entities p #js {:kind "player"}))))) "the fake marks the player hidden")
+    (is (= [9] (mapv #(.-id %) (combat/sensed p {:radius 10}))) "the player stays")
+    (with-redefs [ctx/mem (constantly {})]
+      (is (= [9] (mapv #(.-id %) (attack/present {:primitives p :args {:targets ["Alex"] :radius 10}}))) "attack finds the player by name"))))
