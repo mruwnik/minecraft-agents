@@ -2,7 +2,7 @@
   (:require ["fs" :as fs]
             ["path" :as path]
             ["os" :as os]
-            [cljs.test :refer [deftest is]]
+            [cljs.test :refer [deftest is use-fixtures]]
             [dashboard.edn-data :as data]
             [dashboard.migrate-data :as migration]
             [dashboard.village-data :as villages]
@@ -25,8 +25,23 @@
     (.mkdirSync fs (.dirname path file) #js {:recursive true})
     (.writeFileSync fs file (if json? (js/JSON.stringify (clj->js value)) (pr-str value))) file))
 
+(def roots (atom []))
+(def made (atom []))
+
+(defn remove-roots! []
+  (doseq [root @roots] (.rmSync fs root #js {:recursive true :force true}))
+  (reset! roots []))
+
+(use-fixtures :each {:after remove-roots!})
+
+(use-fixtures :once
+  {:before #(reset! made [])
+   :after #(is (empty? (filter (fn [root] (.existsSync fs root)) @made)) "the run leaves no temp dir behind")})
+
 (defn fixture []
   (let [root (.mkdtempSync fs (.join path (.tmpdir os) "village-plan-migration-"))]
+    (swap! roots conj root)
+    (swap! made conj root)
     (put root "worlds/claude/world.json" {:name "claude"} true)
     (put root "worlds/other/world.json" {:name "other"} true)
     (put root "worlds/claude/places.json" [marker {:name "shelter" :kind "shelter" :x 0 :y 64 :z 0}] true)
