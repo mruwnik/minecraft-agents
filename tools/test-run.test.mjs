@@ -2,7 +2,7 @@
 import fs from 'node:fs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { parseNss, expectedMs, runTimeoutS, needMb, lastFinished, isolate, narrowBundle } from './test-run.mjs'
+import { parseNss, expectedMs, runTimeoutS, needMb, lastFinished, isolate, narrowBundle, missingNss } from './test-run.mjs'
 
 test('parseNss: space- and comma-separated namespaces, blanks dropped', () => {
   assert.deepEqual(parseNss(['engine.a-test,engine.b-test', 'engine.c-test', '']), ['engine.a-test', 'engine.b-test', 'engine.c-test'])
@@ -89,4 +89,13 @@ test('narrowBundle: an unrecognised registry leaves the bundle untouched', (t) =
   fs.writeFileSync(`${dir}/out/test/cljs-runtime/shadow.test.node.js`, 'something else')
   assert.equal(narrowBundle(dir, ['engine.a-test']), 0)
   assert.equal(fs.readFileSync(`${dir}/out/test.cjs`, 'utf8'), 'SHADOW_IMPORT("engine.b_test.js");\n')
+})
+
+test('missingNss: requested namespaces absent from the compiled :test bundle (a run of them would pass with 0 tests)', (t) => {
+  const src = fs.mkdtempSync('/tmp/test-run-missing-')
+  t.after(() => fs.rmSync(src, { recursive: true, force: true }))
+  fs.mkdirSync(`${src}/out/test/cljs-runtime`, { recursive: true })
+  fs.writeFileSync(`${src}/out/test/cljs-runtime/engine.go_to_test.js`, '')
+  assert.deepEqual(missingNss(src, ['engine.go-to-test', 'engine.planner-courses-golden', 'engine.nope']), ['engine.planner-courses-golden', 'engine.nope'])
+  assert.deepEqual(missingNss(src, ['engine.go-to-test']), [])
 })

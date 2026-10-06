@@ -111,11 +111,20 @@ export const narrowBundle = (runDir, nss) => {
   return dropped
 }
 
+// Requested namespaces the :test bundle does not contain (e.g. the opt-in -golden ones, built by --golden): shadow runs 0 tests and exits 0.
+export const missingNss = (engineDir, nss) =>
+  nss.filter((n) => !fs.existsSync(path.join(engineDir, 'out/test/cljs-runtime', `${n.replaceAll('-', '_')}.js`)))
+
 const readJson = (f, d) => fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')) : d
 
 const main = () => {
   const nss = parseNss(process.argv.slice(2))
   if (!nss.length) { console.error('usage: tools/test-run.mjs <ns>...'); process.exit(2) }
+  const missing = missingNss(engine, nss)
+  if (missing.length) {
+    console.error(`test-engine: not in the :test bundle (a run would pass with 0 tests): ${missing.join(' ')}${missing.some((n) => n.endsWith('-golden')) ? ' (the -golden ones run with tools/test-engine --golden)' : ''}`)
+    process.exit(2)
+  }
   const res = readJson(path.join(tools, 'res-slot.json'), null)
   const expected = expectedMs(nss, readJson(path.join(engine, 'out/test-ns-ms.json'), {}))
   const limit = Number(process.env.MC_TEST_TIMEOUT_S) || runTimeoutS(expected)

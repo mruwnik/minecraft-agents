@@ -2,7 +2,7 @@
 # Set up a fresh git worktree for integration testing.
 # Usage: tools/integration-worktree.sh <commit> <dir> | --remove <dir>
 # Checks out <commit> at <dir>, then adds what a clean checkout lacks (all git-ignored): node_modules (symlinked to the main
-# checkout's), the .shadow-cljs dirs, worlds/claude/biomes.json, textures/, the built agent-tools.cjs and the viewer cljs.
+# checkout's), the .shadow-cljs dirs, worlds/claude/biomes.json, textures/, engine/test/fixtures/pathfinding, the built agent-tools.cjs and the viewer cljs.
 # Any failing step fails the script. The builds there start shadow servers (each under a res-slot `compile` slot, 1-2 GB);
 # remove the worktree afterwards with `tools/integration-worktree.sh --remove <dir>`: it kills those servers by PID, then removes it.
 set -euo pipefail
@@ -26,6 +26,8 @@ done
 mkdir -p "$wt/engine/.shadow-cljs" "$wt/dashboard/.shadow-cljs" "$wt/worlds/claude"
 cp "$repo/worlds/claude/biomes.json" "$wt/worlds/claude/"
 cp -r "$repo/textures" "$wt/"
+mkdir -p "$wt/engine/test/fixtures"
+cp -r "$repo/engine/test/fixtures/pathfinding" "$wt/engine/test/fixtures/"
 
 "$wt/tools/compile" dashboard agent-tools --release
 node "$wt/tools/view/build-cljs.mjs"
