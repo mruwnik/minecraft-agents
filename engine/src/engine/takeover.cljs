@@ -3,7 +3,7 @@
   stateless adapter that calls handle). The rules are engine.lease's (pure); this namespace applies their
   effects to the engine and is the only owner of the state: (:manual eng) holds the lease map plus :token.
   take! cuts the holder like a reflex and gives the ownership token to the driver; the scheduler
-  stands still (core/paused?) until the lease ends. The manual state never reaches engine.edn."
+  runs only the driver's slot job (core/tick!) until the lease ends. The manual state never reaches engine.edn."
   (:require [engine.core :as core]
             [engine.entity-observations :as entity-observations]
             [engine.hooks :as hooks]
@@ -297,6 +297,7 @@
               {:ok true :operation (op-view prior) :duplicate true}
               (op-refuse "request-id-conflict"))
       (core/offline? eng) (op-refuse "offline")
+      (and (core/running eng) (core/manual-job eng)) (op-refuse "job-running" {:job (core/manual-job eng)})
       (not (own-lease? eng who)) (not-driver-refusal eng)
       (not (contains? world-actions action)) (op-refuse "unknown-action")
       (action-args-error action args) (op-refuse "bad-args" (action-args-error action args))
@@ -354,15 +355,18 @@
     (let [token (str "m" (swap! (:tokens eng) inc))]
       (when-let [h (core/holder eng)] (core/cut! eng h :takeover nil))
       (core/set-owner! eng token)
+      (reset! (:manual-job eng) nil)
       (reset! (:manual eng) {:who who :why why :since (core/now eng) :token token})
       (core/emit! eng {:source :system :kind :takeover_started :level :info :who who :why why
                        :text (str "manual control by " who ": " why "; jobs and reflexes paused")})
       {:ok true})))
 
 (defn release!
-  "End the takeover: controls cleared, owner nil, the scheduler resumes on the next tick."
+  "End the takeover: the slot job is cancelled, controls cleared, owner nil, the loop and triggers resume on the next tick."
   [eng {:keys [who reason held-ms]}]
   (when (core/manual? eng)
+    (when-let [id (core/manual-job eng)] (core/cancel! eng id :release))
+    (reset! (:manual-job eng) nil)
     (drop-queue! eng (str "lease-" reason))
     (cancel-active! eng (str "lease-" reason))
     (.stopDriving (:primitives eng))
@@ -419,9 +423,14 @@
     (= path "/world") (world-request eng method body content-type)
     :else
     (let [body-map (js->clj body :keywordize-keys true)]
-      (if (and (= path "/drive") (= method "POST") (:active @(:world-ops eng))
-               (contains? #{"set" "stop"} (:op body-map)) (own-lease? eng (:who body-map)))
+      (cond
+        (and (= path "/drive") (= method "POST") (contains? #{"set" "stop"} (:op body-map)) (own-lease? eng (:who body-map))
+             (core/running eng) (core/manual-job eng))
+        #js {:status 409 :json #js {:ok false :reason "job-running" :job (core/manual-job eng)}}
+        (and (= path "/drive") (= method "POST") (:active @(:world-ops eng))
+             (contains? #{"set" "stop"} (:op body-map)) (own-lease? eng (:who body-map)))
         #js {:status 409 :json #js {:ok false :reason "action-running" :requestId (:active @(:world-ops eng))}}
+        :else
         (let [now (core/now eng)
               req {:method method :path path :body body-map}
               r (lease/request @(:manual eng) req now (world-of eng) opts)
@@ -433,6 +442,8 @@
 (defn tick!
   "Time passing for the lease: apply what lease/tick decides (idle, offline, due holds, the dead-man)."
   [eng opts]
+  (when (core/manual-job eng)
+    (swap! (:manual eng) #(some-> % (assoc :last-beat (core/now eng)))))
   (let [{:keys [lease effects]} (lease/tick @(:manual eng) (core/now eng) (world-of eng) opts)]
     (run! #(apply-effect! eng %) effects)
     (store! eng lease)))

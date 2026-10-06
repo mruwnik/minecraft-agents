@@ -1,7 +1,7 @@
 (ns engine.core.schedule
   "The scheduling pass: readiness of listed jobs (checks, job.waiting, the next one to run), who holds
   the body, cuts, firing reflexes, tick! and do-now!."
-  (:require [engine.core.base :refer [add-instance call-guarded emit! flush-save-stats! job-fields job-of new-id! now paused? reflex-text running save-memory! set-owner! state wait-reason waiting-text]]
+  (:require [engine.core.base :refer [add-instance call-guarded emit! flush-save-stats! free-owner! job-fields job-of manual-job manual? new-id! now paused? reflex-text running save-memory! state wait-reason waiting-text]]
             [engine.core.fruitless :refer [reset-backoff!]]
             [engine.core.register :refer [effective-register evaluate-register! expire-changes! preempts?]]
             [engine.core.activity :refer [check-idle!]]
@@ -65,7 +65,7 @@
 (defn cut!
   "Take the body from holder h for entry; cause is the seq of the firing."
   [eng h by cause]
-  (set-owner! eng nil)
+  (free-owner! eng)
   (reset! (:running eng) nil)
   (if (:reflex h)
     (drop-reflex-job! eng (:id h) (:reflex h) :dropped {:how :dropped :by by :cause cause})
@@ -83,8 +83,8 @@
     (mem/create-job! (:store eng) id (second (job-of eng {:spec node})))
     (start-round! eng id)))
 
-(defn tick-online!
-  "One scheduling pass for a body that is on the server."
+(defn housekeep!
+  "Expire register changes, and emit the save stats and sweep memory when due."
   [eng]
   (expire-changes! eng)
   (when (>= (- (now eng) @(:last-stats eng)) (:stats-ms eng))
@@ -92,7 +92,23 @@
     (flush-save-stats! eng))
   (when (>= (- (now eng) @(:last-sweep eng)) (:sweep-ms eng))
     (reset! (:last-sweep eng) (now eng))
-    (save-memory! eng))
+    (save-memory! eng)))
+
+(defn tick-manual!
+  "One pass under manual control: no trigger, no loop. Only the driver's slot job runs (a round per tick until it
+  ends); with it gone the body idles. A world action still running (engine.takeover) holds the body first."
+  [eng]
+  (housekeep! eng)
+  (if (running eng)
+    (check-idle! eng)
+    (when-let [id (and (not (:active @(:world-ops eng))) (manual-job eng))]
+      (when (and (not (contains? (:failed (state eng)) id)) (check-passes? eng id))
+        (start-round! eng id)))))
+
+(defn tick-online!
+  "One scheduling pass for a body that is on the server."
+  [eng]
+  (housekeep! eng)
   (let [order (effective-register (state eng) (now eng))
         firing (evaluate-register! eng order)
         h (holder eng)]
@@ -104,12 +120,14 @@
 (defn tick!
   "One scheduling pass. Synchronous; returns the promise of a round it
   started (resolving once that round is settled), or nil. Does nothing while
-  the body is offline, settling or under manual control: no trigger is evaluated and no round starts.
+  the body is offline or settling. Under manual control only the driver's slot job runs (tick-manual!).
   The first ready tick after a pause clears the backoff and judges the reflex
   ends deferred meanwhile."
   [eng]
-  (if (paused? eng)
-    (do (reset! (:was-paused eng) true) nil)
+  (cond
+    (paused? eng) (do (reset! (:was-paused eng) true) nil)
+    (manual? eng) (do (reset! (:was-paused eng) true) (tick-manual! eng))
+    :else
     (do (when @(:was-paused eng)
           (reset! (:was-paused eng) false)
           (reset-backoff! eng))

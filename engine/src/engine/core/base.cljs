@@ -201,9 +201,26 @@
   (some? @(:manual eng)))
 
 (defn paused?
-  "Whether the scheduler must stand still: offline, settling or under manual control."
+  "Whether the scheduler must stand still: offline or settling. Manual control does not pause it: the
+  scheduler then runs only the driver's slot job (see schedule/tick-manual!)."
   [eng]
-  (or (offline? eng) (settling? eng) (manual? eng)))
+  (or (offline? eng) (settling? eng)))
+
+(defn free-owner!
+  "Nobody's round holds the body: the lease token owns it while someone drives, else no one."
+  [eng]
+  (set-owner! eng (some-> @(:manual eng) :token)))
+
+(defn driver?
+  "Whether by (a name or keyword) is who holds the manual lease."
+  [eng by]
+  (and (manual? eng) (= (if (keyword? by) (name by) (str by)) (:who @(:manual eng)))))
+
+(defn manual-job
+  "The id of the driver's slot job while it is listed, else nil."
+  [eng]
+  (let [id (some-> (:manual-job eng) deref)]
+    (when (and id (some #{id} (:list (state eng)))) id)))
 
 (defn self-pos
   "The body's position, or nil when self() has none (the offline record is just {status: 'offline'})."

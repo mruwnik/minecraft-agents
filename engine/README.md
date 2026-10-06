@@ -482,7 +482,10 @@ one `job.cancelled` event each; the register is untouched, so reflexes keep runn
 
 For rescuing a stuck body by hand. The body listens on `worlds/<world>/agents/<name>/engine/control.sock` (mode 0600).
 Three control modes exist: normal scheduling, `do-now!` (an urgent holder), and manual takeover. `take` cuts the current
-holder and pauses all trigger evaluation and rounds until release or lease expiry. A cut listed job stays listed; a cut
+holder and mutes all triggers and the loop until release or lease expiry: only the driver's slot job runs (the job the
+driver submits with `:by` = the lease's `who`; a new one replaces it; the body idles after it). Jobs from others queue and
+wait, `:front?`/`interrupt` from them are refused `:manual-control`, release cancels the slot job, and a running slot
+job keeps the lease alive and makes `/drive set|stop` answer 409 `job-running`. A cut listed job stays listed; a cut
 reflex job is dropped. Who drives is decided by a lease, first come (`take` is refused `held-by <who>` otherwise). The
 lease is not saved; restart or going offline ends it.
 

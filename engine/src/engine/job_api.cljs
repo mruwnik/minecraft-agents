@@ -21,6 +21,7 @@
   (when-let [inst (get-in (core/state eng) [:instances id])]
     (cond-> {:id id :name (text (expr/label (:spec inst)) 160) :status (status eng id)
              :round (:round inst) :hold? (boolean (:hold? inst))}
+      (= id (core/manual-job eng)) (assoc :manual true)
       (core/waiting eng id) (assoc :waiting (core/waiting eng id))
       (core/holding eng id) (assoc :holding (core/holding eng id)))))
 (defn list-jobs [eng offset limit]
@@ -88,6 +89,8 @@
       (and (#{:cancel :retry} op) (not (valid-job-id? id))) (fail :bad-job-id)
       (and (#{:cancel :retry} op) (nil? (get-in (core/state eng) [:instances id]))) (fail :job-not-found)
       (and (= op :cancel-all) (contains? request :id)) (fail :bad-field ":cancel-all takes no :id; it clears the whole list")
+      (and (= op :submit) (:front? request) (core/manual? eng) (not (core/driver? eng by)))
+      (fail :manual-control "Manual control is held: only its holder may submit :front?; a plain submit queues and waits.")
       (and (= op :interrupt) (core/manual? eng)) (fail :manual-control "Release the exclusive body lease before interrupting; submit can still queue work.")
       :else
       (do

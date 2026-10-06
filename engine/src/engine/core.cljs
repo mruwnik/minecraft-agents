@@ -65,6 +65,9 @@
 (def job-memory base/job-memory)
 (def job-of base/job-of)
 (def manual? base/manual?)
+(def manual-job base/manual-job)
+(def driver? base/driver?)
+(def free-owner! base/free-owner!)
 (def now base/now)
 (def offline? base/offline?)
 (def paused? base/paused?)
@@ -139,7 +142,7 @@
   "End reflex job id by request (cutting its round): reflex.ended :cancelled; its trigger may fire again."
   [eng id by]
   (when (= id (:id (running eng)))
-    (set-owner! eng nil)
+    (free-owner! eng)
     (reset! (:running eng) nil))
   (drop-reflex-job! eng id (get-in (state eng) [:instances id :reflex]) :cancelled {:how :cancelled :by by})
   (emit! eng {:source :job :kind :cancelled :level :info :job id :chain [id] :by by}))
@@ -154,7 +157,7 @@
   (doseq [[id inst] (:instances (state eng))
           :when (:reflex inst)]
     (when (= id (:id (running eng)))
-      (set-owner! eng nil)
+      (free-owner! eng)
       (reset! (:running eng) nil))
     (drop-reflex-job! eng id (:reflex inst) :dropped {:how :dropped :by :death})))
 
@@ -218,6 +221,7 @@
              :running (atom nil)
              :tokens (atom 0)
              :manual (atom nil)
+             :manual-job (atom nil)
              :away (atom nil)
              :waiting (atom {})
              :world-ops (atom {:active nil :records {} :order [] :queue []})
