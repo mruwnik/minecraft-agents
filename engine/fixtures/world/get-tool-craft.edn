@@ -1,0 +1,64 @@
+;; Card 45038295 (items.obtain :craft source, engine.jobs.recipes). Flat open plot, nothing to gather. A table the body
+;; has seen stands 2 east of it in the "seen-table" cases (the body looks east, yaw 270).
+{:defaults
+ {:tags [:fetch :crafting]
+  :time :any
+  :plot {:height 12}
+  :body {:at [16.5 0 16.5] :settle-s 3}
+  :limit-s 90}
+ :cases
+ [{:name "logs-make-pick-and-table"
+   :body {:inventory [["oak_log" 12]]}
+   :act [[:job (jobs.items.get-tool {:kind "pickaxe"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
+   :after [[:item "wooden_pickaxe" 1] [:item "crafting_table" 0]
+           [:entities "type=item" [[0 -1 0] [32 5 32]] 0]]}
+  {:name "logs-make-pick-and-table-stone-pick-name"
+   :body {:inventory [["oak_log" 12]]}
+   :act [[:job (jobs.items.get-tool {:item "wooden_pickaxe"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
+   :after [[:item "wooden_pickaxe" 1]]}
+  {:name "seen-table-planks-sticks"
+   :blocks [[:set [19 0 16] "crafting_table"]]
+   :body {:inventory [["oak_planks" 3] ["stick" 2]]}
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"] [:wait-s 2]
+         [:job (jobs.items.get-tool {:kind "pickaxe"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
+   :after [[:item "wooden_pickaxe" 1] [:item "crafting_table" 0] [:item "oak_planks" 0] [:item "stick" 0]]}
+  {:name "seen-table-logs-no-second-table"
+   :blocks [[:set [19 0 16] "crafting_table"]]
+   :body {:inventory [["oak_log" 2]]}
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"] [:wait-s 2]
+         [:job (jobs.items.get-tool {:kind "pickaxe"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
+   :after [[:item "wooden_pickaxe" 1] [:item "crafting_table" 0]]}
+  {:name "dig-fetch-from-logs"
+   :blocks [[:set [18 0 19] "stone"]]
+   :body {:inventory [["oak_log" 12]]}
+   :act [[:job (jobs.blocks.dig {:pos #at [18 0 19] :fetch true})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
+   :after [[:block [18 0 19] "air"] [:item "wooden_pickaxe" 1] [:item "cobblestone" 1]]}
+  {:name "only-dirt-waits-no-source"
+   :body {:inventory [["dirt" 20]]}
+   :act [[:job (jobs.items.get-tool {:kind "pickaxe"})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-source}} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 15}]
+   :after [[:item "wooden_pickaxe" 0] [:item "dirt" 20]]}
+  {:name "only-dirt-pick-by-item"
+   :body {:inventory [["dirt" 5]]}
+   :act [[:job (jobs.items.get-tool {:item "wooden_pickaxe"})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-source}} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 15}]
+   :after [[:item "wooden_pickaxe" 0]]}
+  {:name "two-logs-no-source"
+   :body {:inventory [["oak_log" 2]]}
+   :act [[:job (jobs.items.get-tool {:kind "pickaxe"})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-source}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 15}]
+   :after [[:item "wooden_pickaxe" 0]]}
+  {:name "stone-pick-no-cobble"
+   :body {:inventory [["oak_log" 12] ["stick" 4]]}
+   :act [[:job (jobs.items.get-tool {:item "stone_pickaxe"})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-source}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 15}]
+   :after [[:item "stone_pickaxe" 0]]}]}
