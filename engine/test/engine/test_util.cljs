@@ -73,12 +73,15 @@
   test a body that has seen nothing."
   [p]
   (aset p "seenBlocks" (fn [q] (.blocks p q)))
+  (aset p "seenBlockAt" (fn [pos] (let [b (.blockAt p pos)]
+                                    #js {:name (.-name b) :properties (.-properties b) :pos pos :age-ms 0})))
   p)
 
 (defn blind
   "p with no seenBlocks: a body that has seen nothing, whatever the world holds."
   [p]
   (js-delete p "seenBlocks")
+  (js-delete p "seenBlockAt")
   p)
 
 (defn short-walks!

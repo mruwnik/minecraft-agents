@@ -494,7 +494,7 @@
       (fn ^:async t []
         (let [spec (world {"3,63,0" "stone"} (item "dirt" 1) (item "oak_sapling" 1) (item "stone_pickaxe" 1))
               dir (tu/tmp-dir)
-              p (tu/fake-on-floor spec)
+              p (tu/seeing-all (tu/fake-on-floor spec))
               first-run (start spec {"forest" one-cell} dir p)]
           (core/submit! (:eng first-run) (list job {:plan "forest"}) {})
           (loop [i 0]

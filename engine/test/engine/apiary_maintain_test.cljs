@@ -41,7 +41,7 @@
   "Submit the job with args in a world; run n ticks 700 ms apart; the setup map."
   ([args w n] (scenario args w n identity))
   ([args w n tweak-jobs]
-   (let [s (h/setup w)
+   (let [s (doto (h/setup w) (-> :p tu/seeing-all))
          s (update s :eng #(update % :jobs tweak-jobs))]
      (core/submit! (:eng s) (spec args) {})
      (dotimes [_ n]

@@ -41,7 +41,7 @@
   "An engine over the fake world spec with the plans {id plan} as its world data and the zones in test-zones, on dir
   when given."
   ([spec plans] (start spec plans (tu/tmp-dir)))
-  ([spec plans dir] (start spec plans dir (tu/fake-on-floor spec)))
+  ([spec plans dir] (start spec plans dir (tu/seeing-all (tu/fake-on-floor spec))))
   ([spec plans dir p]
    (let [[seen sink] (tu/legacy-capture-sink)
          w (world/of-data plans {} @test-zones)
@@ -429,7 +429,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [dir (tu/tmp-dir)
-              p (tu/fake-on-floor oak-world)
+              p (tu/seeing-all (tu/fake-on-floor oak-world))
               first-run (start oak-world {"forest" oak-cell} dir p)]
           (core/submit! (:eng first-run) (list job {:plan "forest"}) {})
           (loop [i 0]

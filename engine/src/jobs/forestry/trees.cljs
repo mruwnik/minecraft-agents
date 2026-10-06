@@ -3,6 +3,7 @@
   replant debts in body memory, saplings. Not a job namespace."
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
+            [jobs.lib.look :as look]
             [jobs.lib.util :as u]))
 
 (def default-radius 16)
@@ -20,14 +21,18 @@
 (defn leaves-name? [n] (boolean (some-> n (str/ends-with? "_leaves"))))
 (defn species-of [log-name] (str/replace log-name #"_log$" ""))
 
+(def max-logs "The most logs one scan reads." 1024)
+(def max-leaves
+  "The most leaves one scan reads: their own cap, so a dense forest's far trees keep theirs."
+  4096)
+
 (defn scan
-  "Blocks from the JS side as cljs maps, nearest first."
-  [p radius match]
-  (mapv (fn [b] {:name (.-name b) :pos (u/pos-of (.-pos b))})
-        (array-seq (.blocks p #js {:radius radius :max 256 :match match}))))
+  "The blocks the body has seen that match, nearest first, as {:name :pos}, at most max."
+  [p radius match max]
+  (mapv #(select-keys % [:name :pos]) (look/seen-blocks p {:radius radius :max max :match match :live? true})))
 
 (defn scan-logs [p radius species]
-  (scan p radius (if species #(= % (str species "_log")) log-name?)))
+  (scan p radius (if species #(= % (str species "_log")) log-name?) max-logs))
 
 (defn find-trees
   "The log columns whose top log has leaves close by, nearest first (lazily), each as
@@ -57,7 +62,7 @@
   "The trees of species (any when nil) within radius, nearest first (find-trees)."
   ([p radius species] (trees-near p radius species #{}))
   ([p radius species excluded]
-   (find-trees (scan-logs p radius species) (scan p (+ radius 4) leaves-name?) excluded)))
+   (find-trees (scan-logs p radius species) (scan p (+ radius 4) leaves-name? max-leaves) excluded)))
 
 (defn tree-near
   ([p radius species] (tree-near p radius species #{}))

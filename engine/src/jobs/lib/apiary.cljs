@@ -1,7 +1,8 @@
 (ns jobs.lib.apiary
   "Helpers for the apiary jobs: reading the smoke and fire under a hive, and
   the fires that stand under the hives."
-  (:require [jobs.lib.util :as u]))
+  (:require [jobs.lib.look :as look]
+            [jobs.lib.util :as u]))
 
 ;; ------------------------------------------------------------------ smoke (vanilla CampfireBlock.isSmokeyPos)
 
@@ -121,12 +122,12 @@
     (<= (u/dist center pos) radius)))
 
 (defn fires
-  "Every lit campfire in the area as {:pos :name}, nearest to the body first."
+  "Every lit campfire the body has seen in the area as {:pos :name}, nearest to the body first."
   [p {:keys [box center radius] :as area}]
   (let [me (u/pos-of (.-pos (.self p)))
         search (if box 64 (+ radius (u/dist me center)))]
-    (->> (array-seq (.blocks p #js {:radius search :names fire-names :properties true :max 64}))
-         (filter lit-campfire?)
-         (map (fn [b] {:pos (u/pos-of (.-pos b)) :name (.-name b)}))
+    (->> (look/seen-blocks p {:radius search :names fire-names :properties? true :live? true :max 64})
+         (filter #(true? (get-in % [:properties :lit])))
+         (map #(select-keys % [:pos :name]))
          (filter #(in-area? area (:pos %)))
          (sort-by #(u/dist me (:pos %))))))

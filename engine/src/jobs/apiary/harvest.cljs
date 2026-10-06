@@ -2,6 +2,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.apiary :as apiary]
             [jobs.lib.gate :as gate]
+            [jobs.lib.look :as look]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]))
 
@@ -42,7 +43,7 @@
 
 (defn pos-key [{:keys [x y z]}] (str x "," y "," z))
 
-(defn ripe? [b] (>= (or (some-> b .-properties .-honey_level) 0) ripe-level))
+(defn ripe? [b] (>= (or (get-in b [:properties :honey_level]) 0) ripe-level))
 
 (defn in-area? [{:keys [box]} center radius pos]
   (if box
@@ -57,14 +58,15 @@
   (gate/allowed? c :apiary.declined "apiary harvest" :harvest pos))
 
 (defn hives
-  "Every hive in the area that the zone rules let the job use, as {:pos :ripe}, nearest to the body first."
+  "Every hive the body has seen in the area that the zone rules let the job use, as {:pos :ripe}, nearest to the
+  body first."
   [c center]
   (let [p (:primitives c)
         me (u/self-pos c)
         {:keys [radius box] :as a} (:args c)
         search (if box 64 (+ radius (u/dist me center)))
-        found (->> (array-seq (.blocks p #js {:radius search :names hive-names :properties true :max 64}))
-                   (map (fn [b] {:pos (u/pos-of (.-pos b)) :ripe (ripe? b)}))
+        found (->> (look/seen-blocks p {:radius search :names hive-names :properties? true :live? true :max 64})
+                   (map (fn [b] {:pos (:pos b) :ripe (ripe? b)}))
                    (filter #(in-area? a center radius (:pos %))))
         ok (set (gate/allowed c :apiary.declined "apiary harvest" :harvest (map :pos found)))]
     (->> found
@@ -165,7 +167,9 @@
   [c]
   (let [center (center-of c)
         _ (when-not (:center (ctx/mem c)) (ctx/update-mem! c assoc :center center))
-        m (ctx/mem c)]
+        m (ctx/mem c)
+        _ (when (and (not= :collect (:phase m)) (empty? (hives c center)) (not (look/looked-here? c)))
+            (await (look/look-around! c)))]
     (if (= :collect (:phase m))
       (await (collect! c))
       (let [seen (classify c (hives c center))
