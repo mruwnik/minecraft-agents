@@ -109,6 +109,15 @@
           (is (true? (:open (props p at))))
           (is (seq (tu/walk-calls p))))))))
 
+(deftest one-call-walks-into-reach-and-clicks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (world "oak_fence_gate" {:open false} 3 14))
+              result (await (child-outcome eng job {:pos at :state :open} 1))]
+          (is (= :changed (:reason result)) "one round walks and clicks")
+          (is (true? (:open (props p at)))))))))
+
 (deftest the-position-may-be-a-vector-and-the-state-a-string
   (async done
     (tu/run-async done
@@ -274,6 +283,16 @@
           (is (= 2 @clicks) "one click out of reach, one after the walk closer")
           (is (seq (tu/walk-calls p)) "the body walked closer")
           (is (<= (js/Math.abs (- (.. p self -pos -z) 0)) 3) "within reach - 1 of the block"))))))
+
+(deftest one-call-walks-closer-after-a-click-out-of-reach
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (world "oak_fence_gate" {:open true} 3 4))
+              clicks (too-far-first! p 1)
+              result (await (child-outcome eng job {:pos at :state :closed :reach 4} 1))]
+          (is (= {:status :done :reason :changed} (head result [:status :reason])))
+          (is (= 2 @clicks)))))))
 
 (deftest a-click-still-out-of-reach-after-walking-closer-twice-is-unreachable
   (async done

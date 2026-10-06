@@ -11,8 +11,10 @@
   - choose: the escalation for a body here and a goal.
   Cells are [x y z]. block-at maps a cell to its block name (nil when not loaded)."
   (:require [jobs.lib.access.rules :as rules]
+            [jobs.lib.blocks :as b]
             [jobs.lib.reach :as reach]
             [jobs.lib.shelter :as sh]
+            [jobs.lib.tidy :as tidy]
             [jobs.lib.util :as u]))
 
 (def max-depth 8)
@@ -271,3 +273,15 @@
        pillar-blocks? {:step :none :why :no-headroom}
 
        :else {:step :none :why :no-dig}))))
+
+(defn note-hole!
+  "Write cell, where block was dug, to the tidy ledger (jobs.lib.tidy, body memory) as a :dig entry with tag merged and
+  :any-of, the items that put it back (the block or what it drops); only when it is air now and not noted yet. The
+  :note arg of jobs.access.stair and clear-path (go-to's escalations), so a cut or cancel leaves no hole unknown."
+  [c tag cell block]
+  (let [p (:primitives c)
+        cell (vec cell)]
+    (when (and (not-any? #(= cell (:cell %)) (tidy/entries c)) (b/air (u/block-name p (zipmap [:x :y :z] cell))))
+      (tidy/record! c (merge {:cell cell :action :dig :was block :any-of (vec (distinct (cons block (b/drops-of p block))))}
+                             tag)
+                    "air"))))

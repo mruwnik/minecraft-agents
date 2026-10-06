@@ -1,6 +1,5 @@
 (ns jobs.maintenance.unstick
   (:require [engine.ctx :as ctx]
-            [jobs.lib.child :as child]
             [jobs.lib.reach :as reach]
             [jobs.lib.result :as result]
             [jobs.lib.util :as u]
@@ -10,7 +9,7 @@
   "Get a body out of being stuck: a job kept calling moveTo and the body got nowhere (the stuck trigger).
   - It waits (50 ms steps, up to 1 s) for the body to land.
   - It walks to the goal of the latest :moved entry with jobs.movement.go-to (range 1, :escalate true), one go-to
-    round per round. go-to opens doors, and when the body is shut in it pillars, stairs or digs a door out and
+    call. go-to opens doors, and when the body is shut in it pillars, stairs or digs a door out and
     puts back what it dug.
   - Done when go-to arrives, or when the body was shut in at the start and is not any more (it is out, though
     the goal may stay out of reach).
@@ -66,7 +65,7 @@
   (let [{:keys [goal enclosed]} (ctx/mem c)]
     (if-not goal
       (give-up! c {:why :no-goal})
-      (let [r (await (child/run! c :go 'jobs.movement.go-to {:pos goal :range 1 :escalate true}))
+      (let [r (await (ctx/call-child c :go 'jobs.movement.go-to {:pos goal :range 1 :escalate true}))
             res (ctx/child-result c :go)]
         (cond
           (:arrived res) :done

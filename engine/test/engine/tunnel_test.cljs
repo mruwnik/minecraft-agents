@@ -328,6 +328,24 @@
           (is (= 22 (count (distinct (map :cell (:dug @out))))) "each cell recorded once")
           (is (<= (count (digs p)) 23) "only the cut dig is repeated"))))))
 
+(defn ^:async stall-dig!
+  "Tick eng until its nth dig, which digs and never resolves (the body stops mid-tunnel, as at a restart); later digs
+  are the real thing."
+  [eng p n]
+  (let [k (atom 0)
+        world (.-world p)]
+    (.override world "dig" (fn [token args impl]
+                             (if (= n (swap! k inc))
+                               (do (impl token args) (js/Promise. (fn [_ _])))
+                               (impl token args))))
+    (loop [i 0]
+      (when (and (< i 40) (< @k n))
+        (await (js/Promise.race #js [(core/tick! eng)
+                                     (js/Promise. (fn [ok] (let [poll (fn poll [] (if (>= @k n) (ok) (js/setTimeout poll 10)))]
+                                                             (poll))))]))
+        (recur (inc i))))
+    (.override world "dig" nil)))
+
 (deftest a-restart-resumes-from-the-body-on-the-line
   (async done
     (tu/run-async done
@@ -335,7 +353,7 @@
         (let [dir (tu/tmp-dir)
               spec {:blocks (assoc ground "6,57,0" "iron_ore")}
               {:keys [eng p]} (setup spec {:target [6 57 0]} (fn [_]) :dir dir)]
-          (dotimes [_ 20] (await (core/tick! eng)))
+          (await (stall-dig! eng p 10))
           (let [mid (feet p)
                 again (await (tick-out! (setup spec {:target [6 57 0]} (fn [_]) :dir dir :p p)))]
             (is (not= [-3 65 0] mid) "the first engine had entered")
@@ -499,7 +517,7 @@
         (let [dir (tu/tmp-dir)
               spec {:blocks eight-down :inventory torches}
               {:keys [eng p]} (setup spec {:target [6 57 0]} (fn [_]) :dir dir)]
-          (dotimes [_ 20] (await (core/tick! eng)))
+          (await (stall-dig! eng p 10))
           (let [again (await (tick-out! (setup spec {:target [6 57 0]} (fn [_]) :dir dir :p p)))
                 res @(:out again)
                 hung (places p)]

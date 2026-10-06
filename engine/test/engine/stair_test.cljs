@@ -278,6 +278,16 @@
           (is (= 3 (count (events-of s :stair.step))))
           (is (= 1 (count (events-of s :stair.done)))))))))
 
+(deftest one-call-cuts-the-whole-stair
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng clock out]} (setup {:blocks ground} east (fn [_]))]
+          (swap! clock + 500)
+          (await (core/tick! eng))
+          (is (= :done (:status @out)) "one round is the whole stair")
+          (is (= [3 62 0] (:at @out))))))))
+
 (deftest down-by-target-y-north
   (async done
     (tu/run-async done

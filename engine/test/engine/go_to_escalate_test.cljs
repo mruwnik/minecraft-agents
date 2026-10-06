@@ -51,8 +51,8 @@
          out (atom :not-done)
          eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out job args)))]
      (core/submit! eng '(recording-parent) {})
-     (await (tick-out! eng 1000))
-     (assoc s :eng eng :out out))))
+     (let [n (await (tick-out! eng 1000))]
+       (assoc s :eng eng :out out :ticks n)))))
 
 (defn feet [p] (let [pos (.-pos (.self p))] (mapv js/Math.floor [(.-x pos) (.-y pos) (.-z pos)])))
 
@@ -192,6 +192,18 @@
                                               {:pos [24 67 0] :range 1}))]
           (is (= {:arrived true} @out))
           (is (= [:stair] (mapv :step (events-of seen :go-to.escalated))) "the failed walks took it to the east wall"))))))
+
+(deftest go-to-escalates-and-arrives-in-one-call
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[what world pos] [[:pillar (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 5}]}) [10 64 0]]
+                                  [:stair (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 2}]}) [10 64 0]]
+                                  [:clear-path (merge in-room {:blocks room}) [8 64 0]]]]
+          (let [{:keys [out seen ticks]} (await (run-job! world {:pos pos :range 1}))]
+            (is (= {:arrived true} @out) what)
+            (is (= [what] (mapv :step (events-of seen :go-to.escalated))) what)
+            (is (= 1 ticks) (str what ": one go-to call, the escalation and put-back inside it"))))))))
 
 (deftest go-to-with-escalate-false-gives-up-as-before
   (async done
@@ -399,14 +411,21 @@
         (let [plain (apply dissoc (merge (box -40 63 -40 40 63 40 "stone") pit) pit-cells)
               {:keys [eng p seen]} (setup (merge in-pit {:blocks plain :inventory [{:name "dirt" :count 2}]}))]
           (core/submit! eng '(jobs.movement.go-to {:pos [10 64 0] :range 1}) {})
-          (loop [i 0]
-            (when (and (< i 300) (< (count (calls p "dig")) 2))
-              (await (core/tick! eng))
-              (recur (inc i))))
-          (is (= 2 (count (calls p "dig"))))
+          (let [k (atom 0)]
+            (.override (.-world p) "dig" (fn [token args impl]
+                                           (if (< (swap! k inc) 3) (impl token args) (js/Promise. (fn [_ _])))))
+            (core/tick! eng)
+            (loop [i 0]
+              (when (and (< i 300) (< @k 3))
+                (await (js/Promise. (fn [ok] (js/setTimeout ok 10))))
+                (recur (inc i)))))
+          (is (= 3 (count (calls p "dig"))) "the third dig never ends: the go-to is cut inside its stair")
           (core/cancel! eng (first (:list (core/state eng))))
+          (.override (.-world p) "dig" nil)
           (is (empty? (:list (core/state eng))))
-          (is (= (dug-cells p) (holes eng)) "both dug cells outlive the cancelled job")
+          (is (= (set (take 2 (map #(mapv (js->clj (.-pos (.-args %)) :keywordize-keys true) [:x :y :z]) (calls p "dig"))))
+                 (holes eng))
+              "both dug cells outlive the cancelled job, noted as the stair dug them")
           (is (every? :any-of (filter :escalation (ledger eng))))
           (core/submit! eng '(jobs.survival.restore-broken) {})
           (await (tick-out! eng 100))

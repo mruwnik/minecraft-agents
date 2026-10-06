@@ -130,6 +130,17 @@
             (is (= (column base 6) (:cells d)))
             (is (= 6 (:height d)))))))))
 
+(deftest one-call-builds-the-whole-height
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup {})]
+          (core/submit! eng (list job {:height 4}) {})
+          (await (ticks s eng 1))
+          (is (finished? eng) "one round is the whole pillar")
+          (is (= [0 68 0] (feet p)))
+          (is (= 1 (count (of-kind seen :pillar.done)))))))))
+
 (deftest a-ceiling-stops-the-pillar-below-it
   (async done
     (tu/run-async done
@@ -145,17 +156,28 @@
             (is (= [0 68 0] (:at g)))
             (is (= (column base 2) (:cells g)))))))))
 
-(deftest too-few-blocks-builds-what-it-has-and-then-waits-saying-so
+(deftest too-few-blocks-at-the-start-waits-saying-so
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p] :as s} (setup {:inventory [{:name "dirt" :count 2}]})
+        (let [{:keys [eng p] :as s} (setup {:inventory []})
               id (core/submit! eng (list job {:height 6}) {})]
-          (await (ticks s eng 8))
+          (await (ticks s eng 3))
           (is (not (finished? eng)) "still listed: it waits for blocks")
+          (is (empty? (calls p "jumpPlace")))
+          (is (= {:reason :too-few-blocks :short 6} (select-keys (core/waiting eng id) [:reason :short]))))))))
+
+(deftest running-short-part-way-builds-what-it-has-and-gives-up-saying-so
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup {:inventory [{:name "dirt" :count 2}]})]
+          (core/submit! eng (list job {:height 6}) {})
+          (await (ticks s eng 1))
+          (is (finished? eng) "one call: it does not hold the body waiting for blocks")
           (is (= [0 66 0] (feet p)))
           (is (= 2 (count (the-ledger eng))))
-          (is (= {:reason :too-few-blocks :short 4} (select-keys (core/waiting eng id) [:reason :short]))))))))
+          (is (= [:too-few-blocks 4 2] ((juxt :reason :short :built) (first (of-kind seen :pillar.gave-up))))))))))
 
 (deftest a-zone-refuses-before-any-placement
   (async done
@@ -180,18 +202,37 @@
           (is (empty? (calls p "jumpPlace")))
           (is (= :no-zones (:reason (first (of-kind seen :pillar.gave-up))))))))))
 
+(defn stall-at!
+  "Override jumpPlace so that its nth call never resolves (after placing the block when place?); the calls before are
+  the real thing. An atom of the calls made."
+  [p n place?]
+  (let [k (atom 0)]
+    (.override (.-world p) "jumpPlace"
+               (fn [token args impl]
+                 (if (< (swap! k inc) n)
+                   (impl token args)
+                   (do (when place? (impl token args))
+                       (js/Promise. (fn [_ _]))))))
+    k))
+
+(defn ^:async until-calls [k n]
+  (loop [i 0]
+    (when (and (< i 200) (< @k n))
+      (await (js/Promise. (fn [ok] (js/setTimeout ok 10))))
+      (recur (inc i)))))
+
 (deftest a-cut-between-intent-and-placement-is-resumed-without-a-double-entry
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng make p seen] :as s} (setup {})]
           (core/submit! eng (list job {:height 6}) {})
-          (await (ticks s eng 2))
-          (.hold (.-world p) "jumpPlace")
-          (core/tick! eng)
-          (await (js/Promise. (fn [ok] (js/setTimeout ok 10))))
+          (let [k (stall-at! p 3 false)]
+            (core/tick! eng)
+            (await (until-calls k 3)))
           (is (= :intent (:state (ledger/entry-at (the-ledger eng) [0 66 0]))) "the intent was saved before the call")
           (core/shutdown! eng)
+          (.override (.-world p) "jumpPlace" nil)
           (let [again (make)]
             (await (ticks s again 8))
             (is (finished? again))
@@ -205,13 +246,9 @@
       (fn ^:async t []
         (let [{:keys [eng make p seen] :as s} (setup {})]
           (core/submit! eng (list job {:height 6}) {})
-          (await (ticks s eng 2))
-          (.override (.-world p) "jumpPlace"
-                     (fn [token args impl]
-                       (impl token args)
-                       (js/Promise. (fn [_ _]))))
-          (core/tick! eng)
-          (await (js/Promise. (fn [ok] (js/setTimeout ok 10))))
+          (let [k (stall-at! p 3 true)]
+            (core/tick! eng)
+            (await (until-calls k 3)))
           (core/shutdown! eng)
           (.override (.-world p) "jumpPlace" nil)
           (is (= "dirt" (block p [0 66 0])))

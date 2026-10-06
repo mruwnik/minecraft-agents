@@ -3,7 +3,9 @@
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
+            [jobs.lib.escape :as escape]
             [jobs.lib.fetch :as fetch]
+            [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
@@ -46,13 +48,14 @@
   in practice, and a falling block would land on the body or refill the cut. :under-feet never comes up, since
   the stair never digs the block it stands on.
 
-  The body's cell is the progress: a resumed round finds its step from where the body stands on the stair
-  line. Dug cells are left and recorded.
+  One call cuts the whole stair; it yields :continue only while a fetch or walk child waits on the world, or after
+  max-steps digs, steps and fetch rounds. The body's cell is the progress: a resumed call finds its step from where
+  the body stands on the stair line. Dug cells are left and recorded.
 
   Hands over {:status :done|:stopped :reason kw :steps n :at [x y z] :dug [{:cell :block}]} plus detail (:cell
   :hazards :zone :walk ...), also as a stair.done info or stair.stopped warn event.
 
-  :fetch (default false; jobs.lib.fetch): the :no-tool wait is not waited out; the rounds run jobs.items.get-tool
+  :fetch (default false; jobs.lib.fetch): the :no-tool wait is not waited out; the call runs jobs.items.get-tool
   for the block (child :fetch) first, then walks back to the cell it stood on (child :fetch-back) and goes on. A
   parent's stair child does not fetch.")
 
@@ -63,11 +66,13 @@
    :y {:doc "feet height to end at, instead of :steps" :default nil}
    :accept {:doc "hazards taken: #{:water :lava :falling-block :under-feet}" :default #{}}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
+   :note {:doc "a map: each cell dug is written to the tidy ledger at once with it (jobs.lib.escape/note-hole!; go-to's escalation)" :default nil}
    :fetch {:doc "get a missing pickaxe instead of waiting :no-tool (jobs.lib.fetch): true, a set of kinds or a map of limits" :default false}})
 
 (def headings {:north [0 -1] :south [0 1] :east [1 0] :west [-1 0]})
 (def rises {:down -1 :up 1})
 (def max-cell-digs 3)
+(def max-steps "Digs, steps, bridges and fetch rounds of one call before it gives the round back with :continue." 400)
 (def stack-size 64)
 (def unbreakable #{"bedrock" "barrier" "end_portal_frame" "end_portal" "nether_portal" "command_block" "structure_block" "jigsaw"})
 
@@ -279,7 +284,7 @@
   (if-let [lack (need c)] (fetch/check c 'jobs.access.stair lack) true))
 
 (defn ^:async dig!
-  "Equip the best tool, check the cell again, write the intent and dig it. :continue, or a stop map."
+  "Equip the best tool, check the cell again, write the intent and dig it. :continue (dug, go on), or a stop map."
   [c in cell cut accept]
   (let [p (:primitives c)
         block ((:block-at in) cell)
@@ -305,12 +310,13 @@
                     status (.-status (await (ctx/act c :dig #js {:pos #js {:x x :y y :z z}})))]
                 (await (tools/note-wear! c))
                 (ctx/update-mem! c record-dug (:block-at in))
+                (when-let [tag (when (= "dug" status) (:note (:args c)))] (escape/note-hole! c tag cell block))
                 (if (#{"dug" "missing"} status)
                   :continue
                   {:reason :dig-failed :cell cell :block block :dig status})))))))))
 
 (defn ^:async bridge!
-  "Place carried filler on the missing floor of the step. :continue, or a stop map."
+  "Place carried filler on the missing floor of the step. :again, or a stop map."
   [c in {:keys [floor]}]
   (let [item (dig-in/pick c dig-in/building-blocks)
         verdict (rules/may-place? (assoc in :cell floor))
@@ -324,18 +330,19 @@
           (if (rules/air ((:block-at (rules-in c (feet-of c))) floor))
             {:reason :place-failed :cell floor :item item}
             (do (ctx/update-mem! c update :bridged (fnil conj #{}) floor)
-                :continue))))))
+                :again))))))
 
 (defn ^:async step!
-  "Walk into the cut step. :continue, or a stop map."
+  "Walk into the cut step. :again, :continue while the walk waits, or a stop map."
   [c next-feet]
-  (if (= :done (await (ctx/call-child c :walk 'jobs.debug.walk-plan {:to next-feet})))
-    (let [r (ctx/child-result c :walk)]
-      (if (and (= :arrived (:status r)) (= next-feet (feet-of c)))
-        (do (ctx/emit! c :stair.step :info {:at next-feet :text (str "stepped to " (pr-str next-feet))})
-            :continue)
-        {:reason :step-failed :cell next-feet :walk r}))
-    :continue))
+  (let [w (await (ctx/call-child c :walk 'jobs.debug.walk-plan {:to next-feet}))
+        r (when (= :done w) (ctx/child-result c :walk))]
+    (cond
+      (= :continue w) :continue
+      (and (= :arrived (:status r)) (= next-feet (feet-of c)))
+      (do (ctx/emit! c :stair.step :info {:at next-feet :text (str "stepped to " (pr-str next-feet))})
+          :again)
+      :else {:reason :step-failed :cell next-feet :walk (or r {:status w})})))
 
 (defn ^:async work!
   "One bounded piece of the stair from the body's place on it: check the way back, dig one cell or take the step."
@@ -369,13 +376,17 @@
                   (await (bridge! c in cells))
                   (or stop
                     (if-let [cell (first (remove #(rules/air ((:block-at in) %)) cut))]
-                      (await (dig! c in cell cut accept))
+                      (let [r (await (dig! c in cell cut accept))] (if (= :continue r) :again r))
                       (await (step! c next)))))))))))))
 
-(defn ^:async round [c]
+(defn ^:async next!
+  "One piece of the stair: a fetch round, the start, a dig, a bridge or a step. :again, :continue (a child waits) or
+  :done."
+  [c]
   (let [m (ctx/mem c)
         r (await (fetch/step! c 'jobs.access.stair (need c) {:return? true}))]
     (cond
+      (= :continue r) :again
       r r
       (nil? (:origin m))
       (let [feet (feet-of c)
@@ -383,10 +394,16 @@
         (if (map? target)
           (finish! c :bad-args {:why (:error target)})
           (do (ctx/update-mem! c assoc :origin feet :target target :dug [])
-              :continue)))
+              :again)))
       :else
       (let [r (await (work! c))]
         (cond
-          (= :continue r) :continue
+          (#{:again :continue} r) r
           (= :finished r) (finish! c :done {})
           :else (finish! c (:reason r) (dissoc r :reason)))))))
+
+(defn ^:async round
+  "The whole stair: next! until it ends, a pace between pieces; :continue after max-steps of them."
+  [c]
+  (let [n (atom 0)]
+    (await (pace/steps! c #(if (< (swap! n inc) max-steps) (next! c) :continue)))))

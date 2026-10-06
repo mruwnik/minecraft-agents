@@ -1,6 +1,7 @@
 (ns jobs.access.toggle
   (:require [jobs.lib.click :as click]
             [engine.ctx :as ctx]
+            [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
             [jobs.lib.places :as places]))
 
@@ -25,7 +26,8 @@
   A click the game answers out of reach (it measures from the eye to the block's middle) walks one cell closer
   and clicks again, twice at most and never closer than 1, then is :unreachable.
 
-  There is no second click. A click that changed nothing (iron-like block, protected area or lag, which cannot
+  One call is the whole run (walk, click, walks closer); it yields :continue only while the go-to child waits on the
+  world. There is no second click. A click that changed nothing (iron-like block, protected area or lag, which cannot
   be told apart) is :unchanged. A block that moved but not to the wanted state is :wrong-way. Both give one
   warn toggle.gave-up. Other reasons: :gone (block vanished or unloaded), :refused (useOn said cannot or
   no-item).
@@ -42,7 +44,6 @@
    :state {:doc ":open or :closed (gate, door, trapdoor), :on or :off (lever), :press (button)" :default nil}
    :reach {:doc "walk until within this many cells of the block (the click reaches 4.5 from the eye)" :default 3}})
 
-;; a walk the go-to child gives up on is three fruitless rounds
 (def valid-states
   {:openable #{:open :closed} :lever #{:on :off} :button #{:press}})
 
@@ -115,7 +116,7 @@
   edge of :reach can be short): walk again, one cell closer."
   [c]
   (ctx/update-mem! c #(-> % (dissoc :arrived) (update :closer (fnil inc 0))))
-  :continue)
+  :again)
 
 (defn ^:async click!
   "Click once with an empty hand and read the block again."
@@ -136,11 +137,13 @@
 (defn ^:async walk! [c pos state block]
   (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos pos :range (reach c) :doors :never :escalate false}))]
     (cond
-      (not= :done r) :continue
-      (:arrived (ctx/child-result c :walk)) (do (ctx/update-mem! c assoc :arrived true) :continue)
+      (= :continue r) :continue
+      (:arrived (ctx/child-result c :walk)) (do (ctx/update-mem! c assoc :arrived true) :again)
       :else (give-up! c :unreachable pos state (str "cannot walk within reach of " block " at " (pr-str pos)) {:block block}))))
 
-(defn ^:async round [c]
+(defn ^:async next!
+  "One piece of the run: a decline, the walk, or the click. :again, :continue (the walk waits) or :done."
+  [c]
   (let [{:keys [pos state error]} (parse (:args c))]
     (if error
       (decline! c :bad-args nil nil error)
@@ -162,3 +165,8 @@
                (not (or (u/within? (u/self-pos c) pos (reach c))
                         (<= (u/dist (u/self-pos c) pos) (reach c))))) (await (walk! c pos state block))
           :else (await (click! c pos state block)))))))
+
+(defn ^:async round
+  "The whole run: next! until it ends, a pace between pieces."
+  [c]
+  (await (pace/steps! c #(next! c))))

@@ -2,6 +2,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.blocks :as b]
             [jobs.lib.escape :as escape]
+            [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -12,18 +13,23 @@
   - Each cell is a jobs.blocks.dig child (zones, claims, hazards and tools are its rules). It picks up the drop
     (:collect) when there is room for it, so the block can be put back; with no room it digs on and leaves it.
   - Then it walks into the cell beyond (jobs.debug.walk-plan).
+  One call is the whole door; it yields :continue only while a dig child waits on the world.
   Ends with {:status :done|:stopped :reason :dug [{:cell :block}] :at [x y z] :through [x y z]}, also as a
   clear-path.done info or clear-path.stopped warn event. Stops: :bad-args, :no-door (no such wall here),
-  :protected (a block it never digs), :dig-waits (the dig child's wait, as :wait), :dig-failed (its :dig
-  result), :step-failed (the walk through did not arrive).
+  :protected (a block it never digs), :dig-waits (the dig child's wait or decline, as :wait), :dig-failed (its
+  :dig result), :refills (a cell dug max-cell-digs times, e.g. sand falling in), :step-failed (the walk through did
+  not arrive).
   It does not put the blocks back: jobs.movement.go-to does that once through.")
 
 (def args
   {:heading {:doc ":north :east :south or :west" :default nil}
    :max-thick {:doc "the thickest wall it digs through, in blocks" :default 3}
+   :note {:doc "a map: each cell dug is written to the tidy ledger at once with it (jobs.lib.escape/note-hole!; go-to's escalation)" :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
 (def headings {:north [0 -1] :south [0 1] :east [1 0] :west [-1 0]})
+
+(def max-cell-digs "Digs of one cell (a falling block refills it) before it stops :refills." 8)
 
 (defn check [_c] true)
 
@@ -54,7 +60,7 @@
       (finish! c :bad-args {:why "needs :heading (:north :east :south :west) and :max-thick > 0"})
       (if-let [{:keys [cells through]} (escape/door (escape/block-at-of p) (feet-of c) dir max-thick)]
         (do (ctx/update-mem! c assoc :cells cells :through through :dug [])
-            :continue)
+            :again)
         (finish! c :no-door {:why (str "no wall at most " max-thick " thick with a floor beyond, "
                                        (name (:heading (:args c))) " of " (pr-str (feet-of c)))})))))
 
@@ -66,33 +72,43 @@
                  (some #(and (drops (:name %)) (< (:count %) 64)) (u/inventory p))))))
 
 (defn ^:async dig-cell!
-  "One round of the dig child on the cell being dug (:digging {:cell :block :collect}, kept until the child ends, so
-  its drop pickup runs after the cell is already air)."
+  "One dig child call on the cell being dug (:digging {:cell :block :collect}, kept until the child ends, so a resumed
+  call goes on with it). :again, :continue while the child waits on the world, or :done."
   [c {:keys [cell block collect]}]
   (let [args {:pos cell :collect collect :ignore-zones? (:ignore-zones? (:args c))}
         done! (fn [] (ctx/update-mem! c dissoc :digging))]
-    (if (escape/protected? block)
-      (finish! c :protected {:cell cell :block block})
+    (cond
+      (escape/protected? block) (finish! c :protected {:cell cell :block block})
+      (>= (get-in (ctx/mem c) [:tries cell] 0) max-cell-digs) (finish! c :refills {:cell cell :block block})
+      :else
       (if-let [wait (when-not (:started (:digging (ctx/mem c))) (b/child-wait c :dig 'jobs.blocks.dig args))]
         (finish! c :dig-waits {:cell cell :block block :wait wait})
-        (let [_ (ctx/update-mem! c assoc-in [:digging :started] true)
+        (let [_ (ctx/update-mem! c #(-> % (assoc-in [:digging :started] true) (update-in [:tries cell] (fnil inc 0))))
               r (await (ctx/call-child c :dig 'jobs.blocks.dig args))
               res (ctx/child-result c :dig)]
           (cond
-            (not= :done r) :continue
-            (:dug res) (do (done!) (ctx/update-mem! c update :dug conj {:cell cell :block block}) :continue)
-            (= :already-clear (:reason res)) (do (done!) :continue)
+            (= :continue r) :continue
+            (= :declined r) (do (done!)
+                                (finish! c :dig-waits {:cell cell :block block
+                                                       :wait (or (b/child-wait c :dig 'jobs.blocks.dig args) {:reason :declined})}))
+            (:dug res) (do (done!)
+                           (ctx/update-mem! c update :dug conj {:cell cell :block block})
+                           (when-let [tag (:note (:args c))] (escape/note-hole! c tag cell block))
+                           :again)
+            (= :already-clear (:reason res)) (do (done!) :again)
             :else (finish! c :dig-failed {:cell cell :block block :dig (select-keys res [:reason :status])})))))))
 
 (defn ^:async step-through! [c through]
-  (if (= :done (await (ctx/call-child c :walk 'jobs.debug.walk-plan {:to through})))
-    (let [r (ctx/child-result c :walk)]
-      (if (and (= :arrived (:status r)) (= through (feet-of c)))
-        (finish! c :done {})
-        (finish! c :step-failed {:cell through :walk (select-keys r [:status :reason :why])})))
-    :continue))
+  (let [w (await (ctx/call-child c :walk 'jobs.debug.walk-plan {:to through}))
+        r (when (= :done w) (ctx/child-result c :walk))]
+    (cond
+      (= :continue w) :continue
+      (and (= :arrived (:status r)) (= through (feet-of c))) (finish! c :done {})
+      :else (finish! c :step-failed {:cell through :walk (if r (select-keys r [:status :reason :why]) {:status w})}))))
 
-(defn ^:async round [c]
+(defn ^:async next!
+  "One piece of the door: plan it, dig a cell or step through. :again, :continue (a child waits) or :done."
+  [c]
   (let [{:keys [cells through]} (ctx/mem c)
         p (:primitives c)]
     (if-not through
@@ -105,3 +121,8 @@
                                d)))]
         (await (dig-cell! c digging))
         (await (step-through! c through))))))
+
+(defn ^:async round
+  "The whole door: next! until it ends, a pace between pieces."
+  [c]
+  (await (pace/steps! c #(next! c))))

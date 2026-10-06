@@ -3,13 +3,14 @@
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
+            [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
             [jobs.lib.walk :as walk]
             [jobs.lib.util :as u]))
 
 (def doc
   "Pillar up :height blocks from the cell the body stands in, by jump-placing one block at a time under itself.
-  One block per round.
+  One call builds the whole pillar; it yields :continue only while a recentring go-to waits on the world.
 
   Every block is written to the scaffold ledger (jobs.lib.ledger, body memory) as an intent before its
   jump and confirmed when the cell is seen holding it, so a cleanup can take the pillar back after a cut or
@@ -23,11 +24,11 @@
   - a block is carried: :item, or without it dirt while any is carried, then cobblestone
   - the cell passes jobs.lib.access.rules/may-place?
 
-  A knockback (a failed jump with the body airborne or more than 0.2 off its start point) is not a refusal: the round waits to land,
+  A knockback (a failed jump with the body airborne or more than 0.2 off its start point) is not a refusal: it waits to land,
   walks back to where it began (go-to child if off the column, then a short centring nudge) and tries again; up to 8 per pillar, then :off-column.
 
-  The check waits (:too-few-blocks, with :short) when blocks are missing. Every other give-up is left to the
-  round, so a parent running this as a child reads the result.
+  The check waits (:too-few-blocks, with :short) when blocks are missing at the start; run short part way, it gives
+  up :too-few-blocks. Every give-up ends the job, so a parent running this as a child reads the result.
 
   Ends with {:status :done|:gave-up :reason :cells [[x y z] ...] :built n :height n}. :cells are this job's
   confirmed blocks, lowest first. Events: pillar.done (info) and pillar.gave-up (warn, with :reason and by
@@ -218,13 +219,13 @@
     (if (pos? (or (.-placed r) 0))
       (do (when (= item (block-at cell)) (ledger/remember! c (ledger/confirm l cell)))
           (ctx/update-mem! c assoc :failures 0)
-          :continue)
+          :again)
       (let [shoved? (displaced? c (:base (ctx/mem c)))
             _ (when shoved? (ctx/update-mem! c #(-> % (update :displaced (fnil inc 0)) (assoc :counted true))))
             failures (if shoved? (:failures (ctx/mem c) 0) (inc (:failures (ctx/mem c) 0)))]
         (ctx/update-mem! c assoc :failures failures)
         (if (and (< failures max-failures) (<= (:displaced (ctx/mem c) 0) max-displacements))
-          :continue
+          :again
           (let [settled (ledger/reconcile l block-at)]
             (ledger/remember! c settled)
             (finish! c settled (if (< failures max-failures)
@@ -248,7 +249,9 @@
             r (await (recentre! c [x top z] home))]
         (when (= :continue r) :continue)))))
 
-(defn ^:async round [c]
+(defn ^:async step!
+  "One block of the pillar (or its end): :again, :continue while a recentring go-to waits, or :done."
+  [c]
   (await (land! c))
   (if (= :continue (await (shoved-back! c)))
     :continue
@@ -267,3 +270,8 @@
       (if (= :place (:step step))
         (await (place! c l block-at step))
         (finish! c l step)))))
+
+(defn ^:async round
+  "The whole pillar: step! until it ends, a pace between blocks."
+  [c]
+  (await (pace/steps! c #(step! c))))

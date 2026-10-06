@@ -192,12 +192,12 @@
                  (and (= :abilities reason) (= :never doors) (= :open (some-> (:kind result) keyword)))))))
 
 (defn escalation-job
-  "[job args] of the child that carries out escalation e (jobs.lib.escape/choose)."
-  [{:keys [step] :as e}]
+  "[job args] of the child that carries out escalation e (jobs.lib.escape/choose); tag marks the holes it digs."
+  [{:keys [step] :as e} tag]
   (case step
     :pillar ['jobs.access.pillar {:height (:height e) :item (:item e)}]
-    :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e)}]
-    :clear-path ['jobs.access.clear-path {:heading (:heading e)}]
+    :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note tag}]
+    :clear-path ['jobs.access.clear-path {:heading (:heading e) :note tag}]
     :approach ['jobs.movement.go-to {:pos (zipmap [:x :y :z] (:pos e)) :range 0 :escalate false}]))
 
 (defn succeeded? [{:keys [step]} result]
@@ -240,18 +240,18 @@
        (sort-by (comp second :cell))
        vec))
 
+(defn hole-tag
+  "What marks a hole as this go-to's in the tidy ledger; its stair and clear-path children write it (:note) as they dig."
+  [c]
+  {:escalation true :go-to (:id c)})
+
 (defn note-holes!
   "Write every cell of dug ({:cell :block}) that is air now and not yet noted to the ledger, as a :dig entry with
   :escalation true and :any-of, the items that put it back (the block or what it drops). Body memory outlives the
   round, a cut, a cancel and a restart: jobs.survival.restore-broken puts back what go-to did not."
   [c dug]
-  (let [p (:primitives c)
-        noted (set (map :cell (tidy/entries c)))]
-    (doseq [{:keys [cell block]} (distinct dug)
-            :when (and (not (noted cell)) (b/air (u/block-name p (zipmap [:x :y :z] cell))))]
-      (tidy/record! c {:cell cell :action :dig :was block :escalation true :go-to (:id c)
-                       :any-of (vec (distinct (cons block (b/drops-of p block))))}
-                    "air"))))
+  (doseq [{:keys [cell block]} (distinct dug)]
+    (escape/note-hole! c (hole-tag c) cell block)))
 
 (defn ^:async escalate!
   "Start the next escalation for the give-up kept in memory (:give-up), or give up with it when there is none (or
@@ -332,11 +332,11 @@
         (await (escalate! c pos detail)))))
 
 (defn ^:async escalation-round!
-  "One round of the escalation child. After it, every planned cell now dug is in the ledger (note-holes!). Its wait or
-  its failure gives up, with the child's reason, unless it got part of the way."
+  "One call of the escalation child: the whole pillar, stair or door. After it, every planned cell now dug is in the
+  ledger (note-holes!). Its wait or its failure gives up, with the child's reason, unless it got part of the way."
   [c pos]
   (let [{:keys [step] :as e} (:escalation (ctx/mem c))
-        [job args] (escalation-job e)]
+        [job args] (escalation-job e (hole-tag c))]
     (if-let [wait (b/child-wait c :escalation job args)]
       (escalation-failed! c pos (merge {:step step} wait))
       (let [r (await (ctx/call-child c :escalation job args))
@@ -380,7 +380,7 @@
 
 (defn ^:async restore-round!
   "Put back the next hole this job's escalations dug (own-holes), lowest first, with jobs.blocks.place (the dug block or
-  what it drops), one child round per round. It runs once the body got on past the escalation (restore-next!). A hole
+  what it drops), one child call each. It runs once the body got on past the escalation (restore-next!). A hole
   skip-why refuses, or the place child would wait on (nothing to place), stays in the ledger for restore-broken (a
   :changed one is forgotten). A placed one is forgotten."
   [c]
@@ -405,7 +405,8 @@
             (let [r (await (ctx/call-child c :restore 'jobs.blocks.place args))
                   res (ctx/child-result c :restore)]
               (cond
-                (not= :done r) :continue
+                (= :continue r) :continue
+                (= :declined r) (skip! (:reason (b/child-wait c :restore 'jobs.blocks.place args) :declined))
                 (:placed res) (do (tidy/forget-cell! c cell) (note-placed! c cell) (done! :restored cell))
                 :else (skip! (:reason res))))))))))
 
