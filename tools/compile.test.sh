@@ -9,7 +9,7 @@ check() { if [ "$2" = "$3" ]; then echo "ok   $1"; else echo "FAIL $1: want [$3]
 
 # Fake repo: tools copied in, stub npx, a live "server" pid so no server start.
 mkdir -p "$T/repo/tools" "$T/repo/engine/.shadow-cljs" "$T/repo/engine/out/test/cljs-runtime" "$T/bin" "$T/res"
-cp "$TOOLS/compile" "$TOOLS/test-engine" "$TOOLS/test-run.mjs" "$TOOLS/res-slot" "$TOOLS/res-slot.mjs" "$TOOLS/res-slot.json" "$T/repo/tools/" 2>/dev/null
+cp "$TOOLS/compile" "$TOOLS/test-engine" "$TOOLS/test-run.mjs" "$TOOLS/res-slot" "$TOOLS/res-slot.mjs" "$TOOLS/res-slot.json" "$TOOLS/compile-idle-watch" "$T/repo/tools/" 2>/dev/null
 printf '{"floorMb":0,"kinds":{"tests":{"needMb":1,"max":1}}}' > "$T/res/cfg.json"
 export RES_SLOT_DIR="$T/res" RES_SLOT_CONFIG="$T/res/cfg.json"
 sleep 300 & SRV=$!; trap 'kill $SRV 2>/dev/null; rm -rf "$T"' EXIT
@@ -85,7 +85,7 @@ timeout 5 "$T/repo/tools/test-engine" >/dev/null 2>&1; check "no args usage exit
 # a worktree's server start waits for a compile slot without holding the global compile lock
 git init -q "$T/main" && git -C "$T/main" -c user.name=t -c user.email=t@t commit -q --allow-empty -m x && git -C "$T/main" worktree add -q "$T/wt" 2>/dev/null
 mkdir -p "$T/wt/tools" "$T/wt/engine/.shadow-cljs"
-cp "$TOOLS/compile" "$T/wt/tools/"
+cp "$TOOLS/compile" "$TOOLS/compile-idle-watch" "$T/wt/tools/"
 printf '#!/bin/sh\nsleep 4\necho "res-slot: busy"\nexit 75\n' > "$T/wt/tools/res-slot"; chmod +x "$T/wt/tools/res-slot"
 MC_COMPILE_MIN_START_MB=0 "$T/wt/tools/compile" engine test >/dev/null 2>&1 & WP=$!
 sleep 1.5
@@ -102,4 +102,16 @@ WSRV=$(cat "$T/wt/engine/.shadow-cljs/server.pid")
 sleep 1; kill -0 "$WSRV" 2>/dev/null; check "worktree server alive right after a compile" "$?" 0
 sleep 6; kill -0 "$WSRV" 2>/dev/null; check "worktree server gone after the idle time" "$?" 1
 unset MC_COMPILE_MIN_START_MB MC_COMPILE_SERVER_IDLE_S MC_COMPILE_IDLE_POLL_S
+
+# the idle watcher kills only the server it was started for (pid + start time), and never while a compile runs
+W="$TOOLS/compile-idle-watch"
+starttime() { awk '{print $22}' "/proc/$1/stat"; }
+touch -d '1 hour ago' "$T/lu"
+sleep 300 & V=$!
+timeout 10 "$W" "$V" "$(( $(starttime "$V") + 1 ))" "$T/lu" 3 1; kill -0 "$V" 2>/dev/null; check "watcher spares a pid with another start time" "$?" 0
+sleep 300 & BUSY=$!; echo $BUSY > "$T/lu.compiling"
+"$W" "$V" "$(starttime "$V")" "$T/lu" 3 1 & WW=$!
+sleep 3; kill -0 "$V" 2>/dev/null; check "watcher spares the server while a compile runs" "$?" 0
+kill $BUSY; wait $WW; kill -0 "$V" 2>/dev/null; check "watcher kills the idle server once no compile runs" "$?" 1
+rm -f "$T/lu.compiling"; kill $BUSY 2>/dev/null
 exit $fail

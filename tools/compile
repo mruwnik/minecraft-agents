@@ -20,7 +20,7 @@
 # Memory: a missing server starts only with MIN_START_MB (3500) available; the compile itself uses the server's heap.
 # A server started outside the main checkout (a git worktree: integration batches, test copies) runs under a `server` slot of
 # tools/res-slot (held for the server's life, so its JVM counts against the memory floor; kind apart from compiles, max 4); no free slot in ~2 min exits 75 (retry).
-# A worktree server stops itself after MC_COMPILE_SERVER_IDLE_S (default 1200) s without a compile (a watcher started with it; the next compile restarts it).
+# A worktree server stops itself after MC_COMPILE_SERVER_IDLE_S (default 1200) s without a compile (tools/compile-idle-watch, started with it: kills only that pid with that start time, never during a compile; the next compile restarts it).
 # That start waits before queueing (under <lock>.start only), so the global compile lock is free meanwhile.
 # A build that prints an :undeclared-var or :undeclared-ns warning exits 1 (shadow-cljs itself exits 0).
 # Env: MC_COMPILE_LOG=1 prints "waited Ns, compiled Ns".
@@ -90,9 +90,9 @@ start_server() {
   server_pid >/dev/null || { echo "tools/compile: the $project server did not start (see $dir/.shadow-cljs/server.log)" >&2; exit 1; }
   if [ ${#slot[@]} -gt 0 ]; then  # idle watcher: a worktree server must not outlive its use (it holds a server slot)
     touch "$dir/.shadow-cljs/last-use"
-    (exec 8>&- 9>&-; exec setsid nohup bash -c 'while kill -0 "$1" 2>/dev/null; do
-      [ $(( $(date +%s) - $(stat -c %Y "$2" 2>/dev/null || echo 0) )) -gt "$3" ] && { kill "$1"; exit; }
-      sleep "$4"; done' _ "$(server_pid)" "$dir/.shadow-cljs/last-use" "${MC_COMPILE_SERVER_IDLE_S:-1200}" "${MC_COMPILE_IDLE_POLL_S:-30}" >/dev/null 2>&1 </dev/null) &
+    sp=$(server_pid)
+    (exec 8>&- 9>&-; exec setsid nohup "$repo/tools/compile-idle-watch" "$sp" "$(awk '{print $22}' "/proc/$sp/stat")" "$dir/.shadow-cljs/last-use" \
+      "${MC_COMPILE_SERVER_IDLE_S:-1200}" "${MC_COMPILE_IDLE_POLL_S:-30}" >/dev/null 2>&1 </dev/null) &
   fi
   sleep 3
 }
@@ -142,7 +142,9 @@ fi
 server_pid >/dev/null || start_server
 
 cd "$dir" || exit 1
-[ ! -e .shadow-cljs/last-use ] || touch .shadow-cljs/last-use  # keeps a worktree server's idle watcher off
+if [ -e .shadow-cljs/last-use ]; then  # keeps a worktree server's idle watcher off while compiling and for the idle time after
+  touch .shadow-cljs/last-use; echo $$ > .shadow-cljs/last-use.compiling
+fi
 # the server (and any detached child) must not inherit the lock fd
 out=$(mktemp)
 npx shadow-cljs "$verb" "${builds[@]}" 9>&- 2>&1 | tee "$out"
@@ -153,6 +155,7 @@ if [ "$code" = 0 ] && grep -qE 'WARNING #[0-9]+ - :undeclared-(var|ns)' "$out"; 
   code=1
 fi
 rm -f "$out"; out=
+[ ! -e .shadow-cljs/last-use ] || { touch .shadow-cljs/last-use; rm -f .shadow-cljs/last-use.compiling; }
 t2=$(date +%s.%N)
 [ -z "${MC_COMPILE_LOG:-}" ] || awk -v a="$t0" -v b="$t1" -v c="$t2" 'BEGIN{printf "tools/compile: waited %.1fs, compiled %.1fs\n", b-a, c-b}' >&2
 exit $code

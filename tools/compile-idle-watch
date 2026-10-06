@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# usage: compile-idle-watch <pid> <starttime> <last-use file> <idle s> <poll s>
+# Kills <pid> once <last-use file> is older than <idle s> and no compile runs (<last-use file>.compiling names a live pid).
+# Gives up when <pid> is gone or its /proc start time is not <starttime> (the pid was reused: never kill that process).
+pid=$1; start=$2; file=$3; idle=$4; poll=$5
+starttime() { awk '{print $22}' "/proc/$pid/stat" 2>/dev/null; }
+while [ "$(starttime)" = "$start" ]; do
+  c=$(cat "$file.compiling" 2>/dev/null)
+  if [ -z "$c" ] || ! kill -0 "$c" 2>/dev/null; then
+    [ $(( $(date +%s) - $(stat -c %Y "$file" 2>/dev/null || echo 0) )) -gt "$idle" ] && { kill "$pid"; exit; }
+  fi
+  sleep "$poll"
+done
