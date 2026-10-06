@@ -7,7 +7,8 @@
             [jobs.lib.near :as near]
             [jobs.items.craft :as craft]
             [jobs.storage.deposit :as deposit]
-            [engine.game :as game]))
+            [engine.game :as game]
+            [clojure.string]))
 
 (def doc
   "Get :count more of :item (or of any of :any-of, in that order of preference) than were carried at the first round.
@@ -26,7 +27,7 @@
     names are tried in order; the first with a plan is made. Three fruitless steps stop it (:tried :craft).
   - Nothing else: stopped :no-source with :tried.
 
-  The check waits {:reason :no-source :item|:any-of} before the first round when nothing is carried enough, no
+  The check waits {:reason :no-source :why text :item|:any-of} (:why: what each source lacks) before the first round when nothing is carried enough, no
   usable chest that might hold it is seen (no exploring) and no craft chain makes it from what is carried. Ends {:status :done :got n :item name} or {:status :stopped
   :reason r :got n :tried {..}}, r :no-source, :cycle (a wanted name is on :chain), :timeout (:minutes from the first
   round) or :bad-args. :depth is the nesting left for sources that need fetches of their own (not used yet: crafting
@@ -98,6 +99,17 @@
               (assoc pl :item name)))
           names)))
 
+(defn no-source-why
+  "Text for the no-source wait: what each allowed source lacks."
+  [c names n]
+  (let [how (:how (limits c))
+        have (carried-counts (:primitives c))
+        version (game/version-of (:primitives c))]
+    (clojure.string/join
+     "; "
+     (concat (when (contains? how :chest) [(str "no seen chest that may hold " (clojure.string/join "/" names))])
+             (when (contains? how :craft) [(recipes/lacking version have (first names) n)])))))
+
 (defn check [c]
   (let [a (:args c)
         names (names-of a)]
@@ -106,7 +118,7 @@
       (:start (ctx/mem c)) true
       (and (contains? (:how (limits c)) :chest) (seq (candidates c names))) true
       (and (contains? (:how (limits c)) :craft) (craft-plan c names (:count a))) true
-      :else (ctx/wait c (merge {:reason :no-source} (wanted-fields a))))))
+      :else (ctx/wait c (merge {:reason :no-source :why (no-source-why c names (:count a))} (wanted-fields a))))))
 
 (defn stop! [c reason extra]
   (let [a (:args c)

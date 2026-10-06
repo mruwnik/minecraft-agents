@@ -6,8 +6,9 @@
   A step is {:op :craft :item name :count n :table? bool} or {:op :place :item \"crafting_table\"} (put the table down
   before the first craft that needs one). Ingredients are taken from what is carried first, then crafted; a recipe
   whose ingredients are carried is tried before one that needs more crafts. opts: :table? (a table is at hand: no table
-  steps), :max-depth (nested crafts, default 6)."
-  (:require ["minecraft-data" :as minecraft-data]))
+  steps), :max-depth (nested crafts, default 6). (lacking version have item n) says why a craft cannot start."
+  (:require ["minecraft-data" :as minecraft-data]
+            [clojure.string]))
 
 (def table-item "crafting_table")
 
@@ -76,6 +77,20 @@
                       (update-in [:have item] (fnil + 0) (* batches (:count r)))
                       (update :steps conj {:op :craft :item item :count (* batches (:count r)) :table? (:table? r)})))))
             options))))
+
+(defn lacking
+  "Why no craft of item (n more) can start, as text: the cheapest recipe's ingredients short of what is carried
+  (\"needs 3 stick, have 1\"), or that no recipe makes item. Pure."
+  [version have item n]
+  (let [rs (get (recipes-for version) item)
+        st {:have have}]
+    (if (empty? rs)
+      (str "no recipe makes " item)
+      (let [r (first (sort-by #(short-count st % (ceil-div n (:count %))) rs))
+            batches (ceil-div n (:count r))
+            short (keep (fn [[k v]] (let [h (get have k 0)] (when (< h (* v batches)) (str "needs " (* v batches) " " k ", have " h))))
+                        (:needs r))]
+        (str "crafting " item " " (if (seq short) (clojure.string/join "; " short) "has no ingredient short, but no chain works"))))))
 
 (defn plan
   "See the ns doc."

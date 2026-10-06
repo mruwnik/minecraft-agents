@@ -328,7 +328,18 @@
           (core/submit! (:eng s) (list 'jobs.items.obtain {:item "dirt" :count 3}) {})
           (await (run-ticks s 5))
           (is (empty? (inspects s)) "no chest seen: no look either")
-          (is (= 1 (count (filter #(= :no-source (:reason %)) (events-of s :waiting))))))))))
+          (is (= 1 (count (filter #(= :no-source (:reason %)) (events-of s :waiting)))))
+          (is (re-find #"no seen chest that may hold dirt" (:why (first (events-of s :waiting)))))
+          (is (re-find #"no recipe makes dirt" (:why (first (events-of s :waiting))))))))))
+
+(deftest obtain-craft-wait-names-the-short-ingredient
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (-> (world {}) (update :blocks dissoc chest-at) (assoc :inventory [{:name "stick" :count 1}])) [own-zone])]
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wooden_pickaxe" :how #{:craft}}) {})
+          (await (run-ticks s 5))
+          (is (re-find #"needs 2 stick, have 1" (:why (first (events-of s :waiting))))))))))
 
 (deftest obtain-any-of-takes-the-first-name-the-chest-holds
   (async done
