@@ -102,11 +102,10 @@
   (if (running eng)
     (check-idle! eng)
     (when-let [id (manual-job eng)]
-      (when-not (contains? (:failed (state eng)) id)
-        (if (check-passes? eng id)
-          (start-round! eng id)
-          (do (end-slot! eng id (:reason (waiting eng id) :not-ready) (waiting eng id))
-              nil))))))
+      (if (check-passes? eng id)
+        (start-round! eng id)
+        (do (end-slot! eng id (:reason (waiting eng id) :not-ready) (waiting eng id))
+            nil)))))
 
 (defn tick-online!
   "One scheduling pass for a body that is on the server."

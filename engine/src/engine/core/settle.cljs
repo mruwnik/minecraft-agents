@@ -45,6 +45,18 @@
                       {:source :job :kind :stopped :level :warn :attention :notice
                        :data data :text (stopped-text data)}))))
 
+(defn fail-slot!
+  "The slot job's round threw: it leaves the slot unlisted (not parked), one job.failed with attention as usual."
+  [eng id error]
+  (swap! (:waiting eng) dissoc id)
+  (swap! (:fruitless eng) dissoc id)
+  (mem/delete-job! (:store eng) id)
+  (request-attention! eng {:job-id id :reason :round-failed :kind :failed
+                           :context (select-keys (job-fields eng id) [:round :chain])
+                           :data {:error (str error)}
+                           :message (str "Manual job failed: " error)
+                           :state-update #(remove-listed % id)}))
+
 (defn settle-listed-job! [eng {:keys [id]} {:keys [status error result child-wait]}]
   (note-child-wait! eng id status child-wait)
   (let [idx (.indexOf (:list (state eng)) id)
@@ -83,12 +95,16 @@
                             {:source :job :kind :yielded :level :debug :status status}))))))
 
 (defn settle-listed!
-  "Book a listed job's round. The driver's slot job gets one call: a round that returned :continue or :declined ends
-  it as stopped (see end-slot!), whatever else it returned is booked as for any listed job."
-  [eng {:keys [id] :as run} {:keys [status child-wait] :as outcome}]
-  (if (and (= id (manual-job eng)) (#{:continue :declined} status))
-    (end-slot! eng id (if (= :declined status) (or (:reason child-wait) :declined) :yielded)
-               (when (= :declined status) child-wait))
+  "Book a listed job's round. The driver's slot job gets one call and ends: :continue or :declined and :cut end it
+  stopped (see end-slot!), :error ends it failed (fail-slot!); :done is booked as for any listed job."
+  [eng {:keys [id] :as run} {:keys [status child-wait error] :as outcome}]
+  (if (= id (manual-job eng))
+    (case status
+      (:continue :declined) (end-slot! eng id (if (= :declined status) (or (:reason child-wait) :declined) :yielded)
+                                       (when (= :declined status) child-wait))
+      :cut (end-slot! eng id :cut nil)
+      :error (fail-slot! eng id error)
+      (settle-listed-job! eng run outcome))
     (settle-listed-job! eng run outcome)))
 
 (defn judge-end!

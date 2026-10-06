@@ -483,9 +483,9 @@ one `job.cancelled` event each; the register is untouched, so reflexes keep runn
 For rescuing a stuck body by hand. The body listens on `worlds/<world>/agents/<name>/engine/control.sock` (mode 0600).
 Three control modes exist: normal scheduling, `do-now!` (an urgent holder), and manual takeover. `take` cuts the current
 holder and mutes all triggers and the loop until release or lease expiry: only the driver's slot job runs (the job the
-driver submits with `:by` = the lease's `who`; a new one replaces it). It gets one call and leaves the slot whatever it returns: `:done`/`:stopped`/`:failed` as returned, `:continue` or `:declined` end it `:stopped` reason `:yielded` (or the child's wait reason) plus the wait text, a failing check ends it at once `:stopped` with the check's reason. Then the body idles. Jobs from others queue and
+driver submits with `:by` = the lease's `who`; a new one replaces it). It gets one call and leaves the slot whatever it returns: `:done`/`:stopped` as returned, an error ends it `job.failed` with attention (unlisted, not parked), a cut ends it `:stopped` reason `:cut`, `:continue` or `:declined` end it `:stopped` reason `:yielded` (or the child's wait reason) plus the wait text, a failing check ends it at once `:stopped` with the check's reason. Then the body idles. Jobs from others queue and
 wait, `:front?`/`interrupt` from them are refused `:manual-control`, release cancels the slot job, and a slot round in
-flight keeps the lease alive (nothing else does); `/drive set` answers 409 `job-running` while a non-failed slot job exists; `/drive stop` cancels the slot job (running or just submitted), then stops. A cut listed job stays listed; a cut
+flight keeps the lease alive (nothing else does); `/drive set` answers 409 `job-running` while a slot job exists; `/drive stop` cancels the slot job (running or just submitted), then stops. A cut listed job (not the slot job) stays listed; a cut
 reflex job is dropped. Who drives is decided by a lease, first come (`take` is refused `held-by <who>` otherwise). The
 lease is not saved; restart or going offline ends it.
 

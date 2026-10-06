@@ -92,7 +92,7 @@
         (do (core/cancel! eng (core/manual-job eng) :driver)
             (handle eng opts method path body content-type))
         (and (= path "/drive") (= method "POST") (= "set" (:op body-map)) (own-lease? eng (:who body-map))
-             (core/manual-job eng) (not (contains? (:failed (core/state eng)) (core/manual-job eng))))
+             (core/manual-job eng))
         #js {:status 409 :json #js {:ok false :reason "job-running" :job (core/manual-job eng)}}
         :else
         (let [now (core/now eng)

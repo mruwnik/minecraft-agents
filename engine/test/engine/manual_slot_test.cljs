@@ -240,18 +240,39 @@
     (is (nil? (core/manual-job eng)))
     (is (empty? (:list (core/state eng))) "release cancelled it")))
 
-(deftest a-failed-slot-job-does-not-keep-the-lease-alive
+(deftest a-failing-slot-job-ends-failed-and-unlisted
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng clock]} (setup)]
+        (let [{:keys [eng seen clock]} (setup)]
           (takeover/handle eng opts "POST" "/drive" #js {:op "take" :who "claude" :why "x" :idleS 5} nil)
           (submit-as eng "claude" '(boom))
           (await (core/tick! eng))
-          (is (contains? (:failed (core/state eng)) (core/manual-job eng)) "the job is listed and failed")
+          (is (empty? (:list (core/state eng))) "left the slot, unlisted")
+          (is (empty? (:failed (core/state eng))) "not parked")
+          (is (nil? (core/manual-job eng)))
+          (is (= [:required] (mapv :attention (kinds seen :failed))) "one job.failed, attention as usual")
+          (is (nil? (core/tick! eng)) "no rerun")
+          (is (= ["j1"] (ran seen)))
           (swap! clock + 6000)
           (takeover/tick! eng opts)
           (is (false? (core/manual? eng))))))))
+
+(deftest a-cut-slot-job-ends-stopped-cut-and-unlisted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen world]} (setup)]
+          (.override world "moveTo" (fn [_ _ _] (js/Promise.reject (core/cut-error))))
+          (takeover/take! eng me)
+          (submit-as eng "claude" '(walk))
+          (await (core/tick! eng))
+          (is (empty? (:list (core/state eng))) "left the slot, unlisted")
+          (is (nil? (:resume (core/state eng))))
+          (is (nil? (core/manual-job eng)))
+          (is (= [:cut] (mapv :reason (kinds seen :stopped))))
+          (is (nil? (core/tick! eng)) "no rerun")
+          (is (= ["j1"] (ran seen))))))))
 
 (deftest a-listed-slot-job-not-yet-running-does-not-keep-the-lease-alive
   (let [{:keys [eng clock]} (setup)]
