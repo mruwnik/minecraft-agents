@@ -174,22 +174,10 @@ test('a cut while activateBlock hangs rejects with cut', async () => {
   await assert.rejects(call, { code: 'cut' })
 })
 
-test('blockAt and blocks report properties when present and omit them when empty', () => {
+test('blockAt reports properties when present and omit them when empty', () => {
   const { p } = rig({ blocks: { '1,64,0': 'composter', '2,64,0': 'dirt' }, props: { [key(1, 64, 0)]: { level: '3' } } })
   assert.deepEqual(p.blockAt(at(1, 64, 0)).properties, { level: 3 })
   assert.equal('properties' in p.blockAt(at(2, 64, 0)), false)
-  const found = p.blocks({ names: ['composter', 'dirt'], properties: true })
-  assert.deepEqual(found.map(b => [b.name, b.properties]), [['composter', { level: 3 }], ['dirt', undefined]])
-  assert.equal('properties' in found.find(b => b.name === 'dirt'), false)
-})
-
-test('blocks omits properties unless asked; blockAt always has them; age stays on both', () => {
-  const { p } = rig({ blocks: { '1,64,0': 'wheat' }, props: { [key(1, 64, 0)]: { age: '7' } } })
-  const plain = p.blocks({ names: ['wheat'] })[0]
-  assert.equal('properties' in plain, false)
-  assert.equal(plain.age, 7)
-  assert.deepEqual(p.blocks({ names: ['wheat'], properties: true })[0].properties, { age: 7 })
-  assert.deepEqual(p.blockAt(at(1, 64, 0)).properties, { age: 7 })
 })
 
 test('blockAt keeps age as a number next to properties', () => {
@@ -201,10 +189,9 @@ test('blockAt keeps age as a number next to properties', () => {
 const rawProps = { level: '8', age: '4', powered: false, facing: 'north' }
 const typedProps = { level: 8, age: 4, powered: false, facing: 'north' }
 
-test('blockAt and blocks report integer states as numbers', () => {
+test('blockAt reports integer states as numbers', () => {
   const { p } = rig({ blocks: { '1,64,0': 'composter' }, props: { [key(1, 64, 0)]: rawProps } })
   assert.deepEqual(p.blockAt(at(1, 64, 0)).properties, typedProps)
-  assert.deepEqual(p.blocks({ names: ['composter'], properties: true })[0].properties, typedProps)
 })
 
 test('useOn before and after report integer states as numbers', async () => {

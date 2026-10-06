@@ -374,12 +374,9 @@ for (const [label, extra, expected] of dropShapes) {
   })
 }
 
-test('blocks matches by name, predicate and max, sorted by distance', () => {
+test('the primitives have no raw block scan (jobs read perception seenBlocks; blockAt is the one cell lookup)', () => {
   const { p } = rig(world)
-  assert.deepEqual(p.blocks({ names: ['oak_log'] }).map(b => b.name), ['oak_log'])
-  assert.deepEqual(p.blocks({ match: n => n.endsWith('_bed') }).map(b => b.name), ['red_bed'])
-  assert.equal(p.blocks({ max: 2 }).length, 2)
-  assert.equal(p.blocks({ names: ['oak_log'] })[0].pos.x, 2)
+  assert.equal(p.blocks, undefined)
 })
 
 test('blockAt gives a name and a plain position', () => {
@@ -896,9 +893,8 @@ test('a reconnect that keeps failing rejects, reports the body disconnected, the
   assert.equal(p.isOffline(), false)
 })
 
-test('blocks and blockAt carry the age state of a crop, and only then', () => {
+test('blockAt carries the age state of a crop, and only then', () => {
   const { p } = rig({ blocks: { '1,64,0': 'carrots', '2,64,0': 'dirt' }, props: { '1,64,0': { age: 7 } } })
-  assert.deepEqual(p.blocks({ names: ['carrots'] }).map(b => b.age), [7])
   assert.equal(p.blockAt(at(1, 64, 0)).age, 7)
   assert.equal('age' in p.blockAt(at(2, 64, 0)), false)
 })
@@ -1296,7 +1292,6 @@ test('while the connection is down every primitive answers offline, never succes
   assert.equal(p.isOffline(), true)
   assert.deepEqual(p.self(), { status: 'offline' })
   assert.deepEqual(p.entities({}), [])
-  assert.deepEqual(p.blocks({}), [])
   assert.equal(p.blockAt(at(2, 64, 0)), null)
   assert.deepEqual(p.drive('t1', { look: { yaw: 90 } }), { status: 'offline' })
   assert.deepEqual(await p.look('t1', { pos: at(1, 64, 1) }), { status: 'offline' })
@@ -1543,7 +1538,6 @@ test('while offline isOffline is true and sensing answers offline instead of sta
   assert.equal(p.isOffline(), true)
   assert.deepEqual(p.self(), { status: 'offline' })
   assert.deepEqual(p.entities({}), [])
-  assert.deepEqual(p.blocks({}), [])
   assert.equal(p.blockAt(at(2, 64, 0)), null)
   p.setOwner('t2')
   await pending

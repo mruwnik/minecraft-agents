@@ -97,7 +97,6 @@ nobody may act. `isOwner(token)` reports whether a token is current.
 |---|---|
 | `self()` | `{username, pos, health, food, foodSaturation, oxygen, onFire, inWater, inLava, onGround, chunkLoaded, settling, isSleeping, vehicle, effects, experience, dimension, timeOfDay, isDay, raining, thundering, players, held, equipment, inventory}` |
 | `entities({radius=16, kind?, names?, max=32})` | `[{id, name, kind, pos, distance, visible?, ...}]` by distance; `kind` is `hostile`, `passive`, `player`, `item` or `other`; passive mobs and villagers are listed only with a clear line of sight; hostiles, items and players are listed regardless and carry `visible` (a player counts as `sleeping` only in sight) |
-| `blocks({radius=16, names?, match?, max=64, properties=false})` | `[{name, pos, age?, properties?, distance}]` by distance |
 | `blockAt(pos)` | `{name, pos, age?, properties?}`, or `null` when the chunk is not loaded |
 
 Notes:
@@ -159,7 +158,7 @@ onto a rim. Every bound bot has collision half-width 0.31 (0.3 left the body flu
 Acting while asleep first leaves the bed.
 
 **Offline is body state.** `offline` quits the bot, emits `offline`, waits `ms`, reconnects with the same params (3 tries),
-rebinds the library bot, emits `online`. While offline: `self()` is `{status: 'offline'}`, `entities`/`blocks` return `[]`,
+rebinds the library bot, emits `online`. While offline: `self()` is `{status: 'offline'}`, `entities` returns `[]`,
 `blockAt` returns `null`, `isOffline()` is true, the register and list are paused (no trigger evaluated, no round
 started), and acting calls resolve `{status: 'offline'}`. A cut ends the wait early but the body reconnects first. `close()`
 cancels it. Only `createPrimitives` supports it. The engine records why in its `:away` atom (`engine.core/away`); a

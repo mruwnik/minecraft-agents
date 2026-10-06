@@ -114,7 +114,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   const env = { get bot () { return bot }, timeScale, settleMs, act, isOwner, here, eye, inventory, standingCell, countsNow, hostilesNear, isOffline, equipment }
   Object.assign(env, createWalk(env), createSense(env))
   const { stopWalking, lookNow } = env
-  const { self, entities, blocks, blockAt, isSettling, settleFromNow, rememberSelf, lastKnown, columnLoaded } = env
+  const { self, entities, blockAt, isSettling, settleFromNow, rememberSelf, lastKnown, columnLoaded } = env
   Object.assign(env, createMove(env), createDig(env), createItems(env))
   const { moveTo, swim, jumpPlace, attack, sleep, look, mount, dismount, dig, place, collect, digTime, harvestTools } = env
   const { inspectContainer, transfer, equip, toss, craft, furnace, enchant, eat, interact, trade, unequip } = env
@@ -511,7 +511,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     .map(([name, fn]) => [name, whenUp(fn)]))
   // the raw world engine.perception looks at (stateAt, lightAt, eye, block changes): body-side only, never a job's
   const rawWorld = createRawWorld({ getBot: () => bot, isOffline: () => isOffline() || down, lightOverlay: (cx, cz, s) => view?.lightOverlay?.(cx, cz, s) })
-  return { setOwner, isOwner, drive: driveNow, stopDriving, self, entities, blocks, blockAt, harvestTools, digTime, pathWorld, ...acting, chatDirect, wait, isOffline, isSettling, lastKnown, offline, onBodyEvent, entityObservation, onEntityDeath, rawWorld, close }
+  return { setOwner, isOwner, drive: driveNow, stopDriving, self, entities, blockAt, harvestTools, digTime, pathWorld, ...acting, chatDirect, wait, isOffline, isSettling, lastKnown, offline, onBodyEvent, entityObservation, onEntityDeath, rawWorld, close }
 }
 
 const REPO_ROOT = join(import.meta.dirname, '..', '..')

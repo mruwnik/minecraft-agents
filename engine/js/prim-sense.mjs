@@ -1,5 +1,5 @@
 // Why JavaScript: Mineflayer boundary; the one adapter that calls Mineflayer and the pathfinder, with tick-bound policy that lives inside their event loops.
-// Sensing for the primitives: self, entities, blocks and the settling state of a body.
+// Sensing for the primitives: self, entities, blockAt and the settling state of a body.
 
 import { lineClear, rayClear, blocksSight } from './sight.mjs'
 import { stateProperties } from './use-on.mjs'
@@ -141,20 +141,10 @@ export function createSense (env) {
     return { name: block.name, pos: xyz(block.position), ...(age !== undefined && { age: Number(age) }), ...(withProps && Object.keys(properties).length > 0 && { properties }), ...(fullCube(block) && { fullCube: true }) }
   }
 
-  const blocks = ({ radius = DEFAULT_RADIUS, names, match, max = 64, properties = false } = {}) => {
-    if (isOffline()) return []
-    const wanted = names && new Set(names)
-    const matching = block => Boolean(block) && (wanted ? wanted.has(block.name) : match ? match(block.name) : !isAir(block.name))
-    const me = here()
-    return env.bot.findBlocks({ matching, maxDistance: radius, count: max })
-      .map(p => ({ ...blockInfo(env.bot.blockAt(p), properties), distance: dist(me, p) }))
-      .sort((a, b) => a.distance - b.distance)
-  }
-
   const blockAt = pos => {
     if (isOffline()) return null
     const block = env.bot.blockAt(vec(pos))
     return block ? blockInfo(block) : null
   }
-  return { self, entities, blocks, blockAt, isSettling, settleFromNow, rememberSelf, lastKnown, columnLoaded }
+  return { self, entities, blockAt, isSettling, settleFromNow, rememberSelf, lastKnown, columnLoaded }
 }
