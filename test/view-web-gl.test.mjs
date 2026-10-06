@@ -42,6 +42,6 @@ for (const [layers, size, levels] of sizes) {
 
 // The element table is a float sampler2D: without a highp default it is read at fp16 precision and element ids above 2048 round (a shulker lid read as its base).
 test('the fragment shader declares highp for float sampler2D, which holds the element ids', () => {
-  const source = fs.readFileSync(new URL('../tools/view/web/gl.mjs', import.meta.url), 'utf8')
+  const source = fs.readFileSync(new URL('../tools/view/web/gl-shader.mjs', import.meta.url), 'utf8')
   assert.ok(source.includes('precision highp sampler2D;'))
 })
