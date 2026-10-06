@@ -666,7 +666,7 @@ the recorded pins (`planner_{bench,options,goals,courses}_golden.cljs`, `js/path
 ## Agent command-line tools
 
 All take `<body> --world <world>`, print EDN, read through the local sockets, and never start a body or take a lease unless
-noted. Most run a prebuilt bundle: build it once with `cd dashboard && npm run build-agent-tools`.
+noted. Most run a prebuilt bundle: build it once with `cd dashboard && npm run build-agent-tools`. The loader warns on stderr when a source is newer than the bundle: rebuild with `tools/compile dashboard agent-tools`.
 
 ```
 node engine/tools/observe.mjs Bob --world claude                       # compact status (--raw: full snapshot, --verbose)
