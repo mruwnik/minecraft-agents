@@ -53,21 +53,28 @@ export function segments(cmd) {
 
 const base = (w) => w.split('/').pop()
 const ASSIGN = /^[A-Za-z_]\w*=/
-const WRAPPERS = new Set(['env', 'nohup', 'sudo', 'time', 'exec', 'command', 'nice'])
+const WRAPPERS = new Set(['env', 'nohup', 'sudo', 'time', 'exec', 'command', 'nice', 'timeout', 'xargs'])
+// Options of each wrapper that take a separate argument word.
+const ARG_OPTS = {
+  sudo: ['-u', '-g', '-h', '-p', '-C', '-r', '-t', '-U', '-D', '-R'], env: ['-u', '-C', '-S'],
+  timeout: ['-s', '-k'], nice: ['-n'], xargs: ['-n', '-I', '-P', '-L', '-d', '-E', '-s', '-a', '-l', '-i'],
+}
+const KEYWORDS = new Set(['if', 'then', 'else', 'elif', 'do', 'while', 'until', '!', '{', '}', 'fi', 'done'])
+const RAW_RUNNERS = new Set(['test-engine', 'shadow-cljs', 'world-test.mjs', 'test-run.mjs', 'test-shards.mjs'])
 
-// Drop leading VAR=x, env, timeout N, nohup etc. so the command word comes first.
+// Drop leading VAR=x, shell keywords and wrappers (with their options) so the command word comes first.
 function strip(words) {
   let i = 0
   while (i < words.length) {
-    const w = words[i]
-    if (ASSIGN.test(w) || WRAPPERS.has(base(w))) { i++; continue }
-    if (base(w) === 'timeout') {
-      i++
-      while (i < words.length && words[i].startsWith('-')) i++
-      i++ // duration
-      continue
+    const w = words[i], b = base(w)
+    if (ASSIGN.test(w) || KEYWORDS.has(w)) { i++; continue }
+    if (!WRAPPERS.has(b)) break
+    i++
+    while (i < words.length && words[i].startsWith('-')) {
+      if (words[i] === '--') { i++; break }
+      i += (ARG_OPTS[b] ?? []).includes(words[i]) ? 2 : 1
     }
-    break
+    if (b === 'timeout') i++ // duration
   }
   return words.slice(i)
 }
@@ -77,7 +84,11 @@ function blockedWords(words) {
   if (!w.length) return false
   const cmd = base(w[0]), args = w.slice(1)
   if (cmd === 'pkill' || cmd === 'killall') return true
-  if (cmd === 'test-engine' || cmd === 'shadow-cljs' || cmd === 'world-test.mjs') return true
+  if (RAW_RUNNERS.has(cmd)) return true
+  if (cmd === 'find') {
+    const i = args.findIndex((a) => ['-exec', '-execdir', '-ok', '-okdir'].includes(a))
+    return i >= 0 && blockedWords(args.slice(i + 1))
+  }
   if (cmd.endsWith('.test.sh')) return true
   if (cmd === 'res-slot') {
     const i = args.indexOf('--')
@@ -88,7 +99,7 @@ function blockedWords(words) {
     const flags = si < 0 ? args : args.slice(0, si) // later words are the script's own args
     if (flags.some((a) => a.startsWith('--test'))) return true
     const script = args[si]
-    return !!script && base(script) === 'world-test.mjs'
+    return !!script && RAW_RUNNERS.has(base(script))
   }
   if (['npx', 'pnpx', 'bunx', 'yarn', 'pnpm', 'npm'].includes(cmd)) {
     if (args.includes('shadow-cljs')) return true
@@ -99,17 +110,26 @@ function blockedWords(words) {
     return true
   }
   if (['bash', 'sh', 'zsh'].includes(cmd)) {
-    const ci = args.indexOf('-c')
+    const ci = args.findIndex((a) => /^-[A-Za-z]*c[A-Za-z]*$/.test(a))
     if (ci >= 0 && args[ci + 1] !== undefined) return blockedCommand(args[ci + 1])
     const script = args.find((a) => !a.startsWith('-'))
-    return !!script && script.endsWith('.test.sh')
+    return !!script && blockedWords([script])
   }
   return false
 }
 
+// run_tests launches each step as `{ (cd <dir> && export LIVE_TESTS_NONCE=<x> ... && <argv> 2>&1 | tee ...`.
+// Only the segment right after such an export (after a lone `{` and a cd) is exempt, and never for
+// pkill/killall; a command that merely mentions the nonce is judged like any other.
+const killer = (words) => ['pkill', 'killall'].includes(base(strip(words)[0] ?? ''))
+const nonceExport = (w) => w[0] === 'export' && w.some((x) => /^LIVE_TESTS_NONCE=[A-Za-z0-9]+$/.test(x))
+
 function blockedCommand(command) {
-  if (command.includes('LIVE_TESTS_NONCE=')) return false
-  return segments(command).some(blockedWords)
+  const segs = segments(command)
+  return segs.some((w, i) => {
+    const wrapped = i >= 3 && nonceExport(segs[i - 1]) && segs[i - 2][0] === 'cd' && segs[i - 3].length === 1 && segs[i - 3][0] === '{'
+    return wrapped ? killer(w) : blockedWords(w)
+  })
 }
 
 export function decide(input) {

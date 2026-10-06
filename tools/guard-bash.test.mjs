@@ -17,6 +17,12 @@ const blocked = [
   'node tools/world-test.mjs f.edn', 'tools/res-slot body -- node tools/world-test.mjs f.edn',
   'tools/res-slot tests -- node --test f.mjs', 'bash tools/compile.test.sh', './tools/commit-mine.test.sh', 'x=$(pkill foo)',
   'echo `killall x`', 'bash -c "pkill foo"', 'echo a\npkill foo',
+  'bash tools/test-engine x', 'sh tools/test-engine x', 'bash -lc "pkill x"', 'if true; then pkill x; fi',
+  'for i in 1 2; do pkill x; done', '{ pkill x; }', 'ls | xargs pkill', 'ls | xargs -n 1 pkill', 'find . -exec pkill x {} \\;',
+  'sudo -u bob pkill x', 'env -i pkill x', 'env -u A pkill x', 'timeout -s KILL 5 pkill x', 'nohup -- pkill x',
+  'node tools/test-run.mjs engine x', 'node tools/test-shards.mjs', 'tools/test-run.mjs x',
+  'echo LIVE_TESTS_NONCE=1; pkill x', 'echo LIVE_TESTS_NONCE=1 && tools/test-engine x', 'LIVE_TESTS_NONCE=1 pkill x',
+  'LIVE_TESTS_NONCE=1 tools/test-engine x', "{ (cd '/p' && export LIVE_TESTS_NONCE='n0' && pkill x)",
 ]
 const allowed = [
   'cat tools/test-engine', 'grep -n \'node --test\' x', 'sed -n 1,5p tools/test-engine', 'git log --grep pkill',
@@ -25,7 +31,10 @@ const allowed = [
   'tools/compile engine test', 'tools/commit-mine --card x -m msg tools/test-engine', 'head -5 tools/world-test.mjs',
   'npm install', 'npm --prefix dashboard run restart', 'tools/res-slot status', 'git diff tools/test-engine | head',
   'cd /x && ls', 'FOO=1 ls', 'rg pkill', 'cat <<\'EOF\'\npkill x\nEOF', 'git commit -m "$(cat <<\'EOF\'\nmsg pkill\nEOF\n)"',
-  'LIVE_TESTS_NONCE=abc tools/test-engine engine.x', 'ls', '',
+  "{ (cd '/p' && export LIVE_TESTS_NONCE='n0' CI='1' && 'node' '--test' 'a.mjs' 2>&1 | tee '/l' | grep -e x >> '/e'; exit \"${PIPESTATUS[0]}\"); c=$?; (exit $c); }",
+  "(echo hi && { (cd '/p' && export LIVE_TESTS_NONCE='n0' && 'npm' 'test' 2>&1 | tee '/l'; exit 0); c=$?; (exit $c); })", 'ls', '',
+  'grep xargs pkill docs', 'ls | xargs grep pkill', 'find . -name pkill', 'sudo -u bob ls', 'timeout -s KILL 5 ls',
+  'bash -lc "ls"', 'bash tools/compile engine x', 'if true; then ls; fi', 'cat tools/test-run.mjs',
 ]
 
 for (const c of blocked) test(`blocks ${JSON.stringify(c)}`, () => {
