@@ -1,4 +1,4 @@
-;; make-room ends :done (card 3133211e): one toss then walk-away then make-room.done with :tossed (twice); nothing tossable -> declined.
+;; make-room ends :done (card 3133211e): one toss then walk-away then make-room.done with :tossed (twice); nothing tossable -> stopped.
 ;; An inventory that already has room: the job does not start (no make-room events).
 {:defaults {:tags [:make-room :jobs] :time :any :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}}
  :cases
@@ -7,7 +7,7 @@
    :body {:inventory [["wooden_pickaxe" 1] ["stone_pickaxe" 1] ["iron_pickaxe" 1] ["golden_pickaxe" 1] ["diamond_pickaxe" 1] ["netherite_pickaxe" 1] ["wooden_axe" 1] ["stone_axe" 1] ["iron_axe" 1] ["golden_axe" 1] ["diamond_axe" 1] ["netherite_axe" 1] ["wooden_shovel" 1] ["stone_shovel" 1] ["iron_shovel" 1] ["golden_shovel" 1] ["diamond_shovel" 1] ["netherite_shovel" 1] ["wooden_hoe" 1] ["stone_hoe" 1] ["iron_hoe" 1] ["golden_hoe" 1] ["diamond_hoe" 1] ["netherite_hoe" 1] ["wooden_sword" 1] ["stone_sword" 1] ["iron_sword" 1] ["golden_sword" 1] ["diamond_sword" 1] ["netherite_sword" 1] ["bucket" 1] ["water_bucket" 1] ["lava_bucket" 1] ["gravel" 64] ["diamond" 5]]}
    :act [[:job (jobs.storage.make-room {:free 2})]]
    :expect [{:event {:source :job :kind :make-room.done :data {:tossed [:any]}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :make-room.declined} :for-s 3}
+            {:no-event {:source :job :kind :make-room.stopped} :for-s 3}
             {:no-event {:source :job :kind :make-room.tossed :data {:item "diamond"}} :for-s 3}]
    :after [[:item "diamond" 5]]
    :limit-s 90}
@@ -15,13 +15,13 @@
    :body {:inventory [["wooden_pickaxe" 1] ["stone_pickaxe" 1] ["iron_pickaxe" 1] ["golden_pickaxe" 1] ["diamond_pickaxe" 1] ["netherite_pickaxe" 1] ["wooden_axe" 1] ["stone_axe" 1] ["iron_axe" 1] ["golden_axe" 1] ["diamond_axe" 1] ["netherite_axe" 1] ["wooden_shovel" 1] ["stone_shovel" 1] ["iron_shovel" 1] ["golden_shovel" 1] ["diamond_shovel" 1] ["netherite_shovel" 1] ["wooden_hoe" 1] ["stone_hoe" 1] ["iron_hoe" 1] ["golden_hoe" 1] ["diamond_hoe" 1] ["netherite_hoe" 1] ["wooden_sword" 1] ["stone_sword" 1] ["iron_sword" 1] ["golden_sword" 1] ["diamond_sword" 1] ["netherite_sword" 1] ["bucket" 1] ["water_bucket" 1] ["lava_bucket" 1] ["sand" 64] ["gold_ingot" 30]]}
    :act [[:job (jobs.storage.make-room {:free 2})]]
    :expect [{:event {:source :job :kind :make-room.done :data {:tossed [:any]}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :make-room.declined} :for-s 3}]
+            {:no-event {:source :job :kind :make-room.stopped} :for-s 3}]
    :after [[:item "gold_ingot" 30]]
    :limit-s 90}
-  {:name "nothing-tossable-declines"
+  {:name "nothing-tossable-stops"
    :body {:inventory [["wooden_pickaxe" 1] ["stone_pickaxe" 1] ["iron_pickaxe" 1] ["golden_pickaxe" 1] ["diamond_pickaxe" 1] ["netherite_pickaxe" 1] ["wooden_axe" 1] ["stone_axe" 1] ["iron_axe" 1] ["golden_axe" 1] ["diamond_axe" 1] ["netherite_axe" 1] ["wooden_shovel" 1] ["stone_shovel" 1] ["iron_shovel" 1] ["golden_shovel" 1] ["diamond_shovel" 1] ["netherite_shovel" 1] ["wooden_hoe" 1] ["stone_hoe" 1] ["iron_hoe" 1] ["golden_hoe" 1] ["diamond_hoe" 1] ["netherite_hoe" 1] ["wooden_sword" 1] ["stone_sword" 1] ["iron_sword" 1] ["golden_sword" 1] ["diamond_sword" 1] ["netherite_sword" 1] ["bucket" 1] ["water_bucket" 1] ["lava_bucket" 1] ["diamond" 64] ["netherite_ingot" 9]]}
    :act [[:job (jobs.storage.make-room {:free 2})]]
-   :expect [{:event {:source :job :kind :make-room.declined :data {:reason "nothing-to-toss"}} :within-s 60 :of-job true}
+   :expect [{:event {:source :job :kind :make-room.stopped :data {:reason :nothing-to-go}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :make-room.tossed} :for-s 3}]
    :after [[:item "diamond" 64]]
    :limit-s 60}
@@ -30,6 +30,6 @@
    :act [[:job (jobs.storage.make-room {:free 4})]]
    :expect [{:no-event {:source :job :kind :make-room.done} :for-s 8}
             {:no-event {:source :job :kind :make-room.tossed} :for-s 8}
-            {:no-event {:source :job :kind :make-room.declined} :for-s 8}]
+            {:no-event {:source :job :kind :make-room.stopped} :for-s 8}]
    :after [[:item "cobblestone" 64]]
    :limit-s 30}]}

@@ -2,9 +2,11 @@
   "jobs.storage.make-room, the reflex of inventory-nearly-full, against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.registry :as registry]
+            [engine.takeover :as takeover]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.storage.make-room :as mr]))
@@ -57,6 +59,49 @@
 (defn chest-entries [eng] (mem/entries (mem/view (:store eng)) :chest-unusable))
 
 (defn know-chest! [eng pos] (mem/write! (:store eng) :chest {:pos pos} mem/place-policy))
+
+(defn returns-parent
+  "A parent that calls make-room with args as its child, keeps every call's return in returns and the child's result in
+  out. seed, when given, is put in the child's memory before its first call (left by an earlier, cut round)."
+  [out returns args seed]
+  {:check (constantly true)
+   :round (fn ^:async returns-round [c]
+            (when (and seed (empty? @returns) (nil? (get-in (ctx/mem c) [:children :kid])))
+              (ctx/update-mem! c assoc-in [:children :kid] (merge {:args args :children {}} seed)))
+            (let [r (await (ctx/call-child c :kid 'jobs.storage.make-room args))]
+              (swap! returns conj r)
+              (when (= :done r) (reset! out (ctx/child-result c :kid)))
+              r))})
+
+(defn with-parent
+  "setup world, with returns-parent listed over make-room args; adds :out and :returns."
+  ([world args] (with-parent world args nil))
+  ([world args seed]
+   (let [{:keys [eng] :as s} (setup world)
+         out (atom :not-done)
+         returns (atom [])
+         eng (assoc eng :jobs (assoc (:jobs eng) 'returns-parent (returns-parent out returns args seed)))]
+     (core/submit! eng '(returns-parent) {})
+     (assoc s :eng eng :out out :returns returns))))
+
+(defn ^:async tick-out!
+  "Tick until the list is empty, at most n ticks."
+  [eng n]
+  (loop [i 0]
+    (when (and (< i n) (seq (:list (core/state eng))))
+      (await (core/tick! eng))
+      (recur (inc i)))))
+
+(defn ^:async run-child
+  "Run make-room as the child of returns-parent to its end; {:eng :p :seen :out :returns}."
+  [world args seed]
+  (let [s (with-parent world args seed)]
+    (await (tick-out! (:eng s) 30))
+    s))
+
+(defn feet [p] (let [pos (.-pos (.self p))] {:x (Math/floor (.-x pos)) :y (Math/floor (.-y pos)) :z (Math/floor (.-z pos))}))
+
+(defn of-kind [seen kind] (filterv #(= kind (:kind %)) @seen))
 
 ;; ------------------------------------------------------------------ pure
 
@@ -272,8 +317,8 @@
           (await (run-reflex eng {:toss-below 2} {}))
           (is (= ["item_a" "item_b"] (mapv #(arg-of "item" %) (calls p "toss"))) "worth 0 before the worth-1 oak_log; stops at 4 free")
           (is (= 32 (stack-count p)))
-          (is (= [{:x -4 :y 64 :z 0}] (mapv #(js->clj (arg-of "pos" %) :keywordize-keys true) (calls p "moveTo")))
-              "then it walks 4 blocks back from where it threw, against the throw direction")
+          (is (>= 1 (Math/abs (- -4 (:x (feet p))))) "then it walks 4 blocks back from where it threw, against the throw direction")
+          (is (= 0 (:z (feet p))))
           (is (= [:make-room.tossed :make-room.done] (vec (distinct (filter #{:make-room.tossed :make-room.done} (map :kind @seen)))))))))))
 
 (deftest the-name-picked-up-more-recently-is-tossed-last
@@ -298,7 +343,7 @@
         (let [{:keys [eng p seen]} (setup {:inventory (vec (concat (same "iron_pickaxe" 20 1) (same "bread" 10 3) (same "shield" 4 1)))})]
           (await (run-reflex eng {:toss-below 1000} {}))
           (is (= 0 (count (calls p "toss"))))
-          (is (declined? seen)))))))
+          (is (= [:nothing-to-go] (mapv :reason (of-kind seen :make-room.stopped)))))))))
 
 (deftest buckets-are-never-tossed
   (async done
@@ -316,18 +361,19 @@
           (await (run-reflex eng {:keep-blocks 64} {}))
           (is (= 2 (count (calls p "toss"))) "at most two of the three stacks")
           (is (= 64 (get (inv p) "cobblestone")))
-          (is (not (declined? seen)) "it acted, so ending short is :done")
-          (is (some #(and (= :make-room.done (:kind %)) (:short %)) @seen)))))))
+          (is (not (declined? seen)))
+          (is (= [:short] (mapv :reason (of-kind seen :make-room.stopped))) "ending short is stopped, not done")
+          (is (empty? (of-kind seen :make-room.done))))))))
 
-(deftest everything-worth-keeping-declines-with-no-toss
+(deftest everything-worth-keeping-stops-with-no-toss
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:inventory (same "diamond" 35 1)})]
           (await (run-reflex eng {} {}))
           (is (= 0 (count (calls p "toss"))))
-          (is (declined? seen))
-          (is (contains? (event-kinds seen) :make-room.declined))
+          (is (not (declined? seen)))
+          (is (= [:nothing-to-go] (mapv :reason (of-kind seen :make-room.stopped))))
           (is (= {} (:instances (core/state eng)))))))))
 
 (def diamond-on-ground
@@ -343,8 +389,8 @@
           (is (= [70] (mapv #(arg-of "id" %) (calls p "collect"))))
           (is (= 1 (get (inv p) "diamond")))
           (is (= 36 (stack-count p)) "35 oak_log stacks and the diamond")
-          (is (not (declined? seen)) "a completed swap with nothing more to toss is :done")
-          (is (some #(and (= :make-room.done (:kind %)) (:short %)) @seen))
+          (is (not (declined? seen)))
+          (is (= [:short] (mapv :reason (of-kind seen :make-room.stopped))) "a swap with nothing more to toss is still short")
           (is (contains? (event-kinds seen) :make-room.swapped)))))))
 
 (deftest the-swap-throws-away-from-the-item
@@ -377,16 +423,16 @@
           (is (= [{:x -3 :y 65.5 :z 0}] (mapv #(js->clj (arg-of "pos" %) :keywordize-keys true) (calls p "look")))
               "east is walled at eye level: west is the first free direction"))))))
 
-(deftest max-rounds-gives-up-with-a-stall-warning
+(deftest max-steps-gives-up-with-a-stall-warning
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:inventory (many "junk" 35) :containers {"10,64,0" []}})]
           (.override (.-world p) "toss" (fn ^:async f [_ _ _] #js {:status "tossed" :count 1}))
-          (await (run-reflex eng {:max-rounds 3 :free 36} {}))
+          (await (run-reflex eng {:max-steps 3 :free 36} {}))
           (is (= 3 (count (calls p "toss"))))
-          (is (some #(= :make-room.stalled (:kind %)) @seen))
-          (is (declined? seen)))))))
+          (is (= 1 (count (of-kind seen :make-room.stalled))))
+          (is (= {} (:instances (core/state eng)))))))))
 
 
 (deftest junk-blocks-are-tossed-before-coal-and-copper-and-the-result-says-so
@@ -420,3 +466,114 @@
 (deftest torches-are-never-tossed
   (let [inventory [{:name "torch" :count 16 :slot 0} {:name "flint" :count 3 :slot 1}]]
     (is (= ["flint"] (names-of (mr/toss-order inventory {} {} 1))))))
+
+;; ------------------------------------------------------------------ one round is one whole attempt
+
+(deftest one-call-tosses-until-enough-is-free-with-no-continue
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out returns p]} (await (run-child {:inventory (many "junk" 35)} {} nil))]
+          (is (= [:done] @returns) "three tosses and the walk away in one call")
+          (is (= {:status :done :free 4 :tossed [{:item "junk_0" :count 1} {:item "junk_1" :count 1} {:item "junk_2" :count 1}]}
+                 @out))
+          (is (= 32 (stack-count p))))))))
+
+(deftest one-call-puts-away-at-the-chest-with-no-continue
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng out returns p]} (with-parent {:inventory full-inventory :containers {"10,64,0" []}} {:free 6})]
+          (know-chest! eng chest-pos)
+          (await (tick-out! eng 30))
+          (is (= [:done] @returns))
+          (is (= :done (:status @out)))
+          (is (= 4 (count (calls p "transfer"))))
+          (is (= 0 (count (calls p "toss")))))))))
+
+(deftest a-reflex-run-is-one-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:inventory (many "junk" 35)})]
+          (await (run-reflex eng {} {}))
+          (is (= 1 (count (of-kind seen :round_started))))
+          (is (= 1 (count (of-kind seen :make-room.done)))))))))
+
+(deftest ending-short-is-stopped-with-the-count-and-what-went
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out returns]} (await (run-child {:inventory (vec (concat (same "iron_pickaxe" 33 1) (same "cobblestone" 3 64)))}
+                                                      {:keep-blocks 64} nil))]
+          (is (= [:done] @returns))
+          (is (= {:status :stopped :reason :short :free 2
+                  :tossed [{:item "cobblestone" :count 64} {:item "cobblestone" :count 64}]}
+                 (dissoc @out :text)))
+          (is (string? (:text @out))))))))
+
+(deftest nothing-that-may-go-is-stopped
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out returns p]} (await (run-child {:inventory (same "diamond" 35 1)} {} nil))]
+          (is (= [:done] @returns))
+          (is (= [:stopped :nothing-to-go 1] ((juxt :status :reason :free) @out)))
+          (is (empty? (.-calls (.-world p))) "no act"))))))
+
+(deftest a-cut-mid-round-resumes-and-keeps-what-it-tossed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p out returns]} (with-parent {:inventory (many "junk" 35)} {})
+              looks (atom 0)]
+          (.override (.-world p) "look" (fn ^:async f [token a impl]
+                                          (when (= 2 (swap! looks inc)) (takeover/take! eng {:who "claude" :why "cut"}))
+                                          (await (impl token a))))
+          (await (core/tick! eng))
+          (is (= [] @returns) "the cut call returned nothing")
+          (is (= 34 (stack-count p)) "one toss before the cut")
+          (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
+          (await (tick-out! eng 10))
+          (is (= [:done] @returns) "the resumed call ended done")
+          (is (= 32 (stack-count p)))
+          (is (= [{:item "junk_0" :count 1} {:item "junk_1" :count 1} {:item "junk_2" :count 1}] (:tossed @out))
+              "the toss before the cut is in the result"))))))
+
+(deftest a-toss-intent-left-by-a-restart-is-inspected
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [intent (fn [item] {:tossing {:item item :count 1 :before 1 :at {:x 0 :y 64 :z 0} :dir [1 0]}})
+              gone (await (run-child {:inventory (many "junk" 35)} {} (intent "flint")))
+              kept (await (run-child {:inventory (many "junk" 35)} {} (intent "junk_9")))]
+          (is (= [{:item "flint" :count 1} {:item "junk_0" :count 1} {:item "junk_1" :count 1} {:item "junk_2" :count 1}]
+                 (:tossed @(:out gone)))
+              "flint is no longer carried: the toss went out before the restart")
+          (is (= [{:item "junk_0" :count 1} {:item "junk_1" :count 1} {:item "junk_2" :count 1}] (:tossed @(:out kept)))
+              "junk_9 is still carried: the toss never happened"))))))
+
+(deftest a-swap-intent-left-by-a-cut-picks-up-the-item
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (run-child {:inventory (same "oak_log" 35 5) :entities [diamond-on-ground]}
+                                            {:free 1 :toss-below 0}
+                                            {:acted true :swap {:id 70 :item "diamond" :worth 10}}))]
+          (is (= [70] (mapv #(arg-of "id" %) (calls p "collect"))))
+          (is (= 0 (count (calls p "toss"))))
+          (is (= 1 (get (inv p) "diamond"))))))))
+
+(deftest a-remembered-chest-that-is-gone-is-dropped-and-junk-is-tossed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (with-parent {:inventory (many "junk" 35)} {})]
+          (know-chest! eng chest-pos)
+          (await (tick-out! eng 30))
+          (is (= [:done] @(:returns s)))
+          (is (= :done (:status @(:out s))))
+          (is (= 3 (count (calls p "toss"))))
+          (is (= 1 (count (calls p "transfer"))) "one try finds it missing")
+          (is (nil? (mem/place (mem/view (:store eng)) :chest)) "the missing chest is no longer known")
+          (is (seq (of-kind seen :chest_missing))))))))

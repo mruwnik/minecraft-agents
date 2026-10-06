@@ -606,7 +606,7 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 | `forestry.maintain`, `forestry.prepare` | Keep and prepare the tree cells of a forest plan |
 | `storage.deposit`, `withdraw`, `kit` | Put away everything except tools and armour (`:keep`); take named items; take a tool and food kit. `withdraw` and `kit` record what a chest holds in `:fetch/stock` |
 | `items.obtain`, `items.get-tool`, `items.fetch-limits` | Get an item (or any of several) from carried stock, seen chests that allow `:take`, or a craft chain planned from recipes over what is carried (logs to planks, sticks, a table put down, the tool; `jobs.items.recipes`); get a tool that harvests a block; set the body's fetch limits (`:fetch/limits`) |
-| `storage.make-room` | The `:inventory-nearly-full` job: deposit by value, swap for worthier items, else toss junk, then step away |
+| `storage.make-room` | The `:inventory-nearly-full` job. One run deposits by value, swaps for worthier items, else tosses junk until `:free` slots are free, then steps away; stopped `:short` or `:nothing-to-go` when no more may go |
 | `items.craft`, `smelt`, `enchant`, `wear`, `bake`, `give` | Craft (walks to a table), smelt in a furnace, enchant, put armour on, bake bread, give items to a player |
 | `village.trade` `{:villager :buy :count}` | Buys from a villager |
 

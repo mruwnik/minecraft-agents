@@ -5,13 +5,16 @@
             [jobs.lib.util :as u]
             [engine.memory :as mem]
             [jobs.lib.worth :as value]
+            [jobs.movement.go-to :as go-to]
+            [jobs.lib.result :as res]
             [jobs.storage.deposit :as deposit]
             [jobs.survival.dig-in :as dig-in]
             [jobs.lib.foods :as foods]))
 
 (def doc
-  "Make room in a nearly full inventory (the inventory-nearly-full reflex), one step per round, until :free slots
-  are free. Each round first checks whether anything is left to do and ends :done when not.
+  "Make room in a nearly full inventory (the inventory-nearly-full reflex) until :free slots are free. One round is
+  the whole attempt: it re-reads the inventory before every step and puts away, swaps or tosses until enough is free
+  or nothing more may go. It never yields (:continue).
   What is thrown, like a player: plain junk blocks first (junk-blocks: cobblestone, cobbled deepslate, granite,
   tuff, dirt, gravel...), whole big stacks before partial, then the rest by worth; ores, fuel and the like
   only after the junk. Never put away or thrown: tools, weapons, armour and buckets. Food is never thrown and is put away only above
@@ -20,19 +23,25 @@
   Steps, in order:
   1. A chest known within :chest-range (and not marked :chest-unusable) takes what jobs.storage.deposit may put
      away, least worth keeping first: names without a floor before food and building blocks, then the cheapest,
-     then the one picked up longest ago. A chest that fails is remembered as :chest-unusable for ten minutes and
-     the job goes on without it.
+     then the one picked up longest ago. A chest that fails (full, gone, unreachable, refused) is remembered as
+     :chest-unusable for ten minutes and the job goes on without it.
   2. With no slot free and an item lying within :swap-radius that is worth more than the cheapest throwable
      stack, that stack is thrown away from the item and the item is collected.
   3. Without a usable chest, the stack of least worth is thrown. A stack qualifies when jobs.lib.worth/item-worth is
      below :toss-below, and it is thrown whole and only while the name's floor stays carried. Cheapest first,
      then the one picked up longest ago (:picked-up entries), then the smaller stack. The body turns to the first
      of the four directions with two free cells ahead at eye level and tosses.
-  After a toss, once enough slots are free (or nothing is left to throw), it walks :away blocks from where the
-  items were thrown, so it does not pick them up again.
-  Hands over {:tossed [{:item :count}] :free}. Emits info make-room.tossed (with :junk), .swapped, .done (with :tossed, what was thrown) and .declined. Three failed tosses end it with warn
-  make-room.toss-failed. After :max-rounds rounds it ends :declined with warn make-room.stalled. It also ends
-  :declined when nothing may be tossed.")
+  After tossing it walks :away blocks from where the items were thrown (a go-to child), so it does not pick them up
+  again.
+  Resume: a toss or swap writes its intent first; a run that finds one (after a cut or a restart) checks the
+  inventory before acting again. What was tossed before a cut stays in the result.
+  Ends:
+  - done {:tossed [{:item :count}] :free} once :free slots are free (info make-room.done when it acted);
+  - stopped :short (it acted, nothing more may go) or :nothing-to-go (it may put away or toss nothing), with
+    :free and :tossed, info make-room.stopped;
+  - stopped :stalled after :max-steps steps (warn make-room.stalled) or :toss-failed after three failed tosses
+    (warn make-room.toss-failed).
+  Also emits info make-room.tossed (with :junk) and make-room.swapped.")
 
 (def args
   {:free {:doc "done once at least this many slots are free (above the trigger's 2, so it does not refire at once)" :default 4}
@@ -42,7 +51,7 @@
    :toss-below {:doc "a stack is tossed to make room only when its jobs.lib.worth/item-worth is below this" :default 1}
    :swap-radius {:doc "when no slot is free, a dropped item worth more than some carried stack within this radius is swapped in" :default 8}
    :away {:doc "after tossing, walk this far away from where the items were thrown" :default 4}
-   :max-rounds {:doc "safety: give up (:declined, make-room.stalled) after this many rounds" :default 40}
+   :max-steps {:doc "safety: stop (:stalled, warn make-room.stalled) after this many deposit calls, swaps and tosses in one run" :default 40}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
 (def unusable-policy {:cap 5 :ttl 600000})
@@ -193,58 +202,91 @@
        (keep (fn [e] (when-let [i (.-item e)]
                        {:id (.-id e) :name (.-name i) :count (.-count i) :pos (u/pos-of (.-pos e))})))))
 
-(defn ^:async toss!
-  "Turn to dir, throw stack, remember where. Resolves to :continue (or :done
-  when three tosses failed)."
-  [c stack dir fields]
-  (let [p (:primitives c)
-        {:keys [x y z]} (u/self-pos c)
-        [dx dz] dir
-        _ (await (ctx/act c :look (clj->js {:pos {:x (+ x (* 3 dx)) :y (+ y 1.5) :z (+ z (* 3 dz))}})))
-        r (await (ctx/act c :toss (clj->js {:item (:name stack) :count (:count stack) :slot (:slot stack)})))]
-    (if (not= "tossed" (.-status r))
-      (u/fail! c :make-room.toss-failed (str "toss " (:name stack) ": " (.-status r)))
-      (do (ctx/update-mem! c #(-> % (assoc :tossed-at {:x x :y y :z z} :toss-dir dir :walked false :acted true)
-                                (update :tossed (fnil conj []) {:item (:name stack) :count (:count stack)})))
-          (ctx/emit! c :make-room.tossed :info
-                     (merge {:item (:name stack) :count (:count stack) :worth (:worth stack) :junk (boolean (:junk stack))
-                             :text (str "tossed " (:count stack) " " (:name stack))}
-                            fields))
-          :continue))))
+(defn carried-of
+  "Total carried of item."
+  [p item]
+  (get (totals (u/inventory p)) item 0))
 
-(defn ^:async walk-away!
-  "Walk :away blocks back from where the items were thrown."
+(defn tossed!
+  "Record a toss of n item from at, thrown along dir: in :tossed, and as the spot to walk away from."
+  [c item n at dir]
+  (ctx/update-mem! c #(-> % (assoc :tossed-at at :toss-dir dir :walked false)
+                          (update :tossed (fnil conj []) {:item item :count n}))))
+
+(defn ^:async toss!
+  "Turn to dir and throw stack, its intent written first (:tossing, with the item's carried total before). True when it
+  went; a failed toss counts in :toss-fails."
+  [c stack dir fields]
+  (let [{:keys [x y z]} (u/self-pos c)
+        at {:x x :y y :z z}
+        [dx dz] dir]
+    (ctx/update-mem! c assoc :acted true
+                     :tossing {:item (:name stack) :count (:count stack) :before (carried-of (:primitives c) (:name stack))
+                               :at at :dir dir})
+    (await (ctx/act c :look (clj->js {:pos {:x (+ x (* 3 dx)) :y (+ y 1.5) :z (+ z (* 3 dz))}})))
+    (let [r (await (ctx/act c :toss (clj->js {:item (:name stack) :count (:count stack) :slot (:slot stack)})))]
+      (ctx/update-mem! c dissoc :tossing)
+      (if (= "tossed" (.-status r))
+        (do (tossed! c (:name stack) (:count stack) at dir)
+            (ctx/emit! c :make-room.tossed :info
+                       (merge {:item (:name stack) :count (:count stack) :worth (:worth stack) :junk (boolean (:junk stack))
+                               :text (str "tossed " (:count stack) " " (:name stack))}
+                              fields))
+            true)
+        (do (ctx/update-mem! c #(-> % (update :toss-fails (fnil inc 0)) (assoc :toss-status (.-status r))))
+            false)))))
+
+(defn ^:async pick-up-swap!
+  "Collect the item a swap made room for (:swap in memory), then forget the swap."
   [c]
-  (let [{:keys [tossed-at toss-dir]} (ctx/mem c)
-        away (:away (:args c))
-        [dx dz] toss-dir
-        ;; raw moveTo kept: a hop of a few blocks away from the spot the items were tossed, on open ground beside the chest; no door is on the way.
-        _ (await (ctx/act c :moveTo (clj->js {:pos {:x (- (:x tossed-at) (* away dx)) :y (:y tossed-at) :z (- (:z tossed-at) (* away dz))}
-                                              :range 1 :timeoutS 10})))]
-    (ctx/update-mem! c assoc :walked true)
-    :continue))
+  (let [{:keys [id item worth]} (:swap (ctx/mem c))
+        r (await (ctx/act c :collect (clj->js {:id id :timeoutS 10})))]
+    (ctx/update-mem! c dissoc :swap)
+    (ctx/emit! c :make-room.swapped :info {:item item :worth worth :status (.-status r)
+                                           :text (str "swap for " item ": " (.-status r))})))
+
+(defn ^:async settle-intents!
+  "Intents left by a cut or a restart, inspected before acting again: a toss went out when the item's carried total is
+  below what it was before; a swap picks up its item when a slot is free, else is dropped."
+  [c]
+  (let [p (:primitives c)
+        {:keys [tossing swap]} (ctx/mem c)]
+    (when tossing
+      (ctx/update-mem! c dissoc :tossing)
+      (when (< (carried-of p (:item tossing)) (:before tossing))
+        (tossed! c (:item tossing) (:count tossing) (:at tossing) (:dir tossing))))
+    (when swap
+      (if (pos? (u/free-slots p))
+        (await (pick-up-swap! c))
+        (ctx/update-mem! c dissoc :swap)))))
 
 (defn pending-walk? [c]
   (let [m (ctx/mem c)] (boolean (and (:tossed-at m) (not (:walked m))))))
 
-(defn ^:async pick-up-swap!
+(defn ^:async walk-away!
+  "Walk :away blocks back from where the items were thrown (a go-to child), so they are not picked up again. Best
+  effort: a walk that does not arrive is not retried."
   [c]
-  (let [{:keys [swap-id swap-item swap-worth]} (ctx/mem c)
-        r (await (ctx/act c :collect (clj->js {:id swap-id :timeoutS 10})))]
-    (ctx/update-mem! c dissoc :swap-id :swap-item :swap-worth)
-    (ctx/emit! c :make-room.swapped :info {:item swap-item :worth swap-worth :status (.-status r)
-                                           :text (str "swap for " swap-item ": " (.-status r))})
-    :continue))
+  (let [{:keys [tossed-at toss-dir]} (ctx/mem c)
+        away (:away (:args c))
+        [dx dz] toss-dir
+        goal {:x (- (:x tossed-at) (* away dx)) :y (:y tossed-at) :z (- (:z tossed-at) (* away dz))}]
+    (await (ctx/call-child c :away 'jobs.movement.go-to {:pos goal :range 1 :escalate false}))
+    (ctx/update-mem! c assoc :walked true)))
 
-(defn ^:async deposit!
-  [c chest names keep]
+(defn ^:async put-away!
+  "One call of the deposit child with names. Once it ends (all put away, or it gave up: that chest is remembered as
+  unusable for ten minutes) the chest is done with for this run (run's :chest-done)."
+  [c run chest names keep]
   (ctx/update-mem! c assoc :acted true)
   (let [r (await (ctx/call-child c :deposit 'jobs.storage.deposit
-                                   (merge (select-keys (:args c) [:ignore-zones?]) {:chest chest :items names :keep keep})))
+                                 (merge (select-keys (:args c) [:ignore-zones?]) {:chest chest :items names :keep keep})))
         result (when (= :done r) (ctx/child-result c :deposit))]
     (when (:gave-up result)
       (ctx/remember! c :chest-unusable {:pos chest :reason (:reason result)} unusable-policy))
-    :continue))
+    (when (not= :continue r)
+      (swap! run assoc :chest-done true))
+    (await (go-to/pace!))))
 
 (defn swap-target
   "{:item ground-item :stack stack-to-throw} for the nearest ground item worth
@@ -257,15 +299,15 @@
         (ground-items c (:swap-radius (:args c)))))
 
 (defn ^:async swap-in!
+  "Throw stack away from item (the swap intent written first), then collect item."
   [c {:keys [item stack]}]
-  (let [away (:pos item)
-        r (await (toss! c stack (direction (:primitives c) away) {:for (:name item)}))]
-    (when (= :continue r)
-      (ctx/update-mem! c assoc :swap-id (:id item) :swap-item (:name item) :swap-worth (:worth item)))
-    r))
+  (ctx/update-mem! c assoc :swap {:id (:id item) :item (:name item) :worth (:worth item)})
+  (if (await (toss! c stack (direction (:primitives c) (:pos item)) {:for (:name item)}))
+    (await (pick-up-swap! c))
+    (ctx/update-mem! c dissoc :swap)))
 
 (defn check
-  "Fewer than :free slots are free, or the job has acted and its done/walk-away round is still to run."
+  "Fewer than :free slots are free, or the job has acted and has yet to end (a cut run resumes)."
   [c]
   (boolean (or (< (u/free-slots (:primitives c)) (:free (:args c)))
                (:acted (ctx/mem c)))))
@@ -278,45 +320,57 @@
      :text (str free-now " free"
                 (when (seq tossed) (str ", tossed " (str/join ", " (map #(str (:count %) " " (:item %)) tossed)))))}))
 
-(defn ^:async round
-  [c]
-  (let [{:keys [free max-rounds toss-below]} (:args c)
-        rounds (inc (:rounds (ctx/mem c) 0))
-        _ (ctx/update-mem! c assoc :rounds rounds)
-        m (ctx/mem c)
+(def stop-texts
+  {:short "nothing more may go"
+   :nothing-to-go "nothing it may put away or toss"
+   :stalled "still short of room after its :max-steps steps"
+   :toss-failed "three tosses failed"})
+
+(defn ^:async end!
+  "Walk away from what was tossed, then end: done when :free slots are free (reason nil), else stopped with reason.
+  :stalled and :toss-failed are warns (make-room.<reason>), the others info make-room.stopped."
+  [c reason]
+  (when (pending-walk? c) (await (walk-away! c)))
+  (let [m (ctx/mem c)
         free-now (u/free-slots (:primitives c))
+        {:keys [tossed text] :as summary} (tossed-summary m free-now)]
+    (if (nil? reason)
+      (do (when (:acted m) (ctx/emit! c :make-room.done :info summary))
+          (res/finish! c {:tossed tossed :free free-now}))
+      (let [text (str (stop-texts reason) "; " text)]
+        (if (#{:stalled :toss-failed} reason)
+          (ctx/emit! c (keyword (str "make-room." (name reason))) :warn (assoc summary :text text :status (:toss-status m)))
+          (ctx/emit! c :make-room.stopped :info (assoc summary :reason reason :text text)))
+        (res/stop! c reason text :free free-now :tossed tossed)))))
+
+(defn ^:async step!
+  "One unit of work on a fresh look at the inventory: a deposit child call, a swap or a toss (:again), or the end
+  (:done, through end!). run is {:steps :chest-done}."
+  [c run]
+  (let [{:keys [free max-steps toss-below]} (:args c)
+        p (:primitives c)
+        m (ctx/mem c)
+        free-now (u/free-slots p)
         {:keys [inventory keep recency] :as st} (state c)
-        chest (usable-chest c)
+        chest (when-not (:chest-done @run) (usable-chest c))
         names (deposit-names inventory keep recency)
-        order (toss-order inventory keep recency toss-below)
-        swap (when (zero? free-now) (swap-target c st))]
+        swap (when (zero? free-now) (swap-target c st))
+        order (toss-order inventory keep recency toss-below)]
+    (swap! run update :steps inc)
     (cond
-      (> rounds max-rounds)
-      (do (ctx/emit! c :make-room.stalled :warn {:rounds rounds :free free-now :text (str "still short of room after " max-rounds " rounds")})
-          :declined)
+      (>= free-now free) (await (end! c nil))
+      (>= (:toss-fails m 0) 3) (await (end! c :toss-failed))
+      (> (:steps @run) max-steps) (await (end! c :stalled))
+      (and chest (seq names)) (do (await (put-away! c run chest names keep)) :again)
+      swap (do (await (swap-in! c swap)) :again)
+      (seq order) (do (await (toss! c (first order) (direction p nil) {})) :again)
+      :else (await (end! c (if (:acted m) :short :nothing-to-go))))))
 
-      (:swap-id m) (await (pick-up-swap! c))
-
-      (and (>= free-now free) (pending-walk? c)) (await (walk-away! c))
-
-      (>= free-now free)
-      (do (when (:acted m)
-            (ctx/emit! c :make-room.done :info (tossed-summary m free-now)))
-          (ctx/result! c {:tossed (vec (:tossed m)) :free free-now})
-          :done)
-
-      (and chest (seq names)) (await (deposit! c chest names keep))
-
-      swap (await (swap-in! c swap))
-
-      (seq order) (await (toss! c (first order) (direction (:primitives c) nil) {}))
-
-      (pending-walk? c) (await (walk-away! c))
-
-      (:acted m)
-      (do (ctx/emit! c :make-room.done :info (assoc (tossed-summary m free-now) :short true))
-          (ctx/result! c {:tossed (vec (:tossed m)) :free free-now :short true})
-          :done)
-
-      :else (do (ctx/emit! c :make-room.declined :info {:free free-now :reason "nothing-to-toss" :text "nothing it may toss"})
-                :declined))))
+(defn ^:async round
+  "One whole attempt: settle intents left by a cut, then step! until it ends."
+  [c]
+  (await (settle-intents! c))
+  (let [run (atom {:steps 0 :chest-done false})]
+    (loop []
+      (let [r (await (step! c run))]
+        (if (= :again r) (recur) r)))))
