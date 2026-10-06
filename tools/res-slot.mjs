@@ -32,14 +32,18 @@ const heldSlots = (kind, max) => [...Array(max).keys()].filter((i) => held(kind,
 
 // Runs cmd under slot i; resolves to its exit code, or null when the slot was taken meanwhile. The holder records pid/start/command in <slot>.info.
 // flock(1) arguments that run cmd under slot i, exiting `busyCode` when the slot is taken (tools/test-shards.mjs uses them too).
-export const slotArgs = (kind, i, cmd, busyCode = 213) =>
-  ['-n', '-E', String(busyCode), lockFile(kind, i), 'sh', '-c', 'printf "%s %s %s\\n" "$$" "$(date +%s)" "$1" > "$0.info"; shift; exec "$@"', lockFile(kind, i), cmd.join(' '), ...cmd]
+export const slotArgs = (kind, i, cmd, busyCode = 213, marker = '') =>
+  ['-n', '-E', String(busyCode), lockFile(kind, i), 'sh', '-c', 'printf "%s %s %s\\n" "$$" "$(date +%s)" "$1" > "$0.info"; [ -z "$2" ] || : > "$2"; shift 2; exec "$@"', lockFile(kind, i), cmd.join(' '), marker, ...cmd]
+let runSeq = 0
 const tryRun = (kind, i, cmd) => new Promise((res) => {
-  const p = spawn('flock', slotArgs(kind, i, cmd), { stdio: 'inherit' })
-  // flock exits 213 itself only when the slot was taken; a command that started has rewritten <slot>.info since the spawn, so a 213 after that is the command's own exit code.
-  const t0 = Date.now() - 50
-  const started = () => { try { return fs.statSync(lockFile(kind, i) + '.info').mtimeMs >= t0 } catch { return false } }
-  p.on('close', (code, sig) => res(code === 213 && !started() ? null : code ?? 128 + (sig ? 9 : 0)))
+  // The wrapper creates the marker only once it holds the lock, so a 213 with no marker is flock's "slot taken", and one with a marker is the command's own exit code.
+  const marker = `${lockFile(kind, i)}.run.${process.pid}.${runSeq++}`
+  const p = spawn('flock', slotArgs(kind, i, cmd, 213, marker), { stdio: 'inherit' })
+  p.on('close', (code, sig) => {
+    const started = fs.existsSync(marker)
+    fs.rmSync(marker, { force: true })
+    res(code === 213 && !started ? null : code ?? 128 + (sig ? 9 : 0))
+  })
 })
 
 // One line per finished run in <dir>/log.jsonl, so queue waits can be measured.

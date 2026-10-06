@@ -107,3 +107,24 @@ test('integration: a command that exits 213 itself is not rerun as a taken slot'
   assert.equal(fs.readFileSync(out, 'utf8'), 'x\n')
   fs.rmSync(dir, { recursive: true, force: true })
 })
+
+test('integration: racing starts for free slots all run (a lost slot race is not a command exit)', async () => {
+  const { dir, env } = tmpEnv({ floorMb: 0, kinds: { t: { needMb: 1, max: 4 } } })
+  const cwd = new URL('..', import.meta.url).pathname
+  for (let round = 0; round < 5; round++) {
+    const procs = [0, 1, 2, 3].map(() => spawn('node', ['tools/res-slot.mjs', 't', '--', 'sh', '-c', 'sleep 0.5; exit 7'], { cwd, env: { ...process.env, ...env }, stdio: 'ignore' }))
+    const codes = await Promise.all(procs.map((p) => new Promise((r) => p.on('close', r))))
+    assert.deepEqual(codes, [7, 7, 7, 7])
+  }
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+
+test('integration: a command exiting 213 with its slot raced still reports 213 and runs once', () => {
+  const { dir, env } = tmpEnv({ floorMb: 0, kinds: { t: { needMb: 1, max: 2 } } })
+  const out = path.join(dir, 'runs')
+  const r = run(['t', '--', 'sh', '-c', `echo x >> ${out}; exit 213`], env)
+  assert.equal(r.status, 213)
+  assert.equal(fs.readFileSync(out, 'utf8'), 'x\n')
+  assert.deepEqual(fs.readdirSync(dir).filter((f) => f.includes('.run.')), [])
+  fs.rmSync(dir, { recursive: true, force: true })
+})
