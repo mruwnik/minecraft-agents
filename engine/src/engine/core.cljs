@@ -161,15 +161,25 @@
       (reset! (:running eng) nil))
     (drop-reflex-job! eng id (:reflex inst) :dropped {:how :dropped :by :death})))
 
+(def deaths-policy "The :deaths list: the ten latest, kept for good." {:cap 10 :ttl :forever})
+
+(defn record-death!
+  "Add the :died entry to the :deaths list (pos, dimension, cause) unless its :death-t is there already."
+  [eng entry]
+  (when-not (some #(= (:t entry) (:death-t (:data %))) (mem/entries (mem/view (:store eng)) :deaths))
+    (mem/write! (:store eng) :deaths
+                (assoc (select-keys (:data entry) [:pos :dimension :cause]) :death-t (:t entry)) deaths-policy)))
+
 (defn record-body-event!
   "A momentary body event becomes an entry of its kind (:hurt, :died, ...).
-  A death also drops every job."
+  A death also drops every job and joins the :deaths list, whatever runs."
   [eng e]
   (let [m (js->clj e :keywordize-keys true)]
     (when (= "died" (:kind m))
       (hurt/flush! eng #(emit! eng %))
       (drop-jobs-on-death! eng))
-    (mem/write! (:store eng) (keyword (:kind m)) (dissoc m :kind))
+    (let [entry (mem/write! (:store eng) (keyword (:kind m)) (dissoc m :kind))]
+      (when (= "died" (:kind m)) (record-death! eng entry)))
     (save-memory! eng)
     (if (= "hurt" (:kind m))
       (hurt/record! eng #(emit! eng %) m)

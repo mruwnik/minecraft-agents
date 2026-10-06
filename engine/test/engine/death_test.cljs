@@ -617,28 +617,19 @@
 
 (defn deaths [eng] (mem/entries (mem/view (:store eng)) :deaths))
 
-(deftest recover-drops-records-the-death-position-in-memory
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng]} (setup {:floor tu/walk-floor :entities drops})]
-          (die! eng {:pos death-pos :inventory junk :cause "lava" :dimension "the_nether"})
-          (core/submit! eng job {})
-          (await (run-until-empty eng 5))
-          (is (= [{:pos death-pos :dimension "the_nether" :cause "lava"}]
-                 (map #(dissoc (:data %) :death-t) (deaths eng))))
-          (is (= :forever (:ttl (mem/policy (mem/view (:store eng)) :deaths)))))))))
+(deftest core-records-a-death-without-any-job
+  (let [{:keys [eng]} (setup {:floor tu/walk-floor})]
+    (core/record-body-event! eng #js {:kind "died" :pos #js {:x 1 :y 64 :z 2} :cause "lava" :dimension "the_nether"})
+    (is (= [{:pos {:x 1 :y 64 :z 2} :dimension "the_nether" :cause "lava"}]
+           (map #(dissoc (:data %) :death-t) (deaths eng))))
+    (is (= (:t (mem/latest (mem/view (:store eng)) :died)) (:death-t (:data (first (deaths eng))))))
+    (is (= :forever (:ttl (mem/policy (mem/view (:store eng)) :deaths))))))
 
-(deftest recover-drops-records-each-death-once-and-caps-the-list
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng]} (setup {:floor tu/walk-floor :entities drops})]
-          (die! eng {:pos death-pos :inventory junk})
-          (core/submit! eng job {})
-          (await (run-until-empty eng 5))
-          (is (= 1 (count (deaths eng))) "one death, one entry")
-          (doseq [i (range 12)]
-            (mem/write! (:store eng) :deaths {:pos {:x i :y 64 :z 0} :death-t i} recover-drops/deaths-policy))
-          (is (= 10 (count (deaths eng))))
-          (is (= {:x 11 :y 64 :z 0} (:pos (:data (last (deaths eng)))))))))))
+(deftest core-records-each-death-once-and-caps-the-list
+  (let [{:keys [eng]} (setup {:floor tu/walk-floor})]
+    (core/record-body-event! eng #js {:kind "died" :pos #js {:x 0 :y 64 :z 0}})
+    (core/record-death! eng (mem/latest (mem/view (:store eng)) :died))
+    (is (= 1 (count (deaths eng))) "one death, one entry")
+    (doseq [i (range 12)]
+      (mem/write! (:store eng) :deaths {:pos {:x i :y 64 :z 0} :death-t i} core/deaths-policy))
+    (is (= 10 (count (deaths eng))))))

@@ -34,8 +34,7 @@
   A pile already carried again ends :collected without a collect step.
   Restart-safe: the decision, the baseline of carried items and the phase are kept in a :recover-trip entry keyed to the death.
   A run cut by a higher reflex, or a restarted body, goes on with the same trip.
-  Memory: reads :died, :respawned, :recover-trip. Writes :recovered, :recover-trip and :deaths (one {:pos :dimension :cause
-  :death-t} per death it sees, the ten latest, forever).")
+  Memory: reads :died, :respawned, :recover-trip. Writes :recovered and :recover-trip.")
 
 (def args
   {:margin {:doc "added to the fetch cost before comparing it to the value" :default 0}
@@ -105,14 +104,6 @@
   [c death-t]
   (let [trip (:data (ctx/latest c :recover-trip))]
     (when (= death-t (:death-t trip)) trip)))
-
-(def deaths-policy "The :deaths list: the ten latest, kept for good." {:cap 10 :ttl :forever})
-
-(defn record-death!
-  "Add the death to the :deaths list (pos, dimension, cause) unless it is there already."
-  [c entry]
-  (when-not (some #(= (:t entry) (:death-t (:data %))) (ctx/entries c :deaths))
-    (ctx/remember! c :deaths (assoc (select-keys (:data entry) [:pos :dimension :cause]) :death-t (:t entry)) deaths-policy)))
 
 (defn key-to-death!
   "Reset the job memory when it belongs to another death than entry: start from the saved trip of this death (a run
@@ -334,7 +325,7 @@
   did not arrive."
   [c]
   (let [entry (died/unrecovered-death (ctx/view c))]
-    (when entry (record-death! c entry) (key-to-death! c entry))
+    (when entry (key-to-death! c entry))
     (if (nil? entry)
       :done
       (let [waited (or (await (wait-while! c entry :respawning #(not (died/respawned-since? (ctx/view c) entry))))

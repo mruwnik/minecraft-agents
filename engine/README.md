@@ -303,8 +303,8 @@ One EDN store per body: `worlds/<world>/agents/<name>/engine/memory.edn`, `{:ent
   of 1 to 32 lowercase letters, digits, dashes) with one `{:pos {:x :y :z}}` entry, cap 1, forever. `jobs.memory.set-place`
   records, moves or verifies one; `jobs.memory.forget-place` removes one. `jobs.survival.sleep` and `jobs.storage.deposit`
   record the bed or chest they used when none is recorded; they never overwrite a live different one.
-- **Deaths**: `jobs.survival.recover-drops` adds one `:deaths` entry `{:pos :dimension :cause :death-t}` per death it sees (cap 10, forever).
-  Jobs read it with `(ctx/entries c :deaths)`; a death the body was offline for, or never respawned from, is not listed.
+- **Deaths**: engine core adds one `:deaths` entry `{:pos :dimension :cause :death-t}` per `:died` event, in any mode (cap 10, forever).
+  Jobs read it with `(ctx/entries c :deaths)`; a death the body was offline for is not listed.
 
 ## Triggers and the register
 
