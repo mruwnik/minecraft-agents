@@ -21,6 +21,9 @@
   - a block is carried: :item, or without it dirt while any is carried, then cobblestone
   - the cell passes jobs.lib.access.rules/may-place?
 
+  A knockback (a failed jump with the body airborne or off the column) is not a refusal: the round waits to land,
+  walks back into the column (go-to child) and tries again; up to 8 per pillar, then :off-column.
+
   The check waits (:too-few-blocks, with :short) when blocks are missing. Every other give-up is left to the
   round, so a parent running this as a child reads the result.
 
@@ -28,7 +31,7 @@
   confirmed blocks, lowest first. Events: pillar.done (info) and pillar.gave-up (warn, with :reason and by
   reason :at :block :zone :short :detail). Gives up with :too-few-blocks (:short still owed), :ceiling,
   :not-on-solid, :zone, :footprint, :no-zones, :not-loaded, :not-replaceable, :off-column (the body left the
-  column it started in), :place-failed (3 failed jumps in a row, :detail the primitive's reason) or :bad-args.")
+  column it started in), :place-failed (3 failed jumps in a row with the body in the column, :detail the primitive's reason) or :bad-args.")
 
 (def args
   {:height {:doc "blocks to rise, 1 to 64" :default 1}
@@ -42,6 +45,14 @@
 (def purpose :pillar)
 
 (def max-failures 3)
+
+(def max-displacements
+  "Knockbacks (a failed jump with the body airborne or off its column) a pillar rides out before it gives up."
+  8)
+
+(def land-step-ms 50)
+
+(def land-max-steps 20)
 
 (defn access-inputs
   "The zones, claims, footprints, the body's name, the clock and the job's :ignore-zones? arg, as jobs.lib.access.rules
@@ -157,8 +168,32 @@
       (ctx/wait c {:reason :too-few-blocks :short (:short step) :item (or item default-items)})
       true)))
 
+(defn displaced?
+  "True when the body is airborne or outside the column cell [bx _ bz] (a knockback), not merely refused."
+  [c [bx _ bz]]
+  (let [[fx _ fz] (feet-cell c)]
+    (boolean (or (false? (.-onGround (.self (:primitives c)))) (not= [bx bz] [fx fz])))))
+
+(defn ^:async land!
+  "Wait in short steps until the body is on the ground, up to land-max-steps."
+  [c]
+  (loop [i 0]
+    (when (and (< i land-max-steps) (false? (.-onGround (.self (:primitives c)))))
+      (await (ctx/act c :wait (clj->js {:ms land-step-ms})))
+      (recur (inc i)))))
+
+(defn ^:async recentre!
+  "Walk back to the middle of the cell [x y z] the pillar last stood in, after a shove. True when the body is in its
+  column again."
+  [c [x y z]]
+  (let [in-column? #(let [[fx _ fz] (feet-cell c)] (= [x z] [fx fz]))]
+    (when-not (in-column?)
+      (await (ctx/call-child c :recentre 'jobs.movement.go-to {:pos {:x (+ x 0.5) :y y :z (+ z 0.5)} :range 0 :escalate false})))
+    (in-column?)))
+
 (defn ^:async place!
-  "Write the intent, jump-place one block, confirm it when the cell shows it. Three failed jumps in a row give up."
+  "Write the intent, jump-place one block, confirm it when the cell shows it. Three failed jumps in a row give up;
+  a failure with the body shoved off or airborne is a knockback and does not count towards the three."
   [c l block-at {:keys [cell item]}]
   (let [l (ledger/intend l {:cell cell :item item :before (block-at cell) :job (:id c) :purpose purpose})
         _ (ledger/remember! c l)
@@ -167,15 +202,23 @@
       (do (when (= item (block-at cell)) (ledger/remember! c (ledger/confirm l cell)))
           (ctx/update-mem! c assoc :failures 0)
           :continue)
-      (let [failures (inc (:failures (ctx/mem c) 0))]
+      (let [shoved? (displaced? c (:base (ctx/mem c)))
+            _ (when shoved? (ctx/update-mem! c update :displaced (fnil inc 0)))
+            failures (if shoved? (:failures (ctx/mem c) 0) (inc (:failures (ctx/mem c) 0)))]
         (ctx/update-mem! c assoc :failures failures)
-        (if (< failures max-failures)
+        (if (and (< failures max-failures) (<= (:displaced (ctx/mem c) 0) max-displacements))
           :continue
           (let [settled (ledger/reconcile l block-at)]
             (ledger/remember! c settled)
-            (finish! c settled (give-up :place-failed :detail (.-reason r)))))))))
+            (finish! c settled (if (< failures max-failures)
+                                 (give-up :off-column :at (feet-cell c) :detail (.-reason r))
+                                 (give-up :place-failed :detail (.-reason r))))))))))
 
 (defn ^:async round [c]
+  (await (land! c))
+  (let [{:keys [stand displaced]} (ctx/mem c)]
+    (when (and stand (pos? (or displaced 0)))
+      (await (recentre! c stand))))
   (let [p (:primitives c)
         block-at (block-at-of p)
         seen (ledger/open-entries (ctx/view c))
@@ -187,7 +230,7 @@
                                {:feet feet :base base :height height :block-at block-at :carried (carried p)
                                 :item item :ledger (ledger/cells l)}))]
     (when (not= l seen) (ledger/remember! c l))
-    (ctx/update-mem! c assoc :base base)
+    (ctx/update-mem! c assoc :base base :stand feet)
     (if (= :place (:step step))
       (await (place! c l block-at step))
       (finish! c l step))))

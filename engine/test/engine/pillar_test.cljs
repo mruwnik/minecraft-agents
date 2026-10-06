@@ -253,3 +253,59 @@
           (is (finished? eng))
           (is (= [0 67 0] (feet p)))
           (is (= 3 (count (the-ledger eng))) "a second pillar job on top adds its own entry"))))))
+
+;; ------------------------------------------------------------------ knockback
+
+(defn knock!
+  "Override jumpPlace so that its first n calls fail with the body shoved to pos (and airborne when air?), as a hit
+  mid-jump does; later calls are the real thing."
+  [p n pos air?]
+  (let [left (atom n)]
+    (.override (.-world p) "jumpPlace"
+               (fn [_token _args impl]
+                 (if (pos? @left)
+                   (do (swap! left dec)
+                       (fake/swap-self! p assoc :pos pos :onGround (not air?))
+                       (js/Promise.resolve #js {:status "failed" :placed 0
+                                                :reason "place-failed: Server refused to place cobblestone: block is still air"}))
+                   (impl _token _args))))))
+
+(deftest knocked-off-the-column-it-walks-back-and-finishes
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup {:blocks {"1,63,0" "stone"}})]
+          (knock! p 4 [1 64 0] false)
+          (core/submit! eng (list job {:height 3}) {})
+          (await (ticks s eng 30))
+          (is (finished? eng))
+          (is (empty? (of-kind seen :pillar.gave-up)))
+          (is (= [0 67 0] (feet p)))
+          (is (= (repeat 3 "dirt") (blocks-at p (column base 3)))))))))
+
+(deftest knocked-into-the-air-it-waits-to-land-before-judging-the-floor
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup {})]
+          (knock! p 1 [0 65 0] true)
+          (.override (.-world p) "wait"
+                     (fn [_token _args _impl]
+                       (fake/swap-self! p assoc :pos [0 64 0] :onGround true)
+                       (js/Promise.resolve #js {:status "ok"})))
+          (core/submit! eng (list job {:height 2}) {})
+          (await (ticks s eng 12))
+          (is (finished? eng))
+          (is (empty? (of-kind seen :pillar.gave-up)))
+          (is (= [0 66 0] (feet p))))))))
+
+(deftest shoved-off-every-time-it-ends-failed-with-a-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup {:blocks {"1,63,0" "stone"}})]
+          (knock! p 1000 [1 64 0] false)
+          (core/submit! eng (list job {:height 3}) {})
+          (await (ticks s eng 60))
+          (is (finished? eng))
+          (is (= :off-column (:reason (first (of-kind seen :pillar.gave-up))))))))))
