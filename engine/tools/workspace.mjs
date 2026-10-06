@@ -17,7 +17,14 @@ export async function runBound (context, command, argv) {
       process.stdout.write(`Workspace ${command}:\n${tools.workspacePlayerUsage(usage)}\n`)
       return 0
     }
-    return await module.main(args)
+    // a tool's own error text carries its raw usage line: cut the body/world plumbing from it too
+    const write = process.stderr.write.bind(process.stderr)
+    process.stderr.write = (text, ...rest) => write(typeof text === 'string' ? tools.workspacePlayerUsage(text) : text, ...rest)
+    try {
+      return await module.main(args)
+    } finally {
+      process.stderr.write = write
+    }
   } catch (error) {
     process.stderr.write(`${error.message}\n`)
     return 2

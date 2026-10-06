@@ -121,6 +121,15 @@ test('player help shows the ./bin form, no body/world plumbing, and says what ou
   }
 })
 
+test('a bad request through a wrapper prints the error and the ./bin usage, no body/world plumbing', t => {
+  const f = fixture(t)
+  const result = f.run('observe', ['catalog', 'jobs', 'items'])
+  assert.equal(result.status, 2)
+  assert.match(result.stderr, /job prefix must start with jobs\./)
+  assert.match(result.stderr, /usage: \.\/bin\/observe/)
+  assert.doesNotMatch(result.stderr, /<agent>|--world <world>|--worlds|--state|observe\.mjs/)
+})
+
 test('extensionless wrappers work beneath both CommonJS and ESM package scopes', t => {
   const f = fixture(t)
   for (const type of ['commonjs', 'module']) {
