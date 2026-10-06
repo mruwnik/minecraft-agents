@@ -143,7 +143,7 @@
 
 (defn ^:async dig-away!
   "Dig the rail at pos through the jobs.blocks.dig child (hazards, tidy record, tool, drops) if the rules agree, and
-  count one fix when it is dug. Water beside is taken as :accept says, lava never. A hazard or a failed dig counts a :shape failure. Resolves to the child's :continue
+  count one fix when it is dug. Water beside is taken as :accept says, lava never. A hazard or a failed dig counts a :shape failure; a cell already clear counts nothing (it is placed in its turn). Resolves to the child's :continue
   or :declined, else :continue."
   [c pos]
   (let [v (rules/may-dig? (assoc (build/rules-input c) :cell pos))
@@ -158,10 +158,12 @@
       (let [r (await (declined/call-child! c :dig 'jobs.blocks.dig args))]
         (if (#{:continue :declined} r)
           r
-          (do (if (:dug (ctx/child-result c :dig))
-                (ctx/update-mem! c update-in [:fixes pos] (fnil inc 0))
-                (ctx/update-mem! c build/count-fail pos :shape (:give-up (:args c))))
-              :continue))))))
+          (let [{:keys [dug reason]} (ctx/child-result c :dig)]
+            (cond
+              dug (ctx/update-mem! c update-in [:fixes pos] (fnil inc 0))
+              (= :already-clear reason) nil
+              :else (ctx/update-mem! c build/count-fail pos :shape (:give-up (:args c))))
+            :continue))))))
 
 (defn ^:async fix-step!
   "Deal with the settled wrong rail at pos: give up as :shape once the fixes are spent, else dig it (walking into

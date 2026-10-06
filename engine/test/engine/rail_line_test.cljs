@@ -4,6 +4,7 @@
             [engine.build-from-plan-test :as b]
             [engine.core :as core]
             [engine.harvest-test :as h]
+            [jobs.blocks.dig :as dig]
             [jobs.build.rail :as builder]
             [engine.registry :as registry]
             [engine.takeover :as takeover]
@@ -418,6 +419,45 @@
           (is (false? (:ok? result)))
           (is (= 0 (count (h/calls p "dig"))))
           (is (= {[10 64 0] :shape} (get-in result [:built :given-up]))))))))
+
+(deftest a-wrong-rail-beside-water-is-dug-through-the-child-when-the-job-accepts-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (built-line-world l-route {} flat-top {"10,64,1" "water"} {"10,64,0" {:shape "north_south"}})
+              [result _ p] (await (build-route! l-route {} world {:all-carried false :accept [:fluid-adjacent]}))]
+          (is (true? (:ok? result)))
+          (is (= "east_west" (shape-of p [10 64 0])))
+          (is (= 1 (count (h/calls p "dig")))))))))
+
+(defn ^:async with-dig-attempt!
+  "Run f with jobs.blocks.dig/attempt! replaced by attempt, restored after."
+  [attempt f]
+  (let [orig dig/attempt!]
+    (set! dig/attempt! attempt)
+    (try (await (f))
+         (finally (set! dig/attempt! orig)))))
+
+(deftest a-wrong-rail-already-air-is-no-shape-failure
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (built-line-world l-route {} flat-top {} {"10,64,0" {:shape "north_south"}})
+              [result _ _] (await (with-dig-attempt!
+                                    (fn [c pos] (dig/finish! c {:dug false :pos pos :block "air" :reason :already-clear}))
+                                    #(build-route! l-route {} world {:all-carried false :fix 1})))]
+          (is (nil? (get-in result [:built :given-up [10 64 0]])) (pr-str (:built result))))))))
+
+(deftest a-declined-dig-child-is-passed-up-and-the-build-parks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (built-line-world l-route {} flat-top {} {"10,64,0" {:shape "north_south"}})
+              [result _ _] (await (with-dig-attempt!
+                                    (fn [c _] (dig/unreachable! c :test))
+                                    #(build-route! l-route {} world {:all-carried false})))]
+          (is (not (true? (:ok? result))))
+          (is (nil? (get-in result [:built :given-up [10 64 0]])) (pr-str result)))))))
 
 (deftest a-rail-that-cannot-come-out-right-is-given-up-as-shape-after-the-fixes-are-spent
   (async done
