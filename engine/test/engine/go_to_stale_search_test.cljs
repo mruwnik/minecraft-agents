@@ -85,3 +85,37 @@
         (let [{:keys [out p]} (await (run-go-to! false))]
           (is (not= :searching (:why @out)) (str "result " @out))
           (is (<= 46 (js/Math.floor (first (gt/at p)))) (str "walked to the east edge, at " (gt/at p))))))))
+
+;; a cut during a search ends the call at once: no search slice runs after it (ctx/alive? per iteration)
+(deftest a-cut-mid-search-runs-no-more-slices
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [slices (atom 0)
+              plan-walk walk/plan-walk-budgeted!
+              p-atom (atom nil)
+              cut-at (atom nil)]
+          (set! walk/plan-walk-budgeted!
+                (fn [& args]
+                  (swap! slices inc)
+                  (when (and @p-atom (not @cut-at))
+                    (reset! cut-at @slices)
+                    (.setOwner @p-atom "other"))
+                  (apply plan-walk args)))
+          (let [budget walk/round-budget
+                chunk walk/chunk-expansions]
+            (reset! walk/searches {})
+            (set! walk/round-budget 16)
+            (set! walk/chunk-expansions 16)
+            (let [{:keys [eng p]} (gt/setup {:blocks floor-blocks :self {:pos {:x 44.5 :y 64 :z 24.5}}})
+                  out (atom :not-done)
+                  eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (gt/recording-parent out {:pos goal :range 0})))]
+              (reset! p-atom p)
+              (core/submit! eng '(recording-parent) {})
+              (await (gt/tick-out! eng 1)))
+            (set! walk/plan-walk-budgeted! plan-walk)
+            (set! walk/round-budget budget)
+            (set! walk/chunk-expansions chunk)
+            (reset! walk/searches {})
+            (is (some? @cut-at) "a search slice ran")
+            (is (= @cut-at @slices) "no slice after the cut")))))))

@@ -530,7 +530,7 @@
 
 (defn ^:async round
   "One whole attempt: step! until it arrives, gives up, or waits on a child (:continue), with pace! between steps. A
-  cut ends it at the next memory write or act, which throws."
+  cut ends it at once (ctx/alive? per iteration, else at the next memory write or act, which throws)."
   [c]
   (let [parsed (places/parse-pos (:pos (:args c)))
         pos (:pos parsed)]
@@ -539,6 +539,7 @@
       (do (start-attempt! c pos)
           (loop []
             (let [r (await (step! c pos))]
-              (if (= :again r)
-                (do (await (pace!)) (recur))
-                r)))))))
+              (cond
+                (not= :again r) r
+                (ctx/alive? c) (do (await (pace!)) (recur))
+                :else :continue)))))))
