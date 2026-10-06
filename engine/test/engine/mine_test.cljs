@@ -1097,3 +1097,12 @@
           (is (= :no-stone-found (:reason (done-event s))))
           (is (re-find #"dug down 3 blocks through soil, found no stone" (:text (done-event s))))
           (is (zero? (get (inv s) "cobblestone" 0))))))))
+
+(deftest mine-spares-cells-of-the-bodys-own-plan-unless-told-not-to
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [own (ew/of-data {"pad" (shape/with-author pad-plan "Fake")} {} [])]
+          (doseq [[extra n] [[{} 0] [{:spare-own-builds false} 1]]]
+            (let [s (await (zoned (merge {:block "sand" :count 1 :mend false :tunnel-length 0} extra) {:blocks {"6,64,0" "sand"}} own 20))]
+              (is (= n (count (dug-cells s))) (pr-str extra)))))))))
