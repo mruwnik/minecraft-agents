@@ -12,7 +12,7 @@ Replacement for `tools/dashboard.mjs`, for ENGINE bodies (agent folders with `en
 ### Start and restart
 
 `npm start` runs `start.mjs`, a small Node supervisor (plain JS: it only spawns processes). It builds with
-`tools/compile dashboard ui --priority`, then `... server --priority` (ui first, so a failed ui build leaves the old `out/server.cjs`; the build runs in its own process group), then runs `node --max-old-space-size=256 --max-semi-space-size=4
+`tools/compile dashboard ui --priority`, then `... server --priority` (ui first, so a failed ui build leaves the old `out/server.cjs`; the build runs in its own process group), then runs `node --max-old-space-size=1024 --max-semi-space-size=4
 out/server.cjs` with inherited stdio, so the server's output stays in your terminal. Start it once; you do not restart it by hand.
 
 To pick up new code, run `npm --prefix dashboard run restart` (or `POST /api/restart`, accepted from loopback peers only,
@@ -139,7 +139,7 @@ From the repository root, build and start the dashboard using saved local data (
 ```sh
 cd dashboard
 npm run build
-DASHBOARD_ROOT=/path/to/minecraft-agents PORT=3701 node --max-old-space-size=256 --max-semi-space-size=4 out/server.cjs
+DASHBOARD_ROOT=/path/to/minecraft-agents PORT=3701 node --max-old-space-size=1024 --max-semi-space-size=4 out/server.cjs
 ```
 
 In another terminal, open the map in headless Chromium, then run the harness from the repository root:

@@ -77,7 +77,7 @@ const runBuild = async () => {
 }
 
 const startServer = () => {
-  server = spawn('node', ['--max-old-space-size=256', '--max-semi-space-size=4', 'out/server.cjs'],
+  server = spawn('node', ['--max-old-space-size=1024', '--max-semi-space-size=4', 'out/server.cjs'],
     { cwd: dir, stdio: ['inherit', 'inherit', 'inherit', 'ipc'] })
   server.on('message', (m) => { if (m && m.type === 'restart') request() })
   server.on('exit', (code, signal) => {
