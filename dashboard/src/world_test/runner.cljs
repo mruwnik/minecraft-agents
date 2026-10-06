@@ -24,7 +24,8 @@
        "Runs world fixtures (default dir engine/fixtures/world) on the reserved plot grid x/z 20000..20640, y 150 (large plots: lanes south of it, to z 22240).\n"
        "--allow-time lets a case that needs night or day set the time (each set appended to --time-log); without it\n"
        "such a case is skipped. A case that depends on the time of day holds a time lock shared by phase (day cases together,\n"
-       "night cases together; the other phase waits; the first holder sets the time) for its whole run; a manual `time set` takes it too: node tools/time-set.mjs <ticks|day|noon|night|midnight>. Exit code 0 when every run passed, 1 when one failed, 2 on a usage or setup error."))
+       "night cases together; the other phase waits; the first holder sets the time) for its whole run; a manual `time set` takes it too: node tools/time-set.mjs <ticks|day|noon|night|midnight>. A failed case whose day time jumped meanwhile (a foreign `time set`) is INCONCLUSIVE. "
+       "Exit code 0 when every run passed, 1 when one failed, 2 on a usage or setup error."))
 
 (defn parse-args [argv]
   (loop [[a b & more :as all] (vec argv) opts {:paths [] :repeat 1 :body "ProbeFixture" :world "claude" :first-plot 0}]
@@ -290,6 +291,26 @@
   (when-let [[_ n] (re-find #"is at (\d+) tick" reply)] (mod (js/Number n) 24000)))
 
 (defn night? [t] (and t (<= 13000 t 23000)))
+
+(def time-jump-tolerance-ticks 200)
+
+(defn time-disturbed?
+  "Whether the day time moved by more than the elapsed real time allows (someone ran `time set`) between two readings
+  (ticks, nil when unread); false for a case with a :time-set step."
+  [c t0 t1 elapsed-ms]
+  (boolean
+   (and t0 t1
+        (not-any? #(= :time-set (first %)) (:act c))
+        (let [moved (mod (- t1 t0) 24000)
+              diff (js/Math.abs (- moved (* elapsed-ms 0.02)))]
+          (> (min diff (- 24000 diff)) time-jump-tolerance-ticks)))))
+
+(defn mark-time-disturbed
+  "A failed result becomes :inconclusive when the time was disturbed during the case."
+  [r disturbed?]
+  (if (and disturbed? (= :fail (:status r)))
+    (assoc r :status :inconclusive :why "world time jumped during the case (someone ran `time set`)")
+    r))
 
 ;; ------------------------------------------------------------------ plot leases (parallel runners)
 
@@ -592,6 +613,7 @@
         rc (f/resolve-tags c origin)
         started (js/Date.now)
         plan-files (atom [])
+        t-start (atom nil)
         pre-register (atom nil)
         _ (note-last-plot! opts origin grid)
         result (fn [m] (merge {:id (:id c) :run run :plot i :origin origin :elapsed-s (/ (- (js/Date.now) started) 1000)} m))]
@@ -602,7 +624,9 @@
         (.then (fn [ok]
                  (if-not ok
                    (result {:status :skipped :why (str "needs " (name (:time rc)) " (no --allow-time)")})
-                   (-> (do (ev/emit! (ev/phase :setup)) (build-plot! {:send rcon! :sleep sleep} grid origin rc))
+                   (-> (.then (rcon! ["time query day"])
+                              (fn [[reply]] (reset! t-start {:ticks (daytime (or reply "")) :ms (js/Date.now)})))
+                       (.then (fn [] (ev/emit! (ev/phase :setup)) (build-plot! {:send rcon! :sleep sleep} grid origin rc)))
                        (.then (fn [why] (when why (throw (js/Error. why)))))
                        (.then #(reset! plan-files (write-plans! opts rc)))
                        (.then #(rcon! (f/body-commands origin (:body opts) rc)))
@@ -626,6 +650,13 @@
                                                                  (result {:status (if (and (x/passed? expects) (every? :pass? afters)) :pass :fail)
                                                                           :expects expects :afters afters})))))))))))))))
         (.catch (fn [e] (result {:status :error :why (.-message e)})))
+        (.then (fn [r]
+                 (if (and @t-start (= :fail (:status r)))
+                   (.then (rcon! ["time query day"])
+                          (fn [[reply]]
+                            (mark-time-disturbed r (time-disturbed? rc (:ticks @t-start) (daytime (or reply ""))
+                                                                    (- (js/Date.now) (:ms @t-start))))))
+                   r)))
         (.then (fn [r]
                  (-> (exec-file ["engine/tools/jobs.mjs" (:body opts) "--world" (:world opts) "cancel-all"])
                      (.then #(rcon! (f/cleanup-commands grid origin (:body opts) rc)))
@@ -763,7 +794,7 @@
                                            (write-results! opts results)
                                            (let [n (frequencies (map :status results))]
                                              (log! "world-test: " (count results) " runs, " (n :pass 0) " passed, " (n :fail 0) " failed, "
-                                                   (n :error 0) " errors, " (n :skipped 0) " skipped")
+                                                   (n :error 0) " errors, " (n :skipped 0) " skipped, " (n :inconclusive 0) " inconclusive")
                                              (exit-code results))))
                                   (.finally #(-> (stop-body! opts)
                                                                  (.then (fn [] (finish-run! opts @final-results)))

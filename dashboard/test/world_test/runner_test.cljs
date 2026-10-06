@@ -5,6 +5,7 @@
             ["os" :as os]
             ["path" :as path]
             [cljs.reader]
+            [world-test.fixture :as f]
             [world-test.runner :as r]))
 
 (deftest the-body-launch-argv-caps-new-space
@@ -224,3 +225,19 @@
     (is (false? (r/create-file-exclusive! file "789")) "an empty leftover still blocks")
     (is (= "" (fs/readFileSync file "utf8")))
     (fs/rmSync dir #js {:recursive true :force true})))
+
+(deftest time-disturbed-when-the-clock-jumped-beyond-the-elapsed-ticks
+  (let [c {:act [[:wait-s 5]]}]
+    (is (false? (r/time-disturbed? c 1000 1600 30000)) "30 s = 600 ticks")
+    (is (false? (r/time-disturbed? c 1000 1500 30000)) "a lagging server stays inside the tolerance")
+    (is (true? (r/time-disturbed? c 1000 14000 30000)) "set to night")
+    (is (true? (r/time-disturbed? c 14000 1000 30000)) "set back")
+    (is (false? (r/time-disturbed? c 23900 500 30000)) "wraps at 24000")
+    (is (false? (r/time-disturbed? c nil 500 30000)) "no reading")
+    (is (false? (r/time-disturbed? {:act [[:time-set 14000]]} 1000 14000 30000)) "the case set it itself")))
+
+(deftest a-failed-case-in-a-disturbed-world-is-inconclusive
+  (is (= :inconclusive (:status (r/mark-time-disturbed {:status :fail :why "x"} true))))
+  (is (= :pass (:status (r/mark-time-disturbed {:status :pass} true))))
+  (is (= :error (:status (r/mark-time-disturbed {:status :error} true))))
+  (is (= :fail (:status (r/mark-time-disturbed {:status :fail} false)))))
