@@ -21,8 +21,8 @@
   at its own level to find more, then mend the pit under where it started and walk back to the start cell.
 
   Targets come only from perception (the primitives' seenBlocks, never x-ray). A target is a remembered :block
-  within :radius that is still there and has at least one of its 6 face neighbours air or cave_air. It is
-  skipped when a neighbour is lava, or water unless :wet. Without perception the body sees nothing and only
+  within :radius that is still there and has at least one of its 6 face neighbours seen as air or cave_air. It is
+  skipped when a seen neighbour is lava, or water unless :wet; lava on top counts as seen (it drips); a face never seen is no hazard. Without perception the body sees nothing and only
   tunnels.
 
   Declines and ends early:
@@ -67,7 +67,7 @@
   Strip tunnel: a 1-wide 2-high straight run at the level the body stood on at the start, along :direction
   (north, south, east, west or n/s/e/w), at most :tunnel-length blocks per job. 0 means no tunnel: then no
   target ends :wet when a seen block was rejected only for water, else :none. Each step stands on the last
-  cell of the run and judges the next cell and the one over it: no fluid in it, no lava beside it, no water
+  cell of the run and judges the next cell and the one over it: no fluid in it, no seen lava beside it, no seen water
   beside it unless :wet, a solid floor, the zone and plan rules with only :accept hazards. It digs them head
   first (a cut of :block is collected like a target), looks ahead level and down so perception records what
   the cut exposed, and steps in. Ore that comes into view is then an ordinary target and is dug before the
@@ -163,11 +163,27 @@
 
 (defn around [{:keys [x y z]} [dx dy dz]] {:x (+ x dx) :y (+ y dy) :z (+ z dz)})
 
+(defn face-names
+  "The names of the 6 faces of cell pos, as the body knows them: the last seen block, nil for a cell never seen. The cells
+  it stands in are felt, and lava directly on top shows as drips, so those read the world."
+  [c pos]
+  (let [p (:primitives c)
+        feet (cell-of (u/self-pos c))
+        own? #(or (= % feet) (= % (update feet :y inc)))]
+    (map (fn [f]
+           (let [cell (around pos f)
+                 seen (look/seen-block p cell)]
+             (cond
+               (own? cell) (u/block-name p cell)
+               (and (= [0 1 0] f) (= "lava" (u/block-name p cell))) "lava"
+               (not (:unknown seen)) (:name seen))))
+         faces)))
+
 (defn classify
-  "How the cell of a block would be dug: :ok, :wet (only water stops it), :buried (no air face) or :no (lava
-  beside it)."
+  "How the cell of a block would be dug: :ok, :wet (only water stops it), :buried (no seen air face) or :no (seen
+  lava beside it, or lava on top). A face never seen is neither air nor a hazard."
   [c wet pos]
-  (let [names (map #(u/block-name (:primitives c) (around pos %)) faces)]
+  (let [names (face-names c pos)]
     (cond
       (not-any? air names) :buried
       (some #{"lava"} names) :no
@@ -383,11 +399,11 @@
 ;; ------------------------------------------------------------------ the strip tunnel
 
 (defn cut-hazard
-  "Why the tunnel may not take cell pos (a fluid in it, lava or unwanted water beside it, not loaded), else nil:
-  {:reason r :at cell}, the cell being the offending one (the lava beside pos, not pos itself)."
+  "Why the tunnel may not take cell pos (a fluid in it, lava or unwanted water beside it seen, not loaded), else nil:
+  {:reason r :at cell}, the cell being the offending one (the lava beside pos, not pos itself). Faces never seen are no hazard."
   [c pos]
   (let [own (u/block-name (:primitives c) pos)
-        beside (map (fn [f] (let [cell (around pos f)] [cell (u/block-name (:primitives c) cell)])) faces)
+        beside (map (fn [f n] [(around pos f) n]) faces (face-names c pos))
         beside-of (fn [n] (some (fn [[cell nm]] (when (= n nm) cell)) beside))]
     (cond
       (nil? own) {:reason :not-loaded :at pos}

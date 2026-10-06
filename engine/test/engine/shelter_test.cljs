@@ -154,10 +154,19 @@
     ;; torchlight is not sky light
     (merge dark {:light {[0 64 0] [0 14]}}) false))
 
-(deftest night-without-light-data-falls-back-to-the-column
-  (let [p (tu/fake {:time night :blocks (stone-above 10 5)})]
-    (is (sh/buried-by-column? p))
-    (is (not (sh/buried-by-column? (tu/fake {:time night :blocks (stone-above 10 2)}))))))
+(defn seen-fake
+  "A fake body looking up, wrapped in perception after one sight pass: it knows only what it has seen."
+  [world]
+  (let [raw-p (tu/fake (merge {:pitch -80} world))
+        per (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)})
+        p (perception/wrap raw-p per)]
+    (perception/pass! per)
+    p))
+
+(deftest night-without-light-data-falls-back-to-the-seen-roof
+  (is (sh/buried-by-column? (seen-fake {:time night :blocks (stone-above 2 1)})) "one seen block over the head, air above it")
+  (is (not (sh/buried-by-column? (seen-fake {:time night :blocks (stone-above 5 3)}))) "air over the head")
+  (is (not (sh/buried-by-column? (tu/fake {:time night :blocks (stone-above 2 1)}))) "nothing seen without a perception"))
 
 (deftest a-roofed-body-logs-out-for-a-sleeper-from-the-register
   (async done

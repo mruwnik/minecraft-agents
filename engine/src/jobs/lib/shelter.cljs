@@ -4,6 +4,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.access.zones :as zones]
             [jobs.lib.util :as u]
+            [jobs.lib.look :as look]
             [engine.memory :as mem]
             [jobs.lib.world-files :as world]))
 
@@ -54,10 +55,6 @@
   (let [{:keys [x y z]} (feet p)]
     (boolean (some #(solid-at? p {:x x :y (+ y %) :z z}) (range 1 (inc height))))))
 
-(def buried-scan 32)
-
-(def buried-thickness 3)
-
 (defn sky-light-at
   "Sky light (0-15, before the night's darkening) of the cell, or nil when no light data is loaded there."
   [p {:keys [x y z]}]
@@ -66,12 +63,11 @@
       (bit-shift-right (.lightAt ^js raw x y z) 4))))
 
 (defn buried-by-column?
-  "Fallback without light data: at least buried-thickness solid blocks in the column within buried-scan above the feet."
+  "Fallback without light data: the cell over the head is a block the body has seen (only that one shows from inside)."
   [p]
-  (let [{:keys [x y z]} (feet p)]
-    (<= buried-thickness
-        (count (take buried-thickness
-                     (filter #(solid-at? p {:x x :y (+ y %) :z z}) (range 1 (inc buried-scan))))))))
+  (let [{:keys [x y z]} (feet p)
+        above (look/seen-block p {:x x :y (+ y 2) :z z})]
+    (boolean (and above (not (:unknown above)) (solid? (:name above))))))
 
 (defn buried?
   "The body is underground: no sky light at its feet and head cells. A cell at 0 is sealed from the sky, so the night

@@ -719,11 +719,11 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:block "iron_ore" :count 1 :direction "east" :tunnel-length 10}
-                                 (rock-world {"4,64,1" "lava"}) 80))]
-          (is (every? #(< (first %) 4) (dug-cells s)) "no cut beside the lava")
+                                 (rock-world {"5,64,0" "lava"}) 80))]
+          (is (every? #(< (first %) 5) (dug-cells s)) "no cut into the lava the glance showed")
           (is (= :tunnel-stopped (:reason (done-event s))))
-          (is (= [{:reason :lava :at [4 64 1] :next [4 64 0]}] (map #(select-keys % [:reason :at :next]) (tunnel-ends s))))
-          (is (= "lava" (block-at s 4 64 1))))))))
+          (is (= [{:reason :lava :at [5 64 0] :next [5 64 0]}] (map #(select-keys % [:reason :at :next]) (tunnel-ends s))))
+          (is (= "lava" (block-at s 5 64 0))))))))
 
 (deftest the-tunnel-length-bound-ends-the-job-with-a-reason
   (async done
@@ -1165,3 +1165,25 @@
           (is (seq (dug-cells s)))
           (is (seq stair-cells) "the stair cells below the start level are still open")
           (is (every? #(#{"air" nil} (block-at s (first %) (second %) (nth % 2))) stair-cells)))))))
+
+;; ------------------------------------------------------------------ unseen faces are no hazard
+
+(defn classify-in
+  "mine/classify of the sand at [0 64 3] (in view) with extra blocks, after the start's sight pass."
+  [extra]
+  (let [s (start {:world {:blocks (merge {"0,64,3" "sand"} extra)}})]
+    (mine/classify {:primitives (:p s)} false {:x 0 :y 64 :z 3})))
+
+(deftest lava-behind-the-block-is-unseen-so-no-hazard
+  (is (= :ok (classify-in {"0,63,3" "lava"})) "lava behind the block is not known")
+  (is (= :no (classify-in {"0,65,3" "lava"})) "lava on top shows as drips: known")
+  (is (= :no (classify-in {"0,64,2" "lava"})) "lava in the open face, seen")
+  (is (= :buried (classify-in {"1,64,3" "stone" "-1,64,3" "stone" "0,65,3" "stone" "0,63,3" "stone" "0,64,4" "stone" "0,64,2" "stone"}))))
+
+(deftest the-tunnel-cuts-beside-lava-it-has-not-seen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "iron_ore" :count 1 :direction "east" :tunnel-length 3}
+                                 (rock-world {"2,64,1" "lava"}) 80))]
+          (is (some #(= 2 (first %)) (dug-cells s)) "the body cut past lava no sight reached"))))))
