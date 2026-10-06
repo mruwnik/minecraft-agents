@@ -221,7 +221,7 @@
 
 (defn powered-indices
   "The indices of a line of n rails that are lit powered rails. shape ({:corners set :slopes set :lits set} of indices,
-  default none) is what the route holds: a lit rail beside each corner (the corner itself is a normal rail, so are
+  default none) is what the route holds: a lit rail beside each corner, and one more outside a pair of corners under 4 apart (the corner itself is a normal rail, so are
   slope cells that are not in :lits). Spaced: the launch groups, the corner neighbours and :lits are fixed, and between
   two fixed rails a lit one every power-every cells, counted from the earlier one, so the count restarts at each."
   ([n o] (powered-indices n o {}))
@@ -229,7 +229,10 @@
    (let [limit (- n 2)
          first-group (range 2 (+ 2 launch))
          far-group (when (= :both launch-ends) (range (- limit launch) limit))
-         beside (mapcat (fn [c] [(dec c) (inc c)]) corners)]
+         sorted-corners (sort corners)
+         tight (filter (fn [[a b]] (< (- b a) 4)) (partition 2 1 sorted-corners))
+         beside (concat (mapcat (fn [c] [(dec c) (inc c)]) corners)
+                        (mapcat (fn [[a b]] [(- a 2) (+ b 2)]) tight))]
      (if (= :all-powered style)
        (set (remove corners (range 2 limit)))
        (let [fixed (sort (distinct (concat first-group far-group beside lits)))
