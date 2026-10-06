@@ -50,7 +50,9 @@
   ;; a cell the body must not be in: an AVOID hazard, or a portal unless the cell (or the one under it) is in the goal
   (avoids [s id x y z]
     (let [hz (aget (.-tbl-hazard s) id)]
-      (or (== hz HAZARD-AVOID)
+      (or (and (== hz HAZARD-AVOID)
+               ;; the body already stands in its start cell: fire there is no reason to refuse the plan out of it
+               (not (and (== x (.-from-x s)) (== y (.-from-y s)) (== z (.-from-z s)))))
           (and (== hz PORTAL) (not ^boolean (.inGoal s x y z))))))
 
   ;; is the column at x,z free for a body spanning lo..hi (1/16 absolute)? Also false for fluid, NARROW, AVOID, unloaded.

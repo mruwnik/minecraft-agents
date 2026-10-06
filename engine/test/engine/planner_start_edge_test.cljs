@@ -40,3 +40,15 @@
     (is (= 1 (:i (ex/start steps 0 {:x 2.5 :y 64 :z 5.5}))) "body in the start cell")
     (is (= 1 (:i (ex/start steps 0 {:x 2.5 :y 64 :z 3.5}))) "body further away: unchanged")
     (is (= 1 (:i (ex/start steps 0))) "no pose: unchanged")))
+
+(def fire-start {:x 2 :y 64 :z 4 :px 2.5 :py 64 :pz 4.5})
+
+(deftest start-in-a-fire-cell-plans-out-of-it
+  (is (= ["found" nil] ((juxt :status :reason) (run (world {:fill [[2 64 4 2 64 4 "fire"]]}) (near 8 64 8) {} fire-start)))))
+
+(deftest start-in-fire-ringed-by-lava-is-enclosed-not-unstandable
+  ;; go-to escalates (pillar, stair, dig) on goal-enclosed, never on start-not-standable
+  (is (= ["none" "goal-enclosed"]
+         ((juxt :status :reason)
+          (run (world {:fill [[2 64 4 2 64 4 "fire"] [3 64 4 3 64 4 "lava"] [1 64 4 1 64 4 "lava"] [2 64 5 2 64 5 "lava"] [2 64 3 2 64 3 "lava"]]})
+               (near 8 64 8) {} fire-start)))))
