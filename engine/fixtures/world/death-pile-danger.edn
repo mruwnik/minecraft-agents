@@ -1,0 +1,25 @@
+;; jobs.survival.recover-drops ends :declined with a :danger reason while a hostile is near the body (card 182ef5f0).
+;; A zombie without AI stands by the respawn point: the job declines and names it, takes no action, then fetches the pile once the zombie is gone.
+{:defaults
+ {:tags [:survival :death :jobs]
+  :body {:at [26.5 0 26.5] :spawnpoint [4 0 4] :effects [["resistance" 600 4]]
+         :inventory [["raw_iron" 24] ["cobblestone" 64] ["cobblestone" 36]]}
+  :mobs :keep
+  :act [[:wait-s 1]
+        [:kill-body]
+        [:await {:source :body :kind :respawned} 30]
+        [:wait-s 3]
+        [:summon "zombie" [8.5 0 4.5] "{NoAI:1b}"]
+        [:wait-s 1]
+        [:job (jobs.survival.recover-drops)]
+        [:await {:source :job :kind :recover-drops.declined} 30]
+        [:rcon "kill @e[type=zombie,tag=wt,x=$X,y=$Y,z=$Z,distance=..60]"]
+        [:wait-s 2]
+        [:job (jobs.survival.recover-drops)]]
+  :limit-s 150}
+ :cases
+ [{:name "zombie-near-declines-with-danger-then-fetches"
+   :expect [{:event {:source :job :kind :recover-drops.declined :data {:reason :danger}} :within-s 60}
+            {:no-event {:source :job :kind :recover-drops.fetching} :for-s 5 :until {:source :job :kind :recover-drops.declined}}
+            {:event {:source :job :kind :recover-drops.decided :data {:decision :collected}} :within-s 130}]
+   :after [[:item "raw_iron" 24]]}]}
