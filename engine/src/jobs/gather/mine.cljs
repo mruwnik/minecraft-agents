@@ -642,11 +642,15 @@
 ;; ------------------------------------------------------------------ mend
 
 (defn owed
-  "The ground entries whose cell is now air, cave_air or water (unloaded cells are not owed)."
+  "The ground entries whose cell is now air, cave_air or water (unloaded cells are not owed). After a descent the
+  cells below the start level are not owed: they are the stair the body walks home by."
   [c]
-  (filterv #(let [name (u/block-name (:primitives c) (:pos %))]
-              (and name (or (air name) (= "water" name))))
-           (:ground (ctx/mem c))))
+  (let [{:keys [descent start]} (ctx/mem c)
+        way-y (when (pos? (:steps descent 0)) (js/Math.floor (:y start)))]
+    (filterv #(let [name (u/block-name (:primitives c) (:pos %))]
+                (and name (or (air name) (= "water" name))
+                     (or (nil? way-y) (>= (:y (:pos %)) way-y))))
+             (:ground (ctx/mem c)))))
 
 (defn filler
   "The first carried block to fill with: dig-in's building blocks other than the
@@ -753,19 +757,40 @@
         lying (left-behind c radius)]
     (ctx/update-mem! c assoc :left (into {} (filter #(contains? lying (key %))) left))))
 
+(defn home-done!
+  "Record whether the body got back to its start, say so when not, drop the left-behind drops it picked up, end."
+  [c arrived?]
+  (ctx/update-mem! c update :tunnel assoc :walked-back? (boolean arrived?) :back-at (access/cell (cell-of (u/self-pos c))))
+  (when-not arrived?
+    (ctx/emit! c :mine.not-home :info {:to (access/cell (:start (ctx/mem c))) :at (access/cell (cell-of (u/self-pos c)))
+                                       :text (str "mine did not get back to " (str/join "," (access/cell (:start (ctx/mem c)))))}))
+  (when (seq (:left (ctx/mem c))) (still-left! c))
+  (finish! c))
+
+(defn ^:async home-by-go-to!
+  "After a descent the way home is the stair up (and a pit the digging left at its foot): go-to walks it, with its
+  escalation. :continue while the walk goes on, else the job ends."
+  [c start]
+  (let [at-home? #(= (cell-of (u/self-pos c)) start)
+        r (if (at-home?)
+            :arrived
+            (await (ctx/call-child c :home 'jobs.movement.go-to
+                                   {:pos {:x (+ (:x start) 0.5) :y (:y start) :z (+ (:z start) 0.5)} :range 0 :escalate true})))]
+    (if (= :continue r)
+      :continue
+      (home-done! c (at-home?)))))
+
 (defn ^:async home-round!
-  "The last step of every normal run: back to the cell it started on (moveTo), whatever the digging left
-  open behind it; an info mine.not-home when the walk did not arrive. The job ends either way."
+  "The last step of every normal run: back to the cell it started on (moveTo; go-to after a descent), whatever the
+  digging left open behind it; an info mine.not-home when the walk did not arrive. The job ends either way."
   [c]
-  (let [{:keys [start]} (ctx/mem c)
-        _ (ctx/update-mem! c assoc-in [:tunnel :end] (access/cell (cell-of (u/self-pos c))))
-        arrived? (await (step-to! c start))]
-    (ctx/update-mem! c update :tunnel assoc :walked-back? (boolean arrived?) :back-at (access/cell (cell-of (u/self-pos c))))
-    (when-not arrived?
-      (ctx/emit! c :mine.not-home :info {:to (access/cell start) :at (access/cell (cell-of (u/self-pos c)))
-                                         :text (str "mine did not get back to " (str/join "," (access/cell start)))}))
-    (when (seq (:left (ctx/mem c))) (still-left! c))
-    (finish! c)))
+  (let [{:keys [start descent homing]} (ctx/mem c)]
+    (when-not homing
+      (ctx/update-mem! c assoc :homing true)
+      (ctx/update-mem! c assoc-in [:tunnel :end] (access/cell (cell-of (u/self-pos c)))))
+    (if (pos? (:steps descent 0))
+      (await (home-by-go-to! c start))
+      (home-done! c (await (step-to! c start))))))
 
 (defn no-tool?
   "Whether the block needs a pickaxe and none is carried (shovel and axe blocks drop by hand)."
