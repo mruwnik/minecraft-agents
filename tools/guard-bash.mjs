@@ -70,6 +70,8 @@ function strip(words) {
     if (ASSIGN.test(w) || KEYWORDS.has(w)) { i++; continue }
     if (!WRAPPERS.has(b)) break
     i++
+    // `command -v/-V` only looks a name up; it runs nothing
+    if (b === 'command' && /^-[a-zA-Z]*[vV]/.test(words[i] ?? '')) return []
     while (i < words.length && words[i].startsWith('-')) {
       if (words[i] === '--') { i++; break }
       i += (ARG_OPTS[b] ?? []).includes(words[i]) ? 2 : 1
@@ -79,56 +81,57 @@ function strip(words) {
   return words.slice(i)
 }
 
-function blockedWords(words) {
+// relax: judge only pkill/killall (the raw-runner rules are off), at every nesting level.
+function blockedWords(words, relax = false) {
   const w = strip(words)
   if (!w.length) return false
   const cmd = base(w[0]), args = w.slice(1)
   if (cmd === 'pkill' || cmd === 'killall') return true
-  if (RAW_RUNNERS.has(cmd)) return true
+  if (RAW_RUNNERS.has(cmd)) return !relax
   if (cmd === 'find') {
     const i = args.findIndex((a) => ['-exec', '-execdir', '-ok', '-okdir'].includes(a))
-    return i >= 0 && blockedWords(args.slice(i + 1))
+    return i >= 0 && blockedWords(args.slice(i + 1), relax)
   }
-  if (cmd.endsWith('.test.sh')) return true
+  if (cmd.endsWith('.test.sh')) return !relax
   if (cmd === 'res-slot') {
     const i = args.indexOf('--')
-    return i >= 0 && blockedWords(args.slice(i + 1))
+    return i >= 0 && blockedWords(args.slice(i + 1), relax)
   }
   if (cmd === 'node') {
     const si = args.findIndex((a) => !a.startsWith('-'))
     const flags = si < 0 ? args : args.slice(0, si) // later words are the script's own args
-    if (flags.some((a) => a.startsWith('--test'))) return true
+    if (flags.some((a) => a.startsWith('--test'))) return !relax
     const script = args[si]
-    return !!script && RAW_RUNNERS.has(base(script))
+    return !relax && !!script && RAW_RUNNERS.has(base(script))
   }
   if (['npx', 'pnpx', 'bunx', 'yarn', 'pnpm', 'npm'].includes(cmd)) {
-    if (args.includes('shadow-cljs')) return true
-    if (cmd === 'npx' || cmd === 'pnpx' || cmd === 'bunx') return blockedWords(args.filter((a) => !a.startsWith('-')))
+    if (args.includes('shadow-cljs')) return !relax
+    if (cmd === 'npx' || cmd === 'pnpx' || cmd === 'bunx') return blockedWords(args.filter((a) => !a.startsWith('-')), relax)
     const i = args.findIndex((a) => a === 'test' || a === 't' || a.startsWith('test:') || a === 'run' || a === 'run-script')
     if (i < 0) return false
-    if (args[i].startsWith('run')) return /^test/.test(args[i + 1] ?? '')
-    return true
+    if (args[i].startsWith('run')) return !relax && /^test/.test(args[i + 1] ?? '')
+    return !relax
   }
   if (['bash', 'sh', 'zsh'].includes(cmd)) {
     const ci = args.findIndex((a) => /^-[A-Za-z]*c[A-Za-z]*$/.test(a))
-    if (ci >= 0 && args[ci + 1] !== undefined) return blockedCommand(args[ci + 1])
+    if (ci >= 0 && args[ci + 1] !== undefined) return blockedCommand(args[ci + 1], relax)
     const script = args.find((a) => !a.startsWith('-'))
-    return !!script && blockedWords([script])
+    return !!script && blockedWords([script], relax)
   }
   return false
 }
 
 // run_tests launches each step as `{ (cd <dir> && export LIVE_TESTS_NONCE=<x> ... && <argv> 2>&1 | tee ...`.
-// Only the segment right after such an export (after a lone `{` and a cd) is exempt, and never for
-// pkill/killall; a command that merely mentions the nonce is judged like any other.
-const killer = (words) => ['pkill', 'killall'].includes(base(strip(words)[0] ?? ''))
+// Only the segment right after such an export (after a lone `{` and a cd) is exempt from the raw-runner
+// rules, never from pkill/killall (also nested in bash -c, find -exec, ...); a command that merely
+// mentions the nonce is judged like any other.
 const nonceExport = (w) => w[0] === 'export' && w.some((x) => /^LIVE_TESTS_NONCE=[A-Za-z0-9]+$/.test(x))
 
-function blockedCommand(command) {
+function blockedCommand(command, relax = false) {
   const segs = segments(command)
   return segs.some((w, i) => {
     const wrapped = i >= 3 && nonceExport(segs[i - 1]) && segs[i - 2][0] === 'cd' && segs[i - 3].length === 1 && segs[i - 3][0] === '{'
-    return wrapped ? killer(w) : blockedWords(w)
+    return blockedWords(w, relax || wrapped)
   })
 }
 

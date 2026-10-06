@@ -19,10 +19,13 @@ const blocked = [
   'echo `killall x`', 'bash -c "pkill foo"', 'echo a\npkill foo',
   'bash tools/test-engine x', 'sh tools/test-engine x', 'bash -lc "pkill x"', 'if true; then pkill x; fi',
   'for i in 1 2; do pkill x; done', '{ pkill x; }', 'ls | xargs pkill', 'ls | xargs -n 1 pkill', 'find . -exec pkill x {} \\;',
+  'command pkill x', 'command -p pkill -v',
   'sudo -u bob pkill x', 'env -i pkill x', 'env -u A pkill x', 'timeout -s KILL 5 pkill x', 'nohup -- pkill x',
   'node tools/test-run.mjs engine x', 'node tools/test-shards.mjs', 'tools/test-run.mjs x',
   'echo LIVE_TESTS_NONCE=1; pkill x', 'echo LIVE_TESTS_NONCE=1 && tools/test-engine x', 'LIVE_TESTS_NONCE=1 pkill x',
   'LIVE_TESTS_NONCE=1 tools/test-engine x', "{ (cd '/p' && export LIVE_TESTS_NONCE='n0' && pkill x)",
+  "{ (cd '/p' && export LIVE_TESTS_NONCE='n0' && bash -c \"pkill x\")", "{ (cd '/p' && export LIVE_TESTS_NONCE='n0' && ls | xargs pkill)",
+  "{ (cd '/p' && export LIVE_TESTS_NONCE='n0' && find . -exec killall x {} \\;)",
 ]
 const allowed = [
   'cat tools/test-engine', 'grep -n \'node --test\' x', 'sed -n 1,5p tools/test-engine', 'git log --grep pkill',
@@ -34,6 +37,7 @@ const allowed = [
   "{ (cd '/p' && export LIVE_TESTS_NONCE='n0' CI='1' && 'node' '--test' 'a.mjs' 2>&1 | tee '/l' | grep -e x >> '/e'; exit \"${PIPESTATUS[0]}\"); c=$?; (exit $c); }",
   "(echo hi && { (cd '/p' && export LIVE_TESTS_NONCE='n0' && 'npm' 'test' 2>&1 | tee '/l'; exit 0); c=$?; (exit $c); })", 'ls', '',
   'grep xargs pkill docs', 'ls | xargs grep pkill', 'find . -name pkill', 'sudo -u bob ls', 'timeout -s KILL 5 ls',
+  'command -v pkill', 'command -v test-engine', 'command -V pkill', 'command -pv pkill',
   'bash -lc "ls"', 'bash tools/compile engine x', 'if true; then ls; fi', 'cat tools/test-run.mjs',
 ]
 
