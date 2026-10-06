@@ -168,6 +168,19 @@
           (is (= :unavailable (get-in @server/entity-cache [{:world "w" :name "B1"} :status])))
           (is (< (count (get-in @server/entity-cache [{:world "w" :name "B1"} :error])) 60)))))))
 
+(deftest one-poll-settles-every-body-without-a-control-socket
+  (with-root 12
+    (fn [_ engines]
+      (let [requests (atom []) entries (server/agent-entries)]
+        (.writeFileSync fs (.join path (nth engines 11) "control.sock") "")
+        (with-redefs [server/entity-cache (atom {}) server/entity-in-flight (atom #{})
+                      server/entity-request! (fn [body] (swap! requests conj (:name body)) (js/Promise.reject (js/Error. "down")))]
+          (server/refresh-entities-in! "w" entries)
+          (is (= ["B11"] @requests) "a body with a socket is asked even behind many without one")
+          (is (= 12 (count @server/entity-cache)))
+          (is (= 11 (count (filter #(= :unavailable (:status %)) (vals @server/entity-cache))))
+              "none stays :loading after the first poll"))))))
+
 (deftest world-entry-does-not-repeat-the-bodies
   (let [entry (server/world-entry [] {:name "w"})]
     (is (not (contains? entry :bodies)))))
@@ -177,7 +190,7 @@
         body-a {:name "A" :engine {:jobs [{:id "j1"}]}}
         body-b {:name "B" :engine {:jobs []}}
         snap (fn [bodies] {:at 1 :bodies bodies :worlds [{:name "w" :places [{:name "p"}]}] :selected "w"})]
-    (with-redefs [server/body-texts (js/WeakMap.)
+    (with-redefs [server/print-memo (atom {})
                   server/pr-body (counting prints pr-str)]
       (is (= (pr-str (snap [body-a body-b])) (server/state-text (snap [body-a body-b]))))
       (is (= 2 @prints))
@@ -186,3 +199,22 @@
       (let [changed (assoc-in body-b [:engine :jobs] [{:id "j2"}])]
         (is (= (pr-str (snap [body-a changed])) (server/state-text (snap [body-a changed]))))
         (is (= 3 @prints) "only the changed body is printed again")))))
+
+(deftest state-text-prints-the-static-world-part-and-equal-bodies-once
+  (let [prints (atom 0)
+        snap (fn [stamp] {:at 1 :bodies [{:name "A" :engine {:jobs [{:id "j1"}]}}]
+                          :worlds [{:name "w" :places (mapv (fn [i] {:name (str "p" i)}) (range 5))
+                                    :entities [{:observed-at stamp}] :entity-truncated? false}]
+                          :selected "w"})
+        same? (fn [snapshot] (= snapshot (reader/read-string (server/state-text snapshot))))]
+    (with-redefs [server/print-memo (atom {})
+                  server/pr-body (counting prints pr-str)
+                  server/pr-part (counting prints pr-str)]
+      (is (same? (snap 1)))
+      (let [first-prints @prints]
+        (is (same? (snap 2)))
+        (is (= first-prints @prints) "freshly built equal bodies and static world parts are not printed again"))
+      (let [before @prints
+            changed (assoc-in (snap 3) [:worlds 0 :places 0 :name] "x")]
+        (is (same? changed))
+        (is (= (inc before) @prints) "only the changed static part is printed again")))))

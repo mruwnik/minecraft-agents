@@ -462,12 +462,16 @@
                      (sort-by (fn [b] [(get-in @entity-cache [(body-key b) :requested-at] 0) (:name b)])))
         room (max 0 (- entity-request-cap (count @entity-in-flight)))]
     (swap! entity-cache #(entities/bound (prune-cache % entries) now))
-    (doseq [body (take room (filter #(and (not (contains? @entity-in-flight (body-key %)))
-                                         (>= (- now (get-in @entity-cache [(body-key %) :requested-at] 0)) entity-refresh-ms)) targets))
-            :let [key (body-key body)]]
-      (swap! entity-cache update key #(assoc % :body key :requested-at now :status (or (:status %) :loading)))
-      (if-not (file-exists? (entity-socket body))
-        (swap! entity-cache update key entity-failure no-socket-error)
+    ;; a body without a socket is settled at once and uses no request slot; only the asked ones are capped
+    (let [due (filterv #(and (not (contains? @entity-in-flight (body-key %)))
+                             (>= (- now (get-in @entity-cache [(body-key %) :requested-at] 0)) entity-refresh-ms)) targets)
+          {asked true silent false} (group-by #(file-exists? (entity-socket %)) due)]
+      (doseq [body silent]
+        (swap! entity-cache update (body-key body)
+               #(entity-failure (assoc % :body (body-key body) :requested-at now) no-socket-error)))
+      (doseq [body (take room asked)
+              :let [key (body-key body)]]
+        (swap! entity-cache update key #(assoc % :body key :requested-at now :status (or (:status %) :loading)))
         (do
           (swap! entity-in-flight conj key)
           (-> (entity-request! body)
@@ -606,25 +610,50 @@
 (defn send-json! [res code value]
   (send-json-js! res code (to-js value)))
 
-(def body-texts (js/WeakMap.))
 (defn pr-body [body] (pr-str body))
+(defn pr-part [part] (pr-str part))
 
-(defn body-text
-  "pr-str of one body; an unchanged (identical) body is printed once, its text kept while the body lives."
-  [body]
-  (or (.get body-texts body)
-      (let [text (pr-body body)] (.set body-texts body text) text)))
+(def print-memo (atom {}))
+
+(defn memo-print
+  "print of value, kept under key: an equal value (freshly built or not) is printed once."
+  [k print value]
+  (let [[held text] (get @print-memo k)]
+    (if (and text (= held value))
+      text
+      (let [text (print value)] (swap! print-memo assoc k [value text]) text))))
+
+(def live-world-keys [:entities :entity-sources :entity-truncated?])
+
+(defn worlds-text
+  "Text of the :worlds vector. Each world's static part (places, villages ...) is printed once while it stays equal;
+  its live entity keys change every poll and are printed each time."
+  [worlds]
+  (str "[" (str/join " " (map (fn [world]
+                                (let [fixed (memo-print [:world (:name world)] pr-part (apply dissoc world live-world-keys))
+                                      live (pr-str (select-keys world live-world-keys))]
+                                  (cond (= "{}" live) fixed
+                                        (= "{}" fixed) live
+                                        :else (str (subs fixed 0 (dec (count fixed))) ", " (subs live 1)))))
+                              worlds)) "]"))
 
 (defn state-text
-  "pr-str of an /api/state snapshot, with the bodies printed through body-text."
+  "EDN text of an /api/state snapshot; the bodies and the static part of each world are printed once while they stay equal."
   [snapshot]
-  (str "{" (str/join ", " (map (fn [[k v]]
-                                 (str (pr-str k) " "
-                                      (if (and (= k :bodies) (vector? v))
-                                        (str "[" (str/join " " (map body-text v)) "]")
-                                        (pr-str v))))
-                               snapshot))
-       "}"))
+  (let [body-key-of (fn [b] [:body (:world b) (:name b)])
+        used (cond-> #{} (:worlds snapshot) (into (map (fn [w] [:world (:name w)])) (:worlds snapshot))
+                    (vector? (:bodies snapshot)) (into (map body-key-of) (:bodies snapshot)))
+        text (str "{" (str/join ", " (map (fn [[k v]]
+                                            (str (pr-str k) " "
+                                                 (cond
+                                                   (and (= k :bodies) (vector? v))
+                                                   (str "[" (str/join " " (map #(memo-print (body-key-of %) pr-body %) v)) "]")
+                                                   (and (= k :worlds) (vector? v)) (worlds-text v)
+                                                   :else (pr-str v))))
+                                          snapshot))
+                  "}")]
+    (swap! print-memo select-keys used)
+    text))
 
 (defn send-edn! [res code value]
   (send! res code "application/edn; charset=utf-8" (if (:bodies value) (state-text value) (pr-str value))))
