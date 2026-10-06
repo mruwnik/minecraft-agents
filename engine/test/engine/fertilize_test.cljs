@@ -81,7 +81,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks {"2,64,0" "wheat"} :ages {"2,64,0" 3}})]
-          (core/submit! eng (list job {}) {})
+          (core/submit! eng (list job {:fetch false}) {})
           (is (nil? (core/tick! eng)) "no bone meal: not yet")
           (is (empty? (calls p "useOn"))))))))
 
@@ -206,6 +206,6 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup (dissoc two-grass :inventory))]
-          (core/submit! eng (list job {:grass true}) {})
+          (core/submit! eng (list job {:grass true :fetch false}) {})
           (is (nil? (core/tick! eng)))
           (is (empty? (calls p "useOn"))))))))

@@ -10,7 +10,7 @@
 (def doc
   "Use bone meal on unripe crops: the crop at :at, or the unripe crops within :radius, nearest first.
   With :grass true it uses bone meal once on each open grass block (nothing on top) it has seen, instead of on crops.
-  Needs bone meal in the inventory; with :fetch it is fetched (jobs.lib.fetch), else the job waits :need. A crop that refuses bone meal or cannot be reached is skipped.
+  Needs bone meal in the inventory; it is fetched (jobs.lib.fetch) unless :fetch is false, then the job waits :need. A crop that refuses bone meal or cannot be reached is skipped.
   Ends when :max uses are spent, the bone meal runs out or no unripe crop is left. Result: {:used n}.
   Zones: a crop in another owner's zone or claim, or inside a plan's footprint, is skipped (it counts as a
   :harvest). The job warns fertilize.declined once, with :reason :refused (or :no-zones when no zone list was read).
@@ -22,7 +22,7 @@
    :center {:doc "centre of the radius search; the body's position when nil" :type :pos :default nil}
    :grass {:doc "fertilize open grass blocks instead of crops" :default false}
    :max {:doc "bone meal uses, at most" :default 16}
-   :fetch {:doc "get missing bone meal instead of waiting :need (jobs.lib.fetch): true, a set of kinds or a map of limits" :default false}
+   :fetch {:doc "get missing bone meal (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits :need instead" :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
 (def ripe-age {"wheat" 7 "carrots" 7 "potatoes" 7 "beetroots" 3})
@@ -85,7 +85,7 @@
 
 (defn check
   "True with bone meal in the pockets, when some was used (the round finishes), when no target remains, or when
-  :fetch will get the bone meal; else waits :need."
+  fetch will get the bone meal; else waits :need."
   [c]
   (if-let [w (problem c)]
     (fetch/check c 'jobs.farm.fertilize w)
@@ -115,7 +115,7 @@
             :continue))))))
 
 (defn ^:async round
-  "One bounded step: fetch missing bone meal when :fetch is on (a failed fetch leaves the job waiting), then
+  "One bounded step: fetch missing bone meal unless :fetch is false (a failed fetch leaves the job waiting), then
   fertilize-one!."
   [c]
   (let [_ (when (and (empty? (targets c)) (not (look/looked-here? c)))
