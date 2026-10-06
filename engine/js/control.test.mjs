@@ -59,7 +59,7 @@ test('method, path (without the query) and parsed body reach handle; an empty bo
   assert.deepEqual(calls, [['POST', '/drive', { op: 'ping', n: [1] }], ['GET', '/drive', null]])
 })
 
-test('world EDN request text and EDN reply pass through without JSON conversion', async () => {
+test('entities EDN request text and EDN reply pass through without JSON conversion', async () => {
   const socketPath = tmpSock()
   const seen = []
   const control = createControl({ socketPath, handle: async (method, p, body, type) => {
@@ -68,11 +68,11 @@ test('world EDN request text and EDN reply pass through without JSON conversion'
   } })
   await control.listen()
   try {
-    const r = await request(socketPath, 'POST', '/world?x=1', '{:op :submit :args {:pos {:x 1}}}', 'application/edn')
+    const r = await request(socketPath, 'POST', '/entities?x=1', '{:op :submit :args {:pos {:x 1}}}', 'application/edn')
     assert.equal(r.status, 202)
     assert.match(r.type, /application\/edn/)
     assert.equal(r.text, '{:ok true :status :running}\n')
-    assert.deepEqual(seen, [['POST', '/world', '{:op :submit :args {:pos {:x 1}}}', 'application/edn']])
+    assert.deepEqual(seen, [['POST', '/entities', '{:op :submit :args {:pos {:x 1}}}', 'application/edn']])
   } finally { await control.close() }
 })
 

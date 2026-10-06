@@ -41,7 +41,7 @@ export function createControl ({ socketPath, handle }) {
 
   const onRequest = async (req, res) => {
     const path = (req.url ?? '').split('?')[0]
-    const edn = path === '/world' || path === '/entities'
+    const edn = path === '/entities'
     const parsed = await readText(req).then(v => ({ v }), e => ({ e }))
     if (parsed.e?.tooLarge) {
       send(res, edn ? ednReply('{:ok false :reason :too-large}', 413) : reply({ ok: false, reason: 'too-large' }, 413))
