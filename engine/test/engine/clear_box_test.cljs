@@ -9,7 +9,7 @@
             [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [engine.world :as ew]
+            [jobs.lib.world-files :as ew]
             [jobs.build.clear-box :as clear-box]))
 
 (defn setup [world & [shared]]

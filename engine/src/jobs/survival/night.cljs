@@ -1,13 +1,13 @@
 (ns jobs.survival.night
   (:require [engine.ctx :as ctx]
-            [engine.jobs.access :as access]
-            [engine.jobs.shelter :as sh]
-            [engine.jobs.tidy :as tidy]
-            [engine.jobs.util :as u]
+            [jobs.lib.access :as access]
+            [jobs.lib.shelter :as sh]
+            [jobs.lib.tidy :as tidy]
+            [jobs.lib.util :as u]
             [engine.memory :as mem]
-            [engine.places :as places]
-            [engine.triggers.hungry :as hungry]
-            [engine.triggers.night :as night]
+            [jobs.lib.places :as places]
+            [triggers.survival.hungry :as hungry]
+            [triggers.survival.night :as night]
             [jobs.survival.dig-in :as dig-in]
             [jobs.survival.eat :as eat]))
 

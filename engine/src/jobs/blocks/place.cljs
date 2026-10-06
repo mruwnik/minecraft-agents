@@ -1,10 +1,10 @@
 (ns jobs.blocks.place
   (:require [engine.ctx :as ctx]
-            [engine.jobs.access :as access]
-            [engine.jobs.blocks :as b]
-            [engine.jobs.fetch :as fetch]
-            [engine.jobs.tidy :as tidy]
-            [engine.jobs.util :as u]))
+            [jobs.lib.access :as access]
+            [jobs.lib.blocks :as b]
+            [jobs.lib.fetch :as fetch]
+            [jobs.lib.tidy :as tidy]
+            [jobs.lib.util :as u]))
 
 (def doc
   "Place one block at :pos ([x y z] or {:x :y :z}): :item, or the first carried of :any-of. One act per round: a
@@ -23,9 +23,9 @@
   - {:reason :not-loaded :pos}.
   - While a plant is being cleared, the jobs.blocks.dig child's own wait reason.
 
-  A plant, flower or snow layer in the cell (engine.jobs.blocks/clearable) is dug first with a jobs.blocks.dig
+  A plant, flower or snow layer in the cell (jobs.lib.blocks/clearable) is dug first with a jobs.blocks.dig
   child (no tool needed, the drop is not collected). Out of reach, the round walks within 3 cells (go-to child).
-  In reach it places through engine.jobs.tidy/place!, so a block placed in another's zone with :ignore-zones? is
+  In reach it places through jobs.lib.tidy/place!, so a block placed in another's zone with :ignore-zones? is
   recorded for jobs.survival.restore-broken.
 
   Ends with info blocks.place.done and {:placed true|false :pos :item :reason}. :reason is :placed, :already
@@ -33,7 +33,7 @@
   plant could not be dug) or :failed (the primitive refused, with its :status). The caller decides whether to
   try again.
 
-  :fetch (default false; engine.jobs.fetch): a :need wait is not waited out. The rounds run jobs.items.obtain for one
+  :fetch (default false; jobs.lib.fetch): a :need wait is not waited out. The rounds run jobs.items.obtain for one
   of the item (child :fetch), then place. A failed fetch is remembered for :fail-minutes; meanwhile the check waits
   :need with {:fetch {:failed reason ...}}.")
 
@@ -43,7 +43,7 @@
    :any-of {:doc "block items, the first carried one is placed (instead of :item)" :default nil}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
-   :fetch {:doc "get the missing block item instead of waiting :need (engine.jobs.fetch): true, a set of kinds or a map of limits" :default false}})
+   :fetch {:doc "get the missing block item instead of waiting :need (jobs.lib.fetch): true, a set of kinds or a map of limits" :default false}})
 
 (defn wanted [{:keys [item any-of]}]
   (vec (if item [item] any-of)))

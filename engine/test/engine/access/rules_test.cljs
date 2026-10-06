@@ -1,7 +1,7 @@
 (ns engine.access.rules-test
-  "engine.access.rules: the verdict table over tiny hand-made block lookups."
+  "jobs.lib.access.rules: the verdict table over tiny hand-made block lookups."
   (:require [cljs.test :refer [deftest is are]]
-            [engine.access.rules :as rules]))
+            [jobs.lib.access.rules :as rules]))
 
 (def feet [0 64 0])
 (def farm {:name "farm" :min [4 60 4] :max [6 70 6] :owner "Miles"})

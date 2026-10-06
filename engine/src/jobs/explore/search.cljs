@@ -1,7 +1,7 @@
 (ns jobs.explore.search
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
-            [engine.jobs.util :as u]
+            [jobs.lib.util :as u]
             [engine.notes :as notes]))
 
 (def doc

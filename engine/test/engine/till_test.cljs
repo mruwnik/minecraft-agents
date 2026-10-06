@@ -11,7 +11,7 @@
             [engine.memory :as mem]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [engine.world :as ew]
+            [jobs.lib.world-files :as ew]
             [jobs.farm.till :as till]))
 
 (defn setup [world & [shared]]

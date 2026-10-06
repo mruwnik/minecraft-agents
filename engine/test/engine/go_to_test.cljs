@@ -9,7 +9,7 @@
             [engine.memory :as mem]
             [engine.perception :as perception]
             [engine.fake.raw-world :as fake-raw]
-            [engine.path.walk :as walk]
+            [jobs.lib.walk :as walk]
             [engine.takeover :as takeover]
             [engine.test-util :as tu :refer [box floor]]
             [engine.triggers :as triggers]

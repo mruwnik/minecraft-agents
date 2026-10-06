@@ -1,17 +1,17 @@
 (ns jobs.survival.respond-to-hostile
   (:require [engine.ctx :as ctx]
-            [engine.jobs.combat :as combat]
-            [engine.jobs.reach :as reach]
-            [engine.jobs.util :as u]))
+            [jobs.lib.combat :as combat]
+            [jobs.lib.reach :as reach]
+            [jobs.lib.util :as u]))
 
 (def doc
   "A hostile is near: fight it (jobs.survival.fight-back, best weapon equipped) when the odds are fair,
   else retreat (jobs.survival.retreat).
   Decided afresh every round. Never fights a creeper. Otherwise fights when the damage the fight is expected to cost
-  leaves at least :reserve health (engine.jobs.combat/fight-damage: weapon, armour worn, each mob's kind
+  leaves at least :reserve health (jobs.lib.combat/fight-damage: weapon, armour worn, each mob's kind
   and what is left of it after the hits landed, the dangers killed nearest first).
   If the chosen child declines, the other one runs.
-  Ends the first round no real danger (as the hostile-near trigger, engine.jobs.reach, in sight) is within :radius
+  Ends the first round no real danger (as the hostile-near trigger, jobs.lib.reach, in sight) is within :radius
   (:ranged-radius for ranged mobs).
   Exception: while the retreat is hiding (sealed in, up a pillar or down a pit), the retreat says when the danger is gone.
   Memory: writes one :hostile entry {:mob :pos :decision} per encounter.
@@ -31,9 +31,9 @@
 (def hostile-policy {:cap 50 :ttl (* 60 60 1000)})
 
 (defn near
-  "The hostiles that count: ones the body has seen (engine.jobs.reach/known-hostiles), melee within :radius and ranged
+  "The hostiles that count: ones the body has seen (jobs.lib.reach/known-hostiles), melee within :radius and ranged
   within :ranged-radius. One behind a wall cannot reach or shoot the body, so
-  it is left alone, as is one with no walkable way to the body (engine.jobs.reach),
+  it is left alone, as is one with no walkable way to the body (jobs.lib.reach),
   as the hostile-near trigger does."
   [c]
   (let [{:keys [radius ranged-radius]} (:args c)]

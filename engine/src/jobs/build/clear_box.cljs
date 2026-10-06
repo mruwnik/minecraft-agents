@@ -1,10 +1,10 @@
 (ns jobs.build.clear-box
   (:require [engine.ctx :as ctx]
-            [engine.jobs.access :as access]
-            [engine.jobs.blocks :as blocks]
-            [engine.jobs.util :as u]
-            [engine.path.near :as near]
-            [engine.jobs.world :as known]))
+            [jobs.lib.access :as access]
+            [jobs.lib.blocks :as blocks]
+            [jobs.lib.util :as u]
+            [jobs.lib.near :as near]
+            [jobs.lib.world :as known]))
 
 (def doc
   "Dig out a box from the top down (site levelling, demolition). Beds, containers and fluids are kept (:keep adds
@@ -27,7 +27,7 @@
    :to {:doc "opposite box corner (inclusive); at most 400 cells" :default nil}
    :keep {:doc "extra block names to leave alone" :default []}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
-   :accept {:doc "dig hazards of engine.access.rules taken (:fluid-adjacent :falling-block :under-feet)"
+   :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent :falling-block :under-feet)"
             :default #{:fluid-adjacent :falling-block}}})
 
 (def max-cells 400)

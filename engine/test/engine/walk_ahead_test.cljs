@@ -1,5 +1,5 @@
 (ns engine.walk-ahead-test
-  "The walk driver's look-ahead (engine.path.walk): the cells a plan's next steps stand on are watched while it is walked,
+  "The walk driver's look-ahead (jobs.lib.walk): the cells a plan's next steps stand on are watched while it is walked,
   a change the planner cares about re-plans at the next step boundary in the same round, a partial plan is re-planned every
   few seconds and kept unless the new one is clearly better, a body stuck behind a mob plans round it."
   (:require [cljs.test :refer [deftest is async]]
@@ -9,7 +9,7 @@
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.path.fixture :as fx]
-            [engine.path.walk :as walk]
+            [jobs.lib.walk :as walk]
             [engine.planner-fixture :as pf]
             [engine.fake :as fake]
             [engine.test-util :as tu :refer [box floor]]

@@ -1,8 +1,8 @@
 (ns jobs.farm.fertilize
   (:require [engine.ctx :as ctx]
-            [engine.jobs.gate :as gate]
-            [engine.jobs.util :as u]
-            [engine.path.near :as near]))
+            [jobs.lib.gate :as gate]
+            [jobs.lib.util :as u]
+            [jobs.lib.near :as near]))
 
 (def doc
   "Use bone meal on unripe crops: the crop at :at, or the unripe crops within :radius, nearest first.

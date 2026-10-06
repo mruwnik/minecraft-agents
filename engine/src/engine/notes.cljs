@@ -12,13 +12,13 @@
   Files: each body writes only its own worlds/<world>/notes/<body>.edn (see paths), whole, to a temp
   file that is renamed, so a reader never sees half a file. Readers merge every body's file.
 
-  Reading follows engine.world. The folder is stat-ed at most every :every-ms, lazily, and only files whose
+  Reading follows jobs.lib.world-files. The folder is stat-ed at most every :every-ms, lazily, and only files whose
   stamp changed are read again. A broken file keeps its last good copy and warns once
   (world.notes-unreadable). The body's own notes are kept in memory, read from its file at first use, so
   its writes show at once.
 
   A store is {:state atom :opts {...}}. :state is {:files {body entry} :checked-at ms :own [note]
-  :own-loaded? bool :broken-own? bool}, an entry as in engine.world."
+  :own-loaded? bool :broken-own? bool}, an entry as in jobs.lib.world-files."
   (:require ["fs" :as fs]
             ["path" :as path]
             [cljs.reader :as reader]

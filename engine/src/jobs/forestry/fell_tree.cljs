@@ -1,19 +1,19 @@
 (ns jobs.forestry.fell-tree
   (:require [engine.ctx :as ctx]
-            [engine.jobs.watch :as watch]
-            [engine.jobs.blocks :as blocks]
-            [engine.jobs.gate :as gate]
-            [engine.jobs.forestry :refer [scan-logs tree-near trees-near tree-at logs-at unreachable-set debts replant-kind
+            [jobs.lib.watch :as watch]
+            [jobs.lib.blocks :as blocks]
+            [jobs.lib.gate :as gate]
+            [jobs.forestry.trees :refer [scan-logs tree-near trees-near tree-at logs-at unreachable-set debts replant-kind
                                           replant-policy default-radius max-partials eye-dist dig-reach log-name?]]
-            [engine.jobs.util :as u]
-            [engine.path.near :as near]
-            [engine.path.targets :as targets]))
+            [jobs.lib.util :as u]
+            [jobs.lib.near :as near]
+            [jobs.lib.targets :as targets]))
 
 (def doc
   "Fell the nearest tree: a log column with leaves near its top. Digs one log a round, lowest first.
   The base log's :forestry/replant debt is written before it is dug.
   With :at it fells that one column instead (:radius and :species are then unused).
-  The tree is chosen by a bounded search over at most 32 candidates, nearest in a line first (engine.path.targets).
+  The tree is chosen by a bounded search over at most 32 candidates, nearest in a line first (jobs.lib.targets).
   It picks the tree the body walks to soonest, so a walled-off or cliff-top tree is passed over for a reachable
   one. The search continues over several rounds if needed. If it proves every candidate out of reach, the job
   warns tree_blocked and ends. If it runs out of nodes, it takes the nearest in a line and the walk decides.

@@ -55,7 +55,7 @@ The compile JVM is capped (`:jvm-opts ["-Xmx1G"]` in `shadow-cljs.edn`) because 
 - `/api/item-icon/<item>.png`: an item's picture from the repo's `textures/`.
 - `/api/jobs`: `{at, jobs: [{kind, id, category, name, file, ns-doc, doc, args, backoff, running, reflex}]}`: every job
   namespace of `engine/src/jobs/**/*.cljs` (`kind` job, `id` `jobs.<dir>.<name>`) and every trigger of
-  `engine/src/engine/triggers/*.cljs` (`kind` trigger, category `triggers`, `id` `engine.triggers.<name>`). The list is
+  the default set `engine/src/triggers/defaults.edn` (`kind` trigger, category `triggers`, `id` the trigger id). The list is
   **fixed at dashboard build time**: the macro `dashboard.jobs-registry/compile-entries` (src/dashboard/jobs_registry.clj)
   calls `engine.registry` (`jobs-dir`, `job-files`, `expected-ns`, `read-forms`, the engine's own lenient reader; `../engine/src`
   is on `:source-paths`, only its `.clj` is loaded) and emits a literal vector, so a new or changed job needs `npm run build`.

@@ -1,7 +1,7 @@
 (ns engine.access.ledger-test
-  "engine.access.ledger: the scaffold ledger's lifecycle as pure functions, and its place in body memory."
+  "jobs.lib.ledger: the scaffold ledger's lifecycle as pure functions, and its place in body memory."
   (:require [cljs.test :refer [deftest is are]]
-            [engine.access.ledger :as ledger]
+            [jobs.lib.ledger :as ledger]
             [engine.memory :as mem]
             [engine.test-util :as tu]))
 

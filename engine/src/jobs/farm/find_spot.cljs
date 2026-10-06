@@ -1,7 +1,7 @@
 (ns jobs.farm.find-spot
   (:require [engine.ctx :as ctx]
-            [engine.jobs.util :as u]
-            [engine.path.near :as near]))
+            [jobs.lib.util :as u]
+            [jobs.lib.near :as near]))
 
 (def doc
   "Pick where a :w x :h farm would go. Ranks patches by flatness first, then water within 4,

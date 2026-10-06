@@ -4,11 +4,11 @@
             [engine.registry :as registry]
             [engine.core :as core]
             [engine.events :as events]
-            [engine.foods :as foods]
+            [jobs.lib.foods :as foods]
             [engine.memory :as mem]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [engine.triggers.hungry :as hungry]
+            [triggers.survival.hungry :as hungry]
             [jobs.survival.eat :as eat]
             [engine.game :as game]))
 

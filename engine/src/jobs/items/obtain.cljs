@@ -1,10 +1,10 @@
 (ns jobs.items.obtain
   (:require [engine.ctx :as ctx]
-            [engine.jobs.blocks :as b]
-            [engine.jobs.fetch :as fetch]
-            [engine.jobs.recipes :as recipes]
-            [engine.jobs.util :as u]
-            [engine.path.near :as near]
+            [jobs.lib.blocks :as b]
+            [jobs.lib.fetch :as fetch]
+            [jobs.items.recipes :as recipes]
+            [jobs.lib.util :as u]
+            [jobs.lib.near :as near]
             [jobs.items.craft :as craft]
             [jobs.storage.deposit :as deposit]
             [engine.game :as game]))
@@ -16,11 +16,11 @@
   Sources, in order (carried, chests and crafting; gathering comes later):
   - Carried: the target is met, done.
   - :chest (in :how): the containers the body has seen (perception's seenBlocks, never x-ray) within 32 blocks,
-    still there, whose zone or claim allows :take (an open, unzoned chest does; engine.jobs.access). A chest known
+    still there, whose zone or claim allows :take (an open, unzoned chest does; jobs.lib.access). A chest known
     to hold a wanted name (body memory :fetch/stock) is withdrawn from (jobs.storage.withdraw child :take); one of
     unknown stock is walked to and looked into, nearest first, at most 4 per obtain; one known not to hold any is
     skipped. Each chest is withdrawn from once.
-  - :craft (in :how): a chain of crafts planned from the recipes (engine.jobs.recipes) over what is carried: logs to
+  - :craft (in :how): a chain of crafts planned from the recipes (jobs.items.recipes) over what is carried: logs to
     planks to sticks to the tool, and a crafting table when the chain needs one and none is seen (crafted, then put
     down on a free cell beside the body with a jobs.blocks.place child). Each step is a jobs.items.craft child. The
     names are tried in order; the first with a plan is made. Three fruitless steps stop it (:tried :craft).
@@ -37,7 +37,7 @@
    :any-of {:doc "items, any one will do, the first preferred (instead of :item)" :default nil}
    :count {:doc "how many more than carried at the start, at most 64" :default 1}
    :how {:doc "sources to use, a subset of #{:chest :craft :gather}; nil: all" :default nil}
-   :depth {:doc "nested fetches left; nil: the fetch limits (engine.jobs.fetch)" :default nil}
+   :depth {:doc "nested fetches left; nil: the fetch limits (jobs.lib.fetch)" :default nil}
    :minutes {:doc "time budget from the first round; nil: the fetch limits" :default nil}
    :fail-minutes {:doc "passed on to nested fetches; nil: the fetch limits" :default nil}
    :chain {:doc "items being fetched above this one (a cycle stops)" :default []}})

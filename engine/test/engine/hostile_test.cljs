@@ -4,7 +4,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.registry :as registry]
             [engine.core :as core]
-            [engine.jobs.combat :as combat]
+            [jobs.lib.combat :as combat]
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.memory :as mem]

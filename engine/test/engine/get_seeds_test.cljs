@@ -9,7 +9,7 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [engine.world :as ew]))
+            [jobs.lib.world-files :as ew]))
 
 (defn setup-seeing
   "h/setup over a body that has seen every block in range."
@@ -223,7 +223,7 @@
 ;; ------------------------------------------------------------------ worlds with zones and plans
 
 (defn start
-  "An engine over primitives p on dir, sharing the engine.world w."
+  "An engine over primitives p on dir, sharing the jobs.lib.world-files w."
   [{:keys [p dir shared]}]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)

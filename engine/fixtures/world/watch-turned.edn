@@ -1,4 +1,4 @@
-;; engine.jobs.watch :watch.turned (card 55fede30): the body turns once toward a hostile it hears and does not see
+;; jobs.lib.watch :watch.turned (card 55fede30): the body turns once toward a hostile it hears and does not see
 ;; and emits {:name :pos :distance}. Hearing is distance only (16), no line needed; the turn memory is 5 s per mob, so
 ;; one mob gives one event per 5 s. Mobs are NoAI (they never move or attack). The stone box is sealed: nothing is seen.
 ;; go-to watches on arrival (body at 20.5 20.5), so mobs sit within 16 of the arrival cell, not of the start.

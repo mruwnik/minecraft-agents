@@ -6,13 +6,13 @@
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.fake.raw-world :as fake-raw]
-            [engine.jobs.tools :as tools]
+            [jobs.lib.tools :as tools]
             [engine.memory :as mem]
             [engine.perception :as perception]
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [engine.world :as ew]
+            [jobs.lib.world-files :as ew]
             [jobs.gather.mine :as mine]))
 
 (defn spec [args] (list 'jobs.gather.mine args))

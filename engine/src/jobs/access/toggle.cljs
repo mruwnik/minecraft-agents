@@ -1,8 +1,8 @@
 (ns jobs.access.toggle
-  (:require [engine.access.click :as click]
+  (:require [jobs.lib.click :as click]
             [engine.ctx :as ctx]
-            [engine.jobs.util :as u]
-            [engine.places :as places]))
+            [jobs.lib.util :as u]
+            [jobs.lib.places :as places]))
 
 (def doc
   "Put one block into a WANTED :state. The state is read first. A block already there is left alone and the run

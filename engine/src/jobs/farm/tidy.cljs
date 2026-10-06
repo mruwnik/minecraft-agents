@@ -1,13 +1,13 @@
 (ns jobs.farm.tidy
   (:require [clojure.string :as str]
-            [engine.access.rules :as rules]
+            [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
-            [engine.jobs.access :as access]
-            [engine.jobs.tools :as tools]
-            [engine.jobs.util :as u]
-            [engine.path.near :as near]
+            [jobs.lib.access :as access]
+            [jobs.lib.tools :as tools]
+            [jobs.lib.util :as u]
+            [jobs.lib.near :as near]
             [plan.shape :as shape]
-            [engine.jobs.world :as known]))
+            [jobs.lib.world :as known]))
 
 (def doc
   "Dig the stray blocks over a plan's cells (:plan, optionally only its :part) and pick up the drops.
@@ -51,7 +51,7 @@
 ;; ------------------------------------------------------------------ access
 
 (defn access-world
-  "The social half of the rules' input, read now (engine.jobs.access/zone-input): zones nil when the zone file was never
+  "The social half of the rules' input, read now (jobs.lib.access/zone-input): zones nil when the zone file was never
   read, claims, footprints of every plan but this one, the body's name, the clock and the job's :ignore-zones? arg."
   [c]
   (access/zone-input c {:except (:plan (:args c)) :ignore-zones? (:ignore-zones? (:args c))}))

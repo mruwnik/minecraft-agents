@@ -1,16 +1,16 @@
 (ns jobs.survival.retreat
-  (:require [engine.access.click :as click]
-            [engine.access.ledger :as ledger]
-            [engine.access.rules :as rules]
+  (:require [jobs.lib.click :as click]
+            [jobs.lib.ledger :as ledger]
+            [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
-            [engine.jobs.access :as access]
-            [engine.jobs.combat :as combat]
-            [engine.jobs.reach :as reach]
-            [engine.jobs.shelter :as sh]
-            [engine.jobs.tidy :as tidy]
-            [engine.jobs.tools :as tools]
-            [engine.jobs.util :as u]
-            [engine.path.near :as near]
+            [jobs.lib.access :as access]
+            [jobs.lib.combat :as combat]
+            [jobs.lib.reach :as reach]
+            [jobs.lib.shelter :as sh]
+            [jobs.lib.tidy :as tidy]
+            [jobs.lib.tools :as tools]
+            [jobs.lib.util :as u]
+            [jobs.lib.near :as near]
             [jobs.access.pillar :as pillar]
             [jobs.survival.dig-in :as dig-in]))
 
@@ -19,12 +19,12 @@
   Each round, in this order:
   1. A door, gate or trapdoor standing open within a hand's reach and nearer the hostile than the body is shut with one click.
      That is the round's only act (retreat.door-shut info). Each door is clicked at most once a flight.
-  2. Walks a short step (:step blocks) away from the nearest danger with the engine walker (engine.path.near/walk-near!),
+  2. Walks a short step (:step blocks) away from the nearest danger with the engine walker (jobs.lib.near/walk-near!),
      leaning toward the latest :bed or :home when that is not through the hostile, avoiding :hazard positions.
      When a wall blocks the way away it turns up to 120 degrees towards open ground (at least 2 clear cells).
      Eats once per flight (up to food 20) when the nearest danger is at least :eat-gap blocks away and food is carried.
   3. Cornered (no open direction worth a walk, or the walk is blocked): takes the safest option it has not yet failed.
-     - fight (jobs.survival.fight-back) only when engine.jobs.combat/fight-damage leaves :reserve health. Never against a creeper.
+     - fight (jobs.survival.fight-back) only when jobs.lib.combat/fight-damage leaves :reserve health. Never against a creeper.
      - seal in: fill the open sides at feet and head height and the roof (dig-in's 1x1 cells) with carried :blocks,
        at most :max-places a round. It first steps to the middle of its cell, and does not place while a hostile's hitbox
        overlaps a cell to fill. An open door is shut, not filled. A cell that answers occupied (torch, chest, bed) is left alone.
@@ -43,7 +43,7 @@
   It hides while a hostile within :radius (ranged ones :ranged-radius) would have a walkable way to the refuge if its own
   blocks were gone.
   Ends the first round no real danger is within :radius (ranged ones :ranged-radius).
-  A real danger is as in engine.jobs.reach: a mob with a walkable way to the body, or a ranged one with a line of fire.
+  A real danger is as in jobs.lib.reach: a mob with a walkable way to the body, or a ranged one with a line of fire.
   A cell in another's zone is used only as a last resort (retreat.trespass-last-resort warning).")
 
 (def args
@@ -380,7 +380,7 @@
 
 (defn fight-wins?
   "Whether fighting hostiles with the best weapon carried is expected to leave :reserve health
-  (engine.jobs.combat/fight-damage); never against a creeper."
+  (jobs.lib.combat/fight-damage); never against a creeper."
   [c hostiles]
   (let [p (:primitives c)
         self (.self p)
@@ -536,7 +536,7 @@
 
 (defn refuge-danger?
   "Whether a hostile within :radius (ranged ones within :ranged-radius), the dead skipped, would have a walkable way to
-  the refuge's anchor cell were the refuge's own cells open (engine.jobs.reach): a danger the refuge keeps off."
+  the refuge's anchor cell were the refuge's own cells open (jobs.lib.reach): a danger the refuge keeps off."
   [c {:keys [anchor cells]}]
   (let [p (:primitives c)
         open (set cells)]

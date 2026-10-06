@@ -1,4 +1,4 @@
-;; engine.jobs.watch wired into go-to arrival and attack (card 9970c377). A sealed stone box: dark inside, or lit by
+;; jobs.lib.watch wired into go-to arrival and attack (card 9970c377). A sealed stone box: dark inside, or lit by
 ;; a sea lantern floor. A scan shows as a memory_written of :watched. Time-independent (the roof shuts the sky out).
 {:defaults
  {:tags [:watch :movement]

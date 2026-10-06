@@ -1,15 +1,15 @@
 (ns engine.vehicle-test
-  "engine.jobs.vehicle (what the body rides, the vehicle hold), the :mounted trigger and
+  "jobs.movement.vehicle (what the body rides, the vehicle hold), the :mounted trigger and
   jobs.movement.leave-vehicle against the fake world."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.events :as events]
-            [engine.jobs.vehicle :as vehicle]
+            [jobs.movement.vehicle :as vehicle]
             [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [engine.triggers.mounted :as mounted]
+            [triggers.movement.mounted :as mounted]
             [jobs.movement.leave-vehicle :as leave]))
 
 (def boat {:id 9 :name "oak_boat" :uuid "u-9" :kind "other" :pos {:x 1.5 :y 64 :z 0.5}})

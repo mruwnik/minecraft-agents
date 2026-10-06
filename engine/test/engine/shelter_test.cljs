@@ -8,7 +8,7 @@
             [engine.memory :as mem]
             [engine.scenario :as scenario]
             [engine.fake :as fake]
-            [engine.jobs.shelter :as sh]
+            [jobs.lib.shelter :as sh]
             [engine.fake.raw-world :as fake-raw]
             [engine.perception :as perception]
             [engine.test-util :as tu]

@@ -1,5 +1,5 @@
 (ns engine.zones-containers-test
-  "Containers as job rules: withdraw, deposit, kit, bake, get-seeds, get-food and smelt consult engine.jobs.access
+  "Containers as job rules: withdraw, deposit, kit, bake, get-seeds, get-food and smelt consult jobs.lib.access
   before taking from or putting into another's chest."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
@@ -9,7 +9,7 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [engine.world :as ew]))
+            [jobs.lib.world-files :as ew]))
 
 (defn setup [world zones]
   (let [clock (atom 1000000)

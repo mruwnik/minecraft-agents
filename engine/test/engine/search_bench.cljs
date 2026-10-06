@@ -1,8 +1,8 @@
 (ns engine.search-bench
   "The job-side searches as a library for the search bench (bench-lang/search.mjs): the reach searches the hostile
-  triggers and survival jobs run (engine.jobs.reach) over a primitives object the bench builds on a recorded world.
+  triggers and survival jobs run (jobs.lib.reach) over a primitives object the bench builds on a recorded world.
   Compiled by `shadow-cljs compile search-bench`."
-  (:require [engine.jobs.reach :as reach]))
+  (:require [jobs.lib.reach :as reach]))
 
 (defn walkable-way
   "reach/walkable-way? from mob {x y z} to body {x y z} over primitives p."

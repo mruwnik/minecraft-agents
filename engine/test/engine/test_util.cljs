@@ -50,7 +50,7 @@
 
 (defn fake-on-floor
   "fake with stone at y 63 under the walk-floor rectangle (or the spec's :floor), in the columns the spec's :blocks leave
-  empty: the ground the walks of jobs that use engine.path.near/walk-near! need, without touching ground a test built.
+  empty: the ground the walks of jobs that use jobs.lib.near/walk-near! need, without touching ground a test built.
   The spec's :floor-block lays another block than stone (a test that digs stone needs a floor it does not dig)."
   [spec]
   (let [built (into #{} (map (fn [k] (let [[x _ z] (.split (name k) ",")] [x z]))) (keys (:blocks spec)))

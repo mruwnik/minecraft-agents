@@ -11,7 +11,7 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [engine.world :as world]
+            [jobs.lib.world-files :as world]
             [jobs.explore.search :as search]))
 
 (def ground

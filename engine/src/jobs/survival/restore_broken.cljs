@@ -1,13 +1,13 @@
 (ns jobs.survival.restore-broken
   (:require [engine.ctx :as ctx]
-            [engine.jobs.reach :as reach]
-            [engine.jobs.tidy :as tidy]
-            [engine.jobs.tools :as tools]
-            [engine.jobs.util :as u]))
+            [jobs.lib.reach :as reach]
+            [jobs.lib.tidy :as tidy]
+            [jobs.lib.tools :as tools]
+            [jobs.lib.util :as u]))
 
 (def doc
   "Put back what a job broke in another's zone or claim, and the holes a go-to escalation dug (the :tidy entries
-  engine.jobs.tidy and jobs.movement.go-to write). A dug block is placed again from an item of the same name
+  jobs.lib.tidy and jobs.movement.go-to write). A dug block is placed again from an item of the same name
   carried, or for an escalation hole what the block drops (cobblestone for stone). An escalation hole waits while
   the body is shut in (:shut-in), as it is the body's way on. A placed block is dug again. It digs nothing else.
   Works only when the body is safe: health at least :min-health and no hostile within :danger-radius.

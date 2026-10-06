@@ -53,7 +53,7 @@
 
 (def door-policy
   "policy plus the steps that open a door, gate or trapdoor by hand: the walk driver that cuts a plan at them
-  (engine.path.pass) does the opening, the tick never sees one."
+  (jobs.lib.pass) does the opening, the tick never sees one."
   (update policy :moves conj :open))
 
 (def move-names

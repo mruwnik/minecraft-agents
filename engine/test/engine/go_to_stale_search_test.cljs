@@ -1,12 +1,12 @@
 (ns engine.go-to-stale-search-test
-  "go-to's search kept over rounds (engine.path.walk/searches) when the land round the goal loads after it began (card
+  "go-to's search kept over rounds (jobs.lib.walk/searches) when the land round the goal loads after it began (card
   9c4471aa; live j53: a search begun while the chunks round a goal on a sealed platform were still arriving read the goal
   unloaded, never ran the goal flood, and gave up :searching after 100 rounds)."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.go-to-test :as gt]
-            [engine.path.walk :as walk]
+            [jobs.lib.walk :as walk]
             [engine.test-util :as tu :refer [box]]))
 
 ;; a stone floor x 0..47, z 0..47 (only those columns are loaded); the body near its east edge, so no cell of the loaded

@@ -1,7 +1,7 @@
 (ns engine.leave-tunnel-test
   "jobs.access.leave-tunnel: the mouth as a pure function, then whole ways out after a real tunnel in the fake world."
   (:require [cljs.test :refer [deftest is are async]]
-            [engine.access.ledger :as ledger]
+            [jobs.lib.ledger :as ledger]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
@@ -11,7 +11,7 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [engine.world :as world]
+            [jobs.lib.world-files :as world]
             [jobs.access.leave-tunnel :as leave-tunnel]))
 
 (def tunnel-job 'jobs.access.tunnel)

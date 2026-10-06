@@ -5,10 +5,10 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
-            [engine.jobs.apiary :as apiary]
+            [jobs.lib.apiary :as apiary]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [engine.world :as ew]
+            [jobs.lib.world-files :as ew]
             [jobs.apiary.guard :as guard]))
 
 (defn setup [world]

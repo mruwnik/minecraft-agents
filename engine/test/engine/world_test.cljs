@@ -1,10 +1,10 @@
 (ns engine.world-test
-  "engine.world: the pure bookkeeping without a disk, then the reader over a temp dir."
+  "jobs.lib.world-files: the pure bookkeeping without a disk, then the reader over a temp dir."
   (:require [cljs.test :refer [deftest is are]]
             ["fs" :as fs]
             ["path" :as path]
             [engine.test-util :as tu]
-            [engine.world :as world]
+            [jobs.lib.world-files :as world]
             [plan.shape :as shape]
             [engine.file-sync :as fsync]))
 

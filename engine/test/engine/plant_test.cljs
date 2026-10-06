@@ -7,7 +7,7 @@
             [engine.events :as events]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [engine.world :as ew]
+            [jobs.lib.world-files :as ew]
             [jobs.farm.plant :as plant]))
 
 (def clock (atom 1000000))

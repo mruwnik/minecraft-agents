@@ -1,7 +1,7 @@
 (ns engine.tunnel-test
   "jobs.access.tunnel: the approach choice, the stops, and whole tunnels against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
-            [engine.access.ledger :as ledger]
+            [jobs.lib.ledger :as ledger]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
@@ -12,7 +12,7 @@
             [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [engine.world :as world]
+            [jobs.lib.world-files :as world]
             [jobs.access.tunnel :as tunnel]))
 
 (def job 'jobs.access.tunnel)

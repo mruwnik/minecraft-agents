@@ -7,7 +7,7 @@
             [engine.path.courses :as courses]
             [engine.path.executor :as ex]
             [engine.path.planner-tuned :as planner]
-            [engine.path.walk :as walk]
+            [jobs.lib.walk :as walk]
             [engine.planner-fixture :as pf]
             [engine.stairs-physics-test :as sp]
             [engine.test-util :as tu]))

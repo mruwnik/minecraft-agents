@@ -1,9 +1,9 @@
 (ns jobs.apiary.harvest
   (:require [engine.ctx :as ctx]
-            [engine.jobs.apiary :as apiary]
-            [engine.jobs.gate :as gate]
-            [engine.jobs.util :as u]
-            [engine.path.near :as near]))
+            [jobs.lib.apiary :as apiary]
+            [jobs.lib.gate :as gate]
+            [jobs.lib.util :as u]
+            [jobs.lib.near :as near]))
 
 (def doc
   "Take the honey of the ripe hives (honey_level 5) near a centre, nearest first, at most :max hives. Shears give 3

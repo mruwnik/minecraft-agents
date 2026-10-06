@@ -843,7 +843,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     return { status: 'placed', block: scoop ? 'bucket' : item.name.replace('_bucket', '') }
   }
 
-  // A click chosen by the caller (engine.placement): sneak if asked, hold the look if one is given (else look at the
+  // A click chosen by the caller (jobs.lib.placement): sneak if asked, hold the look if one is given (else look at the
   // clicked point), click the face of `against` that points into the cell at `cursor`, and never look again on the way.
   const clickSupport = (click, p) => {
     const ref = bot.blockAt(vec(click.against))
@@ -1270,7 +1270,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     // once a second of physics ticks. Lava and suffocation deaths keep their slots, the live inventory is used then.
     let snapshot = inventoryNow()
     let ticks = 0
-    // What the body stands in, as engine.value/lethal-cause? names it. The death message of the server is not used:
+    // What the body stands in, as jobs.lib.worth/lethal-cause? names it. The death message of the server is not used:
     // it arrives in a later packet than the death event. Unknown (a mob, a fall, hunger) leaves the cause out.
     const causeNow = () => {
       const pos = target.entity.position

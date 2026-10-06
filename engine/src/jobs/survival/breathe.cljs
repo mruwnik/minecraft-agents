@@ -1,17 +1,17 @@
 (ns jobs.survival.breathe
-  (:require [engine.jobs.tidy :as tidy]
+  (:require [jobs.lib.tidy :as tidy]
             [engine.ctx :as ctx]
-            [engine.jobs.access :as access]
-            [engine.jobs.util :as u]
-            [engine.path.walk :as walk]
-            [engine.triggers.suffocating :as s]))
+            [jobs.lib.access :as access]
+            [jobs.lib.util :as u]
+            [jobs.lib.walk :as walk]
+            [triggers.survival.suffocating :as s]))
 
 (def doc
   "Get air when drowning or stuck inside a block. One action per round.
   Drowning (in water, head under, oxygen below :min-oxygen):
   - If the own column reaches air within :reach blocks up, swim (the swim primitive rises to the surface).
   - Otherwise walk sideways, at the feet's height, to the nearest column within :radius that does.
-  Enclosed (head cell holds a suffocating block, see engine.triggers.suffocating):
+  Enclosed (head cell holds a suffocating block, see triggers.survival.suffocating):
   - First, once per job, step to a side cell with room to stand.
   - If that does not help, dig the head block, dig the block above it if solid, and step up.
   - A dig that fails (cannot, timeout, unreachable) is a failed round.

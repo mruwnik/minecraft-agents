@@ -1,6 +1,6 @@
 (ns engine.tools-test
   (:require [cljs.test :refer [deftest is are]]
-            [engine.jobs.tools :as tools]))
+            [jobs.lib.tools :as tools]))
 
 (deftest tool-kind-by-block
   (are [block kind] (= kind (tools/tool-kind block))

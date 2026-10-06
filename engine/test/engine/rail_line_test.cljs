@@ -4,7 +4,7 @@
             [engine.build-from-plan-test :as b]
             [engine.core :as core]
             [engine.harvest-test :as h]
-            [engine.jobs.rail :as builder]
+            [jobs.build.rail :as builder]
             [engine.registry :as registry]
             [engine.takeover :as takeover]
             [jobs.build.rail-line :as rail-line]

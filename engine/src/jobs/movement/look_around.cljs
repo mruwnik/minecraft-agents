@@ -1,6 +1,6 @@
 (ns jobs.movement.look-around
   (:require [engine.ctx :as ctx]
-            [engine.jobs.util :as u]))
+            [jobs.lib.util :as u]))
 
 (def doc
   "Face a random point 3 blocks away (any yaw, from a block below to 1.5 above the body),

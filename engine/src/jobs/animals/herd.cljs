@@ -1,14 +1,14 @@
 (ns jobs.animals.herd
-  (:require [engine.access.click :as click]
+  (:require [jobs.lib.click :as click]
             [engine.ctx :as ctx]
-            [engine.jobs.animals :as animals]
-            [engine.jobs.apiary :as apiary]
-            [engine.jobs.declined :as declined]
-            [engine.jobs.pen :as pen]
-            [engine.jobs.util :as u]
-            [engine.jobs.watch :as watch]
-            [engine.path.near :as near]
-            [engine.triggers.pen-gate :as pg]))
+            [jobs.lib.animals :as animals]
+            [jobs.lib.apiary :as apiary]
+            [jobs.lib.declined :as declined]
+            [jobs.animals.pen :as pen]
+            [jobs.lib.util :as u]
+            [jobs.lib.watch :as watch]
+            [jobs.lib.near :as near]
+            [triggers.animals.pen-gate :as pg]))
 
 (def doc
   "Bring grown animals of type :mob into the pen :box until it holds :target of them. Each animal goes
@@ -116,7 +116,7 @@
   {:x (/ (+ (:x min) (:x max) 1) 2) :y (:y min) :z (/ (+ (:z min) (:z max) 1) 2)})
 
 (defn in-box?
-  "True when pos stands on a feet cell of the box, floored as engine.jobs.pen/in-pen? floors it."
+  "True when pos stands on a feet cell of the box, floored as jobs.animals.pen/in-pen? floors it."
   [{:keys [min max]} {:keys [x y z]}]
   (let [fx (js/Math.floor x) fy (js/Math.floor (+ y 0.01)) fz (js/Math.floor z)]
     (and (<= (:x min) fx (:x max)) (<= (:y min) fy (:y max)) (<= (:z min) fz (:z max)))))

@@ -1,7 +1,7 @@
 (ns engine.within-test
   "u/within?: the measure moveTo's arrival uses."
   (:require [cljs.test :refer [deftest is are]]
-            [engine.jobs.util :as u]))
+            [jobs.lib.util :as u]))
 
 (def player {:x -4989.5 :y 101 :z 5000.5})
 

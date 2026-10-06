@@ -1,6 +1,6 @@
 (ns jobs.memory.forget-place
   (:require [engine.ctx :as ctx]
-            [engine.places :as places]))
+            [jobs.lib.places :as places]))
 
 (def doc
   "Forget a named place in body memory, in one round. The place (or the retraction of a gone one) is removed.

@@ -6,7 +6,7 @@
             [engine.path.executor :as ex]
             [engine.path.planner-tuned :as planner]
             [engine.test-util :as tu]
-            [engine.path.walk :as walk]))
+            [jobs.lib.walk :as walk]))
 
 (def version "1.21.4")
 (def lib (delay {:mc ((tu/require-here "minecraft-data") version)

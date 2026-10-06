@@ -1,9 +1,9 @@
 (ns jobs.survival.sleep
   (:require [engine.ctx :as ctx]
-            [engine.jobs.shelter :as sh]
-            [engine.jobs.util :as u]
+            [jobs.lib.shelter :as sh]
+            [jobs.lib.util :as u]
             [engine.memory :as mem]
-            [engine.places :as places]))
+            [jobs.lib.places :as places]))
 
 (def doc
   "Walk to a bed and sleep in it.

@@ -1,17 +1,17 @@
 (ns jobs.farm.tend
   (:require [clojure.string :as str]
-            [engine.access.permit :as permit]
+            [jobs.farm.permit :as permit]
             [engine.ctx :as ctx]
-            [engine.jobs.access :as access]
-            [engine.jobs.gate :as gate]
-            [engine.jobs.util :as u]
+            [jobs.lib.access :as access]
+            [jobs.lib.gate :as gate]
+            [jobs.lib.util :as u]
             [jobs.farm.fertilize :as fertilize]
             [jobs.farm.harvest :as harvest]
             [jobs.farm.plant :as plant]
             [jobs.farm.tidy :as tidy]
             [jobs.farm.till :as till]
             [plan.shape :as shape]
-            [engine.jobs.world :as known]))
+            [jobs.lib.world :as known]))
 
 (def doc
   "Keep one field of crops in order. The field is the :box (inclusive). Its lowest layer (y = min) is the

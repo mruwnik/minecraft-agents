@@ -1,11 +1,11 @@
 (ns jobs.gather.get-seeds
   (:require [engine.ctx :as ctx]
-            [engine.jobs.access :as access]
-            [engine.jobs.util :as u]
-            [engine.path.near :as near]
+            [jobs.lib.access :as access]
+            [jobs.lib.util :as u]
+            [jobs.lib.near :as near]
             [jobs.items.smelt :as smelt]
             [jobs.storage.deposit :as deposit]
-            [engine.jobs.world :as known]))
+            [jobs.lib.world :as known]))
 
 (def doc
   "Carry :count more of :item (a planting material) than at the start, renewably.
@@ -25,7 +25,7 @@
   3. After a dig batch the collect-drops child picks up the item (only it) within :collect-radius.
   4. :dry-digs digs in a row that brought no new item end :dry (warn get-seeds.gave-up).
   5. Otherwise a batch: the nearest source blocks within :radius not skipped (for a stand: its cut cells) are
-     judged by engine.access.rules. At most :per-round of the permitted ones are walked to (within 3) and
+     judged by jobs.lib.access.rules. At most :per-round of the permitted ones are walked to (within 3) and
      dug, each judged again right before its dig.
 
   Skipped blocks: a cell in a zone that bars :dig or in an active plan's footprint is skipped for good and
@@ -55,7 +55,7 @@
    :collect-radius {:doc "how far around to collect drops after a batch" :default 8}
    :dry-digs {:doc "digs in a row that brought no new item before giving up" :default 40}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
-   :accept {:doc "dig hazards of engine.access.rules taken (:fluid-adjacent :falling-block :under-feet)"
+   :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent :falling-block :under-feet)"
             :default #{:falling-block :under-feet}}})
 
 (def reach 3)

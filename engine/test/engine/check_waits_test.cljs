@@ -7,7 +7,7 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [engine.world :as world]))
+            [jobs.lib.world-files :as world]))
 
 (def ground (into {} (for [x (range -3 6) z (range -3 6)] [(str x ",63," z) "stone"])))
 

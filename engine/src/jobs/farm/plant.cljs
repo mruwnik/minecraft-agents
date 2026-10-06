@@ -1,11 +1,11 @@
 (ns jobs.farm.plant
   (:require [clojure.string :as str]
-            [engine.access.permit :as permit]
+            [jobs.farm.permit :as permit]
             [engine.ctx :as ctx]
-            [engine.jobs.gate :as gate]
-            [engine.jobs.util :as u]
+            [jobs.lib.gate :as gate]
+            [jobs.lib.util :as u]
             [jobs.farm.harvest :as harvest]
-            [engine.jobs.world :as known]))
+            [jobs.lib.world :as known]))
 
 (def doc
   "Sow the bare farmland of a :box. A cell is bare when (x, min.y, z) is farmland and the block above is air.

@@ -1,7 +1,7 @@
 (ns jobs.animals.tend
   (:require [engine.ctx :as ctx]
-            [engine.jobs.animals :as animals]
-            [engine.jobs.util :as u]
+            [jobs.lib.animals :as animals]
+            [jobs.lib.util :as u]
             [jobs.animals.cull :as cull]
             [jobs.combat.hunt :as hunt]))
 

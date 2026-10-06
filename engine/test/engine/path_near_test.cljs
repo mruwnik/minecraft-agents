@@ -1,12 +1,12 @@
 (ns engine.path-near-test
-  "engine.path.near/walk-near!, the jobs' one-walk helper, over the path planner and the executor against the fake world."
+  "jobs.lib.near/walk-near!, the jobs' one-walk helper, over the path planner and the executor against the fake world."
   (:require [cljs.test :refer [deftest is async]]
             [engine.registry :as registry]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.memory :as mem]
-            [engine.path.near :as near]
+            [jobs.lib.near :as near]
             [engine.test-util :as tu :refer [box floor]]
             [engine.triggers :as triggers]))
 

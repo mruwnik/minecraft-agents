@@ -1,18 +1,18 @@
 (ns jobs.build.from-plan
   (:require [clojure.string :as str]
-            [engine.access.rules :as rules]
+            [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
-            [engine.jobs.access :as access]
-            [engine.jobs.tidy :as tidy]
-            [engine.jobs.tools :as tools]
-            [engine.jobs.util :as u]
-            [engine.jobs.watch :as watch]
+            [jobs.lib.access :as access]
+            [jobs.lib.tidy :as tidy]
+            [jobs.lib.tools :as tools]
+            [jobs.lib.util :as u]
+            [jobs.lib.watch :as watch]
             [jobs.build.clear-box :as clear-box]
-            [engine.path.near :as near]
-            [engine.placement :as placement]
+            [jobs.lib.near :as near]
+            [jobs.lib.placement :as placement]
             [plan.rail :as rail]
             [plan.shape :as shape]
-            [engine.jobs.world :as known]))
+            [jobs.lib.world :as known]))
 
 (def doc
   "Build what a plan wants (:plan, optionally only its :part) from what the body carries.
@@ -28,14 +28,14 @@
   Each round re-reads the plan and the world, then takes the first step that applies:
   1. Place every buildable cell within :reach of the eye, lowest first. A cell is buildable when its block is
      carried, the cell below it is not itself still owed, and it is not the body's own feet or head cell.
-     engine.placement picks the click (neighbour, face, cursor, look, sneak) that gives the wanted state. A
+     jobs.lib.placement picks the click (neighbour, face, cursor, look, sneak) that gives the wanted state. A
      :facing want that is placed plainly waits until the body looks the right way, from the far side.
   2. Dig the wrong blocks within reach.
   3. Walk to a stand cell two blocks beside the nearest buildable (or diggable) cell. The stand cell is at the
      body's feet height, so flat ground is assumed.
   4. Walk toward the nearest unloaded cell. Unseen cells are never taken as built.
   5. Finish.
-  A cell whose state no neighbour gives waits. If still missing at the end it is given up with engine.placement's
+  A cell whose state no neighbour gives waits. If still missing at the end it is given up with jobs.lib.placement's
   reason (:no-support, :no-room, :opened, :double-slab). A cell whose place is refused, or whose stand cell
   cannot be reached, :give-up times is given up (:refused, :unreachable or :unloaded).
   Zones: every place is checked against zones and the footprints of the other active plans, when the cell is
@@ -267,7 +267,7 @@
           {:trouble trouble}))))
 
 (defn how
-  "How the cell is placed from where the body stands (engine.placement/click)."
+  "How the cell is placed from where the body stands (jobs.lib.placement/click)."
   [c {:keys [pos want item]}]
   (placement/click (block-want want item) pos (eye (u/self-pos c)) (partial world-block (:primitives c))))
 
@@ -356,7 +356,7 @@
       (assoc-in m [:fails pos] n))))
 
 (defn ^:async place-one!
-  "Place the cell's item after asking the access rules and engine.placement once more; a refusal is booked, nothing
+  "Place the cell's item after asking the access rules and jobs.lib.placement once more; a refusal is booked, nothing
   is placed."
   [c {:keys [pos item want] :as cell}]
   (let [d (decide (rules-input c) (:accept (:args c)) pos)

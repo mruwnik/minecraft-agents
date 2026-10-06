@@ -7,7 +7,7 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [engine.triggers.player-joined :as player-joined]))
+            [triggers.debug.player-joined :as player-joined]))
 
 (defn entry-view
   "A memory view at :now 100000 holding :player-joined entries written at the given times."

@@ -1,10 +1,10 @@
 (ns dashboard.shared-map
   "Canonical protection zones and authored social claim overlays. Claims are
-  labels on the common map; the engine does not enforce them, jobs consult them (engine.jobs.access) and may be told to ignore them."
+  labels on the common map; the engine does not enforce them, jobs consult them (jobs.lib.access) and may be told to ignore them."
   (:require ["fs" :as fs]
             ["path" :as path]
             [cljs.reader :as reader]
-            [engine.zones :as zones]))
+            [jobs.lib.zone-file :as zones]))
 
 (defn display-zone [{:keys [name min max owner allow note] :as zone}]
   {:name name :x1 (nth min 0) :y1 (nth min 1) :z1 (nth min 2)

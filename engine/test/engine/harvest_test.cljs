@@ -3,13 +3,13 @@
   (:require [cljs.test :refer [deftest is are async]]
             [engine.registry :as registry]
             [engine.core :as core]
-            [engine.jobs.util :as u]
+            [jobs.lib.util :as u]
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [engine.world :as ew]
+            [jobs.lib.world-files :as ew]
             [jobs.farm.harvest :as harvest]))
 
 (def clock

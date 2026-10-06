@@ -1,7 +1,7 @@
 (ns engine.wear-test
-  "Wearing armour: engine.armour's plan and jobs.items.wear against the fake world."
+  "Wearing armour: jobs.lib.armour's plan and jobs.items.wear against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
-            [engine.armour :as armour]
+            [jobs.lib.armour :as armour]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]

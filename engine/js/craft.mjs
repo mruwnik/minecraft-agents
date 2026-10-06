@@ -45,7 +45,7 @@ const missingTable = bot => {
     : { status: 'unreachable', reason: 'no-table' }
 }
 
-// every candidate recipe ({name: n} of ingredients) and what is carried: engine.craft chooses what to report as missing
+// every candidate recipe ({name: n} of ingredients) and what is carried: jobs.items.shortfall chooses what to report as missing
 const shortOf = (bot, id, table) => ({
   recipes: bot.recipesAll(id, null, table ?? null).map(r => ingredientsOf(bot, r)),
   have: carriedCounts(bot)

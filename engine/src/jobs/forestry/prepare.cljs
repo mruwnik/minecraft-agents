@@ -1,14 +1,14 @@
 (ns jobs.forestry.prepare
   (:require [clojure.string :as str]
-            [engine.access.rules :as rules]
+            [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
-            [engine.jobs.forestry :as forestry]
-            [engine.jobs.tools :as tools]
-            [engine.jobs.util :as u]
-            [engine.path.near :as near]
+            [jobs.forestry.trees :as forestry]
+            [jobs.lib.tools :as tools]
+            [jobs.lib.util :as u]
+            [jobs.lib.near :as near]
             [jobs.farm.tidy :as tidy]
             [jobs.forestry.maintain :as maintain]
-            [engine.jobs.world :as known]))
+            [jobs.lib.world :as known]))
 
 (def doc
   "Get the planting spots of a forest plan ready. A spot is a planned tree cell (want {:tree species}); the cell
@@ -58,7 +58,7 @@
 (def args
   {:plan {:doc "id of a plan of the body's world; its tree cells are the planting spots" :default nil}
    :part {:doc "only the cells of this part" :default nil}
-   :accept {:doc "dig hazards (engine.access.rules) taken: a set of :fluid-adjacent :falling-block :under-feet; lava beside is :lava-adjacent and never taken by default"
+   :accept {:doc "dig hazards (jobs.lib.access.rules) taken: a set of :fluid-adjacent :falling-block :under-feet; lava beside is :lava-adjacent and never taken by default"
             :default #{:fluid-adjacent}}
    :headroom {:doc "{species cells} overriding the table of growth space above a planted cell (the cell included)" :default {}}
    :collect-radius {:doc "how far from where the body stands the drops are collected, in blocks" :default 8}

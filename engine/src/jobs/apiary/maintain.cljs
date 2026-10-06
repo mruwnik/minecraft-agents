@@ -1,8 +1,8 @@
 (ns jobs.apiary.maintain
   (:require [engine.ctx :as ctx]
-            [engine.jobs.animals :as animals]
-            [engine.jobs.apiary :as apiary]
-            [engine.jobs.util :as u]
+            [jobs.lib.animals :as animals]
+            [jobs.lib.apiary :as apiary]
+            [jobs.lib.util :as u]
             [jobs.apiary.guard :as guard]
             [jobs.apiary.harvest :as harvest]))
 

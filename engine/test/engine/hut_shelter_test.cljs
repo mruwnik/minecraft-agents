@@ -6,7 +6,7 @@
             [engine.core :as core]
             [engine.events :as events]
             [engine.fake :as fake]
-            [engine.jobs.shelter :as sh]
+            [jobs.lib.shelter :as sh]
             [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.scenario :as scenario]
@@ -14,7 +14,7 @@
             [engine.test-util :as tu :refer [box]]
             [engine.unstick-test :as ut]
             [engine.triggers :as triggers]
-            [engine.world :as ew]
+            [jobs.lib.world-files :as ew]
             [jobs.survival.dig-in :as dig-in]))
 
 ;; A cobblestone hut: walls x 3..7, z -2..2, y 64..66, roof at y 67, the room x 4..6, z -1..1. A shut oak door in the

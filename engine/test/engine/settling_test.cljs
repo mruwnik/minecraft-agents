@@ -8,7 +8,7 @@
             [engine.events :as events]
             [engine.registry :as registry]
             [engine.fake :as fake]
-            [engine.jobs.shelter :as sh]
+            [jobs.lib.shelter :as sh]
             [engine.test-util :as tu]
             [engine.triggers :as real-triggers]))
 

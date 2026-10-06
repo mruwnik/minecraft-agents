@@ -1,8 +1,8 @@
 (ns jobs.memory.set-place
   (:require [engine.ctx :as ctx]
-            [engine.jobs.util :as u]
+            [jobs.lib.util :as u]
             [engine.memory :as mem]
-            [engine.places :as places]))
+            [jobs.lib.places :as places]))
 
 (def doc
   "Record a named place (:bed, :chest, :home, any name) in body memory, in one round.

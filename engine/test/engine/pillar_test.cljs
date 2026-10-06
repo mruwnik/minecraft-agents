@@ -1,7 +1,7 @@
 (ns engine.pillar-test
   "jobs.access.pillar: the step decision as a plain function, then whole pillars against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
-            [engine.access.ledger :as ledger]
+            [jobs.lib.ledger :as ledger]
             [engine.core :as core]
             [engine.events :as events]
             [engine.memory :as mem]
@@ -9,7 +9,7 @@
             [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [engine.world :as world]
+            [jobs.lib.world-files :as world]
             [jobs.access.pillar :as pillar]))
 
 ;; ------------------------------------------------------------------ the step

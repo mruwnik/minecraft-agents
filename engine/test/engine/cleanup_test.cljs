@@ -2,7 +2,7 @@
   "jobs.access.cleanup: the step decision as a plain function, the standing trigger, then whole cleanups against the
   fake world."
   (:require [cljs.test :refer [deftest is are async]]
-            [engine.access.ledger :as ledger]
+            [jobs.lib.ledger :as ledger]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
@@ -11,8 +11,8 @@
             [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [engine.triggers.scaffold-left :as scaffold-left]
-            [engine.world :as world]
+            [triggers.access.scaffold-left :as scaffold-left]
+            [jobs.lib.world-files :as world]
             [jobs.access.cleanup :as cleanup]))
 
 ;; ------------------------------------------------------------------ the step

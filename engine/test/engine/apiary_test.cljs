@@ -1,7 +1,7 @@
 (ns engine.apiary-test
-  "engine.jobs.apiary: the smoke and fire rules."
+  "jobs.lib.apiary: the smoke and fire rules."
   (:require [cljs.test :refer [deftest is are]]
-            [engine.jobs.apiary :as apiary]))
+            [jobs.lib.apiary :as apiary]))
 
 (defn block-at-from
   "A block-at over {\"x,y,z\" {:name n :lit bool}} cells; absent cells are air."

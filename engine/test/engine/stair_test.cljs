@@ -11,7 +11,7 @@
             [engine.takeover :as takeover]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [engine.world :as world]
+            [jobs.lib.world-files :as world]
             [jobs.access.stair :as stair]))
 
 (def job 'jobs.access.stair)

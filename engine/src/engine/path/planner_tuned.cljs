@@ -33,7 +33,7 @@
    - options.knownCells: a Set of the cells (knownKey) earlier searches toward the same goal knew to their end. The
      frontier avoids them while another edge is loaded (frontierNode, result frontier.known), and a search that ends
      exhausted puts the cells it adds in the result's known (a Set; nil without knownCells), and the cells of its
-     nodes at the loaded edge that are not known in the result's edges. engine.path.walk keeps both for go-to.
+     nodes at the loaded edge that are not known in the result's edges. jobs.lib.walk keeps both for go-to.
    - options.knownEdges: a Set of the cells (knownKey) earlier searches found at the loaded edge that no search has
      known to its end since. When it is empty, a frontier in known land is never taken: every edge was searched past,
      and the result says so as searchedOut true (the way on, if any, is not in the land this goal's searches can reach).

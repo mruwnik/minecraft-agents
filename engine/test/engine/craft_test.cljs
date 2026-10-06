@@ -1,7 +1,7 @@
 (ns engine.craft-test
-  "engine.craft: which recipe a craft reports as missing, and the alternatives, from the candidate recipes."
+  "jobs.items.shortfall: which recipe a craft reports as missing, and the alternatives, from the candidate recipes."
   (:require [cljs.test :refer [deftest is are]]
-            [engine.craft :as craft]))
+            [jobs.items.shortfall :as craft]))
 
 (deftest shortfall-is-what-the-closest-recipe-lacks
   (are [recipes have want] (= want (craft/shortfall recipes have))

@@ -9,7 +9,7 @@
             [engine.memory :as mem]
             [engine.test-util :as tu :refer [box floor]]
             [engine.triggers :as triggers]
-            [engine.world :as world]
+            [jobs.lib.world-files :as world]
             [jobs.movement.go-to :as go-to]))
 
 (defn setup [world zones]

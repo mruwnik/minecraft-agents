@@ -1,7 +1,7 @@
 (ns engine.access.zones-test
-  "engine.access.zones: the social verdict over zones, claims and plan footprints, as a table."
+  "jobs.lib.access.zones: the social verdict over zones, claims and plan footprints, as a table."
   (:require [cljs.test :refer [deftest is are]]
-            [engine.access.zones :as zones]))
+            [jobs.lib.access.zones :as zones]))
 
 (def now 1000)
 (def mine {:name "mine" :min [0 60 0] :max [9 70 9] :owner "Bot"})

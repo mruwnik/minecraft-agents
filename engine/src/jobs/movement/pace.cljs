@@ -1,9 +1,9 @@
 (ns jobs.movement.pace
   (:require [engine.ctx :as ctx]
-            [engine.path.near :as near]))
+            [jobs.lib.near :as near]))
 
 (def doc
-  "Walk a, b, a, b (:laps times each) per round, one walk per leg (engine.path.near/walk-near!, doors :shut).
+  "Walk a, b, a, b (:laps times each) per round, one walk per leg (jobs.lib.near/walk-near!, doors :shut).
   Ends after :rounds rounds, or at once with a :leg-unfinished warning (target, status) when a leg does not arrive.
   A harmless long job, for showing that a reflex cuts a running one.")
 

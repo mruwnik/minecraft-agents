@@ -1,7 +1,7 @@
 (ns jobs.debug.walk-plan
   (:require [clojure.set :as set]
             [engine.ctx :as ctx]
-            [engine.path.walk :as walk]))
+            [jobs.lib.walk :as walk]))
 
 (def doc
   "Debug job: plan a path to :to with the path planner and follow it with the plan executor (steer), instead of

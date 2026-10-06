@@ -1,9 +1,9 @@
 (ns jobs.items.smelt
   (:require [engine.ctx :as ctx]
-            [engine.jobs.access :as access]
-            [engine.jobs.look :as look]
-            [engine.jobs.util :as u]
-            [engine.path.near :as near]))
+            [jobs.lib.access :as access]
+            [jobs.lib.look :as look]
+            [jobs.lib.util :as u]
+            [jobs.lib.near :as near]))
 
 (def doc
   "Smelt :count of an item in a furnace, blast furnace or smoker without standing by it.

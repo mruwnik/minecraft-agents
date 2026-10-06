@@ -7,7 +7,7 @@
             [engine.events :as events]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [engine.world :as ew]
+            [jobs.lib.world-files :as ew]
             [jobs.apiary.harvest :as harvest]))
 
 (defn setup [world]

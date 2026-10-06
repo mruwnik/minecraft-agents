@@ -1,14 +1,14 @@
 (ns jobs.access.tunnel
-  (:require [engine.access.ledger :as ledger]
-            [engine.access.rules :as rules]
+  (:require [jobs.lib.ledger :as ledger]
+            [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
-            [engine.jobs.access :as access]
-            [engine.jobs.declined :as declined]
-            [engine.jobs.util :as u]
-            [engine.jobs.torch :as torch]
+            [jobs.lib.access :as access]
+            [jobs.lib.declined :as declined]
+            [jobs.lib.util :as u]
+            [jobs.lib.torch :as torch]
             [jobs.access.stair :as stair]
             [jobs.build.from-plan :as from-plan]
-            [engine.jobs.world :as known]))
+            [jobs.lib.world :as known]))
 
 (def doc
   "Cut a way to stand beside a buried block :target [x y z] and stop there, with the target the next cell ahead
@@ -26,7 +26,7 @@
 
   Choosing the line: the four headings are tried and, per heading, entry distances 1 to :max-length. A distance
   fits when the stair's steps are at most the distance less one. Every cell of a fitting line is judged from the
-  loaded blocks before anything is walked or dug, as the stair judges its own steps (engine.access.rules: zones,
+  loaded blocks before anything is walked or dug, as the stair judges its own steps (jobs.lib.access.rules: zones,
   other plans' footprints, unloaded; a cut cell that is the floor of a stair this body cut earlier, :undercuts-way,
   from the :stair-way memory; a fluid in a cut; a fluid beside a cut or a falling block over one, taken
   only when named in :accept, default #{}; the next floor solid; the cell under it neither air nor fluid). The
@@ -343,7 +343,7 @@
     nil))
 
 (defn torch-choice
-  "How to hang the torch of site s from the eye: engine.jobs.torch/torch-at for the head and feet cells of s."
+  "How to hang the torch of site s from the eye: jobs.lib.torch/torch-at for the head and feet cells of s."
   [plan s eye block-at]
   (torch/torch-at (stair/headings (:heading plan)) ((line-cells plan) s) eye block-at))
 

@@ -5,7 +5,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
-            [engine.jobs.util :as u]
+            [jobs.lib.util :as u]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.farm.find-spot :as fs]))

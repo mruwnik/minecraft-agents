@@ -7,7 +7,7 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [engine.world :as world]
+            [jobs.lib.world-files :as world]
             [jobs.build.from-plan :as build]))
 
 (def job 'jobs.build.from-plan)
@@ -284,7 +284,7 @@
         (is (= [9 []] (await (run-beside "lava" {:accept [:fluid-adjacent :lava-adjacent]}))))
         (is (= [8 [{:pos [4 64 3] :reason :hazard :hazards [:fluid-adjacent]}]] (await (run-beside "water" {:accept []}))))))))
 
-;; ---------------------------------------------------------------- block state (engine.placement)
+;; ---------------------------------------------------------------- block state (jobs.lib.placement)
 
 (defn ^:async build
   "Build plan parts {:id .. :cells .. :want ..} over the blocks with the inventory: [result p seen]."

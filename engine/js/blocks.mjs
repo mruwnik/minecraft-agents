@@ -6,7 +6,7 @@ const REPLACEABLE = new Set(['fire', 'soul_fire', 'short_grass', 'tall_grass', '
 export const isReplaceable = name => REPLACEABLE.has(name)
 
 // Blocks a right-click works (opens, toggles, uses) instead of placing against: a click on one is refused as a
-// placement unless the body sneaks. Keep in step with `usable` in engine/src/engine/placement.cljs.
+// placement unless the body sneaks. Keep in step with `usable` in engine/src/jobs/lib/placement.cljs.
 const INTERACTABLE = /^(chest|trapped_chest|ender_chest|barrel|furnace|smoker|blast_furnace|crafting_table|hopper|dispenser|dropper|brewing_stand|enchanting_table|anvil|chipped_anvil|damaged_anvil|grindstone|stonecutter|loom|cartography_table|smithing_table|lectern|bell|beacon|lever|note_block|jukebox|cake|composter|flower_pot|repeater|comparator|daylight_detector|respawn_anchor|crafter)$|_(door|trapdoor|fence_gate|bed|button|shulker_box)$|^shulker_box$/
 
 export const isInteractable = name => INTERACTABLE.test(name)

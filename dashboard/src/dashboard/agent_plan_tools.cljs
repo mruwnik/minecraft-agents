@@ -1,7 +1,7 @@
 (ns dashboard.agent-plan-tools
   "Shared native plan checks plus compatibility exports for the Node bridge."
   (:require [cljs.reader :as reader]
-            [engine.zones :as zones]
+            [jobs.lib.zone-file :as zones]
             [plan.conflicts :as conflicts]
             [plan.parse :as parse]
             [plan.shape :as shape]

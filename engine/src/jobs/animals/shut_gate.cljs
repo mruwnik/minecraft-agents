@@ -1,14 +1,14 @@
 (ns jobs.animals.shut-gate
   (:require [engine.ctx :as ctx]
-            [engine.jobs.apiary :as apiary]
-            [engine.jobs.util :as u]
-            [engine.path.near :as near]
-            [engine.triggers.pen-gate :as pg]
-            [engine.jobs.world :as known]))
+            [jobs.lib.apiary :as apiary]
+            [jobs.lib.util :as u]
+            [jobs.lib.near :as near]
+            [triggers.animals.pen-gate :as pg]
+            [jobs.lib.world :as known]))
 
 (def doc
   "Shut the planned fence gates that stand open. A planned gate is a cell of a plan whose want is a fence gate
-  (engine.triggers.pen-gate/gate-cells). A gate in no plan is never touched.
+  (triggers.animals.pen-gate/gate-cells). A gate in no plan is never touched.
 
   - Without :plan: the open planned gates within :radius of the body. This is the job of the pen-gate trigger,
     which waits until a gate has stood open for 4 s with the body more than 2 blocks away, so a job that holds a

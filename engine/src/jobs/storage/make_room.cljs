@@ -1,13 +1,13 @@
 (ns jobs.storage.make-room
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
-            [engine.jobs.shelter :as sh]
-            [engine.jobs.util :as u]
+            [jobs.lib.shelter :as sh]
+            [jobs.lib.util :as u]
             [engine.memory :as mem]
-            [engine.value :as value]
+            [jobs.lib.worth :as value]
             [jobs.storage.deposit :as deposit]
             [jobs.survival.dig-in :as dig-in]
-            [engine.foods :as foods]))
+            [jobs.lib.foods :as foods]))
 
 (def doc
   "Make room in a nearly full inventory (the inventory-nearly-full reflex), one step per round, until :free slots
@@ -24,7 +24,7 @@
      the job goes on without it.
   2. With no slot free and an item lying within :swap-radius that is worth more than the cheapest throwable
      stack, that stack is thrown away from the item and the item is collected.
-  3. Without a usable chest, the stack of least worth is thrown. A stack qualifies when engine.value/item-worth is
+  3. Without a usable chest, the stack of least worth is thrown. A stack qualifies when jobs.lib.worth/item-worth is
      below :toss-below, and it is thrown whole and only while the name's floor stays carried. Cheapest first,
      then the one picked up longest ago (:picked-up entries), then the smaller stack. The body turns to the first
      of the four directions with two free cells ahead at eye level and tosses.
@@ -39,7 +39,7 @@
    :chest-range {:doc "the known :chest place is used only within this distance" :default 32}
    :keep-food {:doc "food items kept carried (best food by points first)" :default 16}
    :keep-blocks {:doc "building blocks kept carried (dig-in's list, in its order)" :default 64}
-   :toss-below {:doc "a stack is tossed to make room only when its engine.value/item-worth is below this" :default 1}
+   :toss-below {:doc "a stack is tossed to make room only when its jobs.lib.worth/item-worth is below this" :default 1}
    :swap-radius {:doc "when no slot is free, a dropped item worth more than some carried stack within this radius is swapped in" :default 8}
    :away {:doc "after tossing, walk this far away from where the items were thrown" :default 4}
    :max-rounds {:doc "safety: give up (:declined, make-room.stalled) after this many rounds" :default 40}
@@ -130,7 +130,7 @@
   "Distinct carried names, not protected, whose total exceeds their keep, in
   the order to put them away: least worth keeping first. Names without a floor
   (keep 0) before names with one (food, building blocks), then the lowest
-  engine.value/item-worth among the name's stacks, then when the name was last
+  jobs.lib.worth/item-worth among the name's stacks, then when the name was last
   picked up (recency {name t}; never is 0, oldest first), then its lowest slot
   (the stack's index when it has no :slot)."
   [inventory keep recency]

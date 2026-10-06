@@ -28,7 +28,7 @@
       :kind :trigger
       :category "triggers"
       :name "stuck"
-      :file "engine/src/engine/triggers/stuck.cljs"
+      :file "engine/src/triggers/survival/stuck.cljs"
       :job "(jobs.maintenance.unstick)")
     (is (string? (:doc t)))
     (is (string? (:ns-doc t)))))

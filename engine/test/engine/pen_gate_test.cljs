@@ -1,5 +1,5 @@
 (ns engine.pen-gate-test
-  "The pen-gate trigger (engine.triggers.pen-gate) and jobs.animals.shut-gate against the fake world."
+  "The pen-gate trigger (triggers.animals.pen-gate) and jobs.animals.shut-gate against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
             [engine.events :as events]
@@ -8,8 +8,8 @@
             [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [engine.triggers.pen-gate :as pg]
-            [engine.world :as world]))
+            [triggers.animals.pen-gate :as pg]
+            [jobs.lib.world-files :as world]))
 
 ;; ------------------------------------------------------------------ plans
 

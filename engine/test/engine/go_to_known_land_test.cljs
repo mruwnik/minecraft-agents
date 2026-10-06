@@ -8,7 +8,7 @@
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.memory :as mem]
-            [engine.path.walk :as walk]
+            [jobs.lib.walk :as walk]
             [engine.registry :as registry]
             [engine.test-util :as tu :refer [box]]
             [engine.triggers :as triggers]))

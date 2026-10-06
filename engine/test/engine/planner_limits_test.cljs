@@ -5,7 +5,7 @@
             [engine.path.executor :as ex]
             [engine.path.planner-tuned :as planner]
             [engine.test-util :as tu]
-            [engine.path.walk :as walk]))
+            [jobs.lib.walk :as walk]))
 
 (defn box
   "A fake block map: name in every cell of x0..x1, y0..y1, z0..z1."

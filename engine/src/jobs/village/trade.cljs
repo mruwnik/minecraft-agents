@@ -1,7 +1,7 @@
 (ns jobs.village.trade
   (:require [engine.ctx :as ctx]
-            [engine.jobs.util :as u]
-            [engine.path.near :as near]))
+            [jobs.lib.util :as u]
+            [jobs.lib.near :as near]))
 
 (def doc
   "Buy :count of :buy from the villager with uuid :villager. Each round is one bounded step: find the villager

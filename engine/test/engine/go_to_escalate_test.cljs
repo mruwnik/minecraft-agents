@@ -1,5 +1,5 @@
 (ns engine.go-to-escalate-test
-  "jobs.movement.go-to escalation (pillar, stair, clear-path, a walk to a wall) and engine.jobs.escape, against the fake
+  "jobs.movement.go-to escalation (pillar, stair, clear-path, a walk to a wall) and jobs.lib.escape, against the fake
   world."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
@@ -7,12 +7,12 @@
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.memory :as mem]
-            [engine.jobs.escape :as escape]
+            [jobs.lib.escape :as escape]
             [jobs.movement.go-to :as go-to]
             [engine.registry :as registry]
             [engine.test-util :as tu :refer [box]]
             [engine.triggers :as triggers]
-            [engine.world :as ew]))
+            [jobs.lib.world-files :as ew]))
 
 (defn setup
   ([world] (setup world nil))

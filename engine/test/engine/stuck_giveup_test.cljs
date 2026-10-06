@@ -4,7 +4,7 @@
   reach; unstick ends once a body that was enclosed is out, though the goal stays out of reach."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
-            [engine.jobs.reach :as reach]
+            [jobs.lib.reach :as reach]
             [engine.memory :as mem]
             [engine.test-util :as tu :refer [box floor]]
             [engine.triggers :as triggers]

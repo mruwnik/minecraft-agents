@@ -1,11 +1,11 @@
 (ns jobs.survival.get-food
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
-            [engine.jobs.access :as access]
-            [engine.jobs.util :as u]
-            [engine.path.near :as near]
-            [engine.triggers.hungry :as hungry]
-            [engine.foods :as foods]
+            [jobs.lib.access :as access]
+            [jobs.lib.util :as u]
+            [jobs.lib.near :as near]
+            [triggers.survival.hungry :as hungry]
+            [jobs.lib.foods :as foods]
             [jobs.survival.eat :as eat]))
 
 (def doc

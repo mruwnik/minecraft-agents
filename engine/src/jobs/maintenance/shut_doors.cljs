@@ -1,14 +1,14 @@
 (ns jobs.maintenance.shut-doors
   (:require [engine.ctx :as ctx]
-            [engine.jobs.util :as u]
-            [engine.path.near :as near]
-            [engine.path.pass :as pass]
-            [engine.triggers.door-left :as dl]))
+            [jobs.lib.util :as u]
+            [jobs.lib.near :as near]
+            [jobs.lib.pass :as pass]
+            [triggers.maintenance.door-left :as dl]))
 
 (def doc
   "Shut the doors, gates and trapdoors a walk opened and left open (the job of the door-left trigger,
-  engine.triggers.door-left).
-  Only blocks with an :opened entry count (written by engine.path.pass when a walk opens a block, dropped when it
+  triggers.maintenance.door-left).
+  Only blocks with an :opened entry count (written by jobs.lib.pass when a walk opens a block, dropped when it
   shuts it), whatever their age. A block the walker did not open is never touched. Blocks a :leave-open walk left
   open on purpose are left alone.
   Each round takes the nearest such block within :radius that stands open. It walks within :reach of it (doors

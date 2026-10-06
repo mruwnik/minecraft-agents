@@ -1,7 +1,7 @@
 (ns jobs.animals.cull
   (:require [engine.ctx :as ctx]
-            [engine.jobs.combat :as combat]
-            [engine.jobs.util :as u]
+            [jobs.lib.combat :as combat]
+            [jobs.lib.util :as u]
             [jobs.combat.hunt :as hunt]))
 
 (def doc

@@ -1,11 +1,11 @@
 (ns jobs.debug.access-check
-  (:require [engine.access.rules :as rules]
+  (:require [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
-            [engine.jobs.util :as u]))
+            [jobs.lib.util :as u]))
 
 (def doc
   "Debug job: report whether the body may dig each given cell and whether it may place a block there
-  (engine.access.rules). Digs and places nothing.
+  (jobs.lib.access.rules). Digs and places nothing.
   The cells come from :cells, or from the box :from/:to (inclusive, at most 400 cells).
   The rules' inputs are :zones, :footprints, :claims and :ledger, all empty by default. Pass :zones nil to see the
   no-zone-list refusal. :self is who the zones and claims are judged for (default the body's name).

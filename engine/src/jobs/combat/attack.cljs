@@ -1,17 +1,17 @@
 (ns jobs.combat.attack
   (:require [engine.ctx :as ctx]
-            [engine.jobs.combat :as combat]
-            [engine.jobs.shelter :as sh]
-            [engine.jobs.util :as u]
-            [engine.jobs.watch :as watch]
-            [engine.path.near :as near]))
+            [jobs.lib.combat :as combat]
+            [jobs.lib.shelter :as sh]
+            [jobs.lib.util :as u]
+            [jobs.lib.watch :as watch]
+            [jobs.lib.near :as near]))
 
 (def doc
   "Attack the entities :targets names until none is left within :radius.
   A target is an entity id (a number), a player's username, or a mob type such as \"zombie\"
   (every mob of that name within :radius). Players match only by username. Items never match. The body never targets itself.
   Each round takes the nearest target not given up on, holds the best weapon carried, walks within reach
-  (engine.path.near/walk-near!, doors :shut, each walk bounded by :walk-timeout-s) and swings once.
+  (jobs.lib.near/walk-near!, doors :shut, each walk bounded by :walk-timeout-s) and swings once.
   Swings at most once per :attack-gap-ms (nil: the held weapon's cooldown).
   It does not swing when the entity's `hittable` sensing is false (no clear line to its hitbox, for example glass).
   It walks closer instead, and counts that as a blocked walk.

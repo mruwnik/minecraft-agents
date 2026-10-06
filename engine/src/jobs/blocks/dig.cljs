@@ -1,11 +1,11 @@
 (ns jobs.blocks.dig
   (:require [engine.ctx :as ctx]
-            [engine.jobs.access :as access]
-            [engine.jobs.blocks :as b]
-            [engine.jobs.fetch :as fetch]
-            [engine.jobs.tidy :as tidy]
-            [engine.jobs.tools :as tools]
-            [engine.jobs.util :as u]))
+            [jobs.lib.access :as access]
+            [jobs.lib.blocks :as b]
+            [jobs.lib.fetch :as fetch]
+            [jobs.lib.tidy :as tidy]
+            [jobs.lib.tools :as tools]
+            [jobs.lib.util :as u]))
 
 (def doc
   "Dig the one block at :pos ([x y z] or {:x :y :z}) and pick up what it dropped, as a player would. One act per
@@ -13,7 +13,7 @@
 
   The check waits with a reason (ctx/wait; job.waiting and observe show it) and never digs when:
   - {:reason :not-allowed :pos :by :zone|:claim|:footprint|:no-zones ...}: zones, claims or another plan's
-    footprint refuse the dig (engine.jobs.access). :for-plan's own footprint does not. :ignore-zones? skips the
+    footprint refuse the dig (jobs.lib.access). :for-plan's own footprint does not. :ignore-zones? skips the
     rule.
   - {:reason :hazard :pos :hazards [kw ..]}: a dig hazard not in :accept (:fluid-adjacent :falling-block
     :under-feet).
@@ -26,7 +26,7 @@
   - {:reason :not-loaded :pos}.
 
   Out of reach, the round walks within 3 cells (go-to child, which opens and shuts doors). In reach it holds the
-  best carried tool (tools/equip-for!) and digs through engine.jobs.tidy/dig!, so a dig of another's block with
+  best carried tool (tools/equip-for!) and digs through jobs.lib.tidy/dig!, so a dig of another's block with
   :ignore-zones? is recorded for jobs.survival.restore-broken. With :collect the next rounds pick up the drops
   (jobs.forestry.collect-drops child, only the item entities that appeared with this dig, by id).
 
@@ -35,7 +35,7 @@
   :bad-args (with a blocks.dig.declined warn). A dig the primitive refuses (a timeout, a failure) ends :failed
   with its :status at once. The caller decides whether to try again.
 
-  :fetch (default false; engine.jobs.fetch): a :no-tool wait is not waited out. The check passes and the rounds run
+  :fetch (default false; jobs.lib.fetch): a :no-tool wait is not waited out. The check passes and the rounds run
   jobs.items.get-tool for the block (child :fetch) until a tool is carried, then dig. A fetch that fails is
   remembered for :fail-minutes; meanwhile the check waits :no-tool with {:fetch {:failed reason ...}}.")
 
@@ -43,10 +43,10 @@
   {:pos {:doc "the block to dig, [x y z] or {:x :y :z}" :default nil}
    :collect {:doc "pick up what the dig dropped (needs a free slot)" :default true}
    :need-drop {:doc "wait :no-tool when no carried tool harvests the block; false digs anyway and the drop is lost (clearing)" :default true}
-   :accept {:doc "dig hazards of engine.access.rules taken (:fluid-adjacent :falling-block :under-feet)" :default #{}}
+   :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent :falling-block :under-feet)" :default #{}}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
-   :fetch {:doc "get a missing tool instead of waiting :no-tool (engine.jobs.fetch): true, a set of kinds or a map of limits" :default false}})
+   :fetch {:doc "get a missing tool instead of waiting :no-tool (jobs.lib.fetch): true, a set of kinds or a map of limits" :default false}})
 
 (def collect-radius 8)
 

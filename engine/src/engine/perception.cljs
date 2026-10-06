@@ -24,8 +24,8 @@
     A block change in view (cone, line of sight, light) updates memory at once.
     A change out of view leaves the old state, a true memory error.
 
-  Mob memory. The hostile mobs the body has seen or heard, by entity id. The danger checks (engine.jobs.reach and the
-  callers of engine.jobs.danger) take their candidates from it, not from every mob the server tracks.
+  Mob memory. The hostile mobs the body has seen or heard, by entity id. The danger checks (jobs.lib.reach and the
+  callers of jobs.survival.danger) take their candidates from it, not from every mob the server tracks.
   A sample (every `:mob-ms`, and at each knownMobs call) reads the hostiles within `:mob-scan` and senses each one:
     heard  within `:hearing` (16) of the eye, unless the mob makes no sound while it stalks (`silent-mobs`: creeper).
     seen   all of: a clear line from the eye to its middle (the entity's `visible` field), within `:radius`,

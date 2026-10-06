@@ -1,7 +1,7 @@
 (ns engine.zones-test
-  "engine.zones: the zone file's validation and parse."
+  "jobs.lib.zone-file: the zone file's validation and parse."
   (:require [cljs.test :refer [deftest is are]]
-            [engine.zones :as zones]))
+            [jobs.lib.zone-file :as zones]))
 
 (def farm {:name "farm" :min [0 60 0] :max [9 70 9] :owner "Miles"})
 

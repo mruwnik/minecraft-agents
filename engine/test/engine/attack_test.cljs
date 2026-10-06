@@ -3,7 +3,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.hostile-test :as h]
-            [engine.jobs.combat :as combat]
+            [jobs.lib.combat :as combat]
             [engine.fake :as fake]
             [engine.memory :as mem]
             [engine.test-util :as tu]

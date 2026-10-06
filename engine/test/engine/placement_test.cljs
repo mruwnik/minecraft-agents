@@ -1,7 +1,7 @@
 (ns engine.placement-test
-  "engine.placement: from a wanted block state to the click that makes it (or a refusal), one table per family."
+  "jobs.lib.placement: from a wanted block state to the click that makes it (or a refusal), one table per family."
   (:require [cljs.test :refer [deftest is are async]]
-            [engine.placement :as placement]
+            [jobs.lib.placement :as placement]
             [engine.test-util :as tu]
             [plan.shape :as shape]))
 
@@ -192,7 +192,7 @@
 ;; ---------------------------------------------------------------- the click against the fake's forward rule
 
 (def round-trip
-  "[want cells]: the click engine.placement chooses, placed in the fake (engine.fake.placing, the rule written forwards),
+  "[want cells]: the click jobs.lib.placement chooses, placed in the fake (engine.fake.placing, the rule written forwards),
   must come out as wanted."
   [[{:block "oak_stairs" :facing :east :half :bottom} floor]
    [{:block "oak_stairs" :facing :north :half :top} {[1 64 0] "stone"}]

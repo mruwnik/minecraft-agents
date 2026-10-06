@@ -1,9 +1,9 @@
 (ns engine.walk-goal-flood-test
-  "The goal flood of go-to's budgeted searches kept per goal over its walks (engine.path.walk/goal-floods, card 59551eba;
+  "The goal flood of go-to's budgeted searches kept per goal over its walks (jobs.lib.walk/goal-floods, card 59551eba;
   live j53: each progress walk began a new search whose flood started again, ~30 s to prove a sealed platform)."
   (:require [cljs.test :refer [deftest is async]]
             [engine.fake :as fake]
-            [engine.path.walk :as walk]
+            [jobs.lib.walk :as walk]
             [engine.test-util :as tu :refer [box]]))
 
 ;; a stone deck x 10..30, z 10..30 at y 70 (441 cells, no way up) over a floor of 63 x 63 cells

@@ -8,7 +8,7 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [engine.world :as world]))
+            [jobs.lib.world-files :as world]))
 
 (defn setup
   "An engine over a fake world on the stone walk floor; world-spec :zones (default []) is the zone list."

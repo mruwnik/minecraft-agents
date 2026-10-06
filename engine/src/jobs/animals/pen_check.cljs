@@ -1,11 +1,11 @@
 (ns jobs.animals.pen-check
   (:require [engine.ctx :as ctx]
-            [engine.jobs.apiary :as apiary]
-            [engine.jobs.pen :as pen]))
+            [jobs.lib.apiary :as apiary]
+            [jobs.animals.pen :as pen]))
 
 (def doc
   "Read-only: say whether an animal can walk out of a pen. Flood-fills what a cow can walk (rules in
-  engine.jobs.pen: fences, walls and closed gates are 1.5 high, an open gate is a way out, a drop of more than 3
+  jobs.animals.pen: fences, walls and closed gates are 1.5 high, an open gate is a way out, a drop of more than 3
   is not taken) from the feet cell :at [x y z], or from every surface inside :box, where a step out of the box
   is a leak. Never moves, digs or places. Declines without :at and :box.
 

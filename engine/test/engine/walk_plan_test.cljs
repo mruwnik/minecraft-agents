@@ -8,7 +8,7 @@
             [engine.path.executor :as executor]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [engine.path.walk :as path-walk]))
+            [jobs.lib.walk :as path-walk]))
 
 (def job 'jobs.debug.walk-plan)
 

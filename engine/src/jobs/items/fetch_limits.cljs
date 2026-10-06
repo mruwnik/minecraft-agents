@@ -1,6 +1,6 @@
 (ns jobs.items.fetch-limits
   (:require [engine.ctx :as ctx]
-            [engine.jobs.fetch :as fetch]))
+            [jobs.lib.fetch :as fetch]))
 
 (def doc
   "Set the body's own default fetch limits (body memory :fetch/limits, kept until changed), in one round. Without :job

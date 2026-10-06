@@ -9,7 +9,7 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [engine.unstick-test :as ut]
-            [engine.world :as ew]
+            [jobs.lib.world-files :as ew]
             [plan.shape :as shape]))
 
 (defn setup [world zones]

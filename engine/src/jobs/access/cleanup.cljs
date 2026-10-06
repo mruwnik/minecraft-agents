@@ -1,16 +1,16 @@
 (ns jobs.access.cleanup
-  (:require [engine.access.ledger :as ledger]
-            [engine.access.rules :as rules]
+  (:require [jobs.lib.ledger :as ledger]
+            [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
-            [engine.jobs.access :as access]
-            [engine.jobs.tools :as tools]
-            [engine.jobs.util :as u]
-            [engine.placement :as placement]
-            [engine.path.walk :as walk]
-            [engine.jobs.world :as known]))
+            [jobs.lib.access :as access]
+            [jobs.lib.tools :as tools]
+            [jobs.lib.util :as u]
+            [jobs.lib.placement :as placement]
+            [jobs.lib.walk :as walk]
+            [jobs.lib.world :as known]))
 
 (def doc
-  "Take back this body's temporary blocks: the open entries of the scaffold ledger (engine.access.ledger, body
+  "Take back this body's temporary blocks: the open entries of the scaffold ledger (jobs.lib.ledger, body
   memory).
 
   Which entries (:job):
@@ -34,7 +34,7 @@
   (the body falls one block and lands). Deeper cells wait for the descent (:under-body). Over a hole it stops
   (:no-floor-below).
 
-  Every dig asks engine.access.rules/may-dig? (zones, plan footprints, ledger cells) when chosen and again
+  Every dig asks jobs.lib.access.rules/may-dig? (zones, plan footprints, ledger cells) when chosen and again
   right before the dig. A refusal (:zone :footprint :no-zones :not-loaded) or a hazard :accept does not name
   (:hazard; lava beside is :lava-adjacent) keeps the entry open, and so does :no-tool (the block needs a tool no
   carried one is: dug by hand it drops nothing). A walk with no plan holds the cell

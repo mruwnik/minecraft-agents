@@ -6,7 +6,7 @@
             [engine.harvest-test :as h]
             [engine.takeover :as takeover]
             [engine.test-util :as tu]
-            [engine.world :as world]
+            [jobs.lib.world-files :as world]
             [jobs.build.pen :as pen]))
 
 (def job 'jobs.build.pen)

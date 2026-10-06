@@ -3,7 +3,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.fake :as fake]
-            [engine.path.walk :as walk]
+            [jobs.lib.walk :as walk]
             [jobs.animals.lead-to :as lead-to]
             [engine.hostile-test :as h]
             [engine.memory :as mem]

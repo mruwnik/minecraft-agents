@@ -6,7 +6,7 @@
     3. blueprints   place, turn-want, front-after
     4. expansion    expand: a plan and its blueprints -> cells [{:pos :want :part}], spots, part summaries, errors
     5. plan minus world  judge, plan-minus-world, assignment-answers
-  Parsing file text is plan.parse; reading the files is dashboard.plan and engine.world; counting and grids over the
+  Parsing file text is plan.parse; reading the files is dashboard.plan and jobs.lib.world-files; counting and grids over the
   answers is dashboard.plan-compare.
 
   A world block is nil (nobody has seen the cell), {:name n} (names only) or {:name n :state {k v}} (state keys and

@@ -1,20 +1,20 @@
 (ns jobs.build.rail-line
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
-            [engine.jobs.declined :as declined]
-            [engine.jobs.rail :as builder]
-            [engine.placement :as placement]
+            [jobs.lib.declined :as declined]
+            [jobs.build.rail :as builder]
+            [jobs.lib.placement :as placement]
             [jobs.build.from-plan :as build]
             [plan.rail :as rail]
             [plan.shape :as shape]
-            [engine.jobs.world :as known]))
+            [jobs.lib.world :as known]))
 
 (def doc
   "Build the rail line a plan wants (:plan, optionally only its :part) and prove a ridden cart can run it.
   The plan's rail cells (wants naming a *rail block) must form one chain (plan.rail/line). plan.rail/layout writes
   such plans, with corners and slopes.
   Three phases:
-  1. :build, the head-first builder (engine.jobs.rail). Cells go in along the line from the end nearer the
+  1. :build, the head-first builder (jobs.build.rail). Cells go in along the line from the end nearer the
      body. Each station's bed and power go under before its rail, and the rail before the torch or lever beside
      it, so every rail takes the shape its neighbours give it. The body stands on the rail behind the cell it
      places. A rail that settled in the wrong shape is dug and placed again up to :fix times, then given up as
@@ -173,7 +173,7 @@
 ;; ------------------------------------------------------------------ rounds
 
 (defn ^:async build-step!
-  "One round of the head-first builder (engine.jobs.rail); its result is kept when it ends and the phase moves on. A
+  "One round of the head-first builder (jobs.build.rail); its result is kept when it ends and the phase moves on. A
   builder not yet begun with nothing to do is skipped: the proof says what is missing."
   [c cells]
   (if (and (not (:building (ctx/mem c))) (builder/idle? c cells))

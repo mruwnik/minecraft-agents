@@ -1,10 +1,10 @@
 (ns engine.goto-bench
   "go-to's planning as a library for the go-to bench (bench-lang/goto.mjs): the rounds go-to plans for a course, the body
   moved to the end of each walked plan (a static world, no physics). Compiled by `shadow-cljs compile goto-bench`."
-  (:require [engine.jobs.util :as u]
+  (:require [jobs.lib.util :as u]
             [engine.path.executor :as executor]
             [engine.path.planner-tuned :as planner]
-            [engine.path.walk :as walk]))
+            [jobs.lib.walk :as walk]))
 
 (def max-rounds 200)
 

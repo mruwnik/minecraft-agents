@@ -1,6 +1,6 @@
 (ns jobs.forestry.harvest-wood
   (:require [engine.ctx :as ctx]
-            [engine.jobs.forestry :refer [default-radius drop-filter]]))
+            [jobs.forestry.trees :refer [default-radius drop-filter]]))
 
 (def doc
   "Fell a tree, collect what dropped and replant. Runs three child jobs in turn, one child round per round:

@@ -3,15 +3,15 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.registry :as registry]
             [engine.core :as core]
-            [engine.access.ledger :as ledger]
+            [jobs.lib.ledger :as ledger]
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.scenario :as scenario]
             [engine.fake :as fake]
-            [engine.jobs.reach :as reach]
+            [jobs.lib.reach :as reach]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [engine.triggers.stuck :as stuck]
+            [triggers.survival.stuck :as stuck]
             [jobs.maintenance.unstick :as unstick]))
 
 (def t0 1000000)

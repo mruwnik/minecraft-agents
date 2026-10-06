@@ -1,10 +1,10 @@
 (ns jobs.farm.till
   (:require [engine.ctx :as ctx]
-            [engine.jobs.access :as access]
-            [engine.jobs.gate :as gate]
-            [engine.jobs.util :as u]
-            [engine.path.near :as near]
-            [engine.jobs.world :as known]))
+            [jobs.lib.access :as access]
+            [jobs.lib.gate :as gate]
+            [jobs.lib.util :as u]
+            [jobs.lib.near :as near]
+            [jobs.lib.world :as known]))
 
 (def doc
   "Hoe dirt, grass_block or dirt_path into farmland over a set of ground cells, given as the box :from/:to or

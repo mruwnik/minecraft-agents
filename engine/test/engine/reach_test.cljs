@@ -1,8 +1,8 @@
 (ns engine.reach-test
-  "engine.jobs.reach: the walk searches the hostile trigger, retreat, respond-to-hostile, restore-broken and tidy run.
+  "jobs.lib.reach: the walk searches the hostile trigger, retreat, respond-to-hostile, restore-broken and tidy run.
   Their answers, and that one query reads each block at most once (a query over several mobs shares its reads)."
   (:require [cljs.test :refer [deftest is]]
-            [engine.jobs.reach :as reach]
+            [jobs.lib.reach :as reach]
             [engine.test-util :as tu]))
 
 (def body {:x 0.5 :y 64 :z 0.5})

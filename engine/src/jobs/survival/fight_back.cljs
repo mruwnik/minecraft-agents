@@ -1,9 +1,9 @@
 (ns jobs.survival.fight-back
   (:require [engine.ctx :as ctx]
-            [engine.jobs.combat :as combat]
-            [engine.jobs.util :as u]
-            [engine.jobs.watch :as watch]
-            [engine.path.near :as near]))
+            [jobs.lib.combat :as combat]
+            [jobs.lib.util :as u]
+            [jobs.lib.watch :as watch]
+            [jobs.lib.near :as near]))
 
 (def doc
   "Equip the best weapon, walk up to the nearest hostile within :range and hit it, at most one swing per :attack-gap-ms.

@@ -1,11 +1,11 @@
 (ns jobs.animals.lead-to
   (:require [engine.ctx :as ctx]
-            [engine.jobs.animals :as animals]
-            [engine.jobs.util :as u]
-            [engine.jobs.watch :as watch]
-            [engine.path.near :as near]
-            [engine.path.walk :as walk]
-            [engine.places :as places]))
+            [jobs.lib.animals :as animals]
+            [jobs.lib.util :as u]
+            [jobs.lib.watch :as watch]
+            [jobs.lib.near :as near]
+            [jobs.lib.walk :as walk]
+            [jobs.lib.places :as places]))
 
 (def doc
   "Put a lead on one animal of type :mob, walk to :pos with it following, then tie it to the fence post :fence

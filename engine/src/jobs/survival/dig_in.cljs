@@ -1,11 +1,11 @@
 (ns jobs.survival.dig-in
-  (:require [engine.jobs.tidy :as tidy]
-            [engine.access.click :as click]
+  (:require [jobs.lib.tidy :as tidy]
+            [jobs.lib.click :as click]
             [engine.ctx :as ctx]
-            [engine.jobs.access :as access]
-            [engine.jobs.shelter :as sh]
-            [engine.jobs.tools :as tools]
-            [engine.jobs.util :as u]))
+            [jobs.lib.access :as access]
+            [jobs.lib.shelter :as sh]
+            [jobs.lib.tools :as tools]
+            [jobs.lib.util :as u]))
 
 (def doc
   "Roof the body in for the night.
@@ -111,7 +111,7 @@
                   (or (.-fullCube b) (re-find mob-proof-shapes (.-name b)))))))
 
 (defn ^:async shut-open!
-  "Shut the door, gate or trapdoor standing open at cell with one click of the hand (engine.access.click): :shut when
+  "Shut the door, gate or trapdoor standing open at cell with one click of the hand (jobs.lib.click): :shut when
   it is shut now, :open when it stays open (an iron one, or a click that did nothing), nil when the cell holds none.
   A shelter fills such a cell by shutting it, never by placing into it or digging it."
   [c cell]

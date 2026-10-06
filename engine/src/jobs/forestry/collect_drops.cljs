@@ -1,6 +1,6 @@
 (ns jobs.forestry.collect-drops
   (:require [engine.ctx :as ctx]
-            [engine.jobs.forestry :refer [default-radius]]))
+            [jobs.forestry.trees :refer [default-radius]]))
 
 (def doc
   "Collect the nearest matching dropped item, one per round, until none is left within :radius.

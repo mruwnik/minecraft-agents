@@ -1,11 +1,11 @@
 (ns jobs.survival.eat
   (:require [engine.ctx :as ctx]
-            [engine.foods :as foods]
-            [engine.jobs.util :as u]))
+            [jobs.lib.foods :as foods]
+            [jobs.lib.util :as u]))
 
 (def doc
   "Eat the best carried food, one item per round, until food reaches :until or nothing edible is left.
-  Best means most hunger points, then most saturation (data from engine.foods).
+  Best means most hunger points, then most saturation (data from jobs.lib.foods).
   Harmful foods (rotten flesh, spider eyes, pufferfish, poisonous potatoes, raw chicken) need :allow-bad.
   Golden apples are eaten only when named or at low health. Chorus fruit and suspicious stew only when named.
   Declines with :not-hungry or :no-food. A named item that is not food, or is harmful without :allow-bad,

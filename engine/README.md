@@ -52,12 +52,13 @@ Layout:
 - `js/primitives.mjs` the real mineflayer layer; `js/connect.mjs` makes the bot; `js/stub-bot.mjs` is a bare stub for primitive
   tests; `js/view.mjs` writes the view dump for the renderer (skips a reloaded column whose content is unchanged; `BODY_VIEW=0` disables; format in `docs/view-format.md`).
   Other `js/*.mjs` files are helpers per primitive (furnace, enchant, trade, vehicle, leash, light, sight, ...).
-- `src/engine/` the engine: `core` (list, register, scheduler, act wrapper, call-child), `memory`, `events`, `ctx`,
-  `expr` (job expressions), `composite` (combinators as jobs), `registry` (compile-time job registry), `triggers` and
-  `triggers/*`, `condition`, `scenario`, `takeover`/`lease`, `world`, `zones`, `perception`, `main`; `engine.path.*` is the
-  planner and walker; `engine.jobs.*` holds helpers shared by jobs.
+- `src/engine/` the engine core only: `core` (list, register, scheduler, act wrapper, call-child), `memory`, `events`,
+  `ctx`, `expr`, `composite`, `registry` (compile-time registries), `triggers` (the trigger registry), `hooks` (job code
+  the engine calls), `condition`, `scenario`, `takeover`/`lease`, `perception`, `main`; `engine.path.*` is the planner.
   Perception sees dark cells within `:near` (4) blocks, within `:near-torch` (7) with a torch in either hand.
-- `src/jobs/` the jobs, one namespace each (`jobs.survival.eat`). Nothing registers them: the build finds them.
+- `src/jobs/` the jobs, one namespace each (`jobs.survival.eat`); the build finds them. Helpers: `jobs.lib.*` (shared,
+  including the walker `jobs.lib.walk`/`near`/`pass`), `jobs.<area>.*` (one area's). `jobs/hooks.edn` names the hooks.
+- `src/triggers/` the triggers, plain fns by area (`triggers.survival.hungry`); `defaults.edn` is the default set.
 - `scenarios/*.edn` scenarios (`survival.edn`, `woodcutter.edn`, `pace-cuts.edn`, ...; `live-*.edn` are live-test scenarios).
 - `test/engine/` cljs tests (helpers in `engine.test-util`); `test/engine/fake.cljs` is the scriptable fake world.
 - `tools/*.mjs` agent CLI tools (below). `fixtures/world/` holds EDN world fixtures run by `../tools/world-test.mjs`.
@@ -110,7 +111,7 @@ Notes:
   unloaded cell never blocks). Raw entity lists go through `js/live-entities.mjs` (drops bare, never-spawned entities).
 - Blocks carry `age` for crops (wheat/carrots/potatoes ripe at 7, beetroots 3, sweet berries from 2) and, with
   `properties`, every block state (integers as numbers, booleans and enum names as they are).
-- **Hostile trigger rule.** `:hostile-near` holds only for a real danger within its radius (`engine.jobs.reach/danger?`): a
+- **Hostile trigger rule.** `:hostile-near` holds only for a real danger within its radius (`jobs.lib.reach/danger?`): a
   melee mob the body knows of that has a walkable way to the body, or a ranged mob (skeleton and the like) with a line of
   fire. A mob walled in, across a deep trench, or with the body sealed in is no danger. "Knows of" comes from perception's
   mob memory (`engine.perception`): heard within 16 blocks (not a silent creeper), or seen (clear line, within 48, in the
@@ -134,7 +135,7 @@ Statuses below are the common ones; `reason` and extra fields are in `js/primiti
 | `transfer` | `{pos, direction: deposit/withdraw, item, count}` | `ok` (`moved`), `missing`, `unreachable`, `no-item`, `full` |
 | `equip` / `unequip` | `{item, dest='hand'}` / `{}` | `equipped`, `no-item` / `ok`, `empty`, `full` |
 | `toss` | `{item, count?, slot?}` | `tossed`, `no-item` |
-| `craft` | `{item, count=1, table?}`; one recipe per call, never walks | `crafted`, `partial`, `no-item`, `out-of-reach`, `unreachable`, `full`, `cannot` (`engine.craft` turns shortages into `short` and `alternatives`) |
+| `craft` | `{item, count=1, table?}`; one recipe per call, never walks | `crafted`, `partial`, `no-item`, `out-of-reach`, `unreachable`, `full`, `cannot` (`jobs.items.shortfall` turns shortages into `short` and `alternatives`) |
 | `furnace` | `{pos, op: read/load/take, input?, fuel?, output?}` | `ok`, `missing`, `unreachable`, `cannot`, `no-item`, `busy`, `rejected`, `full`; never waits for cooking |
 | `enchant` | `{pos, op: offers/enchant, item, choice?, levelCost?}` | `ok`, `enchanted`, `cannot`, `no-item`, `no-lapis`, `no-levels`, `full`, `failed` |
 | `chat` | `{message, to?}` validated by `engine.chat/validate` | `sent`, `gone`, `cannot` (`bad-name`, `empty`, `command`, `too-long`), `blocked` (rate), `failed` |
@@ -269,10 +270,11 @@ read by the stuck trigger.
 it returns `:continue` or `:declined`; on `:done` the sub-map is cleared so the next call starts fresh. A cut anywhere ends
 the whole chain's round; cancel and done take the subtree. `submit!` is delegation (a peer on the list), not a child.
 
-**World knowledge.** `engine.world` reads the plans (`worlds/<world>/plans/<id>.edn`), blueprints
+**World knowledge.** `jobs.lib.world-files` reads the plans (`worlds/<world>/plans/<id>.edn`), blueprints
 (`blueprints/<id>.edn`), zones and claims read-only, re-stat-ed at most every 3 s; a file that turns invalid keeps its last
-good copy and warns once. Jobs read it through `engine.jobs.world` (`plan`, `zones`, `claims`, `footprints`). The engine
-calls job code only through `engine.hooks`, named in `src/jobs/hooks.edn` (world store, manual walk, dig and wear). `engine.notes` is what bodies saw (`worlds/<world>/notes/<body>.edn`, each body writes only its own file;
+good copy and warns once. Jobs read it through `jobs.lib.world` (`plan`, `zones`, `claims`, `footprints`). The engine
+calls job code only through `engine.hooks`, named in `src/jobs/hooks.edn` (world store, manual walk, dig and wear).
+`engine.notes` is what bodies saw (`worlds/<world>/notes/<body>.edn`, each body writes only its own file;
 `notes/notes`, `notes/note!`). `engine.chat` holds the chat limits (at least 1 s between lines, at most 5 in 30 s, per body).
 
 ## Memory
@@ -291,7 +293,7 @@ One EDN store per body: `worlds/<world>/agents/<name>/engine/memory.edn`, `{:ent
   `place`.
 - **Job memory**: a listed (or running reflex) instance owns kind `:job/<id>`, cap 1, forever, deleted on done, cancel or
   drop. Its data is `{:args ... :children {slot child-map}}` plus the job's own keys.
-- **Named places** (`engine.places`): a place is a kind named after it (`:bed`, `:chest`, `:home`, `:food-source`, or a name
+- **Named places** (`jobs.lib.places`): a place is a kind named after it (`:bed`, `:chest`, `:home`, `:food-source`, or a name
   of 1 to 32 lowercase letters, digits, dashes) with one `{:pos {:x :y :z}}` entry, cap 1, forever. `jobs.memory.set-place`
   records, moves or verifies one; `jobs.memory.forget-place` removes one. `jobs.survival.sleep` and `jobs.storage.deposit`
   record the bed or chest they used when none is recorded; they never overwrite a live different one.
@@ -303,9 +305,9 @@ trigger set `src/triggers/defaults.edn` names each by id; `engine.triggers/all` 
 trigger is a fn plus one line:
 
 ```clojure
-{:id :hostile-near :when engine.triggers.hostile-near/hostile-near   ; the fn
+{:id :hostile-near :when triggers.survival.hostile-near/hostile-near   ; the fn
  :job (jobs.survival.respond-to-hostile)                             ; default job spec
- :args engine.triggers.hostile-near/defaults                         ; a map or a var, merged under the entry's :args
+ :args triggers.survival.hostile-near/defaults                         ; a map or a var, merged under the entry's :args
  :persistence :retry}                                                ; :retry | :cooldown (with :cooldown-s) | :stop
 ```
 
@@ -388,7 +390,7 @@ An ad hoc `:when` can be a condition: an EDN list read by `engine.condition` aga
 **Waiting is never silent.** A check says why with `(ctx/wait ctx reason)` (a keyword or a map with `:reason`). The
 scheduler emits one `job.waiting` when a check first declines and again only when the reason changes; it shows as
 `:waiting` in `jobs show`/`list` and `observe`. A parent whose round returns a child's `:declined` keeps the child's reason;
-`engine.jobs.declined` parks such a parent until the child's check passes.
+`jobs.lib.declined` parks such a parent until the child's check passes.
 
 **List edits** (agent): `submit!` (appends; opts `:hold?`, `:front?`, `:now?`, `:backoff`, `:by`), `cancel!`, `retry!`
 (clears a failed mark), `do-now!` (cuts the running listed job, never a reflex, lists the new job directly before it as a
@@ -409,7 +411,7 @@ the token so the in-flight round is never booked; the job stays listed.
 - `act!` classifies each act result. Failure statuses are `blocked failed unreachable cannot timeout gone out-of-reach
   no-item no-support no-headroom occupied full disconnected unsupported not-night monsters-near no-effect unchanged
   no-room missing`; anything else is progress. `look`, `wait`, `equip` and `steer` are neutral. A walk round
-  (`engine.path.near`) counts as one `:walk` act: `arrived` is progress, `partial` and long detours are neutral, a blocked
+  (`jobs.lib.near`) counts as one `:walk` act: `arrived` is progress, `partial` and long detours are neutral, a blocked
   walk is a failure.
 - A **fruitless round** ran at least one act and every act failed. Rounds with no act, cut rounds, throws and `:declined`
   neither count nor reset. The first progress act resets everything.
@@ -478,7 +480,7 @@ lease is not saved; restart or going offline ends it.
   least 1 s of idle time left. `move-to` walks as go-to does (opens doors) within `--max-distance`. `dig` first holds the
   best carried tool and refuses a block no carried tool can harvest (`no-tool`).
 - Rules live in `engine.lease` (pure); `engine.takeover` applies them, walking, digging and wearing through the
-  `:manual/*` hooks (`engine.jobs.manual`); `engine/js/control.mjs` is a stateless socket adapter.
+  `:manual/*` hooks (`jobs.lib.manual`); `engine/js/control.mjs` is a stateless socket adapter.
 - Events: `system.takeover_started`, `system.takeover_ended` (reason `released`, `forced`, `idle`, `offline`, `shutdown`),
   `system.drive_deadman`.
 
@@ -519,8 +521,8 @@ is validated against the job registry and triggers before connecting. Other flag
 ## Zones and claims
 
 Zones (`worlds/<world>/zones.edn`) and claims (`claims.edn`) are a social rule that jobs consult. The engine never enforces
-them: `act!` and the primitives check neither, and a job may ignore them. The helper is `engine.jobs.access` (`may?` for
-`:dig :place :sow :harvest :take :put`) over the pure `engine.access.zones/verdict`. First match wins:
+them: `act!` and the primitives check neither, and a job may ignore them. The helper is `jobs.lib.access` (`may?` for
+`:dig :place :sow :harvest :take :put`) over the pure `jobs.lib.access.zones/verdict`. First match wins:
 
 1. no zone list read: `:no-zones`;
 2. the cell is in another active plan's footprint (the plan the job builds is left out): `:footprint`;
@@ -536,7 +538,7 @@ them: `act!` and the primitives check neither, and a job may ignore them. The he
   another's block only as a last resort (warn `<job>.trespass-last-resort`). They never take from a foreign container. A
   missing zone list never blocks a survival job.
 - A plan's footprint is the body's own when its `:metadata :by` equals the body's username (case-insensitive).
-- **Tidying** (`engine.jobs.tidy`): a dig or place that breaks another's block is noted as a `:tidy` memory entry.
+- **Tidying** (`jobs.lib.tidy`): a dig or place that breaks another's block is noted as a `:tidy` memory entry.
   `jobs.survival.restore-broken` puts the cells back when the body is safe; the `:tidy-pending` trigger starts it.
 
 ## Job library
@@ -550,7 +552,7 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 
 | job | what it does |
 |---|---|
-| `movement.go-to` `{:pos :range 1 :doors :shut :escalate true}` | Walks to a cell. Each round is one plan plus one walk (`engine.path.walk`, about 100 ms of search, at most 60 s walking). Hands over `{:arrived true}` or `{:arrived false :reason :unreachable :why ...}` (planner reason, `:stuck`, `:off-plan`, `:no-progress`, `:searching`, ...). Walks toward unloaded land to the loaded edge. Three rounds without getting closer give up. `:escalate`: a body shut in, with no door or gate it can use beside it (iron doors, and every door under `:doors :never`, are walls), makes a way (pillar, stair, clear-path, or a walk to the nearest wall; a method that fails is followed by the next), digging only natural terrain and blocks it put back itself, outside others' zones; every dug cell goes into the `:tidy` ledger at once, and it puts them back once it got on past them (never one it stands on or needs), restore-broken the rest. `:doors` is `:shut` (open, pass, shut again), `:leave-open` or `:never`; iron doors are walls |
+| `movement.go-to` `{:pos :range 1 :doors :shut :escalate true}` | Walks to a cell. Each round is one plan plus one walk (`jobs.lib.walk`, about 100 ms of search, at most 60 s walking). Hands over `{:arrived true}` or `{:arrived false :reason :unreachable :why ...}` (planner reason, `:stuck`, `:off-plan`, `:no-progress`, `:searching`, ...). Walks toward unloaded land to the loaded edge. Three rounds without getting closer give up. `:escalate`: a body shut in, with no door or gate it can use beside it (iron doors, and every door under `:doors :never`, are walls), makes a way (pillar, stair, clear-path, or a walk to the nearest wall; a method that fails is followed by the next), digging only natural terrain and blocks it put back itself, outside others' zones; every dug cell goes into the `:tidy` ledger at once, and it puts them back once it got on past them (never one it stands on or needs), restore-broken the rest. `:doors` is `:shut` (open, pass, shut again), `:leave-open` or `:never`; iron doors are walls |
 | `movement.look-around` `{:every-ms 2000}` | Faces a random point; writes `:looked` |
 | `movement.pace` `{:a :b :laps :rounds}` | Walks a, b, a, b; a test job |
 | `movement.follow` `{:player :range :radius}` | Keeps within range of a player |
@@ -569,7 +571,7 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 | `survival.fight-back` | Equips the best weapon and hits the nearest hostile within `:range` |
 | `survival.night` | Owns the night: sleep (a seen bed, the known one within 48, or a carried one put down; never an occupied one unless in the body's own zone), else while anyone sleeps log out in 30 s stints until morning, else roofed or buried ends, else dig-in; by day leaves a dug-in shelter and picks up a bed it put down outside its zone. Opt out: mute `:night` |
 | `survival.sleep`, `survival.dig-in`, `survival.log-out` | Walk to a known bed and sleep; roof the body in; leave the server for a stint and wait for the sleep count |
-| `survival.recover-drops` | After death, weighs the drops' value against the trip's danger (`engine.jobs.value`, `engine.jobs.danger`) and fetches or skips them |
+| `survival.recover-drops` | After death, weighs the drops' value against the trip's danger (`jobs.survival.drop-value`, `jobs.survival.danger`) and fetches or skips them |
 | `survival.restore-broken` | Puts back what a job broke in another's zone, and the holes go-to's escalation dug |
 | `survival.unwedge` | Steps out of a full block at the feet cell, else digs it (warn `unwedge.blocked` for bedrock or three failed digs) |
 | `maintenance.unstick`, `maintenance.shut-doors` | Walk to the stuck job's goal with go-to; shut doors a walk left open |
@@ -585,7 +587,7 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 | `forestry.fell-tree`, `collect-drops`, `plant-sapling`, `harvest-wood` | Fell a column (writes a `:forestry/replant` debt), collect nearby drops, plant a sapling, and the three in turn |
 | `forestry.maintain`, `forestry.prepare` | Keep and prepare the tree cells of a forest plan |
 | `storage.deposit`, `withdraw`, `kit` | Put away everything except tools and armour (`:keep`); take named items; take a tool and food kit. `withdraw` and `kit` record what a chest holds in `:fetch/stock` |
-| `items.obtain`, `items.get-tool`, `items.fetch-limits` | Get an item (or any of several) from carried stock, seen chests that allow `:take`, or a craft chain planned from recipes over what is carried (logs to planks, sticks, a table put down, the tool; `engine.jobs.recipes`); get a tool that harvests a block; set the body's fetch limits (`:fetch/limits`) |
+| `items.obtain`, `items.get-tool`, `items.fetch-limits` | Get an item (or any of several) from carried stock, seen chests that allow `:take`, or a craft chain planned from recipes over what is carried (logs to planks, sticks, a table put down, the tool; `jobs.items.recipes`); get a tool that harvests a block; set the body's fetch limits (`:fetch/limits`) |
 | `storage.make-room` | The `:inventory-nearly-full` job: deposit by value, swap for worthier items, else toss junk, then step away |
 | `items.craft`, `smelt`, `enchant`, `wear`, `bake`, `give` | Craft (walks to a table), smelt in a furnace, enchant, put armour on, bake bread, give items to a player |
 | `village.trade` `{:villager :buy :count}` | Buys from a villager |
@@ -604,7 +606,7 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 | `memory.set-place`, `forget-place`, `remember` | Write named places or entries of your own kind |
 | `debug.notify`, `debug.access-check`, `debug.walk-plan` | Test helpers |
 
-**Fetching what a job lacks** (`engine.jobs.fetch`): `blocks.dig`, `blocks.place` and `access.stair` take `:fetch` (default
+**Fetching what a job lacks** (`jobs.lib.fetch`): `blocks.dig`, `blocks.place` and `access.stair` take `:fetch` (default
 false: they wait with the reason). `true` allows every kind (`:tool :item :station`) and source (`:chest :craft :gather`); a
 set narrows the kinds; a map gives limits `{:what :how :depth :minutes :fail-minutes}` (built-in, the job's default, the
 body's defaults from `items.fetch-limits`, then the call's arg; later wins). A fetchable wait (`:no-tool`, `:need`) then runs
@@ -612,11 +614,11 @@ body's defaults from `items.fetch-limits`, then the call's arg; later wins). A f
 `:fetch/failed` (warn `fetch.failed`) and the job waits for `:fail-minutes` before trying again. Only the job given `:fetch`
 fetches; its children and go-to never do. Sources today are carried items, seen chests and crafting; gathering comes later.
 
-Helpers shared by jobs (not jobs): `engine.jobs.watch` (`watch/watch!` between acts: when the place is dark or a hostile
+Helpers shared by jobs (not jobs): `jobs.lib.watch` (`watch/watch!` between acts: when the place is dark or a hostile
 was known recently, the body turns to look behind it so a creeper from behind is noticed; used by mine, fell-tree,
-from-plan, attack, fight-back, herd), `engine.value/item-worth` and `engine.jobs.value`, `engine.jobs.danger`,
-`engine.jobs.escape/choose`, `engine.jobs.tools/equip-for!` (cheapest carried tool that harvests the block; reflex digs use
-the fastest), `engine.jobs.declined`, `engine.jobs.reach` (danger checks), `engine.jobs.tidy`.
+from-plan, attack, fight-back, herd), `jobs.lib.worth/item-worth` and `jobs.survival.drop-value`, `jobs.survival.danger`,
+`jobs.lib.escape/choose`, `jobs.lib.tools/equip-for!` (cheapest carried tool that harvests the block; reflex digs use
+the fastest), `jobs.lib.declined`, `jobs.lib.reach` (danger checks), `jobs.lib.tidy`.
 
 ## Path planner
 
@@ -626,9 +628,9 @@ the recorded pins (`planner_{bench,options,goals,courses}_golden.cljs`, `js/path
 `PLANNER_BENCH_DIR`, or `PLANNER_BENCH_SKIP_WORLD=1` where there is no world; after an intended planner change run
 `npm run record:planner-bench`). Benchmarks are under `bench-lang/` (compile `planner-bench`, `goto-bench`, `search-bench`).
 
-- `engine.path.walk` plans and walks one round (`plan-walk`, `walk-to!`, `follow!`). `engine.path.executor` steers a plan
-  tick by tick. `engine.path.near` (`walk-round!` for go-to, `walk-near!` for walks to something visible) opens and
-  re-shuts doors via `engine.path.pass`; go-to's `:shut-also` shuts doors in or next to another owner's zone. `engine.path.targets/nearest!` finds the soonest-reachable of many targets in one
+- `jobs.lib.walk` plans and walks one round (`plan-walk`, `walk-to!`, `follow!`). `engine.path.executor` steers a plan
+  tick by tick. `jobs.lib.near` (`walk-round!` for go-to, `walk-near!` for walks to something visible) opens and
+  re-shuts doors via `jobs.lib.pass`; go-to's `:shut-also` shuts doors in or next to another owner's zone. `jobs.lib.targets/nearest!` finds the soonest-reachable of many targets in one
   bounded, resumable search (used by `fell-tree` and `mine`).
 - A search is bounded per round (about 100 ms) and resumable; a search that needs more rounds walks toward where it has
   got to, or waits. A start closed in the loaded world, with the goal unloaded, ends `start-enclosed` (not `goal-unloaded`). An enclosed goal is found by a small backward flood before any walking (`goal-enclosed`; `options.preFlood`, default 256 cells), and go-to keeps its flood between searches toward one goal (`goalFloodMemo`).

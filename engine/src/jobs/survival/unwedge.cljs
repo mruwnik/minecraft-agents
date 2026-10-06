@@ -1,14 +1,14 @@
 (ns jobs.survival.unwedge
   (:require [engine.ctx :as ctx]
-            [engine.jobs.access :as access]
-            [engine.jobs.tidy :as tidy]
-            [engine.jobs.tools :as tools]
-            [engine.jobs.util :as u]
-            [engine.triggers.wedged :as w]
+            [jobs.lib.access :as access]
+            [jobs.lib.tidy :as tidy]
+            [jobs.lib.tools :as tools]
+            [jobs.lib.util :as u]
+            [triggers.survival.wedged :as w]
             [jobs.survival.breathe :as breathe]))
 
 (def doc
-  "Get out of a block that fills the feet cell (engine.triggers.wedged), e.g. sand that fell on the body.
+  "Get out of a block that fills the feet cell (triggers.survival.wedged), e.g. sand that fell on the body.
   One action per round:
   - Once per job, step to a free side cell (feet and head cells passable, something to stand on).
   - Else dig the feet block with the best carried tool (a last resort, tidied up like breathe's digs) and

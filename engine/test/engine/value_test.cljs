@@ -1,7 +1,7 @@
 (ns engine.value-test
-  "engine.value/item-worth: the shared item worth used by recover-drops and make-room."
+  "jobs.lib.worth/item-worth: the shared item worth used by recover-drops and make-room."
   (:require [cljs.test :refer [deftest is are]]
-            [engine.value :as value]))
+            [jobs.lib.worth :as value]))
 
 (deftest item-worth-by-tier
   (are [item expected] (= expected (value/item-worth item))

@@ -1,15 +1,15 @@
 (ns jobs.access.pillar
-  (:require [engine.access.ledger :as ledger]
-            [engine.access.rules :as rules]
+  (:require [jobs.lib.ledger :as ledger]
+            [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
-            [engine.jobs.access :as access]
-            [engine.jobs.util :as u]))
+            [jobs.lib.access :as access]
+            [jobs.lib.util :as u]))
 
 (def doc
   "Pillar up :height blocks from the cell the body stands in, by jump-placing one block at a time under itself.
   One block per round.
 
-  Every block is written to the scaffold ledger (engine.access.ledger, body memory) as an intent before its
+  Every block is written to the scaffold ledger (jobs.lib.ledger, body memory) as an intent before its
   jump and confirmed when the cell is seen holding it, so a cleanup can take the pillar back after a cut or
   restart. A restart between intent and placement is decided from the cell.
 
@@ -19,7 +19,7 @@
   - the body stands on a solid block
   - the two cells above the head are clear
   - a block is carried: :item, or without it dirt while any is carried, then cobblestone
-  - the cell passes engine.access.rules/may-place?
+  - the cell passes jobs.lib.access.rules/may-place?
 
   The check waits (:too-few-blocks, with :short) when blocks are missing. Every other give-up is left to the
   round, so a parent running this as a child reads the result.
@@ -44,8 +44,8 @@
 (def max-failures 3)
 
 (defn access-inputs
-  "The zones, claims, footprints, the body's name, the clock and the job's :ignore-zones? arg, as engine.access.rules
-  takes them (engine.jobs.access/zone-input)."
+  "The zones, claims, footprints, the body's name, the clock and the job's :ignore-zones? arg, as jobs.lib.access.rules
+  takes them (jobs.lib.access/zone-input)."
   [c]
   (access/zone-input c {:ignore-zones? (:ignore-zones? (:args c))}))
 

@@ -1,11 +1,11 @@
 (ns jobs.survival.recover-drops
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
-            [engine.jobs.danger :as danger]
-            [engine.jobs.reach :as reach]
-            [engine.jobs.util :as u]
-            [engine.jobs.value :as jv]
-            [engine.triggers.died :as died]
+            [jobs.survival.danger :as danger]
+            [jobs.lib.reach :as reach]
+            [jobs.lib.util :as u]
+            [jobs.survival.drop-value :as jv]
+            [triggers.survival.died :as died]
             [engine.game :as game]))
 
 (def doc
@@ -14,11 +14,11 @@
   so an expired trip still gets to write :abandoned.
   Waits (no decision, no walk) until a :respawned entry newer than the death exists.
   Yields without acting while a real danger is within :danger-radius, so a reflex can deal with it.
-  A real danger is a mob that can reach the body, or a ranged one with a line of fire (engine.jobs.reach/nearest-danger).
+  A real danger is a mob that can reach the body, or a ranged one with a line of fire (jobs.lib.reach/nearest-danger).
   Decision: skips when the value of what was carried is at most the fetch cost plus :margin.
-  - Value: engine.jobs.value/item-value (with :value-overrides), plus 5 per level of experience.
-  - Cost: a trip of 10, 0.3 per block of straight distance, and 10 per point of route danger (engine.jobs.danger)
-    past the hostiles the body knows of (seen or heard, engine.jobs.reach/known-hostiles; :danger-overrides, after armour).
+  - Value: jobs.survival.drop-value/item-value (with :value-overrides), plus 5 per level of experience.
+  - Cost: a trip of 10, 0.3 per block of straight distance, and 10 per point of route danger (jobs.survival.danger)
+    past the hostiles the body knows of (seen or heard, jobs.lib.reach/known-hostiles; :danger-overrides, after armour).
   - Infinite when lava, fire or the void took the pile, or the walk would end after the despawn.
   A fetch emits recover-drops.fetching. A skip emits recover-drops.decided. Both texts give the value, the cost and their parts.
   Fetch: walks to the death point (jobs.movement.go-to), then collects the pile's items it can see within :collect-radius
@@ -35,8 +35,8 @@
 
 (def args
   {:margin {:doc "added to the fetch cost before comparing it to the value" :default 0}
-   :value-overrides {:doc "engine.jobs.value/item-value overrides, a map: item name or group (ore tool armor food block unknown) -> worth of one item, or {:times n}; e.g. {\"raw_iron\" 500}" :default {}}
-   :danger-overrides {:doc "engine.jobs.danger/route-danger overrides, a map: mob name -> threat in points of damage before armour, or {:times n}; e.g. {\"creeper\" 100 \"zombie\" 0}" :default {}}
+   :value-overrides {:doc "jobs.survival.drop-value/item-value overrides, a map: item name or group (ore tool armor food block unknown) -> worth of one item, or {:times n}; e.g. {\"raw_iron\" 500}" :default {}}
+   :danger-overrides {:doc "jobs.survival.danger/route-danger overrides, a map: mob name -> threat in points of damage before armour, or {:times n}; e.g. {\"creeper\" 100 \"zombie\" 0}" :default {}}
    :danger-radius {:doc "a hostile this close makes the job yield without acting" :default 8}
    :collect-radius {:doc "collect the pile's drops within this many blocks of the death point (a pile on open ground rolls 6-8 out)" :default 10}})
 
@@ -120,7 +120,7 @@
 (def top-n 3)
 
 (defn seen-hostiles
-  "The hostiles the body knows of within 64 (engine.jobs.reach/known-hostiles: the perception's mob memory, seen or
+  "The hostiles the body knows of within 64 (jobs.lib.reach/known-hostiles: the perception's mob memory, seen or
   heard and remembered while likely still near, as a player would; none it never sensed). Primitives without that
   memory: the ones in sight now."
   [p]

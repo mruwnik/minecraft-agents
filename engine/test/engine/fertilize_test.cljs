@@ -8,7 +8,7 @@
             [engine.events :as events]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [engine.world :as ew]))
+            [jobs.lib.world-files :as ew]))
 
 (defn setup [world & [shared]]
   (let [clock (atom 1000000)

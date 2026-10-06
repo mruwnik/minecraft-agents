@@ -1,5 +1,5 @@
 (ns jobs.explore.look
-  (:require [engine.ctx :as ctx] [engine.places :as places]))
+  (:require [engine.ctx :as ctx] [jobs.lib.places :as places]))
 (def doc
   "Observe nearby loaded blocks and entities once without moving or changing the world. Emits look.observed,
   available through observe --wait --watch or observe result after completion. :at inspects one exact block

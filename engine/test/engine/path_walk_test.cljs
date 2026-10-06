@@ -1,12 +1,12 @@
 (ns engine.path-walk-test
-  "engine.path.walk (the shared walk driver) against the fake world: one call plans, walks and re-plans to a goal."
+  "jobs.lib.walk (the shared walk driver) against the fake world: one call plans, walks and re-plans to a goal."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.registry :as registry]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.path.planner-tuned :as planner]
-            [engine.path.walk :as walk]
+            [jobs.lib.walk :as walk]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]))
 
@@ -146,7 +146,7 @@
           (is (<= (first at) 5) "the body never went down the drop"))))))
 
 ;; walk-to! (walk-plan's driver) never takes a one-way step, even when the land below runs on into unloaded land (go-to
-;; does, engine.path.near)
+;; does, jobs.lib.near)
 (deftest walk-to-stops-at-a-one-way-step-even-toward-unloaded-land
   (async done
     (tu/run-async done

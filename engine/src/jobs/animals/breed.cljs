@@ -1,8 +1,8 @@
 (ns jobs.animals.breed
   (:require [engine.ctx :as ctx]
-            [engine.jobs.animals :as animals]
-            [engine.jobs.util :as u]
-            [engine.path.near :as near]))
+            [jobs.lib.animals :as animals]
+            [jobs.lib.util :as u]
+            [jobs.lib.near :as near]))
 
 (def doc
   "Feed :count animals of type :mob (such as \"cow\") within :radius so that they breed. A one-shot order that
@@ -11,7 +11,7 @@
   Each round takes the nearest adult not yet fed, refused or given up on. The body walks to within 3 blocks
   (like go-to it opens a shut gate or door on the way and shuts it behind, so a gated pen is entered and its gate
   left shut; a pen with no way in is :unreachable). It then feeds the first breeding
-  food of the mob that it carries (engine.jobs.animals/breeding-food: wheat for cows, sheep, goats and
+  food of the mob that it carries (jobs.lib.animals/breeding-food: wheat for cows, sheep, goats and
   mooshrooms; carrot, potato or beetroot for pigs; seeds for chickens; carrot, golden carrot or dandelion for
   rabbits; flowers for bees). Babies are never fed.
 

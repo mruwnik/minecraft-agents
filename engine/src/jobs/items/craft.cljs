@@ -1,8 +1,8 @@
 (ns jobs.items.craft
-  (:require [engine.craft :as craft]
+  (:require [jobs.items.shortfall :as craft]
             [engine.ctx :as ctx]
-            [engine.jobs.util :as u]
-            [engine.path.near :as near]
+            [jobs.lib.util :as u]
+            [jobs.lib.near :as near]
             [jobs.items.smelt :as smelt]
             [jobs.storage.deposit :as deposit]))
 
@@ -69,7 +69,7 @@
 (defn short!
   "A craft ran out of an ingredient: emit the info and finish with what is
   missing, and the alternatives (name [cousins]) when other recipes use different ingredients.
-  The primitive hands back every candidate recipe and the counts carried; engine.craft chooses."
+  The primitive hands back every candidate recipe and the counts carried; jobs.items.shortfall chooses."
   [c item r made]
   (let [{:keys [short] :as shortage} (craft/no-item (js->clj (.-recipes r)) (js->clj (.-have r)))]
     (ctx/emit! c :craft.short :info {:text (str "craft " item " is missing " (pr-str short))})

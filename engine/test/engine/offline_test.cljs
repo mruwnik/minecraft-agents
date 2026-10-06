@@ -5,7 +5,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
-            [engine.jobs.shelter :as sh]
+            [jobs.lib.shelter :as sh]
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as real-triggers]))

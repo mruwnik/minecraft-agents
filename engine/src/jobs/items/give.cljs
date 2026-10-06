@@ -1,7 +1,7 @@
 (ns jobs.items.give
   (:require [engine.ctx :as ctx]
-            [engine.jobs.util :as u]
-            [engine.path.near :as near]
+            [jobs.lib.util :as u]
+            [jobs.lib.near :as near]
             [jobs.storage.deposit :as deposit]))
 
 (def doc

@@ -1,18 +1,18 @@
 (ns jobs.build.pen
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
-            [engine.jobs.apiary :as apiary]
-            [engine.jobs.pen :as pen]
+            [jobs.lib.apiary :as apiary]
+            [jobs.animals.pen :as pen]
             [jobs.animals.pen-check :as pen-check]
             [jobs.build.from-plan :as build]
-            [engine.jobs.world :as known]))
+            [jobs.lib.world :as known]))
 
 (def doc
   "Build the fence a plan wants (:plan, optionally only its :part) and prove it holds animals.
   The pen is the bounding box of the plan's cells that want a fence, a fence gate or a wall.
   Phase 1 runs jobs.build.from-plan on the plan. Its args :reach :give-up :accept pass through, and its rules
   (zones, other plans' footprints, materials, cuts) apply. Phase 2 checks the pen over that box with
-  engine.jobs.pen (see jobs.animals.pen-check): a step out of the box is a leak.
+  jobs.animals.pen (see jobs.animals.pen-check): a step out of the box is a leak.
   Nothing is placed that the plan does not ask for. A leak left after the build is a hole in the plan, or a cell
   the build refused, gave up on or lacked material for.
   Always ends :done with {:closed? :reason :cells :leaks :gates :built {:placed :missing :short :given-up

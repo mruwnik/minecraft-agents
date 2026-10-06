@@ -1,6 +1,6 @@
 (ns plan.parse
   "The text of a plan or blueprint file -> the checked value or its errors; never throws. Shared by the dashboard
-  (dashboard.plan) and the body engine (engine.world). No IO: reading the files is the caller's."
+  (dashboard.plan) and the body engine (jobs.lib.world-files). No IO: reading the files is the caller's."
   (:require [cljs.reader :as reader]
             [plan.shape :as shape]))
 

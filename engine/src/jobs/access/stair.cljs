@@ -1,13 +1,13 @@
 (ns jobs.access.stair
   (:require [clojure.string :as str]
-            [engine.access.rules :as rules]
+            [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
-            [engine.jobs.access :as access]
-            [engine.jobs.fetch :as fetch]
-            [engine.jobs.tools :as tools]
-            [engine.jobs.util :as u]
+            [jobs.lib.access :as access]
+            [jobs.lib.fetch :as fetch]
+            [jobs.lib.tools :as tools]
+            [jobs.lib.util :as u]
             [engine.path.executor :as executor]
-            [engine.path.walk :as walk]
+            [jobs.lib.walk :as walk]
             [jobs.survival.dig-in :as dig-in]
             [jobs.gather.mine :as mine]))
 
@@ -51,7 +51,7 @@
   Hands over {:status :done|:stopped :reason kw :steps n :at [x y z] :dug [{:cell :block}]} plus detail (:cell
   :hazards :zone :walk ...), also as a stair.done info or stair.stopped warn event.
 
-  :fetch (default false; engine.jobs.fetch): the :no-tool wait is not waited out; the rounds run jobs.items.get-tool
+  :fetch (default false; jobs.lib.fetch): the :no-tool wait is not waited out; the rounds run jobs.items.get-tool
   for the block (child :fetch) first, then walks back to the cell it stood on (child :fetch-back) and goes on. A
   parent's stair child does not fetch.")
 
@@ -62,7 +62,7 @@
    :y {:doc "feet height to end at, instead of :steps" :default nil}
    :accept {:doc "hazards taken: #{:water :lava :falling-block :under-feet}" :default #{}}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
-   :fetch {:doc "get a missing pickaxe instead of waiting :no-tool (engine.jobs.fetch): true, a set of kinds or a map of limits" :default false}})
+   :fetch {:doc "get a missing pickaxe instead of waiting :no-tool (jobs.lib.fetch): true, a set of kinds or a map of limits" :default false}})
 
 (def headings {:north [0 -1] :south [0 1] :east [1 0] :west [-1 0]})
 (def rises {:down -1 :up 1})
@@ -182,7 +182,7 @@
        (not-any? #(re-find #"_pickaxe$" (:name %)) (u/inventory p))))
 
 (defn access-world
-  "The social half of the rules' input (engine.jobs.access/zone-input): zones, claims, footprints, the body's name and
+  "The social half of the rules' input (jobs.lib.access/zone-input): zones, claims, footprints, the body's name and
   the clock, and the job's :ignore-zones? arg."
   [c]
   (access/zone-input c {:ignore-zones? (:ignore-zones? (:args c))}))

@@ -6,15 +6,15 @@
             [engine.fake :as fake]
             [engine.core :as core]
             [engine.events :as events]
-            [engine.jobs.reach :as reach]
-            [engine.jobs.tidy :as tidy]
+            [jobs.lib.reach :as reach]
+            [jobs.lib.tidy :as tidy]
             [jobs.survival.restore-broken :as restore-broken]
             [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [engine.triggers.tidy-pending :as tidy-pending]
-            [engine.world :as ew]))
+            [triggers.survival.tidy-pending :as tidy-pending]
+            [jobs.lib.world-files :as ew]))
 
 (defn ^:async ticks! [eng n]
   (dotimes [_ n] (await (core/tick! eng))))

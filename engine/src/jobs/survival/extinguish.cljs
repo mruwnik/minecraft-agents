@@ -1,9 +1,9 @@
 (ns jobs.survival.extinguish
   (:require [engine.ctx :as ctx]
-            [engine.jobs.access :as access]
-            [engine.jobs.util :as u]
+            [jobs.lib.access :as access]
+            [jobs.lib.util :as u]
             [jobs.survival.eat :as eat]
-            [engine.triggers.burning :as burning]))
+            [triggers.survival.burning :as burning]))
 
 (def doc
   "Put the body out when it is on fire or in lava.

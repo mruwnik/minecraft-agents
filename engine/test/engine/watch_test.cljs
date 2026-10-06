@@ -1,10 +1,10 @@
 (ns engine.watch-test
-  "engine.jobs.watch: a job that stares at its work turns its head between acts, when it is in danger, so the view cone
+  "jobs.lib.watch: a job that stares at its work turns its head between acts, when it is in danger, so the view cone
   catches what comes from the side or behind (card 943cac28)."
   (:require [cljs.test :refer [deftest is async]]
             [engine.fake :as fake]
             [engine.fake.raw-world :as fake-raw]
-            [engine.jobs.watch :as watch]
+            [jobs.lib.watch :as watch]
             [engine.memory :as mem]
             [engine.perception :as perception]
             [engine.test-util :as tu]))

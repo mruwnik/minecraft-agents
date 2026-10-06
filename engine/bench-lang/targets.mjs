@@ -4,7 +4,7 @@
 // with an air face within --radius blocks (at most 32, nearest in a line first), each reached within 3 blocks. Compared:
 //   line  - the straight-line nearest target, then one search to it (what the jobs did)
 //   each  - one search per target, the cheapest found wins (the exact answer by many searches)
-//   set   - one search over the goal set (query.goals), at most 20000 nodes (engine.path.targets)
+//   set   - one search over the goal set (query.goals), at most 20000 nodes (jobs.lib.targets)
 // All at weight 1.2 over the walks' wide box (margin 256, yMargin 96). Truth: the least cost of the per-target searches.
 // The table gives ms p50/p95/max per variant, how often its target was unreachable while another was reachable
 // ("wrong"), and cost / truth.

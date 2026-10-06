@@ -1,7 +1,7 @@
 (ns jobs.movement.leave-vehicle
   (:require [engine.ctx :as ctx]
-            [engine.jobs.util :as u]
-            [engine.jobs.vehicle :as vehicle]))
+            [jobs.lib.util :as u]
+            [jobs.movement.vehicle :as vehicle]))
 
 (def doc
   "Get off whatever the body rides (boat, raft, minecart, mount). Ends at once when on foot.

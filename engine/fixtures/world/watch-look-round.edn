@@ -1,4 +1,4 @@
-;; engine.jobs.watch (card 943cac28): a digging body looks round so the view cone sees danger. A 1-wide strip tunnel in
+;; jobs.lib.watch (card 943cac28): a digging body looks round so the view cone sees danger. A 1-wide strip tunnel in
 ;; a stone block, the body at its open end facing north, a creeper (NoAI, so it never blows) behind it in the corridor.
 ;; Lit corridor: the creeper is made known by the first look round (about 1-2 s) and the hostile-near reflex fires.
 ;; Dark corridor: a creeper 6 behind stays unseen (a mob in the dark is seen only within 4); 3 behind it is known at

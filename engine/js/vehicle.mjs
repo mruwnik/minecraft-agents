@@ -1,7 +1,7 @@
 // Vehicles: who rides what, getting on, getting off. Boats, rafts, minecarts and rideable mobs, for the body and for
 // any mob as a passenger.
 // Why JavaScript: Mineflayer boundary — set_passengers packets, entity objects, use_entity, raw look and sneak input.
-// What to mount and when, and what a landing means, is decided in cljs (engine.jobs.vehicle, jobs.movement.*).
+// What to mount and when, and what a landing means, is decided in cljs (jobs.movement.vehicle, jobs.movement.*).
 //
 // Mineflayer 4.39 only handles set_passengers lists that include the body: it never clears bot.vehicle on a dismount
 // and never takes a dropped passenger out of vehicle.passengers. So the full lists are tracked per bot from the

@@ -1,9 +1,9 @@
 (ns jobs.forestry.plant-sapling
   (:require [engine.ctx :as ctx]
-            [engine.jobs.gate :as gate]
-            [engine.jobs.forestry :refer [debts target-of sapling-for log-name? replant-kind]]
-            [engine.jobs.util :as u]
-            [engine.path.near :as near]))
+            [jobs.lib.gate :as gate]
+            [jobs.forestry.trees :refer [debts target-of sapling-for log-name? replant-kind]]
+            [jobs.lib.util :as u]
+            [jobs.lib.near :as near]))
 
 (def doc
   "Plant a sapling at :at, or at the oldest replant debt, and clear that debt. With :bone-meal n it then uses up to

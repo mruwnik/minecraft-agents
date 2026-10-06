@@ -1,20 +1,20 @@
 (ns jobs.gather.mine
-  (:require [engine.jobs.tidy :as tidy]
+  (:require [jobs.lib.tidy :as tidy]
             [clojure.string :as str]
             [engine.ctx :as ctx]
-            [engine.jobs.access :as access]
-            [engine.jobs.gate :as gate]
-            [engine.jobs.tools :as tools]
-            [engine.access.rules :as rules]
-            [engine.jobs.util :as u]
-            [engine.path.near :as near]
-            [engine.path.targets :as targets]
-            [engine.jobs.watch :as watch]
-            [engine.jobs.look :refer [cell-of headings heading-name facing glance! look-around!]]
-            [engine.jobs.torch :as torch]
+            [jobs.lib.access :as access]
+            [jobs.lib.gate :as gate]
+            [jobs.lib.tools :as tools]
+            [jobs.lib.access.rules :as rules]
+            [jobs.lib.util :as u]
+            [jobs.lib.near :as near]
+            [jobs.lib.targets :as targets]
+            [jobs.lib.watch :as watch]
+            [jobs.lib.look :refer [cell-of headings heading-name facing glance! look-around!]]
+            [jobs.lib.torch :as torch]
             [jobs.build.from-plan :as from-plan]
             [jobs.survival.dig-in :as dig-in]
-            [engine.jobs.world :as known]))
+            [jobs.lib.world :as known]))
 
 (def doc
   "Mine like a player: dig out :count more of one block kind (:block) that the body has seen, strip-tunnelling
@@ -26,7 +26,7 @@
   tunnels.
 
   Declines and ends early:
-  - A pickaxe block (engine.jobs.tools/tool-kind) with no *_pickaxe carried ends at once, before any dig: warn
+  - A pickaxe block (jobs.lib.tools/tool-kind) with no *_pickaxe carried ends at once, before any dig: warn
     mine.no-tool, {:got 0 :reason :no-tool :tool \"pickaxe\"}. Shovel and axe blocks drop by hand.
   - The check passes when a phase is in memory, or :block is named, unless every seen target is refused.
   - No zone list (zones.edn missing or never valid) declines with one warn mine.declined {:reason :no-zones},
@@ -44,7 +44,7 @@
   2. Carrying the goal ends :count.
   3. :max-failures failures end :gave-up (warn mine.gave-up). :dry-digs digs in a row after which the carried
      count did not rise end :no-drops (warn mine.gave-up).
-  4. Dig the nearest target by walking (one bounded search, engine.path.targets, going on next round; a seen
+  4. Dig the nearest target by walking (one bounded search, jobs.lib.targets, going on next round; a seen
      block out of every stand's reach is passed over; when the search finds none reachable, the nearest in a straight
      line is tried; targets over the ground snapshot come last, so the floor
      under the start is dug last). Walk within 3: blocked skips the target and counts a failure, partial tries
@@ -93,7 +93,7 @@
   Every job ends, after the mend, by walking back to the cell it started on (info mine.not-home when the walk
   does not arrive).
 
-  Zones and plans (engine.access.rules, through engine.jobs.access): a target must be a dig the rules permit,
+  Zones and plans (jobs.lib.access.rules, through jobs.lib.access): a target must be a dig the rules permit,
   with only :accept hazards, when chosen and again right before the dig. A cell in a zone that bars :dig, or in
   an active plan's footprint, is never a target. One refused right before the dig is skipped without a failure
   (info mine.refused), as is one with a hazard not accepted. When all seen blocks are refused: before the
@@ -119,7 +119,7 @@
    :direction {:doc "the strip tunnel's heading: north, south, east or west (n/s/e/w); nil: the way the body faces when the job starts" :default nil}
    :tunnel-length {:doc "the most blocks the strip tunnel runs in this job, at the body's level; 0: no tunnel, seen blocks only" :default 32}
    :torch-interval {:doc "the strip tunnel hangs a torch every this many steps; 0: none" :default 10}
-   :accept {:doc "dig hazards of engine.access.rules taken (:fluid-adjacent :falling-block :under-feet); the lava and :wet rules above still hold"
+   :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent :falling-block :under-feet); the lava and :wet rules above still hold"
             :default #{:fluid-adjacent :falling-block :under-feet}}})
 
 (def ores

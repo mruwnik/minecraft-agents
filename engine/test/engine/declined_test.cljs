@@ -1,15 +1,15 @@
 (ns engine.declined-test
-  "engine.jobs.declined: a parent whose round returns a declined child's :declined is parked by its check until the
+  "jobs.lib.declined: a parent whose round returns a declined child's :declined is parked by its check until the
   child's check passes."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
-            [engine.jobs.declined :as declined]
+            [jobs.lib.declined :as declined]
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [engine.world :as world]))
+            [jobs.lib.world-files :as world]))
 
 (defn setup []
   (let [clock (atom 1000000)

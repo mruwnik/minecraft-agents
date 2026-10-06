@@ -1,8 +1,8 @@
 (ns jobs.animals.leash
   (:require [engine.ctx :as ctx]
-            [engine.jobs.animals :as animals]
-            [engine.jobs.util :as u]
-            [engine.path.near :as near]))
+            [jobs.lib.animals :as animals]
+            [jobs.lib.util :as u]
+            [jobs.lib.near :as near]))
 
 (def doc
   "Put a lead on one animal of type :mob (such as \"cow\") within :radius and end. A one-shot order that starts and

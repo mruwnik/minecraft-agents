@@ -1,10 +1,10 @@
 (ns jobs.storage.withdraw
   (:require [engine.ctx :as ctx]
-            [engine.jobs.access :as access]
-            [engine.jobs.fetch :as fetch]
-            [engine.jobs.util :as u]
-            [engine.path.near :as near]
-            [engine.places :as places]
+            [jobs.lib.access :as access]
+            [jobs.lib.fetch :as fetch]
+            [jobs.lib.util :as u]
+            [jobs.lib.near :as near]
+            [jobs.lib.places :as places]
             [jobs.storage.deposit :as deposit]))
 
 (def doc
@@ -19,7 +19,7 @@
   before the transfer. The job ends {:gave-up true :reason :refused :zones [..] :claims [..]} after one
   withdraw.refused warn and takes nothing. :ignore-zones? true skips the check.
   Stock: what the chest holds is booked in body memory :fetch/stock when inspected and after each take
-  (engine.jobs.fetch), for jobs.items.obtain.")
+  (jobs.lib.fetch), for jobs.items.obtain.")
 
 (def args
   {:chest {:doc "chest position [x y z] or {:x :y :z}; the known :chest place when nil" :default nil}

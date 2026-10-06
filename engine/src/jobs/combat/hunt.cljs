@@ -1,8 +1,8 @@
 (ns jobs.combat.hunt
   (:require [engine.ctx :as ctx]
-            [engine.jobs.combat :as combat]
-            [engine.jobs.shelter :as sh]
-            [engine.jobs.util :as u]))
+            [jobs.lib.combat :as combat]
+            [jobs.lib.shelter :as sh]
+            [jobs.lib.util :as u]))
 
 (def doc
   "Kill :count adult animals of the mob kind :mob within :radius, collecting their drops.

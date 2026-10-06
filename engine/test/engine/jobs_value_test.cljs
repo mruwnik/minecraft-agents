@@ -1,7 +1,7 @@
 (ns engine.jobs-value-test
-  "engine.jobs.value: item-value (built from minecraft-data) and fetch-cost, the two sides of a fetch-or-skip decision."
+  "jobs.survival.drop-value: item-value (built from minecraft-data) and fetch-cost, the two sides of a fetch-or-skip decision."
   (:require [cljs.test :refer [deftest is are]]
-            [engine.jobs.value :as v]))
+            [jobs.survival.drop-value :as v]))
 
 (defn value [items & opts] (:value (apply v/item-value items opts)))
 (defn each [name] (value [{:name name :count 1}]))

@@ -1,10 +1,10 @@
 (ns engine.breed-test
-  "engine.jobs.animals and jobs.animals.breed against the fake world."
+  "jobs.lib.animals and jobs.animals.breed against the fake world."
   (:require [cljs.test :refer [deftest is async]]
             [engine.backoff :as backoff]
             [engine.core :as core]
             [engine.hostile-test :as h]
-            [engine.jobs.animals :as animals]
+            [jobs.lib.animals :as animals]
             [engine.memory :as mem]
             [engine.takeover :as takeover]
             [engine.fake :as fake]

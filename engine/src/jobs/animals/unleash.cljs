@@ -1,8 +1,8 @@
 (ns jobs.animals.unleash
   (:require [engine.ctx :as ctx]
-            [engine.jobs.animals :as animals]
-            [engine.jobs.util :as u]
-            [engine.path.near :as near]))
+            [jobs.lib.animals :as animals]
+            [jobs.lib.util :as u]
+            [jobs.lib.near :as near]))
 
 (def doc
   "Take the lead off the animals within :radius that are on this body's lead or tied to a fence knot, and pick

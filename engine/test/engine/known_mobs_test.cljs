@@ -1,12 +1,12 @@
 (ns engine.known-mobs-test
   "The danger checks take only the mobs the body knows of (card 80f25a40): engine.perception's mob memory (seen in the
-  view cone or heard, remembered while likely still near) feeds engine.jobs.reach's dangers, nearest-danger and the
+  view cone or heard, remembered while likely still near) feeds jobs.lib.reach's dangers, nearest-danger and the
   hostile-near trigger; reach reads blocks from the raw world's state ids when there is one; the mobs of one query share
   their walk proofs."
   (:require [cljs.test :refer [deftest is]]
             [engine.fake :as fake]
             [engine.fake.raw-world :as fake-raw]
-            [engine.jobs.reach :as reach]
+            [jobs.lib.reach :as reach]
             [engine.perception :as perception]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]

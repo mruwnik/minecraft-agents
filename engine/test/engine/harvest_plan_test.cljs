@@ -8,7 +8,7 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [engine.world :as world]))
+            [jobs.lib.world-files :as world]))
 
 (defn start
   "An engine over the fake world spec with the plans {id plan} as its world data."

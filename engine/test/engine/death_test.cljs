@@ -8,9 +8,9 @@
             [engine.memory :as mem]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [engine.triggers.died :as died]))
+            [triggers.survival.died :as died]))
 
-;; The value and cost functions are engine.jobs.value (jobs_value_test); route danger engine.jobs.danger.
+;; The value and cost functions are jobs.survival.drop-value (jobs_value_test); route danger jobs.survival.danger.
 
 (def junk
   "A pile too small to walk 20 blocks for: a few dirt and seeds."

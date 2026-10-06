@@ -6,7 +6,7 @@
             [engine.forest-maintain-test :refer [ground forest-plan item start ticks digs places warns listed? give! with-zones]]
             [engine.harvest-test :as h]
             [engine.test-util :as tu]
-            [engine.world :as world]
+            [jobs.lib.world-files :as world]
             [jobs.forestry.prepare :as prepare]))
 
 (def job 'jobs.forestry.prepare)

@@ -1,7 +1,7 @@
 (ns jobs.items.wear
-  (:require [engine.armour :as armour]
+  (:require [jobs.lib.armour :as armour]
             [engine.ctx :as ctx]
-            [engine.jobs.util :as u]))
+            [jobs.lib.util :as u]))
 
 (def doc
   "Put armour on. With :item, that carried piece goes into its slot, and a worn piece of the slot comes back to

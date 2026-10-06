@@ -1,6 +1,6 @@
 (ns jobs.survival.log-out
   (:require [engine.ctx :as ctx]
-            [engine.jobs.shelter :as sh]))
+            [jobs.lib.shelter :as sh]))
 
 (def doc
   "Leave the server for a short stint, then come back: the night job's way to let another player's sleep skip the

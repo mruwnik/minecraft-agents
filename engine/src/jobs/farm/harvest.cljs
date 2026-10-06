@@ -1,11 +1,11 @@
 (ns jobs.farm.harvest
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
-            [engine.jobs.gate :as gate]
-            [engine.jobs.util :as u]
-            [engine.path.near :as near]
-            [engine.path.walk :as walk]
-            [engine.jobs.world :as known]))
+            [jobs.lib.gate :as gate]
+            [jobs.lib.util :as u]
+            [jobs.lib.near :as near]
+            [jobs.lib.walk :as walk]
+            [jobs.lib.world :as known]))
 
 (def doc
   "Cut the ripe crops within :radius of a centre and replant them, then collect the drops.
@@ -229,7 +229,7 @@
     (first (sort-by #(u/dist here %) cells))))
 
 (defn permitted
-  "The poss the job may act on with action: zones, claims and the footprints of plans but its own (see engine.jobs.gate)."
+  "The poss the job may act on with action: zones, claims and the footprints of plans but its own (see jobs.lib.gate)."
   [c action poss]
   (gate/allowed c :harvest.declined "harvest" action poss {:except (:plan (:args c))}))
 

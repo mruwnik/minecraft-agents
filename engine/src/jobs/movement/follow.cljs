@@ -1,7 +1,7 @@
 (ns jobs.movement.follow
   (:require [engine.ctx :as ctx]
-            [engine.jobs.util :as u]
-            [engine.path.near :as near]))
+            [jobs.lib.util :as u]
+            [jobs.lib.near :as near]))
 
 (def doc
   "Keep the body within :range of the player :player, who must be within :radius to be seen.

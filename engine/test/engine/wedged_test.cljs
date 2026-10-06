@@ -7,7 +7,7 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [engine.triggers.wedged :as wedged]
+            [triggers.survival.wedged :as wedged]
             [jobs.survival.breathe :as breathe]))
 
 (def unwedge 'jobs.survival.unwedge)

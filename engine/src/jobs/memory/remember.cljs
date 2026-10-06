@@ -1,7 +1,7 @@
 (ns jobs.memory.remember
   (:require [engine.ctx :as ctx]
             [engine.memory :as mem]
-            [engine.places :as places]))
+            [jobs.lib.places :as places]))
 
 (def doc
   "Write one entry of a kind of your own into body memory, in one round. A trigger reads it with (since :kind).

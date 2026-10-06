@@ -1,9 +1,9 @@
 (ns jobs.apiary.guard
   (:require [engine.ctx :as ctx]
-            [engine.jobs.apiary :as apiary]
-            [engine.jobs.gate :as gate]
-            [engine.jobs.util :as u]
-            [engine.path.near :as near]))
+            [jobs.lib.apiary :as apiary]
+            [jobs.lib.gate :as gate]
+            [jobs.lib.util :as u]
+            [jobs.lib.near :as near]))
 
 (def doc
   "Keep the lit campfires of an apiary in the standard column: the fire one block underground with ground on all

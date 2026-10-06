@@ -1,30 +1,30 @@
 (ns jobs.movement.go-to
   (:require [engine.ctx :as ctx]
-            [engine.jobs.blocks :as b]
-            [engine.jobs.escape :as escape]
-            [engine.jobs.reach :as reach]
-            [engine.jobs.shelter :as sh]
-            [engine.jobs.tidy :as tidy]
-            [engine.jobs.util :as u]
-            [engine.jobs.watch :as watch]
-            [engine.path.near :as near]
-            [engine.path.walk :as walk]
-            [engine.places :as places]
-            [engine.jobs.world :as known]))
+            [jobs.lib.blocks :as b]
+            [jobs.lib.escape :as escape]
+            [jobs.lib.reach :as reach]
+            [jobs.lib.shelter :as sh]
+            [jobs.lib.tidy :as tidy]
+            [jobs.lib.util :as u]
+            [jobs.lib.watch :as watch]
+            [jobs.lib.near :as near]
+            [jobs.lib.walk :as walk]
+            [jobs.lib.places :as places]
+            [jobs.lib.world :as known]))
 
 (def doc
   "Walk to :pos ([x y z] or {:x :y :z}, fractions floored to the cell) until the body's cell is within :range cells of
   it (range 0: in that cell, 1: next to it).
   - Refused at once, before any walk: a :pos that is not one (:bad-pos), a body with no pathWorld sensing
     (:unsupported). Both give a :refused warn and {:arrived false :reason <it>}.
-  - One round is one plan and one walk (engine.path.walk, about 100 ms of search, at most 60 s of walking). A search
+  - One round is one plan and one walk (jobs.lib.walk, about 100 ms of search, at most 60 s of walking). A search
     that needs more rounds walks on toward where it has got to, or not at all while it goes on. A goal in unloaded
     land is walked toward round by round, and to the edge of loaded land when that is the only way on.
   - A round that gets more than 1 block nearer is progress. Three rounds in a row without progress give up, and so
     does a goal the planner proves walled in (:goal-enclosed), at once.
-  - :escalate (default true): a body that is shut in (engine.jobs.reach/enclosed?), not in its own shelter, and whose
+  - :escalate (default true): a body that is shut in (jobs.lib.reach/enclosed?), not in its own shelter, and whose
     search ran out of land (:exhausted or :goal-enclosed) makes a way instead of giving up, at most 3 times per go-to, one child job per
-    round (engine.jobs.escape/choose): jobs.access.pillar up out of a pit when it carries enough blocks; else
+    round (jobs.lib.escape/choose): jobs.access.pillar up out of a pit when it carries enough blocks; else
     jobs.access.clear-path through a wall up to 3 thick toward the goal; else jobs.access.stair up out of a pit or
     toward a higher goal; else a walk to the nearest wall first. Each emits go-to.escalated {:step :why :n}. Once
     through, it puts back what clear-path or stair dug (jobs.blocks.place, the dug block or its drop, when
@@ -38,7 +38,7 @@
   - Success is {:arrived true}. The result is also a :result info event.
   - Every walking round writes a :moved memory entry {:from :to :status :target} (arrived, partial or blocked) for
     the stuck trigger.
-  - :doors (engine.path.pass): :shut (default) opens a shut door, gate or trapdoor with an empty hand, passes and
+  - :doors (jobs.lib.pass): :shut (default) opens a shut door, gate or trapdoor with an empty hand, passes and
     shuts what it opened. :leave-open leaves it open. :never treats them as walls. A door in or beside another
     owner's zone is always shut again. A door that will not open is a wall for that walk (:door-stuck). Iron
     doors are walls.")
@@ -71,7 +71,7 @@
   :done)
 
 (defn ^:async arrived!
-  "Look round once if the place is risky (engine.jobs.watch), then finish: the next job starts facing along the walk."
+  "Look round once if the place is risky (jobs.lib.watch), then finish: the next job starts facing along the walk."
   [c]
   (await (watch/watch! c {}))
   (finish! c {:arrived true}))
@@ -135,7 +135,7 @@
     [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]))
 
 (defn escalation-job
-  "[job args] of the child that carries out escalation e (engine.jobs.escape/choose)."
+  "[job args] of the child that carries out escalation e (jobs.lib.escape/choose)."
   [{:keys [step] :as e}]
   (case step
     :pillar ['jobs.access.pillar {:height (:height e) :item (:item e)}]
@@ -147,7 +147,7 @@
   (if (= :approach step) (true? (:arrived result)) (= :done (:status result))))
 
 (defn may-dig-fn
-  "(may-dig? cell): no other owner's zone, claim or plan footprint refuses a dig there (engine.jobs.tidy/refusal)."
+  "(may-dig? cell): no other owner's zone, claim or plan footprint refuses a dig there (jobs.lib.tidy/refusal)."
   [c]
   (fn [cell] (nil? (tidy/refusal c :dig (zipmap [:x :y :z] cell)))))
 
@@ -176,7 +176,7 @@
     (vec (for [cell cells :let [n (block-at cell)] :when (escape/solid? n)] {:cell cell :block n}))))
 
 (defn own-holes
-  "The ledger entries (engine.jobs.tidy :tidy, body memory) of cells this go-to's escalations dug, lowest first."
+  "The ledger entries (jobs.lib.tidy :tidy, body memory) of cells this go-to's escalations dug, lowest first."
   [c]
   (->> (tidy/entries c)
        (filter #(and (:escalation %) (= (:root c) (:job %)) (= (:id c) (:go-to %))))
@@ -374,7 +374,7 @@
                  zones)))
 
 (defn shut-foreign
-  "The walker's :shut-also (engine.path.pass): a block opened in or next to another owner's zone is shut again whatever
+  "The walker's :shut-also (jobs.lib.pass): a block opened in or next to another owner's zone is shut again whatever
   :doors says, so a pass through somebody's pen lets nothing out."
   [c]
   (fn [cell] (foreign? (known/zones c) (ctx/self-name c) cell)))

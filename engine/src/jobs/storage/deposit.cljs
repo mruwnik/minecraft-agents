@@ -1,12 +1,12 @@
 (ns jobs.storage.deposit
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
-            [engine.jobs.access :as access]
-            [engine.jobs.fetch :as fetch]
-            [engine.jobs.util :as u]
+            [jobs.lib.access :as access]
+            [jobs.lib.fetch :as fetch]
+            [jobs.lib.util :as u]
             [engine.memory :as mem]
-            [engine.path.near :as near]
-            [engine.places :as places]))
+            [jobs.lib.near :as near]
+            [jobs.lib.places :as places]))
 
 (def doc
   "Walk to the chest and deposit one stack per round: the named :items in the order named, or everything but tools
@@ -20,7 +20,7 @@
   Zones: a chest in another owner's zone or claim that does not allow :put is refused before the walk and again
   before the transfer. The job ends {:gave-up true :reason :refused :zones [..] :claims [..]} after one
   deposit.refused warn and puts nothing in. :ignore-zones? true skips the check.
-  Stock: a chest whose stock is booked in body memory :fetch/stock gets what was put in added (engine.jobs.fetch).")
+  Stock: a chest whose stock is booked in body memory :fetch/stock gets what was put in added (jobs.lib.fetch).")
 
 (def args
   {:chest {:doc "chest position [x y z] or {:x :y :z}; the known :chest place when nil" :default nil}

@@ -1,18 +1,18 @@
 (ns engine.fetch-test
-  "The :fetch option (engine.jobs.fetch), jobs.items.obtain, jobs.items.get-tool and jobs.items.fetch-limits against
+  "The :fetch option (jobs.lib.fetch), jobs.items.obtain, jobs.items.get-tool and jobs.items.fetch-limits against
   the fake world, slice F1: carried and chest sources only, chests the body has seen."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.fake.raw-world :as fake-raw]
-            [engine.jobs.fetch :as fetch]
+            [jobs.lib.fetch :as fetch]
             [engine.memory :as mem]
             [engine.perception :as perception]
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [engine.world :as ew]))
+            [jobs.lib.world-files :as ew]))
 
 (def sight-opts {:radius 16 :ray-deg 2})
 

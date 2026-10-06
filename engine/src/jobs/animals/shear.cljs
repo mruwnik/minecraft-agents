@@ -1,8 +1,8 @@
 (ns jobs.animals.shear
   (:require [engine.ctx :as ctx]
-            [engine.jobs.animals :as animals]
-            [engine.jobs.util :as u]
-            [engine.path.near :as near]))
+            [jobs.lib.animals :as animals]
+            [jobs.lib.util :as u]
+            [jobs.lib.near :as near]))
 
 (def doc
   "Shear the adult sheep within :radius and pick up the wool. A one-shot order that starts and ends itself. The

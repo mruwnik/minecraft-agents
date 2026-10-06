@@ -1,15 +1,15 @@
 (ns engine.pass-test
-  "engine.path.pass: the cutting of a plan at the steps that open something, the zone rule, and what a round leaves behind."
+  "jobs.lib.pass: the cutting of a plan at the steps that open something, the zone rule, and what a round leaves behind."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.memory :as mem]
-            [engine.path.pass :as pass]
+            [jobs.lib.pass :as pass]
             [engine.registry :as registry]
             [engine.test-util :as tu :refer [box floor]]
             [engine.triggers :as triggers]
-            [engine.world :as world]))
+            [jobs.lib.world-files :as world]))
 
 (defn lane
   "Steps along +x at y 64, z 0, x 0..n, with the :opens maps in opens, {index [cells]}."

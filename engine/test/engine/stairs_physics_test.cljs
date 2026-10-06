@@ -7,7 +7,7 @@
             [engine.path.fixture :as fx]
             [engine.path.planner-tuned :as planner]
             [engine.test-util :as tu]
-            [engine.path.walk :as walk]))
+            [jobs.lib.walk :as walk]))
 
 (def version "26.1")
 (def lib (delay {:mc ((tu/require-here "minecraft-data") version)

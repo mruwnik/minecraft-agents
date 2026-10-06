@@ -1,4 +1,4 @@
-;; Card 45038295 (items.obtain :craft source, engine.jobs.recipes). Flat open plot, nothing to gather. A table the body
+;; Card 45038295 (items.obtain :craft source, jobs.items.recipes). Flat open plot, nothing to gather. A table the body
 ;; has seen stands 2 east of it in the "seen-table" cases (the body looks east, yaw 270).
 {:defaults
  {:tags [:fetch :crafting]

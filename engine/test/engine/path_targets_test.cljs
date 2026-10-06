@@ -1,8 +1,8 @@
 (ns engine.path-targets-test
-  "engine.path.targets: the nearest of many targets by walking cost, one bounded search a call, against the fake world."
+  "jobs.lib.targets: the nearest of many targets by walking cost, one bounded search a call, against the fake world."
   (:require [cljs.test :refer [deftest is async]]
-            [engine.path.targets :as targets]
-            [engine.path.walk :as walk]
+            [jobs.lib.targets :as targets]
+            [jobs.lib.walk :as walk]
             [engine.test-util :as tu]))
 
 (defn box

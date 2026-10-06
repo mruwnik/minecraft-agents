@@ -1,7 +1,7 @@
 (ns engine.jobs-danger-test
-  "engine.jobs.danger/route-danger: the danger of walking a route past the mobs the body senses, after its armour."
+  "jobs.survival.danger/route-danger: the danger of walking a route past the mobs the body senses, after its armour."
   (:require [cljs.test :refer [deftest is are]]
-            [engine.jobs.danger :as d]
+            [jobs.survival.danger :as d]
             [engine.test-util :as tu]))
 
 (def body {:x 0.5 :y 64 :z 0.5})

@@ -3,7 +3,7 @@
   a body with no way out escalates (seal with carried blocks, fight with a tool
   or the fist) instead of failing the same round again and again."
   (:require [cljs.test :refer [deftest is async]]
-            [engine.access.ledger :as ledger]
+            [jobs.lib.ledger :as ledger]
             [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.core :as core]

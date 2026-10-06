@@ -1,16 +1,16 @@
 (ns engine.door-left-test
-  "The door-left trigger (engine.triggers.door-left) and jobs.maintenance.shut-doors: a door or gate a walk opened and
+  "The door-left trigger (triggers.maintenance.door-left) and jobs.maintenance.shut-doors: a door or gate a walk opened and
   left open (the walk was cut or cancelled between the open and the shut) is shut again."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
             [engine.events :as events]
             [engine.memory :as mem]
-            [engine.path.near :as near]
-            [engine.path.pass :as pass]
+            [jobs.lib.near :as near]
+            [jobs.lib.pass :as pass]
             [engine.registry :as registry]
             [engine.test-util :as tu :refer [box floor]]
             [engine.triggers :as triggers]
-            [engine.triggers.door-left :as dl]))
+            [triggers.maintenance.door-left :as dl]))
 
 (def start {:x 0 :y 64 :z 0})
 

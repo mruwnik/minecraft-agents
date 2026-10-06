@@ -12,7 +12,7 @@
             [engine.test-util :as tu]
             [engine.trigger-api :as trigger-api]
             [engine.triggers :as triggers]
-            [engine.world :as ew]
+            [jobs.lib.world-files :as ew]
             [jobs.movement.look-around :as look-around]
             [jobs.storage.deposit :as dep]))
 

@@ -1,12 +1,12 @@
 (ns engine.places-test
-  "Named places: engine.places (pure), jobs.memory.set-place and forget-place against the fake world, and the
+  "Named places: jobs.lib.places (pure), jobs.memory.set-place and forget-place against the fake world, and the
   self-recording of the sleep and deposit jobs."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
             [engine.events :as events]
             [engine.job-api :as api]
             [engine.memory :as mem]
-            [engine.places :as places]
+            [jobs.lib.places :as places]
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]))

@@ -1,14 +1,14 @@
 (ns jobs.storage.kit
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
-            [engine.jobs.combat :as combat]
-            [engine.jobs.fetch :as fetch]
-            [engine.jobs.util :as u]
-            [engine.path.near :as near]
+            [jobs.lib.combat :as combat]
+            [jobs.lib.fetch :as fetch]
+            [jobs.lib.util :as u]
+            [jobs.lib.near :as near]
             [jobs.items.craft]
             [jobs.storage.deposit :as deposit]
             [jobs.storage.withdraw]
-            [engine.foods :as foods]))
+            [jobs.lib.foods :as foods]))
 
 (def doc
   "Take a kit out of the chest: :spare + 1 of each tool kind in :tools, and :food food items. A name is of a tool
@@ -32,7 +32,7 @@
   A craft phase that ends with a non-empty :missing is remembered as :no-craft in body memory for 10 minutes.
   While that lives, a take phase that would enter the craft phase ends at once with the short and the remembered
   :missing.
-  Every inspect books what the chest holds in body memory :fetch/stock (engine.jobs.fetch).")
+  Every inspect books what the chest holds in body memory :fetch/stock (jobs.lib.fetch).")
 
 (def args
   {:tools {:doc "tool kinds to carry, e.g. [\"hoe\" \"pickaxe\"]" :default ["hoe"]}

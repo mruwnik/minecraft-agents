@@ -1,7 +1,7 @@
 (ns engine.recipes-test
-  "engine.jobs.recipes: crafting chains planned from minecraft-data recipes."
+  "jobs.items.recipes: crafting chains planned from minecraft-data recipes."
   (:require [cljs.test :refer [deftest is]]
-            [engine.jobs.recipes :as recipes]
+            [jobs.items.recipes :as recipes]
             [engine.game :as game]))
 
 (defn plan [have item n & [opts]] (recipes/plan game/default-version have item n (or opts {})))

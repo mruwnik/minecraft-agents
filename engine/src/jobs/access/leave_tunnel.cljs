@@ -1,16 +1,16 @@
 (ns jobs.access.leave-tunnel
-  (:require [engine.access.ledger :as ledger]
-            [engine.access.rules :as rules]
+  (:require [jobs.lib.ledger :as ledger]
+            [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
-            [engine.jobs.access :as access]
-            [engine.jobs.declined :as declined]
-            [engine.jobs.util :as u]
+            [jobs.lib.access :as access]
+            [jobs.lib.declined :as declined]
+            [jobs.lib.util :as u]
             [jobs.access.stair :as stair]
             [jobs.access.tunnel :as tunnel]
             [jobs.build.from-plan :as from-plan]
             [jobs.gather.mine :as mine]
             [jobs.survival.dig-in :as dig-in]
-            [engine.jobs.world :as known]))
+            [jobs.lib.world :as known]))
 
 (def doc
   "Leave a dead-end tunnel (the result of jobs.access.tunnel: :line :dug :torches): take its torches back and
@@ -18,7 +18,7 @@
   the check (one warn leave-tunnel.declined).
 
   Torches first. For each torch that still stands, deepest first, the body walks to the cell after its site
-  (jobs.debug.walk-plan as a child). It asks engine.access.rules/may-dig?. A refusal books the torch as left
+  (jobs.debug.walk-plan as a child). It asks jobs.lib.access.rules/may-dig?. A refusal books the torch as left
   with that reason and is never forced. Otherwise the scaffold ledger entry is marked :removing, the torch is
   dug and the entry dropped once the cell is air. A cell still holding the torch is left :dig-failed. The drops
   are then collected (jobs.forestry.collect-drops, radius 3).

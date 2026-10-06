@@ -1,8 +1,8 @@
 (ns jobs.maintenance.unstick
   (:require [engine.ctx :as ctx]
-            [engine.jobs.reach :as reach]
-            [engine.jobs.util :as u]
-            [engine.triggers.stuck :as stuck]))
+            [jobs.lib.reach :as reach]
+            [jobs.lib.util :as u]
+            [triggers.survival.stuck :as stuck]))
 
 (def doc
   "Get a body out of being stuck: a job kept calling moveTo and the body got nowhere (the stuck trigger).
@@ -15,7 +15,7 @@
   - Else it gives up: warn unstick.failed {:pos :why :escalation :text}, a :stuck memory entry (cap 10, ttl 1 hour)
     that keeps the trigger quiet for :quiet-ms, and it ends so the job list resumes. With no goal in the latest
     :moved entry it gives up at once (:why :no-goal).
-  The check is the stuck trigger's condition (engine.triggers.stuck), or a spell already begun.")
+  The check is the stuck trigger's condition (triggers.survival.stuck), or a spell already begun.")
 
 (def args
   {:n {:doc "bad moves in a row that count as stuck" :default (:n stuck/defaults)}

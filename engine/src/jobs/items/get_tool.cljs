@@ -1,10 +1,10 @@
 (ns jobs.items.get-tool
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
-            [engine.jobs.blocks :as b]
-            [engine.jobs.fetch :as fetch]
-            [engine.jobs.tools :as tools]
-            [engine.jobs.util :as u]))
+            [jobs.lib.blocks :as b]
+            [jobs.lib.fetch :as fetch]
+            [jobs.lib.tools :as tools]
+            [jobs.lib.util :as u]))
 
 (def doc
   "Get a tool: one that harvests :block (minecraft-data harvestTools), the tool :item, or a tool of :kind (\"pickaxe\",
@@ -22,7 +22,7 @@
    :item {:doc "a tool item name" :default nil}
    :kind {:doc "a tool kind, e.g. \"pickaxe\" or \"shears\"" :default nil}
    :how {:doc "sources, a subset of #{:chest :craft :gather}; nil: all" :default nil}
-   :depth {:doc "nested fetches left; nil: the fetch limits (engine.jobs.fetch)" :default nil}
+   :depth {:doc "nested fetches left; nil: the fetch limits (jobs.lib.fetch)" :default nil}
    :minutes {:doc "time budget; nil: the fetch limits" :default nil}
    :fail-minutes {:doc "passed on to nested fetches; nil: the fetch limits" :default nil}
    :chain {:doc "items being fetched above this one" :default []}})

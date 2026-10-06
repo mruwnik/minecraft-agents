@@ -1,13 +1,13 @@
 (ns jobs.access.clear-path
   (:require [engine.ctx :as ctx]
-            [engine.jobs.blocks :as b]
-            [engine.jobs.escape :as escape]
-            [engine.jobs.util :as u]))
+            [jobs.lib.blocks :as b]
+            [jobs.lib.escape :as escape]
+            [jobs.lib.util :as u]))
 
 (def doc
   "Dig a door 1 wide and 2 high through the wall straight ahead along :heading, then step through it.
   - The wall is at most :max-thick blocks thick, starts right in front of the body, and has a floor under every
-    row and room for the body beyond it (engine.jobs.escape/door).
+    row and room for the body beyond it (jobs.lib.escape/door).
   - Never digs a door, gate, trapdoor, bed, container, sign or an unbreakable block.
   - Each cell is a jobs.blocks.dig child (zones, claims, hazards and tools are its rules). It picks up the drop
     (:collect) when there is room for it, so the block can be put back; with no room it digs on and leaves it.
