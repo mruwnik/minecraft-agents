@@ -192,7 +192,9 @@
                                  (stop-ticks) (takeover/close! eng) (some-> control .close)
                                  ((:close event-socket)) (core/shutdown! eng)
                                  (await saved)
-                                 (.close p) (release)))})
+                                 (core/save-memory! eng)
+                                 (await (.close p))
+                                 (release)))})
         (catch :default e
           ((:stop seen))
           (stop-perception)
@@ -205,16 +207,19 @@
 
 (defn shutdown-handler
   "The signal handler: stops the body, then exits once stop has finished (memory saved) or after limit-ms, whichever
-  comes first, and also when stop fails."
+  comes first, and also when stop fails. A second signal returns the first one's promise: stop runs once."
   ([stop exit!] (shutdown-handler stop exit! shutdown-limit-ms))
   ([stop exit! limit-ms]
-   (fn []
-     (let [timer (atom nil)
-           limit (js/Promise. (fn [resolve _] (reset! timer (js/setTimeout resolve limit-ms))))
-           stopped (-> (js/Promise.resolve) (.then stop))]
-       (-> (js/Promise.race #js [stopped limit])
-           (.catch (fn [_]))
-           (.then (fn [] (js/clearTimeout @timer) (exit!))))))))
+   (let [running (atom nil)]
+     (fn []
+       (or @running
+           (let [timer (atom nil)
+                 limit (js/Promise. (fn [resolve _] (reset! timer (js/setTimeout resolve limit-ms))))
+                 stopped (-> (js/Promise.resolve) (.then stop))
+                 done (-> (js/Promise.race #js [stopped limit])
+                          (.catch (fn [_]))
+                          (.then (fn [] (js/clearTimeout @timer) (exit!))))]
+             (reset! running done)))))))
 
 (defn ^:async run
   "Start a body. Resolves to {:engine eng :stop f}, or {:error text}; :exit-code 3 when the body already runs.

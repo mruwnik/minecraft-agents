@@ -71,6 +71,18 @@
           (await ((main/shutdown-handler failing-stop #(swap! log conj :exit-failed) 1000)))
           (is (= [:stopped :exit :exit-hung :exit-failed] @log)))))))
 
+(deftest a-second-signal-does-not-stop-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [log (atom [])
+              stop (fn [] (js/Promise. (fn [resolve _] (js/setTimeout (fn [] (swap! log conj :stopped) (resolve)) 40))))
+              handler (main/shutdown-handler stop #(swap! log conj :exit) 1000)]
+          (handler)
+          (await (handler))
+          (await (js/Promise. (fn [resolve] (js/setTimeout resolve 80))))
+          (is (= [:stopped :exit] @log) "one stop and one exit, however many signals"))))))
+
 (defn scenario-file [text]
   (let [f (path/join (tu/tmp-dir) "s.edn")]
     (fs/writeFileSync f text)
