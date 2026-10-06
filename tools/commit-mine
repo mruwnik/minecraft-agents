@@ -143,7 +143,7 @@ staged_by_me=0
 cleanup() {
   local rc=$?
   if [ "$staged_by_me" = 1 ] && [ "${committed:-0}" != 1 ]; then unstage; fi
-  release_lock
+  [ "${lock_released:-0}" = 1 ] || release_lock
   exit $rc
 }
 unstage() {
@@ -298,6 +298,8 @@ jq -nc --arg time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg hash "$hash" --arg card
   --arg files "$files" --arg stat "$stat" --argjson ins "$ins" --argjson del "$del" --arg flags "$(printf '%s\n' "${flags[@]:-}")" \
   '{time:$time,hash:$hash,card:$card,paths:($files|split("\n")|map(select(.!=""))),insertions:$ins,deletions:$del,stat:$stat,flags:($flags|split("\n")|map(select(.!="")))}' \
   >> "$LEDGER"
+# The lock is not needed past the ledger row: release it before the note, which may take its whole timeout.
+release_lock; lock_released=1
 # Stat on stdout and, best effort, on the card: the commit exists already, so a board failure only warns.
 stat_text="$(git show --stat --format='%h %s' HEAD | sed -n '1,20p')"
 printf '%s\n' "$stat_text"

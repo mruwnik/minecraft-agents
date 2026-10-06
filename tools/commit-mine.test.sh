@@ -209,6 +209,22 @@ echo "$RANDOM$RANDOM" > f.txt; t0=$SECONDS
 out=$(COMMIT_MINE_NOTE_TIMEOUT=1 tools/commit-mine --card abcd1234 -m "$C slow differ" --expect-lines 2 f.txt 2>&1); check "slow differ exit" "$?" 0
 check "slow differ gives up" "$((SECONDS - t0 <= 10))" 1
 check "slow differ warns" "$(grep -ci 'warning.*card' <<<"$out")" 1
+# The lock is free while the note posts: a second commit during a slow note finishes before the note does.
+cat > tools/card <<'EOS'
+#!/usr/bin/env bash
+[ -e "$NOTE_MARK.started" ] && exit 0
+touch "$NOTE_MARK.started"; sleep 5; touch "$NOTE_MARK.done"
+EOS
+export NOTE_MARK="$T/note"; rm -f "$NOTE_MARK".*
+echo "$RANDOM$RANDOM" > f.txt
+tools/commit-mine --card abcd1234 -m "$C first" --expect-lines 2 f.txt >/dev/null 2>&1 &
+first=$!
+until [ -e "$NOTE_MARK.started" ]; do sleep 0.1; done
+echo "$RANDOM$RANDOM" > f.txt
+tools/commit-mine --card abcd1234 -m "$C second" --expect-lines 2 f.txt >/dev/null 2>&1; check "commit during a slow note exit" "$?" 0
+check "second commit done before the first note" "$([ -e "$NOTE_MARK.done" ] && echo late || echo early)" early
+wait "$first"; check "first commit exit" "$?" 0
+check "both commits in the log" "$(git log -2 --format=%s | grep -c 'first\|second')" 2
 rm tools/card tools/card.real
 # Lock: the timeout counts seconds; a lock whose owner pid is dead is reclaimed; one held by a live pid is waited on.
 echo z > f.txt
