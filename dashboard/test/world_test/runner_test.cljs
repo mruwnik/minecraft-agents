@@ -140,8 +140,25 @@
       (fs/mkdirSync dir #js {:recursive true})
       (fs/writeFileSync (path/join dir "body.log") "log")
       (fs/writeFileSync (path/join dir "scenario.edn") "{}")
-      (-> (r/finish-run! {:body body})
+      (-> (r/finish-run! {:body body} [{:status :pass} {:status :skipped}])
           (.then (fn []
                    (is (not (fs/existsSync dir)))
                    (is (fs/existsSync other))))
           (.finally (fn [] (fs/rmSync other #js {:recursive true :force true}) (done)))))))
+
+(deftest a-failed-or-broken-run-keeps-its-temp-dir-for-the-log
+  (async done
+    (let [body (str "WtKeep" (.-pid js/process))
+          dir (r/run-dir {:body body})
+          keeps? (fn [results]
+                   (fs/mkdirSync dir #js {:recursive true})
+                   (fs/writeFileSync (path/join dir "body.log") "log")
+                   (.then (r/finish-run! {:body body} results)
+                          (fn [] (let [kept (fs/existsSync (path/join dir "body.log"))]
+                                   (fs/rmSync dir #js {:recursive true :force true})
+                                   kept))))]
+      (-> (keeps? [{:status :pass} {:status :fail}])
+          (.then (fn [failed] (is failed) (keeps? [{:status :error}])))
+          (.then (fn [errored] (is errored) (keeps? nil)))
+          (.then (fn [broken] (is broken)))
+          (.finally (fn [] (fs/rmSync dir #js {:recursive true :force true}) (done)))))))

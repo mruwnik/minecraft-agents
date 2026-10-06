@@ -209,11 +209,15 @@
       (js/Promise.resolve nil))))
 
 (defn finish-run!
-  "End of a run: clears the plot the body was left on, then removes the run's temp dir. When the clearing fails the dir
-  stays (it holds the plot to clear on the next start) and the rejection goes on."
-  [opts]
+  "End of a run: clears the plot the body was left on, then removes the run's temp dir, unless results is nil (the run
+  broke) or holds a failed or errored case: then the dir stays with its body.log and the log says where. When the
+  clearing fails the dir stays too (it holds the plot to clear on the next start) and the rejection goes on."
+  [opts results]
   (.then (reset-last-plot! opts)
-         (fn [] (fs/rmSync (run-dir opts) #js {:recursive true :force true}))))
+         (fn []
+           (if (or (nil? results) (some #(#{:fail :error} (:status %)) results))
+             (log! "world-test: kept " (run-dir opts) " (body.log) for the post-mortem")
+             (fs/rmSync (run-dir opts) #js {:recursive true :force true})))))
 
 (defn body-argv
   "node argv for a body: V8 flags must be on the command line (card 41987e8c: new-space cap, RSS 335 -> 235 MB)."
@@ -705,6 +709,7 @@
   (-> (js/Promise.resolve nil)
       (.then (fn []
                (let [opts (parse-args (array-seq argv))
+                     final-results (atom nil)
                      cases (f/select-cases (load-cases (:paths opts)) opts)
                      bad (filter :problems cases)]
                  (cond
@@ -722,13 +727,14 @@
                                   (.then #(lease-body! opts))
                                   (.then #(run-all! opts cases))
                                   (.then (fn [results]
+                                           (reset! final-results results)
                                            (write-results! opts results)
                                            (let [n (frequencies (map :status results))]
                                              (log! "world-test: " (count results) " runs, " (n :pass 0) " passed, " (n :fail 0) " failed, "
                                                    (n :error 0) " errors, " (n :skipped 0) " skipped")
                                              (exit-code results))))
                                   (.finally #(-> (stop-body! opts)
-                                                                 (.then (fn [] (finish-run! opts)))
+                                                                 (.then (fn [] (finish-run! opts @final-results)))
                                                                  (.catch (fn [e] (log! "world-test: temp dir kept: " (.-message e))))
                                                                  (.then (fn [] (release-body! opts)))))))))))))
       (.catch (fn [e] (js/console.error (.-message e)) (js/console.error usage) 2))))
