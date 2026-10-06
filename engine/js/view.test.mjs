@@ -870,6 +870,34 @@ test('relight: boxes over budget carry their changes to the next flush, and thei
   assert.equal(cells[s * 4096 + (((65 + 64) & 15) << 8 | 8 << 4 | 8)] & 15, 14)
 })
 
+test('relight: a backlog bigger than relightMaxPoints is only looked at in part per flush; the rest waits, its columns blocked', async () => {
+  const columns = Object.fromEntries([0, 1, 2, 3, 4, 5, 6, 7].flatMap(cx => [0, 1].map(cz => [`${cx},${cz}`, new ChunkColumn()])))
+  const bot = fakeBot({ columns })
+  bot.registry = undefined
+  const { view, dir } = makeView(bot, { relightMaxPoints: 1, relightBudgetMs: 1e9 })
+  const torch = x => {
+    const stone = stateOf('stone')
+    columns[`${x >> 4},0`].setBlockStateId({ x: x & 15, y: 64, z: 8 }, stone)
+    columns[`${x >> 4},0`].setBlockStateId({ x: x & 15, y: 65, z: 8 }, stateOf('torch'))
+    bot.emit('blockUpdate', { position: new Vec3(x, 65, 8), stateId: AIR }, { position: new Vec3(x, 65, 8), stateId: stateOf('torch') })
+  }
+  torch(8)
+  torch(88)
+  torch(120)
+  await view.flushColumns()
+  await view.idle()
+  const first = view.stats()
+  assert.equal(first.relightBoxes, 1)
+  assert.equal(first.relightCarried, 2)
+  assert.equal(fs.existsSync(path.join(worldChunks(dir), '5.0.bin')), false)
+  await view.flushColumns()
+  await view.flushColumns()
+  await view.idle()
+  const rest = view.stats()
+  assert.equal(rest.relightBoxes, 2)
+  assert.equal(fs.existsSync(path.join(worldChunks(dir), '7.0.bin')), true)
+})
+
 test('overlay light in a column file decodes to the overlay, and a column without overlay is unchanged', () => {
   const column = makeColumn()
   const args = { column, x: 0, z: 0, t: 1, body: 'Bob', mcVersion: VERSION }

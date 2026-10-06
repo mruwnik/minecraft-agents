@@ -9,7 +9,7 @@ import { createHash } from 'node:crypto'
 import { promisify } from 'node:util'
 import { relightBox } from './light.mjs'
 import { bodyDir, worldsDir } from './bodies.mjs'
-import { RELIGHT_BUDGET_MS, RELIGHT_REACH, columnLightSection, columnStateSection, tableFor, mergeOverlapping } from './view-light.mjs'
+import { RELIGHT_BUDGET_MS, RELIGHT_MAX_POINTS, RELIGHT_REACH, columnLightSection, columnStateSection, tableFor, mergeOverlapping } from './view-light.mjs'
 import { VIEW_VERSION, encodeColumn } from './view-column.mjs'
 import { poseJson, poseSnapshot, bodyKey, poseKey, offlinePose, hudSnapshot, hudKey } from './view-pose.mjs'
 export * from './view-light.mjs'
@@ -95,7 +95,7 @@ export function poseHzFromEnv (env = process.env) {
 }
 
 
-export function createView ({ stateDir, agent, world, onEvent = () => {}, now = Date.now, enabled = process.env.BODY_VIEW !== '0', poseHz = poseHzFromEnv(), relightBudgetMs = RELIGHT_BUDGET_MS }) {
+export function createView ({ stateDir, agent, world, onEvent = () => {}, now = Date.now, enabled = process.env.BODY_VIEW !== '0', poseHz = poseHzFromEnv(), relightBudgetMs = RELIGHT_BUDGET_MS, relightMaxPoints = RELIGHT_MAX_POINTS }) {
   if (!enabled) return noView
   let bot = null
   let unhook = () => {}
@@ -157,8 +157,15 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     const blocked = new Set()
     if (!changes.size) return blocked
     const start = performance.now()
-    const queued = [...changes.values()]
+    const all = [...changes.values()]
+    const queued = all.slice(0, relightMaxPoints)
     changes = new Map()
+    // a huge backlog is not boxed in one go (boxFor and the merge cost grow with it): the rest waits for the next flush
+    for (const p of all.slice(relightMaxPoints)) {
+      changes.set(`${p.x},${p.y},${p.z}`, p)
+      blocked.add(`${p.x >> 4},${p.z >> 4}`)
+      stats.relightCarried++
+    }
     try {
       relightChanges(target, queued, start, blocked)
     } catch (err) { reportError(err) }

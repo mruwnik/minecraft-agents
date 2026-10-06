@@ -5,6 +5,8 @@ import { lightTable } from './light.mjs'
 
 export const LIGHT_SECTION_BYTES = 2048
 export const RELIGHT_BUDGET_MS = 10
+// block changes boxed per flush; a bigger backlog is carried (a flush must not hold the main thread)
+export const RELIGHT_MAX_POINTS = 400
 export const RELIGHT_REACH = 16
 const SECTION_VOLUME = 4096
 
