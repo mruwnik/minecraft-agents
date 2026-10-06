@@ -424,13 +424,20 @@
           (js/Promise.resolve #{})
           (:act c)))
 
+(defn watch-window
+  "Where watch! starts counting events: {:offset :from-ms}. A case with a register counts from just before the register
+  was put (its triggers may fire inside the settle); one without counts from t0, after the settle."
+  [register? before-register settled]
+  (if register? before-register settled))
+
 (defn watch!
-  "Polls the log until every expectation is decided or the case's limit; resolves to the judged results."
-  [opts c offset t0 ids]
+  "Polls the log until every expectation is decided or the case's limit; resolves to the judged results. window: see
+  watch-window; events before t0 count when the window starts earlier."
+  [opts c {offset :offset from :from-ms} t0 ids]
   (let [limit (+ t0 (* 1000 (max (:limit-s c) (+ 2 (x/deadline-s (:expect c))))))]
     (letfn [(poll []
               (let [now (js/Date.now)
-                    events (filterv #(>= (:time-ms % 0) t0) (read-events-from (events-file opts) offset))
+                    events (filterv #(>= (:time-ms % 0) from) (read-events-from (events-file opts) offset))
                     results (x/judge-all (:expect c) events {:t0-ms t0 :now-ms now :job-ids ids})]
                 (if (or (x/decided? results) (> now limit))
                   (js/Promise.resolve (mapv #(if (= :pending (:status %)) (assoc % :status :fail :evidence "undecided at the case's limit") %) results))
@@ -479,6 +486,7 @@
         rc (f/resolve-tags c origin)
         started (js/Date.now)
         plan-files (atom [])
+        pre-register (atom nil)
         _ (note-last-plot! opts origin grid)
         result (fn [m] (merge {:id (:id c) :run run :plot i :origin origin :elapsed-s (/ (- (js/Date.now) started) 1000)} m))]
     (-> (if-let [phase (lease/time-phase rc)]
@@ -495,6 +503,7 @@
                        (.then #(rcon! (f/body-commands origin (:body opts) rc)))
                        (.then #(ensure-at-start! {:send rcon! :sleep sleep} origin (:body opts) rc))
                        (.then (fn [why] (when why (throw (js/Error. why)))))
+                       (.then #(reset! pre-register {:offset (file-size (events-file opts)) :from-ms (js/Date.now)}))
                        (.then #(when register (put-register! opts register)))
                        (.then #(sleep (* 1000 (get-in rc [:body :settle-s]))))
                        (.then #(rcon! (f/clear-hostiles-commands grid origin rc)))
@@ -503,7 +512,7 @@
                                       t0 (js/Date.now)]
                                   (-> (run-steps! opts origin rc offset t0)
                                       (.then (fn [ids]
-                                               (.then (watch! opts rc offset t0 ids)
+                                               (.then (watch! opts rc (watch-window (some? register) @pre-register {:offset offset :from-ms t0}) t0 ids)
                                                       (fn [expects]
                                                         (.then (after-checks! opts origin rc)
                                                                (fn [afters]

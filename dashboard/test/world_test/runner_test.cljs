@@ -36,3 +36,8 @@
           (.then (fn [{:keys [res]}]
                    (is (re-find #"not at its start" res))
                    (done)))))))
+
+(deftest a-register-case-counts-events-from-before-the-register-was-put
+  (let [pre {:offset 10 :from-ms 1000} post {:offset 90 :from-ms 9000}]
+    (is (= pre (r/watch-window true pre post)) "a trigger firing inside the settle is counted")
+    (is (= post (r/watch-window false pre post)) "no register: the settle still hides leftover events")))
