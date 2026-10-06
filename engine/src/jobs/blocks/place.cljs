@@ -129,17 +129,18 @@
     true))
 
 (defn finish! [c result]
-  (let [text (str (if (:placed result) "placed " "did not place ") (or (:item result) "") " at " (pr-str (b/cell (:pos result)))
-                  (when-not (:placed result) (str ": " (name (:reason result)))))]
+  (let [text (str (if (:placed result) "placed " "did not place ") (:item result) " at " (pr-str (b/cell (:pos result)))
+                  (when-not (:placed result)
+                    (str ": " (name (:reason result)) (when (:block result) (str " by " (:block result))))))]
     (ctx/emit! c :blocks.place.done :info (assoc result :text text))
     (ctx/result! c result)
     :done))
 
-(defn ^:async clear! [c pos]
+(defn ^:async clear! [c pos items]
   (let [r (await (ctx/call-child c :clear 'jobs.blocks.dig (clear-args c pos)))
         res (ctx/child-result c :clear)]
     (if (and (= :done r) (not (#{:dug :already-clear} (:reason res))))
-      (finish! c {:placed false :pos pos :reason :clear-failed :block (:block res) :why (:reason res)})
+      (finish! c {:placed false :pos pos :item (first items) :reason :clear-failed :block (:block res) :why (:reason res)})
       :continue)))
 
 (defn ^:async place! [c pos items]
@@ -162,10 +163,10 @@
             full (occupied-by c pos items)
             r (when-not (or full (some #{block} items)) (await (fetch/step! c 'jobs.blocks.place (problem c))))]
         (cond
-          full (finish! c {:placed false :pos pos :reason :occupied :block full})
+          full (finish! c {:placed false :pos pos :item (first items) :reason :occupied :block full})
           r r
           (some #{block} items) (finish! c {:placed false :pos pos :item block :reason :already})
-          (b/clearable block) (await (clear! c pos))
+          (b/clearable block) (await (clear! c pos items))
           (not (b/in-reach? c pos)) (await (b/walk! c pos))
           (nil? (chosen c items)) :continue
           :else (await (place! c pos items)))))))

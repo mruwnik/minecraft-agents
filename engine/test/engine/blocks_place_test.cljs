@@ -77,6 +77,23 @@
             (is (= {:placed false :reason :occupied :block "stone"} (select-keys r [:placed :reason :block]))))
           (is (empty? (bd/calls (:p env) "dig"))))))))
 
+(defn done-text [seen]
+  (:text (first (filter #(= :blocks.place.done (:kind %)) @seen))))
+
+(deftest done-texts-name-the-item-and-the-blocking-block
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [a (bd/setup {:self body :blocks {"2,64,0" "stone" "2,63,0" "stone"} :inventory cobble})
+              _ (await (bd/child-outcome (:eng a) job {:pos at :item "cobblestone"} 5))
+              b (bd/setup {:self body :blocks {"2,64,0" "cobblestone"} :inventory cobble})
+              _ (await (bd/child-outcome (:eng b) job {:pos at :item "cobblestone"} 5))
+              c (bd/setup {:self body :inventory cobble})
+              _ (await (bd/child-outcome (:eng c) job {:pos [2 64 0] :item "cobblestone"} 5))]
+          (is (= "did not place cobblestone at [2 64 0]: occupied by stone" (done-text (:seen a))))
+          (is (= "did not place cobblestone at [2 64 0]: already" (done-text (:seen b))))
+          (is (= "placed cobblestone at [2 64 0]" (done-text (:seen c)))))))))
+
 (deftest a-cell-in-anothers-zone-waits-not-allowed-and-ignore-zones-records-it
   (async done
     (tu/run-async done
