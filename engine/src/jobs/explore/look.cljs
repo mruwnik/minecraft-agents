@@ -5,7 +5,7 @@
   look.observed, available through observe --wait --watch or observe result after completion. :at inspects one exact
   block as last seen, with properties (a cell never seen is :unknown). Nearby samples are nearest first and bounded;
   :more-blocks?/:more-entities? report extra matches. Nothing is sensed through walls (players are always listed).
-  This is sight evidence, not a terrain map.")
+  This is sight evidence, not a terrain map. A refused argument ends {:status :stopped :reason :bad-args :text why}.")
 (def args
   {:radius {:doc "nearby sample radius, 1..32 blocks" :default 16}
    :block-names {:doc "nil, one block name or a vector/set of up to 16 names" :default nil}
@@ -64,7 +64,7 @@
   (let [a (options (:args c))]
     (if-let [error (:error a)]
       (do (ctx/emit! c :look.refused :warn {:reason :bad-args :text error})
-          (ctx/result! c {:observed false :reason :bad-args}))
+          (ctx/result! c {:status :stopped :observed false :reason :bad-args :text error}))
       (let [result (observe (:primitives c) a)]
         (ctx/emit! c :look.observed :info result)
         (ctx/result! c result)))

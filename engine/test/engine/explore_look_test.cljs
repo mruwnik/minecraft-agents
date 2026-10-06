@@ -45,3 +45,16 @@
             (is (= :seen (get-in event [:data :scope]))))
           (is (empty? (:list (core/state eng))))
           (is (empty? (.-calls (.-world p)))))))))
+(deftest a-refused-look-ends-stopped-with-the-reason-not-completed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[seen sink] (tu/capture-sink)
+              eng (core/create {:primitives (tu/fake {}) :jobs registry/jobs :dir (tu/tmp-dir)
+                                :events (events/make {:sinks [sink]})})]
+          (core/submit! eng '(jobs.explore.look {:max-blocks 32}) {})
+          (await (core/tick! eng))
+          (let [ended (first (filter #(#{:completed :stopped} (:kind %)) @seen))]
+            (is (= :stopped (:kind ended)))
+            (is (= :bad-args (get-in ended [:data :reason])))
+            (is (re-find #"max-blocks" (str (get-in ended [:data :text]))))))))))
