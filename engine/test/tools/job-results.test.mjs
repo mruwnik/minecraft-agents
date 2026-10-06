@@ -49,7 +49,9 @@ test('rich recent history uses multiple finite capped pages and safely reduces o
   assert.deepEqual(result.events[0].data.found[0].pos, [5, 70, 3])
   assert.ok(f.queries.length > 3)
   assert.ok(f.queries.slice(1).every(x => Number(new URL(x, 'http://local').searchParams.get('limit')) <= 128))
-  assert.ok(f.queries.length < 40)
+  // Finite: one snapshot, a few halving retries (128 -> 32), then at most one read per capped page of the whole history.
+  const pageCap = 32; const halvings = 2
+  assert.ok(f.queries.length <= 1 + halvings + Math.ceil(many.length / pageCap), `${f.queries.length} queries`)
 })
 
 test('CLI completed job fallback and explicit result return the same domain outcome', async () => {
