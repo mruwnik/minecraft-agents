@@ -279,3 +279,39 @@
     (.rmSync fs dir #js {:recursive true :force true})
     (is (= {:world "w"} small))
     (is (nil? large))))
+
+(deftest a-file-or-link-already-at-the-png-name-is-never-overwritten
+  (async done
+    (let [{:keys [worlds workspace] :as f} (world-fixture)
+          dir (.join path workspace "snapshots")
+          name (snap/file-name 1500)
+          other (.join path workspace "other.png")
+          opts (snap/options (into base ["--worlds" worlds "--workspace" workspace]))]
+      (.mkdirSync fs dir #js {:recursive true})
+      (.writeFileSync fs other "mine")
+      (.writeFileSync fs (.join path dir name) "first")
+      (write-pose! f (pose {:t 1000}))
+      (-> (snap/execute! opts (fake-render (atom [])) 1500)
+          (.then (fn [_] (is false "a second snapshot in the same millisecond must fail")) (fn [e] (is (= "EEXIST" (.-code e)))))
+          (.then (fn [_]
+                   (is (= "first" (str (.readFileSync fs (.join path dir name)))))
+                   (.rmSync fs (.join path dir name))
+                   (.symlinkSync fs other (.join path dir name))
+                   (snap/execute! opts (fake-render (atom [])) 1500)))
+          (.then (fn [_] (is false "a link at the png name must fail")) (fn [e] (is (= "EEXIST" (.-code e)))))
+          (.then (fn [_] (is (= "mine" (str (.readFileSync fs other))) "the link target is untouched")))
+          (.finally done)))))
+
+(deftest main-fails-with-code-2-when-prune-meets-a-folder-at-an-old-png-name
+  (async done
+    (let [{:keys [worlds workspace] :as f} (world-fixture)
+          dir (.join path workspace "snapshots")]
+      (.mkdirSync fs dir #js {:recursive true})
+      (doseq [i (range 1 25)] (.writeFileSync fs (.join path dir (snap/file-name (+ 1000 i))) "old"))
+      (.mkdirSync fs (.join path dir (snap/file-name 1000)))
+      (write-pose! f (pose {:t (js/Date.now)}))
+      (-> (capture-stdout #(snap/main! (into base ["--worlds" worlds "--workspace" workspace]) (fake-render (atom []))))
+          (.then (fn [[code _]]
+                   (is (= 2 code))
+                   (is (.isDirectory (.statSync fs (.join path dir (snap/file-name 1000)))) "the folder is left alone")))
+          (.finally done)))))

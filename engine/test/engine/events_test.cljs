@@ -302,3 +302,25 @@
     (let [file (write-lines! (range 1 6) pad)]
       (is (= [1 2 3 4 5] (seqs-after file 0 10)) (str "pad " pad))
       (is (= [3 4 5] (seqs-after file 2 10)) (str "pad " pad)))))
+
+(defn write-exact-lines!
+  "Write one line per seq whose newline sits at byte offset nl-at of its own line (seqs must be one digit)."
+  [seqs nl-at trailing-newline?]
+  (let [file (path/join (tu/tmp-dir) "events.edn")
+        pad (- nl-at (count (pr-str {:seq 1 :pad ""})))
+        body (str/join "\n" (map #(pr-str {:seq % :pad (apply str (repeat pad "p"))}) seqs))]
+    (fs/mkdirSync (path/dirname file) #js {:recursive true})
+    (fs/writeFileSync file (if trailing-newline? (str body "\n") body))
+    file))
+
+(deftest a-newline-at-an-exact-probe-or-chunk-offset-is-found
+  (doseq [nl-at [511 512 513 1023 1024 1025 65535 65536 65537]]
+    (let [file (write-exact-lines! (range 1 6) nl-at true)]
+      (is (= [1 2 3 4 5] (seqs-after file 0 10)) (str "newline at " nl-at))
+      (is (= [4 5] (seqs-after file 3 10)) (str "newline at " nl-at)))))
+
+(deftest a-last-line-without-a-newline-is-read
+  (doseq [nl-at [100 511 512 1024 65536]]
+    (let [file (write-exact-lines! (range 1 4) nl-at false)]
+      (is (= [1 2 3] (seqs-after file 0 10)) (str "line length " nl-at))
+      (is (= [3] (seqs-after file 2 10)) (str "line length " nl-at)))))

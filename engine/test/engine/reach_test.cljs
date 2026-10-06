@@ -203,3 +203,23 @@
 
 (deftest a-roof-without-side-walls-is-no-tunnel
   (is (= [9] (danger-ids {"0,66,0" "stone"} heard-skel))))
+
+(def heard-skel-east (assoc heard-skel :pos {:x 8.5 :y 64 :z 0.5}))
+
+(def tunnel-z
+  "A 1x2 passage along x: stone over the head and at both sides along z of feet and head cells."
+  (into {"0,66,0" "stone"} (for [z [-1 1] y [64 65]] [(str "0," y "," z) "stone"])))
+
+(deftest a-heard-ranged-mob-is-no-danger-in-a-tunnel-along-the-other-axis
+  (is (= [] (danger-ids tunnel-z heard-skel-east))))
+
+(deftest a-seen-ranged-mob-is-a-danger-in-a-tunnel-along-the-other-axis
+  (is (= [9] (danger-ids tunnel-z (assoc heard-skel-east :seen true :heard false)))))
+
+(deftest a-two-wide-passage-is-no-tunnel
+  (let [blocks (into {"0,66,0" "stone" "1,66,0" "stone"} (for [x [-1 2] y [64 65]] [(str x "," y ",0") "stone"]))]
+    (is (= [9] (danger-ids blocks heard-skel)))))
+
+(deftest a-tunnel-with-an-opening-at-the-side-is-no-tunnel
+  (doseq [gap ["1,64,0" "-1,65,0"]]
+    (is (= [9] (danger-ids (dissoc tunnel gap) heard-skel)) (str "gap at " gap))))
