@@ -150,6 +150,26 @@
           (is (= "dirt" (block p [1 63 0])))
           (is (= [[2 63 0]] (mapv :cell (:cells skipped))) "nothing left to put back the third"))))))
 
+(def deep-pit
+  "A 5-deep 1x1 pit (feet at y 59) in dirt x -2..2; stone ground east of it (x 3..14) topped at the rim (feet y 64)."
+  (apply dissoc (merge (box 3 56 -3 14 63 3 "stone") (box -2 56 -2 2 63 2 "dirt")) (for [y (range 59 64)] (str "0," y ",0"))))
+
+(deftest go-to-does-not-walk-back-down-its-stair-to-put-it-back
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p seen]} (await (run-job! {:self {:pos {:x 0 :y 59 :z 0}} :blocks deep-pit
+                                                     :inventory [{:name "dirt" :count 2}]}
+                                                {:pos [10 64 0] :range 1}))
+              skipped (:cells (first (events-of seen :go-to.restore-skipped)))
+              low (set (mapv :cell skipped))]
+          (is (= {:arrived true} @out))
+          (is (>= (second (feet p)) 64) "the body stays up on the rim")
+          (is (seq low) "the cells deep below the rim are left for restore-broken")
+          (is (some #(= :away (:why %)) skipped) "cells the body would have to go down the shaft for are left")
+          (is (every? #(not= :away (:why %)) (remove #(> (- 64 (second (:cell %))) 2) skipped)) "only deep ones")
+          (is (every? #(= "air" (block p %)) low)))))))
+
 (deftest go-to-clears-a-door-out-of-a-sealed-room-and-shuts-it-behind
   (async done
     (tu/run-async done

@@ -348,14 +348,22 @@
     (ctx/update-mem! c #(-> % (dissoc :restore-now :restore-seen :restored :skipped :changed :best)
                             (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {})))))
 
+(defn deep-below?
+  "Whether cell lies more than 2 below the body's feet: a place walk (range 3) has to go down into the shaft for it."
+  [c [_ y _]]
+  (> (- (second (feet-cell c)) y) 2))
+
 (defn skip-why
   "Why hole e must not be filled now, or nil: :changed (no longer air: forgotten), :occupied (the body is in it),
-  :needed (filling it would shut in a body that has room now: the stair it stands on, its way out)."
-  [p {:keys [cell]}]
-  (cond
-    (not (b/air (u/block-name p (zipmap [:x :y :z] cell)))) :changed
-    (tidy/in-body? p cell) :occupied
-    (and (not (reach/enclosed? p)) (reach/enclosed? p #{(vec cell)})) :needed))
+  :needed (filling it would shut in a body that has room now: the stair it stands on, its way out), :away (out of
+  reach and deep below the feet: walking down to it would put the body inside its own refilled stair)."
+  [c {:keys [cell]}]
+  (let [p (:primitives c)]
+    (cond
+      (not (b/air (u/block-name p (zipmap [:x :y :z] cell)))) :changed
+      (tidy/in-body? p cell) :occupied
+      (and (not (reach/enclosed? p)) (reach/enclosed? p #{(vec cell)})) :needed
+      (and (not (b/in-reach? c cell)) (deep-below? c cell)) :away)))
 
 (defn ^:async restore-round!
   "Put back the next hole this job's escalations dug (own-holes), lowest first, with jobs.blocks.place (the dug block or
@@ -377,7 +385,7 @@
                     (if (= :changed why)
                       (do (tidy/forget-cell! c cell) (done! :changed cell))
                       (done! :skipped {:cell cell :block was :why why})))]
-        (if-let [why (skip-why p e)]
+        (if-let [why (skip-why c e)]
           (skip! why)
           (if-let [wait (b/child-wait c :restore 'jobs.blocks.place args)]
             (skip! (:reason wait))
