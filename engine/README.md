@@ -638,7 +638,7 @@ Helpers shared by jobs (not jobs): `jobs.lib.watch` (`watch/watch!` between acts
 was known recently, the body turns to look behind it so a creeper from behind is noticed; used by mine, fell-tree,
 from-plan, attack, fight-back, herd), `jobs.lib.worth/item-worth`, `jobs.lib.cost` (pure cost calculators),
 `jobs.lib.escape/choose`, `jobs.lib.tools/equip-for!` (cheapest carried tool that harvests the block; reflex digs use
-the fastest), `jobs.lib.declined`, `jobs.lib.reach` (danger checks), `jobs.lib.tidy`.
+the fastest), `jobs.lib.declined`, `jobs.lib.reach` (danger checks), `jobs.lib.tidy`, `jobs.lib.step-off` (a go-to hop to the nearest standable non-hazard cell off a cell the body stands in).
 
 ## Path planner
 
