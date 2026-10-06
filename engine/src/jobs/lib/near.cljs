@@ -68,7 +68,7 @@
   {:status :searching} (walk/no-walk), nothing walked; progress false: an unfinished search walks nowhere (plan!)."
   [c to range doors shut-also timeout-s explore one-way budget progress]
   (await (walk/settle! c))
-  (let [policy (if (= :never doors) executor/policy executor/door-policy)
+  (let [policy-of (fn [] (cond-> (walk/body-policy c) (not= :never doors) (update :moves conj :open)))
         announce! (fn [_kind data] (ctx/emit! c :replan :info data))
         walk-fn (fn [steps watch]
                   (if (= :never doors)
@@ -76,12 +76,12 @@
                     (pass/walk! c steps {:timeout-s timeout-s :doors doors :shut-also shut-also :watch watch})))]
     (when-not (= :never doors) (await (pass/shut-leftovers! c doors shut-also)))
     (let [result (loop [walls [] stuck nil]
-                   (let [plan (await (plan! c to range doors policy walls explore one-way budget progress))]
-                     (if-let [no (walk/no-walk plan 0 policy)]
+                   (let [plan (await (plan! c to range doors (policy-of) walls explore one-way budget progress))]
+                     (if-let [no (walk/no-walk plan 0 (policy-of))]
                        (if stuck (door-stuck stuck) no)
                        (let [{done :done last-plan :plan}
-                             (await (walk/follow! c plan {:plan-fn #(plan! c to range doors policy (into walls %) explore one-way (walk/replan-budget budget) progress)
-                                                          :walk-fn walk-fn :to to :policy policy :announce! announce!}))]
+                             (await (walk/follow! c plan {:plan-fn #(plan! c to range doors (policy-of) (into walls %) explore one-way (walk/replan-budget budget) progress)
+                                                          :walk-fn walk-fn :to to :policy (policy-of) :announce! announce!}))]
                          (cond
                            (not= :door-stuck (:status done))
                            (cond-> (walk/partial-end done (:status last-plan) to range (:steps last-plan) (:stop last-plan))

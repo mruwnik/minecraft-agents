@@ -40,7 +40,7 @@
   {:key key :t (js/Date.now)
    :plan (planner/create-plan (.-snapshot pw) (query c targets range)
                               (walk/plan-options pw walk/default-weight
-                                                 (executor/planner-limits executor/policy (walk/solid-fn pw))
+                                                 (executor/planner-limits (walk/body-policy c) (walk/solid-fn pw))
                                                  (assoc walk/wide-box :maxNodes max-nodes)))})
 
 (defn answer

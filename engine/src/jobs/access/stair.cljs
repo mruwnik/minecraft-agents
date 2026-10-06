@@ -247,7 +247,7 @@
         (cond
           beyond (stop beyond)
           (not= "found" status) {:reason :no-way-back :why (keyword status) :planner (some-> (.-reason r) keyword)}
-          :else (some-> (executor/refusal executor/policy steps) stop))))))
+          :else (some-> (executor/refusal (walk/body-policy c) steps) stop))))))
 
 (defn need
   "What the next cell to dig lacks, as a reason map for ctx/wait, or nil: :no-tool (a pickaxe), :no-free-slot (no room

@@ -829,7 +829,7 @@
     (loop [replans 0 walked 0 walk-ms 0]
       (await (settle! c))
       (let [plan (await (plan-fn []))]
-        (if-let [no (no-walk plan replans)]
+        (if-let [no (no-walk plan replans (body-policy c))]
           (end no walked walk-ms)
           (let [{:keys [r steps status]} plan]
             (announce! :plan {:steps (count steps) :summary (some-> (.-path r) .-summary js->clj)
