@@ -2,28 +2,27 @@
   (:require [jobs.lib.tidy :as tidy]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
+            [jobs.lib.pace :as pace]
+            [jobs.lib.result :as result]
             [jobs.lib.util :as u]
             [jobs.lib.walk :as walk]
             [triggers.survival.suffocating :as s]))
 
 (def doc
-  "Get air when drowning or stuck inside a block. One action per round.
-  Drowning (in water, head under, oxygen below :min-oxygen):
-  - If the own column reaches air within :reach blocks up, swim (the swim primitive rises to the surface).
-  - Otherwise walk sideways, at the feet's height, to the nearest column within :radius that does.
-  Enclosed (head cell holds a suffocating block, see triggers.survival.suffocating):
-  - First, once per job, step to a side cell with room to stand.
-  - If that does not help, dig the head block, dig the block above it if solid, and step up.
-  - A dig that fails (cannot, timeout, unreachable) is a failed round.
-  After a swim that surfaced, a body still in water heads for land instead of bobbing:
-  it swims to the nearest shore cell (land with its rim at most one block above the water) within :shore-radius,
-  else walks to land within :far-radius.
-  Ends when the head is clear and the body stands on land (solid ground under the feet) out of the water.
-  A body that cannot get out stays afloat (it holds jump for a few seconds each round) instead of ending,
-  because a body with no job sinks and the trigger would fire again for ever. One :afloat warning says so.
-  Gives up with a :no_air or :no_way_out warning after three failed rounds, with :no_shore once every shore in reach failed.
-  The suffocating trigger then fires it again.
-  Memory: writes one :breathe entry per job.")
+  "Get air when drowning or stuck inside a block, then out of the water, in one run (a reflex; never yields).
+  Each pass reads the world again:
+  - Drowning (in water, head under, oxygen below :min-oxygen): swim up the own column when it reaches air within
+    :reach blocks, else step sideways, at the feet's height, to the nearest column within :radius that does.
+  - Enclosed (head cell holds a suffocating block, see triggers.survival.suffocating): step to a side cell with room
+    to stand, once; then dig the head block, the block above it if solid, and step up.
+  - Surfaced and still in water: swim to the nearest shore cell (land with its rim at most one block above the water)
+    within :shore-radius, another direction after each failed swim; else walk to land within :far-radius.
+  - Afloat (no way out found): hold jump (job.holding :afloat) for afloat-holds holds, then stopped :no_land; a body
+    with no job sinks and the trigger fires again. One :afloat or :no_shore warning per spot (body memory
+    :breathe-afloat, 5 min).
+  Completed when the head is clear and, after a swim, the body stands on solid ground out of the water. Stopped
+  :no_air or :no_way_out (with a warn) after three failed tries in the run.
+  Memory: one :breathe entry per run.")
 
 (def args
   {:min-oxygen {:doc "oxygen (of 20) below which being in water with the head submerged is drowning"
@@ -37,6 +36,11 @@
 (def hold-ticks "Physics ticks (20 per second) one afloat hold keeps jump pressed." 100)
 (def hold-timeout-s "Bound of one hold's steer act, a little over its ticks." 8)
 (def far-timeout-s "Bound of one walk to far land." 60)
+(def far-walks "Walks to far land one run makes before the body counts as afloat." 2)
+(def afloat-holds "Holds one run keeps an afloat body up (about 20 s) before it stops :no_land." 4)
+(def max-passes "Passes one run makes before it stops :no_way_out, against a world that never changes." 40)
+(def afloat-near "Blocks around a spot warned afloat about in which a later run does not warn again." 16)
+(def afloat-policy {:cap 5 :ttl (* 5 60 1000)})
 
 (def breathe-policy {:cap 20 :ttl (* 60 60 1000)})
 
@@ -242,60 +246,89 @@
         #js {:controls #js {:jump true}}))))
 
 (defn ^:async hold-afloat!
-  "Keep jump pressed for hold-ticks physics ticks (one steer act), which holds a body at the surface: with no input
-  it sinks, and the drowning trigger would fire again. Returns :continue."
+  "One hold: declare the :afloat hold and keep jump pressed for hold-ticks physics ticks (one steer act), which holds
+  a body at the surface (with no input it sinks). Stopped :no_land after afloat-holds holds in the run, else :held."
   [c]
+  (ctx/hold-still! c :afloat)
   (await (ctx/act c :steer (walk/steer-args hold-timeout-s (hold-decider))))
-  :continue)
+  (let [holds (inc (:holds (ctx/mem c) 0))]
+    (ctx/update-mem! c assoc :holds holds)
+    (cond
+      (on-land? (:primitives c)) :again
+      (< holds afloat-holds) :held
+      :else (result/stop! c :no_land "afloat with no land in reach; fires again if it sinks"))))
+
+(defn near-afloat-spot?
+  "An earlier run warned about being afloat within afloat-near blocks of pos, within afloat-policy's ttl."
+  [c pos]
+  (some (fn [{:keys [data]}]
+          (let [q (:pos data)
+                dx (- (:x pos) (:x q)) dz (- (:z pos) (:z q))]
+            (<= (+ (* dx dx) (* dz dz)) (* afloat-near afloat-near))))
+        (ctx/entries c :breathe-afloat)))
+
+(defn warn-afloat!
+  "Warn kind with fields once per spot: not when an earlier run warned near here (body memory :breathe-afloat)."
+  [c kind fields]
+  (let [pos (u/self-pos c)]
+    (when-not (near-afloat-spot? c pos)
+      (ctx/emit! c kind :warn fields)
+      (ctx/remember! c :breathe-afloat {:pos pos :kind kind} afloat-policy))))
 
 (defn afloat!
-  "The body cannot get out of the water: remember it (later rounds only hold) and, when why is given, warn once."
+  "The body cannot get out of the water: remember it in job memory (later passes only hold) and, when why is given,
+  warn :afloat once per spot."
   [c why]
   (ctx/update-mem! c assoc :afloat true)
   (when why
-    (ctx/emit! c :afloat :warn {:why why :text (str "afloat in water, no way out: " (name why))})))
+    (warn-afloat! c :afloat {:why why :text (str "afloat in water, no way out: " (name why))})))
 
 (defn ^:async walk-to-far-land!
-  "Walk to the nearest land within :far-radius with the walk driver. :done when it arrived out of the water, else
-  :continue after marking the body afloat (no land, no pathWorld, or the driver found no way)."
+  "Walk to the nearest land within :far-radius with the walk driver. :done when it ended on land; :again for another
+  pass after a walk that arrived in water (far-walks per run), else after marking the body afloat (no land, no
+  pathWorld, or the driver found no way)."
   [c]
   (let [p (:primitives c)
         target (when (walk/path-world p) (nearest-land p (surface-pos p (u/self-pos c) (:reach (:args c))) (:far-radius (:args c))))]
     (if-not target
-      (do (afloat! c :no-land-in-reach) :continue)
+      (do (afloat! c :no-land-in-reach) :again)
       (let [{:keys [result]} (await (walk/walk-to! c {:to [(:x target) (:y target) (:z target)] :range 0
-                                                      :weight walk/default-weight :timeout-s far-timeout-s}))]
+                                                      :weight walk/default-weight :timeout-s far-timeout-s}))
+            walks (inc (:far-walks (ctx/mem c) 0))]
+        (ctx/update-mem! c assoc :far-walks walks)
         (cond
           (on-land? p) :done
-          (= :arrived (:status result)) :continue
-          :else (do (afloat! c (or (:reason result) (:status result))) :continue))))))
+          (and (= :arrived (:status result)) (< walks far-walks)) :again
+          :else (do (afloat! c (or (:reason result) (:status result))) :again))))))
 
-(defn ^:async give-up-shore!
-  "Every shore in reach failed (each failed swim excluded its direction): warn :no_shore once and hold afloat."
+(defn give-up-shore!
+  "Every shore in reach failed (each failed swim excluded its direction): warn :no_shore once per spot; the body is
+  afloat."
   [c]
-  (ctx/emit! c :no_shore :warn {:tries (count (:failed-shores (ctx/mem c))) :text "could not reach a shore"})
+  (warn-afloat! c :no_shore {:tries (count (:failed-shores (ctx/mem c))) :text "could not reach a shore"})
   (afloat! c nil)
-  (await (hold-afloat! c)))
+  :again)
 
 (defn ^:async head-for-land!
-  "Surfaced and still in water. Afloat already: hold. Else swim toward the nearest land cell within :shore-radius, then the next nearest in another direction after each failed swim, until every shore failed (the
-  swim primitive with toward climbs out onto a rim the pathfinder cannot path to); with none, walk to land within
-  :far-radius; a body that cannot get out stays afloat. :done when out of the water."
+  "Surfaced and still in water. Afloat already: hold. Else swim toward the nearest shore cell within :shore-radius,
+  then the next nearest in another direction after each failed swim, until every shore failed (the swim primitive
+  with toward climbs out onto a rim the pathfinder cannot path to); with none, walk to land within :far-radius; a
+  body that cannot get out is afloat. :done when out of the water."
   [c]
   (let [p (:primitives c)
         failed (:failed-shores (ctx/mem c))
-        target (nearest-land p (surface-pos p (u/self-pos c) (:reach (:args c))) (:shore-radius (:args c)) failed shore-cell?)]
+        target (when-not (:afloat (ctx/mem c))
+                 (nearest-land p (surface-pos p (u/self-pos c) (:reach (:args c))) (:shore-radius (:args c)) failed shore-cell?))]
     (cond
       (:afloat (ctx/mem c)) (await (hold-afloat! c))
-      (and (not target) (seq failed)) (await (give-up-shore! c))
-      (not target) (let [r (await (walk-to-far-land! c))]
-                     (if (= :continue r) (await (hold-afloat! c)) r))
+      (and (not target) (seq failed)) (give-up-shore! c)
+      (not target) (await (walk-to-far-land! c))
       :else
       (let [r (await (ctx/act c :swim (clj->js {:toward target})))]
         (if (or (= "landed" (status r)) (on-land? p))
           :done
           (do (ctx/update-mem! c update :failed-shores (fnil conj []) target)
-              :continue))))))
+              :again))))))
 
 (defn note!
   "Write the :breathe entry once per job instance."
@@ -305,33 +338,51 @@
       (ctx/remember! c :breathe {:why why :pos (u/pos-of (.-pos self)) :oxygen (.-oxygen self)} breathe-policy)
       (ctx/update-mem! c assoc :noted true))))
 
-(defn after-situation
-  "The situation is gone: keep going while surfaced in water (next round heads
-  for land), else done."
-  [c]
-  (if (surfaced-in-water? c) :continue :done))
+(defn fail!
+  "One failed try in this run: :again until u/max-failures, then the warn kind and stopped with reason kind."
+  [c kind text]
+  (let [tries (inc (:failures (ctx/mem c) 0))]
+    (ctx/update-mem! c assoc :failures tries)
+    (if (< tries u/max-failures)
+      :again
+      (do (ctx/emit! c kind :warn {:tries tries :text text})
+          (result/stop! c kind text)))))
 
-(defn ^:async round [c]
-  (let [min-oxygen (:min-oxygen (:args c))
-        why (s/situation (:primitives c) min-oxygen)]
+(defn ^:async pass!
+  "One look at the world and one try. :again or :held for another pass, else :done (perhaps stopped)."
+  [c]
+  (let [p (:primitives c)
+        min-oxygen (:min-oxygen (:args c))
+        why (s/situation p min-oxygen)]
     (cond
       (and (nil? why) (surfaced-in-water? c)) (await (head-for-land! c))
       (nil? why) :done
 
       :else
-      (let [p (:primitives c)
-            side (when (and (= :enclosed why) (not (:side-tried (ctx/mem c))))
+      (let [side (when (and (= :enclosed why) (not (:side-tried (ctx/mem c))))
                    (side-cell p (.self p)))]
+        (ctx/hold-still! c nil)
         (note! c why)
         (if side
           (do (ctx/update-mem! c assoc :side-tried true)
               ;; raw moveTo kept: an emergency step to air or out of water (range 0), where the planner may have no standable cell; no time for a plan.
               (await (ctx/act c :moveTo (clj->js {:pos side :range 0})))
-              (if (nil? (s/situation p min-oxygen)) (after-situation c) :continue))
+              :again)
           (let [drowning? (= :drowning why)
                 ok (await (if drowning? (swim-up! c) (dig-out! c)))]
             (cond
-              (nil? (s/situation p min-oxygen)) (after-situation c)
-              (and drowning? ok) :continue
-              drowning? (u/fail! c :no_air "drowning and no air within reach")
-              :else (u/fail! c :no_way_out "could not dig out of the block"))))))))
+              (nil? (s/situation p min-oxygen)) :again
+              (and drowning? ok) :again
+              drowning? (fail! c :no_air "drowning and no air within reach")
+              :else (fail! c :no_way_out "could not dig out of the block"))))))))
+
+(defn ^:async round [c]
+  (loop [i 0]
+    (cond
+      (not (ctx/alive? c)) :done
+      (<= max-passes i) (result/stop! c :no_way_out "still not out after many tries")
+      :else (let [r (await (pass! c))]
+              (case r
+                :held (recur (inc i))
+                :again (do (await (pace/pace!)) (recur (inc i)))
+                r)))))

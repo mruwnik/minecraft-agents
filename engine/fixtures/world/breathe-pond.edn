@@ -1,6 +1,7 @@
 ;; Breathe over a 10x10 pond, 4 deep (card 94ae4756): the body is put in the water, its air runs out, the breathe reflex fires.
 ;; Walled all round (wall 2 above the water, ground outside level with the water): it never reaches a shore, so the reflex must not end :cleared against the wall,
-;; the body stays afloat (no shore to swim to; the walk finds the land enclosed: one :afloat warning, held afloat, no end). With a ledge cut into one wall (the ground outside is level with the water) it climbs out and the
+;; the body stays afloat (no shore to swim to; the walk finds the land enclosed: one :afloat warning, a declared :afloat hold, then the run ends and
+;; the reflex fires again when the body sinks; it never drowns). With a ledge cut into one wall (the ground outside is level with the water) it climbs out and the
 ;; reflex ends :cleared once, also when the ledge's top is a slab, a path block or farmland (not a full block).
 {:defaults
  {:tags [:survival :water] :time :any
@@ -17,13 +18,15 @@
  [{:name "walled-stays-afloat-1"
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
             {:event {:source :job :kind :afloat} :within-s 40}
-            {:no-event {:source :reflex :kind :ended} :for-s 70}]
+            {:event {:source :job :kind :holding :data {:reason :afloat}} :within-s 40}
+            {:event {:source :reflex :kind :ended} :within-s 70}]
    :after [[:body-near [15.5 3.5 15.5] 6]]}
   {:name "walled-stays-afloat-2"
    :body {:at [13.5 2 17.5]}
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
             {:event {:source :job :kind :afloat} :within-s 40}
-            {:no-event {:source :reflex :kind :ended} :for-s 70}]
+            {:event {:source :job :kind :holding :data {:reason :afloat}} :within-s 40}
+            {:event {:source :reflex :kind :ended} :within-s 70}]
    :after [[:body-near [13.5 3.5 17.5] 6]]}
   {:name "ledge-east-lands-1"
    :blocks [[:fill [21 4 11] [21 5 20] "air"]]
