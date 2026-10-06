@@ -398,6 +398,42 @@
 
 ;; ---- block changes and touch
 
+(defn walk-cells
+  "Walk the cells from the eye (ox oy oz) towards the point (tx ty tz), up to (excluding) the point's own cell. Nil when a
+  cell on the way blocks sight under `table` (the raw world's sightTable), is unloaded, or the walk overruns its budget;
+  else the light of the last cell before the point's cell (the eye's own cell when they are the same)."
+  [^js raw ^js table ox oy oz tx ty tz]
+  (let [vx (- tx ox) vy (- ty oy) vz (- tz oz)
+        d (js/Math.hypot vx vy vz)
+        x1 (js/Math.floor tx) y1 (js/Math.floor ty) z1 (js/Math.floor tz)
+        x0 (js/Math.floor ox) y0 (js/Math.floor oy) z0 (js/Math.floor oz)
+        dx (if (zero? d) 0 (/ vx d)) dy (if (zero? d) 0 (/ vy d)) dz (if (zero? d) 0 (/ vz d))
+        sx (if (pos? dx) 1 -1) sy (if (pos? dy) 1 -1) sz (if (pos? dz) 1 -1)
+        tdx (if (zero? dx) js/Infinity (js/Math.abs (/ 1 dx)))
+        tdy (if (zero? dy) js/Infinity (js/Math.abs (/ 1 dy)))
+        tdz (if (zero? dz) js/Infinity (js/Math.abs (/ 1 dz)))]
+    (loop [cx x0 cy y0 cz z0
+           tmx (if (zero? dx) js/Infinity (* tdx (if (pos? dx) (- (inc x0) ox) (- ox x0))))
+           tmy (if (zero? dy) js/Infinity (* tdy (if (pos? dy) (- (inc y0) oy) (- oy y0))))
+           tmz (if (zero? dz) js/Infinity (* tdz (if (pos? dz) (- (inc z0) oz) (- oz z0))))
+           prev (or (.lightAt raw x0 y0 z0) 0)
+           budget (+ 3 (js/Math.abs (- x1 x0)) (js/Math.abs (- y1 y0)) (js/Math.abs (- z1 z0)))]
+      (let [t (min tmx tmy tmz)]
+        (cond
+          (or (and (== cx x1) (== cy y1) (== cz z1)) (> t d)) prev
+          (<= budget 0) nil
+          :else
+          (let [ax (== t tmx) ay (and (not ax) (== t tmy)) az (and (not ax) (not ay))
+                nx (if ax (+ cx sx) cx) ny (if ay (+ cy sy) cy) nz (if az (+ cz sz) cz)
+                target? (and (== nx x1) (== ny y1) (== nz z1))
+                here (.stateAt raw nx ny nz)]
+            (cond
+              (and (not target?) (or (< here 0) (== 1 (aget table here)))) nil
+              target? prev
+              :else (recur nx ny nz
+                           (if ax (+ tmx tdx) tmx) (if ay (+ tmy tdy) tmy) (if az (+ tmz tdz) tmz)
+                           (or (.lightAt raw nx ny nz) 0) (dec budget)))))))))
+
 (defn visible-now?
   "Whether the cell (x y z), now holding state id, is in view: inside the cone and the radius, nothing blocking sight on
   the way from the eye to its centre, and lit (or within near)."
@@ -410,68 +446,17 @@
     (and sight
          (<= dist (:radius opts))
          (in-cone? (basis (.-yaw eye) (.-pitch eye)) (:hx grid) (:hy grid) vx vy vz)
-         (let [dx (/ vx dist) dy (/ vy dist) dz (/ vz dist)
-               sx (if (pos? dx) 1 -1) sy (if (pos? dy) 1 -1) sz (if (pos? dz) 1 -1)
-               tdx (if (zero? dx) js/Infinity (js/Math.abs (/ 1 dx)))
-               tdy (if (zero? dy) js/Infinity (js/Math.abs (/ 1 dy)))
-               tdz (if (zero? dz) js/Infinity (js/Math.abs (/ 1 dz)))
-               x0 (js/Math.floor ox) y0 (js/Math.floor oy) z0 (js/Math.floor oz)]
-           (loop [cx x0 cy y0 cz z0
-                  tmx (if (zero? dx) js/Infinity (* tdx (if (pos? dx) (- (inc x0) ox) (- ox x0))))
-                  tmy (if (zero? dy) js/Infinity (* tdy (if (pos? dy) (- (inc y0) oy) (- oy y0))))
-                  tmz (if (zero? dz) js/Infinity (* tdz (if (pos? dz) (- (inc z0) oz) (- oz z0))))
-                  prev (.lightAt ^js raw x0 y0 z0)
-                  budget (+ 3 (js/Math.abs (- x x0)) (js/Math.abs (- y y0)) (js/Math.abs (- z z0)))]
-             (if (and (== cx x) (== cy y) (== cz z))
-               (let [light (.lightAt ^js raw x y z)
-                     shown (if (== 1 (aget sight id)) (max-light light prev) light)]
-                 (or (== 1 (aget visible shown)) (<= dist (near-of per))))
-               (let [t (min tmx tmy tmz)
-                     ax (== t tmx) ay (and (not ax) (== t tmy)) az (and (not ax) (not ay))
-                     nx (if ax (+ cx sx) cx) ny (if ay (+ cy sy) cy) nz (if az (+ cz sz) cz)
-                     here (.stateAt ^js raw nx ny nz)
-                     target? (and (== nx x) (== ny y) (== nz z))]
-                 (cond
-                   (<= budget 0) false
-                   (and (not target?) (or (< here 0) (== 1 (aget sight here)))) false
-                   :else (recur nx ny nz
-                                (if ax (+ tmx tdx) tmx) (if ay (+ tmy tdy) tmy) (if az (+ tmz tdz) tmz)
-                                (if target? prev (.lightAt ^js raw nx ny nz)) (dec budget))))))))))
+         (when-let [prev (walk-cells raw sight ox oy oz (+ x 0.5) (+ y 0.5) (+ z 0.5))]
+           (let [light (.lightAt ^js raw x y z)
+                 shown (if (== 1 (aget sight id)) (max-light light prev) light)]
+             (or (== 1 (aget visible shown)) (<= dist (near-of per))))))))
 
 (defn line-clear?
   "Whether the eye at (ox oy oz) has a clear line to the point (tx ty tz): no cell strictly between the eye's cell and
   the point's cell blocks sight under `table` (the raw world's sightTable) or is unloaded. No cone and no light rule:
   this answers whether a thing there could be seen by turning to it."
   [^js raw ^js table ox oy oz tx ty tz]
-  (let [vx (- tx ox) vy (- ty oy) vz (- tz oz)
-        d (js/Math.hypot vx vy vz)
-        x1 (js/Math.floor tx) y1 (js/Math.floor ty) z1 (js/Math.floor tz)]
-    (or (zero? d)
-        (let [dx (/ vx d) dy (/ vy d) dz (/ vz d)
-              sx (if (pos? dx) 1 -1) sy (if (pos? dy) 1 -1) sz (if (pos? dz) 1 -1)
-              tdx (if (zero? dx) js/Infinity (js/Math.abs (/ 1 dx)))
-              tdy (if (zero? dy) js/Infinity (js/Math.abs (/ 1 dy)))
-              tdz (if (zero? dz) js/Infinity (js/Math.abs (/ 1 dz)))
-              x0 (js/Math.floor ox) y0 (js/Math.floor oy) z0 (js/Math.floor oz)]
-          (loop [cx x0 cy y0 cz z0
-                 tmx (if (zero? dx) js/Infinity (* tdx (if (pos? dx) (- (inc x0) ox) (- ox x0))))
-                 tmy (if (zero? dy) js/Infinity (* tdy (if (pos? dy) (- (inc y0) oy) (- oy y0))))
-                 tmz (if (zero? dz) js/Infinity (* tdz (if (pos? dz) (- (inc z0) oz) (- oz z0))))
-                 budget (+ 3 (js/Math.abs (- x1 x0)) (js/Math.abs (- y1 y0)) (js/Math.abs (- z1 z0)))]
-            (let [t (min tmx tmy tmz)]
-              (cond
-                (or (and (== cx x1) (== cy y1) (== cz z1)) (> t d)) true
-                (<= budget 0) false
-                :else
-                (let [ax (== t tmx) ay (and (not ax) (== t tmy)) az (and (not ax) (not ay))
-                      nx (if ax (+ cx sx) cx) ny (if ay (+ cy sy) cy) nz (if az (+ cz sz) cz)
-                      here (.stateAt raw nx ny nz)]
-                  (cond
-                    (and (== nx x1) (== ny y1) (== nz z1)) true
-                    (or (< here 0) (== 1 (aget table here))) false
-                    :else (recur nx ny nz
-                                 (if ax (+ tmx tdx) tmx) (if ay (+ tmy tdy) tmy) (if az (+ tmz tdz) tmz)
-                                 (dec budget)))))))))))
+  (boolean (walk-cells raw table ox oy oz tx ty tz)))
 
 (defn on-change!
   "A block changed in the raw world: memory takes the new state only if the body sees the cell now."

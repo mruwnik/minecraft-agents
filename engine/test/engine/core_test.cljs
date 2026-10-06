@@ -795,6 +795,20 @@
           (is (= ["j1" "j2" "j2" "j1"] (ran seen)))
           (is (some #(= :cancelled (:kind %)) @seen)))))))
 
+(deftest cancelling-a-cut-job-clears-its-round-entry
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup)]
+          (core/submit! eng (list 'walk {:pos {:x 5 :y 64 :z 0}}) {})
+          (.hold (.-world p) "moveTo")
+          (let [walking (core/tick! eng)]
+            (core/do-now! eng '(count))
+            (await walking))
+          (is (contains? @(:rounds eng) "j1") "the cut job keeps its round entry for its next round")
+          (core/cancel! eng "j1")
+          (is (not (contains? @(:rounds eng) "j1")) "cancelled: nothing left to resume")))))) 
+
 (deftest an-interrupted-job-continues-right-after-the-jobs-done-now-before-it
   ;; X and A take turns; A is cut by B, B by C. Each job done now goes directly before the one it cut, so once C and
   ;; B are done the next round is A's again, not the round-robin's next pick (X).

@@ -140,8 +140,8 @@
         (swap! (:world-ops eng) assoc :active nil)
         ;; Rotate the token synchronously: primitives cut the old promise and clear held controls.
         (rotate-token! eng)
-        (action-event! eng id :done {:name (name (:action record)) :status :cut :reason reason})))
-    id))
+        (action-event! eng id :done {:name (name (:action record)) :status :cut :reason reason})
+        id))))
 
 (defn drop-queued!
   "Cancel queued world action id (it never starts): status :cancelled with reason, and its one action.done event."
@@ -316,9 +316,9 @@
 (defn world-request [eng method body content-type]
   (let [request (try (reader/read-string (or body "")) (catch :default _ ::invalid))]
     (cond
+      (not= method "POST") (world-reply 405 (op-refuse "method-not-allowed"))
       (not (re-matches #"application/edn(?:\s*;.*)?" (str/lower-case content-type)))
       (world-reply 415 (op-refuse "content-type-required" {:expected "application/edn"}))
-      (not= method "POST") (world-reply 405 (op-refuse "method-not-allowed"))
       (not (map? request)) (world-reply 400 (op-refuse "bad-edn"))
       (seq (remove (case (:op request)
                      :submit #{:op :who :request-id :action :args}
@@ -420,7 +420,7 @@
     :else
     (let [body-map (js->clj body :keywordize-keys true)]
       (if (and (= path "/drive") (= method "POST") (:active @(:world-ops eng))
-               (contains? #{"set" "stop"} (:op body-map)))
+               (contains? #{"set" "stop"} (:op body-map)) (own-lease? eng (:who body-map)))
         #js {:status 409 :json #js {:ok false :reason "action-running" :requestId (:active @(:world-ops eng))}}
         (let [now (core/now eng)
               req {:method method :path path :body body-map}

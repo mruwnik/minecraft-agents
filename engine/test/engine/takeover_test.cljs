@@ -255,6 +255,32 @@
             (is (= 1 (count (filter #(and (= :action (:source %)) (= :done (:kind %))
                                           (= "move-1" (:action-id %))) @seen))))))))))
 
+(deftest drive-set-from-a-non-holder-does-not-reveal-the-running-action
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng world]} (setup {})]
+          (post eng {:op "take" :who "claude" :why "manual test" :idleS 30})
+          (.hold world "moveTo")
+          (world-call eng {:op :submit :who "claude" :request-id "move-1" :action :move-to
+                           :args {:pos {:x 10 :y 64 :z 0}}})
+          (doseq [op ["set" "stop"]]
+            (let [r (post eng {:op op :who "intruder" :controls {:forward true}})]
+              (is (= "not-driver" (get-in r [:json :reason])))
+              (is (nil? (get-in r [:json :requestId])))))
+          (is (= "action-running" (get-in (post eng {:op "stop" :who "claude"}) [:json :reason]))))))))
+
+(deftest world-request-checks-the-method-before-the-content-type
+  (let [{:keys [eng]} (setup {})
+        r #(.-status (takeover/handle eng opts %1 "/world" "{}" %2))]
+    (is (= 405 (r "GET" "text/plain")))
+    (is (= 415 (r "POST" "text/plain")))))
+
+(deftest cancel-active-returns-nil-when-nothing-was-cancelled
+  (let [{:keys [eng]} (setup {})]
+    (swap! (:world-ops eng) assoc :active "ghost")
+    (is (nil? (takeover/cancel-active! eng "x")) "an active id without a running record is not cancelled")))
+
 ;; ---------------------------------------------------------------- queued world actions
 
 (defn held-moves!

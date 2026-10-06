@@ -63,6 +63,7 @@
       (reset! (:running eng) nil))
     (resolve-job-attention! eng id :job-cancelled #(remove-listed % id))
     (swap! (:fruitless eng) dissoc id)
+    (swap! (:rounds eng) dissoc id)
     (mem/delete-job! (:store eng) id)
     (save-memory! eng)
     (emit! eng {:source :job :kind :cancelled :level :info :job id :chain [id] :by by})))
