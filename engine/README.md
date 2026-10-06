@@ -103,7 +103,7 @@ nobody may act. `isOwner(token)` reports whether a token is current.
 Notes:
 
 - `health` and `food` are 0..20. `equipment` is `{head, torso, legs, feet, offHand, mainHand}`, each `null` or
-  `{name, count, durability?}`. `inventory` is main and hotbar only: `[{name, count, slot}]`. `effects` are
+  `{name, count, durability?, enchants?: [{name, level}]}`. `inventory` is main and hotbar only: `[{name, count, slot}]`. `effects` are
   `[{name, amplifier, duration}]` with snake_case names. `vehicle` is `{id, uuid, name}` or `null` (`js/vehicle.mjs` repairs
   mineflayer's stale `bot.vehicle` and moves riders with their mount). `isDay` is `timeOfDay < 12542 || timeOfDay > 23460`.
 - `chunkLoaded` false means the column under the body is not loaded (physics then emits no tick). `settling` is true while

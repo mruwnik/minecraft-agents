@@ -2717,6 +2717,13 @@ test('self().equipment lists the armour slots, the off-hand and the main hand, d
   })
 })
 
+test('self().equipment carries the enchantments of a worn piece as [{name, level}] and omits them on plain gear', () => {
+  const worn = [{ name: 'iron_chestplate', count: 1, slot: 6, enchants: [{ name: 'protection', lvl: 3 }, { name: 'unbreaking', lvl: 1 }] }, { name: 'iron_helmet', count: 1, slot: 5, enchants: [] }]
+  const eq = withBot(() => {}, { ...world, worn }).self().equipment
+  assert.deepEqual(eq.torso, { name: 'iron_chestplate', count: 1, enchants: [{ name: 'protection', level: 3 }, { name: 'unbreaking', level: 1 }] })
+  assert.deepEqual(eq.head, { name: 'iron_helmet', count: 1, durability: 165 })
+})
+
 test('self().equipment is empty slots when nothing is worn, and worn items are not in the carried list', () => {
   const bare = withBot(() => {}, { ...world, items: [] })
   assert.deepEqual(bare.self().equipment, noGear)

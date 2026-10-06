@@ -71,7 +71,8 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   const gearView = item => {
     if (!item) return null
     const max = bot.registry?.itemsByName?.[item.name]?.maxDurability
-    return { name: item.name, count: item.count, ...(max > 0 && { durability: max - (item.durabilityUsed ?? 0) }) }
+    const enchants = (item.enchants ?? []).map(e => ({ name: e.name, level: e.lvl ?? e.level }))
+    return { name: item.name, count: item.count, ...(max > 0 && { durability: max - (item.durabilityUsed ?? 0) }), ...(enchants.length > 0 && { enchants }) }
   }
   const equipment = () => ({
     ...Object.fromEntries(Object.entries(WORN_SLOTS).map(([part, slot]) => [part, gearView(bot.inventory.slots[slot])])),
