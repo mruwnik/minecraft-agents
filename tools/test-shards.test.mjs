@@ -51,18 +51,43 @@ test('testNamespaces covers every file under engine/test that contains deftest',
 const ev = (e) => `@@test ${JSON.stringify(e)}`
 const parsed = (out) => out.map((l) => JSON.parse(l.slice('@@test '.length)))
 
-test('eventForwarder: plan, result and phase lines pass through, other output is dropped, a line split over chunks is joined', () => {
+test('eventForwarder: result and phase lines pass through, other output is dropped, a line split over chunks is joined', () => {
   const out = []
-  const f = eventForwarder((l) => out.push(l))
+  const f = eventForwarder((l) => out.push(l), [1])
   const res = ev({ event: 'result', name: 'a/b', outcome: 'passed' })
-  f.feed(0, `noise\n${ev({ event: 'plan', total: 3 })}\n${res.slice(0, 20)}`)
+  f.feed(0, `noise\n${res.slice(0, 20)}`)
   f.feed(0, `${res.slice(20)}\nmore noise\n${ev({ event: 'phase', name: 'x' })}\n`)
-  assert.deepEqual(parsed(out), [{ event: 'plan', total: 3 }, { event: 'result', name: 'a/b', outcome: 'passed' }, { event: 'phase', name: 'x' }])
+  assert.deepEqual(parsed(out), [{ event: 'result', name: 'a/b', outcome: 'passed' }, { event: 'phase', name: 'x' }])
+})
+
+test('eventForwarder: one plan, emitted once every shard has reported its own, with the summed total', () => {
+  const out = []
+  const f = eventForwarder((l) => out.push(l), [4, 6])
+  f.feed(0, `${ev({ event: 'plan', total: 30 })}\n`)
+  assert.deepEqual(parsed(out).filter((e) => e.event === 'plan'), [])
+  f.feed(1, `${ev({ event: 'plan', total: 50 })}\n`)
+  assert.deepEqual(parsed(out).filter((e) => e.event === 'plan'), [{ event: 'plan', total: 80 }])
+})
+
+test('eventForwarder: progress total covers all shards from the start, also those not started', () => {
+  const out = []
+  const f = eventForwarder((l) => out.push(l), [4, 6, 5])
+  f.start()
+  assert.deepEqual(parsed(out), [{ event: 'progress', done: 0, total: 15, unit: 'namespaces' }])
+  f.feed(0, `${ev({ event: 'progress', done: 2, total: 4, unit: 'namespaces' })}\n`)
+  assert.deepEqual(parsed(out).at(-1), { event: 'progress', done: 2, total: 15, unit: 'namespaces' })
+})
+
+test('eventForwarder: waiting names the shard and the slot wait is a phase line', () => {
+  const out = []
+  const f = eventForwarder((l) => out.push(l), [4, 6])
+  f.waiting(1)
+  assert.deepEqual(parsed(out), [{ event: 'phase', name: 'waiting for slot (shard 2/2)' }])
 })
 
 test('eventForwarder: shard progress lines become one progress summed over the shards', () => {
   const out = []
-  const f = eventForwarder((l) => out.push(l))
+  const f = eventForwarder((l) => out.push(l), [4, 6])
   f.feed(0, `${ev({ event: 'progress', done: 1, total: 4, unit: 'namespaces' })}\n`)
   f.feed(1, `${ev({ event: 'progress', done: 1, total: 6, unit: 'namespaces' })}\n`)
   f.feed(0, `${ev({ event: 'progress', done: 2, total: 4, unit: 'namespaces' })}\n`)

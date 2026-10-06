@@ -50,20 +50,29 @@ const FLOOR_MB = RES.floorMb, SHARD_MB = RES.kinds.tests.needMb // shared with t
 export const memSlots = (availableMb, max = RES.kinds.tests.shardMax) => Math.max(1, Math.min(max, Math.floor((availableMb - FLOOR_MB) / SHARD_MB)))
 const availableMb = () => Number(fs.readFileSync('/proc/meminfo', 'utf8').match(/MemAvailable:\s+(\d+)/)[1]) / 1024
 
-// Live @@test lines from the shards (stdout is otherwise kept until the shard ends): plan, result and phase pass through; the shards' per-namespace progress becomes one progress summed over the shards.
-export const eventForwarder = (write) => {
-  const partial = {}, progress = {}
+// Live @@test lines from the shards (stdout is otherwise kept until the shard ends). shardNs = namespace count per shard, known before any shard starts:
+// result and phase pass through; one plan (summed once every shard has reported its own); one progress over all shards' namespaces, 0 done from start().
+export const eventForwarder = (write, shardNs) => {
+  const partial = {}, done = {}, plans = {}
+  const emit = (e) => write(`@@test ${JSON.stringify(e)}`)
+  const progress = (unit) => emit({ event: 'progress', done: Object.values(done).reduce((t, d) => t + d, 0), total: shardNs.reduce((t, n) => t + n, 0), unit })
   const feedLine = (i, l) => {
     const at = l.indexOf('@@test ')
     if (at < 0) return
     let e
     try { e = JSON.parse(l.slice(at + 7)) } catch { return }
+    if (e.event === 'plan') {
+      plans[i] = e.total
+      if (Object.keys(plans).length === shardNs.length) emit({ event: 'plan', total: Object.values(plans).reduce((t, n) => t + n, 0) })
+      return
+    }
     if (e.event !== 'progress') return write(l.slice(at))
-    progress[i] = e
-    const all = Object.values(progress)
-    write(`@@test ${JSON.stringify({ event: 'progress', done: all.reduce((t, p) => t + p.done, 0), total: all.reduce((t, p) => t + p.total, 0), unit: e.unit })}`)
+    done[i] = e.done
+    progress(e.unit)
   }
   return {
+    start: () => progress('namespaces'),
+    waiting: (i) => emit({ event: 'phase', name: `waiting for slot (shard ${i + 1}/${shardNs.length})` }),
     feed: (i, chunk) => {
       const lines = ((partial[i] ?? '') + chunk).split('\n')
       partial[i] = lines.pop()
@@ -75,9 +84,9 @@ export const eventForwarder = (write) => {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 // Runs cmd under the first free slot; polls until one is free.
-const runInSlot = async (slots, cmd, opts, onOut = () => {}) => {
+const runInSlot = async (slots, cmd, opts, onOut = () => {}, onWait = () => {}) => {
   const t0 = Date.now()
-  for (;;) for (let i = 0; i < slots; i++) {
+  for (let first = true; ; first = false) for (let i = 0; i < slots; i++) {
     const t1 = Date.now()
     const r = await new Promise((res) => {
       let out = ''
@@ -89,12 +98,12 @@ const runInSlot = async (slots, cmd, opts, onOut = () => {}) => {
       logRun({ kind: 'tests', needMb: SHARD_MB, waitedS: Math.round((t1 - t0) / 1000), ranS: Math.round((Date.now() - t1) / 1000), code: r.code, cmd: cmd.join(' ') })
       return r
     }
+    if (first && i === slots - 1) onWait()
     await sleep(1000 + Math.random() * 500)
   }
 }
 
 const main = async () => {
-  const events = process.env.TEST_EVENTS === '1' ? eventForwarder((l) => console.log(l)) : null
   const argv = process.argv.slice(2)
   const opt = (name, d) => { const i = argv.indexOf(name); return i < 0 ? d : Number(argv[i + 1]) }
   const shards = opt('--shards', 4), slots = opt('--slots', memSlots(availableMb())), top = opt('--slowest', 15)
@@ -106,14 +115,15 @@ const main = async () => {
   const { runDir, cleanup } = isolate(engine, process.pid)
   const prior = fs.existsSync(nsFile) ? JSON.parse(fs.readFileSync(nsFile, 'utf8')) : {}
   const split = splitShards(testNamespaces(), prior, shards)
+  const events = process.env.TEST_EVENTS === '1' ? eventForwarder((l) => console.log(l), split.map((nss) => nss.length)) : null
   const t0 = Date.now()
-  if (events) console.log('@@test {"event":"phase","name":"testing"}')
+  if (events) { console.log('@@test {"event":"phase","name":"testing"}'); events.start() }
   console.log(`test-shards: ${split.length} shards, at most ${slots} at once machine-wide`)
   const results = await Promise.all(split.map(async (nss, i) => {
     const file = `${timingFile}.${process.pid}.${i}`
     fs.writeFileSync(file, '')
     const limit = runTimeoutS(expectedMs(nss, prior))
-    const r = await runInSlot(slots, ['timeout', '-k', '10', String(limit), 'node', '--max-old-space-size=4096', path.join(runDir, 'out/test.cjs'), `--test=${nss.join(',')}`], { cwd: engine, env: { ...process.env, MC_TEST_TIMINGS: file, NODE_PATH: path.join(repo, 'node_modules') } }, events ? (chunk) => events.feed(i, chunk) : undefined)
+    const r = await runInSlot(slots, ['timeout', '-k', '10', String(limit), 'node', '--max-old-space-size=4096', path.join(runDir, 'out/test.cjs'), `--test=${nss.join(',')}`], { cwd: engine, env: { ...process.env, MC_TEST_TIMINGS: file, NODE_PATH: path.join(repo, 'node_modules') } }, events ? (chunk) => events.feed(i, chunk) : undefined, events ? () => events.waiting(i) : undefined)
     if (r.code === 124 || r.code === 137) r.out += `\ntest-shards: TIMEOUT, shard ${i} killed after ${limit} s; last finished test: ${lastFinished(fs.readFileSync(file, 'utf8').split('\n')) ?? 'none'}\n`
     return { i, nss, file, ...r }
   }))
