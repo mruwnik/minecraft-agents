@@ -154,6 +154,16 @@
     (when (and (.existsSync fs file) (<= (.-size (.statSync fs file)) max-pose-bytes))
       (js->clj (js/JSON.parse (.readFileSync fs file "utf8")) :keywordize-keys true))))
 
+(defn- symlink?
+  "True when `file` is itself a symbolic link (never followed); false when missing."
+  [file]
+  (boolean (some-> (.lstatSync fs file #js {:throwIfNoEntry false}) (.isSymbolicLink))))
+
+(defn- unsafe-dir-problem [workspace]
+  (when (some symlink? [workspace (.join path workspace "snapshots")])
+    {:reason :unsafe-snapshots-dir
+     :message "the workspace or its snapshots/ folder is a symbolic link; refusing to write or prune through it"}))
+
 (defn- center-of [center]
   (when center (js->clj center :keywordize-keys true)))
 
@@ -161,7 +171,7 @@
   "Renders and writes one snapshot; `render` is renderView of tools/view/render.mjs. Resolves to the result map."
   [{:keys [ctx body workspace width height max-dist] :as opts} render now]
   (let [pose (read-pose ctx body)]
-    (if-let [problem (pose-problem pose (:world ctx) now)]
+    (if-let [problem (or (pose-problem pose (:world ctx) now) (unsafe-dir-problem workspace))]
       (js/Promise.resolve (merge {:ok false :body body} problem))
       (let [cam (camera pose opts)]
         (-> (js/Promise.resolve

@@ -158,6 +158,23 @@
                      (is (not (contains? files (snap/file-name 1000)))))))
           (.finally done)))))
 
+(deftest main-refuses-a-symlinked-snapshots-folder-and-leaves-its-target-alone
+  (async done
+    (let [{:keys [worlds workspace] :as f} (world-fixture)
+          target (.mkdtempSync fs (.join path (.tmpdir os) "snap-target-"))
+          victim (.join path target (snap/file-name 1000))
+          calls (atom [])]
+      (.writeFileSync fs victim "old")
+      (.mkdirSync fs workspace #js {:recursive true})
+      (.symlinkSync fs target (.join path workspace "snapshots"))
+      (write-pose! f (pose {:t (js/Date.now)}))
+      (-> (capture-stdout #(snap/main! (into base ["--worlds" worlds "--workspace" workspace]) (fake-render calls)))
+          (.then (fn [[code out]]
+                   (is (= 1 code) out)
+                   (is (str/includes? out ":reason :unsafe-snapshots-dir"))
+                   (is (= ["old"] (map #(str (.readFileSync fs (.join path target %))) (array-seq (.readdirSync fs target)))))))
+          (.finally (fn [] (.rmSync fs target #js {:recursive true :force true}) (done)))))))
+
 (deftest main-refuses-an-offline-body-and-bad-arguments-without-rendering
   (async done
     (let [{:keys [worlds workspace] :as f} (world-fixture) calls (atom [])]
