@@ -58,11 +58,19 @@
 (defn stack [& pairs] (mapv (fn [[n c]] {:name n :count c}) (partition 2 pairs)))
 
 (deftest food-reserve-keeps-three-days-of-food-best-first
-  (is (= 36 cost/food-reserve-points) "3 days at 12 hunger points a day")
-  (is (= {"bread" 8} (cost/food-reserve (stack "bread" 20))))
+  (is (= 60 cost/food-reserve-points) "3 days at 20 hunger points a day")
+  (is (= {"bread" 12} (cost/food-reserve (stack "bread" 20))))
   (is (= {"bread" 3} (cost/food-reserve (stack "bread" 3))))
-  (is (= {"bread" 2 "apple" 7} (cost/food-reserve (stack "apple" 9 "bread" 2))))
-  (is (= {"bread" 8} (cost/food-reserve (stack "bread" 5 "bread" 15))))
-  (is (= {"carrot" 12} (cost/food-reserve (stack "carrot" 30 "dirt" 64))))
+  (is (= {"bread" 2 "apple" 9} (cost/food-reserve (stack "apple" 9 "bread" 2))))
+  (is (= {"bread" 12} (cost/food-reserve (stack "bread" 5 "bread" 15))))
+  (is (= {"carrot" 20} (cost/food-reserve (stack "carrot" 30 "dirt" 64))))
   (is (= {} (cost/food-reserve (stack "rotten_flesh" 9 "dirt" 3 "iron_hoe" 1))))
+  (is (= {"bread" 12} (cost/food-reserve (stack "golden_apple" 3 "bread" 20))) "golden apples are not reserve food")
+  (is (= {} (cost/food-reserve (stack "golden_apple" 3 "enchanted_golden_apple" 1))))
   (is (= {} (cost/food-reserve []))))
+
+(deftest food-short-is-the-points-missing-from-the-reserve
+  (is (= 60 (cost/food-short [])))
+  (is (= 35 (cost/food-short (stack "bread" 5))))
+  (is (= 0 (cost/food-short (stack "bread" 20))))
+  (is (= 60 (cost/food-short (stack "golden_apple" 3 "rotten_flesh" 9)))))

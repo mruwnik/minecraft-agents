@@ -30,7 +30,7 @@
     non-crop food are never stored.
   The keep for compost and deposit, per name, is the largest of: the sowing reserve (twice the number of beds, farmland or
   untilled ground cells, spread over the carried seeds), a backup stack (64) of each seed type, the body's food reserve
-  (jobs.lib.cost/food-reserve: 3 days of food, 36 hunger points, best food first; carrots and potatoes count toward it
+  (jobs.lib.cost/food-reserve: 3 days of food, 60 hunger points, best food first; carrots and potatoes count toward it
   first) and the :keep entry. Harvested crops above it are stored; seed above it is composted.
   Skipped steps are booked as {:skipped reason}: :no-ripe, :till-off, :no-hoe, :nothing-to-till, :no-seed,
   :no-bare, :fertilize-off, :no-bone-meal, :none-unripe, :no-composter, :no-surplus-seed, :no-chest,

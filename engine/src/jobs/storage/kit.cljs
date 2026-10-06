@@ -2,6 +2,7 @@
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
+            [jobs.lib.cost :as cost]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
@@ -11,7 +12,7 @@
             [jobs.lib.foods :as foods]))
 
 (def doc
-  "Take a kit out of the chest: :spare + 1 of each tool kind in :tools, and :food food items. A name is of a tool
+  "Take a kit out of the chest: :spare + 1 of each tool kind in :tools, and :food food items (by default enough to hold the 3-day food reserve, jobs.lib.cost/food-reserve). A name is of a tool
   kind when it equals it or ends in _kind. Any tier counts, the best tier and best food are taken first. Food is
   any name in the eat table.
   Each round works out the needs from the inventory and the plan from the inspected chest, and hands the plan to
@@ -37,7 +38,7 @@
 (def args
   {:tools {:doc "tool kinds to carry, e.g. [\"hoe\" \"pickaxe\"]" :default ["hoe"]}
    :spare {:doc "extra of each tool kind beyond the one in use" :default 1}
-   :food {:doc "food items to carry" :default 12}
+   :food {:doc "food items to carry; enough to hold the body's food reserve (jobs.lib.cost/food-reserve) when nil" :default nil}
    :chest {:doc "chest position; the known :chest place when nil" :type :pos :default nil}
    :craft {:doc "craft what the chest cannot supply" :default true}
    :craft-tiers {:doc "tool tiers to craft, in order; iron or diamond only when listed" :default ["stone" "wooden"]}
@@ -62,10 +63,15 @@
   (let [match? (matcher kind)]
     (transduce (comp (filter #(match? (:name %))) (map :count)) + 0 items)))
 
+(defn food-items
+  "Bread's worth of items that bring the inventory to the food reserve."
+  [inventory]
+  (js/Math.ceil (/ (cost/food-short inventory) (foods/points "bread"))))
+
 (defn needs
   "[[kind n] ...] still needed: the tools kinds in order, then :food; n above 0 only."
-  [inventory {:keys [tools spare food] :or {tools ["hoe"] spare 1 food 12}}]
-  (->> (concat (map (fn [k] [k (inc spare)]) tools) [[:food food]])
+  [inventory {:keys [tools spare food] :or {tools ["hoe"] spare 1}}]
+  (->> (concat (map (fn [k] [k (inc spare)]) tools) [[:food (or food (+ (count-of inventory :food) (food-items inventory)))]])
        (map (fn [[kind want]] [kind (- want (count-of inventory kind))]))
        (filter (fn [[_ n]] (pos? n)))
        vec))

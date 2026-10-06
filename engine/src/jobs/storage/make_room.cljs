@@ -1,6 +1,7 @@
 (ns jobs.storage.make-room
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
+            [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
             [jobs.lib.shelter :as sh]
             [jobs.lib.util :as u]
@@ -19,7 +20,7 @@
   What is thrown, like a player: plain junk blocks first (junk-blocks: cobblestone, cobbled deepslate, granite,
   tuff, dirt, gravel...), whole big stacks before partial, then the rest by worth; ores, fuel and the like
   only after the junk. Never put away or thrown: tools, weapons, armour and buckets. Food is never thrown and is put away only above
-  :keep-food (best food-points first). Building blocks (the dig-in list, in its order) are kept up to
+  :keep-food (best food-points first; the body's 3-day food reserve when nil). Golden apples are never put away. Building blocks (the dig-in list, in its order) are kept up to
   :keep-blocks.
   Steps, in order:
   1. A chest known within :chest-range (and not marked :chest-unusable) takes what jobs.storage.deposit may put
@@ -48,7 +49,7 @@
 (def args
   {:free {:doc "done once at least this many slots are free (above the trigger's 2, so it does not refire at once)" :default 4}
    :chest-range {:doc "the known :chest place is used only within this distance" :default 32}
-   :keep-food {:doc "food items kept carried (best food by points first)" :default 16}
+   :keep-food {:doc "food items kept carried (best food by points first); the body's food reserve (jobs.lib.cost/food-reserve) when nil" :default nil}
    :keep-blocks {:doc "building blocks kept carried (dig-in's list, in its order)" :default 64}
    :toss-below {:doc "a stack is tossed to make room only when its jobs.lib.worth/item-worth is below this" :default 1}
    :swap-radius {:doc "when no slot is free, a dropped item worth more than some carried stack within this radius is swapped in" :default 8}
@@ -74,9 +75,9 @@
 ;; ------------------------------------------------------------------ pure
 
 (defn protected?
-  "Never put away, never thrown: tools, weapons, armour, the buckets and torches."
+  "Never put away, never thrown: tools, weapons, armour, the buckets, torches and golden apples."
   [name]
-  (boolean (or (deposit/tool? name) (tool-like name) (= "torch" name))))
+  (boolean (or (deposit/tool? name) (tool-like name) (= "torch" name) (contains? foods/precious name))))
 
 (defn totals
   "{name carried} over all stacks."
@@ -103,10 +104,13 @@
         food (->> names
                   (filter #(and (not (protected? %)) (foods/edible? %)))
                   (sort-by (juxt #(- (foods/points %)) identity)))
+        food-floors (if keep-food
+                      (shared-floors food totals keep-food)
+                      (select-keys (cost/food-reserve inventory) food))
         blocks (filter #(contains? totals %) dig-in/building-blocks)]
     (merge (zipmap names (repeat 0))
            (select-keys totals (filter protected? names))
-           (shared-floors food totals keep-food)
+           food-floors
            (shared-floors blocks totals keep-blocks))))
 
 (defn recency

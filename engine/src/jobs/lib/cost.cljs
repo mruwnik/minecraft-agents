@@ -42,4 +42,5 @@
 (def dark-factor value/dark-factor)
 
 (def food-reserve food/food-reserve)
+(def food-short food/food-short)
 (def food-reserve-points food/reserve-points)

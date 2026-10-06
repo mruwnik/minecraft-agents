@@ -139,6 +139,14 @@
            (mr/keep-counts inventory {:keep-food 16 :keep-blocks 64}))
         "beef (8 points) keeps its 12, bread (5) the 4 left of 16, apple none; dirt then cobblestone share 64")))
 
+(deftest keep-counts-without-keep-food-uses-the-food-reserve
+  (is (= {"bread" 12 "apple" 0 "golden_apple" 2 "dirt" 0}
+         (mr/keep-counts [{:name "bread" :count 20} {:name "apple" :count 5} {:name "golden_apple" :count 2} {:name "dirt" :count 9}]
+                         {:keep-food nil :keep-blocks 0}))
+      "the 60-point reserve is 12 bread; golden apples are kept whole, outside the reserve")
+  (is (= {"golden_apple" 2 "bread" 0}
+         (mr/keep-counts [{:name "golden_apple" :count 2} {:name "bread" :count 3}] {:keep-food 0 :keep-blocks 0}))))
+
 (deftest keep-counts-with-zero-budgets-keep-only-the-protected
   (is (= {"iron_axe" 1 "bread" 0 "dirt" 0 "stick" 0}
          (mr/keep-counts [{:name "iron_axe" :count 1} {:name "bread" :count 3} {:name "dirt" :count 9} {:name "stick" :count 2}]

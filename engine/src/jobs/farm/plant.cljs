@@ -10,7 +10,7 @@
 
 (def doc
   "Sow the bare farmland of a :box. A cell is bare when (x, min.y, z) is farmland and the block above is air.
-  The seed is :seed, else the carried seed with the largest stack (carrots and potatoes only above the 3-day food reserve). That pick is kept while it is carried,
+  The seed is :seed, else the carried seed with the largest stack. That pick is kept while it is carried,
   so one run sows one crop.
   Each round plants the bare cells within :reach, or walks to the nearest. A cell whose place is refused or
   unreachable, or whose walk is blocked, three times is skipped (warn plant.gave-up).
@@ -29,7 +29,7 @@
 
 (def args
   {:box {:doc "the field: {:min {:x :y :z} :max {:x :y :z}}, inclusive; the ground layer is y = (:y :min); required (without it the check declines)" :default nil}
-   :seed {:doc "item name to plant; the carried seed with the largest count when nil; carrots and potatoes count only above the body's 3-day food reserve" :default nil}
+   :seed {:doc "item name to plant; the carried seed with the largest count when nil" :default nil}
    :reach {:doc "cells whose centre is this close to the eye (place accepts 4.5) are planted without walking, in blocks" :default 4.2}
    :plan {:doc "id of a plan of the body's world whose crop cells are the field (then :box and :seed are not used)" :default nil}
    :part {:doc "with :plan, only the cells of this part" :default nil}
@@ -52,16 +52,15 @@
 
 (defn pick-seed
   "The seed to plant given the inventory: seed when it is carried, else the largest carried stack of a known seed;
-  nil when none. Carrots and potatoes count only above the body's 3-day food reserve (cost/food-reserve)."
+  nil when none. The food reserve never blocks it: a field's own cells are always replanted."
   [seed inventory]
   (let [counts (reduce (fn [acc {:keys [name count]}] (update acc name (fnil + 0) count)) {} inventory)
-        held (cost/food-reserve inventory)
-        spare #(- (get counts % 0) (get held % 0))]
+        carried #(get counts % 0)]
     (if seed
-      (when (pos? (spare seed)) seed)
+      (when (pos? (carried seed)) seed)
       (->> (vals harvest/seed-of)
-           (filter #(pos? (spare %)))
-           (sort-by #(- (spare %)))
+           (filter #(pos? (carried %)))
+           (sort-by #(- (carried %)))
            first))))
 
 (declare planned sowing)

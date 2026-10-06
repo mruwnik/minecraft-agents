@@ -56,7 +56,10 @@
     [{:name "iron_pickaxe" :count 2}] {:tools ["axe"] :spare 0 :food 0} [["axe" 1]]
     [{:name "bread" :count 5} {:name "apple" :count 4} {:name "cooked_beef" :count 1}] {:tools [] :food 12} [[:food 2]]
     [{:name "dirt" :count 40}] {:tools ["hoe"] :spare 1 :food 0} [["hoe" 2]]
-    [] {} [["hoe" 2] [:food 12]]))
+    [] {} [["hoe" 2] [:food 12]]
+    [{:name "bread" :count 5}] {:tools []} [[:food 7]]
+    [{:name "bread" :count 12}] {:tools []} []
+    [{:name "golden_apple" :count 4}] {:tools []} [[:food 12]]))
 
 (deftest plan-takes-the-best-and-reports-the-rest
   (are [needs inventory chest expected] (= expected (kit/plan needs inventory chest))

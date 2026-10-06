@@ -97,17 +97,14 @@
     nil ["dirt" 64] nil
     nil [] nil))
 
-(deftest pick-seed-never-sows-the-food-reserve
+(deftest pick-seed-replants-food-crops-whatever-the-reserve
   (are [carried expected] (= expected (plant/pick-seed nil (apply inv carried)))
-    ["carrot" 12] nil
-    ["carrot" 13] "carrot"
-    ["carrot" 12 "wheat_seeds" 1] "wheat_seeds"
-    ["carrot" 20 "bread" 8] "carrot"
+    ["carrot" 1] "carrot"
+    ["carrot" 12] "carrot"
+    ["carrot" 12 "wheat_seeds" 1] "carrot"
     ["carrot" 9 "potato" 20] "potato"
-    ["carrot" 9 "potato" 9] nil
     ["potato" 3 "bread" 8] "potato")
-  (is (nil? (plant/pick-seed "carrot" (inv "carrot" 12))) "a named food seed too")
-  (is (= "wheat_seeds" (plant/pick-seed "wheat_seeds" (inv "wheat_seeds" 1 "carrot" 3)))))
+  (is (= "carrot" (plant/pick-seed "carrot" (inv "carrot" 2)))))
 
 (deftest count-fail-skips-a-cell-at-the-third-fail
   (let [pos {:x 1 :y 63 :z 1}

@@ -322,7 +322,7 @@
   (are [expected sow inventory keep] (= expected (tend/keeps sow inventory keep))
     {"wheat_seeds" 64 "beetroot_seeds" 64 "melon_seeds" 64 "pumpkin_seeds" 64} {} [] {}
     {"wheat_seeds" 100 "beetroot_seeds" 64 "melon_seeds" 64 "pumpkin_seeds" 64} {"wheat_seeds" 100} [] {}
-    {"wheat_seeds" 64 "beetroot_seeds" 64 "melon_seeds" 64 "pumpkin_seeds" 64 "bread" 4 "carrot" 6}
+    {"wheat_seeds" 64 "beetroot_seeds" 64 "melon_seeds" 64 "pumpkin_seeds" 64 "bread" 4 "carrot" 9}
     {"carrot" 2} [(item "bread" 4) (item "carrot" 9)] {}
     {"wheat_seeds" 64 "beetroot_seeds" 64 "melon_seeds" 64 "pumpkin_seeds" 70} {} [] {"pumpkin_seeds" 70}))
 
@@ -340,8 +340,8 @@
         (let [s (await (scenario {:chest chest}
                                  (world (farm "wheat" 3 [[2 2]] [[2 2]])
                                         {:inventory [(item "carrot" 20) (item "bread" 3)] :containers {"10,64,0" []}}) 40))]
-          (is (= {"carrot" 13} (chest-items s)) "bread 3 is 15 of the 36 points, so 7 carrots (21 points) stay")
-          (is (= {"carrot" 7 "bread" 3} (inv s))))))))
+          (is (= {"carrot" 5} (chest-items s)) "bread 3 is 15 of the 60 points, so 15 carrots (45 points) stay")
+          (is (= {"carrot" 15 "bread" 3} (inv s))))))))
 
 (deftest surplus-lists-names-above-their-keep
   (are [expected inventory keep names] (= expected (tend/surplus inventory keep names))

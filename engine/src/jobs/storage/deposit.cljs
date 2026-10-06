@@ -11,7 +11,8 @@
 
 (def doc
   "Walk to the chest and deposit one stack per round: the named :items in the order named, or everything but tools
-  and armour (saplings included) and the body's 3-day food reserve (jobs.lib.cost/food-reserve) in inventory order. :keep leaves at least that many of a name carried.
+  and armour (saplings included) and the body's 3-day food reserve (jobs.lib.cost/food-reserve) in inventory order.
+  :keep leaves at least that many of a name carried. With explicit :items the reserve is ignored.
   Ends with {:gave-up false} when nothing is left to put away, or {:gave-up true :reason r} after three failed
   transfers (warn chest_unusable). r is the transfer status or \"unreachable\".
   Memory: a :chest argument that took at least one item and finished clean is offered to the :chest place. It is

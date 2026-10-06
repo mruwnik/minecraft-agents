@@ -30,7 +30,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (wt/setup {:inventory [{:name "dirt" :count 5} {:name "bread" :count 12}] :containers {"10,64,0" []}})
+        (let [{:keys [eng p]} (wt/setup {:inventory [{:name "dirt" :count 5} {:name "bread" :count 20}] :containers {"10,64,0" []}})
               result (await (wt/child-outcome eng job {:chest chest} 16))]
-          (is (= {"bread" 8} (wt/inv p)) "bread 8 is 40 of the 36 points; dirt and the 4 spare bread go")
+          (is (= {"bread" 12} (wt/inv p)) "bread 12 is the 60 points; dirt and the 8 spare bread go")
           (is (= {:gave-up false} result)))))))
