@@ -103,19 +103,19 @@ const runInSlot = async (slots, cmd, opts, onOut = () => {}, onWait = () => {}) 
   }
 }
 
-const main = async () => {
+const main = async ({ compile = () => spawnSync(path.join(repo, 'tools/compile'), ['engine', 'test'], { stdio: 'inherit' }) } = {}) => {
   const argv = process.argv.slice(2)
   const opt = (name, d) => { const i = argv.indexOf(name); return i < 0 ? d : Number(argv[i + 1]) }
   const shards = opt('--shards', 4), slots = opt('--slots', memSlots(availableMb())), top = opt('--slowest', 15)
   fs.mkdirSync(slotDir(), { recursive: true })
-  if (events) console.log('@@test {"event":"phase","name":"compiling"}')
-  const c = spawnSync(path.join(repo, 'tools/compile'), ['engine', 'test'], { stdio: 'inherit' })
-  if (c.status !== 0) process.exit(c.status ?? 1)
   const nsFile = path.join(engine, 'out/test-ns-ms.json'), timingFile = path.join(engine, 'out/test-timings.jsonl')
-  const { runDir, cleanup } = isolate(engine, process.pid)
   const prior = fs.existsSync(nsFile) ? JSON.parse(fs.readFileSync(nsFile, 'utf8')) : {}
   const split = splitShards(testNamespaces(), prior, shards)
   const events = process.env.TEST_EVENTS === '1' ? eventForwarder((l) => console.log(l), split.map((nss) => nss.length)) : null
+  if (events) console.log('@@test {"event":"phase","name":"compiling"}')
+  const c = compile()
+  if (c.status !== 0) process.exit(c.status ?? 1)
+  const { runDir, cleanup } = isolate(engine, process.pid)
   const t0 = Date.now()
   if (events) { console.log('@@test {"event":"phase","name":"testing"}'); events.start() }
   console.log(`test-shards: ${split.length} shards, at most ${slots} at once machine-wide`)
@@ -148,3 +148,5 @@ const main = async () => {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) main()
+
+export { main }

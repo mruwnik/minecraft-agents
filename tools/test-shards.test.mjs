@@ -1,6 +1,8 @@
 // Why JavaScript: node --test file for tools/test-shards.mjs (a Node launcher).
 import fs from 'node:fs'
 import path from 'node:path'
+import { spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { splitShards, testNamespaces, slowest, memSlots, eventForwarder } from './test-shards.mjs'
@@ -92,4 +94,12 @@ test('eventForwarder: shard progress lines become one progress summed over the s
   f.feed(1, `${ev({ event: 'progress', done: 1, total: 6, unit: 'namespaces' })}\n`)
   f.feed(0, `${ev({ event: 'progress', done: 2, total: 4, unit: 'namespaces' })}\n`)
   assert.deepEqual(parsed(out).at(-1), { event: 'progress', done: 3, total: 10, unit: 'namespaces' })
+})
+
+test('main with TEST_EVENTS=1 announces compiling before the compile runs (no early use of events)', () => {
+  const script = "import('./tools/test-shards.mjs').then((m) => m.main({ compile: () => ({ status: 3 }) }))"
+  const r = spawnSync('node', ['-e', script, '--input-type=module'], { cwd: path.join(path.dirname(fileURLToPath(import.meta.url)), '..'), env: { ...process.env, TEST_EVENTS: '1' }, encoding: 'utf8' })
+  assert.doesNotMatch(r.stderr, /ReferenceError/)
+  assert.match(r.stdout, /"name":"compiling"/)
+  assert.equal(r.status, 3)
 })
