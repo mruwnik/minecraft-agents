@@ -155,21 +155,25 @@
                    (.close s)
                    (done)))))))
 
-(deftest a-failed-fetch-is-retried-and-the-column-loads
-  (doseq [mode [:reject :http]]
-    (async done
-      (let [calls (volatile! [])
-            urls (volatile! [])
-            ^js s (make-scene {:radius 0 :calls calls :urls urls :fetch (flaky-fetch 2 mode urls)})]
-        (.feed s "pose" (pose 8 8))
-        (-> (js/Promise. (fn [resolve] (js/setTimeout resolve 60)))
-            (.then (fn []
-                     (.frame s 0 nil)
-                     (is (= 3 (count (filter #(.includes % "/columns/") @urls))) (str mode))
-                     (is (= 1 (count (of-kind calls :upload))))
-                     (is (= 1 (:loaded (js->clj (.stats s) :keywordize-keys true))))
-                     (.close s)
-                     (done))))))))
+(defn retried-column-loads [mode done]
+  (let [calls (volatile! [])
+        urls (volatile! [])
+        ^js s (make-scene {:radius 0 :calls calls :urls urls :fetch (flaky-fetch 2 mode urls)})]
+    (.feed s "pose" (pose 8 8))
+    (-> (js/Promise. (fn [resolve] (js/setTimeout resolve 60)))
+        (.then (fn []
+                 (.frame s 0 nil)
+                 (is (= 3 (count (filter #(.includes % "/columns/") @urls))) (str mode))
+                 (is (= 1 (count (of-kind calls :upload))))
+                 (is (= 1 (:loaded (js->clj (.stats s) :keywordize-keys true))))
+                 (.close s)
+                 (done))))))
+
+(deftest a-rejected-fetch-is-retried-and-the-column-loads
+  (async done (retried-column-loads :reject done)))
+
+(deftest a-failed-http-fetch-is-retried-and-the-column-loads
+  (async done (retried-column-loads :http done)))
 
 (deftest a-fetch-that-keeps-failing-gives-up-as-missing
   (async done
