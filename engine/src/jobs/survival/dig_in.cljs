@@ -54,9 +54,14 @@
    "oak_planks" "spruce_planks" "birch_planks" "jungle_planks" "acacia_planks" "dark_oak_planks"
    "mangrove_planks" "cherry_planks"])
 
+(def shelter-blocks
+  "What dig-in places: the building blocks, then logs (worth more, a last resort)."
+  (into building-blocks ["oak_log" "spruce_log" "birch_log" "jungle_log" "acacia_log" "dark_oak_log" "mangrove_log"
+                         "cherry_log"]))
+
 (def args
   {:roof-height {:doc "a solid block within this many blocks above counts as a roof" :default sh/default-roof-height}
-   :blocks {:doc "names of the blocks it may place" :default building-blocks}
+   :blocks {:doc "names of the blocks it may place" :default shelter-blocks}
    :max-places {:doc "placements per step" :default 4}})
 
 (def shelter-policy {:cap 10 :ttl sh/ms-per-day})

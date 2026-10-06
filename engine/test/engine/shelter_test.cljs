@@ -416,6 +416,18 @@
           (is (re-find #"nothing to roof the pit with" (:text (first (emitted seen :dig_in_failed)))))
           (is (= [] (:list (core/state eng))) "ended"))))))
 
+(deftest dig-in-roofs-with-a-carried-log
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:time night :drops {"iron_ore" "raw_iron"}
+                                           :inventory [{:name "iron_pickaxe" :count 1} {:name "oak_log" :count 5}]
+                                           :blocks {"0,63,0" "iron_ore" "0,62,0" "iron_ore" "0,61,0" "iron_ore" "0,60,0" "stone"}})]
+          (core/submit! eng '(jobs.survival.dig-in) {})
+          (await (run-until-empty eng 8))
+          (is (= [] (emitted seen :dig_in_failed)))
+          (is (= ["oak_log"] (map #(.-item (.-args %)) (calls p "place"))) "the log roofs the pit"))))))
+
 (deftest a-submitted-dig-in-says-why-it-waits
   (async done
     (tu/run-async done
