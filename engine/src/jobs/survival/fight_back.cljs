@@ -7,6 +7,7 @@
 
 (def doc
   "Equip the best weapon, walk up to the nearest hostile within :range and hit it, at most one swing per :attack-gap-ms.
+  A hostile more than :leash blocks from the point the job started at is not chased (the job declines, so the retreat takes over).
   Declines when health is below :min-health.
   Ends when no hostile is within :range, with the result {:killed [ids]}.
   A hostile the walk toward is blocked for three times is given up on, with a fight_unreachable warning, and no longer counts.
@@ -18,6 +19,7 @@
 (def args
   {:range {:doc "hostiles within this many blocks are fought" :default 4}
    :ranged-range {:doc "ranged hostiles (skeletons and the like) within this many blocks are fought" :default 16}
+   :leash {:doc "hostiles farther than this from where the job started are not chased" :default 20}
    :min-health {:doc "decline below this health" :default 8}
    :weapons {:doc "item name substrings that count as weapons" :default combat/default-weapons}
    :skip {:doc "entity ids already dead: not fought" :default []}
@@ -31,6 +33,16 @@
   (or (>= (get-in (ctx/mem c) [:blocked (.-id e)] 0) u/max-failures)
       (>= (get-in (ctx/mem c) [:no-damage (.-id e)] 0) u/max-failures)))
 
+(defn start-of
+  "Where the job started: the first round's position (the current one before it)."
+  [c]
+  (or (:start (ctx/mem c)) (u/self-pos c)))
+
+(defn in-leash?
+  "Whether hostile e stands within :leash of the start point."
+  [c e]
+  (<= (u/dist (start-of c) (u/pos-of (.-pos e))) (:leash (:args c))))
+
 (defn in-range
   "The hostiles within :range (ranged ones within :ranged-range): the visible
   ones nearest first, then the hidden melee ones (a ranged mob without a line of fire is no danger)."
@@ -42,9 +54,9 @@
          (remove #(and (combat/ranged? %) (not (.-visible %)))))))
 
 (defn targets
-  "The hostiles in range not given up on, nearest first."
+  "The hostiles in range, within the leash and not given up on, nearest first."
   [c]
-  (remove #(given-up? c %) (in-range c)))
+  (->> (in-range c) (filter #(in-leash? c %)) (remove #(given-up? c %))))
 
 (defn check [c]
   (and (>= (.-health (.self (:primitives c))) (:min-health (:args c)))
@@ -105,6 +117,7 @@
         p (:primitives c)
         target (first (targets c))
         last-attack (:last-attack (ctx/mem c))]
+    (when-not (:start (ctx/mem c)) (ctx/update-mem! c assoc :start (u/self-pos c)))
     (cond
       (nil? target) (if (empty? (in-range c)) :done :declined)
       (and last-attack (< (- (ctx/now c) last-attack) attack-gap-ms)) (do (await (watch/watch! c {})) :continue)

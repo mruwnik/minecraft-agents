@@ -208,6 +208,17 @@
           (core/submit! eng fight {})
           (is (nil? (core/tick! eng)) "6 blocks is beyond range 4"))))))
 
+(deftest fight-back-leaves-a-mob-beyond-its-leash-from-the-start
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory sword :entities [(zombie 8 0)]})]
+          (core/submit! eng '(jobs.survival.fight-back {:range 12 :leash 5}) {})
+          (is (nil? (core/tick! eng)) "8 blocks from the start is past the leash of 5: not chased, the job declines")
+          (is (zero? (count (calls p "attack")))))
+        (let [{:keys [p]} (await (first-round '(jobs.survival.fight-back {:range 12 :leash 10}) {:inventory sword :entities [(zombie 8 0)]}))]
+          (is (= 1 (count (calls p "attack"))) "inside the leash it is fought"))))))
+
 (deftest fight-back-ignores-a-hidden-ranged-mob
   (async done
     (tu/run-async done

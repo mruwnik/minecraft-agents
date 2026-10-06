@@ -269,6 +269,20 @@
           (is (= 1 (fired seen)) "not fired again")
           (is (= 1 (st/notified seen)) "then the queued job ran"))))))
 
+(deftest at-night-a-respawned-body-shelters-before-it-recovers-its-drops
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen clock]} (st/setup {:time night :inventory st/dirt-stack :blocks st/floor})
+              fired-first (fn [] (some #(when (= :fired (:kind %)) (:reflex %)) @seen))]
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night} {:trigger :died}]}"))
+          (write! eng :died {:pos {:x 40 :y 64 :z 0}})
+          (swap! clock + 1000)
+          (write! eng :respawned {})
+          (swap! clock + 1000)
+          (await (core/tick! eng))
+          (is (= :night (fired-first)) "the night handler goes first: no walk to the drops in the dark"))))))
+
 (deftest a-site-whose-roof-fails-is-left-for-another-site
   (async done
     (tu/run-async done
