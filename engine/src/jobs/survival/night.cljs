@@ -219,7 +219,7 @@
 
 (def relocate-reasons
   "dig-in's :futile reasons a better spot nearby can cure."
-  #{:no-floor :hazard-below :fluid-adjacent :no-roof-support})
+  #{:no-floor :hazard-below :fluid-adjacent :fluid-here :no-roof-support})
 
 (def max-relocations "Spots a night tries before holding where it is." 3)
 

@@ -9,6 +9,7 @@
             [engine.scenario :as scenario]
             [engine.fake :as fake]
             [jobs.lib.shelter :as sh]
+            [jobs.survival.dig-in :as dig-in]
             [engine.fake.raw-world :as fake-raw]
             [engine.perception :as perception]
             [engine.test-util :as tu]
@@ -1068,6 +1069,49 @@
             (core/submit! eng '(jobs.survival.dig-in) {})
             (is (nil? (core/tick! eng)) "carried dirt does not make the site safe")
             (is (= :fluid-adjacent (:reason (first (entries eng :dig-in-futile)))))))))))
+
+(deftest dig-in-refuses-water-plants-bubbles-and-waterlogged-blocks-beside-the-pit
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[block states] [["seagrass" nil] ["tall_seagrass" nil] ["kelp" nil] ["kelp_plant" nil] ["bubble_column" nil]
+                                ["oak_slab" {"1,63,0" {:waterlogged true}}]]]
+          (let [{:keys [eng p]} (setup {:time night :blocks (assoc floor "1,63,0" block) :states states
+                                        :inventory [{:name "dirt" :count 1}]})]
+            (core/submit! eng '(jobs.survival.dig-in) {})
+            (await (run-until-empty eng 8))
+            (is (empty? (calls p "dig")) block)
+            (is (= :fluid-adjacent (:reason (first (entries eng :dig-in-futile)))) block)))))))
+
+(deftest dig-in-does-not-dig-down-from-water
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [cell ["0,64,0" "0,65,0"]]
+          (let [{:keys [eng p]} (setup {:time night :blocks (merge ground {cell "water"})})]
+            (core/submit! eng '(jobs.survival.dig-in) {})
+            (await (run-until-empty eng 8))
+            (is (empty? (calls p "dig")) cell)
+            (is (= :fluid-here (:reason (first (entries eng :dig-in-futile)))) cell)))))))
+
+(deftest dig-plan-needs-a-full-block-beside-the-roof-cell
+  (are [side plan] (= plan (dig-in/dig-plan (tu/fake {:blocks (merge ground {"1,64,0" side})}) {:x 0 :y 64 :z 0}))
+    "stone" {:roof {:x 0 :y 64 :z 0} :depth 2}
+    "poppy" {:roof {:x 0 :y 63 :z 0} :depth 3}
+    "sugar_cane" {:roof {:x 0 :y 63 :z 0} :depth 3}
+    "oak_sapling" {:roof {:x 0 :y 63 :z 0} :depth 3}))
+
+(deftest a-flower-beside-the-start-is-no-roof-support
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:time night :blocks (assoc ground "1,64,0" "poppy")})]
+          (require-support! p)
+          (core/submit! eng '(jobs.survival.dig-in) {})
+          (await (run-until-empty eng 12))
+          (is (= [{:x 0 :y 63 :z 0} {:x 0 :y 62 :z 0} {:x 0 :y 61 :z 0}] (mapv arg-pos (calls p "dig"))))
+          (is (= [{:x 0 :y 63 :z 0}] (mapv arg-pos (calls p "place"))) "roofed in the ground layer")
+          (is (= [] (emitted seen :dig_in_failed))))))))
 
 (deftest dig-in-bounds-descent-without-progress
   (async done

@@ -20,10 +20,12 @@
     Every round it recomputes the open cells from the current feet cell. If the blocks run out, it chooses again.
   - dig: digs a pit two deep (three on flat ground, where the start cell has no solid side to roof against),
     then places one block at the roof cell from a carried or dug block.
-    It digs only where the block under is solid and no water or lava borders the cell.
+    It digs only where the block under is solid, the feet and head cells are dry, and no fluid borders the cell
+    (water, lava, bubble column, kelp, seagrass, or a waterlogged block).
     It holds the best carried tool for each block first.
     If the body leaves the column, it chooses again.
-  With no solid side at either height it does not dig (dig_in_failed warning, :no-roof-support).
+  With no full block beside the roof cell at either height (a flower or crop is no support) it does not dig
+  (dig_in_failed warning, :no-roof-support).
   A wall cell the server refuses is retried after the others, and given up after two refusals.
   A cell occupied by a block a mob walks through (torch, sapling, cobweb) is dug once and placed again.
   A door, gate or trapdoor beside the body counts as a wall only when shut. An open one is shut with one click.
@@ -61,7 +63,16 @@
 
 (def sides [[1 0] [-1 0] [0 1] [0 -1]])
 
-(def hazards #{"lava" "water"})
+(def hazards
+  "Blocks that are or hold a fluid: a cell opened beside or under one fills."
+  #{"lava" "water" "bubble_column" "kelp" "kelp_plant" "seagrass" "tall_seagrass"})
+
+(defn wet?
+  "Whether the cell holds a fluid: a hazards block, or a waterlogged one."
+  [p cell]
+  (let [b (.blockAt p (clj->js cell))
+        logged (some-> b .-properties .-waterlogged)]
+    (boolean (and b (or (hazards (.-name b)) (true? logged) (= "true" logged))))))
 
 (defn carried
   "The carried [{:name :count}] whose name is in blocks, in the order of blocks."
@@ -81,10 +92,12 @@
     (when (= :done result) (remember-failed-site! c reason))
     result))
 
-(defn lateral-fluid [p {:keys [x y z]}]
+(defn lateral-fluid
+  "The name of the first wet? side neighbour of the cell, or nil."
+  [p {:keys [x y z]}]
   (some (fn [[dx dz]]
-          (let [name (u/block-name p {:x (+ x dx) :y y :z (+ z dz)})]
-            (when (hazards name) name)))
+          (let [cell {:x (+ x dx) :y y :z (+ z dz)}]
+            (when (wet? p cell) (u/block-name p cell))))
         sides))
 
 (def mob-proof-shapes
@@ -246,12 +259,16 @@
         below {:x x :y (dec y) :z z}
         name (u/block-name p below)
         under (u/block-name p {:x x :y (- y 2) :z z})
-        fluid (lateral-fluid p below)]
+        fluid (lateral-fluid p below)
+        here (first (filter #(wet? p %) [{:x x :y y :z z} {:x x :y (inc y) :z z}]))]
     (cond
+      here (do (remember-failed-site! c :fluid-here)
+               (ctx/emit! c :dig_in_failed :warn {:text (str (u/block-name p here) " where the body stands; not digging down")})
+               :done)
       fluid (do (remember-failed-site! c :fluid-adjacent)
                 (ctx/emit! c :dig_in_failed :warn {:text (str fluid " beside the descent cell; not opening the pit")})
                 :done)
-      (hazards name) (do (remember-failed-site! c :hazard-below)
+      (wet? p below) (do (remember-failed-site! c :hazard-below)
                          (ctx/emit! c :dig_in_failed :warn {:text (str name " below the body; not digging down")})
                          :done)
       (and (sh/solid-at? p below) (not (sh/solid? under)))
@@ -299,9 +316,10 @@
           (fail-site! c :roof-failed (str "cannot roof the pit: " (.-status r))))))))
 
 (defn supported?
-  "Whether a block placed in cell has a solid side neighbour to be placed against."
+  "Whether a block placed in cell has a side neighbour to be placed against: one whose collision shape fills its cell
+  (full-cube?; the place step needs a collision box, so a flower or a crop is no support)."
   [p {:keys [x y z]}]
-  (boolean (some (fn [[dx dz]] (sh/solid-at? p {:x (+ x dx) :y y :z (+ z dz)})) sides)))
+  (boolean (some (fn [[dx dz]] (some-> (.blockAt p (clj->js {:x (+ x dx) :y y :z (+ z dz)})) .-fullCube)) sides)))
 
 (defn dig-plan
   "{:roof :depth} for a pit dug from start: the roof goes at start when a side of it is solid (the pit is 2 deep), else
