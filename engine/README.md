@@ -635,8 +635,7 @@ fetches; its children and go-to never do. Sources today are carried items, seen 
 
 Helpers shared by jobs (not jobs): `jobs.lib.watch` (`watch/watch!` between acts: when the place is dark or a hostile
 was known recently, the body turns to look behind it so a creeper from behind is noticed; used by mine, fell-tree,
-from-plan, attack, fight-back, herd), `jobs.lib.worth/item-worth`, `jobs.lib.cost` (pure cost calculators:
-armour, mob threat, fight, route and planner danger, item value, fetch cost),
+from-plan, attack, fight-back, herd), `jobs.lib.worth/item-worth`, `jobs.lib.cost` (pure cost calculators),
 `jobs.lib.escape/choose`, `jobs.lib.tools/equip-for!` (cheapest carried tool that harvests the block; reflex digs use
 the fastest), `jobs.lib.declined`, `jobs.lib.reach` (danger checks), `jobs.lib.tidy`.
 

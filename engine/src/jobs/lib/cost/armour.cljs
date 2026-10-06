@@ -57,9 +57,11 @@
 
 (defn after-armour
   "The damage left of threat (spread over hits, at least 1) after armour stats, for damage type dtype
-  (:melee :projectile :explosion :fire)."
+  (:melee :projectile :explosion :fire; fire bypasses armour points, only fire protection counts)."
   [{:keys [points toughness enchants]} dtype threat hits]
   (let [hit (/ threat (max 1 hits))
-        armour (min 20 (max (/ points 5) (- points (/ (* 4 hit) (+ toughness 8)))))
+        armour (if (= dtype :fire)
+                 0
+                 (min 20 (max (/ points 5) (- points (/ (* 4 hit) (+ toughness 8))))))
         after (* hit (- 1 (/ armour 25)) (- 1 (/ (epf enchants dtype) 25)))]
     (* after (max 1 hits))))

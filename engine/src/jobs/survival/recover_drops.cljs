@@ -147,7 +147,7 @@
         worth (cost/item-value inventory :overrides (overrides-arg c :value-overrides))
         route (when pos (cost/straight-route kind-at here pos))
         threat (if route
-                 (cost/route-danger kind-at route (seen-hostiles p) (.-equipment (.self p)) :overrides (overrides-arg c :danger-overrides))
+                 (cost/route-danger (game/version-of p) kind-at route (seen-hostiles p) (.-equipment (.self p)) :overrides (overrides-arg c :danger-overrides))
                  {:danger 0 :mobs []})
         fetch (cost/fetch-cost {:distance (when pos (u/dist here pos)) :danger (:danger threat) :elapsed-ms elapsed :cause cause})]
     (cond-> {:value (+ (:value worth) (* xp-per-level (or (:level experience) 0)))

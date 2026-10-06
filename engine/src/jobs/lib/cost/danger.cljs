@@ -1,29 +1,18 @@
 (ns jobs.lib.cost.danger
-  "Danger, in two forms: route-danger, the expected damage of walking a route past mobs (recover-drops' fetch cost), and
-  danger-rate / danger-list, the hp a second go-to's planner costs near a known danger (its options.dangers).
+  "Danger of mobs the body knows (an input, e.g. jobs.lib.reach/known-hostiles; no world entity reads): route-danger, the
+  expected damage of walking a route past them (recover-drops' fetch cost), and danger-rate / danger-list, the hp a
+  go-to planner costs near a known danger (its options.dangers).
 
-  The mobs are an input: what the body has seen or remembers ({:name :pos} per mob; JS entities are read too), e.g.
-  jobs.lib.reach/known-hostiles. Nothing here reads the world's entities, so an unseen creeper never counts. The
-  world is read only through kind-at (jobs.lib.reach/lookup), the caller's.
+  route-danger per mob: hostile (jobs.lib.cost.threat; provoked-only mobs x0.1) or named in overrides; mob-hurt over 3 s
+  after armour; weight 1 within 2 blocks of the route, falling to 0 at :radius; counts only if a melee mob can walk to
+  the route or a ranged mob has a line of fire to it. Overrides {mob-name number-or-{:times n}}: threat before armour.
 
-  route-danger, per mob:
-    hostile?  jobs.lib.cost.threat/hostile?; anything else is no danger unless an override names it. Provoked-only mobs
-              (endermen, zombified piglins) x0.1.
-    threat    jobs.lib.cost.threat/mob-hurt over 3 s of exposure (a creeper: one blast), after armour.
-    weight    by the closest route cell: 1 within 2 blocks, falling to 0 at :radius (16).
-    reach     a melee mob (creepers too) needs a walkable way to that cell (jobs.lib.reach). A ranged mob needs a
-              line of fire to one of the route cells near it. A mob behind walls is no danger.
-  danger = hurt x weight, when the mob can reach the route; else 0.
-  Overrides {mob-name number-or-{:times n}}: a number is the mob's threat before armour, {:times n} multiplies it.
-
-  danger-rate: mob-hurt over 1 s, times the stance factor (what the hostile reflex would do: :flee x4, :fight x0.1),
-  times 20 / health (at most 4), at most max-rate. Body {:health :equipment :weapon :pos}."
+  danger-rate: mob-hurt over 1 s x stance factor (:flee x4, :fight x0.1) x 20 / health (at most 4), at most max-rate."
   (:require [jobs.lib.cost.armour :as armour]
             [jobs.lib.cost.fight :as fight]
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.reach :as reach]
-            [jobs.lib.util :as u]
-            [engine.game :as game]))
+            [jobs.lib.util :as u]))
 
 ;; ---------------------------------------------------------------- reading inputs
 
@@ -81,11 +70,10 @@
 (defn route-danger
   "{:danger total :mobs [{:name :pos :distance :weight :threat :danger} ...]} of walking route ([{:x :y :z}] cells)
   past mobs (cljs maps {:name :pos} or JS entities) for a body wearing equipment. Lists only mobs that add danger, the
-  worst first. kind-at: jobs.lib.reach/lookup. Options: :overrides, :radius (16), :version (minecraft-data, default
-  the body's). See the ns doc."
-  [kind-at route mobs equipment & {:keys [overrides radius version]}]
-  (let [version (or version @game/version)
-        radius (or radius default-radius)
+  worst first. version: the minecraft-data version; kind-at: jobs.lib.reach/lookup. Options: :overrides, :radius (16).
+  See the ns doc."
+  [version kind-at route mobs equipment & {:keys [overrides radius]}]
+  (let [radius (or radius default-radius)
         overrides (into {} (map (fn [[k o]] [(if (keyword? k) (name k) (str k)) o])) overrides)
         stats (armour/armour-stats equipment)
         route (vec route)

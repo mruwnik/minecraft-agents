@@ -41,3 +41,10 @@
   (is (= 7.5 (cost/fight-damage {:weapon "iron_sword" :equipment nil :mobs [{:name "zombie" :distance 3}]})))
   (is (= 3.45 (round2 (cost/fight-damage {:weapon "iron_sword" :equipment iron-set :mobs [{:name "zombie" :distance 3}]})))
       "4 swings, 2.5 s of 3 hp hits: vanilla's 13.5 effective points take 54% off"))
+
+(deftest fire-bypasses-armour-points-but-not-fire-protection
+  (let [fire #(cost/after-armour (cost/armour-stats %) :fire 10 1)]
+    (is (= (fire nil) (fire iron-set)) "armour points do nothing against fire")
+    (is (= (fire nil) (fire diamond-8)) "nor toughness")
+    (is (< (fire (enchanted iron-set "fire_protection")) (fire nil)) "fire protection still counts")
+    (is (< (cost/after-armour (cost/armour-stats iron-set) :melee 10 1) (cost/after-armour (cost/armour-stats nil) :melee 10 1)))))

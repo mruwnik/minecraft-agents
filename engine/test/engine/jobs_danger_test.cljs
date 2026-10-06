@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is are]]
             [jobs.lib.cost :as d]
             [jobs.lib.reach :as reach]
+            [engine.game :as game]
             [engine.test-util :as tu]))
 
 (def body {:x 0.5 :y 64 :z 0.5})
@@ -25,7 +26,7 @@
 (def iron-armour {:head {:name "iron_helmet"} :torso {:name "iron_chestplate"}
                   :legs {:name "iron_leggings"} :feet {:name "iron_boots"}})
 
-(defn route-danger [p route mobs equipment & opts] (apply d/route-danger (reach/lookup p) route mobs equipment opts))
+(defn route-danger [p route mobs equipment & opts] (apply d/route-danger game/default-version (reach/lookup p) route mobs equipment opts))
 
 (defn danger [p mobs & opts] (:danger (apply route-danger p route mobs naked opts)))
 
