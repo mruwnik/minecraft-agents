@@ -28,26 +28,36 @@
   (or (and (nil? a) (nil? b))
       (and (number? a) (number? b) (< (js/Math.abs (- a b)) 0.0011))))
 
+(def sealed-courses
+  "course names whose start lane is sealed by the course's obstacle between glass walls: the JS planner knew no
+  :start-enclosed and recorded the goal's enclosed reason, the planner now says start-enclosed. Any other id must match
+  its recorded reason exactly."
+  #{"carpet-fence" "leaves-wall" "mangrove" "tunnel-stairs" "tunnel-step" "wall-diag"})
+
 (defn same-answer?
-  "does the planner's record equal the recorded one: status, reason, end cell and expanded exactly, costs within rounding"
-  [[s1 r1 sec1 risk1 end1 e1] [s2 r2 sec2 risk2 end2 e2]]
-  (and (= [s1 end1 e1] [s2 end2 e2])
-       (or (= r1 r2) (and (= "start-enclosed" r1) (#{"goal-unloaded" "goal-enclosed" "goal-cut-off"} r2)))
-       (close? sec1 sec2) (close? risk1 risk2)))
+  "does the planner's record equal the recorded one: status, reason, end cell and expanded exactly, costs within rounding;
+  sealed-start? (the id is in start-enclosed-ids) lets start-enclosed stand for the recorded goal-* reason"
+  ([got want] (same-answer? got want false))
+  ([[s1 r1 sec1 risk1 end1 e1] [s2 r2 sec2 risk2 end2 e2] sealed-start?]
+   (and (= [s1 end1 e1] [s2 end2 e2])
+        (or (= r1 r2) (and sealed-start? (= "start-enclosed" r1) (#{"goal-unloaded" "goal-enclosed" "goal-cut-off"} r2)))
+        (close? sec1 sec2) (close? risk1 risk2))))
 
 (defn disagreements
-  "ids whose planned record differs from the recorded one: [[id got expected] ...]"
-  [ids planned expected]
-  (->> ids
-       (keep (fn [id] (let [got (record (planned id))] (when-not (same-answer? got (expected id)) [id got (expected id)]))))
-       vec))
+  "ids whose planned record differs from the recorded one: [[id got expected] ...]; the ids in sealed may answer
+  start-enclosed for the recorded goal-* reason"
+  ([ids planned expected] (disagreements ids planned expected #{}))
+  ([ids planned expected sealed]
+   (->> ids
+        (keep (fn [id] (let [got (record (planned id))] (when-not (same-answer? got (expected id) (contains? sealed id)) [id got (expected id)]))))
+        vec)))
 
 (defn course-names [] (sort (map name (keys (:course @recorded)))))
 
 (deftest every-recorded-course-plans-as-the-js-planner-did
   (let [names (course-names)]
     (is (= 144 (count names)))
-    (is (= [] (disagreements names pf/course-plan (fn [n] (get-in @recorded [:course (keyword n)])))))))
+    (is (= [] (disagreements names pf/course-plan (fn [n] (get-in @recorded [:course (keyword n)])) sealed-courses)))))
 
 (defn bench-dir [] (or js/process.env.PLANNER_BENCH_DIR (path/resolve js/__dirname "../test/fixtures/pathfinding/claude-1")))
 
