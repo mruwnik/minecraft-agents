@@ -5,6 +5,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.combat :as combat]
+            [jobs.lib.escape :as escape]
             [jobs.lib.cost :as cost]
             [jobs.lib.reach :as reach]
             [jobs.lib.shelter :as sh]
@@ -469,7 +470,7 @@
   "Start a pillar-height pillar (jobs.access.pillar, ledgered) when it fits: a step's result, else nil."
   [c]
   (let [p (:primitives c)
-        block-at (pillar/block-at-of p)
+        block-at (escape/block-at-of p)
         feet (pillar/feet-cell c)
         item (pillar-item c)]
     (when (and item (pillar-ok? block-at feet))
@@ -686,7 +687,7 @@
                              {:cell cell :item item :before (u/block-name p roof) :job (:id c) :purpose :retreat-plug})
             _ (ledger/remember! c l)
             r (await (tidy/place! c roof item true))]
-        (ledger/remember! c (ledger/reconcile l (pillar/block-at-of p)))
+        (ledger/remember! c (ledger/reconcile l (escape/block-at-of p)))
         (if (= "placed" (.-status r))
           (hide-now! c refuge "cornered: dug down and plugged the hole until the hostile leaves")
           (await (abandon-refuge! c)))))))
