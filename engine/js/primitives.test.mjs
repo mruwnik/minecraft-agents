@@ -1434,6 +1434,14 @@ test('a dropped item behind a wall is not visible, and is once the wall is gone'
   assert.equal('visible' in p.entities({ kind: 'passive' })[0], false)
 })
 
+test('a cow seen through a fence or an open fence gate is listed: a player sees past the rails', () => {
+  const cow = { 11: { id: 11, name: 'cow', type: 'passive', position: at(5, 64, 0), height: 1.4 } }
+  const line = name => Object.fromEntries([2, 3].map(x => [`${x},64,0`, name]))
+  const listed = name => rig({ blocks: line(name), entities: cow }).p.entities({ names: ['cow'] }).length
+  assert.deepEqual(['oak_fence', 'oak_fence_gate', 'iron_bars'].map(listed), [1, 1, 1])
+  assert.equal(listed('stone'), 0)
+})
+
 test('a sheep and a villager behind a wall are not listed, a player is (visible false); all listed once the wall is gone', () => {
   const others = {
     11: { id: 11, name: 'sheep', type: 'passive', position: at(5, 64, 0), height: 1.3 },

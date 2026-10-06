@@ -77,6 +77,10 @@
 (defn events-of [{:keys [seen]} kind] (filterv #(= kind (:kind %)) @seen))
 (defn done-event [s] (first (events-of s :herd.done)))
 (defn finished? [{:keys [eng]}] (empty? (:list (core/state eng))))
+(defn failed-error
+  "The error text the job was parked failed with, or nil while it is not failed."
+  [{:keys [eng]}]
+  (some-> (core/state eng) :failed vals first :error))
 (defn calls-of [{:keys [p]} name] (h/calls p name))
 (defn entities-of [{:keys [p]}] (fake/entities p))
 (defn cow-of [s id] (first (filter #(= id (:id %)) (entities-of s))))
@@ -236,7 +240,7 @@
               log (watch-gate! s)
               trail (await (body-trail s 900))
               e (done-event s)]
-          (is (finished? s))
+          (is (failed-error s))
           (is (= :short (:reason e)))
           (is (= {"u1" :jammed} (:given-up e)))
           (is (= [] (:brought e)))
@@ -275,7 +279,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [[s log] (await (scenario-log {:target 2 :timeout-s 900} {:entities [(cow 1 4 3) (cow 8 10.2 3.5)]} 1200))]
-          (is (finished? s))
+          (is (failed-error s))
           (is (every? zero? (map :overlapping (filter :was-open @log))) "never a shut while it overlapped")
           (is (seq (events-of s :herd.gate-open)) "the gate is left open with a warn, for the pen-gate trigger")
           (is (empty? (held-entries s))))))))
@@ -330,7 +334,7 @@
           (on-step! s #(when (gate-open? s) (reset! opened true)))
           (await (run-ticks s 400))
           (is @opened "the gate was opened")
-          (is (finished? s))
+          (is (failed-error s))
           (is (= :timeout (:reason (done-event s))))
           (is (empty? (on-lead s)) "the animal is let go")
           (is (not (gate-open? s)))
@@ -341,7 +345,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:target 1} {:entities [(cow 1 4 3)] :unreachable ["9,64,3"]} 100))]
-          (is (finished? s))
+          (is (failed-error s))
           (is (= :unreachable (:reason (done-event s))))
           (is (empty? (on-lead s)) "never left tethered to the body")
           (is (= 2 (count-of s "lead")))
@@ -501,7 +505,7 @@
                       (swap! longest max (- now @opened-at)))
                   (reset! opened-at nil)))
               (recur (inc n))))
-          (is (finished? s))
+          (is (failed-error s))
           (is (= {"u1" :jammed} (:given-up (done-event s))))
           (is (< @longest 40000) "the gate is never left open through the walk out and the second line-up")
           (is (not (gate-open? s))))))))
@@ -635,7 +639,7 @@
                  ["no gate" {:entities [(cow 1 4 3)] :blocks {gate-key "oak_fence"}} :no-gate]
                  ["only a corner gate" {:entities [(cow 1 4 3)] :blocks {gate-key "oak_fence" "10,64,0" "oak_fence_gate"}} :no-gate]]]
           (let [s (await (scenario {:target 2} w 20))]
-            (is (finished? s) label)
+            (is (failed-error s) label)
             (is (= reason (:reason (done-event s))) label)
             (is (empty? (calls-of s "useOn")) label)
             (is (empty? (on-lead s)) label)
@@ -646,7 +650,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:target 1} {:entities [(cow 1 4 3)] :states {gate-key {:open false :locked true}}} 100))]
-          (is (finished? s))
+          (is (failed-error s))
           (is (= :gate-stuck (:reason (done-event s))))
           (is (empty? (on-lead s)))
           (is (not (gate-open? s)))
@@ -669,7 +673,7 @@
                          (impl token args))))
           (await (run-ticks s 600))
           (let [warns (events-of s :herd.gate-open)]
-            (is (finished? s))
+            (is (failed-error s))
             (is (empty? (on-lead s)) "the animal is unleashed before the shut is tried again")
             (is (= 1 (count warns)))
             (is (= gate (:gate (first warns))))
@@ -707,12 +711,34 @@
       (fn ^:async t []
         (let [s (await (scenario {:target 1} {:entities [(cow 1 4 3 {:snaps true})]} 200))
               e (done-event s)]
-          (is (finished? s))
+          (is (failed-error s))
           (is (= :lost (:reason e)))
           (is (= {"u1" :lead-broke} (:given-up e)))
           (is (= 2 (count (filter #(= "lead" (.. % -args -item)) (calls-of s "interact")))) "leashed twice, not more")
           (is (empty? (calls-of s "useOn")) "the gate is never opened")
           (is (= 1 (count (events-of s :herd.gave-up)))))))))
+
+(deftest bringing-none-fails-the-job-with-the-reason-and-the-pen-state
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:target 1} {:entities [(cow 1 4 3 {:snaps true})]} 200))
+              e (done-event s)
+              why (failed-error s)]
+          (is (= :lost (:reason e)) "the outcome is still reported")
+          (is (not (finished? s)) "not completed: parked failed")
+          (is (string? why))
+          (is (re-find #"lost" why))
+          (is (re-find #"none of the 1" why)))))))
+
+(deftest bringing-some-but-fewer-than-wanted-still-completes-short
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:target 3} {:inventory (leads 3) :entities [(cow 1 4 3)]} 200))]
+          (is (= :short (:reason (done-event s))))
+          (is (finished? s))
+          (is (nil? (failed-error s))))))))
 
 (deftest leads-dropped-mid-way-are-picked-up-and-the-animals-leashed-again
   (async done
@@ -910,7 +936,7 @@
       (fn ^:async t []
         (let [s (await (scenario3 {} 20))
               e (done-event s)]
-          (is (finished? s))
+          (is (failed-error s))
           (is (= :too-shallow (:reason e)))
           (is (empty? (calls-of s "useOn")))
           (is (empty? (on-lead s)))
@@ -922,7 +948,7 @@
       (fn ^:async t []
         (let [s (await (scenario {:target 2} {:entities [(cow 1 4 3)] :blocks {"7,64,3" "stone"}} 20))
               e (done-event s)]
-          (is (finished? s))
+          (is (failed-error s))
           (is (= :no-gate (:reason e)))
           (is (= :no-approach (:why e)))
           (is (empty? (calls-of s "useOn")))

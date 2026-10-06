@@ -14,7 +14,7 @@ const hereY = bot => bot?.entity?.position?.y ?? 0
 const LIGHT_TTL_MS = 1000 // light changes arrive without an event: a light copy is re-read after this long
 
 // Same rule as primitives.mjs canSee: a full collision box blocks sight unless it is one of these.
-export const SEE_THROUGH = /glass|^water$|^fire$|grass$|^snow$|^vine$|^ladder$|torch$/
+export const SEE_THROUGH = /glass|fence|^iron_bars$|^water$|^fire$|grass$|^snow$|^vine$|^ladder$|torch$/
 // Opaque to the eye although they have no collision box: nothing is seen through a lava lake or powder snow.
 export const OPAQUE_WITHOUT_BOX = /^(lava|powder_snow)$/
 

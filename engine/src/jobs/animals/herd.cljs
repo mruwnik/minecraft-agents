@@ -70,7 +70,9 @@
   :brought (pen holds :target), :short (fewer than :target in the pen: some came, or none came and no other
   reason), :full,
   :no-pen, :leaky, :no-gate, :too-shallow, :unreachable (a walk was blocked), :gate-stuck, :lost, :timeout,
-  or the leash reason when nobody could be led. The body ends outside with the gate shut.")
+  or the leash reason when nobody could be led. The body ends outside with the gate shut. The job ends completed
+  when the pen holds :target or is :full, or when some animals were brought (a partial run, :short or another reason);
+  when none was brought it fails with the reason, after the result and herd.done were given.")
 
 (def args
   {:mob {:doc "the animal's name, such as \"cow\"" :default nil}
@@ -202,6 +204,10 @@
     (when-not (#{:brought :full} reason)
       (ctx/emit! c :herd.gave-up :warn {:reason reason :text (str "herding stopped: " (name reason))}))
     (ctx/result! c result)
+    (when (and (empty? brought) (not (#{:brought :full} reason)))
+      (throw (ex-info (str "herd brought none of the " target " wanted: " (name reason) ", " (count inside) " in the pen"
+                           (when (seq (:given-up m)) (str ", given up " (pr-str (:given-up m)))))
+                      result)))
     :done))
 
 (defn end!

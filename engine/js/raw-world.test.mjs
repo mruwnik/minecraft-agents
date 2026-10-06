@@ -102,6 +102,11 @@ test('sightTable blocks sight for full blocks, not for glass, water, grass or to
     [1, 1, 1, 0, 0, 0, 0, 0])
 })
 
+test('sightTable lets sight pass fences, fence gates and iron bars', () => {
+  const table = sightTable(registry)
+  assert.deepEqual(['oak_fence', 'oak_fence_gate', 'nether_brick_fence', 'iron_bars', 'cobblestone_wall'].map(n => table[id(n)]), [0, 0, 0, 0, 1])
+})
+
 test('stateInfo names a state with its properties', () => {
   const { bot } = makeBot()
   const raw = createRawWorld({ getBot: () => bot })
