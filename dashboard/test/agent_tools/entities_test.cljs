@@ -225,3 +225,16 @@
                    (is (= 1 code))
                    (is (= :output-too-large (:reason (data/read-edn out))))))
           (.then (fn [_] (close) (done)))))))
+
+(deftest a-heard-row-has-a-direction-and-band-and-no-place
+  (let [now 1700000000000
+        rows [(entity "self" "player" "overworld" {:x 0 :y 64 :z 0} now 100 119900 {:self? true :username "ProbeMove"})
+              (-> (entity "sheep" "sheep" "overworld" nil now 500 119500 {:sense :heard :direction :east :band :far})
+                  (dissoc :pos))
+              (entity "cow" "cow" "overworld" {:x 3 :y 64 :z 0} now 100 119900 {:sense :seen})]
+        result (entities/project {:body "ProbeMove" :radius 64 :limit 10 :raw? false} (snapshot now rows))
+        sheep (first (filter #(= "sheep" (:type %)) (:items result)))]
+    (is (= 2 (:total result)))
+    (is (= {:sense :heard :direction :east :band :far} (select-keys sheep [:sense :direction :band])))
+    (is (not (contains? sheep :pos)))
+    (is (= ["cow" "sheep"] (mapv :type (:items result))) "heard rows sort after those with a place")))

@@ -7,7 +7,7 @@
             ["node:fs" :as fs]
             ["node:path" :as path]))
 
-(def usage "entities.mjs BODY --world WORLD [--type TYPE] [--player NAME] [--dimension DIM] [--center X,Y,Z] [--radius N] [--limit N] [--offset N] [--raw] [--worlds DIR --state LEGACY_PARENT]\nLists entities the body has seen lately, nearest first. :pos is [x y z] blocks, :age-ms how long ago it was seen; :total counts all matches, --limit/--offset page.")
+(def usage "entities.mjs BODY --world WORLD [--type TYPE] [--player NAME] [--dimension DIM] [--center X,Y,Z] [--radius N] [--limit N] [--offset N] [--raw] [--worlds DIR --state LEGACY_PARENT]\nLists entities the body has seen lately, nearest first. :pos is [x y z] blocks, :age-ms how long ago it was seen; a :heard row has :direction and :band instead of :pos; :total counts all matches, --limit/--offset page.")
 (def default-radius 64)
 (def default-limit 10)
 (def max-radius 512)
@@ -105,8 +105,9 @@
   (let [age (max 0 (- now (:observed-at entity)))
         pos (:pos entity)]
     (cond-> {:type (:type entity)
-             :pos (mapv round-tenth ((juxt :x :y :z) pos))
              :age-ms age}
+      pos (assoc :pos (mapv round-tenth ((juxt :x :y :z) pos)))
+      (:direction entity) (assoc :direction (:direction entity) :band (:band entity))
       (:uuid entity) (assoc :uuid (:uuid entity))
       (nil? (:uuid entity)) (assoc :key (:key entity))
       (:username entity) (assoc :player (:username entity))
@@ -152,12 +153,13 @@
             matches (->> rows
                          (filter #(and (not (:self? %))
                                        (number? (:expires-at %)) (> (:expires-at %) now)
-                                       (number? (:observed-at %)) (:pos %)
+                                       (number? (:observed-at %)) (or (:pos %) (:direction %))
                                        (= dimension (:dimension %))
-                                       (<= (distance-squared center (:pos %)) radius-squared)
+                                       (or (nil? (:pos %)) (<= (distance-squared center (:pos %)) radius-squared))
                                        (or (nil? (:type request)) (= (:type request) (:type %)))
                                        (or (nil? (:player request)) (= (:player request) (:username %)))))
-                         (sort-by (fn [entity] [(distance-squared center (:pos entity)) (or (:uuid entity) (:key entity) "")]))
+                         (sort-by (fn [entity] [(if (:pos entity) (distance-squared center (:pos entity)) js/Infinity)
+                                               (or (:uuid entity) (:key entity) "")]))
                          vec)
             selected (vec (take limit (drop offset matches)))
             shown (if (:raw? request) selected (mapv #(compact now %) selected))

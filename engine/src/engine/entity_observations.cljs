@@ -8,6 +8,8 @@
     :remembered at the place last sensed, with :age-ms
   - everything else goes through perception's rule for a thing at a place (`sense`): a clear line, light and
     the view cone, or hearing. Drops and the like make no sound.
+  - a :heard row has no :pos, only :direction (8 compass points) and :band (:near or :far); :seen and :remembered keep
+    the exact place.
   - the body itself is :self.
   Mineflayer tracks far more (mobs deep in the rock under the body). Those are never listed."
   (:require [clojure.string :as str]
@@ -102,13 +104,29 @@
     (when (and p (every? #(and (number? %) (js/Number.isFinite %)) [(.-x p) (.-y p) (.-z p)]))
       {:x (.-x p) :y (.-y p) :z (.-z p)})))
 
+(def near-band "A heard thing within this many blocks of the body is :near, else :far." 8)
+(def directions [:north :north-east :east :south-east :south :south-west :west :north-west])
+
+(defn rough-hearing
+  "What a sound tells of where it came from: {:direction one of 8 compass points (north is -z), :band :near or :far}.
+  from and to are {:x :y :z}."
+  [from to]
+  (let [dx (- (:x to) (:x from)) dz (- (:z to) (:z from))
+        sector (mod (js/Math.round (/ (js/Math.atan2 dx (- dz)) (/ js/Math.PI 4))) 8)]
+    {:direction (nth directions sector)
+     :band (if (<= (js/Math.hypot dx (- (:y to) (:y from)) dz) near-band) :near :far)}))
+
 (defn observation [store source dim [e how entry] now]
   (when-let [pos (when-not (.has (:dead store) e) (position (or entry e)))]
     (merge (entity-identity store source e)
            {:type (entity-type e) :id (when (integer? (.-id e)) (.-id e)) :world (get-in store [:opts :world])
-            :dimension dim :pos pos :observed-at (- now (if entry (or (.-ageMs entry) 0) 0))
+            :dimension dim :observed-at (- now (if entry (or (.-ageMs entry) 0) 0))
             :expires-at (+ (- now (if entry (or (.-ageMs entry) 0) 0)) ttl-ms)
             :sense how}
+           ;; Heard only: a player hears roughly where, not the exact place.
+           (if (= :heard how)
+             (rough-hearing (or (position (.-entity source)) pos) pos)
+             {:pos pos})
            (when-let [username (short-text (.-username e) 64)] {:username username})
            (when (identical? e (.-entity source)) {:self? true}))))
 

@@ -266,3 +266,27 @@
     (seen/observe! c (sample bot [(.-entity bot) (mob 2 "cow" 64 12.5 0.5)]) 0)
     (seen/observe! c (sample bot [(.-entity bot)]) 1000)
     (is (= #{"player" "cow"} (into #{} (map :type) (:entities (seen/snapshot c 1000)))))))
+
+;; ---- a sound gives a rough direction and a band, never a place
+(defn rows-of [r es]
+  (let [bot #js {:entity #js {:id 1 :type "player" :username "Probe" :position #js {:x 0.5 :y 64 :z 0.5}}}
+        c (seen/open {:world "w" :body "Probe" :sense (partial seen/sense (:per r))
+                      :known #(array-seq (.knownMobs (:p r)))})]
+    (seen/observe! c (sample bot (cons (.-entity bot) es)) 0)
+    (into {} (map (juxt :type identity)) (:entities (seen/snapshot c 0)))))
+
+(deftest a-heard-only-sheep-has-a-direction-and-a-band-but-no-position
+  (let [rows (rows-of (rig {:blocks (tu/box 5 64 -3 5 69 3 "stone")}) [(mob 2 "sheep" 64 12.5 0.5)])
+        sheep (get rows "sheep")]
+    (is (= :heard (:sense sheep)))
+    (is (not (contains? sheep :pos)) "a heard sheep has no exact position")
+    (is (= :east (:direction sheep)))
+    (is (= :far (:band sheep)))
+    (is (= :near (:band (get (rows-of (rig {:blocks (tu/box 3 64 -3 3 69 3 "stone")}) [(mob 2 "sheep" 64 6.5 0.5)]) "sheep"))))
+    (is (= :north-west (:direction (get (rows-of (rig {:blocks (tu/box -6 64 -9 -6 69 -2 "stone")}) [(mob 2 "sheep" 64 -8.5 -7.5)]) "sheep"))))))
+
+(deftest a-seen-sheep-keeps-its-exact-position
+  (let [sheep (get (rows-of (rig {}) [(mob 2 "sheep" 64 0.5 10.5)]) "sheep")]
+    (is (= :seen (:sense sheep)))
+    (is (= {:x 0.5 :y 64 :z 10.5} (:pos sheep)))
+    (is (not (contains? sheep :direction)))))
