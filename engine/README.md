@@ -92,7 +92,7 @@ nobody may act. `isOwner(token)` reports whether a token is current.
 | method | returns |
 |---|---|
 | `self()` | `{username, pos, health, food, foodSaturation, oxygen, onFire, inWater, inLava, onGround, chunkLoaded, settling, isSleeping, vehicle, effects, experience, dimension, timeOfDay, isDay, raining, thundering, players, held, equipment, inventory}` |
-| `entities({radius=16, kind?, names?, max=32})` | `[{id, name, kind, pos, distance, visible?, ...}]` by distance; `kind` is `hostile`, `passive`, `player`, `item` or `other`; all but hostiles and items are listed only with a clear line of sight (hostiles and items carry `visible`) |
+| `entities({radius=16, kind?, names?, max=32})` | `[{id, name, kind, pos, distance, visible?, ...}]` by distance; `kind` is `hostile`, `passive`, `player`, `item` or `other`; passive mobs and villagers are listed only with a clear line of sight; hostiles, items and players are listed regardless and carry `visible` (a player counts as `sleeping` only in sight) |
 | `blocks({radius=16, names?, match?, max=64, properties=false})` | `[{name, pos, age?, properties?, distance}]` by distance |
 | `blockAt(pos)` | `{name, pos, age?, properties?}`, or `null` when the chunk is not loaded |
 

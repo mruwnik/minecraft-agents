@@ -532,9 +532,9 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       .filter(e => e !== bot.entity && e.position)
       .map(e => ({ e, distance: dist(me, e.position), kind: entityKind(e) }))
       .filter(({ e, distance, kind: k }) => distance <= radius && (!kind || k === kind) && (!names || names.includes(e.name ?? e.username)))
-      // like a player: a passive mob, a villager or another player behind a wall is not listed (hostiles and items stay
-      // listed with `visible`, which the danger and fetch code reads)
-      .filter(({ e, kind: k }) => k === 'hostile' || k === 'item' || canSee(e))
+      // like a player: a passive mob or a villager behind a wall is not listed. Hostiles, items and players stay
+      // listed with `visible` (players show through walls in the game, nametags); sleeping needs sight
+      .filter(({ e, kind: k }) => k === 'hostile' || k === 'item' || k === 'player' || canSee(e))
       .sort((a, b) => a.distance - b.distance)
       .slice(0, max)
       .map(({ e, distance, kind: k }) => ({
@@ -546,7 +546,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
         ...(k !== 'item' && k !== 'player' && mobFields(bot, e)),
         ...(k !== 'item' && k !== 'player' && leashFields(bot, e)),
         ...(k !== 'item' && vehicleFields(bot, e)),
-        ...((k === 'hostile' || k === 'item') && { visible: canSee(e) }),
+        ...((k === 'hostile' || k === 'item' || k === 'player') && { visible: canSee(e) }),
         ...(k !== 'item' && distance <= HIT_RANGE && { hittable: canHit(e) }),
         ...(k === 'item' && { item: droppedItem(bot, e) }),
         ...(k === 'player' && { username: e.username, sleeping: lyingDown(bot, e) && canSee(e) }),

@@ -501,10 +501,10 @@ test('entities tells sleeping players from standing ones and gives usernames', (
   assert.deepEqual(found.map(e => [e.username, e.sleeping]), [['P1', true], ['P2', false], ['P3', false]])
 })
 
-test('entities counts a sleeping player only with a line of sight: one behind a wall is not listed at all', () => {
+test('entities lists a player behind a wall with visible false, and counts a sleeper there as not seen asleep', () => {
   const player = (id, x) => ({ id, type: 'player', name: 'player', username: `P${id}`, position: at(x, 64, 0), metadata: [0, 0, 0, 0, 0, 0, 2] })
   const p = withBot(bot => { bot.entities = { 1: player(1, 1), 5: player(5, 5) } }, { ...world, blocks: { ...world.blocks, '2,65,0': 'stone' } })
-  assert.deepEqual(p.entities({ kind: 'player' }).map(e => [e.username, e.sleeping]), [['P1', true]])
+  assert.deepEqual(p.entities({ kind: 'player' }).map(e => [e.username, e.sleeping, e.visible]), [['P1', true, true], ['P5', false, false]])
 })
 
 test('a player asleep in a bed is seen over the foot of the bed', () => {
@@ -1417,13 +1417,13 @@ test('a dropped item behind a wall is not visible, and is once the wall is gone'
   assert.equal('visible' in p.entities({ kind: 'passive' })[0], false)
 })
 
-test('a sheep, a villager and a player behind a wall are not listed, and are once the wall is gone', () => {
+test('a sheep and a villager behind a wall are not listed, a player is (visible false); all listed once the wall is gone', () => {
   const others = {
     11: { id: 11, name: 'sheep', type: 'passive', position: at(5, 64, 0), height: 1.3 },
     12: { id: 12, name: 'villager', type: 'passive', position: at(5, 64, 0.5), height: 1.95 },
     13: { id: 13, type: 'player', username: 'Ann', position: at(5, 64, -0.5), height: 1.8, metadata: [] }
   }
-  assert.deepEqual(rig({ blocks: wall, entities: others }).p.entities({}).map(e => e.id), [])
+  assert.deepEqual(rig({ blocks: wall, entities: others }).p.entities({}).map(e => [e.id, e.visible]), [[13, false]])
   assert.deepEqual(rig({ blocks: {}, entities: others }).p.entities({}).map(e => e.id).sort(), [11, 12, 13])
 })
 
