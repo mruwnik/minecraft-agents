@@ -547,6 +547,22 @@
   (let [s (.-seen e)]
     (if (some? s) (or (true? s) (true? (.-heard e))) (true? (.-visible e)))))
 
+(defn seen-only?
+  "Whether the body has seen hostile e (not merely heard it): the seen flag of a known-hostiles entry, else (raw
+  entity) its visible field."
+  [e]
+  (let [s (.-seen e)]
+    (if (some? s) (true? s) (true? (.-visible e)))))
+
+(defn in-tunnel?
+  "Whether the body's cell is in a tunnel by kind-at: solid over the head and solid at both ends of one horizontal
+  axis, at the feet and head cells."
+  [kind-at [x y z]]
+  (let [solid? #(keyword-identical? :solid (kind-at %1 %2 %3))]
+    (and (solid? x (+ y 2) z)
+         (or (and (solid? (dec x) y z) (solid? (inc x) y z) (solid? (dec x) (inc y) z) (solid? (inc x) (inc y) z))
+             (and (solid? x y (dec z)) (solid? x y (inc z)) (solid? x (inc y) (dec z)) (solid? x (inc y) (inc z)))))))
+
 (defn known-hostiles
   "The hostiles the body knows of within radius (ranged ones within :ranged-radius), nearest first. Uses the
   perception's mob memory (p.knownMobs) when p has one, else combat/hostiles."
@@ -562,7 +578,8 @@
   ([p kind-at e opts] (danger-in? p kind-at nil e opts))
   ([p kind-at pr e {:keys [sight?] :or {sight? true}}]
    (if (combat/ranged? e)
-     (line-of-fire? (lookup p arrow-kind-of) (u/pos-of (.-pos e)) (u/pos-of (.-pos (.self p))))
+     (and (or (not sight?) (seen-only? e) (not (in-tunnel? kind-at (cell-of (u/pos-of (.-pos (.self p)))))))
+          (line-of-fire? (lookup p arrow-kind-of) (u/pos-of (.-pos e)) (u/pos-of (.-pos (.self p)))))
      (and (or (seen-mob? e) (not sight?))
           (let [mob (cell-of (u/pos-of (.-pos e)))
                 body (cell-of (u/pos-of (.-pos (.self p))))]
@@ -570,7 +587,8 @@
 
 (defn danger?
   "Whether hostile e (JS entity) is a real danger to the body.
-  A ranged mob needs a line of fire. A melee mob needs a walkable way to the body and, unless :sight? is false, to
+  A ranged mob needs a line of fire and, when the body is in a tunnel (in-tunnel?), to have been seen, not only heard
+  (unless :sight? is false). A melee mob needs a walkable way to the body and, unless :sight? is false, to
   have been seen (seen-mob?)."
   ([p e] (danger? p e {}))
   ([p e opts] (danger-in? p (lookup p) e opts)))

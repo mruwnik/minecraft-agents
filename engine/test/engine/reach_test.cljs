@@ -178,3 +178,28 @@
     (is (= {"mangrove_roots" :solid "muddy_mangrove_roots" :solid
             "warped_roots" :open "crimson_roots" :open "hanging_roots" :open}
            kinds))))
+
+;; ---------------------------------------------------------------- a ranged mob in a tunnel counts only if seen
+
+(def tunnel
+  "Stone over the head (0 66 0) and at both sides along x of feet and head cells: a 1x2 passage along z."
+  (into {"0,66,0" "stone"} (for [x [-1 1] y [64 65]] [(str x "," y ",0") "stone"])))
+
+(defn danger-ids [blocks mob]
+  (let [p (tu/fake {:self {:pos body} :floor [-20 -20 20 20] :blocks blocks :entities [mob]})]
+    (map #(.-id %) (reach/dangers p 16 {:ranged-radius 16} {}))))
+
+(def heard-skel {:id 9 :name "skeleton" :kind "hostile" :seen false :heard true :pos {:x 0.5 :y 64 :z 8.5}})
+(def seen-skel (assoc heard-skel :seen true :heard false))
+
+(deftest a-heard-ranged-mob-is-a-danger-in-the-open
+  (is (= [9] (danger-ids {} heard-skel))))
+
+(deftest a-heard-ranged-mob-is-no-danger-in-a-tunnel
+  (is (= [] (danger-ids tunnel heard-skel))))
+
+(deftest a-seen-ranged-mob-is-a-danger-in-a-tunnel
+  (is (= [9] (danger-ids tunnel seen-skel))))
+
+(deftest a-roof-without-side-walls-is-no-tunnel
+  (is (= [9] (danger-ids {"0,66,0" "stone"} heard-skel))))
