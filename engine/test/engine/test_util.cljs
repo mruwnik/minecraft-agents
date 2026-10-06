@@ -6,6 +6,7 @@
             ["path" :as path]
             [engine.fake :as fake-world]
             [engine.fake.node :as node]
+            [engine.fast-pace]
             [engine.memory :as mem]))
 
 (def require-here node/require-here)
