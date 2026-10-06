@@ -157,7 +157,7 @@
   "The targets the body has seen (never through walls): blocks {:what :pos}, entities {:what :pos :id}."
   [p names radius]
   (concat (map (fn [b] {:what (:name b) :pos (cell-of (:pos b))})
-               (look/seen-blocks p {:names names :radius radius :max 64}))
+               (look/seen-blocks p {:names names :radius radius :max 64 :live? true}))
           (map (fn [e] (cond-> {:what (:name e) :pos (cell-of (:pos e))} (:uuid e) (assoc :id (:uuid e))))
                (look/seen-entities p {:names names :radius radius :max 32}))))
 
@@ -178,11 +178,11 @@
     (ctx/result! c result)
     :done))
 
-(defn scan!
-  "Look round, note what was seen and the spot as searched, book the findings."
+(defn ^:async scan!
+  "Look round (every heading, once per cell), note what was seen and the spot as searched, book the findings."
   [c names]
   (let [{:keys [scan-radius seen-ttl-s entity-ttl-s searched-ttl-s] want :count} (:args c)
-        _ (look/see! c)
+        _ (if (look/looked-here? c) (look/see! c) (await (look/look-around! c)))
         sighted (vec (sense (:primitives c) names scan-radius))
         [x y z] (here c)
         [ox _ oz] (:origin (ctx/mem c))]
@@ -241,7 +241,7 @@
   [c]
   (let [{:keys [max-legs use-notes max-distance] want :count} (:args c)
         names (targets c)
-        _ (scan! c names)
+        _ (await (scan! c names))
         ns (notes/notes c)
         m (ctx/mem c)
         found (cond-> (:found m) use-notes (add-found (noted ns names (:origin m) max-distance) want))]

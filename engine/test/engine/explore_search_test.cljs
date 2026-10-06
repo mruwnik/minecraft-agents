@@ -9,6 +9,8 @@
             [engine.memory :as mem]
             [engine.notes :as notes]
             [engine.registry :as registry]
+            [engine.fake.raw-world :as fake-raw]
+            [engine.perception :as perception]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as world]
@@ -25,7 +27,12 @@
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         dir (tu/tmp-dir)
-        p (tu/seeing-all (tu/fake (update spec :blocks #(merge (ground (or ground-r 64)) %))))
+        p (tu/fake (update (dissoc spec :cone?) :blocks #(merge (ground (or ground-r 64)) %)))
+        p (if (:cone? spec)
+            (let [w (perception/wrap p (perception/create (fake-raw/create p) {:radius 16 :ray-deg 2}))]
+              (.setOwner p "Fake")
+              w)
+            (tu/seeing-all p))
         store (notes/open {:world-dir dir :body "Fake" :emit (fn [_])})
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :world (assoc (world/of-data {} {}) :notes store)
@@ -262,4 +269,26 @@
                                 400 (fn [{:keys [p]}] (tu/blind p))))
               e (event-of s :search.not-found)]
           (is (= [] (:found e)))
+          (is (not-any? #(= :seen (:kind %)) (file-notes s))))))))
+
+(deftest a-scan-turns-its-head-so-ore-behind-the-body-is-found
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (search! {:target "diamond_block" :max-distance 20 :max-legs 0}
+                                {:blocks {"-4,64,0" "diamond_block"} :cone? true}))
+              e (event-of s :search.done)]
+          (is (= 1 (count (:found e))))
+          (is (some #(= :seen (:kind %)) (file-notes s))))))))
+
+(deftest a-scan-does-not-note-ore-mined-since-it-was-seen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (search! {:target "diamond_block" :max-distance 20 :max-legs 0}
+                                {:blocks {"0,64,5" "diamond_block"} :cone? true}
+                                400 (fn [{:keys [p]}]
+                                      (perception/pass! (aget p "perception"))
+                                      (fake/set-block! p {:x 0 :y 64 :z 5} "air"))))]
+          (is (nil? (event-of s :search.done)))
           (is (not-any? #(= :seen (:kind %)) (file-notes s))))))))
