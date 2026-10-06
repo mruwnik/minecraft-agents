@@ -103,7 +103,7 @@ Notes:
 - `health` and `food` are 0..20. `equipment` is `{head, torso, legs, feet, offHand, mainHand}`, each `null` or
   `{name, count, durability?}`. `inventory` is main and hotbar only: `[{name, count, slot}]`. `effects` are
   `[{name, amplifier, duration}]` with snake_case names. `vehicle` is `{id, uuid, name}` or `null` (`js/vehicle.mjs` repairs
-  mineflayer's stale `bot.vehicle`). `isDay` is `timeOfDay < 12542 || timeOfDay > 23460`.
+  mineflayer's stale `bot.vehicle` and moves riders with their mount). `isDay` is `timeOfDay < 12542 || timeOfDay > 23460`.
 - `chunkLoaded` false means the column under the body is not loaded (physics then emits no tick). `settling` is true while
   the body is connected but its senses are not yet trustworthy.
 - Entities: items carry `item {name, count}`; players `username`, `sleeping` (only in sight); mobs `uuid`, `baby`, sheep `sheared`; leashed

@@ -37,6 +37,18 @@ export const mountRefusal = (name, riders) => {
   return null
 }
 
+// Mineflayer 4.39 never moves a passenger with its mount (the server sends a rider only rotation), so a rider's
+// position is set from the mount's: mount position + seat height - the rider's riding offset. Small tables, vanilla
+// values; unknown names fall back to 0.75 of the mount's height and 0.14.
+const SEAT_Y = { skeleton_horse: 1.31875, zombie_horse: 1.31875, horse: 1.31875, donkey: 1.2, mule: 1.2, camel: 2.0, strider: 1.4, spider: 0.8, chicken: 0.5, pig: 0.7 }
+const RIDING_OFFSET = { skeleton: 0.7, stray: 0.7, wither_skeleton: 0.7, bogged: 0.7, zombie: 0.14, drowned: 0.14, husk: 0.14, player: 0.14 }
+const BOAT_SEAT_Y = -0.1
+export const seatPosition = (mount, rider) => {
+  const seat = BOAT.test(mount.name ?? '') ? BOAT_SEAT_Y : SEAT_Y[mount.name] ?? (mount.height ?? 1) * 0.75
+  const p = mount.position
+  return vec3(p.x, p.y + seat - (RIDING_OFFSET[rider.name] ?? 0.14), p.z)
+}
+
 const tracked = new WeakMap() // bot -> Map vehicleId -> [passenger ids], as the server last listed them
 
 export function trackVehicles (bot) {
@@ -48,6 +60,13 @@ export function trackVehicles (bot) {
     const body = bot.entity?.id
     if (passengers.includes(body)) bot.vehicle = bot.entities?.[entityId] ?? bot.vehicle
     else if (bot.vehicle?.id === entityId) bot.vehicle = null
+  })
+  bot.on('entityMoved', mount => {
+    for (const id of lists.get(mount.id) ?? []) {
+      const rider = bot.entities?.[id]
+      if (!rider || rider === bot.entity || !mount.position) continue
+      rider.position = seatPosition(mount, rider)
+    }
   })
   bot.on('entityGone', e => {
     lists.delete(e.id)

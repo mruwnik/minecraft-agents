@@ -239,3 +239,28 @@ test('dismountVehicle', async t => {
     await pending
   })
 })
+
+test('a passenger follows its mount (the server sends a rider only rotation)', async t => {
+  const horse = () => entity(9, 'skeleton_horse', { position: vec3(0, 64, 0), height: 1.6 })
+  await t.test('moving the horse 10 blocks moves the skeleton with a seat offset', () => {
+    const h = horse()
+    const skel = entity(12, 'skeleton', { position: vec3(0, 64, 0) })
+    const bot = makeBot({ entities: [h, skel] })
+    trackVehicles(bot)
+    passengers(bot, 9, [12])
+    h.position = vec3(10, 64, 0)
+    bot.emit('entityMoved', h)
+    assert.equal(skel.position.x, 10)
+    assert.ok(Math.abs(skel.position.y - 64.61875) < 1e-9)
+    assert.equal(skel.position.z, 0)
+  })
+  await t.test('a rider whose list is gone is left alone', () => {
+    const h = horse()
+    const skel = entity(12, 'skeleton', { position: vec3(3, 64, 3) })
+    const bot = makeBot({ entities: [h, skel] })
+    trackVehicles(bot)
+    h.position = vec3(10, 64, 0)
+    bot.emit('entityMoved', h)
+    assert.equal(skel.position.x, 3)
+  })
+})
