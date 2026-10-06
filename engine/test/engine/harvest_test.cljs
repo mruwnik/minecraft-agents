@@ -213,6 +213,36 @@
           (is (nil? (core/tick! eng)))
           (is (zero? (count (.-calls (.-world p))))))))))
 
+(defn look-then-see
+  "Make p see no block until it has looked around (a look call)."
+  [p]
+  (tu/blind p)
+  (aset p "seenBlocks" (fn [q] (if (seq (calls p "look")) (.blocks p q) #js [])))
+  (aset p "seenBlockAt" (fn [pos] (let [b (.blockAt p pos)] #js {:name (.-name b) :properties (.-properties b) :pos pos :age-ms 0}))))
+
+(deftest nothing-seen-looks-around-once-then-harvests
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/fake-on-floor wheat-world)
+              _ (look-then-see p)
+              {:keys [eng]} (start {:p p})
+              result (await (child-outcome eng job {} 200))]
+          (is (seq (calls p "look")))
+          (is (= 9 (:cut result))))))))
+
+(deftest nothing-anywhere-ends-with-no-crop-seen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/fake-on-floor {:blocks {}})
+              _ (look-then-see p)
+              {:keys [eng]} (start {:p p})
+              result (await (child-outcome eng job {} 50))]
+          (is (seq (calls p "look")))
+          (is (= :no-crop-seen (:reason result)))
+          (is (= 0 (:cut result))))))))
+
 (def one-cell
   {:blocks (field "wheat" 7 [3] [0]) :ages (ages 7 [3] [0]) :drops wheat-drops})
 

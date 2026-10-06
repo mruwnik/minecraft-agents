@@ -18,6 +18,8 @@
      After :give-up such crops it stops cutting (warn harvest.gave-up); replanting and collecting go on.
   3. Collect the drops.
   4. Finish.
+  With no crop seen at all (ripe or not) it looks around once from where it stands first; if still none it ends with
+  result :reason :no-crop-seen (warn harvest.no-crop-seen).
   Result: {:cut :replanted :bare :lost :gave-up}. Cells that could not be replanted, or stopped being a crop
   afterwards, are named in a harvest.bare warn.
   Each cell it cuts is written to memory with its seed before the dig, because bare farmland does not show
@@ -298,6 +300,17 @@
 (defn cutting? [c]
   (not (gave-up? c)))
 
+(defn crop-seen?
+  "Whether any crop of a wanted name within :radius of the centre has been seen, ripe or not (box mode)."
+  [c]
+  (let [{:keys [crops radius]} (:args c)]
+    (boolean (seq (crops/seen-crops (:primitives c) (or crops (keys ripe-age)) (+ radius (u/dist (u/self-pos c) (center-of c))) 1)))))
+
+(defn blind?
+  "Box mode with no crop seen yet and no look from this cell: the round must look around before it can tell."
+  [c]
+  (and (cutting? c) (not (:plan-cells c)) (not (look/looked-here? c)) (not (crop-seen? c))))
+
 (defn check
   "A debt is owed (with :plan: a planned bare cell whose seed is carried), a collect sweep is owed, or there
   is a ripe crop and cutting has not been given up. A job that has begun (its :center is in memory) always
@@ -311,7 +324,8 @@
           (or (:center m)
               (if field (seq (sowable c)) (seq (:replant m)))
               (:collect m)
-              (and (cutting? c) (seq (ripe-of c (:skipped m)))))))))
+              (and (cutting? c) (seq (ripe-of c (:skipped m))))
+              (and (not field) (blind? c)))))))
 
 ;; ------------------------------------------------------------------ steps
 
@@ -462,7 +476,12 @@
   (let [m (ctx/mem c)
         lost (lost-cells (:primitives c) (:planted m))
         bare (vec (distinct (concat (:bare m) (map :pos (:replant m)) lost)))
-        result {:cut (:cut m 0) :replanted (:replanted m 0) :bare bare :lost lost :gave-up (gave-up? c)}]
+        no-crop? (and (not (:plan-cells c)) (zero? (:cut m 0)) (empty? (:replant m)) (not (crop-seen? c)))
+        result (cond-> {:cut (:cut m 0) :replanted (:replanted m 0) :bare bare :lost lost :gave-up (gave-up? c)}
+                 no-crop? (assoc :reason :no-crop-seen))]
+    (when no-crop?
+      (ctx/emit! c :harvest.no-crop-seen :warn
+                 {:text (str "harvest saw no crop within " (:radius (:args c)) " of " (pr-str (center-of c)) " after looking around")}))
     (when (seq bare)
       (ctx/emit! c :harvest.bare :warn
                  {:cells bare :lost lost
