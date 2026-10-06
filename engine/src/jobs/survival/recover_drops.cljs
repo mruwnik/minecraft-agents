@@ -15,6 +15,7 @@
   so an expired trip still gets to write :abandoned.
   One run is the whole trip: it holds still (declared :respawning, then :settling) until a :respawned entry newer than
   the death exists and its 2 s have passed (no decision, no walk), decides, walks, collects and writes :recovered.
+  Every :declined emits recover-drops.declined with a :reason (:danger with :mob and :mob-pos, :unreachable, :collect-waiting) and a text.
   It ends :declined, without acting, while a real danger is within :danger-radius, so a reflex can deal with it
   (the died trigger fires it again), and when go-to does not arrive; the despawn window ends it :abandoned.
   A real danger is a mob that can reach the body, or a ranged one with a line of fire (jobs.lib.reach/nearest-danger).
@@ -40,6 +41,7 @@
    :value-overrides {:doc "jobs.lib.cost/item-value overrides, a map: item name or group (ore tool armor food block unknown) -> worth of one item, or {:times n}; e.g. {\"raw_iron\" 500}" :default {}}
    :danger-overrides {:doc "jobs.lib.cost/route-danger overrides, a map: mob name -> threat in points of damage before armour, or {:times n}; e.g. {\"creeper\" 100 \"zombie\" 0}" :default {}}
    :danger-radius {:doc "a hostile this close makes the job yield without acting" :default 8}
+   :collect-calls {:doc "calls of the collect child in one pass before the run declines :collect-waiting" :default child/default-max-calls}
    :collect-radius {:doc "collect the pile's drops within this many blocks of the death point (a pile on open ground rolls 6-8 out)" :default 10}})
 
 (def arrive-range 2)
@@ -163,14 +165,22 @@
 (def max-collect-passes "Walks back to the pile after a collect pass that left visible items of it behind." 3)
 (def stray-range "A body this far from the death point in the collect phase (a flee cut the trip) walks back first." 5)
 
+(defn decline!
+  "Say why this run ends :declined (an event with the reason and a text), then :declined."
+  [c reason text fields]
+  (ctx/emit! c :recover-drops.declined :info (assoc fields :reason reason :text (str "recover-drops declined: " text)))
+  :declined)
+
 (defn ^:async go!
   "Walk to the death point by one go-to call: :next once there (the collect phase), else :declined (go-to waits on the
   world, or it did not arrive: the next run walks again while the pile is worth it, and the window closes it)."
   [c pos]
   (let [r (await (ctx/call-child c :go 'jobs.movement.go-to {:pos pos :range arrive-range}))]
     (cond
-      (not= :done r) :declined
-      (not (:arrived (ctx/child-result c :go))) (do (ctx/update-mem! c assoc :blocked true) :declined)
+      (not= :done r) (decline! c :unreachable (str "the walk to " (pr-str pos) " is waiting on the world") {:pos pos})
+      (not (:arrived (ctx/child-result c :go)))
+      (do (ctx/update-mem! c assoc :blocked true)
+          (decline! c :unreachable (str "the walk to " (pr-str pos) " did not arrive") {:pos pos}))
       :else (do (ctx/update-mem! c assoc :phase :collect :blocked false) (save-trip! c) :next))))
 
 (defn carried-counts
@@ -229,9 +239,10 @@
         (if (empty? ids)
           (finish-collect! c pile ids)
           (let [r (await (child/run! c :collect 'jobs.forestry.collect-drops
-                                     {:radius (+ radius stray-range 4) :ids ids :filter names :visible-only true}))]
+                                     {:radius (+ radius stray-range 4) :ids ids :filter names :visible-only true}
+                                     {:max-calls (:collect-calls (:args c))}))]
             (cond
-              (= :continue r) :declined
+              (= :continue r) (decline! c :collect-waiting "the collect of the pile is waiting" {:pos pos})
               (empty? (left-over c pile)) (finish-collect! c pile [])
               :else
               (let [again (pile-ids c pos names radius)
@@ -245,8 +256,17 @@
   [c entry]
   (>= (- (ctx/now c) (:t entry)) game/despawn-ms))
 
-(defn threatened? [c]
-  (some? (reach/nearest-danger (:primitives c) (:danger-radius (:args c)) {} {})))
+(defn threatened?
+  "The nearest real danger within :danger-radius, or nil."
+  [c]
+  (reach/nearest-danger (:primitives c) (:danger-radius (:args c)) {} {}))
+
+(defn decline-danger!
+  "End :declined for the danger m: its name and place are in the event."
+  [c m]
+  (let [pos (u/pos-of (.-pos m))
+        mob (.-name m)]
+    (decline! c :danger (str mob " at " (pr-str pos) " within " (:danger-radius (:args c)) " blocks") {:mob mob :mob-pos pos})))
 
 (defn ^:async wait-while!
   "Hold still (reason) while (pending?) is true: nil when it clears, else :declined for a danger within
@@ -257,7 +277,7 @@
       (not (pending?)) (do (ctx/hold-still! c nil) nil)
       (not (ctx/alive? c)) :declined
       (window-closed? c entry) (do (ctx/hold-still! c nil) :closed)
-      (threatened? c) (do (ctx/hold-still! c nil) :declined)
+      (threatened? c) (do (ctx/hold-still! c nil) (decline-danger! c (threatened? c)))
       :else (do (ctx/hold-still! c reason) (await (pace/pace!)) (recur)))))
 
 (defn decide!
@@ -285,7 +305,7 @@
       (<= (:value decided) (+ (if (= :infinite (:cost decided)) js/Infinity (:cost decided)) margin))
       (finish! c :skip decided)
 
-      (threatened? c) :declined
+      (threatened? c) (decline-danger! c (threatened? c))
 
       (and (= :collect (:phase (ctx/mem c))) (> (u/dist (u/self-pos c) pos) stray-range))
       (do (ctx/update-mem! c assoc :phase :go) :next)

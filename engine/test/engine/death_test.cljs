@@ -337,6 +337,50 @@
           (await (run-until-empty eng 10))
           (is (= :collected (:decision (recovered eng)))))))))
 
+;; ------------------------------------------- every :declined says why
+
+(defn declined-events [seen] (filter #(= :recover-drops.declined (:kind %)) @seen))
+
+(deftest recover-drops-declines-with-the-danger-named
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}}
+              {:keys [eng seen]} (setup {:floor tu/walk-floor :entities (conj drops zombie)})]
+          (die! eng {:pos death-pos :inventory diamonds})
+          (core/submit! eng job {})
+          (await (core/tick! eng))
+          (let [e (first (declined-events seen))]
+            (is (= :danger (:reason e)))
+            (is (= "zombie" (:mob e)))
+            (is (= {:x 3 :y 64 :z 0} (select-keys (:mob-pos e) [:x :y :z])))
+            (is (re-find #"zombie" (:text e)))))))))
+
+(deftest recover-drops-declines-with-unreachable-when-the-walk-does-not-arrive
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:floor tu/walk-floor :entities drops :unreachable ["20,64,0"]})]
+          (die! eng {:pos death-pos :inventory diamonds})
+          (core/submit! eng job {})
+          (await (run-until-empty eng 6))
+          (let [e (first (declined-events seen))]
+            (is (= :unreachable (:reason e)))
+            (is (seq (:text e)))))))))
+
+(deftest recover-drops-declines-with-collect-waiting-when-the-collect-waits
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:floor tu/walk-floor :entities drops})]
+          (die! eng {:pos death-pos :inventory diamonds})
+          (core/submit! eng job {:collect-calls 2})
+          (.override (.-world p) "collect" (fn ^:async g [tok a impl] #js {:status "ok" :collected 0}))
+          (await (core/tick! eng))
+          (let [e (first (declined-events seen))]
+            (is (= :collect-waiting (:reason e)))
+            (is (seq (:text e)))))))))
+
 ;; ------------------------------------------- cut by a higher reflex, fired again
 
 (defn ^:async tick-n! [eng clock n]
