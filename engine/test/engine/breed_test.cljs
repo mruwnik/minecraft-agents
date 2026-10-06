@@ -133,7 +133,7 @@
       (fn ^:async t []
         (let [s (await (scenario {:mob "cow"} {:inventory (wheat 2) :entities [(cow 1 2)]} 4))]
           (is (= [:too-few] (mapv :reason (events-of s :breed.gave-up))))
-          (is (nil? (:level (first (events-of s :breed.gave-up))))))))))
+          (is (= :warn (:level (first (events-of s :breed.gave-up))))))))))
 
 (deftest feeds-only-the-ready-animals
   (async done
@@ -245,7 +245,7 @@
           (is (= :full (:hand (done-event s))))
           (is (= "wheat" (held-at-end s)))
           (is (= 1 (count (events-of s :breed.hand-full))))
-          (is (nil? (:level (first (events-of s :breed.hand-full))))))))))
+          (is (= :warn (:level (first (events-of s :breed.hand-full))))))))))
 
 (deftest touches-no-hand-when-nothing-was-fed
   (async done
@@ -313,7 +313,7 @@
           (is (= [] (:fed (done-event s))))
           (is (= {"u1" :baby "u2" :baby} (:given-up (done-event s))))
           (is (= 2 (count (events-of s :breed.baby))))
-          (is (nil? (:level (first (events-of s :breed.baby))))))))))
+          (is (= :warn (:level (first (events-of s :breed.baby))))))))))
 
 (deftest three-refusals-end-refused-without-backoff
   (async done

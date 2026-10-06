@@ -45,7 +45,7 @@
   cannot be reached, :give-up times is given up (:refused, :unreachable or :unloaded).
   Zones: every place is checked against zones and the footprints of the other active plans, when the cell is
   chosen and again before the place. A cell in a zone that does not allow :place, or in another plan's footprint,
-  is refused for good (not counted as given up). It is listed in :refused [{:pos :reason :zone|:plan}], with one
+  is refused for good (not counted as given up). It is listed in :refused [{:pos :reason :zone|:claim|:footprint|:hazard}], with one
   build.refused warn per reason.
   Water beside a cell is no obstacle by default. :accept names the fluid hazards taken (:fluid-adjacent,
   :lava-adjacent). A cell with an untaken one is refused as :hazard.

@@ -439,7 +439,7 @@
           (await (run!))
           (is (= [] (:list (core/state eng))) "done, so the list resumes work")
           (is (= 1 (count (none))))
-          (is (nil? (:level (first (none)))))
+          (is (= :warn (:level (first (none)))))
           (is (re-find #"farm" (:text (first (none)))) "names the nearest known source")
           (is (= 1 (count (entries eng :hungry))))
           (swap! clock + 60000)

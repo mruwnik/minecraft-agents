@@ -136,7 +136,7 @@
                                   :unreachable ["10,64,0" "11,64,0" "12,64,0"]} 200))
               gave-up (events-of s :hunt.gave-up)]
           (is (= 1 (count gave-up)))
-          (is (nil? (:level (first gave-up))))
+          (is (= :warn (:level (first gave-up))))
           (is (= :gave-up (:reason (done-event s))))
           (is (= 0 (:killed (done-event s))))
           (is (finished? s)))))))

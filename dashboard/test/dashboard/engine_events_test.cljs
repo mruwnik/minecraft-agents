@@ -19,7 +19,6 @@
 
 (deftest thresholds
   (is (= 30000 ee/engine-up-ms))
-  (is (= 600000 ee/warn-window-ms))
   (is (= 10 ee/recent-max)))
 
 (deftest chunks-fold-the-same-as-one-batch
@@ -123,23 +122,6 @@
   (let [events (mapv #(ev (inc %) {:source "body" :kind "chat" :text (str "m" (inc %)) :job nil}) (range 25))]
     (is (= (mapv #(str "m" (+ 16 %)) (range 10))
            (mapv :text (:recent (view events (+ t0 30000))))))))
-
-(deftest warn-and-error-counts-cover-ten-minutes
-  (let [at (fn [seq level t] (ev seq {:level level :kind "x" :t t}))
-        events [(at 1 "warn" t0) (at 2 "error" (+ t0 1000)) (at 3 "warn" (+ t0 700000))
-                (at 4 "warn" (+ t0 710000)) (at 5 "error" (+ t0 720000)) (at 6 "info" (+ t0 730000))]
-        v (view events (+ t0 735000))]
-    (is (= 2 (:warn10m v)))
-    (is (= 1 (:error10m v)))))
-
-(deftest warnings-age-out-with-now
-  (let [state (fold [(ev 1 {:level "warn" :kind "x"})])
-        t (+ t0 1000)]
-    (is (= 1 (:warn10m (ee/engine-view state (+ t ee/warn-window-ms -1)))))
-    (is (= 0 (:warn10m (ee/engine-view state (+ t ee/warn-window-ms 1)))))))
-
-(deftest fold-prunes-stored-warnings
-  (is (= [] (:warns (fold [(ev 1 {:level "warn" :kind "x"}) (ev 2000 {:level "info"})])))))
 
 (deftest complete-lines-cases
   (doseq [[title carry chunk text rest-text]

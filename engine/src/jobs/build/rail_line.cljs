@@ -33,7 +33,7 @@
   - the plan is missing or unreadable (:plan).
   - its rail cells are not one chain (:not-a-line, :why :gap|:branch|:two-chains|:loop|:no-rails).
   - no zone list has been read (:no-zones).
-  - a cell still to build is refused by the access rules (:refused, with the list [{:pos :reason :zone|:plan}]).
+  - a cell still to build is refused by the access rules (:refused, with the list [{:pos :reason :zone|:claim|:footprint|:hazard}]).
   - a cell wanting a redstone block holds another block (:source-blocked, :cells). The builder never digs, so on
     natural ground put a torch or lever in the plan, or use a raised bed.
   With :all-carried (the default) it also waits, with one rail-build.short warn {item n}, until the items for

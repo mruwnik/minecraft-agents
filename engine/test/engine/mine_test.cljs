@@ -233,7 +233,7 @@
               warns (events-of s :mine.gave-up)]
           (is (= :gave-up (:reason (done-event s))))
           (is (= 1 (count warns)))
-          (is (nil? (:level (first warns))))
+          (is (= :warn (:level (first warns))))
           (is (zero? (dig-count s)))
           (is (finished? s)))))))
 
@@ -274,7 +274,7 @@
                                  {:blocks floor :drops {"dirt" "rotten_flesh"}} 60))
               short-warns (events-of s :mine.mend-short)]
           (is (= 1 (count short-warns)))
-          (is (nil? (:level (first short-warns))))
+          (is (= :warn (:level (first short-warns))))
           (is (some? (done-event s)))
           (is (zero? (count (calls s "place"))))
           (is (finished? s)))))))
@@ -351,7 +351,7 @@
           (await (run-ticks s 80))
           (is (= 6 (count (calls s "place"))) "bounded at max-mend-failures")
           (is (= 1 (count (events-of s :mine.mend-failed))))
-          (is (nil? (:level (first (events-of s :mine.mend-failed)))))
+          (is (= :warn (:level (first (events-of s :mine.mend-failed)))))
           (is (empty? (events-of s :mine.mend-short)))
           (is (some? (done-event s)))
           (is (finished? s)))))))
@@ -414,7 +414,7 @@
           (is (= 3 (dig-count s)))
           (is (= :no-drops (:reason (done-event s))))
           (is (= [:no-drops] (mapv :reason warns)))
-          (is (nil? (:level (first warns))))
+          (is (= :warn (:level (first warns))))
           (is (= "dirt" (block-at s 0 63 0)) "the ground is intact")
           (is (finished? s)))))))
 

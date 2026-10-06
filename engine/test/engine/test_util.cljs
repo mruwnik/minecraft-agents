@@ -140,7 +140,7 @@
         projected (merge {:seq (:seq event) :t (:time-ms event) :body "Fake"}
                          (dissoc context :job-id :reflex-id :cause-seq)
                          (:data event)
-                         (select-keys event [:source :kind :request-id :attention]))]
+                         (select-keys event [:source :kind :level :request-id :attention]))]
     (cond-> projected
       (:job-id context) (assoc :job (:job-id context))
       (:reflex-id context) (assoc :reflex (:reflex-id context))

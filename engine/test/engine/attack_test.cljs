@@ -167,7 +167,7 @@
           (is (zero? (count (attacked s))))
           (is (= [] (h/calls (:p s) "moveTo")) "walks with the engine walker, not the raw pathfinder")
           (is (= [[7 :unreachable]] (mapv (juxt :target :reason) gave-up)))
-          (is (nil? (:level (first gave-up))))
+          (is (= :warn (:level (first gave-up))))
           (is (finished? s))
           (is (= :gave-up (:reason (done-event s))))
           (is (= {7 :unreachable} (:given-up (done-event s)))))))))

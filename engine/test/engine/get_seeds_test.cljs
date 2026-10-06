@@ -112,7 +112,7 @@
               warns (events-of s :get-seeds.gave-up)]
           (is (= :dry (:reason (done-event s))))
           (is (= 1 (count warns)))
-          (is (nil? (:level (first warns))))
+          (is (= :warn (:level (first warns))))
           (is (<= 6 (dig-count s) 10))
           (is (= 0 (:got (done-event s))))
           (is (finished? s)))))))
