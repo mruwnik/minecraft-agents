@@ -117,6 +117,36 @@
          (keyword-identical? :solid (kind-at x (dec y) z))
          (not (hazard-blocks (some-> below .-name))))))
 
+(def hitbox-half 0.3)
+
+(defn overlap [a0 a1 c] (max 0 (- (min a1 (inc c)) (max a0 c))))
+
+(defn standing-cell
+  "The feet cell {:x :y :z} the body is supported by, as the planner starts a walk (planner-tuned start-query): the cell
+  under its centre when that stands (standable-cell?), else, for a body on a block's edge, the first other cell its
+  0.6-wide hitbox overlaps (most overlap, then lower x, then lower z) that stands at the same feet height. Else the
+  centre cell. kind-at: a lookup to read the blocks through (one query's reads shared), hazards then count as floor."
+  ([p] (standing-cell p nil))
+  ([p kind-at]
+  (let [{:keys [x z] :as pos} (u/self-pos {:primitives p})
+        centre (sh/cell pos)
+        stands? (if kind-at
+                  (fn [{:keys [x y z]}] (and (passable? kind-at x y z) (passable? kind-at x (inc y) z)
+                                             (keyword-identical? :solid (kind-at x (dec y) z))))
+                  #(standable-cell? p %))]
+    (if (stands? centre)
+      centre
+      (or (->> (for [cx (range (js/Math.floor (- x hitbox-half)) (inc (js/Math.floor (+ x hitbox-half))))
+                     cz (range (js/Math.floor (- z hitbox-half)) (inc (js/Math.floor (+ z hitbox-half))))
+                     :let [area (* (overlap (- x hitbox-half) (+ x hitbox-half) cx) (overlap (- z hitbox-half) (+ z hitbox-half) cz))]
+                     :when (and (pos? area) (not (and (== cx (:x centre)) (== cz (:z centre)))))]
+                 [area cx cz])
+               (sort-by (fn [[area cx cz]] [(- area) cx cz]))
+               (map (fn [[_ cx cz]] {:x cx :y (:y centre) :z cz}))
+               (filter stands?)
+               first)
+          centre)))))
+
 (def dirs #js [#js [1 0] #js [-1 0] #js [0 1] #js [0 -1]])
 
 (defn step-to
@@ -419,7 +449,7 @@
            kind-at (if (empty? solid)
                      base
                      (fn [x y z] (if (contains? solid [x y z]) :solid (base x y z))))
-           {:keys [x y z]} (sh/feet p)]
+           {:keys [x y z]} (standing-cell p base)]
        (= :closed (flood (partial forward kind-at) [x y z] room-cells)))
      false)))
 

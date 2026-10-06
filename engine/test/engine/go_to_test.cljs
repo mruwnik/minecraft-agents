@@ -389,3 +389,11 @@
           (is (= {:arrived true} @(:out dark)))
           (is (empty? (watched lit)))
           (is (seq (watched dark))))))))
+
+(deftest go-to-range-0-from-a-block-edge-to-the-cell-it-stands-on-arrives
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out]} (await (go-prepped! {:self {:pos {:x 0.5 :y 64 :z -9.2}} :blocks {"0,63,-9" "stone"}}
+                                                {:pos [0 64 -9] :range 0} identity))]
+          (is (true? (:arrived @out)) (pr-str @out)))))))

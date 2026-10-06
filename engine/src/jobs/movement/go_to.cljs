@@ -131,8 +131,8 @@
                  (and (= :abilities reason) (= :never doors) (= :open (some-> (:kind result) keyword)))))))
 
 (defn feet-cell [c]
-  (let [{:keys [x y z]} (u/self-pos c)]
-    [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]))
+  (let [{:keys [x y z]} (reach/standing-cell (:primitives c))]
+    [x y z]))
 
 (defn escalation-job
   "[job args] of the child that carries out escalation e (jobs.lib.escape/choose)."
@@ -384,7 +384,7 @@
         d (u/dist from pos)
         pw (walk/path-world (:primitives c))]
     (cond
-      (u/within? from pos range)
+      (or (u/within? from pos range) (u/within? (reach/standing-cell (:primitives c)) pos range))
       (if (:restore-pending (ctx/mem c)) (restore-next! c) (arrived! c))
 
       (nil? pw)

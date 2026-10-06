@@ -4,6 +4,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.fetch :as fetch]
+            [jobs.lib.reach :as reach]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [engine.path.executor :as executor]
@@ -187,9 +188,11 @@
   [c]
   (access/zone-input c {:ignore-zones? (:ignore-zones? (:args c))}))
 
-(defn feet-of [c]
-  (let [{:keys [x y z]} (u/self-pos c)]
-    [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]))
+(defn feet-of
+  "The cell [x y z] the body stands on (jobs.lib.reach/standing-cell: the planner's start on a block's edge)."
+  [c]
+  (let [{:keys [x y z]} (reach/standing-cell (:primitives c))]
+    [x y z]))
 
 (defn rules-in [c feet]
   (merge {:block-at (fn [[x y z]] (u/block-name (:primitives c) {:x x :y y :z z})) :feet feet :ledger #{}

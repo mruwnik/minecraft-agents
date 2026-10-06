@@ -2,7 +2,9 @@
   "jobs.lib.reach: the walk searches the hostile trigger, retreat, respond-to-hostile, restore-broken and tidy run.
   Their answers, and that one query reads each block at most once (a query over several mobs shares its reads)."
   (:require [cljs.test :refer [deftest is]]
+            [jobs.access.stair :as stair]
             [jobs.lib.reach :as reach]
+            [jobs.movement.go-to :as go-to]
             [engine.test-util :as tu]))
 
 (def body {:x 0.5 :y 64 :z 0.5})
@@ -108,3 +110,25 @@
         q (tu/fake {:self {:pos body} :floor [-20 -20 20 20] :blocks (ring "oak_fence") :entities [skel]})]
     (is (= [] (reach/dangers p 8 {} {:sight? false})))
     (is (= [9] (map #(.-id %) (reach/dangers q 16 {:ranged-radius 16} {:sight? false}))))))
+
+;; ---------------------------------------------------------------- the cell a body on a block's edge stands on
+
+(def edge-body
+  "0.09 m onto the block at (0 63 -9): the centre cell (0 64 -10) is over air."
+  {:x 0.5 :y 64 :z -9.2})
+
+(def edge-world {:self {:pos edge-body} :blocks {"0,63,-9" "stone"}})
+
+(deftest a-body-on-a-block-edge-stands-on-the-cell-the-planner-starts-from
+  (let [p (tu/fake edge-world)]
+    (is (= {:x 0 :y 64 :z -9} (reach/standing-cell p)))
+    (is (= [0 64 -9] (stair/feet-of {:primitives p})))
+    (is (= [0 64 -9] (go-to/feet-cell {:primitives p})))))
+
+(deftest a-body-over-its-own-cell-stands-in-it
+  (let [p (tu/fake {:self {:pos {:x 0.5 :y 64 :z -9.5}} :blocks {"0,63,-10" "stone" "0,63,-9" "stone"}})]
+    (is (= {:x 0 :y 64 :z -10} (reach/standing-cell p)))))
+
+(deftest a-body-over-air-with-no-edge-keeps-the-floored-cell
+  (let [p (tu/fake {:self {:pos {:x 0.5 :y 64 :z -9.5}}})]
+    (is (= {:x 0 :y 64 :z -10} (reach/standing-cell p)))))
