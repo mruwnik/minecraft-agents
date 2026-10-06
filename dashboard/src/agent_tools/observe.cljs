@@ -8,7 +8,7 @@
             ["node:path" :as path]
             [clojure.string :as str]
             ["node:timers/promises" :as timers]
-            [agent-tools.observe.status :refer [attention-changes classify code-of coded collect compact-status id-str recovered? signature stale-reconnect? summary-result]]
+            [agent-tools.observe.status :refer [attention-changes classify code-of coded collect compact-status death-jobs id-str recovered? signature stale-reconnect? summary-result track-deaths with-death-jobs]]
             [agent-tools.observe.lock :refer [acquire! checkpoint! observer-count saved-checkpoint]]
             [agent-tools.observe.request :refer [legacy-notice request-for usage wait-options]]
             [shadow.cljs.modern :refer [js-await]]))
@@ -93,6 +93,7 @@
           timeout-finish (volatile! nil)
           st (atom nil)
           summary (atom {:counts {} :items [] :more false})
+          deaths (atom {})
           read! (fn [endpoint]
                   (js-await [response (get! (:socket-path request) endpoint
                                             {:signal signal :timeout-ms (max 1 (min request-timeout-ms (- @deadline (js/Date.now))))})]
@@ -175,9 +176,11 @@
                                      (swap! st assoc :snap snap :cursor (:cursor snap) :seen {} :pending [] :lookup true)
                                      (finish! (array-map :wake :reset :reason :engine-restarted)))
                                    (let [failed? (= :reconnect-failed (:kind event))
+                                         _ (swap! deaths track-deaths event)
+                                         dead-jobs (death-jobs @deaths event)
                                          immediate (when-not (and failed? (stale-reconnect? event later))
-                                                     (classify event opts body))
-                                         skip! (fn [] (swap! summary collect event) (more))]
+                                                     (some-> (classify event opts body) (with-death-jobs dead-jobs)))
+                                         skip! (fn [] (swap! summary collect event dead-jobs) (more))]
                                      (cond
                                        (nil? immediate) (skip!)
                                        (and failed? (empty? later) (< (:seq event) (:latest-seq page)))
@@ -256,10 +259,9 @@
   (js/Promise. (fn [resolve reject] (.write (.-stdout js/process) text #(if % (reject %) (resolve nil))))))
 
 (def failure-reasons
-  {"ABORT_ERR" :cancelled "EOBSERVERBUSY" :observer-busy "EOBSERVERLIMIT" :observer-limit
-   "EATTENTIONLIMIT" :attention-limit "EOBSERVEUNAVAILABLE" :observe-unavailable "ETIMEDOUT" :timeout
-   "ERESPONSETOOLARGE" :response-too-large "ECONNREFUSED" :no-running-body "ENOENT" :no-running-body
-   "EACCES" :socket-access-denied})
+  (merge http/transport-reasons
+         {"ABORT_ERR" :cancelled "EOBSERVERBUSY" :observer-busy "EOBSERVERLIMIT" :observer-limit
+          "EATTENTIONLIMIT" :attention-limit "EOBSERVEUNAVAILABLE" :observe-unavailable}))
 
 (defn failure-text [request error]
   (str "{:ok false :reason " (data/write-edn (get failure-reasons (code-of error) :transport-error))

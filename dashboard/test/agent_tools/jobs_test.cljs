@@ -342,3 +342,8 @@
 
 (deftest usage-says-jobs-wait-under-manual-control
   (is (re-find #"manual control" jobs/usage)))
+
+(deftest failure-for-keeps-the-transport-reason
+  (doseq [[code reason] [["ENOENT" :no-running-body] ["ETIMEDOUT" :timeout] ["ERESPONSETOOLARGE" :response-too-large]
+                         ["EACCES" :socket-access-denied] ["EPIPE" :transport-error]]]
+    (is (= reason (:reason (jobs/failure-for {} (let [e (js/Error. "x")] (aset e "code" code) e)))) code)))

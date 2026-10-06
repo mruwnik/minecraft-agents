@@ -172,3 +172,9 @@
                  (is (not (contains? seen :payload))))
                (http/request {:socket-path "/s" :path "/x" :signal (.-signal controller) :request-fn request-fn})
                seen))))
+
+(deftest transport-reason-names-the-error-code
+  (doseq [[code reason] [["ECONNREFUSED" :no-running-body] ["ENOENT" :no-running-body] ["ETIMEDOUT" :timeout]
+                         ["ERESPONSETOOLARGE" :response-too-large] ["EACCES" :socket-access-denied]
+                         ["ECONNRESET" :transport-error] [nil :transport-error]]]
+    (is (= reason (http/transport-reason (http/coded-error code "x"))) (str code))))

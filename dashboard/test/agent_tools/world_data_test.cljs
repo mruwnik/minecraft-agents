@@ -34,3 +34,14 @@
   (are [thunk expected] (= expected (message-of thunk))
     #(data/query [] {:limit 101}) "limit 1..100 and nonnegative offset required"
     #(data/query [] {:limit 1 :center [0]}) "center needs [x y z], radius nonnegative"))
+
+(deftest busy-lock-held-by-a-live-process-does-not-blame-a-reaper
+  (async done
+    (let [dir (.mkdtempSync fs (.join path (os/tmpdir) "world-lock-"))
+          file (.join path dir "x.edn")]
+      (.writeFileSync fs (str file ".lock") (str (.-pid js/process) "\nother"))
+      (-> (data/with-file-lock file (fn [] :ran) {:timeout-ms 50})
+          (.then (fn [_] (is false "expected busy")))
+          (.catch (fn [e] (is (= "busy" (.-reason e)) (.-message e))
+                          (is (nil? (re-find #"reaper" (.-message e))) (.-message e))))
+          (.finally (fn [] (.rmSync fs dir #js {:recursive true :force true}) (done)))))))

@@ -175,3 +175,8 @@
 
 (deftest bad-id-message-says-ids-come-from-the-offer
   (is (re-find #"offer" (:error (request "upgrade" "Night")))))
+
+(deftest failure-for-keeps-the-transport-reason
+  (doseq [[code reason] [["ENOENT" :no-running-body] ["ETIMEDOUT" :timeout] ["ERESPONSETOOLARGE" :response-too-large]
+                         ["EACCES" :socket-access-denied] ["EPIPE" :transport-error]]]
+    (is (= reason (:reason (triggers/failure-for (let [e (js/Error. "x")] (aset e "code" code) e) false))) code)))

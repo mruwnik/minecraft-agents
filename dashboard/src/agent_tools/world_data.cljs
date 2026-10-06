@@ -230,7 +230,9 @@
                     (reap-lock! lock)
                     (cond
                       (not (.existsSync fs lock)) (acquire)
-                      (>= (js/Date.now) deadline) (throw (fail :busy "shared data is busy; a crashed reaper guard requires inspection before removal"))
+                      (>= (js/Date.now) deadline) (throw (fail :busy (if (.existsSync fs (str lock ".reaper"))
+                                           "shared data is busy; a crashed reaper guard requires inspection before removal"
+                                           "shared data is busy: another tool holds its lock; retry shortly")))
                       :else (.then (setTimeout 20) acquire))))))]
        ;; Defer acquisition so every failure, including a busy lock, rejects.
        (.then (js/Promise.resolve)

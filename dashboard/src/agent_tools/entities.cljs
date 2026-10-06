@@ -236,13 +236,8 @@
           #(project-response request %))))
 
 (defn transport-failure [error]
-  (let [code (aget error "code")
-        reason (or (aget error "reason") (some-> (ex-data error) :reason)
-                   (cond (#{"ECONNREFUSED" "ENOENT"} code) "no-running-body"
-                         (= "ETIMEDOUT" code) "timeout"
-                         (= "ERESPONSETOOLARGE" code) "response-too-large"
-                         (= "EACCES" code) "socket-access-denied"
-                         :else "transport-error"))]
+  (let [reason (or (aget error "reason") (some-> (ex-data error) :reason)
+                   (name (http/transport-reason error)))]
     (failure reason (message-of error 240))))
 
 (defn print-line! [text] (.write (.-stdout js/process) (str text "\n")))

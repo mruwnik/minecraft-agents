@@ -18,6 +18,15 @@
   [{:keys [status content-type text]}]
   (boolean (and (= 404 status) (edn-response? content-type) (re-matches not-found-body (or text "")))))
 
+(def transport-reasons
+  {"ECONNREFUSED" :no-running-body "ENOENT" :no-running-body "ETIMEDOUT" :timeout
+   "ERESPONSETOOLARGE" :response-too-large "EACCES" :socket-access-denied})
+
+(defn transport-reason
+  "The tool-facing :reason for a failed socket request, by the error's code; :transport-error when it has no name."
+  [error]
+  (get transport-reasons (aget error "code") :transport-error))
+
 (defn coded-error [code message]
   (let [error (js/Error. message)]
     (aset error "code" code)

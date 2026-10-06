@@ -265,7 +265,7 @@
 
 (defn failure-for [r error]
   (let [request-id (get-in r [:request :request-id])]
-    (cond-> {:ok false :reason (if (#{"ENOENT" "ECONNREFUSED"} (aget error "code")) :no-running-body :transport-error)}
+    (cond-> {:ok false :reason (http/transport-reason error)}
       (:resolve r) (assoc :request-id request-id :confirmation :unknown
                           :message "Resolve confirmation is unknown; inspect outstanding attention before another request.")
       (and (:mutating r) (not (:resolve r))) (assoc :request-id request-id :confirmation :unknown

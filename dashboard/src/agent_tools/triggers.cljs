@@ -273,11 +273,8 @@ Add and put both create or replace a custom entry; built-in entries cannot be re
                  (post! (:socketPath r) (assoc (:request r) :generation-id generation) opts)))))))
 
 (defn failure-for [error sent?]
-  (let [code (aget error "code")]
-    (cond-> {:ok false
-             :reason (keyword (cond (= "ERESPONSETOOLARGE" code) "response-too-large"
-                                    (#{"ENOENT" "ECONNREFUSED"} code) "no-running-body"
-                                    :else "transport-error"))}
+  (do
+    (cond-> {:ok false :reason (http/transport-reason error)}
       sent? (assoc :confirmation :unknown
                    :message "Inspect trigger show/list before retrying; mutations are not automatically retried."))))
 
