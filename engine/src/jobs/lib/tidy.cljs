@@ -8,7 +8,6 @@
   jobs.survival.restore-broken puts the cells back when the body is safe. Best effort, never at the cost of safety."
   (:require [engine.ctx :as ctx]
             [jobs.lib.access :as access]
-            [jobs.lib.combat :as combat]
             [jobs.lib.reach :as reach]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]))
@@ -24,11 +23,11 @@
   {:cap 1 :ttl (* 6 60 60 1000)})
 
 (defn unsafe?
-  "Whether the body should not be busy with other people's blocks now: health under :min-health or a hostile within
-  :danger-radius."
+  "Whether the body should not be busy with other people's blocks now: health under :min-health or a real danger (jobs.lib.reach/danger-near?)
+  within :danger-radius."
   [p {:keys [min-health danger-radius]}]
   (or (< (.-health (.self p)) min-health)
-      (boolean (seq (combat/hostiles p danger-radius)))))
+      (reach/danger-near? p danger-radius danger-radius {:sight? false})))
 
 (defn carried? [p item] (boolean (some #(= item (:name %)) (u/inventory p))))
 

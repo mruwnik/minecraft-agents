@@ -596,6 +596,14 @@
     (some #(when (and (not (contains? skip (.-id %))) (danger-in? p kind-at @pr % danger-opts)) %)
           (known-hostiles p radius opts))))
 
+(defn danger-near?
+  "Whether a real danger (nearest-danger) is within radius, ranged mobs within :ranged-radius (default radius). The one
+  definition of danger for the hostile-near trigger and fact and the tidy safety check; opts as nearest-danger's
+  danger-opts."
+  ([p radius ranged-radius] (danger-near? p radius ranged-radius {}))
+  ([p radius ranged-radius danger-opts]
+   (some? (nearest-danger p radius {:ranged-radius ranged-radius} danger-opts))))
+
 (defn seen-hostiles
   "The hostiles the body knows of within 64 (known-hostiles: the perception's mob memory, seen or
   heard and remembered while likely still near, as a player would; none it never sensed). Primitives without that

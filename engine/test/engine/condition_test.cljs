@@ -337,13 +337,22 @@
       '(= (distance-to (place :home)) 5) true
       '(daytime) false
       '(hostile-near 4) true
-      '(hostile-near 2) false
+      '(hostile-near 2) true ; the unseen skeleton two blocks away has a line of fire
       '(in-water) true
       '(burning) false
       '(suffocating) false
       '(night-unsafe) false
       '(stuck) false
       '(= (blocks-near "stone" 8) 1) true)))
+
+(deftest hostile-near-is-a-real-danger-as-the-trigger-defines-it
+  (let [wall (into {} (for [[x z] [[4 0] [6 0] [5 1] [5 -1]] y [64 65]] [(str x "," y "," z) "stone"]))
+        zombie {:id 1 :kind "hostile" :name "zombie" :pos {:x 5 :y 64 :z 0} :visible true}
+        skeleton {:id 2 :kind "hostile" :name "skeleton" :pos {:x 0 :y 64 :z 10} :visible true}
+        near? (fn [world] (value '(hostile-near 8) (env (tu/seeing-all (tu/fake-on-floor (assoc world :self {:pos {:x 0 :y 64 :z 0}}))))))]
+    (is (true? (near? {:entities [zombie]})))
+    (is (false? (near? {:blocks wall :entities [zombie]})) "a melee mob walled off is no danger")
+    (is (true? (near? {:entities [skeleton]})) "a ranged mob with a line of fire beyond the melee radius is")))
 
 (deftest blocks-near-counts-only-blocks-the-body-has-seen
   (let [fresh #(tu/fake {:blocks {"3,64,4" "diamond_ore" "3,60,4" "diamond_ore"}})

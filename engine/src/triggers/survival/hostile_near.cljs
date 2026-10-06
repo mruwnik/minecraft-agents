@@ -22,6 +22,5 @@
   An agent may set :persistence :cooldown with :cooldown-s, or :backoff, in its own entry."
   [world memory args]
   (boolean (and (not (died/dead? memory))
-                (some? (reach/nearest-danger world (:radius args hostile-radius)
-                                             {:ranged-radius (:ranged-radius args ranged-radius)}
-                                             {:sight? (:visible-only args true)})))))
+                (reach/danger-near? world (:radius args hostile-radius) (:ranged-radius args ranged-radius)
+                                    {:sight? (:visible-only args true)}))))
