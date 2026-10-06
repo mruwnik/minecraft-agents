@@ -1,6 +1,7 @@
 ;; jobs.gather.mine at the surface (card 07b89724, commit bbc10e42): stone in sight is mined with a pickaxe (:completed);
 ;; no pickaxe and nothing to fetch ends :stopped :no-tool with nothing dug; a soil-only surface with a pickaxe ends
-;; :stopped got 0 (never :completed) and the pickaxe is not worn (dirt dug bare-handed).
+;; :stopped got 0 (never :completed) and the pickaxe is not worn (dirt dug bare-handed; :descend-limit 0 keeps that case on the tunnel).
+;; Cases 4/5 (card 213a5723): soil 4 deep over stone stairs down then mines (:reason :count); soil past :descend-limit ends :no-stone-found.
 ;; Body on the floor at [16.5 0 16.5]; stone block mass east x 20..26, y 0..2, z 14..18 (case 1/2); dirt mass case 3.
 {:defaults
  {:tags [:mine :jobs] :time :any
@@ -30,6 +31,20 @@
    :plot {:floor "dirt"}
    :blocks [[:fill [0 -1 0] [31 5 31] "dirt"] [:fill [10 0 14] [22 6 18] "air"]]
    :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.gather.mine {:block "stone" :count 4 :direction :east :tunnel-length 8})]]
+   :act [[:job (jobs.gather.mine {:block "stone" :count 4 :direction :east :tunnel-length 8 :descend-limit 0})]]
    :expect [{:event {:source :job :kind :mine.done :data {:got 0}} :within-s 100 :of-job true}]
-   :after [[:item "stone_pickaxe[minecraft:damage=0]" [:>= 1]]]}]}
+   :after [[:item "stone_pickaxe[minecraft:damage=0]" [:>= 1]]]}
+  {:name "soil-4-deep-over-stone-stairs-down-and-mines"
+   :plot {:floor "dirt"}
+   :blocks [[:fill [0 -9 0] [31 -5 31] "stone"] [:fill [0 -4 0] [31 -1 31] "dirt"]]
+   :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.gather.mine {:block "stone" :count 4 :direction :east :tunnel-length 8})]]
+   :expect [{:event {:source :job :kind :mine.done :data {:reason :count :got [:>= 4]}} :within-s 110 :of-job true}]
+   :after [[:item "cobblestone" [:>= 4]] [:item "stone_pickaxe[minecraft:damage=0]" [:>= 1]]]}
+  {:name "soil-deeper-than-limit-ends-no-stone-found"
+   :plot {:floor "dirt"}
+   :blocks [[:fill [0 -12 0] [31 -1 31] "dirt"]]
+   :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.gather.mine {:block "stone" :count 4 :direction :east :tunnel-length 8 :descend-limit 4})]]
+   :expect [{:event {:source :job :kind :mine.done :data {:got 0 :reason :no-stone-found}} :within-s 110 :of-job true}]
+   :after [[:item "cobblestone" 0] [:item "stone_pickaxe[minecraft:damage=0]" [:>= 1]]]}]}

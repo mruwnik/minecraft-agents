@@ -57,7 +57,12 @@
   5. With no target the body looks around from where it stands (each heading, level and down at the floor
      ahead), once per cell and after each dig, so a vein's next block comes into view. It also looks around
      once before the first target.
-  6. Still none: the strip tunnel.
+  6. Still none, the block stone-type (stone, cobblestone, deepslate, andesite, granite, diorite, tuff) and the
+     tunnel not begun: a stair down (jobs.access.stair child, one step a round, :fetch) along the heading, at most
+     :descend-limit steps, soil dug by hand; each step looks round, so stone that comes into view is a target.
+     The limit used up, or the stair stopping, ends :stopped :no-stone-found (warn mine.no-stone-found, result
+     :descent {:steps :stop}); the mend and the walk home follow.
+  7. Else the strip tunnel, at the level then stood on.
 
   Strip tunnel: a 1-wide 2-high straight run at the level the body stood on at the start, along :direction
   (north, south, east, west or n/s/e/w), at most :tunnel-length blocks per job. 0 means no tunnel: then no
@@ -122,6 +127,7 @@
    :dry-digs {:doc "digs in a row after which the carried count of the item did not rise before giving up (:no-drops)" :default 3}
    :direction {:doc "the strip tunnel's heading: north, south, east or west (n/s/e/w); nil: the way the body faces when the job starts" :default nil}
    :tunnel-length {:doc "the most blocks the strip tunnel runs in this job, at the body's level; 0: no tunnel, seen blocks only" :default 32}
+   :descend-limit {:doc "the most steps of stair down through soil to find stone, when the block is stone-type and none is in sight; 0: never descend" :default 12}
    :torch-interval {:doc "the strip tunnel hangs a torch every this many steps; 0: none" :default 10}
    :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent :falling-block :under-feet); the lava and :wet rules above still hold"
             :default #{:fluid-adjacent :falling-block :under-feet}}})
@@ -224,13 +230,14 @@
 (defn finish!
   "Emit the outcome, hand it to the parent and end the job."
   [c]
-  (let [{:keys [goal reason mended dig-reason resumes tunnel left]} (ctx/mem c)
+  (let [{:keys [goal reason mended dig-reason resumes tunnel left descent]} (ctx/mem c)
         got (max 0 (- (carried c) (- goal (:count (:args c)))))
-        why (cond-> {} dig-reason (assoc :dig-reason dig-reason) resumes (assoc :resumes resumes)
+        why (cond-> {} dig-reason (assoc :dig-reason dig-reason) (= :no-stone-found reason) (assoc :descent descent) resumes (assoc :resumes resumes)
               (pos? (:steps tunnel 0)) (assoc :tunnel (-> tunnel (select-keys [:origin :heading :steps :stop :end :back-at :walked-back?]) (update :origin access/cell)))
               (seq left) (assoc :left (mapv (fn [[pos n]] {:pos pos :count n}) left)))]
     (ctx/emit! c :mine.done :info (merge {:got got :reason reason :mended (or mended 0)
                                           :text (str "mine done: " (name reason) ", got " got ", mended " (or mended 0)
+                                                     (when (= :no-stone-found reason) (str "; dug down " (:steps descent 0) " blocks through soil, found no stone"))
                                                      (when-let [{:keys [end back-at walked-back?]} (when (pos? (:steps tunnel 0)) tunnel)]
                                                        (str "; tunnel " (:steps tunnel) " blocks " (:heading tunnel)
                                                             (when end (str ", ended at " (str/join "," end)))
@@ -567,6 +574,41 @@
           :searching :searching
           (first group))))))
 
+(def stone-types #{"stone" "cobblestone" "deepslate" "andesite" "granite" "diorite" "tuff"})
+
+(defn descend-due?
+  "Whether the dig phase should first stair down: the block is stone-type, no seen target, the strip tunnel not begun."
+  [c]
+  (let [{:keys [block descend-limit]} (:args c)]
+    (and (contains? stone-types block) (pos? descend-limit) (nil? (:tunnel (ctx/mem c))))))
+
+(defn no-stone!
+  "The stair down found no stone: one warn mine.no-stone-found, then the mend and the walk home with :reason :no-stone-found."
+  [c]
+  (let [stop (:stop (:descent (ctx/mem c)))
+        steps (:steps (:descent (ctx/mem c)) 0)]
+    (ctx/emit! c :mine.no-stone-found :warn {:steps steps :stop stop :text (str "mine dug down " steps " blocks through soil, found no stone"
+                                                                               (when stop (str "; the stair stopped: " (name stop))))})
+    (to-mend! c :no-stone-found)))
+
+(defn ^:async descend-round!
+  "One step of the stair down (jobs.access.stair child, :steps 1, :fetch) along the tunnel heading; the next round
+  looks round and scans. At :descend-limit steps, or when the stair stops, ends :no-stone-found."
+  [c]
+  (let [n (:steps (:descent (ctx/mem c)) 0)]
+    (if (>= n (:descend-limit (:args c)))
+      (no-stone! c)
+      (let [r (await (ctx/call-child c :stair 'jobs.access.stair
+                                     {:dir :down :heading (keyword (:heading (ctx/mem c))) :steps 1 :fetch true
+                                      :ignore-zones? (:ignore-zones? (:args c))}))
+            res (when (not= :continue r) (ctx/child-result c :stair))]
+        (cond
+          (= :continue r) :continue
+          (and (= :done r) (= :done (:status res)))
+          (do (ctx/update-mem! c update-in [:descent :steps] (fnil + 0) (or (:steps res) 1)) :continue)
+          :else (do (ctx/update-mem! c update :descent assoc :stop (or (:reason res) :declined))
+                    (no-stone! c)))))))
+
 (defn ^:async dig-round! [c]
   (let [{:keys [goal failures dry looked]} (ctx/mem c)
         {:keys [max-failures wet dry-digs tunnel-length]} (:args c)
@@ -592,6 +634,7 @@
       :else (do (when (seq refused)
                   (access/decline! c :mine.declined "mine" (assoc (access/refusal-fields refused) :reason :refused)))
                 (cond
+                  (and (empty? refused) (descend-due? c)) (await (descend-round! c))
                   (pos? tunnel-length) (await (tunnel-round! c))
                   (seq refused) (to-mend! c :refused)
                   :else (to-mend! c (if (and wet? (not wet)) :wet :none)))))))

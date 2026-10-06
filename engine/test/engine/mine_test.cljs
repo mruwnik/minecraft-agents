@@ -1057,8 +1057,41 @@
         (let [s (start {:world {:blocks (merge (cells "dirt" (range 0 6) [63] [0]) (cells "dirt" (range 1 6) [64 65] [0]))
                                 :inventory [{:name "stone_pickaxe" :count 1}]}})]
           (fake/swap-self! (:p s) assoc :held "stone_pickaxe")
-          (core/submit! (:eng s) (spec {:block "stone" :count 1 :direction "east" :tunnel-length 3 :mend false}) {})
+          (core/submit! (:eng s) (spec {:block "stone" :count 1 :direction "east" :tunnel-length 3 :descend-limit 0 :mend false}) {})
           (await (run-ticks s 60))
           (is (pos? (dig-count s)) "it did dig the soil")
           (is (nil? (.-held (.self (:p s)))) "by hand")
           (is (= 1 (count (calls s "unequip")))))))))
+
+(defn soil-over-stone
+  "Dirt from y top-down to bottom+1 over stone below, in a block wide enough for a stair east."
+  [top bottom]
+  (merge (cells "stone" (range -3 13) (range (- bottom 4) (inc bottom)) (range -3 4))
+         (cells "dirt" (range -3 13) (range (inc bottom) (inc top)) (range -3 4))))
+
+(deftest stone-under-soil-is-reached-by-a-stair-down-then-mined
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks (soil-over-stone 63 59) :drops cobble :inventory [{:name "stone_pickaxe" :count 1}]}})]
+          (fake/swap-self! (:p s) assoc :held "stone_pickaxe")
+          (core/submit! (:eng s) (spec {:block "stone" :count 2 :direction "east" :tunnel-length 4 :mend false}) {})
+          (await (run-ticks s 200))
+          (is (= :count (:reason (done-event s))))
+          (is (<= 2 (get (inv s) "cobblestone" 0)))
+          (let [names (mapv #(.-name %) (.-calls (.-world (:p s))))
+                soil-digs (filter #(< 59 (nth % 1)) (dug-cells s))]
+            (is (seq soil-digs) "it dug soil")
+            (is (< -1 (.indexOf names "unequip") (.indexOf names "equip")) "the hand was emptied before the pickaxe came out")))))))
+
+(deftest soil-deeper-than-the-descent-limit-ends-no-stone-found
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks (soil-over-stone 63 40) :drops cobble :inventory [{:name "stone_pickaxe" :count 1}]}})]
+          (core/submit! (:eng s) (spec {:block "stone" :count 2 :direction "east" :tunnel-length 4 :descend-limit 3 :mend false}) {})
+          (await (run-ticks s 200))
+          (is (finished? s))
+          (is (= :no-stone-found (:reason (done-event s))))
+          (is (re-find #"dug down 3 blocks through soil, found no stone" (:text (done-event s))))
+          (is (zero? (get (inv s) "cobblestone" 0))))))))
