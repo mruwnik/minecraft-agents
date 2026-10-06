@@ -27,6 +27,16 @@
   (is (nil? (site (blocks "stone" [4 8] [64 65] [-3 3]))) "no ceiling over the niche")
   (is (nil? (site (blocks "stone" [4 8] [64 66] [0 0]))) "no side walls"))
 
+(deftest a-cave-under-the-floor-the-body-has-not-seen-gives-no-site
+  (let [cave (merge (blocks "stone" [3 8] [59 63] [-3 3]) (blocks "air" [2 3] [61 62] [0 0]))
+        p (tu/fake {:blocks (merge ground cave) :inventory [{:name "iron_pickaxe" :count 1}]})
+        seen? (fn [pos] (>= (.-y pos) 64))]
+    (aset p "seenBlockAt" (fn [pos] (let [b (.blockAt p pos)]
+                                      (if (seen? pos)
+                                        #js {:name (.-name b) :pos pos :age-ms 0}
+                                        #js {:unknown true :pos pos}))))
+    (is (nil? (niche/find-site p 16)))))
+
 (defn ok? [extra]
   (niche/niche-ok? (tu/fake {:blocks (merge ground (blocks "stone" [4 8] [64 66] [-3 3]) extra)
                              :inventory [{:name "iron_pickaxe" :count 1}]})

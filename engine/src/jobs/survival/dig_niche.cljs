@@ -2,6 +2,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.child :as child]
+            [jobs.lib.look :as look]
             [jobs.lib.result :as result]
             [jobs.lib.shelter :as sh]
             [jobs.lib.tidy :as tidy]
@@ -81,11 +82,13 @@
            (some #(access/trespass-refusal in :place %) (door-cells f dir)))))
 
 (defn stand-ok?
-  "Cheap per-cell part of niche-ok?: dry standing room on solid ground, whatever the direction."
+  "Cheap per-cell part of niche-ok?: dry standing room the body has seen (no hollow it only knows from the data) on
+  solid ground, whatever the direction."
   [p f]
   (let [solid? #(sh/solid? (u/block-name p %))
-        up (assoc f :y (inc (:y f)))]
-    (and (solid? (assoc f :y (dec (:y f)))) (not (solid? f)) (not (solid? up))
+        up (assoc f :y (inc (:y f)))
+        unseen? #(:unknown (look/seen-block p %))]
+    (and (not (unseen? f)) (not (unseen? up)) (solid? (assoc f :y (dec (:y f)))) (not (solid? f)) (not (solid? up))
          (not (dig-in/wet? p f)) (not (dig-in/wet? p up)))))
 
 (defn scan
