@@ -306,6 +306,39 @@ test('pose writes only on change, but at least every 2 seconds', async () => {
   assert.equal(view.stats().poses, 3)
 })
 
+test('10 s of walking (a step every 50 ms tick) writes about 10 poses a second', async () => {
+  const bot = fakeBot()
+  let clock = 10000
+  const { view } = makeView(bot, { now: () => clock })
+  for (let i = 0; i < 200; i++) {
+    bot.entity.position.x += 0.2
+    await view.tickPose()
+    clock += 50
+  }
+  const { poses } = view.stats()
+  assert.ok(poses <= 101 && poses >= 95, `poses ${poses}`)
+})
+
+test('a teleport or dimension change is written at once, inside the walking cap', async () => {
+  const bot = fakeBot()
+  let clock = 10000
+  const { view, dir } = makeView(bot, { now: () => clock })
+  const file = path.join(dir, 'worlds', 'w', 'agents', 'Bob', 'view', 'pose.json')
+  await view.tickPose()
+  clock += 50
+  bot.entity.position.x += 100
+  await view.tickPose()
+  assert.equal(readJson(file).t, 10050)
+  clock += 10
+  bot.game.dimension = 'minecraft:the_nether'
+  await view.tickPose()
+  assert.equal(readJson(file).dimension, 'minecraft:the_nether')
+  clock += 10
+  bot.entity.position.x += 0.2
+  await view.tickPose()
+  assert.equal(readJson(file).t, 10060)
+})
+
 test('hud writes only on change', async () => {
   const bot = fakeBot()
   let clock = 1
@@ -399,7 +432,7 @@ const posesIn = async (poseHz, seconds, drive) => {
     const bot = fakeBot()
     const { view } = makeView(bot, { poseHz, now: () => Date.now() })
     for (let i = 0; i < seconds * 100; i++) {
-      bot.entity.position.x += 1
+      bot.entity.position.x += 0.1
       drive(bot)
       mock.timers.tick(10)
       await new Promise(resolve => setImmediate(resolve))
@@ -414,20 +447,23 @@ const posesIn = async (poseHz, seconds, drive) => {
 
 test('pose rate is capped at the configured hz', async () => {
   assert.ok(Math.abs(await posesIn(10, 2, () => {}) - 20) <= 1)
-  assert.ok(Math.abs(await posesIn(20, 2, () => {}) - 40) <= 1)
+  assert.ok(Math.abs(await posesIn(5, 2, () => {}) - 10) <= 1)
+  assert.ok(Math.abs(await posesIn(20, 2, () => {}) - 20) <= 1)
 })
 
-test('hz 0 writes on every physics tick with no interval', async () => {
+test('hz 0 writes on physics ticks with no interval, at most one per POSE_BODY_MS', async () => {
   let ticks = 0
   const poses = await posesIn(0, 1, bot => { ticks++; bot.emit('physicsTick') })
-  assert.equal(poses, ticks)
   assert.equal(ticks, 100)
+  assert.ok(Math.abs(poses - 10) <= 1, `poses ${poses}`)
 })
 
-test('default mode writes one pose per changed physics tick, none for an unchanged one', async () => {
+test('default mode writes one pose per changed physics tick (spaced POSE_BODY_MS), none for an unchanged one', async () => {
   const bot = fakeBot()
-  const { view } = makeView(bot)
+  let clock = 1000
+  const { view } = makeView(bot, { now: () => clock })
   for (let i = 0; i < 5; i++) {
+    clock += 100
     bot.entity.position.x += 1
     bot.emit('physicsTick')
     await view.idle()

@@ -18,8 +18,11 @@ export const FLUSH_MS = 500
 export const MAX_COLUMNS_PER_FLUSH = 8
 export const POSE_HZ = 0
 export const POSE_REFRESH_MS = 2000
-// a pose whose only change is the surroundings (mobs, time, rain) is written at most this often; the body's own move goes out at once
+// a pose whose only change is the surroundings (mobs, time, rain) is written at most this often; the body's own move is capped by POSE_BODY_MS
 export const POSE_SURROUND_MS = 500
+// the body's own small moves are written at most this often (the viewer interpolates); a jump past POSE_JUMP blocks or a dimension change goes out at once
+export const POSE_BODY_MS = 100
+export const POSE_JUMP = 2.5
 export const HUD_MS = 1000
 export const STATS_MS = 60000
 export const ERROR_EVERY_MS = 60000
@@ -682,6 +685,8 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
         const sinceWrite = t - lastPoseAt
         if (key === lastPoseKey && sinceWrite < POSE_REFRESH_MS) return null
         if (body === lastBodyKey && sinceWrite < POSE_SURROUND_MS) return null
+        const moved = lastPose && (lastPose.dimension !== pose.dimension || Math.hypot(pose.pos.x - lastPose.pos.x, pose.pos.y - lastPose.pos.y, pose.pos.z - lastPose.pos.z) > POSE_JUMP)
+        if (body !== lastBodyKey && sinceWrite < POSE_BODY_MS && !moved && lastPoseKey !== null) return null
         lastPoseKey = key
         lastBodyKey = body
         lastPoseAt = t
