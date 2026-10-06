@@ -381,3 +381,58 @@
         (let [s (await (scenario {:pos {:x 30 :y 70 :z 0}} {:inventory lead :entities [(cow 1 3)]} 40))
               legs (tu/walked-to (:eng s))]
           (is (< 4 (count legs)) "more than a few legs"))))))
+
+(deftest no-animal-in-radius-is-a-stop-that-says-so
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:radius 8} {:inventory lead :entities [(cow 1 35)]} 5))
+              stopped (first (events-of s :stopped))]
+          (is (finished? s))
+          (is (= :none (:reason (done-event s))))
+          (is (= 1 (count (events-of s :stopped))) "the job ends stopped, not completed")
+          (is (re-find #"no cow within 8" (:text stopped)))
+          (is (re-find #":radius" (:text stopped))))))))
+
+(deftest a-success-is-not-a-stop
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {} {:inventory lead :entities [(cow 1 3)]} 12))]
+          (is (= :unleashed (:reason (done-event s))))
+          (is (empty? (events-of s :stopped))))))))
+
+(deftest a-pull-aims-a-block-past-the-radius-for-a-body-that-stops-short
+  (let [t (lead-to/pull-point {:x 24 :z 0} {:x 30 :y 64 :z 0} 3)]
+    (is (= 34 (:x t)) "lead length 6 less radius 3, plus the 1 block the walk's range may leave")))
+
+(defn ^:async hide-cow-after-the-walk
+  "Run the job until its legs reach the spot, hide the cow for n-hidden ticks, then show it again."
+  [n-hidden]
+  (let [{:keys [p] :as s} (h/setup {:floor tu/walk-floor :inventory lead :entities [(cow 1 3 {:trail 1})]})
+        saved (atom nil)]
+    (core/submit! (:eng s) (list 'jobs.animals.lead-to {:mob "cow" :pos goal}) {})
+    (loop [i 0]
+      (when (and (< i 40) (not-any? #(= goal %) (tu/walked-to (:eng s))))
+        (await (run-ticks s 1 700))
+        (recur (inc i))))
+    (reset! saved (first (:entities @(fake/state p))))
+    (swap! (fake/state p) update :entities subvec 1)
+    (await (run-ticks s n-hidden 700))
+    (swap! (fake/state p) update :entities conj @saved)
+    (await (run-ticks s 15 700))
+    s))
+
+(deftest a-cow-out-of-sight-for-one-look-after-the-walk-is-not-lost
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (hide-cow-after-the-walk 1))]
+          (is (= :unleashed (:reason (done-event s)))))))))
+
+(deftest a-cow-out-of-sight-for-good-after-the-walk-is-lost
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (hide-cow-after-the-walk 30))]
+          (is (= :lost (:reason (done-event s)))))))))

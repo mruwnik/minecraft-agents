@@ -10,7 +10,7 @@
  [{:name "straight-cow-gathered"
    :act [[:summon "cow" [6.5 0 18.5]]
          [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [26 0 16]})]]
-   :expect [{:event {:source :job :kind :lead-to.done :data {:reason :unleashed}} :within-s 150 :of-job true}]
+   :expect [{:event {:source :job :kind :lead-to.done :data {:reason :unleashed :gathered true}} :within-s 150 :of-job true}]
    :after [[:entities "type=cow,tag=wt" [[19 0 9] [31 2 23]] 1]
            [:item "lead" 2]]}
   {:name "gap-in-wall-cow-gathered"
@@ -18,7 +18,7 @@
             [:fill [14 0 14] [14 3 18] "air"]]
    :act [[:summon "cow" [6.5 0 18.5]]
          [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [26 0 16]})]]
-   :expect [{:event {:source :job :kind :lead-to.done :data {:reason :unleashed}} :within-s 150 :of-job true}]
+   :expect [{:event {:source :job :kind :lead-to.done :data {:reason :unleashed :gathered true}} :within-s 150 :of-job true}]
    :after [[:entities "type=cow,tag=wt" [[17 0 9] [31 2 27]] 1]
            [:item "lead" 2]]}
   {:name "pull-behind-wall-given-up"

@@ -25,12 +25,12 @@
   A tie counts only when the sensing then shows the animal held by something else than this body.
 
   Before each walking round the animal is looked up (within :watch-radius). Seen off this body's lead: ends
-  :lead-broke. Not seen: ends :lost (a walk tolerates a few unseen looks, see :walk).
+  :lead-broke. Not seen: ends :lost after three looks in a row (see :walk), in every phase.
 
   Gather: a led animal trails about a lead length behind the body. On arrival, if the animal is farther than
   :gather-radius from :pos, the body walks on past :pos (range 1) so the lead pulls it in. It waits for the
   animal to settle between pulls, at most :gather-tries pulls. A pull stays within 11 blocks of the animal (the
-  lead breaks past 12). A pull walks in the same legs; it is given up after 20 s (checked after each leg), or before it starts when the planned walk strays more than 11
+  lead breaks past 12). A pull walks in the same legs, aiming a block past the point that would just gather; it is given up after 20 s (checked after each leg), or before it starts when the planned walk strays more than 11
   blocks from the animal (a wall in the way). An animal 10 or more blocks from :pos is never pulled. None of
   this is a failure: the animal is let go where it is, with a warn
   lead-to.gather-short (:distance from :pos) and :gathered false. :gathered is true when the animal was within
@@ -39,7 +39,8 @@
   Ends with info lead-to.done and a warn lead-to.gave-up unless the reason is :tied or :unleashed. Result
   {:reason :animal key :still-led bool :at pos :gathered bool}. Reasons:
   - :tied, :unleashed: success.
-  - :lead-broke, :lost, :lagging (the animal is still on the lead): as above.
+  - :none (no animal within :radius; widen it), :lead-broke, :lost, :lagging (the animal is still on the lead): as above.
+  Every reason but :tied and :unleashed ends the job :stopped with a :text.
   - :unreachable: the walk gave up (the animal is still on the lead).
   - :tie-failed: the post did not take the animal (still on the lead).
   - :timeout: :timeout-s from the first round (a cut walk leaves the animal on the lead).
@@ -62,19 +63,28 @@
 
 (defn check [_c] true)
 
+(defn stop-text
+  "The words for a leading that ended without success."
+  [c reason]
+  (let [{:keys [mob radius]} (:args c)]
+    (if (= :none reason)
+      (str "no " mob " within " radius " blocks to lead; widen :radius")
+      (str "leading stopped: " (name reason)))))
+
 (defn finish!
-  "Emit the outcome, hand it to the parent and end the job."
+  "Emit the outcome, hand it to the parent and end the job. Any reason but :tied and :unleashed is a stop."
   [c reason]
   (let [m (ctx/mem c)
+        ok? (#{:tied :unleashed} reason)
         result {:reason reason
                 :animal (:animal m)
                 :still-led (boolean (:still-led m))
                 :gathered (boolean (:gathered m))
                 :at (u/self-pos c)}]
     (ctx/emit! c :lead-to.done :info (assoc result :text (str "lead-to done: " (name reason))))
-    (when-not (#{:tied :unleashed} reason)
-      (ctx/emit! c :lead-to.gave-up :warn {:reason reason :text (str "leading stopped: " (name reason))}))
-    (ctx/result! c result)
+    (when-not ok?
+      (ctx/emit! c :lead-to.gave-up :warn {:reason reason :text (stop-text c reason)}))
+    (ctx/result! c (cond-> result (not ok?) (assoc :status :stopped :text (stop-text c reason))))
     :done))
 
 (defn destination [c]
@@ -127,14 +137,18 @@
   "A pull walk still going after this long (a detour round a wall, say) is given up."
   20)
 
+(def pull-range
+  "How close to the pull target the walk must get."
+  1)
+
 (defn pull-point
   "Where the body walks to pull the animal to within radius of pos: past pos, on the line from the
-  animal through pos, by the lead length less radius (flat, pos's y) but never so far that the body
-  ends more than max-reach from the animal, or nil when the animal is at pos or too far out for any
-  pull."
+  animal through pos, by the lead length less radius plus the walk's range (flat, pos's y: a body that
+  stops that far short still leaves the animal within radius) but never so far that the body ends more
+  than max-reach from the animal, or nil when the animal is at pos or too far out for any pull."
   [animal-pos pos radius]
   (let [d (flat-dist animal-pos pos)
-        extra (min (- lead-length radius) (- max-reach d))
+        extra (min (+ (- lead-length radius) pull-range) (- max-reach d))
         k (/ extra d)]
     (when (and (pos? d) (pos? extra))
       (assoc pos
@@ -259,7 +273,7 @@
       (>= (- now started) (* 1000 pull-timeout-s)) (stop-gathering! c d)
       (path-leaves-reach? c target animal-pos) (stop-gathering! c d)
       :else
-      (let [r (await (walk-legs! c :pull target 1 started (* 1000 pull-timeout-s)))]
+      (let [r (await (walk-legs! c :pull target pull-range started (* 1000 pull-timeout-s)))]
         (cond
           (= :waiting r) :continue
           (map? r) (do (ctx/update-mem! c assoc :still-led (= :lagging (:problem r)))
@@ -338,12 +352,15 @@
     (ctx/update-mem! c update :started #(or % now))
     (let [{:keys [phase started animal]} (ctx/mem c)
           a (when animal (animal-now c))]
+      (when a (ctx/update-mem! c dissoc :unseen))
       (cond
         (and (nil? phase) fence (not (fence-block? c))) (finish! c :no-fence)
         (>= (- now started) (* 1000 timeout-s)) (finish! c :timeout)
         (nil? phase) (do (set-phase! c :leash) :continue)
         (= :leash phase) (await (leash! c))
-        (and (#{:gather :arrive} phase) (nil? a)) (do (ctx/update-mem! c assoc :still-led false) (finish! c :lost))
+        (and (#{:gather :arrive} phase) (nil? a)) (if (= :lost (escort-problem c))
+                                                    (do (ctx/update-mem! c assoc :still-led false) (finish! c :lost))
+                                                    :continue)
         (and (#{:walk :gather :arrive} phase) a (not (animals/led-by-me? a))) (do (ctx/update-mem! c assoc :still-led false) (finish! c :lead-broke))
         (= :walk phase) (do (await (watch/watch! c {})) (await (walk! c)))
         (= :gather phase) (do (await (watch/watch! c {})) (await (gather! c a)))
