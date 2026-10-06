@@ -2,6 +2,7 @@
   "go-to plans with the body's abilities: at food 6 or less (no sprint) a corner jump past a high block is refused."
   (:require [cljs.test :refer [deftest is async]]
             [engine.go-to-test :as g]
+            [jobs.movement.go-to :as go]
             [engine.test-util :as tu :refer [box]]))
 
 ;; start (0 64 0) on a one-cell floor; a two-high column at (1 64..65 0), no floor at (0 63 1); landing floor (1 64 1) with air over it:
@@ -24,3 +25,9 @@
         (let [{:keys [out]} (await (g/go! (assoc-in corner-world [:self :food] 20) {:pos [1 65 1]}))]
           ;; the fake's point body cannot slide a corner, so the walk ends stuck on the planned jump: what counts is the jump was planned
           (is (= {:why :stuck :kind :jump} (select-keys @out [:why :kind])) (pr-str @out)))))))
+
+(deftest gap-kinds-have-plain-stopped-words
+  (doseq [[kind part] [[:gap-sprint "takes a sprint"] [:gap-width "gap"]]]
+    (let [text (go/give-up-words [0 64 0] {:why :abilities :kind kind})]
+      (is (re-find (re-pattern part) text) text)
+      (is (not (re-find #"move the body cannot make" text)) text))))

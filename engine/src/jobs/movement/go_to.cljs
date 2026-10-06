@@ -118,7 +118,9 @@
   {:corner-jump "needs a sprint jump past a corner and food is too low"
    :gap-up "needs a step up the body cannot make"
    :gap-down "needs a drop the body cannot survive"
-   :gap "needs a jump across a gap the body cannot make"})
+   :gap "needs a jump across a gap the body cannot make"
+   :gap-sprint "needs a gap jump that takes a sprint and food is too low"
+   :gap-width "needs a jump across a gap wider than the body can jump"})
 
 (def step-words {:stair "dig a stair out" :pillar "pillar out" :clear-path "dig through the wall"})
 
