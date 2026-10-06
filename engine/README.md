@@ -349,13 +349,13 @@ Built-in triggers, in the order of `triggers/defaults.edn` (the default register
 | `:hostile-near` | a real danger (see Sensing) within `:radius` 8, ranged within `:ranged-radius` 16; `:visible-only false` counts heard mobs | `respond-to-hostile` | none (retry) |
 | `:hungry` | food below `:food` 6 plus one per missing hp (at most 18: below 18 nothing heals); or hurt, below 18 and common food carried; or health below `:health` 7 and food carried (eats to 20) | `get-food` | 90 s |
 | `:night` | night, awake, and a bed to use or carried, someone asleep, unroofed, or shut in its shelter; by day shut in its shelter or a bed it put down outside its zone still stands | `survival.night` | 10 s |
-| `:door-left` | a door a walk opened and meant to shut still stands open after 10 s | `maintenance.shut-doors` | 5 s |
+| `:door-left` | a door a walk opened and meant to shut was last seen open 10 s after (never read through a wall) | `maintenance.shut-doors` | 5 s |
 | `:stuck` | the last 4 `:moved` entries all moved under 1.5 blocks, newest under 60 s old, body really held | `maintenance.unstick` | 60 s |
 | `:died` | a `:died` under 5 minutes old with a newer `:respawned` and no `:recovered` | `recover-drops` | 30 s |
 | `:inventory-nearly-full` | at most `:free` 2 of 36 main and hotbar slots empty | `storage.make-room` | 120 s |
 | `:scaffold-left` | the scaffold ledger holds blocks whose job is gone | `access.cleanup` | stop |
-| `:tidy-pending` | body safe and on the ground, a `:tidy` entry pending; a cell a run tried waits 2 min or until the body moves 8 blocks | `survival.restore-broken` | 10 s |
-| `:pen-gate` | a planned fence gate within 8 stands open, body more than 2 away, for 4 s | `animals.shut-gate` | 5 s |
+| `:tidy-pending` | body safe and on the ground, a `:tidy` entry pending; a cell a run tried (the entry's `:tried` stamp) waits 2 min or until the body moves 8 blocks | `survival.restore-broken` | 10 s |
+| `:pen-gate` | a planned fence gate within 8 was last seen open, body more than 2 away; no `:opened`/`:gate-held`/`:gate-gave-up` entry for it | `animals.shut-gate` | 5 s |
 | `:mounted` | the body rides something and no live job holds a vehicle | `movement.leave-vehicle` | stop |
 
 The dangers (`:suffocating`, `:burning`) have no cooldown and no backoff. Needs rest with a reason the agent
