@@ -5,7 +5,7 @@
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { restartVerdict } from './js/launcher.mjs'
+import { restartVerdict, restartDeadline } from './js/launcher.mjs'
 
 const port = Number(process.env.PORT || 3701)
 const base = `http://127.0.0.1:${port}`
@@ -24,11 +24,16 @@ const buildId = async () => {
 
 // {kind:'ok', id} | {kind:'failed', failed} | {kind:'timeout'}
 const waitForVerdict = async (seq0, old) => {
-  const deadline = Date.now() + waitMs
+  let deadline = Date.now() + waitMs
+  let queued = null
   while (Date.now() < deadline) {
     await sleep(2000)
-    const verdict = restartVerdict(launcherStatus(), { seq0, old, now: await buildId() })
+    const status = launcherStatus()
+    const verdict = restartVerdict(status, { seq0, old, now: await buildId() })
     if (verdict.kind !== 'wait') return verdict
+    deadline = restartDeadline(status, { now: Date.now(), deadline, waitMs })
+    if (status?.queued != null && status.queued !== queued) console.log(`queued for the compile lock (${status.queued} ahead)`)
+    queued = status?.queued ?? null
   }
   return { kind: 'timeout' }
 }

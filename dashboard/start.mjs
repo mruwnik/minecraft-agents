@@ -5,11 +5,11 @@
 // {type:"restart"}, sent by POST /api/restart) builds FIRST while the old server keeps running; only a good build replaces it.
 // Ctrl-C stops both; a server exit nobody asked for ends the launcher with the server's exit code.
 import { spawn } from 'node:child_process'
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
+import { readFileSync, readdirSync, writeFileSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
-  initial, onRestartRequest, onBuildDone, onServerExit, onQuit, buildSteps, buildOutcome, stopsBuild, stepCommand, parseMemAvailableMb, enoughMemory, minMemoryMb, terminateGroup, launcherStatus,
+  initial, onRestartRequest, onBuildDone, onServerExit, onQuit, buildSteps, buildOutcome, stopsBuild, stepCommand, parseMemAvailableMb, enoughMemory, minMemoryMb, terminateGroup, launcherStatus, queuePosition,
 } from './js/launcher.mjs'
 
 const dir = dirname(fileURLToPath(import.meta.url))
@@ -20,15 +20,28 @@ let state = initial
 let server = null
 let build = null
 let done = { seq: 0, last: null, failed: null }
+let queued = null
 const statusFile = join(dir, 'out', `launcher-${process.env.PORT || 3701}.json`)
 
 // Published for `npm run restart`; a write failure only costs it the early exit.
 const publishStatus = () => {
   try {
     mkdirSync(dirname(statusFile), { recursive: true })
-    writeFileSync(statusFile, JSON.stringify(launcherStatus(state, done)))
+    writeFileSync(statusFile, JSON.stringify(launcherStatus(state, done, queued)))
   } catch (e) { say(`could not write ${statusFile}: ${e.message}`) }
 }
+
+// Where the running compile stands on tools/compile's queue (its ticket is named after the compile's pid); republished on change.
+const queueDir = process.env.MC_COMPILE_QUEUE || '/tmp/mc-compile.queue'
+const refreshQueued = () => {
+  let tickets = []
+  try { tickets = readdirSync(queueDir) } catch { /* no queue dir: nothing waits */ }
+  const now = build ? queuePosition(build.pid, tickets) : null
+  if (now === queued) return
+  queued = now
+  publishStatus()
+}
+setInterval(refreshQueued, 2000).unref()
 
 const availableMb = () => {
   try { return parseMemAvailableMb(readFileSync('/proc/meminfo', 'utf8')) } catch { return null }

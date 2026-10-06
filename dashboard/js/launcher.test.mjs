@@ -3,7 +3,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   initial, onRestartRequest, onBuildDone, onServerExit, onQuit, buildSteps, buildOutcome, stopsBuild, stepCommand, parseMemAvailableMb, enoughMemory, minMemoryMb,
-  terminateGroup, launcherStatus, restartVerdict,
+  terminateGroup, launcherStatus, restartVerdict, queuePosition, restartDeadline,
 } from './launcher.mjs'
 
 test('a request while idle starts a build', () => {
@@ -152,7 +152,7 @@ const base = { phase: 'idle', pending: false, seq: 3, last: 'ok', failed: null }
 test('launcherStatus records the phase, pending flag and last result', () => {
   assert.deepEqual(
     launcherStatus({ phase: 'building', pending: true }, { seq: 2, last: 'failed', failed: 'ui' }),
-    { phase: 'building', pending: true, seq: 2, last: 'failed', failed: 'ui' })
+    { phase: 'building', pending: true, seq: 2, last: 'failed', failed: 'ui', queued: null })
 })
 
 for (const [name, status, expected, now = 'old'] of [
@@ -169,3 +169,23 @@ for (const [name, status, expected, now = 'old'] of [
     assert.deepEqual(restartVerdict(status, { seq0: 2, old: 'old', now }), expected)
   })
 }
+
+test('queuePosition counts the tickets ahead of the build, null when it has none', () => {
+  const tickets = ['0-100-11', '1-90-22', '1-95-33']
+  assert.equal(queuePosition(11, tickets), 0)
+  assert.equal(queuePosition(33, tickets), 2)
+  assert.equal(queuePosition(44, tickets), null)
+  assert.equal(queuePosition(undefined, tickets), null)
+})
+
+test('launcherStatus carries the queue position', () => {
+  assert.equal(launcherStatus({ phase: 'building', pending: false }, { seq: 1, last: null, failed: null }, 3).queued, 3)
+  assert.equal(launcherStatus({ phase: 'idle', pending: false }, { seq: 1, last: 'ok', failed: null }).queued, null)
+})
+
+test('restartDeadline restarts the wait while the build is queued and keeps it otherwise', () => {
+  const q = { ...base, phase: 'building', queued: 2 }
+  assert.equal(restartDeadline(q, { now: 1000, deadline: 500, waitMs: 360 }), 1360)
+  assert.equal(restartDeadline({ ...q, queued: null }, { now: 1000, deadline: 1200, waitMs: 360 }), 1200)
+  assert.equal(restartDeadline(null, { now: 1000, deadline: 1200, waitMs: 360 }), 1200)
+})

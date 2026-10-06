@@ -81,9 +81,21 @@ export const terminateGroup = async ({ kill, exited, grace }) => {
 
 // What the launcher publishes (out/launcher-<port>.json) so `npm run restart` learns the outcome of a build.
 // done: {seq, last, failed}: seq counts finished builds, last is 'ok' | 'failed' | 'refused'.
-export const launcherStatus = (state, done) => ({
-  phase: state.phase, pending: state.pending, seq: done.seq, last: done.last, failed: done.failed,
+// queued: tickets ahead of the build on the compile lock, null when it is not waiting there.
+export const launcherStatus = (state, done, queued = null) => ({
+  phase: state.phase, pending: state.pending, seq: done.seq, last: done.last, failed: done.failed, queued,
 })
+
+// Tickets ahead of the compile with this pid in tools/compile's queue (names `<lane>-<ns>-<pid>`, served in `ls` order);
+// null when it holds none (running, or not a compile).
+export const queuePosition = (pid, tickets) => {
+  const i = [...tickets].sort().findIndex((t) => t.endsWith(`-${pid}`))
+  return i < 0 ? null : i
+}
+
+// restart.mjs's give-up time: a build queued on the compile lock restarts the wait, so only a build that runs counts.
+export const restartDeadline = (status, { now, deadline, waitMs }) =>
+  status?.phase === 'building' && status.queued != null ? now + waitMs : deadline
 
 // What restart.mjs should do given the launcher status read after its request. seq0: seq before the request. The state is
 // settled only when idle with no pending build and seq moved: coalesced requests are covered by the chain of builds.
