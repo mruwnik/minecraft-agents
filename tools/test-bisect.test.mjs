@@ -10,7 +10,7 @@ const tools = dirname(fileURLToPath(import.meta.url))
 const sh = (cwd, ...a) => execFileSync(a[0], a.slice(1), { cwd, encoding: 'utf8' }).trim()
 
 // Fake repo: tools/compile fails while file BROKEN exists, tools/test-engine fails (printing a FAIL line) while file BAD exists.
-const COMPILE = '#!/bin/sh\n[ -n "$BISECT_SLOW" ] && sleep 30\n[ -e "$(dirname "$0")/../BROKEN" ] && exit 1\nexit 0\n'
+const COMPILE = '#!/bin/sh\n[ -n "$BISECT_SLOW" ] && sleep 30\n[ -n "$FAKE_COMPILE_BUSY_N" ] && { n=$(cat "$(dirname "$0")/../c.busy" 2>/dev/null || echo 0); echo $((n + 1)) > "$(dirname "$0")/../c.busy"; [ "$n" -lt "$FAKE_COMPILE_BUSY_N" ] && { echo "no free compile slot"; exit 75; }; }\n[ -e "$(dirname "$0")/../BROKEN" ] && { echo "boom: undeclared var"; exit 1; }\nexit 0\n'
 const TEST_ENGINE = '#!/bin/sh\n[ "$1" = engine.nope-test ] && exit 2\n[ -n "$FAKE_TE_BUSY_N" ] && { n=$(cat "$(dirname "$0")/../te.busy" 2>/dev/null || echo 0); echo $((n + 1)) > "$(dirname "$0")/../te.busy"; [ "$n" -lt "$FAKE_TE_BUSY_N" ] && exit 75; }\n[ -n "$FAKE_TE_RC" ] && exit "$FAKE_TE_RC"\nif [ -e "$(dirname "$0")/../BAD" ]; then if [ -n "$FAKE_TE_CTRL" ]; then printf "FAIL in (a-test\\t\\033[31mred\\033[0m)\\n"; else echo "FAIL in (a-test)"; fi; exit "${FAKE_TE_BADRC:-1}"; fi\nexit 0\n'
 const WT = '#!/bin/sh\nif [ "$1" != --remove ] && [ -n "$WT_BUSY_N" ]; then n=$(cat "$WT_LOG.busy" 2>/dev/null || echo 0); echo $((n + 1)) > "$WT_LOG.busy"; [ "$n" -lt "$WT_BUSY_N" ] && exit 75; fi\nrepo="$(cd "$(dirname "$0")/.." && pwd)"\nif [ "$1" = --remove ]; then echo removed >> "$WT_LOG"; git -C "$repo" worktree remove --force "$2"; exit; fi\ngit -C "$repo" worktree add --detach "$2" "$1"\n'
 
@@ -123,6 +123,34 @@ test('a busy test-engine step is retried, then gives its verdict', () => {
     assert.equal(r.status, 0, r.stdout + r.stderr)
     assert.match(r.stdout, new RegExp(`FIRST BAD: ${shas[5]} c5 after`))
     assert.match(r.stdout, /FAIL in \(a-test\)/)
+  } finally { rmSync(d, { recursive: true, force: true }) }
+})
+
+test('a busy compile (75) is retried, then gives its verdict', () => {
+  const { d, shas } = fakeRepo()
+  try {
+    const r = run(d, ['engine.a-test', '--good', shas[4], '--bad', shas[5]], { FAKE_COMPILE_BUSY_N: '2', TEST_BISECT_BUSY_RETRIES: '5', TEST_BISECT_RETRY_SLEEP: '0' })
+    assert.equal(r.status, 0, r.stdout + r.stderr)
+    assert.match(r.stdout, new RegExp(`FIRST BAD: ${shas[5]} c5 after`))
+  } finally { rmSync(d, { recursive: true, force: true }) }
+})
+
+test('a compile that stays busy is skipped as busy with its reason, never as a compile failure', () => {
+  const { d, shas } = fakeRepo()
+  try {
+    const r = run(d, ['engine.a-test', '--good', shas[4], '--bad', shas[5]], { FAKE_COMPILE_BUSY_N: '99', TEST_BISECT_BUSY_RETRIES: '1', TEST_BISECT_RETRY_SLEEP: '0' })
+    assert.notEqual(r.status, 0, r.stdout + r.stderr)
+    assert.match(r.stdout, /compile busy.*no free compile slot/)
+    assert.doesNotMatch(r.stdout, /compile failed/)
+    assert.doesNotMatch(r.stdout, /FIRST BAD/)
+  } finally { rmSync(d, { recursive: true, force: true }) }
+})
+
+test('a real compile failure names its error in the step line', () => {
+  const { d, shas } = fakeRepo()
+  try {
+    const r = run(d, ['engine.a-test', '--good', shas[0], '--bad', shas[1]])
+    assert.match(r.stdout, /compile failed.*boom: undeclared var/)
   } finally { rmSync(d, { recursive: true, force: true }) }
 })
 
