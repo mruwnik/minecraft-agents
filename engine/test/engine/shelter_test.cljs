@@ -1121,6 +1121,22 @@
             (is (empty? (calls p "dig")) cell)
             (is (= :fluid-here (:reason (first (entries eng :dig-in-futile)))) cell)))))))
 
+(deftest dig-in-stops-digging-when-fluid-appears-above-the-roof-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [fluid ["water" "lava"]]
+          (let [{:keys [eng p]} (setup {:time night :blocks (assoc ground "1,64,0" "stone")})]
+            (.override (.-world p) "dig" (fn ^:async f [token a impl]
+                                           (let [r (await (impl token a))]
+                                             (fake/set-block! p [0 65 0] fluid)
+                                             r)))
+            (core/submit! eng '(jobs.survival.dig-in) {})
+            (await (run-until-empty eng 8))
+            (is (= 1 (count (calls p "dig"))) fluid)
+            (is (empty? (calls p "place")) fluid)
+            (is (= :fluid-above (:reason (first (entries eng :dig-in-futile)))) fluid)))))))
+
 (deftest dig-plan-needs-a-full-block-beside-the-roof-cell
   (are [side plan] (= plan (dig-in/dig-plan (tu/fake {:blocks (merge ground {"1,64,0" side})}) {:x 0 :y 64 :z 0}))
     "stone" {:roof {:x 0 :y 64 :z 0} :depth 2}

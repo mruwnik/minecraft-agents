@@ -10,6 +10,16 @@
   [p pos]
   (some-> (.blockAt p (clj->js pos)) .-name))
 
+(defn block-facts
+  "What a cell holds as cljs facts {:name :full-cube? :waterlogged?} (full-cube?: its collision shape fills the cell), or
+  nil when the chunk is not loaded."
+  [p pos]
+  (when-let [b (.blockAt p (clj->js pos))]
+    (let [logged (some-> b .-properties .-waterlogged)]
+      {:name (.-name b)
+       :full-cube? (boolean (.-fullCube b))
+       :waterlogged? (or (true? logged) (= "true" logged))})))
+
 (defn pos-of
   "A JS {x y z} object as a cljs map."
   [o]

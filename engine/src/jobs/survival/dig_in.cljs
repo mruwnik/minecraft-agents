@@ -24,7 +24,8 @@
   - dig: digs a pit two deep (three on flat ground, where the start cell has no solid side to roof against),
     then places one block at the roof cell from a carried or dug block.
     It digs only where the block under is solid, the feet and head cells are dry, and no fluid borders the cell
-    (water, lava, bubble column, kelp, seagrass, or a waterlogged block).
+    (water, lava, bubble column, kelp, seagrass, or a waterlogged block), nor the roof cell or the cell above it
+    (:fluid-above).
     It holds the best carried tool for each block first.
     If the body leaves the column, it chooses again.
   With no full block beside the roof cell at either height (a flower or crop is no support) it does not dig
@@ -73,9 +74,8 @@
 (defn wet?
   "Whether the cell holds a fluid: a hazards block, or a waterlogged one."
   [p cell]
-  (let [b (.blockAt p (clj->js cell))
-        logged (some-> b .-properties .-waterlogged)]
-    (boolean (and b (or (hazards (.-name b)) (true? logged) (= "true" logged))))))
+  (let [b (u/block-facts p cell)]
+    (boolean (and b (or (hazards (:name b)) (:waterlogged? b))))))
 
 (defn carried
   "The carried [{:name :count}] whose name is in blocks, in the order of blocks."
@@ -275,7 +275,9 @@
         name (u/block-name p below)
         under (u/block-name p {:x x :y (- y 2) :z z})
         fluid (lateral-fluid p below)
-        here (first (filter #(wet? p %) [{:x x :y y :z z} {:x x :y (inc y) :z z}]))]
+        here (first (filter #(wet? p %) [{:x x :y y :z z} {:x x :y (inc y) :z z}]))
+        roof (:roof (ctx/mem c))
+        over (when roof (first (filter #(wet? p %) [roof (update roof :y inc)])))]
     (cond
       here (do (remember-failed-site! c :fluid-here)
                (ctx/emit! c :dig_in_failed :warn {:text (str (u/block-name p here) " where the body stands; not digging down")})
@@ -286,6 +288,9 @@
       (wet? p below) (do (remember-failed-site! c :hazard-below)
                          (ctx/emit! c :dig_in_failed :warn {:text (str name " below the body; not digging down")})
                          :done)
+      over (do (remember-failed-site! c :fluid-above)
+               (ctx/emit! c :dig_in_failed :warn {:text (str (u/block-name p over) " at or above the roof cell; not digging further")})
+               :done)
       (and (sh/solid-at? p below) (not (sh/solid? under)))
       (do (remember-failed-site! c :no-floor)
           (ctx/emit! c :dig_in_failed :warn {:text (str (or under "an unloaded cell") " under the floor; not digging through it")})
@@ -334,7 +339,7 @@
   "Whether a block placed in cell has a side neighbour to be placed against: one whose collision shape fills its cell
   (full-cube?; the place step needs a collision box, so a flower or a crop is no support)."
   [p {:keys [x y z]}]
-  (boolean (some (fn [[dx dz]] (some-> (.blockAt p (clj->js {:x (+ x dx) :y y :z (+ z dz)})) .-fullCube)) sides)))
+  (boolean (some (fn [[dx dz]] (:full-cube? (u/block-facts p {:x (+ x dx) :y y :z (+ z dz)}))) sides)))
 
 (defn dig-plan
   "{:roof :depth} for a pit dug from start: the roof goes at start when a side of it is solid (the pit is 2 deep), else

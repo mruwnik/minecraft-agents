@@ -37,6 +37,13 @@
             {:no-event {:source :job :kind :dig-in.sealed} :for-s 5}]
    :after [[:block [16 -1 16] "dirt"]]
    :limit-s 40}
+  {:name "water-above-roof-cell-refuses"
+   :blocks [[:set [17 0 16] "stone"] [:set [16 1 16] "water"]]
+   :act [[:job (jobs.survival.dig-in {})]]
+   :expect [{:event {:source :job :kind :dig_in_failed :message [:contains "not digging"]} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :dig-in.sealed} :for-s 5}]
+   :after [[:block [16 -1 16] "dirt"]]
+   :limit-s 40}
   {:name "poppy-beside-start-digs-3-deep-and-seals"
    :blocks [[:set [17 0 16] "poppy"]]
    :act [[:job (jobs.survival.dig-in {})]]
