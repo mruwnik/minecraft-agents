@@ -238,6 +238,26 @@
           (is (zero? (waited-ms-before-click s)) "nothing open: no wait")
           (is (= 0 (:shut (first (events-of s :shut-gate.done))))))))))
 
+(deftest a-gate-shut-during-the-grace-wait-is-not-clicked
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p] :as s} (start (pen-world true 2 -7) {"pen-a" pen-a} nil)]
+          (.override (.-world p) "wait"
+                     (fn [token args impl]
+                       (swap! (fake/state p) assoc-in [:states [2 64 0] :open] false)
+                       (impl token args)))
+          (core/submit! eng (list 'jobs.animals.shut-gate {}) {})
+          (loop [i 0]
+            (when (and (< i 30) (seq (:list (core/state eng))))
+              (swap! clock + 700)
+              (await (core/tick! eng))
+              (recur (inc i))))
+          (is (pos? (count (filter #(= "wait" (.-name %)) (.-calls (.-world p))))) "it waited the grace")
+          (is (not (gate-open? p 2 64 0)))
+          (is (empty? (filter #(= "useOn" (.-name %)) (.-calls (.-world p)))) "no click on the gate the player shut")
+          (is (= 0 (:shut (first (events-of s :shut-gate.done))))))))))
+
 (deftest from-the-far-side-the-job-walks-round-the-ring-and-shuts-the-gate
   (async done
     (tu/run-async done
