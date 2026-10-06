@@ -5,6 +5,7 @@
             [engine.fake :as fake]
             [jobs.lib.walk :as walk]
             [jobs.animals.lead-to :as lead-to]
+            [engine.fetch-test :as fetch-test]
             [engine.hostile-test :as h]
             [engine.memory :as mem]
             [engine.test-util :as tu]))
@@ -474,3 +475,31 @@
       (fn ^:async t []
         (let [s (await (hide-cow-after-the-walk 30))]
           (is (= :lost (:reason (done-event s)))))))))
+
+(deftest crafts-a-lead-when-none-is-carried-then-leads-the-cow
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (fetch-test/start {:self {:pos {:x 0 :y 64 :z 0}}
+                                   :recipes {"lead" {:count 2 :needs {"string" 5} :table true}}
+                                   :inventory [{:name "string" :count 5} {:name "oak_planks" :count 4}]
+                                   :entities [(cow 1 3)]}
+                                  [])]
+          (core/submit! (:eng s) (list 'jobs.animals.lead-to {:mob "cow" :pos goal}) {})
+          (await (fetch-test/run-ticks s 60))
+          (is (empty? (fetch-test/listed s)))
+          (is (= 2 (get (fetch-test/inv s) "lead")) "the crafted pair is carried, the cow let go")
+          (is (empty? (fetch-test/events-of s :lead-to.gave-up))))))))
+
+(deftest no-lead-and-no-way-to-get-one-stops-no-lead-at-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {} {:inventory [] :entities [(cow 1 3)]} 6))
+              r (done-event s)
+              [gave-up] (events-of s :lead-to.gave-up)]
+          (is (finished? s))
+          (is (= :no-lead (:reason r)))
+          (is (re-find #"no lead carried and none could be got" (:text gave-up)))
+          (is (= [:no-lead] (mapv :reason (events-of s :lead-to.gave-up))))
+          (is (empty? (tu/walked-to (:eng s))) "the body did not move"))))))

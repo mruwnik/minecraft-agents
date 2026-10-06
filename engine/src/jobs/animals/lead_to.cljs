@@ -1,6 +1,7 @@
 (ns jobs.animals.lead-to
   (:require [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
+            [jobs.lib.blocks :as b]
             [jobs.lib.util :as u]
             [jobs.lib.watch :as watch]
             [jobs.lib.near :as near]
@@ -10,7 +11,9 @@
 
 (def doc
   "Put a lead on one animal of type :mob, walk to :pos with it following, then tie it to the fence post :fence
-  or let it go. A one-shot order that starts and ends itself. Declines (waits) with :no-mob, :no-destination or :no-lead (no lead carried) until all are given; a started job always passes.
+  or let it go. A one-shot order that starts and ends itself. Declines (waits) with :no-mob or :no-destination until both are given; a started job always passes. A body that carries no
+  lead first gets one (phase :get-lead, a jobs.items.obtain child: withdrawn from a chest it has seen or crafted); when none
+  can be got the job ends :no-lead at once, it never waits for one.
 
   Phases, each by a child job:
   - :leash: jobs.animals.leash (radius :radius).
@@ -47,6 +50,7 @@
   - :tie-failed: the post did not take the animal (still on the lead).
   - :timeout: :timeout-s from the first round (a cut walk leaves the animal on the lead).
   - :no-fence.
+  - :no-lead: no lead carried and obtain could not get one (the :text says why).
   - The reason of jobs.animals.leash (:no-lead, :none, :unreachable, :refused, :all-leashed, :timeout) when no
     animal got on the lead, or of jobs.animals.unleash (:refused, :unreachable, :none, :timeout) when the lead would not come off.")
 
@@ -67,23 +71,23 @@
   (some #(= "lead" (:name %)) (u/inventory (:primitives c))))
 
 (defn check
-  "A started job passes. Else :mob, a destination (:pos or :fence) and a lead in the inventory are needed: a missing
-  one waits with that reason."
+  "A started job passes. Else :mob and a destination (:pos or :fence) are needed: a missing one waits with that reason.
+  A missing lead is fetched, never waited for."
   [c]
   (let [{:keys [mob pos fence]} (:args c)]
     (cond
       (:started (ctx/mem c)) true
       (nil? mob) (ctx/wait c :no-mob)
       (not (or pos fence)) (ctx/wait c :no-destination)
-      (not (lead-carried? c)) (ctx/wait c :no-lead)
       :else true)))
 
 (defn stop-text
   "The words for a leading that ended without success."
   [c reason]
   (let [{:keys [mob radius]} (:args c)]
-    (if (= :none reason)
-      (str "no " mob " seen within " radius " blocks to lead")
+    (case reason
+      :none (str "no " mob " seen within " radius " blocks to lead")
+      :no-lead (str "no lead carried and none could be got" (some->> (:lead-why (ctx/mem c)) (str ": ")))
       (str "leading stopped: " (name reason)))))
 
 (defn finish!
@@ -116,6 +120,19 @@
 
 (defn set-phase! [c phase]
   (ctx/update-mem! c assoc :phase phase))
+
+(defn ^:async get-lead!
+  "Without a lead: a jobs.items.obtain child gets one (chest or craft). Any child failure ends :no-lead."
+  [c]
+  (let [oargs {:item "lead" :count 1}
+        r (await (ctx/call-child c :obtain 'jobs.items.obtain oargs))]
+    (cond
+      (= :continue r) :continue
+      (= :declined r) (do (ctx/update-mem! c assoc :lead-why (some-> (b/child-wait c :obtain 'jobs.items.obtain oargs) :reason name))
+                          (finish! c :no-lead))
+      (lead-carried? c) (do (set-phase! c :leash) :continue)
+      :else (do (ctx/update-mem! c assoc :lead-why (some-> (ctx/child-result c :obtain) :reason name))
+                (finish! c :no-lead)))))
 
 (defn ^:async leash! [c]
   (let [{:keys [mob radius]} (:args c)
@@ -407,7 +424,8 @@
       (cond
         (and (nil? phase) fence (not (fence-block? c))) (finish! c :no-fence)
         (>= (- now started) (* 1000 timeout-s)) (finish! c :timeout)
-        (nil? phase) (do (set-phase! c :leash) :continue)
+        (nil? phase) (do (set-phase! c (if (lead-carried? c) :leash :get-lead)) :continue)
+        (= :get-lead phase) (await (get-lead! c))
         (= :leash phase) (await (leash! c))
         (and (#{:gather :arrive} phase) (nil? a)) (if (= :lost (escort-problem c safe-gap))
                                                     (do (ctx/update-mem! c assoc :still-led false) (finish! c :lost))
