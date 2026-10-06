@@ -1,0 +1,2 @@
+;; ProbeNight live cases for the one night handler (card 3db292e6): idle, the :night trigger is added with tools/triggers.mjs once the body stands in its room
+{:register [] :queue []}
