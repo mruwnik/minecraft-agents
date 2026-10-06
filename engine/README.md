@@ -349,7 +349,7 @@ Built-in triggers, in the order of `triggers/defaults.edn` (the default register
 | `:hungry` | food below `:food` 6 plus one per missing hp (at most 18: below 18 nothing heals); or hurt, below 18 and common food carried; or health below `:health` 7 and food carried (eats to 20) | `get-food` | 90 s |
 | `:night` | night, awake, and a bed to use or carried, someone asleep, unroofed, or shut in its shelter; by day shut in its shelter or a bed it put down outside its zone still stands | `survival.night` | 10 s |
 | `:door-left` | a door a walk opened and meant to shut was last seen open 10 s after (never read through a wall) | `maintenance.shut-doors` | 5 s |
-| `:stuck` | the last 4 `:moved` entries all moved under 1.5 blocks, newest under 60 s old, body really held, feet cell not wedged | `maintenance.unstick` | 60 s |
+| `:stuck` | the last 4 `:moved` entries all moved under 1.5 blocks, newest under 60 s old, body really held, feet cell not wedged (unless unwedge gave up on it) | `maintenance.unstick` | 60 s |
 | `:died` | a `:died` under 5 minutes old with a newer `:respawned` and no `:recovered` | `recover-drops` | 30 s |
 | `:inventory-nearly-full` | at most `:free` 2 of 36 main and hotbar slots empty | `storage.make-room` | 120 s |
 | `:scaffold-left` | the scaffold ledger holds blocks whose job is gone | `access.cleanup` | stop |
