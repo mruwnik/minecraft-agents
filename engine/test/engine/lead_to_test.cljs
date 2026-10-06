@@ -151,11 +151,13 @@
           (is (= :lead-broke (:reason (done-event s))))
           (is (false? (:gathered (done-event s)))))))))
 
-(deftest a-pull-still-going-after-20-s-is-given-up-and-its-child-dropped
+(deftest a-pull-that-keeps-falling-short-is-given-up-by-its-go-to-in-one-call
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p eng clock] :as s} (h/setup {:floor tu/walk-floor :inventory lead :entities [(cow 1 3 {:trail 6})]})
+        ;; go-to's call is a whole attempt: three walks gaining under a block each end it inside one tick, so the
+        ;; pull is no longer carried across ticks for the 20 s limit to cut
+        (let [{:keys [p eng] :as s} (h/setup {:floor tu/walk-floor :inventory lead :entities [(cow 1 3 {:trail 6})]})
               steers (atom 0)
               pull-slot #(get-in (mem/job-mem (mem/view (:store eng)) "j1" []) [:children :pull])]
           (.override (.-world p) "steer"
@@ -166,17 +168,12 @@
                              (fake/swap-self! p update-in [:pos 0] + 0.5)
                              (js/Promise.resolve #js {:status "timeout" :pose #js {}})))))
           (core/submit! eng (list 'jobs.animals.lead-to {:mob "cow" :pos goal}) {})
-          (await (run-ticks s 6 700))
-          (is (some? (pull-slot)) "a pull is in progress")
-          (let [before @steers]
-            (swap! clock + 25000)
-            (await (core/tick! eng))
-            (is (= before @steers) "the late pull is not walked again")
-            (is (nil? (pull-slot)) "its child is dropped")
-            (await (run-ticks s 10 700))
-            (is (finished? s))
-            (is (= 1 (count (events-of s :lead-to.gather-short))))
-            (is (false? (:gathered (done-event s))))))))))
+          (await (run-ticks s 20 700))
+          (is (pos? @steers) "a pull was walked")
+          (is (nil? (pull-slot)) "its child is dropped")
+          (is (finished? s))
+          (is (= 1 (count (events-of s :lead-to.gather-short))))
+          (is (false? (:gathered (done-event s)))))))))
 
 (deftest a-cow-lost-during-the-pull-is-lost
   (async done

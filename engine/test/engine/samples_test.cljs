@@ -74,15 +74,19 @@
           (is (= [] (:list (core/state eng))))
           (is (some #(= :unreachable (:kind %)) @seen)))))))
 
-(deftest go-to-continues-on-partial
+(deftest go-to-gives-up-at-the-edge-and-a-new-call-goes-on
   (async done
     (tu/run-async done
       (fn ^:async t []
-        ;; the floor ends at x 40 and the goal's chunk is not loaded: the first round walks to the edge and is not done
-        (let [{:keys [eng p]} (setup {:floor [-30 -10 40 10]})]
-          (core/submit! eng (list 'jobs.movement.go-to {:pos {:x 60 :y 64 :z 0}}) {})
+        ;; the floor ends at x 40 and the goal's chunk is not loaded: one call walks to the edge, finds no way on and gives up
+        (let [{:keys [eng p]} (setup {:floor [-30 -10 40 10]})
+              goal (list 'jobs.movement.go-to {:pos {:x 60 :y 64 :z 0}})]
+          (core/submit! eng goal {})
           (await (core/tick! eng))
-          (is (= ["j1"] (:list (core/state eng))))
+          (is (= [] (:list (core/state eng))))
+          (is (<= 35 (first (:pos (fake/self p)))) "the body is at the edge")
           (doseq [[k v] (tu/floor 41 -10 60 10)] (fake/set-block! p (fake/parse-cell k) v))
+          (core/submit! eng goal {})
           (await (core/tick! eng))
-          (is (= [] (:list (core/state eng)))))))))
+          (is (= [] (:list (core/state eng))))
+          (is (<= 59 (first (:pos (fake/self p)))) "the second call arrived"))))))
