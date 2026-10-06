@@ -30,8 +30,11 @@ if [ "${1:-}" = --step ]; then
   # A commit from before ef81c1c6 compiles under the retired 2-slot `compile` kind and never stops its servers: its compile and tests run
   # under MAIN's `server` slot (accounting and memory floor from main's res-slot), and its servers are stopped when the step ends.
   legacy=0; grep -q 'res-slot" compile --' "$wt/tools/compile" 2>/dev/null && legacy=1
-  slotted() { if [ $legacy = 1 ]; then "$repo/tools/res-slot" server -- "$@"; else "$@"; fi; }
+  # run in the background and wait, so INT/TERM interrupts the wait at once (the trap below kills the command and stops the legacy servers)
+  cmd=""
+  slotted() { if [ $legacy = 1 ]; then "$repo/tools/res-slot" server -- "$@" & else "$@" & fi; cmd=$!; wait $cmd; local r=$?; cmd=""; return $r; }
   stop_legacy() { [ $legacy = 1 ] || return 0; for p in engine dashboard; do "$wt/tools/compile" $p --stop >/dev/null 2>&1; done; }
+  trap '[ -n "$cmd" ] && kill "$cmd" 2>/dev/null; stop_legacy; exit 130' INT TERM
   # done: report the step's result and progress, then exit with its code
   done_step() { stop_legacy; result "$rname" "$1"; emit "{\"event\":\"progress\",\"done\":$n,\"total\":$total,\"unit\":\"steps\"}"; exit "$2"; }
   event "step $n/$total $rev: compiling"
@@ -77,7 +80,8 @@ good_sha="$(git -C "$repo" rev-parse --verify -q "$good^{commit}")" || { echo "t
 work="$(mktemp -d "${TMPDIR:-/tmp}/mc-bisect-XXXXXX")"
 wt="$work/wt"; child=""
 cleanup() {
-  [ -n "$child" ] && kill "$child" 2>/dev/null
+  # TERM the bisect's whole group (own session): each step's trap stops its legacy servers; wait for that before the worktree goes
+  [ -n "$child" ] && { kill -TERM -- "-$child" 2>/dev/null; wait "$child" 2>/dev/null; }
   [ -d "$wt" ] && "$wt_sh" --remove "$wt" >/dev/null 2>&1
   git -C "$repo" worktree prune
   rm -rf "$work"
@@ -105,7 +109,7 @@ count="$(git rev-list --count "$good_sha..$bad_sha")"; BISECT_TOTAL=1; while [ $
 export BISECT_TOTAL
 emit "{\"event\":\"plan\",\"total\":$BISECT_TOTAL}"
 echo "test-bisect: ${nss[*]} between $(git rev-parse --short "$good_sha") (good) and $(git rev-parse --short "$bad_sha") (bad)"
-BISECT_WORK="$work" git bisect run "$self" --step "${nss[@]}" > "$work/run.log" 2>&1 &
+BISECT_WORK="$work" setsid git bisect run "$self" --step "${nss[@]}" > "$work/run.log" 2>&1 &
 child=$!
 tail -f "$work/run.log" --pid=$child 2>/dev/null | grep --line-buffered -E '^(step |@@test )' &
 tailpid=$!
