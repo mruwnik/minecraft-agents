@@ -391,6 +391,20 @@
              id
              (throw (js/Error. (str "submit refused: " (str/trim out))))))))
 
+(defn rcon-until!
+  "Sends cmd every every-s seconds until an event matching pattern (since t0) is logged or limit-s passes; resolves to true
+  when the event came. For shoves that must outlast a job whose pace is not fixed."
+  [opts origin offset t0 cmd {:keys [until every-s limit-s]}]
+  (let [stop (+ (js/Date.now) (* 1000 limit-s))
+        text (f/substitute cmd (:body opts) origin)]
+    (letfn [(tick []
+              (if (some #(and (>= (:time-ms % 0) t0) (x/matches? until %)) (read-events-from (events-file opts) offset))
+                (js/Promise.resolve true)
+                (if (> (js/Date.now) stop)
+                  (js/Promise.resolve false)
+                  (.then (rcon! [text]) #(.then (sleep (* 1000 every-s)) tick)))))]
+      (tick))))
+
 (defn run-steps!
   "Runs the act steps in order; resolves to the set of submitted job ids."
   [opts origin c offset t0]
@@ -400,6 +414,7 @@
                          :summon (.then (rcon! [(f/summon-command origin step)]) (constantly ids))
                          :rcon (.then (rcon! [(f/substitute a (:body opts) origin)]) (constantly ids))
                          :kill-body (.then (rcon! [(str "kill " (:body opts))]) (constantly ids))
+                         :rcon-until (.then (rcon-until! opts origin offset t0 a b) (constantly ids))
                          :wait-s (.then (sleep (* 1000 a)) (constantly ids))
                          :time-set (.then (set-time! opts a (str (:id c) " step"))
                                           (fn [ok] (if ok ids (throw (js/Error. "a :time-set step needs --allow-time")))))

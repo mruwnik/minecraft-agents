@@ -113,7 +113,7 @@
           {:entries {} :policies {}}
           entries))
 
-(def step-kinds #{:summon :rcon :job :wait-s :await :kill-body :time-set})
+(def step-kinds #{:summon :rcon :rcon-until :job :wait-s :await :kill-body :time-set})
 (def after-kinds #{:block :not-block :body-near :item :entities})
 
 (defn problems
