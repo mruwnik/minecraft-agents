@@ -115,16 +115,16 @@ if [ -f "$msg" ]; then message="$(cat "$msg")"; else message="$msg"; fi
 trailer='Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>'
 grep -qiE '^Co-Authored-By:' <<<"$message" || message="$message"$'\n\n'"$trailer"
 
-# Lock with backoff. The lock dir holds the owner's pid; a lock whose owner is dead is reclaimed (moved aside first, so only one waiter wins).
+# Lock with backoff. The lock dir holds the owner's pid; a lock whose owner is dead is reclaimed. Reclaimers and the owner's release take turns under a flock guard (the kernel frees it on death), so the owner read, the death check and the removal see one lock: nobody removes a fresh one.
 reclaim_dead() {
-  local owner; owner="$(cat "$LOCK/pid" 2>/dev/null)" || return 1
-  [[ "$owner" =~ ^[0-9]+$ ]] && ! kill -0 "$owner" 2>/dev/null || return 1
-  local aside="$LOCK.dead.$$"
-  mv "$LOCK" "$aside" 2>/dev/null || return 1
-  if [ "$(cat "$aside/pid" 2>/dev/null)" = "$owner" ]; then rm -rf "$aside"; return 0; fi
-  mv "$aside" "$LOCK" 2>/dev/null || rm -rf "$aside" # we moved a fresh lock: put it back
-  return 1
+  (
+    flock 8
+    owner="$(cat "$LOCK/pid" 2>/dev/null)" || exit 1
+    [[ "$owner" =~ ^[0-9]+$ ]] && ! kill -0 "$owner" 2>/dev/null || exit 1
+    rm -rf "$LOCK"
+  ) 8>"$LOCK.guard"
 }
+release_lock() { ( flock 8; rm -rf "$LOCK" ) 8>"$LOCK.guard"; }
 start=$SECONDS; delay=0.2
 until mkdir "$LOCK" 2>/dev/null; do
   reclaim_dead && continue
@@ -137,7 +137,7 @@ staged_by_me=0
 cleanup() {
   local rc=$?
   if [ "$staged_by_me" = 1 ] && [ "${committed:-0}" != 1 ]; then unstage; fi
-  rm -rf "$LOCK"
+  release_lock
   exit $rc
 }
 unstage() {

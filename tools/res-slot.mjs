@@ -38,6 +38,7 @@ let runSeq = 0
 const tryRun = (kind, i, cmd) => new Promise((res) => {
   // The wrapper creates the marker only once it holds the lock, so a 213 with no marker is flock's "slot taken", and one with a marker is the command's own exit code.
   const marker = `${lockFile(kind, i)}.run.${process.pid}.${runSeq++}`
+  fs.rmSync(marker, { force: true }) // a stale one from a killed parent whose pid was reused
   const p = spawn('flock', slotArgs(kind, i, cmd, 213, marker), { stdio: 'inherit' })
   p.on('close', (code, sig) => {
     const started = fs.existsSync(marker)

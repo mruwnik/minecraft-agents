@@ -1,5 +1,6 @@
 (ns world-test.runner-test
   (:require [cljs.test :refer [deftest is async]]
+            ["child_process" :as cp]
             ["fs" :as fs]
             ["os" :as os]
             ["path" :as path]
@@ -107,3 +108,26 @@
     (is (= 2 (count (cljs.reader/read-string (fs/readFileSync file "utf8")))))
     (r/write-results! {} [{:status :pass}])
     (fs/unlinkSync file)))
+
+(def contender-sh
+  "Takes the lease file 6 times in turn (reclaiming a dead holder through unlink-if-script); every other time it
+  leaves a dead PID behind instead of releasing. Two inside the critical section at once is logged."
+  (str "set -C; take() { echo $$ 2>/dev/null > \"$L\"; }
+        un() { flock \"$L.guard\" sh -c '" r/unlink-if-script "' sh \"$L\" \"$1\"; }
+        for n in 1 2 3 4 5 6; do
+          until take; do h=$(cat \"$L\" 2>/dev/null); case \"$h\" in ''|*[!0-9]*) ;; *) kill -0 \"$h\" 2>/dev/null || un \"$h\";; esac; done
+          mkdir \"$L.cs\" 2>/dev/null || echo x >> \"$L.bad\"
+          sleep 0.002; rmdir \"$L.cs\"
+          if [ $((n % 2)) = 0 ]; then un $$; else set +C; echo 99999999 > \"$L\"; set -C; fi
+        done"))
+
+(deftest racing-reclaimers-of-a-dead-holder-never-share-the-lock
+  (async done
+    (let [dir (fs/mkdtempSync (path/join (os/tmpdir) "wt-reclaim-"))
+          lease (path/join dir "lease")
+          run (fn [] (js/Promise. (fn [res] (.on (cp/spawn "bash" #js ["-c" contender-sh] #js {:env (js/Object.assign #js {"L" lease} js/process.env)}) "close" res))))]
+      (fs/writeFileSync lease "99999999")
+      (-> (js/Promise.all #js [(run) (run) (run) (run)])
+          (.then (fn [_]
+                   (is (not (fs/existsSync (str lease ".bad"))) "never two holders at once")))
+          (.finally (fn [] (fs/rmSync dir #js {:recursive true :force true}) (done)))))))

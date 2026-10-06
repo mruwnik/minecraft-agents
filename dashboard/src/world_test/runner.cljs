@@ -292,16 +292,21 @@
 
 (defn read-holder [i] (read-pid-file (lease-file i)))
 
+(def unlink-if-script
+  "sh script ($1 file, $2 expected content): removes the file only while it holds exactly that."
+  "cur=$(cat \"$1\" 2>/dev/null) || exit 1; [ \"$cur\" = \"$2\" ] && rm -f \"$1\"")
+
+(defn unlink-if!
+  "Removes file only while it still holds `content` (\"\" = empty). The check and the removal run under a flock
+  guard beside the file that every reclaim and release takes, so a fresh lock taken meanwhile is never removed
+  (a creator needs the file absent, and only a guarded removal makes it so)."
+  [file content]
+  (zero? (.-status (cp/spawnSync "flock" #js [(str file ".guard") "sh" "-c" unlink-if-script "sh" file content]))))
+
 (defn reclaim-file!
-  "Removes file only while it still holds `holder` (a dead PID or :empty): it is renamed aside first, so of several
-  reclaimers one wins, and a fresh lease taken meanwhile is linked back."
+  "Removes file only while it still holds `holder` (a dead PID or :empty)."
   [file holder]
-  (let [aside (str file ".reclaim." (.-pid js/process))]
-    (when (try (fs/renameSync file aside) true (catch :default _ false))
-      (if (= holder (read-pid-file aside))
-        (try (fs/unlinkSync aside) (catch :default _ nil))
-        (do (try (fs/linkSync aside file) (catch :default _ nil))
-            (try (fs/unlinkSync aside) (catch :default _ nil)))))))
+  (unlink-if! file (if (= :empty holder) "" (str holder))))
 
 (defn acquire-plot!
   "Leases the first free plot index from `first` (exclusive lease file holding this PID; leases of dead PIDs are
@@ -318,8 +323,7 @@
    {:pid (.-pid js/process) :first first :total total}))
 
 (defn release-plot! [i]
-  (when (= (.-pid js/process) (read-holder i))
-    (try (fs/unlinkSync (lease-file i)) (catch :default _ nil))))
+  (unlink-if! (lease-file i) (str (.-pid js/process))))
 
 ;; ------------------------------------------------------------------ time lock
 
@@ -334,7 +338,7 @@
       (let [made (try (fs/writeFileSync time-guard-file (str pid) #js {:flag "wx"}) true
                       (catch :default e (if (= "EEXIST" (.-code e)) false (throw e))))]
         (if made
-          (try (thunk) (finally (try (fs/unlinkSync time-guard-file) (catch :default _ nil))))
+          (try (thunk) (finally (unlink-if! time-guard-file (str pid))))
           (let [h (read-pid-file time-guard-file)
                 age-ms (try (- (js/Date.now) (.-mtimeMs (fs/statSync time-guard-file))) (catch :default _ 0))]
             (when (or (and (number? h) (not (pid-alive? h))) (and (= :empty h) (> age-ms 2000)))

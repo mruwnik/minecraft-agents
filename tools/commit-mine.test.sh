@@ -165,13 +165,30 @@ check "1000-file commit: output capped at 20 lines" "$(wc -l <<<"$out")" 20
 echo z > f.txt
 mkdir .git/commit-lock; echo 99999999 > .git/commit-lock/pid
 out=$(tools/commit-mine --card c -m dead --expect-lines 2 f.txt 2>&1); check "dead-owner lock reclaimed exit" "$?" 0
-check "lock gone after commit" "$(ls .git | grep -c '^commit-lock')" 0
+check "lock gone after commit" "$(ls .git | grep -c '^commit-lock$')" 0
 echo zz > f.txt
 mkdir .git/commit-lock; echo $$ > .git/commit-lock/pid
 t0=$SECONDS
 out=$(COMMIT_LOCK_TIMEOUT=3 tools/commit-mine --card c -m live --expect-lines 2 f.txt 2>&1); rc=$?
 check "live-owner lock times out exit" "$rc" 4
 check "timeout is in seconds" "$((SECONDS - t0 >= 3 && SECONDS - t0 <= 6))" 1
-check "foreign lock left in place" "$(ls .git | grep -c '^commit-lock')" 1
+check "foreign lock left in place" "$(ls .git | grep -c '^commit-lock$')" 1
 rm -rf .git/commit-lock; git checkout -q f.txt
+# Reclaim race: 3 contenders take the lock in turn after a dead holder; two inside the critical section at once is a violation.
+rdir=$(mktemp -d); LOCK=$rdir/lock; eval "$(sed -n '/^reclaim_dead() {/,/^}/p;/^release_lock() /p' tools/commit-mine)"; export LOCK
+contender() {
+  local n
+  for n in 1 2 3 4 5; do
+    until mkdir "$LOCK" 2>/dev/null; do reclaim_dead && continue; sleep 0.001; done
+    echo $BASHPID > "$LOCK/pid"
+    mkdir "$rdir/cs" 2>/dev/null || echo x >> "$rdir/violations"
+    sleep 0.002; rmdir "$rdir/cs" 2>/dev/null; release_lock
+  done
+}
+for round in $(seq 1 60); do
+  mkdir "$LOCK"; echo 99999999 > "$LOCK/pid"
+  contender & contender & contender & contender & wait
+done
+check "reclaim race: no two holders" "$(cat "$rdir/violations" 2>/dev/null | wc -l)" 0
+rm -rf "$rdir"; unset LOCK
 exit $fail
