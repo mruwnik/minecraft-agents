@@ -163,3 +163,24 @@
     (is (= :bad-by (:reason (command eng "y" :cancel-all {:by 7}))))
     (is (= :bad-field (:reason (command eng "z" :cancel-all {:id "j1"}))) ":cancel-all takes no id")
     (core/shutdown! eng)))
+
+(deftest cancel-refuses-a-reflex-job-which-belongs-to-its-trigger
+  (async done
+    (tu/run-async done
+      (fn ^:async run []
+        (let [p (tu/fake {})
+              jobs {'wait {:args {:ms {:default 1000}} :check (constantly true)
+                           :round (fn ^:async round [ctx] (await (ctx/act ctx :wait #js {:ms 1000})) :continue)}}
+              eng (core/create {:primitives p :jobs jobs :dir (tu/tmp-dir)
+                                :triggers {:probe {:name :probe :job '(wait) :when (fn [_ _ _] true)}}
+                                :events (events/make {:stdout? false})})
+              _ (core/register-reflex! eng {:trigger :probe})
+              round (core/tick! eng)
+              id (:id (core/running eng))
+              reflex (get-in (core/state eng) [:instances id :reflex])
+              r (command eng "cancel-reflex" :cancel {:id id})]
+          (is (= :probe reflex) "the running job is the reflex's")
+          (is (= [false :reflex-job] [(:ok r) (:reason r)]))
+          (is (some? (get-in (core/state eng) [:instances id])) "the instance is untouched")
+          (core/shutdown! eng)
+          (await round))))))
