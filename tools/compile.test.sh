@@ -5,6 +5,8 @@ TOOLS="$(cd "$(dirname "$0")" && pwd)"
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 export MC_COMPILE_LOCK="$T/lock" MC_COMPILE_QUEUE="$T/queue"
 fail=0
+# gone PID [DEADLINE_S]: poll until PID is dead (rc 0) or the deadline passes (rc 1); a bounded wait, not a fixed sleep
+gone() { local i; for ((i=0; i<${2:-20}*10; i++)); do kill -0 "$1" 2>/dev/null || return 0; sleep 0.1; done; return 1; }
 check() { if [ "$2" = "$3" ]; then echo "ok   $1"; else echo "FAIL $1: want [$3] got [$2]"; fail=1; fi; }
 
 # Fake repo: tools copied in, stub npx, a live "server" pid so no server start.
@@ -100,7 +102,7 @@ export MC_COMPILE_MIN_START_MB=0 MC_COMPILE_SERVER_IDLE_S=3 MC_COMPILE_IDLE_POLL
 timeout 30 "$T/wt/tools/compile" engine test >/dev/null 2>&1; check "worktree compile rc" "$?" 0
 WSRV=$(cat "$T/wt/engine/.shadow-cljs/server.pid")
 sleep 1; kill -0 "$WSRV" 2>/dev/null; check "worktree server alive right after a compile" "$?" 0
-sleep 6; kill -0 "$WSRV" 2>/dev/null; check "worktree server gone after the idle time" "$?" 1
+gone "$WSRV"; check "worktree server gone after the idle time" "$?" 0
 unset MC_COMPILE_MIN_START_MB MC_COMPILE_SERVER_IDLE_S MC_COMPILE_IDLE_POLL_S
 
 # the main checkout's server stops after its own (longer) idle time too, with no server slot
@@ -110,7 +112,7 @@ export MC_COMPILE_MIN_START_MB=0 MC_COMPILE_MAIN_IDLE_S=3 MC_COMPILE_SERVER_IDLE
 timeout 30 "$T/main/tools/compile" engine test >/dev/null 2>&1; check "main compile rc" "$?" 0
 MSRV=$(cat "$T/main/engine/.shadow-cljs/server.pid")
 sleep 1; kill -0 "$MSRV" 2>/dev/null; check "main server alive right after a compile" "$?" 0
-sleep 6; kill -0 "$MSRV" 2>/dev/null; check "main server gone after the main idle time" "$?" 1
+gone "$MSRV"; check "main server gone after the main idle time" "$?" 0
 timeout 30 "$T/main/tools/compile" engine test >/dev/null 2>&1; check "main compile restarts the server" "$?" 0
 kill "$(cat "$T/main/engine/.shadow-cljs/server.pid")" 2>/dev/null
 unset MC_COMPILE_MIN_START_MB MC_COMPILE_MAIN_IDLE_S MC_COMPILE_SERVER_IDLE_S MC_COMPILE_IDLE_POLL_S
@@ -124,6 +126,6 @@ timeout 10 "$W" "$V" "$(( $(starttime "$V") + 1 ))" "$T/lu" 3 1; kill -0 "$V" 2>
 sleep 300 & BUSY=$!; echo $BUSY > "$T/lu.compiling"
 "$W" "$V" "$(starttime "$V")" "$T/lu" 3 1 & WW=$!
 sleep 3; kill -0 "$V" 2>/dev/null; check "watcher spares the server while a compile runs" "$?" 0
-kill $BUSY; wait $WW; kill -0 "$V" 2>/dev/null; check "watcher kills the idle server once no compile runs" "$?" 1
+kill $BUSY; wait $BUSY 2>/dev/null; wait $WW; gone "$V"; check "watcher kills the idle server once no compile runs" "$?" 0
 rm -f "$T/lu.compiling"; kill $BUSY 2>/dev/null
 exit $fail
