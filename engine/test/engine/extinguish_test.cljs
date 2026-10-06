@@ -529,6 +529,21 @@
           (is (= 1 (count (calls p "moveTo"))) "after a blocked step, later passes go straight to go-to")
           (is (re-find #"walled in" (:text (first (of-kind seen :extinguish_stuck))))))))))
 
+(deftest failures-scattered-between-arrivals-do-not-stop-a-run-that-is-escaping
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen go-tos]} (setup-blocked (fn [c p n]
+                                                           (when (= 6 n) (put-out! p))
+                                                           ((:result c) (if (#{3 6} n)
+                                                                          {:status :done :arrived true}
+                                                                          {:status :stopped :arrived false :reason :unreachable :text "walled in"}))
+                                                           :done))]
+          (await (run-until-empty eng 10))
+          (is (= 6 @go-tos))
+          (is (= [] (of-kind seen :extinguish_stuck)))
+          (is (= 1 (count (of-kind seen :completed)))))))))
+
 (deftest a-go-to-that-arrives-with-the-fire-still-on-is-bounded
   (async done
     (tu/run-async done

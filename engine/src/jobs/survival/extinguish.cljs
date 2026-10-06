@@ -279,7 +279,7 @@
 (defn ^:async escape!
   "The emergency step is blocked (boxed in, perhaps by own covers): one go-to to pos, which plans the way and, when
   shut in, pillars, stairs or digs out. :again while it works or when it arrives; a go-to that fails or is declined
-  counts toward stuck!, which carries its reason."
+  counts toward stuck!, which carries its reason; an arrival resets that count."
   [c pos]
   (ctx/hold-still! c nil)
   (ctx/update-mem! c assoc :blocked true)
@@ -288,7 +288,7 @@
     (cond
       (clear? c) :done
       (= :continue r) :again
-      (and (= :done r) (:arrived res)) :again
+      (and (= :done r) (:arrived res)) (do (ctx/update-mem! c dissoc :failures) :again)
       :else (stuck! c (str "the way to a safe cell is blocked" (some->> (:text res) (str ": ")))))))
 
 (defn ^:async pass!
