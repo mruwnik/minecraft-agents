@@ -288,7 +288,10 @@
         (let [s (await (search! {:target "diamond_block" :max-distance 20 :max-legs 0}
                                 {:blocks {"0,64,5" "diamond_block"} :cone? true}
                                 400 (fn [{:keys [p]}]
-                                      (perception/pass! (aget p "perception"))
-                                      (fake/set-block! p {:x 0 :y 64 :z 5} "air"))))]
+                                      ;; mined after the body's last look, before sense reads memory: no sight pass corrects it
+                                      (let [seen-blocks (aget p "seenBlocks")]
+                                        (aset p "seenBlocks" (fn [q]
+                                                               (fake/set-block! p {:x 0 :y 64 :z 5} "air")
+                                                               (seen-blocks q)))))))]
           (is (nil? (event-of s :search.done)))
           (is (not-any? #(= :seen (:kind %)) (file-notes s))))))))
