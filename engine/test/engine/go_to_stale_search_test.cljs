@@ -20,40 +20,48 @@
 (def goal [105 64 24])
 
 (defn ^:async run-go-to!
-  "go-to to goal from (44 64 24) with a budget of 16 expansions a round; after rounds ticks the sealed cell's blocks
-  are added (their columns load), when load? is true. {:out :ticks :eng :p}."
+  "go-to to goal from (44 64 24) with a budget of 16 expansions a search slice; when load? is true, the sealed cell's
+  blocks are added (their columns load) at the first search slice after the body walked to the loaded edge (x 47), in
+  the same go-to call. {:out :ticks :eng :p}."
   [load?]
   (let [budget walk/round-budget
         chunk walk/chunk-expansions
+        plan-walk walk/plan-walk-budgeted!
         {:keys [eng p] :as s} (gt/setup {:blocks floor-blocks :self {:pos {:x 44.5 :y 64 :z 24.5}}})
         out (atom :not-done)
+        loaded (atom false)
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (gt/recording-parent out {:pos goal :range 0})))]
     (reset! walk/searches {})
     (set! walk/round-budget 16)
     (set! walk/chunk-expansions 16)
+    (set! walk/plan-walk-budgeted!
+          (fn [& args]
+            (when (and load? (not @loaded) (= 47 (js/Math.floor (first (gt/at p)))))
+              (reset! loaded true)
+              (swap! (fake/state p) update :blocks merge (fake/cells sealed-cell identity)))
+            (apply plan-walk args)))
     (core/submit! eng '(recording-parent) {})
-    (let [early (await (gt/tick-out! eng 3))]
-      (when load?
-        (swap! (fake/state p) update :blocks merge (fake/cells sealed-cell identity)))
-      (let [later (await (gt/tick-out! eng 400))]
-        (set! walk/round-budget budget)
-        (set! walk/chunk-expansions chunk)
-        (reset! walk/searches {})
-        (assoc s :eng eng :p p :out out :ticks (+ early later))))))
+    (let [ticks (await (gt/tick-out! eng 400))]
+      (set! walk/plan-walk-budgeted! plan-walk)
+      (set! walk/round-budget budget)
+      (set! walk/chunk-expansions chunk)
+      (reset! walk/searches {})
+      (assoc s :eng eng :p p :out out :ticks ticks :loaded @loaded))))
 
-;; the goal's land loads while the search goes on: the next round begins a new search over it, whose goal flood proves
+;; the goal's land loads while the search goes on: the next search slice begins a new search over it, whose goal flood proves
 ;; the cell walled in, and go-to gives up :goal-enclosed without walking
 (deftest a-search-begun-with-the-goal-unloaded-starts-again-once-it-loads
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p ticks]} (await (run-go-to! true))]
+        (let [{:keys [out p ticks loaded]} (await (run-go-to! true))]
+          (is loaded "the goal loaded while go-to searched")
           (is (= {:arrived false :reason :unreachable :why :goal-enclosed} (select-keys @out [:arrived :reason :why])))
-          (is (< ticks 20) "ends in the round after the goal loads, not after the old search")
+          (is (= 1 ticks) "ends in the same call, not after the old search")
           (is (= 47 (js/Math.floor (first (gt/at p))))
               "the body walked to the loaded edge (its frontier) before the goal loaded, and no farther"))))))
 
-;; the goal stays unloaded: the kept search goes on as before (no new search every round)
+;; the goal stays unloaded: the kept search goes on as before (no new search every slice)
 (deftest a-search-whose-goal-stays-unloaded-goes-on
   (async done
     (tu/run-async done

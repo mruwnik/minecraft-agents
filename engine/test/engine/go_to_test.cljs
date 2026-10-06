@@ -411,3 +411,142 @@
         (let [{:keys [out]} (await (go-prepped! {:self {:pos {:x 0.5 :y 64 :z -9.2}} :blocks {"0,63,-9" "stone"}}
                                                 {:pos [0 64 -9] :range 0} identity))]
           (is (true? (:arrived @out)) (pr-str @out)))))))
+
+;; ------------------------------------------------------- one call is one whole attempt (docs/job-rounds-design.md)
+
+(defn returns-parent
+  "A parent that calls go-to with args as its child, keeps every call's return in returns and the child's result in out.
+  seed, when given, is put in the child's memory before its first call (a stale hint left by an earlier round)."
+  [out returns args seed]
+  {:check (constantly true)
+   :round (fn ^:async returns-round [c]
+            (when (and seed (empty? @returns) (nil? (get-in (ctx/mem c) [:children :kid])))
+              (ctx/update-mem! c assoc-in [:children :kid] (merge {:args args :children {}} seed)))
+            (let [r (await (ctx/call-child c :kid 'jobs.movement.go-to args))]
+              (swap! returns conj r)
+              (when (= :done r) (reset! out (ctx/child-result c :kid)))
+              r))})
+
+(defn ^:async go-returns!
+  "Run go-to with args under returns-parent over world; {:eng :p :seen :out :returns}."
+  ([world args] (go-returns! world args nil))
+  ([world args seed]
+   (let [{:keys [eng] :as s} (setup world)
+         out (atom :not-done)
+         returns (atom [])
+         eng (assoc eng :jobs (assoc (:jobs eng) 'returns-parent (returns-parent out returns args seed)))]
+     (core/submit! eng '(returns-parent) {})
+     (await (tick-out! eng 30))
+     (assoc s :eng eng :out out :returns returns))))
+
+(deftest one-go-to-call-walks-until-it-gives-up-with-no-continue-between
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out returns eng]} (await (go-returns! (assoc gap-up-world :self {:pos {:x 0 :y 64 :z 1}})
+                                                            {:pos [10 65 1]}))]
+          (is (= :unreachable (:reason @out)))
+          (is (= ["blocked" "blocked" "blocked"] (mapv :status (moved eng))) "three fruitless walks")
+          (is (= [:done] @returns) "all of them in one call"))))))
+
+(deftest one-go-to-call-walks-to-the-frontier-and-on-with-no-continue-between
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:blocks (merge (box 0 63 0 47 63 15 "stone") (box 18 79 8 47 79 8 "stone"))
+                     :self {:pos {:x 18.5 :y 80 :z 8.5}}}
+              {:keys [out returns eng]} (await (go-returns! world {:pos [10 64 8] :range 0}))]
+          (is (= :exhausted (:why @out)))
+          (is (= ["partial" "blocked" "blocked" "blocked"] (mapv :status (moved eng))))
+          (is (= [:done] @returns)))))))
+
+(def joined-world
+  "A floor x 0..6, z 0..60 cut by a wall at x 3 open only at z 59..60: the way from x 0 to x 6 runs 120 blocks round."
+  {:blocks (merge (box 0 63 0 6 63 60 "stone") (box 3 64 0 3 65 58 "stone")) :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+
+(defn ^:async with-small-budget!
+  "Run (f) with a search budget of 32 expansions a slice and go-to's pace! counted in paces; restores both."
+  [paces f]
+  (let [budget walk/round-budget
+        chunk walk/chunk-expansions
+        pace go-to/pace!]
+    (reset! walk/searches {})
+    (set! walk/round-budget 32)
+    (set! walk/chunk-expansions 16)
+    (set! go-to/pace! (fn [] (swap! paces inc) (pace)))
+    (try (await (f))
+         (finally (set! walk/round-budget budget)
+                  (set! walk/chunk-expansions chunk)
+                  (set! go-to/pace! pace)))))
+
+(deftest one-go-to-call-searches-on-paced-until-its-search-ends
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [paces (atom 0)
+              plans (atom 0)
+              plan-walk walk/plan-walk-budgeted!]
+          (set! walk/plan-walk-budgeted! (fn [& args] (swap! plans inc) (apply plan-walk args)))
+          (let [{:keys [out returns]} (await (with-small-budget! paces #(go-returns! joined-world {:pos [6 64 0] :range 0})))]
+            (set! walk/plan-walk-budgeted! plan-walk)
+            (is (= {:arrived true} @out))
+            (is (> @plans 3) "several search slices")
+            (is (= [:done] @returns) "searched and walked in one call")
+            (is (>= @paces (dec @plans)) "every slice that walked nowhere awaited the pace timer")))))))
+
+(deftest a-cut-stops-the-search-loop-and-the-next-call-resumes-and-arrives
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [paces (atom 0)
+              plans (atom 0)
+              plan-walk walk/plan-walk-budgeted!]
+          (set! walk/plan-walk-budgeted! (fn [& args] (swap! plans inc) (apply plan-walk args)))
+          (await
+           (with-small-budget! paces
+             (fn ^:async cut-run []
+               (let [{:keys [eng p] :as s} (setup joined-world)
+                     out (atom :not-done)
+                     returns (atom [])
+                     eng (assoc eng :jobs (assoc (:jobs eng) 'returns-parent
+                                                 (returns-parent out returns {:pos [6 64 0] :range 0} nil)))]
+                 (core/submit! eng '(returns-parent) {})
+                 (let [running (core/tick! eng)]
+                   (loop [i 0]
+                     (when (and (< @paces 2) (< i 400))
+                       (await (js/Promise. (fn [r] (js/setTimeout r 5))))
+                       (recur (inc i))))
+                   (is (>= @paces 2) "the search loop paced")
+                   (takeover/take! eng {:who "claude" :why "cut"})
+                   (let [at-cut @plans]
+                     (await running)
+                     (is (<= @plans (inc at-cut)) "at most the slice in flight ran after the cut")
+                     (is (= [] @returns) "the cut call returned nothing")
+                     (is (= [] (moved eng)) "it walked nowhere")))
+                 (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
+                 (await (tick-out! eng 10))
+                 (is (= {:arrived true} @out) (pr-str @out))
+                 (is (= [6 64 0] (at p)))
+                 (is (= [:done] @returns) "the resumed call arrived in one call")
+                 (is (= [] (events-of s :unreachable)))))))
+          (set! walk/plan-walk-budgeted! plan-walk))))))
+
+(deftest a-call-reads-its-memory-as-a-hint
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; stale counters from an earlier, cut round: a search that went on 99 times and two fruitless walks
+        (let [{:keys [out returns]} (await (go-returns! {:blocks flat} {:pos [10 64 0] :range 0}
+                                                        {:searching 99 :blocked 2 :best 0}))]
+          (is (= {:arrived true} @out) (pr-str @out))
+          (is (= [:done] @returns)))
+        ;; an escalation left in memory by a round a reflex cut, with the body now already at the goal: arrived, and no
+        ;; escalation child is started
+        (let [{:keys [out returns p eng]} (await (go-returns! {:blocks flat} {:pos [1 64 0] :range 1}
+                                                              {:escalation {:step :stair :heading [1 0] :steps 3}
+                                                               :escalations 1 :escalation-from [0 64 0] :planned []}))
+              solid (fn [blocks] (count (remove #(= "air" (val %)) blocks)))]
+          (is (= {:arrived true} @out) (pr-str @out))
+          (is (= [:done] @returns))
+          (is (= (solid flat) (solid (:blocks @(fake/state p)))) "no stair child dug")
+          (is (= [] (mem/entries (mem/view (:store eng)) :tidy)) "nothing in the dig ledger"))))))

@@ -18,14 +18,18 @@
   it (range 0: in that cell, 1: next to it).
   - Refused at once, before any walk: a :pos that is not one (:bad-pos), a body with no pathWorld sensing
     (:unsupported). Both give a :refused warn and {:status :stopped :arrived false :reason <it> :text}.
-  - One round is one plan and one walk (jobs.lib.walk, about 100 ms of search, at most 60 s of walking). A search
-    that needs more rounds walks on toward where it has got to, or not at all while it goes on. A goal in unloaded
-    land is walked toward round by round, and to the edge of loaded land when that is the only way on.
-  - A round that gets more than 1 block nearer is progress. Three rounds in a row without progress give up, and so
+  - One call is one whole attempt: it plans and walks (jobs.lib.walk: slices of about 100 ms of search, walks of at
+    most 60 s each) until it arrives or gives up. A search that needs more slices walks on toward where it has got
+    to, or not at all while it goes on; every iteration awaits a pace-ms timer. A goal in unloaded land is walked
+    toward walk by walk, and to the edge of loaded land when that is the only way on. It returns :continue only while
+    an escalation or put-back child is waiting on the world.
+  - A call starts afresh from the world: its counters are per call, and a saved escalation is dropped when the body
+    is already there (a cut call's memory is a hint).
+  - A walk that gets more than 1 block nearer is progress. Three walks in a row without progress give up, and so
     does a goal the planner proves walled in (:goal-enclosed), at once.
   - :escalate (default true): a body that is shut in (jobs.lib.reach/enclosed?), not in its own shelter, and whose
-    search ran out of land (:exhausted or :goal-enclosed) makes a way instead of giving up, at most 3 times per go-to, one child job per
-    round (jobs.lib.escape/choose): jobs.access.pillar up out of a pit when it carries enough blocks; else
+    search ran out of land (:exhausted or :goal-enclosed) makes a way instead of giving up, at most 3 times per go-to, one child job
+    each (jobs.lib.escape/choose): jobs.access.pillar up out of a pit when it carries enough blocks; else
     jobs.access.clear-path through a wall up to 3 thick toward the goal; else jobs.access.stair up out of a pit or
     toward a higher goal; else a walk to the nearest wall first. Each emits go-to.escalated {:step :why :n}. Once
     through, it puts back what clear-path or stair dug (jobs.blocks.place, the dug block or its drop, when
@@ -38,7 +42,7 @@
     body's feet cell and :near its blocks from the goal. A failed
     escalation adds :escalation {:step :reason ...}, the child's reason or wait.
   - Success is {:arrived true}. The result is also a :result info event.
-  - Every walking round writes a :moved memory entry {:from :to :status :target} (arrived, partial or blocked) for
+  - Every walk writes a :moved memory entry {:from :to :status :target} (arrived, partial or blocked) for
     the stuck trigger.
   - :doors (jobs.lib.pass): :shut (default) opens a shut door, gate or trapdoor with an empty hand, passes and
     shuts what it opened. :leave-open leaves it open. :never treats them as walls. A door in or beside another
@@ -56,10 +60,17 @@
 (def max-blocked 3)
 
 (def max-searching
-  "Rounds in a row whose search is still going on and began afresh (walk/round-budget expansions each) before go-to gives
-  up: a search that goes on from the same cell always ends after the planner's maxNodes; only a body moved off its
-  search's start every round (pushed, drifting) starts afresh each time."
+  "Search slices in a row whose search is still going on and began afresh (walk/round-budget expansions each) before
+  go-to gives up: a search that goes on from the same cell always ends after the planner's maxNodes; only a body moved
+  off its search's start every slice (pushed, drifting) starts afresh each time."
   100)
+
+(def pace-ms "The timer each iteration of a call's loop awaits, so a search loop never starves the event loop." 50)
+
+(defn pace!
+  "A promise that resolves after pace-ms (a timer, never a microtask)."
+  []
+  (js/Promise. (fn [resolve] (js/setTimeout resolve pace-ms))))
 
 (defn check [_c] true)
 
@@ -257,7 +268,7 @@
                                                :text (str "no way out on foot: " (name (:step e)))})
           (ctx/update-mem! c assoc :escalations n :escalation e :escalation-from feet
                            :planned (planned-cells (:primitives c) e feet) :holes-before (count (own-holes c)))
-          :continue))))
+          :again))))
 
 (defn escalate?
   "Whether a give-up with result may escalate instead: the body is shut in (reach/enclosed?) and no door or gate
@@ -286,7 +297,7 @@
                                   (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {}))
                         (= :approach step) (assoc :escalate-now true)
                         (not= :approach step) (assoc :restore-pending true)))
-  :continue)
+  :again)
 
 (defn partly-made?
   "Whether the escalation changed something before it stopped: it dug a cell or moved the body. Then walking again
@@ -375,12 +386,12 @@
         seen (:restore-seen (ctx/mem c) #{})
         e (first (remove #(seen (:cell %)) (own-holes c)))]
     (if (nil? e)
-      (do (restore-done! c) :continue)
+      (do (restore-done! c) :again)
       (let [{:keys [cell was any-of]} e
             args {:pos cell :any-of any-of}
             done! (fn [k entry]
                     (ctx/update-mem! c #(-> % (update :restore-seen (fnil conj #{}) cell) (update k (fnil conj []) entry)))
-                    :continue)
+                    :again)
             skip! (fn [why]
                     (if (= :changed why)
                       (do (tidy/forget-cell! c cell) (done! :changed cell))
@@ -402,7 +413,7 @@
   the body would strand it."
   [c]
   (ctx/update-mem! c #(-> % (dissoc :restore-pending) (assoc :restore-now true)))
-  :continue)
+  :again)
 
 (defn forget-known-land!
   "Forget the land earlier searches knew to their end (walk/known-land) at the go-to's first walking round and after each
@@ -437,12 +448,17 @@
   [c]
   (fn [cell] (foreign? (known/zones c) (ctx/self-name c) cell)))
 
+(defn here?
+  "Whether the body is within range of pos, by its position or by the cell it stands on."
+  [c pos range]
+  (or (u/within? (u/self-pos c) pos range) (u/within? (reach/standing-cell (:primitives c)) pos range)))
+
 (defn ^:async walk! [c pos range doors]
   (let [from (u/self-pos c)
         d (u/dist from pos)
         pw (walk/path-world (:primitives c))]
     (cond
-      (or (u/within? from pos range) (u/within? (reach/standing-cell (:primitives c)) pos range))
+      (here? c pos range)
       (if (:restore-pending (ctx/mem c)) (restore-next! c) (arrived! c))
 
       (nil? pw)
@@ -474,7 +490,7 @@
           (let [n (cond-> (:searching (ctx/mem c) 0) (:fresh walked) inc)]
             (ctx/update-mem! c assoc :searching n)
             (if (< n max-searching)
-              :continue
+              :again
               (give-up! c pos (:blocked (ctx/mem c) 0) :searching {:status :no-path :reason :moved-while-searching})))
 
           :else
@@ -485,17 +501,44 @@
                              :target-best (cond-> tbests target (assoc target (min tdist (get tbests target js/Infinity)))))
             (when (and progress? (:restore-pending (ctx/mem c))) (restore-next! c))
             (if (and (< tries max-blocked) (not= :goal-enclosed (:reason result)))
-              :continue
+              :again
               (await (give-up-or-escalate! c pos tries status result)))))))))
 
-(defn ^:async round [c]
-  (let [parsed (places/parse-pos (:pos (:args c)))
-        pos (:pos parsed)
-        m (ctx/mem c)]
+(defn start-attempt!
+  "Begin a call from the world, with memory as a hint: the counters of an earlier call (cut, or ended :continue) start
+  again, and a saved escalation, or a pending one, is dropped when the body is already there (its holes, if any, are
+  put back as after a made way)."
+  [c pos]
+  (let [m (ctx/mem c)
+        there? (here? c pos (:range (:args c)))]
+    (ctx/update-mem! c #(cond-> (-> % (dissoc :best) (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {}))
+                          (and there? (:escalate-now m)) (dissoc :escalate-now)
+                          (and there? (:escalation m))
+                          (-> (dissoc :escalation :escalation-from :planned :holes-before)
+                              (assoc :restore-pending true))))))
+
+(defn ^:async step!
+  "One iteration of a call: :again to go on in the same call, else what the call returns."
+  [c pos]
+  (let [m (ctx/mem c)]
     (cond
-      (:reason parsed) (refuse! c parsed)
       (:restore-now m) (await (restore-round! c))
       (:escalation m) (await (escalation-round! c pos))
       (:escalate-now m) (do (ctx/update-mem! c dissoc :escalate-now)
                             (await (escalate! c pos nil)))
       :else (await (walk! c pos (:range (:args c)) (some-> (:doors (:args c)) keyword))))))
+
+(defn ^:async round
+  "One whole attempt: step! until it arrives, gives up, or waits on a child (:continue), with pace! between steps. A
+  cut ends it at the next memory write or act, which throws."
+  [c]
+  (let [parsed (places/parse-pos (:pos (:args c)))
+        pos (:pos parsed)]
+    (if (:reason parsed)
+      (refuse! c parsed)
+      (do (start-attempt! c pos)
+          (loop []
+            (let [r (await (step! c pos))]
+              (if (= :again r)
+                (do (await (pace!)) (recur))
+                r)))))))
