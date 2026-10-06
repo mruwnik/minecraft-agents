@@ -956,34 +956,26 @@
     (hurt/flush! eng #(core/emit! eng %))
     (is (some #(= [:body :hurt] [(:source %) (:kind %)]) @seen) "the merged :hurt event follows its window")))
 
-(deftest cancelling-a-reflex-job-between-rounds-leaves-no-ghost-instance
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:self {:health 5}})]
-          (core/register-reflex! eng {:trigger :hurt :job '(count)})
-          (await (core/tick! eng))
-          (is (= "j1" (:pending-reflex (core/state eng))) "the reflex job holds the body between rounds")
-          (swap! (.. p -world -state) assoc-in [:self :health] 20)
-          (core/cancel! eng "j1")
-          (is (nil? (:pending-reflex (core/state eng))))
-          (is (= {} (:instances (core/state eng))))
-          (is (nil? (core/tick! eng)) "nothing is left to start"))))))
+(defn continued-warns [seen] (filterv #(= [:reflex :continued] [(:source %) (:kind %)]) @seen))
 
-(deftest a-death-drops-a-reflex-job-between-rounds
+(deftest a-reflex-job-that-continues-ends-declined-with-a-warn-once-an-hour
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:self {:health 5}})]
+        (let [{:keys [eng seen clock]} (setup {:self {:health 5}})]
           (core/register-reflex! eng {:trigger :hurt :job '(count)})
           (await (core/tick! eng))
-          (is (= "j1" (:pending-reflex (core/state eng))))
-          (.emit (.-world p) #js {:kind "died" :pos #js {:x 0 :y 64 :z 0} :inventory #js []})
-          (is (= {} (:instances (core/state eng))))
-          (is (nil? (:pending-reflex (core/state eng))))
-          (is (= [["j1" :dropped :death]]
-                 (->> @seen (filter #(= [:reflex :ended] [(:source %) (:kind %)]))
-                      (mapv (juxt :job :outcome :by))))))))))
+          (is (= {} (:instances (core/state eng))) "the reflex job ran one round and is gone")
+          (is (nil? (core/holder eng)) "nothing holds the body between rounds")
+          (is (= [["j1" :declined]] (->> @seen (filter #(= [:reflex :ended] [(:source %) (:kind %)]))
+                                          (mapv (juxt :job :outcome)))))
+          (is (= [[:hurt "j1"]] (mapv (juxt :reflex :job) (continued-warns seen))))
+          (await (core/tick! eng))
+          (is (= ["j1" "j2"] (ran seen)) "the trigger still holds: a :retry entry fires again")
+          (is (= 1 (count (continued-warns seen))) "warned once per reflex per hour")
+          (swap! clock + 3600000)
+          (await (core/tick! eng))
+          (is (= 2 (count (continued-warns seen))) "and again after an hour"))))))
 
 (deftest the-tick-loop-parks-a-failed-round-and-keeps-ticking
   (async done
@@ -1332,8 +1324,7 @@
           (core/submit! eng '(count) {})
           (core/register-reflex! eng {:trigger :gated})
           (dotimes [_ 2] (await (core/tick! eng)))
-          (is (= ["j2" "j2"] (ran seen)) "the trigger fired the job and its check was never asked")
-          (is (= {:n 2} (job-mem eng "j2")) "the round ran both times")
+          (is (= ["j2" "j3"] (ran seen)) "the trigger fired the job twice and its check was never asked")
           (is (= {} (job-mem eng "j1")) "the listed job waits"))))))
 
 (def flag-b (atom true))

@@ -293,11 +293,9 @@
             (is (:ok (api/request! eng {:op :remove :id :bread-low})))
             (is (= :bread-low (:reflex (core/running eng))) "the round in flight is not cut")
             (await round))
-          (is (= "j1" (:pending-reflex (core/state eng))))
           (await (tick-at r (+ t0 250)))
-          (is (nil? (:pending-reflex (core/state eng))))
           (is (= {} (:instances (core/state eng))))
-          (is (= [:dropped] (mapv :outcome (of-kind seen :reflex :ended))))
+          (is (= [:declined] (mapv :outcome (of-kind seen :reflex :ended))) "its one round ended it")
           (is (= 1 (count (of-kind seen :job :round_started))) "no second round"))))))
 
 ;; ---------------------------------------------------------------- restart and scenario

@@ -20,7 +20,6 @@
     :cursor n               where the next round-robin scan starts
     :resume id              a cut listed job, next once the body is free
     :current id             the listed job whose round is in flight
-    :pending-reflex id      a reflex job between its rounds; it keeps the body
     :failed {id {:error text :t ms}}  listed jobs whose round threw; they keep
                             their place and memory, the scheduler skips them
                             until retry! or cancel!
@@ -205,6 +204,7 @@
              :hurt (hurt/new-state)
              :world (or world ((:world/blank hooks/all)))
              :warned (atom #{})
+             :continued (atom {})
              :state st
              :running (atom nil)
              :tokens (atom 0)

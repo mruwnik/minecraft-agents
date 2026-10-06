@@ -322,8 +322,8 @@ Each tick the engine fires the first entry whose `:when` holds and which is not 
 
 - A firing reflex cuts a running listed job (which stays listed and runs again once no reflex holds the body). It cuts a
   running reflex job only if it sits above that one. A reflex whose job is running does not fire again.
-- A reflex job gets one chance. Its check is never asked: the trigger is its check. It gets a round every tick while it
-  returns `:continue`. On `:done`, `:declined` (also an info `reflex.declined`) or a throw it is removed. If the trigger
+- A reflex job runs one round. Its check is never asked: the trigger is its check. A `:continue` counts as `:declined`
+  (warn `reflex.continued`, once per reflex an hour). On `:done`, `:declined` (also an info `reflex.declined`) or a throw it is removed. If the trigger
   still holds it fires again as a new instance, subject to persistence. So a reflex job must return `:done` or `:declined`
   at the top of its round when there is nothing to do. Combinators follow this: `any`, `seq` and `repeat` return `:declined`
   when the relevant child declines.
@@ -388,7 +388,7 @@ An ad hoc `:when` can be a condition: an EDN list read by `engine.condition` aga
 
 1. Expire register changes; sweep memory when due.
 2. Evaluate the register. A firing entry that preempts the holder cuts by rotating the token and runs a round of its job.
-3. Otherwise, if a round is in flight, nothing. A reflex job between rounds gets its next round.
+3. Otherwise, if a round is in flight, nothing.
 4. Otherwise the list: a holding job runs if its check passes, else the body idles; else the cut job if its check passes;
    else round-robin from the job after the last one run, to the next whose check passes. If every check declines, nothing
    runs until the next tick.
@@ -431,8 +431,7 @@ Listed jobs are never backed off.
 - Schedule `{:after 3 :first-s 1 :max-s 30}`: after `:after` fruitless runs the entry does not fire for `:first-s`
   seconds, doubling per further fruitless run up to `:max-s`.
 - Config, most specific wins: engine `:backoff` < the trigger's `:backoff` in `triggers/defaults.edn` < the entry's.
-  `false` turns it off (`:suffocating`, `:burning`, `:hostile-near`, `:night`, `:stuck`). A reflex job that continues into
-  a backoff ends `:backoff`.
+  `false` turns it off (`:suffocating`, `:burning`, `:hostile-near`, `:night`, `:stuck`).
 - State is the non-persisted `:backoffs` atom, cleared after every pause (offline, settling, manual control).
 - Events: warn `reflex.backoff`, repeated at most every `:backoff-alert-ms` (300000); info `reflex.recovered`.
 

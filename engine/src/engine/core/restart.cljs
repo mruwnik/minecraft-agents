@@ -15,10 +15,9 @@
         current (:current s)]
     (-> s
         (update :failed select-keys (:list s))
-        (dissoc :backoff)
+        (dissoc :backoff :pending-reflex)
         (assoc :resume (if (some #{current} (:list s)) current (:resume s))
-               :current nil
-               :pending-reflex nil)
+               :current nil)
         (update :instances #(apply dissoc % reflex-ids)))))
 
 (defn unknown-job

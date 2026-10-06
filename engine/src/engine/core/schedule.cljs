@@ -58,11 +58,9 @@
                   (range n)))))
 
 (defn holder
-  "Who has the body: the running round, or a reflex job between its rounds."
+  "Who has the body: the running round."
   [eng]
-  (or (running eng)
-      (when-let [id (:pending-reflex (state eng))]
-        {:id id :reflex (get-in (state eng) [:instances id :reflex])})))
+  (running eng))
 
 (defn cut!
   "Take the body from holder h for entry; cause is the seq of the firing."
@@ -101,7 +99,6 @@
     (cond
       (and firing (preempts? order h firing)) (fire! eng firing h)
       (running eng) (check-idle! eng)
-      (:pending-reflex (state eng)) (start-round! eng (:pending-reflex (state eng)))
       :else (when-let [id (choose-listed eng)] (start-round! eng id)))))
 
 (defn tick!

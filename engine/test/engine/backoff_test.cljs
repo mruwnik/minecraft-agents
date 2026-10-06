@@ -306,7 +306,7 @@
           (is (= [:done :done :done :done] (outcomes)))
           (is (= 2000 (:delay-ms (entry eng :always)))))))))
 
-(deftest a-continuing-fruitless-round-reaching-backoff-ends-backoff
+(deftest a-continuing-reflex-run-counts-as-declined
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -314,7 +314,8 @@
               outcomes #(mapv :outcome (filterv (fn [e] (= :reflex (:source e))) (of-kind seen :ended)))]
           (core/register-reflex! eng {:trigger :holding})
           (dotimes [_ 3] (await (tick-at r t0)))
-          (is (= :backoff (last (outcomes)))))))))
+          (is (= [:declined :declined :declined] (outcomes)))
+          (is (some? (:until (entry eng :holding))) "three fruitless runs: the entry backs off"))))))
 
 (deftest a-progress-act-in-any-job-of-a-reflex-resets-it-and-says-so
   (async done

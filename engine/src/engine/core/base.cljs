@@ -21,7 +21,7 @@
 
 (def empty-state
   {:list [] :instances {} :register [] :changes {} :reflex-state {}
-   :deferred-ends [] :cursor 0 :resume nil :current nil :pending-reflex nil :failed {}
+   :deferred-ends [] :cursor 0 :resume nil :current nil :failed {}
    :attention {} :next-id 1})
 
 (defn cut-error []
@@ -44,7 +44,6 @@
                 (update :failed dissoc id))
       (and (>= idx 0) (< idx (:cursor state))) (update :cursor dec)
       (= id (:resume state)) (assoc :resume nil)
-      (= id (:pending-reflex state)) (assoc :pending-reflex nil)
       (= id (:current state)) (assoc :current nil))))
 
 (defn normalize-result [r]
@@ -126,8 +125,7 @@
   (mem/job-mem (mem/view (:store eng)) id []))
 
 (defn drop-instance! [eng id]
-  (swap! (:state eng) #(cond-> (update % :instances dissoc id)
-                         (= id (:pending-reflex %)) (assoc :pending-reflex nil)))
+  (swap! (:state eng) update :instances dissoc id)
   (mem/delete-job! (:store eng) id)
   (save-memory! eng))
 

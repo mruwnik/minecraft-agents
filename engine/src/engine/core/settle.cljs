@@ -117,9 +117,26 @@
     (doseq [end ends]
       (judge-end! eng end {:deferred-ms (- (now eng) (:ended-at end))}))))
 
-(defn settle-reflex! [eng run {:keys [status error]}]
+(def continued-warn-ms
+  "Least gap between two reflex.continued warns of one reflex."
+  3600000)
+
+(defn warn-continued!
+  "Reflex job run returned :continue, which a reflex job may not (it runs one round): warn, at most once per reflex id
+  per continued-warn-ms."
+  [eng {:keys [id reflex]}]
+  (let [t (now eng)
+        last (get @(:continued eng) reflex)]
+    (when (or (nil? last) (>= (- t last) continued-warn-ms))
+      (swap! (:continued eng) assoc reflex t)
+      (emit! eng {:source :reflex :kind :continued :level :warn :reflex reflex :job id
+                  :text (str (reflex-text reflex (get-in (state eng) [:instances id :spec]))
+                             " returned :continue; a reflex job runs one round, so it counts as declined")}))))
+
+(defn settle-reflex!
+  "End reflex job run after its one round."
+  [eng run {:keys [status error]}]
   (case status
-    :continue (swap! (:state eng) assoc :pending-reflex (:id run))
     :declined
     (do (emit! eng {:source :reflex :kind :declined :level :info :reflex (:reflex run) :job (:id run)
                     :text (str "reflex " (name (:reflex run)) ": job " (:id run)
@@ -138,8 +155,10 @@
     (reset! (:running eng) nil)
     (set-owner! eng nil)
     (if (:reflex run)
-      (if (and (book-round! eng run outcome) (= :continue (:status outcome)))
-        (end-reflex! eng run :backoff)
+      (let [outcome (if (= :continue (:status outcome))
+                      (do (warn-continued! eng run) (assoc outcome :status :declined))
+                      outcome)]
+        (book-round! eng run outcome)
         (settle-reflex! eng run outcome))
       (do (note-fruitless! eng (:id run) (:status outcome) (get @(:rounds eng) (:id run)))
           (swap! (:rounds eng) dissoc (:id run))
@@ -157,8 +176,7 @@
                  (fn [s] (let [inst (get-in s [:instances id])]
                            (cond-> (update-in s [:instances id :round] inc)
                              (not (:reflex inst)) (assoc :current id)
-                             (= id (:resume s)) (assoc :resume nil)
-                             (= id (:pending-reflex s)) (assoc :pending-reflex nil)))))
+                             (= id (:resume s)) (assoc :resume nil)))))
         inst (get-in s [:instances id])
         run {:id id :token token :reflex (:reflex inst) :round (:round inst)}]
     (reset! (:running eng) run)
