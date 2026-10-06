@@ -570,9 +570,9 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 | `survival.get-food` | Ladder: eat, known source, hunt or harvest; gives up with warn `food.none` |
 | `survival.breathe`, `survival.extinguish` | Swim up or dig the head free; pour water or reach water. Never trespass except as a last resort |
 | `survival.respond-to-hostile` | Fights (`fight-back`) when the odds are fair, else `retreat` |
-| `survival.retreat` | Flees from the nearest real danger; never ends while one stands. Cornered it fights, seals itself in, pillars, or digs down, then hides until the way is closed |
+| `survival.retreat` | Flees away from all real dangers in range (nearer ones weigh more), leaning to a bed or home within `:home-range` (64); never ends while one stands. Cornered (no open way, rechecked each round) it fights, seals itself in, pillars, or digs down, then hides until the way is closed |
 | `survival.fight-back` | Equips the best weapon and hits the nearest hostile within `:range` |
-| `survival.night` | Owns the night: sleep (a seen bed, the known one within 48, or a carried one put down; never an occupied one unless in the body's own zone), else while anyone sleeps log out in 30 s stints until morning, else roofed or buried ends, else dig-in; by day leaves a dug-in shelter and picks up a bed it put down outside its zone. Opt out: mute `:night` |
+| `survival.night` | Owns the night: sleep (a seen bed, the known one within 48, or a carried one put down; never an occupied one unless in the body's own zone), else while anyone sleeps log out in 30 s stints until morning, else roofed or buried ends, else dig-in (on hollow or wet ground it first walks to a pit site within 16 blocks, up to 3 times); by day leaves a dug-in shelter and picks up a bed it put down outside its zone. Opt out: mute `:night` |
 | `survival.sleep`, `survival.dig-in`, `survival.log-out` | Walk to a known bed and sleep; roof the body in; leave the server for a stint and wait for the sleep count |
 | `survival.recover-drops` | After death, weighs the drops' value against the trip's danger (`jobs.survival.drop-value`, `jobs.survival.danger`) and fetches or skips them |
 | `survival.restore-broken` | Puts back what a job broke in another's zone, and the holes go-to's escalation dug |

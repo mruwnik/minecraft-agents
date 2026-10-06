@@ -15,15 +15,15 @@
             [jobs.survival.dig-in :as dig-in]))
 
 (def doc
-  "Flee from the nearest hostile. Never ends while a real danger stands.
+  "Flee from the hostiles in range. Never ends while a real danger stands.
   Each round, in this order:
   1. A door, gate or trapdoor standing open within a hand's reach and nearer the hostile than the body is shut with one click.
      That is the round's only act (retreat.door-shut info). Each door is clicked at most once a flight.
-  2. Walks a short step (:step blocks) away from the nearest danger with the engine walker (jobs.lib.near/walk-near!),
-     leaning toward the latest :bed or :home when that is not through the hostile, avoiding :hazard positions.
+  2. Walks a short step (:step blocks) away from all dangers in range (nearer ones weigh more) with the engine walker (jobs.lib.near/walk-near!),
+     leaning toward the latest :bed or :home when it is within :home-range and not through the hostiles, avoiding :hazard positions.
      When a wall blocks the way away it turns up to 120 degrees towards open ground (at least 2 clear cells).
      Eats once per flight (up to food 20) when the nearest danger is at least :eat-gap blocks away and food is carried.
-  3. Cornered (no open direction worth a walk, or the walk is blocked): takes the safest option it has not yet failed.
+  3. Cornered (no open direction worth a walk, or the walk is blocked; checked afresh every round): takes the safest option it has not yet failed.
      - fight (jobs.survival.fight-back) only when jobs.lib.combat/fight-damage leaves :reserve health. Never against a creeper.
      - seal in: fill the open sides at feet and head height and the roof (dig-in's 1x1 cells) with carried :blocks,
        at most :max-places a round. It first steps to the middle of its cell, and does not place while a hostile's hitbox
@@ -51,6 +51,7 @@
    :ranged-radius {:doc "ranged hostiles (skeletons and the like) within this many blocks start a flight" :default 16}
    :eat-gap {:doc "with at least this many blocks to the nearest hostile, eat once per flight" :default 12}
    :step {:doc "blocks per walk" :default 6}
+   :home-range {:doc "a flight leans towards the latest :bed or :home only when it lies within this many blocks" :default 64}
    :weapons {:doc "item name substrings that count as weapons, for a cornered fight" :default combat/default-weapons}
    :reserve {:doc "health a cornered fight must be expected to leave" :default 4}
    :blocks {:doc "names of the blocks a cornered body may seal itself in with" :default dig-in/building-blocks}
@@ -97,11 +98,15 @@
     (when (pos? n) [(/ dx n) (/ dz n)])))
 
 (defn direction
-  "The preferred unit [ux uz] from from: directly away from threat (+x when
-  they coincide), blended with the direction of home when that lies on the
-  away side (not through the threat)."
-  [from threat home]
-  (let [away (or (unit (- (:x from) (:x threat)) (- (:z from) (:z threat))) [1 0])
+  "The preferred unit [ux uz] from from: directly away from the threats (positions), each weighing 1/distance so the
+  nearer pushes harder (+x when they cancel out), blended with the direction of home when that lies on the away side
+  (not through the threats)."
+  [from threats home]
+  (let [push (fn [t] (let [d (max 1 (js/Math.hypot (- (:x from) (:x t)) (- (:z from) (:z t))))
+                           [ux uz] (or (unit (- (:x from) (:x t)) (- (:z from) (:z t))) [0 0])]
+                       [(/ ux d) (/ uz d)]))
+        sum (reduce (fn [[ax az] t] (let [[ux uz] (push t)] [(+ ax ux) (+ az uz)])) [0 0] threats)
+        away (or (unit (first sum) (second sum)) [1 0])
         to-home (when home (unit (- (:x home) (:x from)) (- (:z home) (:z from))))
         along (when to-home (+ (* (first away) (first to-home)) (* (second away) (second to-home))))]
     (if (and along (pos? along))
@@ -197,10 +202,10 @@
   a real walk (min-open + 1 blocks) or gain at least 2 blocks of distance. A
   short side step in a dead end is neither, so a body that only has those
   left is cornered."
-  [from threat {:keys [open end]}]
+  [from threats {:keys [open end]}]
   (and (>= open min-open)
-       (let [now (u/dist from threat)
-             then (u/dist end threat)]
+       (let [now (apply min (map #(u/dist from %) threats))
+             then (apply min (map #(u/dist end %) threats))]
          (and (>= then now)
               (or (> open min-open) (>= (- then now) 2))))))
 
@@ -209,27 +214,28 @@
   from the preferred one as needed, that avoids every hazard and is open for a
   full step; else the most open one that is still worth walking (see
   worth?). nil when cornered."
-  [block-at from threat home hazards step]
-  (let [dir (direction from threat home)
+  [block-at from threats home hazards step]
+  (let [dir (direction from threats home)
         options (->> turns
                      (map #(rotate dir %))
                      (map (fn [d] (let [cells (walk-cells block-at from d step)]
                                     {:open (count cells) :dir d :end (peek cells)})))
                      (remove #(near-hazard? hazards from (point-along from (:dir %) step)))
-                     (filter #(worth? from threat %)))
+                     (filter #(worth? from threats %)))
         pick (or (first (filter #(>= (:open %) step) options))
                  (last (sort-by :open options)))]
     (:end pick)))
 
 (defn home-pos
-  "The position of the latest :bed or :home entry, or nil."
+  "The position of the latest :bed or :home entry within :home-range blocks of the body, or nil."
   [c]
-  (->> [(ctx/latest c :bed) (ctx/latest c :home)]
-       (remove nil?)
-       (sort-by :t >)
-       first
-       :data
-       :pos))
+  (let [pos (->> [(ctx/latest c :bed) (ctx/latest c :home)]
+                 (remove nil?)
+                 (sort-by :t >)
+                 first
+                 :data
+                 :pos)]
+    (when (and pos (<= (u/dist pos (u/self-pos c)) (:home-range (:args c)))) pos)))
 
 (defn check [_c] true)
 
@@ -670,21 +676,22 @@
 (defn ^:async flight-round [c]
   (let [{:keys [radius ranged-radius step]} (:args c)
         p (:primitives c)
-        threat (reach/nearest-danger p radius {:ranged-radius ranged-radius} {:sight? false :skip (dead-ids c)})
+        dead (set (dead-ids c))
+        threats (remove #(dead (.-id %)) (reach/dangers p radius {:ranged-radius ranged-radius} {:sight? false}))
+        threat (first threats)
         door (when threat (door-to-shut c (u/pos-of (.-pos threat))))]
     (cond
       (nil? threat) :done
       door (await (shut-door! c door))
-      (and (:cornered (ctx/mem c)) (<= (.-distance threat) radius)) (await (cornered! c "cornered"))
       :else
-      (let [_ (when (:cornered (ctx/mem c)) (ctx/update-mem! c dissoc :cornered))
-            _ (await (eat-on-the-run! c threat))
+      (let [_ (await (eat-on-the-run! c threat))
             from (u/self-pos c)
-            target (choose-target (block-at-fn p) from (u/pos-of (.-pos threat)) (home-pos c)
+            target (choose-target (block-at-fn p) from (mapv #(u/pos-of (.-pos %)) threats) (home-pos c)
                                   (keep (comp :pos :data) (ctx/entries c :hazard)) step)]
         (if (nil? target)
           (await (cornered! c "no open way away from the hostile"))
-          (let [r (await (near/walk-near! c target 1 {:timeout-s flight-timeout-s}))]
+          (let [_ (when (:cornered (ctx/mem c)) (ctx/update-mem! c dissoc :cornered))
+                r (await (near/walk-near! c target 1 {:timeout-s flight-timeout-s}))]
             (if (= :blocked r)
               (await (cornered! c "the way away from the hostile is blocked"))
               (do (ctx/update-mem! c dissoc :tried) :continue))))))))

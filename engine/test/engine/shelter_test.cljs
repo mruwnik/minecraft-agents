@@ -884,6 +884,21 @@
             (is (= [reason] (mapv :reason (entries eng :dig-in-futile))) (pr-str blocks))
             (is (= 1 (count (:list (core/state eng)))) "still holding")))))))
 
+(def solid-column
+  (into {} (for [y (range 60 64)] [(str "12," y ",0") "stone"])))
+
+(deftest night-over-an-open-floor-walks-to-a-site-with-solid-ground-before-holding
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:time night :inventory [{:name "dirt" :count 1}]
+                                           :blocks (merge {"0,63,0" "stone" "0,62,0" "air"} solid-column)})]
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (tick-n eng 30))
+          (let [pos (pos-of p)]
+            (is (> (:x pos) 9) "left the site whose floor is hollow")
+            (is (<= (js/Math.abs (- (:x pos) 12)) 2) "and stands on the solid column")))))))
+
 (deftest an-unsheltered-hold-logs-out-once-someone-falls-asleep
   (async done
     (tu/run-async done

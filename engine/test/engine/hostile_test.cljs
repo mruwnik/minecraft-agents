@@ -243,6 +243,25 @@
           (await (core/tick! eng))
           (is (= {:x 0 :z -6} (last-move eng)) "a home beyond the hostile is ignored"))))))
 
+(deftest retreat-flees-from-the-weighted-set-of-threats-not-the-nearest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:entities [(zombie 1 0 4) (zombie 2 3 -3) (zombie 3 -3 -3)]})]
+          (core/submit! eng retreat {})
+          (await (core/tick! eng))
+          (is (> (:z (last-move eng)) 1) "mobs on three sides: it leaves through the one open side, not away from the nearest"))))))
+
+(deftest retreat-ignores-a-home-beyond-the-home-range
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:entities [(zombie 0 5)]})]
+          (remember! eng :home {:pos {:x -2100 :y 64 :z -2000}})
+          (core/submit! eng retreat {})
+          (await (core/tick! eng))
+          (is (= {:x 0 :z -6} (last-move eng)) "a home 2000 blocks away does not bend the flight"))))))
+
 (deftest retreat-avoids-hazard-entries
   (async done
     (tu/run-async done

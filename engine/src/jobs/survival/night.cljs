@@ -32,7 +32,9 @@
   3. someone else asleep (sh/log-out-for-sleepers?: the action bar's sleep count tonight, a sleeper in sight, or no
      count since the body's return): jobs.survival.log-out, a 30 s stint at most until morning, again each round
      while anyone sleeps or nothing is known; until morning. A log-out that is not ok or cut is not tried again.
-  4. roofed or buried: :done (the queue runs). Otherwise jobs.survival.dig-in; nothing roofs it: held exposed
+  4. roofed or buried: :done (the queue runs). Otherwise jobs.survival.dig-in. When it refused because the ground is
+     hollow, wet or has nothing to place against, the body walks (go-to) to the nearest cell within 16 blocks, 9+ from
+     every failed site, with solid ground 3 deep (shelter.relocated info), at most 3 times a night. Nothing roofs it: held exposed
      (:sheltered :exposed, one shelter.exposed warn), each round choosing again.
   An overdue body (no sleep for :max-days-awake in-game days) warns needs_bed once an in-game day (:needs-bed).
   Job memory: :sheltered (:slept, :dug-in, :exposed), :log-out-failed and leave!'s :dig-out.")
@@ -219,6 +221,65 @@
           (ctx/emit! c :shelter.bed_place_failed :warn {:text "no room or permission to put the carried bed down; not sleeping in it"})
           :continue))))
 
+(def relocate-reasons
+  "dig-in's :futile reasons a better spot nearby can cure."
+  #{:no-floor :hazard-below :fluid-adjacent :no-roof-support})
+
+(def max-relocations "Spots a night tries before holding where it is." 3)
+
+(def relocate-reach "How far (blocks) a night looks for a spot to dig in." 16)
+
+(defn pit-site?
+  "Whether feet cell f is a place a pit can be dug: standing room, solid ground 3 deep, no fluid beside the ground."
+  [p {:keys [x y z] :as f}]
+  (let [at (fn [dy] (u/block-name p {:x x :y (+ y dy) :z z}))]
+    (and (not (sh/solid? (at 0))) (not (sh/solid? (at 1)))
+         (not (dig-in/hazards (at 0))) (not (dig-in/hazards (at -1)))
+         (sh/solid? (at -1)) (sh/solid? (at -2)) (sh/solid? (at -3))
+         (not (dig-in/lateral-fluid p {:x x :y (dec y) :z z}))
+         (not (dig-in/lateral-fluid p {:x x :y (- y 2) :z z})))))
+
+(defn relocation-site
+  "The nearest feet cell within relocate-reach, at least futile-radius+1 from every failed site, where a pit can be
+  dug (pit-site?), or nil."
+  [c]
+  (let [p (:primitives c)
+        {:keys [x y z]} (sh/feet p)
+        failed (map (comp :pos :data) (ctx/entries c :dig-in-futile))
+        far? (fn [f] (every? #(> (u/dist % f) dig-in/futile-radius) failed))
+        offsets (sort-by (fn [[dx dz]] (+ (* dx dx) (* dz dz)))
+                         (for [dx (range (- relocate-reach) (inc relocate-reach))
+                               dz (range (- relocate-reach) (inc relocate-reach))
+                               :when (<= (+ (* dx dx) (* dz dz)) (* relocate-reach relocate-reach))]
+                           [dx dz]))]
+    (some (fn [[dx dz]]
+            (some (fn [dy] (let [f {:x (+ x dx) :y (+ y dy) :z (+ z dz)}]
+                             (when (and (far? f) (pit-site? p f)) f)))
+                  [0 -1 1 -2 2]))
+          offsets)))
+
+(defn relocatable?
+  "Whether dig-in's refusal (a decline map from ctx/wait) names a cure: the ground here is hollow or wet."
+  [c]
+  (and (< (count (:relocations (ctx/mem c))) max-relocations)
+       (some #(relocate-reasons (:reason (:data %))) (ctx/entries c :dig-in-futile))))
+
+(defn ^:async relocate!
+  "Walk (go-to) to a nearby cell where a pit can be dug, so dig-in runs again from there. :continue while walking; nil
+  when there is no such cell or the walk did not arrive (the caller holds exposed)."
+  [c]
+  (let [site (or (:relocating (ctx/mem c)) (relocation-site c))]
+    (when site
+      (ctx/update-mem! c assoc :relocating site)
+      (let [w (await (ctx/call-child c :relocate 'jobs.movement.go-to {:pos site :range 0}))]
+        (cond
+          (= :continue w) :continue
+          :else (do (ctx/update-mem! c dissoc :relocating)
+                    (ctx/update-mem! c update :relocations (fnil conj []) site)
+                    (when (:arrived (ctx/child-result c :relocate))
+                      (ctx/emit! c :shelter.relocated :info {:pos site :text "the ground here is hollow; moved to dig in elsewhere"})
+                      :continue)))))))
+
 (defn ^:async hold-exposed
   "Night, and nothing could shelter the body: hold it anyway until day. The first time, :sheltered :exposed and one
   shelter.exposed warn; every round waits hold-ms, and the next round chooses again."
@@ -285,4 +346,7 @@
           (log-out-wanted? c) (await (log-out-step c))
           (or roofed (sh/buried? p)) :done
           :else (let [r (await (dig-in-step c))]
-                  (if (= :declined r) (await (hold-exposed c)) r)))))))
+                  (if (= :declined r)
+                    (or (when (relocatable? c) (await (relocate! c)))
+                        (await (hold-exposed c)))
+                    r)))))))
