@@ -238,3 +238,61 @@
     (events/emit! stream {:source :job :kind :queued :job "j2"})
     (is (= [1 3] (mapv :seq (read-lines file))) "no half record is left between the lines")
     (is (= 3 (:seq (events/cursor (events/make {:file file :generation-id "generation-b"})))) "the log boots")))
+
+(defn write-lines!
+  "Write one event line per seq in seqs (pad chars of :pad each) to a fresh file; returns the file."
+  ([seqs pad] (write-lines! seqs pad "p"))
+  ([seqs pad ch]
+   (let [file (path/join (tu/tmp-dir) "events.edn")
+         line (fn [n] (str (pr-str {:seq n :pad (apply str (repeat pad ch))}) "\n"))]
+     (fs/mkdirSync (path/dirname file) #js {:recursive true})
+     (fs/writeFileSync file (apply str (map line seqs)))
+     file)))
+
+(defn seqs-after [file after n]
+  (mapv :seq (events/segment-records-after file after n)))
+
+(deftest a-line-split-across-the-chunk-edge-is-read-whole
+  (doseq [pad [(- events/read-chunk-bytes 40) (- events/read-chunk-bytes 20) events/read-chunk-bytes]]
+    (let [file (write-lines! (range 1 6) pad)]
+      (is (= [1 2 3 4 5] (seqs-after file 0 10)) (str "pad " pad))
+      (is (= [4 5] (seqs-after file 3 10)) (str "pad " pad)))))
+
+(deftest multi-byte-utf8-at-the-chunk-edge-is-not-split
+  (doseq [pad (range 20000 20003)]
+    (let [file (write-lines! (range 1 5) (quot events/read-chunk-bytes 3) "é")
+          file2 (write-lines! (range 1 5) pad "日")]
+      (is (every? #(= (quot events/read-chunk-bytes 3) (count (:pad %)))
+                  (events/segment-records-after file 0 10)))
+      (is (every? #(= pad (count (:pad %))) (events/segment-records-after file2 0 10))
+          (str "pad " pad)))))
+
+(deftest a-line-longer-than-one-chunk-is-read-whole
+  (let [file (write-lines! [1 2 3] (* 5 events/read-chunk-bytes))]
+    (is (= [1 2 3] (seqs-after file 0 10)))
+    (is (= [2 3] (seqs-after file 1 10)))
+    (is (= [3] (seqs-after file 2 10)))
+    (is (= (* 5 events/read-chunk-bytes) (count (:pad (first (events/segment-records-after file 0 1))))))))
+
+(deftest a-cursor-older-than-every-segment-reports-a-gap
+  (let [file (path/join (tu/tmp-dir) "events.edn")
+        stream (events/make {:file file :generation-id "g" :max-bytes 8192})
+        sid (:stream-id (events/cursor stream))]
+    (emit-n! stream 80)
+    (let [oldest (:oldest-seq (events/read-after stream {:stream-id sid :after 80}))]
+      (is (< 2 oldest))
+      (disk-only stream)
+      (is (true? (:gap? (events/read-after stream {:stream-id sid :after 0}))))
+      (is (true? (:gap? (events/read-after stream {:stream-id sid :after (- oldest 2)}))))
+      (is (false? (:gap? (events/read-after stream {:stream-id sid :after (dec oldest) :limit 3})))))))
+
+(deftest an-empty-file-yields-no-records
+  (let [file (write-lines! [] 0)]
+    (is (= [] (seqs-after file 0 10)))
+    (is (= [] (events/records-from (fs/openSync file "r") 0 file 0 10)))))
+
+(deftest a-corrupt-line-is-reported-with-its-file
+  (let [file (write-lines! [1 2] 10)]
+    (fs/appendFileSync file "{:seq 3 :pad\n")
+    (fs/appendFileSync file (str (pr-str {:seq 4}) "\n"))
+    (is (thrown-with-msg? js/Error #"malformed complete event record" (seqs-after file 0 10)))))
