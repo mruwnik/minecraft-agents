@@ -139,7 +139,7 @@ From the repository root, build and start the dashboard using saved local data (
 ```sh
 cd dashboard
 npm run build
-DASHBOARD_ROOT=/path/to/minecraft-agents PORT=3701 node --max-old-space-size=1024 --max-semi-space-size=4 out/server.cjs
+MALLOC_ARENA_MAX=2 DASHBOARD_ROOT=/path/to/minecraft-agents PORT=3701 node --max-old-space-size=1024 --max-semi-space-size=4 out/server.cjs
 ```
 
 In another terminal, open the map in headless Chromium, then run the harness from the repository root:

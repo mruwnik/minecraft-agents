@@ -78,7 +78,7 @@ const runBuild = async () => {
 
 const startServer = () => {
   server = spawn('node', ['--max-old-space-size=1024', '--max-semi-space-size=4', 'out/server.cjs'],
-    { cwd: dir, stdio: ['inherit', 'inherit', 'inherit', 'ipc'] })
+    { cwd: dir, stdio: ['inherit', 'inherit', 'inherit', 'ipc'], env: { ...process.env, MALLOC_ARENA_MAX: '2' } })
   server.on('message', (m) => { if (m && m.type === 'restart') request() })
   server.on('exit', (code, signal) => {
     server = null
