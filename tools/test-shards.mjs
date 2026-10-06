@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Why JavaScript: a thin Node launcher (spawns the compiled test runner in shards, takes a machine-wide flock slot per shard); no engine behaviour.
-// Usage: tools/test-engine --full [--shards N] [--slots M] [--slowest K]
+// Usage: tools/test-engine --full [--part i/N] [--shards N] [--slots M] [--slowest K]
+//  --part i/N: runs only part i (1-based) of N: the i-th, i+N-th... namespace in sorted name order (a function of the names alone, so parts never overlap or leave a gap); timings are merged into test-ns-ms.json, the full-run timings file is left alone.
 //  Splits the engine test namespaces over N node processes (default 4), balanced by the per-namespace ms of the previous run (engine/out/test-ns-ms.json).
 //  At most M shard processes run at once machine-wide (default: (MemAvailable - 6 GB) / 2.95 GB (kinds.tests.needMb), 1..shardMax): each takes res-slot's 'tests' slot tests.<i> (i < M; slots above shardMax stay for targeted runs), so parallel agents cannot OOM the machine.
 //  Each shard is killed after runTimeoutS of its prior timing (tools/test-run.mjs), so a hung test frees its slot; the failure names the last finished test.
@@ -23,6 +24,14 @@ export const testNamespaces = (root = path.join(engine, 'test')) =>
   walk(root).filter((f) => /\.clj[cs]$/.test(f))
     .map((f) => fs.readFileSync(f, 'utf8').match(/^\(ns\s+(?:\^\S+\s+)*([^\s()]+-test)[\s)]/m)?.[1])
     .filter(Boolean).sort()
+
+export const parsePart = (spec) => {
+  const m = /^(\d+)\/(\d+)$/.exec(spec ?? '')
+  const i = m && Number(m[1]), n = m && Number(m[2])
+  if (!m || n < 1 || i < 1 || i > n) throw new Error(`--part wants i/N with 1 <= i <= N, got ${spec}`)
+  return { i, n }
+}
+export const partOf = (nss, i, n) => [...nss].sort().filter((_, k) => k % n === i - 1)
 
 // Greedy longest-first onto the lightest shard. Unknown ns get the mean known cost (or 1).
 export const splitShards = (nss, ms, n) => {
@@ -114,7 +123,10 @@ const main = async ({ compile = () => spawnSync(path.join(repo, 'tools/compile')
   fs.mkdirSync(slotDir(), { recursive: true })
   const nsFile = path.join(engine, 'out/test-ns-ms.json'), timingFile = path.join(engine, 'out/test-timings.jsonl')
   const prior = fs.existsSync(nsFile) ? JSON.parse(fs.readFileSync(nsFile, 'utf8')) : {}
-  const split = splitShards(testNamespaces(), prior, shards)
+  const partIdx = argv.indexOf('--part')
+  const part = partIdx < 0 ? null : parsePart(argv[partIdx + 1])
+  const all = testNamespaces()
+  const split = splitShards(part ? partOf(all, part.i, part.n) : all, prior, shards)
   const events = process.env.TEST_EVENTS === '1' ? eventForwarder((l) => console.log(l), split.map((nss) => nss.length)) : null
   if (events) console.log('@@test {"event":"phase","name":"compiling"}')
   const c = compile()
@@ -146,8 +158,8 @@ const main = async ({ compile = () => spawnSync(path.join(repo, 'tools/compile')
     bad++; console.log(`--- shard ${r.i} FAILED (${o.why}), output kept in ${log} ---\n${r.out}`)
   }
   cleanup()
-  fs.writeFileSync(timingFile, lines.filter(Boolean).join('\n') + '\n')
-  if (bad === 0 && parse(lines).some((r) => r.var)) fs.writeFileSync(nsFile, JSON.stringify(nsMs(lines)))
+  if (!part) fs.writeFileSync(timingFile, lines.filter(Boolean).join('\n') + '\n')
+  if (bad === 0 && parse(lines).some((r) => r.var)) fs.writeFileSync(nsFile, JSON.stringify({ ...(part ? prior : {}), ...nsMs(lines) }))
   const peaks = parse(lines).filter((r) => r['peak-rss-kb']).map((r) => r['peak-rss-kb'])
   const tests = parse(lines).filter((r) => r.var).length
   console.log(`test-shards: ${tests} tests, wall ${((Date.now() - t0) / 1000).toFixed(0)} s, shard peak RSS MB: ${peaks.map((k) => Math.round(k / 1024)).join(' ')} (sum ${Math.round(peaks.reduce((a, b) => a + b, 0) / 1024)})`)

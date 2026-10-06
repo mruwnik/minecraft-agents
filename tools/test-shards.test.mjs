@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { splitShards, testNamespaces, slowest, memSlots, eventForwarder, shardOutcome } from './test-shards.mjs'
+import { splitShards, partOf, parsePart, testNamespaces, slowest, memSlots, eventForwarder, shardOutcome } from './test-shards.mjs'
 
 test('splitShards: every namespace exactly once, loads balanced by prior timing', () => {
   const nss = ['a-test', 'b-test', 'c-test', 'd-test', 'e-test']
@@ -119,4 +119,23 @@ test('main with TEST_EVENTS=1 announces compiling before the compile runs (no ea
   assert.doesNotMatch(r.stderr, /ReferenceError/)
   assert.match(r.stdout, /"name":"compiling"/)
   assert.equal(r.status, 3)
+})
+
+test('partOf: for N in 1..6 the parts are disjoint and together cover every namespace', () => {
+  const nss = Array.from({ length: 23 }, (_, k) => `ns${(k * 7) % 23}-test`)
+  for (let n = 1; n <= 6; n++) {
+    const parts = Array.from({ length: n }, (_, i) => partOf(nss, i + 1, n))
+    assert.deepEqual(parts.flat().sort(), [...nss].sort(), `N=${n}`)
+  }
+})
+
+test('partOf: depends on the names only, not on the order they are given in', () => {
+  const nss = ['d-test', 'a-test', 'c-test', 'b-test', 'e-test']
+  assert.deepEqual(partOf(nss, 2, 2), partOf([...nss].reverse(), 2, 2))
+  assert.deepEqual(partOf(nss, 2, 2), ['b-test', 'd-test'])
+})
+
+test('parsePart: "i/N" with 1 <= i <= N, otherwise an error', () => {
+  assert.deepEqual(parsePart('2/4'), { i: 2, n: 4 })
+  for (const bad of ['0/4', '5/4', 'x', '2', '1/0']) assert.throws(() => parsePart(bad), /--part/)
 })
