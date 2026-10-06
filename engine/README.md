@@ -498,6 +498,8 @@ lease is not saved; restart or going offline ends it.
   `wear`, `inventory`. They run one at a time (at most 8 queued), have deadlines of at most 10 s, and need a lease with at
   least 1 s of idle time left. `move-to` walks as go-to does (opens doors) within `--max-distance`. `dig` first holds the
   best carried tool and refuses a block no carried tool can harvest (`no-tool`).
+- `world.mjs submit <move-to|dig|place|use-on|interact|wear>` submits the job of that action (`go-to`, `blocks.dig`, `blocks.place`,
+  `blocks.use-on`, `items.interact`, `items.wear`) with `:by` = `--who`: under manual control it is the slot job.
 - Rules live in `engine.lease` (pure); `engine.takeover` applies them, walking, digging and wearing through the
   `:manual/*` hooks (`jobs.lib.manual`); `engine/js/control.mjs` is a stateless socket adapter.
 - Events: `system.takeover_started`, `system.takeover_ended` (reason `released`, `forced`, `idle`, `offline`, `shutdown`),

@@ -14,7 +14,7 @@
 
 (def usage
   (str "usage: jobs.mjs <body> --world <world> list [--limit 8 --offset 0] | show <jID> | submit <EDN-spec> [--hold] [--front | --now] [--wait [--timeout 60s]] | cancel <jID> | cancel-all | retry <jID> | resolve <request-id> --reason handled|condition-recovered [--worlds DIR --state LEGACY_PARENT]\n"
-       "While manual control holds the body (drive.mjs take) no job runs: jobs stay :queued and list/submit say who holds it; drive.mjs <body> release frees it.\n"
+       "While manual control holds the body (drive.mjs take) only the driver's one job runs (world.mjs submit): others stay :queued and list/submit say who holds it; drive.mjs <body> release frees it.\n"
        "submit appends the job to the end of the list (jobs take turns). --hold makes the job hold the body: no other job gets a round until it ends or fails (reflexes still come first).\n"
        "  --front  list it directly after the current job: it gets the next round, nothing is cut\n"
        "  --now    cut the current job and run this one at once (it holds the body, as --hold does, until it ends); the cut job keeps its memory and\n"
@@ -213,7 +213,7 @@
 
 (defn manual-hint [{:keys [who why]}]
   (str "waiting: manual control held by " who (when (seq why) (str " (" why ")"))
-       "; queued jobs run after drive.mjs <body> release"))
+       "; only its job runs meanwhile, queued jobs run after drive.mjs <body> release"))
 
 (defn queued? [value]
   (or (= :queued (get-in value [:job :status]))
@@ -299,6 +299,15 @@
                                    (output (str (data/write-edn (with-hint r (wait-result answer id wake) (when (:follow (wait-result answer id wake)) manual))) "\n"))
                                    0))))))))))
 
+(defn run-request!
+  "Send the request map r (request-for's shape) and print the answer; a promise of the exit code."
+  [r output {:keys [request-fn] :as opts}]
+  (-> (js/Promise.resolve nil)
+      (.then #(if (:wait r) (submit-and-wait! r output opts) (.then (exchange! r opts) (fn [response] (.then (manual-for r response opts) (fn [manual] (deliver! r output response (assoc opts :manual manual))))))))
+      (.catch (fn [error]
+                (output (str (data/write-edn (failure-for r error)) "\n"))
+                2))))
+
 (defn main!
   ([] (main! (vec (.slice (.-argv js/process) 2))))
   ([argv] (main! argv {}))
@@ -306,8 +315,4 @@
    (let [r (request-for argv)]
      (if (:error r)
        (do (js/console.error (str (:error r) "\n" usage)) (js/Promise.resolve 2))
-       (-> (js/Promise.resolve nil)
-           (.then #(if (:wait r) (submit-and-wait! r output opts) (.then (exchange! r opts) (fn [response] (.then (manual-for r response opts) (fn [manual] (deliver! r output response (assoc opts :manual manual))))))))
-           (.catch (fn [error]
-                     (output (str (data/write-edn (failure-for r error)) "\n"))
-                     2)))))))
+       (run-request! r output opts)))))

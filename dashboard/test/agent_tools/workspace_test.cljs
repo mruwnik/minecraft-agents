@@ -10,19 +10,18 @@
   (let [routed (workspace/route ctx command argv)]
     (case command
       "drive" (get-in (drive/request-for routed) [:body :who])
-      "world" (get-in (world/request-for routed) [:who]))))
+      "world" (get-in (world/request-for routed) [:request :by]))))
 
 (deftest drive-and-world-share-the-body-identity-by-default
   (are [command argv] (= "Probe" (who-of command argv))
     "drive" ["take" "--why" "x" "--idle-s" "30"]
     "drive" ["release"]
-    "world" ["inventory"]
     "world" ["submit" "dig" "1" "2" "3"]))
 
 (deftest an-explicit-who-is-kept
   (are [command argv] (= "Other" (who-of command argv))
     "drive" ["take" "--who" "Other"]
-    "world" ["inventory" "--who" "Other"]))
+    "world" ["submit" "dig" "1" "2" "3" "--who" "Other"]))
 
 (deftest plans-check-gets-the-workspace-body
   (is (= ["--world" "w" "--worlds" "/x" "--repo" "/r" "--body" "Probe" "check" "p1"]
