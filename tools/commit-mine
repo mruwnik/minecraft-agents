@@ -279,4 +279,4 @@ jq -nc --arg time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg hash "$hash" --arg card
   --arg files "$files" --argjson ins "$ins" --argjson del "$del" --arg flags "$(printf '%s\n' "${flags[@]:-}")" \
   '{time:$time,hash:$hash,card:$card,paths:($files|split("\n")|map(select(.!=""))),insertions:$ins,deletions:$del,flags:($flags|split("\n")|map(select(.!="")))}' \
   >> "$LEDGER"
-git show --stat --format='%h %s' HEAD | head -20
+git show --stat --format='%h %s' HEAD | sed -n '1,20p'
