@@ -311,3 +311,18 @@ test('too far: unreachable carries reason too-far and the eye-to-centre distance
   const want = Math.round(Math.hypot(bot.entity.position.x - 1.5, eyeY - 64.5, bot.entity.position.z - 9.5) * 100) / 100
   assert.deepEqual([r.status, r.reason, r.distance], ['unreachable', 'too-far', want])
 })
+
+test('a block behind solid stone is unreachable (no-line) and never clicked', async () => {
+  const blocks = { '3,64,0': 'dirt', '2,64,0': 'stone', '2,65,0': 'stone' }
+  const { bot, p } = rig({ blocks })
+  const r = await p.useOn('t1', { pos: at(3, 64, 0), item: 'diamond_hoe' })
+  assert.deepEqual([r.status, r.reason, r.consumed], ['unreachable', 'no-line', 0])
+  assert.equal(calls(bot, 'activateBlock').length, 0)
+})
+
+test('a block behind glass is still clicked', async () => {
+  const blocks = { '3,64,0': 'dirt', '2,64,0': 'glass', '2,65,0': 'glass' }
+  const { bot, p } = rig({ blocks, onUseBlock: () => { blocks['3,64,0'] = 'farmland' } })
+  await p.useOn('t1', { pos: at(3, 64, 0), item: 'diamond_hoe' })
+  assert.equal(calls(bot, 'activateBlock').length, 1)
+})

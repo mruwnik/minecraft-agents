@@ -2,7 +2,7 @@
 ;; (4 s, more than 2 and at most 8 blocks off), and leaves every other gate alone. Fence line z=12, x 10..22, gates at
 ;; [13 0 12] and [19 0 12], both open; the body at [16.5 0 16.5], 5 blocks from each.
 ;; Should-succeed: both planned gates shut; with one planned, only that one.
-;; Should-fail (left alone): no plan, body standing in the gate, gate beyond the radius.
+;; Should-fail (left alone): no plan, body standing in the gate, gate beyond the radius, gate walled into stone (gave up).
 {:defaults
  {:tags [:animals :triggers :pen-gate]
   :time :any
@@ -41,4 +41,12 @@
             [:set [2 0 28] "oak_fence_gate[facing=south,open=true]"]]
    :body {:at [16.5 0 8.5]}
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :pen-gate}} :for-s 20}]
-   :after [[:block [2 0 28] "oak_fence_gate[open=true]"]]}]}
+   :after [[:block [2 0 28] "oak_fence_gate[open=true]"]]}
+  {:name "gate-walled-into-stone-gives-up"
+   :plans [{:id "pen" :parts [{:id "gate" :cells [#at [16 0 4]] :want [:any "oak_fence_gate"]}]}]
+   :blocks [[:fill [13 0 12] [13 0 12] "oak_fence"] [:fill [19 0 12] [19 0 12] "oak_fence"]
+            [:fill [14 0 2] [18 3 6] "stone"]
+            [:set [16 0 4] "oak_fence_gate[facing=south,open=true]"]]
+   :body {:at [16.5 0 10.5]}
+   :expect [{:event {:source :job :kind :shut-gate.gave-up :data {:cell [16 0 4]}} :within-s 50}]
+   :after [[:block [16 0 4] "oak_fence_gate[open=true]"]]}]}

@@ -1,6 +1,8 @@
 // Why JavaScript: Mineflayer boundary; block use/activate calls and the safety guards before the click.
 // useOn: right-click a block with an item (or an empty hand) and report what changed.
 import vec3 from 'vec3'
+import { lineClear } from './sight.mjs'
+import { SEE_THROUGH } from './raw-world.mjs'
 
 const { Vec3 } = vec3
 
@@ -61,6 +63,9 @@ export function createUseOn ({ act, getBot, inventory, eye, lookNow, timeScale, 
       if (item !== undefined && !stack) return refuse('no-item')
       const distance = Math.hypot(eye().x - (p.x + 0.5), eye().y - (p.y + 0.5), eye().z - (p.z + 0.5))
       if (distance > REACH) return refuse('unreachable', { reason: 'too-far', distance: Math.round(distance * 100) / 100 })
+      const centre = { x: p.x + 0.5, y: p.y + 0.5, z: p.z + 0.5 }
+      const blocksClick = cell => { const b = bot.blockAt(new Vec3(cell.x, cell.y, cell.z)); return b?.boundingBox === 'block' && !SEE_THROUGH.test(b.name) }
+      if (!lineClear(eye(), centre, blocksClick)) return refuse('unreachable', { reason: 'no-line' })
       if (stack) {
         await bot.equip(stack, 'hand')
         ctx.alive()
