@@ -15,10 +15,13 @@ const engine = path.join(repo, 'engine')
 
 export const parseNss = (argv) => argv.flatMap((a) => a.split(',')).filter(Boolean)
 
-// Prior per-namespace ms summed; a namespace without a prior timing costs the mean of the known ones.
+// Mean ms per namespace in a full run (411 s / 196 namespaces), used when no timings exist yet (fresh worktree).
+export const DEFAULT_NS_MS = 2100
+
+// Prior per-namespace ms summed; a namespace without a prior timing costs the mean of the known ones (DEFAULT_NS_MS with none).
 export const expectedMs = (nss, ms) => {
   const known = Object.values(ms)
-  const mean = known.length ? known.reduce((a, b) => a + b, 0) / known.length : 0
+  const mean = known.length ? known.reduce((a, b) => a + b, 0) / known.length : DEFAULT_NS_MS
   return Math.round(nss.reduce((t, n) => t + (ms[n] ?? mean), 0))
 }
 

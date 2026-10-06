@@ -14,7 +14,12 @@ test('parseNss: space- and comma-separated namespaces, blanks dropped', () => {
 test('expectedMs: known ns summed, unknown ones cost the mean of the known', () => {
   assert.equal(expectedMs(['a', 'b'], { a: 100, b: 300 }), 400)
   assert.equal(expectedMs(['a', 'x'], { a: 100, b: 300 }), 300)
-  assert.equal(expectedMs(['x'], {}), 0)
+  assert.equal(expectedMs(['x'], {}), 2100)
+})
+
+test('expectedMs without prior timings: a 52-namespace shard gets more than the 180 s floor', () => {
+  const nss = Array.from({ length: 52 }, (_, i) => `n${i}`)
+  assert.ok(runTimeoutS(expectedMs(nss, {})) > 500)
 })
 
 test('runTimeoutS: 60 s plus 5x the expected time, between 180 s and 1200 s', () => {

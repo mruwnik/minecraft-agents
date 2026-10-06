@@ -18,6 +18,9 @@ import { expectedMs, runTimeoutS, lastFinished, isolate, sweepStale, cleanupOnEx
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const engine = path.join(repo, 'engine')
 
+// The failing shard's output for stdout: its tail only (the whole text is in the kept log).
+export const failureDump = (out, max = 20000) => out.length <= max ? out : `...(cut, ${out.length - max} chars before)\n${out.slice(-max)}`
+
 const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(path.join(dir, e.name)) : [path.join(dir, e.name)])
 
 export const testNamespaces = (root = path.join(engine, 'test')) =>
@@ -140,7 +143,7 @@ const main = async ({ compile = () => spawnSync(path.join(repo, 'tools/compile')
   const results = await Promise.all(split.map(async (nss, i) => {
     const file = `${timingFile}.${process.pid}.${i}`
     fs.writeFileSync(file, '')
-    const limit = runTimeoutS(expectedMs(nss, prior))
+    const limit = Number(process.env.MC_TEST_TIMEOUT_S) || runTimeoutS(expectedMs(nss, prior))
     const r = await runInSlot(slots, ['timeout', '-k', '10', String(limit), 'node', '--max-old-space-size=4096', path.join(runDir, 'out/test.cjs'), `--test=${nss.join(',')}`], { cwd: engine, env: { ...process.env, MC_TEST_TIMINGS: file, NODE_PATH: path.join(repo, 'node_modules') } }, events ? (chunk) => events.feed(i, chunk) : undefined, events ? () => events.waiting(i) : undefined)
     events?.end(i)
     if (r.code === 124 || r.code === 137) r.out += `\ntest-shards: TIMEOUT, shard ${i} killed after ${limit} s; last finished test: ${lastFinished(fs.readFileSync(file, 'utf8').split('\n')) ?? 'none'}\n`
@@ -155,7 +158,7 @@ const main = async ({ compile = () => spawnSync(path.join(repo, 'tools/compile')
     if (o.ok) { console.log(`shard ${r.i}: ok (${r.nss.length} ns)`); continue }
     const log = `/tmp/mc-test-run-${process.pid}-shard-${r.i}.log`
     fs.writeFileSync(log, r.out)
-    bad++; console.log(`--- shard ${r.i} FAILED (${o.why}), output kept in ${log} ---\n${r.out}`)
+    bad++; console.log(`--- shard ${r.i} FAILED (${o.why}), output kept in ${log} ---\n${failureDump(r.out)}`)
   }
   cleanup()
   if (!part) fs.writeFileSync(timingFile, lines.filter(Boolean).join('\n') + '\n')
@@ -165,7 +168,7 @@ const main = async ({ compile = () => spawnSync(path.join(repo, 'tools/compile')
   console.log(`test-shards: ${tests} tests, wall ${((Date.now() - t0) / 1000).toFixed(0)} s, shard peak RSS MB: ${peaks.map((k) => Math.round(k / 1024)).join(' ')} (sum ${Math.round(peaks.reduce((a, b) => a + b, 0) / 1024)})`)
   console.log(`slowest tests (full list: ${timingFile}):`)
   for (const r of slowest(lines, top)) console.log(`  ${String(r.ms).padStart(6)} ms  ${r.var}`)
-  process.exit(bad ? 1 : 0)
+  process.exitCode = bad ? 1 : 0
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) main()

@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { splitShards, partOf, parsePart, testNamespaces, slowest, memSlots, eventForwarder, shardOutcome } from './test-shards.mjs'
+import { splitShards, partOf, parsePart, testNamespaces, slowest, memSlots, eventForwarder, shardOutcome, failureDump } from './test-shards.mjs'
 
 test('splitShards: every namespace exactly once, loads balanced by prior timing', () => {
   const nss = ['a-test', 'b-test', 'c-test', 'd-test', 'e-test']
@@ -138,4 +138,16 @@ test('partOf: depends on the names only, not on the order they are given in', ()
 test('parsePart: "i/N" with 1 <= i <= N, otherwise an error', () => {
   assert.deepEqual(parsePart('2/4'), { i: 2, n: 4 })
   for (const bad of ['0/4', '5/4', 'x', '2', '1/0']) assert.throws(() => parsePart(bad), /--part/)
+})
+
+test('failureDump: long output is cut to its tail, short output kept whole', () => {
+  assert.equal(failureDump('short', 100), 'short')
+  const d = failureDump('x'.repeat(500) + 'TAIL', 100)
+  assert.ok(d.length < 200 && d.endsWith('TAIL'))
+})
+
+test('main end: a large stdout write before exit reaches a pipe reader intact', () => {
+  const src = "process.stdout.write('y'.repeat(300000) + 'END\\n'); process.exitCode = 1"
+  const r = spawnSync(process.execPath, ['-e', src], { maxBuffer: 1e7 })
+  assert.equal(r.stdout.length, 300004)
 })
