@@ -45,6 +45,7 @@
 (def body-middle 0.9)
 (def craft-reach 4.5)
 (def entity-height 1.8)
+(def item-middle 0.125) ; a drop rests on its cell floor, 0.25 high (the real entity aims at height/2 above its feet)
 (def hit-range 6)
 (def fake-body-id -1)
 (def offline-default-ms (* 5 60 1000))
@@ -613,11 +614,13 @@
 (defn cell-of [c] [(.-x c) (.-y c) (.-z c)])
 
 (defn can-see?
-  "A cell with a block that is not see-through stops the eye; unknown cells and unloaded ones do not."
+  "A cell with a block that is not see-through stops the eye; unknown cells and unloaded ones do not. The eye aims at the
+  middle of the entity: an item lies low, as the real entity does."
   [w e]
   (let [[sx sy sz] (body-pos w) [ex ey ez] (:pos e)
+        middle (if (= "item" (:kind e)) item-middle body-middle)
         blocks-sight (fn [c] (let [cell (cell-of c)] (and (not (see-through (block-name w cell))) (not ((:unloaded w) cell)))))]
-    (.lineClear ^js @sight #js {:x (+ sx 0.5) :y (+ sy eye) :z (+ sz 0.5)} #js {:x (+ ex 0.5) :y (+ ey body-middle) :z (+ ez 0.5)} blocks-sight)))
+    (.lineClear ^js @sight #js {:x (+ (js/Math.floor sx) 0.5) :y (+ sy eye) :z (+ (js/Math.floor sz) 0.5)} #js {:x (+ ex 0.5) :y (+ ey middle) :z (+ ez 0.5)} blocks-sight)))
 
 (defn can-hit?
   "A melee swing needs a clear line from the eye to some point of the target's hitbox; blocks by name."
