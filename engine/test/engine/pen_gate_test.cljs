@@ -258,7 +258,8 @@
       (fn ^:async t []
         (let [s (await (run-job (pen-world true 2 0) {"pen-a" pen-a} {} 20))]
           (is (gate-open? (:p s) 2 64 0))
-          (is (= [{:cell [2 64 0] :reason :standing-in}] (:left (first (events-of s :shut-gate.done))))))))))
+          (is (= [{:cell [2 64 0] :reason :standing-in}] (:left (first (events-of s :shut-gate.stopped)))))
+          (is (empty? (events-of s :shut-gate.done)) "a gate left open is not done"))))))
 
 (deftest with-a-plan-every-open-gate-of-that-plan-is-shut-and-other-plans-are-not
   (async done
@@ -273,6 +274,38 @@
           (is (not (gate-open? (:p s) 0 64 2)))
           (is (gate-open? (:p s) 20 64 0) "the other plan's gate stays open")
           (is (= 2 (:shut (first (events-of s :shut-gate.done))))))))))
+
+(deftest one-run-shuts-all-gates-at-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [two (update (pen-plan "pen-a" [2 64 0]) :parts conj {:id "gate2" :cells [[0 64 2]] :want gate-want})
+              spec (pen-world true 2 -6 {:blocks (merge ground ring {"2,64,0" "oak_fence_gate" "0,64,2" "oak_fence_gate"})
+                                        :states {"2,64,0" {:open true} "0,64,2" {:open true}}})
+              s (await (run-job spec {"pen-a" two} {:plan "pen-a"} 1))]
+          (is (empty? (:list (core/state (:eng s)))) "one tick: the job ended")
+          (is (not (gate-open? (:p s) 2 64 0)))
+          (is (not (gate-open? (:p s) 0 64 2)))
+          (is (= 2 (:shut (first (events-of s :shut-gate.done))))))))))
+
+(deftest a-gate-given-up-ends-the-run-stopped
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (run-job (pen-world true 2 7 {:unreachable ["2,64,0"]}) {"pen-a" pen-a} {} 1))]
+          (is (empty? (:list (core/state (:eng s)))) "one tick: the job ended")
+          (is (empty? (events-of s :shut-gate.done)))
+          (is (= [[2 64 0]] (mapv :cell (:left (first (events-of s :shut-gate.stopped)))))))))))
+
+(deftest a-cow-that-stays-in-the-gate-is-waited-out-not-pushed-and-the-run-ends-stopped
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cow {:id 7 :name "cow" :kind "passive" :pos {:x 2.5 :y 64 :z 0.5}}
+              s (await (run-job (pen-world true 2 -6 {:entities [cow]}) {"pen-a" pen-a} {} 1))]
+          (is (gate-open? (:p s) 2 64 0) "the cow is not pushed")
+          (is (zero? (count (filter #(= "useOn" (.-name %)) (.-calls (.-world (:p s)))))) "no click")
+          (is (= [{:cell [2 64 0] :reason :animal-in-the-way}] (:left (first (events-of s :shut-gate.stopped))))))))))
 
 (deftest without-a-plan-only-gates-within-the-radius-are-shut
   (async done

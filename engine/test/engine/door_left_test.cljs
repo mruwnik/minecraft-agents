@@ -165,3 +165,42 @@
             (core/submit! eng '(walker) {})
             (await (tick-until s #(empty? (:list (core/state eng))) 10))
             (is (= shut? (first @seen)) (str doors))))))))
+
+(def gate2-cell {:x 5 :y 64 :z 4})
+
+(defn two-gates-world [x z more]
+  (gate-world true x z (merge-with merge {:blocks {"5,64,4" "oak_fence_gate"} :states {"5,64,4" {:open true :facing "east"}}} more)))
+
+(defn remember-opened-at! [{:keys [eng clock]} cell]
+  (mem/write! (:store eng) :opened {:cell cell :by "j1" :t @clock} pass/opened-policy))
+
+(deftest one-run-shuts-every-left-block
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup (two-gates-world 9 2 {}))]
+          (remember-opened-at! s gate-cell)
+          (remember-opened-at! s gate2-cell)
+          (core/submit! eng '(jobs.maintenance.shut-doors) {})
+          (await (tick-until s #(empty? (:list (core/state eng))) 1))
+          (is (empty? (:list (core/state eng))) "one tick: the job ended")
+          (is (not (open? p gate-cell)))
+          (is (not (open? p gate2-cell)))
+          (is (= 2 (:shut (first (filter #(= :shut-doors.done (:kind %)) @seen))))))))))
+
+(deftest a-block-given-up-ends-the-run-stopped-with-the-others-shut
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup (two-gates-world 14 2 {:unreachable ["5,64,0"]}))]
+          (remember-opened-at! s gate-cell)
+          (remember-opened-at! s gate2-cell)
+          (core/submit! eng '(jobs.maintenance.shut-doors) {})
+          (await (tick-until s #(empty? (:list (core/state eng))) 3))
+          (is (empty? (:list (core/state eng))))
+          (is (open? p gate-cell))
+          (is (not (open? p gate2-cell)))
+          (is (empty? (filter #(= :shut-doors.done (:kind %)) @seen)) "partial is not done")
+          (let [e (first (filter #(= :shut-doors.stopped (:kind %)) @seen))]
+            (is (= 1 (:shut e)))
+            (is (= [[5 64 0]] (mapv :cell (:left e))))))))))

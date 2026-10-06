@@ -593,7 +593,7 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 | `survival.recover-drops` | After death, weighs the drops' value against the trip's danger (`jobs.lib.cost`) and fetches or skips them |
 | `survival.restore-broken` | Puts back what a job broke in another's zone, and the holes go-to's escalation dug |
 | `survival.unwedge` | Steps out of a full block at the feet cell, else digs it, all in one run (stopped + warn `unwedge.blocked` for bedrock or three failed digs) |
-| `maintenance.unstick`, `maintenance.shut-doors` | Walk to the stuck job's goal with go-to in one run (stopped + warn `unstick.failed` when it does not arrive); shut doors a walk left open |
+| `maintenance.unstick`, `maintenance.shut-doors` | Walk to the stuck job's goal with go-to in one run (stopped + warn `unstick.failed` when it does not arrive); shut every door a walk left open in one run (stopped `:left` with the reasons when any stays open) |
 | `combat.attack` `{:targets :radius :absent :done}` | Kills named targets (ids, usernames, mob types); ends `:cleared`, `:gave-up`, `:lost`, `:timeout` or `:absent`. `:absent :wait` makes a standing guard |
 | `combat.hunt`, `animals.cull` | Kill adults of a mob kind, never the last `:keep`, and collect drops |
 
@@ -616,7 +616,7 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 | job | what it does |
 |---|---|
 | `farm.till`, `plant`, `harvest`, `fertilize`, `compost`, `tidy`, `find-spot`, `tend` | Field work; `tend` keeps one field in order |
-| `animals.breed`, `leash`, `unleash`, `lead-to`, `herd`, `shear`, `pen-check`, `shut-gate`, `tend` | Animal care; `tend` keeps one pen in order |
+| `animals.breed`, `leash`, `unleash`, `lead-to`, `herd`, `shear`, `pen-check`, `shut-gate` (shuts every open planned gate in one run; stopped `:left` when any stays open), `tend` | Animal care; `tend` keeps one pen in order |
 | `apiary.guard`, `harvest`, `maintain` | Keep campfire columns, take honey, keep an apiary in order |
 | `build.from-plan`, `pen`, `rail-line`, `clear-box` | Build what a plan wants; build a pen's fence or a rail line; dig out a box |
 | `blocks.dig`, `blocks.place` | One block at `:pos`; dig holds the best suited tool; `:on-fluid :fail` ends a dig beside water at once (default `:wait`) |

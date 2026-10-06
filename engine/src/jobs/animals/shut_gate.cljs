@@ -2,7 +2,8 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.apiary :as apiary]
             [jobs.lib.util :as u]
-            [jobs.lib.near :as near]
+            [jobs.lib.pass :as pass]
+            [jobs.lib.result :as res]
             [triggers.animals.pen-gate :as pg]
             [jobs.lib.world :as known]))
 
@@ -15,19 +16,21 @@
     gate open on purpose is not fought.
   - With :plan: every open gate of that plan, wherever it is.
 
-  Each round takes the nearest open gate, walks within :reach of it, clicks it with an empty hand and reads the
-  block again. A gate the body stands in is left (reason :standing-in). A gate that could not be reached or did
-  not shut after :tries rounds is given up with one warn shut-gate.gave-up and a :gate-gave-up memory entry,
-  which keeps the trigger away from it for 10 minutes.
+  One run shuts them all, nearest first. For each it walks within :reach (a jobs.movement.go-to child, doors :never),
+  waits a few seconds when an animal stands in the gate (never pushes it), clicks it with an empty hand and reads
+  the block again. A gate the body stands in is left (reason :standing-in), as is one an animal never left
+  (:animal-in-the-way). A gate that could not be reached or did not shut after :tries clicks is given up with one warn
+  shut-gate.gave-up and a :gate-gave-up memory entry, which keeps the trigger away from it for 10 minutes.
 
-  Ends with info shut-gate.done and {:shut n :left [{:cell [x y z] :reason r}]}. A :plan that is missing or
-  unreadable gives one warn shut-gate.declined and {:shut 0 :left [] :declined text}.")
+  Ends done with info shut-gate.done {:shut n :left []} when every open gate was shut (or none stood open); with any
+  left, stopped :left with warn shut-gate.stopped and {:shut n :left [{:cell [x y z] :reason r}]}. A :plan that is
+  missing or unreadable gives one warn shut-gate.declined and {:shut 0 :left [] :declined text}.")
 
 (def args
   {:plan {:doc "id of a plan whose open gates are all shut; nil: the open planned gates of every active plan within :radius" :default nil}
    :radius {:doc "without :plan, how far from the body a gate is looked for, in blocks" :default 8}
    :reach {:doc "walk until within this many cells of the gate (the click reaches 4.5 from the eye)" :default 3}
-   :tries {:doc "failed rounds on one gate before it is given up" :default 3}})
+   :tries {:doc "failed clicks on one gate before it is given up" :default 3}})
 
 (def quiet-ttl-ms (* 1000 (:quiet-s pg/defaults)))
 
@@ -56,25 +59,25 @@
         [(pg/candidates (u/self-pos c) cells {:radius radius :min-dist -1}) nil]))))
 
 (defn open-now
-  "The open gates among cells that this job has not given up on."
-  [c cells]
-  (let [given-up (set (map first (:given-up (ctx/mem c))))]
-    (pg/open-cells (apiary/block-at-fn (:primitives c)) (remove given-up cells))))
+  "The open gates among cells, minus the cells in left ({:cell [x y z]})."
+  [c cells left]
+  (let [done (set (map :cell left))]
+    (pg/open-cells (apiary/block-at-fn (:primitives c)) (remove done cells))))
 
 (defn nearest [c cells]
   (let [here (u/self-pos c)]
     (first (sort-by #(pg/distance here %) cells))))
 
 (defn finish!
-  "End the job: the event and the result."
-  [c]
-  (let [m (ctx/mem c)
-        left (into (vec (:standing m)) (map (fn [[cell reason]] {:cell cell :reason reason})) (:given-up m))
-        result {:shut (:shut m 0) :left left}]
-    (ctx/emit! c :shut-gate.done :info
-               (assoc result :text (str (:shut result) " gate(s) shut" (when (seq left) (str ", " (count left) " left open")))))
-    (ctx/result! c result)
-    :done))
+  "End the job: the event and the result; stopped when any gate is left."
+  [c shut left]
+  (let [result {:shut shut :left left}
+        text (str shut " gate(s) shut" (when (seq left) (str ", " (count left) " left open")))]
+    (if (empty? left)
+      (do (ctx/emit! c :shut-gate.done :info (assoc result :text text))
+          (res/finish! c result))
+      (do (ctx/emit! c :shut-gate.stopped :warn (assoc result :text text))
+          (res/stop! c :left text :shut shut :left left)))))
 
 (defn decline!
   [c text]
@@ -83,36 +86,49 @@
   :done)
 
 (defn give-up!
-  "Give up the gate: one warn, one memory entry the trigger reads, and the gate is not looked at again by this job."
+  "Give up the gate: one warn, one memory entry the trigger reads; the entry for the left list."
   [c cell reason]
-  (ctx/update-mem! c update :given-up (fnil conj []) [cell reason])
   (ctx/remember! c :gate-gave-up {:cell cell :reason reason} {:cap 50 :ttl quiet-ttl-ms})
   (ctx/emit! c :shut-gate.gave-up :warn {:cell cell :reason reason :plan (:plan (:args c))
                                         :text (str "gate " cell " stays open: " (name reason))})
-  :continue)
+  {:cell cell :reason reason})
 
-(defn fail-gate!
-  "Count a failed round on the gate; give it up on the last allowed try."
-  [c cell reason]
-  (let [tries (inc (get-in (ctx/mem c) [:tries cell] 0))]
-    (ctx/update-mem! c assoc-in [:tries cell] tries)
-    (if (>= tries (:tries (:args c)))
-      (give-up! c cell reason)
-      :continue)))
+(defn ^:async walk! [c cell]
+  (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos (cell-pos cell) :range (:reach (:args c)) :doors :never :escalate false}))]
+    (and (= :done r) (:arrived (ctx/child-result c :walk)))))
+
+(defn ^:async clear-of-animals?
+  "Whether no animal stands in the gate's cell, after waiting out one for pass/shut-waits times pass/shut-wait-ms."
+  [c cell]
+  (let [col (pass/column-of (cell-pos cell) {})]
+    (loop [n 0]
+      (cond
+        (empty? (pass/animals-in c col)) true
+        (>= n pass/shut-waits) false
+        :else (do (await (ctx/act c :wait #js {:ms pass/shut-wait-ms})) (recur (inc n)))))))
 
 (defn ^:async click!
-  "Click the gate at cell once the body is in reach, then read it again."
+  "Click the gate at cell once the body is in reach, then read it again: nil when shut, else the reason."
   [c cell]
   (let [r (await (ctx/act c :useOn (clj->js {:pos (cell-pos cell)})))]
-    (if (empty? (pg/open-cells (apiary/block-at-fn (:primitives c)) [cell]))
-      (do (ctx/update-mem! c update :shut (fnil inc 0)) :continue)
-      (fail-gate! c cell (if (= "unreachable" (.-status r)) :unreachable :refused)))))
+    (cond
+      (empty? (pg/open-cells (apiary/block-at-fn (:primitives c)) [cell])) nil
+      (= "unreachable" (.-status r)) :unreachable
+      :else :refused)))
 
-(defn ^:async walk-and-click! [c cell]
-  (case (await (near/walk-near! c (cell-pos cell) (:reach (:args c)) {:doors :never}))
-    :there (await (click! c cell))
-    :partial :continue
-    (fail-gate! c cell :unreachable)))
+(defn ^:async shut-once!
+  "Shut the gate: nil when shut, else the reason it stays open."
+  [c cell]
+  (cond
+    (not (await (walk! c cell))) :unreachable
+    (not (await (clear-of-animals? c cell))) :animal-in-the-way
+    :else
+    (loop [n 1]
+      (let [reason (await (click! c cell))]
+        (cond
+          (nil? reason) nil
+          (< n (:tries (:args c))) (recur (inc n))
+          :else reason)))))
 
 (defn check
   "Always: a run that finds nothing open ends at once with {:shut 0 :left []}, and a started run owes its result
@@ -124,11 +140,16 @@
   (let [[cells trouble] (watched-cells c)]
     (if trouble
       (decline! c trouble)
-      (let [here (u/self-pos c)
-            open (open-now c cells)
-            under (filter #(pg/standing-in? here %) open)
-            todo (remove (set under) open)]
-        (ctx/update-mem! c assoc :standing (mapv (fn [cell] {:cell cell :reason :standing-in}) under))
-        (if (empty? todo)
-          (finish! c)
-          (await (walk-and-click! c (nearest c todo))))))))
+      (loop [shut 0 left []]
+        (let [here (u/self-pos c)
+              open (open-now c cells left)
+              under (filter #(pg/standing-in? here %) open)
+              todo (remove (set under) open)
+              left (into left (map (fn [cell] {:cell cell :reason :standing-in})) under)]
+          (if-let [cell (nearest c todo)]
+            (let [reason (await (shut-once! c cell))]
+              (cond
+                (nil? reason) (recur (inc shut) left)
+                (= :animal-in-the-way reason) (recur shut (conj left {:cell cell :reason reason}))
+                :else (recur shut (conj left (give-up! c cell reason)))))
+            (finish! c shut left)))))))
