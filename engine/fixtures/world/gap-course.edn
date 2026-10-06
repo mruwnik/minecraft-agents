@@ -1,6 +1,6 @@
-;; Card a3418585: a gap jump over 3 cells needs a sprint (food > 6); a walking jump clears 2. One-wide stone strip along x at z 10, pit floor at y -5.
+;; Card a3418585: gap jumps over 2 or 3 cells need a sprint (food > 6). One-wide stone strip along x at z 10, pit floor at y -5.
 ;; Food 20 arrives over a 3 or level 2 gap; food <= 6 (hunger effect, then cleared) walks round when a detour exists, else stops
-;; without jumping (:gap-sprint / :abilities); a 1 gap is still jumped. gap2-food6-level (no detour): live result 5 of 5 arrive (a walking 2-gap jump works).
+;; without jumping (:gap-sprint / :abilities); a 1 gap is still jumped. gap2-food6-level (no detour): refused like a 3 gap.
 {:defaults
  {:tags [:movement]
   :time :any
@@ -36,8 +36,8 @@
  {:name "gap2-food6-level"
    :blocks [[:fill [3 -5 3] [26 -5 17] "stone"] [:fill [4 -1 10] [8 -1 10] "stone"] [:fill [11 -1 10] [15 -1 10] "stone"]]
    :act [[:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:wait-s 9] [:rcon "effect clear $BODY"] [:job (jobs.movement.go-to {:pos #at [14 0 10] :range 0 :escalate false})]]
-   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 60 :of-job true}]
-   :after [[:body-near [14.5 0 10.5] 1.5]]}
+   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived false}} :within-s 60 :of-job true}]
+   :after [[:body-near [7.5 0 10.5] 4]]}
  {:name "gap1-food6"
    :blocks [[:fill [3 -5 3] [26 -5 17] "stone"] [:fill [4 -1 10] [8 -1 10] "stone"] [:fill [10 -1 10] [14 -1 10] "stone"]]
    :act [[:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:wait-s 9] [:rcon "effect clear $BODY"] [:job (jobs.movement.go-to {:pos #at [13 0 10] :range 0 :escalate false})]]

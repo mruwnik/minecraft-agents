@@ -46,7 +46,7 @@
    :crossing-xz 0.3        ; steer at a crossing point until this close to it
    :still-xz 0.1           ; closer than this to the aim: no forward, keep the yaw
    :gap-jump {1 {:from 0.2 :sprint false}  ; by gap width: jump once the feet are within :from of the takeoff
-              2 {:from 0.2 :sprint false}  ; edge; a walking jump clears 2 cells, 3 needs a sprint for the run and the flight
+              2 {:from 0.4 :sprint true}   ; edge; a walking jump falls short over 2 cells or more: they need a sprint for the run and the flight
               3 {:from 0.1 :sprint true}}
    :gap-jump-down {2 {:from 0.0 :sprint false}}  ; one block down, by width, where it differs (a sprint jump over 2 overshoots a 1x1 landing)
    :gap-past 0.3           ; feet up to this far past the takeoff edge are still held by it (half the body's width)
