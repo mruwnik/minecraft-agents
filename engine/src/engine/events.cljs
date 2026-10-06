@@ -224,6 +224,17 @@
                       (range (dec segment-count) 0 -1))]
     (conj (vec rotated) empty-segment)))
 
+(defn append-line!
+  "Append line to file; a failed append (disk full) cuts the partial line off again, so the next append
+  cannot glue onto it and the log stays readable."
+  [file line]
+  (let [before (.-size (fs/statSync file))]
+    (try
+      (fs/appendFileSync file line)
+      (catch :default e
+        (try (fs/truncateSync file before) (catch :default _ nil))
+        (throw e)))))
+
 (defn append-record! [stream event]
   (let [{:keys [file max-bytes last-seq stream-id generation-id run-id now pos-fn]} @stream
         n (inc last-seq)
@@ -248,7 +259,7 @@
                        (> (+ active-bytes line-bytes) (segment-target max-bytes)))
               (rotate! file)
               (swap! stream update :segments rotate-segment-index file))
-            (fs/appendFileSync active line)
+            (append-line! active line)
             (prune-segments! file max-bytes)
             (swap! stream update :segments update-active-segment file n line-bytes)
             (swap! stream update :segments existing-segment-index)))

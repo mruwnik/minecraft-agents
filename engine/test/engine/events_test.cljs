@@ -224,3 +224,17 @@
     (events/emit! stream {:source :job :kind :done :cause 7})
     (is (= [{:data {:cause "lava"}} {:context {:cause-seq 7}}]
            [(select-keys (first @seen) [:data :context]) (select-keys (second @seen) [:data :context])]))))
+
+(deftest a-partial-append-is-rolled-back-so-the-log-stays-bootable
+  (let [file (path/join (tu/tmp-dir) "events.edn")
+        stream (events/make {:file file :generation-id "generation-a"})
+        real-append (.-appendFileSync fs)]
+    (events/emit! stream {:source :system :kind :started})
+    (set! (.-appendFileSync fs)
+          (fn [f text] (real-append f (subs text 0 20)) (throw (js/Error. "ENOSPC"))))
+    (try (events/emit! stream {:source :job :kind :queued :job "j1"})
+         (catch :default _ nil)
+         (finally (set! (.-appendFileSync fs) real-append)))
+    (events/emit! stream {:source :job :kind :queued :job "j2"})
+    (is (= [1 3] (mapv :seq (read-lines file))) "no half record is left between the lines")
+    (is (= 3 (:seq (events/cursor (events/make {:file file :generation-id "generation-b"})))) "the log boots")))
