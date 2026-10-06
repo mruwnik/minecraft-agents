@@ -358,6 +358,15 @@
   [plan prefix]
   (pr-str (assoc plan :id (str prefix (:id plan)))))
 
+(defn resolve-plan-refs
+  "Replaces every \"$plan:<id>\" string in form with the runner's plan id (prefix + id), so a fixture names its
+  own plan without knowing the body."
+  [form prefix]
+  (walk/postwalk (fn [v] (if (and (string? v) (str/starts-with? v "$plan:"))
+                           (str prefix (subs v 6))
+                           v))
+                 form))
+
 ;; ------------------------------------------------------------------ after checks
 
 (defn after-command

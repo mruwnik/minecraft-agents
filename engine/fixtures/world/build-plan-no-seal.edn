@@ -1,5 +1,5 @@
 ;; Cards 44a6972e / 35197ebf: build.from-plan never shuts the body in (a place that closes its last way out is held back, the body
-;; walks out of the footprint first) and digs a non-replaceable block (leaves) in a :clear cell. Run with --body ProbePlanSeal.
+;; walks out of the footprint first) and digs a non-replaceable block (leaves) in a :clear cell.
 ;; Box: walls outline [10 0 10]-[13 1 13] + roof y2, body inside at [11.5 0 11.5], 64 dirt.
 {:defaults
  {:tags [:build] :time :any
@@ -11,7 +11,7 @@
    :plans [{:id "box" :metadata {:by "ProbePlanSeal"}
             :parts [{:id "walls" :outline [#at [10 0 10] #at [13 1 13]] :want "dirt"}
                     {:id "roof" :box [#at [10 2 10] #at [13 2 13]] :want "dirt"}]}]
-   :act [[:job (jobs.build.from-plan {:plan "test-probeplanseal-box"})]]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:box"})]]
    :expect [{:event {:source :job :kind :build.done :data {:missing 0}} :within-s 120}
             {:event {:source :job :kind :result :data {:arrived true}} :within-s 120}
             {:no-event {:source :job :kind :build.wrong} :for-s 5}]
@@ -26,7 +26,7 @@
    :blocks [[:fill [5 0 5] [22 0 22] "stone"] [:fill [15 1 5] [22 1 22] "stone"]
             [:set [11 1 11] "stone"] [:set [12 1 11] "stone"] [:set [11 1 12] "stone"]]
    :body {:at [11.5 2 11.5]}
-   :act [[:job (jobs.build.from-plan {:plan "test-probeplanseal-box"})]]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:box"})]]
    ;; interior roof cells wait (no-support) until the ring roof is there. Stand cells are put on the ground (card 51beca4c): the corner
    ;; roof [13 3 10] was given up :unreachable on the slope (stand cells at the body's feet height lay inside the hill).
    :expect [{:event {:source :job :kind :build.done :data {:placed 40 :missing 0}} :within-s 120}
@@ -45,7 +45,7 @@
                     {:id "roof" :box [#at [10 2 10] #at [13 2 13]] :want "dirt"}]}]
    :blocks [[:set [11 1 13] "oak_leaves[persistent=true]"] [:set [11 0 13] "oak_leaves[persistent=true]"]]
    :body {:at [11.5 0 17.5]}
-   :act [[:job (jobs.build.from-plan {:plan "test-probeplanseal-hut"})]]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:hut"})]]
    :expect [{:event {:source :job :kind :build.done} :within-s 140}
             {:no-event {:source :job :kind :build.wrong} :for-s 5}]
    :after [[:block [11 1 13] "air"] [:block [11 0 13] "air"] [:block [10 0 10] "dirt"] [:block [13 2 13] "dirt"] [:block [12 1 13] "dirt"]]
@@ -57,7 +57,7 @@
             :parts [{:id "walls" :outline [#at [10 0 10] #at [13 1 13]] :want "dirt"}
                     {:id "roof" :box [#at [10 2 10] #at [13 2 13]] :want "dirt"}]}]
    :blocks [[:fill [4 0 4] [19 4 19] "stone"] [:fill [8 0 8] [15 4 15] "air"]]
-   :act [[:job (jobs.build.from-plan {:plan "test-probeplanseal-box"})]]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:box"})]]
    :expect [{:event {:source :job :kind :build.done :data {:placed 40 :missing 0}} :within-s 140}]
    :after [[:not-block [11 0 11] "dirt"] [:block [13 2 10] "dirt"]]
    :limit-s 170}
@@ -68,7 +68,7 @@
             :parts [{:id "walls" :outline [#at [10 0 10] #at [13 1 13]] :want "dirt"}
                     {:id "roof" :box [#at [10 2 10] #at [13 2 13]] :want "dirt"}]}]
    :blocks [[:fill [0 -3 0] [31 -3 31] "stone"] [:fill [0 -2 0] [31 -1 31] "air"] [:fill [9 -1 9] [14 -1 14] "stone"]]
-   :act [[:job (jobs.build.from-plan {:plan "test-probeplanseal-box"})]]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:box"})]]
    :expect [{:event {:source :job :kind :build.gave-up :message [:contains "unreachable"]} :within-s 140}
             {:event {:source :job :kind :stopped :data {:reason :incomplete} :message [:contains "unreachable"]} :within-s 140}]
    :after [[:not-block [11 0 11] "dirt"] [:not-block [12 2 13] "dirt"] [:not-block [13 1 13] "dirt"] [:block [10 0 10] "dirt"]]

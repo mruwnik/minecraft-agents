@@ -47,7 +47,7 @@ patterns write `#at [x y z]` (absolute `[x y z]`) or `#xyz [x y z]` (absolute `{
 | `:mobs` | `:keep`: the runner does not kill hostile mobs within 32 blocks of the plot before `:act` (each run, `--repeat` too); for danger cases that rely on mobs already there | absent (hostiles near the plot are killed) |
 | `:plot` | `{:height 2..31 :floor "block"}`; `:length` (x, 16..1024) and `:width` (z, 16..64) make a large plot, leased from 16 lanes south of the grid (z 20704 + 96 j, never overlapping it; setup clears the lane's full 64-wide floor first); keep each `:blocks` fill under 32768 blocks | `{:height 16 :floor "stone"}`, 32x32 |
 | `:blocks` | `[:fill a b "block" (:hollow/:outline/...)]`, `[:set p "block[state]"]` | `[]` |
-| `:plans` | plan maps (`:id`, `:parts`); written as `worlds/<world>/plans/test-<body>-<id>.edn`, deleted after | `[]` |
+| `:plans` | plan maps (`:id`, `:parts`); written as `worlds/<world>/plans/test-<body>-<id>.edn`, deleted after; a job-spec string `"$plan:<id>"` becomes that plan's id | `[]` |
 | `:body` | `{:at p :inventory [["item" n]] :effects [["effect" s amp]] :spawnpoint p :settle-s 3}` | at the middle |
 | `:act` | steps, in order (below) | `[]` |
 | `:expect` | event expectations (below) | `[]` |

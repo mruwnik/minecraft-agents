@@ -166,6 +166,11 @@
 (deftest plan-files-carry-the-runner-prefix
   (is (= "{:id \"test-probefixture-pen\", :parts []}" (f/plan-file-text {:id "pen" :parts []} "test-probefixture-"))))
 
+(deftest plan-refs-resolve-to-the-runner-prefix
+  (is (= '(jobs.forestry.prepare {:plan "test-probex-wood"})
+         (f/resolve-plan-refs '(jobs.forestry.prepare {:plan "$plan:wood"}) "test-probex-")))
+  (is (= {:plan "other"} (f/resolve-plan-refs {:plan "other"} "test-probex-"))))
+
 (deftest body-start-plan-gives-each-case-clean-memory
   (is (= :restart-clean (f/body-start-plan {} true)))
   (is (= :restart-clean (f/body-start-plan {} false)))

@@ -1,7 +1,7 @@
 ;; Card c5d2cded part 1: tool wear after digs in jobs.access.cleanup and jobs.forestry.prepare. A pickaxe with 1 durability
 ;; left (damage=249) breaks in the dig: warn tool.broke then tool.none; a healthy pick gives no tool event; no pick at all
 ;; gives none either (nothing is dug: prepare and cleanup leave a block that needs a pick). Cleanup digs the cobblestone pillar the same body placed; prepare digs a
-;; cobblestone stray in the planned oak cell. Torches keep hostiles away. Prepare cases name the plan test-probewear-wood, so run with --body ProbeWear. Run: node tools/world-test.mjs <file> --body ProbeWear --match <name> --first-plot N
+;; cobblestone stray in the planned oak cell. Torches keep hostiles away.  Run: node tools/world-test.mjs <file> --match <name> --first-plot N
 {:defaults
  {:tags [:tool-wear :cleanup :prepare]
   :time :any
@@ -38,7 +38,7 @@
    :blocks [[:set [16 0 16] "cobblestone"]]
    :plans [{:id "wood" :parts [{:id "t" :cells [#at [16 0 16]] :want {:tree "oak"}}]}]
    :body {:at [16.5 0 12.5] :inventory [["iron_pickaxe[damage=249]" 1] ["oak_sapling" 1] ["dirt" 2]]}
-   :act [[:job (jobs.forestry.prepare {:plan "test-probewear-wood"})]]
+   :act [[:job (jobs.forestry.prepare {:plan "$plan:wood"})]]
    :expect [{:event {:source :job :kind :tool.broke} :within-s 60}
             {:event {:source :job :kind :tool.none} :within-s 60}]
    :after [[:item "iron_pickaxe" 0]]}
@@ -46,7 +46,7 @@
    :blocks [[:set [16 0 16] "cobblestone"]]
    :plans [{:id "wood" :parts [{:id "t" :cells [#at [16 0 16]] :want {:tree "oak"}}]}]
    :body {:at [16.5 0 12.5] :inventory [["iron_pickaxe" 1] ["oak_sapling" 1] ["dirt" 2]]}
-   :act [[:job (jobs.forestry.prepare {:plan "test-probewear-wood"})]]
+   :act [[:job (jobs.forestry.prepare {:plan "$plan:wood"})]]
    :expect [{:event {:source :job :kind :prepare.done} :within-s 60}
             {:no-event {:source :job :kind #{:tool.broke :tool.none :tool.low}} :for-s 15}]
    :after [[:item "iron_pickaxe" 1] [:block [16 0 16] "oak_sapling"]]}
@@ -54,7 +54,7 @@
    :blocks [[:set [16 0 16] "cobblestone"]]
    :plans [{:id "wood" :parts [{:id "t" :cells [#at [16 0 16]] :want {:tree "oak"}}]}]
    :body {:at [16.5 0 12.5] :inventory [["oak_sapling" 1] ["dirt" 2]]}
-   :act [[:job (jobs.forestry.prepare {:plan "test-probewear-wood"})]]
+   :act [[:job (jobs.forestry.prepare {:plan "$plan:wood"})]]
    ;; no pick: the cobblestone stray is not dug by hand; warn prepare.no-tool, no tool event, no error
    :expect [{:event {:source :job :kind :prepare.no-tool} :within-s 30}
             {:no-event {:source :job :kind #{:tool.broke :tool.none :tool.low}} :for-s 20}
