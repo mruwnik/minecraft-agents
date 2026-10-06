@@ -10,7 +10,7 @@
             [jobs.lib.near :as near]
             [jobs.lib.targets :as targets]
             [jobs.lib.watch :as watch]
-            [jobs.lib.look :refer [cell-of headings heading-name facing glance! look-around!]]
+            [jobs.lib.look :as look :refer [cell-of headings heading-name facing glance! look-around!]]
             [jobs.lib.torch :as torch]
             [jobs.build.from-plan :as from-plan]
             [jobs.survival.dig-in :as dig-in]
@@ -174,13 +174,6 @@
       (and (some #{"water"} names) (not wet)) :wet
       :else :ok)))
 
-(defn seen-cells
-  "The cells perception remembers holding block within radius of the body, nearest first ([] without a perception)."
-  [p block radius]
-  (if-let [f (aget p "seenBlocks")]
-    (mapv #(u/pos-of (.-pos %)) (array-seq (.call f p #js {:radius radius :names #js [block] :max 128})))
-    []))
-
 (defn rules-in
   "The rules input: another's plans always refuse, this body's own too unless :spare-own-builds is false."
   [c]
@@ -196,9 +189,9 @@
         skipped (set (:skipped (ctx/mem c)))
         ground (into #{} (map :pos) (:ground (ctx/mem c)))
         here (u/self-pos c)
-        cells (->> (seen-cells p block radius)
-                   (remove skipped)
-                   (filter #(= block (u/block-name p %))))
+        cells (->> (look/seen-blocks p {:names [block] :radius radius :max 128 :live? true})
+                   (map :pos)
+                   (remove skipped))
         graded (map (juxt identity #(classify c wet %)) cells)
         in (rules-in c)
         judged (->> graded

@@ -186,22 +186,11 @@
   [c]
   (or (:furnace (:args c)) (:furnace (ctx/mem c))))
 
-(defn seen-blocks
-  "The blocks of names the body has seen within radius (perception's seenBlocks: memory of what it saw, never
-  x-ray) that are still that block now, nearest first, as {:name :pos}; empty without perception."
-  [p names radius max]
-  (if-let [f (aget p "seenBlocks")]
-    (->> (array-seq (.call f p #js {:radius radius :names (clj->js (vec names)) :max max}))
-         (keep (fn [b] (let [pos (u/pos-of (.-pos b))]
-                         (when (= (.-name b) (u/block-name p pos))
-                           {:name (.-name b) :pos pos})))))
-    []))
-
 (defn nearest-furnace
   "The nearest furnace, blast furnace or smoker the body has seen within seen-radius, still that block now, that
   cooks item (any kind when item is nil); nil when none."
   [c item]
-  (->> (seen-blocks (:primitives c) furnace-block? seen-radius 16)
+  (->> (look/seen-blocks (:primitives c) {:names furnace-block? :radius seen-radius :max 16 :live? true})
        (some #(when (or (nil? item) (smelts? (:name %) item)) (:pos %)))))
 
 (defn needs-attention?

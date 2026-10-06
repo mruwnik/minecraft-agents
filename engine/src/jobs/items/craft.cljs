@@ -3,7 +3,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
-            [jobs.items.smelt :as smelt]
+            [jobs.lib.look :as look]
             [jobs.storage.deposit :as deposit]))
 
 (def doc
@@ -29,7 +29,7 @@
 (defn nearest-table
   "The position of the nearest crafting table the body has seen within radius, or nil."
   [p radius]
-  (:pos (first (smelt/seen-blocks p ["crafting_table"] radius 8))))
+  (:pos (first (look/seen-blocks p {:names ["crafting_table"] :radius radius :max 8 :live? true}))))
 
 (defn finish!
   "Hand the parent a result, made so far plus extra, and return :done."

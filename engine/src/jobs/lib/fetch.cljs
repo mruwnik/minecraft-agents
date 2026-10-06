@@ -19,6 +19,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
             [jobs.lib.declined :as declined]
+            [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
             [engine.memory :as mem]))
@@ -302,14 +303,12 @@
   nearest first; empty without perception. A cell seen in the last view-age-ms is checked against the live block
   (gone: dropped); an older memory is trusted, a failed open or a later sight corrects it."
   [c]
-  (let [p (:primitives c)]
-    (if-let [f (aget p "seenBlocks")]
-      (let [me (u/self-pos c)]
-        (->> (array-seq (.call f p #js {:radius chest-radius :names (clj->js container-names) :max 32}))
-             (keep (fn [b] (let [pos (u/pos-of (.-pos b))]
-                             (when (or (> (aget b "age-ms") view-age-ms) (= (.-name b) (u/block-name p pos))) pos))))
-             (sort-by #(u/dist me %))))
-      [])))
+  (let [p (:primitives c)
+        me (u/self-pos c)]
+    (->> (look/seen-blocks p {:names container-names :radius chest-radius :max 32})
+         (keep (fn [{:keys [name pos age-ms]}]
+                 (when (or (> age-ms view-age-ms) (= name (u/block-name p pos))) pos)))
+         (sort-by #(u/dist me %)))))
 
 (defn usable-chests
   "seen-chests whose zone or claim allows :take (an open, unzoned chest does)."

@@ -2,7 +2,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
-            [jobs.items.smelt :as smelt]
+            [jobs.lib.look :as look]
             [jobs.storage.deposit :as deposit]))
 
 (def doc
@@ -78,7 +78,7 @@
   "The position of the crafting table nearest the chest within radius of it
   (one the body has seen within 16 of it), or nil."
   [p chest radius]
-  (->> (smelt/seen-blocks p ["crafting_table"] 16 8)
+  (->> (look/seen-blocks p {:names ["crafting_table"] :radius 16 :max 8 :live? true})
        (map :pos)
        (filter #(<= (u/dist % chest) radius))
        (sort-by #(u/dist % chest))

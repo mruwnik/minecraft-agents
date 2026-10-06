@@ -3,7 +3,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
-            [jobs.items.smelt :as smelt]
+            [jobs.lib.look :as look]
             [jobs.storage.deposit :as deposit]
             [jobs.lib.world :as known]))
 
@@ -118,7 +118,7 @@
         names (cond stalk? [(:block (materials item))] sources sources :else (:sources (materials item)))
         skipped (set (:skipped (ctx/mem c)))
         here (u/self-pos c)]
-    (->> (smelt/seen-blocks (:primitives c) names radius (+ (if stalk? 512 64) (count skipped)))
+    (->> (look/seen-blocks (:primitives c) {:names names :radius radius :max (+ (if stalk? 512 64) (count skipped)) :live? true})
          (map :pos)
          (remove skipped)
          (filter #(or (not stalk?) (cut-cell? c (first names) %)))
@@ -129,7 +129,7 @@
   "Whether any block of the stalk material is within :radius (a stand there may be too short to cut)."
   [c]
   (let [{:keys [radius item]} (:args c)]
-    (boolean (seq (smelt/seen-blocks (:primitives c) [(:block (materials item))] radius 8)))))
+    (boolean (seq (look/seen-blocks (:primitives c) {:names [(:block (materials item))] :radius radius :max 8 :live? true})))))
 
 (defn decline!
   "One warn per reason, then false for the check, noting the reason with ctx/wait."
