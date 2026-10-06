@@ -1,6 +1,7 @@
 ;; shadow-cljs builds for the body engine. See README.md.
 ;; Both builds run from `compile` (never :advanced), so externs inference is off.
-{:jvm-opts ["-Xmx1G"]
+;; Idle servers return heap and malloc memory (measured 1.75 GB -> ~0.6-0.8 GB); compile times unchanged. Not TieredStopAtLevel=1 (2.5x slower).
+{:jvm-opts ["-Xmx1G" "-XX:G1PeriodicGCInterval=20000" "-XX:MinHeapFreeRatio=10" "-XX:MaxHeapFreeRatio=30" "-XX:TrimNativeHeapInterval=10000"]
  :source-paths ["src" "test" "test-support"]
  :dependencies []
  :builds
