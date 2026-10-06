@@ -15,7 +15,7 @@
 (defn setup [world]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake world)
+        p (tu/seeing-all (tu/fake world))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
                           :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -226,7 +226,7 @@
       (fn ^:async t []
         (let [clock (atom 1000000)
               [seen sink] (tu/legacy-capture-sink)
-              p (tu/fake {:self {:onFire true} :blocks {"0,63,0" "stone" "1,64,0" "fire"}})
+              p (tu/seeing-all (tu/fake {:self {:onFire true} :blocks {"0,63,0" "stone" "1,64,0" "fire"}}))
               eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
                                 :now #(deref clock)
                                 :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -254,7 +254,7 @@
       (fn ^:async t []
         (let [clock (atom 1000000)
               [seen sink] (tu/legacy-capture-sink)
-              p (tu/fake {:self {:onFire true} :blocks (floor 8)})
+              p (tu/seeing-all (tu/fake {:self {:onFire true} :blocks (floor 8)}))
               eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
                                 :now #(deref clock)
                                 :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -363,7 +363,7 @@
       (fn ^:async t []
         (let [clock (atom 1000000)
               [seen sink] (tu/legacy-capture-sink)
-              p (tu/fake {:self {:onFire true} :inventory [{:name "water_bucket" :count 1}] :blocks (floor 6)})
+              p (tu/seeing-all (tu/fake {:self {:onFire true} :inventory [{:name "water_bucket" :count 1}] :blocks (floor 6)}))
               eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
                                 :now #(deref clock)
                                 :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -490,7 +490,7 @@
   [step & [world]]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake (or world {:self {:onFire true} :blocks (merge (floor 8) {"1,64,0" "fire"})}))
+        p (tu/seeing-all (tu/fake (or world {:self {:onFire true} :blocks (merge (floor 8) {"1,64,0" "fire"})})))
         n (atom 0)
         go-to {:check (fn [_] true)
                :round (fn ^:async go-to-round [c] (step c p (swap! n inc)))}
@@ -691,3 +691,8 @@
           (is (= ["water_bucket" "water_bucket" "bucket"] (mapv (comp :item call-args) (calls p "place"))))
           (is (= [] (of-kind seen :extinguish.scoop_failed)))
           (is (= [] (entries eng :extinguish-pour))))))))
+
+(deftest a-fire-the-body-has-not-seen-is-not-scanned
+  (let [p (tu/fake {:blocks {"1,64,0" "fire"}})]
+    (is (= 1 (count (extinguish/scan (tu/seeing-all p) 8 ["fire"] 8))))
+    (is (empty? (extinguish/scan (tu/blind p) 8 ["fire"] 8)))))

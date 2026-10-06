@@ -25,7 +25,7 @@
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         dir (tu/tmp-dir)
-        p (tu/fake (update spec :blocks #(merge (ground (or ground-r 64)) %)))
+        p (tu/seeing-all (tu/fake (update spec :blocks #(merge (ground (or ground-r 64)) %))))
         store (notes/open {:world-dir dir :body "Fake" :emit (fn [_])})
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :world (assoc (world/of-data {} {}) :notes store)
@@ -253,3 +253,13 @@
     {} 5000 false
     {:wait-until 6000} 5000 true
     {:wait-until 6000} 6000 false))
+
+(deftest ore-the-body-has-not-seen-is-neither-found-nor-noted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (search! {:target "diamond_block" :max-distance 20} {:blocks {"10,64,0" "diamond_block"}}
+                                400 (fn [{:keys [p]}] (tu/blind p))))
+              e (event-of s :search.not-found)]
+          (is (= [] (:found e)))
+          (is (not-any? #(= :seen (:kind %)) (file-notes s))))))))

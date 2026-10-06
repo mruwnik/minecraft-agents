@@ -15,7 +15,7 @@
 (defn setup [world zones]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake (merge {:offlineScale 0.0001} world))
+        p (tu/seeing-all (tu/fake (merge {:offlineScale 0.0001} world)))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :backoff false :world (ew/of-data {} {} zones)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -57,7 +57,7 @@
 (defn setup-with-plan [world plan]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake (merge {:offlineScale 0.0001} world))
+        p (tu/seeing-all (tu/fake (merge {:offlineScale 0.0001} world)))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :backoff false :world (ew/of-data {"hut" plan} {} [])
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]

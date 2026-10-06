@@ -1,6 +1,7 @@
 (ns jobs.survival.extinguish
   (:require [engine.ctx :as ctx]
             [jobs.lib.access :as access]
+            [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.result :as result]
             [jobs.lib.util :as u]
@@ -83,9 +84,10 @@
 (defn offset [pos dx dy dz] {:x (+ (:x pos) dx) :y (+ (:y pos) dy) :z (+ (:z pos) dz)})
 
 
-(defn scan [p radius names max]
-  (mapv (fn [b] {:name (.-name b) :pos (u/pos-of (.-pos b))})
-        (array-seq (.blocks p #js {:radius radius :names (clj->js names) :max max}))))
+(defn scan
+  "The blocks of names the body has seen within radius, nearest first, as {:name :pos}."
+  [p radius names max]
+  (mapv #(select-keys % [:name :pos]) (look/seen-blocks p {:radius radius :names names :max max})))
 
 (defn standable?
   "Feet cell and head cell passable, and the cell below solid, or the feet in water."

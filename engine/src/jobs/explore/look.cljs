@@ -1,10 +1,11 @@
 (ns jobs.explore.look
-  (:require [engine.ctx :as ctx] [jobs.lib.places :as places] [jobs.lib.util :as u]))
+  (:require [engine.ctx :as ctx] [jobs.lib.look :as look] [jobs.lib.places :as places]))
 (def doc
-  "Observe nearby loaded blocks and entities once without moving or changing the world. Emits look.observed,
-  available through observe --wait --watch or observe result after completion. :at inspects one exact block
-  including properties (air is known; an unloaded cell is unknown). Nearby samples are nearest first and bounded;
-  :more-blocks?/:more-entities? report extra matches. This is loaded-chunk evidence, not a complete terrain map.")
+  "Observe the nearby blocks and entities the body has seen, once, without moving or changing the world. Emits
+  look.observed, available through observe --wait --watch or observe result after completion. :at inspects one exact
+  block as last seen, with properties (a cell never seen is :unknown). Nearby samples are nearest first and bounded;
+  :more-blocks?/:more-entities? report extra matches. Nothing is sensed through walls (players are always listed).
+  This is sight evidence, not a terrain map.")
 (def args
   {:radius {:doc "nearby sample radius, 1..32 blocks" :default 16}
    :block-names {:doc "nil, one block name or a vector/set of up to 16 names" :default nil}
@@ -33,26 +34,32 @@
       (:reason at) {:error (:message at)}
       :else (assoc a :block-names blocks :entity-names entities :at (:pos at)))))
 (defn pos [p]
-  (mapv #(let [n (aget p %)] (/ (js/Math.round (* 10 n)) 10)) ["x" "y" "z"]))
+  (mapv #(/ (js/Math.round (* 10 %)) 10) (if (map? p) [(:x p) (:y p) (:z p)] [(.-x p) (.-y p) (.-z p)])))
 (defn block [b]
-  (cond-> {:name (.-name b) :pos (pos (.-pos b))}
-    (some? (.-age b)) (assoc :age (.-age b))
-    (.-properties b) (assoc :properties (js->clj (.-properties b) :keywordize-keys true))))
+  (cond-> {:name (:name b) :pos (pos (:pos b))}
+    (:properties b) (assoc :properties (:properties b))))
 (defn entity [e]
-  (cond-> {:name (.-name e) :kind (.-kind e) :pos (pos (.-pos e))}
-    (.-uuid e) (assoc :uuid (.-uuid e))
-    (.-username e) (assoc :username (.-username e))
-    (some? (.-visible e)) (assoc :visible? (.-visible e))))
+  (cond-> {:name (:name e) :kind (:kind e) :pos (pos (:pos e))}
+    (:uuid e) (assoc :uuid (:uuid e))
+    (:username e) (assoc :username (:username e))
+    (some? (:visible e)) (assoc :visible? (:visible e))))
 (defn observe [p {:keys [radius block-names entity-names max-blocks max-entities properties? at]}]
   (let [self (.self p)
-        blocks (if (pos? max-blocks) (vec (array-seq (.blocks p #js {:radius radius :names (clj->js block-names) :max (inc max-blocks) :properties properties?}))) [])
-        entities (if (pos? max-entities) (vec (array-seq (.entities p #js {:radius radius :names (clj->js entity-names) :max (inc max-entities)}))) [])
-        exact (when at (u/block-at p at))]
-    (cond-> {:center (pos (.-pos self)) :radius radius :scope :loaded-chunks
+        blocks (if (pos? max-blocks)
+                 (look/seen-blocks p (cond-> {:radius radius :max (inc max-blocks) :properties? properties?}
+                                       block-names (assoc :names block-names) (not block-names) (assoc :all? true)))
+                 [])
+        entities (if (pos? max-entities)
+                   (look/seen-entities p (cond-> {:radius radius :max (inc max-entities)} entity-names (assoc :names entity-names)))
+                   [])
+        exact (when at (look/seen-block p at))]
+    (cond-> {:center (pos (.-pos self)) :radius radius :scope :seen
              :blocks (mapv block (take max-blocks blocks)) :entities (mapv entity (take max-entities entities))}
       (> (count blocks) max-blocks) (assoc :more-blocks? true)
       (> (count entities) max-entities) (assoc :more-entities? true)
-      at (assoc :at (if exact (assoc (block exact) :loaded? true) {:pos (pos (clj->js at)) :loaded? false})))))
+      at (assoc :at (if (or (nil? exact) (:unknown exact))
+                      {:pos (pos at) :unknown true}
+                      (assoc (block exact) :seen? true))))))
 (defn round [c]
   (let [a (options (:args c))]
     (if-let [error (:error a)]

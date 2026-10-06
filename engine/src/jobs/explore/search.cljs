@@ -1,6 +1,7 @@
 (ns jobs.explore.search
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
+            [jobs.lib.look :as look]
             [jobs.lib.util :as u]
             [engine.notes :as notes]))
 
@@ -150,13 +151,15 @@
 (defn cell [p] (mapv js/Math.floor [(.-x p) (.-y p) (.-z p)]))
 (defn here [c] (cell (.-pos (.self (:primitives c)))))
 
+(defn cell-of [{:keys [x y z]}] (mapv js/Math.floor [x y z]))
+
 (defn sense
-  "The targets in sight: blocks {:what :pos}, entities {:what :pos :id}."
+  "The targets the body has seen (never through walls): blocks {:what :pos}, entities {:what :pos :id}."
   [p names radius]
-  (concat (map (fn [b] {:what (.-name b) :pos (cell (.-pos b))})
-               (array-seq (.blocks p #js {:names (clj->js names) :radius radius :max 64})))
-          (map (fn [e] (cond-> {:what (.-name e) :pos (cell (.-pos e))} (.-uuid e) (assoc :id (.-uuid e))))
-               (array-seq (.entities p #js {:names (clj->js names) :radius radius :max 32})))))
+  (concat (map (fn [b] {:what (:name b) :pos (cell-of (:pos b))})
+               (look/seen-blocks p {:names names :radius radius :max 64}))
+          (map (fn [e] (cond-> {:what (:name e) :pos (cell-of (:pos e))} (:uuid e) (assoc :id (:uuid e))))
+               (look/seen-entities p {:names names :radius radius :max 32}))))
 
 (defn finish!
   "Emit the outcome, hand it to the parent, end the job."
@@ -179,6 +182,7 @@
   "Look round, note what was seen and the spot as searched, book the findings."
   [c names]
   (let [{:keys [scan-radius seen-ttl-s entity-ttl-s searched-ttl-s] want :count} (:args c)
+        _ (look/see! c)
         sighted (vec (sense (:primitives c) names scan-radius))
         [x y z] (here c)
         [ox _ oz] (:origin (ctx/mem c))]
