@@ -601,7 +601,7 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 | `apiary.guard`, `harvest`, `maintain` | Keep campfire columns, take honey, keep an apiary in order |
 | `build.from-plan`, `pen`, `rail-line`, `clear-box` | Build what a plan wants; build a pen's fence or a rail line; dig out a box |
 | `blocks.dig`, `blocks.place` | One block at `:pos`; dig holds the best suited tool |
-| `access.pillar`, `stair`, `clear-path`, `tunnel`, `leave-tunnel`, `toggle`, `cleanup` | Ways through the world: pillar up, dig a stair (stops `:undercuts-way` at a still-solid floor of an earlier stair of this body and dimension, memory `:stair-way`; tunnel plans round it), dig through a wall, cut a tunnel to a buried block and leave it, set a door or lever state, take back scaffold blocks |
+| `access.pillar`, `stair`, `clear-path`, `tunnel`, `leave-tunnel`, `toggle`, `cleanup` | Ways through the world: pillar up (rides out knockbacks: lands, walks back into its column, retries), dig a stair (stops `:undercuts-way` at a still-solid floor of an earlier stair of this body and dimension, memory `:stair-way`; tunnel plans round it), dig through a wall, cut a tunnel to a buried block and leave it, set a door or lever state, take back scaffold blocks |
 | `explore.search`, `explore.look` | Search for a block or entity by a pattern (uses notes); a one-shot read of nearby blocks and entities (`look.observed`) |
 | `memory.set-place`, `forget-place`, `remember` | Write named places or entries of your own kind |
 | `debug.notify`, `debug.access-check`, `debug.walk-plan` | Test helpers |
