@@ -131,3 +131,17 @@
           (.then (fn [_]
                    (is (not (fs/existsSync (str lease ".bad"))) "never two holders at once")))
           (.finally (fn [] (fs/rmSync dir #js {:recursive true :force true}) (done)))))))
+
+(deftest finishing-a-run-removes-its-own-temp-dir-only
+  (async done
+    (let [body (str "WtLeak" (.-pid js/process))
+          dir (r/run-dir {:body body})
+          other (fs/mkdtempSync (path/join (os/tmpdir) "wt-other-"))]
+      (fs/mkdirSync dir #js {:recursive true})
+      (fs/writeFileSync (path/join dir "body.log") "log")
+      (fs/writeFileSync (path/join dir "scenario.edn") "{}")
+      (-> (r/finish-run! {:body body})
+          (.then (fn []
+                   (is (not (fs/existsSync dir)))
+                   (is (fs/existsSync other))))
+          (.finally (fn [] (fs/rmSync other #js {:recursive true :force true}) (done)))))))

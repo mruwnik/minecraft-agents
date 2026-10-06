@@ -187,7 +187,9 @@
   (str/includes? (or (.-stdout (cp/spawnSync "pgrep" #js ["-af" (str "out/body.cjs --agent " body " ")] #js {:encoding "utf8"})) "")
                  (str "--agent " body " ")))
 
-(defn last-plot-file [opts] (path/join (os/tmpdir) (str "world-test-" (:body opts)) "last-origin.edn"))
+(defn run-dir [opts] (path/join (os/tmpdir) (str "world-test-" (:body opts))))
+
+(defn last-plot-file [opts] (path/join (run-dir opts) "last-origin.edn"))
 
 (defn note-last-plot!
   "Records the plot the body is about to be put on, so a later start can clear it first (the body is saved there)."
@@ -205,6 +207,13 @@
     (if (vector? origin)
       (rcon! (f/reset-plot-commands (let [[sx sz] dims] (if sx (assoc f/default-grid :size-x sx :size-z sz) f/default-grid)) origin))
       (js/Promise.resolve nil))))
+
+(defn finish-run!
+  "End of a run: clears the plot the body was left on, then removes the run's temp dir. When the clearing fails the dir
+  stays (it holds the plot to clear on the next start) and the rejection goes on."
+  [opts]
+  (.then (reset-last-plot! opts)
+         (fn [] (fs/rmSync (run-dir opts) #js {:recursive true :force true}))))
 
 (defn body-argv
   "node argv for a body: V8 flags must be on the command line (card 41987e8c: new-space cap, RSS 335 -> 235 MB)."
@@ -236,7 +245,7 @@
     (when memory-data
       (fs/mkdirSync (path/join (body-dir opts) "engine") #js {:recursive true})
       (fs/writeFileSync (path/join (body-dir opts) "engine" "memory.edn") (pr-str memory-data))))
-  (let [dir (path/join (os/tmpdir) (str "world-test-" (:body opts)))
+  (let [dir (run-dir opts)
         scenario (path/join dir "scenario.edn")
         out (path/join dir "body.log")
         since (js/Date.now)
@@ -718,5 +727,8 @@
                                              (log! "world-test: " (count results) " runs, " (n :pass 0) " passed, " (n :fail 0) " failed, "
                                                    (n :error 0) " errors, " (n :skipped 0) " skipped")
                                              (exit-code results))))
-                                  (.finally #(release-body! opts))))))))))
+                                  (.finally #(-> (stop-body! opts)
+                                                                 (.then (fn [] (finish-run! opts)))
+                                                                 (.catch (fn [e] (log! "world-test: temp dir kept: " (.-message e))))
+                                                                 (.then (fn [] (release-body! opts)))))))))))))
       (.catch (fn [e] (js/console.error (.-message e)) (js/console.error usage) 2))))
