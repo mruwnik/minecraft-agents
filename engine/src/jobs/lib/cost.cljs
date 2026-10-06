@@ -8,7 +8,7 @@
     fight    fight-damage, decide: the damage of a fight with the current kit, :fight or :flee (jobs.lib.cost.fight).
     danger   route-danger, straight-route: the danger of a walk past mobs; stance, danger-rate, danger-list: go-to's
              planner dangers (jobs.lib.cost.danger).
-    value    item-value, fetch-cost: what items are worth, what fetching them costs (jobs.lib.cost.value)."
+    value    item-value, fetch-cost, walk-cost: what items are worth, what fetching them or walking costs (jobs.lib.cost.value)."
   (:require [jobs.lib.cost.armour :as armour]
             [jobs.lib.cost.danger :as danger]
             [jobs.lib.cost.fight :as fight]
@@ -34,3 +34,4 @@
 
 (def item-value value/item-value)
 (def fetch-cost value/fetch-cost)
+(def walk-cost value/walk-cost)

@@ -1,0 +1,39 @@
+;; Card 173c5390: a night that cannot dig in (no pickaxe on stone, no site) flees somewhere safer within :flee-radius, never
+;; fetches a pickaxe in the dark. Stone pad y -6..-1 (the plot floor is over void), torches around; the body has no tools.
+;; :walk-radius 5 makes the roofed home a flee target instead of the lit roof walk. Needs night: --allow-time --time-log <the
+;; shared time log>, one case per call.
+{:defaults
+ {:tags [:night :survival :flee]
+  :time :night-exclusive
+  :blocks [[:fill [0 -6 0] [31 -1 31] "stone"]
+           [:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 4] "torch"] [:set [28 0 28] "torch"]
+           [:set [16 0 4] "torch"] [:set [16 0 28] "torch"] [:set [4 0 16] "torch"] [:set [28 0 16] "torch"]]
+  :body {:at [4.5 0 16.5] :effects [["resistance" 600 4]] :settle-s 3}}
+ :cases
+ [{:name "flees-to-a-roofed-home"
+   :blocks [[:fill [29 2 15] [31 2 17] "stone"]]
+   :act [[:job (jobs.memory.set-place {:name :home :pos #at [30 0 16]})]
+         [:job (jobs.survival.night {:walk-radius 5})]]
+   :expect [{:event {:source :job :kind :shelter.fled :data {:target :roofed-place}} :within-s 120}
+            {:no-event {:source :job :kind :shelter.exposed} :for-s 60}]
+   :after [[:body-near [30.5 0 16.5] 3]]
+   :limit-s 150}
+  {:name "flees-to-seen-ground-it-can-dig"
+   :blocks [[:fill [22 -6 10] [30 -1 22] "dirt"]]
+   :body {:at [2.5 0 16.5] :inventory [["dirt" 20]]}
+   :act [[:job (jobs.survival.night {})]]
+   :expect [{:event {:source :job :kind :shelter.fled :data {:target :ground}} :within-s 150}
+            {:event {:source :job :kind :dig-in.sealed} :within-s 200}]
+   :limit-s 230}
+  {:name "walled-home-flee-fails-honestly"
+   :blocks [[:fill [28 0 14] [32 4 18] "stone" :hollow]]
+   :act [[:job (jobs.memory.set-place {:name :home :pos #at [30 1 16]})]
+         [:job (jobs.survival.night {:walk-radius 5})]]
+   :expect [{:event {:source :job :kind :shelter.flee_failed} :within-s 150}
+            {:event {:source :job :kind :shelter.exposed} :within-s 200}]
+   :limit-s 230}
+  {:name "stone-hillside-no-pickaxe-fetches-nothing"
+   :blocks [[:fill [10 0 10] [20 5 22] "stone"]]
+   :act [[:job (jobs.survival.night {:flee-radius 0})]]
+   :expect [{:no-event {:source :job :kind :child_started :data {:slot :fetch}} :for-s 60}]
+   :limit-s 90}]}

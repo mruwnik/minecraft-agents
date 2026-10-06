@@ -461,19 +461,21 @@
 (defn know-home! [eng pos] (mem/write! (:store eng) :home {:pos pos} mem/place-policy))
 
 (defn night-at-home
-  "Run the night job in world with :home at pos, the body seeing through its perception: {:eng :p}."
-  [world pos]
-  (let [raw-p (tu/fake (merge {:offlineScale 0.0001 :floor tu/walk-floor} (dissoc world :light-default :light)))
+  "Run the night job (with args) in world with :home at pos, the body seeing through its perception: {:eng :p}."
+  ([world pos] (night-at-home world pos {}))
+  ([world pos args]
+  (let [[seen sink] (tu/legacy-capture-sink)
+        raw-p (tu/fake (merge {:offlineScale 0.0001 :floor tu/walk-floor} (dissoc world :light-default :light)))
         _ (swap! (fake/state raw-p) merge (select-keys world [:light-default :light]))
         p (perception/wrap raw-p (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)}))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
                           :now (constantly 1000000)
-                          :events (events/make {:body "Fake" :sinks [(second (tu/legacy-capture-sink))] :now (constantly 1000000)})})]
+                          :events (events/make {:body "Fake" :sinks [sink] :now (constantly 1000000)})})]
     (aset p "seenBlockAt" (fn [pos] #js {:name (.-name (.blockAt raw-p pos)) :pos pos :age-ms 0}))
     (st/dawn-after! p st/default-dawn)
     (know-home! eng pos)
-    (core/submit! eng '(jobs.survival.night) {})
-    (js/Promise.resolve {:eng eng :p p})))
+    (core/submit! eng (list 'jobs.survival.night args) {})
+    (js/Promise.resolve {:eng eng :p p :seen seen}))))
 
 (deftest a-lit-route-to-a-close-roofed-home-is-walked-instead-of-digging-in
   (async done
@@ -533,3 +535,128 @@
           (await (st/run-until-empty eng 60))
           (is (seq (st/calls p "place")) "the night dug in after the walk failed")
           (is (< (:x (st/pos-of p)) 9) "and did not walk to the home again"))))))
+
+;; ------------------------------------------------------------------ flee somewhere safer
+
+(defn ^:async with-child-log
+  "Run (f), a promise, with ctx/call-child logging [key sym args] of every child call; the log. (on-call c k sym a) may
+  answer a result to stand for the child."
+  ([f] (with-child-log f (fn [_ _ _ _] nil)))
+  ([f on-call]
+   (let [log (atom [])
+         orig ctx/call-child]
+     (set! ctx/call-child (fn ^:async g [c k sym a]
+                            (swap! log conj [k sym a])
+                            (let [r (on-call c k sym a)]
+                              (if (some? r) r (await (orig c k sym a))))))
+     (await (f))
+     (set! ctx/call-child orig)
+     @log)))
+
+(def dark-world (assoc lit-world :light-default [15 0]))
+
+(defn flee-home-night
+  "night-at-home in the dark with a home at x 10 beyond :walk-radius 5, no placing, nothing but the home to see: the
+  dig-in fails everywhere, so the night has to flee to the roof. {:eng :p}."
+  [world args]
+  (js/Promise.resolve
+   (.then (night-at-home world {:x 10 :y 64 :z 0} (merge {:walk-radius 5} args))
+          (fn [{:keys [p] :as r}]
+            (st/refuse-placing! p)
+            (aset p "seenBlocks" (fn [_] #js []))
+            r))))
+
+(deftest the-night-never-fetches-a-tool-for-its-niche
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (st/setup {:time night :blocks hillside :floor [-2 -2 8 2]})
+              _ (st/refuse-cell! p [0 63 0])
+              _ (st/dawn-after! p 4)
+              _ (core/submit! eng '(jobs.survival.night) {})
+              log (await (with-child-log #(core/tick! eng)))
+              niche (first (filter #(= :niche (first %)) log))]
+          (is (= {:fetch false} (nth niche 2)) "the niche child is told not to fetch")
+          (is (empty? (filter #(= 'jobs.items.get-tool (second %)) log)) "no tool fetched in the dark"))))))
+
+(deftest with-nothing-to-dig-the-night-flees-to-a-roofed-home-beyond-the-walk-radius-by-an-unlit-route
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (await (flee-home-night (update dark-world :blocks merge {"10,66,0" "stone"}) {}))]
+          (await (st/run-until-empty eng 80))
+          (is (= {:x 10 :y 64 :z 0} (select-keys (st/pos-of p) [:x :y :z])) "walked to the roofed home")
+          (is (empty? (st/emitted seen :shelter.exposed)))
+          (let [fled (st/emitted seen :shelter.fled)]
+            (is (= [:roofed-place] (mapv :target fled)))))))))
+
+(deftest a-night-that-fled-ends-with-its-flee-count
+  (with-redefs [ctx/mem (constantly {:flees 2})]
+    (is (= 2 (night/fled nil))))
+  (with-redefs [ctx/mem (constantly {})]
+    (is (nil? (night/fled nil)))))
+
+(deftest with-flee-radius-0-the-night-holds-exposed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (await (flee-home-night (update dark-world :blocks merge {"10,66,0" "stone"}) {:flee-radius 0}))]
+          (st/dawn-after! p 4)
+          (await (st/run-until-empty eng 80))
+          (is (empty? (st/emitted seen :shelter.fled)))
+          (is (= 1 (count (st/emitted seen :shelter.exposed)))))))))
+
+(deftest a-flee-that-cannot-arrive-is-reported-and-the-night-holds-exposed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (await (flee-home-night (update dark-world :blocks merge walled-home) {}))]
+          (st/dawn-after! p 6)
+          (let [log (await (with-child-log #(st/run-until-empty eng 80)))]
+            (is (= 1 (count (filter #(= :flee (first %)) log))) "one walk, never the same target twice")
+            (is (= {:place :home :range 0} (nth (first (filter #(= :flee (first %)) log)) 2))))
+          (is (= 1 (count (st/emitted seen :shelter.flee_failed))))
+          (is (= 1 (count (st/emitted seen :shelter.exposed))))
+          (is (= [[:exposed 1]] (mapv (juxt :reason :fled) (st/emitted seen :stopped)))))))))
+
+(deftest a-flee-cut-mid-walk-resumes-the-same-target-from-where-the-body-is
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (await (flee-home-night (update dark-world :blocks merge {"10,66,0" "stone"}) {}))
+              n (atom 0)
+              log (await (with-child-log #(st/run-until-empty eng 80)
+                           (fn [_ k _ _] (when (and (= :flee k) (= 1 (swap! n inc)))
+                                           (st/teleport! p 4 64 0)
+                                           :continue))))
+              flees (filter #(= :flee (first %)) log)]
+          (is (<= 2 (count flees)) "walked again after the cut")
+          (is (apply = (map #(nth % 2) flees)) "the same target"))))))
+
+(def stone-and-dirt-patch
+  (merge (into {} (for [x (range 28 33) z (range -2 3)] [(str x ",63," z) "dirt"]))))
+
+(deftest with-nothing-to-dig-here-the-night-flees-to-seen-ground-the-carried-tools-dig
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (st/setup {:time night :inventory st/dirt-stack :blocks stone-and-dirt-patch})]
+          (tu/seeing-all p)
+          (.override (.-world p) "place"
+                     (fn ^:async f [token a impl]
+                       (if (< (.-x (.-pos a)) 20)
+                         #js {:status "no-support"}
+                         (await (impl token a)))))
+          (st/dawn-after! p 12)
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (st/run-until-empty eng 120))
+          (is (= [:ground] (mapv :target (st/emitted seen :shelter.fled))))
+          (is (some #(<= 27 (:x (st/arg-pos %))) (st/calls p "place")) "the pit's roof is placed at the patch"))))))
+
+(deftest the-cheapest-flee-candidate-pays-for-the-danger-on-its-route
+  (let [cands [{:kind :roofed-place :name :a :pos {:x 10 :y 64 :z 0}}
+               {:kind :roofed-place :name :b :pos {:x 0 :y 64 :z 14}}]
+        danger-of (fn [pos] (if (= 10 (:x pos)) 3 0))
+        ranked (night/rank-flees {:x 0 :y 64 :z 0} cands danger-of)]
+    (is (= [:b :a] (mapv :name ranked)) "the nearer one has a mob on the way")
+    (is (every? number? (map :cost ranked)))))

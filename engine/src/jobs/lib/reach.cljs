@@ -595,3 +595,11 @@
         danger-opts (dissoc danger-opts :skip)]
     (some #(when (and (not (contains? skip (.-id %))) (danger-in? p kind-at @pr % danger-opts)) %)
           (known-hostiles p radius opts))))
+
+(defn seen-hostiles
+  "The hostiles the body knows of within 64 (known-hostiles: the perception's mob memory, seen or
+  heard and remembered while likely still near, as a player would; none it never sensed). Primitives without that
+  memory: the ones in sight now."
+  [p]
+  (let [known (known-hostiles p 64 {})]
+    (if (.-knownMobs p) known (filterv seen-mob? known))))

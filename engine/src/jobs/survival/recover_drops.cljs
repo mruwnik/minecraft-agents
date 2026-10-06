@@ -122,14 +122,6 @@
 (def xp-per-level "Worth of one experience level carried at the death (the game drops a few levels' worth)." 5)
 (def top-n 3)
 
-(defn seen-hostiles
-  "The hostiles the body knows of within 64 (jobs.lib.reach/known-hostiles: the perception's mob memory, seen or
-  heard and remembered while likely still near, as a player would; none it never sensed). Primitives without that
-  memory: the ones in sight now."
-  [p]
-  (let [known (reach/known-hostiles p 64 {})]
-    (if (.-knownMobs p) known (filterv reach/seen-mob? known))))
-
 (defn overrides-arg
   "The override map of arg k, or {} with a recover-drops.bad-overrides warn when it is not a map."
   [c k]
@@ -151,7 +143,7 @@
         worth (cost/item-value inventory :overrides (overrides-arg c :value-overrides))
         route (when pos (cost/straight-route kind-at here pos))
         threat (if route
-                 (cost/route-danger (game/version-of p) kind-at route (seen-hostiles p) (.-equipment (.self p)) :overrides (overrides-arg c :danger-overrides))
+                 (cost/route-danger (game/version-of p) kind-at route (reach/seen-hostiles p) (.-equipment (.self p)) :overrides (overrides-arg c :danger-overrides))
                  {:danger 0 :mobs []})
         fetch (cost/fetch-cost {:distance (when pos (u/dist here pos)) :danger (:danger threat) :elapsed-ms elapsed :cause cause})]
     (cond-> {:value (+ (:value worth) (* xp-per-level (or (:level experience) 0)))

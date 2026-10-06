@@ -14,7 +14,7 @@
   :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]] :settle-s 3}}
  :cases
  [{:name "exposed-red-bed-given-later-placed-and-slept"
-   :act [[:job (jobs.survival.night)]
+   :act [[:job (jobs.survival.night {:flee-radius 0})]
          [:await {:source :job :kind :shelter.exposed} 40]
          [:wait-s 10]
          [:rcon "give $BODY red_bed 1"]]
@@ -23,7 +23,7 @@
             {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 90}]
    :limit-s 100}
   {:name "exposed-white-bed-given-later-placed-and-slept"
-   :act [[:job (jobs.survival.night)]
+   :act [[:job (jobs.survival.night {:flee-radius 0})]
          [:await {:source :job :kind :shelter.exposed} 40]
          [:wait-s 10]
          [:rcon "give $BODY white_bed 1"]]
@@ -32,7 +32,7 @@
             {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 90}]
    :limit-s 100}
   {:name "no-bed-anywhere-stays-exposed-one-warn"
-   :act [[:job (jobs.survival.night)] [:wait-s 60]]
+   :act [[:job (jobs.survival.night {:flee-radius 0})] [:wait-s 60]]
    :expect [{:event {:source :job :kind :shelter.exposed} :within-s 40}
             {:no-event {:source :action :kind :started :data {:name "sleep"}} :for-s 60}
             {:no-event {:source :action :kind :done :data {:name "place"}} :for-s 60}

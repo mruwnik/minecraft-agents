@@ -111,7 +111,7 @@
 
 (deftest recover-drops-weighs-only-known-hostiles
   (let [{:keys [p]} (rig {:entities [(mob 1 "creeper" 0 -2) (mob 2 "zombie" 0 5)]})]
-    (is (= [2] (mapv #(.-id %) (recover-drops/seen-hostiles p))))))
+    (is (= [2] (mapv #(.-id %) (reach/seen-hostiles p))))))
 
 ;; ---- blocks from state ids
 

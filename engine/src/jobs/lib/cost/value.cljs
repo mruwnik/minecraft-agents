@@ -233,6 +233,13 @@
   (let [c (str/lower-case (if (keyword? cause) (name cause) (str cause)))]
     (boolean (some #(str/includes? c %) lethal-causes))))
 
+(defn walk-cost
+  "{:cost :parts {:walk :danger}} of walking `distance` blocks with `danger` (route-danger's number) on the way: the
+  per-block and per-danger prices every trip is costed with."
+  [{:keys [distance danger]}]
+  (let [parts {:walk (* per-block distance) :danger (* per-danger (or danger 0))}]
+    {:cost (reduce + (vals parts)) :parts parts}))
+
 (defn fetch-cost
   "{:cost :parts {:trip :walk :danger}} of fetching a pile `distance` blocks off, with `danger` (route-danger's number)
   on the way, `elapsed-ms` after it dropped.
@@ -248,5 +255,5 @@
                  (>= (+ elapsed walk-ms) despawn-ms) :too-far)]
     (if reason
       {:cost js/Infinity :reason reason}
-      (let [parts {:trip trip :walk (* per-block distance) :danger (* per-danger (or danger 0))}]
-        {:cost (reduce + (vals parts)) :parts parts}))))
+      (let [w (walk-cost {:distance distance :danger danger})]
+        {:cost (+ trip (:cost w)) :parts (assoc (:parts w) :trip trip)}))))

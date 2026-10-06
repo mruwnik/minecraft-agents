@@ -32,7 +32,7 @@
    :limit-s 140}
   {:name "no-site-holds-exposed-then-stops-at-day"
    :blocks [[:fill [8 -6 8] [24 -1 24] "air"] [:fill [12 -1 12] [20 -1 20] "stone"]]
-   :act [[:job (jobs.survival.night)]
+   :act [[:job (jobs.survival.night {:flee-radius 0})]
          [:await {:source :job :kind :shelter.exposed} 60]
          [:wait-s 15]
          [:time-set 1000]]

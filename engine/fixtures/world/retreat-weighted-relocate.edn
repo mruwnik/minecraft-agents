@@ -48,7 +48,7 @@
   {:name "no-pit-site-holds-exposed"
    :blocks [[:fill [0 -8 0] [31 -2 31] "air"]]
    :body {:inventory [["stone_pickaxe" 1]] :effects [["resistance" 600 4]]}
-   :act [[:job (jobs.survival.night {})]]
+   :act [[:job (jobs.survival.night {:flee-radius 0})]]
    :expect [{:event {:source :job :kind :shelter.exposed} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :shelter.relocated} :for-s 60}
             {:no-event {:source :job :kind :completed} :for-s 60}]
