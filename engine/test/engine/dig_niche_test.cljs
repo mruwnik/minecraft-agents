@@ -192,3 +192,29 @@
             (await (run! s {})))
           (is (= :refused (:reason (failed seen))))
           (is (= 1 @scans)))))))
+
+(deftest stone-without-a-pickaxe-and-no-fetch-fails-no-tool
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen] :as s} (setup [] {:inventory []})]
+          (await (run! s {:fetch false}))
+          (is (= :no-tool (:reason (failed seen))))
+          (is (= "stone" (block-at p [5 64 0]))))))))
+
+(deftest stone-without-a-pickaxe-tries-a-fetch-by-default-then-fails-no-tool
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen] :as s} (setup [] {:inventory []})]
+          (await (run! s {}))
+          (is (contains? (kinds-seen seen) :fetch.started))
+          (is (= :no-tool (:reason (failed seen)))))))))
+
+(deftest flat-ground-without-a-pickaxe-is-still-no-site
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen] :as s} (setup [] {:inventory [] :blocks ground})]
+          (await (run! s {}))
+          (is (= :no-site (:reason (failed seen)))))))))

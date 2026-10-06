@@ -2,6 +2,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.child :as child]
+            [jobs.lib.fetch :as fetch]
             [jobs.lib.look :as look]
             [jobs.lib.result :as result]
             [jobs.lib.shelter :as sh]
@@ -17,14 +18,17 @@
   both sides, the back) that the carried tools harvest, with no fluid or falling block (sand, gravel) in or round it,
   walks there (go-to), digs the four cells (opening first, head before feet), steps to the far cell and places one block
   at each opening cell (feet, then head) from the blocks the dig dropped or carried ones.
+  Needs a tool that harvests the face (a pickaxe for stone): :fetch (default true; jobs.lib.fetch) runs jobs.items.get-tool
+  for it, else, or when that fails, it stops :no-tool.
   Declines (waiting) with :day or :already-sealed. Ends done {:pos :door [feet head cells plugged]} with a :shelter entry {:pos :door} (jobs.survival.dig-in/leave! digs
-  the door out by day), or stopped :no-site, :refused (every site would dig or plug another's zone, claim or plan footprint), :unreachable, :dig-failed, :no-blocks or :place-failed.
+  the door out by day), or stopped :no-site, :no-tool, :refused (every site would dig or plug another's zone, claim or plan footprint), :unreachable, :dig-failed, :no-blocks, :place-failed or :no-progress (over max-steps rounds).
   Events: dig-niche.sealed (info).")
 
 (def args
   {:reach {:doc "how far from the body to look for a face" :default 16}
    :blocks {:doc "names of the blocks it may place" :default dig-in/shelter-blocks}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
+   :fetch {:doc "get a missing tool (jobs.lib.fetch): true, a set of kinds or a map of limits; false stops :no-tool" :default true}
    :roof-height {:doc "a solid block within this many blocks above counts as a roof" :default sh/default-roof-height}})
 
 (defn check
@@ -62,18 +66,19 @@
 (defn niche-ok?
   "Whether a niche can be cut from stand cell f in dir: standing room on dry ground with the approach (the cell behind) open, every cell to dig solid, harvestable
   and not falling, every shell cell solid, dry and not a falling block."
-  [p f dir]
+  ([p f dir] (niche-ok? p f dir true))
+  ([p f dir need-tool?]
   (let [name #(u/block-name p %)
         solid? #(sh/solid? (name %))]
     (and (solid? (at f dir 0 0 -1)) (not (solid? f))
          (not (solid? (at f dir -1 0 0))) (not (solid? (at f dir -1 0 1))) (not (solid? (at f dir 0 0 1)))
          (not (dig-in/wet? p f)) (not (dig-in/wet? p (at f dir 0 0 1)))
          (every? #(and (solid? %) (not (falling? (name %))) (not (dig-in/wet? p %))
-                       (tools/can-harvest? p (name %)))
+                       (or (not need-tool?) (tools/can-harvest? p (name %))))
                  (dug-cells f dir))
          (every? #(and (solid? %) (not (dig-in/wet? p %))) (shell-cells f dir))
          (not (falling? (name (at f dir 1 0 2))))
-         (not (falling? (name (at f dir 2 0 2)))))))
+         (not (falling? (name (at f dir 2 0 2))))))))
 
 (defn permitted?
   "Whether the zone rules (input in, see jobs.lib.access/rules-input) let the job dig the niche's cells and plug its opening."
@@ -91,10 +96,11 @@
     (and (not (unseen? f)) (not (unseen? up)) (solid? (assoc f :y (dec (:y f)))) (not (solid? f)) (not (solid? up))
          (not (dig-in/wet? p f)) (not (dig-in/wet? p up)))))
 
-(defn scan
+(defn scan*
   "One nearest-first pass within reach of the feet cell, stopping at the first {:stand :dir} where a niche can be cut and
-  (ok? stand dir) holds. Returns {:site that-or-nil :refused? whether a niche that would do was turned down by ok?}."
-  [p reach ok?]
+  (ok? stand dir) holds. Returns {:site that-or-nil :refused? whether a niche that would do was turned down by ok?}.
+  need-tool? false ignores whether a carried tool harvests the face."
+  [p reach ok? need-tool?]
   (let [{:keys [x y z]} (sh/feet p)
         offsets (sort-by (fn [[dx dz]] (+ (* dx dx) (* dz dz)))
                          (for [dx (range (- reach) (inc reach)) dz (range (- reach) (inc reach))
@@ -102,7 +108,7 @@
                            [dx dz]))
         refused (volatile! false)
         try-dir (fn [f dir]
-                  (when (niche-ok? p f dir)
+                  (when (niche-ok? p f dir need-tool?)
                     (if (ok? f dir) {:stand f :dir dir} (do (vreset! refused true) nil))))
         site (some (fn [[dx dz]]
                      (some (fn [dy]
@@ -111,6 +117,11 @@
                            [0 -1 1 -2 2 -3 3]))
                    offsets)]
     {:site site :refused? @refused}))
+
+(defn scan
+  "scan* that needs a carried tool to harvest the face."
+  [p reach ok?]
+  (scan* p reach ok? true))
 
 (defn find-site
   "The nearest {:stand :dir} within reach of the feet cell where a niche can be cut (and (ok? stand dir) holds, default
@@ -132,6 +143,12 @@
       (if (seq open) [:plug (first open)] [:sealed])
       solid (if (<= (u/dist feet solid) dig-reach) [:dig solid] [:walk-to-face])
       :else [:walk-in])))
+
+(defn tool-wait
+  "The :no-tool wait of the first cell of the site's niche no carried tool harvests, nil when none."
+  [p {:keys [stand dir]}]
+  (when-let [cell (first (remove #(tools/can-harvest? p (u/block-name p %)) (dug-cells stand dir)))]
+    {:reason :no-tool :block (u/block-name p cell)}))
 
 (defn fail! [c reason text]
   (let [site (:site (ctx/mem c))]
@@ -185,7 +202,12 @@
     (if (nil? site)
       (if refused?
         (fail! c :refused "every hillside or wall that would do is another's (zone, claim or plan)")
-        (fail! c :no-site "no hillside or wall to cut a niche into"))
+        (let [w (some->> (:site (scan* p reach ok? false)) (tool-wait p))
+              r (when w (await (fetch/step! c 'jobs.survival.dig-niche w)))]
+          (cond
+            r r
+            w (fail! c :no-tool (str "no tool for the " (:block w) " of the hillside"))
+            :else (fail! c :no-site "no hillside or wall to cut a niche into"))))
       (let [_ (ctx/update-mem! c assoc :site site)
             [what cell] (let [s (stage p site)] (if (vector? s) s [s]))]
         (case what
