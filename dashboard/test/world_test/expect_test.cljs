@@ -49,6 +49,11 @@
     (is (= :pass (:status (x/judge {:no-event {:kind :fired} :for-s 0.1} [fired] (assoc opts :now-ms 3000))))
         "an event after the window does not count")))
 
+(deftest a-no-event-ignores-events-before-t0-so-a-register-time-fire-does-not-count
+  (let [e {:no-event {:kind :fired} :for-s 10}]
+    (is (= :pass (:status (x/judge e [(assoc fired :time-ms 500)] (assoc opts :now-ms 11001)))) "fired inside the settle, before t0")
+    (is (= :fail (:status (x/judge e [(assoc fired :time-ms 1000)] (assoc opts :now-ms 5000)))) "fired at t0 counts")))
+
 (deftest a-no-event-ignores-events-before-its-from-s
   (let [e {:no-event {:kind :fired} :for-s 10 :from-s 3}]
     (is (= :pending (:status (x/judge e [fired] (assoc opts :now-ms 2000)))) "fired at 1.5 s is before from-s")

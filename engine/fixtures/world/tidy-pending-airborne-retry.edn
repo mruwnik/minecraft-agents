@@ -1,6 +1,6 @@
 ;; Card 8eaa3d1a: the :tidy-pending trigger never holds while the body is airborne, a cell a run tried waits 2 min or 8
 ;; blocks of movement, restore-broken counts a try when its walk starts (3 tries, then warn tidy.not-restored :why :gave-up).
-;; Entries are seeded into body memory (:memory); the plot is lit by torches. Cases 3 and 4: one warn :unreachable (logged at the register, before t0: :from-s 3 skips it), then no refire for 2 min (the :gave-up path needs a cell the walk reaches but a place cannot fill: not built).
+;; Entries are seeded into body memory (:memory); the plot is lit by torches. Cases 3 and 4: one warn :unreachable (logged at the register, before t0, which a :no-event ignores), then no refire for 2 min (the :gave-up path needs a cell the walk reaches but a place cannot fill: not built).
 {:defaults
  {:tags [:tidy :tidy-pending]
   :time :any
@@ -36,13 +36,13 @@
    :blocks [[:fill [20 0 20] [30 6 30] "stone"] [:set [25 3 25] "air"]]
    :memory [{:kind :tidy :data {:cell #at [25 3 25] :action :dig :was "cobblestone" :now "air" :tries 0}}]
    :body {:inventory [["cobblestone" 4]]}
-   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :tidy-pending}} :from-s 3 :for-s 130}]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :tidy-pending}} :for-s 130}]
    :after [[:block [25 3 25] "air"]]
    :limit-s 170}
   {:name "floating-cell-one-run-then-quiet"
    :blocks [[:set [25 5 25] "air"]]
    :memory [{:kind :tidy :data {:cell #at [25 5 25] :action :dig :was "cobblestone" :now "air" :tries 0}}]
    :body {:inventory [["cobblestone" 4]]}
-   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :tidy-pending}} :from-s 3 :for-s 130}]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :tidy-pending}} :for-s 130}]
    :after [[:block [25 5 25] "air"]]
    :limit-s 170}]}
