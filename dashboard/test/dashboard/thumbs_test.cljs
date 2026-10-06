@@ -107,3 +107,67 @@
            (let [{:keys [t]} (fake (atom {"A" 1 "B" 2}) (atom {:t 0}))]
              (-> (js/Promise.all #js [((:get t) "A") ((:get t) "B")])
                  (.then (fn [_] (is (= {:renders 2 :last-ms 7 :mean-ms 7 :queue 0 :bodies 2} ((:stats t))))))))))))
+
+(defn fake-timers
+  "Injected timers: pending is an atom id -> {:f :ms}; (fire! id) runs one."
+  []
+  (let [pending (atom {}) n (atom 0)]
+    {:pending pending
+     :set-timer (fn [f ms] (let [id (swap! n inc)] (swap! pending assoc id {:f f :ms ms}) id))
+     :clear-timer (fn [id] (swap! pending dissoc id))
+     :fire-all! (fn [] (doseq [[id {:keys [f]}] @pending] (swap! pending dissoc id) (f)))}))
+
+(defn fake-idle
+  "A thumbnailer with idle-ms 180000 and fake timers; log records :render/:recycle in order."
+  [poses]
+  (let [log (atom [])
+        timers (fake-timers)
+        t (thumbs/make {:render (fn [name] (swap! log conj [:render name])
+                                  (js/Promise.resolve {:png (str "png-" name (count @log)) :ms 1 :loaded 1}))
+                        :pose-mtime #(get @poses %)
+                        :recycle #(swap! log conj [:recycle])
+                        :now (constantly 0)
+                        :min-interval-ms 2000 :column-cap 400
+                        :idle-ms 180000
+                        :set-timer (:set-timer timers) :clear-timer (:clear-timer timers)})]
+    {:t t :log log :timers timers}))
+
+(deftest worker-stops-after-idle-time
+  (async done
+    (run done
+         (fn []
+           (let [{:keys [t log timers]} (fake-idle (atom {"A" 1}))]
+             (-> ((:get t) "A")
+                 (.then (fn [_]
+                          (is (= [180000] (map :ms (vals @(:pending timers)))))
+                          (is (= [[:render "A"]] @log) "still running before the idle time")
+                          ((:fire-all! timers))
+                          (is (= [[:render "A"] [:recycle]] @log))))))))))
+
+(deftest request-after-stop-starts-a-new-worker
+  (async done
+    (run done
+         (fn []
+           (let [poses (atom {"A" 1 "B" 2})
+                 {:keys [t log timers]} (fake-idle poses)]
+             (-> ((:get t) "A")
+                 (.then (fn [_] ((:fire-all! timers)) ((:get t) "B")))
+                 (.then (fn [e]
+                          (is (some? (:png e)))
+                          (is (= [[:render "A"] [:recycle] [:render "B"]] @log))))))))))
+
+(deftest request-before-the-timer-fires-keeps-the-worker
+  (async done
+    (run done
+         (fn []
+           (let [poses (atom {"A" 1 "B" 2})
+                 {:keys [t log timers]} (fake-idle poses)]
+             (-> ((:get t) "A")
+                 (.then (fn [_]
+                          (let [p ((:get t) "B")]
+                            (is (empty? @(:pending timers)) "timer cancelled while a render is queued")
+                            ((:fire-all! timers))
+                            p)))
+                 (.then (fn [_]
+                          (is (= [[:render "A"] [:render "B"]] @log))
+                          (is (= 1 (count @(:pending timers))) "re-armed after the render")))))))))

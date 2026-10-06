@@ -657,7 +657,10 @@
                                      :recycle #(.recycle r)
                                      :now #(js/Date.now)
                                      :min-interval-ms thumbs/min-interval-ms
-                                     :column-cap thumbs/column-cap})]
+                                     :column-cap thumbs/column-cap
+                                     :idle-ms thumbs/idle-ms
+                                     :set-timer (fn [f ms] (doto (js/setTimeout f ms) .unref))
+                                     :clear-timer js/clearTimeout})]
                  (assoc t :close #(.close r)))))
       (.catch (fn [e]
                 (js/console.error (str "thumbnails disabled: " (ex-message e)))

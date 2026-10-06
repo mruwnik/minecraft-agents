@@ -42,7 +42,7 @@ The compile JVM is capped (`:jvm-opts ["-Xmx1G"]` in `shadow-cljs.edn`) because 
 - `/api/thumb/<world>/<body>.png`: the fallback still of a body's latest view (software-rendered from `pose.json`, `x-pose-mtime`
   header; 404 when the body has no view), used only when the browser has no WebGL2 or the page has `?nogl=1`.
   `dashboard.thumbs` (cljs) decides: cached by pose mtime, a newer pose is re-rendered only once the cached still is 2 s old, one render
-  at a time, the render worker replaced once it holds more than 400 columns. `js/thumbs.mjs` renders one still on request in a
+  at a time, the render worker replaced once it holds more than 400 columns and ended after 3 idle minutes (`THUMB_IDLE_MS`, 0 = never; the next render starts a new one). `js/thumbs.mjs` renders one still on request in a
   worker thread (heap caps, `resourceLimits` 160 MB old generation). `/api/thumbs/stats`: `{bodies, renders, last-ms, mean-ms, queue}`.
   On SIGTERM/SIGINT the server closes the thumbnailer and the view mount (`close()`, ends the block-issues scan worker) and exits. A body card whose view is older
   than 10 s shows an "N s old" / "N min old" mark when the body is online (`trouble/thumb-age-mark`).
