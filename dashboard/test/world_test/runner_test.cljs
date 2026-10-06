@@ -3,6 +3,7 @@
             ["fs" :as fs]
             ["os" :as os]
             ["path" :as path]
+            [cljs.reader]
             [world-test.runner :as r]))
 
 (deftest the-body-launch-argv-caps-new-space
@@ -90,3 +91,19 @@
                          (fn [_] (is false "no register: the event before the settle is hidden"))
                          (fn [e] (is (re-find #"timed out" (.-message e))))))
           (.finally (fn [] (cleanup) (done)))))))
+
+(deftest the-exit-code-is-zero-only-when-every-case-ran-and-passed
+  (is (= 0 (r/exit-code [{:status :pass} {:status :pass}])))
+  (is (= 1 (r/exit-code [{:status :pass} {:status :fail}])))
+  (is (= 1 (r/exit-code [{:status :error}])))
+  (is (= 1 (r/exit-code [{:status :skipped}])))
+  (is (= 1 (r/exit-code [])) "no result is not a pass"))
+
+(deftest results-are-written-to-the-file-as-they-come
+  (let [file (path/join (os/tmpdir) (str "wt-results-" (.-pid js/process) ".edn"))]
+    (r/write-results! {:results file} [{:status :pass :id "a"}])
+    (is (= "[{:status :pass, :id \"a\"}]" (fs/readFileSync file "utf8")))
+    (r/write-results! {:results file} [{:status :pass :id "a"} {:status :fail :id "b"}])
+    (is (= 2 (count (cljs.reader/read-string (fs/readFileSync file "utf8")))))
+    (r/write-results! {} [{:status :pass}])
+    (fs/unlinkSync file)))

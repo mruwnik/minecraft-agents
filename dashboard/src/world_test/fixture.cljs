@@ -134,6 +134,7 @@
       (not (vector? (get-in c [:body :at]))) (conj ":body :at must be [x y z]")
       (some #(not (step-kinds (first %))) (:act c)) (conj (str ":act steps must be one of " (sort step-kinds)))
       (some #(not (after-kinds (first %))) (:after c)) (conj (str ":after checks must be one of " (sort after-kinds)))
+      (and (empty? (:expect c)) (empty? (:after c))) (conj "the case checks nothing: it needs an :expect or :after")
       (some #(not (or (:event %) (:no-event %))) (:expect c)) (conj ":expect entries need :event or :no-event")
       (some #(and (:event %) (not (number? (:within-s %)))) (:expect c)) (conj ":event expectations need :within-s")
       (some #(and (:no-event %) (not (number? (:for-s %)))) (:expect c)) (conj ":no-event expectations need :for-s"))))
@@ -384,11 +385,12 @@
                      ",dx=" (js/Math.abs (- bx ax)) ",dy=" (js/Math.abs (- by ay)) ",dz=" (js/Math.abs (- bz az)) "]"))))
 
 (defn reply-count
-  "The count an `execute if` reply reports: 0 for a failed test, 1 for a pass without a count."
+  "The count an `execute if` reply reports: 0 for a failed test, 1 for a pass without a count, nil for any other reply."
   [reply]
   (cond
     (str/includes? reply "Test failed") 0
-    :else (if-let [[_ n] (re-find #"Count: (\d+)" reply)] (js/Number n) (if (str/includes? reply "Test passed") 1 0))))
+    (re-find #"Count: (\d+)" reply) (js/Number (second (re-find #"Count: (\d+)" reply)))
+    (str/includes? reply "Test passed") 1))
 
 (defn reply-pos
   "The [x y z] in a `data get entity <body> Pos` reply, or nil."
@@ -405,13 +407,17 @@
 (defn judge-after
   "Pass or fail of one :after check from its command's reply: {:check :pass? :evidence}."
   [origin [op & args :as check] reply]
-  (let [result (case op
-                 :block [(pos? (reply-count reply)) reply]
-                 :not-block [(zero? (reply-count reply)) reply]
+  (let [n (when (#{:block :not-block :item :entities} op) (reply-count reply))
+        result (case op
+                 (:block :not-block :item :entities)
+                 (cond
+                   (nil? n) [false (str "unrecognised reply: " reply)]
+                   (= op :block) [(pos? n) reply]
+                   (= op :not-block) [(zero? n) reply]
+                   (= op :item) [(count-ok? (second args) n) (str "count " n)]
+                   :else [(count-ok? (nth args 2) n) (str "count " n)])
                  :body-near (let [p (reply-pos reply)
                                   [x y z] (abs-pos origin (first args))
                                   d (when p (js/Math.hypot (- (p 0) x) (- (p 1) y) (- (p 2) z)))]
-                              [(boolean (and d (<= d (second args)))) (if d (str "distance " (.toFixed d 2)) reply)])
-                 :item (let [n (reply-count reply)] [(count-ok? (second args) n) (str "count " n)])
-                 :entities (let [n (reply-count reply)] [(count-ok? (nth args 2) n) (str "count " n)]))]
+                              [(boolean (and d (<= d (second args)))) (if d (str "distance " (.toFixed d 2)) reply)]))]
     {:check check :pass? (first result) :evidence (second result)}))

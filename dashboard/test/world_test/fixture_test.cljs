@@ -68,7 +68,7 @@
     (is (every? #(re-find #"20767$" %) (filter #(re-find #"^forceload add" %) cmds)))))
 
 (deftest a-plot-must-fit-its-lane
-  (let [ps #(f/problems (merge {:name "a" :time :day :body {:at [1 0 1]} :act [] :after [] :expect []} %))]
+  (let [ps #(f/problems (merge {:name "a" :time :day :body {:at [1 0 1]} :act [] :after [] :expect [{:event {:kind :x} :within-s 1}]} %))]
     (is (empty? (ps {:plot {:height 16 :length 1024 :width 64}})))
     (is (seq (ps {:plot {:height 16 :length 1025}})))
     (is (seq (ps {:plot {:height 16 :width 65}})))
@@ -92,7 +92,7 @@
 
 (deftest problems-name-what-cannot-run
   (let [ps (fn [c] (f/problems (f/merge-case {} c)))]
-    (is (empty? (ps {:name "a"})))
+    (is (empty? (ps {:name "a" :after [[:block [1 0 1] "stone"]]})))
     (is (seq (ps {:name "a" :time :dusk})))
     (is (seq (ps {:name "a" :act [[:teleport]]})))
     (is (seq (ps {:name "a" :expect [{:event {:kind :x}}]})) "an :event needs :within-s")
@@ -213,7 +213,7 @@
     (is (= {:entries {} :policies {}} (f/memory-seed nil 5000)))))
 
 (deftest memory-seed-problems
-  (let [ps #(f/problems (merge {:name "a" :time :day :plot {:height 6} :body {:at [1 0 1]} :act [] :after [] :expect []} %))]
+  (let [ps #(f/problems (merge {:name "a" :time :day :plot {:height 6} :body {:at [1 0 1]} :act [] :after [] :expect [{:event {:kind :x} :within-s 1}]} %))]
     (is (empty? (ps {:memory [{:kind :food-source :data {:pos [1 0 1]}}]})))
     (is (some #(re-find #":memory" %) (ps {:memory [{:data {}}]})))
     (is (some #(re-find #":memory" %) (ps {:memory [{:kind :bed :data {}}] :keep-memory true})))))
@@ -232,7 +232,7 @@
   (is (empty? (f/clear-hostiles-commands grid [0 0 0] {:mobs :keep}))))
 
 (deftest mobs-problems
-  (let [ps #(f/problems (merge {:name "a" :time :day :plot {:height 6} :body {:at [1 0 1]} :act [] :after [] :expect []} %))]
+  (let [ps #(f/problems (merge {:name "a" :time :day :plot {:height 6} :body {:at [1 0 1]} :act [] :after [] :expect [{:event {:kind :x} :within-s 1}]} %))]
     (is (empty? (ps {:mobs :keep})))
     (is (some #(re-find #":mobs" %) (ps {:mobs :bogus})))))
 
@@ -250,3 +250,27 @@
     (is (not (:pass? (f/judge-start origin c "No entity was found")))
         "no position at all is a failure")
     (is (re-find #"No entity" (:why (f/judge-start origin c "No entity was found"))))))
+
+(deftest a-case-with-nothing-to-check-cannot-run
+  (let [ps (fn [c] (f/problems (f/merge-case {} c)))]
+    (is (some #(re-find #":expect or :after" %) (ps {:name "a"})))
+    (is (some #(re-find #":expect or :after" %) (ps {:name "a" :act [[:wait-s 1]] :expect [] :after []})))
+    (is (empty? (ps {:name "a" :expect [{:event {:kind :x} :within-s 1}]})))
+    (is (empty? (ps {:name "a" :after [[:block [1 0 1] "stone"]]})))))
+
+(deftest an-unrecognised-reply-is-not-a-count
+  (is (nil? (f/reply-count "That position is not loaded")))
+  (is (nil? (f/reply-count "")))
+  (is (= 0 (f/reply-count "Test failed")))
+  (is (= 1 (f/reply-count "Test passed")))
+  (is (= 3 (f/reply-count "Test passed. Count: 3"))))
+
+(deftest an-unrecognised-reply-fails-every-after-check
+  (let [origin [0 0 0]
+        bad "Unknown or incomplete command"
+        judge (fn [check] (f/judge-after origin check bad))]
+    (is (= [false false false false]
+           (mapv (comp :pass? judge)
+                 [[:block [1 0 1] "stone"] [:not-block [1 0 1] "stone"] [:item "dirt" 0] [:entities "type=cow" [[0 0 0] [1 1 1]] 0]])))
+    (is (every? #(re-find #"unrecognised reply" (:evidence %))
+                (map judge [[:block [1 0 1] "stone"] [:not-block [1 0 1] "stone"] [:item "dirt" 0]])))))

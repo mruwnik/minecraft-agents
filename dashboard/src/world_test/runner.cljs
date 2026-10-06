@@ -641,6 +641,16 @@
   [{:keys [stop-on-fail]} results]
   (boolean (and stop-on-fail (some #(#{:fail :error} (:status %)) results))))
 
+(defn exit-code
+  "0 when there is at least one result and all passed, else 1."
+  [results]
+  (if (and (seq results) (every? #(= :pass (:status %)) results)) 0 1))
+
+(defn write-results!
+  "Writes results to the --results file, when there is one."
+  [opts results]
+  (when-let [file (:results opts)] (fs/writeFileSync file (pr-str results))))
+
 (defn run-all! [opts cases]
   (let [groups (group-by :register cases)
         results (atom [])
@@ -667,7 +677,7 @@
                                                                    (.then #(when-not (= :restart-keep plan) (reset-last-plot! opts)))
                                                                    (.then #(start-body! opts register (= :restart-keep plan) memory))))
                                                              (.then #(run-case! opts c i run (when-not (= :keep plan) register)))
-                                                             (.then (fn [r] (report! r) (swap! results conj (assoc r :file (:file c))) (report-fixtures!)))
+                                                             (.then (fn [r] (report! r) (swap! results conj (assoc r :file (:file c))) (write-results! opts @results) (report-fixtures!)))
                                                              (.finally #(release-plot! i))))))))
                                          (js/Promise.resolve nil)
                                          (map-indexed vector (for [run (range 1 (inc (:repeat opts))) c group] [c run])))
@@ -699,10 +709,10 @@
                                   (.then #(lease-body! opts))
                                   (.then #(run-all! opts cases))
                                   (.then (fn [results]
-                                           (when-let [file (:results opts)] (fs/writeFileSync file (pr-str results)))
+                                           (write-results! opts results)
                                            (let [n (frequencies (map :status results))]
                                              (log! "world-test: " (count results) " runs, " (n :pass 0) " passed, " (n :fail 0) " failed, "
                                                    (n :error 0) " errors, " (n :skipped 0) " skipped")
-                                             (if (= (count results) (n :pass 0)) 0 1))))
+                                             (exit-code results))))
                                   (.finally #(release-body! opts))))))))))
       (.catch (fn [e] (js/console.error (.-message e)) (js/console.error usage) 2))))

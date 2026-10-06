@@ -11,6 +11,7 @@
  :act [[:job (jobs.access.pillar {:height 5})]
        [:await {:source :job :kind :pillar.done} 60]
        [:wait-s 5]]
- ;; the body is still on the pillar top (feet y 5) five seconds after the job ended: nothing dug under it
- :expect [{:no-event {:source :job :kind :cleanup.done :data {:removed 1}} :for-s 5}]
+ ;; the body is still on the pillar top (feet y 5) after the job ended: nothing dug under it
+ :expect [{:event {:source :job :kind :pillar.done} :within-s 60}
+          {:no-event {:source :job :kind :cleanup.done :data {:removed 1}} :from-event {:source :job :kind :pillar.done} :for-s 8}]
  :after [[:not-block [16 4 16] "air"] [:body-near [16.5 5 16.5] 1.5]]}

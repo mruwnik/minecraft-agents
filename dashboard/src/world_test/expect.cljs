@@ -57,7 +57,8 @@
 
 (defn judge
   "One expectation's state at now-ms: {:expect e :status :pass|:fail|:pending :evidence text :at-s seconds after t0}.
-  events are those logged since the act started (t0-ms); job-ids the jobs the act submitted."
+  events are those logged since the act started (t0-ms); job-ids the jobs the act submitted.
+  A :no-event window starts at t0 (or :from-s, or the first :from-event match, then :for-s long) and ends early at the first :until match inside it."
   [e events {:keys [t0-ms now-ms job-ids]}]
   (if-let [pattern (:event e)]
     (let [deadline (+ t0-ms (* 1000 (:within-s e)))
@@ -66,12 +67,16 @@
         hit {:expect e :status :pass :evidence (evidence hit) :at-s (/ (- (:time-ms hit) t0-ms) 1000)}
         (> now-ms deadline) {:expect e :status :fail :evidence (str "no matching event within " (:within-s e) " s")}
         :else {:expect e :status :pending}))
-    (let [cap (+ t0-ms (* 1000 (:for-s e)))
-          until (when-let [p (:until e)] (some #(when (matches? p %) %) events))
+    (let [start (when-let [p (:from-event e)] (some #(when (matches? p %) %) events))
+          from (if-let [p (:from-event e)]
+                 (when start (:time-ms start))
+                 (+ t0-ms (* 1000 (or (:from-s e) 0))))
+          cap (+ (if start from t0-ms) (* 1000 (:for-s e)))
+          until (when-let [p (:until e)] (some #(when (and from (>= (:time-ms % 0) from) (matches? p %)) %) events))
           deadline (if until (min cap (:time-ms until)) cap)
-          from (+ t0-ms (* 1000 (or (:from-s e) 0)))
-          hit (event-match e (:no-event e) (filter #(<= from (:time-ms % 0) deadline) events) job-ids)]
+          hit (when from (event-match e (:no-event e) (filter #(<= from (:time-ms % 0) deadline) events) job-ids))]
       (cond
+        (nil? from) {:expect e :status :pending}
         hit {:expect e :status :fail :evidence (str "unwanted " (evidence hit)) :at-s (/ (- (:time-ms hit) t0-ms) 1000)}
         (and until (<= (:time-ms until) cap)) {:expect e :status :pass :evidence (str "none until " (evidence until))}
         (> now-ms cap) {:expect e :status :pass :evidence (str "none in " (:for-s e) " s")}

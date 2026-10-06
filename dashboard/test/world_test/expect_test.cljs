@@ -96,3 +96,19 @@
     (is (= [:fail :fail] (mapv :status stopped)))
     (is (= "not judged: the run stopped at the first failure" (:evidence (first stopped))))
     (is (re-find #"unwanted" (:evidence (second stopped))))))
+
+(deftest a-no-event-until-ignores-until-events-before-its-window
+  (let [e {:no-event {:kind :fired} :for-s 100 :until {:kind :herd.done}}
+        early-done (assoc herd-done :time-ms -500)]
+    (is (= :pending (:status (x/judge e [early-done] (assoc opts :now-ms 9500)))) "a settle-period until event is outside the window")
+    (is (= :fail (:status (x/judge e [early-done (assoc fired :time-ms 9000)] (assoc opts :now-ms 9500)))))
+    (is (= :pending (:status (x/judge (assoc e :from-s 5) [(assoc herd-done :time-ms 4000)] (assoc opts :now-ms 9500)))) "nor one before :from-s")))
+
+(deftest a-no-event-from-event-starts-its-window-at-that-event
+  (let [e {:no-event {:kind :fired} :for-s 10 :from-event {:kind :herd.done}}
+        at (fn [ms] (assoc fired :time-ms ms))]
+    (is (= :pending (:status (x/judge e [fired] (assoc opts :now-ms 9500)))) "no start event yet: pending, and an earlier fire does not count")
+    (is (= :pending (:status (x/judge e [fired herd-done] (assoc opts :now-ms 15000)))) "fired before the start event; window runs to 19 s")
+    (is (= :pass (:status (x/judge e [fired herd-done] (assoc opts :now-ms 19001)))))
+    (is (= :fail (:status (x/judge e [herd-done (at 12000)] (assoc opts :now-ms 12500)))))
+    (is (= :pass (:status (x/judge e [herd-done (at 20000)] (assoc opts :now-ms 20001)))) "a fire after the window does not count")))
