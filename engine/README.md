@@ -582,7 +582,7 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 | `forestry.fell-tree`, `collect-drops`, `plant-sapling`, `harvest-wood` | Fell a column (writes a `:forestry/replant` debt), collect nearby drops, plant a sapling, and the three in turn |
 | `forestry.maintain`, `forestry.prepare` | Keep and prepare the tree cells of a forest plan |
 | `storage.deposit`, `withdraw`, `kit` | Put away everything except tools and armour (`:keep`); take named items; take a tool and food kit. `withdraw` and `kit` record what a chest holds in `:fetch/stock` |
-| `items.obtain`, `items.get-tool`, `items.fetch-limits` | Get an item (or any of several) from carried stock or seen chests that allow `:take`; get a tool that harvests a block; set the body's fetch limits (`:fetch/limits`) |
+| `items.obtain`, `items.get-tool`, `items.fetch-limits` | Get an item (or any of several) from carried stock, seen chests that allow `:take`, or a craft chain planned from recipes over what is carried (logs to planks, sticks, a table put down, the tool; `engine.jobs.recipes`); get a tool that harvests a block; set the body's fetch limits (`:fetch/limits`) |
 | `storage.make-room` | The `:inventory-nearly-full` job: deposit by value, swap for worthier items, else toss junk, then step away |
 | `items.craft`, `smelt`, `enchant`, `wear`, `bake`, `give` | Craft (walks to a table), smelt in a furnace, enchant, put armour on, bake bread, give items to a player |
 | `village.trade` `{:villager :buy :count}` | Buys from a villager |
@@ -607,7 +607,7 @@ set narrows the kinds; a map gives limits `{:what :how :depth :minutes :fail-min
 body's defaults from `items.fetch-limits`, then the call's arg; later wins). A fetchable wait (`:no-tool`, `:need`) then runs
 `items.get-tool` or `items.obtain` as child `:fetch` (info `fetch.started`, `fetch.done`). A failed fetch writes
 `:fetch/failed` (warn `fetch.failed`) and the job waits for `:fail-minutes` before trying again. Only the job given `:fetch`
-fetches; its children and go-to never do. Sources today are carried items and seen chests; crafting and gathering come later.
+fetches; its children and go-to never do. Sources today are carried items, seen chests and crafting; gathering comes later.
 
 Helpers shared by jobs (not jobs): `engine.jobs.watch` (`watch/watch!` between acts: when the place is dark or a hostile
 was known recently, the body turns to look behind it so a creeper from behind is noticed; used by mine, fell-tree,
