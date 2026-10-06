@@ -70,9 +70,24 @@
 
 (def lock-stale-ms 5000)
 
+(defn lock-stale? [lock]
+  (try (> (- (js/Date.now) (.-mtimeMs (fs/statSync lock))) lock-stale-ms)
+       (catch :default _ false)))
+
+(defn reclaim-stale!
+  "Remove lock if it is stale. Renames it to a unique name first (atomic: one of several waiters wins), then
+  re-checks the moved dir: a waiter that judged the lock stale just before another reclaimed and re-made it
+  would otherwise remove that fresh lock; a fresh one is put back."
+  [lock]
+  (let [tomb (str lock ".dead-" js/process.pid "-" (js/Date.now) "-" (rand-int 1000000))]
+    (when (try (fs/renameSync lock tomb) true (catch :default _ false))
+      (when-not (lock-stale? tomb)
+        (try (fs/renameSync tomb lock) (catch :default _ nil)))
+      (fs/rmSync tomb #js {:recursive true :force true}))))
+
 (defn ^:async with-replace-lock
   "Run (f) while holding <sock>.lock, a directory made atomically: replacing a stale socket is probe, rm, listen,
-  and two starts doing that at once would both bind. A lock older than lock-stale-ms is a crashed starter's."
+  and two starts doing that at once would both bind. A lock older than lock-stale-ms is a crashed starter's; the holder touches it while f runs."
   [sock f]
   (let [lock (str sock ".lock")]
     (loop [tries 0]
@@ -80,11 +95,14 @@
                        (catch :default e (if (= "EEXIST" (.-code e)) false (throw e))))]
         (cond
           made? nil
-          (and (fs/existsSync lock) (> (- (js/Date.now) (.-mtimeMs (fs/statSync lock))) lock-stale-ms))
-          (do (fs/rmSync lock #js {:recursive true :force true}) (recur tries))
+          (lock-stale? lock)
+          (do (reclaim-stale! lock) (recur tries))
           :else (do (await (js/Promise. (fn [r] (js/setTimeout r 20)))) (recur (inc tries))))))
-    (try (await (f))
-         (finally (fs/rmSync lock #js {:recursive true :force true})))))
+    (let [beat (js/setInterval #(try (let [t (/ (js/Date.now) 1000)] (fs/utimesSync lock t t)) (catch :default _ nil))
+                               (/ lock-stale-ms 5))]
+      (try (await (f))
+           (finally (js/clearInterval beat)
+                    (fs/rmSync lock #js {:recursive true :force true}))))))
 
 (defn ^:async claim!
   "Take the body's place at sock, naming info to anyone who asks. Resolves to {:held release} (release is a thunk

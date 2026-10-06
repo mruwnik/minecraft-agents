@@ -117,6 +117,34 @@
             (is (= 1 (count held)) "exactly one start wins; the other sees it running")
             (doseq [c held] (await ((:held c))))))))))
 
+(deftest reclaiming-a-lock-judged-stale-earlier-leaves-a-fresh-one-alone
+  (let [lock (str (path/join (tu/tmp-dir) "body.sock") ".lock")]
+    (fs/mkdirSync lock)
+    (single/reclaim-stale! lock)
+    (is (fs/existsSync lock) "a waiter that saw the old lock must not remove the lock made since")))
+
+(deftest a-stale-lock-is-reclaimed
+  (let [lock (str (path/join (tu/tmp-dir) "body.sock") ".lock")
+        old (- (/ (js/Date.now) 1000) 60)]
+    (fs/mkdirSync lock)
+    (fs/utimesSync lock old old)
+    (single/reclaim-stale! lock)
+    (is (not (fs/existsSync lock)))))
+
+(deftest a-lock-held-longer-than-the-stale-age-is-kept-by-the-holder
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [lock (str (path/join (tu/tmp-dir) "body.sock") ".lock")]
+          (let [sock (str (subs lock 0 (- (count lock) 5)))
+                old (- (/ (js/Date.now) 1000) 60)]
+            (await (single/with-replace-lock
+                     sock
+                     (fn ^:async hold []
+                       (fs/utimesSync lock old old)
+                       (await (js/Promise. (fn [r] (js/setTimeout r (+ 50 (/ single/lock-stale-ms 5))))))
+                       (is (not (single/lock-stale? lock)) "the heartbeat refreshed the lock"))))))))))
+
 (deftest every-connection-gets-an-error-listener-so-an-early-reset-cannot-crash-the-body
   (async done
     (tu/run-async done
