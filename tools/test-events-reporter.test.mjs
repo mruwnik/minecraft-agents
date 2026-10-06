@@ -8,6 +8,9 @@ import { spawnSync } from 'node:child_process'
 
 const reporter = path.resolve(import.meta.dirname, 'test-events-reporter.mjs')
 
+// run_tests (node-test runner) injects --test-reporter flags via NODE_OPTIONS; the child must not inherit them.
+const withoutRunnerEnv = ({ NODE_OPTIONS, NODE_TEST_CONTEXT, ...rest }) => rest
+
 const run = (env) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'test-events-reporter-'))
   const file = path.join(dir, 'sample.test.mjs')
@@ -18,7 +21,7 @@ test('breaks', () => assert.equal(1, 2))
 test('later', { skip: true }, () => {})
 `)
   try {
-    const r = spawnSync(process.execPath, ['--test', `--test-reporter=${reporter}`, file], { encoding: 'utf8', env: { ...process.env, NODE_TEST_CONTEXT: undefined, ...env } })
+    const r = spawnSync(process.execPath, ['--test', `--test-reporter=${reporter}`, file], { encoding: 'utf8', env: { ...withoutRunnerEnv(process.env), ...env } })
     return r.stdout.split('\n').filter((l) => l.startsWith('@@test ')).map((l) => JSON.parse(l.slice(7)))
   } finally { fs.rmSync(dir, { recursive: true }) }
 }
