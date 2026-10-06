@@ -39,4 +39,10 @@
    :act [[:job (jobs.gather.mine {:block "stone" :count 1 :tunnel-length 0 :wet true})]]
    :expect [{:event {:source :job :kind :mine.done :data {:got [:>= 1]}} :within-s 120 :of-job true}]
    :after [[:item "cobblestone" [:>= 1]]]
+   :limit-s 140}
+  {:name "mine-dry-stone-beside-wet-digs-dry"
+   :blocks [[:set [14 0 16] "stone"]]
+   :act [[:job (jobs.gather.mine {:block "stone" :count 1 :tunnel-length 0})]]
+   :expect [{:event {:source :job :kind :mine.done :data {:got [:>= 1]}} :within-s 120 :of-job true}]
+   :after [[:not-block [14 0 16] "stone"] [:item "cobblestone" [:>= 1]]]
    :limit-s 140}]}
