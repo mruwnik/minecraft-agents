@@ -30,6 +30,15 @@ WARN='------ WARNING #1 - :undeclared-ns ---' timeout 20 "$C" engine test >/dev/
 WARN='------ WARNING #1 - :redef ---' timeout 20 "$C" engine test >/dev/null 2>&1; check "other warning passes" "$?" 0
 printf '#!/bin/sh\necho "npx $*" >> "%s/npx.log"\n' "$T" > "$T/bin/npx"
 
+# TERM during a compile leaves no temp file behind
+mkdir -p "$T/tmpd"
+printf '#!/bin/sh\necho $$ > "%s/npx.pid"\nexec sleep 30\n' "$T" > "$T/bin/npx"
+TMPDIR="$T/tmpd" "$C" engine test >/dev/null 2>&1 & CP=$!
+sleep 1.5; kill -TERM $CP; wait $CP 2>/dev/null
+kill "$(cat "$T/npx.pid")" 2>/dev/null # the orphaned stub
+check "TERM leaves no temp file" "$(ls "$T/tmpd" | wc -l)" 0
+printf '#!/bin/sh\necho "npx $*" >> "%s/npx.log"\n' "$T" > "$T/bin/npx"
+
 # wrapped in flock: exits at once with a clear message (would poll forever otherwise)
 out=$(timeout 10 flock "$MC_COMPILE_LOCK" "$C" engine test 2>&1); rc=$?
 check "flock-wrapped exit" "$rc" 2

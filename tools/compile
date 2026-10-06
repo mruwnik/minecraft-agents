@@ -67,7 +67,8 @@ mkdir -p "$queue"
 ticket="$queue/$lane-$(date +%s%N)-$$"
 : > "$ticket"
 exec 9>>"$lock"
-trap 'rm -f "$ticket"' EXIT
+out=
+trap 'rm -f "$ticket" "$out"' EXIT
 t0=$(date +%s.%N)
 while :; do
   for f in "$queue"/*; do  # prune tickets of dead waiters
@@ -129,7 +130,7 @@ if [ "$code" = 0 ] && grep -qE 'WARNING #[0-9]+ - :undeclared-(var|ns)' "$out"; 
   echo "tools/compile: failing the build: undeclared-var/undeclared-ns warning above (a call to a var or namespace that does not exist)" >&2
   code=1
 fi
-rm -f "$out"
+rm -f "$out"; out=
 t2=$(date +%s.%N)
 [ -z "${MC_COMPILE_LOG:-}" ] || awk -v a="$t0" -v b="$t1" -v c="$t2" 'BEGIN{printf "tools/compile: waited %.1fs, compiled %.1fs\n", b-a, c-b}' >&2
 exit $code

@@ -49,6 +49,20 @@ test('claimBody: a dead holder is stale and gets replaced', () => {
   assert.equal(fs.readFileSync(path.join(d, 'world-body.ProbeX.pid'), 'utf8').trim(), String(process.pid))
   fs.rmSync(d, { recursive: true })
 })
+test('claimBody: a claim replaced while the holder was being checked is not removed', () => {
+  const d = lockDir()
+  claimBody(d, 'ProbeX', 999999, () => true)
+  const racing = (pid) => {
+    if (pid !== 999999) return true
+    fs.writeFileSync(path.join(d, 'world-body.ProbeX.pid'), '4242') // another runner took over the stale claim
+    return false
+  }
+  const r = claimBody(d, 'ProbeX', process.pid, racing)
+  assert.equal(r.ok, false)
+  assert.equal(r.holder, 4242)
+  assert.equal(fs.readFileSync(path.join(d, 'world-body.ProbeX.pid'), 'utf8').trim(), '4242')
+  fs.rmSync(d, { recursive: true })
+})
 test('releaseBody: removes only its own claim', () => {
   const d = lockDir()
   claimBody(d, 'ProbeX', 4242, isAlive)

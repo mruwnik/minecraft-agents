@@ -5,7 +5,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { createRequire } from 'node:module'
-import { spawnSync } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { slotArgv, bodyName, claimBody, releaseBody } from './world-test-slots.mjs'
 
 const bundle = path.join(import.meta.dirname, '..', 'dashboard', 'out', 'world-test.cjs')
@@ -21,8 +21,11 @@ if (!process.env.WORLD_TEST_SLOT_HELD && !args.includes('--list')) {
   if (!claim.ok) { console.error(`world-test: ${claim.why}`); process.exit(75) }
   process.on('exit', () => releaseBody(claimDir, body, process.pid))
   const [cmd, ...argv] = slotArgv(args, path.join(import.meta.dirname, 'res-slot'), process.execPath, process.argv[1])
-  const r = spawnSync(cmd, argv, { stdio: 'inherit', env: { ...process.env, WORLD_TEST_SLOT_HELD: '1' } })
-  process.exit(r.status ?? 1)
+  // async, so INT/TERM reach us: pass them on to the run and exit (releasing the claim) when it ends
+  const child = spawn(cmd, argv, { stdio: 'inherit', env: { ...process.env, WORLD_TEST_SLOT_HELD: '1' } })
+  for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => child.kill(sig))
+  child.on('close', (code) => process.exit(code ?? 1))
+} else {
+  process.env.WORLD_TEST_REPO = path.join(import.meta.dirname, '..')
+  process.exitCode = await createRequire(import.meta.url)(bundle).main(args)
 }
-process.env.WORLD_TEST_REPO = path.join(import.meta.dirname, '..')
-process.exitCode = await createRequire(import.meta.url)(bundle).main(args)

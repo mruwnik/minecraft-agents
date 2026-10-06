@@ -17,7 +17,8 @@ export const claimBody = (dir, name, pid, alive) => {
     try { fs.writeFileSync(claimFile(dir, name), String(pid), { flag: 'wx' }); return { ok: true } } catch (e) { if (e.code !== 'EEXIST') throw e }
     const holder = Number(fs.readFileSync(claimFile(dir, name), 'utf8'))
     if (holder && alive(holder)) return { ok: false, holder, why: `body ${name} is already in use by a world-test run (pid ${holder}); wait for it or use another --body` }
-    fs.rmSync(claimFile(dir, name), { force: true })
+    // another runner may have replaced the stale claim while we checked it: remove only the one we saw
+    if (Number(fs.readFileSync(claimFile(dir, name), 'utf8')) === holder) fs.rmSync(claimFile(dir, name), { force: true })
   }
   return { ok: false, holder: 0, why: `body ${name}: could not take the claim file, retry` }
 }
