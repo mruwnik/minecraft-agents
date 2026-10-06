@@ -25,8 +25,8 @@ export const expectedMs = (nss, ms) => {
 // Generous: a loaded machine runs a namespace up to ~3x slower than its prior timing.
 export const runTimeoutS = (expected) => Math.max(180, Math.min(1200, Math.round(60 + 5 * expected / 1000)))
 
-// Measured peak RSS: 650-780 MB for one namespace, up to 2.5 GB for a full shard (~45 namespaces).
-export const needMb = (nsCount, capMb) => Math.min(capMb, 900 + 60 * nsCount)
+// Measured peak RSS: 600-610 MB for one namespace, 750 for ten, 2.45 GB for a full shard (~45 namespaces). The table of needs is kinds.tests in res-slot.json (needMb = shard and cap, goldenMb).
+export const needMb = (nsCount, tests) => Math.min(tests.needMb, tests.baseMb + tests.perNsMb * nsCount)
 
 export const lastFinished = (lines) =>
   lines.filter(Boolean).map((l) => JSON.parse(l)).filter((r) => r.var).at(-1)?.var ?? null
@@ -133,7 +133,7 @@ const main = () => {
   const timings = path.join(runDir, 'timings.jsonl')
   fs.writeFileSync(timings, '')
   const r = spawnSync(path.join(tools, 'res-slot'),
-    ['tests', '--need', String(needMb(nss.length, res.kinds.tests.needMb)), '--',
+    ['tests', '--need', String(needMb(nss.length, res.kinds.tests)), '--',
       'timeout', '-k', '10', String(limit), 'node', '--max-old-space-size=4096', path.join(runDir, 'out/test.cjs'), `--test=${nss.join(',')}`],
     { cwd: engine, stdio: 'inherit', env: { ...process.env, MC_TEST_TIMINGS: timings, NODE_PATH: path.join(repo, 'node_modules') } })
   const code = r.status ?? 1

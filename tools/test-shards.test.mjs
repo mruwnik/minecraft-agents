@@ -33,7 +33,7 @@ test('slowest sorts timing lines descending', () => {
 
 test('memSlots: (available - 6 GB floor) / shard peak, at least 1, at most 3', () => {
   assert.equal(memSlots(5900), 1)
-  assert.equal(memSlots(12000), 2)
+  assert.equal(memSlots(12100), 2)
   assert.equal(memSlots(30000), 3)
 })
 

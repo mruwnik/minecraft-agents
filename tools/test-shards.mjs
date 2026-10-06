@@ -2,7 +2,7 @@
 // Why JavaScript: a thin Node launcher (spawns the compiled test runner in shards, takes a machine-wide flock slot per shard); no engine behaviour.
 // Usage: tools/test-engine --full [--shards N] [--slots M] [--slowest K]
 //  Splits the engine test namespaces over N node processes (default 4), balanced by the per-namespace ms of the previous run (engine/out/test-ns-ms.json).
-//  At most M shard processes run at once machine-wide (default: (MemAvailable - 6 GB) / 2.8 GB, 1..shardMax): each takes res-slot's 'tests' slot tests.<i> (i < M; slots above shardMax stay for targeted runs), so parallel agents cannot OOM the machine.
+//  At most M shard processes run at once machine-wide (default: (MemAvailable - 6 GB) / 2.95 GB (kinds.tests.needMb), 1..shardMax): each takes res-slot's 'tests' slot tests.<i> (i < M; slots above shardMax stay for targeted runs), so parallel agents cannot OOM the machine.
 //  Each shard is killed after runTimeoutS of its prior timing (tools/test-run.mjs), so a hung test frees its slot; the failure names the last finished test.
 //  TEST_EVENTS=1: prints the live-tests @@test lines (phase, plan, result per test, progress) as the shards produce them (engine.timing-test emits them).
 //  Per-test timings: engine/out/test-timings.jsonl (one {"var","ms"} line per test, {"peak-rss-kb"} per shard); the K slowest are printed.

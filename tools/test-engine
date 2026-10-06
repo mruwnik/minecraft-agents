@@ -27,8 +27,10 @@ fi
 if [ "$1" = "--golden" ]; then
   [ "${TEST_EVENTS:-}" = 1 ] && echo '@@test {"event":"phase","name":"compiling"}'
   "$repo/tools/compile" engine test-golden || exit $?
-  cd "$repo/engine" && node --max-old-space-size=4096 out/test-golden.cjs || exit $?
-  exec node --test --test-reporter=../tools/test-events-reporter.mjs js/path/bench.golden.mjs
+  # one 'tests' slot with the golden need from res-slot.json (kinds.tests.goldenMb)
+  need="$(node -e 'console.log(require(process.argv[1]).kinds.tests.goldenMb)' "$repo/tools/res-slot.json")"
+  cd "$repo/engine" && "$repo/tools/res-slot" tests --need "$need" -- sh -c 'node --max-old-space-size=4096 out/test-golden.cjs && exec node --test --test-reporter=../tools/test-events-reporter.mjs js/path/bench.golden.mjs'
+  exit $?
 fi
 if [ "$1" = "--full" ]; then
   # sharded, machine-wide slot limit, per-test timings in engine/out/test-timings.jsonl (see tools/test-shards.mjs); options after --full: --shards N --slots M --slowest K

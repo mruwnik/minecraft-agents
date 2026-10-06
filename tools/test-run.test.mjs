@@ -1,5 +1,6 @@
 // Why JavaScript: node --test file for tools/test-run.mjs (a Node launcher).
 import fs from 'node:fs'
+import path from 'node:path'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { parseNss, expectedMs, runTimeoutS, needMb, lastFinished, isolate, narrowBundle, missingNss } from './test-run.mjs'
@@ -20,10 +21,17 @@ test('runTimeoutS: 60 s plus 5x the expected time, between 180 s and 1200 s', ()
   assert.equal(runTimeoutS(1e7), 1200)
 })
 
-test('needMb: ~1 GB for one namespace, growing with the count, capped at the shard reservation', () => {
-  assert.equal(needMb(1, 2800), 960)
-  assert.equal(needMb(10, 2800), 1500)
-  assert.equal(needMb(45, 2800), 2800)
+test('needMb: measured peak plus margin per run, growing with the namespace count, capped at the shard need', () => {
+  const tests = { needMb: 2950, baseMb: 700, perNsMb: 40 }
+  assert.equal(needMb(1, tests), 740)
+  assert.equal(needMb(10, tests), 1100)
+  assert.equal(needMb(45, tests), 2500)
+  assert.equal(needMb(200, tests), 2950)
+})
+
+test('res-slot.json holds the one table of tests needs: shard 2950, golden 940, floor untouched', () => {
+  const res = JSON.parse(fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), 'res-slot.json'), 'utf8'))
+  assert.deepEqual([res.kinds.tests.needMb, res.kinds.tests.goldenMb, res.floorMb], [2950, 940, 6144])
 })
 
 test('lastFinished: the last test var in a timing file, or none', () => {
