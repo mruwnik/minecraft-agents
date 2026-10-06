@@ -12,6 +12,7 @@
 (def args
   {:radius {:doc "search radius in blocks" :default default-radius}
    :filter {:doc "item names to collect; everything when nil" :default nil}
+   :near {:doc "{:x :y :z} the work area is centred on, instead of where the body stands when the job begins" :type :pos :default nil}
    :ids {:doc "entity ids to collect (only those); any item when nil" :default nil}
    :visible-only {:doc "skip items the body has no line of sight to (a player cannot see through walls)" :default false}})
 
@@ -35,7 +36,7 @@
         wanted (some-> (:filter (:args c)) set)
         skipped (set (:skipped (ctx/mem c)))
         anchor (or (:anchor (ctx/mem c))
-                   (let [a (u/self-pos c)] (ctx/update-mem! c assoc :anchor a) a))
+                   (let [a (or (:near (:args c)) (u/self-pos c))] (ctx/update-mem! c assoc :anchor a) a))
         item (->> (array-seq (.entities (:primitives c) #js {:radius (+ radius (u/dist anchor (u/self-pos c))) :kind "item" :max (if (or only-ids wanted) 1024 32)}))
                   (filter #(if-let [p (.-pos %)] (<= (u/dist anchor (u/pos-of p)) radius) true))
                   (remove #(skipped (.-id %)))

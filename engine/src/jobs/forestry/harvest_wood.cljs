@@ -1,12 +1,14 @@
 (ns jobs.forestry.harvest-wood
   (:require [engine.ctx :as ctx]
             [jobs.lib.util :as u]
+            [jobs.lib.result :as result]
             [jobs.forestry.trees :refer [default-radius drop-filter debts near-debt? sapling-for]]))
 
 (def doc
   "Fell a tree, collect what dropped and replant. Runs three child jobs in turn, one child round per round:
   :fell (jobs.forestry.fell-tree), :collect (collect-drops) and :plant (plant-sapling).
-  Ends when :plant is done. Only replant debts within :radius of where the body stood when :plant began are
+  :collect works around the felled tree's base, wherever a reflex has since taken the body; a felling that brings in
+  no item at all ends the job :stopped (:nothing-collected). Ends when :plant is done. Only replant debts within :radius of where the body stood when :plant began are
   planted; the others (and any when no sapling is carried or the spot is not clear) stay owed, and the job
   warns harvest-wood.debts-owed with their :count and the :nearest one's :pos.
   Debts within the radius that stay unplanted (no sapling carried, spot refused) warn harvest-wood.replant-owed
@@ -20,17 +22,17 @@
    :ignore-zones? {:doc "act regardless of zones and claims (passed to the felling and the planting); the rules of the game allow it" :default false}})
 
 (defn phases
-  "The children in order: [phase job args]; the phase is also the slot."
-  [{:keys [species radius filter ignore-zones?]} origin]
+  "The children in order: [phase job args]; the phase is also the slot. tree is the felled tree's base, if any."
+  [{:keys [species radius filter ignore-zones?]} origin tree]
   [[:fell 'jobs.forestry.fell-tree {:species species :radius radius :ignore-zones? ignore-zones?}]
-   [:collect 'jobs.forestry.collect-drops {:radius radius :filter (or filter (drop-filter species))}]
+   [:collect 'jobs.forestry.collect-drops {:radius radius :filter (or filter (drop-filter species)) :near tree}]
    [:plant 'jobs.forestry.plant-sapling {:species species :ignore-zones? ignore-zones? :near origin :within radius}]])
 
 (defn current-phase
   "The [phase job args] the job is in, from its memory."
   [c]
   (let [phase (:phase (ctx/mem c) :fell)]
-    (some #(when (= phase (first %)) %) (phases (:args c) (:origin (ctx/mem c))))))
+    (some #(when (= phase (first %)) %) (phases (:args c) (:origin (ctx/mem c)) (:tree (ctx/mem c))))))
 
 (defn check
   "The current phase's child would run: its check, against its sub-map. The :plant phase always runs: a child that
@@ -80,9 +82,14 @@
         r (if (and (= :plant phase) (not (ctx/check-child c phase job args)))
             :done
             (await (ctx/call-child c phase job args)))
-        next-phase (second (drop-while #(not= phase %) (map first (phases (:args c) nil))))]
+        _ (when (and (= :fell phase) (= :done r))
+            (some->> (ctx/child-result c :fell) :base (ctx/update-mem! c assoc :tree)))
+        collected (when (and (= :collect phase) (= :done r)) (:collected (ctx/child-result c :collect)))
+        next-phase (second (drop-while #(not= phase %) (map first (phases (:args c) nil nil))))]
     (cond
       (not= :done r) :continue
+      (and (= :collect phase) (:tree (ctx/mem c)) (zero? (or collected 0)))
+      (result/stop! c :nothing-collected "felled a tree but no drop came into the inventory")
       (nil? next-phase) (do (warn-owed! c) (warn-replant-owed! c) :done)
       :else (do (ctx/update-mem! c assoc :phase next-phase)
                 (when (= :plant next-phase) (ctx/update-mem! c assoc :origin (u/self-pos c)))

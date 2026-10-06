@@ -25,7 +25,8 @@
   Zones: a tree whose base log is in another owner's zone or claim, or in a plan's footprint (but :for-plan's
   own), is not a candidate. A later log that turns out refused makes the tree count as unreachable. The job warns
   fell-tree.declined once, with :reason :refused (or :no-zones when no zone list was read). :ignore-zones? true
-  skips the check.")
+  skips the check.
+  Result: {:base pos} of the tree it felled, when it did.")
 
 (def args
   {:species {:doc "log species such as \"oak\"; any when nil" :default nil}
@@ -208,7 +209,8 @@
       :else
       (let [logs (tree-logs c radius)]
         (if (empty? logs)
-          :done
+          (do (ctx/result! c {:base (:base (ctx/mem c))})
+              :done)
           (let [_ (await (watch/watch! c {:before-dig (:pos (first logs))}))
                 r (await (dig-log! c (first logs)))]
             (case r

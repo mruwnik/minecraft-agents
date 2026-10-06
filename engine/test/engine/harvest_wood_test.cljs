@@ -2,6 +2,7 @@
   "jobs.forestry.harvest-wood ends when it has no sapling to plant (BaseMiner trial: it sat queued with the body idle)."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
+            [engine.fake :as fake]
             [engine.library-test :as lt]
             [engine.memory :as mem]
             [engine.test-util :as tu]))
@@ -118,3 +119,34 @@
           (is (= [] (filterv #(#{:error :failed} (:kind %)) @seen)))
           (is (= [] (lt/calls p "place")) "nothing placed into an unknown cell")
           (is (= 1 (count (lt/debts eng)))))))))
+
+(deftest a-body-moved-away-after-the-felling-still-collects-the-drops
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3)})]
+          (core/submit! eng '(jobs.forestry.harvest-wood {:species "oak" :radius 10}) {})
+          (loop [i 0]
+            (when (and (< i 30) (not= :collect (:phase (core/job-memory eng "j1"))))
+              (await (core/tick! eng))
+              (recur (inc i))))
+          (is (= :collect (:phase (core/job-memory eng "j1"))) "reached the collect phase")
+          (fake/swap-self! p assoc :pos [-30 64 0])
+          (await (lt/run-until-empty eng 30))
+          (is (= 3 (get (lt/inv p) "oak_log")) "the drops at the tree are fetched, not forgotten")
+          (is (= [] (:list (core/state eng)))))))))
+
+(deftest nothing-collected-after-a-felling-is-not-completed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3)})]
+          (core/submit! eng '(jobs.forestry.harvest-wood {:species "oak" :radius 10}) {})
+          (loop [i 0]
+            (when (and (< i 30) (not= :collect (:phase (core/job-memory eng "j1"))))
+              (await (core/tick! eng))
+              (recur (inc i))))
+          (doseq [e (fake/entities p)] (swap! (fake/state p) update :entities (fn [es] (remove #(= (:id e) (:id %)) es))))
+          (await (lt/run-until-empty eng 30))
+          (is (= [:nothing-collected] (mapv :reason (filterv #(= :stopped (:kind %)) @seen))) "no item came in: stopped with a reason, not completed")
+          (is (zero? (get (lt/inv p) "oak_log" 0))))))))
