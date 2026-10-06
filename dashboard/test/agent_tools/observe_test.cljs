@@ -7,6 +7,7 @@
             [agent-tools.observe.request :as observe-request]
             [agent-tools.observe.status :as observe-status]
             [agent-tools.world-data :as data]
+            [engine.expr :as expr]
             [clojure.string :as str]
             ["node:fs" :as fs]
             ["node:os" :as os]
@@ -841,3 +842,35 @@
                    ((:wait! f))))
           (.then (fn [death]
                    (is (= [{:id "j1" :name "jobs.explore.search"}] (:cancelled-jobs (died-item death))))))))))
+
+(deftest the-cancelled-list-keeps-only-the-latest-cancels
+  (let [events (for [i (range 80)] (plain-job-event :cancelled (str "j" i) {:by :death}))
+        tracker (reduce observe-status/track-deaths {} events)]
+    (is (= 50 (count (:cancelled tracker))))
+    (is (= {:id "j79"} (last (:cancelled tracker))))))
+
+(deftest an-event-gap-drops-the-cancels-seen-before-it
+  (with-fixture []
+    (fn [f]
+      (swap! (:world f) assoc :instances {"j1" {:spec {:op :leaf :job 'jobs.explore.search}}})
+      (-> ((:wait! f))
+          (.then (fn [_]
+                   (push! f (plain-job-event-at :cancelled "j1" 1 {:by :death}))
+                   ((:wait! f))))
+          (.then (fn [_]
+                   (swap! (:world f) assoc :gap true)
+                   ((:wait! f))))
+          (.then (fn [gap]
+                   (is (= :event-gap (:reason gap)))
+                   (swap! (:world f) assoc :gap false :events [])
+                   (push! f (assoc (event :body :died {}) :seq 5))
+                   ((:wait! f))))
+          (.then (fn [death]
+                   (is (not (contains? (died-item death) :cancelled-jobs)))))))))
+
+(deftest spec-label-prints-as-the-engine-expr-label
+  (let [specs [{:op :leaf :job 'jobs.a.b}
+               {:op :repeat :child {:op :leaf :job 'jobs.a.b}}
+               {:op :seq :children [{:op :leaf :job 'jobs.a.b} {:op :any :children [{:op :leaf :job 'jobs.c.d}]}]}]]
+    (doseq [spec specs]
+      (is (= (expr/label spec) (observe-status/spec-label spec))))))

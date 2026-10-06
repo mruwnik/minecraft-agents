@@ -143,6 +143,7 @@
                                    (js-await [page (read! (events-query (:stream-id cursor) (:seq cursor) 256))]
                                      (if (:gap? page)
                                        (do (swap! st assoc :cursor (:cursor page) :seen {})
+                                           (swap! deaths dissoc :cancelled)
                                            (reset-with-status! :event-gap))
                                        (process-events page (:events page))))))
                                (process-events [page events]
@@ -226,6 +227,7 @@
                                          (cond
                                            (:gap? history)
                                            (do (swap! st assoc :lookup false)
+                                               (swap! deaths dissoc :cancelled)
                                                (finish! (array-map :wake :reset :reason :history-unavailable)))
 
                                            (seq unavailable)

@@ -187,15 +187,18 @@
   (into {} (keep (fn [[id inst]] (when (:spec inst) [(id-str id) (clip (spec-label (:spec inst)) 120)])))
         (get-in snap [:state :instances])))
 
+(def max-cancelled 50)
+
 (defn track-deaths
-  "Fold an event into the death tracker {:names :cancelled}: job names from :queued events, and the jobs a death
-  cancelled (the engine emits those before the :died event; clear-reported drops them once reported)."
+  "Fold an event into the death tracker {:names :cancelled}: job names from :queued events, and the latest
+  max-cancelled jobs a death cancelled (the engine emits those before the :died event; clear-reported drops them
+  once reported)."
   [tracker e]
   (let [id (get-in e [:context :job-id])]
     (cond
       (and (= :job (:source e)) (= :queued (:kind e))) (assoc-in tracker [:names id] (get-in e [:data :name]))
       (and (= :job (:source e)) (= :cancelled (:kind e)) (= :death (get-in e [:data :by])))
-      (update tracker :cancelled (fnil conj []) (clean-pairs :id id :name (get-in tracker [:names id])))
+      (update tracker :cancelled #(vec (take-last max-cancelled (conj (or % []) (clean-pairs :id id :name (get-in tracker [:names id]))))))
       :else tracker)))
 
 (defn clear-reported
