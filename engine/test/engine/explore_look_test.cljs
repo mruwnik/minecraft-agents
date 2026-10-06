@@ -75,4 +75,15 @@
           (let [ended (first (filter #(#{:completed :stopped} (:kind %)) @seen))]
             (is (= :stopped (:kind ended)))
             (is (= :bad-args (get-in ended [:data :reason])))
-            (is (re-find #"max-blocks" (str (get-in ended [:data :text]))))))))))
+            (is (re-find #"max-blocks" (str (get-in ended [:data :text])))))))))
+(deftest block-name-checker-rejects-prototype-pollution-names
+  (let [p (tu/fake {})
+        checker (look/block-name-checker p)]
+    (is (false? (checker "constructor")) "constructor should not be a valid block name")
+    (is (false? (checker "__proto__")) "__proto__ should not be a valid block name")))
+(deftest block-names-with-constructor-and-proto-are-rejected
+  (let [p (tu/fake {})
+        checker (look/block-name-checker p)]
+    (is (re-find #"unknown block names" (:error (look/options {:block-names ["constructor"]} checker))))
+    (is (re-find #"unknown block names" (:error (look/options {:block-names ["__proto__"]} checker)))))))
+

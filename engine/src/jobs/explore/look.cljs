@@ -25,7 +25,7 @@
   "A fn of a block name: does minecraft-data list it for the body's version?"
   [p]
   (let [by-name (.-blocksByName (minecraft-data (game/version-of p)))]
-    (fn [n] (some? (aget by-name n)))))
+    (fn [n] (.hasOwnProperty by-name n))))
 (defn options
   "The validated args, or {:error text}. known-block? (optional) refuses block names minecraft-data does not list."
   ([a] (options a nil))
