@@ -12,6 +12,7 @@
             [engine.perception :as perception]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [jobs.lib.result :as r]
             [jobs.lib.cost :as cost]
             [jobs.lib.threats :as threats]
             [jobs.survival.retreat :as retreat]))
@@ -126,14 +127,34 @@
           (is (= :lost (:ended out)))
           (is (< (fake/dist (body-pos p) (mob-pos p 7)) 35) "lost before the follow range"))))))
 
-(deftest retreat-is-bounded-and-stops-still-chased
+(deftest a-flight-has-no-time-limit
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [calls out]} (await (run-job! (setup {:entities [(zombie 7 5 {:chase {:speed 1}})]})
-                                                   'jobs.survival.retreat {:max-flight-s 5}))]
-          (is (= [:done] calls))
-          (is (= {:status :stopped :reason :still-chased} (select-keys out [:status :reason]))))))))
+        (let [s (setup {:entities [(zombie 7 5 {:chase {:speed 1}})]})
+              {:keys [p clock]} s
+              world (.-world p)
+              calls #(.-length (.-calls world))]
+          (doseq [name ["steer" "moveTo" "wait" "attack" "place" "dig" "equip" "eat"]]
+            (.override world name (fn ^:async f [token a impl]
+                                    (when (= 5 (calls)) (swap! clock + 200000))
+                                    (when (> (calls) 400) (swap! (fake/state p) assoc :entities []))
+                                    (await (impl token a)))))
+          (let [{:keys [out]} (await (run-job! s 'jobs.survival.retreat {:no-gain-steps 3}))]
+            (is (> (calls) 400) "the chase went on past the old 180 s bound, until the zombie left")
+            (is (not= :still-chased (:reason out)))))))))
+
+(deftest a-chase-that-gains-no-distance-escalates-and-a-gain-resets-it
+  (let [step (fn [mem gap] (retreat/note-gap mem gap))]
+    (is (= {:best-gap 5 :since-gain 0 :sweeps 0} (step {:sweeps 1} 5)) "first gap is a gain")
+    (is (= {:best-gap 5 :since-gain 2 :sweeps 1} (-> {:best-gap 5 :since-gain 1 :sweeps 1} (step 5.5))) "under a block: no gain")
+    (is (= {:best-gap 7 :since-gain 0 :sweeps 0} (step {:best-gap 5 :since-gain 2 :sweeps 1} 7)) "a gain resets both")
+    (is (retreat/no-gain? {:since-gain 3} 3))
+    (is (not (retreat/no-gain? {:since-gain 2} 3)))))
+
+(deftest every-option-failing-in-two-sweeps-in-a-row-is-cannot-escape
+  (is (not (retreat/cannot-escape? (retreat/count-sweep {}))))
+  (is (retreat/cannot-escape? (retreat/count-sweep (retreat/count-sweep {})))))
 
 (deftest respond-to-hostile-never-continues
   (async done
@@ -222,7 +243,7 @@
            (retreat/resume-flight mem 100000))
         "a long gap: the flight starts now and every chaser was just seen")))
 
-(deftest respond-to-hostile-stops-when-a-danger-stays-near-past-its-bound
+(deftest respond-to-hostile-stops-after-three-calls-that-change-nothing
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -231,6 +252,23 @@
               declining {:check (constantly true)
                          :round (fn ^:async idle-flight [c] (swap! clock + 1000) :done)}
               s (assoc-in s [:eng :jobs 'jobs.survival.retreat] declining)
-              {:keys [calls out]} (await (run-job! s 'jobs.survival.respond-to-hostile {:max-attempt-s 3}))]
+              {:keys [calls out]} (await (run-job! s 'jobs.survival.respond-to-hostile {}))]
           (is (= [:done] calls))
-          (is (= {:status :stopped :reason :still-near} (select-keys out [:status :reason]))))))))
+          (is (= {:status :stopped :reason :no_response} (select-keys out [:status :reason]))))))))
+
+(deftest respond-to-hostile-is-done-when-the-danger-is-gone-after-a-long-hide
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup {:entities [(zombie 7 5 {:chase false})]})
+              clock (:clock s)
+              p (:p s)
+              hiding {:check (constantly true)
+                      :round (fn ^:async long-hide [c]
+                               (swap! clock + 400000)
+                               (swap! (fake/state p) assoc :entities [])
+                               (r/finish! c {:fled [7] :ended :hidden}))}
+              s (assoc-in s [:eng :jobs 'jobs.survival.retreat] hiding)
+              {:keys [calls out]} (await (run-job! s 'jobs.survival.respond-to-hostile {}))]
+          (is (= [:done] calls))
+          (is (not= :stopped (:status out))))))))

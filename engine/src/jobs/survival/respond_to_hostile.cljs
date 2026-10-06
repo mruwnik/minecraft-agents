@@ -17,8 +17,8 @@
   If the chosen child declines, the other one runs.
   Done once no real danger (as the hostile-near trigger, jobs.lib.reach, in sight) is within :radius
   (:ranged-radius for ranged mobs) and the retreat is not hiding (sealed in, up a pillar or down a pit).
-  A child that stops (a retreat still chased after its bound) stops it with that cause; a danger still near after
-  :max-attempt-s stops it :still-near; never :continue.
+  A child that stops (a retreat that cannot escape) stops it with that cause; three calls in a row that change
+  neither the body's cell nor the dangers near stop it :no_response; never :continue.
   Memory: writes one :hostile entry {:mob :pos :decision} per encounter.
   A danger reflex: never backed off.")
 
@@ -26,7 +26,6 @@
   {:radius {:doc "hostiles within this many blocks count" :default 8}
    :ranged-radius {:doc "ranged hostiles (skeletons and the like) within this many blocks count" :default 16}
    :reserve {:doc "health a fight must be expected to leave" :default 4}
-   :max-attempt-s {:doc "an attempt with a danger still near after this many seconds stops :still-near" :default 300}
    :quiet-s {:doc "passed to the retreat: a hidden body keeps its refuge this many seconds after the last danger" :default 30}
    :weapons {:doc "item name substrings that count as weapons" :default combat/default-weapons}})
 
@@ -98,21 +97,35 @@
   [c]
   (some #(let [res (ctx/child-result c %)] (when (= :stopped (:status res)) [% res])) [:flee :fight]))
 
+(def max-unchanged
+  "Calls of a child in a row that leave the body and the dangers as they were before the reflex stops :no_response."
+  3)
+
+(defn signature
+  "What a call may change: the body's cell and the ids of the dangers near."
+  [c hs]
+  {:cell (let [{:keys [x y z]} (u/self-pos c)] [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)])
+   :ids (set (map #(.-id %) hs))})
+
 (defn ^:async round
-  "One whole attempt: respond (or let the retreat hide on) while a danger is near; stopped when a child stops or after
-  :max-attempt-s with a danger still near."
+  "One whole attempt: respond (or let the retreat hide on) while a danger is near; stopped when a child stops, or
+  :no_response after max-unchanged calls in a row that changed nothing; never for the time a danger stays."
   [c]
-  (let [t0 (ctx/now c)]
-    (loop []
-      (let [hs (near c)]
-        (cond
-          (hiding? c) (await (run-child c :flee (:args c)))
-          (empty? hs) nil
-          :else (await (respond c hs)))
+  (loop [unchanged 0]
+    (let [hs (near c)
+          before (signature c hs)]
+      (cond
+        (hiding? c) (await (run-child c :flee (:args c)))
+        (empty? hs) nil
+        :else (await (respond c hs)))
+      (let [after (near c)]
         (if-let [[slot res] (stopped-child c)]
           (r/stop! c (:reason res) (:text res) :cause (r/cause-of slot res))
           (cond
-            (not (or (seq hs) (hiding? c))) :done
-            (> (- (ctx/now c) t0) (* 1000 (:max-attempt-s (:args c))))
-            (r/stop! c :still-near (str "a hostile is still near after " (:max-attempt-s (:args c)) " s"))
-            :else (do (await (pace/pace!)) (recur))))))))
+            (not (or (seq after) (hiding? c))) :done
+            :else
+            (let [n (if (= before (signature c after)) (inc unchanged) 0)]
+              (if (>= n max-unchanged)
+                (do (ctx/emit! c :no_response :warn {:text "the hostile is still near and nothing changed in three tries"})
+                    (r/stop! c :no_response "a hostile is still near and three tries changed nothing"))
+                (do (await (pace/pace!)) (recur n))))))))))

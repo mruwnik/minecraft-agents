@@ -697,7 +697,7 @@
         (let [{:keys [p]} (await (flight-round respond {:inventory [{:name "stone_sword" :count 1} {:name "diamond_sword" :count 1}]
                                                         :entities [(zombie 3 0)]}))]
           (is (= ["diamond_sword"] (mapv #(.-item (.-args %)) (calls p "equip"))))
-          (is (= 4 (count (calls p "attack")))))))))
+          (is (= 3 (count (calls p "attack"))) "a diamond sword (7) kills the 20 hp zombie in three hits; no fourth swing at the corpse"))))))
 
 (def stair-exit
   "A dead-end corridor one wide along +z, closed behind the body (z -1): the way out of a dug-in cell, the zombie in it."

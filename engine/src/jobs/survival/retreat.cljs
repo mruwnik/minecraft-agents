@@ -56,8 +56,10 @@
   hostile within its follow range (jobs.lib.threats; ranged ones at least :ranged-radius) would have a walkable way to
   the refuge if its own blocks were gone, and for :quiet-s more after the last such danger (a silent mob is forgotten
   after a few seconds); then the flight ends :hidden.
-  Returns done {:fled [ids] :ended :gone|:far|:lost|:closed|:hidden|:none}, or stopped :still-chased after
-  :max-flight-s (the hostile reflex fires again if the danger is still near).
+  A chase has no time limit. With no new best gap to the nearest chaser in :no-gain-steps steps it takes the
+  cornered options instead of walking on; stopped :cannot_escape only once every option failed in two sweeps in a row
+  with no gain between.
+  Returns done {:fled [ids] :ended :gone|:far|:lost|:closed|:hidden|:none}, or stopped :cannot_escape.
   Memory: one :threat entry per mob fled (jobs.lib.threats); the third from one mob within 5 min warns hostile.chased.
   A cell in another's zone is used only as a last resort (retreat.trespass-last-resort warning).")
 
@@ -73,7 +75,7 @@
    :max-places {:doc "seal placements per step" :default 4}
    :lost-s {:doc "a mob out of line of sight this many seconds has stopped chasing" :default 4}
    :quiet-s {:doc "a hidden body keeps its refuge this many seconds after the last danger" :default 30}
-   :max-flight-s {:doc "a flight still chased after this many seconds stops :still-chased" :default 180}})
+   :no-gain-steps {:doc "flight steps without a new best gap to the nearest chaser before the cornered options are tried" :default 20}})
 
 (def tool-weapons
   "Item name substrings a cornered body with no weapon and no seal swings: any of them beats the fist."
@@ -563,16 +565,42 @@
               (await (dig-in/collect-drops! c (:blocks (:args c)) (.-drops r)))
               (recur more))))))))
 
+(declare end-flight!)
+
+(defn count-sweep
+  "mem with one more sweep of every option failed."
+  [mem]
+  (update mem :sweeps (fnil inc 0)))
+
+(defn cannot-escape?
+  "Whether two sweeps of every option failed with no gain between."
+  [mem]
+  (>= (:sweeps mem 0) 2))
+
+(defn note-gap
+  "mem after a flight step that left the nearest chaser gap blocks off: a gain of a block over the best gap resets the
+  sweeps and the no-gain count, else the count grows."
+  [mem gap]
+  (let [best (:best-gap mem)]
+    (if (or (nil? best) (>= gap (inc best)))
+      (assoc mem :best-gap gap :since-gain 0 :sweeps 0)
+      (update mem :since-gain (fnil inc 0)))))
+
+(defn no-gain?
+  "Whether the flight went n steps without a gain."
+  [mem n]
+  (>= (:since-gain mem 0) n))
+
 (defn ^:async blocked!
   "Every option failed: forget them all, warn once a flight, hold a moment (wait, why cornered) and go on: the next step
-  tries them again from the start (the danger still stands)."
+  tries them again from the start (the danger still stands). The second sweep in a row ends the flight :cannot-escape."
   [c why]
-  (ctx/update-mem! c dissoc :tried)
+  (ctx/update-mem! c #(-> % (dissoc :tried) count-sweep))
   (when-not (:blocked-warned (ctx/mem c))
     (ctx/update-mem! c assoc :blocked-warned true)
     (ctx/emit! c :retreat_blocked :warn {:text (str why "; every escape failed, trying them again")}))
   (await (ctx/act c :wait #js {:ms wait-ms :why "cornered"}))
-  :again)
+  (if (cannot-escape? (ctx/mem c)) (end-flight! c :cannot-escape) :again))
 
 (defn ^:async cornered!
   "Nowhere worth walking to: the first option of escape-order that it can take and has not failed since the last
@@ -667,7 +695,7 @@
 (defn end-flight!
   "Write a :threat entry per mob fled (jobs.lib.threats; one per mob, its last way out) and end the flight: done with
   {:fled [ids] :ended}, :ended why the last chaser stopped (or ended, given for the chasers still on: :hidden); ended
-  :still-chased stops."
+  :cannot-escape stops."
   [c ended]
   (let [{:keys [chasers fled]} (ctx/mem c)
         by-id (merge (into {} (map (juxt :id identity)) fled)
@@ -677,8 +705,8 @@
         ids (mapv :id all)]
     (doseq [t all] (threats/remember! c t))
     (ctx/update-mem! c dissoc :chasers :fled)
-    (if (= :still-chased ended)
-      (r/stop! c :still-chased (str "still chased after " (:max-flight-s (:args c)) " s of flight") :fled ids)
+    (if (= :cannot-escape ended)
+      (r/stop! c :cannot_escape "every way of escaping failed twice in a row" :fled ids)
       (r/finish! c {:fled ids :ended why}))))
 
 ;; ------------------------------------------------------------------ up a pillar or down a pit
@@ -848,9 +876,9 @@
 
 (defn ^:async flight-step!
   "One step of the flight (look!, then shut a door, or walk a step away, or the cornered options), :again; the flight's
-  end (end-flight!) once no chaser is left or after :max-flight-s."
+  end (end-flight!) once no chaser is left."
   [c]
-  (let [{:keys [step max-flight-s]} (:args c)
+  (let [{:keys [step no-gain-steps]} (:args c)
         p (:primitives c)
         threats (look! c)
         threat (first threats)
@@ -859,7 +887,9 @@
                 (if (empty? (near-hostiles c)) (await (wait-far! c)) (await (cornered! c why))))]
     (cond
       (nil? threat) (end-flight! c nil)
-      (> (- (ctx/now c) (:flight-start (ctx/mem c))) (* 1000 max-flight-s)) (end-flight! c :still-chased)
+      (no-gain? (ctx/mem c) no-gain-steps)
+      (do (ctx/update-mem! c assoc :since-gain 0)
+          (await (stuck "the chaser keeps up")))
       door (await (shut-door! c door))
       :else
       (let [_ (await (eat-on-the-run! c threat))
@@ -872,7 +902,9 @@
                 r (await (near/walk-near! c target 1 {:timeout-s flight-timeout-s}))]
             (if (= :blocked r)
               (await (stuck "the way away from the hostile is blocked"))
-              (do (ctx/update-mem! c dissoc :tried) :again))))))))
+              (let [gap (or (some-> (first (near-hostiles c)) .-distance) (:ranged-radius (:args c)))]
+                    (ctx/update-mem! c #(-> % (dissoc :tried) (note-gap gap)))
+                :again))))))))
 
 (defn ^:async round
   "One whole flight: steps (flight-step!, or the refuge's) until it ends."

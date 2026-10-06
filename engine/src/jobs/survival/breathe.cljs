@@ -222,7 +222,8 @@
 
 (defn ^:async dig-out!
   "Enclosed: dig the head block (and the one above if solid), step up. True
-  when the dig worked; false when it did not (nothing moved)."
+  when the dig worked and the body stepped up; :dug when a dig worked but the step did not (the head cell may have
+  refilled); false when nothing changed."
   [c]
   (let [p (:primitives c)
         head (s/eye-cell (.self p))
@@ -234,7 +235,9 @@
       (do (when (solid-at? p above)
             (await (tidy/dig! c above true)))
           ;; raw moveTo kept: an emergency step to air or out of water (range 0), where the planner may have no standable cell; no time for a plan.
-          (= "arrived" (status (await (ctx/act c :moveTo (clj->js {:pos head :range 0})))))))))
+          (if (= "arrived" (status (await (ctx/act c :moveTo (clj->js {:pos head :range 0})))))
+            true
+            :dug)))))
 
 (def headings
   "Swim headings [dx dz], east first, then south, west, north, then the diagonals."
@@ -386,6 +389,7 @@
             (cond
               (nil? (s/situation p min-oxygen)) :again
               (and drowning? ok) :again
+              (= :dug ok) (do (ctx/update-mem! c dissoc :failures) :again)
               drowning? (fail! c :no_air "drowning and no air within reach")
               :else (fail! c :no_way_out "could not dig out of the block"))))))))
 

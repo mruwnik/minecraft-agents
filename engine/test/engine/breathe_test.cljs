@@ -195,6 +195,19 @@
           (is (= [[:stopped :no_way_out]] (ended seen)))
           (is (= 1 (count (of-kind seen :no_way_out)))))))))
 
+(deftest enclosed-digs-that-work-but-leave-the-head-enclosed-are-progress-not-failures
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:blocks {"0,65,0" "stone" "0,66,0" "stone"}})
+              digs (atom 0)]
+          (.override (.-world p) "dig" (fn ^:async f [token a impl]
+                                         (if (<= (swap! digs inc) 5)
+                                           #js {:status "dug"}
+                                           (await (impl token a)))))
+          (await (one-run! eng defaults))
+          (is (= [[:completed nil]] (ended seen)) "five refilled digs are not three failures in a row"))))))
+
 (deftest enclosed-run-leaves-the-block-above-when-it-is-already-open
   (async done
     (tu/run-async done
