@@ -52,9 +52,10 @@
      Against a creeper back off comes first.
      An option that fails is not tried again until all have failed. Then, after a second's hold, all are tried again
      (one retreat_blocked warning per flight).
-  Sealed in, up a pillar or down a pit it hides (one retreat_sealed warning; a declared hold, wait why hiding), with no
-  time limit, while a hostile within :radius (ranged ones :ranged-radius) would have a walkable way to the refuge if
-  its own blocks were gone; then the flight ends :hidden.
+  Sealed in, up a pillar or down a pit it hides (one retreat_sealed warning; a declared hold, wait why hiding) while a
+  hostile within its follow range (jobs.lib.threats; ranged ones at least :ranged-radius) would have a walkable way to
+  the refuge if its own blocks were gone, and for :quiet-s more after the last such danger (a silent mob is forgotten
+  after a few seconds); then the flight ends :hidden.
   Returns done {:fled [ids] :ended :gone|:far|:lost|:closed|:hidden|:none}, or stopped :still-chased after
   :max-flight-s (the hostile reflex fires again if the danger is still near).
   Memory: one :threat entry per mob fled (jobs.lib.threats); the third from one mob within 5 min warns hostile.chased.
@@ -71,6 +72,7 @@
    :blocks {:doc "names of the blocks a cornered body may seal itself in with" :default dig-in/building-blocks}
    :max-places {:doc "seal placements per step" :default 4}
    :lost-s {:doc "a mob out of line of sight this many seconds has stopped chasing" :default 4}
+   :quiet-s {:doc "a hidden body keeps its refuge this many seconds after the last danger" :default 30}
    :max-flight-s {:doc "a flight still chased after this many seconds stops :still-chased" :default 180}})
 
 (def tool-weapons
@@ -690,23 +692,32 @@
     :again))
 
 (defn refuge-danger?
-  "Whether a hostile within :radius (ranged ones within :ranged-radius), the dead skipped, would have a walkable way to
-  the refuge's anchor cell were the refuge's own cells open (jobs.lib.reach): a danger the refuge keeps off."
+  "Whether a hostile within its follow range (jobs.lib.threats; ranged ones at least :ranged-radius), the dead skipped,
+  would have a walkable way to the refuge's anchor cell were the refuge's own cells open (jobs.lib.reach): a danger
+  the refuge keeps off."
   [c {:keys [anchor cells]}]
   (let [p (:primitives c)
-        open (set cells)]
-    (boolean (some #(reach/walkable-way? p (u/pos-of (.-pos %)) anchor #{} open) (near-hostiles c)))))
+        open (set cells)
+        {:keys [ranged-radius]} (:args c)
+        reach-of (fn [e] (cond-> (threats/follow-range (.-name e)) (combat/ranged? e) (max ranged-radius)))
+        known (near-known p (set (dead-ids c)) threats/max-follow-range ranged-radius)]
+    (boolean (some #(and (<= (.-distance %) (reach-of %))
+                         (reach/walkable-way? p (u/pos-of (.-pos %)) anchor #{} open))
+                   known))))
 
 (defn ^:async hide-hold!
   "Sealed in, up the pillar or down the pit: hold (a :wait, why hiding) while the refuge keeps a danger off
-  (refuge-danger?), then end the flight :hidden. No time limit."
+  (refuge-danger?) and :quiet-s after the last one, then end the flight :hidden."
   [c]
+  (when-not (:quiet-from (ctx/mem c)) (ctx/update-mem! c assoc :quiet-from (ctx/now c)))
   (loop []
-    (if (refuge-danger? c (:refuge (ctx/mem c)))
+    (when (refuge-danger? c (:refuge (ctx/mem c))) (ctx/update-mem! c assoc :quiet-from (ctx/now c)))
+    (if (< (- (ctx/now c) (:quiet-from (ctx/mem c))) (* 1000 (:quiet-s (:args c))))
       (do (await (ctx/act c :wait #js {:ms wait-ms :why "hiding"}))
           (await (pace/pace!))
           (recur))
-      (end-flight! c :hidden))))
+      (do (ctx/update-mem! c dissoc :quiet-from)
+          (end-flight! c :hidden)))))
 
 (defn hide-now! [c refuge text]
   (ctx/update-mem! c assoc :refuge (assoc refuge :hidden true))

@@ -180,10 +180,83 @@
         (let [{:keys [eng p while-hidden]}
               (await (hidden-round retreat {:blocks dead-end :inventory [{:name "cobblestone" :count 20}]
                                             :entities [(skeleton 4 64 0)]}
-                                   1000 (fn [{:keys [eng]}] (:list (core/state eng)))
+                                   31000 (fn [{:keys [eng]}] (:list (core/state eng)))
                                    [{:id 3 :name "zombie" :kind "hostile" :pos {:x 0 :y 64 :z 5} :health 20}]))]
           (is (= ["j1"] while-hidden) "sealed, the skeleton in the tunnel")
           (is (= [] (:list (core/state eng))) "a zombie walled off in the rock is no danger even with the seal gone"))))))
+
+(def long-dead-end
+  "dead-end stretched to x 0..16: a zombie can stand beyond :radius and still have a way to the sealed body."
+  (rock [-3 17] [62 67] (set (for [x (range 0 17) y [64 65]] [x y 0]))))
+
+(defn zombie-at [x] {:id 9 :name "zombie" :kind "hostile" :pos {:x x :y 64 :z 0} :health 20})
+
+(defn ^:async hide-steps
+  "Submit spec over world and run its round. Once it hides, each [entities jump-ms] of steps replaces the mobs and
+  moves the clock; after a short real wait the job list is noted. Then the mobs go and the round is awaited.
+  The setup map plus :listed (the lists noted) and :waits (wait calls made by the end)."
+  [spec world steps]
+  (let [{:keys [eng p seen clock] :as s} (setup world)
+        listed (atom [])]
+    (core/submit! eng spec {})
+    (let [round (core/tick! eng)]
+      (loop [i 0] (when (and (not (hiding? seen)) (< i 1000)) (await (sleep 20)) (recur (inc i))))
+      (doseq [[ents jump-ms] steps]
+        (swap! (fake/state p) assoc :entities [])
+        (doseq [e ents] (fake/add-entity! p e))
+        (swap! clock + jump-ms)
+        (await (sleep 200))
+        (swap! listed conj (:list (core/state eng))))
+      (swap! (fake/state p) assoc :entities [])
+      (await round))
+    (assoc s :listed @listed :waits (count (calls p "wait")))))
+
+(deftest a-sealed-body-keeps-hiding-while-a-hostile-beyond-the-radius-could-reach-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng listed]}
+              (await (hide-steps retreat {:blocks long-dead-end :inventory [{:name "cobblestone" :count 20}]
+                                          :entities [(zombie-at 4)]}
+                                 [[[(zombie-at 12)] 100000]]))]
+          (is (= [["j1"]] listed) "a zombie 12 blocks off, with a way to the open refuge, is still a danger")
+          (is (= [] (:list (core/state eng)))))))))
+
+(deftest a-sealed-body-listens-for-a-quiet-period-after-the-last-danger
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng listed]}
+              (await (hide-steps '(jobs.survival.retreat {:quiet-s 100000})
+                                 {:blocks long-dead-end :inventory [{:name "cobblestone" :count 20}]
+                                  :entities [(zombie-at 4)]}
+                                 [[[(zombie-at 12)] 0] [[] 10000]]))]
+          (is (= [["j1"] ["j1"]] listed) "the mob forgotten 10 s ago: still hiding")
+          (is (= [] (:list (core/state eng))) "after the quiet period: done"))))))
+
+(deftest a-sealed-respond-to-hostile-keeps-hiding-through-the-quiet-period
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen waits]}
+              (await (hide-steps '(jobs.survival.respond-to-hostile)
+                                 {:blocks long-dead-end :inventory [{:name "cobblestone" :count 20}]
+                                  :entities [(zombie-at 4)]}
+                                 [[[] 0]]))]
+          (is (hiding? seen))
+          (is (>= waits 25) "about 30 s of holds after the zombie is gone")
+          (is (= [] (:list (core/state eng)))))))))
+
+(deftest a-walled-off-hostile-ends-the-hide-only-after-the-quiet-period
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]}
+              (await (hidden-round retreat {:blocks dead-end :inventory [{:name "cobblestone" :count 20}]
+                                            :entities [(skeleton 4 64 0)]}
+                                   0 (constantly nil)
+                                   [{:id 3 :name "zombie" :kind "hostile" :pos {:x 0 :y 64 :z 5} :health 20}]))]
+          (is (>= (count (calls p "wait")) 25) "about 30 s of holds before it ends"))))))
 
 (def hard-sided-dead-end
   "dead-end with obsidian beside and behind the tunnel: a stone pickaxe digs no pocket into it."
