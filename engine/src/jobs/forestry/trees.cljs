@@ -108,17 +108,27 @@
 
 ;; ------------------------------------------------------------ planting
 
-(defn pick-debt [debts species]
-  (->> debts
-       (filter #(or (nil? species) (= species (:species %))))
-       first))
+(defn near-debt?
+  "True when the debt's cell is within radius blocks (flat distance) of near; always when near is nil."
+  [near radius d]
+  (or (nil? near)
+      (<= (js/Math.hypot (- (:x near) (:x (:pos d))) (- (:z near) (:z (:pos d)))) radius)))
+
+(defn pick-debt
+  "The oldest debt of species (any when nil), within radius of near when given."
+  ([debts species] (pick-debt debts species nil nil))
+  ([debts species near radius]
+   (->> debts
+        (filter #(or (nil? species) (= species (:species %))))
+        (filter #(near-debt? near radius %))
+        first)))
 
 (defn target-of
   "The planting plan {:pos :species :debt} from args and the replant debts, or nil."
   [debts args]
   (if-let [at (:at args)]
     {:pos at :species (:species args)}
-    (when-let [d (pick-debt debts (:species args))]
+    (when-let [d (pick-debt debts (:species args) (:near args) (:within args))]
       {:pos (:pos d) :species (or (:species args) (:species d)) :debt d})))
 
 (defn sapling-for

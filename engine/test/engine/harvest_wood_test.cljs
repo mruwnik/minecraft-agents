@@ -61,3 +61,46 @@
           (core/submit! eng '(jobs.forestry.plant-sapling) {})
           (await (lt/run-until-empty eng 5))
           (is (= [] (filterv #(#{:error :failed} (:kind %)) @seen)) "no crash"))))))
+
+(def far-debt {:pos {:x 1500 :y 66 :z 1500} :species "oak"})
+
+(defn owe-far! [eng] (mem/write! (:store eng) :forestry/replant far-debt {:cap 50 :ttl :forever}))
+
+(deftest a-far-debt-is-left-owed-and-the-near-tree-is-replanted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3) :inventory [{:name "oak_sapling" :count 2}]
+                                              :unloaded ["1500,66,1500"]})]
+          (owe-far! eng)
+          (core/submit! eng '(jobs.forestry.harvest-wood {:radius 32}) {})
+          (is (< (await (lt/run-until-empty eng 40)) 40))
+          (is (= [] (filterv #(#{:error :failed} (:kind %)) @seen)) "no crash")
+          (is (= "oak_sapling" (.-name (.blockAt p #js {:x 3 :y 64 :z 0}))) "the felled tree's spot is planted")
+          (is (= [far-debt] (lt/debts eng)) "the far debt stays owed")
+          (is (empty? (filterv #(< 100 (js/Math.abs (or (some-> % .-args .-pos .-x) 0))) (lt/calls p "moveTo"))) "no walk far")
+          (is (= 1 (count (filterv #(= :harvest-wood.debts-owed (:kind %)) @seen))) "the owed debt is reported"))))))
+
+(deftest a-far-debt-and-no-sapling-ends-with-both-owed-and-says-so
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3) :unloaded ["1500,66,1500"]})]
+          (owe-far! eng)
+          (core/submit! eng '(jobs.forestry.harvest-wood {:radius 32}) {})
+          (is (< (await (lt/run-until-empty eng 40)) 40))
+          (is (= [] (filterv #(#{:error :failed} (:kind %)) @seen)) "no crash")
+          (is (= 2 (count (lt/debts eng))))
+          (is (= 1 (count (filterv #(= :harvest-wood.debts-owed (:kind %)) @seen)))))))))
+
+(deftest a-near-debt-on-an-unloaded-cell-is-not-planted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (lt/setup {:inventory [{:name "oak_sapling" :count 1}] :unloaded ["5,66,5"]})]
+          (mem/write! (:store eng) :forestry/replant {:pos {:x 5 :y 66 :z 5} :species "oak"} {:cap 50 :ttl :forever})
+          (core/submit! eng '(jobs.forestry.plant-sapling) {})
+          (await (lt/run-until-empty eng 8))
+          (is (= [] (filterv #(#{:error :failed} (:kind %)) @seen)))
+          (is (= [] (lt/calls p "place")) "nothing placed into an unknown cell")
+          (is (= 1 (count (lt/debts eng)))))))))

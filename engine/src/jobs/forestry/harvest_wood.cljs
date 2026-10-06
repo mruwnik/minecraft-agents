@@ -1,12 +1,14 @@
 (ns jobs.forestry.harvest-wood
   (:require [engine.ctx :as ctx]
-            [jobs.forestry.trees :refer [default-radius drop-filter]]))
+            [jobs.lib.util :as u]
+            [jobs.forestry.trees :refer [default-radius drop-filter debts near-debt?]]))
 
 (def doc
   "Fell a tree, collect what dropped and replant. Runs three child jobs in turn, one child round per round:
   :fell (jobs.forestry.fell-tree), :collect (collect-drops) and :plant (plant-sapling).
-  Ends when :plant is done. The replant is skipped, and stays owed, when no sapling is carried or the spot is not
-  clear.")
+  Ends when :plant is done. Only replant debts within :radius of where the body stood when :plant began are
+  planted; the others (and any when no sapling is carried or the spot is not clear) stay owed, and the job
+  warns harvest-wood.debts-owed with their :count and the :nearest one's :pos.")
 
 (def args
   {:species {:doc "log species; any when nil" :default nil}
@@ -16,16 +18,16 @@
 
 (defn phases
   "The children in order: [phase job args]; the phase is also the slot."
-  [{:keys [species radius filter ignore-zones?]}]
+  [{:keys [species radius filter ignore-zones?]} origin]
   [[:fell 'jobs.forestry.fell-tree {:species species :radius radius :ignore-zones? ignore-zones?}]
    [:collect 'jobs.forestry.collect-drops {:radius radius :filter (or filter (drop-filter species))}]
-   [:plant 'jobs.forestry.plant-sapling {:species species :ignore-zones? ignore-zones?}]])
+   [:plant 'jobs.forestry.plant-sapling {:species species :ignore-zones? ignore-zones? :near origin :within radius}]])
 
 (defn current-phase
   "The [phase job args] the job is in, from its memory."
   [c]
   (let [phase (:phase (ctx/mem c) :fell)]
-    (some #(when (= phase (first %)) %) (phases (:args c)))))
+    (some #(when (= phase (first %)) %) (phases (:args c) (:origin (ctx/mem c))))))
 
 (defn check
   "The current phase's child would run: its check, against its sub-map. The :plant phase always runs: a child that
@@ -35,18 +37,33 @@
     (or (= :plant slot)
         (boolean (ctx/check-child c slot job args)))))
 
+(defn warn-owed!
+  "Warn once when replant debts of the species remain owed, far from here."
+  [c]
+  (let [{:keys [species]} (:args c)
+        here (:origin (ctx/mem c))
+        owed (filterv #(and (or (nil? species) (= species (:species %))) (not (near-debt? here (:radius (:args c)) %)))
+                      (debts c))]
+    (when (seq owed)
+      (ctx/warn-once! c :owed :harvest-wood.debts-owed
+                      {:count (count owed)
+                       :nearest (:pos (apply min-key #(u/dist here (:pos %)) owed))}))))
+
 (defn ^:async round
   "Steps the current phase's child once; when the child is done the phase
   advances. Done when the :plant child is done. A declined child is
   :continue (the check normally keeps the round from running at all). The :plant phase with a child that would
   wait (no sapling carried, the spot not clear) is done without it: the replant stays owed."
   [c]
-  (let [[phase job args] (current-phase c)
+  (let [_ (when-not (:origin (ctx/mem c)) (ctx/update-mem! c assoc :origin (u/self-pos c)))
+        [phase job args] (current-phase c)
         r (if (and (= :plant phase) (not (ctx/check-child c phase job args)))
             :done
             (await (ctx/call-child c phase job args)))
-        next-phase (second (drop-while #(not= phase %) (map first (phases (:args c)))))]
+        next-phase (second (drop-while #(not= phase %) (map first (phases (:args c) nil))))]
     (cond
       (not= :done r) :continue
-      (nil? next-phase) :done
-      :else (do (ctx/update-mem! c assoc :phase next-phase) :continue))))
+      (nil? next-phase) (do (warn-owed! c) :done)
+      :else (do (ctx/update-mem! c assoc :phase next-phase)
+                (when (= :plant next-phase) (ctx/update-mem! c assoc :origin (u/self-pos c)))
+                :continue))))
