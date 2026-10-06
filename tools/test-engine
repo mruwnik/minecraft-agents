@@ -4,6 +4,7 @@
 # tools/test-engine --golden: the opt-in planner pins (the engine.planner-*-golden namespaces, build :test-golden); run when planner code changes. Not part of --full or the default suite.
 # tools/test-engine --changed [<git-rev>]: only the tests affected by the changed files (working tree + staged + untracked vs HEAD, or vs <git-rev>; use <sha>^ to test a commit); see tools/changed-tests.mjs.
 # <ns>: engine namespaces, e.g. engine.go-to-test: run by tools/test-run.mjs on a private copy of the bundle, one 'tests' slot sized by the namespace count, killed (exit 124) after a timeout from the prior timings. --full [--shards N --slots M --slowest K]: the whole suite sharded over N node processes (default 4), at most M running machine-wide (default from free memory, 1..3, flock under /tmp/mc-res, the res-slot 'tests' kind, floor in tools/res-slot.json), per-test ms in engine/out/test-timings.jsonl (shared-code changes only).
+# TEST_EVENTS=1: also prints the live-tests @@test lines (phase, plan, result per test, progress per namespace), see engine.timing-test.
 # Why not JS: a thin shell wrapper; runs node with --max-old-space-size=4096.
 set -u
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -24,6 +25,7 @@ if [ "$1" = "--changed" ]; then
   fi
 fi
 if [ "$1" = "--golden" ]; then
+  [ "${TEST_EVENTS:-}" = 1 ] && echo '@@test {"event":"phase","name":"compiling"}'
   "$repo/tools/compile" engine test-golden || exit $?
   cd "$repo/engine" && node --max-old-space-size=4096 out/test-golden.cjs || exit $?
   exec node --test js/path/bench.golden.mjs
@@ -32,5 +34,7 @@ if [ "$1" = "--full" ]; then
   # sharded, machine-wide slot limit, per-test timings in engine/out/test-timings.jsonl (see tools/test-shards.mjs); options after --full: --shards N --slots M --slowest K
   shift; exec node "$repo/tools/test-shards.mjs" "$@"
 fi
+[ "${TEST_EVENTS:-}" = 1 ] && echo '@@test {"event":"phase","name":"compiling"}'
 "$repo/tools/compile" engine test || exit $?
+[ "${TEST_EVENTS:-}" = 1 ] && echo '@@test {"event":"phase","name":"testing"}'
 exec node "$repo/tools/test-run.mjs" "$@"

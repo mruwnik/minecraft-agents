@@ -27,7 +27,7 @@
   :test-golden {:target :node-test
                 :output-to "out/test-golden.cjs"
                 :output-dir "out/test-golden"
-                :ns-regexp "-golden$"
+                :ns-regexp "-golden$|^engine\\.timing-test$"
                 :autorun false
                 :build-hooks [(engine.build-hooks/add-job-namespaces)]
                 :compiler-options {:infer-externs false}}

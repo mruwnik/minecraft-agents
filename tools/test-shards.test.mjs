@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { splitShards, testNamespaces, slowest, memSlots } from './test-shards.mjs'
+import { splitShards, testNamespaces, slowest, memSlots, eventForwarder } from './test-shards.mjs'
 
 test('splitShards: every namespace exactly once, loads balanced by prior timing', () => {
   const nss = ['a-test', 'b-test', 'c-test', 'd-test', 'e-test']
@@ -46,4 +46,25 @@ test('testNamespaces covers every file under engine/test that contains deftest',
     .filter(([, ns]) => !ns?.endsWith('-golden')) // golden namespaces are opt-in (tools/test-engine --golden)
     .filter(([, ns]) => !nss.includes(ns)).map(([f]) => f)
   assert.deepEqual(missing, [])
+})
+
+const ev = (e) => `@@test ${JSON.stringify(e)}`
+const parsed = (out) => out.map((l) => JSON.parse(l.slice('@@test '.length)))
+
+test('eventForwarder: plan, result and phase lines pass through, other output is dropped, a line split over chunks is joined', () => {
+  const out = []
+  const f = eventForwarder((l) => out.push(l))
+  const res = ev({ event: 'result', name: 'a/b', outcome: 'passed' })
+  f.feed(0, `noise\n${ev({ event: 'plan', total: 3 })}\n${res.slice(0, 20)}`)
+  f.feed(0, `${res.slice(20)}\nmore noise\n${ev({ event: 'phase', name: 'x' })}\n`)
+  assert.deepEqual(parsed(out), [{ event: 'plan', total: 3 }, { event: 'result', name: 'a/b', outcome: 'passed' }, { event: 'phase', name: 'x' }])
+})
+
+test('eventForwarder: shard progress lines become one progress summed over the shards', () => {
+  const out = []
+  const f = eventForwarder((l) => out.push(l))
+  f.feed(0, `${ev({ event: 'progress', done: 1, total: 4, unit: 'namespaces' })}\n`)
+  f.feed(1, `${ev({ event: 'progress', done: 1, total: 6, unit: 'namespaces' })}\n`)
+  f.feed(0, `${ev({ event: 'progress', done: 2, total: 4, unit: 'namespaces' })}\n`)
+  assert.deepEqual(parsed(out).at(-1), { event: 'progress', done: 3, total: 10, unit: 'namespaces' })
 })

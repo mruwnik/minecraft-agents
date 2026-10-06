@@ -3,7 +3,7 @@
 // tools/test-run.mjs <ns>...   (called by tools/test-engine after the compile; namespaces space- or comma-separated)
 //  Runs a private copy of out/test.cjs + out/test/cljs-runtime (/tmp/mc-test-run-<pid>, so a concurrent compile cannot swap it) under one
 //  res-slot 'tests' slot sized by the namespace count (needMb), killed after runTimeoutS (from engine/out/test-ns-ms.json) so a hung test frees its slot (env MC_TEST_TIMEOUT_S overrides).
-//  Only the requested -test namespaces are loaded (narrowBundle: imports and shadow.test registry cut in the private copy); full and shard runs keep the whole bundle.
+//  Only the requested -test namespaces are loaded (narrowBundle: imports and shadow.test registry cut in the private copy; engine.timing-test, the timing / TEST_EVENTS=1 @@test reporter, always stays); full and shard runs keep the whole bundle.
 import fs from 'node:fs'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -86,8 +86,8 @@ const narrowRegistry = (js, keep) => {
 export const narrowBundle = (runDir, nss) => {
   const bundle = path.join(runDir, 'out/test.cjs')
   const runtime = path.join(runDir, 'out/test/cljs-runtime')
-  const keep = new Set(nss.map((n) => n.replaceAll('-', '_')))
-  const queue = [...keep]
+  const queue = nss.map((n) => n.replaceAll('-', '_'))
+  const keep = new Set([...queue, 'engine.timing_test']) // the timing and @@test reporter hooks are not requested but must load
   while (queue.length) {
     const f = path.join(runtime, `${queue.pop()}.js`)
     if (!fs.existsSync(f)) continue

@@ -99,3 +99,15 @@ test('missingNss: requested namespaces absent from the compiled :test bundle (a 
   assert.deepEqual(missingNss(src, ['engine.go-to-test', 'engine.planner-courses-golden', 'engine.nope']), ['engine.planner-courses-golden', 'engine.nope'])
   assert.deepEqual(missingNss(src, ['engine.go-to-test']), [])
 })
+
+test('narrowBundle: always keeps engine.timing_test (the per-test timing and @@test reporter hooks)', (t) => {
+  const dir = fs.mkdtempSync('/tmp/test-run-narrow-')
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
+  fs.mkdirSync(`${dir}/out/test/cljs-runtime`, { recursive: true })
+  const imp = (f) => `SHADOW_IMPORT("${f}.js");`
+  fs.writeFileSync(`${dir}/out/test.cjs`, ['engine.a_test', 'engine.b_test', 'engine.timing_test', 'shadow.test.node'].map(imp).join('\n') + '\n})();\n')
+  fs.writeFileSync(`${dir}/out/test/cljs-runtime/shadow.test.node.js`, `${testData(['engine.a_test', 'engine.b_test'])}\n`)
+  assert.equal(narrowBundle(dir, ['engine.a-test']), 1)
+  assert.deepEqual(fs.readFileSync(`${dir}/out/test.cjs`, 'utf8').split('\n').filter(Boolean),
+    ['engine.a_test', 'engine.timing_test', 'shadow.test.node'].map(imp).concat('})();'))
+})
