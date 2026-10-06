@@ -762,7 +762,7 @@
 
       (do (swap! (:state eng) assoc :cursor (inc idx) :current nil)
           (emit! eng (merge (job-fields eng id)
-                            {:source :job :kind :yielded :level :info :status status}))))))
+                            {:source :job :kind :yielded :level :debug :status status}))))))
 
 (defn trigger-holds?
   "Whether entry's trigger holds: (:when world view args plans live), where view is a
@@ -915,7 +915,7 @@
              :acts-before (get @(:acts eng) id 0)
              :mem-before (job-memory eng id)}]
     (reset! (:running eng) run)
-    (emit! eng (merge (job-fields eng id) {:source :job :kind :round_started :level :info}))
+    (emit! eng (merge (job-fields eng id) {:source :job :kind :round_started :level :debug}))
     (-> (run-round eng run inst)
         (.then #(settle! eng run %)))))
 

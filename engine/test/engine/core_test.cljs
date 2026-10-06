@@ -206,6 +206,22 @@
           (is (= {:n 2} (job-mem eng "j1")))
           (is (= {:n 1} (job-mem eng "j3"))))))))
 
+(deftest round-started-and-yielded-are-debug
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup)
+              raw (atom [])
+              emit core/emit!]
+          (set! core/emit! (fn [eng e] (swap! raw conj e) (emit eng e)))
+          (try
+            (core/submit! eng '(count) {})
+            (await (core/tick! eng))
+            (finally (set! core/emit! emit)))
+          (is (= [[:round_started :debug] [:yielded :debug]]
+                 (->> @raw (filter #(#{:round_started :yielded} (:kind %))) (mapv (juxt :kind :level))))
+              "the canonical log drops :level; the emitted event carries it"))))))
+
 (deftest a-declining-job-is-skipped-and-costs-nothing
   (async done
     (tu/run-async done
