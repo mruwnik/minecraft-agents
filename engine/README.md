@@ -616,7 +616,7 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 
 | job | what it does |
 |---|---|
-| `farm.till`, `plant`, `harvest`, `fertilize`, `compost`, `tidy`, `find-spot`, `tend` | Field work; `tend` keeps one field in order |
+| `farm.till`, `plant`, `harvest`, `fertilize` (crops, or open grass with `:grass`; `:fetch` gets bone meal), `compost`, `tidy`, `find-spot`, `tend` | Field work; `tend` keeps one field in order |
 | `animals.breed`, `leash`, `unleash`, `lead-to`, `herd`, `shear`, `pen-check`, `shut-gate` (shuts every open planned gate in one run; stopped `:left` when any stays open), `tend` | Animal care; `tend` keeps one pen in order |
 | `apiary.guard`, `harvest`, `maintain` | Keep campfire columns, take honey, keep an apiary in order; fires and hives come from what the body has seen (harvest looks around once when it knows none) |
 | `build.from-plan`, `pen`, `rail-line`, `clear-box` | Build what a plan wants; build a pen's fence or a rail line; dig out a box |

@@ -542,3 +542,14 @@
           (await (run-ticks s 80))
           (is (= 1 (get (inv s) "wooden_pickaxe")))
           (is (= 1 (count (tables s)))))))))
+
+(deftest fertilize-fetches-bone-meal-from-an-own-seen-chest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (assoc-in (world {chest-at [{:name "bone_meal" :count 4}]}) [:blocks "3,63,1"] "grass_block") [own-zone])]
+          (core/submit! (:eng s) (list 'jobs.farm.fertilize {:grass true :max 1 :fetch true}) {})
+          (await (run-ticks s 40))
+          (is (empty? (listed s)) "the job ended")
+          (is (= 1 (count (calls s "useOn"))))
+          (is (= 1 (count (events-of s :fetch.done)))))))))

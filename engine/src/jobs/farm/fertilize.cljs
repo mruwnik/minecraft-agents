@@ -1,5 +1,6 @@
 (ns jobs.farm.fertilize
   (:require [engine.ctx :as ctx]
+            [jobs.lib.fetch :as fetch]
             [jobs.lib.gate :as gate]
             [jobs.lib.util :as u]
             [jobs.lib.crops :as crops]
@@ -8,7 +9,8 @@
 
 (def doc
   "Use bone meal on unripe crops: the crop at :at, or the unripe crops within :radius, nearest first.
-  Needs bone meal in the inventory. A crop that refuses bone meal or cannot be reached is skipped.
+  With :grass true it uses bone meal once on each open grass block (nothing on top) it has seen, instead of on crops.
+  Needs bone meal in the inventory; with :fetch it is fetched (jobs.lib.fetch), else the job waits :need. A crop that refuses bone meal or cannot be reached is skipped.
   Ends when :max uses are spent, the bone meal runs out or no unripe crop is left. Result: {:used n}.
   Zones: a crop in another owner's zone or claim, or inside a plan's footprint, is skipped (it counts as a
   :harvest). The job warns fertilize.declined once, with :reason :refused (or :no-zones when no zone list was read).
@@ -18,7 +20,9 @@
   {:at {:doc "one crop position to fertilize; the crops around the body when nil" :type :pos :default nil}
    :radius {:doc "crops within this many blocks of the body count, when :at is nil" :default 8}
    :center {:doc "centre of the radius search; the body's position when nil" :type :pos :default nil}
+   :grass {:doc "fertilize open grass blocks instead of crops" :default false}
    :max {:doc "bone meal uses, at most" :default 16}
+   :fetch {:doc "get missing bone meal instead of waiting :need (jobs.lib.fetch): true, a set of kinds or a map of limits" :default false}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
 (def ripe-age {"wheat" 7 "carrots" 7 "potatoes" 7 "beetroots" 3})
@@ -35,18 +39,30 @@
         age (when b (age-of b))]
     (boolean (and ripe age (< age ripe)))))
 
+(defn open-grass
+  "The seen grass blocks within radius of mid with air above, as positions."
+  [p mid radius reach]
+  (->> (look/seen-blocks p {:names ["grass_block"] :radius reach :max 4096 :live? true})
+       (map :pos)
+       (filter #(<= (u/dist mid %) radius))
+       (filter #(= "air" (u/block-name p (update % :y inc))))))
+
 (defn targets
-  "The unripe crop positions to fertilize, nearest first, minus the refused ones."
+  "The positions to fertilize (unripe crops, or open grass with :grass), nearest first, minus the refused ones."
   [c]
   (let [p (:primitives c)
-        {:keys [at radius center]} (:args c)
+        {:keys [at radius center grass]} (:args c)
         refused (:refused (ctx/mem c) #{})
         me (u/self-pos c)
         mid (or center me)
         reach (+ radius (u/dist me mid))
-        found (if at
-                (let [b (u/block-at p at)]
-                  (if (unripe? b) [at] []))
+        found (cond
+                grass (if at
+                        (if (and (= "grass_block" (u/block-name p at)) (= "air" (u/block-name p (update at :y inc)))) [at] [])
+                        (open-grass p mid radius reach))
+                at (let [b (u/block-at p at)]
+                     (if (unripe? b) [at] []))
+                :else
                 (->> (crops/seen-crops p (keys ripe-age) reach 4096)
                      (filter #(some-> (:age %) (< (ripe-age (:name %)))))
                      (map :pos)
@@ -58,37 +74,54 @@
 (defn has-meal? [p]
   (some #(= "bone_meal" (:name %)) (u/inventory p)))
 
-(defn check
-  "True with bone meal in the pockets, when some was used (the round finishes), or
-  when no target remains."
+(defn problem
+  "The wait reason {:reason :need :item \"bone_meal\"} while targets remain, no bone meal is carried and none was
+  used yet; else nil."
   [c]
-  (boolean (or (has-meal? (:primitives c))
-               (pos? (:used (ctx/mem c) 0))
-               (empty? (targets c)))))
+  (when (and (not (has-meal? (:primitives c)))
+             (not (pos? (:used (ctx/mem c) 0)))
+             (seq (targets c)))
+    {:reason :need :item "bone_meal"}))
+
+(defn check
+  "True with bone meal in the pockets, when some was used (the round finishes), when no target remains, or when
+  :fetch will get the bone meal; else waits :need."
+  [c]
+  (if-let [w (problem c)]
+    (fetch/check c 'jobs.farm.fertilize w)
+    true))
+
+(defn ^:async fertilize-one!
+  "Finish when nothing is left to fertilize, the budget is spent or the bone meal ran out; else walk to the nearest
+  target of todo and use one bone meal."
+  [c todo used]
+  (if (or (empty? todo) (>= used (:max (:args c))) (not (has-meal? (:primitives c))))
+    (do (ctx/emit! c :fertilize.done :info {:used used :text (str "fertilized with " used " bone meal")})
+        (ctx/result! c {:used used})
+        :done)
+    (let [target (first todo)
+          refuse! #(ctx/update-mem! c update :refused (fnil conj #{}) target)
+          w (await (near/walk-near! c target 3))]
+      (case w
+        :partial :continue
+        :blocked (do (refuse!) :continue)
+        (if-not (gate/allowed? c :fertilize.declined "fertilize" :harvest target)
+          (do (refuse!) :continue)
+          (let [r (await (ctx/act c :useOn #js {:pos (clj->js target) :item "bone_meal" :face "up"}))]
+            (if (= "used" (.-status r))
+              (do (ctx/update-mem! c update :used (fnil + 0) (max 1 (or (.-consumed r) 1)))
+                  (when (:grass (:args c)) (refuse!)))
+              (refuse!))
+            :continue))))))
 
 (defn ^:async round
-  "One bounded step: finish when nothing is left to fertilize, the budget is
-  spent or the bone meal ran out; else walk to the nearest unripe crop and use one."
+  "One bounded step: fetch missing bone meal when :fetch is on (a failed fetch leaves the job waiting), then
+  fertilize-one!."
   [c]
-  (let [p (:primitives c)
-        used (:used (ctx/mem c) 0)
-        _ (when (and (empty? (targets c)) (not (look/looked-here? c)))
+  (let [_ (when (and (empty? (targets c)) (not (look/looked-here? c)))
             (await (look/look-around! c)))
-        todo (targets c)]
-    (if (or (empty? todo) (>= used (:max (:args c))) (not (has-meal? p)))
-      (do (ctx/emit! c :fertilize.done :info {:used used :text (str "fertilized with " used " bone meal")})
-          (ctx/result! c {:used used})
-          :done)
-      (let [target (first todo)
-            refuse! #(ctx/update-mem! c update :refused (fnil conj #{}) target)
-            w (await (near/walk-near! c target 3))]
-        (case w
-          :partial :continue
-          :blocked (do (refuse!) :continue)
-          (if-not (gate/allowed? c :fertilize.declined "fertilize" :harvest target)
-            (do (refuse!) :continue)
-            (let [r (await (ctx/act c :useOn #js {:pos (clj->js target) :item "bone_meal" :face "up"}))]
-              (if (= "used" (.-status r))
-                (ctx/update-mem! c update :used (fnil + 0) (max 1 (or (.-consumed r) 1)))
-                (refuse!))
-              :continue)))))))
+        fetched (when (problem c) (await (fetch/fetch! c 'jobs.farm.fertilize problem)))]
+    (cond
+      fetched fetched
+      (problem c) :continue
+      :else (await (fertilize-one! c (targets c) (:used (ctx/mem c) 0))))))

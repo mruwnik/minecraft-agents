@@ -163,3 +163,49 @@
                                       :ages (assoc (zipmap cells (repeat 7)) "7,64,0" 3)})]
           (await (child-outcome eng job {:radius 10} 20))
           (is (= 7 (age p "7,64,0"))))))))
+
+;; ------------------------------------------------------------------ grass
+
+(def two-grass {:inventory meal :blocks {"2,63,0" "grass_block" "3,63,1" "grass_block"}})
+
+(deftest fertilize-grass-uses-bone-meal-on-each-open-grass-block
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup two-grass)
+              r (await (child-outcome eng job {:grass true} 20))]
+          (is (= {:used 2} r))
+          (is (= 2 (count (calls p "useOn")))))))))
+
+(deftest fertilize-grass-off-leaves-grass-alone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup two-grass)]
+          (is (= {:used 0} (await (child-outcome eng job {} 10))))
+          (is (empty? (calls p "useOn"))))))))
+
+(deftest fertilize-grass-skips-covered-grass
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory meal :blocks {"2,63,0" "grass_block" "2,64,0" "stone"}})]
+          (is (= {:used 0} (await (child-outcome eng job {:grass true} 10))))
+          (is (empty? (calls p "useOn"))))))))
+
+(deftest fertilize-grass-max-stops-after-that-many-uses
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup two-grass)]
+          (is (= {:used 1} (await (child-outcome eng job {:grass true :max 1} 10))))
+          (is (= 1 (count (calls p "useOn")))))))))
+
+(deftest fertilize-grass-waits-without-bone-meal
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (dissoc two-grass :inventory))]
+          (core/submit! eng (list job {:grass true}) {})
+          (is (nil? (core/tick! eng)))
+          (is (empty? (calls p "useOn"))))))))
