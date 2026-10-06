@@ -183,3 +183,16 @@
     (let [left (fs/existsSync log)]
       (fs/rmSync dir #js {:recursive true :force true})
       (is (not left) "the kept log of an earlier run does not mix with this one"))))
+
+(deftest create-file-exclusive-never-shows-an-empty-file-and-leaves-an-existing-one
+  (let [dir (fs/mkdtempSync (path/join (os/tmpdir) "wt-create-"))
+        file (path/join dir "lease")]
+    (is (true? (r/create-file-exclusive! file "123")))
+    (is (= "123" (fs/readFileSync file "utf8")))
+    (is (false? (r/create-file-exclusive! file "456")))
+    (is (= "123" (fs/readFileSync file "utf8")) "the holder's file is untouched")
+    (is (= ["lease"] (vec (fs/readdirSync dir))) "no temp file is left behind")
+    (fs/writeFileSync file "")
+    (is (false? (r/create-file-exclusive! file "789")) "an empty leftover still blocks")
+    (is (= "" (fs/readFileSync file "utf8")))
+    (fs/rmSync dir #js {:recursive true :force true})))

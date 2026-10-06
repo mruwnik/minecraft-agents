@@ -309,6 +309,17 @@
   (try (let [n (js/parseInt (str/trim (fs/readFileSync file "utf8")) 10)] (if (js/isNaN n) :empty n))
        (catch :default _ nil)))
 
+(defn create-file-exclusive!
+  "Creates file holding `content` only when it does not exist, returning true when this call made it. The content is
+  written to a temp file first and hard-linked in, so the file is never visible empty (a reclaimer of a crashed empty
+  file can never take a fresh creator's)."
+  [file content]
+  (let [tmp (str file "." (.-pid js/process) ".tmp")]
+    (fs/writeFileSync tmp content)
+    (try (fs/linkSync tmp file) true
+         (catch :default e (if (= "EEXIST" (.-code e)) false (throw e)))
+         (finally (fs/rmSync tmp #js {:force true})))))
+
 (defn read-holder [i] (read-pid-file (lease-file i)))
 
 (def unlink-if-script
@@ -333,8 +344,7 @@
   [first total]
   (fs/mkdirSync lease-dir #js {:recursive true})
   (lease/acquire
-   {:create! (fn [i pid] (try (fs/writeFileSync (lease-file i) (str pid) #js {:flag "wx"}) true
-                              (catch :default e (if (= "EEXIST" (.-code e)) false (throw e)))))
+   {:create! (fn [i pid] (create-file-exclusive! (lease-file i) (str pid)))
     :holder read-holder
     :reclaim! (fn [i holder] (reclaim-file! (lease-file i) holder))
     :alive? pid-alive?
@@ -354,8 +364,7 @@
   [thunk]
   (let [pid (.-pid js/process)]
     (loop [tries 0]
-      (let [made (try (fs/writeFileSync time-guard-file (str pid) #js {:flag "wx"}) true
-                      (catch :default e (if (= "EEXIST" (.-code e)) false (throw e))))]
+      (let [made (create-file-exclusive! time-guard-file (str pid))]
         (if made
           (try (thunk) (finally (unlink-if! time-guard-file (str pid))))
           (let [h (read-pid-file time-guard-file)
