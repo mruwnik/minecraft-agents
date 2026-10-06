@@ -1,0 +1,41 @@
+;; Card 9cdfd6e4 (jobs.lib.reach/standing-cell): a body resting on a block edge (centre cell over air, tp z .2) at the bottom of a
+;; 4-deep pit. Pit = 1x2 (z 15..16), floor stone at z 15 only; the cell under z 16 is air, so the body stands on the 0.1 m edge.
+;; Ground top y 3, surface y 4. With a pickaxe go-to escalates (stair) and arrives; sealed and with no pickaxe it fails cleanly.
+{:defaults
+ {:tags [:movement :access]
+  :plot {:height 12}
+  :body {:at [16.5 0 16.2]}
+  :limit-s 120}
+ :cases
+ [{:name "edge-pit-4-deep-arrives-a"
+   :blocks [[:fill [4 -1 4] [28 3 28] "stone"]
+            [:fill [16 0 15] [16 3 16] "air"]
+            [:set [16 -1 16] "air"]]
+   :body {:at [16.5 0 16.2] :inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [22 4 16] :range 1})]]
+   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 90 :of-job true}]
+   :after [[:body-near [22.5 4 16.5] 3]]}
+  {:name "edge-pit-4-deep-arrives-b"
+   :blocks [[:fill [4 -1 4] [28 3 28] "stone"]
+            [:fill [16 0 15] [16 3 16] "air"]
+            [:set [16 -1 16] "air"]]
+   :body {:at [16.5 0 16.2] :inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [16 4 24] :range 1})]]
+   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 90 :of-job true}]
+   :after [[:body-near [16.5 4 24.5] 3]]}
+  {:name "edge-pit-sealed-no-pickaxe-fails"
+   :blocks [[:fill [4 -1 4] [28 3 28] "stone"]
+            [:fill [16 0 15] [16 3 16] "air"]
+            [:set [16 -1 16] "air"]]
+   :body {:at [16.5 0 16.2]}
+   :act [[:job (jobs.movement.go-to {:pos #at [22 4 16] :range 1})]]
+   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived false}} :within-s 90 :of-job true}]
+   :limit-s 100}
+  {:name "edge-pit-no-escalate-fails"
+   :blocks [[:fill [4 -1 4] [28 3 28] "stone"]
+            [:fill [16 0 15] [16 3 16] "air"]
+            [:set [16 -1 16] "air"]]
+   :body {:at [16.5 0 16.2] :inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [22 4 16] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived false}} :within-s 60 :of-job true}]
+   :limit-s 70}]}
