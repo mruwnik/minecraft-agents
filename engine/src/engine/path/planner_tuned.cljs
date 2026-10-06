@@ -273,7 +273,7 @@
         fx (.-x from) fy (.-y from) fz (.-z from)]
     (if (or (>= (.-start-h search) 0) (nil? px) (nil? pz))
       query
-      (if-let [[x z] (first (filter (fn [[x z]]
+      (if-some [[x z] (first (filter (fn [[x z]]
                                       (let [h (.nodeH search x fy z)]
                                         (and (>= h 0) (or (nil? py) (<= (js/Math.abs (- (+ fy (/ h WHOLE)) py)) (/ 1 WHOLE))))))
                                     (hitbox-cells fx fz px pz)))]
@@ -338,7 +338,7 @@
     (.init search)
     #js {:step (fn [max-expansions]
                  (cond
-                   @ready true
+                   ^boolean @ready true
                    (some? @clean) (vreset! ready ^boolean (.step ^Search @clean max-expansions))
                    (not ^boolean (.step search max-expansions)) false
                    :else (do (.settle search)
@@ -353,4 +353,4 @@
                           (.resultFrom search -1 nil)
                           (.resultFrom search @node (.nearest ^Search @clean))))
          ;; while the search itself is not over: where it has got to (Search.progress), else nil
-         :progress (fn [] (when-not (.-finished search) (.progress search)))}))
+         :progress (fn [] (when-not ^boolean (.-finished search) (.progress search)))}))

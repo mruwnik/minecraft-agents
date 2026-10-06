@@ -347,10 +347,10 @@
   ;; An off-band node of a search that ended at its first edge (edgeStop) and was never expanded lies in land this search
   ;; did not cover: it is left in edges-new (a handful: the fringe of the search) as an edge a way may still lead from. An
   ;; expanded node that options.knownEdges holds is covered now: it goes in known-new.
-  (noteOffBand [s i x y z expanded]
+  (noteOffBand [s i x y z ^boolean expanded]
     (let [k (.knownKey s x y z)]
       (cond
-        (and expanded (.has ^js (.-known-edges s) k)) (.add ^js (.-known-new s) k)
+        (and expanded ^boolean (.has ^js (.-known-edges s) k)) (.add ^js (.-known-new s) k)
         (and (not expanded) (>= (.-edge-node s) 0) (< (.-length ^js (.-edges-new s)) 64)
              (<= (js/Math.max (js/Math.abs (- x (.-goal-x s))) (js/Math.abs (- z (.-goal-z s)))) (.-frontier-reach s))
              (not (and (some? ^js (.-known-cells s)) ^boolean (.has ^js (.-known-cells s) k))))
@@ -365,7 +365,7 @@
         (loop []
           (let [^js n (.next it)]
             (cond
-              (.-done n) out
+              ^boolean (.-done n) out
               (and (some? ^js (.-known-new s)) ^boolean (.has ^js (.-known-new s) (.-value n))) (recur)
               :else (do (.push out (.-value n)) (recur))))))))
 

@@ -59,7 +59,7 @@
         free? (fn [p q] (let [[pi pj] (ij p) [qi qj] (ij q)] (line-free? mask pi pj qi qj)))]
     (if (free? a b)
       []
-      (when-let [cells (shortest mask a b)]
+      (when-some [cells (shortest mask a b)]
         (loop [from 0 out []]
           (let [far (last (filter #(free? (nth cells from) (nth cells %)) (range (inc from) (count cells))))]
             (if (or (nil? far) (== far (dec (count cells))))
@@ -102,17 +102,17 @@
                 ^js next-step (when (< (inc k) n) (aget steps (inc k)))
                 walked (or (nil? next-step) (and (== (.-move next-step) MOVE-WALK) (some? (.-cx next-step))))
                 bends (when walked
-                        (.bendsFor s step (if next-step (.-cx next-step) (.-px step)) (if next-step (.-cz next-step) (.-pz step))))
+                        (.bendsFor s step (if (some? next-step) (.-cx next-step) (.-px step)) (if (some? next-step) (.-cz next-step) (.-pz step))))
                 ^js head (first bends)]
             (cond
               (nil? bends) (.push out step)
-              (empty? bends) (do (when next-step (set! (.-px step) (.-cx next-step)) (set! (.-pz step) (.-cz next-step)))
+              (empty? bends) (do (when (some? next-step) (set! (.-px step) (.-cx next-step)) (set! (.-pz step) (.-cz next-step)))
                                  (.push out step))
-              :else (let [final (when-not next-step (let [^js c (js/Object.assign #js {} step)] (js-delete c "cx") (js-delete c "cz") c))]
+              :else (let [final (when (nil? next-step) (let [^js c (js/Object.assign #js {} step)] (js-delete c "cx") (js-delete c "cz") c))]
                       (set! (.-px step) (.-px head))
                       (set! (.-pz step) (.-pz head))
                       (.push out step)
                       (doseq [b bends] (.push out b))
-                      (when final (.push out final))))
+                      (when (some? final) (.push out final))))
             (recur (inc k)))))
       out)))

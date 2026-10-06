@@ -122,7 +122,7 @@
                                     (and (some? ^js (.-limit-gap s))
                                          ;; (the goal flood expands cells nothing reached: i is -1, the takeoff a plain walk)
                                          (not (true? (^js (.-limit-gap s) x y z (- h0 (* y 16)) (if (neg? i) MOVE-WALK (aget (.-moves s) i)) lx ly lz h1)))
-                                         (set! (.-limit-refused s) true)))
+                                         (do (set! (.-limit-refused s) true) true)))
                         (.edge s lx ly lz h1 MOVE-GAP i
                                (+ (* (inc n) SPRINT-S) GAP-S (if (pos? delta) GAP-UP-S 0) (.-enter-extra s))
                                (+ (.-enter-risk s) risk) (.-enter-slow s) 0 0))))
