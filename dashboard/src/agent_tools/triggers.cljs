@@ -27,7 +27,8 @@ Add and put both create or replace a custom entry; built-in entries cannot be re
 
 (defn identifier [s]
   (let [text (if (string? s) (str/replace s #"^:" "") "")]
-    (when-not (re-matches #"[a-z][a-z0-9-]{0,39}" text) (fail "trigger ID must be a short lowercase name"))
+    (when-not (re-matches #"[a-z][a-z0-9-]{0,39}" text)
+      (fail "trigger ID must be a short lowercase name; for upgrade/decline use ids from the offer (triggers list)"))
     (keyword text)))
 
 (defn one-form [text]
@@ -211,13 +212,26 @@ Add and put both create or replace a custom entry; built-in entries cannot be re
      (:muted (:trigger value)) (conj [:muted true])
      (:moved (:trigger value)) (conj [:moved (bounded (:moved (:trigger value)))]))))
 
+(defn ignored-ids
+  "Requested ids the engine did not act on, each with the reason the reply allows: only offered ids are acted on."
+  [r done]
+  (let [done (set done)
+        reason (if (= :upgrade (:command r))
+                 "not added: not in the offer (unknown or already settled) or already registered"
+                 "not declined: not in the offer (unknown, already registered or already settled)")]
+    (vec (for [id (:ids (:request r)) :when (not (done id))] {:id id :reason reason}))))
+
+(defn with-ignored [r pairs done]
+  (let [ignored (ignored-ids r done)]
+    (ordered-map (cond-> pairs (seq ignored) (conj [:ignored ignored])))))
+
 (defn compact [r value]
   (cond
     (false? (:ok value)) (bounded value)
     (= :list (:command r)) (compact-list r value)
     (= :show (:command r)) (compact-show r value)
-    (= :upgrade (:command r)) (ordered-map [[:ok true] [:op :upgrade] [:added (:added value)] [:offered (:offered value)]])
-    (= :decline (:command r)) (ordered-map [[:ok true] [:op :decline] [:declined (:declined value)] [:offered (:offered value)]])
+    (= :upgrade (:command r)) (with-ignored r [[:ok true] [:op :upgrade] [:added (:added value)] [:offered (:offered value)]] (:added value))
+    (= :decline (:command r)) (with-ignored r [[:ok true] [:op :decline] [:declined (:declined value)] [:offered (:offered value)]] (:declined value))
     :else (compact-mutation value)))
 
 ;; Transport

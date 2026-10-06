@@ -155,3 +155,15 @@
 (deftest upgrade-and-decline-replies-show-what-is-left-offered
   (is (= {:ok true :op :decline :declined [:wedged] :offered [:night]}
          (into {} (triggers/compact {:command :decline} {:ok true :declined [:wedged] :offered [:night]})))))
+
+(deftest upgrade-and-decline-report-ignored-ids-with-a-reason
+  (let [d (into {} (triggers/compact (request "decline" "nonsense" "wedged") {:ok true :declined [:wedged] :offered []}))
+        u (into {} (triggers/compact (request "upgrade" "night") {:ok true :added [] :offered []}))
+        none (into {} (triggers/compact (request "decline") {:ok true :declined [] :offered []}))]
+    (is (= [:nonsense] (mapv :id (:ignored d))))
+    (is (string? (:reason (first (:ignored d)))))
+    (is (= [:night] (mapv :id (:ignored u))))
+    (is (not (contains? none :ignored)))))
+
+(deftest bad-id-message-says-ids-come-from-the-offer
+  (is (re-find #"offer" (:error (request "upgrade" "Night")))))
