@@ -550,3 +550,55 @@
           (is (= [:done] @returns))
           (is (= (solid flat) (solid (:blocks @(fake/state p)))) "no stair child dug")
           (is (= [] (mem/entries (mem/view (:store eng)) :tidy)) "nothing in the dig ledger"))))))
+
+;; ------------------------------------------------------- a walker fault at one cell is routed round (card 679d3475)
+
+(def east-yaw (- (/ js/Math.PI 2)))
+
+(defn fault-at-east-edge!
+  "Steer override: the body cannot get past x 4.9 on the z 0 row heading east (the walker's fault at the cell [5 64 0]); every
+  pose is pushed to visited, an atom of [cell-x cell-z] pairs."
+  [p visited]
+  (.override (.-world p) "steer"
+             (fn [token ^js a impl]
+               (let [decide (.-decide a)
+                     wrapped (fn [pose]
+                               (swap! visited conj [(js/Math.floor (.-x pose)) (js/Math.floor (.-z pose))])
+                               (let [^js out (decide pose)]
+                                 (if (and (not (.-done out)) (<= 4.9 (.-x pose) 5.5) (= 0 (js/Math.floor (.-z pose)))
+                                          (< (js/Math.abs (- (.-yaw out) east-yaw)) 0.3))
+                                   #js {:controls #js {} :yaw (.-yaw out)}
+                                   out)))]
+                 (impl token (js/Object.assign #js {} a #js {:decide wrapped}))))))
+
+(deftest go-to-routes-round-a-cell-the-walker-got-stuck-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [visited (atom #{})
+              {:keys [out] :as s} (await (go-prepped! {:blocks flat} {:pos [10 64 0] :range 0} #(fault-at-east-edge! % visited)))]
+          (is (true? (:arrived @out)) (pr-str @out))
+          (is (= 1 (count (events-of s :walker-fault))) "the walker's fault stays visible as a warn")
+          (is (every? (fn [[_ z]] (<= -1 z 1)) @visited) "a short detour, not a wide one"))))))
+
+(deftest go-to-still-gives-up-stuck-when-the-only-way-runs-over-the-faulty-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out]} (await (go-prepped! {:blocks (floor -2 0 40 0)} {:pos [10 64 0] :range 0}
+                                                #(fault-at-east-edge! % (atom #{}))))]
+          (is (= {:arrived false :reason :unreachable :why :stuck}
+                 (select-keys @out [:arrived :reason :why]))))))))
+
+(deftest a-walk-plans-with-the-cells-to-avoid-and-keeps-them-in-its-search-key
+  (let [p (tu/fake {:self {:pos start} :blocks flat})
+        pw (walk/path-world p)
+        avoided (walk/with-avoid pw #{[5 64 0] [6 64 1]})
+        same (walk/with-avoid pw #{[6 64 1] [5 64 0]})
+        other (walk/with-avoid pw #{[5 64 0]})]
+    (is (= (walk/avoid-key avoided) (walk/avoid-key same)))
+    (is (not= (walk/avoid-key avoided) (walk/avoid-key other)))
+    (is (nil? (walk/avoid-key (walk/with-avoid pw #{}))) "no cells: the key of a plain search")
+    (is (= (walk/avoid-key avoided) (walk/avoid-key (walk/with-walls avoided [[1 64 1]]))) "walls keep the avoided cells")
+    (is (= 2 (.-size (.-cells (.-avoid (walk/plan-options avoided 1 nil nil))))))
+    (is (nil? (.-avoid (walk/plan-options pw 1 nil nil))))))

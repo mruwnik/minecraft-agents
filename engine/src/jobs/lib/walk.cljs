@@ -100,7 +100,7 @@
           wall? (wall-cells snapshot (.-table pw) walls)
           walled (js/Object.create snapshot)]
       (set! (.-stateAt walled) (fn [x y z] (if (contains? wall? [x y z]) id (.stateAt snapshot x y z))))
-      #js {:snapshot walled :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw)})))
+      #js {:snapshot walled :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw) :avoid (.-avoid pw)})))
 
 (def wide-box
   "The planner's search box (options margin and yMargin, blocks round start and goal) of the walks' searches. A way
@@ -150,7 +150,7 @@
   "The planner options over pw with weight, limits and the search box (nil: the planner's default); pw's dangers
   (with-dangers) as options.dangers."
   [pw weight limits box]
-  (js/Object.assign #js {:table (.-table pw) :space (.-space pw) :weight weight :limits limits :dangers (.-dangers pw)}
+  (js/Object.assign #js {:table (.-table pw) :space (.-space pw) :weight weight :limits limits :dangers (.-dangers pw) :avoid (.-avoid pw)}
                     (clj->js box)))
 
 (defn with-dangers
@@ -158,7 +158,27 @@
   [pw dangers]
   (if (nil? dangers)
     pw
-    #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers dangers}))
+    #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers dangers :avoid (.-avoid pw)}))
+
+(def avoid-factor
+  "How many times a cell's own cost an avoided cell costs more (the planner's options.avoid.factor): a detour is taken
+  over a stretch of several cells, the only way over the cell is still taken."
+  50)
+
+(defn with-avoid
+  "pw whose plans cost cells ([x y z] each) avoid-factor times more to enter (the planner's options.avoid; none: pw)."
+  [pw cells]
+  (if (empty? cells)
+    pw
+    (let [sorted (vec (sort cells))]
+      #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw)
+           :avoid #js {:kinds 0 :factor avoid-factor :list sorted
+                       :cells (js/Set. (clj->js (mapv (fn [[x y z]] (planner/cell-key x y z)) sorted)))}})))
+
+(defn avoid-key
+  "What a kept search's key holds of pw's avoided cells (with-avoid): the cells, nil for none."
+  [pw]
+  (some-> (.-avoid pw) .-list))
 
 (defn danger-key
   "What a kept search's key holds of pw's dangers: the mob, place (rounded to 4 blocks) and rate (to 0.1 hp/s) of each (a
@@ -431,7 +451,7 @@
 (defn search-key [c to range weight policy walls & [pw]]
   (let [{:keys [x y z]} (body-cell c)]
     (cond-> [[x y z] to range weight policy walls]
-      pw (conj (danger-key pw)))))
+      pw (conj (danger-key pw) (avoid-key pw)))))
 
 (defn goal-unloaded?
   "Whether the snapshot reads the goal cell to [x y z] as unloaded (the planner's goal-unloaded: no goal flood runs)."

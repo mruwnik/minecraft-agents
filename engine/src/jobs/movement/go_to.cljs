@@ -27,6 +27,8 @@
     is already there (a cut call's memory is a hint).
   - A walk that gets more than 1 block nearer is progress. Three walks in a row without progress give up, and so
     does a goal the planner proves walled in (:goal-enclosed, :goal-cut-off), at once.
+  - A walk stuck or off its plan at a cell is a go-to.walker-fault warn; the next plans of the call cost that cell
+    (up to 8) far more (walk/with-avoid), so a way round is taken when there is one.
   - :escalate (default true): a body that is shut in (jobs.lib.reach/enclosed?), not in its own shelter, and whose
     search ran out of land (:exhausted, :goal-enclosed or :goal-cut-off) makes a way instead of giving up, at most 3 times per go-to, one child job
     each (jobs.lib.escape/choose): jobs.access.pillar up out of a pit when it carries enough blocks; else
@@ -60,6 +62,8 @@
           :default true}})
 
 (def max-blocked 3)
+
+(def max-fault-cells "Cells a call keeps its plans away from (the walker's faults: fault-cells), the oldest dropped." 8)
 
 (def max-searching
   "Search slices in a row whose search is still going on and began afresh (walk/round-budget expansions each) before
@@ -461,6 +465,24 @@
   [c pos range]
   (or (u/within? (u/self-pos c) pos range) (u/within? (reach/standing-cell (:primitives c)) pos range)))
 
+(defn fault-cells
+  "The cells a walk that failed at the walker (:stuck at :target, :off-plan at :at) says it cannot pass, [x y z] each."
+  [{:keys [status target at]}]
+  (case status
+    :stuck (some-> target vector)
+    :off-plan (some-> at vector)
+    nil))
+
+(defn note-fault!
+  "A walk that failed at the walker is a bug to see (a go-to.walker-fault warn) and a cell to keep the next plans off
+  (mem :fault-cells, at most max-fault-cells; a new call starts with none): the walks go round it when there is a way."
+  [c {:keys [status] :as result}]
+  (when-let [cells (seq (fault-cells result))]
+    (ctx/emit! c :walker-fault :warn (cond-> {:why status :target (first cells)}
+                                       (:move result) (assoc :kind (:move result))
+                                       (:why result) (assoc :detail (:why result))))
+    (ctx/update-mem! c update :fault-cells #(vec (take-last max-fault-cells (distinct (into (vec %) cells)))))))
+
 (defn ^:async walk! [c pos range doors]
   (let [from (u/self-pos c)
         d (u/dist from pos)
@@ -477,6 +499,7 @@
             {walked :result status :status to :to} (await (near/walk-round! c pos range {:doors doors :explore true
                                                                                           :shut-also (shut-foreign c)
                                                                                           :budget walk/round-budget
+                                                                                          :avoid (set (:fault-cells (ctx/mem c)))
                                                                                           :progress (empty? (:frontier-best (ctx/mem c)))}))
             result (known-frontier-result walked)
             left (u/dist to pos)
@@ -502,7 +525,8 @@
               (give-up! c pos (:blocked (ctx/mem c) 0) :searching {:status :no-path :reason :moved-while-searching})))
 
           :else
-          (let [progress? (or (< left (dec best)) explored? nearer?)
+          (let [_ (note-fault! c walked)
+                progress? (or (< left (dec best)) explored? nearer?)
                 tries (if progress? 0 (inc (:blocked (ctx/mem c) 0)))]
             (ctx/update-mem! c assoc :blocked tries :searching 0 :best (if (< left (dec best)) left best)
                              :frontier-best (cond-> fbests frontier (assoc frontier (min fbest (u/dist to fcell))))
@@ -519,7 +543,7 @@
   [c pos]
   (let [m (ctx/mem c)
         there? (here? c pos (:range (:args c)))]
-    (ctx/update-mem! c #(cond-> (-> % (dissoc :best) (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {}))
+    (ctx/update-mem! c #(cond-> (-> % (dissoc :best :fault-cells) (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {}))
                           (and there? (:escalate-now m)) (dissoc :escalate-now)
                           (and there? (:escalation m))
                           (-> (dissoc :escalation :escalation-from :planned :holes-before)
