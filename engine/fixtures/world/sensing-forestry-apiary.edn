@@ -1,0 +1,81 @@
+;; Card 1c005ab9 (Sensing 3; trees east and behind the body: fell-tree looks around once before it waits): harvest-wood and apiary harvest use only blocks the body has seen. In view: the tree is
+;; felled, the ripe hive is harvested (real perception must give honey_level as a number). Behind a thick wall: the
+;; tree stays standing, the hive is untouched, the job ends with a clear reason.
+{:defaults
+ {:tags [:forestry :apiary :sensing] :time :day
+  :plot {:height 16 :floor "grass_block"}
+  :body {:at [6.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [ {:name "diag-east-20"
+   :blocks [[:fill [20 0 16] [20 3 16] "oak_log"] [:fill [18 3 14] [22 4 18] "oak_leaves[persistent=true]"]
+            [:fill [20 3 16] [20 3 16] "oak_log"]]
+   :body {:inventory [["iron_axe" 1]]}
+   :act [[:job (jobs.forestry.harvest-wood {:radius 24})]]
+   :expect [{:event {:kind :blocks.dig.done :data {:block "oak_log"}} :within-s 40 :of-job true}]
+   :after [[:not-block [20 0 16] "oak_log"]]}
+ {:name "diag-west-behind"
+   :blocks [[:fill [2 0 16] [2 3 16] "oak_log"] [:fill [0 3 14] [4 4 18] "oak_leaves[persistent=true]"]
+            [:fill [2 3 16] [2 3 16] "oak_log"]]
+   :body {:inventory [["iron_axe" 1]]}
+   :act [[:job (jobs.forestry.harvest-wood {:radius 24})]]
+   :expect [{:event {:kind :blocks.dig.done :data {:block "oak_log"}} :within-s 40 :of-job true}]
+   :after [[:not-block [2 0 16] "oak_log"]]}
+ {:name "tree-in-view-felled"
+   :blocks [[:fill [16 0 16] [16 3 16] "oak_log"] [:fill [14 3 14] [18 4 18] "oak_leaves[persistent=true]"]
+            [:fill [16 3 16] [16 3 16] "oak_log"]]
+   :body {:inventory [["iron_axe" 1]]}
+   :act [[:job (jobs.forestry.harvest-wood {:radius 24})]]
+   :expect [{:event {:kind :blocks.dig.done :data {:block "oak_log"}} :within-s 60 :of-job true}]
+   :after [[:not-block [16 0 16] "oak_log"]]}
+  {:name "second-tree-in-view-felled"
+   :blocks [[:fill [20 0 10] [20 3 10] "birch_log"] [:fill [18 3 8] [22 4 12] "birch_leaves[persistent=true]"]
+            [:fill [20 3 10] [20 3 10] "birch_log"]]
+   :body {:inventory [["iron_axe" 1]]}
+   :act [[:job (jobs.forestry.harvest-wood {:radius 24})]]
+   :expect [{:event {:kind :blocks.dig.done :data {:block "birch_log"}} :within-s 60 :of-job true}]
+   :after [[:not-block [20 0 10] "birch_log"]]}
+  {:name "tree-behind-wall-left-standing"
+   :blocks [[:fill [10 0 0] [14 13 31] "stone"]
+            [:fill [20 0 16] [20 3 16] "oak_log"] [:fill [18 3 14] [22 4 18] "oak_leaves[persistent=true]"]
+            [:fill [20 3 16] [20 3 16] "oak_log"]]
+   :body {:inventory [["iron_axe" 1]]}
+   :act [[:job (jobs.forestry.harvest-wood {:radius 24})]]
+   :expect [{:event {:kind :waiting :data {:reason :no-tree}} :within-s 30 :of-job true}
+            {:no-event {:kind :blocks.dig.done} :for-s 30}]
+   :after [[:block [20 0 16] "oak_log"] [:body-near [6.5 0 16.5] 12]]}
+  {:name "second-tree-behind-wall-left-standing"
+   :blocks [[:fill [10 0 0] [14 13 31] "stone"]
+            [:fill [24 0 6] [24 3 6] "spruce_log"] [:fill [22 3 4] [26 4 8] "spruce_leaves[persistent=true]"]
+            [:fill [24 3 6] [24 3 6] "spruce_log"]]
+   :body {:inventory [["iron_axe" 1]]}
+   :act [[:job (jobs.forestry.harvest-wood {:radius 24})]]
+   :expect [{:event {:kind :waiting :data {:reason :no-tree}} :within-s 30 :of-job true}
+            {:no-event {:kind :blocks.dig.done} :for-s 30}]
+   :after [[:block [24 0 6] "spruce_log"] [:body-near [6.5 0 16.5] 12]]}
+  {:name "hive-in-view-harvested"
+   :blocks [[:set [16 0 16] "campfire[lit=true]"] [:set [16 1 16] "beehive[honey_level=5]"]]
+   :body {:inventory [["shears" 1]]}
+   :act [[:job (jobs.apiary.harvest {:radius 20})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
+   :after [[:block [16 1 16] "beehive[honey_level=0]"] [:item "honeycomb" [:>= 3]]]}
+  {:name "second-hive-in-view-harvested"
+   :blocks [[:set [20 0 10] "campfire[lit=true]"] [:set [20 1 10] "bee_nest[honey_level=5]"]]
+   :body {:inventory [["shears" 1]]}
+   :act [[:job (jobs.apiary.harvest {:radius 20})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
+   :after [[:block [20 1 10] "bee_nest[honey_level=0]"] [:item "honeycomb" [:>= 3]]]}
+  {:name "hive-behind-wall-untouched"
+   :blocks [[:fill [10 0 0] [14 13 31] "stone"]
+            [:set [20 0 16] "campfire[lit=true]"] [:set [20 1 16] "beehive[honey_level=5]"]]
+   :body {:inventory [["shears" 1]]}
+   :act [[:job (jobs.apiary.harvest {:radius 20})]]
+   :expect [{:event {:kind :apiary.done :data {:reason :no-hive}} :within-s 80 :of-job true}]
+   :after [[:block [20 1 16] "beehive[honey_level=5]"] [:item "honeycomb" 0]]}
+  {:name "second-hive-behind-wall-untouched"
+   :blocks [[:fill [10 0 0] [14 13 31] "stone"]
+            [:set [24 0 8] "campfire[lit=true]"] [:set [24 1 8] "bee_nest[honey_level=5]"]]
+   :body {:inventory [["shears" 1]]}
+   :act [[:job (jobs.apiary.harvest {:radius 20})]]
+   :expect [{:event {:kind :apiary.done :data {:reason :no-hive}} :within-s 80 :of-job true}]
+   :after [[:block [24 1 8] "bee_nest[honey_level=5]"] [:item "honeycomb" 0]]}]}

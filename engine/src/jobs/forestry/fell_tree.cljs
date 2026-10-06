@@ -3,6 +3,7 @@
             [jobs.lib.watch :as watch]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.gate :as gate]
+            [jobs.lib.look :as look]
             [jobs.forestry.trees :refer [scan-logs tree-near trees-near tree-at logs-at unreachable-set debts replant-kind
                                           replant-policy default-radius max-partials eye-dist dig-reach log-name?]]
             [jobs.lib.util :as u]
@@ -20,7 +21,7 @@
   A tree whose walk is blocked, or partial three times in a row, is marked unreachable and the next one is chosen.
   Each log is dug by a jobs.blocks.dig child. That child holds the best carried axe and leaves the drop on the
   ground (jobs.forestry.harvest-wood collects it).
-  Waits (check) with :reason :no-tree when no tree is in sight.
+  Waits (check) with :reason :no-tree when no tree is in sight, after one look around from where it stands.
   Zones: a tree whose base log is in another owner's zone or claim, or in a plan's footprint (but :for-plan's
   own), is not a candidate. A later log that turns out refused makes the tree count as unreachable. The job warns
   fell-tree.declined once, with :reason :refused (or :no-zones when no zone list was read). :ignore-zones? true
@@ -192,6 +193,8 @@
 (defn ^:async round
   [c]
   (let [{:keys [species radius]} (:args c)
+        _ (when (and (not (:column (ctx/mem c))) (not (candidate c radius species)) (not (look/looked-here? c)))
+            (await (look/look-around! c)))
         chosen (or (:column (ctx/mem c)) (await (choose-tree! c radius species)))]
     (cond
       (= :searching chosen) :continue
@@ -224,5 +227,6 @@
         {:keys [radius species]} (:args c)]
     (or (boolean (or (:column m)
                      (seq (:unreachable m))
-                     (candidate c radius species)))
+                     (candidate c radius species)
+                     (not (look/looked-here? c))))
         (ctx/wait c (cond-> {:reason :no-tree :radius radius} species (assoc :species species))))))

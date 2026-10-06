@@ -119,7 +119,8 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks {"3,64,0" "oak_log" "3,65,0" "oak_log"}})]
           (core/submit! eng (list 'jobs.forestry.fell-tree {:radius 10}) {})
-          (is (nil? (core/tick! eng)) "logs without leaves are not a tree")
+          (await (core/tick! eng))
+          (is (nil? (core/tick! eng)) "logs without leaves are not a tree: one look around, then it waits")
           (is (= [] (calls p "dig"))))))))
 
 ;; fell-tree reachability

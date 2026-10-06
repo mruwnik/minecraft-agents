@@ -34,6 +34,23 @@
           (await (lt/run-until-empty eng 4))
           (is (= [] (lt/calls p "dig"))))))))
 
+(defn seeing-after-look
+  "p whose seen blocks stay empty until the body has turned (a look call), then answer the world."
+  [p]
+  (aset p "seenBlocks" (fn [q] (if (seq (lt/calls p "look")) (.blocks p q) #js [])))
+  p)
+
+(deftest fell-tree-looks-around-before-it-waits
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3)})]
+          (tu/blind p)
+          (seeing-after-look p)
+          (core/submit! eng '(jobs.forestry.fell-tree {:radius 10}) {})
+          (await (lt/run-until-empty eng 40))
+          (is (seq (lt/calls p "dig")) "the tree it saw after turning is dug"))))))
+
 (deftest the-farthest-tree-of-a-dense-forest-keeps-its-leaves
   (let [{:keys [p]} (lt/setup {:blocks forest})
         found (trees/trees-near p 60 nil)]
