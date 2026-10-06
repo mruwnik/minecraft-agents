@@ -150,7 +150,7 @@ Statuses below are the common ones; `reason` and extra fields are in `js/primiti
 | `look` / `wait` | `{pos}` or `{yaw, pitch}` / `{ms}` (max 10000) | `ok` |
 | `swim` | `{ms=3000, toward?}` | `surfaced`, `landed`, `timeout` |
 | `mount` / `dismount` | `{id}` / `{yaw?, pitch?}` | `mounted`, `already-mounted`, `gone`, `not-mountable`, `occupied`, `out-of-reach`, `hand-full`, `timeout` / `dismounted`, `not-mounted`, `timeout` |
-| `useOn` | `{pos, item?, face='up'}` | `used`, `unchanged`, `missing`, `no-item`, `no-room`, `unreachable`, `cannot` (beds, containers, hazards) |
+| `useOn` | `{pos, item?, face='up'}` | `used`, `unchanged`, `missing`, `no-item`, `no-room`, `unreachable` (`too-far`, or `no-line`: solid blocks between the eye and the block), `cannot` (beds, containers, hazards) |
 | `offline` | `{ms=300000}` (max 600000) | `ok`, `cut`, `closed`, `unsupported`, `offline` |
 
 Bounds are 1 to 60 s per call (most 2 to 10 s). `jumpPlace` pillars up: sneak to cell centre, jump, place under the feet,
