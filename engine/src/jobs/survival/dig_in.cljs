@@ -1,5 +1,6 @@
 (ns jobs.survival.dig-in
-  (:require [jobs.lib.tidy :as tidy]
+  (:require [jobs.forestry.trees :as trees]
+            [jobs.lib.tidy :as tidy]
             [jobs.lib.click :as click]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
@@ -17,6 +18,7 @@
   stopped {:reason :text :pos}: the :dig-in-futile reasons below, :no-blocks, :no-tool, :unsealed or :no-progress.
   The mode is the first of these whose cells the zone rules permit. If none is permitted it takes the first
   as a last resort, with one dig-in.trespass-last-resort warning.
+  - Blocks it places: building blocks (planks, stone kinds, dirt), then logs as a last resort.
   - plug: the body is in a closed room with a door and a hole in the roof over it. One carried block mends the hole.
   - walls: enough :blocks are carried for every open cell. Places the four sides at feet height, the four at head height,
     a support beside the roof cell, then the roof cell, at most :max-places per step.
@@ -55,9 +57,8 @@
    "mangrove_planks" "cherry_planks"])
 
 (def shelter-blocks
-  "What dig-in places: the building blocks, then logs (worth more, a last resort)."
-  (into building-blocks ["oak_log" "spruce_log" "birch_log" "jungle_log" "acacia_log" "dark_oak_log" "mangrove_log"
-                         "cherry_log"]))
+  "What dig-in places: the building blocks, then logs (jobs.forestry.trees/log-names; worth more, a last resort)."
+  (into building-blocks trees/log-names))
 
 (def args
   {:roof-height {:doc "a solid block within this many blocks above counts as a roof" :default sh/default-roof-height}

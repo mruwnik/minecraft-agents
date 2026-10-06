@@ -71,3 +71,22 @@
       (fs/writeFileSync file (ev 12))
       (is (= [3 4 5 6 7 8 9 10 11 12] (ks (r/read-events-from file cur))) "rotated twice"))
     (fs/rmSync dir #js {:recursive true :force true})))
+
+(deftest an-await-step-counts-events-from-the-watch-window
+  (let [opts {:world "wt-await-769ce017" :body "Probe"}
+        file (r/events-file opts)
+        pre {:offset {:ino nil :pos 0} :from-ms 500}
+        post {:offset {:ino nil :pos 0} :from-ms 2000}
+        run (fn [window]
+              (r/run-steps! opts [0 0 0] {:act [[:await {:kind :slept} 1]]} (:offset window) (:from-ms window)))
+        cleanup #(fs/rmSync (path/join (r/repo-path "worlds" "wt-await-769ce017")) #js {:recursive true :force true})]
+    (fs/mkdirSync (path/dirname file) #js {:recursive true})
+    (fs/writeFileSync file "{:kind :slept :time-ms 1000}\n")
+    (async done
+      (-> (js/Promise.resolve)
+          (.then #(run (r/watch-window true pre post)))
+          (.then (fn [ids] (is (= #{} ids) "a register case sees an event from before the settle ended")))
+          (.then #(.then (run (r/watch-window false pre post))
+                         (fn [_] (is false "no register: the event before the settle is hidden"))
+                         (fn [e] (is (re-find #"timed out" (.-message e))))))
+          (.finally (fn [] (cleanup) (done)))))))

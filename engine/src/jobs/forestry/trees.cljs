@@ -12,6 +12,10 @@
   "Consecutive partial walks toward one tree before it counts as unreachable."
   3)
 
+(def log-names
+  "The overworld log blocks (the stem woods are not logs)."
+  (mapv #(str % "_log") ["oak" "spruce" "birch" "jungle" "acacia" "dark_oak" "mangrove" "cherry"]))
+
 (defn log-name? [n] (boolean (some-> n (str/ends-with? "_log"))))
 (defn leaves-name? [n] (boolean (some-> n (str/ends-with? "_leaves"))))
 (defn species-of [log-name] (str/replace log-name #"_log$" ""))

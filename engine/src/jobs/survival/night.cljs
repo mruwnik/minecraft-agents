@@ -313,7 +313,7 @@
   [c]
   (let [{:keys [pos at retries]} (:exposed (ctx/mem c))]
     (and pos (< (or retries 0) max-retries)
-         (or (> (u/dist (sh/feet (:primitives c)) pos) dig-in/futile-radius)
+         (or (>= (u/dist (sh/feet (:primitives c)) pos) (inc dig-in/futile-radius))
              (>= (- (ctx/now c) at) retry-after-ms)))))
 
 (defn retry-dig-in!

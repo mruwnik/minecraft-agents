@@ -13,6 +13,7 @@
             [engine.shelter-test :as st]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [jobs.lib.shelter :as sh]
             [jobs.survival.night :as night]))
 
 (def night st/night)
@@ -395,6 +396,15 @@
           (await (core/tick! eng))
           (set! ctx/call-child call-child)
           (is (= (inc night/max-retries) @tries) "one dig-in, then one more per retry of the exposed hold"))))))
+
+(deftest an-exposed-hold-retries-only-from-futile-radius-plus-one-away
+  (let [due? (fn [feet]
+               (with-redefs [ctx/mem (constantly {:exposed {:pos {:x 0 :y 0 :z 0} :at 0 :retries 0}})
+                             ctx/now (constantly 1000)
+                             sh/feet (constantly feet)]
+                 (night/retry-due? {:primitives nil})))]
+    (is (not (due? {:x 8 :y 0 :z 1})) "8.06 away is still inside dig-in's futile check")
+    (is (due? {:x 9 :y 0 :z 0}))))
 
 (deftest a-pit-site-is-judged-by-the-surface-a-player-sees
   (let [p (tu/fake {:blocks (into {} (for [x (range -2 3) z (range -2 3)] [(str x ",63," z) "dirt"]))})]
