@@ -274,7 +274,7 @@
         here (first (filter #(<= (u/dist feet %) dig-in/futile-radius) (map :pos (failed-sites c))))
         {:keys [x y z]} (or here feet)
         failed (concat (map :pos (failed-sites c)) (map (comp :pos :data) (ctx/entries c :dig-in-futile)))
-        far? (fn [f] (every? #(> (u/dist % f) dig-in/futile-radius) failed))
+        far? (fn [f] (every? #(>= (u/dist % f) (inc dig-in/futile-radius)) failed))
         offsets (sort-by (fn [[dx dz]] (+ (* dx dx) (* dz dz)))
                          (for [dx (range (- relocate-reach) (inc relocate-reach))
                                dz (range (- relocate-reach) (inc relocate-reach))

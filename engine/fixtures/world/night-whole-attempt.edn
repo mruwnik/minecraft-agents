@@ -1,6 +1,7 @@
 ;; Night as one whole attempt (cards 3df7476d, 65b99a04): one round from the start to the morning leave, every hold
 ;; declared (job.holding), a site where dig-in stops is left for another pit site 9+ blocks away, and a night with no
-;; site holds exposed and ends stopped :exposed at day. Dirt pad y -6..-1 (the plot floor is over void).
+;; site holds exposed and ends stopped :exposed at day. Dirt pad y -6..-1 (the plot floor is over void); the wet-site case
+;; covers the whole plot, since sites 9+ away are judged from the surface and dig-in finds the void.
 ;; jobs.survival.night is submitted in :act. Needs night: --allow-time --time-log <the shared time log>, one case per call.
 {:defaults
  {:tags [:night :survival :dig-in]
@@ -21,7 +22,7 @@
             {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 120 :of-job true}]
    :limit-s 140}
   {:name "wet-site-is-left-for-another-pit-site"
-   :blocks [[:set [17 -1 16] "water"]]
+   :blocks [[:fill [0 -6 0] [31 -1 31] "dirt"] [:set [17 -1 16] "water"]]
    :act [[:job (jobs.survival.night)]]
    :expect [{:event {:source :job :kind :dig_in_failed :message [:contains "beside the descent cell"]} :within-s 30}
             {:event {:source :job :kind :shelter.relocated} :within-s 60}

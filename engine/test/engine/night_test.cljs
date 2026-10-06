@@ -279,7 +279,8 @@
           (await (core/tick! eng))
           (let [roofs (filterv #(= 63 (:y %)) (mapv st/arg-pos (st/calls p "place")))]
             (is (= {:x 0 :y 63 :z 0} (first roofs)) "the first pit's roof was refused")
-            (is (< 8 (js/Math.hypot (:x (last roofs)) (:z (last roofs)))) "a second pit 9+ blocks away was roofed"))
+            (is (<= 9 (js/Math.hypot (:x (last roofs)) (:z (last roofs))))
+                "a second pit 9+ blocks away was roofed (8.06 away, dig-in's futile check from the body declines it)"))
           (is (= [[:roof-failed]] (mapv #(mapv :reason (:sites %)) (st/emitted seen :shelter.relocated)))
               "moved once, after the failed site, with dig-in's stop reason")
           (is (= [] (st/entries eng :night-site)) "tonight's failed sites are forgotten at morning")
