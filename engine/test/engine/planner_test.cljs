@@ -543,7 +543,7 @@
     (is (not= "found" (:status small)))
     (is (= "found" (:status (run (world {}) (near 20 64 20) {:goalFlood 10}))))))
 
-(deftest goal-sealed-in-by-a-wall-is-goal-enclosed-with-a-partial-path
+(deftest goal-sealed-in-by-a-wall-is-goal-cut-off-with-a-partial-path
   (let [r (run (world {:fill [[5 64 -2 5 65 40 "stone"]]}) (near 8 64 2) flooding)]
     (is (= ["partial" "goal-cut-off"] (status+reason r)))
     (is (= [4 64 2] (last-cell r)))))
@@ -554,8 +554,8 @@
 
 (deftest xz-goal-does-not-flood
   (let [goal (xz 12 12 0)]
-    (is (not= "goal-enclosed" (:reason (run floating goal flooding))))
-    (is (not= "goal-enclosed" (:reason (run floating goal))))))
+    (is (not (#{"goal-enclosed" "goal-cut-off"} (:reason (run floating goal flooding)))))
+    (is (not (#{"goal-enclosed" "goal-cut-off"} (:reason (run floating goal)))))))
 
 ;; ---- early goal flood ----
 

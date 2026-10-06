@@ -591,3 +591,18 @@
           (is (some #{:declined} (map :why skipped)) "a declined child is a skip with the reason :declined")
           (is (= [[1 62 0] [1 63 0] [2 63 0]] (sort (mapv :cell skipped))) "every hole is left for restore-broken")
           (is (= "air" (block p [1 62 0])) "nothing was put back"))))))
+
+(def room-and-deck
+  "The sealed room with a stone deck (x 7..9, z -1..1, y 70) floating high over the floor beside it: the deck is cut off by a drop."
+  (merge room (box 7 70 -1 9 70 1 "stone")))
+
+(deftest go-to-escalates-on-a-goal-cut-off-as-on-a-walled-in-one
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (merge in-room {:blocks room-and-deck})
+              {:keys [out seen]} (await (run-job! world {:pos [8 71 0] :range 0}))
+              {off :out} (await (run-job! world {:pos [8 71 0] :range 0 :escalate false}))]
+          (is (= :goal-cut-off (:why @off)) "without escalation the planner's verdict is cut-off")
+          (is (seq (events-of seen :go-to.escalated)) "shut in: it escalates")
+          (is (= :unreachable (:reason @out))))))))

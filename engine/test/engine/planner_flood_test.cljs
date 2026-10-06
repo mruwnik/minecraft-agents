@@ -16,6 +16,9 @@
                          (js/Object.assign #js {:table (.-table pw) :space (.-space pw)} (clj->js options)))]
      {:status (.-status r) :reason (.-reason r)})))
 
+;; reasons that are a false proof for a goal the search can reach
+(def false-proofs #{"goal-enclosed" "goal-cut-off"})
+
 (def flat (floor -2 -3 40 3))
 
 (defn hollow
@@ -56,7 +59,7 @@
     ladder-deck [6 67 0]))
 
 (deftest a-goal-behind-something-the-search-opens-is-not-enclosed-early
-  (are [spec goal] (not= "goal-enclosed" (:reason (plan-over spec goal {:maxNodes 1})))
+  (are [spec goal] (not (false-proofs (:reason (plan-over spec goal {:maxNodes 1}))))
     hatch [6 67 0]
     hatch-facing-away [6 67 0]
     pen [7 64 0]
@@ -98,12 +101,12 @@
 (deftest every-kind-of-cell-the-search-passes-is-not-enclosed
   (doseq [[spec goal] passable
           options [{:maxNodes 1} {:preFlood 0 :floodAfter 0}]]
-    (is (not= "goal-enclosed" (:reason (plan-over spec goal options))) (pr-str goal options))))
+    (is (not (false-proofs (:reason (plan-over spec goal options)))) (pr-str goal options))))
 
-;; water is a way in the flood follows (see a-sealed-platform-holding-a-pool-is-enclosed); a bubble column it cannot, and a
+;; water is a way in the flood follows (see a-sealed-platform-holding-a-pool-is-cut-off); a bubble column it cannot, and a
 ;; wall cell of water is a way in the search takes
 (deftest water-on-the-way-in-is-never-enclosed
-  (are [spec goal options] (not= "goal-enclosed" (:reason (plan-over spec goal options)))
+  (are [spec goal options] (not (false-proofs (:reason (plan-over spec goal options))))
     (way-in {"5,64,0" "water"}) [7 64 0] {:maxNodes 1}
     (way-in {"5,64,0" "water"}) [7 64 0] {:preFlood 0 :floodAfter 0}
     (up-to-deck "bubble_column") [6 67 0] {:maxNodes 1}
@@ -124,7 +127,7 @@
 
 (deftest a-goal-only-a-gap-jump-up-reaches-is-not-enclosed
   (is (= "found" (:status (plan-over pillar [6 65 0] {:goalFlood 0 :preFlood 0}))))
-  (is (not= "goal-enclosed" (:reason (plan-over pillar [6 65 0] {:preFlood 0 :floodAfter 0})))))
+  (is (not (false-proofs (:reason (plan-over pillar [6 65 0] {:preFlood 0 :floodAfter 0}))))))
 
 ;; with doors never opened the search walks every way it has: its verdict, not a found path
 (deftest a-door-room-with-doors-never-opened-is-not-found
@@ -158,7 +161,7 @@
 
 ;; the early flood by default, the late one alone with preFlood 0 and floodAfter 0
 (deftest a-goal-whose-only-way-out-is-unseen-is-not-enclosed
-  (are [spec goal options] (not= "goal-enclosed" (:reason (plan-over spec goal options)))
+  (are [spec goal options] (not (false-proofs (:reason (plan-over spec goal options))))
     into-unloaded [12 64 0] {}
     into-out-of-span [2045 64 0] {}
     into-unloaded [12 64 0] {:preFlood 0 :floodAfter 0}
@@ -392,7 +395,7 @@
                         :states {"3,64,0" {:facing "south"} "3,66,0" {:facing "south"}}})
 
 (deftest a-goal-whose-way-in-is-a-ladder-with-a-gap-is-not-enclosed
-  (is (not= "goal-enclosed" (:reason (plan-over gappy-ladder-deck [6 67 0] {:maxNodes 1}))))
+  (is (not (false-proofs (:reason (plan-over gappy-ladder-deck [6 67 0] {:maxNodes 1})))))
   (is (= "ladder-gap" (:reason (plan-over gappy-ladder-deck [6 67 0] {}))))
   (is (= "ladder-gap" (:reason (plan-over gappy-ladder-deck [6 67 0] {:preFlood 0 :floodAfter 0})))))
 
@@ -494,7 +497,7 @@
 (deftest every-way-into-a-big-pocket-the-search-takes-is-not-enclosed
   (doseq [[spec goal] big-ways-in
           options [{} {:maxNodes 1} {:preFlood 0 :floodAfter 0}]]
-    (is (not= "goal-enclosed" (:reason (plan-over spec goal options))) (pr-str goal (:states spec) options))))
+    (is (not (false-proofs (:reason (plan-over spec goal options)))) (pr-str goal (:states spec) options))))
 
 (deftest a-big-pocket-with-no-way-in-is-enclosed-at-once
   (are [spec goal options] (= "goal-enclosed" (:reason (plan-over spec goal options)))
@@ -506,13 +509,13 @@
 ;; the small deck with one stone cell and a water cell on it (the pool is part of the deck, nothing leads into it from below)
 (def pool-deck {:blocks (merge (:blocks small-floor-deck) {"4,69,4" "stone" "4,70,4" "water"})})
 
-(deftest a-sealed-platform-holding-a-pool-is-enclosed
+(deftest a-sealed-platform-holding-a-pool-is-cut-off
   (is (= "goal-cut-off" (:reason (result-over pool-deck [0 64 0] [6 71 6] {})))))
 
 (def pooled-high-deck
   {:blocks (merge (:blocks high-deck) (box 14 68 14 16 68 15 "stone") (box 14 69 14 16 70 15 "water"))})
 
-(deftest a-flood-through-a-pool-proves-the-goal-enclosed-early
+(deftest a-flood-through-a-pool-proves-the-goal-cut-off-early
   (is (= "goal-cut-off"
          (:reason (result-over pooled-high-deck [0 64 0] [20 71 20] {:maxNodes 1 :preFlood 0 :floodAfter 0 :goalFlood 100000})))))
 
@@ -524,8 +527,8 @@
                              (apply merge (for [y (range 64 81)] {(str "9," y ",14") "ladder"})))
               :states (into {} (for [y (range 64 81)] [(str "9," y ",14") {:facing "east"}]))}]
     (is (= "found" (:status (result-over spec [0 64 0] [11 70 14] {:goalFlood 0 :preFlood 0}))))
-    (is (not= "goal-enclosed"
-              (:reason (result-over spec [0 64 0] [11 70 14] {:maxNodes 300 :preFlood 0 :floodAfter 0 :goalFlood 100000}))))))
+    (is (not (false-proofs
+              (:reason (result-over spec [0 64 0] [11 70 14] {:maxNodes 300 :preFlood 0 :floodAfter 0 :goalFlood 100000})))))))
 
 ;; a two-high shelter (interior x -1..1, z 0..2, roof y 66) on grass; the first stair cell (0 63 1) is dug out of the floor
 ;; in front of the body at (0 64 0): one step down, the table and chest beside it
