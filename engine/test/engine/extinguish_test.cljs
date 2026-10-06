@@ -514,3 +514,57 @@
           (is (= ["water_bucket"] (mapv (comp :item call-args) (calls (:p far) "place"))) "no scoop attempted from afar")
           (is (= [] (entries (:eng far) :extinguish-pour)) "the entry is gone")
           (is (= 1 (count (of-kind (:seen far) :extinguish.scoop_failed)))))))))
+
+(deftest a-failed-walk-back-drops-the-pour-with-a-warn-and-ends
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (let [s (setup {:self {:onFire true}
+                                                   :inventory [{:name "water_bucket" :count 1}]
+                                                   :blocks (floor 40)})]
+                                     (on-place! (:p s) "water_bucket" (fn [st _] (swap! st assoc-in [:self :onFire] true)))
+                                     (on-wait! (:p s) (fn [n _] (when (= 1 n) (core/cut! (:eng s) (core/holder (:eng s)) :test nil))))
+                                     (.override (.-world (:p s)) "steer" (fn ^:async f [_ _ _] #js {:status "failed" :reason "no controls"}))
+                                     (core/submit! (:eng s) '(jobs.survival.extinguish) {})
+                                     (await (core/tick! (:eng s)))
+                                     (swap! (fake/state (:p s)) assoc-in [:self :onFire] false)
+                                     (swap! (fake/state (:p s)) assoc-in [:self :pos] [(inc extinguish/max-scoop-distance) 64 0])
+                                     (await (run-until-empty (:eng s) 3))
+                                     s)]
+          (is (= [] (:list (core/state eng))) "the run ends")
+          (is (= ["water_bucket"] (mapv (comp :item call-args) (calls p "place"))) "no scoop from afar")
+          (is (= [] (entries eng :extinguish-pour)) "the entry is gone")
+          (is (= ["far"] (mapv :status (of-kind seen :extinguish.scoop_failed)))))))))
+
+(deftest a-second-pour-in-the-same-run-is-walked-back-to-as-well
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [far (inc extinguish/max-scoop-distance)
+              {:keys [eng p seen]} (setup {:self {:onFire true}
+                                           :inventory [{:name "water_bucket" :count 2}]
+                                           :blocks (floor 40)})
+              st (fake/state p)
+              pours (atom 0)]
+          ;; each pour puts the fire out and leaves the body far from the water; the first walk back sets it alight
+          ;; again, so that pour is given up and the body pours anew
+          (.override (.-world p) "place"
+                     (fn ^:async g [tok a impl]
+                       (let [r (await (impl tok a))]
+                         (when (= "water_bucket" (.-item a))
+                           (swap! pours inc)
+                           (swap! st assoc-in [:self :onFire] false)
+                           (swap! st update-in [:self :pos 0] + far))
+                         r)))
+          (let [walks (atom 0)]
+            (.override (.-world p) "steer"
+                       (fn ^:async g [tok a impl]
+                         (let [r (await (impl tok a))]
+                           (when (= 1 (swap! walks inc)) (swap! st assoc-in [:self :onFire] true))
+                           r))))
+          (core/submit! eng '(jobs.survival.extinguish) {})
+          (await (run-until-empty eng 4))
+          (is (= 2 @pours) "poured twice")
+          (is (= ["water_bucket" "water_bucket" "bucket"] (mapv (comp :item call-args) (calls p "place"))))
+          (is (= [] (of-kind seen :extinguish.scoop_failed)))
+          (is (= [] (entries eng :extinguish-pour))))))))

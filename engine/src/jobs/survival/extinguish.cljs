@@ -177,7 +177,7 @@
 
 (defn clear-pour! [c]
   (ctx/forget-where! c :extinguish-pour (constantly true))
-  (ctx/update-mem! c dissoc :pour-waits :water-waits))
+  (ctx/update-mem! c dissoc :pour-waits :water-waits :returned))
 
 (defn ^:async burning-wait!
   "Hold still on purpose for ms."
