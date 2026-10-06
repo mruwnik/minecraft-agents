@@ -109,7 +109,7 @@ Notes:
 - Entities: items carry `item {name, count}`; players `username`, `sleeping` (only in sight); mobs `uuid`, `baby`, sheep `sheared`; leashed
   mobs `leashed`, `leashedToMe`, `leashHolder`; riders `passengers` and `vehicle`. Creepers carry `creeper: true`. Every
   hostile carries `visible` (a raycast from the eye to the entity's middle; glass, fences, gates, iron bars, water, fire and the like do not block, an
-  unloaded cell never blocks). Raw entity lists go through `js/live-entities.mjs` (drops bare, never-spawned entities).
+  unloaded cell never blocks). Raw entity lists go through `js/live-entities.mjs` (drops bare, never-spawned entities, picked-up drops and mobs that died).
 - Blocks carry `age` for crops (wheat/carrots/potatoes ripe at 7, beetroots 3, sweet berries from 2) and, with
   `properties`, every block state (integers as numbers, booleans and enum names as they are).
 - **Hostile trigger rule.** `:hostile-near` holds only for a real danger within its radius (`jobs.lib.reach/danger?`): a
