@@ -516,3 +516,17 @@
           (is (= "dirt" (block p [0 64 0])))
           (is (= [:dig-failed] (mapv :reason (:open @out))))
           (is (= #{[0 64 0]} (ledger/held-cells (mem/view (:store eng))))))))))
+
+(deftest only-a-permanent-walk-verdict-holds-a-cell-unreachable
+  (are [result permanent?] (= permanent? (cleanup/permanent-walk? result))
+    {:status :no-path :reason :abilities} true
+    {:status :no-path :reason :goal-enclosed} true
+    {:status :no-path :reason :one-way} true
+    {:status :refused} true
+    {:status :bad-args} true
+    {:status :no-path :reason :door-stuck} false
+    {:status :no-path :reason :moved-while-searching} false
+    {:status :no-path :reason :budget} false
+    {:status :no-path :reason :start-not-standable} false
+    {:status :no-path} false
+    {:status :arrived} false))
