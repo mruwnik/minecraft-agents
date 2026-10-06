@@ -102,9 +102,8 @@
     (reach/enclosed? p)
     (let [base (reach/lookup p reach/body-kind-of)
           block-at (block-at-of p)
-          kind-at (fn [x y z] (if (some->> (block-at [x y z]) (re-find door-block)) :solid (base x y z)))
-          {:keys [x y z]} (reach/standing-cell p base)]
-      (= :closed (reach/flood (partial reach/forward kind-at) [x y z] reach/room-cells)))))
+          kind-at (fn [x y z] (if (some->> (block-at [x y z]) (re-find door-block)) :solid (base x y z)))]
+      (reach/shut-in? p kind-at))))
 
 (defn open-door-beside?
   "door-beside? without the :doors check."

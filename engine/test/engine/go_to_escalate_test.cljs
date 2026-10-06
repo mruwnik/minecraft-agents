@@ -520,3 +520,16 @@
               {:keys [out seen]} (await (run-job! (merge in-pit {:blocks lava-pit}) {:pos [10 64 0] :range 1}))]
           (is (true? (:arrived @out)))
           (is (< 1 (count (events-of seen :go-to.escalated))) "the first heading was refused, another was tried"))))))
+
+(deftest go-to-escalates-from-the-free-part-of-a-shut-iron-door-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [iron (assoc room "3,64,0" "iron_door" "3,65,0" "iron_door")
+              states {"3,64,0" {:open false :half "lower" :facing "west"} "3,65,0" {:open false :half "upper" :facing "west"}}
+              {:keys [out p seen]} (await (run-job! {:self {:pos {:x 3.3 :y 64 :z 0.5}} :blocks iron :states states
+                                                     :inventory [{:name "stone_pickaxe" :count 1}]}
+                                                    {:pos [8 64 0] :range 1}))]
+          (is (seq (events-of seen :go-to.escalated)) "a body shut in by the panel escalates")
+          (is (= {:arrived true} @out))
+          (is (< 6 (first (feet p)))))))))

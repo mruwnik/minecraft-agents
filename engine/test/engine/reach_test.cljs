@@ -132,3 +132,35 @@
 (deftest a-body-over-air-with-no-edge-keeps-the-floored-cell
   (let [p (tu/fake {:self {:pos {:x 0.5 :y 64 :z -9.5}}})]
     (is (= {:x 0 :y 64 :z -10} (reach/standing-cell p)))))
+
+;; ---------------------------------------------------------------- a body in the free part of a shut door's cell
+
+(def facing-vec {"north" [0 -1] "south" [0 1] "east" [1 0] "west" [-1 0]})
+
+(defn door-cell-world
+  "The door cell (0 64 0) in a wall, side walls either way. On its facing side a sealed one-cell room, on the other
+  open ground. The body stands in the cell's free part. door: block name, open?: its open state."
+  [facing door open?]
+  (let [[fx fz] (facing-vec facing)
+        [px pz] [(- fz) fx]
+        around (fn [cx cz] (for [[dx dz] [[fx fz] [px pz] [(- px) (- pz)]]] [(+ cx dx) (+ cz dz)]))
+        room [fx fz]
+        cells (concat [[px pz] [(- px) (- pz)]]
+                      (remove #{[0 0]} (around (first room) (second room))))
+        walls (into {[(first room) 66 (second room)] "stone"}
+                    (for [[x z] cells y [64 65]] [(str x "," y "," z) "stone"]))
+        walls (into (dissoc walls [(first room) 66 (second room)])
+                    {(str (first room) ",66," (second room)) "stone"})]
+    {:self {:pos {:x (+ 0.5 (* 0.2 fx)) :y 64 :z (+ 0.5 (* 0.2 fz))}}
+     :floor tu/walk-floor
+     :blocks (merge walls {"0,64,0" door "0,65,0" door})
+     :states {"0,64,0" {:open open? :half "lower" :facing facing} "0,65,0" {:open open? :half "upper" :facing facing}}}))
+
+(deftest a-body-in-the-free-part-of-a-shut-iron-door-cell-is-shut-in-whatever-the-facing
+  (doseq [facing ["north" "south" "east" "west"]]
+    (is (true? (reach/enclosed? (tu/fake (door-cell-world facing "iron_door" false)))) facing)))
+
+(deftest an-open-door-or-a-wooden-one-leaves-the-body-a-way-out
+  (doseq [facing ["north" "south" "east" "west"]]
+    (is (false? (reach/enclosed? (tu/fake (door-cell-world facing "iron_door" true)))) (str "open " facing))
+    (is (false? (reach/enclosed? (tu/fake (door-cell-world facing "oak_door" false)))) (str "wooden " facing))))

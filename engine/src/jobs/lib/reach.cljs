@@ -438,9 +438,37 @@
                       (.push queue n))))
                 (recur (inc head)))))))
 
+(def door-panel-step
+  "The step [dx dz] from a door cell onto the side its closed panel fills: opposite the door's facing."
+  {"north" [0 1] "south" [0 -1] "east" [-1 0] "west" [1 0]})
+
+(defn panel-step
+  "The step [dx dz] from the cell {:x :y :z} across a shut door's panel, when kind-at counts the cell solid and the block
+  there is a shut door, else nil. A body standing in the free part of that cell cannot walk through the panel."
+  [p kind-at {:keys [x y z]}]
+  (when (keyword-identical? :solid (kind-at x y z))
+    (let [b (.blockAt p #js {:x x :y y :z z})
+          name (some-> b .-name)]
+      (when (and name (str/ends-with? name "_door") (not (open-prop? b)))
+        (door-panel-step (some-> b .-properties .-facing))))))
+
+(defn shut-in?
+  "Whether the body is shut in: it can walk to fewer than room-cells cells over kind-at. A body in the free part of a
+  shut door's cell cannot step across the panel."
+  [p kind-at]
+  (let [{:keys [x y z] :as start} (standing-cell p kind-at)
+        panel (panel-step p kind-at start)
+        next-cells (fn [cx cy cz]
+                     (let [ns (forward kind-at cx cy cz)]
+                       (if (and panel (== cx x) (== cy y) (== cz z))
+                         (.filter ns (fn [n] (not (and (== (- (aget n 0) x) (first panel)) (== (- (aget n 2) z) (second panel))))))
+                         ns)))]
+    (= :closed (flood next-cells [x y z] room-cells))))
+
 (defn enclosed?
   "Whether the body is shut in: it can walk to fewer than room-cells cells (one step up, up to three down, water swum,
-  wooden doors opened). A pit or sealed room is; open ground or a hut with a door is not. False with no body position.
+  wooden doors opened). A pit or sealed room is; open ground or a hut with a door is not. A body in the free part of a
+  shut door's cell cannot step across the panel. False with no body position.
   solid: a set of cells [x y z] treated as solid blocks (what if they were filled)."
   ([p] (enclosed? p #{}))
   ([p solid]
@@ -448,9 +476,8 @@
      (let [base (lookup p body-kind-of)
            kind-at (if (empty? solid)
                      base
-                     (fn [x y z] (if (contains? solid [x y z]) :solid (base x y z))))
-           {:keys [x y z]} (standing-cell p base)]
-       (= :closed (flood (partial forward kind-at) [x y z] room-cells)))
+                     (fn [x y z] (if (contains? solid [x y z]) :solid (base x y z))))]
+       (shut-in? p kind-at))
      false)))
 
 (def arrow-passes
