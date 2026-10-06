@@ -79,6 +79,7 @@
              ^js p (:plan search)
              t0 (js/performance.now)]
          (loop [used walk/chunk-expansions]
+           (walk/stop-if-cut! c)
            (cond
              ^boolean (.step p walk/chunk-expansions)
              (do (swap! searches dissoc who)

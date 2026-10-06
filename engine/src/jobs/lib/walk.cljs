@@ -119,11 +119,19 @@
   []
   (js/Promise. (fn [resolve] (js/setImmediate resolve))))
 
+(defn stop-if-cut!
+  "Throws the cut error (what an act raises) when c's round was cut: a search loop with no act checks this per slice."
+  [c]
+  (when-not (ctx/alive? c)
+    (throw (doto (js/Error. "cut: the ownership token changed") (aset "code" "cut")))))
+
 (defn ^:async run-plan!
-  "planner/plan in slices of chunk-expansions (planner/create-plan) with a yield! between them: the same result."
-  [snapshot query options]
+  "planner/plan in slices of chunk-expansions (planner/create-plan) with a yield! between them: the same result. A cut
+  round's call throws the cut error before its next slice."
+  [c snapshot query options]
   (let [^js p (planner/create-plan snapshot query options)]
     (loop []
+      (stop-if-cut! c)
       (when-not (.step p chunk-expansions)
         (await (yield!))
         (recur)))
@@ -152,7 +160,7 @@
 (defn ^:async plan-from!
   "plan-from in slices (run-plan!), yielding to the event loop between them."
   [c pw to range weight limits]
-  (await (run-plan! (.-snapshot pw) (plan-query c to range) (plan-options pw weight limits wide-box))))
+  (await (run-plan! c (.-snapshot pw) (plan-query c to range) (plan-options pw weight limits wide-box))))
 
 (defn solid-fn
   "solid? for executor/with-free-sides over a pathWorld."
@@ -446,6 +454,7 @@
   (let [walled (:walled search)
         t0 (js/performance.now)]
     (loop [search search used 0]
+      (stop-if-cut! c)
       (let [^js phase (or (:unlimited search) (:limited search))
             over ^boolean (.step phase chunk-expansions)
             used (+ used chunk-expansions)]
