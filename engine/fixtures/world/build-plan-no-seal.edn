@@ -62,14 +62,14 @@
    :after [[:not-block [11 0 11] "dirt"] [:block [13 2 10] "dirt"]]
    :limit-s 170}
   {:name "island-exit-unwalkable"
-   ;; box on a 6x6 stone platform in the air (floor layer removed around it): the flood sees a way out, the walk to the exit
-   ;; point (2 outside the box = over the void) cannot arrive; the sealing cells must be given up :unreachable, never placed
+   ;; box on a 6x6 stone platform in the air (floor removed 2 deep around it): the flood sees a way out (a 2-block drop), the walk to the exit
+   ;; point (2 outside the box) cannot get within range; the sealing cells must be given up :unreachable, never placed
    :plans [{:id "box" :metadata {:by "ProbePlanSeal"}
             :parts [{:id "walls" :outline [#at [10 0 10] #at [13 1 13]] :want "dirt"}
                     {:id "roof" :box [#at [10 2 10] #at [13 2 13]] :want "dirt"}]}]
-   :blocks [[:fill [0 -1 0] [31 -1 31] "air"] [:fill [9 -1 9] [14 -1 14] "stone"]]
+   :blocks [[:fill [0 -3 0] [31 -3 31] "stone"] [:fill [0 -2 0] [31 -1 31] "air"] [:fill [9 -1 9] [14 -1 14] "stone"]]
    :act [[:job (jobs.build.from-plan {:plan "test-probeplanseal-box"})]]
    :expect [{:event {:source :job :kind :build.gave-up :message [:contains "unreachable"]} :within-s 140}
             {:event {:source :job :kind :stopped :data {:reason :incomplete} :message [:contains "unreachable"]} :within-s 140}]
-   :after [[:not-block [11 0 11] "dirt"] [:not-block [13 2 10] "dirt"] [:block [10 0 10] "dirt"]]
+   :after [[:not-block [11 0 11] "dirt"] [:not-block [12 2 13] "dirt"] [:not-block [13 1 13] "dirt"] [:block [10 0 10] "dirt"]]
    :limit-s 170}]}
