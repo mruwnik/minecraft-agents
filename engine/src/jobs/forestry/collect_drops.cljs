@@ -1,9 +1,11 @@
 (ns jobs.forestry.collect-drops
   (:require [engine.ctx :as ctx]
+            [jobs.lib.util :as u]
             [jobs.forestry.trees :refer [default-radius]]))
 
 (def doc
-  "Collect the nearest matching dropped item, one per round, until none is left within :radius.
+  "Collect the nearest matching dropped item, one per round, until none is left within :radius of where the job began (the work area: a walk to an item
+  does not move it, so drops far away, e.g. other bodies', are never chased).
   An item that cannot be reached or picked up is skipped.
   Result: {:collected n}, the number of items that entered the inventory.")
 
@@ -32,7 +34,10 @@
         only-ids (some-> ids set)
         wanted (some-> (:filter (:args c)) set)
         skipped (set (:skipped (ctx/mem c)))
-        item (->> (array-seq (.entities (:primitives c) #js {:radius radius :kind "item" :max (if (or only-ids wanted) 1024 32)}))
+        anchor (or (:anchor (ctx/mem c))
+                   (let [a (u/self-pos c)] (ctx/update-mem! c assoc :anchor a) a))
+        item (->> (array-seq (.entities (:primitives c) #js {:radius (+ radius (u/dist anchor (u/self-pos c))) :kind "item" :max (if (or only-ids wanted) 1024 32)}))
+                  (filter #(if-let [p (.-pos %)] (<= (u/dist anchor (u/pos-of p)) radius) true))
                   (remove #(skipped (.-id %)))
                   (filter #(or (nil? only-ids) (only-ids (.-id %))))
                   (remove #(and visible-only (false? (.-visible %))))

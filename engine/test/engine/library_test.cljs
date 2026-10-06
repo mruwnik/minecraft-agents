@@ -268,6 +268,27 @@
           (is (<= (await (run-until-empty eng 8)) 4) "an unreachable item does not loop forever")
           (is (= {"dirt" 1} (inv p))))))))
 
+(deftest collect-drops-stays-within-radius-of-where-it-started
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [item (fn [id x name] {:id id :name "item" :kind "item" :pos {:x x :y 64 :z 0} :item {:name name :count 1}})
+              {:keys [eng p]} (setup {:entities [(item 1 6 "dirt") (item 2 14 "dirt") (item 3 22 "dirt") (item 4 30 "dirt")]})]
+          (core/submit! eng (list 'jobs.forestry.collect-drops {:radius 10}) {})
+          (await (run-until-empty eng 10))
+          (is (= [1] (mapv #(.-id (.-args %)) (calls p "collect")))
+              "the next item is in reach of where the body walked to, not of where it started: left alone"))))))
+
+(deftest collect-drops-takes-a-drop-that-rolled-a-few-blocks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [item (fn [id x name] {:id id :name "item" :kind "item" :pos {:x x :y 64 :z 0} :item {:name name :count 1}})
+              {:keys [eng p]} (setup {:entities [(item 1 3 "dirt") (item 2 9 "dirt")]})]
+          (core/submit! eng (list 'jobs.forestry.collect-drops {:radius 10}) {})
+          (await (run-until-empty eng 10))
+          (is (= [1 2] (mapv #(.-id (.-args %)) (calls p "collect")))))))))
+
 ;; ------------------------------------------------------------ child results
 
 (deftest go-to-hands-over-whether-it-arrived
