@@ -1,0 +1,33 @@
+;; jobs.gather.mine hangs torches in its strip tunnel (card 50602363, b0d9d76c): gather.mine iron_ore east, tunnel-length 25,
+;; in an unlit stone mass (no ore: the run ends at the length). Torches carried: a wall torch at steps 1, 11 and 21 and one at
+;; the cut's end. With only coal and sticks it crafts torches (the craft child) and hangs them. With neither, the tunnel still
+;; reaches its length and exactly one mine.no-torches is said.
+;; Stone mass x 0..31, z 8..24, y 0..6; body in a 1x2 cell at [2 0 16] facing east, stone pickaxe.
+{:defaults
+ {:tags [:mine :jobs] :time :any
+  :plot {:height 12}
+  :blocks [[:fill [0 0 8] [31 6 24] "stone"] [:fill [2 0 16] [2 1 16] "air"]]
+  :body {:at [2.5 0 16.5] :inventory [["stone_pickaxe" 1] ["cobblestone" 16]] :effects [["resistance" 600 4]]}
+  :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 25})]]
+  :limit-s 200}
+ :cases
+ [{:name "torches-in-the-bag-hang-at-steps-1-11-21-and-the-end"
+   :body {:inventory [["stone_pickaxe" 1] ["cobblestone" 16] ["torch" 8]]}
+   :expect [{:event {:source :job :kind :mine.done} :within-s 190 :of-job true}
+            {:no-event {:source :job :kind :mine.no-torches} :for-s 3}]
+   :after [[:block [2 1 16] "wall_torch"] [:block [12 1 16] "wall_torch"] [:block [22 1 16] "wall_torch"]
+           [:block [26 1 16] "wall_torch"] [:not-block [7 1 16] "wall_torch"] [:not-block [17 1 16] "wall_torch"]]}
+  {:name "torches-in-the-bag-hang-twice-over"
+   :body {:inventory [["stone_pickaxe" 1] ["cobblestone" 16] ["torch" 4]]}
+   :expect [{:event {:source :job :kind :mine.done} :within-s 190 :of-job true}]
+   :after [[:block [2 1 16] "wall_torch"] [:block [12 1 16] "wall_torch"] [:block [22 1 16] "wall_torch"]
+           [:block [26 1 16] "wall_torch"]]}
+  {:name "coal-and-sticks-are-crafted-into-torches-and-hung"
+   :body {:inventory [["stone_pickaxe" 1] ["cobblestone" 16] ["coal" 4] ["stick" 4]]}
+   :expect [{:event {:source :job :kind :mine.done} :within-s 190 :of-job true}
+            {:no-event {:source :job :kind :mine.no-torches} :for-s 3}]
+   :after [[:block [2 1 16] "wall_torch"] [:block [12 1 16] "wall_torch"] [:block [22 1 16] "wall_torch"]]}
+  {:name "no-torches-no-materials-tunnel-reaches-length-one-no-torches-event"
+   :expect [{:event {:source :job :kind :mine.no-torches} :within-s 60 :of-job true}
+            {:event {:source :job :kind :mine.done :data {:reason :tunnel-length}} :within-s 190 :of-job true}]
+   :after [[:not-block [2 1 16] "wall_torch"] [:not-block [12 1 16] "wall_torch"] [:body-near [2.5 0 16.5] 3]]}]}
