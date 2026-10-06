@@ -6,6 +6,7 @@
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
+            [jobs.lib.step-off :as step-off]
             [jobs.farm.tidy :as tidy]
             [jobs.forestry.maintain :as maintain]
             [jobs.lib.world :as known]))
@@ -404,11 +405,10 @@
 (defn bump [m k] (update m k (fnil inc 0)))
 
 (defn ^:async step-off!
-  "Walk two blocks off the column of pos, which the body stands in. :continue."
+  "Walk off the column of pos, which the body stands in (jobs.lib.step-off). :continue."
   [c pos]
-  ;; raw moveTo kept: a two-block hop off the cell the body stands on, in the open work area, to free that cell for a sapling; no door is on the way.
-  (let [r (await (ctx/act c :moveTo (clj->js {:pos (update pos :x + 2) :range 1})))]
-    (when-not (#{"arrived" "partial"} (.-status r))
+  (let [r (await (step-off/step-off! c pos {}))]
+    (when (:unreachable r)
       (fail! c pos :unreachable))
     :continue))
 

@@ -3,7 +3,8 @@
             [jobs.lib.apiary :as apiary]
             [jobs.lib.gate :as gate]
             [jobs.lib.util :as u]
-            [jobs.lib.near :as near]))
+            [jobs.lib.near :as near]
+            [jobs.lib.step-off :as step-off]))
 
 (def doc
   "Keep the lit campfires of an apiary in the standard column: the fire one block underground with ground on all
@@ -130,8 +131,7 @@
   "Move off the fire's cell once when standing in it. Resolves to true when clear."
   [c {:keys [x y z] :as fire}]
   (when (on-fire? c fire)
-    ;; raw moveTo kept: a two-block hop out of a fire cell, an emergency step with no door to open and no time for a plan.
-    (await (ctx/act c :moveTo (clj->js {:pos {:x (+ x 2) :y y :z z} :range 0}))))
+    (await (step-off/step-off! c fire {:avoid #{[x y z]}})))
   (not (on-fire? c fire)))
 
 ;; ------------------------------------------------------------------ carpet

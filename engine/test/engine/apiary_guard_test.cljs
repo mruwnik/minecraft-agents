@@ -11,10 +11,12 @@
             [jobs.lib.world-files :as ew]
             [jobs.apiary.guard :as guard]))
 
-(defn setup [world]
+(defn setup
+  "The engine over the fake world; with floor? the walk-floor ground under it, for the walks of go-to."
+  [world & [floor?]]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/seeing-all (tu/fake world))
+        p (tu/seeing-all (if floor? (tu/fake-on-floor world) (tu/fake world)))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :world (ew/of-data {} {} (:zones world []))
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -217,13 +219,29 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [w (assoc (fire-world {:inventory (inv "white_carpet" 1)}) :self {:pos {:x 2.5 :y 65 :z 0.5}})
-              {:keys [eng p]} (setup w)
-              result (await (child-outcome eng job {} 40))
-              targets (map #(let [pos (.-pos (.-args %))] [(.-x pos) (.-y pos) (.-z pos)]) (calls p "moveTo"))]
+        (let [w {:inventory (inv "white_carpet" 1)
+                 :self {:pos {:x 2.5 :y 64 :z 0.5}}
+                 :blocks {"2,64,0" "campfire" "2,63,0" "stone"}
+                 :states {"2,64,0" {:lit true}}}
+              {:keys [eng p]} (setup w true)
+              result (await (child-outcome eng job {} 60))]
           (is (= 1 (:carpeted result)))
-          (is (not-any? #{[2 64 0] [2 65 0]} targets))
-          (is (= 1 (count targets))))))))
+          (is (not (guard/on-fire? {:primitives p} {:x 2 :y 64 :z 0})) "the body stands off the fire"))))))
+
+(deftest the-hop-out-of-a-fire-goes-where-the-body-can-stand
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w {:inventory (inv "white_carpet" 1)
+                 :self {:pos {:x 2.5 :y 64 :z 0.5}}
+                 :blocks {"2,64,0" "campfire" "2,63,0" "stone" "4,64,0" "stone" "4,65,0" "stone" "4,63,0" "stone"}
+                 :states {"2,64,0" {:lit true}}}
+              {:keys [eng p]} (setup w true)
+              result (await (child-outcome eng job {} 60))
+              goals (map #(let [t (.-pos (.-args %))] [(.-x t) (.-y t) (.-z t)]) (calls p "moveTo"))]
+          (is (= 1 (:carpeted result)))
+          (is (not (guard/on-fire? {:primitives p} {:x 2 :y 64 :z 0})) "the body stands off the fire")
+          (is (not-any? #{[4 64 0]} goals) "the wall two blocks east is no goal"))))))
 
 (deftest the-end-reason
   (are [m seen expected] (= expected (guard/end-reason m seen))

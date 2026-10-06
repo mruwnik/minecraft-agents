@@ -5,6 +5,7 @@
             [jobs.forestry.trees :as forestry]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
+            [jobs.lib.step-off :as step-off]
             [jobs.lib.world :as known]))
 
 (def doc
@@ -331,11 +332,10 @@
     #{[x y z] [x (inc y) z]}))
 
 (defn ^:async step-off!
-  "Walk two blocks off pos, which the body stands on, so a sapling can go there. :continue."
+  "Walk off pos, which the body stands on, so a sapling can go there (jobs.lib.step-off). :continue."
   [c pos]
-  ;; raw moveTo kept: a two-block hop off the cell the body stands on, in the open work area, to free that cell for a sapling; no door is on the way.
-  (let [r (await (ctx/act c :moveTo (clj->js {:pos (update pos :x + 2) :range 1})))]
-    (when-not (= "arrived" (.-status r))
+  (let [r (await (step-off/step-off! c pos {}))]
+    (when (:unreachable r)
       (fail-plant! c pos :unreachable))
     :continue))
 

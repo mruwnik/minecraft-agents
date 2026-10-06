@@ -194,7 +194,7 @@
   "[[name x] ...] of the moveTo and dig calls in order."
   [p]
   (->> (.-calls (.-world p))
-       (filter #(#{"moveTo" "dig"} (.-name %)))
+       (filter #(#{"steer" "dig"} (.-name %)))
        (mapv #(vector (.-name %) (.-x (or (.-pos (.-args %)) #js {}))))))
 
 (deftest clear-box-digs-the-others-before-the-cell-under-foot-then-steps-off
@@ -218,7 +218,7 @@
                                       :self {:pos {:x 1.5 :y 64 :z 1.5}}})
               result (await (child-outcome eng job args 20))]
           (is (= {:dug 1 :skipped {} :kept 0 :fluids {}} result))
-          (is (= [["moveTo" 0] ["dig" 1]] (act-trail p))))))))
+          (is (= ["steer" "dig"] (map first (act-trail p))) "walked off through go-to, then dug"))))))
 
 ;; ------------------------------------------------------------------ zones and footprints
 

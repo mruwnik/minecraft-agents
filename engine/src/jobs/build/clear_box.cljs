@@ -4,6 +4,7 @@
             [jobs.lib.blocks :as blocks]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
+            [jobs.lib.step-off :as step-off]
             [jobs.lib.world :as known]))
 
 (def doc
@@ -176,15 +177,16 @@
               (apply min-key #(u/dist me (first %)) (filter #(= top (:y (first %))) loaded))))))
 
 (defn ^:async step-off!
-  "Only under-foot cells are left: move to just west of the box at the feet
-  level. A blocked step bumps the cell the body is standing on."
+  "Only under-foot cells are left: walk to the nearest cell outside the box (jobs.lib.step-off) to leave the cell the job
+  must clear. A step that fails bumps the cell the body is standing on."
   [c todo]
   (let [me (u/self-pos c)
-        min-x (apply min (map :x (cells (:args c))))
-        dest {:x (dec min-x) :y (js/Math.floor (:y me)) :z (js/Math.floor (:z me))}
-        ;; raw moveTo kept: one step to the cell beside the box at the feet level the body already stands on, to leave the cell the job must clear.
-        r (await (ctx/act c :moveTo (clj->js {:pos dest :range 0})))]
-    (when (= "blocked" (.-status r))
+        box (cells (:args c))
+        xs (map :x box) zs (map :z box)
+        reach (max 2 (inc (max (- (apply max xs) (apply min xs)) (- (apply max zs) (apply min zs)))))
+        feet {:x (js/Math.floor (:x me)) :y (js/Math.floor (:y me)) :z (js/Math.floor (:z me))}
+        r (await (step-off/step-off! c feet {:avoid (into #{} (map (juxt :x :y :z)) box) :reach reach}))]
+    (when (:unreachable r)
       (bump! c (first (apply min-key #(u/dist me (first %)) todo)) :unreachable))
     :continue))
 
