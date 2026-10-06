@@ -27,7 +27,7 @@
             [:set [11 1 11] "stone"] [:set [12 1 11] "stone"] [:set [11 1 12] "stone"]]
    :body {:at [11.5 2 11.5]}
    :act [[:job (jobs.build.from-plan {:plan "test-probeplanseal-box"})]]
-   ;; known: the 3 interior roof cells are given up :refused from outside (card Bug: from-plan slope roof)
+   ;; the interior roof cells have nothing to click until the ring roof is placed: they wait (no-support), never counted refused
    :expect [{:event {:source :job :kind :build.done} :within-s 120}
             {:event {:source :job :kind :result :data {:arrived true}} :within-s 120}
             {:no-event {:source :job :kind :build.wrong} :for-s 5}]
@@ -51,7 +51,7 @@
    :limit-s 170}
   {:name "pit-cannot-walk-out"
    ;; stone mass x 4..19, z 4..19 y 0..4 with an open 8x8 pit x 8..15 z 8..15 (4 deep); plan walls in the pit floor; no pickaxe.
-   ;; The pit is already no way out for the walker, but open to the sky: nothing is held back, the last roof cells are :refused.
+   ;; The pit is already no way out for the walker (the flood is walkable): nothing is held back; roof cells wait for a neighbour.
    :plans [{:id "box" :metadata {:by "ProbePlanSeal"}
             :parts [{:id "walls" :outline [#at [10 0 10] #at [13 1 13]] :want "dirt"}
                     {:id "roof" :box [#at [10 2 10] #at [13 2 13]] :want "dirt"}]}]

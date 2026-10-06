@@ -40,8 +40,8 @@
      body's feet height, so flat ground is assumed.
   4. Walk toward the nearest unloaded cell. Unseen cells are never taken as built.
   5. Finish.
-  A cell whose state no neighbour gives waits. If still missing at the end it is given up with jobs.lib.placement's
-  reason (:no-support, :no-room, :opened, :double-slab). A cell whose place is refused, or whose stand cell
+  A cell whose state no neighbour gives, or with no block to click beside it yet, waits for one. If still missing at
+  the end it is given up with jobs.lib.placement's reason (:no-support, :no-room, :opened, :double-slab). A cell whose place is refused, or whose stand cell
   cannot be reached, :give-up times is given up (:refused, :unreachable or :unloaded).
   Zones: every place is checked against zones and the footprints of the other active plans, when the cell is
   chosen and again before the place. A cell in a zone that does not allow :place, or in another plan's footprint,
@@ -52,7 +52,8 @@
   :sturdy-ground true accepts a sturdy block on the ground of a rail line (plan.rail/ground) where the plan wants
   fill; it is not listed :wrong.
   Result: {:placed n :missing [[x y z] ...] :short {item n} :given-up {[x y z] reason} :wrong [{:pos :found
-  :want}] :refused [...]}. For a block placed in the wrong state, :found names the state it came out in.
+  :want}] :refused [...]}. A build that leaves cells missing ends :stopped (:reason :incomplete, :text naming the
+  missing count and what it left); only a complete one has no :status. For a block placed in the wrong state, :found names the state it came out in.
   Events: build.done (info), build.short, build.gave-up, build.refused and build.wrong (warns). Event texts name
   the count and the first few cells. The whole list is in :cells of the event and in the result.
   The job declines (one build.declined warn naming the plan and the reason):
@@ -274,10 +275,22 @@
                            :text (str "build declines plan " plan (when part (str " part " part)) ": " trouble)})
           {:trouble trouble}))))
 
+(def neighbour-steps [[0 -1 0] [1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 1 0]])
+
+(defn supported?
+  "Whether a block stands beside, above or below pos that a click can be made on."
+  [block-at pos]
+  (boolean (some #(placement/clickable? (block-at (mapv + pos %))) neighbour-steps)))
+
 (defn how
-  "How the cell is placed from where the body stands (jobs.lib.placement/click)."
+  "How the cell is placed from where the body stands (jobs.lib.placement/click). A plain place of a cell with nothing
+  to click beside it is refused :no-support (it waits for a neighbour; the primitive would answer no-support)."
   [c {:keys [pos want item]}]
-  (placement/click (block-want want item) pos (eye (u/self-pos c)) (partial world-block (:primitives c))))
+  (let [block-at (partial world-block (:primitives c))
+        h (placement/click (block-want want item) pos (eye (u/self-pos c)) block-at)]
+    (if (or (:click h) (:refused h) (supported? block-at pos))
+      h
+      (assoc h :refused :no-support))))
 
 (defn placeable
   "The cells of todo a click places now, each with its :click (nil: placed plainly); the others are booked under
@@ -559,10 +572,18 @@
     (ctx/emit! c :build.done :info {:plan plan :placed (:placed result) :missing (count left)
                                     :text (str "build of " plan " done: placed " (:placed result) ", still missing " (count left))})))
 
+(defn stopped-text
+  "Why a build that left cells ended stopped: the plan, how many were placed and are missing, and what it left."
+  [plan {:keys [placed missing] :as result}]
+  (let [left (left-text result)]
+    (str "build of " plan " stopped: placed " placed ", still missing " (count missing) (when (seq left) (str " (" left ")")))))
+
 (defn finish! [c cells]
   (let [result (summary c cells (ctx/mem c) (:sturdy-ground (:args c)))]
     (announce! c result)
-    (ctx/result! c result)
+    (ctx/result! c (if (seq (:missing result))
+                     (assoc result :status :stopped :reason :incomplete :text (stopped-text (:plan (:args c)) result))
+                     result))
     :done))
 
 (defn ^:async round [c]

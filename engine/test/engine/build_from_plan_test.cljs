@@ -485,3 +485,73 @@
           (is (= 1 (count (h/calls p "dig"))))
           (is (= "air" (h/block-at p 3 64 3)))
           (is (= {:wrong [] :missing []} (select-keys result [:wrong :missing]))))))))
+
+(defn no-support-world!
+  "Make place answer no-support for a cell with no block beside, above or below it, as the real primitive does."
+  [p]
+  (.override (.-world p) "place"
+             (fn ^:async f [token args impl]
+               (let [x (.-x (.-pos args)) y (.-y (.-pos args)) z (.-z (.-pos args))
+                     held? (some #(not= "air" (h/block-at p (+ x (nth % 0)) (+ y (nth % 1)) (+ z (nth % 2))))
+                                 [[0 -1 0] [1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 1 0]])]
+                 (if held? (await (impl token args)) #js {:status "no-support"})))))
+
+(deftest a-cell-with-nothing-beside-it-waits-for-its-neighbour-and-does-not-starve-the-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "arm" :parts [{:id "arm" :cells [[2 66 3] [3 66 3]] :want "dirt"}]}
+              {:keys [eng p]} (start {:blocks (assoc wide-ground "1,66,3" "stone") :inventory [{:name "dirt" :count 8}]
+                                      :self {:pos {:x 7.3 :y 64 :z 3.5}}}
+                                     {"arm" plan} [])]
+          (no-support-world! p)
+          (let [result (await (h/child-outcome eng job {:plan "arm"} 400))]
+            (is (= [] (:missing result)))
+            (is (= {} (:given-up result)))
+            (is (= 2 (:placed result)))
+            (is (= "dirt" (block p [3 66 3])))))))))
+
+(deftest a-cell-no-neighbour-ever-supports-is-given-up-as-no-support-and-never-placed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "float" :parts [{:id "f" :cells [[3 66 3]] :want "dirt"}]}
+              {:keys [eng p seen]} (start {:blocks wide-ground :inventory [{:name "dirt" :count 8}]
+                                           :self {:pos {:x 3.5 :y 64 :z 6.5}}}
+                                          {"float" plan} [])]
+          (no-support-world! p)
+          (let [result (await (h/child-outcome eng job {:plan "float"} 200))]
+            (is (empty? (places p)))
+            (is (= {[3 66 3] :no-support} (:given-up result)))
+            (is (= :stopped (:status result)))
+            (is (= :incomplete (:reason result)))
+            (is (re-find #"still missing 1" (:text result)))
+            (is (re-find #"no-support" (:text result)))
+            (is (= 1 (count (h/events-of seen :build.gave-up))))))))))
+
+(deftest a-build-that-leaves-cells-ends-stopped-and-a-complete-one-does-not
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (start {:inventory [{:name "oak_fence" :count 4} {:name "oak_fence_gate" :count 1}
+                                                {:name "torch" :count 1}]}
+                                   {"pen" (pen-plan)})
+              short (await (h/child-outcome eng job {:plan "pen"} 200))
+              {eng2 :eng} (start {:inventory kit} {"pen" (pen-plan)})
+              full (await (h/child-outcome eng2 job {:plan "pen"} 200))]
+          (is (= :stopped (:status short)))
+          (is (re-find #"still missing 3" (:text short)))
+          (is (re-find #"short of oak_fence 3" (:text short)))
+          (is (nil? (:status full))))))))
+
+(deftest a-body-in-a-pit-it-cannot-climb-is-already-shut-in-so-no-place-is-held-back
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pit (into {} (for [x (range 0 10) z (range 0 10) y (range 63 69)
+                                 :when (or (= y 63) (not (and (<= 3 x 6) (<= 3 z 6))))]
+                             [(h/cell-key x y z) "stone"]))
+              {:keys [p]} (start {:blocks pit :self {:pos {:x 4.5 :y 64 :z 4.5}}} {} [])]
+          (is (reach/enclosed? p))
+          (is (not (build/seals? {:primitives p} [4 65 4])))
+          (is (not (build/seals? {:primitives p} [4 64 3]))))))))
