@@ -5,6 +5,7 @@
             [engine.registry :as registry]
             [engine.core :as core]
             [jobs.lib.combat :as combat]
+            [jobs.lib.cost :as cost]
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.memory :as mem]
@@ -625,21 +626,15 @@
   {:head {:name "iron_helmet" :count 1} :torso {:name "iron_chestplate" :count 1}
    :legs {:name "iron_leggings" :count 1} :feet {:name "iron_boots" :count 1}})
 
-(deftest combat-counts-armour-points-from-equipment
-  (is (= 0 (combat/armour-points nil)))
-  (is (= 15 (combat/armour-points (clj->js {:head {:name "iron_helmet"} :torso {:name "iron_chestplate"}
-                                            :legs {:name "iron_leggings"} :feet {:name "iron_boots"}}))))
-  (is (= 5 (combat/armour-points (clj->js {:torso {:name "golden_chestplate"} :mainHand {:name "iron_sword"}})))
-      "only worn slots count"))
-
 (deftest combat-fight-damage-weighs-weapon-mobs-and-armour
   (let [z {:name "zombie" :distance 3}]
-    (is (= 7.5 (combat/fight-damage {:weapon "iron_sword" :armour 0 :mobs [z]})) "4 hits at 0.625 s while it hits 3/s")
-    (is (= 30 (combat/fight-damage {:weapon nil :armour 0 :mobs [z]})) "the fist: 20 hits at 0.5 s")
-    (is (= 22.5 (combat/fight-damage {:weapon "iron_sword" :armour 0 :mobs [z z]})) "the second hits until it dies too")
-    (is (= 3 (combat/fight-damage {:weapon "iron_sword" :armour 15 :mobs [z]})) "iron armour (15 points) takes 60% off")
-    (is (= 3.75 (combat/fight-damage {:weapon "iron_sword" :armour 0 :mobs [(assoc z :hits 2)]})) "a struck mob has less left")
-    (is (= 10 (combat/fight-damage {:weapon "iron_sword" :armour 0 :mobs [{:name "skeleton" :distance 13}]}))
+    (is (= 7.5 (cost/fight-damage {:weapon "iron_sword" :equipment nil :mobs [z]})) "4 hits at 0.625 s while it hits 3/s")
+    (is (= 30 (cost/fight-damage {:weapon nil :equipment nil :mobs [z]})) "the fist: 20 hits at 0.5 s")
+    (is (= 22.5 (cost/fight-damage {:weapon "iron_sword" :equipment nil :mobs [z z]})) "the second hits until it dies too")
+    (is (= 3.45 (/ (js/Math.round (* 100 (cost/fight-damage {:weapon "iron_sword" :equipment iron-armour :mobs [z]}))) 100))
+        "iron armour: vanilla's 13.5 effective points against 3 hp hits take 54% off")
+    (is (= 3.75 (cost/fight-damage {:weapon "iron_sword" :equipment nil :mobs [(assoc z :hits 2)]})) "a struck mob has less left")
+    (is (= 10 (cost/fight-damage {:weapon "iron_sword" :equipment nil :mobs [{:name "skeleton" :distance 13}]}))
         "a skeleton shoots while the body closes 10 blocks")))
 
 (defn walked? [{:keys [eng]}] (pos? (count (tu/walked-to eng))))

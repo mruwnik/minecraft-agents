@@ -1,4 +1,4 @@
-(ns jobs.survival.drop-value
+(ns jobs.lib.cost.value
   "What a list of items is worth (item-value) and what fetching them costs (fetch-cost), in one unit: about a second
   of a player's work. recover-drops compares the two; any job may ask what a pile, a chest or a kit is worth.
 
@@ -225,7 +225,7 @@
 (def despawn-ms game/despawn-ms)
 (def trip "Any fetch: turning round, finding the pile, the risk of the place one died at." 10)
 (def per-block "One block walked, there and back about a second of a player's time per 3 blocks." 0.3)
-(def per-danger "One expected point of damage (jobs.survival.danger/route-danger): about 10 s of healing and risk." 10)
+(def per-danger "One expected point of damage (jobs.lib.cost/route-danger): about 10 s of healing and risk." 10)
 (def walk-blocks-per-s "Walking speed with slack for detours (4.3 flat out, 1.5x the way)." 2.9)
 (def lethal-causes ["lava" "fire" "burn" "void" "out_of_world"])
 

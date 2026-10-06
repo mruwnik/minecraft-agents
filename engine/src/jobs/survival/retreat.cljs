@@ -5,6 +5,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.combat :as combat]
+            [jobs.lib.cost :as cost]
             [jobs.lib.reach :as reach]
             [jobs.lib.shelter :as sh]
             [jobs.lib.tidy :as tidy]
@@ -32,7 +33,7 @@
      Eats once per flight (up to food 20) when the nearest chaser is at least :eat-gap blocks away and food is carried.
   3. Cornered (no open direction worth a walk, or the walk is blocked; checked afresh every step) with no hostile within
      :radius: holds a second (wait, why cornered) and looks again. With one within :radius: takes the safest option it has not yet failed.
-     - fight (jobs.survival.fight-back) only when jobs.lib.combat/fight-damage leaves :reserve health. Never against a creeper.
+     - fight (jobs.survival.fight-back) only when jobs.lib.cost/fight-damage leaves :reserve health. Never against a creeper.
      - seal in: fill the open sides at feet and head height and the roof (dig-in's 1x1 cells) with carried :blocks,
        at most :max-places a step. It first steps to the middle of its cell, and does not place while a hostile's hitbox
        overlaps a cell to fill. An open door is shut, not filled. A cell that answers occupied (torch, chest, bed) is left alone.
@@ -400,7 +401,7 @@
 
 (defn fight-wins?
   "Whether fighting hostiles with the best weapon carried is expected to leave :reserve health
-  (jobs.lib.combat/fight-damage); never against a creeper."
+  (jobs.lib.cost/fight-damage); never against a creeper."
   [c hostiles]
   (let [p (:primitives c)
         self (.self p)
@@ -408,9 +409,9 @@
     (boolean
      (and (seq hostiles)
           (not-any? combat/creeper? hostiles)
-          (<= (combat/fight-damage {:weapon (combat/best-weapon p weapons)
-                                    :armour (combat/armour-points (.-equipment self))
-                                    :mobs (map (fn [e] {:name (.-name e) :distance (.-distance e) :hits 0}) hostiles)})
+          (<= (cost/fight-damage {:weapon (combat/best-weapon p weapons)
+                                  :equipment (cost/equipment-of (.-equipment self))
+                                  :mobs (map (fn [e] {:name (.-name e) :distance (.-distance e) :hits 0}) hostiles)})
               (- (.-health self) reserve))))))
 
 (defn back-off-target

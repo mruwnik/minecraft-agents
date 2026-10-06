@@ -1,6 +1,7 @@
 (ns jobs.survival.respond-to-hostile
   (:require [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
+            [jobs.lib.cost :as cost]
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
             [jobs.lib.result :as r]
@@ -11,7 +12,7 @@
   else retreat (jobs.survival.retreat).
   One whole attempt per round: decides afresh before each call of the child, while a danger is near.
   Never fights a creeper. Otherwise fights when the damage the fight is expected to cost
-  leaves at least :reserve health (jobs.lib.combat/fight-damage: weapon, armour worn, each mob's kind
+  leaves at least :reserve health (jobs.lib.cost/fight-damage: weapon, armour worn, each mob's kind
   and what is left of it after the hits landed, the dangers killed nearest first).
   If the chosen child declines, the other one runs.
   Done once no real danger (as the hostile-near trigger, jobs.lib.reach, in sight) is within :radius
@@ -67,12 +68,12 @@
   (let [{:keys [reserve weapons] :as a} (:args c)
         p (:primitives c)
         self (.self p)
-        decision (combat/decide {:health (.-health self)
-                                 :creeper? (boolean (some combat/creeper? near))
-                                 :reserve reserve
-                                 :damage (combat/fight-damage {:weapon (combat/best-weapon p weapons)
-                                                               :armour (combat/armour-points (.-equipment self))
-                                                               :mobs (map #(mob-of c %) near)})})]
+        decision (cost/decide {:health (.-health self)
+                               :creeper? (boolean (some combat/creeper? near))
+                               :reserve reserve
+                               :damage (cost/fight-damage {:weapon (combat/best-weapon p weapons)
+                                                           :equipment (cost/equipment-of (.-equipment self))
+                                                           :mobs (map #(mob-of c %) near)})})]
     (log-encounter! c (first near) decision)
     (ctx/update-mem! c assoc :decision decision)
     (let [result (await (run-child c decision a))]

@@ -1,10 +1,9 @@
 (ns jobs.survival.recover-drops
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
-            [jobs.survival.danger :as danger]
+            [jobs.lib.cost :as cost]
             [jobs.lib.reach :as reach]
             [jobs.lib.util :as u]
-            [jobs.survival.drop-value :as jv]
             [triggers.survival.died :as died]
             [engine.game :as game]))
 
@@ -16,8 +15,8 @@
   Yields without acting while a real danger is within :danger-radius, so a reflex can deal with it.
   A real danger is a mob that can reach the body, or a ranged one with a line of fire (jobs.lib.reach/nearest-danger).
   Decision: skips when the value of what was carried is at most the fetch cost plus :margin.
-  - Value: jobs.survival.drop-value/item-value (with :value-overrides), plus 5 per level of experience.
-  - Cost: a trip of 10, 0.3 per block of straight distance, and 10 per point of route danger (jobs.survival.danger)
+  - Value: jobs.lib.cost/item-value (with :value-overrides), plus 5 per level of experience.
+  - Cost: a trip of 10, 0.3 per block of straight distance, and 10 per point of route danger (jobs.lib.cost/route-danger)
     past the hostiles the body knows of (seen or heard, jobs.lib.reach/known-hostiles; :danger-overrides, after armour).
   - Infinite when lava, fire or the void took the pile, or the walk would end after the despawn.
   A fetch emits recover-drops.fetching. A skip emits recover-drops.decided. Both texts give the value, the cost and their parts.
@@ -35,8 +34,8 @@
 
 (def args
   {:margin {:doc "added to the fetch cost before comparing it to the value" :default 0}
-   :value-overrides {:doc "jobs.survival.drop-value/item-value overrides, a map: item name or group (ore tool armor food block unknown) -> worth of one item, or {:times n}; e.g. {\"raw_iron\" 500}" :default {}}
-   :danger-overrides {:doc "jobs.survival.danger/route-danger overrides, a map: mob name -> threat in points of damage before armour, or {:times n}; e.g. {\"creeper\" 100 \"zombie\" 0}" :default {}}
+   :value-overrides {:doc "jobs.lib.cost/item-value overrides, a map: item name or group (ore tool armor food block unknown) -> worth of one item, or {:times n}; e.g. {\"raw_iron\" 500}" :default {}}
+   :danger-overrides {:doc "jobs.lib.cost/route-danger overrides, a map: mob name -> threat in points of damage before armour, or {:times n}; e.g. {\"creeper\" 100 \"zombie\" 0}" :default {}}
    :danger-radius {:doc "a hostile this close makes the job yield without acting" :default 8}
    :collect-radius {:doc "collect the pile's drops within this many blocks of the death point (a pile on open ground rolls 6-8 out)" :default 10}})
 
@@ -144,17 +143,18 @@
   [c {:keys [pos inventory cause experience]} elapsed]
   (let [p (:primitives c)
         here (u/self-pos c)
-        worth (jv/item-value inventory :overrides (overrides-arg c :value-overrides))
-        route (when pos (danger/straight-route p here pos))
+        kind-at (reach/lookup p)
+        worth (cost/item-value inventory :overrides (overrides-arg c :value-overrides))
+        route (when pos (cost/straight-route kind-at here pos))
         threat (if route
-                 (danger/route-danger p route (seen-hostiles p) :overrides (overrides-arg c :danger-overrides))
+                 (cost/route-danger kind-at route (seen-hostiles p) (.-equipment (.self p)) :overrides (overrides-arg c :danger-overrides))
                  {:danger 0 :mobs []})
-        cost (jv/fetch-cost {:distance (when pos (u/dist here pos)) :danger (:danger threat) :elapsed-ms elapsed :cause cause})]
+        fetch (cost/fetch-cost {:distance (when pos (u/dist here pos)) :danger (:danger threat) :elapsed-ms elapsed :cause cause})]
     (cond-> {:value (+ (:value worth) (* xp-per-level (or (:level experience) 0)))
-             :cost (:cost cost)
+             :cost (:cost fetch)
              :top-items (mapv #(select-keys % [:name :count :value]) (take top-n (:items worth)))}
-      (:parts cost) (assoc :parts (:parts cost))
-      (:reason cost) (assoc :reason (:reason cost))
+      (:parts fetch) (assoc :parts (:parts fetch))
+      (:reason fetch) (assoc :reason (:reason fetch))
       (seq (:mobs threat)) (assoc :top-mobs (mapv #(select-keys % [:name :danger]) (take top-n (:mobs threat)))))))
 
 (def max-collect-passes "Walks back to the pile after a collect pass that left visible items of it behind." 3)

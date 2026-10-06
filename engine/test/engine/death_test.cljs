@@ -10,7 +10,7 @@
             [engine.triggers :as triggers]
             [triggers.survival.died :as died]))
 
-;; The value and cost functions are jobs.survival.drop-value (jobs_value_test); route danger jobs.survival.danger.
+;; The value and cost functions are jobs.lib.cost (jobs_value_test, cost_test); route danger jobs_danger_test.
 
 (def junk
   "A pile too small to walk 20 blocks for: a few dirt and seeds."

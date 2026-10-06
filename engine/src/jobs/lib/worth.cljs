@@ -1,6 +1,6 @@
 (ns jobs.lib.worth
   "The coarse item worth tiers make-room reads to decide what may be tossed (item-worth). What a pile is worth and what
-  fetching it costs, as recover-drops decides it, is jobs.survival.drop-value (built from minecraft-data).
+  fetching it costs, as recover-drops decides it, is jobs.lib.cost/item-value and fetch-cost (built from minecraft-data).
 
   Item value, per stack (an inventory entry), first matching rule wins:
 

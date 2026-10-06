@@ -12,7 +12,7 @@
             [engine.perception :as perception]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [jobs.lib.combat :as combat]
+            [jobs.lib.cost :as cost]
             [jobs.lib.threats :as threats]
             [jobs.survival.retreat :as retreat]))
 
@@ -83,9 +83,9 @@
     (is (= :far (retreat/stopped-chasing {:mob "skeleton" :distance 17 :in-line? true} now now lost-ms)))))
 
 (deftest decide-moved-to-combat-unchanged
-  (is (= :fight (combat/decide {:health 20 :damage 10 :creeper? false :reserve 4})))
-  (is (= :flee (combat/decide {:health 20 :damage 17 :creeper? false :reserve 4})))
-  (is (= :flee (combat/decide {:health 20 :damage 0 :creeper? true :reserve 4}))))
+  (is (= :fight (cost/decide {:health 20 :damage 10 :creeper? false :reserve 4})))
+  (is (= :flee (cost/decide {:health 20 :damage 17 :creeper? false :reserve 4})))
+  (is (= :flee (cost/decide {:health 20 :damage 0 :creeper? true :reserve 4}))))
 
 ;; ------------------------------------------------------------------ whole flights
 
