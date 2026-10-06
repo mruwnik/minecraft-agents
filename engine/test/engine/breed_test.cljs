@@ -371,3 +371,16 @@
                                   :entities [(cow 1 14 {:pos {:x 14 :y 64 :z 1}}) (cow 2 14 {:pos {:x 14 :y 64 :z -1}})]} 12))]
           (is (= :unreachable (:reason (done-event s))))
           (is (empty? (interacts s))))))))
+
+(deftest a-used-result-with-no-love-and-nothing-eaten-is-refused
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p] :as s} (h/setup {:inventory (wheat 4) :entities [(cow 1 2) (cow 2 3)]})]
+          (.override (.-world p) "interact"
+                     (fn [_token _args _impl]
+                       (js/Promise.resolve #js {:status "used" :consumed 0 :love false :worn 0 :leash nil :changed #js {}})))
+          (core/submit! eng '(jobs.animals.breed {:mob "cow"}) {})
+          (await (run-ticks s 6 700))
+          (is (finished? s))
+          (is (= ["u1" "u2"] (sort (:refused (done-event s))))))))))

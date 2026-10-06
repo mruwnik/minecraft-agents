@@ -45,7 +45,7 @@
         found (if at
                 (let [b (.blockAt p (clj->js at))]
                   (if (unripe? b) [at] []))
-                (->> (array-seq (.blocks p #js {:radius reach :names (clj->js (vec (keys ripe-age)))}))
+                (->> (array-seq (.blocks p #js {:radius reach :names (clj->js (vec (keys ripe-age))) :max 4096}))
                      (filter unripe?)
                      (map #(u/pos-of (.-pos %)))
                      (filter #(<= (u/dist mid %) radius))))]

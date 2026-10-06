@@ -32,7 +32,7 @@
         only-ids (some-> ids set)
         wanted (some-> (:filter (:args c)) set)
         skipped (set (:skipped (ctx/mem c)))
-        item (->> (array-seq (.entities (:primitives c) #js {:radius radius :kind "item" :max 32}))
+        item (->> (array-seq (.entities (:primitives c) #js {:radius radius :kind "item" :max (if (or only-ids wanted) 1024 32)}))
                   (remove #(skipped (.-id %)))
                   (filter #(or (nil? only-ids) (only-ids (.-id %))))
                   (remove #(and visible-only (false? (.-visible %))))

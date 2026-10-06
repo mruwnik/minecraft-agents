@@ -851,3 +851,14 @@
             (await (run-until-empty eng 6))
             (is (= placed (count (calls p "place"))) (pr-str [owner extra]))
             (is (= declined (declined-of seen :plant-sapling.declined)) (pr-str [owner extra]))))))))
+
+(deftest collect-drops-finds-a-wanted-item-past-many-nearer-unwanted-ones
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [item (fn [id x name] {:id id :name "item" :kind "item" :pos {:x x :y 64 :z 0} :item {:name name :count 1}})
+              junk (map #(item % 1 "stick") (range 1 41))
+              {:keys [eng p]} (setup {:entities (conj (vec junk) (item 100 9 "oak_log"))})]
+          (core/submit! eng (list 'jobs.forestry.collect-drops {:radius 10 :filter ["oak_log"]}) {})
+          (await (core/tick! eng))
+          (is (= [100] (mapv #(.-id (.-args %)) (calls p "collect")))))))))

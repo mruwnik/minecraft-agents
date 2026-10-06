@@ -382,3 +382,20 @@
           (await (run-until-empty eng 60))
           (is (zero? (count (calls p "dig"))))
           (is (= [:no-zones] (mapv :reason (events-of seen :harvest.declined)))))))))
+
+(deftest ripe-crops-finds-a-ripe-cell-past-hundreds-of-nearer-unripe-ones
+  (let [xs (range -8 9)
+        cells (for [x xs z xs] (cell-key x 64 z))
+        p (tu/fake {:blocks (assoc (zipmap cells (repeat "wheat")) "12,64,0" "wheat")
+                    :ages (assoc (zipmap cells (repeat 3)) "12,64,0" 7)})]
+    (is (= [12] (mapv :x (harvest/ripe-crops p (plain-args {}) origin []))))))
+
+(deftest a-place-that-is-unreachable-leaves-the-cell-bare-after-three-tries
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (start {:world one-cell})]
+          (.override (.-world p) "place" (fn ^:async f [_ _ _] #js {:status "unreachable"}))
+          (let [result (await (child-outcome eng job {} 100))]
+            (is (= [{:x 3 :y 64 :z 0}] (:bare result)))
+            (is (= 3 (count (place-calls-at p 3))))))))))

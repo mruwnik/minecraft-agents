@@ -151,3 +151,15 @@
           (is (= {:used 0} r))
           (is (empty? (calls p "useOn")))
           (is (= [:no-zones] (mapv :reason (kinds seen :fertilize.declined)))))))))
+
+(deftest fertilize-finds-an-unripe-crop-past-many-nearer-ripe-ones
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [xs (range -4 5)
+              cells (for [x xs z xs :when (not= z 0)] (str x ",64," z))
+              {:keys [eng p]} (setup {:inventory meal
+                                      :blocks (assoc (zipmap cells (repeat "wheat")) "7,64,0" "wheat")
+                                      :ages (assoc (zipmap cells (repeat 7)) "7,64,0" 3)})]
+          (await (child-outcome eng job {:radius 10} 20))
+          (is (= 7 (age p "7,64,0"))))))))

@@ -118,7 +118,7 @@
         skipped (set skipped)
         here (u/pos-of (.-pos (.self p)))
         radius (+ (:radius args) (u/dist here center))]
-    (->> (array-seq (.blocks p #js {:radius radius :names (clj->js crops) :max 256}))
+    (->> (array-seq (.blocks p #js {:radius radius :names (clj->js crops) :max 4096}))
          (filter #(some-> (.-age %) (>= (ripe-age (.-name %)))))
          (map #(u/pos-of (.-pos %)))
          (filter #(<= (u/dist % center) (:radius args)))
@@ -330,7 +330,7 @@
         ("placed" "occupied") (ctx/update-mem! c (fn [m] (-> (drop-debt m pos)
                                                               (inc-in :replanted)
                                                               (update :planted (fn [cells] (vec (distinct (conj (vec cells) pos))))))))
-        ("no-item" "unreachable") nil
+        "no-item" nil
         (ctx/update-mem! c fail-debt pos)))))
 
 (defn ^:async replant!

@@ -171,6 +171,8 @@
                (fed? r) (ctx/update-mem! c #(-> % (update :fed (fnil conj []) k) (assoc :in-row 0)))
                (baby? r) (do (give-up! c k :baby)
                              (ctx/emit! c :breed.baby :warn {:uuid k :text "fed a baby the sensing missed; given up on"}))
+               (zero? (or (.-consumed r) 0)) (do (ctx/update-mem! c update :refused (fnil conj []) k)
+                                                 (bump-row! c))
                :else (reset-row! c))
       "no-effect" (do (ctx/update-mem! c update :refused (fnil conj []) k)
                       (bump-row! c))

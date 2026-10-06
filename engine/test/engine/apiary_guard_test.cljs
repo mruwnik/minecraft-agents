@@ -277,3 +277,16 @@
         (let [{:keys [p seen]} (await (run-guard (assoc (fire-world {:inventory (inv "white_carpet" 2)}) :zones nil) {} 12))]
           (is (empty? (calls p "place")))
           (is (= [:no-zones] (mapv :reason (kinds seen :apiary.guard-declined)))))))))
+
+(deftest a-sink-whose-steps-never-settle-is-bounded
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (-> (fire-world {:inventory (inv "campfire" 1 "white_carpet" 1)}) (open-side "3,64,0"))
+              {:keys [eng p]} (setup w)
+              digs (atom 0)]
+          (.override (.-world p) "dig"
+                     (fn ^:async f [_ _ _]
+                       (if (< (swap! digs inc) 50) #js {:status "dug"} #js {:status "failed"})))
+          (await (child-outcome eng job {} 60))
+          (is (<= (count (calls p "dig")) 10)))))))

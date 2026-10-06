@@ -185,21 +185,24 @@
   (when carpet (await (collect-carpet! c carpet)))
   :continue)
 
+(def max-sink-steps 8)
+
 (defn ^:async sink!
   "Run the steps of the sink in mem :sinking until the lowered fire stands."
   [c]
   (let [{:keys [fire] :as s} (:sinking (ctx/mem c))
         block-at (apiary/block-at-fn (:primitives c))]
-    (loop []
-      (let [{:keys [op pos item]} (next-step block-at s)]
-        (case op
+    (loop [steps 0 prev nil]
+      (let [{:keys [op pos item] :as step} (next-step block-at s)]
+        (case (if (or (= step prev) (>= steps max-sink-steps)) :stuck op)
+          :stuck (do (abandon! c fire :cannot) :continue)
           :done (await (finish-sink! c s))
           :abort (do (abandon! c fire :cannot) :continue)
           :dig (if-not (permitted? c :dig pos)
                  (do (abandon! c fire :refused) :continue)
                  (let [status (.-status (await (ctx/act c :dig (clj->js {:pos pos}))))]
                    (if (contains? #{"dug" "missing"} status)
-                     (recur)
+                     (recur (inc steps) step)
                      (do (abandon! c fire (keyword status)) :continue))))
           :place (if-not (permitted? c :place pos)
                    (do (abandon! c fire :refused) :continue)
