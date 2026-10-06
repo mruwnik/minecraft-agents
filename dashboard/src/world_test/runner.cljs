@@ -19,7 +19,7 @@
 (def usage
   (str "usage: node tools/world-test.mjs [fixture.edn|dir ...] [--tag T] [--match TEXT] [--repeat N] [--body NAME]\n"
        "         [--world claude] [--first-plot I] [--card ID] [--allow-time --time-log FILE] [--results FILE] [--list]\n"
-       "Runs world fixtures (default dir engine/fixtures/world) on the reserved plot grid x/z 20000..20640, y 150.\n"
+       "Runs world fixtures (default dir engine/fixtures/world) on the reserved plot grid x/z 20000..20640, y 150 (large plots: lanes south of it, to z 22240).\n"
        "--allow-time lets a case that needs night or day set the time (each set appended to --time-log); without it\n"
        "such a case is skipped. A case that depends on the time of day holds a time lock shared by phase (day cases together,\n"
        "night cases together; the other phase waits; the first holder sets the time) for its whole run; a manual `time set` takes it too: node tools/time-set.mjs <ticks|day|noon|night|midnight>. Exit code 0 when every run passed, 1 when one failed, 2 on a usage or setup error."))
@@ -141,18 +141,19 @@
 
 (defn note-last-plot!
   "Records the plot the body is about to be put on, so a later start can clear it first (the body is saved there)."
-  [opts origin]
+  [opts origin grid]
   (fs/mkdirSync (path/dirname (last-plot-file opts)) #js {:recursive true})
-  (fs/writeFileSync (last-plot-file opts) (pr-str origin)))
+  (fs/writeFileSync (last-plot-file opts) (pr-str {:origin origin :dims (f/dims grid)})))
 
 (defn reset-last-plot!
   "Resolves once the plot the body was last left on is cleared (its traps gone), before the body starts."
   [opts]
   (let [file (last-plot-file opts)
-        origin (when (fs/existsSync file)
-                 (try (reader/read-string (fs/readFileSync file "utf8")) (catch :default _ nil)))]
+        {:keys [origin dims]} (when (fs/existsSync file)
+                                (try (let [v (reader/read-string (fs/readFileSync file "utf8"))] (if (vector? v) {:origin v} v))
+                                     (catch :default _ nil)))]
     (if (vector? origin)
-      (rcon! (f/reset-plot-commands f/default-grid origin))
+      (rcon! (f/reset-plot-commands (let [[sx sz] dims] (if sx (assoc f/default-grid :size-x sx :size-z sz) f/default-grid)) origin))
       (js/Promise.resolve nil))))
 
 (defn start-body!
@@ -217,7 +218,7 @@
 (defn acquire-plot!
   "Leases the first free plot index from `first` (exclusive lease file holding this PID; leases of dead PIDs are
   reclaimed), so runners started together never share a plot."
-  [first]
+  [first total]
   (fs/mkdirSync lease-dir #js {:recursive true})
   (lease/acquire
    {:create! (fn [i pid] (try (fs/writeFileSync (lease-file i) (str pid) #js {:flag "wx"}) true
@@ -225,7 +226,7 @@
     :holder read-holder
     :reclaim! (fn [i] (try (fs/unlinkSync (lease-file i)) (catch :default _ nil)))
     :alive? pid-alive?}
-   {:pid (.-pid js/process) :first first :total (* (:cols f/default-grid) (:rows f/default-grid))}))
+   {:pid (.-pid js/process) :first first :total total}))
 
 (defn release-plot! [i]
   (when (= (.-pid js/process) (read-holder i))
@@ -387,17 +388,18 @@
       (poll))))
 
 (defn after-checks! [opts origin c]
-  (let [cmds (mapv #(f/after-command origin (:body opts) f/default-grid c %) (:after c))]
+  (let [cmds (mapv #(f/after-command origin (:body opts) (f/case-grid c) c %) (:after c))]
     (.then (rcon! cmds) (fn [replies] (mapv #(f/judge-after origin %1 %2) (:after c) replies)))))
 
 (defn run-case!
   "One run of case c on plot i; resolves to a result map."
   [opts c i run]
-  (let [origin (f/plot-origin f/default-grid i)
+  (let [grid (f/case-grid c)
+        origin (f/plot-origin grid i)
         rc (f/resolve-tags c origin)
         started (js/Date.now)
         plan-files (atom [])
-        _ (note-last-plot! opts origin)
+        _ (note-last-plot! opts origin grid)
         result (fn [m] (merge {:id (:id c) :run run :plot i :origin origin :elapsed-s (/ (- (js/Date.now) started) 1000)} m))]
     (-> (if-let [phase (lease/time-phase rc)]
           (acquire-time-lock! phase (str (:id c) " depends on the time of day"))
@@ -406,7 +408,7 @@
         (.then (fn [ok]
                  (if-not ok
                    (result {:status :skipped :why (str "needs " (name (:time rc)) " (no --allow-time)")})
-                   (-> (rcon! (f/setup-commands f/default-grid origin rc))
+                   (-> (rcon! (f/setup-commands grid origin rc))
                        (.then #(sleep 1000))
                        (.then #(rcon! (f/block-commands origin rc)))
                        (.then #(reset! plan-files (write-plans! opts rc)))
@@ -426,7 +428,7 @@
         (.catch (fn [e] (result {:status :error :why (.-message e)})))
         (.then (fn [r]
                  (-> (exec-file ["engine/tools/jobs.mjs" (:body opts) "--world" (:world opts) "cancel-all"])
-                     (.then #(rcon! (f/cleanup-commands f/default-grid origin (:body opts) rc)))
+                     (.then #(rcon! (f/cleanup-commands grid origin (:body opts) rc)))
                      (.then (fn [_] (run! #(when (fs/existsSync %) (fs/unlinkSync %)) @plan-files) r))
                      (.catch (fn [_] (run! #(when (fs/existsSync %) (fs/unlinkSync %)) @plan-files) r)))))
         (.finally release-time-lock!))))
@@ -495,7 +497,8 @@
                                                                    (.then #(when-not (= :restart-keep plan) (reset-last-plot! opts)))
                                                                    (.then #(start-body! opts register (= :restart-keep plan)))))
                                                              (.then (fn []
-                                                                      (let [i (acquire-plot! (:first-plot opts))]
+                                                                      (let [[from end] (f/plot-range (f/case-grid c))
+                                                                            i (acquire-plot! (max from (:first-plot opts)) end)]
                                                                         (-> (run-case! opts c i run)
                                                                             (.then (fn [r] (report! r) (swap! results conj r)))
                                                                             (.finally #(release-plot! i)))))))))))

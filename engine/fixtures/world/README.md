@@ -42,7 +42,7 @@ patterns write `#at [x y z]` (absolute `[x y z]`) or `#xyz [x y z]` (absolute `{
 | `:time` | `:day`, `:night`, `:night-exclusive` or `:any`; day/night cases hold a time lock shared by phase (same phase together, the other waits; `:night-exclusive` (cases that sleep: a night skip ends every other night case) holds it alone; `tools/time-set.mjs` takes it too), `:any` takes none | `:day` |
 | `:register` | the body's scenario register (triggers), as in `engine/scenarios/*.edn` | `[]` |
 | `:keep-memory` | `true`: the body's `engine/memory.edn` is not deleted before this case, and when a case follows another in the same register group the body is not restarted (it goes on with the memory it has); for cases that test memory across runs | `false` (every case starts a restarted body with its `memory.edn` deleted) |
-| `:plot` | `{:height 2..31 :floor "block"}` | `{:height 16 :floor "stone"}` |
+| `:plot` | `{:height 2..31 :floor "block"}`; `:length` (x, 16..1024) and `:width` (z, 16..64) make a large plot, leased from 16 lanes south of the grid (z 20704 + 96 j, never overlapping it); keep each `:blocks` fill under 32768 blocks | `{:height 16 :floor "stone"}`, 32x32 |
 | `:blocks` | `[:fill a b "block" (:hollow/:outline/...)]`, `[:set p "block[state]"]` | `[]` |
 | `:plans` | plan maps (`:id`, `:parts`); written as `worlds/<world>/plans/test-<body>-<id>.edn`, deleted after | `[]` |
 | `:body` | `{:at p :inventory [["item" n]] :effects [["effect" s amp]] :spawnpoint p :settle-s 3}` | at the middle |

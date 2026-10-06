@@ -19,7 +19,48 @@
   (is (= [20000 150 20000] (f/plot-origin grid 0)))
   (is (= [20032 150 20000] (f/plot-origin grid 1)))
   (is (= [20000 150 20032] (f/plot-origin grid 20)))
-  (is (thrown? js/Error (f/plot-origin grid 400))))
+  (is (thrown? js/Error (f/plot-origin grid 416))))
+
+(defn rect [grid i]
+  (let [[x _ z] (f/plot-origin grid i)] [x z (+ x (:size-x grid) -1) (+ z (:size-z grid) -1)]))
+
+(defn overlap? [[ax az ax2 az2] [bx bz bx2 bz2]]
+  (and (<= ax bx2) (<= bx ax2) (<= az bz2) (<= bz az2)))
+
+(deftest large-plots-lie-beside-the-grid-and-never-overlap
+  (let [big (f/case-grid {:plot {:length 1024 :width 64}})
+        small (f/case-grid {:plot {}})
+        rects (map #(rect big %) (range 400 416))
+        grid-rect [20000 20000 20639 20639]]
+    (is (= 1024 (:size-x big)))
+    (is (= 32 (:size-x small) (:size-z small)))
+    (is (= [20000 150 20704] (f/plot-origin big 400)))
+    (is (not-any? #(overlap? grid-rect %) rects))
+    (is (not-any? (fn [[a b]] (overlap? a b)) (for [a rects b rects :when (not= a b)] [a b])))
+    (is (= [400 416] (f/plot-range big)))
+    (is (= [0 400] (f/plot-range small)))))
+
+(deftest large-plot-setup-covers-every-block-in-small-commands
+  (let [g (f/case-grid {:plot {:length 400 :width 32}})
+        origin (f/plot-origin g 400)
+        cmds (f/setup-commands g origin {:plot {:height 16 :floor "stone"}})
+        nums (fn [prefix] (for [c cmds :when (re-find (re-pattern (str "^" prefix)) c)] (mapv js/Number (re-seq #"-?\d+" c))))
+        fills (nums "fill")
+        loads (nums "forceload add")]
+    (is (every? (fn [[x y z x2 y2 z2]] (<= (* (inc (- x2 x)) (inc (- y2 y)) (inc (- z2 z))) 32768)) fills))
+    (is (every? (fn [[x z x2 z2]] (<= (* (quot (inc (- x2 x)) 16) (quot (inc (- z2 z)) 16)) 256)) loads))
+    (is (= 20000 (apply min (map first fills)) (apply min (map first loads))))
+    (is (= 20399 (apply max (map #(nth % 3) fills)) (apply max (map #(nth % 2) loads))))
+    (is (= [150 166] [(apply min (map second (remove #(= 149 (second %)) fills))) (apply max (map #(nth % 4) fills))]))
+    (is (re-find #"dx=399,dy=17,dz=31" (some #(when (re-find #"^kill" %) %) cmds)))
+    (is (= (count loads) (count (filter #(re-find #"^forceload remove" %) (f/cleanup-commands g origin "B" {:plot {:height 16 :floor "stone"}})))))))
+
+(deftest a-plot-must-fit-its-lane
+  (let [ps #(f/problems (merge {:name "a" :time :day :body {:at [1 0 1]} :act [] :after [] :expect []} %))]
+    (is (empty? (ps {:plot {:height 16 :length 1024 :width 64}})))
+    (is (seq (ps {:plot {:height 16 :length 1025}})))
+    (is (seq (ps {:plot {:height 16 :width 65}})))
+    (is (seq (ps {:plot {:height 16 :length 8}})))))
 
 (deftest a-file-of-cases-merges-each-case-over-its-defaults
   (let [[open glass bad] (f/file-cases text "hostile")]

@@ -1,0 +1,18 @@
+;; Card b32ef367: a plot longer than 256 blocks (:plot {:length 340 :width 32}), so a go-to goal can start out of view
+;; (view distance) and be reached over several rounds. Floor is the plot's stone; body west end, goal 310 blocks east.
+;; A bedrock wall across the whole plot (no way round: the plot has no floor outside) ends :arrived false.
+{:defaults
+ {:tags [:movement :planner :large]
+  :plot {:height 12 :length 340 :width 32}
+  :body {:at [1.5 0 16.5]}
+  :limit-s 240}
+ :cases
+ [{:name "far-goal-arrives"
+   :act [[:job (jobs.movement.go-to {:pos #at [310 0 16] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 200 :of-job true}]
+   :after [[:body-near [310.5 0 16.5] 3]]}
+  {:name "far-goal-behind-a-wall-fails"
+   :blocks [[:fill [150 -1 0] [150 11 31] "bedrock"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [310 0 16] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 200 :of-job true}]
+   :after [[:body-near [75.5 0 16.5] 78]]}]}

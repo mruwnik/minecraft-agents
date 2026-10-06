@@ -14,11 +14,33 @@
   body level y."
   {:x0 20000 :z0 20000 :y 150 :size 32 :cols 20 :rows 20})
 
+(def large-lanes
+  "Plots longer or wider than 32 lie in lanes south of the grid (plot indexes 400..415): lane j starts at z z0 + 96 j,
+  up to 1024 long and 64 wide, so a lane never touches the grid or another lane."
+  {:z0 20704 :stride 96 :count 16 :max-length 1024 :max-width 64 :min-length 16})
+
 (defn plot-origin
   "The origin [x y z] of plot i: its north-west corner at body level."
   [{:keys [x0 z0 y size cols rows]} i]
-  (when (>= i (* cols rows)) (throw (js/Error. (str "plot " i " is outside the grid (" (* cols rows) " plots)"))))
-  [(+ x0 (* size (mod i cols))) y (+ z0 (* size (quot i cols)))])
+  (let [n (* cols rows) {lz :z0 :keys [stride count]} large-lanes]
+    (cond
+      (< -1 (- i n) count) [x0 y (+ lz (* stride (- i n)))]
+      (>= i n) (throw (js/Error. (str "plot " i " is outside the grid (" n " plots, then " count " large lanes)")))
+      :else [(+ x0 (* size (mod i cols))) y (+ z0 (* size (quot i cols)))])))
+
+(defn case-grid
+  "The grid with the case's plot size: :size-x (length along x) and :size-z (width), 32 by default."
+  [{:keys [plot]}]
+  (let [{:keys [length width]} plot]
+    (assoc default-grid :size-x (or length (:size default-grid)) :size-z (or width (:size default-grid)))))
+
+(defn plot-range
+  "[first end) of the plot indexes a case may lease: the 32x32 grid, or the large lanes."
+  [{:keys [size-x size-z size cols rows]}]
+  (let [n (* cols rows)]
+    (if (and (<= (or size-x size) 32) (<= (or size-z size) 32)) [0 n] [n (+ n (:count large-lanes))])))
+
+(defn dims [{:keys [size size-x size-z]}] [(or size-x size) (or size-z size)])
 
 (defn grid-centre [{:keys [x0 z0 y size cols rows]}]
   [(+ x0 (quot (* size cols) 2)) y (+ z0 (quot (* size rows) 2))])
@@ -81,8 +103,12 @@
 (defn problems
   "Why a merged case cannot run, as a vector of strings (empty when it can)."
   [c]
-  (let [h (get-in c [:plot :height])]
+  (let [h (get-in c [:plot :height])
+        {:keys [length width]} (:plot c)
+        {:keys [max-length max-width min-length]} large-lanes]
     (cond-> []
+      (not (or (nil? length) (and (int? length) (<= min-length length max-length)))) (conj (str ":plot :length must be an integer " min-length ".." max-length))
+      (not (or (nil? width) (and (int? width) (<= 16 width max-width)))) (conj (str ":plot :width must be an integer 16.." max-width))
       (not (string? (:name c))) (conj ":name must be a string")
       (not (#{:day :night :night-exclusive :any} (:time c))) (conj ":time must be :day, :night, :night-exclusive or :any")
       (not (and (int? h) (< 1 h 32))) (conj ":plot :height must be an integer 2..31")
@@ -154,20 +180,35 @@
 
 (defn box-selector
   "An entity selector box over the whole plot, from the floor up to the top of the cleared space."
-  [{:keys [size]} [ox oy oz] height]
-  (str "x=" ox ",y=" (dec oy) ",z=" oz ",dx=" (dec size) ",dy=" (inc height) ",dz=" (dec size)))
+  [grid [ox oy oz] height]
+  (let [[sx sz] (dims grid)]
+    (str "x=" ox ",y=" (dec oy) ",z=" oz ",dx=" (dec sx) ",dy=" (inc height) ",dz=" (dec sz))))
 
-(defn forceload-command [op {:keys [size]} [ox _ oz]]
-  (str "forceload " op " " ox " " oz " " (+ ox (dec size)) " " (+ oz (dec size))))
+(defn segments
+  "[from to] x ranges of at most n blocks covering [ox, ox + len)."
+  [ox len n]
+  (for [x (range ox (+ ox len) n)] [x (min (+ ox (dec len)) (+ x (dec n)))]))
+
+(defn forceload-commands
+  "One forceload per 128-block slice of the plot (a command takes at most 256 chunks)."
+  [op grid [ox _ oz]]
+  (let [[sx sz] (dims grid)]
+    (for [[x0 x1] (segments ox sx 128)]
+      (str "forceload " op " " x0 " " oz " " x1 " " (+ oz (dec sz))))))
+
+(defn forceload-command [op grid origin] (first (forceload-commands op grid origin)))
 
 (defn clear-commands
-  "Air over the plot from the floor up to height, then the floor layer; split so that no fill exceeds 32768 blocks."
-  [{:keys [size]} [ox oy oz] height floor]
-  (let [layers (max 1 (quot 32768 (* size size)))
+  "Air over the plot from the floor up to height, then the floor layer, in 64-long slices so that no fill exceeds 32768 blocks."
+  [grid [ox oy oz] height floor]
+  (let [[sx sz] (dims grid)
         top (+ oy height)]
-    (into (vec (for [y0 (range oy (inc top) layers)]
-                 (str "fill " ox " " y0 " " oz " " (+ ox (dec size)) " " (min top (+ y0 (dec layers))) " " (+ oz (dec size)) " air")))
-          [(str "fill " ox " " (dec oy) " " oz " " (+ ox (dec size)) " " (dec oy) " " (+ oz (dec size)) " " floor)])))
+    (vec (mapcat (fn [[x0 x1]]
+                   (let [layers (max 1 (quot 32768 (* (inc (- x1 x0)) sz)))]
+                     (conj (vec (for [y0 (range oy (inc top) layers)]
+                                  (str "fill " x0 " " y0 " " oz " " x1 " " (min top (+ y0 (dec layers))) " " (+ oz (dec sz)) " air")))
+                           (str "fill " x0 " " (dec oy) " " oz " " x1 " " (dec oy) " " (+ oz (dec sz)) " " floor))))
+                 (segments ox sx 64)))))
 
 (defn kill-command [grid origin height]
   (str "kill @e[type=!player," (box-selector grid origin height) "]"))
@@ -176,7 +217,7 @@
   "Forceload the plot, kill every non-player entity in it, clear it to air and lay the floor."
   [grid origin c]
   (let [{:keys [height floor]} (:plot c)]
-    (into [(forceload-command "add" grid origin) (kill-command grid origin height)]
+    (into (conj (vec (forceload-commands "add" grid origin)) (kill-command grid origin height))
           (clear-commands grid origin height floor))))
 
 (defn reset-plot-commands
@@ -184,7 +225,7 @@
   forceload removed. The runner sends it for the plot the body was last left on, before the body starts."
   [grid origin]
   (let [plot {:plot {:height 31 :floor "stone"}}]
-    (conj (setup-commands grid origin plot) (forceload-command "remove" grid origin))))
+    (into (setup-commands grid origin plot) (forceload-commands "remove" grid origin))))
 
 (def clean-start-files
   "The body's files (in its engine dir) a clean start deletes: engine memory and the seen-blocks memory, whose cells
@@ -230,8 +271,8 @@
         (into (clear-commands grid origin height floor))
         (into [(str "clear " body)
                (str "effect clear " body)
-               (str "tp " body " " (xyz-str (abs-pos origin [1.5 0 1.5])) " 0 0")
-               (forceload-command "remove" grid origin)]))))
+               (str "tp " body " " (xyz-str (abs-pos origin [1.5 0 1.5])) " 0 0")])
+        (into (forceload-commands "remove" grid origin)))))
 
 (defn plan-file-text
   "A :plans entry ({:id .. :parts ..}, positions already absolute) as the plan file text, its id prefixed so the
