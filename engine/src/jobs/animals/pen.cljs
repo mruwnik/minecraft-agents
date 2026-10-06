@@ -305,7 +305,9 @@
   (->> @unloaded sort (take 5) (mapv (fn [[x y z]] {:pos {:x x :y y :z z} :why :unloaded}))))
 
 (defn dedupe-leaks [leaks]
-  (vec (vals (reduce (fn [m l] (if (contains? m (:pos l)) m (assoc m (:pos l) l))) (array-map) leaks))))
+  (vec (first (reduce (fn [[out seen] l]
+                        (if (contains? seen (:pos l)) [out seen] [(conj out l) (conj seen (:pos l))]))
+                      [[] #{}] leaks))))
 
 (defn analyse
   "One fill: {:world :fill :leaks} with the leaks found (the unloaded cells too); nil when there is no start."

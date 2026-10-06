@@ -4,6 +4,12 @@
             [jobs.lib.gate :as gate]
             [jobs.lib.util :as u]))
 
+(defn in-box?
+  "True when pos stands on a feet cell of the box ({:min :max}, cells, inclusive), floored as jobs.animals.pen/in-pen? floors it."
+  [{:keys [min max]} {:keys [x y z]}]
+  (let [fx (js/Math.floor x) fy (js/Math.floor (+ y 0.01)) fz (js/Math.floor z)]
+    (and (<= (:x min) fx (:x max)) (<= (:y min) fy (:y max)) (<= (:z min) fz (:z max)))))
+
 (def breeding-food
   "Mob name -> the foods that put it in love, in the order the body prefers them."
   {"cow" ["wheat"]

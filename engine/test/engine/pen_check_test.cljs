@@ -3,7 +3,8 @@
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
             [engine.hostile-test :as h]
-            [engine.test-util :as tu]))
+            [engine.test-util :as tu]
+            [jobs.animals.pen :as pen]))
 
 (def job 'jobs.animals.pen-check)
 
@@ -72,3 +73,7 @@
       (fn ^:async t []
         (let [{:keys [event]} (await (run-job {} (world {})))]
           (is (nil? event)))))))
+
+(deftest dedupe-leaks-keeps-first-seen-order-past-eight-leaks
+  (let [leaks (mapv (fn [i] {:pos {:x i :y 64 :z 0} :why :gap}) (range 12))]
+    (is (= leaks (pen/dedupe-leaks (concat leaks leaks))))))

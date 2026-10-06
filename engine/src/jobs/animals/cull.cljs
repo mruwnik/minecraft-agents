@@ -69,9 +69,7 @@
   (let [{:keys [box centre radius]} (:args c)
         {:keys [x y z]} pos]
     (cond
-      box (and (<= (:x (:min box)) x (:x (:max box)))
-               (<= (:y (:min box)) y (:y (:max box)))
-               (<= (:z (:min box)) z (:z (:max box))))
+      box (animals/in-box? box pos)
       centre (<= (js/Math.hypot (- x (:x centre)) (- z (:z centre))) radius)
       :else (<= (u/dist (u/self-pos c) pos) radius))))
 

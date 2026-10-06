@@ -121,12 +121,6 @@
 (defn box-centre [{:keys [min max]}]
   {:x (/ (+ (:x min) (:x max) 1) 2) :y (:y min) :z (/ (+ (:z min) (:z max) 1) 2)})
 
-(defn in-box?
-  "True when pos stands on a feet cell of the box, floored as jobs.animals.pen/in-pen? floors it."
-  [{:keys [min max]} {:keys [x y z]}]
-  (let [fx (js/Math.floor x) fy (js/Math.floor (+ y 0.01)) fz (js/Math.floor z)]
-    (and (<= (:x min) fx (:x max)) (<= (:y min) fy (:y max)) (<= (:z min) fz (:z max)))))
-
 (defn view-radius
   "How far from the body animals are listed: the fetch radius, plus the way to the pen."
   [c]
@@ -142,7 +136,7 @@
   (let [{:keys [mob box target]} (:args c)]
     (boolean (if (:started (ctx/mem c))
                (declined/check c)
-               (and mob box (< (count (filter #(in-box? box (u/pos-of (.-pos %))) (adults c))) target))))))
+               (and mob box (< (count (filter #(animals/in-box? box (u/pos-of (.-pos %))) (adults c))) target))))))
 
 (defn read-pen [c]
   (pen/check {:block-at (apiary/block-at-fn (:primitives c)) :box (:box (:args c))}))
@@ -199,7 +193,7 @@
         reason (or reason
                    (cond (>= (count inside) target) :brought
                          (seq brought) :short
-                         :else (or (:trouble m) :short)))
+                         :else :short))
         result (merge {:reason reason :inside (count inside) :target target :brought brought
                        :given-up (:given-up m {}) :gate (:gate m) :escaped (:escaped-total m 0)}
                       extra)]
@@ -392,10 +386,10 @@
     :else :wait))
 
 (defn step-in-step
-  "How the stepping goes on for a pinned animal at position index: :back (fewer than max-backs backs made: the
+  "How the stepping goes on for a pinned animal: :back (fewer than max-backs backs made: the
   body steps back one position), :retry-from-out (backs made, not retried yet: walk out to out-4 and start over)
   or :give-up."
-  [_index backs retried]
+  [backs retried]
   (cond
     (< backs max-backs) :back
     (not retried) :retry-from-out
@@ -439,8 +433,7 @@
           (>= inside target) (finish! c :full)
           (< (depth (:inside answer) (cell gate) in) min-depth) (finish! c :too-shallow)
           :else (do (ctx/update-mem! c assoc :phase :leash :gate gate :inside-cell (cell-pos in) :outside-cell (cell-pos out)
-                                     :axis (axis-cells (cell gate) in out (depth (:inside answer) (cell gate) in))
-                                     :wanted (- target inside))
+                                     :axis (axis-cells (cell gate) in out (depth (:inside answer) (cell gate) in)))
                     :continue))))))
 
 (declare go!)
@@ -491,7 +484,7 @@
   [c]
   (let [here (u/self-pos c)
         [gx _ gz] (gate-cell c)]
-    (or (in-box? (:box (:args c)) here)
+    (or (animals/in-box? (:box (:args c)) here)
         (and (= gx (js/Math.floor (:x here))) (= gz (js/Math.floor (:z here)))))))
 
 (defn ^:async exit-dash!
@@ -714,7 +707,7 @@
   [c idx]
   (let [m (ctx/mem c)
         backs (:backs m 0)]
-    (case (step-in-step idx backs (boolean (:retried m)))
+    (case (step-in-step backs (boolean (:retried m)))
       :back (set-phase! c :step {:pos-index (max out-1 (dec idx)) :back-step true :backs (inc backs) :deepest-tried false})
       :retry-from-out (set-phase! c :retry-back {:backs 0 :retried true :deepest-tried false})
       :give-up (set-phase! c :give-up-walk))))

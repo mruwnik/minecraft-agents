@@ -97,6 +97,16 @@
           (is (= {:killed 2 :remaining 1 :reason :keep}
                  (select-keys (done-event s) [:killed :remaining :reason]))))))))
 
+(deftest a-box-counts-animals-standing-in-its-max-cells
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [box {:min {:x 0 :y 64 :z 0} :max {:x 6 :y 64 :z 5}}
+              s (await (scenario {:keep 1 :box box :radius 1}
+                                 {:inventory h/sword :entities [(cow 1 6.5 0.5) (cow 2 6.9 0.2) (cow 3 6.2 0.8)]} 200))]
+          (is (= {:killed 2 :remaining 1 :reason :keep}
+                 (select-keys (done-event s) [:killed :remaining :reason]))))))))
+
 (deftest a-centre-and-radius-bound-the-herd
   (async done
     (tu/run-async done

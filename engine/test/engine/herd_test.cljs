@@ -831,12 +831,12 @@
     (is (= expected (herd/settle-step dist moved waited)) label)))
 
 (deftest step-in-step-backs-off-twice-retries-from-out-once-then-gives-up
-  (doseq [[label index backs retried expected]
+  (doseq [[label _index backs retried expected]
           [["first pin" 3 0 false :back]
            ["second pin" 2 1 false :back]
            ["two backs made" 1 2 false :retry-from-out]
            ["two backs made, retried" 1 2 true :give-up]]]
-    (is (= expected (herd/step-in-step index backs retried)) label)))
+    (is (= expected (herd/step-in-step backs retried)) label)))
 
 (deftest the-let-go-cell-is-the-pen-cell-farthest-from-the-gate-off-the-axis-when-tied
   (is (= [15 64 1] (herd/let-go-cell (rect 11 15 1 5) g [11 64 3])) "corners are far, the axis end is not farther: a corner")
