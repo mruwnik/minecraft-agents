@@ -423,6 +423,26 @@
           (is (= {:x 3 :y 65 :z 0} (core/self-pos p)) "the east ledge is reached after the west swim timed out")
           (is (empty? (filter #(= :no_shore (:kind %)) @seen))))))))
 
+;; live (card 95752610): land behind a wall two blocks above the water is nearer than the open ledge; a swim can only
+;; climb out onto a rim at the water, so it heads for the ledge first and never swims at the wall
+(deftest land-behind-a-high-wall-is-not-a-shore-the-farther-ledge-is
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [wall (into {} (for [y (range 64 68) z [-1 0 1]] [(str "-2," y "," z) "stone"]))
+              {:keys [eng p]} (setup {:self {:inWater true :oxygen 4}
+                                      :blocks (merge pool wall
+                                                     {"-3,64,0" "stone" "-3,63,0" "stone"
+                                                      "2,64,0" "water" "2,65,0" "water" "3,64,0" "water" "3,65,0" "water"
+                                                      "4,64,0" "stone" "4,63,0" "stone"})})]
+          (core/submit! eng (list breathe defaults) {})
+          (dotimes [_ 3] (await (core/tick! eng)))
+          (is (= [{:x 4 :y 65 :z 0}]
+                 (->> (array-seq (.. p -world -calls))
+                      (keep #(some-> (.-args %) .-toward (js->clj :keywordize-keys true)))))
+               "one shore swim, toward the ledge")
+          (is (= {:x 4 :y 65 :z 0} (core/self-pos p))))))))
+
 ;; a pond with a ledge in every direction: the swims west, north and south time out, then the east ledge is tried
 (deftest every-shore-direction-is-tried-before-no-shore
   (async done
@@ -460,6 +480,25 @@
           (is (empty? (filter #(= :afloat (:kind %)) @seen)) "the no_shore warn is the one notice")
           (is (= "steer" (last (call-names p))))
           (is (not (some #{"moveTo"} (call-names p)))))))))
+
+;; live (card 95752610): a swim toward a walled shore times out with the body on a jump crest against the wall,
+;; out of the water for that moment (inWater false, onGround true or false) but over water
+(deftest a-failed-shore-swim-ending-on-a-crest-over-water-is-not-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [on-ground [false true]]
+          (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4}
+                                             :blocks (merge pool {"2,64,0" "stone" "2,63,0" "stone"})})]
+            (.override (.-world p) "swim"
+                       (fn ^:async f [_ args impl]
+                         (if (.-toward args)
+                           (do (set-self! p {"inWater" false "onGround" on-ground}) #js {:status "timeout"})
+                           (await (impl _ args)))))
+            (core/submit! eng (list breathe defaults) {})
+            (dotimes [_ 6] (await (core/tick! eng)))
+            (is (= 1 (count (:list (core/state eng)))) (str "not done on a crest, onGround " on-ground))
+            (is (= 1 (count (filter #(= :no_shore (:kind %)) @seen))) (str "no_shore once, onGround " on-ground))))))))
 
 (deftest enclosed-with-a-free-neighbour-steps-sideways-without-digging
   (async done

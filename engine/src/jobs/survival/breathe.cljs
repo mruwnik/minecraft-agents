@@ -16,7 +16,8 @@
   - If that does not help, dig the head block, dig the block above it if solid, and step up.
   - A dig that fails (cannot, timeout, unreachable) is a failed round.
   After a swim that surfaced, a body still in water heads for land instead of bobbing:
-  it swims to the nearest land cell within :shore-radius, else walks to land within :far-radius.
+  it swims to the nearest shore cell (land with its rim at most one block above the water) within :shore-radius,
+  else walks to land within :far-radius.
   Ends when the head is clear and the body stands on land (solid ground under the feet) out of the water.
   A body that cannot get out stays afloat (it holds jump for a few seconds each round) instead of ending,
   because a body with no job sinks and the trigger would fire again for ever. One :afloat warning says so.
@@ -49,6 +50,13 @@
                                :z (js/Math.floor (.. self -pos -z))})]
     (boolean (and below (not (s/air? below)) (not (contains? unsafe-below below))))))
 
+(defn on-land?
+  "Out of the water and standing on solid ground. A swim or walk that ends on a jump crest against a wall over water
+  is out of the water for that moment, without a footing."
+  [p]
+  (let [self (.self p)]
+    (and (not (.-inWater self)) (.-onGround self) (land-footing? p self))))
+
 (defn surfaced-in-water?
   "A swim surfaced earlier in this job and the body is still in water, or not standing on land yet: a body bobbing
   at the surface or climbing out is out of the water for a moment on every crest, and one pressed against a wall
@@ -56,8 +64,7 @@
   [c]
   (boolean (and (:view c)
                 (:surfaced (ctx/mem c))
-                (let [self (.self (:primitives c))]
-                  (or (.-inWater self) (not (.-onGround self)) (not (land-footing? (:primitives c) self)))))))
+                (not (on-land? (:primitives c))))))
 
 (defn check [c]
   (or (some? (s/situation (:primitives c) (:min-oxygen (:args c))))
@@ -133,11 +140,23 @@
                  (>= (* dot dot) (* 0.5 (+ (* dx dx) (* dz dz)) (+ (* tx tx) (* tz tz)))))))
         failed))
 
+(defn shore-cell?
+  "A land cell a swimming body can climb onto: a side neighbour has room (feet and head cells air or water) over water
+  one or two blocks below the land cell's feet, so its rim is at most one block above the water. Land behind a wall,
+  or on a wall two above the water, is not one."
+  [p cell]
+  (some (fn [[dx dz]]
+          (let [n (-> cell (update :x + dx) (update :z + dz))
+                at (fn [dy] (u/block-name p (update n :y + dy)))]
+            (and (passable-water-or-air? (at 0)) (passable-water-or-air? (at 1))
+                 (or (= "water" (at -1)) (= "water" (at -2))))))
+        [[1 0] [-1 0] [0 1] [0 -1]]))
+
 (defn nearest-land
-  "The nearest land cell within radius sideways of self-pos, feet y from one
-  below to two above; nil if none. Cells in the direction of a failed target (a seq of cells) are skipped."
-  ([p self-pos radius] (nearest-land p self-pos radius nil))
-  ([p self-pos radius failed]
+  "The nearest land cell within radius sideways of self-pos, feet y from one below to two above, that keep? accepts;
+  nil if none. Cells in the direction of a failed target (a seq of cells) are skipped."
+  ([p self-pos radius] (nearest-land p self-pos radius nil (constantly true)))
+  ([p self-pos radius failed keep?]
    (let [fx (js/Math.floor (:x self-pos))
          fy (js/Math.floor (:y self-pos))
          fz (js/Math.floor (:z self-pos))]
@@ -145,7 +164,7 @@
                 :when (not (same-way? dx dz failed fx fz))
                 dy [0 -1 1 2]]
             {:x (+ fx dx) :y (+ fy dy) :z (+ fz dz)})
-          (filter #(land-cell? p %))
+          (filter #(and (land-cell? p %) (keep? p %)))
           first))))
 
 (defn ^:async swim-up!
@@ -247,7 +266,7 @@
       (let [{:keys [result]} (await (walk/walk-to! c {:to [(:x target) (:y target) (:z target)] :range 0
                                                       :weight walk/default-weight :timeout-s far-timeout-s}))]
         (cond
-          (not (.-inWater (.self p))) :done
+          (on-land? p) :done
           (= :arrived (:status result)) :continue
           :else (do (afloat! c (or (:reason result) (:status result))) :continue))))))
 
@@ -265,7 +284,7 @@
   [c]
   (let [p (:primitives c)
         failed (:failed-shores (ctx/mem c))
-        target (nearest-land p (surface-pos p (u/self-pos c) (:reach (:args c))) (:shore-radius (:args c)) failed)]
+        target (nearest-land p (surface-pos p (u/self-pos c) (:reach (:args c))) (:shore-radius (:args c)) failed shore-cell?)]
     (cond
       (:afloat (ctx/mem c)) (await (hold-afloat! c))
       (and (not target) (seq failed)) (await (give-up-shore! c))
@@ -273,7 +292,7 @@
                      (if (= :continue r) (await (hold-afloat! c)) r))
       :else
       (let [r (await (ctx/act c :swim (clj->js {:toward target})))]
-        (if (or (= "landed" (status r)) (not (.-inWater (.self p))))
+        (if (or (= "landed" (status r)) (on-land? p))
           :done
           (do (ctx/update-mem! c update :failed-shores (fnil conj []) target)
               :continue))))))
