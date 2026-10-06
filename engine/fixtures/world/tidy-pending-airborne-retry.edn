@@ -1,0 +1,46 @@
+;; Card 8eaa3d1a: the :tidy-pending trigger never holds while the body is airborne, a cell a run tried waits 2 min or 8
+;; blocks of movement, restore-broken counts a try when its walk starts (3 tries, then warn tidy.not-restored :why :gave-up).
+;; Entries are seeded into body memory (:memory); the plot is lit by torches. Cases 3 and 4: one warn :unreachable (logged before the run notes t0, so not an expectation), then no refire for 2 min (the :gave-up path needs a cell the walk reaches but a place cannot fill: not built).
+{:defaults
+ {:tags [:tidy :tidy-pending]
+  :time :any
+  :register [{:trigger :tidy-pending :persistence :cooldown :cooldown-s 10}]
+  :plot {:height 12}
+  :blocks [[:set [2 0 2] "torch"] [:set [2 0 14] "torch"] [:set [2 0 26] "torch"] [:set [14 0 2] "torch"] [:set [14 0 26] "torch"]
+           [:set [26 0 2] "torch"] [:set [26 0 14] "torch"] [:set [26 0 26] "torch"] [:set [8 0 8] "torch"] [:set [20 0 8] "torch"]
+           [:set [8 0 20] "torch"] [:set [20 0 20] "torch"]]
+  :body {:at [4.5 0 4.5] :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "reachable-cell-restored-promptly"
+   :blocks [[:fill [14 0 6] [14 1 6] "cobblestone"] [:set [14 0 6] "air"]]
+   :memory [{:kind :tidy :data {:cell #at [14 0 6] :action :dig :was "cobblestone" :now "air" :tries 0}}]
+   :act [[:wait-s 2] [:rcon "give $BODY cobblestone 4"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :tidy-pending}} :within-s 20}
+            {:event {:source :job :kind :tidy.restored :data {:cells [[:any]]}} :within-s 60}
+            {:no-event {:source :job :kind :tidy.not-restored} :for-s 15}]
+   :after [[:block [14 0 6] "cobblestone"]]
+   :limit-s 70}
+  {:name "stair-walk-then-hold-no-cut-while-airborne"
+   :blocks [[:fill [8 0 4] [8 0 4] "stone"] [:fill [9 0 4] [9 1 4] "stone"] [:fill [10 0 4] [10 2 4] "stone"] [:fill [11 0 4] [11 3 4] "stone"]
+            [:fill [12 0 4] [12 4 4] "stone"] [:fill [13 0 4] [13 5 4] "stone"] [:fill [14 0 4] [14 6 4] "stone"] [:fill [15 0 4] [15 7 4] "stone"]
+            [:fill [16 0 4] [16 8 4] "stone"] [:fill [17 0 4] [17 9 4] "stone"]
+            [:fill [24 0 24] [24 1 24] "cobblestone"] [:set [24 0 24] "air"]]
+   :memory [{:kind :tidy :data {:cell #at [24 0 24] :action :dig :was "cobblestone" :now "air" :tries 0}}]
+   :act [[:job (jobs.movement.go-to {:pos #at [17 10 4] :range 0})] [:wait-s 1]
+         [:rcon "give $BODY cobblestone 4"]]
+   :expect [{:event {:source :job :kind :tidy.restored :data {:cells [[:any]]}} :within-s 80}]
+   :after [[:block [24 0 24] "cobblestone"]]
+   :limit-s 90}
+  {:name "walled-off-cell-one-run-then-quiet"
+   :blocks [[:fill [20 0 20] [30 6 30] "stone"] [:set [25 3 25] "air"]]
+   :memory [{:kind :tidy :data {:cell #at [25 3 25] :action :dig :was "cobblestone" :now "air" :tries 0}}]
+   :body {:inventory [["cobblestone" 4]]}
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :tidy-pending}} :for-s 130}]
+   :limit-s 170}
+  {:name "floating-cell-one-run-then-quiet"
+   :blocks [[:set [25 5 25] "air"]]
+   :memory [{:kind :tidy :data {:cell #at [25 5 25] :action :dig :was "cobblestone" :now "air" :tries 0}}]
+   :body {:inventory [["cobblestone" 4]]}
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :tidy-pending}} :for-s 130}]
+   :limit-s 170}]}
