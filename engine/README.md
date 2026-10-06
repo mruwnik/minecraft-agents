@@ -36,14 +36,14 @@ npm run body -- --agent <name> --world <world> [--scenario <file.edn>]   # node 
 
 Run one namespace with `node --max-old-space-size=4096 out/test.cjs --test=engine.<ns>-test`.
 
-Builds (`shadow-cljs.edn`): `:test` (`:node-test`, every namespace ending in `-test`, to `out/test.cjs`) and `:body`
+Builds (in `dashboard/shadow-cljs.edn`, which holds the engine and dashboard builds; engine outputs go to `engine/out/`): `:test` (`:node-test`, the `engine|jobs|plan` namespaces ending in `-test`, to `out/test.cjs`) and `:body`
 (`:node-script`, `out/body.cjs`, `engine.main/main`). The compile JVM is capped at 1 GB.
 
 **Compiling: `tools/compile <engine|dashboard> <build>... [--priority] [--release]`** (repo root). Every cljs compile goes
-through it. It queues on `/tmp/mc-compile.lock` (never wrap it in `flock`) and compiles against the project's long-lived
-`shadow-cljs server`, which it starts when missing. `--priority` is for the owner's UI rebuilds, agents never use it.
-`--release` runs `shadow-cljs release`. `MC_COMPILE_LOG=1` prints lock wait and compile time. `tools/compile <project> --stop`
-stops that project's server.
+through it. It queues on `/tmp/mc-compile.lock` (never wrap it in `flock`) and compiles against the checkout's one long-lived
+`shadow-cljs server` (both project words use it), which it starts when missing. `--priority` is for the owner's UI rebuilds, agents never use it.
+`--release` runs `shadow-cljs release`. `MC_COMPILE_LOG=1` prints lock wait and compile time. `tools/compile engine --stop`
+stops the server.
 
 Agent command-line tools run ahead-of-time compiled JavaScript directly in Node, with no compiler or JVM per call.
 
