@@ -1,7 +1,7 @@
 (ns world-test.expect
   "Expectations of a world fixture, judged over the body's event log (pure). An :event expectation passes when a
   matching event comes within :within-s seconds of the act's start; a :no-event one passes when none comes for
-  :for-s seconds. Patterns are partial: a map matches a map holding at least its keys (recursively), a set matches
+  :for-s seconds (events before :from-s seconds after the start are ignored). Patterns are partial: a map matches a map holding at least its keys (recursively), a set matches
   any of its members, [:> n] [:>= n] [:< n] [:<= n] compare numbers, [:near [x y z] r] a position ({:x :y :z} or
   [x y z]) within r blocks, [:contains \"text\"] a substring, [:not p] the opposite of p, [:any] anything present;
   anything else matches by equality.")
@@ -69,7 +69,8 @@
     (let [cap (+ t0-ms (* 1000 (:for-s e)))
           until (when-let [p (:until e)] (some #(when (matches? p %) %) events))
           deadline (if until (min cap (:time-ms until)) cap)
-          hit (event-match e (:no-event e) (filter #(<= (:time-ms % 0) deadline) events) job-ids)]
+          from (+ t0-ms (* 1000 (or (:from-s e) 0)))
+          hit (event-match e (:no-event e) (filter #(<= from (:time-ms % 0) deadline) events) job-ids)]
       (cond
         hit {:expect e :status :fail :evidence (str "unwanted " (evidence hit)) :at-s (/ (- (:time-ms hit) t0-ms) 1000)}
         (and until (<= (:time-ms until) cap)) {:expect e :status :pass :evidence (str "none until " (evidence until))}

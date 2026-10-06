@@ -49,6 +49,12 @@
     (is (= :pass (:status (x/judge {:no-event {:kind :fired} :for-s 0.1} [fired] (assoc opts :now-ms 3000))))
         "an event after the window does not count")))
 
+(deftest a-no-event-ignores-events-before-its-from-s
+  (let [e {:no-event {:kind :fired} :for-s 10 :from-s 3}]
+    (is (= :pending (:status (x/judge e [fired] (assoc opts :now-ms 2000)))) "fired at 1.5 s is before from-s")
+    (is (= :pass (:status (x/judge e [fired] (assoc opts :now-ms 11001)))))
+    (is (= :fail (:status (x/judge e [(assoc fired :time-ms 4000)] (assoc opts :now-ms 5000)))))))
+
 (deftest a-no-event-with-until-ends-its-window-at-the-first-until-event
   (let [e {:no-event {:kind :fired} :for-s 100 :until {:kind :herd.done}}]
     (is (= :pass (:status (x/judge e [herd-done] (assoc opts :now-ms 9500)))) "herd done at 9 s and nothing fired")
