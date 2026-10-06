@@ -1,5 +1,5 @@
 // Why JavaScript: tests use-on.mjs, which stays JS: Mineflayer boundary; block use/activate calls and the safety guards before the click.
-import { test } from 'node:test'
+import { test, mock } from 'node:test'
 import assert from 'node:assert/strict'
 import { createPrimitivesFromBot } from './primitives.mjs'
 import { stubBot, names, Vec3 } from './stub-bot.mjs'
@@ -9,12 +9,24 @@ const at = (x, y, z) => ({ x, y, z })
 const hoe = { name: 'diamond_hoe', count: 1, slot: 36 }
 const key = (x, y, z) => `${x},${y},${z}`
 
-// A case that must not meet its time bound (useOn waits ~13 ms of the 50 ms bound at SCALE) runs at CALM_SCALE, so a loaded machine cannot time it out.
-const CALM_SCALE = 0.1
+// Timers and Date are virtual: drive() advances them while the call is pending, so machine load cannot make a wait or the call's time bound fire early.
+mock.timers.enable({ apis: ['setTimeout', 'Date'] })
+const drive = async promise => {
+  let settled = false
+  const done = promise.finally(() => { settled = true })
+  done.catch(() => {})
+  while (!settled) {
+    mock.timers.tick(5)
+    await new Promise(resolve => setImmediate(resolve))
+  }
+  return done
+}
 const rig = (spec, timeScale = SCALE) => {
   const bot = stubBot({ blocks: { '1,64,0': 'dirt' }, items: [hoe], ...spec })
   const p = createPrimitivesFromBot(bot, { timeScale })
   p.setOwner('t1')
+  const useOn = p.useOn
+  p.useOn = (...args) => drive(useOn(...args))
   return { bot, p }
 }
 const calls = (bot, name) => bot.calls.filter(c => c.name === name)
@@ -196,7 +208,7 @@ test('blockAt and blocks report integer states as numbers', () => {
 })
 
 test('useOn before and after report integer states as numbers', async () => {
-  const { p } = rig({ blocks: { '1,64,0': 'composter' }, props: { [key(1, 64, 0)]: rawProps } }, CALM_SCALE)
+  const { p } = rig({ blocks: { '1,64,0': 'composter' }, props: { [key(1, 64, 0)]: rawProps } })
   const r = await p.useOn('t1', dirt)
   assert.deepEqual([r.before.properties, r.after.properties], [typedProps, typedProps])
 })

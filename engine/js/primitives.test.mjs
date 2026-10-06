@@ -1,5 +1,5 @@
 // Why JavaScript: tests primitives.mjs, which stays JS: Mineflayer boundary; the one adapter that calls Mineflayer and the pathfinder, with tick-bound policy that lives inside their event loops.
-import { test } from 'node:test'
+import { test, mock } from 'node:test'
 import assert from 'node:assert/strict'
 import { createPrimitives, createPrimitivesFromBot, mcToMineflayerLook, mineflayerToMcLook } from './primitives.mjs'
 import { EventEmitter } from 'node:events'
@@ -1051,10 +1051,27 @@ test('moveTo: a capped hop that finds no path under open sky is not retried', as
   assert.equal('hop' in result, false)
 })
 
+// Timers and Date are virtual for the stall cases: the pump advances them while the call is pending, so machine load cannot stretch a measured time.
+const virtually = async body => {
+  mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] })
+  try {
+    let settled = false
+    const done = body().finally(() => { settled = true })
+    done.catch(() => {})
+    while (!settled) {
+      await new Promise(resolve => setImmediate(resolve))
+      mock.timers.tick(1)
+    }
+    return await done
+  } finally {
+    mock.timers.reset()
+  }
+}
+
 // walks only count time from the pathfinder's first path_update of the goto
 const update = bot => bot.emit('path_update', { status: 'success', path: [] })
 
-test('moveTo: a body that does not move at all after a path_update ends stalled in about STILL_S, well before STALL_S', async () => {
+test('moveTo: a body that does not move at all after a path_update ends stalled in about STILL_S, well before STALL_S', () => virtually(async () => {
   const { bot, p } = rig({ ...world, hang: ['goto'] })
   setTimeout(() => update(bot), 1)
   const started = Date.now()
@@ -1062,9 +1079,9 @@ test('moveTo: a body that does not move at all after a path_update ends stalled 
   const took = Date.now() - started
   assert.equal(result.reason, 'stalled')
   assert.ok(took >= 3.5 * 1000 * SCALE && took < 6 * 1000 * SCALE, `took ${took}`)
-})
+}))
 
-test('moveTo: a still body in water is not cut at STILL_S, only at STALL_S', async () => {
+test('moveTo: a still body in water is not cut at STILL_S, only at STALL_S', () => virtually(async () => {
   const { bot, p } = rig({ ...world, hang: ['goto'] })
   bot.entity.isInWater = true
   setTimeout(() => update(bot), 1)
@@ -1072,18 +1089,18 @@ test('moveTo: a still body in water is not cut at STILL_S, only at STALL_S', asy
   const result = await p.moveTo('t1', { pos: at(30, 64, 0), timeoutS: 60 })
   assert.equal(result.reason, 'stalled')
   assert.ok(Date.now() - started >= 7.5 * 1000 * SCALE)
-})
+}))
 
-test('moveTo: a still body on a ladder is not cut at STILL_S, only at STALL_S', async () => {
+test('moveTo: a still body on a ladder is not cut at STILL_S, only at STALL_S', () => virtually(async () => {
   const { bot, p } = rig({ ...world, blocks: { ...world.blocks, '0,64,0': 'ladder' }, hang: ['goto'] })
   setTimeout(() => update(bot), 1)
   const started = Date.now()
   const result = await p.moveTo('t1', { pos: at(30, 64, 0), timeoutS: 60 })
   assert.equal(result.reason, 'stalled')
   assert.ok(Date.now() - started >= 7.5 * 1000 * SCALE)
-})
+}))
 
-test('moveTo: a still body is not cut before the first path_update, and the cut follows it', async () => {
+test('moveTo: a still body is not cut before the first path_update, and the cut follows it', () => virtually(async () => {
   const { bot, p } = rig({ ...world, hang: ['goto'] })
   const started = Date.now()
   let cutAt = null
@@ -1091,9 +1108,9 @@ test('moveTo: a still body is not cut before the first path_update, and the cut 
   const result = await p.moveTo('t1', { pos: at(30, 64, 0), timeoutS: 60 }).then(r => { cutAt = Date.now() - started; return r })
   assert.equal(result.reason, 'stalled')
   assert.ok(cutAt >= 23.5 * 1000 * SCALE, `cut at ${cutAt}`)
-})
+}))
 
-test('moveTo: a walk whose body never moves ends stalled well before its timeout', async () => {
+test('moveTo: a walk whose body never moves ends stalled well before its timeout', () => virtually(async () => {
   const { bot, p } = rig({ ...world, hang: ['goto'] })
   setTimeout(() => update(bot), 1)
   const started = Date.now()
@@ -1101,24 +1118,24 @@ test('moveTo: a walk whose body never moves ends stalled well before its timeout
   assert.equal(result.status, 'blocked')
   assert.equal(result.reason, 'stalled')
   assert.ok(Date.now() - started < 60 * 1000 * SCALE / 2)
-})
+}))
 
-test('moveTo: a body that keeps moving is not cut by the stall rule and ends on the timeout', async () => {
+test('moveTo: a body that keeps moving is not cut by the stall rule and ends on the timeout', () => virtually(async () => {
   const { bot, p } = rig({ ...world, hang: ['goto'] })
   const mover = setInterval(() => { bot.entity.position = new Vec3(bot.entity.position.x + 0.1, 64, 0) }, 1).unref()
   const result = await p.moveTo('t1', { pos: at(60, 64, 0), timeoutS: 20 })
   clearInterval(mover)
   assert.equal(result.reason, 'timeout')
-})
+}))
 
-test('moveTo: a body that moved three blocks and then stopped is partial, stalled', async () => {
+test('moveTo: a body that moved three blocks and then stopped is partial, stalled', () => virtually(async () => {
   const { bot, p } = rig({ ...world, hang: ['goto'] })
   setTimeout(() => update(bot), 1)
   setTimeout(() => { bot.entity.position = new Vec3(3, 64, 0) }, 5)
   const result = await p.moveTo('t1', { pos: at(30, 64, 0), timeoutS: 60 })
   assert.equal(result.status, 'partial')
   assert.equal(result.reason, 'stalled')
-})
+}))
 
 // swim
 const waterAbove = { ...world, blocks: { ...world.blocks, '0,65,0': 'water', '0,64,0': 'water' }, oxygen: 4 }
