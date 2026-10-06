@@ -19,7 +19,8 @@ set -euo pipefail
 # An unexpected failure always says which command failed (git prints its own message first).
 trap 'echo "commit-mine: command failed (exit $?) at line $LINENO: $BASH_COMMAND" >&2' ERR
 
-CORE_RE='^engine/src/engine/(core|expr|triggers|takeover|trigger_api)\.cljs$|^engine/src/engine/registry\.(clj|cljs)$'
+CORE_RE='^engine/src/engine/'
+CORE_EXCLUDE_RE='^engine/src/engine/path/planner'
 # Built from pieces so this file does not trip its own owner-name check.
 NAME_WORD='d''an'
 LOCK_TIMEOUT="${COMMIT_LOCK_TIMEOUT:-600}"
@@ -97,6 +98,7 @@ flags=()
 # Engine-core gate (before locking).
 for a in "${allowed[@]}"; do
   [[ "$a" =~ $CORE_RE ]] || continue
+  [[ "$a" =~ $CORE_EXCLUDE_RE ]] && continue
   [ -n "$approved" ] || die "engine-core path $a needs --approved-core <card> (owner approval)"
   flags+=("engine-core $a approved-by $approved")
 done

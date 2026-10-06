@@ -43,6 +43,20 @@ tools/commit-mine --card --expect-lines 2 -m m f.txt >/dev/null 2>&1; check "car
 tools/commit-mine --card c -m m --expect-hunks --approved-core x f.txt >/dev/null 2>&1; check "expect swallowing exit" "$?" 1
 tools/commit-mine --card c -m m --expect-lines --approved-core x f.txt >/dev/null 2>&1; check "expect-lines swallowing exit" "$?" 1
 git checkout -q f.txt
+# Engine-core gate: engine/src/engine/* paths (except planner*) need --approved-core; planner* and engine/src/jobs/* do not.
+mkdir -p engine/src/engine/path engine/src/jobs/gather
+echo "planner" > engine/src/engine/path/planner_tuned.cljs
+echo "other core" > engine/src/engine/path/executor.cljs
+echo "job" > engine/src/jobs/gather/mine.cljs
+tools/commit-mine --card c -m m --expect-lines 1 engine/src/engine/path/planner_tuned.cljs >/dev/null 2>&1; check "planner file without approval exit" "$?" 0
+git checkout -q engine/src/engine/path/planner_tuned.cljs 2>/dev/null || rm engine/src/engine/path/planner_tuned.cljs
+out=$(tools/commit-mine --card c -m m --expect-lines 1 engine/src/engine/path/executor.cljs 2>&1); check "other core path without approval exit" "$?" 1
+check "core refusal text" "$(grep -c 'engine-core path.*needs --approved-core' <<<"$out")" 1
+tools/commit-mine --card c -m m --approved-core card2 --expect-lines 1 engine/src/engine/path/executor.cljs >/dev/null 2>&1; check "core path with approval exit" "$?" 0
+git checkout -q engine/src/engine/path/executor.cljs 2>/dev/null || rm engine/src/engine/path/executor.cljs
+echo "job2" > engine/src/jobs/gather/mine.cljs
+tools/commit-mine --card c -m m --expect-lines 1 engine/src/jobs/gather/mine.cljs >/dev/null 2>&1; check "job path without approval exit" "$?" 0
+git checkout -q engine/src/jobs/gather/mine.cljs 2>/dev/null || rm engine/src/jobs/gather/mine.cljs
 # A committed JS file must parse: a broken .mjs is refused (naming it), a valid one commits.
 W='// Why JavaScript: test'
 printf '%s\nexport const a = 1\n' "$W" > ok.mjs; printf '%s\nexport const b = (\n' "$W" > bad.mjs
