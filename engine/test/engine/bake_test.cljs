@@ -226,3 +226,19 @@
           (is (= {"wheat" 30} (chest-items p)))
           (is (empty? (calls p "transfer")))
           (is (contains? (kinds seen) :bake.inventory-full)))))))
+
+(deftest failures-in-a-row-restart-after-a-withdraw-that-took-wheat
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [reads (atom 0)
+              [result p seen] (await (bake {:inventory (vec (repeat 33 {:name "stick" :count 1}))
+                                            :containers {"10,64,0" [{:name "wheat" :count 12}]} :blocks beside} {}
+                                           (fn [p]
+                                             (.override (.-world p) "inspectContainer"
+                                                        (fn ^:async f [t a impl]
+                                                          (if (contains? #{1 2 5 6} (swap! reads inc))
+                                                            #js {:status "blocked"}
+                                                            (await (impl t a))))))))]
+          (is (nil? (:reason result)) "two blocked reads, a good one, two more: never three in a row")
+          (is (not (contains? (kinds seen) :bake.gave-up))))))))

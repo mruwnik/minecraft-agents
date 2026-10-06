@@ -355,12 +355,10 @@
 (defn fail!
   "One failed try in this run: :again until u/max-failures, then the warn kind and stopped with reason kind."
   [c kind text]
-  (let [tries (inc (:failures (ctx/mem c) 0))]
-    (ctx/update-mem! c assoc :failures tries)
-    (if (< tries u/max-failures)
-      :again
-      (do (ctx/emit! c kind :warn {:tries tries :text text})
-          (result/stop! c kind text)))))
+  (if-not (u/count-fail! c)
+    :again
+    (do (ctx/emit! c kind :warn {:tries u/max-failures :text text})
+        (result/stop! c kind text))))
 
 (defn ^:async pass!
   "One look at the world and one try. :again or :held for another pass, else :done (perhaps stopped)."

@@ -132,7 +132,7 @@
       (do (if (:reason out)
             (stop! c :bake.craft-failed (str "cannot craft the bread: " (:reason out))
                    (str "craft " (:reason out)))
-            :continue)))))
+            (do (u/progress! c) :continue))))))
 
 (defn ^:async withdraw!
   "Take the wheat out through the withdraw child, carrying target in all."
@@ -146,6 +146,7 @@
       (and (= :done r) (= :refused (:reason out))) (refused! c :bake.refused out)
       (and (= :done r) (:gave-up out)) (stop! c :bake.withdraw-failed (str "cannot take the wheat out: " (:reason out))
                                               (str "withdraw " (:reason out)))
+      (= :done r) (do (u/progress! c) :continue)
       :else :continue)))
 
 (defn finish-done!
@@ -185,8 +186,7 @@
       (let [r (u/fail! c :bake.gave-up (str "chest " (.-status seen)))]
         (when (= :done r) (finish! c {:reason (str "chest " (.-status seen))}))
         r)
-      (let [_ (u/progress! c)
-            items (.-items seen)
+      (let [items (.-items seen)
             wheat (reduce + 0 (map #(.-count %) (filter #(= "wheat" (.-name %)) (array-seq items))))
             target (wheat-target p wheat)
             whole (* 3 (quot (+ wheat (carried p "wheat")) 3))]
