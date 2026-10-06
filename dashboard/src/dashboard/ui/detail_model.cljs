@@ -36,7 +36,7 @@
        :world world
        :last-seen (when age (logic/time-ago-text age))
        :thumb (:thumb card)
-       :iframe-src (when up (str "/view?agent=" world "/" name "&embed=1&who=" (js/encodeURIComponent who)))
+       :iframe-src (when up (str "/view?agent=" (js/encodeURIComponent world) "/" (js/encodeURIComponent name) "&embed=1&who=" (js/encodeURIComponent who)))
        :offline-text (when-not up (offline-text at age))
        :hud (:hud view)
        :jobs (:jobs engine)

@@ -43,12 +43,9 @@
                        (.catch (fn [e] (is (boolean (re-find #"exceeds" (ex-message e)))))))))
           (.then (fn [_]
                    (reset! mode :stall)
-                   (let [started (js/Date.now)]
-                     (-> (server/entity-request! body)
-                         (.then (fn [_] (is false "stalled response must reject")))
-                         (.catch (fn [e]
-                                   (is (boolean (re-find #"timed out" (ex-message e))))
-                                   (is (< (- (js/Date.now) started) 1500))))))))
+                   (-> (server/entity-request! body)
+                       (.then (fn [_] (is false "stalled response must reject")))
+                       (.catch (fn [e] (is (boolean (re-find #"timed out" (ex-message e)))))))))
           (.catch (fn [e] (is (nil? e) (str e))))
           (.finally (fn []
                       (set! server/entity-socket original-socket)

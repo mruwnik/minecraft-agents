@@ -143,9 +143,13 @@
                     "No mobs or players in view."))]
     {:facing facing :crosshair crosshair :entities entities :text text}))
 
-(defn- read-pose [ctx body]
+(def max-pose-bytes 1048576)
+
+(defn read-pose
+  "The body's pose.json as a map; nil when missing or over 1 MB."
+  [ctx body]
   (let [file (.join path (:world-dir ctx) "agents" body "view" "pose.json")]
-    (when (.existsSync fs file)
+    (when (and (.existsSync fs file) (<= (.-size (.statSync fs file)) max-pose-bytes))
       (js->clj (js/JSON.parse (.readFileSync fs file "utf8")) :keywordize-keys true))))
 
 (defn- center-of [center]

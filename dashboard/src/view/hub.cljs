@@ -85,6 +85,7 @@
         fps (option options "fps" 6)
         base-url (option options "baseUrl" "")
         budget-ms (option options "frameBudgetMs" 8)
+        debounce-ms (option options "streamDebounceMs" STREAM-DEBOUNCE-MS)
         open-stream (option options "openStream" (fn [url] (js/EventSource. url)))
         entries (js/Map.) ; scene id -> entry #js {scene, targets (Map canvas -> target), renders, renderCount, renderMs, gpuMs}
         frame-costs #js [] ; main-thread ms of the animation frames that rendered something
@@ -186,7 +187,7 @@
                                (set! (.-onerror source) #(js/console.warn "the /poses stream was interrupted; the browser will retry")))))))
         schedule-stream! (fn []
                            (js/clearTimeout @stream-timer)
-                           (vreset! stream-timer (js/setTimeout sync-stream! STREAM-DEBOUNCE-MS)))
+                           (vreset! stream-timer (js/setTimeout sync-stream! debounce-ms)))
 
         fps-of (fn [^js entry now] (s/count-since (.-renders entry) now FPS-WINDOW-MS))
 

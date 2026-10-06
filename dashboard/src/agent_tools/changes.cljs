@@ -24,7 +24,7 @@
     (when-not (re-matches #"^[A-Za-z0-9_-]{1,64}$" observer) (throw (data/fail :invalid-observer "invalid observer name")))
     (when (or (not (js/Number.isFinite timeout-ms)) (< timeout-ms 10) (> timeout-ms 3600000)
               (not (js/Number.isInteger poll-ms)) (< poll-ms 50) (> poll-ms 5000))
-      (throw (data/fail :invalid-timeout "timeout10ms..60m and poll50..5000ms required")))
+      (throw (data/fail :invalid-timeout "timeout 10ms..60m and poll 50..5000ms required")))
     (when (and (not (:wait v)) (or (:timeout v) (:poll-ms v))) (throw (data/fail :invalid-options "timeout/poll need --wait")))
     (let [ctx (data/context (select-keys v [:state :worlds :world :repo-root]))]
       {:ctx ctx :filter (map-tool/filters ctx v) :observer observer
@@ -80,6 +80,11 @@
   ([request opts]
    (.then (js/Promise.resolve nil) (fn [_] (execute-request! request opts)))))
 
+(defn exit-code-for
+  "1 for an {:ok false ...} answer (a cursor gap), else 0."
+  [result]
+  (if (false? (:ok result)) 1 0))
+
 (defn main!
   ([] (main! (vec (.slice (.-argv js/process) 2))))
   ([argv]
@@ -88,7 +93,7 @@
      (.once js/process "SIGINT" stop)
      (.once js/process "SIGTERM" stop)
      (-> (.then (js/Promise.resolve nil) (fn [_] (execute! (options argv) {:signal (.-signal controller)})))
-         (.then (fn [_] 0))
+         (.then exit-code-for)
          (.catch (fn [error]
                    (if (.-aborted (.-signal controller)) 130
                        (let [message (or (.-message error) (str error))]

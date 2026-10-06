@@ -542,9 +542,12 @@
 (defn send-edn! [res code value]
   (send! res code "application/edn; charset=utf-8" (pr-str value)))
 
+(defn regular-file? [file]
+  (try (.isFile (.statSync fs file)) (catch :default _ false)))
+
 (defn send-file! [res file]
   (let [type (get content-types (str/lower-case (.extname path file)) "application/octet-stream")]
-    (if (file-exists? file)
+    (if (regular-file? file)
       (send! res 200 type (.readFileSync fs file))
       (send-json! res 404 {:error (str "no such file: " (.basename path file))}))))
 
@@ -757,12 +760,17 @@
 (def route-list
   "try /, /villagers, /villages, /blueprints, /api/worlds, /api/state, /api/villagers, /api/villages, /api/chat?limit=200, POST /api/chat/send, /api/jobs, /api/plans, /api/plan/<name>, /api/blueprints, /api/blueprint/<name>, POST /api/blueprint-preview (state, chat, world and villages take ?world=<name>, default the first world)")
 
-(defn read-body [req limit on-done]
-  (let [chunks (atom []) size (atom 0)]
+(defn read-body
+  "Calls on-done once with the body text, or nil when it is over the limit or the request broke off."
+  [req limit on-done]
+  (let [chunks (atom []) size (atom 0) done? (atom false)
+        finish! (fn [text] (when-not @done? (reset! done? true) (on-done text)))]
     (.on req "data" (fn [chunk]
                       (swap! size + (.-length chunk))
                       (when (<= @size limit) (swap! chunks conj chunk))))
-    (.on req "end" #(on-done (when (<= @size limit) (.toString (js/Buffer.concat (to-array @chunks)) "utf8"))))))
+    (.on req "error" #(finish! nil))
+    (.on req "aborted" #(finish! nil))
+    (.on req "end" #(finish! (when (<= @size limit) (.toString (js/Buffer.concat (to-array @chunks)) "utf8"))))))
 
 ;; ---------------------------------------------------------------- state-changing routes
 ;; Every POST route goes through dashboard.guard (Host, Origin, Content-Type, method) and a body limit.
@@ -793,6 +801,12 @@
     (do (println (str "chat send (dry run): " command)) (js/Promise.resolve "dry"))
     (rcon/send-command! command)))
 
+(defn send-rcon-failure!
+  "A fixed 502 body; the detail (paths, socket text) stays in the server log."
+  [res e]
+  (js/console.error (str "RCON failed: " (ex-message e)))
+  (send-json! res 502 {:error "RCON failed"}))
+
 (defn send-chat! [req res]
   (guarded-post!
    req res guard/max-body-bytes
@@ -803,7 +817,7 @@
          (send-json! res status json)
          (-> (run-chat-command! command)
              (.then (fn [_] (send-json! res 200 {:ok true :command command})))
-             (.catch (fn [e] (send-json! res 502 {:error (str "RCON failed: " (ex-message e))})))))))))
+             (.catch (fn [e] (send-rcon-failure! res e)))))))))
 
 (defn send-whisper! [req res {target :name world :world}]
   (guarded-post!
@@ -820,7 +834,7 @@
          (send-json! res status json)
          (-> (run-chat-command! command)
              (.then (fn [_] (send-json! res 200 {:ok true :command command})))
-             (.catch (fn [e] (send-json! res 502 {:error (str "RCON failed: " (ex-message e))})))))))))
+             (.catch (fn [e] (send-rcon-failure! res e)))))))))
 
 ;; ---------------------------------------------------------------- jobs (GET /api/jobs)
 ;; The job and trigger namespaces as compiled into this build (dashboard.jobs-registry), joined with usage.

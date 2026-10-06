@@ -13,8 +13,9 @@
 (defn reg-key-sub [k] (rf/reg-sub k (fn [d _] (get d k))))
 
 (doseq [k [:status :selected :chat-open? :places-open? :players-open? :chat-filter :hide-whispers? :detail-body :detail-events :detail-stream :detail-chip :detail-text :attention-outstanding :attention-error :detail-notices :drive :notices :chat :worlds :detail-stats? :chat-send :chat-sender :who :status-filter]]
-(rf/reg-sub :whisper-send (fn [d [_ name]] (get-in d [:whisper-send name] cs/initial)))
   (reg-key-sub k))
+
+(rf/reg-sub :whisper-send (fn [d [_ name]] (get-in d [:whisper-send name] cs/initial)))
 
 (rf/reg-sub :current-world (fn [d _] (db/current-world d)))
 (rf/reg-sub :view (fn [d _] (db/effective-view d)))

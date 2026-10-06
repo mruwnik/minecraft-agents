@@ -130,7 +130,7 @@
 
 (defn- checked-id [id]
   (when-not (and (string? id) (re-matches id-pattern id))
-    (throw (fail :invalid-id "ID must use letters, digits, _ or - (up to100)"))) id)
+    (throw (fail :invalid-id "ID must use letters, digits, _ or - (up to 100)"))) id)
 (def collection-kinds #{:marker :zone :claim})
 (defn document-path [ctx kind id]
   (let [kind (keyword kind)]
@@ -139,7 +139,7 @@
       :blueprint (.join path (:blueprint-dir ctx) (str (checked-id id) ".edn"))
       (:marker :zone :claim)
       (do (when-not (and (string? id) (not (str/blank? id)) (<= (count id) 100) (not (str/includes? id "\u0000")))
-            (throw (fail :invalid-id "map names need1..100 characters")))
+            (throw (fail :invalid-id "map names need 1..100 characters")))
           (.join path (:world-dir ctx) ({:marker "places.json" :zone "zones.edn" :claim "claims.edn"} kind)))
       (throw (fail :invalid-kind "kind must be marker, zone, claim, plan or blueprint")))))
 
@@ -153,7 +153,7 @@
          (throw (fail :file-too-large (str "file exceeds " max-size " bytes") {:file file})))
        (when (some? @scan-budget)
          (swap! scan-budget - (.-size stat))
-         (when (neg? @scan-budget) (throw (fail :scan-too-large "shared world scan exceeds64MiB; archive unused documents"))))
+         (when (neg? @scan-budget) (throw (fail :scan-too-large "shared world scan exceeds 64MiB; archive unused documents"))))
        (.readFileSync fs file "utf8"))
      (catch :default e (if (= "ENOENT" (.-code e)) nil (throw e))))))
 (defn- parse-collection [kind text]
@@ -190,7 +190,7 @@
             files (try (sort (filter #(str/ends-with? % ".edn") (array-seq (.readdirSync fs dir))))
                        (catch :default e (if (= "ENOENT" (.-code e)) [] (throw e))))
             prior @scan-budget]
-        (when (> (count files) 1000) (throw (fail :object-limit "at most1000 documents per directory")))
+        (when (> (count files) 1000) (throw (fail :object-limit "at most 1000 documents per directory")))
         (reset! scan-budget (min (or prior 67108864) 67108864))
         (try (mapv #(read-document ctx kind (subs % 0 (- (count %) 4))) files)
              (finally (when (nil? prior) (reset! scan-budget nil))))))))
@@ -334,7 +334,7 @@
                             (throw (fail :text-mismatch "text and decoded value disagree"))) decoded)) (:value opts))
             file (document-path ctx kind id)]
         (when-not (and (string? by) (not (str/blank? by)) (<= (count by) 80))
-          (throw (fail :actor-required "mutations need explicit --by (up to80 characters)")))
+          (throw (fail :actor-required "mutations need explicit --by (up to 80 characters)")))
         (when-not (contains? opts :expected-revision) (throw (fail :revision-required "mutation needs expected revision; null means create only")))
         (when-not (#{:intent :observation} source) (throw (fail :invalid-source "source must be intent or observation")))
         (transaction ctx
@@ -357,7 +357,7 @@
                             obj (object-meta {:kind kind :id id :value (or value (:value previous) {}) :revision next-revision :scope (if (= kind :blueprint) :global :world)})
                             op (if (nil? value) :remove (if previous :edit :add))]
                         (when (and after (> (js/Buffer.byteLength after) max-file-bytes))
-                          (throw (fail :file-too-large "updated file would exceed8MiB")))
+                          (throw (fail :file-too-large "updated file would exceed 8MiB")))
                         (if dry-run
                           {:ok true :preview true :kind kind :id id :scope (:scope obj) :revision (:revision previous)
                            :next-revision next-revision :op op
@@ -383,7 +383,7 @@
   ([records {:keys [center type owner status text limit offset now radius]
              :or {limit 10 offset 0 now (js/Date.now) radius 128}}]
    (when-not (and (js/Number.isInteger limit) (<= 1 limit 100) (js/Number.isInteger offset) (<= 0 offset))
-     (throw (fail :invalid-page "limit1..100 and nonnegative offset required")))
+     (throw (fail :invalid-page "limit 1..100 and nonnegative offset required")))
    (when (and center (not (and (vector? center) (= 3 (count center)) (every? js/Number.isFinite center) (js/Number.isFinite radius) (<= 0 radius))))
      (throw (fail :invalid-center "center needs [x y z], radius nonnegative")))
    (let [lower #(str/lower-case (str (or % "")))
@@ -408,12 +408,15 @@
   ([ctx {:keys [cursor limit] :or {limit 10} :as opts}]
    (.then (js/Promise.resolve)
      (fn []
-       (when-not (and (js/Number.isInteger limit) (<= 1 limit 100)) (throw (fail :invalid-page "limit must be1..100")))
+       (when-not (and (js/Number.isInteger limit) (<= 1 limit 100)) (throw (fail :invalid-page "limit must be 1..100")))
        (let [filters (dissoc opts :cursor :limit)]
          (query [] (assoc filters :limit limit))
          (transaction ctx
            (fn [l]
-             (let [l (scan ctx l) _ (atomic-text (ledger-file ctx) (str (write-edn l) "\n"))
+             (let [scanned (scan ctx l)
+                   _ (when (or (not= scanned l) (not (.existsSync fs (ledger-file ctx))))
+                       (atomic-text (ledger-file ctx) (str (write-edn scanned) "\n")))
+                   l scanned
                    oldest (or (:seq (first (:events l))) (inc (:seq l))) end (select-keys l [:stream :seq])]
                (cond
                  (nil? cursor) {:cursor end :total 0 :items []}

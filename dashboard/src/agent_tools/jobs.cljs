@@ -95,7 +95,7 @@
           (let [limit (js/Number (or (:limit values) 8)) offset (js/Number (or (:offset values) 0))]
             (when-not (and (js/Number.isInteger limit) (<= 1 limit 32)
                            (js/Number.isInteger offset) (<= 0 offset 10000))
-              (throw (js/Error. "list limit must be1..32 and offset0..10000")))
+              (throw (js/Error. "list limit must be 1..32 and offset 0..10000")))
             (assoc base :path (str "/jobs?limit=" limit "&offset=" offset)))
           :else
           (do

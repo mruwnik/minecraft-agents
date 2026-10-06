@@ -117,7 +117,7 @@
                       (sequential? v) (mapv scrub v)
                       :else v))
             encoded (pr-str (data/raw-bound (scrub value) bound))
-            output (reduce (fn [s [token fragment]] (str/replace s (pr-str token) (str fragment "\n"))) encoded @fragments)]
+            output (reduce (fn [s [token fragment]] (str/replace s (pr-str token) (fn [_] (str fragment "\n")))) encoded @fragments)]
         (when (> (js/Buffer.byteLength output) bound)
           (fail! :output-too-large (str "raw result exceeds " bound " bytes; scope or page the query")))
         (str output "\n"))

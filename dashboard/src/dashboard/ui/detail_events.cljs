@@ -122,16 +122,15 @@
      {:fetch-json {:key :detail-drive :url (drive-url (db/current-world db) name)
                    :on-ok [:drive-poll-ok name] :on-err [:drive-poll-err name]}})))
 
-(rf/reg-event-db
- :drive-poll-ok
- (fn [db [_ name data]]
-   (if (= name (:detail-body db)) (update db :drive drive/apply-poll (:manual data) (js/Date.now)) db)))
+(defn drive-polled
+  "db after a /drive poll of body `name` showed `manual` (nil: nobody drives); ignored once another body is open."
+  [db name manual now]
+  (if (= name (:detail-body db)) (update db :drive drive/apply-poll manual now (:who db)) db))
+
+(rf/reg-event-db :drive-poll-ok (fn [db [_ name data]] (drive-polled db name (:manual data) (js/Date.now))))
 
 ;; no body listening (offline) or no reply: nobody drives it
-(rf/reg-event-db
- :drive-poll-err
- (fn [db [_ name _]]
-   (if (= name (:detail-body db)) (update db :drive drive/apply-poll nil (js/Date.now)) db)))
+(rf/reg-event-db :drive-poll-err (fn [db [_ name _]] (drive-polled db name nil (js/Date.now))))
 
 (rf/reg-event-db
  :drive-message

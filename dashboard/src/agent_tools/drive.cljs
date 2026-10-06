@@ -102,10 +102,26 @@
 (defn parse-json [text]
   (try (js->clj (js/JSON.parse text) :keywordize-keys true) (catch :default _ nil)))
 
-(defn send! [socket-path {:keys [method path body]}]
-  (http/request {:socket-path socket-path :method method :path path :label "drive"
-                 :headers {"content-type" "application/json"}
-                 :body (when (some? body) (js/JSON.stringify (clj->js body)))}))
+(def timeout-ms 3000)
+(def max-response-bytes 65536)
+
+(defn request-options [socket-path {:keys [method path body]}]
+  {:socket-path socket-path :method method :path path :label "drive"
+   :headers {"content-type" "application/json"}
+   :timeout-ms timeout-ms :max-bytes max-response-bytes
+   :body (when (some? body) (js/JSON.stringify (clj->js body)))})
+
+(defn send! [socket-path req] (http/request (request-options socket-path req)))
+
+(defn failure-text [error agent socket]
+  (case (aget error "code")
+    "ETIMEDOUT" (str "drive request to " agent " timed out after 3 s")
+    "ERESPONSETOOLARGE" (str "drive response from " agent " exceeded 64 KB")
+    (str "no running body " agent " ("
+         (if (.existsSync fs socket)
+           (str "connection failed at " socket)
+           (str "no control socket at " socket))
+         ")")))
 
 (defn main!
   ([] (main! (vec (.slice (.-argv js/process) 2))))
@@ -118,11 +134,6 @@
                 (fn [{:keys [status text]}]
                   (js/console.log text)
                   (exit-code-for {:status status :json (parse-json text)}))
-                (fn [_]
-                  (js/console.error
-                   (str "no running body " (:agent req) " ("
-                        (if (.existsSync fs socket)
-                          (str "connection refused at " socket)
-                          (str "no control socket at " socket))
-                        ")"))
+                (fn [error]
+                  (js/console.error (failure-text error (:agent req) socket))
                   2)))))))

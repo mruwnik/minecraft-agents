@@ -175,7 +175,12 @@
 ;; ---- running ----
 
 (def password-file (path/join (os/homedir) ".config" "minecraft-claude" "rcon-password"))
-(def server-properties "/home/dan/minecraft/claude/server.properties")
+(defn server-properties-path
+  "MINECRAFT_SERVER_PROPERTIES when set, else minecraft/claude/server.properties under `home`."
+  [env home]
+  (or (not-empty (.-MINECRAFT_SERVER_PROPERTIES env))
+      (path/join home "minecraft" "claude" "server.properties")))
+(def server-properties (server-properties-path js/process.env (os/homedir)))
 
 (defn exit-code-after
   "Resolves to 0 after (run!) succeeds, to 1 after printing `label failed: message` when it rejects."

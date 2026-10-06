@@ -19,7 +19,7 @@
    (let [[_ n unit] (re-matches #"^(\d+(?:\.\d+)?)(ms|s|m|h|d)?$" (str text))
          ms (if n (* (js/Number n) (get {"ms" 1 "s" 1000 "m" 60000 "h" 3600000 "d" 86400000} (or unit "s"))) js/NaN)]
      (when (or (not (js/Number.isFinite ms)) (< ms 100) (> ms 604800000))
-       (throw (data/fail :invalid-duration "claim duration must be100ms..7d")))
+       (throw (data/fail :invalid-duration "claim duration must be 100ms..7d")))
      ms)))
 
 (defn parse-options [argv spec]
@@ -173,7 +173,7 @@
       (throw (data/fail :validation "unsupported claim key")))
     (when (and (contains? value :note) (not (string? (:note value)))) (throw (data/fail :validation "note must be text")))
     (when (> (:until value) (+ (js/Date.now) 604800000))
-      (throw (data/fail :invalid-duration "claim expiry cannot be more than7d away")))
+      (throw (data/fail :invalid-duration "claim expiry cannot be more than 7d away")))
     value))
 
 (defn active-claim? [value]
@@ -191,7 +191,7 @@
               (data/raw-bound (cond-> (summary d) (:raw v) (assoc :record (:value d)))))
       (let [patch (when (#{:add :edit} command)
                     (when (or (nil? (:data v)) (> (.byteLength js/Buffer (:data v)) 65536))
-                      (throw (data/fail :invalid-data "give --data EDN map up to64KiB")))
+                      (throw (data/fail :invalid-data "give --data EDN map up to 64KiB")))
                     (let [parsed (read-edn (:data v))]
                       (when-not (map? parsed) (throw (data/fail :invalid-data "data must be a map")))
                       parsed))

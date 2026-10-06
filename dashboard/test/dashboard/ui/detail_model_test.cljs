@@ -60,3 +60,7 @@
     "engine event service unavailable: ENOENT" true {:kind :error :text "engine event service unavailable: ENOENT"}
     "engine event service unavailable: ENOENT" false {:kind :offline :text "offline: outstanding requests cannot be read"}
     "http 500" false {:kind :offline :text "offline: outstanding requests cannot be read"}))
+
+(deftest iframe-src-encodes-world-and-name
+  (let [odd (assoc online :name "a&b#c" :world "w 1")]
+    (is (= "/view?agent=w%201/a%26b%23c&embed=1&who=me" (:iframe-src (m/detail-model odd now nil "me"))))))

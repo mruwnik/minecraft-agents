@@ -2,12 +2,13 @@
   (:require [dashboard.edn :as edn]
             [re-frame.core :as rf]))
 
-;; keys of requests still in flight: a slow response never piles up behind the next poll tick
+;; [key url] of requests still in flight: a slow response never piles up behind the next poll tick,
+;; but a request for another url (new world, new body) is not dropped behind the old one
 (defonce in-flight (atom #{}))
 
 (defn fetch-json! [{:keys [key url on-ok on-err]}]
-  (when-not (contains? @in-flight key)
-    (swap! in-flight conj key)
+  (when-not (contains? @in-flight [key url])
+    (swap! in-flight conj [key url])
     (-> (js/fetch url)
         (.then (fn [res]
                  (-> (.json res)
@@ -16,23 +17,31 @@
                                 (rf/dispatch (conj on-ok (js->clj data :keywordize-keys true)))
                                 (rf/dispatch (conj on-err (or (.-error data) (str "http " (.-status res))))))))))) 
         (.catch (fn [e] (rf/dispatch (conj on-err (str e)))))
-        (.finally (fn [] (swap! in-flight disj key))))))
+        (.finally (fn [] (swap! in-flight disj [key url]))))))
 
 (rf/reg-fx :fetch-json fetch-json!)
 
+(defn edn-outcome
+  "[:ok data] or [:err message] for an HTTP reply: an unparseable body is an error, whatever the status."
+  [ok? status text]
+  (let [parsed (try {:data (edn/one-form text)} (catch :default e {:parse-error (str e)}))
+        data (:data parsed)]
+    (cond
+      (and ok? (:parse-error parsed)) [:err (str "bad reply: " (:parse-error parsed))]
+      ok? [:ok data]
+      :else [:err (or (when (map? data) (:error data)) (str "http " status))])))
+
 (defn fetch-edn! [{:keys [key url on-ok on-err]}]
-  (when-not (contains? @in-flight key)
-    (swap! in-flight conj key)
+  (when-not (contains? @in-flight [key url])
+    (swap! in-flight conj [key url])
     (-> (js/fetch url)
         (.then (fn [res]
                  (-> (.text res)
                      (.then (fn [text]
-                              (let [data (try (edn/one-form text) (catch :default e {:error (str e)}))]
-                                (if (.-ok res)
-                                  (rf/dispatch (conj on-ok data))
-                                  (rf/dispatch (conj on-err (or (:error data) (str "http " (.-status res))))))))))))
+                              (let [[outcome value] (edn-outcome (.-ok res) (.-status res) text)]
+                                (rf/dispatch (conj (if (= :ok outcome) on-ok on-err) value))))))))
         (.catch (fn [e] (rf/dispatch (conj on-err (str e)))))
-        (.finally (fn [] (swap! in-flight disj key))))))
+        (.finally (fn [] (swap! in-flight disj [key url]))))))
 
 (rf/reg-fx :fetch-edn fetch-edn!)
 

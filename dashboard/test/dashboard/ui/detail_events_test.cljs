@@ -26,3 +26,20 @@
         reconciled (detail-events/reconcile-page prior-stream prior page)]
     (is (= [90 91] (mapv :seq (:events reconciled))))
     (is (= {"r90" {:request-id "r90"}} (:outstanding reconciled)))))
+
+(def lease {:who "dashboard-k3x9ab" :expiresAt 9000})
+
+(deftest drive-poll-keeps-our-lease-and-countdown
+  (let [db {:who "dashboard-k3x9ab" :detail-body "Bob" :drive {:driving? true :expires-at 5000}}
+        polled (detail-events/drive-polled db "Bob" lease 100)]
+    (is (= {:driving? true :expires-at 9000 :manual lease :at 100} (:drive polled)))))
+
+(deftest drive-poll-of-someone-elses-lease-stops-us-driving
+  (let [db {:who "dashboard-k3x9ab" :detail-body "Bob" :drive {:driving? true :expires-at 5000}}
+        other {:who "claude" :expiresAt 9000}
+        polled (detail-events/drive-polled db "Bob" other 100)]
+    (is (= {:driving? false :expires-at nil :manual other :at 100} (:drive polled)))))
+
+(deftest drive-poll-for-a-closed-body-changes-nothing
+  (let [db {:who "me" :detail-body "Al" :drive {:driving? true}}]
+    (is (= db (detail-events/drive-polled db "Bob" nil 100)))))

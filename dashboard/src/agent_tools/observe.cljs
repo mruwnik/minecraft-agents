@@ -209,6 +209,9 @@
 
 ;; Observer lock and checkpoint
 
+;; a lock dir with no pid file this old was left by a process that died between mkdir and writing its pid
+(def pidless-lock-stale-ms 5000)
+
 (defn acquire!
   "Take the observer's lock directory; the function that gives it back. Throws EOBSERVERBUSY while a live process holds it."
   [dir observer]
@@ -218,10 +221,12 @@
     (try (.mkdirSync fs lock #js {:mode private-dir-mode})
          (catch :default error
            (when-not (= "EEXIST" (code-of error)) (throw error))
-           (let [pid (try (js/Number (.readFileSync fs (.join path lock "pid") "utf8")) (catch :default _ nil))]
-             (when-not (and pid (js/Number.isInteger pid) (not= 0 pid)) (throw (busy)))
-             (when (try (.kill js/process pid 0) true
-                        (catch :default e (if (= "ESRCH" (code-of e)) false (throw e))))
+           (let [pid (try (js/Number (.readFileSync fs (.join path lock "pid") "utf8")) (catch :default _ nil))
+                 pid? (and pid (js/Number.isInteger pid) (not= 0 pid))]
+             (when (and (not pid?) (< (- (js/Date.now) (.-mtimeMs (.statSync fs lock))) pidless-lock-stale-ms))
+               (throw (busy)))
+             (when (and pid? (try (.kill js/process pid 0) true
+                                  (catch :default e (if (= "ESRCH" (code-of e)) false (throw e)))))
                (throw (busy)))
              (.rmSync fs lock #js {:recursive true})
              (.mkdirSync fs lock #js {:mode private-dir-mode}))))

@@ -1,8 +1,10 @@
 (ns agent-tools.drive-test
-  (:require [cljs.test :refer [deftest is]]
+  (:require [cljs.test :refer [deftest is are]]
             [agent-tools.drive :as drive]
             [agent-tools.map :as map-tool]
             ["node:path" :as path]))
+
+(defn coded [code] (doto (js/Error. "x") (aset "code" code)))
 
 (defn post [body] {:method "POST" :path "/drive" :body body})
 
@@ -56,3 +58,15 @@
                         [{:status 200 :json {}} 1]
                         [{:status 200 :json nil} 1]]]
     (is (= code (drive/exit-code-for reply)) (pr-str reply))))
+
+(deftest failure-text-distinguishes-the-error-codes
+  (are [code expected] (= expected (drive/failure-text (coded code) "Bob" "/no/such/socket"))
+    "ETIMEDOUT" "drive request to Bob timed out after 3 s"
+    "ERESPONSETOOLARGE" "drive response from Bob exceeded 64 KB"
+    "ECONNRESET" "no running body Bob (no control socket at /no/such/socket)"
+    "ECONNREFUSED" "no running body Bob (no control socket at /no/such/socket)"))
+
+(deftest request-options-bound-time-and-reply-size
+  (let [options (drive/request-options "/s" {:method "GET" :path "/drive" :body nil})]
+    (is (= 3000 (:timeout-ms options)))
+    (is (= 65536 (:max-bytes options)))))

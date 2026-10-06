@@ -56,14 +56,14 @@
 
 (deftest every-slot-is-owned-by-exactly-one-wanted-column-after-any-move
   (let [{:keys [columns ^js owners]} (start)]
-    (loop [^js columns columns
-           [[x z] & more] [[1 0] [1 1] [-3 2] [-3 2] [0 0]]]
-      (when (some? x)
-        (let [^js now (.-columns (w/move-window x z radius columns owners))
-              cs (vec (es6-iterator-seq (.values now)))]
-          (is (= 9 (count (set (map #(w/slot-key (.-cx ^js %) (.-cz ^js %) N) cs)))))
-          (is (every? #(= (w/key-of (.-cx ^js %) (.-cz ^js %)) (.get owners (w/slot-key (.-cx ^js %) (.-cz ^js %) N))) cs))
-          (recur now more))))))
+    (reduce (fn [^js columns [x z]]
+              (let [^js now (.-columns (w/move-window x z radius columns owners))
+                    cs (vec (es6-iterator-seq (.values now)))]
+                (is (= 9 (count (set (map #(w/slot-key (.-cx ^js %) (.-cz ^js %) N) cs)))))
+                (is (every? #(= (w/key-of (.-cx ^js %) (.-cz ^js %)) (.get owners (w/slot-key (.-cx ^js %) (.-cz ^js %) N))) cs))
+                now))
+            columns
+            [[1 0] [1 1] [-3 2] [-3 2] [0 0]])))
 
 (deftest modulo-wraps-negatives
   (are [a n expected] (= expected (w/modulo a n))

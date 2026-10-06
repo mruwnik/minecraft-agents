@@ -14,17 +14,17 @@
    {:fx [[:dispatch [:tiles/fetch]]
          [:start-timers [[:tiles tiles-ms [:tiles/fetch]]]]]}))
 
-(rf/reg-event-fx
- :tiles/fetch
- (fn [{:keys [db]} _]
-   (let [world (db/current-world db)
-         held (:tiles db)
-         since (when (= world (:requested held)) (some-> (:at held) (- overlap-ms) (max 0)))]
-     (if-not world
-       {:dispatch-later [{:ms 1000 :dispatch [:tiles/fetch]}]}
-       {:fetch-json {:key :tiles
-                     :url (str "/api/tiles/" (js/encodeURIComponent world) (when since (str "?since=" since)))
-                     :on-ok [:tiles/ok world] :on-err [:tiles/err]}}))))
+(defn fetch-fx
+  "The tiles request for the current world; nil without one (the 15 s timer asks again)."
+  [db]
+  (when-let [world (db/current-world db)]
+    (let [held (:tiles db)
+          since (when (= world (:requested held)) (some-> (:at held) (- overlap-ms) (max 0)))]
+      {:fetch-json {:key :tiles
+                    :url (str "/api/tiles/" (js/encodeURIComponent world) (when since (str "?since=" since)))
+                    :on-ok [:tiles/ok world] :on-err [:tiles/err]}})))
+
+(rf/reg-event-fx :tiles/fetch (fn [{:keys [db]} _] (fetch-fx db)))
 
 (defn merge-index
   "The index {[cx cz] mtime} of the same world with the tiles that changed since; a new world starts empty."

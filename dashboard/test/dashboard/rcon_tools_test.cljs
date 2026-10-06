@@ -134,3 +134,9 @@
     "rcon.port=25575x" 25575
     "other=1" 25575
     "" 25575))
+
+(deftest server-properties-path-cases
+  (are [env home expected] (= expected (tools/server-properties-path (clj->js env) home))
+    {} "/home/x" "/home/x/minecraft/claude/server.properties"
+    {"MINECRAFT_SERVER_PROPERTIES" ""} "/home/x" "/home/x/minecraft/claude/server.properties"
+    {"MINECRAFT_SERVER_PROPERTIES" "/srv/mc/server.properties"} "/home/x" "/srv/mc/server.properties"))

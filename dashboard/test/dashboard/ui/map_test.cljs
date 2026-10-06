@@ -18,6 +18,8 @@
     (is (not (map/retry-same-image? replacement failed)))))
 
 (deftest unmount-releases-the-retained-overview-path
-  (reset! map/coverage-path-cache {:path #js {}})
-  (map/release-terrain-cache!)
-  (is (nil? @map/coverage-path-cache)))
+  (let [before @map/coverage-path-cache]
+    (reset! map/coverage-path-cache {:path #js {}})
+    (map/release-terrain-cache!)
+    (is (nil? @map/coverage-path-cache))
+    (reset! map/coverage-path-cache before)))

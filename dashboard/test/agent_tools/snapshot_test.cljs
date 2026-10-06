@@ -172,3 +172,13 @@
                    (is (empty? @calls))
                    (is (not (.existsSync fs (.join path workspace "snapshots"))))))
           (.finally done)))))
+
+(deftest read-pose-ignores-a-pose-file-over-one-megabyte
+  (let [{:keys [dir worlds view]} (world-fixture)
+        ctx {:world-dir (.join path worlds "w")}
+        write! #(.writeFileSync fs (.join path view "pose.json") %)
+        small (do (write! "{\"world\":\"w\"}") (snap/read-pose ctx "B"))
+        large (do (write! (str "{\"pad\":\"" (apply str (repeat 1048577 "x")) "\"}")) (snap/read-pose ctx "B"))]
+    (.rmSync fs dir #js {:recursive true :force true})
+    (is (= {:world "w"} small))
+    (is (nil? large))))

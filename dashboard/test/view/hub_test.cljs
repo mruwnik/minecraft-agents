@@ -40,7 +40,7 @@
       source)))
 
 (defn make-hub [calls & [sources]]
-  (hub/hub #js {:fps 6 :maxScenes 3 :openStream (fake-source (or sources (volatile! [])))} (fake-surface calls)))
+  (hub/hub #js {:fps 6 :maxScenes 3 :streamDebounceMs 0 :openStream (fake-source (or sources (volatile! [])))} (fake-surface calls)))
 
 (defn canvas [] #js {:width 300 :height 150})
 (defn now [] (js/performance.now))
@@ -162,7 +162,7 @@
          (.close h)
          (is (.-closed ^js (first @sources)))
          (done))
-       600))))
+       50))))
 
 (deftest without-a-surface-the-hub-is-unsupported-and-leaves-the-canvas-alone
   (async done

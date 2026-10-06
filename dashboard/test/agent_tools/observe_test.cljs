@@ -1,5 +1,5 @@
 (ns agent-tools.observe-test
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [deftest is are async]]
             [agent-tools.fake-socket :as fake]
             [agent-tools.job-results :as job-results]
             [agent-tools.observe :as observe]
@@ -214,14 +214,14 @@
 (defn event [source kind & [data message]]
   (cond-> {:source source :kind kind :data (or data {})} message (assoc :message message)))
 
-(def chat (event :body :chat {:from "Dan"} "Hello Probe!"))
+(def chat (event :body :chat {:from "Alex"} "Hello Probe!"))
 
 (def classify-cases
   [["addressed chatter wakes" chat defaults :chat]
    ["a longer name does not match" (assoc chat :message "ProbeExtra") defaults nil]
    ["chatter all wakes on banter" (assoc chat :message "banter") (assoc defaults :chatter "all") :chat]
    ["a sender filter applies" chat (assoc defaults :from "Other") nil]
-   ["a whisper wakes" (event :body :whisper {:from "Dan"} "hi") defaults :chat]
+   ["a whisper wakes" (event :body :whisper {:from "Alex"} "hi") defaults :chat]
    ["chatter none suppresses whispers" (event :body :whisper {} "hi") (assoc defaults :chatter "none") nil]
    ["hurt is opt-in" (event :body :hurt) defaults nil]
    ["disconnection is opt-in" (event :body :disconnected) defaults nil]
@@ -265,15 +265,19 @@
     (is (= {} (:seen (observe/attention-changes {} (:seen first-pass)))))
     (is (= [{:id "r" :job "j1" :reason :blocked :message "No food"}] (:changed first-pass)))))
 
+(defn pass-sizes
+  "How many attention requests each successive pass delivers, until a pass delivers none."
+  [requests]
+  (->> (iterate #(observe/attention-changes requests (:seen %)) {:seen {}})
+       rest
+       (map (comp count :changed))
+       (take-while pos?)
+       vec))
+
 (deftest attention-is-delivered-four-at-a-time-until-all-are-seen
-  (doseq [n [10 129]]
-    (let [requests (into {} (map (fn [i] [(str "r" i) {:reason :blocked :event {:message "help"}}])) (range n))
-          [delivered _] (loop [seen {} delivered 0 passes 0]
-                          (let [{:keys [changed] :as pass} (observe/attention-changes requests seen)]
-                            (if (or (empty? changed) (> passes 100))
-                              [delivered passes]
-                              (recur (:seen pass) (+ delivered (count changed)) (inc passes)))))]
-      (is (= n delivered)))))
+  (are [n expected] (= expected (pass-sizes (into {} (map (fn [i] [(str "r" i) {:reason :blocked :event {:message "help"}}])) (range n))))
+    10 [4 4 2]
+    129 (conj (vec (repeat 32 4)) 1)))
 
 (deftest keyword-keyed-requests-are-reported-by-their-name
   (is (= "r1" (:id (first (:changed (observe/attention-changes {:r1 blocked} {})))))))
@@ -365,7 +369,7 @@
           (.then (fn [quiet]
                    (is (= :timeout (:wake quiet)))
                    (is (= 1 (get-in quiet [:summary :counts :picked-up])))
-                   (push! f (assoc (event :body :chat {:from "Dan"} "Probe come home") :seq 2))
+                   (push! f (assoc (event :body :chat {:from "Alex"} "Probe come home") :seq 2))
                    ((:wait! f))))
           (.then (fn [woken]
                    (is (= :chat (:wake woken)))
@@ -471,7 +475,7 @@
             (.then (fn [_] (.abort controller) pending))
             (.then (fn [cancelled]
                      (is (some? (.-code cancelled)))
-                     (push! f (assoc (event :body :chat {:from "Dan"} "Probe hello") :seq 1))
+                     (push! f (assoc (event :body :chat {:from "Alex"} "Probe hello") :seq 1))
                      ((:wait! f))))
             (.then (fn [woken] (is (= :chat (:wake woken))))))))))
 
@@ -480,7 +484,7 @@
     (fn [f]
       (let [stalled (fn [socket endpoint options]
                       (if (str/starts-with? endpoint "/events")
-                        (-> (js/Promise. (fn [resolve _] (js/setTimeout resolve 25)))
+                        (-> (js/Promise. (fn [resolve _] (js/setTimeout resolve (+ 5 (:timeout-ms options))))) ; outlasts the deadline the read was given
                             (.then (fn [_] (throw (doto (js/Error. "deadline") (aset "code" "ETIMEDOUT"))))))
                         ((:get! f) socket endpoint options)))]
         (-> (observe/wait-observe (:req f) stalled nil (fn [_] (js/Promise.resolve nil)))
@@ -511,7 +515,7 @@
 (deftest first-use-catches-recently-completed-watched-actions-while-ignoring-historical-chat
   (with-fixture []
     (fn [f]
-      (push! f (assoc (event :body :chat {:from "Dan"} "Probe historical chat") :seq 1 :generation-id "g")
+      (push! f (assoc (event :body :chat {:from "Alex"} "Probe historical chat") :seq 1 :generation-id "g")
              (assoc (event :action :done {:status :dug}) :context {:action-id "dig-1"} :seq 2 :generation-id "g")
              (assoc (event :action :done {:status :placed}) :context {:action-id "place-1"} :seq 3 :generation-id "g"))
       (let [req (assoc-in (:req f) [:wait-options :watch-actions] ["dig-1" "place-1"])
@@ -669,3 +673,20 @@
   (is (= {:by :shelter :job "j563" :why :logged-out-for-night :back-at 1020000}
          (:offline (observe/compact-status {:mode :offline :offline {:by :shelter :job "j563" :why :logged-out-for-night :back-at 1020000}}))))
   (is (not (contains? (observe/compact-status {:mode :scheduled}) :offline))))
+
+(deftest acquire-reclaims-a-lock-whose-owner-died-before-writing-its-pid
+  (let [dir (.mkdtempSync fs (.join path (os/tmpdir) "observe-lock-"))
+        lock (.join path dir "obs.lock")]
+    (.mkdirSync fs lock)
+    (.utimesSync fs lock 1 1)
+    (let [release (observe/acquire! dir "obs")]
+      (is (= (str (.-pid js/process)) (.readFileSync fs (.join path lock "pid") "utf8")))
+      (release))
+    (.rmSync fs dir #js {:recursive true :force true})))
+
+(deftest acquire-refuses-a-fresh-lock-with-no-pid-yet
+  (let [dir (.mkdtempSync fs (.join path (os/tmpdir) "observe-lock-"))
+        outcome (do (.mkdirSync fs (.join path dir "obs.lock"))
+                    (try (observe/acquire! dir "obs") nil (catch :default e (.-code e))))]
+    (.rmSync fs dir #js {:recursive true :force true})
+    (is (= "EOBSERVERBUSY" outcome))))
