@@ -90,6 +90,14 @@
     (is (= expected (extinguish/check (bare-ctx (tu/fake {:self self}) {}))) (pr-str self))
     (is (= expected ((:when (:burning triggers/all)) (tu/fake {:self self}) nil {})) (pr-str self))))
 
+(deftest burning-trigger-holds-for-an-unscooped-pour-even-when-the-fire-is-out
+  (let [view (fn [now] {:now now :data {:entries {:extinguish-pour [{:t 0 :data {:pos {:x 0 :y 64 :z 0}}}]}
+                                        :policies {:extinguish-pour extinguish/pour-policy}}})
+        holds? #((:when (:burning triggers/all)) (tu/fake {:self {}}) % {})]
+    (is (true? (holds? (view 1000))) "a fresh pour is scooped though the body is no longer burning")
+    (is (false? (holds? (view (* 11 60 1000)))) "an expired entry does not fire")
+    (is (false? (holds? {:now 0 :data {}})) "no pour, no fire")))
+
 (deftest burning-trigger-holds-on-fire-or-in-lava
   (doseq [[self expected] [[{:onFire true} true] [{:inLava true} true] [{} false]]]
     (is (= expected ((:when (:burning triggers/all)) (tu/fake {:self self}) nil {})) (pr-str self))))

@@ -343,7 +343,7 @@ Built-in triggers, in the order of `triggers/defaults.edn` (the default register
 | trigger | holds when | job | cooldown |
 |---|---|---|---|
 | `:suffocating` | drowning (in water, oxygen below `:min-oxygen` 12, head not in air) or head in a suffocating block | `breathe` | 0 |
-| `:burning` | on fire or in lava, without `fire_resistance` | `extinguish` | 0 |
+| `:burning` | on fire or in lava, without `fire_resistance`, or an unscooped `:extinguish-pour` in memory | `extinguish` | 0 |
 | `:wedged` | a full block fills the cell of the feet and the eye cell is not solid (sand fallen on the body; both solid is `:suffocating`); quiet while a recent `:unwedge-blocked` entry names the cell | `survival.unwedge` | 0 |
 | `:hostile-near` | a real danger (see Sensing) within `:radius` 8, ranged within `:ranged-radius` 16; `:visible-only false` counts heard mobs | `respond-to-hostile` | none (retry) |
 | `:hungry` | food below `:food` 6 plus one per missing hp (at most 18: below 18 nothing heals); or hurt, below 18 and common food carried; or health below `:health` 7 and food carried (eats to 20) | `get-food` | 90 s |
