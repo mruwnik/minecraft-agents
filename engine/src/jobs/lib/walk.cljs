@@ -43,7 +43,7 @@
 
 (defn pose-of [pose]
   {:x (.-x pose) :y (.-y pose) :z (.-z pose) :vx (.-vx pose) :vy (.-vy pose) :vz (.-vz pose) :on-ground (.-onGround pose)
-   :on-climbable (.-onClimbable pose) :in-water (.-inWater pose) :collided (.-collided pose)})
+   :on-climbable (.-onClimbable pose) :in-water (.-inWater pose) :in-lava (.-inLava pose) :collided (.-collided pose)})
 
 (defn steer-args
   "The act args of one walk. decide is not enumerable: the engine's act wrapper writes (js->clj args) into

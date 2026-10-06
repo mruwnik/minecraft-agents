@@ -825,3 +825,9 @@
     vine-exit-steps 1 (pose 0.5 64.9 3.5 {:on-ground false :on-climbable false}) true
     [(step 0 64 3 :start) (step 0 66 3 :climb-up {:px 0.5 :pz 3.5})] 1 (pose 0.3 64.9 3.5 {:on-ground false :on-climbable true}) true
     [(step 0 64 3 :start) (step 1 66 3 :walk)] 1 (pose 0.5 64.9 3.5 {:on-ground false :on-climbable true}) true))
+
+;; in lava a jump gives no rise, so the body keeps pressing forward: the wall collision is what lifts it out
+(deftest in-lava-at-the-wall-keeps-pressing-forward
+  (are [extra forward?] (= forward? (:forward (controls-of (ex/tick p (state-at rise-steps 1) (pose 2.69 64 3.5 extra)))))
+    {}              false
+    {:in-lava true} true))

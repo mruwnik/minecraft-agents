@@ -6,7 +6,7 @@
   Step:  {:x :y :z :h :move kw :corner bool :px :pz}, plus :cx :cz (crossing point on the boundary the
          move came in by), :swim true, :opens [...] and :free [fx fz] (corner slides) when present.
          h is the stand height above the cell floor in 1/16 block; px/pz is the point to stand at.
-  Pose:  {:x :y :z :vy :on-ground :on-climbable :in-water :collided}, feet position; :vx :vz (horizontal velocity, blocks
+  Pose:  {:x :y :z :vy :on-ground :on-climbable :in-water :in-lava :collided}, feet position; :vx :vz (horizontal velocity, blocks
          per tick) when the body reports them.
   State: {:steps :i :since :tick :yaw}; i is the index of the step walked to, since the tick at which it
          became current, tick the number of calls, yaw the last yaw sent while moving.
@@ -482,10 +482,12 @@
 (defn rise-first?
   "True when a jump up must go straight up first: a straight or free diagonal jump (no corner slide), the body
   at the wall it climbs and below the step's stand height. Pushing forward there moves the client 0.02 into the
-  wall, and the server rejects that position every time."
-  [policy prev step {:keys [y in-water] :as pose}]
+  wall, and the server rejects that position every time. Never in lava: a jump gives no rise there, and only
+  pressing into the wall lifts the body out."
+  [policy prev step {:keys [y in-water in-lava] :as pose}]
   (and (= :jump (:move step))
        (not in-water)
+       (not in-lava)
        (nil? (:cx step))
        (some? prev)
        (not (:corner step))
