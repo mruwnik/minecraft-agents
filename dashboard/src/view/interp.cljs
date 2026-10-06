@@ -23,12 +23,12 @@
 ;; the delay only moves when the target leaves [delay - BAND-BELOW, delay + BAND-ABOVE]: no wobble from the jitter estimate
 (def ^:const BAND-BELOW 8)
 (def ^:const BAND-ABOVE 20)
-(def ^:const GAP-KEEP 12)
+(def ^:const GAP-KEEP 60) ; about 6 s of writes: a one-in-ten longer step must still be in the window
 (def ^:const MAX-INTERVAL-GAP 500)
 (def ^:const DEFAULT-INTERVAL 100)
 (def ^:const RISE-PER-SECOND 0.2) ; the delay rises slowly ...
 (def ^:const FALL-PER-SECOND 1) ; ... and falls fast, so playback catches up when walking resumes
-(def ^:const INTERVAL-QUANTILE 0.9) ; a body at a write-rate cap steps 1 or 2 ticks apart; the longer step sets the delay (gaps over MAX-INTERVAL-GAP are pauses)
+(def ^:const INTERVAL-QUANTILE 1) ; the longest recent step sets the delay: a body at a write-rate cap steps 1 or 2 ticks apart, at random (gaps over MAX-INTERVAL-GAP are pauses)
 
 (defn clamp ^number [^number v ^number lo ^number hi] (min hi (max lo v)))
 (defn lerp ^number [^number a ^number b ^number f] (+ a (* (- b a) f)))

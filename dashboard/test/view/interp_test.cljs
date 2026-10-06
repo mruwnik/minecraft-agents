@@ -236,3 +236,17 @@
   (let [frames (filterv #(> (:now %) (+ T0 SKEW 8000)) (playback (interp/pose-interpolator) (capped-walk 300) (+ T0 SKEW) (+ T0 SKEW 28000)))]
     (is (= 0 (- (:underruns (peek frames)) (:underruns (first frames)))))
     (is (<= (:delay (peek frames)) 180))))
+
+;; the same cap, with 150 ms steps arriving at random (about one in ten, 9.5 writes/s as measured live), not in a fixed rhythm
+(defn random-capped-walk [n seed]
+  (let [rnd (iterate #(mod (+ (* % 1103515245) 12345) 2147483648) seed)
+        gaps (map #(if (< (mod (quot % 65536) 100) 10) 150 100) (rest rnd))
+        ts (reductions + T0 (take n gaps))]
+    (vec (map-indexed (fn [k t] {:pose (mk t (* 0.43 (/ (- t T0) 100)))
+                                 :arrival (+ t SKEW (mod (* k 7919) 31))}) ts))))
+
+(deftest a-10-hz-walk-with-random-150-ms-steps-does-not-underrun
+  (doseq [seed [1 2 3 4 5 6]]
+    (let [frames (filterv #(> (:now %) (+ T0 SKEW 8000)) (playback (interp/pose-interpolator) (random-capped-walk 700 seed) (+ T0 SKEW) (+ T0 SKEW 60000)))]
+      (is (= 0 (- (:underruns (peek frames)) (:underruns (first frames)))) (str "seed " seed))
+      (is (<= (:delay (peek frames)) 200)))))
