@@ -1,0 +1,35 @@
+;; fight-back counts a hit only when the attack did damage (card a655e658, commit 4c84db24): a killable mob dies in a few
+;; swings; an Invulnerable zombie is given up on after 3 no-damage swings (fight_no_damage) and not swung at again.
+;; Mobs are NoAI and helmeted (they never hurt, no sun burn).
+{:defaults
+ {:tags [:hostile :combat] :time :any
+  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+              :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+  :body {:at [16.5 0 16.5]}}
+ :cases
+ [{:name "skeleton-dies-stone-sword"
+   :body {:inventory [["stone_sword" 1]]}
+   :act [[:summon "skeleton" [18.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 10}
+            {:no-event {:kind :fight_no_damage} :for-s 25}]
+   :after [[:entities "type=skeleton,tag=wt" [[0 0 0] [32 4 32]] 0]]
+   :limit-s 40}
+  {:name "invulnerable-zombie-given-up"
+   :body {:inventory [["stone_sword" 1]]}
+   :act [[:summon "zombie" [18.5 0 16.5] "{NoAI:1b,Invulnerable:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:kind :fight_no_damage} :within-s 30}]
+   :after [[:entities "type=zombie,tag=wt" [[0 0 0] [32 4 32]] 1]]
+   :limit-s 45}
+  {:name "invulnerable-zombie-no-more-swings"
+   :body {:inventory [["stone_sword" 1]]}
+   :act [[:summon "zombie" [18.5 0 16.5] "{NoAI:1b,Invulnerable:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:await {:kind :fight_no_damage} 30] [:wait-s 15]]
+   :expect [{:event {:kind :fight_no_damage} :within-s 30}]
+   :after [[:entities "type=zombie,tag=wt" [[0 0 0] [32 4 32]] 1]]
+   :limit-s 60}
+  {:name "bare-hand-skeleton-at-range"
+   :body {:effects [["resistance" 600 4]]}
+   :act [[:summon "skeleton" [26.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:wait-s 25]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 10}]
+   :limit-s 45}]}
