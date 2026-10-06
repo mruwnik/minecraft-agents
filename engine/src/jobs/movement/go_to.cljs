@@ -26,9 +26,9 @@
   - A call starts afresh from the world: its counters are per call, and a saved escalation is dropped when the body
     is already there (a cut call's memory is a hint).
   - A walk that gets more than 1 block nearer is progress. Three walks in a row without progress give up, and so
-    does a goal the planner proves walled in (:goal-enclosed), at once.
+    does a goal the planner proves walled in (:goal-enclosed, :goal-cut-off), at once.
   - :escalate (default true): a body that is shut in (jobs.lib.reach/enclosed?), not in its own shelter, and whose
-    search ran out of land (:exhausted or :goal-enclosed) makes a way instead of giving up, at most 3 times per go-to, one child job
+    search ran out of land (:exhausted, :goal-enclosed or :goal-cut-off) makes a way instead of giving up, at most 3 times per go-to, one child job
     each (jobs.lib.escape/choose): jobs.access.pillar up out of a pit when it carries enough blocks; else
     jobs.access.clear-path through a wall up to 3 thick toward the goal; else jobs.access.stair up out of a pit or
     toward a higher goal; else a walk to the nearest wall first. Each emits go-to.escalated {:step :why :n}. Once
@@ -37,7 +37,7 @@
     jobs.access.cleanup. Its children's walks never escalate. Jobs that must not change the world on the way pass
     :escalate false.
   - Gives up with {:status :stopped :arrived false :reason :unreachable :why ... :text words} (the job ends :stopped) and an :unreachable warn: :why is the planner's
-    reason (:exhausted, :goal-enclosed, :door-stuck with :cells, :one-way with :near and :one-way ...), or :stuck
+    reason (:exhausted, :goal-enclosed, :goal-cut-off, :door-stuck with :cells, :one-way with :near and :one-way ...), or :stuck
     (:kind the step, :detail the executor's text), :off-plan, :steer-failed, :no-progress or :moved-while-searching; :at is the
     body's feet cell and :near its blocks from the goal. A failed
     escalation adds :escalation {:step :reason ...}, the child's reason or wait.
@@ -147,6 +147,7 @@
          (case why
            :abilities (str "it " (or (kind-words kind) (str "needs a " (some-> kind name) " move the body cannot make")))
            :goal-enclosed "the goal is walled in with no way through"
+           :goal-cut-off "the goal is cut off by a drop: no walkable way leads to it"
            :start-enclosed "the body is shut in and nothing it can walk reaches out"
            :exhausted "no walkable way leads there from here"
            :no-progress "the walk ended no nearer"
@@ -185,7 +186,7 @@
   "Planner reasons that prove the way needs the world changed. A stuck or off-plan walk is the walker's fault and
   never escalates: changing the world there would hide a go-to bug. :start-enclosed is the search running out of land
   with no loaded edge reached (a sealed pen, the goal far and unloaded)."
-  #{:exhausted :goal-enclosed :start-enclosed})
+  #{:exhausted :goal-enclosed :goal-cut-off :start-enclosed})
 
 (defn escalate-reason?
   "Whether a walk result's reason proves the way needs the world changed (escalate-reasons), or is the planner's way
@@ -507,7 +508,7 @@
                              :frontier-best (cond-> fbests frontier (assoc frontier (min fbest (u/dist to fcell))))
                              :target-best (cond-> tbests target (assoc target (min tdist (get tbests target js/Infinity)))))
             (when (and progress? (:restore-pending (ctx/mem c))) (restore-next! c))
-            (if (and (< tries max-blocked) (not= :goal-enclosed (:reason result)))
+            (if (and (< tries max-blocked) (not (#{:goal-enclosed :goal-cut-off} (:reason result))))
               :again
               (await (give-up-or-escalate! c pos tries status result)))))))))
 

@@ -47,8 +47,8 @@
   (is (= ["found" nil] ((juxt :status :reason) (run (world {:fill [[2 64 4 2 64 4 "fire"]]}) (near 8 64 8) {} fire-start)))))
 
 (deftest start-in-fire-ringed-by-lava-is-enclosed-not-unstandable
-  ;; go-to escalates (pillar, stair, dig) on goal-enclosed, never on start-not-standable
-  (is (= ["none" "goal-enclosed"]
+  ;; go-to escalates (pillar, stair, dig) on goal-enclosed or goal-cut-off, never on start-not-standable
+  (is (= ["none" "goal-cut-off"]
          ((juxt :status :reason)
           (run (world {:fill [[2 64 4 2 64 4 "fire"] [3 64 4 3 64 4 "lava"] [1 64 4 1 64 4 "lava"] [2 64 5 2 64 5 "lava"] [2 64 3 2 64 3 "lava"]]})
                (near 8 64 8) {} fire-start)))))
@@ -66,4 +66,4 @@
     (near 4 65 4) ["found" nil]
     ;; lava on all four sides: enclosed, so go-to escalates
     [[1 64 4 1 64 4 "lava"] [3 64 4 3 64 4 "lava"] [2 64 5 2 64 5 "lava"] [2 64 3 2 64 3 "lava"]]
-    (near 8 64 8) ["none" "goal-enclosed"]))
+    (near 8 64 8) ["none" "goal-cut-off"]))

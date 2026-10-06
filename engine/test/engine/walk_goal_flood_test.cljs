@@ -49,7 +49,7 @@
           (let [fresh (await (calls 12 [[0 0] [2 0] [4 0]]))]
             (set! walk/goal-flood! kept)
             (is (= :unfinished fresh) "each walk's search floods afresh and never gets to the flood that proves it")))
-        (is (= "goal-enclosed" (await (calls 12 [[0 0] [2 0] [4 0]]))))))))
+        (is (= "goal-cut-off" (await (calls 12 [[0 0] [2 0] [4 0]]))))))))
 
 (deftest forgetting-the-known-land-forgets-the-flood
   (let [p (tu/fake {:blocks high-deck :self {:pos {:x 0.5 :y 64 :z 0.5}}})

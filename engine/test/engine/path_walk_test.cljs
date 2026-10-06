@@ -248,8 +248,8 @@
 
 (deftest a-walled-in-goal-is-not-walked-towards
   (let [plan (plan-from walled-off [0 64 1] [8 64 1] {:frontier true})]
-    (is (= ["partial" "goal-enclosed"] [(:status plan) (.-reason (:r plan))]))
-    (is (= {:status :no-path :reason :goal-enclosed :replans 0} (walk/no-walk plan 0)))))
+    (is (= ["partial" "goal-cut-off"] [(:status plan) (.-reason (:r plan))]))
+    (is (= {:status :no-path :reason :goal-cut-off :replans 0} (walk/no-walk plan 0)))))
 
 ;; ---- one search where one will do; one bounded search a call (go-to) ----
 

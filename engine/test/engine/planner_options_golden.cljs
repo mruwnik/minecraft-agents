@@ -29,7 +29,7 @@
 
 (deftest options-change-the-reasons-they-should
   (is (contains? (reasons-under {:maxNodes 40}) "budget"))
-  (is (contains? (reasons-under {:floodAfter 5}) "goal-enclosed")))
+  (is (contains? (reasons-under {:floodAfter 5}) "goal-cut-off")))
 
 (defn shift-east [dx {:keys [snapshot query]}]
   {:snapshot snapshot :query (update-in query [:goal :x] + dx)})

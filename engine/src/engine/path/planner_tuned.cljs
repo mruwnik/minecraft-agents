@@ -232,8 +232,8 @@
      js/Infinity 0 0 (js/performance.now) 0 -1 0
      ;; returnable held replaying
      (true? (option options "returnable" false)) #js [] false
-     ;; lf-seen lf-queue lf-head lf-budget lf-active lf-open lf-seed-open lf-end limit-refused
-     nil nil 0 0 false false false false false
+     ;; lf-seen lf-queue lf-head lf-budget lf-active lf-open lf-seed-open lf-end cut-off limit-refused
+     nil nil 0 0 false false false false false false
      ;; known-cells known-new known-edges edges-new
      (.-knownCells options) nil (.-knownEdges options) nil
      ;; searched-out

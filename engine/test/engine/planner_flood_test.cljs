@@ -221,7 +221,7 @@
 
 (deftest a-flood-out-of-budget-grows-until-it-proves-the-goal-walled-in
   (let [r (result-over high-deck [0 64 0] [20 71 20] {:preFlood 0 :floodAfter 20 :goalFlood 100})]
-    (is (= "goal-enclosed" (:reason r)))
+    (is (= "goal-cut-off" (:reason r)))
     (is (> (get-in r [:stats :flooded]) 100) "the flood grew past its first budget")
     (is (< (:expanded r) 3969) "before the search ran out of floor")))
 
@@ -231,7 +231,7 @@
 (def small-floor-deck {:blocks (merge (floor -2 -2 6 6) (box 4 70 4 8 70 8 "stone"))})
 
 (deftest a-search-that-runs-out-before-the-flood-floods-at-the-end
-  (is (= "goal-enclosed" (:reason (result-over small-floor-deck [0 64 0] [6 71 6] {}))))
+  (is (= "goal-cut-off" (:reason (result-over small-floor-deck [0 64 0] [6 71 6] {}))))
   (is (= "exhausted" (:reason (result-over small-floor-deck [0 64 0] [6 71 6] {:goalFlood 0})))))
 
 ;; ---- the frontier: where the searched land runs on into unloaded land ----
@@ -295,7 +295,7 @@
 (deftest a-late-flood-runs-in-the-slices-of-the-search
   (let [options {:preFlood 0 :floodAfter 20 :goalFlood 100}
         [whole most] (sliced-over high-deck [0 64 0] [20 71 20] options 50)]
-    (is (= "goal-enclosed" (:reason whole)))
+    (is (= "goal-cut-off" (:reason whole)))
     (is (> (get-in whole [:stats :flooded]) 400) "the flood grew twice")
     (is (< most 150) "no slice flooded much more than its 50")))
 
@@ -328,7 +328,7 @@
 
 (deftest a-ladder-gap-elsewhere-does-not-hide-a-walled-in-goal
   (is (= "ladder-gap" (:reason (result-over deck-and-gappy-ladder [0 64 0] [6 71 6] {:goalFlood 0}))) "the search saw the gap")
-  (is (= "goal-enclosed" (:reason (result-over deck-and-gappy-ladder [0 64 0] [6 71 6] {})))))
+  (is (= "goal-cut-off" (:reason (result-over deck-and-gappy-ladder [0 64 0] [6 71 6] {})))))
 
 ;; a sealed 45 x 45 deck (2025 cells) over a 93 x 93 floor: the floods of 100, 400 and 1600 cells run out, and the next
 ;; (6000) was due after 10240 expansions, past the 6000 nodes the search may make: it must come before them
@@ -336,7 +336,7 @@
 
 (deftest a-sealed-area-is-proved-before-max-nodes
   (let [r (result-over wide-deck [0 64 0] [30 71 30] {:preFlood 0 :floodAfter 20 :goalFlood 100 :maxNodes 6000})]
-    (is (= "goal-enclosed" (:reason r)))
+    (is (= "goal-cut-off" (:reason r)))
     (is (> (get-in r [:stats :flooded]) 1600))))
 
 ;; a bubble column beside the goal: the flood can prove nothing once it meets one, so it stops there (not at the start, 30 away)
@@ -370,7 +370,7 @@
 (deftest a-flood-goes-on-over-the-searches-of-one-goal
   (is (= :unfinished (rounds high-deck [[0 64 0] [2 64 0]] [20 71 20] small-floods 300 12 nil))
       "each search floods afresh and never gets to the flood that proves it")
-  (is (= "goal-enclosed" (rounds high-deck [[0 64 0] [2 64 0]] [20 71 20] small-floods 300 12 #js {}))))
+  (is (= "goal-cut-off" (rounds high-deck [[0 64 0] [2 64 0]] [20 71 20] small-floods 300 12 #js {}))))
 
 (deftest a-kept-flood-of-another-goal-is-not-used
   (let [memo #js {}]
@@ -507,13 +507,13 @@
 (def pool-deck {:blocks (merge (:blocks small-floor-deck) {"4,69,4" "stone" "4,70,4" "water"})})
 
 (deftest a-sealed-platform-holding-a-pool-is-enclosed
-  (is (= "goal-enclosed" (:reason (result-over pool-deck [0 64 0] [6 71 6] {})))))
+  (is (= "goal-cut-off" (:reason (result-over pool-deck [0 64 0] [6 71 6] {})))))
 
 (def pooled-high-deck
   {:blocks (merge (:blocks high-deck) (box 14 68 14 16 68 15 "stone") (box 14 69 14 16 70 15 "water"))})
 
 (deftest a-flood-through-a-pool-proves-the-goal-enclosed-early
-  (is (= "goal-enclosed"
+  (is (= "goal-cut-off"
          (:reason (result-over pooled-high-deck [0 64 0] [20 71 20] {:maxNodes 1 :preFlood 0 :floodAfter 0 :goalFlood 100000})))))
 
 ;; a pool beside a ladder tower: the path climbs to y 80 and falls into the pool, so the pool is a way in the flood must find

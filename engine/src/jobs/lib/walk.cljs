@@ -560,7 +560,7 @@
 
 (defn no-walk
   "The result of a plan that is not walked, nil when it is: no path within abilities (:beyond), a goal the planner proved
-  walled in (:goal-enclosed: its partial plan's nearer end gets the body no nearer to arriving), a plan cut at a one-way step with no step left, no path, a plan the policy (default
+  walled in or cut off by a drop (:goal-enclosed, :goal-cut-off: its partial plan's nearer end gets the body no nearer to arriving), a plan cut at a one-way step with no step left, no path, a plan the policy (default
   executor/policy) refuses. replans goes in the result."
   ([plan replans] (no-walk plan replans executor/policy))
   ([{:keys [r steps beyond status stop searched-out fresh]} replans policy]
@@ -572,8 +572,8 @@
        beyond
        {:status :no-path :reason :abilities :kind (:kind beyond) :at (:at beyond) :replans replans}
 
-       (= "goal-enclosed" (some-> r .-reason))
-       {:status :no-path :reason :goal-enclosed :replans replans}
+       (contains? #{"goal-enclosed" "goal-cut-off"} (some-> r .-reason))
+       {:status :no-path :reason (keyword (.-reason r)) :replans replans}
 
        searched-out
        {:status :no-path :reason :exhausted :searched-out true :replans replans}

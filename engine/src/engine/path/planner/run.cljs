@@ -228,10 +228,10 @@
                                                         (set! (.-verifying s) true)
                                                         (recur (+ n used)))
                   ^boolean (.-lf-end s) (do (set! (.-flood-pending s) false)
-                             (.finish s (cond enclosed "goal-enclosed" ^boolean (.-boxed s) "box" :else "exhausted")))
+                             (.finish s (cond enclosed (if ^boolean (.-cut-off s) "goal-cut-off" "goal-enclosed") ^boolean (.-boxed s) "box" :else "exhausted")))
                   :else (do (.growFlood s (.-lf-budget s))
                             (if enclosed
-                              (.finish s "goal-enclosed")
+                              (.finish s (if ^boolean (.-cut-off s) "goal-cut-off" "goal-enclosed"))
                               (do (.expandNext s)
                                   (recur (+ n used)))))))))
 

@@ -545,12 +545,12 @@
 
 (deftest goal-sealed-in-by-a-wall-is-goal-enclosed-with-a-partial-path
   (let [r (run (world {:fill [[5 64 -2 5 65 40 "stone"]]}) (near 8 64 2) flooding)]
-    (is (= ["partial" "goal-enclosed"] (status+reason r)))
+    (is (= ["partial" "goal-cut-off"] (status+reason r)))
     (is (= [4 64 2] (last-cell r)))))
 
 (deftest sealed-goal-no-nearer-than-the-start-is-none
   (let [r (run (world {:fill [[5 64 -2 5 65 40 "stone"]]}) (near 8 64 2) flooding {:x 4 :y 64 :z 2})]
-    (is (= ["none" "goal-enclosed" nil] [(:status r) (:reason r) (:path r)]))))
+    (is (= ["none" "goal-cut-off" nil] [(:status r) (:reason r) (:path r)]))))
 
 (deftest xz-goal-does-not-flood
   (let [goal (xz 12 12 0)]

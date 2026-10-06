@@ -1,5 +1,5 @@
 ;; Card d6bd067f: go-to's goal flood over a sealed platform. A floating deck (y 11, x/z 13..19), with or without a 2x2 pool set in
-;; it, is proved :goal-enclosed in the first rounds, with :at and :near and no walk; a deck with a ramp up, and a pool on a deck
+;; it, is proved :goal-cut-off in the first rounds, with :at and :near and no walk; a deck with a ramp up, and a pool on a deck
 ;; reached by a ladder tower and a fall off its top, are reached.
 {:defaults
  {:tags [:movement :planner]
@@ -8,19 +8,19 @@
   :body {:at [2.5 0 16.5]}
   :limit-s 120}
  :cases
- [{:name "plain-deck-is-goal-enclosed"
+ [{:name "plain-deck-is-goal-cut-off"
    :blocks [[:fill [13 11 13] [19 11 19] "stone"]]
    :act [[:job (jobs.movement.go-to {:pos #at [17 12 17] :range 1 :escalate false})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived false :reason :unreachable :why :goal-enclosed :at [:any] :near [:any]}} :within-s 30 :of-job true}
-            {:event {:source :job :kind :stopped :data {:status :stopped :arrived false :text [:contains "walled in"]}} :within-s 30 :of-job true}
-            {:no-event {:source :action :kind :done :data {:name "walkTo"}} :for-s 30 :until {:source :job :kind :stopped :data {:status :stopped :arrived false :text [:contains "walled in"]}}}]
+   :expect [{:event {:source :job :kind :result :data {:arrived false :reason :unreachable :why :goal-cut-off :at [:any] :near [:any]}} :within-s 30 :of-job true}
+            {:event {:source :job :kind :stopped :data {:status :stopped :arrived false :text [:contains "cut off"]}} :within-s 30 :of-job true}
+            {:no-event {:source :action :kind :done :data {:name "walkTo"}} :for-s 30 :until {:source :job :kind :stopped :data {:status :stopped :arrived false :text [:contains "cut off"]}}}]
    :after [[:body-near [2.5 0 16.5] 3]]}
-  {:name "deck-with-pool-is-goal-enclosed"
+  {:name "deck-with-pool-is-goal-cut-off"
    :blocks [[:fill [13 11 13] [19 11 19] "stone"] [:fill [14 10 14] [15 10 15] "stone"] [:fill [14 11 14] [15 11 15] "water"]]
    :act [[:job (jobs.movement.go-to {:pos #at [17 12 17] :range 1 :escalate false})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived false :reason :unreachable :why :goal-enclosed :at [:any] :near [:any]}} :within-s 30 :of-job true}
-            {:event {:source :job :kind :stopped :data {:status :stopped :arrived false :text [:contains "walled in"]}} :within-s 30 :of-job true}
-            {:no-event {:source :action :kind :done :data {:name "walkTo"}} :for-s 30 :until {:source :job :kind :stopped :data {:status :stopped :arrived false :text [:contains "walled in"]}}}]
+   :expect [{:event {:source :job :kind :result :data {:arrived false :reason :unreachable :why :goal-cut-off :at [:any] :near [:any]}} :within-s 30 :of-job true}
+            {:event {:source :job :kind :stopped :data {:status :stopped :arrived false :text [:contains "cut off"]}} :within-s 30 :of-job true}
+            {:no-event {:source :action :kind :done :data {:name "walkTo"}} :for-s 30 :until {:source :job :kind :stopped :data {:status :stopped :arrived false :text [:contains "cut off"]}}}]
    :after [[:body-near [2.5 0 16.5] 3]]}
   {:name "deck-with-ramp-arrives"
    :blocks [[:fill [10 0 16] [10 0 16] "stone"] [:fill [11 0 16] [11 1 16] "stone"] [:fill [12 0 12] [20 2 20] "stone"]]

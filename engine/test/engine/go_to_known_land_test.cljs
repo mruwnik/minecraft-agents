@@ -162,7 +162,7 @@
       (fn ^:async t []
         (let [{:keys [out eng]} (await (go! {:blocks pool-platform :self {:pos {:x 0.5 :y 64 :z 0.5}} :viewChunks 2}
                                             {:pos [34 100 -30] :range 1 :escalate false}))]
-          (is (= {:arrived false :reason :unreachable :why :goal-enclosed} (select-keys @out [:arrived :reason :why]))
+          (is (= {:arrived false :reason :unreachable :why :goal-cut-off} (select-keys @out [:arrived :reason :why]))
               (str "result " @out))
           (is (every? #(<= (dist-to [(:x (:to %)) (:y (:to %)) (:z (:to %))] [34 100 -30]) 50) (moved eng))
               (str "walks: " (mapv (juxt :status :to) (moved eng)))))))))
@@ -179,7 +179,7 @@
                       walk/round-budget 1000]
           (let [{:keys [out]} (await (go! {:blocks high-deck-floor :self {:pos {:x 20.5 :y 64 :z 20.5}}}
                                           {:pos [20 71 20] :range 1 :escalate false}))]
-            (is (= {:arrived false :reason :unreachable :why :goal-enclosed} (select-keys @out [:arrived :reason :why]))
+            (is (= {:arrived false :reason :unreachable :why :goal-cut-off} (select-keys @out [:arrived :reason :why]))
                 (str "result " @out))))))))
 
 (deftest go-to-says-where-it-gave-up

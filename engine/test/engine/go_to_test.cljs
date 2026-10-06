@@ -315,7 +315,7 @@
         ;; a stone wall at x 5 cuts the floor: the goal's side is walled in
         (let [walled (merge (box -2 63 -2 10 63 4 "stone") (box 5 64 -2 5 65 4 "stone"))
               {:keys [out eng p]} (await (go! {:blocks walled} {:pos [8 64 1] :range 0 :escalate false}))]
-          (is (= {:arrived false :reason :unreachable :why :goal-enclosed} (dissoc @out :at :near :text :status)))
+          (is (= {:arrived false :reason :unreachable :why :goal-cut-off} (dissoc @out :at :near :text :status)))
           (is (= [0 64 0] (at p)) "the body did not walk to the wall")
           (is (= ["blocked"] (mapv :status (moved eng))) "one round"))))))
 

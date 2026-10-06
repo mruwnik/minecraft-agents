@@ -405,10 +405,12 @@
           (when (== state 2) (set! (.-lf-open s) true))
           (not (== state 1))))))
 
-  ;; the run that is over: true when the goal is walled in (the flood exhausted within its budget, neither meeting the start
-  ;; nor leaking); flooded is the flood's size (left alone when the start is one of the goal's own cells, as goalEnclosed)
+  ;; the run that is over: true when the goal is walled in or cut off (the flood exhausted within its budget, neither meeting the start
+  ;; nor leaking; cut-off says it has a cliff edge); flooded is the flood's size (left alone when the start is one of the goal's own cells, as goalEnclosed)
   (lateFloodEnd [s]
     (set! (.-lf-active s) false)
     (set! (.-verifying s) false)
     (when-not ^boolean (.-lf-seed-open s) (set! (.-flooded s) (.-size ^js (.-lf-seen s))))
-    (and (not ^boolean (.-lf-open s)) (not ^boolean (.-leaked s)) (<= (.-size ^js (.-lf-seen s)) (.-lf-budget s)) (not ^boolean (.floodGap s ^js (.-lf-queue s))))))
+    (let [enclosed (and (not ^boolean (.-lf-open s)) (not ^boolean (.-leaked s)) (<= (.-size ^js (.-lf-seen s)) (.-lf-budget s)) (not ^boolean (.floodGap s ^js (.-lf-queue s))))]
+      (set! (.-cut-off s) (and enclosed ^boolean (.floodLeaks s ^js (.-lf-queue s))))
+      enclosed)))

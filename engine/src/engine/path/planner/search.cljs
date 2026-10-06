@@ -92,6 +92,7 @@
    ;; progress, whether it met the start (lf-seed-open: among the goal's own cells), whether the run is the one at the end
    ^:mutable ^js lf-seen ^:mutable ^js lf-queue ^:mutable lf-head ^:mutable lf-budget ^:mutable ^boolean lf-active
    ^:mutable ^boolean lf-open ^:mutable ^boolean lf-seed-open ^:mutable ^boolean lf-end
+   ^:mutable ^boolean cut-off ; the late flood proved the goal unreachable with a cliff edge in its region: cut off, not walled in
    ;; the walker's limits (options.limits) refused some move: a search without them could have gone further
    ^:mutable ^boolean limit-refused
    ;; land a caller's earlier searches toward the same goal searched to the end (options.knownCells, a Set of knownKey,
