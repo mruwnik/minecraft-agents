@@ -20,7 +20,7 @@
 # Memory: a missing server starts only with MIN_START_MB (3500) available; the compile itself uses the server's heap.
 # A server started outside the main checkout (a git worktree: integration batches, test copies) runs under a `server` slot of
 # tools/res-slot (held for the server's life, so its JVM counts against the memory floor; kind apart from compiles, max 4); no free slot in ~2 min exits 75 (retry).
-# A worktree server stops itself after MC_COMPILE_SERVER_IDLE_S (default 1200) s without a compile (tools/compile-idle-watch, started with it: kills only that pid with that start time, never during a compile; the next compile restarts it).
+# Every server stops itself after an idle time without a compile: MC_COMPILE_SERVER_IDLE_S (default 1200) for a worktree, MC_COMPILE_MAIN_IDLE_S (1800) for the main checkout (tools/compile-idle-watch, started with it: kills only that pid with that start time, never during a compile; the next compile restarts it).
 # That start waits before queueing (under <lock>.start only), so the global compile lock is free meanwhile.
 # A build that prints an :undeclared-var or :undeclared-ns warning exits 1 (shadow-cljs itself exits 0).
 # Env: MC_COMPILE_LOG=1 prints "waited Ns, compiled Ns".
@@ -75,8 +75,9 @@ start_server() {
   echo "tools/compile: starting the $project shadow-cljs server" >&2
   # the background subshell must drop the lock fds (8, 9) too, or it holds the lock until the server dies
   slot=()
-  [ "$(cd "$repo" && git rev-parse --git-dir)" = "$(cd "$repo" && git rev-parse --git-common-dir)" ] || \
-    slot=(env RES_SLOT_MAX_WAIT_MS=${RES_SLOT_MAX_WAIT_MS:-120000} "$repo/tools/res-slot" server --)
+  idle=${MC_COMPILE_MAIN_IDLE_S:-1800}
+  [ "$(cd "$repo" && git rev-parse --git-dir)" = "$(cd "$repo" && git rev-parse --git-common-dir)" ] || { idle=${MC_COMPILE_SERVER_IDLE_S:-1200}
+    slot=(env RES_SLOT_MAX_WAIT_MS=${RES_SLOT_MAX_WAIT_MS:-120000} "$repo/tools/res-slot" server --); }
   (exec 8>&- 9>&-; cd "$dir" && exec setsid nohup "${slot[@]}" npx shadow-cljs server >"$dir/.shadow-cljs/server.log" 2>&1 </dev/null) &
   bg=$!
   for _ in $(seq 1 300); do
@@ -88,12 +89,11 @@ start_server() {
     sleep 0.5
   done
   server_pid >/dev/null || { echo "tools/compile: the $project server did not start (see $dir/.shadow-cljs/server.log)" >&2; exit 1; }
-  if [ ${#slot[@]} -gt 0 ]; then  # idle watcher: a worktree server must not outlive its use (it holds a server slot)
-    touch "$dir/.shadow-cljs/last-use"
-    sp=$(server_pid)
-    (exec 8>&- 9>&-; exec setsid nohup "$repo/tools/compile-idle-watch" "$sp" "$(awk '{print $22}' "/proc/$sp/stat")" "$dir/.shadow-cljs/last-use" \
-      "${MC_COMPILE_SERVER_IDLE_S:-1200}" "${MC_COMPILE_IDLE_POLL_S:-30}" >/dev/null 2>&1 </dev/null) &
-  fi
+  # idle watcher: a server must not outlive its use (a worktree's holds a server slot; every JVM holds ~2 GB)
+  touch "$dir/.shadow-cljs/last-use"
+  sp=$(server_pid)
+  (exec 8>&- 9>&-; exec setsid nohup "$repo/tools/compile-idle-watch" "$sp" "$(awk '{print $22}' "/proc/$sp/stat")" "$dir/.shadow-cljs/last-use" \
+    "$idle" "${MC_COMPILE_IDLE_POLL_S:-30}" >/dev/null 2>&1 </dev/null) &
   sleep 3
 }
 
@@ -142,9 +142,7 @@ fi
 server_pid >/dev/null || start_server
 
 cd "$dir" || exit 1
-if [ -e .shadow-cljs/last-use ]; then  # keeps a worktree server's idle watcher off while compiling and for the idle time after
-  touch .shadow-cljs/last-use; echo $$ > .shadow-cljs/last-use.compiling
-fi
+touch .shadow-cljs/last-use; echo $$ > .shadow-cljs/last-use.compiling  # keeps the idle watcher off while compiling and for the idle time after
 # the server (and any detached child) must not inherit the lock fd
 out=$(mktemp)
 npx shadow-cljs "$verb" "${builds[@]}" 9>&- 2>&1 | tee "$out"
@@ -155,7 +153,7 @@ if [ "$code" = 0 ] && grep -qE 'WARNING #[0-9]+ - :undeclared-(var|ns)' "$out"; 
   code=1
 fi
 rm -f "$out"; out=
-[ ! -e .shadow-cljs/last-use ] || { touch .shadow-cljs/last-use; rm -f .shadow-cljs/last-use.compiling; }
+touch .shadow-cljs/last-use; rm -f .shadow-cljs/last-use.compiling
 t2=$(date +%s.%N)
 [ -z "${MC_COMPILE_LOG:-}" ] || awk -v a="$t0" -v b="$t1" -v c="$t2" 'BEGIN{printf "tools/compile: waited %.1fs, compiled %.1fs\n", b-a, c-b}' >&2
 exit $code

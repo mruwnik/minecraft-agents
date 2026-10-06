@@ -103,6 +103,18 @@ sleep 1; kill -0 "$WSRV" 2>/dev/null; check "worktree server alive right after a
 sleep 6; kill -0 "$WSRV" 2>/dev/null; check "worktree server gone after the idle time" "$?" 1
 unset MC_COMPILE_MIN_START_MB MC_COMPILE_SERVER_IDLE_S MC_COMPILE_IDLE_POLL_S
 
+# the main checkout's server stops after its own (longer) idle time too, with no server slot
+mkdir -p "$T/main/tools" "$T/main/engine/.shadow-cljs"
+cp "$TOOLS/compile" "$TOOLS/compile-idle-watch" "$T/main/tools/"
+export MC_COMPILE_MIN_START_MB=0 MC_COMPILE_MAIN_IDLE_S=3 MC_COMPILE_SERVER_IDLE_S=1000 MC_COMPILE_IDLE_POLL_S=1
+timeout 30 "$T/main/tools/compile" engine test >/dev/null 2>&1; check "main compile rc" "$?" 0
+MSRV=$(cat "$T/main/engine/.shadow-cljs/server.pid")
+sleep 1; kill -0 "$MSRV" 2>/dev/null; check "main server alive right after a compile" "$?" 0
+sleep 6; kill -0 "$MSRV" 2>/dev/null; check "main server gone after the main idle time" "$?" 1
+timeout 30 "$T/main/tools/compile" engine test >/dev/null 2>&1; check "main compile restarts the server" "$?" 0
+kill "$(cat "$T/main/engine/.shadow-cljs/server.pid")" 2>/dev/null
+unset MC_COMPILE_MIN_START_MB MC_COMPILE_MAIN_IDLE_S MC_COMPILE_SERVER_IDLE_S MC_COMPILE_IDLE_POLL_S
+
 # the idle watcher kills only the server it was started for (pid + start time), and never while a compile runs
 W="$TOOLS/compile-idle-watch"
 starttime() { awk '{print $22}' "/proc/$1/stat"; }
