@@ -1,0 +1,35 @@
+;; jobs.animals.lead-to after go-to became one whole walk per call (card 41ac6c2d): gathering pulls still finish, and a pull
+;; the animal cannot follow is given up with lead-to.gather-short and :gathered false. Cow starts 3 from the body; spot 22 east.
+{:defaults
+ {:tags [:animals :jobs :go-to]
+  :time :any
+  :plot {:floor "grass_block"}
+  :body {:at [4.5 0 16.5] :inventory [["lead" 2]] :effects [["resistance" 900 4]]}
+  :limit-s 200}
+ :cases
+ [{:name "straight-cow-gathered"
+   :act [[:summon "cow" [6.5 0 18.5]]
+         [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [26 0 16]})]]
+   :expect [{:event {:source :job :kind :lead-to.done :data {:reason :unleashed}} :within-s 150 :of-job true}]
+   :after [[:entities "type=cow,tag=wt" [[19 0 9] [31 2 23]] 1]
+           [:item "lead" 2]]}
+  {:name "gap-in-wall-cow-gathered"
+   :blocks [[:fill [14 0 0] [14 3 31] "stone"]
+            [:fill [14 0 14] [14 3 18] "air"]]
+   :act [[:summon "cow" [6.5 0 18.5]]
+         [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [26 0 16]})]]
+   :expect [{:event {:source :job :kind :lead-to.done :data {:reason :unleashed}} :within-s 150 :of-job true}]
+   :after [[:entities "type=cow,tag=wt" [[17 0 9] [31 2 27]] 1]
+           [:item "lead" 2]]}
+  {:name "pull-behind-wall-given-up"
+   :blocks [[:fill [28 0 0] [29 6 31] "stone"]]
+   :act [[:summon "cow" [6.5 0 18.5]]
+         [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [26 0 16] :gather-radius 1})]]
+   :expect [{:event {:source :job :kind :lead-to.gather-short} :within-s 150 :of-job true}
+            {:event {:source :job :kind :lead-to.done :data {:reason :unleashed :gathered false}} :within-s 150 :of-job true}]
+   :after [[:item "lead" 2]]}
+  {:name "glass-wall-cow-stuck-ends-lagging"
+   :blocks [[:fill [14 0 10] [14 3 22] "glass"]]
+   :act [[:summon "cow" [6.5 0 18.5]]
+         [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [26 0 16]})]]
+   :expect [{:event {:source :job :kind :lead-to.done :data {:still-led true}} :within-s 150 :of-job true}]}]}
