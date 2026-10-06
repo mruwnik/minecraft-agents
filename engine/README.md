@@ -27,9 +27,9 @@ async fn needs a name: `(fn ^:async round [ctx] ...)` compiles, `^:async (fn ...
 ```
 cd engine
 npm install
-npm test                      # cljs tests, then node --test js/**/*.test.mjs
+npm test                      # cljs tests, builds the agent-tools bundle, then node --test js/**/*.test.mjs
 npm run test:cljs             # cljs only (4 GB node heap: --max-old-space-size=4096)
-npm run test:js               # JS only
+npm run test:js               # JS only (test/tools needs the bundle: run test:agent-tools or npm test on a fresh clone)
 npm run test:agent-tools      # builds the agent-tools bundle, then runs test/tools
 npm run body -- --agent <name> --world <world> [--scenario <file.edn>]   # node --max-semi-space-size=4: V8 flags only work on argv (RSS 335 -> 235 MB); any other launcher must pass it
 ```
