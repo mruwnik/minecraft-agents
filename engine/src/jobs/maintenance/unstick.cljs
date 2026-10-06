@@ -22,7 +22,8 @@
   {:n {:doc "bad moves in a row that count as stuck" :default (:n stuck/defaults)}
    :min-move {:doc "blocks a move must cover to count as progress" :default (:min-move stuck/defaults)}
    :window-ms {:doc "the newest of the bad moves must be at most this many ms old" :default (:window-ms stuck/defaults)}
-   :quiet-ms {:doc "after giving up, the trigger stays quiet this many ms" :default (:quiet-ms stuck/defaults)}})
+   :quiet-ms {:doc "after giving up, the trigger stays quiet this many ms" :default (:quiet-ms stuck/defaults)}
+   :ignore-zones? {:doc "act regardless of zones and claims (passed to go-to's escalation); the rules of the game allow it" :default false}})
 
 (def stuck-policy {:cap 10 :ttl (* 60 60 1000)})
 
@@ -65,7 +66,8 @@
   (let [{:keys [goal enclosed]} (ctx/mem c)]
     (if-not goal
       (give-up! c {:why :no-goal})
-      (let [r (await (ctx/call-child c :go 'jobs.movement.go-to {:pos goal :range 1 :escalate true}))
+      (let [r (await (ctx/call-child c :go 'jobs.movement.go-to {:pos goal :range 1 :escalate true
+                                                          :ignore-zones? (boolean (:ignore-zones? (:args c)))}))
             res (ctx/child-result c :go)]
         (cond
           (:arrived res) :done

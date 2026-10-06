@@ -213,3 +213,14 @@
           (await (run-until-empty (:eng unwedge) 6))
           (is (= 1 (count (calls (:p unwedge) "dig"))) "unwedge digs the feet block")
           (is (= [] (trespass (:seen unwedge) :unwedge.trespass-last-resort))))))))
+
+(deftest unstick-ignore-zones-reaches-go-to-escalation
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[args out?] [[{} false] [{:ignore-zones? true} true]]]
+          (let [{:keys [eng p]} (setup {:self {:pos ut/in-pit} :blocks ut/pit :inventory [{:name "dirt" :count 4}]} [(zone "Miles" [0 55 -5] [12 70 5])])]
+            (ut/seed-moved! eng (repeat 4 (ut/bad-move-at ut/in-pit ut/goal)))
+            (core/submit! eng (list 'jobs.maintenance.unstick args) {})
+            (await (run-until-empty eng 200))
+            (is (= out? (<= 11 (first (ut/feet p)) 13)) (pr-str args))))))))

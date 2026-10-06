@@ -59,7 +59,8 @@
    :escalate {:doc "when shut in with no way out, pillar, stair or dig a door to get out (and put back what was dug); false: give up"
               :default true}
    :warn {:doc "false: a give-up or refusal is an info event, not a warn, for a caller that reports the failure itself"
-          :default true}})
+          :default true}
+   :ignore-zones? {:doc "act regardless of zones and claims in the escalation (pillar, stair, clear-path); the rules of the game allow it" :default false}})
 
 (def max-blocked 3)
 
@@ -202,11 +203,11 @@
 
 (defn escalation-job
   "[job args] of the child that carries out escalation e (jobs.lib.escape/choose); tag marks the holes it digs."
-  [{:keys [step] :as e} tag]
+  [{:keys [step] :as e} tag ignore-zones?]
   (case step
-    :pillar ['jobs.access.pillar {:height (:height e) :item (:item e)}]
-    :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note tag}]
-    :clear-path ['jobs.access.clear-path {:heading (:heading e) :note tag}]
+    :pillar ['jobs.access.pillar {:height (:height e) :item (:item e) :ignore-zones? ignore-zones?}]
+    :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note tag :ignore-zones? ignore-zones?}]
+    :clear-path ['jobs.access.clear-path {:heading (:heading e) :note tag :ignore-zones? ignore-zones?}]
     :approach ['jobs.movement.go-to {:pos (zipmap [:x :y :z] (:pos e)) :range 0 :escalate false}]))
 
 (defn succeeded? [{:keys [step]} result]
@@ -215,7 +216,7 @@
 (defn may-dig-fn
   "(may-dig? cell): no other owner's zone, claim or plan footprint refuses a dig there (jobs.lib.tidy/refusal)."
   [c]
-  (fn [cell] (nil? (tidy/refusal c :dig (zipmap [:x :y :z] cell)))))
+  (fn [cell] (or (boolean (:ignore-zones? (:args c))) (nil? (tidy/refusal c :dig (zipmap [:x :y :z] cell))))))
 
 (def placed-policy
   "Body memory policy of :escalation-placed, the cells go-to put a block back in: later escalations may dig them."
@@ -345,7 +346,7 @@
   ledger (note-holes!). Its wait or its failure gives up, with the child's reason, unless it got part of the way."
   [c pos]
   (let [{:keys [step] :as e} (:escalation (ctx/mem c))
-        [job args] (escalation-job e (hole-tag c))]
+        [job args] (escalation-job e (hole-tag c) (boolean (:ignore-zones? (:args c))))]
     (if-let [wait (b/child-wait c :escalation job args)]
       (escalation-failed! c pos (merge {:step step} wait))
       (let [r (await (ctx/call-child c :escalation job args))
