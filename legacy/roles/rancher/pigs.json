@@ -1,4 +1,0 @@
-[
-  {"action": "kit", "food": 16, "place": "$place"},
-  {"action": "flock.maintain", "mob": "pig", "place": "$place", "size": 6, "deposit": "$store"}
-]

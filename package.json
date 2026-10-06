@@ -6,8 +6,7 @@
   "scripts": {
     "postinstall": "patch-package",
     "pretest": "node tools/view/build-cljs.mjs",
-    "test": "node --test test/*.test.mjs",
-    "test:legacy": "npm --prefix legacy test"
+    "test": "node --test test/*.test.mjs"
   },
   "keywords": [],
   "author": "",

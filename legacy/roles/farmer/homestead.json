@@ -1,3 +1,0 @@
-[
-  {"action": "farm.maintain", "place": "$place", "deposit": "$store", "compost": "$compost", "reserve_for": "$places", "bone_meal": "$bone_meal"}
-]

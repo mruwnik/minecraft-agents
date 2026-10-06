@@ -1,8 +1,7 @@
 # Minecraft agents
 
 The current implementation uses a ClojureScript body engine, a ClojureScript
-dashboard, and compiled ClojureScript agent tools. The previous HTTP-action body
-and JavaScript dashboard are archived in [legacy/](legacy/README.md).
+dashboard, and compiled ClojureScript agent tools.
 
 ## Current code
 
@@ -46,9 +45,7 @@ ClojureScript.
 ## Build and test
 
 Install the root dependencies with `npm install`, then follow the engine and
-dashboard READMEs for their dependencies and launch commands. To use the archived
-JavaScript implementation, install its additional plugins with
-`npm install --prefix legacy`.
+dashboard READMEs for their dependencies and launch commands.
 
 ## Local ViaProxy
 
@@ -62,7 +59,6 @@ npm test                             # current renderer and shared infrastructur
 npm --prefix engine test             # engine tests
 npm --prefix dashboard test          # dashboard tests
 npm --prefix engine run test:agent-tools  # build compiled tools and test their CLIs
-npm run test:legacy                  # archived implementation tests
 ```
 
 Build the shared-world commands once with
