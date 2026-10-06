@@ -35,7 +35,7 @@
   - else a safe place: jobs.survival.dig-in here, unless a site tonight failed within 8 blocks. A dig-in that does not
     roof the body (stopped, or declined) writes a :night-site {:pos :reason} entry, and the body walks (go-to) to the
     nearest cell within 16 blocks, 9+ from every failed site, that looks dry and solid from the surface (shelter.relocated info; dig-in finds out the
-    rest), to dig in there. After max-sites failed sites, or with no such cell, it holds exposed until day (one shelter.exposed
+    rest), to dig in there. After max-sites failed sites, or with no such cell, it cuts a niche (jobs.survival.dig-niche, once, :niche; out of a failed pit first), else holds exposed until day (one shelter.exposed
     warn, hold :exposed), still taking a bed or a sleeper's log-out when one turns up. A body held exposed digs in again (failed sites
     forgotten) when it has moved off its spot or retry-after-ms passed, at most max-retries times.
   Every hold is declared (ctx/hold-still!) and waits hold-ms at a time, eating one carried food when the hungry
@@ -322,8 +322,22 @@
   (let [p (:primitives c)
         retries (inc (or (:retries (:exposed (ctx/mem c))) 0))]
     (ctx/forget-where! c :night-site (constantly true))
-    (ctx/update-mem! c #(-> % (dissoc :relocating :pit-trapped)
+    (ctx/update-mem! c #(-> % (dissoc :relocating :pit-trapped :niche)
                             (assoc :exposed {:pos (sh/feet p) :at (ctx/now c) :retries retries})))))
+
+(defn ^:async niche!
+  "No pit site is left: out of the failed pit first (dig-in/climb!, a stair), then jobs.survival.dig-niche cuts a niche
+  into a hillside or wall. Whatever it ends in, it is tried once (:niche :tried); the next pass holds exposed if it
+  did not shut the body in."
+  [c pit]
+  (busy! c)
+  (if pit
+    (let [r (await (dig-in/climb! c {:start pit} nil))]
+      (when (map? r) (ctx/update-mem! c assoc :pit-trapped true))
+      :again)
+    (let [d (await (ctx/call-child c :niche 'jobs.survival.dig-niche {}))]
+      (when-not (= :continue d) (ctx/update-mem! c assoc :niche :tried))
+      :again)))
 
 (defn ^:async relocate!
   "Get to a nearby cell where a pit can be dug; the next pass digs in there. Out of its own failed pit first by a stair
@@ -334,7 +348,9 @@
                  (when (< (count (failed-sites c)) max-sites) (relocation-site c)))
         pit (pit-start c)]
     (cond
-      (or (nil? site) (:pit-trapped (ctx/mem c))) (await (hold-exposed! c))
+      (:pit-trapped (ctx/mem c)) (await (hold-exposed! c))
+      (and (nil? site) (not= :tried (:niche (ctx/mem c)))) (await (niche! c pit))
+      (nil? site) (await (hold-exposed! c))
       pit (do (busy! c)
               (ctx/update-mem! c assoc :relocating site)
               (let [r (await (dig-in/climb! c {:start pit} site))]

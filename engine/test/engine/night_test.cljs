@@ -410,3 +410,27 @@
   (let [p (tu/fake {:blocks (into {} (for [x (range -2 3) z (range -2 3)] [(str x ",63," z) "dirt"]))})]
     (is (night/pit-site? p {:x 1 :y 64 :z 1}) "one layer of dirt shows nothing against a pit; dig-in finds out")
     (is (not (night/pit-site? p {:x 9 :y 64 :z 9})) "no ground to stand on")))
+
+;; ------------------------------------------------------------------ a niche in a hillside
+
+(def hillside
+  "Dirt ground over x -2..8, z -2..2 with a stone hill (x 4..8, y 64..66) on it: no pit site 9+ from a failed one, a niche in the hill."
+  (merge (into {} (for [x (range -2 9) z (range -2 3) y (range 60 64)] [(str x "," y "," z) "dirt"]))
+         (into {} (for [x (range 4 9) z (range -2 3) y (range 64 67)] [(str x "," y "," z) "stone"]))))
+
+(deftest with-no-pit-site-left-the-night-digs-a-niche-into-the-hill
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (st/setup {:time night :blocks hillside :floor [-2 -2 8 2] :inventory [{:name "iron_pickaxe" :count 1}]})
+              mid (atom nil)]
+          (st/refuse-cell! p [0 63 0])
+          (st/dawn-after! p 4 (fn [n] (when (= n 2) (reset! mid {:at (st/pos-of p) :reason (:reason (core/holding eng "j1"))}))))
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (core/tick! eng))
+          (is (= {:at {:x 5 :y 64 :z -1} :reason :sheltered} @mid) "shut in at the end of the niche (the stair out of the failed pit went north), a declared hold")
+          (is (= #{{:x 4 :y 64 :z -1} {:x 4 :y 65 :z -1}}
+                 (set (filterv #(= 4 (:x %)) (mapv st/arg-pos (st/calls p "place")))))
+              "the opening, feet and head, plugged")
+          (is (empty? (st/emitted seen :shelter.exposed)))
+          (is (empty? (st/emitted seen :stopped)) "the night ended done"))))))

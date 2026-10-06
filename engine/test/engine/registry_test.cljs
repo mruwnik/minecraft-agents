@@ -8,7 +8,7 @@
   '#{jobs.survival.breathe jobs.survival.unwedge jobs.survival.extinguish
      jobs.survival.respond-to-hostile jobs.survival.fight-back jobs.survival.retreat
      jobs.survival.eat jobs.survival.get-food
-     jobs.survival.sleep jobs.survival.night jobs.survival.dig-in jobs.survival.log-out
+     jobs.survival.sleep jobs.survival.night jobs.survival.dig-in jobs.survival.dig-niche jobs.survival.log-out
      jobs.combat.attack jobs.animals.breed jobs.animals.shear jobs.animals.cull jobs.animals.tend jobs.animals.pen-check jobs.animals.shut-gate jobs.animals.leash jobs.animals.unleash jobs.animals.lead-to jobs.survival.recover-drops jobs.survival.restore-broken jobs.maintenance.unstick jobs.maintenance.shut-doors jobs.storage.make-room
      jobs.animals.herd
      jobs.forestry.fell-tree jobs.forestry.collect-drops jobs.forestry.plant-sapling
