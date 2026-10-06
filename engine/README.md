@@ -581,7 +581,7 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 | job | what it does |
 |---|---|
 | `survival.eat` `{:item :until 18}` | Eats the best carried food (points, then saturation); harmful food only with `:allow-bad` |
-| `survival.get-food` | One round: eat carried food; while hungry take the next way (bake, known source, drops, hunt, wild crops; withdraw/attack/dig children) and eat again. Fed: `{:food n}`; nothing left: stopped `:no-food` with warn `food.none`; inside its ask cooldown it declines |
+| `survival.get-food` | One round: eat carried food; while hungry take the next way (bake, known source, drops, hunt (looks around once first), wild crops; withdraw/attack/dig children) and eat again. Fed: `{:food n}`; nothing left: stopped `:no-food` with warn `food.none`; inside its ask cooldown it declines |
 | `survival.breathe` | One run: swim up or dig the head free, then to land: shore swim, go-to land within `:search-radius`, outward swim legs; stopped `:no_land_in_range` only when all are spent (no hold). Never trespass except as a last resort |
 | `survival.extinguish` | One run until no longer burning: pour water (scooped back after) or reach water, cover lava beside the feet, step off hazards, else hold still (`:burning-wait`); stopped `:stuck` or `:still-burning`. Never trespass except as a last resort |
 | `survival.respond-to-hostile` | Fights (`fight-back`) when the odds are fair, else `retreat`, deciding afresh each call; one round until no danger is near (stopped when the retreat stops, or `:still-near` after `:max-attempt-s` 300) |

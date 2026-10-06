@@ -3,6 +3,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.child :as child]
+            [jobs.lib.look :as look]
             [jobs.lib.result :as r]
             [jobs.lib.util :as u]
             [triggers.survival.hungry :as hungry]
@@ -249,11 +250,19 @@
          (remove #(skipped (.-id %)))
          first)))
 
-(defn ^:async hunt!
-  "Kill the nearest food animal (combat.attack) and pick up its drops: :again, or nil when there is none. An animal
-  is attacked once per job, killed or not."
+(defn ^:async animal-in-sight
+  "The nearest food animal in sight; with none, the body looks around once from where it stands and tries again."
   [c]
-  (when-let [animal (nearest-animal c)]
+  (or (nearest-animal c)
+      (when-not (look/looked-here? c)
+        (await (look/look-around! c))
+        (nearest-animal c))))
+
+(defn ^:async hunt!
+  "Kill the nearest food animal (combat.attack) and pick up its drops: :again, or nil when there is none (after a
+  look around). An animal is attacked once per job, killed or not."
+  [c]
+  (when-let [animal (await (animal-in-sight c))]
     (let [{:keys [hunt-radius attack-gap-ms]} (:args c)
           st (await (child/run! c :attack 'jobs.combat.attack
                                 {:targets [(.-id animal)] :radius hunt-radius :attack-gap-ms attack-gap-ms

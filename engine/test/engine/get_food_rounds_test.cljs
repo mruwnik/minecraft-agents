@@ -87,6 +87,21 @@
           (is (= ["beef"] (call-args p "eat" "item")))
           (is (= 7 (food p))))))))
 
+(deftest an-animal-that-only-comes-into-view-when-the-body-looks-around-is-hunted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:food 2}})
+              look (.-look p)
+              added (atom false)]
+          (set! (.-look p) (fn [& args]
+                             (when (compare-and-set! added false true) (fake/add-entity! p cow))
+                             (.apply look p (to-array args))))
+          (await (one-round! eng {:attack-gap-ms 0}))
+          (is (= [] (:list (core/state eng))) "one round")
+          (is (= [7 7 7 7] (call-args p "attack" "id")) "it looked around before giving up")
+          (is (= 7 (food p))))))))
+
 (deftest the-attack-child-keeps-the-gap-between-swings
   (async done
     (tu/run-async done
