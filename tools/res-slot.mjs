@@ -2,7 +2,7 @@
 // Why JavaScript: a thin launcher around flock(1) and /proc/meminfo (machine-wide resource gate); no engine behaviour.
 // tools/res-slot <kind> [--need MB] -- <cmd...>   waits for a free slot of <kind> AND MemAvailable - need >= floor, then runs cmd.
 // tools/res-slot status                            holders per kind (pid, command, age) and free memory.
-// Each finished run appends {kind, needMb, waitedS, ranS, code, cmd} to /tmp/mc-res/log.jsonl.
+// A run appends {start:true, pid, kind, cmd} to /tmp/mc-res/log.jsonl when it gets its slot, and {kind, needMb, waitedS, ranS, code, cmd} when it finishes.
 // Kinds, need, max and the memory floor: tools/res-slot.json (tools/test-shards.mjs reads the same floor and tests numbers).
 // Exit 75 "busy" after ~9 min of waiting (agents' foreground calls cap at 10 min): retry. The slot is an flock held by the command's own process, so it is freed when the command exits or dies.
 import fs from 'node:fs'
@@ -40,7 +40,17 @@ const tryRun = (kind, i, cmd) => new Promise((res) => {
   const marker = `${lockFile(kind, i)}.run.${process.pid}.${runSeq++}`
   fs.rmSync(marker, { force: true }) // a stale one from a killed parent whose pid was reused
   const p = spawn('flock', slotArgs(kind, i, cmd, 213, marker), { stdio: 'inherit' })
+  // start line as soon as the command holds the slot (the holder stays visible in log.jsonl even if it is SIGKILLed); p.pid is the command's pid (flock and sh exec it)
+  let announced = false
+  const announce = () => {
+    if (announced || !fs.existsSync(marker)) return
+    announced = true
+    logRun({ start: true, pid: p.pid, kind, cmd: cmd.join(' ') })
+  }
+  const poll = setInterval(announce, 100)
   p.on('close', (code, sig) => {
+    clearInterval(poll)
+    announce()
     const started = fs.existsSync(marker)
     fs.rmSync(marker, { force: true })
     res(code === 213 && !started ? null : code ?? 128 + (sig ? 9 : 0))

@@ -86,9 +86,24 @@ test('integration: each run appends kind, need, waited, ran and exit to log.json
   fs.writeFileSync(cfg, JSON.stringify({ floorMb: 0, kinds: { t: { needMb: 1, max: 1 } } }))
   const r = run(['t', '--need', '5', '--', 'sh', '-c', 'exit 4'], { RES_SLOT_DIR: dir, RES_SLOT_CONFIG: cfg })
   assert.equal(r.status, 4)
-  const [entry] = fs.readFileSync(path.join(dir, 'log.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l))
+  const entry = fs.readFileSync(path.join(dir, 'log.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).find((e) => !e.start)
   assert.equal(entry.kind, 't'); assert.equal(entry.needMb, 5); assert.equal(entry.code, 4)
   assert.ok(entry.waitedS >= 0 && entry.ranS >= 0); assert.match(entry.cmd, /sh -c exit 4/)
+})
+
+test('integration: a start line (pid, kind, cmd) is logged while the command still runs', async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'res-slot-test-'))
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
+  const cfg = path.join(dir, 'cfg.json')
+  fs.writeFileSync(cfg, JSON.stringify({ floorMb: 0, kinds: { t: { needMb: 1, max: 1 } } }))
+  const p = spawn('node', [path.join(path.dirname(new URL(import.meta.url).pathname), 'res-slot.mjs'), 't', '--', 'sleep', '3'], { env: { ...process.env, RES_SLOT_DIR: dir, RES_SLOT_CONFIG: cfg } })
+  t.after(() => p.kill())
+  await new Promise((r) => setTimeout(r, 1500))
+  const lines = fs.readFileSync(path.join(dir, 'log.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l))
+  assert.equal(lines.length, 1)
+  assert.equal(lines[0].start, true); assert.equal(lines[0].kind, 't'); assert.match(lines[0].cmd, /sleep 3/)
+  assert.ok(Number.isInteger(lines[0].pid) && lines[0].pid > 0)
+  assert.doesNotThrow(() => process.kill(lines[0].pid, 0))
 })
 
 test('reservedMb: counts only grants still ramping whose owner lives', () => {

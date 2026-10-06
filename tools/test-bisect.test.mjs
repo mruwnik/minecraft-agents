@@ -2,7 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, copyFileSync, chmodSync, rmSync, existsSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, copyFileSync, chmodSync, rmSync, existsSync, readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -10,22 +10,25 @@ const tools = dirname(fileURLToPath(import.meta.url))
 const sh = (cwd, ...a) => execFileSync(a[0], a.slice(1), { cwd, encoding: 'utf8' }).trim()
 
 // Fake repo: tools/compile fails while file BROKEN exists, tools/test-engine fails (printing a FAIL line) while file BAD exists.
-const COMPILE = '#!/bin/sh\n[ -n "$BISECT_SLOW" ] && sleep 30\n[ -n "$FAKE_COMPILE_BUSY_N" ] && { n=$(cat "$(dirname "$0")/../c.busy" 2>/dev/null || echo 0); echo $((n + 1)) > "$(dirname "$0")/../c.busy"; [ "$n" -lt "$FAKE_COMPILE_BUSY_N" ] && { echo "no free compile slot"; exit 75; }; }\n[ -e "$(dirname "$0")/../BROKEN" ] && { echo "boom: undeclared var"; exit 1; }\nexit 0\n'
+const COMPILE = '#!/bin/sh\n[ -n "$COMPILE_LOG" ] && echo "compile $*" >> "$COMPILE_LOG"\n[ -n "$BISECT_SLOW" ] && sleep 30\n[ -n "$FAKE_COMPILE_BUSY_N" ] && { n=$(cat "$(dirname "$0")/../c.busy" 2>/dev/null || echo 0); echo $((n + 1)) > "$(dirname "$0")/../c.busy"; [ "$n" -lt "$FAKE_COMPILE_BUSY_N" ] && { echo "no free compile slot"; exit 75; }; }\n[ -e "$(dirname "$0")/../BROKEN" ] && { echo "boom: undeclared var"; exit 1; }\nexit 0\n'
 const TEST_ENGINE = '#!/bin/sh\n[ "$1" = engine.nope-test ] && exit 2\n[ -n "$FAKE_TE_BUSY_N" ] && { n=$(cat "$(dirname "$0")/../te.busy" 2>/dev/null || echo 0); echo $((n + 1)) > "$(dirname "$0")/../te.busy"; [ "$n" -lt "$FAKE_TE_BUSY_N" ] && exit 75; }\n[ -n "$FAKE_TE_RC" ] && exit "$FAKE_TE_RC"\nif [ -e "$(dirname "$0")/../BAD" ]; then if [ -n "$FAKE_TE_CTRL" ]; then printf "FAIL in (a-test\\t\\033[31mred\\033[0m)\\n"; else echo "FAIL in (a-test)"; fi; exit "${FAKE_TE_BADRC:-1}"; fi\nexit 0\n'
+// the main checkout's res-slot: logs "<kind> -- <cmd>" to RES_LOG, then runs cmd
+const RES_SLOT = '#!/bin/sh\n[ -n "$RES_LOG" ] && echo "$*" >> "$RES_LOG"\nshift 2\nexec "$@"\n'
+const LEGACY = '# legacy: tools/res-slot" compile -- npx shadow-cljs server\n'
 const WT = '#!/bin/sh\nif [ "$1" != --remove ] && [ -n "$WT_BUSY_N" ]; then n=$(cat "$WT_LOG.busy" 2>/dev/null || echo 0); echo $((n + 1)) > "$WT_LOG.busy"; [ "$n" -lt "$WT_BUSY_N" ] && exit 75; fi\nrepo="$(cd "$(dirname "$0")/.." && pwd)"\nif [ "$1" = --remove ]; then echo removed >> "$WT_LOG"; git -C "$repo" worktree remove --force "$2"; exit; fi\ngit -C "$repo" worktree add --detach "$2" "$1"\n'
 
-function fakeRepo() {
+function fakeRepo({ legacyUpTo = -1 } = {}) {
   const d = mkdtempSync(join(process.env.TMPDIR || '/tmp', 'bisect-test-'))
   mkdirSync(join(d, 'tools'))
   copyFileSync(join(tools, 'test-bisect'), join(d, 'tools/test-bisect'))
-  for (const [f, body] of [['compile', COMPILE], ['test-engine', TEST_ENGINE], ['wt.sh', WT]]) writeFileSync(join(d, 'tools', f), body)
-  for (const f of ['test-bisect', 'compile', 'test-engine', 'wt.sh']) chmodSync(join(d, 'tools', f), 0o755)
+  for (const [f, body] of [['compile', COMPILE + (legacyUpTo >= 0 ? LEGACY : '')], ['test-engine', TEST_ENGINE], ['wt.sh', WT], ['res-slot', RES_SLOT]]) writeFileSync(join(d, 'tools', f), body)
+  for (const f of ['test-bisect', 'compile', 'test-engine', 'wt.sh', 'res-slot']) chmodSync(join(d, 'tools', f), 0o755)
   sh(d, 'git', 'init', '-q'); sh(d, 'git', 'config', 'user.email', 't@t'); sh(d, 'git', 'config', 'user.name', 't')
   const commit = (n, msg) => { sh(d, 'git', 'add', '-A'); sh(d, 'git', 'commit', '-q', '-m', msg); return sh(d, 'git', 'rev-parse', '--short', 'HEAD') }
   const shas = [commit(0, 'c0 base')]
   writeFileSync(join(d, 'BROKEN'), ''); shas.push(commit(1, 'c1 breaks compile'))
   rmSync(join(d, 'BROKEN')); writeFileSync(join(d, 'x'), '2'); shas.push(commit(2, 'c2 fine'))
-  writeFileSync(join(d, 'BAD'), ''); shas.push(commit(3, 'c3 culprit'))
+  writeFileSync(join(d, 'BAD'), ''); writeFileSync(join(d, 'tools/compile'), COMPILE); shas.push(commit(3, 'c3 culprit'))
   writeFileSync(join(d, 'x'), '4'); shas.push(commit(4, 'c4 after'))
   writeFileSync(join(d, 'x'), '5'); shas.push(commit(5, 'c5 after'))
   return { d, shas }
@@ -151,6 +154,33 @@ test('a real compile failure names its error in the step line', () => {
   try {
     const r = run(d, ['engine.a-test', '--good', shas[0], '--bad', shas[1]])
     assert.match(r.stdout, /compile failed.*boom: undeclared var/)
+  } finally { rmSync(d, { recursive: true, force: true }) }
+})
+
+test('a commit whose compile still uses the retired compile slot kind runs under main res-slot server, its servers stopped after; a later commit in the same range compiles plain', () => {
+  const { d, shas } = fakeRepo({ legacyUpTo: 2 })
+  try {
+    const r = run(d, ['engine.a-test', '--good', shas[0], '--bad', shas[5]], { RES_LOG: join(d, 'res.log'), COMPILE_LOG: join(d, 'compile.log') })
+    assert.equal(r.status, 0, r.stdout + r.stderr)
+    assert.match(r.stdout, new RegExp(`FIRST BAD: ${shas[3]} c3 culprit`))
+    const res = readFileSync(join(d, 'res.log'), 'utf8').trim().split('\n')
+    const calls = readFileSync(join(d, 'compile.log'), 'utf8').trim().split('\n')
+    const wrapped = res.filter((l) => /^server -- .*tools\/compile engine test$/.test(l))
+    assert.ok(wrapped.length >= 1, res.join('\n'))
+    assert.ok(res.some((l) => /^server -- .*tools\/test-engine engine\.a-test$/.test(l)), res.join('\n'))
+    assert.equal(calls.filter((l) => l === 'compile engine test').length > wrapped.length, true, 'a modern step compiled unwrapped: ' + calls.join(' | '))
+    assert.equal(calls.filter((l) => l === 'compile engine --stop').length, wrapped.length, calls.join(' | '))
+    assert.equal(calls.filter((l) => l === 'compile dashboard --stop').length, wrapped.length, calls.join(' | '))
+  } finally { rmSync(d, { recursive: true, force: true }) }
+})
+
+test('a modern commit is never wrapped in a main res-slot or stopped', () => {
+  const { d, shas } = fakeRepo()
+  try {
+    const r = run(d, ['engine.a-test', '--good', shas[0], '--bad', shas[5]], { RES_LOG: join(d, 'res.log'), COMPILE_LOG: join(d, 'compile.log') })
+    assert.equal(r.status, 0, r.stdout + r.stderr)
+    assert.equal(existsSync(join(d, 'res.log')), false)
+    assert.doesNotMatch(readFileSync(join(d, 'compile.log'), 'utf8'), /--stop/)
   } finally { rmSync(d, { recursive: true, force: true }) }
 })
 
