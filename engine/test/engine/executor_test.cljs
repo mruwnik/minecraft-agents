@@ -397,6 +397,16 @@
     (gap-steps 3)
     (gap-steps 2 :landing-y 63)))
 
+(deftest refusal-gap-without-sprint
+  (let [hungry (assoc p :sprint false)]
+    (are [steps] (nil? (ex/refusal hungry steps))
+      (gap-steps 1)
+      (gap-steps 2 :landing-y 63))
+    (are [n] (= {:status :refused :kind :gap-sprint :at [(+ 11 n) 64 0]
+                 :reason (str "gap jump at " (pr-str [(+ 11 n) 64 0]) " over " n " cells needs a sprint")}
+                (ex/refusal hungry (gap-steps n)))
+      2 3)))
+
 (deftest refusal-gap-kinds-and-reasons
   (are [steps kind reason at]
        (= {:status :refused :kind kind :at at :reason reason} (ex/refusal p steps))
@@ -481,6 +491,15 @@
     [2 :solid #{[13 66 0]}] true
     [2 :h 8 :solid #{[10 67 0]}] false
     [2 :solid #{[10 67 0]}] true))
+
+(deftest planner-limits-gap-test-needs-a-sprint-for-a-wide-gap
+  (let [gap (fn [n ly] ((.-gap (ex/planner-limits (assoc p :sprint false) (solid-set #{}))) 10 64 0 0 1 (+ 11 n) ly 0 0))]
+    (are [n ly allowed?] (= allowed? (gap n ly))
+      1 64 true
+      2 64 false
+      3 64 false
+      2 63 true
+      3 63 false)))
 
 (deftest past-edge-in-all-directions
   (are [landing x z expected] (approx= expected (ex/past-edge (step 10 64 0 :walk) landing (pose x 64 z)))

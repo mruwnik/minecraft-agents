@@ -106,6 +106,12 @@
   (let [dx (- (:x step) (:x prev)) dz (- (:z step) (:z prev))]
     [(when (= 1 (count (filter zero? [dx dz]))) (dec (+ (Math/abs dx) (Math/abs dz)))) dx dz]))
 
+(defn gap-rule-for
+  "The :gap-jump entry for a gap of n cells, the :gap-jump-down one for a gap down when there is one."
+  [policy n down?]
+  (or (when down? (get (:gap-jump-down policy) n))
+      (get (:gap-jump policy) n)))
+
 (defn gap-refused
   "The refusal for a :gap step walked from prev, or nil."
   [policy prev {:keys [x y z] :as step}]
@@ -120,6 +126,9 @@
 
       (not (contains? (:gap-jump policy) n))
       (refuse :gap-width (str "gap jump at " (pr-str at) " over " n " cells"))
+
+      (and (:sprint (gap-rule-for policy n (< (stand-y step) (stand-y prev)))) (not (:sprint policy)))
+      (refuse :gap-sprint (str "gap jump at " (pr-str at) " over " n " cells needs a sprint"))
 
       (> (stand-y step) (stand-y prev))
       (refuse :gap-up (str "gap jump up at " (pr-str at) " (not measured yet)"))
@@ -235,6 +244,7 @@
                        (or (zero? dx) (zero? dz))
                        (not (and (zero? dx) (zero? dz)))
                        (contains? widths n)
+                       (or (:sprint policy) (not (:sprint (gap-rule-for policy n (< ly y)))))
                        (<= (+ (* ly 16) lh) (+ (* y 16) h))
                        (loop [k 0]
                          (cond (> k n) true
@@ -418,8 +428,7 @@
   (let [prev (nth steps (dec i))
         step (nth steps i)
         [n] (gap-cells prev step)]
-    (or (when (< (stand-y step) (stand-y prev)) (get (:gap-jump-down policy) n))
-        (get (:gap-jump policy) n))))
+    (gap-rule-for policy n (< (stand-y step) (stand-y prev)))))
 
 (defn gap-jump?
   "On the takeoff cell, close enough to its edge: jump. Otherwise the plain rule (a body that fell into a
