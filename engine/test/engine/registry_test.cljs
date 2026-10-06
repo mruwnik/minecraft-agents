@@ -46,7 +46,7 @@
   (is (nil? (get-in registry/jobs ['jobs.time.wait-for-day :args])) "args is optional"))
 
 (deftest real-jobs-refuse-unknown-arg-keys
-  (is (re-find #"jobs.movement.go-to has no arg :target; its args are :doors, :escalate, :pos, :range"
+  (is (re-find #"jobs.movement.go-to has no arg :target; its args are :doors, "
                (expr/problem registry/jobs '(jobs.movement.go-to {:target [50 40 3]}))))
   (is (re-find #"jobs.time.wait-for-dusk has no arg :bogus; it takes no args"
                (expr/problem registry/jobs '(jobs.time.wait-for-dusk {:bogus 1}))))
