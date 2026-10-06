@@ -34,6 +34,14 @@
       (update :entities conj {:id (:next-entity-id w) :name "item" :kind "item" :pos pos :item {:name name :count count}})
       (update :next-entity-id inc)))
 
+(defn landing
+  "Where an item popped at pos comes to rest: it falls through air, at most 8 cells."
+  [w pos]
+  (loop [p pos n 0]
+    (if (and (< n 8) (= "air" (get-in w [:blocks (update p 1 dec)] "air")))
+      (recur (update p 1 dec) (inc n))
+      p)))
+
 (defn take-one
   "World with one of the named item taken out of the inventory (a stack that empties goes)."
   [w item]
@@ -61,6 +69,8 @@
             knot-id (:id (first (filter #(and (= "leash_knot" (:name %)) (= pos (:pos %))) (:entities w))))]
         [(update w :entities (fn [es] (mapv #(if (:leashed-to-me %) (assoc % :leashed-to-me false :leash-holder knot-id) %) es)))
          (count led)]))))
+
+(def face-delta {"up" [0 1 0] "down" [0 -1 0] "north" [0 0 -1] "south" [0 0 1] "east" [1 0 0] "west" [-1 0 0]})
 
 (defn use-on [w {:keys [pos item face] :or {face "up"}}]
   (let [here (get-in w [:blocks pos] "air")
@@ -110,7 +120,7 @@
           (and (hives here) (>= (get props :honey_level 0) 5) (#{"shears" "glass_bottle"} item))
           (let [w (assoc-in w [:states pos :honey_level] 0)]
             (if (= item "shears")
-              (done (spawn-item w (update pos 1 inc) "honeycomb" 3) "used")
+              (done (spawn-item w (landing w (mapv + pos (face-delta face))) "honeycomb" 3) "used")
               (done (-> w (take-one item) (give-one "honey_bottle")) "used" 1)))
 
           (and (= here "composter") (= level 8))

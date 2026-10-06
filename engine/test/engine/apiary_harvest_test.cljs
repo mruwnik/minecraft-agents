@@ -10,6 +10,14 @@
             [jobs.lib.world-files :as ew]
             [jobs.apiary.harvest :as harvest]))
 
+(deftest the-comb-face-is-the-side-the-body-stands-on
+  (let [hive {:x 2 :y 66 :z 0}]
+    (is (= "up" (harvest/face-toward hive {:x 2 :y 67 :z 3})))
+    (is (= "west" (harvest/face-toward hive {:x 0 :y 64 :z 0})))
+    (is (= "east" (harvest/face-toward hive {:x 5 :y 66 :z 1})))
+    (is (= "north" (harvest/face-toward hive {:x 2 :y 64 :z -3})))
+    (is (= "south" (harvest/face-toward hive {:x 2 :y 64 :z 3})))))
+
 (defn setup [world]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)

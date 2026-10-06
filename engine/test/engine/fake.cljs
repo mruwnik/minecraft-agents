@@ -53,6 +53,10 @@
 (def ms-per-tick 50)
 (def no-shape #{"air" "cave_air" "water" "lava" "fire" "short_grass" "tall_grass" "snow"})
 (def see-through #{"air" "water" "lava" "fire" "short_grass" "tall_grass" "snow" "glass" "glass_pane" "torch" "wall_torch" "soul_torch"})
+;; plants and small fittings have no collision box in the real game, so they do not stop the eye either
+(def no-box-see-through
+  #"^(wheat|carrots|potatoes|beetroots|fern|large_fern|dead_bush|sugar_cane|kelp|seagrass|tall_seagrass|cobweb|lever|vine|ladder|rail|dandelion|poppy|sunflower|lilac|rose_bush|peony)$|_(sapling|sign|flower|button|pressure_plate|rail|stem)$")
+(defn sight-passes? [block] (or (contains? see-through block) (boolean (some->> block (re-find no-box-see-through)))))
 ;; blocks whose collision shape does not fill the cell (or that have none); every other block is a full cube
 (def not-full-cube
   #"^(air|cave_air|void_air|water|lava|bubble_column|fire|soul_fire|short_grass|tall_grass|fern|large_fern|snow|wheat|carrots|potatoes|beetroots|farmland|dirt_path|soul_sand|torch|wall_torch|vine|cobweb|ladder|sugar_cane|dead_bush|kelp|seagrass|tall_seagrass|rail|lever|dandelion|poppy|wither_rose|sunflower|lilac|rose_bush|peony)$|_(slab|stairs|carpet|sapling|sign|flower|button|pressure_plate|fence|pane|torch|rail)$")
@@ -619,7 +623,7 @@
   [w e]
   (let [[sx sy sz] (body-pos w) [ex ey ez] (:pos e)
         middle (if (= "item" (:kind e)) item-middle body-middle)
-        blocks-sight (fn [c] (let [cell (cell-of c)] (and (not (see-through (block-name w cell))) (not ((:unloaded w) cell)))))]
+        blocks-sight (fn [c] (let [cell (cell-of c)] (and (not (sight-passes? (block-name w cell))) (not ((:unloaded w) cell)))))]
     (.lineClear ^js @sight #js {:x (+ (js/Math.floor sx) 0.5) :y (+ sy eye) :z (+ (js/Math.floor sz) 0.5)} #js {:x (+ ex 0.5) :y (+ ey middle) :z (+ ez 0.5)} blocks-sight)))
 
 (defn can-hit?

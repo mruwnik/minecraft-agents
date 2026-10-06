@@ -140,6 +140,16 @@
       (ctx/update-mem! c #(-> % (update :collected (fnil + 0) (:collected (ctx/child-result c :collect) 0)) (dissoc :phase))))
     :continue))
 
+;; the comb pops out of the face clicked: the side the body stands on, so it lies in view (on top, the hive hides it from below)
+(defn face-toward
+  "The face of the hive at pos the body at `from` looks at: \"up\" from above, else the horizontal side it is on."
+  [pos from]
+  (let [dx (- (:x from) (:x pos)) dz (- (:z from) (:z pos))]
+    (cond
+      (> (:y from) (:y pos)) "up"
+      (>= (js/Math.abs dx) (js/Math.abs dz)) (if (neg? dx) "west" "east")
+      :else (if (neg? dz) "north" "south"))))
+
 (defn ^:async harvest!
   "Walk to the hive and use the tool once; book the outcome."
   [c pos tool]
@@ -148,7 +158,7 @@
       :partial :continue
       :blocked (do (skip! c pos :unreachable) :continue)
       (let [r (if (hive-allowed? c pos)
-                (await (ctx/act c :useOn (clj->js {:pos pos :item tool :face "up"})))
+                (await (ctx/act c :useOn (clj->js {:pos pos :item tool :face (face-toward pos (u/self-pos c))})))
                 #js {:status "refused"})
             level (some-> r .-after .-properties .-honey_level)]
         (if (and (= "used" (.-status r)) (< (or level ripe-level) ripe-level))
