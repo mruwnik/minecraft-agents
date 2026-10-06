@@ -632,6 +632,8 @@ gap jumps, climbing, water, doors), with costs in seconds plus risk. Tests are `
   got to, or waits. A start closed in the loaded world, with the goal unloaded, ends `start-enclosed` (not `goal-unloaded`). An enclosed goal is found by a small backward flood before any walking (`goal-enclosed`; `options.preFlood`, default 256 cells), and go-to keeps its flood between searches toward one goal (`goalFloodMemo`).
 - A partial plan ends at the node nearest the goal that the body can come back from (one-way drops and gap jumps are not
   taken). `walk-near!` never leads the body off a ledge it cannot climb back.
+- A search that runs out of loaded land names a frontier (a loaded edge) at most `options.frontierReach` (256) farther from
+  the goal than the start.
 - The walker watches the way ahead and replans when the world under the plan changed, when a mob blocks a leg, and every 4 s
   for a partial plan.
 - Risks are priced rather than banned: gap jumps over pits, corner slides over lava or fire, drops onto farmland. The planner

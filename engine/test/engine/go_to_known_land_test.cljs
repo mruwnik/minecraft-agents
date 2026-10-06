@@ -128,3 +128,17 @@
               {:keys [out eng p]} (await (go! {:blocks blocks :self {:pos {:x 40.5 :y 80 :z 8.5}} :viewChunks 1}
                                               {:pos [-50 64 9] :range 1}))]
           (is (= {:arrived true} (select-keys @out [:arrived])) (str "result " @out " at " (at p) (mapv (juxt :status :to) (moved eng)))))))))
+
+;; the stair lies far east, past the planner's frontier reach of a goal at the dead west end: the body sees the east edge
+;; of the walkway (over 256 from the goal) while it starts, walks west to the dead end, and must walk back east to it
+(deftest go-to-walks-back-east-to-a-way-far-from-the-goal
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [blocks (merge (box -56 63 9 340 63 9 "stone")
+                            (box -40 79 8 300 79 8 "stone")
+                            (apply merge (for [i (range 1 17)] (box (+ 300 i) (- 79 i) 8 (+ 300 i) (- 79 i) 8 "stone"))))
+              {:keys [out eng p]} (await (go! {:blocks blocks :self {:pos {:x 200.5 :y 80 :z 8.5}} :viewChunks 1}
+                                              {:pos [-50 64 9] :range 1}))]
+          (is (= {:arrived true} (select-keys @out [:arrived]))
+              (str "result " @out " at " (at p) (mapv (juxt :status :to) (moved eng)))))))))

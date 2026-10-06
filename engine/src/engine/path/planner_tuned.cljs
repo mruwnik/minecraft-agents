@@ -2900,6 +2900,15 @@
 
 (defn- or-else [v default] (if (some? v) v default))
 
+(def ^:const KEY-REACH 1000) ; knownKey holds cells within 1024 of the goal along x and z
+
+(defn- reach-of
+  "How far from the goal (along x and z) a frontier node may lie: options.frontierReach (256) past the start's own
+  distance, so the land round the body always counts (a way down far behind it on a walkway), at most KEY-REACH."
+  [^js options ^js from ^js goal]
+  (js/Math.min KEY-REACH (+ (option options "frontierReach" 256)
+                            (js/Math.max (js/Math.abs (- (.-x from) (.-x goal))) (js/Math.abs (- (.-z from) (.-z goal)))))))
+
 (defn- goal-bounds
   "#js [x0 x1 z0 z1 y0 y1]: the extent of the start and the goals (y: the start's and the sphere goals')."
   [^js from ^js goals]
@@ -2964,7 +2973,7 @@
      ;; options
      max-nodes (option options "maxDrop" 3) (option options "weight" 1) (option options "riskWeight" 2)
      (option options "goalFlood" 4000) (option options "floodAfter" 3000) (option options "preFlood" 256)
-     (option options "frontierReach" 256)
+     (reach-of options from goal)
      ;; avoid
      (some? avoid) (if (some? avoid) (.-kinds avoid) 0) (if (some? avoid) (.-cells avoid) nil) (if (some? avoid) (.-factor avoid) 0)
      ;; limits

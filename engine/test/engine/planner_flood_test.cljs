@@ -253,6 +253,10 @@
     ;; the frontier is 36 from the goal
     (walkway 47) {:frontierReach 20}))
 
+;; the reach counts from the start: a frontier past frontierReach of the goal but within it of the start is named
+(deftest a-frontier-near-the-start-counts-past-the-reach-of-the-goal
+  (is (= [46 80 8] (cell (:frontier (result-over (walkway 47) [40 80 8] [10 64 8] {:frontierReach 20}))))))
+
 ;; ---- the late flood in slices ----
 
 (defn query-of [[fx fy fz] [x y z]]
