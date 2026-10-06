@@ -9,17 +9,21 @@
             [engine.takeover :as takeover]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [jobs.lib.world-files :as ew]
             [jobs.storage.make-room :as mr]))
 
 (def t0 1000000)
 
-(defn setup [world]
+(defn setup
+  ([world] (setup world nil))
+  ([world zones]
   (let [clock (atom t0)
         [seen sink] (tu/legacy-capture-sink)
         p (tu/fake-on-floor world)
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                          :world (when zones (ew/of-data {} {} zones))
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    {:eng eng :p p :seen seen :clock clock}))
+    {:eng eng :p p :seen seen :clock clock})))
 
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
 
@@ -641,3 +645,39 @@
           (await (run-reflex eng {} {}))
           (is (empty? (of-kind seen :make-room.toss-failed)) "a failure between successes does not add up")
           (is (= 1 (count (of-kind seen :make-room.done)))))))))
+
+;; ------------------------------------------------------------------ zones
+
+(def chest-zone {:name "vault" :owner "Miles" :min [9 63 -1] :max [11 65 1]})
+
+(deftest a-chest-in-another-s-zone-is-not-filled-and-the-junk-is-tossed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:inventory (many "junk" 35) :containers {"10,64,0" []}} [chest-zone])]
+          (know-chest! eng chest-pos)
+          (await (run-reflex eng {:free 3} {}))
+          (is (= 0 (count (calls p "transfer"))) "nothing put into another's chest")
+          (is (pos? (count (calls p "toss"))) "tossed instead")
+          (is (= 3 (- 36 (stack-count p))) "three slots are free")
+          (is (contains? (event-kinds seen) :make-room.done)))))))
+
+(deftest ignore-zones-fills-a-chest-in-another-s-zone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory (many "junk" 35) :containers {"10,64,0" []}} [chest-zone])]
+          (know-chest! eng chest-pos)
+          (await (run-reflex eng {:free 3 :ignore-zones? true} {}))
+          (is (pos? (count (calls p "transfer"))) "put away")
+          (is (= 0 (count (calls p "toss"))) "nothing tossed"))))))
+
+(deftest a-chest-in-the-body-s-own-zone-is-filled
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory (many "junk" 35) :containers {"10,64,0" []}} [(assoc chest-zone :owner "Fake")])]
+          (know-chest! eng chest-pos)
+          (await (run-reflex eng {:free 3} {}))
+          (is (pos? (count (calls p "transfer"))))
+          (is (= 0 (count (calls p "toss")))))))))

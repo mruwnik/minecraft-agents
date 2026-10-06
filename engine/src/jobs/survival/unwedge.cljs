@@ -20,7 +20,8 @@
   its fire for that cell meanwhile) and ends stopped {:reason :blocked :why}: the body holds still, nothing refires.
   Still wedged after max-passes tries ends stopped :still-wedged. Never :continue.")
 
-(def args {})
+(def args
+  {:ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
 (defn check [c] (some? (w/wedged-cell (:primitives c))))
 

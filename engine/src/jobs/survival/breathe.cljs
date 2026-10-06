@@ -34,7 +34,8 @@
    :search-radius {:doc "land beyond :shore-radius up to this many blocks sideways is gone to with go-to" :default 48}
    :leg-length {:doc "blocks one swim leg goes out at most" :default 32}
    :swim-range {:doc "blocks from the run's start no swim leg goes beyond" :default 96}
-   :max-legs {:doc "swim legs one run makes at most" :default 6}})
+   :max-legs {:doc "swim legs one run makes at most" :default 6}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
 (def land-tries "Go-to targets one spot tries before it swims a leg." 3)
 (def min-leg "Blocks a swim leg must move to count as moved." 8)

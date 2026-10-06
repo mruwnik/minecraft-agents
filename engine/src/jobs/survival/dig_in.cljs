@@ -63,7 +63,8 @@
 (def args
   {:roof-height {:doc "a solid block within this many blocks above counts as a roof" :default sh/default-roof-height}
    :blocks {:doc "names of the blocks it may place" :default shelter-blocks}
-   :max-places {:doc "placements per step" :default 4}})
+   :max-places {:doc "placements per step" :default 4}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
 (def shelter-policy {:cap 10 :ttl sh/ms-per-day})
 
@@ -706,7 +707,7 @@
       (let [slot (keyword (str "dig-out-" i))
             _ (update-leave! c assoc :heading (:heading attempt))
             r (await (ctx/call-child c slot 'jobs.access.stair
-                                     (merge {:dir :up :heading (:heading attempt) :ignore-zones? (:ignore-zones? attempt)}
+                                     (merge {:dir :up :heading (:heading attempt) :ignore-zones? (or (:ignore-zones? attempt) (:ignore-zones? (:args c)))}
                                             (if start {:y (:y start)} {:steps 1}))))
             res (when (= :done r) (ctx/child-result c slot))]
         (when (and res (:ignore-zones? attempt)) (note-trespass! c (:dug res)))
