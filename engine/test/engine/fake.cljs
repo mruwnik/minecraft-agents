@@ -51,7 +51,7 @@
 (def offline-max-ms (* 10 60 1000))
 (def ms-per-tick 50)
 (def no-shape #{"air" "cave_air" "water" "lava" "fire" "short_grass" "tall_grass" "snow"})
-(def see-through #{"air" "water" "lava" "fire" "short_grass" "tall_grass" "snow" "glass" "glass_pane"})
+(def see-through #{"air" "water" "lava" "fire" "short_grass" "tall_grass" "snow" "glass" "glass_pane" "torch" "wall_torch" "soul_torch"})
 ;; blocks whose collision shape does not fill the cell (or that have none); every other block is a full cube
 (def not-full-cube
   #"^(air|cave_air|void_air|water|lava|bubble_column|fire|soul_fire|short_grass|tall_grass|fern|large_fern|snow|wheat|carrots|potatoes|beetroots|farmland|dirt_path|soul_sand|torch|wall_torch|vine|cobweb|ladder|sugar_cane|dead_bush|kelp|seagrass|tall_seagrass|rail|lever|dandelion|poppy|wither_rose|sunflower|lilac|rose_bush|peony)$|_(slab|stairs|carpet|sapling|sign|flower|button|pressure_plate|fence|pane|torch|rail)$")
