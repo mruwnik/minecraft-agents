@@ -150,3 +150,20 @@
           (await (lt/run-until-empty eng 30))
           (is (= [:nothing-collected] (mapv :reason (filterv #(= :stopped (:kind %)) @seen))) "no item came in: stopped with a reason, not completed")
           (is (zero? (get (lt/inv p) "oak_log" 0))))))))
+
+(deftest logs-picked-up-during-the-felling-count-as-collected
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3) :inventory [{:name "oak_sapling" :count 1}]})]
+          (core/submit! eng '(jobs.forestry.harvest-wood {:species "oak" :radius 10}) {})
+          (loop [i 0]
+            (when (and (< i 30) (not= :collect (:phase (core/job-memory eng "j1"))))
+              (await (core/tick! eng))
+              (recur (inc i))))
+          (doseq [e (fake/entities p)] (swap! (fake/state p) update :entities (fn [es] (remove #(= (:id e) (:id %)) es))))
+          (fake/add-item! p "oak_log" 3)
+          (await (lt/run-until-empty eng 30))
+          (is (= [] (filterv #(= :stopped (:kind %)) @seen)) "the logs are in the inventory: not stopped")
+          (is (= "oak_sapling" (.-name (.blockAt p #js {:x 3 :y 64 :z 0}))) "the replant is done")
+          (is (= [] (lt/debts eng))))))))
