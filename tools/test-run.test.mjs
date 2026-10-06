@@ -2,9 +2,10 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { EventEmitter } from 'node:events'
+import { spawn } from 'node:child_process'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { parseNss, expectedMs, runTimeoutS, needMb, lastFinished, isolate, narrowBundle, missingNss, sweepStale, cleanupOnExit } from './test-run.mjs'
+import { parseNss, expectedMs, runTimeoutS, needMb, lastFinished, isolate, narrowBundle, missingNss, sweepStale, cleanupOnExit, killTree } from './test-run.mjs'
 
 test('parseNss: space- and comma-separated namespaces, blanks dropped', () => {
   assert.deepEqual(parseNss(['engine.a-test,engine.b-test', 'engine.c-test', '']), ['engine.a-test', 'engine.b-test', 'engine.c-test'])
@@ -155,4 +156,44 @@ test('cleanupOnExit: cleans once on exit, and on SIGTERM / SIGINT it stops the c
   cleanupOnExit(proc, () => calls.push('clean'))
   proc.emit('exit')
   assert.deepEqual(calls, ['clean'])
+})
+
+const alive = (pid) => { try { process.kill(pid, 0); return true } catch { return false } }
+const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms))
+
+test('killTree: stops the child and its descendants, also those in another process group (timeout(1) makes its own)', async () => {
+  const dir = fs.mkdtempSync('/tmp/test-run-tree-')
+  const pidFile = `${dir}/pids`
+  // sh -> setsid sh (own group) -> sleep: the grandchild is out of the child's process group.
+  const child = spawn('sh', ['-c', `setsid sh -c 'sleep 300 & echo $! > ${pidFile}; wait' & wait`], { stdio: 'ignore' })
+  const exited = new Promise((r) => child.on('exit', r))
+  for (let i = 0; i < 100 && !fs.existsSync(pidFile); i++) await sleepMs(50)
+  await sleepMs(100)
+  const leaf = Number(fs.readFileSync(pidFile, 'utf8'))
+  assert.ok(alive(leaf))
+  killTree(child.pid, 'SIGTERM')
+  await exited
+  for (let i = 0; i < 100 && alive(leaf); i++) await sleepMs(50)
+  fs.rmSync(dir, { recursive: true, force: true })
+  assert.equal(alive(leaf), false)
+})
+
+test('cleanupOnExit: SIGHUP is handled like SIGTERM (exit 129)', () => {
+  const proc = Object.assign(new EventEmitter(), { exit: (c) => { proc.exited = c } })
+  const calls = []
+  cleanupOnExit(proc, () => calls.push('clean'), (s) => calls.push(`kill ${s}`))
+  proc.emit('SIGHUP')
+  assert.deepEqual(calls, ['kill SIGHUP', 'clean'])
+  assert.equal(proc.exited, 129)
+})
+
+test('sweepStale: a dir that cannot be removed is skipped, the others still go', (t) => {
+  const root = fs.mkdtempSync('/tmp/test-run-sweep-')
+  t.after(() => { fs.chmodSync(`${root}/mc-test-run-111/sub`, 0o755); fs.rmSync(root, { recursive: true, force: true }) })
+  fs.mkdirSync(`${root}/mc-test-run-111/sub/x`, { recursive: true })
+  fs.mkdirSync(`${root}/mc-test-run-222`)
+  fs.chmodSync(`${root}/mc-test-run-111/sub`, 0o555)
+  const removed = sweepStale(root, () => false)
+  assert.ok(removed.includes('mc-test-run-222'))
+  assert.ok(!removed.includes('mc-test-run-111'))
 })

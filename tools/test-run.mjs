@@ -53,18 +53,38 @@ export const sweepStale = (root = '/tmp', alive = pidAlive) => {
   for (const name of fs.readdirSync(root)) {
     const m = /^mc-test-run-(\d+)$/.exec(name)
     if (!m || alive(Number(m[1]))) continue
-    fs.rmSync(path.join(root, name), { recursive: true, force: true })
+    try { fs.rmSync(path.join(root, name), { recursive: true, force: true }) } catch { continue } // not ours to delete (EACCES, EBUSY): skip it
     removed.push(name)
   }
   return removed
 }
 
-// Runs cleanup once on the proc's exit or on SIGINT/SIGTERM (then exits 128+signal); returns the once-only cleanup.
+// Pids of every descendant of pid (any process group or session), read from /proc.
+const descendants = (pid) => {
+  const kids = new Map()
+  for (const d of fs.readdirSync('/proc')) {
+    if (!/^\d+$/.test(d)) continue
+    try {
+      const ppid = Number(/^\d+ \(.*\) \S (\d+)/.exec(fs.readFileSync(`/proc/${d}/stat`, 'utf8'))[1])
+      kids.set(ppid, [...(kids.get(ppid) ?? []), Number(d)])
+    } catch { /* the process ended meanwhile */ }
+  }
+  const out = []
+  for (const queue = [pid]; queue.length;) for (const k of kids.get(queue.pop()) ?? []) { out.push(k); queue.push(k) }
+  return out
+}
+
+// Signals pid and all its descendants (res-slot -> flock -> timeout -> node: timeout(1) leaves the process group, so a group kill would miss the test node).
+export const killTree = (pid, sig = 'SIGTERM', self = true) => {
+  for (const p of [...descendants(pid).reverse(), ...(self ? [pid] : [])]) try { process.kill(p, sig) } catch { /* already gone */ }
+}
+
+// Runs cleanup once on the proc's exit or on SIGINT/SIGTERM/SIGHUP (then exits 128+signal); returns the once-only cleanup.
 export const cleanupOnExit = (proc, cleanup, onSignal = () => {}) => {
   let done = false
   const once = () => { if (!done) { done = true; cleanup() } }
   proc.on('exit', once)
-  for (const [sig, n] of [['SIGINT', 2], ['SIGTERM', 15]]) proc.on(sig, () => { onSignal(sig); once(); proc.exit(128 + n) })
+  for (const [sig, n] of [['SIGINT', 2], ['SIGHUP', 1], ['SIGTERM', 15]]) proc.on(sig, () => { onSignal(sig); once(); proc.exit(128 + n) })
   return once
 }
 
@@ -156,7 +176,7 @@ const main = async () => {
   sweepStale()
   const { runDir, cleanup } = isolate(engine, process.pid)
   let child = null
-  cleanupOnExit(process, cleanup, (sig) => child?.kill(sig))
+  cleanupOnExit(process, cleanup, (sig) => child && killTree(child.pid, sig))
   narrowBundle(runDir, nss)
   const timings = path.join(runDir, 'timings.jsonl')
   fs.writeFileSync(timings, '')

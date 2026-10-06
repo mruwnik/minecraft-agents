@@ -12,7 +12,7 @@ import path from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { slotArgs, logRun, slotDir } from './res-slot.mjs'
-import { expectedMs, runTimeoutS, lastFinished, isolate } from './test-run.mjs'
+import { expectedMs, runTimeoutS, lastFinished, isolate, sweepStale, cleanupOnExit, killTree } from './test-run.mjs'
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const engine = path.join(repo, 'engine')
@@ -118,7 +118,9 @@ const main = async ({ compile = () => spawnSync(path.join(repo, 'tools/compile')
   if (events) console.log('@@test {"event":"phase","name":"compiling"}')
   const c = compile()
   if (c.status !== 0) process.exit(c.status ?? 1)
+  sweepStale()
   const { runDir, cleanup } = isolate(engine, process.pid)
+  cleanupOnExit(process, cleanup, (sig) => killTree(process.pid, sig, false))
   const t0 = Date.now()
   if (events) { console.log('@@test {"event":"phase","name":"testing"}'); events.start() }
   console.log(`test-shards: ${split.length} shards, at most ${slots} at once machine-wide`)
