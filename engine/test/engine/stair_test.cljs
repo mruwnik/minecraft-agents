@@ -51,7 +51,7 @@
 
 (defn stop [named accept & {:keys [zones dir] :or {zones [] dir :down}}]
   (let [in {:block-at (world-fn named) :feet [0 65 0] :zones zones :footprints #{} :ledger #{}}]
-    (stair/stop-of in (stair/step-cells [0 65 0] dir :east) accept)))
+    (stair/stop-of in (assoc (stair/step-cells [0 65 0] dir :east) :up? (= :up dir)) accept)))
 
 (deftest the-stop-rules-of-one-step
   (are [named accept zones reason] (= reason (:reason (stop named accept :zones zones)))
@@ -644,3 +644,7 @@
           (let [{:keys [out]} (await (stair! {:blocks ground :zones [(assoc around-the-cut :owner owner)]}
                                              (merge east extra) (fn [_])))]
             (is (= status (:status @out)) (pr-str [owner extra]))))))))
+
+(deftest an-up-stair-ignores-air-under-its-solid-floor
+  (is (nil? (:reason (stop {[1 65 0] "stone" [1 64 0] "cave_air"} #{:water} :dir :up))))
+  (is (= :cave-below (:reason (stop {[1 62 0] "cave_air"} #{:water}))) "going down still refuses"))

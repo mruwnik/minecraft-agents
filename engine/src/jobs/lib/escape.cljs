@@ -228,8 +228,8 @@
 (defn choose
   "How a body at feet (a cell) that cannot walk to goal (a cell) can make a way, cheapest first. It only ever digs
   natural terrain (natural?) and blocks it placed itself (opts :own?, (own? cell block)) in cells (may-dig? cell)
-  allows (go-to: no other owner's zone or claim). opts :skip is a set of steps that already failed: the next one
-  is chosen.
+  allows (go-to: no other owner's zone or claim). opts :skip is a set of steps that already failed (a stair heading
+  that failed: [:stair :east]): the next one is chosen.
   - {:step :pillar :height d :item}: in a pit d deep with room above the head and at least d pillar blocks carried.
   - {:step :stair :heading kw :steps n}: a block in front to stair up on, n the pit's depth (in no pit: how far the
     goal is above, at most max-depth), every cell of its cut diggable?.
@@ -248,7 +248,9 @@
          pillar-blocks? (and (not (skip :pillar)) (pos? depth) item (>= count depth))
          rise (if (pos? depth) depth (min max-depth (max 0 (- (second goal) (second feet)))))
          stair (when (and (not (skip :stair)) (pos? rise))
-                 (stair-heading block-at feet (distinct (cond->> cardinals dir (cons dir))) rise may-dig? own?))
+                 (stair-heading block-at feet
+                                (remove #(skip [:stair (heading-names %)]) (distinct (cond->> cardinals dir (cons dir))))
+                                rise may-dig? own?))
          gap (when (and dir (not (skip :clear-path))) (door block-at feet dir max-door))]
      (cond
        (and pillar-blocks? (passable? (block-at (up feet 2))))

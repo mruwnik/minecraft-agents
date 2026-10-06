@@ -254,6 +254,11 @@
     (or (> (count (own-holes c)) (:holes-before m 0))
         (not= (:escalation-from m) (feet-cell c)))))
 
+(defn skip-key
+  "What a failed escalation e rules out: a stair only its heading (the other headings may be open), else its step."
+  [{:keys [step heading]}]
+  (if (= :stair step) [:stair heading] step))
+
 (defn ^:async escalation-failed!
   "The child stopped or would wait: when it changed something, walk again (escalated!) after a go-to.escalation-stopped
   warn; else try the next method (escalate!, never the same step twice, at most max-escalations in all), giving up
@@ -267,7 +272,8 @@
     (do (ctx/emit! c :go-to.escalation-stopped :warn (assoc detail :text (str (name step) " failed: "
                                                                               (some-> (:reason detail) name)
                                                                               "; trying another way")))
-        (ctx/update-mem! c update :skipped-steps (fnil conj #{}) step)
+        (ctx/update-mem! c #(cond-> (update % :skipped-steps (fnil conj #{}) (skip-key (:escalation (ctx/mem c))))
+                              (= :stair step) (update :escalations dec)))
         (await (escalate! c pos detail)))))
 
 (defn ^:async escalation-round!

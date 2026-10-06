@@ -499,3 +499,22 @@
         p (tu/fake (merge in-room {:blocks (assoc wide "3,64,0" "oak_door" "3,65,0" "oak_door")}))]
     (is (false? (escape/enclosed? p :shut)) "a wooden door is a way out")
     (is (true? (escape/enclosed? p :never)) "doors :never: the room is shut")))
+
+;; ------------------------------------------------------------------ other headings (card 4ad29ed7)
+
+(deftest escape-choose-skips-only-the-refused-stair-heading
+  (let [p (tu/fake (merge in-pit {:blocks pit}))
+        first-heading (:heading (escape/choose p [0 61 0] [10 64 0]))
+        again (escape/choose p [0 61 0] [10 64 0] (constantly true) {:skip #{[:stair first-heading]}})]
+    (is (= :east first-heading))
+    (is (= :stair (:step again)))
+    (is (not= first-heading (:heading again)))))
+
+(deftest go-to-climbs-out-of-a-pit-by-another-heading-when-the-first-is-refused
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [lava-pit (assoc pit "2,63,1" "lava")
+              {:keys [out seen]} (await (run-job! (merge in-pit {:blocks lava-pit}) {:pos [10 64 0] :range 1}))]
+          (is (true? (:arrived @out)))
+          (is (< 1 (count (events-of seen :go-to.escalated))) "the first heading was refused, another was tried"))))))

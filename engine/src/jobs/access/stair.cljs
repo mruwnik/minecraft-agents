@@ -147,8 +147,9 @@
 
 (defn stop-of
   "Why the step cannot go on, as {:reason ...detail}, or nil when every cell may be cut.
-  in: the rules' input without :cell. cells :bridged? true: the floor was placed by the stair, what is under it is not judged."
-  [{:keys [block-at] :as in} {:keys [cut floor under bridged? ways]} accept]
+  in: the rules' input without :cell. cells :bridged? true: the floor was placed by the stair, what is under it is not judged; :up? true: it never is (a stair up
+  digs no floor)."
+  [{:keys [block-at] :as in} {:keys [cut floor under bridged? up? ways]} accept]
   (let [floor-cell (known-floor block-at cut (into (set (:ways in)) ways))
         fluid-cell (first (filter #(rules/fluids (block-at %)) cut))
         crop-cell (first (filter #(crop-names (block-at %)) cut))]
@@ -160,7 +161,7 @@
       floor-cell {:reason :undercuts-way :cell floor-cell :block (block-at floor-cell)
                   :why "the cell is the floor of a stair this body cut earlier; cutting it breaks the way"}
       (not (rules/solid-floor? block-at floor)) {:reason :no-floor :cell floor :block (block-at floor)}
-      (and (not bridged?) (let [n (block-at under)] (or (rules/air n) (rules/fluids n))))
+      (and (not bridged?) (not up?) (let [n (block-at under)] (or (rules/air n) (rules/fluids n))))
       {:reason :cave-below :cell under :block (block-at under)}
       :else
       (some (fn [cell]
@@ -361,7 +362,8 @@
             (if (= i target)
               :finished
               (let [{:keys [next cut] :as cells} (-> (step-cells feet dir heading)
-                                                           (as-> cs (assoc cs :bridged? (contains? (:bridged (ctx/mem c)) (:floor cs)))))
+                                                           (as-> cs (assoc cs :up? (= :up dir)
+                                                                 :bridged? (contains? (:bridged (ctx/mem c)) (:floor cs)))))
                     stop (stop-of in cells accept)]
                 (if (and (= :no-floor (:reason stop)) (rules/air (:block stop)))
                   (await (bridge! c in cells))
