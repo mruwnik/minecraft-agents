@@ -100,7 +100,8 @@
           options [{:maxNodes 1} {:preFlood 0 :floodAfter 0}]]
     (is (not= "goal-enclosed" (:reason (plan-over spec goal options))) (pr-str goal options))))
 
-;; water is a way the flood cannot follow (a drop into it starts higher than it looks): any water it meets is a leak
+;; water is a way in the flood follows (see a-sealed-platform-holding-a-pool-is-enclosed); a bubble column it cannot, and a
+;; wall cell of water is a way in the search takes
 (deftest water-on-the-way-in-is-never-enclosed
   (are [spec goal options] (not= "goal-enclosed" (:reason (plan-over spec goal options)))
     (way-in {"5,64,0" "water"}) [7 64 0] {:maxNodes 1}
@@ -338,9 +339,9 @@
     (is (= "goal-enclosed" (:reason r)))
     (is (> (get-in r [:stats :flooded]) 1600))))
 
-;; water beside the goal: the flood can prove nothing once it meets water, so it stops there (not at the start, 30 away)
+;; a bubble column beside the goal: the flood can prove nothing once it meets one, so it stops there (not at the start, 30 away)
 (deftest a-flood-that-leaks-stops
-  (let [r (result-over {:blocks (assoc flat "31,64,0" "water" "31,63,0" "stone")} [0 64 0] [30 64 0]
+  (let [r (result-over {:blocks (assoc flat "31,64,0" "bubble_column" "31,63,0" "stone")} [0 64 0] [30 64 0]
                        {:preFlood 0 :floodAfter 0 :goalFlood 100000})]
     (is (= "found" (:status r)))
     (is (< (get-in r [:stats :flooded]) 50))))
@@ -499,3 +500,29 @@
   (are [spec goal options] (= "goal-enclosed" (:reason (plan-over spec goal options)))
     sealed-room [12 64 0] {:maxNodes 1}
     pit [13 61 0] {:maxNodes 1 :maxDrop 2}))
+
+;; ---- water on a sealed platform: the flood follows the one move into water it does not enumerate (a fall off an edge) ----
+
+;; the small deck with one stone cell and a water cell on it (the pool is part of the deck, nothing leads into it from below)
+(def pool-deck {:blocks (merge (:blocks small-floor-deck) {"4,69,4" "stone" "4,70,4" "water"})})
+
+(deftest a-sealed-platform-holding-a-pool-is-enclosed
+  (is (= "goal-enclosed" (:reason (result-over pool-deck [0 64 0] [6 71 6] {})))))
+
+(def pooled-high-deck
+  {:blocks (merge (:blocks high-deck) (box 14 68 14 16 68 15 "stone") (box 14 69 14 16 70 15 "water"))})
+
+(deftest a-flood-through-a-pool-proves-the-goal-enclosed-early
+  (is (= "goal-enclosed"
+         (:reason (result-over pooled-high-deck [0 64 0] [20 71 20] {:maxNodes 1 :preFlood 0 :floodAfter 0 :goalFlood 100000})))))
+
+;; a pool beside a ladder tower: the path climbs to y 80 and falls into the pool, so the pool is a way in the flood must find
+(deftest a-pool-a-fall-from-a-tower-reaches-is-not-enclosed
+  (let [spec {:blocks (merge (:blocks high-deck)
+                             (box 11 68 14 12 68 15 "stone") (box 11 69 14 12 70 15 "water")
+                             (box 10 64 13 10 79 15 "stone")
+                             (apply merge (for [y (range 64 81)] {(str "9," y ",14") "ladder"})))
+              :states (into {} (for [y (range 64 81)] [(str "9," y ",14") {:facing "east"}]))}]
+    (is (= "found" (:status (result-over spec [0 64 0] [11 70 14] {:goalFlood 0 :preFlood 0}))))
+    (is (not= "goal-enclosed"
+              (:reason (result-over spec [0 64 0] [11 70 14] {:maxNodes 300 :preFlood 0 :floodAfter 0 :goalFlood 100000}))))))

@@ -33,7 +33,8 @@
     :escalate false.
   - Gives up with {:arrived false :reason :unreachable :why ...} and an :unreachable warn: :why is the planner's
     reason (:exhausted, :goal-enclosed, :door-stuck with :cells, :one-way with :near and :one-way ...), or :stuck
-    (:kind the step, :detail the executor's text), :off-plan, :steer-failed, :no-progress or :searching. A failed
+    (:kind the step, :detail the executor's text), :off-plan, :steer-failed, :no-progress or :moved-while-searching; :at is the
+    body's feet cell and :near its blocks from the goal. A failed
     escalation adds :escalation {:step :reason ...}, the child's reason or wait.
   - Success is {:arrived true}. The result is also a :result info event.
   - Every walking round writes a :moved memory entry {:from :to :status :target} (arrived, partial or blocked) for
@@ -54,9 +55,9 @@
 (def max-blocked 3)
 
 (def max-searching
-  "Rounds in a row whose search is still going on (walk/round-budget expansions each) before go-to gives up: far more than
-  any one search takes (it ends after the planner's maxNodes); only a body moved off its search's start every round
-  (pushed, drifting) starts afresh each time."
+  "Rounds in a row whose search is still going on and began afresh (walk/round-budget expansions each) before go-to gives
+  up: a search that goes on from the same cell always ends after the planner's maxNodes; only a body moved off its
+  search's start every round (pushed, drifting) starts afresh each time."
   100)
 
 (defn check [_c] true)
@@ -75,6 +76,10 @@
   [c]
   (await (watch/watch! c {}))
   (finish! c {:arrived true}))
+
+(defn feet-cell [c]
+  (let [{:keys [x y z]} (reach/standing-cell (:primitives c))]
+    [x y z]))
 
 (defn give-up-fields
   "What a fruitless round's result says about why: {:why :kind :detail ...}, only the keys it has. A :no-path says the planner's
@@ -100,7 +105,8 @@
 (defn give-up!
   ([c pos tries status result] (give-up! c pos tries status result nil))
   ([c pos tries status result extra]
-   (let [{:keys [why kind] :as fields} (merge (give-up-fields result) (sh/shelter-hint c) extra)
+   (let [{:keys [why kind] :as fields} (merge {:at (feet-cell c) :near (js/Math.round (u/dist (u/self-pos c) pos))}
+                                              (give-up-fields result) (sh/shelter-hint c) extra)
          more (dissoc fields :why :kind)]
      (ctx/emit! c :unreachable :warn (cond-> (merge {:target pos :tries tries :status status :why why
                                                      :text (str "gave up walking to " pos)}
@@ -129,10 +135,6 @@
   (let [reason (some-> (:reason result) keyword)]
     (boolean (or (contains? escalate-reasons reason)
                  (and (= :abilities reason) (= :never doors) (= :open (some-> (:kind result) keyword)))))))
-
-(defn feet-cell [c]
-  (let [{:keys [x y z]} (reach/standing-cell (:primitives c))]
-    [x y z]))
 
 (defn escalation-job
   "[job args] of the child that carries out escalation e (jobs.lib.escape/choose)."
@@ -413,11 +415,11 @@
           (if (:restore-pending (ctx/mem c)) (restore-next! c) (arrived! c))
 
           (= "searching" status)
-          (let [n (inc (:searching (ctx/mem c) 0))]
+          (let [n (cond-> (:searching (ctx/mem c) 0) (:fresh walked) inc)]
             (ctx/update-mem! c assoc :searching n)
             (if (< n max-searching)
               :continue
-              (give-up! c pos (:blocked (ctx/mem c) 0) :searching {:status :no-path :reason :searching})))
+              (give-up! c pos (:blocked (ctx/mem c) 0) :searching {:status :no-path :reason :moved-while-searching})))
 
           :else
           (let [progress? (or (< left (dec best)) explored? nearer?)

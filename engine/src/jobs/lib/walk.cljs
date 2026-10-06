@@ -483,7 +483,8 @@
         k (search-key c to range weight policy walls)
         kept (get @searches who)
         known (when frontier (known-cells! c to range))
-        search (if (go-on? kept k pw to)
+        fresh? (not (go-on? kept k pw to))
+        search (if-not fresh?
                  kept
                  (new-search c (with-walls pw walls) to range weight policy k known (goal-flood! c to range weight policy walls)))
         [search within] (await (run-search! c search budget policy to range weight))
@@ -492,7 +493,7 @@
       (do (swap! searches dissoc who)
           (when known (learn-known! known (:r within)))
           (walk-plan c (:walled search) (:walled search) to one-way frontier within))
-      (let [plan (unfinished-plan search ms one-way progress)]
+      (let [plan (assoc (unfinished-plan search ms one-way progress) :fresh fresh?)]
         (if (= "partial" (:status plan))
           (swap! searches dissoc who)
           (swap! searches assoc who search))
@@ -515,11 +516,11 @@
   walled in (:goal-enclosed: its partial plan's nearer end gets the body no nearer to arriving), a plan cut at a one-way step with no step left, no path, a plan the policy (default
   executor/policy) refuses. replans goes in the result."
   ([plan replans] (no-walk plan replans executor/policy))
-  ([{:keys [r steps beyond status stop searched-out]} replans policy]
+  ([{:keys [r steps beyond status stop searched-out fresh]} replans policy]
    (let [partial? (= "partial" status)]
      (cond
        (= "searching" status)
-       {:status :searching :replans replans}
+       (cond-> {:status :searching :replans replans} fresh (assoc :fresh true))
 
        beyond
        {:status :no-path :reason :abilities :kind (:kind beyond) :at (:at beyond) :replans replans}

@@ -114,7 +114,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out eng p] :as s} (await (go! (assoc gap-up-world :self {:pos {:x 0 :y 64 :z 1}}) {:pos [10 65 1]}))]
-          (is (= {:arrived false :reason :unreachable :why :abilities :kind :gap-up} @out))
+          (is (= {:arrived false :reason :unreachable :why :abilities :kind :gap-up} (dissoc @out :at :near)))
           (is (= [0 64 1] (at p)) "the body did not move")
           (is (= ["blocked" "blocked" "blocked"] (mapv :status (moved eng))) "one :moved entry per round")
           (is (= [{:tries 3 :why :abilities :refused-kind :gap-up}]
@@ -284,7 +284,7 @@
       (fn ^:async t []
         (let [{:keys [out]} (await (go-prepped! {:blocks flat} {:pos [10 64 0] :range 0}
                                                 #(override-steer! % (fn ^:async f [_ _ _] #js {:status "failed" :reason "no controls"}))))]
-          (is (= {:arrived false :reason :unreachable :why :steer-failed :detail "no controls"} @out)))))))
+          (is (= {:arrived false :reason :unreachable :why :steer-failed :detail "no controls"} (dissoc @out :at :near))))))))
 
 (deftest go-to-says-no-progress-when-the-walk-ends-no-nearer
   (async done
@@ -292,7 +292,7 @@
       (fn ^:async t []
         (let [{:keys [out]} (await (go-prepped! {:blocks flat} {:pos [10 64 0] :range 0}
                                                 #(override-steer! % (fn ^:async f [_ _ _] #js {:status "done"}))))]
-          (is (= {:arrived false :reason :unreachable :why :no-progress} @out)))))))
+          (is (= {:arrived false :reason :unreachable :why :no-progress} (dissoc @out :at :near))))))))
 
 (deftest go-to-gives-up-at-once-on-a-walled-in-goal
   (async done
@@ -301,7 +301,7 @@
         ;; a stone wall at x 5 cuts the floor: the goal's side is walled in
         (let [walled (merge (box -2 63 -2 10 63 4 "stone") (box 5 64 -2 5 65 4 "stone"))
               {:keys [out eng p]} (await (go! {:blocks walled} {:pos [8 64 1] :range 0 :escalate false}))]
-          (is (= {:arrived false :reason :unreachable :why :goal-enclosed} @out))
+          (is (= {:arrived false :reason :unreachable :why :goal-enclosed} (dissoc @out :at :near)))
           (is (= [0 64 0] (at p)) "the body did not walk to the wall")
           (is (= ["blocked"] (mapv :status (moved eng))) "one round"))))))
 

@@ -347,7 +347,7 @@
           (is (nil? (walk/no-walk open 0)))
           (is (<= 46 (:x (peek (:steps open)))) "walked to the loaded edge")
           (is (= {:kind :drop :at [2 61 32]} (:one-way-taken open)))
-          (is (= {:status :searching :replans 0} (walk/no-walk shut 0)) "without :one-way :open the step is never taken"))))))
+          (is (= {:status :searching :replans 0 :fresh true} (walk/no-walk shut 0)) "without :one-way :open the step is never taken"))))))
 
 ;; the same ledge with only a closed pit below it (feet 61, x 2..13, z 30..34: 12 blocks nearer) before a wall too high to
 ;; climb (feet 66, x 14..17): every cell round the pit is loaded, so the unfinished search walks nowhere
@@ -358,5 +358,5 @@
     (tu/run-async done
       (fn ^:async t []
         (let [plan (await (one-budgeted-call ledge-over-pit {:x 1.5 :y 64 :z 32.5} [120 61 32] 32 {:one-way :open}))]
-          (is (= {:status :searching :replans 0} (walk/no-walk plan 0)))
+          (is (= {:status :searching :replans 0 :fresh true} (walk/no-walk plan 0)))
           (is (nil? (:one-way-taken plan))))))))

@@ -142,3 +142,51 @@
                                               {:pos [-50 64 9] :range 1}))]
           (is (= {:arrived true} (select-keys @out [:arrived]))
               (str "result " @out " at " (at p) (mapv (juxt :status :to) (moved eng)))))))))
+
+;; ---- a sealed platform holding a pool: the flood goes through the water, so the goal is proved walled in at once ----
+
+;; a stone floor 141 x 141 and a platform at y 99 (x 30..36, z -33..-27) with a 2 x 2 pool on a stone bed; the loaded land is 2
+;; chunks round the body (live: a 100 x 110 slab with a pool, 95 s of frontier walks, then :why :searching)
+(def pool-platform
+  (merge (box -70 63 -70 70 63 70 "stone")
+         (box 30 99 -33 36 99 -27 "stone")
+         (box 31 98 -32 32 98 -31 "stone")
+         (box 31 99 -32 32 99 -31 "water")))
+
+(defn dist-to [[x y z] [gx gy gz]]
+  (js/Math.sqrt (+ (* (- x gx) (- x gx)) (* (- y gy) (- y gy)) (* (- z gz) (- z gz)))))
+
+(deftest go-to-a-goal-on-a-platform-with-a-pool-is-enclosed-without-wandering
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out eng]} (await (go! {:blocks pool-platform :self {:pos {:x 0.5 :y 64 :z 0.5}} :viewChunks 2}
+                                            {:pos [34 100 -30] :range 1 :escalate false}))]
+          (is (= {:arrived false :reason :unreachable :why :goal-enclosed} (select-keys @out [:arrived :reason :why]))
+              (str "result " @out))
+          (is (every? #(<= (dist-to [(:x (:to %)) (:y (:to %)) (:z (:to %))] [34 100 -30]) 50) (moved eng))
+              (str "walks: " (mapv (juxt :status :to) (moved eng)))))))))
+
+(def high-deck-floor
+  (merge (box -2 63 -2 60 63 60 "stone") (box 10 70 10 30 70 30 "stone")))
+
+;; a search that outlasts max-searching rounds of one search goes on from the same cell: it is not a body moved off its start
+(deftest go-to-does-not-give-up-a-search-that-goes-on-from-the-same-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (with-redefs [jobs.movement.go-to/max-searching 2
+                      walk/round-budget 1000]
+          (let [{:keys [out]} (await (go! {:blocks high-deck-floor :self {:pos {:x 20.5 :y 64 :z 20.5}}}
+                                          {:pos [20 71 20] :range 1 :escalate false}))]
+            (is (= {:arrived false :reason :unreachable :why :goal-enclosed} (select-keys @out [:arrived :reason :why]))
+                (str "result " @out))))))))
+
+(deftest go-to-says-where-it-gave-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out]} (await (go! {:blocks high-deck-floor :self {:pos {:x 20.5 :y 64 :z 20.5}}}
+                                        {:pos [20 71 20] :range 1 :escalate false}))]
+          (is (= {:reason :unreachable :at [20 64 20]} (select-keys @out [:reason :at])) (str "result " @out))
+          (is (number? (:near @out)) (str "result " @out)))))))

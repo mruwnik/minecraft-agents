@@ -1880,6 +1880,10 @@
                  (>= (.nodeH s (+ goal-x dx) (+ goal-y dy) (+ goal-z dz)) 0)) false
             :else (recur dx dy (inc dz)))))))
 
+  ;; a bubble column lifts and drags in ways the flood does not enumerate: meeting one marks the flood leaked
+  (leakBubble [s x y z]
+    (when-not (zero? (aget tbl-bubble (.stateAt s x y z))) (set! leaked true)))
+
   ;; the standable cells of the goal start the flood
   (floodSeeds [s ^js seen ^js queue]
     (let [r (js/Math.ceil goal-range)]
@@ -1900,7 +1904,7 @@
               (dotimes [r (.floodRegions s x y z (.nodeH s x y z))]
                 (.add seen (.keyOf s x y z r))
                 (.push queue x y z r))
-              (when ^boolean (.isWater s x y z) (set! leaked true)))
+              (.leakBubble s x y z))
             (recur dx dy (inc dz)))))))
 
   ;; the flood's nodes in a cell standing at h: one per region of a tight cell, as the search's nodes are (the strips either
@@ -1997,7 +2001,7 @@
           (if hit
             (do (.add seen key)
                 (.push queue x y z r)
-                (when ^boolean (.isWater s x y z) (set! leaked true))
+                (.leakBubble s x y z)
                 (== key start-key))
             false)))))
 
@@ -2013,15 +2017,27 @@
         ^boolean (.floodVisit s seen queue start-key (+ fx (* (aget adx c) n)) (+ fy dy) (+ fz (* (aget adz c) n)) c) true
         :else (recur c n (inc dy)))))
 
+  ;; the highest takeoff (dy above the flood's current cell) a move into it can come from: a fall off an edge into surface
+  ;; water starts up to maxWaterDrop above it, down a shaft over the water that is free of blocks and water
+  (floodTakeoff [s]
+    (if-not (and ^boolean (.isWater s fx fy fz) (not ^boolean (.isWater s fx (inc fy) fz)))
+      (inc max-drop)
+      (loop [k 1]
+        (let [id (.stateAt s fx (+ fy k) fz)]
+          (if (and (<= k c-max-water-drop) (not (== id UNLOADED)) (zero? (aget tbl-top id)) (not (== (aget tbl-kind id) WATER)))
+            (recur (inc k))
+            (js/Math.max (inc max-drop) k))))))
+
   ;; the predecessors of the flood's current cell; true when the start is among them
   (floodAround [s seen queue start-key]
     (loop [c 0
-           dy -1]
+           dy -1
+           top (.floodTakeoff s)]
       (cond
         (== c 8) (.floodAhead s seen queue start-key)
-        (> dy (inc max-drop)) (recur (inc c) -1)
+        (> dy top) (recur (inc c) -1 top)
         ^boolean (.floodVisit s seen queue start-key (+ fx (aget adx c)) (+ fy dy) (+ fz (aget adz c)) -1) true
-        :else (recur c (inc dy)))))
+        :else (recur c (inc dy) top))))
 
   ;; climbs and falls in the column
   (floodColumn [s seen queue start-key]
@@ -2050,8 +2066,8 @@
   ;; the queue holds x y z region) with a forward move n -> c. Predecessors are found by running n's own moves, so the
   ;; flood cannot disagree with the search. Slow, but bounded by the budget.
   ;; True when the flood exhausts within budget nodes without meeting the start: nothing reaches the goal.
-  ;; False when the budget runs out, the start is met, or the flood leaks. It leaks into water (a drop into water
-  ;; starts further up than it looks) and into an unloaded or out-of-span cell (what lies there is unknown).
+  ;; False when the budget runs out, the start is met, or the flood leaks. It leaks into an unloaded or out-of-span cell
+  ;; (what lies there is unknown).
   (goalEnclosed [s budget sealed]
     (let [start-key (aget node-keys 0) ; the start node's key, its region in a tight cell (begin)
           seen (js/Set.)
