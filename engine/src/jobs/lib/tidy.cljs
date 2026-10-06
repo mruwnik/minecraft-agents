@@ -106,12 +106,24 @@
 (defn forget-cell! [c cell]
   (ctx/forget-where! c :tidy #(= cell (:cell %))))
 
+(defn restorable?
+  "Whether entry e is worth a restore try now: fewer than max-tries tries and nothing in the way (why-not)."
+  [p {:keys [tries] :as e}]
+  (and (< tries max-tries) (nil? (why-not p e))))
+
+(defn tried-record
+  "The :tried stamp of an entry a run just counted a try on: the time, the body's feet (here {:x :y :z}) and whether the
+  entry was restorable then. The :tidy-pending trigger waits on it."
+  [here now can]
+  (assoc (select-keys here [:x :y :z]) :t now :can can))
+
 (defn count-try!
-  "Replace the entry for cell with one counting another try."
+  "Replace the entry for cell with one counting another try, stamped :tried."
   [c cell]
-  (let [e (first (filter #(= cell (:cell %)) (entries c)))]
+  (let [e (first (filter #(= cell (:cell %)) (entries c)))
+        e (update e :tries inc)]
     (forget-cell! c cell)
-    (ctx/remember! c :tidy (update e :tries inc) tidy-policy)))
+    (ctx/remember! c :tidy (assoc e :tried (tried-record (u/self-pos c) (ctx/now c) (restorable? (:primitives c) e))) tidy-policy)))
 
 (defn noting?
   "Whether acts of this job are noted: a job run with :ignore-zones?, or any act with last-resort? set (a survival

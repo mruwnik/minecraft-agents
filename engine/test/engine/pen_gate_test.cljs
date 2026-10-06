@@ -90,15 +90,6 @@
     {:x 2.5 :y 64 :z 9.6} false   ; 9.1 away: out of the radius
     {:x 2.5 :y 80 :z 3.5} false)) ; far above
 
-(deftest the-clock-runs-from-the-first-tick-a-candidate-is-open-and-resets-when-it-is-not
-  (let [s1 (pg/track nil 1000 [[2 64 0]])
-        s2 (pg/track s1 3000 [[2 64 0]])]
-    (is (= [] (pg/settled s2 3000 4000)))
-    (is (= [[2 64 0]] (pg/settled (pg/track s2 5000 [[2 64 0]]) 5000 4000)) "open 4 s")
-    (is (= [] (pg/settled (pg/track s2 5000 []) 5000 4000)) "no longer a candidate: forgotten")
-    (is (= [] (pg/settled (pg/track (pg/track s2 5000 []) 5100 [[2 64 0]]) 9000 4000)) "and the clock starts again")
-    (is (= [] (pg/settled (pg/track s1 30000 [[2 64 0]]) 30000 4000)) "a long gap between looks restarts it")))
-
 (deftest quiet-cells-are-the-gates-given-up-lately
   (let [data (-> mem/empty-data
                  (mem/add-entry :gate-gave-up {:t 1000 :data {:cell [2 64 0]}} nil)
@@ -120,10 +111,10 @@
 (defn fake-at
   "A fake world: the gate of pen-a open or shut, the body at x z."
   [open? x z & [more]]
-  (tu/fake-on-floor (merge {:self {:pos {:x x :y 64 :z z}}
+  (tu/seeing-all (tu/fake-on-floor (merge {:self {:pos {:x x :y 64 :z z}}
                    :blocks {"2,64,0" "oak_fence_gate"}
                    :states {"2,64,0" {:open open?}}}
-                  more)))
+                  more))))
 
 (defn holds-over
   "Ask the trigger at each time in times; the answers."
@@ -135,38 +126,32 @@
 
 (def times [0 1000 2000 3000 4000 5000 6000])
 
-(deftest the-trigger-fires-once-a-planned-gate-has-stood-open-a-while-with-the-body-away
-  (is (= [false false false false true true true]
-         (holds-over (fake-at true 2 5) (knowledge pen-a) times)) "open, body 5 away: after 4 s")
-  (is (= [false false false false false false false]
-         (holds-over (fake-at false 2 5) (knowledge pen-a) times)) "shut")
-  (is (= [false false false false false false false]
-         (holds-over (fake-at true 2 0) (knowledge pen-a) times)) "the body stands in the gate cell")
-  (is (= [false false false false false false false]
-         (holds-over (fake-at true 2 1) (knowledge pen-a) times)) "the body 1 block from it: a job at the gate")
-  (is (= [false false false false false false false]
-         (holds-over (fake-at true 2 20) (knowledge pen-a) times)) "too far away")
-  (is (= [false false false false false false false]
-         (holds-over (fake-at true 2 5) (knowledge) times)) "the gate is in no plan")
-  (is (= [false false false false false false false]
-         (holds-over (fake-at true 2 5) nil times)) "no world data at all"))
+(def f7 [false false false false false false false])
+(def t7 [true true true true true true true])
 
-(deftest a-job-that-comes-back-to-the-gate-restarts-the-clock
-  (let [p (fake-at true 2 5)
-        kn (knowledge pen-a)
-        at-z (fn [z] (fake/swap-self! p assoc :pos [2 64 z]))
-        ask (fn [t] (boolean (when-gate p {:data mem/empty-data :now t} (:args (:pen-gate triggers/all)) kn)))]
-    (is (= [false false false false] (mapv ask [0 1000 2000 3000])) "away for 3 s")
-    (at-z 1)
-    (is (false? (ask 3500)) "back at the gate (a job holding it open on purpose)")
-    (at-z 5)
-    (is (= [false false false false true] (mapv ask (range 4000 9000 1000)))
-        "4 s after it left again, not 4 s after the gate opened")))
+(deftest the-trigger-fires-when-a-planned-gate-stands-open-with-the-body-away
+  (is (= t7 (holds-over (fake-at true 2 5) (knowledge pen-a) times)) "open, body 5 away")
+  (is (= f7 (holds-over (fake-at false 2 5) (knowledge pen-a) times)) "shut")
+  (is (= f7 (holds-over (fake-at true 2 0) (knowledge pen-a) times)) "the body stands in the gate cell")
+  (is (= f7 (holds-over (fake-at true 2 1) (knowledge pen-a) times)) "the body 1 block from it: a job at the gate")
+  (is (= f7 (holds-over (fake-at true 2 20) (knowledge pen-a) times)) "too far away")
+  (is (= f7 (holds-over (fake-at true 2 5) (knowledge) times)) "the gate is in no plan")
+  (is (= f7 (holds-over (fake-at true 2 5) nil times)) "no world data at all"))
+
+(deftest the-trigger-reads-the-gate-as-last-seen-never-through-a-wall
+  (is (= f7 (holds-over (tu/blind (fake-at true 2 5)) (knowledge pen-a) times)) "never seen")
+  (let [p (fake-at true 2 5)]
+    (aset p "seenBlockAt" (fn [pos] #js {:name "oak_fence_gate" :properties #js {:open "false"} :pos pos :age-ms 5000}))
+    (is (= f7 (holds-over p (knowledge pen-a) times)) "seen shut, opened unseen since: still shut")))
+
+(deftest a-gate-a-walk-opened-is-the-walks-business-the-trigger-has-no-clock
+  (let [data (mem/add-entry mem/empty-data :opened {:t 0 :data {:cell {:x 2 :y 64 :z 0} :by "j1" :shut? true}} nil)]
+    (is (= f7 (holds-over (fake-at true 2 5) (knowledge pen-a) times data)) "an :opened entry: the shut-doors job's gate")
+    (is (= t7 (holds-over (fake-at true 2 5) (knowledge pen-a) times)) "the same answer at every look, nothing kept between")))
 
 (deftest a-gate-given-up-lately-does-not-fire-again
   (let [data (mem/add-entry mem/empty-data :gate-gave-up {:t 0 :data {:cell [2 64 0]}} nil)]
-    (is (= [false false false false false false false]
-           (holds-over (fake-at true 2 5) (knowledge pen-a) times data)))))
+    (is (= f7 (holds-over (fake-at true 2 5) (knowledge pen-a) times data)))))
 
 (deftest the-trigger-is-registered-with-the-job-that-shuts-the-gate
   (is (= pg/pen-gate (:when (:pen-gate triggers/all))))
@@ -179,7 +164,7 @@
 
 (defn start [spec plans & [extra-jobs]]
   (let [[seen sink] (tu/legacy-capture-sink)
-        p (tu/fake-on-floor spec)
+        p (tu/seeing-all (tu/fake-on-floor spec))
         w (world/of-data plans {})
         eng (core/create {:primitives p :jobs (merge registry/jobs extra-jobs) :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})
@@ -366,8 +351,8 @@
 (deftest a-gate-held-by-a-job-does-not-fire-until-the-entry-is-old
   (let [data (mem/add-entry mem/empty-data :gate-held {:t 0 :data {:cell [2 64 0]}} nil)
         ask (fn [ts] (holds-over (fake-at true 2 5) (knowledge pen-a) ts data))]
-    (is (= [false false false false false false false] (ask times)) "entry 0-6 s old: left alone")
-    (is (= [false false false false true true true] (ask (range 31000 38000 1000))) "entry 31 s old: fires after 4 s")))
+    (is (= f7 (ask times)) "entry 0-6 s old: left alone")
+    (is (= t7 (ask (range 31000 38000 1000))) "entry 31 s old: fires")))
 
 (defn gave-up-cells [s] (mapv (comp :cell :data) (mem/entries (mem/view (:store (:eng s))) :gate-gave-up)))
 

@@ -4,24 +4,21 @@
   A gate is a cell of a plan whose want is a fence gate. The index {cell plan-id} is built once per plan change
   (jobs.lib.world-files/derived), never per tick.
 
-  The trigger holds when a planned gate stands open, within :radius (8) of the body and farther than :min-dist (2),
-  and has done so for :open-s (4) seconds. The clock restarts whenever the body is near again, so a job that opened a
-  gate on purpose (standing in the doorway, passing it) is left alone.
-  Two memory entries hide a gate cell:
+  The trigger holds when a planned gate was last seen open (perception's memory, never through a wall), within :radius
+  (8) of the body and farther than :min-dist (2). It keeps no state: a gate a job opened on purpose is hidden by memory
+  entries, three kinds:
     :gate-gave-up  written by jobs.animals.shut-gate; the cell is skipped for :quiet-s (10 min)
     :gate-held     written by a job leading animals through, dropped after it shuts the gate; skipped while
-                   younger than :held-s (30)"
-  (:require [jobs.lib.apiary :as apiary]
-            [jobs.animals.pen :as pen]
+                   younger than :held-s (30)
+    :opened        written by a walk (jobs.lib.pass) that opened it; the shut-doors job owns that gate"
+  (:require [jobs.animals.pen :as pen]
+            [jobs.lib.click :as click]
+            [jobs.lib.look :as look]
             [engine.memory :as mem]
             [jobs.lib.world-files :as world]
             [clojure.string :as str]))
 
-(def defaults {:radius 8 :min-dist 2 :open-s 4 :quiet-s 600 :held-s 30})
-
-(def gap-ms
-  "A clock whose last look is older than this was not watched in between: it starts again."
-  2000)
+(def defaults {:radius 8 :min-dist 2 :quiet-s 600 :held-s 30})
 
 ;; ------------------------------------------------------------------ the index
 
@@ -65,6 +62,14 @@
   [block-at cells]
   (filterv (fn [[x y z]] (open-gate? (block-at {:x x :y y :z z}))) cells))
 
+(defn seen-open-cells
+  "The cells ([x y z]) among cells the body last saw as a fence gate standing open (never seen: not open)."
+  [p cells]
+  (filterv (fn [[x y z]]
+             (let [{:keys [name properties]} (look/seen-block p {:x x :y y :z z})]
+               (and name (str/ends-with? name "_fence_gate") (click/reached? :open properties))))
+           cells))
+
 (defn distance
   "Blocks from the body at self ({:x :y :z}, feet) to the middle of the cell."
   [self [x y z]]
@@ -80,20 +85,7 @@
   [self [x y z]]
   (= [x y z] (mapv #(js/Math.floor %) [(:x self) (:y self) (:z self)])))
 
-;; ------------------------------------------------------------------ the clock
-
-(defn track
-  "The clock {:at now :since {cell t}} after a look at now that found cells open and far.
-  Each cell keeps the time it was first seen so. A cell not seen is forgotten.
-  A clock last looked at more than gap-ms ago starts from nothing."
-  [clock now cells]
-  (let [fresh (if (and clock (<= (- now (:at clock)) gap-ms)) (:since clock) {})]
-    {:at now :since (into {} (map (fn [c] [c (get fresh c now)])) cells)}))
-
-(defn settled
-  "The cells of the clock that have been seen open for at least open-ms at now."
-  [clock now open-ms]
-  (vec (keep (fn [[cell t]] (when (>= (- now t) open-ms) cell)) (:since clock))))
+;; ------------------------------------------------------------------ the memory
 
 (defn quiet-cells
   "The gates the job gave up on less than quiet-ms ago: a set of [x y z]."
@@ -109,24 +101,26 @@
   (into #{} (keep (fn [{:keys [t data]}] (when (< (- (:now view) t) held-ms) (some-> (:cell data) vec))))
         (mem/entries view :gate-held)))
 
-(defonce clocks (js/WeakMap.))
+(defn opened-cells
+  "The gates a walk opened (:opened entries): a set of [x y z]."
+  [view]
+  (into #{} (keep (fn [{:keys [data]}] (some-> (:cell data) ((juxt :x :y :z)))))
+        (mem/entries view :opened)))
 
 (defn holds?
-  "Whether a planned gate near the body has stood open, with the body away, for :open-s seconds."
+  "Whether a planned gate near the body was last seen open, with the body away, and no memory entry hides it."
   [p view args kn]
-  (let [{:keys [open-s quiet-s held-s] :as args} (merge defaults args)
+  (let [{:keys [quiet-s held-s] :as args} (merge defaults args)
         gates (some-> (gate-index kn) keys)]
     (if (empty? gates)
       false
-      (let [self (let [pos (.-pos (.self p))] {:x (.-x pos) :y (.-y pos) :z (.-z pos)})
-            quiet (quiet-cells view (* 1000 quiet-s))
-            held (held-cells view (* 1000 held-s))
-            open (open-cells (apiary/block-at-fn p) (remove (some-fn quiet held) gates))
-            clock (track (.get clocks kn) (:now view) (candidates self open args))]
-        (.set clocks kn clock)
-        (boolean (seq (settled clock (:now view) (* 1000 open-s))))))))
+      (let [pos (.-pos (.self p))
+            self {:x (.-x pos) :y (.-y pos) :z (.-z pos)}
+            hidden (into (opened-cells view) (concat (quiet-cells view (* 1000 quiet-s)) (held-cells view (* 1000 held-s))))
+            open (seen-open-cells p (remove hidden (candidates self gates args)))]
+        (boolean (seq open))))))
 
 (defn pen-gate
-  "Holds when holds? says so; args :radius :min-dist :open-s :quiet-s :held-s. The job it starts shuts the gate."
+  "Holds when holds? says so; args :radius :min-dist :quiet-s :held-s. The job it starts shuts the gate."
   [world view args kn]
   (if kn (holds? world view args kn) false))

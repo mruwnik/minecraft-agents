@@ -260,7 +260,6 @@
   (default none)."
   ([world memory] (holds? world memory #{}))
   ([world memory live]
-   (tidy-pending/forget-attempts!)
    (let [s (mem/open (tu/tmp-dir) {:now (constantly 1000)})]
      (doseq [[kind data] memory] (mem/write! s kind data tidy/tidy-policy))
      (tidy-pending/tidy-pending (tu/fake world) (mem/view s) tidy-pending/defaults nil live))))
@@ -290,8 +289,6 @@
            [(assoc with-stone :unloaded ["0,65,0"]) [[:tidy dug]] false "cell not loaded"]]]
     (is (= expected (holds? world memory)) why)))
 
-(use-fixtures :each {:before tidy-pending/forget-attempts!})
-
 (deftest the-trigger-does-not-hold-while-airborne
   (is (false? (holds? (assoc-in with-stone [:self :onGround] false) [[:tidy dug]])) "mid-jump")
   (is (true? (holds? (assoc-in with-stone [:self :onGround] true) [[:tidy dug]])) "landed"))
@@ -303,19 +300,35 @@
     (doseq [[kind data] memory] (mem/write! s kind data tidy/tidy-policy))
     (tidy-pending/tidy-pending (tu/fake (assoc-in world [:self :pos] pos)) (mem/view s) tidy-pending/defaults nil #{})))
 
+(defn tried
+  "dug with a counted try at t-s seconds, from the body at [2 64 0] (can: whether it was restorable then)."
+  ([t-s] (tried t-s true))
+  ([t-s can] (assoc (update dug :tries inc) :tried {:t (* 1000 t-s) :x 2 :y 64 :z 0 :can can})))
+
 (deftest an-attempted-cell-is-not-tried-again-until-the-body-moves-far-or-the-window-passes
-  (let [at (fn [t pos] (holds-at with-stone [[:tidy (update dug :tries inc)]] t pos))]
-    (is (true? (holds-at with-stone [[:tidy dug]] 990 [2 64 0])) "never tried: held, and not counted as tried")
-    (is (true? (holds-at with-stone [[:tidy dug]] 991 [2 64 0])) "still held")
-    (is (false? (at 1000 [2 64 0])) "a try was counted since: wait")
+  (let [at (fn [t pos] (holds-at with-stone [[:tidy (tried 1000)]] t pos))]
+    (is (true? (holds-at with-stone [[:tidy dug]] 990 [2 64 0])) "never tried: held")
+    (is (true? (holds-at with-stone [[:tidy (update dug :tries inc)]] 1000 [2 64 0])) "a try with no record: held")
+    (is (false? (at 1000 [2 64 0])) "a try was counted: wait")
     (is (false? (at 1010 [2 64 0])) "same place, soon after")
     (is (false? (at 1010 [4 64 0])) "moved a little")
     (is (true? (at 1010 [40 64 0])) "moved far")
     (is (true? (at (+ 1000 tidy-pending/retry-s) [2 64 0])) "window passed")))
 
+(deftest the-trigger-answers-from-memory-alone-so-a-restart-changes-nothing
+  (is (= (holds-at with-stone [[:tidy (tried 1000)]] 1010 [2 64 0])
+         (holds-at with-stone [[:tidy (tried 1000)]] 1010 [2 64 0]))
+      "same entries, same answer, whatever ran before")
+  (is (false? (holds-at with-stone [[:tidy (tried 1000)]] 1010 [2 64 0])))
+  (is (true? (holds-at with-stone [[:tidy (tried 1000 false)]] 1010 [2 64 0])) "restorable now, was not at the try: something changed"))
+
+(deftest a-counted-try-is-stamped-on-the-entry-for-the-trigger
+  (is (= (:tried (tried 5)) (tidy/tried-record {:x 2 :y 64 :z 0} 5000 true)))
+  (is (= {:t 5000 :x 2 :y 64 :z 0 :can false} (tidy/tried-record {:x 2 :y 64 :z 0} 5000 false))))
+
 (deftest a-new-cell-is-tried-at-once
-  (is (false? (holds-at with-stone [[:tidy (update dug :tries inc)]] 1000 [2 64 0])))
-  (is (true? (holds-at with-stone [[:tidy (update dug :tries inc)] [:tidy (assoc dug :cell [0 65 1])]] 1001 [2 64 0])) "other cell too"))
+  (is (false? (holds-at with-stone [[:tidy (tried 1000)]] 1000 [2 64 0])))
+  (is (true? (holds-at with-stone [[:tidy (tried 1000)] [:tidy (assoc dug :cell [0 65 1])]] 1001 [2 64 0])) "other cell too"))
 
 (deftest the-trigger-is-a-builtin-with-a-cooldown
   (is (= tidy-pending/tidy-pending (:when (:tidy-pending triggers/all))))

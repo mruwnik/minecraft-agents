@@ -40,15 +40,24 @@
     :now now}))
 
 (deftest the-trigger-holds-for-an-old-entry-of-an-open-block-near-a-body-out-of-its-column
-  (are [open x z now holds note] (is (= holds (boolean (dl/door-left (tu/fake (gate-world open x z)) (view-with now 0) (:args (:door-left triggers/all)) nil))) note)
+  (are [open x z now holds note] (is (= holds (boolean (dl/door-left (tu/seeing-all (tu/fake (gate-world open x z))) (view-with now 0) (:args (:door-left triggers/all)) nil))) note)
     true 9 0 10000 true "10 s open, 4 blocks off"
     true 9 0 9999 false "not yet open-s"
     false 9 0 60000 false "shut again"
     true 5 0 60000 false "the body stands in the gate"
     true 30 0 60000 false "beyond the radius"))
 
+(deftest the-trigger-reads-only-what-the-body-has-seen
+  (let [args (:args (:door-left triggers/all))
+        holds? #(boolean (dl/door-left % (view-with 60000 0) args nil))
+        p (tu/seeing-all (tu/fake (gate-world true 9 0)))]
+    (is (true? (holds? p)) "seen open")
+    (is (false? (holds? (tu/blind (tu/fake (gate-world true 9 0))))) "never seen: not read through the wall")
+    (aset p "seenBlockAt" (fn [pos] #js {:name "oak_fence_gate" :properties #js {:open "false"} :pos pos :age-ms 5000}))
+    (is (false? (holds? p)) "last seen shut, opened unseen: the last seen state counts")))
+
 (deftest a-block-a-walk-left-open-on-purpose-is-not-the-triggers-business
-  (let [p (tu/fake (gate-world true 9 0))
+  (let [p (tu/seeing-all (tu/fake (gate-world true 9 0)))
         holds? #(dl/door-left p (view-with 60000 0 %) (:args (:door-left triggers/all)) nil)]
     (is (false? (holds? {:shut? false})) "a :leave-open walk's entry")
     (is (true? (holds? {})))))
@@ -71,7 +80,7 @@
   ([world walk-args extra-jobs]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake world)
+        p (tu/seeing-all (tu/fake world))
         eng (core/create {:primitives p :jobs (assoc (merge registry/jobs extra-jobs) 'walker (walker walk-args))
                           :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]

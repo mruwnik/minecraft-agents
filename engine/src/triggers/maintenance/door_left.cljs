@@ -6,8 +6,10 @@
   open is one a walk left: its round was cut or cancelled between the open and the shut, it ended in the doorway, or the
   shutting click did nothing. The trigger holds while such a block lies within :radius (16) of the body and the body is
   out of its column; its job walks back and shuts it (jobs tidy up after themselves). A block shut by anything else
-  ends the entry's part in this: it is no longer open."
+  ends the entry's part in this: it is no longer open. The trigger reads whether a block stands open as the body last saw it (perception's
+  memory), never through a wall."
   (:require [jobs.lib.click :as click]
+            [jobs.lib.look :as look]
             [engine.memory :as mem]
             [jobs.lib.pass :as pass]))
 
@@ -24,29 +26,39 @@
   (js/Math.hypot (- (:x self) (+ x 0.5)) (- (:y self) y) (- (:z self) (+ z 0.5))))
 
 (defn open-block
-  "{:cell :column} of the block at cell when it is an openable block standing open, else nil (shut, gone, unloaded)."
+  "{:cell :column} of the block at cell when it is an openable block standing open now, else nil (shut, gone, unloaded).
+  For the job, which stands beside the block."
   [p cell]
   (let [b (.blockAt p (clj->js cell))
         props (click/props-of b)]
     (when (and b (= :openable (click/kind-of (.-name b))) (click/reached? :open props))
       {:cell cell :column (pass/column-of cell props)})))
 
+(defn seen-open-block
+  "open-block as the body last saw the block (perception's memory); a block never seen is not open. For the trigger: what
+  the body could not see is not read."
+  [p cell]
+  (let [{:keys [name properties]} (look/seen-block p cell)]
+    (when (and name (= :openable (click/kind-of name)) (click/reached? :open properties))
+      {:cell cell :column (pass/column-of cell properties)})))
+
 (defn left-open
   "The blocks the walker opened to shut again (:opened entries in view, not those a :leave-open walk left on purpose) that
   stand open, whose entry is at least open-ms old, within radius of the body: [{:cell :column :by :dist}] nearest first,
-  one per cell."
-  [p view {:keys [radius]} open-ms]
-  (let [self (self-pos p)]
-    (->> (mem/entries view :opened)
-         (filter (fn [{:keys [t]}] (>= (- (:now view) t) open-ms)))
-         (map :data)
-         (remove #(false? (:shut? %)))
-         (keep (fn [{:keys [cell by]}]
-                 (when-let [o (open-block p cell)]
-                   (assoc o :by by :dist (distance self cell)))))
-         (filter #(<= (:dist %) radius))
-         (sort-by :dist)
-         (reduce (fn [acc o] (if (some #(= (:cell o) (:cell %)) acc) acc (conj acc o))) []))))
+  one per cell. read is open-block or seen-open-block."
+  ([p view args open-ms] (left-open p view args open-ms open-block))
+  ([p view {:keys [radius]} open-ms read]
+    (let [self (self-pos p)]
+      (->> (mem/entries view :opened)
+           (filter (fn [{:keys [t]}] (>= (- (:now view) t) open-ms)))
+           (map :data)
+           (remove #(false? (:shut? %)))
+           (keep (fn [{:keys [cell by]}]
+                   (when-let [o (read p cell)]
+                     (assoc o :by by :dist (distance self cell)))))
+           (filter #(<= (:dist %) radius))
+           (sort-by :dist)
+           (reduce (fn [acc o] (if (some #(= (:cell o) (:cell %)) acc) acc (conj acc o))) [])))))
 
 (defn holds?
   "Whether a block a walk left open has stood so for :open-s, within :radius, with the body out of its column."
@@ -54,7 +66,7 @@
   (let [{:keys [open-s] :as args} (merge defaults args)
         here (feet-cell (self-pos p))]
     (boolean (some #(not (pass/in-column? (:column %) here))
-                   (left-open p view args (* 1000 open-s))))))
+                   (left-open p view args (* 1000 open-s) seen-open-block)))))
 
 (defn door-left
   "Holds when holds? says so; args :radius :open-s. The job it starts shuts the blocks."
