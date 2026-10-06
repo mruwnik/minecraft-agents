@@ -44,6 +44,7 @@
             [engine.path.planner.world]
             [engine.path.planner.nodes]
             [engine.path.planner.tight]
+            [engine.path.planner.bends]
             [engine.path.planner.water]
             [engine.path.planner.moves]
             [engine.path.planner.doors]

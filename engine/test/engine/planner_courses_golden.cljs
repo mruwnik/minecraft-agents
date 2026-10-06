@@ -139,7 +139,6 @@
            (is (= status (:status (plan-course name))) name))
     "fence-diag" [2870 3205 2890 3225] [2879.5 3217.5] [2882.5 3216.5] 32 true "found"
     "wall-diag" [2870 3205 2890 3225] [2879.5 3217.5] [2882.5 3216.5] 32 false "partial"
-    ;; the body fits through a solid block of offset bamboo only by weaving inside cells, which one stand point per free
-    ;; region (and straight legs from it) cannot say: no plan, where the plan before the legs were checked stuck the body
-    ;; at its first stalk (engine.courses-physics-test)
-    "full-walled" [2855 3209 2905 3224] [2857.5 3216.5] [2902.5 3216.5] 16 true "partial"))
+    ;; the body fits through a solid block of offset bamboo only by weaving inside cells: the plan carries the bends
+    ;; (engine.courses-physics-test walks it)
+    "full-walled" [2855 3209 2905 3224] [2857.5 3216.5] [2902.5 3216.5] 16 true "found"))

@@ -1,7 +1,7 @@
 (ns engine.path.planner.tight
   "Search methods: tight cells, where the body fits in only part of a cell: free-space masks, regions and the moves
    between them."
-  (:require [engine.path.planner.base :refer [BODY-BLOCKS CENTRE DROP-INSET GRID MOVE-DROP NO-MASKS REGIONS TABLE TIGHT-S UNLOADED]]
+  (:require [engine.path.planner.base :refer [BENT-COST BODY-BLOCKS CENTRE DROP-INSET GRID MOVE-DROP NO-MASKS REGIONS TABLE TIGHT-S UNLOADED]]
             [engine.path.planner.search :refer [Search]]))
 
 (set! *warn-on-infer* true)
@@ -205,7 +205,8 @@
   ;; nearest the line between the two representative points; -1 where none does. A drop (inset DROP-INSET, else 0)
   ;; falls from the point `inset` into B, where the body has cleared the ledge it walked off: it must pass there at the
   ;; joint height, and the fall and the landing are judged there. The legs either side of the crossing must be straight
-  ;; and free in their cell (lineFree), from A's point to the crossing and from where it enters B to B's point.
+  ;; and free in their cell (lineFree) where one is: a bent leg (counted in pick's bits above 4) is taken only for want of a
+  ;; straight one, and the path then carries the bends (bendsIn).
   (crossings [s c label ^js rep-a ^boolean tight-b ^js own-a ^js own-b ^js joint-a ^js joint-b snap-a snap-b ^js falls inset]
     (let [mask-a (.-mask joint-a)
           mask-b (.-mask joint-b)]
@@ -217,26 +218,28 @@
                 pf (if (zero? inset) pb (.insetB s c t inset))]
             (when (and (not (zero? (aget mask-a pa))) (not (zero? (aget mask-b pb))) (not (zero? (aget mask-b pf)))
                        (== (.regionNear s own-a pa snap-a) label)
-                       (not ^boolean (.fallBlocked s falls pf))
-                       ^boolean (.lineFree s (.-mask own-a) (.-px rep-a) (.-pz rep-a) (js-mod pa GRID) (js/Math.floor (/ pa GRID))))
+                       (not ^boolean (.fallBlocked s falls pf)))
               (let [lb (.regionNear s own-b pf snap-b)
                     rb (if tight-b lb (if (== lb (.-centre own-b)) 0 -1))]
                 (when (and (>= rb 0) (< rb REGIONS))
                   (let [^js rep-b (if tight-b (aget (.-regs own-b) rb) CENTRE)
                         along (if (< c 2) (/ (+ (.-pz rep-a) (.-pz rep-b)) 2) (/ (+ (.-px rep-a) (.-px rep-b)) 2))
-                        picked (aget ^js (.-pick s) rb)]
-                    (when (and ^boolean (.lineFree s (.-mask own-b) (js-mod pf GRID) (js/Math.floor (/ pf GRID))
-                                                   (.-px rep-b) (.-pz rep-b))
-                               (or (== picked -1) (< (js/Math.abs (- t along)) (js/Math.abs (- picked along)))))
-                      (aset ^js (.-pick s) rb t)))))))
+                        picked (aget ^js (.-pick s) rb)
+                        bent (+ (if ^boolean (.lineFree s (.-mask own-a) (.-px rep-a) (.-pz rep-a) (js-mod pa GRID) (js/Math.floor (/ pa GRID))) 0 1)
+                                (if ^boolean (.lineFree s (.-mask own-b) (js-mod pf GRID) (js/Math.floor (/ pf GRID)) (.-px rep-b) (.-pz rep-b)) 0 1))]
+                    (when (or (== picked -1)
+                              (< (+ (js/Math.abs (- t along)) (* BENT-COST bent))
+                                 (+ (js/Math.abs (- (bit-and picked 31) along)) (* BENT-COST (bit-shift-right picked 5)))))
+                      (aset ^js (.-pick s) rb (bit-or t (bit-shift-left bent 5)))))))))
           (recur (inc t))))))
 
   ;; one edge per picked region of B
   (tightEdges [s i c x2 y2 z2 h1 move sec drisk slow-to ^boolean tight-b ^js own-b]
     (loop [rb 0]
       (when (< rb REGIONS)
-        (let [t (aget ^js (.-pick s) rb)]
-          (when (>= t 0)
+        (let [picked (aget ^js (.-pick s) rb)
+              t (bit-and picked 31)]
+          (when (>= picked 0)
             (let [^js rep (if tight-b (aget (.-regs own-b) rb) CENTRE)
                   ;; the crossing, relative to B: on its west edge (0) for an eastward move, its east edge (16) for a
                   ;; westward one...

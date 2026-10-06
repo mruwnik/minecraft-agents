@@ -69,11 +69,11 @@
     (let [r (walk-course name)]
       (is (= :arrived (:status r)) (pr-str name r)))))
 
-;; a solid block of offset bamboo: the body would have to weave inside cells, which one stand point per free region cannot
-;; say; before the legs were checked the planner found a plan the body stuck on at its first stalk
-(deftest a-full-bamboo-wall-has-no-plan-rather-than-a-stuck-one
-  (is (= {:status "partial"} (walk-course "full-walled")))
-  (is (= {:status "none"} (walk-course "target-in-full"))))
+;; a solid block of offset bamboo: the body has to weave inside cells, bending between the stalks; the plan carries the bends
+(deftest a-full-bamboo-wall-is-woven-through
+  (doseq [name ["full-walled" "target-in-full"]]
+    (let [r (walk-course name)]
+      (is (= :arrived (:status r)) (pr-str name r)))))
 
 ;; a vine pit entered from a ledge, leaves over its exit cell: pushing forward with the head under a block makes the client
 ;; climb the vine for ever; the body has to drop to the pit's floor before it walks on

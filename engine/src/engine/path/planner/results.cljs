@@ -89,7 +89,7 @@
               (unchecked-set step "cz" (+ z (/ (bit-and (bit-shift-right shape 21) 31) 16))))
             (.push out step))
           (recur (aget (.-parents s) i))))
-      (.reverse out)))
+      (.withBends s (.reverse out))))
 
   ;; the facing (1 east, 2 west, 3 south, 4 north) of the ladder under a trapdoor at x,y,z, or 0: a climb up into that cell
   ;; is aimed at the ladder's wall, where the body stands on the ladder's top edge when the trapdoor's panel leaves it free

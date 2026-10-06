@@ -24,6 +24,7 @@
    :no-progress-ticks 60   ; 3 s on one step without reaching it -> stuck
    :swim-no-progress-ticks 120  ; the same for a step in water: a body that plunged in comes up at ~1.2 blocks/s
    :swim-float 0.2         ; in water, jump while the feet are below the step's height plus this (head out at the surface)
+   :bend-xz 0.15           ; a bend step (a corner round a stalk inside a tight cell) is reached this close to its point
    :arrive-xz 0.35         ; final step: horizontal distance to px/pz
    :arrive-y 0.5           ; |feet y - stand-y| that counts as at a step's height
    :off-plan-xz 1.5        ; horizontal distance from the current leg that counts as off the plan
@@ -45,7 +46,7 @@
    :crossing-xz 0.3        ; steer at a crossing point until this close to it
    :still-xz 0.1           ; closer than this to the aim: no forward, keep the yaw
    :gap-jump {1 {:from 0.2 :sprint false}  ; by gap width: jump once the feet are within :from of the takeoff
-              2 {:from 0.4 :sprint true}   ; edge; sprint for the run and the flight
+              2 {:from 0.2 :sprint false}  ; edge; a walking jump clears 2 cells, 3 needs a sprint for the run and the flight
               3 {:from 0.1 :sprint true}}
    :gap-jump-down {2 {:from 0.0 :sprint false}}  ; one block down, by width, where it differs (a sprint jump over 2 overshoots a 1x1 landing)
    :gap-past 0.3           ; feet up to this far past the takeoff edge are still held by it (half the body's width)
@@ -80,6 +81,7 @@
     (some? (.-cx s)) (assoc :cx (.-cx s) :cz (.-cz s))
     (.-swim s) (assoc :swim true)
     (.-hatch s) (assoc :hatch true)
+    (.-bend s) (assoc :bend true)
     (some? (.-opens s)) (assoc :opens (vec (js->clj (.-opens s) :keywordize-keys true)))))
 
 (defn steps-of
@@ -349,9 +351,10 @@
   "The body is in the step's cell and at its height (climbs: at least that high going up, at most that high going
   down). A :hatch step (a trapdoor cell over a ladder) counts only once the body is held there, on the ladder's top
   edge or climbing, because the client bobs over the ladder's top until it stands on that edge."
-  [policy step {:keys [y] :as pose}]
+  [policy step {:keys [x y z] :as pose}]
   (let [sy (stand-y step)]
     (and (in-cell? step pose)
+         (or (not (:bend step)) (<= (dist-xz x z (:px step) (:pz step)) (:bend-xz policy)))
          (or (not= :gap (:move step)) (:on-ground pose))
          (or (not (:hatch step)) (and (>= y sy) (or (:on-ground pose) (:on-climbable pose))))
          (case (:move step)

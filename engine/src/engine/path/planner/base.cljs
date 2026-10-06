@@ -72,6 +72,9 @@
 (def ^:const GAP-UP-S 0.3) ; a gap jump landing one block higher costs this much more than a level one
 (def ^:const GAP-PIT-RISK 0.5) ; hp of risk for a jump over 3 above a pit it cannot jump out of: a short jump traps the body
 (def ^:const TIGHT-S 0.1) ; careful walking: each tight cell entered costs this much more than a plain step
+;; in picking a crossing, a leg that is not straight through the cell's free mask counts as this many 1/16 of distance: a bent
+;; leg (the path carries bends, planner.bends) is taken only where no straight crossing leads on
+(def ^:const BENT-COST 100)
 (def ^:const CORNER-S 0.15) ; a diagonal slid along a blocked corner: slower than a straight one
 (def ^:const SLOW-EXTRA 0.75) ; walking time grows by this much of itself per slow end of a move
 (def ^:const LAVA-ADJACENT 0.5) ; hp of risk for a step with lava beside the feet
