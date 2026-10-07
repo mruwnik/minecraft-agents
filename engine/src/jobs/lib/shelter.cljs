@@ -10,6 +10,15 @@
             [engine.memory :as mem]
             [jobs.lib.world-files :as world]))
 
+(def settings
+  {::seen-bed-radius {:default 6 :type :int :min 1
+                      :doc "Blocks (square) within which a bed in the body's room counts as seen."}
+   ::default-player-radius {:default 128 :type :int :min 1
+                            :doc "Blocks within which a sleeping player counts when the night is skipped."}})
+
+(defn seen-bed-radius [] (settings/get settings ::seen-bed-radius))
+(defn default-player-radius [] (settings/get settings ::default-player-radius))
+
 (def ms-per-day
   "One in-game day in engine-clock milliseconds (20 minutes). \"A day\" in memory policies and :max-days-awake is
   this long."
@@ -18,8 +27,6 @@
 (def default-roof-height 4)
 
 (def default-bed-radius 48)
-
-(def default-player-radius 128)
 
 (defn feet [p] (solid/cell (u/self-pos {:primitives p})))
 
@@ -91,7 +98,6 @@
     (boolean (or (and (solid 1 0) (solid -1 0) (free 0 1) (free 0 -1))
                  (and (solid 0 1) (solid 0 -1) (free 1 0) (free -1 0))))))
 
-(def seen-bed-radius 6)
 
 (defn bed-occupied?
   "Whether the bed at pos is occupied as a player sees it: the bed block's occupied state, or another player lying within
@@ -138,7 +144,7 @@
             (let [next (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
                              :let [n {:x (+ (:x pos) dx) :y y :z (+ (:z pos) dz)}]
                              :when (and (not (seen n))
-                                        (<= (max (js/Math.abs (- (:x n) x)) (js/Math.abs (- (:z n) z))) seen-bed-radius)
+                                        (<= (max (js/Math.abs (- (:x n) x)) (js/Math.abs (- (:z n) z))) (seen-bed-radius))
                                         (walkable-at? p n))]
                          n)]
               (recur (into (subvec (vec queue) 1) next) (into seen next))))))))))
@@ -286,7 +292,7 @@
                  (and status (if own?
                                (> (:sleeping (:data status) 0) 1)
                                (or (:skipping (:data status)) (pos? (:sleeping (:data status) 0)))))
-                 (seq (sleeping-players p default-player-radius))))))
+                 (seq (sleeping-players p (default-player-radius)))))))
 
 (defn log-out-for-sleepers?
   "Night, awake, someone else asleep (others-asleep?), and no log-out tonight that failed (unsupported, closed)."

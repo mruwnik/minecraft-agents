@@ -66,7 +66,7 @@
   (if (nil? dark)
     pw
     #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw) :avoid (.-avoid pw) :tolls (.-tolls pw)
-         :dark #js {:at (:at dark) :factor cost/dark-factor}}))
+         :dark #js {:at (:at dark) :factor (cost/dark-factor)}}))
 
 (defn costed-world
   "pw (the primitives' pathWorld) costed the way go-to plans: with the dangers the body knows of now (dangers?, jobs.lib.threats)

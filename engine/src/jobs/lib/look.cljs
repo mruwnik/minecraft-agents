@@ -4,11 +4,24 @@
   perception's memory. Nothing is sensed through walls: jobs read blocks and entities through the seen-* helpers here
   (memory of what the body saw, players, hostiles it saw or heard), never through blocks/entities as a scan."
   (:require [engine.game :as game]
+            [engine.settings :as settings]
             [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.util :as u]
             [engine.perception :as perception]
             [engine.perception.store :as store]))
+
+(def settings
+  {::glance-ahead {:default 4 :type :number :min 0 :doc "How far ahead a level look takes in, in blocks."}
+   ::glance-near {:default 1.5 :type :number :min 0 :doc "How far ahead the look down at the floor takes in, in blocks."}
+   ::dark-light {:default 8 :type :int :min 0 :max 15
+                 :doc "A feet cell under this effective light is dark: hostiles spawn and walk in from it."}
+   ::toss-reach {:default 10 :type :number :min 0 :doc "Blocks within which an item entity counts as the body's toss."}})
+
+(defn glance-ahead [] (settings/get settings ::glance-ahead))
+(defn glance-near [] (settings/get settings ::glance-near))
+(defn dark-light [] (settings/get settings ::dark-light))
+(defn toss-reach [] (settings/get settings ::toss-reach))
 
 (def headings {"north" [0 -1] "south" [0 1] "east" [1 0] "west" [-1 0]})
 (def heading-short {"n" "north" "s" "south" "e" "east" "w" "west"})
@@ -40,8 +53,8 @@
   "The points a look along [dx dz] takes in from eye: level, 4 blocks ahead, then down (about 50 degrees) at the
   floor ahead."
   [eye [dx dz]]
-  [{:x (+ (:x eye) (* 4 dx)) :y (:y eye) :z (+ (:z eye) (* 4 dz))}
-   {:x (+ (:x eye) (* 1.5 dx)) :y (- (:y eye) game/body-height) :z (+ (:z eye) (* 1.5 dz))}])
+  [{:x (+ (:x eye) (* (glance-ahead) dx)) :y (:y eye) :z (+ (:z eye) (* (glance-ahead) dz))}
+   {:x (+ (:x eye) (* (glance-near) dx)) :y (- (:y eye) game/body-height) :z (+ (:z eye) (* (glance-near) dz))}])
 
 (defn see!
   "A sight pass now, so what the last look faced is in memory before the next decision."
@@ -190,7 +203,6 @@
 
 ;; ------------------------------------------------------------------ light
 
-(def dark-light "A feet cell under this effective light is dark: hostiles spawn and walk in from it." 8)
 
 (defn sky-subtract
   "What the sky's light is reduced by now (0 at noon, 11 at a clear midnight): time of day, rain and thunder of raw."
@@ -216,7 +228,7 @@
     (when-let [raw (:raw per)]
       (let [^js st (:st per)
             subtract (sky-subtract raw)
-            night? (< (- 15 subtract) dark-light)
+            night? (< (- 15 subtract) (dark-light))
             unseen (if night? 1 0)
             ^js sections (store/store-of st (.-dim st))]
         {:night? night?
@@ -225,9 +237,8 @@
                  (if (or (nil? sec) (zero? (aget (.-ids sec) (store/cell-index x y z))))
                    unseen
                    (let [packed (.lightAt ^js raw x y z)]
-                     (if (or (pos? (bit-and packed 15)) (>= (- (bit-shift-right packed 4) subtract) dark-light)) 0 1)))))}))))
+                     (if (or (pos? (bit-and packed 15)) (>= (- (bit-shift-right packed 4) subtract) (dark-light))) 0 1)))))}))))
 
-(def toss-reach 10)
 
 (defn drops
   "Item entities of name within radius as [{:id :pos :count}], nearest first; only those within toss-reach of near
@@ -237,4 +248,4 @@
    (->> (seen-items p {:radius radius :max 32})
         (filter #(= name (some-> (.-item %) .-name)))
         (mapv (fn [e] {:id (.-id e) :pos (u/pos-of (.-pos e)) :count (or (some-> (.-item e) .-count) 1)}))
-        (filterv #(or (nil? near) (u/within? near (:pos %) toss-reach))))))
+        (filterv #(or (nil? near) (u/within? near (:pos %) (toss-reach)))))))

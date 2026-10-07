@@ -30,6 +30,7 @@
    ::default-every-ms {:default 3000 :doc "How often a job looks round for danger by default, in ms." :type :int :min 0}
    ::default-alert-every-ms {:default 2000 :doc "How often a job looks round while the place is :alert, in ms." :type :int :min 0}
    ::long-dig-ms {:default 2000 :doc "A dig longer than this is looked up from, in ms." :type :int :min 0}
+   ::turn-gap-ms {:default 5000 :doc "How long a mob the body turned toward is remembered as turned to, in ms." :type :int :min 0}
    ::dig-gap-ms {:default 1000 :doc "Gap between looks during a long dig, in ms." :type :int :min 0}
    ::hearing-radius {:default 16 :doc "Blocks within which a heard mob counts." :type :int :min 1}
    ::probe-distance {:default 3 :doc "Blocks ahead a look probes." :type :int :min 1}})
@@ -40,12 +41,12 @@
 (defn default-alert-every-ms [] (settings/get settings ::default-alert-every-ms))
 (defn long-dig-ms [] (settings/get settings ::long-dig-ms))
 (defn dig-gap-ms [] (settings/get settings ::dig-gap-ms))
-(def turn-gap-ms 5000)
+(defn turn-gap-ms [] (settings/get settings ::turn-gap-ms))
 (defn hearing-radius [] (settings/get settings ::hearing-radius))
 (defn probe-distance [] (settings/get settings ::probe-distance))
 
 (def memory-policy {:cap 1 :ttl 600000})
-(def turn-policy {:cap 20 :ttl turn-gap-ms})
+(defn turn-policy [] {:cap 20 :ttl (turn-gap-ms)})
 
 (defn perception-of [c] (aget (:primitives c) "perception"))
 
@@ -55,7 +56,7 @@
         ^js pos (.-pos (.self (:primitives c)))]
     (and raw
          (< (look/effective-light raw (js/Math.floor (.-x pos)) (js/Math.floor (.-y pos)) (js/Math.floor (.-z pos)))
-            look/dark-light))))
+            (look/dark-light)))))
 
 (defn known-mobs [c]
   (when-let [f (aget (:primitives c) "knownMobs")]
@@ -177,7 +178,7 @@
   "Turn once toward a mob heard and not seen, then sample."
   [c ^js m]
   (let [before (set (map #(.-id ^js %) (known-mobs c)))]
-    (ctx/remember! c :watch-turned {:id (.-id m)} turn-policy)
+    (ctx/remember! c :watch-turned {:id (.-id m)} (turn-policy))
     (ctx/remember! c :watched {:open (get-in (last-scan c) [:data :open] 0)} memory-policy)
     (let [{:keys [direction] :as heard} (rough c m)]
       (ctx/emit! c :watch.turned :info (assoc heard :name (.-name m)))

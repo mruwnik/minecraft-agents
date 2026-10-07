@@ -81,8 +81,8 @@
 (def fetch-cost value/fetch-cost)
 (def walk-cost value/walk-cost)
 (def per-danger value/per-danger)
-(def per-dark value/per-dark)
-(def dark-factor value/dark-factor)
+(defn per-dark [] (value/per-dark))
+(defn dark-factor [] (value/dark-factor))
 
 (def farm-tolls tolls/farm-tolls)
 (def zone-tolls tolls/zone-tolls)

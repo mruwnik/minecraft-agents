@@ -6,6 +6,16 @@
             [jobs.lib.access.rules :as rules]
             [jobs.lib.util :as u]))
 
+(def settings
+  {::flow-delay-ticks {:default 34 :type :int :min 1
+                       :doc "One overworld lava flow delay (30 game ticks) with a few ticks over, in game ticks."}
+   ::settle-wait-ms {:default 500 :type :int :min 0 :doc "One wait while a flow delay runs (wait-settled!), in ms."}
+   ::settle-waits {:default 6 :type :int :min 0 :doc "Most waits of wait-settled!."}})
+
+(defn flow-delay-ticks [] (settings/get settings ::flow-delay-ticks))
+(defn settle-wait-ms [] (settings/get settings ::settle-wait-ms))
+(defn settle-waits [] (settings/get settings ::settle-waits))
+
 (defn add [[x y z] [dx dy dz]] [(+ x dx) (+ y dy) (+ z dz)])
 
 (defn unknown?
@@ -23,7 +33,7 @@
 (defn flow-delay-ms
   "One overworld lava flow delay in wall ms: 30 game ticks at the live game rate, with a few ticks over."
   []
-  (settings/ticks->ms 34))
+  (settings/ticks->ms (flow-delay-ticks)))
 
 (defn ^:async settle!
   "Before the body steps into the open cut: when a cell beside it is unseen, what is behind it shows only once it flows
@@ -51,16 +61,12 @@
         (when (unknown? (:primitives c) n) (await (look-at! c n))))
       (recur (rest ds)))))
 
-(def settle-wait-ms "One wait while a flow delay runs (wait-settled!)." 500)
-
-(def settle-waits "Most waits of wait-settled!." 6)
-
 (defn ^:async wait-settled!
   "settle! for a job that holds still while it runs: waits (act :wait) until the flow delay since the last dig has passed
-  and the cut was looked at again, at most settle-waits times. Truthy while settle! still asks for more."
+  and the cut was looked at again, at most (settle-waits) times. Truthy while settle! still asks for more."
   [c cut]
   (loop [i 0]
-    (when (< i settle-waits)
+    (when (< i (settle-waits))
       (when (await (settle! c cut))
-        (await (ctx/act c :wait #js {:ms settle-wait-ms :why "letting what the dig opened settle"}))
+        (await (ctx/act c :wait #js {:ms (settle-wait-ms) :why "letting what the dig opened settle"}))
         (recur (inc i))))))

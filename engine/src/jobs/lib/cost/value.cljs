@@ -41,7 +41,18 @@
             [jobs.lib.cost.health :as health]
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.foods :as foods]
-            [engine.game :as game]))
+            [engine.game :as game]
+            [engine.settings :as settings]))
+
+(def settings
+  {::trip {:default 10 :type :number :min 0
+           :doc "Any fetch: turning round, finding the pile, the risk of the place one died at, in seconds."}
+   ::per-block {:default 0.3 :type :number :min 0
+                :doc "One block walked, there and back about a second of a player's time per 3 blocks."}
+   ::per-dark {:default 0.3 :type :number :min 0
+               :doc "One block walked in the dark, on top of per-block: a dark block costs twice a lit one."}
+   ::walk-blocks-per-s {:default 2.9 :type :number :min 0.1
+                        :doc "Walking speed with slack for detours (4.3 flat out, 1.5x the way), blocks a second."}})
 
 (def default-basis
   "Every constant of the item base; item-value's :basis is deep-merged over it."
@@ -344,14 +355,15 @@
 
 ;; ---------------------------------------------------------------- the cost
 
-(def trip "Any fetch: turning round, finding the pile, the risk of the place one died at." 10)
-(def per-block "One block walked, there and back about a second of a player's time per 3 blocks." 0.3)
-(def per-dark "One block walked in the dark, on top of per-block: a dark block costs twice a lit one." 0.3)
-(def dark-factor
+(defn trip [] (settings/get settings ::trip))
+(defn per-block [] (settings/get settings ::per-block))
+(defn per-dark [] (settings/get settings ::per-dark))
+(defn dark-factor
   "The planner's extra cost of a dark cell as a share of its own seconds (options.dark.factor): per-dark over per-block."
-  (/ per-dark per-block))
+  []
+  (/ (per-dark) (per-block)))
 (def per-danger "One expected point of damage (jobs.lib.cost/route-danger): what an hp costs (jobs.lib.cost.health)." health/hp-seconds)
-(def walk-blocks-per-s "Walking speed with slack for detours (4.3 flat out, 1.5x the way)." 2.9)
+(defn walk-blocks-per-s [] (settings/get settings ::walk-blocks-per-s))
 (def lethal-causes ["lava" "fire" "burn" "void" "out_of_world"])
 
 (defn lethal-cause? [cause]
@@ -362,7 +374,7 @@
   "{:cost :parts {:walk :danger}} of walking `distance` blocks with `danger` (route-danger's number) on the way: the
   per-block and per-danger prices every trip is costed with."
   [{:keys [distance danger]}]
-  (let [parts {:walk (* per-block distance) :danger (* per-danger (or danger 0))}]
+  (let [parts {:walk (* (per-block) distance) :danger (* per-danger (or danger 0))}]
     {:cost (reduce + (vals parts)) :parts parts}))
 
 (defn fetch-cost
@@ -373,7 +385,7 @@
   [{:keys [distance danger elapsed-ms cause]}]
   (let [elapsed (or elapsed-ms 0)
         despawn-ms (game/despawn-ms)
-        walk-ms (when (number? distance) (* 1000 (/ distance walk-blocks-per-s)))
+        walk-ms (when (number? distance) (* 1000 (/ distance (walk-blocks-per-s))))
         reason (cond
                  (nil? walk-ms) :no-position
                  (>= elapsed despawn-ms) :window-closed
@@ -382,4 +394,4 @@
     (if reason
       {:cost js/Infinity :reason reason}
       (let [w (walk-cost {:distance distance :danger danger})]
-        {:cost (+ trip (:cost w)) :parts (assoc (:parts w) :trip trip)}))))
+        {:cost (+ (trip) (:cost w)) :parts (assoc (:parts w) :trip (trip))}))))
