@@ -205,6 +205,22 @@
           (is (= 2 (carried p "dirt")) "the other building block first")
           (is (= 10 (carried p "cobblestone")) "the spare untouched while another is carried"))))))
 
+;; The tunnel's round runs first (the parent yields once), then leave-tunnel's; the nth dig of leave-tunnel never
+;; happens, as the body stops mid-way at a restart.
+(defn ^:async stall-dig! [{:keys [eng clock p]} n]
+  (swap! clock + 500)
+  (await (core/tick! eng))
+  (let [k (atom 0)
+        world (.-world p)]
+    (.override world "dig" (fn [token args impl]
+                             (if (= n (swap! k inc))
+                               (js/Promise. (fn [_ _]))
+                               (impl token args))))
+    (swap! clock + 500)
+    (await (js/Promise.race #js [(core/tick! eng)
+                                 (js/Promise. (fn [ok] (let [poll (fn poll [] (if (>= @k n) (ok) (js/setTimeout poll 10)))] (poll))))]))
+    (.override world "dig" nil)))
+
 (deftest a-restart-on-the-way-out-finishes-without-digging-or-placing-twice
   (async done
     (tu/run-async done
@@ -212,7 +228,7 @@
         (let [dir (tu/tmp-dir)
               spec {:blocks eight-down :inventory (inventory)}
               s (setup spec {:target [6 57 0]} {} :dir dir)]
-          (await (ticks-while! s #(not (and (map? @(:tun s)) (= 7 (carried (:p s) "torch"))))))
+          (await (stall-dig! s 2))
           (is (= 7 (carried (:p s) "torch")) "the first torch is back")
           (let [again (await (run-out! (setup spec {:target [6 57 0]} {} :dir dir :p (:p s))))
                 p (:p s)
@@ -223,9 +239,9 @@
             (is (= :sealed (:reason @(:out again))))
             (is (= 8 (carried p "torch")))
             (is (= entry (feet p)))
-            (is (every? (fn [[cell n]] (= n (+ (if (torch-cells cell) 1 0) (if (dug-cells cell) 1 0))))
-                        (frequencies (map (juxt :x :y :z) digs)))
-                "each cell dug once as stone and once as a torch, as often as it was either")
+            (is (= 1 (reduce + (map (fn [[cell n]] (- n (+ (if (torch-cells cell) 1 0) (if (dug-cells cell) 1 0))))
+                                    (frequencies (map (juxt :x :y :z) digs)))))
+                "each cell dug once as stone and once as a torch; only the cut dig is asked twice")
             (is (= (count places) (count (distinct places))) "no cell placed twice")
             (is (= [] (the-ledger (:eng again))))))))))
 
@@ -424,3 +440,15 @@
               {:keys [out]} (await (run-out! s))]
           (is (empty? @calls))
           (is (= :not-done @out)))))))
+
+(deftest one-call-takes-the-torches-back-and-seals
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng clock out]} (setup {:blocks eight-down :inventory (inventory)} {:target [6 57 0]} {})]
+          (swap! clock + 500)
+          (await (core/tick! eng))
+          (is (= :not-done @out) "the first round is the tunnel's, the second leave-tunnel's")
+          (swap! clock + 500)
+          (await (core/tick! eng))
+          (is (= :sealed (:reason @out)) "one round takes every torch and seals the mouth"))))))

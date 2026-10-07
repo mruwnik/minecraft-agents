@@ -5,6 +5,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.declined :as declined]
             [jobs.lib.fetch :as fetch]
+            [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
             [jobs.lib.torch :as torch]
             [jobs.access.stair :as stair]
@@ -48,6 +49,8 @@
   After any other stop once the body has entered, it walks back to the entry first (:out true when it arrived).
   A dead end (:keep false) goes through jobs.access.leave-tunnel as a child (result in :leave). A kept tunnel
   is left by a plain walk.
+
+  One call does it all, in and (a dead end) out; :continue only while a child waits on the world.
 
   The body's cell is the progress. On the stair line the stair child goes on, on the run line the run, at the
   stand it is done, anywhere else it walks to the entry. A cell dug before a cut is air and is not dug again.
@@ -288,8 +291,14 @@
     (ctx/child-result c slot)
     :continue))
 
+(defn ^:async dig-cell!
+  "stair/dig! with :again for a dug cell (more to do), else a stop map."
+  [c in cell cut accept]
+  (let [r (await (stair/dig! c in cell cut accept))]
+    (if (= :continue r) :again r)))
+
 (defn ^:async run-step!
-  "Dig one cell of the next run step or walk into it: :continue, or a stop map."
+  "Dig one cell of the next run step or walk into it: :again, :continue while the walk waits, or a stop map."
   [c feet]
   (let [{:keys [plan]} (ctx/mem c)
         accept (set (:accept (:args c)))
@@ -297,12 +306,12 @@
         {:keys [next cut] :as cells} (run-cells feet (:heading plan))]
     (or (stair/stop-of in cells accept)
         (if-let [cell (first (remove #(rules/air ((:block-at in) %)) cut))]
-          (await (stair/dig! c in cell cut accept))
+          (await (dig-cell! c in cell cut accept))
           (let [r (await (walk-to! c :walk next))]
             (cond
               (= :continue r) :continue
               (and (= :arrived (:status r)) (= next (feet-of c)))
-              (do (ctx/emit! c :tunnel.step :info {:at next :text (str "tunnel step to " (pr-str next))}) :continue)
+              (do (ctx/emit! c :tunnel.step :info {:at next :text (str "tunnel step to " (pr-str next))}) :again)
               :else {:reason :step-failed :cell next :walk r}))))))
 
 (defn ^:async open-over-target!
@@ -315,7 +324,7 @@
     (or (stair/stop-of in cells accept)
         (if (rules/air ((:block-at in) over))
           :reached
-          (await (stair/dig! c in over cut accept))))))
+          (await (dig-cell! c in over cut accept))))))
 
 (defn line-index
   "The index of feet on the line of cells (0..n), or nil."
@@ -328,8 +337,8 @@
   (min steps (or (some #(when (>= % k) (inc %)) sites) steps)))
 
 (defn ^:async stair-part!
-  "One round of the stair child over the segment from line index k, also its last one at the segment's end (it hands
-  over what it dug): :continue, :declined when the stair declined (the wait, e.g. :no-tool, reaches this job's
+  "One call of the stair child over the segment from line index k (it hands over what it dug): :again once the
+  segment is cut, :continue while the child waits on the world, :declined when the stair declined (the wait, e.g. :no-tool, reaches this job's
   job.waiting), or a stop map when the stair stopped. :stair-done once the body stands at the stair's
   end."
   [c {:keys [heading dir] :as plan} k]
@@ -344,7 +353,7 @@
         (ctx/update-mem! c #(-> % (update :dug (fnil into []) (:dug res))
                                 (assoc :stair-done (and done? (= (cells (:steps plan)) (feet-of c))))))
         (if done?
-          :continue
+          :again
           (assoc (select-keys res [:cell :hazards :zone :claim :plan :fluid :block :tool :walk :why]) :reason (:reason res)
                  :in :stair))))))
 
@@ -372,7 +381,7 @@
 
 (defn ^:async hang!
   "Hang the torch of site s from the body's place, or book the site :unlit with why not. The ledger entry (a dead
-  end) is written before the place and confirmed when the cell holds the torch. :continue after a place."
+  end) is written before the place and confirmed when the cell holds the torch. :again after a place."
   [c in plan s]
   (let [p (:primitives c)
         block-at (:block-at in)
@@ -393,11 +402,11 @@
             held? (or (= "placed" (.-status r)) (torch-blocks (block-at cell)))]
         (when-not keep? (ledger/remember! c (if held? (ledger/confirm intended cell) (ledger/reconcile intended block-at))))
         (when-not held? (book-unlit! c plan s :place-failed cell))
-        :continue))))
+        :again))))
 
 (defn ^:async torch-step!
   "With the body on line index k: book the sites it passed without a torch, and hang the one due (site k-1, not
-  :unlit, nothing hanging in its cells). :continue after a place, else nil."
+  :unlit, nothing hanging in its cells). :again after a place, else nil."
   [c k]
   (let [{:keys [plan unlit]} (ctx/mem c)
         in (stair/rules-in c (feet-of c))
@@ -409,7 +418,7 @@
       (await (hang! c in plan due)))))
 
 (defn ^:async work!
-  "One bounded piece of the way from the body's place: :reached, :continue or a stop map."
+  "One bounded piece of the way from the body's place: :reached, :again, :continue (a child waits) or a stop map."
   [c]
   (let [{:keys [plan checked stair-done]} (ctx/mem c)
         {:keys [entry heading dir steps run]} plan
@@ -434,7 +443,7 @@
           :else (let [r (await (walk-to! c :in entry))]
                   (cond
                     (= :continue r) :continue
-                    (and (= :arrived (:status r)) (= entry (feet-of c))) :continue
+                    (and (= :arrived (:status r)) (= entry (feet-of c))) :again
                     :else {:reason :walk-in-failed :cell entry :walk r :outside true}))))))
 
 (defn way-out
@@ -469,7 +478,7 @@
   [c {:keys [reason outside] :as stop}]
   (if (or outside (and (= :no-way-back reason) (:keep (:args c))) (= (feet-of c) (:entry (:plan (ctx/mem c)))))
     (finish! c reason (cond-> (dissoc stop :reason :outside) outside (assoc :inside false)))
-    (do (ctx/update-mem! c assoc :stop stop :way-out (way-out c)) :continue)))
+    (do (ctx/update-mem! c assoc :stop stop :way-out (way-out c)) :again)))
 
 (defn bad-target? [t] (not (and (vector? t) (every? int? t))))
 
@@ -504,16 +513,16 @@
           (do (ctx/update-mem! c assoc :plan (assoc a :sites (torch-sites a)) :dug [])
               (ctx/emit! c :tunnel.plan :info (assoc a :text (str "tunnel from " (pr-str (:entry a)) " " (name (:heading a))
                                                                   ", " (:steps a) " steps, run " (:run a))))
-              :continue)
+              :again)
           (finish! c (:reason a) (dissoc a :reason)))))))
 
 (defn fetch-for-stop!
-  "A :no-tool stop the fetch can cure: remember the wait so the next rounds fetch for it; :continue. Nil when not."
+  "A :no-tool stop the fetch can cure: remember the wait so the next step fetches for it; :again. Nil when not."
   [c stop]
   (let [w {:reason :no-tool :block (:block stop)}]
     (when (and (= :no-tool (:reason stop)) (fetch/due c 'jobs.access.tunnel w))
       (ctx/update-mem! c assoc :fetch-wait w)
-      :continue)))
+      :again)))
 
 (defn ^:async work-round [c]
   (declined/begin! c)
@@ -523,14 +532,25 @@
       (:stop m) (await (retreat! c))
       :else (let [r (await (work! c))]
               (cond
-                (#{:continue :declined} r) r
+                (#{:again :continue :declined} r) r
                 (= :reached r) (finish! c :reached {})
                 :else (or (fetch-for-stop! c r) (stop! c r)))))))
 
-(defn ^:async round
-  "The fetch part first (the stair's booked wait, or the stop's remembered one), then the work."
+(defn ^:async step!
+  "One piece of the tunnel: the fetch part first (the stair's booked wait, or the stop's remembered one), then the
+  work. :again, :continue (a child waits on the world), :declined or :done."
   [c]
   (let [r (await (fetch/step! c 'jobs.access.tunnel (or (fetch/booked-wait c) (:fetch-wait (ctx/mem c))) {:return? true}))]
     (when (and (:fetch-wait (ctx/mem c)) (nil? (:fetching (ctx/mem c))))
       (ctx/update-mem! c dissoc :fetch-wait))
-    (or r (await (work-round c)))))
+    (cond
+      (= :continue r) :again
+      r r
+      :else (await (work-round c)))))
+
+(defn ^:async round
+  "The whole tunnel, in and (a dead end) out: step! until it ends, a pace between; :continue after stair/max-steps of
+  them or while a child waits on the world."
+  [c]
+  (let [n (atom 0)]
+    (await (pace/steps! c #(if (< (swap! n inc) stair/max-steps) (step! c) :continue)))))

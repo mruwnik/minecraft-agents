@@ -693,3 +693,26 @@
         (let [{:keys [calls out]} (await (fetching-tunnel! "iron_pickaxe" false (fn [_])))]
           (is (empty? calls))
           (is (= :not-done @out)))))))
+
+(deftest one-call-is-the-whole-tunnel
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng clock out p]} (setup {:blocks (assoc ground "6,57,0" "iron_ore")} {:target [6 57 0]} (fn [_]))]
+          (swap! clock + 500)
+          (await (core/tick! eng))
+          (is (= :reached (:reason @out)) "one round digs the stair, the run and opens the target")
+          (is (= [5 57 0] (feet p))))))))
+
+(deftest one-call-is-a-dead-end-and-its-way-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng clock out p]} (setup {:blocks eight-down :inventory with-cobble
+                                                :drops {"wall_torch" "torch" "stone" "cobblestone"}}
+                                               {:target [6 57 0]} lava-ahead)]
+          (swap! clock + 500)
+          (await (core/tick! eng))
+          (is (= :hazard (:reason @out)) "one round: in, stopped, torches taken, mouth sealed")
+          (is (= :sealed (:reason (:leave @out))))
+          (is (= [-3 65 0] (feet p))))))))

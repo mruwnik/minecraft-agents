@@ -6,6 +6,7 @@
             [jobs.lib.blocks :as blocks]
             [jobs.lib.declined :as declined]
             [jobs.lib.fetch :as fetch]
+            [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
             [jobs.access.stair :as stair]
             [jobs.access.tunnel :as tunnel]
@@ -15,7 +16,8 @@
 
 (def doc
   "Leave a dead-end tunnel (the result of jobs.access.tunnel: :line :dug :torches): take its torches back and
-  block its mouth off. Every round is read from the world, so a cut or restart goes on. A nil zone list declines
+  block its mouth off. One call does all of it (:continue only while a child waits on the world); a cut or
+  restart reads the world again and goes on. A nil zone list declines
   the check (one warn leave-tunnel.declined).
 
   Torches first. For each torch that still stands, deepest first, the body walks to the cell after its site
@@ -145,16 +147,16 @@
     :done))
 
 (defn ^:async walk-to!
-  "Walk to cell: :continue while walking or once there. A walk that did not arrive starts the escape (the way out
+  "Walk to cell: :continue while the walk waits on the world, :again once there. A walk that did not arrive starts the escape (the way out
   does not need the tunnel's stair); once out, giveup is called with the walk instead."
   [c cell giveup]
   (let [r (await (tunnel/walk-to! c :walk cell))]
     (cond
       (= :continue r) :continue
-      (and (= :arrived (:status r)) (= cell (feet-of c))) :continue
+      (and (= :arrived (:status r)) (= cell (feet-of c))) :again
       (:escaped (ctx/mem c)) (giveup r)
       :else (do (ctx/update-mem! c assoc :escape {:i 0 :cell cell :walk r :results []})
-                :continue))))
+                :again))))
 
 (def opposite {:north :south :south :north :east :west :west :east})
 
@@ -195,24 +197,24 @@
           (= :refused (:reason refused))
           (do (declined/begin! c)
               (ctx/update-mem! c update :escape #(-> % (assoc :i (inc i)) (update :results conj {:reason :refused :heading (:heading attempt)})))
-              :continue)
+              :again)
           (= :declined r) :declined
           (nil? res) :continue
           (= :done (:status res))
           (do (ctx/emit! c :leave-tunnel.escape :info {:at (feet-of c) :heading (:heading attempt) :ignore-zones? (:ignore-zones? attempt)
                                                       :text (str "leave-tunnel dug its own way out " (name (:heading attempt)))})
               (ctx/update-mem! c #(-> % (dissoc :escape) (assoc :escaped true)))
-              :continue)
+              :again)
           :else (do (ctx/update-mem! c update :escape #(-> % (assoc :i (inc i)) (update :results conj (select-keys res [:reason :cell :heading]))))
-                    :continue))))))
+                    :again))))))
 
 (defn book-left! [c cell site reason]
   (ctx/update-mem! c update :left (fnil conj []) {:cell cell :site site :reason reason})
-  :continue)
+  :again)
 
 (defn book-open! [c cell reason]
   (ctx/update-mem! c update :open (fnil conj []) {:cell cell :reason reason})
-  :continue)
+  :again)
 
 (defn ^:async dig-torch!
   "From the cell after its site: the torch's dig asked of the rules, its ledger entry marked :removing before the
@@ -230,14 +232,15 @@
           (book-left! c cell site :dig-failed)
           (do (ledger/remember! c (ledger/drop-cell l cell))
               (ctx/update-mem! c #(-> % (update :taken (fnil conj []) cell) (assoc :collect true)))
-              :continue))))))
+              :again))))))
 
 (defn ^:async collect!
-  "Pick the dropped torches up near the body; the flag clears when none is left."
+  "Pick the dropped torches up near the body; the flag clears when the pick-up ends (done, or it cannot run)."
   [c]
   (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius 3 :filter ["torch"]}))]
-    (when (= :done r) (ctx/update-mem! c dissoc :collect))
-    :continue))
+    (if (= :continue r)
+      :continue
+      (do (ctx/update-mem! c dissoc :collect) :again))))
 
 (defn ^:async take-torch!
   "Walk to the cell after the torch's site and take it back."
@@ -264,7 +267,7 @@
       :else (do (await (ctx/act c :place (clj->js {:pos (cell-pos cell) :item item})))
                 (let [n (block-at cell)]
                   (if (and n (not (rules/replaceable n)))
-                    (do (ctx/update-mem! c update :filled (fnil conj []) cell) :continue)
+                    (do (ctx/update-mem! c update :filled (fnil conj []) cell) :again)
                     (book-open! c cell :place-failed)))))))
 
 (defn ^:async seal!
@@ -294,8 +297,19 @@
       (seq torches) (await (take-torch! c (first torches)))
       :else (await (seal! c)))))
 
-(defn ^:async round
-  "The fetch part first (the escape stair's booked wait), then the work."
+(defn ^:async step!
+  "One piece of the way out: the fetch part first (the escape stair's booked wait), then the work. :again, :continue
+  (a child waits on the world), :declined or :done."
   [c]
   (let [r (await (fetch/step! c 'jobs.access.leave-tunnel (fetch/booked-wait c) {:return? true}))]
-    (or r (await (work-round c)))))
+    (cond
+      (= :continue r) :again
+      r r
+      :else (await (work-round c)))))
+
+(defn ^:async round
+  "The whole way out: step! until it ends, a pace between; :continue after stair/max-steps of them or while a child
+  waits on the world."
+  [c]
+  (let [n (atom 0)]
+    (await (pace/steps! c #(if (< (swap! n inc) stair/max-steps) (step! c) :continue)))))
