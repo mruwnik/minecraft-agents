@@ -2,6 +2,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
             [jobs.lib.apiary :as apiary]
+            [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
             [jobs.apiary.guard :as guard]
             [jobs.apiary.harvest :as harvest]))
@@ -9,8 +10,8 @@
 (def doc
   "Keep one apiary in order. The apiary is the :box ({:from :to}), or :center (the body's position at the first
   run) with :radius.
-  One run is one pass over four steps in a fixed order. Each is a child job, run one round at a time and never run
-  twice in a pass:
+  One call is one pass over four steps in a fixed order. Each is a child job, called until it ends and never run
+  twice in a pass (:continue only while a child waits on the world):
   - :guard (jobs.apiary.guard): a lit fire lacks a carpet or a sink and a carried item does it.
   - :harvest (jobs.apiary.harvest, with :with): a ripe hive is smoked, the tool is carried, and no ripe hive
     stands over a fire that is still unsafe. The harvest child cannot leave one hive out, so one unsafe fire holds
@@ -227,7 +228,9 @@
       (ctx/update-mem! c booked step {:skipped :failed :error (str e)})
       :failed)))
 
-(defn ^:async round [c]
+(defn ^:async step
+  "One piece of the pass: :again after a step ended, :continue while its child waits on the world, :done."
+  [c]
   (let [center (apiary/center-of c)]
     (when-not (:todo (ctx/mem c))
       (ctx/update-mem! c assoc :todo steps :report {} :center center))
@@ -240,7 +243,13 @@
               _ (ctx/update-mem! c assoc :call-args call-args)
               r (await (run-child! c step call-args))]
           (case r
-            :done (ctx/update-mem! c booked step (summary step (ctx/child-result c step)))
-            :declined (ctx/update-mem! c booked step {:skipped :declined})
-            nil)
-          :continue)))))
+            :continue :continue
+            :failed :again
+            :done (do (ctx/update-mem! c booked step (summary step (ctx/child-result c step))) :again)
+            (do (ctx/update-mem! c booked step {:skipped :declined}) :again)))))))
+
+(def max-steps "Steps of one call before it gives the round back with :continue." 400)
+
+(defn ^:async round [c]
+  (let [n (atom 0)]
+    (await (pace/steps! c #(if (< (swap! n inc) max-steps) (step c) :continue)))))

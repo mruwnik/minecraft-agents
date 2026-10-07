@@ -4,10 +4,12 @@
             [jobs.lib.gate :as gate]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
-            [jobs.lib.near :as near]))
+            [jobs.lib.near :as near]
+            [jobs.lib.pace :as pace]))
 
 (def doc
-  "Take the honey of the ripe hives (honey_level 5) near a centre, nearest first, at most :max hives. Shears give 3
+  "Take the honey of the ripe hives (honey_level 5) near a centre, nearest first, at most :max hives, all in one call
+  (:continue only while a walk or the comb pick-up waits on the world). Shears give 3
   honeycomb, a glass bottle gives a honey bottle. After each shears harvest the honeycomb on the ground is
   collected.
   A hive is worked only when it is smoked by vanilla's rule: a lit campfire at most 5 blocks under it with only
@@ -121,12 +123,32 @@
 ;; ------------------------------------------------------------------ rounds
 
 (defn ^:async collect!
-  "Pick up the honeycomb lying about, then go back to the hives."
+  "Pick up the honeycomb lying about, then go back to the hives. :continue while the pick-up waits; any other end
+  of it (done, declined) closes the phase."
   [c]
   (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius 8 :filter ["honeycomb"]}))]
     (when (= :done r)
-      (ctx/update-mem! c #(-> % (update :collected (fnil + 0) (:collected (ctx/child-result c :collect) 0)) (dissoc :phase))))
-    :continue))
+      (ctx/update-mem! c update :collected (fnil + 0) (:collected (ctx/child-result c :collect) 0)))
+    (if (= :continue r)
+      :continue
+      (do (ctx/update-mem! c dissoc :phase) :again))))
+
+(defn book-harvest!
+  "Count the hive at pos as taken when it is no longer ripe; the comb is then collected after shears."
+  [c pos tool]
+  (let [level (some-> (u/block-at (:primitives c) pos) .-properties .-honey_level)]
+    (if (< (or level ripe-level) ripe-level)
+      (ctx/update-mem! c #(cond-> (-> % (update :harvested (fnil inc 0)) (assoc :strikes 0))
+                            (= "shears" tool) (assoc :phase :collect)))
+      (skip! c pos :no-effect))))
+
+(defn settle-click!
+  "A cut left a click unbooked: book it from the hive's level now."
+  [c]
+  (when-let [{:keys [pos tool]} (:clicking (ctx/mem c))]
+    (ctx/update-mem! c dissoc :clicking)
+    (when (< (or (some-> (u/block-at (:primitives c) pos) .-properties .-honey_level) ripe-level) ripe-level)
+      (book-harvest! c pos tool))))
 
 ;; the comb pops out of the face clicked: the side the body stands on, so it lies in view (on top, the hive hides it from below)
 (defn face-toward
@@ -144,26 +166,28 @@
   (let [w (await (near/go-near! c pos reach {:zone-tolls true :escalate false}))]
     (case w
       :partial :continue
-      :blocked (do (skip! c pos :unreachable) :continue)
-      (let [r (if (hive-allowed? c pos)
+      :blocked (do (skip! c pos :unreachable) :again)
+      (let [_ (when (hive-allowed? c pos) (ctx/update-mem! c assoc :clicking {:pos pos :tool tool}))
+            r (if (hive-allowed? c pos)
                 (await (ctx/act c :useOn (clj->js {:pos pos :item tool :face (face-toward pos (u/self-pos c))})))
                 #js {:status "refused"})
             level (some-> r .-after .-properties .-honey_level)]
+        (ctx/update-mem! c dissoc :clicking)
         (if (and (= "used" (.-status r)) (< (or level ripe-level) ripe-level))
-          (ctx/update-mem! c #(cond-> (-> % (update :harvested (fnil inc 0)) (assoc :strikes 0))
-                                (= "shears" tool) (assoc :phase :collect)))
+          (book-harvest! c pos tool)
           (skip! c pos (keyword (if (= "used" (.-status r)) "no-effect" (.-status r)))))
-        :continue))))
+        :again))))
 
 (defn check [_c] true)
 
-(defn ^:async round
-  "One bounded step: collect after a shears harvest; else classify the hives and
-  finish when none can be worked, the budget is spent or three hives in a row
-  failed; else harvest the nearest workable hive."
+(defn ^:async step
+  "One piece of the harvest: collect after a shears harvest; else classify the hives and finish when none can be
+  worked, the budget is spent or three hives in a row failed; else harvest the nearest workable hive. :again,
+  :continue while a walk or collect waits on the world, or :done."
   [c]
   (let [center (apiary/center-of c)
         _ (when-not (:center (ctx/mem c)) (ctx/update-mem! c assoc :center center))
+        _ (settle-click! c)
         m (ctx/mem c)
         _ (when (and (not= :collect (:phase m)) (empty? (hives c center)) (not (look/looked-here? c)))
             (await (look/look-around! c)))]
@@ -179,3 +203,9 @@
           (nil? tool) (finish! c :no-tool seen)
           :else (do (ctx/update-mem! c assoc :tool tool)
                     (await (harvest! c pos tool))))))))
+
+(def max-steps "Steps of one call before it gives the round back with :continue." 400)
+
+(defn ^:async round [c]
+  (let [n (atom 0)]
+    (await (pace/steps! c #(if (< (swap! n inc) max-steps) (step c) :continue)))))

@@ -4,6 +4,7 @@
             [jobs.lib.gate :as gate]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
+            [jobs.lib.pace :as pace]
             [jobs.lib.step-off :as step-off]
             [jobs.lib.access :as access]))
 
@@ -14,7 +15,8 @@
     is taken first, then the fire and the ground block under it are dug out, and a carried campfire is placed
     one block lower. Mining a campfire gives charcoal, not the fire, so one must be carried.
   - Every lit fire with nothing on it gets a non-moss carpet, since an open fire burns landing bees.
-  Fires are worked nearest first, at most :max actions in a run. A fire that cannot be reached or refuses is
+  One call works every fire (:continue only while a walk or the carpet pick-up waits on the world). Fires are
+  worked nearest first, at most :max actions in a run. A fire that cannot be reached or refuses is
   skipped for the rest of the run. The body never stands in a fire's cell.
   Result: {:sunk n :carpeted n :reason r :left {pos reason} :skipped {pos reason} :fires n}. :reason is
   :guarded (work done, nothing left), :limit (:max reached), :safe, :no-fire, :no-carpet, :no-campfire, a skip
@@ -134,18 +136,29 @@
 
 ;; ------------------------------------------------------------------ carpet
 
+(defn named-at [block-at pos] (some-> (block-at pos) .-name))
+
 (defn ^:async carpet!
+  "Place the carpet over the fire; the intent is saved first, so a cut after the placing still books it."
   [c pos item]
   (if-not (permitted? c :place (update pos :y inc))
     (skip! c pos :refused)
-    (let [r (await (ctx/act c :place (clj->js {:pos (update pos :y inc) :item item})))]
-      (if (= "placed" (.-status r))
-        (booked! c :carpeted)
-        (skip! c pos (keyword (.-status r)))))))
+    (do (ctx/update-mem! c assoc :carpeting pos)
+        (let [r (await (ctx/act c :place (clj->js {:pos (update pos :y inc) :item item})))]
+          (ctx/update-mem! c dissoc :carpeting)
+          (if (= "placed" (.-status r))
+            (booked! c :carpeted)
+            (skip! c pos (keyword (.-status r))))))))
+
+(defn settle-carpet!
+  "A cut left a carpet placing unbooked: book it when the carpet stands."
+  [c]
+  (when-let [pos (:carpeting (ctx/mem c))]
+    (ctx/update-mem! c dissoc :carpeting)
+    (when-let [above (named-at (apiary/block-at-fn (:primitives c)) (update pos :y inc))]
+      (when (apiary/carpet? above) (booked! c :carpeted)))))
 
 ;; ------------------------------------------------------------------ sink
-
-(defn named-at [block-at pos] (some-> (block-at pos) .-name))
 
 (defn next-step
   "The next idempotent step of a sink {:fire :kind :carpet} read off the world:
@@ -178,8 +191,7 @@
 (defn ^:async finish-sink! [c {:keys [carpet]}]
   (ctx/update-mem! c dissoc :sinking)
   (booked! c :sunk)
-  (when carpet (await (collect-carpet! c carpet)))
-  :continue)
+  (if (and carpet (= :continue (await (collect-carpet! c carpet)))) :continue :again))
 
 (def max-sink-steps 8)
 
@@ -191,21 +203,21 @@
     (loop [steps 0 prev nil]
       (let [{:keys [op pos item] :as step} (next-step block-at s)]
         (case (if (or (= step prev) (>= steps max-sink-steps)) :stuck op)
-          :stuck (do (abandon! c fire :cannot) :continue)
+          :stuck (do (abandon! c fire :cannot) :again)
           :done (await (finish-sink! c s))
-          :abort (do (abandon! c fire :cannot) :continue)
+          :abort (do (abandon! c fire :cannot) :again)
           :dig (if-not (permitted? c :dig pos)
-                 (do (abandon! c fire :refused) :continue)
+                 (do (abandon! c fire :refused) :again)
                  (let [status (.-status (await (ctx/act c :dig (clj->js {:pos pos}))))]
                    (if (contains? #{"dug" "missing"} status)
                      (recur (inc steps) step)
-                     (do (abandon! c fire (keyword status)) :continue))))
+                     (do (abandon! c fire (keyword status)) :again))))
           :place (if-not (permitted? c :place pos)
-                   (do (abandon! c fire :refused) :continue)
+                   (do (abandon! c fire :refused) :again)
                    (let [status (.-status (await (ctx/act c :place (clj->js {:pos pos :item item}))))]
                      (if (= "placed" status)
                        (await (finish-sink! c s))
-                       (do (abandon! c fire :place-failed) :continue)))))))))
+                       (do (abandon! c fire :place-failed) :again)))))))))
 
 (defn start-sink!
   "Remember the sink so a cut resumes it, then run it."
@@ -222,12 +234,12 @@
   (let [w (await (near/go-near! c pos reach {:zone-tolls true :escalate false}))]
     (case w
       :partial :continue
-      :blocked (do (skip! c pos :unreachable) :continue)
+      :blocked (do (skip! c pos :unreachable) :again)
       (if-not (await (clear-fire! c pos))
-        (do (skip! c pos :on-fire) :continue)
+        (do (skip! c pos :on-fire) :again)
         (if (= :sink action)
           (await (start-sink! c pos kind))
-          (do (await (carpet! c pos item)) :continue))))))
+          (do (await (carpet! c pos item)) :again))))))
 
 (defn ^:async resume-sink!
   "A cut left a sink half done: walk back and run its steps again."
@@ -236,10 +248,10 @@
         w (await (near/go-near! c fire reach {:zone-tolls true :escalate false}))]
     (case w
       :partial :continue
-      :blocked (do (abandon! c fire :unreachable) :continue)
+      :blocked (do (abandon! c fire :unreachable) :again)
       (if (await (clear-fire! c fire))
         (await (sink! c))
-        (do (abandon! c fire :on-fire) :continue)))))
+        (do (abandon! c fire :on-fire) :again)))))
 
 (defn check
   "True while a run is under way or some lit fire in the area lacks a carpet or sits too high."
@@ -253,13 +265,14 @@
              (some #(seq (apiary/needs block-at (:pos %))) (permitted-fires c (apiary/fires p {:box box :center center :radius radius}))))))
       (ctx/wait c {:reason :nothing-to-guard})))
 
-(defn ^:async round
-  "One bounded step: resume a sink; else survey the fires and finish when the
-  budget is spent, three fires in a row failed or none can be worked; else act
-  on the nearest workable fire."
+(defn ^:async step
+  "One piece of the guarding: resume a sink; else survey the fires and finish when the budget is spent, three fires
+  in a row failed or none can be worked; else act on the nearest workable fire. :again, :continue while a walk or
+  collect waits on the world, or :done."
   [c]
   (let [center (apiary/center-of c)
         _ (ctx/update-mem! c assoc :started true :center center)
+        _ (settle-carpet! c)
         m (ctx/mem c)]
     (if (:sinking m)
       (await (resume-sink! c))
@@ -270,3 +283,9 @@
           (>= (:strikes m 0) max-strikes) (finish! c :gave-up seen)
           (nil? target) (finish! c (end-reason m seen) seen)
           :else (await (work! c target)))))))
+
+(def max-steps "Steps of one call before it gives the round back with :continue." 400)
+
+(defn ^:async round [c]
+  (let [n (atom 0)]
+    (await (pace/steps! c #(if (< (swap! n inc) max-steps) (step c) :continue)))))
