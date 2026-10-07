@@ -17,7 +17,7 @@ import { missingPatches, missingRequired } from './deps-check.mjs'
 import { wrapBlockAt } from './offset-shapes.mjs'
 import { say } from './chat.mjs'
 import vec3 from 'vec3'
-import { MONSTER_RANGE, DAMAGE_FRESH_MS, OFFLINE_DEFAULT_MS, OFFLINE_MAX_MS, RECONNECT_TRIES, RECONNECT_RETRY_MS, RECONNECT_BACKOFF_FIRST_MS, RECONNECT_BACKOFF_MAX_MS, WORLD_TIMEOUT_MS, PHYSICS_STALL_MS, STALL_POLL_MS, SETTLE_MS, TELEPORT_BLOCKS, BODY_HALF_WIDTH, WAIT_MAX_MS, RAIN_LEVEL, THUNDER_LEVEL, mcToMineflayerLook, mineflayerToMcLook, sleepMs, waitForWorld, xyz, isNum, vec, cutError, badArgs, isCut, failed, need, entityKind, attempt, sleepStatusOf, droppedItem, itemCounts } from './prim-base.mjs'
+import { MONSTER_RANGE, DAMAGE_FRESH_MS, OFFLINE_DEFAULT_MS, OFFLINE_MAX_MS, RECONNECT_TRIES, RECONNECT_RETRY_MS, RECONNECT_BACKOFF_FIRST_MS, RECONNECT_BACKOFF_MAX_MS, WORLD_TIMEOUT_MS, PHYSICS_STALL_MS, STALL_POLL_MS, SETTLE_MS, TELEPORT_BLOCKS, BODY_HALF_WIDTH, WAIT_MAX_MS, weatherOf, mcToMineflayerLook, mineflayerToMcLook, sleepMs, waitForWorld, xyz, isNum, vec, cutError, badArgs, isCut, failed, need, entityKind, attempt, sleepStatusOf, droppedItem, itemCounts } from './prim-base.mjs'
 import { createWalk } from './prim-walk.mjs'
 import { createSense } from './prim-sense.mjs'
 import { createMove } from './prim-move.mjs'
@@ -233,10 +233,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       const { at, ...fields } = last
       return fields
     }
-    const weatherNow = () => {
-      const raining = (target.rainState ?? 0) > RAIN_LEVEL
-      return { raining, thundering: raining && (target.thunderState ?? 0) > THUNDER_LEVEL }
-    }
+    const weatherNow = () => weatherOf(target)
     let weather = weatherNow()
     const handlers = {
       physicsTick: () => { lastTick = Date.now(); stalled = false; lastPos = target.entity.position.clone(); if (++ticks % 20 === 0) remember() },

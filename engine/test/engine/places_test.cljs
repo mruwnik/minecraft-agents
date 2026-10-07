@@ -27,7 +27,7 @@
 
 (deftest names-the-engine-uses-for-its-own-memory-are-reserved
   (are [in] (= :reserved-name (:reason (places/parse-name in)))
-    :hurt :slept :moved :notify :bed-unreachable :chest-unusable :needs-bed :restart :picked-up :chat :log-out))
+    :hurt :slept :moved :notify :bed-unreachable :chest-unusable :needs-bed :restart :picked-up :chat :log-out :weather-changed))
 
 (deftest positions-take-a-vector-or-a-map-and-floor
   (are [in out] (= out (:pos (places/parse-pos in)))

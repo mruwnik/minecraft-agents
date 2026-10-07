@@ -10,6 +10,10 @@ export const MONSTER_RANGE = 8
 export const DROP_RADIUS = 2
 export const RAIN_LEVEL = 0.2 // vanilla client: raining above this rain level, thundering above THUNDER_LEVEL while raining
 export const THUNDER_LEVEL = 0.9
+export const weatherOf = bot => {
+  const raining = (bot.rainState ?? 0) > RAIN_LEVEL
+  return { raining, thundering: raining && (bot.thunderState ?? 0) > THUNDER_LEVEL }
+}
 export const DROP_WAIT_S = 1
 export const DIG_MARGIN_S = 5 // slack over the expected dig time (latency, a tick of lag)
 export const POLL_MS = 50
