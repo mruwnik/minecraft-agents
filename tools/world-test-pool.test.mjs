@@ -251,15 +251,35 @@ test('listArgs: the --list call gets the paths and the case-selecting flags the 
   assert.deepEqual(listArgs(p), ['dir', '--phase', 'night', '--tag', 'air', '--match', 'dive', '--repeat', '2', '--list'])
 })
 
-test('knownFailures: ids whose last recorded result was a fail; a later pass or flaky clears them, an error is not one', () => {
-  const older = vec(form('a/c1', 'fail'), form('a/c2', 'fail'), form('a/c3', 'fail'), form('a/c4', 'error'))
+// a failed case whose first failing check is `check` (an :expect map text)
+const failForm = (id, check, secs = 1, extra = '') =>
+  `{:file "${id.split('/')[0]}", :expects [{:status :pass, :expect {:event {:kind :ok}}} {:status :fail, :evidence "none", :expect ${check}}], :status :fail, :id "${id}", :elapsed-s ${secs}${extra}}`
+test('knownFailures: id -> first failing check of its last recorded result when that was a fail; a later pass or flaky clears it, an error is not one', () => {
+  const older = vec(failForm('a/c1', '{:event {:kind :x}}'), form('a/c2', 'fail'), form('a/c3', 'fail'), form('a/c4', 'error'))
   const newer = vec(form('a/c2', 'pass'), form('a/c3', 'flaky'))
-  assert.deepEqual([...knownFailures([older, newer])], ['a/c1'])
+  assert.deepEqual([...knownFailures([older, newer])], [['a/c1', '{:event {:kind :x}}']])
+})
+test('runPool: a failure with a different first failing check than last time is rerun, not a known failure', async () => {
+  const log = []
+  const run = fakeRunner(() => ({ code: 1, text: vec(failForm('a/c1', '{:event {:kind :y}}')) }), log)
+  const r = await runPool({ units: ['a'], workers: workerSpecs(2, 19, 'P', 0), runUnit: run, retries: 1, known: new Map([['a/c1', '{:event {:kind :x}}']]) })
+  assert.deepEqual(log.map((l) => l.match), [null, 'a/c1'])
+  assert.equal(r.skipped, 0)
+  assert.doesNotMatch(r.text, /:known-failure/)
+})
+test('result events carry known-failure and the seconds saved by an early end', async () => {
+  const seen = []
+  const run = fakeRunner(() => ({ code: 1, text: vec(failForm('a/c1', '{:event {:kind :x}}', 1, ', :ended-early-s 40'), form('a/c2', 'pass')) }), [])
+  await runPool({ units: ['a'], workers: workerSpecs(2, 19, 'P', 0), runUnit: run, retries: 1, known: new Map([['a/c1', '{:event {:kind :x}}']]), emit: (e) => seen.push(e) })
+  const [c1, c2] = resultsOf(seen)
+  assert.equal(c1.knownFailure, true)
+  assert.equal(c1.endedEarlyS, 40)
+  assert.equal('knownFailure' in c2, false)
 })
 test('runPool: a failed case that is a known failure is not rerun, is marked :known-failure true and counted as skipped', async () => {
   const log = []
   const run = fakeRunner(() => ({ code: 1, text: vec(form('a/c1', 'fail'), form('a/c2', 'fail')) }), log)
-  const r = await runPool({ units: ['a'], workers: workerSpecs(2, 19, 'P', 0), runUnit: run, retries: 2, known: new Set(['a/c1']) })
+  const r = await runPool({ units: ['a'], workers: workerSpecs(2, 19, 'P', 0), runUnit: run, retries: 2, known: new Map([['a/c1', '']]) })
   assert.deepEqual(log.map((l) => l.match), [null, 'a/c2', 'a/c2'], 'only c2 is rerun')
   assert.equal(r.skipped, 1)
   const forms = splitForms(r.text)
