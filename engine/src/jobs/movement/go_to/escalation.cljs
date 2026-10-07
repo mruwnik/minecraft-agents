@@ -91,22 +91,30 @@
   (doseq [{:keys [cell block]} (distinct dug)]
     (escape/note-hole! c (hole-tag c) cell block)))
 
-(def look-levels
-  "Levels from the feet up whose cells beside the body escalation looks at before it chooses (pit-depth, headroom)."
-  4)
+(defn ^:async look-level!
+  "Look at each cell beside the body at level lvl above feet that it has not sensed."
+  [c feet lvl]
+  (loop [todo (for [d escape/cardinals] (escape/up (escape/ahead feet d 1) lvl))]
+    (when-let [cell (first todo)]
+      (when (dig-look/unknown? (:primitives c) cell) (await (dig-look/look-at! c cell)))
+      (recur (rest todo)))))
 
 (defn ^:async look-round!
-  "Before choosing: look at each cell beside the body (feet up look-levels) and over its head that it has not sensed,
-  so the choice reads walls it sees; a look shows the cells round the one looked at too. Cells inside rock stay
-  unknown (escape reads them as rock)."
+  "Before choosing: look at each cell beside the body (the first look-levels levels up, then on while the level below
+  reads walled, as far as pit-depth reads) and over its head that it has not sensed, so the choice reads walls it
+  sees; a look shows the cells round the one looked at too. Cells inside rock stay unknown (escape reads them as
+  rock)."
   [c feet]
   (let [p (:primitives c)
-        cells (cons (escape/up feet 2)
-                    (for [lvl (range look-levels) d escape/cardinals] (escape/up (escape/ahead feet d 1) lvl)))]
-    (loop [todo cells]
-      (when-let [cell (first todo)]
-        (when (dig-look/unknown? p cell) (await (dig-look/look-at! c cell)))
-        (recur (rest todo))))))
+        block-at (escape/block-at-of p)
+        top (inc (escape/max-depth))
+        over (escape/up feet 2)]
+    (when (dig-look/unknown? p over) (await (dig-look/look-at! c over)))
+    (loop [lvl 0]
+      (when (< lvl top)
+        (await (look-level! c feet lvl))
+        (when (or (< lvl (dec escape/look-levels)) (escape/walled-at? block-at (escape/unseen-of p) (escape/up feet lvl)))
+          (recur (inc lvl)))))))
 
 (defn ^:async escalate!
   "Start the next escalation for the give-up kept in memory (:give-up), or give up with it when there is none (or

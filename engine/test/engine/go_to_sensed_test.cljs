@@ -191,3 +191,18 @@
                                                    {:pos [10 64 0] :range 1}))]
           (is (= {:arrived true} out) (pr-str (last seen)))
           (is (= [:stair] (steps seen))))))))
+
+(def deep-pit
+  "A 5-deep 1x1 pit (feet at y 61) in dirt x -2..2, y 60..65; stone ground east of it (x 3..14) topped at the rim."
+  (apply dissoc (merge (box 3 60 -3 14 65 3 "stone") (box -2 60 -2 2 65 2 "dirt"))
+         (for [y (range 61 66)] (str "0," y ",0"))))
+
+(deftest go-to-pillars-out-of-a-deep-pit-with-just-enough-blocks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out seen]} (await (run-go-to {:self {:pos {:x 0 :y 61 :z 0}} :blocks deep-pit
+                                                    :inventory [{:name "dirt" :count 5}]}
+                                                   {:pos [10 66 0] :range 1}))]
+          (is (= {:arrived true} out) (pr-str (last seen)))
+          (is (= [:pillar] (steps seen)) (pr-str (filter #(= :go-to.escalated (:kind %)) seen))))))))

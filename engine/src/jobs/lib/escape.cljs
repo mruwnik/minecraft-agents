@@ -88,14 +88,26 @@
       :else [0 (js/Math.sign dz)])))
 
 (defn walled-at?
-  "At least three of the four sides of cell are solid."
-  [block-at cell]
-  (>= (count (filter #(solid? (block-at (ahead cell % 1))) cardinals)) 3))
+  "At least three of the four sides of cell are solid. With unseen? ((unseen? cell)), a level with a side cell the body
+  has not sensed is not walled: what it has not seen is not known to be rock."
+  ([block-at cell] (walled-at? block-at (constantly false) cell))
+  ([block-at unseen? cell]
+   (let [sides (map #(ahead cell % 1) cardinals)]
+     (and (not-any? unseen? sides)
+          (>= (count (filter #(solid? (block-at %)) sides)) 3)))))
+
+(def look-levels
+  "Levels from the feet up whose cells beside the body go-to's escalation looks at before it chooses; an unseen cell
+  there is rock behind rock."
+  4)
 
 (defn pit-depth
-  "Levels up from the feet, 0, 1, ..., walled on at least three sides, at most max-depth."
-  [block-at feet]
-  (count (take-while #(walled-at? block-at (up feet %)) (range (max-depth)))))
+  "Levels up from the feet, 0, 1, ..., walled on at least three sides, at most max-depth. Above look-levels a side
+  cell the body has not sensed (unseen?) is not known to be rock: the pit reads as ending there."
+  ([block-at feet] (pit-depth block-at (constantly false) feet))
+  ([block-at unseen? feet]
+   (count (take-while #(walled-at? block-at (if (< % look-levels) (constantly false) unseen?) (up feet %))
+                      (range (max-depth))))))
 
 (defn stair-cuts
   "The cells a stair up along dir ([dx dz]) cuts from feet in n steps, step by step (jobs.access.stair/step-cells)."
@@ -270,7 +282,7 @@
   ([p feet goal may-dig? {:keys [own? skip] :or {own? (constantly false) skip #{}}}]
    (let [block-at (block-at-of p)
          dir (heading feet goal)
-         depth (pit-depth block-at feet)
+         depth (pit-depth block-at (unseen-of p) feet)
          {:keys [item count]} (pillar-item p)
          pillar-blocks? (and (not (skip :pillar)) (pos? depth) item (>= count depth))
          rise (if (pos? depth) depth (min (max-depth) (max 0 (- (second goal) (second feet)))))
