@@ -799,13 +799,31 @@
       (.then #(start-body! opts nil true nil))
       (.then #(when (seq (:register c)) (put-register! opts (:register c) origin)))))
 
+(defn settling-reply?
+  "True when a tool's answer is the lease's refusal of a body that has just started: {:ok false :reason \"settling\"}."
+  [out]
+  (boolean (re-find #"reason\W+settling" (str out))))
+
+(defn exec-settled
+  "Runs argv with exec (-> promise of {:code :out}) again every every-ms, up to limit-ms, while the answer is the
+  settling refusal. Resolves to the last result, unchanged."
+  [{:keys [exec sleep limit-ms every-ms] :or {exec exec-file sleep sleep limit-ms 10000 every-ms 500}} argv]
+  (letfn [(go [waited]
+            (.then (exec argv)
+                   (fn [res]
+                     (if (and (settling-reply? (:out res)) (< waited limit-ms))
+                       (.then (sleep every-ms) #(go (+ waited every-ms)))
+                       res))))]
+    (go 0)))
+
 (defn tool-step!
-  "Runs a :cli or :http step: the tool's answer must pass f/judge-reply or the step throws. Resolves to the tool's output."
+  "Runs a :cli or :http step: the tool's answer must pass f/judge-reply or the step throws. Resolves to the tool's output.
+  An :http step waits (up to 10 s) while the body answers settling."
   [opts step last-job event-job]
   (let [argv (f/step-argv (:body opts) (:world opts) step last-job event-job)]
     (if-let [why (f/argv-gap argv step last-job event-job)]
       (js/Promise.reject (js/Error. (str (pr-str (vec (take 2 step))) " step: " why)))
-      (.then (exec-file argv)
+      (.then (if (= :http (first step)) (exec-settled {} argv) (exec-file argv))
              (fn [{:keys [code out]}]
                (let [{:keys [pass? evidence]} (f/judge-reply (some-> (f/step-pattern step) (f/fill-pattern last-job event-job)) code out)]
                  (when-not pass? (throw (js/Error. (str (pr-str (vec (take 2 step))) " step: " evidence))))

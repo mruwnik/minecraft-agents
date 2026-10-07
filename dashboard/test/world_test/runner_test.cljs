@@ -755,6 +755,27 @@
         (.catch (fn [e] (is false (.-message e))))
         (.finally done))))
 
+(deftest an-http-tool-answer-of-settling-is-retried-then-passed-on
+  (async done
+    (let [answers (atom ["{:ok false :reason \"settling\"}" "{:ok false :reason \"settling\"}" "{:ok true}"])
+          slept (atom 0)
+          run (fn [replies limit]
+                (reset! answers replies)
+                (r/exec-settled {:exec (fn [_] (let [a (first @answers)]
+                                                 (swap! answers #(if (next %) (vec (rest %)) %))
+                                                 (js/Promise.resolve {:code 0 :out a})))
+                                 :sleep (fn [ms] (swap! slept + ms) (js/Promise.resolve nil))
+                                 :limit-ms limit :every-ms 500}
+                                ["x"]))]
+      (-> (run @answers 10000)
+          (.then (fn [res]
+                   (is (= "{:ok true}" (:out res)) "retried until the body settled")
+                   (is (= 1000 @slept))
+                   (run ["{:ok false :reason \"settling\"}"] 1500)))
+          (.then (fn [res]
+                   (is (= "{:ok false :reason \"settling\"}" (:out res)) "after the limit the reply is passed on unchanged")
+                   (done)))))))
+
 (deftest the-case-goal-names-the-case-its-expectations-run-and-retry
   (is (= "world-test pen-check/closed: event job.completed, no event reflex.fired (run 2, retry 1)"
          (r/case-goal {:id "pen-check/closed"
