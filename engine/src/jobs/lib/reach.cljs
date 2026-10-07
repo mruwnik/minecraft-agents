@@ -116,13 +116,14 @@
 ;; Follows the planner's floor rule: a torch, sign or carpet is no floor.
 (defn standable-cell?
   "Whether a body can stand with its feet in cell pos {:x :y :z}: feet and head free, and a solid floor below (not a
-  torch, plant, rail, lava, fire, cactus or water)."
+  torch, plant, rail, lava, fire, cactus or water). A floor a sensing body has not seen may be a hazard: not standable."
   ([p pos] (standable-cell? p pos (lookup p)))
   ([p {:keys [x y z]} kind-at]
    (let [below (u/seen-block p {:x x :y (dec y) :z z})]
      (and (passable? kind-at x y z) (passable? kind-at x (inc y) z)
           (keyword-identical? :solid (kind-at x (dec y) z))
-          (not (hazard-blocks (some-> below .-name)))))))
+          (or (nil? (.-sensedAt p))
+              (boolean (and below (not (hazard-blocks (.-name below))))))))))
 
 
 (defn overlap [a0 a1 c] (max 0 (- (min a1 (inc c)) (max a0 c))))

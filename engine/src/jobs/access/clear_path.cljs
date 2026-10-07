@@ -10,7 +10,7 @@
 (def doc
   "Dig a door 1 wide and 2 high through the wall straight ahead along :heading, then step through it.
   - The wall is at most :max-thick blocks thick, starts right in front of the body, and has a floor under every
-    row and room for the body beyond it (jobs.lib.escape/door). A cell it has not seen is rock; a far side it cannot
+    row and room for the body beyond it (jobs.lib.escape/door). A cell it has not seen is rock (one not loaded ends :no-door); a far side it cannot
     see is guessed, and once the cells before it are dug it plans on from there with what it sees.
   - Never digs a door, gate, trapdoor, bed, container, sign or an unbreakable block.
   - Each cell is a jobs.blocks.dig child (zones, claims, hazards and tools are its rules). It picks up the drop
@@ -133,25 +133,38 @@
           :else (do (ctx/update-mem! c assoc :cells (:cells gap) :through (:through gap) :unseen (:unseen gap))
                     :again))))))
 
+(defn ^:async start-cell!
+  "Look at the first cell not seen open, then say what to do with it: {:digging d} (kept in memory), :open (the look
+  showed it open: plan again) or :unloaded (cannot be dug); nil when every cell is open."
+  [c cells]
+  (let [p (:primitives c)
+        pos #(zipmap [:x :y :z] %)]
+    (when-let [cell (first (remove #(b/air (u/seen-name p (pos %))) cells))]
+      (when (dig-look/unknown? p cell) (await (dig-look/look-at! c cell)))
+      (let [seen (u/seen-name p (pos cell))]
+        (cond
+          (b/air seen) :open
+          (and (nil? seen) (some? (.-sensedAt p)) (nil? (u/sensed p (pos cell)))) {:unloaded cell}
+          :else (let [block (or seen b/hidden-guess)
+                      d {:cell cell :block block :collect (room-for-drop? p block)}]
+                  (ctx/update-mem! c assoc :digging d)
+                  {:digging d}))))))
+
 (defn ^:async next!
   "One piece of the door: plan it, dig a cell, plan on past a far side it could not see, or step through. :again,
   :continue (a child waits) or :done."
   [c]
-  (let [{:keys [cells through unseen]} (ctx/mem c)
-        p (:primitives c)]
+  (let [{:keys [cells through unseen digging]} (ctx/mem c)]
     (if-not through
       (await (plan! c))
-      (if-let [digging (or (:digging (ctx/mem c))
-                           (when-let [cell (first (remove #(b/air (u/seen-name p (zipmap [:x :y :z] %))) cells))]
-                             (when (dig-look/unknown? p cell) (await (dig-look/look-at! c cell)))
-                             (let [block (u/block-name-or p (zipmap [:x :y :z] cell) b/hidden-guess)
-                                   d {:cell cell :block block :collect (room-for-drop? p block)}]
-                               (ctx/update-mem! c assoc :digging d)
-                               d)))]
-        (await (dig-cell! c digging))
-        (if unseen
-          (await (replan! c))
-          (await (step-through! c through)))))))
+      (let [start (if digging {:digging digging} (await (start-cell! c cells)))]
+        (cond
+          (= :open start) :again
+          (:unloaded start) (finish! c :no-door {:why (str "the cell " (pr-str (:unloaded start)) " is not loaded")
+                                                 :cell (:unloaded start)})
+          (:digging start) (await (dig-cell! c (:digging start)))
+          unseen (await (replan! c))
+          :else (await (step-through! c through)))))))
 
 (defn ^:async round
   "The whole door: next! until it ends, a pace between pieces."
