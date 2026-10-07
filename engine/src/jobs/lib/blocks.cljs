@@ -148,7 +148,7 @@
 (defn dig-outcome
   "What one round of a jobs.blocks.dig child (its return r, result res, the reason its check waits with) means for the
   cell: :dug, :missing (nothing there), :continue (the child waits on the world), :refused (a zone, claim, plan or
-  hazard), :unreachable, :cannot, or the failed dig's status as a keyword."
+  hazard), :unreachable, :cannot, or the failed dig's :reason (:failed, :fluid-adjacent ...)."
   [r res waits]
   (case r
     :continue :continue
@@ -157,7 +157,7 @@
       :dug :dug
       :already-clear :missing
       (:cannot :fluid) :cannot
-      (keyword (or (:status res) (:reason res))))))
+      (or (:reason res) :failed))))
 
 (defn ^:async dig-cell!
   "Dig the one block at pos with a jobs.blocks.dig child in slot :dig (args merged over: no drops collected, no tool
@@ -168,3 +168,47 @@
         res (ctx/child-result c :dig)
         waits (when (= :declined r) (child-wait c :dig 'jobs.blocks.dig args))]
     (dig-outcome r res waits)))
+
+(defn chosen
+  "The first of items carried, or nil."
+  [c items]
+  (let [carried (set (map :name (u/inventory (:primitives c))))]
+    (first (filter carried items))))
+
+(def neighbours [[0 -1 0] [1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 1 0]])
+
+(defn support?
+  "Whether a neighbour of pos is a block to place against (not air, a fluid or a plant)."
+  [p {:keys [x y z]}]
+  (boolean (some (fn [[dx dy dz]]
+                   (let [n (u/block-name p {:x (+ x dx) :y (+ y dy) :z (+ z dz)})]
+                     (and n (not (air n)) (not (fluids n)) (not (clearable n)))))
+                 neighbours)))
+
+(defn place-outcome
+  "What one round of a jobs.blocks.place child (its return r, result res, the reason its check waits with) means for the
+  cell: :placed, :already (it holds the block), :continue, :refused (a zone, claim or plan), :need (the item is not
+  carried), :no-support, :unreachable, :occupied, or the failed place's :reason (:failed, :clear-failed ...)."
+  [r res waits]
+  (case r
+    :continue :continue
+    :declined (case (:reason waits)
+                (:not-allowed :own-body) :refused
+                :need :need
+                :no-support :no-support
+                :unreachable)
+    (case (:reason res)
+      :placed :placed
+      :already :already
+      :occupied :occupied
+      (or (:reason res) :failed))))
+
+(defn ^:async place-cell!
+  "Place item at pos with a jobs.blocks.place child in slot :place (args merged over: no fetch) and say what came of it
+  (place-outcome)."
+  [c pos item args]
+  (let [args (merge {:fetch false} args {:pos pos :item item})
+        r (await (ctx/call-child c :place 'jobs.blocks.place args))
+        res (ctx/child-result c :place)
+        waits (when (= :declined r) (child-wait c :place 'jobs.blocks.place args))]
+    (place-outcome r res waits)))

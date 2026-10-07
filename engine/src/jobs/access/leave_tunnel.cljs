@@ -266,11 +266,12 @@
       (> (u/eye-dist (u/self-pos c) cell) reach) (book-open! c cell :out-of-reach)
       (not (:ok verdict)) (book-open! c cell (:reason verdict))
       (nil? item) (book-open! c cell :no-blocks)
-      :else (do (await (ctx/act c :place (clj->js {:pos (cell-pos cell) :item item})))
-                (let [n (block-at cell)]
-                  (if (and n (not (rules/replaceable n)))
-                    (do (ctx/update-mem! c update :filled (fnil conj []) cell) :again)
-                    (book-open! c cell :place-failed)))))))
+      :else (let [outcome (await (blocks/place-cell! c (cell-pos cell) item {:ignore-zones? true}))
+                  n (block-at cell)]
+              (cond
+                (= :continue outcome) :continue
+                (and n (not (rules/replaceable n))) (do (ctx/update-mem! c update :filled (fnil conj []) cell) :again)
+                :else (book-open! c cell :place-failed))))))
 
 (defn ^:async seal!
   "At the entry: fill the next mouth cell, lowest first, then the farthest; none left ends the job."
