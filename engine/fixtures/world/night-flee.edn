@@ -5,7 +5,7 @@
 ;; pit site within 16 exists and night flees instead of hand-digging a pit; the dirt field and overhang lie beyond 16.
 {:defaults
  {:tags [:night :survival :flee]
-  :time :night-exclusive
+  :time :night
   :blocks [[:fill [0 -6 0] [31 -1 31] "stone"]
            [:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 4] "torch"] [:set [28 0 28] "torch"]
            [:set [16 0 4] "torch"] [:set [16 0 28] "torch"] [:set [4 0 16] "torch"] [:set [28 0 16] "torch"]]

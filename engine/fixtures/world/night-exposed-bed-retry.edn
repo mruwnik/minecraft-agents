@@ -45,6 +45,7 @@
    :after [[:item "red_bed" 1]]
    :limit-s 180}
   {:name "no-bed-anywhere-stays-exposed-one-warn"
+   :time :night
    :act [[:job (jobs.survival.night {:flee-radius 0})] [:wait-s 60]]
    :expect [{:event {:source :job :kind :shelter.exposed} :within-s 40}
             {:no-event {:source :action :kind :started :data {:name "sleep"}} :for-s 60}

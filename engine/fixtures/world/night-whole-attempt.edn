@@ -5,13 +5,14 @@
 ;; jobs.survival.night is submitted in :act. Needs night: --allow-time --time-log <the shared time log>, one case per call.
 {:defaults
  {:tags [:night :survival :dig-in]
-  :time :night-exclusive
+  :time :night
   :blocks [[:fill [8 -6 8] [24 -1 24] "dirt"]
            [:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 4] "torch"] [:set [28 0 28] "torch"]
            [:set [16 0 4] "torch"] [:set [16 0 28] "torch"] [:set [4 0 16] "torch"] [:set [28 0 16] "torch"]]
   :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]] :settle-s 3}}
  :cases
  [{:name "dug-in-holds-declared-then-leaves-by-day-in-one-round"
+   :time :night-exclusive
    :act [[:job (jobs.survival.night)]
          [:await {:source :job :kind :holding :data {:reason :sheltered}} 60]
          [:wait-s 10]
@@ -31,6 +32,7 @@
    :after [[:block [16 -1 16] "dirt"]]
    :limit-s 140}
   {:name "no-site-holds-exposed-then-stops-at-day"
+   :time :night-exclusive
    :blocks [[:fill [8 -6 8] [24 -1 24] "air"] [:fill [12 -1 12] [20 -1 20] "stone"]]
    :act [[:job (jobs.survival.night {:flee-radius 0})]
          [:await {:source :job :kind :shelter.exposed} 60]
@@ -43,6 +45,7 @@
   ;; Card 97fac480 (fix 57d67d3b). Night 1 relocates off a wet start site (a :night-site entry) and ends roofed; the entries are
   ;; forgotten then, so night 2 (water gone) digs at the start again instead of skipping it: the start's descent cell is dug.
   {:name "failed-site-forgotten-when-the-night-ends-roofed"
+   :time :night-exclusive
    :blocks [[:fill [0 -6 0] [31 -1 31] "dirt"] [:set [17 -1 16] "water"]]
    :act [[:job (jobs.survival.night)]
          [:await {:source :job :kind :holding :data {:reason :sheltered}} 150]
@@ -61,6 +64,7 @@
   ;; A hostile reflex cuts the night: a NoAI zombie 6 away fires hostile-near as the night starts, the reflex fights it, and the
   ;; night job resumes, digs in, holds sheltered and leaves at day.
   {:name "reflex-cut-night-resumes-and-holds"
+   :time :night-exclusive
    :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
                :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
    :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
@@ -78,6 +82,7 @@
   ;; Card 62278915 (fix b0462852): pit-site? needs ground the carried tools dig. A stone pad and no pickaxe: no pit is started
   ;; (no dig-in call at all), the night holds exposed; the same pad with a stone pickaxe is dug in.
   {:name "stone-pad-no-pickaxe-starts-no-pit"
+   :time :night-exclusive
    :blocks [[:fill [8 -6 8] [24 -1 24] "stone"]]
    :act [[:job (jobs.survival.night {:flee-radius 0})]
          [:await {:source :job :kind :shelter.exposed} 90]
