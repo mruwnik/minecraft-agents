@@ -36,8 +36,9 @@
    :blocks [[:fill [22 2 14] [25 2 18] "stone"] [:fill [25 0 14] [25 1 18] "stone"]]
    :body {:at [2.5 0 16.5] :inventory [["dirt" 3]]}
    :act [[:job (jobs.survival.night {})]]
-   :expect [{:no-event {:source :job :kind :shelter.fled :data {:target :cave}} :for-s 90}]
-   :limit-s 120}
+   :expect [{:no-event {:source :job :kind :shelter.fled :data {:target :cave}} :for-s 90}
+            {:event {:source :job :kind :shelter.exposed} :within-s 120}]
+   :limit-s 150}
   {:name "walled-home-flee-fails-honestly"
    :blocks [[:fill [28 0 14] [32 4 18] "stone" :hollow]]
    :act [[:job (jobs.memory.set-place {:name :home :pos #at [30 1 16]})]
@@ -48,5 +49,6 @@
   {:name "stone-hillside-no-pickaxe-fetches-nothing"
    :blocks [[:fill [10 0 10] [20 5 22] "stone"]]
    :act [[:job (jobs.survival.night {:flee-radius 0})]]
-   :expect [{:no-event {:source :job :kind :child_started :data {:slot :fetch}} :for-s 60}]
+   :expect [{:event {:source :job :kind :dig_in_failed :message [:contains "cannot harvest stone"]} :within-s 60}
+            {:no-event {:source :job :kind :child_started :data {:slot :fetch}} :for-s 60}]
    :limit-s 90}]}
