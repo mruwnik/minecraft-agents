@@ -6,6 +6,7 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [jobs.farm.harvest :as harvest]
+            [jobs.lib.fetch :as fetch]
             [jobs.lib.world-files :as ew]
             [jobs.lib.toll-cells :as tc]
             [jobs.lib.walk :as walk]))
@@ -166,3 +167,45 @@
                                       {:inventory [{:name "wheat" :count 3}] :blocks {"40,64,0" "crafting_table"}}))]
           (is (seq trail))
           (is (not (on-strip? trail -5 5))))))))
+
+(defn ^:async walk-back-trail
+  "job-trail of fetch/walk-back! from the origin to [40 64 0], run by a job with args."
+  [args]
+  (let [{:keys [p] :as w} (setup {} [(zone "Other")])
+        trail (atom [])]
+    (.override (.-world p) "steer"
+               (fn [token a impl]
+                 (let [decide (.-decide a)
+                       logged (fn [pose] (swap! trail conj [(js/Math.floor (.-x pose)) (js/Math.floor (.-z pose))]) (decide pose))]
+                   (impl token (walk/steer-args (.-timeoutS a) logged)))))
+    (let [job {:check (constantly true)
+               :round (fn ^:async back-round [c]
+                        (loop [i 0] (when (< i 6) (await (fetch/walk-back! c [40 64 0])) (recur (inc i))))
+                        :done)}
+          eng (assoc-in (:eng w) [:jobs 'back-job] job)]
+      (core/submit! eng (list 'back-job args) {})
+      (await (tu/tick-until-idle! eng 60)))
+    @trail))
+
+(deftest fetch-walk-back-bends-round-another-bodys-zone-unless-ignoring-zones
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [tolled (await (walk-back-trail {}))
+              ignoring (await (walk-back-trail {:ignore-zones? true}))]
+          (is (seq tolled))
+          (is (not (on-strip? tolled -5 5)))
+          (is (on-strip? ignoring -5 5)))))))
+
+(deftest obtain-enchant-and-give-bend-round-another-bodys-zone-on-their-walks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (await (tu/each-async
+                [['(jobs.items.obtain {:item "bread" :count 1}) {:blocks {"30,64,0" "chest"} :containers {"30,64,0" [{:name "bread" :count 4}]}}]
+                 ['(jobs.items.enchant {:item "diamond_sword" :table {:x 40 :y 64 :z 0}}) {:inventory [{:name "diamond_sword" :count 1}] :blocks {"40,64,0" "enchanting_table"}}]
+                 ['(jobs.items.give {:player "Steve" :item "bread" :radius 60}) {:inventory [{:name "bread" :count 5}] :entities [{:id 5 :name "Steve" :kind "player" :pos {:x 40 :y 64 :z 0}}]}]]
+                (fn ^:async one [[form extra]]
+                  (let [trail (await (job-trail form extra))]
+                    (is (seq trail) (pr-str form))
+                    (is (not (on-strip? trail -5 5)) (pr-str form))))))))))
