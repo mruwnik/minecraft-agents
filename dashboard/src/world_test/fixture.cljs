@@ -393,6 +393,14 @@
 
 ;; ------------------------------------------------------------------ after checks
 
+(defn entities-selector
+  "The @e[...] selector of an :entities check's [sel [a b]] args (positions plot-relative), limited to one entity for a probe."
+  [origin [sel [a b]]]
+  (let [[ax ay az] (abs-pos origin a)
+        [bx by bz] (abs-pos origin b)]
+    (str "@e[" sel ",x=" (min ax bx) ",y=" (min ay by) ",z=" (min az bz)
+         ",dx=" (js/Math.abs (- bx ax)) ",dy=" (js/Math.abs (- by ay)) ",dz=" (js/Math.abs (- bz az)) "]")))
+
 (defn after-command
   "The RCON command whose reply answers one :after check (positions plot-relative)."
   [origin body grid c [op & args]]
@@ -401,11 +409,24 @@
     :not-block (str "execute if block " (xyz-str (abs-pos origin (first args))) " " (second args))
     (:body-near :body-far) (str "data get entity " body " Pos")
     :item (str "execute if items entity " body " container.* " (first args))
-    :entities (let [[sel [a b]] args
-                    [ax ay az] (abs-pos origin a)
-                    [bx by bz] (abs-pos origin b)]
-                (str "execute if entity @e[" sel ",x=" (min ax bx) ",y=" (min ay by) ",z=" (min az bz)
-                     ",dx=" (js/Math.abs (- bx ax)) ",dy=" (js/Math.abs (- by ay)) ",dz=" (js/Math.abs (- bz az)) "]"))))
+    :entities (str "execute if entity " (entities-selector origin args))))
+
+(defn entity-probe-command
+  "The RCON command that dumps one entity matching a failed :entities check (nil for other checks)."
+  [origin [op & args]]
+  (when (= op :entities)
+    (let [sel (entities-selector origin args)]
+      (str "data get entity " (subs sel 0 (dec (count sel))) ",limit=1]"))))
+
+(defn describe-entity-reply
+  "Names the entity in a `data get entity` reply: its type and plot-relative position."
+  [origin reply]
+  (let [[_ id] (re-find #"id: \"minecraft:([a-z_]+)\"" reply)
+        [_ x y z] (re-find #"Pos: \[(-?[\d.E-]+)d, (-?[\d.E-]+)d, (-?[\d.E-]+)d\]" reply)]
+    (if-not (and id x)
+      (str "stray entity: no data in reply: " reply)
+      (let [[ox oy oz] origin]
+        (str "stray entity " id " at plot " [(- (js/Number x) ox) (- (js/Number y) oy) (- (js/Number z) oz)])))))
 
 (defn reply-count
   "The count an `execute if` reply reports: 0 for a failed test, 1 for a pass without a count, nil for any other reply."

@@ -576,7 +576,18 @@
 
 (defn after-checks! [opts origin c]
   (let [cmds (mapv #(f/after-command origin (:body opts) (f/case-grid c) c %) (:after c))]
-    (.then (rcon! cmds) (fn [replies] (mapv #(f/judge-after origin %1 %2) (:after c) replies)))))
+    (.then (rcon! cmds)
+           (fn [replies]
+             (let [results (mapv #(f/judge-after origin %1 %2) (:after c) replies)
+                   probes (mapv #(when-not (:pass? %) (f/entity-probe-command origin (:check %))) results)]
+               (.then (rcon! (keep identity probes))
+                      (fn [dumps]
+                        (let [named (zipmap (keep-indexed #(when %2 %1) probes) dumps)]
+                          (vec (map-indexed (fn [i r]
+                                              (if-let [d (named i)]
+                                                (update r :evidence str "; " (f/describe-entity-reply origin d))
+                                                r))
+                                            results))))))))))
 
 (defn put-register!
   "Puts the case's register entries on the running body (one triggers.mjs put each); throws when one is refused."

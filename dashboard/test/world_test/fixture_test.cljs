@@ -172,6 +172,16 @@
     (is (not (:pass? (f/judge-after origin [:body-far [16.5 0 16.5] 25] "ProbeFixture has the following entity data: [20018.9d, 150.0d, 20016.5d]"))))
     (is (= [-1.5 64 2.25] (f/reply-pos "X has the following entity data: [-1.5d, 64.0d, 2.25d]")))))
 
+(deftest failed-entities-check-names-the-stray-entity
+  (let [origin [20000 150 20000]
+        check [:entities "tag=!wt,type=!player" [[0 -1 0] [32 6 32]] 0]
+        reply "Zombie has the following entity data: {Air: 300s, Motion: [0.0d, -0.07d, 0.0d], Pos: [20010.5d, 151.0d, 20007.25d], id: \"minecraft:zombie\"}"]
+    (is (= "data get entity @e[tag=!wt,type=!player,x=20000,y=149,z=20000,dx=32,dy=7,dz=32,limit=1]"
+           (f/entity-probe-command origin check)))
+    (is (nil? (f/entity-probe-command origin [:block [3 0 4] "air"])))
+    (is (= "stray entity zombie at plot [10.5 1 7.25]" (f/describe-entity-reply origin reply)))
+    (is (= "stray entity: no data in reply: No entity was found" (f/describe-entity-reply origin "No entity was found")))))
+
 (deftest plan-files-carry-the-runner-prefix
   (is (= "{:id \"test-probefixture-pen\", :parts []}" (f/plan-file-text {:id "pen" :parts []} "test-probefixture-"))))
 
