@@ -42,12 +42,17 @@
   (is (= 3.45 (round2 (cost/fight-damage {:weapon "iron_sword" :equipment iron-set :mobs [{:name "zombie" :distance 3}]})))
       "4 swings, 2.5 s of 3 hp hits: vanilla's 13.5 effective points take 54% off"))
 
-(deftest fire-bypasses-armour-points-but-not-fire-protection
-  (let [fire #(cost/after-armour (cost/armour-stats %) :fire 10 1)]
-    (is (= (fire nil) (fire iron-set)) "armour points do nothing against fire")
-    (is (= (fire nil) (fire diamond-8)) "nor toughness")
-    (is (< (fire (enchanted iron-set "fire_protection")) (fire nil)) "fire protection still counts")
+(deftest burning-bypasses-armour-points-but-not-fire-protection
+  (let [burn #(cost/after-armour (cost/armour-stats %) :burning 10 1)]
+    (is (= (burn nil) (burn iron-set)) "armour points do nothing against burning")
+    (is (= (burn nil) (burn diamond-8)) "nor toughness")
+    (is (< (burn (enchanted iron-set "fire_protection")) (burn nil)) "fire protection still counts")
     (is (< (cost/after-armour (cost/armour-stats iron-set) :melee 10 1) (cost/after-armour (cost/armour-stats nil) :melee 10 1)))))
+
+(deftest standing-in-fire-or-lava-is-reduced-by-armour
+  (let [fire #(cost/after-armour (cost/armour-stats %) :fire 10 1)]
+    (is (< (fire iron-set) (fire nil)) "in_fire and lava damage is not in the bypasses_armor tag")
+    (is (< (fire (enchanted iron-set "fire_protection")) (fire iron-set)) "fire protection counts too")))
 
 (deftest an-enchanted-worn-chestplate-lowers-the-danger-rate
   (let [body {:health 20 :weapon "diamond_sword"}
