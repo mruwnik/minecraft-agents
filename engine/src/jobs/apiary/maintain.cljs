@@ -173,9 +173,10 @@
           {:todo (vec todo) :report report :call call})))))
 
 (defn check [c]
-  (boolean (or (:todo (ctx/mem c))
-               (let [f (facts c)]
-                 (some #(:call (decide % (:args c) f)) steps)))))
+  (or (boolean (or (:todo (ctx/mem c))
+                   (let [f (facts c)]
+                     (some #(:call (decide % (:args c) f)) steps))))
+      (ctx/wait c {:reason :nothing-to-do})))
 
 ;; ------------------------------------------------------------------ the run
 

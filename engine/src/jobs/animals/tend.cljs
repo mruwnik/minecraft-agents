@@ -150,10 +150,11 @@
           {:todo (vec todo) :report report :call call})))))
 
 (defn check [c]
-  (boolean (and (:box (:args c))
-                (or (:todo (ctx/mem c))
-                    (let [f (facts c)]
-                      (some #(:call (decide % (:args c) f)) steps))))))
+  (cond
+    (not (:box (:args c))) (ctx/wait c {:reason :no-box})
+    (:todo (ctx/mem c)) true
+    (let [f (facts c)] (some #(:call (decide % (:args c) f)) steps)) true
+    :else (ctx/wait c {:reason :nothing-to-do})))
 
 (defn summary
   "What the report keeps of a child's result."

@@ -28,7 +28,8 @@
 (def max-listed 12)
 
 (defn check [c]
-  (boolean (or (:at (:args c)) (:box (:args c)))))
+  (or (boolean (or (:at (:args c)) (:box (:args c))))
+      (ctx/wait c {:reason :no-pen :why "needs :at or :box"})))
 
 (defn summary
   "The answer as the event and result carry it: the cells counted, the leaks capped."

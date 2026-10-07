@@ -244,13 +244,14 @@
 (defn check
   "True while a run is under way or some lit fire in the area lacks a carpet or sits too high."
   [c]
-  (boolean
-   (or (:started (ctx/mem c))
-       (let [p (:primitives c)
-             block-at (apiary/block-at-fn p)
-             {:keys [box radius]} (:args c)
-             center (or (:center (:args c)) (u/self-pos c))]
-         (some #(seq (apiary/needs block-at (:pos %))) (permitted-fires c (apiary/fires p {:box box :center center :radius radius})))))))
+  (or (boolean
+       (or (:started (ctx/mem c))
+           (let [p (:primitives c)
+                 block-at (apiary/block-at-fn p)
+                 {:keys [box radius]} (:args c)
+                 center (or (:center (:args c)) (u/self-pos c))]
+             (some #(seq (apiary/needs block-at (:pos %))) (permitted-fires c (apiary/fires p {:box box :center center :radius radius}))))))
+      (ctx/wait c {:reason :nothing-to-guard})))
 
 (defn ^:async round
   "One bounded step: resume a sink; else survey the fires and finish when the

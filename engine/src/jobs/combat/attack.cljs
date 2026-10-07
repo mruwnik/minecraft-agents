@@ -99,9 +99,10 @@
     (into [] (remove #(contains? given-up (.-id %))) (present c))))
 
 (defn check [c]
-  (boolean (or (:started (ctx/mem c))
-               (not= :wait (:absent (:args c)))
-               (seq (candidates c)))))
+  (or (boolean (or (:started (ctx/mem c))
+                   (not= :wait (:absent (:args c)))
+                   (seq (candidates c))))
+      (ctx/wait c {:reason :no-target})))
 
 (defn book-kill!
   "Add id to :killed; its username, if any, is not attacked again."

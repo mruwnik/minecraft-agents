@@ -97,9 +97,11 @@
   "A started run always passes; else :mob and :box are given and the box holds fewer than :target adults."
   [c]
   (let [{:keys [mob box target]} (:args c)]
-    (boolean (if (:started (ctx/mem c))
-               (declined/check c)
-               (and mob box (< (count (filter #(animals/in-box? box (u/pos-of (.-pos %))) (adults c))) target))))))
+    (cond
+      (:started (ctx/mem c)) (declined/check c)
+      (not (and mob box)) (ctx/wait c {:reason :no-mob-or-box})
+      (< (count (filter #(animals/in-box? box (u/pos-of (.-pos %))) (adults c))) target) true
+      :else (ctx/wait c {:reason :at-target :target target}))))
 
 (defn ^:async step! [c phase]
   (let [m (ctx/mem c)
