@@ -1,6 +1,7 @@
 (ns engine.harvest-wood-test
   "jobs.forestry.harvest-wood ends when it has no sapling to plant (BaseMiner trial: it sat queued with the body idle)."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.ctx :as ctx]
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.library-test :as lt]
@@ -255,3 +256,30 @@
           (is (= {:status :stopped :reason :no-tree :got 3} (select-keys r [:status :reason :got]))
               "one tree felled, none left: ends with what it got, not waiting for ever")
           (is (= 3 (get (lt/inv p) "oak_log"))))))))
+
+(deftest count-no-tree-after-a-fell-needs-the-fell-check-to-say-no-tree
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (lt/setup {:blocks (merge (lt/tree 3 0 "oak" 3) {"3,63,0" "grass_block"})
+                                       :inventory [{:name "oak_sapling" :count 1}]})
+              felled? (atom false)
+              fell (get-in eng [:jobs 'jobs.forestry.fell-tree])
+              eng (-> eng
+                      (assoc-in [:jobs 'jobs.forestry.fell-tree :round]
+                                (fn ^:async f [c] (let [r (await ((:round fell) c))] (reset! felled? true) r)))
+                      (assoc-in [:jobs 'jobs.forestry.fell-tree :check]
+                                (fn [c] (if @felled?
+                                          (ctx/wait c {:reason :need :any-of ["dirt"] :count 4})
+                                          ((:check fell) c)))))
+              r (await (lt/child-outcome eng 'jobs.forestry.harvest-wood {:species "oak" :radius 10 :count 6} 80))]
+          (is (not= :no-tree (:reason r)) "a fetch wait is not an empty forest"))))))
+
+(deftest count-no-tree-after-a-fell-still-reports-the-replant-owed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (lt/setup {:blocks (merge (lt/tree 3 0 "oak" 3) {"3,63,0" "grass_block"})})
+              r (await (lt/child-outcome eng 'jobs.forestry.harvest-wood {:species "oak" :radius 10 :count 6} 80))]
+          (is (= {:status :stopped :reason :no-tree :replant-owed 1} (select-keys r [:status :reason :replant-owed])))
+          (is (= 1 (count (filterv #(= :harvest-wood.replant-owed (:kind %)) @seen))) "the debt is warned"))))))

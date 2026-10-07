@@ -15,7 +15,7 @@
   warns harvest-wood.debts-owed with their :count and the :nearest one's :pos.
   Debts within the radius that stay unplanted (no sapling carried, spot refused) warn harvest-wood.replant-owed
   with :count, :pos, :reason (:no-sapling or :not-planted) and :text. The status stays :completed (the wood is
-  the goal); the result is {:replant-owed n} then. With :count, the three phases repeat on the next tree until that many logs are carried; when no tree is left to fell it ends :stopped :no-tree with :got (waiting for a tree only before the first is felled). A missing sapling is fetched by plant-sapling (a seen chest, a craft); when none can be got it stays owed.")
+  the goal); the result is {:replant-owed n} then. With :count, the three phases repeat on the next tree until that many logs are carried; when no tree is left to fell it ends :stopped :no-tree with :got (and :replant-owed, the warnings as at a normal end; waiting for a tree only before the first is felled). A missing sapling is fetched by plant-sapling (a seen chest, a craft); when none can be got it stays owed.")
 
 (def args
   {:species {:doc "log species; any when nil" :default nil}
@@ -61,7 +61,7 @@
                        :nearest (:pos (apply min-key #(u/dist here (:pos %)) owed))}))))
 
 (defn warn-replant-owed!
-  "Debts of the species within the radius still owed when the job ends: warn once and hand over {:replant-owed n}."
+  "Debts of the species within the radius still owed when the job ends: warn once; the count n, nil when none."
   [c]
   (let [{:keys [species radius]} (:args c)
         here (:origin (ctx/mem c))
@@ -75,7 +75,7 @@
                          :reason reason
                          :text (str "felled " n (if (= 1 n) " tree" " trees") ", could not replant: "
                                     (if (= :no-sapling reason) "no sapling" "spot not plantable"))})
-        (ctx/result! c {:replant-owed n})))))
+        n))))
 
 (defn carried-count
   "How many of the collected items the body carries: the filter's items, any item when there is no filter."
@@ -108,8 +108,10 @@
   (let [_ (when-not (:origin (ctx/mem c)) (ctx/update-mem! c assoc :origin (u/self-pos c)))
         _ (when-not (:carried-before (ctx/mem c)) (ctx/update-mem! c assoc :carried-before (carried-count c)))
         [phase job args] (current-phase c)
+        wait (atom nil)
         no-more-trees? (and (= :fell phase) (:count (:args c)) (pos? (:felled (ctx/mem c) 0))
-                            (not (ctx/check-child c phase job args)))
+                            (not (ctx/check-child (assoc c :wait wait) phase job args))
+                            (= :no-tree (:reason (let [w @wait] (if (map? w) w {:reason w})))))
         r (cond
             no-more-trees? :no-tree
             (and (= :plant phase) (not (ctx/check-child c phase job args))) :done
@@ -120,8 +122,9 @@
         next-phase (second (drop-while #(not= phase %) (map first (phases (:args c) nil nil))))]
     (cond
       (or no-more-trees? (and (= :fell phase) (= :done r) (:count (:args c)) (not (:tree (ctx/mem c)))))
-      (result/stop! c :no-tree (str "no tree left to fell: " (logs-carried c) " of " (:count (:args c)) " logs carried")
-                    :got (logs-carried c))
+      (do (warn-owed! c)
+          (result/stop! c :no-tree (str "no tree left to fell: " (logs-carried c) " of " (:count (:args c)) " logs carried")
+                        :got (logs-carried c) :replant-owed (warn-replant-owed! c)))
       (not= :done r) :continue
       (and (= :collect phase) (:tree (ctx/mem c)) (not (pos? gained)))
       (result/stop! c :nothing-collected "felled a tree but no drop came into the inventory")
@@ -130,7 +133,9 @@
                                   (update :felled (fnil inc 0))
                                   (update :children dissoc :fell :collect :plant)))
           :continue)
-      (nil? next-phase) (do (warn-owed! c) (warn-replant-owed! c) :done)
+      (nil? next-phase) (do (warn-owed! c)
+                            (when-let [n (warn-replant-owed! c)] (ctx/result! c {:replant-owed n}))
+                            :done)
       :else (do (ctx/update-mem! c assoc :phase next-phase)
                 (when (= :plant next-phase) (ctx/update-mem! c assoc :origin (u/self-pos c)))
                 :continue))))
