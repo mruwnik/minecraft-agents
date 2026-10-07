@@ -502,6 +502,18 @@
             (is (every? #(and (= :placed (:state %)) (= :tunnel-torch (:purpose %))) l) (str keep?))
             (is (= (set (map :cell l)) (set ({false (map :cell (:torches @out)) true []} keep?))) (str keep?))))))))
 
+(deftest a-tunnel-through-leaves-is-dug-by-hand-with-an-empty-bag-and-no-fetch
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [leaves (update-vals (assoc ground "6,57,0" "iron_ore") (constantly "oak_leaves"))
+              {:keys [out p] :as s} (await (tunnel! {:blocks (assoc leaves "6,57,0" "iron_ore") :inventory []}
+                                                    {:target [6 57 0] :fetch false} (fn [_])))]
+          (is (= :reached (:reason @out)))
+          (is (seq (digs p)) "dug by hand")
+          (is (empty? (events-of s :fetch.started)))
+          (is (empty? (filter #(= :no-tool (:reason %)) (events-of s :waiting)))))))))
+
 (deftest no-pickaxe-waits-with-the-stairs-reason-and-digs-nothing
   (async done
     (tu/run-async done

@@ -417,7 +417,7 @@
 (deftest a-block-that-needs-a-pickaxe-is-held-no-tool-without-one
   (are [carried reason] (= reason (:reason (first (:open (step :entries [(entry [1 64 0] :item "cobblestone")]
                                                               :block-at (lookup [1 64 0] "cobblestone")
-                                                              :can-harvest? #(or (not= % "cobblestone") carried))))))
+                                                              :can-clear? #(or (not= % "cobblestone") carried))))))
     false :no-tool
     true nil))
 

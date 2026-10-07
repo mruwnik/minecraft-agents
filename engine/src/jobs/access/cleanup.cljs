@@ -97,14 +97,14 @@
 
 (defn blocker
   "Why entry e cannot be dug now, as {:reason ...detail}, or nil. in: {:feet :block-at :zones :footprints :ledger
-  :accept :can-harvest? (block name -> whether a carried tool harvests it; absent: always)}."
-  [{:keys [feet block-at accept can-harvest?] :as in} {:keys [cell]}]
+  :accept :can-clear? (block name -> whether the body can clear it now, by hand or a carried tool; absent: always)}."
+  [{:keys [feet block-at accept can-clear?] :as in} {:keys [cell]}]
   (let [[fx fy fz] feet
         [x y z] cell
         below (rules/offset cell 0 -1 0)]
     (cond
       (nil? (block-at cell)) {:reason :not-loaded}
-      (and can-harvest? (not (can-harvest? (block-at cell)))) {:reason :no-tool :block (block-at cell)}
+      (and can-clear? (not (can-clear? (block-at cell)))) {:reason :no-tool :block (block-at cell)}
       (and (= [x z] [fx fz]) (< y (dec fy))) {:reason :under-body}
       (and (= cell [fx (dec fy) fz]) (not (rules/solid-floor? block-at below)))
       {:reason :no-floor-below :block (block-at below)}
@@ -148,7 +148,7 @@
   (let [{:keys [accept reach]} (:args c)]
     (merge (access/zone-input c {:ignore-zones? (:ignore-zones? (:args c))})
            {:feet (stair/feet-of c) :eye (eye-of c) :block-at (escape/block-at-of (:primitives c)) :entries entries
-            :can-harvest? #(not (tools/needs-tool-to-clear? (:primitives c) %))
+            :can-clear? #(not (tools/needs-tool-to-clear? (:primitives c) %))
             :ledger (ledger/cells l) :zones zones :accept (set accept) :reach reach
             :held (:held (ctx/mem c) {})})))
 

@@ -161,7 +161,7 @@
 (def quick-clear-ms "A block that carried tools or the bare hand break within this is cleared without a tool." 1500)
 
 (defn clear-ms
-  "The least time in ms the bare hand or any carried item takes to break block-name (primitive clearTime)."
+  "The least time in ms the bare hand or any carried item takes to break block-name (primitive clearTime; a block name the registry does not know counts as 0, free)."
   [p block-name]
   (->> (map :name (u/inventory p))
        distinct

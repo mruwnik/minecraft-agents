@@ -32,6 +32,7 @@
             [engine.fake.trade :as trade]
             [engine.fake.unequip :as unequip]
             [engine.fake.use-on :as use-on]
+            [engine.game :as game]
             [engine.fake.node :as node]))
 
 ;; The JS modules the real primitives share with the fake (why they are not ported: they are the real ones).
@@ -42,7 +43,7 @@
 (def dig-registry
   "The real registry (with the dig-materials fix) and its Block class: clearTime is the real maths, not a table."
   (delay (let [cjs #(let [m (node/require-here %)] (or (.-default m) m))
-               registry ((cjs "prismarine-registry") "1.21.8")]
+               registry ((cjs "prismarine-registry") game/default-version)]
            ((.-fixDigMaterials (node/require-here "./js/dig-materials.mjs")) registry)
            {:registry registry :block-class ((cjs "prismarine-block") registry)})))
 
@@ -929,7 +930,7 @@
                         :else (.digTime b (or type nil) false false false #js [] #js {}))))
               "harvestTools"
               (fn [block]
-                (let [data (minecraft-data "26.1")
+                (let [data (minecraft-data game/default-version)
                       ids (some-> (aget (.-blocksByName data) block) .-harvestTools js/Object.keys)]
                   (when ids (to-array (map #(.-name (aget (.-items data) %)) ids)))))
               "blockAt"

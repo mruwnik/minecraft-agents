@@ -235,6 +235,18 @@
 (defn block-at [p [x y z]] (.-name (.blockAt p #js {:x x :y y :z z})))
 (defn events-of [{:keys [seen]} kind] (filter #(= kind (:kind %)) @seen))
 
+(deftest a-stair-through-snow-is-dug-by-hand-with-an-empty-bag-and-no-fetch
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [snow (update-vals ground (constantly "snow_block"))
+              s (await (stair! {:blocks snow :inventory []} (assoc east :fetch false) (fn [_])))]
+          (is (= :done (:status @(:out s))))
+          (is (= 3 (:steps @(:out s))))
+          (is (seq (digs (:p s))) "dug by hand")
+          (is (empty? (events-of s :fetch.started)))
+          (is (nil? (waiting s))))))))
+
 (deftest a-stair-queued-in-a-farm-stops-before-digging-the-crop
   (async done
     (tu/run-async done
