@@ -638,6 +638,11 @@
   [[op a :as step]]
   (case op :cli (nth step 3 nil) :http (nth step (if (= :submit a) 4 3) nil) nil))
 
+(defn fill-pattern
+  "pattern with the strings \"$job\" and \"$event-job\" replaced by the ids (an item of a jobs list is matched by its id)."
+  [pattern last-job event-job]
+  (walk/postwalk (fn [v] (case v "$job" last-job "$event-job" event-job v)) pattern))
+
 (defn judge-reply
   "Pass or fail of a tool's answer: with a pattern, the EDN printed must match it (a refusal with exit 1 can be the wanted
   answer); without one, exit code 0. {:pass? :evidence}."

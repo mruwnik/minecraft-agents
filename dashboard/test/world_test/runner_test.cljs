@@ -524,13 +524,15 @@
   (is (true? (:changed-since-pass (r/parse-args #js ["--changed-since-pass"]))))
   (is (nil? (:changed-since-pass (r/parse-args #js [])))))
 
+(declare log-reload!)
+
 (deftest a-case-seeds-its-zones-and-places-and-drops-only-its-own
   (let [repo (fs/mkdtempSync (path/join (os/tmpdir) "wt-shared-"))
         old (.. js/process -env -WORLD_TEST_REPO)
         world (path/join repo "worlds" "w")
         zones (path/join world "zones.edn")
         places (path/join world "places.json")
-        opts {:body "ProbeX" :world "w" :shared-settle-ms 0}
+        opts {:body "ProbeX" :world "w" :shared-settle-ms 3000}
         c {:zones [{:name "box" :min [1 0 1] :max [2 3 2] :owner "Ann" :allow #{:dig}}]
            :places [{:name "home-$tag" :pos [4 0 5] :note "n"}]}
         names #(map :name (cljs.reader/read-string (fs/readFileSync zones "utf8")))
@@ -539,6 +541,7 @@
     (fs/mkdirSync world #js {:recursive true})
     (fs/writeFileSync zones "[{:name \"keep\" :min [0 0 0] :max [1 1 1] :owner \"Z\"}\n {:name \"wt-other-box\" :min [0 0 0] :max [1 1 1] :owner \"Z\"}]\n")
     (fs/writeFileSync places "[\n {\n  \"name\": \"mine\",\n  \"x\": 1,\n  \"y\": 2,\n  \"z\": 3\n }\n]\n")
+    (js/setTimeout #(log-reload! opts ["/w/zones.edn" "/w/places.json"]) 150)
     (async done
       (-> (r/seed-shared! opts [20000 150 20000] c)
           (.then (fn []
@@ -639,3 +642,12 @@
   (is (= 60 (r/tick-rate-of "The game is running normallyTarget tick rate: 60.0 per second.")))
   (is (= 20 (r/tick-rate-of "")) "no reading means the vanilla rate")
   (is (= 20 (r/tick-rate-of nil))))
+
+(deftest seed-shared-fails-loudly-when-the-body-never-re-reads
+  (async done
+    (-> (with-body-dir
+          (fn [opts _]
+            (r/seed-shared! (assoc opts :shared-settle-ms 300) [0 0 0] {:places [{:name "p-$tag" :pos [1 0 1]}]})))
+        (.then (fn [v] (is false (str "should have thrown, got " v))))
+        (.catch (fn [e] (is (re-find #"world.reloaded" (.-message e)) (.-message e))))
+        (.finally done))))

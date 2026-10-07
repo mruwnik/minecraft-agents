@@ -10,7 +10,10 @@
  [{:name "done-slot-job-leaves-the-list"
    :act [[:http :take {:who "wt" :why "fixture" :idle-s 60} {:ok true}]
          [:cli "world" ["$body" "submit" "dig" #at [8 0 8] "--who" "wt" "--world" "$world"] {:ok true}]
-         [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}] 20]]
+         [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}] 20]
+         ;; absence needs a window: the list must still be empty after it (a re-queued job would show)
+         [:wait-s 6]
+         [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}]]
    :expect [{:event {:source :job :kind :result :data {:dug false}} :within-s 20}]}
   {:name "refused-slot-job-leaves-the-list"
    :act [[:http :take {:who "wt" :why "fixture" :idle-s 60} {:ok true}]

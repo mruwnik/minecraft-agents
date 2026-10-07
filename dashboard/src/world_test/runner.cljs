@@ -642,8 +642,9 @@
 (defn world-file [opts name] (repo-path "worlds" (:world opts) name))
 
 (def shared-settle-ms
-  "How long seed-shared! waits for the body to re-read an edited file (it stats them lazily, at most every 3 s)."
-  4000)
+  "How long seed-shared! waits for the body to re-read an edited file (it stats them lazily, at most every 3 s, and only
+  while it ticks); a body that has not by then fails the case."
+  8000)
 
 (defn await-reload!
   "Polls the body's log from cursor until every file in names (file names, e.g. \"zones.edn\") appears in a :world.reloaded
@@ -697,8 +698,8 @@
 
 (defn seed-shared!
   "Adds the case's :zones and :places (plot-relative in c, resolved against origin) to the world's zones.edn and
-  places.json, tagged with the body; resolves once the body logged world.reloaded for them (or after shared-settle-ms: an idle body reads
-  nothing, so its first job re-reads). Nothing to do when the case has neither."
+  places.json, tagged with the body; resolves once the body logged world.reloaded for them, throws after shared-settle-ms
+  without one. Nothing to do when the case has neither."
   [opts origin c]
   (if (and (empty? (:zones c)) (empty? (:places c)))
     (js/Promise.resolve nil)
@@ -711,7 +712,10 @@
                  (when (seq zones) (edit-shared-file! (world-file opts "zones.edn") #(f/zones-with % zones)))
                  (when (seq markers) (edit-shared-file! (world-file opts "places.json") #(f/markers-with % markers))))))
             (.then #(await-reload! opts cursor since (cond-> [] (seq zones) (conj "zones.edn") (seq markers) (conj "places.json"))
-                                   (:shared-settle-ms opts shared-settle-ms))))))))
+                                   (:shared-settle-ms opts shared-settle-ms)))
+            (.then #(when-not %
+                      (throw (js/Error. (str "the body logged no world.reloaded for the seeded zones/places within "
+                                             (:shared-settle-ms opts shared-settle-ms) " ms"))))))))))
 
 (defn submit-job!
   "Submits spec with tools/jobs.mjs; resolves to the job id or throws with the tool's answer."
@@ -754,7 +758,7 @@
       (js/Promise.reject (js/Error. (str (pr-str (vec (take 2 step))) " step: " why)))
       (.then (exec-file argv)
              (fn [{:keys [code out]}]
-               (let [{:keys [pass? evidence]} (f/judge-reply (f/step-pattern step) code out)]
+               (let [{:keys [pass? evidence]} (f/judge-reply (some-> (f/step-pattern step) (f/fill-pattern last-job event-job)) code out)]
                  (when-not pass? (throw (js/Error. (str (pr-str (vec (take 2 step))) " step: " evidence))))
                  out))))))
 

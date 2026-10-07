@@ -470,6 +470,12 @@
     (is (re-find #"\$job" (gap [:cli "jobs" ["cancel" "$job"]] nil "j2")))
     (is (nil? (gap step "j1" "j3")))))
 
+(deftest a-pattern-names-the-submitted-job-by-its-placeholder
+  (is (= {:items [:has {:id "j7" :status :queued}]}
+         (f/fill-pattern {:items [:has {:id "$job" :status :queued}]} "j7" "j9")))
+  (is (= {:job "j9"} (f/fill-pattern {:job "$event-job"} "j7" "j9")))
+  (is (= {:total 0} (f/fill-pattern {:total 0} nil nil))))
+
 (deftest until-step-polls-a-file-or-tool-check
   (let [ps #(f/step-problem? %)]
     (is (not (ps [:until [:memory {:entries {}}] 20])))
