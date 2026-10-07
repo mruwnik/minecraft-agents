@@ -79,6 +79,8 @@
                                :workspaceUsage agent-tools.workspace/usage
                                :workspacePlayerUsage agent-tools.workspace/player-usage
                                :workspacePlayerError agent-tools.workspace/player-error
+                               :workspacePlayerEdn agent-tools.workspace/player-edn
+                               :workspaceErrorEdn agent-tools.workspace/error-edn
                                :storage agent-tools.storage-compat/api
                                :mapFilters agent-tools.api/map-filters
                                :mapSummary agent-tools.api/map-summary

@@ -8,7 +8,7 @@ import http from 'node:http'
 import { spawnSync, spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import tools from '../../tools/agent-tools-loader.mjs'
-import { readEDN } from './edn.mjs'
+import { readEDN, keyword } from './edn.mjs'
 
 const repo = fileURLToPath(new URL('../../../', import.meta.url))
 const cli = path.join(repo, 'engine/tools/workspace.mjs')
@@ -52,7 +52,7 @@ test('generator writes EDN bindings and executable tools; reruns preserve agent 
   assert.equal(f.generate().status, 2)
   assert.equal(f.generate('--update-tools').status, 0)
   for (const file of ['AGENTS.md', 'briefing.md', 'notes/handoff.md']) assert.equal(fs.readFileSync(path.join(f.workspace, file), 'utf8'), `custom ${file}`)
-  assert.match(f.generate('--body', 'Other').stderr, /bindings differ/)
+  assert.match(f.generate('--body', 'Other').stdout, /bindings differ/)
 })
 
 test('generator refuses unrelated destinations, unknown wrappers and symlinks without partial updates', t => {
@@ -64,13 +64,13 @@ test('generator refuses unrelated destinations, unknown wrappers and symlinks wi
   assert.equal(bad.status, 2)
   assert.deepEqual(fs.readdirSync(unrelated), ['keep'])
   fs.writeFileSync(path.join(f.workspace, 'bin/say'), 'custom tool')
-  assert.match(f.generate('--update-tools').stderr, /unrecognized wrapper/)
+  assert.match(f.generate('--update-tools').stdout, /unrecognized wrapper/)
   assert.equal(fs.readFileSync(path.join(f.workspace, 'bin/say'), 'utf8'), 'custom tool')
   fs.unlinkSync(path.join(f.workspace, 'bin/say'))
   const outside = path.join(f.dir, 'outside')
   fs.writeFileSync(outside, 'outside')
   fs.symlinkSync(outside, path.join(f.workspace, 'bin/say'))
-  assert.match(f.generate('--update-tools').stderr, /non-file/)
+  assert.match(f.generate('--update-tools').stdout, /non-file/)
   assert.equal(fs.readFileSync(outside, 'utf8'), 'outside')
 })
 
@@ -103,7 +103,7 @@ test('actual wrappers work from another cwd and give useful help for every tool'
     assert.ok(result.stdout.length > 40, `${command}: ${result.stdout}`)
     const rejected = f.run(command, ['--world=other'])
     assert.equal(rejected.status, 2)
-    assert.match(rejected.stderr, /cannot override/)
+    assert.match(rejected.stdout, /cannot override/)
   }
 })
 
@@ -122,13 +122,34 @@ test('player help shows the ./bin form, no body/world plumbing, and says what ou
   }
 })
 
-test('a bad request through a wrapper prints the error and the ./bin usage, no body/world plumbing', t => {
+test('a bad request through a wrapper prints EDN on stdout with the ./bin usage, no body/world plumbing', t => {
   const f = fixture(t)
   const result = f.run('observe', ['catalog', 'jobs', 'items'])
   assert.equal(result.status, 2)
-  assert.match(result.stderr, /job prefix must start with jobs\./)
-  assert.match(result.stderr, /usage: \.\/bin\/observe/)
-  assert.doesNotMatch(result.stderr, /<agent>|--world <world>|--worlds|--state|observe\.mjs/)
+  const edn = readEDN(result.stdout)
+  assert.equal(edn.ok, false)
+  assert.deepEqual(edn.reason, keyword('bad-args'))
+  assert.match(edn.message, /job prefix must start with jobs\./)
+  assert.match(edn.usage, /\.\/bin\/observe/)
+  assert.doesNotMatch(result.stdout, /<agent>|--world <world>|--worlds|--state|observe\.mjs/)
+  assert.equal(result.stderr, '')
+})
+
+test('a generator error is EDN on stdout, exit 2', t => {
+  const f = fixture(t)
+  const result = f.generate('--body', 'Other')
+  assert.equal(result.status, 2)
+  const edn = readEDN(result.stdout)
+  assert.equal(edn.ok, false)
+  assert.match(edn.message, /bindings differ/)
+  assert.equal(result.stderr, '')
+})
+
+test('the generated wrapper reports a failed launcher import as EDN on stdout', t => {
+  const f = fixture(t)
+  const wrapper = fs.readFileSync(path.join(f.workspace, 'bin', 'observe'), 'utf8')
+  assert.match(wrapper, /process\.stdout\.write\(/)
+  assert.doesNotMatch(wrapper, /process\.stderr/)
 })
 
 test('extensionless wrappers work beneath both CommonJS and ESM package scopes', t => {

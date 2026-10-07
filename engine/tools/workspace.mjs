@@ -3,7 +3,7 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { loadTools } from './agent-tools-loader.mjs'
-const tools = loadTools(['ednWrite', 'workspaceGenerate', 'workspaceRoute', 'workspaceUsage', 'workspacePlayerUsage', 'workspacePlayerError'])
+const tools = loadTools(['ednWrite', 'workspaceGenerate', 'workspaceRoute', 'workspaceUsage', 'workspacePlayerUsage', 'workspacePlayerError', 'workspacePlayerEdn', 'workspaceErrorEdn'])
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 
@@ -17,16 +17,19 @@ export async function runBound (context, command, argv) {
       process.stdout.write(`Workspace ${command}:\n${tools.workspacePlayerUsage(usage)}\n`)
       return 0
     }
-    // a tool's own error text carries its raw usage line: cut the body/world plumbing from it too
-    const write = process.stderr.write.bind(process.stderr)
-    process.stderr.write = (text, ...rest) => write(typeof text === 'string' ? tools.workspacePlayerError(text) : text, ...rest)
+    // a tool's own error carries its raw usage line (EDN on stdout, text on stderr): cut the body/world plumbing from both
+    const writeErr = process.stderr.write.bind(process.stderr)
+    const writeOut = process.stdout.write.bind(process.stdout)
+    process.stderr.write = (text, ...rest) => writeErr(typeof text === 'string' ? tools.workspacePlayerError(text) : text, ...rest)
+    process.stdout.write = (text, ...rest) => writeOut(typeof text === 'string' ? tools.workspacePlayerEdn(text) : text, ...rest)
     try {
       return await module.main(args)
     } finally {
-      process.stderr.write = write
+      process.stderr.write = writeErr
+      process.stdout.write = writeOut
     }
   } catch (error) {
-    process.stderr.write(`${tools.workspacePlayerError(error.message)}\n`)
+    process.stdout.write(`${tools.workspaceErrorEdn(tools.workspacePlayerError(error.message))}\n`)
     return 2
   }
 }
@@ -39,7 +42,7 @@ export async function main (argv = process.argv.slice(2)) {
     process.stdout.write(`${tools.ednWrite(tools.workspaceGenerate(argv, repo))}\n`)
     return 0
   } catch (error) {
-    process.stderr.write(`${error.message}\n`)
+    process.stdout.write(`${tools.workspaceErrorEdn(error.message)}\n`)
     return 2
   }
 }

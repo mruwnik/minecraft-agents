@@ -50,3 +50,17 @@
   (is (= ["--world" "w" "--worlds" "/x" "--repo-root" "/r" "--observer" "Probe" "--wait"]
          (workspace/route ctx "world-changes" ["--wait"])))
   (is (not-any? #{"--observer"} (workspace/route ctx "world-changes" ["--cursor" "{:seq 1}"]))))
+
+(deftest player-edn-cuts-plumbing-from-usage-and-message
+  (let [text (str "{:ok false :reason :bad-args :message \"bad\" "
+                  ":usage \"usage: observe.mjs <agent> --world <world> [--worlds <dir>] x\"}")
+        out (workspace/player-edn text)]
+    (is (not (re-find #"<agent>|--world|--worlds|\.mjs" out)))
+    (is (re-find #"usage: \./bin/observe" out))
+    (is (re-find #":reason :bad-args" out))))
+
+(deftest player-edn-leaves-other-output-alone
+  (are [text] (= text (workspace/player-edn text))
+    "{:ok true :message \"fine\"}"
+    "not edn at all {"
+    "{:ok false :reason :x :message \"nothing to cut\"}"))

@@ -51,17 +51,17 @@ test('a missing socket exits 2 with a message', () => {
   const state = stateDir()
   const r = spawnSync('node', [cli, 'Bob', 'state', '--world', 'w', '--state', state], { encoding: 'utf8' })
   assert.equal(r.status, 2)
-  assert.match(r.stderr, /no running body Bob \(no control socket at .*control\.sock\)/)
+  assert.match(r.stdout, /no running body Bob \(no control socket at .*control\.sock\)/)
 })
 
 test('no --world exits 2 naming the flag', () => {
   const r = spawnSync('node', [cli, 'Bob', 'state', '--state', stateDir()], { encoding: 'utf8' })
   assert.equal(r.status, 2)
-  assert.match(r.stderr, /missing --world <world>/)
+  assert.match(r.stdout, /missing --world <world>/)
 })
 
 test('bad usage exits 2', () => {
   const r = spawnSync('node', [cli, 'Bob', 'dance'], { encoding: 'utf8' })
   assert.equal(r.status, 2)
-  assert.match(r.stderr, /usage/i)
+  assert.match(r.stdout, /usage/i)
 })

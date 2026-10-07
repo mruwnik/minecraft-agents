@@ -2,6 +2,7 @@
   "Workspace generation and binding policy; Node launchers only load tools."
   (:require [clojure.string :as str]
             [agent-tools.map :as map-tool]
+            [agent-tools.world-data :as data]
             ["node:fs" :as fs]
             ["node:path" :as path]
             ["node:url" :refer [pathToFileURL]]))
@@ -75,6 +76,21 @@
        (map #(if (re-find #"^\s*usage:" %) (player-usage %) %))
        (str/join "\n")))
 
+;; Bound tools print their errors as EDN on stdout: cut the plumbing from :usage and :message there too.
+;; Only failure maps change; any other output (and non-EDN text) passes through byte for byte.
+(defn player-edn [text]
+  (let [value (when (str/includes? text ":ok false") (try (data/read-edn text) (catch :default _ nil)))
+        cut (fn [m k f] (if (string? (get m k)) (update m k f) m))]
+    (if-not (and (map? value) (= false (:ok value)))
+      text
+      (let [out (-> value (cut :usage player-usage) (cut :message player-error))]
+        (if (= out value) text (str (data/write-edn out) (when (str/ends-with? text "\n") "\n")))))))
+
+(defn error-edn
+  "The EDN text of a launcher failure: {:ok false :reason :bad-args :message ...}."
+  [message]
+  (data/write-edn {:ok false :reason :bad-args :message message}))
+
 (defn wrapper [repo command]
   ;; Dynamic imports work even beneath a caller's type:commonjs package.json.
   ;; No require/__dirname or top-level await: the same script also works in ESM.
@@ -83,7 +99,7 @@
        "), import('node:url'), import('node:path')]).then(async ([{runBound}, {pathToFileURL}, {resolve, dirname}]) => {\n"
        "  process.exitCode = await runBound(pathToFileURL(resolve(dirname(process.argv[1]), '../context.edn')), "
        (js/JSON.stringify command) ", process.argv.slice(2));\n"
-       "}).catch(error => { process.stderr.write(error.message + " (js/JSON.stringify "\n") "); process.exitCode = 2; });\n"))
+       "}).catch(error => { process.stdout.write('{:ok false :reason :tool-error :message ' + JSON.stringify(error.message) + '}\\n'); process.exitCode = 2; });\n"))
 (defn agents-text [{:keys [body world]}]
   (str "# Agent workspace\n\n"
        "You operate body `" body "` in world `" world "`. Read `context.edn`, `briefing.md`, and relevant `notes/` before acting. Keep private working notes and handoffs in `notes/`; publish lasting world discoveries through shared map/plans tools.\n\n"

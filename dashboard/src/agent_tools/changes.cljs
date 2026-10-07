@@ -98,7 +98,7 @@
                    (if (.-aborted (.-signal controller)) 130
                        (let [message (or (.-message error) (str error))]
                          (.write (.-stdout js/process)
-                                 (str (data/write-edn {:ok false :reason (keyword (data/name (or (map-tool/error-field error :reason) :invalid-request)))
+                                 (str (data/write-edn {:ok false :reason (keyword (data/name (or (map-tool/error-field error :reason) :bad-args)))
                                                :message (subs message 0 (min 300 (count message)))}) "\n"))
                          1))))
          (.finally (fn [] (.removeListener js/process "SIGINT" stop) (.removeListener js/process "SIGTERM" stop)))))))

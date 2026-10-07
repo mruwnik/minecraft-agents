@@ -34,7 +34,7 @@
   (let [reader (rt/string-push-back-reader text)
         form (edn/read {:eof ::eof} reader)]
     (when (or (= form ::eof) (not= ::eof (edn/read {:eof ::eof} reader)))
-      (throw (data/fail :invalid-request "expected one EDN value")))
+      (throw (data/fail :bad-args "expected one EDN value")))
     form))
 
 (defn options [argv]
@@ -256,7 +256,7 @@
 (defn error-result [error]
   (let [conflicts (error-field error :conflicts)
         conflicts (if (array? conflicts) (js->clj conflicts :keywordize-keys true) conflicts)]
-    (cond-> {:ok false :reason (keyword (data/name (or (error-field error :reason) :invalid-request)))
+    (cond-> {:ok false :reason (keyword (data/name (or (error-field error :reason) :bad-args)))
              :message (subs (or (.-message error) (str error)) 0 (min 500 (count (or (.-message error) (str error)))))}
       (error-field? error :current) (assoc :current (error-field error :current))
       (error-field error :owner) (assoc :owner (error-field error :owner))

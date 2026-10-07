@@ -200,8 +200,8 @@
     (subs text 0 (min limit (count text)))))
 
 (defn error-result [error]
-  (let [reason (or (aget error "reason") (some-> (ex-data error) :reason) "invalid-request")]
-    (failure (if (string? reason) reason "invalid-request") (message-of error 500))))
+  (let [reason (or (aget error "reason") (some-> (ex-data error) :reason) "bad-args")]
+    (failure (if (string? reason) reason "bad-args") (message-of error 500))))
 
 (defn drop-nils [result]
   (into {} (filter (comp some? val)) result))
