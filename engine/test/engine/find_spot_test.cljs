@@ -254,6 +254,28 @@
           (is (= expected (:spots @out)))
           (is (= (:pos (first expected)) (:spot @out))))))))
 
+(deftest a-scan-over-open-air-stops-at-the-slice-cap
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [a {:w 16 :h 16 :range 48 :depth 7 :limit 3 :walk false}
+              {:keys [eng p]} (setup {:blocks {}})
+              reads (atom 0)
+              orig (.-blockAt p)
+              _ (set! (.-blockAt p) (fn [pos] (swap! reads inc) (.call orig p pos)))
+              out (atom :not-done)
+              parent {:check (constantly true)
+                      :round (fn ^:async recording-round [c]
+                               (let [r (await (ctx/call-child c :kid job a))]
+                                 (when (= :done r) (reset! out (ctx/child-result c :kid)))
+                                 r))}
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
+          (core/submit! eng '(recording-parent) {})
+          (await (run-until-empty eng 40))
+          (is (empty? (:list (core/state eng))) "the job ends")
+          (is (<= @reads 66000) (str "reads over the slice cap: " @reads))
+          (is (= :none (:reason @out))))))))
+
 (deftest a-body-moved-mid-scan-does-not-change-the-rows-scanned
   (async done
     (tu/run-async done

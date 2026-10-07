@@ -8,6 +8,7 @@
 (def doc
   "Pick where a :w x :h farm would go. Ranks patches by flatness first, then water within 4,
   open sky and nearness to :center. Reads blocks only: it never digs or marks anything.
+  A scan reads at most about 30000 blocks, then settles for the best spots so far.
   With :walk true it then walks to the best spot.
   Result: {:spot pos-or-nil :spots [...] :walked bool}. A pos is the north-west corner at ground level.
   :reason is :none (no patch found) or :unreachable (walk failed).")
@@ -78,6 +79,10 @@
   "blockAt reads after which a round stops scanning (at the end of the row it is in)."
   4096)
 
+(def max-reads
+  "blockAt reads one attempt may spend on scanning (a cut and restart keeps the count); then it settles for the best spots found."
+  30000)
+
 (def sky-extra 8)
 
 (defn sky-above?
@@ -93,7 +98,7 @@
 (defn scan-rows
   "Scan whole patch rows (one NW corner x, every z) from (:next-x state) until
   the read count reaches budget or the last row is done. Returns {:next-x :found
-  :done}; found is the best :limit spots so far. Caches live within this call."
+  :done :reads}; found is the best :limit spots so far. Caches live within this call."
   [p {:keys [w h range depth limit]} from {:keys [next-x found]} budget]
   (let [reads (volatile! 0)
         name-fn (fn [pos] (vswap! reads inc) (u/block-name p pos))
@@ -126,8 +131,8 @@
                        vec)
             nx (inc x)]
         (cond
-          (> nx last-x) {:next-x nx :found found :done true}
-          (>= @reads budget) {:next-x nx :found found :done false}
+          (> nx last-x) {:next-x nx :found found :done true :reads @reads}
+          (>= @reads budget) {:next-x nx :found found :done false :reads @reads}
           :else (recur nx found))))))
 
 (defn scan
@@ -160,10 +165,11 @@
   (let [saved (:scan (ctx/mem c))
         from (or (:center a) (:from saved) (into {} (map (fn [[k v]] [k (js/Math.floor v)])) (u/self-pos c)))
         state (or saved {:next-x (- (:x from) (:range a)) :found []})
-        r (scan-rows (:primitives c) a from state read-budget)]
-    (if (:done r)
+        r (scan-rows (:primitives c) a from state read-budget)
+        spent (+ (:reads state 0) (:reads r))]
+    (if (or (:done r) (>= spent max-reads))
       (finish-scan! c a from (:found r))
-      (do (ctx/update-mem! c assoc :scan (assoc (select-keys r [:next-x :found]) :from from))
+      (do (ctx/update-mem! c assoc :scan (assoc (select-keys r [:next-x :found]) :from from :reads spent))
           :again))))
 
 (defn ^:async step
