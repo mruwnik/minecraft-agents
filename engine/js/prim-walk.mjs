@@ -5,6 +5,7 @@ import vec3 from 'vec3'
 import { POLL_MS, PLAN_REASONS, PROGRESS_BLOCKS, STALL_S, STILL_BLOCKS, STILL_S, CLIMBABLE, STEP_RISE, CENTRE_TOLERANCE, CENTRE_S, CENTRE_SPEED, LOOK_TICK_MS, STEP_S, STEP_ATTEMPTS, sleepMs, dist, cell, vec } from './prim-base.mjs'
 
 const { Vec3 } = vec3
+const DROP_CAPS = Symbol('drop caps')
 
 export function createWalk (env) {
   const { timeScale } = env
@@ -93,13 +94,28 @@ export function createWalk (env) {
       body.clearControlStates()
     }
   }
+  // A drop cap set on the movements for one walk. Walks that overlap (a cut walk's restore and the next walk's cap) share
+  // one count on the movements; their own cap comes back when the last capped walk ends. Returns the restore fn.
+  const capDrop = (movements, maxDropDown) => {
+    if (!movements || maxDropDown === undefined) return () => {}
+    const caps = (movements[DROP_CAPS] ??= { own: movements.maxDropDown, n: 0 })
+    caps.n++
+    movements.maxDropDown = maxDropDown
+    let done = false
+    return () => {
+      if (done) return
+      done = true
+      if (--caps.n > 0) return
+      movements.maxDropDown = caps.own
+      delete movements[DROP_CAPS]
+    }
+  }
   // A goto is rejected by our own setGoal(null) when a step-up starts; that is not a failure, the walk re-issues it.
   // maxDropDown caps the drops of this walk's path (the movements' own, 4 by default, comes back after it).
   const walk = async (ctx, goal, { stall = true, maxDropDown } = {}) => {
     const walking = env.bot
-    const movements = walking.pathfinder.movements
-    const dropDown = movements?.maxDropDown
-    if (movements && maxDropDown !== undefined) movements.maxDropDown = maxDropDown
+    const uncap = capDrop(walking.pathfinder.movements, maxDropDown)
+    ctx.onAbort(uncap) // a cut call never reaches the finally
     ctx.onAbort(() => stopWalking(walking))
     let path = null
     let onStuck = () => {}
@@ -149,7 +165,7 @@ export function createWalk (env) {
       clearInterval(poll)
       walking.off('path_update', onUpdate)
       walking.off('path_reset', onReset)
-      if (movements && maxDropDown !== undefined) movements.maxDropDown = dropDown
+      uncap()
       stopWalking(walking)
     }
   }

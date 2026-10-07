@@ -258,7 +258,9 @@
 (defn ^:async collect!
   "One collect-drops round while the drops of the digs are owed. :again, :continue while it waits."
   [c]
-  (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius (:collect-radius (:args c))}))]
+  (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops
+                                 {:radius (:collect-radius (:args c))
+                                  :holes (vec (remove nil? (cons (:collect (ctx/mem c)) (:holes (ctx/mem c)))))}))]
     (when (= :done r) (ctx/update-mem! c dissoc :collect))
     (if (= :continue r) :continue :again)))
 

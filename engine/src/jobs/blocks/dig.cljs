@@ -156,7 +156,7 @@
   "Pick up the dug block's drops (jobs.forestry.collect-drops child, called until it ends); finish when it has."
   [c pos]
   (let [{:keys [block ids]} (:dug (ctx/mem c))
-        r (await (child/run! c :collect 'jobs.forestry.collect-drops {:radius collect-radius :ids ids}))]
+        r (await (child/run! c :collect 'jobs.forestry.collect-drops {:radius collect-radius :ids ids :holes [pos]}))]
     (if (= :continue r)
       :continue
       (finish! c {:dug true :pos pos :block block :reason :dug

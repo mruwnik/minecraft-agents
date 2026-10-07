@@ -290,7 +290,8 @@
   not asked for again."
   [c removed]
   (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops
-                                 {:radius (collect-radius c removed) :filter (vec (distinct (map (comp placement/item-of :item) removed)))}))]
+                                 {:radius (collect-radius c removed) :filter (vec (distinct (map (comp placement/item-of :item) removed)))
+                                  :holes (mapv :cell removed)}))]
     (when-not (= :continue r)
       (ctx/update-mem! c #(-> % (dissoc :collect)
                               (assoc :collected (if (= :done r) (:collected (ctx/child-result c :collect) 0) 0)))))

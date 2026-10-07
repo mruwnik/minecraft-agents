@@ -262,7 +262,7 @@ export function createDig (env) {
   const collect = async (token, a = {}) => {
     if (!isOwner(token)) throw cutError()
     need(isNum(a.id), 'collect needs an entity id')
-    const { id, timeoutS = 10 } = a
+    const { id, timeoutS = 10, maxDropDown } = a
     const before = countsNow()
     const result = (status, reason) => ({ status, ...(reason && { reason }), gained: gained(before, countsNow()) })
     return act(token, { boundS: Math.min(timeoutS, 20), onTimeout: () => result('timeout') }, async ctx => {
@@ -282,8 +282,8 @@ export function createDig (env) {
         inReachSince = null
         if (approaches >= MAX_APPROACHES) return result('unreachable', 'out-of-reach')
         const p = item.position
-        // never more than a block down on the way: the walk plans on the raw world, so a deeper drop lands on a floor never seen
-        const { reached } = await walk(ctx, new goals.GoalNear(p.x, p.y, p.z, approaches === 0 ? 1 : 0), { stall: false, maxDropDown: 1 })
+        // maxDropDown caps the walk's drops (a dug hole's drop: the walk plans on the raw world, a deeper drop lands on a floor never seen)
+        const { reached } = await walk(ctx, new goals.GoalNear(p.x, p.y, p.z, approaches === 0 ? 1 : 0), { stall: false, maxDropDown })
         approaches++
         if (!reached && liveEntity(env.bot, id)) return result('unreachable')
       }

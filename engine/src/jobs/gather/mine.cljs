@@ -346,7 +346,8 @@
 
 (defn ^:async collect! [c]
   (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops
-                                 {:radius (drop-radius c) :filter [(blocks/item-name (:args c))]}))]
+                                 (cond-> {:radius (drop-radius c) :filter [(blocks/item-name (:args c))]}
+                                   (:dug-at (ctx/mem c)) (assoc :holes [(:dug-at (ctx/mem c))]))))]
     (when (not= :continue r)
       (await (note-left! c))
       (let [now (carried c)]

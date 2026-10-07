@@ -1039,8 +1039,8 @@ test('collect: an item lying a block below beside the body is walked to, not wai
   assert.equal(result.status, 'collected')
 })
 
-// The walk plans on the raw world: it never drops more than a block on the way, so it does not land on a floor never seen.
-test('collect: the walk to an item never drops more than one block, and the movements keep their own cap after', async () => {
+// A dug hole's drop: the caller caps the walk's drops (maxDropDown), so it does not land on a floor never seen.
+test('collect: maxDropDown caps the walk to an item, and the movements keep their own cap after', async () => {
   const drops = []
   const { bot, p } = dropRig([1.5, 63, 0.5], (b, goal) => {
     drops.push(b.pathfinder.movements.maxDropDown)
@@ -1048,9 +1048,38 @@ test('collect: the walk to an item never drops more than one block, and the move
     pickUp(b)
   })
   bot.pathfinder.movements = { maxDropDown: 4 }
-  const result = await p.collect('t1', { id: 7 })
+  const result = await p.collect('t1', { id: 7, maxDropDown: 1 })
   assert.equal(result.status, 'collected')
   assert.deepEqual(drops, [1])
+  assert.equal(bot.pathfinder.movements.maxDropDown, 4)
+})
+
+test('collect: without maxDropDown the walk keeps the movements\' own drop cap', async () => {
+  const drops = []
+  const { bot, p } = dropRig([1.5, 61, 0.5], (b, goal) => {
+    drops.push(b.pathfinder.movements.maxDropDown)
+    b.entity.position = new Vec3(goal.x + 0.5, 61, goal.z + 0.5)
+    pickUp(b)
+  })
+  bot.pathfinder.movements = { maxDropDown: 4 }
+  const result = await p.collect('t1', { id: 7 })
+  assert.equal(result.status, 'collected')
+  assert.deepEqual(drops, [4])
+})
+
+test('collect: a capped walk cut and a capped collect started at once leave the movements their own cap', async () => {
+  const { bot, p } = dropRig([1.5, 63, 0.5], () => {})
+  bot.pathfinder.movements = { maxDropDown: 4 }
+  bot.pathfinder.goto = () => new Promise(() => {})
+  const cut = p.collect('t1', { id: 7, maxDropDown: 1 })
+  cut.catch(() => {})
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(bot.pathfinder.movements.maxDropDown, 1)
+  p.setOwner('t2')
+  bot.pathfinder.goto = goal => { bot.entity.position = new Vec3(goal.x + 0.5, 63, goal.z + 0.5); pickUp(bot); return Promise.resolve() }
+  const again = await p.collect('t2', { id: 7, maxDropDown: 1 })
+  await assert.rejects(cut, cutError)
+  assert.equal(again.status, 'collected')
   assert.equal(bot.pathfinder.movements.maxDropDown, 4)
 })
 
