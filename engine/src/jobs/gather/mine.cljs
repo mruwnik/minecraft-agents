@@ -882,10 +882,9 @@
       (home-done! c (await (step-to! c start))))))
 
 (defn no-tool?
-  "Whether the block needs a pickaxe and none is carried (shovel and axe blocks drop by hand)."
+  "Whether the block needs a tool to drop (get-tool's test: its harvestTools) and none carried is one of them."
   [c]
-  (and (= "pickaxe" (tools/tool-kind (:block (:args c))))
-       (not-any? #(str/ends-with? (:name %) "_pickaxe") (u/inventory (:primitives c)))))
+  (not (tools/can-harvest? (:primitives c) (:block (:args c)))))
 
 (defn no-tool!
   "End at once, before any dig: warn and hand over {:status :stopped :got 0 :reason :no-tool :tool \"pickaxe\"}."

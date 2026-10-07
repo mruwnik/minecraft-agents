@@ -581,6 +581,15 @@
           (is (nil? (:ground (job-mem s))) "nothing was written")
           (is (finished? s)))))))
 
+(deftest a-block-any-hand-harvests-needs-no-pickaxe
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "oak_sapling" :count 2} {:blocks (cells "oak_sapling" [3 4] [64] [0]) :inventory [{:name "iron_shovel" :count 1}]} 40))]
+          (is (empty? (events-of s :mine.no-tool)))
+          (is (= 2 (dig-count s)))
+          (is (= :count (:reason (done-event s)))))))))
+
 (deftest sand-without-a-shovel-is-still-dug
   (async done
     (tu/run-async done
