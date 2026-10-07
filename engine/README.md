@@ -128,7 +128,7 @@ Statuses below are the common ones; `reason` and extra fields are in `js/primiti
 
 | method | args | statuses |
 |---|---|---|
-| `moveTo` | `{pos, range=1, timeoutS=20, maxDistance=64}` | `arrived`, `partial`, `blocked` (reason `noPath`, `planTimeout`, `stalled`, `timeout`), `mounted`. Uses the mineflayer pathfinder and treats doors as walls; jobs walk with `go-to` instead |
+| `moveTo` | `{pos, range=1, timeoutS=20, maxDistance=64}` (numbers, range from 0, the others above 0, else `bad-args`) | `arrived`, `partial`, `blocked` (reason `noPath`, `planTimeout`, `stalled`, `timeout`), `mounted`. Uses the mineflayer pathfinder and treats doors as walls; jobs walk with `go-to` instead |
 | `dig` | `{pos}` | `dug` (`drops`), `missing`, `unreachable` (over 4.5), `cannot` |
 | `place` | `{pos, item, click?}` | `placed`, `occupied`, `no-item`, `no-support`, `unreachable`, `failed` (server refused: reason names face, body spot and entities near the cell); buckets pour/scoop at `pos` |
 | `jumpPlace` | `{item, count=1}` (max 8) | `done`, `partial`, `failed` (`no-item`, `no-support`, `no-headroom`, `not-raised`) |
@@ -144,7 +144,7 @@ Statuses below are the common ones; `reason` and extra fields are in `js/primiti
 | `eat` | `{item?}` | `ate`, `no-food`, `full` |
 | `attack` | `{id}` (one swing) | `hit`, `killed`, `gone`, `out-of-reach` |
 | `interact` | `{id, item?}` use item on entity | `used`, `no-effect`, `gone`, `out-of-reach`, `no-item`, `full`, `cannot`, `failed` |
-| `trade` | `{villager uuid, op: offers/buy, offer?, times?}` | `ok`, `bought`, `gone`, `out-of-reach`, `no-item`, `full`, `cannot`, `failed` |
+| `trade` | `{villager uuid, op: offers/buy, offer?, times?}` | `ok`, `bought`, `gone`, `out-of-reach`, `no-item`, `full`, `cannot`, `failed`; `bought` ends `stopped: window-closed` if the window closed mid-run |
 | `sleep` | `{pos}` bed | `sleeping`, `not-night`, `occupied`, `monsters-near`, `missing`, `unreachable` |
 | `look` / `wait` | `{pos}` or `{yaw, pitch}` / `{ms}` (max 10000) | `ok` |
 | `swim` | `{ms=3000, toward?}` | `surfaced`, `landed`, `timeout` |

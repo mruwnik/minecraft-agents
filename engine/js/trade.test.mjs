@@ -39,7 +39,7 @@ const offer = ({ cost = ['emerald', 2], cost2 = null, gives = ['bread', 3], uses
 const stack = (name, count) => ({ name, count })
 
 // A hand-made bot. Like mineflayer, a trade only lands in the inventory when the window is closed.
-const makeBot = ({ target = villager(), stock = [], trades = [offer()], free = 5, open = 'now', confirm = true, tradeThrows = null, landsBeforeThrow = false, hang = false, landTimes = null, at = vec3(0, 64, 0) } = {}) => {
+const makeBot = ({ target = villager(), stock = [], trades = [offer()], free = 5, open = 'now', confirm = true, tradeThrows = null, landsBeforeThrow = false, hang = false, landTimes = null, closeAfter = null, at = vec3(0, 64, 0) } = {}) => {
   const bot = new EventEmitter()
   const calls = []
   const items = [...stock]
@@ -81,6 +81,7 @@ const makeBot = ({ target = villager(), stock = [], trades = [offer()], free = 5
       })
       if (hang) return new Promise(() => {})
       if (tradeThrows) throw new Error(tradeThrows)
+      if (closeAfter !== null && calls.filter(c => c[0] === 'trade').length >= closeAfter) bot.closeWindow(w)
     },
     closeWindow: w => { calls.push(['closeWindow']); bot.currentWindow = null; land() }
   })
@@ -252,7 +253,7 @@ test('buy: what was gained and paid is measured after the window closed', async 
     await t.test(label, async () => {
       const bot = makeBot({ trades, stock, free: 5 })
       assert.deepEqual(await run(bot, { op: 'buy', offer: 0, ...extra }), { status: 'bought', ...expected })
-      assert.deepEqual(bot.calls.slice(1), [['trade', 0, asked], ['closeWindow']])
+      assert.deepEqual(bot.calls.slice(1), [...Array(asked).fill(['trade', 0, 1]), ['closeWindow']])
     })
   }
 })
@@ -269,7 +270,7 @@ test('buy: the count is clamped by uses left, payment and room, and says which',
     await t.test(label, async () => {
       const bot = makeBot({ trades, stock, free })
       assert.deepEqual(await run(bot, { op: 'buy', offer: 0, times: ask }), { status: 'bought', times: did, requested: ask, gained, paid, stopped })
-      assert.deepEqual(bot.calls.find(c => c[0] === 'trade'), ['trade', 0, did])
+      assert.equal(bot.calls.filter(c => c[0] === 'trade').length, did)
     })
   }
 })
@@ -343,4 +344,13 @@ test('an abort closes an open window, and a cut call closes it too', async () =>
   const cutCtx = { alive: () => { throw new Error('cut') }, onAbort: () => {} }
   await assert.rejects(tradeWith(cut, cutCtx, { villager: 'v-1', op: 'offers' }, opts), /cut/)
   assert.equal(closes(cut), 1)
+})
+
+test('buy: a window that closes mid-run stops the clicks and reports what landed', async () => {
+  const bot = makeBot({ stock: [stack('emerald', 20)], closeAfter: 1 })
+  const result = await run(bot, { op: 'buy', offer: 0, times: 3 })
+  assert.equal(bot.calls.filter(c => c[0] === 'trade').length, 1)
+  assert.equal(result.status, 'bought')
+  assert.equal(result.times, 1)
+  assert.equal(result.stopped, 'window-closed')
 })

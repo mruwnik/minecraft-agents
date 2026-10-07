@@ -57,6 +57,7 @@ export function createMove (env) {
     if (!isOwner(token)) throw cutError()
     need(isPos(a.pos), 'moveTo needs pos {x, y, z}')
     const { range = 1, timeoutS = 20, maxDistance = 64 } = a
+    need(isNum(range) && range >= 0 && [timeoutS, maxDistance].every(n => isNum(n) && n > 0), 'moveTo range must be a number from 0, timeoutS and maxDistance numbers above 0')
     const target = cell(a.pos)
     const start = here()
     const before = dist(start, target)

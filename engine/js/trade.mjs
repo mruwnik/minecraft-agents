@@ -108,9 +108,17 @@ async function buy (bot, ctx, win, a, timeScale) {
   // stop waiting after a bound, close and measure whatever happened
   let error = null
   let stalled = false
+  let windowClosed = false
   let timer
+  // one click per call so a window that closed underneath (villager gone, server close) ends the run
+  const clickAll = async () => {
+    for (let i = 0; i < n; i++) {
+      if (bot.currentWindow !== win) { windowClosed = true; return }
+      await bot.trade(win, a.offer, 1)
+    }
+  }
   try {
-    const call = Promise.resolve(bot.trade(win, a.offer, n))
+    const call = clickAll()
     call.catch(() => {})
     const bound = new Promise(resolve => { timer = setTimeout(() => resolve('stalled'), TRADE_WAIT_MS * timeScale) })
     stalled = (await Promise.race([call, bound])) === 'stalled'
@@ -125,7 +133,7 @@ async function buy (bot, ctx, win, a, timeScale) {
   const [gained, paid] = changes(before, tally(bot))
   const done = Math.floor((gained[row.gives.item] ?? 0) / row.gives.count)
   if (done === 0) return { status: 'failed', reason: error ? String(error.message ?? error).slice(0, 120) : stalled ? 'trade-stalled' : 'not-confirmed', ...(!error && { paid, gained }) }
-  const stopped = done >= times ? null : stalled ? 'stalled' : (limits.find(([, v]) => v === n && n < times)?.[0] ?? null)
+  const stopped = done >= times ? null : stalled ? 'stalled' : windowClosed ? 'window-closed' : (limits.find(([, v]) => v === n && n < times)?.[0] ?? null)
   return { status: 'bought', times: done, requested: times, gained, paid, stopped, ...(stalled && { stalled: true }) }
 }
 
