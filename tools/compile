@@ -12,6 +12,7 @@
 #   --priority  jump the queue: ahead of every waiting normal compile (it still waits for the compile now running).
 #               For the owner's UI rebuilds (dashboard ui/server) and nothing else.
 #   --release   `shadow-cljs release` instead of `compile` (the :viewer build).
+#   A build-time .clj (engine/src, dashboard/src) newer than the running server restarts it before the compile (shadow-cljs does not reload macros).
 #   --stop      stop the checkout's server (needs the lock; for restarts; no build argument).
 #
 # Queue: a ticket file <lane>-<ns>-<pid> per waiter in /tmp/mc-compile.queue (lane 0 priority, 1 normal); the first live
@@ -148,6 +149,14 @@ if [ "$stop" = 1 ]; then
   kill "$p"; exit 0
 fi
 
+# shadow-cljs does not reload macro / build-hook .clj files into a running server: one changed since it started means stale
+# macros (bogus "undeclared" errors until a restart). We hold the lock, so no compile is running; restart before ours.
+if p=$(server_pid) && [ -n "$(find "$repo/engine/src" "$repo/dashboard/src" "$repo/dashboard/bench-src" -name '*.clj' -newer "/proc/$p" -print -quit 2>/dev/null)" ]; then
+  echo "tools/compile: a build-time .clj file changed since the server started; restarting it" >&2
+  kill "$p"
+  for _ in $(seq 1 100); do kill -0 "$p" 2>/dev/null || break; sleep 0.2; done
+  kill -0 "$p" 2>/dev/null && { echo "tools/compile: the old server (pid $p) did not stop" >&2; exit 1; }
+fi
 server_pid >/dev/null || start_server
 
 cd "$dir" || exit 1

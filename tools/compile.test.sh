@@ -140,6 +140,19 @@ MSRV=$(cat "$T/main/dashboard/.shadow-cljs/server.pid")
 sleep 1; kill -0 "$MSRV" 2>/dev/null; check "main server alive right after a compile" "$?" 0
 gone "$MSRV"; check "main server gone after the main idle time" "$?" 0
 timeout 30 "$T/main/tools/compile" engine test >/dev/null 2>&1; check "main compile restarts the server" "$?" 0
+# a build-time .clj changed after the server started: the next compile restarts the server (once); a .cljs change does not
+mkdir -p "$T/main/engine/src/engine"
+OLD=$(cat "$T/main/dashboard/.shadow-cljs/server.pid")
+sleep 1; echo x > "$T/main/engine/src/engine/ui.cljs"
+timeout 30 "$T/main/tools/compile" engine test >/dev/null 2>&1
+check "cljs change keeps the server" "$(cat "$T/main/dashboard/.shadow-cljs/server.pid")" "$OLD"
+echo '(ns m)' > "$T/main/engine/src/engine/macros.clj"
+timeout 30 "$T/main/tools/compile" engine test >/dev/null 2>&1; check "clj change compile rc" "$?" 0
+NEW=$(cat "$T/main/dashboard/.shadow-cljs/server.pid")
+kill -0 "$OLD" 2>/dev/null; check "clj change stops the old server" "$?" 1
+kill -0 "$NEW" 2>/dev/null; check "clj change starts a new server" "$?" 0
+timeout 30 "$T/main/tools/compile" engine test >/dev/null 2>&1
+check "no second restart without a new change" "$(cat "$T/main/dashboard/.shadow-cljs/server.pid")" "$NEW"
 kill "$(cat "$T/main/dashboard/.shadow-cljs/server.pid")" 2>/dev/null
 unset MC_COMPILE_MIN_START_MB MC_COMPILE_MAIN_IDLE_S MC_COMPILE_SERVER_IDLE_S MC_COMPILE_IDLE_POLL_S
 
