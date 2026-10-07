@@ -9,7 +9,8 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [jobs.lib.world-files :as ew]))
+            [jobs.lib.world-files :as ew]
+            [jobs.storage.deposit :as deposit]))
 
 (defn setup-seeing
   "h/setup over a body that has seen every block in range."
@@ -522,3 +523,17 @@
           (await (run-ticks s 5 700))
           (is (= [:no-source] (declined-reasons s)))
           (is (zero? (dig-count s))))))))
+
+(deftest a-declined-withdraw-ends-with-a-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls (atom 0)
+              real deposit/chest-of
+              s (setup-seeing {})]
+          (with-redefs [deposit/chest-of (fn [view args] (when (= 1 (swap! calls inc)) (real view args)))]
+            (core/submit! (:eng s) (spec {:count 2 :chest {:x 10 :y 64 :z 0}}) {})
+            (await (run-ticks s 30 700)))
+          (is (= :withdraw-declined (:reason (done-event s))))
+          (is (= [:withdraw-declined] (mapv :reason (events-of s :get-seeds.gave-up))))
+          (is (finished? s)))))))

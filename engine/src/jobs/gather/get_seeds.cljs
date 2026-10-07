@@ -235,7 +235,8 @@
                                    (merge (select-keys (:args c) [:ignore-zones?]) {:chest chest :items {item goal}})))
         out (ctx/child-result c :take)]
     (cond
-      (not= :done r) :continue
+      (= :continue r) :continue
+      (not= :done r) (give-up! c :withdraw-declined)
       (>= (carried c) goal) (finish! c :count)
       (:gave-up out) (do (ctx/emit! c :get-seeds.gave-up :warn (merge (select-keys out [:zones :claims])
                                                                       {:reason (:reason out) :text (str "get-seeds: withdraw gave up: " (:reason out))}))
