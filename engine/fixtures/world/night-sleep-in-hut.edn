@@ -18,6 +18,7 @@
    :act [[:job (jobs.memory.set-place {:name :bed :pos #at [10 0 12]})]
          [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 90]
          [:wait-s 3]
+         [:rcon "data get entity $BODY respawn"]
          [:kill-body]
          [:await {:source :body :kind :respawned} 30]]
    :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 90}]
