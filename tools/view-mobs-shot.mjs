@@ -21,7 +21,7 @@ const { values } = parseArgs({ options: { out: { type: 'string' }, yaw: { type: 
 if (!values.out) throw new Error('--out file.png is required')
 const [width, height, yaw] = [Number(values.width), Number(values.height), Number(values.yaw)]
 
-const HEIGHTS = { zombie: 1.95, husk: 1.95, drowned: 1.95, zombified_piglin: 1.95, player: 1.8, piglin: 1.95, piglin_brute: 1.95, skeleton: 1.99, stray: 1.99, wither_skeleton: 2.4, bogged: 1.99, creeper: 1.7, cow: 1.4, mooshroom: 1.4, pig: 0.9, sheep: 1.3, spider: 0.9, cave_spider: 0.5, chicken: 0.7, villager: 1.95, wandering_trader: 1.95, witch: 1.95, enderman: 2.9 }
+const HEIGHTS = { zombie: 1.95, husk: 1.95, drowned: 1.95, zombified_piglin: 1.95, player: 1.8, piglin: 1.95, piglin_brute: 1.95, skeleton: 1.99, stray: 1.99, wither_skeleton: 2.4, bogged: 1.99, creeper: 1.7, cow: 1.4, mooshroom: 1.4, pig: 0.9, sheep: 1.3, spider: 0.9, cave_spider: 0.5, chicken: 0.7, villager: 1.95, wandering_trader: 1.95, witch: 1.95, enderman: 2.9, illusioner: 1.95, zombie_villager: 1.95, horse: 1.6, skeleton_horse: 1.6, zombie_horse: 1.6, donkey: 1.5, mule: 1.6, wolf: 0.85, cat: 0.7, ocelot: 0.7, fox: 0.7, iron_golem: 2.7, snow_golem: 1.9, blaze: 1.8, slime: 0.52 }
 const PER_ROW = 7
 const FLOOR_Y = 64
 const entities = Object.keys(MOBS).map((name, i) => ({

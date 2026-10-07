@@ -10,8 +10,12 @@ import { speciesColored } from '../tools/view/web/scene.mjs'
 import { modelUniforms, MAX_PART_ROWS } from '../tools/view/web/gl.mjs'
 import { render, makeGrid } from '../tools/view/renderer.mjs'
 import { openJar, findClientJar } from '../tools/view/jar-read.mjs'
+import { textureBytes } from '../tools/view/materials.mjs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const WANTED = 'zombie husk drowned player piglin zombified_piglin skeleton stray wither_skeleton creeper cow mooshroom pig sheep spider cave_spider chicken villager wandering_trader witch enderman vindicator pillager evoker'.split(' ')
+const WANTED = 'zombie husk drowned player piglin zombified_piglin skeleton stray wither_skeleton creeper cow mooshroom pig sheep spider cave_spider chicken villager wandering_trader witch enderman vindicator pillager evoker illusioner zombie_villager horse donkey mule skeleton_horse zombie_horse wolf cat ocelot fox iron_golem snow_golem blaze slime'.split(' ')
+const textureDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'textures')
 const jarPath = findClientJar()
 const skip = jarPath === null
 const close = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} !~ ${b}`)
@@ -30,8 +34,9 @@ test('a mob without a model has none', () => {
   assert.equal(modelFor({ name: 'item', height: 0.25 }), null)
 })
 
-test('the layers the models need stay few', () => {
-  assert.ok(modelLayers().length < 250, String(modelLayers().length))
+test('the layers the models need stay few: the array with the blocks must fit a GPU\'s 2048 layers', { skip }, () => {
+  const total = textureBytes('26.1', textureDir, { jarPath }).table.textures.names.length
+  assert.ok(total < 2000, `${total} layers, ${modelLayers().length} of them the models'`)
 })
 
 test('a model is scaled to the entity height, so a baby is smaller', () => {

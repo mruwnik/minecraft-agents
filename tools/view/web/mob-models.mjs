@@ -33,6 +33,11 @@ const compact = n => ({ top: n.up, bottom: n.up, south: n.north, north: n.east, 
 // a body lying along z (quadruped bodies are drawn turned a quarter: the net's front is the back, its top the front end): the back, a side and the ends
 const lying = n => ({ top: n.north, bottom: n.north, south: n.up, north: n.up, east: n.east, west: n.east })
 
+// a body or neck whose ends share the front: the top, the front (also the back) and one side
+const slab = n => ({ top: n.up, bottom: n.up, south: n.north, north: n.north, east: n.east, west: n.east })
+// a thin part seen mostly from the side: the side on the top and bottom too, the front on both ends
+const slim = n => ({ top: n.east, bottom: n.east, south: n.north, north: n.north, east: n.east, west: n.east })
+
 // paint: 0 body, 1 head, 2 limbs (the entries of the flat palette, web/mobs.mjs, used when a sheet is missing)
 const cube = (from, to, nt, pick, paint, sheet) => ({ from, to, faces: pick(net(nt)), paint, ...(sheet ? { sheet } : {}) })
 
@@ -63,6 +68,86 @@ const quadruped = ({ body, bodyNet, bodySheet, head, headNet, legTop, legNet, le
   cube([-body[0], body[1], body[3]], [body[0], body[2], body[4]], bodyNet, lying, 0, bodySheet),
   cube(head[0], head[1], headNet, compact, 1),
   ...[[1, 5], [-5, -1]].flatMap(([x0, x1]) => legZ.map(([z0, z1]) => cube([x0, 0, z0], [x1, legTop, z1], legNet, limb, 2)))
+]
+
+const horse = ({ ears }) => [
+  cube([-5, 11, -11], [5, 21, 11], { u: 0, v: 32, w: 10, h: 10, d: 22 }, slab, 0),
+  cube([-2, 14, 6], [2, 26, 13], { u: 0, v: 35, w: 4, h: 12, d: 7 }, slim, 0),
+  cube([-3, 24, 11], [3, 29, 18], { u: 0, v: 0, w: 6, h: 5, d: 7 }, compact, 1),
+  cube([-2, 23, 18], [2, 28, 23], { u: 0, v: 25, w: 4, h: 5, d: 5 }, slim, 1),
+  ...[[-3, -1], [1, 3]].map(([x0, x1]) => cube([x0, 29, 11], [x1, 29 + ears.h, 12], { u: ears.u, v: 0, w: 2, h: ears.h, d: 1 }, limb, 1)),
+  cube([-0.5, 14, 4], [0.5, 30, 6], { u: 56, v: 36, w: 1, h: 16, d: 2 }, limb, 0),
+  cube([-1.5, 4, -15], [1.5, 18, -11], { u: 42, v: 36, w: 3, h: 14, d: 4 }, limb, 2),
+  ...[[-5, -1], [1, 5]].flatMap(([x0, x1]) => [[6, 10], [-10, -6]].map(([z0, z1]) => cube([x0, 0, z0], [x1, 11, z1], { u: 48, v: 21, w: 4, h: 11, d: 4 }, limb, 2)))
+]
+
+const wolf = () => [
+  cube([-3, 7, -6], [3, 13, 3], { u: 18, v: 14, w: 6, h: 9, d: 6 }, lying, 0),
+  cube([-3.2, 6.8, -1], [3.2, 13.2, 6], { u: 21, v: 0, w: 6, h: 6, d: 7 }, compact, 0),
+  cube([-3, 7.5, 5], [3, 13.5, 9], { u: 0, v: 0, w: 6, h: 6, d: 4 }, compact, 1),
+  cube([-1.5, 7.5, 9], [1.5, 10.5, 13], { u: 0, v: 10, w: 3, h: 3, d: 4 }, compact, 1),
+  ...[[-3, -1], [1, 3]].map(([x0, x1]) => cube([x0, 13.5, 6], [x1, 15.5, 7], { u: 16, v: 14, w: 2, h: 2, d: 1 }, limb, 1)),
+  cube([-1, 4, -10], [1, 12, -8], { u: 9, v: 18, w: 2, h: 8, d: 2 }, limb, 2),
+  ...[[-3, -1], [1, 3]].flatMap(([x0, x1]) => [[1, 3], [-6, -4]].map(([z0, z1]) => cube([x0, 0, z0], [x1, 8, z1], { u: 0, v: 18, w: 2, h: 8, d: 2 }, limb, 2)))
+]
+
+const cat = () => [
+  cube([-2, 4, -9], [2, 10, 7], { u: 20, v: 0, w: 4, h: 16, d: 6 }, lying, 0),
+  cube([-2.5, 7, 7], [2.5, 11, 12], { u: 0, v: 0, w: 5, h: 4, d: 5 }, compact, 1),
+  cube([-1.5, 7, 12], [1.5, 9, 14], { u: 0, v: 24, w: 3, h: 2, d: 2 }, limb, 1),
+  ...[[-2.5, -1.5], [1.5, 2.5]].map(([x0, x1]) => cube([x0, 11, 8], [x1, 12, 10], { u: 0, v: 10, w: 1, h: 1, d: 2 }, limb, 1)),
+  cube([-0.5, 2, -10], [0.5, 10, -9], { u: 0, v: 15, w: 1, h: 8, d: 1 }, limb, 2),
+  cube([-0.5, 0, -11], [0.5, 8, -10], { u: 4, v: 15, w: 1, h: 8, d: 1 }, limb, 2),
+  ...[[-2.2, -0.2], [0.2, 2.2]].map(([x0, x1]) => cube([x0, 0, 3], [x1, 10, 5], { u: 40, v: 0, w: 2, h: 10, d: 2 }, limb, 2)),
+  ...[[-2.2, -0.2], [0.2, 2.2]].map(([x0, x1]) => cube([x0, 0, -8], [x1, 6, -6], { u: 8, v: 13, w: 2, h: 6, d: 2 }, limb, 2))
+]
+
+const fox = () => [
+  cube([-3, 4, -7], [3, 10, 4], { u: 24, v: 15, w: 6, h: 11, d: 6 }, lying, 0),
+  cube([-4, 4, 4], [4, 10, 10], { u: 1, v: 5, w: 8, h: 6, d: 6 }, compact, 1),
+  cube([-1, 4.5, 10], [1, 6.5, 13], { u: 6, v: 18, w: 2, h: 2, d: 3 }, limb, 1),
+  ...[[-4, -2], [2, 4]].map(([x0, x1]) => cube([x0, 10, 5], [x1, 12, 6], { u: 8, v: 1, w: 2, h: 2, d: 1 }, limb, 1)),
+  cube([-2, 5, -16], [2, 10, -7], { u: 30, v: 0, w: 4, h: 9, d: 5 }, lying, 2),
+  ...[[-3, -1], [1, 3]].flatMap(([x0, x1]) => [[[1, 3], 13], [[-6, -4], 4]].map(([[z0, z1], u]) => cube([x0, 0, z0], [x1, 6, z1], { u, v: 24, w: 2, h: 6, d: 2 }, limb, 2)))
+]
+
+const ironGolem = () => [
+  cube([-4, 33, -2.5], [4, 43, 5.5], { u: 0, v: 0, w: 8, h: 10, d: 8 }, upright, 1),
+  cube([-1, 35, 5.5], [1, 39, 7.5], { u: 24, v: 0, w: 2, h: 4, d: 2 }, limb, 1),
+  cube([-9, 21, -5.5], [9, 33, 5.5], { u: 0, v: 40, w: 18, h: 12, d: 11 }, trunk, 0),
+  cube([-4.5, 16, -3], [4.5, 21, 3], { u: 0, v: 70, w: 9, h: 5, d: 6 }, limb, 0),
+  ...[[-13, -9], [9, 13]].map(([x0, x1]) => cube([x0, 3.5, -3], [x1, 33.5, 3], { u: 60, v: 21, w: 4, h: 30, d: 6 }, limb, 2)),
+  ...[[-7.5, -1.5], [1.5, 7.5]].map(([x0, x1]) => cube([x0, 0, -2.5], [x1, 16, 2.5], { u: 37, v: 0, w: 6, h: 16, d: 5 }, limb, 2))
+]
+
+const snowGolem = () => [
+  cube([-4, 20, -4], [4, 28, 4], { u: 0, v: 0, w: 8, h: 8, d: 8 }, upright, 1),
+  cube([-5, 11, -5], [5, 21, 5], { u: 0, v: 16, w: 10, h: 10, d: 10 }, trunk, 0),
+  cube([-6, 0, -6], [6, 12, 6], { u: 0, v: 36, w: 12, h: 12, d: 12 }, trunk, 0),
+  ...[[5, 17], [-17, -5]].map(([x0, x1]) => cube([x0, 15, -1], [x1, 17, 1], { u: 32, v: 0, w: 12, h: 2, d: 2 }, limb, 2))
+]
+
+// twelve rods in three rings round the head
+const blaze = () => [
+  cube([-4, 24, -4], [4, 32, 4], { u: 0, v: 0, w: 8, h: 8, d: 8 }, upright, 1),
+  ...[[16, [[9, 0], [-9, 0], [0, 9], [0, -9]]], [8, [[5, 5], [-5, 5], [5, -5], [-5, -5]]], [0, [[5, 0], [-5, 0], [0, 5], [0, -5]]]]
+    .flatMap(([y, spots]) => spots.map(([x, z]) => cube([x - 1, y, z - 1], [x + 1, y + 8, z + 1], { u: 0, v: 16, w: 2, h: 8, d: 2 }, limb, 2)))
+]
+
+// the opaque core of the sheet (the outer shell is translucent) with its eyes and mouth
+const slime = () => [
+  cube([-4, 0, -4], [4, 8, 4], { u: 0, v: 16, w: 6, h: 6, d: 6 }, upright, 0),
+  cube([-3.5, 4, 4], [-1.5, 6, 5.2], { u: 32, v: 0, w: 2, h: 2, d: 2 }, limb, 1),
+  cube([1.5, 4, 4], [3.5, 6, 5.2], { u: 32, v: 4, w: 2, h: 2, d: 2 }, limb, 1),
+  cube([-0.5, 2, 4], [0.5, 3, 4.8], { u: 32, v: 8, w: 1, h: 1, d: 1 }, limb, 1)
+]
+
+const zombieVillager = () => [
+  cube([-4, 24, -4], [4, 34, 4], { u: 0, v: 0, w: 8, h: 10, d: 8 }, upright, 1),
+  cube([-1, 23, 4], [1, 27, 6], { u: 24, v: 0, w: 2, h: 4, d: 2 }, limb, 1),
+  cube([-4, 12, -3], [4, 24, 3], { u: 16, v: 20, w: 8, h: 12, d: 6 }, trunk, 0),
+  ...[[4, 8], [-8, -4]].map(([x0, x1]) => cube([x0, 20, -2], [x1, 24, 10], { u: 44, v: 22, w: 4, h: 12, d: 4 }, limb, 2)),
+  ...[[0, 4], [-4, 0]].map(([x0, x1]) => cube([x0, 0, -2], [x1, 12, 2], { u: 0, v: 22, w: 4, h: 12, d: 4 }, limb, 2))
 ]
 
 const SHAPES = {
@@ -98,6 +183,16 @@ const SHAPES = {
     ...[[4, 8], [-8, -4]].map(([x0, x1]) => cube([x0, 15, 3], [x1, 23, 7], { u: 40, v: 38, w: 4, h: 8, d: 4 }, limb, 2)),
     ...[[0, 4], [-4, 0]].map(([x0, x1]) => cube([x0, 0, -2], [x1, 3, 2], { u: 0, v: 22, w: 4, h: 12, d: 4 }, limb, 2))
   ] },
+  horse: { px: 32, hit: 1.6, parts: horse({ ears: { u: 19, h: 3 } }) },
+  donkey: { px: 36, hit: 1.5, parts: horse({ ears: { u: 48, h: 7 } }) },
+  wolf: { px: 16, hit: 0.85, parts: wolf() },
+  cat: { px: 12, hit: 0.7, parts: cat() },
+  fox: { px: 12, hit: 0.7, parts: fox() },
+  iron_golem: { px: 43, hit: 2.7, parts: ironGolem() },
+  snow_golem: { px: 28, hit: 1.9, parts: snowGolem() },
+  blaze: { px: 32, hit: 1.8, parts: blaze() },
+  slime: { px: 8, hit: 0.52, parts: slime() },
+  zombie_villager: { px: 34, hit: 1.95, parts: zombieVillager() },
   enderman: { px: 50, hit: 2.9, parts: [
     cube([-4, 42, -4], [4, 50, 4], { u: 0, v: 0, w: 8, h: 8, d: 8 }, upright, 1),
     cube([-4, 30, -2], [4, 42, 2], { u: 32, v: 16, w: 8, h: 12, d: 4 }, trunk, 0),
@@ -137,7 +232,22 @@ export const MOBS = {
   vindicator: ['villager', 'illager/vindicator'],
   pillager: ['villager', 'illager/pillager'],
   evoker: ['villager', 'illager/evoker'],
-  enderman: ['enderman', 'enderman/enderman']
+  enderman: ['enderman', 'enderman/enderman'],
+  illusioner: ['villager', 'illager/illusioner'],
+  zombie_villager: ['zombie_villager', 'zombie_villager/zombie_villager'],
+  horse: ['horse', 'horse/horse_brown'],
+  skeleton_horse: ['horse', 'horse/horse_skeleton'],
+  zombie_horse: ['horse', 'horse/horse_zombie'],
+  donkey: ['donkey', 'horse/donkey'],
+  mule: ['donkey', 'horse/mule'],
+  wolf: ['wolf', 'wolf/wolf'],
+  cat: ['cat', 'cat/cat_tabby'],
+  ocelot: ['cat', 'cat/ocelot'],
+  fox: ['fox', 'fox/fox'],
+  iron_golem: ['iron_golem', 'iron_golem/iron_golem'],
+  snow_golem: ['snow_golem', 'snow_golem/snow_golem'],
+  blaze: ['blaze', 'blaze/blaze'],
+  slime: ['slime', 'slime/slime']
 }
 
 export const layerName = (sheet, [x, y, w, h]) => `${ENTITY_PREFIX}${sheet}#${x},${y},${w},${h}`
