@@ -24,9 +24,11 @@
 (def start {:x 2.5 :y 64 :z 2.5})
 
 (defn ^:async answer-of
-  "nearest! called (chunk-expansions 16) from start over blocks until it answers more than :searching: [answer calls]."
-  [blocks ts range opts]
-  (let [p (tu/fake {:blocks blocks :self {:pos start}})
+  "nearest! called (chunk-expansions 16) from start over blocks until it answers more than :searching: [answer calls].
+  world (optional) is merged into the fake's spec (:entities, ...), self into its :self."
+  ([blocks ts range opts] (answer-of blocks ts range opts nil))
+  ([blocks ts range opts {:keys [world self]}]
+  (let [p (tu/fake (merge {:blocks blocks :self (merge {:pos start} self)} world))
         c {:primitives p :view (fn [] {:data mem/empty-data :now 0})}
         chunk wplan/chunk-expansions]
     (reset! targets/searches {})
@@ -36,7 +38,7 @@
         (if (and (= :searching (:status a)) (< calls 500))
           (recur (inc calls))
           (do (set! wplan/chunk-expansions chunk)
-              [a calls]))))))
+              [a calls])))))))
 
 (def near-sealed {:x 6 :y 64 :z 2})
 (def far-open {:x 20 :y 64 :z 2})
@@ -85,3 +87,14 @@
         (let [[a calls] (await (answer-of (merge floor (sealed 6 2)) [near-sealed] 0 nil))]
           (is (= {:status :found :target near-sealed :index 0} a))
           (is (= 1 calls)))))))
+
+(def zombie {:id 9 :uuid "u9" :name "zombie" :kind "hostile" :pos {:x 12.5 :y 64 :z 2.5}})
+
+(deftest a-danger-on-the-way-costs-more-at-low-health
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [ts [{:x 20 :y 64 :z 2} {:x 20 :y 64 :z 14}]
+              full (first (await (answer-of floor ts 0 nil {:world {:entities [zombie]}})))
+              low (first (await (answer-of floor ts 0 nil {:world {:entities [zombie]} :self {:health 4}})))]
+          (is (> (:cost low) (:cost full)) (str "low " (:cost low) " full " (:cost full))))))))

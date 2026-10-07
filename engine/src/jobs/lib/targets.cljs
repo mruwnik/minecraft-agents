@@ -45,10 +45,13 @@
   :dangers and :dark, default true)."
   [c pw targets range key {:keys [dangers dark] :or {dangers true dark true}}]
   {:key key :t (js/Date.now)
-   :plan (planner/create-plan (.-snapshot pw) (query c targets range)
-                              (wplan/plan-options (wworld/costed-world c pw {:dangers? dangers :dark? dark}) walk/default-weight
-                                                 (executor/planner-limits (wworld/body-policy c) (wworld/solid-fn pw))
-                                                 (assoc wplan/wide-box :maxNodes max-nodes)))})
+   :plan (let [policy (wworld/body-policy c)]
+           (planner/create-plan (.-snapshot pw) (query c targets range)
+                                (wplan/with-drops
+                                  (wplan/plan-options (wworld/costed-world c pw {:dangers? dangers :dark? dark}) walk/default-weight
+                                                      (executor/planner-limits policy (wworld/solid-fn pw))
+                                                      (assoc wplan/wide-box :maxNodes max-nodes))
+                                  policy)))})
 
 (defn answer
   "The answer of a search that is over, from its planner result r: {:status :found :target :index :cost} (cost in
