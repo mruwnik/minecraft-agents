@@ -162,18 +162,13 @@
 
 (defn block-at [p x y z] (.-name (.blockAt p #js {:x x :y y :z z})))
 
-(defn lava-dealt-with?
-  "The lava under the first cell was filled, or the failed seal was reported."
-  [{:keys [p kinds]}]
-  (boolean (or (not= "lava" (block-at p -1 62 -1)) (kinds :shelter_seal_failed))))
-
-(deftest a-3-deep-pit-deals-with-lava-its-first-dig-lays-open-below
+(deftest a-3-deep-pit-reports-lava-its-first-dig-lays-open-below
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [r (await (pit-round (plain-world {(key-of -1 62 -1) "lava"} false) {}))]
           (is (= [[-1 63 -1]] (calls (:p r) "dig")) "one cell dug, the lava showed")
-          (is (lava-dealt-with? r) "filled, or the failed seal said why"))))))
+          (is ((:kinds r) :shelter_seal_failed) "the body sank into the lava: the failed seal is said"))))))
 
 (deftest a-3-deep-pit-leaves-lava-alone-when-asked
   (async done
@@ -198,9 +193,18 @@
         (let [r (await (pit-round (plain-world {(key-of -1 63 0) "air"} false) {}))]
           (is (= [[-1 63 -1]] (calls (:p r) "dig")) "dug once, the open wall showed"))))))
 
-(deftest a-2-deep-pit-deals-with-lava-below-the-first-cell
+(deftest a-2-deep-pit-reports-lava-below-the-first-cell
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [r (await (pit-round (plain-world {(key-of -1 62 -1) "lava"} true) {}))]
-          (is (lava-dealt-with? r) "filled, or the failed seal said why"))))))
+        (let [r (await (pit-round (plain-world {(key-of 0 62 0) "lava"} true) {}))]
+          (is ((:kinds r) :shelter_seal_failed) "the body sank into the lava: the failed seal is said"))))))
+
+(deftest a-3-deep-pit-reports-lava-the-body-sinks-into
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [y [62 61 60]]
+          (let [r (await (pit-round (plain-world {(key-of -1 y -1) "lava"} false) {}))]
+            (is (= "lava" (block-at (:p r) -1 y -1)) "the body fell into it: nothing can be placed in its own cell")
+            (is ((:kinds r) :shelter_seal_failed) "the failed seal is said")))))))
