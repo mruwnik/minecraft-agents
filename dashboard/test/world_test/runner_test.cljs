@@ -850,6 +850,18 @@
                                (keeps {:expect [{:event {:kind :never} :of-job true :within-s 10}]} ended)])
           (.then (fn [oks] (is (= [true true false] (vec oks))) (done)))))))
 
+(deftest idle-grace-s-sets-how-long-a-job-case-waits-after-its-jobs-ended
+  (async done
+    (let [evs [(job-ev :completed "j1") (job-ev :done-later "j1" :time-ms 1010100)]
+          io #(fake-watch-io {} (fn [t] (filterv (fn [e] (<= (:time-ms e) t)) evs)))
+          c {:limit-s 30 :expect [{:event {:source :job :kind :done-later} :within-s 20}]}
+          watch (fn [c] (r/watch-with! (io) c 1000000 #{"j1"} (r/stall-clock 1000000)))]
+      (-> (js/Promise.all #js [(watch (assoc c :idle-grace-s 15)) (watch c)])
+          (.then (fn [[long-grace default]]
+                   (is (= [:pass] (mapv :status long-grace)) "the event 10 s after the end is waited for")
+                   (is (= [:fail] (mapv :status default)) "the default grace is 3 s")
+                   (done)))))))
+
 (deftest early-end-waits-while-a-job-of-a-trigger-is-active
   (async done
     (.then (watch-case {:limit-s 20 :expect never-expect}

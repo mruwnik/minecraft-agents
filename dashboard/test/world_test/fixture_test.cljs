@@ -90,6 +90,15 @@
 (deftest a-single-case-file-is-one-case
   (is (= ["one/x"] (map :id (f/file-cases "{:name \"x\"}" "one")))))
 
+(deftest idle-grace-s-is-a-positive-number-defaulting-to-3
+  (is (= 3 (:idle-grace-s (f/merge-case {} {}))))
+  (is (= 15 (:idle-grace-s (f/merge-case {:idle-grace-s 15} {}))) "a file default")
+  (let [ps (fn [g] (f/problems (f/merge-case {} {:name "a" :idle-grace-s g :expect [{:event {:kind :x} :within-s 1}]})))]
+    (is (empty? (ps 0.5)))
+    (is (some #(re-find #":idle-grace-s" %) (ps 0)))
+    (is (some #(re-find #":idle-grace-s" %) (ps -1)))
+    (is (some #(re-find #":idle-grace-s" %) (ps "3")))))
+
 (deftest problems-name-what-cannot-run
   (let [ps (fn [c] (f/problems (f/merge-case {} c)))]
     (is (empty? (ps {:name "a" :after [[:block [1 0 1] "stone"]]})))

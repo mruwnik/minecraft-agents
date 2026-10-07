@@ -55,6 +55,7 @@ patterns write `#at [x y z]` (absolute `[x y z]`) or `#xyz [x y z]` (absolute `{
 | `:expect` | event expectations (below) | `[]` |
 | `:after` | RCON checks after the expectations are decided (below) | `[]` |
 | `:limit-s` | the longest a run may watch the log | 120 |
+| `:idle-grace-s` | a job case whose jobs have all ended is judged this many seconds later (early end); positive number, a file default applies to its cases | 3 |
 
 Act steps:
 - `[:summon "type" p "{NBT}"]` (the runner adds `Tags:["wt"]` and `PersistenceRequired`), `[:rcon "text"]` (with `$BODY $X $Y $Z $BOX` = the body, the plot origin and the plot box; every `@e` selector must be a plot box, e.g. `kill @e[type=zombie,$BOX]`).

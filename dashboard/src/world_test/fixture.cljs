@@ -74,7 +74,8 @@
    :act []
    :expect []
    :after []
-   :limit-s 120})
+   :limit-s 120
+   :idle-grace-s 3})
 
 (def concatenated
   "Keys a case adds to its file's :defaults instead of replacing them."
@@ -235,7 +236,8 @@
       (some #(and (:count-event %) (not (and (number? (:for-s %)) (or (number? (:at-least %)) (number? (:at-most %)))))) (:expect c))
       (conj ":count-event expectations need :for-s and :at-least or :at-most")
       (some #(and (:event %) (not (number? (:within-s %)))) (:expect c)) (conj ":event expectations need :within-s")
-      (some #(and (:no-event %) (not (number? (:for-s %)))) (:expect c)) (conj ":no-event expectations need :for-s"))))
+      (some #(and (:no-event %) (not (number? (:for-s %)))) (:expect c)) (conj ":no-event expectations need :for-s")
+      (not (or (nil? (:idle-grace-s c)) (and (number? (:idle-grace-s c)) (pos? (:idle-grace-s c))))) (conj ":idle-grace-s must be a positive number of seconds"))))
 
 (defn file-cases
   "The cases of one fixture file's text: a single case map, or {:defaults {...} :cases [...]}. Each case gets :id

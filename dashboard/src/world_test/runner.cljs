@@ -29,7 +29,7 @@
        "--changed-since-pass skips a fixture file that passed fully at a recorded revision (every run passes record it, in .claude/world-test-passes.edn) when no file of the jobs and triggers it uses (and what their source names) changed since, tracked or untracked; any engine, js, trigger-default or runner change, or a change to the fixture file, runs it.\n"
        "--retry-failed N reruns each failed case (not errors or inconclusive) up to N times after the batch, on the same body; a pass on a retry is reported :flaky (counted apart, never :pass, exit 0, also the live outcome) with the first failure kept under :first-failure; not combinable with --stop-on-fail.\n"
        "--check only loads and validates the fixtures (no body, no server): one result per case, exit 1 on a parse error or problem.\n"
-       "A job case (no :register, no :wait-full true, only :event expectations pending) ends 3 s after every job it submitted has ended, failed or parked (\"no job active: ...\", :ended-early-s in the result).\n"
+       "A job case (no :register, no :wait-full true, only :event expectations pending) ends :idle-grace-s (default 3) s after every job it submitted has ended, failed or parked (\"no job active: ...\", :ended-early-s and :idle-grace-s in the result).\n"
        "Runs world fixtures (default dir engine/fixtures/world) on the reserved plot grid x/z 20000..20640, y 150 (large plots: lanes south of it, to z 22240).\n"
        "--allow-time lets a case that needs night or day set the time (each set appended to --time-log); without it\n"
        "such a case is skipped. A case that depends on the time of day (with --allow-time, every case) holds a time lock shared by phase (day cases together,\n"
@@ -948,9 +948,10 @@
     (assoc r :status :inconclusive :why "runner stalled during the case (host suspended or process stopped)")
     r))
 
-(def idle-grace-ms
-  "How long a job case waits after its last job ended, for trailing events, before it is judged."
-  3000)
+(defn idle-grace-ms
+  "How long a job case waits after its last job ended, for trailing events, before it is judged: its :idle-grace-s (default 3)."
+  [c]
+  (* 1000 (:idle-grace-s c 3)))
 
 (defn early-end?
   "Whether a case may end before its limit once its jobs are idle: it submitted jobs, has no register, does not set
@@ -994,7 +995,7 @@
                   (x/failed? results) (js/Promise.resolve (x/stop-early results))
                   (or (x/decided? results) (> t limit))
                   (js/Promise.resolve (mapv #(if (= :pending (:status %)) (assoc % :status :fail :evidence "undecided at the case's limit") %) results))
-                  (and idle (>= (- t @idle-since) idle-grace-ms))
+                  (and idle (>= (- t @idle-since) (idle-grace-ms c)))
                   (js/Promise.resolve (end-early results idle (js/Math.round (/ (- limit t) 1000))))
                   :else
                   (.then (sleep 500) poll))))]
@@ -1179,7 +1180,8 @@
                                                                  (mark-stalled
                                                                   (result (cond-> {:status (if (and (x/passed? expects) (every? :pass? afters)) :pass :fail)
                                                                                    :expects expects :afters afters}
-                                                                            (some :ended-early-s expects) (assoc :ended-early-s (some :ended-early-s expects)))))))))))))))))))
+                                                                            (some :ended-early-s expects) (assoc :ended-early-s (some :ended-early-s expects)
+                                                                                                          :idle-grace-s (:idle-grace-s rc 3)))))))))))))))))))
         (.catch (fn [e] (result {:status :error :why (.-message e)})))
         (.then (fn [r]
                  (if (and @t-start (= :fail (:status r)))
