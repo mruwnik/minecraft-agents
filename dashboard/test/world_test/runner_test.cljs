@@ -492,7 +492,12 @@
         r1 (r/settle-retries first-run [{:id "a" :run 1 :status :fail :why "y"}])]
     (is (= :fail (:status r1)))
     (is (= "x" (:why r1)))
-    (is (= 1 (:retries r1)))))
+    (is (= 1 (:retries r1)))
+    (is (= "y" (:why (:last-retry r1))) "the last retry's evidence is kept")))
+
+(deftest match-id-selects-the-exact-case
+  (is (= 2 (:retry-failed (r/parse-args #js ["--retry-failed" "2" "--match-id" "a/c1"]))))
+  (is (= "a/c1" (:match-id (r/parse-args #js ["--match-id" "a/c1"])))))
 
 (deftest only-failed-results-are-retried-and-flaky-is-not-a-failure
   (is (= 0 (r/exit-code [{:status :pass} {:status :flaky}])))

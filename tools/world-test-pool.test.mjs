@@ -117,6 +117,49 @@ test('runPool: inconclusive cases are not rerun and fail the exit code', async (
   assert.equal(log.length, 1)
   assert.equal(r.code, 1)
 })
+const runForm = (id, status, run) => form(id, status, 1, `, :run ${run}`)
+test('parsePoolArgs: --retry-failed N is the pool\'s own (not passed to children); default 1', () => {
+  const p = parsePoolArgs(['d', '--retry-failed', '3', '--phase', 'day'])
+  assert.equal(p.retries, 3)
+  assert.deepEqual(p.passthrough, ['--phase', 'day'])
+  assert.equal(parsePoolArgs(['d']).retries, 1)
+})
+test('runPool: --retry-failed N reruns a failing case exactly N times, no more', async () => {
+  const log = []
+  const run = fakeRunner(() => ({ code: 1, text: vec(form('a/c1', 'fail')) }), log)
+  const r = await runPool({ units: ['a'], workers: workerSpecs(2, 19, 'P', 0), runUnit: run, retries: 3 })
+  assert.equal(log.length, 4)
+  assert.equal(r.code, 1)
+})
+test('runPool: --retry-failed 0 reruns nothing', async () => {
+  const log = []
+  await runPool({ units: ['a'], workers: workerSpecs(2, 19, 'P', 0), runUnit: fakeRunner(() => ({ code: 1, text: vec(form('a/c1', 'fail')) }), log), retries: 0 })
+  assert.equal(log.length, 1)
+})
+test('runPool: an :error case is not rerun (the single-body runner retries failures only)', async () => {
+  const log = []
+  const r = await runPool({ units: ['a'], workers: workerSpecs(2, 19, 'P', 0), runUnit: fakeRunner(() => ({ code: 1, text: vec(form('a/c1', 'error')) }), log) })
+  assert.equal(log.length, 1)
+  assert.equal(r.code, 1)
+})
+test('runPool: --repeat results of one id are all kept, and a rerun replaces only its own run', async () => {
+  const log = []
+  const run = fakeRunner((f, match) => match
+    ? { code: 0, text: vec(runForm('a/c1', 'pass', 1)) }
+    : { code: 1, text: vec(runForm('a/c1', 'pass', 1), runForm('a/c1', 'fail', 2), runForm('a/c1', 'pass', 3)) }, log)
+  const r = await runPool({ units: ['a'], workers: workerSpecs(2, 19, 'P', 0), runUnit: run })
+  const s = splitForms(r.text).map(summarize)
+  assert.deepEqual(s.map((x) => [x.id, x.run, x.status]), [['a/c1', 1, 'pass'], ['a/c1', 2, 'flaky'], ['a/c1', 3, 'pass']])
+  assert.equal(log.length, 2)
+  assert.equal(r.code, 0)
+})
+test('runPool: a rerun asks for the exact case id (and one run), not a substring', async () => {
+  const log = []
+  const run = async (job) => { log.push(job); return job.match ? { code: 0, text: vec(form('a/c1', 'pass')) } : { code: 1, text: vec(form('a/c1', 'fail'), form('a/c10', 'pass')) } }
+  await runPool({ units: ['a'], workers: workerSpecs(2, 19, 'P', 0), runUnit: run })
+  assert.equal(log[1].match, 'a/c1')
+  assert.equal(log[1].exact, true)
+})
 test('mergeText: wraps forms in one vector', () => {
   assert.equal(mergeText(['{:a 1}', '{:b 2}']), '[{:a 1}\n {:b 2}]')
 })

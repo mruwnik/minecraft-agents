@@ -21,7 +21,7 @@
             [world-test.lease :as lease]))
 
 (def usage
-  (str "usage: node tools/world-test.mjs [fixture.edn|dir ...] [--tag T] [--match TEXT] [--repeat N] [--body NAME]\n"
+  (str "usage: node tools/world-test.mjs [fixture.edn|dir ...] [--tag T] [--match TEXT] [--match-id ID] [--repeat N] [--body NAME]\n"
        "         [--world claude] [--first-plot I] [--card ID] [--allow-time --time-log FILE] [--results FILE] [--phase day|night|night-exclusive] [--retry-failed N] [--changed-since-pass] [--stop-on-fail] [--list] [--check]\n"
        "--phase runs only the cases of that time class (case level; :any and untimed cases, and :day, count as day; a case whose first :time-set step is\n"
        "night counts as night): run day, then night, then night-exclusive so the time lock never flips mid-pass.\n"
@@ -44,6 +44,7 @@
       (empty? all) opts
       (= a "--tag") (recur more (assoc opts :tag b))
       (= a "--match") (recur more (assoc opts :match b))
+      (= a "--match-id") (recur more (assoc opts :match-id b))
       (= a "--repeat") (recur more (assoc opts :repeat (js/Number b)))
       (= a "--body") (recur more (assoc opts :body b))
       (= a "--world") (recur more (assoc opts :world b))
@@ -1240,7 +1241,7 @@
   [r1 retries]
   (if-let [[n pass] (first (keep-indexed (fn [i x] (when (= :pass (:status x)) [(inc i) x])) retries))]
     (assoc pass :status :flaky :retry n :first-failure r1)
-    (assoc r1 :retries (count retries))))
+    (assoc r1 :retries (count retries) :last-retry (last retries))))
 
 (defn retry-failed!
   "Up to n rounds: rerun! (failed results -> promise of new results in the same order) the cases still failing.

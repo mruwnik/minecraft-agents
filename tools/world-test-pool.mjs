@@ -9,7 +9,8 @@
 //   --first-plot I    first plot of body A; body k starts at I + 20 k
 //   --durations FILE  earlier --results files (repeatable): files run longest first; unseen files count as the median; none = file order
 // Every other flag (--phase, --allow-time, --time-log, --tag, ...) goes to every child, so one call is one time phase.
-// A failed or errored case is rerun once (--match its id) on a different body when the pool has one; a pass on the rerun is :flaky.
+//   --retry-failed N the pool owns retries (children never get it): a failed case (not an error or inconclusive one, as in the single-body runner)
+//                     is rerun up to N times (default 1; exactly its --match-id, one run) on a different body when the pool has one; a pass is :flaky.
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
@@ -19,8 +20,8 @@ import { fileURLToPath } from 'node:url'
 const PLOTS_PER_BODY = 20
 const LOAD_POLL_MS = 5000
 const here = path.dirname(fileURLToPath(import.meta.url))
-const POOL_VALUE_FLAGS = ['--bodies', '--body', '--first-plot', '--results', '--durations', '--max-parallel']
-const VALUE_FLAGS = ['--tag', '--match', '--repeat', '--world', '--card', '--time-log', '--phase', '--retry-failed']
+const POOL_VALUE_FLAGS = ['--bodies', '--body', '--first-plot', '--results', '--durations', '--max-parallel', '--retry-failed']
+const VALUE_FLAGS = ['--tag', '--match', '--repeat', '--world', '--card', '--time-log', '--phase', '--match-id']
 const CLOSERS = { '{': '}', '[': ']', '(': ')' }
 
 // ---- EDN text: just enough to split a results vector into its maps and read their top-level keys
@@ -60,10 +61,16 @@ const valueOf = (formText, key) => {
 }
 export const summarize = (formText) => ({
   id: JSON.parse(valueOf(formText, ':id') ?? 'null'),
+  run: Number(valueOf(formText, ':run') ?? 1),
   file: JSON.parse(valueOf(formText, ':file') ?? 'null'),
   status: (valueOf(formText, ':status') ?? ':error').slice(1),
   elapsed: Number(valueOf(formText, ':elapsed-s') ?? 0),
 })
+// the form with its :run set to run (a rerun child runs once, so reports run 1)
+const withRun = (formText, run) => {
+  const e = entries(formText).find((x) => x.key === ':run')
+  return e ? `${formText.slice(0, e.start)}${run}${formText.slice(e.end)}` : `${formText.slice(0, -1)} :run ${run}}`
+}
 const withStatus = (formText, status, extra) => {
   const e = entries(formText).find((x) => x.key === ':status')
   return `${formText.slice(0, e.start)}:${status}${formText.slice(e.end, -1)} ${extra}}`
@@ -87,7 +94,7 @@ export const unitOrder = (files, previousTexts) => {
 }
 
 export const parsePoolArgs = (args) => {
-  const p = { bodies: 1, prefix: 'ProbePool', firstPlot: 0, results: null, maxParallel: null, durations: [], paths: [], passthrough: [] }
+  const p = { bodies: 1, prefix: 'ProbePool', firstPlot: 0, results: null, maxParallel: null, durations: [], retries: 1, paths: [], passthrough: [] }
   for (let i = 0; i < args.length; i++) {
     const a = args[i]
     if (!a.startsWith('--')) { p.paths.push(a); continue }
@@ -99,6 +106,7 @@ export const parsePoolArgs = (args) => {
     else if (a === '--first-plot') p.firstPlot = Number(v)
     else if (a === '--results') p.results = v
     else if (a === '--max-parallel') p.maxParallel = Number(v)
+    else if (a === '--retry-failed') p.retries = Number(v)
     else p.durations.push(v)
   }
   return p
@@ -124,14 +132,14 @@ export const createReaper = (rm) => {
 }
 
 // ---- scheduling
-const failed = (s) => s.status === 'fail' || s.status === 'error'
+const failed = (s) => s.status === 'fail'
 const errorForm = (file, why) => `{:id ${JSON.stringify(file)}, :file ${JSON.stringify(file)}, :status :error, :evidence ${JSON.stringify(why)}}`
 
 // units: file stems; runUnit({file, match, worker}) -> promise of {code, text|null} (text = the child's results vector).
 // Resolves to {text, code}: one merged results vector, code 0 when every case passed or was flaky.
-export const runPool = async ({ units, workers, runUnit, load = () => 0, cores = 1, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) => {
+export const runPool = async ({ units, workers, runUnit, retries = 1, load = () => 0, cores = 1, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) => {
   const queue = units.map((file) => ({ file, match: null, avoid: null }))
-  const done = new Map() // case id (or file when the unit died) -> form text, in first-seen order
+  const done = new Map() // `id#run` (or file when the unit died) -> form text, in first-seen order
   let busy = 0
   let wake = []
   const notify = () => { const w = wake; wake = []; w.forEach((r) => r()) }
@@ -139,6 +147,7 @@ export const runPool = async ({ units, workers, runUnit, load = () => 0, cores =
     const i = queue.findIndex((j) => j.avoid !== worker.body || workers.length === 1)
     return i < 0 ? null : queue.splice(i, 1)[0]
   }
+  const key = (s) => `${s.id}#${s.run}`
   const record = (job, worker, res) => {
     const retryJob = { file: job.file, avoid: worker.body, retry: { body: worker.body } }
     if (!res.text && job.retry) { done.set(job.file, errorForm(job.file, `the run exited ${res.code} with no results (twice)`)); return }
@@ -150,18 +159,21 @@ export const runPool = async ({ units, workers, runUnit, load = () => 0, cores =
     const forms = splitForms(res.text).map((form) => ({ form, s: summarize(form) }))
     if (job.retry && job.match === null) { // a whole-file rerun replaces the placeholder error
       done.delete(job.file)
-      forms.forEach(({ form, s }) => done.set(s.id, form))
+      forms.forEach(({ form, s }) => done.set(key(s), form))
       return
     }
-    if (job.retry) { // a case rerun: a pass is flaky, anything else is the final result
-      for (const { form, s } of forms.filter((x) => x.s.id === job.match)) {
-        done.set(s.id, s.status === 'pass' ? withStatus(form, 'flaky', `:first-failure ${done.get(s.id)} :first-failure-body ${JSON.stringify(job.retry.body)}`) : form)
+    if (job.retry) { // a case rerun (one run of one case): a pass is flaky, a failure is rerun until the retries are spent
+      const k = `${job.match}#${job.run}`
+      for (const { form, s } of forms.map((x) => ({ ...x, form: withRun(x.form, job.run) })).filter((x) => x.s.id === job.match)) {
+        if (s.status === 'pass') done.set(k, withStatus(form, 'flaky', `:first-failure ${job.firstForm} :first-failure-body ${JSON.stringify(job.retry.body)}`))
+        else if (failed(s) && job.attempt < retries) queue.push({ ...retryJob, match: s.id, run: job.run, attempt: job.attempt + 1, firstForm: job.firstForm })
+        else done.set(k, form)
       }
       return
     }
     for (const { form, s } of forms) {
-      done.set(s.id, form)
-      if (failed(s)) queue.push({ ...retryJob, match: s.id })
+      done.set(key(s), form)
+      if (failed(s) && retries > 0) queue.push({ ...retryJob, match: s.id, run: s.run, attempt: 1, firstForm: form })
     }
   }
   const loop = async (worker) => {
@@ -170,7 +182,7 @@ export const runPool = async ({ units, workers, runUnit, load = () => 0, cores =
       if (job) {
         while (busy && load() > cores) await sleep(LOAD_POLL_MS)
         busy++
-        const res = await runUnit({ file: job.file, match: job.match, worker })
+        const res = await runUnit({ file: job.file, match: job.match, exact: job.match !== null, worker })
         record(job, worker, res)
         busy--
         notify()
@@ -194,7 +206,7 @@ const bodyCap = () => Math.max(1, (JSON.parse(fs.readFileSync(path.join(here, 'r
 
 // One child per unit: the ordinary one-body entry point (it takes the body slot and the body claim itself). Exit 75 = busy: ask again.
 const spawnChild = (script, pass, { file, match, worker }, tmpResults, reaper) => new Promise((resolve) => {
-  const argv = [script, file, ...pass, '--body', worker.body, '--first-plot', String(worker.firstPlot), '--results', tmpResults, ...(match ? ['--match', match] : [])]
+  const argv = [script, file, ...pass, '--body', worker.body, '--first-plot', String(worker.firstPlot), '--results', tmpResults, ...(match ? ['--match-id', match, '--repeat', '1'] : [])]
   const child = spawn(process.execPath, argv, { stdio: 'inherit' })
   const entry = reaper.add(child, tmpResults)
   child.on('close', (code) => { reaper.done(entry); resolve(code ?? 1) })
@@ -225,7 +237,7 @@ export const main = async (args) => {
     fs.rmSync(tmp, { force: true })
     return { code, text }
   }
-  const r = await runPool({ units, workers, runUnit, load: () => os.loadavg()[0], cores })
+  const r = await runPool({ units, workers, runUnit, retries: p.retries, load: () => os.loadavg()[0], cores })
   if (p.results) fs.writeFileSync(p.results, r.text)
   const sums = splitForms(r.text).map(summarize)
   const count = (st) => sums.filter((s) => s.status === st).length

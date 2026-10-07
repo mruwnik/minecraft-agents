@@ -116,7 +116,9 @@
   (let [cases (f/file-cases text "hostile")]
     (is (= 3 (count (f/select-cases cases {:tag "hostile"}))))
     (is (= 0 (count (f/select-cases cases {:tag "herd"}))))
-    (is (= ["hostile/glass"] (map :id (f/select-cases cases {:match "glass"}))))))
+    (is (= ["hostile/glass"] (map :id (f/select-cases cases {:match "glass"}))))
+    (is (= ["hostile/glass"] (map :id (f/select-cases cases {:match-id "hostile/glass"}))))
+    (is (empty? (f/select-cases cases {:match-id "glass"})))))
 
 (deftest commands-build-the-plot-and-place-the-body
   (let [[open glass] (f/file-cases text "hostile")
