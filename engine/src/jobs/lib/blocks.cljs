@@ -144,3 +144,27 @@
         (cond (map? r) r
               (some? r) {:reason r}
               :else {:reason :not-ready})))))
+
+(defn dig-outcome
+  "What one round of a jobs.blocks.dig child (its return r, result res, the reason its check waits with) means for the
+  cell: :dug, :missing (nothing there), :continue (the child waits on the world), :refused (a zone, claim, plan or
+  hazard), :unreachable, :cannot, or the failed dig's status as a keyword."
+  [r res waits]
+  (case r
+    :continue :continue
+    :declined (if (#{:not-allowed :hazard} (:reason waits)) :refused :unreachable)
+    (case (:reason res)
+      :dug :dug
+      :already-clear :missing
+      (:cannot :fluid) :cannot
+      (keyword (or (:status res) (:reason res))))))
+
+(defn ^:async dig-cell!
+  "Dig the one block at pos with a jobs.blocks.dig child in slot :dig (args merged over: no drops collected, no tool
+  needed, no fetch; the caller picks drops up) and say what came of it (dig-outcome)."
+  [c pos args]
+  (let [args (merge {:collect false :need-drop false :fetch false} args {:pos pos})
+        r (await (ctx/call-child c :dig 'jobs.blocks.dig args))
+        res (ctx/child-result c :dig)
+        waits (when (= :declined r) (child-wait c :dig 'jobs.blocks.dig args))]
+    (dig-outcome r res waits)))

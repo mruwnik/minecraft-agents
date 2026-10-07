@@ -3,7 +3,7 @@
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
-            [jobs.lib.tools :as tools]
+            [jobs.lib.blocks :as blocks]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
@@ -223,26 +223,28 @@
       (assoc-in m [:fails pos] n))))
 
 (defn ^:async dig-one!
-  "Dig the stray after asking the access rules once more; a refusal, a failure or a dig that did nothing is booked."
-  [c {:keys [pos block] :as stray}]
-  (let [p (:primitives c)
-        give-up (:give-up (:args c))
+  "Dig the stray (a blocks.dig child) after asking the access rules once more; a refusal, a failure or a dig that did nothing is booked."
+  [c {:keys [pos] :as stray}]
+  (let [give-up (:give-up (:args c))
         d (decide c pos)]
     (cond
       (and (vector? d) (= :refuse (first d))) (ctx/update-mem! c refuse stray (second d))
       (not= :dig d) nil
       :else
-      (let [tool (tools/best-tool (map :name (u/inventory p)) block)]
-        (when (and tool (not= tool (.-held (.self p))))
-          (await (ctx/act c :equip #js {:item tool :dest "hand"})))
+      (do
         (ctx/update-mem! c assoc :digging pos :collect true)
-        (let [status (.-status (await (ctx/act c :dig (clj->js {:pos (pos-map pos)}))))]
-          (ctx/update-mem! c dissoc :digging)
-          (case status
-            "dug" (ctx/update-mem! c update :dug (fnil inc 0))
-            "missing" nil
-            "cannot" (ctx/update-mem! c refuse stray {:reason :cannot})
-            "unreachable" (ctx/update-mem! c count-fail stray :unreachable give-up)
+        (let [outcome (await (blocks/dig-cell! c (pos-map pos)
+                                               ;; decide has judged the hazards, lava apart from water
+                                               {:for-plan (:plan (:args c)) :accept #{:fluid-adjacent :falling-block :under-feet}
+                                                :ignore-zones? (:ignore-zones? (:args c))}))]
+          (when-not (= :continue outcome) (ctx/update-mem! c dissoc :digging))
+          (case outcome
+            :continue :continue
+            :dug (ctx/update-mem! c update :dug (fnil inc 0))
+            :missing nil
+            :cannot (ctx/update-mem! c refuse stray {:reason :cannot})
+            :refused (ctx/update-mem! c count-fail stray :hazard give-up)
+            :unreachable (ctx/update-mem! c count-fail stray :unreachable give-up)
             (ctx/update-mem! c count-fail stray :failed give-up)))))))
 
 (defn ^:async walk-to!
@@ -283,11 +285,12 @@
                   (filter #(in-reach? c (:pos %)))
                   (sort-by (juxt #(- (get (:pos %) 1)) #(u/dist (u/self-pos c) (pos-map (:pos %))))))]
     (cond
-      (seq near) (do (loop [left near]
-                       (when (seq left)
-                         (await (dig-one! c (first left)))
-                         (recur (rest left))))
-                     :again)
+      (seq near) (loop [left near]
+                   (if-let [stray (first left)]
+                     (if (= :continue (await (dig-one! c stray)))
+                       :continue
+                       (recur (rest left)))
+                     :again))
       (seq ready) (await (walk-to! c (nearest c ready)))
       (seq deferred) (let [stray (nearest c (map first deferred))
                            reasons (second (first (filter #(= (:pos stray) (:pos (first %))) deferred)))]

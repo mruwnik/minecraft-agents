@@ -162,6 +162,14 @@
           (is (= 1 (count (of-kind seen :tidy.done))))
           (is (= 1 (count (of-kind seen :tidy.wrong)))))))))
 
+(deftest every-dig-goes-through-the-dig-job
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (start tidy-spec {"field" field-plan})]
+          (await (outcome eng {:plan "field"} 200))
+          (is (= 5 (count (of-kind seen :blocks.dig.done)))))))))
+
 (deftest what-is-dug-is-picked-up
   (async done
     (tu/run-async done
