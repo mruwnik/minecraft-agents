@@ -1,6 +1,6 @@
 ;; Card b2fdd061: a marker added with map.mjs add (shared places.json) is read by the body within a few seconds; go-to :place walks to it.
 ;; The marker is named and tagged for this body (it is cleaned up with the case's :places entry, which has no other use here).
-;; add-then-go-to-arrives: add, wait for the body to re-read, go-to the marker by name. unknown-name-refused: a name nobody added is :unknown-place, the body stays.
+;; add-then-go-to-arrives: add, wait for the body's world.reloaded event for places.json, go-to the marker by name. unknown-name-refused: a name nobody added is :unknown-place, the body stays.
 {:defaults
  {:tags [:movement :places :tool] :time :any
   :plot {:height 8}
@@ -10,13 +10,13 @@
  :cases
  [{:name "add-then-go-to-arrives"
    :act [[:cli "map" ["--world" "$world" "add" "marker" "hut-$tag" "--data" {:at #at [24 0 16] :kind "base"} "--by" "$tag"] {:ok true}]
-         [:wait-s 5]
+         [:await {:kind :world.reloaded :data {:files [:has [:contains "places.json"]]}} 15]
          [:job (jobs.movement.go-to {:place "hut-$tag" :range 1})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 45 :of-job true}]
    :after [[:body-near [24.5 0 16.5] 2]]}
   {:name "unknown-name-refused"
    :act [[:cli "map" ["--world" "$world" "add" "marker" "hut-$tag" "--data" {:at #at [24 0 16] :kind "base"} "--by" "$tag"] {:ok true}]
-         [:wait-s 5]
+         [:await {:kind :world.reloaded :data {:files [:has [:contains "places.json"]]}} 15]
          [:job (jobs.movement.go-to {:place "shed-$tag" :range 1})]]
    :expect [{:event {:source :job :kind :result :data {:arrived false :reason :unknown-place}} :within-s 15 :of-job true}]
    :after [[:body-near [4.5 0 16.5] 1.5]]}]}

@@ -10,12 +10,10 @@
  [{:name "done-slot-job-leaves-the-list"
    :act [[:http :take {:who "wt" :why "fixture" :idle-s 60} {:ok true}]
          [:cli "world" ["$body" "submit" "dig" #at [8 0 8] "--who" "wt" "--world" "$world"] {:ok true}]
-         [:wait-s 10]
-         [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}]]
+         [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}] 20]]
    :expect [{:event {:source :job :kind :result :data {:dug false}} :within-s 20}]}
   {:name "refused-slot-job-leaves-the-list"
    :act [[:http :take {:who "wt" :why "fixture" :idle-s 60} {:ok true}]
          [:cli "world" ["$body" "submit" "equip" "diamond_sword" "--who" "wt" "--world" "$world"] {:ok true}]
-         [:wait-s 10]
-         [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}]]
+         [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}] 20]]
    :expect [{:event {:source :job :kind :result :data {:ok false}} :within-s 20}]}]}
