@@ -1,0 +1,89 @@
+;; Cards c6fa5c5e, bd595db8, a21bbe8c (go-to's air budget). Water is swum at 0.5 s a cell; vanilla air lasts 15 s under water, comes back 4 s a second with the head out. The planner may plan 12 s of it.
+;; surface-*: glass-roofed 20 cell dives (10 s each, x 5..24 and after the middle), start in the west shaft, goal the east shaft (head in air).
+;;   Should-succeed: a 14 cell surface stretch between them (7 s with the head out = a full breath back). Should-fail: the dives joined by one cell with air over it (about 2 s of air back, 10 s + 8 s > 12 s), :why :air.
+;; replan-*: a 6 deep water shaft S (x 4), a 2 high sealed tunnel from S's bottom to the shaft F (x 5+T), land over all (feet y 6), a bedrock ridge at x 11 (y 6..9) across the plot, with a gap at z 59..63 (the walk round, 100+ blocks) or none.
+;;   The body starts at S's bottom and waits under water (/data cannot set a player's air) before go-to to the land beside F; no reflex is registered.
+;;   Should-succeed: full air takes the sealed tunnel (T 12); with air half spent and the ridge gap open it surfaces and walks (no :hurt). Should-fail: air half spent, T 32 sealed, only a lethal drowning way: :why :air-lethal.
+;; drowning-*: a 2 high water tunnel with a stone roof and an air pocket (air at y 2 over the water) in line of sight; the body waits ~10 s under water (air ~4 of 20 bubbles, vanilla 15 s) then go-to the pocket.
+;;   Should-succeed: pocket 6 cells away (3 s): arrives, the drowning is priced not refused. Should-fail: pocket 36 cells away (18 s, over 20 hp of drowning): :why :air-lethal (resistance given to keep the body alive after).
+;; Live risks: the wait gives an oxygen of about 4..10, not exact; the 36 cell line of sight.
+{:defaults
+ {:tags [:movement :water :air] :time :any
+  :plot {:height 8 :length 80 :width 16}
+  :body {:at [4.5 1 8.5] :yaw 270 :settle-s 1}
+  :limit-s 150}
+ :cases
+ [
+  ;; dive 10 s, 14 cells with the head out (the air comes back), dive 10 s
+  {:name "surface-stretch-arrives"
+   :blocks [[:fill [3 0 7] [61 4 9] "stone"]
+            [:fill [4 0 8] [59 1 8] "water"]
+            [:fill [4 2 8] [4 3 8] "air"] [:fill [59 2 8] [59 3 8] "air"]
+            [:fill [25 2 8] [38 2 8] "air"]
+            [:fill [5 2 8] [24 2 8] "glass"] [:fill [39 2 8] [58 2 8] "glass"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [59 1 8] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 150 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 150 :until {:source :job :kind :result}}]
+   :after [[:body-near [59.5 1 8.5] 3]]}
+  ;; should fail: two 10 s dives joined by one cell with air over it: the touch gives back about 2 s
+  {:name "shaft-joined-dives-refused"
+   :blocks [[:fill [3 0 7] [48 4 9] "stone"]
+            [:fill [4 0 8] [46 1 8] "water"]
+            [:fill [4 2 8] [4 3 8] "air"] [:fill [46 2 8] [46 3 8] "air"]
+            [:fill [25 2 8] [25 2 8] "air"]
+            [:fill [5 2 8] [24 2 8] "glass"] [:fill [26 2 8] [45 2 8] "glass"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [46 1 8] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived false :reason :unreachable :why :air}} :within-s 60 :of-job true}]
+   :after [[:body-near [4.5 1 8.5] 3]]}
+  ;; full air, no walk round (ridge has no gap): the 12 cell tunnel is the way and fits in the air
+  {:name "replan-full-air-takes-the-tunnel"
+   :plot {:height 12 :length 32 :width 64}
+   :blocks [[:fill [0 0 0] [31 5 63] "stone"]
+            [:fill [4 0 8] [4 5 8] "water"] [:fill [5 0 8] [16 1 8] "water"] [:fill [17 0 8] [17 5 8] "water"]
+            [:fill [11 6 0] [11 9 63] "bedrock"]]
+   :body {:at [4.5 0 8.5]}
+   :act [[:job (jobs.movement.go-to {:pos #at [18 6 8] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 120 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 120 :until {:source :job :kind :result}}]
+   :after [[:body-near [18.5 6 8.5] 3]]}
+  ;; air about half spent: the tunnel does not fit, so swim up the shaft (about 1.5 s) and walk round the ridge; no drowning
+  {:name "replan-low-air-surfaces-and-walks-round"
+   :plot {:height 12 :length 32 :width 64}
+   :blocks [[:fill [0 0 0] [31 5 63] "stone"]
+            [:fill [4 0 8] [4 5 8] "water"] [:fill [5 0 8] [16 1 8] "water"] [:fill [17 0 8] [17 5 8] "water"]
+            [:fill [11 6 0] [11 9 58] "bedrock"]]
+   :body {:at [4.5 0 8.5]}
+   :act [[:wait-s 7] [:job (jobs.movement.go-to {:pos #at [18 6 8] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 150 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 150 :until {:source :job :kind :result}}]
+   :after [[:body-near [18.5 6 8.5] 3]]}
+  ;; should fail: air half spent, only a 32 cell tunnel (16 s) with no way round: drowning past 20 hp is refused, not planned
+  {:name "replan-low-air-lethal-tunnel-refused"
+   :plot {:height 12 :length 44 :width 64}
+   :blocks [[:fill [0 0 0] [43 5 63] "stone"]
+            [:fill [4 0 8] [4 5 8] "water"] [:fill [5 0 8] [36 1 8] "water"] [:fill [37 0 8] [37 5 8] "water"]
+            [:fill [11 6 0] [11 9 63] "bedrock"]]
+   :body {:at [4.5 0 8.5] :effects [["resistance" 600 4]]}
+   :act [[:wait-s 8] [:job (jobs.movement.go-to {:pos #at [38 6 8] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived false :reason :unreachable :why :air-lethal}} :within-s 60 :of-job true}]
+   :after [[:body-near [4.5 0 8.5] 8]]}
+  ;; oxygen about 4: the seen pocket 6 cells away is gone to (a few hp of drowning is fine)
+  {:name "drowning-body-swims-to-seen-air"
+   :plot {:height 8 :length 24 :width 16}
+   :blocks [[:fill [3 0 7] [22 4 9] "stone"]
+            [:fill [4 0 8] [20 1 8] "water"]
+            [:fill [11 2 8] [13 2 8] "air"]]
+   :body {:at [5.5 0 8.5] :yaw 270}
+   :act [[:wait-s 10] [:job (jobs.movement.go-to {:pos #at [12 1 8] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 60 :of-job true}]
+   :after [[:body-near [12.5 1 8.5] 4]]}
+  ;; should fail: the pocket is 36 cells (18 s) away; drowning on the way would be lethal
+  {:name "drowning-body-far-air-lethal-refused"
+   :plot {:height 8 :length 64 :width 16}
+   :blocks [[:fill [3 0 7] [62 4 9] "stone"]
+            [:fill [4 0 8] [60 1 8] "water"]
+            [:fill [40 2 8] [42 2 8] "air"]]
+   :body {:at [5.5 0 8.5] :yaw 270 :effects [["resistance" 600 4]]}
+   :act [[:wait-s 10] [:job (jobs.movement.go-to {:pos #at [41 1 8] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived false :reason :unreachable :why :air-lethal}} :within-s 60 :of-job true}]
+   :after [[:body-near [5.5 0 8.5] 3]]}]}

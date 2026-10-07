@@ -1,0 +1,84 @@
+;; Cards 365ddcb9, ea1561a3 (go-to's air model follows the helmet): a sealed, glass-roofed water tunnel of L cells (0.5 s a cell, so L/2 s under water,
+;; vanilla air 15 s), the body starts at its west shaft with its head in air and go-to's the east shaft (head in air). Vanilla: Respiration n lasts about (n+1) x 15 s,
+;; a turtle helmet gives 10 s of Water Breathing a dive; a Water Breathing potion is deliberately NOT counted by the planner (its sensed duration never counts down).
+;; The planner plans a dive up to 12 s of unarmoured air (+ the 10 s turtle grace x the drain), so gear that covers the dive arrives (no :hurt), the rest is refused with :why :air.
+;; Should-succeed: turtle + Respiration III 20 s and 50 s; Respiration III helmet 20 s; turtle only 20 s. Should-fail: bare head 20 s; Water Breathing only 20 s; turtle + Respiration III 65 s (real air to 0 at ~70 s; planner stops at 58 s).
+;; Gear is put on with /item replace (armor.head) in the act; the body is cleared before each case. Live risk: the 100 and 130 cell tunnels need the whole water line seen from the west shaft (a refusal for another :why fails the case).
+{:defaults
+ {:tags [:movement :water :air] :time :any
+  :plot {:height 8 :length 150 :width 16}
+  :body {:at [4.5 1 8.5] :yaw 270 :settle-s 1}
+  :limit-s 150}
+ :cases
+ [
+  {:name "turtle-respiration3-dive-20s-arrives"
+   :blocks [[:fill [3 0 7] [46 4 9] "stone"]
+            [:fill [4 0 8] [45 1 8] "water"]
+            [:fill [4 2 8] [4 3 8] "air"] [:fill [45 2 8] [45 3 8] "air"]
+            [:fill [5 2 8] [44 2 8] "glass"]]
+   :act [[:rcon "item replace entity $BODY armor.head with minecraft:turtle_helmet[enchantments={respiration:3}]"] [:wait-s 1]
+         [:job (jobs.movement.go-to {:pos #at [45 1 8] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 120 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 120 :until {:source :job :kind :result}}]
+   :after [[:body-near [45.5 1 8.5] 3]]}
+  ;; tunnel 100 cells = 50 s: planned up to 58 s, real air lasts ~70 s
+  {:name "turtle-respiration3-dive-50s-arrives"
+   :blocks [[:fill [3 0 7] [106 4 9] "stone"]
+            [:fill [4 0 8] [105 1 8] "water"]
+            [:fill [4 2 8] [4 3 8] "air"] [:fill [105 2 8] [105 3 8] "air"]
+            [:fill [5 2 8] [104 2 8] "glass"]]
+   :act [[:rcon "item replace entity $BODY armor.head with minecraft:turtle_helmet[enchantments={respiration:3}]"] [:wait-s 1]
+         [:job (jobs.movement.go-to {:pos #at [105 1 8] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 180 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 180 :until {:source :job :kind :result}}]
+   :after [[:body-near [105.5 1 8.5] 3]]}
+  {:name "respiration3-helmet-dive-20s-arrives"
+   :blocks [[:fill [3 0 7] [46 4 9] "stone"]
+            [:fill [4 0 8] [45 1 8] "water"]
+            [:fill [4 2 8] [4 3 8] "air"] [:fill [45 2 8] [45 3 8] "air"]
+            [:fill [5 2 8] [44 2 8] "glass"]]
+   :act [[:rcon "item replace entity $BODY armor.head with minecraft:iron_helmet[enchantments={respiration:3}]"] [:wait-s 1]
+         [:job (jobs.movement.go-to {:pos #at [45 1 8] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 120 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 120 :until {:source :job :kind :result}}]
+   :after [[:body-near [45.5 1 8.5] 3]]}
+  ;; turtle only: 10 s grace + 15 s of air; planner limit 22 s
+  {:name "turtle-only-dive-20s-arrives"
+   :blocks [[:fill [3 0 7] [46 4 9] "stone"]
+            [:fill [4 0 8] [45 1 8] "water"]
+            [:fill [4 2 8] [4 3 8] "air"] [:fill [45 2 8] [45 3 8] "air"]
+            [:fill [5 2 8] [44 2 8] "glass"]]
+   :act [[:rcon "item replace entity $BODY armor.head with minecraft:turtle_helmet"] [:wait-s 1]
+         [:job (jobs.movement.go-to {:pos #at [45 1 8] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 120 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 120 :until {:source :job :kind :result}}]
+   :after [[:body-near [45.5 1 8.5] 3]]}
+  ;; should fail: no gear, 20 s under water against 15 s of air
+  {:name "bare-head-dive-20s-refused"
+   :blocks [[:fill [3 0 7] [46 4 9] "stone"]
+            [:fill [4 0 8] [45 1 8] "water"]
+            [:fill [4 2 8] [4 3 8] "air"] [:fill [45 2 8] [45 3 8] "air"]
+            [:fill [5 2 8] [44 2 8] "glass"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [45 1 8] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived false :reason :unreachable :why :air}} :within-s 60 :of-job true}]
+   :after [[:body-near [4.5 1 8.5] 3]]}
+  ;; should fail: only a Water Breathing potion; the planner does not count it, so the dive is refused like a bare head
+  {:name "water-breathing-only-dive-refused"
+   :blocks [[:fill [3 0 7] [46 4 9] "stone"]
+            [:fill [4 0 8] [45 1 8] "water"]
+            [:fill [4 2 8] [4 3 8] "air"] [:fill [45 2 8] [45 3 8] "air"]
+            [:fill [5 2 8] [44 2 8] "glass"]]
+   :body {:effects [["water_breathing" 600 0]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [45 1 8] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived false :reason :unreachable :why :air}} :within-s 60 :of-job true}]
+   :after [[:body-near [4.5 1 8.5] 3]]}
+  ;; should fail: 65 s is past the planner limit (58 s); the old unit-bug limit planned 88 s
+  {:name "turtle-respiration3-dive-65s-refused"
+   :blocks [[:fill [3 0 7] [136 4 9] "stone"]
+            [:fill [4 0 8] [135 1 8] "water"]
+            [:fill [4 2 8] [4 3 8] "air"] [:fill [135 2 8] [135 3 8] "air"]
+            [:fill [5 2 8] [134 2 8] "glass"]]
+   :act [[:rcon "item replace entity $BODY armor.head with minecraft:turtle_helmet[enchantments={respiration:3}]"] [:wait-s 1]
+         [:job (jobs.movement.go-to {:pos #at [135 1 8] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived false :reason :unreachable :why :air}} :within-s 60 :of-job true}]
+   :after [[:body-near [4.5 1 8.5] 3]]}]}
