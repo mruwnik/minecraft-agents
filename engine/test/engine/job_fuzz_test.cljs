@@ -114,6 +114,16 @@
 (def read-cap "Calls allowed since the last act: a loop over reads never awaits, so only a count stops it." 60000)
 (def max-rounds 12)
 
+(def current-case "The case run-all is running: acts started now belong to it." (atom nil))
+
+(def owners "Act promise -> the case that started it, so a late stray rejection is blamed on that case." (js/WeakMap.))
+
+(defn own!
+  "Tag promise r with the current case; returns r."
+  [r]
+  (when-let [c @current-case] (.set owners r c))
+  r)
+
 (defn capped-primitives
   "p with every act (a call returning a promise) counted in calls (reset before each round); past the cap one throws, so a loop that never ends fails instead of hanging. The act it drops is handled, so its late rejection (a cut) is not a stray one."
   [p calls hit act-cap]
@@ -126,6 +136,7 @@
                                    (throw (js/Error. "fuzz: call cap (runaway job)")))
                                  (let [r (.apply v t (to-array args))]
                                    (when (and r (fn? (.-then r)))
+                                     (own! r)
                                      (swap! calls assoc :all 0))
                                    (when (and r (fn? (.-then r)) (> (:acts (swap! calls update :acts inc)) act-cap))
                                      (reset! hit :act)
@@ -161,12 +172,13 @@
   (remove #(contains? (:failed state) %) (:list state)))
 
 (defn world-sig
-  "What a job can change in the fake world p: blocks, bag, containers, drops, entities, the body's position (block states and ages, furnaces, worn gear). Job memory, chat and self stats are left out: retry counters and timestamps change on a spin."
+  "What a job can change in the fake world p: blocks, bag, containers, drops, entities, the body's position (block states and ages, furnaces, enchant tables, unloaded cells, rain, worn gear). Job memory, chat and self stats are left out: retry counters and timestamps change on a spin. :time is left out: every wait or sleep moves it, so a job that only waits would look like progress."
   [p]
   (let [w @(fake/state p)]
     {:blocks (:blocks w) :inventory (:inventory w) :containers (:containers w) :drops (:drops w)
      :entities (:entities w) :pos (get-in w [:self :pos])
-     :states (:states w) :ages (:ages w) :furnaces (:furnaces w) :equipment (:equipment w)}))
+     :states (:states w) :ages (:ages w) :furnaces (:furnaces w) :equipment (:equipment w)
+     :enchant-tables (:enchant-tables w) :unloaded (:unloaded w) :raining (:raining w)}))
 
 (defn progressing?
   "True when a world signature in the last progress-window rounds is new: not seen before in sigs (the world before round 1, then one per round, oldest first). A job that cycles through signatures it has already had is spinning."
@@ -292,24 +304,29 @@
   (js/Promise. (fn [resolve] (js/setTimeout resolve 0))))
 
 (defn ^:async run-all
-  "The defects of every case ([{:job :kind :detail :repro ...}]). A case that throws, or leaves a promise rejected with no handler, is that case's defect (with its repro line), never a crash of the run."
+  "The defects of every case ([{:job :kind :detail :repro ...}]). A case that throws, or leaves a promise rejected with no handler, is that case's defect (with its repro line), never a crash of the run. A stray rejection is blamed on the case that started its act (see own!), else on the case running when it fired."
   ([opts] (run-all opts (job-cases opts) run-case))
   ([_opts cases run]
-   (let [stray (atom [])
-         handler #(swap! stray conj (str %))]
+   (let [strays (atom [])
+         handler (fn [reason promise] (swap! strays conj [(or (.get owners promise) @current-case) (str reason)]))]
      (.on js/process "unhandledRejection" handler)
      (try
-       (loop [todo cases found []]
-         (if-let [c (first todo)]
-           (let [_ (when (env "FUZZ_TRACE" nil) (println "fuzz" (:job c) (:seed c)))
-                 _ (reset! stray [])
-                 res (try (await (run c))
-                          (catch :default e {:job (:job c) :defects [[:harness-threw (str e)]]}))
-                 _ (await (tick!))
-                 defects (concat (:defects res) (map (fn [s] [:stray-rejection s]) @stray))]
-             (recur (rest todo) (into found (map (fn [[kind detail]] (assoc (select-keys res [:job :args :ground]) :repro (repro-line c) :kind kind :detail detail))) defects)))
-           found))
-       (finally (.off js/process "unhandledRejection" handler))))))
+       (let [results (loop [todo cases done []]
+                       (if-let [c (first todo)]
+                         (let [_ (when (env "FUZZ_TRACE" nil) (println "fuzz" (:job c) (:seed c)))
+                               _ (reset! current-case c)
+                               res (try (await (run c))
+                                        (catch :default e {:job (:job c) :defects [[:harness-threw (str e)]]}))]
+                           (recur (rest todo) (conj done [c res])))
+                         done))
+             _ (await (tick!))
+             stray-of (group-by first @strays)]
+         (vec (for [[c res] results
+                    [kind detail] (concat (:defects res) (map (fn [[_ s]] [:stray-rejection s]) (stray-of c)))]
+                (assoc (select-keys res [:job :args :ground]) :repro (repro-line c) :kind kind :detail detail))))
+       (finally
+         (reset! current-case nil)
+         (.off js/process "unhandledRejection" handler))))))
 
 (defn summary [found]
   (->> (group-by (juxt (comp str :job) :kind) found)
@@ -416,9 +433,29 @@
     (is (not (progressing? sigs)))
     (is (= [[:runaway "still running after 12 rounds"]] (runaway 'jobs.farm.till nil (not (progressing? sigs)))))))
 
+(def every-third-round
+  "Change functions by round mod 3: round 0 places a block, rounds 1 and 2 leave the world as it is."
+  [(fn [w i] (assoc-in w [:blocks [1 64 i]] "dirt")) (fn [w _] w) (fn [w _] w)])
+
 (deftest a-job-that-changes-a-block-every-third-round-is-progress
-  (let [sigs (sigs-over 12 (fn [w i] (assoc-in w [:blocks [1 64 i]] (nth ["dirt" nil nil] (mod i 3)))))]
+  (let [sigs (sigs-over 12 (fn [w i] ((nth every-third-round (mod i 3)) w i)))]
+    (is (= 1 (count (distinct (take 3 (drop 1 sigs))))) "the two repeat rounds leave the signature as it was")
     (is (every? progressing? (map #(take % sigs) (range 5 14))))))
+
+(deftest the-same-job-changing-nothing-is-a-runaway
+  (let [sigs (sigs-over 12 (fn [w _] w))]
+    (is (not (progressing? sigs)))
+    (is (= [[:runaway "still running after 12 rounds"]] (runaway 'jobs.farm.till nil (not (progressing? sigs)))))))
+
+(deftest a-stray-rejection-is-blamed-on-the-case-that-started-its-act
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [late (fn [c] (own! (js/Promise. (fn [_ reject] (js/setTimeout #(reject (str "late " (:job c))) 5)))))
+              run (fn ^:async r [c] (when (= 'a (:job c)) (late c)) (await (js/Promise. (fn [r] (js/setTimeout r (if (= 'a (:job c)) 0 40))))) {:job (:job c) :defects []})
+              cases [{:job 'a :seed 1 :k 0 :base 1 :n 2} {:job 'b :seed 2 :k 1 :base 1 :n 2}]
+              found (await (run-all {} cases run))]
+          (is (= [['a :stray-rejection "late a"]] (map (juxt :job :kind :detail) found))))))))
 
 (def world-parts
   "[part path value]: a change a job can make to each part of the fake world that world-sig must see."
@@ -431,7 +468,10 @@
    [:states [:states [1 64 1]] {:open true}]
    [:ages [:ages [1 64 1]] 2]
    [:furnaces [:furnaces [1 64 1]] {:smelted 1}]
-   [:equipment [:equipment "head"] {:name "iron_helmet" :count 1}]])
+   [:equipment [:equipment "head"] {:name "iron_helmet" :count 1}]
+   [:enchant-tables [:enchant-tables [1 64 1]] {:lapis 1}]
+   [:unloaded [:unloaded] #{[1 64 1]}]
+   [:raining [:raining] true]])
 
 (deftest every-part-of-the-world-a-job-can-change-shows-in-the-signature
   (doseq [[part path value] world-parts]
