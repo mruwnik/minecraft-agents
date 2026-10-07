@@ -90,10 +90,24 @@
                 '(jobs.survival.dig-niche {:reach 100000})
                 '(jobs.survival.dig-niche {:reach 0})
                 '(jobs.survival.dig-niche {:roof-height 100000})
-                '(jobs.farm.till {:center [0 64 0] :radius 1000000})]]
+                '(jobs.farm.till {:center [0 64 0] :radius 1000000})
+                '(jobs.farm.find-spot {:w 17})
+                '(jobs.farm.find-spot {:range 49})
+                '(jobs.farm.find-spot {:depth 17})
+                '(jobs.farm.find-spot {:limit 9})
+                '(jobs.movement.go-to {:pos [1 64 1] :leg-s 0.05})
+                '(jobs.movement.go-to {:pos [1 64 1] :leg-s 120.1})
+                '(jobs.survival.dig-niche {:reach 33})
+                '(jobs.farm.till {:center [0 64 0] :radius 8})
+                '(jobs.farm.till {:center [0 64 0] :radius -1})]]
     (is (string? (expr/problem registry/jobs form)) (pr-str form)))
   (doseq [form ['(jobs.farm.find-spot {:w 16 :h 16 :range 48 :depth 16 :limit 8})
                 '(jobs.movement.go-to {:pos [1 64 1] :leg-s 5})
                 '(jobs.survival.dig-niche {:reach 16 :roof-height 4})
-                '(jobs.farm.till {:center [0 64 0] :radius 7})]]
+                '(jobs.farm.till {:center [0 64 0] :radius 7})
+                '(jobs.farm.find-spot {:limit 1})
+                '(jobs.movement.go-to {:pos [1 64 1] :leg-s 0.1})
+                '(jobs.movement.go-to {:pos [1 64 1] :leg-s 120})
+                '(jobs.survival.dig-niche {:reach 32})
+                '(jobs.farm.till {:center [0 64 0] :radius 0})]]
     (is (nil? (expr/problem registry/jobs form)) (pr-str form))))

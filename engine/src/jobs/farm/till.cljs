@@ -126,14 +126,14 @@
                              (when (gate/refused? v) v))))]
     (if (string? cs)
       (ctx/wait c {:reason :bad-args :why cs})
-    (and (or (:ignore-zones? (:args c)) (some? (known/zones c))
-             (access/decline! c :till.declined "till" {:reason :no-zones}))
-         (let [{:keys [todo? work? verdicts]} (survey c cs refuse)]
-           (cond
-             (and (seq verdicts) (not work?))
-             (access/decline! c :till.declined "till" (assoc (access/refusal-fields verdicts) :reason :refused))
+      (and (or (:ignore-zones? (:args c)) (some? (known/zones c))
+               (access/decline! c :till.declined "till" {:reason :no-zones}))
+           (let [{:keys [todo? work? verdicts]} (survey c cs refuse)]
+             (cond
+               (and (seq verdicts) (not work?))
+               (access/decline! c :till.declined "till" (assoc (access/refusal-fields verdicts) :reason :refused))
 
-             :else (or (not todo?) (some? (hoe-of (:primitives c))) (fetch/check c 'jobs.farm.till no-hoe))))))))
+               :else (or (not todo?) (some? (hoe-of (:primitives c))) (fetch/check c 'jobs.farm.till no-hoe))))))))
 
 (defn skip!
   "Record the cells as skipped with reason and emit one :till.skipped each."
