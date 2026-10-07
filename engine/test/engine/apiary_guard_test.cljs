@@ -102,7 +102,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [w (-> (fire-world {:inventory (inv "campfire" 1)}) (open-side "3,64,0") (update :blocks assoc "2,65,0" "red_carpet"))
-              {:keys [eng p]} (setup w)
+              {:keys [eng p]} (setup w true)
               result (await (child-outcome eng job {} 80))]
           (is (= 1 (:sunk result)))
           (is (= 1 (:carpeted result)))
