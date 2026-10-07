@@ -229,7 +229,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng listed]}
-              (await (hide-steps '(jobs.survival.retreat {:quiet-s 100000})
+              (await (hide-steps '(jobs.survival.retreat {:quiet-s 20000})
                                  {:blocks long-dead-end :inventory [{:name "cobblestone" :count 20}]
                                   :entities [(zombie-at 4)]}
                                  [[[(zombie-at 12)] 0] [[] 10000]]))]
