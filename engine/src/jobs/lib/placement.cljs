@@ -14,7 +14,8 @@
     wall torches and ladders hang on the block behind them, looking into it
   Anything else is placed plainly. A usable neighbour (chest, table, door ...) is clicked only when nothing else
   gives the state, and then sneaking. Directions are mineflayer's: yaw 0 looks north, pi/2 west; pitch -pi/2 down."
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [shadow.resource :as rc]))
 
 (def pi js/Math.PI)
 
@@ -33,7 +34,8 @@
     "fern" "large_fern" "snow" "vine" "dead_bush" "seagrass" "tall_seagrass" "light" "leaf_litter" "glow_lichen" "hanging_roots"})
 
 (def usable
-  #"^(chest|trapped_chest|ender_chest|barrel|furnace|smoker|blast_furnace|crafting_table|hopper|dispenser|dropper|brewing_stand|enchanting_table|anvil|chipped_anvil|damaged_anvil|grindstone|stonecutter|loom|cartography_table|smithing_table|lectern|bell|beacon|lever|note_block|jukebox|cake|composter|flower_pot|repeater|comparator|daylight_detector|respawn_anchor|crafter)$|_(door|trapdoor|fence_gate|bed|button|shulker_box)$|^shulker_box$")
+  "Blocks a right-click works (opens, toggles, uses). The table is interactable_blocks.txt, also read by engine/js/blocks.mjs."
+  (re-pattern (str/trim (rc/inline "jobs/lib/interactable_blocks.txt"))))
 
 (def thin
   "Blocks without a full face to hang a torch or ladder on, or to stand a door on."
