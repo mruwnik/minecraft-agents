@@ -2,6 +2,7 @@
   "jobs.movement.mount against the fake world: every mount status maps to a job status."
   (:require [cljs.test :refer [deftest is async]]
             [engine.test-util :as tu]
+            [engine.registry :as registry]
             [jobs.movement.mount :as mount]
             [jobs.movement.vehicle :as vehicle]))
 
@@ -17,9 +18,11 @@
      :act (fn [k args] (.call (aget p (name k)) p "t" args))
      :seen seen}))
 
-(defn ^:async run [spec args]
+(defn ^:async run [spec args & [mount-status child]]
   (let [p (doto (tu/fake spec) (.setOwner "t"))
-        c (bare-ctx p args)
+        _ (when mount-status (set! (.-mount p) (fn [_ _] (js/Promise.resolve #js {:status mount-status}))))
+        c (cond-> (bare-ctx p args) child (assoc :engine {:jobs registry/jobs} :call-child (fn [_ _ _] (js/Promise.resolve child))
+                                                 :child-result (fn [_] {:reason :blocked})))
         r (await (mount/round c))]
     {:r r :p p :results (filterv #(= :result (first %)) @(:seen c)) :seen @(:seen c)}))
 
@@ -71,9 +74,57 @@
               o (await (run {:entities [far boat]} {:name "oak_boat"}))]
           (is (= 9 (:id (result-of o)))))))))
 
-(deftest a-name-with-nothing-of-that-name_is_gone
+(deftest a-name-with-nothing-of-that-name-is-gone
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [o (await (run {:entities [boat]} {:name "pig"}))]
           (is (= :gone (:reason (result-of o)))))))))
+
+(deftest a-name-skips-an-occupied-nearer-vehicle
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [taken (assoc boat :id 5 :name "minecart" :passengers [77])
+              free (assoc boat :id 6 :name "minecart" :pos {:x 1.5 :y 64 :z 1.0})
+              o (await (run {:entities [(assoc taken :pos {:x 1.5 :y 64 :z 0.5}) free]} {:name "minecart"}))]
+          (is (= 6 (:id (result-of o)))))))))
+
+(deftest an-occupied-vehicle-by-id-is-occupied
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [o (await (run {:entities [(assoc boat :passengers [77 78])]} {:id 9}))]
+          (is (= :occupied (:reason (result-of o)))))))))
+
+(deftest mount-statuses-map-to-reasons
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[status reason] [["hand-full" :hand-full] ["out-of-reach" :unreachable] ["weird" :failed]]]
+          (let [o (await (run {:entities [boat]} {:id 9} status))]
+            (is (= reason (:reason (result-of o))) status)))))))
+
+(deftest aboard-another-vehicle-is-aboard-other
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [o (await (run {:self {:vehicle 5} :entities [boat (assoc boat :id 5 :name "minecart")]} {:id 9}))]
+          (is (= :aboard-other (:reason (result-of o)))))))))
+
+(deftest a-walk-that-waits-on-the-world-continues
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [far (assoc boat :pos {:x 1.5 :y 64 :z 30.5})
+              o (await (run {:entities [far]} {:id 9} nil :continue))]
+          (is (= :continue (:r o)))
+          (is (empty? (:results o))))))))
+
+(deftest a-failed-walk-twice-is-unreachable
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [far (assoc boat :pos {:x 1.5 :y 64 :z 30.5})
+              o (await (run {:entities [far]} {:id 9} nil :done))]
+          (is (= :unreachable (:reason (result-of o)))))))))

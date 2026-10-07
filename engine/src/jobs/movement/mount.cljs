@@ -5,13 +5,15 @@
 
 (def doc
   "Get on the boat, raft, minecart or rideable mob :id, or the nearest one in sight named :name (e.g. oak_boat, pig). One call is the whole attempt: find the entity in sight, walk
-  into reach (jobs.movement.go-to, range 2, no escalation), mount with an empty hand, wait for the server to seat the body.
-  Holds the vehicle (jobs.movement.vehicle) while the job lives, so the :mounted trigger does not step the body off.
+  into reach (jobs.movement.go-to, range 2, no escalation), mount (a mob needs an empty hand, a boat or minecart does not), wait for the server to seat the body.
+  Holds the vehicle (jobs.movement.vehicle) while the job lives, so the :mounted trigger does not step the body off:
+  the body stays aboard only in manual mode, otherwise the hold ends with the job and the trigger steps it off ~30 s later.
+  By :name it prefers a vehicle with no rider.
   The check always passes. It yields :continue only when the walk waits on the world.
 
   Ends {:status :done :id :vehicle name} (plus :already true when aboard it already), info vehicle.mounted, or
   {:status :stopped :reason r}: :bad-args, :gone (no such entity in sight), :not-mountable, :occupied, :hand-full
-  (the held item cannot be put away), :timeout (the server never seated the body), :unreachable (the walk failed twice),
+  (a mob, with an item in hand that cannot be put away), :timeout (the server never seated the body), :unreachable (the walk failed twice),
   :aboard-other (already on another vehicle), :failed (any other status, with :mount the primitive's).")
 
 (def args
@@ -27,12 +29,12 @@
   (first (filter #(= id (.-id %)) (array-seq (.entities p #js {:radius 64 :max 64})))))
 
 (defn nearest-named
-  "The id of the nearest sensed entity named name, or nil."
+  "The id of the nearest sensed entity named name, a free one before an occupied one, or nil."
   [c name]
   (let [p (:primitives c) me (u/self-pos c)]
     (some->> (array-seq (.entities p #js {:radius 64 :max 64}))
              (filter #(= name (.-name %)))
-             (sort-by #(u/dist me (u/pos-of (.-pos %))))
+             (sort-by (juxt #(pos? (count (.-passengers %))) #(u/dist me (u/pos-of (.-pos %)))))
              first .-id)))
 
 (defn stop! [c id reason & [more]]

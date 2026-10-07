@@ -148,7 +148,7 @@ test('mountVehicle refuses', async t => {
     ['gone', {}, { id: 9 }, { status: 'gone' }],
     ['not-mountable', { entities: [entity(9, 'cow')] }, { id: 9 }, { status: 'not-mountable' }],
     ['out-of-reach', { entities: [entity(9, 'oak_boat', { position: vec3(5, 64, 0) })] }, { id: 9 }, { status: 'out-of-reach' }],
-    ['hand-full', { entities: [boat], held: { name: 'lead', count: 1 }, free: false }, { id: 9 }, { status: 'hand-full' }]
+    ['hand-full', { entities: [entity(9, 'pig')], held: { name: 'lead', count: 1 }, free: false }, { id: 9 }, { status: 'hand-full' }]
   ]
   for (const [label, spec, a, expected] of rows) {
     await t.test(label, async () => {
@@ -166,11 +166,22 @@ test('mountVehicle refuses', async t => {
   })
 })
 
+test('mountVehicle boards a boat or minecart with the hand as it is', async t => {
+  for (const name of ['oak_boat', 'bamboo_chest_raft', 'minecart']) {
+    await t.test(name, async () => {
+      const bot = makeBot({ entities: [entity(9, name)], held: { name: 'lead', count: 1 }, free: false, onMount: seat })
+      trackVehicles(bot)
+      assert.equal((await mountVehicle(bot, ctx(), { id: 9 }, opts)).status, 'mounted')
+      assert.deepEqual(bot.calls, ['lookAt', 'mount'])
+    })
+  }
+})
+
 test('mountVehicle mounts once the server lists the body, emptying the hand first', async () => {
-  const bot = makeBot({ entities: [entity(9, 'oak_boat')], held: { name: 'lead', count: 1 }, onMount: seat })
+  const bot = makeBot({ entities: [entity(9, 'pig')], held: { name: 'lead', count: 1 }, onMount: seat })
   trackVehicles(bot)
   const r = await mountVehicle(bot, ctx(), { id: 9 }, opts)
-  assert.deepEqual(r, { status: 'mounted', vehicle: { id: 9, uuid: 'u-9', name: 'oak_boat' } })
+  assert.deepEqual(r, { status: 'mounted', vehicle: { id: 9, uuid: 'u-9', name: 'pig' } })
   assert.deepEqual(bot.calls, ['unequip', 'lookAt', 'mount'])
 })
 

@@ -28,6 +28,9 @@ export const seatsOf = name => {
   return 0
 }
 
+// A boat or minecart takes the body with anything in hand; a mob would be leashed or fed by a held lead or food.
+export const needsEmptyHand = name => seatsOf(name) > 0 && !BOAT.test(name) && !CHEST_BOAT.test(name) && name !== 'minecart'
+
 // Why a mount must not be tried, from the name and how many ride it now; null when it may. A non-player in a boat's
 // front seat does not count against the body: vanilla puts a boarding player first.
 export const mountRefusal = (name, riders) => {
@@ -109,7 +112,7 @@ const waitFor = async (ctx, done, ms) => {
   return done()
 }
 
-// Gets the body on entity a.id: refused before any use when it cannot work, then a use with an empty hand (a held
+// Gets the body on entity a.id: refused before any use when it cannot work, then a use, with an empty hand for a mob (a held
 // lead or food would leash or feed instead), then a wall-time wait for the server to list the body as a passenger.
 export async function mountVehicle (bot, ctx, a, { timeScale = 1, reach = MOUNT_REACH } = {}) {
   if (bot.vehicle) return { status: 'already-mounted', vehicle: describe(bot.vehicle) }
@@ -118,8 +121,10 @@ export async function mountVehicle (bot, ctx, a, { timeScale = 1, reach = MOUNT_
   const refused = mountRefusal(target.name, ridersOf(bot, target).length)
   if (refused) return { status: refused }
   if (eyeOf(bot).distanceTo(middle(target)) > reach) return { status: 'out-of-reach' }
-  const emptied = await emptyHand(bot, ctx)
-  if (emptied.status === 'full' || emptied.status === 'failed') return { status: 'hand-full' }
+  if (needsEmptyHand(target.name)) {
+    const emptied = await emptyHand(bot, ctx)
+    if (emptied.status === 'full' || emptied.status === 'failed') return { status: 'hand-full' }
+  }
   await bot.lookAt(middle(target), true)
   ctx.alive()
   bot.mount(target)
