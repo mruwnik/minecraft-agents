@@ -1,6 +1,6 @@
 ;; Card 40ac095a: jobs.movement.cross-water crosses a lake by boat (boat-launch, boat-drive, boat-land) and takes the boat back.
 ;; Should-succeed: a given far-shore land cell (boat.landed, boat recovered); an auto-chosen far shore; :recover false leaves the boat afloat.
-;; Should-fail: a given cell that is no shore (:no-far-shore); no shore :min-cross away (:no-far-shore); no water within :radius of the body (:not-water).
+;; Also a boat fetched from a seen chest, then the crossing. Should-fail: no boat anywhere (:no-boat); a given cell that is no shore (:no-far-shore); no shore :min-cross away (:no-far-shore); no water within :radius of the body (:not-water).
 ;; The lake is x 12..22, z 4..28 (11 wide); the body starts on the west bank.
 {:defaults
  {:tags [:boats :movement :cross-water] :time :any
@@ -26,4 +26,15 @@
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-far-shore}} :within-s 30 :of-job true}]}
   {:name "no-water-within-radius"
    :act [[:job (jobs.movement.cross-water {:pos [23 0 16] :radius 1})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :not-water}} :within-s 30 :of-job true}]}]}
+   :expect [{:event {:source :job :kind :stopped :data {:reason :not-water}} :within-s 30 :of-job true}]}
+  {:name "boat-in-a-chest-is-fetched-then-crossed"
+   :body {:inventory []}
+   :blocks [[:set [10 0 14] "chest{Items:[{Slot:0b,id:\"minecraft:oak_boat\",count:1}]}"]]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 20"] [:wait-s 2]
+         [:job (jobs.movement.cross-water {:pos [23 0 16] :recover false})]]
+   :expect [{:event {:source :job :kind :fetch.done} :within-s 60 :of-job true}
+            {:event {:source :job :kind :boat.landed :data {:recovered false}} :within-s 150 :of-job true}]}
+  {:name "no-boat-anywhere"
+   :body {:inventory []}
+   :act [[:job (jobs.movement.cross-water {:pos [23 0 16]})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-boat}} :within-s 60 :of-job true}]}]}

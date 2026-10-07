@@ -11,17 +11,21 @@
   "Cross a lake or river by boat, from where the body stands (or floats) to a far shore it has seen. A choice for a caller or a travel job to make: go-to never boats.
   Children: jobs.movement.boat-launch (put a boat on the water and board it; a boat not carried is fetched), then jobs.movement.boat-land (drive to the water beside
   the far shore, step off facing the land, and with :recover take the boat back). A body already aboard skips the launch.
-  The far shore is :pos (a land cell: it must be a seen shore), else the farthest seen shore within :radius of the body that is at least :min-cross blocks away.
+  The far shore is :pos (a land cell: it must be a seen shore), else a seen shore within :radius of the body, at least :min-cross blocks away, with water between it and the body
+  (not the start bank): the one nearest :goal when given, else the farthest.
   The check waits (:unseen) while a given :pos is not sensed. Ends {:status :done :land {:x :y :z} :boat id :recovered bool}, info boat.landed (from boat-land), or
   {:status :stopped :reason r}: :bad-args, :not-water (no water in sight to launch on), :no-far-shore (:pos is no shore, or none far enough is in sight),
-  :no-boat (none carried and none to fetch), the launch's other stops (:refused, :no-support, :unreachable, :occupied, :board-failed, :failed; :cause names the child),
+  :no-boat (none carried and none could be fetched; :cause from the launch), :boat-not-seen (the placed boat is not in sight), the launch's other stops (:refused, :no-support,
+  :unreachable, :occupied, :board-failed, :failed; :cause names the child),
   the landing's stops (:blocked, :drive-failed, :not-landed, :recover-failed, :no-shore; :cause names the child).
-  Resumes safely: aboard it goes on to the landing; on foot after the launch it lets boat-land finish or recover.
+  Resumes safely: aboard it goes on to the landing; on foot after the launch it lets boat-land finish or recover, and ends :done only when the body stands on the far shore
+  (else :not-landed).
 
   Never :continue except when a child waits on the world.")
 
 (def args
-  {:pos {:doc "the far-shore land cell to step onto, [x y z] or {:x :y :z}; nil: the farthest seen shore at least :min-cross away" :type :pos :default nil}
+  {:pos {:doc "the far-shore land cell to step onto, [x y z] or {:x :y :z}; nil: choose one (see :goal)" :type :pos :default nil}
+   :goal {:doc "with no :pos: pick the seen far shore nearest this cell; nil: the farthest" :type :pos :default nil}
    :radius {:doc "how far from the body to look for the far shore" :type :number :min 1 :default 24}
    :min-cross {:doc "an auto-chosen far shore is at least this many blocks from the start" :type :number :min 1 :default 6}
    :item {:doc "the boat item to launch; nil: the first carried boat or raft, else one is fetched" :default nil}
@@ -40,21 +44,36 @@
         (some? (u/seen-name (:primitives c) cell))
         (ctx/wait c {:reason :unseen :why "the far-shore cell is not sensed yet"}))))
 
+(defn water-between?
+  "Whether a seen water cell lies on the straight line from `from` to the spot's land cell, at the spot's water level."
+  [p from {:keys [land water]}]
+  (let [to (vehicle/centre land)
+        n (js/Math.ceil (* 2 (u/dist from to)))]
+    (some (fn [i]
+            (let [t (/ i (max n 1))
+                  cell {:x (js/Math.floor (+ (:x from) (* t (- (:x to) (:x from)))))
+                        :y (:y water)
+                        :z (js/Math.floor (+ (:z from) (* t (- (:z to) (:z from)))))}]
+              (= "water" (u/seen-name p cell))))
+          (range 1 n))))
+
 (defn far-spot
-  "The shore spot {:land :water} farthest from `from` within :radius that is at least :min-cross away, or nil."
-  [p from {:keys [radius min-cross]}]
+  "The shore spot {:land :water} within :radius of `from`, at least :min-cross away and across water from it (not the start bank), or nil:
+  the one nearest :goal when given, else the farthest."
+  [p from {:keys [radius min-cross goal]}]
   (->> (shore/spots p from {:radius radius})
        (map #(assoc % :d (u/dist from (vehicle/centre (:land %)))))
-       (filter #(>= (:d %) min-cross))
-       (sort-by :d >)
+       (filter #(and (>= (:d %) min-cross) (water-between? p from %)))
+       (sort-by (if goal #(u/dist goal (vehicle/centre (:land %))) #(- (:d %))))
        first))
 
 (defn target-spot [c]
   (let [p (:primitives c)
-        {:keys [radius min-cross]} (:args c)]
+        {:keys [radius min-cross goal]} (:args c)]
     (if-let [cell (given-pos c)]
       (shore/spot-at p cell)
-      (far-spot p (u/self-pos c) {:radius radius :min-cross min-cross}))))
+      (far-spot p (u/self-pos c) {:radius radius :min-cross min-cross
+                                                  :goal (when goal (:pos (b/parse {:pos goal})))}))))
 
 (defn water-in-sight? [c]
   (boolean (seq (look/seen-blocks (:primitives c) {:names ["water"] :radius (:radius (:args c)) :max 1 :live? true}))))
@@ -62,7 +81,12 @@
 (defn crossing [c]
   (some #(when (= (:root c) (:job (:data %))) (:data %)) (ctx/entries c crossing-kind)))
 
-(def launch-stops {:need :no-boat})
+(def launch-stops {:need :no-boat :no-boat :boat-not-seen})
+
+(defn on-shore?
+  "Whether the body stands on or next to the landing cell."
+  [c land]
+  (<= (u/dist (u/self-pos c) (vehicle/centre land)) 1.5))
 
 (defn ^:async land! [c land]
   (let [{:keys [recover]} (:args c)
@@ -73,10 +97,14 @@
       (and (= :done r) (not= :stopped (:status res)))
       (do (ctx/forget-where! c crossing-kind #(= (:root c) (:job %)))
           (result/finish! c (select-keys res [:land :boat :recovered])))
-      ;; on foot after the launch with the landing already done: nothing left to do
+      ;; on foot after the launch with the landing already done: done only if the body is on the far shore
+      (and (crossing c) (= :not-aboard (:reason res)) (on-shore? c land))
+      (do (ctx/forget-where! c crossing-kind #(= (:root c) (:job %)))
+          (result/finish! c {:land land :recovered false}))
       (and (crossing c) (= :not-aboard (:reason res)))
       (do (ctx/forget-where! c crossing-kind #(= (:root c) (:job %)))
-          (result/finish! c {:land (:land (crossing c)) :recovered false}))
+          (result/stop! c :not-landed "on foot, but not on the far shore"
+                        :cause (result/cause-of :land res)))
       :else
       (do (ctx/forget-where! c crossing-kind #(= (:root c) (:job %)))
           (result/stop! c (or (:reason res) :failed) (or (:text res) "could not land on the far shore")
