@@ -2,6 +2,7 @@
   "What the night jobs (night, sleep, log-out, dig-in) and the night trigger share: night and roof tests, the bed to
   use, who sleeps on the server, the shelter entry."
   (:require [engine.ctx :as ctx]
+            [jobs.lib.solid :as solid]
             [jobs.lib.access.zones :as zones]
             [jobs.lib.util :as u]
             [jobs.lib.look :as look]
@@ -19,35 +20,10 @@
 
 (def default-player-radius 128)
 
-(def non-solid
-  "Block names that are not a roof: air, fluids, and plants and fixtures a body can stand in."
-  #{"air" "cave_air" "void_air" "water" "lava" "short_grass" "grass" "tall_grass" "fern" "large_fern"
-    "torch" "wall_torch" "snow" "vine" "dead_bush" "seagrass" "tall_seagrass" "fire"})
-
-(def walk-through
-  "Blocks a mob or body walks through or over (signs, banners, rails, plates, buttons, levers, carpets, tripwire,
-  cobweb). Not solid: neither roof, wall nor floor."
-  #"(_sign|_banner|_carpet|_pressure_plate|_button|_rail)$|^(rail|lever|tripwire|tripwire_hook|string|cobweb|redstone_wire)$")
-
-(defn solid?
-  "Whether a block name counts as solid: not nil (unloaded), not non-solid or walk-through, and not leaves or a
-  sapling."
-  [name]
-  (and (some? name)
-       (not (non-solid name))
-       (not (re-find walk-through name))
-       (not (.endsWith name "_leaves"))
-       (not (.endsWith name "_sapling"))))
-
-(defn cell
-  "The block cell {:x :y :z} containing a position."
-  [{:keys [x y z]}]
-  {:x (js/Math.floor x) :y (js/Math.floor y) :z (js/Math.floor z)})
-
-(defn feet [p] (cell (u/self-pos {:primitives p})))
+(defn feet [p] (solid/cell (u/self-pos {:primitives p})))
 
 
-(defn solid-at? [p pos] (solid? (u/block-name p pos)))
+(defn solid-at? [p pos] (solid/solid? (u/block-name p pos)))
 
 (defn roofed?
   "Whether a solid block lies within height blocks straight above the feet cell."
@@ -67,7 +43,7 @@
   [p]
   (let [{:keys [x y z]} (feet p)
         above (look/seen-block p {:x x :y (+ y 2) :z z})]
-    (boolean (and above (not (:unknown above)) (solid? (:name above))))))
+    (boolean (and above (not (:unknown above)) (solid/solid? (:name above))))))
 
 (defn buried?
   "The body is underground: no sky light at its feet and head cells. A cell at 0 is sealed from the sky, so the night
@@ -104,7 +80,7 @@
   "Whether the cell at pos is one a body stands or walks in: not solid, or a bed."
   [p pos]
   (let [n (u/block-name p pos)]
-    (and (some? n) (or (not (solid? n)) (.endsWith n "_bed")))))
+    (and (some? n) (or (not (solid/solid? n)) (.endsWith n "_bed")))))
 
 (defn doorway?
   "Whether the cell is a gap in a wall: solid on both sides along one horizontal axis and free on both ends of the other."
@@ -141,7 +117,7 @@
   "A predicate (fn [pos]) for whether the body may use the bed at pos: any bed, in anyone's zone or claim (sleeping sets
   only the sleeper's own spawn), unless it is occupied; a bed in a zone the body owns is always a candidate (the server
   refuses an occupied one, which is a failed sleep). kn is the engine world (nil: no zone known)."
-  [p kn _now]
+  [p kn]
   (fn [pos]
     (or (in-own-zone? p kn pos)
         (not (bed-occupied? p pos)))))

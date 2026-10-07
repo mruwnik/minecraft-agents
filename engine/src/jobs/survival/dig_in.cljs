@@ -7,6 +7,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.result :as result]
             [jobs.lib.shelter :as sh]
+            [jobs.lib.solid :as solid]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]))
 
@@ -316,7 +317,7 @@
       over (do (remember-failed-site! c :fluid-above)
                (ctx/emit! c :dig_in_failed :warn {:text (str (u/block-name p over) " at or above the roof cell; not digging further")})
                :done)
-      (and (sh/solid-at? p below) (not (sh/solid? under)))
+      (and (sh/solid-at? p below) (not (solid/solid? under)))
       (do (remember-failed-site! c :no-floor)
           (ctx/emit! c :dig_in_failed :warn {:text (str (or under "an unloaded cell") " under the floor; not digging through it")})
           :done)

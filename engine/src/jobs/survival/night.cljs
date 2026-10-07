@@ -7,6 +7,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.result :as result]
             [jobs.lib.shelter :as sh]
+            [jobs.lib.solid :as solid]
             [jobs.lib.targets :as targets]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.tools :as tools]
@@ -78,9 +79,9 @@
    :flee-radius {:doc "when no shelter can be dug here, how far the night looks for somewhere safer (a known bed or roofed place, a seen cave or overhang to wall in, or seen ground the carried tools dig); 0 never flees" :default 64}})
 
 (defn bed-permit
-  "Whether the body may use a bed (sh/bed-permit over the job's world and clock)."
+  "Whether the body may use a bed (sh/bed-permit over the job's world)."
   [c]
-  (sh/bed-permit (:primitives c) (:world (:engine c)) (ctx/now c)))
+  (sh/bed-permit (:primitives c) (:world (:engine c))))
 
 (defn check
   "The night trigger's condition, or job memory :sheltered (a listed night cut before its morning)."
@@ -285,7 +286,7 @@
   [p {:keys [x y z] :as f}]
   (let [at (fn [dy] (u/block-name p {:x x :y (+ y dy) :z z}))
         below {:x x :y (dec y) :z z}]
-    (and (sh/solid? (at -1)) (tools/can-harvest? p (at -1)) (not (sh/solid? (at 0))) (not (sh/solid? (at 1)))
+    (and (solid/solid? (at -1)) (tools/can-harvest? p (at -1)) (not (solid/solid? (at 0))) (not (solid/solid? (at 1)))
          (not (dig-in/wet? p f)) (not (dig-in/wet? p {:x x :y (inc y) :z z}))
          (not (dig-in/wet? p below))
          (not (dig-in/lateral-fluid p below)))))
@@ -434,7 +435,7 @@
   cells ({:kind :ground :pos}) a pit can be dug at (pit-site?), clear of failed sites, the nearest ground-candidates."
   [c radius]
   (let [p (:primitives c)]
-    (->> (look/seen-blocks p {:match #(and (sh/solid? %) (escape/natural? %) (not (dig-niche/falling? %)) (tools/can-harvest? p %))
+    (->> (look/seen-blocks p {:match #(and (solid/solid? %) (escape/natural? %) (not (dig-niche/falling? %)) (tools/can-harvest? p %))
                               :radius (min 64 radius) :max 64})
          (map #(update (:pos %) :y inc))
          (filter #(and (pit-site? p %) (clear-of-failed? c %)))
@@ -453,7 +454,7 @@
   [c radius]
   (let [p (:primitives c)
         roof-height (:roof-height (:args c))
-        solids (look/seen-blocks p {:match sh/solid? :radius (min 64 radius) :max cave-scan})
+        solids (look/seen-blocks p {:match solid/solid? :radius (min 64 radius) :max cave-scan})
         key-of (juxt :x :y :z)
         solid? (into #{} (map (comp key-of :pos)) solids)
         seen-free? (fn [cell] (and (not (solid? (key-of cell)))

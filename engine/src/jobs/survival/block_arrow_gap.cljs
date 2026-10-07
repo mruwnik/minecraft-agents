@@ -8,6 +8,7 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.result :as r]
             [jobs.lib.shelter :as sh]
+            [jobs.lib.solid :as solid]
             [jobs.lib.util :as u]
             [jobs.survival.dig-in :as dig-in]))
 
@@ -107,7 +108,7 @@
       (let [kind-at (seen-kind p)
             in (access/rules-input c)
             skip (:skip (ctx/mem c) #{})
-            seen-solid? #(let [b (look/seen-block p %)] (and b (not (:unknown b)) (sh/solid? (:name b))))
+            seen-solid? #(let [b (look/seen-block p %)] (and b (not (:unknown b)) (solid/solid? (:name b))))
             allowed? #(and (not (contains? skip %)) (supported? seen-solid? %))
             permitted? #(not (access/trespass-refusal in :place %))
             mob (reach/mob-pos p (first dangers))

@@ -183,7 +183,8 @@
         [hx _ hz] feet
         near? (fn [[x _ z]] (and (<= (js/Math.abs (- x hx)) wall-search-radius)
                                  (<= (js/Math.abs (- z hz)) wall-search-radius)))
-        standable? (fn [[x y z]] (reach/standable-cell? p {:x x :y y :z z}))
+        kind-at (reach/lookup p)
+        standable? (fn [[x y z]] (reach/standable-cell? p {:x x :y y :z z} kind-at))
         dirs (distinct (cond->> cardinals dir (cons dir)))]
     (loop [queue #queue [feet] seen #{feet} fallback nil]
       (if-let [cell (peek queue)]
@@ -215,7 +216,8 @@
         [hx _ hz] feet
         near? (fn [[x _ z]] (and (<= (js/Math.abs (- x hx)) wall-search-radius)
                                  (<= (js/Math.abs (- z hz)) wall-search-radius)))
-        standable? (fn [[x y z]] (reach/standable-cell? p {:x x :y y :z z}))
+        kind-at (reach/lookup p)
+        standable? (fn [[x y z]] (reach/standable-cell? p {:x x :y y :z z} kind-at))
         ok? (fn [cell] (when-let [gap (door block-at cell dir max-door)] (every? diggable (:cells gap))))]
     (loop [queue #queue [feet] seen #{feet}]
       (when-let [cell (peek queue)]
@@ -252,7 +254,9 @@
                  (stair-heading block-at feet
                                 (remove #(skip [:stair (heading-names %)]) (distinct (cond->> cardinals dir (cons dir))))
                                 rise may-dig? own?))
-         gap (when (and dir (not (skip :clear-path))) (door block-at feet dir max-door))]
+         gap (when (and dir (not (skip :clear-path))) (door block-at feet dir max-door))
+         spot (delay (when (and dir (not (skip :approach)) (walled-side? block-at feet))
+                       (door-spot p feet dir #(diggable? block-at may-dig? own? %))))]
      (cond
        (and pillar-blocks? (passable? (block-at (up feet 2))))
        {:step :pillar :height depth :item item}
@@ -263,9 +267,8 @@
        (and gap (every? #(diggable? block-at may-dig? own? %) (:cells gap)))
        {:step :clear-path :heading (heading-names dir)}
 
-       (and dir (not (skip :approach)) (walled-side? block-at feet)
-            (door-spot p feet dir #(diggable? block-at may-dig? own? %)))
-       {:step :approach :pos (door-spot p feet dir #(diggable? block-at may-dig? own? %))}
+       @spot
+       {:step :approach :pos @spot}
 
        (and (not (skip :approach)) (not (walled-side? block-at feet)))
        (if-let [spot (wall-spot p feet dir)] {:step :approach :pos spot} {:step :none :why :no-wall})

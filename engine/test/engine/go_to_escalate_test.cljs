@@ -526,6 +526,14 @@
     (is (= :approach (:step c)))
     (is (not= [2 64 0] (:pos c)))))
 
+(deftest escape-choose-searches-for-a-door-spot-once
+  (let [iron (-> room (assoc "3,64,0" "iron_door" "3,65,0" "iron_door"))
+        calls (atom 0)
+        real escape/door-spot]
+    (with-redefs [escape/door-spot (fn [& args] (swap! calls inc) (apply real args))]
+      (escape/choose (tu/fake (merge in-room {:blocks iron :self {:pos {:x 2 :y 64 :z 0}}})) [2 64 0] [8 64 0]))
+    (is (= 1 @calls))))
+
 (deftest go-to-escalates-on-a-door-that-doors-never-refuses
   (let [ok? (fn [result doors] (go-to/escalate-reason? result doors))]
     (is (true? (ok? {:reason :exhausted} :shut)))

@@ -6,6 +6,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.result :as result]
             [jobs.lib.shelter :as sh]
+            [jobs.lib.solid :as solid]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
@@ -69,7 +70,7 @@
   ([p f dir] (niche-ok? p f dir true))
   ([p f dir need-tool?]
   (let [name #(u/block-name p %)
-        solid? #(sh/solid? (name %))]
+        solid? #(solid/solid? (name %))]
     (and (solid? (at f dir 0 0 -1)) (not (solid? f))
          (not (solid? (at f dir -1 0 0))) (not (solid? (at f dir -1 0 1))) (not (solid? (at f dir 0 0 1)))
          (not (dig-in/wet? p f)) (not (dig-in/wet? p (at f dir 0 0 1)))
@@ -90,7 +91,7 @@
   "Cheap per-cell part of niche-ok?: dry standing room the body has seen (no hollow it only knows from the data) on
   solid ground, whatever the direction."
   [p f]
-  (let [solid? #(sh/solid? (u/block-name p %))
+  (let [solid? #(solid/solid? (u/block-name p %))
         up (assoc f :y (inc (:y f)))
         unseen? #(:unknown (look/seen-block p %))]
     (and (not (unseen? f)) (not (unseen? up)) (solid? (assoc f :y (dec (:y f)))) (not (solid? f)) (not (solid? up))

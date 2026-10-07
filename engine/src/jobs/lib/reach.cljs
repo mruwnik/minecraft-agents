@@ -10,7 +10,7 @@
   (:require [clojure.string :as str]
             [engine.entity-observations :as obs]
             [jobs.lib.combat :as combat]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.solid :as solid]
             [jobs.lib.util :as u]))
 
 (def node-budget
@@ -35,7 +35,7 @@
   #"_(fence|fence_gate|wall)$")
 
 (def arrow-passes
-  "Blocks, besides shelter's non-solid and walk-through ones, that an arrow flies through and a walker walks through
+  "Blocks, besides solid's non-solid and walk-through ones, that an arrow flies through and a walker walks through
   (fences and gates are :tall to a walker first): plants, torches, ladders."
   #"_(sapling|flower|tulip|torch|fence|fence_gate|bush)$|^(poppy|dandelion|blue_orchid|allium|azure_bluet|oxeye_daisy|cornflower|lily_of_the_valley|wither_rose|sunflower|lilac|rose_bush|peony|torchflower|pitcher_plant|brown_mushroom|red_mushroom|sugar_cane|kelp|kelp_plant|lily_pad|ladder|nether_sprout|wheat|carrots|potatoes|beetroots|bubble_column|pink_petals|wildflowers|leaf_litter|short_dry_grass|tall_dry_grass|warped_roots|crimson_roots|hanging_roots|glow_lichen|moss_carpet|redstone_torch|soul_torch|light|structure_void)$")
 
@@ -52,7 +52,7 @@
       (re-find tall-block name) :tall
       (str/ends-with? name "_leaves") :solid
       (re-find arrow-passes name) :open
-      (sh/solid? name) :solid
+      (solid/solid? name) :solid
       :else :open)))
 
 (def key-span
@@ -117,12 +117,12 @@
 (defn standable-cell?
   "Whether a body can stand with its feet in cell pos {:x :y :z}: feet and head free, and a solid floor below (not a
   torch, plant, rail, lava, fire, cactus or water)."
-  [p {:keys [x y z]}]
-  (let [kind-at (lookup p)
-        below (u/block-at p {:x x :y (dec y) :z z})]
-    (and (passable? kind-at x y z) (passable? kind-at x (inc y) z)
-         (keyword-identical? :solid (kind-at x (dec y) z))
-         (not (hazard-blocks (some-> below .-name))))))
+  ([p pos] (standable-cell? p pos (lookup p)))
+  ([p {:keys [x y z]} kind-at]
+   (let [below (u/block-at p {:x x :y (dec y) :z z})]
+     (and (passable? kind-at x y z) (passable? kind-at x (inc y) z)
+          (keyword-identical? :solid (kind-at x (dec y) z))
+          (not (hazard-blocks (some-> below .-name)))))))
 
 (def hitbox-half 0.3)
 
@@ -136,7 +136,7 @@
   ([p] (standing-cell p nil))
   ([p kind-at]
   (let [{:keys [x z] :as pos} (u/self-pos {:primitives p})
-        centre (sh/cell pos)
+        centre (solid/cell pos)
         stands? (if kind-at
                   (fn [{:keys [x y z]}] (and (passable? kind-at x y z) (passable? kind-at x (inc y) z)
                                              (keyword-identical? :solid (kind-at x (dec y) z))))
@@ -272,7 +272,7 @@
                     (heap-push! open #js [(+ g' (heuristic cx cy cz tx ty tz)) g' cx cy cz]))))
               (recur (inc n)))))))))
 
-(defn cell-of [pos] (let [{:keys [x y z]} (sh/cell pos)] [x y z]))
+(defn cell-of [pos] (let [{:keys [x y z]} (solid/cell pos)] [x y z]))
 
 (defn way?
   "walkable-way? over kind-at (a lookup), from the mob's cell [x y z] to the body's."
@@ -489,14 +489,14 @@
 
 (defn arrow-kind-of
   "What a block b is to an arrow: :open or :solid. Unloaded (nil) is open. Doors, gates and trapdoors follow their
-  open property. Shelter's non-solid and walk-through blocks and arrow-passes are open. Anything else stops it."
+  open property. solid's non-solid and walk-through blocks and arrow-passes are open. Anything else stops it."
   [b]
   (let [name (some-> b .-name)]
     (cond
       (nil? name) :open
       (openable? name) (if (open-prop? b) :open :solid)
-      (sh/non-solid name) :open
-      (re-find sh/walk-through name) :open
+      (solid/non-solid name) :open
+      (re-find solid/walk-through name) :open
       (re-find arrow-passes name) :open
       :else :solid)))
 
@@ -608,12 +608,13 @@
          vec)))
 
 (defn danger-in?
-  "danger? reading blocks through kind-at (shared by the mobs of one query) and, with pr, sharing walk proofs."
+  "danger? reading blocks through kind-at (shared by the mobs of one query) and, with pr, sharing walk proofs. opts
+  :arrow-at is the query's shared arrow lookup (lookup p arrow-kind-of); without it a ranged mob builds its own."
   ([p kind-at e opts] (danger-in? p kind-at nil e opts))
-  ([p kind-at pr e {:keys [sight?] :or {sight? true}}]
+  ([p kind-at pr e {:keys [sight? arrow-at] :or {sight? true}}]
    (if (combat/ranged? e)
      (and (or (not sight?) (seen-only? e) (not (in-tunnel? kind-at (cell-of (u/pos-of (.-pos (.self p)))))))
-          (line-of-fire? (lookup p arrow-kind-of) (mob-pos p e) (u/pos-of (.-pos (.self p)))))
+          (line-of-fire? (or arrow-at (lookup p arrow-kind-of)) (mob-pos p e) (u/pos-of (.-pos (.self p)))))
      (and (or (seen-mob? e) (not sight?))
           (let [mob (cell-of (mob-pos p e))
                 body (cell-of (u/pos-of (.-pos (.self p))))]
@@ -634,7 +635,8 @@
   ([p radius opts] (dangers p radius opts {}))
   ([p radius opts danger-opts]
    (let [kind-at (lookup p)
-         pr (query-proofs p)]
+         pr (query-proofs p)
+         danger-opts (assoc danger-opts :arrow-at (lookup p arrow-kind-of))]
      (filterv #(danger-in? p kind-at pr % danger-opts) (known-hostiles p radius opts)))))
 
 (defn nearest-danger
@@ -644,7 +646,7 @@
   (let [skip (set skip)
         kind-at (lookup p)
         pr (delay (query-proofs p))
-        danger-opts (dissoc danger-opts :skip)]
+        danger-opts (assoc (dissoc danger-opts :skip) :arrow-at (lookup p arrow-kind-of))]
     (some #(when (and (not (contains? skip (.-id %))) (danger-in? p kind-at @pr % danger-opts)) %)
           (known-hostiles p radius opts))))
 

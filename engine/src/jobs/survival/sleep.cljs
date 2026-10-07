@@ -54,7 +54,7 @@
       (not (sh/night? p)) (ctx/wait c :not-night)
       (nil? bed) (ctx/wait c {:reason :no-bed :text "no bed given or remembered within the bed radius"})
       (unreachable-bed? c bed) (ctx/wait c {:reason :bed-unreachable :pos bed})
-      (not ((sh/bed-permit p (:world (:engine c)) (ctx/now c)) bed)) (ctx/wait c {:reason :bed-occupied :pos bed})
+      (not ((sh/bed-permit p (:world (:engine c))) bed)) (ctx/wait c {:reason :bed-occupied :pos bed})
       :else true)))
 
 (defn give-up-unreachable! [c bed]
