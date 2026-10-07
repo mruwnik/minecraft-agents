@@ -233,8 +233,14 @@
       (and w (not (:arrived (ctx/child-result c :walk)))) (give-up! c "cannot reach the chest" "unreachable")
       :else
       (let [table (or (:table (ctx/mem c)) (nearest-table p chest (:table-radius (:args c))))]
-        (if (nil? table)
+        (cond
+          (and (nil? table) (not (look/surveyed? c)))
+          (do (await (look/survey! c)) :again) ; a table behind the body is not seen until it looks
+
+          (nil? table)
           (stop! c :bake.no-table "no crafting table near the chest" "no-table")
+
+          :else
           (do (ctx/update-mem! c assoc :table table)
               (cond
                 spare? (await (deposit-spare! c chest bread))

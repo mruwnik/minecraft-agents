@@ -172,7 +172,9 @@
   (let [{:keys [table radius]} (:args c)
         pos (or table (find-table (:primitives c) radius))]
     (if-not pos
-      (give-up! c "no-table" {})
+      (if (look/surveyed? c)
+        (give-up! c "no-table" {})
+        (do (await (look/survey! c)) :again)) ; a table behind the body is not seen until it looks
       (let [r (if (u/within? (u/self-pos c) pos reach)
                 :done
                 (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos pos :range reach :escalate false :warn false :retry false :zone-tolls true})))]

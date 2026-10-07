@@ -26,7 +26,7 @@
   :not-ripe, :no-tool, :unsafe-fire, :not-smoked, :open-fire, :no-target, :at-target, :night, :raining,
   :too-few-adults, :no-food, :no-chest, :nothing-to-store). One that declines is booked {:skipped :declined}
   and one that throws {:skipped :failed :error text}. The pass goes on either way.
-  The job declines (does nothing) unless some step would run, after one look around per run. A started run always
+  The job declines (does nothing) unless some step would run, after one look around per run when part of the area was never seen. A started run always
   continues.
   It ends :done with {:target :bees :steps {step summary}} (info maintain.done), also when every step was
   skipped. Summaries: guard {:sunk :carpeted :reason :left}, harvest {:harvested :reason :declined}, breed {:fed
@@ -171,9 +171,14 @@
   (let [f (facts c)]
     (boolean (some #(:call (decide % (:args c) f)) steps))))
 
+(defn watched-cells
+  "The cells whose never having been seen calls for a look: the corners of the box, or the centre."
+  [c]
+  (if-let [box (:box (:args c))] (corners box) [(apiary/center-of c)]))
+
 (defn check [c]
   (or (boolean (or (:todo (ctx/mem c)) (would-run? c)))
-      (look/wait-unless-surveyed c {:reason :nothing-to-do})))
+      (look/wait-unless-surveyed c {:reason :nothing-to-do} (watched-cells c))))
 
 ;; ------------------------------------------------------------------ the run
 
@@ -233,7 +238,8 @@
   "One piece of the pass: :again after a step ended, :continue while its child waits on the world, :done. With
   nothing to do in sight before the pass, a look around first (:continue: the check decides again)."
   [c]
-  (if (and (not (:todo (ctx/mem c))) (not (look/surveyed? c)) (not (would-run? c)))
+  (if (and (not (:todo (ctx/mem c))) (not (look/surveyed? c)) (look/unseen? (:primitives c) (watched-cells c))
+           (not (would-run? c)))
     (await (look/survey! c))
     (await (pass-step c))))
 

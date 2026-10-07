@@ -312,3 +312,11 @@
                                                        r))))))]
           (is (true? (:enchanted r)))
           (is (= ["offers" "enchant" "offers"] (ops p))))))))
+
+(deftest enchant-looks-around-before-it-says-there-is-no-table
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[r p] (await (enchant! (assoc table-world :self {:experience {:level 5}}) {} tu/seeing-after-look))]
+          (is (seq (calls p "look")))
+          (is (true? (:enchanted r))))))))

@@ -225,3 +225,29 @@
           (is (= 8 (count (calls s "look"))) "one look around")
           (is (= [:nothing-to-do] (distinct (map :reason (events-of s :waiting)))))
           (is (nil? (done-event s))))))))
+
+(deftest a-body-that-sees-nothing-even-after-looking-waits-with-its-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (doto (h/setup (world {:inventory (inv "shears" 1) :raised? true}))
+                  (-> :p (doto tu/blind (aset "sensedAt" (fn [_] #js {:unknown true})))))]
+          (core/submit! (:eng s) (spec {}) {})
+          (dotimes [_ 10]
+            (swap! (:clock s) + 700)
+            (await (core/tick! (:eng s))))
+          (is (= 8 (count (calls s "look"))) "one look around, not one per run")
+          (is (= [:nothing-to-do] (distinct (map :reason (events-of s :waiting)))))
+          (is (nil? (done-event s))))))))
+
+(deftest a-fully-seen-idle-apiary-does-not-look
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (doto (h/setup (world {:inventory (inv "shears" 1) :raised? true})) (-> :p tu/seeing-all))]
+          (core/submit! (:eng s) (spec {}) {})
+          (dotimes [_ 10]
+            (swap! (:clock s) + 700)
+            (await (core/tick! (:eng s))))
+          (is (empty? (calls s "look")) "every cell of the area is already seen")
+          (is (= [:nothing-to-do] (distinct (map :reason (events-of s :waiting))))))))))

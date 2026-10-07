@@ -149,7 +149,7 @@
       (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) (decline! c :no-zones)
       (or (:goal (ctx/mem c)) (seq (source-blocks c))) true
       (and (= :stalk m) (stalks-in-range? c)) (decline! c :too-short)
-      :else (ctx/wait c {:reason :nothing-in-range :radius (:radius (:args c))}))))
+      :else (look/wait-unless-surveyed c {:reason :nothing-in-range :radius (:radius (:args c))}))))
 
 (defn finish!
   "Emit the outcome, hand it to the parent and end the job."
@@ -283,6 +283,7 @@
       collecting (await (collect! c))
       (>= dry dry-digs) (give-up! c :dry)
       (and (empty? targets) (seq (:refused (ctx/mem c)))) (refuse-up! c)
+      (and (empty? targets) (not (look/surveyed? c))) (do (await (look/survey! c)) :again)
       (empty? targets) (finish! c :none)
       :else (await (dig-round! c targets)))))
 

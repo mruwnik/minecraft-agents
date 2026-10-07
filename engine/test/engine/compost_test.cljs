@@ -171,3 +171,13 @@
               result (await (child-outcome eng job {:at at :items ["wheat_seeds"]} 40))]
           (is (= :no-composter (:reason result)))
           (is (= [:no-zones] (mapv :reason (kinds seen :compost.declined)))))))))
+
+(deftest compost-looks-around-before-it-says-there-is-no-composter
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory (inv "wheat_seeds" 10) :blocks comp-block})
+              _ (tu/seeing-after-look p)
+              result (await (child-outcome eng job {:items ["wheat_seeds"]} 60))]
+          (is (seq (calls p "look")))
+          (is (= 1 (:bone-meal result))))))))

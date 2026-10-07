@@ -85,24 +85,24 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[args world note]
-                [[{} {} "nothing at all"]
-                 [{} {:blocks {"2,64,0" "dirt"}} "other blocks"]
-                 [{:radius 5} {:blocks {"9,64,0" "short_grass"}} "grass outside the radius"]]]
-          (let [{:keys [eng p]} (setup-seeing world)]
-            (core/submit! eng (spec args) {})
-            (is (nil? (core/tick! eng)) note)
-            (is (zero? (count (tu/walked-to eng))) note)
-            (is (zero? (dig-count {:p p})) note)))))))
+        (await (tu/each-async [[{} {} "nothing at all"]
+                               [{} {:blocks {"2,64,0" "dirt"}} "other blocks"]
+                               [{:radius 5} {:blocks {"9,64,0" "short_grass"}} "grass outside the radius"]]
+                              (fn ^:async one [[args world note]]
+                                (let [s (setup-seeing world)]
+                                  (core/submit! (:eng s) (spec args) {})
+                                  (await (run-ticks s 10 700))
+                                  (is (zero? (count (tu/walked-to (:eng s)))) note)
+                                  (is (zero? (dig-count s)) note)))))))))
 
 (deftest grass-never-seen-is-not-a-source
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (update (setup-seeing {:blocks (patch "short_grass" (range 2 6) (range 0 4)) :drops seed-drops}) :p tu/blind)]
-          (core/submit! eng (spec {:count 2}) {})
-          (is (nil? (core/tick! eng)))
-          (is (zero? (dig-count {:p p}))))))))
+        (let [s (update (setup-seeing {:blocks (patch "short_grass" (range 2 6) (range 0 4)) :drops seed-drops}) :p tu/blind)]
+          (core/submit! (:eng s) (spec {:count 2}) {})
+          (await (run-ticks s 10 700))
+          (is (zero? (dig-count s))))))))
 
 (deftest the-check-passes-with-only-a-chest
   (async done
@@ -323,13 +323,14 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[args world] [[{:item "bamboo"} {}]
-                              [{:item "bamboo"} {:blocks (stand "sugar_cane" 3 0 3)}]
-                              [{:item "bamboo" :radius 5} {:blocks (stand "bamboo" 9 0 3)}]]]
-          (let [{:keys [eng p]} (setup-seeing world)]
-            (core/submit! eng (spec args) {})
-            (is (nil? (core/tick! eng)))
-            (is (zero? (dig-count {:p p})))))))))
+        (await (tu/each-async [[{:item "bamboo"} {}]
+                               [{:item "bamboo"} {:blocks (stand "sugar_cane" 3 0 3)}]
+                               [{:item "bamboo" :radius 5} {:blocks (stand "bamboo" 9 0 3)}]]
+                              (fn ^:async one [[args world]]
+                                (let [s (setup-seeing world)]
+                                  (core/submit! (:eng s) (spec args) {})
+                                  (await (run-ticks s 10 700))
+                                  (is (zero? (dig-count s)))))))))))
 
 (deftest a-cut-in-a-zone-or-a-plan-is-refused-and-reported
   (async done
@@ -544,3 +545,14 @@
           (is (= :withdraw-declined (:reason (done-event s))))
           (is (= [:withdraw-declined] (mapv :reason (events-of s :get-seeds.gave-up))))
           (is (finished? s)))))))
+
+(deftest grass-behind-the-body-is-found-after-a-look-around
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup-seeing {:blocks (patch "short_grass" (range 2 6) (range 0 4)) :drops seed-drops})
+              _ (tu/seeing-after-look (:p s))]
+          (core/submit! (:eng s) (spec {:count 2}) {})
+          (await (run-ticks s 60 700))
+          (is (seq (h/calls (:p s) "look")))
+          (is (pos? (dig-count s))))))))

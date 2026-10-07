@@ -12,9 +12,9 @@
 (def ground (into {} (for [x (range -3 6) z (range -3 6)] [(str x ",63," z) "stone"])))
 
 (defn ^:async waiting-after
-  "Submit spec in a fake world (spec keys :zones, default [], nil: never read) and run one tick; the reason the job
+  "Submit spec in a fake world (spec keys :zones, default [], nil: never read) and run ticks (default 1); the reason the job
   waits for (core/waiting), and the observe status row."
-  [spec world-spec]
+  [spec world-spec & [ticks]]
   (let [clock (atom 1000000)
         [_ sink] (tu/legacy-capture-sink)
         p (tu/fake (merge {:blocks ground} (dissoc world-spec :zones)))
@@ -23,8 +23,9 @@
                           :world w
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})
         id (core/submit! eng spec {})]
-    (swap! clock + 700)
-    (await (core/tick! eng))
+    (dotimes [_ (or ticks 1)]
+      (swap! clock + 700)
+      (await (core/tick! eng)))
     {:waiting (core/waiting eng id)
      :observed (get-in (event-api/status eng nil) [:jobs :items 0 :waiting])
      :listed (seq (:list (core/state eng)))}))
@@ -93,8 +94,8 @@
             "no zone list")
         (is (= :no-source (:reason (:waiting (await (waiting-after '(jobs.gather.get-seeds {:item "nonsense"}) {})))))
             "no way to get the item")
-        (is (= :nothing-in-range (:reason (:waiting (await (waiting-after '(jobs.gather.get-seeds {:item "sugar_cane"}) {})))))
-            "no source block near")))))
+        (let [r (await (waiting-after '(jobs.gather.get-seeds {:item "sugar_cane"}) {} 6))]
+          (is (nil? (:listed r)) "no source block near: it looks around once, then ends :none"))))))
 
 (def lead-item [{:name "lead" :count 1}])
 

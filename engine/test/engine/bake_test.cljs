@@ -275,3 +275,11 @@
           (is (empty? (:list (core/state eng))))
           (is (= {"bread" 4} (inv p)))
           (is (= {:baked 10 :deposited 6} result)))))))
+
+(deftest bake-looks-around-before-it-says-there-is-no-table
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (bake {:containers {"10,64,0" [{:name "wheat" :count 30}]} :blocks beside} {} tu/seeing-after-look))]
+          (is (seq (calls p "look")))
+          (is (= {:baked 10 :deposited 6} result)))))))

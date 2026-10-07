@@ -310,3 +310,20 @@
           (let [result (await (child-outcome eng job {:item "oak_planks" :count 4} 8))]
             (is (= {:made 4} result))
             (is (= 1 (count (calls p "craft"))))))))))
+
+(deftest craft-looks-around-before-it-says-there-is-no-table
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory [{:name "wheat" :count 3}] :blocks table-block})
+              _ (tu/seeing-after-look p)
+              n (atom 0)
+              _ (.override (.-world p) "craft"
+                           (fn ^:async f [token args impl]
+                             (case (swap! n inc)
+                               1 #js {:status "out-of-reach" :reason "too-far" :table #js {:x 10 :y 64 :z 0}}
+                               2 #js {:status "unreachable" :reason "no-table"}
+                               (await (impl token args)))))
+              result (await (child-outcome eng job {:item "bread" :fetch false} 20))]
+          (is (seq (calls p "look")) "the table behind the body is not known until it looks")
+          (is (= {:made 1} result)))))))

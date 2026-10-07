@@ -139,8 +139,14 @@
         p (:primitives c)
         handed? (some? table)
         table (or table (nearest-table p radius))]
-    (if (nil? table)
+    (cond
+      (and (nil? table) (not (look/surveyed? c)))
+      (do (await (look/survey! c)) :again) ; a table behind the body is not seen until it looks
+
+      (nil? table)
       (await (no-table! c made))
+
+      :else
       (do (ctx/update-mem! c assoc :table table)
           (if (u/within? (u/self-pos c) table 3)
             (if handed? (give-up! c made "unreachable") :again)

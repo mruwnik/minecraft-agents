@@ -114,9 +114,15 @@
         mem (ctx/mem c)
         pos (or (:composter mem) (when at (when (composter-allowed? c at) at)) (when-not at (nearest-composter c)))
         block (when pos (u/seen-block p pos))]
-    (if-not (and pos block (= "composter" (.-name block)))
+    (cond
+      (and (nil? pos) (not (look/surveyed? c)))
+      (do (await (look/survey! c)) :again) ; a composter behind the body is not seen until it looks
+
+      (not (and pos block (= "composter" (.-name block))))
       (do (ctx/emit! c :compost.no-composter :warn {:text "no composter to feed"})
           (finish! c {:reason :no-composter}))
+
+      :else
       (do
         (when-not (:composter mem) (ctx/update-mem! c assoc :composter pos))
         (let [meal (meal-near c pos)
