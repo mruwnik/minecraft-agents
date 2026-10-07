@@ -660,7 +660,7 @@
       (let [n (min (max (js/Math.floor ticks) 0) (.-PADDLE_MAX_TICKS m))
             [x y z] (:pos e)]
         (loop [i 0 pose #js {:x x :y y :z z :yaw (:yaw e 0)} w w]
-          (let [done (fn [status] [w {:status status :pos [(.-x pose) (.-y pose) (.-z pose)] :yaw (.-yaw pose) :ticks i}])
+          (let [done (fn [status] [w {:status status :pos [(.-x pose) (.-y pose) (.-z pose)] :yaw (.-yaw pose) :ticks i :turnDeg (.-BOAT_TURN m) :speed (.-BOAT_SPEED m)}])
                 next (.boatStep m pose #js {:turn turn :forward (boolean forward)})]
             (cond
               (= i n) (done "ok")

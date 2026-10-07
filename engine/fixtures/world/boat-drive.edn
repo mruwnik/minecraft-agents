@@ -1,7 +1,7 @@
 ;; Card a5793fdc: jobs.movement.boat-drive steers the boat the body is in to a water cell (paddle strokes; the boat is simulated client side).
 ;; Should-succeed: launch a carried boat and drive it across the pond (boat.driven); drive a second leg back.
 ;; Should-fail: on foot (:not-aboard); the target is stone (:not-water); the target pond is across land (:blocked).
-;; The boat's real speed and turn rate are a model (js/vehicle.mjs BOAT_SPEED, BOAT_TURN): a server that rejects the vehicle moves would show as the boat not moving, :timeout.
+;; The boat's real speed and turn rate are a model (js/vehicle.mjs BOAT_SPEED, BOAT_TURN; paddle returns them as speed, turnDeg): a server that rejects the vehicle moves would show as the boat not moving, :timeout.
 {:defaults
  {:tags [:boats :movement :boat-drive] :time :any
   :plot {:height 8 :floor "stone"}
@@ -18,7 +18,8 @@
    :act [[:job (jobs.movement.boat-launch {})]
          [:job (jobs.movement.boat-drive {:pos [23 -1 16]})]
          [:job (jobs.movement.boat-drive {:pos [14 -1 15]})]]
-   :expect [{:event {:source :job :kind :boat.driven} :within-s 100 :of-job true}]}
+   :expect [{:event {:source :job :kind :boat.driven :data {:pos [:near #at [23.5 -1 16.5] 2]}} :within-s 100 :of-job true}
+            {:event {:source :job :kind :boat.driven :data {:pos [:near #at [14.5 -1 15.5] 2]}} :within-s 100 :of-job true}]}
   {:name "on-foot-is-not-aboard"
    :blocks [[:fill [12 -1 14] [24 -1 18] "water"]]
    :act [[:job (jobs.movement.boat-drive {:pos [23 -1 16]})]]

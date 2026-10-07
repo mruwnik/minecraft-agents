@@ -194,7 +194,7 @@ export async function paddleBoat (bot, ctx, a, { timeScale = 1 } = {}) {
   const keys = { turn: a.turn ?? null, forward: Boolean(a.forward) }
   let pose = { x: boat.position.x, y: boat.position.y, z: boat.position.z, yaw: mcYawOf(boat.yaw ?? Math.PI) }
   const release = () => bot._client.write('player_input', { inputs: {} })
-  const result = (status, done) => ({ status, pos: { x: pose.x, y: pose.y, z: pose.z }, yaw: pose.yaw, ticks: done })
+  const result = (status, done) => ({ status, pos: { x: pose.x, y: pose.y, z: pose.z }, yaw: pose.yaw, ticks: done, turnDeg: BOAT_TURN, speed: BOAT_SPEED })
   if (ticks === 0) return result('ok', 0)
   ctx.onAbort(release)
   let done = 0

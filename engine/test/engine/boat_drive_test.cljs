@@ -77,3 +77,16 @@
           (core/submit! eng '(jobs.movement.boat-drive {:pos [10 63 2]}) {})
           (await (tu/run-until-empty eng 3))
           (is (= [:unseen] (mapv :reason (filterv #(= :waiting (:kind %)) @seen)))))))))
+
+(deftest a-target-that-turns-unsensed-after-the-check-waits
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen p]} (lt/setup {:blocks lake :entities [(boat-at 2.5 2.5)] :self {:vehicle 9}})
+              real (.-blockAt p)
+              calls (atom 0)]
+          (aset p "blockAt" (fn [pos] (if (and (= 10 (.-x pos)) (> (swap! calls inc) 1)) nil (real pos))))
+          (core/submit! eng '(jobs.movement.boat-drive {:pos [10 63 2]}) {})
+          (await (tu/run-until-empty eng 3))
+          (is (empty? (filterv #(= :stopped (:kind %)) @seen)) (pr-str (mapv #(select-keys % [:kind :reason :data]) @seen)))
+          (is (= [:unseen] (distinct (mapv :reason (filterv #(= :waiting (:kind %)) @seen))))))))))

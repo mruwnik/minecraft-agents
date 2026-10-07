@@ -9,23 +9,21 @@
   "Steer the boat or raft the body is in to the water cell :pos, in bounded strokes (the paddle primitive: a few ticks of turn and forward each).
   Each stroke reads where the boat is and which way it points, turns toward the cell while the heading is off, and paddles forward once it is close to right.
   Done when the boat is within :range of the middle of the cell. Holds the vehicle (jobs.lib.vehicle) while the job lives.
-  The check waits (:unseen) while the cell is not sensed. Every key is released at the end of a stroke and by a cut.
+  The check waits (:unseen) while the cell is not sensed; a cell that turns unsensed later yields :continue until it is. Every key is released at the end of a stroke and by a cut.
 
   Ends {:status :done :pos {:x :y :z} :strokes n}, info boat.driven, or
   {:status :stopped :reason r}: :bad-args, :not-aboard (on foot: jobs.movement.boat-launch puts the body in a boat), :not-a-boat (another vehicle),
   :not-water (the cell is not water), :blocked (land in the way: two forward strokes in a row that could not move), :timeout (:max-strokes or :max-s used up,
   with the distance left), :failed (any other paddle status, with :primitive).
 
-  Never :continue.")
+  Never :continue except for that.")
 
 (def args
   {:pos {:doc "the water cell to steer to, [x y z] or {:x :y :z}" :type :pos :default nil}
-   :range {:doc "done when the boat is within this many blocks (horizontally) of the middle of the cell" :default 1.5}
-   :max-strokes {:doc "strokes before giving up" :default 80}
-   :max-s {:doc "seconds before giving up" :default 120}})
+   :range {:doc "done when the boat is within this many blocks (horizontally) of the middle of the cell" :type :number :min 0 :default 1.5}
+   :max-strokes {:doc "strokes before giving up" :type :int :min 1 :default 80}
+   :max-s {:doc "seconds before giving up" :type :number :min 0 :default 120}})
 
-(def turn-deg "degrees a tick of turning moves the heading (js/vehicle.mjs BOAT_TURN)" 4)
-(def speed "blocks a tick of forward (js/vehicle.mjs BOAT_SPEED)" 0.2)
 (def aligned-deg 8)
 (def forward-while-turning-deg 30)
 (def max-turn-ticks 10)
@@ -50,8 +48,9 @@
   (- (mod (+ (- bearing yaw) 540) 360) 180))
 
 (defn stroke-for
-  "The next stroke {:turn :forward :ticks} from the boat's pose, the middle of the cell and :range."
-  [{:keys [x z]} yaw goal range]
+  "The next stroke {:turn :forward :ticks} from the boat's pose, the middle of the cell, :range and the model's turn-deg (degrees
+  a tick of turning) and speed (blocks a tick of forward), as the paddle primitive reports them."
+  [{:keys [x z]} yaw goal range turn-deg speed]
   (let [err (heading-error yaw (vehicle/yaw-toward {:x x :z z} goal))
         miss (u/dist {:x x :y 0 :z z} (assoc goal :y 0))]
     (if (> (js/Math.abs err) aligned-deg)
@@ -61,7 +60,7 @@
       {:turn nil :forward true
        :ticks (max 1 (min max-forward-ticks (js/Math.ceil (/ (- miss range) speed))))})))
 
-(defn pose-of [r] {:pos {:x (.. r -pos -x) :y (.. r -pos -y) :z (.. r -pos -z)} :yaw (.-yaw r)})
+(defn pose-of [r] {:pos {:x (.. r -pos -x) :y (.. r -pos -y) :z (.. r -pos -z)} :yaw (.-yaw r) :turn-deg (.-turnDeg r) :speed (.-speed r)})
 
 (defn paddle! [c {:keys [turn forward ticks]}]
   (ctx/act c :paddle (clj->js (cond-> {:ticks ticks :forward forward} turn (assoc :turn turn)))))
@@ -76,7 +75,8 @@
     (cond
       (nil? cell) (stop! :bad-args (:error (b/parse (:args c))))
       (not (vehicle/mounted? p)) (stop! :not-aboard "the body is not in a boat")
-      (not= "water" (u/seen-name p cell)) (stop! :not-water (str "the cell is " (or (u/seen-name p cell) "unsensed") ", not water") :pos cell)
+      (nil? (u/seen-name p cell)) :continue
+      (not= "water" (u/seen-name p cell)) (stop! :not-water (str "the cell is " (u/seen-name p cell) ", not water") :pos cell)
       :else
       (do
         (vehicle/hold! c)
@@ -88,7 +88,7 @@
                 "not-mounted" (stop! :not-aboard "the body is not in a boat")
                 "not-a-boat" (stop! :not-a-boat "the vehicle is not a boat")
                 (stop! :failed (str "paddle: " status) :primitive status))
-              (let [{:keys [pos yaw]} (pose-of r)
+              (let [{:keys [pos yaw turn-deg speed]} (pose-of r)
                     left (u/dist (assoc pos :y 0) (assoc goal :y 0))]
                 (cond
                   (<= left range)
@@ -97,7 +97,7 @@
                   (or (>= strokes max-strokes) (>= (js/Date.now) deadline))
                   (stop! :timeout (str "the boat is still " (int left) " blocks from the cell after " strokes " strokes") :pos pos :left left)
                   :else
-                  (let [s (stroke-for pos yaw goal range)
+                  (let [s (stroke-for pos yaw goal range turn-deg speed)
                         out (await (paddle! c s))
                         st (.-status out)]
                     (cond

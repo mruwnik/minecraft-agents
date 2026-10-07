@@ -149,6 +149,7 @@ Statuses below are the common ones; `reason` and extra fields are in `js/primiti
 | `sleep` | `{pos}` bed | `sleeping`, `not-night`, `occupied`, `monsters-near`, `missing`, `unreachable` |
 | `look` / `wait` | `{pos}` or `{yaw, pitch}` / `{ms}` (max 10000) | `ok` |
 | `swim` | `{ms=3000, toward?}` | `surfaced`, `landed`, `timeout` |
+| `paddle` | `{ticks, turn?: 'left'/'right', forward?}` | one stroke of the boat the body is in (the boat is simulated client side, sent as `vehicle_move`; `ticks` at most 40): `ok`, `blocked` (the next forward tick leaves the water), `not-mounted`, `not-a-boat`; result `{pos, yaw, ticks, turnDeg, speed}` (the model: degrees and blocks a tick); ticks 0 reads the pose |
 | `mount` / `dismount` | `{id}` / `{yaw?, pitch?}` | `mounted`, `already-mounted`, `gone`, `not-mountable`, `occupied`, `out-of-reach`, `hand-full`, `timeout` / `dismounted`, `not-mounted`, `timeout` |
 | `useOn` | `{pos, item?, face='up'}` | `used`, `unchanged`, `missing`, `no-item`, `no-room`, `unreachable` (`too-far`, or `no-line`: no point of the block is in view past other blocks' shapes; its own other half never blocks), `cannot` (beds, containers, hazards) |
 | `offline` | `{ms=300000}` (max 600000) | `ok`, `cut`, `closed`, `unsupported`, `offline` |
@@ -580,6 +581,7 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 | `movement.mount` `{:id or :name}` | Waits (:no-vehicle) until the vehicle is in sight, then walks to a boat, raft, minecart or rideable mob and gets on; by `:name` prefers an unoccupied one; boats and minecarts need no free hand; the body stays aboard only in manual mode (else the `:mounted` trigger steps off after the job ends); stopped `:gone`, `:not-mountable`, `:occupied`, `:hand-full`, `:timeout`, `:unreachable`, `:aboard-other`, `:bad-args` |
 | `movement.leave-vehicle` | Gets off a boat, minecart or mount (run by `:mounted`; one run, retries inside, stopped when still aboard, fired again after the cooldown) |
 | `movement.boat-launch` `{:action :launch/:recover :pos :item :board :id :max-s}` | Launch: puts a carried boat (else fetched) on shore-side water in sight (`jobs.blocks.place`) and boards it (`:board`); waits `:no-water`; stopped `:aboard`, `:need`, `:refused`, `:no-support`, `:unreachable`, `:occupied`, `:no-boat`, `:board-failed`, `:failed`, `:bad-args`. Recover: gets off, walks up, hits the boat until it breaks (up to `:max-s`), collects the item; waits `:no-boat`; stopped `:gone`, `:unreachable`, `:leave-failed`, `:not-broken`, `:not-collected` |
+| `movement.boat-drive` `{:pos :range :max-strokes :max-s}` | Steers the boat the body is in to the water cell `:pos` with `paddle` strokes (turn toward it, then forward); done within `:range`, info `boat.driven`; waits `:unseen` (check, and a round when the cell turns unsensed); stopped `:bad-args`, `:not-aboard`, `:not-a-boat`, `:not-water`, `:blocked` (land in the way), `:timeout`, `:failed` |
 | `time.wait-for-day`, `time.wait-for-dusk` | Done once it is day / evening; waits `:day-not-come` / `:dusk-not-come` |
 
 **Survival (reflex and need jobs)**
@@ -745,5 +747,3 @@ node engine/tools/world-changes.mjs --world claude --wait --type claim --observe
   anything; jobs consult them as above.
 - Markers keep the `places.json` format; zones use the strict `zones.edn` schema.
 - `world-changes` keeps a named cursor outside engine state and returns grouped changes (latest 2048; `:cursor-gap` after loss).
-| `paddle` | `{ticks, turn?: 'left'/'right', forward?}` | one stroke of the boat the body is in (the boat is simulated client side, sent as `vehicle_move`; `ticks` at most 40): `ok`, `blocked` (the next forward tick leaves the water), `not-mounted`, `not-a-boat`; result `{pos, yaw, ticks}`; ticks 0 reads the pose |
-| `movement.boat-drive` `{:pos :range :max-strokes :max-s}` | Steers the boat the body is in to the water cell `:pos` with `paddle` strokes (turn toward it, then forward); done within `:range`, info `boat.driven`; waits `:unseen`; stopped `:bad-args`, `:not-aboard`, `:not-a-boat`, `:not-water`, `:blocked` (land in the way), `:timeout`, `:failed` |

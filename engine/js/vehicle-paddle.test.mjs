@@ -58,7 +58,7 @@ test('paddleBoat', async t => {
   await t.test('zero ticks reads the pose and sends nothing', async () => {
     const { bot } = rig()
     const r = await paddleBoat(bot, ctx(), { ticks: 0 }, opts)
-    assert.deepEqual(r, { status: 'ok', pos: { x: 0.5, y: 63, z: 0.5 }, yaw: 0, ticks: 0 })
+    assert.deepEqual(r, { status: 'ok', pos: { x: 0.5, y: 63, z: 0.5 }, yaw: 0, ticks: 0, turnDeg: BOAT_TURN, speed: BOAT_SPEED })
     assert.deepEqual(bot.written, [])
   })
   await t.test('forward strokes move the boat and the rider, and send the vehicle position each tick', async () => {
@@ -97,5 +97,21 @@ test('paddleBoat', async t => {
     assert.equal(c.aborts.length, 1)
     c.aborts[0]()
     assert.deepEqual(bot.written.at(-1), ['player_input', { inputs: {} }])
+  })
+  await t.test('a cut in the middle of a stroke releases every input', async () => {
+    const { bot } = rig()
+    let alive = 0
+    const c = { aborts: [], onAbort: fn => c.aborts.push(fn), alive: () => { if (++alive === 3) throw new Error('cut') } }
+    await assert.rejects(paddleBoat(bot, c, { ticks: 10, forward: true }, opts), /cut/)
+    assert.deepEqual(bot.written.at(-1), ['player_input', { inputs: {} }])
+    assert.equal(bot.written.filter(([n]) => n === 'vehicle_move').length, 3)
+  })
+  await t.test('every result carries the model constants, so a job need not copy them', async () => {
+    const { bot } = rig()
+    for (const ticks of [0, 2]) {
+      const r = await paddleBoat(bot, ctx(), { ticks, forward: true }, opts)
+      assert.equal(r.turnDeg, BOAT_TURN)
+      assert.equal(r.speed, BOAT_SPEED)
+    }
   })
 })
