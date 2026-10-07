@@ -1,0 +1,20 @@
+;; Card db7aa152: jobs.items.equip holds a carried item in the main or off hand; a missing or misspelt item is refused with a reason.
+{:defaults
+ {:tags [:items :equip]
+  :plot {:height 8}
+  :body {:inventory [["iron_pickaxe" 1] ["shield" 1]]}
+  :limit-s 40}
+ :cases
+ [{:name "main-hand"
+   :act [[:job (jobs.items.equip {:item "iron_pickaxe"})]]
+   :expect [{:event {:source :job :kind :equip.done :data {:item "iron_pickaxe" :hand "main"}} :within-s 20 :of-job true}]}
+  {:name "off-hand-shield"
+   :act [[:job (jobs.items.equip {:item "shield" :hand "off"})]]
+   :expect [{:event {:source :job :kind :equip.done :data {:item "shield" :hand "off"}} :within-s 20 :of-job true}]}
+  {:name "no-item"
+   :act [[:job (jobs.items.equip {:item "diamond_pickaxe"})]]
+   :expect [{:event {:source :job :kind :equip.refused :data {:reason :no-item}} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind :equip.done} :for-s 10}]}
+  {:name "unknown-item"
+   :act [[:job (jobs.items.equip {:item "iron_pickaxx"})]]
+   :expect [{:event {:source :job :kind :equip.refused :data {:reason :unknown-item}} :within-s 20 :of-job true}]}]}

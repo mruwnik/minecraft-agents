@@ -4,6 +4,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.fetch-test :as ft]
             [engine.fake :as fake]
             [engine.registry :as registry]
             [engine.test-util :as tu]
@@ -30,13 +31,6 @@
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     (core/submit! eng '(recording-parent) {})
     {:eng eng :p p :clock clock :seen seen :out out}))
-
-(defn ^:async equip [world args]
-  (let [s (setup world args)]
-    (dotimes [_ 6]
-      (await (core/tick! (:eng s)))
-      (swap! (:clock s) + 500))
-    s))
 
 (defn ^:async equip [world args]
   (let [s (setup world args)]
@@ -95,3 +89,35 @@
       (fn ^:async t []
         (let [{:keys [out]} (await (equip (stacks "dirt") {:item "dirt" :hand "foot"}))]
           (is (= {:status :stopped :reason :bad-args} (select-keys @out [:status :reason]))))))))
+
+(deftest fetch-gets-a-missing-item-from-a-seen-chest-then-holds-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (ft/start (ft/world ft/pickaxe-stock) [])]
+          (core/submit! (:eng s) (list job {:item "wooden_pickaxe" :fetch true}) {})
+          (await (ft/run-ticks s 40))
+          (is (= "wooden_pickaxe" (held (:p s))))
+          (is (= 1 (count (ft/events-of s :fetch.done))))
+          (is (empty? (ft/listed s))))))))
+
+(deftest fetch-with-nothing-to-get-fails-clearly
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (ft/start (ft/world {}) [])]
+          (core/submit! (:eng s) (list job {:item "wooden_pickaxe" :fetch true}) {})
+          (await (ft/run-ticks s 40))
+          (is (nil? (held (:p s))))
+          (is (seq (ft/events-of s :fetch.failed))))))))
+
+(deftest without-fetch-the-job-waits-need-and-touches-no-chest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (ft/start (ft/world ft/pickaxe-stock) [])]
+          (core/submit! (:eng s) (list job {:item "wooden_pickaxe"}) {})
+          (await (ft/run-ticks s 10))
+          (is (nil? (held (:p s))))
+          (is (empty? (ft/events-of s :fetch.started)))
+          (is (seq (ft/chest-items s [-2 64 3]))))))))
