@@ -27,7 +27,9 @@
     ["use-on" "1" "64" "2"] '(jobs.blocks.use-on {:pos {:x 1 :y 64 :z 2}})
     ["interact" "17" "--item" "lead"] '(jobs.items.interact {:id 17 :item "lead"})
     ["wear" "iron_helmet"] '(jobs.items.wear {:item "iron_helmet"})
-    ["wear"] '(jobs.items.wear {})))
+    ["wear"] '(jobs.items.wear {})
+    ["equip" "iron_pickaxe"] '(jobs.items.equip {:item "iron_pickaxe"})
+    ["equip" "shield" "--hand" "off"] '(jobs.items.equip {:item "shield" :hand "off"})))
 
 (deftest the-request-goes-to-the-jobs-api-as-the-driver
   (let [r (world/request-for ["--world" "w" "Probe" "--state" "/s" "submit" "dig" "1" "64" "2" "--who" "Wren" "--request-id" "r1"])]
@@ -44,6 +46,9 @@
                           [#"not valid for dig" ["--world" "w" "Probe" "submit" "dig" "1" "64" "2" "--range" "1"]]
                           [#"not valid for move-to" ["--world" "w" "Probe" "submit" "move-to" "1" "64" "2" "--item" "bread"]]
                           [#"not valid for wear" ["--world" "w" "Probe" "submit" "wear" "--ignore-zones"]]
+                          [#"not valid for wear" ["--world" "w" "Probe" "submit" "wear" "--hand" "off"]]
+                          [#"--hand must be" ["--world" "w" "Probe" "submit" "equip" "shield" "--hand" "left"]]
+                          [#"equip needs one item" ["--world" "w" "Probe" "submit" "equip"]]
                           [#"--doors must be" ["--world" "w" "Probe" "submit" "move-to" "1" "64" "2" "--doors" "smash"]]
                           [#"--request-id must be" ["--world" "w" "Probe" "submit" "dig" "1" "64" "2" "--request-id" "bad id"]]
                           [#"--who must be" ["--world" "w" "Probe" "submit" "dig" "1" "64" "2" "--who" ""]]]]

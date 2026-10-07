@@ -493,8 +493,8 @@ lease is not saved; restart or going offline ends it.
   Refusals: `offline`, `settling`, `held-by <who>`, `not-taken`, `not-driver` (`detail {:holder :idle-left-s}`), `bad-args`.
 - Dead-man: untimed controls are released after 1 s without an op. The takeover ends after 15 s of silence by default
   (`--drive-idle-s`, or `idleS` on `take`); `ping` keeps the lease. Timed holds last at most 10 s.
-- `world.mjs submit <move-to|dig|place|use-on|interact|wear>` submits the job of that action (`go-to`, `blocks.dig`, `blocks.place`,
-  `blocks.use-on`, `items.interact`, `items.wear`) with `:by` = `--who`: under manual control it is the slot job.
+- `world.mjs submit <move-to|dig|place|use-on|interact|wear|equip>` submits the job of that action (`go-to`, `blocks.dig`, `blocks.place`,
+  `blocks.use-on`, `items.interact`, `items.wear`, `items.equip`) with `:by` = `--who`: under manual control it is the slot job.
 - Rules live in `engine.lease` (pure); `engine.takeover` applies them; `engine/js/control.mjs` is a stateless socket adapter.
 - Events: `system.takeover_started`, `system.takeover_ended` (reason `released`, `forced`, `idle`, `offline`, `shutdown`),
   `system.drive_deadman`.
@@ -610,7 +610,7 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 | `storage.deposit`, `withdraw`, `kit` | Put away everything except tools, armour and the body's 3-day food reserve (`jobs.lib.cost/food-reserve`; `:keep`; gives up when nothing moves); take named items (explicit `:items` ignore the reserve); take a tool and food kit (food up to the reserve). `withdraw` and `kit` record what a chest holds in `:fetch/stock` |
 | `items.obtain`, `items.get-tool`, `items.fetch-limits` | Get an item (or any of several) from carried stock, seen chests that allow `:take`, or a craft chain planned from recipes over what is carried (logs to planks, sticks, a table put down, the tool; `jobs.items.recipes`; a seen table the craft cannot reach is dropped from the plan and a carried or new one is put down, else it stops `:table-unreachable`); get a tool that harvests a block; set the body's fetch limits (`:fetch/limits`) |
 | `storage.make-room` | The `:inventory-nearly-full` job. One run deposits by value, swaps for worthier items, else tosses junk until `:free` slots are free, then steps away; stopped `:short` or `:nothing-to-go` when no more may go |
-| `items.craft`, `smelt`, `enchant`, `wear`, `bake`, `give` | Craft (walks to a table), smelt in a furnace, enchant, put armour on, bake bread, give items to a player |
+| `items.craft`, `smelt`, `enchant`, `wear`, `equip`, `bake`, `give` | Craft (walks to a table), smelt in a furnace, enchant, put armour on, hold an item in a hand, bake bread, give items to a player |
 | `village.trade` `{:villager :buy :count}` | Buys from a villager in one call (go-to legs, offers, buys); a give-up ends stopped with the reason |
 
 **Farming, animals, apiary, building**

@@ -508,7 +508,7 @@
            {:status "ok" :moved moved}])))))
 
 (defn equip [w {:keys [item dest]}]
-  (let [part (when (contains? #{"head" "torso" "legs" "feet"} dest) dest)
+  (let [part (if (= "off-hand" dest) "offHand" (when (contains? #{"head" "torso" "legs" "feet"} dest) dest))
         old (when part (get-in w [:equipment part]))]
     (cond
       (zero? (carried (:inventory w) item)) [w {:status "no-item"}]

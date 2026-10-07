@@ -16,6 +16,7 @@
        "  submit use-on <x> <y> <z> [--item <item>] [--face up|down|north|south|east|west]   (jobs.blocks.use-on)\n"
        "  submit interact <entity-id> [--item <item>]   (jobs.items.interact)\n"
        "  submit wear [<item>]   (jobs.items.wear: a carried armour piece; no item: the best carried piece for each empty or weaker slot)\n"
+       "  submit equip <item> [--hand main|off]   (jobs.items.equip: hold a carried item in the main hand or off-hand; refuses a missing item)\n"
        "Acquire the body first: drive.mjs take --who NAME --why \"<text>\" --idle-s N, and pass the same --who here.\n"
        "Under manual control the driver's job is the one slot: no other job runs, a new submit replaces the running one, and the body idles after it;\n"
        "jobs.mjs cancel <jID> or drive.mjs stop cancels it. Without manual control (or as another --who) the job joins the normal list.\n"
@@ -25,14 +26,14 @@
 (def options
   {:who {:type "string" :default "claude"} :state {:type "string"} :worlds {:type "string"} :world {:type "string"}
    :range {:type "string"} :doors {:type "string"} :no-escalate {:type "boolean"} :ignore-zones {:type "boolean"}
-   :item {:type "string"} :face {:type "string"} :request-id {:type "string"}
+   :item {:type "string"} :hand {:type "string"} :face {:type "string"} :request-id {:type "string"}
    :wait {:type "boolean"} :timeout {:type "string"}})
 
-(def action-options [:range :doors :no-escalate :ignore-zones :item :face])
+(def action-options [:range :doors :no-escalate :ignore-zones :item :face :hand])
 
 (def allowed
   {"move-to" #{:range :doors :no-escalate} "dig" #{:ignore-zones} "place" #{:ignore-zones}
-   "use-on" #{:item :face} "interact" #{:item} "wear" #{}})
+   "use-on" #{:item :face} "interact" #{:item} "wear" #{} "equip" #{:hand}})
 
 (def doors #{"shut" "leave-open" "never"})
 
@@ -50,7 +51,7 @@
 
 (defn spec-for
   "The job spec of a manual action: (job-name args-map)."
-  [action args {:keys [range doors no-escalate ignore-zones item face]}]
+  [action args {:keys [range doors no-escalate ignore-zones item face hand]}]
   (let [zones #(cond-> % ignore-zones (assoc :ignore-zones? true))]
     (case action
       "move-to" (list 'jobs.movement.go-to
@@ -63,6 +64,9 @@
       "use-on" (list 'jobs.blocks.use-on (cond-> (pos-args action args 3) (seq item) (assoc :item item) (seq face) (assoc :face face)))
       "wear" (do (when (> (count args) 1) (fail "wear needs at most one item"))
                  (list 'jobs.items.wear (if (seq args) {:item (first args)} {})))
+      "equip" (do (when-not (= 1 (count args)) (fail "equip needs one item"))
+                  (when-not (contains? #{nil "main" "off"} hand) (fail "--hand must be main or off"))
+                  (list 'jobs.items.equip (cond-> {:item (first args)} (some? hand) (assoc :hand hand))))
       "interact" (do (when-not (= 1 (count args)) (fail "interact needs one entity-id"))
                      (list 'jobs.items.interact (cond-> {:id (num (first args) "entity-id")} (seq item) (assoc :item item))))
       (fail (str "unknown action " (or action "undefined"))))))
