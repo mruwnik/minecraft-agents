@@ -21,7 +21,7 @@
    :blocks [[:fill [10 0 4] [22 5 31] "stone"] [:fill [16 0 20] [16 1 29] "air"]]
    :body {:at [16.5 0 23.5] :inventory [["diamond_pickaxe" 1]]}
    :act [[:summon "zombie" [16.5 0 29.5] "{NoAI:1b}"]
-         [:job (jobs.gather.mine {:block "diamond_ore" :direction :n :tunnel-length 12 :count 1})]]
+         [:job (jobs.gather.mine {:block "diamond_ore" :direction :n :tunnel-length 12 :count 1 :radius 8})]]
    :expect [{:event {:kind :watch.turned :data {:name "zombie"}} :within-s 15}]
    :limit-s 40}
   {:name "zombie-beyond-hearing-no-turn"
