@@ -262,3 +262,16 @@ test('without TEST_EVENTS no @@test line is printed', () => {
     assert.doesNotMatch(r.stdout, /@@test/)
   } finally { rmSync(d, { recursive: true, force: true }) }
 })
+
+test('TEST_EVENTS=1: the plan comes first, before the worktree is set up, and a busy slot is named in a phase line', () => {
+  const { d, shas } = fakeRepo()
+  try {
+    const r = run(d, ['engine.a-test', '--good', shas[0], '--bad', shas[5]], { TEST_EVENTS: '1', WT_BUSY_N: '2', TEST_BISECT_RETRY_SLEEP: '0' })
+    assert.equal(r.status, 0, r.stdout + r.stderr)
+    const ev = events(r.stdout)
+    assert.deepEqual(ev[0], { event: 'plan', total: 4 })
+    const phases = ev.filter((e) => e.event === 'phase').map((e) => e.name)
+    assert.match(phases[0], /^worktree: setting up/)
+    assert.ok(phases.some((p) => /^worktree: waiting for a free server slot/.test(p)), phases.join('|'))
+  } finally { rmSync(d, { recursive: true, force: true }) }
+})

@@ -93,7 +93,10 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT TERM
 
-event "worktree"
+count="$(git -C "$repo" rev-list --count "$good_sha..$bad_sha")"; BISECT_TOTAL=1; while [ $(( 1 << (BISECT_TOTAL - 1) )) -lt "$count" ]; do BISECT_TOTAL=$((BISECT_TOTAL + 1)); done
+export BISECT_TOTAL
+emit "{\"event\":\"plan\",\"total\":$BISECT_TOTAL}"
+event "worktree: setting up (checkout, then compiles under a server slot)"
 deadline=$(( $(date +%s) + ${TEST_BISECT_SLOT_WAIT:-1800} ))
 while true; do
   "$wt_sh" "$bad_sha" "$wt" >"$work/setup.log" 2>&1 && break
@@ -102,6 +105,7 @@ while true; do
   git -C "$repo" worktree prune
   if [ $rc -eq 75 ]; then
     [ "$(date +%s)" -lt "$deadline" ] || { cat "$work/setup.log" >&2; echo "test-bisect: no free server slot for the worktree after ${TEST_BISECT_SLOT_WAIT:-1800} s, retry later" >&2; exit 75; }
+    event "worktree: waiting for a free server slot ($(tail -n 1 "$work/setup.log" | cut -c1-200))"
     sleep "${TEST_BISECT_RETRY_SLEEP:-20}"
     continue
   fi
@@ -109,15 +113,17 @@ while true; do
 done
 cd "$wt" || exit 2
 git bisect start "$bad_sha" "$good_sha" >/dev/null || exit 2
-count="$(git rev-list --count "$good_sha..$bad_sha")"; BISECT_TOTAL=1; while [ $(( 1 << (BISECT_TOTAL - 1) )) -lt "$count" ]; do BISECT_TOTAL=$((BISECT_TOTAL + 1)); done
-export BISECT_TOTAL
-emit "{\"event\":\"plan\",\"total\":$BISECT_TOTAL}"
 echo "test-bisect: ${nss[*]} between $(git rev-parse --short "$good_sha") (good) and $(git rev-parse --short "$bad_sha") (bad)"
+# the relay reads up to an @@end line written after the bisect ends, so no output is lost to a tail --pid exit race
 BISECT_WORK="$work" setsid git bisect run "$self" --step "${nss[@]}" > "$work/run.log" 2>&1 &
 child=$!
-tail -f "$work/run.log" --pid=$child 2>/dev/null | grep --line-buffered -E '^(step |@@test )' &
+exec 3< <(exec tail -n +1 -f "$work/run.log")
 tailpid=$!
-wait $child; child=""; wait $tailpid 2>/dev/null
+sed -u -n -E '/^@@end$/q; /^(step |@@test )/p' <&3 &
+relay=$!
+wait $child; child=""
+echo @@end >> "$work/run.log"
+wait $relay; kill "$tailpid" 2>/dev/null; exec 3<&-
 
 first="$(git bisect log | sed -n 's/^# first .\{0,1\}bad.\{0,1\} commit: \[\([0-9a-f]*\)\].*/\1/p' | tail -n1)"
 if [ -z "$first" ]; then
