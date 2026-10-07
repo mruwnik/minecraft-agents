@@ -412,6 +412,19 @@
   (let [a (animal-now c)]
     (and a (animals/leashed? a) (not (animals/led-by-me? a)))))
 
+(def tie-settle-ms "How long to wait between looks at the animal after the click on the post." 250)
+(def tie-settle-tries "How often the animal is looked at again after the click before the tie counts as not taken." 6)
+
+(defn ^:async await-tied!
+  "True once the animal is held by something else than this body, looking tries more times a beat apart: the
+  state lands a tick or two after the click."
+  [c tries]
+  (cond
+    (tied? c) true
+    (zero? tries) false
+    :else (do (await (ctx/act c :wait #js {:ms tie-settle-ms}))
+              (await (await-tied! c (dec tries))))))
+
 (defn ^:async tie! [c]
   (let [fence (:fence (:args c))
         near (await (near/go-near! c fence 2 {:doors :never :zone-tolls true :escalate false}))]
@@ -421,7 +434,7 @@
             tries (inc (:ties (ctx/mem c) 0))]
         (ctx/update-mem! c assoc :ties tries)
         (cond
-          (tied? c) (do (ctx/update-mem! c assoc :still-led false :gathered true) (finish! c :tied))
+          (await (await-tied! c tie-settle-tries)) (do (ctx/update-mem! c assoc :still-led false :gathered true) (finish! c :tied))
           (>= tries max-ties) (finish! c :tie-failed)
           :else (do (ctx/emit! c :lead-to.tie-retry :info {:status (.-status r) :text "the post did not take the animal, trying once more"})
                     :again))))))

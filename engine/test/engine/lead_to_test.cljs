@@ -306,6 +306,30 @@
           (is (= 0 (count-of s "lead")) "the lead stays on the cow")
           (is (empty? (events-of s :lead-to.gave-up))))))))
 
+(deftest a-tie-that-lands-a-moment-after-the-click-is-polled-for-not-failed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p] :as s} (setup {:floor tu/walk-floor :inventory lead :blocks fence :entities [(cow 1 3)]})
+              state (fake/state p)
+              waits (atom 0)
+              landed (atom nil)]
+          (.override (.-world p) "useOn"
+                     (fn [token args impl]
+                       (let [before (:entities @state)
+                             r (impl token args)]
+                         (reset! landed (:entities @state))
+                         (swap! state assoc :entities before)
+                         r)))
+          (.override (.-world p) "wait"
+                     (fn [token args impl]
+                       (when (= 2 (swap! waits inc)) (swap! state assoc :entities @landed))
+                       (impl token args)))
+          (await (submit s {:fence {:x 31 :y 64 :z 0}} 12))
+          (is (finished? s))
+          (is (= :tied (:reason (done-event s))))
+          (is (= 1 (count (calls-of s "useOn"))) "the post was clicked once, not retried while the tie was landing"))))))
+
 (deftest declines-before-touching-anything
   (async done
     (tu/run-async done
