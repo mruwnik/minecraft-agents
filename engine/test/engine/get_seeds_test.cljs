@@ -214,10 +214,12 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p eng] :as s} (setup-seeing {:blocks {"6,64,0" "short_grass"} :drops seed-drops})]
-          (with-redefs [near/go-near! (fn ^:async f [_ _ _ _] :partial)]
-            (core/submit! eng (spec {:count 1}) {})
-            (await (run-ticks s 6 700)))
+          (await (tu/with-near-stub (fn ^:async f [_ _ _ _] :partial)
+            (fn ^:async b []
+              (core/submit! eng (spec {:count 1}) {})
+              (await (run-ticks s 6 700)))))
           (is (zero? (dig-count s)))
+          (is (not (finished? s)) "the job waits on the walk, it does not end")
           (is (zero? (:barren (job-mem s) 0)) "no barren round counted")
           (is (empty? (:skipped (job-mem s))) "the cell is not skipped"))))))
 

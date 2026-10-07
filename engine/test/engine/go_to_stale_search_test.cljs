@@ -73,6 +73,7 @@
           (let [{:keys [out]} (await (run-go-to! false))]
             (set! wsearch/new-search new-search)
             (is (not= :goal-enclosed (:why @out)))
+            (is (pos? (count @plans)) "the stub saw the searches")
             (is (< (count @plans) 10) "one search kept over its rounds, not one a round")))))))
 
 ;; the goal stays unloaded far past the loaded floor's east edge (card 7a031d15): no node of the loaded land is 8 blocks
