@@ -476,10 +476,10 @@
                  form))
 
 (defn resolve-body-refs
-  "Replaces every \"$body\" string in form with the name of the body running the case, so a plan's :metadata :by
-  names its own maker whatever probe body runs it."
+  "Replaces \"$body\" in every string of form with the name of the body running the case (a plan's :metadata :by names
+  its own maker whatever probe body runs it) and \"$tag\" with its lowercase shared tag (a marker name no other shard shares)."
   [form body]
-  (walk/postwalk (fn [v] (if (= v "$body") body v)) form))
+  (walk/postwalk (fn [v] (if (string? v) (-> v (str/replace "$body" body) (str/replace "$tag" (shared-tag body))) v)) form))
 
 ;; ------------------------------------------------------------------ after checks
 

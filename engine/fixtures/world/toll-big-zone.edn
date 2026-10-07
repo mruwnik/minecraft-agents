@@ -1,5 +1,5 @@
 ;; Card 228cb784: other bodies' zones are tolled up to 8000 cells (jobs.lib.toll-cells/zone-cells); over that the cells nearest the straight line
-;; are kept and one toll-cells.capped warn is given. The window of the walk (a to b and 8 blocks round) here holds 24 x 64 x 6 = 9216 zone cells.
+;; are kept and one toll-cells.capped warn is given. The window of the walk (a to b and 8 blocks round) here (y feet-2..feet+3, 4 rows of the zone) holds 35 x 64 x 4 = 8960 zone cells.
 ;; The zone is a toll, not a wall: the walk still arrives. A small zone is under the cap and gives no warn.
 {:defaults
  {:tags [:movement :zones]
@@ -9,7 +9,7 @@
   :limit-s 150}
  :cases
  [{:name "big-foreign-zone-warns-capped-and-arrives"
-   :zones [{:name "wide" :min [12 0 0] :max [35 5 63] :owner "SomeoneElse"}]
+   :zones [{:name "wide" :min [12 0 0] :max [46 5 63] :owner "SomeoneElse"}]
    :act [[:job (jobs.movement.go-to {:pos #at [44 0 59] :range 2})]]
    :expect [{:event {:source :job :level :warn :kind :toll-cells.capped} :within-s 60 :of-job true}
             {:event {:source :job :kind :result :data {:arrived true}} :within-s 140 :of-job true}]

@@ -530,7 +530,7 @@
         places (path/join world "places.json")
         opts {:body "ProbeX" :world "w" :shared-settle-ms 0}
         c {:zones [{:name "box" :min [1 0 1] :max [2 3 2] :owner "Ann" :allow #{:dig}}]
-           :places [{:name "home" :pos [4 0 5] :note "n"}]}
+           :places [{:name "home-$tag" :pos [4 0 5] :note "n"}]}
         names #(map :name (cljs.reader/read-string (fs/readFileSync zones "utf8")))
         markers #(map (fn [m] (.-name m)) (js/JSON.parse (fs/readFileSync places "utf8")))]
     (set! (.. js/process -env -WORLD_TEST_REPO) repo)
@@ -543,16 +543,26 @@
                    (is (= ["keep" "wt-other-box" "wt-probex-box"] (names)))
                    (is (= {:min [20001 150 20001] :max [20002 153 20002] :owner "Ann"}
                           (select-keys (last (cljs.reader/read-string (fs/readFileSync zones "utf8"))) [:min :max :owner])))
-                   (is (= ["mine" "home"] (markers)))
+                   (is (= ["mine" "home-wt-probex"] (markers)))
                    (let [m (aget (js/JSON.parse (fs/readFileSync places "utf8")) 1)]
                      (is (= [20004 150 20005 "wt-probex"] [(.-x m) (.-y m) (.-z m) (.-by m)])))
                    (r/drop-shared! opts)))
           (.then (fn []
                    (is (= ["keep" "wt-other-box"] (names)))
                    (is (= ["mine"] (markers)))
-                   (is (not (fs/existsSync r/shared-lock)))))
+                   (is (not (fs/existsSync (str zones ".lock"))))
+                   (is (not (fs/existsSync (str places ".lock"))))))
           (.catch (fn [e] (is false (.-message e))))
           (.finally (fn []
                       (if old (set! (.. js/process -env -WORLD_TEST_REPO) old) (js-delete (.-env js/process) "WORLD_TEST_REPO"))
                       (fs/rmSync repo #js {:recursive true :force true})
                       (done)))))))
+
+(deftest cleanup-runs-every-step-even-after-a-failure
+  (let [ran (atom [])
+        step (fn [k fail?] #(do (swap! ran conj k) (if fail? (js/Promise.reject (js/Error. "x")) (js/Promise.resolve))))]
+    (async done
+      (-> (r/run-cleanup! [(step :cancel true) (step :rcon false) (step :drop false)])
+          (.then (fn [] (is (= [:cancel :rcon :drop] @ran))))
+          (.catch (fn [e] (is false (.-message e))))
+          (.finally done)))))

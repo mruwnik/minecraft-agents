@@ -12,6 +12,7 @@
             [cljs.reader :as reader]
             [clojure.string :as str]
             [dashboard.rcon :as rcon]
+            [agent-tools.world-data :as wd]
             [world-test.build :as build]
             [world-test.changed :as chg]
             [world-test.events :as ev]
@@ -634,26 +635,13 @@
 
 (defn world-file [opts name] (repo-path "worlds" (:world opts) name))
 
-(def shared-lock (path/join (os/tmpdir) "world-test-shared-files.lock"))
 (def shared-settle-ms 3200)
 
-(defn with-shared-lock!
-  "Runs thunk (-> promise) while holding the lock that serialises the runners' edits of zones.edn and places.json (a
-  directory made exclusively; one held over 30 s is taken over)."
-  [thunk]
-  (let [until (+ (js/Date.now) 15000)]
-    (letfn [(try-lock []
-              (if (try (fs/mkdirSync shared-lock) true
-                       (catch :default _
-                         (when (try (> (- (js/Date.now) (.-mtimeMs (fs/statSync shared-lock))) 30000) (catch :default _ false))
-                           (try (fs/rmdirSync shared-lock) (catch :default _ nil)))
-                         false))
-                (-> (js/Promise.resolve (thunk))
-                    (.finally #(try (fs/rmdirSync shared-lock) (catch :default _ nil))))
-                (if (> (js/Date.now) until)
-                  (js/Promise.reject (js/Error. "the shared zones/places lock stayed busy for 15 s"))
-                  (.then (sleep 100) try-lock))))]
-      (try-lock))))
+(defn with-shared-files!
+  "Returns a thunk that runs thunk (-> promise) while holding the agent tools' own lock (<file>.lock) on each of files
+  in turn, so an edit of zones.edn or places.json cannot lose a tool's write or be lost to it."
+  [files thunk]
+  (reduce (fn [run file] #(wd/with-file-lock file run {:timeout-ms 15000})) thunk (reverse files)))
 
 (defn edit-shared-file!
   "Rewrites file with (f text) atomically (tmp file, rename); a missing file reads as empty text."
@@ -668,11 +656,16 @@
   "Removes the body's tagged zones and markers (the case's, or an earlier run's leftovers)."
   [opts]
   (let [tag (f/shared-tag (:body opts))]
-    (with-shared-lock!
-      (fn []
-        (edit-shared-file! (world-file opts "zones.edn") #(f/zones-without % tag))
-        (when (fs/existsSync (world-file opts "places.json"))
-          (edit-shared-file! (world-file opts "places.json") #(f/markers-without % tag)))))))
+    ((with-shared-files! [(world-file opts "zones.edn") (world-file opts "places.json")]
+       (fn []
+         (edit-shared-file! (world-file opts "zones.edn") #(f/zones-without % tag))
+         (when (fs/existsSync (world-file opts "places.json"))
+           (edit-shared-file! (world-file opts "places.json") #(f/markers-without % tag))))))))
+
+(defn run-cleanup!
+  "Runs the thunks (-> promise or nil) one after another; one that fails does not stop the rest."
+  [steps]
+  (reduce (fn [p step] (.then p #(-> (js/Promise.resolve) (.then step) (.catch (fn [_] nil))))) (js/Promise.resolve) steps))
 
 (defn abs-entries [origin entries ks]
   (mapv (fn [e] (reduce #(update %1 %2 (partial f/abs-pos origin)) e (filter #(contains? e %) ks))) entries))
@@ -685,11 +678,11 @@
   (if (and (empty? (:zones c)) (empty? (:places c)))
     (js/Promise.resolve nil)
     (let [zones (f/zone-entries (:body opts) (abs-entries origin (:zones c) [:min :max]))
-          markers (f/marker-entries (:body opts) (abs-entries origin (:places c) [:pos]))]
-      (-> (with-shared-lock!
-            (fn []
-              (when (seq zones) (edit-shared-file! (world-file opts "zones.edn") #(f/zones-with % zones)))
-              (when (seq markers) (edit-shared-file! (world-file opts "places.json") #(f/markers-with % markers)))))
+          markers (f/marker-entries (:body opts) (f/resolve-body-refs (abs-entries origin (:places c) [:pos]) (:body opts)))]
+      (-> ((with-shared-files! [(world-file opts "zones.edn") (world-file opts "places.json")]
+             (fn []
+               (when (seq zones) (edit-shared-file! (world-file opts "zones.edn") #(f/zones-with % zones)))
+               (when (seq markers) (edit-shared-file! (world-file opts "places.json") #(f/markers-with % markers))))))
           (.then #(sleep (:shared-settle-ms opts shared-settle-ms)))))))
 
 (defn submit-job!
@@ -990,14 +983,13 @@
                                                                     (some-> @pre-register :offset (as-> off (woke? (read-events-from (events-file opts) off))))))))
                    r)))
         (.then (fn [r]
-                 (-> (if (some #(#{:cli :http} (first %)) (:act c))
-                       (exec-file ["engine/tools/drive.mjs" (:body opts) "release" "--force" "--world" (:world opts)])
-                       (js/Promise.resolve nil))
-                     (.then #(exec-file ["engine/tools/jobs.mjs" (:body opts) "--world" (:world opts) "cancel-all"]))
-                     (.then #(rcon! (f/cleanup-commands grid origin (:body opts) rc)))
-                     (.then (fn [_] (when (or (seq (:zones c)) (seq (:places c))) (drop-shared! opts))))
-                     (.then (fn [_] (run! #(when (fs/existsSync %) (fs/unlinkSync %)) @plan-files) r))
-                     (.catch (fn [_] (run! #(when (fs/existsSync %) (fs/unlinkSync %)) @plan-files) r)))))
+                 (-> (run-cleanup! [#(when (some (fn [s] (#{:cli :http} (first s))) (:act c))
+                                       (exec-file ["engine/tools/drive.mjs" (:body opts) "release" "--force" "--world" (:world opts)]))
+                                    #(exec-file ["engine/tools/jobs.mjs" (:body opts) "--world" (:world opts) "cancel-all"])
+                                    #(rcon! (f/cleanup-commands grid origin (:body opts) rc))
+                                    #(when (or (seq (:zones c)) (seq (:places c))) (drop-shared! opts))
+                                    #(run! (fn [f] (when (fs/existsSync f) (fs/unlinkSync f))) @plan-files)])
+                     (.then (constantly r)))))
         (.finally (fn [] (stop-monitor) (release-time-lock!))))))
 
 ;; ------------------------------------------------------------------ reporting
