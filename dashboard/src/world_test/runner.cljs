@@ -24,7 +24,7 @@
        "--check only loads and validates the fixtures (no body, no server): one result per case, exit 1 on a parse error or problem.\n"
        "Runs world fixtures (default dir engine/fixtures/world) on the reserved plot grid x/z 20000..20640, y 150 (large plots: lanes south of it, to z 22240).\n"
        "--allow-time lets a case that needs night or day set the time (each set appended to --time-log); without it\n"
-       "such a case is skipped. A case that depends on the time of day holds a time lock shared by phase (day cases together,\n"
+       "such a case is skipped. A case that depends on the time of day (with --allow-time, every case) holds a time lock shared by phase (day cases together,\n"
        "night cases together; the other phase waits; the first holder sets the time) for its whole run; a manual `time set` takes it too: node tools/time-set.mjs <ticks|day|noon|night|midnight>. A failed case whose day time jumped meanwhile (a foreign `time set`) is INCONCLUSIVE. "
        "Exit code 0 when every run passed, 1 when one failed, 2 on a usage or setup error."))
 
@@ -432,26 +432,36 @@
 (defn release-time-lock! []
   (try (fs/unlinkSync (time-entry-file (.-pid js/process))) (catch :default _ nil)))
 
-(defn acquire-time-lock!
+(defn lock-phase
+  "The time-lock phase of case rc: its own when it depends on the time of day; else :day when the run may set the time
+  (it then waits out night, and the first holder sets day), else :any (joins the current phase)."
+  [opts rc]
+  (or (lease/time-phase rc) (if (:allow-time opts) :day :any)))
+
+(defn acquire-shared!
   "Resolves to {:first? bool} when this process holds the time lock for phase (:day, :night or :any), logging who it waits
-  for (once per holder set). Holders of the same phase share it; :any joins the phase that holds, else the world's."
-  [phase what]
+  for (once per holder set). Holders of the same phase share it; :any joins the phase that holds, else the world's.
+  env: {:ops lock dir ops, :read-phase (-> promise of :day or :night), :sleep, :log}."
+  [{:keys [ops read-phase sleep log]} phase what]
   (let [pid (.-pid js/process)
-        ops (time-lock-dir-ops)
-        seq (js/Date.now)
-        world-phase (fn [] (if (= :any phase)
-                             (.then (rcon! ["time query day"]) (fn [[reply]] (if (night? (daytime (or reply ""))) :night :day)))
-                             (js/Promise.resolve :day)))]
+        seq (js/Date.now)]
     (letfn [(attempt [told]
-              (.then (world-phase)
+              (.then (if (= :any phase) (read-phase) (js/Promise.resolve :day))
                      (fn [wp]
                        (let [r (lease/try-share ops pid phase seq wp)]
                          (if (:held r)
                            {:first? (:first? r)}
                            (do (when-not (= told (:waiting-on r))
-                                 (log! "waiting for time lock (" (name phase) ") held by " (str/join "," (:waiting-on r)) " (" what ")"))
+                                 (log "waiting for time lock (" (name phase) ") held by " (str/join "," (:waiting-on r)) " (" what ")"))
                                (.then (sleep 2000) #(attempt (:waiting-on r)))))))))]
       (attempt nil))))
+
+(defn acquire-time-lock!
+  [phase what]
+  (acquire-shared! {:ops (time-lock-dir-ops)
+                    :read-phase #(.then (rcon! ["time query day"]) (fn [[reply]] (if (night? (daytime (or reply ""))) :night :day)))
+                    :sleep sleep :log log!}
+                   phase what))
 
 (defn with-time-lock!
   "Runs thunk (a promise-returning fn) holding the time lock for phase; always releases it."
@@ -652,9 +662,9 @@
         pre-register (atom nil)
         _ (note-last-plot! opts origin grid)
         result (fn [m] (merge {:id (:id c) :run run :plot i :origin origin :elapsed-s (/ (- (js/Date.now) started) 1000)} m))]
-    (-> (let [phase (lease/time-phase rc)]
-          (.then (acquire-time-lock! (or phase :any) (str (:id c) (if phase " depends on the time of day" " runs under the current time")))
-                 (fn [held] (if (and phase (:first? held)) (time-ok! opts rc) true))))
+    (-> (let [phase (lock-phase opts rc)]
+          (.then (acquire-time-lock! phase (str (:id c) (if (= :any phase) " runs under the current time" " depends on the time of day")))
+                 (fn [held] (if (and (not= :any phase) (:first? held)) (time-ok! opts (if (lease/time-phase rc) rc (assoc rc :time :day))) true))))
         (.then (fn [ok]
                  (if-not ok
                    (result {:status :skipped :why (str "needs " (name (:time rc)) " (no --allow-time)")})

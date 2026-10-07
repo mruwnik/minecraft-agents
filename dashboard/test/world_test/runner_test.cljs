@@ -305,3 +305,42 @@
 
 (deftest check-is-an-option
   (is (true? (:check (r/parse-args #js ["--check"])))))
+
+(deftest a-time-independent-case-locks-as-day-when-the-run-may-set-the-time
+  (is (= [:day :any :night :night-x :day]
+         [(r/lock-phase {:allow-time true} {:time :any})
+          (r/lock-phase {} {:time :any})
+          (r/lock-phase {:allow-time true} {:time :night})
+          (r/lock-phase {} {:time :night-exclusive})
+          (r/lock-phase {} {:time :any :act [[:time-set 1000]]})])))
+
+(defn share-env [files read-phase told]
+  {:ops {:guard (fn [f] (f))
+         :entries (fn [] @files)
+         :put! (fn [pid e] (swap! files assoc pid e))
+         :remove! (fn [pid] (swap! files dissoc pid))
+         :alive? (constantly true)}
+   :read-phase read-phase
+   :sleep (fn [_] (js/Promise.resolve nil))
+   :log (fn [& parts] (swap! told conj (apply str parts)))})
+
+(deftest the-any-lock-joins-the-phase-read-from-the-world-when-nobody-holds
+  (async done
+    (let [files (atom {}) told (atom [])]
+      (.then (r/acquire-shared! (share-env files #(js/Promise.resolve :night) told) :any "x")
+             (fn [res]
+               (is (= {:first? true} res))
+               (is (= :night (:phase (get @files (.-pid js/process)))))
+               (done))))))
+
+(deftest the-day-lock-waits-out-a-night-holder-and-says-so
+  (async done
+    (let [files (atom {1 {:phase :night :state :hold :seq 1}})
+          told (atom [])
+          env (assoc (share-env files #(js/Promise.resolve :day) told)
+                     :sleep (fn [_] (swap! files dissoc 1) (js/Promise.resolve nil)))]
+      (.then (r/acquire-shared! (assoc-in env [:ops :alive?] (constantly true)) :day "x")
+             (fn [res]
+               (is (= {:first? true} res))
+               (is (= ["waiting for time lock (day) held by 1 (x)"] @told))
+               (done))))))
