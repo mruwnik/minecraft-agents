@@ -12,7 +12,8 @@
             [engine.events :as events]
             [engine.registry :as registry]
             [engine.test-util :as tu]
-            [engine.expr :as expr]))
+            [engine.expr :as expr]
+            [engine.fake :as fake]))
 
 ;; ---- seeded random numbers (mulberry32)
 
@@ -151,17 +152,24 @@
   {'jobs.survival.night "a night round waits for dawn, which the fake world's frozen clock never brings"
    'jobs.survival.retreat "flight keeps moving while the danger lasts, and the fake danger never goes"})
 
-(def progress-window "Rounds over which a changing job memory counts as progress, not a spin." 3)
+(def progress-window "Rounds over which a change in the fake world counts as progress, not a spin." 3)
 
 (defn running-ids
   "The listed job ids that are not parked after a failure (a parked job has stopped with its reason)."
   [state]
   (remove #(contains? (:failed state) %) (:list state)))
 
+(defn world-sig
+  "What a job can change in the fake world p: blocks, bag, containers, drops, entities, the body's position. Job memory is left out: retry counters and timestamps change on a spin."
+  [p]
+  (let [w @(fake/state p)]
+    {:blocks (:blocks w) :inventory (:inventory w) :containers (:containers w) :drops (:drops w)
+     :entities (:entities w) :pos (get-in w [:self :pos])}))
+
 (defn progressing?
-  "True when the memories (one per round, oldest first) differ across the last progress-window rounds: the job is working through its input."
-  [mems]
-  (let [tail (take-last (inc progress-window) mems)]
+  "True when the world signatures (one per round, oldest first) differ across the last progress-window rounds: the job is changing the world."
+  [sigs]
+  (let [tail (take-last (inc progress-window) sigs)]
     (and (> (count tail) 1) (not= (first tail) (last tail)))))
 
 (defn runaway
@@ -202,18 +210,18 @@
     (if (instance? js/Error id)
       (assoc base :outcome :refused :defects (when (str/blank? (ex-message id)) [[:blank-refusal ""]]))
       (let [thrown (atom nil)
-            mems (atom [])
+            sigs (atom [])
             unrefused (when (seq (:wrong-typed (meta args))) [[:wrong-type-accepted (pr-str (:wrong-typed (meta args)))]])]
         (loop [i 0]
           (when (and (< i max-rounds) (seq (running-ids (core/state eng))) (not @thrown) (not @capped))
             (swap! clock + 1500)
             (reset! calls {:all 0 :acts 0})
             (let [ok? (try (await (core/tick! eng)) true (catch :default e (reset! thrown (str e)) false))]
-              (swap! mems conj (into {} (map (juxt identity #(core/job-memory eng %))) (:list (core/state eng))))
+              (swap! sigs conj (world-sig raw))
               (when ok? (recur (inc i))))))
         (assoc base :outcome :ran
                :defects (concat unrefused (when (and @thrown (not (act-cap? @thrown))) [[:tick-threw @thrown]])
-                                (runaway job @capped (and (not @thrown) (seq (running-ids (core/state eng))) (not (declared-wait? @seen)) (not (progressing? @mems))))
+                                (runaway job @capped (and (not @thrown) (seq (running-ids (core/state eng))) (not (declared-wait? @seen)) (not (progressing? @sigs))))
                                 (defects @seen (core/state eng))))))))
 
 ;; ---- the run
@@ -227,7 +235,7 @@
 
 (def known
   "{[job kind] card}: defects already carded, so the suite stays green and a new one fails it. A default run fails when an entry no longer occurs: delete it with its fix."
-  {})
+  {["jobs.farm.find-spot" :runaway] "a9fb6a61: unbounded :w/:range scan keeps one scan row per round without changing the world"})
 
 (defn case-seed
   "Seed of case k of job: stable under the job filter and the other jobs."
@@ -360,8 +368,25 @@
           (is (= (:seed c) (:seed replay)))
           (is (= (select-keys a [:args :ground :defects]) (select-keys b [:args :ground :defects]))))))))
 
-(deftest runaway-ignores-parked-jobs-and-jobs-whose-memory-changes
+(deftest runaway-ignores-parked-jobs-and-jobs-whose-world-changes
   (is (= ["j2"] (running-ids {:list ["j1" "j2"] :failed {"j1" {}}})))
   (is (progressing? [{:a 0} {:a 0} {:a 1} {:a 2}]))
   (is (not (progressing? [{:a 1} {:a 1} {:a 1} {:a 1} {:a 1}])))
   (is (not (progressing? [{:a 1}]))))
+
+(defn sigs-over
+  "The world-sig after each of rounds rounds on a fake world, where (change! state round) is the job's act that round."
+  [rounds change!]
+  (let [p (tu/fake {:self {:pos [0 64 0]}})]
+    (mapv (fn [i] (swap! (fake/state p) change! i) (world-sig p)) (range rounds))))
+
+(deftest a-job-whose-only-change-is-a-retry-counter-is-a-runaway
+  (let [memory (atom {})
+        sigs (sigs-over 8 (fn [w _] (swap! memory update :tries (fnil inc 0)) w))]
+    (is (= 8 (:tries @memory)))
+    (is (not (progressing? sigs)))
+    (is (= [[:runaway "still running after 12 rounds"]] (runaway 'jobs.farm.till nil (not (progressing? sigs)))))))
+
+(deftest a-job-that-changes-a-block-every-third-round-is-progress
+  (let [sigs (sigs-over 12 (fn [w i] (if (zero? (mod i 3)) (assoc-in w [:blocks [1 64 i]] "dirt") w)))]
+    (is (every? progressing? (map #(take % sigs) (range 4 13))))))
