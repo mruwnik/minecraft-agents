@@ -82,6 +82,11 @@
   [commands]
   (if (empty? commands) (js/Promise.resolve []) (rcon/send-commands! {} (vec commands))))
 
+(defn rcon-step!
+  "One :rcon act step: sends text and logs the reply, so a fixture run shows what the server said."
+  [{:keys [send log]} text]
+  (.then (send [text]) (fn [[reply]] (log (str "rcon: " text " -> " (str/trim (str reply)))))))
+
 (defn exec-file
   "Runs node with args in the repo; resolves to {:code :out}."
   [args]
@@ -794,7 +799,7 @@
             (.then p (fn [ids]
                        (case op
                          :summon (.then (rcon! [(f/summon-command origin step)]) (constantly ids))
-                         :rcon (.then (rcon! [(f/substitute a (:body opts) origin box)]) (constantly ids))
+                         :rcon (.then (rcon-step! {:send rcon! :log log!} (f/substitute a (:body opts) origin box)) (constantly ids))
                          :kill-body (.then (rcon! [(str "kill " (:body opts))]) (constantly ids))
                          :rcon-until (.then (rcon-until! opts origin box offset t0 a b) (constantly ids))
                          :wait-s (.then (sleep (* 1000 a)) (constantly ids))

@@ -651,3 +651,15 @@
         (.then (fn [v] (is false (str "should have thrown, got " v))))
         (.catch (fn [e] (is (re-find #"world.reloaded" (.-message e)) (.-message e))))
         (.finally done))))
+
+(deftest an-rcon-step-logs-its-reply
+  (let [sent (atom []) logged (atom [])]
+    (async done
+      (-> (r/rcon-step! {:send (fn [cmds] (swap! sent into cmds) (js/Promise.resolve ["Bob has the data {SpawnX: 3}"]))
+                         :log (fn [s] (swap! logged conj s))}
+                        "data get entity Bob SpawnX")
+          (.then (fn [_]
+                   (is (= ["data get entity Bob SpawnX"] @sent))
+                   (is (= ["rcon: data get entity Bob SpawnX -> Bob has the data {SpawnX: 3}"] @logged))))
+          (.catch (fn [e] (is false (.-message e))))
+          (.finally done)))))
