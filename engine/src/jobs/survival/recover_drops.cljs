@@ -8,7 +8,28 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.util :as u]
             [triggers.survival.died :as died]
-            [engine.game :as game]))
+            [engine.game :as game]
+            [engine.memory :as mem]))
+
+(defn death-summary
+  "What status reports of a :died memory entry at now: {:pos :cause? :ago-ms :despawns-in-ms :recovered?}
+  while the drops can still be there (under the five minute despawn window), else nil. :recovered is the decision
+  of a :recovered entry newer than the death (:collected, :partial, :skip, :abandoned), when there is one."
+  ([entry now] (death-summary entry now nil))
+  ([entry now recovered]
+   (when entry
+     (let [ago (- now (:t entry))
+           {:keys [pos cause]} (:data entry)
+           decision (when (and recovered (> (:t recovered) (:t entry))) (:decision (:data recovered)))]
+       (when (< ago game/despawn-ms)
+         (cond-> {:pos pos :ago-ms ago :despawns-in-ms (- game/despawn-ms ago)}
+           cause (assoc :cause cause)
+           decision (assoc :recovered decision)))))))
+
+(defn death-status
+  "The status :died extra for a memory view."
+  [view]
+  (death-summary (mem/latest view :died) (:now view) (mem/latest view :recovered)))
 
 (def doc
   "After a death, go back for the drops when they are worth it.

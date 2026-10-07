@@ -8,6 +8,7 @@
             [engine.notes :as notes]
             [engine.perception :as perception]
             [engine.registry :as registry]
+            [jobs.survival.recover-drops :as recover-drops]
             [engine.scenario :as scenario]
             [engine.single :as single]
             [engine.takeover :as takeover]
@@ -187,7 +188,8 @@
                                                   :io ((createRequire (str root "/")) "./js/seen-file.mjs")
                                                   :on-event (fn [e] (some-> @eng-ref (core/emit! e)))})
                           (fn []))]
-    (let [event-socket (event-api/create (path/join (:engine-dir cfg) "events.sock") eng)]
+    (let [event-socket (event-api/create (path/join (:engine-dir cfg) "events.sock") eng
+                                             {:died recover-drops/death-status})]
       (try
         (await ((:listen event-socket)))
         (let [lease-opts {:idle-ms (* 1000 (:drive-idle-s opts))}

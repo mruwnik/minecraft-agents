@@ -14,8 +14,7 @@
             ["fs" :as fs]
             ["http" :as http]
             ["net" :as net]
-            ["path" :as path]
-            [engine.game :as game]))
+            ["path" :as path]))
 
 (def content-type "application/edn; charset=utf-8")
 (def max-body-bytes 16384)
@@ -199,25 +198,12 @@
      :message (short-text (:message event) 240)
      :updated-at (:updated-at request)}))
 
-(defn death-summary
-  "What status reports of a :died memory entry at now: {:pos :cause? :ago-ms :despawns-in-ms :recovered?}
-  while the drops can still be there (under the five minute despawn window), else nil. :recovered is the decision
-  of a :recovered entry newer than the death (:collected, :partial, :skip, :abandoned), when there is one."
-  ([entry now] (death-summary entry now nil))
-  ([entry now recovered]
-   (when entry
-     (let [ago (- now (:t entry))
-           {:keys [pos cause]} (:data entry)
-           decision (when (and recovered (> (:t recovered) (:t entry))) (:decision (:data recovered)))]
-       (when (< ago game/despawn-ms)
-         (cond-> {:pos pos :ago-ms ago :despawns-in-ms (- game/despawn-ms ago)}
-           cause (assoc :cause cause)
-           decision (assoc :recovered decision)))))))
-
 (defn status
   "The compact status view: mode, position, health, food, the current job, up to limit queued jobs,
-  failed jobs, outstanding attention requests and the event cursor."
-  [eng requested-limit]
+  failed jobs, outstanding attention requests and the event cursor. extras is {status-key (fn [memory-view])}:
+  each result is added under its key (job-side facts, e.g. a death summary)."
+  ([eng requested-limit] (status eng requested-limit nil))
+  ([eng requested-limit extras]
   (let [s (core/state eng)
         p (:primitives eng)
         self (.self p)
@@ -233,7 +219,8 @@
                        (sort-by (fn [[id req]] [(- (or (:updated-at req) 0)) id]))
                        (take attention-limit)
                        (mapv attention-summary))]
-    {:body (.-username self)
+    (merge
+     {:body (.-username self)
      :generation-id (:generation-id s)
      :cursor (events/cursor (:events eng))
      :mode (cond (core/manual? eng) :manual
@@ -247,8 +234,6 @@
                  (string? (:why manual)) (update :why #(short-text % 160))))
      :position (or (core/self-pos p) (some-> known :pos (select-keys [:x :y :z])))
      :last-known (when known true)
-     :died (let [view (mem/view (:store eng))]
-             (death-summary (mem/latest view :died) (:now view) (mem/latest view :recovered)))
      :health (let [h (if known (:health known) (.-health self))] (when (number? h) h))
      :food (let [f (if known (:food known) (.-food self))] (when (number? f) f))
      :current (when current
@@ -269,7 +254,9 @@
                {:total (count failed) :items (->> failed (take attention-limit) vec)
                 :more? (> (count failed) attention-limit)})
      :outstanding {:total (count (:attention s)) :items attention
-                   :more? (> (count (:attention s)) attention-limit)}}))
+                   :more? (> (count (:attention s)) attention-limit)}}
+     (let [view (mem/view (:store eng))]
+       (into {} (keep (fn [[k f]] (when-let [v (f view)] [k v]))) extras))))))
 
 (defn job-detail
   "One listed job with its bounded spec and args, status, wait reason, failure and attention requests; nil when unknown."
@@ -340,8 +327,9 @@
 
 (defn create
   "The API server for eng on socket-path: {:listen fn :close fn}, each returning a promise.
-  Refuses to listen when a live process already holds the socket."
-  [socket-path eng]
+  status-extras is the status extras (see status). Refuses to listen when a live process already holds the socket."
+  ([socket-path eng] (create socket-path eng nil))
+  ([socket-path eng status-extras]
   (let [listening? (atom false)
         server (http/createServer
                 (fn [req res]
@@ -385,7 +373,7 @@
                         (and (= method "GET") (= pathname "/status"))
                         (let [limit (number-param (.-searchParams url) "limit" status-job-limit 32)]
                           (if (and limit (pos? limit))
-                            (respond! res 200 (status eng limit))
+                            (respond! res 200 (status eng limit status-extras))
                             (bad! res 400 :bad-query)))
 
                         (and (= method "GET") (= pathname "/job"))
@@ -519,4 +507,4 @@
                            (fn []
                              (reset! listening? false)
                              (fs/rmSync socket-path #js {:force true})
-                             (resolve true)))))))}))
+                             (resolve true)))))))})))
