@@ -4,6 +4,7 @@
             [jobs.lib.blocks :as blocks]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
+            [jobs.lib.pace :as pace]
             [jobs.lib.step-off :as step-off]
             [jobs.lib.world :as known]))
 
@@ -180,7 +181,7 @@
         r (await (step-off/step-off! c feet {:avoid (into #{} (map (juxt :x :y :z)) box) :reach reach :ok? (step-off/zone-ok (access/rules-input c))}))]
     (when (:unreachable r)
       (bump! c (first (apply min-key #(u/dist me (first %)) todo)) :unreachable))
-    :continue))
+    :again))
 
 (defn finish! [c]
   (let [mem (ctx/mem c)
@@ -204,9 +205,9 @@
     (case (:reason w)
       :not-allowed (when (#{:zone :claim :footprint} (:by w)) (skip-refused! c [[t (assoc w :reason (:by w))]]))
       :hazard (bump! c t :hazard)
-      :not-loaded nil
+      :not-loaded (bump! c t :unreachable)
       (skip! c t :unreachable)))
-  :continue)
+  (if (blocks/body-wait? w) :continue :again))
 
 (defn ^:async dig!
   "One round of the dig child on the target cell t; book its end. A refused dig counts a try (:refused after two)."
@@ -223,10 +224,10 @@
           :already-clear (ctx/update-mem! c update :tries dissoc t)
           (:cannot :fluid) (skip! c t :cannot)
           (bump! c t :refused))
-        :continue))))
+        :again))))
 
-(defn ^:async round
-  "One bounded step: a round of the dig child on the cell under way (until it has picked up the drop), else skip the
+(defn ^:async step
+  "One step: a round of the dig child on the cell under way (until it has picked up the drop), else skip the
   refused cells and start on the highest nearest pending cell; an unloaded one is walked to first."
   [c]
   (if-let [t (:target (ctx/mem c))]
@@ -239,7 +240,12 @@
           (if (nil? n)
             (let [w (await (near/go-near! c pos 3 {:zone-tolls true}))]
               (when (= :blocked w) (bump! c pos :unreachable))
-              :continue)
+              (if (or (= :partial w) (and (= :there w) (nil? (u/block-name (:primitives c) pos)))) :continue :again))
             (do (ctx/update-mem! c assoc :target pos)
                 (await (dig! c pos))))
           (await (step-off! c allowed)))))))
+
+(defn ^:async round
+  "The whole attempt: loop the steps until the box is cleared or declined; :continue only while a walk or the body waits."
+  [c]
+  (await (pace/steps! c (fn ^:async s [] (await (step c))))))

@@ -323,3 +323,19 @@
           (is (seq @calls*))
           (is (every? #(= 3 (first %)) @calls*))
           (is (= :not-done result) "a waiting walk gives nothing up"))))))
+
+(deftest clear-box-clears-the-whole-box-in-one-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:blocks eight})
+              out (atom :not-done)
+              parent {:check (constantly true)
+                      :round (fn ^:async r [c]
+                               (let [r (await (ctx/call-child c :kid job box))]
+                                 (when (= :done r) (reset! out (ctx/child-result c :kid)))
+                                 r))}
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
+          (core/submit! eng '(recording-parent) {})
+          (await (core/tick! eng))
+          (is (= {:dug 8 :skipped {} :kept 0 :fluids {}} @out) "one tick, one call of the child"))))))
