@@ -24,6 +24,19 @@
   [p pos]
   (some-> (block-at p pos) .-name))
 
+(defn feel
+  "The block at a cell the body touches (its feet, head and the cell under the feet), as the JS object, in any light;
+  nil for a cell it does not touch. Primitives that are not wrapped by perception (a bare fake) have no feel and read blockAt."
+  [p pos]
+  (if (some? (.-feel p))
+    (.feel p (clj->js pos))
+    (block-at p pos)))
+
+(defn feel-name
+  "The block name at a cell the body touches, or nil (see feel)."
+  [p pos]
+  (some-> (feel p pos) .-name))
+
 (defn block-facts
   "What a cell holds as cljs facts {:name :full-cube? :waterlogged?} (full-cube?: its collision shape fills the cell), or
   nil when the chunk is not loaded."

@@ -17,17 +17,20 @@
   "Blocks at the feet that hold a body still enough to plan from: climbables, and water (it swims from there)."
   #{"ladder" "vine" "water"})
 
+(defn grounded?
+  "Whether the body stands on the ground, or its feet cell (felt) is a climbable or water."
+  [p]
+  (let [s (.self p)
+        pos (.-pos s)
+        b (u/feel p {:x (js/Math.floor (.-x pos)) :y (js/Math.floor (.-y pos)) :z (js/Math.floor (.-z pos))})]
+    (or (.-onGround s) (contains? held-in (some-> b .-name)))))
+
 (defn ^:async settle!
   "Wait (100 ms at a time, at most 20 waits) until the body stands on the ground, in a climbable or in water."
   [c]
-  (let [p (:primitives c)
-        grounded? (fn []
-                    (let [s (.self p)
-                          pos (.-pos s)
-                          b (u/block-at p {:x (js/Math.floor (.-x pos)) :y (js/Math.floor (.-y pos)) :z (js/Math.floor (.-z pos))})]
-                      (or (.-onGround s) (contains? held-in (some-> b .-name)))))]
+  (let [p (:primitives c)]
     (loop [n 0]
-      (when (and (< n max-settle-waits) (not (grounded?)))
+      (when (and (< n max-settle-waits) (not (grounded? p)))
         (await (ctx/act c :wait #js {:ms 100}))
         (recur (inc n))))))
 

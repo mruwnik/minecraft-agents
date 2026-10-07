@@ -29,6 +29,11 @@
    :y (js/Math.floor (+ (.. self -pos -y) eye-height))
    :z (js/Math.floor (.. self -pos -z))})
 
+(defn suffocates-here?
+  "Whether the cell the body touches (its eye or feet cell) fills with a block, as it feels: no raw read, any light."
+  [p cell]
+  (boolean (some-> (u/feel p cell) .-fullCube)))
+
 (defn suffocates?
   "Whether the block at cell makes a head inside it suffocate: sensing reports
   its collision shape as filling the cell (:fullCube). Plants, slabs, fluids
@@ -40,10 +45,10 @@
   "Why the body at p is suffocating, :drowning or :enclosed, or nil."
   [p min-oxygen]
   (let [self (.self p)
-        head (u/block-name p (eye-cell self))]
+        head (u/feel-name p (eye-cell self))]
     (cond
       (and (.-inWater self) (< (.-oxygen self) min-oxygen) (not (air? (or head "water")))) :drowning
-      (suffocates? p (eye-cell self)) :enclosed
+      (suffocates-here? p (eye-cell self)) :enclosed
       :else nil)))
 
 (def defaults {:min-oxygen default-min-oxygen})
@@ -63,12 +68,12 @@
   "The feet cell when its block fills the cell, else nil."
   [p]
   (let [cell (feet-cell (.self p))]
-    (when (some-> (.blockAt p (clj->js cell)) .-fullCube) cell)))
+    (when (suffocates-here? p cell) cell)))
 
 (defn only-feet-cell
   "wedged-cell, unless the eye cell is solid too (suffocating's business, breathe digs out); else nil."
   [p]
-  (when-not (suffocates? p (eye-cell (.self p)))
+  (when-not (suffocates-here? p (eye-cell (.self p)))
     (wedged-cell p)))
 
 (defn blocked-here?

@@ -66,7 +66,7 @@
   "The block under the feet cell is solid ground: not air, water, lava, fire or magma, and loaded. A body pressed
   against a wall over water is onGround for a tick without it."
   [p self]
-  (let [below (u/block-name p {:x (js/Math.floor (.. self -pos -x)) :y (dec (js/Math.floor (.. self -pos -y)))
+  (let [below (u/feel-name p {:x (js/Math.floor (.. self -pos -x)) :y (dec (js/Math.floor (.. self -pos -y)))
                                :z (js/Math.floor (.. self -pos -z))})]
     (boolean (and below (not (breath/air? below)) (not (contains? unsafe-below below))))))
 

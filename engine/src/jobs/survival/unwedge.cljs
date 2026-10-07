@@ -51,7 +51,7 @@
   (let [p (:primitives c)]
     (if (lava-near? p cell)
       (await (fail! c cell "lava"))
-      (let [block (u/block-name p cell)
+      (let [block (u/feel-name p cell)
             _ (access/trespass! c "unwedge" (:trespass (access/choose c :dig [[cell]] identity)))
             _ (await (tools/equip-tool! c block {:fast true}))
             status (.-status (await (tidy/dig! c cell true)))]

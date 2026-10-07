@@ -95,7 +95,7 @@
 (defn feel-feet
   "scanned plus the fire at the feet cell when the scan lacks it: the body feels the flames it stands in, in view or not."
   [p pos scanned]
-  (let [feet (u/block-name p pos)]
+  (let [feet (u/feel-name p pos)]
     (if (and (contains? hazards feet) (not-any? #(= pos (:pos %)) scanned))
       (conj scanned {:name feet :pos pos})
       scanned)))
