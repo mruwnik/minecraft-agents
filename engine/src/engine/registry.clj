@@ -129,23 +129,6 @@
                (job-files dir)))
     []))
 
-(defn settings-namespaces
-  "Every namespace under jobs/ and triggers/ (helper files included) that defines a top-level `settings`, in
-  path order."
-  []
-  (vec (for [dir-fn [jobs-dir triggers-dir]
-             :let [dir (dir-fn)]
-             :when dir
-             f (job-files dir)
-             :let [forms (read-forms f)]
-             :when (contains? (defined-names forms) 'settings)]
-         (expected-ns dir f))))
-
-(defmacro settings-registry
-  "{ns-symbol ns/settings} for every namespace that declares a top-level `settings` map of its keys."
-  []
-  (into {} (map (fn [ns] [(list 'quote ns) (symbol (str ns) "settings")])) (settings-namespaces)))
-
 (defmacro job-registry
   "{ns-symbol {:check :round :doc :args}} for every job namespace under jobs/."
   []
@@ -188,6 +171,27 @@
   "The triggers/ directory on the classpath (engine/src/triggers), or nil."
   []
   (some-> (io/resource "triggers") io/file))
+
+(defn settings-namespaces
+  "Every namespace under the given directories (default: jobs/ and triggers/; helper files included) that defines
+  a top-level `settings`, in path order."
+  ([] (settings-namespaces [(jobs-dir) (triggers-dir)]))
+  ([dirs]
+   (vec (for [dir dirs
+              :when dir
+              f (job-files dir)
+              :let [forms (read-forms f)]
+              :when (contains? (defined-names forms) 'settings)]
+          (expected-ns dir f)))))
+
+(defn settings-form [nss]
+  (into {} (map (fn [ns] [(list 'quote ns) (symbol (str ns) "settings")])) nss))
+
+(defmacro settings-registry
+  "{ns-symbol ns/settings} for every namespace that declares a top-level `settings` map of its keys. With a
+  classpath directory name (a test fixture), reads that directory instead of jobs/ and triggers/."
+  ([] (settings-form (settings-namespaces)))
+  ([resource] (settings-form (settings-namespaces [(some-> (io/resource resource) io/file)]))))
 
 (defn trigger-files-namespaces
   "The namespace of each source file under triggers/."

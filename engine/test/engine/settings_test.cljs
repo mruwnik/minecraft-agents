@@ -1,9 +1,11 @@
 (ns engine.settings-test
+  (:require-macros [engine.registry :refer [settings-registry]])
   (:require [cljs.test :refer [deftest is async]]
             [clojure.string :as str]
             [engine.registry :as registry]
             [engine.settings :as settings]
             [engine.test-util :as tu]
+            [settings-demo.declares :as demo]
             ["fs" :as fs]
             ["path" :as path]))
 
@@ -122,30 +124,51 @@
 
 (def all-specs (merge registry/settings settings/settings))
 
-(deftest every-key-is-in-its-declaring-namespace
-  (doseq [[sym specs] (assoc registry/settings-by-ns 'engine.settings settings/settings)
-          k (keys specs)]
-    (is (if (= 'engine.settings sym) (str/starts-with? (namespace k) "engine.") (= (str sym) (namespace k)))
-        (str k " declared in " sym))))
+(defn key-problems
+  "Strings naming each key of by-ns that is outside its declaring namespace, duplicated or has a default that does
+  not fit its spec."
+  [by-ns]
+  (let [pairs (for [[sym s] by-ns [k v] s] [k sym v])
+        misplaced (for [[k sym _] pairs
+                        :let [ok (if (= 'engine.settings sym) (str/starts-with? (namespace k) "engine.") (= (str sym) (namespace k)))]
+                        :when (not ok)]
+                    (str k " declared in " sym))
+        dups (for [[k n] (frequencies (map first pairs)) :when (> n 1)] (str k " declared twice"))
+        bad-defaults (for [[k _ spec] pairs :when (settings/spec-problem spec (:default spec))] (str k " default"))]
+    (concat misplaced dups bad-defaults)))
 
-(deftest no-duplicate-keys-and-defaults-fit-their-spec
-  (let [pairs (mapcat (fn [[sym s]] (map (fn [[k v]] [k sym v]) s))
-                      (assoc registry/settings-by-ns 'engine.settings settings/settings))]
-    (is (= (count pairs) (count (set (map first pairs)))))
-    (doseq [[k _ spec] pairs]
-      (is (contains? spec :default) (str k))
-      (is (string? (:doc spec)) (str k))
-      (is (nil? (settings/spec-problem spec (:default spec))) (str k)))))
+(deftest declared-keys-are-in-place-unique-and-fit-their-spec
+  (is (empty? (key-problems (assoc registry/settings-by-ns 'engine.settings settings/settings)))))
+
+(def int-key {:default 1 :type :int})
+
+(deftest key-problems-names-each-kind-of-problem
+  (is (= [":jobs.a/x declared in jobs.b"] (key-problems {'jobs.b {:jobs.a/x int-key}})))
+  (is (some #{":jobs.a/x declared twice"} (key-problems {'jobs.a {:jobs.a/x int-key} 'jobs.b {:jobs.a/x int-key}})))
+  (is (= [":jobs.a/x default"] (key-problems {'jobs.a {:jobs.a/x {:default "s" :type :int}}}))))
+
+(def demo-by-ns (settings-registry "settings_demo"))
+
+(deftest settings-registry-collects-a-real-declaring-namespace
+  (is (= {'settings-demo.declares demo/settings} demo-by-ns))
+  (is (empty? (key-problems demo-by-ns))))
 
 (defn source-files [dir]
   (mapcat (fn [e] (let [p (path/join dir (.-name e))]
                     (if (.isDirectory e) (source-files p) [p])))
           (.readdirSync fs dir #js {:withFileTypes true})))
 
+(defn settings-aliases
+  "The names a source text calls engine.settings by: its :as alias and the full name."
+  [text]
+  (conj (set (map second (re-seq #"\[engine\.settings :as ([^\s\]]+)" text))) "engine.settings"))
+
 (deftest settings-get-is-never-read-in-a-top-level-def
   (let [bad (for [f (source-files "src")
                   :when (re-find #"\.cljs$" f)
-                  form (str/split (fs/readFileSync f "utf8") #"\n(?=\()")
-                  :when (and (re-find #"^\((def|defonce) " form) (re-find #"settings/get" form))]
+                  :let [text (fs/readFileSync f "utf8")
+                        reads (re-pattern (str "(^|[^\\w.-])(" (str/join "|" (map #(str/replace % "." "\\.") (settings-aliases text))) ")/get[\\s)]"))]
+                  form (str/split text #"\n(?=\()")
+                  :when (and (re-find #"^\((def|defonce) " form) (re-find reads form))]
               f)]
     (is (empty? bad))))
