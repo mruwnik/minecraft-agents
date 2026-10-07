@@ -10,6 +10,7 @@ import { speciesColored } from '../tools/view/web/scene.mjs'
 import { modelUniforms, MAX_PART_ROWS } from '../tools/view/web/gl.mjs'
 import { render, makeGrid } from '../tools/view/renderer.mjs'
 import { openJar, findClientJar } from '../tools/view/jar-read.mjs'
+import { decodePng } from '../tools/view/renderer-png.mjs'
 import { textureBytes } from '../tools/view/materials.mjs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -235,6 +236,38 @@ test('the baby zombie\'s head reads the 6x6x6 head net at (3, 3) of its sheet, a
   assert.equal(head.layers[FACES.indexOf('south')], 'entity/zombie/zombie_baby#9,9,6,6')
   close(head.box[3] - head.box[0], 6 * 1.95 / 32)
   assert.ok(m.hull[4] < 0.55 * 1.95)
+})
+
+test('the baby layouts: the pig, chicken, cat, ocelot, fox, rabbit, horse family and llamas read their own baby sheets', () => {
+  const NAMES = 'pig chicken cat ocelot fox rabbit horse zombie_horse donkey mule llama trader_llama'.split(' ')
+  for (const name of NAMES) {
+    assert.ok(name in BABIES, name)
+    const m = modelFor({ name, height: 1, baby: true })
+    assert.ok(m.parts.length >= 4, name)
+    const adult = modelFor({ name, height: 1 }).hull[4]
+    assert.ok(m.hull[4] < 0.8 * adult && m.hull[4] > 0.3 * adult, `${name}: a baby is about half the adult's height, not ${m.hull[4]} of ${adult}`)
+  }
+})
+
+test('every region of a baby layout lies on painted pixels of its baby sheet', { skip }, () => {
+  const jar = openJar(jarPath)
+  const sheets = new Map()
+  const sheet = path => sheets.get(path) ?? sheets.set(path, decodePng(jar.read(`assets/minecraft/textures/${path}.png`))).get(path)
+  for (const name of Object.keys(BABIES)) {
+    for (const layer of modelFor({ name, height: 1, baby: true }).parts.flatMap(p => p.layers)) {
+      const [path, region] = layer.split('#')
+      const [x, y, w, h] = region.split(',').map(Number)
+      const { width, rgba } = sheet(path)
+      let painted = 0
+      for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) painted += rgba[(j * width + i) * 4 + 3] > 0 ? 1 : 0
+      assert.ok(painted >= 0.8 * w * h, `${name}: ${layer} is ${painted} of ${w * h} painted`)
+    }
+  }
+})
+
+test('the baby pig\'s head reads the 7x6x6 head net at (0, 15) of its sheet', () => {
+  const head = modelFor({ name: 'pig', height: 0.9, baby: true }).parts.find(p => p.paint === 1)
+  assert.equal(head.layers[FACES.indexOf('south')], 'entity/pig/pig_temperate_baby#6,21,7,6')
 })
 
 test('a baby of a mob without a baby layout still reads the adult sheet, half height with a bigger head', () => {
