@@ -1,7 +1,8 @@
 (ns jobs.lib.walk.watch
   "The walk driver's look-ahead: the cells and mobs of the way ahead watched while a plan is walked (watch-stop), when a walk may
   stop to plan again, and whether a refreshed plan replaces the old one."
-  (:require [jobs.lib.combat :as combat]
+  (:require [engine.hurt :as hurt]
+            [jobs.lib.combat :as combat]
             [jobs.lib.cost.danger :as danger]
             [jobs.lib.threats :as threats]
             [jobs.lib.walk.plan :as wplan]
@@ -33,6 +34,8 @@
   #{:gap :climb-up :climb-down :jump-climb :open :swim :swim-up :swim-down :exit})
 
 (def body-half 0.3)
+
+(def fall-margin "Hp a walk's falls may cost over the plan before it is a mismatch (rounding of the fall)." 1)
 
 (defn step-cells
   "The cells [x y z] the body passes going from prev to step: the columns its footprint (body-half either side) touches
@@ -179,13 +182,35 @@
       (swap! known into ks)
       {:status :replan :why :danger :at at :step i})))
 
+(defn damage-ahead
+  "The hp the steps from index i on plan to cost (their :damage, the planner's)."
+  [steps i]
+  (transduce (keep :damage) + 0 (subvec (vec steps) (min i (count steps)))))
+
+(defn health-stop
+  "The :replan done map when the damage still planned from step i on is more than the walk may spend now (watch :budget, a
+  fn: the hp of jobs.lib.cost/damage-budget at the body's health, food and effects now: a mob, a fall or hunger since the
+  plan was made), else nil."
+  [{:keys [budget]} steps i at]
+  (when (and budget (> (damage-ahead steps i) (budget)))
+    {:status :replan :why :health :at at :step i}))
+
+(defn damage-mismatch
+  "{:planned :lost} when the falls in hurts (raw :hurt memory entries since the walk began) cost more than margin hp over
+  planned, the hp the walked steps planned for drops; else nil. Hits of other causes do not count."
+  [planned hurts]
+  (let [lost (transduce (comp (filter #(= "fall" (hurt/cause (:data %)))) (map #(:amount (:data %)))) + 0 hurts)]
+    (when (> lost (+ planned fall-margin))
+      {:planned planned :lost lost})))
+
 (defn watch-stop
   "The look-ahead at one tick: nil, or the done map that stops the walk to plan again: {:status :replan :why :changed :cells}
   when a cell of the window ahead differs for the planner between the plan's snapshot (base) and a fresh one, {:status
   :replan :why :mob :cells} (the cells as walls) when a mob has stood in a 1-wide way ahead (still-mob-cells), else
   {:status :replan :why :danger} when a danger sensed now, not known when the walk began, lies within danger-reach of the
   way ahead (watch :sense, :known: the keys already planned for, which the stop adds its own to), else
-  {:status :replan :why :refresh} for a partial plan due a refresh. Only at a boundary?. steps: the steps walked; i the
+  {:status :replan :why :health} when the damage planned ahead is more than the body may spend now (health-stop; watch
+  :budget), else {:status :replan :why :refresh} for a partial plan due a refresh. Only at a boundary?. steps: the steps walked; i the
   executor's index before the tick; state its state after; watch {:base :fresh :ahead :skip :status :interval :mobs :seen}."
   [{:keys [base fresh ahead skip status interval mobs sense known] :as watch} steps i {i2 :i tick :tick} pose]
   (when (boundary? steps i i2 tick pose)
@@ -198,11 +223,14 @@
                     (let [^js bs (.-snapshot base) ^js ns (.-snapshot now) table (.-table base)]
                       (filterv (fn [[x y z]] (not (same-for-planner? table (.stateAt bs x y z) (.stateAt ns x y z))))
                                (remove (or skip #{}) (window-cells here i2 (:window watch-policy))))))
-          dstop (when (and (empty? still) (empty? changed)) (danger-stop watch all i2 at))]
+          quiet? (and (empty? still) (empty? changed))
+          dstop (when quiet? (danger-stop watch all i2 at))
+          hstop (when (and quiet? (not dstop)) (health-stop watch all i2 at))]
       (cond
         (seq changed) {:status :replan :why :changed :cells changed :at at :step i2}
         (seq still) {:status :replan :why :mob :cells still :at at :step i2}
         dstop dstop
+        hstop hstop
         (refresh-due? status tick interval) {:status :replan :why :refresh :at at :step i2}))))
 
 (defn watch-of
@@ -214,7 +242,7 @@
   (when known (swap! known into (map :key (threats/sensed-mobs (:primitives c)))))
   (cond-> {:base (:pw plan) :fresh #(wworld/path-world (:primitives c)) :ahead [] :skip (opens-cells (:steps plan))
    :mobs #(combat/sensed (:primitives c) {:radius 8 :max 64}) :seen (atom {})
-   :status (:status plan) :interval (refresh-ticks (:ms plan))}
+   :status (:status plan) :interval (refresh-ticks (:ms plan)) :budget #(wworld/damage-budget c)}
     known (assoc :known known :sense #(threats/sensed-mobs (:primitives c))))))
 
 (defn mob-cells

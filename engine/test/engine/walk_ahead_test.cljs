@@ -13,6 +13,7 @@
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.search :as wsearch]
             [jobs.lib.walk.watch :as wwatch]
+            [jobs.lib.walk.world :as wworld]
             [engine.planner-fixture :as pf]
             [engine.fake :as fake]
             [engine.test-util :as tu :refer [box floor]]
@@ -405,3 +406,89 @@
         (let [r (await (follow-with :danger "none" nil []))]
           (is (= 2 (:walks r)))
           (is (= :arrived (:status (:done r)))))))))
+
+;; ---------------------------------------------------------------- the health stop
+
+(def drop-ahead
+  "A walk of 4 steps whose third step is a drop that costs 3 hp."
+  [(step 0 64 0 :start) (step 1 64 0 :walk) (assoc (step 2 61 0 :drop) :damage 3) (step 3 61 0 :walk)])
+
+(defn health-stop [budget steps i2]
+  (wwatch/health-stop {:budget (constantly budget)} steps i2 [1 64 0]))
+
+(deftest a-health-stop-is-due-when-the-damage-still-ahead-is-over-the-budget-now
+  (is (= {:status :replan :why :health :at [1 64 0] :step 2} (health-stop 2 drop-ahead 2)) "3 hp planned, 2 may be spent")
+  (is (nil? (health-stop 3 drop-ahead 2)) "exactly the budget")
+  (is (nil? (health-stop 0 drop-ahead 3)) "the drop is behind")
+  (is (nil? (health-stop 0 (line 4) 2)) "no damage planned")
+  (is (nil? (wwatch/health-stop {} drop-ahead 2 [1 64 0])) "no budget read: no stop"))
+
+(deftest the-damage-of-the-steps-ahead-adds-up
+  (let [two (assoc drop-ahead 3 (assoc (step 3 58 0 :drop) :damage 1.5))]
+    (is (= 4.5 (wwatch/damage-ahead two 2)))
+    (is (= 1.5 (wwatch/damage-ahead two 3)))
+    (is (= 0 (wwatch/damage-ahead two 4)))))
+
+(deftest the-watch-stops-for-health-at-a-boundary-and-only-there
+  (let [watch {:base nil :fresh (constantly nil) :budget (constantly 1)}
+        done (wwatch/watch-stop watch drop-ahead 1 {:i 2 :tick 1} pose-on-ground)]
+    (is (= {:status :replan :why :health} (select-keys done [:status :why])))
+    (is (nil? (wwatch/watch-stop watch drop-ahead 1 {:i 1 :tick 1} pose-on-ground)) "no step reached, not on a check tick")))
+
+(deftest a-health-replan-keeps-the-old-plan-when-there-is-no-better-way
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[status reason steps walks] [["none" nil [] 2] ["partial" "goal-cut-off" (line 3) 2] ["found" nil (line 10) 2]]]
+          (let [r (await (follow-with :health status reason steps))]
+            (is (= walks (:walks r)) (str status reason))))))))
+
+;; the plan's steps carry the hp a drop costs (planner step damage), and follow! adds up what the walks planned
+(deftest plan-steps-carry-the-planned-damage-of-a-drop
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/fake {:blocks (merge (floor -2 -3 10 3) (floor 59 11 -3 47 3)) :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+              c {:primitives p}
+              plan (await (walk/plan-walk! c (wworld/path-world p) [14 60 0] 0 walk/default-weight))]
+          (is (= "found" (:status plan)))
+          (is (= [1] (vec (keep :damage (:steps plan)))) "a 4-block drop is 1 hp"))))))
+
+(deftest a-walk-reports-the-damage-its-steps-planned
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:status "found" :r #js {} :steps drop-ahead :ms 5}
+              c {:primitives (tu/fake-on-floor {:floor [-5 -5 20 5]})}
+              r (await (walk/follow! c plan {:plan-fn (fn [_] (js/Promise.resolve plan))
+                                             :walk-fn (fn [steps _] (js/Promise.resolve [{:status :arrived :at [3 61 0]} 1]))
+                                             :to [3 61 0] :policy executor/policy}))]
+          (is (= 3 (:damage r))))))))
+
+(deftest a-fall-that-cost-more-than-planned-is-a-mismatch
+  (let [fall (fn [amount] {:data {:amount amount :damageType "minecraft:fall"}})
+        mob (fn [amount] {:data {:amount amount :attacker {:name "zombie"}}})]
+    (is (nil? (wwatch/damage-mismatch 3 [(fall 3)])) "as planned")
+    (is (nil? (wwatch/damage-mismatch 3 [(fall 4)])) "a margin of 1")
+    (is (= {:planned 3 :lost 5} (wwatch/damage-mismatch 3 [(fall 2) (fall 3)])) "falls add up")
+    (is (= {:planned 0 :lost 6} (wwatch/damage-mismatch 0 [(fall 6) (mob 4)])) "other hurts do not count")
+    (is (nil? (wwatch/damage-mismatch 0 [(mob 9)])))))
+
+(deftest health-lost-before-a-drop-replans-and-the-body-does-not-take-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:blocks (merge (floor -2 -3 10 3) (floor 59 11 -3 47 3))}
+              [result replans at] (await (walk-to world [14 60 0]
+                                                  (fn [p] (on-steer p (fn [s tick _] (when (= tick 3) (swap! s assoc-in [:self :health] 12)))))))]
+          (is (= :health (:why (first replans))) "the walk stopped for the health it lost")
+          (is (= 64 (nth at 1)) "still on the plateau: the 1 hp drop is over the budget now")
+          (is (= :no-path (:status result)) "no way left within the budget (go-to waits or heals: its own case)"))))))
+
+(deftest a-drop-within-the-budget-is-walked-without-a-replan
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:blocks (merge (floor -2 -3 10 3) (floor 59 11 -3 47 3))}
+              [result replans at] (await (walk-to world [14 60 0] (fn [p] nil)))]
+          (is (= [:arrived [] 14] [(:status result) replans (js/Math.floor (first at))])))))))

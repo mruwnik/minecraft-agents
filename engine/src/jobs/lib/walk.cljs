@@ -153,21 +153,24 @@
   cells {:x :y :z} read as walls;
   :walk-fn (fn [steps watch]) -> [done ms] (walk! or jobs.lib.pass/walk!); :to the goal cell; :policy for no-walk;
   :dangers true: a danger newly sensed near the way ahead is planned round once (watch-stop);
+  a :health stop (the damage still planned is over what the body may spend now) plans again and walks the new plan, or
+  keeps the old one when there is no other way: it never ends the call;
   :announce! (fn [:replan data]) per replan, data {:why :ms :kept :replans :at :text}.
-  {:done :plan :ms :walked :replans}: done the last walk's done map, or the no-walk result of a replan that has no way; plan
-  the plan in force at the end; ms the time in walks; walked the blocks of plan walked."
+  {:done :plan :ms :walked :replans :damage}: done the last walk's done map, or the no-walk result of a replan that has no way; plan
+  the plan in force at the end; ms the time in walks; walked the blocks of plan walked; damage the hp the steps walked planned."
   [c plan {:keys [plan-fn walk-fn to policy announce! dangers] :or {policy (wworld/body-policy c) announce! (fn [_ _])}}]
   (let [known (when dangers (atom #{}))
         walkable? (fn [pl] (nil? (wplan/no-walk pl 0 policy)))
         proved-none? (fn [pl] (contains? #{:goal-cut-off :goal-enclosed} (:reason (wplan/no-walk pl 0 policy))))
         cut-length (fn [steps k] (path-length (subvec steps 0 (min (count steps) (max 1 k)))))]
-    (loop [plan plan steps (:steps plan) n 0 ms 0 walked 0]
+    (loop [plan plan steps (:steps plan) n 0 ms 0 walked 0 damage 0]
       (let [watch (when (< n wwatch/max-watch-replans) (wwatch/watch-of c plan known))
             [done wms] (await (walk-fn steps watch))
             ms (+ ms wms)
             k (or (:step done) (count steps))
             walked' (+ walked (cut-length steps k))
-            finish (fn [d pl w] {:done d :plan pl :ms ms :walked w :replans n})
+            damage' (+ damage (wwatch/damage-ahead (subvec steps 0 (min (count steps) k)) 0))
+            finish (fn [d pl w] {:done d :plan pl :ms ms :walked w :replans n :damage damage'})
             tell! (fn [why plan-ms kept]
                     (announce! :replan {:why why :ms (/ (js/Math.round (* 10 plan-ms)) 10) :kept kept :replans (inc n)
                                         :at (:at done)
@@ -179,8 +182,17 @@
                 plan-ms (- (js/performance.now) t)]
             (tell! :mob plan-ms false)
             (if (walkable? fresh)
-              (recur (assoc fresh :ms plan-ms) (:steps fresh) (inc n) ms walked')
-              (recur plan (subvec steps (max 0 (dec k))) wwatch/max-watch-replans ms walked')))
+              (recur (assoc fresh :ms plan-ms) (:steps fresh) (inc n) ms walked' damage')
+              (recur plan (subvec steps (max 0 (dec k))) wwatch/max-watch-replans ms walked' damage')))
+
+          (and (= :replan (:status done)) (= :health (:why done)))
+          (let [t (js/performance.now)
+                fresh (await (plan-fn []))
+                plan-ms (- (js/performance.now) t)]
+            (tell! :health plan-ms (not (walkable? fresh)))
+            (if (walkable? fresh)
+              (recur (assoc fresh :ms plan-ms) (:steps fresh) (inc n) ms walked' damage')
+              (recur plan (subvec steps (max 0 (dec k))) wwatch/max-watch-replans ms walked' damage')))
 
           (and (= :replan (:status done)) (= :danger (:why done)))
           (let [t (js/performance.now)
@@ -188,9 +200,9 @@
                 plan-ms (- (js/performance.now) t)]
             (tell! :danger plan-ms (not (walkable? fresh)))
             (cond
-              (walkable? fresh) (recur (assoc fresh :ms plan-ms) (:steps fresh) (inc n) ms walked')
+              (walkable? fresh) (recur (assoc fresh :ms plan-ms) (:steps fresh) (inc n) ms walked' damage')
               (proved-none? fresh) (finish (wplan/no-walk fresh 0 policy) fresh walked')
-              :else (recur (assoc plan :ms plan-ms) (subvec steps (max 0 (dec k))) (inc n) ms walked')))
+              :else (recur (assoc plan :ms plan-ms) (subvec steps (max 0 (dec k))) (inc n) ms walked' damage')))
 
           (= :replan (:status done))
           (let [t (js/performance.now)
@@ -202,19 +214,19 @@
                     none? (proved-none? fresh)]
                 (tell! :refresh plan-ms (not (or take? none?)))
                 (cond
-                  take? (recur fresh (:steps fresh) (inc n) ms walked')
+                  take? (recur fresh (:steps fresh) (inc n) ms walked' damage')
                   none? (finish (wplan/no-walk fresh 0 policy) fresh walked')
-                  :else (recur (assoc plan :ms plan-ms) (subvec steps (max 0 (dec k))) (inc n) ms walked')))
+                  :else (recur (assoc plan :ms plan-ms) (subvec steps (max 0 (dec k))) (inc n) ms walked' damage')))
               (do (tell! :changed plan-ms false)
                   (if (walkable? fresh)
-                    (recur fresh (:steps fresh) (inc n) ms walked')
+                    (recur fresh (:steps fresh) (inc n) ms walked' damage')
                     (finish (wplan/no-walk fresh 0 policy) fresh walked')))))
 
           (and (= :stuck (:status done)) (< n wwatch/max-watch-replans) (seq (wwatch/mob-cells c steps k)))
           (let [[fresh plan-ms] (await (replan-round-mob! c plan-fn walkable? steps k))]
             (tell! :mob plan-ms false)
             (if (walkable? fresh)
-              (recur fresh (:steps fresh) (inc n) ms walked')
+              (recur fresh (:steps fresh) (inc n) ms walked' damage')
               (finish done plan walked')))
 
           :else (finish done plan walked'))))))
@@ -239,11 +251,14 @@
             (announce! :plan {:steps (count steps) :summary (some-> (.-path r) .-summary js->clj)
                               :status status :ms (.-ms r) :replans replans
                               :text (str "plan " status ", " (count steps) " steps")})
-            (let [{walk-result :done last-plan :plan ms :ms length :walked}
+            (let [began (ctx/now c)
+                  {walk-result :done last-plan :plan ms :ms length :walked planned :damage}
                   (await (follow! c plan {:plan-fn plan-fn :to to :announce! announce!
                                           :walk-fn (fn [steps watch] (walk! c steps timeout-s watch))}))
                   walked (+ walked length)
                   walk-ms (+ walk-ms ms)
+                  _ (when-let [m (wwatch/damage-mismatch planned (ctx/since c :hurt began))]
+                      (ctx/emit! c :damage-mismatch :warn m))
                   done (partial-end walk-result (:status last-plan) to range (:steps last-plan) (:stop last-plan))
                   after (if (#{:arrived :off-plan :stuck} (:status done))
                           (executor/after-walk executor/policy replans done)

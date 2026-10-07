@@ -78,15 +78,22 @@
   ([c pw to range weight limits policy]
    (await (run-plan! c (.-snapshot pw) (plan-query c to range) (with-drops (plan-options pw weight limits wide-box) policy)))))
 
+(defn with-damage
+  "steps (of js-steps) with the hp each is planned to cost (:damage, the planner's step damage) where it costs any."
+  [steps ^js js-steps]
+  (mapv (fn [s ^js js] (cond-> s (some? (unchecked-get js "damage")) (assoc :damage (unchecked-get js "damage"))))
+        steps (array-seq js-steps)))
+
 (defn path-steps
-  "The executor's steps for a planner path over pw: corner free sides and hops, high corners and gap ceilings marked."
+  "The executor's steps for a planner path over pw: corner free sides and hops, high corners and gap ceilings marked,
+  and the planned damage of each."
   [pw ^js path]
   (let [solid? (wworld/solid-fn pw)]
     (executor/with-gap-ceilings
       executor/policy
       (executor/with-high-corners
         executor/policy
-        (executor/with-corner-hops (executor/with-free-sides (executor/steps-of (.-steps path)) solid?) solid?)
+        (executor/with-corner-hops (executor/with-free-sides (with-damage (executor/steps-of (.-steps path)) (.-steps path)) solid?) solid?)
         solid?)
       solid?)))
 
