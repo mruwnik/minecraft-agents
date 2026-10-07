@@ -172,6 +172,34 @@
           (is (= :place-failed (:reason (failed seen))))
           (is (not (contains? (kinds-seen seen) :dig-niche.sealed))))))))
 
+(defn mob-in-door [n]
+  (let [left (atom n)]
+    (fn ^:async f [token a impl]
+      (if (pos? @left)
+        (do (swap! left dec) #js {:status "failed" :reason "Server refused" :refusal #js {:entities #js [#js {:name "zombie" :id 7}]}})
+        (await (impl token a))))))
+
+(deftest a-mob-in-the-door-cell-delays-the-plug-until-it-clears
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen] :as s} (setup [] {})]
+          (.override (.-world p) "place" (mob-in-door 3))
+          (await (run! s {}))
+          (is (nil? (failed seen)))
+          (is (contains? (kinds-seen seen) :dig-niche.sealed))
+          (is (= ["cobblestone" "cobblestone"] (mapv #(block-at p %) [[4 64 0] [4 65 0]]))))))))
+
+(deftest a-mob-that-never-leaves-the-door-fails-place-failed-with-the-mob-named
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen] :as s} (setup [] {})]
+          (.override (.-world p) "place" (mob-in-door 1000))
+          (await (run! s {}))
+          (is (= :place-failed (:reason (failed seen))))
+          (is (re-find #"zombie" (:text (failed seen)))))))))
+
 (deftest scan-reports-refusals-and-stops-at-the-first-allowed-site
   (let [p (tu/seeing-all (tu/fake {:blocks (merge ground hill) :inventory [{:name "iron_pickaxe" :count 1}]}))
         asked (atom 0)]
