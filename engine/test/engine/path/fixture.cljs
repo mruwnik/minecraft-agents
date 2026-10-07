@@ -1,6 +1,5 @@
 (ns engine.path.fixture
-  "Tiny hand-built worlds for planner tests: a few named blocks in an otherwise empty (air) column set. Ported from
-  engine/js/path/fixture.mjs. The snapshot (path/snapshot.mjs), the block table (path/blocks.mjs) and block state ids
+  "Tiny hand-built worlds for planner tests: a few named blocks in an otherwise empty (air) column set. The snapshot (path/snapshot.mjs), the block table (path/blocks.mjs) and block state ids
   (prismarine-block) stay interop: they are the JS the planner reads."
   (:require ["module" :refer [createRequire]]))
 

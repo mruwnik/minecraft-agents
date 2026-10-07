@@ -3,9 +3,10 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { createRequire } from 'node:module'
 import { createSnapshot, loadRecordedWorld } from '../js/path/snapshot.mjs'
-import { courseNames, courseSnapshot } from '../js/path/courses.mjs'
 
+const require = createRequire(import.meta.url)
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 
 export const benchDir = () => process.env.PLANNER_BENCH_DIR ?? path.join(ROOT, 'engine/test/fixtures/pathfinding/claude-1')
@@ -19,10 +20,14 @@ const worldCourses = dir => {
     .map(({ id, from, goal }) => ({ id, group: 'world', snapshot, query: { from, goal } }))
 }
 
-const laneCourses = () => courseNames().map(name => {
-  const { snapshot, from, goal } = courseSnapshot(name)
-  return { id: `course-${name}`, group: 'course', snapshot, query: { from, goal } }
-})
+// the live tester's courses come from the cljs fixtures (engine.bench-courses in the planner-bench build); run from engine/
+const laneCourses = () => {
+  const build = require(path.join(ROOT, 'engine/out/planner-bench.cjs'))
+  return build.courseNames().map(name => {
+    const { snapshot, from, goal } = build.courseSnapshot(name)
+    return { id: `course-${name}`, group: 'course', snapshot, query: { from, goal } }
+  })
+}
 
 // [{ id, group: 'world' | 'course', snapshot, query: { from, goal } }]
 export const loadCourses = (dir = benchDir()) => [...worldCourses(dir), ...laneCourses()]

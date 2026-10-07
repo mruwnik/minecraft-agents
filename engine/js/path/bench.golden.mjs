@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { makeQueries } from './bench.mjs'
 import { plan } from './bench-baseline.mjs'
-import { fixtureSnapshot } from './fixture.mjs'
+import { fixtureSnapshot } from './test-world.mjs'
 
 const floor = fixtureSnapshot({ fill: [[0, 60, 0, 47, 63, 47, 'stone']] })
 const sets = [

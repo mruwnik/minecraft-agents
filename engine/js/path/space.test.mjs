@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { fixtureSnapshot } from './fixture.mjs'
+import { fixtureSnapshot } from './test-world.mjs'
 import { defaultStateTable } from './blocks.mjs'
 import { boxesNear, freeMask, regions, labelRegions, segmentFree } from './space.mjs'
 import { bambooBox } from '../offsets.mjs'

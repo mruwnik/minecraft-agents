@@ -39,7 +39,9 @@
                   :exports {:planTuned engine.path.planner-tuned/plan
                             :createSearchTuned engine.path.planner-tuned/create-search
                             :MOVE engine.path.planner-tuned/MOVE
-                            :DEFAULT_COSTS engine.path.planner-tuned/DEFAULT-COSTS}
+                            :DEFAULT_COSTS engine.path.planner-tuned/DEFAULT-COSTS
+                            :courseNames engine.bench-courses/course-names
+                            :courseSnapshot engine.bench-courses/course-snapshot}
                   :output-to "../engine/out/planner-bench.cjs"
                   :output-dir "../engine/out/planner-bench"
                   :compiler-options {:infer-externs false}}

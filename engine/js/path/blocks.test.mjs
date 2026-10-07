@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import prismarineRegistry from 'prismarine-registry'
-import { stateId } from './fixture.mjs'
+import { stateId } from './test-world.mjs'
 import { buildStateTable, OPEN, SOLID, WATER, LAVA, CLIMB, OPENABLE, NARROW, HAZARD_NONE, HAZARD_AVOID, DAMAGE_STAND, DAMAGE_TOUCH, SLOW, PORTAL } from './blocks.mjs'
 
 const registry = prismarineRegistry('26.1')

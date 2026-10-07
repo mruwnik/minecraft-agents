@@ -1,7 +1,7 @@
 (ns engine.path.courses
   "The live tester's courses as fixture snapshots (engine.path.fixture): its server commands (setblock / fill) are replayed
   into fixture entries on top of the lane as the tester prepares it, so unit tests and live runs share their terrain.
-  Ported from engine/js/path/courses.mjs; the course data is courses.edn."
+  The course data is courses.edn."
   (:require [cljs.reader :as reader]
             [clojure.string :as str]
             ["fs" :as fs]
