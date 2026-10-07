@@ -201,6 +201,7 @@
     (cond-> (merge executor/policy
                    (cost/fall-profile {:damage-budget (cost/survivable-budget (damage-body c) (select-keys (walk-settings c) [:max-damage]))
                                        :equipment (cost/equipment-of (.-equipment self))})
+                   (cost/air-profile (.-equipment self) (map #(js->clj % :keywordize-keys true) (array-seq (.-effects self))))
                    {:damage-budget (damage-budget c)
                     :damage-weight (* (or (:hp-seconds (:args c)) cost/hp-seconds) (cost/health-scale (.-health self)))
                     :danger-cap (max cost/danger-cap (or (:danger-max-rate (:args c)) 0))}

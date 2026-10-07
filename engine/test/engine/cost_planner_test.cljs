@@ -75,3 +75,22 @@
   (let [hay (.stateAt (world {:blocks [[0 70 0 "hay_block"]]}) 0 70 0)]
     (is (= 0.2 (.get (.-landing (wplan/with-drops #js {} {})) hay)) "the default")
     (is (= 0.5 (.get (.-landing (wplan/with-drops #js {} {:landing {"hay_block" 0.5}})) hay)))))
+
+(deftest air-profile-follows-the-helmet-and-the-effects
+  (are [equipment effects expected] (= expected (cost/air-profile equipment effects))
+    nil [] {}
+    {:head {:name "iron_helmet"}} [] {}
+    {:head {:name "diving_helmet" :enchants [{:name "respiration" :level 3}]}} [] {:air-drain 0.25}
+    {:head {:name "turtle_helmet"}} [] {:air-grace 10}
+    nil [{:name "water_breathing" :amplifier 0 :duration 600}] {:air-grace 30}
+    nil [{:name "conduit_power" :amplifier 0 :duration 200} {:name "speed" :duration 9000}] {:air-grace 10}
+    {:head {:name "turtle_helmet" :enchants [{:name "respiration" :level 1}]}} [{:name "water_breathing" :duration 100}] {:air-drain 0.5 :air-grace 10}))
+
+(deftest with-drops-sets-the-air-costs-under-the-callers-costs
+  (let [o (wplan/with-drops #js {} {:air-drain 0.5 :air-grace 10})]
+    (is (= 0.5 (.. o -costs -airDrain)))
+    (is (= 10 (.. o -costs -airGrace))))
+  (let [o (wplan/with-drops #js {} {:air-drain 0.5 :costs {:swim-h 2}})]
+    (is (= 0.5 (.. o -costs -airDrain)))
+    (is (= 2 (.. o -costs -swimH))))
+  (is (nil? (.-costs (wplan/with-drops #js {} {})))))

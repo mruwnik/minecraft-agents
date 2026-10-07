@@ -63,14 +63,16 @@
   "options (the planner's, a JS object) with the policy's :drop-cost: a number is the planner's costs.dropFactor (nil: as
   it is), false takes no drop of 2 or 3 (maxDrop 1). The policy's :max-drop is maxDrop, its :fall-factor fallFactor, and
   :damage-budget and :damage-weight the planner's damageBudget and damageWeight (none: the planner's defaults). Its :landing (block
-  name -> damage factor) is the planner's landing over cost/default-landing. Its :gait (:walk, :sneak) sets the costs walkS and sprintS under the :costs."
+  name -> damage factor) is the planner's landing over cost/default-landing. Its :gait (:walk, :sneak) sets the costs walkS and sprintS under the :costs; its :air-drain and :air-grace the costs airDrain and airGrace."
   [^js options policy]
   (let [k (:drop-cost policy)]
     (doseq [[opt key] [["maxDrop" :max-drop] ["fallFactor" :fall-factor] ["damageBudget" :damage-budget] ["damageWeight" :damage-weight] ["dangerCap" :danger-cap]]]
       (when-some [v (get policy key)] (unchecked-set options opt v)))
     (unchecked-set options "landing" (cost/planner-landing (:landing policy)))
-    (when (or (seq (:costs policy)) (contains? #{:walk :sneak} (:gait policy)))
-      (unchecked-set options "costs" (js/Object.assign (cost/gait-costs (:gait policy)) (cost/planner-costs (:costs policy)))))
+    (when (or (seq (:costs policy)) (contains? #{:walk :sneak} (:gait policy)) (:air-drain policy) (:air-grace policy))
+      (unchecked-set options "costs" (js/Object.assign (cost/gait-costs (:gait policy))
+                                                       (cost/air-costs policy)
+                                                       (cost/planner-costs (:costs policy)))))
     (cond
       (false? k) (doto options (unchecked-set "maxDrop" 1))
       (and (number? k) (not= 1 k)) (doto options (unchecked-set "costs" (js/Object.assign (or (.-costs options) #js {}) #js {:dropFactor k})))

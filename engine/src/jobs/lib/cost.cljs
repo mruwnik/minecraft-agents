@@ -15,7 +15,7 @@
     food     food-reserve: the food a body keeps carried, 3 days of it (jobs.lib.cost.food).
     value    item-value, fetch-cost, walk-cost: what items are worth, what fetching them or walking costs (jobs.lib.cost.value);
              per-dark, dark-factor: the one price of a dark block, which go-to's planner costs.
-    planner  planner-costs-problem, planner-costs, planner-names: go-to's :costs, the per-move prices it may override; landing-problem, planner-landing: go-to's :landing, fall damage by landing block; gait-problem, gait-costs: go-to's :gait (jobs.lib.cost.planner).
+    planner  planner-costs-problem, planner-costs, planner-names: go-to's :costs, the per-move prices it may override; landing-problem, planner-landing: go-to's :landing, fall damage by landing block; air-profile, air-costs: the planner's air drain and grace from the body's helmet and effects; gait-problem, gait-costs: go-to's :gait (jobs.lib.cost.planner).
     tolls    farm-tolls, zone-tolls: go-to's :tolls for planted cells and zone cells to cross only as a last resort
              (jobs.lib.cost.tolls)."
   (:require [jobs.lib.cost.armour :as armour]
@@ -70,6 +70,8 @@
 
 (def planner-costs-problem planner/planner-costs-problem)
 (def planner-costs planner/planner-costs)
+(def air-profile planner/air-profile)
+(def air-costs planner/air-costs)
 (def planner-names planner/planner-names)
 (def landing-problem planner/landing-problem)
 (def planner-landing planner/planner-landing)

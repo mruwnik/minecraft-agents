@@ -141,8 +141,8 @@
 
 (deftest default-water-costs-are-the-stated-ones
   (is (= {:swimH 0.5 :swimUp 0.3 :swimDown 0.35 :exit 0.6 :current 0.3 :bubbleUp 0.08 :bubbleDown 0.12
-          :airSupply 15 :airLimit 12 :maxWaterDrop 64 :dripleaf 0.2}
-         (select-keys costs [:swimH :swimUp :swimDown :exit :current :bubbleUp :bubbleDown :airSupply :airLimit
+          :airSupply 15 :airLimit 12 :airDrain 1 :airGrace 0 :maxWaterDrop 64 :dripleaf 0.2}
+         (select-keys costs [:swimH :swimUp :swimDown :exit :current :bubbleUp :bubbleDown :airSupply :airLimit :airDrain :airGrace
                              :maxWaterDrop :dripleaf]))))
 
 (deftest start-in-the-water-way-out-is-an-exit
@@ -227,6 +227,20 @@
 
 (deftest water-column-40-with-higher-air-limit-is-passable
   (is (found? (run-up (column 40) 40 {:costs {:airLimit 14}}))))
+
+;; Respiration n drains 1/(n+1) air a second; a turtle helmet or Water Breathing leaves airGrace free seconds
+(deftest respiration-lets-a-dive-twice-as-long-pass
+  (is (not (found? (run-up (column 40) 40 {:costs {:airDrain 1}}))))
+  (is (found? (run-up (column 40) 40 {:costs {:airDrain 0.5}}))))
+
+(deftest water-breathing-grace-lets-a-long-dive-pass
+  (is (not (found? (run-up (column 40) 40))))
+  (is (found? (run-up (column 40) 40 {:costs {:airGrace 10}}))))
+
+(deftest drain-scales-the-lowest-air-reading
+  (let [full (cost (run-up (column 20) 20) :airMin)
+        half (cost (run-up (column 20) 20 {:costs {:airDrain 0.5}}) :airMin)]
+    (is (> half full))))
 
 (deftest bubble-column-40-up-refills-the-air
   (let [r (run-up (column 40 bubble-up) 40)]

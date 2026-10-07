@@ -91,3 +91,9 @@
     (is (= 13 (:damage-budget (policy true {}))))
     (is (= 1 (:damage-budget (policy true {:min-health 12}))) "a caller's floor is never crossed")
     (is (= 2 (:damage-budget (policy true {:max-damage 2}))))))
+
+(deftest body-policy-reads-the-helmet-and-effects-for-the-air
+  (let [policy (fn [self & [equipment]] (wworld/body-policy {:primitives (tu/fake {:self self :equipment equipment}) :args {}}))]
+    (is (nil? (:air-drain (policy {:health 20 :food 20}))))
+    (is (= 0.5 (:air-drain (policy {:health 20 :food 20} {:head {:name "iron_helmet" :enchants [{:name "respiration" :level 1}]}}))))
+    (is (= 15 (:air-grace (policy {:health 20 :food 20 :effects [{:name "water_breathing" :duration 300}]}))))))

@@ -24,7 +24,7 @@
    limit-kinds ^js limit-gap ^js limit-corner
    ;; costs (options.costs over DEFAULT-COSTS)
    c-climb-up c-climb-down c-jump-climb c-open c-open-redstone c-open-lever c-open-plate c-beside-magma c-swim-h c-swim-up c-swim-down
-   c-exit c-current c-bubble-up c-bubble-down c-air-supply c-air-limit c-max-water-drop c-dripleaf c-dripleaf-risk
+   c-exit c-current c-bubble-up c-bubble-down c-air-supply c-air-limit c-air-drain c-max-water-drop c-dripleaf c-dripleaf-risk
    c-drop-factor ; a drop's fall seconds and fall damage are scaled by it (0: free)
    c-walk-s c-sprint-s ; seconds per block walked, and per block of a gap jump (the gait: walking, sprinting, sneaking)
    ;; search box: start and goal, plus margins

@@ -325,7 +325,7 @@
   ;; takeFlood). Cells it took over read an older world, so their enclosed answer is checked by a fresh flood (step). A
   ;; flood that leaked or met the start is dropped. The key holds the options that change the flood's moves (the box,
   ;; avoid and the walker's limits only refuse the search's nodes, not the flood's).
-  (goalId [s] (str (.-goal-x s) "," (.-goal-y s) "," (.-goal-z s) "," (.-goal-range s) "," (.-max-drop s) "," (.-c-air-supply s) "," (.-c-air-limit s) "," (.-c-max-water-drop s)))
+  (goalId [s] (str (.-goal-x s) "," (.-goal-y s) "," (.-goal-z s) "," (.-goal-range s) "," (.-max-drop s) "," (.-c-air-supply s) "," (.-c-air-limit s) "," (.-c-air-drain s) "," (.-c-max-water-drop s)))
 
   (memoOfGoal [s]
     (and (some? ^js (.-flood-memo s)) (identical? (.-goal ^js (.-flood-memo s)) (.goalId s))))
