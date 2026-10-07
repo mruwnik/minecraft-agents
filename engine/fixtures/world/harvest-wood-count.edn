@@ -18,7 +18,7 @@
             {:no-event {:source :job :kind :stopped} :for-s 100 :until {:source :job :kind :completed}}]
    :after [[:item "oak_log" [:>= 2]]]}
   {:name "only-an-island-tree-ends-no-tree"
-   :blocks [[:fill [8 -1 4] [28 -1 28] "lava"] [:fill [14 -1 12] [22 -1 20] "stone"]
+   :blocks [[:fill [8 -2 4] [28 -2 28] "stone"] [:fill [8 -1 4] [28 -1 28] "lava"] [:fill [14 -1 12] [22 -1 20] "stone"]
             [:fill [18 0 16] [18 3 16] "oak_log"] [:fill [16 3 14] [20 4 18] "mangrove_leaves[persistent=true]"] [:set [18 3 16] "oak_log"]]
    :body {:inventory [["iron_axe" 1]]}
    :act [[:job (jobs.forestry.harvest-wood {:radius 32 :count 4})]]
@@ -27,7 +27,7 @@
             {:no-event {:source :job :kind :harvest-wood.debts-owed} :for-s 100 :until {:source :job :kind :stopped :data {:reason :no-tree}}}]
    :after [[:block [18 0 16] "oak_log"] [:body-far [18.5 0 16.5] 6]]}
   {:name "felled-tree-then-island-only-ends-no-tree-with-replant-owed"
-   :blocks [[:fill [8 -1 4] [28 -1 28] "lava"] [:fill [14 -1 12] [22 -1 20] "stone"]
+   :blocks [[:fill [8 -2 4] [28 -2 28] "stone"] [:fill [8 -1 4] [28 -1 28] "lava"] [:fill [14 -1 12] [22 -1 20] "stone"]
             [:fill [18 0 16] [18 3 16] "oak_log"] [:fill [16 3 14] [20 4 18] "mangrove_leaves[persistent=true]"] [:set [18 3 16] "oak_log"]
             [:fill [3 0 8] [3 3 8] "oak_log"] [:fill [1 3 6] [5 4 10] "mangrove_leaves[persistent=true]"] [:set [3 3 8] "oak_log"]]
    :body {:inventory [["iron_axe" 1]]}

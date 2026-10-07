@@ -12,33 +12,33 @@
   :limit-s 90}
  :cases
  [{:name "harvest-cuts-open-crops-and-leaves-the-walled-one"
-   :blocks [[:fill [10 -1 16] [12 -1 16] "farmland[moisture=7]"] [:fill [10 -1 17] [12 -1 17] "water"]
+   :blocks [[:fill [10 -1 16] [12 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [12 -2 17] "stone"] [:fill [10 -1 17] [12 -1 17] "water"]
             [:fill [10 0 16] [12 0 16] "wheat[age=7]"]
-            [:fill [17 0 15] [19 2 17] "stone"] [:set [17 -1 16] "water"] [:set [18 -1 16] "farmland[moisture=7]"]
+            [:fill [17 0 15] [19 2 17] "stone"] [:set [17 -2 16] "stone"] [:set [17 -1 16] "water"] [:set [18 -1 16] "farmland[moisture=7]"]
             [:set [18 0 16] "wheat[age=7]"]]
    :act [[:job (jobs.farm.harvest {:center #xyz [14 0 16] :radius 8 :replant false})]]
    :expect [{:event {:source :job :kind :harvest.done :data {:cut 3}} :within-s 70 :of-job true}]
    :after [[:block [10 0 16] "air"] [:block [12 0 16] "air"] [:block [18 0 16] "wheat[age=7]"]]}
   {:name "fertilize-grows-open-crops-and-leaves-the-walled-one"
-   :blocks [[:fill [10 -1 16] [12 -1 16] "farmland[moisture=7]"] [:fill [10 -1 17] [12 -1 17] "water"]
+   :blocks [[:fill [10 -1 16] [12 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [12 -2 17] "stone"] [:fill [10 -1 17] [12 -1 17] "water"]
             [:fill [10 0 16] [12 0 16] "wheat[age=2]"]
-            [:fill [17 0 15] [19 2 17] "stone"] [:set [17 -1 16] "water"] [:set [18 -1 16] "farmland[moisture=7]"]
+            [:fill [17 0 15] [19 2 17] "stone"] [:set [17 -2 16] "stone"] [:set [17 -1 16] "water"] [:set [18 -1 16] "farmland[moisture=7]"]
             [:set [18 0 16] "wheat[age=2]"]]
    :body {:inventory [["bone_meal" 16]]}
    :act [[:job (jobs.farm.fertilize {:center #xyz [14 0 16] :radius 8 :fetch false})]]
    :expect [{:event {:source :job :kind :fertilize.done :data {:used [:>= 3]}} :within-s 70 :of-job true}]
    :after [[:block [10 0 16] "wheat[age=7]"] [:block [12 0 16] "wheat[age=7]"] [:block [18 0 16] "wheat[age=2]"]]}
   {:name "tend-harvests-open-crops-and-leaves-the-walled-one"
-   :blocks [[:fill [10 -1 16] [12 -1 16] "farmland[moisture=7]"] [:fill [10 -1 17] [12 -1 17] "water"]
+   :blocks [[:fill [10 -1 16] [12 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [12 -2 17] "stone"] [:fill [10 -1 17] [12 -1 17] "water"]
             [:fill [10 0 16] [12 0 16] "wheat[age=7]"]
-            [:fill [17 0 15] [19 2 17] "stone"] [:set [17 -1 16] "water"] [:set [18 -1 16] "farmland[moisture=7]"]
+            [:fill [17 0 15] [19 2 17] "stone"] [:set [17 -2 16] "stone"] [:set [17 -1 16] "water"] [:set [18 -1 16] "farmland[moisture=7]"]
             [:set [18 0 16] "wheat[age=7]"]]
    :body {:inventory [["wheat_seeds" 10]]}
    :act [[:job (jobs.farm.tend {:box {:min #xyz [10 -1 16] :max #xyz [18 0 16]}})]]
    :expect [{:event {:source :job :kind :farm-tend.done :data {:steps {:harvest {:cut 3 :replanted 3}}}} :within-s 80 :of-job true}]
    :after [[:block [10 0 16] "wheat[age=0]"] [:block [12 0 16] "wheat[age=0]"] [:block [18 0 16] "wheat[age=7]"]]}
   {:name "harvest-far-from-the-centre-finishes-in-time"
-   :blocks [[:fill [19 -1 20] [21 -1 20] "farmland[moisture=7]"] [:fill [19 -1 21] [21 -1 21] "water"]
+   :blocks [[:fill [19 -1 20] [21 -1 20] "farmland[moisture=7]"] [:fill [19 -2 21] [21 -2 21] "stone"] [:fill [19 -1 21] [21 -1 21] "water"]
             [:fill [19 0 20] [21 0 20] "wheat[age=7]"]]
    :body {:at [2.5 0 2.5]}
    :act [[:job (jobs.farm.harvest {:center #xyz [20 0 20] :radius 6 :replant false})]]

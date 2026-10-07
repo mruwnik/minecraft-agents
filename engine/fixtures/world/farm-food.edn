@@ -14,14 +14,14 @@
   :limit-s 90}
  :cases
  [{:name "tend-composts-surplus-seed-and-stores-crops-above-the-reserve"
-   :blocks [[:set [10 -1 16] "farmland[moisture=7]"] [:set [10 -1 17] "water"] [:set [10 0 16] "wheat[age=3]"]
+   :blocks [[:set [10 -1 16] "farmland[moisture=7]"] [:set [10 -2 17] "stone"] [:set [10 -1 17] "water"] [:set [10 0 16] "wheat[age=3]"]
             [:set [9 0 16] "chest"] [:set [11 0 16] "composter"]]
    :body {:inventory [["bread" 3] ["carrot" 20] ["wheat_seeds" 70]]}
    :act [[:job (jobs.farm.tend {:box {:min #xyz [10 -1 16] :max #xyz [10 0 16]} :chest #xyz [9 0 16] :composter #xyz [11 0 16]})]]
    :expect [{:event {:source :job :kind :farm-tend.done :data {:steps {:deposit {:gave-up false}}}} :within-s 80 :of-job true}]
    :after [[:item "wheat_seeds" 64] [:item "carrot" 15] [:item "bread" 3]]}
   {:name "tend-with-only-the-reserve-and-no-seed-does-nothing"
-   :blocks [[:set [10 -1 16] "farmland[moisture=7]"] [:set [10 -1 17] "water"]
+   :blocks [[:set [10 -1 16] "farmland[moisture=7]"] [:set [10 -2 17] "stone"] [:set [10 -1 17] "water"]
             [:set [9 0 16] "chest"] [:set [11 0 16] "composter"]]
    :body {:inventory [["carrot" 12]]}
    :act [[:job (jobs.farm.tend {:box {:min #xyz [10 -1 16] :max #xyz [10 0 16]} :chest #xyz [9 0 16] :composter #xyz [11 0 16]})]]
@@ -35,33 +35,33 @@
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :after [[:item "bread" 12] [:item "dirt" 0]]}
   {:name "tend-with-15-carrots-tills-and-sows-nothing"
-   :blocks [[:set [10 -1 16] "dirt"] [:set [10 -1 17] "water"]]
+   :blocks [[:set [10 -1 16] "dirt"] [:set [10 -2 17] "stone"] [:set [10 -1 17] "water"]]
    :body {:inventory [["stone_hoe" 1] ["carrot" 15]]}
    :act [[:job (jobs.farm.tend {:box {:min #xyz [10 -1 16] :max #xyz [10 0 16]}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :nothing-to-do}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :till.done} :for-s 20}]
    :after [[:block [10 -1 16] "dirt"] [:block [10 0 16] "air"] [:item "carrot" 15]]}
   {:name "tend-with-30-carrots-and-bread-tills-and-sows"
-   :blocks [[:set [10 -1 16] "dirt"] [:set [10 -1 17] "water"]]
+   :blocks [[:set [10 -1 16] "dirt"] [:set [10 -2 17] "stone"] [:set [10 -1 17] "water"]]
    :body {:inventory [["stone_hoe" 1] ["bread" 3] ["carrot" 30]]}
    :act [[:job (jobs.farm.tend {:box {:min #xyz [10 -1 16] :max #xyz [10 0 16]}})]]
    :expect [{:event {:source :job :kind :farm-tend.done :data {:steps {:till {:tilled 1} :plant {:planted 1}}}} :within-s 80 :of-job true}]
    :after [[:block [10 -1 16] "farmland"] [:block [10 0 16] "carrots"] [:item "carrot" 29]]}
   {:name "harvest-replants-its-own-cell-below-the-reserve"
-   :blocks [[:set [10 -1 16] "farmland[moisture=7]"] [:set [10 -1 17] "water"] [:set [10 0 16] "carrots[age=7]"]]
+   :blocks [[:set [10 -1 16] "farmland[moisture=7]"] [:set [10 -2 17] "stone"] [:set [10 -1 17] "water"] [:set [10 0 16] "carrots[age=7]"]]
    :body {:inventory [["carrot" 15]]}
    :act [[:job (jobs.farm.harvest {:center #xyz [10 0 16] :radius 3})]]
    :expect [{:event {:source :job :kind :harvest.done :data {:cut 1 :replanted 1}} :within-s 60 :of-job true}]
    :after [[:block [10 0 16] "carrots[age=0]"]]}
   {:name "plant-with-only-the-reserve-in-carrots-waits-for-seed"
-   :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -1 17] [13 -1 17] "water"]]
+   :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [13 -2 17] "stone"] [:fill [10 -1 17] [13 -1 17] "water"]]
    :body {:inventory [["carrot" 15]]}
    :act [[:job (jobs.farm.plant {:box {:min #xyz [10 -1 16] :max #xyz [13 -1 16]} :fetch false})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :need}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :plant.done :data {:planted [:>= 1]}} :for-s 20}]
    :after [[:block [10 0 16] "air"] [:block [13 0 16] "air"] [:item "carrot" 15]]}
   {:name "plant-sows-wheat-seeds-and-keeps-the-carrot-reserve"
-   :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -1 17] [13 -1 17] "water"]]
+   :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [13 -2 17] "stone"] [:fill [10 -1 17] [13 -1 17] "water"]]
    :body {:inventory [["carrot" 15] ["wheat_seeds" 4]]}
    :act [[:job (jobs.farm.plant {:box {:min #xyz [10 -1 16] :max #xyz [13 -1 16]} :fetch false})]]
    :expect [{:event {:source :job :kind :plant.done :data {:planted 4 :reason :done}} :within-s 60 :of-job true}]

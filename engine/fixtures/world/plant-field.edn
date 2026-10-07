@@ -7,40 +7,40 @@
   :body {:at [10.5 0 14.5] :effects [["resistance" 600 4]]}}
  :cases
  [{:name "sow-wheat-row-walks-over-sown-cells"
-   :blocks [[:fill [10 -1 16] [21 -1 16] "farmland[moisture=7]"] [:fill [10 -1 17] [21 -1 17] "water"]]
+   :blocks [[:fill [10 -1 16] [21 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [21 -2 17] "stone"] [:fill [10 -1 17] [21 -1 17] "water"]]
    :body {:inventory [["wheat_seeds" 30]]}
    :act [[:job (jobs.farm.plant {:box {:min #xyz [10 -1 16] :max #xyz [21 -1 16]}})]]
    :expect [{:event {:source :job :kind :plant.done :data {:planted 12 :reason :done}} :within-s 90 :of-job true}]
    :after [[:block [10 0 16] "wheat"] [:block [21 0 16] "wheat"] [:item "wheat_seeds" 18]]}
   {:name "one-run-one-crop-first-pick-kept"
    ;; carrots count as food: 20 (60 points) stay as the food reserve, only the 5 above it are sown
-   :blocks [[:fill [10 -1 16] [21 -1 16] "farmland[moisture=7]"] [:fill [10 -1 17] [21 -1 17] "water"]]
+   :blocks [[:fill [10 -1 16] [21 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [21 -2 17] "stone"] [:fill [10 -1 17] [21 -1 17] "water"]]
    :body {:inventory [["wheat_seeds" 7] ["carrot" 25]]}
    :act [[:job (jobs.farm.plant {:box {:min #xyz [10 -1 16] :max #xyz [21 -1 16]}})]]
    :expect [{:event {:source :job :kind :plant.done :data {:planted 12 :reason :done}} :within-s 90 :of-job true}]
    :after [[:block [16 0 16] "wheat"] [:block [17 0 16] "carrots"] [:block [21 0 16] "carrots"]
            [:item "wheat_seeds" 0] [:item "carrot" 20]]}
   {:name "seed-arg-picks-that-crop"
-   :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -1 17] [13 -1 17] "water"]]
+   :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [13 -2 17] "stone"] [:fill [10 -1 17] [13 -1 17] "water"]]
    :body {:inventory [["carrot" 20] ["wheat_seeds" 5]]}
    :act [[:job (jobs.farm.plant {:box {:min #xyz [10 -1 16] :max #xyz [13 -1 16]} :seed "wheat_seeds"})]]
    :expect [{:event {:source :job :kind :plant.done :data {:planted 4 :reason :done}} :within-s 60 :of-job true}]
    :after [[:block [10 0 16] "wheat"] [:block [13 0 16] "wheat"] [:item "carrot" 20]]}
   {:name "no-seed-does-not-sow"
-   :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -1 17] [13 -1 17] "water"]]
+   :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [13 -2 17] "stone"] [:fill [10 -1 17] [13 -1 17] "water"]]
    :act [[:job (jobs.farm.plant {:box {:min #xyz [10 -1 16] :max #xyz [13 -1 16]} :fetch false})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :need}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :plant.done :data {:planted [:>= 1]}} :for-s 20}]
    :after [[:block [10 0 16] "air"] [:block [13 0 16] "air"]]}
   {:name "no-seed-fetches-from-a-seen-chest"
    :body {:yaw 0}
-   :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -1 17] [13 -1 17] "water"]
+   :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [13 -2 17] "stone"] [:fill [10 -1 17] [13 -1 17] "water"]
             [:set [8 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:wheat_seeds\",count:10}]}"]]
    :act [[:job (jobs.farm.plant {:box {:min #xyz [10 -1 16] :max #xyz [13 -1 16]} :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :plant.done :data {:planted 4 :reason :done}} :within-s 90 :of-job true}]
    :after [[:block [10 0 16] "wheat"] [:block [13 0 16] "wheat"]]}
   {:name "field-in-a-plan-footprint-stays-bare"
-   :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -1 17] [13 -1 17] "water"]]
+   :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [13 -2 17] "stone"] [:fill [10 -1 17] [13 -1 17] "water"]]
    :plans [{:id "other"
             :parts [{:id "field" :cells [#at [10 0 16] #at [11 0 16] #at [12 0 16] #at [13 0 16]] :want [:any "stone"]}]}]
    :body {:inventory [["wheat_seeds" 10]]}
@@ -54,7 +54,7 @@
   ;; the own cells 10, 11 are sown. When every cell is shared the job never starts, still one warn. :ignore-zones? sows
   ;; the shared cells and warns nothing.
   {:name "overlapping-plans-sow-own-cells-and-warn"
-   :blocks [[:fill [10 -1 16] [15 -1 16] "farmland[moisture=7]"] [:fill [10 -1 17] [15 -1 17] "water"]]
+   :blocks [[:fill [10 -1 16] [15 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [15 -2 17] "stone"] [:fill [10 -1 17] [15 -1 17] "water"]]
    :plans [{:id "mine" :metadata {:by "$body"}
             :parts [{:id "p" :cells [#at [10 0 16] #at [11 0 16] #at [12 0 16] #at [13 0 16]] :want {:crop "wheat"}}]}
            {:id "other" :metadata {:by "SomeoneElse"}
@@ -66,7 +66,7 @@
    :after [[:block [10 0 16] "wheat"] [:block [11 0 16] "wheat"] [:block [12 0 16] "air"] [:block [13 0 16] "air"]
            [:block [14 0 16] "air"]]}
   {:name "all-cells-shared-with-another-plan-warns-and-never-starts"
-   :blocks [[:fill [10 -1 16] [11 -1 16] "farmland[moisture=7]"] [:fill [10 -1 17] [11 -1 17] "water"]]
+   :blocks [[:fill [10 -1 16] [11 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [11 -2 17] "stone"] [:fill [10 -1 17] [11 -1 17] "water"]]
    :plans [{:id "mine" :metadata {:by "$body"}
             :parts [{:id "p" :cells [#at [10 0 16] #at [11 0 16]] :want {:crop "wheat"}}]}
            {:id "other" :metadata {:by "SomeoneElse"}
@@ -77,7 +77,7 @@
             {:no-event {:source :job :kind :plant.done :data {:planted [:>= 1]}} :for-s 20}]
    :after [[:block [10 0 16] "air"] [:block [11 0 16] "air"] [:item "wheat_seeds" 10]]}
   {:name "ignore-zones-sows-cells-shared-with-another-plan"
-   :blocks [[:fill [10 -1 16] [11 -1 16] "farmland[moisture=7]"] [:fill [10 -1 17] [11 -1 17] "water"]]
+   :blocks [[:fill [10 -1 16] [11 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [11 -2 17] "stone"] [:fill [10 -1 17] [11 -1 17] "water"]]
    :plans [{:id "mine" :metadata {:by "$body"}
             :parts [{:id "p" :cells [#at [10 0 16] #at [11 0 16]] :want {:crop "wheat"}}]}
            {:id "other" :metadata {:by "SomeoneElse"}

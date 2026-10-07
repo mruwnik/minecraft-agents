@@ -22,13 +22,13 @@
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 80 :of-job true}]
    :after [[:body-near [26.5 0 22.5] 2]]}
   {:name "covers-adjacent-lava-1"
-   :blocks [[:set [11 -1 16] "lava"]]
+   :blocks [[:set [11 -2 16] "stone"] [:set [11 -1 16] "lava"]]
    :body {:inventory [["cobblestone" 8]]}
    :act [[:wait-s 6]]
    :after [[:not-block [11 -1 16] "lava"] [:block [11 -1 16] "cobblestone"]]
    :limit-s 30}
   {:name "covers-adjacent-lava-2"
-   :blocks [[:set [8 -1 10] "netherrack"] [:set [8 0 10] "fire"] [:set [8 -1 11] "lava"]]
+   :blocks [[:set [8 -1 10] "netherrack"] [:set [8 0 10] "fire"] [:set [8 -2 11] "stone"] [:set [8 -1 11] "lava"]]
    :body {:at [8.5 0 10.5] :inventory [["cobblestone" 8]]}
    :act [[:wait-s 6]]
    :after [[:not-block [8 -1 11] "lava"] [:block [8 -1 11] "cobblestone"]]

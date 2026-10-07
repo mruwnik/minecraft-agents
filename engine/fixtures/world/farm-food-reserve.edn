@@ -11,7 +11,7 @@
   :limit-s 90}
  :cases
  [{:name "harvest-plan-replants-cut-cells-below-reserve"
-   :blocks [[:fill [10 -1 16] [11 -1 16] "farmland[moisture=7]"] [:fill [10 -1 17] [11 -1 17] "water"]
+   :blocks [[:fill [10 -1 16] [11 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [11 -2 17] "stone"] [:fill [10 -1 17] [11 -1 17] "water"]
             [:set [10 0 16] "carrots[age=7]"] [:set [11 0 16] "carrots[age=7]"]]
    :plans [{:id "field" :metadata {:by "$body"}
             :parts [{:id "row" :box [#at [10 0 16] #at [11 0 16]] :want {:crop "carrots"}}]}]
@@ -20,7 +20,7 @@
    :expect [{:event {:source :job :kind :harvest.done :data {:cut 2 :replanted 2}} :within-s 70 :of-job true}]
    :after [[:block [10 0 16] "carrots[age=0]"] [:block [11 0 16] "carrots[age=0]"]]}
   {:name "harvest-plan-leaves-bare-cells-unsown-below-reserve"
-   :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -1 17] [13 -1 17] "water"]
+   :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [13 -2 17] "stone"] [:fill [10 -1 17] [13 -1 17] "water"]
             [:set [10 0 16] "carrots[age=7]"] [:set [11 0 16] "carrots[age=7]"]]
    :plans [{:id "field" :metadata {:by "$body"}
             :parts [{:id "row" :box [#at [10 0 16] #at [13 0 16]] :want {:crop "carrots"}}]}]

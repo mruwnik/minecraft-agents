@@ -9,13 +9,13 @@
   :limit-s 60}
  :cases
  [{:name "height-1-cane-declines-too-short"
-   :blocks [[:set [20 -1 14] "sand"] [:set [21 -1 14] "water"] [:set [20 0 14] "sugar_cane"]]
+   :blocks [[:set [20 -1 14] "sand"] [:set [21 -2 14] "stone"] [:set [21 -1 14] "water"] [:set [20 0 14] "sugar_cane"]]
    :act [[:job (jobs.gather.get-seeds {:item "sugar_cane" :count 1 :radius 16})]]
    :expect [{:event {:source :job :kind :get-seeds.declined :data {:reason :too-short}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :get-seeds.done} :for-s 30 :until {:source :job :kind :get-seeds.declined}}]
    :after [[:block [20 0 14] "sugar_cane"] [:item "sugar_cane" 0]]}
   {:name "three-high-cane-is-cut-above-the-base"
-   :blocks [[:set [20 -1 14] "sand"] [:set [21 -1 14] "water"] [:fill [20 0 14] [20 2 14] "sugar_cane"]]
+   :blocks [[:set [20 -1 14] "sand"] [:set [21 -2 14] "stone"] [:set [21 -1 14] "water"] [:fill [20 0 14] [20 2 14] "sugar_cane"]]
    :act [[:job (jobs.gather.get-seeds {:item "sugar_cane" :count 1 :radius 16})]]
    :expect [{:event {:source :job :kind :get-seeds.done :data {:reason :count}} :within-s 50 :of-job true}
             {:no-event {:source :job :kind :get-seeds.declined} :for-s 50 :until {:source :job :kind :get-seeds.done}}]

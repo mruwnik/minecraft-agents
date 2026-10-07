@@ -9,28 +9,28 @@
   :limit-s 120}
  :cases
  [{:name "drive-across-the-pond"
-   :blocks [[:fill [12 -1 14] [24 -1 18] "water"]]
+   :blocks [[:fill [12 -2 14] [24 -2 18] "stone"] [:fill [12 -1 14] [24 -1 18] "water"]]
    :act [[:job (jobs.movement.boat-launch {})]
          [:job (jobs.movement.boat-drive {:pos [23 -1 16]})]]
    :expect [{:event {:source :job :kind :boat.driven} :within-s 100 :of-job true}]}
   {:name "drive-there-and-back"
-   :blocks [[:fill [12 -1 14] [24 -1 18] "water"]]
+   :blocks [[:fill [12 -2 14] [24 -2 18] "stone"] [:fill [12 -1 14] [24 -1 18] "water"]]
    :act [[:job (jobs.movement.boat-launch {})]
          [:job (jobs.movement.boat-drive {:pos [23 -1 16]})]
          [:job (jobs.movement.boat-drive {:pos [14 -1 15]})]]
    :expect [{:event {:source :job :kind :boat.driven :data {:pos [:near #at [23.5 -1 16.5] 2]}} :within-s 100 :of-job true}
             {:event {:source :job :kind :boat.driven :data {:pos [:near #at [14.5 -1 15.5] 2]}} :within-s 100 :of-job true}]}
   {:name "on-foot-is-not-aboard"
-   :blocks [[:fill [12 -1 14] [24 -1 18] "water"]]
+   :blocks [[:fill [12 -2 14] [24 -2 18] "stone"] [:fill [12 -1 14] [24 -1 18] "water"]]
    :act [[:job (jobs.movement.boat-drive {:pos [23 -1 16]})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :not-aboard}} :within-s 30 :of-job true}]}
   {:name "target-is-not-water"
-   :blocks [[:fill [12 -1 14] [24 -1 18] "water"]]
+   :blocks [[:fill [12 -2 14] [24 -2 18] "stone"] [:fill [12 -1 14] [24 -1 18] "water"]]
    :act [[:job (jobs.movement.boat-launch {})]
          [:job (jobs.movement.boat-drive {:pos [23 0 16]})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :not-water}} :within-s 60 :of-job true}]}
   {:name "pond-across-land-is-blocked"
-   :blocks [[:fill [12 -1 14] [24 -1 18] "water"] [:fill [12 -1 24] [24 -1 28] "water"]]
+   :blocks [[:fill [12 -2 14] [24 -2 18] "stone"] [:fill [12 -1 14] [24 -1 18] "water"] [:fill [12 -2 24] [24 -2 28] "stone"] [:fill [12 -1 24] [24 -1 28] "water"]]
    :act [[:job (jobs.movement.boat-launch {})]
          [:job (jobs.movement.boat-drive {:pos [18 -1 26]})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :blocked}} :within-s 100 :of-job true}]}]}

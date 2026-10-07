@@ -9,33 +9,33 @@
   :limit-s 150}
  :cases
  [{:name "land-on-the-nearest-shore"
-   :blocks [[:fill [12 -1 14] [24 -1 18] "water"]]
+   :blocks [[:fill [12 -2 14] [24 -2 18] "stone"] [:fill [12 -1 14] [24 -1 18] "water"]]
    :act [[:job (jobs.movement.boat-launch {})]
          [:job (jobs.movement.boat-drive {:pos [18 -1 16]})]
          [:job (jobs.movement.boat-land {})]]
    :expect [{:event {:source :job :kind :boat.landed} :within-s 120 :of-job true}]}
   {:name "land-and-recover-the-boat"
-   :blocks [[:fill [12 -1 14] [24 -1 18] "water"]]
+   :blocks [[:fill [12 -2 14] [24 -2 18] "stone"] [:fill [12 -1 14] [24 -1 18] "water"]]
    :act [[:job (jobs.movement.boat-launch {})]
          [:job (jobs.movement.boat-land {:recover true})]]
    :expect [{:event {:source :job :kind :boat.landed :data {:recovered true}} :within-s 120 :of-job true}]}
   {:name "on-foot-is-not-aboard"
-   :blocks [[:fill [12 -1 14] [24 -1 18] "water"]]
+   :blocks [[:fill [12 -2 14] [24 -2 18] "stone"] [:fill [12 -1 14] [24 -1 18] "water"]]
    :act [[:job (jobs.movement.boat-land {})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :not-aboard}} :within-s 30 :of-job true}]}
   {:name "no-shore-within-radius"
-   :blocks [[:fill [12 -1 14] [24 -1 18] "water"]]
+   :blocks [[:fill [12 -2 14] [24 -2 18] "stone"] [:fill [12 -1 14] [24 -1 18] "water"]]
    :act [[:job (jobs.movement.boat-launch {})]
          [:job (jobs.movement.boat-drive {:pos [18 -1 16]})]
          [:job (jobs.movement.boat-land {:radius 1})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-shore}} :within-s 100 :of-job true}]}
   {:name "given-cell-is-not-a-shore"
-   :blocks [[:fill [12 -1 14] [24 -1 18] "water"]]
+   :blocks [[:fill [12 -2 14] [24 -2 18] "stone"] [:fill [12 -1 14] [24 -1 18] "water"]]
    :act [[:job (jobs.movement.boat-launch {})]
          [:job (jobs.movement.boat-land {:pos [18 0 16]})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-shore}} :within-s 60 :of-job true}]}
   {:name "given-shore-across-land-is-blocked"
-   :blocks [[:fill [12 -1 14] [24 -1 18] "water"] [:fill [12 -1 24] [24 -1 28] "water"]]
+   :blocks [[:fill [12 -2 14] [24 -2 18] "stone"] [:fill [12 -1 14] [24 -1 18] "water"] [:fill [12 -2 24] [24 -2 28] "stone"] [:fill [12 -1 24] [24 -1 28] "water"]]
    :act [[:job (jobs.movement.boat-launch {})]
          [:job (jobs.movement.boat-land {:pos [18 0 29]})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :blocked}} :within-s 120 :of-job true}]}]}

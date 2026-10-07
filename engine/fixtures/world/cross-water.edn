@@ -6,7 +6,7 @@
  {:tags [:boats :movement :cross-water] :time :any
   :plot {:height 8 :floor "stone"}
   :body {:at [10.5 0 16.5] :inventory [["oak_boat" 1]]}
-  :blocks [[:fill [12 -1 4] [22 -1 28] "water"]]
+  :blocks [[:fill [12 -2 4] [22 -2 28] "stone"] [:fill [12 -1 4] [22 -1 28] "water"]]
   :limit-s 200}
  :cases
  [{:name "cross-to-the-given-far-shore-and-recover"

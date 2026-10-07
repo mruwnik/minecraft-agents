@@ -11,23 +11,23 @@
  :cases
  [{:name "launch-and-board"
    :body {:inventory [["oak_boat" 1]]}
-   :blocks [[:fill [14 -1 14] [20 -1 18] "water"]]
+   :blocks [[:fill [14 -2 14] [20 -2 18] "stone"] [:fill [14 -1 14] [20 -1 18] "water"]]
    :act [[:job (jobs.movement.boat-launch {})]]
    :expect [{:event {:source :job :kind :boat.launched :data {:boat "oak_boat"}} :within-s 60 :of-job true}
             {:event {:source :job :kind :vehicle.mounted} :within-s 60 :of-job true}]}
   {:name "launch-without-boarding"
    :body {:inventory [["oak_boat" 1]]}
-   :blocks [[:fill [14 -1 14] [20 -1 18] "water"]]
+   :blocks [[:fill [14 -2 14] [20 -2 18] "stone"] [:fill [14 -1 14] [20 -1 18] "water"]]
    :act [[:job (jobs.movement.boat-launch {:board false})]]
    :expect [{:event {:source :job :kind :boat.launched} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :vehicle.mounted} :for-s 10}]}
   {:name "recover-a-boat-afloat"
-   :blocks [[:fill [14 -1 14] [20 -1 18] "water"]]
+   :blocks [[:fill [14 -2 14] [20 -2 18] "stone"] [:fill [14 -1 14] [20 -1 18] "water"]]
    :act [[:summon "oak_boat" [15.5 -1 16.5] "{}"]
          [:job (jobs.movement.boat-launch {:action :recover})]]
    :expect [{:event {:source :job :kind :boat.recovered :data {:item "oak_boat"}} :within-s 60 :of-job true}]}
   {:name "recover-while-aboard"
-   :blocks [[:fill [12 -1 14] [20 -1 18] "water"]]
+   :blocks [[:fill [12 -2 14] [20 -2 18] "stone"] [:fill [12 -1 14] [20 -1 18] "water"]]
    :act [[:summon "oak_boat" [15.5 -1 16.5] "{}"]
          [:job (jobs.movement.mount {:name "oak_boat"})]
          [:job (jobs.movement.boat-launch {:action :recover})]]
@@ -41,16 +41,16 @@
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-boat}} :within-s 20 :of-job true}]}
   {:name "non-boat-item-is-bad-args"
    :body {:inventory [["stick" 1]]}
-   :blocks [[:fill [14 -1 14] [20 -1 18] "water"]]
+   :blocks [[:fill [14 -2 14] [20 -2 18] "stone"] [:fill [14 -1 14] [20 -1 18] "water"]]
    :act [[:job (jobs.movement.boat-launch {:item "stick"})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :bad-args}} :within-s 30 :of-job true}]}
   {:name "recover-a-boat-4-from-shore"
-   :blocks [[:fill [14 -1 14] [20 -1 18] "water"]]
+   :blocks [[:fill [14 -2 14] [20 -2 18] "stone"] [:fill [14 -1 14] [20 -1 18] "water"]]
    :act [[:summon "oak_boat" [18.5 -1 16.5] "{}"]
          [:job (jobs.movement.boat-launch {:action :recover})]]
    :expect [{:event {:source :job :kind :boat.recovered} :within-s 60 :of-job true}]}
   {:name "recover-by-id-of-nothing-waits"
-   :blocks [[:fill [14 -1 14] [20 -1 18] "water"]]
+   :blocks [[:fill [14 -2 14] [20 -2 18] "stone"] [:fill [14 -1 14] [20 -1 18] "water"]]
    :act [[:summon "oak_boat" [15.5 -1 16.5] "{}"]
          [:job (jobs.movement.boat-launch {:action :recover :id 999999})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-boat}} :within-s 20 :of-job true}]}]}

@@ -15,7 +15,7 @@
             {:no-event {:source :system :kind :error} :for-s 30}]}
   {:name "water-all-round-finds-no-spot"
    :plot {:floor "water"}
-   :blocks [[:fill [63 -1 31] [65 -1 33] "stone"]]
+   :blocks [[:fill [0 -2 0] [127 -2 63] "stone"] [:fill [63 -1 31] [65 -1 33] "stone"]]
    :act [[:job (jobs.farm.find-spot {:range 12 :depth 7})]]
    :expect [{:event {:source :job :kind :find-spot.none} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :find-spot.found} :for-s 30 :until {:source :job :kind :find-spot.none}}]}]}

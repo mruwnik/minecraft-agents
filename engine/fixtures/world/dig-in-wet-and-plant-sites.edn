@@ -10,7 +10,7 @@
   :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}}
  :cases
  [{:name "water-beside-descent-cell-refuses"
-   :blocks [[:set [17 -1 16] "water"]]
+   :blocks [[:set [17 -2 16] "stone"] [:set [17 -1 16] "water"]]
    :act [[:job (jobs.survival.dig-in {})]]
    :expect [{:event {:source :job :kind :dig_in_failed :message [:contains "beside the descent cell"]} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :dig-in.sealed} :for-s 30 :until {:source :job :kind :dig_in_failed :message [:contains "beside the descent cell"]}}]

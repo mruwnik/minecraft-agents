@@ -11,7 +11,7 @@
   :limit-s 90}
  :cases
  [{:name "ripe-cell-in-another-plans-footprint-keeps-tend-waiting"
-   :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -1 17] [13 -1 17] "water"]
+   :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [13 -2 17] "stone"] [:fill [10 -1 17] [13 -1 17] "water"]
             [:set [10 0 16] "wheat[age=7]"]]
    :plans [{:id "other" :parts [{:id "f" :cells [#at [10 0 16]] :want [:any "wheat"]}]}]
    :act [[:job (jobs.farm.tend {:box {:min #xyz [10 -1 16] :max #xyz [13 0 16]}})]]
@@ -19,7 +19,7 @@
             {:no-event {:source :job :kind :farm-tend.done} :for-s 30}]
    :after [[:block [10 0 16] "wheat[age=7]"]]}
   {:name "own-ripe-cell-harvested-foreign-one-left-standing"
-   :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -1 17] [13 -1 17] "water"]
+   :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [13 -2 17] "stone"] [:fill [10 -1 17] [13 -1 17] "water"]
             [:set [10 0 16] "wheat[age=7]"] [:set [13 0 16] "wheat[age=7]"]]
    :plans [{:id "other" :parts [{:id "f" :cells [#at [10 0 16]] :want [:any "wheat"]}]}]
    :act [[:job (jobs.farm.tend {:box {:min #xyz [10 -1 16] :max #xyz [13 0 16]}})]]

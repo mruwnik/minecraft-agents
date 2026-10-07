@@ -7,7 +7,7 @@
 {:defaults
  {:tags [:farm :tend :food-reserve :jobs]
   :time :any
-  :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -1 17] [13 -1 17] "water"]
+  :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [13 -2 17] "stone"] [:fill [10 -1 17] [13 -1 17] "water"]
            [:set [10 0 16] "carrots[age=7]"]]
   :plans [{:id "field" :metadata {:by "$body"}
            :parts [{:id "row" :box [#at [10 0 16] #at [13 0 16]] :want {:crop "carrots"}}]}]
