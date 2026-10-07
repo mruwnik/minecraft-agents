@@ -29,4 +29,24 @@
    :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 5 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.done :data {:got 0 :reason :tunnel-length}} :within-s 100 :of-job true}]
    :after [[:block [18 0 14] "iron_ore"] [:block [19 3 16] "iron_ore"] [:block [20 0 18] "iron_ore"]]
+   :limit-s 120}
+  ;; Card ca6fc91f: a block behind an intact one is no longer dug with its drop hidden (dry :no-drops). A 6-stone row
+  ;; in open air (the mass is cleared first); perception shows a random subset of the row, so each direction is its own
+  ;; case and the sweep repeats them. Should-fail (drops hidden for good, ends :no-drops) is not a fixture: no way to
+  ;; hide a drop for good without inventory-full set-ups the job would mend.
+  {:name "stone-row-mined-to-the-count-east"
+   :blocks [[:fill [2 0 8] [30 6 24] "air"] [:fill [4 0 16] [9 0 16] "stone"]]
+   :body {:at [3.5 0 16.5] :yaw 270}
+   :act [[:job (jobs.gather.mine {:block "stone" :count 6 :direction :east :tunnel-length 8 :radius 8 :mend false})]]
+   :expect [{:event {:source :job :kind :mine.done :data {:got 6 :reason :count}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :mine.gave-up} :for-s 100 :until {:source :job :kind :mine.done}}]
+   :after [[:item "cobblestone" 6] [:not-block [4 0 16] "stone"] [:not-block [9 0 16] "stone"]]
+   :limit-s 120}
+  {:name "stone-row-mined-to-the-count-west"
+   :blocks [[:fill [2 0 8] [30 6 24] "air"] [:fill [4 0 16] [9 0 16] "stone"]]
+   :body {:at [10.5 0 16.5] :yaw 90}
+   :act [[:job (jobs.gather.mine {:block "stone" :count 6 :direction :west :tunnel-length 8 :radius 8 :mend false})]]
+   :expect [{:event {:source :job :kind :mine.done :data {:got 6 :reason :count}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :mine.gave-up} :for-s 100 :until {:source :job :kind :mine.done}}]
+   :after [[:item "cobblestone" 6] [:not-block [4 0 16] "stone"] [:not-block [9 0 16] "stone"]]
    :limit-s 120}]}

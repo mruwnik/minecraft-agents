@@ -1,0 +1,57 @@
+;; Card fd54536e: clearing jobs (from-plan :clear cells, stair, tunnel) ask "can this block be broken quickly", not "does it drop":
+;; snow_block, leaves, glass and dirt go by hand; cobweb, stone, iron ore under a wooden pickaxe and obsidian under an iron one
+;; still need a tool (given up :no-tool when nothing can be fetched). Body at [12.5 0 14.5] for the plan cases, plan cells on the row z 11.
+{:defaults
+ {:tags [:build :access] :time :any
+  :plot {:height 20}
+  :limit-s 120
+  :body {:at [12.5 0 14.5] :effects [["resistance" 600 4]] :settle-s 3}}
+ :cases
+ [{:name "from-plan-clears-hand-breakable-blocks-with-no-tool"
+   :blocks [[:set [11 0 11] "snow_block"] [:set [12 0 11] "oak_leaves[persistent=true]"] [:set [13 0 11] "dirt"] [:set [14 0 11] "glass"]]
+   :plans [{:id "row" :metadata {:by "$body"}
+            :parts [{:id "clear" :cells [#at [11 0 11] #at [12 0 11] #at [13 0 11] #at [14 0 11]] :want :clear}]}]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:row"})]]
+   :expect [{:event {:source :job :kind :build.done :data {:missing 0}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :build.gave-up} :for-s 100 :until {:source :job :kind :build.done}}]
+   :after [[:block [11 0 11] "air"] [:block [12 0 11] "air"] [:block [13 0 11] "air"] [:block [14 0 11] "air"]]}
+  {:name "from-plan-gives-up-cobweb-and-stone-with-no-tool"
+   :blocks [[:set [11 0 11] "cobweb"] [:set [12 0 11] "stone"]]
+   :plans [{:id "row" :metadata {:by "$body"}
+            :parts [{:id "clear" :cells [#at [11 0 11] #at [12 0 11]] :want :clear}]}]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:row"})]]
+   :expect [{:event {:source :job :kind :build.gave-up} :within-s 100 :of-job true}]
+   :after [[:block [11 0 11] "cobweb"] [:block [12 0 11] "stone"]]}
+  {:name "from-plan-gives-up-iron-ore-under-a-wooden-pickaxe"
+   :blocks [[:set [11 0 11] "iron_ore"]]
+   :body {:inventory [["wooden_pickaxe" 1]]}
+   :plans [{:id "row" :metadata {:by "$body"}
+            :parts [{:id "clear" :cells [#at [11 0 11]] :want :clear}]}]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:row"})]]
+   :expect [{:event {:source :job :kind :build.gave-up} :within-s 100 :of-job true}]
+   :after [[:block [11 0 11] "iron_ore"]]}
+  {:name "from-plan-gives-up-obsidian-under-an-iron-pickaxe"
+   :blocks [[:set [12 0 11] "obsidian"]]
+   :body {:inventory [["iron_pickaxe" 1]]}
+   :plans [{:id "obs" :metadata {:by "$body"}
+            :parts [{:id "clear" :cells [#at [12 0 11]] :want :clear}]}]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:obs"})]]
+   :expect [{:event {:source :job :kind :build.gave-up} :within-s 100 :of-job true}]
+   :after [[:block [12 0 11] "obsidian"]]}
+  {:name "stair-through-snow-blocks-by-hand"
+   ;; a mass of snow_block (hardness 0.2) x 8..24, y 0..9, the body on top with nothing in hand: dug, no :no-tool wait, no fetch
+   :blocks [[:fill [8 0 8] [24 9 24] "snow_block"]]
+   :body {:at [16.5 10 16.5]}
+   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 3})]]
+   :expect [{:event {:source :job :kind :stair.done} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :waiting :data {:reason :no-tool}} :for-s 90 :until {:source :job :kind :stair.done}}
+            {:no-event {:source :job :kind :fetch.started} :for-s 90 :until {:source :job :kind :stair.done}}]
+   :after [[:body-near [19.5 7 16.5] 1.5] [:block [17 9 16] "air"]]}
+  {:name "tunnel-through-snow-blocks-by-hand"
+   :blocks [[:fill [8 0 8] [24 9 24] "snow_block"]]
+   :body {:at [16.5 10 16.5] :inventory [["torch" 8] ["cobblestone" 8]]}
+   :act [[:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :keep true})]]
+   :expect [{:event {:source :job :kind :tunnel.done} :within-s 150 :of-job true}
+            {:no-event {:source :job :kind :waiting :data {:reason :no-tool}} :for-s 150 :until {:source :job :kind :tunnel.done}}
+            {:no-event {:source :job :kind :fetch.started} :for-s 150 :until {:source :job :kind :tunnel.done}}]
+   :limit-s 170}]}

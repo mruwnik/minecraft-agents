@@ -1,0 +1,30 @@
+;; Card d6adf320 (and its review follow-up c26ae84e): jobs.farm.find-spot scans nearest-first and stops once :limit flat open-sky patches
+;; are found; an early accept must have water within 4 when water is in range. A 128 x 64 grass plot, body in the middle, :range 24.
+;; Should-succeed: flat grass with a pond 10 east: the best spot lies by the pond (water within 4), the job ends within 20 s; a pond 18
+;; east (beyond a block of dry flat ground by the body) still wins the best spot; a grass hillside (1 up every 4 columns) finds its
+;; best-so-far spots within 40 s whatever the 30000-read cap does. The water-all-round and cliff cases (:none) are in farm-find-spot.edn.
+{:defaults
+ {:tags [:farm :find-spot :jobs] :time :day
+  :plot {:height 31 :floor "grass_block" :length 128 :width 64}
+  :body {:at [64.5 0 32.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 60}
+ :cases
+ [{:name "pond-10-east-best-spot-is-by-the-pond"
+   :blocks [[:fill [74 -2 30] [76 -2 34] "stone"] [:fill [74 -1 30] [76 -1 34] "water"]]
+   :act [[:job (jobs.farm.find-spot {:w 5 :h 5 :range 24 :depth 7})]]
+   :expect [{:event {:source :job :kind :find-spot.found :data {:best [:near #at [70 -1 32] 10]}} :within-s 20 :of-job true}
+            {:event {:source :job :kind :completed} :within-s 20 :of-job true}
+            {:no-event {:source :system :kind :error} :for-s 20}]}
+  {:name "pond-18-east-still-wins-over-dry-ground-by-the-body"
+   :blocks [[:fill [82 -2 30] [84 -2 34] "stone"] [:fill [82 -1 30] [84 -1 34] "water"]]
+   :act [[:job (jobs.farm.find-spot {:w 5 :h 5 :range 24 :depth 7})]]
+   :expect [{:event {:source :job :kind :find-spot.found :data {:best [:near #at [78 -1 32] 10]}} :within-s 30 :of-job true}
+            {:event {:source :job :kind :completed} :within-s 30 :of-job true}]}
+  {:name "hillside-finds-best-so-far-spots"
+   :blocks [[:fill [24 0 0] [27 0 63] "grass_block"] [:fill [28 0 0] [31 1 63] "grass_block"] [:fill [32 0 0] [35 2 63] "grass_block"] [:fill [36 0 0] [39 3 63] "grass_block"] [:fill [40 0 0] [43 4 63] "grass_block"] [:fill [44 0 0] [47 5 63] "grass_block"] [:fill [48 0 0] [51 6 63] "grass_block"] [:fill [52 0 0] [55 7 63] "grass_block"] [:fill [56 0 0] [59 8 63] "grass_block"] [:fill [60 0 0] [63 9 63] "grass_block"] [:fill [64 0 0] [67 10 63] "grass_block"] [:fill [68 0 0] [71 11 63] "grass_block"] [:fill [72 0 0] [75 12 63] "grass_block"] [:fill [76 0 0] [79 13 63] "grass_block"] [:fill [80 0 0] [83 14 63] "grass_block"] [:fill [84 0 0] [87 15 63] "grass_block"] [:fill [88 0 0] [91 16 63] "grass_block"] [:fill [92 0 0] [95 17 63] "grass_block"] [:fill [96 0 0] [99 18 63] "grass_block"] [:fill [100 0 0] [103 19 63] "grass_block"] [:fill [104 0 0] [107 20 63] "grass_block"] [:fill [108 0 0] [111 21 63] "grass_block"]]
+   :body {:at [64.5 11 32.5]}
+   :act [[:job (jobs.farm.find-spot {:w 5 :h 5 :range 24 :depth 12})]]
+   :expect [{:event {:source :job :kind :find-spot.found} :within-s 40 :of-job true}
+            {:event {:source :job :kind :completed} :within-s 40 :of-job true}
+            {:no-event {:source :system :kind :error} :for-s 40 :until {:source :job :kind :completed}}]
+   :limit-s 60}]}

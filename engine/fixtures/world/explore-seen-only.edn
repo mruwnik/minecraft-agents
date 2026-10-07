@@ -1,0 +1,44 @@
+;; Card ad8e1b18: jobs.explore.look and jobs.explore.search report only what the body has seen, never the world through walls
+;; (look :scope :seen, :at {:unknown true} for a cell never seen; search writes no :seen note for buried ore).
+;; Stone mass x 2..30, z 8..24, y 0..6. A lit 3x3x2 room x 15..17, z 15..17 (sea lantern in its roof); the body at [16.5 0 16.5]
+;; facing east, ore [18 0 16] in the room's east wall (exposed), ore [22 0 16] and [16 0 21] buried in the rock; a sealed cell
+;; [24 0 16]-[24 1 16] 7 blocks east behind the rock holds a NoAI zombie in the cases that use it.
+{:defaults
+ {:tags [:explore :sensing :jobs] :time :any
+  :plot {:height 12}
+  :blocks [[:fill [2 0 8] [30 6 24] "stone"] [:fill [15 0 15] [17 1 17] "air"] [:set [16 2 16] "sea_lantern"]
+           [:set [18 0 16] "iron_ore"] [:set [22 0 16] "iron_ore"] [:set [16 0 21] "iron_ore"]
+           [:fill [24 0 16] [24 1 16] "air"]]
+  :body {:at [16.5 0 16.5] :yaw 270 :inventory [["stone_pickaxe" 1]] :effects [["resistance" 600 4]] :settle-s 3}
+  :limit-s 60}
+ :cases
+ [{:name "look-lists-the-exposed-ore-and-not-the-buried"
+   :act [[:wait-s 3] [:job (jobs.explore.look {:block-names ["iron_ore"] :radius 16 :max-blocks 6})]]
+   :expect [{:event {:source :job :kind :look.observed :data {:scope :seen :blocks [{:name "iron_ore"}]}} :within-s 30 :of-job true}]}
+  {:name "look-at-a-buried-cell-is-unknown"
+   :act [[:wait-s 3] [:job (jobs.explore.look {:at #at [22 0 16] :max-blocks 0 :max-entities 0})]]
+   :expect [{:event {:source :job :kind :look.observed :data {:scope :seen :at {:unknown true}}} :within-s 30 :of-job true}]}
+  {:name "look-at-the-exposed-ore-is-seen"
+   :act [[:wait-s 3] [:job (jobs.explore.look {:at #at [18 0 16] :max-blocks 0 :max-entities 0})]]
+   :expect [{:event {:source :job :kind :look.observed :data {:at {:name "iron_ore" :seen? true}}} :within-s 30 :of-job true}]}
+  {:name "look-lists-a-zombie-in-the-room"
+   :act [[:summon "zombie" [17.5 0 16.5] "{NoAI:1b,Silent:1b}"] [:wait-s 3]
+         [:job (jobs.explore.look {:entity-names ["zombie"] :radius 16 :max-blocks 0})]]
+   :expect [{:event {:source :job :kind :look.observed :data {:entities [{:name "zombie"}]}} :within-s 30 :of-job true}]}
+  {:name "look-does-not-list-the-walled-in-zombie"
+   :act [[:summon "zombie" [24.5 0 16.5] "{NoAI:1b,Silent:1b}"] [:wait-s 3]
+         [:job (jobs.explore.look {:entity-names ["zombie"] :radius 16 :max-blocks 0})]]
+   :expect [{:event {:source :job :kind :look.observed :data {:entities []}} :within-s 30 :of-job true}]}
+  {:name "search-finds-the-exposed-ore"
+   :act [[:job (jobs.explore.search {:target "iron_ore" :count 1 :max-distance 8 :spacing 4 :scan-radius 16 :timeout-s 40})]]
+   :expect [{:event {:source :job :kind :search.done :data {:reason :found :found [{:what "iron_ore"}]}} :within-s 40 :of-job true}]}
+  {:name "search-does-not-find-buried-ore"
+   ;; the exposed ore is mined out first: only buried ore is left, none in view, so the search ends not-found (the room is sealed and the body has
+   ;; no pickaxe: its legs fail) and never reports the rock-bound ones
+   :blocks [[:set [18 0 16] "stone"]]
+   :body {:inventory []}
+   :act [[:job (jobs.explore.search {:target "iron_ore" :count 1 :max-distance 8 :spacing 4 :scan-radius 16 :timeout-s 40})]]
+   :expect [{:event {:source :job :kind :search.not-found} :within-s 50 :of-job true}
+            {:no-event {:source :job :kind :search.done} :for-s 50 :until {:source :job :kind :search.not-found}}]
+   :limit-s 70
+   :after [[:block [22 0 16] "iron_ore"] [:block [16 0 21] "iron_ore"]]}]}

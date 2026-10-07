@@ -1,0 +1,16 @@
+;; Card ad8e1b18: jobs.survival.extinguish looks for water only where it has seen it. The body burns on a fire in a closed 3x3x2
+;; room (stone x 8..12, z 14..18, y 0..2 round it); a pool [13 -1 15]-[14 -1 17] lies just behind the east wall, 4 blocks away,
+;; and is never in view: the job stands still (extinguish_wait, no water known) and the body stays out of the pool.
+{:defaults
+ {:tags [:survival :fire :sensing] :time :any
+  :plot {:height 6}
+  :register [{:trigger :burning :persistence :cooldown :cooldown-s 0 :job (jobs.survival.extinguish {:water-radius 6})}]
+  :blocks [[:fill [8 0 14] [12 2 18] "stone"] [:fill [9 0 15] [11 1 17] "air"]
+           [:fill [13 -2 15] [14 -2 17] "stone"] [:fill [13 -1 15] [14 -1 17] "water"]
+           [:set [10 -1 16] "netherrack"] [:set [10 0 16] "fire"]]
+  :body {:at [10.5 0 16.5] :effects [["resistance" 600 4]] :settle-s 1}
+  :limit-s 40}
+ :cases
+ [{:name "water-behind-a-wall-is-not-known"
+   :expect [{:event {:source :job :kind :extinguish_wait} :within-s 25}]
+   :after [[:body-far [13.5 -1 16.5] 2.5]]}]}

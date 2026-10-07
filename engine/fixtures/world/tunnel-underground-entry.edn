@@ -1,0 +1,24 @@
+;; Card eb4e3ccc: jobs.access.tunnel takes the body's own standable cell in the entry column as an entry when it stands underground
+;; (a surface-only entry made a buried block beside a cave room :too-far). Stone mass x 8..24, z 8..24, y 0..9 (surface y 10); a lit
+;; 3x2x3 room y 4..5 in it; target [16 1 16], 3 below the room's floor level and 4 east of the body's column; :max-length 6, so
+;; only a line from the body's own cell fits (the surface line is 10 long).
+{:defaults
+ {:tags [:access :mining]
+  :plot {:height 20}
+  :blocks [[:fill [8 0 8] [24 9 24] "stone"]]
+  :body {:at [12.5 4 16.5] :inventory [["stone_pickaxe" 1] ["torch" 8] ["cobblestone" 8]] :effects [["resistance" 600 4]] :settle-s 3}
+  :limit-s 120}
+ :cases
+ [{:name "body-in-the-room-enters-the-line-where-it-stands"
+   :blocks [[:fill [11 4 15] [13 5 17] "air"] [:set [12 6 16] "sea_lantern"]]
+   :act [[:job (jobs.access.tunnel {:target #at [16 1 16] :max-length 6 :keep true})]]
+   :expect [{:event {:source :job :kind :tunnel.plan :data {:entry [12 4 16]}} :within-s 30 :of-job true}
+            {:event {:source :job :kind :tunnel.done} :within-s 100 :of-job true}]
+   :after [[:body-near [15.5 1 16.5] 2] [:body-far [12.5 10 16.5] 5]]}
+  {:name "body-off-the-line-column-is-too-far"
+   :blocks [[:fill [11 4 11] [13 5 13] "air"] [:set [12 6 12] "sea_lantern"]]
+   :body {:at [12.5 4 12.5]}
+   :act [[:job (jobs.access.tunnel {:target #at [16 1 16] :max-length 6 :keep true})]]
+   :expect [{:event {:source :job :kind :tunnel.stopped :data {:reason :too-far}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :tunnel.step} :for-s 30 :until {:source :job :kind :tunnel.stopped}}]
+   :after [[:body-near [12.5 4 12.5] 2] [:not-block [15 1 16] "air"]]}]}

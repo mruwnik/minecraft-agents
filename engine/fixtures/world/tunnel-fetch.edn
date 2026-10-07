@@ -1,0 +1,69 @@
+;; Cards c277d5a3 (equip, tunnel and leave-tunnel fetch by default, :fetch false opts out), caf02a9d (:fetch for tunnel: the
+;; stair's booked :no-tool wait and a :no-tool stop of the tunnel's own digs fetch a pickaxe then walk back), df7d29f9 (a
+;; tunnel's :fetch false reaches its leave-tunnel child: one-off, see the note on the card).
+;; Stone mass x 8..24, z 8..24, y 0..9; the body stands on top (feet y 10) facing south and a little down, so its first
+;; sight sees the chest at [14 10 19] (a chest on the surface, outside every zone). Tunnel target [16 6 20] as in access-pickaxe-wait.
+{:defaults
+ {:tags [:access :fetch]
+  :plot {:height 20}
+  :blocks [[:fill [8 0 8] [24 9 24] "stone"]]
+  :body {:at [16.5 10 16.5] :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "equip-fetches-an-item-from-a-seen-chest-by-default"
+   :blocks [[:set [14 10 19] "chest{Items:[{Slot:0b,id:\"minecraft:iron_pickaxe\",count:1}]}"]]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+         [:job (jobs.items.equip {:item "iron_pickaxe"})]]
+   :expect [{:event {:source :job :kind :fetch.started} :within-s 30 :of-job true}
+            {:event {:source :job :kind :fetch.done} :within-s 60 :of-job true}
+            {:event {:source :job :kind :equip.done :data {:item "iron_pickaxe"}} :within-s 70 :of-job true}]
+   :after [[:item "iron_pickaxe" 1]]}
+  {:name "equip-fetch-false-stops-no-item-chest-untouched"
+   :blocks [[:set [14 10 19] "chest{Items:[{Slot:0b,id:\"minecraft:iron_pickaxe\",count:1}]}"]]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+         [:job (jobs.items.equip {:item "iron_pickaxe" :fetch false})]]
+   :expect [{:event {:source :job :kind :equip.refused :data {:reason :no-item}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :fetch.started} :for-s 30 :until {:source :job :kind :equip.refused}}
+            {:no-event {:source :action :kind :started :data {:name "inspectContainer"}} :for-s 30 :until {:source :job :kind :equip.refused}}]
+   :after [[:item "iron_pickaxe" 0]]}
+  {:name "tunnel-fetches-a-pickaxe-by-default-then-cuts"
+   :blocks [[:set [14 10 19] "chest{Items:[{Slot:0b,id:\"minecraft:stone_pickaxe\",count:1}]}"]]
+   :body {:inventory [["torch" 8] ["cobblestone" 8]]}
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+         [:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :keep true})]]
+   :expect [{:event {:source :job :kind :fetch.started} :within-s 40 :of-job true}
+            {:event {:source :job :kind :fetch.done} :within-s 90 :of-job true}
+            {:event {:source :job :kind :tunnel.done} :within-s 200 :of-job true}]
+   :limit-s 220
+   :after [[:item "stone_pickaxe" [:>= 1]] [:block [17 9 16] "air"]]}
+  {:name "tunnel-fetch-false-waits-no-tool-and-fetches-nothing"
+   :blocks [[:set [14 10 19] "chest{Items:[{Slot:0b,id:\"minecraft:stone_pickaxe\",count:1}]}"]]
+   :body {:inventory [["torch" 8] ["cobblestone" 8]]}
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+         [:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :keep true :fetch false})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-tool}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :fetch.started} :for-s 40 :until {:source :job :kind :waiting :data {:reason :no-tool}}}
+            {:no-event {:source :job :kind :tunnel.done} :for-s 40 :until {:source :job :kind :waiting :data {:reason :no-tool}}}]
+   :after [[:item "stone_pickaxe" 0] [:not-block [16 9 16] "air"]]}
+  {:name "tunnel-no-source-fetch-fails-and-waits-no-tool"
+   :body {:inventory [["torch" 8] ["cobblestone" 8]]}
+   :act [[:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :keep true})]]
+   :expect [{:event {:source :job :kind :fetch.started} :within-s 40 :of-job true}
+            {:event {:source :job :kind :fetch.failed} :within-s 60 :of-job true}
+            {:event {:source :job :kind :waiting :data {:reason :no-tool :fetch {:failed [:any]}}} :within-s 70 :of-job true}
+            {:no-event {:source :job :kind :tunnel.done} :for-s 70 :until {:source :job :kind :waiting :data {:reason :no-tool}}}]
+   :after [[:not-block [16 9 16] "air"]]}
+  {:name "tunnel-pickaxe-lost-mid-run-is-fetched-and-the-run-goes-on"
+   ;; the pickaxe is taken away once the run has begun: the next dig stops :no-tool, which fetches (the chest was seen at the
+   ;; start), walks back and goes on
+   :blocks [[:set [14 10 19] "chest{Items:[{Slot:0b,id:\"minecraft:stone_pickaxe\",count:1}]}"]]
+   :body {:inventory [["stone_pickaxe" 1] ["torch" 8] ["cobblestone" 8]]}
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+         [:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :keep true})]
+         [:await {:source :job :kind :tunnel.step} 90]
+         [:rcon "clear $BODY stone_pickaxe"]]
+   :expect [{:event {:source :job :kind :fetch.started} :within-s 120 :of-job true}
+            {:event {:source :job :kind :fetch.done} :within-s 180 :of-job true}
+            {:event {:source :job :kind :tunnel.done} :within-s 260 :of-job true}]
+   :limit-s 280
+   :after [[:item "stone_pickaxe" [:>= 1]]]}]}
