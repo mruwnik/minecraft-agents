@@ -7,7 +7,8 @@
 
 (def doc
   "Pick where a :w x :h farm would go. Ranks patches by flatness first, then water within 4,
-  open sky and nearness to :center. Reads blocks only: it never digs or marks anything.
+  open sky and nearness to :center. It tries patches nearest-first and stops once :limit flat open-sky ones are found.
+  A patch of 8 or more is tried at every fourth corner. Reads blocks only: it never digs or marks anything.
   A scan reads at most about 30000 blocks, then settles for the best spots so far.
   With :walk true it then walks to the best spot.
   Result: {:spot pos-or-nil :spots [...] :walked bool}. A pos is the north-west corner at ground level.
@@ -95,11 +96,39 @@
           (when (or (nil? n) (air n))
             (recur (inc y)))))))
 
+(defn patch-ring
+  "How many cells out from from the centre of the patch with NW corner x z lies (the larger of its x and z offsets, rounded up)."
+  [{:keys [w h]} from x z]
+  (long (js/Math.ceil (max (js/Math.abs (- (+ x (/ (dec w) 2)) (:x from)))
+                           (js/Math.abs (- (+ z (/ (dec h) 2)) (:z from)))))))
+
+(defn coarse-step
+  "The gap between tried corners: big patches overlap so much that every fourth corner finds the same ground."
+  [{:keys [w h]}]
+  (max 1 (quot (min w h) 4)))
+
+(defn corners-by-ring
+  "{ring [[x z] ...]} for every tried NW corner of a patch within :range of from."
+  [{:keys [w h range] :as a} from]
+  (let [s (coarse-step a)
+        fx (:x from) fz (:z from)]
+    (->> (for [x (clojure.core/range (- fx range) (inc (- (+ fx range) w)) s)
+               z (clojure.core/range (- fz range) (inc (- (+ fz range) h)) s)]
+           [x z])
+         (group-by (fn [[x z]] (patch-ring a from x z))))))
+
+(defn good?
+  "A spot that needs no earthwork under open sky: nothing nearer can improve much on it."
+  [{:keys [level sky]}]
+  (and sky (= 100 level)))
+
 (defn scan-rows
-  "Scan whole patch rows (one NW corner x, every z) from (:next-x state) until
-  the read count reaches budget or the last row is done. Returns {:next-x :found
-  :done :reads}; found is the best :limit spots so far. Caches live within this call."
-  [p {:keys [w h range depth limit]} from {:keys [next-x found]} budget]
+  "Scan patches ring by ring (nearest the centre first) from (:next-ring state)
+  until the read count reaches budget, the last ring is done, or :limit good
+  spots are in hand (the ring it is in is finished first). Returns {:next-ring
+  :found :done :reads}; found is the best :limit spots so far. Caches live within
+  this call."
+  [p {:keys [w h range depth limit] :as a} from {:keys [next-ring found]} budget]
   (let [reads (volatile! 0)
         name-fn (fn [pos] (vswap! reads inc) (u/block-name p pos))
         waters (->> (look/seen-blocks p {:names ["water"] :radius (+ range w h 4) :max 4096 :live? true})
@@ -112,34 +141,36 @@
         sky-of (memo (fn [x z t] (sky-above? name-fn x z t (:y from) depth)))
         wet? (memo (fn [x z y] (hydrated? waters x y z)))
         fx (:x from) fz (:z from)
-        last-x (- (+ fx range) w)
-        row (fn [x]
-              (for [z (clojure.core/range (- fz range) (inc (- (+ fz range) h)))
-                    :let [cols (for [dx (clojure.core/range w) dz (clojure.core/range h)] [(+ x dx) (+ z dz)])
-                          tops (mapv (fn [[cx cz]] (top-of cx cz)) cols)]
-                    :when (not-any? nil? tops)
-                    :let [wetn (count (filter true? (map (fn [[cx cz] t] (wet? cx cz t)) cols tops)))
-                          sky (every? true? (map (fn [[cx cz] t] (sky-of cx cz t)) cols tops))
-                          s (score-patch {:tops tops :water-share (/ wetn (count cols)) :sky sky
-                                          :away (js/Math.hypot (- (+ x (/ (dec w) 2)) fx) (- (+ z (/ (dec h) 2)) fz))})]
-                    :when s]
-                (assoc s :pos {:x x :y (:y s) :z z})))]
-    (loop [x next-x found found]
-      (let [found (->> (concat found (doall (row x)))
-                       (sort-by (juxt (comp - :score) :away))
-                       (take limit)
-                       vec)
-            nx (inc x)]
-        (cond
-          (> nx last-x) {:next-x nx :found found :done true :reads @reads}
-          (>= @reads budget) {:next-x nx :found found :done false :reads @reads}
-          :else (recur nx found))))))
+        by-ring (corners-by-ring a from)
+        rings (sort (keys by-ring))
+        cand (fn [[x z]]
+               (when (some? (top-of (+ x (quot w 2)) (+ z (quot h 2))))
+                 (let [cols (for [dx (clojure.core/range w) dz (clojure.core/range h)] [(+ x dx) (+ z dz)])
+                       tops (mapv (fn [[cx cz]] (top-of cx cz)) cols)]
+                   (when (not-any? nil? tops)
+                     (let [wetn (count (filter true? (map (fn [[cx cz] t] (wet? cx cz t)) cols tops)))
+                           sky (every? true? (map (fn [[cx cz] t] (sky-of cx cz t)) cols tops))
+                           s (score-patch {:tops tops :water-share (/ wetn (count cols)) :sky sky
+                                           :away (js/Math.hypot (- (+ x (/ (dec w) 2)) fx) (- (+ z (/ (dec h) 2)) fz))})]
+                       (when s (assoc s :pos {:x x :y (:y s) :z z})))))))]
+    (loop [rs (drop-while #(< % next-ring) rings) found found]
+      (if (empty? rs)
+        {:next-ring ##Inf :found found :done true :reads @reads}
+        (let [r (first rs)
+              found (->> (concat found (keep cand (by-ring r)))
+                         (sort-by (juxt (comp - :score) :away))
+                         (take limit)
+                         vec)]
+          (cond
+            (and (= limit (count found)) (every? good? found)) {:next-ring (inc r) :found found :done true :reads @reads}
+            (>= @reads budget) {:next-ring (inc r) :found found :done false :reads @reads}
+            :else (recur (rest rs) found)))))))
 
 (defn scan
   "The best :limit spots [{:pos :score :level ...}] for the args around from, in
   one unbounded pass."
-  [p {:keys [range w] :as a} from]
-  (:found (scan-rows p a from {:next-x (- (:x from) range) :found []} ##Inf)))
+  [p a from]
+  (:found (scan-rows p a from {:next-ring 0 :found []} ##Inf)))
 
 (defn check [_c] true)
 
@@ -164,12 +195,12 @@
   [c a]
   (let [saved (:scan (ctx/mem c))
         from (or (:center a) (:from saved) (into {} (map (fn [[k v]] [k (js/Math.floor v)])) (u/self-pos c)))
-        state (or saved {:next-x (- (:x from) (:range a)) :found []})
+        state (or saved {:next-ring 0 :found []})
         r (scan-rows (:primitives c) a from state read-budget)
         spent (+ (:reads state 0) (:reads r))]
     (if (or (:done r) (>= spent max-reads))
       (finish-scan! c a from (:found r))
-      (do (ctx/update-mem! c assoc :scan (assoc (select-keys r [:next-x :found]) :from from :reads spent))
+      (do (ctx/update-mem! c assoc :scan (assoc (select-keys r [:next-ring :found]) :from from :reads spent))
           :again))))
 
 (defn ^:async step

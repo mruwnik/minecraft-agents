@@ -296,3 +296,27 @@
           (swap! (fake/state p) assoc-in [:self :pos] [7 64 5])
           (await (run-until-empty eng 40))
           (is (= expected (:spots @out))))))))
+
+(defn scan-reads
+  "[reads spots] of one unbounded scan of world from [x y z]."
+  [world self a]
+  (let [p (tu/seeing-all (tu/fake {:blocks world :self {:pos self}}))
+        reads (atom 0)
+        orig (.-blockAt p)
+        _ (set! (.-blockAt p) (fn [pos] (swap! reads inc) (.call orig p pos)))
+        r (fs/scan p a {:x (first self) :y (second self) :z (nth self 2)})]
+    [@reads r]))
+
+(deftest flat-ground-stops-at-the-nearest-good-patches
+  (let [flat (tu/box -30 62 -30 30 63 30 "grass_block")
+        a {:w 5 :h 5 :range 24 :depth 12 :limit 3}
+        [reads spots] (scan-reads flat [0 64 0] a)
+        [full-reads] (scan-reads flat [0 64 0] (assoc a :limit 100))]
+    (is (= 3 (count spots)))
+    (is (every? #(<= (js/Math.abs (- (:x (:pos %)) -2)) 2) spots) "all three lie next to the centre")
+    (is (< (* 3 reads) full-reads) (str reads " reads against " full-reads " for the whole range"))))
+
+(deftest open-air-with-a-big-patch-reads-far-fewer-columns
+  (let [[reads spots] (scan-reads {} [0 64 0] {:w 16 :h 16 :range 48 :depth 7 :limit 3})]
+    (is (empty? spots))
+    (is (< reads 20000) (str reads " reads"))))
