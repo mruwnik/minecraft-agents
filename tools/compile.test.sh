@@ -111,7 +111,13 @@ unset MC_COMPILE_MIN_START_MB MC_COMPILE_SERVER_IDLE_S MC_COMPILE_IDLE_POLL_S
 mkdir -p "$T/main/tools" "$T/main/dashboard/.shadow-cljs"
 cp "$TOOLS/compile" "$TOOLS/compile-idle-watch" "$T/main/tools/"
 export MC_COMPILE_MIN_START_MB=0 MC_COMPILE_MAIN_IDLE_S=3 MC_COMPILE_SERVER_IDLE_S=1000 MC_COMPILE_IDLE_POLL_S=1
-timeout 30 "$T/main/tools/compile" engine test >/dev/null 2>&1; check "main compile rc" "$?" 0
+printf '#!/bin/sh\ncase "$1 $2" in "shadow-cljs server") echo $$ > .shadow-cljs/server.pid; echo 1 > .shadow-cljs/nrepl.port; echo 1 > .shadow-cljs/http.port; echo "ppid=$(ps -o ppid= -p $$ | tr -d " ") label=${LIVE_TESTS_AGENT_ID:-none} shared=${COMPILE_SHARED:-0}" > .shadow-cljs/launch.env; exec sleep 300;; esac\n' > "$T/bin/npx"
+LIVE_TESTS_AGENT_ID=fixer-x timeout 30 "$T/main/tools/compile" engine test >/dev/null 2>&1; check "main compile rc" "$?" 0
+# the shared server is detached from the caller: no agent label, not a child of the compile script, marked shared
+read -r LPPID LLABEL LSHARED < <(tr ' ' '\n' < "$T/main/dashboard/.shadow-cljs/launch.env" | cut -d= -f2 | paste -sd' ')
+check "shared server has no agent label" "$LLABEL" none
+check "shared server is marked shared" "$LSHARED" 1
+check "shared server is not under the compile script" "$(cat /proc/$LPPID/cmdline 2>/dev/null | tr '\0' ' ' | grep -c 'tools/compile')" 0
 MSRV=$(cat "$T/main/dashboard/.shadow-cljs/server.pid")
 sleep 1; kill -0 "$MSRV" 2>/dev/null; check "main server alive right after a compile" "$?" 0
 gone "$MSRV"; check "main server gone after the main idle time" "$?" 0

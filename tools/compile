@@ -84,11 +84,14 @@ start_server() {
   idle=${MC_COMPILE_MAIN_IDLE_S:-1800}
   [ "$(cd "$repo" && git rev-parse --git-dir)" = "$(cd "$repo" && git rev-parse --git-common-dir)" ] || { idle=${MC_COMPILE_SERVER_IDLE_S:-1200}
     slot=(env RES_SLOT_MAX_WAIT_MS=${RES_SLOT_MAX_WAIT_MS:-120000} "$repo/tools/res-slot" server --); }
-  (exec 8>&- 9>&-; cd "$dir" && exec setsid nohup "${slot[@]}" npx shadow-cljs server >"$dir/.shadow-cljs/server.log" 2>&1 </dev/null) &
-  bg=$!
+  # The server is shared by every agent: double fork so it is no descendant of the caller's shell, and drop the agent label
+  # (LIVE_TESTS_AGENT_ID), so agent-usage attributes it to no agent (agent_reap of the starter must not kill it). The idle watcher stops it.
+  rm -f "$dir/.shadow-cljs/launch.pid"
+  ( (exec 8>&- 9>&-; echo "$BASHPID" > "$dir/.shadow-cljs/launch.pid"; cd "$dir" && exec setsid nohup env -u LIVE_TESTS_AGENT_ID COMPILE_SHARED=1 "${slot[@]}" npx shadow-cljs server >"$dir/.shadow-cljs/server.log" 2>&1 </dev/null) & )
   for _ in $(seq 1 300); do
     p=$(server_pid) && [ -s "$dir/.shadow-cljs/nrepl.port" ] && [ -s "$dir/.shadow-cljs/http.port" ] && break
-    if ! kill -0 "$bg" 2>/dev/null && grep -q '^res-slot: busy' "$dir/.shadow-cljs/server.log" 2>/dev/null; then
+    bg=$(cat "$dir/.shadow-cljs/launch.pid" 2>/dev/null)
+    if [ -n "$bg" ] && ! kill -0 "$bg" 2>/dev/null && grep -q '^res-slot: busy' "$dir/.shadow-cljs/server.log" 2>/dev/null; then
       echo "tools/compile: no free server slot for a worktree server, retry later ($(grep '^res-slot: busy' "$dir/.shadow-cljs/server.log" | tail -n1))" >&2
       exit 75
     fi
@@ -98,8 +101,8 @@ start_server() {
   # idle watcher: a server must not outlive its use (a worktree's holds a server slot; every JVM holds ~2 GB)
   touch "$dir/.shadow-cljs/last-use"
   sp=$(server_pid)
-  (exec 8>&- 9>&-; exec setsid nohup "$repo/tools/compile-idle-watch" "$sp" "$(awk '{print $22}' "/proc/$sp/stat")" "$dir/.shadow-cljs/last-use" \
-    "$idle" "${MC_COMPILE_IDLE_POLL_S:-30}" >/dev/null 2>&1 </dev/null) &
+  ( (exec 8>&- 9>&-; exec setsid nohup env -u LIVE_TESTS_AGENT_ID COMPILE_SHARED=1 "$repo/tools/compile-idle-watch" "$sp" "$(awk '{print $22}' "/proc/$sp/stat")" "$dir/.shadow-cljs/last-use" \
+    "$idle" "${MC_COMPILE_IDLE_POLL_S:-30}" >/dev/null 2>&1 </dev/null) & )
   sleep 3
 }
 
