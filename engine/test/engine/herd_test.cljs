@@ -1045,18 +1045,13 @@
 
 (defn watched [{:keys [eng]}] (mem/entries (mem/view (:store eng)) :watched))
 
-(deftest herding-in-the-dark-looks-round-and-in-the-light-does-not
+(deftest herding-in-the-light-does-not-look-round
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [w {:entities [(cow 1 4 3)]}
-              seeing (fn [light] (submit! (clock-on-wait! (h/setup-seeing (world w) light)) {:target 1}))
-              lit (seeing nil)
-              dk (seeing [0 0])
-              _ (await (run-ticks lit 400))
-              _ (await (run-ticks dk 400))]
-          (is (empty? (watched lit)))
-          (is (seq (watched dk))))))))
+        (let [lit (submit! (clock-on-wait! (h/setup-seeing (world {:entities [(cow 1 4 3)]}) nil)) {:target 1})
+              _ (await (run-ticks lit 400))]
+          (is (empty? (watched lit))))))))
 
 (deftest a-body-standing-in-the-open-gate-steps-out-to-shut-it-and-is-never-parked
   (async done

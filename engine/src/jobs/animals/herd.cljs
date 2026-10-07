@@ -17,7 +17,7 @@
   A body more than 16 blocks from the pen first walks within 12 of it.
 
   Checks before the first animal (each ends the run with its reason):
-  - :no-pen: the pen cannot be read from :box.
+  - :no-pen: the pen cannot be read from :box (a cell it has not seen is gone near and looked at once; a cell still unknown ends here).
   - :leaky: the pen has a leak other than the chosen gate (:leaks lists them).
   - :no-gate: no usable gate. The gate is :gate, else the pen's gate nearest the body. It needs pen floor on
     one side and free floor straight across (a corner gate has none). The four cells straight out from the gate

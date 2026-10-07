@@ -5,6 +5,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.declined :as declined]
             [jobs.lib.gate :as gate]
+            [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.pen :as pen]
             [jobs.lib.util :as u]
@@ -15,7 +16,7 @@
 (defn free-floor?
   "True when an animal can stand in cell: feet and head free, something to stand on."
   [p [x y z]]
-  (let [at (fn [dy] (u/block-name p {:x x :y (+ y dy) :z z}))
+  (let [at (fn [dy] (u/seen-name p {:x x :y (+ y dy) :z z}))
         [below feet head] (map at [-1 0 1])]
     (boolean (and below feet head (pen/passes? feet) (pen/passes? head) (not (pen/passes? below))))))
 
@@ -144,28 +145,57 @@
   [answer g]
   (filterv #(not= (cell (:pos %)) (cell g)) (:leaks answer)))
 
+(def look-range "How near the body goes to a pen cell it has not seen before looking at it." 4)
+
+(defn ^:async check-unknown!
+  "The pen has cells the body has not seen (a gate in the dark decays): go near the nearest, look at it once, then read
+  the pen again. A cell still unknown after the look ends :no-pen."
+  [c answer]
+  (let [here (u/self-pos c)
+        centre (fn [{:keys [x y z]}] {:x (+ x 0.5) :y (+ y 0.5) :z (+ z 0.5)})
+        unk (->> (:leaks answer) (filter #(= :unloaded (:why %))) (map :pos) (sort-by #(u/dist here (centre %))) first)
+        looked (set (:looked-pen (ctx/mem c)))]
+    (cond
+      (nil? unk) (finish! c :no-pen)
+      (not (u/within? here unk look-range))
+      (if (= :blocked (await (near/go-near! c unk look-range {:doors :never :escalate false})))
+        (finish! c :unreachable)
+        :continue)
+      (contains? looked (cell unk)) (finish! c :no-pen)
+      :else (do (await (ctx/act c :look (clj->js {:pos (centre unk)})))
+                (look/see! c)
+                (ctx/update-mem! c update :looked-pen (fnil conj []) (cell unk))
+                :continue))))
+
+(defn survey-pen!
+  "The pen is read in full: choose the gate and go to the leash phase, or end with the reason."
+  [c answer]
+  (let [{:keys [target]} (:args c)
+        {:keys [gate in out] :as chosen} (choose-gate c answer)
+        leaks (when chosen (other-leaks answer gate))
+        inside (count (in-pen-adults c answer))]
+    (cond
+      (= :no-start (:reason answer)) (finish! c :no-pen)
+      (nil? chosen) (finish! c :no-gate)
+      (not (gate/allowed? c :herd.declined "herd" :place gate {:own-plans-ok? true})) (finish! c :refused)
+      (not (approach-free? (:primitives c) (cell gate) in out)) (finish! c :no-gate {:why :no-approach})
+      (seq leaks) (finish! c :leaky {:leaks (vec (take 12 leaks))})
+      (>= inside target) (finish! c :full)
+      (< (depth (:inside answer) (cell gate) in) min-depth) (finish! c :too-shallow)
+      :else (do (ctx/update-mem! c assoc :phase :leash :gate gate :inside-cell (cell-pos in) :outside-cell (cell-pos out)
+                                 :axis (axis-cells (cell gate) in out (depth (:inside answer) (cell gate) in)))
+                  :continue))))
+
 (defn ^:async survey! [c]
-  (let [{:keys [box target]} (:args c)
-        centre (box-centre box)]
+  (let [centre (box-centre (:box (:args c)))]
     (if (> (u/dist (u/self-pos c) centre) near-pen)
       (if (= :blocked (await (near/go-near! c centre approach-range {:doors :never :escalate false})))
         (finish! c :unreachable)
         :continue)
-      (let [answer (read-pen c)
-            {:keys [gate in out] :as chosen} (choose-gate c answer)
-            leaks (when chosen (other-leaks answer gate))
-            inside (count (in-pen-adults c answer))]
-        (cond
-          (#{:no-start :unloaded} (:reason answer)) (finish! c :no-pen)
-          (nil? chosen) (finish! c :no-gate)
-          (not (gate/allowed? c :herd.declined "herd" :place gate {:own-plans-ok? true})) (finish! c :refused)
-          (not (approach-free? (:primitives c) (cell gate) in out)) (finish! c :no-gate {:why :no-approach})
-          (seq leaks) (finish! c :leaky {:leaks (vec (take 12 leaks))})
-          (>= inside target) (finish! c :full)
-          (< (depth (:inside answer) (cell gate) in) min-depth) (finish! c :too-shallow)
-          :else (do (ctx/update-mem! c assoc :phase :leash :gate gate :inside-cell (cell-pos in) :outside-cell (cell-pos out)
-                                     :axis (axis-cells (cell gate) in out (depth (:inside answer) (cell gate) in)))
-                    :continue))))))
+      (let [answer (read-pen c)]
+        (if (= :unloaded (:reason answer))
+          (await (check-unknown! c answer))
+          (survey-pen! c answer))))))
 
 (declare go!)
 

@@ -31,7 +31,7 @@
 
 (defn ^:async round [c]
   (let [{:keys [at box max-cells]} (:args c)
-        result (pen/summary (pen/check {:block-at (apiary/block-at-fn (:primitives c))
+        result (pen/summary (pen/check {:block-at (apiary/seen-block-at-fn (:primitives c))
                                         :at at
                                         :box box
                                         :max-cells max-cells}))]

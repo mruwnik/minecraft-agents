@@ -45,7 +45,7 @@
   (animals/adults (:primitives c) (:mob (:args c)) (view-radius c)))
 
 (defn read-pen [c]
-  (pen/check {:block-at (apiary/block-at-fn (:primitives c)) :box (:box (:args c))}))
+  (pen/check {:block-at (apiary/seen-block-at-fn (:primitives c)) :box (:box (:args c))}))
 
 (defn in-pen-adults
   "The adults of :mob standing on the pen's cells."
@@ -72,7 +72,7 @@
 (defn gate-cell [c] (cell (:gate (ctx/mem c))))
 
 (defn gate-open? [c]
-  (boolean (seq (pg/open-cells (apiary/block-at-fn (:primitives c)) [(gate-cell c)]))))
+  (boolean (seq (pg/open-cells (apiary/seen-block-at-fn (:primitives c)) [(gate-cell c)]))))
 
 (defn same-cell? [g entry-cell] (= g (some-> entry-cell vec)))
 

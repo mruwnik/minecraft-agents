@@ -67,7 +67,7 @@
   "The open gates among cells, minus the cells in left ({:cell [x y z]})."
   [c cells left]
   (let [done (set (map :cell left))]
-    (pg/open-cells (apiary/block-at-fn (:primitives c)) (remove done cells))))
+    (pg/open-cells (apiary/seen-block-at-fn (:primitives c)) (remove done cells))))
 
 (defn nearest [c cells]
   (let [here (u/self-pos c)]
@@ -128,7 +128,7 @@
   [c cell]
   (let [r (await (ctx/act c :useOn (clj->js {:pos (cell-pos cell)})))]
     (cond
-      (empty? (pg/open-cells (apiary/block-at-fn (:primitives c)) [cell])) nil
+      (empty? (pg/open-cells (apiary/seen-block-at-fn (:primitives c)) [cell])) nil
       (= "unreachable" (.-status r)) :unreachable
       :else :refused)))
 
