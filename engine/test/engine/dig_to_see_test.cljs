@@ -244,6 +244,35 @@
     (is (not= :floor-unseen (:reason (stair/stop-of (assoc in :block-at (constantly "stone")) cells #{})))
         "judged once the cut is open: it is dug to see first")))
 
+(defn floor-seen-after-cut!
+  "p whose cell floor reads unknown until the second look at it: the first glance missed."
+  [p floor]
+  (let [seen (atom false)
+        looks (atom 0)
+        look (.-look p)
+        sensed-at (.-sensedAt p)]
+    (aset p "look" (fn [token args]
+                     (let [pos (.-pos args)]
+                       (when (and (= floor [(js/Math.floor (.-x pos)) (js/Math.floor (.-y pos)) (js/Math.floor (.-z pos))])
+                                  (= 2 (swap! looks inc)))
+                         (reset! seen true))
+                       (.call look p token args))))
+    (aset p "sensedAt" (fn [pos]
+                         (if (and (not @seen) (= floor [(.-x pos) (.-y pos) (.-z pos)]))
+                           #js {:unknown true :pos pos}
+                           (.call sensed-at p pos))))
+    p))
+
+(deftest stair-looks-again-at-a-floor-its-first-look-missed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [open (apply dissoc ground (for [y [64 65 66]] (str "1," y ",0")))
+              p (floor-seen-after-cut! (sensing {:blocks open}) [1 63 0])
+              {:keys [out]} (await (tick-out! (setup p 'jobs.access.stair stair-east)))]
+          (is (= :done (:status @out)) (pr-str @out))
+          (is (= 3 (:steps @out))))))))
+
 (deftest tunnel-passes-its-fetch-to-the-stair-child-for-items-only
   (is (= {:what #{:item}} (tunnel/stair-fetch true)))
   (is (= {:what #{:item}} (tunnel/stair-fetch #{:tool :item})))

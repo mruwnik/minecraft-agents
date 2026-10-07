@@ -43,7 +43,7 @@
   :no-approach: the headings differ, with :headings giving each one's reason.
 
   Then the body walks to the entry (a go-to child; failing: :walk-in-failed) and the stair child cuts
-  and walks its steps. Each run step is judged again right before each dig (:hazard :zone :no-tool
+  and walks its steps. Each run step is judged again right before each dig (:hazard :floor-unseen :zone :no-tool
   :inventory-full :refills :dig-failed). Exposed lava is sealed or stops as the stair's :on-lava says (tunnel.sealed
   info; :lava-exposed, :lava-unsealed). Before each further run step, and at the stand, the way back to the
   entry is planned on a fresh pathWorld and must be whole and walkable, else :no-way-back and the body stays
@@ -303,7 +303,7 @@
         {:keys [next cut] :as cells} (run-cells feet (:heading plan))]
     (await (stair/look-ahead! c feet next cut))
     (or (await (stair/lava-step! c :tunnel.sealed (:block-at in) feet cut))
-        (stair/stop-of (stair/judged-in c in) cells accept)
+        (await (stair/judge! c in cells accept))
         (if-let [cell (first (remove #(rules/air ((:block-at in) %)) cut))]
           (or (await (stair/peek! c cell)) (await (dig-cell! c in cell cut accept)))
           (or (await (look/settle! c cut))
@@ -323,7 +323,7 @@
         over (first cut)]
     (await (stair/look-ahead! c feet next cut))
     (or (await (stair/lava-step! c :tunnel.sealed (:block-at in) feet [over]))
-        (stair/stop-of (stair/judged-in c in) cells accept)
+        (await (stair/judge! c in cells accept))
         (if (rules/air ((:block-at in) over))
           (or (await (look/settle! c [over])) :reached)
           (or (await (stair/peek! c over)) (await (dig-cell! c in over cut accept)))))))

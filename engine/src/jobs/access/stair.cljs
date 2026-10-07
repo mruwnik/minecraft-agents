@@ -48,7 +48,7 @@
   - :hazard: a hazard not in :accept (below).
   - :off-stair: the body is off the stair line.
   - :lava-exposed: lava beside an open cell of the step (or in one) with :on-lava :stop.
-  - :floor-unseen: the floor of the step is still unseen once its cut is open.
+  - :floor-unseen: the floor of the step is still unseen once its cut is open and looked at once more.
   - :lava-unsealed: that lava could not be filled (:on-lava :seal, the default): the place child's outcome in :place,
     or still lava after max-seals places (a seal, then one reseal when lava flows back). The body first steps back to the stair's cell before (:backed-off) and
     digs no more.
@@ -247,6 +247,18 @@
       (when-let [cell (first cells)]
         (when (unknown? (:primitives c) cell) (await (look-at! c cell)))
         (recur (rest cells))))))
+
+(defn ^:async judge!
+  "stop-of for the step about to be taken. A floor still unseen once the cut is open gets one more look (memory
+  :floor-looked) and is judged again, so a glance that missed is not a final stop."
+  [c in cells accept]
+  (let [stop (stop-of (judged-in c in) cells accept)
+        cell (:cell stop)]
+    (if (and (= :floor-unseen (:reason stop)) (not= cell (:floor-looked (ctx/mem c))))
+      (do (ctx/update-mem! c assoc :floor-looked cell)
+          (await (look-at! c cell))
+          (stop-of (judged-in c in) cells accept))
+      stop)))
 
 (defn ^:async peek!
   "Before digging cell: when it is still unknown, look at it once (memory :peeked) and give :again so the step is
@@ -500,7 +512,7 @@
                                                            (as-> cs (assoc cs :up? (= :up dir)
                                                                  :bridged? (contains? (:bridged (ctx/mem c)) (:floor cs)))))
                     _ (await (look-ahead! c feet next cut))
-                    stop (or (await (lava-step! c :stair.sealed (:block-at in) feet cut)) (stop-of (judged-in c in) cells accept))]
+                    stop (or (await (lava-step! c :stair.sealed (:block-at in) feet cut)) (await (judge! c in cells accept)))]
                 (if (and (= :no-floor (:reason stop)) (rules/air (:block stop)))
                   (await (bridge! c in cells))
                   (or stop
