@@ -16,7 +16,8 @@
   "plan-walk! with a budget of 300 expansions toward the deck's middle, the body put at the next of starts after each
   call that walked; the planner's floods small (preFlood 0, floodAfter 20, goalFlood 100). The reason of the first
   call whose search ended, else :unfinished after k calls."
-  [k starts]
+  ([k starts] (calls k starts #(assoc % :max-drop 3 :damage-budget 0)))
+  ([k starts policy-fn]
   (let [p (tu/fake {:blocks high-deck :self {:pos {:x 0.5 :y 64 :z 0.5}}})
         c {:primitives p}
         chunk wplan/chunk-expansions
@@ -33,7 +34,7 @@
                         _ (when walked ; a walk: the next call begins a new search from where it got to
                             (swap! (fake/state p) assoc-in [:self :pos] [(+ x 0.5) 64 (+ z 0.5)])
                             (reset! wsearch/searches {}))
-                        plan (await (walk/plan-walk! c (.pathWorld p) [20 71 20] 0 walk/default-weight {:budget 300 :policy (assoc (wworld/body-policy c) :max-drop 3 :damage-budget 0)}))]
+                        plan (await (walk/plan-walk! c (.pathWorld p) [20 71 20] 0 walk/default-weight {:budget 300 :policy (policy-fn (wworld/body-policy c))}))]
                     (if (= "searching" (.-reason (:r plan)))
                       (recur (inc i) (some? (:steps plan)))
                       (.-reason (:r plan))))))]
@@ -41,7 +42,7 @@
       (set! wplan/plan-options options)
       (reset! wsearch/searches {})
       (wsearch/forget-known! c)
-      out)))
+      out))))
 
 (deftest a-goal-flood-goes-on-after-each-walk
   (async done
@@ -91,3 +92,9 @@
               (wsearch/forget-known! c)
               (is (= "searching" (.-reason (:r first-plan))))
               (is (= ["found" nil] [(.-status (:r then)) (.-reason (:r then))])))))))))
+
+(deftest the-default-policy-proves-the-high-deck-enclosed-not-cut-off
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= "goal-enclosed" (await (calls 12 [[0 0]] identity))) "drops of 10 are in the default budget")))))

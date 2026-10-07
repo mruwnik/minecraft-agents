@@ -18,8 +18,8 @@
   would open, waypoints the cells [x y z] where the route turns or changes move kind, ending at the goal's end of the plan.
   A route that only gets nearer (a partial plan) or none is {:status :stopped :found false :reason (the planner's, as
   go-to's :why; :abilities with :kind) :near} plus :partial {the same fields up to where it ends} when there is one.
-  A bad :pos or :place, :tolls or :drop-cost, or a body without pathWorld sensing, is {:status :stopped :found false :reason
-  :bad-pos|:bad-name|:unknown-place|:bad-tolls|:bad-drop-cost|:unsupported :text}.")
+  A bad :pos or :place, :tolls, :drop-cost, :min-health or :max-damage, or a body without pathWorld sensing, is {:status :stopped :found false :reason
+  :bad-pos|:bad-name|:unknown-place|:bad-tolls|:bad-drop-cost|:bad-min-health|:bad-max-damage|:unsupported :text}.")
 
 (def args
   {:pos {:doc "target position [x y z] or {:x :y :z}" :type :pos :default nil}

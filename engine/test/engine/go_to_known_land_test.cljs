@@ -182,6 +182,15 @@
             (is (= {:arrived false :reason :unreachable :why :goal-cut-off} (select-keys @out [:arrived :reason :why]))
                 (str "result " @out))))))))
 
+(deftest go-to-a-high-deck-with-the-default-budget-is-goal-enclosed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out]} (await (go! {:blocks high-deck-floor :self {:pos {:x 20.5 :y 64 :z 20.5}}}
+                                        {:pos [20 71 20] :range 1 :escalate false}))]
+          (is (= {:arrived false :reason :unreachable :why :goal-enclosed} (select-keys @out [:arrived :reason :why]))
+              (str "result " @out)))))))
+
 (deftest go-to-says-where-it-gave-up
   (async done
     (tu/run-async done
@@ -206,6 +215,15 @@
         (str "result " @out))
     (is (< (dist-to (at p) [2.5 64 16.5]) 3)
         (str "body at " (at p) " walks: " (mapv (juxt :status :to) (moved eng))))))
+
+(deftest go-to-a-small-sealed-deck-with-the-default-budget
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out]} (await (go! {:blocks small-deck :self {:pos {:x 2.5 :y 64 :z 16.5}}}
+                                        {:pos [17 75 17] :range 1 :escalate false}))]
+          (is (= {:arrived false :reason :unreachable :why :goal-enclosed} (select-keys @out [:arrived :reason :why]))
+              (str "result " @out)))))))
 
 (deftest go-to-a-small-sealed-deck-is-cut-off-without-walking
   (async done (tu/run-async done (fn ^:async t [] (await (small-deck-cut-off! small-deck))))))

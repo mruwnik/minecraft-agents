@@ -5,7 +5,8 @@
   health-scale: the price rises x20/health (at most 4) near zero health (the danger rate's scale too).
   damage-budget: the hp a walk may spend on certain damage (drops over 3 blocks, plants that hurt on touch): the health
   and absorption over the floor (:min-health, default 12) less a margin of 1, at most :max-damage; less when the food
-  would put the hungry line (jobs.lib.foods/hungry?) over the body after the damage; 0 while burning, poisoned or withered."
+  would put the hungry line (jobs.lib.foods/hungry?) over the body after the damage; 0 while burning, poisoned or withered,
+  or with a health or absorption that is not a number."
   (:require [jobs.lib.foods :as foods]))
 
 (def hp-seconds "Seconds one hp costs at full health." 10)
@@ -35,7 +36,7 @@
   "The hp of certain damage a walk may take: see the ns doc. body {:health :absorption :food :effects (names) :on-fire}
   and settings {:min-health :max-damage} (nil: the defaults)."
   [{:keys [health absorption food effects on-fire]} {:keys [min-health max-damage]}]
-  (if (or on-fire (some ticking-effects effects))
+  (if (or on-fire (some ticking-effects effects) (not (js/isFinite health)) (not (js/isFinite (or absorption 0))))
     0
     (let [room (max 0 (- (+ health (or absorption 0)) (or min-health default-min-health) margin))
           cap (when food (food-cap food health))]

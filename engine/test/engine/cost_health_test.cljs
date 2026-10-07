@@ -30,6 +30,13 @@
     {:health 20 :food 20 :effects ["poison"]} {} 0
     {:health 20 :food 20 :effects ["speed"]} {} 7))
 
+(deftest an-unknown-health-leaves-no-budget
+  (are [body] (= 0 (health/damage-budget body {}))
+    {:health js/NaN :food 20}
+    {:health nil :food 20}
+    {:food 20}
+    {:health 20 :absorption js/NaN :food 20}))
+
 (deftest the-budget-leaves-the-body-fed-enough-not-to-go-hungry-after-the-drop
   (are [food budget] (= budget (health/damage-budget {:health 20 :food food} {}))
     18 7

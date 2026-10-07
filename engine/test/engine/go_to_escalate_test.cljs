@@ -627,3 +627,12 @@
           (is (= :goal-cut-off (:why @off)) "without escalation the planner's verdict is cut-off")
           (is (seq (events-of seen :go-to.escalated)) "shut in: it escalates")
           (is (= :unreachable (:reason @out))))))))
+
+(deftest go-to-the-cut-off-deck-with-the-default-budget-is-goal-enclosed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out]} (await (run-job! {:self {:pos {:x 5 :y 64 :z 0}} :blocks room-and-deck}
+                                             {:pos [8 71 0] :range 0 :escalate false}))]
+          (is (= {:why :goal-enclosed :reason :unreachable :arrived false} (select-keys @out [:why :reason :arrived]))
+              "the default budget lets drops of 10 in, so the deck is no longer proved cut off by a drop"))))))
