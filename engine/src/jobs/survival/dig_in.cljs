@@ -10,6 +10,7 @@
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.retreat-refuge :as refuge]
             [jobs.lib.result :as result]
+            [jobs.lib.sense :as sense]
             [jobs.lib.shelter :as sh]
             [jobs.lib.solid :as solid]
             [jobs.lib.tools :as tools]
@@ -398,7 +399,7 @@
       (let [cells (dig-cells/open-cells p start)
             have (reduce + (map :count (lb/carried c (:blocks (:args c)))))
             enclose (:enclose (:args c))
-            plan (when-not enclose (dig-cells/dig-plan p start))
+            plan (when-not enclose (await (sense/decide! c ::dig-plan #(dig-cells/dig-plan p start))))
             shape (when plan (await (find-shape! c start plan)))
             plan (if shape
                    (assoc plan :roof (:roof shape) :cells (mapcat :dig (:steps shape)))

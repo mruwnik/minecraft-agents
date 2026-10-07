@@ -77,3 +77,27 @@
 (deftest dedupe-leaks-keeps-first-seen-order-past-eight-leaks
   (let [leaks (mapv (fn [i] {:pos {:x i :y 64 :z 0} :why :gap}) (range 12))]
     (is (= leaks (pen/dedupe-leaks (concat leaks leaks))))))
+
+(defn ^:async run-seeing
+  "run-job with the body seeing through perception and no look taken yet; facing yaw (Minecraft degrees)."
+  [args w yaw]
+  (let [s (h/setup-seeing (assoc w :yaw yaw) nil)]
+    (core/submit! (:eng s) (list job args) {})
+    (dotimes [_ 6]
+      (swap! (:clock s) + 700)
+      (await (core/tick! (:eng s))))
+    (first (filter #(= :pen-check.done (:kind %)) @(:seen s)))))
+
+(deftest a-pen-the-body-never-looked-at-is-looked-at-before-the-answer
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [event (await (run-seeing {:at [2 64 2]} (world {}) 0))]
+          (is (= {:closed? true :cells 25} (select-keys event [:closed? :reason :cells]))
+              "inside the ring: the floor round the feet and the fence behind are looked at, not :no-start"))
+        (let [event (await (run-seeing {:at [2 64 2]} (assoc (world {}) :self {:pos {:x 6 :y 64 :z 2}}) 270))]
+          (is (= {:closed? true :cells 25} (select-keys event [:closed? :reason :cells]))
+              "the ring behind the body, outside it: no false :unloaded or :climb leak"))
+        (let [event (await (run-seeing {:at [2 64 2] :max-cells 100} (world {"2,64,-1" "air"}) 0))]
+          (is (= :leak (:reason event)) "the gap in the fence behind the body is seen")
+          (is (some #{{:x 2 :y 64 :z -1}} (map :pos (:leaks event)))))))))

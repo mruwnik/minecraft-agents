@@ -199,3 +199,12 @@
           (is (map? @out) "ends with a result")
           (is (= 62 (feet-y p)) "three down")
           (is (seq (calls p "place")) "roofed"))))))
+
+(deftest flat-ground-never-looked-at-is-looked-at-before-the-pit-is-planned
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p] :as s} (await (tick-out! (setup (sensing {:blocks ground}) 'jobs.survival.dig-in {})))]
+          (is (empty? (failed s)) "no :no-roof-support from ground the body never looked at")
+          (is (= 62 (feet-y p)) "three down: nothing beside the start cell, the roof goes in the ground layer")
+          (is (seq (calls p "place")) "roofed"))))))

@@ -145,6 +145,7 @@
   (assert (or (nil? match) (fn? match)) ":match is a fn of a block name")
   (assert (not (and names match)) ":names or :match, not both")
   (assert (or names match all?) "name the blocks wanted (:names or :match), or pass :all? true")
+  (u/note-read! :area {:radius (or radius 16)})
   (if-let [f (aget p "seenBlocks")]
     (let [q (cond-> {} names (assoc :names (vec names)) match (assoc :match match) radius (assoc :radius radius) max (assoc :max max))]
       (->> (array-seq (.call f p (clj->js q)))
@@ -165,6 +166,7 @@
   [p pos]
   (when-let [f (aget p "seenBlockAt")]
     (let [b (js->clj (.call f p (clj->js pos)) :keywordize-keys true)]
+      (when (:unknown b) (u/note-read! :cells (u/cell-vec pos)))
       (update b :pos #(if (map? %) % (u/pos-of %))))))
 
 (defn seen-entities
@@ -172,6 +174,7 @@
   hostiles as perception's known mobs (seen or heard, nearest first) when it has them; every other kind only when
   it is `visible`. Passive mobs are already sight-filtered by entities()."
   [p opts]
+  (u/note-read! :entities (select-keys opts [:radius :kind :names]))
   (let [raw (js->clj (.entities p (clj->js opts)) :keywordize-keys true)
         known (when-let [f (aget p "knownMobs")]
                 (let [{:keys [radius names kind]} opts]

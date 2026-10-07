@@ -2,13 +2,15 @@
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.apiary :as apiary]
-            [jobs.lib.pen :as pen]))
+            [jobs.lib.pen :as pen]
+            [jobs.lib.sense :as sense]))
 
 (def doc
   "Read-only: say whether an animal can walk out of a pen. Flood-fills what a cow can walk (rules in
   jobs.lib.pen: fences, walls and closed gates are 1.5 high, an open gate is a way out, a drop of more than 3
   is not taken) from the feet cell :at [x y z], or from every surface inside :box, where a step out of the box
-  is a leak. Never moves, digs or places. Declines without :at and :box.
+  is a leak. Reads what the body has seen; a pen it has not seen closed is checked again after it looks at the
+  cells it has not seen (jobs.lib.sense/decide!). Never moves, digs or places. Declines without :at and :box.
 
   The fill stops after :max-cells cells: a bigger pen is not closed, reason :unbounded. A fill without a box
   that finds no wall either side of a gap says that too.
@@ -32,10 +34,10 @@
 
 (defn ^:async round [c]
   (let [{:keys [at box max-cells]} (:args c)
-        result (pen/summary (pen/check {:block-at (apiary/seen-block-at-fn (:primitives c))
-                                        :at at
-                                        :box box
-                                        :max-cells max-cells}))]
+        block-at (apiary/seen-block-at-fn (:primitives c))
+        checked (await (sense/decide! c ::pen #(pen/check {:block-at block-at :at at :box box :max-cells max-cells})
+                                      {:retry? #(not (:closed? %))}))
+        result (pen/summary checked)]
     (ctx/emit! c :pen-check.done :info
                (assoc result :text (if (:closed? result)
                                      (str "pen closed, " (:cells result) " cells")

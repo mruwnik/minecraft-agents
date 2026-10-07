@@ -216,6 +216,11 @@
     (is (= :unloaded (:reason r)))
     (is (= [{:pos {:x 5 :y 64 :z 3} :why :unloaded}] (:leaks r)))))
 
+(deftest an-unseen-cell-under-a-fence-post-does-not-matter
+  (let [r (check (merge fence-ring (ring :unloaded [63])))]
+    (is (true? (:closed? r)) "nothing stands in or on a cell under a fence post")
+    (is (= [] (:leaks r)))))
+
 (deftest a-start-that-is-no-floor-answers-no-start
   (are [at] (= :no-start (:reason (check fence-ring {:at at})))
     {:x 2 :y 70 :z 2}

@@ -8,9 +8,28 @@
             [engine.perception.rays :as rays]))
 
 (a/defargs settings
-  {::max-failures {:default 3 :doc "Failures in a row a retrying helper takes before it gives up." :spec (a/int-in 1 nil)}})
+  {::max-failures {:default 3 :doc "Failures in a row a retrying helper takes before it gives up." :spec (a/int-in 1 nil)}
+   ::max-reads {:default 256 :doc "Unknown cells *reads* records per decision." :spec (a/int-in 1 nil)}})
 
 (defn max-failures [] (settings/get settings ::max-failures))
+
+(def ^:dynamic *reads*
+  "Bound by jobs.lib.sense/decide! around a sync decision to a volatile of what it read and the body does not know:
+  {:cells #{[x y z]} :guessed #{[x y z]} :area #{query} :entities #{query}}; nil otherwise."
+  nil)
+
+(defn note-read!
+  "Record v under k in *reads* when it is bound (at most ::max-reads cells under :cells and :guessed)."
+  [k v]
+  (when-let [r *reads*]
+    (vswap! r (fn [m] (if (and (#{:cells :guessed} k) (>= (count (get m k)) (settings/get settings ::max-reads)))
+                        m
+                        (update m k (fnil conj #{}) v))))))
+
+(defn cell-vec
+  "[x y z] of the cell holding pos (a cljs map or a JS {x y z})."
+  [pos]
+  (mapv js/Math.floor (if (map? pos) [(:x pos) (:y pos) (:z pos)] [(.-x pos) (.-y pos) (.-z pos)])))
 
 (defn ^:async untimed!
   "Await (thunk), then move mem :started (the job's :timeout-s start) on by the time it took: :timeout-s bounds the
@@ -59,7 +78,9 @@
   is not loaded. Primitives that are not wrapped by perception (no sensedAt) know nothing: nil, never a blockAt read."
   [p pos]
   (when (some? (.-sensedAt p))
-    (.sensedAt p (clj->js pos))))
+    (let [b (.sensedAt p (clj->js pos))]
+      (when (and *reads* b (true? (.-unknown b))) (note-read! :cells (cell-vec pos)))
+      b)))
 
 (defn seen-block
   "The block at a cell in view or remembered, as the JS object; nil when unloaded or never seen (unknown). Look at the
@@ -74,9 +95,12 @@
   (some-> (seen-block p pos) .-name))
 
 (defn block-name-or
-  "The seen block name at a cell, or guess when it is unknown: the caller states its policy for what it cannot see."
+  "The seen block name at a cell, or guess when it is unknown: the caller states its policy for what it cannot see.
+  A guess is noted in *reads* (:guessed)."
   [p pos guess]
-  (or (seen-name p pos) guess))
+  (or (seen-name p pos)
+      (do (when (and *reads* (true? (some-> (sensed p pos) .-unknown))) (note-read! :guessed (cell-vec pos)))
+          guess)))
 
 (defn seen-facts
   "seen-block as cljs facts {:name :full-cube? :waterlogged?}, or nil when the cell is unloaded or unknown."

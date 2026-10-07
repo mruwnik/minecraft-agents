@@ -312,8 +312,17 @@
 (defn answer [closed? reason inside leaks gates]
   {:closed? closed? :reason reason :inside inside :leaks leaks :gates gates})
 
-(defn unloaded-leaks [{:keys [unloaded]}]
-  (->> @unloaded sort (take 5) (mapv (fn [[x y z]] {:pos {:x x :y y :z z} :why :unloaded}))))
+(defn covered?
+  "Whether a known block standing on the floor of the cell over [x y z] (a fence, a wall, a block) covers it: no animal
+  stands in it or on it, so what it holds does not matter."
+  [{:keys [cell]} [x y z]]
+  (let [c (cell x (inc y) z)]
+    (boolean (and c (not (:unloaded? c)) (zero? (:lo c))))))
+
+(defn unloaded-leaks
+  "The unloaded (or unseen) cells the fill read, but not those covered?."
+  [{:keys [unloaded] :as world}]
+  (->> @unloaded (remove #(covered? world %)) sort (take 5) (mapv (fn [[x y z]] {:pos {:x x :y y :z z} :why :unloaded}))))
 
 (defn dedupe-leaks [leaks]
   (vec (first (reduce (fn [[out seen] l]
