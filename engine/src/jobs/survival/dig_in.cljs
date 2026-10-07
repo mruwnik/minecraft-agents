@@ -6,6 +6,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.child :as child]
+            [jobs.lib.dig-look :as look]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.lib.result :as result]
             [jobs.lib.shelter :as sh]
@@ -33,7 +34,8 @@
     It digs only where the block under is solid, the feet and head cells are dry, and no fluid borders the cell
     (water, lava, bubble column, kelp, seagrass, or a waterlogged block), nor the roof cell or the cell above it
     (:fluid-above).
-    It holds the best carried tool for each block first.
+    It holds the best carried tool for each block first. After each dig it looks at what the dig laid open and does
+    not walk into the hole when the cell under it is seen not solid (:no-floor; rock it cannot see counts as stone).
     If the body leaves the column, it chooses again.
   With no full block beside the roof cell at either height (a flower or crop is no support) it does not dig
   (dig_in_failed warning, :no-roof-support).
@@ -130,19 +132,47 @@
       (dig-cells/sealed-in? p :walls roof-height) :done
       :else :continue)))
 
+(defn ^:async look-below!
+  "Look at the cell to dig when it or one of its sides is unknown, so the checks read what is there."
+  [c {:keys [x y z]}]
+  (let [cells (cons [x y z] (for [[dx dz] dig-cells/sides] [(+ x dx) y (+ z dz)]))]
+    (when (some #(look/unknown? (:primitives c) %) cells)
+      (await (look/look-at! c [x y z])))))
+
+(def settle-wait-ms "One wait while a flow delay runs (look/settle!), at most settle-waits of them." 500)
+
+(def settle-waits 6)
+
+(defn ^:async hole-round
+  "The cell below the feet is dug and the body is about to walk into it (for the drops or to descend): looks at the cell
+  under it. :done (a :no-floor stop) when that is seen not solid, else nil once the flow delay has passed and the
+  cut was looked at again (look/settle!)."
+  [c {:keys [x y z]}]
+  (let [p (:primitives c)
+        under-cell [x (- y 2) z]
+        _ (when (look/unknown? p under-cell) (await (look/look-at! c under-cell)))
+        under (u/block-name-or p {:x x :y (- y 2) :z z} "stone")]
+    (if (solid/solid? under)
+      (loop [i 0]
+        (when (and (< i settle-waits) (await (look/settle! c [[x (dec y) z]])))
+          (await (ctx/act c :wait #js {:ms settle-wait-ms :why "letting what the dig opened settle"}))
+          (recur (inc i))))
+      (do (remember-failed-site! c :no-floor)
+          (ctx/emit! c :dig_in_failed :warn {:text (str under " under the hole; not stepping into it")})
+          :done))))
+
 (defn ^:async descend-round
-  "One step down toward the pit: dig the block below the feet, collect what
-  it dropped, and step into the hole. Gives up (dig_in_failed warn, done)
-  rather than dig when the block below is a hazard or the cell under it is not
-  solid (a thin floor over water, lava or air)."
+  "One step down toward the pit: dig the block below the feet, look at what the dig laid open, collect what it dropped,
+  and step into the hole (hole-round). Gives up (dig_in_failed warn, done) rather than dig when the block below is a
+  hazard or the cell under it is seen not to be solid (a thin floor over water, lava or air)."
   [c]
   (let [{:keys [blocks]} (:args c)
         p (:primitives c)
         {:keys [x y z]} (sh/feet p)
         below {:x x :y (dec y) :z z}
+        _ (await (look-below! c below))
         name (u/seen-name p below)
-        ;; two below solid ground a player assumes rock; a cell the body saw or remembers answers for itself
-        under (u/block-name-or p {:x x :y (- y 2) :z z} "stone")
+        under (u/seen-name p {:x x :y (- y 2) :z z})
         fluid (dig-cells/lateral-fluid p below)
         here (first (filter #(dig-cells/wet? p %) [{:x x :y y :z z} {:x x :y (inc y) :z z}]))
         roof (:roof (ctx/mem c))
@@ -160,7 +190,7 @@
       over (do (remember-failed-site! c :fluid-above)
                (ctx/emit! c :dig_in_failed :warn {:text (str (u/seen-name p over) " at or above the roof cell; not digging further")})
                :done)
-      (and (sh/solid-at? p below) (not (solid/solid? under)))
+      (and (sh/solid-at? p below) under (not (solid/solid? under)))
       (do (remember-failed-site! c :no-floor)
           (ctx/emit! c :dig_in_failed :warn {:text (str under " under the floor; not digging through it")})
           :done)
@@ -172,23 +202,27 @@
                                  "; nothing to roof the pit with, so not digging")})
           :done)
       (not (sh/solid-at? p below))
-      (let [before (:y (sh/feet p))
-            ;; raw moveTo kept: a step into the cell the job is digging, range 0.5, inside its own pit; the planner has no standable goal there.
-            r (await (ctx/act c :moveTo (clj->js {:pos below :range 0.5})))]
-        (if (< (:y (sh/feet p)) before)
-          (do (u/progress! c) :continue)
-          (fail-site! c :descent-stalled (str "cannot descend into the pit: " (.-status r)))))
+      (or (await (hole-round c (sh/feet p)))
+          (let [before (:y (sh/feet p))
+                ;; raw moveTo kept: a step into the cell the job is digging, range 0.5, inside its own pit; the planner has no standable goal there.
+                r (await (ctx/act c :moveTo (clj->js {:pos below :range 0.5})))]
+            (if (< (:y (sh/feet p)) before)
+              (do (u/progress! c) :continue)
+              (fail-site! c :descent-stalled (str "cannot descend into the pit: " (.-status r))))))
       :else (let [_ (await (tools/equip-for! c name {:fast true}))
                   r (await (tidy/dig! c below true))]
               (if (= "dug" (.-status r))
                 (let [placeable (some #(some #{(.-name %)} blocks) (array-seq (.-drops r)))]
                   (u/progress! c)
-                  (await (dig-cells/collect-drops! c blocks (.-drops r)))
-                  (if (or placeable (some? (lb/pick c blocks)))
-                    :continue
-                    (do (remember-material! c {:pos (:roof (ctx/mem c))})
-                        (ctx/emit! c :dig_in_failed :warn {:text "nothing to roof the pit with"})
-                        :done)))
+                  (ctx/update-mem! c assoc :dug-at (ctx/now c))
+                  (await (look/see-round! c [x (dec y) z]))
+                  (or (await (hole-round c {:x x :y y :z z}))
+                      (do (await (dig-cells/collect-drops! c blocks (.-drops r)))
+                          (if (or placeable (some? (lb/pick c blocks)))
+                            :continue
+                            (do (remember-material! c {:pos (:roof (ctx/mem c))})
+                                (ctx/emit! c :dig_in_failed :warn {:text "nothing to roof the pit with"})
+                                :done)))))
                 (fail-site! c :dig-failed (str "cannot dig down: " (.-status r))))))))
 
 (defn ^:async roof-round
