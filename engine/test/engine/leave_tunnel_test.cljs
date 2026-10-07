@@ -91,7 +91,7 @@
   [spec targs largs & {:keys [dir p between jobs]}]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p' (or p (tu/fake (merge {:self {:pos {:x 0 :y 65 :z 0}} :drops drops} (dissoc spec :zones))))
+        p' (or p (tu/fake (merge {:self {:pos {:x 0 :y 65 :z 0}} :drops drops} (dissoc spec :zones :zones-after))))
         tun (atom :not-done)
         out (atom :not-done)
         w (world/of-data {} {} (get spec :zones []))
@@ -108,6 +108,7 @@
                                (let [res (ctx/child-result c :in)]
                                  (reset! tun res)
                                  (when between (between p'))
+                                 (when-let [z (:zones-after spec)] (world/set-zones! w z))
                                  (ctx/update-mem! c assoc :tunnel (select-keys res [:line :dug :torches]))))
                              :continue)))}
         eng (core/create {:primitives p' :jobs (merge registry/jobs {'recording-parent parent} jobs)
@@ -271,7 +272,7 @@
           (is (= :done (:status @out)))
           (is (= [] (the-ledger (:eng s))) "every torch was taken or destroyed: no entry is left"))))))
 
-(deftest an-escape-never-overrides-zones-unless-the-caller-asks
+(deftest an-escape-never-overrides-zones-unless-the-caller-asks-and-stops-when-all-are-refused
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -279,8 +280,21 @@
               {:keys [out] :as s} (await (run-out! (setup {:blocks eight-down :inventory (inventory) :zones [zone]}
                                                           {:target [6 57 0] :ignore-zones? true} {} :between block-stair!)))
               escapes (events-of s :leave-tunnel.escape)]
-          (is (= :not-done @out) "the refused escape stair declines: the job waits")
+          (is (= [:stopped :walk-failed] ((juxt :status :reason) @out)) "every heading refused: the escapes are used up")
+          (is (= [:refused :refused :refused :refused] (map :reason (:escape @out))))
           (is (not-any? :ignore-zones? escapes) "no attempt ran with :ignore-zones?"))))))
+
+(deftest a-zone-refusing-only-the-first-escape-heading-leaves-by-another
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [zone {:name "keep" :min [-12 50 -3] :max [4 64 3] :allow #{:walk}}
+              {:keys [out] :as s} (await (run-out! (setup {:blocks eight-down :inventory (inventory) :zones-after [zone]}
+                                                          {:target [6 57 0]} {} :between block-stair!)))
+              escapes (events-of s :leave-tunnel.escape)]
+          (is (= :done (:status @out)) "not parked on the refused heading")
+          (is (= 1 (count escapes)))
+          (is (not= :west (:heading (first escapes)))))))))
 
 (deftest an-escape-that-respects-zones-is-info
   (async done

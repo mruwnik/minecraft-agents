@@ -3,6 +3,7 @@
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
+            [jobs.lib.blocks :as blocks]
             [jobs.lib.declined :as declined]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.util :as u]
@@ -171,7 +172,7 @@
 
 (defn ^:async escape!
   "One attempt of the way out: a stair to the entry's height (opposite the tunnel's :dir) along the next heading; done, the body is out and the
-  rounds go on; stopped, the next heading; none left, the walk failure stands; the stair declined (:declined: its
+  rounds go on; stopped or refused by a zone, the next heading; none left, the walk failure stands; the stair declined (:declined: its
   wait, e.g. :no-tool, reaches this job's job.waiting)."
   [c]
   (let [{:keys [tunnel]} (:args c)
@@ -184,11 +185,17 @@
       (nil? attempt)
       (finish! c :stopped :walk-failed {:cell cell :walk walk :escape results})
       :else
-      (let [r (await (declined/call-child! c (keyword (str "escape-" i)) 'jobs.access.stair
-                                     (assoc (escape-stair (:line tunnel) entry-y)
-                                            :heading (:heading attempt) :ignore-zones? (:ignore-zones? attempt))))
-            res (when (= :done r) (ctx/child-result c (keyword (str "escape-" i))))]
+      (let [slot (keyword (str "escape-" i))
+            sargs (assoc (escape-stair (:line tunnel) entry-y)
+                         :heading (:heading attempt) :ignore-zones? (:ignore-zones? attempt))
+            r (await (declined/call-child! c slot 'jobs.access.stair sargs))
+            res (when (= :done r) (ctx/child-result c slot))
+            refused (when (= :declined r) (blocks/child-wait c slot 'jobs.access.stair sargs))]
         (cond
+          (= :refused (:reason refused))
+          (do (declined/begin! c)
+              (ctx/update-mem! c update :escape #(-> % (assoc :i (inc i)) (update :results conj {:reason :refused :heading (:heading attempt)})))
+              :continue)
           (= :declined r) :declined
           (nil? res) :continue
           (= :done (:status res))
