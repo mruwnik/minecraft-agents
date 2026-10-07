@@ -1,7 +1,7 @@
 ;; jobs.gather.mine at the surface (card 07b89724, commit bbc10e42): stone in sight is mined with a pickaxe (:completed);
 ;; no pickaxe and nothing to fetch ends :stopped :no-tool with nothing dug; a soil-only surface with a pickaxe ends
 ;; :stopped got 0 (never :completed) and the pickaxe is not worn (dirt dug bare-handed; :descend-limit 0 keeps that case on the tunnel).
-;; Cases 4/5 (card 213a5723): soil 4 deep over stone stairs down then mines (:reason :count); soil past :descend-limit ends :no-stone-found.
+;; Cases 4/5 (card 213a5723): soil 4 deep over stone stairs down then mines (:reason :count; a 2-high tunnel step can dig 5 for 4, so wear 4 or 5); soil past :descend-limit ends :no-stone-found.
 ;; Cases 5/6 wall the plot in dirt (y -4..6): neighbouring plots have stone floors at the same level and the body walks to stone it sees.
 ;; Body on the floor at [16.5 0 16.5]; stone block mass east x 20..26, y 0..2, z 14..18 (case 1/2); dirt mass case 3.
 {:defaults
@@ -41,7 +41,7 @@
    :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.gather.mine {:block "stone" :count 4 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.done :data {:reason :count :got [:>= 4]}} :within-s 110 :of-job true}]
-   :after [[:item "cobblestone" [:>= 4]] [:item "stone_pickaxe" [:>= 1]] [:body-near [16.5 0 16.5] 2]]}
+   :after [[:item "cobblestone" [:>= 4]] [:item "stone_pickaxe" [:>= 1]] [:item "stone_pickaxe[minecraft:damage=0]" 0] [:item "stone_pickaxe[minecraft:damage=1]" 0] [:item "stone_pickaxe[minecraft:damage=2]" 0] [:item "stone_pickaxe[minecraft:damage=3]" 0] [:item "stone_pickaxe[minecraft:damage=6]" 0] [:item "stone_pickaxe[minecraft:damage=7]" 0] [:item "stone_pickaxe[minecraft:damage=8]" 0] [:body-near [16.5 0 16.5] 2]]}
   {:name "soil-deeper-than-limit-ends-no-stone-found"
    :plot {:floor "dirt"}
    :blocks [[:fill [0 -12 0] [31 -1 31] "dirt"] [:fill [0 -4 0] [31 6 0] "dirt"] [:fill [0 -4 31] [31 6 31] "dirt"] [:fill [0 -4 0] [0 6 31] "dirt"] [:fill [31 -4 0] [31 6 31] "dirt"]]
