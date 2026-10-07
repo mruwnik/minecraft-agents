@@ -108,6 +108,25 @@
   (is (= 8 (count (:entities (snap/summary {:pose (pose {}) :camera {:yaw 0 :pitch 0} :width 10 :height 10
                                             :seen (map (fn [i] {:name "bat" :px 5 :py 5 :dist i}) (range 20))}))))))
 
+(deftest summary-reports-the-light-of-the-crosshair-and-of-each-mob
+  (let [light {:sky 4 :block 0 :seeing 0.2}
+        s (snap/summary {:pose (pose {}) :camera {:yaw 0 :pitch 0} :width 10 :height 10
+                         :center {:name "stone" :x 0 :y 64 :z -3 :t 3 :face "south" :light light}
+                         :seen [{:name "zombie" :px 5 :py 5 :dist 3 :light light}]})]
+    (is (= light (get-in s [:crosshair :light])))
+    (is (= light (:light (first (:entities s)))))))
+
+(deftest perceived-splits-the-entity-cache-into-seen-and-heard
+  (let [rows [{:type "zombie" :id 7 :sense :seen :pos {:x 1 :y 64 :z 2}}
+              {:type "player" :id 8 :sense :seen :username "Ann" :pos {:x 3 :y 64 :z 4}}
+              {:type "creeper" :id 9 :sense :remembered :pos {:x 5 :y 64 :z 6} :age-ms 5000}
+              {:type "skeleton" :sense :heard :direction :north-east :band :near}
+              {:type "wolf" :sense :self :pos {:x 0 :y 64 :z 0} :self? true}]
+        {:keys [entities heard]} (snap/perceived rows)]
+    (is (= [["zombie" 1 2] ["player" 3 4]] (map (fn [e] [(:name e) (get-in e [:pos :x]) (get-in e [:pos :z])]) entities)))
+    (is (= "Ann" (:username (second entities))))
+    (is (= [{:name "skeleton" :direction :north-east :band :near}] heard))))
+
 (defn capture-stdout [f]
   (let [out (atom "") write (.-write (.-stdout js/process))]
     (set! (.-write (.-stdout js/process)) (fn [s] (swap! out str s) true))
@@ -120,6 +139,34 @@
     (swap! calls conj (js->clj opts :keywordize-keys true))
     #js {:png (js/Buffer.from "PNGDATA") :ms 12 :columns 9
          :center #js {:name "dirt" :x 0 :y 64 :z -3 :t 3.5 :face "south"} :seen #js []}))
+
+(deftest execute-draws-the-seen-set-not-the-raw-pose-entities
+  (async done
+    (let [{:keys [worlds workspace] :as f} (world-fixture) calls (atom [])
+          raw {:id 1 :name "zombie" :type "hostile" :pos {:x 0 :y 64 :z -5}}
+          rows [{:type "cow" :id 2 :sense :seen :pos {:x 1 :y 64 :z -4}}
+                {:type "zombie" :sense :heard :direction :south :band :far}]]
+      (write-pose! f (pose {:t (js/Date.now) :entities [raw]}))
+      (-> (snap/execute! (snap/options (into base ["--worlds" worlds "--workspace" workspace]))
+                         (fake-render calls) (js/Date.now)
+                         (fn [] (js/Promise.resolve {:ok true :entities rows})))
+          (.then (fn [out]
+                   (is (= ["cow"] (map :name (get-in (first @calls) [:pose :entities]))))
+                   (is (= [{:name "zombie" :direction "south" :band "far"}] (map #(update % :direction name) (map #(update % :band name) (:heard out)))))
+                   (is (str/includes? (:text out) "Heard: zombie"))))
+          (.finally done)))))
+
+(deftest execute-draws-no-entities-when-the-body-cannot-be-asked
+  (async done
+    (let [{:keys [worlds workspace] :as f} (world-fixture) calls (atom [])]
+      (write-pose! f (pose {:t (js/Date.now) :entities [{:id 1 :name "zombie" :pos {:x 0 :y 64 :z -5}}]}))
+      (-> (snap/execute! (snap/options (into base ["--worlds" worlds "--workspace" workspace]))
+                         (fake-render calls) (js/Date.now)
+                         (fn [] (js/Promise.reject (js/Error. "no socket"))))
+          (.then (fn [out]
+                   (is (empty? (get-in (first @calls) [:pose :entities])))
+                   (is (= "no socket" (:entities-error out)))))
+          (.finally done)))))
 
 (deftest main-writes-the-png-into-the-workspace-and-prints-a-relative-path
   (async done

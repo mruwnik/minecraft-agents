@@ -1,9 +1,10 @@
 (ns agent-tools.snapshot
   "A picture of what a body sees, plus a short text of what is in front. Read-only: it reads the body's view/pose.json
-  and the world's chunk dumps and never talks to the body, so it never moves it. The picture is drawn by the JS
+  and the world's chunk dumps and asks the body's /entities for what it perceives, so it never moves it. The picture is drawn by the JS
   software renderer (tools/view/render.mjs), which the launcher engine/tools/snapshot.mjs passes in as `render`;
   everything else (options, the online check, the camera, file names, the bounded folder, the summary) is here."
   (:require [clojure.string :as str]
+            [agent-tools.http :as http]
             [agent-tools.map :as map-tool]
             [agent-tools.world-data :as data]
             ["node:fs" :as fs]
@@ -14,7 +15,8 @@
        "            [--yaw DEG] [--pitch DEG] [--look-at X,Y,Z] [--max-dist 64]\n"
        "Draws what the body sees now into <workspace>/snapshots/snap-<UTC time>.png (the newest " 20 " are kept) and\n"
        "prints EDN: :png (relative to the workspace), :facing, :crosshair (the block the centre of the view hits, its\n"
-       "cell and distance), :entities (mobs/players in the picture, nearest first, left/centre/right) and :text.\n"
+       "cell, distance and light), :entities (mobs/players the body sees, in the picture, nearest first, left/centre/right),\n"
+       ":heard (noises it hears but does not see: name, direction, band) and :text.\n"
        "Default direction: where the body faces. --yaw/--pitch in degrees (yaw 0 north, 90 west, 180 south, 270 east;\n"
        "pitch +90 straight up), either alone; --look-at aims at the centre of block X,Y,Z (or X Y Z). Only the picture turns: the\n"
        "body never moves. Needs the body online (pose.json written in the last " 10 " s). Drawn from the chunks the\n"
@@ -119,31 +121,52 @@
 (defn- round1 [n] (/ (js/Math.round (* 10 n)) 10))
 (defn- coords [xs] (str/join " " xs))
 
+(defn perceived
+  "{:entities :heard} from the body's /entities rows: the :seen rows as pose entities for the renderer, and the :heard
+  rows (no position) as {:name :direction :band}. Remembered rows and the body itself are not drawn."
+  [rows]
+  {:entities (->> rows
+                  (filter #(and (= :seen (:sense %)) (:pos %)))
+                  (mapv (fn [{:keys [type id username pos]}]
+                          (cond-> {:id id :name type :type (when (= "player" type) "player") :pos pos}
+                            username (assoc :username username)))))
+   :heard (->> rows
+               (filter #(= :heard (:sense %)))
+               (mapv (fn [{:keys [type direction band]}] {:name type :direction direction :band band})))})
+
 (defn summary
-  "{:facing :crosshair :entities :text} from the pose, the camera drawn, the centre ray's hit and the entities drawn."
-  [{:keys [pose camera center seen width]}]
+  "{:facing :crosshair :entities :heard :text} from the pose, the camera drawn, the centre ray's hit, the entities drawn
+  and the noises heard."
+  [{:keys [pose camera center seen heard width]}]
   (let [yaw-deg (mod (js/Math.round (* (:yaw camera) degrees)) 360)
         facing {:yaw yaw-deg :pitch (js/Math.round (* (:pitch camera) degrees)) :compass (compass (:yaw camera))}
         crosshair (when center
-                    {:block (:name center) :at [(:x center) (:y center) (:z center)] :face (:face center)
-                     :distance (round1 (:t center))})
+                    (cond-> {:block (:name center) :at [(:x center) (:y center) (:z center)] :face (:face center)
+                             :distance (round1 (:t center))}
+                      (:light center) (assoc :light (:light center))))
         side #(cond (< % (/ width 3)) "left" (> % (/ (* 2 width) 3)) "right" :else "centre")
         entities (->> seen
                       (sort-by :dist)
                       (take 8)
-                      (mapv (fn [{:keys [name kind px dist]}] {:name name :kind kind :distance dist :side (side px)})))
+                      (mapv (fn [{:keys [name kind px dist light]}]
+                                 (cond-> {:name name :kind kind :distance dist :side (side px)}
+                                   light (assoc :light light)))))
         eye (:eye pose)
         text (str "Facing " (:compass facing) " (yaw " (:yaw facing) ", pitch " (:pitch facing) ") from "
                   (coords (map #(round1 (get eye %)) [:x :y :z])) ". "
                   (if crosshair
                     (str "Crosshair: " (:block crosshair) " at " (coords (:at crosshair)) ", "
-                         (.toFixed (:distance crosshair) 1) " blocks.")
+                         (.toFixed (:distance crosshair) 1) " blocks"
+                         (when-let [l (:light crosshair)] (str ", light " (max (:sky l) (:block l))))
+                         ".")
                     "Crosshair: nothing within reach of the loaded world (sky or unloaded).")
                   " "
                   (if (seq entities)
                     (str "In view: " (str/join ", " (map #(str (:name %) " " (:distance %) " (" (:side %) ")") entities)) ".")
-                    "No mobs or players in view."))]
-    {:facing facing :crosshair crosshair :entities entities :text text}))
+                    "No mobs or players in view.")
+                  (when (seq heard)
+                    (str " Heard: " (str/join ", " (map #(str (:name %) " " (name (:direction %)) " (" (name (:band %)) ")") heard)) ".")))]
+    {:facing facing :crosshair crosshair :entities entities :heard (vec heard) :text text}))
 
 (def max-pose-bytes 1048576)
 
@@ -193,10 +216,39 @@
 (defn- center-of [center]
   (when center (js->clj center :keywordize-keys true)))
 
+(declare execute-with!)
+
+(def entities-timeout-ms 3000)
+(def entities-max-bytes (+ (* 4 1024 1024) 4096))
+
+(defn fetch-entities
+  "A promise of the body's /entities snapshot map, asked over its control socket."
+  [ctx body]
+  (-> (http/request {:socket-path (.join path (:world-dir ctx) "agents" body "engine" "control.sock") :path "/entities"
+                     :label "entities" :timeout-ms entities-timeout-ms :max-bytes entities-max-bytes})
+      (.then (fn [{:keys [status text]}]
+               (let [snapshot (when (= 200 status) (data/read-edn text))]
+                 (if (and (map? snapshot) (:ok snapshot))
+                   snapshot
+                   (throw (js/Error. (str "the body's /entities answered " status)))))))))
+
 (defn execute!
-  "Renders and writes one snapshot; `render` is renderView of tools/view/render.mjs. Resolves to the result map."
-  [{:keys [ctx body workspace width height max-dist] :as opts} render now]
-  (let [pose (read-pose ctx body)
+  "Renders and writes one snapshot; `render` is renderView of tools/view/render.mjs. `entities-fn` (default: ask the
+  body) returns a promise of its /entities snapshot; what the body perceives, not the live entity list, is drawn, and
+  with no answer nothing is drawn and :entities-error says why. Resolves to the result map."
+  ([opts render now] (execute! opts render now nil))
+  ([{:keys [ctx body] :as opts} render now entities-fn]
+   (let [pose (read-pose ctx body)]
+     (if (pose-problem pose (:world ctx) now)
+       (execute-with! opts render now pose {})
+       (-> (js/Promise.resolve ((or entities-fn #(fetch-entities ctx body))))
+           (.then (fn [snapshot] (perceived (:entities snapshot))))
+           (.catch (fn [error] {:entities [] :heard [] :entities-error (str (or (some-> error .-message) error))}))
+           (.then #(execute-with! opts render now pose %)))))))
+
+(defn execute-with!
+  [{:keys [ctx body workspace width height max-dist] :as opts} render now pose {:keys [entities heard entities-error]}]
+  (let [pose (when pose (assoc pose :entities entities))
         expected (real-target (.join path workspace "snapshots"))]
     (if-let [problem (or (pose-problem pose (:world ctx) now) (unsafe-dir-problem workspace expected))]
       (js/Promise.resolve (merge {:ok false :body body} problem))
@@ -220,7 +272,9 @@
                              (merge {:ok true :body body :png (.relative path workspace (.join path dir name)) :size [width height]}
                                     (summary {:pose pose :camera cam :width width :height height
                                               :center (center-of (unchecked-get out "center"))
+                                              :heard heard
                                               :seen (js->clj (unchecked-get out "seen") :keywordize-keys true)})
+                                    (when entities-error {:entities-error entities-error})
                                     {:eye (mapv #(round1 (get-in pose [:eye %])) [:x :y :z])
                                      :columns (unchecked-get out "columns") :render-ms (js/Math.round (unchecked-get out "ms"))}))))))))))))
 
