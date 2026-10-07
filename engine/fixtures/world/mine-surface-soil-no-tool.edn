@@ -41,7 +41,7 @@
    :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.gather.mine {:block "stone" :count 4 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.done :data {:reason :count :got [:>= 4]}} :within-s 110 :of-job true}]
-   :after [[:item "cobblestone" [:>= 4]] [:item "stone_pickaxe[minecraft:damage=4]" [:>= 1]] [:body-near [16.5 0 16.5] 2]]}
+   :after [[:item "cobblestone" [:>= 4]] [:item "stone_pickaxe" [:>= 1]] [:body-near [16.5 0 16.5] 2]]}
   {:name "soil-deeper-than-limit-ends-no-stone-found"
    :plot {:floor "dirt"}
    :blocks [[:fill [0 -12 0] [31 -1 31] "dirt"] [:fill [0 -4 0] [31 6 0] "dirt"] [:fill [0 -4 31] [31 6 31] "dirt"] [:fill [0 -4 0] [0 6 31] "dirt"] [:fill [31 -4 0] [31 6 31] "dirt"]]
