@@ -408,13 +408,14 @@
                       (await (step! c next)))))))))))))
 
 (defn ^:async next!
-  "One piece of the stair: a fetch round, the start, a dig, a bridge or a step. :again, :continue (a child waits) or
-  :done."
+  "One piece of the stair: a fetch round, the start, a dig, a bridge or a step. :again, :continue (a child waits, or
+  the next cell lacks a tool or room with nothing to fetch: the check waits) or :done."
   [c]
   (let [m (ctx/mem c)
         r (await (fetch/step! c 'jobs.access.stair (need c) {:return? true}))]
     (cond
       r r
+      (and (:origin m) (need c)) :continue
       (nil? (:origin m))
       (let [feet (feet-of c)
             target (target-steps (:args c) feet)]

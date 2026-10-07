@@ -313,6 +313,32 @@
           (let [me (:pos (fake/self (:p s)))]
             (is (= [0 0] [(js/Math.floor (:x me)) (js/Math.floor (:z me))]) "back on the stair line at its origin")))))))
 
+(deftest stair-fetches-a-pickaxe-lost-mid-run
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:self {:pos {:x 0 :y 64 :z 0}}
+                        :inventory [{:name "stone_pickaxe" :count 1}]
+                        :blocks {"0,61,1" "andesite" "0,62,1" "andesite" "0,63,1" "stone" "0,64,1" "stone" "0,65,1" "stone"
+                                 "0,60,2" "stone" "0,61,2" "stone" "0,62,2" "stone" "0,63,2" "stone" "0,64,2" "stone"
+                                 "-3,64,2" "chest"}
+                        :containers {"-3,64,2" [{:name "wooden_pickaxe" :count 1}]}
+                        :drops {"stone" "cobblestone"}}
+                       [own-zone])
+              n (atom 0)
+              world (.-world (:p s))
+              _ (.override world "dig"
+                           (fn ^:async f [token a impl]
+                             (let [r (await (impl token a))]
+                               (when (= 1 (swap! n inc))
+                                 (swap! (.. world -state) assoc :inventory []))
+                               r)))
+              id (core/submit! (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 2}) {})]
+          (await (run-ticks s 80))
+          (is (= 1 (get (inv s) "wooden_pickaxe")) (pr-str (core/waiting (:eng s) id)))
+          (is (empty? (events-of s :stair.stopped)) "no stop for the lost pickaxe")
+          (is (= 1 (count (events-of s :fetch.done)))))))))
+
 (defn ^:async with-waiting-fetch-child
   "Run (f counter) with the :fetch child of every job answering :continue (a child waiting on the world); counter
   counts its rounds."

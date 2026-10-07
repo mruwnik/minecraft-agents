@@ -356,6 +356,24 @@
           (is (= 1 (count (events-of s :tool.broke))))
           (is (= 1 (count (events-of s :tool.none)))))))))
 
+(deftest a-pickaxe-lost-mid-stair-waits-no-tool-instead-of-stopping
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [n (atom 0)
+              prep (fn [p]
+                     (let [world (.-world p)]
+                       (.override world "dig"
+                                  (fn ^:async f [token a impl]
+                                    (let [r (await (impl token a))]
+                                      (when (= 1 (swap! n inc))
+                                        (swap! (.. world -state) assoc :inventory []))
+                                      r)))))
+              s (await (stair! {:blocks ground} (assoc east :fetch false) prep))]
+          (is (= :not-done @(:out s)) "the child declines: its parent waits")
+          (is (= :no-tool (:reason (waiting s))))
+          (is (empty? (events-of s :stair.stopped))))))))
+
 (deftest lava-two-ahead-stops-before-opening-it
   (async done
     (tu/run-async done
