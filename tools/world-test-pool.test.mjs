@@ -1,7 +1,7 @@
 // Why JavaScript: node --test file for tools/world-test-pool.mjs.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { splitForms, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper, countListed } from './world-test-pool.mjs'
+import { splitForms, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper, countListed, listArgs } from './world-test-pool.mjs'
 
 const form = (id, status, secs = 1, extra = '') =>
   `{:plot 0, :file "${id.split('/')[0]}", :expects [{:status :pass, :evidence "a } \\" {"}], :status :${status}, :id "${id}", :elapsed-s ${secs}${extra}}`
@@ -245,4 +245,8 @@ test('runPool events: a failure that passes on the rerun is reported once, as fl
   const seen = await eventsOf(['a'], run, 1)
   assert.deepEqual(resultsOf(seen).map((e) => [e.name, e.outcome]), [['a/c1#1', 'flaky']])
   assert.equal(progressOf(seen).at(-1).retries, 1)
+})
+test('listArgs: the --list call gets the paths and the case-selecting flags the children get', () => {
+  const p = parsePoolArgs(['dir', '--bodies', '4', '--phase', 'night', '--tag', 'air', '--match', 'dive', '--repeat', '2'])
+  assert.deepEqual(listArgs(p), ['dir', '--phase', 'night', '--tag', 'air', '--match', 'dive', '--repeat', '2', '--list'])
 })

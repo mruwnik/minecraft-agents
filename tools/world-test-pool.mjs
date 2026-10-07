@@ -241,8 +241,10 @@ const spawnChild = (script, pass, { file, match, worker }, tmpResults, reaper) =
 })
 
 // every case of the fixture files as the children will select them (--list needs no world); null when the listing fails
+// the --list call selects cases with the same paths and flags (--phase, --tag, --match, ...) the children get
+export const listArgs = (p) => [...p.paths, ...p.passthrough, '--list']
 const listTotal = (script, p) => {
-  const r = spawnSync(process.execPath, [script, ...p.paths, ...p.passthrough, '--list'], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 })
+  const r = spawnSync(process.execPath, [script, ...listArgs(p)], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 })
   if (r.status !== 0) return null
   const at = p.passthrough.indexOf('--repeat')
   return countListed(r.stdout, at < 0 ? 1 : Number(p.passthrough[at + 1]))
