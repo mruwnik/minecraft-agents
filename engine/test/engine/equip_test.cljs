@@ -70,7 +70,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p out seen]} (await (equip (stacks "dirt") {:item "iron_pickaxe"}))]
+        (let [{:keys [p out seen]} (await (equip (stacks "dirt") {:item "iron_pickaxe" :fetch false}))]
           (is (= {:status :stopped :reason :no-item :item "iron_pickaxe"} (select-keys @out [:status :reason :item])))
           (is (nil? (held p)))
           (is (some #(re-find #"equip.refused" %) (tu/kinds seen))))))))
@@ -90,34 +90,43 @@
         (let [{:keys [out]} (await (equip (stacks "dirt") {:item "dirt" :hand "foot"}))]
           (is (= {:status :stopped :reason :bad-args} (select-keys @out [:status :reason]))))))))
 
-(deftest fetch-gets-a-missing-item-from-a-seen-chest-then-holds-it
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (ft/start (ft/world ft/pickaxe-stock) [])]
-          (core/submit! (:eng s) (list job {:item "wooden_pickaxe" :fetch true}) {})
-          (await (ft/run-ticks s 40))
-          (is (= "wooden_pickaxe" (held (:p s))))
-          (is (= 1 (count (ft/events-of s :fetch.done))))
-          (is (empty? (ft/listed s))))))))
-
-(deftest fetch-with-nothing-to-get-fails-clearly
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (ft/start (ft/world {}) [])]
-          (core/submit! (:eng s) (list job {:item "wooden_pickaxe" :fetch true}) {})
-          (await (ft/run-ticks s 40))
-          (is (nil? (held (:p s))))
-          (is (seq (ft/events-of s :fetch.failed))))))))
-
-(deftest without-fetch-the-job-waits-need-and-touches-no-chest
+(deftest a-default-call-gets-a-missing-item-from-a-seen-chest-then-holds-it
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (ft/start (ft/world ft/pickaxe-stock) [])]
           (core/submit! (:eng s) (list job {:item "wooden_pickaxe"}) {})
+          (await (ft/run-ticks s 40))
+          (is (= "wooden_pickaxe" (held (:p s))))
+          (is (= 1 (count (ft/events-of s :fetch.done))))
+          (is (= ["wooden_pickaxe"] (mapv :item (ft/events-of s :equip.done))))
+          (is (empty? (ft/chest-items s [-2 64 3]))))))))
+
+(deftest fetch-with-nothing-to-get-fails-and-the-job-waits-with-the-failure
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (ft/start (ft/world {}) [])
+              id (core/submit! (:eng s) (list job {:item "wooden_pickaxe"}) {})]
+          (await (ft/run-ticks s 40))
+          (is (nil? (held (:p s))))
+          (is (= 1 (count (ft/events-of s :fetch.failed))))
+          (is (empty? (ft/events-of s :equip.done)))
+          (let [w (core/waiting (:eng s) id)]
+            (is (= :need (:reason w)))
+            (is (= "wooden_pickaxe" (:item w)))
+            (is (some? (get-in w [:fetch :failed])))))))))
+
+(deftest fetch-false-opts-out-and-the-round-stops-no-item-without-touching-the-chest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (ft/start (ft/world ft/pickaxe-stock) [])]
+          (core/submit! (:eng s) (list job {:item "wooden_pickaxe" :fetch false}) {})
           (await (ft/run-ticks s 10))
           (is (nil? (held (:p s))))
           (is (empty? (ft/events-of s :fetch.started)))
-          (is (seq (ft/chest-items s [-2 64 3]))))))))
+          (is (empty? (ft/inspects s)))
+          (is (seq (ft/chest-items s [-2 64 3])))
+          (is (= [:no-item] (mapv :reason (ft/events-of s :equip.refused))))
+          (is (empty? (ft/listed s))))))))

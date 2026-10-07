@@ -7,7 +7,7 @@
 
 (def doc
   "Hold a carried item in the main hand (:hand \"main\", default) or the off-hand (:hand \"off\"). Done at once when
-  it is held there already. A missing item is fetched (jobs.lib.fetch) only with :fetch.
+  it is held there already. A missing item is fetched (jobs.lib.fetch) unless :fetch is false.
   Ends {:status :done :item name :hand h} (plus :held true when nothing had to move) or {:status :stopped :reason r}:
   :no-item (not carried), :unknown-item (no such item for the body's version), :bad-args (bad :hand), :failed (the
   server did not take it, with :equip the primitive's status), warn equip.refused.")
@@ -15,7 +15,7 @@
 (def args
   {:item {:doc "the item to hold" :default nil}
    :hand {:doc "\"main\" or \"off\"" :default "main"}
-   :fetch {:doc "get a missing item (jobs.lib.fetch): true, a set of kinds or a map of limits" :default false}})
+   :fetch {:doc "get a missing item (jobs.lib.fetch): true, a set of kinds or a map of limits; false stops :no-item instead" :default true}})
 
 (def dests {"main" "hand" "off" "off-hand"})
 (def slots {"main" :mainHand "off" :offHand})
