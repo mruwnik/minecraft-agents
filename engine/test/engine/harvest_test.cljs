@@ -478,3 +478,8 @@
           (await (child-outcome eng job {} 200))
           (is (= (count (calls p "place")) (count (events-of seen :blocks.place.done))))
           (is (= 9 (count (events-of seen :blocks.place.done)))))))))
+
+(deftest still-ripe-rereads-the-cells
+  (let [p (tu/fake {:blocks (field "wheat" 7 [1 2] [1]) :ages (merge (ages 7 [1] [1]) (ages 2 [2] [1]))})
+        cells [{:x 1 :y 64 :z 1} {:x 2 :y 64 :z 1} {:x 3 :y 64 :z 1}]]
+    (is (= [{:x 1 :y 64 :z 1}] (harvest/still-ripe p cells)) "unripe and missing crops are dropped")))

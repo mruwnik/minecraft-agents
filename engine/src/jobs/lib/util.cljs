@@ -50,11 +50,10 @@
 
 (defn sensed
   "What the body knows of a cell as the JS answer (blockAt's keys plus ageMs, felt, visible, unknown), or nil when the chunk
-  is not loaded. Primitives that are not wrapped by perception (a bare fake) have no sensedAt and read blockAt."
+  is not loaded. Primitives that are not wrapped by perception (no sensedAt) know nothing: nil, never a blockAt read."
   [p pos]
-  (if (some? (.-sensedAt p))
-    (.sensedAt p (clj->js pos))
-    (block-at p pos)))
+  (when (some? (.-sensedAt p))
+    (.sensedAt p (clj->js pos))))
 
 (defn seen-block
   "The block at a cell in view or remembered, as the JS object; nil when unloaded or never seen (unknown). Look at the

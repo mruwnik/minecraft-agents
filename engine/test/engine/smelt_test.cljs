@@ -195,7 +195,8 @@
   (a furnace by default) and has properties props; none when props is nil."
   ([m now props] (check-of m now props "furnace"))
   ([m now props block-name]
-   (let [p #js {:blockAt (fn [_] (when props #js {:name block-name :properties (clj->js props)}))}]
+   (let [at (fn [_] (when props #js {:name block-name :properties (clj->js props)}))
+         p #js {:blockAt at :sensedAt at}]
      (boolean (smelt/check {:args {:furnace spot} :primitives p :root "j1" :slots []
                             :view (fn [] {:now now :data {:policies {(mem/job-kind "j1") mem/job-policy}
                                                          :entries {(mem/job-kind "j1") [{:t now :data m}]}}})})))))

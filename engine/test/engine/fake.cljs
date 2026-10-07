@@ -983,6 +983,7 @@
                                   (when (contains? (:ages w) pos) {:age (get-in w [:ages pos])})
                                   (when (seq props) {:properties props})
                                   (when-not (re-find not-full-cube block) {:fullCube true}))))))
+              "sensedAt" (fn [a] (.blockAt p a))
               "pathWorld" (fn [] (let [{:keys [snapshot table space]} (steer/path-world @state)]
                                    #js {:snapshot snapshot :table table :space space}))
               "onBodyEvent" (fn [listener] (swap! listeners conj listener) (fn [] (swap! listeners disj listener)))

@@ -82,6 +82,11 @@
   (let [b (u/seen-block p pos)]
     (boolean (and b (= crop (.-name b)) (some-> (.-age b) (>= (ripe-age crop)))))))
 
+(defn still-ripe
+  "The targets p shows ripe now (a ripe reading may be remembered and stale; the cell is in view after the walk)."
+  [p targets]
+  (filterv #(some->> (u/seen-name p %) (ripe-at? p %)) targets))
+
 (defn planned-ripe
   "The planned cells (cells {pos crop}) ripe with the crop the plan wants there, of a wanted crop, not in skipped,
   nearest to the body first."
@@ -381,19 +386,19 @@
                 (recur (rest todo))))))))))
 
 (defn ^:async cut-cell!
-  "Write the debt of the crop at pos, dig it (a blocks.dig child; the zone verdict is the job's own) and settle by the outcome."
+  "Write the debt of the crop at pos, dig it (a blocks.dig child; the zone verdict is the job's own) and settle by the outcome.
+  A cell whose crop is not seen is left (no debt could be written)."
   [c pos]
-  (when (seq (permitted c (cut-action c) [pos]))
-    (let [seed (get seed-of (u/seen-name (:primitives c) pos))]
-      (when (and (:replant (:args c)) seed)
-        (ctx/update-mem! c update :replant (fnil conj []) {:pos pos :seed seed :cut true}))
-      (let [outcome (await (blocks/dig-cell! c pos {:accept #{:fluid-adjacent :falling-block :under-feet}
-                                                    :ignore-zones? true}))]
-        (case outcome
-          :continue :continue
-          :dug (ctx/update-mem! c inc-in :cut)
-          :missing nil
-          (ctx/update-mem! c skip-crop pos))))))
+  (when-let [crop (and (seq (permitted c (cut-action c) [pos])) (u/seen-name (:primitives c) pos))]
+    (when-let [seed (and (:replant (:args c)) (get seed-of crop))]
+      (ctx/update-mem! c update :replant (fnil conj []) {:pos pos :seed seed :cut true}))
+    (let [outcome (await (blocks/dig-cell! c pos {:accept #{:fluid-adjacent :falling-block :under-feet}
+                                                  :ignore-zones? true}))]
+      (case outcome
+        :continue :continue
+        :dug (ctx/update-mem! c inc-in :cut)
+        :missing nil
+        (ctx/update-mem! c skip-crop pos)))))
 
 (defn warn-gave-up! [c]
   (let [m (ctx/mem c)]
@@ -425,7 +430,8 @@
       (let [here (u/self-pos c)
             near (filterv #(<= (u/eye-dist here %) (:reach (:args c))) ripe)
             walked (when (empty? near) (await (walk! c (first ripe) 3)))
-            targets (if (seq near) near [(first ripe)])]
+            targets (if (seq near) near [(first ripe)])
+            targets (still-ripe p targets)]
         (case walked
           :partial :continue
           :blocked (do (ctx/update-mem! c walk-fail-crop (first ripe))

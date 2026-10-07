@@ -7,10 +7,13 @@
             [engine.perception :as perception]
             [engine.test-util :as tu]
             [jobs.animals.lead-to :as lead-to]
+            [jobs.farm.harvest :as harvest]
             [jobs.farm.plant :as plant]
             [jobs.forestry.plant-sapling :as sapling]
             [jobs.gather.get-seeds :as seeds]
-            [jobs.lib.apiary :as apiary]))
+            [jobs.lib.access :as access]
+            [jobs.lib.apiary :as apiary]
+            [jobs.lib.util :as u]))
 
 (defn wrapped
   "Wrapped fake primitives whose raw blockAt throws; wall? puts a stone wall between the body and the cells at z 4."
@@ -50,3 +53,19 @@
         cut? (fn [w] (seeds/cut-cell? {:primitives w} "sugar_cane" {:x 0 :y 64 :z 4}))]
     (is (not (cut? (wrapped blocks true))))
     (is (true? (cut? (wrapped blocks false))))))
+
+(deftest sensed-is-nil-without-perception
+  (let [bare #js {:blockAt (fn [_] (throw (js/Error. "x-ray blockAt")))}]
+    (is (nil? (u/sensed bare {:x 0 :y 64 :z 4})) "no sensedAt: nothing known, blockAt is not read")
+    (is (nil? (u/seen-name bare {:x 0 :y 64 :z 4})))))
+
+(deftest rules-input-reads-what-the-body-senses
+  (let [blocks {"0,64,4" "lava"}
+        at (fn [w] ((:block-at (access/rules-input {:primitives w :args {} :root "j1" :slots [] :view (fn [] {:now 0 :data {}})})) [0 64 4]))]
+    (is (= "stone" (at (wrapped blocks true))) "unsensed: taken for rock")
+    (is (= "lava" (at (wrapped blocks false))) "in view: what it is")))
+
+(deftest harvest-ripe-reading-needs-sight
+  (let [blocks {"0,64,4" "wheat"}
+        ripe (fn [w] (vec (harvest/planned-ripe w {} {{:x 0 :y 64 :z 4} "wheat"} [])))]
+    (is (= [] (ripe (wrapped blocks true))) "behind stone: unknown, not ripe")))

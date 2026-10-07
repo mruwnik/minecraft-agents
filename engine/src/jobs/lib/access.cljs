@@ -56,12 +56,12 @@
     (await (ctx/act c :look (clj->js {:pos {:x (+ x 0.5) :y (+ y 0.5) :z (+ z 0.5)}})))))
 
 (defn rules-input
-  "The rules' input without :cell: the blocks, the body's feet and zone-input. opts as zone-input."
+  "The rules' input without :cell: the blocks (as sensed), the body's feet and zone-input. opts as zone-input."
   ([c] (rules-input c {}))
   ([c opts]
    (let [p (:primitives c)
          {:keys [x y z]} (u/self-pos c)]
-     (merge {:block-at (fn [[bx by bz]] (u/block-name p {:x bx :y by :z bz}))
+     (merge {:block-at (sensed-at p "stone") ; an unsensed cell is taken for rock (jobs.lib.blocks/hidden-guess)
              :feet [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]
              :ledger #{}}
             (zone-input c opts)))))
