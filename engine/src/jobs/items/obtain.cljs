@@ -30,7 +30,7 @@
   - :gather (in :how): coal comes from a plain or deepslate ore seen; every raw item a chain lacks must be seen before it starts. A sapling (no recipe) comes from the leaves of its tree the body has seen, broken by
     jobs.gather.get-seeds (at most 60 leaves, one run; the drop is picked up). What a craft chain lacks that has no recipe (logs, coal, stone-tool material; recipes/gatherable?, stone-materials) is
     felled or mined as one child per round, only what the body has seen: logs by jobs.forestry.harvest-wood,
-    cobblestone and coal by jobs.gather.mine (with :fetch false: the chain crafts the pickaxe, and mine asking get-tool for it would loop back into obtain). The crafts follow once the chain is whole (a chain that is craftable now
+    cobblestone and coal by jobs.gather.mine (its pickaxe only from a chest or a craft, never gathered: no mine inside a mine's fetch, so no loop back into obtain). The crafts follow once the chain is whole (a chain that is craftable now
     is crafted first). A child that brings in nothing three times stops it (:tried :gather).
   - Nothing else: stopped :no-source with :tried.
 
@@ -148,6 +148,10 @@
   "Leaves broken for one sapling at most (a drop is about 1 in 20); one run, no retries."
   60)
 
+(def mine-fetch
+  "The :fetch of a gather mine: its pickaxe from a chest or a craft only, so a mine never starts another gather."
+  {:what #{:tool} :how #{:chest :craft}})
+
 (defn gather-needs
   "The raw needs of a plan's :gather map, logs first: [{:key k :count n :job sym :args {..} :seen fn of a block name: what must have been seen}]. A new gather source
   is one more case here. Coal is mined from a plain or a deepslate ore: :block is set by with-block."
@@ -162,10 +166,10 @@
           (for [[k n] gather :when (material-blocks version k)]
             (let [blocks (material-blocks version k)]
               {:key k :count n :job 'jobs.gather.mine :seen blocks
-               :args {:block (first (sort blocks)) :item k :count n :fetch false}}))
+               :args {:block (first (sort blocks)) :item k :count n :fetch mine-fetch}}))
           (when-let [n (get gather "coal")]
             [{:key "coal" :count n :job 'jobs.gather.mine :seen #{"coal_ore" "deepslate_coal_ore"}
-              :args {:block "coal_ore" :item "coal" :count n :fetch false}}]))))))
+              :args {:block "coal_ore" :item "coal" :count n :fetch mine-fetch}}]))))))
 
 (defn gather-need
   "The first of gather-needs."

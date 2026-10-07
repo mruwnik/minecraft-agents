@@ -744,6 +744,16 @@
           (is (empty? (listed s)))
           (is (= 1 (get (inv s) "stone_pickaxe"))))))))
 
+(deftest obtain-stone-pickaxe-from-planks-with-no-pickaxe-carried
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (assoc (update (world {}) :blocks merge (into {} (for [x [0 1] z [5 6]] [(str x ",64," z) "stone"]))) :inventory [{:name "oak_planks" :count 12} {:name "crafting_table" :count 1}]) [own-zone])]
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "stone_pickaxe"}) {})
+          (await (run-ticks s 160))
+          (is (empty? (listed s)))
+          (is (= 1 (get (inv s) "stone_pickaxe"))))))))
+
 (deftest obtain-gather-waits-no-source-when-nothing-is-seen-to-gather
   (async done
     (tu/run-async done
@@ -847,15 +857,15 @@
     (is (= 1 (obtain/fruitless-limit sapling :done)))
     (is (= obtain/max-fruitless (obtain/fruitless-limit sapling :declined)) "a child that could not start broke no leaves")))
 
-(deftest gather-mines-never-fetch-a-pickaxe-themselves
-  (is (false? (get-in (obtain/gather-need {"cobblestone" 1}) [:args :fetch])))
-  (is (false? (get-in (obtain/gather-need {"coal" 1}) [:args :fetch]))))
+(deftest gather-mines-fetch-a-pickaxe-without-gathering
+  (is (= obtain/mine-fetch (get-in (obtain/gather-need {"cobblestone" 1}) [:args :fetch])))
+  (is (= obtain/mine-fetch (get-in (obtain/gather-need {"coal" 1}) [:args :fetch]))))
 
 (deftest gather-needs-mine-the-block-that-drops-the-material
   (is (= #{"stone"} (:seen (obtain/gather-need {"cobblestone" 1}))))
   (let [n (obtain/gather-need {"cobbled_deepslate" 2})]
     (is (= #{"deepslate"} (:seen n)))
-    (is (= {:block "deepslate" :item "cobbled_deepslate" :count 2 :fetch false} (:args n)))))
+    (is (= {:block "deepslate" :item "cobbled_deepslate" :count 2 :fetch obtain/mine-fetch} (:args n)))))
 
 (deftest the-stone-materials-are-those-of-the-bodys-version
   (is (= #{"deepslate"} (obtain/material-blocks "26.1" "cobbled_deepslate")))
