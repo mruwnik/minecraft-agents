@@ -84,7 +84,7 @@
 
 (def args
   {:target {:doc "the buried block [x y z] or {:x :y :z}" :type :pos :default nil}
-   :max-length {:doc "longest line, in blocks along the heading from the entry to the target" :default 24}
+   :max-length {:doc "longest line, in blocks along the heading from the entry to the target, 1 to 64" :type :int :min 1 :max 64 :default 24}
    :accept {:doc "hazards taken: #{:water :lava :falling-block}" :default #{}}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
    :keep {:doc "a tunnel that stays: torches left and the tunnel left open; false (a dead end): torches go into the scaffold ledger for jobs.access.leave-tunnel to take back" :default false}

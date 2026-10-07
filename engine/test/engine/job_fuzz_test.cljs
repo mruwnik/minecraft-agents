@@ -253,8 +253,7 @@
 
 (def known
   "{[job kind] card}: defects already carded, so the suite stays green and a new one fails it. A default run fails when an entry no longer occurs: delete it with its fix."
-  {["jobs.access.tunnel" :runaway] "d7c8ff99"
-   ["jobs.explore.search" :runaway] "7ef2db8f"
+  {["jobs.explore.search" :runaway] "7ef2db8f"
    ["jobs.farm.find-spot" :runaway] "bc44edcd"
    ["jobs.gather.mine" :runaway] "cd74fd83"
    ["jobs.items.enchant" :round-threw] "1b671b73"

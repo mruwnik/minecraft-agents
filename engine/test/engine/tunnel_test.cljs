@@ -716,3 +716,14 @@
           (is (= :hazard (:reason @out)) "one round: in, stopped, torches taken, mouth sealed")
           (is (= :sealed (:reason (:leave @out))))
           (is (= [-3 65 0] (feet p))))))))
+
+(deftest max-length-is-typed-and-bounded
+  (let [spec (:max-length tunnel/args)]
+    (is (= [:int 1 64] ((juxt :type :min :max) spec)))))
+
+(deftest the-widest-line-reads-few-blocks-over-open-air
+  (let [reads (atom 0)
+        air (fn [_] (swap! reads inc) "air")]
+    (tunnel/approach {:block-at air :zones [] :footprints #{} :ledger #{} :ways nil :ignore-zones? true}
+                     [4 64 4] [0 65 0] 64 #{})
+    (is (< @reads 40000))))
