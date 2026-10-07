@@ -10,7 +10,8 @@
             [jobs.lib.shelter :as sh]
             [jobs.lib.solid :as solid]
             [jobs.lib.util :as u]
-            [jobs.survival.dig-in :as dig-in]))
+            [jobs.survival.dig-in :as dig-in]
+            [jobs.survival.dig-in-cells :as dig-cells]))
 
 (def doc
   "Stop a ranged mob's arrows at a gap in the body's cover: a doorway, window or hole a skeleton (or the like) has a
@@ -18,7 +19,7 @@
   arrows' line (jobs.lib.reach/line-of-fire?: from the mob's eye to the body's eye and its middle), the cell nearest
   the body first, one that ends the line alone before one that blocks half of it. A mob that was only heard is
   taken at the rough spot its direction and band give (jobs.lib.reach/mob-pos). A door, gate or trapdoor standing
-  open in the way is shut, not walled over (jobs.survival.dig-in/place-all!).
+  open in the way is shut, not walled over (jobs.survival.dig-in-cells/place-all!).
   Declines (waiting) with :no-ranged-danger when no ranged mob within :radius has a line of fire.
   With none of :blocks carried it fetches one (:fetch, default true; jobs.lib.fetch, jobs.items.obtain) before it stops :no-blocks.
   Ends done {:placed [cells]} once none has (also when the mob moved away meanwhile), else stopped :no-blocks (none
@@ -116,13 +117,13 @@
             cells (candidates (sh/feet p) within)
             cell (plug-cell kind-at cells mob body #(and (allowed? %) (permitted? %)))]
         (cond
-          (nil? (dig-in/pick c blocks)) (or (await (fetch/step! c 'jobs.survival.block-arrow-gap {:reason :need :any-of (vec blocks)}))
+          (nil? (dig-cells/pick c blocks)) (or (await (fetch/step! c 'jobs.survival.block-arrow-gap {:reason :need :any-of (vec blocks)}))
                                             (fail! c :no-blocks "no block to stop the arrows with"))
           (nil? cell) (if (plug-cell kind-at cells mob body allowed?)
                         (fail! c :refused "every cell that would stop the arrows is another's (zone, claim or plan)")
                         (fail! c :no-gap "no open cell within reach would stop the arrows"))
           :else (let [_ (fetch/settle! c)
-                      status (await (dig-in/place-all! c blocks [cell]))]
+                      status (await (dig-cells/place-all! c blocks [cell]))]
                   (if (not= :ok status)
                     (fail! c :place-failed (str "cannot place at the gap: " status))
                     (do (ctx/update-mem! c update :skip (fnil conj #{}) cell)

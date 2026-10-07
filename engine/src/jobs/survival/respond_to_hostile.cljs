@@ -9,7 +9,8 @@
             [jobs.lib.threats :as threats]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
-            [jobs.survival.dig-in :as dig-in]))
+            [jobs.survival.dig-in :as dig-in]
+            [jobs.survival.dig-in-cells :as dig-cells]))
 
 (def doc
   "A hostile is near: fight it (jobs.survival.fight-back, best weapon equipped) when the odds are fair,
@@ -110,7 +111,7 @@
     (boolean (and (not tried?)
                   (every? combat/ranged? hs)
                   (covered? p)
-                  (dig-in/pick c dig-in/building-blocks)
+                  (dig-cells/pick c dig-in/building-blocks)
                   (tools/can-harvest? p "stone")))))
 
 (defn ^:async gap!

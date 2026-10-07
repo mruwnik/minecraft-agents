@@ -17,13 +17,15 @@
             [triggers.survival.night :as night]
             [triggers.survival.hungry :as hungry]
             [jobs.survival.dig-in :as dig-in]
+            [jobs.survival.dig-in-cells :as dig-cells]
+            [jobs.survival.dig-in-leave :as dig-leave]
             [jobs.survival.dig-niche :as dig-niche]
             [jobs.survival.eat :as eat]))
 
 (def doc
   "The night: one round from the trigger until the night is over and the body is out of its shelter. The round repeats
   one choice, each time from the world as it is now (the first that applies), with a 50 ms timer between:
-  - day: a dug-in or exposed night leaves the shelter (dig-in/leave!); :no-way-out stops the job (shelter.failed warn,
+  - day: a dug-in or exposed night leaves the shelter (dig-in-leave/leave!); :no-way-out stops the job (shelter.failed warn,
     a :shelter-trapped entry, 5 minutes); then a bed it put down outside its own zones (:bed-placed) is dug up and its
     drop walked over (go-to); then the job ends: done {:night :slept|:dug-in|:logged-out}, or stopped :exposed {:sites} after a
     night with no shelter.
@@ -287,9 +289,9 @@
   (let [at (fn [dy] (u/block-name p {:x x :y (+ y dy) :z z}))
         below {:x x :y (dec y) :z z}]
     (and (solid/solid? (at -1)) (tools/can-harvest? p (at -1)) (not (solid/solid? (at 0))) (not (solid/solid? (at 1)))
-         (not (dig-in/wet? p f)) (not (dig-in/wet? p {:x x :y (inc y) :z z}))
-         (not (dig-in/wet? p below))
-         (not (dig-in/lateral-fluid p below)))))
+         (not (dig-cells/wet? p f)) (not (dig-cells/wet? p {:x x :y (inc y) :z z}))
+         (not (dig-cells/wet? p below))
+         (not (dig-cells/lateral-fluid p below)))))
 
 (defn clear-of-failed?
   "Whether feet cell f is at least futile-radius+1 from every failed site (tonight's and dig-in's :dig-in-futile entries)."
@@ -411,13 +413,13 @@
                             (assoc :exposed {:pos (sh/feet p) :at (ctx/now c) :retries retries})))))
 
 (defn ^:async niche!
-  "No pit site is left: out of the failed pit first (dig-in/climb!, a stair), then jobs.survival.dig-niche cuts a niche
+  "No pit site is left: out of the failed pit first (dig-in-leave/climb!, a stair), then jobs.survival.dig-niche cuts a niche
   into a hillside or wall. Whatever it ends in, it is tried once (:niche :tried); the next pass holds exposed if it
   did not shut the body in."
   [c pit]
   (busy! c)
   (if pit
-    (let [r (await (dig-in/climb! c {:start pit} nil))]
+    (let [r (await (dig-leave/climb! c {:start pit} nil))]
       (when (map? r) (ctx/update-mem! c assoc :pit-trapped true))
       :again)
     (let [d (await (ctx/call-child c :niche 'jobs.survival.dig-niche {:fetch false}))]
@@ -459,18 +461,18 @@
         solid? (into #{} (map (comp key-of :pos)) solids)
         seen-free? (fn [cell] (and (not (solid? (key-of cell)))
                                    (not (:unknown (look/seen-block p cell)))))
-        have (reduce + (map :count (dig-in/carried c dig-in/shelter-blocks)))
+        have (reduce + (map :count (dig-cells/carried c dig-in/shelter-blocks)))
         up (fn [{:keys [x y z]} dy] {:x x :y (+ y dy) :z z})
-        sealed? (fn [cell] (and (solid? (key-of cell)) (dig-in/sealed? p cell)))]
+        sealed? (fn [cell] (and (solid? (key-of cell)) (dig-cells/sealed? p cell)))]
     (->> solids
          (map #(up (:pos %) 1))
          (filter (fn [f]
                    (and (some #(solid? (key-of (up f %))) (range 2 (inc roof-height)))
                         (seen-free? f) (seen-free? (up f 1))
-                        (not (dig-in/wet? p f)) (not (dig-in/wet? p (up f 1)))
+                        (not (dig-cells/wet? p f)) (not (dig-cells/wet? p (up f 1)))
                         (clear-of-failed? c f))))
          (keep (fn [f]
-                 (let [cells (dig-in/fill-cells sealed? f)]
+                 (let [cells (dig-cells/fill-cells sealed? f)]
                    (when (and (<= (count cells) have)
                               (not-any? #(access/trespass-refusal c :place %) cells))
                      {:kind :cave :pos f :needed (count cells)}))))
@@ -534,7 +536,7 @@
 
 (defn ^:async enclose!
   "At a cave target (:enclose is its feet cell): wall in with dig-in :enclose, one call. Sealed in: :dug-in, held until
-  morning (dig-in/leave! opens the door). Stopped or declined: the site is marked failed with dig-in's reason, and the
+  morning (dig-in-leave/leave! opens the door). Stopped or declined: the site is marked failed with dig-in's reason, and the
   roofed body ends the night :roofed. A body that is no longer at the cell forgets the target."
   [c]
   (let [p (:primitives c)
@@ -548,14 +550,14 @@
         (if (= :continue d)
           :again
           (do (ctx/update-mem! c dissoc :enclose)
-              (if (and (= :done d) (dig-in/sealed-in? p :walls roof-height) (not= :stopped (:status res)))
+              (if (and (= :done d) (dig-cells/sealed-in? p :walls roof-height) (not= :stopped (:status res)))
                 (sheltered! c :dug-in)
                 (site-failed! c pos (or (:reason res) (if (= :declined d) :declined :unsealed))))
               :again))))))
 
 (defn ^:async relocate!
   "Get to a nearby cell where a pit can be dug; the next pass digs in there. Out of its own failed pit first by a stair
-  (dig-in/climb!; one that finds no way out holds exposed), then a walk (go-to). A walk that does not arrive marks that
+  (dig-in-leave/climb!; one that finds no way out holds exposed), then a walk (go-to). A walk that does not arrive marks that
   cell failed (:unreachable). With max-sites failed sites, or no such cell: hold exposed."
   [c]
   (let [site (or (:relocating (ctx/mem c))
@@ -571,7 +573,7 @@
                       :else (await (hold-exposed! c))))
       pit (do (busy! c)
               (ctx/update-mem! c assoc :relocating site)
-              (let [r (await (dig-in/climb! c {:start pit} site))]
+              (let [r (await (dig-leave/climb! c {:start pit} site))]
                 (when (map? r) (ctx/update-mem! c assoc :pit-trapped true))
                 :again))
       :else
@@ -660,8 +662,8 @@
 (defn ^:async morning-step!
   "By day, nothing to walk over: out of a dig-in pit first, then a bed picked up, then the end."
   [c]
-  (if (or (#{:dug-in :exposed} (:sheltered (ctx/mem c))) (:dig-out (ctx/mem c)) (dig-in/sheltered-in c))
-    (let [r (await (dig-in/leave! c))]
+  (if (or (#{:dug-in :exposed} (:sheltered (ctx/mem c))) (:dig-out (ctx/mem c)) (dig-leave/sheltered-in c))
+    (let [r (await (dig-leave/leave! c))]
       (cond
         (= :continue r) :again
         (= :out (:reason r)) (do (ctx/update-mem! c dissoc :dig-out)
@@ -696,7 +698,7 @@
     (cond
       (not (sh/night? p)) (await (morning! c))
       (sh/sleeping? p) (do (when-not (= :slept sheltered) (sheltered! c :slept)) (await (hold! c :sleeping)))
-      (and roofed (or (#{:slept :dug-in} sheltered) (dig-in/sheltered-in c)))
+      (and roofed (or (#{:slept :dug-in} sheltered) (dig-leave/sheltered-in c)))
       (do (when-not sheltered (sheltered! c :dug-in))
           (if (log-out-wanted? c) (await (log-out-step c)) (await (hold! c :sheltered))))
       :else

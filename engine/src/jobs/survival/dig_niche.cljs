@@ -10,7 +10,8 @@
             [jobs.lib.tidy :as tidy]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
-            [jobs.survival.dig-in :as dig-in]))
+            [jobs.survival.dig-in :as dig-in]
+            [jobs.survival.dig-in-cells :as dig-cells]))
 
 (def doc
   "Shut the body in for the night in a hillside or wall where no pit can be dug: a niche two blocks deep, one wide and
@@ -21,7 +22,7 @@
   at each opening cell (feet, then head) from the blocks the dig dropped or carried ones.
   Needs a tool that harvests the face (a pickaxe for stone): :fetch (default true; jobs.lib.fetch) runs jobs.items.get-tool
   for it, else, or when that fails, it stops :no-tool.
-  Declines (waiting) with :day or :already-sealed. Ends done {:pos :door [feet head cells plugged]} with a :shelter entry {:pos :door} (jobs.survival.dig-in/leave! digs
+  Declines (waiting) with :day or :already-sealed. Ends done {:pos :door [feet head cells plugged]} with a :shelter entry {:pos :door} (jobs.survival.dig-in-leave/leave! digs
   the door out by day), or stopped :no-site, :no-tool, :refused (every site would dig or plug another's zone, claim or plan footprint), :unreachable, :dig-failed, :no-blocks, :place-failed or :no-progress (over max-steps rounds).
   Events: dig-niche.sealed (info).")
 
@@ -73,11 +74,11 @@
         solid? #(solid/solid? (name %))]
     (and (solid? (at f dir 0 0 -1)) (not (solid? f))
          (not (solid? (at f dir -1 0 0))) (not (solid? (at f dir -1 0 1))) (not (solid? (at f dir 0 0 1)))
-         (not (dig-in/wet? p f)) (not (dig-in/wet? p (at f dir 0 0 1)))
-         (every? #(and (solid? %) (not (falling? (name %))) (not (dig-in/wet? p %))
+         (not (dig-cells/wet? p f)) (not (dig-cells/wet? p (at f dir 0 0 1)))
+         (every? #(and (solid? %) (not (falling? (name %))) (not (dig-cells/wet? p %))
                        (or (not need-tool?) (tools/can-harvest? p (name %))))
                  (dug-cells f dir))
-         (every? #(and (solid? %) (not (dig-in/wet? p %))) (shell-cells f dir))
+         (every? #(and (solid? %) (not (dig-cells/wet? p %))) (shell-cells f dir))
          (not (falling? (name (at f dir 1 0 2))))
          (not (falling? (name (at f dir 2 0 2))))))))
 
@@ -95,7 +96,7 @@
         up (assoc f :y (inc (:y f)))
         unseen? #(:unknown (look/seen-block p %))]
     (and (not (unseen? f)) (not (unseen? up)) (solid? (assoc f :y (dec (:y f)))) (not (solid? f)) (not (solid? up))
-         (not (dig-in/wet? p f)) (not (dig-in/wet? p up)))))
+         (not (dig-cells/wet? p f)) (not (dig-cells/wet? p up)))))
 
 (defn scan*
   "One nearest-first pass within reach of the feet cell, stopping at the first {:stand :dir} where a niche can be cut and
@@ -170,11 +171,11 @@
         _ (await (tools/equip-for! c (u/block-name p cell) {:fast true}))
         r (await (tidy/dig! c cell))]
     (if (= "dug" (.-status r))
-      (do (await (dig-in/collect-drops! c (:blocks (:args c)) (.-drops r))) :again)
+      (do (await (dig-cells/collect-drops! c (:blocks (:args c)) (.-drops r))) :again)
       (fail! c :dig-failed (str "cannot dig the niche: " (.-status r))))))
 
 (defn ^:async plug-step! [c cell]
-  (let [item (dig-in/pick c (:blocks (:args c)))]
+  (let [item (dig-cells/pick c (:blocks (:args c)))]
     (if (nil? item)
       (fail! c :no-blocks "nothing to plug the niche with")
       (let [r (await (tidy/place! c cell item))]

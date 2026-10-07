@@ -12,7 +12,9 @@
             [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [jobs.survival.retreat :as retreat]))
+            [jobs.survival.retreat :as retreat]
+            [jobs.survival.retreat-walk :as retreat-walk]
+            [jobs.survival.retreat-refuge :as retreat-refuge]))
 
 (defn setup
   "An engine over a fake; its clock moves a second with every primitive call (a whole flight ends by time)."
@@ -438,8 +440,8 @@
           (is (zero? (count (calls p "attack")))))))))
 
 (deftest hitbox-cells-are-every-cell-a-mob-overlaps
-  (is (= #{[0 64 0] [1 64 0] [0 65 0] [1 65 0]} (set (map (juxt :x :y :z) (retreat/hitbox-cells {:x 0.8 :y 64 :z 0.5})))))
-  (is (= #{[0 64 0] [0 65 0]} (set (map (juxt :x :y :z) (retreat/hitbox-cells {:x 0.5 :y 64 :z 0.5}))))))
+  (is (= #{[0 64 0] [1 64 0] [0 65 0] [1 65 0]} (set (map (juxt :x :y :z) (retreat-refuge/hitbox-cells {:x 0.8 :y 64 :z 0.5})))))
+  (is (= #{[0 64 0] [0 65 0]} (set (map (juxt :x :y :z) (retreat-refuge/hitbox-cells {:x 0.5 :y 64 :z 0.5}))))))
 
 (def deep-dead-end
   "dead-end over solid rock down to y 58: a tunnel with a roof at y 66, a pickaxe digs down into it."
@@ -519,9 +521,9 @@
   (fn [{:keys [x y z]}] (if (and (= y 63) (<= x edge) (= z 0)) "stone" "air")))
 
 (deftest walk-cells-stop-at-the-edge-of-a-floor
-  (is (= [1 2 3] (mapv :x (retreat/walk-cells (edge-world 3) {:x 0.5 :y 64 :z 0.5} [1 0] 6))) "the cells past the edge have no floor")
-  (is (= [1 2 3] (mapv :x (retreat/walk-cells (edge-world 3) {:x 0.5 :y 64 :z 0.5} [1 0] 3))))
-  (is (= [1 2 3 4 5 6] (mapv :x (retreat/walk-cells (edge-world 9) {:x 0.5 :y 64 :z 0.5} [1 0] 6)))))
+  (is (= [1 2 3] (mapv :x (retreat-walk/walk-cells (edge-world 3) {:x 0.5 :y 64 :z 0.5} [1 0] 6))) "the cells past the edge have no floor")
+  (is (= [1 2 3] (mapv :x (retreat-walk/walk-cells (edge-world 3) {:x 0.5 :y 64 :z 0.5} [1 0] 3))))
+  (is (= [1 2 3 4 5 6] (mapv :x (retreat-walk/walk-cells (edge-world 9) {:x 0.5 :y 64 :z 0.5} [1 0] 6)))))
 
 (defn sealed-world
   "Floor at y 63 everywhere, stone at feet and head height on the four sides of cell 0,0 only: the diagonals open."
@@ -532,7 +534,7 @@
     :else "air"))
 
 (deftest walk-cells-do-not-cut-a-corner-between-two-blocks
-  (is (= [] (retreat/walk-cells sealed-world {:x 0.5 :y 64 :z 0.5} (retreat/unit 1 1) 2))
+  (is (= [] (retreat-walk/walk-cells sealed-world {:x 0.5 :y 64 :z 0.5} (retreat-walk/unit 1 1) 2))
       "a body walled in on four sides cannot squeeze out diagonally")
-  (is (= 2 (count (retreat/walk-cells (fn [{:keys [y]}] (if (= y 63) "stone" "air")) {:x 0.5 :y 64 :z 0.5} (retreat/unit 1 1) 2)))
+  (is (= 2 (count (retreat-walk/walk-cells (fn [{:keys [y]}] (if (= y 63) "stone" "air")) {:x 0.5 :y 64 :z 0.5} (retreat-walk/unit 1 1) 2)))
       "past no corner, the diagonal is open"))

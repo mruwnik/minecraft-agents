@@ -15,6 +15,7 @@
             [jobs.lib.torch :as torch]
             [jobs.build.from-plan :as from-plan]
             [jobs.survival.dig-in :as dig-in]
+            [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.lib.world :as known]))
 
 (def doc
@@ -752,7 +753,7 @@
   (let [{:keys [block] :as a} (:args c)
         item (item-name a)
         own (when (or (some #{item} dig-in/building-blocks) (= item block)) [item])]
-    (dig-in/pick c (concat (remove #{item} dig-in/building-blocks) own))))
+    (dig-cells/pick c (concat (remove #{item} dig-in/building-blocks) own))))
 
 (defn mend-target
   "The owed cell to fill next: not the body's feet or head, lowest y first, then nearest."

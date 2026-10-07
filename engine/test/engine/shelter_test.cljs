@@ -9,7 +9,7 @@
             [engine.scenario :as scenario]
             [engine.fake :as fake]
             [jobs.lib.shelter :as sh]
-            [jobs.survival.dig-in :as dig-in]
+            [jobs.survival.dig-in-cells :as dig-cells]
             [engine.fake.raw-world :as fake-raw]
             [engine.perception :as perception]
             [engine.test-util :as tu]
@@ -1167,7 +1167,7 @@
             (is (= :fluid-above (:reason (first (entries eng :dig-in-futile)))) fluid)))))))
 
 (deftest dig-plan-needs-a-full-block-beside-the-roof-cell
-  (are [side plan] (= plan (dig-in/dig-plan (tu/fake {:blocks (merge ground {"1,64,0" side})}) {:x 0 :y 64 :z 0}))
+  (are [side plan] (= plan (dig-cells/dig-plan (tu/fake {:blocks (merge ground {"1,64,0" side})}) {:x 0 :y 64 :z 0}))
     "stone" {:roof {:x 0 :y 64 :z 0} :depth 2}
     "poppy" {:roof {:x 0 :y 63 :z 0} :depth 3}
     "sugar_cane" {:roof {:x 0 :y 63 :z 0} :depth 3}
@@ -1343,8 +1343,8 @@
   (let [feet {:x 0 :y 64 :z 0}
         none (constantly false)
         roofed #(= 66 (:y %))]
-    (is (= 10 (count (dig-in/fill-cells none feet))) "sides, support, roof")
-    (is (= 8 (count (dig-in/fill-cells roofed feet))) "a sealed roof cell needs no support")))
+    (is (= 10 (count (dig-cells/fill-cells none feet))) "sides, support, roof")
+    (is (= 8 (count (dig-cells/fill-cells roofed feet))) "a sealed roof cell needs no support")))
 
 (deftest dig-in-without-enclose-still-declines-under-a-roof
   (async done

@@ -14,6 +14,7 @@
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.walk.plan :as wplan]
             [jobs.survival.dig-in :as dig-in]
+            [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.gather.mine :as mine]))
 
 (def doc
@@ -337,7 +338,7 @@
 (defn ^:async bridge!
   "Place carried filler on the missing floor of the step. :again, or a stop map."
   [c in {:keys [floor]}]
-  (let [item (dig-in/pick c dig-in/building-blocks)
+  (let [item (dig-cells/pick c dig-in/building-blocks)
         verdict (rules/may-place? (assoc in :cell floor))
         [x y z] floor]
     (cond

@@ -16,7 +16,9 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.reach :as reach]
             [jobs.lib.threats :as threats]
-            [jobs.survival.retreat :as retreat]))
+            [jobs.survival.retreat :as retreat]
+            [jobs.survival.retreat-flight :as retreat-flight]
+            [jobs.survival.retreat-refuge :as retreat-refuge]))
 
 (def ms-per-call
   "Game time one primitive call takes in these tests: a flight ends by time (out of line, its bound), so the clock moves
@@ -76,13 +78,13 @@
 (deftest a-mob-stops-chasing-past-its-range-out-of-line-or-with-no-way
   (let [now 10000 lost-ms 4000
         chasing {:mob "zombie" :distance 10 :in-line? true :way? true}]
-    (is (nil? (retreat/stopped-chasing chasing 0 now lost-ms)) "in range, in line, a way: chasing")
-    (is (= :gone (retreat/stopped-chasing nil 0 now lost-ms)))
-    (is (= :far (retreat/stopped-chasing (assoc chasing :distance 36) now now lost-ms)))
-    (is (= :lost (retreat/stopped-chasing (assoc chasing :in-line? false) 5000 now lost-ms)))
-    (is (nil? (retreat/stopped-chasing (assoc chasing :in-line? false) 7000 now lost-ms)) "out of line 3 s: still")
-    (is (= :closed (retreat/stopped-chasing (assoc chasing :way? false) now now lost-ms)))
-    (is (= :far (retreat/stopped-chasing {:mob "skeleton" :distance 17 :in-line? true} now now lost-ms)))))
+    (is (nil? (retreat-flight/stopped-chasing chasing 0 now lost-ms)) "in range, in line, a way: chasing")
+    (is (= :gone (retreat-flight/stopped-chasing nil 0 now lost-ms)))
+    (is (= :far (retreat-flight/stopped-chasing (assoc chasing :distance 36) now now lost-ms)))
+    (is (= :lost (retreat-flight/stopped-chasing (assoc chasing :in-line? false) 5000 now lost-ms)))
+    (is (nil? (retreat-flight/stopped-chasing (assoc chasing :in-line? false) 7000 now lost-ms)) "out of line 3 s: still")
+    (is (= :closed (retreat-flight/stopped-chasing (assoc chasing :way? false) now now lost-ms)))
+    (is (= :far (retreat-flight/stopped-chasing {:mob "skeleton" :distance 17 :in-line? true} now now lost-ms)))))
 
 (deftest decide-moved-to-combat-unchanged
   (is (= :fight (cost/decide {:health 20 :damage 10 :creeper? false :reserve 4})))
@@ -162,26 +164,26 @@
             (is (not= :still-chased (:reason out)))))))))
 
 (deftest a-chase-that-gains-no-distance-escalates-and-a-gain-resets-it
-  (let [step (fn [mem gap] (retreat/note-gap mem gap))]
+  (let [step (fn [mem gap] (retreat-flight/note-gap mem gap))]
     (is (= {:best-gap 5 :since-gain 0 :sweeps 0} (step {:sweeps 1} 5)) "first gap is a gain")
     (is (= {:best-gap 5 :since-gain 2 :sweeps 1} (-> {:best-gap 5 :since-gain 1 :sweeps 1} (step 5.5))) "under a block: no gain")
     (is (= {:best-gap 7 :since-gain 0 :sweeps 0} (step {:best-gap 5 :since-gain 2 :sweeps 1} 7)) "a gain resets both")
-    (is (retreat/no-gain? {:since-gain 3} 3))
-    (is (not (retreat/no-gain? {:since-gain 2} 3)))))
+    (is (retreat-flight/no-gain? {:since-gain 3} 3))
+    (is (not (retreat-flight/no-gain? {:since-gain 2} 3)))))
 
 (deftest a-step-with-no-hostile-near-is-no-gap-sample
-  (is (= {:best-gap 9 :since-gain 0 :sweeps 1} (retreat/note-gap {:best-gap 9 :since-gain 4 :sweeps 1} nil))
+  (is (= {:best-gap 9 :since-gain 0 :sweeps 1} (retreat-flight/note-gap {:best-gap 9 :since-gain 4 :sweeps 1} nil))
       "the flight is succeeding: no-gain count resets, best gap and sweeps stay")
-  (is (= {:since-gain 0} (retreat/note-gap {} nil)) "no best gap is invented from nothing")
-  (is (= {:best-gap 6 :since-gain 0 :sweeps 0} (retreat/note-gap (retreat/note-gap {} nil) 6))))
+  (is (= {:since-gain 0} (retreat-flight/note-gap {} nil)) "no best gap is invented from nothing")
+  (is (= {:best-gap 6 :since-gain 0 :sweeps 0} (retreat-flight/note-gap (retreat-flight/note-gap {} nil) 6))))
 
 (deftest the-step-gap-is-the-nearest-hostile-however-they-are-ordered
   (let [p (tu/fake-on-floor {:floor big-floor :entities [(zombie 1 20 {}) (zombie 2 6 {})]})
         hostiles (vec (reach/known-hostiles p 30 {:ranged-radius 30}))]
     (is (= 2 (count hostiles)))
-    (is (= 6 (retreat/nearest-gap p hostiles)))
-    (is (= 6 (retreat/nearest-gap p (vec (reverse hostiles)))))
-    (is (nil? (retreat/nearest-gap p [])))))
+    (is (= 6 (retreat-flight/nearest-gap p hostiles)))
+    (is (= 6 (retreat-flight/nearest-gap p (vec (reverse hostiles)))))
+    (is (nil? (retreat-flight/nearest-gap p [])))))
 
 (def sweeper
   "A job that runs retreat's blocked! until it ends the job."
@@ -208,7 +210,7 @@
    :round (fn ^:async backer-round [c]
             (let [threat (first (reach/known-hostiles (:primitives c) 30 {:ranged-radius 30}))
                   r (await (retreat/back-off! c threat))]
-              (reset! out {:r r :tried (retreat/tried? c :back-off)})
+              (reset! out {:r r :tried (retreat-flight/tried? c :back-off)})
               :done))})
 
 (deftest back-off-steps-away-and-fails-when-the-walk-does
@@ -227,8 +229,8 @@
             (is (= want @out) (str "go-to " (if kid "gives up" "walks")))))))))
 
 (deftest every-option-failing-in-two-sweeps-in-a-row-is-cannot-escape
-  (is (not (retreat/cannot-escape? (retreat/count-sweep {}))))
-  (is (retreat/cannot-escape? (retreat/count-sweep (retreat/count-sweep {})))))
+  (is (not (retreat-flight/cannot-escape? (retreat-flight/count-sweep {}))))
+  (is (retreat-flight/cannot-escape? (retreat-flight/count-sweep (retreat-flight/count-sweep {})))))
 
 (deftest respond-to-hostile-never-continues
   (async done
@@ -327,24 +329,24 @@
   (let [p (tu/fake-on-floor {:floor big-floor :entities [(zombie 7 30 {})]})
         per (perception/create (fake-raw/create p) {:now (constantly 1000000)})
         wrapped (perception/wrap p per)]
-    (is (= [7] (mapv #(.-id %) (retreat/known-chasers p))) "no perception: every tracked mob")
-    (is (= [] (mapv #(.-id %) (retreat/known-chasers wrapped))) "30 blocks off, unseen and unheard: not known")))
+    (is (= [7] (mapv #(.-id %) (retreat-flight/known-chasers p))) "no perception: every tracked mob")
+    (is (= [] (mapv #(.-id %) (retreat-flight/known-chasers wrapped))) "30 blocks off, unseen and unheard: not known")))
 
 (deftest the-cornered-body-weighs-only-the-hostiles-it-knows
   (let [p (tu/fake-on-floor {:floor big-floor :entities [(zombie 7 30 {})]})
         per (perception/create (fake-raw/create p) {:now (constantly 1000000)})
         wrapped (perception/wrap p per)
         ids #(mapv (fn [e] (.-id e)) %)]
-    (is (= [7] (ids (retreat/near-known p #{} 40 nil))) "no perception: every tracked mob")
-    (is (= [] (ids (retreat/near-known wrapped #{} 40 nil))) "unseen and unheard: not weighed")
-    (is (= [] (vec (retreat/hostile-cells wrapped 40))) "no cell is kept clear for an unknown mob")
-    (is (= [] (ids (retreat/near-known p #{7} 40 nil))) "a corpse is skipped")))
+    (is (= [7] (ids (retreat-flight/near-known p #{} 40 nil))) "no perception: every tracked mob")
+    (is (= [] (ids (retreat-flight/near-known wrapped #{} 40 nil))) "unseen and unheard: not weighed")
+    (is (= [] (vec (retreat-refuge/hostile-cells wrapped 40))) "no cell is kept clear for an unknown mob")
+    (is (= [] (ids (retreat-flight/near-known p #{7} 40 nil))) "a corpse is skipped")))
 
 (deftest a-flight-resumed-after-a-gap-starts-its-clocks-afresh
   (let [mem {:flight-start 0 :last-step 1000 :chasers {7 {:id 7 :seen-t 1000}}}]
-    (is (= mem (retreat/resume-flight mem 3000)) "a short gap: as it was")
+    (is (= mem (retreat-flight/resume-flight mem 3000)) "a short gap: as it was")
     (is (= {:flight-start 100000 :last-step 100000 :chasers {7 {:id 7 :seen-t 100000}}}
-           (retreat/resume-flight mem 100000))
+           (retreat-flight/resume-flight mem 100000))
         "a long gap: the flight starts now and every chaser was just seen")))
 
 (deftest respond-to-hostile-stops-after-three-calls-that-change-nothing
@@ -381,6 +383,6 @@
   (let [p0 (tu/fake-on-floor {:floor big-floor})
         [bx] (body-pos p0)
         p (tu/fake-on-floor {:floor big-floor :entities [(zombie 7 (+ bx 10) {:visible false})]})
-        cells (retreat/hostile-cells p 40)]
+        cells (retreat-refuge/hostile-cells p 40)]
     (is (contains? (set (map :x cells)) (js/Math.floor (+ bx 16))) "heard 10 blocks east (far band): 16 east")
     (is (not-any? #(= (js/Math.floor (+ bx 10)) (:x %)) cells) "the exact place is not kept")))
