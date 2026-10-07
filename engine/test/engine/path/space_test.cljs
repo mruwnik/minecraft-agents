@@ -1,8 +1,7 @@
 (ns engine.path.space-test
   "engine.path.space: free space for the body centre (ported from the JS space.test.mjs), and the bamboo box the planner and
   the body's physics must agree on (offset-shared.test.mjs)."
-  (:require ["module" :refer [createRequire]]
-            ["prismarine-block" :as prismarine-block]
+  (:require ["prismarine-block" :as prismarine-block]
             [cljs.test :refer [deftest is testing]]
             [engine.path.blocks :as b]
             [engine.path.fixture :as fx]
@@ -11,7 +10,7 @@
 (def table (b/default-state-table))
 (def W 0.31)
 (def N 17)
-(def require-here (createRequire (str (js/process.cwd) "/")))
+(def require-here fx/require-here)
 (def offsets (require-here "./js/offsets.mjs"))
 
 (defn free-at

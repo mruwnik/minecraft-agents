@@ -9,7 +9,7 @@
             [engine.path.fixture :as fx :refer [UNLOADED require-here]]))
 
 
-(def courses-file "test/engine/path/courses.edn")
+(def courses-file (str (fx/engine-root) "/test/engine/path/courses.edn"))
 
 (def courses-vector
   "[[name {:family :start :to :cmds (:walls)}] ...] in the file's order"

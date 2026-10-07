@@ -7,12 +7,13 @@
   (:require [cljs.test :refer [deftest is]]
             ["fs" :as fs]
             ["path" :as path]
+            [engine.path.fixture :as fx]
             [engine.planner-fixture :as pf]
             [engine.test-util :as tu]))
 
 (def recorded
   "the JS planner's answers: {:world {id rec} :course {name rec} :options {set {sample rec}} :goals {k rec} ...}"
-  (delay (-> (fs/readFileSync (path/join (js/process.cwd) "test/planner-bench.json") "utf8")
+  (delay (-> (fs/readFileSync (path/join (fx/engine-root) "test/planner-bench.json") "utf8")
              js/JSON.parse
              (js->clj :keywordize-keys true))))
 

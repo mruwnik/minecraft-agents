@@ -3,12 +3,16 @@
   moved to the end of each walked plan (a static world, no physics). Compiled by `tools/compile engine goto-bench`."
   (:require [jobs.lib.util :as u]
             [engine.path.executor :as executor]
+            [engine.path.fixture :as fx]
+            [engine.path.offsets :as offsets]
             [engine.path.planner-tuned :as planner]
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.search :as wsearch]))
 
 (def max-rounds 200)
+
+(offsets/set-root! (fx/engine-root)) ;; the bench may start outside engine/
 
 (defn body-at
   "A ctx whose primitives say a healthy, fed, unarmoured body stands at the step {x y z px pz} (the damage probe reads it)."
