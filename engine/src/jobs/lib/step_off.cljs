@@ -4,6 +4,7 @@
   (:require [engine.settings :as settings]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
+            [jobs.lib.dig-look :as dig-look]
             [jobs.lib.reach :as reach]
             [jobs.lib.util :as u]))
 
@@ -15,7 +16,7 @@
 (defn hazard-at?
   "Whether the feet or head cell holds fire, lava or another block a body must not stand in."
   [p {:keys [x y z]}]
-  (some #(contains? reach/hazard-blocks (u/block-name p {:x x :y % :z z})) [y (inc y)]))
+  (some #(contains? reach/hazard-blocks (u/seen-name p {:x x :y % :z z})) [y (inc y)]))
 
 (defn zone-ok
   "An :ok? fn for candidates: no cell another owner's zone, claim or plan footprint refuses, over a rules input
@@ -36,10 +37,19 @@
          (filter #(and (reach/standable-cell? p %) (not (hazard-at? p %))
                        (not (contains? avoid [(:x %) (:y %) (:z %)])) (ok? %))))))
 
+(defn floors
+  "The floors [x y z] under the cells within reach (default two) blocks of the column of cell, nearest first."
+  [{:keys [x y z]} reach]
+  (let [r (range (- reach) (inc reach))]
+    (->> (for [dx r dz r :when (not (and (zero? dx) (zero? dz)))] [dx dz])
+         (sort-by (fn [[dx dz]] (+ (* dx dx) (* dz dz))))
+         (map (fn [[dx dz]] [(+ x dx) (dec y) (+ z dz)])))))
+
 (defn ^:async step-off!
   "Walk off the column of cell (a go-to child :step-off, range 0, no escalation). opts {:avoid :ok? :reach} as candidates (jobs pass :ok? (zone-ok (access/rules-input c))).
-  Resolves to :arrived, :continue (go-to waits on the world) or {:unreachable why}: no cell to go to (:no-cell) or go-to's."
-  [c cell opts]
+  Glances at floors it has not seen first. Resolves to :arrived, :continue (go-to waits on the world) or {:unreachable why}: no cell to go to (:no-cell) or go-to's."
+  [c cell {:keys [reach] :or {reach (reach-blocks)}  :as opts}]
+  (await (dig-look/look-unknown! c (floors cell reach)))
   (if-let [to (first (candidates (:primitives c) cell opts))]
     (let [r (await (ctx/call-child c :step-off 'jobs.movement.go-to {:pos to :range 0 :escalate false}))
           res (ctx/child-result c :step-off)]

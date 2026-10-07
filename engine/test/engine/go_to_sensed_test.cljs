@@ -15,6 +15,7 @@
             [jobs.lib.escape :as escape]
             [jobs.lib.pass :as pass]
             [jobs.lib.reach :as reach]
+            [jobs.lib.step-off :as step-off]
             [jobs.lib.vehicle :as vehicle]
             [jobs.movement.go-to.escalation :as esc]
             [jobs.survival.retreat :as retreat]
@@ -228,3 +229,34 @@
                                                    {:pos [10 66 0] :range 1}))]
           (is (= {:arrived true} out) (pr-str (last seen)))
           (is (= [:pillar] (steps seen)) (pr-str (filter #(= :go-to.escalated (:kind %)) seen))))))))
+
+(defn ^:async run-step-off
+  "Run step-off! from the origin cell over the sensed-only world spec as a child of a parent job; [its result, world calls]."
+  [spec opts]
+  (let [clock (atom 1000000)
+        [_ sink] (tu/legacy-capture-sink)
+        {:keys [w]} (sensed-only spec)
+        out (atom :not-done)
+        parent {:check (constantly true)
+                :round (fn ^:async recording-round [c]
+                         (let [r (await (step-off/step-off! c {:x 0 :y 64 :z 0} opts))]
+                           (when-not (= :continue r) (reset! out r))
+                           (if (= :continue r) :continue :done)))}
+        eng (core/create {:primitives w :jobs (assoc registry/jobs 'recording-parent parent) :triggers triggers/all
+                          :dir (tu/tmp-dir) :now #(deref clock)
+                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+    (core/submit! eng '(recording-parent) {})
+    (loop [i 0]
+      (when (and (< i 40) (seq (:list (core/state eng))))
+        (swap! clock + 700)
+        (await (core/tick! eng))
+        (recur (inc i))))
+    @out))
+
+(deftest step-off-looks-at-floors-it-has-not-seen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (await (run-step-off {:self {:pos {:x 0.5 :y 64 :z 0.5}} :yaw 0 :pitch 0 :blocks ground} {:reach 1}))]
+          (is (not= {:unreachable :no-cell} r) "a body at pitch 0 that remembers nothing glances down before it judges")
+          (is (= :arrived r)))))))

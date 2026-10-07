@@ -30,6 +30,21 @@
   (when (some? (.-sensedAt (:primitives c)))
     (await (ctx/act c :look (clj->js {:pos {:x (+ x 0.5) :y (+ y 0.5) :z (+ z 0.5)}})))))
 
+(def max-floor-looks "Most looks of look-unknown!." 5)
+
+(defn ^:async look-unknown!
+  "Look at each of cells ([x y z], nearest first) the body has not sensed, at most max-floor-looks looks; a look shows
+  the cells round the one looked at too, so those are tested again before each look. For floors a judge of standable
+  cells needs seen."
+  [c cells]
+  (let [p (:primitives c)]
+    (loop [todo (seq cells) n 0]
+      (when (and todo (< n max-floor-looks))
+        (if (unknown? p (first todo))
+          (do (await (look-at! c (first todo)))
+              (recur (next todo) (inc n)))
+          (recur (next todo) n))))))
+
 (defn flow-delay-ms
   "One overworld lava flow delay in wall ms: 30 game ticks at the live game rate, with a few ticks over."
   []

@@ -1,9 +1,11 @@
 (ns jobs.survival.restore-broken
   (:require [engine.ctx :as ctx]
+            [jobs.lib.dig-look :as dig-look]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
             [jobs.lib.result :as result]
+            [jobs.lib.step-off :as step-off]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]))
@@ -170,7 +172,9 @@
   that did not clear it, skip e as :occupied (its entry stays for when the body is out). The cell is clear of every
   entry still waiting."
   [c e waiting]
-  (let [target (when-not (:stepped (ctx/mem c)) (clear-cell c e waiting))]
+  (let [{:keys [x y z]} (u/self-pos c)
+        _ (await (dig-look/look-unknown! c (step-off/floors {:x (js/Math.floor x) :y (js/Math.floor y) :z (js/Math.floor z)} 2)))
+        target (when-not (:stepped (ctx/mem c)) (clear-cell c e waiting))]
     (if-not target
       (skip! c e :occupied)
       (do (await (ctx/call-child c :go 'jobs.movement.go-to {:pos target :range 0 :escalate false}))

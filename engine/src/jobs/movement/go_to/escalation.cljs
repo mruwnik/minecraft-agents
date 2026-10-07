@@ -7,6 +7,7 @@
             [jobs.lib.escape :as escape]
             [jobs.lib.reach :as reach]
             [jobs.lib.shelter :as sh]
+            [jobs.lib.step-off :as step-off]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.util :as u]
             [jobs.movement.go-to.result :as end]))
@@ -108,7 +109,9 @@
   (let [p (:primitives c)
         block-at (escape/block-at-of p)
         top (inc (escape/max-depth))
-        over (escape/up feet 2)]
+        over (escape/up feet 2)
+        [fx fy fz] feet]
+    (await (dig-look/look-unknown! c (step-off/floors {:x fx :y fy :z fz} 2)))
     (when (dig-look/unknown? p over) (await (dig-look/look-at! c over)))
     (loop [lvl 0]
       (when (< lvl top)
