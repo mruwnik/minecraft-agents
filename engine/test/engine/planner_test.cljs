@@ -622,6 +622,10 @@
     (bar 40) {:margin 3} "partial" "box"
     (bar 40) {} "partial" "exhausted"))
 
+(deftest nodes-beyond-the-hard-span-report-box
+  (let [w (pf/snapshot {:fill [[-2 63 1 2400 63 3 "stone"]]})]
+    (is (= ["partial" "box"] (status+reason (search w (near 2300 64 2)))))))
+
 (def step-world (world {:fill [[5 64 -2 40 64 40 "stone"]]}))
 
 (deftest y-margin-limits-the-search
