@@ -48,6 +48,31 @@
   [p pos]
   (some-> (feel p pos) .-name))
 
+(defn sensed
+  "What the body knows of a cell as the JS answer (blockAt's keys plus ageMs, felt, visible, unknown), or nil when the chunk
+  is not loaded. Primitives that are not wrapped by perception (a bare fake) have no sensedAt and read blockAt."
+  [p pos]
+  (if (some? (.-sensedAt p))
+    (.sensedAt p (clj->js pos))
+    (block-at p pos)))
+
+(defn seen-block
+  "The block at a cell in view or remembered, as the JS object; nil when unloaded or never seen (unknown). Look at the
+  cell or skip it, never guess."
+  [p pos]
+  (let [b (sensed p pos)]
+    (when-not (or (nil? b) (true? (.-unknown b))) b)))
+
+(defn seen-name
+  "The block name at a cell in view or remembered, or nil when unloaded or unknown (see seen-block)."
+  [p pos]
+  (some-> (seen-block p pos) .-name))
+
+(defn block-name-or
+  "The seen block name at a cell, or guess when it is unknown: the caller states its policy for what it cannot see."
+  [p pos guess]
+  (or (seen-name p pos) guess))
+
 (defn block-facts
   "What a cell holds as cljs facts {:name :full-cube? :waterlogged?} (full-cube?: its collision shape fills the cell), or
   nil when the chunk is not loaded."
