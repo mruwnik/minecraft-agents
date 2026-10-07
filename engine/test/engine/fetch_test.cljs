@@ -846,3 +846,15 @@
           (await (run-ticks s 60))
           (is (empty? (calls s "dig")))
           (is (nil? (get (inv s) "oak_sapling"))))))))
+
+(deftest obtain-gather-passes-harvest-wood-the-logs-to-carry-in-total
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [seen-args (atom [])
+              s (start (update (bare [{:name "oak_log" :count 1}]) :blocks merge tree-blocks {"1,64,2" "crafting_table"}) [own-zone])
+              eng (assoc-in (:eng s) [:jobs 'jobs.forestry.harvest-wood :round]
+                            (fn ^:async f [c] (swap! seen-args conj (:args c)) :done))]
+          (core/submit! eng (list 'jobs.items.obtain {:item "wooden_pickaxe"}) {})
+          (await (run-ticks (assoc s :eng eng) 12))
+          (is (= 2 (:count (first @seen-args))) "one log carried, one more needed: harvest-wood's :count is logs carried in all"))))))

@@ -187,6 +187,13 @@
     (assoc-in need [:args :block] name)
     need))
 
+(defn with-count
+  "The need with the logs to carry in all (harvest-wood's :count) in its args: those carried and those it lacks."
+  [p need]
+  (if (= "log" (:key need))
+    (assoc-in need [:args :count] (+ (gather-carried p need) (:count need)))
+    need))
+
 (defn gather-viable?
   "Whether a chain is craftable once raw items are gathered, and a block for every raw need has been seen and
   the child of the first would run."
@@ -353,7 +360,7 @@
   "One round of the gather source: the child for the first raw item the chain lacks, until it ends."
   [c names have target]
   (let [p (:primitives c)
-        need (some->> (some-> (gather-plan c names (- target have)) :gather (gather-need (game/version-of p))) (with-block c))]
+        need (some->> (some-> (gather-plan c names (- target have)) :gather (gather-need (game/version-of p))) (with-block c) (with-count p))]
     (cond
       (nil? need) (do (tried! c :gather :no-plan) :continue)
       (and (not (get-in (ctx/mem c) [:gather :before])) (not (gather-viable? c names (- target have))))
