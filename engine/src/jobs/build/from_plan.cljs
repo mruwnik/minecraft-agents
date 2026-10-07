@@ -437,11 +437,11 @@
           (ctx/update-mem! c #(count-fail (dissoc % :placing) pos :refused give-up)))))))
 
 (defn settle-placing!
-  "A place that a cut left unbooked (:placing, set before the act): the world is the answer, so a cell no longer owed
-  was placed and counts."
+  "A place that a cut left unbooked (:placing, set before the act): the world is the answer, so a cell the plan now
+  judges :match was placed and counts. Another body placing the same block there in the gap would count too."
   [c cells]
   (when-let [pos (:placing (ctx/mem c))]
-    (let [placed? (not-any? #(= pos (:pos %)) (owed cells))]
+    (let [placed? (boolean (some #(and (= pos (:pos %)) (= :match (:answer %))) cells))]
       (ctx/update-mem! c #(cond-> (dissoc % :placing) placed? (update :placed (fnil inc 0)))))))
 
 (defn pos-map [pos] (zipmap [:x :y :z] pos))

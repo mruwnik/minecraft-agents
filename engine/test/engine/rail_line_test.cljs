@@ -444,7 +444,7 @@
     (try (await (f))
          (finally (set! dig/attempt! orig)))))
 
-(deftest a-wrong-rail-already-air-is-no-shape-failure
+(deftest a-wrong-rail-the-dig-reads-as-air-is-given-up-as-shape-not-retried-for-ever
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -452,10 +452,10 @@
               [result seen p] (await (with-dig-attempt!
                                     (fn [c pos] (dig/finish! c {:dug false :pos pos :block "air" :reason :already-clear}))
                                     #(build-route! l-route {} world {:all-carried false :fix 1})))]
-          (is (nil? (get-in result [:built :given-up [10 64 0]])) (pr-str (:built result)))
-          (is (= :not-done result) "the build parks with the rail unmended")
+          (is (= {[10 64 0] :shape} (get-in result [:built :given-up])) (pr-str result))
+          (is (not= :not-done result) "the build ends, it does not yield for ever")
           (is (empty? (h/calls p "dig")) "the dig was never made")
-          (is (empty? (h/events-of seen :rail-build.broken))))))))
+          (is (= [{:pos [10 64 0] :why :shape}] (:breaks (first (h/events-of seen :rail-build.broken))))))))))
 
 (deftest a-declined-dig-child-is-passed-up-and-the-build-parks
   (async done

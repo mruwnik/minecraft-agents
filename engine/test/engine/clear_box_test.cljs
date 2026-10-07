@@ -339,3 +339,23 @@
           (core/submit! eng '(recording-parent) {})
           (await (core/tick! eng))
           (is (= {:dug 8 :skipped {} :kept 0 :fluids {}} @out) "one tick, one call of the child"))))))
+
+(deftest a-dig-declined-not-loaded-waits-without-counting-a-try
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [t1 {:x 1 :y 64 :z 1}
+              seen* (atom {:rs [] :skipped :none})
+              parent {:check (constantly true)
+                      :round (fn recording-round [c]
+                               (dotimes [_ 5]
+                                 (swap! seen* update :rs conj (clear-box/declined! c t1 {:reason :not-loaded :pos t1})))
+                               (swap! seen* assoc :skipped (:skipped (ctx/mem c) {}) :tries (:tries (ctx/mem c) {}))
+                               :done)}
+              {:keys [eng]} (setup {:blocks {"1,64,1" "dirt"}})
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
+          (core/submit! eng '(recording-parent) {})
+          (await (run-until-empty eng 3))
+          (is (= [:continue :continue :continue :continue :continue] (:rs @seen*)))
+          (is (= {} (:skipped @seen*)) "a briefly unloaded cell is not skipped")
+          (is (= {} (:tries @seen*))))))))

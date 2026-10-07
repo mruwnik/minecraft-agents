@@ -197,17 +197,17 @@
     :done))
 
 (defn declined!
-  "Book the cell t whose dig child declined with wait reason w: a body reason keeps it (the check waits on it), a
-  refusal or a missing zone list skips or leaves it, a hazard counts a try, anything else skips it as :unreachable."
+  "Book the cell t whose dig child declined with wait reason w: a body reason or an unloaded cell keeps it (the
+  check waits on it), a refusal or a missing zone list skips or leaves it, a hazard counts a try, anything else skips
+  it as :unreachable."
   [c t w]
-  (when-not (blocks/body-wait? w)
+  (when-not (or (blocks/body-wait? w) (= :not-loaded (:reason w)))
     (ctx/update-mem! c dissoc :target)
     (case (:reason w)
       :not-allowed (when (#{:zone :claim :footprint} (:by w)) (skip-refused! c [[t (assoc w :reason (:by w))]]))
       :hazard (bump! c t :hazard)
-      :not-loaded (bump! c t :unreachable)
       (skip! c t :unreachable)))
-  (if (blocks/body-wait? w) :continue :again))
+  (if (or (blocks/body-wait? w) (= :not-loaded (:reason w))) :continue :again))
 
 (defn ^:async dig!
   "One round of the dig child on the target cell t; book its end. A refused dig counts a try (:refused after two)."
