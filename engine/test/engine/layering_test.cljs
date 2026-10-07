@@ -1,5 +1,5 @@
 (ns engine.layering-test
-  "Layering guard: jobs call other jobs as children, shared helpers live in jobs.lib, and jobs never reach into
+  "Layering guard: jobs call other jobs as children, shared helpers live in jobs.lib, and jobs and libs never reach into
   triggers. Rules over the ns forms of src/jobs and src/triggers; the known leftovers are the shrink-only
   allow-list layering_allow.edn (one reason per edge)."
   (:require [cljs.reader :as reader]
@@ -35,6 +35,7 @@
     (cond
       (and (= fk :job) (= tk :trigger)) :job-requires-trigger
       (and (= fk :helper) (= tk :trigger)) :job-requires-trigger
+      (and (= fk :lib) (= tk :trigger)) :lib-requires-trigger
       (and (#{:lib :trigger} fk) (#{:job :helper} tk)) :lib-requires-job
       (and (#{:job :helper} fk) (#{:job :helper} tk) (not= (family from) (family to)))
       (if (= tk :job) :job-requires-other-family-job :helper-required-cross-family))))
@@ -88,7 +89,7 @@
    'jobs.a.split {:requires #{} :job? false}
    'jobs.b.job {:requires #{} :job? true}
    'jobs.b.help {:requires #{} :job? false}
-   'jobs.lib.x {:requires '#{jobs.a.job} :job? false}
+   'jobs.lib.x {:requires '#{jobs.a.job triggers.a.cond} :job? false}
    'triggers.a.cond {:requires '#{jobs.lib.x jobs.b.help} :job? false}})
 
 (deftest guard-finds-fabricated-violations
@@ -96,6 +97,7 @@
            [jobs.a.job jobs.b.job :job-requires-other-family-job]
            [jobs.a.job triggers.a.cond :job-requires-trigger]
            [jobs.lib.x jobs.a.job :lib-requires-job]
+           [jobs.lib.x triggers.a.cond :lib-requires-trigger]
            [triggers.a.cond jobs.b.help :lib-requires-job]]
          (violations fabricated))))
 
