@@ -614,7 +614,7 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 | `storage.make-room` | The `:inventory-nearly-full` job. One run deposits by value, swaps for worthier items, else tosses junk until `:free` slots are free, then steps away; stopped `:short` or `:nothing-to-go` when no more may go |
 | `items.craft`, `smelt`, `enchant`, `wear`, `equip`, `bake`, `give` | Craft (one call: walks to a table (puts a carried or fetched one down when none is seen), crafts the full count, fetches an ingredient that runs out, all unless `:fetch false`; a short craft is stopped), smelt in a furnace, enchant, put armour on, hold an item in a hand, bake bread, give items to a player |
 | `village.trade` `{:villager :buy :count}` | Buys from a villager in one call (go-to legs, offers, buys); a give-up ends stopped with the reason |
-| `village.feed` `{:villager :item :count :radius :fetch}` | Tosses food to one villager (food fetched unless `:fetch false`) and counts only what that villager's uuid collected (toss `:watchS` receipt); the rest is collected back (never a drop lying before the toss); a toss cut before its receipt is settled on restart; stopped `gone`, `no-food`, `unreachable`, `not-taken`, `litter` |
+| `village.feed` `{:villager :item :count :radius :fetch}` | Tosses food to one villager (food fetched unless `:fetch false`) and counts only what that villager's uuid collected (toss `:watchS` receipt); the rest is collected back (never a drop lying before the toss); a toss cut before its receipt is settled on restart back at its spot (food eaten meanwhile is not counted; none taken counts as refused); stopped `gone`, `no-food`, `unreachable`, `not-taken`, `litter` |
 
 **Farming, animals, apiary, building**
 
