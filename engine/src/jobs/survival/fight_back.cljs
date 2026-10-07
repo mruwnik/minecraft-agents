@@ -3,8 +3,8 @@
             [jobs.lib.combat :as combat]
             [jobs.lib.reach :as reach]
             [jobs.lib.util :as u]
-            [jobs.lib.watch :as watch]
-            [jobs.lib.near :as near]))
+            [jobs.lib.near :as near]
+            [jobs.lib.pace :as pace]))
 
 (def doc
   "Equip the best weapon, walk up to the nearest hostile within :range and hit it, at most one swing per :attack-gap-ms.
@@ -116,22 +116,32 @@
         (when (= "killed" (.-status a)) (ctx/update-mem! c update :killed (fnil conj []) (.-id target)))))
     r))
 
-(defn ^:async round [c]
-  (let [{:keys [weapons attack-gap-ms]} (:args c)
+(defn ^:async step
+  "One step of the fight: look at a heard mob, wait out the swing gap, or swing once. :again, :continue, :done or :declined."
+  [c]
+  (let [{:keys [weapons attack-gap-ms min-health]} (:args c)
         p (:primitives c)
         target (first (targets c))
         last-attack (:last-attack (ctx/mem c))]
     (when-not (:start (ctx/mem c)) (ctx/update-mem! c assoc :start (u/self-pos c)))
     (cond
+      (and last-attack (< (.-health (.self p)) min-health)) :declined
+      (and last-attack (< (.-health (.self p)) (:health0 (ctx/mem c)))) :continue
       (nil? target) (if-let [heard (first (remove reach/seen-only? (in-range c)))]
                       (do (await (ctx/act c :look (let [{:keys [x y z]} (reach/mob-pos p heard)] #js {:pos #js {:x x :y (+ 1 y) :z z}})))
                           :declined)
                       (if (seq (in-range c)) :declined :done))
-      (and last-attack (< (- (ctx/now c) last-attack) attack-gap-ms)) (do (await (watch/watch! c {})) :continue)
+      (and last-attack (< (- (ctx/now c) last-attack) attack-gap-ms)) (do (await (combat/wait-gap! c last-attack attack-gap-ms)) :again)
       :else
       (do (await (combat/equip-best! c (combat/best-weapon p weapons)))
           (await (swing! c target))
           (cond
             (empty? (in-range c)) (do (ctx/result! c {:killed (vec (:killed (ctx/mem c)))}) :done)
             (empty? (targets c)) :declined
-            :else :continue)))))
+            :else :again)))))
+
+(defn ^:async round
+  "The whole fight: steps until no hostile is left (:done) or the retreat should take over (:declined)."
+  [c]
+  (ctx/update-mem! c assoc :health0 (.-health (.self (:primitives c))))
+  (await (pace/steps! c #(step c))))

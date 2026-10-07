@@ -22,12 +22,18 @@
 
 ;; ------------------------------------------------------------------ attack from inside the hut
 
+(defn waits-move-clock!
+  "Time passes only while the body waits: a whole fight in one call ends by time."
+  [{:keys [p clock]}]
+  (.override (.-world p) "wait" (fn [t a impl] (swap! clock + (.-ms a)) (impl t a))))
+
 (deftest attack-from-inside-a-doored-hut-goes-out-through-the-door-and-kills
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (ut/setup (merge (hut/hut-world {:x 5 :y 64 :z 0} {})
-                                                    {:inventory sword :entities [(zed 7 5 7)]}))]
+        (let [{:keys [eng p seen] :as s} (ut/setup (merge (hut/hut-world {:x 5 :y 64 :z 0} {})
+                                                          {:inventory sword :entities [(zed 7 5 7)]}))
+              _ (waits-move-clock! s)]
           (core/submit! eng '(jobs.combat.attack {:targets [7] :timeout-s 1000}) {})
           (await (st/tick-n eng 12))
           (is (= [] (ut/calls p "moveTo")) "no raw pathfinder walk")
@@ -36,16 +42,18 @@
           (is (false? (hut/door-open? p)) "the door is shut behind it")
           (is (not (contains? (started-jobs seen) 'jobs.maintenance.unstick)) "no stuck reflex"))))))
 
-(deftest attack-chases-a-target-that-moves-between-rounds
+(deftest attack-chases-a-target-that-moves-between-swings
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p clock]} (ut/setup {:floor tu/walk-floor :inventory sword :entities [(zed 7 10 0)]})
-              tick! (fn ^:async tick! [n] (loop [i 0] (when (< i n) (swap! clock + 700) (await (core/tick! eng)) (recur (inc i)))))]
+        (let [{:keys [eng p] :as s} (ut/setup {:floor tu/walk-floor :inventory sword :entities [(zed 7 10 0)]})
+              n (atom 0)]
+          (waits-move-clock! s)
+          (.override (.-world p) "attack" (fn [t a impl]
+                                            (when (= 1 (swap! n inc)) (swap! (fake/state p) assoc-in [:entities 0 :pos] [-6 64 0]))
+                                            (impl t a)))
           (core/submit! eng '(jobs.combat.attack {:targets [7] :timeout-s 1000}) {})
-          (await (tick! 1))
-          (swap! (fake/state p) assoc-in [:entities 0 :pos] [-6 64 0])
-          (await (tick! 4))
+          (await (core/tick! eng))
           (is (= [] (ut/calls p "moveTo")))
           (is (> -3 (.-x (.-pos (.self p)))) "the body walked after the target to its new spot")
           (is (seq (ut/call-args p "attack"))))))))
@@ -96,8 +104,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (ut/setup {:floor tu/walk-floor :entities [(zed 7 10 0)]})
-              planned (atom 0)]
+        (let [{:keys [eng] :as s} (ut/setup {:floor tu/walk-floor :entities [(zed 7 10 0)]})
+              planned (atom 0)
+              _ (waits-move-clock! s)]
           (with-redefs [threats/planner-dangers (fn [_] (swap! planned inc) nil)]
             (core/submit! eng '(jobs.combat.attack {:targets [7] :timeout-s 1000}) {})
             (await (tu/tick-until-idle! eng 6)))

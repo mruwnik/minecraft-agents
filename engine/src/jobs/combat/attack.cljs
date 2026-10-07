@@ -3,16 +3,17 @@
             [jobs.lib.combat :as combat]
             [jobs.lib.shelter :as sh]
             [jobs.lib.util :as u]
-            [jobs.lib.watch :as watch]
-            [jobs.lib.near :as near]))
+            [jobs.lib.near :as near]
+            [jobs.lib.pace :as pace]))
 
 (def doc
   "Attack the entities :targets names until none is left within :radius.
   A target is an entity id (a number), a player's username, or a mob type such as \"zombie\"
   (every mob of that name within :radius). Players match only by username. Items never match. The body never targets itself.
-  Each round takes the nearest target not given up on, holds the best weapon carried, walks within reach
-  (jobs.lib.near/walk-near!, doors :shut, each walk bounded by :walk-timeout-s) and swings once.
-  Swings at most once per :attack-gap-ms (nil: the held weapon's cooldown).
+  One call is the whole fight: it takes the nearest target not given up on, holds the best weapon carried, walks within
+  reach (jobs.lib.near/walk-near!, doors :shut, each walk bounded by :walk-timeout-s) and swings, again and again until
+  it ends. Swings at most once per :attack-gap-ms (nil: the held weapon's cooldown); the rest of the gap is spent looking
+  round and waiting.
   It does not swing when the entity's `hittable` sensing is false (no clear line to its hitbox, for example glass).
   It walks closer instead, and counts that as a blocked walk.
   A target is given up on, with an attack.gave-up warning and a :reason:
@@ -222,13 +223,17 @@
       (every? settled? seen) :gave-up
       :else :lost)))
 
+(defn gap-ms
+  "The least time between swings: :attack-gap-ms, else the held weapon's cooldown."
+  [c]
+  (or (:attack-gap-ms (:args c))
+      (combat/attack-gap-ms (.-held (.self (:primitives c))))))
+
 (defn within-gap?
   "Whether the last swing was less than the gap ago."
   [c]
-  (let [last-attack (:last-attack (ctx/mem c))
-        gap (or (:attack-gap-ms (:args c))
-                (combat/attack-gap-ms (.-held (.self (:primitives c)))))]
-    (and last-attack (< (- (ctx/now c) last-attack) gap))))
+  (let [last-attack (:last-attack (ctx/mem c))]
+    (and last-attack (< (- (ctx/now c) last-attack) (gap-ms c)))))
 
 (defn ^:async engage!
   "Equip, walk to the nearest target and swing once."
@@ -239,13 +244,15 @@
     :arrived (await (swing-or-close-in! c target true))
     :partial nil
     (fail! c target))
-  :continue)
+  :again)
 
 (defn ^:async wait! [c ms]
   (await (ctx/act c :wait #js {:ms ms}))
-  :continue)
+  :again)
 
-(defn ^:async round [c]
+(defn ^:async step
+  "One step of the fight: finish, wait, wait out the swing gap, or walk and swing once. :again or :done."
+  [c]
   (let [now (ctx/now c)
         {:keys [timeout-s lost-s]} (:args c)]
     (ctx/update-mem! c update :started #(or % now))
@@ -262,5 +269,10 @@
                            (await (wait! c 1000)))
         :else (do (ctx/update-mem! c #(-> % (assoc :last-seen now) (update :seen (fnil into #{}) (mapv (fn [e] (.-id e)) targets))))
                   (if (within-gap? c)
-                    (do (await (watch/watch! c {})) :continue)
+                    (do (await (combat/wait-gap! c (:last-attack (ctx/mem c)) (gap-ms c))) :again)
                     (await (engage! c (first targets)))))))))
+
+(defn ^:async round
+  "The whole fight: steps until the job finishes (cleared, gave up, lost, timeout, absent)."
+  [c]
+  (await (pace/steps! c #(step c))))

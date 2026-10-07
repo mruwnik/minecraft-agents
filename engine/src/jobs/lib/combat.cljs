@@ -3,7 +3,8 @@
   the weapons carried."
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [jobs.lib.watch :as watch]))
 
 (def default-weapons
   "Item name substrings that count as weapons; _axe does not match pickaxes."
@@ -91,6 +92,14 @@
        (cond
          (and item-name (str/ends-with? item-name "_sword")) 625
          :else (get axe-gap-ms item-name min-gap-ms))))
+
+(defn ^:async wait-gap!
+  "Spend the rest of the attack gap after a swing at last-attack (ms): look round (watch!), then wait out what is left."
+  [c last-attack gap]
+  (await (watch/watch! c {}))
+  (let [left (- (+ last-attack gap) (ctx/now c))]
+    (when (pos? left)
+      (await (ctx/act c :wait #js {:ms left})))))
 
 (def mob-max-health
   "Full health of the common hostiles; unknown ones count as 20."

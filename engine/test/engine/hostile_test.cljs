@@ -56,16 +56,17 @@
 (defn setup-seeing
   "As setup, the body seeing through perception (engine.perception/wrap) as it does live; light is [sky block] for
   every cell when given (jobs that look round only in the dark)."
-  [world light]
+  ([world light] (setup-seeing world light 0))
+  ([world light ms]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         raw (tu/fake-on-floor (merge {:floor flight-floor} world))
         _ (when light (swap! (fake/state raw) assoc :light-default light))
-        now (tu/act-clock clock raw 0)
+        now (tu/act-clock clock raw ms)
         p (perception/wrap raw (perception/create (fake-raw/create raw) {:radius 16 :ray-deg 2 :now now}))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
                           :events (events/make {:body "Fake" :sinks [sink] :now now})})]
-    {:eng eng :p p :seen seen :clock clock}))
+    {:eng eng :p p :seen seen :clock clock})))
 
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
 
@@ -78,17 +79,26 @@
 (def sword [{:name "iron_sword" :count 1}])
 
 (defn ^:async first-round-seeing
-  "As first-round, over a body that sees through perception."
-  [spec world]
-  (let [s (setup-seeing world nil)]
+  "As first-round, over a body that sees through perception (the clock moving ms with every call, default 0)."
+  ([spec world] (first-round-seeing spec world 0))
+  ([spec world ms]
+  (let [s (setup-seeing world nil ms)]
     (core/submit! (:eng s) spec {})
     (await (core/tick! (:eng s)))
-    s))
+    s)))
 
 (defn ^:async first-round
   "Submit spec in a world and run one tick; the setup map."
   [spec world]
   (let [s (setup world)]
+    (core/submit! (:eng s) spec {})
+    (await (core/tick! (:eng s)))
+    s))
+
+(defn ^:async first-round-ms
+  "As first-round, the clock moving ms with every primitive call, so a call that waits out a gap ends."
+  [spec world ms]
+  (let [s (setup world ms)]
     (core/submit! (:eng s) spec {})
     (await (core/tick! (:eng s)))
     s))
@@ -176,38 +186,28 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p clock]} (await (first-round fight {:inventory [{:name "wooden_sword" :count 1} {:name "iron_axe" :count 1}
-                                                                           {:name "iron_pickaxe" :count 1}]
-                                                               :entities [(zombie 7 3 0)]}))]
+        (let [{:keys [eng p]} (await (first-round-ms fight {:inventory [{:name "wooden_sword" :count 1} {:name "iron_axe" :count 1}
+                                                                        {:name "iron_pickaxe" :count 1}]
+                                                            :entities [(zombie 7 3 0)]} 20))]
           (is (= ["iron_axe"] (mapv #(.-item (.-args %)) (calls p "equip"))) "the best weapon, not the pickaxe")
-          (is (= 1 (count (calls p "attack"))))
-          (is (= [7] (mapv #(.-id (.-args %)) (calls p "attack"))))
-          (is (= ["j1"] (:list (core/state eng))) "the zombie has 20 health and survives one hit")
-          (await (core/tick! eng))
-          (is (= 1 (count (calls p "attack"))) "within the attack gap nothing is swung")
-          (dotimes [_ 3]
-            (swap! clock + 700)
-            (await (core/tick! eng)))
-          (is (= 4 (count (calls p "attack"))))
-          (is (= [] (:list (core/state eng))) "four hits killed it: done"))))))
+          (is (= [7 7 7 7] (mapv #(.-id (.-args %)) (calls p "attack"))) "four hits kill the 20 health zombie")
+          (is (= [] (:list (core/state eng))) "done in one call"))))))
 
 (deftest fight-back-looks-round-while-the-cooldown-runs
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (await (first-round-seeing fight {:inventory sword :entities [(zombie 7 3 0)]}))]
-          (is (empty? (mem/entries (mem/view (:store eng)) :watched)) "no wait yet: the first round swings")
-          (await (core/tick! eng))
-          (is (seq (mem/entries (mem/view (:store eng)) :watched)) "the second round waits out the gap and looks round"))))))
+        (let [{:keys [eng]} (await (first-round-seeing '(jobs.survival.fight-back {:attack-gap-ms 3000}) {:inventory sword :entities [(zombie 7 3 0)]} 20))]
+          (is (seq (mem/entries (mem/view (:store eng)) :watched)) "the call waits out the gap and looks round"))))))
 
 (deftest fight-back-walks-up-to-a-mob-beyond-reach
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p eng]} (await (first-round '(jobs.survival.fight-back {:range 6}) {:inventory sword :entities [(zombie 5 0)]}))]
-          (is (= 1 (count (tu/walked-to eng))))
+        (let [{:keys [p eng]} (await (first-round-ms '(jobs.survival.fight-back {:range 6}) {:inventory sword :entities [(zombie 5 0)]} 20))]
+          (is (pos? (count (tu/walked-to eng))))
           (is (every? #(<= % 15) (map #(.-timeoutS (.-args %)) (calls p "steer"))) "a short walk: it aims again at the mob")
-          (is (= 1 (count (calls p "attack")))))))))
+          (is (pos? (count (calls p "attack")))))))))
 
 (deftest fight-back-declines-when-hurt-or-nothing-is-near
   (async done
@@ -228,8 +228,8 @@
           (core/submit! eng '(jobs.survival.fight-back {:range 12 :leash 5}) {})
           (is (nil? (core/tick! eng)) "8 blocks from the start is past the leash of 5: not chased, the job declines")
           (is (zero? (count (calls p "attack")))))
-        (let [{:keys [p]} (await (first-round '(jobs.survival.fight-back {:range 12 :leash 10}) {:inventory sword :entities [(zombie 8 0)]}))]
-          (is (= 1 (count (calls p "attack"))) "inside the leash it is fought"))))))
+        (let [{:keys [p]} (await (first-round-ms '(jobs.survival.fight-back {:range 12 :leash 10}) {:inventory sword :entities [(zombie 8 0)]} 20))]
+          (is (pos? (count (calls p "attack"))) "inside the leash it is fought"))))))
 
 (deftest fight-back-ignores-a-hidden-ranged-mob
   (async done
@@ -245,17 +245,14 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng clock]} (await (first-round fight {:inventory sword :entities [(invulnerable-zombie)]}))]
+        (let [{:keys [eng clock]} (await (first-round-ms fight {:inventory sword :entities [(invulnerable-zombie)]} 20))]
           (is (nil? (:struck (core/job-memory eng "j1"))) "no damage seen: no hit recorded"))))))
 
 (deftest fight-back-gives-up-on-a-mob-it-cannot-damage
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p clock seen]} (await (first-round fight {:inventory sword :entities [(invulnerable-zombie)]}))]
-          (dotimes [_ 6]
-            (swap! clock + 700)
-            (await (core/tick! eng)))
+        (let [{:keys [p seen]} (await (first-round-ms fight {:inventory sword :entities [(invulnerable-zombie)]} 20))]
           (is (= 3 (count (calls p "attack"))) "three swings without damage, then no more")
           (is (some #(= "fight_no_damage" (name (:kind %))) @seen) "warned, with the reason"))))))
 
@@ -540,9 +537,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p]} (await (first-round '(jobs.survival.fight-back {:range 8})
-                                              {:inventory sword :blocks wall :entities [(zombie 1 5 0) (zombie 2 0 6)]}))]
-          (is (= [2] (mapv #(.-id (.-args %)) (calls p "attack")))
+        (let [{:keys [p]} (await (first-round-ms '(jobs.survival.fight-back {:range 8})
+                                                 {:inventory sword :blocks wall :entities [(zombie 1 5 0) (zombie 2 0 6)]} 20))]
+          (is (= 2 (first (mapv #(.-id (.-args %)) (calls p "attack"))))
               "the nearer zombie is behind the wall; the visible one is fought"))))))
 
 ;; ------------------------------------------------------- finishing a fight, eating on the run
@@ -699,7 +696,7 @@
         (let [{:keys [p]} (await (flight-round respond {:inventory [{:name "stone_sword" :count 1} {:name "diamond_sword" :count 1}]
                                                         :entities [(zombie 3 0)]}))]
           (is (= ["diamond_sword"] (mapv #(.-item (.-args %)) (calls p "equip"))))
-          (is (= 3 (count (calls p "attack"))) "a diamond sword (7) kills the 20 hp zombie in three hits; no fourth swing at the corpse"))))))
+          (is (= 4 (count (calls p "attack"))) "the fake's hits of 5 kill the 20 hp zombie in four; no fifth swing at the corpse"))))))
 
 (def stair-exit
   "A dead-end corridor one wide along +z, closed behind the body (z -1): the way out of a dug-in cell, the zombie in it."
@@ -856,3 +853,11 @@
           (is (= :declined r) "the seen zombie is past the leash, the heard one is never fought")
           (is (= 1 (count @looks)))
           (is (pos? (.-x (.-pos (first @looks)))) "the look points east at the heard mob, not west at the seen one"))))))
+
+(deftest fight-back-one-call-fights-until-the-mob-is-dead
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (await (first-round-ms fight {:inventory sword :entities [(zombie 7 3 0)]} 20))]
+          (is (= 4 (count (calls p "attack"))) "four hits in one call")
+          (is (= [] (:list (core/state eng))) "done in the first call"))))))

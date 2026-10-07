@@ -27,7 +27,7 @@
 (defn ^:async scenario-seeing
   "As scenario, over a body that sees through perception."
   [args world n]
-  (let [s (h/setup-seeing world nil)]
+  (let [s (h/setup-seeing world nil 20)]
     (core/submit! (:eng s) (spec args) {})
     (await (run-ticks s n 700))
     s))
@@ -35,7 +35,7 @@
 (defn ^:async scenario
   "Submit the job with args in a world; run n ticks 700 ms apart; the setup map."
   [args world n]
-  (let [s (h/setup world)]
+  (let [s (h/setup world 20)]
     (core/submit! (:eng s) (spec args) {})
     (await (run-ticks s n 700))
     s))
@@ -93,12 +93,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng clock] :as s} (await (scenario {:targets [7]} {:inventory h/sword :entities [(zed 7 3)]} 4))]
+        (let [s (await (scenario {:targets [7]} {:inventory h/sword :entities [(zed 7 3)]} 1))]
           (is (= [7 7 7 7] (attacked s)) "four hits at 5 damage")
-          (is (= ["j1"] (:list (core/state eng))) "still running until nothing was seen for :lost-s")
-          (swap! clock + 6000)
-          (await (core/tick! eng))
-          (is (finished? s))
+          (is (finished? s) "one call: the kill, then :lost-s of waiting")
           (is (= :cleared (:reason (done-event s))))
           (is (= [7] (:killed (done-event s)))))))))
 
@@ -198,7 +195,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:targets [7]} {:inventory h/sword :entities [(zed 7 3)] :blocks {"1,64,0" "oak_fence"}} 2))]
-          (is (= [7 7] (attacked s)))
+          (is (= [7] (distinct (attacked s))))
           (is (empty? (events-of s :attack.gave-up))))))))
 
 (deftest a-target-in-the-open-is-swung-at-and-a-missing-hittable-swings-too
@@ -206,7 +203,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:targets [7]} {:inventory h/sword :entities [(zed 7 3)]} 2))]
-          (is (= [7 7] (attacked s))))))))
+          (is (= [7] (distinct (attacked s)))))))))
 
 (deftest gives-up-on-a-target-that-takes-no-damage
   (async done
@@ -244,7 +241,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p] :as s} (await (scenario {:targets [7]} {:inventory h/sword :entities [(zed 7 2)]} 3))]
-          (is (= 3 (count (attacked s))))
+          (is (= 4 (count (attacked s))))
           (is (= 1 (count (h/calls p "equip")))))))))
 
 (deftest a-killed-player-respawning-under-a-new-id-is-left-alone
@@ -261,53 +258,50 @@
           (is (= :cleared (:reason (done-event s))))
           (is (= [9] (:killed (done-event s)))))))))
 
+(defn waited-between-swings
+  "The first ms waited (act :wait) after each swing but the last: what is left of the gap (the fake clock moves with calls,
+  not with waits)."
+  [p]
+  (let [calls (vec (.-calls (.-world p)))
+        idx (vec (keep-indexed (fn [i c] (when (= "attack" (.-name c)) i)) calls))]
+    (mapv (fn [a b] (some #(when (= "wait" (.-name %)) (.. % -args -ms)) (subvec calls a b)))
+          idx (rest idx))))
+
 (deftest at-most-one-swing-per-gap
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng clock] :as s} (await (h/first-round (spec {:targets [7]}) {:inventory h/sword :entities [(zed 7 2)]}))]
-          (is (= 1 (count (attacked s))))
-          (await (core/tick! eng))
-          (swap! clock + 100)
-          (await (core/tick! eng))
-          (is (= 1 (count (attacked s))) "inside the sword's 625 ms")
-          (swap! clock + 600)
-          (await (core/tick! eng))
-          (is (= 2 (count (attacked s)))))))))
+        (let [{:keys [p] :as s} (await (h/first-round-ms (spec {:targets [7]}) {:inventory h/sword :entities [(zed 7 2)]} 10))]
+          (is (= 4 (count (attacked s))))
+          (is (every? #(<= 585 % 625) (waited-between-swings p)) "the rest of the sword's 625 ms is waited out between swings"))))))
 
 (deftest an-explicit-attack-gap-ms-beats-the-floor
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng clock] :as s} (await (h/first-round (spec {:targets [7] :attack-gap-ms 100}) {:inventory h/sword :entities [(zed 7 2)]}))]
-          (is (= 1 (count (attacked s))))
-          (swap! clock + 100)
-          (await (core/tick! eng))
-          (is (= 2 (count (attacked s))) "100 ms later, not the sword's 625 nor the 500 floor"))))))
+        (let [{:keys [p] :as s} (await (h/first-round-ms (spec {:targets [7] :attack-gap-ms 100}) {:inventory h/sword :entities [(zed 7 2)]} 10))]
+          (is (= 4 (count (attacked s))))
+          (is (every? #(<= 80 % 100) (waited-between-swings p)) "100 ms, not the sword's 625 nor the 500 floor"))))))
 
 (deftest a-started-job-stays-until-lost-s-after-its-target-leaves
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng clock p] :as s} (await (scenario {:targets [7]} {:inventory h/sword :entities [(zed 7 2)]} 1))]
-          (swap! (fake/state p) assoc :entities [])
-          (await (run-ticks s 2 700))
-          (is (= ["j1"] (:list (core/state eng))) "nothing to attack, still started")
-          (swap! clock + 6000)
-          (await (core/tick! eng))
-          (is (finished? s))
+        (let [{:keys [p] :as s} (h/setup {:inventory h/sword :entities [(zed 7 2)]} 20)]
+          (.override (.-world p) "attack" (fn [_ _ _] (swap! (fake/state p) assoc :entities []) (js/Promise.resolve #js {:status "hit" :hurt true})))
+          (core/submit! (:eng s) (spec {:targets [7]}) {})
+          (await (core/tick! (:eng s)))
+          (is (finished? s) "nothing left to attack: the call waits :lost-s and ends")
           (is (= :lost (:reason (done-event s)))))))))
 
 (deftest a-target-that-vanishes-after-a-hit-is-not-booked-as-killed
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p clock eng] :as s} (await (scenario {:targets [7]} {:inventory h/sword :entities [(zed 7 2)]} 1))]
-          (swap! (fake/state p) assoc :entities [])
-          (swap! clock + 700)
-          (await (core/tick! eng))
-          (swap! clock + 6000)
-          (await (core/tick! eng))
+        (let [{:keys [p] :as s} (h/setup {:inventory h/sword :entities [(zed 7 2)]} 20)]
+          (.override (.-world p) "attack" (fn [_ _ _] (swap! (fake/state p) assoc :entities []) (js/Promise.resolve #js {:status "hit" :hurt true})))
+          (core/submit! (:eng s) (spec {:targets [7]}) {})
+          (await (core/tick! (:eng s)))
           (is (finished? s))
           (is (= :lost (:reason (done-event s))))
           (is (= [] (:killed (done-event s)))))))))
@@ -329,14 +323,12 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [targets [[9] ["Alex"]]]
-          (let [{:keys [p clock eng] :as s} (h/setup {:inventory h/sword :entities [(ent 9 "Alex" "player" 2)]})]
+          (let [{:keys [p clock eng] :as s} (h/setup {:inventory h/sword :entities [(ent 9 "Alex" "player" 2)]} 20)]
             (.override (.-world p) "attack"
                        (fn [_token _args _impl] (js/Promise.resolve #js {:status "killed" :health 0 :hurt true})))
             (core/submit! eng (spec {:targets targets}) {})
-            (await (run-ticks s 3 700))
-            (is (= [9] (attacked s)) (str targets " one swing, then left alone"))
-            (swap! clock + 6000)
             (await (core/tick! eng))
+            (is (= [9] (attacked s)) (str targets " one swing, then left alone"))
             (is (finished? s) (str targets))
             (is (= :cleared (:reason (done-event s))) (str targets))
             (is (= [9] (:killed (done-event s))) (str targets))))))))
@@ -345,15 +337,13 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p clock eng seen] :as s} (await (scenario {:targets [7]} {:inventory h/sword :entities [(zed 7 2)]} 1))]
-          (swap! (fake/state p) assoc :entities [])
-          (await (run-ticks s 12 250))
+        (let [{:keys [p seen] :as s} (h/setup {:inventory h/sword :entities [(zed 7 2)]} 20)]
+          (.override (.-world p) "attack" (fn [_ _ _] (swap! (fake/state p) assoc :entities []) (js/Promise.resolve #js {:status "hit" :hurt true})))
+          (core/submit! (:eng s) (spec {:targets [7]}) {})
+          (await (core/tick! (:eng s)))
           (is (pos? (count (h/calls p "wait"))))
           (is (= [1000] (distinct (mapv #(.. % -args -ms) (h/calls p "wait")))))
           (is (not-any? #(= :idle (:kind %)) @seen))
-          (is (not (finished? s)))
-          (swap! clock + 6000)
-          (await (core/tick! eng))
           (is (= :lost (:reason (done-event s)))))))))
 
 (deftest an-absent-target-ends-the-job-after-the-grace
@@ -361,12 +351,8 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [targets [[123] ["skeleton"] ["Fake"]]]
-          (let [{:keys [p] :as s} (await (h/first-round (spec {:targets targets})
-                                                        {:inventory h/sword :entities [(ent 3 "Fake" "player" 1) (zed 7 2)]}))]
-            (await (run-ticks s 1 1000))
-            (await (run-ticks s 1 900))
-            (is (not (finished? s)) (str targets " still inside the 2 s grace"))
-            (await (run-ticks s 1 200))
+          (let [{:keys [p] :as s} (await (h/first-round-ms (spec {:targets targets})
+                                                           {:inventory h/sword :entities [(ent 3 "Fake" "player" 1) (zed 7 2)]} 20))]
             (is (finished? s) (str targets))
             (is (= :absent (:reason (done-event s))) (str targets))
             (is (= 1 (count (events-of s :attack.done))) (str targets))
@@ -377,34 +363,41 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p] :as s} (await (h/first-round (spec {:targets ["zombie"]}) {:inventory h/sword}))]
-          (fake/add-entity! p {:id 7 :name "zombie" :kind "hostile" :health 20 :pos [2 64 0]})
-          (await (run-ticks s 1 1000))
-          (is (= [7] (attacked s)))
-          (is (not (finished? s)))
-          (is (nil? (done-event s))))))))
+        (let [{:keys [p] :as s} (h/setup {:inventory h/sword} 20)
+              first? (atom true)]
+          (.override (.-world p) "wait" (fn [t a impl]
+                                          (when @first?
+                                            (reset! first? false)
+                                            (fake/add-entity! p {:id 7 :name "zombie" :kind "hostile" :health 20 :pos [2 64 0]}))
+                                          (impl t a)))
+          (core/submit! (:eng s) (spec {:targets ["zombie"]}) {})
+          (await (core/tick! (:eng s)))
+          (is (= [7] (distinct (attacked s))))
+          (is (= :cleared (:reason (done-event s)))))))))
 
 (deftest absent-wait-declines-until-a-target-turns-up
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p clock] :as s} (h/setup {:inventory h/sword})]
+        (let [{:keys [eng p clock] :as s} (h/setup {:inventory h/sword} 20)]
           (core/submit! eng (spec {:targets ["zombie"] :absent :wait}) {})
           (is (nil? (core/tick! eng)))
           (is (zero? (count (events-of s :attack.done))))
           (fake/add-entity! p {:id 7 :name "zombie" :kind "hostile" :health 20 :pos [2 64 0]})
           (swap! clock + 700)
           (await (core/tick! eng))
-          (is (= [7] (attacked s))))))))
+          (is (= [7] (distinct (attacked s)))))))))
 
 (deftest lost-when-a-target-is-neither-killed-nor-given-up
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p clock eng] :as s} (await (scenario {:targets [7 8]} {:inventory h/sword :entities [(zed 7 2) (zed 8 3)]} 4))]
-          (swap! (fake/state p) assoc-in [:entities 0 :pos] [0 64 40])
-          (swap! clock + 6000)
-          (await (core/tick! eng))
+        (let [{:keys [p] :as s} (h/setup {:inventory h/sword :entities [(zed 7 2) (zed 8 3)]} 20)]
+          (.override (.-world p) "attack" (fn [t a impl]
+                                            (swap! (fake/state p) assoc-in [:entities 1 :pos] [0 64 40])
+                                            (impl t a)))
+          (core/submit! (:eng s) (spec {:targets [7 8]}) {})
+          (await (core/tick! (:eng s)))
           (is (= :lost (:reason (done-event s))))
           (is (= [7] (:killed (done-event s)))))))))
 
@@ -412,19 +405,21 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p clock eng] :as s} (await (scenario {:targets [7]}
-                                                           {:inventory h/sword
-                                                            :entities [(ent 7 "zombie" "hostile" 2 {:invulnerable true})]} 4))]
-          (swap! (fake/state p) assoc-in [:entities 0 :pos] [0 64 40])
-          (swap! clock + 6000)
-          (await (core/tick! eng))
+        (let [{:keys [p] :as s} (h/setup {:inventory h/sword :entities [(ent 7 "zombie" "hostile" 2 {:invulnerable true})]} 20)
+              n (atom 0)]
+          (.override (.-world p) "attack" (fn [t a impl]
+                                            (.then (impl t a) (fn [r]
+                                                                (when (= 4 (swap! n inc)) (swap! (fake/state p) assoc-in [:entities 0 :pos] [0 64 40]))
+                                                                r))))
+          (core/submit! (:eng s) (spec {:targets [7]}) {})
+          (await (core/tick! (:eng s)))
           (is (= :gave-up (:reason (done-event s))))
           (is (= {7 :no-damage} (:given-up (done-event s)))))))))
 
 (defn ^:async scripted-attack
   "Submit an attack on id 7 (in reach) whose attack results follow statuses in order, then repeat the last; n ticks."
   [statuses n]
-  (let [{:keys [p eng] :as s} (h/setup {:inventory h/sword :entities [(zed 7 2)]})
+  (let [{:keys [p eng] :as s} (h/setup {:inventory h/sword :entities [(zed 7 2)]} 20)
         i (atom 0)]
     (.override (.-world p) "attack"
                (fn [_token _args _impl]
@@ -439,7 +434,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scripted-attack (vec (take 12 (cycle ["out-of-reach" "hit"]))) 24))]
+        (let [s (await (scripted-attack (conj (vec (take 12 (cycle ["out-of-reach" "hit"]))) "killed") 1))]
           (is (>= (count (attacked s)) 12))
           (is (empty? (events-of s :attack.gave-up))))))))
 
@@ -454,16 +449,15 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p eng clock] :as s} (h/setup {:inventory h/sword :entities [(zed 7 10)]})]
-          ;; the target runs to the other side before each round: every walk arrives, and the swing finds it gone on
-          (.override (.-world p) "attack" (fn [_ _ _] (js/Promise.resolve #js {:status "out-of-reach"})))
+        (let [{:keys [p eng] :as s} (h/setup {:inventory h/sword :entities [(zed 7 10)]} 20)
+              i (atom 0)]
+          ;; the target runs to the other side after each swing: every walk arrives, and the swing finds it gone on
+          (.override (.-world p) "attack" (fn [_ _ _]
+                                            (let [n (swap! i inc)]
+                                              (swap! (fake/state p) assoc-in [:entities 0 :pos] [(if (even? n) 10 -4) 64 0])
+                                              (js/Promise.resolve #js {:status (if (< n 8) "out-of-reach" "killed")}))))
           (core/submit! eng (spec {:targets [7] :timeout-s 1000}) {})
-          (loop [i 0]
-            (when (< i 14)
-              (swap! (fake/state p) assoc-in [:entities 0 :pos] [(if (even? i) 10 -4) 64 0])
-              (swap! clock + 700)
-              (await (core/tick! eng))
-              (recur (inc i))))
+          (await (core/tick! eng))
           (is (>= (count (attacked s)) 5) "swung well past three times")
           (is (empty? (events-of s :attack.gave-up))))))))
 
@@ -487,3 +481,18 @@
                                  {:inventory h/sword :entities [(ent 8 "cow" "passive" 3)]} 3))]
           (is (empty? (watched s)))
           (is (= [8] (distinct (attacked s)))))))))
+
+;; ------------------------------------------------------- one fight per call (card 96dccacc)
+
+(deftest one-call-fights-to-the-end-with-swings-a-gap-apart
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng clock] :as s} (await (h/first-round-ms (spec {:targets [7]}) {:inventory h/sword :entities [(zed 7 3)]} 20))
+              _ (is (= [] (:list (core/state eng))) "the first call killed it and waited out :lost-s")
+              calls (vec (.-calls (.-world p)))
+              idx (keep-indexed (fn [i c] (when (= "attack" (.-name c)) i)) calls)]
+          (is (= [7 7 7 7] (attacked s)))
+          (is (= :cleared (:reason (done-event s))))
+          (is (every? true? (map #(boolean (some (fn [c] (= "wait" (.-name c))) (subvec calls %1 %2))) idx (rest idx)))
+              "between two swings the call waits out the gap"))))))

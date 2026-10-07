@@ -194,7 +194,7 @@
                  ["Miles" {} [2] [:refused]]
                  ["Miles" {:ignore-zones? true} [1 2] []]
                  [nil {} [] [:no-zones]]]]
-          (let [{:keys [eng] :as s} (h/setup {:inventory h/sword :entities [(cow 1 2) (cow 2 3)]} 0 (h/zone-store 2 owner))]
+          (let [{:keys [eng] :as s} (h/setup {:inventory h/sword :entities [(cow 1 2) (cow 2 3)]} 50 (h/zone-store 2 owner))]
             (core/submit! eng (list 'jobs.animals.cull (merge {:keep 0} extra)) {})
             (dotimes [_ 20]
               (swap! (:clock s) + 700)
@@ -207,7 +207,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[owner reason] [["Miles" :refused] [nil :no-zones]]]
-          (let [{:keys [eng] :as s} (h/setup {:inventory h/sword :entities [(cow 1 2)]} 0 (h/zone-store 2 owner))]
+          (let [{:keys [eng] :as s} (h/setup {:inventory h/sword :entities [(cow 1 2)]} 50 (h/zone-store 2 owner))]
             (core/submit! eng (list 'jobs.animals.cull {:keep 0}) {})
             (dotimes [_ 20]
               (swap! (:clock s) + 700)

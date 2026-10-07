@@ -2,6 +2,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
             [jobs.lib.shelter :as sh]
+            [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -10,7 +11,7 @@
   (a kind any of whose entities in range reports kind hostile). 0 turns the rule off.
   Babies are never targets and never counted.
   Declines (waiting :too-few) unless more than :keep adults are within :radius. Once started it always passes.
-  Each round does one step:
+  One call hunts until it ends, in steps; it yields (:continue) only while a child is waiting on the world:
   1. With a :target, the attack child fights it. It is booked killed, or skipped when attack gave up on it or lost it.
      :max-skips skips in a row end the job :gave-up (warn hunt.gave-up).
   2. After a target, the collect-drops child picks up :drops (nil: the kind's entry in the drops table,
@@ -129,27 +130,28 @@
                              (assoc :collecting true))))))
 
 (defn ^:async attack!
-  "One round of the attack child on the target; books its end."
+  "Call the attack child on the target (a whole fight); books its end."
   [c]
   (let [{:keys [radius weapons]} (:args c)
         target (:target (ctx/mem c))
         r (await (ctx/call-child c :attack 'jobs.combat.attack
                                  {:targets [target] :radius (+ radius 8) :weapons weapons :lost-s 1 :absent :done}))]
     (cond
-      (not= :done r) :continue
+      (not= :done r) :yield
       :else (do (book-outcome! c target)
                 (if (>= (:skips (ctx/mem c) 0) (:max-skips (:args c)))
                   (give-up! c)
-                  :continue)))))
+                  :again)))))
 
 (defn ^:async collect!
-  "One round of the collect-drops child; done collecting when it is."
+  "Call the collect-drops child; done collecting when it is."
   [c]
   (let [{:keys [mob collect-radius] :as a} (:args c)
         r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops
                                  {:radius collect-radius :filter (or (:drops a) (get drops mob))}))]
-    (when (= :done r) (ctx/update-mem! c dissoc :collecting))
-    :continue))
+    (if (= :done r)
+      (do (ctx/update-mem! c dissoc :collecting) :again)
+      :yield)))
 
 (defn ^:async search!
   "Nothing to attack: wait and look once more, then end :none."
@@ -159,9 +161,11 @@
     (if (>= misses 2)
       (finish! c :none)
       (do (await (ctx/act c :wait #js {:ms 1000}))
-          :continue))))
+          :again))))
 
-(defn ^:async round [c]
+(defn ^:async step
+  "One step: attack the target, collect, finish, or pick the next target. :again, :yield (a child is waiting on the world) or :done."
+  [c]
   (let [now (ctx/now c)
         wanted (:count (:args c))
         keep (keep-of c)]
@@ -176,3 +180,9 @@
         (nil? next-target) (await (search! c))
         :else (do (ctx/update-mem! c assoc :target (.-id next-target) :misses 0)
                   (await (attack! c)))))))
+
+(defn ^:async round
+  "The whole hunt: steps until it ends; yields only while a child waits on the world."
+  [c]
+  (let [r (await (pace/steps! c #(step c)))]
+    (if (= :yield r) :continue r)))

@@ -28,7 +28,7 @@
 (defn ^:async scenario
   "Submit the job with args in a world; run n ticks 700 ms apart; the setup map."
   [args world n]
-  (let [s (h/setup world)]
+  (let [s (h/setup world 20)]
     (core/submit! (:eng s) (spec args) {})
     (await (run-ticks s n 700))
     s))
@@ -97,12 +97,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (h/setup {:inventory h/sword :entities [(cow 1 3)]})]
-          (core/submit! (:eng s) (spec {:keep 0}) {})
-          (await (run-ticks s 1 700))
+        (let [s (h/setup {:inventory h/sword :entities [(cow 1 3)]} 20)]
           (fake/add-entity! (:p s) {:id 50 :kind "item" :name "item" :item {:name "dirt" :count 1}
                                     :pos [3 64 0]})
-          (await (run-ticks s 29 700))
+          (core/submit! (:eng s) (spec {:keep 0}) {})
+          (await (run-ticks s 1 700))
           (is (= 1 (get (inv s) "beef")))
           (is (nil? (get (inv s) "dirt")) "dirt stays on the ground")
           (is (contains? (world-ids s) 50))
@@ -145,10 +144,15 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:keep 0 :count 1} {:inventory h/sword :entities [(cow 1 4)]} 1))]
-          (is (= 1 (:target (job-mem s))) "the target is remembered")
-          (fake/add-entity! (:p s) {:id 2 :kind "passive" :name "cow" :health 20 :pos [1 64 0]})
-          (await (run-ticks s 5 700))
+        (let [s (h/setup {:inventory h/sword :entities [(cow 1 4)]} 20)
+              added (atom false)]
+          (.override (.-world (:p s)) "attack" (fn [t a impl]
+                                                 (when-not @added
+                                                   (reset! added true)
+                                                   (fake/add-entity! (:p s) {:id 2 :kind "passive" :name "cow" :health 20 :pos [1 64 0]}))
+                                                 (impl t a)))
+          (core/submit! (:eng s) (spec {:keep 0 :count 1}) {})
+          (await (run-ticks s 1 700))
           (is (= #{1} (set (attacked s))) "only the original cow is hit")
           (is (not (contains? (world-ids s) 1)))
           (is (contains? (world-ids s) 2)))))))
@@ -157,7 +161,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng clock]} (h/setup {:inventory h/sword :entities [(cow 1 3) (cow 2 5)]})
+        (let [{:keys [eng clock]} (h/setup {:inventory h/sword :entities [(cow 1 3) (cow 2 5)]} 20)
               out (atom nil)
               parent {:check (constantly true)
                       :round (fn ^:async hunting-parent [c]
@@ -266,7 +270,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (h/setup {:inventory h/sword :entities [(zombie 1 3)]})]
+        (let [{:keys [eng p]} (h/setup {:inventory h/sword :entities [(zombie 1 3)]} 20)]
           (core/submit! eng (spec {:mob "zombie"}) {})
           (await (core/tick! eng))
           (is (pos? (count (h/calls p "attack")))))))))
@@ -280,3 +284,16 @@
           (is (= 1 (get (inv s) "chicken")))
           (is (= 1 (get (inv s) "feather")))
           (is (finished? s)))))))
+
+;; ------------------------------------------------------- one call hunts and collects (card 96dccacc)
+
+(deftest one-call-kills-two-cows-and-collects-both
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (h/first-round-ms (spec {:count 2 :keep 0}) {:inventory h/sword :entities [(cow 1 3) (cow 2 5) (cow 3 7)]} 20))]
+          (is (= #{3} (world-ids s)))
+          (is (= 2 (get (inv s) "beef")))
+          (is (= 2 (get (inv s) "leather")))
+          (is (= :count (:reason (done-event s))))
+          (is (finished? s) "one call"))))))
