@@ -8,10 +8,11 @@
   Each round: within range it holds still (declared hold :lingering) for 500 ms and yields :continue; out of range
   (pushed away, or at the start) it walks back with a go-to child (:escalate false).
   Ends with a result:
-  - {:lingered true :reason \"waited\"} when :wait-s has passed.
+  - {:lingered true :reason \"waited\"} when :wait-s of time in range has been waited, with the body in range.
   - {:status :stopped :lingered false :reason :unreachable :why <go-to's reason>} (warn linger.unreachable) when go-to
     does not arrive three times in a row.
-  The wait starts at the first round and is kept in job memory. A cut leaves nothing to undo; a caller whose wait
+  Only time held in range counts (500 ms per round, kept in job memory): walking back and time the job was
+  preempted add nothing, and a resume checks the range again before it can end. A cut leaves nothing to undo; a caller whose wait
   ends early cuts the job.")
 
 (def args
@@ -52,21 +53,20 @@
               (finish! c {:status :stopped :lingered false :reason :unreachable :why (:reason res)})))))))
 
 (defn ^:async round
-  "One bounded step: end when the wait is over, hold still in range, else walk back."
+  "One bounded step: in range, end when the waited time is up, else hold still and count the wait; out of range,
+  walk back."
   [c]
-  (let [now (ctx/now c)
-        _ (when-not (contains? (ctx/mem c) :started)
-            (ctx/update-mem! c assoc :started now))
-        {:keys [pos range wait-s]} (:args c)]
+  (let [{:keys [pos range wait-s]} (:args c)]
     (cond
-      (>= (- now (:started (ctx/mem c))) (* 1000 wait-s))
+      (not (u/within? (u/self-pos c) pos range))
+      (do (ctx/hold-still! c nil)
+          (await (walk-back! c pos range)))
+
+      (>= (:waited (ctx/mem c) 0) (* 1000 wait-s))
       (finish! c {:lingered true :reason "waited"})
 
-      (u/within? (u/self-pos c) pos range)
+      :else
       (do (ctx/hold-still! c :lingering)
           (await (ctx/act c :wait #js {:ms idle-ms}))
-          :continue)
-
-      :else
-      (do (ctx/hold-still! c nil)
-          (await (walk-back! c pos range))))))
+          (ctx/update-mem! c update :waited (fnil + 0) idle-ms)
+          :continue))))
