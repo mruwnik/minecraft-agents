@@ -7,8 +7,8 @@
 
 (defn cost [r] (when (= "found" (:status r)) (+ (get-in r [:path :cost :seconds]) (* 2 (get-in r [:path :cost :risk])))))
 
-;; (a walk priced at sprint speed after two walks depends on the way in, which the search keeps one record per node for: costs agree to 1%)
-(defn close? [a b] (<= (js/Math.abs (- a b)) (* 0.01 (js/Math.max a b))))
+;; (a walk priced at sprint speed after two walks depends on the way in, which the search keeps one record per node for: costs agree to 1%, and never differ by more than two strides' saving)
+(defn close? [a b] (<= (js/Math.abs (- a b)) (js/Math.min (* 0.01 (js/Math.max a b)) 0.11)))
 
 ;; a cell walled in on its four sides and roofed: no move enters it
 (defn sealed [x z]

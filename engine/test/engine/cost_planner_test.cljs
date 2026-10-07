@@ -92,3 +92,8 @@
     (is (= 0.5 (.. o -costs -airDrain)))
     (is (= 2 (.. o -costs -swimH))))
   (is (nil? (.-costs (wplan/with-drops #js {} {})))))
+
+(deftest with-drops-prices-walking-for-a-body-that-cannot-sprint
+  (let [walk-s (.-sprintS (.-costs (wplan/with-drops #js {} {:gait :walk})))]
+    (is (= walk-s (.-sprintS (.-costs (wplan/with-drops #js {} {:sprint false})))) "sprint false: sprintS = walkS")
+    (is (nil? (.-costs (wplan/with-drops #js {} {:sprint true}))) "can sprint: the planner's defaults")))
