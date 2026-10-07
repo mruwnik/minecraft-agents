@@ -738,3 +738,15 @@
     {:block "powered_rail" :shape "north_south" :powered true} {:name "powered_rail" :state {:shape "north_south" :powered "false"}} nil
     {:block "rail" :shape "south_east"} {:name "stone"} "stone"
     {:block "lever" :facing "north"} {:name "lever" :state {:facing "south"}} "lever[facing=south]"))
+
+(deftest a-plan-cell-under-the-feet-is-dug-from-beside-not-refused
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "floor" :parts [{:id "f" :cells [[0 63 0]] :want "oak_planks"}]}
+              {:keys [eng p]} (start {:self {:pos {:x 0 :y 64 :z 0}} :blocks {"0,63,0" "dirt"}
+                                      :inventory [{:name "oak_planks" :count 4}]}
+                                     {"floor" plan})
+              result (await (tu/child-outcome eng job {:plan "floor"} 200))]
+          (is (= [] (:refused result)) "the floor under it is unseen: not a hazard to refuse, a dig to make from beside")
+          (is (= "oak_planks" (block p [0 63 0]))))))))

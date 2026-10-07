@@ -59,8 +59,8 @@
    :collect-radius {:doc "how far around to collect drops after a batch" :spec (a/num-in 0 nil) :default 8}
    :dry-digs {:doc "digs in a row that brought no new item before giving up" :spec (a/int-in 1 nil) :default 40}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
-   :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent :falling-block :under-feet)"
-            :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block :under-feet}) :default #{:falling-block :under-feet}}})
+   :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent :falling-block)"
+            :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block :under-feet}) :default #{:falling-block}}})
 
 (def reach 3)
 
@@ -213,7 +213,7 @@
         (if (not= :ok judged)
           (do (if (= :refused judged) (refuse! c pos v) (skip! c pos)) :skipped)
           (let [outcome (await (blocks/dig-cell! c pos
-                                                 {:accept #{:fluid-adjacent :falling-block :under-feet}
+                                                 {:accept #{:fluid-adjacent :falling-block}
                                                   :ignore-zones? (:ignore-zones? (:args c))}))]
             (case outcome
               :continue :walking

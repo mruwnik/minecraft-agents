@@ -86,13 +86,19 @@
         (let [v (zones/verdict (assoc (select-keys in [:zones :footprints :plan-cells :claims :self :now :cell]) :action action))]
           (if (:ok v) {:ok true} v))))))
 
+(defn under-feet?
+  "Whether verdict v says the dig is of the cell under the feet with no seen solid floor below it."
+  [v]
+  (boolean (some #(= :under-feet (:reason %)) (:hazards v))))
+
 (defn judge
   "What a dig job does with verdict v given the hazards it accepts:
   :ok (dig), :refused (zone, claim or another plan's footprint: leave the cell for good), :hazard (a hazard not
-  accepted), :no-zones (no zone list: dig nothing now), :not-loaded, or another reason from the rules."
+  accepted), :no-zones (no zone list: dig nothing now), :not-loaded, or another reason from the rules.
+  :under-feet is never refused here: jobs.blocks.dig digs that cell from beside it."
   [v accept]
   (cond
-    (rules/accepts? v (set accept)) :ok
+    (rules/accepts? v (conj (set accept) :under-feet)) :ok
     (:ok v) :hazard
     (#{:zone :claim :footprint} (:reason v)) :refused
     :else (:reason v)))

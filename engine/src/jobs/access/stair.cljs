@@ -435,7 +435,7 @@
               (ctx/update-mem! c #(cond-> (assoc % :digging {:cell cell :block block} :counted cell)
                                     (not= cell (:counted %)) (update-in [:tries cell] (fnil inc 0))))
               (let [[x y z] cell
-                    outcome (await (blocks/dig-cell! c {:x x :y y :z z} {:accept #{:fluid-adjacent :falling-block :under-feet}
+                    outcome (await (blocks/dig-cell! c {:x x :y y :z z} {:accept #{:fluid-adjacent :falling-block}
                                                                          :ignore-zones? true}))]
                 (if (= :continue outcome)
                   :yield

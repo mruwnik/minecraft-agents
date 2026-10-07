@@ -55,7 +55,9 @@
   4. Dig the nearest target by walking (one bounded search, jobs.lib.targets, going on in the next step; a seen
      block out of every stand's reach is passed over; when the search finds none reachable, the nearest in a straight
      line is tried; targets over the ground snapshot come last, so the floor
-     under the start is dug last; targets whose drop lies in a clear line from the eye come first, and a body
+     under the start is dug last, the block under the feet after all others; a block under the feet whose floor
+     is unseen is dug from a cell beside it (the jobs.blocks.dig child), never from above, and skipped when there is
+     none; targets whose drop lies in a clear line from the eye come first, and a body
      whose line is blocked walks to within 1 when it can). Walk within 3: blocked skips the target and counts a failure, partial tries
      again and the third partial in a row skips it. The best carried tool is equipped. Dug resets the failures
      and starts collecting. Missing does nothing. Cannot (bedrock) skips without a failure. Anything else skips
@@ -138,7 +140,7 @@
    :tunnel-length {:doc "the most blocks the strip tunnel runs in this job, at the body's level; 0: no tunnel, seen blocks only" :spec (a/int-in 0 nil) :default 32}
    :descend-limit {:doc "the most steps of stair down through soil to find stone, when the block is stone-type and none is in sight; 0: never descend" :spec (a/int-in 0 nil) :default 12}
    :torch-interval {:doc "the strip tunnel hangs a torch every this many steps; 0: none" :spec (a/int-in 0 nil) :default 10}
-   :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent :falling-block, :under-feet: the cell under the feet, its floor unseen); the lava and :wet rules above still hold"
+   :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent :falling-block); the lava and :wet rules above still hold"
             :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block :under-feet}) :default #{:fluid-adjacent :falling-block}}})
 
 (def reach 3)
@@ -205,7 +207,7 @@
         in (rules-in c)
         judged (->> graded
                     (filter #(= :ok (second %)))
-                    (map (fn [[pos]] (let [v (access/may-dig? in pos)] [pos v (access/judge v (conj (set accept) :under-feet))]))))]
+                    (map (fn [[pos]] (let [v (access/may-dig? in pos)] [pos v (access/judge v accept)]))))]
     {:targets (->> judged (filter #(= :ok (nth % 2))) (map first) (sort-by (juxt #(if (ground %) 1 0) #(u/dist here %) #(- (:y %)))) vec)
      :refused (into [] (comp (filter #(= :refused (nth % 2))) (map second)) judged)
      :wet? (boolean (some #(= :wet (second %)) graded))
@@ -383,44 +385,12 @@
   (book-ground! c pos)
   (await (blocks/dig-cell! c pos {:accept (set (:accept (:args c))) :ignore-zones? (boolean (:ignore-zones? (:args c)))})))
 
-(defn under-feet-only?
-  "Whether the one hazard of verdict v that :accept does not take is :under-feet."
-  [c v]
-  (= [:under-feet] (vec (distinct (remove (set (:accept (:args c))) (map :reason (:hazards v)))))))
-
-(defn side-stands
-  "The cells beside the one under the body's feet that the body can stand in: open at feet and head, on a floor it has seen."
-  [c]
-  (let [in (rules-in c)
-        [fx fy fz] (:feet in)
-        at (:block-at in)]
-    (filterv (fn [[x y z :as cell]]
-               (and (air (at cell)) (air (at [x (inc y) z]))
-                    (rules/solid-floor? (:floor-at in) [x (dec y) z])))
-             [[(inc fx) fy fz] [(dec fx) fy fz] [fx fy (inc fz)] [fx fy (dec fz)]])))
-
-(defn ^:async step-aside!
-  "Stand beside the cell under the feet, whose floor is unseen, so the dig does not drop the body onto it:
-  :there, :partial (the walk goes on) or :blocked (no cell beside to stand in, or the walk failed)."
-  [c]
-  (let [stands (side-stands c)]
-    (if-let [[x y z] (first stands)]
-      (await (near/go-near! c {:x x :y y :z z} 0 {:zone-tolls true}))
-      :blocked)))
-
 (defn ^:async dig! [c pos]
   (await (tools/equip! c))
   (let [v (access/may-dig? (rules-in c) pos)
         verdict (access/judge v (:accept (:args c)))]
-    (cond
-      (and (= :hazard verdict) (under-feet-only? c v))
-      (let [walked (await (step-aside! c))]
-        (if (= :partial walked)
-          :continue
-          (do (when (= :blocked walked) (refused! c pos v verdict)) :again)))
-      (not= :ok verdict)
+    (if (not= :ok verdict)
       (do (refused! c pos v verdict) :again)
-      :else
       (let [_ (ctx/update-mem! c assoc :digging pos)
             outcome (await (dig-cell! c pos))]
         (when-not (= :continue outcome) (ctx/update-mem! c dissoc :digging))
@@ -702,13 +672,17 @@
 
 (defn ^:async next-target!
   "The target to walk to next: of the targets off the ground snapshot (else those over it) that the body sees in a
-  clear line when any does, the one the body walks to
+  clear line when any does (the block under the feet only when there is no other: it is dug from beside, where a drop
+  deeper down is out of sight), the one the body walks to
   soonest (targets/nearest!), :searching while that search goes on, the nearest in a line when none is found reachable
   (its walk decides); nil with no targets."
   [c targets]
-  (let [ground (into #{} (map :pos) (:ground (ctx/mem c)))
-        off (vec (remove ground targets))
-        group (in-line c (if (seq off) off targets))]
+  (let [{:keys [ground start]} (ctx/mem c)
+        ground (into (set (map :pos ground)) (when (and start (:mend (:args c))) (ground-pos start)))
+        under (update (cell-of (u/self-pos c)) :y dec)
+        pool (or (not-empty (filterv #(not= under %) targets)) targets)
+        off (vec (remove ground pool))
+        group (in-line c (if (seq off) off pool))]
     (when (seq group)
       (let [a (await (targets/nearest! c group reach {:tag :mine}))]
         (case (:status a)

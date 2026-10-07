@@ -220,7 +220,7 @@
           :abort (do (abandon! c fire :cannot) :again)
           :dig (if-not (permitted? c :dig pos)
                  (do (abandon! c fire :refused) :again)
-                 (let [outcome (await (blocks/dig-cell! c pos {:accept #{:fluid-adjacent :falling-block :under-feet}
+                 (let [outcome (await (blocks/dig-cell! c pos {:accept #{:fluid-adjacent :falling-block}
                                                                :ignore-zones? true}))]
                    (case outcome
                      :continue :continue

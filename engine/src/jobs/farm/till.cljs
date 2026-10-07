@@ -159,7 +159,7 @@
   plant over the ground)."
   [c pos]
   (merge (select-keys (:args c) [:for-plan :ignore-zones?])
-         {:pos pos :collect false :need-drop false :accept #{:fluid-adjacent :falling-block :under-feet}}))
+         {:pos pos :collect false :need-drop false :accept #{:fluid-adjacent :falling-block}}))
 
 (defn nearest
   "The [pos name] of todo nearest the body."

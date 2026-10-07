@@ -78,7 +78,9 @@
   [block xs ys zs]
   (into {} (for [x xs y ys z zs] [(str x "," y "," z) block])))
 
-(def floor (cells "dirt" (range -2 3) [62 63] (range -2 3)))
+(def floor
+  "Two layers of dirt under the start, on stone (the ground goes on below what the job digs)."
+  (merge (cells "stone" (range -2 3) [61] (range -2 3)) (cells "dirt" (range -2 3) [62 63] (range -2 3))))
 (def sand-patch (cells "sand" (range 4 7) [64] (range -1 2)))
 
 ;; ------------------------------------------------------------------ the job
@@ -142,23 +144,12 @@
             (is (= 4 (:goal m)))
             (is (= 1 (dig-count s)) "the snapshot is in memory when the first dig is cut")))))))
 
-;; the fake's collect moves the body onto the drop; a pick-up from beside leaves it where it stands, as a player's does
-(defn keep-body-put!
-  [p]
-  (let [st (fake/state p)]
-    (.override (.-world p) "collect" (fn ^:async f [token a impl]
-                                       (let [at (get-in @st [:self :pos])
-                                             r (await (impl token a))]
-                                         (swap! st assoc-in [:self :pos] at)
-                                         r)))))
-
 (deftest a-restart-still-mends
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [dir (tu/tmp-dir)
               s (start {:world {:blocks floor} :dir dir})]
-          (keep-body-put! (:p s))
           (tu/shutdown-at! s "dig" 3)
           (core/submit! (:eng s) (spec {:block "dirt" :count 4}) {})
           (await (run-ticks s 1))
@@ -534,7 +525,7 @@
           (is (= :count (:reason (done-event s))))
           (is (pos? (count items)) "the mend placed")
           (is (every? #{"dirt"} items) "never the cobblestone")
-          (is (= 2 (get (inv s) "cobblestone"))))))))
+          (is (<= 2 (get (inv s) "cobblestone")) "a drop left in a shaft may come in later"))))))
 
 (deftest a-mend-that-spends-the-count-ends-spent-on-mend
   (async done
@@ -1397,9 +1388,16 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:block "sand" :count 1 :tunnel-length 0}
-                                 {:blocks {"0,63,0" "sand" "0,62,0" "lava"}} 30))]
+        (let [s (start {:world {:blocks {"0,63,0" "sand" "0,62,0" "lava"} :drops {"sand" []} ; the drop burns in the lava
+                                :inventory [{:name "cobblestone" :count 2}]}})
+              low (atom [])]
+          (add-watch (fake/state (:p s)) ::low (fn [_ _ _ w] (let [[_ y] (get-in w [:self :pos])]
+                                                               (when (< y 64) (swap! low conj (get-in w [:self :pos]))))))
+          (core/submit! (:eng s) (spec {:block "sand" :count 1 :tunnel-length 0}) {})
+          (await (run-ticks s 30))
           (is (= "lava" (block-at s 0 62 0)))
+          (is (= [[0 63 0]] (dug-cells s)) "the sand is dug, from beside")
+          (is (empty? @low) "the body never drops into the sand's cell, over the lava")
           (is (#{{:x 1 :y 64 :z 0} {:x -1 :y 64 :z 0} {:x 0 :y 64 :z 1} {:x 0 :y 64 :z -1}} (:target (first (moved s))))
               "it steps to the floor beside before the dig, so it does not drop onto the unseen cell below")
           (is (not (contains? (:default (:accept mine/args)) :under-feet))))))))

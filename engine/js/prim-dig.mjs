@@ -253,7 +253,11 @@ export function createDig (env) {
   const PICKUP_REACH = 1
   const PICKUP_WAIT_S = 3 // an item in reach that is still there after this long is not going to be picked up (full inventory)
   const MAX_APPROACHES = 3
-  const inPickupReach = e => Math.hypot(e.position.x - here().x, e.position.z - here().z) <= PICKUP_REACH && Math.abs(e.position.y - here().y) <= 1
+  // Up and down the pickup box is the body's grown by 0.5: an item resting a block below (in a hole beside) is out of it.
+  const inPickupReach = e => {
+    const dy = e.position.y - here().y
+    return Math.hypot(e.position.x - here().x, e.position.z - here().z) <= PICKUP_REACH && dy > -0.7 && dy < 2.2
+  }
 
   const collect = async (token, a = {}) => {
     if (!isOwner(token)) throw cutError()

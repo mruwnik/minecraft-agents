@@ -43,12 +43,13 @@
   (if (and (= :fluid-adjacent reason) (= "lava" fluid)) :lava-adjacent reason))
 
 (defn judge-verdict
-  "What to do with the may-dig? verdict v: :dig, :skip (not loaded), [:refuse {:reason ...}] or [:hazard [reasons]]."
+  "What to do with the may-dig? verdict v: :dig, :skip (not loaded), [:refuse {:reason ...}] or [:hazard [reasons]].
+  A cell under the feet is no hazard here: the blocks.dig child digs it from beside."
   [v accept]
   (cond
     (= :not-loaded (:reason v)) :skip
     (not (:ok v)) [:refuse (select-keys v [:reason :zone :claim :plan])]
-    (rules/accepts? (update v :hazards (fn [hs] (mapv #(assoc % :reason (hazard-reason %)) hs))) accept) :dig
+    (rules/accepts? (update v :hazards (fn [hs] (mapv #(assoc % :reason (hazard-reason %)) hs))) (conj (set accept) :under-feet)) :dig
     :else [:hazard (mapv hazard-reason (:hazards v))]))
 
 (defn world-block

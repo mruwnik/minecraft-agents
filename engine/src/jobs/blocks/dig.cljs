@@ -6,6 +6,7 @@
             [jobs.lib.blocks :as b]
             [jobs.lib.child :as child]
             [jobs.lib.fetch :as fetch]
+            [jobs.lib.step-off :as step-off]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]))
@@ -19,8 +20,11 @@
   - {:reason :not-allowed :pos :by :zone|:claim|:footprint|:no-zones ...}: zones, claims or another plan's
     footprint refuse the dig (jobs.lib.access). :for-plan's own footprint does not. :ignore-zones? skips the
     rule.
-  - {:reason :hazard :pos :hazards [kw ..]}: a dig hazard not in :accept (:fluid-adjacent :falling-block
-    :under-feet). With :on-fluid :fail a :fluid-adjacent hazard ends the job instead (see below).
+  - {:reason :hazard :pos :hazards [kw ..]}: a dig hazard not in :accept (:fluid-adjacent :falling-block).
+    With :on-fluid :fail a :fluid-adjacent hazard ends the job instead (see below).
+  - {:reason :hazard :pos :hazards [:under-feet] :why :no-side-stand}: the block is under the feet with no seen solid
+    floor below it, and no cell beside (jobs.lib.step-off, within 1 block) to dig it from. The wait lasts while the
+    body stands where it found none.
   - {:reason :no-tool :needs item :block name}: with :need-drop, no carried tool harvests the block
     (tools/can-harvest?). :needs is the cheapest tool that does.
   - {:reason :inventory-full :pos}: with :collect, no free slot and no carried stack of the block's drop to
@@ -30,6 +34,9 @@
   - {:reason :not-loaded :pos}.
 
   Out of reach, it walks within 3 cells (go-to child, which opens and shuts doors); a failed walk is tried once more.
+  A block under the feet with no seen solid floor below it is not dug from on top: the body first steps off its
+  column to a cell beside it on a seen floor (a go-to child), then digs. Only :accept :under-feet digs it from on top
+  (a caller that knows the floor below, e.g. its own pillar).
   In reach it holds the best carried tool (tools/equip-for!) and digs through jobs.lib.tidy/dig!, so a dig of
   another's block with :ignore-zones? is recorded for jobs.survival.restore-broken. With :collect it picks up the
   drops (only the item entities that appeared with this dig, by id).
@@ -49,7 +56,7 @@
   {:pos {:doc "the block to dig, [x y z] or {:x :y :z}" :spec ::a/pos :default nil}
    :collect {:doc "pick up what the dig dropped (needs a free slot)" :spec boolean? :default true}
    :need-drop {:doc "wait :no-tool when no carried tool harvests the block; false digs anyway and the drop is lost (clearing)" :spec boolean? :default true}
-   :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent :falling-block :under-feet)" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block :under-feet}) :default #{}}
+   :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent :falling-block; :under-feet digs a block under the feet from on top instead of from beside)" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block :under-feet}) :default #{}}
    :on-fluid {:doc ":wait: a block beside a fluid that :accept does not take waits :hazard; :fail: the job ends at once, reason :fluid-adjacent, with a :hint" :spec #{:wait :fail} :default :wait}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :spec a/name? :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
@@ -73,6 +80,15 @@
         (pos? (u/free-slots p))
         (boolean (some #(and (drops (:name %)) (< (:count %) 64)) (u/inventory p))))))
 
+(defn no-stand-wait
+  "The wait reason for a dig under the feet that found no cell beside to stand on (memory m), while the body still
+  stands where it looked. Once the body has moved, nil (it looks again)."
+  [c m pos v]
+  (when-let [{:keys [from why]} (:no-stand m)]
+    (when (and (access/under-feet? v) (not (contains? (set (:accept (:args c))) :under-feet)) (= from (b/feet-cell c)))
+      (cond-> {:reason :hazard :pos pos :hazards [:under-feet] :why :no-side-stand}
+        why (assoc :walk why)))))
+
 (defn problem
   "Why the job cannot run now: a wait reason map (see doc), or nil. Bad args, air and fluids pass: the round ends them.
   A block still to be looked at (b/to-see?) is only guessed: tool and room are judged once the round has looked."
@@ -90,7 +106,8 @@
           :else
           (let [v (access/may-dig? (b/rules-in c) pos)]
             (case (access/judge v accept)
-              :ok (or (b/unreachable-wait c m pos)
+              :ok (or (no-stand-wait c m pos v)
+                      (b/unreachable-wait c m pos)
                       (when-not (b/to-see? c pos)
                         (or (when-let [{:keys [tool]} (needs c block)]
                               {:reason :no-tool :needs tool :block block})
@@ -157,6 +174,19 @@
 (def max-walks "Failed walks of one call before it declines :unreachable." 2)
 (def max-steps "Walks, digs and fetches of one call before it gives the round back with :continue." 12)
 
+(defn ^:async step-aside!
+  "The block to dig is under the feet with no seen solid floor below: step off the column to a cell beside it within
+  1 block (jobs.lib.step-off). :arrived, :continue, or :declined (none to stand on, or the walk failed: remembered as
+  :no-stand, which the check waits on)."
+  [c]
+  (let [[x y z] (b/feet-cell c)
+        r (await (step-off/step-off-zoned! c {:x x :y y :z z} {:reach 1}))]
+    (if (keyword? r)
+      r
+      (let [why (:unreachable r)]
+        (ctx/update-mem! c assoc :no-stand (cond-> {:from (b/feet-cell c)} (not= :no-cell why) (assoc :why why)))
+        :declined))))
+
 (defn unreachable!
   "Remember why the block cannot be reached from here; the check waits on it while the body stays. :declined."
   [c why]
@@ -191,6 +221,12 @@
             (>= (inc fails) max-walks) (unreachable! c (:unreachable w))
             :else (recur (inc fails) (inc steps))))
         (b/refused-now c (problem c)) :declined
+        (and (access/under-feet? (access/may-dig? (b/rules-in c) pos)) (not (contains? (set (:accept (:args c))) :under-feet)))
+        (let [r (await (step-aside! c))]
+          (case r
+            :arrived (recur fails (inc steps))
+            :declined (do (b/refused-now c (problem c)) :declined)
+            r))
         :else
         (let [d (await (dig! c pos block))]
           (cond

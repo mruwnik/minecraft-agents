@@ -67,11 +67,13 @@
            (access/zone-input c {:except (:plan (:args c)) :ignore-zones? (:ignore-zones? (:args c))}))))
 
 (defn refusal
-  "The reason the body may not dig the log at pos (a hazard it does not accept, or a refusal), nil when it may."
+  "The reason the body may not dig the log at pos (a hazard it does not accept, or a refusal), nil when it may. A log
+  under the feet is no refusal: the blocks.dig child digs it from beside."
   [c pos]
-  (let [v (rules/may-dig? (access-input c pos))]
-    (when-not (rules/accepts? v (:accept (:args c)))
-      (or (:reason v) (:reason (first (remove #((:accept (:args c)) (:reason %)) (:hazards v))))))))
+  (let [v (rules/may-dig? (access-input c pos))
+        accept (conj (set (:accept (:args c))) :under-feet)]
+    (when-not (rules/accepts? v accept)
+      (or (:reason v) (:reason (first (remove #(accept (:reason %)) (:hazards v))))))))
 
 (defn place-refusal [c pos]
   (let [v (rules/may-place? (access-input c pos))]

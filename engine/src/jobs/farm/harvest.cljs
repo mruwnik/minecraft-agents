@@ -393,7 +393,7 @@
   (when-let [crop (and (seq (permitted c (cut-action c) [pos])) (u/seen-name (:primitives c) pos))]
     (when-let [seed (and (:replant (:args c)) (get seed-of crop))]
       (ctx/update-mem! c update :replant (fnil conj []) {:pos pos :seed seed :cut true}))
-    (let [outcome (await (blocks/dig-cell! c pos {:accept #{:fluid-adjacent :falling-block :under-feet}
+    (let [outcome (await (blocks/dig-cell! c pos {:accept #{:fluid-adjacent :falling-block}
                                                   :ignore-zones? true}))]
       (case outcome
         :continue :continue

@@ -689,3 +689,14 @@
           (is (seq (h/calls p "look")))
           (is (= [[3 64 0 "oak_sapling"]] (places p)))
           (is (= (expect {:planted 1}) result)))))))
+
+(deftest ground-under-the-feet-is-replaced-from-beside
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p result]} (await (outcome (assoc (world {"3,63,0" "stone"} (item "dirt" 1) (item "oak_sapling" 1) (item "stone_pickaxe" 1))
+                                                        :self {:pos {:x 3 :y 64 :z 0}})
+                                                 {"forest" one-cell}))]
+          (is (= [[3 63 0]] (digs p)) "the body stands on the stone: it is dug once the body is off the column, not refused")
+          (is (= "dirt" (h/block-at p 3 63 0)))
+          (is (= (expect {:soiled 1 :planted 1}) result)))))))

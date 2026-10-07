@@ -1028,6 +1028,17 @@ test('collect: an item in reach that is never picked up ends unreachable with a 
   assert.equal(result.reason, 'not-picked-up')
 })
 
+// The pickup box is the body's grown by 0.5 up and down: an item resting a block below (in a hole beside) is walked to.
+test('collect: an item lying a block below beside the body is walked to, not waited on', async () => {
+  const { p, goals } = dropRig([1.5, 63, 0.5], (b, goal) => {
+    b.entity.position = new Vec3(goal.x + 0.5, 63, goal.z + 0.5)
+    pickUp(b)
+  })
+  const result = await p.collect('t1', { id: 7 })
+  assert.equal(goals.length, 1)
+  assert.equal(result.status, 'collected')
+})
+
 test('collect: an item the body cannot get within reach of after the re-approaches ends unreachable out-of-reach', async () => {
   const { p, goals } = dropRig([4.5, 64, 0.5], () => {})
   const result = await p.collect('t1', { id: 7 })

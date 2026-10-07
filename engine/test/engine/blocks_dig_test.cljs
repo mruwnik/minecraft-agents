@@ -345,3 +345,65 @@
           (is (= {:reason :not-allowed :pos at :by :footprint :plan "hut"}
                  (select-keys (await (waiting-after other (list job {:pos at}) 3)) [:reason :pos :by :plan])))
           (is (empty? (calls (:p other) "dig"))))))))
+
+;; ------------------------------------------------------------------ the block under the feet
+
+(defn hiding
+  "p whose body has not seen the cells (hidden? [x y z]) while the cell over each is not air: the floor under the
+  block stood on is out of sight."
+  [p hidden?]
+  (aset p "sensedAt" (fn [pos]
+                       (let [b (.blockAt p pos)
+                             over (.blockAt p #js {:x (.-x pos) :y (inc (.-y pos)) :z (.-z pos)})]
+                         (if (and (hidden? [(.-x pos) (.-y pos) (.-z pos)]) (not= "air" (some-> over .-name)))
+                           #js {:unknown true}
+                           b))))
+  p)
+
+(defn digging-from
+  "Record in stands the body's feet column [x z] at each dig."
+  [p stands]
+  (let [st (fake/state p)]
+    (.override (.-world p) "dig" (fn [token a impl]
+                                   (let [[x _ z] (get-in @st [:self :pos])]
+                                     (swap! stands conj [(js/Math.floor x) (js/Math.floor z)])
+                                     (impl token a))))))
+
+(def under-feet {:x 0 :y 63 :z 0})
+
+(deftest the-block-under-the-feet-is-dug-from-beside
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self body :blocks {"0,63,0" "dirt" "0,62,0" "stone"}})
+              stands (atom [])]
+          (hiding p #(= [0 62 0] %))
+          (digging-from p stands)
+          (let [result (await (child-outcome eng job {:pos under-feet} 20))]
+            (is (= {:dug true :reason :dug} (select-keys result [:dug :reason])))
+            (is (= "air" (block-at p under-feet)))
+            (is (= 1 (count @stands)))
+            (is (not= [0 0] (first @stands)) "the dig is made from beside the column, never from on top")))))))
+
+(deftest with-no-cell-beside-to-stand-on-the-block-under-the-feet-waits-hazard
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (setup {:self body :floor [0 0 0 0] :blocks {"0,63,0" "dirt" "0,62,0" "stone"}})]
+          (hiding (:p env) #(= [0 62 0] %))
+          (is (= {:reason :hazard :pos under-feet :hazards [:under-feet] :why :no-side-stand}
+                 (await (waiting-after env (list job {:pos under-feet}) 3))))
+          (is (empty? (calls (:p env) "dig")) "a pillar top is never dug from on top"))))))
+
+(deftest a-cell-beside-on-an-unseen-floor-is-never-stood-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (setup {:self body :floor [0 0 1 0] :blocks {"0,63,0" "dirt" "0,62,0" "stone"}})]
+          (aset (:p env) "sensedAt" (let [p (:p env)]
+                                      (fn [pos] (if (#{[1 63 0] [0 62 0]} [(.-x pos) (.-y pos) (.-z pos)])
+                                                  #js {:unknown true}
+                                                  (.blockAt p pos)))))
+          (is (= :no-side-stand (:why (await (waiting-after env (list job {:pos under-feet}) 3)))))
+          (is (empty? (calls (:p env) "dig")))
+          (is (= [0 64 0] (vec (map js/Math.floor (:pos (fake/self (:p env)))))) "it does not step onto the unseen floor"))))))

@@ -133,7 +133,7 @@
   "The jobs.blocks.dig args for the ground cover at pos: no tool needed, the drop left."
   [c pos]
   (merge (select-keys (:args c) [:ignore-zones?])
-         {:pos pos :collect false :need-drop false :accept #{:fluid-adjacent :falling-block :under-feet}}))
+         {:pos pos :collect false :need-drop false :accept #{:fluid-adjacent :falling-block}}))
 
 (defn nothing-pathed
   "Stopped outcome for a run that pathed nothing: the one skip reason, or :nothing-pathed when they are mixed."
