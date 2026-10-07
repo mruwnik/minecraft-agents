@@ -314,10 +314,19 @@
   [c]
   (->> (animals-in-sight c) (filter :why) (mapv (fn [{:keys [entity why]}] {:name (.-name entity) :id (.-id entity) :why why}))))
 
+(defn nearby
+  "The mobs of any kind the entity scan lists within :hunt-radius, as {:name :kind :distance}: tells a hunt filter from an
+  empty scan when no animal qualified."
+  [c]
+  (->> (array-seq (.entities (:primitives c) #js {:radius (:hunt-radius (:args c)) :max 16}))
+       (remove #(#{"item" "player"} (.-kind %)))
+       (mapv (fn [e] {:name (.-name e) :kind (.-kind e) :distance (/ (js/Math.round (* 10 (.-distance e))) 10)}))))
+
 (defn none-text [c]
   (let [{:keys [hunt-radius]} (:args c)
         near (nearest-known-source c)
         passed (passed-over c)
+        around (nearby c)
         wheat (carried-count c "wheat")
         reason (no-bake-reason c)]
     (str "no food: carried none" (harmful-carried-text (u/inventory (:primitives c))) ", searched for animals and ripe crops within " hunt-radius " blocks"
@@ -326,6 +335,8 @@
          (when (seq passed)
            (str "; passed over " (count passed) " animal" (when (> (count passed) 1) "s") " ("
                 (str/join ", " (map (fn [a] (str (:name a) ": " (name (:why a)))) passed)) ")"))
+         (when (and (empty? passed) (seq around))
+           (str "; nothing hunted; in range: " (str/join ", " (map (fn [a] (str (:name a) " (" (:kind a) ")")) around))))
          (if near
            (str "; nearest known source is a " (name (:kind near)) " at " (pr-str (:pos near))
                 ", " (js/Math.round (u/dist (u/self-pos c) (:pos near))) " blocks away")
@@ -336,7 +347,7 @@
   [c]
   (let [food (food-level c)
         text (none-text c)]
-    (ctx/emit! c :food.none :warn {:food food :animals (passed-over c)
+    (ctx/emit! c :food.none :warn {:food food :animals (passed-over c) :nearby (nearby c)
                                    :text (str text "; the hungry reflex rests for "
                                               (js/Math.round (/ (:ask-cooldown-ms (:args c)) 60000))
                                               " min unless food is carried, wheat to bake is, or a food source is learned")})
