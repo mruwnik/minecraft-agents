@@ -123,7 +123,7 @@
                   {:pos pos :reason reason
                    :text (str "prepare leaves " (pr-str (maintain/cell-vec pos)) " alone: " (name reason))}))
 
-(defn fail!
+(defn count-cell-fail!
   "Count a failed try on the cell; skipped at the third. :again."
   [c pos reason]
   (let [n (inc (get-in (ctx/mem c) [:fails pos] 0))]
@@ -137,7 +137,7 @@
   [c cell v]
   (if (vector? v)
     (skip! c cell (second v))
-    (fail! c cell :not-loaded))
+    (count-cell-fail! c cell :not-loaded))
   :again)
 
 (defn bump [m k] (update m k (fnil inc 0)))
@@ -147,7 +147,7 @@
   [c pos]
   (let [r (await (step-off/step-off! c pos {:ok? (step-off/zone-ok (access/rules-input c))}))]
     (when (:unreachable r)
-      (fail! c pos :unreachable))
+      (count-cell-fail! c pos :unreachable))
     :again))
 
 (defn ^:async ready!
@@ -157,7 +157,7 @@
   (let [w (await (near/go-near! c target 3 {:zone-tolls true}))]
     (cond
       (= :partial w) :continue
-      (= :blocked w) (fail! c cell :unreachable)
+      (= :blocked w) (count-cell-fail! c cell :unreachable)
       (and column? (field/in-column? c cell)) (await (step-off! c cell))
       :else nil)))
 
@@ -183,8 +183,8 @@
                       "dug" (on-dug c)
                       "missing" nil
                       "cannot" (skip! c cell :cannot)
-                      "unreachable" (fail! c cell :unreachable)
-                      (fail! c cell :failed))
+                      "unreachable" (count-cell-fail! c cell :unreachable)
+                      (count-cell-fail! c cell :failed))
                     :again))))))))
 
 (defn dug-stray [pos]
@@ -208,8 +208,8 @@
                   (let [r (await (ctx/act c :place (clj->js {:pos under :item item})))]
                     (case (.-status r)
                       "placed" (ctx/update-mem! c #(-> % (bump :soiled) (update :holes disj (maintain/cell-vec under))))
-                      ("no-item" "occupied") (fail! c pos (keyword (.-status r)))
-                      (fail! c pos :failed))
+                      ("no-item" "occupied") (count-cell-fail! c pos (keyword (.-status r)))
+                      (count-cell-fail! c pos :failed))
                     :again))))))))
 
 (def recede-ms "How long a flow is given to recede after its source was dammed." 10000)
@@ -234,8 +234,8 @@
                                          (not fill?) (update :recede assoc pos (+ (ctx/now c) recede-ms))))]
                     (case (.-status r)
                       "placed" (ctx/update-mem! c dammed)
-                      ("no-item" "occupied") (fail! c pos (keyword (.-status r)))
-                      (fail! c pos :failed))
+                      ("no-item" "occupied") (count-cell-fail! c pos (keyword (.-status r)))
+                      (count-cell-fail! c pos :failed))
                     :again))))))))
 
 (defn ^:async plant!
@@ -253,7 +253,7 @@
                                  :ignore-zones? (:ignore-zones? (:args c))}))
                   (if (= item (u/block-name (:primitives c) pos))
                     (ctx/update-mem! c bump :planted)
-                    (fail! c pos :failed))
+                    (count-cell-fail! c pos :failed))
                   :again)))))))
 
 (defn ^:async collect!

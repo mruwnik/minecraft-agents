@@ -198,7 +198,7 @@
   [args]
   (or (:item args) (:block args) (:kind args) (pr-str (:any-of args))))
 
-(defn fail!
+(defn book-failed!
   "Book the failed fetch (until now + :fail-minutes), warn fetch.failed, :again (the check now waits)."
   [c {:keys [key opts wait args]} res]
   (let [f (merge (select-keys args [:item :any-of :block :kind])
@@ -237,7 +237,7 @@
       (let [r (await (ctx/call-child c :fetch job args))]
         (case r
           :continue :continue
-          :declined (fail! c pl (or (b/child-wait c :fetch job args) {:reason :not-ready}))
+          :declined (book-failed! c pl (or (b/child-wait c :fetch job args) {:reason :not-ready}))
           (let [res (ctx/child-result c :fetch)]
             (if (= :done (:status res))
               (do (ctx/update-mem! c dissoc :fetching)
@@ -245,7 +245,7 @@
                   (ctx/emit! c :fetch.done :info (merge {:for (:reason (:wait pl)) :text (str "fetched for " (name (:reason (:wait pl))))}
                                                         (select-keys res [:got :item :tool])))
                   :again)
-              (fail! c pl res))))))))
+              (book-failed! c pl res))))))))
 
 (defn ^:async step!
   "One round's fetch part for job with wait reason w: runs the due fetch (round!) and returns its round result
@@ -257,7 +257,7 @@
   ([c job w {:keys [return?]}]
    (if-let [pl (due c job w)]
      (if (repeat-done? c (:key pl) (:wait pl))
-       (fail! c pl {:reason :not-solved
+       (book-failed! c pl {:reason :not-solved
                     :why (str "fetched " (pr-str (second (:key pl))) " but the need is unchanged")})
        (await (round! c (assoc pl :return? return?))))
      (do (settle! c)
