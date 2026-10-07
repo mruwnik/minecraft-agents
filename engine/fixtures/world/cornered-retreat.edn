@@ -29,6 +29,14 @@
    :expect [{:no-event {:source :job :kind :retreat_blocked} :for-s 40}]
    :after [[:entities "type=zombie,tag=wt" [[2 0 10] [30 4 22]] 0]]
    :limit-s 60}
+  {:name "pocket-when-pickaxe-and-no-blocks"
+   :body {:inventory [["stone_pickaxe" 1]]}
+   :act [[:summon "zombie" [9.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :retreat_sealed} :within-s 50}
+            {:no-event {:source :job :kind :retreat_blocked} :for-s 50 :until {:source :job :kind :retreat_sealed}}]
+   :after [[:body-near [5.5 0 16.5] 2.0]
+           [:entities "type=zombie,tag=wt" [[2 0 10] [30 4 22]] 1]]
+   :limit-s 70}
   {:name "fist-fight-when-empty-handed"
    :act [[:summon "zombie" [9.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:no-event {:source :job :kind :retreat_blocked} :for-s 40}]

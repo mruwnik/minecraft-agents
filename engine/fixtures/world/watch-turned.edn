@@ -15,14 +15,18 @@
  [{:name "zombie-heard-behind-wall-turns"
    :act [[:summon "zombie" [5.5 0 20.5] "{NoAI:1b}"]
          [:job (jobs.movement.go-to {:pos #xyz [20 0 20] :range 0})]]
-   :expect [{:event {:kind :watch.turned :data {:name "zombie" :band [:any] :direction [:any]}} :within-s 20}]
+   :expect [{:event {:kind :watch.turned :data {:name "zombie" :band [:any] :direction [:any]}} :within-s 20}
+            {:no-event {:kind :watch.turned :data {:pos [:any]}} :for-s 20}
+            {:no-event {:kind :watch.turned :data {:distance [:any]}} :for-s 20}]
    :after [[:body-near [20.5 0 20.5] 1.5]]}
   {:name "zombie-heard-in-tunnel-turns"
    :blocks [[:fill [10 0 4] [22 5 31] "stone"] [:fill [16 0 20] [16 1 29] "air"] [:fill [16 0 28] [16 1 28] "stone"]]
    :body {:at [16.5 0 23.5] :inventory [["diamond_pickaxe" 1]]}
    :act [[:summon "zombie" [16.5 0 29.5] "{NoAI:1b}"]
          [:job (jobs.gather.mine {:block "diamond_ore" :direction :n :tunnel-length 12 :count 1 :radius 8})]]
-   :expect [{:event {:kind :watch.turned :data {:name "zombie"}} :within-s 15}]
+   :expect [{:event {:kind :watch.turned :data {:name "zombie" :band [:any] :direction [:any]}} :within-s 15}
+            {:no-event {:kind :watch.turned :data {:pos [:any]}} :for-s 15}
+            {:no-event {:kind :watch.turned :data {:distance [:any]}} :for-s 15}]
    :limit-s 40}
   {:name "zombie-beyond-hearing-no-turn"
    :act [[:summon "zombie" [31.5 0 0.5] "{NoAI:1b}"]

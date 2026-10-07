@@ -1,0 +1,30 @@
+;; Card 58df2db7 (fix 8a7ca4cb): respond-to-hostile takes :quiet-s and passes it to the :flee retreat, so the agent can
+;; override the hide hold through the hostile-near reflex (default 30 s). The cornered-retreat tunnel (1x2 along z 16 from x 5,
+;; closed end, body) with cobblestone: a NoAI helmeted zombie in the tunnel gets the body sealed in; the zombie is killed after
+;; the seal, so the hold counts down from there and the reflex ends :done when the hide does.
+{:defaults
+ {:tags [:hostile :survival :cornered]
+  :time :any
+  :blocks [[:fill [2 0 10] [30 4 22] "stone"] [:fill [5 0 16] [29 1 16] "air"]
+           [:set [8 1 16] "torch"] [:set [14 1 16] "torch"]]
+  :body {:at [5.5 0 16.5] :inventory [["cobblestone" 20]]}
+  :act [[:summon "zombie" [10.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+        [:await {:source :job :kind :retreat_sealed} 40]
+        [:rcon "kill @e[type=zombie,$BOX]"]]}
+ :cases
+ [{:name "quiet-s-0-ends-the-hide-at-once"
+   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+               :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16 :quiet-s 0})}]
+   :expect [{:event {:source :reflex :kind :ended :data {:outcome :done}} :within-s 40}]
+   :limit-s 90}
+  {:name "quiet-s-120-holds-past-a-minute"
+   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+               :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16 :quiet-s 120})}]
+   :expect [{:no-event {:source :reflex :kind :ended} :from-event {:source :job :kind :retreat_sealed} :for-s 70}]
+   :limit-s 120}
+  {:name "default-holds-about-30s"
+   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+               :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+   :expect [{:no-event {:source :reflex :kind :ended} :from-event {:source :job :kind :retreat_sealed} :for-s 20}
+            {:event {:source :reflex :kind :ended :data {:outcome :done}} :within-s 90}]
+   :limit-s 130}]}

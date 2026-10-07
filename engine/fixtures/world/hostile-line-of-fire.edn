@@ -53,4 +53,50 @@
   {:name "zombie-way-round-glass-fires"
    :blocks [[:fill [19 0 14] [19 2 18] "glass"]]
    :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
-   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 9}]}]}
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 9}]}
+  {:name "zombie-through-wheat-fires"
+   :blocks [[:fill [20 0 14] [24 2 18] "stone" :hollow] [:fill [20 0 15] [20 1 17] "air"]
+            [:fill [20 -1 15] [20 -1 17] "farmland"] [:fill [20 0 15] [20 0 17] "wheat[age=7]"]]
+   :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 9}]
+   :after [[:block [20 0 16] "wheat[age=7]"]]}
+  {:name "zombie-through-carrots-fires"
+   :blocks [[:fill [20 0 14] [24 2 18] "stone" :hollow] [:fill [20 0 15] [20 1 17] "air"]
+            [:fill [20 -1 15] [20 -1 17] "farmland"] [:fill [20 0 15] [20 0 17] "carrots[age=7]"]]
+   :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 9}]
+   :after [[:block [20 0 16] "carrots[age=7]"]]}
+  {:name "zombie-through-flowers-fires"
+   :blocks [[:fill [20 0 14] [24 2 18] "stone" :hollow] [:fill [20 0 15] [20 1 17] "air"]
+            [:fill [20 -1 15] [20 -1 17] "grass_block"] [:fill [20 0 15] [20 0 17] "poppy"]]
+   :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 9}]
+   :after [[:block [20 0 16] "poppy"]]}
+  {:name "zombie-stone-box-quiet"
+   :blocks [[:fill [20 0 14] [24 2 18] "stone" :hollow]]
+   :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 10}]
+   :after [[:entities "type=zombie,tag=wt" [[21 0 15] [23 1 17]] 1]]}
+  ;; Card 876c2ac8 (fix 5aea0a88, owner Q78): a ranged mob only heard counts as a danger in the open, not in a tunnel.
+  ;; Heard only = a clear arrow line but unseen: a sealed dark stone box (light 0) puts a skeleton beyond dark-sight (4) out of
+  ;; sight while it is within hearing (16). The tunnel cases are a 1x2 passage along x in solid stone, the body 10 from the mob.
+  {:name "heard-skeleton-in-the-dark-open-fires"
+   :plot {:height 8}
+   :blocks [[:fill [4 -1 4] [28 6 28] "stone" :hollow]]
+   :body {:at [12.5 0 16.5]}
+   :act [[:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 9}]}
+  {:name "heard-skeleton-in-a-dark-tunnel-quiet"
+   :plot {:height 8}
+   :blocks [[:fill [4 -1 4] [28 6 28] "stone"] [:fill [8 0 16] [26 1 16] "air"]]
+   :body {:at [12.5 0 16.5]}
+   :act [[:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 10}]
+   :after [[:entities "type=skeleton,tag=wt" [[20 0 15] [24 2 17]] 1]]}
+  {:name "seen-skeleton-in-a-lit-tunnel-fires"
+   :plot {:height 8}
+   :blocks [[:fill [4 -1 4] [28 6 28] "stone"] [:fill [8 0 16] [26 1 16] "air"] [:set [10 0 16] "torch"] [:set [14 0 16] "torch"] [:set [18 0 16] "torch"] [:set [21 0 16] "torch"] [:set [24 0 16] "torch"]]
+   :body {:at [12.5 0 16.5] :yaw -90}
+   :act [[:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 9}]}
+]}
