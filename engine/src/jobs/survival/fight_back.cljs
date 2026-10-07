@@ -48,13 +48,13 @@
 
 (defn in-range
   "The hostiles within :range (ranged ones within :ranged-range, a heard one by its band): the visible
-  ones nearest first, then the hidden melee ones (a ranged mob without a line of fire is no danger)."
+  ones nearest first, then the hidden melee ones (a ranged mob without a line of fire, by jobs.lib.danger/danger? as the hostile-near trigger, is dropped)."
   [c]
   (let [{:keys [range ranged-range skip]} (:args c)
         dead (into (set skip) (:killed (ctx/mem c)))
         all (->> (danger-q/known-hostiles (:primitives c) range {:ranged-radius (max range ranged-range)})
                  (remove #(contains? dead (.-id %)))
-                 (remove #(and (combat/ranged? %) (not (.-visible %)))))]
+                 (remove #(and (combat/ranged? %) (not (danger-q/danger? (:primitives c) %)))))]
     (into (filterv #(.-visible %) all) (remove #(.-visible %)) all)))
 
 (defn targets

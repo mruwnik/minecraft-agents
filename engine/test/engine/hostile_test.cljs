@@ -510,6 +510,17 @@
            ["behind a wall of shut trapdoors" (arrow-wall "oak_trapdoor" [64 65 66]) false]]]
     (is (= fires? (skeleton-fires? blocks)) label)))
 
+(deftest fight-back-and-hostile-near-agree-on-a-ranged-mob-behind-a-torch-wall
+  (let [torches (arrow-wall "torch" [64 65 66])
+        sk (assoc (skeleton 7 6 0) :visible false :seen true)]
+    (is (holds? {:entities [sk] :blocks torches} {:radius 8 :ranged-radius 16}) "the trigger sees a line of fire through torches")
+    (async done
+      (tu/run-async done
+        (fn ^:async t []
+          (let [{:keys [eng]} (setup {:inventory sword :blocks torches :entities [sk]})]
+            (core/submit! eng '(jobs.survival.fight-back {:ranged-range 16}) {})
+            (is (some? (core/tick! eng)) "fight-back keeps the skeleton as a target: same line of fire as the trigger")))))))
+
 (deftest combat-hostiles-takes-a-ranged-radius
   (let [p (tu/fake-on-floor {:entities [(zombie 1 13 0) (skeleton 2 12 0) (zombie 3 5 0)]})
         ids (fn [hs] (mapv #(.-id %) hs))]
