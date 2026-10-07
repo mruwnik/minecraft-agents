@@ -27,7 +27,10 @@ export function sightTable (registry) {
   return out
 }
 
-// id -> {name, properties}, cached per id.
+// a collision shape that fills the whole cell (prim-sense.mjs's blockAt rule)
+const fullCube = block => block.boundingBox === 'block' && (block.shapes ?? []).some(([x0, y0, z0, x1, y1, z1]) => x0 <= 0 && y0 <= 0 && z0 <= 0 && x1 >= 1 && y1 >= 1 && z1 >= 1)
+
+// id -> {name, properties, boundingBox ('block' or 'empty'), fullCube}, cached per id.
 export function stateInfo (registry) {
   const Block = prismarineBlock(registry)
   const cache = new Map()
@@ -35,7 +38,7 @@ export function stateInfo (registry) {
     let info = cache.get(id)
     if (info) return info
     const block = Block.fromStateId(id, 0)
-    info = { name: block.name, properties: block.getProperties() }
+    info = { name: block.name, properties: block.getProperties(), boundingBox: block.boundingBox, fullCube: fullCube(block) }
     cache.set(id, info)
     return info
   }

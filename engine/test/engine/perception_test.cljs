@@ -127,7 +127,7 @@
     (perception/pass! per)
     (swap! clock + 700)
     (is (= {:name "oak_log" :pos [0 65 3] :properties {:axis "y"} :age-ms 700}
-           (perception/seen-block per [0 65 3])))))
+           (dissoc (perception/seen-block per [0 65 3]) :state-id)))))
 
 (deftest seen-blocks-lists-remembered-blocks-by-name-nearest-first
   (let [{:keys [per]} (rig {"0,65,3" "gold_block" "3,65,8" "gold_block" "-2,65,5" "stone"})]
@@ -155,7 +155,7 @@
         wrapped (perception/wrap p per)]
     (perception/pass! per)
     (is (every? #(identical? (aget p %) (aget wrapped %))
-                (remove perception/touching-primitives (js/Object.keys p))))
+                (remove (conj perception/touching-primitives "look") (js/Object.keys p))))
     (is (= "diamond_ore" (.-name (.blockAt wrapped #js {:x 0 :y 65 :z 8}))))
     (is (.-unknown (.seenBlockAt wrapped #js {:x 0 :y 65 :z 8})))
     (is (= "stone" (.-name (.seenBlockAt wrapped #js {:x 0 :y 65 :z 5}))))))

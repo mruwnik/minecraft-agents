@@ -2,7 +2,7 @@
   "Sight: the view cone, the sight pass that casts rays from the eye into block memory, and keeping memory current
   after block changes and touches."
   (:require [engine.perception.light :refer [darken-now max-light table-now]]
-            [engine.perception.store :refer [new-stamp! record! store-of]]))
+            [engine.perception.store :refer [eye-height new-stamp! record! store-of]]))
 
 ;; ---- the view cone
 
@@ -272,6 +272,46 @@
     (when (>= id 0)
       (new-stamp! st)
       (record! st (store-of st (.-dim st)) x y z id ((:now opts))))))
+
+(defn glance!
+  "One ray instead of a pass: the state id of the cell (x y z) when the body sees it now (visible-now?: view cone, radius,
+  clear line, lit or within near), which memory takes. Nil when it does not, or the cell is unloaded, or offline."
+  [{:keys [raw opts st] :as per} [x y z]]
+  (let [^js st st ^js eye (.eye ^js raw)]
+    (when eye
+      (let [id (.stateAt ^js raw x y z)]
+        (when (and (>= id 0) (visible-now? per st eye x y z id))
+          (new-stamp! st)
+          (record! st (store-of st (.-dimension eye)) x y z id ((:now opts)))
+          id)))))
+
+(def hitbox-half 0.3)
+(def hitbox-height 1.8)
+(def feel-margin 0.1)
+
+(defn felt?
+  "Whether the body touches the cell (x y z): it overlaps the body's hitbox (0.6 wide, 1.8 tall, feet at the eye less
+  eye-height) grown by feel-margin, or lies under the feet' cell in the hitbox's columns."
+  [^js eye [x y z]]
+  (let [fx (.-x eye) fz (.-z eye) feet (- (.-y eye) eye-height)
+        r (+ hitbox-half feel-margin)
+        over? (fn [c lo hi] (and (< c hi) (> (inc c) lo)))]
+    (and (over? x (- fx r) (+ fx r))
+         (over? z (- fz r) (+ fz r))
+         (or (over? y (- feet feel-margin) (+ feet hitbox-height feel-margin))
+             (== y (dec (js/Math.floor feet)))))))
+
+(defn feel!
+  "The state id of a cell the body touches (felt?), in any light; memory takes it. Nil for any other cell, an unloaded
+  one, or offline."
+  [{:keys [raw opts st]} [x y z :as pos]]
+  (let [^js st st ^js eye (.eye ^js raw)]
+    (when (and eye (felt? eye pos))
+      (let [id (.stateAt ^js raw x y z)]
+        (when (>= id 0)
+          (new-stamp! st)
+          (record! st (store-of st (.-dimension eye)) x y z id ((:now opts)))
+          id)))))
 
 (def touching-primitives
   "The primitives whose {pos} argument is a cell the body changes or clicks."

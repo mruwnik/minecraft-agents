@@ -37,12 +37,24 @@
   An entry whose id the client no longer tracks (dead, despawned, far off) is dropped at once.
   So an unseen silent creeper behind the body is no danger, but a creeper seen 3 s ago that went round a corner still is.
 
-  Wrapping leaves blocks, blockAt and entities raw. It adds seenBlockAt, seenBlocks and knownMobs.
+  One cell. `sensed` answers what the body knows of a cell now, first match:
+    nil          unloaded, or offline;
+    felt         the cell touches the body (hitbox grown by 0.1, and the cell under the feet), any light;
+    visible      a glance: one ray, by the pass's rules (cone, line, light or near); memory takes it;
+    remembered   the state last seen, :age-ms old (to the ms for fluids, doors, gates, trapdoors and fire; else
+                 to the minute); one of those mutable states older than `:mutable-max-ms` (10 s) reads unknown;
+    unknown      {:unknown true :pos}.
+  Answers are cached for one tick (`:step-ms`) while the eye and the raw world's epoch stay the same.
+  A cell outside the cone needs a turn first: the wrapped look glances its cell and the 6 neighbours once it settles.
+
+  Wrapping leaves blocks, blockAt and entities raw. It adds seenBlockAt, seenBlocks, knownMobs, and sensedAt, feel and
+  glance (blockAt-like answers: name, pos, properties, age, fullCube, plus ageMs and felt / visible).
   dig, place, jumpPlace and useOn let memory take the true state of their cell once they settle.
 
   The parts: engine.perception.light (light curve), .store (block memory and reading it), .rays (view cone, sight pass,
   keeping memory current), .mobs (mob memory), .persist (file). This namespace creates, runs and wraps them."
-  (:require [engine.perception.light :as light]
+  (:require [clojure.set :as set]
+            [engine.perception.light :as light]
             [engine.perception.mobs :as mobs]
             [engine.perception.persist :as persist]
             [engine.perception.rays :as rays]
@@ -85,7 +97,8 @@
    :mob-scan 64           ; hostiles within this of the body are sampled
    :hearing 16            ; a mob within this of the eye is heard
    :dark-sight 4          ; a mob standing in the dark (light too low to make out) is seen only within this
-   :mob-drift 16})        ; a mob not sensed is forgotten once it could have walked this far
+   :mob-drift 16          ; a mob not sensed is forgotten once it could have walked this far
+   :mutable-max-ms 10000}) ; a remembered fluid, door, gate, trapdoor or fire older than this reads unknown
 
 ;; ---- create
 
@@ -101,6 +114,7 @@
               :stamp 0 :lastKey -1 :lastSec nil :dim "overworld" :sight nil :visible nil
               :pass nil :lastStart nil :unsubscribe nil
               :mobs (js/Map.) :mobSource nil
+              :infoOf (fn [id] (.stateInfo ^js raw id)) :kinds nil :sensedKey nil :sensed (js/Map.)
               :passes 0 :rays 0 :cells 0 :steps 0 :stepMs 0 :stepMsMax 0}}))
 
 (defn stats [{:keys [st] :as per}]
@@ -138,21 +152,112 @@
       (off)
       (save))))
 
+(defn block-of
+  "A blockAt-like answer for state id at pos: {:name :pos :properties :age (a crop's, as a number) :full-cube :state-id}."
+  [{:keys [raw]} id pos]
+  (let [^js info (.stateInfo ^js raw id)
+        props (store/properties-of info)]
+    (cond-> {:name (.-name info) :pos pos :state-id id}
+      props (assoc :properties props)
+      (:age props) (assoc :age (js/Number (:age props)))
+      (.-fullCube info) (assoc :full-cube true))))
+
+(defn glance!
+  "The cell's blockAt-like answer with :visible true when the body sees it now (one ray, the pass's rules; memory takes
+  it), else nil. No head turn: outside the view cone it is nil."
+  [per pos]
+  (when-let [id (rays/glance! per pos)]
+    (assoc (block-of per id pos) :age-ms 0 :visible true)))
+
+(defn feel!
+  "The cell's blockAt-like answer with :felt true when it touches the body (memory takes it), else nil."
+  [per pos]
+  (when-let [id (rays/feel! per pos)]
+    (assoc (block-of per id pos) :age-ms 0 :felt true)))
+
+(defn remembered
+  "The remembered answer for pos with :age-ms and :visible false; unknown when never seen, or a mutable state older than
+  :mutable-max-ms."
+  [{:keys [opts st] :as per} [x y z :as pos]]
+  (let [[id seen-at] (store/remembered st x y z)
+        age (when id (- ((:now opts)) seen-at))]
+    (if (or (nil? id) (and (store/mutable-id? st id) (> age (:mutable-max-ms opts))))
+      {:unknown true :pos pos}
+      (assoc (block-of per id pos) :age-ms age :visible false))))
+
+(defn sense-key
+  "What a cached answer depends on: the tick, the raw world's epoch and the eye; nil offline."
+  [{:keys [raw opts]}]
+  (when-let [^js eye (.eye ^js raw)]
+    (str (js/Math.floor (/ ((:now opts)) (:step-ms opts))) "|" (rays/epoch-of raw) "|" (.-dimension eye) "|"
+         (.-x eye) "|" (.-y eye) "|" (.-z eye) "|" (.-yaw eye) "|" (.-pitch eye))))
+
+(defn sensed
+  "What the body knows of the cell pos [x y z] now: nil (unloaded or offline), felt, visible, remembered or unknown (see
+  the namespace doc). Cached for one tick while the eye and the world stay the same."
+  [{:keys [raw st] :as per} [x y z :as pos]]
+  (let [^js st st k (sense-key per)]
+    (when k
+      (when-not (= k (.-sensedKey st))
+        (set! (.-sensedKey st) k)
+        (.clear ^js (.-sensed st)))
+      (let [ck (str x "," y "," z)
+            hit (.get ^js (.-sensed st) ck)]
+        (if (undefined? hit)
+          (let [answer (when (>= (.stateAt ^js raw x y z) 0)
+                         (or (feel! per pos) (glance! per pos) (remembered per pos)))]
+            (.set ^js (.-sensed st) ck answer)
+            answer)
+          hit)))))
+
+(defn pos-js [[x y z]] #js {:x x :y y :z z})
+
+(defn answer-js
+  "A sensed answer as JS: blockAt's keys (pos {x y z}, fullCube) plus ageMs, felt, visible, unknown."
+  [m]
+  (when m
+    (clj->js (-> m
+                 (dissoc :state-id)
+                 (set/rename-keys {:age-ms :ageMs :full-cube :fullCube})
+                 (update :pos pos-js)))))
+
+(defn cell-of [^js a]
+  (when-let [^js pos (some-> a .-pos)]
+    (when (every? number? [(.-x pos) (.-y pos) (.-z pos)])
+      (mapv #(js/Math.floor %) [(.-x pos) (.-y pos) (.-z pos)]))))
+
+(defn looking
+  "The look primitive f (called on p) that, once the head turned to a pos, glances its cell and the cell's 6 neighbours
+  and adds the cell's sensed answer to the result as `sensed`."
+  [per ^js p ^js f]
+  (fn [token ^js a]
+    (-> (.call f p token a)
+        (.then (fn [r]
+                 (if-let [cell (cell-of a)]
+                   (do (run! #(rays/glance! per (mapv + cell %)) [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
+                       (js/Object.assign #js {} r #js {:sensed (answer-js (sensed per cell))}))
+                   r))))))
+
 (defn wrap
   "The primitives object p with every primitive as it is (blocks, blockAt, entities stay raw; dig, place, jumpPlace and useOn also let memory
-  take the true state of their cell, see touching), plus
+  take the true state of their cell, see touching; look glances where it turned, see looking), plus
   seenBlockAt({x,y,z}) and seenBlocks({radius, names, max}) over memory, knownMobs() (known-mobs: the hostiles the body
-  has seen or heard, sampled from p's entities), and the perception itself."
+  has seen or heard, sampled from p's entities), sensedAt, feel and glance ({x,y,z}: answer-js of sensed, feel!,
+  glance!), and the perception itself."
   [p per]
   (let [out (js/Object.assign #js {} p)
-        pos-js (fn [[x y z]] #js {:x x :y y :z z})]
+        cell (fn [^js a] (mapv #(js/Math.floor %) [(.-x a) (.-y a) (.-z a)]))]
     (aset out "perception" per)
     (set! (.-mobSource ^js (:st per)) p)
     (aset out "knownMobs" (fn [] (mobs/known-mobs per p)))
     (run! #(when-let [f (aget p %)] (aset out % (rays/touching per p f))) touching-primitives)
+    (when-let [f (aget p "look")] (aset out "look" (looking per p f)))
     (aset out "seenBlockAt" (fn [^js a]
-                              (let [b (store/seen-block per [(.-x a) (.-y a) (.-z a)])]
-                                (clj->js (update b :pos pos-js)))))
+                              (let [b (store/seen-block per (cell a))]
+                                (clj->js (-> b (dissoc :state-id) (update :pos pos-js))))))
+    (aset out "sensedAt" (fn [a] (answer-js (sensed per (cell a)))))
+    (aset out "feel" (fn [a] (answer-js (feel! per (cell a)))))
+    (aset out "glance" (fn [a] (answer-js (glance! per (cell a)))))
     (aset out "seenBlocks" (fn [^js a]
                              (let [q (js->clj (or a #js {}) :keywordize-keys true)]
                                (clj->js (mapv #(update % :pos pos-js) (store/seen-blocks per q))))))

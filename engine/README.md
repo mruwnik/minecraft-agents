@@ -56,6 +56,7 @@ Layout:
   `ctx`, `expr`, `composite`, `registry` (compile-time registries), `triggers` (the trigger registry), `hooks` (job code
   the engine calls), `condition`, `scenario`, `takeover`/`lease`, `perception` (+ `perception.light|store|rays|mobs|persist`), `main`; `engine.path.*` is the planner.
   Perception sees dark cells within `:near` (4) blocks, within `:near-torch` (7) with a torch in either hand.
+  One cell: `sensedAt`/`perception/sensed` answers felt, visible (one-ray glance, view cone), remembered (`ageMs`; fluids, doors, gates, trapdoors, fire older than 10 s read unknown) or `{unknown}`; `feel`, `glance`; the wrapped `look` glances where it turned. `blockAt` stays raw.
   A still body in an unchanged world looks again every `:still-ms` (30 s); unchanged means no block or chunk update within 50 blocks, same daylight, and same torch in hand.
 - `src/jobs/` the jobs, one namespace each (`jobs.survival.eat`); the build finds them. Helpers: `jobs.lib.*` (shared,
   including the walker `jobs.lib.walk`/`near`/`pass`), `jobs.<area>.*` (one area's). `jobs/hooks.edn` names the hooks.

@@ -1,6 +1,8 @@
 (ns engine.perception.store
   "Block memory: per dimension and 16^3 section, the state ids and seen times of the cells the body has seen, capped by
-  forgetting the least recently seen section; and reading it back (seen-block, seen-blocks).")
+  forgetting the least recently seen section; and reading it back (seen-block, seen-blocks).
+  A cell holding a mutable state (fluid, door, gate, trapdoor, fire: `mutable-id?`) also keeps its seen time to the ms,
+  in the section's :fine map (not saved to file).")
 
 (def section-bytes 12288) ; ids (8192) and per-cell seen times (4096)
 (def minute-ms 60000)
@@ -61,9 +63,31 @@
         255))))
 
 (defn cell-seen
-  "When the cell was last seen, in ms."
+  "When the cell was last seen, in ms: to the ms for a mutable state, else to the minute (never later than the truth)."
   [^js sec i]
-  (+ (.-base sec) (* minute-ms (aget (.-times sec) i))))
+  (or (some-> ^js (.-fine sec) (.get i))
+      (+ (.-base sec) (* minute-ms (aget (.-times sec) i)))))
+
+(def mutable-names #{"water" "lava" "bubble_column" "fire" "soul_fire"})
+
+(defn mutable-name?
+  "Fluids, doors, fence gates, trapdoors and fire: cells that change out of sight, so an old memory of them is unsafe."
+  [name]
+  (or (contains? mutable-names name)
+      (.endsWith name "_door") (.endsWith name "_fence_gate") (.endsWith name "_trapdoor")))
+
+(defn mutable-id?
+  "Whether state id holds a mutable-name? block. False while the sight table (and so the state count) is not known."
+  [^js st id]
+  (let [^js kinds (or (.-kinds st)
+                      (when-let [^js sight (.-sight st)] (set! (.-kinds st) (js/Int8Array. (.-length sight)))))]
+    (and (some? kinds) (< id (.-length kinds))
+         (let [k (aget kinds id)]
+           (if (zero? k)
+             (let [yes (mutable-name? (.-name ^js ((.-infoOf st) id)))]
+               (aset kinds id (if yes 1 -1))
+               yes)
+             (== k 1))))))
 
 (defn record! [^js st store x y z id now]
   (let [cx (bit-shift-right x 4) sy (bit-shift-right y 4) cz (bit-shift-right z 4)
@@ -71,7 +95,10 @@
         ^js sec (if (== key (.-lastKey st)) (.-lastSec st) (section-for! st store key cx sy cz now))]
     (let [i (cell-index x y z)]
       (aset (.-ids sec) i (inc id))
-      (aset (.-times sec) i (minute-of! sec now)))))
+      (aset (.-times sec) i (minute-of! sec now))
+      (if (mutable-id? st id)
+        (.set (or (.-fine sec) (set! (.-fine sec) (js/Map.))) i now)
+        (when-let [^js fine (.-fine sec)] (.delete fine i))))))
 
 (defn new-stamp!
   "A new write round: sections written from now on are moved to the newest end again."
@@ -94,11 +121,11 @@
     (when (seq props) props)))
 
 (defn seen-block
-  "{:name :pos :properties :age-ms} as last seen, or {:unknown true :pos} for a cell the body never saw."
+  "{:name :pos :properties :age-ms :state-id} as last seen, or {:unknown true :pos} for a cell the body never saw."
   [{:keys [raw opts st]} [x y z :as pos]]
   (if-let [[id seen-at] (remembered st x y z)]
     (let [^js info (.stateInfo ^js raw id)]
-      (cond-> {:name (.-name info) :pos pos :age-ms (- ((:now opts)) seen-at)}
+      (cond-> {:name (.-name info) :pos pos :age-ms (- ((:now opts)) seen-at) :state-id id}
         (properties-of info) (assoc :properties (properties-of info))))
     {:unknown true :pos pos}))
 
