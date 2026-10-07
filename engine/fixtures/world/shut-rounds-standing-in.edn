@@ -1,0 +1,19 @@
+;; Rounds migration of the door-left reflex (cards 85e1dd07, 268296ab): the run leaves the gate the body stands in
+;; (shut-doors.stopped :standing-in, entry kept); stepped off, the reflex shuts it later. Own file: a single gate, so
+;; the run has no second gate to walk to, and the body looks west so gate 10 is in view after the tp east.
+{:defaults
+ {:tags [:triggers :doors]
+  :time :any
+  :plot {:floor "grass_block"}
+  :register [{:trigger :door-left :persistence :cooldown :cooldown-s 5 :job (jobs.maintenance.shut-doors)}]
+  :blocks [[:fill [10 0 0] [10 0 31] "oak_fence"] [:set [10 0 16] "oak_fence_gate[facing=east,open=true]"]]
+  :memory [{:kind :opened :data {:cell #xyz [10 0 16] :by "j0" :shut? true}}]
+  :body {:at [10.5 0 16.5] :yaw 90}
+  :limit-s 90}
+ :cases
+ [{:name "standing-in-gate-kept-then-shut-later"
+   :act [[:job (jobs.maintenance.shut-doors)] [:await {:source :job :kind :shut-doors.stopped} 20]
+         [:rcon "execute at $BODY run tp $BODY ~3 ~ ~"]]
+   :expect [{:event {:source :job :kind :shut-doors.stopped :data {:left [{:reason :standing-in}]}} :within-s 20}
+            {:event {:source :job :kind :shut-doors.done} :within-s 60}]
+   :after [[:block [10 0 16] "oak_fence_gate[open=false]"]]}]}
