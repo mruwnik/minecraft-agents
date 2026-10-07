@@ -46,6 +46,7 @@ The compile JVM is capped (`:jvm-opts ["-Xmx1G"]` in `shadow-cljs.edn`) because 
   worker thread (heap caps, `resourceLimits` 160 MB old generation). `/api/thumbs/stats`: `{bodies, renders, last-ms, mean-ms, queue}`.
   On SIGTERM/SIGINT the server closes the thumbnailer and the view mount (`close()`, ends the block-issues scan worker) and exits. A body card whose view is older
   than 10 s shows an "N s old" / "N min old" mark when the body is online (`trouble/thumb-age-mark`).
+- Body card and popup: the goal its controller set (`worlds/<world>/agents/<name>/goal.edn`, `dashboard.goal`; `./bin/goal`, the world-test runner per case) with its age; the job with its hold or wait reason; a parked job with its error.
 - Body cards (hub mode): online bodies get a live textured scene from the view hub (`ui/livecards.cljs`); an offline body shows the server's still
   (`/api/thumb`, greyed by CSS) with no scene. Debug flags on the page URL: `?fps=1` labels live cards with their fps, `?nogl=1` forces the server stills,
   `?allive=1` gives every card with a view a live scene, offline ones too (the hub holds at most 12 scenes).
@@ -92,7 +93,7 @@ off screen gets an arrow on the edge, click it to pan there), `/plans` (plan fil
 - Engine bodies with the canonical event service are read from their local `events.sock` for snapshots, paginated event replay
   and attention resolution; the socket is separate from the viewer control socket. `engine.edn` remains a legacy fallback for jobs and reflexes. Folders without recognized
   engine data are listed as down, "not an engine body (unsupported)".
-- One `/api/state` lists the bodies once. A body with no `events.sock` is rebuilt only when its `engine.edn`, event files, `pose.json`/`hud.json`, config or the minute changed; `engine.edn` is parsed once per change. Village plan files are parsed once per mtime/size change, and an unchanged body's EDN text is printed once. A body without `events.sock` (or `control.sock` for entities) gets no socket request: it is shown down, and asked on the poll its socket appears. Bodies are sent once, top-level in `:bodies`, not again inside each `:worlds` entry.
+- One `/api/state` lists the bodies once. A body with no `events.sock` is rebuilt only when its `engine.edn`, event files, `pose.json`/`hud.json`, `goal.edn`, config or the minute changed; `engine.edn` is parsed once per change. Village plan files are parsed once per mtime/size change, and an unchanged body's EDN text is printed once. A body without `events.sock` (or `control.sock` for entities) gets no socket request: it is shown down, and asked on the poll its socket appears. Bodies are sent once, top-level in `:bodies`, not again inside each `:worlds` entry.
 - No look/screen/actions/whisper/icon endpoints, and `/api/world` is 501.
 - Chat comes from engine events (`:source :chat`, kind `:said`/`:whisper`); canonical `:time-ms` is epoch millis.
 - Blueprints read the canonical `blueprints/<id>.edn` library and validate drafts using the engine's native schema. The editor previews and downloads EDN; preview does not place or change a build. POST `/api/blueprint-preview` requires `application/edn` and accepts `{:source "..." :stock "..."}`; stock is an optional EDN map of block names to counts.

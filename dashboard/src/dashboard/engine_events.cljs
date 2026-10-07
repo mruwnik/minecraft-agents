@@ -41,6 +41,7 @@
        :message (:message e)
        :text (:message e)
        :error (or (:error data) (:reason data))
+       :reason (:reason data) :since (:since data)
        :attention (field-name (or (:attention e) :none))
        :request-id (:request-id e)})))
 
@@ -56,15 +57,23 @@
 (defn kind-name [e] (dashed (:kind e)))
 (defn kind-is? [e & kinds] (contains? (set kinds) (kind-name e)))
 
-;; only a top-level job (its own id is the head of its chain) is "the current job"; a queued job is not running yet
+(defn wait-text
+  "Why a job.waiting event's job waits: its message without the \"waiting: \" head, else its reason."
+  [e]
+  (if (string? (:message e)) (str/replace (:message e) #"^waiting: " "") (field-name (:reason e))))
+
+;; only a top-level job (its own id is the head of its chain) is "the current job"; a queued job is not running yet,
+;; and another listed job's wait leaves the current one
 (defn next-job [job e]
   (cond
     (system-started? e) nil
     (or (not= "job" (:source e)) (kind-is? e "queued") (not (:job e)) (not= (first (:chain e)) (:job e))) job
     (job-ends (kind-name e)) (when-not (= (:id job) (:job e)) job)
+    (and (kind-is? e "waiting") job (not= (:id job) (:job e))) job
     :else (cond-> {:id (:job e)
                    :name (or (:name e) (when (= (:id job) (:job e)) (:name job)))}
-            (kind-is? e "holding") (assoc :holding {:reason (:reason e) :since (:since e)}))))
+            (kind-is? e "holding") (assoc :holding {:reason (:reason e) :since (:since e)})
+            (kind-is? e "waiting") (assoc :waiting {:why (wait-text e) :since (:t e)}))))
 
 (defn next-reflex [reflex e]
   (cond

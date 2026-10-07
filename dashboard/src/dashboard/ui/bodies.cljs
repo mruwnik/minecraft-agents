@@ -48,7 +48,7 @@
      :on-click #(set! (.-href js/location) (logic/map-show-url world name))}
     "show on map"]])
 
-(defn body-card [{:keys [name status reason manual severity mine? health food job event event-age event-attention] :as card}]
+(defn body-card [{:keys [name status reason manual severity mine? health food job parked goal goal-by goal-age event event-age event-attention] :as card}]
   ^{:key name}
   [:div.bcard {:class [(clojure.core/name status) (when mine? "mine") (when reason (str "sev-" (clojure.core/name severity)))]
                :tabIndex 0 :role "button"
@@ -57,7 +57,9 @@
    [preview card]
    [:div.binfo
     [:div.vitals [bar :health health] [bar :food food]]
+    (when goal [:div.line.goal {:title (str goal (when goal-by (str " (set by " goal-by ")")))} [:span.text goal] [:span.age goal-age]])
     [:div.line.job {:title job} (or job [:span.dim "no job"])]
+    (when parked [:div.line.parked {:title parked} parked])
     [:div.line.event {:class (when (#{:notice :required} event-attention) (clojure.core/name event-attention)) :title event}
      (if event [:<> [:span.text event] [:span.age event-age]] [:span.dim "no events"])]
     (when manual [:div.reason.manual manual])

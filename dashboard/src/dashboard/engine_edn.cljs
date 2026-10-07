@@ -17,12 +17,14 @@
     (:seq :any) (str (name (:op spec)) "(" (str/join ", " (map label (:children spec))) ")")
     (str (:op spec))))
 
-(defn summarize-job [current instance]
-  {:id (:id instance)
-   :label (label (:spec instance))
-   :current? (= current (:id instance))
-   :hold? (boolean (:hold? instance))
-   :round (:round instance)})
+;; a parked job (its round threw; it waits for a retry or cancel) carries :failed, its error
+(defn summarize-job [current failed instance]
+  (cond-> {:id (:id instance)
+           :label (label (:spec instance))
+           :current? (= current (:id instance))
+           :hold? (boolean (:hold? instance))
+           :round (:round instance)}
+    (contains? failed (:id instance)) (assoc :failed (or (get-in failed [(:id instance) :error]) "failed"))))
 
 (defn summarize-reflex [reflex-state now entry]
   {:id (:id entry)
@@ -49,7 +51,7 @@
     error {:error error}
     (not (map? value)) {:error "engine.edn is not a map"}
     :else
-    {:jobs (mapv #(summarize-job (:current value) %) (ordered-instances value))
+    {:jobs (mapv #(summarize-job (:current value) (:failed value) %) (ordered-instances value))
      :reflexes (mapv #(summarize-reflex (:reflex-state value) now %) (:register value))
      :current (:current value)
      :failed-count (count (:failed value))}))

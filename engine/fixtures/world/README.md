@@ -20,7 +20,7 @@ Options: `--body` (default `ProbeFixture`, created and whitelisted when missing)
 passed. The runner refuses to start when another player is within 500 blocks of the grid's centre or the body already
 runs. The body is stopped (SIGTERM to its own child) and started again (`--fresh`, and its own `engine/memory.edn` and `seen.bin` deleted, since `--fresh` only drops `engine.edn`; the plot it was last left on is cleared first) before every case, so no case sees another's memory (`:slept`, `:futile`, ...); `:keep-memory true` opts out. It is stopped at the end.
 
-Per run: forceload the plot, kill every non-player entity in it, clear it to air up to `:plot :height`, lay the
+Per run: set the body's goal (`goal.edn`, shown on the dashboard) to `world-test <id>: <expectations> (run N, retry M)`, cleared when the run ends; forceload the plot, kill every non-player entity in it, clear it to air up to `:plot :height`, lay the
 floor; build `:blocks`; write `:plans`; put the body at its start (survival, cleared, healed, fed, inventory,
 effects, spawn point); kill hostiles in the plot (at night also natural ones within 24 blocks of it, then every 5 s
 until the case ends); put the `:register`; wait `:settle-s`; kill hostiles again; note

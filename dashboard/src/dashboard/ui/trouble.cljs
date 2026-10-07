@@ -88,10 +88,12 @@
 
 (defn job-text
   "One line for the job: its spec label and round from engine.edn when known, else the name from events,
-  then its declared hold."
+  then its declared hold or why it waits."
   [job edn-job]
   (let [{:keys [reason since]} (:holding job)
-        hold (when reason (str ", holding: " reason " since " (hhmm since)))]
+        {:keys [why] wait-since :since} (:waiting job)
+        hold (cond reason (str ", holding: " (if (keyword? reason) (name reason) reason) " since " (hhmm since))
+                   why (str ", waiting: " why " since " (hhmm wait-since)))]
     (cond
       (and (nil? job) (nil? edn-job)) nil
       edn-job (str (short-name (:label edn-job)) (when (:round edn-job) (str ", round " (:round edn-job))) hold)
@@ -115,6 +117,13 @@
     (let [s (quot (- now mtime) 1000)]
       (if (< s 60) (str s " s old") (str (quot s 60) " min old")))))
 
+(defn parked-text
+  "\"parked: <label>: <error>\" for the first parked job of engine.edn (\"(+N more)\" after), nil when none is."
+  [edn-jobs]
+  (let [[p & more] (filter :failed edn-jobs)]
+    (when p
+      (str "parked: " (short-name (:label p)) ": " (:failed p) (when more (str " (+" (count more) " more)"))))))
+
 (defn mine?
   "Does this page (its own `who`) hold the body? Only then does the card get the red edge."
   [body who]
@@ -123,7 +132,7 @@
 (defn card-model
   "Everything a body card shows, as plain data. `who`: this page load's name, to tell its own takeover from another's."
   ([body now] (card-model body now nil))
-  ([{:keys [name world up engine view] :as body} now who]
+  ([{:keys [name world up engine view goal] :as body} now who]
   (let [st (status body now)
         top (first (reasons body now))
         last-event (peek (vec (:recent engine)))
@@ -141,6 +150,10 @@
      :health (get-in view [:hud :health])
      :food (get-in view [:hud :food])
      :job (job-text (:job engine) edn-job)
+     :parked (parked-text (:jobs engine))
+     :goal (:text goal)
+     :goal-by (:by goal)
+     :goal-age (when (number? (:since goal)) (ago now (:since goal)))
      :event (:text last-event)
      :event-age (when last-event (ago now (:t last-event)))
      :event-attention (keyword (clojure.core/name (or (:attention last-event) "none")))

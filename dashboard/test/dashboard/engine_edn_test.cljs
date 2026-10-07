@@ -36,3 +36,7 @@
 (deftest older-register-entries-name-the-job-with-a-keyword
   (let [s (edn/summarize "{:instances {}, :list [], :register [{:id :hungry, :trigger :hungry, :job :eat, :persistence :cooldown, :cooldown-s 90}]}" 0)]
     (is (= ["eat"] (mapv :job (:reflexes s))))))
+
+(deftest a-parked-job-carries-its-error
+  (let [s (edn/summarize "{:instances {\"j1\" {:id \"j1\", :spec {:op :leaf, :job jobs.gather.mine, :args {}}, :round 2} \"j2\" {:id \"j2\", :spec {:op :leaf, :job jobs.a, :args {}}, :round 1} \"j3\" {:id \"j3\", :spec {:op :leaf, :job jobs.b, :args {}}, :round 1}}, :list [\"j1\" \"j2\" \"j3\"], :register [], :current nil, :failed {\"j1\" {:error \"no pickaxe\" :t 5} \"j3\" {}}}" 0)]
+    (is (= ["no pickaxe" nil "failed"] (mapv :failed (:jobs s))))))

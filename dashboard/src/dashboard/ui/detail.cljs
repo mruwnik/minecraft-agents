@@ -11,12 +11,14 @@
             [dashboard.ui.hudmodel :as hudmodel]
             [dashboard.ui.logic :as logic]))
 
-(defn header [{:keys [name status reason severity job action pos-text dimension world last-seen]}]
+(defn header [{:keys [name status reason severity goal goal-age job parked action pos-text dimension world last-seen]}]
   [:div.dhead
    [:h2 name]
    (when status [bodies/status-pill status])
    (when reason [:span.reason {:class (clojure.core/name severity)} reason])
+   (when goal [:span.dfact.goal {:title goal} goal [:span.dim (str " · " goal-age)]])
    [:span.dfact (or job [:span.dim "no job"]) (when action [:span.dim (str " · " action)])]
+   (when parked [:span.dfact.parked parked])
    [:span.dfact.mono pos-text]
    (when dimension [:span.dfact dimension])
    (when world [:span.dfact.dim world])

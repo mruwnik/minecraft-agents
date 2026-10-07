@@ -30,6 +30,9 @@
        :severity (:severity card)
        :online? (boolean up)
        :job (:job card)
+       :parked (:parked card)
+       :goal (:goal card)
+       :goal-age (:goal-age card)
        :action action
        :pos-text (pos-text (or (:pos view) (:pos engine)))
        :dimension (:dimension view)

@@ -9,8 +9,8 @@
             ["node:url" :refer [pathToFileURL]]))
 
 (def commands ["observe" "jobs" "triggers" "say" "entities" "drive" "world"
-               "map" "plans" "blueprints" "world-changes" "time" "snapshot"])
-(def body-tools #{"observe" "jobs" "triggers" "say" "entities" "drive" "world" "snapshot"})
+               "map" "plans" "blueprints" "world-changes" "time" "snapshot" "goal"])
+(def body-tools #{"observe" "jobs" "triggers" "say" "entities" "drive" "world" "snapshot" "goal"})
 (def format-id :minecraft-agent-workspace/v1)
 (def wrapper-marker "// Generated Minecraft agent workspace tool v1\n")
 (def usage "usage: node engine/tools/workspace.mjs <directory> --body <body> --world <world> [--worlds <directory>] [--update-tools] [--adopt-existing]\nCreate an agent workspace for an existing or future body; does not start it.\nReruns preserve AGENTS.md, briefing.md and notes/. --update-tools refreshes generated wrappers only; bindings cannot change.\n--adopt-existing requires a canonical body folder and matching config.json; it preserves existing documents and runtime files.")
@@ -119,7 +119,7 @@
        "Prefer the bound `bin/` tools even when older briefings mention `mc`. Read any existing `BRIEFING.md` and `journal.md` for mission history. Legacy `mc` and `start` launchers are obsolete; use `bin/` for agent commands. Body lifecycle is separate; workspace generation does not start or restart a body.\n\n"
        "Run `./bin/<tool>` here, or use its absolute path from elsewhere. Body/world/worlds/repository are bound; do not supply them. Each tool has `--help`. Bindings guide routing, not a security sandbox.\n\n"
        "Start with `./bin/observe`, then `./bin/observe inventory` or `./bin/entities` as needed. Discover jobs and triggers with `./bin/observe catalog jobs` and `./bin/observe catalog triggers`; inspect exact catalog entries before submitting unfamiliar work.\n\n"
-       "Use `./bin/jobs` for managed work and `./bin/triggers` for event rules. `./bin/jobs submit` appends a job to the list; `--now` cuts the current job and runs the new one at once (the cut one continues after it); `--wait` blocks until the job ends and prints what happened meanwhile. Follow completion with `./bin/observe --wait --watch j12`; retrieve recorded outcomes with `./bin/observe result j12` after completion. Use `./bin/say 'message'` to communicate. `./bin/snapshot` draws what the body sees into `snapshots/` (a PNG) and says what is under the crosshair; `--yaw`/`--pitch`/`--look-at` turn only the picture.\n\n"
+       "Use `./bin/jobs` for managed work and `./bin/triggers` for event rules. `./bin/jobs submit` appends a job to the list; `--now` cuts the current job and runs the new one at once (the cut one continues after it); `--wait` blocks until the job ends and prints what happened meanwhile. Follow completion with `./bin/observe --wait --watch j12`; retrieve recorded outcomes with `./bin/observe result j12` after completion. Use `./bin/say 'message'` to communicate. `./bin/snapshot` draws what the body sees into `snapshots/` (a PNG) and says what is under the crosshair; `--yaw`/`--pitch`/`--look-at` turn only the picture. `./bin/goal 'what you are doing now'` sets the line the dashboard shows for your body; set it when your aim changes, `--clear` when done.\n\n"
        "Manual actions require `./bin/drive take --why 'reason' --idle-s 30`; `--who` defaults to the body name for drive and world (keep any other name the same on both), poll returned request IDs, then release control.\n\n"
        "Shared memory: `./bin/map`, `./bin/plans`, `./bin/blueprints`, and `./bin/world-changes`. Read records before edits and use their revisions and an explicit author. `./bin/time clock` reads world time; `./bin/time dawn` waits for daylight.\n\n"
        "Observe before acting, protect existing builds and starter stock, and record task constraints in briefing.md. The repository's AGENTS.md governs code changes.\n"))

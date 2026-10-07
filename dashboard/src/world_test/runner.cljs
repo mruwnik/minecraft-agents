@@ -13,6 +13,7 @@
             [clojure.string :as str]
             [dashboard.rcon :as rcon]
             [agent-tools.world-data :as wd]
+            [dashboard.goal :as goal]
             [world-test.build :as build]
             [world-test.changed :as chg]
             [world-test.events :as ev]
@@ -1265,6 +1266,36 @@
   [opts results]
   (when-let [file (:results opts)] (fs/writeFileSync file (pr-str results))))
 
+;; ------------------------------------------------------------------ the body goal (shown on the dashboard)
+
+(defn pattern-brief [p]
+  (let [n #(if (keyword? %) (name %) (str %))]
+    (if (and (:source p) (:kind p)) (str (n (:source p)) "." (n (:kind p))) (pr-str p))))
+
+(defn expect-brief [e]
+  (cond (:event e) (str "event " (pattern-brief (:event e)))
+        (:count-event e) (str "count " (pattern-brief (:count-event e)))
+        :else (str "no event " (pattern-brief (:no-event e)))))
+
+(defn case-goal
+  "The goal line of run `run` (retry `retry`) of case c: \"world-test <id>: <expectations> (run N, retry M)\", the
+  expectations cut to fit goal/max-text."
+  [c run retry]
+  (let [tail (str " (run " run ", retry " retry ")")
+        head (str "world-test " (:id c) (when (seq (:expect c)) (str ": " (str/join ", " (map expect-brief (:expect c))))))
+        room (- goal/max-text (count tail))]
+    (str (if (> (count head) room) (str (subs head 0 (dec room)) "…") head) tail)))
+
+(defn with-goal!
+  "Sets the body goal in body-dir to text, runs thunk (-> promise) and clears the goal when it settles, also on an error.
+  A goal that cannot be written is logged; the run goes on."
+  [body-dir text thunk]
+  (try (goal/write-goal! body-dir text "world-test" (js/Date.now))
+       (catch :default e (log! "world-test: goal not set: " (.-message e))))
+  (-> (js/Promise.resolve nil)
+      (.then thunk)
+      (.finally #(goal/clear-goal! body-dir))))
+
 (defn run-groups!
   "Runs the [case run] pairs of each register group in order on the body, on-result! (result -> any) after each; resolves
   once every group ran. A batch stops early under --stop-on-fail (stop?: -> bool)."
@@ -1279,12 +1310,13 @@
                                                            i (acquire-plot! (max from (:first-plot opts)) end)
                                                            memory (when (seq (:memory c))
                                                                     (f/memory-seed (:memory (f/resolve-tags c (f/plot-origin (f/case-grid c) i))) (js/Date.now)))]
-                                                       (-> (run-case! opts c i run (when-not (= :keep plan) register)
-                                                                      #(if (= :keep plan) (js/Promise.resolve nil) (stop-body! opts))
-                                                                      #(if (= :keep plan)
-                                                                         (js/Promise.resolve nil)
-                                                                         (-> (if (= :restart-keep plan) (js/Promise.resolve nil) (reset-last-plot! opts))
-                                                                             (.then (fn [] (start-body! opts register (= :restart-keep plan) memory))))))
+                                                       (-> (with-goal! (body-dir opts) (case-goal c run (or (:retry opts) 0))
+                                                             #(run-case! opts c i run (when-not (= :keep plan) register)
+                                                                         (fn [] (if (= :keep plan) (js/Promise.resolve nil) (stop-body! opts)))
+                                                                         (fn [] (if (= :keep plan)
+                                                                                  (js/Promise.resolve nil)
+                                                                                  (-> (if (= :restart-keep plan) (js/Promise.resolve nil) (reset-last-plot! opts))
+                                                                                      (.then (fn [] (start-body! opts register (= :restart-keep plan) memory))))))))
                                                            (.then (fn [r] (on-result! c r)))
                                                            (.finally #(release-plot! i))))))))
                                        (js/Promise.resolve nil)
@@ -1305,11 +1337,12 @@
                  [register (for [run (range 1 (inc (:repeat opts))) c group] [c run])])
         first-pass (fn [c r] (report! r) (swap! results conj (assoc r :file (:file c))) (write-results! opts @results) (report-fixtures!))
         by-id (into {} (map (juxt :id identity)) cases)
+        retry (atom 0)
         rerun! (fn [failed]
                  (let [again (atom {})
                        groups (retry-groups by-id failed)]
                    (log! "world-test: retrying " (count failed) " failed: " (str/join ", " (map #(str (:id %) " #" (:run %)) failed)))
-                   (-> (run-groups! opts groups (constantly false)
+                   (-> (run-groups! (assoc opts :retry (swap! retry inc)) groups (constantly false)
                                     (fn [c r] (report! (retry-view r)) (swap! again assoc [(:id c) (:run r)] (assoc r :file (:file c)))))
                        (.then (fn [] (align-retries failed @again))))))]
     (reset-body-log! opts)

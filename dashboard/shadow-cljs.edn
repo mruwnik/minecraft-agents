@@ -123,6 +123,8 @@
                                :sayUsage agent-tools.say/usage
                                :sayRequestFor agent-tools.api/say-request-for
                                :sayMain agent-tools.api/say-main
+                               :goalUsage agent-tools.goal/usage
+                               :goalMain agent-tools.goal/main!
                                :driveUsage agent-tools.api/drive-usage
                                :driveDefaultStateDir agent-tools.api/drive-default-state-dir
                                :driveMain agent-tools.api/drive-main

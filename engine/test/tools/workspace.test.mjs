@@ -12,8 +12,8 @@ import { readEDN, keyword } from './edn.mjs'
 
 const repo = fileURLToPath(new URL('../../../', import.meta.url))
 const cli = path.join(repo, 'engine/tools/workspace.mjs')
-const commands = ['observe', 'jobs', 'triggers', 'say', 'entities', 'drive', 'world', 'map', 'plans', 'blueprints', 'world-changes', 'time', 'snapshot']
-const bodyTools = new Set(['observe', 'jobs', 'triggers', 'say', 'entities', 'drive', 'world', 'snapshot'])
+const commands = ['observe', 'jobs', 'triggers', 'say', 'entities', 'drive', 'world', 'map', 'plans', 'blueprints', 'world-changes', 'time', 'snapshot', 'goal']
+const bodyTools = new Set(['observe', 'jobs', 'triggers', 'say', 'entities', 'drive', 'world', 'snapshot', 'goal'])
 function fixture (t) {
   const dir = fs.mkdtempSync('/tmp/ws-')
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
@@ -105,6 +105,19 @@ test('actual wrappers work from another cwd and give useful help for every tool'
     assert.equal(rejected.status, 2)
     assert.match(rejected.stdout, /cannot override/)
   }
+})
+
+test('./bin/goal sets, shows and clears the bound body goal file', t => {
+  const f = fixture(t)
+  assert.deepEqual(readEDN(f.run('goal', ['dig a well']).stdout).reason, keyword('no-body'))
+  const dir = path.join(f.worlds, 'w', 'agents', 'B')
+  fs.mkdirSync(dir, { recursive: true })
+  const set = f.run('goal', ['dig a well'])
+  assert.equal(set.status, 0, set.stdout)
+  assert.match(fs.readFileSync(path.join(dir, 'goal.edn'), 'utf8'), /:text "dig a well"/)
+  assert.match(f.run('goal').stdout, /dig a well/)
+  assert.equal(f.run('goal', ['--clear']).status, 0)
+  assert.equal(fs.existsSync(path.join(dir, 'goal.edn')), false)
 })
 
 test('player help shows the ./bin form, no body/world plumbing, and says what output means', t => {

@@ -66,7 +66,10 @@
            [{:id "j1" :name "dig"} {:label "dig"} "dig"]
            [{:id "j1" :name "dig" :holding {:reason "waiting-for-boat" :since 0}} {:label "dig" :round 2}
             (str "dig, round 2, holding: waiting-for-boat since " (t/hhmm 0))]
-           [{:id "j1" :name "dig" :holding {:reason "x" :since 0}} nil (str "dig, holding: x since " (t/hhmm 0))]]]
+           [{:id "j1" :name "dig" :holding {:reason "x" :since 0}} nil (str "dig, holding: x since " (t/hhmm 0))]
+           [{:id "j1" :name "plant" :waiting {:why "refused {:plans [\"p\"]}" :since 0}} {:label "plant" :round 1}
+            (str "plant, round 1, waiting: refused {:plans [\"p\"]} since " (t/hhmm 0))]
+           [{:id "j1" :name "dig" :holding {:reason :sheltered :since 0}} nil (str "dig, holding: sheltered since " (t/hhmm 0))]]]
     (is (= expected (t/job-text job edn-job)))))
 
 (deftest offline-label
@@ -162,3 +165,19 @@
         bodies [(body) (mk "Z" "someone-else") (mk "Y" "dashboard-k3x9ab")]]
     (is (= [:manual :manual :idle] (mapv #(t/status % now) (t/sort-bodies bodies now))))
     (is (= 2 (:manual (t/counts bodies now))))))
+
+(deftest card-model-shows-the-goal-and-its-age
+  (let [card (t/card-model (assoc full-body :goal {:text "world-test pen/closed: event job.completed (run 1, retry 0)" :by "world-test" :since (- now 12000)}) now)]
+    (is (= "world-test pen/closed: event job.completed (run 1, retry 0)" (:goal card)))
+    (is (= "12s ago" (:goal-age card)))
+    (is (= "world-test" (:goal-by card))))
+  (is (nil? (:goal (t/card-model full-body now))))
+  (is (nil? (:goal-age (t/card-model (assoc full-body :goal {:text "x"}) now)))))
+
+(deftest card-model-names-a-parked-job
+  (doseq [[title jobs expected]
+          [["none parked" [{:id "j1" :label "attack" :current? true}] nil]
+           ["one parked" [{:id "j1" :label "jobs.gather.mine" :failed "no pickaxe"}] "parked: gather.mine: no pickaxe"]
+           ["two parked" [{:id "j1" :label "a" :failed "x"} {:id "j2" :label "b" :failed "y"}] "parked: a: x (+1 more)"]]]
+    (testing title
+      (is (= expected (:parked (t/card-model (assoc-in full-body [:engine :jobs] jobs) now)))))))

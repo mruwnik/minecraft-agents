@@ -5,6 +5,7 @@
             ["os" :as os]
             ["path" :as path]
             [dashboard.engine-edn :as engine-edn]
+            [dashboard.goal :as goal]
             [dashboard.server.engine-state :as srv-engine-state]
             [dashboard.server.entities :as srv-entities]
             [dashboard.server.files :as srv-files]
@@ -36,7 +37,8 @@
                     srv-engine-state/live-errors (atom {})
                     srv-engine-state/edn-cache (atom {})
                     srv-engine-state/body-cache (atom {})
-                    srv-engine-state/view-cache (atom {})]
+                    srv-engine-state/view-cache (atom {})
+                    srv-engine-state/goal-cache (atom {})]
         (f root engines))
       (finally (.rmSync fs root #js {:recursive true :force true})))))
 
@@ -84,6 +86,20 @@
           (.writeFileSync fs (.join path root "worlds" "w" "agents" "B0" "view" "hud.json") "{}")
           (srv-engine-state/bodies-in 70500 entries)
           (is (= 3 @builds) "a new view file"))))))
+
+(deftest a-body-carries-its-goal-and-a-new-goal-shows-on-the-next-poll
+  (with-root 2
+    (fn [root _]
+      (let [entries (srv-engine-state/agent-entries)
+            dir (.join path root "worlds" "w" "agents" "B0")]
+        (is (every? nil? (map :goal (srv-engine-state/bodies-in 1000 entries))))
+        (goal/write-goal! dir "fence the pen" "B0" 500)
+        (is (= [{:text "fence the pen" :by "B0" :since 500} nil] (mapv :goal (srv-engine-state/bodies-in 2000 entries))))
+        (goal/write-goal! dir "world-test a/b (run 1, retry 0)" "world-test" 600)
+        (touch! (goal/goal-file dir) 10)
+        (is (= "world-test a/b (run 1, retry 0)" (:text (:goal (first (srv-engine-state/bodies-in 3000 entries))))))
+        (goal/clear-goal! dir)
+        (is (nil? (:goal (first (srv-engine-state/bodies-in 4000 entries)))))))))
 
 (deftest one-state-request-lists-the-bodies-once
   (async done

@@ -105,6 +105,10 @@ input:focus, select:focus, button:focus-visible, .bcard:focus-visible { outline:
 .bcard.offline .binfo { opacity: .6; }
 .line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .line.job { font-family: var(--mono); font-size: 12px; }
+.line.goal { display: flex; gap: 8px; font-size: 12px; }
+.line.goal .text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.line.goal .age { flex: none; font-family: var(--mono); font-size: 11px; color: var(--offline); }
+.line.parked, .dfact.parked { color: var(--trouble); font-size: 12px; }
 .line.event { display: flex; gap: 8px; color: var(--dim); font-size: 12px; }
 .line.event .text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .line.event .age { flex: none; font-family: var(--mono); font-size: 11px; color: var(--offline); }

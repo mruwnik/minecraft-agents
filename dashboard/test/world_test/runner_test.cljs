@@ -754,3 +754,32 @@
         (.then (fn [v] (is (= [] v))))
         (.catch (fn [e] (is false (.-message e))))
         (.finally done))))
+
+(deftest the-case-goal-names-the-case-its-expectations-run-and-retry
+  (is (= "world-test pen-check/closed: event job.completed, no event reflex.fired (run 2, retry 1)"
+         (r/case-goal {:id "pen-check/closed"
+                       :expect [{:event {:source :job :kind :completed} :within-s 30}
+                                {:no-event {:source :reflex :kind :fired :context {:reflex-id :night}} :for-s 25}]}
+                      2 1)))
+  (is (= "world-test a/b: count job.started, event {:message \"x\"} (run 1, retry 0)"
+         (r/case-goal {:id "a/b" :expect [{:count-event {:source :job :kind :started} :at-least 2 :for-s 9}
+                                          {:event {:message "x"} :within-s 3}]}
+                      1 0)))
+  (is (= "world-test a/c (run 1, retry 0)" (r/case-goal {:id "a/c"} 1 0))))
+
+(deftest a-case-run-sets-the-body-goal-and-clears-it-after-an-error-too
+  (async done
+    (let [dir (fs/mkdtempSync (path/join (os/tmpdir) "runner-goal-"))
+          file (path/join dir "goal.edn")
+          seen (atom [])]
+      (-> (r/with-goal! dir "world-test a/b (run 1, retry 0)"
+                        #(do (swap! seen conj (cljs.reader/read-string (fs/readFileSync file "utf8")))
+                             (js/Promise.reject (js/Error. "setup failed"))))
+          (.catch (fn [e] (swap! seen conj (.-message e))))
+          (.then (fn []
+                   (is (= "world-test a/b (run 1, retry 0)" (:text (first @seen))))
+                   (is (= "world-test" (:by (first @seen))))
+                   (is (= "setup failed" (second @seen)))
+                   (is (not (fs/existsSync file)))
+                   (fs/rmSync dir #js {:recursive true})
+                   (done)))))))

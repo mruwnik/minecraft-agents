@@ -8,6 +8,7 @@
             ["path" :as path]
             [cljs.reader :as reader]
             [dashboard.view-info :as view-info]
+            [dashboard.goal :as goal]
             [dashboard.server.files :refer [file-exists? read-text state-dir]]))
 
 ;; ---------------------------------------------------------------- engine bodies
@@ -203,6 +204,23 @@
         hud (read-view-file body "hud.json" #(some-> % (js->clj :keywordize-keys true)))]
     (view-info/summarize (:value pose) (:value hud) (:mtime pose))))
 
+;; ---------------------------------------------------------------- goal (goal.edn, set by the body's controller)
+(def goal-cache (atom {}))
+(declare file-stamp)
+
+(defn read-body-goal
+  "The body's goal (dashboard.goal), re-read only when goal.edn's stamp changed; nil without one."
+  [body]
+  (let [dir (body-dir body)
+        stamp (file-stamp (goal/goal-file dir))
+        cached (get @goal-cache (body-key body))]
+    (cond
+      (nil? stamp) nil
+      (= stamp (:stamp cached)) (:value cached)
+      :else (let [value (goal/read-goal dir)]
+              (swap! goal-cache assoc (body-key body) {:stamp stamp :value value})
+              value))))
+
 (defn build-engine-body [agent now]
   (let [body (body-key agent)
         live (get @live-engines body)
@@ -237,7 +255,8 @@
     (assoc (ee/engine-body agent (ee/with-view-status view pose-view))
            :state (when position {:pos position})
            :outstanding outstanding
-           :view pose-view)))
+           :view pose-view
+           :goal (read-body-goal body))))
 
 ;; A body with no events.sock is built again only when an input changed: the agent, its live state, a stamp of each file
 ;; the build reads, or the minute (ages and cooldowns are shown coarse for an offline body).
@@ -253,7 +272,8 @@
     [agent (quot now offline-cache-ms) (get @live-engines body) (get @live-errors body)
      (mapv #(file-stamp (.join path dir %)) ["engine.edn" "events.edn"])
      sock-stamp
-     (mapv #(file-stamp (view-file body %)) ["pose.json" "hud.json"])]))
+     (mapv #(file-stamp (view-file body %)) ["pose.json" "hud.json"])
+     (file-stamp (goal/goal-file (body-dir body)))]))
 
 (defn engine-body [agent now]
   (let [body (body-key agent)
@@ -283,6 +303,7 @@
   (let [engine? (filter engine-folder? entries)
          other (remove engine-folder? entries)]
      (swap! body-cache #(prune-cache % entries))
+     (swap! goal-cache #(prune-cache % entries))
      (vec (concat (map #(engine-body % now) (ee/parse-engine-agents engine?))
                   (map ee/unsupported-body (ee/parse-engine-agents other))))))
 

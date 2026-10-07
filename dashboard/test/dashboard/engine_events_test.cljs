@@ -88,6 +88,30 @@
     (testing title
       (is (= job (:job (view events (+ t0 9000))))))))
 
+(defn canon [seq kind job data message]
+  {:source :job :kind kind :level :info :seq seq :time-ms (+ t0 (* seq 1000)) :message message
+   :context {:job-id job :round 1 :chain [job]} :data data})
+
+(deftest a-real-event-carries-the-hold-and-wait-reason
+  (doseq [[title events job]
+          [["a hold of the running job"
+            [(canon 1 :round_started "j1" {:name "jobs.survival.night"} nil)
+             (canon 2 :holding "j1" {:name "jobs.survival.night" :reason :sheltered :since (+ t0 2000)} "holding: sheltered")]
+            {:id "j1" :name "jobs.survival.night" :holding {:reason :sheltered :since (+ t0 2000)}}]
+           ["a wait of the job with its reason"
+            [(canon 1 :waiting "j1" {:name "jobs.farm.plant" :reason :refused :plans ["p"]} "waiting: refused {:plans [\"p\"]}")]
+            {:id "j1" :name "jobs.farm.plant" :waiting {:why "refused {:plans [\"p\"]}" :since (+ t0 1000)}}]
+           ["the next round ends the wait"
+            [(canon 1 :waiting "j1" {:name "a" :reason :refused} "waiting: refused")
+             (canon 2 :round_started "j1" {:name "a"} nil)]
+            {:id "j1" :name "a"}]
+           ["another listed job waiting is not the running job"
+            [(canon 1 :round_started "j1" {:name "a"} nil)
+             (canon 2 :waiting "j2" {:name "b" :reason :not-ready} "waiting: not-ready")]
+            {:id "j1" :name "a"}]]]
+    (testing title
+      (is (= job (:job (view events (+ t0 9000))))))))
+
 (defn reflex-ev [seq kind id extra]
   (ev seq (merge {:source "reflex" :kind kind :reflex id :job "j9" :chain nil} extra)))
 
