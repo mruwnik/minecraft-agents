@@ -223,3 +223,14 @@
             "3 logs carried of 5: back to :fell")
         (is (= [:collect :plant] (await (phases-of {:species "oak" :radius 10 :count 3}))) "enough: the job ends")
         (is (= [:collect :plant] (await (phases-of {:species "oak" :radius 10}))) "no count: one tree")))))
+
+(deftest count-six-fells-two-three-log-trees
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (lt/setup {:blocks (merge (lt/tree 3 0 "oak" 3) (lt/tree 3 6 "oak" 3) {"3,63,0" "grass_block" "3,63,6" "grass_block"})
+                                         :inventory [{:name "oak_sapling" :count 2}]})]
+          (core/submit! eng '(jobs.forestry.harvest-wood {:species "oak" :radius 12 :count 6}) {})
+          (is (< (await (lt/run-until-empty eng 80)) 80) "the job ends")
+          (is (= 6 (get (lt/inv p) "oak_log")) "both trees felled and collected")
+          (is (= 2 (count (filter #(= "oak_sapling" (.-name (.blockAt p #js {:x 3 :y 64 :z %}))) [0 6]))) "both replanted"))))))

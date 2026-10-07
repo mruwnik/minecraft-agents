@@ -1062,3 +1062,13 @@
        (is same)
        (is (zero? dug))
        (is (= stone placed))))))
+
+(deftest gravity-drops-the-body-to-the-first-solid-cell
+  (are [blocks pos health expected]
+       (let [w (-> (fake/initial-state {:blocks blocks :self {:pos pos :health 20}}) fake/fall)]
+         (= expected [(get-in w [:self :pos]) (get-in w [:self :health])]))
+    {"0,60,0" "stone"} [0 64 0] 20 [[0 61 0] 20]           ; a drop of 3: no damage
+    {"0,60,0" "stone"} [0 66 0] 20 [[0 61 0] 18]           ; 5 cells: 2 damage
+    {"0,60,0" "stone" "0,63,0" "oak_sapling"} [0 65 0] 20 [[0 61 0] 19] ; a sapling does not stop it: 4 cells, 1 damage
+    {"0,63,0" "stone"} [0 64 0] 20 [[0 64 0] 20]           ; standing: stays
+    {} [0 64 0] 20 [[0 64 0] 20]))                          ; a void: stays

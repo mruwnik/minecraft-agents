@@ -259,6 +259,19 @@
         (assoc-in [:self :inWater] (= here "water"))
         (update :self #(cond-> % (= here "water") (assoc :onFire false))))))
 
+(defn fall
+  "Gravity: a body over a cell without a collision box (air, a sapling, tall grass) drops to the first cell with a solid
+  block under it (up to 64 down; over a void or fluid it stays); a drop of more than 3 cells costs one health per extra cell."
+  [w]
+  (let [[x y z] (body-pos w)
+        [cx cz] [(js/Math.floor x) (js/Math.floor z)]
+        soft? #(let [b (block-name w [cx (dec %) cz])] (or (contains? no-shape b) (boolean (re-find no-box-see-through b))))
+        floor (when (soft? y) (first (filter (complement soft?) (range (dec y) (- y 64) -1))))]
+    (if (or (nil? floor) (#{"water" "lava"} (block-name w [cx (dec floor) cz])))
+      w
+      (-> w (assoc-in [:self :pos 1] floor)
+          (update-in [:self :health] #(max 0 (- % (max 0 (- y floor 3)))))))))
+
 (defn step-toward [from to maxd]
   (let [f (/ maxd (dist from to))]
     (mapv (fn [a b] (js/Math.round (+ a (* (- b a) f)))) from to)))
@@ -308,7 +321,7 @@
         [w' {:status "partial" :pos (body-pos w') :distance (dist (body-pos w') pos)}])
       :else
       (let [stand (if (:body-hitbox w) (centre-xz pos) pos)
-            w' (-> w (assoc-in [:self :pos] stand) settle (after-walk here))]
+            w' (-> w (assoc-in [:self :pos] stand) fall settle (after-walk here))]
         [w' {:status "arrived" :pos stand :distance 0}]))))
 
 (defn dig [w {:keys [pos]}]
@@ -320,7 +333,7 @@
       (not (near? w pos)) [w {:status "unreachable"}]
       (= block "bedrock") [w {:status "cannot"}]
       :else
-      (let [w (-> w (drop-block pos) (update :ages dissoc pos) (update :states dissoc pos))
+      (let [w (-> w (drop-block pos) (update :ages dissoc pos) (update :states dissoc pos) fall)
             ids (map #(+ (:next-entity-id w) %) (range (count names)))
             w' (reduce #(spawn %1 pos %2 1) w names)]
         [w' {:status "dug" :block block :drops (mapv (fn [id item] {:id id :name item :count 1 :pos pos}) ids names)}]))))
@@ -425,6 +438,7 @@
       (or (nil? e) (not= "item" (:kind e))) [w {:status "gone" :gained []}]
       ((:unreachable w) (:pos e)) [w {:status "unreachable" :gained []}]
       :else [(-> w (cond-> (= "air" (block-name w (update (vec (:pos e)) 1 + 1))) (assoc-in [:self :pos] (:pos e)))   ; a pocket without headroom is picked from beside it
+                 fall
                  (update :entities #(filterv (fn [x] (not= id (:id x))) %))
                  (give (get-in e [:item :name]) (get-in e [:item :count])))
              {:status "collected" :gained [(select-keys (:item e) [:name :count])]}])))
