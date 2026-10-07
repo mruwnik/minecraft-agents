@@ -633,3 +633,15 @@
                                  extra 6))]
             (is (= refused? (= :refused (:reason (done-event s)))) (pr-str extra))
             (is (= declined (mapv :reason (events-of s :leash.declined))) (pr-str extra))))))))
+
+(deftest the-tie-walk-never-escalates-through-a-pen-fence
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls* (atom [])
+              s (await (tu/with-near-spy calls* (fn ^:async b []
+                         (await (scenario {:fence {:x 31 :y 64 :z 0}} {:inventory lead :blocks fence :entities [(cow 1 3)]} 12)))))
+              opts (map #(nth % 2) @calls*)]
+          (is (seq opts))
+          (is (every? #(and (false? (:escalate %)) (= :never (:doors %)) (:zone-tolls %)) opts))
+          (is (= :tied (:reason (done-event s)))))))))

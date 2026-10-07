@@ -173,3 +173,14 @@
     (aset near/go-near! k stub)
     (try (await (f))
          (finally (aset near/go-near! k orig)))))
+
+(defn ^:async with-near-spy
+  "Run the async f with every jobs.lib.near/go-near! call recorded as [pos range opts] in the atom calls*, the walk done."
+  [calls* f]
+  (let [k "cljs$core$IFn$_invoke$arity$4"
+        orig (aget near/go-near! k)]
+    (aset near/go-near! k (fn ^:async spy [c pos range opts]
+                            (swap! calls* conj [pos range opts])
+                            (await (orig c pos range opts))))
+    (try (await (f))
+         (finally (aset near/go-near! k orig)))))

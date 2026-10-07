@@ -1,5 +1,6 @@
 (ns jobs.survival.restore-broken
   (:require [engine.ctx :as ctx]
+            [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
             [jobs.lib.result :as result]
@@ -98,13 +99,13 @@
   [c e]
   (tidy/why-not (:primitives c) e))
 
-(defn ^:async walk-near!
-  "Walk to within reach of cell with one go-to call: true when it arrived, :continue when go-to yielded."
+(defn ^:async walk-to!
+  "Walk to within reach of cell: true when it arrived, :continue when the walk yielded, false when it gave up."
   [c cell reach]
-  (let [r (await (ctx/call-child c :go 'jobs.movement.go-to {:pos (zipmap [:x :y :z] cell) :range reach :escalate false}))]
-    (if (= :continue r)
-      :continue
-      (and (= :done r) (boolean (:arrived (ctx/child-result c :go)))))))
+  (case (await (near/go-near! c (zipmap [:x :y :z] cell) reach {:escalate false :one-way :open}))
+    :there true
+    :partial :continue
+    false))
 
 (defn place-item
   "The carried item that puts back the dug cell: tidy/place-item of its entry (an escalation hole takes what the
@@ -128,7 +129,7 @@
   try is counted before the put-back (a cut run still used one), the cell is forgotten as soon as it is put back.
   A cell that failed is tried again on the next pass until it gave up."
   [c {:keys [cell tries] :as e} reach]
-  (let [walked (await (walk-near! c cell reach))]
+  (let [walked (await (walk-to! c cell reach))]
     (if (= :continue walked)
       :continue
       (do (tidy/count-try! c cell)

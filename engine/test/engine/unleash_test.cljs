@@ -203,3 +203,15 @@
             (await (run-ticks s 12 700))
             (is (= freed (vec (sort (:freed (done-event s))))) (pr-str owner extra))
             (is (= declined (mapv :reason (events-of s :unleash.declined))) (pr-str owner extra))))))))
+
+(deftest the-walk-to-the-animal-is-short-legs-that-never-escalate
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls* (atom [])
+              s (await (tu/with-near-spy calls* (fn ^:async b [] (await (scenario {} {:entities [(led 1 8)]} 12)))))
+              opts (map #(nth % 2) @calls*)]
+          (is (seq opts))
+          (is (every? #(and (false? (:escalate %)) (= 5 (:leg-s %)) (false? (:look-round %)) (:zone-tolls %)) opts)
+              "a moving target is chased in legs, never dug or pillared toward")
+          (is (finished? s)))))))

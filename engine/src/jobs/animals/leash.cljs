@@ -10,7 +10,7 @@
   ends itself. The check always passes, so a cut job resumes.
 
   One call is the whole run. It takes the nearest animal that is not on anyone's lead, not given up on and not in :skip (uuids or
-  ids). The body walks to within 3 blocks (doors :shut, each steer bounded by :walk-timeout-s) and uses the lead
+  ids). The body walks to within 3 blocks (doors :shut, each leg bounded by :walk-timeout-s) and uses the lead
   it carries (fetching one first when none is carried and an animal waits, jobs.lib.fetch, unless :fetch is false). The use counts only when the sensing then shows the animal on this body's lead. Animals are
   tracked by uuid, by id when it has none.
 
@@ -91,7 +91,7 @@
   (let [tpos (u/pos-of (.-pos animal))]
     (if (<= (u/dist (u/self-pos c) tpos) reach)
       :there
-      (let [r (await (near/walk-near! c tpos 2 {:zone-tolls true :doors :shut :timeout-s (:walk-timeout-s (:args c))}))]
+      (let [r (await (near/go-near! c tpos 2 {:zone-tolls true :doors :shut :leg-s (:walk-timeout-s (:args c)) :escalate false :look-round false}))]
         (case r
           :there :there
           :partial :partial

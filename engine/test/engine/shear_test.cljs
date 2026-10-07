@@ -233,3 +233,15 @@
         (let [s (await (seeing-scenario {} (chest-world []) 120))]
           (is (finished? s))
           (is (= :no-shears (:reason (done-event s)))))))))
+
+(deftest the-walk-to-the-sheep-is-short-legs-that-never-escalate
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls* (atom [])
+              s (await (tu/with-near-spy calls* (fn ^:async b [] (await (scenario {} {:inventory shears :entities [(sheep 1 8) (sheep 2 9)]} 12)))))
+              opts (map #(nth % 2) @calls*)]
+          (is (seq opts))
+          (is (every? #(and (false? (:escalate %)) (= 5 (:leg-s %)) (false? (:look-round %)) (:zone-tolls %)) opts)
+              "a moving target is chased in legs, never dug or pillared toward")
+          (is (finished? s)))))))

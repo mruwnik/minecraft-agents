@@ -414,7 +414,7 @@
 
 (defn ^:async tie! [c]
   (let [fence (:fence (:args c))
-        near (await (near/walk-near! c fence 2 {:doors :never :zone-tolls true}))]
+        near (await (near/go-near! c fence 2 {:doors :never :zone-tolls true :escalate false}))]
     (if-not (= :there near)
       (if (= :partial near) :again (finish! c :unreachable))
       (let [r (await (ctx/act c :useOn (clj->js {:pos fence})))

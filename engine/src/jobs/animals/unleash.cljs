@@ -11,7 +11,7 @@
   :mob limits it to one kind (any when nil), :animal to one animal by uuid (any when nil).
 
   One call is the whole run. It takes the nearest such animal not given up on. The body walks to within 3 blocks of what it
-  clicks (doors :shut, each steer bounded by :walk-timeout-s) and clicks with an empty hand:
+  clicks (doors :shut, each leg bounded by :walk-timeout-s) and clicks with an empty hand:
   - An animal on this body's lead is clicked itself. It counts when the sensing then shows it off the lead
     (checked for up to 1.5 s).
   - An animal tied to a knot: the knot is clicked. That removes the knot and hands every animal tied to it to
@@ -129,7 +129,7 @@
   (let [tpos (u/pos-of (.-pos target))]
     (if (<= (u/dist (u/self-pos c) tpos) reach)
       :there
-      (let [r (await (near/walk-near! c tpos 2 {:doors :shut :timeout-s (:walk-timeout-s (:args c)) :zone-tolls true}))]
+      (let [r (await (near/go-near! c tpos 2 {:zone-tolls true :doors :shut :leg-s (:walk-timeout-s (:args c)) :escalate false :look-round false}))]
         (case r
           :there :there
           :partial :partial

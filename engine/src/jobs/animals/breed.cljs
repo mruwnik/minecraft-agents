@@ -150,7 +150,7 @@
   (let [tpos (u/pos-of (.-pos animal))]
     (if (<= (u/dist (u/self-pos c) tpos) reach)
       :there
-      (let [r (await (near/walk-near! c tpos 2 {:zone-tolls true :timeout-s (:walk-timeout-s (:args c))}))]
+      (let [r (await (near/go-near! c tpos 2 {:zone-tolls true :leg-s (:walk-timeout-s (:args c)) :escalate false :look-round false}))]
         (case r
           :there (do (reset-row! c) :there)
           :partial :partial

@@ -602,12 +602,13 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (with-redefs [restore-broken/walk-near! (fn ^:async f [_ _ _] :continue)]
-          (let [{:keys [eng seen]} (restore! open-floor-world [(zs/whole-zone "Miles")] [(dug-cell [3 64 0])])]
-            (dotimes [_ 6] (await (core/tick! eng)))
-            (is (= [0] (mapv :tries (tidy-entries eng))) "yielding go-to costs no try")
-            (is (= [[{:cell [3 64 0] :was "stone" :why :unvisited}]] (mapv :cells (zs/trespass seen :tidy.not-restored)))
-                "kept for the next run, never :gave-up")))))))
+        (await (tu/with-near-stub (fn ^:async f [_ _ _ _] :partial)
+          (fn ^:async b []
+            (let [{:keys [eng seen]} (restore! open-floor-world [(zs/whole-zone "Miles")] [(dug-cell [3 64 0])])]
+              (dotimes [_ 6] (await (core/tick! eng)))
+              (is (= [0] (mapv :tries (tidy-entries eng))) "yielding go-to costs no try")
+              (is (= [[{:cell [3 64 0] :was "stone" :why :unvisited}]] (mapv :cells (zs/trespass seen :tidy.not-restored)))
+                  "kept for the next run, never :gave-up")))))))))
 
 (deftest a-run-that-hits-the-pass-cap-with-cells-waiting-ends-stopped-not-done
   (async done

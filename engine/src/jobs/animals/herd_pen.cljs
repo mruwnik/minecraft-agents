@@ -148,7 +148,7 @@
   (let [{:keys [box target]} (:args c)
         centre (box-centre box)]
     (if (> (u/dist (u/self-pos c) centre) near-pen)
-      (if (= :blocked (await (near/walk-near! c centre approach-range {:doors :never})))
+      (if (= :blocked (await (near/go-near! c centre approach-range {:doors :never :escalate false})))
         (finish! c :unreachable)
         :continue)
       (let [answer (read-pen c)
@@ -219,12 +219,12 @@
         (and (= gx (js/Math.floor (:x here))) (= gz (js/Math.floor (:z here)))))))
 
 (defn ^:async exit-dash!
-  "The exit in one round: walk-near! to out-1 with its own gate handling (open, pass, shut). Shut and outside: on to the
+  "The exit in one round: go-near! to out-1 with its own gate handling (open, pass, shut). Shut and outside: on to the
   census. Open and outside: the shut from outside (:shut-out). Still inside, or blocked: by :exit-open, the
   failure counted in :dash-tries."
   [c]
   (hold-gate! c)
-  (let [r (await (near/walk-near! c (cell-pos (nth (:axis (ctx/mem c)) out-1)) 0))
+  (let [r (await (near/go-near! c (cell-pos (nth (:axis (ctx/mem c)) out-1)) 0 {:escalate false}))
         outside? (body-outside? c)
         open? (gate-open? c)]
     (cond

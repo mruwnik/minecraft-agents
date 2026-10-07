@@ -10,7 +10,7 @@
   check always passes, so a cut job resumes.
 
   One call is the whole run. It takes the nearest adult sheep not yet shorn or given up on (babies and sheared sheep are
-  skipped). The body walks to within 3 blocks (doors :shut, each steer bounded by :walk-timeout-s) and uses the
+  skipped). The body walks to within 3 blocks (doors :shut, each leg bounded by :walk-timeout-s) and uses the
   shears it carries (fetching them first when none are carried and sheep wait, jobs.lib.fetch, unless :fetch is false). Sheep are tracked by uuid, by id when it has none.
 
   A sheep is given up on when its walk is blocked or two shearings were out of reach (:unreachable), nothing
@@ -120,7 +120,7 @@
   (let [tpos (u/pos-of (.-pos sheep))]
     (if (<= (u/dist (u/self-pos c) tpos) reach)
       :there
-      (let [r (await (near/walk-near! c tpos 2 {:zone-tolls true :doors :shut :timeout-s (:walk-timeout-s (:args c))}))]
+      (let [r (await (near/go-near! c tpos 2 {:zone-tolls true :doors :shut :leg-s (:walk-timeout-s (:args c)) :escalate false :look-round false}))]
         (case r
           :there (do (reset-row! c) :there)
           :partial :partial

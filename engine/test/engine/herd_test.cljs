@@ -945,8 +945,8 @@
                 unequip (first (filter #(= "unequip" (:name %)) acts))]
             (is (= :brought (:reason (done-event s))))
             (is (= 2 (count clicks)) "one open and one shut after the hand is emptied")
-            (is (= #{[(:job unequip) (:round (first clicks))]} (set (map (juxt :job :round) clicks)))
-                "the open, the pass and the shut are one round of the herd job itself, not toggle children")
+            (is (= #{[(str (:job unequip) "/walk") (:round (first clicks))]} (set (map (juxt :job :round) clicks)))
+                "the open, the pass and the shut are one round of the one go-to walk child, not toggle children")
             (is (not (gate-open? s)))
             (is (< (self-x s) 10) "the body ends outside")
             (is (zero? (:escaped (done-event s))))
@@ -1112,3 +1112,14 @@
                   s (submit! (clock-on-wait! (h/setup (world {:entities [(cow 1 4 3)]}) 0 store)) {:target 1})]
               (await (run-ticks s 400))
               (is (= reason (:reason (done-event s))) by))))))))
+
+(deftest the-gate-work-walks-never-escalate-through-the-fence
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls* (atom [])
+              s (await (tu/with-near-spy calls* (fn ^:async b [] (await (scenario {:target 1} {:entities [(cow 1 4 3)]} 300)))))
+              opts (map #(nth % 2) @calls*)]
+          (is (seq opts))
+          (is (every? #(false? (:escalate %)) opts) "a body shut in the pen is not dug or pillared out through its fence")
+          (is (= :brought (:reason (done-event s)))))))))
