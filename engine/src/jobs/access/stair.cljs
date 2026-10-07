@@ -188,9 +188,9 @@
       (some #(and (= item (:name %)) (< (:count %) stack-size)) (u/inventory p))))
 
 (defn no-tool?
-  "Whether block needs a tool to drop (its harvestTools) and none carried is one of them."
+  "Whether block needs a tool to clear (jobs.lib.tools/needs-tool-to-clear?) and none is carried."
   [p block]
-  (not (tools/can-harvest? p block)))
+  (tools/needs-tool-to-clear? p block))
 
 (defn access-world
   "The social half of the rules' input (jobs.lib.access/zone-input): zones, claims, footprints, the body's name and

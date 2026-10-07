@@ -646,7 +646,7 @@ Helpers shared by jobs (not jobs): `jobs.lib.watch` (`watch/watch!` between acts
 was known recently, the body turns to look behind it so a creeper from behind is noticed (a heard mob gives only a direction and band); used by mine, fell-tree,
 from-plan, attack, fight-back, herd), `jobs.lib.worth/item-worth`, `jobs.lib.cost` (pure cost calculators),
 `jobs.lib.escape/choose`, `jobs.lib.tools/equip-for!` (cheapest carried tool that harvests the block; reflex digs use
-the fastest), `jobs.lib.declined`, `jobs.lib.danger` (danger checks), `jobs.lib.reach` (walk and arrow searches), `jobs.lib.reach.proofs`, `jobs.lib.tidy`, `jobs.lib.step-off` (a go-to hop to the nearest standable non-hazard cell (no campfire, no foreign zone via zone-ok) off a cell the body stands in).
+the fastest), `jobs.lib.tools/needs-tool-to-clear?` (what stair, tunnel cleanup and from-plan ask: no harvesting tool carried and nothing carried or bare hands breaks the block in 1.5 s; mine asks `can-harvest?`), `jobs.lib.declined`, `jobs.lib.danger` (danger checks), `jobs.lib.reach` (walk and arrow searches), `jobs.lib.reach.proofs`, `jobs.lib.tidy`, `jobs.lib.step-off` (a go-to hop to the nearest standable non-hazard cell (no campfire, no foreign zone via zone-ok) off a cell the body stands in).
 
 ## Path planner
 

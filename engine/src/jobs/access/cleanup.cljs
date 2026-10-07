@@ -148,7 +148,7 @@
   (let [{:keys [accept reach]} (:args c)]
     (merge (access/zone-input c {:ignore-zones? (:ignore-zones? (:args c))})
            {:feet (stair/feet-of c) :eye (eye-of c) :block-at (escape/block-at-of (:primitives c)) :entries entries
-            :can-harvest? #(tools/can-harvest? (:primitives c) %)
+            :can-harvest? #(not (tools/needs-tool-to-clear? (:primitives c) %))
             :ledger (ledger/cells l) :zones zones :accept (set accept) :reach reach
             :held (:held (ctx/mem c) {})})))
 

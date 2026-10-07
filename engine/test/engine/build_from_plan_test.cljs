@@ -409,7 +409,7 @@
           (is (= "oak_fence" (block p [4 64 3])))
           (is (= {} (:given-up result))))))))
 
-(deftest a-wrong-snow-block-is-dug-with-a-carried-shovel-and-without-one-is-given-up-as-no-tool
+(deftest a-wrong-snow-block-is-dug-by-hand-with-or-without-a-shovel
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -417,8 +417,8 @@
               [without q] (await (fence-run {"4,64,3" "snow_block"} kit {} {}))]
           (is (= "oak_fence" (block p [4 64 3])))
           (is (= {} (:given-up with)))
-          (is (empty? (h/calls q "dig")))
-          (is (= {[4 64 3] :no-tool} (:given-up without))))))))
+          (is (= "oak_fence" (block q [4 64 3])))
+          (is (= {} (:given-up without))))))))
 
 (deftest a-wrong-stone-is-dug-with-the-carried-pickaxe-and-without-one-is-given-up-as-no-tool
   (async done

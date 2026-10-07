@@ -361,7 +361,7 @@
   (let [mem (ctx/mem c)
         closed (merge (:given-up mem) (:refused mem))]
     (some #(when (and (not (contains? closed (:pos %)))
-                      (not (tools/can-harvest? (:primitives c) (:found %))))
+                      (tools/needs-tool-to-clear? (:primitives c) (:found %)))
              {:reason :no-tool :block (:found %)})
           (digging cells))))
 
@@ -464,7 +464,7 @@
   "The cells of digs not closed (given up or refused); a block no carried tool harvests is given up here as :no-tool."
   [c digs closed]
   (let [open (remove #(contains? closed (:pos %)) digs)
-        {no-tool true ok false} (group-by #(not (tools/can-harvest? (:primitives c) (:found %))) open)]
+        {no-tool true ok false} (group-by #(tools/needs-tool-to-clear? (:primitives c) (:found %)) open)]
     (when (seq no-tool)
       (ctx/update-mem! c update :given-up merge (into {} (map (fn [cell] [(:pos cell) :no-tool])) no-tool)))
     (vec ok)))

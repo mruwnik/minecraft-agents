@@ -5,11 +5,14 @@ import { isReplaceable, isInteractable } from './blocks.mjs'
 import { stateProperties } from './use-on.mjs'
 import { liveEntities, liveEntity } from './live-entities.mjs'
 import vec3 from 'vec3'
+import blockFor from 'prismarine-block'
 import pf from 'mineflayer-pathfinder'
 import { REACH, DROP_RADIUS, DROP_WAIT_S, DIG_MARGIN_S, POLL_MS, sleepMs, xyz, dist, center, isAir, isNum, isPos, cell, vec, cutError, BUCKET_WAIT_S, need, entityKind, droppedItem, gained } from './prim-base.mjs'
 
 const { Vec3 } = vec3
 const { goals } = pf
+
+const blockClasses = new WeakMap()
 
 export function createDig (env) {
   const { act, isOwner, here, eye, inventory, countsNow, timeScale, lookNow, walk } = env
@@ -38,6 +41,19 @@ export function createDig (env) {
     if (!itemName || itemName === env.bot.heldItem?.name) return env.bot.digTime?.(block) ?? 0
     const type = env.bot.registry?.itemsByName?.[itemName]?.id
     return block.digTime?.(type, env.bot.game?.gameMode === 'creative', env.bot.entity.isInWater, !env.bot.entity.onGround, [], {}) ?? 0
+  }
+
+  // the time in ms to break a block of this name with the named item (the bare hand when omitted); Infinity for a block
+  // that cannot be dug, 0 for an unknown name. No world lookup: a block is a kind here, not a cell.
+  const blockClass = registry => (blockClasses.get(registry) ?? blockClasses.set(registry, blockFor(registry)).get(registry))
+  const clearTime = (blockName, itemName) => {
+    const registry = env.bot.registry
+    const kind = registry?.blocksByName?.[blockName]
+    if (!kind) return 0
+    const block = blockClass(registry).fromStateId(kind.defaultState, 0)
+    if (!block.diggable) return Infinity
+    const type = itemName ? registry.itemsByName?.[itemName]?.id : null
+    return block.digTime(type ?? null, false, false, false, [], {})
   }
 
   // the item names minecraft-data lists as able to harvest a block (its drops are lost otherwise); null when the
@@ -239,5 +255,5 @@ export function createDig (env) {
       return got.length ? { status: 'collected', gained: got } : { status: 'gone', gained: [] }
     })
   }
-  return { dig, place, collect, digTime, harvestTools }
+  return { dig, place, collect, digTime, clearTime, harvestTools }
 }

@@ -4,6 +4,8 @@ import assert from 'node:assert/strict'
 import { createPrimitives, createPrimitivesFromBot, mcToMineflayerLook, mineflayerToMcLook } from './primitives.mjs'
 import { EventEmitter } from 'node:events'
 import { stubBot, names, Vec3 } from './stub-bot.mjs'
+import registryFor from 'prismarine-registry'
+import { fixDigMaterials } from './dig-materials.mjs'
 
 // the calls a bot received, minus the blockAt reads waitForWorld makes
 const acted = bot => names(bot).filter(n => n !== 'blockAt')
@@ -2955,6 +2957,19 @@ test('harvestTools lists the harvesting item names, null when the block lists no
   assert.deepEqual(p.harvestTools('iron_ore'), ['stone_pickaxe', 'iron_pickaxe'])
   assert.equal(p.harvestTools('dirt'), null)
   assert.equal(p.harvestTools('no_such_block'), null)
+})
+
+// clearTime(block, item): the dig time in ms of a block kind with the named item, the bare hand when omitted
+test('clearTime is the time of the named item or the hand, Infinity for an undiggable block, 0 for an unknown name', () => {
+  const { bot, p } = rig(world)
+  bot.registry = registryFor('1.21.8')
+  fixDigMaterials(bot.registry)
+  assert.equal(p.clearTime('snow_block'), 1000)
+  assert.equal(p.clearTime('snow_block', 'wooden_shovel'), 150)
+  assert.equal(p.clearTime('cobweb'), 20000)
+  assert.equal(p.clearTime('cobweb', 'shears'), 400)
+  assert.equal(p.clearTime('bedrock'), Infinity)
+  assert.equal(p.clearTime('no_such_block'), 0)
 })
 
 const hurtRig = () => {

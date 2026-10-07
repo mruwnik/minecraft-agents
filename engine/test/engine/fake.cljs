@@ -39,6 +39,12 @@
 (def blocks-mod (delay (node/require-here "./js/blocks.mjs")))
 (def chat-mod (delay (node/require-here "./js/chat.mjs")))
 (def vehicle-mod (delay (node/require-here "./js/vehicle.mjs")))
+(def dig-registry
+  "The real registry (with the dig-materials fix) and its Block class: clearTime is the real maths, not a table."
+  (delay (let [cjs #(let [m (node/require-here %)] (or (.-default m) m))
+               registry ((cjs "prismarine-registry") "1.21.8")]
+           ((.-fixDigMaterials (node/require-here "./js/dig-materials.mjs")) registry)
+           {:registry registry :block-class ((cjs "prismarine-block") registry)})))
 
 (def reach 4.5)
 (def eye 1.62)
@@ -912,6 +918,15 @@
                                                 (when (and properties (seq props)) {:properties props}))))))
                          to-array))))
               "digTime" (fn [_pos _item] (or (:dig-ms @state) 0))
+              "clearTime"
+              (fn [block item]
+                (let [{:keys [registry block-class]} @dig-registry
+                      kind (aget (.-blocksByName registry) block)
+                      b (when kind (.fromStateId block-class (.-defaultState kind) 0))
+                      type (some-> item (#(aget (.-itemsByName registry) %)) .-id)]
+                  (cond (nil? b) 0
+                        (not (.-diggable b)) js/Infinity
+                        :else (.digTime b (or type nil) false false false #js [] #js {}))))
               "harvestTools"
               (fn [block]
                 (let [data (minecraft-data "26.1")

@@ -157,3 +157,22 @@
   "Whether the carried tools harvest block-name: its harvestTools are empty, or one is carried."
   [p block-name]
   (nil? (harvest-need (map :name (u/inventory p)) (some-> (.harvestTools p block-name) js->clj))))
+
+(def quick-clear-ms "A block that carried tools or the bare hand break within this is cleared without a tool." 1500)
+
+(defn clear-ms
+  "The least time in ms the bare hand or any carried item takes to break block-name (primitive clearTime)."
+  [p block-name]
+  (->> (map :name (u/inventory p))
+       distinct
+       (cons nil)
+       (map #(js/Number (.clearTime p block-name %)))
+       (apply min)))
+
+(defn needs-tool-to-clear?
+  "Whether a job that only needs block-name gone (stair, tunnel, build) must have a tool first: no carried tool
+  harvests it (can-harvest?) and nothing carried breaks it within quick-clear-ms. Leaves, snow, glass, dirt go by
+  hand; stone, ore and a cobweb do not. A job that wants the drop (mine) asks can-harvest? alone."
+  [p block-name]
+  (and (not (can-harvest? p block-name))
+       (> (clear-ms p block-name) quick-clear-ms)))
