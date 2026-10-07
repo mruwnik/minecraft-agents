@@ -269,8 +269,7 @@ The one argument of a check and a round. Helpers are in `engine.ctx`:
 
 **act.** Every acting call goes through `act`: it checks the token, saves memory, emits `action.started`/`action.done`
 (debug), calls the primitive, saves again. There is no commit: a cut loses at most the work since the last save, so write a
-debt or intent with `update-mem!` before the `act` it protects. After every `moveTo` it writes a `:moved` body-memory entry
-read by the stuck trigger.
+debt or intent with `update-mem!` before the `act` it protects. After every `moveTo` it writes a `:moved` body-memory entry.
 
 **call-child.** The child's memory is the parent's `[:children slot]` sub-map. The same slot resumes the same child while
 it returns `:continue` or `:declined`; on `:done` the sub-map is cleared so the next call starts fresh. A cut anywhere ends
@@ -289,7 +288,7 @@ calls job code only through `engine.hooks`, named in `src/jobs/hooks.edn` (world
 One EDN store per body: `worlds/<world>/agents/<name>/engine/memory.edn`, `{:entries {kind [entry]} :policies {kind policy}}`.
 
 - An **entry** is `{:t wall-clock-ms :wt world-time :data ...}`, newest last. **Kinds** are an open vocabulary: `:hurt`, `:died`,
-  `:chat`, `:restart`, `:bed`, `:chest`, `:home`, `:looked`, `:moved`, `:picked-up`, `:fed`, `:slept`, `:shelter`, `:stuck`, `:threat`,
+  `:chat`, `:restart`, `:bed`, `:chest`, `:home`, `:looked`, `:moved`, `:picked-up`, `:fed`, `:slept`, `:shelter`, `:threat`,
   `:tidy`, `:scaffold`, `:forestry/replant`, `:job/j7`, and so on. Body events become entries of their kind; every start
   appends `:restart`.
 - **Policy** `{:cap n :ttl ms}` is stored beside the kind. A new kind gets cap 50 and ttl one hour unless a write gives
@@ -351,7 +350,6 @@ Built-in triggers, in the order of `triggers/defaults.edn` (the default register
 | `:hungry` | food below `:food` 6 plus one per missing hp (at most 18: below 18 nothing heals); or hurt, below 18 and common food carried; or health below `:health` 7 and food carried (eats to 20) | `get-food` | 90 s |
 | `:night` | night, awake, and a bed to use or carried, someone asleep, unroofed, or shut in its shelter; by day shut in its shelter or a bed it put down outside its zone still stands | `survival.night` | 10 s |
 | `:door-left` | a door a walk opened and meant to shut was last seen open 10 s after (never read through a wall) | `maintenance.shut-doors` | 5 s |
-| `:stuck` | the last 4 `:moved` entries all moved under 1.5 blocks, newest under 60 s old, body really held, feet cell not wedged (unless unwedge gave up on it) | `maintenance.unstick` | 60 s |
 | `:died` | a `:died` under 5 minutes old with a newer `:respawned` and no `:recovered` | `recover-drops` | 30 s |
 | `:inventory-nearly-full` | at most `:free` 2 of 36 main and hotbar slots empty | `storage.make-room` | 120 s |
 | `:scaffold-left` | the scaffold ledger holds blocks whose job is gone | `access.cleanup` | stop |
@@ -377,7 +375,7 @@ An ad hoc `:when` can be a condition: an EDN list read by `engine.condition` aga
 - Operators: `and or not < > <= >= =`, `(held-for seconds cond)`, `(known? x)`.
 - Facts: numbers `(health) (food) (inventory "item") (free-slots) (distance-to pos) (blocks-near "name" r) (seen blocks only)
   (since :kind)`; a position `(place :kind)`; booleans `(daytime) (in-water) (hostile-near r, a real danger) (burning) (suffocating)
-  (night-unsafe) (stuck) (wearing "item")`. `(since :kind)` is the seconds since body memory last recorded an unexpired
+  (night-unsafe) (wearing "item")`. `(since :kind)` is the seconds since body memory last recorded an unexpired
   entry of that kind (unknown when none).
 - A fact can be unknown (offline, no such place). Unknown propagates; `and`/`or` are three-valued; a condition holds only
   when definitely true; `known?` is how to ask about absence.
@@ -433,7 +431,7 @@ Listed jobs are never backed off.
 - Schedule `{:after 3 :first-s 1 :max-s 30}`: after `:after` fruitless runs the entry does not fire for `:first-s`
   seconds, doubling per further fruitless run up to `:max-s`.
 - Config, most specific wins: engine `:backoff` < the trigger's `:backoff` in `triggers/defaults.edn` < the entry's.
-  `false` turns it off (`:suffocating`, `:burning`, `:hostile-near`, `:night`, `:stuck`).
+  `false` turns it off (`:suffocating`, `:burning`, `:hostile-near`, `:night`).
 - State is the non-persisted `:backoffs` atom, cleared after every pause (offline, settling, manual control).
 - Events: warn `reflex.backoff`, repeated at most every `:backoff-alert-ms` (300000); info `reflex.recovered`.
 
@@ -598,7 +596,7 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 | `survival.recover-drops` | After death, one run is the whole trip: holds `:respawning` then `:settling`, weighs the drops' value against the trip's danger (`jobs.lib.cost`), walks, collects. Never `:continue`; ends `:declined` with a `recover-drops.declined` event whose `:reason` is `:danger` (mob and place) or `:unreachable` |
 | `survival.restore-broken` | Puts back what a job broke in another's zone, and the holes go-to's escalation dug; one run over every cell |
 | `survival.unwedge` | Steps out of a full block at the feet cell, else digs it, all in one run (stopped + warn `unwedge.blocked` for bedrock or three failed digs); `:ignore-zones?` lifts the zone check |
-| `maintenance.unstick`, `maintenance.shut-doors` | Walk to the stuck job's goal with go-to in one run (stopped + warn `unstick.failed` when it does not arrive; `:ignore-zones?` goes on to go-to's escalation); shut every door a walk left open in one run (stopped `:left` with the reasons when any stays open) |
+| `maintenance.shut-doors` | Shut every door a walk left open in one run (stopped `:left` with the reasons when any stays open) |
 | `combat.attack` `{:targets :radius :absent :done}` | Kills named targets (ids, usernames, mob types) in one call; ends `:cleared`, `:gave-up`, `:lost`, `:timeout` or `:absent`. `:absent :wait` makes a standing guard |
 | `combat.hunt`, `animals.cull` | Kill adults of a mob kind, never the last `:keep`, and collect drops, all in one call (yields only while a child waits); `animals.cull` skips animals in another's zone (`:ignore-zones?`) |
 

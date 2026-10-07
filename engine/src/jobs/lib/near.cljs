@@ -1,7 +1,7 @@
 (ns jobs.lib.near
   "One round of walking toward a cell, as jobs.movement.go-to and go-near! do it: plan from where the body stands
   within the executor's abilities (jobs.lib.walk), follow the plan once, opening shut doors, gates and trapdoors by the
-  :doors policy (jobs.lib.pass), and write the :moved memory entry the stuck trigger and jobs.maintenance.unstick read.
+  :doors policy (jobs.lib.pass), and write the :moved memory entry.
   Its own namespace because jobs.lib.walk and jobs.lib.pass require jobs.lib.util."
   (:require [jobs.lib.click :as click]
             [engine.ctx :as ctx]

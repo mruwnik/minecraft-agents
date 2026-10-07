@@ -1,5 +1,0 @@
-;; jobs.maintenance.unstick pillar cells go to the scaffold ledger; jobs.access.cleanup takes them back (trigger :scaffold-left).
-{:register [{:trigger :stuck :persistence :cooldown :cooldown-s 60
-             :job (jobs.maintenance.unstick)}
-            {:trigger :scaffold-left}]
- :queue []}

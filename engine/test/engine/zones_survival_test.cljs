@@ -8,7 +8,6 @@
             [engine.shelter-test :as st]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [engine.unstick-test :as ut]
             [engine.wedged-test :as wt]
             [jobs.lib.world-files :as ew]
             [plan.shape :as shape]))
@@ -150,24 +149,7 @@
           (is (= 10 (count (calls p "place"))))
           (is (= 1 (count (trespass seen :dig-in.trespass-last-resort)))))))))
 
-;; ------------------------------------------------------------------ unstick
-
 (defn dug [p] (mapv arg-pos (calls p "dig")))
-
-(deftest unstick-in-a-pit-in-another-s-zone-neither-pillars-nor-digs
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [here {:x 5 :y 61 :z 0}
-              {:keys [eng p seen]} (setup {:self {:pos here} :blocks ut/pit :inventory [{:name "dirt" :count 4}]}
-                                          [(zone "Miles" [0 55 -5] [12 70 5])])]
-          (ut/seed-moved! eng (repeat 4 (ut/bad-move-at here ut/goal)))
-          (core/submit! eng '(jobs.maintenance.unstick) {})
-          (await (run-until-empty eng 100))
-          (is (= [] (calls p "jumpPlace")))
-          (is (= [] (calls p "dig")))
-          (is (= {:step :pillar :reason :zone} (select-keys (:escalation (ut/failed-event seen)) [:step :reason]))
-              "go-to's pillar refuses another's zone, and unstick says so"))))))
 
 ;; ------------------------------------------------------------------ get-food
 
@@ -214,13 +196,3 @@
           (is (= 1 (count (calls (:p unwedge) "dig"))) "unwedge digs the feet block")
           (is (= [] (trespass (:seen unwedge) :unwedge.trespass-last-resort))))))))
 
-(deftest unstick-ignore-zones-reaches-go-to-escalation
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (doseq [[args out?] [[{} false] [{:ignore-zones? true} true]]]
-          (let [{:keys [eng p]} (setup {:self {:pos ut/in-pit} :blocks ut/pit :inventory [{:name "dirt" :count 4}]} [(zone "Miles" [0 55 -5] [12 70 5])])]
-            (ut/seed-moved! eng (repeat 4 (ut/bad-move-at ut/in-pit ut/goal)))
-            (core/submit! eng (list 'jobs.maintenance.unstick args) {})
-            (await (run-until-empty eng 200))
-            (is (= out? (<= 11 (first (ut/feet p)) 13)) (pr-str args))))))))

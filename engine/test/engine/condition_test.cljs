@@ -342,7 +342,6 @@
       '(burning) false
       '(suffocating) false
       '(night-unsafe) false
-      '(stuck) false
       '(= (blocks-near "stone" 8) 1) true)))
 
 (deftest hostile-near-is-a-real-danger-as-the-trigger-defines-it

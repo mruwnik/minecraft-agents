@@ -12,8 +12,7 @@
             [jobs.lib.danger :as danger-q]
             [jobs.lib.shelter :as sh]
             [triggers.survival.burning :as burning]
-            [triggers.survival.suffocating :as suffocating]
-            [triggers.survival.stuck :as stuck]))
+            [triggers.survival.suffocating :as suffocating]))
 
 (def table
   "Every fact by symbol: {:args [type ...] :type type :cost :cheap|:scan
@@ -57,9 +56,6 @@
    'night-unsafe {:args [] :type :boolean :cost :cheap
                   :doc "night, awake, nothing overhead and not buried"
                   :read (online (fn [p _] (sh/unsafe-night? p sh/default-roof-height)))}
-   'stuck {:args [] :type :boolean :cost :cheap
-           :doc "the last moves all failed and the body is really held (the stuck trigger, default args)"
-           :read (fn [{:keys [world memory]}] (stuck/body-stuck? world memory {}))}
    'blocks-near {:args [:string :number] :type :number :cost :scan :refresh-s 5
                  :doc "how many blocks of that name the body has seen within the radius (at most 32), counted up to 256"
                  :read (online blocks-near)}})

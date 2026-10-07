@@ -3,8 +3,7 @@
  ;; The default trigger set: id -> trigger fn, default job, args and persistence. The order here is the default
  ;; register's priority (most urgent first), used when a scenario has no :register; an explicit :register orders its own.
  ;; :backoff (engine.backoff): the entry's default. Off for danger reflexes (no backoff while the danger lasts), for night
- ;; (time-critical, bounds itself) and stuck (go-to bounds the spell; its give-up writes a :stuck entry that quiets the
- ;; trigger). {:after 9} where one firing may take several fruitless runs (two unreachable doors or gates).
+ ;; (time-critical, bounds itself). {:after 9} where one firing may take several fruitless runs (two unreachable doors or gates).
  :triggers
  [{:id :suffocating :when triggers.survival.suffocating/suffocating :job (jobs.survival.breathe) :args triggers.survival.suffocating/defaults :persistence :cooldown :cooldown-s 0 :backoff false}
   {:id :burning :when triggers.survival.burning/burning :job (jobs.survival.extinguish) :args {} :persistence :cooldown :cooldown-s 0 :backoff false}
@@ -12,7 +11,6 @@
   {:id :hostile-near :when triggers.survival.hostile-near/hostile-near :job (jobs.survival.respond-to-hostile) :args triggers.survival.hostile-near/defaults :persistence :retry :backoff false}
   {:id :night :when triggers.survival.night/night :job (jobs.survival.night) :args triggers.survival.night/defaults :persistence :cooldown :cooldown-s 10 :backoff false}
   {:id :hungry :when triggers.survival.hungry/hungry :job (jobs.survival.get-food) :args triggers.survival.hungry/defaults :persistence :cooldown :cooldown-s 90}
-  {:id :stuck :when triggers.survival.stuck/stuck :job (jobs.maintenance.unstick) :args triggers.survival.stuck/defaults :persistence :cooldown :cooldown-s 60 :backoff false}
   {:id :door-left :when triggers.maintenance.door-left/door-left :job (jobs.maintenance.shut-doors) :args triggers.maintenance.door-left/defaults :persistence :cooldown :cooldown-s 5 :backoff {:after 9}}
   {:id :died :when triggers.survival.died/died :job (jobs.survival.recover-drops) :args {} :persistence :cooldown :cooldown-s 30}
   {:id :inventory-nearly-full :when triggers.storage.inventory-nearly-full/inventory-nearly-full :job (jobs.storage.make-room) :args triggers.storage.inventory-nearly-full/defaults :persistence :cooldown :cooldown-s 120}

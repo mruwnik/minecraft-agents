@@ -1,6 +1,5 @@
 (ns engine.hut-shelter-test
-  "A body inside its own roofed hut with a shut door (game-agent bugs #33/#42): the unstick job leaves through the door
-  instead of pillaring in the room and digging the roof, the night trigger holds only when the roof is really
+  "A body inside its own roofed hut with a shut door (game-agent bugs #33/#42): the night trigger holds only when the roof is really
   gone, and dig-in mends a hole in the roof of a closed room instead of walling the body in at feet and head height."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
@@ -12,7 +11,6 @@
             [engine.scenario :as scenario]
             [engine.shelter-test :as st]
             [engine.test-util :as tu :refer [box]]
-            [engine.unstick-test :as ut]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
             [jobs.survival.dig-in-leave :as dig-leave]))
@@ -51,40 +49,6 @@
                  :let [cell [x y z] name (block-at p cell)]
                  :when (and (not= "air" name) (not (contains? furniture (str x "," y "," z))))]
              [cell name])))
-
-;; ------------------------------------------------------------------ unstick: out through the door
-
-(def outside {:x 5 :y 64 :z 8})
-
-(deftest unstick-in-a-hut-leaves-through-the-door-without-pillaring-or-digging
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (ut/setup (merge (hut-world {:x 5 :y 64 :z 1} {})
-                                               {:inventory [{:name "cobblestone" :count 32}
-                                                            {:name "stone_pickaxe" :count 1}]}))]
-          (ut/block-moveTo! p) ; the job's own moveTo cannot route through a door
-          (ut/seed-moved! eng (repeat 4 {:from {:x 5 :y 64 :z 1} :to {:x 5 :y 64 :z 1} :status "blocked" :target outside}))
-          (core/submit! eng '(jobs.maintenance.unstick) {})
-          (await (st/tick-n eng 30))
-          (is (= [] (ut/calls p "jumpPlace")) "no pillar in the room")
-          (is (= [] (ut/calls p "dig")) "no roof or wall dug")
-          (is (= [] (ut/calls p "place")))
-          (is (= {} (room-blocks p)) "nothing left at feet or head height in the room")
-          (is (= "cobblestone" (block-at p [5 67 1])) "the roof is whole")
-          (is (<= 3 (.-z (.-pos (.self p)))) "the body is outside, past the door")
-          (is (false? (door-open? p)) "the door is shut behind it")
-          (is (= [] (:list (core/state eng))) "the spell is over"))))))
-
-(deftest unstick-in-a-closed-pit-still-pillars-when-no-walk-gets-out
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [here {:x 5 :y 61 :z 0}
-              {:keys [eng p]} (ut/setup {:self {:pos here} :blocks ut/pit :inventory [{:name "dirt" :count 4}]})]
-          (await (ut/run-unstick! eng here ut/goal))
-          (is (= 3 (count (ut/calls p "jumpPlace"))) "a real pit: the walk finds no way, so go-to pillars")
-          (is (= [] (:list (core/state eng)))))))))
 
 ;; ------------------------------------------------------------------ the night trigger in the hut
 

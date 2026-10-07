@@ -1,5 +1,5 @@
 ;; ProbeNight: the shipped survival register, plus a queue job that walks away
-;; at day (to see whether stuck -> unstick gets a body out of its dig-in hut).
+;; at day (to see whether go-to gets a body out of its dig-in hut).
 {:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12}
              :job (jobs.survival.breathe {:min-oxygen 12})}
             {:trigger :burning :persistence :cooldown :cooldown-s 2
@@ -10,8 +10,6 @@
              :job (jobs.survival.get-food {:food 6})}
             {:trigger :night :persistence :cooldown :cooldown-s 10 :args {:roof-height 4}
              :job (jobs.survival.night {:roof-height 4})}
-            {:trigger :stuck :persistence :cooldown :cooldown-s 60
-             :job (jobs.maintenance.unstick)}
             {:trigger :died :persistence :cooldown :cooldown-s 30
              :job (jobs.survival.recover-drops {:collect-radius 6})}]
  :queue [(seq (jobs.time.wait-for-day) (jobs.movement.go-to {:pos {:x -2000 :y 65 :z 1993}}))

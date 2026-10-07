@@ -75,8 +75,6 @@
 ;;              :job (jobs.survival.get-food {:food 6})}
 ;;             {:trigger :night :persistence :cooldown :cooldown-s 10 :args {:roof-height 4}
 ;;              :job (jobs.survival.night {:roof-height 4})}
-;;             {:trigger :stuck :persistence :cooldown :cooldown-s 60
-;;              :job (jobs.maintenance.unstick)}
 ;;             {:trigger :died :persistence :cooldown :cooldown-s 30
 ;;              :job (jobs.survival.recover-drops {:collect-radius 6})}
 ;;             {:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 120 :args {:free 2}

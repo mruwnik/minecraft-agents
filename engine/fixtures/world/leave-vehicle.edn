@@ -1,0 +1,20 @@
+;; Rounds migration of leave-vehicle (card 8aa49e24): one run each, never :continue.
+;; Should-succeed: leave-vehicle gets off a boat on land (vehicle.left, landed :dry), twice (boat, minecart).
+{:defaults
+ {:tags [:survival :leave-vehicle] :time :any
+  :plot {:height 8 :floor "stone"}
+  :body {:at [10.5 0 16.5]}
+  :limit-s 90}
+ :cases
+ [{:name "leave-boat-on-land"
+   :register [{:trigger :mounted :persistence :stop :job (jobs.movement.leave-vehicle)}]
+   :act [[:summon "oak_boat" [10.5 0 16.5] "{}"]
+         [:rcon "execute at $BODY run ride $BODY mount @e[type=oak_boat,tag=wt,$BOX,limit=1]"]]
+   :expect [{:event {:source :job :kind :vehicle.left :data {:landed :dry}} :within-s 40}
+            {:no-event {:source :job :kind :vehicle.dismount_failed} :for-s 40 :until {:source :job :kind :vehicle.left :data {:landed :dry}}}]}
+  {:name "leave-minecart-on-land"
+   :register [{:trigger :mounted :persistence :stop :job (jobs.movement.leave-vehicle)}]
+   :act [[:summon "minecart" [10.5 0 16.5] "{}"]
+         [:rcon "execute at $BODY run ride $BODY mount @e[type=minecart,tag=wt,$BOX,limit=1]"]]
+   :expect [{:event {:source :job :kind :vehicle.left :data {:landed :dry}} :within-s 40}
+            {:no-event {:source :job :kind :vehicle.dismount_failed} :for-s 40 :until {:source :job :kind :vehicle.left :data {:landed :dry}}}]}]}

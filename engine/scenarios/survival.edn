@@ -20,8 +20,6 @@
              :job (jobs.survival.night {:roof-height 4})}
             {:trigger :hungry :persistence :cooldown :cooldown-s 90 :args {:food 6}
              :job (jobs.survival.get-food {:food 6})}
-            {:trigger :stuck :persistence :cooldown :cooldown-s 60
-             :job (jobs.maintenance.unstick)}
             {:trigger :door-left :persistence :cooldown :cooldown-s 5 :job (jobs.maintenance.shut-doors)}
             {:trigger :died :persistence :cooldown :cooldown-s 30
              :job (jobs.survival.recover-drops {:collect-radius 6})}

@@ -3,7 +3,7 @@
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
             [engine.test-util :as tu]
-            [engine.unstick-test :as ut]
+            [engine.moved-test :as ut]
             [jobs.lib.near :as near]))
 
 (deftest cell-of-takes-both-forms-and-refuses-the-rest

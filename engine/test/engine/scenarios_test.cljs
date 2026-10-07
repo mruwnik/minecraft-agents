@@ -101,7 +101,7 @@
                                                 :inventory [{:name "bread" :count 4}]}
                                                1000)
               food #(:food (fake/self p))]
-          (is (= [:suffocating :burning :wedged :hostile-near :night :hungry :stuck :door-left
+          (is (= [:suffocating :burning :wedged :hostile-near :night :hungry :door-left
                   :died :inventory-nearly-full :scaffold-left :tidy-pending]
                  (mapv :id (:register (core/state eng)))))
           (await (run-ticks eng clock 3 1000))
@@ -148,7 +148,7 @@
               "no errors besides the death itself"))))))
 
 (def survival-cooldowns
-  {:suffocating 0 :burning 0 :hungry 90 :night 10 :stuck 60 :door-left 5 :died 30 :inventory-nearly-full 120 :tidy-pending 10})
+  {:suffocating 0 :burning 0 :hungry 90 :night 10 :door-left 5 :died 30 :inventory-nearly-full 120 :tidy-pending 10})
 
 (deftest survival-triggers-wait-a-cooldown-after-their-job-ends
   (let [{:keys [eng]} (boot "scenarios/survival.edn" {})

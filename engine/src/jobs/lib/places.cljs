@@ -16,7 +16,7 @@
   the kind's own cap and ttl. (A kind that exists in memory and is not a place is refused too, see foreign-kind?.)"
   #{:hurt :died :chat :whisper :woke :player-joined :player-left :spawned :respawned :online :offline :disconnected :error :reconnect-failed
     :dependency-patches-missing :world-not-loaded :physics-stalled :picked-up
-    :restart :moved :slept :fed :hungry :hostile :hazard :stuck :looked :recovered :breathe :extinguish :log-out
+    :restart :moved :slept :fed :hungry :hostile :hazard :looked :recovered :breathe :extinguish :log-out
     :needs-bed :shelter :dig-in-futile :gate-gave-up :no-bake :no-craft :notify :bed-unreachable :chest-unusable
     :scaffold :heal-ended :recover-trip :sleep-status :bed-placed
     :opened :watched :watch-turned :sleep-failed :bed-place-failed :shelter-trapped :weather-changed})

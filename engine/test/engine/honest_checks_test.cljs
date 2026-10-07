@@ -102,7 +102,6 @@
   (are [job args reason] (= reason (waiting-reason job args))
     'jobs.build.clear-box {} :bad-args
     'jobs.gather.mine {} :no-block
-    'jobs.maintenance.unstick {} :not-stuck
     'jobs.movement.leave-vehicle {} :not-mounted
     'jobs.survival.breathe {} :not-underwater
     'jobs.survival.extinguish {} :not-burning

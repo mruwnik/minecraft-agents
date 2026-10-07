@@ -1,24 +1,19 @@
 (ns engine.combat-walk-test
   "jobs.combat.attack walks with the engine walker (jobs.lib.near/go-near!, doors :shut), so a body inside its doored
-  hut leaves through the door instead of getting noPath from the raw pathfinder; and the stuck trigger counts a walk that
-  found no path only when the body is enclosed (jobs.lib.reach/enclosed?), not when the goal alone is out of reach."
+  hut leaves through the door instead of getting noPath from the raw pathfinder; and the :moved entry marks a walk that found no path."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.hut-shelter-test :as hut]
             [jobs.lib.reach :as reach]
             [jobs.lib.threats :as threats]
-            [engine.memory :as mem]
-            [engine.shelter-test :as st]
+                        [engine.shelter-test :as st]
             [engine.test-util :as tu]
-            [engine.triggers :as triggers]
-            [engine.unstick-test :as ut]))
+            [engine.moved-test :as ut]))
 
 (def sword [{:name "iron_sword" :count 1}])
 
 (defn zed [id x z] {:id id :name "zombie" :kind "hostile" :pos {:x x :y 64 :z z}})
-
-(defn started-jobs [seen] (into #{} (keep :job) @seen))
 
 ;; ------------------------------------------------------------------ attack from inside the hut
 
@@ -39,8 +34,7 @@
           (is (= [] (ut/calls p "moveTo")) "no raw pathfinder walk")
           (is (seq (ut/calls p "attack")) "the zombie outside was swung at")
           (is (<= 3 (.-z (.-pos (.self p)))) "the body is outside, past the door")
-          (is (false? (hut/door-open? p)) "the door is shut behind it")
-          (is (not (contains? (started-jobs seen) 'jobs.maintenance.unstick)) "no stuck reflex"))))))
+          (is (false? (hut/door-open? p)) "the door is shut behind it"))))))
 
 (deftest attack-chases-a-target-that-moves-between-swings
   (async done
@@ -58,14 +52,7 @@
           (is (> -3 (.-x (.-pos (.self p)))) "the body walked after the target to its new spot")
           (is (seq (ut/call-args p "attack"))))))))
 
-;; ------------------------------------------------------------------ stuck: no path is not stuck unless enclosed
-
-(defn no-path-move [] (assoc (ut/bad-move) :no-path true))
-
-(defn stuck-in? [world moves]
-  (let [{:keys [eng p]} (ut/setup world)]
-    (ut/seed-moved! eng moves)
-    ((:when (get triggers/all :stuck)) p (mem/view (:store eng)) {})))
+;; ------------------------------------------------------------------ enclosed, and the :moved entries of a walk with no path
 
 (deftest enclosed-is-a-pit-or-a-doorless-room-not-open-ground-or-a-doored-hut
   (is (true? (reach/enclosed? (tu/fake {:self {:pos ut/at5} :blocks ut/deep-pit}))) "a 3-deep pit")
@@ -75,17 +62,6 @@
       "the same hut with its door walled up")
   (is (true? (reach/enclosed? (tu/fake (hut/hut-world {:x 5 :y 64 :z 0} {"5,64,2" "iron_door" "5,65,2" "iron_door"}))))
       "an iron door a hand cannot open"))
-
-(deftest no-path-moves-fire-stuck-only-for-an-enclosed-body
-  (is (false? (stuck-in? {:self {:pos ut/at5} :floor tu/walk-floor} (repeat 4 (no-path-move))))
-      "open ground, the goal out of reach: not stuck")
-  (is (false? (stuck-in? (hut/hut-world {:x 5 :y 64 :z 0} {}) (repeat 4 (no-path-move))))
-      "inside a doored hut: not stuck")
-  (is (true? (stuck-in? {:self {:pos ut/at5} :blocks ut/deep-pit} (repeat 4 (no-path-move)))) "in a pit: stuck")
-  (is (true? (stuck-in? {:self {:pos ut/at5} :floor tu/walk-floor} (repeat 4 (ut/bad-move))))
-      "a walk that had a way and did not move is stuck evidence even in the open")
-  (is (true? (stuck-in? {:self {:pos ut/at5} :floor tu/walk-floor} (concat (repeat 3 (no-path-move)) [(ut/bad-move)])))
-      "one physical failure among no-path ones"))
 
 (deftest moved-entries-mark-a-walk-that-found-no-path
   (async done

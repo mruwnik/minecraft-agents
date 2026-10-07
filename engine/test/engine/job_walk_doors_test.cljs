@@ -7,7 +7,7 @@
             [engine.hut-shelter-test :as hut]
             [engine.shelter-test :as st]
             [engine.test-util :as tu]
-            [engine.unstick-test :as ut]))
+            [engine.moved-test :as ut]))
 
 (def inside {:x 5 :y 64 :z 0})
 
