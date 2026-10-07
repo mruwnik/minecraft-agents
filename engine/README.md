@@ -31,7 +31,7 @@ npm test                      # cljs tests, builds the agent-tools bundle, then 
 npm run test:cljs             # cljs only (4 GB node heap: --max-old-space-size=4096)
 npm run test:js               # JS only (test/tools needs the bundle: run test:agent-tools or npm test on a fresh clone)
 npm run test:agent-tools      # builds the agent-tools bundle, then runs test/tools
-npm run body -- --agent <name> --world <world> [--scenario <file.edn>]   # node --max-semi-space-size=4: V8 flags only work on argv (RSS 335 -> 235 MB); any other launcher must pass it
+npm run body -- --agent <name> --world <world> [--scenario <file.edn>]   # node --max-old-space-size=128 --max-semi-space-size=8: V8 flags only work on argv (RSS 335 -> ~255 MB); any other launcher must pass them
 ```
 
 Run one namespace with `node --max-old-space-size=4096 out/test.cjs --test=engine.<ns>-test`.

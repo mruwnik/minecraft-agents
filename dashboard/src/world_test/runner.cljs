@@ -224,9 +224,9 @@
              (fs/rmSync (run-dir opts) #js {:recursive true :force true})))))
 
 (defn body-argv
-  "node argv for a body: V8 flags must be on the command line (card 41987e8c: new-space cap, RSS 335 -> 235 MB)."
+  "node argv for a body: V8 flags must be on the command line (heap cap: RSS 335 -> ~255 MB)."
   [opts scenario]
-  #js ["--max-semi-space-size=4" "out/body.cjs" "--agent" (:body opts) "--world" (:world opts) "--scenario" scenario "--fresh"])
+  #js ["--max-old-space-size=128" "--max-semi-space-size=8" "out/body.cjs" "--agent" (:body opts) "--world" (:world opts) "--scenario" scenario "--fresh"])
 
 (defn await-online!
   "Polls the server's player list (every 250 ms, up to 10 s) until the body is on it, then lets it settle 500 ms."

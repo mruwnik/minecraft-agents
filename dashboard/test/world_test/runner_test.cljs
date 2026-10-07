@@ -8,12 +8,12 @@
             [world-test.fixture :as f]
             [world-test.runner :as r]))
 
-(deftest the-body-launch-argv-caps-new-space
-  (let [argv (vec (r/body-argv {:body "B" :world "w"} "/tmp/s.edn"))]
-    (is (some #{"--max-semi-space-size=4"} argv))
-    (is (< (.indexOf argv "--max-semi-space-size=4") (.indexOf argv "out/body.cjs")))
+(deftest the-body-launch-argv-caps-the-v8-heap
+  (let [argv (vec (r/body-argv {:body "B" :world "w"} "/tmp/s.edn"))
+        script (.indexOf argv "out/body.cjs")]
+    (is (= ["--max-old-space-size=128" "--max-semi-space-size=8"] (subvec argv 0 script)))
     (is (= ["--agent" "B" "--world" "w" "--scenario" "/tmp/s.edn" "--fresh"]
-           (vec (drop (inc (.indexOf argv "out/body.cjs")) argv))))))
+           (vec (drop (inc script) argv))))))
 
 (deftest build-plot-retries-an-unloaded-plot-then-fails-as-a-setup-error
   (let [origin [20000 150 20000]

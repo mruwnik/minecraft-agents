@@ -10,7 +10,7 @@
     "test:golden": "../tools/compile engine test-golden && node --max-old-space-size=4096 out/test-golden.cjs && node --test js/path/bench.golden.mjs",
     "record:planner-bench": "../tools/compile engine planner-record && node out/planner-record.cjs",
     "build": "../tools/compile engine body",
-    "body": "../tools/compile engine body && node --max-semi-space-size=4 out/body.cjs",
+    "body": "../tools/compile engine body && node --max-old-space-size=128 --max-semi-space-size=8 out/body.cjs",
     "test:agent-tools": "npm --prefix ../dashboard run build-agent-tools && node --test 'test/tools/**/*.test.mjs'"
   },
   "devDependencies": {
