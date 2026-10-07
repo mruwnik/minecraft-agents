@@ -23,7 +23,7 @@
   Only ranged mobs with a line of fire near and the body under a roof, carrying building blocks and a tool that digs
   stone (a block in the doorway must not shut it in): it stops the arrows instead (jobs.survival.block-arrow-gap, no
   fetch), once per call; when that places nothing it decides as above.
-  Done once no real danger (as the hostile-near trigger, jobs.lib.reach, in sight) is within :radius
+  Done once no real danger (as the hostile-near trigger, jobs.lib.danger, in sight) is within :radius
   (:ranged-radius for ranged mobs) and the retreat is not hiding (sealed in, up a pillar or down a pit).
   A child that stops (a retreat that cannot escape) stops it with that cause; three calls in a row that change
   neither the body's cell, its health nor the dangers near stop it :no_response; never :continue.
@@ -42,7 +42,7 @@
 (defn near
   "The hostiles that count: ones the body has seen (jobs.lib.danger/known-hostiles), melee within :radius and ranged
   within :ranged-radius. One behind a wall cannot reach or shoot the body, so
-  it is left alone, as is one with no walkable way to the body (jobs.lib.reach),
+  it is left alone, as is one with no walkable way to the body (jobs.lib.danger),
   as the hostile-near trigger does."
   [c]
   (let [{:keys [radius ranged-radius]} (:args c)]

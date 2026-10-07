@@ -249,7 +249,7 @@
 
 (defn refuge-danger?
   "Whether a hostile within its follow range (jobs.lib.threats; ranged ones at least :ranged-radius), the dead skipped,
-  would have a walkable way to the refuge's anchor cell were the refuge's own cells open (jobs.lib.reach): a danger
+  would have a walkable way to the refuge's anchor cell were the refuge's own cells open (jobs.lib.danger): a danger
   the refuge keeps off."
   [c {:keys [anchor cells]}]
   (let [p (:primitives c)

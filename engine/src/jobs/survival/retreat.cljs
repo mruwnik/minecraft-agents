@@ -15,7 +15,7 @@
 
 (def doc
   "Flee from the hostiles in range, one whole flight per round: run until no mob chases the body any more.
-  A real danger (jobs.lib.reach: a mob with a walkable way to the body, or a ranged one with a line of fire) within
+  A real danger (jobs.lib.danger: a mob with a walkable way to the body, or a ranged one with a line of fire) within
   :radius (ranged ones :ranged-radius) starts a chase, or is seen afresh. A mob stops chasing (vanilla) once it is
   gone (dead, despawned, untracked), beyond its follow range (jobs.lib.threats: zombie 35, most 16), out of line of
   sight for :lost-s, or has no walkable way to the body (nor, ranged, a line of fire).
