@@ -52,6 +52,15 @@
           (is (= 1 (:leads (done-event s))))
           (is (empty? (events-of s :unleash.gave-up))))))))
 
+(deftest one-call-frees-and-collects
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {} {:entities [(led 1 3)]} 1))]
+          (is (finished? s))
+          (is (= :unleashed (:reason (done-event s))))
+          (is (= 1 (count-of s "lead"))))))))
+
 (deftest a-lead-picked-up-at-once-counts-as-collected
   (async done
     (tu/run-async done

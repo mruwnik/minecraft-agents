@@ -10,7 +10,7 @@
 
   :mob limits it to one kind (any when nil), :animal to one animal by uuid (any when nil).
 
-  Each round takes the nearest such animal not given up on. The body walks to within 3 blocks of what it
+  One call is the whole run. It takes the nearest such animal not given up on. The body walks to within 3 blocks of what it
   clicks (doors :shut, each steer bounded by :walk-timeout-s) and clicks with an empty hand:
   - An animal on this body's lead is clicked itself. It counts when the sensing then shows it off the lead
     (checked for up to 1.5 s).
@@ -32,7 +32,7 @@
   - :timeout: :timeout-s from the first round (no collecting).
   - With nothing freed: :unreachable if one was given up as unreachable, else :refused (others given up) or
     :none.
-  - It also ends after three fruitless rounds in a row.
+  - It also ends after three fruitless animals in a row.
 
   Zones: an animal standing in another owner's zone or claim, or in a plan's footprint, is left on its lead (warn
   unleash.declined once, :reason :refused, or :no-zones when no zone list was read). :ignore-zones? true skips the check.")
@@ -80,7 +80,7 @@
   (if-not (:collect (:args c))
     (finish! c reason)
     (do (ctx/update-mem! c assoc :phase :collect :reason reason)
-        :continue)))
+        :again)))
 
 (defn animals-in-radius [c]
   (let [{:keys [mob radius]} (:args c)]
@@ -193,7 +193,7 @@
         (await (click! c a target))))
     (if (>= (:in-row (ctx/mem c) 0) max-in-row)
       (go-collect! c (none-reason c))
-      :continue)))
+      :again)))
 
 (defn ^:async collect! [c]
   (when-not (:dropped (ctx/mem c))
@@ -204,7 +204,7 @@
       :continue
       (finish! c (:reason (ctx/mem c))))))
 
-(defn ^:async round [c]
+(defn ^:async step [c]
   (let [now (ctx/now c)
         {:keys [timeout-s]} (:args c)]
     (ctx/update-mem! c #(-> %
@@ -217,3 +217,10 @@
         (= :collect (:phase m)) (await (collect! c))
         (empty? cands) (if (seq (:freed m)) (go-collect! c :unleashed) (finish! c (none-reason c)))
         :else (await (engage! c (first cands)))))))
+
+(defn ^:async round
+  "The whole attempt: loop the steps until one ends or yields."
+  [c]
+  (loop []
+    (let [r (await (step c))]
+      (if (= :again r) (recur) r))))
