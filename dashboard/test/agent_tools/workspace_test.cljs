@@ -1,5 +1,6 @@
 (ns agent-tools.workspace-test
   (:require [cljs.test :refer [deftest is are]]
+            [clojure.string :as str]
             [agent-tools.drive :as drive]
             [agent-tools.world :as world]
             [agent-tools.workspace :as workspace]))
@@ -58,6 +59,14 @@
     (is (not (re-find #"<agent>|--world|--worlds|\.mjs" out)))
     (is (re-find #"usage: \./bin/observe" out))
     (is (re-find #":reason :bad-args" out))))
+
+(deftest player-edn-keeps-later-forms
+  (let [text (str "{:ok false :reason :bad-args :usage \"usage: observe.mjs <agent> x\"}\n"
+                  "{:ok true :n 1}\n")
+        out (workspace/player-edn text)]
+    (is (not (re-find #"<agent>|\.mjs" out)))
+    (is (re-find #"usage: \./bin/observe" out))
+    (is (str/ends-with? out "{:ok true :n 1}\n"))))
 
 (deftest player-edn-leaves-other-output-alone
   (are [text] (= text (workspace/player-edn text))

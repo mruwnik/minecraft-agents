@@ -1,6 +1,7 @@
 (ns agent-tools.workspace
   "Workspace generation and binding policy; Node launchers only load tools."
   (:require [clojure.string :as str]
+            [cljs.reader :as reader]
             [agent-tools.map :as map-tool]
             [agent-tools.world-data :as data]
             ["node:fs" :as fs]
@@ -78,13 +79,21 @@
 
 ;; Bound tools print their errors as EDN on stdout: cut the plumbing from :usage and :message there too.
 ;; Only failure maps change; any other output (and non-EDN text) passes through byte for byte.
-(defn player-edn [text]
+(defn edn-forms [text] (try (reader/read-string (str "[" text "]")) (catch :default _ nil)))
+
+(defn player-edn-form [text]
   (let [value (when (str/includes? text ":ok false") (try (data/read-edn text) (catch :default _ nil)))
         cut (fn [m k f] (if (string? (get m k)) (update m k f) m))]
     (if-not (and (map? value) (= false (:ok value)))
       text
       (let [out (-> value (cut :usage player-usage) (cut :message player-error))]
         (if (= out value) text (str (data/write-edn out) (when (str/ends-with? text "\n") "\n")))))))
+
+;; A chunk of several forms is cut form by form (one per line); a single form may span lines.
+(defn player-edn [text]
+  (if (<= (count (edn-forms text)) 1)
+    (player-edn-form text)
+    (str/join "\n" (map player-edn-form (str/split text #"\n" -1)))))
 
 (defn error-edn
   "The EDN text of a launcher failure: {:ok false :reason :bad-args :message ...}."
@@ -99,7 +108,11 @@
        "), import('node:url'), import('node:path')]).then(async ([{runBound}, {pathToFileURL}, {resolve, dirname}]) => {\n"
        "  process.exitCode = await runBound(pathToFileURL(resolve(dirname(process.argv[1]), '../context.edn')), "
        (js/JSON.stringify command) ", process.argv.slice(2));\n"
-       "}).catch(error => { process.stdout.write('{:ok false :reason :tool-error :message ' + JSON.stringify(error.message) + '}\\n'); process.exitCode = 2; });\n"))
+       "}).catch(error => {\n"
+       "  const cuts = " (js/JSON.stringify (clj->js (mapv (fn [[from to]] [(.-source from) to]) player-cuts))) ";\n"
+       "  const cut = line => /^\\s*usage:/.test(line) ? cuts.reduce((t, [from, to]) => t.replace(new RegExp(from, 'g'), to), line) : line;\n"
+       "  process.stdout.write('{:ok false :reason :tool-error :message ' + JSON.stringify(String(error.message).split('\\n').map(cut).join('\\n')) + '}\\n'); process.exitCode = 2;\n"
+       "});\n"))
 (defn agents-text [{:keys [body world]}]
   (str "# Agent workspace\n\n"
        "You operate body `" body "` in world `" world "`. Read `context.edn`, `briefing.md`, and relevant `notes/` before acting. Keep private working notes and handoffs in `notes/`; publish lasting world discoveries through shared map/plans tools.\n\n"

@@ -145,11 +145,19 @@ test('a generator error is EDN on stdout, exit 2', t => {
   assert.equal(result.stderr, '')
 })
 
-test('the generated wrapper reports a failed launcher import as EDN on stdout', t => {
+test('the generated wrapper reports a failed launcher import as EDN on stdout, plumbing cut', t => {
   const f = fixture(t)
-  const wrapper = fs.readFileSync(path.join(f.workspace, 'bin', 'observe'), 'utf8')
-  assert.match(wrapper, /process\.stdout\.write\(/)
-  assert.doesNotMatch(wrapper, /process\.stderr/)
+  const file = path.join(f.workspace, 'bin', 'observe')
+  const broken = 'data:text/javascript,' + encodeURIComponent('throw new Error("boom\\nusage: observe.mjs <agent> --world <world> x")')
+  const text = fs.readFileSync(file, 'utf8').replace(/import\("file:[^"]*workspace\.mjs"\)/, `import(${JSON.stringify(broken)})`)
+  assert.notEqual(text, fs.readFileSync(file, 'utf8'))
+  fs.writeFileSync(file, text)
+  const result = f.run('observe', [])
+  assert.equal(result.status, 2)
+  assert.equal(result.stderr, '')
+  assert.match(result.stdout, /:ok false :reason :tool-error/)
+  assert.match(result.stdout, /usage: \.\/bin\/observe x/)
+  assert.doesNotMatch(result.stdout, /<agent>|--world|\.mjs/)
 })
 
 test('extensionless wrappers work beneath both CommonJS and ESM package scopes', t => {
