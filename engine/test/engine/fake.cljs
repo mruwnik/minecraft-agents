@@ -424,7 +424,8 @@
     (cond
       (or (nil? e) (not= "item" (:kind e))) [w {:status "gone" :gained []}]
       ((:unreachable w) (:pos e)) [w {:status "unreachable" :gained []}]
-      :else [(-> w (assoc-in [:self :pos] (:pos e)) (update :entities #(filterv (fn [x] (not= id (:id x))) %))
+      :else [(-> w (cond-> (= "air" (block-name w (update (vec (:pos e)) 1 + 1))) (assoc-in [:self :pos] (:pos e)))   ; a pocket without headroom is picked from beside it
+                 (update :entities #(filterv (fn [x] (not= id (:id x))) %))
                  (give (get-in e [:item :name]) (get-in e [:item :count])))
              {:status "collected" :gained [(select-keys (:item e) [:name :count])]}])))
 
