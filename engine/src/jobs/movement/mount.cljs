@@ -84,7 +84,6 @@
                   res (ctx/child-result c :walk)]
               (cond
                 (= :continue r) :continue
-                (and (= :done r) (:arrived res)) (recur fails)
                 (>= (inc fails) max-walks) (stop! c id :unreachable {:why (:reason res)})
                 :else (recur (inc fails))))
             :else

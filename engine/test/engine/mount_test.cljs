@@ -18,11 +18,11 @@
      :act (fn [k args] (.call (aget p (name k)) p "t" args))
      :seen seen}))
 
-(defn ^:async run [spec args & [mount-status child]]
+(defn ^:async run [spec args & [mount-status child child-res]]
   (let [p (doto (tu/fake spec) (.setOwner "t"))
         _ (when mount-status (set! (.-mount p) (fn [_ _] (js/Promise.resolve #js {:status mount-status}))))
         c (cond-> (bare-ctx p args) child (assoc :engine {:jobs registry/jobs} :call-child (fn [_ _ _] (js/Promise.resolve child))
-                                                 :child-result (fn [_] {:reason :blocked})))
+                                                 :child-result (fn [_] (or child-res {:reason :blocked}))))
         r (await (mount/round c))]
     {:r r :p p :results (filterv #(= :result (first %)) @(:seen c)) :seen @(:seen c)}))
 
@@ -153,3 +153,13 @@
   (is (true? (:ok (check-with {:entities [boat]} {:id 9}))))
   (is (true? (:ok (check-with {:entities [boat]} {:name "oak_boat"}))))
   (is (true? (:ok (check-with {:entities []} {:id "x"}))) "bad args are the round's stop"))
+
+(deftest a-walk-that-arrives-but-stays-out-of-reach-is-unreachable
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [far (assoc boat :pos {:x 1.5 :y 64 :z 30.5})
+              o (await (js/Promise.race #js [(run {:entities [far]} {:id 9} nil :done {:arrived true})
+                                             (js/Promise. (fn [res _] (js/setTimeout #(res {:hung true}) 200)))]))]
+          (is (nil? (:hung o)) "no endless re-walk")
+          (is (= :unreachable (:reason (result-of o)))))))))
