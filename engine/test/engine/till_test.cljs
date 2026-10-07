@@ -8,7 +8,9 @@
             [engine.expr :as expr]
             [engine.takeover :as takeover]
             [engine.fake :as fake]
+            [engine.hostile-test :as h]
             [engine.memory :as mem]
+            [engine.perception :as perception]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
@@ -133,12 +135,12 @@
           (is (= 1 (count (calls p "dig"))))
           (is (= "farmland" (block-at p {:x 1 :y 63 :z 1}))))))))
 
-(deftest till-without-a-hoe-the-check-is-false
+(deftest till-without-a-hoe-and-with-fetch-false-the-check-is-false
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks four})]
-          (core/submit! eng (list job box) {})
+          (core/submit! eng (list job (assoc box :fetch false)) {})
           (is (nil? (core/tick! eng)) "check false: nothing runs")
           (is (empty? (calls p "useOn"))))))))
 
@@ -312,3 +314,32 @@
             (is (= {:tilled 0 :skipped {{:x 1 :y 63 :z 1} :no-hoe {:x 2 :y 63 :z 1} :no-hoe
                                         {:x 1 :y 63 :z 2} :no-hoe {:x 2 :y 63 :z 2} :no-hoe}}
                    result))))))))
+
+(def hoe-chest "-2,64,3")
+
+(defn ^:async seeing-till
+  "Submit till over four dirt cells in a world with a chest holding a hoe, the body seeing through perception; n ticks."
+  [extra n]
+  (let [s (h/setup-seeing {:blocks (assoc four hoe-chest "chest") :containers {hoe-chest [{:name "stone_hoe" :count 1}]}} nil)]
+    (perception/pass! (aget (:p s) "perception"))
+    (core/submit! (:eng s) (list job (merge box {:ignore-zones? true} extra)) {})
+    (dotimes [_ n]
+      (swap! (:clock s) + 700)
+      (await (core/tick! (:eng s))))
+    s))
+
+(deftest till-fetches-a-hoe-from-a-seen-chest-by-default
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (seeing-till {} 120))]
+          (is (every? #(= "farmland" (block-at p %)) [{:x 1 :y 63 :z 1} {:x 2 :y 63 :z 1} {:x 1 :y 63 :z 2} {:x 2 :y 63 :z 2}])))))))
+
+(deftest till-fetch-false-waits-no-tool-and-leaves-the-chest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng]} (await (seeing-till {:fetch false} 12))]
+          (is (empty? (calls p "useOn")))
+          (is (= 1 (count (:list (core/state eng)))) "still waiting")
+          (is (= "chest" (block-at p {:x -2 :y 64 :z 3}))))))))

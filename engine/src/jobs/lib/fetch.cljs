@@ -87,13 +87,14 @@
 
 (defn plan-for
   "The fetch for wait reason w under limits o: {:kind :job :args :key}, or nil when w is not fetchable or its kind
-  is not in (:what o). A :need wait's :count is how many obtain gets (default 1)."
+  is not in (:what o). A :no-tool wait names :block, :needs (an item) or :kind (a tool kind such as \"hoe\"). A :need wait's :count is how many obtain gets (default 1)."
   [w o]
   (let [{:keys [reason item any-of block needs]} w
         pl (case reason
              :no-tool (cond
                         block {:kind :tool :job 'jobs.items.get-tool :args {:block block} :key [:tool block]}
-                        needs {:kind :tool :job 'jobs.items.get-tool :args {:item needs} :key [:tool needs]})
+                        needs {:kind :tool :job 'jobs.items.get-tool :args {:item needs} :key [:tool needs]}
+                        (:kind w) {:kind :tool :job 'jobs.items.get-tool :args {:kind (:kind w)} :key [:tool (:kind w)]})
              :need (cond
                      item {:kind :item :job 'jobs.items.obtain :args {:item item :count (or (:count w) 1)} :key [:item [item]]}
                      (seq any-of) {:kind :item :job 'jobs.items.obtain :args {:any-of (vec any-of) :count (or (:count w) 1)}

@@ -2,6 +2,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
+            [jobs.lib.fetch :as fetch]
             [jobs.lib.gate :as gate]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
@@ -11,7 +12,8 @@
 (def doc
   "Hoe dirt, grass_block or dirt_path into farmland over a set of ground cells, given as the box :from/:to or
   the square :center/:radius (at most 256 cells). Water nearby is not its concern.
-  Needs a hoe; the job declines without one. Ground cover over a cell (grass, ferns, snow layer) is dug first with
+  Needs a hoe: without one it fetches one (jobs.lib.fetch, child :fetch) while cells wait; with :fetch false, or
+  after a failed fetch, the check waits :no-tool (kind hoe) and cells left without a hoe are skipped :no-hoe. Ground cover over a cell (grass, ferns, snow layer) is dug first with
   a jobs.blocks.dig child. If that child declines or gives up, it counts a try.
   Cells are skipped with a reason: :not-tillable, :covered (something else above), :not-permitted (zone rules),
   :unreachable, :gone, :refused (the hoe failed twice), :no-hoe (the hoe is gone) or :cover-stuck (two failed cover
@@ -28,6 +30,7 @@
    :center {:doc "centre of a square of cells at its y; with :radius" :type :pos :default nil}
    :radius {:doc "the square covers |dx|,|dz| <= radius" :default nil}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :default nil}
+   :fetch {:doc "get a hoe when none is carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits :no-tool" :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
 (def max-cells 256)
@@ -100,8 +103,16 @@
                   :else (assoc acc :todo? true))))
             {:verdicts []} cs)))
 
+(def no-hoe {:reason :no-tool :kind "hoe"})
+
+(defn problem
+  "The :no-tool wait for a hoe while none is carried and cells are left to till, else nil."
+  [c]
+  (when (and (nil? (hoe-of (:primitives c))) (seq (pending c)))
+    no-hoe))
+
 (defn check
-  "True when nothing is pending (the round can finish), false without a hoe, and false while no zone list has been
+  "True when nothing is pending (the round can finish), a wait without a hoe (after the fetch, if any), and false while no zone list has been
   read (unless :ignore-zones?). Before the first round it also declines when every tillable cell is refused by a
   zone, claim or plan. Bad args pass, so the round throws them. Walks the cells lazily and stops at the first one
   that needs work, reading each cell at most once."
@@ -119,7 +130,7 @@
              (and (seq verdicts) (not work?))
              (access/decline! c :till.declined "till" (assoc (access/refusal-fields verdicts) :reason :refused))
 
-             :else (or (not todo?) (some? (hoe-of (:primitives c))) (ctx/wait c :no-hoe)))))))
+             :else (or (not todo?) (some? (hoe-of (:primitives c))) (fetch/check c 'jobs.farm.till no-hoe)))))))
 
 (defn skip!
   "Record the cells as skipped with reason and emit one :till.skipped each."
@@ -150,9 +161,8 @@
   (let [me (u/self-pos c)]
     (apply min-key #(u/dist me (first %)) todo)))
 
-(defn ^:async round
-  "One bounded step: skip what cannot be tilled, else walk to the nearest cell,
-  clear ground cover above it or use the hoe on it."
+(defn ^:async till-step!
+  "Skip what cannot be tilled, else walk to the nearest cell, clear ground cover above it or use the hoe on it."
   [c]
   (let [p (:primitives c)
         todo (pending c)
@@ -212,3 +222,10 @@
                     (= "no-item" status) (bump! c target :no-hoe)
                     :else (bump! c target :refused))
                   :continue)))))))))
+
+(defn ^:async round
+  "One bounded step: fetch a hoe when none is carried, skip what cannot be tilled, else walk to the nearest cell,
+  clear ground cover above it or use the hoe on it."
+  [c]
+  (or (await (fetch/fetch! c 'jobs.farm.till problem))
+      (await (till-step! c))))
