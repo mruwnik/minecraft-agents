@@ -1,6 +1,6 @@
 ;; jobs.lib.watch :watch.turned (card 55fede30): the body turns once toward a hostile it hears and does not see
-;; and emits {:name :pos :distance}. Hearing is distance only (16), no line needed; the turn memory is 5 s per mob, so
-;; one mob gives one event per 5 s. Mobs are NoAI (they never move or attack). The stone box is sealed: nothing is seen.
+;; and emits {:name :band :direction} (no pos or distance). Hearing is distance only (16), no line needed; the turn memory is 5 s per mob, so
+;; one mob gives one event per 5 s. Mobs are NoAI (they never move or attack). The stone box is sealed: nothing is seen. The tunnel case plugs the tunnel so the zombie is only heard.
 ;; go-to watches on arrival (body at 20.5 20.5), so mobs sit within 16 of the arrival cell, not of the start.
 ;; Passive mobs and mobs beyond 16 are not in the body's mob memory, so no event. Flood (no second event within 5 s)
 ;; is read from the event log timestamps by hand (the runner counts no events).
@@ -15,10 +15,10 @@
  [{:name "zombie-heard-behind-wall-turns"
    :act [[:summon "zombie" [5.5 0 20.5] "{NoAI:1b}"]
          [:job (jobs.movement.go-to {:pos #xyz [20 0 20] :range 0})]]
-   :expect [{:event {:kind :watch.turned :data {:name "zombie" :distance [:<= 16] :pos [:any]}} :within-s 20}]
+   :expect [{:event {:kind :watch.turned :data {:name "zombie" :band [:any] :direction [:any]}} :within-s 20}]
    :after [[:body-near [20.5 0 20.5] 1.5]]}
   {:name "zombie-heard-in-tunnel-turns"
-   :blocks [[:fill [10 0 4] [22 5 31] "stone"] [:fill [16 0 20] [16 1 29] "air"]]
+   :blocks [[:fill [10 0 4] [22 5 31] "stone"] [:fill [16 0 20] [16 1 29] "air"] [:fill [16 0 28] [16 1 28] "stone"]]
    :body {:at [16.5 0 23.5] :inventory [["diamond_pickaxe" 1]]}
    :act [[:summon "zombie" [16.5 0 29.5] "{NoAI:1b}"]
          [:job (jobs.gather.mine {:block "diamond_ore" :direction :n :tunnel-length 12 :count 1 :radius 8})]]
