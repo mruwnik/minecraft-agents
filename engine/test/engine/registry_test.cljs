@@ -78,3 +78,22 @@
 (deftest the-facts-table-is-the-one-the-defaults-name
   (is (contains? triggers/facts 'health))
   (is (fn? (:read (get triggers/facts 'stuck)))))
+
+(deftest numeric-args-are-bounded-at-submit
+  (doseq [form ['(jobs.farm.find-spot {:w 1000})
+                '(jobs.farm.find-spot {:h 0})
+                '(jobs.farm.find-spot {:range 1000})
+                '(jobs.farm.find-spot {:depth 1000000})
+                '(jobs.farm.find-spot {:limit 0})
+                '(jobs.movement.go-to {:pos [1 64 1] :leg-s 0})
+                '(jobs.movement.go-to {:pos [1 64 1] :leg-s 500})
+                '(jobs.survival.dig-niche {:reach 100000})
+                '(jobs.survival.dig-niche {:reach 0})
+                '(jobs.survival.dig-niche {:roof-height 100000})
+                '(jobs.farm.till {:center [0 64 0] :radius 1000000})]]
+    (is (string? (expr/problem registry/jobs form)) (pr-str form)))
+  (doseq [form ['(jobs.farm.find-spot {:w 16 :h 16 :range 48 :depth 16 :limit 8})
+                '(jobs.movement.go-to {:pos [1 64 1] :leg-s 5})
+                '(jobs.survival.dig-niche {:reach 16 :roof-height 4})
+                '(jobs.farm.till {:center [0 64 0] :radius 7})]]
+    (is (nil? (expr/problem registry/jobs form)) (pr-str form))))

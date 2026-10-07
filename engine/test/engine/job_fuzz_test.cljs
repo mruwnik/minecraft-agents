@@ -61,7 +61,7 @@
   [r k {:keys [default type values] :as spec} wrong?]
   (let [kn (name k)]
     (cond
-      wrong? (pick r wrong-values)
+      wrong? (pick r (if type (filterv #(if (= :pos type) (nil? (expr/cell %)) (some? (expr/type-problem spec %))) wrong-values) wrong-values))
       (= :pos type) (gen-pos r)
       (= :enum type) (pick r (vec values))
       (= :keyword type) (pick r [:a :b default])
@@ -235,7 +235,7 @@
 
 (def known
   "{[job kind] card}: defects already carded, so the suite stays green and a new one fails it. A default run fails when an entry no longer occurs: delete it with its fix."
-  {["jobs.farm.find-spot" :runaway] "a9fb6a61: unbounded :w/:range scan keeps one scan row per round without changing the world"})
+  {})
 
 (defn case-seed
   "Seed of case k of job: stable under the job filter and the other jobs."

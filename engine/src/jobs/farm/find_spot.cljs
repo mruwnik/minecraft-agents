@@ -12,12 +12,12 @@
   :reason is :none (no patch found) or :unreachable (walk failed).")
 
 (def args
-  {:w {:doc "patch width (x)" :default 5}
-   :h {:doc "patch height (z)" :default 5}
-   :range {:doc "patches lie within this many blocks of :center in x and z" :default 24}
+  {:w {:doc "patch width (x), 1 to 16" :type :int :min 1 :max 16 :default 5}
+   :h {:doc "patch height (z), 1 to 16" :type :int :min 1 :max 16 :default 5}
+   :range {:doc "patches lie within this many blocks of :center in x and z, 1 to 48" :type :int :min 1 :max 48 :default 24}
    :center {:doc "where to search from {:x :y :z}; nil is the body's cell" :type :pos :default nil}
-   :depth {:doc "how far above and below the centre's y to look for ground" :default 12}
-   :limit {:doc "how many spots to keep" :default 3}
+   :depth {:doc "how far above and below the centre's y to look for ground, 1 to 16" :type :int :min 1 :max 16 :default 12}
+   :limit {:doc "how many spots to keep, 1 to 8" :type :int :min 1 :max 8 :default 3}
    :walk {:doc "walk to the best spot (finding and walking are separate; a parent can walk)" :default false}})
 
 (def air #{"air" "cave_air" "void_air"})

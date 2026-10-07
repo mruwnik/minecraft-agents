@@ -28,7 +28,7 @@
   {:from {:doc "box corner (inclusive); with :to, any order" :type :pos :default nil}
    :to {:doc "opposite box corner (inclusive)" :type :pos :default nil}
    :center {:doc "centre of a square of cells at its y; with :radius" :type :pos :default nil}
-   :radius {:doc "the square covers |dx|,|dz| <= radius" :default nil}
+   :radius {:doc "the square covers |dx|,|dz| <= radius, 0 to 7" :type :int :min 0 :max 7 :default nil}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :default nil}
    :fetch {:doc "get a hoe when none is carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits :no-tool" :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
@@ -44,21 +44,22 @@
   [a b]
   (range (min a b) (inc (max a b))))
 
+(defn span-size [a b] (inc (js/Math.abs (- a b))))
+
 (defn cells
   "The ground cells [{:x :y :z} ...] of args: the box :from/:to, or the square
   :center/:radius at center's y. Throws ex-info for neither form or over
   max-cells cells."
   [{:keys [from to center radius]}]
-  (let [[xs ys zs] (cond
-                     (and from to) [(span (:x from) (:x to)) (span (:y from) (:y to)) (span (:z from) (:z to))]
-                     (and center radius) [(span (- (:x center) radius) (+ (:x center) radius))
-                                          [(:y center)]
-                                          (span (- (:z center) radius) (+ (:z center) radius))]
-                     :else (throw (ex-info "till needs :from and :to, or :center and :radius" {})))
-        n (* (count xs) (count ys) (count zs))]
+  (let [[xa xb ya yb za zb] (cond
+                              (and from to) [(:x from) (:x to) (:y from) (:y to) (:z from) (:z to)]
+                              (and center radius) [(- (:x center) radius) (+ (:x center) radius) (:y center) (:y center)
+                                                   (- (:z center) radius) (+ (:z center) radius)]
+                              :else (throw (ex-info "till needs :from and :to, or :center and :radius" {})))
+        n (* (span-size xa xb) (span-size ya yb) (span-size za zb))]
     (when (> n max-cells)
       (throw (ex-info (str "till covers " n " cells, at most " max-cells) {:cells n})))
-    (vec (for [x xs y ys z zs] {:x x :y y :z z}))))
+    (vec (for [x (span xa xb) y (span ya yb) z (span za zb)] {:x x :y y :z z}))))
 
 (defn hoe-of
   "The name of a carried item ending in _hoe, or nil."
@@ -114,15 +115,17 @@
 (defn check
   "True when nothing is pending (the round can finish), a wait without a hoe (after the fetch, if any), and false while no zone list has been
   read (unless :ignore-zones?). Before the first round it also declines when every tillable cell is refused by a
-  zone, claim or plan. Bad args pass, so the round throws them. Walks the cells lazily and stops at the first one
+  zone, claim or plan. Bad args wait :bad-args with a :why. Walks the cells lazily and stops at the first one
   that needs work, reading each cell at most once."
   [c]
   (let [cs (try (cells (:args c))
-                (catch :default _ nil))
+                (catch :default e (ex-message e)))
         in (access/zone-input c {:except (:for-plan (:args c))})
         refuse (when-not (or (started? c) (:ignore-zones? in))
                  (fn [pos] (let [v (rules/social-verdict :dig (assoc in :cell (access/cell pos)))]
                              (when (gate/refused? v) v))))]
+    (if (string? cs)
+      (ctx/wait c {:reason :bad-args :why cs})
     (and (or (:ignore-zones? (:args c)) (some? (known/zones c))
              (access/decline! c :till.declined "till" {:reason :no-zones}))
          (let [{:keys [todo? work? verdicts]} (survey c cs refuse)]
@@ -130,7 +133,7 @@
              (and (seq verdicts) (not work?))
              (access/decline! c :till.declined "till" (assoc (access/refusal-fields verdicts) :reason :refused))
 
-             :else (or (not todo?) (some? (hoe-of (:primitives c))) (fetch/check c 'jobs.farm.till no-hoe)))))))
+             :else (or (not todo?) (some? (hoe-of (:primitives c))) (fetch/check c 'jobs.farm.till no-hoe))))))))
 
 (defn skip!
   "Record the cells as skipped with reason and emit one :till.skipped each."

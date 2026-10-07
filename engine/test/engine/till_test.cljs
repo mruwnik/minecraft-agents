@@ -355,3 +355,12 @@
           (is (empty? (calls p "useOn")))
           (is (= 1 (count (:list (core/state eng)))) "still waiting")
           (is (= "chest" (block-at p {:x -2 :y 64 :z 3}))))))))
+
+(deftest check-declines-bad-args-with-bad-args-and-a-why
+  (are [args] (let [wait (atom nil)
+                    c (assoc (counting-ctx {:inventory hoe} args (atom {})) :wait wait)]
+                (and (false? (till/check c)) (= :bad-args (:reason @wait)) (string? (:why @wait))))
+    {}
+    {:from {:x 0 :y 63 :z 0}}
+    {:center {:x 0 :y 63 :z 0}}
+    {:from {:x 0 :y 63 :z 0} :to {:x 1000000000 :y 63 :z 1000000000}}))

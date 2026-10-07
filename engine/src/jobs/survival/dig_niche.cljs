@@ -27,11 +27,11 @@
   Events: dig-niche.sealed (info).")
 
 (def args
-  {:reach {:doc "how far from the body to look for a face" :default 16}
+  {:reach {:doc "how far from the body to look for a face, 1 to 32" :type :int :min 1 :max 32 :default 16}
    :blocks {:doc "names of the blocks it may place" :default dig-in/shelter-blocks}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
    :fetch {:doc "get a missing tool (jobs.lib.fetch): true, a set of kinds or a map of limits; false stops :no-tool" :default true}
-   :roof-height {:doc "a solid block within this many blocks above counts as a roof" :default sh/default-roof-height}})
+   :roof-height {:doc "a solid block within this many blocks above counts as a roof, 1 to 32" :type :int :min 1 :max 32 :default sh/default-roof-height}})
 
 (defn check
   "Night and no roof over the body; a decline says why (ctx/wait): :day or :already-sealed."
