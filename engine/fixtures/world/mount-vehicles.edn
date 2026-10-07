@@ -43,12 +43,12 @@
    :act [[:job (jobs.movement.mount {:name "oak_boat"})]]
    :expect [{:event {:source :job :kind :vehicle.mount_refused :data {:reason :gone}} :within-s 20 :of-job true}]}
   {:name "hand-full"
-   :body {:at [10.5 0 16.5] :inventory [["stick" 1] ["coal" 1] ["apple" 1] ["bread" 1] ["carrot" 1] ["potato" 1] ["beetroot" 1] ["iron_ingot" 1] ["gold_ingot" 1] ["diamond" 1] ["emerald" 1] ["redstone" 1] ["lapis_lazuli" 1] ["quartz" 1] ["flint" 1] ["feather" 1] ["string" 1] ["bone" 1] ["arrow" 1] ["egg" 1] ["paper" 1] ["book" 1] ["clay_ball" 1] ["brick" 1] ["snowball" 1] ["slime_ball" 1] ["gunpowder" 1] ["leather" 1] ["sugar" 1] ["wheat_seeds" 1] ["melon_seeds" 1] ["pumpkin_seeds" 1] ["cocoa_beans" 1] ["charcoal" 1] ["glowstone_dust" 1]]}
+   :body {:at [10.5 0 16.5] :inventory [["stick" 1] ["coal" 1] ["apple" 1] ["bread" 1] ["carrot" 1] ["potato" 1] ["beetroot" 1] ["iron_ingot" 1] ["gold_ingot" 1] ["diamond" 1] ["emerald" 1] ["redstone" 1] ["lapis_lazuli" 1] ["quartz" 1] ["flint" 1] ["feather" 1] ["string" 1] ["bone" 1] ["arrow" 1] ["egg" 1] ["paper" 1] ["book" 1] ["clay_ball" 1] ["brick" 1] ["snowball" 1] ["slime_ball" 1] ["gunpowder" 1] ["leather" 1] ["sugar" 1] ["wheat_seeds" 1] ["melon_seeds" 1] ["pumpkin_seeds" 1] ["cocoa_beans" 1] ["charcoal" 1] ["glowstone_dust" 1] ["cookie" 1]]}
    :act [[:summon "pig" [12.5 0 16.5] "{equipment:{saddle:{id:\"minecraft:saddle\",count:1}}}"]
          [:job (jobs.movement.mount {:name "pig"})]]
    :expect [{:event {:source :job :kind :vehicle.mount_refused :data {:reason :hand-full}} :within-s 40 :of-job true}]}
   {:name "full-hand-boards-a-boat"
-   :body {:at [10.5 0 16.5] :inventory [["stick" 1] ["coal" 1] ["apple" 1] ["bread" 1] ["carrot" 1] ["potato" 1] ["beetroot" 1] ["iron_ingot" 1] ["gold_ingot" 1] ["diamond" 1] ["emerald" 1] ["redstone" 1] ["lapis_lazuli" 1] ["quartz" 1] ["flint" 1] ["feather" 1] ["string" 1] ["bone" 1] ["arrow" 1] ["egg" 1] ["paper" 1] ["book" 1] ["clay_ball" 1] ["brick" 1] ["snowball" 1] ["slime_ball" 1] ["gunpowder" 1] ["leather" 1] ["sugar" 1] ["wheat_seeds" 1] ["melon_seeds" 1] ["pumpkin_seeds" 1] ["cocoa_beans" 1] ["charcoal" 1] ["glowstone_dust" 1]]}
+   :body {:at [10.5 0 16.5] :inventory [["stick" 1] ["coal" 1] ["apple" 1] ["bread" 1] ["carrot" 1] ["potato" 1] ["beetroot" 1] ["iron_ingot" 1] ["gold_ingot" 1] ["diamond" 1] ["emerald" 1] ["redstone" 1] ["lapis_lazuli" 1] ["quartz" 1] ["flint" 1] ["feather" 1] ["string" 1] ["bone" 1] ["arrow" 1] ["egg" 1] ["paper" 1] ["book" 1] ["clay_ball" 1] ["brick" 1] ["snowball" 1] ["slime_ball" 1] ["gunpowder" 1] ["leather" 1] ["sugar" 1] ["wheat_seeds" 1] ["melon_seeds" 1] ["pumpkin_seeds" 1] ["cocoa_beans" 1] ["charcoal" 1] ["glowstone_dust" 1] ["cookie" 1]]}
    :act [[:summon "oak_boat" [12.5 0 16.5] "{}"]
          [:job (jobs.movement.mount {:name "oak_boat"})]]
    :expect [{:event {:source :job :kind :vehicle.mounted :data {:vehicle "oak_boat"}} :within-s 40 :of-job true}]}]}
