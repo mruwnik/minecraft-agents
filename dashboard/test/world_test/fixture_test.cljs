@@ -470,6 +470,13 @@
     (is (re-find #"\$job" (gap [:cli "jobs" ["cancel" "$job"]] nil "j2")))
     (is (nil? (gap step "j1" "j3")))))
 
+(deftest shared-files-are-cleaned-after-a-case-that-writes-them
+  (is (f/writes-shared? {:zones [{:name "z"}]}))
+  (is (f/writes-shared? {:places [{:name "p"}]}))
+  (is (f/writes-shared? {:act [[:cli "map" ["add" "marker" "m"]]]}))
+  (is (not (f/writes-shared? {:act [[:cli "jobs" ["list"]] [:job {}]]})))
+  (is (not (f/writes-shared? {}))))
+
 (deftest a-pattern-names-the-submitted-job-by-its-placeholder
   (is (= {:items [:has {:id "j7" :status :queued}]}
          (f/fill-pattern {:items [:has {:id "$job" :status :queued}]} "j7" "j9")))

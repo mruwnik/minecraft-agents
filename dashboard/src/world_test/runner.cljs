@@ -1050,7 +1050,7 @@
                                        (exec-file ["engine/tools/drive.mjs" (:body opts) "release" "--force" "--world" (:world opts)]))
                                     #(exec-file ["engine/tools/jobs.mjs" (:body opts) "--world" (:world opts) "cancel-all"])
                                     #(rcon! (f/cleanup-commands grid origin (:body opts) rc))
-                                    #(when (or (seq (:zones c)) (seq (:places c))) (drop-shared! opts))
+                                    #(when (f/writes-shared? c) (drop-shared! opts))
                                     #(run! (fn [f] (when (fs/existsSync f) (fs/unlinkSync f))) @plan-files)])
                      (.then (constantly r)))))
         (.finally (fn [] (stop-monitor) (release-time-lock!))))))

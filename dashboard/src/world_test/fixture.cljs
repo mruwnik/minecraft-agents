@@ -638,6 +638,12 @@
   [[op a :as step]]
   (case op :cli (nth step 3 nil) :http (nth step (if (= :submit a) 4 3) nil) nil))
 
+(defn writes-shared?
+  "True when a case edits the world's shared zones.edn / places.json: it has :zones or :places, or a :cli map step."
+  [c]
+  (boolean (or (seq (:zones c)) (seq (:places c))
+               (some #(and (= :cli (first %)) (= "map" (second %))) (:act c)))))
+
 (defn fill-pattern
   "pattern with the strings \"$job\" and \"$event-job\" replaced by the ids (an item of a jobs list is matched by its id)."
   [pattern last-job event-job]

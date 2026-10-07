@@ -1,6 +1,6 @@
 ;; Card 6ae5d8aa: under manual control the driver's job is one slot with one call: it ends (result, refusal) and leaves the list, and does not run again.
 ;; A body-driving job (world.mjs submit dig of an air cell) ends :already-clear; `jobs list` is then empty (nothing parked or re-rolled). The same for a refused job
-;; (equip of an item not carried). The :error and :cut endings need a throwing round or a cut call: engine/test/engine/manual_slot_test.cljs only.
+;; (equip of an item not carried: its fetch need fails under manual, so the slot ends with a :job :stopped event). The :error and :cut endings need a throwing round or a cut call: engine/test/engine/manual_slot_test.cljs only.
 {:defaults
  {:tags [:manual :scheduler :tool] :time :any
   :plot {:height 8}
@@ -19,4 +19,4 @@
    :act [[:http :take {:who "wt" :why "fixture" :idle-s 60} {:ok true}]
          [:cli "world" ["$body" "submit" "equip" "diamond_sword" "--who" "wt" "--world" "$world"] {:ok true}]
          [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}] 20]]
-   :expect [{:event {:source :job :kind :result :data {:ok false}} :within-s 20}]}]}
+   :expect [{:event {:source :job :kind :stopped :data {:status :stopped}} :within-s 20}]}]}

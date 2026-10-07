@@ -1,10 +1,9 @@
 ;; Card b2fdd061: a marker added with map.mjs add (shared places.json) is read by the body within a few seconds; go-to :place walks to it.
-;; The marker is named and tagged for this body (it is cleaned up with the case's :places entry, which has no other use here).
+;; The marker is named and tagged for this body (the runner removes markers by that tag after any case with a :cli map step).
 ;; add-then-go-to-arrives: add, wait for the body's world.reloaded event for places.json, go-to the marker by name. unknown-name-refused: a name nobody added is :unknown-place, the body stays.
 {:defaults
  {:tags [:movement :places :tool] :time :any
   :plot {:height 8}
-  :places [{:name "unused-$tag" :pos [2 0 2]}]
   :body {:at [4.5 0 16.5] :effects [["resistance" 600 4]]}
   :limit-s 80}
  :cases
