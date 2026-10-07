@@ -1,0 +1,25 @@
+;; Card 8005f9b9 (fixes 5ce6ca10, e48be483; owner Q82): fight-back swings only at a SEEN mob; a heard-only mob is never walked to or hit at its
+;; exact cell (the body may turn toward it, the retreat path handles it). Heard only = a sealed dark stone box (light 0), the zombie
+;; beyond dark-sight (4) but within hearing (16), NoAI and helmeted (never hurts, no sun burn). The control lights the box (glowstone
+;; roof): the same zombie is seen and killed. The recover-drops decline-danger log of a heard danger is unit-only (needs a death pile).
+{:defaults
+ {:tags [:hostile :combat :sensing]
+  :time :any
+  :plot {:height 8}
+  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+              :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+  :blocks [[:fill [4 -1 4] [28 6 28] "stone" :hollow]]
+  :body {:at [12.5 0 16.5] :yaw -90 :inventory [["iron_sword" 1]] :effects [["resistance" 600 4]]}
+  :limit-s 50}
+ :cases
+ [{:name "heard-zombie-in-the-dark-is-never-attacked"
+   :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 10}
+            {:no-event {:kind :fight_no_damage} :for-s 35}]
+   :after [[:entities "type=zombie,tag=wt" [[4 0 4] [28 4 28]] 1] [:body-far [22.5 0 16.5] 4]]}
+  {:name "seen-zombie-in-the-light-is-fought"
+   :blocks [[:fill [5 6 5] [27 6 27] "glowstone"]]
+   :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 10}]
+   :after [[:entities "type=zombie,tag=wt" [[4 0 4] [28 4 28]] 0]]
+   :limit-s 60}]}

@@ -39,4 +39,59 @@
    :expect [{:event {:source :job :kind :shelter.exposed} :within-s 60}
             {:event {:source :job :kind :holding :data {:reason :exposed}} :within-s 60 :of-job true}
             {:event {:source :job :kind :stopped :data {:reason :exposed}} :within-s 120 :of-job true}]
-   :limit-s 140}]}
+   :limit-s 140}
+  ;; Card 97fac480 (fix 57d67d3b). Night 1 relocates off a wet start site (a :night-site entry) and ends roofed; the entries are
+  ;; forgotten then, so night 2 (water gone) digs at the start again instead of skipping it: the start's descent cell is dug.
+  {:name "failed-site-forgotten-when-the-night-ends-roofed"
+   :blocks [[:fill [0 -6 0] [31 -1 31] "dirt"] [:set [17 -1 16] "water"]]
+   :act [[:job (jobs.survival.night)]
+         [:await {:source :job :kind :holding :data {:reason :sheltered}} 150]
+         [:wait-s 5]
+         [:time-set 1000]
+         [:await {:source :job :kind :completed :data {:name "jobs.survival.night"}} 120]
+         [:rcon "execute positioned $X $Y $Z run setblock ~17 ~-1 ~16 minecraft:dirt"]
+         [:rcon "execute positioned $X $Y $Z run tp $BODY ~16.5 ~ ~16.5"]
+         [:time-set 14000]
+         [:job (jobs.survival.night)]
+         [:wait-s 60]]
+   :expect [{:event {:source :job :kind :shelter.relocated} :within-s 150}
+            {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 300 :of-job true}]
+   :after [[:not-block [16 -1 16] "dirt"]]
+   :limit-s 330}
+  ;; A hostile reflex cuts the night: a NoAI zombie 6 away fires hostile-near as the night starts, the reflex fights it, and the
+  ;; night job resumes, digs in, holds sheltered and leaves at day.
+  {:name "reflex-cut-night-resumes-and-holds"
+   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+               :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+   :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:job (jobs.survival.night)]
+         [:await {:source :job :kind :holding :data {:reason :sheltered}} 120]
+         [:wait-s 5]
+         [:time-set 1000]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 30}
+            {:event {:source :reflex :kind :ended :context {:reflex-id :hostile-near}} :within-s 90}
+            {:event {:source :job :kind :dig-in.sealed} :within-s 120}
+            {:event {:source :job :kind :holding :data {:reason :sheltered}} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :shelter.exposed} :for-s 120}
+            {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 200 :of-job true}]
+   :limit-s 230}
+  ;; Card 62278915 (fix b0462852): pit-site? needs ground the carried tools dig. A stone pad and no pickaxe: no pit is started
+  ;; (no dig-in call at all), the night holds exposed; the same pad with a stone pickaxe is dug in.
+  {:name "stone-pad-no-pickaxe-starts-no-pit"
+   :blocks [[:fill [8 -6 8] [24 -1 24] "stone"]]
+   :act [[:job (jobs.survival.night {:flee-radius 0})]
+         [:await {:source :job :kind :shelter.exposed} 90]
+         [:wait-s 10]
+         [:time-set 1000]]
+   :expect [{:event {:source :job :kind :shelter.exposed} :within-s 90}
+            {:no-event {:source :job :kind #{:dig-in.sealed :dig_in_failed}} :for-s 90 :until {:source :job :kind :stopped :data {:reason :exposed}}}
+            {:event {:source :job :kind :stopped :data {:reason :exposed}} :within-s 150 :of-job true}]
+   :limit-s 170}
+  {:name "stone-pad-with-pickaxe-digs-in"
+   :blocks [[:fill [8 -6 8] [24 -1 24] "stone"]]
+   :body {:inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.survival.night)]]
+   :expect [{:event {:source :job :kind :dig-in.sealed} :within-s 90}
+            {:no-event {:source :job :kind :shelter.exposed} :for-s 90 :until {:source :job :kind :dig-in.sealed}}]
+   :limit-s 100}
+]}

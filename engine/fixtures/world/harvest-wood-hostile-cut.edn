@@ -1,0 +1,23 @@
+;; Card 93e80627 (fix b1e049e3): harvest-wood after a hostile reflex moved the body still fetches the felled tree's drops (collect-drops
+;; is anchored on the felled base, not on where the body stands), and never ends :completed with nothing collected (that stops
+;; :nothing-collected). A zombie (AI on, helmeted) turns up while the body fells a 4-log oak; the hostile reflex fights it, then the job resumes.
+{:defaults
+ {:tags [:forestry :harvest-wood :hostile]
+  :time :day
+  :plot {:height 10 :floor "grass_block" :length 64 :width 32}
+  :blocks [[:fill [16 0 16] [16 3 16] "oak_log"]
+           [:fill [14 3 14] [18 4 18] "oak_leaves[persistent=true]"]
+           [:set [16 3 16] "oak_log"]]
+  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+              :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+  :body {:at [10.5 0 16.5] :settle-s 2 :inventory [["iron_axe" 1] ["oak_sapling" 1]] :effects [["resistance" 600 4]]}}
+ :cases
+ [{:name "logs-collected-after-the-reflex-cut"
+   :act [[:job (jobs.forestry.harvest-wood {:radius 32})]
+         [:wait-s 5]
+         [:summon "zombie" [4.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 40}
+            {:event {:source :job :kind :completed :data {:status :completed}} :within-s 150 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :nothing-collected}} :for-s 150 :until {:source :job :kind :completed}}]
+   :after [[:item "oak_log" 1]]
+   :limit-s 170}]}

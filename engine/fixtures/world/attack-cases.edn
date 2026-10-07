@@ -67,4 +67,23 @@
          [:job (jobs.combat.attack {:targets "zombie" :lost-s 3})]]
    :expect [{:event {:source :job :kind :attack.gave-up :data {:reason :no-damage}} :within-s 60 :of-job true}
             {:event {:source :job :kind :attack.done :data {:reason :gave-up :killed []}} :within-s 90 :of-job true}]
-   :after [[:entities "type=zombie,tag=wt" [[0 0 0] [31 3 31]] 1]]}]}
+   :after [[:entities "type=zombie,tag=wt" [[0 0 0] [31 3 31]] 1]]}
+;; Card 6634f19f (fix 74e6eb4f): copper tools (server 1.21.9+) are costed as their tier, not a fist; the axe swings at its 1250 ms gap
+;; (swing spacing is read from the log timestamps by hand).
+  {:name "copper-sword-kills-zombie"
+   :body {:inventory [["copper_sword" 1]]}
+   :act [[:summon "zombie" [20.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:wait-s 2]
+         [:job (jobs.combat.attack {:targets "zombie"})]]
+   :expect [{:event {:source :job :kind :attack.done :data {:reason :cleared}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :attack.gave-up} :for-s 60 :until {:source :job :kind :attack.done}}]
+   :after [[:entities "type=zombie,tag=wt" [[0 0 0] [31 3 31]] 0]]}
+  {:name "copper-axe-kills-zombie"
+   :body {:inventory [["copper_axe" 1]]}
+   :act [[:summon "zombie" [20.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:wait-s 2]
+         [:job (jobs.combat.attack {:targets "zombie"})]]
+   :expect [{:event {:source :job :kind :attack.done :data {:reason :cleared}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :attack.gave-up} :for-s 60 :until {:source :job :kind :attack.done}}]
+   :after [[:entities "type=zombie,tag=wt" [[0 0 0] [31 3 31]] 0]]}
+]}

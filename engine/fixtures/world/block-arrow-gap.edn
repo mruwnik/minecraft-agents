@@ -1,0 +1,30 @@
+;; Card 6a70b865 (jobs.survival.block-arrow-gap): the body stands in a closed stone room (x 14..19, z 14..18, roof y 3) whose east wall has
+;; a 1x1 slit at head height [19 1 16]; a NoAI helmeted skeleton stands 10 east of the body with an arrow line through the slit.
+;; The only placeable cell on the line is the slit (the cells in front of the body touch no solid block). The job places there and
+;; ends done {:placed [cell]}; with no block carried (and :fetch false) it stops :no-blocks and places nothing; behind a wall with
+;; no slit there is no line of fire, so it declines (waits :no-ranged-danger) and places nothing.
+{:defaults
+ {:tags [:survival :hostile :jobs]
+  :time :any
+  :plot {:height 8}
+  :blocks [[:fill [14 0 14] [19 3 18] "stone" :hollow] [:set [19 1 16] "air"] [:set [15 1 15] "torch"]]
+  :body {:at [17.5 0 16.5] :inventory [["cobblestone" 10]] :effects [["resistance" 600 4]]}
+  :act [[:summon "skeleton" [27.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+        [:wait-s 2]]
+  :limit-s 60}
+ :cases
+ [{:name "slit-in-the-wall-is-filled"
+   :act [[:job (jobs.survival.block-arrow-gap {})]]
+   :expect [{:event {:source :job :kind :block-arrow-gap.closed} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :block_arrow_gap_failed} :for-s 30 :until {:source :job :kind :block-arrow-gap.closed}}]
+   :after [[:block [19 1 16] "cobblestone"]]}
+  {:name "no-blocks-stops-places-nothing"
+   :body {:inventory []}
+   :act [[:job (jobs.survival.block-arrow-gap {:fetch false})]]
+   :expect [{:event {:source :job :kind :block_arrow_gap_failed :data {:reason :no-blocks}} :within-s 30 :of-job true}]
+   :after [[:block [19 1 16] "air"]]}
+  {:name "wall-without-a-slit-declines"
+   :blocks [[:set [19 1 16] "stone"]]
+   :act [[:job (jobs.survival.block-arrow-gap {})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-ranged-danger}} :within-s 30 :of-job true}]
+   :after [[:block [19 1 16] "stone"] [:not-block [18 0 16] "cobblestone"]]}]}
