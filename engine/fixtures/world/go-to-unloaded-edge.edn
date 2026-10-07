@@ -1,4 +1,4 @@
-;; go-to is one whole attempt per call (card 41ac6c2d): a goal in unloaded land past the plot's end gives up at the edge
+;; go-to is one whole attempt per call (card 41ac6c2d): a goal in unloaded land (x 1500, past every plot lane: land at 450 is loaded) gives up at the edge
 ;; (arrived false), and a second call to a goal in the loaded land arrives. Plot 340 long, body at the west end.
 {:defaults
  {:tags [:movement :go-to]
@@ -8,7 +8,7 @@
   :limit-s 240}
  :cases
  [{:name "unloaded-goal-gives-up-then-second-call-arrives"
-   :act [[:job (jobs.movement.go-to {:pos #at [450 0 16] :range 1 :escalate false})]
+   :act [[:job (jobs.movement.go-to {:pos #at [1500 0 16] :range 1 :escalate false})]
          [:await {:source :job :kind :result :data {:arrived false}} 200]
          [:job (jobs.movement.go-to {:pos #at [330 0 16] :range 1 :escalate false})]]
    :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 200 :of-job true}

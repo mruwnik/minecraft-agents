@@ -4,7 +4,7 @@
 ;; block or blocks are carried). The cases share one plot (plots are leased first-free, so run this file alone with
 ;; --first-plot set high, e.g. 300, to keep positions the same) and run in order: c1 writes a tool-only entry, c2 (memory
 ;; kept) retries it with a pickaxe and seals, c3 writes a reasoned (:no-floor) entry, c4 (a second register group: the
-;; body is restarted with memory.edn kept) is declined by it, c5 elsewhere on the plot (> 8 blocks) is not.
+;; body is restarted, its memory seeded with the same entry) is declined by it, c5 elsewhere on the plot (> 8 blocks) is not.
 ;; The 10 minute expiry is not run. Night: run with --allow-time --time-log <the shared time log>.
 {:defaults
  {:tags [:night :survival :dig-in :memory]
@@ -34,6 +34,9 @@
    :after [[:block [25 5 25] "stone"]]
    :limit-s 40}
   {:name "c4-reasoned-entry-declines-after-restart"
+   ;; seeds its own entry (the one c3 writes), so it does not depend on the cases before it
+   :keep-memory false
+   :memory [{:kind :dig-in-futile :data {:pos #xyz [25 6 25] :reason :no-floor}}]
    :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
                :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
    :body {:at [25.5 6 25.5] :inventory [["stone_pickaxe" 1] ["cobblestone" 16]]}

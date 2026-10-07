@@ -13,12 +13,13 @@
    :expect [{:event {:source :job :kind :plant.done :data {:planted 12 :reason :done}} :within-s 90 :of-job true}]
    :after [[:block [10 0 16] "wheat"] [:block [21 0 16] "wheat"] [:item "wheat_seeds" 18]]}
   {:name "one-run-one-crop-first-pick-kept"
+   ;; carrots count as food: 20 (60 points) stay as the food reserve, only the 5 above it are sown
    :blocks [[:fill [10 -1 16] [21 -1 16] "farmland[moisture=7]"] [:fill [10 -1 17] [21 -1 17] "water"]]
-   :body {:inventory [["wheat_seeds" 7] ["carrot" 6]]}
+   :body {:inventory [["wheat_seeds" 7] ["carrot" 25]]}
    :act [[:job (jobs.farm.plant {:box {:min #xyz [10 -1 16] :max #xyz [21 -1 16]}})]]
    :expect [{:event {:source :job :kind :plant.done :data {:planted 12 :reason :done}} :within-s 90 :of-job true}]
    :after [[:block [16 0 16] "wheat"] [:block [17 0 16] "carrots"] [:block [21 0 16] "carrots"]
-           [:item "wheat_seeds" 0] [:item "carrot" 1]]}
+           [:item "wheat_seeds" 0] [:item "carrot" 20]]}
   {:name "seed-arg-picks-that-crop"
    :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -1 17] [13 -1 17] "water"]]
    :body {:inventory [["carrot" 20] ["wheat_seeds" 5]]}

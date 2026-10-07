@@ -1,6 +1,6 @@
 ;; Breathe over a 10x10 pond, 4 deep (card 94ae4756): the body is put in the water, its air runs out, the breathe reflex fires.
 ;; Walled all round (wall 2 above the water, ground outside level with the water): it never reaches a shore and the pond is narrower than a swim leg,
-;; so the reflex ends stopped :no_land_in_range (no :afloat warning, no hold) and the body stays in the pond; it never drowns. With a ledge cut into one wall
+;; so, with no pillar block carried, the reflex ends stopped :no_blocks (no :afloat warning, no hold) and the body stays in the pond; it never drowns. With a ledge cut into one wall
 ;; (the ground outside is level with the water) it climbs out and the reflex ends :cleared once, also when the ledge's top is a slab, a path block or farmland.
 ;; ledge-east-hostile-cuts-then-refire-lands: a zombie summoned once suffocating has fired, hostile-near above suffocating, drops the breathe run; once it is killed breathe fires again and lands.
 {:defaults
@@ -17,18 +17,18 @@
  :cases
  [{:name "walled-stops-no-land-1"
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
-            {:event {:source :reflex :kind :ended :data {:outcome :stopped :reason :no_land_in_range}} :within-s 80}
-            {:no-event {:source :job :kind :afloat} :for-s 80 :until {:source :reflex :kind :ended :data {:outcome :stopped :reason :no_land_in_range}}}
-            {:no-event {:source :job :kind :holding :data {:reason :afloat}} :for-s 80 :until {:source :reflex :kind :ended :data {:outcome :stopped :reason :no_land_in_range}}}
-            {:no-event {:source :job :level :warn :kind #{:unreachable :refused}} :for-s 80 :until {:source :reflex :kind :ended :data {:outcome :stopped :reason :no_land_in_range}}}]
+            {:event {:source :reflex :kind :ended :data {:outcome :stopped :reason :no_blocks}} :within-s 80}
+            {:no-event {:source :job :kind :afloat} :for-s 80 :until {:source :reflex :kind :ended :data {:outcome :stopped :reason :no_blocks}}}
+            {:no-event {:source :job :kind :holding :data {:reason :afloat}} :for-s 80 :until {:source :reflex :kind :ended :data {:outcome :stopped :reason :no_blocks}}}
+            {:no-event {:source :job :level :warn :kind #{:unreachable :refused}} :for-s 80 :until {:source :reflex :kind :ended :data {:outcome :stopped :reason :no_blocks}}}]
    :after [[:body-near [15.5 3.5 15.5] 6]]}
   {:name "walled-stops-no-land-2"
    :body {:at [13.5 2 17.5]}
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
-            {:event {:source :reflex :kind :ended :data {:outcome :stopped :reason :no_land_in_range}} :within-s 80}
-            {:no-event {:source :job :kind :afloat} :for-s 80 :until {:source :reflex :kind :ended :data {:outcome :stopped :reason :no_land_in_range}}}
-            {:no-event {:source :job :kind :holding :data {:reason :afloat}} :for-s 80 :until {:source :reflex :kind :ended :data {:outcome :stopped :reason :no_land_in_range}}}
-            {:no-event {:source :job :level :warn :kind #{:unreachable :refused}} :for-s 80 :until {:source :reflex :kind :ended :data {:outcome :stopped :reason :no_land_in_range}}}]
+            {:event {:source :reflex :kind :ended :data {:outcome :stopped :reason :no_blocks}} :within-s 80}
+            {:no-event {:source :job :kind :afloat} :for-s 80 :until {:source :reflex :kind :ended :data {:outcome :stopped :reason :no_blocks}}}
+            {:no-event {:source :job :kind :holding :data {:reason :afloat}} :for-s 80 :until {:source :reflex :kind :ended :data {:outcome :stopped :reason :no_blocks}}}
+            {:no-event {:source :job :level :warn :kind #{:unreachable :refused}} :for-s 80 :until {:source :reflex :kind :ended :data {:outcome :stopped :reason :no_blocks}}}]
    :after [[:body-near [13.5 3.5 17.5] 6]]}
   {:name "ledge-east-lands-1"
    :blocks [[:fill [21 4 11] [21 5 20] "air"]]

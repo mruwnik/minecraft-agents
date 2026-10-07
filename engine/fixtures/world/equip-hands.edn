@@ -2,7 +2,8 @@
 {:defaults
  {:tags [:items :equip]
   :plot {:height 8}
-  :body {:inventory [["iron_pickaxe" 1] ["shield" 1]]}
+  ;; the first stack is the one held at start: another item first, so equipping the pickaxe moves it
+  :body {:inventory [["stone_axe" 1] ["iron_pickaxe" 1] ["shield" 1]]}
   :limit-s 40}
  :cases
  [{:name "main-hand"
@@ -12,7 +13,7 @@
    :act [[:job (jobs.items.equip {:item "shield" :hand "off"})]]
    :expect [{:event {:source :job :kind :equip.done :data {:item "shield" :hand "off"}} :within-s 20 :of-job true}]}
   {:name "no-item"
-   :act [[:job (jobs.items.equip {:item "diamond_pickaxe"})]]
+   :act [[:job (jobs.items.equip {:item "diamond_pickaxe" :fetch false})]]
    :expect [{:event {:source :job :kind :equip.refused :data {:reason :no-item}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :equip.done} :for-s 10}]}
   {:name "unknown-item"

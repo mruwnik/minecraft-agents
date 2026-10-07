@@ -9,9 +9,10 @@
   :body {:at [16.5 10 16.5] :effects [["resistance" 600 4]]}}
  :cases
  [{:name "pickaxe-wears-out"
-   :body {:inventory [["stone_pickaxe" 1]]}
-   :act [[:rcon "item replace entity $BODY container.0 with minecraft:stone_pickaxe[minecraft:damage=116]"]
-         [:job (jobs.access.stair {:dir :down :heading :east :steps 6})]]
+   ;; 14 uses left (low after one dig); a 10-step stair from the west edge of the mass digs well over 14 blocks
+   :body {:at [8.5 10 16.5] :inventory [["stone_pickaxe" 1]]}
+   :act [[:rcon "item replace entity $BODY container.0 with minecraft:stone_pickaxe[minecraft:damage=117]"]
+         [:job (jobs.access.stair {:dir :down :heading :east :steps 10})]]
    :expect [{:event {:source :job :kind :tool.low} :within-s 40}
             {:event {:source :job :kind :waiting :data {:reason :no-tool}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :stair.done} :for-s 40 :until {:source :job :kind :waiting :data {:reason :no-tool}}}]}

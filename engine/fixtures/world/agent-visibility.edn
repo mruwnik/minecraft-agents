@@ -15,8 +15,10 @@
              :within-s 150 :of-job true}]
    :limit-s 160}
   {:name "hungry-names-raw-chicken-skipped-on-purpose"
+   ;; the body starts fed to 20 and hungry? stops at 18: drain it first (food about 8, below :food 12)
    :body {:inventory [["chicken" 2] ["rotten_flesh" 5]]}
-   :act [[:job (jobs.survival.get-food {:food 21 :hunt-radius 4 :ask-cooldown-ms 0})]]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
+         [:job (jobs.survival.get-food {:food 12 :hunt-radius 4 :ask-cooldown-ms 0})]]
    :expect [{:event {:source :job :kind :food.none :message [:contains "carrying 2 chicken, 5 rotten_flesh, skipped on purpose"]} :within-s 60 :of-job true}
             {:event {:source :job :kind :food.none :message [:contains "searched for animals"]} :within-s 5 :of-job true}]
    :limit-s 70}

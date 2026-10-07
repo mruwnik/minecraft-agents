@@ -58,6 +58,8 @@
             {:no-event {:source :job :kind :completed} :for-s 40 :until {:source :job :kind :waiting :data {:reason :no-source :why [:contains "no seen chest"]}}}]
    :after [[:item "wooden_pickaxe" 0]]}
   {:name "stone-pick-no-cobble"
+   ;; a dirt floor: with stone to see the chain mines cobblestone itself (fetch by default), so no stone may be in view
+   :plot {:height 12 :floor "dirt"}
    :body {:inventory [["oak_log" 12] ["stick" 4]]}
    :act [[:job (jobs.items.get-tool {:item "stone_pickaxe"})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-source :why [:contains "no seen chest"]}} :within-s 40 :of-job true}

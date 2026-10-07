@@ -55,8 +55,8 @@
    :body {:at [16.5 1 16.5] :inventory [["stone_pickaxe" 1] ["dirt" 8]]}
    :act [[:job (jobs.movement.go-to {:pos #at [24 1 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated} :within-s 60 :of-job true}
-            {:event {:source :job :kind :result :data {:arrived true}} :within-s 140 :of-job true}
-            {:no-event {:source :job :kind :result :data {:escalation {:why :no-dig}}} :for-s 140 :until {:source :job :kind :result :data {:arrived true}}}]
+            {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :result :data {:escalation {:why :no-dig}}} :for-s 140 :until {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}}}]
    :after [[:body-near [24.5 1 16.5] 2] [:block [20 1 16] "iron_door"]]}
   {:name "walled-yard-iron-door-beside-digs-natural-wall"
    ;; the iron door is in the north wall, off the line to the goal: the stone wall east is dug
@@ -66,8 +66,8 @@
    :body {:at [16.5 1 16.5] :inventory [["stone_pickaxe" 1] ["dirt" 8]]}
    :act [[:job (jobs.movement.go-to {:pos #at [24 1 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated} :within-s 60 :of-job true}
-            {:event {:source :job :kind :result :data {:arrived true}} :within-s 140 :of-job true}
-            {:no-event {:source :job :kind :result :data {:escalation {:why :no-dig}}} :for-s 140 :until {:source :job :kind :result :data {:arrived true}}}]
+            {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :result :data {:escalation {:why :no-dig}}} :for-s 140 :until {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}}}]
    :after [[:body-near [24.5 1 16.5] 2] [:block [16 1 12] "iron_door"]]}
   {:name "oak-door-with-doors-never-digs"
    ;; stone room, an oak door in the east wall and :doors :never (a wall for the walk): the room is dug out, no :no-dig

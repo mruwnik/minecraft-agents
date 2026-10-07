@@ -51,22 +51,22 @@
    :after [[:not-block [16 0 16] "sand"] [:body-near [16.5 0 16.5] 1.5]]}
   {:name "n1-slab"
    :blocks [[:set [16 0 16] "stone_slab[type=bottom]"]]
-   :act [[:wait-s 13] [:rcon "tp $BODY $X $Y $Z"]]
+   :act [[:wait-s 13] [:rcon "execute positioned $X $Y $Z run tp $BODY ~16.5 ~ ~16.5"]]
    :expect [{:no-event {:source :reflex :kind :fired} :for-s 12}]
    :after [[:block [16 0 16] "stone_slab[type=bottom]"] [:body-near [16.5 0 16.5] 1.5]]}
   {:name "n1-farmland"
    :blocks [[:set [16 -1 16] "farmland"]]
-   :act [[:wait-s 13] [:rcon "tp $BODY $X $Y $Z"]]
+   :act [[:wait-s 13] [:rcon "execute positioned $X $Y $Z run tp $BODY ~16.5 ~ ~16.5"]]
    :expect [{:no-event {:source :reflex :kind :fired} :for-s 12}]
    :after [[:block [16 -1 16] "farmland"] [:body-near [16.5 0 16.5] 1.5]]}
   {:name "n1-snow-layer"
    :blocks [[:set [16 0 16] "snow[layers=1]"]]
-   :act [[:wait-s 13] [:rcon "tp $BODY $X $Y $Z"]]
+   :act [[:wait-s 13] [:rcon "execute positioned $X $Y $Z run tp $BODY ~16.5 ~ ~16.5"]]
    :expect [{:no-event {:source :reflex :kind :fired} :for-s 12}]
    :after [[:block [16 0 16] "snow[layers=1]"] [:body-near [16.5 0 16.5] 1.5]]}
   {:name "n1-soul-sand"
    :blocks [[:set [16 -1 16] "soul_sand"]]
-   :act [[:wait-s 13] [:rcon "tp $BODY $X $Y $Z"]]
+   :act [[:wait-s 13] [:rcon "execute positioned $X $Y $Z run tp $BODY ~16.5 ~ ~16.5"]]
    :expect [{:no-event {:source :reflex :kind :fired} :for-s 12}]
    :after [[:block [16 -1 16] "soul_sand"] [:body-near [16.5 0 16.5] 1.5]]}
  {:name "n2-pillar-up-no-false-wedge-1"
