@@ -16,8 +16,8 @@
   at feet height. The target itself is left. A nil zone list declines the check (one warn tunnel.declined).
 
   The way is one straight line along a heading through the target's column:
-  1. An entry stand on the surface (the column's top cell over a solid floor, two open cells; no entry from
-     water).
+  1. An entry stand: on the surface (the column's top cell over a solid floor, two open cells; no entry from
+     water), or the body's own cell when it stands underground in the entry column.
   2. A 1-wide stair down (or up) to the target's height, cut by jobs.access.stair as a child with :y set, so it
      resumes from any step.
   3. A flat run, 1 wide and 2 high (head cell first), up to the stand. Never a shaft, and the run never passes
@@ -174,13 +174,28 @@
     (or (some (fn [[feet cells]] (stair/stop-of (assoc in :feet feet) cells accept)) steps)
         (stair/stop-of (assoc in :feet stand) (run-cells stand (:heading plan)) accept))))
 
+(defn standable?
+  "Whether the body can stand at feet: it and the head cell open, a solid floor under."
+  [block-at [x y z]]
+  (and (open-cell? (block-at [x y z])) (open-cell? (block-at [x (inc y) z]))
+       (boolean (rules/solid-floor? block-at [x (dec y) z]))))
+
+(defn entry-heights
+  "The feet heights an entry in column [ex ez] may take: the surface, and the body's own cell when it stands in
+  that column (a cave or tunnel roof hides the surface from a body underground)."
+  [block-at [ex ez] lo hi feet]
+  (let [[fx fy fz] feet
+        own (when (and feet (= [fx fz] [ex ez]) (<= lo fy hi) (standable? block-at feet)) fy)]
+    (distinct (keep identity [(surface block-at [ex ez] lo hi) own]))))
+
 (defn fits
-  "The plan of the line along heading whose entry is n before the target, when the stair fits in it; else nil."
-  [block-at target heading n max-length]
+  "The plans of the lines along heading whose entry is n before the target, when the stair fits in it (entry: the
+  surface, or the body's cell feet); else ()."
+  [block-at target heading n max-length feet]
   (let [[tx ty tz] target
-        [ex _ ez] (ahead target heading (- n))
-        y (surface block-at [ex ez] (- ty max-length) (+ ty max-length 1))]
-    (when (and y (<= (js/Math.abs (- y ty)) (dec n)))
+        [ex _ ez] (ahead target heading (- n))]
+    (for [y (entry-heights block-at [ex ez] (- ty max-length) (+ ty max-length 1) feet)
+          :when (<= (js/Math.abs (- y ty)) (dec n))]
       (let [d (- y ty)
             plan {:entry [ex y ez] :heading heading :dir (if (neg? d) :up :down) :steps (js/Math.abs d)
                   :run (- n 1 (js/Math.abs d)) :length n :target [tx ty tz]}]
@@ -189,8 +204,8 @@
 (defn best-on-heading
   "{:plan p} for the shortest valid line along heading, else {:stop s} (the shortest fitting line's stop, or
   :too-far when none fits)."
-  [in target heading max-length accept]
-  (let [fitting (keep #(fits (:block-at in) target heading % max-length) (range 1 (inc max-length)))
+  [in target heading max-length accept feet]
+  (let [fitting (mapcat #(fits (:block-at in) target heading % max-length feet) (range 1 (inc max-length)))
         judged (map (fn [p] [p (line-stop in p accept)]) fitting)]
     (if-let [[p] (first (filter (comp nil? second) judged))]
       {:plan p}
@@ -210,7 +225,7 @@
   [in target feet max-length accept]
   (if (and (nil? (:zones in)) (not (:ignore-zones? in)))
     {:reason :no-zones}
-    (let [per (into {} (map (fn [h] [h (best-on-heading in target h max-length accept)])) heading-order)
+    (let [per (into {} (map (fn [h] [h (best-on-heading in target h max-length accept feet)])) heading-order)
           plans (keep (comp :plan per) heading-order)]
       (if (seq plans)
         (first (sort-by (juxt :length #(cuts-floor? % feet) #(dist2 feet (:entry %))) plans))

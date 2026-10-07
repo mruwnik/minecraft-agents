@@ -26,9 +26,9 @@
     (let [n (get named cell (if (< y 65) "stone" "air"))]
       (when-not (= :unloaded n) n))))
 
-(defn approach [named target & {:keys [zones footprints max-length accept ways] :or {zones [] footprints #{} max-length 24 accept #{}}}]
+(defn approach [named target & {:keys [zones footprints max-length accept ways feet] :or {zones [] footprints #{} max-length 24 accept #{} feet [0 65 0]}}]
   (tunnel/approach {:block-at (world-fn named) :zones zones :footprints footprints :ledger #{} :ways ways}
-                   target [0 65 0] max-length accept))
+                   target feet max-length accept))
 
 (defn stair-target [{:keys [stand heading]}]
   (let [[dx dz] ({:north [0 -1] :south [0 1] :east [1 0] :west [-1 0]} heading)
@@ -43,6 +43,19 @@
     {[3 64 5] "water"} nil
     {[3 64 5] "lava"} nil
     {[3 70 5] :unloaded} nil))
+
+(def cave-room
+  (into {} (for [x [-1 0 1] y [60 61] z [-1 0 1]] [[x y z] "air"])))
+
+(deftest a-body-in-a-cave-enters-the-line-where-it-stands
+  (let [a (approach cave-room [4 57 0] :feet [0 60 0])]
+    (is (= {:entry [0 60 0] :heading :east :dir :down :steps 3 :run 0 :length 4 :stand [3 57 0] :target [4 57 0]} a))))
+
+(deftest a-shorter-surface-entry-beats-the-body-underground
+  (is (= (approach {} [2 64 0]) (approach cave-room [2 64 0] :feet [0 60 0]))))
+
+(deftest a-body-that-cannot-stand-where-it-is-is-no-entry
+  (is (not= [0 60 0] (:entry (approach {} [4 57 0] :feet [0 60 0])))))
 
 (deftest a-target-straight-below-gets-a-straight-stair
   (let [a (approach {} [0 60 0])]
