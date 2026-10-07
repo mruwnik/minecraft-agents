@@ -5,6 +5,9 @@
 
 (set! *warn-on-infer* true)
 
+;; the height a bounce off a slime pad rises to, per block fallen (a 10-block drop bounces about 6.3)
+(def ^:const BOUNCE-PEAK 0.63)
+
 (defn- run-move? [m] (or (== m MOVE-WALK) (== m MOVE-DIAGONAL)))
 
 (extend-type Search
@@ -57,21 +60,23 @@
       0))
 
   ;; the landing factor (options.landing, 1 when none) of `sup`, the support of a landing in the cell x y z (the cell's own
-  ;; block, else the one under it): a negative one (a bounce) only on a pad the bounce stays on (bouncePad), else 1, the full fall
-  (landFactor [s sup x y z]
+  ;; block, else the one under it) after a fall of fall16: a negative one (a bounce) only on a pad the bounce stays on
+  ;; (bouncePad), else 1, the full fall
+  (landFactor [s sup x y z fall16]
     (let [land (if (some? (.-land-factors s)) (.get ^js (.-land-factors s) sup) nil)]
       (cond
         (nil? land) 1
-        (and (neg? land) (not ^boolean (.bouncePad s x (if (== (.stateAt s x y z) sup) y (dec y)) z))) 1
+        (and (neg? land) (not ^boolean (.bouncePad s x (if (== (.stateAt s x y z) sup) y (dec y)) z fall16))) 1
         :else land)))
 
   ;; the body sees the block at x y z now (options.landingSeen; none: every block)
   (landSeen [s x y z]
     (or (nil? (.-land-seen s)) (true? (.call ^js (.-land-seen s) nil x y z))))
 
-  ;; a bounce off the block at x y z stays on the pad: it and the 8 blocks round it are bouncing blocks or (round it) a wall
-  ;; 2 high over that level, and the body sees each. A smaller pad lets the bounce carry the body off it.
-  (bouncePad [s x y z]
+  ;; a bounce off the block at x y z after a fall of fall16 stays on the pad: it and the 8 blocks round it are bouncing blocks
+  ;; or (round it) a wall up to the bounce's peak (BOUNCE-PEAK of the fall) over that level, and the body sees each. A smaller
+  ;; pad or a lower wall lets the bounce carry the body off it.
+  (bouncePad [s x y z fall16]
     (loop [c 0]
       (if (== c 9)
         true
@@ -80,8 +85,13 @@
               id (.stateAt s bx y bz)
               land (if (== id UNLOADED) nil (.get ^js (.-land-factors s) id))
               pad (or (and (some? land) (neg? land) ^boolean (.landSeen s bx y bz))
-                      (and (not (== c 4)) ^boolean (.wallAt s bx (inc y) bz) ^boolean (.wallAt s bx (+ y 2) bz)))]
+                      (and (not (== c 4)) ^boolean (.wallUp s bx y bz (js/Math.ceil (* BOUNCE-PEAK (/ fall16 16))))))]
           (when pad (recur (inc c)))))))
+
+  ;; seen blocks with whole collision tops in the k cells over x y z
+  (wallUp [s x y z k]
+    (loop [dy 1]
+      (or (> dy k) (and ^boolean (.wallAt s x (+ y dy) z) (recur (inc dy))))))
 
   ;; a seen block at x y z with a whole collision top
   (wallAt [s x y z]
@@ -104,7 +114,7 @@
                   (let [sup (.-support s)
                         tight-drop (or tight-src ^boolean (.isTight s x2 y2 z2))
                         fall (- h0 (+ (* y2 16) h1))
-                        f (.landFactor s sup x2 y2 z2)
+                        f (.landFactor s sup x2 y2 z2 fall)
                         dmg (.dropDamage s f fall)]
                     (when-not (> fall (* (.-max-drop s) 16))
                       (let [sec (+ (* (.-c-walk-s s) (+ 1 (* SLOW-EXTRA (+ slow-from (.-enter-slow s)))))
@@ -348,7 +358,7 @@
                 (when-not (pos? (aget (.-tbl-top s) id)) (recur (dec y3)))
                 (let [sup (.-support s)
                       fall (- from16 (+ (* y3 16) h3))
-                      f (.landFactor s sup x y3 z)
+                      f (.landFactor s sup x y3 z fall)
                       dmg (.dropDamage s f fall)]
                   (when-not (> fall (* (.-max-drop s) 16))
                     (set! (.-move-dmg s) (+ dmg (.-enter-dmg s)))

@@ -105,6 +105,24 @@
   (testing "stone at the pad's level beside the landing: no bounce price"
     (is (true? (:damageRefused (pad-drop [5 64 2 7 64 3 "slime_block"] 0))))))
 
+;; a 1x1 slime pad at (5 64 2) at the foot of the cliff, walled round by stone h blocks over the pad's level: the 10-block
+;; drop bounces about 6.3 blocks, so a lower wall lets the bounce carry the body onto it or over it
+(defn walled-pad [h budget]
+  (run (pf/world {:fill [[0 64 0 4 74 4 "stone"] [6 64 1 6 (+ 64 h) 3 "stone"] [5 64 1 5 (+ 64 h) 1 "stone"]
+                         [5 64 3 5 (+ 64 h) 3 "stone"] [5 64 2 5 64 2 "slime_block"]]})
+       (near 5 65 2)
+       {:maxDrop 16 :damageBudget budget :landing (landing slime-id -1)}
+       {:x 4 :y 75 :z 2}))
+
+(deftest a-wall-holds-the-bounce-only-up-to-its-peak
+  (testing "a shaft walled up to the bounce's peak: the bounce, no damage"
+    (is (= 0 (cost (walled-pad 7 0) :damage))))
+  (testing "a 1-high wall ring: refused at no budget"
+    (is (true? (:damageRefused (walled-pad 1 0)))))
+  (testing "a 2-high wall ring under a 10-block drop: priced as the full fall"
+    (is (true? (:damageRefused (walled-pad 2 0))))
+    (is (pos? (cost (walled-pad 2 10) :damage)))))
+
 (deftest a-bounce-needs-a-pad-the-body-sees
   (testing "options.landingSeen says every pad cell is seen: the bounce"
     (is (= 0 (cost (pad-drop wide-pad 0 {:landingSeen (fn [_ _ _] true)}) :damage))))
