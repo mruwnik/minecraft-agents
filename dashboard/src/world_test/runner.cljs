@@ -622,7 +622,7 @@
 
 (defn put-register!
   "Puts the case's register entries on the running body (one triggers.mjs put each); throws when one is refused."
-  [opts register]
+  [opts register origin]
   (reduce (fn [p argv]
             (.then p (fn []
                        (.then (exec-file (into ["engine/tools/triggers.mjs"] argv))
@@ -630,7 +630,7 @@
                                 (when-not (zero? code)
                                   (throw (js/Error. (str "register put failed: " (str/trim out))))))))))
           (js/Promise.resolve nil)
-          (f/register-put-argvs (:body opts) (:world opts) register)))
+          (f/register-put-argvs (:body opts) (:world opts) register origin)))
 
 (defn ensure-at-start!
   "Checks the body stands at the case's start after body-commands; when it does not (a tp that did not take), repeats
@@ -702,7 +702,7 @@
                        (.then (fn [why] (when why (throw (js/Error. why)))))
                        (.then #(rcon! (f/clear-hostiles-commands grid origin rc)))
                        (.then #(reset! pre-register {:offset (log-cursor (events-file opts)) :from-ms (js/Date.now)}))
-                       (.then #(when register (ev/emit! (ev/phase :register)) (put-register! opts register)))
+                       (.then #(when register (ev/emit! (ev/phase :register)) (put-register! opts register origin)))
                        (.then #(sleep (* 1000 (get-in rc [:body :settle-s]))))
                        (.then #(rcon! (f/clear-hostiles-commands grid origin rc)))
                        (.then (fn []

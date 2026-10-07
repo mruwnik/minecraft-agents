@@ -225,13 +225,21 @@
 
 (deftest register-entries-become-trigger-put-commands
   (is (= [["Probe" "--world" "claude" "put" "night" "--trigger" "night" "--by" "world-test"]]
-         (f/register-put-argvs "Probe" "claude" [{:trigger :night}])))
+         (f/register-put-argvs "Probe" "claude" [{:trigger :night}] [0 0 0])))
   (is (= [["Probe" "--world" "claude" "put" "wedged" "--trigger" "wedged" "--persistence" "cooldown"
            "--cooldown-s" "0" "--job" "(jobs.survival.unwedge)" "--args" "{:radius 8}" "--by" "world-test"]]
          (f/register-put-argvs "Probe" "claude"
                                [{:trigger :wedged :persistence :cooldown :cooldown-s 0
-                                 :job '(jobs.survival.unwedge) :args {:radius 8}}])))
-  (is (= [] (f/register-put-argvs "Probe" "claude" []))))
+                                 :job '(jobs.survival.unwedge) :args {:radius 8}}] [0 0 0])))
+  (is (= [] (f/register-put-argvs "Probe" "claude" [] [0 0 0]))))
+
+(deftest register-put-resolves-plot-relative-markers-in-job-args
+  (is (= [["Probe" "--world" "claude" "put" "hungry" "--trigger" "hungry" "--job" "(jobs.storage.deposit {:chest [20016 150 20011]})" "--by" "world-test"]]
+         (f/register-put-argvs "Probe" "claude" [{:trigger :hungry :job (list 'jobs.storage.deposit {:chest (f/rel [16 0 11])})}] [20000 150 20000]))))
+
+(deftest block-commands-floor-fractional-coordinates
+  (is (= "setblock 20001 150 20002 stone" (f/block-command [20000 150 20000] [:set [1.5 0 2.5] "stone"])))
+  (is (= "fill 20001 150 20001 20003 152 20003 glass" (f/block-command [20000 150 20000] [:fill [1.5 0 1.5] [3.9 2 3.2] "glass"]))))
 
 (deftest memory-seed-makes-memory-data-from-case-entries
   (let [c (f/resolve-tags (f/read-edn "{:memory [{:kind :food-source :data {:pos #at [3 0 4] :kind :chest}}

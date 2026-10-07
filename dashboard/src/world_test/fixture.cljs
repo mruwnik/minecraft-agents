@@ -295,13 +295,18 @@
   of the last case's plot would otherwise hold blocks that are gone."
   ["memory.edn" "seen.bin"])
 
+(defn block-pos
+  "A plot-relative position as a block position: absolute, each coordinate floored (block commands take integers)."
+  [origin p]
+  (mapv #(js/Math.floor %) (abs-pos origin p)))
+
 (defn block-command
   "One :blocks entry: [:fill [x y z] [x y z] block] (optionally :hollow / :outline as a fifth element) or
   [:set [x y z] block], plot-relative."
   [origin [op a b c d]]
   (case op
-    :fill (str "fill " (xyz-str (abs-pos origin a)) " " (xyz-str (abs-pos origin b)) " " c (when d (str " " (name d))))
-    :set (str "setblock " (xyz-str (abs-pos origin a)) " " b)
+    :fill (str "fill " (xyz-str (block-pos origin a)) " " (xyz-str (block-pos origin b)) " " c (when d (str " " (name d))))
+    :set (str "setblock " (xyz-str (block-pos origin a)) " " b)
     (throw (js/Error. (str "unknown block op " op)))))
 
 (defn block-commands [origin c] (mapv #(block-command origin %) (:blocks c)))
@@ -315,8 +320,9 @@
 (defn register-put-argvs
   "The `triggers.mjs` argument vectors that put each register entry on a running body, in order. The runner starts the
   body with an empty register and puts these once the plot, the time and the body are in place, so no trigger fires
-  on the body's old spot while the case is being built."
-  [body world register]
+  on the body's old spot while the case is being built. #at / #xyz markers anywhere in the entries are made absolute
+  against origin."
+  [body world register origin]
   (mapv (fn [{:keys [id trigger persistence cooldown-s job args backoff] condition :when}]
           (let [id (name (or id trigger))
                 opt (fn [flag v f] (when (some? v) [flag (f v)]))]
@@ -328,7 +334,7 @@
                 (into (opt "--args" args pr-str))
                 (into (opt "--backoff" backoff pr-str))
                 (into ["--by" "world-test"]))))
-        register))
+        (resolve-tags register origin)))
 
 (defn body-commands
   "Put the body at its start: on the plot, survival, healed and fed, its inventory and effects as the case says."
