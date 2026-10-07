@@ -20,9 +20,10 @@
 
 (def usage
   (str "usage: node tools/world-test.mjs [fixture.edn|dir ...] [--tag T] [--match TEXT] [--repeat N] [--body NAME]\n"
-       "         [--world claude] [--first-plot I] [--card ID] [--allow-time --time-log FILE] [--results FILE] [--phase day|night|night-exclusive] [--stop-on-fail] [--list] [--check]\n"
+       "         [--world claude] [--first-plot I] [--card ID] [--allow-time --time-log FILE] [--results FILE] [--phase day|night|night-exclusive] [--retry-failed N] [--stop-on-fail] [--list] [--check]\n"
        "--phase runs only the cases of that time class (case level; :any and untimed cases, and :day, count as day; a case whose first :time-set step is\n"
        "night counts as night): run day, then night, then night-exclusive so the time lock never flips mid-pass.\n"
+       "--retry-failed N reruns each failed case (not errors or inconclusive) up to N times after the batch, on the same body; a pass on a retry is reported :flaky (counted apart, never :pass, exit 0) with the first failure kept under :first-failure.\n"
        "--check only loads and validates the fixtures (no body, no server): one result per case, exit 1 on a parse error or problem.\n"
        "Runs world fixtures (default dir engine/fixtures/world) on the reserved plot grid x/z 20000..20640, y 150 (large plots: lanes south of it, to z 22240).\n"
        "--allow-time lets a case that needs night or day set the time (each set appended to --time-log); without it\n"
@@ -46,6 +47,9 @@
       (= a "--phase") (if (#{"day" "night" "night-exclusive"} b)
                         (recur more (assoc opts :phase b))
                         (throw (js/Error. (str "--phase must be day, night or night-exclusive, not " b))))
+      (= a "--retry-failed") (if (re-matches #"\d+" (str b))
+                               (recur more (assoc opts :retry-failed (js/Number b)))
+                               (throw (js/Error. (str "--retry-failed needs a count, not " b))))
       (= a "--card") (recur more (assoc opts :card b))
       (= a "--results") (recur more (assoc opts :results b))
       (= a "--stop-on-fail") (recur (rest all) (assoc opts :stop-on-fail true))
@@ -881,50 +885,101 @@
   (boolean (and stop-on-fail (some #(#{:fail :error} (:status %)) results))))
 
 (defn exit-code
-  "0 when there is at least one result and all passed, else 1."
+  "0 when there is at least one result and all passed or were flaky, else 1."
   [results]
-  (if (and (seq results) (every? #(= :pass (:status %)) results)) 0 1))
+  (if (and (seq results) (every? #(#{:pass :flaky} (:status %)) results)) 0 1))
+
+(defn retry-targets
+  "The results worth a retry: plain failures (an error or an inconclusive run is not a flake candidate)."
+  [results]
+  (filterv #(= :fail (:status %)) results))
+
+(defn settle-retries
+  "The first failed result r1 after its retry results: the first passing retry makes it :flaky (that retry's data, the
+  attempt number under :retry, r1 under :first-failure); else r1 stays failed with :retries counted."
+  [r1 retries]
+  (if-let [[n pass] (first (keep-indexed (fn [i x] (when (= :pass (:status x)) [(inc i) x])) retries))]
+    (assoc pass :status :flaky :retry n :first-failure r1)
+    (assoc r1 :retries (count retries))))
+
+(defn retry-failed!
+  "Up to n rounds: rerun! (failed results -> promise of new results in the same order) the cases still failing.
+  Resolves to results with each first failure settled (see settle-retries)."
+  [n results rerun!]
+  (let [attempts (fn [tried r] (get tried ((juxt :id :run) r) []))
+        passed? (fn [tried r] (some #(= :pass (:status %)) (attempts tried r)))
+        round (fn round [tried left]
+                (let [open (filterv #(not (passed? tried %)) (retry-targets results))]
+                  (if (or (zero? left) (empty? open))
+                    (js/Promise.resolve tried)
+                    (.then (rerun! open)
+                           (fn [new-results]
+                             (round (reduce (fn [t [r nr]] (update t ((juxt :id :run) r) (fnil conj []) nr)) tried (map vector open new-results))
+                                    (dec left)))))))]
+    (.then (round {} n)
+           (fn [tried] (mapv (fn [r] (if (seq (attempts tried r)) (settle-retries r (attempts tried r)) r)) results)))))
 
 (defn write-results!
   "Writes results to the --results file, when there is one."
   [opts results]
   (when-let [file (:results opts)] (fs/writeFileSync file (pr-str results))))
 
+(defn run-groups!
+  "Runs the [case run] pairs of each register group in order on the body, on-result! (result -> any) after each; resolves
+  once every group ran. A batch stops early under --stop-on-fail (stop?: -> bool)."
+  [opts groups stop? on-result!]
+  (-> (reduce (fn [p [register pairs]]
+                (.then p (fn []
+                           (-> (reduce (fn [p2 [n [c run]]]
+                                         (.then p2 (fn []
+                                                    (when-not (stop?)
+                                                     (let [plan (f/body-start-plan c (zero? n))
+                                                           [from end] (f/plot-range (f/case-grid c))
+                                                           i (acquire-plot! (max from (:first-plot opts)) end)
+                                                           memory (when (seq (:memory c))
+                                                                    (f/memory-seed (:memory (f/resolve-tags c (f/plot-origin (f/case-grid c) i))) (js/Date.now)))]
+                                                       (-> (run-case! opts c i run (when-not (= :keep plan) register)
+                                                                      #(if (= :keep plan) (js/Promise.resolve nil) (stop-body! opts))
+                                                                      #(if (= :keep plan)
+                                                                         (js/Promise.resolve nil)
+                                                                         (-> (if (= :restart-keep plan) (js/Promise.resolve nil) (reset-last-plot! opts))
+                                                                             (.then (fn [] (start-body! opts register (= :restart-keep plan) memory))))))
+                                                           (.then (fn [r] (on-result! c r)))
+                                                           (.finally #(release-plot! i))))))))
+                                       (js/Promise.resolve nil)
+                                       (map-indexed vector pairs))
+                               (.finally #(stop-body! opts))))))
+              (js/Promise.resolve nil)
+              groups)))
+
 (defn run-all! [opts cases]
-  (let [groups (group-by :register cases)
-        results (atom [])
+  (let [results (atom [])
         expected (frequencies (map :file cases))
         expected (into {} (map (fn [[k n]] [k (* n (:repeat opts))]) expected))
         done (atom 0)
         report-fixtures! (fn []
                            (let [n (count (ev/fixtures-done expected @results))]
-                             (when (> n @done) (reset! done n) (ev/emit! (ev/progress n (count expected))))))]
+                             (when (> n @done) (reset! done n) (ev/emit! (ev/progress n (count expected))))))
+        groups (for [[register group] (group-by :register cases)]
+                 [register (for [run (range 1 (inc (:repeat opts))) c group] [c run])])
+        first-pass (fn [c r] (report! r) (swap! results conj (assoc r :file (:file c))) (write-results! opts @results) (report-fixtures!))
+        by-id (into {} (map (juxt :id identity)) cases)
+        rerun! (fn [failed]
+                 (let [again (atom {})
+                       groups (for [[register rs] (group-by #(:register (by-id (:id %))) failed)]
+                                [register (for [r rs] [(by-id (:id r)) (:run r)])])]
+                   (log! "world-test: retrying " (count failed) " failed: " (str/join ", " (map #(str (:id %) " #" (:run %)) failed)))
+                   (-> (run-groups! opts groups (constantly false)
+                                    (fn [c r] (report! r) (swap! again assoc [(:id c) (:run r)] (assoc r :file (:file c)))))
+                       (.then (fn [] (mapv #(or (@again [(:id %) (:run %)]) %) failed))))))]
     (reset-body-log! opts)
     (ev/emit! (ev/plan cases (:repeat opts)))
-    (-> (reduce (fn [p [register group]]
-                  (.then p (fn []
-                             (-> (reduce (fn [p2 [n [c run]]]
-                                           (.then p2 (fn []
-                                                      (when-not (stop-batch? opts @results)
-                                                       (let [plan (f/body-start-plan c (zero? n))
-                                                             [from end] (f/plot-range (f/case-grid c))
-                                                             i (acquire-plot! (max from (:first-plot opts)) end)
-                                                             memory (when (seq (:memory c))
-                                                                      (f/memory-seed (:memory (f/resolve-tags c (f/plot-origin (f/case-grid c) i))) (js/Date.now)))]
-                                                         (-> (run-case! opts c i run (when-not (= :keep plan) register)
-                                                                        #(if (= :keep plan) (js/Promise.resolve nil) (stop-body! opts))
-                                                                        #(if (= :keep plan)
-                                                                           (js/Promise.resolve nil)
-                                                                           (-> (if (= :restart-keep plan) (js/Promise.resolve nil) (reset-last-plot! opts))
-                                                                               (.then (fn [] (start-body! opts register (= :restart-keep plan) memory))))))
-                                                             (.then (fn [r] (report! r) (swap! results conj (assoc r :file (:file c))) (write-results! opts @results) (report-fixtures!)))
-                                                             (.finally #(release-plot! i))))))))
-                                         (js/Promise.resolve nil)
-                                         (map-indexed vector (for [run (range 1 (inc (:repeat opts))) c group] [c run])))
-                                 (.finally #(stop-body! opts))))))
-                (js/Promise.resolve nil)
-                groups)
-        (.then (fn [] @results)))))
+    (-> (run-groups! opts groups #(stop-batch? opts @results) first-pass)
+        (.then (fn []
+                 (if (and (:retry-failed opts) (not (:stop-on-fail opts)))
+                   (-> (retry-failed! (:retry-failed opts) @results rerun!)
+                       (.then (fn [settled] (reset! results settled) (write-results! opts settled) settled)))
+                   @results))))))
 
 (defn main
   "argv (array) -> promise of the exit code."
@@ -961,7 +1016,7 @@
                                            (write-results! opts results)
                                            (let [n (frequencies (map :status results))]
                                              (log! "world-test: " (count results) " runs, " (n :pass 0) " passed, " (n :fail 0) " failed, "
-                                                   (n :error 0) " errors, " (n :skipped 0) " skipped, " (n :inconclusive 0) " inconclusive")
+                                                   (n :error 0) " errors, " (n :flaky 0) " flaky, " (n :skipped 0) " skipped, " (n :inconclusive 0) " inconclusive")
                                              (exit-code results))))
                                   (.finally #(-> (stop-body! opts)
                                                                  (.then (fn [] (finish-run! opts @final-results)))

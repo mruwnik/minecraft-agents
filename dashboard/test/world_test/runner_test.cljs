@@ -448,3 +448,48 @@
     (is (= ["a/night" "a/set"] (ids "night")))
     (is (= ["a/nx"] (ids "night-exclusive")))
     (is (= (count cases) (count (r/select-phase cases nil))))))
+
+(deftest retry-failed-is-an-option
+  (is (= 2 (:retry-failed (r/parse-args #js ["--retry-failed" "2"]))))
+  (is (nil? (:retry-failed (r/parse-args #js []))))
+  (is (thrown-with-msg? js/Error #"--retry-failed" (r/parse-args #js ["--retry-failed" "x"]))))
+
+(deftest a-pass-on-retry-is-flaky-and-keeps-the-first-failure
+  (let [first-run {:id "a" :run 1 :status :fail :expects [{:status :fail :evidence "none seen"}]}
+        flaky (r/settle-retries first-run [{:id "a" :run 1 :status :fail} {:id "a" :run 1 :status :pass}])]
+    (is (= :flaky (:status flaky)))
+    (is (= 2 (:retry flaky)))
+    (is (= [{:status :fail :evidence "none seen"}] (:expects (:first-failure flaky))))))
+
+(deftest a-case-failing-every-retry-stays-failed-with-the-first-evidence
+  (let [first-run {:id "a" :run 1 :status :fail :why "x"}
+        r1 (r/settle-retries first-run [{:id "a" :run 1 :status :fail :why "y"}])]
+    (is (= :fail (:status r1)))
+    (is (= "x" (:why r1)))
+    (is (= 1 (:retries r1)))))
+
+(deftest only-failed-results-are-retried-and-flaky-is-not-a-failure
+  (is (= 0 (r/exit-code [{:status :pass} {:status :flaky}])))
+  (is (= 1 (r/exit-code [{:status :flaky} {:status :fail}])))
+  (is (= [1] (map :n (r/retry-targets [{:n 0 :status :pass} {:n 1 :status :fail} {:n 2 :status :error}
+                                       {:n 3 :status :inconclusive} {:n 4 :status :flaky}])))))
+
+(deftest retry-failed!-reruns-failures-up-to-n-times-and-stops-for-a-passing-case
+  (async done
+    (let [calls (atom [])
+          rerun! (fn [targets]
+                   (swap! calls conj (mapv :id targets))
+                   (js/Promise.resolve
+                    (mapv (fn [t] (assoc t :status (if (and (= "a" (:id t)) (= 2 (count @calls))) :pass :fail))) targets)))
+          results [{:id "a" :run 1 :status :fail} {:id "b" :run 1 :status :pass} {:id "c" :run 1 :status :fail}]]
+      (-> (r/retry-failed! 3 results rerun!)
+          (.then (fn [out]
+                   (is (= [["a" "c"] ["a" "c"] ["c"]] @calls))
+                   (is (= [:flaky :pass :fail] (mapv :status out)))
+                   (is (= 3 (:retries (nth out 2))))
+                   (done)))))))
+
+(deftest retry-failed!-with-zero-retries-reruns-nothing
+  (async done
+    (-> (r/retry-failed! 0 [{:id "a" :run 1 :status :fail}] (fn [_] (throw (js/Error. "no"))))
+        (.then (fn [out] (is (= [:fail] (mapv :status out))) (done))))))
