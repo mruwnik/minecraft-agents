@@ -217,6 +217,16 @@
             (await (one-round! eng {}))
             (is (= attacks (boolean (seq (calls p "attack")))) (pr-str [ent zones]))))))))
 
+(deftest food-none-names-the-animals-it-passed-over
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:self {:food 1} :entities [(assoc cow :baby true)]} :step-ms 5)]
+          (await (one-round! eng {}))
+          (let [none (first (filterv #(= :food.none (:kind %)) @seen))]
+            (is (= [{:name "cow" :id 7 :why :baby}] (mapv #(select-keys % [:name :id :why]) (:animals none))))
+            (is (re-find #"passed over 1 animal \(cow: baby\)" (str (:text none))))))))))
+
 ;; ---------------------------------------------------------------- cut and resume
 
 (defn ^:async cut-at-transfer!

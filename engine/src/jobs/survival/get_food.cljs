@@ -247,16 +247,22 @@
         (pos? wheat) (await (withdraw! c pos "wheat" wheat))
         :else (bury-source! c pos)))))
 
-(defn nearest-animal
-  "The nearest adult food animal within :hunt-radius not skipped in this job and not in another's zone or claim."
+(defn animals-in-sight
+  "The food animals the entity scan lists within :hunt-radius, nearest first, as {:entity e :why r}: r is nil for one
+  to hunt, else :tried (attacked this job), :baby or :refused (another's zone or claim)."
   [c]
   (let [skipped (set (:skipped-animals (ctx/mem c)))]
     (->> (array-seq (.entities (:primitives c) #js {:radius (:hunt-radius (:args c)) :kind "passive"
                                                     :names (clj->js food-animals) :max 16}))
-         (remove #(skipped (.-id %)))
-         (remove #(true? (.-baby %)))
-         (remove #(access/container-refusal c :take (u/pos-of (.-pos %))))
-         first)))
+         (mapv (fn [e] {:entity e
+                        :why (cond (skipped (.-id e)) :tried
+                                   (true? (.-baby e)) :baby
+                                   (access/container-refusal c :take (u/pos-of (.-pos e))) :refused)})))))
+
+(defn nearest-animal
+  "The nearest adult food animal within :hunt-radius not skipped in this job and not in another's zone or claim."
+  [c]
+  (->> (animals-in-sight c) (remove :why) first :entity))
 
 (defn ^:async animal-in-sight
   "The nearest food animal in sight; with none, the body looks around once from where it stands and tries again."
@@ -303,14 +309,23 @@
       (str "; carrying " (str/join ", " (map (fn [[n k]] (str k " " n)) bad))
            ", skipped on purpose (raw or rotten food hurts; eat with :allow-bad via the eat job)"))))
 
+(defn passed-over
+  "The animals in sight that were not hunted, as {:name :id :why}."
+  [c]
+  (->> (animals-in-sight c) (filter :why) (mapv (fn [{:keys [entity why]}] {:name (.-name entity) :id (.-id entity) :why why}))))
+
 (defn none-text [c]
   (let [{:keys [hunt-radius]} (:args c)
         near (nearest-known-source c)
+        passed (passed-over c)
         wheat (carried-count c "wheat")
         reason (no-bake-reason c)]
     (str "no food: carried none" (harmful-carried-text (u/inventory (:primitives c))) ", searched for animals and ripe crops within " hunt-radius " blocks"
          (when (and (>= wheat 3) reason)
            (str "; carrying " wheat " wheat but cannot bake (" reason ")"))
+         (when (seq passed)
+           (str "; passed over " (count passed) " animal" (when (> (count passed) 1) "s") " ("
+                (str/join ", " (map (fn [a] (str (:name a) ": " (name (:why a)))) passed)) ")"))
          (if near
            (str "; nearest known source is a " (name (:kind near)) " at " (pr-str (:pos near))
                 ", " (js/Math.round (u/dist (u/self-pos c) (:pos near))) " blocks away")
@@ -321,7 +336,7 @@
   [c]
   (let [food (food-level c)
         text (none-text c)]
-    (ctx/emit! c :food.none :warn {:food food
+    (ctx/emit! c :food.none :warn {:food food :animals (passed-over c)
                                    :text (str text "; the hungry reflex rests for "
                                               (js/Math.round (/ (:ask-cooldown-ms (:args c)) 60000))
                                               " min unless food is carried, wheat to bake is, or a food source is learned")})
