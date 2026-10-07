@@ -2,7 +2,8 @@
   "HTTP over a unix socket for the agent tools: one request with a deadline, a response byte cap and an abort
   signal, rejecting with the error codes the tools report on (ETIMEDOUT, ERESPONSETOOLARGE, ECONNRESET, ABORT_ERR).
   The request function is injectable so tests can fake the socket."
-  (:require ["node:http" :as node-http]))
+  (:require [agent-tools.world-data :as data]
+            ["node:http" :as node-http]))
 
 (def edn-content-type (js/RegExp. "^application\\/edn(?:;|$)" "i"))
 
@@ -26,6 +27,12 @@
   "The tool-facing :reason for a failed socket request, by the error's code; :transport-error when it has no name."
   [error]
   (get transport-reasons (aget error "code") :transport-error))
+
+(defn print-bad-args!
+  "Report an argument error as EDN on stdout through `output`: a promise of exit code 2."
+  [output message usage]
+  (-> (js/Promise.resolve (output (str (data/write-edn {:ok false :reason :bad-args :message message :usage usage}) "\n")))
+      (.then (constantly 2))))
 
 (defn coded-error [code message]
   (let [error (js/Error. message)]

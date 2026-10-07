@@ -1,6 +1,7 @@
 (ns agent-tools.drive
   "Manual control of a body over its control socket: drive.mjs <agent> <op> ..."
   (:require [agent-tools.http :as http]
+            [agent-tools.world-data :as data]
             [agent-tools.map :as map-tool]
             [engine.bodies :as bodies]
             [clojure.string :as str]
@@ -130,6 +131,9 @@
     "ECONNREFUSED" (no-body-text agent socket)
     (str "drive request to " agent " failed (" (or (aget error "code") (.-message error)) ")")))
 
+(defn failure-edn [error agent socket]
+  (data/write-edn {:ok false :reason (http/transport-reason error) :message (failure-text error agent socket)}))
+
 (defn print-text! [text] (js/console.log text))
 
 (defn main!
@@ -138,12 +142,12 @@
   ([argv {:keys [output] :or {output print-text!} :as opts}]
    (let [req (request-for argv)]
      (if (:error req)
-       (do (js/console.error (str (:error req) "\n" usage)) (js/Promise.resolve 2))
+       (http/print-bad-args! #(output (str/trimr %)) (:error req) usage)
        (let [socket (socket-path-for req)]
          (.then (send! socket req (:request-fn opts))
                 (fn [{:keys [status text]}]
                   (output text)
                   (exit-code-for {:status status :json (parse-json text)}))
                 (fn [error]
-                  (js/console.error (failure-text error (:agent req) socket))
+                  (output (failure-edn error (:agent req) socket))
                   2)))))))

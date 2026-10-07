@@ -314,5 +314,5 @@
   ([argv {:keys [output] :or {output print-text!} :as opts}]
    (let [r (request-for argv)]
      (if (:error r)
-       (do (js/console.error (str (:error r) "\n" usage)) (js/Promise.resolve 2))
+       (http/print-bad-args! output (:error r) usage)
        (run-request! r output opts)))))

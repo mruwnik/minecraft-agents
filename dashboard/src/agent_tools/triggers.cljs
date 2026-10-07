@@ -300,7 +300,7 @@ Add and put both create or replace a custom entry; built-in entries cannot be re
    (let [r (request-for argv)
          sent (volatile! false)]
      (if (:error r)
-       (do (js/console.error (str (:error r) "\n" usage)) (js/Promise.resolve 2))
+       (http/print-bad-args! output (:error r) usage)
        (-> (exchange! r opts sent)
            (.then (fn [response] (deliver! r output response)))
            (.catch (fn [error]

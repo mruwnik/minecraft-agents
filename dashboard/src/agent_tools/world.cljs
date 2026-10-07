@@ -1,6 +1,7 @@
 (ns agent-tools.world
   "Manual actions as jobs: world.mjs <agent> submit <action> ... submits the job of that action as the driver."
   (:require [agent-tools.drive :as drive]
+            [agent-tools.http :as http]
             [agent-tools.jobs :as jobs]
             [agent-tools.map :as map-tool]
             [agent-tools.observe.request :as observe-request]
@@ -132,5 +133,5 @@
   ([argv {:keys [output] :or {output print-text!} :as opts}]
    (let [r (request-for argv)]
      (if (:error r)
-       (do (js/console.error (str (:error r) "\n" usage)) (js/Promise.resolve 2))
+       (http/print-bad-args! output (:error r) usage)
        (jobs/run-request! r output opts)))))

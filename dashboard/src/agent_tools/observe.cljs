@@ -384,7 +384,7 @@
          get-fn (fn [socket-path request-path options] (get! socket-path request-path (cond-> options request-fn (assoc :request-fn request-fn))))
          opts {:output output :get! get-fn}]
      (if (:error request)
-       (do (js/console.error (str (:error request) "\n" usage)) (js/Promise.resolve 2))
+       (http/print-bad-args! output (:error request) usage)
        (-> (js/Promise.resolve nil)
            (.then (fn []
                     (cond
