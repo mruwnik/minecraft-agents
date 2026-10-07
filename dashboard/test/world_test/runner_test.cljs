@@ -246,3 +246,8 @@
   (is (= :pass (:status (r/mark-time-disturbed {:status :pass} true))))
   (is (= :error (:status (r/mark-time-disturbed {:status :error} true))))
   (is (= :fail (:status (r/mark-time-disturbed {:status :fail} false)))))
+
+(deftest allow-time-needs-a-time-log-so-every-time-set-is-logged
+  (is (thrown-with-msg? js/Error #"--time-log" (r/parse-args #js ["--allow-time"])))
+  (is (true? (:allow-time (r/parse-args #js ["--allow-time" "--time-log" "f.log"]))))
+  (is (nil? (:allow-time (r/parse-args #js [])))))

@@ -28,6 +28,8 @@
        "Exit code 0 when every run passed, 1 when one failed, 2 on a usage or setup error."))
 
 (defn parse-args [argv]
+  (when (and (some #{"--allow-time"} argv) (not (some #{"--time-log"} argv)))
+    (throw (js/Error. "--allow-time needs --time-log FILE (every time set is logged there)")))
   (loop [[a b & more :as all] (vec argv) opts {:paths [] :repeat 1 :body "ProbeFixture" :world "claude" :first-plot 0}]
     (cond
       (empty? all) opts

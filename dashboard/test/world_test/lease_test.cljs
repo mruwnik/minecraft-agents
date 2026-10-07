@@ -170,3 +170,48 @@
 
 (deftest time-phase-of-an-exclusive-night-case
   (is (= :night-x (l/time-phase {:time :night-exclusive}))))
+
+(defn simulate-runners
+  "n runners, each taking `cases` day/night cases through try-share in a pseudo-random interleaving (seeded). Returns
+  {:overlaps steps where holders of both phases existed, :wrong-time steps where a holder saw the world in the other phase,
+  :sets the logged time sets, :done cases finished}. The first holder of a phase sets the world time and logs it."
+  [seed n cases]
+  (let [files (atom {}) alive (set (range 1 (inc n)))
+        dir (fake-share files alive)
+        world (atom :day) sets (atom []) overlaps (atom 0) wrong (atom 0) done (atom 0)
+        plan (into {} (map (fn [p] [p (vec (take cases (iterate (fn [x] (mod (+ (* x 7) 3) 11)) (+ p seed))))]) alive))
+        st (atom (into {} (map (fn [p] [p {:todo (plan p) :holding nil :seq nil}]) alive)))
+        rnd (atom seed)
+        next-rnd! (fn [] (swap! rnd #(mod (+ (* % 1103515245) 12345) 2147483648)) (quot @rnd 65536))]
+    (loop [steps 0]
+      (let [active (filter (fn [p] (let [s (@st p)] (or (seq (:todo s)) (:holding s)))) (sort alive))]
+        (when (and (seq active) (< steps 20000))
+          (let [p (nth active (mod (next-rnd!) (count active)))
+                {:keys [todo holding seq] :as s} (@st p)]
+            (if holding
+              (do (when (not= holding @world) (swap! wrong inc))
+                  (swap! files dissoc p)
+                  (swap! done inc)
+                  (swap! st assoc p {:todo (rest todo) :holding nil :seq nil}))
+              (let [phase (if (even? (first todo)) :day :night)
+                    sq (or seq steps)
+                    r (l/try-share dir p phase sq)]
+                (if (:held r)
+                  (do (when (:first? r) (when (not= phase @world) (swap! sets conj phase)) (reset! world phase))
+                      (swap! st assoc p (assoc s :holding phase :seq sq)))
+                  (swap! st assoc p (assoc s :seq sq)))))
+            (when (> (count (distinct (map :phase (filter #(= :hold (:state %)) (vals @files))))) 1) (swap! overlaps inc))
+            (recur (inc steps))))))
+    {:overlaps @overlaps :wrong-time @wrong :sets @sets :done @done}))
+
+(deftest day-and-night-cases-of-several-runners-never-overlap-and-every-time-set-is-logged
+  (doseq [seed [1 2 3 4 5 6 7 8] n [2 3 8]]
+    (let [r (simulate-runners seed n 12)]
+      (is (= 0 (:overlaps r)) (str "seed " seed " n " n))
+      (is (= 0 (:wrong-time r)) (str "seed " seed " n " n))
+      (is (= (* n 12) (:done r)) (str "every case ran, seed " seed " n " n))
+      (is (every? #{:day :night} (:sets r))))))
+
+(deftest the-time-is-set-only-when-a-phase-group-starts-so-each-set-is-logged-once
+  (let [files (atom {10 (hold :day)})]
+    (is (false? (:first? (l/try-share (fake-share files #{10 11}) 11 :day 5))) "joining a held phase sets nothing")))

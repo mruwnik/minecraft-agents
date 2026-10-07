@@ -13,7 +13,7 @@ if (!fs.existsSync(bundle)) {
   console.error(`the world-test bundle is not built (${bundle}); build it with: tools/compile dashboard world-test`)
   process.exit(2)
 }
-// A second run on the same --body is refused (exit 75, like a busy slot). One body slot for the whole run (a run keeps one probe body at a time, restarted per case), plus the time slot with --allow-time: it re-executes itself under tools/res-slot.
+// A second run on the same --body is refused (exit 75, like a busy slot). One body slot for the whole run (a run keeps one probe body at a time, restarted per case). It re-executes itself under tools/res-slot; --allow-time takes no further slot (the phase-shared time lock serialises day against night across runs).
 const args = process.argv.slice(2)
 if (!process.env.WORLD_TEST_SLOT_HELD && !args.includes('--list')) {
   const claimDir = process.env.RES_SLOT_DIR ?? '/tmp/mc-res', body = bodyName(args)

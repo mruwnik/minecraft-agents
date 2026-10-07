@@ -1,8 +1,8 @@
 // Why JavaScript: thin helper for the tools/world-test.mjs launcher (which res-slot kinds a run holds).
 import fs from 'node:fs'
 import path from 'node:path'
-// A run holds the body slot (unless an outer res-slot already does: RES_SLOT_HELD lists those kinds); with --allow-time it takes the time slot after the body slot (one fixed order, so two runs cannot deadlock) (only one world-time-changing run at a time).
-export const slotKinds = (args, heldKinds = '') => (args.includes('--allow-time') ? ['body', 'time'] : ['body']).filter((k) => !heldKinds.split(',').includes(k))
+// A run holds the body slot (unless an outer res-slot already does: RES_SLOT_HELD lists those kinds). --allow-time takes no further slot: the runner's phase-shared time lock (/tmp/mc-time-lock) lets day cases of several runs go together and night cases together.
+export const slotKinds = (args, heldKinds = '') => ['body'].filter((k) => !heldKinds.split(',').includes(k))
 
 export const slotArgv = (args, resSlot, node, script, heldKinds = '') =>
   [...slotKinds(args, heldKinds).flatMap((k) => [resSlot, k, '--']), node, script, ...args]
