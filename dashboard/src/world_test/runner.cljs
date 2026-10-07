@@ -713,7 +713,7 @@
 
 (defn ensure-at-start!
   "Checks the body stands at the case's start after body-commands; when it does not (a tp that did not take), repeats
-  the tp up to 3 times. Resolves to nil when it stands there, else to the failure message. io: {:send cmds->promise of
+  the tp and polls up to 16 times, 300 ms apart (about 5 s). Resolves to nil when it stands there, else to the failure message. io: {:send cmds->promise of
   replies, :sleep ms->promise}."
   [{:keys [send sleep]} origin body c]
   (let [{:keys [at yaw]} (:body c)
@@ -724,9 +724,9 @@
                        (let [{:keys [pass? why]} (f/judge-start origin c (or reply ""))]
                          (cond
                            pass? nil
-                           (zero? retries) (str why " (tp repeated 3 times)")
+                           (zero? retries) (str why " (tp repeated 16 times over 5 s)")
                            :else (.then (send [tp]) (fn [_] (.then (sleep 300) #(check (dec retries))))))))))]
-      (check 3))))
+      (check 16))))
 
 (defn build-plot!
   "Sends the plot's setup and block commands (idempotent), then checks the replies: a plot whose chunks were not loaded

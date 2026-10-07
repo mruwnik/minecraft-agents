@@ -82,7 +82,10 @@
           (.then (fn [{:keys [res sent]}]
                    (is (nil? res))
                    (is (= 1 (count (filter #(re-find #"^tp " %) sent))) "one retry tp")))
-          (.then #(run [spawn spawn spawn spawn spawn]))
+          (.then #(run (concat (repeat 12 spawn) [at])))
+          (.then (fn [{:keys [res]}]
+                   (is (nil? res) "entity data that lags after login is polled for about 5 s")))
+          (.then #(run (repeat 30 spawn)))
           (.then (fn [{:keys [res]}]
                    (is (re-find #"not at its start" res))
                    (done)))))))
