@@ -38,7 +38,7 @@
 (defn sapling-at?
   "True when the block at pos is a sapling, mangrove propagule or fungus."
   [p pos]
-  (boolean (some-> (u/block-name p pos)
+  (boolean (some-> (u/seen-name p pos)
                    (as-> n (or (.endsWith n "_sapling") (= "mangrove_propagule" n) (.endsWith n "_fungus"))))))
 
 (defn has-meal? [p]
@@ -98,7 +98,7 @@
       (nil? t) true
       w (let [r (fetch/check c 'jobs.forestry.plant-sapling (fetch-wait w))]
           (or (true? r) (ctx/wait c (shown-wait c w))))
-      (log-name? (some-> (u/block-at p (:pos t)) .-name)) (ctx/wait c {:reason :log-on-spot :pos (:pos t)})
+      (log-name? (some-> (u/seen-block p (:pos t)) .-name)) (ctx/wait c {:reason :log-on-spot :pos (:pos t)})
       :else true)))
 
 (defn ^:async step
@@ -121,7 +121,7 @@
           :blocked (u/fail! c :plant_blocked "cannot reach the planting spot")
           (cond
             (not (spot-allowed? c (:pos t))) :done
-            (nil? (u/block-name (:primitives c) (:pos t)))
+            (nil? (u/seen-name (:primitives c) (:pos t)))
             (do (ctx/warn-once! c [:unknown (:pos t)] :plant-sapling.unknown {:pos (:pos t)}) :done)
             :else
             (do (await (ctx/act c :equip (clj->js {:item sapling})))
@@ -132,7 +132,7 @@
                     (if (and (pos? n) (has-meal? (:primitives c)))
                       (do (ctx/update-mem! c assoc :meal {:pos (:pos t) :left n}) :again)
                       :done))
-                  (if (and (= "occupied" (.-status r)) (= sapling (u/block-name (:primitives c) (:pos t))))
+                  (if (and (= "occupied" (.-status r)) (= sapling (u/seen-name (:primitives c) (:pos t))))
                     (do (ctx/forget-where! c replant-kind #(= (:pos t) (:pos %))) :done)
                     (u/fail! c :plant_blocked (str "cannot plant: " (.-status r)))))))))))))
 

@@ -51,7 +51,7 @@
 (defn own-cell
   "{:state ...} when the block in the planned cell settles it (unloaded, growing, grown, wrong), else nil."
   [p pos species]
-  (let [n (u/block-name p pos)]
+  (let [n (u/seen-name p pos)]
     (cond
       (nil? n) {:state :unloaded}
       (= n (forestry/sapling-of species)) {:state :growing}
@@ -64,7 +64,7 @@
   [p pos species over]
   (some (fn [dy]
           (let [at (update pos :y + dy)
-                n (u/block-name p at)]
+                n (u/seen-name p at)]
             (cond
               (nil? n) {:state :unloaded}
               (not (tree-free? n)) {:state :cramped :at (maintain/cell-vec at) :block n})))
@@ -75,7 +75,7 @@
   ground, dirt carried), :soil-place (the hole this job dug, dirt carried), :no-soil with :why, or :unloaded."
   [p pos species {:keys [planned holes carried]}]
   (let [under (maintain/down pos)
-        n (u/block-name p under)
+        n (u/seen-name p under)
         dirt (soil-item carried species)
         no-dirt {:state :no-soil :why :no-dirt}]
     (cond
@@ -122,7 +122,7 @@
 (defn water-level
   "The level of the water at pos (a number), nil for any other block, unloaded, or water without a level."
   [p pos]
-  (let [b (u/block-at p pos)]
+  (let [b (u/seen-block p pos)]
     (when (= "water" (some-> b .-name))
       (let [l (some-> b .-properties .-level)]
         (when (number? l) l)))))
@@ -169,7 +169,7 @@
 (defn assess-open
   "assess before the tool rule."
   [p pos species {:keys [carried over] :as world}]
-  (let [n (u/block-name p pos)
+  (let [n (u/seen-name p pos)
         sapling (forestry/sapling-of species)]
     (or (when-not (headroom-of species over) {:state :unsupported})
         (when (= "water" n) (wet-state p pos species carried))

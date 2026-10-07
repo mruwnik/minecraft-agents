@@ -89,7 +89,7 @@
   "What the access rules say of placing at the cell pos: :ok, :wait (not loaded, or the body in it) or [:refuse reason]."
   [c pos]
   (let [p (:primitives c)
-        v (rules/may-place? (merge {:block-at (fn [[x y z]] (u/block-name p {:x x :y y :z z})) :cell pos
+        v (rules/may-place? (merge {:block-at (fn [[x y z]] (u/seen-name p {:x x :y y :z z})) :cell pos
                                     :feet (maintain/feet-cell c) :ledger #{}}
                                    (tidy/access-world c)))]
     (cond

@@ -129,7 +129,7 @@
               r (await (ctx/call-child c :dig 'jobs.blocks.dig args))
               res (ctx/child-result c :dig)
               waits (when (= :declined r) (blocks/child-wait c :dig 'jobs.blocks.dig args))]
-          (when (and wrote? (some-> (u/block-name (:primitives c) pos) log-name?))
+          (when (and wrote? (some-> (u/seen-name (:primitives c) pos) log-name?))
             (ctx/forget-where! c replant-kind #(= pos (:pos %))))
           (outcome r res waits))))))
 

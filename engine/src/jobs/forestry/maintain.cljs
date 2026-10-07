@@ -57,7 +57,7 @@
   "The rules' input for a cell as the body is now."
   [c pos]
   (let [p (:primitives c)]
-    (merge {:block-at (fn [[x y z]] (u/block-name p {:x x :y y :z z}))
+    (merge {:block-at (fn [[x y z]] (u/seen-name p {:x x :y y :z z}))
             :cell (cell-vec pos)
             :feet (feet-cell c)
             :ledger #{}}
@@ -107,8 +107,8 @@
   soil, nothing growing below a log), :no-ground (air, but no soil below), :cramped (air over soil with a log
   above), :unloaded, or :foreign (anything else)."
   [p pos species]
-  (let [here (u/block-name p pos)
-        below (u/block-name p (down pos))]
+  (let [here (u/seen-name p pos)
+        below (u/seen-name p (down pos))]
     (cond
       (nil? here) :unloaded
       (= here (str species "_log")) :ripe
@@ -116,7 +116,7 @@
       (not (rules/air here)) :foreign
       (nil? below) :unloaded
       (not ((soil-for species) below)) :no-ground
-      (some-> (u/block-name p (up pos)) forestry/log-name?) :cramped
+      (some-> (u/seen-name p (up pos)) forestry/log-name?) :cramped
       :else :bare)))
 
 (defn carried-names [p] (set (map :name (u/inventory p))))
@@ -166,7 +166,7 @@
         have (carried-names p)]
     (doseq [[pos [kind species]] classes]
       (case kind
-        :foreign (let [found (u/block-name p pos)]
+        :foreign (let [found (u/seen-name p pos)]
                    (ctx/warn-once! c [:foreign pos found] :forest.foreign
                                    {:pos pos :found found :wanted species
                                     :text (str "forest leaves " found " at " (pr-str (cell-vec pos)) " (the plan wants a " species " tree)")}))
