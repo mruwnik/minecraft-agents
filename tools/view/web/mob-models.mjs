@@ -144,6 +144,45 @@ const slime = () => [
   cube([-0.5, 2, 4], [0.5, 3, 4.8], { u: 32, v: 8, w: 1, h: 1, d: 1 }, limb, 1)
 ]
 
+// llama: neck and head up front, body a quarter-turn, chests left out
+const llama = () => [
+  cube([-6, 12, -12], [6, 22, 6], { u: 29, v: 0, w: 12, h: 18, d: 10 }, lying, 0),
+  cube([-4, 15, 6], [4, 33, 12], { u: 0, v: 14, w: 8, h: 18, d: 6 }, upright, 1),
+  cube([-2, 27, 7], [2, 31, 16], { u: 0, v: 0, w: 4, h: 4, d: 9 }, compact, 1),
+  ...[[-4, -1], [1, 4]].map(([x0, x1]) => cube([x0, 33, 8], [x1, 36, 10], { u: 17, v: 0, w: 3, h: 3, d: 2 }, limb, 1)),
+  ...[[1.5, 5.5], [-5.5, -1.5]].flatMap(([x0, x1]) => [[-8, -4], [3, 7]].map(([z0, z1]) => cube([x0, 0, z0], [x1, 14, z1], { u: 29, v: 29, w: 4, h: 14, d: 4 }, limb, 2)))
+]
+
+const rabbit = () => [
+  cube([-3, 2, -8], [3, 7, 2], { u: 0, v: 0, w: 6, h: 5, d: 10 }, upright, 0),
+  cube([-2.5, 8, 1], [2.5, 12, 6], { u: 32, v: 0, w: 5, h: 4, d: 5 }, compact, 1),
+  cube([-0.5, 9.5, 5.5], [0.5, 10.5, 6.5], { u: 32, v: 9, w: 1, h: 1, d: 1 }, limb, 1),
+  cube([-2.5, 12, 1], [-0.5, 17, 2], { u: 52, v: 0, w: 2, h: 5, d: 1 }, limb, 1),
+  cube([0.5, 12, 1], [2.5, 17, 2], { u: 58, v: 0, w: 2, h: 5, d: 1 }, limb, 1),
+  cube([-1.5, 2.5, -9], [1.5, 5.5, -7], { u: 52, v: 6, w: 3, h: 3, d: 2 }, limb, 0),
+  ...[[2, 4], [-4, -2]].flatMap(([x0, x1]) => [
+    cube([x0, 0, 0], [x1, 7, 2], { u: 8, v: 15, w: 2, h: 7, d: 2 }, limb, 2),
+    cube([x0, 2.5, -8.7], [x1, 6.5, -3.7], { u: 30, v: 15, w: 2, h: 4, d: 5 }, limb, 2),
+    cube([x0, 0, -7.7], [x1, 1, -0.7], { u: 26, v: 24, w: 2, h: 1, d: 7 }, limb, 2)
+  ])
+]
+
+// goat: the head is held level instead of tilted
+const goat = () => [
+  cube([-4.5, 6, -9], [4.5, 17, 7], { u: 1, v: 1, w: 9, h: 11, d: 16 }, upright, 0),
+  cube([-5.5, 4, -3], [5.5, 18, 8], { u: 0, v: 28, w: 11, h: 14, d: 11 }, upright, 0),
+  cube([-2.5, 12, 3], [2.5, 19, 13], { u: 34, v: 46, w: 5, h: 7, d: 10 }, compact, 1),
+  ...[[-2.4, -0.4], [0.4, 2.4]].map(([x0, x1]) => cube([x0, 19, 5], [x1, 26, 7], { u: 12, v: 55, w: 2, h: 7, d: 2 }, limb, 1)),
+  ...[[1, 4], [-4, -1]].flatMap(([x0, x1]) => [[[-7, -4], 36], [[3, 6], 49]].map(([[z0, z1], u]) => cube([x0, 0, z0], [x1, 6, z1], { u, v: 29, w: 3, h: 6, d: 3 }, limb, 2)))
+]
+
+// the sheet's dark shell in three slabs: plain sides, the eyes row on the front of the middle one
+const magmaCube = () => {
+  const plain = [8, 0, 8, 8]
+  const slab = (y0, y1, front) => ({ from: [-4, y0, -4], to: [4, y1, 4], faces: { top: plain, bottom: plain, south: front, north: plain, east: plain, west: plain }, paint: 0 })
+  return [slab(0, 3, plain), slab(3, 6, [8, 24, 8, 8]), slab(6, 8, plain)]
+}
+
 const zombieVillager = () => [
   cube([-4, 24, -4], [4, 34, 4], { u: 0, v: 0, w: 8, h: 10, d: 8 }, upright, 1),
   cube([-1, 23, 4], [1, 27, 6], { u: 24, v: 0, w: 2, h: 4, d: 2 }, limb, 1),
@@ -195,6 +234,10 @@ const SHAPES = {
   blaze: { px: 32, hit: 1.8, parts: blaze() },
   slime: { px: 8, hit: 0.52, parts: slime() },
   zombie_villager: { px: 34, hit: 1.95, parts: zombieVillager() },
+  llama: { px: 32, hit: 1.87, parts: llama() },
+  rabbit: { px: 8, hit: 0.5, parts: rabbit() },
+  goat: { px: 21, hit: 1.3, parts: goat() },
+  magma_cube: { px: 8, hit: 0.52, parts: magmaCube() },
   enderman: { px: 50, hit: 2.9, parts: [
     cube([-4, 42, -4], [4, 50, 4], { u: 0, v: 0, w: 8, h: 8, d: 8 }, upright, 1),
     cube([-4, 30, -2], [4, 42, 2], { u: 32, v: 16, w: 8, h: 12, d: 4 }, trunk, 0),
@@ -249,7 +292,12 @@ export const MOBS = {
   iron_golem: ['iron_golem', 'iron_golem/iron_golem'],
   snow_golem: ['snow_golem', 'snow_golem/snow_golem'],
   blaze: ['blaze', 'blaze/blaze'],
-  slime: ['slime', 'slime/slime']
+  slime: ['slime', 'slime/slime'],
+  magma_cube: ['magma_cube', 'slime/magmacube'],
+  llama: ['llama', 'llama/llama_creamy'],
+  trader_llama: ['llama', 'llama/llama_white'],
+  rabbit: ['rabbit', 'rabbit/rabbit_brown'],
+  goat: ['goat', 'goat/goat']
 }
 
 // a sheep's wool by dye index (white, orange, magenta, light blue, yellow, lime, pink, gray, light gray, cyan, purple, blue, brown, green, red, black), rgb

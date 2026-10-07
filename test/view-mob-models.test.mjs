@@ -14,7 +14,7 @@ import { textureBytes } from '../tools/view/materials.mjs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const WANTED = 'zombie husk drowned player piglin zombified_piglin skeleton stray wither_skeleton creeper cow mooshroom pig sheep spider cave_spider chicken villager wandering_trader witch enderman vindicator pillager evoker illusioner zombie_villager horse donkey mule skeleton_horse zombie_horse wolf cat ocelot fox iron_golem snow_golem blaze slime'.split(' ')
+const WANTED = 'zombie husk drowned player piglin zombified_piglin skeleton stray wither_skeleton creeper cow mooshroom pig sheep spider cave_spider chicken villager wandering_trader witch enderman vindicator pillager evoker illusioner zombie_villager horse donkey mule skeleton_horse zombie_horse wolf cat ocelot fox iron_golem snow_golem blaze slime magma_cube llama trader_llama rabbit goat'.split(' ')
 const textureDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'textures')
 const jarPath = findClientJar()
 const skip = jarPath === null
