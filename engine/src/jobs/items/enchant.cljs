@@ -2,7 +2,8 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
-            [jobs.lib.look :as look]))
+            [jobs.lib.look :as look]
+            [clojure.string :as str]))
 
 (def doc
   "Enchant one :item at an enchanting table. Walks to the table (:table, else the nearest within :radius), reads
@@ -34,9 +35,9 @@
 (def reach 3)
 
 (defn check
-  "An item name is given."
+  "A non-blank item name is given."
   [c]
-  (or (string? (:item (:args c)))
+  (or (let [i (:item (:args c))] (and (string? i) (not (str/blank? i))))
       (ctx/wait c {:reason :bad-args :why "no item name"})))
 
 ;; ------------------------------------------------------------------ the choice

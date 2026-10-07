@@ -112,3 +112,8 @@
     'jobs.survival.respond-to-hostile {} :no-hostile
     'jobs.survival.restore-broken {} :nothing-to-restore
     'jobs.survival.unwedge {} :not-wedged))
+
+(deftest enchant-refuses-a-blank-item-name-with-a-why
+  (are [item] (= [[:bad-args "no item name"]] (mapv (juxt :reason :why) (waiting-event 'jobs.items.enchant {:item item})))
+    ""
+    "  "))

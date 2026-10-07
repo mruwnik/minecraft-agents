@@ -264,8 +264,7 @@
 
 (def known
   "{[job kind] card}: defects already carded, so the suite stays green and a new one fails it. A default run fails when an entry no longer occurs: delete it with its fix."
-  {["jobs.gather.mine" :runaway] "cd74fd83"
-   ["jobs.items.enchant" :round-threw] "1b671b73"})
+  {["jobs.gather.mine" :runaway] "cd74fd83"})
 
 (defn case-seed
   "Seed of case k of job: stable under the job filter and the other jobs."
