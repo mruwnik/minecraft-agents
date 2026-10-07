@@ -5,6 +5,7 @@
             [engine.path.blocks :as blocks]
             [engine.path.courses :as courses]
             [engine.path.fixture :as fx]
+            [engine.path.planner-tuned :as planner]
             [engine.planner-fixture :as pf]))
 
 (def table @pf/table)
@@ -280,7 +281,8 @@
 (deftest a-plan-to-air-from-under-water-prices-drowning-not-refuses
   (let [r (run drown-tunnel drown-start (near 21 64 1 0) {:goalFlood 0 :costs {:airUsed 13}})]
     (is (found? r) "the swim to air is planned")
-    (is (<= 4 (cost r :risk) 7) "2 hp of risk a second past the supply (about 3 s)")))
+    (is (< 4 (cost r :drown) 7) "2 hp a second past the supply (about 3 s)")
+    (is (zero? (cost r :risk)) "drowning is its own cost, not risk")))
 
 (deftest a-plan-to-air-has-no-drowning-risk-with-the-air-to-spare
   (is (zero? (cost (run drown-tunnel drown-start (near 21 64 1 0) {:goalFlood 0 :costs {:airUsed 2}}) :risk))))
@@ -291,6 +293,49 @@
 
 (deftest a-plan-to-a-goal-under-water-keeps-the-air-refusal
   (is (not (found? (run drown-tunnel drown-start (near 20 64 1 0) {:goalFlood 0 :costs {:airUsed 13}})))))
+
+;; a go-to to the tunnel's stone ceiling (range 2): its head cell is stone, not air
+(deftest a-goal-under-water-with-stone-above-is-not-air
+  (is (found? (run drown-tunnel drown-start (near 20 66 1 2) {:goalFlood 0 :costs {:airUsed 2}})))
+  (is (not (found? (run drown-tunnel drown-start (near 20 66 1 2) {:goalFlood 0 :costs {:airUsed 13}})))))
+
+(deftest a-goal-whose-head-cell-is-not-seen-is-not-air
+  (is (not (found? (run drown-tunnel drown-start (near 21 64 1 0) {:goalFlood 0 :costs {:airUsed 13} :airSeen (fn [_ _ _] false)}))))
+  (is (found? (run drown-tunnel drown-start (near 21 64 1 0) {:goalFlood 0 :costs {:airUsed 13} :airSeen (fn [_ _ _] true)}))))
+
+(deftest past-the-air-limit-no-swim-to-a-goal-under-water
+  (is (found? (run drown-tunnel drown-start (near 12 64 1 0) {:goalFlood 0 :costs {:airUsed 11}})))
+  (is (not (found? (run drown-tunnel drown-start (near 12 64 1 0) {:goalFlood 0 :costs {:airUsed 14}})))))
+
+(deftest a-plan-to-air-with-a-range-ends-with-the-head-in-air
+  (let [r (run drown-tunnel drown-start (near 21 64 1 1) {:goalFlood 0 :costs {:airUsed 13}})]
+    (is (found? r))
+    (is (= [21 64 1] (xyz (last-step r))))))
+
+;; at health 10 (an hp costs 20 s): a 40-block sealed tunnel (x 12..51) from the start's shaft (x 11) to the goal's (x 52)
+;; drowns the body even after a breath on the ledge at its top (7 s past the supply, 14 hp); the walkway round by z 20
+;; is safe but a toll makes it some 500 s dearer
+(defn lethal-dive [walkway]
+  (world (cond-> [[10 64 -2 56 72 22 "stone"]
+                  [11 64 1 11 69 1 "water"] [11 70 1 11 71 1 "air"]
+                  [12 64 1 51 65 1 "water"]
+                  [52 64 1 52 69 1 "water"] [52 70 1 53 71 1 "air"]
+                  [11 70 2 11 71 2 "air"]]
+           walkway (into [[11 70 2 11 71 20 "air"] [12 70 20 52 71 20 "air"] [52 70 2 52 71 19 "air"]]))))
+(defn toll-walk [] {:cells (js/Map. #js [#js [(planner/cell-key 30 70 20) 3000]])})
+(def at-health-10 {:goalFlood 0 :health 10 :damageWeight 20 :costs {:airUsed 12.5}})
+
+(deftest a-lethal-way-to-air-loses-to-a-long-safe-one
+  (let [r (run (lethal-dive true) dive-start (near 53 70 1 0) (assoc at-health-10 :tolls (toll-walk)))]
+    (is (found? r))
+    (is (some #(= 20 (:z %)) (steps r)) "the long way round")
+    (is (< (cost r :drown) 10) "not drowned")))
+
+(deftest a-lethal-way-to-air-is-planned-when-it-is-the-only-one
+  (let [r (run (lethal-dive false) dive-start (near 53 70 1 0) at-health-10)]
+    (is (found? r))
+    (is (>= (cost r :drown) 10) "it drowns: still the only way")
+    (is (< (cost r :drown) 20) "the least drowning: a breath at the top first")))
 
 (deftest drain-scales-the-lowest-air-reading
   (let [full (cost (run-up (column 20) 20) :airMin)

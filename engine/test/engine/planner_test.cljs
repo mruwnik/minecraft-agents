@@ -24,7 +24,7 @@
     (is (= [12 64 2] (last-cell r)))
     (is (= 11 (count (cells r))))
     (is (< (js/Math.abs (- (cost r :seconds) (+ (* 2 0.2316) (* 8 0.1782)))) 0.01) "two walking steps, then sprinting")
-    (is (= {:seconds 0 :risk 0 :damage 0 :maxDrop 0 :jumps 0 :climbed 0 :opens 0 :waterSeconds 0 :darkSeconds 0 :airMin 15 :waterDrop 0}
+    (is (= {:seconds 0 :risk 0 :damage 0 :drown 0 :maxDrop 0 :jumps 0 :climbed 0 :opens 0 :waterSeconds 0 :darkSeconds 0 :airMin 15 :waterDrop 0}
            (assoc (get-in r [:path :cost]) :seconds 0)))
     (is (and (> (:expanded r) 0) (>= (:ms r) 0)))))
 

@@ -35,9 +35,10 @@
       (= "turtle_helmet" (:name head)) (assoc :air-grace 10))))
 
 (defn air-used
-  "The seconds of air a body with oxygen (0-20 bubbles, 15 s; unknown: full) has used."
+  "The seconds of air a body with oxygen (0-20 bubbles, 15 s; unknown: full) has used; mineflayer rounds the air to a
+  bubble, so 0.375 s (half a bubble) more."
   [oxygen]
-  (if (number? oxygen) (* (- 20 oxygen) 0.75) 0))
+  (if (number? oxygen) (+ (* (- 20 oxygen) 0.75) 0.375) 0))
 
 (defn air-costs
   "The planner's options.costs airDrain, airGrace and airUsed (a JS object) for a policy's :air-drain, :air-grace and

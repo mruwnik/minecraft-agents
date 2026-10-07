@@ -54,11 +54,14 @@
    - options.costs.dropFactor (1): scales the fall seconds and fall damage of every drop on land (0: free); options.maxDrop
      (3) refuses a drop of more than that many blocks (1: none of 2 or 3). go-to's :drop-cost sets them.
    - options.costs.airUsed (0): seconds of air the body has used at the start (a plan made mid-dive); go-to's body-policy
-     sets it from the oxygen when the head is under water. Such a plan to a goal with its head in air (to-air?) is never
-     refused for air: each second past the supply is DROWN-HP hp of risk, priced at damageWeight (not held to damageBudget).
+     sets it from the oxygen when the head is under water. Such a plan to a goal with its head in seen air (to-air?) is never
+     refused for air and ends with the head in air (options.airSeen, fn x y z: the body has seen or felt that block, nil: all): each second past the supply drowns DROWN-HP hp (result cost.drown; not
+     damage, so no damageBudget), the first k hp costing options.drownPrices[k] seconds (nil: damageWeight each); drowning
+     to options.health (20) is lethal and costs LETHAL-S more, so a lethal plan comes back only when no other does. Any
+     other plan swims no further than airLimit from airUsed.
    - options.stopAtEdge: with the goal unloaded, the search ends at the first node it expands at the loaded edge (edgeStop)
      and names it as its frontier, not after searching all loaded land. go-to's budgeted searches set it (walk.search/new-search)."
-  (:require [engine.path.planner.base :as base :refer [DROWN-HP OCTILE-SLACK REGIONS TABLE WHOLE next-pow2]]
+  (:require [engine.path.planner.base :as base :refer [OCTILE-SLACK REGIONS TABLE WHOLE next-pow2]]
             [engine.path.planner.search :refer [Search ->Search]]
             [engine.path.planner.world]
             [engine.path.planner.nodes]
@@ -149,27 +152,23 @@
     b))
 
 ;; The air a swim may use up to: airLimit, plus the free grace seconds' worth (airGrace * airDrain). A plan made mid-dive
-;; (airUsed, the air the body used before it, above 0) always keeps the margin (airSupply - airLimit) to reach air.
+;; counts it from the air used (airUsed): past it, no swim with the head under water (unless to-air?).
 (defn- air-limit [^js costs]
-  (let [limit (+ (unchecked-get costs "airLimit") (* (unchecked-get costs "airGrace") (unchecked-get costs "airDrain")))
-        used (unchecked-get costs "airUsed")]
-    (if (pos? used)
-      (js/Math.max limit (+ used (- (unchecked-get costs "airSupply") (unchecked-get costs "airLimit"))))
-      limit)))
+  (+ (unchecked-get costs "airLimit") (* (unchecked-get costs "airGrace") (unchecked-get costs "airDrain"))))
 
 (defn- to-air?
-  "Whether a plan started with air used (costs.airUsed above 0) goes to air: its one near goal's head cell is loaded and
-  not submerged (air, or a bubble column, which gives air). No swim of such a plan is refused for air (swimBegin)."
+  "Whether a plan started with air used (costs.airUsed above 0) goes to air: its one near goal's head cell breathes
+  (base/breathable?) and the body has seen or felt it (options.airSeen, nil: every cell). No swim of such a plan is
+  refused for air: it drowns, priced (drownCost), and it ends with the head in such a cell (expandNext)."
   [^js snapshot ^js query ^js options]
   (let [^js goal (.-goal query)
         ^js goals (.-goals query)
-        ^js table (.-table options)]
+        ^js seen (.-airSeen options)]
     (and (pos? (or-else (some-> (.-costs options) (unchecked-get "airUsed")) 0))
          (or (nil? goals) (zero? (.-length goals)))
          (some? goal) (identical? (.-kind goal) "near")
-         (let [id (.stateAt snapshot (.-x goal) (inc (.-y goal)) (.-z goal))]
-           (and (not (== id base/UNLOADED))
-                (or (not (== (aget (.-kind table) id) base/WATER)) (pos? (aget (.-bubble table) id))))))))
+         (base/breathable? (.-table options) (.stateAt snapshot (.-x goal) (inc (.-y goal)) (.-z goal)))
+         (or (nil? seen) (true? (seen (.-x goal) (inc (.-y goal)) (.-z goal)))))))
 
 (defn- search-from ^Search [^js snapshot ^js query ^js options]
   (let [^js table (.-table options)
@@ -238,7 +237,7 @@
      (unchecked-get costs "swimH") (unchecked-get costs "swimUp") (unchecked-get costs "swimDown")
      (unchecked-get costs "exit") (unchecked-get costs "current") (unchecked-get costs "bubbleUp") (unchecked-get costs "bubbleDown")
      (unchecked-get costs "airSupply") (air-limit costs) (unchecked-get costs "airDrain") (unchecked-get costs "maxWaterDrop")
-     (unchecked-get costs "dripleaf") (unchecked-get costs "dripleafRisk") (if (to-air? snapshot query options) (* DROWN-HP risk-scale) 0) (unchecked-get costs "dropFactor")
+     (unchecked-get costs "dripleaf") (unchecked-get costs "dripleafRisk") (to-air? snapshot query options) (unchecked-get costs "dropFactor")
      (unchecked-get costs "walkS") (unchecked-get costs "sprintS")
      ;; search box
      (- (aget bounds 0) margin) (+ (aget bounds 1) margin)
@@ -298,7 +297,9 @@
      (option options "damageBudget" js/Infinity) (option options "damageWeight" (option options "riskWeight" 2)) (option options "fallFactor" 1)
      (.-landing options) (.-landingSeen options)
      ;; dmgs move-dmg enter-dmg cur-dmg damage-refused
-     (js/Float64Array. cap) 0 0 0 false)))
+     (js/Float64Array. cap) 0 0 0 false
+     ;; drowns cur-drown drown-prices lethal-hp air-known
+     (js/Float64Array. cap) 0 (.-drownPrices options) (option options "health" 20) (.-airSeen options))))
 
 ;; the body's hitbox reaches this far from its centre in x and z
 (def ^:const HITBOX-HALF 0.3)

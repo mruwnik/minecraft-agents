@@ -63,13 +63,16 @@
   "options (the planner's, a JS object) with the policy's :drop-cost: a number is the planner's costs.dropFactor (nil: as
   it is), false takes no drop of 2 or 3 (maxDrop 1). The policy's :max-drop is maxDrop, its :fall-factor fallFactor, and
   :damage-budget and :damage-weight the planner's damageBudget and damageWeight (none: the planner's defaults). Its :landing (block
-  name -> damage factor) is the planner's landing over cost/default-landing (no bounce under :gait :sneak), seen (wworld/landing-seen) its landingSeen. Its :gait (:walk, :sneak), or :sprint false (:walk), sets the costs walkS and sprintS under the :costs; its :air-drain, :air-grace and :air-used the costs airDrain, airGrace and airUsed."
+  name -> damage factor) is the planner's landing over cost/default-landing (no bounce under :gait :sneak), seen (wworld/landing-seen) its landingSeen. Its :gait (:walk, :sneak), or :sprint false (:walk), sets the costs walkS and sprintS under the :costs; its :air-drain, :air-grace and :air-used the costs airDrain, airGrace and airUsed; its :health, :drown-prices and :air-seen the planner's health, drownPrices and airSeen."
   ([options policy] (with-drops options policy nil))
   ([^js options policy seen]
   (let [k (:drop-cost policy)
         gait (or (:gait policy) (when (false? (:sprint policy)) :walk))]
-    (doseq [[opt key] [["maxDrop" :max-drop] ["fallFactor" :fall-factor] ["damageBudget" :damage-budget] ["damageWeight" :damage-weight] ["dangerCap" :danger-cap]]]
+    (doseq [[opt key] [["maxDrop" :max-drop] ["fallFactor" :fall-factor] ["damageBudget" :damage-budget] ["damageWeight" :damage-weight] ["dangerCap" :danger-cap]
+                       ["health" :health]]]
       (when-some [v (get policy key)] (unchecked-set options opt v)))
+    (when-some [p (:drown-prices policy)] (unchecked-set options "drownPrices" (js/Float64Array.from (clj->js p))))
+    (when-some [f (:air-seen policy)] (unchecked-set options "airSeen" f))
     (unchecked-set options "landing" (cost/planner-landing (:landing policy) gait))
     (when (some? seen) (unchecked-set options "landingSeen" seen))
     (when (or (seq (:costs policy)) (contains? #{:walk :sneak} gait) (:air-drain policy) (:air-grace policy) (:air-used policy))

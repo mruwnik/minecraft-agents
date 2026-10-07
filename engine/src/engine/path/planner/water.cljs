@@ -1,6 +1,6 @@
 (ns engine.path.planner.water
   "Search methods: swimming, diving, currents and leaving the water."
-  (:require [engine.path.planner.base :refer [AIR-REFILL BODY CORNER-S DAMAGE-STAND DAMAGE-TOUCH EXIT-SLACK HAZARD-AVOID JUMP-S JUMP-UP LAVA-ADJACENT MOVE-CORNER MOVE-EXIT MOVE-JUMP MOVE-SWIM MOVE-SWIM-DOWN MOVE-SWIM-UP MOVE-WALK NARROW NONE OPEN SNAP SQRT2 STEP UNLOADED WALK-S WATER WHOLE]]
+  (:require [engine.path.planner.base :refer [AIR-REFILL BODY CORNER-S DAMAGE-STAND DAMAGE-TOUCH DROWN-HP EXIT-SLACK HAZARD-AVOID JUMP-S JUMP-UP LAVA-ADJACENT MOVE-CORNER MOVE-EXIT MOVE-JUMP MOVE-SWIM MOVE-SWIM-DOWN MOVE-SWIM-UP MOVE-WALK NARROW NONE OPEN SNAP SQRT2 STEP UNLOADED WALK-S WATER WHOLE breathable?]]
             [engine.path.planner.search :refer [Search]]))
 
 (set! *warn-on-infer* true)
@@ -24,6 +24,11 @@
             (== (aget (.-tbl-kind s) head) WATER) 0
             (and (== (aget (.-tbl-kind s) head) OPEN) (zero? (aget (.-tbl-top s) head)) (zero? (aget (.-tbl-hazard s) head))) 0
             :else -1)))))
+
+  ;; the head at x,y,z breathes (base/breathable?) and the body has seen or felt that block (options.airSeen): where a plan to air ends
+  (breathes [s x y z]
+    (and (breathable? (.-table s) (.stateAt s x (inc y) z))
+         (or (nil? (.-air-known s)) (true? ((.-air-known s) x (inc y) z)))))
 
   ;; head in water that is not a bubble column: the breath runs
   (submerged [s x y z]
@@ -106,14 +111,14 @@
   ;; then calls swimEnd. `base` seconds of swimming count for the air (times costs.airDrain, the expected drain: 1/(Respiration+1); airGrace free seconds a dive, turtle helmet 10, add airGrace * airDrain to the limit), `extra` seconds of current do not.
   ;; src-sub: the body starts the move with its head in water. target-water: it ends in a water cell. A move that
   ;; ends with the head out of water breathes AIR-REFILL times its seconds back, none on the move in from under water.
-  ;; On a way to air from under water (c-drown above 0) no move is refused for air: its seconds past the supply add
-  ;; c-drown risk each (move-drown, which the caller adds to the move's risk; not damage, so no damage budget refuses it).
+  ;; On a way to air from under water (to-air) no move is refused for air: its seconds past the supply drown DROWN-HP hp
+  ;; each (move-drown, which consider adds to the node's drowning and prices; not damage, so no damage budget refuses it).
   (swimBegin [s i ^boolean target-water x2 y2 z2 base extra ^boolean src-sub]
     (let [target-sub (and target-water ^boolean (.submerged s x2 y2 z2))
           air (if (>= i 0) (aget (.-airs s) i) 0)
           use (+ air (* base (.-c-air-drain s)))
           ^boolean under (or src-sub target-sub)]
-      (if (and under (> use (.-c-air-limit s)) (zero? (.-c-drown s)))
+      (if (and under (> use (.-c-air-limit s)) (not ^boolean (.-to-air s)))
         (do (set! (.-air-seen s) true)
             false)
         (do (set! (.-move-air s) (cond
@@ -123,7 +128,7 @@
             (set! (.-move-peak s) (if under use 0))
             (set! (.-move-water s) (+ base extra))
             (when (and under (> use (.-c-air-supply s)))
-              (set! (.-move-drown s) (/ (* (.-c-drown s) (- use (js/Math.max air (.-c-air-supply s)))) (.-c-air-drain s))))
+              (set! (.-move-drown s) (/ (* DROWN-HP (- use (js/Math.max air (.-c-air-supply s)))) (.-c-air-drain s))))
             true))))
 
   (swimEnd [s]
@@ -177,7 +182,7 @@
                     extra (.currentAt s x y2 z)
                     risk (.swimRisk s x y2 z)]
                 (when ^boolean (.swimBegin s i true x y2 z base extra src-sub)
-                  (.verticalMove s i x y z 0 region y2 0 move (+ base extra) (+ risk (.-move-drown s)) 0)
+                  (.verticalMove s i x y z 0 region y2 0 move (+ base extra) risk 0)
                   (.swimEnd s)))))))))
 
   (dragAt [s x y z]
@@ -192,8 +197,8 @@
           sec (+ base extra)]
       (when ^boolean (.swimBegin s i true x2 y z2 base extra src-sub)
         (if tight
-          (.tightMove s i x y z 0 region c x2 y z2 0 MOVE-SWIM sec (+ risk (.-move-drown s)) 0 SNAP SNAP)
-          (.edge s x2 y z2 0 MOVE-SWIM i sec (+ risk (.-move-drown s)) 0 0 0))
+          (.tightMove s i x y z 0 region c x2 y z2 0 MOVE-SWIM sec risk 0 SNAP SNAP)
+          (.edge s x2 y z2 0 MOVE-SWIM i sec risk 0 0 0))
         (.swimEnd s))))
 
   ;; out of the water onto the bank cells beside it, from the same level up to last-ty
@@ -208,8 +213,8 @@
                   tight (or tight-src ^boolean (.tightAt s x2 y2 z2))]
               (when ^boolean (.swimBegin s i false x2 y2 z2 base 0 src-sub)
                 (if tight
-                  (.tightMove s i x y z 0 region c x2 y2 z2 h1 MOVE-EXIT (+ base 0) (+ risk (.-move-drown s)) slow-to SNAP SNAP)
-                  (.edge s x2 y2 z2 h1 MOVE-EXIT i (+ base 0) (+ risk (.-move-drown s)) slow-to 0 0))
+                  (.tightMove s i x y z 0 region c x2 y2 z2 h1 MOVE-EXIT (+ base 0) risk slow-to SNAP SNAP)
+                  (.edge s x2 y2 z2 h1 MOVE-EXIT i (+ base 0) risk slow-to 0 0))
                 (.swimEnd s))))
           (recur (inc y2))))))
 
@@ -231,7 +236,7 @@
                   base (+ (* (.-c-swim-h s) SQRT2) (* slide CORNER-S))
                   extra (.currentAt s x2 y z2)]
               (when ^boolean (.swimBegin s i true x2 y z2 base extra src-sub)
-                (.edge s x2 y z2 0 (if (zero? slide) MOVE-SWIM MOVE-CORNER) i (+ base extra) (+ risk (.-move-drown s)) 0 slide 0)
+                (.edge s x2 y z2 0 (if (zero? slide) MOVE-SWIM MOVE-CORNER) i (+ base extra) risk 0 slide 0)
                 (.swimEnd s))))))))
 
   ;; a node floating in water: up, down, sideways and onto the bank; sideways moves and exits may cross tight cells (masks), a

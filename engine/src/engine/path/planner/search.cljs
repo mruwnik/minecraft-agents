@@ -25,7 +25,7 @@
    ;; costs (options.costs over DEFAULT-COSTS)
    c-climb-up c-climb-down c-jump-climb c-open c-open-redstone c-open-lever c-open-plate c-beside-magma c-swim-h c-swim-up c-swim-down
    c-exit c-current c-bubble-up c-bubble-down c-air-supply c-air-limit c-air-drain c-max-water-drop c-dripleaf c-dripleaf-risk
-   c-drown ; risk a second of swimming past the air supply adds on a way to air from under water; 0: refused past c-air-limit
+   ^boolean to-air ; a plan started under water to a goal with its head in air: no swim is refused for air, it drowns (drowns)
    c-drop-factor ; a drop's fall seconds and fall damage are scaled by it (0: free)
    c-walk-s c-sprint-s ; seconds per block walked, and per block of a gap jump (the gait: walking, sprinting, sneaking)
    ;; search box: start and goal, plus margins
@@ -56,7 +56,7 @@
    ^:mutable ^boolean gap-seen ; a ladder was refused because the feet would leave it at a gap
    ^:mutable ^boolean air-seen ; a swim move was refused for lack of air
    ^:mutable ^boolean enters-shut ; the last enterCell was a shut trapdoor
-   ;; what the swim move being made adds to the node (move-drown: the risk of its drowning seconds, see swimBegin), and
+   ;; what the swim move being made adds to the node (move-drown: the hp its drowning seconds cost, see swimBegin), and
    ;; what the move being made opens
    ^:mutable move-air ^:mutable move-peak ^:mutable move-water ^:mutable move-drown ^:mutable move-open
    ^js open-lists
@@ -125,4 +125,8 @@
    damage-budget damage-weight fall-factor ^js land-factors ^js land-seen
    ;; certain damage so far to each node; what the move being made adds (set around its edge, 0 otherwise); what the last landing
    ;; adds (plants touched, a hurting floor); the total of the node being recorded; a move was refused for the budget
-   ^:mutable dmgs ^:mutable move-dmg ^:mutable enter-dmg ^:mutable cur-dmg ^:mutable ^boolean damage-refused])
+   ^:mutable dmgs ^:mutable move-dmg ^:mutable enter-dmg ^:mutable cur-dmg ^:mutable ^boolean damage-refused
+   ;; drowning (to-air only): its hp so far to each node, the hp of the node being recorded, options.drownPrices (the seconds
+   ;; the first k hp cost, nil: damage-weight each) and options.health (drowning to it is lethal, see drownCost), and
+   ;; options.airSeen (fn x y z: the body has seen or felt that block; nil: every block, see breathes)
+   ^:mutable drowns ^:mutable cur-drown ^js drown-prices lethal-hp ^js air-known])

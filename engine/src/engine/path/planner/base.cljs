@@ -6,6 +6,7 @@
 (def ^:const OPEN 0)
 (def ^:const WATER 2)
 (def ^:const LAVA 3)
+(def ^:const CLIMB 4)
 (def ^:const OPENABLE 5)
 (def ^:const NARROW 6)
 (def ^:const HAZARD-AVOID 1)
@@ -144,6 +145,7 @@
 (def ^:const REGIONS 16) ; regions of one cell that can be nodes (4 bits of the key)
 (def ^:const AIR-REFILL 4) ; seconds of air a second with the head out of water gives back (vanilla: +4 air a tick, -1 under water)
 (def ^:const DROWN-HP 2) ; hp a second with no air left costs (vanilla: 2 every 20 ticks at 0 air)
+(def ^:const LETHAL-S 1e6) ; seconds a lethal drowning costs, and each hp past it: any plan that does not drown wins
 (def ^:const AIR-STEP 1) ; seconds of air that make an arrival at a node already reached worth a record of its own
 (def ^:const DMG-STEP 0) ; hp of damage that make an arrival at a node already reached worth a record of its own (a finite budget: exact)
 (def ^:const TABLE 8192) ; slots of the direct-mapped tight-cell caches
@@ -182,3 +184,11 @@
 ;; the blocks of `blocks` that are not in `others`
 (defn not-in [^js blocks ^js others]
   (.filter blocks (fn [b] (not ^boolean (in-list? b others)))))
+
+(defn breathable?
+  "Whether a head in the block of state id (table: the block table) breathes: open, a climbable or an openable block, or
+  a bubble column (vanilla drains no air with the eyes in one); not a solid block, water or lava."
+  [^js table id]
+  (and (not (== id UNLOADED))
+       (let [k (aget (.-kind table) id)]
+         (or (== k OPEN) (== k CLIMB) (== k OPENABLE) (pos? (aget (.-bubble table) id))))))

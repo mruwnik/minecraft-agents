@@ -1,6 +1,6 @@
 (ns engine.path.planner.nodes
   "Search methods: the goal test and heuristic, and node storage (hash, heap, recording an arrival, refused moves)."
-  (:require [engine.path.planner.base :refer [AIR-REFILL AIR-STEP AVOID-CLIMB DMG-STEP AVOID-OPEN AVOID-WATER HALF JUMP-UP MOVE-CLIMB-UP MOVE-DROP MOVE-GAP MOVE-OPEN MOVE-SWIM REGIONS SPAN SQRT2 cell-key grown next-pow2]]
+  (:require [engine.path.planner.base :refer [AIR-REFILL AIR-STEP AVOID-CLIMB DMG-STEP LETHAL-S AVOID-OPEN AVOID-WATER HALF JUMP-UP MOVE-CLIMB-UP MOVE-DROP MOVE-GAP MOVE-OPEN MOVE-SWIM REGIONS SPAN SQRT2 cell-key grown next-pow2]]
             [engine.path.planner.search :refer [Search]]))
 
 (set! *warn-on-infer* true)
@@ -103,6 +103,7 @@
     (set! (.-secs s) (grown (.-secs s) (.-cap s)))
     (set! (.-risks s) (grown (.-risks s) (.-cap s)))
     (set! (.-dmgs s) (grown (.-dmgs s) (.-cap s)))
+    (set! (.-drowns s) (grown (.-drowns s) (.-cap s)))
     (set! (.-darks s) (grown (.-darks s) (.-cap s)))
     (set! (.-airs s) (grown (.-airs s) (.-cap s)))
     (set! (.-peaks s) (grown (.-peaks s) (.-cap s)))
@@ -194,6 +195,7 @@
     (aset (.-secs s) node sec)
     (aset (.-risks s) node risk)
     (aset (.-dmgs s) node (.-cur-dmg s))
+    (aset (.-drowns s) node (.-cur-drown s))
     (aset (.-darks s) node dark)
     (aset (.-airs s) node (.-move-air s))
     (aset (.-peaks s) node (js/Math.max (aget (.-peaks s) parent-node) (.-move-peak s)))
@@ -205,6 +207,19 @@
       (do (set! (.-heap-n s) (inc (.-heap-n s)))
           (.siftUp s (dec (.-heap-n s)) node))
       (.siftUp s (aget (.-heap-pos s) node) node)))
+
+  ;; the seconds drowning hp costs: drown-prices (the first k hp cost drown-prices[k], between and past them linear; nil:
+  ;; damage-weight each), and LETHAL-S more, and LETHAL-S each hp past it, from lethal-hp on (a lethal plan loses to any other)
+  (drownCost [s hp]
+    (let [^js p (.-drown-prices s)
+          n (if (some? p) (dec (.-length p)) 0)
+          price (if (< n 1)
+                  (* hp (.-damage-weight s))
+                  (let [k (js/Math.min (dec n) (js/Math.floor hp))]
+                    (+ (aget p k) (* (- hp k) (- (aget p (inc k)) (aget p k))))))]
+      (if (>= hp (.-lethal-hp s))
+        (+ price LETHAL-S (* LETHAL-S (- hp (.-lethal-hp s))))
+        price)))
 
   ;; a record of its own for a node: unless the node budget is spent
   (insertNode [s x y z h move parent-node sec risk dark g slow-to corner shape region key slot]
@@ -245,10 +260,14 @@
                   dmg (+ (aget (.-dmgs s) parent-node) (.-move-dmg s))
                   ;; the price of certain damage over what risk already charges for it
                   dpay (* (- (.-damage-weight s) (.-risk-weight s)) (.-move-dmg s))
+                  drown (+ (aget (.-drowns s) parent-node) (.-move-drown s))
                   g (if ^boolean (.-avoiding s)
-                      (+ (aget (.-gs s) parent-node) dsec (* (.-risk-weight s) drisk) extra ddark dpay)
-                      (+ sec (* (.-risk-weight s) risk) dark (* (- (.-damage-weight s) (.-risk-weight s)) dmg)))]
+                      (+ (aget (.-gs s) parent-node) dsec (* (.-risk-weight s) drisk) extra ddark dpay
+                         (if (pos? (.-move-drown s)) (- (.drownCost s drown) (.drownCost s (aget (.-drowns s) parent-node))) 0))
+                      (+ sec (* (.-risk-weight s) risk) dark (* (- (.-damage-weight s) (.-risk-weight s)) dmg)
+                         (if (pos? drown) (.drownCost s drown) 0)))]
               (set! (.-cur-dmg s) dmg)
+              (set! (.-cur-drown s) drown)
               ;; a move that is not a swim has the head out of water: it breathes AIR-REFILL times its seconds back
               (when (zero? (.-move-water s))
                 (set! (.-move-air s) (js/Math.max 0 (- (aget (.-airs s) parent-node) (* AIR-REFILL dsec)))))
@@ -257,13 +276,14 @@
                 (let [d-air (- (.-move-air s) (aget (.-airs s) found))
                       ;; (a search without a budget keeps one record per node)
                       d-dmg (if (< (.-damage-budget s) js/Infinity) (- dmg (aget (.-dmgs s) found)) 0)
+                      d-drown (- drown (aget (.-drowns s) found))
                       g-found (aget (.-gs s) found)]
                   (cond
-                    (and (< g g-found) (<= d-air AIR-STEP) (<= d-dmg DMG-STEP))
+                    (and (< g g-found) (<= d-air AIR-STEP) (<= d-dmg DMG-STEP) (<= d-drown DMG-STEP))
                     (when-not (== (aget (.-heap-pos s) found) -2)
                       (.relax s found x z h move parent-node sec risk dark g slow-to corner shape))
 
-                    (or (< g g-found) (< d-air (- AIR-STEP)) (< d-dmg (- DMG-STEP)))
+                    (or (< g g-found) (< d-air (- AIR-STEP)) (< d-dmg (- DMG-STEP)) (< d-drown (- DMG-STEP)))
                     (.insertNode s x y z h move parent-node sec risk dark g slow-to corner shape region key slot)
 
                     :else nil)))))))))

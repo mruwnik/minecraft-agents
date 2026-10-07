@@ -209,6 +209,28 @@
   [c]
   ((if (:over-budget c) cost/survivable-budget cost/damage-budget) (damage-body c) (walk-settings c)))
 
+(defn known-fn
+  "(fn [x y z]) true when the body of primitives p has seen or felt the block there (now or remembered, not unknown); nil
+  without a perception."
+  [p]
+  (when (some? (.-sensedAt p))
+    (let [memo (js/Map.)]
+      (fn [x y z]
+        (let [k (str x "," y "," z)]
+          (if (.has memo k)
+            (.get memo k)
+            (let [^js b (u/sensed p {:x x :y y :z z})
+                  known (boolean (and b (not (true? (.-unknown b)))))]
+              (.set memo k known)
+              known)))))))
+
+(defn- drowning
+  "{:health :drown-prices}: the hp (health and absorption) drowning to which is lethal, and the price of each hp of it."
+  [^js self hp-s]
+  (let [pool (+ (.-health self) (or (.-absorption self) 0))]
+    (when (and (number? pool) (js/isFinite pool))
+      {:health pool :drown-prices (cost/drown-prices pool hp-s)})))
+
 (defn body-policy
   "executor/policy for the body: the gait (:walk, :sneak) never sprints; with the walk's food (food-of) 6 or less the client does not sprint, so :sprint is false (a corner jump past
   a high block is then refused). :damage-budget (hp, damage-budget) and :damage-weight (seconds an hp costs at its health)
@@ -216,7 +238,8 @@
   :max-drop and :fall-factor follow its fall enchantments and the longest drop it survives (the survivable-budget under the job's :max-damage,
   whatever the budget: a drop the budget refuses is a refusal the planner reports as :damageRefused, jobs.lib.cost/fall-profile).
   :air-drain and :air-grace follow the helmet (jobs.lib.cost/air-profile); with the head under water :air-used is the air
-  its oxygen says it has used, and there is no grace (it may be spent on this dive)."
+  its oxygen says it has used, and there is no grace (it may be spent on this dive); :health is the hp drowning to which
+  is lethal, :drown-prices the price of each hp of drowning (jobs.lib.cost/drown-prices), :air-seen (known-fn) which air counts."
   [c]
   (let [self (.self (:primitives c))
         food (food-of c)]
@@ -228,7 +251,9 @@
                     :damage-weight (* (or (:hp-seconds (:args c)) cost/hp-seconds) (cost/health-scale (.-health self)))
                     :danger-cap (max cost/danger-cap (or (:danger-max-rate (:args c)) 0))}
                    (when-some [landing (:landing (:args c))] {:landing landing}))
-      (breath/head-under? (:primitives c)) (-> (dissoc :air-grace) (assoc :air-used (cost/air-used (.-oxygen self))))
+      (breath/head-under? (:primitives c)) (-> (dissoc :air-grace) (assoc :air-used (cost/air-used (.-oxygen self)))
+                                               (merge (drowning self (or (:hp-seconds (:args c)) cost/hp-seconds)))
+                                               (merge (some->> (known-fn (:primitives c)) (hash-map :air-seen))))
       (and (number? food) (<= food 6)) (assoc :sprint false)
       (= :walk (gait c)) (assoc :sprint false :gait :walk)
       (= :sneak (gait c)) (assoc :sprint false :gait :sneak))))

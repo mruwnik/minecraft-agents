@@ -17,6 +17,11 @@
     0 4)
   (is (= 10 cost/per-danger) "the fetch price of a point of damage is the same figure"))
 
+(deftest drowning-prices-each-hp-at-the-health-it-leaves
+  (is (= [0 20 42 67 96] (mapv js/Math.round (health/drown-prices 10 10 4))) "20/10, 20/9, 20/8, 20/7 x 10 s")
+  (is (= [0 40 80] (vec (health/drown-prices 4 10 2))) "at most max-scale")
+  (is (= 21 (count (health/drown-prices 20 10))) "every hp the body has, by default"))
+
 (deftest the-budget-is-the-health-over-the-floor-less-a-margin
   (are [body settings budget] (= budget (health/damage-budget body settings))
     {:health 20 :food 20} {} 7
@@ -106,9 +111,15 @@
         column {"0,64,0" "water" "0,65,0" "water" "0,66,0" "water"}
         surface {"0,64,0" "water"}
         turtle {:head {:name "turtle_helmet"}}]
-    (is (= 11.25 (:air-used (policy {:inWater true :oxygen 5} column))))
+    (is (= 11.625 (:air-used (policy {:inWater true :oxygen 5} column))) "mineflayer rounds the air: 0.375 s more")
+    (is (= 10 (:health (policy {:inWater true :oxygen 5 :health 10} column))) "drowning to it is lethal")
+    (is (= 11 (count (:drown-prices (policy {:inWater true :oxygen 5 :health 10 :absorption 0} column)))) "priced to the last hp")
+    (is (true? ((:air-seen (policy {:inWater true :oxygen 5} column)) 0 66 0)) "air it has seen counts")
     (is (nil? (:air-grace (policy {:inWater true :oxygen 20} column turtle))) "under water: no grace")
     (is (= 10 (:air-grace (policy {:inWater true :oxygen 5} surface turtle))) "head out: as before")
     (is (nil? (:air-used (policy {:inWater true :oxygen 5} surface))))
     (is (nil? (:air-used (policy {:inWater false :oxygen 20} {}))))
-    (is (= 11.25 (.. (wplan/with-drops #js {} {:air-used 11.25}) -costs -airUsed)) "go-to hands it to the planner")))
+    (is (= 11.25 (.. (wplan/with-drops #js {} {:air-used 11.25}) -costs -airUsed)) "go-to hands it to the planner")
+    (let [o (wplan/with-drops #js {} {:air-used 11.25 :health 10 :drown-prices [0 20]})]
+      (is (= 10 (.-health o)))
+      (is (= [0 20] (vec (.-drownPrices o)))))))
