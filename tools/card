@@ -43,19 +43,14 @@ patch() { # id json
   api -X PATCH -H 'Content-Type: application/json' -d "$2" "$URL/api/tasks/$1" | jq -r '.task|"\(.id) \(.status) \(.title)"'
 }
 
-# The HTTP API has no create route, so create goes through the board's /mcp JSON-RPC endpoint.
 create_card() { # title desc priority tags-csv
   local req resp
-  req=$(jq -n --arg repo "$REPO" --arg t "$1" --arg d "$2" --argjson p "$3" --arg tags "$4" '
-    {jsonrpc:"2.0",id:1,method:"tools/call",params:{name:"create_task",arguments:{
-      repo_path:$repo,title:$t,description:$d,priority:$p,
-      tags:($tags|split(",")|map(select(.!=""))),
-      checklist:["unit","integration","review","live"]}}}')
-  resp=$(api -X POST -H 'Content-Type: application/json' -d "$req" "$URL/mcp")
-  jq -e '.result.isError // false | not' <<<"$resp" >/dev/null \
-    || die "$(jq -r '.result.content[0].text' <<<"$resp")"
-  jq -r '.error.message // empty' <<<"$resp" | grep . >&2 && exit 1
-  jq -r '.result.content[0].text|fromjson|.task|"\(.id) \(.status) \(.title)"' <<<"$resp"
+  req=$(jq -n --arg t "$1" --arg d "$2" --argjson p "$3" --arg tags "$4" '
+    {title:$t,description:$d,priority:$p,
+     tags:($tags|split(",")|map(select(.!=""))),
+     checklist:["unit","integration","review","live"]}')
+  resp=$(api -X POST -H 'Content-Type: application/json' -d "$req" "$URL/api/boards/$(repo_enc)/tasks")
+  jq -r '.task|"\(.id) \(.status) \(.title)"' <<<"$resp"
 }
 
 cmd="${1:-}"; shift || true
