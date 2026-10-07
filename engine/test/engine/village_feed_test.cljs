@@ -4,6 +4,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.fake :as fake]
+            [engine.memory :as mem]
             [engine.hostile-test :as h]
             [engine.perception :as perception]
             [engine.registry :as registry]
@@ -34,24 +35,29 @@
 
 (defn ^:async feed
   "Run the job on a world until it ends (at most n ticks); prepare is called with the primitives first. The child's
-  result is in :out."
-  [world args n prepare]
+  result is in :out. seed, when given, is put in the child's memory before its first call (left by a cut round);
+  prepare-eng is called with the engine first."
+  ([world args n prepare] (await (feed world args n prepare nil nil)))
+  ([world args n prepare seed prepare-eng]
   (let [s (h/setup world)
         out (atom :not-done)
         parent {:check (constantly true)
                 :round (fn ^:async recording-round [c]
+                         (when (and seed (nil? (get-in (ctx/mem c) [:children :kid])))
+                           (ctx/update-mem! c assoc-in [:children :kid] (merge {:args args :children {}} seed)))
                          (let [r (await (ctx/call-child c :kid job args))]
                            (when (= :done r) (reset! out (ctx/child-result c :kid)))
                            r))}
         eng (assoc (:eng s) :jobs (assoc (:jobs (:eng s)) 'recording-parent parent))]
     (prepare (:p s))
+    (when prepare-eng (prepare-eng eng))
     (core/submit! eng '(recording-parent) {})
     (loop [i 0]
       (when (and (< i n) (seq (:list (core/state eng))))
         (swap! (:clock s) + 700)
         (await (core/tick! eng))
         (recur (inc i))))
-    (assoc s :out out)))
+    (assoc s :out out))))
 
 (defn inv [p] (reduce (fn [m i] (update m (.-name i) (fnil + 0) (.-count i))) {} (.-inventory (.self p))))
 (defn kinds [{:keys [seen]}] (set (map :kind @seen)))
@@ -172,9 +178,65 @@
           (is (= [50] (map :id left)) "another's drop stays where it lay"))))))
 
 (deftest a-toss-cut-before-its-receipt-books-what-the-villager-took
-  (are [before now lying took] (= took (feed/took {:before before} now (mapv (fn [n] {:count n}) lying)))
+  (are [before now lying took] (= took (feed/took {:before before} now 0 (mapv (fn [n] {:count n}) lying)))
     5 3 [] 2          ; both thrown, nothing lying: taken
     5 3 [2] 0         ; both still lying: nothing taken
     5 3 [1] 1
     5 5 [] 0          ; the toss never happened
     5 2 [] 3))
+
+(def at0 {:x 0 :y 64 :z 0})
+
+(defn cut-toss
+  "The memory a cut left in the middle of a toss of bread from at: 5 carried then, as of time 0."
+  [& {:as more}]
+  (merge {:tossing {:item "bread" :at at0 :before 5 :t 0 :skip {}}} more))
+
+(deftest a-restart-books-what-left-the-inventory-as-taken
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out]} (await (feed {:entities [(villager 6)] :inventory [{:name "bread" :count 3}]}
+                                         {:villager "v-1" :count 2} 40 identity (cut-toss) nil))]
+          (is (= {:fed 2 :item "bread"} @out)))))))
+
+(deftest food-eaten-during-a-cut-is-not-counted-as-fed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out]} (await (feed {:entities [(villager 6)] :inventory [{:name "bread" :count 3}]}
+                                         {:villager "v-1" :count 1} 40 identity (cut-toss)
+                                         #(mem/write! (:store %) :fed {:item "bread" :food 18})))]
+          (is (= 1 (:fed @out)) "two left the inventory, one of them was eaten"))))))
+
+(deftest a-thrown-stack-that-merged-into-a-skipped-drop-is-not-taken
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [merged {:id 50 :name "item" :kind "item" :pos {:x 1 :y 64 :z 0} :item {:name "bread" :count 3}}
+              {:keys [p out]} (await (feed {:entities [merged] :inventory [{:name "bread" :count 3}]}
+                                           {:villager "v-1" :count 1} 40 identity (cut-toss :tossing {:item "bread" :at at0 :before 5 :t 0 :skip {50 1}}) nil))]
+          (is (= 0 (:fed @out)) "only 2 of the 3 are the body's, and they lie there")
+          (is (= {"bread" 6} (inv p)) "the merged stack was collected back"))))))
+
+(deftest restarts-that-took-nothing-count-towards-not-taken
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p out]} (await (feed {:entities [(villager 6)] :inventory bread}
+                                           {:villager "v-1" :count 1} 40 identity (cut-toss :refused 2) nil))]
+          (is (= "not-taken" (:reason @out)))
+          (is (empty? (tosses p))))))))
+
+(deftest a-cut-toss-is-settled-back-at-its-spot
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [at {:x 12 :y 64 :z 0}
+              drop {:id 51 :name "item" :kind "item" :pos {:x 12 :y 64 :z 0} :item {:name "bread" :count 2}}
+              {:keys [p out]} (await (feed {:entities [drop] :inventory [{:name "bread" :count 3}]}
+                                           {:villager "v-1" :count 2} 60 identity
+                                           (cut-toss :tossing {:item "bread" :at at :before 5 :t 0 :skip {}}) nil))]
+          (is (> (.-x (.-pos (.self p))) 7) "the body walked back to the spot first")
+          (is (= 0 (:fed @out)) "the drop at the spot is the body's own")
+          (is (= {"bread" 5} (inv p))))))))

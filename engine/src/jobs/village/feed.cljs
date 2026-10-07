@@ -21,8 +21,9 @@
   - \"not-taken\": three tosses in a row that the villager did not collect (full inventory, not wanted), or the
     toss status when the toss is refused three times, or \"litter\" when the drop cannot be collected back.
   Success is info feed.done. What was fed is booked after each toss, so a cut and restart does not feed twice; a
-  toss cut before its receipt is settled on restart (what left the inventory and does not lie there counts as taken)
-  and its drop is collected back. Drops lying near before the toss are never collected.
+  toss cut before its receipt is settled on restart, back at its spot (what left the inventory, was not eaten and
+  does not lie there counts as taken; none taken counts as refused) and its drop is collected back. Drops lying near
+  before the toss are never collected.
   One call is the whole attempt; it yields :continue only while a walk or fetch child waits on the world.")
 
 (def args
@@ -40,6 +41,7 @@
 (def max-walks 8)
 (def watch-s 4)
 (def foot-height 0.3)
+(def settle-reach 4)
 (def job 'jobs.village.feed)
 
 (defn fed [c] (:fed (ctx/mem c) 0))
@@ -123,10 +125,13 @@
           :again)))))
 
 (defn lying
-  "The drops of item near at (the toss spot), nearest first, but not the ones with an id in skip (lying there before
-  the toss: not the body's)."
+  "The drops of item near at (the toss spot), nearest first, with only the body's share counted: skip maps the id of a
+  drop lying there before the toss to its count then, so a thrown stack that merged into it counts by what it grew."
   [c item at skip]
-  (remove #(contains? skip (:id %)) (give/drops (:primitives c) item (:radius (:args c)) at)))
+  (keep (fn [d]
+          (let [more (- (:count d) (get skip (:id d) 0))]
+            (when (pos? more) (assoc d :count more))))
+        (give/drops (:primitives c) item (:radius (:args c)) at)))
 
 (defn held
   "How many of item the body carries."
@@ -135,9 +140,14 @@
 
 (defn took
   "What the villager took of a toss cut before its receipt: the items gone from the inventory since the intent was
-  booked (:before), less those of them still lying as the body's own drops."
-  [{:keys [before]} now own]
-  (max 0 (- (- before now) (transduce (map :count) + 0 own))))
+  booked (:before), less those eaten meanwhile and those still lying as the body's own drops."
+  [{:keys [before]} now eaten own]
+  (max 0 (- before now eaten (transduce (map :count) + 0 own))))
+
+(defn eaten
+  "How many bites of item the body ate since t (the :fed entries jobs.survival.eat writes to body memory)."
+  [c item t]
+  (count (filter #(= item (:item (:data %))) (ctx/since c :fed t))))
 
 (defn ^:async clean-up!
   "Collect back the drop of the last toss that lies near its spot; each collect that gathers nothing counts through
@@ -177,7 +187,8 @@
         n (min (- (:count (:args c)) (fed c)) (get (into {} (map (juxt :name :count)) (u/inventory p)) item 0))
         pos (u/pos-of (.-pos e))]
     (ctx/update-mem! c assoc :tossing {:item item :at (u/self-pos c) :before (held c item)
-                                       :skip (into #{} (map :id) (lying c item (u/self-pos c) #{}))})
+                                       :t (ctx/now c)
+                                       :skip (into {} (map (juxt :id :count)) (lying c item (u/self-pos c) {}))})
     (await (ctx/act c :look (clj->js {:pos (update pos :y + foot-height)})))
     (let [r (await (ctx/act c :toss (clj->js {:item item :count n :watchS watch-s})))
           status (.-status r)]
@@ -189,14 +200,16 @@
               :again))))))
 
 (defn settle!
-  "A restart found a toss without its receipt: what left the inventory and does not lie there as the body's own drop
-  was taken by the villager, so it counts as fed; the rest is cleaned up."
-  [c {:keys [item at skip] :as intent}]
-  (let [got (took intent (held c item) (lying c item at skip))]
+  "A restart found a toss without its receipt: what left the inventory and was neither eaten nor lies there as the
+  body's own drop was taken by the villager, so it counts as fed (none taken counts as refused); the rest is cleaned
+  up."
+  [c {:keys [item at skip t] :as intent}]
+  (let [got (took intent (held c item) (eaten c item t) (lying c item at skip))]
     (ctx/update-mem! c #(-> %
-                            (dissoc :tossing)
+                            (dissoc :tossing :walks)
                             (assoc :item item)
                             (update :fed (fnil + 0) got)
+                            (assoc :refused (if (pos? got) 0 (inc (:refused % 0))))
                             (assoc :cleanup {:item item :at at :skip skip})))
     :again))
 
@@ -208,7 +221,9 @@
         item (food c)
         e (when-not (or (:tossing m) (:cleanup m) (>= (fed c) count)) (find-villager (:primitives c) villager radius))]
     (cond
-      (:tossing m) (settle! c (:tossing m))
+      (:tossing m) (if (u/within? (u/self-pos c) (:at (:tossing m)) settle-reach)
+                     (settle! c (:tossing m))
+                     (await (walk! c (:at (:tossing m)))))
       (:cleanup m) (await (clean-up! c (:cleanup m)))
       (>= (fed c) count) (done! c)
       (>= (:refused m 0) max-refused) (stop! c "not-taken" "the villager does not take the food")
