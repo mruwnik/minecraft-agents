@@ -3,8 +3,8 @@
   the world into a lookup and acts on the verdict.
 
   Input, one map:
-    :block-at    fn [x y z] -> block name, or nil when the cell is not loaded. Jobs read what the body senses and
-                 give a cell it has not seen their own guess
+    :block-at    fn [x y z] -> block name, or nil when the cell is not loaded. The caller's read: stair and
+                 tunnel give what the body senses and a guess for a cell it has not seen; other jobs still read the world
     :cell        [x y z] the cell to dig or fill
     :feet        [x y z] the body's feet cell (its head cell is one above)
     :zones       nil (no zone list loaded) or a vector of zones {:name :min :max :owner :allow}

@@ -82,7 +82,7 @@
 
   :fetch (default true; false waits :no-tool; jobs.lib.fetch): a missing pickaxe (the stair's wait, or a :no-tool stop of the run's own
   digs) is got with jobs.items.get-tool, then the body walks back to the cell it stood on and goes on. The stair
-  child does not fetch itself.")
+  child fetches only items (a block to seal lava with), not tools.")
 
 (def args
   {:target {:doc "the buried block [x y z] or {:x :y :z}" :type :pos :default nil}
@@ -302,15 +302,16 @@
         {:keys [next cut] :as cells} (run-cells feet (:heading plan))]
     (await (stair/look-ahead! c feet next cut))
     (or (await (stair/lava-step! c :tunnel.sealed (:block-at in) feet cut))
-        (stair/stop-of in cells accept)
+        (stair/stop-of (stair/judged-in c in) cells accept)
         (if-let [cell (first (remove #(rules/air ((:block-at in) %)) cut))]
           (or (await (stair/peek! c cell)) (await (dig-cell! c in cell cut accept)))
-          (let [r (await (stair/walk-into! c :walk next))]
-            (cond
-              (= :continue r) :continue
-              (and (:arrived r) (= next (feet-of c)))
-              (do (ctx/emit! c :tunnel.step :info {:at next :text (str "tunnel step to " (pr-str next))}) :again)
-              :else {:reason :step-failed :cell next :walk r}))))))
+          (or (await (stair/settle! c cut))
+              (let [r (await (stair/walk-into! c :walk next))]
+                (cond
+                  (= :continue r) :continue
+                  (and (:arrived r) (= next (feet-of c)))
+                  (do (ctx/emit! c :tunnel.step :info {:at next :text (str "tunnel step to " (pr-str next))}) :again)
+                  :else {:reason :step-failed :cell next :walk r})))))))
 
 (defn ^:async open-over-target!
   "At the stand: the target's step judged again and the cell over the target dug; :reached once it is open."
@@ -321,7 +322,7 @@
         over (first cut)]
     (await (stair/look-ahead! c feet next cut))
     (or (await (stair/lava-step! c :tunnel.sealed (:block-at in) feet [over]))
-        (stair/stop-of in cells accept)
+        (stair/stop-of (stair/judged-in c in) cells accept)
         (if (rules/air ((:block-at in) over))
           :reached
           (or (await (stair/peek! c over)) (await (dig-cell! c in over cut accept)))))))
@@ -336,6 +337,14 @@
   [{:keys [sites steps]} k]
   (min steps (or (some #(when (>= % k) (inc %)) sites) steps)))
 
+(defn stair-fetch
+  "The :fetch the stair child gets from the tunnel's: its items (a seal block), not tools (the tunnel fetches those),
+  nil when that is off."
+  [fetch]
+  (let [limits (fetch/parse-arg fetch)]
+    (when (and limits (contains? (or (:what limits) fetch/kinds) :item))
+      (assoc limits :what #{:item}))))
+
 (defn ^:async stair-part!
   "One call of the stair child over the segment from line index k (it hands over what it dug): :again once the
   segment is cut, :continue while the child waits on the world, :declined when the stair declined (the wait, e.g. :no-tool, reaches this job's
@@ -344,7 +353,7 @@
   [c {:keys [heading dir] :as plan} k]
   (let [cells (line-cells plan)
         r (await (declined/call-child! c :stair 'jobs.access.stair
-                                 {:dir dir :heading heading :fetch false :y ((cells (segment-end plan k)) 1) :on-lava (:on-lava (:args c) :seal)
+                                 {:dir dir :heading heading :fetch (stair-fetch (:fetch (:args c))) :y ((cells (segment-end plan k)) 1) :on-lava (:on-lava (:args c) :seal)
                                   :accept (set (:accept (:args c))) :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (if (not= :done r)
       (if (= :declined r) :declined :continue)
