@@ -363,7 +363,8 @@
         blocks (:blocks (:args c))
         {:keys [x y z]} (sh/feet p)
         below {:x x :y (dec y) :z z}
-        shaft (for [yy (range (:y below) (:y roof))] {:x x :y yy :z z})
+        ;; the cell just dug is the one checked; the column over it (the pit above, the body's cells) is the way in
+        column (set (for [yy (range (:y below) (+ y 3))] {:x x :y yy :z z}))
         _ (when (and (look/unknown? p [x (dec y) z]) (> y target-y)) (await (look/look-at! c [x (dec y) z])))]
     (cond
       (not (and (= x (:x roof)) (= z (:z roof)))) (await (abandon-refuge! c))
@@ -376,7 +377,7 @@
               (await (look/see-round! c [x (dec y) z]))
               (await (look/wait-settled! c [[x (dec y) z]]))
               (await (dig-cells/collect-drops! c blocks (.-drops r)))
-              (if (or (await (lays-open? c shaft (conj (set shaft) (select-keys roof [:x :y :z]))))
+              (if (or (await (lays-open? c [below] (conj column (select-keys roof [:x :y :z]))))
                       (not (solid/solid? (u/block-name-or p {:x x :y (- y 2) :z z} "stone"))))
                 (await (abandon-refuge! c))
                 :again))

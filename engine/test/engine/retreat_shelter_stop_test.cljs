@@ -89,7 +89,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [p (await (round (pocket-world "lava") {}))]
-          (is (some #{[-2 64 0]} (calls p "place")) "the lava cell is filled"))))))
+          (is (some #{[-2 64 0]} (calls p "place")) "the lava cell is filled")
+          (is (not= "lava" (.-name (.blockAt p #js {:x -2 :y 64 :z 0}))) "and holds a block now"))))))
 
 (deftest a-pocket-that-lays-open-lava-only-stops-when-asked
   (async done
@@ -119,3 +120,87 @@
     (is (= "stone" (dig-cells/rock-name (sensing-stub face) (cell 0 0 0))) "a seen solid face behind it")
     (is (nil? (dig-cells/rock-name (sensing-stub (assoc face [0 1 0] "air")) (cell 0 0 0))) "a seen open neighbour would have shown it")
     (is (nil? (dig-cells/rock-name (sensing-stub {}) (cell 0 0 0))) "nothing seen near")))
+
+;; ------------------------------------------------------------------ the pit's first dig
+
+(defn plain-world
+  "Flat stone ground (top y 63) with the named hidden or seen blocks laid over it; a stone beside the start (side) makes
+  the pit 2 deep, else it is 3."
+  [extra side?]
+  {:blocks (merge (into {} (for [x (range -3 10) y (range 58 64) z (range -3 4)] [(key-of x y z) "stone"]))
+                  ;; a walled yard, 3x3 inside, a block clear over the ground: too low to leave by, and nothing beside the feet
+                  (into {} (for [x (range -2 3) z (range -2 3) y (range 65 69)
+                                 :when (or (= 2 (Math/abs x)) (= 2 (Math/abs z)))]
+                             [(key-of x y z) "stone"]))
+                  (when side? {(key-of 0 64 -1) "stone"})
+                  extra)
+   :inventory kit})
+
+(defn ^:async see-plain! [raw p]
+  (.setOwner p "t1")
+  (await (look-at-cells! p (for [x (range -3 4) y [63 64] z (range -3 4)] [x y z])))
+  p)
+
+(defn ^:async pit-round
+  "The retreat over a plain with a skeleton beside, the body having seen only the surface; {:p primitives :kinds event kinds}."
+  [world args]
+  (let [clock (atom 1000000)
+        [seen sink] (tu/legacy-capture-sink)
+        raw (tu/fake-on-floor (assoc world :entities [{:id 9 :name "skeleton" :kind "hostile" :pos {:x 1 :y 64 :z 1} :health 20}]))
+        p (perception/wrap raw (perception/create (fake-raw/create raw) {:now (fn [] @clock)}))
+        now (tu/act-clock clock p 1000)
+        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
+                          :events (events/make {:body "Fake" :sinks [sink] :now now})})]
+    (await (see-plain! raw p))
+    (core/submit! eng (list 'jobs.survival.retreat args) {})
+    (let [r (core/tick! eng)]
+      (await (sleep 700))
+      (swap! (fake/state raw) assoc :entities [])
+      (swap! clock + 300000)
+      (await r))
+    {:p p :kinds (set (map :kind @seen))}))
+
+(defn block-at [p x y z] (.-name (.blockAt p #js {:x x :y y :z z})))
+
+(defn lava-dealt-with?
+  "The lava under the first cell was filled, or the failed seal was reported."
+  [{:keys [p kinds]}]
+  (boolean (or (not= "lava" (block-at p -1 62 -1)) (kinds :shelter_seal_failed))))
+
+(deftest a-3-deep-pit-deals-with-lava-its-first-dig-lays-open-below
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (await (pit-round (plain-world {(key-of -1 62 -1) "lava"} false) {}))]
+          (is (= [[-1 63 -1]] (calls (:p r) "dig")) "one cell dug, the lava showed")
+          (is (lava-dealt-with? r) "filled, or the failed seal said why"))))))
+
+(deftest a-3-deep-pit-leaves-lava-alone-when-asked
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (await (pit-round (plain-world {(key-of -1 62 -1) "lava"} false) {:on-lava :stop}))]
+          (is (= [[-1 63 -1]] (calls (:p r) "dig")) "no second cell is dug")
+          (is (= "lava" (block-at (:p r) -1 62 -1)) "the lava is left")
+          (is (not ((:kinds r) :shelter_seal_failed)) "no seal tried"))))))
+
+(deftest a-3-deep-pit-stops-at-water-its-first-dig-shows
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (await (pit-round (plain-world {(key-of -1 62 -1) "water"} false) {}))]
+          (is (= [[-1 63 -1]] (calls (:p r) "dig")) "dug once, the water showed"))))))
+
+(deftest a-3-deep-pit-stops-at-a-seen-open-side-wall
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (await (pit-round (plain-world {(key-of -1 63 0) "air"} false) {}))]
+          (is (= [[-1 63 -1]] (calls (:p r) "dig")) "dug once, the open wall showed"))))))
+
+(deftest a-2-deep-pit-deals-with-lava-below-the-first-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (await (pit-round (plain-world {(key-of -1 62 -1) "lava"} true) {}))]
+          (is (lava-dealt-with? r) "filled, or the failed seal said why"))))))

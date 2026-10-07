@@ -45,14 +45,21 @@
 
 (defn ^:async seal-lava!
   "Fill each of the lava cells with a carried block (jobs.lib.blocks/place-cell!, the place child): true when every one
-  is filled (or none is given), false when a block is missing or a placement fails."
+  is filled (or none is given), false when a block is missing or a placement fails; the failure is emitted
+  (:shelter_seal_failed, naming the cell and 'no block to seal with' or the place status). Placed with :ignore-zones?
+  because this is safety: lava the body's own dig laid open is filled even where it borders another's zone, and the
+  block stays in the lava cell the dig exposed."
   [c blocks lavas]
-  (loop [[lava & more] lavas]
-    (cond
-      (nil? lava) true
-      (nil? (lb/pick c blocks)) false
-      (not (#{:placed :already} (await (lb/place-cell! c lava (lb/pick c blocks) {:ignore-zones? true})))) false
-      :else (recur more))))
+  (let [fail! (fn [lava why]
+                (ctx/emit! c :shelter_seal_failed :info {:text (str "lava at " (:x lava) " " (:y lava) " " (:z lava) " not sealed: " why)})
+                false)]
+    (loop [[lava & more] lavas]
+      (if (nil? lava)
+        true
+        (if-let [item (lb/pick c blocks)]
+          (let [st (await (lb/place-cell! c lava item {:ignore-zones? true}))]
+            (if (#{:placed :already} st) (recur more) (fail! lava (str "place " (or st "failed")))))
+          (fail! lava "no block to seal with"))))))
 
 (def mob-proof-shapes
   "Blocks that stop a mob although their collision shape does not fill the cell: fences (1.5 high), walls, panes,

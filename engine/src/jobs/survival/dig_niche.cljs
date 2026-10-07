@@ -1,6 +1,5 @@
 (ns jobs.survival.dig-niche
   (:require [clojure.string]
-            [engine.settings :as settings]
             [jobs.lib.blocks :as lb]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
@@ -27,7 +26,7 @@
   Needs a tool that harvests the face (a pickaxe for stone): :fetch (default true; jobs.lib.fetch) runs jobs.items.get-tool
   for it, else, or when that fails, it stops :no-tool.
   Declines (waiting) with :day or :already-sealed (not while it is cutting: a niche in progress is roofed). Ends done {:pos :door [feet head cells plugged]} with a :shelter entry {:pos :door} (jobs.survival.dig-in-leave/leave! digs
-  the door out by day), or stopped :no-site, :no-tool, :refused (every site would dig or plug another's zone, claim or plan footprint), :unreachable, :dig-failed, :no-blocks, :place-failed (a mob in the door cell is waited out first, :plug-mob-wait-ticks), :no-progress (over max-steps rounds), or :fluid / :open-shell (what a dug cell
+  the door out by day), or stopped :no-site, :no-tool, :refused (every site would dig or plug another's zone, claim or plan footprint), :unreachable, :dig-failed, :no-blocks, :place-failed (a mob in the door cell is waited out first, :dig-in-cells/mob-wait-ticks), :no-progress (over max-steps rounds), or :fluid / :open-shell (what a dug cell
   laid open: fluid in or beside the niche, a shell cell that is not solid). Rock the body has not looked into reads stone
   (dig-in-cells/rock-name); after each dig it looks at the cells laid open and waits a lava flow delay.
   Events: dig-niche.sealed (info).")
@@ -193,33 +192,16 @@
           :again)
       (fail! c :dig-failed (str "cannot dig the niche: " (.-status r))))))
 
-(def settings
-  {::plug-mob-wait-ticks {:default 200 :doc "Game ticks a plug refused for a mob in the door cell is retried before the niche gives up."
-                          :type :int :min 0}})
-
-(defn plug-mob-wait-ms [] (settings/ticks->ms (settings/get settings ::plug-mob-wait-ticks)))
-
-(defn refusing-mobs
-  "The names of the entities a refused place reports near its cell (the mob in the doorway), nil when none."
-  [r]
-  (seq (map #(or (.-name %) (.-kind %)) (some-> r .-refusal .-entities))))
-
 (defn ^:async plug-step! [c cell]
   (let [item (lb/pick c (:blocks (:args c)))]
     (if (nil? item)
       (fail! c :no-blocks "nothing to plug the niche with")
-      (let [r (await (tidy/place! c cell item))
-            mobs (refusing-mobs r)
-            now (ctx/now c)
-            since (or (:plug-since (ctx/mem c)) now)]
+      (let [r (await (tidy/place! c cell item))]
         (cond
-          (#{"placed" "occupied"} (.-status r)) (do (ctx/update-mem! c dissoc :plug-since) :again)
-          (and mobs (<= (- now since) (plug-mob-wait-ms)))
-          (do (ctx/update-mem! c assoc :plug-since since)
-              :continue)
+          (#{"placed" "occupied"} (.-status r)) (do (dig-cells/forget-wait! c :plug-since) :again)
+          (dig-cells/keep-waiting! c :plug-since r) :continue
           :else (fail! c :place-failed
-                       (str "cannot plug the niche: " (.-status r)
-                            (when mobs (str ", " (clojure.string/join ", " mobs) " stays in the door cell")))))))))
+                       (str "cannot plug the niche: " (.-status r) (dig-cells/mob-text r))))))))
 
 (defn seal!
   "Plugged: the :shelter entry and the result."
