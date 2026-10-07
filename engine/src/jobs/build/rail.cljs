@@ -120,7 +120,7 @@
         give-up (:give-up (:args c))]
     (if-not stand
       (ctx/update-mem! c build/count-fail (:pos cell) :unreachable give-up)
-      (let [w (await (near/walk-near! c (zipmap [:x :y :z] stand) 0 {:zone-tolls true}))]
+      (let [w (await (near/go-near! c (zipmap [:x :y :z] stand) 0 {:zone-tolls true :escalate false}))]
         (when (= :blocked w)
           (ctx/update-mem! c #(-> (build/count-fail % (:pos cell) :unreachable give-up)
                                   (update :bad-stands (fnil conj []) stand))))

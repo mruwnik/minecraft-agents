@@ -390,23 +390,12 @@
           :else (do (skip! c pos) (ctx/update-mem! c update :failures (fnil inc 0))))))
     :continue))
 
-(def max-partials 3)
 
 (defn skip-failed!
   "Skip the target and count a failure."
   [c pos]
   (skip! c pos)
-  (ctx/update-mem! c #(-> % (update :failures (fnil inc 0)) (dissoc :partials :partial-pos))))
-
-(defn partial!
-  "Count a partial walk toward pos (reset when the target changed); the third in a row skips it."
-  [c pos]
-  (let [m (ctx/mem c)
-        n (if (= pos (:partial-pos m)) (inc (:partials m 0)) 1)]
-    (if (>= n max-partials)
-      (skip-failed! c pos)
-      (ctx/update-mem! c assoc :partials n :partial-pos pos))
-    :continue))
+  (ctx/update-mem! c update :failures (fnil inc 0)))
 
 ;; ------------------------------------------------------------------ the strip tunnel
 
@@ -649,9 +638,9 @@
 (defn ^:async walk-to-dig!
   "Walk toward pos until the body is within reach of it, and close enough to see its drop (range 1) when the line to it
   is blocked from here; a body within reach that cannot get closer digs from there. :there, :partial or :blocked
-  (jobs.lib.near/walk-near!)."
+  (jobs.lib.near/go-near!)."
   [c pos]
-  (let [walked (await (near/walk-near! c pos (if (drop-in-line? c pos) reach 1) {:zone-tolls true}))]
+  (let [walked (await (near/go-near! c pos (if (drop-in-line? c pos) reach 1) {:zone-tolls true}))]
     (if (and (not= :there walked) (u/within? (u/self-pos c) (cell-of pos) reach))
       :there
       walked)))
@@ -724,10 +713,9 @@
       (some? pos) (let [walked (await (walk-to-dig! c pos))]
                     (cond
                       (= :blocked walked) (do (skip-failed! c pos) :continue)
-                      (= :partial walked) (partial! c pos)
+                      (= :partial walked) :continue
                       (branch-torch-due? c) (await (torch-step! c true))
-                      :else (do (ctx/update-mem! c dissoc :partials :partial-pos)
-                                (await (watch/watch! c {:before-dig pos}))
+                      :else (do (await (watch/watch! c {:before-dig pos}))
                                 (await (dig! c pos)))))
       (not= looked (cell-of (u/self-pos c))) (await (look-around! c))
       :else (do (when (and wet? (not wet)) (ctx/update-mem! c update :wet-skipped #(max (or % 0) wet-n)))
@@ -783,7 +771,7 @@
 
 (defn ^:async place! [c pos item]
   (let [walked (if (> (u/dist (u/self-pos c) pos) mend-reach)
-                 (await (near/walk-near! c pos reach {:zone-tolls true}))
+                 (await (near/go-near! c pos reach {:zone-tolls true}))
                  :there)]
     (if (not= :there walked)
       (do (when (= :blocked walked) (mend-fail! c)) :continue)
@@ -826,7 +814,7 @@
       (not= looked (cell-of (u/self-pos c))) (await (look-around! c))
       (and more? (< (or resumes 0) max-resumes))
       (do (ctx/update-mem! c #(-> % (assoc :phase :dig :failures 0 :dry 0 :last-carried (carried c) :mend-failures 0)
-                                  (dissoc :collecting :partials :partial-pos)
+                                  (dissoc :collecting)
                                   (update :resumes (fnil inc 0))))
           :continue)
       :else (do (ctx/update-mem! c assoc :reason :spent-on-mend :dig-reason reason)

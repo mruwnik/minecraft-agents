@@ -9,7 +9,6 @@
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
             [jobs.lib.toll-cells :as tc]
-            [jobs.lib.walk.world :as wworld]
             [jobs.lib.world :as known]))
 
 (def doc

@@ -7,6 +7,7 @@
             [engine.memory :as mem]
             [jobs.blocks.dig :as dig]
             [jobs.build.rail :as builder]
+            [jobs.lib.near :as near]
             [engine.registry :as registry]
             [engine.takeover :as takeover]
             [jobs.build.rail-line :as rail-line]
@@ -540,3 +541,23 @@
                 w (first (:waits r))]
             (is (= reason (:reason w)) (str reason))
             (is (re-find text (str (:why w))) (str reason " " (pr-str w)))))))))
+
+(defn ^:async with-near-stub
+  "Run the async f with jobs.lib.near/go-near! replaced by stub, restored after."
+  [stub f]
+  (let [k "cljs$core$IFn$_invoke$arity$4" ; callers use the 4-arity, which the compiler calls directly
+        orig (aget near/go-near! k)]
+    (aset near/go-near! k stub)
+    (try (await (f))
+         (finally (aset near/go-near! k orig)))))
+
+(deftest the-walk-to-a-stand-never-escalates
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [opts (atom [])
+              [_ _ p] (await (with-near-stub (fn ^:async f [_ _ _ o] (swap! opts conj o) :partial)
+            (fn ^:async b [] (await (build! (spec "stone" 63 (kit {})) {"line" (line-plan {})} {})))))]
+          (is (seq @opts))
+          (is (every? #(false? (:escalate %)) @opts) "a walk to a stand never digs through the line")
+          (is (empty? (h/calls p "dig"))))))))

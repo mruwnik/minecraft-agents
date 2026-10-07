@@ -10,7 +10,8 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
-            [jobs.build.clear-box :as clear-box]))
+            [jobs.build.clear-box :as clear-box]
+            [jobs.lib.near :as near]))
 
 (defn setup [world & [shared]]
   (let [clock (atom 1000000)
@@ -309,3 +310,26 @@
           (dotimes [_ 4] (await (core/tick! eng)))
           (is (= :inventory-full (:reason (core/waiting eng id))))
           (is (empty? (calls p "dig"))))))))
+
+(defn ^:async with-near-stub
+  "Run the async f with jobs.lib.near/go-near! replaced by stub, restored after."
+  [stub f]
+  (let [k "cljs$core$IFn$_invoke$arity$4" ; callers use the 4-arity, which the compiler calls directly
+        orig (aget near/go-near! k)]
+    (aset near/go-near! k stub)
+    (try (await (f))
+         (finally (aset near/go-near! k orig)))))
+
+(deftest clear-box-walk-to-an-unloaded-cell-is-go-near-and-a-waiting-walk-is-no-failure
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [far {:from {:x 30 :y 64 :z 30} :to {:x 31 :y 64 :z 30}}
+              calls* (atom [])
+              {:keys [eng]} (setup {:blocks {"30,64,30" "dirt" "31,64,30" "dirt"} :floor [-5 -5 35 35]
+                                    :unloaded ["30,64,30" "31,64,30"]})
+              result (await (with-near-stub (fn ^:async f [_ pos r o] (swap! calls* conj [r o]) :partial)
+            (fn ^:async b [] (await (child-outcome eng job far 8)))))]
+          (is (seq @calls*))
+          (is (every? #(= 3 (first %)) @calls*))
+          (is (= :not-done result) "a waiting walk gives nothing up"))))))

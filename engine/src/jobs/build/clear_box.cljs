@@ -237,7 +237,7 @@
         (finish! c)
         (if-let [[pos n] (target c allowed)]
           (if (nil? n)
-            (let [w (await (near/walk-near! c pos 3 {:zone-tolls true}))]
+            (let [w (await (near/go-near! c pos 3 {:zone-tolls true}))]
               (when (= :blocked w) (bump! c pos :unreachable))
               :continue)
             (do (ctx/update-mem! c assoc :target pos)

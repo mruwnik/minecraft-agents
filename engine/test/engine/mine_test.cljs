@@ -14,6 +14,7 @@
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
             [jobs.gather.mine :as mine]
+            [jobs.lib.near :as near]
             [plan.shape :as shape]))
 
 (defn spec [args] (list 'jobs.gather.mine args))
@@ -247,7 +248,7 @@
           (await (run-ticks s 1))
           (is (zero? (:failures (job-mem s))) "failures start at 0")
           (await (run-ticks s 20))
-          (is (= ["partial" "partial" "partial" "arrived"] (mapv :status (moved s))) "three walks, each cut short, then the walk home")
+          (is (= "partial" (:status (first (moved s)))) "the first walk is cut short")
           (is (zero? (dig-count s)))
           (is (= :none (:reason (done-event s))))
           (is (finished? s)))))))
@@ -1332,3 +1333,26 @@
         (let [s (await (scenario {:block "iron_ore" :count 1 :direction "east" :tunnel-length 3}
                                  (rock-world {"2,64,1" "lava"}) 80))]
           (is (some #(= 2 (first %)) (dug-cells s)) "the body cut past lava no sight reached"))))))
+
+(defn ^:async with-near-stub
+  "Run the async f with jobs.lib.near/go-near! replaced by stub, restored after."
+  [stub f]
+  (let [k "cljs$core$IFn$_invoke$arity$4" ; callers use the 4-arity, which the compiler calls directly
+        orig (aget near/go-near! k)]
+    (aset near/go-near! k stub)
+    (try (await (f))
+         (finally (aset near/go-near! k orig)))))
+
+(deftest the-walk-to-a-target-is-go-near-and-a-waiting-walk-is-a-yield
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks {"15,64,0" "sand"}}})
+              opts (atom [])]
+          (await (with-near-stub (fn ^:async f [_ _ _ o] (swap! opts conj o) :partial)
+            (fn ^:async b [] (core/submit! (:eng s) (spec {:block "sand" :tunnel-length 0}) {})
+            (await (run-ticks s 6)))))
+          (is (seq @opts))
+          (is (every? :zone-tolls @opts))
+          (is (zero? (:failures (job-mem s) 0)) "a waiting walk is no failure")
+          (is (zero? (dig-count s))))))))
