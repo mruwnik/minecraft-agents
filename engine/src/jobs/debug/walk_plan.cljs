@@ -1,7 +1,8 @@
 (ns jobs.debug.walk-plan
   (:require [clojure.set :as set]
             [engine.ctx :as ctx]
-            [jobs.lib.walk :as walk]))
+            [jobs.lib.walk :as walk]
+            [jobs.lib.walk.world :as wworld]))
 
 (def doc
   "Debug job: plan a path to :to with the path planner and follow it with the plan executor (steer), instead of
@@ -49,7 +50,7 @@
         announce! (fn [kind data]
                     (ctx/emit! c (case kind :plan :walk-plan.plan :replan :walk-plan.replan) :info data))]
     (cond
-      (nil? (walk/path-world (:primitives c))) (finish! c {:status :unsupported} t0 0 0)
+      (nil? (wworld/path-world (:primitives c))) (finish! c {:status :unsupported} t0 0 0)
       (nil? to) (finish! c {:status :bad-args :reason "to must be [x y z] or {:x :y :z}"} t0 0 0)
       :else
       (let [{:keys [result walked walk-ms]}

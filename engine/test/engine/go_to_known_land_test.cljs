@@ -8,7 +8,7 @@
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.memory :as mem]
-            [jobs.lib.walk :as walk]
+            [jobs.lib.walk.search :as wsearch]
             [engine.registry :as registry]
             [engine.test-util :as tu :refer [box]]
             [engine.triggers :as triggers]))
@@ -39,8 +39,8 @@
   (let [{:keys [eng] :as s} (setup world)
         out (atom :not-done)
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out args)))]
-    (reset! walk/searches {})
-    (reset! walk/known-land {})
+    (reset! wsearch/searches {})
+    (reset! wsearch/known-land {})
     (core/submit! eng '(recording-parent) {})
     (assoc s :eng eng :out out :ticks (await (tick-out! eng 200)))))
 
@@ -176,7 +176,7 @@
     (tu/run-async done
       (fn ^:async t []
         (with-redefs [jobs.movement.go-to/max-searching 2
-                      walk/round-budget 1000]
+                      wsearch/round-budget 1000]
           (let [{:keys [out]} (await (go! {:blocks high-deck-floor :self {:pos {:x 20.5 :y 64 :z 20.5}}}
                                           {:pos [20 71 20] :range 1 :escalate false}))]
             (is (= {:arrived false :reason :unreachable :why :goal-cut-off} (select-keys @out [:arrived :reason :why]))

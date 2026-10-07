@@ -3,7 +3,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.memory :as mem]
             [jobs.lib.targets :as targets]
-            [jobs.lib.walk :as walk]
+            [jobs.lib.walk.plan :as wplan]
             [engine.test-util :as tu]))
 
 (defn box
@@ -28,14 +28,14 @@
   [blocks ts range opts]
   (let [p (tu/fake {:blocks blocks :self {:pos start}})
         c {:primitives p :view (fn [] {:data mem/empty-data :now 0})}
-        chunk walk/chunk-expansions]
+        chunk wplan/chunk-expansions]
     (reset! targets/searches {})
-    (set! walk/chunk-expansions 16)
+    (set! wplan/chunk-expansions 16)
     (loop [calls 1]
       (let [a (await (targets/nearest! c ts range opts))]
         (if (and (= :searching (:status a)) (< calls 500))
           (recur (inc calls))
-          (do (set! walk/chunk-expansions chunk)
+          (do (set! wplan/chunk-expansions chunk)
               [a calls]))))))
 
 (def near-sealed {:x 6 :y 64 :z 2})

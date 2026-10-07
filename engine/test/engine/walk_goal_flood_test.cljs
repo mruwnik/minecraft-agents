@@ -1,9 +1,11 @@
 (ns engine.walk-goal-flood-test
-  "The goal flood of go-to's budgeted searches kept per goal over its walks (jobs.lib.walk/goal-floods, card 59551eba;
+  "The goal flood of go-to's budgeted searches kept per goal over its walks (jobs.lib.walk.search/goal-floods, card 59551eba;
   live j53: each progress walk began a new search whose flood started again, ~30 s to prove a sealed platform)."
   (:require [cljs.test :refer [deftest is async]]
             [engine.fake :as fake]
             [jobs.lib.walk :as walk]
+            [jobs.lib.walk.plan :as wplan]
+            [jobs.lib.walk.search :as wsearch]
             [engine.test-util :as tu :refer [box]]))
 
 ;; a stone deck x 10..30, z 10..30 at y 70 (441 cells, no way up) over a floor of 63 x 63 cells
@@ -16,12 +18,12 @@
   [k starts]
   (let [p (tu/fake {:blocks high-deck :self {:pos {:x 0.5 :y 64 :z 0.5}}})
         c {:primitives p}
-        chunk walk/chunk-expansions
-        options walk/plan-options]
-    (reset! walk/searches {})
-    (walk/forget-known! c)
-    (set! walk/chunk-expansions 16)
-    (set! walk/plan-options (fn [& args] (js/Object.assign (apply options args) #js {:preFlood 0 :floodAfter 20 :goalFlood 100})))
+        chunk wplan/chunk-expansions
+        options wplan/plan-options]
+    (reset! wsearch/searches {})
+    (wsearch/forget-known! c)
+    (set! wplan/chunk-expansions 16)
+    (set! wplan/plan-options (fn [& args] (js/Object.assign (apply options args) #js {:preFlood 0 :floodAfter 20 :goalFlood 100})))
     (let [out (loop [i 0
                      walked true]
                 (if (>= i k)
@@ -29,35 +31,35 @@
                   (let [[x z] (nth (cycle starts) i)
                         _ (when walked ; a walk: the next call begins a new search from where it got to
                             (swap! (fake/state p) assoc-in [:self :pos] [(+ x 0.5) 64 (+ z 0.5)])
-                            (reset! walk/searches {}))
+                            (reset! wsearch/searches {}))
                         plan (await (walk/plan-walk! c (.pathWorld p) [20 71 20] 0 walk/default-weight {:budget 300}))]
                     (if (= "searching" (.-reason (:r plan)))
                       (recur (inc i) (some? (:steps plan)))
                       (.-reason (:r plan))))))]
-      (set! walk/chunk-expansions chunk)
-      (set! walk/plan-options options)
-      (reset! walk/searches {})
-      (walk/forget-known! c)
+      (set! wplan/chunk-expansions chunk)
+      (set! wplan/plan-options options)
+      (reset! wsearch/searches {})
+      (wsearch/forget-known! c)
       out)))
 
 (deftest a-goal-flood-goes-on-after-each-walk
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [kept walk/goal-flood!]
-          (set! walk/goal-flood! (constantly nil))
+        (let [kept wsearch/goal-flood!]
+          (set! wsearch/goal-flood! (constantly nil))
           (let [fresh (await (calls 12 [[0 0] [2 0] [4 0]]))]
-            (set! walk/goal-flood! kept)
+            (set! wsearch/goal-flood! kept)
             (is (= :unfinished fresh) "each walk's search floods afresh and never gets to the flood that proves it")))
         (is (= "goal-cut-off" (await (calls 12 [[0 0] [2 0] [4 0]]))))))))
 
 (deftest forgetting-the-known-land-forgets-the-flood
   (let [p (tu/fake {:blocks high-deck :self {:pos {:x 0.5 :y 64 :z 0.5}}})
         c {:primitives p}]
-    (walk/goal-flood! c [20 71 20] 0 walk/default-weight nil nil)
-    (is (some? (get @walk/goal-floods "Fake")))
-    (walk/forget-known! c)
-    (is (nil? (get @walk/goal-floods "Fake")))))
+    (wsearch/goal-flood! c [20 71 20] 0 walk/default-weight nil nil)
+    (is (some? (get @wsearch/goal-floods "Fake")))
+    (wsearch/forget-known! c)
+    (is (nil? (get @wsearch/goal-floods "Fake")))))
 
 ;; a stone room x 5..18, z -7..6 (12 x 12 inside, feet y 64) on a floor; the goal (17 64 0) beside its east wall at z 0
 (def room-floor (merge (box -2 63 -10 24 63 10 "stone")
@@ -71,20 +73,20 @@
       (fn ^:async t []
         (let [p (tu/fake {:blocks room-floor :self {:pos {:x 0.5 :y 64 :z 0.5}}})
               c {:primitives p}
-              chunk walk/chunk-expansions
-              options walk/plan-options
+              chunk wplan/chunk-expansions
+              options wplan/plan-options
               plan! (fn [budget] (walk/plan-walk! c (.pathWorld p) [17 64 0] 0 walk/default-weight {:budget budget}))]
-          (reset! walk/searches {})
-          (walk/forget-known! c)
-          (set! walk/chunk-expansions 16)
-          (set! walk/plan-options (fn [& args] (js/Object.assign (apply options args) #js {:preFlood 0 :floodAfter 20 :goalFlood 100})))
+          (reset! wsearch/searches {})
+          (wsearch/forget-known! c)
+          (set! wplan/chunk-expansions 16)
+          (set! wplan/plan-options (fn [& args] (js/Object.assign (apply options args) #js {:preFlood 0 :floodAfter 20 :goalFlood 100})))
           (let [first-plan (await (plan! 40))]
             (swap! (fake/state p) update :blocks dissoc (fake/parse-cell "18,64,0") (fake/parse-cell "18,65,0"))
-            (reset! walk/searches {}) ; a walk: the next call begins a new search
+            (reset! wsearch/searches {}) ; a walk: the next call begins a new search
             (let [then (await (plan! 100000))]
-              (set! walk/chunk-expansions chunk)
-              (set! walk/plan-options options)
-              (reset! walk/searches {})
-              (walk/forget-known! c)
+              (set! wplan/chunk-expansions chunk)
+              (set! wplan/plan-options options)
+              (reset! wsearch/searches {})
+              (wsearch/forget-known! c)
               (is (= "searching" (.-reason (:r first-plan))))
               (is (= ["found" nil] [(.-status (:r then)) (.-reason (:r then))])))))))))

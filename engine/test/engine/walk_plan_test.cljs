@@ -8,7 +8,7 @@
             [engine.path.executor :as executor]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [jobs.lib.walk :as path-walk]))
+            [jobs.lib.walk.plan :as wplan]))
 
 (def job 'jobs.debug.walk-plan)
 
@@ -151,7 +151,7 @@
 
 (deftest a-partial-plan-ends-on-its-last-dry-step
   (let [s (fn [x swim?] (cond-> {:x x :move :walk} swim? (assoc :swim true)))]
-    (are [steps kept] (= kept (mapv :x (path-walk/dry-end steps)))
+    (are [steps kept] (= kept (mapv :x (wplan/dry-end steps)))
       [(s 0 false) (s 1 false) (s 2 true) (s 3 true)] [0 1]
       [(s 0 false) (s 1 true) (s 2 false) (s 3 true)] [0 1 2]
       [(s 0 true) (s 1 true)] []

@@ -1,12 +1,13 @@
 (ns engine.go-to-stale-search-test
-  "go-to's search kept over rounds (jobs.lib.walk/searches) when the land round the goal loads after it began (card
+  "go-to's search kept over rounds (jobs.lib.walk.search/searches) when the land round the goal loads after it began (card
   9c4471aa; live j53: a search begun while the chunks round a goal on a sealed platform were still arriving read the goal
   unloaded, never ran the goal flood, and gave up :searching after 100 rounds)."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.go-to-test :as gt]
-            [jobs.lib.walk :as walk]
+            [jobs.lib.walk.plan :as wplan]
+            [jobs.lib.walk.search :as wsearch]
             [engine.test-util :as tu :refer [box]]))
 
 ;; a stone floor x 0..47, z 0..47 (only those columns are loaded); the body near its east edge, so no cell of the loaded
@@ -24,17 +25,17 @@
   blocks are added (their columns load) at the first search slice after the body walked to the loaded edge (x 47), in
   the same go-to call. {:out :ticks :eng :p}."
   [load?]
-  (let [budget walk/round-budget
-        chunk walk/chunk-expansions
-        plan-walk walk/plan-walk-budgeted!
+  (let [budget wsearch/round-budget
+        chunk wplan/chunk-expansions
+        plan-walk wsearch/plan-walk-budgeted!
         {:keys [eng p] :as s} (gt/setup {:blocks floor-blocks :self {:pos {:x 44.5 :y 64 :z 24.5}}})
         out (atom :not-done)
         loaded (atom false)
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (gt/recording-parent out {:pos goal :range 0})))]
-    (reset! walk/searches {})
-    (set! walk/round-budget 16)
-    (set! walk/chunk-expansions 16)
-    (set! walk/plan-walk-budgeted!
+    (reset! wsearch/searches {})
+    (set! wsearch/round-budget 16)
+    (set! wplan/chunk-expansions 16)
+    (set! wsearch/plan-walk-budgeted!
           (fn [& args]
             (when (and load? (not @loaded) (= 47 (js/Math.floor (first (gt/at p)))))
               (reset! loaded true)
@@ -42,10 +43,10 @@
             (apply plan-walk args)))
     (core/submit! eng '(recording-parent) {})
     (let [ticks (await (gt/tick-out! eng 400))]
-      (set! walk/plan-walk-budgeted! plan-walk)
-      (set! walk/round-budget budget)
-      (set! walk/chunk-expansions chunk)
-      (reset! walk/searches {})
+      (set! wsearch/plan-walk-budgeted! plan-walk)
+      (set! wsearch/round-budget budget)
+      (set! wplan/chunk-expansions chunk)
+      (reset! wsearch/searches {})
       (assoc s :eng eng :p p :out out :ticks ticks :loaded @loaded))))
 
 ;; the goal's land loads while the search goes on: the next search slice begins a new search over it, whose goal flood proves
@@ -67,10 +68,10 @@
     (tu/run-async done
       (fn ^:async t []
         (let [plans (atom [])
-              new-search walk/new-search]
-          (set! walk/new-search (fn [& args] (swap! plans conj 1) (apply new-search args)))
+              new-search wsearch/new-search]
+          (set! wsearch/new-search (fn [& args] (swap! plans conj 1) (apply new-search args)))
           (let [{:keys [out]} (await (run-go-to! false))]
-            (set! walk/new-search new-search)
+            (set! wsearch/new-search new-search)
             (is (not= :goal-enclosed (:why @out)))
             (is (< (count @plans) 10) "one search kept over its rounds, not one a round")))))))
 
@@ -92,30 +93,30 @@
     (tu/run-async done
       (fn ^:async t []
         (let [slices (atom 0)
-              plan-walk walk/plan-walk-budgeted!
+              plan-walk wsearch/plan-walk-budgeted!
               p-atom (atom nil)
               cut-at (atom nil)]
-          (set! walk/plan-walk-budgeted!
+          (set! wsearch/plan-walk-budgeted!
                 (fn [& args]
                   (swap! slices inc)
                   (when (and @p-atom (not @cut-at))
                     (reset! cut-at @slices)
                     (.setOwner @p-atom "other"))
                   (apply plan-walk args)))
-          (let [budget walk/round-budget
-                chunk walk/chunk-expansions]
-            (reset! walk/searches {})
-            (set! walk/round-budget 16)
-            (set! walk/chunk-expansions 16)
+          (let [budget wsearch/round-budget
+                chunk wplan/chunk-expansions]
+            (reset! wsearch/searches {})
+            (set! wsearch/round-budget 16)
+            (set! wplan/chunk-expansions 16)
             (let [{:keys [eng p]} (gt/setup {:blocks floor-blocks :self {:pos {:x 44.5 :y 64 :z 24.5}}})
                   out (atom :not-done)
                   eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (gt/recording-parent out {:pos goal :range 0})))]
               (reset! p-atom p)
               (core/submit! eng '(recording-parent) {})
               (await (gt/tick-out! eng 1)))
-            (set! walk/plan-walk-budgeted! plan-walk)
-            (set! walk/round-budget budget)
-            (set! walk/chunk-expansions chunk)
-            (reset! walk/searches {})
+            (set! wsearch/plan-walk-budgeted! plan-walk)
+            (set! wsearch/round-budget budget)
+            (set! wplan/chunk-expansions chunk)
+            (reset! wsearch/searches {})
             (is (some? @cut-at) "a search slice ran")
             (is (= @cut-at @slices) "no slice after the cut")))))))

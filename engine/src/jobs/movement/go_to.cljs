@@ -10,7 +10,8 @@
             [jobs.lib.util :as u]
             [jobs.lib.watch :as watch]
             [jobs.lib.near :as near]
-            [jobs.lib.walk :as walk]
+            [jobs.lib.walk.world :as wworld]
+            [jobs.lib.walk.search :as wsearch]
             [jobs.lib.places :as places]
             [jobs.lib.world :as known]))
 
@@ -35,7 +36,7 @@
   - A walk that gets more than 1 block nearer is progress. Three walks in a row without progress give up, and so
     does a goal the planner proves walled in (:goal-enclosed, :goal-cut-off), at once.
   - A walk stuck or off its plan at a cell is a go-to.walker-fault warn; the next plans of the call cost that cell
-    (up to 8) far more (walk/with-avoid), so a way round is taken when there is one.
+    (up to 8) far more (wworld/with-avoid), so a way round is taken when there is one.
   - :escalate (default true): a body that is shut in (jobs.lib.reach/enclosed?), not in its own shelter, and whose
     search ran out of land (:exhausted, :goal-enclosed or :goal-cut-off) makes a way instead of giving up, at most 3 times per go-to, one child job
     each (jobs.lib.escape/choose): jobs.access.pillar up out of a pit when it carries enough blocks; else
@@ -82,7 +83,7 @@
 (def max-fault-cells "Cells a call keeps its plans away from (the walker's faults: fault-cells), the oldest dropped." 8)
 
 (def max-searching
-  "Search slices in a row whose search is still going on and began afresh (walk/round-budget expansions each) before
+  "Search slices in a row whose search is still going on and began afresh (wsearch/round-budget expansions each) before
   go-to gives up: a search that goes on from the same cell always ends after the planner's maxNodes; only a body moved
   off its search's start every slice (pushed, drifting) starts afresh each time."
   100)
@@ -445,12 +446,12 @@
   :again)
 
 (defn forget-known-land!
-  "Forget the land earlier searches knew to their end (walk/known-land) at the go-to's first walking round and after each
+  "Forget the land earlier searches knew to their end (wsearch/known-land) at the go-to's first walking round and after each
   escalation (:escalations, the world changed): a new go-to, or a dug way, may open a way through it."
   [c]
   (let [epoch (:escalations (ctx/mem c) 0)]
     (when-not (= epoch (:known-epoch (ctx/mem c)))
-      (walk/forget-known! c)
+      (wsearch/forget-known! c)
       (ctx/update-mem! c assoc :known-epoch epoch))))
 
 (defn known-frontier-result
@@ -504,7 +505,7 @@
 (defn ^:async walk! [c pos range doors]
   (let [from (u/self-pos c)
         d (u/dist from pos)
-        pw (walk/path-world (:primitives c))]
+        pw (wworld/path-world (:primitives c))]
     (cond
       (here? c pos range)
       (if (:restore-pending (ctx/mem c)) (restore-next! c) (arrived! c))
@@ -519,7 +520,7 @@
                                                                                           :dark (not (false? (:dark (:args c))))
                                                                                           :timeout-s (or (:leg-s (:args c)) near/walk-timeout-s)
                                                                                           :shut-also (shut-foreign c)
-                                                                                          :budget walk/round-budget
+                                                                                          :budget wsearch/round-budget
                                                                                           :avoid (set (:fault-cells (ctx/mem c)))
                                                                                           :tolls (:tolls (:args c))
                                                                                           :zone-tolls (:zone-tolls (:args c))
@@ -605,7 +606,7 @@
   [c]
   (let [parsed (target c)
         pos (:pos parsed)
-        tolls-problem (walk/tolls-problem (:tolls (:args c)))]
+        tolls-problem (wworld/tolls-problem (:tolls (:args c)))]
     (cond
       (:reason parsed)
       (refuse! c parsed)

@@ -1,12 +1,14 @@
 (ns engine.walk-dark-test
-  "The walks' plans cost darkness (jobs.lib.walk/costed-world, with-dark, plan-options), and jobs.lib.targets passes it on:
+  "The walks' plans cost darkness (jobs.lib.walk.world/costed-world, with-dark, plan-options), and jobs.lib.targets passes it on:
   its answer's cost adds the dark seconds and a target may carry its own range."
   (:require [cljs.test :refer [deftest is]]
             [engine.fake.raw-world :as fake-raw]
             [engine.perception :as perception]
             [engine.test-util :as tu]
             [jobs.lib.targets :as targets]
-            [jobs.lib.walk :as walk]))
+            [jobs.lib.walk :as walk]
+            [jobs.lib.walk.world :as wworld]
+            [jobs.lib.walk.plan :as wplan]))
 
 (defn seen-world
   "Fake primitives over a floor with a perception at time t, one sight pass done."
@@ -20,8 +22,8 @@
 (defn options-of
   "plan-options over the pathWorld of p's costed-world with opts (no dangers: the ctx has no memory)."
   [p opts]
-  (let [pw (walk/costed-world {:primitives p} (walk/path-world p) opts)]
-    (walk/plan-options pw walk/default-weight nil walk/wide-box)))
+  (let [pw (wworld/costed-world {:primitives p} (wworld/path-world p) opts)]
+    (wplan/plan-options pw walk/default-weight nil wplan/wide-box)))
 
 (deftest plans-carry-the-dark-test
   (let [p (seen-world 18000)

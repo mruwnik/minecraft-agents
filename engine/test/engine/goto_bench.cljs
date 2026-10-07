@@ -4,7 +4,9 @@
   (:require [jobs.lib.util :as u]
             [engine.path.executor :as executor]
             [engine.path.planner-tuned :as planner]
-            [jobs.lib.walk :as walk]))
+            [jobs.lib.walk :as walk]
+            [jobs.lib.walk.plan :as wplan]
+            [jobs.lib.walk.search :as wsearch]))
 
 (def max-rounds 200)
 
@@ -36,7 +38,7 @@
   (let [t (js/performance.now)
         plan (await (walk/plan-walk! (body-at at) pw to range walk/default-weight
                                      {:policy executor/door-policy :one-way :open :frontier true
-                                      :budget walk/round-budget}))]
+                                      :budget wsearch/round-budget}))]
     [plan (- (js/performance.now) t)]))
 
 (defn ^:async simulate
@@ -45,7 +47,7 @@
   arrived, on a plan not walked (its no-walk status and reason), after 3 walked rounds that get no nearer, or after
   max-rounds. A JS object {answer rounds: [{ms searches status}]}: one search a round, searches its ms."
   [^js pw ^js from ^js goal range]
-  (reset! walk/searches {})
+  (reset! wsearch/searches {})
   (let [to [(.-x goal) (.-y goal) (.-z goal)]
         goal-cell {:x (.-x goal) :y (.-y goal) :z (.-z goal)}
         done (fn [answer rounds] #js {:answer answer :rounds (clj->js rounds)})]
@@ -56,7 +58,7 @@
           (or (>= (count rounds) max-rounds) (>= blocked 3)) (done "blocked" rounds)
           :else
           (let [[plan ms] (await (traced #(plan-round pw at to range)))
-                no (walk/no-walk plan 0 executor/door-policy)
+                no (wplan/no-walk plan 0 executor/door-policy)
                 rounds (conj rounds {:ms ms :searches [ms] :status (str (or (:status no) (:status plan)))})]
             (cond
               (= :searching (:status no)) (recur at rounds best blocked)

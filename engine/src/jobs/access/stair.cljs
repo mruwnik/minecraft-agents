@@ -11,6 +11,8 @@
             [jobs.lib.util :as u]
             [engine.path.executor :as executor]
             [jobs.lib.walk :as walk]
+            [jobs.lib.walk.world :as wworld]
+            [jobs.lib.walk.plan :as wplan]
             [jobs.survival.dig-in :as dig-in]
             [jobs.gather.mine :as mine]))
 
@@ -247,16 +249,16 @@
 (defn way-back
   "nil when a whole plan the executor can walk leads from the body to origin on a fresh pathWorld, else the stop."
   [c origin]
-  (let [pw (walk/path-world (:primitives c))]
+  (let [pw (wworld/path-world (:primitives c))]
     (if (nil? pw)
       {:reason :no-way-back :why :unsupported}
-      (let [{:keys [r steps beyond]} (walk/plan-within c pw origin 0 walk/default-weight)
+      (let [{:keys [r steps beyond]} (wplan/plan-within c pw origin 0 walk/default-weight)
             status (.-status r)
             stop (fn [refused] {:reason :no-way-back :why :refused :kind (:kind refused) :step (:at refused)})]
         (cond
           beyond (stop beyond)
           (not= "found" status) {:reason :no-way-back :why (keyword status) :planner (some-> (.-reason r) keyword)}
-          :else (some-> (executor/refusal (walk/body-policy c) steps) stop))))))
+          :else (some-> (executor/refusal (wworld/body-policy c) steps) stop))))))
 
 (defn need
   "What the next cell to dig lacks, as a reason map for ctx/wait, or nil: :no-tool (a pickaxe), :no-free-slot (no room

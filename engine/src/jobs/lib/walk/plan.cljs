@@ -1,0 +1,235 @@
+(ns jobs.lib.walk.plan
+  "The walk driver's planning: plan the walk from the body's cell to a goal within the executor's abilities (plan-walk, plan-within),
+  in slices that yield to the event loop, and say when a plan is not walked (no-walk)."
+  (:require [engine.ctx :as ctx]
+            [engine.path.executor :as executor]
+            [engine.path.planner-tuned :as planner]
+            [jobs.lib.walk.world :as wworld]))
+
+(def wide-box
+  "The planner's search box (options margin and yMargin, blocks round start and goal) of the walks' searches. A way
+  round can run far past the planner's default box (64 and 48). The walks search the wide box from the start:
+  A* goes no wider than it must, and a search in the default box that hit its edge would only have to be repeated."
+  {:margin 256 :yMargin 96})
+
+(def chunk-expansions
+  "Expansions a search of the walking plans (plan-from! and the functions over it) runs between yields to the event
+  loop, so the body's HTTP API, perception and the other jobs run during a long search. An expansion costs some tens
+  of microseconds."
+  1000)
+
+(defn yield!
+  "A promise that resolves once the event loop has run what was waiting (I/O callbacks included)."
+  []
+  (js/Promise. (fn [resolve] (js/setImmediate resolve))))
+
+(defn stop-if-cut!
+  "Throws the cut error (what an act raises) when c's round was cut: a search loop with no act checks this per slice."
+  [c]
+  (when-not (ctx/alive? c)
+    (throw (doto (js/Error. "cut: the ownership token changed") (aset "code" "cut")))))
+
+(defn ^:async run-plan!
+  "planner/plan in slices of chunk-expansions (planner/create-plan) with a yield! between them: the same result. A cut
+  round's call throws the cut error before its next slice."
+  [c snapshot query options]
+  (let [^js p (planner/create-plan snapshot query options)]
+    (loop []
+      (stop-if-cut! c)
+      (when-not (.step p chunk-expansions)
+        (await (yield!))
+        (recur)))
+    (.result p)))
+
+(defn plan-query
+  "The planner query from the body's cell to within range of the goal cell to."
+  [c to range]
+  (let [pos (.-pos (.self (:primitives c)))
+        [gx gy gz] to]
+    #js {:from #js {:x (js/Math.floor (.-x pos)) :y (js/Math.floor (.-y pos)) :z (js/Math.floor (.-z pos))
+                    :px (.-x pos) :py (.-y pos) :pz (.-z pos)}
+         :goal #js {:kind "near" :x gx :y gy :z gz :range range}}))
+
+(defn plan-options
+  "The planner options over pw with weight, limits and the search box (nil: the planner's default); pw's dangers
+  (with-dangers) as options.dangers and its dark (with-dark) as options.dark."
+  [pw weight limits box]
+  (js/Object.assign #js {:table (.-table pw) :space (.-space pw) :weight weight :limits limits :dangers (.-dangers pw) :avoid (.-avoid pw)
+                         :dark (.-dark pw) :tolls (.-tolls pw)}
+                    (clj->js box)))
+
+(defn plan-from
+  "Plan from the body's cell to the goal in wide-box, within limits (the planner's options.limits, nil for none); the
+  planner's JS result. In one go: the walks plan with plan-from!, which yields to the event loop."
+  [c pw to range weight limits]
+  (planner/plan (.-snapshot pw) (plan-query c to range) (plan-options pw weight limits wide-box)))
+
+(defn ^:async plan-from!
+  "plan-from in slices (run-plan!), yielding to the event loop between them."
+  [c pw to range weight limits]
+  (await (run-plan! c (.-snapshot pw) (plan-query c to range) (plan-options pw weight limits wide-box))))
+
+(defn path-steps
+  "The executor's steps for a planner path over pw: corner free sides and hops, high corners and gap ceilings marked."
+  [pw ^js path]
+  (let [solid? (wworld/solid-fn pw)]
+    (executor/with-gap-ceilings
+      executor/policy
+      (executor/with-high-corners
+        executor/policy
+        (executor/with-corner-hops (executor/with-free-sides (executor/steps-of (.-steps path)) solid?) solid?)
+        solid?)
+      solid?)))
+
+(defn plan-steps
+  "The executor's steps for a found plan r over pw (path-steps of its path)."
+  [pw r]
+  (path-steps pw (.-path r)))
+
+(defn within-of [pw r] {:r r :steps (when (.-path r) (plan-steps pw r))})
+
+(defn with-beyond
+  "within with :beyond, the policy's refusal of the path a search without the limits found (wide), when it found one."
+  [within pw policy wide]
+  (cond-> within
+    (= "found" (.-status wide)) (assoc :beyond (executor/refusal policy (plan-steps pw wide)))))
+
+(defn beyond-needed?
+  "Whether a search within the walker's limits that found no whole path leaves a search without them to run: only when
+  the limits turned some move away (r.limited). Otherwise the search without them would search the very same moves."
+  [r]
+  (and (not= "found" (.-status r)) (true? (.-limited r))))
+
+(defn plan-within
+  "Plan within the executor's abilities (policy, default executor/policy): {:r :steps} (steps nil when r has no path). When
+  that finds no whole path, and the limits turned a move away (beyond-needed?), but a search without the limits finds one,
+  also :beyond, the executor's refusal of that path: no path within abilities, and the kind of step that would have made
+  one."
+  ([c pw to range weight] (plan-within c pw to range weight (wworld/body-policy c)))
+  ([c pw to range weight policy]
+   (let [r (plan-from c pw to range weight (executor/planner-limits policy (wworld/solid-fn pw)))
+         within (within-of pw r)]
+     (if (beyond-needed? r)
+       (with-beyond within pw policy (plan-from c pw to range weight nil))
+       within))))
+
+(defn ^:async plan-within!
+  "plan-within with plan-from! (yields to the event loop between search slices)."
+  [c pw to range weight policy]
+  (let [r (await (plan-from! c pw to range weight (executor/planner-limits policy (wworld/solid-fn pw))))
+        within (within-of pw r)]
+    (if (beyond-needed? r)
+      (with-beyond within pw policy (await (plan-from! c pw to range weight nil)))
+      within)))
+
+(defn dry-end
+  "A partial plan up to its last step out of water: a walk that cannot reach the goal never leaves the body swimming (at a
+  bank too high to climb out, say)."
+  [steps]
+  (let [k (last (keep-indexed (fn [i s] (when-not (:swim s) i)) steps))]
+    (if k (subvec steps 0 (inc k)) [])))
+
+(defn near-goal
+  "How far, in blocks to 1 decimal, the step is from the goal cell to."
+  [{:keys [x y z]} [gx gy gz]]
+  (/ (js/Math.round (* 10 (js/Math.hypot (- gx x) (- gy y) (- gz z)))) 10))
+
+(defn one-way-of
+  "The planner's oneWay of a result as {:kind :at}: the first step on the way to a node nearer the goal that the body cannot undo
+  (a drop of more than a block, a gap jump down), nil when there is none."
+  [r]
+  (when-let [^js ow (.-oneWay r)]
+    {:kind (nth executor/move-names (.-move ow)) :at [(.-x ow) (.-y ow) (.-z ow)]}))
+
+(defn stopped-one-way
+  "The no-path result of a plan whose nearer end lies behind a step that cannot be undone: that step, and how near to the goal
+  the walk got (from: the last step kept, or the start)."
+  [r from to one-way]
+  (assoc {:status :no-path :reason :one-way :planner (some-> (.-reason r) keyword)}
+         :one-way one-way :near (near-goal from to)))
+
+(defn open-path
+  "The planner's path past r's one-way step when the land there runs on into unloaded land (oneWay.open: its end stands at the
+  edge of what is loaded), nil otherwise: a region below that is all loaded and gets no nearer (a pit) has no open path."
+  [r]
+  (when-let [^js ow (.-oneWay r)]
+    (when (true? (.-open ow)) (.-path ow))))
+
+(defn frontier-path
+  "The planner's path to r's frontier (the searched node at the edge of what is loaded, within its reach of the goal, the
+  search having run out of land) and that node's cell [x y z], with :known true when the node lies in land earlier
+  searches knew to their end (known-land); nil when r has none."
+  [r]
+  (when-let [^js f (.-frontier r)]
+    (cond-> {:path (.-path f) :at [(.-x f) (.-y f) (.-z f)]}
+      (true? (.-known f)) (assoc :known true)
+      (some? (.-target f)) (assoc :target (vec (.-target f))))))
+
+(defn walk-plan
+  "plan-walk's answer from its plan-within answer {:r :steps :beyond} over walled (pw with the walls).
+  With frontier, a search that ran out of loaded land (no path within abilities beyond it) walks to its frontier, not
+  its nearest end. Every way the loaded land holds is known and none arrives, so a way can only go on past what is
+  loaded. A body standing at its frontier walks nowhere, not even to the nearest end: that would swing between
+  the two for ever. A search whose only edges lie in land earlier searches knew to their end, with none left open
+  (the planner's searchedOut, known-land), walks nowhere either (:searched-out, no-walk: :no-path :exhausted)."
+  [c pw walled to one-way frontier {:keys [r steps beyond]}]
+  (let [edge (when (and frontier (not beyond)) (frontier-path r))
+        out (and frontier (not beyond) (not edge) (true? (.-searchedOut r)))
+        past (when (and (not edge) (not out) (= :open one-way)) (open-path r))
+        steps (cond edge (path-steps walled (:path edge)) past (path-steps walled past) :else steps)
+        status (if (or edge past) "partial" (.-status r))
+        walked (if (= "partial" status) (dry-end steps) steps)
+        step (one-way-of r)]
+    {:r r :steps walked :beyond beyond :status status :pw pw
+     :ms (or (some-> r .-ms) 0)
+     :one-way-taken (when past step)
+     :frontier-taken (when (and edge (> (count walked) 1)) (cond-> {:at (:at edge)} (:known edge) (assoc :known true) (:target edge) (assoc :target (:target edge))))
+     :searched-out out
+     :stop (when (and step (not past) (not edge)) (stopped-one-way r (or (peek walked) (first steps) (wworld/body-cell c)) to step))}))
+
+(defn plan-walk
+  "Plan the next walk from where the body stands: plan-within, and for a partial plan only the steps up to its last
+  dry step (dry-end). The planner ends a partial plan at the nearest node the body can come back from.
+  Answer {:r :steps :beyond :status :stop :one-way-taken}. :stop is the no-path result (stopped-one-way) for a plan
+  whose nearer end lies behind a step that cannot be undone, else nil.
+  opts:
+  - :policy, the executor policy the plan must fit (default executor/policy).
+  - :walls, cells {:x :y :z} to read as walls.
+  - :one-way :open, to take a one-way step when the land past it runs on into unloaded land (open-path; a far goal
+    past a cliff). The plan is then the partial path past it, with no :stop and :one-way-taken {:kind :at}. By default
+    it never takes one.
+  - :frontier true, so a search that ran out of loaded land walks to its frontier (walk-plan), with
+    :frontier-taken {:at [x y z]}."
+  ([c pw to range weight] (plan-walk c pw to range weight nil))
+  ([c pw to range weight {:keys [policy walls one-way frontier] :or {policy (wworld/body-policy c)}}]
+   (let [walled (wworld/with-walls pw walls)]
+     (walk-plan c pw walled to one-way frontier (plan-within c walled to range weight policy)))))
+
+(defn no-walk
+  "The result of a plan that is not walked, nil when it is: no path within abilities (:beyond), a goal the planner proved
+  walled in or cut off by a drop (:goal-enclosed, :goal-cut-off: its partial plan's nearer end gets the body no nearer to arriving), a plan cut at a one-way step with no step left, no path, a plan the policy (default
+  executor/policy) refuses. replans goes in the result."
+  ([plan replans] (no-walk plan replans executor/policy))
+  ([{:keys [r steps beyond status stop searched-out fresh]} replans policy]
+   (let [partial? (= "partial" status)]
+     (cond
+       (= "searching" status)
+       (cond-> {:status :searching :replans replans} fresh (assoc :fresh true))
+
+       beyond
+       {:status :no-path :reason :abilities :kind (:kind beyond) :at (:at beyond) :replans replans}
+
+       (contains? #{"goal-enclosed" "goal-cut-off"} (some-> r .-reason))
+       {:status :no-path :reason (keyword (.-reason r)) :replans replans}
+
+       searched-out
+       {:status :no-path :reason :exhausted :searched-out true :replans replans}
+
+       (and stop (< (count steps) 2))
+       (assoc stop :replans replans)
+
+       (or (= "none" status) (and partial? (< (count steps) 2)))
+       {:status :no-path :reason (some-> (.-reason r) keyword) :replans replans}
+
+       :else
+       (some-> (executor/refusal policy steps) (assoc :replans replans))))))

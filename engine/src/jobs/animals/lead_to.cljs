@@ -6,6 +6,8 @@
             [jobs.lib.watch :as watch]
             [jobs.lib.near :as near]
             [jobs.lib.walk :as walk]
+            [jobs.lib.walk.world :as wworld]
+            [jobs.lib.walk.plan :as wplan]
             [jobs.lib.reach :as reach]
             [jobs.lib.places :as places]))
 
@@ -202,14 +204,14 @@
   planning throws a RangeError (a far target the planner cannot index): the check never fails the job."
   [c pw target]
   (when-let [{:keys [x y z]} (:pos (places/parse-pos target))]
-    (try (walk/plan-walk c pw [x y z] 1 walk/default-weight)
+    (try (wplan/plan-walk c pw [x y z] 1 walk/default-weight)
          (catch js/RangeError _ nil))))
 
 (defn path-leaves-reach?
   "True when the walk the body would now take to target passes farther than path-reach from the animal. A body
   that cannot plan (no path sensing, no path, a planner that throws) is not judged here: go-to deals with that."
   [c target animal-pos]
-  (let [pw (walk/path-world (:primitives c))
+  (let [pw (wworld/path-world (:primitives c))
         plan (when pw (plan-or-nil c pw target))]
     (boolean
      (some #(> (js/Math.hypot (- (:px %) (:x animal-pos)) (- (:pz %) (:z animal-pos))) path-reach)
@@ -238,7 +240,7 @@
   "Where the next leg of a walk to target (within range) goes: the planned path's cell leg-steps on, or nil when the
   rest is within one leg, there is no plan, or the leg would not move the body (the caller walks the whole way)."
   [c target range]
-  (let [pw (walk/path-world (:primitives c))
+  (let [pw (wworld/path-world (:primitives c))
         steps (when pw (:steps (plan-or-nil c pw (snap-to-ground c target))))
         step (when (< leg-steps (count steps)) (nth steps leg-steps))
         me (u/self-pos c)]

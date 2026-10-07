@@ -23,7 +23,8 @@
             [jobs.lib.combat :as combat]
             [jobs.lib.util :as u]
             [engine.memory :as mem]
-            [jobs.lib.walk :as walk]))
+            [jobs.lib.walk :as walk]
+            [jobs.lib.walk.world :as wworld]))
 
 (def opened-policy {:cap 50 :ttl :forever})
 
@@ -157,7 +158,7 @@
 (defn ^:async shut-ready!
   "Shut each block of the columns pending that the body is out of; the columns it is still in."
   [c pending]
-  (let [here (walk/body-cell c)]
+  (let [here (wworld/body-cell c)]
     (loop [todo pending kept []]
       (if-let [col (first todo)]
         (if (in-column? col here)
@@ -185,7 +186,7 @@
 (defn ^:async walk!
   "Follow steps (a plan that may open things) once, segment by segment: [done ms] as jobs.lib.walk/walk! answers (its
   :step counted in steps), or {:status :door-stuck :cells [...]} for blocks that would not open. watch, when given, is the
-  look-ahead (jobs.lib.walk/watch-stop) of every segment walked with nothing left to shut behind, the rest of the plan as
+  look-ahead (jobs.lib.walk.watch/watch-stop) of every segment walked with nothing left to shut behind, the rest of the plan as
   its :ahead. A walk that ends off its plan or stuck still shuts what
   it can; what it cannot (the body is in its column, or the walk was cut) keeps its :opened entry."
   [c steps {:keys [timeout-s doors shut-also watch]}]
@@ -223,6 +224,6 @@
               col (column-of cell (click/props-of b))]
           (when (and shut?
                      (<= (u/dist (u/self-pos c) cell) leftover-reach)
-                     (not (in-column? col (walk/body-cell c))))
+                     (not (in-column? col (wworld/body-cell c))))
             (await (shut-column! c col)))
           (recur (rest todo)))))))

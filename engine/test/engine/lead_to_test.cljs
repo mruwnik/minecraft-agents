@@ -3,7 +3,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.fake :as fake]
-            [jobs.lib.walk :as walk]
+            [jobs.lib.walk.plan :as wplan]
             [jobs.animals.lead-to :as lead-to]
             [engine.fetch-test :as fetch-test]
             [engine.hostile-test :as h]
@@ -373,13 +373,13 @@
 (deftest the-reach-check-plans-to-the-floored-cell
   (let [s (setup {:floor tu/walk-floor :inventory lead})
         asked (atom nil)]
-    (with-redefs [walk/plan-walk (fn ([_ _ to _ _] (reset! asked to) nil) ([_ _ to _ _ _] (reset! asked to) nil))]
+    (with-redefs [wplan/plan-walk (fn ([_ _ to _ _] (reset! asked to) nil) ([_ _ to _ _ _] (reset! asked to) nil))]
       (lead-to/path-leaves-reach? {:primitives (:p s)} {:x 9794.82 :y 64 :z -3.5} animal-at-3))
     (is (= [9794 64 -4] @asked) "the planner is given whole cells, as go-to gives it")))
 
 (deftest the-reach-check-is-false-when-planning-throws
   (let [s (setup {:floor tu/walk-floor :inventory lead})]
-    (with-redefs [walk/plan-walk (fn ([_ _ _ _ _] (throw (js/RangeError. "cannot be converted to a BigInt"))) ([_ _ _ _ _ _] (throw (js/RangeError. "cannot be converted to a BigInt"))))]
+    (with-redefs [wplan/plan-walk (fn ([_ _ _ _ _] (throw (js/RangeError. "cannot be converted to a BigInt"))) ([_ _ _ _ _ _] (throw (js/RangeError. "cannot be converted to a BigInt"))))]
       (is (false? (lead-to/path-leaves-reach? {:primitives (:p s)} {:x 33.4 :y 64 :z 0.6} animal-at-3))))))
 
 ;; ------------------------------------------------------- looking round while leading (card 9970c377)

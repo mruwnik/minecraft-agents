@@ -9,7 +9,9 @@
             [engine.memory :as mem]
             [engine.perception :as perception]
             [engine.fake.raw-world :as fake-raw]
-            [jobs.lib.walk :as walk]
+            [jobs.lib.walk.world :as wworld]
+            [jobs.lib.walk.plan :as wplan]
+            [jobs.lib.walk.search :as wsearch]
             [jobs.lib.threats :as threats]
             [engine.takeover :as takeover]
             [engine.test-util :as tu :refer [box floor]]
@@ -377,20 +379,20 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [budget walk/round-budget
-              chunk walk/chunk-expansions
+        (let [budget wsearch/round-budget
+              chunk wplan/chunk-expansions
               world {:blocks (merge (box 0 63 0 47 63 15 "stone") (box 18 79 8 47 79 8 "stone"))
                      :self {:pos {:x 18.5 :y 80 :z 8.5}}}
               {:keys [eng p] :as s} (setup world)
               out (atom :not-done)
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out {:pos [10 64 8] :range 0})))]
-          (reset! walk/searches {})
-          (set! walk/round-budget 64)
-          (set! walk/chunk-expansions 16)
+          (reset! wsearch/searches {})
+          (set! wsearch/round-budget 64)
+          (set! wplan/chunk-expansions 16)
           (core/submit! eng '(recording-parent) {})
           (await (tick-out! eng 600))
-          (set! walk/round-budget budget)
-          (set! walk/chunk-expansions chunk)
+          (set! wsearch/round-budget budget)
+          (set! wplan/chunk-expansions chunk)
           (is (= {:arrived false :reason :unreachable :why :exhausted} (select-keys @out [:arrived :reason :why])))
           (is (>= (first (at p)) 46) "walked to the frontier and stayed there")
           (is (= ["partial" "blocked" "blocked" "blocked"] (mapv :status (moved eng)))
@@ -405,24 +407,24 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [budget walk/round-budget
-              chunk walk/chunk-expansions
+        (let [budget wsearch/round-budget
+              chunk wplan/chunk-expansions
               joined (merge (box 0 63 0 6 63 60 "stone") (box 3 64 0 3 65 58 "stone"))
               {:keys [eng p] :as s} (setup {:blocks joined :self {:pos {:x 0.5 :y 64 :z 0.5}}})
               out (atom :not-done)
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out {:pos [6 64 0] :range 0})))]
-          (reset! walk/searches {})
-          (set! walk/round-budget 32)
-          (set! walk/chunk-expansions 16)
+          (reset! wsearch/searches {})
+          (set! wsearch/round-budget 32)
+          (set! wplan/chunk-expansions 16)
           (core/submit! eng '(recording-parent) {})
           (let [plans (atom 0)
-                plan-walk walk/plan-walk-budgeted!]
-            (set! walk/plan-walk-budgeted! (fn [& args] (swap! plans inc) (apply plan-walk args)))
+                plan-walk wsearch/plan-walk-budgeted!]
+            (set! wsearch/plan-walk-budgeted! (fn [& args] (swap! plans inc) (apply plan-walk args)))
             (await (tick-out! eng 200))
-            (set! walk/plan-walk-budgeted! plan-walk)
+            (set! wsearch/plan-walk-budgeted! plan-walk)
             (is (> @plans 3) "several rounds searched"))
-          (set! walk/round-budget budget)
-          (set! walk/chunk-expansions chunk)
+          (set! wsearch/round-budget budget)
+          (set! wplan/chunk-expansions chunk)
           (is (= {:arrived true} @out))
           (is (= [] (events-of s :unreachable)))
           (is (= ["arrived"] (mapv :status (moved eng))) "one round walked: the rounds that searched wrote nothing"))))))
@@ -503,16 +505,16 @@
 (defn ^:async with-small-budget!
   "Run (f) with a search budget of 32 expansions a slice and go-to's pace! counted in paces; restores both."
   [paces f]
-  (let [budget walk/round-budget
-        chunk walk/chunk-expansions
+  (let [budget wsearch/round-budget
+        chunk wplan/chunk-expansions
         pace go-to/pace!]
-    (reset! walk/searches {})
-    (set! walk/round-budget 32)
-    (set! walk/chunk-expansions 16)
+    (reset! wsearch/searches {})
+    (set! wsearch/round-budget 32)
+    (set! wplan/chunk-expansions 16)
     (set! go-to/pace! (fn [] (swap! paces inc) (pace)))
     (try (await (f))
-         (finally (set! walk/round-budget budget)
-                  (set! walk/chunk-expansions chunk)
+         (finally (set! wsearch/round-budget budget)
+                  (set! wplan/chunk-expansions chunk)
                   (set! go-to/pace! pace)))))
 
 (deftest one-go-to-call-searches-on-paced-until-its-search-ends
@@ -521,10 +523,10 @@
       (fn ^:async t []
         (let [paces (atom 0)
               plans (atom 0)
-              plan-walk walk/plan-walk-budgeted!]
-          (set! walk/plan-walk-budgeted! (fn [& args] (swap! plans inc) (apply plan-walk args)))
+              plan-walk wsearch/plan-walk-budgeted!]
+          (set! wsearch/plan-walk-budgeted! (fn [& args] (swap! plans inc) (apply plan-walk args)))
           (let [{:keys [out returns]} (await (with-small-budget! paces #(go-returns! joined-world {:pos [6 64 0] :range 0})))]
-            (set! walk/plan-walk-budgeted! plan-walk)
+            (set! wsearch/plan-walk-budgeted! plan-walk)
             (is (= {:arrived true} @out))
             (is (> @plans 3) "several search slices")
             (is (= [:done] @returns) "searched and walked in one call")
@@ -536,8 +538,8 @@
       (fn ^:async t []
         (let [paces (atom 0)
               plans (atom 0)
-              plan-walk walk/plan-walk-budgeted!]
-          (set! walk/plan-walk-budgeted! (fn [& args] (swap! plans inc) (apply plan-walk args)))
+              plan-walk wsearch/plan-walk-budgeted!]
+          (set! wsearch/plan-walk-budgeted! (fn [& args] (swap! plans inc) (apply plan-walk args)))
           (await
            (with-small-budget! paces
              (fn ^:async cut-run []
@@ -565,7 +567,7 @@
                  (is (= [6 64 0] (at p)))
                  (is (= [:done] @returns) "the resumed call arrived in one call")
                  (is (= [] (events-of s :unreachable)))))))
-          (set! walk/plan-walk-budgeted! plan-walk))))))
+          (set! wsearch/plan-walk-budgeted! plan-walk))))))
 
 (deftest a-call-reads-its-memory-as-a-hint
   (async done
@@ -636,16 +638,16 @@
 
 (deftest a-walk-plans-with-the-cells-to-avoid-and-keeps-them-in-its-search-key
   (let [p (tu/fake {:self {:pos start} :blocks flat})
-        pw (walk/path-world p)
-        avoided (walk/with-avoid pw #{[5 64 0] [6 64 1]})
-        same (walk/with-avoid pw #{[6 64 1] [5 64 0]})
-        other (walk/with-avoid pw #{[5 64 0]})]
-    (is (= (walk/avoid-key avoided) (walk/avoid-key same)))
-    (is (not= (walk/avoid-key avoided) (walk/avoid-key other)))
-    (is (nil? (walk/avoid-key (walk/with-avoid pw #{}))) "no cells: the key of a plain search")
-    (is (= (walk/avoid-key avoided) (walk/avoid-key (walk/with-walls avoided [[1 64 1]]))) "walls keep the avoided cells")
-    (is (= 2 (.-size (.-cells (.-avoid (walk/plan-options avoided 1 nil nil))))))
-    (is (nil? (.-avoid (walk/plan-options pw 1 nil nil))))))
+        pw (wworld/path-world p)
+        avoided (wworld/with-avoid pw #{[5 64 0] [6 64 1]})
+        same (wworld/with-avoid pw #{[6 64 1] [5 64 0]})
+        other (wworld/with-avoid pw #{[5 64 0]})]
+    (is (= (wworld/avoid-key avoided) (wworld/avoid-key same)))
+    (is (not= (wworld/avoid-key avoided) (wworld/avoid-key other)))
+    (is (nil? (wworld/avoid-key (wworld/with-avoid pw #{}))) "no cells: the key of a plain search")
+    (is (= (wworld/avoid-key avoided) (wworld/avoid-key (wworld/with-walls avoided [[1 64 1]]))) "walls keep the avoided cells")
+    (is (= 2 (.-size (.-cells (.-avoid (wplan/plan-options avoided 1 nil nil))))))
+    (is (nil? (.-avoid (wplan/plan-options pw 1 nil nil))))))
 
 (defn ^:async go-place!
   "Run go-to with args as a child over flat after writing the places in memory; {:out :p :seen}."

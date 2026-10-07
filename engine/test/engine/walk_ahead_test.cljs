@@ -10,6 +10,8 @@
             [engine.memory :as mem]
             [engine.path.fixture :as fx]
             [jobs.lib.walk :as walk]
+            [jobs.lib.walk.search :as wsearch]
+            [jobs.lib.walk.watch :as wwatch]
             [engine.planner-fixture :as pf]
             [engine.fake :as fake]
             [engine.test-util :as tu :refer [box floor]]
@@ -21,19 +23,19 @@
 
 (deftest the-cells-of-a-straight-step-are-its-two-columns-from-the-floor-to-over-the-head
   (is (= #{[0 63 0] [0 64 0] [0 65 0] [0 66 0] [1 63 0] [1 64 0] [1 65 0] [1 66 0]}
-         (set (walk/step-cells (step 0 64 0 :walk) (step 1 64 0 :walk))))))
+         (set (wwatch/step-cells (step 0 64 0 :walk) (step 1 64 0 :walk))))))
 
 (deftest the-cells-of-a-diagonal-step-include-both-side-columns
   (is (= #{[0 0] [1 0] [0 1] [1 1]}
-         (set (map (fn [[x _ z]] [x z]) (walk/step-cells (step 0 64 0 :walk) (step 1 64 1 :diagonal)))))))
+         (set (map (fn [[x _ z]] [x z]) (wwatch/step-cells (step 0 64 0 :walk) (step 1 64 1 :diagonal)))))))
 
 (deftest the-cells-of-a-step-down-span-both-heights
-  (is (= [62 67] ((juxt first last) (sort (distinct (map second (walk/step-cells (step 0 65 0 :walk) (step 1 63 0 :drop)))))))))
+  (is (= [62 67] ((juxt first last) (sort (distinct (map second (wwatch/step-cells (step 0 65 0 :walk) (step 1 63 0 :drop)))))))))
 
 (deftest the-window-covers-the-next-steps-and-skips-what-the-plan-opens
   (let [steps [(step 0 64 0 :start) (step 1 64 0 :walk) (assoc (step 2 64 0 :walk) :opens [{:x 2 :y 64 :z 0}])
                (step 3 64 0 :walk) (step 4 64 0 :walk)]
-        cells (set (walk/window-cells steps 1 2))]
+        cells (set (wwatch/window-cells steps 1 2))]
     (is (contains? cells [0 64 0]))
     (is (contains? cells [1 64 0]))
     (is (not (contains? cells [3 64 0])) "two steps from index 1: up to step 2")
@@ -44,48 +46,48 @@
 (defn sid [name props] (fx/state-id name props))
 
 (deftest a-state-change-the-planner-ignores-is-no-change
-  (is (walk/same-for-planner? table (sid "wheat" {:age 0}) (sid "wheat" {:age 7})))
-  (is (walk/same-for-planner? table (sid "stone" {}) (sid "stone" {}))))
+  (is (wwatch/same-for-planner? table (sid "wheat" {:age 0}) (sid "wheat" {:age 7})))
+  (is (wwatch/same-for-planner? table (sid "stone" {}) (sid "stone" {}))))
 
 (deftest a-state-change-the-planner-reads-is-a-change
-  (is (not (walk/same-for-planner? table (sid "air" {}) (sid "stone" {}))))
-  (is (not (walk/same-for-planner? table (sid "oak_door" {:open true :half "lower" :facing "east"})
+  (is (not (wwatch/same-for-planner? table (sid "air" {}) (sid "stone" {}))))
+  (is (not (wwatch/same-for-planner? table (sid "oak_door" {:open true :half "lower" :facing "east"})
                                    (sid "oak_door" {:open false :half "lower" :facing "east"}))))
-  (is (not (walk/same-for-planner? table (sid "air" {}) 0xFFFF)) "a cell that went unloaded"))
+  (is (not (wwatch/same-for-planner? table (sid "air" {}) 0xFFFF)) "a cell that went unloaded"))
 
 (def pose-on-ground {:x 1.5 :y 64 :z 0.5 :on-ground true :on-climbable false :in-water false})
 
 (deftest a-step-boundary-is-an-advance-on-the-ground-to-a-plain-step-or-a-check-along-a-leg
   (let [steps [(step 0 64 0 :start) (step 1 64 0 :walk) (step 2 64 0 :walk) (step 3 64 0 :walk)]]
-    (is (walk/boundary? steps 1 2 1 pose-on-ground))
-    (is (not (walk/boundary? steps 2 2 1 pose-on-ground)) "no advance this tick")
-    (is (walk/boundary? steps 2 2 5 pose-on-ground) "mid-way along a plain leg, every check-every ticks")
-    (is (not (walk/boundary? steps 1 2 1 (assoc pose-on-ground :on-ground false))) "in the air")
-    (is (not (walk/boundary? steps 1 2 1 (assoc pose-on-ground :in-water true))) "swimming")
-    (is (not (walk/boundary? steps 1 2 1 (assoc pose-on-ground :on-climbable true))) "on a ladder")))
+    (is (wwatch/boundary? steps 1 2 1 pose-on-ground))
+    (is (not (wwatch/boundary? steps 2 2 1 pose-on-ground)) "no advance this tick")
+    (is (wwatch/boundary? steps 2 2 5 pose-on-ground) "mid-way along a plain leg, every check-every ticks")
+    (is (not (wwatch/boundary? steps 1 2 1 (assoc pose-on-ground :on-ground false))) "in the air")
+    (is (not (wwatch/boundary? steps 1 2 1 (assoc pose-on-ground :in-water true))) "swimming")
+    (is (not (wwatch/boundary? steps 1 2 1 (assoc pose-on-ground :on-climbable true))) "on a ladder")))
 
 (deftest no-step-boundary-before-a-gap-a-climb-or-a-swim
   (doseq [move [:gap :climb-up :climb-down :jump-climb :swim :swim-up :swim-down :exit]]
     (let [steps [(step 0 64 0 :start) (step 1 64 0 :walk) (step 2 64 0 move) (step 3 64 0 :walk)]]
-      (is (not (walk/boundary? steps 1 2 1 pose-on-ground)) (str move)))))
+      (is (not (wwatch/boundary? steps 1 2 1 pose-on-ground)) (str move)))))
 
 (deftest a-partial-plan-is-refreshed-after-its-interval-a-whole-one-never
-  (is (walk/refresh-due? "partial" 80 80) "ticks walked, interval")
-  (is (not (walk/refresh-due? "partial" 79 80)))
-  (is (not (walk/refresh-due? "found" 10000 80))))
+  (is (wwatch/refresh-due? "partial" 80 80) "ticks walked, interval")
+  (is (not (wwatch/refresh-due? "partial" 79 80)))
+  (is (not (wwatch/refresh-due? "found" 10000 80))))
 
 (deftest the-refresh-interval-grows-with-the-plan-time
-  (is (= 80 (walk/refresh-ticks 3)))
-  (is (= 200 (walk/refresh-ticks 500)) "a 500 ms plan: 10 s between refreshes (at most 5 % planning)"))
+  (is (= 80 (wwatch/refresh-ticks 3)))
+  (is (= 200 (wwatch/refresh-ticks 500)) "a 500 ms plan: 10 s between refreshes (at most 5 % planning)"))
 
 (deftest a-refreshed-plan-replaces-the-old-only-when-clearly-better
   (let [old [(step 0 64 0 :start) (step 10 64 0 :walk)]
         to [40 64 0]]
-    (is (walk/take-refresh? old {:status "found" :steps [(step 0 64 0 :start) (step 40 64 0 :walk)]} to))
-    (is (walk/take-refresh? old {:status "partial" :steps [(step 0 64 0 :start) (step 12 64 0 :walk)]} to))
-    (is (not (walk/take-refresh? old {:status "partial" :steps [(step 0 64 0 :start) (step 11 64 0 :walk)]} to))
+    (is (wwatch/take-refresh? old {:status "found" :steps [(step 0 64 0 :start) (step 40 64 0 :walk)]} to))
+    (is (wwatch/take-refresh? old {:status "partial" :steps [(step 0 64 0 :start) (step 12 64 0 :walk)]} to))
+    (is (not (wwatch/take-refresh? old {:status "partial" :steps [(step 0 64 0 :start) (step 11 64 0 :walk)]} to))
         "one block nearer is not worth a switch")
-    (is (not (walk/take-refresh? old {:status "partial" :steps [(step 0 64 0 :start) (step 10 64 1 :walk)]} to))
+    (is (not (wwatch/take-refresh? old {:status "partial" :steps [(step 0 64 0 :start) (step 10 64 1 :walk)]} to))
         "an equal end elsewhere")))
 
 (deftest a-refresh-never-swaps-a-finished-search-for-an-unfinished-one
@@ -93,11 +95,11 @@
         to [40 64 0]
         unfinished {:status "partial" :r #js {:status "partial" :reason "searching"}
                     :steps [(step 0 64 0 :start) (step 30 64 0 :walk)]}]
-    (is (not (walk/take-refresh? old unfinished to {:status "partial" :r #js {:status "partial" :reason "exhausted"}}))
+    (is (not (wwatch/take-refresh? old unfinished to {:status "partial" :r #js {:status "partial" :reason "exhausted"}}))
         "the old plan's search ended (a walk to its frontier): an unfinished search's nearest node does not replace it")
-    (is (walk/take-refresh? old unfinished to {:status "partial" :r #js {:status "partial" :reason "searching"}})
+    (is (wwatch/take-refresh? old unfinished to {:status "partial" :r #js {:status "partial" :reason "searching"}})
         "an unfinished search's walk is replaced by a clearly better one")
-    (is (walk/take-refresh? old unfinished to) "no old plan given: by the ends alone")))
+    (is (wwatch/take-refresh? old unfinished to) "no old plan given: by the ends alone")))
 
 (deftest a-refresh-from-an-ended-search-takes-its-new-frontier-over-the-old
   (let [old [(step 0 64 0 :start) (step 10 64 0 :walk)]
@@ -107,14 +109,14 @@
         unfinished {:status "partial" :r #js {:status "partial" :reason "searching"} :frontier-taken {:at [5 64 3]}
                     :steps [(step 0 64 0 :start) (step 5 64 3 :walk)]}
         old-plan {:status "partial" :r #js {:status "partial" :reason "exhausted"} :frontier-taken {:at [10 64 0]}}]
-    (is (walk/take-refresh? old (ended [5 64 3]) to old-plan)
+    (is (wwatch/take-refresh? old (ended [5 64 3]) to old-plan)
         "the search from here ended on another frontier: the old one is a dead end now, though the new end is farther off")
-    (is (not (walk/take-refresh? old (ended [10 64 0]) to old-plan)) "the same frontier: the ends rule")
-    (is (not (walk/take-refresh? old unfinished to old-plan)) "an unfinished search never replaces it")))
+    (is (not (wwatch/take-refresh? old (ended [10 64 0]) to old-plan)) "the same frontier: the ends rule")
+    (is (not (wwatch/take-refresh? old unfinished to old-plan)) "an unfinished search never replaces it")))
 
 (deftest a-replan-searches-several-rounds
-  (is (= 4000 (walk/replan-budget 1000)) "a refresh or change replan gets refresh-rounds times a round's budget")
-  (is (nil? (walk/replan-budget nil)) "no budget stays none"))
+  (is (= 4000 (wsearch/replan-budget 1000)) "a refresh or change replan gets refresh-rounds times a round's budget")
+  (is (nil? (wsearch/replan-budget nil)) "no budget stays none"))
 
 ;; ---------------------------------------------------------------- the driver over the fake
 
@@ -251,7 +253,7 @@
         (let [[result replans] (await (walk-to {:self {:pos {:x 0 :y 64 :z 0}} :blocks lane} [20 64 0]
                                                (fn [p] (on-steer p (fn [s _ pose] (set-block! s [(+ 2 (js/Math.floor (.-x pose))) 66 0] "stone"))))))]
           (is (= :arrived (:status result)))
-          (is (= walk/max-watch-replans (count replans))))))))
+          (is (= wwatch/max-watch-replans (count replans))))))))
 
 ;; ---------------------------------------------------------------- go-to
 

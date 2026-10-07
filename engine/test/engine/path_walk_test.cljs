@@ -7,6 +7,9 @@
             [engine.events :as events]
             [engine.path.planner-tuned :as planner]
             [jobs.lib.walk :as walk]
+            [jobs.lib.walk.world :as wworld]
+            [jobs.lib.walk.plan :as wplan]
+            [jobs.lib.walk.search :as wsearch]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]))
 
@@ -87,10 +90,10 @@
          (when joined? (box 1 63 100 5 63 100 "stone"))))
 
 (defn plan-within-status
-  "The planner status and reason of walk/plan-within from (0 64 0) to goal over blocks."
+  "The planner status and reason of wplan/plan-within from (0 64 0) to goal over blocks."
   [blocks goal]
   (let [p (tu/fake {:blocks blocks :self {:pos {:x 0.5 :y 64 :z 0.5}}})
-        {:keys [r]} (walk/plan-within {:primitives p} (.pathWorld p) goal 0 walk/default-weight)]
+        {:keys [r]} (wplan/plan-within {:primitives p} (.pathWorld p) goal 0 walk/default-weight)]
     [(.-status r) (.-reason r)]))
 
 (deftest a-way-round-past-the-default-box-is-found-by-a-wider-one
@@ -108,13 +111,13 @@
         (let [p (tu/fake {:blocks (walkways true) :self {:pos {:x 0.5 :y 64 :z 0.5}}})
               c {:primitives p}
               order (atom [])
-              chunk walk/chunk-expansions
-              whole (walk/plan-walk c (.pathWorld p) [6 64 0] 0 walk/default-weight)]
-          (set! walk/chunk-expansions 16)
+              chunk wplan/chunk-expansions
+              whole (wplan/plan-walk c (.pathWorld p) [6 64 0] 0 walk/default-weight)]
+          (set! wplan/chunk-expansions 16)
           (js/setTimeout #(swap! order conj :timer) 0)
           (let [plan (await (walk/plan-walk! c (.pathWorld p) [6 64 0] 0 walk/default-weight))]
             (swap! order conj :planned)
-            (set! walk/chunk-expansions chunk)
+            (set! wplan/chunk-expansions chunk)
             (is (= [:timer :planned] @order))
             (is (= "found" (:status plan) (:status whole)))
             (is (= (:steps whole) (:steps plan)))
@@ -198,17 +201,17 @@
 
 (deftest dry-end-keeps-a-partial-plan-up-to-its-last-dry-step
   (let [s (fn [x swim?] (cond-> {:x x :move :walk} swim? (assoc :swim true)))]
-    (are [steps kept] (= kept (mapv :x (walk/dry-end steps)))
+    (are [steps kept] (= kept (mapv :x (wplan/dry-end steps)))
       [(s 0 false) (s 1 false) (s 2 true) (s 3 true)] [0 1]
       [(s 0 true) (s 1 true)] []
       [(s 0 false) (s 1 false)] [0 1])))
 
 (deftest with-walls-reads-the-named-cells-as-one-stone-state-and-leaves-the-rest
   (let [pw (.pathWorld (tu/fake {:blocks (merge (box 0 64 0 2 64 0 "oak_fence_gate") (box 0 65 0 0 65 0 "air"))}))
-        walled (walk/with-walls pw [{:x 1 :y 64 :z 0}])
-        id (walk/wall-id (.-table pw))
+        walled (wworld/with-walls pw [{:x 1 :y 64 :z 0}])
+        id (wworld/wall-id (.-table pw))
         at (fn [pw x] (.stateAt (.-snapshot pw) x 64 0))]
-    (is (identical? pw (walk/with-walls pw [])) "no walls: the same pathWorld")
+    (is (identical? pw (wworld/with-walls pw [])) "no walls: the same pathWorld")
     (is (= [(at pw 0) id (at pw 2)] [(at walled 0) (at walled 1) (at walled 2)]))
     (is (not= id (at pw 1)))
     (is (= 1 (aget (.-kind (.-table walled)) id)) "a solid block")
@@ -218,10 +221,10 @@
 ;; ---- the frontier and a walled-in goal ----
 
 (defn plan-from
-  "walk/plan-walk from the cell pos (feet) to goal over blocks with opts."
+  "wplan/plan-walk from the cell pos (feet) to goal over blocks with opts."
   [blocks [x y z] goal opts]
   (let [p (tu/fake {:blocks blocks :self {:pos {:x (+ x 0.5) :y y :z (+ z 0.5)}}})]
-    (walk/plan-walk {:primitives p} (.pathWorld p) goal 0 walk/default-weight opts)))
+    (wplan/plan-walk {:primitives p} (.pathWorld p) goal 0 walk/default-weight opts)))
 
 ;; a walkway (feet 80) x 18..47 at z 8 over a floor x 0..47, z 0..15; columns from x 48 on are not loaded
 (def walkway-to-unloaded (merge (box 0 63 0 47 63 15 "stone") (box 18 79 8 47 79 8 "stone")))
@@ -229,17 +232,17 @@
 (deftest plan-walk-takes-the-frontier-only-when-asked
   (let [asked (plan-from walkway-to-unloaded [18 80 8] [10 64 8] {:frontier true})
         not-asked (plan-from walkway-to-unloaded [18 80 8] [10 64 8] nil)]
-    (is (nil? (walk/no-walk asked 0)))
+    (is (nil? (wplan/no-walk asked 0)))
     (is (= {:at [46 80 8]} (:frontier-taken asked)))
     (is (= [46 80 8] ((juxt :x :y :z) (peek (:steps asked)))))
-    (is (= {:status :no-path :reason :exhausted :replans 0} (walk/no-walk not-asked 0)))
+    (is (= {:status :no-path :reason :exhausted :replans 0} (wplan/no-walk not-asked 0)))
     (is (nil? (:frontier-taken not-asked)))))
 
 ;; at the frontier the plan walks nowhere: not back to the walkway's end nearest the goal (x 18), which would swing the
 ;; body between the two
 (deftest plan-walk-at-its-frontier-walks-nowhere
   (let [plan (plan-from walkway-to-unloaded [46 80 8] [10 64 8] {:frontier true})]
-    (is (= {:status :no-path :reason :exhausted :replans 0} (walk/no-walk plan 0)))
+    (is (= {:status :no-path :reason :exhausted :replans 0} (wplan/no-walk plan 0)))
     (is (nil? (:frontier-taken plan)))))
 
 ;; a floor x -2..10, z -2..4 cut by a stone wall at x 5 (feet and head): the goal's side is walled in, the planner's
@@ -249,7 +252,7 @@
 (deftest a-walled-in-goal-is-not-walked-towards
   (let [plan (plan-from walled-off [0 64 1] [8 64 1] {:frontier true})]
     (is (= ["partial" "goal-cut-off"] [(:status plan) (.-reason (:r plan))]))
-    (is (= {:status :no-path :reason :goal-cut-off :replans 0} (walk/no-walk plan 0)))))
+    (is (= {:status :no-path :reason :goal-cut-off :replans 0} (wplan/no-walk plan 0)))))
 
 ;; ---- one search where one will do; one bounded search a call (go-to) ----
 
@@ -274,7 +277,7 @@
 (deftest plan-within-searches-without-the-limits-when-they-turned-a-move-away
   (let [p (tu/fake {:blocks gap-up-only :self {:pos {:x 0.5 :y 64 :z 1.5}}})
         within (atom nil)]
-    (is (= 2 (searches-of #(reset! within (walk/plan-within {:primitives p} (.pathWorld p) [10 65 1] 0 walk/default-weight)))))
+    (is (= 2 (searches-of #(reset! within (wplan/plan-within {:primitives p} (.pathWorld p) [10 65 1] 0 walk/default-weight)))))
     (is (= :gap-up (:kind (:beyond @within))))))
 
 (defn ^:async budgeted-calls
@@ -283,14 +286,14 @@
   [blocks pos goal budget]
   (let [p (tu/fake {:blocks blocks :self {:pos pos}})
         c {:primitives p}
-        chunk walk/chunk-expansions]
-    (reset! walk/searches {})
-    (set! walk/chunk-expansions 16)
+        chunk wplan/chunk-expansions]
+    (reset! wsearch/searches {})
+    (set! wplan/chunk-expansions 16)
     (loop [calls 1]
       (let [plan (await (walk/plan-walk! c (.pathWorld p) goal 0 walk/default-weight {:budget budget}))]
         (if (and (= "searching" (:status plan)) (< calls 100))
           (recur (inc calls))
-          (do (set! walk/chunk-expansions chunk)
+          (do (set! wplan/chunk-expansions chunk)
               [plan calls]))))))
 
 ;; the joined walkways' way round is ~200 cells along a walkway that leads away from the goal: no call gets nearer, so
@@ -300,13 +303,13 @@
     (tu/run-async done
       (fn ^:async t []
         (let [p (tu/fake {:blocks (walkways true) :self {:pos {:x 0.5 :y 64 :z 0.5}}})
-              whole (walk/plan-walk {:primitives p} (.pathWorld p) [6 64 0] 0 walk/default-weight)
+              whole (wplan/plan-walk {:primitives p} (.pathWorld p) [6 64 0] 0 walk/default-weight)
               [plan calls] (await (budgeted-calls (walkways true) {:x 0.5 :y 64 :z 0.5} [6 64 0] 32))]
           (is (> calls 3) "several calls")
-          (is (= {:status :searching :replans 0} (walk/no-walk (walk/unfinished-plan {:walled nil :limited #js {:progress (fn [] nil)}} 1) 0)))
+          (is (= {:status :searching :replans 0} (wplan/no-walk (wsearch/unfinished-plan {:walled nil :limited #js {:progress (fn [] nil)}} 1) 0)))
           (is (= "found" (:status plan) (:status whole)))
           (is (= (:steps whole) (:steps plan)))
-          (is (= {} @walk/searches) "the search is over"))))))
+          (is (= {} @wsearch/searches) "the search is over"))))))
 
 ;; a long corridor toward the goal: the first call's search is not over, but it got well on: that much is walked
 (deftest a-budgeted-search-that-got-well-on-walks-there
@@ -316,20 +319,20 @@
         (let [[plan calls] (await (budgeted-calls (floor (range 120)) {:x 0.5 :y 64 :z 1.5} [110 64 1] 32))]
           (is (= 1 calls))
           (is (= ["partial" "searching"] [(:status plan) (.-reason (:r plan))]))
-          (is (nil? (walk/no-walk plan 0)))
-          (is (>= (:x (peek (:steps plan))) walk/progress-blocks))
-          (is (= {} @walk/searches) "the body walks on: a new search from where it gets to"))))))
+          (is (nil? (wplan/no-walk plan 0)))
+          (is (>= (:x (peek (:steps plan))) wsearch/progress-blocks))
+          (is (= {} @wsearch/searches) "the body walks on: a new search from where it gets to"))))))
 
 (defn ^:async one-budgeted-call
   "One plan-walk! with budget (chunk-expansions 16) from pos toward goal with opts: its plan."
   [blocks pos goal budget opts]
   (let [p (tu/fake {:blocks blocks :self {:pos pos}})
-        chunk walk/chunk-expansions]
-    (reset! walk/searches {})
-    (set! walk/chunk-expansions 16)
+        chunk wplan/chunk-expansions]
+    (reset! wsearch/searches {})
+    (set! wplan/chunk-expansions 16)
     (let [plan (await (walk/plan-walk! {:primitives p} (.pathWorld p) goal 0 walk/default-weight (assoc opts :budget budget)))]
-      (set! walk/chunk-expansions chunk)
-      (reset! walk/searches {})
+      (set! wplan/chunk-expansions chunk)
+      (reset! wsearch/searches {})
       plan)))
 
 ;; a ledge (feet 64, x 0..1, z 0..63) whose first move east is a 3-drop to a floor (feet 61, x 2..47) running on to the
@@ -344,10 +347,10 @@
         (let [open (await (one-budgeted-call ledge-to-unloaded {:x 1.5 :y 64 :z 32.5} [120 61 32] 600 {:one-way :open}))
               shut (await (one-budgeted-call ledge-to-unloaded {:x 1.5 :y 64 :z 32.5} [120 61 32] 600 {}))]
           (is (= ["partial" "searching"] [(:status open) (.-reason (:r open))]))
-          (is (nil? (walk/no-walk open 0)))
+          (is (nil? (wplan/no-walk open 0)))
           (is (<= 46 (:x (peek (:steps open)))) "walked to the loaded edge")
           (is (= {:kind :drop :at [2 61 32]} (:one-way-taken open)))
-          (is (= {:status :searching :replans 0 :fresh true} (walk/no-walk shut 0)) "without :one-way :open the step is never taken"))))))
+          (is (= {:status :searching :replans 0 :fresh true} (wplan/no-walk shut 0)) "without :one-way :open the step is never taken"))))))
 
 ;; the same ledge with only a closed pit below it (feet 61, x 2..13, z 30..34: 12 blocks nearer) before a wall too high to
 ;; climb (feet 66, x 14..17): every cell round the pit is loaded, so the unfinished search walks nowhere
@@ -358,5 +361,5 @@
     (tu/run-async done
       (fn ^:async t []
         (let [plan (await (one-budgeted-call ledge-over-pit {:x 1.5 :y 64 :z 32.5} [120 61 32] 32 {:one-way :open}))]
-          (is (= {:status :searching :replans 0 :fresh true} (walk/no-walk plan 0)))
+          (is (= {:status :searching :replans 0 :fresh true} (wplan/no-walk plan 0)))
           (is (nil? (:one-way-taken plan))))))))

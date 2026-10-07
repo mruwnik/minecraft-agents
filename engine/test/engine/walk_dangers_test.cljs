@@ -9,7 +9,7 @@
             [engine.test-util :as tu]
             [jobs.lib.near :as near]
             [jobs.lib.threats :as threats]
-            [jobs.lib.walk :as walk]))
+            [jobs.lib.walk.world :as wworld]))
 
 (def zombie {:id 9 :uuid "u9" :name "zombie" :kind "hostile" :pos {:x 20.5 :y 64 :z 0.5}})
 
@@ -29,7 +29,7 @@
         parent {:check (constantly true)
                 :round (fn ^:async planning-round [c]
                          (doseq [t remembered] (threats/remember! c t))
-                         (reset! out (await (near/plan! c [40 64 0] 0 :never (walk/body-policy c) [] false nil nil true dangers)))
+                         (reset! out (await (near/plan! c [40 64 0] 0 :never (wworld/body-policy c) [] false nil nil true dangers)))
                          :done)}
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'planning-parent parent)
                           :triggers {} :dir (tu/tmp-dir) :now #(deref clock)
@@ -65,9 +65,9 @@
 
 (deftest a-kept-search-is-new-once-a-danger-moved-died-or-came
   (let [pw #js {:snapshot nil :table nil :space nil}
-        with (fn [& ds] (walk/danger-key (walk/with-dangers pw (clj->js (vec ds)))))
+        with (fn [& ds] (wworld/danger-key (wworld/with-dangers pw (clj->js (vec ds)))))
         z {:mob "zombie" :x 20.5 :y 64 :z 0.5 :rate 4}]
-    (is (nil? (walk/danger-key pw)))
+    (is (nil? (wworld/danger-key pw)))
     (is (= (with z) (with (assoc z :x 21.2))) "a step within its 4 blocks: the same search goes on")
     (is (not= (with z) (with (assoc z :x 30.5))) "moved on")
     (is (not= (with z) (with)) "died: none left")
@@ -75,8 +75,8 @@
 
 (defn key-of [world]
   (let [p (tu/fake-on-floor (merge {:floor [-5 -20 45 20]} world))
-        pw (walk/with-dangers (walk/path-world p) (clj->js (threats/known-dangers p [])))]
-    (walk/danger-key pw)))
+        pw (wworld/with-dangers (wworld/path-world p) (clj->js (threats/known-dangers p [])))]
+    (wworld/danger-key pw)))
 
 (deftest the-search-key-follows-the-body-s-weapon-and-health
   (let [unarmed (key-of {:entities [zombie]})

@@ -4,15 +4,18 @@
   the least over the targets), from the cell the body stands in. It stays within the walker's abilities
   (executor/planner-limits), over the walks' wide box, at most max-nodes nodes. A target walled off, or across a gap
   no move crosses, is passed over for a farther one the body can walk to.
-  Bounded and resumable like go-to's search (jobs.lib.walk/run-search!). One call runs at most budget expansions
-  and walk/round-ms. A search not over answers :searching and goes on at the next call from the same cell to the same
-  targets (kept per body and tag, for at most walk/search-max-age-ms)."
+  Bounded and resumable like go-to's search (jobs.lib.walk.search/run-search!). One call runs at most budget expansions
+  and wsearch/round-ms. A search not over answers :searching and goes on at the next call from the same cell to the same
+  targets (kept per body and tag, for at most wsearch/search-max-age-ms)."
   (:require [engine.path.executor :as executor]
             [engine.path.planner-tuned :as planner]
-            [jobs.lib.walk :as walk]))
+            [jobs.lib.walk :as walk]
+            [jobs.lib.walk.world :as wworld]
+            [jobs.lib.walk.plan :as wplan]
+            [jobs.lib.walk.search :as wsearch]))
 
 (def max-nodes
-  "The node cap of one search over a set of targets: a few rounds of walk/round-budget. A set none of which is reached by
+  "The node cap of one search over a set of targets: a few rounds of wsearch/round-budget. A set none of which is reached by
   then answers :none :budget (every target walled off floods all the land the box holds, ~1 s on the bench)."
   20000)
 
@@ -33,19 +36,19 @@
   :range replaces range)."
   [c targets range]
   (let [{:keys [x y z] :as t} (first targets)
-        ^js q (walk/plan-query c [x y z] (or (:range t) range))]
+        ^js q (wplan/plan-query c [x y z] (or (:range t) range))]
     (set! (.-goals q) (to-array (map (fn [t] #js {:kind "near" :x (:x t) :y (:y t) :z (:z t) :range (or (:range t) range)}) targets)))
     q))
 
 (defn new-search
-  "A search over targets of the world costed as go-to's plans are (walk/costed-world: known dangers and darkness; opts
+  "A search over targets of the world costed as go-to's plans are (wworld/costed-world: known dangers and darkness; opts
   :dangers and :dark, default true)."
   [c pw targets range key {:keys [dangers dark] :or {dangers true dark true}}]
   {:key key :t (js/Date.now)
    :plan (planner/create-plan (.-snapshot pw) (query c targets range)
-                              (walk/plan-options (walk/costed-world c pw {:dangers? dangers :dark? dark}) walk/default-weight
-                                                 (executor/planner-limits (walk/body-policy c) (walk/solid-fn pw))
-                                                 (assoc walk/wide-box :maxNodes max-nodes)))})
+                              (wplan/plan-options (wworld/costed-world c pw {:dangers? dangers :dark? dark}) walk/default-weight
+                                                 (executor/planner-limits (wworld/body-policy c) (wworld/solid-fn pw))
+                                                 (assoc wplan/wide-box :maxNodes max-nodes)))})
 
 (defn answer
   "The answer of a search that is over, from its planner result r: {:status :found :target :index :cost} (cost in
@@ -65,34 +68,34 @@
   the next call), or {:status :none :reason :proved} (answer). One target is not searched ({:status :found :target t
   :index 0}): the walk to it decides. A target may carry its own :range. opts {:tag :budget :dangers :dark}: tag keeps
   searches of different callers of one body apart (default :default), budget the expansions of one call (default
-  walk/round-budget), dangers and dark (default true) whether known dangers and darkness are costed (new-search)."
+  wsearch/round-budget), dangers and dark (default true) whether known dangers and darkness are costed (new-search)."
   ([c targets range] (nearest! c targets range nil))
-  ([c targets range {:keys [tag budget] :or {tag :default budget walk/round-budget} :as opts}]
+  ([c targets range {:keys [tag budget] :or {tag :default budget wsearch/round-budget} :as opts}]
    (let [targets (vec (take max-targets targets))
-         pw (walk/path-world (:primitives c))]
+         pw (wworld/path-world (:primitives c))]
      (cond
        (empty? targets) {:status :none :reason :no-targets :proved true}
        (= 1 (count targets)) {:status :found :target (first targets) :index 0}
        (nil? pw) {:status :none :reason :no-path-world :proved false}
        :else
-       (let [who [(walk/body-name c) tag]
-             k [(walk/body-cell c) targets range]
+       (let [who [(wworld/body-name c) tag]
+             k [(wworld/body-cell c) targets range]
              kept (get @searches who)
-             search (if (and (= k (:key kept)) (< (- (js/Date.now) (:t kept)) walk/search-max-age-ms))
+             search (if (and (= k (:key kept)) (< (- (js/Date.now) (:t kept)) wsearch/search-max-age-ms))
                       kept
                       (new-search c pw targets range k opts))
              ^js p (:plan search)
              t0 (js/performance.now)]
-         (loop [used walk/chunk-expansions]
-           (walk/stop-if-cut! c)
+         (loop [used wplan/chunk-expansions]
+           (wplan/stop-if-cut! c)
            (cond
-             ^boolean (.step p walk/chunk-expansions)
+             ^boolean (.step p wplan/chunk-expansions)
              (do (swap! searches dissoc who)
                  (answer targets (.result p)))
 
-             (or (>= used budget) (>= (- (js/performance.now) t0) walk/round-ms))
+             (or (>= used budget) (>= (- (js/performance.now) t0) wsearch/round-ms))
              (do (swap! searches assoc who search)
                  {:status :searching})
 
-             :else (do (await (walk/yield!))
-                       (recur (+ used walk/chunk-expansions))))))))))
+             :else (do (await (wplan/yield!))
+                       (recur (+ used wplan/chunk-expansions))))))))))

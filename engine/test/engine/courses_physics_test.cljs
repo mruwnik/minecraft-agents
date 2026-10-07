@@ -7,7 +7,8 @@
             [engine.path.courses :as courses]
             [engine.path.executor :as ex]
             [engine.path.planner-tuned :as planner]
-            [jobs.lib.walk :as walk]
+            [jobs.lib.walk.world :as wworld]
+            [jobs.lib.walk.plan :as wplan]
             [engine.planner-fixture :as pf]
             [engine.stairs-physics-test :as sp]
             [engine.test-util :as tu]))
@@ -46,11 +47,11 @@
         pw #js {:snapshot snapshot :table @pf/table :space @pf/space}
         r (planner/plan snapshot (clj->js {:from from :goal goal})
                         #js {:table @pf/table :space @pf/space :weight 1.2
-                             :limits (ex/planner-limits ex/policy (walk/solid-fn pw))})
+                             :limits (ex/planner-limits ex/policy (wworld/solid-fn pw))})
         world (physics-world snapshot)
         phys ((.-Physics physics) mc world)
         _ (set! (.-playerHalfWidth phys) 0.31)
-        steps (when (= "found" (.-status r)) (walk/plan-steps pw r))
+        steps (when (= "found" (.-status r)) (wplan/plan-steps pw r))
         bot (sp/bot-at [(:x from) (:y from) (:z from)] [(:px from) (:pz from)])]
     (if (nil? steps)
       {:status (.-status r)}

@@ -9,7 +9,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
             [jobs.lib.toll-cells :as tc]
-            [jobs.lib.walk :as walk]
+            [jobs.lib.walk.world :as wworld]
             [jobs.lib.world :as known]))
 
 (def doc
@@ -225,7 +225,7 @@
   [c pos range]
   (cond
     (u/within? (u/self-pos c) pos range) :there
-    (nil? (walk/path-world (:primitives c))) (do (ctx/note-walk! c "blocked" 0) :blocked)
+    (nil? (wworld/path-world (:primitives c))) (do (ctx/note-walk! c "blocked" 0) :blocked)
     :else (let [{:keys [result status]} (await (near/walk-round! c (near/cell-of pos) range {:doors :shut :tolls (tc/walk-tolls c (near/cell-of pos))}))
                 no-path? (= :no-path (:status result))]
             (case status

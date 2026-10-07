@@ -11,7 +11,10 @@
             [jobs.lib.pass :as pass]
             [jobs.lib.places :as places]
             [jobs.lib.toll-cells :as tc]
-            [jobs.lib.walk :as walk]))
+            [jobs.lib.walk :as walk]
+            [jobs.lib.walk.world :as wworld]
+            [jobs.lib.walk.plan :as wplan]
+            [jobs.lib.walk.search :as wsearch]))
 
 (def walk-timeout-s
   "The default bound of one steer of a walk round. A caller that chases something that moves passes a shorter one, so it
@@ -32,22 +35,22 @@
   "Plan from where the body stands over a fresh pathWorld (the live one copies a section the first time it reads it, so an
   old one is stale), with walls read as stone; with doors other than :never, the iron doors the plan would open are walls
   too (planned again without them). A one-way step (a drop of 2 or 3, a gap jump down) is taken when the land past it runs
-  on into unloaded land (walk/plan-walk :one-way :open) when one-way is :open: a far goal past a cliff is walked on to; a
+  on into unloaded land (wplan/plan-walk :one-way :open) when one-way is :open: a far goal past a cliff is walked on to; a
   loaded pit is never entered. With one-way nil a partial plan ends at the nearest node the body can come back from. With
-  explore, a search that ran out of loaded land walks to its frontier (walk/plan-walk :frontier). With budget, at most
+  explore, a search that ran out of loaded land walks to its frontier (wplan/plan-walk :frontier). With budget, at most
   that many expansions of search (walk/plan-walk! :budget): the plan may be status \"searching\" (walk nowhere, the
   search goes on at the next call) or a walk to where an unfinished search has got to (never, with progress false).
   With budget, each plan's search is an info :planned event {:ms :status :why :nodes} (nodes only once the search is over).
   With dangers, each plan costs the dangers the body knows of now (jobs.lib.threats/planner-dangers): it keeps away from them.
-  With dark (default: unless false), each plan costs dark cells twice (walk/with-dark: look/dark-fn).
-  With avoid (a set of [x y z] cells), each plan costs entering them much more (walk/with-avoid): a way round is taken when there is one.
-  With tolls ([{:x :y :z :factor}], jobs.lib.cost farm-tolls and zone-tolls), each plan costs those cells factor times their seconds more (walk/with-tolls).
+  With dark (default: unless false), each plan costs dark cells twice (wworld/with-dark: look/dark-fn).
+  With avoid (a set of [x y z] cells), each plan costs entering them much more (wworld/with-avoid): a way round is taken when there is one.
+  With tolls ([{:x :y :z :factor}], jobs.lib.cost farm-tolls and zone-tolls), each plan costs those cells factor times their seconds more (wworld/with-tolls).
   A promise: the searches run in slices with yields between them (walk/plan-walk!), so the body's API answers meanwhile."
   [c to range doors policy walls explore one-way budget progress dangers & [avoid dark tolls]]
   (loop [walls walls]
-    (let [pw (cond-> (walk/costed-world c (walk/path-world (:primitives c)) {:dangers? dangers :dark? (not (false? dark))})
-               (seq avoid) (walk/with-avoid avoid)
-               (seq tolls) (walk/with-tolls tolls))
+    (let [pw (cond-> (wworld/costed-world c (wworld/path-world (:primitives c)) {:dangers? dangers :dark? (not (false? dark))})
+               (seq avoid) (wworld/with-avoid avoid)
+               (seq tolls) (wworld/with-tolls tolls))
           plan (await (walk/plan-walk! c pw to range walk/default-weight
                                        {:policy policy :walls walls :one-way one-way :frontier explore :budget budget
                                         :progress progress}))
@@ -71,13 +74,13 @@
   round, a walk that ended in a doorway) are shut when within reach (pass/shut-leftovers!); farther ones, and those a cut
   leaves, are the door-left trigger's (triggers.maintenance.door-left). With explore (go-to), a search that ran out of loaded land
   walks to its frontier, and the result carries :frontier, that node's cell [x y z], when the last plan walked was one,
-  and :frontier-known true when that node lay in land earlier searches knew to their end (walk/known-land).
+  and :frontier-known true when that node lay in land earlier searches knew to their end (wsearch/known-land).
   With budget (go-to), each plan searches at most that many expansions (plan!): a plan still searching is the result
-  {:status :searching} (walk/no-walk), nothing walked; progress false: an unfinished search walks nowhere (plan!).
+  {:status :searching} (wplan/no-walk), nothing walked; progress false: an unfinished search walks nowhere (plan!).
   dangers: whether the plans keep away from known dangers (plan!). avoid: cells the plans keep off (plan!). dark: false plans dark cells like lit ones. tolls: cells the plans price (plan!)."
   [c to range doors shut-also timeout-s explore one-way budget progress dangers & [avoid dark tolls]]
   (await (walk/settle! c))
-  (let [policy-of (fn [] (cond-> (walk/body-policy c) (not= :never doors) (update :moves conj :open)))
+  (let [policy-of (fn [] (cond-> (wworld/body-policy c) (not= :never doors) (update :moves conj :open)))
         announce! (fn [_kind data] (ctx/emit! c :replan :info data))
         walk-fn (fn [steps watch]
                   (if (= :never doors)
@@ -86,10 +89,10 @@
     (when-not (= :never doors) (await (pass/shut-leftovers! c)))
     (let [result (loop [walls [] stuck nil]
                    (let [plan (await (plan! c to range doors (policy-of) walls explore one-way budget progress dangers avoid dark tolls))]
-                     (if-let [no (walk/no-walk plan 0 (policy-of))]
+                     (if-let [no (wplan/no-walk plan 0 (policy-of))]
                        (if stuck (door-stuck stuck) no)
                        (let [{done :done last-plan :plan}
-                             (await (walk/follow! c plan {:plan-fn #(plan! c to range doors (policy-of) (into walls %) explore one-way (walk/replan-budget budget) progress dangers avoid dark tolls)
+                             (await (walk/follow! c plan {:plan-fn #(plan! c to range doors (policy-of) (into walls %) explore one-way (wsearch/replan-budget budget) progress dangers avoid dark tolls)
                                                           :walk-fn walk-fn :to to :policy (policy-of) :announce! announce! :dangers dangers}))]
                          (cond
                            (not= :door-stuck (:status done))
@@ -165,7 +168,7 @@
        (nil? cell) (do (ctx/emit! c :refused :warn {:reason :bad-pos :text (:message (places/parse-pos pos))})
                        :blocked)
        (u/within? (u/self-pos c) cell range) :there
-       (nil? (walk/path-world (:primitives c))) (do (ctx/note-walk! c "blocked" 0) :blocked)
+       (nil? (wworld/path-world (:primitives c))) (do (ctx/note-walk! c "blocked" 0) :blocked)
        :else (case (:status (await (walk-round! c cell range {:doors doors :timeout-s timeout-s :one-way nil :dangers dangers :tolls tolls :zone-tolls zone-tolls})))
                "arrived" :there
                "partial" :partial

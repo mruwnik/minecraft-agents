@@ -7,7 +7,8 @@
             [engine.path.fixture :as fx]
             [engine.path.planner-tuned :as planner]
             [engine.test-util :as tu]
-            [jobs.lib.walk :as walk]))
+            [jobs.lib.walk.world :as wworld]
+            [jobs.lib.walk.plan :as wplan]))
 
 (def version "26.1")
 (def lib (delay {:mc ((tu/require-here "minecraft-data") version)
@@ -67,9 +68,9 @@
                         #js {:from #js {:x x :y (Math/floor y) :z z :px (+ x 0.5) :pz (+ z 0.5)}
                              :goal #js {:kind "near" :x gx :y gy :z gz :range 0}}
                         #js {:table (.-table pw) :space (.-space pw) :weight 1.2
-                             :limits (ex/planner-limits ex/policy (walk/solid-fn pw))})]
+                             :limits (ex/planner-limits ex/policy (wworld/solid-fn pw))})]
     (when (= "found" (.-status r))
-      (walk/plan-steps pw r))))
+      (wplan/plan-steps pw r))))
 
 (defn bot-at
   "A bot standing at feet cell [x y z], at its middle or at the point px pz inside it."
