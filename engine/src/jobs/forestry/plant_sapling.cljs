@@ -2,7 +2,8 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.gate :as gate]
-            [jobs.forestry.trees :refer [debts target-of sapling-for sapling-of log-name? replant-kind]]
+            [jobs.forestry.trees :refer [debts target-of sapling-for sapling-of log-name? replant-kind species]
+             :rename {species all-species}]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]))
 
@@ -66,7 +67,7 @@
       (cond-> {:reason :no-sapling :species species}
         species (assoc :item (sapling-of species))))))
 
-(def saplings (mapv sapling-of ["oak" "spruce" "birch" "jungle" "acacia" "dark_oak" "cherry" "mangrove" "crimson" "warped"]))
+(def saplings (mapv sapling-of all-species))
 
 (defn fetch-wait
   "The :need wait a fetch of w's sapling answers."

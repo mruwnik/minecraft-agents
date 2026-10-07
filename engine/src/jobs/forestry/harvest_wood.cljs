@@ -20,14 +20,16 @@
   {:species {:doc "log species; any when nil" :default nil}
    :radius {:doc "search radius in blocks" :default default-radius}
    :filter {:doc "items to collect; the species' log, sapling, stick and apple when nil" :default nil}
-   :ignore-zones? {:doc "act regardless of zones and claims (passed to the felling and the planting); the rules of the game allow it" :default false}})
+   :ignore-zones? {:doc "act regardless of zones and claims (passed to the felling and the planting); the rules of the game allow it" :default false}
+   :fetch {:doc "get a missing sapling (passed to plant-sapling; see its :fetch): true, a set of kinds or a map of limits; false leaves the replant owed" :default true}})
 
 (defn phases
   "The children in order: [phase job args]; the phase is also the slot. tree is the felled tree's base, if any."
-  [{:keys [species radius filter ignore-zones?]} origin tree]
+  [{:keys [species radius filter ignore-zones? fetch]} origin tree]
   [[:fell 'jobs.forestry.fell-tree {:species species :radius radius :ignore-zones? ignore-zones?}]
    [:collect 'jobs.forestry.collect-drops {:radius radius :filter (or filter (drop-filter species)) :near tree}]
-   [:plant 'jobs.forestry.plant-sapling {:species species :ignore-zones? ignore-zones? :near origin :within radius}]])
+   [:plant 'jobs.forestry.plant-sapling (cond-> {:species species :ignore-zones? ignore-zones? :near origin :within radius}
+                                         (some? fetch) (assoc :fetch fetch))]])
 
 (defn current-phase
   "The [phase job args] the job is in, from its memory."

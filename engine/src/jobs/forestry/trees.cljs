@@ -16,6 +16,10 @@
   "The overworld log blocks (the stem woods are not logs)."
   (mapv #(str % "_log") ["oak" "spruce" "birch" "jungle" "acacia" "dark_oak" "mangrove" "cherry"]))
 
+(def species
+  "Every species a sapling grows (the logs' species and the two stem woods)."
+  (conj (mapv #(subs % 0 (- (count %) 4)) log-names) "crimson" "warped"))
+
 (defn log-name? [n] (boolean (some-> n (str/ends-with? "_log"))))
 (defn leaves-name? [n] (boolean (some-> n (str/ends-with? "_leaves"))))
 (defn species-of [log-name] (str/replace log-name #"_log$" ""))

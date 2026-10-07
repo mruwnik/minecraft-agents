@@ -1,0 +1,48 @@
+;; Card fe73a5ef: jobs.forestry.plant-sapling with no sapling carried. A seen chest holding one is fetched and planted;
+;; seen oak leaves are broken for the drop (obtain :gather via gather.get-seeds; the drop is chance, so that case may need the whole
+;; limit); with no source the job waits :no-sapling; harvest-wood :fetch false passes down and leaves the debt owed.
+{:defaults
+ {:tags [:forestry :plant-sapling :fetch] :time :day
+  :plot {:height 10 :floor "grass_block" :length 64 :width 32}
+  :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "chest-sapling-fetched-and-planted"
+   :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:oak_sapling\",count:2}]}"]]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+         [:job (jobs.forestry.plant-sapling {:at #at [20 0 14] :species "oak"})]]
+   :expect [{:event {:source :job :kind :fetch.started} :within-s 20 :of-job true}
+            {:event {:source :job :kind :fetch.done} :within-s 60 :of-job true}
+            {:event {:source :job :kind :completed} :within-s 80 :of-job true}]
+   :after [[:block [20 0 14] "oak_sapling"]]}
+  {:name "leaves-broken-for-a-sapling"
+   :limit-s 170
+   :blocks [[:fill [14 0 19] [18 1 21] "oak_leaves[persistent=false]"]]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+         [:job (jobs.forestry.plant-sapling {:at #at [20 0 14] :species "oak"})]]
+   :expect [{:event {:source :job :kind :fetch.started} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind :failed} :for-s 20}]}
+  {:name "no-source-waits-no-sapling"
+   :act [[:job (jobs.forestry.plant-sapling {:at #at [20 0 14] :species "oak"})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-sapling :species "oak"}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-sapling}}}]
+   :after [[:not-block [20 0 14] "oak_sapling"]]}
+  {:name "fetch-false-waits-despite-chest"
+   :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:oak_sapling\",count:2}]}"]]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+         [:job (jobs.forestry.plant-sapling {:at #at [20 0 14] :species "oak" :fetch false})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-sapling}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :fetch.started} :for-s 20}]
+   :after [[:not-block [20 0 14] "oak_sapling"]]}
+  {:name "harvest-wood-fetch-false-leaves-debt-owed"
+   :blocks [[:fill [22 0 16] [22 3 16] "oak_log"]
+            [:fill [20 3 14] [24 4 18] "oak_leaves[persistent=true]"]
+            [:fill [22 3 16] [22 3 16] "oak_log"]
+            [:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:oak_sapling\",count:2}]}"]]
+   :body {:inventory [["iron_axe" 1]]}
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+         [:job (jobs.forestry.harvest-wood {:radius 16 :fetch false})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}
+            {:event {:source :job :kind :harvest-wood.replant-owed :data {:reason :no-sapling}} :within-s 80 :of-job true}
+            {:no-event {:source :job :kind :fetch.started} :for-s 80 :until {:source :job :kind :harvest-wood.replant-owed}}]
+   :after [[:not-block [22 0 16] "oak_sapling"]]}]}

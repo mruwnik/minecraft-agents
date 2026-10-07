@@ -5,7 +5,10 @@
             [engine.fake :as fake]
             [engine.library-test :as lt]
             [engine.memory :as mem]
-            [engine.test-util :as tu]))
+            [engine.test-util :as tu]
+            [jobs.forestry.harvest-wood :as hw]
+            [jobs.forestry.plant-sapling :as ps]
+            [jobs.forestry.trees :as trees]))
 
 (def harvest '(jobs.forestry.harvest-wood {:species "oak" :radius 10}))
 
@@ -190,3 +193,13 @@
           (await (lt/run-until-empty eng 12))
           (is (= [] (lt/debts eng)) "the debt is cleared")
           (is (= [] (filterv #(#{:error :failed} (:kind %)) @seen)) "no failure"))))))
+
+(deftest the-plant-child-gets-the-fetch-arg-only-when-given
+  (let [plant-args #(nth (some (fn [ph] (when (= :plant (first ph)) ph)) (hw/phases % nil nil)) 2)]
+    (is (not (contains? (plant-args {:species "oak"}) :fetch)) "unset: the child's default (true) applies")
+    (is (false? (:fetch (plant-args {:species "oak" :fetch false}))))
+    (is (= {:log 4} (:fetch (plant-args {:fetch {:log 4}}))))))
+
+(deftest the-sapling-list-is-derived-from-the-species-table
+  (is (= (set (map trees/sapling-of trees/species)) (set ps/saplings)))
+  (is (every? (set trees/species) ["oak" "mangrove" "crimson" "warped"])))
