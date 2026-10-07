@@ -124,6 +124,22 @@
     (is (= ["lever"] (mapv :via (opened-by r))))
     (is (re-find #"pulls 1 lever" (summary r)))))
 
+(deftest lever-door-costs-more-than-button-door
+  (let [lever [7 65 4 7 65 4 "lever" {:face "wall" :facing "west"}]
+        secs (fn [act] (:seconds (cost (run (wall-with (door "iron_door" 5) [act]) start goal {:goalFlood 0}))))
+        dear (:seconds (cost (run (wall-with (door "iron_door" 5) [lever]) start goal {:goalFlood 0 :costs {:openLever 20}})))]
+    (is (> (secs lever) (secs (button 7))))
+    (is (close? (+ (secs lever) (- 20 (:openLever pf/default-costs))) dear))))
+
+(deftest lever-door-loses-to-a-short-walk-around
+  (let [lever [7 65 4 7 65 4 "lever" {:face "wall" :facing "west"}]
+        r (run (world {:fill [[8 64 0 8 67 40 "stone"] lever
+                              [8 64 5 8 64 5 "iron_door" {:half "lower" :facing "east"}]
+                              [8 65 5 8 65 5 "iron_door" {:half "upper" :facing "east"}]]})
+               start goal {:goalFlood 0})]
+    (is (= "found" (:status r)))
+    (is (= [] (opened-by r)) "round the end of the wall, no lever")))
+
 (deftest iron-door-prefers-a-button-to-a-nearer-lever
   (let [lever [7 65 4 7 65 4 "lever" {:face "wall" :facing "west"}]
         r (run (wall-with (door "iron_door" 5) [lever [7 65 6 7 65 6 "stone_button" {:face "wall" :facing "west"}]]) start goal {:goalFlood 0})]

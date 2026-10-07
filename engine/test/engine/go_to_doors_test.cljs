@@ -303,15 +303,43 @@
           (is (= {:arrived true} @out))
           (is (> (first (at p)) 5)))))))
 
-(deftest a-lever-door-stays-a-wall
+(def lever-cell "4,65,-1")
+(def lever-spec [{lever-cell "lever"} {lever-cell {:face "wall" :facing "west" :powered false}}])
+
+(deftest a-lever-door-is-passed-and-left-open
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [w (iron-world {"4,65,-1" "lever"} {"4,65,-1" {:face "wall" :facing "west" :powered false}}
-                            :wires {"4,65,-1" ["5,64,0"]})
-              {:keys [out p]} (await (go! w {:pos [10 64 0] :range 0}))]
+        (doseq [doors [:shut :leave-open]]
+          (let [w (iron-world {lever-cell "lever"} {lever-cell {:face "wall" :facing "west" :powered false}}
+                              :wires {lever-cell ["5,64,0"]})
+                {:keys [out p eng]} (await (go! w {:pos [10 64 0] :range 0 :doors doors}))]
+            (is (= {:arrived true} @out) (str doors))
+            (is (> (first (at p)) 5) (str doors))
+            (is (= 1 (clicks p)) "one pull, never put back")
+            (is (true? (open? p [5 64 0])) "the lever's door stays open")
+            (is (= [] (opened eng)) "nothing to shut")))))))
+
+(deftest a-lever-door-is-a-wall-under-doors-never
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (iron-world {lever-cell "lever"} {lever-cell {:face "wall" :facing "west" :powered false}}
+                            :wires {lever-cell ["5,64,0"]})
+              {:keys [out p]} (await (go! w {:pos [10 64 0] :range 0 :doors :never}))]
           (is (= {:arrived false :reason :unreachable} (select-keys @out [:arrived :reason])))
           (is (zero? (clicks p))))))))
+
+(deftest a-lever-door-is-skipped-for-a-short-walk-around
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (iron-world {lever-cell "lever"} {lever-cell {:face "wall" :facing "west" :powered false}}
+                            :wires {lever-cell ["5,64,0"]})
+              w (update w :blocks merge (floor -2 -8 40 8) (box 5 64 -3 5 66 3 "stone") iron-doors)
+              {:keys [out p]} (await (go! w {:pos [10 64 0] :range 0}))]
+          (is (= {:arrived true} @out))
+          (is (zero? (clicks p)) "walked round, no lever pulled"))))))
 
 (def iron-room
   "Shut in at x 0..5, z -3..3 under a roof; the only way out is an iron door at x 5, z 0."

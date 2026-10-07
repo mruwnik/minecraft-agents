@@ -103,7 +103,7 @@
 
           ;; doors, trapdoors and gates flip `open` (iron ones ignore a hand); a lever flips `powered`; a button sets it
           (and hand? (doors/openable? here) (not (re-find #"^iron_" here))) (done (doors/flip-open w pos) "used")
-          (and hand? (= here "lever")) (done (assoc-in w [:states pos :powered] (not (:powered props))) "used")
+          (and hand? (= here "lever")) (done (doors/set-wired w pos (not (:powered props))) "used")
           (and hand? (re-find #"_button$" here) (not (:powered props))) (done (doors/press w pos) "used")
 
           (and item (re-find #"_hoe$" item) (tillable here) (not= face "down")

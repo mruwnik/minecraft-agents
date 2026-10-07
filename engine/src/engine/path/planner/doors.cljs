@@ -38,7 +38,7 @@
 
   ;; an activator for an iron door at `door`, for a body in the cell (sx, sy, sz) in front of it: a plate in that cell, or a
   ;; button or lever on the body's side of the door within 4 blocks, on a block next to the door's frame; a button beats a
-  ;; nearer lever (levers stay walls for now). nil when none.
+  ;; nearer lever (a lever door costs c-open-lever, left open once passed). nil when none.
   (findActivator [s ^js door sx sy sz side]
     (if (and (== (aget (.-tbl-activator s) (.stateAt ^js (.-snapshot s) sx sy sz)) ACT-PLATE)
              (== (+ (js/Math.abs (- (.-x door) sx)) (js/Math.abs (- (.-z door) sz))) 1))
@@ -110,7 +110,7 @@
                   (recur (inc k) (+ seconds (.-c-open s))))
               :else
               (do (.push list #js {:x (.-x b) :y (.-y b) :z (.-z b) :via (.-via act) :at (.-at act)})
-                  (recur (inc k) (+ seconds (if (identical? (.-via act) "plate") (.-c-open-plate s) (.-c-open-redstone s)))))))))))
+                  (recur (inc k) (+ seconds (case (.-via act) "plate" (.-c-open-plate s) "lever" (.-c-open-lever s) (.-c-open-redstone s)))))))))))
 
   ;; the opening pass's edge: only what the first pass did not find, and that needs something opened
   (openingEdge [s x y z h move parent-node dsec drisk slow-to corner shape]

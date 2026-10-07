@@ -1,5 +1,5 @@
 (ns jobs.lib.pass
-  "Walking a plan that opens doors, gates and trapdoors by hand, or iron doors by a button or plate. The plan is cut at each step that opens something.
+  "Walking a plan that opens doors, gates and trapdoors by hand, or iron doors by a button, lever or plate. The plan is cut at each step that opens something.
   The walk goes up to the step before it, the block is clicked open with an empty hand (jobs.lib.click) and read
   back, and the walk goes on. Once the body is out of the opened block's column the walker shuts it again, if its
   policy says so. The executor's tick never sees an :opens step.
@@ -182,15 +182,15 @@
         :else (do (await (ctx/act c :wait #js {:ms await-poll-ms})) (recur (inc n)))))))
 
 (defn ^:async work-activator!
-  "Open the door at cell through its opener o, {:via \"button\" :at cell}: the button is pressed, a plate is the body's weight
-  (the walk stops on it), then the door is read back. Same results as await-open!. A door a hand can open, behind a plate,
+  "Open the door at cell through its opener o, {:via \"button\" :at cell}: the button is pressed, a lever is pulled on (and
+  left on, so the door stays open), a plate is the body's weight (the walk stops on it), then the door is read back. Same results as await-open!. A door a hand can open, behind a plate,
   is opened by hand when the plate did not."
   [c cell {:keys [via at]} shut?]
   (let [name (some-> (block-at c at) .-name)
         door (block-at c cell)
-        pressed (when (and (= "button" via) (not (some-> door click/props-of (->> (click/reached? :open)))))
-                  (if (= :button (click/kind-of name))
-                    (:outcome (await (click/click! c at :press name)))
+        pressed (when (and (#{"button" "lever"} via) (not (some-> door click/props-of (->> (click/reached? :open)))))
+                  (if (= (keyword via) (click/kind-of name))
+                    (:outcome (await (click/click! c at (if (= "lever" via) :on :press) name)))
                     :unchanged))
         r (if (#{nil :changed} pressed) (await (await-open! c cell)) {:result :stuck})]
     (if (and (= :stuck (:result r)) (= "plate" via) (= :openable (click/kind-of (some-> (block-at c cell) .-name))))
@@ -198,9 +198,9 @@
       r)))
 
 (defn ^:async open-all!
-  "Open each block of cells (a step's :opens: a hand opens it, or its :via button or plate does), the walker's policy doors and
+  "Open each block of cells (a step's :opens: a hand opens it, or its :via button, lever or plate does), the walker's policy doors and
   shut-also deciding which it will shut again: {:pending the columns to shut, :stuck the cells that would not open}.
-  What a button or plate opened shuts itself, so it has no column to shut."
+  What a button or plate opened shuts itself, and a lever is left on: neither has a column to shut."
   [c cells doors shut-also]
   (loop [todo cells pending [] stuck []]
     (if-let [o (first todo)]
