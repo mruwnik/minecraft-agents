@@ -99,10 +99,8 @@
                        (recur (inc looks) (conj looked target) surveyed))
 
                    (and ask (not surveyed) (not (look/surveyed? c :cell)))
-                   (let [hit (await (look/survey-until! c :cell #(let [[v] (decide decide-fn)] (when-not (retry? v) [v]))))]
-                     (if hit
-                       [(first hit) looked true]
-                       (recur looks looked true)))
+                   (do (await (look/survey-until! c :cell #(let [[v] (decide decide-fn)] (when-not (retry? v) [v]))))
+                       (recur looks looked true))
 
                    :else [v looked surveyed])))))
          new (remove looked0 looked)]

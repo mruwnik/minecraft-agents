@@ -96,12 +96,13 @@
 (def absent ::absent)
 
 (defn make-world
-  "Memoised reader over block-at: {:block f :cell f :unloaded volatile-of-set}; both take x y z. The cells in
-  sealed ([x y z]) read as a wall two high."
+  "Memoised reader over block-at: {:block f :cell f :unloaded volatile-of-set :head volatile-of-set}; both take x y z.
+  The cells in sealed ([x y z]) read as a wall two high. :head collects the unloaded cells clear? read as head room."
   [block-at sealed]
   (let [blocks (volatile! {})
         cells (volatile! {})
         unloaded (volatile! #{})
+        head (volatile! #{})
         block (fn [x y z]
                 (let [k [x y z]
                       known (get @blocks k absent)]
@@ -117,6 +118,7 @@
                  {:lo 0 :hi 1 :unloaded? true}))]
     {:block block
      :unloaded unloaded
+     :head head
      :max-drop (max-drop)
      :body-height (body-height)
      :cell (fn [x y z]
@@ -133,9 +135,12 @@
   (and (< (+ y lo) (- top eps)) (> (+ y hi) (+ bottom eps))))
 
 (defn clear?
-  "True when nothing in column x z collides with the open height interval (bottom, top)."
-  [{:keys [cell]} x z bottom top]
-  (every? (fn [y] (let [c (cell x y z)] (or (nil? c) (not (overlaps? c y bottom top)))))
+  "True when nothing in column x z collides with the open height interval (bottom, top). An unloaded cell read goes
+  in the world's :head."
+  [{:keys [cell head]} x z bottom top]
+  (every? (fn [y] (let [c (cell x y z)]
+                    (when (:unloaded? c) (vswap! head conj [x y z]))
+                    (or (nil? c) (not (overlaps? c y bottom top)))))
           (range (js/Math.floor bottom) (inc (js/Math.floor (- top eps))))))
 
 (defn standable?
@@ -314,10 +319,11 @@
 
 (defn covered?
   "Whether a known block standing on the floor of the cell over [x y z] (a fence, a wall, a block) covers it: no animal
-  stands in it or on it, so what it holds does not matter."
-  [{:keys [cell]} [x y z]]
+  stands in it or on it, so what it holds does not matter. Not for a cell read as head room (a doorway under a lintel):
+  air there may be a way out."
+  [{:keys [cell head]} [x y z :as k]]
   (let [c (cell x (inc y) z)]
-    (boolean (and c (not (:unloaded? c)) (zero? (:lo c))))))
+    (boolean (and c (not (:unloaded? c)) (zero? (:lo c)) (not (contains? @head k))))))
 
 (defn unloaded-leaks
   "The unloaded (or unseen) cells the fill read, but not those covered?."

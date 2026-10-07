@@ -221,6 +221,15 @@
     (is (true? (:closed? r)) "nothing stands in or on a cell under a fence post")
     (is (= [] (:leaks r)))))
 
+(deftest an-unseen-head-cell-under-a-lintel-is-no-proof-of-a-closed-doorway
+  (let [doorway (merge (ring "stone" [64 65 66]) {[2 64 -1] "air" [2 65 -1] :unloaded [2 66 -1] "stone"})
+        r (check doorway {:max-cells 100})]
+    (is (false? (:closed? r)) "the head cell may be air: a 2-high gap a cow walks out of")
+    (is (= :unloaded (:reason r)))
+    (is (= [{:pos {:x 2 :y 65 :z -1} :why :unloaded}] (:leaks r)))
+    (is (true? (:closed? (check (assoc doorway [2 65 -1] "stone") {:max-cells 100}))) "seen: the doorway is shut")
+    (is (false? (:closed? (check (assoc doorway [2 65 -1] "air") {:max-cells 100}))) "seen: the doorway leaks")))
+
 (deftest a-start-that-is-no-floor-answers-no-start
   (are [at] (= :no-start (:reason (check fence-ring {:at at})))
     {:x 2 :y 70 :z 2}

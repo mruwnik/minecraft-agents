@@ -32,6 +32,11 @@
 
 (defn looks [p] (count (filter #(= "look" (.-name %)) (.-calls (.-world p)))))
 
+(defn look-points
+  "The points the body looked at, in order, as [x y z]."
+  [p]
+  (->> (.-calls (.-world p)) (filter #(= "look" (.-name %))) (mapv #(let [q (.. % -args -pos)] [(.-x q) (.-y q) (.-z q)]))))
+
 (def feet {:x 0 :y 64 :z 0})
 
 (deftest flat-ground-unseen-round-the-feet-is-looked-at-and-planned-3-deep
@@ -43,7 +48,7 @@
           (is (nil? (dig-cells/dig-plan p feet)) "the ground beside the feet is unseen: no plan without a look")
           (is (= {:roof {:x 0 :y 63 :z 0} :depth 3}
                  (await (sense/decide! c ::dig-plan #(dig-cells/dig-plan p feet)))))
-          (is (<= 1 (looks p) 2))
+          (is (= [[-1 64 0]] (:cells (first (filter #(= :sense.looked (:kind %)) @(:events c))))) "one look, at the unseen cell beside the feet")
           (is (= 1 (count (filter #(= :sense.looked (:kind %)) @(:events c)))) "one event per call that looked"))))))
 
 (def rock
@@ -73,7 +78,7 @@
               ore #(first (look/seen-blocks p {:names ["iron_ore"] :radius 16}))]
           (is (nil? (ore)) "behind the body: not seen")
           (is (= "iron_ore" (:name (await (sense/decide! c ::ore ore)))))
-          (is (<= 1 (looks p) 8) "one survey at most")
+          (is (= [[0.5 65.62 -3.5]] (look-points p)) "one survey, stopped at its first look: level, north, at the ore")
           (let [before (looks p)]
             (is (nil? (await (sense/decide! c ::gold #(first (look/seen-blocks p {:names ["gold_ore"] :radius 16}))))))
             (is (= before (looks p)) "surveyed from this cell already: no second survey")))))))
@@ -113,3 +118,16 @@
           (is (zero? (looks p)))
           (is (= "sand" (await (sense/decide! c ::guess floor {:verify-guesses true}))))
           (is (= 1 (looks p))))))))
+
+(deftest a-survey-hit-that-guessed-is-checked-after-a-look-with-verify-guesses
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (seeing {:self {:pos {:x 0 :y 64 :z 0}} :yaw 0 :blocks (merge rock {"0,64,-5" "iron_ore"})})
+              c (stub-ctx p)
+              hidden {:x 6 :y 64 :z 0}
+              ore-and-guess #(when-let [o (first (look/seen-blocks p {:names ["iron_ore"] :radius 16}))]
+                               [(:name o) (u/block-name-or p hidden "air")])]
+          (is (= ["iron_ore" "air"] (await (sense/decide! c ::ore ore-and-guess {:verify-guesses true}))))
+          (is (= [[6 64 0]] (:cells (first (filter #(= :sense.looked (:kind %)) @(:events c)))))
+              "the survey found the ore; the guessed cell is looked at after it"))))))

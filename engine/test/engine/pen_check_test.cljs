@@ -101,3 +101,18 @@
         (let [event (await (run-seeing {:at [2 64 2] :max-cells 100} (world {"2,64,-1" "air"}) 0))]
           (is (= :leak (:reason event)) "the gap in the fence behind the body is seen")
           (is (some #{{:x 2 :y 64 :z -1}} (map :pos (:leaks event)))))))))
+
+(deftest an-unseen-head-cell-in-a-doorway-under-a-lintel-is-no-closed-pen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [wall (into {} (for [x (range -1 6) z (range -1 6) y [64 65 66]
+                                  :when (or (#{-1 5} x) (#{-1 5} z))]
+                              [(str x "," y "," z) "stone"]))
+              w (-> (world (merge wall {"2,64,-1" "air"}))
+                    (update :blocks dissoc "2,65,-1")
+                    (assoc :unloaded #{"2,65,-1"}))
+              {:keys [event]} (await (run-job {:at [2 64 2] :max-cells 100} w))]
+          (is (false? (:closed? event)))
+          (is (= :unloaded (:reason event)))
+          (is (= [{:pos {:x 2 :y 65 :z -1} :why :unloaded}] (:leaks event))))))))
