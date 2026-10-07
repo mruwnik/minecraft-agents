@@ -1,7 +1,7 @@
 ;; jobs.survival.night holds the body at night and lets it out at day (card 79be43a4; the shelter-level hold was not ported in
 ;; card 8aa80fca). Night case: on open ground with a remembered bed the night job sleeps (a known bed within :bed-radius
-;; comes before log-out and dig-in), and each round waits: the job does not complete and the body does not walk off while it
-;; is night. (The release at day and the queued-job hold are the known-failing fixture shelter-night-hold-queued-job.) Day case: a shelter
+;; comes before log-out and dig-in); the sleep skips the night (vanilla, all online players asleep), the body wakes and the job completes.
+;; (The release at day and the queued-job hold are the known-failing fixture shelter-night-hold-queued-job.) Day case: a shelter
 ;; job by day does nothing and ends :done at once. Night: run with --allow-time --time-log <the shared time log>.
 {:defaults
  {:tags [:survival :shelter]
@@ -9,7 +9,7 @@
            [:set [16 0 4] "torch"] [:set [16 0 28] "torch"] [:set [4 0 16] "torch"] [:set [28 0 16] "torch"]]
   :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}}
  :cases
- [{:name "night-sleeps-and-shelter-does-not-complete"
+ [{:name "night-sleeps-wakes-and-completes"
    :time :night-exclusive
    :tags [:night]
    :blocks [[:set [20 0 16] "red_bed[facing=east,part=foot]"] [:set [21 0 16] "red_bed[facing=east,part=head]"]]
@@ -18,8 +18,8 @@
          [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 60]
          [:wait-s 30]]
    :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 60}
-            {:no-event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :for-s 60}
-            {:no-event {:source :body :kind :woke} :for-s 60}]
+            {:event {:source :body :kind :woke} :within-s 60}
+            {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 60}]
    :after [[:body-near [20.5 0 16.5] 3]]
    :limit-s 100}
   {:name "day-shelter-does-nothing"

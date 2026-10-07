@@ -33,6 +33,7 @@
             {:no-event {:source :job :kind :plant.done :data {:planted [:>= 1]}} :for-s 20}]
    :after [[:block [10 0 16] "air"] [:block [13 0 16] "air"]]}
   {:name "no-seed-fetches-from-a-seen-chest"
+   :body {:yaw 90}
    :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -1 17] [13 -1 17] "water"]
             [:set [8 0 14] "chest{Items:[{Slot:0b,id:\"minecraft:wheat_seeds\",count:10}]}"]]
    :act [[:job (jobs.farm.plant {:box {:min #xyz [10 -1 16] :max #xyz [13 -1 16]} :ignore-zones? true})]]

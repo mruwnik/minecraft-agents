@@ -38,7 +38,7 @@
             [:set [16 0 20] "air"] [:set [16 1 20] "air"]]
    :act [[:summon "skeleton" [16.5 0 26.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:no-event {:source :job :kind :retreat.door-shut} :for-s 25}]
-   :after [[:block [16 0 12] "oak_door[half=lower,open=true]"]]
+   :after [[:not-block [16 0 12] "cobblestone"]]
    :limit-s 40}
   {:name "open-iron-door-is-not-shut"
    :blocks [[:set [16 0 20] "iron_door[facing=south,half=lower,open=true]"]

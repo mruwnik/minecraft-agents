@@ -23,7 +23,7 @@
             {:event {:source :job :kind :mine.done :data {:got 0}} :within-s 90 :of-job true}]
    :after [[:block [26 0 16] "iron_ore"]]}
   {:name "lit-ore-is-seen-and-dug-from-the-cut-end"
-   :blocks [[:set [19 1 16] "torch"]]
+   :blocks [[:set [18 0 16] "torch"]]
    :expect [{:event {:source :job :kind :mine.left-behind} :within-s 90 :of-job true}
             {:event {:source :job :kind :mine.done} :within-s 100 :of-job true}]
    :after [[:not-block [22 0 16] "iron_ore"] [:body-near [16.5 0 16.5] 1.5]]}]}

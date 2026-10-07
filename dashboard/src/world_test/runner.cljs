@@ -315,14 +315,17 @@
 (defn time-disturbed?
   "Whether the day time jumped between two readings (ticks, nil when unread): forward by more than the elapsed real
   time allows at 20 TPS plus a margin, or backward. Standing still or running slow (low TPS, daylight cycle off) is
-  not a jump. False for a case with a :time-set step."
-  [c t0 t1 elapsed-ms]
+  not a jump. False for a case with a :time-set step, and when the body woke from sleep (all online players asleep
+  skips the night)."
+  [c t0 t1 elapsed-ms woke?]
   (boolean
-   (and t0 t1
+   (and t0 t1 (not woke?)
         (not-any? #(= :time-set (first %)) (:act c))
         (let [moved (mod (- t1 t0) 24000)]
           (and (> moved (+ (* elapsed-ms 0.02) time-jump-tolerance-ticks))
                (< moved (- 24000 time-jump-tolerance-ticks)))))))
+
+(defn woke? [events] (boolean (some #(and (= :body (:source %)) (= :woke (:kind %))) events)))
 
 (defn mark-time-disturbed
   "A failed result becomes :inconclusive when the time was disturbed during the case."
@@ -798,7 +801,8 @@
                    (.then (rcon! ["time query day"])
                           (fn [[reply]]
                             (mark-time-disturbed r (time-disturbed? rc (:ticks @t-start) (daytime (or reply ""))
-                                                                    (- (js/Date.now) (:ms @t-start))))))
+                                                                    (- (js/Date.now) (:ms @t-start))
+                                                                    (some-> @pre-register :offset (as-> off (woke? (read-events-from (events-file opts) off))))))))
                    r)))
         (.then (fn [r]
                  (-> (exec-file ["engine/tools/jobs.mjs" (:body opts) "--world" (:world opts) "cancel-all"])
