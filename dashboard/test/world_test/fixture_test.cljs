@@ -216,6 +216,13 @@
   (is (= {:place "camp-wt-probex" :by "x ProbeX"} (f/resolve-body-refs {:place "camp-$tag" :by "x $body"} "ProbeX"))
       "$tag (the lowercase shared tag) and $body inside a string"))
 
+(deftest entity-id-refs-name-a-type-and-resolve-to-numbers
+  (let [form '(jobs.combat.attack {:targets ["$entity-id:cow" "zombie" "$entity-id:pig"]})]
+    (is (= #{"cow" "pig"} (f/entity-id-types form)))
+    (is (= #{} (f/entity-id-types {:targets "zombie"})))
+    (is (= '(jobs.combat.attack {:targets [12 "zombie" 40]})
+           (f/resolve-entity-refs form {"cow" 12 "pig" 40})))))
+
 (deftest after-block-checks-floor-fractional-coordinates
   (is (= "execute if block 20001 150 20002 air" (f/after-command [20000 150 20000] "B" {} {} [:block [1.5 0 2.5] "air"])))
   (is (= "execute if block 20011 150 20011 dirt" (f/after-command [20000 150 20000] "B" {} {} [:not-block [11.5 0 11.5] "dirt"]))))

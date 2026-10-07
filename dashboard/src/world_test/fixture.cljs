@@ -508,6 +508,18 @@
   [form body]
   (walk/postwalk (fn [v] (if (string? v) (-> v (str/replace "$body" body) (str/replace "$tag" (shared-tag body))) v)) form))
 
+(defn entity-id-types
+  "The mob types named by \"$entity-id:<type>\" strings in form (a :job spec), as a set."
+  [form]
+  (let [found (atom #{})]
+    (walk/postwalk (fn [v] (when (and (string? v) (str/starts-with? v "$entity-id:")) (swap! found conj (subs v 11))) v) form)
+    @found))
+
+(defn resolve-entity-refs
+  "Replaces every \"$entity-id:<type>\" string in form with (ids type), the numeric id of a summoned mob of that type."
+  [form ids]
+  (walk/postwalk (fn [v] (if (and (string? v) (str/starts-with? v "$entity-id:")) (get ids (subs v 11) v) v)) form))
+
 ;; ------------------------------------------------------------------ after checks
 
 (defn entities-selector

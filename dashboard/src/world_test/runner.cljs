@@ -734,6 +734,28 @@
              id
              (throw (js/Error. (str "submit refused: " (str/trim out))))))))
 
+(defn entity-id!
+  "Resolves to the numeric id of the nearest mob of type the body has seen (entities.mjs), polling up to 10 s; throws when none."
+  [opts type]
+  (let [until (+ (js/Date.now) 10000)]
+    (letfn [(poll []
+              (.then (exec-file ["engine/tools/entities.mjs" (:body opts) "--world" (:world opts) "--type" type "--limit" "1"])
+                     (fn [{:keys [out]}]
+                       (let [id (some-> (try (f/read-edn out) (catch :default _ nil)) :items first :id)]
+                         (cond
+                           id id
+                           (> (js/Date.now) until) (throw (js/Error. (str "$entity-id:" type ": the body sees no " type)))
+                           :else (.then (sleep 500) poll))))))]
+      (poll))))
+
+(defn resolve-entity-ids!
+  "Resolves to spec with each \"$entity-id:<type>\" string replaced by that mob's numeric id."
+  [opts spec]
+  (.then (reduce (fn [p type] (.then p (fn [ids] (.then (entity-id! opts type) #(assoc ids type %)))))
+                 (js/Promise.resolve {})
+                 (f/entity-id-types spec))
+         #(f/resolve-entity-refs spec %)))
+
 (defn rcon-until!
   "Sends cmd every every-s seconds until an event matching pattern (since t0) is logged or limit-s passes; resolves to true
   when the event came. For shoves that must outlast a job whose pace is not fixed."
@@ -816,8 +838,9 @@
                                              (fn [out] (if-let [id (and (= [:http :submit] (take 2 step)) (f/submitted-id out))]
                                                          (do (reset! last-job id) (conj ids id))
                                                          ids)))
-                         :job (.then (submit-job! opts (f/resolve-body-refs (f/resolve-plan-refs a (plan-prefix opts)) (:body opts)) (vec (map #(str "--" (name %)) b)))
-                                     (fn [id] (reset! last-job id) (conj ids id)))))))
+                         :job (.then (resolve-entity-ids! opts (f/resolve-body-refs (f/resolve-plan-refs a (plan-prefix opts)) (:body opts)))
+                                     (fn [spec] (.then (submit-job! opts spec (vec (map #(str "--" (name %)) b)))
+                                     (fn [id] (reset! last-job id) (conj ids id)))))))))
           (js/Promise.resolve #{})
           (:act c))))
 

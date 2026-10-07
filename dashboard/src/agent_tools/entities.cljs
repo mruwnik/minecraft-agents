@@ -7,7 +7,7 @@
             ["node:fs" :as fs]
             ["node:path" :as path]))
 
-(def usage "entities.mjs BODY --world WORLD [--type TYPE] [--player NAME] [--dimension DIM] [--center X,Y,Z] [--radius N] [--limit N] [--offset N] [--raw] [--worlds DIR --state LEGACY_PARENT]\nLists entities the body has seen lately, nearest first. :pos is [x y z] blocks, :age-ms how long ago it was seen; a :heard row has :direction and :band instead of :pos; :total counts all matches, --limit/--offset page.")
+(def usage "entities.mjs BODY --world WORLD [--type TYPE] [--player NAME] [--dimension DIM] [--center X,Y,Z] [--radius N] [--limit N] [--offset N] [--raw] [--worlds DIR --state LEGACY_PARENT]\nLists entities the body has seen lately, nearest first. :id is the numeric entity id (the one attack targets), :pos is [x y z] blocks, :age-ms how long ago it was seen; a :heard row has :direction and :band instead of :pos; :total counts all matches, --limit/--offset page.")
 (def default-radius 64)
 (def default-limit 10)
 (def max-radius 512)
@@ -106,6 +106,7 @@
         pos (:pos entity)]
     (cond-> {:type (:type entity)
              :age-ms age}
+      (integer? (:id entity)) (assoc :id (:id entity))
       pos (assoc :pos (mapv round-tenth ((juxt :x :y :z) pos)))
       (:direction entity) (assoc :direction (:direction entity) :band (:band entity))
       (:uuid entity) (assoc :uuid (:uuid entity))

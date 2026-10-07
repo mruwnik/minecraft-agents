@@ -729,7 +729,7 @@ node engine/tools/time.mjs --world claude clock | dawn --timeout 1200   # world 
   result. A manual lease rejects `--now` with `:manual-control`.
 - `triggers.mjs` uses `GET/POST /triggers`; built-ins cannot be replaced or removed, only muted or moved. `put`/`add`
   replace a custom entry and reset its condition, latch, cooldown and backoff state.
-- `entities.mjs` reads the body's perception cache (`:sense` is `:seen`, `:heard` or `:remembered`; a `:heard` row has no `:pos`, only `:direction` (8 compass points)
+- `entities.mjs` reads the body's perception cache (a row has the numeric `:id` when known; `:sense` is `:seen`, `:heard` or `:remembered`; a `:heard` row has no `:pos`, only `:direction` (8 compass points)
   and `:band` (`:near` within 8, else `:far`); rows older than two minutes expire). Engine reflexes do not read it.
 - `drive.mjs` and `world.mjs` are the manual takeover tools above.
 
