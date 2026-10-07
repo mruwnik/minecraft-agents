@@ -10,17 +10,23 @@
 (defn- free-at? [^js mask i j]
   (and (>= i 0) (< i GRID) (>= j 0) (< j GRID) (not (zero? (aget mask (+ (* j GRID) i))))))
 
+(defn- blocked-at? [^js mask i j]
+  (and (>= i 0) (< i GRID) (>= j 0) (< j GRID) (zero? (aget mask (+ (* j GRID) i)))))
+
 (defn line-free?
-  "Is every mask position the segment (ai, aj) - (bi, bj) passes (one per 1/16 along its longer axis, rounded) free?"
+  "Is every mask position the segment (ai, aj) - (bi, bj) passes (one per 1/16 along its longer axis, rounded) free?
+   A leg with a blocked end (a boundary point snapped to the nearest region, at a step or a climbable) is not judged."
   [^js mask ai aj bi bj]
   (let [di (- bi ai)
         dj (- bj aj)
         n (js/Math.max (js/Math.abs di) (js/Math.abs dj))]
-    (loop [k 1]
-      (cond
-        (>= k n) true
-        (free-at? mask (js/Math.round (+ ai (/ (* di k) n))) (js/Math.round (+ aj (/ (* dj k) n)))) (recur (inc k))
-        :else false))))
+    (or (blocked-at? mask ai aj)
+        (blocked-at? mask bi bj)
+        (loop [k 1]
+          (cond
+            (>= k n) true
+            (free-at? mask (js/Math.round (+ ai (/ (* di k) n))) (js/Math.round (+ aj (/ (* dj k) n)))) (recur (inc k))
+            :else false)))))
 
 (defn- shortest
   "The free positions of a shortest 8-connected route (no corner cut) from a to b over the mask, as indices a..b, or nil."
@@ -108,7 +114,7 @@
               (nil? bends) (.push out step)
               (empty? bends) (do (when (some? next-step) (set! (.-px step) (.-cx next-step)) (set! (.-pz step) (.-cz next-step)))
                                  (.push out step))
-              :else (let [final (when (nil? next-step) (let [^js c (js/Object.assign #js {} step)] (js-delete c "cx") (js-delete c "cz") c))]
+              :else (let [final (when (nil? next-step) (let [^js c (js/Object.assign #js {} step)] (js-delete c "cx") (js-delete c "cz") (js-delete c "opens") (js-delete c "hatch") c))]
                       (set! (.-px step) (.-px head))
                       (set! (.-pz step) (.-pz head))
                       (.push out step)

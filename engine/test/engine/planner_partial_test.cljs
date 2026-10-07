@@ -3,6 +3,8 @@
   the goal among those reached without a step the body cannot undo, and result :oneWay when a nearer node lies behind one."
   (:require [cljs.test :refer [deftest is are]]
             [engine.path.planner-tuned :as planner]
+            [engine.path.planner.results]
+            [engine.path.planner.search :refer [Search]]
             [engine.planner-fixture :as pf :refer [near cells moves last-cell]]))
 
 (def DROP (:drop pf/MOVE))
@@ -187,3 +189,28 @@
   (let [pr (progress-after first-move-pit {:x 1 :y 70 :z 32} (near 120 67 32) 60)]
     (is (= DROP (get-in pr [:oneWay :move])))
     (is (false? (get-in pr [:oneWay :open])))))
+
+(defn key-search
+  "A Search with just the fields knownKey and noteOffBand read: goal at 0 64 0, the given known edges."
+  [edges]
+  (doto (js/Object.create (.-prototype Search))
+    (set! -goal-x 0) (set! -goal-z 0) (set! -frontier-reach 1000) (set! -edge-node 1)
+    (set! -known-edges edges) (set! -known-cells nil)
+    (set! -known-new (js/Set.)) (set! -edges-new #js [])))
+
+(deftest a-cell-too-far-from-the-goal-has-no-known-key
+  (let [s (key-search (js/Set.))]
+    (is (neg? (.knownKey s 1500 64 0)))
+    (is (neg? (.knownKey s 0 64 -1500)))
+    (is (neg? (.knownKey s 0 600 0)))
+    (is (not (neg? (.knownKey s 1000 64 -1000))))))
+
+(deftest a-far-expanded-node-does-not-hit-a-known-edge
+  (let [edges (js/Set. #js [(.knownKey (key-search (js/Set.)) 3 64 0)])
+        s (key-search edges)]
+    ;; z -2048 spills one step into x: (4, -2048) would alias the key of (3, 0) without a range check
+    (.noteOffBand s 1 4 64 -2048 true)
+    (is (zero? (.-size ^js (.-known-new s))) "no key hit")
+    (is (zero? (.-length ^js (.-edges-new s))))
+    (.noteOffBand s 1 3 64 0 true)
+    (is (= 1 (.-size ^js (.-known-new s))) "the near one does")))

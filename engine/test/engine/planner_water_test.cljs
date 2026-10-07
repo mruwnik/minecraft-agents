@@ -270,12 +270,12 @@
              shaft (into [[mid 66 1 mid 68 1 "air"] [mid 66 1 mid 67 1 "water"]])))))
 
 (deftest submerged-channel-breath
-  (are [len shaft reachable]
+  (are [len shaft reachable reason]
        (let [r (run (tunnel len shaft) from2 (near (+ 13 len) 64 1 0) {:goalFlood 0})]
-         (= [reachable (if reachable nil "air")] [(found? r) (:reason r)]))
-    10 false true
-    30 false false
-    30 true true))
+         (= [reachable reason] [(found? r) (:reason r)]))
+    10 false true nil
+    30 false false "air"
+    30 true true nil))
 
 (deftest breath-in-the-shaft-refills-the-air
   (let [r (run (tunnel 30 true) from2 (near 43 64 1 0) {:goalFlood 0})]

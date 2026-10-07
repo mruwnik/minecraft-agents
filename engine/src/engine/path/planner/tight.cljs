@@ -2,6 +2,7 @@
   "Search methods: tight cells, where the body fits in only part of a cell: free-space masks, regions and the moves
    between them."
   (:require [engine.path.planner.base :refer [BENT-COST BODY-BLOCKS CENTRE DROP-INSET GRID MOVE-DROP NO-MASKS REGIONS TABLE TIGHT-S UNLOADED]]
+            [engine.path.planner.bends :as bends]
             [engine.path.planner.search :refer [Search]]))
 
 (set! *warn-on-infer* true)
@@ -185,27 +186,13 @@
   ;; a crossing point to the representative point it leads to. So each such line must be free. Example: a fence post
   ;; beside a gap leaves its cell a U-shaped region. A crossing on the strip without the representative point lies
   ;; behind the post, and the body would walk into it and stick. A ring of free space round a bamboo stalk is the same.
-  ;; Is every mask point the segment (ai, aj) - (bi, bj) passes (one per 1/16 along its longer axis, rounded) free?
-  ;; If an end is itself blocked (a boundary point snapped to the nearest region, at a step or a climbable), the leg
-  ;; is not judged.
-  (lineFree [s ^js mask ai aj bi bj]
-    (let [di (- bi ai)
-          dj (- bj aj)
-          n (js/Math.max (js/Math.abs di) (js/Math.abs dj))]
-      (if (or (zero? (aget mask (+ (* aj GRID) ai))) (zero? (aget mask (+ (* bj GRID) bi))))
-        true
-        (loop [k 1]
-          (cond
-            (>= k n) true
-            (not (zero? (aget mask (+ (* (js/Math.round (+ aj (/ (* dj k) n))) GRID) (js/Math.round (+ ai (/ (* di k) n)))))))
-            (recur (inc k))
-            :else false)))))
+  ;; (bends/line-free?: every mask point of the segment free; a leg with a blocked end is not judged.)
 
   ;; pick[rb]: for each region of B a boundary point free for both cells leads to from region `label` of A, the point
   ;; nearest the line between the two representative points; -1 where none does. A drop (inset DROP-INSET, else 0)
   ;; falls from the point `inset` into B, where the body has cleared the ledge it walked off: it must pass there at the
   ;; joint height, and the fall and the landing are judged there. The legs either side of the crossing must be straight
-  ;; and free in their cell (lineFree) where one is: a bent leg (counted in pick's bits above 4) is taken only for want of a
+  ;; and free in their cell (bends/line-free?) where one is: a bent leg (counted in pick's bits above 4) is taken only for want of a
   ;; straight one, and the path then carries the bends (bendsIn).
   (crossings [s c label ^js rep-a ^boolean tight-b ^js own-a ^js own-b ^js joint-a ^js joint-b snap-a snap-b ^js falls inset]
     (let [mask-a (.-mask joint-a)
@@ -225,8 +212,8 @@
                   (let [^js rep-b (if tight-b (aget (.-regs own-b) rb) CENTRE)
                         along (if (< c 2) (/ (+ (.-pz rep-a) (.-pz rep-b)) 2) (/ (+ (.-px rep-a) (.-px rep-b)) 2))
                         picked (aget ^js (.-pick s) rb)
-                        bent (+ (if ^boolean (.lineFree s (.-mask own-a) (.-px rep-a) (.-pz rep-a) (js-mod pa GRID) (js/Math.floor (/ pa GRID))) 0 1)
-                                (if ^boolean (.lineFree s (.-mask own-b) (js-mod pf GRID) (js/Math.floor (/ pf GRID)) (.-px rep-b) (.-pz rep-b)) 0 1))]
+                        bent (+ (if ^boolean (bends/line-free? (.-mask own-a) (.-px rep-a) (.-pz rep-a) (js-mod pa GRID) (js/Math.floor (/ pa GRID))) 0 1)
+                                (if ^boolean (bends/line-free? (.-mask own-b) (js-mod pf GRID) (js/Math.floor (/ pf GRID)) (.-px rep-b) (.-pz rep-b)) 0 1))]
                     (when (or (== picked -1)
                               (< (+ (js/Math.abs (- t along)) (* BENT-COST bent))
                                  (+ (js/Math.abs (- (bit-and picked 31) along)) (* BENT-COST (bit-shift-right picked 5)))))

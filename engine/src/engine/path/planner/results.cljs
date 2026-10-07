@@ -200,7 +200,6 @@
                                (let [opened (unchecked-get (aget steps k) "opens")]
                                  (recur (inc k) (+ total (if (some? opened) (.-length opened) 0))))
                                total))
-                    :unknown 0
                     :waterSeconds (aget (.-wsecs s) node)
                     :airMin (- (.-c-air-supply s) (aget (.-peaks s) node))
                     :waterDrop (loop [k 1 best 0]
@@ -291,8 +290,12 @@
 
   ;; The key of cell x y z in options.knownCells and the result's known: relative to the goal along x and z (a frontier
   ;; node lies within frontier-reach of it), so the memory of one goal's searches holds small numbers.
+  ;; -1 for a cell the packing cannot hold (1024 or more from the goal along x or z, y outside -512..511).
   (knownKey [s x y z]
-    (+ (* (+ (* (+ (- x (.-goal-x s)) 1024) 2048) (+ (- z (.-goal-z s)) 1024)) 1024) (+ y 512)))
+    (let [dx (- x (.-goal-x s)) dz (- z (.-goal-z s))]
+      (if (or (>= (js/Math.abs dx) 1024) (>= (js/Math.abs dz) 1024) (< y -512) (>= y 512))
+        -1
+        (+ (* (+ (* (+ dx 1024) 2048) (+ dz 1024)) 1024) (+ y 512)))))
 
   ;; The frontier node: where the searched land runs on into land not loaded, so a way may go on there. Of the nodes
   ;; at the loaded edge (atLoadedEdge) within frontier-reach blocks of the goal (along x and along z), the one with
@@ -351,6 +354,7 @@
   (noteOffBand [s i x y z ^boolean expanded]
     (let [k (.knownKey s x y z)]
       (cond
+        (neg? k) nil
         (and expanded ^boolean (.has ^js (.-known-edges s) k)) (.add ^js (.-known-new s) k)
         (and (not expanded) (>= (.-edge-node s) 0) (< (.-length ^js (.-edges-new s)) 64)
              (<= (js/Math.max (js/Math.abs (- x (.-goal-x s))) (js/Math.abs (- z (.-goal-z s)))) (.-frontier-reach s))

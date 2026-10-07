@@ -26,6 +26,12 @@
     (is (true? (bends/line-free? post 0 2 16 2)) "a line clear of it")
     (is (true? (bends/line-free? post 0 8 7 8)) "the end points are not tested")))
 
+(deftest line-free-skips-a-leg-with-a-blocked-end
+  (let [post (mask-of stalk)]
+    (is (true? (bends/line-free? post 0 8 9 8)) "blocked end (snapped boundary point): not judged, though the middle is blocked")
+    (is (true? (bends/line-free? post 8 8 16 8)) "blocked start: not judged")
+    (is (false? (bends/line-free? post 0 8 12 8)) "both ends free, the stalk between: judged")))
+
 (deftest route-is-empty-when-the-leg-is-straight
   (is (= [] (bends/route (mask-of stalk) (idx 0 2) (idx 16 2)))))
 
@@ -69,6 +75,15 @@
     (is (= [1.0 0.5] [(.-px final) (.-pz final)]) "the final step is at the stand point")
     (is (undefined? (.-cx final)) "and no longer comes in by a crossing")
     (is (= [(.-px (first bends)) (.-pz (first bends))] [(.-px head) (.-pz head)]) "the step heads for its first bend")))
+
+(deftest with-bends-last-step-final-copy-opens-nothing-again
+  (let [only (walk 0 1.0 0.5 {"cx" 0.0 "cz" 0.5 "opens" #js [#js {:x 0 :y 64 :z 0}] "hatch" true "swim" true})
+        out (.withBends (search-over (mask-of stalk)) #js [only])
+        final (aget out (dec (.-length out)))]
+    (is (identical? only (aget out 0)))
+    (is (= 1 (count (filter #(some? (.-opens %)) (array-seq out)))) "the gate is opened by the first step only")
+    (is (undefined? (.-hatch final)) "a hatch is pressed once")
+    (is (true? (.-swim final)) "the body is still in the water")))
 
 (deftest with-bends-on-a-free-leg-heads-for-the-next-crossing
   (let [a (walk 0 0.5 0.5 {"cx" 0.0 "cz" 0.125})
