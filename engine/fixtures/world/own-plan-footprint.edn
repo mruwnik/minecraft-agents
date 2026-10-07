@@ -89,14 +89,15 @@
    :expect [{:event {:source :job :kind :stair.declined :data {:reason :refused}} :within-s 60 :of-job true}]
    :after [[:block [17 1 16] "stone"]]
    :limit-s 90}
+  ;; step 2 from (17 1 16) cuts (17 3 16) (18 3 16) (18 2 16); (18 1 16) is the kept floor, never cut
   {:name "stair-other-plan-footprint-mid-run"
    :plans [{:id "hut" :metadata {:by "SomeoneElse"}
-            :parts [{:id "wall" :cells [#at [18 1 16]] :want [:any "stone"]}]}]
+            :parts [{:id "wall" :cells [#at [18 2 16]] :want [:any "stone"]}]}]
    :blocks [[:fill [10 0 10] [22 3 22] "stone"] [:fill [16 0 16] [16 3 16] "air"]]
    :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 3})]]
    :expect [{:event {:source :job :kind :stair.step} :within-s 60 :of-job true}
             {:event {:source :job :kind :stair.stopped :data {:reason :footprint}} :within-s 90 :of-job true}]
-   :after [[:block [17 1 16] "air"] [:block [18 1 16] "stone"]]
+   :after [[:block [17 1 16] "air"] [:block [18 2 16] "stone"]]
    :limit-s 120}
   {:name "mine-spares-own-plan-cells-by-default-a"
    :plans [{:id "o" :metadata {:by "$body"} :parts [{:id "o" :cells [#at [20 0 16]] :want [:any "iron_ore"]}]}]
