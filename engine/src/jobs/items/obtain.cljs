@@ -309,7 +309,7 @@
       (tried! c :craft :no-plan)
 
       (= :place (:op step))
-      (let [spot (or (:spot mem) (craft/table-spot c))]
+      (let [spot (or (:spot mem) (await (craft/find-spot! c)))]
         (if-not spot
           (fruitless! c :no-table-spot)
           (do (ctx/update-mem! c assoc-in [:craft :step] step)

@@ -45,3 +45,47 @@
               _ (ht/submit! s {:target 1})
               _ (await (ht/run-ticks s 12))]
           (is (= :brought (:reason (ht/done-event s)))))))))
+
+(defn gate-state [s] (hr/gate-state (:p s) (hr/cell ht/gate)))
+
+(defn sensing [answer] #js {:sensedAt (fn [_] (clj->js answer))})
+
+(deftest a-gate-not-seen-lately-is-unknown-never-shut
+  (let [cell (hr/cell ht/gate)]
+    (is (= :shut (hr/gate-state (sensing {:name "oak_fence_gate" :properties {:open false}}) cell)) "shut gate seen")
+    (is (= :open (hr/gate-state (sensing {:name "oak_fence_gate" :properties {:open true}}) cell)) "open gate seen")
+    (is (= :unknown (hr/gate-state (sensing {:unknown true}) cell)) "never seen or aged out")
+    (is (= :unknown (hr/gate-state (:p (seeing {} true)) cell)) "a real aged gate")
+    (is (= :shut (hr/gate-state (:p (seeing {} false)) cell)) "a real gate in view")))
+
+(defn dark-run
+  "A herd run in a pitch-dark pen: nothing can be read."
+  []
+  (let [s (ht/clock-on-wait! (h/setup-seeing (ht/world {:entities [(ht/cow 1 4 3)]}) [0 0] 700))]
+    (ht/submit! s {:target 1})))
+
+(deftest a-dark-pen-is-looked-at-once-then-no-pen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (dark-run)
+              _ (await (ht/run-ticks s 40))]
+          (is (= :no-pen (:reason (ht/done-event s)))))))))
+
+(defn aged-run
+  "A herd run with the gate remembered past its 10 s, after f was applied to the setup."
+  [f world]
+  (let [s (f (seeing world true))]
+    (ht/submit! (ht/clock-on-wait! s) {:target 1})))
+
+(deftest check-unknown-walks-near-looks-once-then-no-pen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (aged-run identity {:entities [(ht/cow 1 4 3)]})
+              looks (atom 0)
+              _ (.override (.-world (:p s)) "look" (fn [_ _ _] (swap! looks inc) #js {:status "ok"}))
+              _ (await (ht/run-ticks s 40))]
+          (is (= :no-pen (:reason (ht/done-event s))) "the look did not show the gate")
+          (is (= 1 @looks) "one look at the unknown cell")
+          (is (<= (Math/abs (- 10 (ht/self-x s))) 4) "went within 4 of it"))))))

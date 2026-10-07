@@ -54,19 +54,38 @@
 
 (def table-offsets [[1 0] [-1 0] [0 1] [0 -1] [1 1] [-1 1] [1 -1] [-1 -1]])
 
+(defn spot-cells
+  "The candidate table cells beside the body: [pos floor-pos] for each offset."
+  [c]
+  (let [{:keys [x y z]} (u/self-pos c)
+        [x y z] (mapv #(js/Math.floor %) [x y z])]
+    (for [[dx dz] table-offsets
+          :let [pos {:x (+ x dx) :y y :z (+ z dz)}]]
+      [pos (update pos :y dec)])))
+
 (defn table-spot
   "A free cell beside the body to put a table in: air at the body's level with a solid block under it, or nil."
   [c]
   (let [p (:primitives c)
-        self (u/self-pos c)
-        [x y z] (mapv #(js/Math.floor (% self)) [:x :y :z])
         solid? (fn [n] (and n (not (b/air n)) (not (b/fluids n)) (not (b/clearable n))))]
-    (some (fn [[dx dz]]
-            (let [pos {:x (+ x dx) :y y :z (+ z dz)}]
-              (when (and (b/air (u/seen-name p pos))
-                         (solid? (u/seen-name p (update pos :y dec))))
-                pos)))
-          table-offsets)))
+    (some (fn [[pos floor]]
+            (when (and (b/air (u/seen-name p pos)) (solid? (u/seen-name p floor)))
+              pos))
+          (spot-cells c))))
+
+(defn ^:async find-spot!
+  "table-spot, and when the cells beside the body are not all seen: look at each unseen floor cell once (per standing
+  cell), then read again."
+  [c]
+  (or (table-spot c)
+      (let [here (look/cell-of (u/self-pos c))]
+        (when-not (= here (:looked-spot (ctx/mem c)))
+          (ctx/update-mem! c assoc :looked-spot here)
+          (doseq [[pos floor] (spot-cells c)
+                  :when (or (nil? (u/seen-name (:primitives c) pos)) (nil? (u/seen-name (:primitives c) floor)))]
+            (await (ctx/act c :look (clj->js {:pos {:x (+ (:x floor) 0.5) :y (+ (:y floor) 0.5) :z (+ (:z floor) 0.5)}})))
+            (look/see! c))
+          (table-spot c)))))
 
 (defn carried-table? [c]
   (pos? (storage/carried (u/inventory (:primitives c)) "crafting_table")))
@@ -78,10 +97,11 @@
     {:reason :need :item "crafting_table" :count 1}))
 
 (defn ^:async place-table!
-  "Put the carried table down in a free cell beside the body (a jobs.blocks.place child). :again once it stands (it
-  is the table to craft at), :continue while the child waits, nil when it could not be put down."
+  "Put the carried table down in a free cell beside the body (a jobs.blocks.place child; the floor is looked at first
+  when no spot is seen). :again once it stands (it is the table to craft at), :continue while the child waits, nil when
+  it could not be put down."
   [c]
-  (let [spot (or (:table-spot (ctx/mem c)) (table-spot c))]
+  (let [spot (or (:table-spot (ctx/mem c)) (await (find-spot! c)))]
     (when spot
       (ctx/update-mem! c assoc :table-spot spot)
       (let [r (await (ctx/call-child c :place 'jobs.blocks.place {:item "crafting_table" :pos spot :fetch false}))]

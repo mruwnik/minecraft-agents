@@ -71,8 +71,20 @@
 
 (defn gate-cell [c] (cell (:gate (ctx/mem c))))
 
-(defn gate-open? [c]
-  (boolean (seq (pg/open-cells (apiary/seen-block-at-fn (:primitives c)) [(gate-cell c)]))))
+(defn gate-state
+  "The gate at cell as the body knows it: :open, :shut, or :unknown (never seen, or remembered past its 10 s)."
+  [p cell]
+  (let [b (apiary/seen-block-at-fn p)
+        pos (cell-pos cell)]
+    (cond
+      (nil? (b pos)) :unknown
+      (seq (pg/open-cells b [cell])) :open
+      :else :shut)))
+
+(defn gate-open?
+  "True unless the gate is seen shut: an unknown gate is never taken for shut (the body goes there and reads it)."
+  [c]
+  (not= :shut (gate-state (:primitives c) (gate-cell c))))
 
 (defn same-cell? [g entry-cell] (= g (some-> entry-cell vec)))
 
