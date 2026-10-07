@@ -874,3 +874,90 @@
           (is (= [[:completed nil]] ended))
           (is (= "air" (block [0 68 0])))
           (is (= 1 (count (of-kind seen :breathe.trespass-last-resort)))))))))
+
+;; ---------------------------------------------------------------- sensing: only seen cells are targets, the cap is read by digging
+
+(defn stub-seen!
+  "Gives the fake body a perception: seen? (cell vector -> bool) cells read as the world holds them, the rest as never seen."
+  [p seen?]
+  (aset p "seenBlockAt"
+        (fn [a]
+          (let [cell [(.-x a) (.-y a) (.-z a)]]
+            (if (seen? cell)
+              #js {:name (.-name (.blockAt p a)) :pos a :age-ms 10}
+              #js {:unknown true :pos a})))))
+
+(def pocket-tunnel
+  "A stone block with a water tunnel at y 64..65 from x 0 to 9 and a one-cell shaft to air at x 6; the own column has a stone cap at y 66."
+  (merge (into {} (for [x (range -9 19) z (range -8 9) y [64 65 66]] [(str x "," y "," z) "stone"]))
+         (into {} (for [x (range 0 10) y [64 65]] [(str x "," y ",0") "water"]))
+         {"6,66,0" "water"}))
+
+(defn ^:async pocket-run!
+  "One breathe run in pocket-tunnel with seen? (cell -> bool) stubbed; the ending, the body, its reader and the dig count."
+  [seen? blocks]
+  (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}} :blocks blocks})]
+    (stub-seen! p seen?)
+    (await (one-run! eng (assoc defaults :air-radius 8)))
+    {:ended (ended seen) :p p :data (stopped-data seen)
+     :digs (count (filter #{"dig"} (call-names p)))
+     :block (fn [cell] (.-name (.blockAt p (apply tu/pos cell))))}))
+
+(deftest an-air-pocket-behind-stone-that-was-never-seen-is-not-a-target
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [ended p block]} (await (pocket-run! (fn [[x]] (zero? x)) pocket-tunnel))]
+          (is (= [[:completed nil]] ended))
+          (is (= "air" (block [0 66 0])) "dug up through the own cap instead")
+          (is (< (:x (core/self-pos p)) 3) "never went to the unseen pocket"))))))
+
+(deftest an-air-pocket-that-was-seen-is-a-target
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [ended p block]} (await (pocket-run! (constantly true) pocket-tunnel))]
+          (is (= [[:completed nil]] ended))
+          (is (= "stone" (block [0 66 0])) "no dig")
+          (is (>= (:x (core/self-pos p)) 5) "went to the pocket"))))))
+
+(deftest a-seen-pocket-that-go-to-cannot-reach-falls-back-to-the-cap
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [walled (assoc pocket-tunnel "3,64,0" "stone" "3,65,0" "stone")
+              {:keys [ended block]} (await (pocket-run! (constantly true) walled))]
+          (is (= [[:completed nil]] ended))
+          (is (= "air" (block [0 66 0])) "dug the cap once the walk failed"))))))
+
+(defn ^:async refused-dig-run!
+  "A dirt cap over a thick stack whose dig reports dug but changes nothing, so the body keeps drowning."
+  []
+  (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4} :blocks (capped-world "dirt")})]
+    (.override (.-world p) "dig" (fn ^:async f [_ _ _] #js {:status "dug"}))
+    (await (one-run! eng cap-args))
+    {:ended (ended seen) :data (stopped-data seen) :digs (count (filter #{"dig"} (call-names p)))}))
+
+(deftest a-cap-that-keeps-drowning-the-body-stops-after-three-digs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [ended data digs]} (await (refused-dig-run!))]
+          (is (= [[:stopped :no_air]] ended))
+          (is (= :dig-failed (:cap data)))
+          (is (= 3 digs)))))))
+
+(deftest a-two-cell-cap-is-dug-one-cell-and-the-air-over-it-is-not-peeked-at
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (:p (setup {:self {:inWater true :oxygen 4}
+                              :blocks (merge (capped-world "dirt") {"0,69,0" "dirt" "0,70,0" "air"})}))
+              head {:x 0 :y 65 :z 0}]
+          (is (= {:cells [{:x 0 :y 68 :z 0}]} (b/cap-above p head)))
+          (is (= {:cells [{:x 0 :y 68 :z 0}]}
+                 (b/cap-above (:p (setup {:blocks (merge (capped-world "dirt") {"0,69,0" "dirt" "0,70,0" "dirt"})})) head))
+              "the same whatever lies over the cap"))))))
+
+(deftest a-sand-cap-is-never-dug-it-would-fall-into-the-water
+  (async done (never-dug! done "sand" :gravity)))
