@@ -21,7 +21,7 @@
   ([world raw]
    (let [clock (atom 1000000)
          [seen sink] (tu/legacy-capture-sink)
-         p (tu/fake world)
+         p (tu/seeing-all (tu/fake world))
          eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                            :events (events/make {:body "Fake" :sinks [sink #(swap! raw conj %)] :now #(deref clock)})})]
      {:eng eng :p p :seen seen})))
@@ -312,7 +312,7 @@
           (is (= [[:completed nil]] (ended seen))))))))
 
 (deftest surface-pos-raises-the-body-to-the-top-of-its-water-column
-  (let [p (tu/fake {:blocks (pond 3)})]
+  (let [p (tu/seeing-all (tu/fake {:blocks (pond 3)}))]
     (doseq [[y expected] [[62 65] [64 65] [65 65] [66 66]]]
       (is (= {:x 0 :y expected :z 0} (b/surface-pos p {:x 0 :y y :z 0} 10)) (str "feet at " y)))))
 
@@ -741,7 +741,7 @@
   [{:keys [inventory zones blocks args] :or {inventory [] zones [] args step-args}}]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}} :blocks (walled-pond blocks) :inventory inventory})
+        p (tu/seeing-all (tu/fake {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}} :blocks (walled-pond blocks) :inventory inventory}))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :world (world-files/of-data {} {} zones)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -819,7 +819,7 @@
   [{:keys [block zones args] :or {block "dirt" zones [] args cap-args}}]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake {:self {:inWater true :oxygen 4} :blocks (capped-world block)})
+        p (tu/seeing-all (tu/fake {:self {:inWater true :oxygen 4} :blocks (capped-world block)}))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :world (world-files/of-data {} {} zones)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -1084,3 +1084,49 @@
     (is (nil? (b/side-cell p self)) "unseen: no side cell")
     (is (not (b/land-cell? p cell)) "unseen: no land")
     (is (not (b/shore-cell? p shore)) "unseen: no shore")))
+
+(defn neighbour-column
+  "water-column capped over the body, and an adjacent +x column of bubble_column cells (drag as given) open to air."
+  [drag]
+  {:self {:inWater true :oxygen 4}
+   :blocks (merge water-column walls {"0,68,0" "stone"}
+                  (into {} (for [y (range 64 68)] [(str "1," y ",0") "bubble_column"])))
+   :states (into {} (for [y (range 64 68)] [(str "1," y ",0") {:drag drag}]))})
+
+(deftest a-down-bubble-column-is-never-swum-into
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (neighbour-column true))]
+          (await (one-run! eng side-args))
+          (is (not-any? #(= 1 (some-> % .-args .-pos .-x)) (array-seq (.. p -world -calls))) "no step into the dragging column")
+          (is (not= 1 (js/Math.floor (:x (core/self-pos p))))))))))
+
+(deftest an-up-bubble-column-is-swum-into
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (neighbour-column false))]
+          (await (one-run! eng side-args))
+          (is (= ["moveTo"] (call-names p)))
+          (is (= 1 (js/Math.floor (:x (core/self-pos p))))))))))
+
+(deftest a-column-deeper-than-one-swim-is-swum-to-the-top
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [top 113
+              {:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4}
+                                           :blocks (into {} (concat (for [y (range 64 (inc top))] [(str "0," y ",0") "water"])
+                                                                    (for [y (range 64 (inc top)) x (range -2 3) z (range -2 3) :when (not= 0 x z)]
+                                                                      [(str x "," y "," z) "stone"])))})]
+          (.override (.-world p) "swim"
+                     (fn ^:async f [_ _ _]
+                       (fake/swap-self! p (fn [s] (update-in s [:pos 1] #(min top (+ % 10)))))
+                       (if (= top (js/Math.floor (:y (core/self-pos p))))
+                         (do (set-self! p {"oxygen" 20}) #js {:status "surfaced"})
+                         #js {:status "timeout"})))
+          (await (one-run! eng defaults))
+          (is (<= top (js/Math.floor (:y (core/self-pos p)))) "swam to the top")
+          (is (empty? (of-kind seen :no_air)) "a swim that rose is not a failed try")
+          (is (>= (count (filter #{"swim"} (call-names p))) 5)))))))

@@ -105,9 +105,19 @@
        (sort-by (fn [[dx dz]] (+ (* dx dx) (* dz dz))))))
 
 (def swimmable
-  "Fluid and water plants a body swims through as water: kelp, seagrass and a bubble column (it pushes up or down; a
-  body that swims up in it still gets out, which beats digging it as a cap)."
+  "Fluid and water plants a body swims through as water: kelp, seagrass and an upward bubble column (see seen-water-name:
+  a downward one drags to the floor and is never swum into)."
   #{"water" "kelp" "kelp_plant" "seagrass" "tall_seagrass" "bubble_column"})
+
+(defn seen-water-name
+  "u/seen-name, but a bubble column with drag true (it pulls down, over magma) reads as \"bubble_column_down\", which is
+  not swimmable."
+  [p cell]
+  (let [b (u/seen-block p cell)
+        drag? (and b (= "bubble_column" (.-name b))
+                   (let [props (or (.-properties b) (some-> (.-getProperties b) (.call b)))]
+                     (or (true? (some-> props .-drag)) (= "true" (some-> props .-drag str)))))]
+    (if drag? "bubble_column_down" (some-> b .-name))))
 
 (defn passable-water-or-air? [name]
   (or (breath/air? name) (contains? swimmable name)))
@@ -115,8 +125,8 @@
 (defn surface-in-column
   "The feet cell in column x z, at or above fy and within reach, whose head
   cell is air and which is reached through water or air only; nil if the
-  column is capped or leaves the loaded world. name-at (default u/seen-name) reads the cells; a cell never seen ends the column."
-  ([p x z fy reach] (surface-in-column p x z fy reach u/seen-name))
+  column is capped or leaves the loaded world. name-at (default seen-water-name) reads the cells; a cell never seen ends the column."
+  ([p x z fy reach] (surface-in-column p x z fy reach seen-water-name))
   ([p x z fy reach name-at]
    (loop [k 0]
      (when (<= k reach)
@@ -177,7 +187,7 @@
   [p cell]
   (some (fn [[dx dz]]
           (let [n (-> cell (update :x + dx) (update :z + dz))
-                at (fn [dy] (u/seen-name p (update n :y + dy)))]
+                at (fn [dy] (seen-water-name p (update n :y + dy)))]
             (and (passable-water-or-air? (at 0)) (passable-water-or-air? (at 1))
                  (or (= "water" (at -1)) (= "water" (at -2))))))
         [[1 0] [-1 0] [0 1] [0 -1]]))
@@ -210,13 +220,13 @@
         (if (access/unknown? p [x (:y cell) z])
           (do (await (access/look-at! c [x (:y cell) z]))
               (when-not first-only? (recur (inc k))))
-          (when (passable-water-or-air? (u/seen-name p cell))
+          (when (passable-water-or-air? (seen-water-name p cell))
             (recur (inc k))))))))
 
 (defn column-open?
   "No cell seen over the feet cell up to reach is a block: what is not seen is not a cap, so a drowning body may swim up it."
   [p x z fy reach]
-  (every? (fn [k] (let [n (u/seen-name p {:x x :y (+ fy k) :z z})] (or (nil? n) (passable-water-or-air? n))))
+  (every? (fn [k] (let [n (seen-water-name p {:x x :y (+ fy k) :z z})] (or (nil? n) (passable-water-or-air? n))))
           (range (inc (inc reach)))))
 
 (defn ^:async find-air!
@@ -246,10 +256,11 @@
         fy (js/Math.floor (:y pos))
         fz (js/Math.floor (:z pos))
         target (await (find-air! c pos))
+        ;; a swim that timed out but rose is progress, not a failed try: a deep column takes several 3 s swims
         swim! (fn ^:async f []
                 (let [surfaced? (= "surfaced" (status (await (ctx/act c :swim #js {}))))]
                   (when surfaced? (ctx/update-mem! c assoc :surfaced true))
-                  surfaced?))]
+                  (or surfaced? (<= (inc fy) (js/Math.floor (:y (u/self-pos c)))))))]
     (cond
       (and (nil? target) (column-open? p fx fz fy reach))
       (or (await (swim!)) :no-air)
@@ -314,7 +325,7 @@
   [p head]
   (let [cell (fn [k] (update head :y + k))]
     (loop [k 0]
-      (let [n (when (<= k 3) (u/seen-name p (cell k)))]
+      (let [n (when (<= k 3) (seen-water-name p (cell k)))]
         (cond
           (> k 3) {:why :no-cap}
           (nil? n) {:why :unseen}
