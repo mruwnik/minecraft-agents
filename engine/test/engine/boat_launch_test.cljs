@@ -107,3 +107,53 @@
 (deftest boat-names
   (is (every? bl/boat-name? ["oak_boat" "bamboo_raft" "oak_chest_boat"]))
   (is (not-any? bl/boat-name? ["minecart" nil "boat_x"])))
+
+(defn boat-at [id x & {:as more}]
+  (merge {:id id :name "oak_boat" :uuid (str "u-" id) :kind "other" :pos {:x x :y 64 :z 0.5} :health 1
+          :drops [{:name "oak_boat" :count 1}]}
+         more))
+
+(deftest recover-a-boat-that-takes-many-hits
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [res p]} (await (run {:blocks pond :entities [(boat-at 9 1.5 :health 100)]} {:action :recover}))]
+          (is (= :done (:status res)) (pr-str res))
+          (is (= 1 (get (lt/inv p) "oak_boat"))))))))
+
+(deftest recover-walks-to-a-far-boat-once-it-arrives
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [res p]} (await (run {:blocks pond :entities [(boat-at 9 9.5)] :radius 20} {:action :recover :radius 20}))]
+          (is (= :done (:status res)) (pr-str res))
+          (is (= 1 (get (lt/inv p) "oak_boat"))))))))
+
+(deftest recover-an-id-picks-that-boat
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [res]} (await (run {:blocks pond :entities [(boat-at 8 1.5 :drops [{:name "oak_boat" :count 1}]) (boat-at 9 3.5 :name "birch_boat" :drops [{:name "birch_boat" :count 1}])]}
+                                        {:action :recover :id 9}))]
+          (is (= {:status :done :id 9 :item "birch_boat"} (select-keys res [:status :id :item]))))))))
+
+(deftest recover-a-boat-that-never-breaks-is-not-broken
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [res]} (await (run {:blocks pond :entities [(boat-at 9 1.5 :invulnerable true)]} {:action :recover :max-s 0.3}))]
+          (is (= {:status :stopped :reason :not-broken} (select-keys res [:status :reason]))))))))
+
+(deftest recover-without-a-drop-is-not-collected
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [res]} (await (run {:blocks pond :entities [(boat-at 9 1.5 :drops [])]} {:action :recover}))]
+          (is (= {:status :stopped :reason :not-collected} (select-keys res [:status :reason]))))))))
+
+(deftest board-failed-carries-the-cause
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [res]} (await (run {:blocks pond :inventory [boat-item] :mountFails true} {}))]
+          (is (= {:status :stopped :reason :board-failed} (select-keys res [:status :reason])) (pr-str res)))))))

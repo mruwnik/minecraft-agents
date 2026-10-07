@@ -20,7 +20,7 @@
   Recover: the boat is :id, else the nearest boat or raft in sight. When aboard, it gets off first (jobs.movement.leave-vehicle),
   walks into reach (jobs.movement.go-to), hits it until it breaks and collects the dropped item (jobs.forestry.collect-drops).
   The check waits (:no-boat) while no boat is in sight. Ends {:status :done :id :item name :collected n}, info boat.recovered, or
-  {:status :stopped :reason r}: :gone, :unreachable, :leave-failed, :not-broken (still there after :max-hits), :not-collected (the item was not picked up).
+  {:status :stopped :reason r}: :gone, :unreachable, :leave-failed, :not-broken (still there after :max-s), :not-collected (the item was not picked up).
 
   Never :continue except when a child waits on the world.")
 
@@ -31,10 +31,10 @@
    :board {:doc "launch: get in once it is down" :default true}
    :id {:doc "recover: the entity id of the boat; nil: the nearest in sight" :default nil}
    :radius {:doc "how far to look for water or a boat" :default 12}
-   :max-hits {:doc "recover: hits before giving up on a boat that does not break" :default 4}})
+   :max-s {:doc "recover: seconds to keep hitting a boat that does not break (bare hands take 5 hits, a boat has no health to read)" :default 15}})
 
 (def default-item "oak_boat")
-(def reach 2.5)
+(def reach 3)
 
 (defn boat-name? [n] (boolean (and (string? n) (re-find #"_(boat|raft)$" n))))
 
@@ -140,7 +140,7 @@
 (defn ^:async recover! [c]
   (let [p (:primitives c)
         id (:id (:args c))
-        max-hits (:max-hits (:args c))]
+        deadline (+ (js/Date.now) (* 1000 (:max-s (:args c))))]
     (let [aboard (when (vehicle/mounted? p)
                    (await (ctx/call-child c :leave 'jobs.movement.leave-vehicle {})))]
       (cond
@@ -149,17 +149,18 @@
         (and (some? aboard) (= :stopped (:status (ctx/child-result c :leave))))
         (result/stop! c :leave-failed "could not get off the boat" :cause (result/cause-of :leave (ctx/child-result c :leave)))
         :else
-        (loop [hits 0 walks 0]
+        (loop [hits 0 failed 0]
           (let [boat (pick-boat c)]
             (cond
               (nil? boat) (result/stop! c :gone (if (pos? hits) "the boat broke but its item was not seen" "no boat in sight") :id id)
-              (>= hits max-hits) (result/stop! c :not-broken (str (:name boat) " is still there after " hits " hits") :id (:id boat))
+              (>= (js/Date.now) deadline) (result/stop! c :not-broken (str (:name boat) " is still there after " hits " hits") :id (:id boat))
               (> (u/dist (u/self-pos c) (:pos boat)) reach)
               (let [w (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos (:pos boat) :range 2 :escalate false}))]
                 (cond
                   (= :continue w) :continue
-                  (>= (inc walks) 2) (result/stop! c :unreachable "could not walk up to the boat" :id (:id boat))
-                  :else (recur hits (inc walks))))
+                  (= :done w) (recur hits failed)
+                  (>= (inc failed) 2) (result/stop! c :unreachable (str "could not walk within reach of the " (:name boat) ", " (int (u/dist (u/self-pos c) (:pos boat))) " cells away") :id (:id boat))
+                  :else (recur hits (inc failed))))
               :else
               (let [r (await (ctx/act c :attack #js {:id (:id boat)}))
                     status (.-status r)]
@@ -173,7 +174,7 @@
                       (zero? n) (result/stop! c :not-collected (str "the " item " was not picked up") :id (:id boat))
                       :else (do (ctx/emit! c :boat.recovered :info {:id (:id boat) :item item :collected n :text (str "took back " item)})
                                 (result/finish! c {:id (:id boat) :item item :collected n}))))
-                  (recur (inc hits) walks))))))))))
+                  (recur (inc hits) failed))))))))))
 
 (defn ^:async round [c]
   (case (or (:action (:args c)) :launch)

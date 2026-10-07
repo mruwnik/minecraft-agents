@@ -1,6 +1,7 @@
 ;; Card 84100d49: jobs.movement.boat-launch puts a boat on water and boards it (:launch), or breaks one and takes the item back (:recover).
 ;; Should-succeed: launch with a boat carried (boat.launched, aboard); :board false leaves it on the water; recover a boat afloat (boat.recovered, item back in the inventory);
 ;; recover while aboard (gets off first).
+;; Boat 4 cells out (recover walks in or stops :unreachable); a boat that cannot be reached.
 ;; Should-fail: no water in sight (waits :no-water); no boat in sight (recover waits :no-boat); a non-boat :item (stopped :bad-args).
 {:defaults
  {:tags [:boats :movement :boat-launch] :time :any
@@ -37,4 +38,19 @@
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-water}} :within-s 20 :of-job true}]}
   {:name "no-boat-to-recover-waits"
    :act [[:job (jobs.movement.boat-launch {:action :recover})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-boat}} :within-s 20 :of-job true}]}
+  {:name "non-boat-item-is-bad-args"
+   :body {:inventory [["stick" 1]]}
+   :blocks [[:fill [14 -1 14] [20 -1 18] "water"]]
+   :act [[:job (jobs.movement.boat-launch {:item "stick"})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :bad-args}} :within-s 30 :of-job true}]}
+  {:name "recover-a-boat-4-from-shore"
+   :blocks [[:fill [14 -1 14] [20 -1 18] "water"]]
+   :act [[:summon "oak_boat" [18.5 -1 16.5] "{}"]
+         [:job (jobs.movement.boat-launch {:action :recover})]]
+   :expect [{:event {:source :job :kind :boat.recovered} :within-s 60 :of-job true}]}
+  {:name "recover-by-id-of-nothing-waits"
+   :blocks [[:fill [14 -1 14] [20 -1 18] "water"]]
+   :act [[:summon "oak_boat" [15.5 -1 16.5] "{}"]
+         [:job (jobs.movement.boat-launch {:action :recover :id 999999})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-boat}} :within-s 20 :of-job true}]}]}
