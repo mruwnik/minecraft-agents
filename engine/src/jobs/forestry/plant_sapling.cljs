@@ -50,7 +50,7 @@
   (let [p (:primitives c)]
     (if (or (zero? left) (not (sapling-at? p pos)) (not (has-meal? p)))
       (do (ctx/update-mem! c dissoc :meal) :done)
-      (let [w (await (near/walk-near! c pos 3 {:zone-tolls true}))]
+      (let [w (await (near/go-near! c pos 3 {:zone-tolls true}))]
         (case w
           :partial :continue
           (do (await (ctx/act c :useOn #js {:pos (clj->js pos) :item "bone_meal" :face "up"}))
@@ -111,7 +111,7 @@
       (not (spot-allowed? c (:pos t))) :done
       (nil? sapling) (or (await (fetch/fetch! c 'jobs.forestry.plant-sapling #(some-> (problem %) fetch-wait))) :continue)
       :else
-      (let [w (await (near/walk-near! c (:pos t) 3 {:zone-tolls true}))]
+      (let [w (await (near/go-near! c (:pos t) 3 {:zone-tolls true}))]
         (case w
           :partial :continue
           :blocked (u/fail! c :plant_blocked "cannot reach the planting spot")

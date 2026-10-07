@@ -82,9 +82,9 @@
   (if (<= (u/eye-dist (u/self-pos c) pos) dig-reach)
     :there
     (let [foot (assoc pos :y (:y (:base (ctx/mem c))))
-          w (await (near/walk-near! c foot 2 {:zone-tolls true}))]
+          w (await (near/go-near! c foot 2 {:zone-tolls true}))]
       (if (= :blocked w)
-        (await (near/walk-near! c foot 3 {:zone-tolls true}))
+        (await (near/go-near! c foot 3 {:zone-tolls true}))
         w))))
 
 (defn log-dig-args
