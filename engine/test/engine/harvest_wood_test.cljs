@@ -234,3 +234,24 @@
           (is (< (await (lt/run-until-empty eng 80)) 80) "the job ends")
           (is (= 6 (get (lt/inv p) "oak_log")) "both trees felled and collected")
           (is (= 2 (count (filter #(= "oak_sapling" (.-name (.blockAt p #js {:x 3 :y 64 :z %}))) [0 6]))) "both replanted"))))))
+
+(deftest count-ends-no-tree-when-the-fell-finds-none-to-reach
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3) :inventory [{:name "oak_sapling" :count 1}]})
+              eng (assoc-in eng [:jobs 'jobs.forestry.fell-tree :round] (fn ^:async f [_] :done))
+              r (await (lt/child-outcome eng 'jobs.forestry.harvest-wood {:species "oak" :radius 10 :count 6} 60))]
+          (is (= {:status :stopped :reason :no-tree :got 0} (select-keys r [:status :reason :got]))
+              "a felling that finds no tree ends the job instead of starting the next"))))))
+
+(deftest count-ends-no-tree-when-the-trees-seen-are-felled
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (lt/setup {:blocks (merge (lt/tree 3 0 "oak" 3) {"3,63,0" "grass_block"})
+                                         :inventory [{:name "oak_sapling" :count 1}]})
+              r (await (lt/child-outcome eng 'jobs.forestry.harvest-wood {:species "oak" :radius 10 :count 6} 80))]
+          (is (= {:status :stopped :reason :no-tree :got 3} (select-keys r [:status :reason :got]))
+              "one tree felled, none left: ends with what it got, not waiting for ever")
+          (is (= 3 (get (lt/inv p) "oak_log"))))))))
