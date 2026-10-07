@@ -1110,8 +1110,11 @@
 
 (defn expect-line [{:keys [expect status evidence at-s]}]
   (str "    " (if (= :pass status) "ok  " "FAIL") " "
-       (if (:event expect) (str "event " (pr-str (:event expect)) " within " (:within-s expect) " s")
-           (str "no event " (pr-str (:no-event expect)) " for " (:for-s expect) " s"))
+       (cond
+         (:event expect) (str "event " (pr-str (:event expect)) " within " (:within-s expect) " s")
+         (:count-event expect) (str "count of " (pr-str (:count-event expect)) " in " (:for-s expect) " s, "
+                                    (pr-str (select-keys expect [:at-least :at-most])))
+         :else (str "no event " (pr-str (:no-event expect)) " for " (:for-s expect) " s"))
        (when evidence (str " -> " evidence)) (when at-s (str " at " (.toFixed at-s 1) " s"))))
 
 (defn report! [r]

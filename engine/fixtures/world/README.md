@@ -67,7 +67,7 @@ Act steps:
 
 Expectations: `{:event pattern :within-s n}` passes when a matching event is logged within n s of t0;
 `{:no-event pattern :for-s n}` passes when none is logged for n s, or, with `:until pattern`, until the first event
-matching that (if it comes within n s). `:of-job true` only counts events of the run's submitted jobs (their chain
+matching that (if it comes within n s). `{:count-event pattern :for-s n :at-least a :at-most b}` passes when the number of matching events in the n s from t0 (or `:from-s`) lies in range (above `:at-most` fails at once; `:at-least` counts as a positive anchor). `:of-job true` only counts events of the run's submitted jobs (their chain
 starts with one). Patterns are partial: a map matches a map holding at least its keys (recursively), a set any of its
 members, `[:> n] [:>= n] [:< n] [:<= n]` numbers, `[:near p r]` a position within r, `[:contains "s"]` a substring, `[:has p]` a list with one element matching p,
 `[:not p]`, `[:any]` anything present; a vector of patterns matches a sequence of that length; else equality.

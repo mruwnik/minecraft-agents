@@ -52,6 +52,18 @@
     (is (= :pass (:status (x/judge {:no-event {:kind :fired} :for-s 0.1} [fired] (assoc opts :now-ms 3000))))
         "an event after the window does not count")))
 
+(deftest a-count-event-judges-how-many-events-match-within-its-window
+  (let [e {:count-event {:kind :fired} :for-s 10 :at-most 1}
+        later (assoc fired :time-ms 3000)
+        outside (assoc fired :time-ms 20000)]
+    (is (= :pending (:status (x/judge e [fired] (assoc opts :now-ms 5000)))) "the window is still open")
+    (is (= :pass (:status (x/judge e [fired outside] (assoc opts :now-ms 12000)))) "events after the window do not count")
+    (is (= :fail (:status (x/judge e [fired later] (assoc opts :now-ms 5000)))) "over the maximum fails at once")
+    (is (= :fail (:status (x/judge {:count-event {:kind :fired} :for-s 10 :at-least 2} [fired] (assoc opts :now-ms 12000)))) "too few at the window's end")
+    (is (= :pending (:status (x/judge {:count-event {:kind :fired} :for-s 10 :at-least 2} [fired later] (assoc opts :now-ms 5000)))))
+    (is (= :pass (:status (x/judge {:count-event {:kind :fired} :for-s 10 :at-least 2 :at-most 2} [fired later] (assoc opts :now-ms 12000)))))
+    (is (= 10 (x/deadline-s [e])))))
+
 (deftest a-no-event-ignores-events-before-t0-so-a-register-time-fire-does-not-count
   (let [e {:no-event {:kind :fired} :for-s 10}]
     (is (= :pass (:status (x/judge e [(assoc fired :time-ms 500)] (assoc opts :now-ms 11001)))) "fired inside the settle, before t0")
