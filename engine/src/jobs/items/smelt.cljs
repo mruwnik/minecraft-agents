@@ -73,14 +73,14 @@
 (defn fuel-per-unit
   "How many items one fuel item smelts (the same in every kind: the quick ones cook and burn twice as fast), or nil
   when it is no fuel this job knows."
-  [kind name]
+  [_kind name]
   (cond
-         (#{"coal" "charcoal"} name) 8
-         (= "coal_block" name) 80
-         (= "blaze_rod" name) 12
-         (= "dried_kelp_block" name) 20
-         (wood-fuel? name) 1.5
-         (= "stick" name) 0.5))
+    (#{"coal" "charcoal"} name) 8
+    (= "coal_block" name) 80
+    (= "blaze_rod" name) 12
+    (= "dried_kelp_block" name) 20
+    (wood-fuel? name) 1.5
+    (= "stick" name) 0.5))
 
 (defn fuel-rank
   "Lower burns first: coal and charcoal, then wood, then sticks, then the rest."
@@ -99,7 +99,7 @@
   "How many items the fuel already in the furnace will cook: the burning fuel's bar and the fuel slot."
   [kind state]
   (let [slot (:fuel state)]
-    (+ (js/Math.floor (/ (get-in state [:burn :left] 0) (cook-ticks kind)))
+    (+ (js/Math.floor (/ (get-in state [:burn :left] 0) (cook-ticks "furnace")))
        (if slot (js/Math.floor (* (or (fuel-per-unit kind (:name slot)) 0) (:count slot))) 0))))
 
 (defn pick-fuel
