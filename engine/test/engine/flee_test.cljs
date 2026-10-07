@@ -323,15 +323,34 @@
           (is (= :hidden (:ended out)))
           (is (= [] (:list (core/state eng)))))))))
 
-(deftest a-chaser-beyond-the-radius-that-keeps-its-distance-ends-the-dance-in-a-hold
+(deftest a-chaser-beyond-the-radius-that-keeps-its-distance-ends-the-flight-keeps-off
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p] :as s} (setup {:floor [-8 -8 8 8] :entities [(zombie 7 4 {:pos {:x 4 :y 64 :z 4}})]})
-              _ (js/setTimeout #(swap! (fake/state p) assoc :entities []) 2500)
-              _ (await (run-job! s 'jobs.survival.retreat {}))
-              waits (filterv #(and (= "wait" (.-name %)) (= "cornered" (.. % -args -why))) (.-calls (.-world p)))]
-          (is (seq waits) "no gain against a chaser beyond :radius ends in a cornered hold, not a walk back and forth"))))))
+        (let [s (setup {:floor [-8 -8 8 8] :entities [(zombie 7 4 {:pos {:x 4 :y 64 :z 4}})]})
+              {:keys [calls out]} (await (run-job! s 'jobs.survival.retreat {}))]
+          (is (= [:done] calls) "the flight ends, it does not dance for ever")
+          (is (= :keeps-off (:ended out))))))))
+
+(def long-tunnel
+  "Stone round a 1-wide tunnel along x on z 0, feet and head height, x 0..20, closed behind the body at x -1."
+  (let [open (set (for [x (range 0 21) y [64 65]] [x y 0]))]
+    (into {} (for [x (range -3 23) y (range 62 68) z [-1 0 1] :when (not (open [x y z]))]
+               [(key-of x y z) "stone"]))))
+
+(deftest a-walled-in-body-with-a-chaser-beyond-the-radius-ends-the-flight-keeps-off
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p] :as s} (setup {:floor [-3 -1 23 1] :blocks long-tunnel :entities [(zombie 7 8 {})]})
+              world (.-world p)
+              _ (doseq [name ["steer" "moveTo" "wait" "attack" "place" "dig" "equip" "eat"]]
+                  (.override world name (fn ^:async f [token a impl]
+                                          (swap! (fake/state p) update :entities (partial mapv #(assoc % :pos [15 64 0])))
+                                          (await (impl token a)))))
+              {:keys [calls out]} (await (run-job! s 'jobs.survival.retreat {}))]
+          (is (= [:done] calls) "no way away, nothing within :radius: the flight ends")
+          (is (= :keeps-off (:ended out))))))))
 
 ;; ------------------------------------------------------------------ what the flight senses, resume, the round's bound
 

@@ -27,7 +27,7 @@
      When a wall blocks the way away it turns up to 120 degrees towards open ground (at least 2 clear cells).
      Eats one bite a step (up to food 20) when the nearest chaser is at least :eat-gap blocks away and food is carried.
   3. Cornered (no open direction worth a walk, or the walk is blocked; checked afresh every step) with no hostile within
-     :radius: holds a second (wait, why cornered) and looks again. With one within :radius: takes the safest option it has not yet failed.
+     :radius: holds a second (wait, why cornered) and looks again; after :no-gain-steps such steps or holds with no gain the flight ends :keeps-off. With one within :radius: takes the safest option it has not yet failed.
      - fight (jobs.survival.fight-back) only when jobs.lib.cost/fight-damage leaves :reserve health. Never against a creeper.
      - seal in: fill the open sides at feet and head height and the roof (dig-in's 1x1 cells) with carried :blocks,
        at most :max-places a step. It first steps to the middle of its cell, and does not place while a hostile's hitbox
@@ -53,7 +53,7 @@
   A chase has no time limit. With no new best gap to the nearest chaser in :no-gain-steps steps it takes the
   cornered options instead of walking on; stopped :cannot_escape only once every option failed in two sweeps in a row
   with no gain between.
-  Returns done {:fled [ids] :ended :gone|:far|:lost|:closed|:hidden|:none}, or stopped :cannot_escape.
+  Returns done {:fled [ids] :ended :gone|:far|:lost|:closed|:hidden|:keeps-off|:none}, or stopped :cannot_escape.
   Memory: one :threat entry per mob fled (jobs.lib.threats); the third from one mob within 5 min warns hostile.chased.
   A cell in another's zone is used only as a last resort (retreat.trespass-last-resort warning).")
 
@@ -283,11 +283,16 @@
         threat (first threats)
         door (when threat (door-to-shut c (danger-q/mob-pos p threat)))
         stuck (fn ^:async stuck [why]
-                (if (empty? (near-hostiles c)) (await (wait-far! c)) (await (cornered! c why))))]
+                (if (seq (near-hostiles c))
+                  (await (cornered! c why))
+                  (do (ctx/update-mem! c update :since-gain (fnil inc 0))
+                      (if (flight/no-gain? (ctx/mem c) no-gain-steps)
+                        (flight/end-flight! c :keeps-off)
+                        (await (wait-far! c))))))]
     (cond
       (nil? threat) (flight/end-flight! c nil)
       (flight/no-gain? (ctx/mem c) no-gain-steps)
-      (do (ctx/update-mem! c assoc :since-gain 0)
+      (do (when (seq (near-hostiles c)) (ctx/update-mem! c assoc :since-gain 0))
           (await (stuck "the chaser keeps up")))
       door (await (shut-door! c door))
       :else
