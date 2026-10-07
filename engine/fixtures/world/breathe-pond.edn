@@ -2,7 +2,8 @@
 ;; Walled all round (wall 2 above the water, ground outside level with the water): it never reaches a shore and the pond is narrower than a swim leg,
 ;; so, with no pillar block carried, the reflex ends stopped :no_blocks (no :afloat warning, no hold) and the body stays in the pond; it never drowns. With a ledge cut into one wall
 ;; (the ground outside is level with the water) it climbs out and the reflex ends :cleared once, also when the ledge's top is a slab, a path block or farmland.
-;; ledge-east-hostile-cuts-then-refire-lands: a zombie summoned once suffocating has fired, hostile-near above suffocating, drops the breathe run; the body flees the zombie onto dry ground (no refire).
+;; ledge-east-hostile-flees-onto-dry-ground: a zombie summoned once suffocating has fired, hostile-near above suffocating, drops the breathe run; the body flees the zombie onto dry ground (no refire).
+;; ledge-east-hostile-gone-fast-refire-lands: the zombie is killed 1 s after it came, before the flight leaves the pond; breathe fires again and lands (:cleared).
 {:defaults
  {:tags [:survival :water] :time :any
   :plot {:height 10}
@@ -70,7 +71,7 @@
             {:event {:source :reflex :kind :ended :data {:how :cleared}} :within-s 60}
             {:no-event {:source :job :kind :afloat} :for-s 60 :until {:source :reflex :kind :ended :data {:how :cleared}}}]
    :after [[:body-near [22.5 4 15.5] 4]]}
-  {:name "ledge-east-hostile-cuts-then-refire-lands"
+  {:name "ledge-east-hostile-flees-onto-dry-ground"
    :blocks [[:fill [21 4 11] [21 5 20] "air"]]
    :register [{:trigger :hostile-near :persistence :retry :backoff false :job (jobs.survival.respond-to-hostile)}
               {:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12} :job (jobs.survival.breathe {:min-oxygen 12})}]
@@ -84,6 +85,20 @@
             {:no-event {:source :job :kind :afloat} :for-s 90 :until {:source :reflex :kind :ended :context {:reflex-id :hostile-near}}}]
    ;; the flight from the zombie leads far off the ledge onto dry ground, so breathe never fires again
    :after [[:body-far [15.5 3.5 15.5] 6]]}
+  {:name "ledge-east-hostile-gone-fast-refire-lands"
+   :blocks [[:fill [21 4 11] [21 5 20] "air"]]
+   :register [{:trigger :hostile-near :persistence :retry :backoff false :job (jobs.survival.respond-to-hostile)}
+              {:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12} :job (jobs.survival.breathe {:min-oxygen 12})}]
+   :body {:at [18.5 2 15.5]}
+   :act [[:await {:source :reflex :kind :fired :context {:reflex-id :suffocating}} 40]
+         [:summon "zombie" [22.5 4 15.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:wait-s 1]
+         [:rcon "kill @e[type=zombie,tag=wt,$BOX]"]]
+   ;; the first run is dropped, so a :cleared end is a second breathe run that landed
+   :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :suffocating} :data {:outcome :dropped :by :hostile-near}} :within-s 40}
+            {:event {:source :reflex :kind :ended :context {:reflex-id :suffocating} :data {:how :cleared}} :within-s 90}
+            {:no-event {:source :job :kind :afloat} :for-s 90 :until {:source :reflex :kind :ended :context {:reflex-id :suffocating} :data {:how :cleared}}}]
+   :after [[:body-near [22.5 4 15.5] 4]]}
   {:name "ledge-east-farmland-lands"
    :blocks [[:fill [21 4 11] [21 5 20] "air"] [:fill [21 3 11] [21 3 20] "farmland"]]
    :body {:at [18.5 2 15.5]}
