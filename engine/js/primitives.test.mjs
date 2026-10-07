@@ -2223,6 +2223,16 @@ test('createPrimitives does not return until the column under the body is loaded
   assert.equal(p.blockAt({ x: 2, y: 64, z: 0 }).name, 'oak_log')
 })
 
+test('createPrimitives: a socket error while the world loads does not throw on the bot, and a kick fails the start', async () => {
+  const bot = stubBot({ ...world, unloaded: true })
+  const pending = createPrimitives(WORLD_OPTS, { connect: async () => bot, timeScale: SCALE, worldTimeoutMs: 5000 })
+  const result = assert.rejects(pending, /connection dropped while the world loaded/)
+  await sleep(50)
+  assert.doesNotThrow(() => bot.emit('error', new Error('write EPIPE')))
+  bot.emit('kicked', 'bye')
+  await result
+})
+
 test('createPrimitives refuses to start, before it connects, when a required dependency patch is missing', async () => {
   let connected = false
   const connect = async () => { connected = true; return stubBot(world) }
@@ -3014,4 +3024,22 @@ test('a damage packet for another entity is not the cause', () => {
   bot.health = 14
   bot.emit('health')
   assert.equal('damageType' in seen.find(e => e.kind === 'hurt'), false)
+})
+
+// a time bound that passes after part of the work happened reports what the inventory shows, so callers re-check the world
+test('transfer: a timeout after the items moved reports the inventory change', async () => {
+  const items = [{ name: 'cobblestone', count: 4, slot: 37 }]
+  const bot = stubBot({ ...world, items, onClick: () => { items[0].count -= 2 } })
+  const open = bot.openContainer
+  let opens = 0
+  bot.openContainer = (...args) => ++opens > 1 ? new Promise(() => {}) : open(...args) // the second open (the re-check) never answers
+  const p = createPrimitivesFromBot(bot, { timeScale: SCALE })
+  p.setOwner('t1')
+  const result = await p.transfer('t1', { pos: at(3, 64, 0), direction: 'deposit', item: 'cobblestone', count: 2 })
+  assert.deepEqual(result, { status: 'timeout', inventoryChange: { cobblestone: -2 } })
+})
+
+test('a timeout with nothing changed stays a bare timeout', async () => {
+  const { p } = rig(hanging(acting.find(c => c.name === 'transfer')))
+  assert.deepEqual(await p.transfer('t1', { pos: at(3, 64, 0), direction: 'deposit', item: 'cobblestone', count: 2 }), { status: 'timeout' })
 })

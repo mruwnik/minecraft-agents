@@ -84,11 +84,19 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     .filter(e => Math.hypot(e.position.x - bot.entity.position.x, e.position.z - bot.entity.position.z) <= MONSTER_RANGE && Math.abs(e.position.y - bot.entity.position.y) <= 5)
 
   // Runs `body(ctx)` as one call owned by `token`. The call ends the moment the owner changes (rejects with cut), or
-  // when its time bound passes (resolves onTimeout(), default {status: 'timeout'}); both run the aborts the body
+  // when its time bound passes (resolves onTimeout(), default {status: 'timeout'} plus `inventoryChange` {item: delta}
+  // when the stacks changed meanwhile, so a half-done transfer, craft or trade is not read as nothing done); both run the aborts the body
   // registered, and `ctx.alive()` then throws so the body stops reaching the bot. Any other throw from the body (a
   // mineflayer rejection) resolves {status: 'failed', reason}. Entry with a stale token throws.
-  const act = (token, { boundS, onTimeout = () => ({ status: 'timeout' }) }, body) => {
+  const inventoryDelta = (before, after) => Object.fromEntries([...new Set([...Object.keys(before), ...Object.keys(after)])]
+    .map(name => [name, (after[name] ?? 0) - (before[name] ?? 0)]).filter(([, d]) => d !== 0))
+  const act = (token, { boundS, onTimeout }, body) => {
     if (!isOwner(token)) return Promise.reject(cutError())
+    const startCounts = onTimeout ? null : countsNow()
+    const timedOut = onTimeout ?? (() => {
+      const inventoryChange = inventoryDelta(startCounts, countsNow())
+      return Object.keys(inventoryChange).length > 0 ? { status: 'timeout', inventoryChange } : { status: 'timeout' }
+    })
     return new Promise((resolve, reject) => {
       const aborts = []
       let settled = false
@@ -105,7 +113,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
         alive: () => { if (settled || !isOwner(token)) throw cutError() },
         onAbort: fn => aborts.push(fn)
       }
-      const timer = setTimeout(() => { if (settled) return; runAborts(); settle(resolve)(onTimeout()) }, Math.max(1, boundS * 1000 * timeScale))
+      const timer = setTimeout(() => { if (settled) return; runAborts(); settle(resolve)(timedOut()) }, Math.max(1, boundS * 1000 * timeScale))
       inflight.add(call)
       Promise.resolve().then(() => body(ctx)).then(settle(resolve), err => settled ? undefined : (isCut(err) ? settle(reject)(err) : settle(resolve)(failed(err))))
     })
@@ -534,7 +542,18 @@ export async function createPrimitives ({ view: viewOpts, ...opts }, { connect =
   if (required.length) throw new Error(`refusing to start: dependency patches missing (${required.join(', ')}); run node tools/patch-deps.mjs (an npm install undid them)`)
   const view = viewOpts ? createView(viewOpts) : null
   const bot = await connect(opts)
-  const pending = await waitForWorld(bot, { timeoutMs: worldTimeoutMs }) ? [] : [{ kind: 'world-not-loaded', ms: worldTimeoutMs }]
+  // connect's own guards are gone at spawn and bindEvents comes later: a socket error would crash the process and a kick
+  // would go unseen, so guard the wait and refuse to start on a bot that already dropped
+  let dropped = null
+  const onDrop = reason => { dropped = reason }
+  bot.on('error', () => {})
+  bot.once('end', onDrop)
+  bot.once('kicked', onDrop)
+  const loaded = await waitForWorld(bot, { timeoutMs: worldTimeoutMs, stop: () => dropped !== null })
+  bot.removeListener('end', onDrop)
+  bot.removeListener('kicked', onDrop)
+  if (dropped !== null) throw new Error(`connection dropped while the world loaded: ${JSON.stringify(dropped)}`)
+  const pending = loaded ? [] : [{ kind: 'world-not-loaded', ms: worldTimeoutMs }]
   const titles = missingPatches(readFile)
   if (titles.length) pending.push({ kind: 'dependency-patches-missing', titles, text: 'run node tools/patch-deps.mjs (an npm install undid them)' })
   return createPrimitivesFromBot(bot, { timeScale, reconnect: () => connect(opts), view, worldTimeoutMs, settleMs, pending })
