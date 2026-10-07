@@ -453,7 +453,8 @@
         r (if keep?
             (await (walk-to! c :out (:entry plan)))
             (let [k (await (declined/call-child! c :out 'jobs.access.leave-tunnel
-                                           {:tunnel way-out :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+                                           (cond-> {:tunnel way-out :ignore-zones? (boolean (:ignore-zones? (:args c)))}
+                                             (some? (:fetch (:args c))) (assoc :fetch (:fetch (:args c))))))]
               (cond (= :done k) (ctx/child-result c :out)
                     (= :declined k) :declined
                     :else :continue)))]

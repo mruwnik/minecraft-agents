@@ -403,6 +403,35 @@
           (is (some? (:leave @out)) "a dead end goes through leave-tunnel, which digs its own way out")
           (is (not= :walk-failed (:reason (:leave @out))) "the escape got the body out, or the walk did"))))))
 
+(defn ^:async lost-pickaxe-dead-end!
+  "A dead end whose way back is blocked and whose pickaxe is gone, so leave-tunnel's escape stair needs one."
+  [args]
+  (let [prep (fn [p]
+               (let [world (.-world p)
+                     n (atom 0)]
+                 (.override world "steer"
+                            (fn ^:async f [token a impl]
+                              (let [r (await (impl token a))]
+                                (when (= 3 (swap! n inc))
+                                  (set-block! p "-2,65,0" "stone") (set-block! p "-2,66,0" "stone")
+                                  (swap! (.-state world) assoc :inventory []))
+                                r)))))]
+    (await (tunnel! {:blocks (assoc ground "6,57,0" "iron_ore")} (merge {:target [6 57 0]} args) prep))))
+
+(deftest a-dead-end-without-a-pickaxe-fetches-for-its-escape-by-default
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen]} (await (lost-pickaxe-dead-end! {}))]
+          (is (seq (filter #(#{:fetch.started :fetch.failed} (:kind %)) @seen))))))))
+
+(deftest tunnel-fetch-false-is-passed-to-the-leave-tunnel-child
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen]} (await (lost-pickaxe-dead-end! {:fetch false}))]
+          (is (empty? (filter #(#{:fetch.started :fetch.failed} (:kind %)) @seen))))))))
+
 (deftest a-way-back-blocked-on-the-run-stops-at-the-stand
   (async done
     (tu/run-async done
