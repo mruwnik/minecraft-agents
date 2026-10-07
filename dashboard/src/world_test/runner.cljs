@@ -719,12 +719,37 @@
       (.then #(when (seq (:register c)) (put-register! opts (:register c) origin)))))
 
 (defn tool-step!
-  "Runs a :cli or :http step: the tool's answer must pass f/judge-reply or the step throws."
+  "Runs a :cli or :http step: the tool's answer must pass f/judge-reply or the step throws. Resolves to the tool's output."
   [opts step last-job]
-  (.then (exec-file (f/step-argv (:body opts) (:world opts) step last-job))
-         (fn [{:keys [code out]}]
-           (let [{:keys [pass? evidence]} (f/judge-reply (f/step-pattern step) code out)]
-             (when-not pass? (throw (js/Error. (str (pr-str (vec (take 2 step))) " step: " evidence))))))))
+  (let [argv (f/step-argv (:body opts) (:world opts) step last-job)]
+    (if-let [why (f/argv-gap argv)]
+      (js/Promise.reject (js/Error. (str (pr-str (vec (take 2 step))) " step: " why)))
+      (.then (exec-file argv)
+             (fn [{:keys [code out]}]
+               (let [{:keys [pass? evidence]} (f/judge-reply (f/step-pattern step) code out)]
+                 (when-not pass? (throw (js/Error. (str (pr-str (vec (take 2 step))) " step: " evidence))))
+                 out))))))
+
+(declare judge-file-check)
+
+(defn until-step!
+  "Polls check (a :memory / :file after check or a :cli step) every 500 ms until it passes; throws with its last evidence
+  after limit-s seconds."
+  [opts check limit-s last-job]
+  (let [until (+ (js/Date.now) (* 1000 limit-s))
+        run (fn [] (if (f/after-file check)
+                     (js/Promise.resolve (let [r (judge-file-check opts check)] (when-not (:pass? r) (:evidence r))))
+                     (-> (tool-step! opts check last-job)
+                         (.then (constantly nil))
+                         (.catch #(.-message %)))))]
+    (letfn [(poll []
+              (.then (run)
+                     (fn [why]
+                       (cond
+                         (nil? why) nil
+                         (> (js/Date.now) until) (throw (js/Error. (str ":until " (pr-str (vec (take 2 check))) " not met after " limit-s " s: " why)))
+                         :else (.then (sleep 500) poll)))))]
+      (poll))))
 
 (defn run-steps!
   "Runs the act steps in order; resolves to the set of submitted job ids. :await and :rcon-until see events from
@@ -745,7 +770,11 @@
                          :await (.then (await-event opts offset a t0 (* 1000 b))
                                        (fn [ev] (if ev ids (throw (js/Error. (str ":await " (pr-str a) " timed out after " b " s"))))))
                          :restart-body (.then (restart-body! opts origin c) (constantly ids))
-                         (:cli :http) (.then (tool-step! opts step @last-job) (constantly ids))
+                         :until (.then (until-step! opts a b @last-job) (constantly ids))
+                         (:cli :http) (.then (tool-step! opts step @last-job)
+                                             (fn [out] (if-let [id (and (= [:http :submit] (take 2 step)) (f/submitted-id out))]
+                                                         (do (reset! last-job id) (conj ids id))
+                                                         ids)))
                          :job (.then (submit-job! opts (f/resolve-body-refs (f/resolve-plan-refs a (plan-prefix opts)) (:body opts)) (vec (map #(str "--" (name %)) b)))
                                      (fn [id] (reset! last-job id) (conj ids id)))))))
           (js/Promise.resolve #{})

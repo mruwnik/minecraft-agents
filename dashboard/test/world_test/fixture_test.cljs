@@ -411,13 +411,20 @@
   (is (:pass? (f/judge-reply nil 0 "anything")) "without a pattern the exit code decides")
   (is (not (:pass? (f/judge-reply nil 1 "boom")))))
 
+(def real-memory-text
+  "A memory.edn as engine.memory/write! stores two deaths ({:t :wt :data} entries under :entries, kinds under :policies)."
+  (pr-str {:entries {:deaths [{:t 1 :wt 100 :data {:pos [1 64 2] :dimension "overworld" :cause :lava}}
+                              {:t 2 :wt 200 :data {:pos [3 64 4] :dimension "overworld" :cause :fall}}]}
+           :policies {:deaths {:cap 20 :ttl :forever}}}))
+
 (deftest file-and-memory-after-checks-read-the-body-files
   (is (= "engine/memory.edn" (f/after-file [:memory {:deaths [:any]}])))
   (is (= "engine/x.edn" (f/after-file [:file "engine/x.edn" {}])))
   (is (nil? (f/after-file [:block [0 0 0] "air"])))
-  (is (:pass? (f/judge-file-after [:memory {:deaths [{:dimension "overworld"} {:dimension "overworld"}]}]
-                                  "{:deaths [{:dimension \"overworld\" :cause :x} {:dimension \"overworld\"}]}")))
-  (is (not (:pass? (f/judge-file-after [:memory {:deaths [{} {}]}] "{:deaths [{}]}"))))
+  (is (:pass? (f/judge-file-after [:memory {:entries {:deaths [{:data {:dimension "overworld"}} {:data {:pos [:any]}}]}}]
+                                  real-memory-text)))
+  (is (not (:pass? (f/judge-file-after [:memory {:entries {:deaths [{} {} {}]}}] real-memory-text))))
+  (is (not (:pass? (f/judge-file-after [:memory {:deaths [{:pos [:any]}]}] real-memory-text))) "the old top-level :deaths shape never matches")
   (is (not (:pass? (f/judge-file-after [:memory {:deaths [:any]}] nil))) "a missing file fails with a reason")
   (is (not (:pass? (f/judge-file-after [:file "a" {}] "{:bad")))))
 
@@ -429,3 +436,18 @@
     (is (some #(re-find #":act steps" %) (ps {:act [[:cli "no/such" []]]})))
     (is (some #(re-find #":act steps" %) (ps {:act [[:cli "plans" "check"]]})))
     (is (some #(re-find #":after" %) (ps {:after [[:file 7 {}]]})))))
+
+(deftest submitted-job-id-is-read-from-jobs-submit-output
+  (is (= "j12" (f/submitted-id "{:ok true :job {:id \"j12\" :status :queued}}")))
+  (is (nil? (f/submitted-id "{:ok false :error \"refused\"}"))))
+
+(deftest tool-step-argv-gap-names-an-unfilled-placeholder
+  (is (nil? (f/argv-gap ["engine/tools/jobs.mjs" "B" "cancel" "j1"])))
+  (is (some? (f/argv-gap (f/step-argv "B" "claude" [:http :cancel "$job"] nil)))))
+
+(deftest until-step-polls-a-file-or-tool-check
+  (let [ps #(f/step-problem? %)]
+    (is (not (ps [:until [:memory {:entries {}}] 20])))
+    (is (not (ps [:until [:cli "jobs" [] {:items [{:status :queued}]}] 20])))
+    (is (ps [:until [:block [0 0 0] "air"] 20]) "only checks the runner can re-run")
+    (is (ps [:until [:memory {}]]) "a bound is required")))

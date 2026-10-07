@@ -8,12 +8,13 @@
   :limit-s 90}
  :cases
  [{:name "two-deaths-two-entries"
-   :act [[:wait-s 1] [:kill-body] [:await {:source :body :kind :respawned} 30]
-         [:wait-s 2] [:kill-body] [:await {:source :body :kind :respawned} 30] [:wait-s 3]]
+   :act [[:kill-body] [:await {:source :body :kind :respawned} 30]
+         [:kill-body] [:await {:source :body :kind :respawned} 30]
+         [:until [:memory {:entries {:deaths [{:data {:pos [:any]}} {:data {:pos [:any]}}]}}] 15]]
    :expect [{:event {:source :body :kind :respawned} :within-s 60}]
-   :after [[:memory {:deaths [{:pos [:any]} {:pos [:any]}]}]]}
+   :after [[:memory {:entries {:deaths [{:data {:pos [:any]}} {:data {:pos [:any]}}]}}]]}
   {:name "restart-keeps-one-entry"
-   :act [[:wait-s 1] [:kill-body] [:await {:source :body :kind :respawned} 30] [:wait-s 3]
+   :act [[:kill-body] [:await {:source :body :kind :respawned} 30] [:until [:memory {:entries {:deaths [{:data {:pos [:any]}}]}}] 15]
          [:restart-body]]
    :expect [{:event {:source :body :kind :respawned} :within-s 60}]
-   :after [[:memory {:deaths [{:pos [:any]}]}]]}]}
+   :after [[:memory {:entries {:deaths [{:data {:pos [:any]}}]}}]]}]}

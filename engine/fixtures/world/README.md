@@ -55,10 +55,14 @@ patterns write `#at [x y z]` (absolute `[x y z]`) or `#xyz [x y z]` (absolute `{
 | `:after` | RCON checks after the expectations are decided (below) | `[]` |
 | `:limit-s` | the longest a run may watch the log | 120 |
 
-Act steps: `[:summon "type" p "{NBT}"]` (the runner adds `Tags:["wt"]` and `PersistenceRequired`), `[:job (spec) [:now]]`
-(submitted with `engine/tools/jobs.mjs`; its id joins the run's jobs), `[:wait-s n]`, `[:await pattern s]` (wait for an
-event since t0, error after s), `[:kill-body]`, `[:time-set ticks]` (needs `--allow-time`), `[:restart-body]` (stops the body, starts it keeping memory and position, puts the register again), `[:cli "tool" [args] pattern?]` (runs `engine/tools/<tool>.mjs` with `$body $world $job` filled in; the printed EDN must match the pattern, else exit 0), `[:http op arg pattern?]` (`:submit spec [flags]`, `:cancel id`, `:cancel-all`, `:take {:who :why :idle-s}`, `:release {:who}` through jobs.mjs / drive.mjs; the manual lease is force-released after the run), `[:rcon "text"]` (with
-`$BODY $X $Y $Z $BOX` = the body, the plot origin and the plot box; every `@e` selector must be a plot box, e.g. `kill @e[type=zombie,$BOX]`).
+Act steps:
+- `[:summon "type" p "{NBT}"]` (the runner adds `Tags:["wt"]` and `PersistenceRequired`), `[:rcon "text"]` (with `$BODY $X $Y $Z $BOX` = the body, the plot origin and the plot box; every `@e` selector must be a plot box, e.g. `kill @e[type=zombie,$BOX]`).
+- `[:job (spec) [:now]]`: submitted with `engine/tools/jobs.mjs`; its id joins the run's jobs.
+- `[:await pattern s]`: wait for an event since t0, error after s. `[:until check s]`: poll a `:memory` / `:file` check or a `:cli` step every 0.5 s until it passes, error after s. Prefer these to `[:wait-s n]`.
+- `[:kill-body]`, `[:time-set ticks]` (needs `--allow-time`), `[:restart-body]` (stops the body, starts it keeping memory and position, puts the register again).
+- `[:cli "tool" [args] pattern?]`: runs `engine/tools/<tool>.mjs` with `$body $world $job` filled in (an unfilled one fails the step); the printed EDN must match the pattern, else exit 0.
+- `[:http op arg pattern?]`: `:submit spec [flags]` (its id becomes `$job` and joins the run's jobs), `:cancel id`, `:cancel-all`, `:take {:who :why :idle-s}`, `:release {:who}` through jobs.mjs / drive.mjs; the manual lease is force-released after the run.
+- `:memory` pattern: the body's `engine/memory.edn` is `{:entries {kind [{:t :wt :data {...}}]} :policies {...}}`, so match `{:entries {:deaths [{:data {:pos [:any]}}]}}`.
 
 Expectations: `{:event pattern :within-s n}` passes when a matching event is logged within n s of t0;
 `{:no-event pattern :for-s n}` passes when none is logged for n s, or, with `:until pattern`, until the first event

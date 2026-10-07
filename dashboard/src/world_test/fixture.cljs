@@ -177,15 +177,16 @@
         kept (.filter arr (fn [m] (not= tag (.-by m))))]
     (if (= (.-length kept) (.-length arr)) text (markers-text kept))))
 
-(def step-kinds #{:summon :rcon :rcon-until :job :wait-s :await :kill-body :time-set :restart-body :cli :http})
+(def step-kinds #{:summon :rcon :rcon-until :job :wait-s :await :kill-body :time-set :restart-body :cli :http :until})
 (def after-kinds #{:block :not-block :body-near :body-far :item :entities :memory :file})
 (def http-ops #{:submit :cancel :cancel-all :take :release})
 (def cli-tools #{"jobs" "drive" "plans" "map" "world" "say" "time" "triggers" "entities" "observe" "workspace" "blueprints"})
 
 (defn step-problem?
   "Whether an :act step has a kind or shape the runner cannot run (kinds without extra shape are only checked by name)."
-  [[op a b]]
+  [[op a b :as step]]
   (case op
+    :until (not (and (= 3 (count step)) (number? b) (vector? a) (or (#{:memory :file} (first a)) (and (= :cli (first a)) (not (step-problem? a))))))
     :cli (not (and (cli-tools a) (vector? b) (every? string? b)))
     :http (not (http-ops a))
     (not (step-kinds op))))
@@ -602,6 +603,16 @@
                (into [(str "engine/tools/" tool ".mjs")] args)
                (http-argv body world (walk/postwalk fill step)))]
     (if (= :cli op) (mapv fill argv) argv)))
+
+(defn argv-gap
+  "Why argv cannot run (a \"$job\" placeholder had no job to fill it), nil when it can."
+  [argv]
+  (when (some nil? argv) "$job is used before any job was submitted"))
+
+(defn submitted-id
+  "The job id jobs.mjs submit printed, nil when it printed a refusal."
+  [out]
+  (second (re-find #":id \"(j\d+)\"" (str out))))
 
 (defn step-pattern
   "The answer pattern of a :cli or :http step, nil when it has none."
