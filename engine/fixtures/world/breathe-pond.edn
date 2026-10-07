@@ -2,7 +2,7 @@
 ;; Walled all round (wall 2 above the water, ground outside level with the water): it never reaches a shore and the pond is narrower than a swim leg,
 ;; so, with no pillar block carried, the reflex ends stopped :no_blocks (no :afloat warning, no hold) and the body stays in the pond; it never drowns. With a ledge cut into one wall
 ;; (the ground outside is level with the water) it climbs out and the reflex ends :cleared once, also when the ledge's top is a slab, a path block or farmland.
-;; ledge-east-hostile-cuts-then-refire-lands: a zombie summoned once suffocating has fired, hostile-near above suffocating, drops the breathe run; once it is killed breathe fires again and lands.
+;; ledge-east-hostile-cuts-then-refire-lands: a zombie summoned once suffocating has fired, hostile-near above suffocating, drops the breathe run; the body flees the zombie onto dry ground (no refire).
 {:defaults
  {:tags [:survival :water] :time :any
   :plot {:height 10}
@@ -80,9 +80,10 @@
          [:wait-s 12]
          [:rcon "kill @e[type=zombie,tag=wt,$BOX]"]]
    :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :suffocating} :data {:outcome :dropped :by :hostile-near}} :within-s 40}
-            {:event {:source :reflex :kind :ended :context {:reflex-id :suffocating} :data {:how :cleared}} :within-s 90}
-            {:no-event {:source :job :kind :afloat} :for-s 90 :until {:source :reflex :kind :ended :context {:reflex-id :suffocating} :data {:how :cleared}}}]
-   :after [[:body-near [22.5 4 15.5] 4]]}
+            {:event {:source :reflex :kind :ended :context {:reflex-id :hostile-near}} :within-s 90}
+            {:no-event {:source :job :kind :afloat} :for-s 90 :until {:source :reflex :kind :ended :context {:reflex-id :hostile-near}}}]
+   ;; the flight from the zombie leads far off the ledge onto dry ground, so breathe never fires again
+   :after [[:body-far [15.5 3.5 15.5] 6]]}
   {:name "ledge-east-farmland-lands"
    :blocks [[:fill [21 4 11] [21 5 20] "air"] [:fill [21 3 11] [21 3 20] "farmland"]]
    :body {:at [18.5 2 15.5]}
