@@ -17,7 +17,7 @@
      jobs.apiary.guard
      jobs.apiary.maintain
      jobs.village.trade
-     jobs.village.feed jobs.village.breed
+     jobs.village.feed jobs.village.breed jobs.village.maintain
      jobs.items.smelt
      jobs.items.enchant jobs.items.obtain jobs.items.get-tool jobs.items.fetch-limits
      jobs.build.from-plan jobs.build.pen jobs.build.rail-line
