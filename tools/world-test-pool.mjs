@@ -100,6 +100,7 @@ export const parseListed = (text) => {
   return m
 }
 // the units that have at least one listed case (all of them without a listing)
+export const noCasesSelected = (units, listed) => listed !== null && !units.length
 export const unitsWithCases = (units, listed) => (listed ? units.filter((u) => listed.has(u)) : units)
 const emitLine = (e) => { if (process.env.TEST_EVENTS) console.log(`@@test ${JSON.stringify(e)}`) }
 export const mergeText = (forms) => `[${forms.join('\n ')}]`
@@ -257,7 +258,7 @@ export const runPool = async ({ units, workers, runUnit, retries = 1, load = () 
   }
   await Promise.all(workers.map(loop))
   const forms = [...done.values()]
-  return { skipped, text: mergeText(forms), code: forms.length && forms.every((f) => ['pass', 'flaky'].includes(summarize(f).status)) ? 0 : 1 }
+  return { skipped, text: mergeText(forms), code: !forms.length ? 2 : forms.every((f) => ['pass', 'flaky'].includes(summarize(f).status)) ? 0 : 1 }
 }
 
 // ---- the real thing
@@ -296,6 +297,11 @@ export const main = async (args) => {
   const listing = listCases(script, p)
   const listed = listing === null ? null : parseListed(listing)
   const units = unitsWithCases(unitOrder([...byStem.keys()], previous), listed)
+  if (noCasesSelected(units, listed)) {
+    console.error('world-test pool: no cases selected (none match the paths and flags, or all are unchanged under --changed-since-pass)')
+    emitLine({ event: 'plan', total: 0 })
+    return 2
+  }
   const cores = os.cpus().length
   const workers = workerSpecs(poolCap({ bodies: p.bodies, maxParallel: p.maxParallel, availableMb: availableMb(), floorMb: slotConfig().floorMb, needMb: slotConfig().kinds.body.needMb, bodyMax: bodyCap() }), bodyCap(), p.prefix, p.firstPlot)
   const reaper = createReaper((f) => fs.rmSync(f, { force: true }))
