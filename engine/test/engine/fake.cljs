@@ -891,14 +891,15 @@
               "self" (fn [] (if (:offline @state) #js {:status "offline"} (self-view @state)))
               "entities"
               (fn [a]
-                (let [{:keys [radius kind names max] :or {radius 16 max 32}} (js->clj (or a #js {}) :keywordize-keys true)
+                (let [{:keys [radius kind names ids max] :or {radius 16 max 32}} (js->clj (or a #js {}) :keywordize-keys true)
                       w @state]
                   (if (:offline w)
                     #js []
                     (->> (:entities w)
                          (map #(entity-view w %))
                          (filter #(and (<= (.-distance %) radius) (or (nil? kind) (= kind (.-kind %)))
-                                       (or (nil? names) (some #{(.-name %)} names))))
+                                       (or (nil? names) (some #{(.-name %)} names))
+                                       (or (nil? ids) (some #{(.-id %)} ids))))
                          (sort-by #(.-distance %))
                          (take max)
                          to-array))))

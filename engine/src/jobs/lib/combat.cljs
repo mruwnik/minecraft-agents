@@ -25,13 +25,13 @@
     (array-seq (.entities p #js {:radius radius :kind "hostile" :max 16}))))
 
 (defn sensed
-  "The entities a player would place within radius (opts :radius, :max), as JS entities: known hostiles (seen or
+  "The entities a player would place within radius (opts :radius, :max, :ids and :names filter before the cap), as JS entities: known hostiles (seen or
   heard), players (listed through walls), and every other kind only when not hidden (visible false). Items included. Nearest first."
-  [p {:keys [radius max] :as opts}]
+  [p {:keys [radius max ids] :as opts}]
   (let [others (->> (array-seq (.entities p (clj->js opts)))
                     (remove #(= "hostile" (.-kind %)))
                     (remove #(and (not= "player" (.-kind %)) (false? (.-visible %)))))]
-    (vec (sort-by #(.-distance %) (concat others (take (or max 64) (known-or-raw p radius)))))))
+    (vec (sort-by #(.-distance %) (concat others (take (or max 64) (cond->> (known-or-raw p radius) ids (filter #(some #{(.-id %)} ids)))))))))
 
 (defn hostiles
   "The hostile mobs within radius of the body that it knows of (seen or heard), nearest first, as JS entities.

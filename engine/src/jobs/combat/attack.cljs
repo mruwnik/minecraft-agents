@@ -80,7 +80,7 @@
 
 (defn present
   "The entities matching :targets within :radius, nearest first; ones already
-  killed (their id stays after a respawn) are left out. Name targets filter before the 64 cap of the sense."
+  killed (their id stays after a respawn) are left out. Name and id targets filter before the 64 cap of the sense."
   [c]
   (let [p (:primitives c)
         {:keys [targets radius]} (:args c)
@@ -88,8 +88,9 @@
         dead-ids (set killed)
         self-name (.-username (.self p))
         wanted (target-list targets)
-        names (when (and (seq wanted) (every? string? wanted)) {:names (vec wanted)})]
-    (->> (combat/sensed p (merge {:radius radius :max 64} names))
+        names (when (and (seq wanted) (every? string? wanted)) {:names (vec wanted)})
+        ids (when (and (seq wanted) (every? number? wanted)) {:ids (vec wanted)})]
+    (->> (combat/sensed p (merge {:radius radius :max 64} names ids))
          (remove #(contains? dead-ids (.-id %)))
          (filterv #(matches? wanted self-name (set killed-players) %)))))
 

@@ -3080,3 +3080,12 @@ test('a timeout with nothing changed stays a bare timeout', async () => {
   const { p } = rig(hanging(acting.find(c => c.name === 'transfer')))
   assert.deepEqual(await p.transfer('t1', { pos: at(3, 64, 0), direction: 'deposit', item: 'cobblestone', count: 2 }), { status: 'timeout' })
 })
+
+test('entities with ids filter before the max cap', () => {
+  const crowd = Object.fromEntries(Array.from({ length: 5 }, (_, i) => [100 + i, { id: 100 + i, name: 'cow', type: 'passive', position: at(1 + i * 0.1, 64, 0), height: 1.4 }]))
+  const far = { id: 500, name: 'cow', type: 'passive', position: at(9, 64, 0), height: 1.4 }
+  const bot = stubBot({ ...world, entities: { ...world.entities, ...crowd, 500: far } })
+  const p = createPrimitivesFromBot(bot, { timeScale: SCALE })
+  assert.equal(p.entities({ max: 3 }).some(e => e.id === 500), false)
+  assert.deepEqual(p.entities({ max: 3, ids: [500] }).map(e => e.id), [500])
+})

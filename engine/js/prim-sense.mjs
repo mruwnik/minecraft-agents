@@ -101,13 +101,13 @@ export function createSense (env) {
   const canHit = e => [0.2, (e.height ?? 1.8) / 2, (e.height ?? 1.8) - 0.1].some(dy =>
     rayClear(eye(), { x: e.position.x, y: e.position.y + dy, z: e.position.z }, shapesAt))
 
-  const entities = ({ radius = DEFAULT_RADIUS, kind, names, max = 32 } = {}) => {
+  const entities = ({ radius = DEFAULT_RADIUS, kind, names, ids, max = 32 } = {}) => {
     if (isOffline()) return []
     const me = here()
     return liveEntities(env.bot)
       .filter(e => e !== env.bot.entity && e.position)
       .map(e => ({ e, distance: dist(me, e.position), kind: entityKind(e) }))
-      .filter(({ e, distance, kind: k }) => distance <= radius && (!kind || k === kind) && (!names || names.includes(e.name ?? e.username)))
+      .filter(({ e, distance, kind: k }) => distance <= radius && (!kind || k === kind) && (!names || names.includes(e.name ?? e.username)) && (!ids || ids.includes(e.id)))
       // like a player: a passive mob or a villager behind a wall is not listed. Hostiles, items and players stay
       // listed with `visible` (players show through walls in the game, nametags); sleeping needs sight
       .filter(({ e, kind: k }) => k === 'hostile' || k === 'item' || k === 'player' || canSee(e))
