@@ -4,10 +4,10 @@
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
             [engine.fake :as fake]
-            [engine.library-test :refer [setup run-until-empty calls inv]]
+            [engine.library-test :refer [setup calls inv]]
             [engine.memory :as mem]
             [engine.takeover :as takeover]
-            [engine.test-util :as tu]
+            [engine.test-util :as tu :refer [run-until-empty]]
             [engine.triggers :as triggers]
             [jobs.survival.recover-drops :as recover-drops]
             [triggers.survival.died :as died]))

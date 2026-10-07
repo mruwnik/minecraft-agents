@@ -19,7 +19,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (wt/setup {:inventory [{:name "dirt" :count 5}] :containers {"10,64,0" []}})
-              result (await (wt/child-outcome eng job {:chest chest :items ["dirt"]} 8))]
+              result (await (tu/child-outcome eng job {:chest chest :items ["dirt"]} 8))]
           (is (= {} (wt/inv p)))
           (is (= {:gave-up false} result)))))))
 
@@ -29,7 +29,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (wt/setup {:inventory [{:name "dirt" :count 5}] :containers {"10,64,0" []}})]
           (.override (.-world p) "transfer" (fn ^:async f [_ _ _] #js {:status "ok" :moved 0}))
-          (let [result (await (wt/child-outcome eng job {:chest chest :items ["dirt"]} 12))]
+          (let [result (await (tu/child-outcome eng job {:chest chest :items ["dirt"]} 12))]
             (is (= true (:gave-up result)))
             (is (<= (count (wt/calls p "transfer")) 3))))))))
 
@@ -38,7 +38,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (wt/setup {:inventory [{:name "dirt" :count 5} {:name "bread" :count 20}] :containers {"10,64,0" []}})
-              result (await (wt/child-outcome eng job {:chest chest} 16))]
+              result (await (tu/child-outcome eng job {:chest chest} 16))]
           (is (= {"bread" 12} (wt/inv p)) "bread 12 is the 60 points; dirt and the 8 spare bread go")
           (is (= {:gave-up false} result)))))))
 
@@ -49,7 +49,7 @@
         (let [{:keys [eng seen]} (wt/setup {:inventory [{:name "dirt" :count 5}]})]
           (wt/know-place! eng :chest chest)
           (is (= {:gave-up true :reason "missing" :status :stopped :moved 0}
-                 (await (wt/child-outcome eng job {:items ["dirt"]} 8))))
+                 (await (tu/child-outcome eng job {:items ["dirt"]} 8))))
           (is (some #(= :chest_missing (:kind %)) @seen))
           (is (= [] (:list (core/state eng)))))))))
 
@@ -68,7 +68,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup-far {:inventory [{:name "dirt" :count 5} {:name "gravel" :count 7} {:name "sand" :count 2}]
                                           :containers {"20,64,0" []}})
-              result (await (wt/child-outcome eng job {:chest {:x 20 :y 64 :z 0}} 1))]
+              result (await (tu/child-outcome eng job {:chest {:x 20 :y 64 :z 0}} 1))]
           (is (= {} (wt/inv p)))
           (is (= {:gave-up false} result))
           (is (= 3 (count (wt/calls p "transfer"))))
@@ -85,7 +85,7 @@
                        (if (= 1 (swap! n inc))
                          (await (impl token args))
                          #js {:status "full" :moved 0})))
-          (let [result (await (wt/child-outcome eng job {:chest chest :items ["dirt" "gravel"]} 1))]
+          (let [result (await (tu/child-outcome eng job {:chest chest :items ["dirt" "gravel"]} 1))]
             (is (= {"gravel" 7} (wt/inv p)))
             (is (= {:gave-up true :reason "full" :status :stopped :moved 5} result))))))))
 
@@ -102,7 +102,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (wt/setup {:inventory [{:name "dirt" :count 5}] :containers {"10,64,0" []}})]
           (.override (.-world p) "transfer" (timed-out {"dirt" -5}))
-          (let [result (await (wt/child-outcome eng job {:chest chest :items ["dirt"]} 12))]
+          (let [result (await (tu/child-outcome eng job {:chest chest :items ["dirt"]} 12))]
             (is (= {:gave-up false} result))
             (is (= {} (wt/inv p)))
             (is (= 1 (count (wt/calls p "transfer"))))))))))
@@ -113,5 +113,5 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (wt/setup {:inventory [{:name "dirt" :count 5}] :containers {"10,64,0" []}})]
           (.override (.-world p) "transfer" (fn ^:async f [_ _ _] #js {:status "timeout"}))
-          (let [result (await (wt/child-outcome eng job {:chest chest :items ["dirt"]} 12))]
+          (let [result (await (tu/child-outcome eng job {:chest chest :items ["dirt"]} 12))]
             (is (= true (:gave-up result)))))))))

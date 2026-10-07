@@ -26,7 +26,7 @@
   ([spec plans] (outcome spec plans {:plan "forest"}))
   ([spec plans args]
    (let [s (start spec plans)]
-     (assoc s :result (await (h/child-outcome (:eng s) job args 300))))))
+     (assoc s :result (await (tu/child-outcome (:eng s) job args 300))))))
 
 (defn ^:async run
   "Submit the job with args in a world over plans and tick it n times: the start map."

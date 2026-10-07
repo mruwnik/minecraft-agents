@@ -5,7 +5,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
-            [engine.test-util :as tu]
+            [engine.test-util :as tu :refer [run-until-empty]]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]))
 
@@ -17,13 +17,6 @@
                           :world (ew/of-data {} {} [])
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen}))
-
-(defn ^:async run-until-empty [eng n]
-  (loop [i 0]
-    (if (or (>= i n) (empty? (:list (core/state eng))))
-      i
-      (do (await (core/tick! eng))
-          (recur (inc i))))))
 
 (defn ^:async outcome
   "Run job with args as the child of a recording parent in a world; {:result the child's result :p :seen}."

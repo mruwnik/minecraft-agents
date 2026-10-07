@@ -7,7 +7,7 @@
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.memory :as mem]
-            [engine.test-util :as tu]
+            [engine.test-util :as tu :refer [run-until-empty child-outcome]]
             [engine.triggers :as triggers]
             [jobs.storage.kit :as kit]))
 
@@ -18,27 +18,6 @@
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen :clock clock}))
-
-(defn ^:async run-until-empty [eng n]
-  (loop [i 0]
-    (if (or (>= i n) (empty? (:list (core/state eng))))
-      i
-      (do (await (core/tick! eng))
-          (recur (inc i))))))
-
-(defn ^:async child-outcome
-  "Run job with args as the child of a recording parent until the list is empty, at most n ticks; the child's result."
-  [eng job args n]
-  (let [out (atom :not-done)
-        parent {:check (constantly true)
-                :round (fn ^:async recording-round [c]
-                         (let [r (await (ctx/call-child c :kid job args))]
-                           (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                           r))}
-        eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
-    (core/submit! eng '(recording-parent) {})
-    (await (run-until-empty eng n))
-    @out))
 
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
 (defn inv [p] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))

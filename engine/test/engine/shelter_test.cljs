@@ -12,7 +12,7 @@
             [jobs.survival.dig-in-cells :as dig-cells]
             [engine.fake.raw-world :as fake-raw]
             [engine.perception :as perception]
-            [engine.test-util :as tu]
+            [engine.test-util :as tu :refer [run-until-empty]]
             [engine.triggers :as triggers]))
 
 (def day-ms 1200000)
@@ -53,13 +53,6 @@
                           :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen :clock clock}))
-
-(defn ^:async run-until-empty [eng n]
-  (loop [i 0]
-    (if (or (>= i n) (empty? (:list (core/state eng))))
-      i
-      (do (await (core/tick! eng))
-          (recur (inc i))))))
 
 (defn ^:async tick-n [eng n]
   (loop [i 0]

@@ -120,7 +120,7 @@
   "Run fell-tree with args as a child; the digs' xs."
   [spec args]
   (let [{:keys [eng p]} (start spec {})]
-    (await (h/child-outcome eng 'jobs.forestry.fell-tree args 60))
+    (await (tu/child-outcome eng 'jobs.forestry.fell-tree args 60))
     (mapv first (digs p))))
 
 (deftest fell-tree-at-fells-that-column-not-the-nearest-tree
@@ -138,7 +138,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (start {:blocks (lt/tree 6 0 "oak" 5)} {})]
-          (await (h/child-outcome eng 'jobs.forestry.fell-tree {:radius 10} 60))
+          (await (tu/child-outcome eng 'jobs.forestry.fell-tree {:radius 10} 60))
           (is (= [[6 64 0] [6 65 0] [6 66 0] [6 67 0] [6 68 0]] (digs p)))
           (is (= [[6 64 0]] (mapv (juxt :x :y :z) (tu/walked-to eng))) "one walk, to the column's foot, none for the high logs"))))))
 
@@ -153,7 +153,7 @@
                        (if (= 1 (swap! n inc))
                          #js {:status "failed" :reason "test: the first walk goes nowhere"}
                          (await (impl token args)))))
-          (await (h/child-outcome eng 'jobs.forestry.fell-tree {:radius 10} 60))
+          (await (tu/child-outcome eng 'jobs.forestry.fell-tree {:radius 10} 60))
           (is (= 5 (count (digs p))))
           (is (= ["blocked" "arrived"] (take 2 (mapv :status (mapv :data (mem/entries (mem/view (:store eng)) :moved)))))
               "the walk to within 2 of the foot is blocked, the one to within 3 arrives"))))))
@@ -195,7 +195,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (start oak-world {"forest" oak-cell})
-              result (await (h/child-outcome eng job {:plan "forest"} 200))]
+              result (await (tu/child-outcome eng job {:plan "forest"} 200))]
           (is (= [[3 64 0] [3 65 0] [3 66 0] [3 67 0]] (digs p)) "its four logs, lowest first, nothing else")
           (is (= [[3 64 0 "oak_sapling"]] (places p)))
           (is (= "oak_sapling" (h/block-at p 3 64 0)))
@@ -214,7 +214,7 @@
               {:keys [eng p]} (start {:blocks (merge (ground cells) (into {} (map (fn [[x z]] (lt/tree x z "dark_oak" 3))) cells))
                                       :inventory [(item "dark_oak_sapling" 4)]}
                                      {"forest" plan})
-              result (await (h/child-outcome eng job {:plan "forest"} 300))]
+              result (await (tu/child-outcome eng job {:plan "forest"} 300))]
           (is (= 12 (count (digs p))))
           (is (= (set (map (fn [[x z]] [x 64 z "dark_oak_sapling"]) cells)) (set (places p))))
           (is (= {:felled 4 :planted 4 :left [] :bare []} result)))))))
@@ -262,7 +262,7 @@
                      (fn ^:async f [token args impl]
                        (world/set-data! (:w s) {"forest" oak-cell} {})
                        (await (impl token args))))
-          (await (h/child-outcome (:eng s) job {:plan "forest"} 200))
+          (await (tu/child-outcome (:eng s) job {:plan "forest"} 200))
           (is (= #{3} (set (map first (digs (:p s))))) "the tree whose cell left the plan is not felled")
           (is (= (repeat 4 "oak_log") (mapv #(h/block-at (:p s) 9 % 0) (range 64 68)))))))))
 
@@ -279,7 +279,7 @@
                          (when (= 2 (swap! dug inc))
                            (world/set-data! (:w s) {"forest" (forest-plan ["b" [[9 64 0]] "birch"])} {}))
                          r)))
-          (await (h/child-outcome (:eng s) job {:plan "forest"} 200))
+          (await (tu/child-outcome (:eng s) job {:plan "forest"} 200))
           (is (= [[3 64 0 "oak_sapling"]] (places (:p s))) "the cut cell is replanted though the plan dropped it")
           (is (= 4 (count (digs (:p s)))) "the felling is one call: the tree begun is felled whole"))))))
 
@@ -493,7 +493,7 @@
               own (shape/with-author (forest-plan ["a" [[3 64 0] [3 65 0] [3 66 0]] "oak"]) "Fake")]
           (doseq [[args n] [[{:radius 10} 0] [{:radius 10 :spare-own-builds false} 3]]]
             (let [{:keys [eng p]} (start spec {"forest" own})]
-              (await (h/child-outcome eng 'jobs.forestry.fell-tree args 60))
+              (await (tu/child-outcome eng 'jobs.forestry.fell-tree args 60))
               (is (= n (count (digs p))) (pr-str args)))))))))
 
 ;; ------------------------------------------------------------------ :accept reaches the fell child

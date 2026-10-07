@@ -109,7 +109,7 @@
         (let [{:keys [eng p]} (st/setup {:time night :blocks (merge roof {"20,64,0" "red_bed"})})]
           (st/know-bed! eng {:x 20 :y 64 :z 0})
           (core/submit! eng '(jobs.survival.night) {})
-          (await (st/run-until-empty eng 20))
+          (await (tu/run-until-empty eng 20))
           (is (= [{:x 20 :y 64 :z 0}] (mapv st/arg-pos (st/calls p "sleep")))))))))
 
 (deftest the-night-leaves-an-occupied-remembered-bed-alone
@@ -190,7 +190,7 @@
           (on-return! p clock (fn [_] (.setTime (.-world p) noon)))
           (sleep-count! p 1 2)
           (core/submit! eng '(jobs.survival.night) {})
-          (await (st/run-until-empty eng 10))
+          (await (tu/run-until-empty eng 10))
           (is (= [30000] (st/ms-of-offline p)))
           (is (= ["logged-out-for-sleeping-player"] (offline-why p)))
           (is (= [] (st/calls p "place")) "not dug in")
@@ -207,7 +207,7 @@
                                         (.setTime (.-world p) noon))))
           (sleep-count! p 1 2)
           (core/submit! eng '(jobs.survival.night) {})
-          (await (st/run-until-empty eng 30))
+          (await (tu/run-until-empty eng 30))
           (is (= 3 (count (st/calls p "offline"))) "out again after a count of one and after no news; back by day")
           (is (= [] (st/calls p "place"))))))))
 
@@ -232,7 +232,7 @@
           (st/know-bed! eng {:x 6 :y 64 :z 0})
           (sleep-count! p 1 2)
           (core/submit! eng '(jobs.survival.night) {})
-          (await (st/run-until-empty eng 8))
+          (await (tu/run-until-empty eng 8))
           (is (= 1 (count (st/calls p "sleep"))))
           (is (= [] (st/calls p "offline"))))))))
 
@@ -243,7 +243,7 @@
         (let [{:keys [eng p]} (st/setup {:time 23000})]
           (sleep-count! p 1 2)
           (core/submit! eng '(jobs.survival.log-out) {})
-          (await (st/run-until-empty eng 3))
+          (await (tu/run-until-empty eng 3))
           (is (= [25050] (st/ms-of-offline p))))))))
 
 ;; ------------------------------------------------------------------ one whole attempt per night
@@ -489,7 +489,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (await (night-at-home lit-world {:x 10 :y 64 :z 0}))]
-          (await (st/run-until-empty eng 40))
+          (await (tu/run-until-empty eng 40))
           (is (= [] (st/calls p "place")) "no pit dug")
           (is (= {:x 10 :y 64 :z 0} (select-keys (st/pos-of p) [:x :y :z]))))))))
 
@@ -554,7 +554,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (await (night-at-home (update lit-world :blocks merge walled-home) {:x 10 :y 64 :z 0}))]
-          (let [log (await (with-child-log #(st/run-until-empty eng 60)))]
+          (let [log (await (with-child-log #(tu/run-until-empty eng 60)))]
             (is (= 1 (count (filter #(= :roof-walk (first %)) log))) "one walk attempted, never repeated"))
           (is (seq (st/calls p "place")) "the night dug in after the walk failed")
           (is (< (:x (st/pos-of p)) 9) "and did not walk to the home again"))))))
@@ -565,7 +565,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (await (night-at-home lit-world {:x 10 :y 64 :z 0}))
               beside {:x 10 :y 64 :z 1}
-              log (await (with-child-log #(st/run-until-empty eng 60)
+              log (await (with-child-log #(tu/run-until-empty eng 60)
                            (fn [c k sym a] (when (:place a) (ctx/call-child c k sym (-> a (dissoc :place) (assoc :pos beside)))))))]
           (is (= 1 (count (filter #(and (= :roof-walk (first %)) (:place (nth % 2))) log))) "walked once, arrived unroofed, then dug in")
           (is (seq (st/calls p "place")) "the night dug in"))))))
@@ -603,7 +603,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (await (flee-home-night (update dark-world :blocks merge {"10,66,0" "stone"}) {}))]
-          (await (st/run-until-empty eng 80))
+          (await (tu/run-until-empty eng 80))
           (is (= {:x 10 :y 64 :z 0} (select-keys (st/pos-of p) [:x :y :z])) "walked to the roofed home")
           (is (empty? (st/emitted seen :shelter.exposed)))
           (let [fled (st/emitted seen :shelter.fled)]
@@ -621,7 +621,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (await (flee-home-night (update dark-world :blocks merge {"10,66,0" "stone"}) {:flee-radius 0}))]
           (st/dawn-after! p 4)
-          (await (st/run-until-empty eng 80))
+          (await (tu/run-until-empty eng 80))
           (is (empty? (st/emitted seen :shelter.fled)))
           (is (= 1 (count (st/emitted seen :shelter.exposed)))))))))
 
@@ -631,7 +631,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (await (flee-home-night (update dark-world :blocks merge walled-home) {}))]
           (st/dawn-after! p 6)
-          (let [log (await (with-child-log #(st/run-until-empty eng 80)))]
+          (let [log (await (with-child-log #(tu/run-until-empty eng 80)))]
             (is (= 1 (count (filter #(= :flee (first %)) log))) "one walk, never the same target twice")
             (is (= {:place :home :range 0} (nth (first (filter #(= :flee (first %)) log)) 2))))
           (is (= 1 (count (st/emitted seen :shelter.flee_failed))))
@@ -644,7 +644,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (await (flee-home-night (update dark-world :blocks merge {"10,66,0" "stone"}) {}))
               n (atom 0)
-              log (await (with-child-log #(st/run-until-empty eng 80)
+              log (await (with-child-log #(tu/run-until-empty eng 80)
                            (fn [_ k _ _] (when (and (= :flee k) (= 1 (swap! n inc)))
                                            (st/teleport! p 4 64 0)
                                            :continue))))
@@ -668,7 +668,7 @@
                          (await (impl token a)))))
           (st/dawn-after! p 12)
           (core/submit! eng '(jobs.survival.night) {})
-          (await (st/run-until-empty eng 120))
+          (await (tu/run-until-empty eng 120))
           (is (= [:ground] (mapv :target (st/emitted seen :shelter.fled))))
           (is (some #(<= 27 (:x (st/arg-pos %))) (st/calls p "place")) "the pit's roof is placed at the patch"))))))
 
@@ -682,7 +682,7 @@
                                ([_ ts _ _] (swap! calls conj ts) (js/Promise.resolve (answer-of ts)))))
     (try
       (let [{:keys [eng seen]} (await (flee-home-night (update dark-world :blocks merge {"10,66,0" "stone"}) {}))]
-        [(await (with-child-log #(st/run-until-empty eng 80))) seen @calls])
+        [(await (with-child-log #(tu/run-until-empty eng 80))) seen @calls])
       (finally (set! targets/nearest! real)))))
 
 (deftest the-flee-walks-to-the-target-go-to-costs-cheapest
@@ -739,7 +739,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (cave-night [{:name "dirt" :count 8}])
-              log (await (with-child-log #(st/run-until-empty eng 160)))
+              log (await (with-child-log #(tu/run-until-empty eng 160)))
               enclose (first (filter #(and (= 'jobs.survival.dig-in (second %)) (contains? (nth % 2) :enclose)) log))]
           (is (= [:cave] (mapv :target (st/emitted seen :shelter.fled))))
           (is (= true (:enclose (nth enclose 2))))
@@ -752,7 +752,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (cave-night [{:name "dirt" :count 3}])]
-          (await (st/run-until-empty eng 160))
+          (await (tu/run-until-empty eng 160))
           (is (empty? (st/emitted seen :shelter.fled))))))))
 
 (deftest an-overhang-whose-roof-the-body-has-not-seen-is-no-flee-target
@@ -762,5 +762,5 @@
         (let [{:keys [eng p seen]} (cave-night [{:name "dirt" :count 8}])
               all (.-seenBlocks p)]
           (aset p "seenBlocks" (fn [q] (.filter (all q) (fn [b] (< (.-y (.-pos b)) 66)))))
-          (await (st/run-until-empty eng 160))
+          (await (tu/run-until-empty eng 160))
           (is (empty? (st/emitted seen :shelter.fled))))))))

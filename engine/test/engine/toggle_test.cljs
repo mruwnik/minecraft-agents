@@ -7,7 +7,7 @@
             [engine.events :as events]
             [engine.job-api :as job-api]
             [engine.job-api :as job-api]
-            [engine.test-util :as tu]
+            [engine.test-util :as tu :refer [run-until-empty]]
             [engine.triggers :as triggers]
             [jobs.access.toggle :as toggle]))
 
@@ -19,13 +19,6 @@
          eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                            :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
      {:eng eng :p p :seen seen})))
-
-(defn ^:async run-until-empty [eng n]
-  (loop [i 0]
-    (if (or (>= i n) (empty? (:list (core/state eng))))
-      i
-      (do (await (core/tick! eng))
-          (recur (inc i))))))
 
 (defn ^:async child-outcome
   "Run job with args as the child of a recording parent until the list is empty, at most n ticks; the child's result, or {:waiting w} when the child declined and its parent waits."

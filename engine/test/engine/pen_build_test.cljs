@@ -38,7 +38,7 @@
   "Run the job as a child over the world spec and plans: [result seen p]."
   [world-spec plans args & [zones]]
   (let [{:keys [eng p seen]} (b/start world-spec plans (or zones []))
-        result (await (h/child-outcome eng job (merge {:plan "pen"} args) 300))]
+        result (await (tu/child-outcome eng job (merge {:plan "pen"} args) 300))]
     [result seen p]))
 
 (defn kinds-of [seen kind] (h/events-of seen kind))
@@ -118,7 +118,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (b/start (spec kit) {"pen" (ring-plan)} nil)
-              result (await (h/child-outcome eng job {:plan "pen" :ignore-zones? true} 300))]
+              result (await (tu/child-outcome eng job {:plan "pen" :ignore-zones? true} 300))]
           (is (true? (:closed? result)))
           (is (= "oak_fence" (h/block-at p 4 64 3))))))))
 
@@ -127,7 +127,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (b/start (spec kit) {"pen" (ring-plan) "other" b/other-plan} [])
-              result (await (h/child-outcome eng job {:plan "pen"} 300))
+              result (await (tu/child-outcome eng job {:plan "pen"} 300))
               [warn] (kinds-of seen :pen-build.leaky)]
           (is (= "air" (h/block-at p 4 64 3)))
           (is (= :leak (:reason result)))
@@ -238,5 +238,5 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (b/start (spec kit) {"pen" (ring-plan)} [])
-              result (await (h/child-outcome eng job {:plan "pen"} 1))]
+              result (await (tu/child-outcome eng job {:plan "pen"} 1))]
           (is (true? (:closed? result))))))))

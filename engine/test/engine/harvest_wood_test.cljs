@@ -19,7 +19,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3)})]
           (core/submit! eng harvest {})
-          (is (< (await (lt/run-until-empty eng 30)) 30) "finishes instead of waiting for a sapling")
+          (is (< (await (tu/run-until-empty eng 30)) 30) "finishes instead of waiting for a sapling")
           (is (= [] (:list (core/state eng))))
           (is (= 3 (get (lt/inv p) "oak_log")) "logs collected")
           (is (= 1 (count (lt/debts eng))) "the replant stays owed")
@@ -35,7 +35,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3)})]
-          (is (= {:replant-owed 1} (await (lt/child-outcome eng 'jobs.forestry.harvest-wood {:species "oak" :radius 10} 30)))))))))
+          (is (= {:replant-owed 1} (await (tu/child-outcome eng 'jobs.forestry.harvest-wood {:species "oak" :radius 10} 30)))))))))
 
 (deftest a-sapling-carried-is-still-planted
   (async done
@@ -43,7 +43,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3) :inventory [{:name "oak_sapling" :count 1}]})]
           (core/submit! eng harvest {})
-          (is (< (await (lt/run-until-empty eng 30)) 30))
+          (is (< (await (tu/run-until-empty eng 30)) 30))
           (is (= "oak_sapling" (.-name (.blockAt p #js {:x 3 :y 64 :z 0}))))
           (is (= [] (lt/debts eng))))))))
 
@@ -53,7 +53,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (lt/setup {:blocks (lt/tree 9 0 "oak" 3)})]
           (core/submit! eng '(jobs.forestry.harvest-wood {:radius 2}) {})
-          (await (lt/run-until-empty eng 4))
+          (await (tu/run-until-empty eng 4))
           (is (= 1 (count (:list (core/state eng)))) "still queued")
           (is (= [{:reason :no-tree :radius 2}]
                  (mapv #(select-keys % [:reason :radius :species]) (filterv #(= :waiting (:kind %)) @seen)))
@@ -65,7 +65,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3)})]
           (core/submit! eng '(jobs.forestry.harvest-wood {:radius 32}) {})
-          (is (< (await (lt/run-until-empty eng 40)) 40))
+          (is (< (await (tu/run-until-empty eng 40)) 40))
           (is (= [] (filterv #(= :failed (:kind %)) @seen)) "no crash")
           (is (= 3 (get (lt/inv p) "oak_log")))
           (is (= 1 (count (lt/debts eng)))))))))
@@ -77,7 +77,7 @@
         (let [{:keys [eng seen]} (lt/setup {:inventory [{:name "oak_sapling" :count 1}] :unloaded ["1500,66,1500"]})]
           (mem/write! (:store eng) :forestry/replant {:pos {:x 1500 :y 66 :z 1500} :species "oak"} {:cap 50 :ttl :forever})
           (core/submit! eng '(jobs.forestry.plant-sapling) {})
-          (await (lt/run-until-empty eng 5))
+          (await (tu/run-until-empty eng 5))
           (is (= [] (filterv #(#{:error :failed} (:kind %)) @seen)) "no crash"))))))
 
 (def far-debt {:pos {:x 1500 :y 66 :z 1500} :species "oak"})
@@ -92,7 +92,7 @@
                                               :unloaded ["1500,66,1500"]})]
           (owe-far! eng)
           (core/submit! eng '(jobs.forestry.harvest-wood {:radius 32}) {})
-          (is (< (await (lt/run-until-empty eng 40)) 40))
+          (is (< (await (tu/run-until-empty eng 40)) 40))
           (is (= [] (filterv #(#{:error :failed} (:kind %)) @seen)) "no crash")
           (is (= "oak_sapling" (.-name (.blockAt p #js {:x 3 :y 64 :z 0}))) "the felled tree's spot is planted")
           (is (= [far-debt] (lt/debts eng)) "the far debt stays owed")
@@ -107,7 +107,7 @@
         (let [{:keys [eng seen]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3) :unloaded ["1500,66,1500"]})]
           (owe-far! eng)
           (core/submit! eng '(jobs.forestry.harvest-wood {:radius 32}) {})
-          (is (< (await (lt/run-until-empty eng 40)) 40))
+          (is (< (await (tu/run-until-empty eng 40)) 40))
           (is (= [] (filterv #(#{:error :failed} (:kind %)) @seen)) "no crash")
           (is (= 2 (count (lt/debts eng))))
           (is (= 1 (count (filterv #(= :harvest-wood.debts-owed (:kind %)) @seen)))))))))
@@ -119,7 +119,7 @@
         (let [{:keys [eng p seen]} (lt/setup {:inventory [{:name "oak_sapling" :count 1}] :unloaded ["5,66,5"]})]
           (mem/write! (:store eng) :forestry/replant {:pos {:x 5 :y 66 :z 5} :species "oak"} {:cap 50 :ttl :forever})
           (core/submit! eng '(jobs.forestry.plant-sapling) {})
-          (await (lt/run-until-empty eng 8))
+          (await (tu/run-until-empty eng 8))
           (is (= [] (filterv #(#{:error :failed} (:kind %)) @seen)))
           (is (= [] (lt/calls p "place")) "nothing placed into an unknown cell")
           (is (= 1 (count (lt/debts eng)))))))))
@@ -147,7 +147,7 @@
         (let [{:keys [eng p]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3)})]
           (after-last-dig! p #(fake/swap-self! p assoc :pos [-30 64 0]))
           (core/submit! eng '(jobs.forestry.harvest-wood {:species "oak" :radius 10}) {})
-          (await (lt/run-until-empty eng 30))
+          (await (tu/run-until-empty eng 30))
           (is (= 3 (get (lt/inv p) "oak_log")) "the drops at the tree are fetched, not forgotten")
           (is (= [] (:list (core/state eng)))))))))
 
@@ -158,7 +158,7 @@
         (let [{:keys [eng p seen]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3)})]
           (after-last-dig! p #(clear-drops! p))
           (core/submit! eng '(jobs.forestry.harvest-wood {:species "oak" :radius 10}) {})
-          (await (lt/run-until-empty eng 30))
+          (await (tu/run-until-empty eng 30))
           (is (= [:nothing-collected] (mapv :reason (filterv #(= :stopped (:kind %)) @seen))) "no item came in: stopped with a reason, not completed")
           (is (zero? (get (lt/inv p) "oak_log" 0))))))))
 
@@ -169,7 +169,7 @@
         (let [{:keys [eng p seen]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3) :inventory [{:name "oak_sapling" :count 1}]})]
           (after-last-dig! p #(do (clear-drops! p) (fake/add-item! p "oak_log" 3)))
           (core/submit! eng '(jobs.forestry.harvest-wood {:species "oak" :radius 10}) {})
-          (await (lt/run-until-empty eng 30))
+          (await (tu/run-until-empty eng 30))
           (is (= [] (filterv #(= :stopped (:kind %)) @seen)) "the logs are in the inventory: not stopped")
           (is (= "oak_sapling" (.-name (.blockAt p #js {:x 3 :y 64 :z 0}))) "the replant is done")
           (is (= [] (lt/debts eng))))))))
@@ -181,7 +181,7 @@
         (let [{:keys [eng seen]} (lt/setup {:blocks {"3,64,0" "stone" "3,63,0" "grass_block"} :inventory [{:name "oak_sapling" :count 1}]})]
           (mem/write! (:store eng) :forestry/replant {:pos {:x 3 :y 64 :z 0} :species "oak"} {:cap 50 :ttl :forever})
           (core/submit! eng '(jobs.forestry.plant-sapling) {})
-          (await (lt/run-until-empty eng 12))
+          (await (tu/run-until-empty eng 12))
           (is (= 1 (count (lt/debts eng))) "the replant stays owed")
           (is (= ["cannot plant: occupied"]
                  (mapv :text (filterv #(= :plant_blocked (:kind %)) @seen)))))))))
@@ -193,7 +193,7 @@
         (let [{:keys [eng seen]} (lt/setup {:blocks {"3,64,0" "oak_sapling" "3,63,0" "grass_block"} :inventory [{:name "oak_sapling" :count 1}]})]
           (mem/write! (:store eng) :forestry/replant {:pos {:x 3 :y 64 :z 0} :species "oak"} {:cap 50 :ttl :forever})
           (core/submit! eng '(jobs.forestry.plant-sapling) {})
-          (await (lt/run-until-empty eng 12))
+          (await (tu/run-until-empty eng 12))
           (is (= [] (lt/debts eng)) "the debt is cleared")
           (is (= [] (filterv #(#{:error :failed} (:kind %)) @seen)) "no failure"))))))
 
@@ -213,7 +213,7 @@
   [n args]
   (let [{:keys [eng seen]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3) :inventory [{:name "oak_sapling" :count 1}]})]
     (core/submit! eng (list 'jobs.forestry.harvest-wood args) {})
-    (await (lt/run-until-empty eng n))
+    (await (tu/run-until-empty eng n))
     [(mapv :reason (filterv #(= :stopped (:kind %)) @seen)) (boolean (seq (:list (core/state eng))))]))
 
 (deftest count-starts-the-next-tree-until-enough-logs-are-carried
@@ -232,7 +232,7 @@
         (let [{:keys [eng p]} (lt/setup {:blocks (merge (lt/tree 3 0 "oak" 3) (lt/tree 3 6 "oak" 3) {"3,63,0" "grass_block" "3,63,6" "grass_block"})
                                          :inventory [{:name "oak_sapling" :count 2}]})]
           (core/submit! eng '(jobs.forestry.harvest-wood {:species "oak" :radius 12 :count 6}) {})
-          (is (< (await (lt/run-until-empty eng 80)) 80) "the job ends")
+          (is (< (await (tu/run-until-empty eng 80)) 80) "the job ends")
           (is (= 6 (get (lt/inv p) "oak_log")) "both trees felled and collected")
           (is (= 2 (count (filter #(= "oak_sapling" (.-name (.blockAt p #js {:x 3 :y 64 :z %}))) [0 6]))) "both replanted"))))))
 
@@ -242,7 +242,7 @@
       (fn ^:async t []
         (let [{:keys [eng]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3) :inventory [{:name "oak_sapling" :count 1}]})
               eng (assoc-in eng [:jobs 'jobs.forestry.fell-tree :round] (fn ^:async f [_] :done))
-              r (await (lt/child-outcome eng 'jobs.forestry.harvest-wood {:species "oak" :radius 10 :count 6} 60))]
+              r (await (tu/child-outcome eng 'jobs.forestry.harvest-wood {:species "oak" :radius 10 :count 6} 60))]
           (is (= {:status :stopped :reason :no-tree :got 0} (select-keys r [:status :reason :got]))
               "a felling that finds no tree ends the job instead of starting the next"))))))
 
@@ -252,7 +252,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (lt/setup {:blocks (merge (lt/tree 3 0 "oak" 3) {"3,63,0" "grass_block"})
                                          :inventory [{:name "oak_sapling" :count 1}]})
-              r (await (lt/child-outcome eng 'jobs.forestry.harvest-wood {:species "oak" :radius 10 :count 6} 80))]
+              r (await (tu/child-outcome eng 'jobs.forestry.harvest-wood {:species "oak" :radius 10 :count 6} 80))]
           (is (= {:status :stopped :reason :no-tree :got 3} (select-keys r [:status :reason :got]))
               "one tree felled, none left: ends with what it got, not waiting for ever")
           (is (= 3 (get (lt/inv p) "oak_log"))))))))
@@ -271,7 +271,7 @@
                                 (fn [c] (if @felled?
                                           (do (ctx/wait c {:reason :need :any-of ["dirt"] :count 4}) false)
                                           ((:check fell) c)))))
-              r (await (lt/child-outcome eng 'jobs.forestry.harvest-wood {:species "oak" :radius 10 :count 6} 80))]
+              r (await (tu/child-outcome eng 'jobs.forestry.harvest-wood {:species "oak" :radius 10 :count 6} 80))]
           (is (= :not-done r) "the job has not ended: a fetch wait is not an empty forest")
           (is (some #(and (= :child_ended (:kind %)) (= :need (:reason %))) @seen) "the fell child ended :need, the job kept waiting")
           (is (not-any? #(= :no-tree (:reason %)) @seen)))))))
@@ -281,6 +281,6 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (lt/setup {:blocks (merge (lt/tree 3 0 "oak" 3) {"3,63,0" "grass_block"})})
-              r (await (lt/child-outcome eng 'jobs.forestry.harvest-wood {:species "oak" :radius 10 :count 6} 80))]
+              r (await (tu/child-outcome eng 'jobs.forestry.harvest-wood {:species "oak" :radius 10 :count 6} 80))]
           (is (= {:status :stopped :reason :no-tree :replant-owed 1} (select-keys r [:status :reason :replant-owed])))
           (is (= 1 (count (filterv #(= :harvest-wood.replant-owed (:kind %)) @seen))) "the debt is warned"))))))

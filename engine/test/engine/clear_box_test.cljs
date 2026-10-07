@@ -7,7 +7,7 @@
             [engine.events :as events]
             [engine.takeover :as takeover]
             [engine.fake :as fake]
-            [engine.test-util :as tu]
+            [engine.test-util :as tu :refer [run-until-empty child-outcome]]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
             [jobs.build.clear-box :as clear-box]))
@@ -20,25 +20,6 @@
                           :world shared
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen}))
-
-(defn ^:async run-until-empty [eng n]
-  (loop [i 0]
-    (if (or (>= i n) (empty? (:list (core/state eng))))
-      i
-      (do (await (core/tick! eng))
-          (recur (inc i))))))
-
-(defn ^:async child-outcome [eng job args n]
-  (let [out (atom :not-done)
-        parent {:check (constantly true)
-                :round (fn ^:async recording-round [c]
-                         (let [r (await (ctx/call-child c :kid job args))]
-                           (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                           r))}
-        eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
-    (core/submit! eng '(recording-parent) {})
-    (await (run-until-empty eng n))
-    @out))
 
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
 (defn block-at [p pos] (.-name (.blockAt p (clj->js pos))))

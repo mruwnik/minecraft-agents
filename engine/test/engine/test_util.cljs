@@ -202,3 +202,26 @@
                    (do (core/shutdown! eng)
                        (js/Promise.reject (core/cut-error)))
                    (impl token a))))))
+
+(defn ^:async run-until-empty
+  "Tick eng until its job list is empty, at most n ticks; the ticks run."
+  [eng n]
+  (loop [i 0]
+    (if (or (>= i n) (empty? (:list (core/state eng))))
+      i
+      (do (await (core/tick! eng))
+          (recur (inc i))))))
+
+(defn ^:async child-outcome
+  "Run job with args as the child of a recording parent until the list is empty, at most n ticks; the child's result."
+  [eng job args n]
+  (let [out (atom :not-done)
+        parent {:check (constantly true)
+                :round (fn ^:async recording-round [c]
+                         (let [r (await (ctx/call-child c :kid job args))]
+                           (when (= :done r) (reset! out (ctx/child-result c :kid)))
+                           r))}
+        eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
+    (core/submit! eng '(recording-parent) {})
+    (await (run-until-empty eng n))
+    @out))

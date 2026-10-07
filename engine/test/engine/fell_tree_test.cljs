@@ -42,7 +42,7 @@
 (defn ^:async fell [spec args n]
   (let [s (fm/start spec {})
         _ (eye-reach! (:p s))
-        out (await (h/child-outcome (:eng s) 'jobs.forestry.fell-tree args n))]
+        out (await (tu/child-outcome (:eng s) 'jobs.forestry.fell-tree args n))]
     (assoc s :out out)))
 
 (deftest a-tall-trunk-is-felled-from-a-pillar-and-the-pillar-is-taken-back

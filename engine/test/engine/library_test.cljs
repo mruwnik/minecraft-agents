@@ -9,7 +9,7 @@
             [engine.fake :as fake]
             [engine.memory :as mem]
             [engine.scenario :as scenario]
-            [engine.test-util :as tu]
+            [engine.test-util :as tu :refer [run-until-empty child-outcome]]
             [engine.trigger-api :as trigger-api]
             [engine.triggers :as triggers]
             [jobs.lib.cost :as cost]
@@ -28,30 +28,6 @@
                           :world (ew/of-data {} {} (:zones world []))
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
      {:eng eng :p p :seen seen :clock clock})))
-
-(defn ^:async run-until-empty
-  "Tick until the list is empty, at most n ticks; returns the ticks used."
-  [eng n]
-  (loop [i 0]
-    (if (or (>= i n) (empty? (:list (core/state eng))))
-      i
-      (do (await (core/tick! eng))
-          (recur (inc i))))))
-
-(defn ^:async child-outcome
-  "Run job (a registry symbol) with args as the child of a recording parent
-  until the list is empty, at most n ticks; the child's result when done."
-  [eng job args n]
-  (let [out (atom :not-done)
-        parent {:check (constantly true)
-                :round (fn ^:async recording-round [c]
-                         (let [r (await (ctx/call-child c :kid job args))]
-                           (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                           r))}
-        eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
-    (core/submit! eng '(recording-parent) {})
-    (await (run-until-empty eng n))
-    @out))
 
 (defn tree [x z species height]
   (merge

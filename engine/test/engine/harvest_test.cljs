@@ -8,7 +8,7 @@
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.takeover :as takeover]
-            [engine.test-util :as tu]
+            [engine.test-util :as tu :refer [child-outcome]]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
             [jobs.farm.harvest :as harvest]))
@@ -44,20 +44,6 @@
       (do (swap! clock + 700)
           (await (core/tick! eng))
           (recur (inc i))))))
-
-(defn ^:async child-outcome
-  "Run job with args as the child of a recording parent until the list is empty, at most n ticks; the child's result."
-  [eng job args n]
-  (let [out (atom :not-done)
-        parent {:check (constantly true)
-                :round (fn ^:async recording-round [c]
-                         (let [r (await (ctx/call-child c :kid job args))]
-                           (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                           r))}
-        eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
-    (core/submit! eng '(recording-parent) {})
-    (await (run-until-empty eng n))
-    @out))
 
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
 (defn inv [p] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))

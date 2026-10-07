@@ -31,7 +31,7 @@
         (let [{:keys [eng p]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3)})]
           (tu/blind p)
           (core/submit! eng '(jobs.forestry.fell-tree {:radius 10}) {})
-          (await (lt/run-until-empty eng 4))
+          (await (tu/run-until-empty eng 4))
           (is (= [] (lt/calls p "dig"))))))))
 
 (defn seeing-after-look
@@ -48,7 +48,7 @@
           (tu/blind p)
           (seeing-after-look p)
           (core/submit! eng '(jobs.forestry.fell-tree {:radius 10}) {})
-          (await (lt/run-until-empty eng 40))
+          (await (tu/run-until-empty eng 40))
           (is (seq (lt/calls p "dig")) "the tree it saw after turning is dug"))))))
 
 (deftest the-farthest-tree-of-a-dense-forest-keeps-its-leaves
@@ -63,7 +63,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (ah/setup (ah/world {:inventory (ah/inv "shears" 1)}))]
           (tu/blind p)
-          (is (= :no-hive (:reason (await (ah/child-outcome eng 'jobs.apiary.harvest {} 40)))))
+          (is (= :no-hive (:reason (await (tu/child-outcome eng 'jobs.apiary.harvest {} 40)))))
           (is (= [] (ah/calls p "useOn"))))))))
 
 (deftest a-fire-the-body-has-not-seen-is-not-listed

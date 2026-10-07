@@ -6,6 +6,7 @@
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.search :as wsearch]
+            [jobs.lib.walk.world :as wworld]
             [engine.test-util :as tu :refer [box]]))
 
 ;; a stone deck x 10..30, z 10..30 at y 70 (441 cells, no way up) over a floor of 63 x 63 cells

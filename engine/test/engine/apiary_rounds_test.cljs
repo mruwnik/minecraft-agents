@@ -17,7 +17,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (g/setup (two-fires (g/inv "white_carpet" 2)) true)
-              result (await (g/child-outcome eng g/job {} 1))]
+              result (await (tu/child-outcome eng g/job {} 1))]
           (is (= 2 (:carpeted result)))
           (is (= :guarded (:reason result)))
           (is (= "white_carpet" (g/block-name p 2 65 0)))
@@ -32,7 +32,7 @@
                     (update :blocks assoc "2,64,6" "beehive" "2,63,6" "campfire")
                     (update :states assoc "2,64,6" {:honey_level 5} "2,63,6" {:lit true}))
               {:keys [eng p]} (h/setup w)
-              result (await (h/child-outcome eng h/job {} 1))]
+              result (await (tu/child-outcome eng h/job {} 1))]
           (is (= 2 (:harvested result)))
           (is (= 6 (h/carried p "honeycomb"))))))))
 

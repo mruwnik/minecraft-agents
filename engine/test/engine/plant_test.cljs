@@ -5,7 +5,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
-            [engine.test-util :as tu]
+            [engine.test-util :as tu :refer [child-outcome]]
             [engine.triggers :as triggers]
             [engine.hostile-test :as h]
             [engine.perception :as perception]
@@ -31,20 +31,6 @@
       (do (swap! clock + 700)
           (await (core/tick! eng))
           (recur (inc i))))))
-
-(defn ^:async child-outcome
-  "Run job with args as the child of a recording parent; the child's result, :not-done when it never finished."
-  [eng job args n]
-  (let [out (atom :not-done)
-        parent {:check (constantly true)
-                :round (fn ^:async recording-round [c]
-                         (let [r (await (ctx/call-child c :kid job args))]
-                           (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                           r))}
-        eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
-    (core/submit! eng '(recording-parent) {})
-    (await (run-until-empty eng n))
-    @out))
 
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
 (defn inv-of [p] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))

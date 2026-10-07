@@ -8,7 +8,7 @@
             [engine.memory :as mem]
             [jobs.lib.places :as places]
             [engine.registry :as registry]
-            [engine.test-util :as tu]
+            [engine.test-util :as tu :refer [run-until-empty]]
             [engine.triggers :as triggers]))
 
 ;; ------------------------------------------------------------------ pure
@@ -97,13 +97,6 @@
          eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir dir :now #(deref clock)
                            :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
      {:eng eng :p p :seen seen :clock clock :dir dir})))
-
-(defn ^:async run-until-empty [eng n]
-  (loop [i 0]
-    (if (or (>= i n) (empty? (:list (core/state eng))))
-      i
-      (do (await (core/tick! eng))
-          (recur (inc i))))))
 
 (defn ^:async run-job
   "Submit spec and tick until the list is empty (at most 8 ticks)."

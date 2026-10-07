@@ -43,7 +43,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (start mixed-field {"field" (field-plan [2])})
-              result (await (h/child-outcome eng h/job {:plan "field"} 200))]
+              result (await (tu/child-outcome eng h/job {:plan "field"} 200))]
           (is (= #{[2 2]} (dug p)))
           (is (= #{[2 2 "wheat_seeds"] [4 2 "wheat_seeds"]} (placed p)))
           (is (= {:cut 1 :replanted 2 :bare [] :lost [] :gave-up false} result))
@@ -57,7 +57,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (start (merge mixed-field {:inventory [] :drops {"wheat" ["wheat"]}})
                                      {"field" (field-plan [2])})
-              result (await (h/child-outcome eng h/job {:plan "field"} 200))]
+              result (await (tu/child-outcome eng h/job {:plan "field"} 200))]
           (is (= #{[2 2]} (dug p)))
           (is (= {:cut 1 :replanted 0 :bare [{:x 2 :y 64 :z 2} {:x 4 :y 64 :z 2}] :lost [] :gave-up false}
                  (update result :bare #(vec (sort-by :x %))))))))))
@@ -68,7 +68,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (start {:blocks (h/field "wheat" 7 [2 3] [2 3]) :ages (h/ages 7 [2 3] [2 3]) :drops h/wheat-drops}
                                      {"field" (field-plan [2 3])})
-              result (await (h/child-outcome eng h/job {:plan "field" :part "row-3"} 200))]
+              result (await (tu/child-outcome eng h/job {:plan "field" :part "row-3"} 200))]
           (is (= #{[2 3] [3 3]} (dug p)))
           (is (= 2 (:cut result))))))))
 
@@ -106,7 +106,7 @@
                      (fn ^:async f [token args impl]
                        (world/set-data! w {"field" (field-plan [2])} {})
                        (await (impl token args))))
-          (let [result (await (h/child-outcome eng h/job {:plan "field"} 200))]
+          (let [result (await (tu/child-outcome eng h/job {:plan "field"} 200))]
             (is (= #{2} (set (map second (dug p)))))
             (is (= 4 (:cut result)))
             (is (every? #(= 7 (h/age-at p % 64 9)) (range 2 6)))))))))
@@ -136,7 +136,7 @@
                      (fn ^:async f [token args impl]
                        (world/set-data! w {"field" (field-plan [2])} {})
                        (await (impl token args))))
-          (let [result (await (h/child-outcome eng h/job {:plan "field"} 200))]
+          (let [result (await (tu/child-outcome eng h/job {:plan "field"} 200))]
             (is (= #{} (dug p)))
             (is (= 0 (:cut result)))))))))
 
@@ -150,7 +150,7 @@
                      :drops h/wheat-drops}
               plan {"field" {:id "field" :parts [{:id "row-2" :box [[2 64 2] [5 64 2]] :want {:crop "carrots"}}]}}
               {:keys [eng p]} (start world plan)
-              result (await (h/child-outcome eng h/job {:plan "field"} 200))]
+              result (await (tu/child-outcome eng h/job {:plan "field"} 200))]
           (is (= #{[2 2]} (dug p)))
           (is (= #{[2 2 "carrot"]} (placed p)))
           (is (= 1 (:replanted result))))))))

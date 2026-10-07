@@ -12,7 +12,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (fm/start {:blocks (lt/tree 3 0 "oak" 4)} {})
-              out (await (h/child-outcome eng 'jobs.forestry.fell-tree {:radius 10} 1))]
+              out (await (tu/child-outcome eng 'jobs.forestry.fell-tree {:radius 10} 1))]
           (is (= {:base {:x 3 :y 64 :z 0}} out))
           (is (= 4 (count (digs p)))))))))
 
@@ -22,7 +22,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3) :inventory [{:name "oak_sapling" :count 1}]})]
           (core/submit! eng '(jobs.forestry.harvest-wood {:species "oak" :radius 10}) {})
-          (is (= 1 (await (lt/run-until-empty eng 1))) "the list is empty after one tick")
+          (is (= 1 (await (tu/run-until-empty eng 1))) "the list is empty after one tick")
           (is (= 3 (get (lt/inv p) "oak_log")))
           (is (= "oak_sapling" (h/block-at p 3 64 0))))))))
 

@@ -46,7 +46,7 @@
   "Run the job as a child over the world spec and plans: [result seen p]."
   [world-spec plans args & [zones]]
   (let [{:keys [eng p seen]} (b/start world-spec plans (or zones []))
-        result (await (h/child-outcome eng job (merge {:plan "line"} args) 400))]
+        result (await (tu/child-outcome eng job (merge {:plan "line"} args) 400))]
     [result seen p]))
 
 (defn props [p [x y z]] (js->clj (.-properties (.blockAt p #js {:x x :y y :z z})) :keywordize-keys true))
@@ -226,7 +226,7 @@
   "Build the line, break the rail at x 7, then submit the job with args: [seen p]."
   [args]
   (let [{:keys [eng p seen]} (b/start (spec "stone" 63 (kit {})) {"line" (line-plan {})} [])]
-    (await (h/child-outcome eng job {:plan "line"} 400))
+    (await (tu/child-outcome eng job {:plan "line"} 400))
     (fake/remove-block! p [7 64 0])
     (core/submit! eng (list job (merge {:plan "line"} args)) {})
     (dotimes [_ 6] (swap! h/clock + 700) (await (core/tick! eng)))
@@ -311,7 +311,7 @@
   "Build the plan of the waypoints over the world: [result seen p eng]."
   [waypoints opts world args & [zones]]
   (let [{:keys [eng p seen]} (b/start world {"line" (route-plan waypoints opts)} (or zones []))
-        result (await (h/child-outcome eng job (merge {:plan "line"} args) 900))]
+        result (await (tu/child-outcome eng job (merge {:plan "line"} args) 900))]
     [result seen p eng]))
 
 (defn shape-of [p [x y z]] (:shape (props p [x y z])))
@@ -490,7 +490,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (b/start (route-world l-route {} flat-top) {"line" (route-plan l-route {})} [])]
-          (await (h/child-outcome eng job {:plan "line"} 900))
+          (await (tu/child-outcome eng job {:plan "line"} 900))
           (fake/remove-block! p [19 64 0])
           (core/submit! eng (list job {:plan "line" :all-carried false}) {})
           (dotimes [_ 6] (swap! h/clock + 700) (await (core/tick! eng)))
@@ -558,6 +558,6 @@
       (fn ^:async t []
         (let [opts {:power :lever}
               {:keys [eng p]} (b/start (spec "stone" 63 (kit opts)) {"line" (line-plan opts)} [])
-              result (await (h/child-outcome eng job {:plan "line"} 1))]
+              result (await (tu/child-outcome eng job {:plan "line"} 1))]
           (is (true? (:ok? result)))
           (is (true? (:powered (props p [3 64 0])))))))))

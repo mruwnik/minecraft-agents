@@ -65,7 +65,7 @@
 (defn ^:async dig-in! [world]
   (let [{:keys [eng p seen] :as s} (st/setup (merge world {:time st/night :inventory st/dirt-stack}))]
     (core/submit! eng '(jobs.survival.dig-in) {})
-    (await (st/run-until-empty eng 8))
+    (await (tu/run-until-empty eng 8))
     (assoc s :eng eng :p p :seen seen)))
 
 (deftest dig-in-in-a-closed-room-mends-the-roof-hole-instead-of-walling-the-body-in
