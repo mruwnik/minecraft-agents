@@ -1,9 +1,10 @@
 ;; Card a5ca4ed3: a reflex (hostile-near) cuts jobs.blocks.dig and jobs.blocks.place while they walk to a far cell; the
 ;; reflex runs, the zombie is killed, the job restarts, re-reads the world and finishes (dig: block gone and collected;
 ;; place: block there, item spent once). Body starts 24 blocks from the target.
+;; :time :day and the runner's default clearing of natural hostiles: skeletons left on the plot cut the job again and again.
 {:defaults
  {:tags [:blocks :hostile]
-  :mobs :keep
+  :time :day
   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
               :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
   :plot {:height 12}
