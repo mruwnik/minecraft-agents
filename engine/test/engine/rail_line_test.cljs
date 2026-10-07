@@ -137,15 +137,17 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [plan (line-plan {})
-              {:keys [eng p seen]} (b/start {:inventory (kit {}) :blocks (built-world plan "stone")
-                                             :self {:pos {:x 0 :y 64 :z 3}}}
-                                            {"line" plan} [])
-              _ (core/submit! eng (list job {:plan "line"}) {})]
-          (dotimes [_ 6] (swap! h/clock + 700) (await (core/tick! eng)))
-          (is (= 1 (count (h/events-of seen :rail-build.done))))
-          (is (= 0 (count (h/events-of seen :rail-build.declined))))
-          (is (= 0 (count (h/calls p "place")))))))))
+        (doseq [pos [{:x 0 :y 64 :z 3} {:x 80 :y 64 :z 60}]]
+          (let [plan (line-plan {})
+                {:keys [eng p seen]} (b/start {:inventory (kit {}) :blocks (built-world plan "stone")
+                                               :self {:pos pos}}
+                                              {"line" plan} [])
+                _ (core/submit! eng (list job {:plan "line"}) {})]
+            (dotimes [_ 6] (swap! h/clock + 700) (await (core/tick! eng)))
+            (is (= 1 (count (h/events-of seen :rail-build.done))) (pr-str pos))
+            (is (= 0 (count (h/events-of seen :rail-build.declined))) (pr-str pos))
+            (is (= 0 (count (h/calls p "place"))) (pr-str pos))
+            (is (empty? (:list (core/state eng))) (pr-str pos))))))))
 
 ;; ---------------------------------------------------------------- redstone blocks on ground that is there
 
