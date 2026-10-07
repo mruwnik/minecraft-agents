@@ -2,6 +2,7 @@
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.apiary :as apiary]
+            [jobs.lib.look :as look]
             [jobs.lib.pen :as pen]
             [jobs.build.from-plan :as build]
             [jobs.lib.pace :as pace]
@@ -81,8 +82,10 @@
                            :text (str "pen build declines plan " plan (when part (str " part " part)) ": " trouble)})
           {:trouble trouble}))))
 
-(defn read-pen [c cells]
-  (pen/check {:block-at (apiary/block-at-fn (:primitives c))
+(defn read-pen
+  "The pen check over the cells the body has seen: an unseen cell is an :unloaded leak."
+  [c cells]
+  (pen/check {:block-at (apiary/seen-block-at-fn (:primitives c))
               :box (barrier-box cells)
               :max-cells (:max-cells (:args c))}))
 
@@ -144,7 +147,7 @@
         phase (:phase (ctx/mem c))]
     (cond
       trouble :declined
-      (= :check phase) (finish! c cells)
+      (= :check phase) (do (await (look/survey! c)) (finish! c cells)) ; cells behind the body are not seen until it looks
       :else (do (when-not phase (ctx/update-mem! c assoc :phase :build))
                 (await (build-step! c))))))
 
