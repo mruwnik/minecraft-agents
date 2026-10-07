@@ -10,23 +10,25 @@
     huts and beds are the housing, so this is the house step too. Skipped :no-plan without a :plan.
   - :breed (jobs.village.breed, :target and :radius): villagers (babies count) are below :target and 2 adults are
     near. Skipped :no-target, :at-target, :too-few-adults.
-  - :roll-N (jobs.village.roll, one per entry of :roles, with its :profession, :trade and :radius): no adult villager
-    near holds the role's profession, so one is rolled to it (the lock). Skipped :filled when one holds it,
-    :no-villager when none is near.
+  - :roll-N (jobs.village.roll, one per entry of :roles, with its :profession, :trade, :pos and :radius): no adult villager
+    near holds the role's profession, so one is rolled to it (the lock). :pos is the workstation cell. Skipped
+    :no-pos without one, :filled when a villager holds the profession, :no-villager when none is near. A roll
+    already begun goes on while its villager holds the profession.
   - :import: bringing villagers in needs passenger transport, which does not exist yet; always skipped :no-transport.
-  Villagers are those the body sees within :radius. A step that declines is booked {:skipped :declined}, one that
+  Villagers are those the body sees within :radius. Every call re-reads the villagers: a step the world no longer needs is skipped.
+  A step whose child declines is booked {:skipped :declined :reason why} (the child's wait reason), one that
   throws {:skipped :failed :error text}; the pass goes on either way.
   The job declines (does nothing) unless some step would run. A started run always continues.
   It ends :done with {:villagers n :target :steps {step summary}} (info maintain.done, also when every step was
   skipped). A summary is the child's :status, :reason, :placed, :missing, :fed, :rolled, :born and :count. A child that
-  ended stopped or failed makes the pass :stopped with :reason \"incomplete\" (warn maintain.done).
+  ended stopped, declined or failed makes the pass :stopped with :reason \"incomplete\" (warn maintain.done).
   The job names of breed and roll are used, not their internals: their args are as listed above.
   :ignore-zones? is passed to the repair.")
 
 (def args
   {:plan {:doc "id of the village plan to repair (jobs.build.from-plan); nil: no repair" :default nil}
    :target {:doc "villagers wanted (babies count); nil: no breeding" :type :int :min 2 :default nil}
-   :roles {:doc "profession roles to hold: [{:profession name :trade name?}], each rolled when nobody holds it" :default []}
+   :roles {:doc "profession roles to hold: [{:profession name :pos workstation-cell :trade name?}], each rolled when nobody holds it" :default []}
    :radius {:doc "villagers within this many blocks of the body count" :type :int :min 1 :max 96 :default 48}
    :ignore-zones? {:doc "act regardless of zones and claims (passed to the repair); the rules of the game allow it" :default false}})
 
@@ -74,11 +76,12 @@
                (< (count adults) 2) {:skip :too-few-adults}
                :else {:call {:target target :radius radius}})
       :import {:skip :no-transport}
-      (let [{:keys [profession trade]} (role-of args slot)]
+      (let [{:keys [profession trade pos]} (role-of args slot)]
         (cond
+          (nil? pos) {:skip :no-pos}
           (empty? villagers) {:skip :no-villager}
           (some #(= profession (:profession %)) adults) {:skip :filled}
-          :else {:call (cond-> {:profession profession :radius radius} trade (assoc :trade trade))})))))
+          :else {:call (cond-> {:profession profession :pos pos :radius radius} trade (assoc :trade trade))})))))
 
 (defn plan
   "Walk todo, booking the steps that decide skips in report; {:todo :report :call}, :call nil when none is left."
@@ -106,7 +109,7 @@
 
 (defn incomplete?
   [entry]
-  (or (= :stopped (:status entry)) (= :failed (:skipped entry))))
+  (or (= :stopped (:status entry)) (contains? #{:failed :declined} (:skipped entry))))
 
 (defn finish!
   [c report]
@@ -114,7 +117,8 @@
         out (cond-> {:villagers (count (:villagers (facts c))) :target (:target (:args c)) :steps report}
               (seq bad) (assoc :status :stopped :reason "incomplete"))
         text (if (seq bad)
-               (str "maintain done, incomplete: " (str/join ", " (map name bad)))
+               (str "maintain done, incomplete: "
+                    (str/join ", " (map #(str (name %) (some->> (:reason (report %)) (str " "))) bad)))
                (str "maintain done: " (count (filter :skipped (vals report))) " steps skipped"))]
     (ctx/emit! c :maintain.done (if (seq bad) :warn :info) (assoc out :text text))
     (ctx/result! c out)
@@ -135,26 +139,43 @@
       (ctx/update-mem! c booked slot {:skipped :failed :error (str e)})
       :failed)))
 
+(defn declined-reason
+  "Why the child of slot declines now: the reason of its check's wait."
+  [c slot call-args]
+  (let [w (atom nil)]
+    (ctx/check-child (assoc c :wait w) slot (job-of slot) call-args)
+    (if (map? @w) (:reason @w) @w)))
+
+(defn roll? [slot] (str/starts-with? (name slot) "roll-"))
+
+(defn resume
+  "The step to go on with: a roll begun goes on while its villager holds the profession (its saved call); any other
+  step is decided again from what the body sees."
+  [c m]
+  (let [saved (:call-args m)
+        fresh (plan (:todo m) (:args c) (facts c) (:report m))]
+    (if (and saved (= (:call-slot m) (first (:todo m))) (roll? (first (:todo m))))
+      (assoc fresh :todo (:todo m) :call (or (:call fresh) saved))
+      fresh)))
+
 (defn ^:async step
   "One piece of the pass: :again after a step ended, :continue while its child waits on the world, :done."
   [c]
   (when-not (:todo (ctx/mem c))
     (ctx/update-mem! c assoc :todo (slots (:args c)) :report {}))
   (let [m (ctx/mem c)
-        {:keys [call] :as p} (if (:call-args m)
-                               {:todo (:todo m) :report (:report m) :call (:call-args m)}
-                               (plan (:todo m) (:args c) (facts c) (:report m)))]
+        {:keys [call] :as p} (resume c m)]
     (ctx/update-mem! c assoc :todo (:todo p) :report (:report p))
     (if-not call
       (finish! c (:report p))
       (let [slot (first (:todo p))
-            _ (ctx/update-mem! c assoc :call-args call)
+            _ (ctx/update-mem! c assoc :call-args call :call-slot slot)
             r (await (run-child! c slot call))]
         (case r
           :continue :continue
           :failed :again
           :done (do (ctx/update-mem! c booked slot (summary (ctx/child-result c slot))) :again)
-          (do (ctx/update-mem! c booked slot {:skipped :declined}) :again))))))
+          (do (ctx/update-mem! c booked slot {:skipped :declined :reason (declined-reason c slot call)}) :again))))))
 
 (def max-steps "Steps of one call before it gives the round back with :continue." 400)
 
