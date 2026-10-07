@@ -322,7 +322,7 @@
             (core/submit! eng '(jobs.survival.night) {})
             (await (st/tick-n eng 6))
             (is (= [] (st/calls p "sleep")) (pr-str [known? zones]))
-            (is (= (if known? [{:pos bed-cell}] []) (st/entries eng :bed)) "nothing new recorded as :bed")))))))
+            (is (= ({true [{:pos bed-cell}] false []} known?) (st/entries eng :bed)) "nothing new recorded as :bed")))))))
 
 (deftest shelter-tries-an-occupied-bed-in-its-own-zone-and-a-refusal-is-a-failed-sleep
   (async done
