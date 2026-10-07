@@ -2,7 +2,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.result :as result]
             [jobs.lib.util :as u]
-            [jobs.movement.vehicle :as vehicle]))
+            [jobs.lib.vehicle :as vehicle]))
 
 (def doc
   "Get off whatever the body rides (boat, raft, minecart, mount). Ends at once when on foot.

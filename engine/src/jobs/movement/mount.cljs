@@ -1,12 +1,12 @@
 (ns jobs.movement.mount
   (:require [engine.ctx :as ctx]
             [jobs.lib.util :as u]
-            [jobs.movement.vehicle :as vehicle]))
+            [jobs.lib.vehicle :as vehicle]))
 
 (def doc
   "Get on the boat, raft, minecart or rideable mob :id, or the nearest one in sight named :name (e.g. oak_boat, pig). One call is the whole attempt: find the entity in sight, walk
   into reach (jobs.movement.go-to, range 2, no escalation), mount (a mob needs an empty hand, a boat or minecart does not), wait for the server to seat the body.
-  Holds the vehicle (jobs.movement.vehicle) while the job lives, so the :mounted trigger does not step the body off:
+  Holds the vehicle (jobs.lib.vehicle) while the job lives, so the :mounted trigger does not step the body off:
   the body stays aboard only in manual mode, otherwise the hold ends with the job and the trigger steps it off ~30 s later.
   By :name it prefers a vehicle with no rider.
   The check waits (:no-vehicle) while none is in sight. The round yields :continue only when the walk waits on the world.

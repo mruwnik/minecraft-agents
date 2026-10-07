@@ -1,4 +1,4 @@
-(ns jobs.movement.vehicle
+(ns jobs.lib.vehicle
   "Vehicles from the job side: what the body rides (self().vehicle, see engine/js/vehicle.mjs), the vehicle hold, and
   where to step off.
 
@@ -9,7 +9,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.util :as u]
             [engine.memory :as mem]
-            [triggers.survival.suffocating :as s]))
+            [jobs.lib.breath :as breath]))
 
 (def hold-kind :vehicle-hold)
 (def hold-policy {:cap 8 :ttl (* 24 60 60 1000)})
@@ -55,8 +55,8 @@
   (let [feet (u/block-name p cell)
         head (u/block-name p (update cell :y inc))
         below (u/block-name p (update cell :y dec))]
-    (boolean (and feet head below (s/air? feet) (s/air? head)
-                  (not (s/air? below)) (not (contains? unsafe-below below))))))
+    (boolean (and feet head below (breath/air? feet) (breath/air? head)
+                  (not (breath/air? below)) (not (contains? unsafe-below below))))))
 
 (defn centre [{:keys [x y z]}] {:x (+ x 0.5) :y y :z (+ z 0.5)})
 

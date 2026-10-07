@@ -6,7 +6,7 @@
             [jobs.lib.result :as result]
             [jobs.lib.util :as u]
             [jobs.survival.eat :as eat]
-            [triggers.survival.burning :as burning]))
+            [jobs.lib.body :as body]))
 
 (def doc
   "Put the body out when it is on fire or in lava. One run, re-reading the world before each pass, until the body is
@@ -69,7 +69,7 @@
 (def max-pour-waits 8)
 (def max-water-waits 10)
 
-(defn body-burning? [c] (burning/burning? (.self (:primitives c))))
+(defn body-burning? [c] (body/burning? (.self (:primitives c))))
 
 (def pour-policy "Body memory of the cell poured: it outlives a cut run so the next run scoops it." {:cap 1 :ttl (* 10 60 1000)})
 
@@ -317,7 +317,7 @@
     (cond
       scooped scooped
 
-      (not (burning/burning? me))
+      (not (body/burning? me))
       :done
 
       :else

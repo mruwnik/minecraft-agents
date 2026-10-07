@@ -11,8 +11,8 @@
             [jobs.lib.util :as u]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.shelter :as sh]
-            [triggers.survival.burning :as burning]
-            [triggers.survival.suffocating :as suffocating]))
+            [jobs.lib.body :as body]
+            [jobs.lib.breath :as breath]))
 
 (def table
   "Every fact by symbol: {:args [type ...] :type type :cost :cheap|:scan
@@ -49,10 +49,10 @@
               :read (online (fn [_ s] (boolean-or-unknown (.-inWater s))))}
    'burning {:args [] :type :boolean :cost :cheap
              :doc "on fire or in lava without fire resistance (the burning trigger)"
-             :read (online (fn [_ s] (burning/burning? s)))}
+             :read (online (fn [_ s] (body/burning? s)))}
    'suffocating {:args [] :type :boolean :cost :cheap
                  :doc "drowning or enclosed (the suffocating trigger, default oxygen)"
-                 :read (online (fn [p _] (some? (suffocating/situation p suffocating/default-min-oxygen))))}
+                 :read (online (fn [p _] (some? (breath/situation p breath/default-min-oxygen))))}
    'night-unsafe {:args [] :type :boolean :cost :cheap
                   :doc "night, awake, nothing overhead and not buried"
                   :read (online (fn [p _] (sh/unsafe-night? p sh/default-roof-height)))}

@@ -13,8 +13,6 @@
   :why "S4: equip!/item-name/eye/js-click move to jobs.lib tools/blocks/click"}
  {:from jobs.animals.herd-run :to triggers.animals.pen-gate :rule :job-requires-trigger
   :why "S1/S5: sensing fn shared with its trigger moves to jobs.lib"}
- {:from jobs.animals.lead-to :to triggers.maintenance.door-left :rule :job-requires-trigger
-  :why "S1/S5: sensing fn shared with its trigger moves to jobs.lib"}
  {:from jobs.animals.shut-gate :to triggers.animals.pen-gate :rule :job-requires-trigger
   :why "S1/S5: sensing fn shared with its trigger moves to jobs.lib"}
  {:from jobs.build.pen :to jobs.animals.pen :rule :helper-required-cross-family
@@ -47,38 +45,24 @@
   :why "S2: carried/chest-of/tool? move to jobs.lib.storage"}
  {:from jobs.lib.blocks :to jobs.forestry.trees :rule :lib-requires-job
   :why "S4: trees is helper-only, moves to jobs.lib.trees"}
- {:from jobs.maintenance.shut-doors :to triggers.maintenance.door-left :rule :job-requires-trigger
-  :why "S1/S5: sensing fn shared with its trigger moves to jobs.lib"}
- {:from jobs.movement.vehicle :to triggers.survival.suffocating :rule :job-requires-trigger
-  :why "S1/S5: sensing fn shared with its trigger moves to jobs.lib"}
  {:from jobs.storage.kit :to jobs.items.craft :rule :job-requires-other-family-job
   :why "layering E/F (6b05372f): craft nearest-table to jobs.lib"}
  {:from jobs.storage.make-room :to jobs.survival.dig-in :rule :job-requires-other-family-job
   :why "S4: building-blocks/pick move to jobs.lib.blocks"}
  {:from jobs.survival.breathe :to jobs.blocks.place :rule :job-requires-other-family-job
   :why "S2: place chosen/support? move to jobs.lib.placement"}
- {:from jobs.survival.breathe :to triggers.survival.suffocating :rule :job-requires-trigger
-  :why "S1/S5: sensing fn shared with its trigger moves to jobs.lib"}
  {:from jobs.survival.dig-in :to jobs.forestry.trees :rule :helper-required-cross-family
   :why "S4: trees is helper-only, moves to jobs.lib.trees"}
- {:from jobs.survival.extinguish :to triggers.survival.burning :rule :job-requires-trigger
-  :why "S1/S5: sensing fn shared with its trigger moves to jobs.lib"}
  {:from jobs.survival.get-food :to triggers.survival.hungry :rule :job-requires-trigger
   :why "S1/S5: sensing fn shared with its trigger moves to jobs.lib"}
  {:from jobs.survival.night :to triggers.survival.hungry :rule :job-requires-trigger
   :why "S1/S5: sensing fn shared with its trigger moves to jobs.lib"}
  {:from jobs.survival.night :to triggers.survival.night :rule :job-requires-trigger
   :why "S1/S5: sensing fn shared with its trigger moves to jobs.lib"}
- {:from jobs.survival.recover-drops :to triggers.survival.died :rule :job-requires-trigger
-  :why "S1/S5: sensing fn shared with its trigger moves to jobs.lib"}
  {:from jobs.survival.retreat-refuge :to jobs.access.pillar :rule :job-requires-other-family-job
   :why "layering E/F (6b05372f, 24ac6454): pillar helpers or child call"}
- {:from jobs.survival.unwedge :to triggers.survival.wedged :rule :job-requires-trigger
-  :why "S1/S5: sensing fn shared with its trigger moves to jobs.lib"}
  {:from jobs.village.feed :to jobs.items.give :rule :job-requires-other-family-job
   :why "S2: give drops fn moves to jobs.lib"}
  {:from triggers.animals.pen-gate :to jobs.animals.pen :rule :lib-requires-job
   :why "S3: pen helpers move to jobs.lib.pen"}
- {:from triggers.movement.mounted :to jobs.movement.vehicle :rule :lib-requires-job
-  :why "S1: vehicle helper moves to jobs.lib.vehicle"}
 ]

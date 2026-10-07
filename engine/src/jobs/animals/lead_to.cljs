@@ -9,7 +9,7 @@
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.reach :as reach]
             [jobs.lib.pass :as pass]
-            [triggers.maintenance.door-left :as dl]
+            [jobs.lib.doors :as doors]
             [engine.memory :as mem]
             [clojure.string :as str]
             [jobs.lib.places :as places]))
@@ -134,7 +134,7 @@
   "Blocks from the body at self that cover every entry's cell (the floor is shut-doors' own default radius)."
   [self entries]
   (->> entries
-       (map #(js/Math.ceil (dl/distance self (:cell %))))
+       (map #(js/Math.ceil (doors/distance self (:cell %))))
        (reduce max 16)))
 
 (defn ^:async close-up!
@@ -147,7 +147,7 @@
       (ctx/remember! c :opened (assoc e :shut? true) pass/opened-policy))
     (if (empty? mine)
       (conclude! c (:ending (ctx/mem c)))
-      (if (= :done (await (ctx/call-child c :shut 'jobs.maintenance.shut-doors {:radius (shut-radius (dl/self-pos (:primitives c)) mine)})))
+      (if (= :done (await (ctx/call-child c :shut 'jobs.maintenance.shut-doors {:radius (shut-radius (doors/self-pos (:primitives c)) mine)})))
         (conclude! c (:ending (ctx/mem c)))
         :yield))))
 

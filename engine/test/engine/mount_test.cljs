@@ -4,7 +4,7 @@
             [engine.test-util :as tu]
             [engine.registry :as registry]
             [jobs.movement.mount :as mount]
-            [jobs.movement.vehicle :as vehicle]))
+            [jobs.lib.vehicle :as vehicle]))
 
 (def boat {:id 9 :name "oak_boat" :uuid "u-9" :kind "other" :pos {:x 1.5 :y 64 :z 0.5}})
 

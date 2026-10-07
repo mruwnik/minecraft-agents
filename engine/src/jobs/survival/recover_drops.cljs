@@ -7,7 +7,7 @@
             [jobs.lib.danger :as danger-q]
             [jobs.lib.reach :as reach]
             [jobs.lib.util :as u]
-            [triggers.survival.died :as died]
+            [jobs.lib.body :as body]
             [engine.game :as game]
             [engine.memory :as mem]))
 
@@ -76,7 +76,7 @@
 (def trip-policy {:cap 1 :ttl game/despawn-ms})
 
 (defn check [c]
-  (or (some? (died/unrecovered-death (ctx/view c)))
+  (or (some? (body/unrecovered-death (ctx/view c)))
       (ctx/wait c {:reason :no-drops})))
 
 (defn finite [n] (if (js/isFinite n) n :infinite))
@@ -108,7 +108,7 @@
 (defn finish!
   "Write the :recovered entry, report the decision and end the job."
   [c decision fields]
-  (let [pos (:pos (:data (died/unrecovered-death (ctx/view c))))]
+  (let [pos (:pos (:data (body/unrecovered-death (ctx/view c))))]
     (ctx/remember! c :recovered (merge {:decision decision} fields) recovered-policy)
     (ctx/emit! c :recover-drops.decided :info
                (assoc (select-keys fields [:value :cost :reason :items :left :parts :top-items :top-mobs])
@@ -360,17 +360,17 @@
   :declined when a danger is within :danger-radius (the hostile reflex acts, the trigger fires again) or the walk
   did not arrive."
   [c]
-  (let [entry (died/unrecovered-death (ctx/view c))]
+  (let [entry (body/unrecovered-death (ctx/view c))]
     (when entry (key-to-death! c entry))
     (if (nil? entry)
       :done
-      (let [waited (or (await (wait-while! c entry :respawning #(not (died/respawned-since? (ctx/view c) entry))))
+      (let [waited (or (await (wait-while! c entry :respawning #(not (body/respawned-since? (ctx/view c) entry))))
                        (when (nil? (:decided (ctx/mem c)))
                          (await (wait-while! c entry :settling #(settling? c entry)))))]
         (when-not (= :declined waited) (warn-away-from-bed! c entry))
         (if (= :declined waited)
           :declined
           (loop []
-            (let [entry (died/unrecovered-death (ctx/view c))
+            (let [entry (body/unrecovered-death (ctx/view c))
                   r (if entry (await (step! c entry)) :done)]
               (if (= :next r) (recur) r))))))))

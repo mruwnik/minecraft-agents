@@ -6,11 +6,11 @@
             [jobs.lib.tidy :as tidy]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
-            [triggers.survival.wedged :as w]
+            [jobs.lib.breath :as breath]
             [jobs.survival.breathe :as breathe]))
 
 (def doc
-  "Get out of a block that fills the feet cell (triggers.survival.wedged), e.g. sand that fell on the body.
+  "Get out of a block that fills the feet cell (jobs.lib.breath), e.g. sand that fell on the body.
   One run, paced between tries, until the feet cell is no longer a full block (then :done):
   - Once, step to a free side cell (feet and head cells passable, something to stand on).
   - Else dig the feet block with the best carried tool (a last resort, tidied up like breathe's digs).
@@ -24,14 +24,14 @@
   {:ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
 (defn check [c]
-  (or (some? (w/wedged-cell (:primitives c)))
+  (or (some? (breath/wedged-cell (:primitives c)))
       (ctx/wait c {:reason :not-wedged})))
 
 (defn ^:async block!
   "Give up on cell: warn once, remember it so the trigger stays quiet there. Resolves :done, stopped."
   [c cell why]
   (ctx/emit! c :unwedge.blocked :warn {:cell cell :why why :text (str "wedged in a block I cannot dig out of: " (name why))})
-  (ctx/remember! c :unwedge-blocked {:cell cell :why why} w/blocked-policy)
+  (ctx/remember! c :unwedge-blocked {:cell cell :why why} breath/blocked-policy)
   (result/stop! c :blocked (str "wedged in a block I cannot dig out of: " (name why)) :why why :cell cell))
 
 (defn lava-near?
@@ -77,7 +77,7 @@
 (defn ^:async round [c]
   (let [p (:primitives c)]
     (loop [i 0]
-      (let [cell (w/wedged-cell p)]
+      (let [cell (breath/wedged-cell p)]
         (cond
           (nil? cell) :done
           (not (ctx/alive? c)) :done

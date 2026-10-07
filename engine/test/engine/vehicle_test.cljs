@@ -1,10 +1,10 @@
 (ns engine.vehicle-test
-  "jobs.movement.vehicle (what the body rides, the vehicle hold), the :mounted trigger and
+  "jobs.lib.vehicle (what the body rides, the vehicle hold), the :mounted trigger and
   jobs.movement.leave-vehicle against the fake world."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.events :as events]
-            [jobs.movement.vehicle :as vehicle]
+            [jobs.lib.vehicle :as vehicle]
             [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.test-util :as tu]

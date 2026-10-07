@@ -3,11 +3,11 @@
             [jobs.lib.util :as u]
             [jobs.lib.result :as res]
             [jobs.lib.pass :as pass]
-            [triggers.maintenance.door-left :as dl]))
+            [jobs.lib.doors :as doors]))
 
 (def doc
   "Shut the doors, gates and trapdoors a walk opened and left open (the job of the door-left trigger,
-  triggers.maintenance.door-left).
+  jobs.lib.doors).
   Only blocks with an :opened entry count (written by jobs.lib.pass when a walk opens a block, dropped when it
   shuts it), whatever their age. A block the walker did not open is never touched. Blocks a :leave-open walk left
   open on purpose are left alone while that walk's job lives (once it is gone, they count).
@@ -29,10 +29,10 @@
 (defn cell-key [{:keys [x y z]}] [x y z])
 
 (defn targets
-  "The left-open blocks (dl/left-open, any age) within :radius, minus the cells in left ({:cell [x y z]})."
+  "The left-open blocks (doors/left-open, any age) within :radius, minus the cells in left ({:cell [x y z]})."
   [c left]
   (let [given-up (set (map :cell left))]
-    (remove #(given-up (cell-key (:cell %))) (dl/left-open (:primitives c) (ctx/view c) (:args c) 0))))
+    (remove #(given-up (cell-key (:cell %))) (doors/left-open (:primitives c) (ctx/view c) (:args c) 0))))
 
 (defn ^:async walk!
   "nil when the body stands within reach, else why not: :walk-interrupted (the walk ended :continue) or :unreachable."
@@ -50,14 +50,14 @@
 (defn ^:async shut-once!
   "Shut the target: nil when shut, else the reason it stays open."
   [c {:keys [cell column dist]}]
-  (if (pass/in-column? column (dl/feet-cell (u/self-pos c)))
+  (if (pass/in-column? column (doors/feet-cell (u/self-pos c)))
     :standing-in
     (if-let [why (when (> dist pass/leftover-reach) (await (walk! c {:cell cell})))]
       why
       (loop [n 1]
         (await (pass/shut-column! c column))
         (cond
-          (not (dl/open-block (:primitives c) cell)) nil
+          (not (doors/open-block (:primitives c) cell)) nil
           (< n (:tries (:args c))) (recur (inc n))
           :else :shut-failed)))))
 

@@ -10,7 +10,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.result :as result]
             [jobs.lib.util :as u]
-            [triggers.survival.suffocating :as s]))
+            [jobs.lib.breath :as breath]))
 
 (def doc
   "Get air when drowning or stuck inside a block, then out of the water, in one run (a reflex; never yields).
@@ -21,7 +21,7 @@
     a cap within 3 blocks over the head when it is natural (jobs.lib.escape/natural?), not protected and not sand or gravel,
     one cell a pass, at most 3 digs (zones respected, trespass only as a last resort). Air is looked for only in the own
     column and in cells the body has seen (perception memory), never through stone.
-  - Enclosed (head cell holds a suffocating block, see triggers.survival.suffocating): step to a side cell with room
+  - Enclosed (head cell holds a suffocating block, see jobs.lib.breath): step to a side cell with room
     to stand, once; then dig the head block, the block above it if solid, and step up.
   - Surfaced and still in water: each pass takes the first way left: swim to the nearest shore cell (land with its
     rim at most one block above the water) within :shore-radius, another direction after each failed swim; a go-to
@@ -41,7 +41,7 @@
 
 (def args
   {:min-oxygen {:doc "oxygen (of 20) below which being in water with the head submerged is drowning"
-                :default s/default-min-oxygen}
+                :default breath/default-min-oxygen}
    :radius {:doc "columns this far sideways are searched for air" :default 2}
    :reach {:doc "blocks above the feet the search climbs" :default 10}
    :air-radius {:doc "when no air is near, a go-to child searches for air-reaching water this many blocks sideways, 1 to 32" :type :int :min 1 :max 32 :default 8}
@@ -69,7 +69,7 @@
   [p self]
   (let [below (u/block-name p {:x (js/Math.floor (.. self -pos -x)) :y (dec (js/Math.floor (.. self -pos -y)))
                                :z (js/Math.floor (.. self -pos -z))})]
-    (boolean (and below (not (s/air? below)) (not (contains? unsafe-below below))))))
+    (boolean (and below (not (breath/air? below)) (not (contains? unsafe-below below))))))
 
 (defn on-land?
   "Out of the water and standing on solid ground. A swim or walk that ends on a jump crest against a wall over water
@@ -88,7 +88,7 @@
                 (not (on-land? (:primitives c))))))
 
 (defn check [c]
-  (or (some? (s/situation (:primitives c) (:min-oxygen (:args c))))
+  (or (some? (breath/situation (:primitives c) (:min-oxygen (:args c))))
       (boolean (surfaced-in-water? c))
       (ctx/wait c {:reason :not-underwater})))
 
@@ -102,7 +102,7 @@
        (sort-by (fn [[dx dz]] (+ (* dx dx) (* dz dz))))))
 
 (defn passable-water-or-air? [name]
-  (or (s/air? name) (= "water" name)))
+  (or (breath/air? name) (= "water" name)))
 
 (defn seen-name
   "The name of the block at cell as the body last saw it; nil for a cell never seen. A body without a perception
@@ -126,7 +126,7 @@
              head (name-at p {:x x :y (inc y) :z z})]
          (cond
            (not (and feet head (passable-water-or-air? feet))) nil
-           (s/air? head) {:x x :y y :z z}
+           (breath/air? head) {:x x :y y :z z}
            (= "water" head) (recur (inc k))
            :else nil))))))
 
@@ -144,7 +144,7 @@
                (when-not (contains? skip cell) cell)))
            (columns radius)))))
 
-(defn solid-at? [p cell] (s/suffocates? p cell))
+(defn solid-at? [p cell] (breath/suffocates? p cell))
 
 (defn status [r] (.-status r))
 
@@ -158,8 +158,8 @@
         head (u/block-name p (update cell :y inc))
         below (u/block-name p (update cell :y dec))]
     (boolean (and feet head below
-                  (s/air? feet) (s/air? head)
-                  (not (s/air? below)) (not (contains? unsafe-below below))))))
+                  (breath/air? feet) (breath/air? head)
+                  (not (breath/air? below)) (not (contains? unsafe-below below))))))
 
 (defn surface-pos
   "pos with y raised to the feet cell at the top of the own water column (surface-in-column), so a body that has
@@ -248,9 +248,9 @@
                       head (u/block-name p (update cell :y inc))
                       below (u/block-name p (update cell :y dec))]
                   (and feet head below
-                       (not (s/suffocates? p cell)) (not (s/suffocates? p (update cell :y inc)))
+                       (not (breath/suffocates? p cell)) (not (breath/suffocates? p (update cell :y inc)))
                        (not (contains? harmful-in-cell feet)) (not (contains? harmful-in-cell head))
-                       (not (s/air? below)) (not (contains? #{"water" "lava" "magma_block"} below)))))]
+                       (not (breath/air? below)) (not (contains? #{"water" "lava" "magma_block"} below)))))]
     (->> [[1 0] [-1 0] [0 1] [0 -1]]
          (map (fn [[dx dz]] {:x (+ fx dx) :y fy :z (+ fz dz)}))
          (filter fits?)
@@ -262,7 +262,7 @@
   refilled); false when nothing changed."
   [c]
   (let [p (:primitives c)
-        head (s/eye-cell (.self p))
+        head (breath/eye-cell (.self p))
         above (update head :y inc)
         _ (access/trespass! c "breathe" (:trespass (access/choose c :dig [(cond-> [head] (solid-at? p above) (conj above))] identity)))
         dug (status (await (tidy/dig! c head true)))]
@@ -310,7 +310,7 @@
   up; else the reason (see cap-above, or :dig-failed, also after :max-cap-digs digs that left the body drowning)."
   [c]
   (let [p (:primitives c)
-        {:keys [cells why]} (cap-above p (s/eye-cell (.self p)))]
+        {:keys [cells why]} (cap-above p (breath/eye-cell (.self p)))]
     (cond
       (not cells) why
       (<= max-cap-digs (:cap-digs (ctx/mem c) 0)) :dig-failed
@@ -411,8 +411,8 @@
     (->> (for [[dx dz] (columns radius) dy [0 -1]] {:x (+ fx dx) :y (+ fy dy) :z (+ fz dz)})
          (remove #(or (= own %) (contains? (set failed) %)))
          (filter #(and (= "water" (u/block-name p %))
-                       (s/air? (u/block-name p (update % :y inc)))
-                       (s/air? (u/block-name p (update % :y + 2)))
+                       (breath/air? (u/block-name p (update % :y inc)))
+                       (breath/air? (u/block-name p (update % :y + 2)))
                        (place/support? p %)))
          first)))
 
@@ -523,7 +523,7 @@
   [c]
   (let [p (:primitives c)
         min-oxygen (:min-oxygen (:args c))
-        why (s/situation p min-oxygen)]
+        why (breath/situation p min-oxygen)]
     (cond
       (and (nil? why) (surfaced-in-water? c)) (await (head-for-land! c))
       (nil? why) :done
@@ -541,7 +541,7 @@
           (let [drowning? (= :drowning why)
                 ok (await (if drowning? (drown-out! c) (dig-out! c)))]
             (cond
-              (nil? (s/situation p min-oxygen)) :again
+              (nil? (breath/situation p min-oxygen)) :again
               (and drowning? ok) :again
               (= :dug ok) (do (ctx/update-mem! c dissoc :failures) :again)
               drowning? (fail-air! c)
