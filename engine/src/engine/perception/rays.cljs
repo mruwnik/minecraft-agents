@@ -289,25 +289,37 @@
 (def hitbox-height 1.8)
 (def feel-margin 0.1)
 
+(defn in-reach?
+  "Whether the cell [x y z] could be touched by a body with its feet at (fx fy fz), whatever its collision shape: over the
+  hitbox column (grown by feel-margin) or at most one cell below the feet. Cheap, so callers test it before reading state."
+  [fx fy fz [x y z]]
+  (let [r (+ hitbox-half feel-margin)]
+    (and (< x (+ fx r)) (> (inc x) (- fx r))
+         (< z (+ fz r)) (> (inc z) (- fz r))
+         (< y (+ fy hitbox-height feel-margin))
+         (>= y (dec (js/Math.floor fy))))))
+
+(defn touches?
+  "Whether a body with its feet at (fx fy fz) touches the cell [x y z] whose collision shape reaches `top` above its floor:
+  it overlaps the body's hitbox (0.6 wide, 1.8 tall) grown by feel-margin, or is a tall support (a fence) under the feet
+  whose top reaches the feet. The one rule for perception's feel and the jobs' feel."
+  [fx fy fz [x y z :as pos] top]
+  (and (in-reach? fx fy fz pos)
+       (let [over? (fn [c lo hi] (and (< c hi) (> (inc c) lo)))]
+         (or (over? y (- fy feel-margin) (+ fy hitbox-height feel-margin))
+             (and (< y fy) (>= (+ y top) (- fy feel-margin)))))))
+
 (defn felt?
-  "Whether the body touches the cell (x y z) whose collision shape reaches `top` above its floor: it overlaps the
-  body's hitbox (0.6 wide, 1.8 tall, feet at the eye less eye-height) grown by feel-margin, or is a tall support (a
-  fence) under the feet whose top reaches the feet."
-  [^js eye [x y z] top]
-  (let [fx (.-x eye) fz (.-z eye) feet (- (.-y eye) eye-height)
-        r (+ hitbox-half feel-margin)
-        over? (fn [c lo hi] (and (< c hi) (> (inc c) lo)))]
-    (and (over? x (- fx r) (+ fx r))
-         (over? z (- fz r) (+ fz r))
-         (or (over? y (- feet feel-margin) (+ feet hitbox-height feel-margin))
-             (and (< y feet) (>= (+ y top) (- feet feel-margin)))))))
+  "touches? for the body whose eye is `eye` (feet at the eye less eye-height)."
+  [^js eye pos top]
+  (touches? (.-x eye) (- (.-y eye) eye-height) (.-z eye) pos top))
 
 (defn feel!
   "The state id of a cell the body touches (felt?), in any light; memory takes it. Nil for any other cell, an unloaded
   one, or offline."
   [{:keys [raw opts st]} [x y z :as pos]]
   (let [^js st st ^js eye (.eye ^js raw)]
-    (when eye
+    (when (and eye (in-reach? (.-x eye) (- (.-y eye) eye-height) (.-z eye) pos))
       (let [id (.stateAt ^js raw x y z)]
         (when (and (>= id 0) (felt? eye pos (.-top ^js (.stateInfo ^js raw id))))
           (new-stamp! st)

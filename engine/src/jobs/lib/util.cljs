@@ -1,7 +1,8 @@
 (ns jobs.lib.util
   "Helpers the library jobs share: reading positions off JS, distances, the
   inventory and bounded failure counting. Walking in reach is jobs.lib.near/go-near!."
-  (:require [engine.ctx :as ctx]))
+  (:require [engine.ctx :as ctx]
+            [engine.perception.rays :as rays]))
 
 (def max-failures 3)
 
@@ -24,21 +25,10 @@
   [p pos]
   (some-> (block-at p pos) .-name))
 
-(def hitbox-half 0.3)
-(def hitbox-height 1.8)
-(def feel-margin 0.1)
-
-(defn touches?
-  "Whether a body with its feet at (fx fy fz) touches the cell [x y z]: it overlaps the hitbox (0.6 wide, 1.8 tall) grown by
-  feel-margin, or is the support under the feet whose collision top (a block's height above its floor) reaches the feet.
-  The same rule as engine.perception.rays/felt?, over feet instead of the eye."
-  [fx fy fz [x y z] top]
-  (let [r (+ hitbox-half feel-margin)
-        over? (fn [c lo hi] (and (< c hi) (> (inc c) lo)))]
-    (and (over? x (- fx r) (+ fx r))
-         (over? z (- fz r) (+ fz r))
-         (or (over? y (- fy feel-margin) (+ fy hitbox-height feel-margin))
-             (and (< y fy) (>= (+ y top) (- fy feel-margin)))))))
+(def touches?
+  "Whether a body with its feet at (fx fy fz) touches the cell [x y z] whose collision top is `top`: the rule perception's
+  feel answers by (engine.perception.rays/touches?)."
+  rays/touches?)
 
 (defn feel
   "The block at a cell the body touches (its feet, head and the cell under the feet), as the JS object, in any light;

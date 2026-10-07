@@ -5,6 +5,7 @@
             [engine.fake :as fake]
             [engine.fake.raw-world :as fake-raw]
             [engine.perception :as perception]
+            [engine.perception.rays :as rays]
             [engine.perception.store :as store]
             [engine.test-util :as tu]))
 
@@ -166,3 +167,14 @@
           (is (= "ok" (.-status r)))
           (is (= ["gold_block" "iron_block"] [(seen-name per [0 65 -5]) (seen-name per [0 66 -5])]))
           (is (= "gold_block" (.-name (.-sensed r)))))))))
+
+(deftest touches?-is-the-one-feel-rule-over-feet-position-and-collision-top
+  (is (true? (rays/touches? 0.5 64 0.5 [0 63 0] 1)) "the full block under the feet")
+  (is (false? (rays/touches? 0.5 64 0.5 [0 62 0] 1)) "the cell below the floor")
+  (is (true? (rays/touches? 0.5 64.5 0.5 [0 64 0] 0.5)) "a slab under the feet")
+  (is (false? (rays/touches? 0.5 64.5 0.5 [0 63 0] 1)) "the cell under a slab")
+  (is (true? (rays/touches? 0.5 65.5 0.5 [0 64 0] 1.5)) "a fence under the feet")
+  (is (false? (rays/touches? 0.5 65.5 0.5 [0 63 0] 1)) "below the fence")
+  (is (false? (rays/touches? 0.5 70.9 0.5 [0 69 0] 1)) "a falling body: the block far below")
+  (is (false? (rays/touches? 0.5 64 0.5 [1 64 0] 1)) "beside the hitbox margin")
+  (is (true? (rays/touches? 0.5 64 0.5 [0 65 0] 0)) "the head cell"))
