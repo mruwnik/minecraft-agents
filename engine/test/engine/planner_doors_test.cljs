@@ -124,6 +124,11 @@
     (is (= ["lever"] (mapv :via (opened-by r))))
     (is (re-find #"pulls 1 lever" (summary r)))))
 
+(deftest iron-door-prefers-a-button-to-a-nearer-lever
+  (let [lever [7 65 4 7 65 4 "lever" {:face "wall" :facing "west"}]
+        r (run (wall-with (door "iron_door" 5) [lever [7 65 6 7 65 6 "stone_button" {:face "wall" :facing "west"}]]) start goal {:goalFlood 0})]
+    (is (= ["button"] (mapv :via (opened-by r))))))
+
 (deftest button-more-than-4-blocks-away-out-of-reach
   (let [far [3 65 4 3 65 4 "stone_button" {:face "wall" :facing "west"}]
         r (run (wall-with (door "iron_door" 5) [[2 64 3 2 66 3 "stone"] far]) start goal {:goalFlood 0})]

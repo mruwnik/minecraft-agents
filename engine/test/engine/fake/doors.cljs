@@ -61,10 +61,15 @@
     (reduce #(set-open %1 %2 open) w (get-in w [:wires pos]))))
 
 (defn press
-  "World after a button at pos is pressed: powered, its wired doors open, and a timer to shut them when :pulse-moves is set."
+  "World after a button at pos is pressed: powered, its wired doors open, and a timer to shut them when :pulse-moves is set (a vector: one pulse per press, the last one repeating)."
   [w pos]
-  (cond-> (set-wired w pos true)
-    (:pulse-moves w) (assoc-in [:timers pos] (:pulse-moves w))))
+  (let [pulses (:pulse-moves w)
+        w (set-wired w pos true)]
+    (cond
+      (nil? pulses) w
+      (number? pulses) (assoc-in w [:timers pos] pulses)
+      :else (-> (assoc-in w [:timers pos] (first pulses))
+                (assoc :pulse-moves (if (next pulses) (vec (next pulses)) (last pulses)))))))
 
 (defn tick-wires
   "World after one steer tick with the body in cell: a plate under it opens its doors; timers run down and shut theirs."

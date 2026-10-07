@@ -280,6 +280,29 @@
           (is (> (first (at p)) 5))
           (is (= 1 (clicks p)) "no second press needed"))))))
 
+(deftest a-button-door-that-shuts-before-the-body-is-through-is-pressed-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [pulse [[1 20] [2 20]]]
+          (let [w (button-world :wires {button-cell ["5,64,0"]} :pulseMoves pulse)
+                {:keys [out p]} (await (go! w {:pos [10 64 0] :range 0}))]
+            (is (= {:arrived true} @out) (str "pulse " pulse))
+            (is (> (first (at p)) 5) (str "pulse " pulse))
+            (is (>= (clicks p) 2) (str "pulse " pulse " clicks " (clicks p)))))))))
+
+(deftest a-button-wins-over-a-nearer-lever
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (iron-world {button-cell "stone_button" "4,64,-1" "lever"}
+                            {button-cell {:face "wall" :facing "west" :powered false}
+                             "4,64,-1" {:face "wall" :facing "west" :powered false}}
+                            :wires {button-cell ["5,64,0"]})
+              {:keys [out p]} (await (go! w {:pos [10 64 0] :range 0}))]
+          (is (= {:arrived true} @out))
+          (is (> (first (at p)) 5)))))))
+
 (deftest a-lever-door-stays-a-wall
   (async done
     (tu/run-async done

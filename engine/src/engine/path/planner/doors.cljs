@@ -37,7 +37,8 @@
       out))
 
   ;; an activator for an iron door at `door`, for a body in the cell (sx, sy, sz) in front of it: a plate in that cell, or a
-  ;; button or lever on the body's side of the door within 4 blocks, on a block next to the door's frame. nil when none.
+  ;; button or lever on the body's side of the door within 4 blocks, on a block next to the door's frame; a button beats a
+  ;; nearer lever (levers stay walls for now). nil when none.
   (findActivator [s ^js door sx sy sz side]
     (if (and (== (aget (.-tbl-activator s) (.stateAt ^js (.-snapshot s) sx sy sz)) ACT-PLATE)
              (== (+ (js/Math.abs (- (.-x door) sx)) (js/Math.abs (- (.-z door) sz))) 1))
@@ -53,8 +54,9 @@
             (> dy 4) (recur (inc dz) -2 -4 best best-dist)
             (> dx 4) (recur dz (inc dy) -4 best best-dist)
             :else
-            (let [d (+ (* dx dx) (* dy dy) (* dz dz))]
-              (if (or (> d 16) (>= d best-dist))
+            (let [d0 (+ (* dx dx) (* dy dy) (* dz dz))
+                  d (if (== (aget (.-tbl-activator s) (.stateAt ^js (.-snapshot s) (+ sx dx) (+ sy dy) (+ sz dz))) ACT-LEVER) (+ d0 100) d0)]
+              (if (or (> d0 16) (>= d best-dist))
                 (recur dz dy (inc dx) best best-dist)
                 (let [x (+ sx dx)
                       y (+ sy dy)
