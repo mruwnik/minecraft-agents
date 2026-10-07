@@ -173,7 +173,8 @@
         (nil? item) "no-item"
         :else (let [door (await (shut-open! c cell))
                     r (when-not door (await (tidy/place! c cell item true)))
-                    status (some-> r .-status)]
+                    status (some-> r .-status)
+                    _ (when-not (refusing-mobs r) (forget-wait! c :mob-since))]
                 (cond
                   (= :shut door) (recur (rest cells))
 
