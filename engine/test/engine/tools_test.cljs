@@ -66,3 +66,10 @@
     ;; already low at the first hold: told once; not again once :low-seen
     {:name "stone_pickaxe" :durability 10 :max 131 :n 1} {:name "stone_pickaxe" :durability 9 :max 131 :n 1} :tool-low
     {:name "stone_pickaxe" :durability 10 :max 131 :n 1 :low-seen true} {:name "stone_pickaxe" :durability 9 :max 131 :n 1} nil))
+
+(deftest need-kind-strips-the-material
+  (are [tool kind] (= kind (tools/need-kind tool))
+    "wooden_pickaxe" "pickaxe"
+    "iron_sword" "sword"
+    "shears" "shears"
+    nil "pickaxe"))

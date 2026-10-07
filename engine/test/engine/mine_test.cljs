@@ -1355,3 +1355,11 @@
           (is (every? :zone-tolls @opts))
           (is (zero? (:failures (job-mem s) 0)) "a waiting walk is no failure")
           (is (zero? (dig-count s))))))))
+
+(deftest no-tool-names-the-kind-the-block-needs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "cobweb" :count 2} {:blocks (cells "cobweb" [3 4] [64] [0]) :inventory []} 10))]
+          (is (zero? (dig-count s)))
+          (is (= ["sword"] (mapv :tool (events-of s :mine.no-tool)))))))))

@@ -279,7 +279,7 @@
             block (some #(let [n (block-at %)] (when (and n (not (rules/air n)) (not (unbreakable n))) n)) cut)]
         (cond
           (nil? block) nil
-          (no-tool? p block) {:reason :no-tool :tool "pickaxe" :block block}
+          (no-tool? p block) {:reason :no-tool :tool (tools/needed-kind p block) :block block}
           (not (room-for? p (mine/item-name {:block block}))) {:reason :no-free-slot :block block})))))
 
 (defn refusal
@@ -313,7 +313,7 @@
     (cond
       (>= tries max-cell-digs) {:reason :refills :cell cell :block block}
       (unbreakable block) {:reason :unbreakable :cell cell :block block}
-      (no-tool? p block) {:reason :no-tool :cell cell :block block :tool "pickaxe"}
+      (no-tool? p block) {:reason :no-tool :cell cell :block block :tool (tools/needed-kind p block)}
       (not (room-for? p (mine/item-name {:block block}))) {:reason :inventory-full :cell cell :block block}
       :else
       (do

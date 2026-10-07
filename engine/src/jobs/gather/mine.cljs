@@ -31,7 +31,7 @@
   Declines and ends early:
   - A pickaxe block (jobs.lib.tools/tool-kind) with no *_pickaxe carried, at the start or later (the pick broke),
     runs jobs.items.get-tool as a child first (unless :fetch is false). Nothing got: before any dig it ends at once, warn mine.no-tool,
-    {:status :stopped :got 0 :reason :no-tool :tool \"pickaxe\"}; in the dig phase the mend and walk home follow with
+    {:status :stopped :got 0 :reason :no-tool :tool <kind needed: pickaxe, sword, shears>}; in the dig phase the mend and walk home follow with
     :reason :no-tool. Shovel and axe blocks drop by hand. Soil or wood dug with only a pickaxe held empties the
     hand first (no wear on the pickaxe).
   - The check passes when a phase is in memory, or :block is named, unless every seen target is refused.
@@ -886,13 +886,17 @@
   [c]
   (not (tools/can-harvest? (:primitives c) (:block (:args c)))))
 
+(defn needed-kind [c]
+  (tools/needed-kind (:primitives c) (:block (:args c))))
+
 (defn no-tool!
-  "End at once, before any dig: warn and hand over {:status :stopped :got 0 :reason :no-tool :tool \"pickaxe\"}."
+  "End at once, before any dig: warn and hand over {:status :stopped :got 0 :reason :no-tool :tool <kind>}."
   [c]
-  (ctx/emit! c :mine.no-tool :warn {:tool "pickaxe" :text (str "mine has no pickaxe for " (:block (:args c)))})
-  (ctx/emit! c :mine.done :info {:got 0 :reason :no-tool :tool "pickaxe" :mended 0 :text "mine done: no-tool, got 0, mended 0"})
-  (ctx/result! c {:status :stopped :got 0 :reason :no-tool :tool "pickaxe"})
-  :done)
+  (let [kind (needed-kind c)]
+    (ctx/emit! c :mine.no-tool :warn {:tool kind :text (str "mine has no " kind " for " (:block (:args c)))})
+    (ctx/emit! c :mine.done :info {:got 0 :reason :no-tool :tool kind :mended 0 :text "mine done: no-tool, got 0, mended 0"})
+    (ctx/result! c {:status :stopped :got 0 :reason :no-tool :tool kind})
+    :done))
 
 (defn tool-problem
   "The :no-tool wait for the block while no pickaxe is carried, else nil."
@@ -909,7 +913,7 @@
       r r
       (not (no-tool? c)) :continue
       (nil? (:phase (ctx/mem c))) (no-tool! c)
-      :else (do (ctx/emit! c :mine.no-tool :warn {:tool "pickaxe" :text (str "mine has no pickaxe for " (:block (:args c)) " and could not get one")})
+      :else (do (ctx/emit! c :mine.no-tool :warn {:tool (needed-kind c) :text (str "mine has no " (needed-kind c) " for " (:block (:args c)) " and could not get one")})
                 (to-mend! c :no-tool)))))
 
 (defn ^:async round [c]

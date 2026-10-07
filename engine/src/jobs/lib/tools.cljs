@@ -143,6 +143,16 @@
   ([c block-name] (equip-tool! c block-name nil))
   ([c block-name opts] (equip-tool! c block-name opts)))
 
+(defn need-kind
+  "The tool kind (\"pickaxe\", \"sword\", \"shears\") of a tool item name; \"pickaxe\" for nil."
+  [tool-name]
+  (if tool-name (last (str/split tool-name #"_")) "pickaxe"))
+
+(defn needed-kind
+  "The kind of tool block-name needs and none carried is (the cheapest harvestTools entry), else \"pickaxe\"."
+  [p block-name]
+  (need-kind (harvest-need (map :name (u/inventory p)) (some-> (.harvestTools p block-name) js->clj))))
+
 (defn can-harvest?
   "Whether the carried tools harvest block-name: its harvestTools are empty, or one is carried."
   [p block-name]
