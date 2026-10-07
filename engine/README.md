@@ -454,7 +454,7 @@ HTTP over `worlds/<world>/agents/<name>/engine/events.sock` (mode 0600; all bodi
 | `GET /events?stream-id=&after=&limit=` | an event page after a cursor, with gap indication |
 | `POST /attention/resolve` | `{:request-id :reason :handled}`; does not retry or cancel its job |
 | `POST /chat` | one public line or whisper, sharing the chat limits |
-| `GET /status?limit=` | compact body/job/attention projection (includes `:died` while a death is under 5 minutes old) |
+| `GET /status?limit=` | compact body/job/attention projection (includes `:died` while a death is under 5 minutes old; supplied by recover-drops through the status extras main passes to event-api/create) |
 | `GET /inventory` | carried stacks and worn equipment (with a short enchants list), read-only |
 | `GET /job?id=` | one job's parsed spec, args, state, linked requests |
 | `GET /catalog?kind=jobs\|triggers&prefix=` / `kind=job\|trigger&name=` | names page / one description |
