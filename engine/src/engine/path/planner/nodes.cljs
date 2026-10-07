@@ -1,6 +1,6 @@
 (ns engine.path.planner.nodes
   "Search methods: the goal test and heuristic, and node storage (hash, heap, recording an arrival, refused moves)."
-  (:require [engine.path.planner.base :refer [AIR-STEP AVOID-CLIMB DMG-STEP AVOID-OPEN AVOID-WATER HALF JUMP-UP MOVE-CLIMB-UP MOVE-DROP MOVE-GAP MOVE-OPEN MOVE-SWIM REGIONS SPAN SQRT2 cell-key grown next-pow2]]
+  (:require [engine.path.planner.base :refer [AIR-REFILL AIR-STEP AVOID-CLIMB DMG-STEP AVOID-OPEN AVOID-WATER HALF JUMP-UP MOVE-CLIMB-UP MOVE-DROP MOVE-GAP MOVE-OPEN MOVE-SWIM REGIONS SPAN SQRT2 cell-key grown next-pow2]]
             [engine.path.planner.search :refer [Search]]))
 
 (set! *warn-on-infer* true)
@@ -249,6 +249,9 @@
                       (+ (aget (.-gs s) parent-node) dsec (* (.-risk-weight s) drisk) extra ddark dpay)
                       (+ sec (* (.-risk-weight s) risk) dark (* (- (.-damage-weight s) (.-risk-weight s)) dmg)))]
               (set! (.-cur-dmg s) dmg)
+              ;; a move that is not a swim has the head out of water: it breathes AIR-REFILL times its seconds back
+              (when (zero? (.-move-water s))
+                (set! (.-move-air s) (js/Math.max 0 (- (aget (.-airs s) parent-node) (* AIR-REFILL dsec)))))
               (if (== found -1)
                 (.insertNode s x y z h move parent-node sec risk dark g slow-to corner shape region key slot)
                 (let [d-air (- (.-move-air s) (aget (.-airs s) found))

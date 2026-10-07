@@ -276,12 +276,26 @@
          (= [reachable reason] [(found? r) (:reason r)]))
     10 false true nil
     30 false false "air"
-    30 true true nil))
+    30 true false "air"))
 
-(deftest breath-in-the-shaft-refills-the-air
+;; a stretch of open water (feet cell water, air over it) in a 30-block tunnel: the head breathes there for the seconds
+;; the body spends in it, 4 s of air a second
+(defn tunnel-with-surface [open]
+  (let [mid (+ 11 (bit-shift-right 30 1))]
+    (world [[10 64 -2 42 68 40 "stone"]
+            [11 64 1 40 65 1 "water"]
+            [10 64 1 10 65 1 "air"]
+            [41 64 1 42 65 1 "air"]
+            [(- mid (bit-shift-right open 1)) 65 1 (+ mid (bit-shift-right open 1)) 65 1 "air"]])))
+
+(deftest a-long-surface-swim-refills-the-air-a-short-touch-does-not
+  (are [open reachable] (= reachable (found? (run (tunnel-with-surface open) from2 (near 43 64 1 0) {:goalFlood 0})))
+    14 true
+    1 false))
+
+(deftest a-surfacing-in-the-shaft-gives-back-4-s-a-second-not-a-breath
   (let [r (run (tunnel 30 true) from2 (near 43 64 1 0) {:goalFlood 0})]
-    (is (> (cost r :airMin) (- (:airSupply costs) (:airLimit costs))))
-    (is (> (cost r :waterSeconds) 15))))
+    (is (= "air" (:reason r)))))
 
 ;; a sealed tunnel 3 high (y 64..66) whose middle cell is a dragging column over magma: the head breathes in it, but only
 ;; for the moments the body spends there

@@ -30,11 +30,6 @@
     (let [head (.stateAt s x (inc y) z)]
       (and (not (== head UNLOADED)) (== (aget (.-tbl-kind s) head) WATER) (zero? (aget (.-tbl-bubble s) head)))))
 
-  ;; head in a bubble column: it breathes, though only AIR-REFILL seconds of air a second, not a whole breath at once
-  (headInBubbles [s x y z]
-    (let [head (.stateAt s x (inc y) z)]
-      (and (not (== head UNLOADED)) (not (zero? (aget (.-tbl-bubble s) head))))))
-
   ;; Dominance: a submerged sideways move in open water is never better than swimming at the surface over it. A cell's column
   ;; is open when its water reaches plain air; then surfaceY is the top water cell, else NONE. Cached per cell.
   (surfaceScan [s x y z]
@@ -109,8 +104,8 @@
 
   ;; One swim or exit edge. The caller calls swimBegin, makes the edge (`base` + `extra` seconds) if it says true,
   ;; then calls swimEnd. `base` seconds of swimming count for the air, `extra` seconds of current do not.
-  ;; src-sub: the body starts the move with its head in water. target-water: it ends in a water cell. A move into a bubble
-  ;; column's head breathes AIR-REFILL times its seconds back, none on the move in from under water.
+  ;; src-sub: the body starts the move with its head in water. target-water: it ends in a water cell. A move that
+  ;; ends with the head out of water breathes AIR-REFILL times its seconds back, none on the move in from under water.
   (swimBegin [s i ^boolean target-water x2 y2 z2 base extra ^boolean src-sub]
     (let [target-sub (and target-water ^boolean (.submerged s x2 y2 z2))
           air (if (>= i 0) (aget (.-airs s) i) 0)
@@ -120,7 +115,6 @@
             false)
         (do (set! (.-move-air s) (cond
                                    target-sub use
-                                   (not (and target-water ^boolean (.headInBubbles s x2 y2 z2))) 0
                                    src-sub use
                                    :else (js/Math.max 0 (- air (* AIR-REFILL (+ base extra))))))
             (set! (.-move-peak s) (if (or src-sub target-sub) use 0))
