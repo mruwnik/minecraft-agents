@@ -247,24 +247,16 @@
           (is (nil? (:reason result)) "two blocked reads, a good one, two more: never three in a row")
           (is (not (contains? (kinds seen) :bake.gave-up))))))))
 
-(deftest blocked-reads-count-across-good-reads-that-take-nothing-more
+(deftest a-withdraw-that-reports-a-take-but-changes-nothing-stops-the-bake
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [blocks (atom 0)
-              moves (atom 0)
-              [result p seen] (await (bake {:containers {"10,64,0" [{:name "wheat" :count 12}]} :blocks beside} {}
+        (let [[result p seen] (await (bake {:containers {"10,64,0" [{:name "wheat" :count 12}]} :blocks beside} {}
                                            (fn [p]
-                                             (.override (.-world p) "inspectContainer"
-                                                        (fn ^:async f [t a impl]
-                                                          (if (= @moves @blocks)
-                                                            (do (swap! blocks inc) #js {:status "blocked"})
-                                                            (await (impl t a)))))
                                              (.override (.-world p) "transfer"
-                                                        (fn ^:async f [_ _ _] (swap! moves inc) #js {:status "ok" :moved 1})))))]
-          (is (= 3 @blocks) "a blocked read, then a good one and a withdraw that finishes nothing, three times")
+                                                        (fn ^:async f [_ _ _] #js {:status "ok" :moved 1})))))]
           (is (string? (:reason result)))
-          (is (contains? (kinds seen) :bake.gave-up)))))))
+          (is (contains? (kinds seen) :bake.withdraw-failed)))))))
 
 (defn ^:async bake-with-craft
   "Like bake, but jobs.items.craft is the given definition; [result p seen]."

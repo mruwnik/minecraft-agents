@@ -2,7 +2,7 @@
   (:require [jobs.items.shortfall :as craft]
             [engine.ctx :as ctx]
             [jobs.lib.util :as u]
-            [jobs.lib.near :as near]
+            [jobs.lib.pace :as pace]
             [jobs.lib.look :as look]
             [jobs.storage.deposit :as deposit]))
 
@@ -13,7 +13,8 @@
   batch loses nothing.
   Ends with {:made n}, the number of items gained. When it stops short it adds :short {name n} (an ingredient ran
   out) or :reason (\"no-table\", \"not-a-table\", \"unreachable\", \"full\", the cannot reason, or the failed
-  status), after a warn.")
+  status), after a warn, and its status is stopped. One call is the whole craft: it walks (a go-to child) and crafts
+  again until the count is carried or it stops; it yields only while go-to waits on the world.")
 
 (def args
   {:item {:doc "item name to craft" :default nil}
@@ -32,17 +33,16 @@
   (:pos (first (look/seen-blocks p {:names ["crafting_table"] :radius radius :max 8 :live? true}))))
 
 (defn finish!
-  "Hand the parent a result, made so far plus extra, and return :done."
+  "Hand the parent a result, made so far plus extra (a stop when extra is not empty: :status :stopped), and return :done."
   [c made extra]
-  (ctx/result! c (merge {:made made} extra))
+  (ctx/result! c (cond-> (merge {:made made} extra) (seq extra) (assoc :status :stopped)))
   :done)
 
 (defn give-up!
-  "u/fail!, and when it gives up hand the parent the made count and the reason."
+  "u/fail!: :again until the third failure in a row, then finish with the made count and the reason."
   [c made reason]
   (let [r (u/fail! c :craft.gave-up (str "craft gave up: " reason))]
-    (when (= :done r) (finish! c made {:reason reason}))
-    r))
+    (if (= :done r) (finish! c made {:reason reason}) :again)))
 
 (defn no-table!
   "Warn that no crafting table is within the radius and finish."
@@ -51,8 +51,8 @@
   (finish! c made {:reason "no-table"}))
 
 (defn ^:async reach-table!
-  "The craft was unreachable: walk to the remembered or the nearest table.
-  :continue to craft again, :done when there is none or the walk was given up."
+  "The craft was unreachable: walk to the remembered or the nearest table with a go-to child.
+  :again to craft again, :continue while go-to waits, :done when there is none or the walk was given up."
   [c made]
   (let [{:keys [table radius]} (merge (:args c) (ctx/mem c))
         p (:primitives c)
@@ -62,10 +62,12 @@
       (no-table! c made)
       (do (ctx/update-mem! c assoc :table table)
           (if (u/within? (u/self-pos c) table 3)
-            (if handed? (give-up! c made "unreachable") :continue)
-            (case (await (near/walk-near! c table 3))
-              :blocked (give-up! c made "unreachable")
-              :continue))))))
+            (if handed? (give-up! c made "unreachable") :again)
+            (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos table :range 3 :escalate false :warn false :retry false}))]
+              (cond
+                (= :continue r) :continue
+                (:arrived (ctx/child-result c :walk)) :again
+                :else (give-up! c made "unreachable"))))))))
 
 (defn short!
   "A craft ran out of an ingredient: emit the info and finish with what is
@@ -76,9 +78,8 @@
     (ctx/emit! c :craft.short :info {:text (str "craft " item " is missing " (pr-str short))})
     (finish! c made shortage)))
 
-(defn ^:async round
-  "One bounded step: stop when the target is carried, else craft the rest and
-  act on the status."
+(defn ^:async step!
+  "Stop when the target is carried, else craft the rest and act on the status: :again, :continue (go-to waits) or :done."
   [c]
   (let [p (:primitives c)
         {:keys [item count]} (:args c)
@@ -99,7 +100,7 @@
           "no-item" (short! c item r made)
           "partial" (if (= "no-item" (.-reason r))
                       (short! c item r made)
-                      (do (u/progress! c) :continue))
+                      (do (u/progress! c) :again))
           "out-of-reach" (let [handed (u/pos-of (.-table r))]
                            (cond
                              (:table (:args c)) (await (reach-table! c made))
@@ -112,9 +113,14 @@
                           (not= "not-a-table" (.-reason r)) (await (reach-table! c made))
                           (:table (:args c)) (do (ctx/emit! c :craft.no-table :warn {:text (str "not a crafting table: " (pr-str table))})
                                                  (finish! c made {:reason "not-a-table"}))
-                          :else (do (ctx/update-mem! c dissoc :table) :continue))
+                          :else (do (ctx/update-mem! c dissoc :table) :again))
           "full" (do (ctx/emit! c :craft.full :warn {:text "inventory is full"})
                      (finish! c made {:reason "full"}))
           "cannot" (do (ctx/emit! c :craft.cannot :warn {:text (str "cannot craft " item ": " (.-reason r))})
                        (finish! c made {:reason (.-reason r)}))
           (give-up! c made status))))))
+
+(defn ^:async round
+  "The whole craft in one call: step! until it is done or stopped."
+  [c]
+  (await (pace/steps! c (fn ^:async craft-step [] (await (step! c))))))

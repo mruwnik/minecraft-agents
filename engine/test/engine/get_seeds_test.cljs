@@ -99,10 +99,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (setup-seeing {})]
+        (let [{:keys [eng seen]} (setup-seeing {})]
           (core/submit! eng (spec {:chest {:x 10 :y 64 :z 0}}) {})
           (await (core/tick! eng))
-          (is (some? (:goal (core/job-memory eng "j1")))))))))
+          (is (some #(= :child_started (:kind %)) @seen) "the job ran, it did not wait"))))))
 
 (deftest grass-that-drops-nothing-ends-dry
   (async done
