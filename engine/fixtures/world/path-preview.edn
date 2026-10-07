@@ -12,9 +12,9 @@
  :cases
  [{:name "preview-plans-through-a-door-and-opens-nothing"
    :act [[:job (jobs.movement.path-preview {:pos #at [22 0 16] :range 1})]]
-   :expect [{:event {:source :job :kind :result :data {:found true}} :within-s 20 :of-job true}]
+   :expect [{:event {:source :job :kind :path-preview :data {:found true}} :within-s 20 :of-job true}]
    :after [[:block [16 0 16] "oak_door[half=lower,open=false]"] [:body-near [10.5 0 16.5] 1]]}
   {:name "preview-with-doors-never-finds-no-way-and-says-why"
    :act [[:job (jobs.movement.path-preview {:pos #at [22 0 16] :range 1 :doors :never})]]
-   :expect [{:event {:source :job :kind :result :data {:found false}} :within-s 20 :of-job true}]
+   :expect [{:event {:source :job :kind :path-preview :data {:found false}} :within-s 20 :of-job true}]
    :after [[:block [16 0 16] "oak_door[half=lower,open=false]"] [:body-near [10.5 0 16.5] 1]]}]}
