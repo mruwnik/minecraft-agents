@@ -295,6 +295,7 @@ Tuning numbers live in one global map, read by anyone. A namespace under `jobs/`
 - Layers, low to high: the code `:default`, `worlds/<world>/settings.edn` (`:world`), `worlds/<world>/agents/<Name>/settings.edn` (`:body`). Files are EDN maps `{key value}`, read at body start (`settings/load!` again reloads).
 - A bad value, unknown key or unreadable file keeps the lower layer and emits one `settings.bad` `:info` event naming the key and file.
 - `(settings/resolved)` gives `{key {:value :layer :doc}}`. One body per process: `load!` throws for a second one. Tests wrap in `settings/with-settings {key value} f`.
+- Rates: the **game rate** (`(settings/game-rate)`, `frozen?`, `rate-source`) is the server's `/tick rate`, read from `set_ticking_state` by `js/game-clock.mjs`, attached in `connectBot` before spawn so the join packet counts, and independent of the physics shim; with no packet it is 20, source `:assumed`, and one `game-rate.assumed` `:info` is emitted. Game ticks (item despawn 6000, smelting, the night) become ms with `ticks->ms` / `ms->ticks`, re-read at each use. The **physics step** is `(settings/physics-ms p)`: the shim's interval, else 50. Wall-clock timers (engine tick, JS time scale) are never converted. Memory entries and views carry `:age`, the world age in game ticks (still while the tick is frozen); drop timers count it.
 
 ## Memory
 
@@ -363,7 +364,7 @@ Built-in triggers, in the order of `triggers/defaults.edn` (the default register
 | `:hungry` | food below `:food` 6 plus one per missing hp (at most 18: below 18 nothing heals); or hurt, below 18 and common food carried; or health below `:health` 7 and food carried (eats to 20) | `get-food` | 90 s |
 | `:night` | night, awake, and a bed to use or carried, someone asleep, unroofed, or shut in its shelter; by day shut in its shelter or a bed it put down outside its zone still stands | `survival.night` | 10 s |
 | `:door-left` | a door a walk opened and meant to shut was last seen open 10 s after (never read through a wall) | `maintenance.shut-doors` | 5 s |
-| `:died` | a `:died` under 5 minutes old with a newer `:respawned` and no `:recovered` | `recover-drops` | 30 s |
+| `:died` | a `:died` under the despawn window (6000 game ticks) old with a newer `:respawned` and no `:recovered` | `recover-drops` | 30 s |
 | `:inventory-nearly-full` | at most `:free` 2 of 36 main and hotbar slots empty | `storage.make-room` | 120 s |
 | `:scaffold-left` | the scaffold ledger holds blocks whose job is gone | `access.cleanup` | stop |
 | `:tidy-pending` | body safe and on the ground, a `:tidy` entry pending; a cell a run tried (the entry's `:tried` stamp) waits 2 min or until the body moves 8 blocks | `survival.restore-broken` | 10 s |

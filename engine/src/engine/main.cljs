@@ -189,6 +189,7 @@
                                :body (:username cfg) :max-event-bytes events-max-bytes :world world})
         _ (reset! eng-ref base-eng)
         _ (run! #(core/emit! base-eng %) @settings-events)
+        _ (when-let [gc (.-gameClock raw-p)] (settings/wire-game-clock! gc #(core/emit! base-eng %)))
         _ (trigger-api/restore-conditions! base-eng)
         _ (boot-scenario! base-eng {:plan plan :stale stale :restoring? restoring? :upgrade? upgrade?})
         seen (entity-observations/start! p {:world (:world cfg) :body (:agent opts)})
