@@ -5,6 +5,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.gate :as gate]
             [jobs.lib.pace :as pace]
+            [jobs.lib.steps :as steps]
             [jobs.lib.util :as u]
             [jobs.farm.fertilize :as fertilize]
             [jobs.lib.crops :as crops]
@@ -246,21 +247,6 @@
     (ctx/result! c out)
     :done))
 
-(defn running-call
-  "The call of the step a child has already started, from memory, else nil."
-  [m]
-  (when-let [call-args (:call-args m)]
-    (let [step (first (:todo m))]
-      {:slot step :job (decide/jobs step) :args call-args})))
-
-(defn next-plan
-  "The step to run: the one under way, else the first that decide wants to call."
-  [c]
-  (let [m (ctx/mem c)]
-    (if-let [call (running-call m)]
-      {:todo (:todo m) :report (:report m) :call call}
-      (decide/plan (:todo m) (:args c) (facts c) (:report m)))))
-
 (defn after-till
   "Memory after a till child ended: the cell is tried, its tilled cells counted, the step stays to be decided again."
   [m call-args r-tilled declined?]
@@ -296,7 +282,7 @@
   [c]
   (when-not (:todo (ctx/mem c))
     (ctx/update-mem! c assoc :todo decide/steps :report {} :till-tried #{} :tilled 0))
-  (let [{:keys [call] :as p} (next-plan c)]
+  (let [{:keys [call] :as p} (steps/next-plan decide/decide decide/jobs c facts)]
     (ctx/update-mem! c assoc :todo (:todo p) :report (:report p))
     (if-not call
       (finish! c (:report p))

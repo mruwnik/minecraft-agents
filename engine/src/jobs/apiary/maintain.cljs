@@ -3,6 +3,7 @@
             [jobs.lib.animals :as animals]
             [jobs.lib.apiary :as apiary]
             [jobs.lib.pace :as pace]
+            [jobs.lib.steps :as steps]
             [jobs.lib.util :as u]
             [jobs.apiary.guard :as guard]
             [jobs.apiary.harvest :as harvest]))
@@ -162,17 +163,6 @@
                              (when (:ignore-zones? (:args c)) {:ignore-zones? true}))
     (:args decided)))
 
-(defn plan
-  "Walk todo, booking the steps that decide skips in report; {:todo :report :call}, :call nil when none is left."
-  [todo args facts report]
-  (loop [todo todo report report]
-    (if (empty? todo)
-      {:todo [] :report report :call nil}
-      (let [{:keys [skip call]} (decide (first todo) args facts)]
-        (if skip
-          (recur (rest todo) (assoc report (first todo) {:skipped skip}))
-          {:todo (vec todo) :report report :call call})))))
-
 (defn check [c]
   (or (boolean (or (:todo (ctx/mem c))
                    (let [f (facts c)]
@@ -198,21 +188,6 @@
     (ctx/result! c out)
     :done))
 
-(defn running-call
-  "The call of the step a child has already started, from memory, else nil."
-  [m]
-  (when-let [call-args (:call-args m)]
-    (let [step (first (:todo m))]
-      {:slot step :args call-args})))
-
-(defn next-plan
-  "The step to run: the one under way, else the first that decide wants to call."
-  [c]
-  (let [m (ctx/mem c)]
-    (if-let [call (running-call m)]
-      {:todo (:todo m) :report (:report m) :call call}
-      (plan (:todo m) (:args c) (facts c) (:report m)))))
-
 (defn booked
   "Memory after the step's child ended with status r: the step leaves todo, its summary goes in the report."
   [m step entry]
@@ -234,7 +209,7 @@
   (let [center (apiary/center-of c)]
     (when-not (:todo (ctx/mem c))
       (ctx/update-mem! c assoc :todo steps :report {} :center center))
-    (let [{:keys [call] :as p} (next-plan c)]
+    (let [{:keys [call] :as p} (steps/next-plan decide jobs c facts)]
       (ctx/update-mem! c assoc :todo (:todo p) :report (:report p))
       (if-not call
         (finish! c (:report p))

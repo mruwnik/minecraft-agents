@@ -2,6 +2,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
             [jobs.lib.look :as look]
+            [jobs.lib.steps :as steps]
             [jobs.lib.util :as u]
             [jobs.animals.cull :as cull]
             [jobs.combat.hunt :as hunt]))
@@ -138,17 +139,6 @@
     :deposit (decide-deposit args facts)
     {:skip :todo}))
 
-(defn plan
-  "Walk todo, skipping the steps that decide skips (booked in report); {:todo :report :call}, :call nil when none is left."
-  [todo args facts report]
-  (loop [todo todo report report]
-    (if (empty? todo)
-      {:todo [] :report report :call nil}
-      (let [{:keys [skip call]} (decide (first todo) args facts)]
-        (if skip
-          (recur (rest todo) (assoc report (first todo) {:skipped skip}))
-          {:todo (vec todo) :report report :call call})))))
-
 (defn check [c]
   (cond
     (not (:box (:args c))) (ctx/wait c {:reason :no-box})
@@ -175,27 +165,12 @@
     (ctx/result! c out)
     :done))
 
-(defn running-call
-  "The call of the step a child has already started, from memory, else nil."
-  [m]
-  (when-let [call-args (:call-args m)]
-    (let [step (first (:todo m))]
-      {:slot step :job (jobs step) :args call-args})))
-
-(defn next-plan
-  "The step to run: the one under way, else the first that decide wants to call."
-  [c]
-  (let [m (ctx/mem c)]
-    (if-let [call (running-call m)]
-      {:todo (:todo m) :report (:report m) :call call}
-      (plan (:todo m) (:args c) (facts c) (:report m)))))
-
 (defn ^:async step
   "One step: finish, or one call of the next step's child. :again after it ended (done or declined), :yield while it waits on the world, :done at the end."
   [c]
   (when-not (:todo (ctx/mem c))
     (ctx/update-mem! c assoc :todo steps :report {}))
-  (let [{:keys [call] :as p} (next-plan c)]
+  (let [{:keys [call] :as p} (steps/next-plan decide jobs c facts)]
     (ctx/update-mem! c assoc :todo (:todo p) :report (:report p))
     (if-not call
       (finish! c (:report p))

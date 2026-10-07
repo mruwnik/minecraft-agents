@@ -71,15 +71,3 @@
     :compost (decide-compost args facts)
     :deposit (decide-deposit args facts)
     {:skip :todo}))
-
-(defn plan
-  "Walk todo, skipping the steps that decide skips (booked in report unless it already holds an entry for the step); {:todo :report :call}, :call nil when none is left."
-  [todo args facts report]
-  (loop [todo todo report report]
-    (if (empty? todo)
-      {:todo [] :report report :call nil}
-      (let [step (first todo)
-            {:keys [skip call]} (decide step args facts)]
-        (if skip
-          (recur (rest todo) (if (contains? report step) report (assoc report step {:skipped skip})))
-          {:todo (vec todo) :report report :call call})))))

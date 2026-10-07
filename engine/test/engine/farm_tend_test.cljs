@@ -10,6 +10,7 @@
             [jobs.farm.tend :as tend]
             [jobs.farm.tend-decide :as decide]
             [jobs.farm.tend-stock :as stock]
+            [jobs.lib.steps :as steps]
             [jobs.lib.world-files :as world]))
 
 (def box {:min {:x 2 :y 63 :z 2} :max {:x 4 :y 64 :z 4}})
@@ -430,9 +431,9 @@
         facts {:hoe true :untilled [cell {:x 4 :y 63 :z 2}] :bare 0 :seeds 3}]
     (is (= {:from cell :to cell} (:args (:call (decide/decide :till {:till true} facts)))))
     (is (= {:till {:tilled 2} :plant {:skipped :no-bare}}
-           (:report (decide/plan [:till :plant] {:till true} {:hoe true :untilled [] :bare 0 :seeds 3} {:till {:tilled 2}}))))
+           (:report (steps/plan decide/decide [:till :plant] {:till true} {:hoe true :untilled [] :bare 0 :seeds 3} {:till {:tilled 2}}))))
     (is (= {:till {:skipped :nothing-to-till}}
-           (:report (decide/plan [:till] {:till true} {:hoe true :untilled [] :bare 0 :seeds 3} {}))))))
+           (:report (steps/plan decide/decide [:till] {:till true} {:hoe true :untilled [] :bare 0 :seeds 3} {}))))))
 
 ;; ------------------------------------------------------------------ zones
 
