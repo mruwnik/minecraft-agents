@@ -6,6 +6,9 @@
 #   tools/card note <id> <text>             add a note
 #   tools/card move <id> <status> [note]    set status (optionally with a note)
 #   tools/card claim <id> <worker>          status in_progress + "claimed by <worker>" note
+#   tools/card create <title words...> [-d <description>] [-p <priority>] [-t tag,tag]
+#                                           new pending card (priority default 1) with the checklist
+#                                           unit, integration, review, live; prints "<id> <status> <title>"
 # Env: DIFFER_URL (default http://localhost:8576), CARD_AUTHOR (default: worker from claim, else "agent"),
 #      CARD_REPO (default: this repo's root).
 set -euo pipefail
@@ -40,6 +43,21 @@ patch() { # id json
   api -X PATCH -H 'Content-Type: application/json' -d "$2" "$URL/api/tasks/$1" | jq -r '.task|"\(.id) \(.status) \(.title)"'
 }
 
+# The HTTP API has no create route, so create goes through the board's /mcp JSON-RPC endpoint.
+create_card() { # title desc priority tags-csv
+  local req resp
+  req=$(jq -n --arg repo "$REPO" --arg t "$1" --arg d "$2" --argjson p "$3" --arg tags "$4" '
+    {jsonrpc:"2.0",id:1,method:"tools/call",params:{name:"create_task",arguments:{
+      repo_path:$repo,title:$t,description:$d,priority:$p,
+      tags:($tags|split(",")|map(select(.!=""))),
+      checklist:["unit","integration","review","live"]}}}')
+  resp=$(api -X POST -H 'Content-Type: application/json' -d "$req" "$URL/mcp")
+  jq -e '.result.isError // false | not' <<<"$resp" >/dev/null \
+    || die "$(jq -r '.result.content[0].text' <<<"$resp")"
+  jq -r '.error.message // empty' <<<"$resp" | grep . >&2 && exit 1
+  jq -r '.result.content[0].text|fromjson|.task|"\(.id) \(.status) \(.title)"' <<<"$resp"
+}
+
 cmd="${1:-}"; shift || true
 case "$cmd" in
   id) [ $# -ge 1 ] || die "usage: id <prefix|title words>"; resolve "$*" ;;
@@ -69,5 +87,19 @@ case "$cmd" in
     # The HTTP API cannot set worker fields, so a claim is in_progress plus a note naming the worker.
     patch "$id" "$(jq -n --arg w "$2" '{status:"in_progress",note:"claimed by \($w)",author:$w}')"
     ;;
-  *) die "usage: card id|show|note|move|claim ... (see header of $0)" ;;
+  create)
+    desc=""; prio=1; tags=""; words=()
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        -d) [ $# -ge 2 ] || die "usage: create <title> [-d desc] [-p prio] [-t tags]"; desc="$2"; shift 2 ;;
+        -p) [ $# -ge 2 ] || die "usage: create <title> [-d desc] [-p prio] [-t tags]"; prio="$2"; shift 2 ;;
+        -t) [ $# -ge 2 ] || die "usage: create <title> [-d desc] [-p prio] [-t tags]"; tags="$2"; shift 2 ;;
+        *) words+=("$1"); shift ;;
+      esac
+    done
+    [ ${#words[@]} -ge 1 ] || die "usage: create <title words> [-d desc] [-p prio] [-t tag,tag]"
+    [[ "$prio" =~ ^-?[0-9]+$ ]] || die "create: priority must be an integer, got '$prio'"
+    create_card "${words[*]}" "$desc" "$prio" "$tags"
+    ;;
+  *) die "usage: card id|show|note|move|claim|create ... (see header of $0)" ;;
 esac
