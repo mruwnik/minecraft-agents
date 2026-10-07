@@ -134,6 +134,9 @@ export const MOBS = {
   villager: ['villager', 'villager/villager'],
   wandering_trader: ['villager', 'wandering_trader/wandering_trader'],
   witch: ['witch', 'witch/witch'],
+  vindicator: ['villager', 'illager/vindicator'],
+  pillager: ['villager', 'illager/pillager'],
+  evoker: ['villager', 'illager/evoker'],
   enderman: ['enderman', 'enderman/enderman']
 }
 

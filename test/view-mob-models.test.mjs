@@ -11,7 +11,7 @@ import { modelUniforms, MAX_PART_ROWS } from '../tools/view/web/gl.mjs'
 import { render, makeGrid } from '../tools/view/renderer.mjs'
 import { openJar, findClientJar } from '../tools/view/jar-read.mjs'
 
-const WANTED = 'zombie husk drowned player piglin zombified_piglin skeleton stray wither_skeleton creeper cow mooshroom pig sheep spider cave_spider chicken villager wandering_trader witch enderman'.split(' ')
+const WANTED = 'zombie husk drowned player piglin zombified_piglin skeleton stray wither_skeleton creeper cow mooshroom pig sheep spider cave_spider chicken villager wandering_trader witch enderman vindicator pillager evoker'.split(' ')
 const jarPath = findClientJar()
 const skip = jarPath === null
 const close = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} !~ ${b}`)
