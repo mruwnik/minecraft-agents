@@ -148,28 +148,59 @@
     (r/write-results! {} [{:status :pass}])
     (fs/unlinkSync file)))
 
-(def contender-sh
-  "Takes the lease file 6 times in turn (reclaiming a dead holder through unlink-if-script); every other time it
-  leaves a dead PID behind instead of releasing. Two inside the critical section at once is logged."
-  (str "set -C; take() { echo $$ 2>/dev/null > \"$L\"; }
-        un() { flock \"$L.guard\" sh -c '" r/unlink-if-script "' sh \"$L\" \"$1\"; }
-        for n in 1 2 3 4 5 6; do
-          until take; do h=$(cat \"$L\" 2>/dev/null); case \"$h\" in ''|*[!0-9]*) ;; *) kill -0 \"$h\" 2>/dev/null || un \"$h\";; esac; done
-          mkdir \"$L.cs\" 2>/dev/null || echo x >> \"$L.bad\"
-          sleep 0.002; rmdir \"$L.cs\"
-          if [ $((n % 2)) = 0 ]; then un $$; else set +C; echo 99999999 > \"$L\"; set -C; fi
-        done"))
+(defn- contend-env
+  "The contender child's settings (set by the parent test): plot index, scratch dir, rounds."
+  []
+  (let [e (.-env js/process)]
+    (when-let [plot (.-WT_CONTEND_PLOT e)]
+      {:plot (js/parseInt plot 10) :dir (.-WT_CONTEND_DIR e)})))
+
+(defn- take-plot!
+  "Real acquire-plot! on a one-plot range, retried while another live runner holds it."
+  [plot deadline]
+  (or (try (r/acquire-plot! plot (inc plot)) (catch :default _ nil))
+      (do (when (> (.now js/Date) deadline) (throw (js/Error. "contender gave up")))
+          (r/pause-sync 1)
+          (recur plot deadline))))
+
+(deftest lease-contender-child
+  "Not a test on its own: the process the next test spawns (it runs only when WT_CONTEND_PLOT is set). Takes the real
+  plot lease 6 times in turn; after the critical section it releases (real release-plot!) or leaves the lease as a
+  crashed runner would, holding a dead PID or empty. Two inside the critical section at once is logged."
+  (when-let [{:keys [plot dir]} (contend-env)]
+    (doseq [n (range 6)]
+      (take-plot! plot (+ (.now js/Date) 60000))
+      (let [cs (path/join dir "cs")]
+        (try (fs/mkdirSync cs) (catch :default _ (fs/appendFileSync (path/join dir "bad") "x")))
+        (r/pause-sync 2)
+        (fs/rmSync cs #js {:recursive true :force true}))
+      (case (mod n 3)
+        0 (r/release-plot! plot)
+        1 (fs/writeFileSync (r/lease-file plot) "99999999")
+        2 (fs/writeFileSync (r/lease-file plot) "")))
+    (is true)))
 
 (deftest racing-reclaimers-of-a-dead-holder-never-share-the-lock
   (async done
     (let [dir (fs/mkdtempSync (path/join (os/tmpdir) "wt-reclaim-"))
-          lease (path/join dir "lease")
-          run (fn [] (js/Promise. (fn [res] (.on (cp/spawn "bash" #js ["-c" contender-sh] #js {:env (js/Object.assign #js {"L" lease} js/process.env)}) "close" res))))]
-      (fs/writeFileSync lease "99999999")
+          plot (+ 100000 (.-pid js/process))
+          bundle (aget js/process.argv 1)
+          env (js/Object.assign #js {} js/process.env #js {"WT_CONTEND_PLOT" (str plot) "WT_CONTEND_DIR" dir})
+          run (fn [] (js/Promise. (fn [res] (.on (cp/spawn (.-execPath js/process)
+                                                           #js [bundle "--test=world-test.runner-test/lease-contender-child"]
+                                                           #js {:env env :stdio "ignore"})
+                                                 "close" res))))]
+      (fs/mkdirSync r/lease-dir #js {:recursive true})
+      (fs/writeFileSync (r/lease-file plot) "99999999")
       (-> (js/Promise.all #js [(run) (run) (run) (run)])
-          (.then (fn [_]
-                   (is (not (fs/existsSync (str lease ".bad"))) "never two holders at once")))
-          (.finally (fn [] (fs/rmSync dir #js {:recursive true :force true}) (done)))))))
+          (.then (fn [codes]
+                   (is (every? zero? (array-seq codes)) "every contender finished all its rounds")
+                   (is (not (fs/existsSync (path/join dir "bad"))) "never two holders at once")))
+          (.finally (fn []
+                      (fs/rmSync (r/lease-file plot) #js {:force true})
+                      (fs/rmSync (str (r/lease-file plot) ".guard") #js {:force true})
+                      (fs/rmSync dir #js {:recursive true :force true})
+                      (done)))))))
 
 (deftest finishing-a-run-removes-its-own-temp-dir-only
   (async done
