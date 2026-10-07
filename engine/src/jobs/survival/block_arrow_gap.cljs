@@ -1,0 +1,123 @@
+(ns jobs.survival.block-arrow-gap
+  (:require [engine.ctx :as ctx]
+            [jobs.lib.access :as access]
+            [jobs.lib.combat :as combat]
+            [jobs.lib.pace :as pace]
+            [jobs.lib.reach :as reach]
+            [jobs.lib.result :as r]
+            [jobs.lib.shelter :as sh]
+            [jobs.lib.util :as u]
+            [jobs.survival.dig-in :as dig-in]))
+
+(def doc
+  "Stop a ranged mob's arrows at a gap in the body's cover: a doorway, window or hole a skeleton (or the like) has a
+  line of fire through. The body stays where it is and places blocks in the open cells near it that cross the
+  arrows' line (jobs.lib.reach/line-of-fire?: from the mob's eye to the body's eye and its middle), the cell nearest
+  the body first, one that ends the line alone before one that blocks half of it. A mob that was only heard is
+  taken at the rough spot its direction and band give (jobs.lib.reach/mob-pos). A door, gate or trapdoor standing
+  open in the way is shut, not walled over (jobs.survival.dig-in/place-all!).
+  Declines (waiting) with :no-ranged-danger when no ranged mob within :radius has a line of fire.
+  Ends done {:placed [cells]} once none has (also when the mob moved away meanwhile), else stopped :no-blocks (none
+  carried that :blocks names), :refused (every cell that would help is another's zone, claim or plan; :ignore-zones?
+  lifts it), :no-gap (a line of fire stays and no open cell within :reach would end it), :place-failed or
+  :no-progress (over max-steps rounds).
+  Does not fight, flee or walk: respond-to-hostile and retreat own that.
+  Events: block-arrow-gap.closed (info), block_arrow_gap_failed (warning).")
+
+(def args
+  {:radius {:doc "ranged mobs within this many blocks count" :default 16}
+   :reach {:doc "open cells within this many blocks of the body's feet may be filled" :default 3}
+   :blocks {:doc "names of the blocks it may place" :default dig-in/shelter-blocks}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
+
+(def max-steps "Rounds one call takes at most." 12)
+
+(def ray-heights "Heights above the body's feet the arrows are aimed at." [reach/eye-height 0.9])
+
+(defn ranged-dangers
+  "The ranged mobs within radius with a line of fire to the body, nearest first."
+  [c]
+  (filterv combat/ranged? (reach/dangers (:primitives c) (:radius (:args c)) {:ranged-radius (:radius (:args c))} {})))
+
+(defn clear-rays
+  "How many of the two arrow rays from the mob at mob-pos to the body at body-pos cross no :solid cell of kind-at."
+  [kind-at mob-pos body-pos]
+  (let [from [(:x mob-pos) (+ (:y mob-pos) reach/eye-height) (:z mob-pos)]]
+    (count (filter #(reach/ray-clear? kind-at from [(:x body-pos) (+ (:y body-pos) %) (:z body-pos)]) ray-heights))))
+
+(defn candidates
+  "The cells within `within` blocks of the feet cell, nearest the body first, bar its feet and head cells."
+  [feet within]
+  (let [{:keys [x y z]} feet]
+    (->> (for [dx (range (- within) (inc within)) dz (range (- within) (inc within)) dy [-1 0 1 2 3]
+               :when (and (<= (+ (* dx dx) (* dz dz)) (* within within)) (not (and (zero? dx) (zero? dz) (<= 0 dy 1))))]
+           {:x (+ x dx) :y (+ y dy) :z (+ z dz)})
+         (sort-by #(u/dist feet %)))))
+
+(def faces [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
+
+(defn supported?
+  "Whether a block can be placed at cell: one of its faces touches a solid block (solid-at? takes a cell)."
+  [solid-at? {:keys [x y z]}]
+  (boolean (some (fn [[dx dy dz]] (solid-at? {:x (+ x dx) :y (+ y dy) :z (+ z dz)})) faces)))
+
+(defn plug-cell
+  "The open cell (arrow-kind :open of kind-at) in cells that cuts most of the mob's line of fire, the nearest to the
+  body among equals, or nil when none cuts any. ok? (cell -> bool) leaves cells out."
+  [kind-at cells mob-pos body-pos ok?]
+  (let [now (clear-rays kind-at mob-pos body-pos)
+        open (filter #(and (ok? %) (= :open (kind-at (:x %) (:y %) (:z %)))) cells)
+        left (fn [cell] (clear-rays (fn [x y z] (if (and (= x (:x cell)) (= y (:y cell)) (= z (:z cell))) :solid (kind-at x y z)))
+                                    mob-pos body-pos))
+        scored (map (juxt identity left) open)
+        best (first (sort-by second scored))]
+    (when (and best (< (second best) now)) (first best))))
+
+(defn fail! [c reason text]
+  (ctx/emit! c :block_arrow_gap_failed :warn {:reason reason :text text})
+  (r/stop! c reason text))
+
+(defn ^:async step
+  "One cell: :done, or :again."
+  [c]
+  (let [p (:primitives c)
+        {:keys [blocks] within :reach} (:args c)
+        dangers (ranged-dangers c)]
+    (if (empty? dangers)
+      (do (ctx/emit! c :block-arrow-gap.closed :info {:placed (vec (:placed (ctx/mem c))) :text "no arrow line to the body"})
+          (r/finish! c {:placed (vec (:placed (ctx/mem c)))}))
+      (let [kind-at (reach/lookup p reach/arrow-kind-of)
+            in (access/rules-input c)
+            skip (:skip (ctx/mem c) #{})
+            allowed? #(and (not (contains? skip %)) (supported? (partial sh/solid-at? p) %))
+            permitted? #(not (access/trespass-refusal in :place %))
+            mob (reach/mob-pos p (first dangers))
+            body (u/pos-of (.-pos (.self p)))
+            cells (candidates (sh/feet p) within)
+            cell (plug-cell kind-at cells mob body #(and (allowed? %) (permitted? %)))]
+        (cond
+          (nil? (dig-in/pick c blocks)) (fail! c :no-blocks "no block to stop the arrows with")
+          (nil? cell) (if (plug-cell kind-at cells mob body allowed?)
+                        (fail! c :refused "every cell that would stop the arrows is another's (zone, claim or plan)")
+                        (fail! c :no-gap "no open cell within reach would stop the arrows"))
+          :else (let [status (await (dig-in/place-all! c blocks [cell]))]
+                  (if (not= :ok status)
+                    (fail! c :place-failed (str "cannot place at the gap: " status))
+                    (do (if (= :open (reach/arrow-kind-of (u/block-at p cell)))
+                          (ctx/update-mem! c update :skip (fnil conj #{}) cell)
+                          (ctx/update-mem! c update :placed (fnil conj []) cell))
+                        :again))))))))
+
+(defn check
+  "A ranged mob with a line of fire to the body; a decline says why (ctx/wait): :no-ranged-danger."
+  [c]
+  (or (boolean (seq (ranged-dangers c))) (ctx/wait c {:reason :no-ranged-danger})))
+
+(defn ^:async round
+  "Fill the gap (see doc), one cell a step with a timer between."
+  [c]
+  (loop [i 0]
+    (let [res (if (< i max-steps) (await (step c)) (fail! c :no-progress "the gap took too many steps"))]
+      (if (= :again res)
+        (do (await (pace/pace!)) (recur (inc i)))
+        res))))
