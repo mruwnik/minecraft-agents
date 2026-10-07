@@ -631,8 +631,8 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 
 **Seeing** (`jobs.lib.look`): jobs find blocks and entities through `seen-blocks` (memory of what the body saw; `:live?` drops changed cells, `:live-within-ms` only for recent ones; ask for `:names`, `:match` or `:all?`), `seen-block` (`{:unknown true}` if never seen), `seen-entities` (players, known hostiles, visible others), `seen-items` (item entities not hidden behind a wall; jobs never count a drop they cannot see) and `find-seen!` (one look around when nothing is seen), never a scan through walls (`jobs.lib.combat/hostiles` and `sensed` list hostiles as known: seen or heard).
 
-**Fetching what a job lacks** (`jobs.lib.fetch`): `blocks.dig`, `blocks.place`, `access.stair`, `access.tunnel` and `access.leave-tunnel` take `:fetch` (default
-false: they wait with the reason). `true` allows every kind (`:tool :item :station`) and source (`:chest :craft :gather`); a
+**Fetching what a job lacks** (`jobs.lib.fetch`): `blocks.dig`, `blocks.place` and `access.stair` take `:fetch` (default false: they wait with the reason); `access.tunnel`,
+`access.leave-tunnel` and `items.equip` take it too (default true; `false` waits or stops instead). `true` allows every kind (`:tool :item :station`) and source (`:chest :craft :gather`); a
 set narrows the kinds; a map gives limits `{:what :how :depth :minutes :fail-minutes}` (built-in, the job's default, the
 body's defaults from `items.fetch-limits`, then the call's arg; later wins). A fetchable wait (`:no-tool`, `:need`) then runs
 `items.get-tool` or `items.obtain` as child `:fetch` (info `fetch.started`, `fetch.done`). A failed fetch writes
