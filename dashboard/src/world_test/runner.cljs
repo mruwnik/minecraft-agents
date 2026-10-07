@@ -136,35 +136,43 @@
     (into {} (map (fn [p] [p (fs/readFileSync (repo-path p) "utf8")])) (concat (walk "engine/src/jobs") (walk "engine/src/triggers")))))
 
 (defn fixture-dir-texts
-  "{stem text} of the fixture files under paths."
+  "{repo-relative path text} of the fixture files under paths."
   [paths]
-  (into {} (map (fn [f] [(path/basename f ".edn") (fs/readFileSync f "utf8")])) (fixture-files paths)))
+  (into {} (map (fn [f] [(path/relative (repo) (path/resolve f)) (fs/readFileSync f "utf8")])) (fixture-files paths)))
+
+(defn stem-path [p] (path/basename p ".edn"))
 
 (defn select-changed
   "Cases of the fixture files that are stale since their recorded pass (see world-test.changed)."
   [cases paths]
-  (let [stale (chg/stale-stems {:fixtures (fixture-dir-texts paths) :record (read-pass-record) :src (source-texts)
-                                :dir "engine/fixtures/world" :changed-since changed-since})
+  (let [stale (into #{} (map stem-path)
+                    (chg/stale-stems {:fixtures (fixture-dir-texts paths) :record (read-pass-record) :src (source-texts)
+                                      :changed-since changed-since}))
         kept (filterv #(contains? stale (:file %)) cases)]
     (log! "world-test: --changed-since-pass skips " (- (count (distinct (map :file cases))) (count (distinct (map :file kept))))
           " unchanged fixture file(s)")
     kept))
 
+(defn run-state
+  "HEAD and the changed paths now; taken at the body build and again after the run."
+  []
+  (let [rev (head-rev)] {:rev rev :changed (when rev (changed-since rev))}))
+
 (defn record-passes!
-  "Records the HEAD revision for every fixture file of all-cases whose every run passed, when its code is not changed since HEAD."
-  [opts all-cases paths results]
+  "Records the start revision for every fixture file of all-cases whose every run passed, when HEAD and the changes held since start (the body build's state) and its code is not changed since HEAD. A file that ran and did not pass loses its record."
+  [opts all-cases paths results start]
   (let [expected (into {} (map (fn [[k n]] [k (* n (:repeat opts))])) (frequencies (map :file all-cases)))
         passed (chg/passed-stems expected results)
-        rev (head-rev)]
-    (when (and rev (seq passed))
-      (let [stale (chg/stale-stems {:fixtures (select-keys (fixture-dir-texts paths) passed)
-                                    :record (zipmap passed (repeat rev)) :src (source-texts)
-                                    :dir "engine/fixtures/world" :changed-since changed-since})
-            clean (remove stale passed)
-            file (repo-path pass-record-path)]
-        (when (seq clean)
-          (fs/mkdirSync (path/dirname file) #js {:recursive true})
-          (fs/writeFileSync file (pr-str (merge (read-pass-record) (zipmap clean (repeat rev))))))))))
+        texts (fixture-dir-texts paths)
+        by-stem (group-by stem-path (keys texts))
+        ran (set (mapcat by-stem (map :file results)))
+        clean (chg/recordable {:passed (set (mapcat by-stem passed)) :fixtures texts :src (source-texts) :start start :end (run-state)})
+        record (read-pass-record)
+        next (chg/next-record record (:rev start) {:clean clean :ran ran})]
+    (when (not= record next)
+      (let [file (repo-path pass-record-path)]
+        (fs/mkdirSync (path/dirname file) #js {:recursive true})
+        (fs/writeFileSync file (pr-str next))))))
 
 (defn load-cases [paths]
   (vec (mapcat #(f/file-cases (fs/readFileSync % "utf8") (path/basename % ".edn")) (fixture-files paths))))
@@ -1071,6 +1079,7 @@
       (.then (fn []
                (let [opts (parse-args (array-seq argv))
                      final-results (atom nil)
+                     run-start (atom nil)
                      all-cases (if (:check opts) [] (load-cases (:paths opts)))
                      cases (if (:check opts) [] (select-phase (f/select-cases all-cases opts) (:phase opts)))
                      cases (if (and (:changed-since-pass opts) (not (:list opts))) (select-changed cases (:paths opts)) cases)
@@ -1087,7 +1096,7 @@
                    (empty? cases) (do (log! "no cases selected") 2)
                    (seq bad) (do (run! #(log! (:id %) ": " (str/join "; " (:problems %))) bad) 2)
                    (running? opts) (do (log! "the body " (:body opts) " already runs; stop it first") 2)
-                   (not (refresh-body-build!)) 2
+                   (not (do (reset! run-start (run-state)) (refresh-body-build!))) 2
                    :else
                    (.then (players-near opts)
                           (fn [refusal]
@@ -1099,7 +1108,7 @@
                                   (.then (fn [results]
                                            (reset! final-results results)
                                            (write-results! opts results)
-                                           (record-passes! opts all-cases (:paths opts) results)
+                                           (record-passes! opts all-cases (:paths opts) results @run-start)
                                            (let [n (frequencies (map :status results))]
                                              (log! "world-test: " (count results) " runs, " (n :pass 0) " passed, " (n :fail 0) " failed, "
                                                    (n :error 0) " errors, " (n :flaky 0) " flaky, " (n :skipped 0) " skipped, " (n :inconclusive 0) " inconclusive")

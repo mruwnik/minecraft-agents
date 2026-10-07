@@ -3,7 +3,7 @@
   unchanged since their last recorded pass. Any change to shared engine code selects every fixture."
   (:require [clojure.string :as str]))
 
-(def ns-token #"\bjobs\.[a-z0-9\-]+(?:\.[a-z0-9\-]+)*")
+(def ns-token #"\b[a-z][a-z0-9\-]*(?:\.[a-z0-9\-]+)+")
 (def trigger-token #":([a-z0-9\-]+)")
 
 (defn ns-file [ns-name]
@@ -16,7 +16,7 @@
     (first (filter #(and (str/starts-with? % "engine/src/triggers/") (str/ends-with? % tail)) known))))
 
 (defn mentioned
-  "Source files the text names: job namespaces by symbol, triggers by keyword."
+  "Source files the text names: namespaces by symbol (jobs.*, triggers.*, any dotted name that is a known file), triggers by keyword."
   [text known]
   (let [known? (set known)]
     (into (set (filter known? (map ns-file (re-seq ns-token text))))
@@ -55,15 +55,30 @@
   (boolean (some #(or (= % fixture-path) (closure %) (shared-code? %)) changed)))
 
 (defn stale-stems
-  "The fixture stems to run: no recorded pass, a rev git cannot diff (changed-since gives nil), or a change since it.
-  fixtures {stem text}, record {stem rev}, src {path text}, dir the fixtures' repo-relative directory,
+  "The fixture paths to run: no recorded pass, a rev git cannot diff (changed-since gives nil), or a change since it.
+  fixtures {repo-relative path text}, record {path rev}, src {path text} of every job and trigger source,
   changed-since (rev -> changed repo paths or nil)."
-  [{:keys [fixtures record src dir changed-since]}]
-  (set (for [[stem text] fixtures
-             :let [rev (get record stem)
+  [{:keys [fixtures record src changed-since]}]
+  (set (for [[path text] fixtures
+             :let [rev (get record path)
                    changed (when rev (changed-since rev))]
-             :when (or (nil? changed) (stale? (closure text src) (str dir "/" stem ".edn") changed))]
-         stem)))
+             :when (or (nil? changed) (stale? (closure text src) path changed))]
+         path)))
+
+(defn recordable
+  "The passed fixture paths whose pass may be recorded: HEAD and the changed set held from the run's start (the body
+  build) to its end, and none of their code differs from HEAD. start/end: {:rev :changed}."
+  [{:keys [passed fixtures src start end]}]
+  (if (or (nil? (:rev start)) (nil? (:changed end)) (not= (:rev start) (:rev end)) (not= (set (:changed start)) (set (:changed end))))
+    #{}
+    (set (remove (stale-stems {:fixtures (select-keys fixtures passed) :record (zipmap passed (repeat (:rev end))) :src src
+                               :changed-since (constantly (:changed end))})
+                 passed))))
+
+(defn next-record
+  "The pass record after a run: fixtures that ran without passing lose their record, clean ones get rev."
+  [record rev {:keys [clean ran]}]
+  (merge (apply dissoc record (remove (set clean) ran)) (zipmap clean (repeat rev))))
 
 (defn passed-stems
   "The stems whose every expected run (expected {stem n}) passed in results ({:file :status})."
