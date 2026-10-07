@@ -120,7 +120,7 @@
   (let [tpos (u/pos-of (.-pos sheep))]
     (if (<= (u/dist (u/self-pos c) tpos) reach)
       :there
-      (let [r (await (near/walk-near! c tpos 2 {:doors :shut :timeout-s (:walk-timeout-s (:args c))}))]
+      (let [r (await (near/walk-near! c tpos 2 {:zone-tolls true :doors :shut :timeout-s (:walk-timeout-s (:args c))}))]
         (case r
           :there (do (reset-row! c) :there)
           :partial :partial

@@ -318,7 +318,7 @@
         (loop []
           (let [leg (leg-target c target range)
                 r (await (ctx/call-child c slot 'jobs.movement.go-to
-                                         {:pos (or leg target) :range (if leg 1 range) :doors :leave-open :escalate false}))]
+                                         {:pos (or leg target) :range (if leg 1 range) :doors :leave-open :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
             (cond
               (not= :done r) :waiting
               (not (:arrived (ctx/child-result c slot))) :failed
@@ -412,7 +412,7 @@
 
 (defn ^:async tie! [c]
   (let [fence (:fence (:args c))
-        near (await (near/walk-near! c fence 2 {:doors :never}))]
+        near (await (near/walk-near! c fence 2 {:doors :never :zone-tolls true}))]
     (if-not (= :there near)
       (if (= :partial near) :again (finish! c :unreachable))
       (let [r (await (ctx/act c :useOn (clj->js {:pos fence})))
