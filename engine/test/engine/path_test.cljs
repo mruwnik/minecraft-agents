@@ -92,18 +92,21 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:blocks four})]
+        (let [{:keys [eng p seen]} (setup {:blocks four})]
           (core/submit! eng (list job (assoc box :fetch false)) {})
           (is (nil? (core/tick! eng)) "check false: nothing runs")
+          (is (= [:no-tool] (map :reason (kinds seen :waiting))))
+          (is (empty? (kinds seen :fetch.started)) "fetch false: no fetch child")
           (is (empty? (calls p "useOn"))))))))
 
 (deftest path-bad-args-wait-instead-of-throwing
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:inventory shovel :blocks four})]
+        (let [{:keys [eng p seen]} (setup {:inventory shovel :blocks four})]
           (core/submit! eng (list job {:from {:x 0 :y 63 :z 0} :to {:x 30 :y 63 :z 30}}) {})
           (is (nil? (core/tick! eng)))
+          (is (= [:bad-args] (map :reason (kinds seen :waiting))))
           (is (empty? (calls p "useOn"))))))))
 
 (deftest path-skips-a-cell-the-use-refuses-after-two-tries
@@ -150,3 +153,70 @@
           (await (run-until-empty eng 12))
           (is (= {:pathed 4 :skipped {}} @out))
           (is (= ["dirt_path"] (distinct (map #(block-at p %) (path/cells box))))))))))
+
+(defn zone [min max] {:name "farm" :owner "Miles" :min min :max max})
+
+(deftest path-declines-before-the-first-round-when-every-cell-is-refused
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:inventory shovel :blocks four} (ew/of-data {} {} [(zone [1 60 1] [2 70 2])]))]
+          (core/submit! eng (list job box) {})
+          (is (nil? (core/tick! eng)))
+          (is (= [:refused] (map :reason (kinds seen :waiting))))
+          (is (= [:refused] (map :reason (kinds seen :path.declined))))
+          (is (empty? (calls p "useOn"))))))))
+
+(deftest path-declines-without-a-zone-list-and-ignore-zones-goes-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:inventory shovel :blocks four} (ew/of-data {} {} nil))]
+          (core/submit! eng (list job box) {})
+          (is (nil? (core/tick! eng)))
+          (is (= [:no-zones] (map :reason (kinds seen :waiting))))
+          (is (empty? (calls p "useOn"))))
+        (let [{:keys [eng]} (setup {:inventory shovel :blocks four} (ew/of-data {} {} nil))]
+          (is (= {:pathed 4 :skipped {}} (await (child-outcome eng job (assoc box :ignore-zones? true) 1)))))
+        (let [{:keys [eng]} (setup {:inventory shovel :blocks four} (ew/of-data {} {} [(zone [1 60 1] [2 70 2])]))]
+          (is (= {:pathed 4 :skipped {}} (await (child-outcome eng job (assoc box :ignore-zones? true) 1)))))))))
+
+(deftest path-skips-the-refused-cell-and-paths-the-rest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory shovel :blocks four} (ew/of-data {} {} [(zone [2 60 2] [2 70 2])]))
+              result (await (child-outcome eng job box 8))]
+          (is (= {:pathed 3 :skipped {{:x 2 :y 63 :z 2} :not-permitted}} result))
+          (is (= "grass_block" (block-at p {:x 2 :y 63 :z 2}))))))))
+
+(deftest path-with-every-cell-already-a-path-is-done-with-nothing-pathed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory shovel :blocks (zipmap (keys four) (repeat "dirt_path"))})
+              result (await (child-outcome eng job box 2))]
+          (is (= {:pathed 0 :skipped {}} result))
+          (is (empty? (calls p "useOn"))))))))
+
+(deftest path-skips-cells-when-the-shovel-is-lost-mid-run
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory shovel :blocks {"1,63,1" "dirt"}})
+              args {:from {:x 1 :y 63 :z 1} :to {:x 1 :y 63 :z 1}}]
+          (.override (.-world p) "useOn" (fn ^:async f [_ _ _] #js {:status "no-item"}))
+          (is (= {:status :stopped :reason :no-shovel :pathed 0 :skipped {{:x 1 :y 63 :z 1} :no-shovel}}
+                 (dissoc (await (child-outcome eng job args 8)) :text))))))))
+
+(deftest path-without-a-shovel-runs-the-fetch-child
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:blocks four})]
+          (core/submit! eng (list job box) {})
+          (await (run-until-empty eng 3))
+          (is (empty? (calls p "useOn")))
+          (is (= 1 (count (kinds seen :fetch.started))))
+          (is (= 1 (count (kinds seen :fetch.failed))))
+          (is (= [:no-shovel] (distinct (map :reason (kinds seen :path.skipped))))))))))
