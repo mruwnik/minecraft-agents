@@ -600,7 +600,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [world (merge in-room {:blocks room-and-deck})
+        (let [world (merge {:self {:pos {:x 5 :y 64 :z 0}}} {:blocks room-and-deck})
               {:keys [out seen]} (await (run-job! world {:pos [8 71 0] :range 0}))
               {off :out} (await (run-job! world {:pos [8 71 0] :range 0 :escalate false}))]
           (is (= :goal-cut-off (:why @off)) "without escalation the planner's verdict is cut-off")
