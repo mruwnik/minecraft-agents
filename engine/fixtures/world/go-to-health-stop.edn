@@ -1,6 +1,6 @@
 ;; Card 2909cf46 S3: the walk's health stop. A stone block y 0..9 fills x 1..40 (feet y 10, body at x 3.5), walls all round, the goal
 ;; on the floor east of its edge at x 46: a drop of 10 (7 hp of budget at full health). Health lost mid-walk (instant damage) takes
-;; the budget under the drop, so the walk stops for it and plans again: the body does not jump. (Healing and waiting are S4.)
+;; the budget under the drop, so the walk stops for it and go-to heals first (the old plan is never walked on unwatched).
 {:defaults
  {:tags [:movement]
   :time :any
@@ -8,15 +8,16 @@
   :blocks [[:fill [0 0 0] [51 12 0] "stone"] [:fill [0 0 31] [51 12 31] "stone"] [:fill [0 0 0] [0 12 31] "stone"] [:fill [51 0 0] [51 12 31] "stone"]
            [:fill [1 0 1] [40 9 30] "stone"]]
   :body {:at [3.5 10 16.5]}
-  :limit-s 90}
+  :limit-s 200}
  :cases
  [{:name "full-health-walk-takes-the-10-drop"
    :act [[:job (jobs.movement.go-to {:pos #at [46 0 16] :range 1 :escalate false})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [46.5 0 16.5] 2]]}
-  {:name "health-lost-on-the-way-keeps-the-body-off-the-drop"
+  {:name "health-lost-on-the-way-waits-to-heal-before-the-drop"
    :act [[:job (jobs.movement.go-to {:pos #at [46 0 16] :range 1 :escalate false})]
-         [:wait-s 2]
-         [:rcon "effect give $BODY minecraft:instant_damage 1 0 true"]]
-   :expect [{:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 45}]
-   :after [[:body-far [46.5 0 16.5] 4]]}]}
+         [:await {:source :action :kind :started :data {:name "steer"}} 30]
+         [:rcon "effect give $BODY minecraft:instant_damage 1 1 true"]]
+   :expect [{:event {:source :job :kind :go-to.waiting-health} :within-s 40 :of-job true}
+            {:event {:source :job :kind :result :data {:arrived true}} :within-s 150 :of-job true}]
+   :after [[:body-near [46.5 0 16.5] 2]]}]}

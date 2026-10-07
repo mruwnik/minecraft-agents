@@ -435,13 +435,41 @@
     (is (= {:status :replan :why :health} (select-keys done [:status :why])))
     (is (nil? (wwatch/watch-stop watch drop-ahead 1 {:i 1 :tick 1} pose-on-ground)) "no step reached, not on a check tick")))
 
-(deftest a-health-replan-keeps-the-old-plan-when-there-is-no-better-way
+(deftest a-health-replan-that-finds-no-walkable-plan-ends-the-walk-and-never-walks-the-refused-drop-unwatched
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[status reason steps walks] [["none" nil [] 2] ["partial" "goal-cut-off" (line 3) 2] ["found" nil (line 10) 2]]]
+        (doseq [[status reason steps] [["none" nil []] ["partial" "goal-cut-off" (line 3)]]]
           (let [r (await (follow-with :health status reason steps))]
-            (is (= walks (:walks r)) (str status reason))))))))
+            (is (= 1 (:walks r)) (str status reason ": no second walk of the old plan"))
+            (is (not= :arrived (:status (:done r))) (str status reason))))))))
+
+(deftest a-health-replan-that-finds-a-walkable-plan-walks-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (await (follow-with :health "found" nil (line 10)))]
+          (is (= 2 (:walks r)))
+          (is (= :arrived (:status (:done r)))))))))
+
+(deftest a-kept-plan-counts-the-damage-of-the-step-it-walks-again-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [steps [(step 0 64 0 :start) (assoc (step 1 63 0 :drop) :damage 2) (step 2 63 0 :walk) (step 3 63 0 :walk)]
+              walks (atom 0)
+              plan {:status "found" :r #js {} :steps steps :ms 5}
+              none {:status "none" :r #js {} :steps [] :ms 5}
+              walk-fn (fn [steps _]
+                        (js/Promise.resolve
+                         (if (= 1 (swap! walks inc))
+                           [{:status :replan :why :danger :step 2 :at [2 63 0]} 1]
+                           [{:status :arrived :at [3 63 0]} 1])))
+              c {:primitives (tu/fake-on-floor {:floor [-5 -5 20 5]})}
+              r (await (walk/follow! c plan {:plan-fn (fn [_] (js/Promise.resolve none)) :walk-fn walk-fn :to [3 63 0]
+                                             :policy executor/policy}))]
+          (is (= 2 @walks))
+          (is (= 2 (:damage r)) "the 2 hp drop walked once"))))))
 
 ;; the plan's steps carry the hp a drop costs (planner step damage), and follow! adds up what the walks planned
 (deftest plan-steps-carry-the-planned-damage-of-a-drop
@@ -472,7 +500,9 @@
     (is (nil? (wwatch/damage-mismatch 3 [(fall 4)])) "a margin of 1")
     (is (= {:planned 3 :lost 5} (wwatch/damage-mismatch 3 [(fall 2) (fall 3)])) "falls add up")
     (is (= {:planned 0 :lost 6} (wwatch/damage-mismatch 0 [(fall 6) (mob 4)])) "other hurts do not count")
-    (is (nil? (wwatch/damage-mismatch 0 [(mob 9)])))))
+    (is (nil? (wwatch/damage-mismatch 0 [(mob 9)])))
+    (is (nil? (wwatch/damage-mismatch 3 [(fall 5)] 2)) "a caller's margin of 2")
+    (is (= {:planned 3 :lost 6} (wwatch/damage-mismatch 3 [(fall 6)] 2)))))
 
 (deftest health-lost-before-a-drop-replans-and-the-body-does-not-take-it
   (async done

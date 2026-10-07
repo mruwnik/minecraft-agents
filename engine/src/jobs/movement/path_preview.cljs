@@ -11,7 +11,7 @@
   "Dry run of a go-to: plan the route to :pos (or :place) from where the body stands, with the policy, costs, dangers and
   tolls go-to plans with, and report it. Nothing is walked, opened or dug. One round, one plan (a search of any length, in
   slices that yield), then :done.
-  Takes the go-to args :pos :place :range :doors :dangers :dark :tolls :drop-cost :min-health :max-damage :hp-seconds :one-way, same defaults.
+  Takes the go-to args :pos :place :range :doors :dangers :dark :tolls :drop-cost :min-health :max-damage :hp-seconds :food :one-way, same defaults.
   Returns {:status :completed :found true :length :seconds :summary :steps :moves :doors :waypoints}: length is the horizontal
   blocks, seconds the planner's cost in seconds (tolls, dark and danger costs not included), summary its words (drops, swims,
   doors), steps the step count, moves a count of each move kind (:drop :jump :open ...), doors the cells [x y z] it
@@ -32,6 +32,7 @@
    :drop-cost {:doc "number: scales the cost of a drop; false: no drop of 2 or 3 at all" :default 1}
    :min-health {:doc "go-to's :min-health: the hp the walk may not spend below" :default nil}
    :max-damage {:doc "go-to's :max-damage: at most this many hp spent on drops and plants" :default nil}
+   :food {:doc "go-to's :food: the food level (0-20) the damage budget counts on" :default 20}
    :hp-seconds {:doc "go-to's :hp-seconds: seconds an hp costs at full health" :default 10}
    :one-way {:doc ":closed takes no drop of 2 or 3 or gap jump down that the body cannot climb back; :open (default) takes one toward unloaded land" :default :open}})
 

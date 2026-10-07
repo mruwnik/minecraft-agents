@@ -131,11 +131,19 @@
   (let [snapshot (.-snapshot pw) tops (.-top (.-table pw))]
     (fn [x y z] (pos? (aget tops (.stateAt snapshot x y z))))))
 
+(def default-food "The food a walk counts on when its caller gives none: fed (nothing caps the damage)." 20)
+
+(defn food-of
+  "The food level (0-20) the walk counts on: the job's :food arg (a number), else default-food. The caller knows it; the walk does not read it off the body."
+  [c]
+  (let [food (:food (:args c))]
+    (if (number? food) food default-food)))
+
 (defn damage-body
-  "The body's {:health :absorption :food :on-fire :effects} for jobs.lib.cost/damage-budget."
+  "The body's {:health :absorption :food :on-fire :effects} for jobs.lib.cost/damage-budget; the food is the job's (food-of)."
   [c]
   (let [self (.self (:primitives c))]
-    {:health (.-health self) :absorption (.-absorption self) :food (.-food self) :on-fire (.-onFire self)
+    {:health (.-health self) :absorption (.-absorption self) :food (food-of c) :on-fire (.-onFire self)
      :effects (map #(.-name %) (array-seq (.-effects self)))}))
 
 (defn damage-budget

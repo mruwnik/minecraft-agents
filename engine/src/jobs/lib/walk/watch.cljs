@@ -35,7 +35,7 @@
 
 (def body-half 0.3)
 
-(def fall-margin "Hp a walk's falls may cost over the plan before it is a mismatch (rounding of the fall)." 1)
+(def fall-margin "Default hp a walk's falls may cost over the plan before it is a mismatch (rounding of the fall)." 1)
 
 (defn step-cells
   "The cells [x y z] the body passes going from prev to step: the columns its footprint (body-half either side) touches
@@ -196,12 +196,13 @@
     {:status :replan :why :health :at at :step i}))
 
 (defn damage-mismatch
-  "{:planned :lost} when the falls in hurts (raw :hurt memory entries since the walk began) cost more than margin hp over
-  planned, the hp the walked steps planned for drops; else nil. Hits of other causes do not count."
-  [planned hurts]
+  "{:planned :lost} when the falls in hurts (raw :hurt memory entries since the walk began) cost more than margin hp
+  (default fall-margin) over planned, the hp the walked steps planned for drops; else nil. Hits of other causes do not count."
+  ([planned hurts] (damage-mismatch planned hurts fall-margin))
+  ([planned hurts margin]
   (let [lost (transduce (comp (filter #(= "fall" (hurt/cause (:data %)))) (map #(:amount (:data %)))) + 0 hurts)]
-    (when (> lost (+ planned fall-margin))
-      {:planned planned :lost lost})))
+    (when (> lost (+ planned margin))
+      {:planned planned :lost lost}))))
 
 (defn watch-stop
   "The look-ahead at one tick: nil, or the done map that stops the walk to plan again: {:status :replan :why :changed :cells}

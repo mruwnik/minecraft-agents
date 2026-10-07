@@ -33,11 +33,11 @@
     :else :none))
 
 (defn body-of
-  "The body's {:health :food :effects :on-fire :carried-food} from its primitives."
+  "The body's {:health :food :effects :on-fire :carried-food}: the food is the job's (wworld/food-of), the rest from its primitives."
   [c]
   (let [p (:primitives c)
         self (.self p)]
-    {:health (.-health self) :food (.-food self) :on-fire (.-onFire self)
+    {:health (.-health self) :food (wworld/food-of c) :on-fire (.-onFire self)
      :effects (map #(.-name %) (array-seq (.-effects self)))
      :carried-food (boolean (some #(foods/edible? (:name %)) (u/inventory p)))}))
 
@@ -82,7 +82,7 @@
           (await (ctx/act c :wait #js {:ms wait-ms}))))
     :continue))
 
-(defn ^:async probe!
+(defn ^:async probe-plan!
   "Whether a whole way exists for the body that may spend all but 1 hp (:max-damage still capping): the hp it costs, or nil
   when there is none. A refusal of the budget in a search that finds no whole way anyway (:damage-refused is only a move the
   budget turned away) is no reason to heal."
@@ -94,6 +94,19 @@
         ^js r (:r within)]
     (when (= "found" (.-status r))
       (or (some-> r .-path .-cost .-damage) 0))))
+
+(defn ^:async probe!
+  "The hp of the whole way for a body that may spend all but 1 hp, planned again only when the health or the cell changed
+  since the last probe of this wait (mem :probe, kept heal-gap-ms): see probe-plan!."
+  [c pos range]
+  (let [now (ctx/now c)
+        key [(.-health (.self (:primitives c))) (mapv #(js/Math.floor (% pos)) [:x :y :z])]
+        m (:probe (ctx/mem c))]
+    (if (and m (= key (:key m)) (< (- now (:at m)) heal-gap-ms))
+      (:planned m)
+      (let [planned (await (probe-plan! c pos range))]
+        (ctx/update-mem! c assoc :probe {:key key :planned planned :at now})
+        planned))))
 
 (defn ^:async heal-or-drop!
   "A walk whose search found no way and met the damage budget (:damage-refused): nil when a way with all but 1 hp spent

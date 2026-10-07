@@ -5,6 +5,7 @@
             [engine.fake :as fake]
             [engine.go-to-test :as g]
             [engine.test-util :as tu :refer [floor]]
+            [jobs.lib.walk.plan :as wplan]
             [jobs.movement.go-to.health :as gth]))
 
 (deftest the-way-to-heal-follows-health-food-and-what-is-carried
@@ -63,7 +64,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p out] :as r} (await (go-heal! (world {:health 13 :food 10}) args false))]
+        (let [{:keys [p out] :as r} (await (go-heal! (world {:health 13}) (assoc args :food 10) false))]
           (is (empty? (g/events-of r :go-to.waiting-health)))
           (is (= 1 (count (g/events-of r :go-to.over-budget))) "it told it went over the budget")
           (is (= 60 (y-of p)) "down the cliff")
@@ -73,7 +74,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p out] :as r} (await (go-heal! (world {:health 13 :food 10} {:inventory [{:name "bread" :count 3}]}) args true))]
+        (let [{:keys [p out] :as r} (await (go-heal! (world {:health 13} {:inventory [{:name "bread" :count 3}]}) (assoc args :food 10) true))]
           (is (< (count (filter #(= "bread" (:name %)) (.-inventory (.self p)))) 3) "it ate")
           (is (= 60 (y-of p)) "down the cliff")
           (is (= {:arrived true} @out)))))))
@@ -82,7 +83,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p out] :as r} (await (go-heal! (world {:health 13 :food 10}) (assoc args :min-health 12) false))]
+        (let [{:keys [p out] :as r} (await (go-heal! (world {:health 13}) (assoc args :min-health 12 :food 10) false))]
           (is (= 64 (y-of p)) "still on the plateau")
           (is (empty? (g/events-of r :go-to.over-budget)))
           (is (= {:arrived false :reason :unreachable :why :needs-health} (select-keys @out [:arrived :reason :why]))))))))
@@ -96,6 +97,34 @@
           (is (empty? (g/events-of r :go-to.waiting-health)))
           (is (empty? (g/events-of r :go-to.over-budget)))
           (is (= :unreachable (:reason @out))))))))
+
+(deftest the-food-comes-from-the-caller-not-the-body
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [fed (await (go-heal! (world {:health 13 :food 3}) args true))
+              hungry (await (go-heal! (world {:health 13 :food 20}) (assoc args :food 3) false))]
+          (is (seq (g/events-of fed :go-to.waiting-health)) "no :food given: counted as fed, whatever the body's food")
+          (is (empty? (g/events-of hungry :go-to.waiting-health)) ":food 3 given: nothing to regenerate with")
+          (is (= 1 (count (g/events-of hungry :go-to.over-budget)))))))))
+
+(defn ^:async probes-while-waiting
+  "How many probe plans (a survivable budget over 0) a body that never heals asks for while go-to waits for it."
+  []
+  (let [probes (atom 0)
+        orig wplan/plan-within!]
+    (set! wplan/plan-within! (fn [c pw to range weight policy]
+                               (when (pos? (:damage-budget policy 0)) (swap! probes inc))
+                               (orig c pw to range weight policy)))
+    (try (await (go-heal! (world {:health 13}) args false))
+         (finally (set! wplan/plan-within! orig)))
+    @probes))
+
+(deftest a-heal-wait-probes-once-while-health-and-place-stay
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= 1 (await (probes-while-waiting))))))))
 
 (deftest a-full-health-body-takes-the-drop-with-no-wait
   (async done

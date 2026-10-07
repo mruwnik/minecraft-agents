@@ -75,6 +75,7 @@
    :dark {:doc "false: plan dark cells like lit ones; true: a dark cell (seen dark, or unseen at night) costs twice a lit one" :default true}
    :tolls {:doc "cells to cross only as a last resort, [{:x :y :z :factor}]: each costs factor times its own seconds more (jobs.lib.cost farm-tolls, zone-tolls)" :default nil}
    :min-health {:doc "hp (1-20) a drop or a plant's prick may not take the body below, less a margin of 1 (the walk's damage budget); 12 when absent; a floor the walk never crosses, not even when it goes over its budget" :default nil}
+   :food {:doc "the body's food level (0-20) the walk counts on for its damage budget and for whether it can heal by waiting (18 or more regenerates); the caller tells it" :default 20}
    :hp-seconds {:doc "seconds an hp costs at full health when the planner weighs a drop or a plant's prick against a longer way (more at low health)" :default 10}
    :max-damage {:doc "hp at most a walk may spend on drops and plants that hurt (0: none), under the :min-health budget" :default nil}
    :drop-cost {:doc "number: scales the cost of a drop (fall seconds and damage; 1 as is, 0 free, 5 dear); false: no drop of 2 or 3 at all. :one-way :closed instead refuses only a drop the body cannot climb back" :default 1}
