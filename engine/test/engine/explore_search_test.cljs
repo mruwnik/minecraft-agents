@@ -172,7 +172,7 @@
           (is (= :distance (:why e)))
           (is (= 4 (get-in e [:coverage :legs])))
           (is (= 5 (get-in e [:coverage :scans])))
-          (is (= 14 (get-in e [:coverage :farthest])) "the body stops within 2 of the leg 16 out")
+          (is (<= 14 (get-in e [:coverage :farthest]) 16) "the body stops within 2 of the leg 16 out (go-to ends on any cell within its range, so 14 or 15)")
           (is (= [] (:found e))))))))
 
 (deftest the-leg-and-time-bounds-end-it
