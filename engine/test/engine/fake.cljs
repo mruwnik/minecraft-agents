@@ -637,7 +637,8 @@
 ;; ---- reading the world
 
 (defn equipment-view [w]
-  (let [gear (fn [i] (when i (cond-> {:name (:name i) :count (:count i 1)} (some? (:durability i)) (assoc :durability (:durability i)))))
+  (let [gear (fn [i] (when i (cond-> {:name (:name i) :count (:count i 1)} (some? (:durability i)) (assoc :durability (:durability i))
+                                                       (:enchants i) (assoc :enchants (:enchants i)))))
         held (get-in w [:self :held])
         carried-stack (first (filter #(= held (:name %)) (:inventory w)))]
     (merge (into {} (map (fn [part] [part (gear (get-in w [:equipment part]))])) equipment-parts)

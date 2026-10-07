@@ -129,10 +129,11 @@
 
 (defn body-policy
   "executor/policy for the body: with food 6 or less the client does not sprint, so :sprint is false (a corner jump past
-  a high block is then refused)."
+  a high block is then refused). :max-drop and :fall-factor follow its fall enchantments and health (jobs.lib.cost/fall-profile)."
   [c]
-  (let [food (.-food (.self (:primitives c)))]
-    (cond-> executor/policy
+  (let [self (.self (:primitives c))
+        food (.-food self)]
+    (cond-> (merge executor/policy (cost/fall-profile {:health (.-health self) :equipment (cost/equipment-of (.-equipment self))}))
       (and (number? food) (<= food 6)) (assoc :sprint false))))
 
 (defn body-cell

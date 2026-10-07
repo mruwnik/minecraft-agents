@@ -1,6 +1,6 @@
 (ns jobs.lib.cost.armour
   "Armour, the one formula: vanilla's per hit. The armour points and toughness reduction, then the enchantment reduction
-  (EPF: protection 1 a level, blast 2 for explosions, projectile 2 for arrows, fire 2 for fire and burning). Toughness is 2 a diamond
+  (EPF: protection 1 a level, feather falling 3 for falls, blast 2 for explosions, projectile 2 for arrows, fire 2 for fire and burning). Toughness is 2 a diamond
   piece and 3 a netherite piece.
   Equipment: {part {:name :enchants [{:name :lvl}]}} for head torso legs feet, as cljs (keyword or string keys) or JS;
   other slots never count."
@@ -18,7 +18,7 @@
 
 (def toughness-by-material {"diamond" 2 "netherite" 3})
 
-(def epf-per-level {"protection" {:all 1} "blast_protection" {:explosion 2} "projectile_protection" {:projectile 2}
+(def epf-per-level {"protection" {:all 1} "feather_falling" {:fall 3} "blast_protection" {:explosion 2} "projectile_protection" {:projectile 2}
                     "fire_protection" {:fire 2 :burning 2}})
 
 (defn piece-points [item-name]
@@ -66,3 +66,24 @@
                  (min 20 (max (/ points 5) (- points (/ (* 4 hit) (+ toughness 8))))))
         after (* hit (- 1 (/ armour 25)) (- 1 (/ (epf enchants dtype) 25)))]
     (* after (max 1 hits))))
+
+(defn fall-damage
+  "hp a fall of blocks costs a body with equipment (vanilla: a point a block past 3; armour points do not count,
+  enchantments do: protection and feather falling)."
+  [equipment blocks]
+  (* (max 0 (js/Math.ceil (- blocks 3)))
+     (- 1 (/ (epf (:enchants (armour-stats equipment)) :fall) 25))))
+
+(def harmless-fall "hp of fall damage a drop may cost and still be taken as a jump." 1.5)
+(def max-fall "The longest drop in blocks ever allowed." 8)
+
+(defn fall-profile
+  "How a body {:health :equipment} takes drops: {:fall-factor the share of the usual fall damage left (1: none
+  reduced), :max-drop the longest drop in blocks the planner may take}: 3 as usual, more only when fall enchantments
+  keep the damage within harmless-fall and 3 under the health (up to max-fall)."
+  [{:keys [health equipment]}]
+  (let [factor (fall-damage equipment 4)
+        cap (min harmless-fall (- (or health 20) 3))
+        safe (when (< factor 1)
+               (last (take-while #(<= (fall-damage equipment %) cap) (range 4 (inc max-fall)))))]
+    {:fall-factor factor :max-drop (or safe 3)}))

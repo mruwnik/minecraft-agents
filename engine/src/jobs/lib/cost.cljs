@@ -3,7 +3,8 @@
   never read the world themselves. They compose: armour under mob threat, mob threat under fight cost, route danger and
   the planner's rate; route danger under fetch cost.
 
-    armour   armour-stats, after-armour, equipment-of: vanilla's per-hit formula, the only one (jobs.lib.cost.armour).
+    armour   armour-stats, after-armour, equipment-of: vanilla's per-hit formula, the only one; fall-damage, fall-profile: a fall's hp and the drops a body takes
+             (jobs.lib.cost.armour).
     threat   hostile?, mob-hurt: what one mob does over some seconds, after armour (jobs.lib.cost.threat).
     fight    fight-damage, decide: the damage of a fight with the current kit, :fight or :flee (jobs.lib.cost.fight).
     danger   route-danger, straight-route: the danger of a walk past mobs; stance, danger-rate, danger-list: go-to's
@@ -24,6 +25,8 @@
 (def equipment-of armour/equipment-of)
 (def armour-stats armour/armour-stats)
 (def after-armour armour/after-armour)
+(def fall-damage armour/fall-damage)
+(def fall-profile armour/fall-profile)
 
 (def hostile? threat/hostile?)
 (def mob-hurt threat/mob-hurt)

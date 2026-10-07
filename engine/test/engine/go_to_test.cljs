@@ -205,6 +205,17 @@
           (is (= 64 (js/Math.floor (second (at (:p no))))) "no drop: still on the plateau")
           (is (= 61 (js/Math.floor (second (at (:p dear))))) "a dear drop is still the only way"))))))
 
+(deftest go-to-takes-a-four-block-drop-only-with-feather-falling
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cliff (merge (floor -2 -3 10 3) (floor 59 11 -3 47 3))
+              plain (await (go! {:blocks cliff} {:pos [120 60 0] :escalate false}))
+              boots (await (go! {:blocks cliff :equipment {:feet {:name "iron_boots" :enchants [{:name "feather_falling" :lvl 4}]}}}
+                                {:pos [120 60 0] :escalate false}))]
+          (is (= 64 (js/Math.floor (second (at (:p plain))))) "plain body: no 4-block drop")
+          (is (= 60 (js/Math.floor (second (at (:p boots))))) "feather falling IV: it drops"))))))
+
 (deftest go-to-drop-cost-false-still-takes-a-one-block-step-down
   (async done
     (tu/run-async done

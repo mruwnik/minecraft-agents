@@ -79,3 +79,16 @@
   (is (= 35 (cost/food-short (stack "bread" 5))))
   (is (= 0 (cost/food-short (stack "bread" 20))))
   (is (= 60 (cost/food-short (stack "golden_apple" 3 "rotten_flesh" 9)))))
+
+(def ff-boots (fn [lvl] {:feet {:name "iron_boots" :enchants [{:name "feather_falling" :lvl lvl}]}}))
+
+(deftest fall-damage-is-vanillas-and-armour-points-do-not-reduce-it
+  (is (= [0 0 1 2 4] (mapv #(cost/fall-damage nil %) [2 3 4 5 7])))
+  (is (= 2 (cost/fall-damage iron-set 5)) "points do not count")
+  (is (= 0.52 (round2 (cost/fall-damage (ff-boots 4) 4))) "feather falling IV: 12 of 25 off")
+  (is (< (cost/fall-damage (enchanted iron-8 "protection") 5) 2) "protection counts"))
+
+(deftest fall-profile-allows-longer-drops-only-when-enchants-make-them-harmless
+  (is (= {:max-drop 3 :fall-factor 1} (cost/fall-profile {:health 20 :equipment iron-set})))
+  (is (= {:max-drop 5 :fall-factor 0.52} (update (cost/fall-profile {:health 20 :equipment (ff-boots 4)}) :fall-factor round2)))
+  (is (= 3 (:max-drop (cost/fall-profile {:health 3 :equipment (ff-boots 4)}))) "no extra drop when health is low"))
