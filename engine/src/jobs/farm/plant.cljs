@@ -6,6 +6,7 @@
             [jobs.lib.crops :as crops]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.gate :as gate]
+            [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
             [jobs.farm.harvest :as harvest]
@@ -155,6 +156,7 @@
         bare (when box (bare-cells p box (:skipped m)))]
     (cond
       (:started m) true
+      (and (empty? bare) (not (look/looked-here? c))) true ; the round looks around before it gives up
       (empty? bare) (ctx/wait c {:reason :nothing-to-do})
       (not (pick-seed seed (u/inventory p)))
       (fetch/check c job-sym (seed-need seed (count bare)))
@@ -324,8 +326,12 @@
 
 (defn ^:async step [c]
   (let [field (planned c)
-        fetched (when (problem c) (await (fetch/fetch! c job-sym problem)))]
+        m (ctx/mem c)
+        unseen? (and (nil? field) (not (:started m)) (not (look/looked-here? c))
+                     (empty? (bare-cells (:primitives c) (:box (:args c)) (:skipped m))))
+        fetched (when-not unseen? (when (problem c) (await (fetch/fetch! c job-sym problem))))]
     (cond
+      unseen? (await (look/look-around! c))
       fetched fetched
       (nil? field) (await (box-round c))
       (:trouble field) :declined

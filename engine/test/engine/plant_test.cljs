@@ -24,6 +24,15 @@
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen}))
 
+(defn start-on
+  "start over an existing primitives object p."
+  [p]
+  (let [[seen sink] (tu/legacy-capture-sink)
+        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                          :world (ew/of-data {} {} [])
+                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+    {:eng eng :p p :seen seen}))
+
 (defn ^:async run-until-empty [eng n]
   (loop [i 0]
     (if (or (>= i n) (empty? (:list (core/state eng))))
@@ -377,3 +386,35 @@
           (await (child-outcome eng job {:box field-box} 100))
           (is (= (count (calls p "place")) (count (events-of seen :blocks.place.done))))
           (is (= 9 (count (events-of seen :blocks.place.done)))))))))
+
+(defn look-then-see
+  "Make p see no block until it has looked around (a look call)."
+  [p]
+  (tu/blind p)
+  (aset p "seenBlocks" (fn [q] (if (seq (calls p "look")) (.blocks p q) #js [])))
+  (aset p "seenBlockAt" (fn [pos] (let [b (.blockAt p pos)] #js {:name (.-name b) :properties (.-properties b) :pos pos :age-ms 0})))
+  (aset p "sensedAt" (fn [pos] (if (seq (calls p "look")) (.blockAt p pos) #js {:unknown true}))))
+
+(deftest a-box-not-yet-seen-is-looked-at-before-nothing-to-do
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/fake (field-world (inv "wheat_seeds" 9)))
+              _ (look-then-see p)
+              {:keys [eng seen]} (start-on p)
+              result (await (child-outcome eng job {:box field-box} 100))]
+          (is (seq (calls p "look")))
+          (is (= {:planted 9 :skipped [] :reason :done} result))
+          (is (empty? (events-of seen :waiting))))))))
+
+(deftest a-box-with-nothing-bare-after-the-look-still-waits-nothing-to-do
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/fake (field-world (inv "wheat_seeds" 9) {:blocks {}}))
+              _ (look-then-see p)
+              {:keys [eng seen]} (start-on p)]
+          (core/submit! eng (list job {:box field-box}) {})
+          (await (run-until-empty eng 6))
+          (is (seq (calls p "look")))
+          (is (= [:nothing-to-do] (distinct (map :reason (events-of seen :waiting))))))))))

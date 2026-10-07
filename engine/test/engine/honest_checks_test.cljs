@@ -86,7 +86,6 @@
     'jobs.access.cleanup {} :nothing-to-do
     'jobs.farm.harvest {:plan "nope"} :plan-trouble
     'jobs.farm.plant {:plan "nope"} :plan-trouble
-    'jobs.farm.plant {:box box} :nothing-to-do
     'jobs.farm.tend {:plan "nope"} :plan-trouble
     'jobs.farm.tend {:box box} :nothing-to-do
     'jobs.farm.tidy {:plan "nope"} :plan-trouble
