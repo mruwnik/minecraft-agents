@@ -91,6 +91,18 @@
   (js-delete p "sensedAt")
   p)
 
+(defn seeing-after-look
+  "p that has seen nothing until its first look call (a look around), then every block in range, as seeing-all."
+  [p]
+  (blind p)
+  (let [looked? #(some (fn [call] (= "look" (.-name call))) (.-calls (.-world p)))]
+    (aset p "seenBlocks" (fn [q] (if (looked?) (.blocks p q) #js [])))
+    (aset p "seenBlockAt" (fn [pos] (if (looked?)
+                                      (let [b (.blockAt p pos)] #js {:name (.-name b) :properties (.-properties b) :pos pos :age-ms 0})
+                                      #js {:unknown true :pos pos})))
+    (aset p "sensedAt" (fn [pos] (if (looked?) (.blockAt p pos) #js {:unknown true})))
+    p))
+
 (defn short-walks!
   "Make the fake's walks end early, as a steer that timed out after ticks ticks (the fake walks about 0.2 blocks a tick):
   a go-near! toward a target farther than that ends :partial. Only the first n walks when n is given."

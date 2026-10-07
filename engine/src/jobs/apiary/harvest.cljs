@@ -189,9 +189,8 @@
         _ (when-not (:center (ctx/mem c)) (ctx/update-mem! c assoc :center center))
         _ (settle-click! c)
         m (ctx/mem c)
-        _ (when (and (not= :collect (:phase m)) (not (:surveyed m)))
-            (ctx/update-mem! c assoc :surveyed true)
-            (await (look/look-around! c)))]
+        _ (when (not= :collect (:phase m))
+            (await (look/survey! c)))]
     (if (= :collect (:phase m))
       (await (collect! c))
       (let [seen (classify c (hives c center))

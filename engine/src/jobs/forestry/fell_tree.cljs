@@ -319,8 +319,8 @@
   "One piece of the felling: :again, :continue (a child waits on the world, or nothing is in sight), :done or a stop."
   [c]
   (let [{:keys [species radius]} (:args c)
-        _ (when (and (not (:column (ctx/mem c))) (not (first (candidates c radius species))) (not (look/looked-here? c)))
-            (await (look/look-around! c)))
+        _ (when (and (not (:column (ctx/mem c))) (not (first (candidates c radius species))))
+            (await (look/survey! c :cell)))
         _ (when (and (not (:pillar (ctx/mem c))) (open-scaffold? c))
             (set-pillar! c {:phase :clean}))
         chosen (or (:column (ctx/mem c)) (await (choose-tree! c radius species)))]
@@ -371,5 +371,5 @@
       (or (boolean (or (:column m)
                      (seq (:unreachable m))
                      (first (candidates c radius species))
-                     (not (look/looked-here? c))))
+                     (not (look/surveyed? c :cell))))
         (ctx/wait c (cond-> {:reason :no-tree :radius radius} species (assoc :species species)))))))

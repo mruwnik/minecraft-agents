@@ -287,9 +287,7 @@
   (let [center (apiary/center-of c)
         _ (ctx/update-mem! c assoc :started true :center center)
         _ (settle-carpet! c)
-        _ (when-not (:surveyed (ctx/mem c))
-            (ctx/update-mem! c assoc :surveyed true)
-            (await (look/look-around! c)))
+        _ (await (look/survey! c))
         m (ctx/mem c)]
     (cond
       (:collecting m) (await (collect-step! c))

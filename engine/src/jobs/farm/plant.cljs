@@ -156,7 +156,7 @@
         bare (when box (bare-cells p box (:skipped m)))]
     (cond
       (:started m) true
-      (and (empty? bare) (not (look/looked-here? c))) true ; the round looks around before it gives up
+      (and (empty? bare) (not (look/surveyed? c :cell))) true ; the round looks around before it gives up
       (empty? bare) (ctx/wait c {:reason :nothing-to-do})
       (not (pick-seed seed (u/inventory p)))
       (fetch/check c job-sym (seed-need seed (count bare)))
@@ -327,11 +327,11 @@
 (defn ^:async step [c]
   (let [field (planned c)
         m (ctx/mem c)
-        unseen? (and (nil? field) (not (:started m)) (not (look/looked-here? c))
+        unseen? (and (nil? field) (not (:started m)) (not (look/surveyed? c :cell))
                      (empty? (bare-cells (:primitives c) (:box (:args c)) (:skipped m))))
         fetched (when-not unseen? (when (problem c) (await (fetch/fetch! c job-sym problem))))]
     (cond
-      unseen? (await (look/look-around! c))
+      unseen? (await (look/survey! c :cell))
       fetched fetched
       (nil? field) (await (box-round c))
       (:trouble field) :declined

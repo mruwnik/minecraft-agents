@@ -81,10 +81,42 @@
         (do (ctx/update-mem! c assoc :looked (cell-of (u/self-pos c)))
             nil)))))
 
-(defn looked-here?
-  "Whether the job has already looked around from the cell the body stands in."
-  [c]
-  (= (:looked (ctx/mem c)) (cell-of (u/self-pos c))))
+(defn surveyed?
+  "Whether the job has looked around: this run (per :run, the default) or from the cell the body stands in (:cell)."
+  ([c] (surveyed? c :run))
+  ([c per]
+   (let [looked (:looked (ctx/mem c))]
+     (if (= :cell per) (= looked (cell-of (u/self-pos c))) (some? looked)))))
+
+(defn ^:async survey!
+  "Look around once before choosing work from what the body has seen, as a player turns before deciding there is
+  nothing (or only one thing) to do: look-around! unless (surveyed? c per). :continue when it looked, else nil.
+  A check that finds no work passes while the job has not surveyed (wait-unless-surveyed), so the round looks first."
+  ([c] (survey! c :run))
+  ([c per]
+   (when-not (surveyed? c per)
+     (await (look-around! c)))))
+
+(defn ^:async survey-until!
+  "survey! for entities: test (f) after each look and return the first truthy one (entities count only while in view);
+  (f) once when already surveyed."
+  ([c f] (survey-until! c :run f))
+  ([c per f]
+   (if (surveyed? c per)
+     (f)
+     (await (look-around-until! c f)))))
+
+(defn unseen?
+  "Whether the body has never seen one of cells ({:x :y :z}); false without a perception."
+  [p cells]
+  (boolean (and (some? (.-sensedAt p)) (some #(true? (some-> (u/sensed p %) .-unknown)) cells))))
+
+(defn wait-unless-surveyed
+  "For a check that found no work in what the body has seen: true while the job has not surveyed this run (its round
+  looks around first), else (ctx/wait c reason). With cells, only while one of them was never seen."
+  ([c reason] (if (surveyed? c) (ctx/wait c reason) true))
+  ([c reason cells]
+   (if (or (surveyed? c) (not (unseen? (:primitives c) cells))) (ctx/wait c reason) true)))
 
 ;; ------------------------------------------------------------------ what the body has seen
 

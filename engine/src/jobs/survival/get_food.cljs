@@ -177,8 +177,8 @@
   "Dig the nearest ripe block, permitted ones first (blocks.dig walks there and collects the drops): :again, or nil
   when there is none. A block not dug is skipped from then on."
   [c ripe-ages center radius]
-  (when (and (empty? (ripe-blocks c ripe-ages center radius)) (not (look/looked-here? c)))
-    (await (look/look-around! c)))
+  (when (empty? (ripe-blocks c ripe-ages center radius))
+    (await (look/survey! c :cell)))
   (let [{pos :option trespass :trespass} (access/choose c :dig (ripe-blocks c ripe-ages center radius) vector)]
     (when pos
       (access/trespass! c "get-food" trespass)
@@ -267,8 +267,7 @@
   "The nearest food animal in sight; with none, the body looks around once from where it stands and tries again."
   [c]
   (or (nearest-animal c)
-      (when-not (look/looked-here? c)
-        (await (look/look-around-until! c #(nearest-animal c))))))
+      (await (look/survey-until! c :cell #(nearest-animal c)))))
 
 (defn ^:async hunt!
   "Kill the nearest food animal (combat.attack) and pick up its drops: :again, or nil when there is none (after a

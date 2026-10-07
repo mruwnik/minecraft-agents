@@ -315,7 +315,7 @@
 (defn blind?
   "Box mode with no crop seen yet and no look from this cell: the round must look around before it can tell."
   [c]
-  (and (cutting? c) (not (:plan-cells c)) (not (look/looked-here? c)) (not (crop-seen? c))))
+  (and (cutting? c) (not (:plan-cells c)) (not (look/surveyed? c :cell)) (not (crop-seen? c))))
 
 (defn check
   "A debt is owed (with :plan: a planned bare cell whose seed is carried), a collect sweep is owed, or there
@@ -423,8 +423,8 @@
   [c]
   (let [p (:primitives c)
         m (ctx/mem c)
-        _ (when (and (cutting? c) (empty? (ripe-of c (:skipped m))) (not (look/looked-here? c)))
-            (await (look/look-around! c)))
+        _ (when (and (cutting? c) (empty? (ripe-of c (:skipped m))))
+            (await (look/survey! c :cell)))
         ripe (when (cutting? c) (ripe-of c (:skipped m)))]
     (when (seq ripe)
       (let [here (u/self-pos c)

@@ -324,7 +324,7 @@
       (let [{:keys [water-radius step scan-radius]} (:args c)
             pos (floor-cell (u/pos-of (.-pos me)))
             lava? (boolean (.-inLava me))
-            _ (when-not (look/looked-here? c) (await (look/look-around! c)))
+            _ (await (look/survey! c :cell))
             scanned (feel-feet p pos (scan p scan-radius hazards 128))
             water (when-not lava? (first (scan p water-radius water-like 1)))
             pour? (and (not lava?) (has-bucket? p))

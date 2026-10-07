@@ -120,8 +120,8 @@
   "One step: fetch missing bone meal unless :fetch is false (a failed fetch leaves the job waiting), then
   fertilize-one!."
   [c]
-  (let [_ (when (and (empty? (targets c)) (not (look/looked-here? c)))
-            (await (look/look-around! c)))
+  (let [_ (when (empty? (targets c))
+            (await (look/survey! c :cell)))
         fetched (when (problem c) (await (fetch/fetch! c 'jobs.farm.fertilize problem)))]
     (cond
       fetched fetched

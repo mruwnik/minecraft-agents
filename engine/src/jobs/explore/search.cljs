@@ -186,7 +186,7 @@
   "Look round (every heading, once per cell), note what was seen and the spot as searched, book the findings."
   [c names]
   (let [{:keys [scan-radius seen-ttl-s entity-ttl-s searched-ttl-s] want :count} (:args c)
-        _ (if (look/looked-here? c) (look/see! c) (await (look/look-around! c)))
+        _ (when-not (await (look/survey! c :cell)) (look/see! c))
         sighted (vec (sense (:primitives c) names scan-radius))
         [x y z] (here c)
         [ox _ oz] (:origin (ctx/mem c))]

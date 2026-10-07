@@ -395,6 +395,5 @@
       (do (ctx/update-mem! c assoc :furnace pos)
           (ctx/emit! c :smelt.furnace :info {:furnace pos :text (str "smelting at the furnace seen at " (:x pos) " " (:y pos) " " (:z pos))})
           (await (round-with c pos)))
-      (if (look/looked-here? c)
-        (stop! c "no-furnace-seen")
-        (await (look/look-around! c))))))
+      (or (await (look/survey! c :cell))
+          (stop! c "no-furnace-seen")))))
