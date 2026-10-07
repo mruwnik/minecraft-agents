@@ -1,11 +1,24 @@
 (ns engine.path.fixture
   "Tiny hand-built worlds for planner tests: a few named blocks in an otherwise empty (air) column set. The snapshot (path/snapshot.mjs), block state ids
   (prismarine-block) stay interop."
-  (:require ["module" :refer [createRequire]]
+  (:require ["fs" :as fs]
+            ["module" :refer [createRequire]]
+            ["path" :as path]
             [engine.path.blocks :as blocks]))
 
 ;; not engine.test-util: that requires engine.fake, which requires engine.fake.steer, which requires this
-(def require-here (createRequire (str (js/process.cwd) "/")))
+(defn engine-root
+  "The nearest ancestor of this compiled module that holds js/path/snapshot.mjs (the builds sit at different depths under engine/out);
+  test builds in a temp dir are outside the repo, so they use the working directory (the test runner starts in engine/)."
+  []
+  (loop [dir js/__dirname]
+    (let [parent (.dirname path dir)]
+      (cond
+        (.existsSync fs (str dir "/js/path/snapshot.mjs")) dir
+        (= parent dir) (js/process.cwd)
+        :else (recur parent)))))
+
+(def require-here (createRequire (str (engine-root) "/")))
 
 (def MC-VERSION "26.1")
 (def registry ((require-here "prismarine-registry") MC-VERSION))
