@@ -119,3 +119,14 @@
         (let [{:keys [seen] :as s} (setup [] {:blocks ground})]
           (await (run-job! s {:reach 0}))
           (is (= :no-gap (:reason (failed seen)))))))))
+
+(deftest the-placed-cell-is-read-through-perception
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p] :as s} (setup [] {:entities [pit-skeleton] :blocks (merge ground pit shell)})
+              seen-reads (atom 0)
+              seen-block-at (aget p "seenBlockAt")]
+          (aset p "seenBlockAt" (fn [pos] (swap! seen-reads inc) (seen-block-at pos)))
+          (await (run-job! s {}))
+          (is (pos? @seen-reads) "the result of the placing is read as perceived, not from the raw world"))))))
