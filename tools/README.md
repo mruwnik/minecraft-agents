@@ -73,10 +73,10 @@ whose repo path is this checkout, override with `CARD_REPO`). `CARD_AUTHOR` sets
 
 ### res-slot
 
-    tools/res-slot <body|tests|browser|time> [--need MB] -- <cmd...>      tools/res-slot status
+    tools/res-slot <body|tests|browser> [--need MB] -- <cmd...>      tools/res-slot status
 
 - Heavy commands run under a machine-wide slot: waits for a free `/tmp/mc-res/<kind>.<n>` flock AND `MemAvailable - need - (needs of runs granted in the last 60 s) >= floor`; prints a status line every 60 s; after ~9 min exits 75 `busy, retry later` (just run it again). Slot is held by the command's process, so it frees on exit or crash; a `{start, pid, kind, cmd}` line goes to `/tmp/mc-res/log.jsonl` when the slot is taken.
-- Kinds, need, max and the floor: `tools/res-slot.json` (body 500 MB x10, tests 2800 MB x5 with `--full` shards on at most 3, browser 600 MB x2, time x1: one world-time-changing run at a time). `status` lists holders (pid, command, age); every finished run appends `{kind, needMb, waitedS, ranS, code}` to `/tmp/mc-res/log.jsonl`.
+- Kinds, need, max and the floor: `tools/res-slot.json` (body 500 MB x10, tests 2800 MB x5 with `--full` shards on at most 3, browser 600 MB x2). `status` lists holders (pid, command, age); every finished run appends `{kind, needMb, waitedS, ranS, code}` to `/tmp/mc-res/log.jsonl`.
 - Already wrapped: `world-test.mjs` (one body slot for the whole run; `--allow-time` needs `--time-log` and shares the phase time lock, so day and night runs may overlap by phase; hand-run `time set` goes through `tools/time-set.mjs`), `test-engine` (tests), `tools/view/headless.mjs` (browser). Wrap other manual body starts and headless browsers yourself.
 
 ## Live testing
