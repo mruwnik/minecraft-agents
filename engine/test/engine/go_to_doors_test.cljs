@@ -229,6 +229,27 @@
           (is (< (first (at p)) 5) "the body stays on its side")
           (is (zero? (clicks p))))))))
 
+(def iron-room
+  "Shut in at x 0..5, z -3..3 under a roof; the only way out is an iron door at x 5, z 0."
+  (merge flat
+         (box -1 64 -4 6 67 -4 "stone") (box -1 64 4 6 67 4 "stone") (box -1 64 -4 -1 67 4 "stone")
+         (box 5 64 -3 5 66 3 "stone") (box 0 67 -3 5 67 3 "stone")
+         {"5,64,0" "iron_door" "5,65,0" "iron_door"}))
+
+(deftest out-of-a-room-shut-by-an-iron-door-says-unreachable-in-words
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [start [2 4]
+                args [{:pos [10 64 0] :range 0} {:pos [10 64 0] :range 0 :escalate false} {:pos [10 64 3] :range 2 :escalate false}]]
+          (let [w {:self {:pos {:x start :y 64 :z 0}}
+                   :blocks iron-room
+                   :states {"5,64,0" {:open false :half "lower" :facing "east"} "5,65,0" {:open false :half "upper" :facing "east"}}}
+                {:keys [out p]} (await (go! w args))]
+            (is (= {:arrived false :reason :unreachable} (select-keys @out [:arrived :reason])) (str start args))
+            (is (contains? #{:exhausted :start-enclosed :goal-enclosed} (:why @out)) (str start args " " (select-keys @out [:why :text])))
+            (is (< (first (at p)) 5) "the body stays inside")))))))
+
 ;; ------------------------------------------------------------------ zones
 
 (deftest a-zone-of-another-owner-reaches-one-block-past-its-box
