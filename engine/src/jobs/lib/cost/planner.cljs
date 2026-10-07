@@ -42,7 +42,7 @@
     o))
 
 (def gaits
-  "go-to's :gait values: :auto (sprints where the executor does), :walk (never sprints), :sneak (sneaks: no drop, no gap)."
+  "go-to's :gait values: :auto (sprints where the executor does), :walk (never sprints), :sneak (sneaks on level steps, never sprints)."
   #{:auto :walk :sneak})
 
 (defn gait-problem

@@ -50,7 +50,7 @@
 
 (defn pose-of [pose]
   {:x (.-x pose) :y (.-y pose) :z (.-z pose) :vx (.-vx pose) :vy (.-vy pose) :vz (.-vz pose) :on-ground (.-onGround pose)
-   :on-climbable (.-onClimbable pose) :in-water (.-inWater pose) :in-lava (.-inLava pose) :collided (.-collided pose)})
+   :on-climbable (.-onClimbable pose) :on-scaffolding (.-onScaffolding pose) :in-water (.-inWater pose) :in-lava (.-inLava pose) :collided (.-collided pose)})
 
 (defn steer-args
   "The act args of one walk. decide is not enumerable: the engine's act wrapper writes (js->clj args) into
@@ -91,12 +91,21 @@
      (let [walled (wworld/with-walls pw walls)]
        (wplan/walk-plan c pw walled to one-way frontier (await (wplan/plan-within! c walled to range weight policy)))))))
 
+(def sneak-moves
+  "The steps a sneaking walk holds sneak on: level ground and jumps up. A drop or gap lets go (sneak stops at the edge),
+  and so does a climb (it holds the body on a ladder)."
+  #{:start :walk :diagonal :corner :jump})
+
 (defn gait-controls
-  "The executor's controls under the policy's gait: a sneaking walk holds sneak and never sprints, except in water (sneaking
-  there sinks the body)."
-  [policy {:keys [in-water]} controls]
+  "The executor's controls under the policy's gait: a sneaking walk never sprints and holds sneak only on the ground, on a
+  sneak-moves step out of water (it sinks the body, and stops it at a deep bank), off a climbable and scaffolding (sneak descends there); in the air it
+  lets go, so a slime landing bounces."
+  [policy {:keys [steps i]} {:keys [on-ground in-water on-climbable on-scaffolding]} controls]
   (cond-> controls
-    (and (= :sneak (:gait policy)) (not in-water)) (assoc :sneak true :sprint false)))
+    (= :sneak (:gait policy))
+    (assoc :sprint false
+           :sneak (boolean (and on-ground (not in-water) (not on-climbable) (not on-scaffolding)
+                                (contains? sneak-moves (:move (get steps i))) (not (executor/water-step? (get steps i))))))))
 
 (defn ^:async walk!
   "Follow steps once. [result ms]: the executor's done map, or {:status :stuck ...} on a timeout,
@@ -119,7 +128,7 @@
                    (vreset! state state')
                    (if done
                      (do (vreset! last-done done) #js {:done (clj->js done)})
-                     #js {:controls (clj->js (gait-controls policy pose controls)) :yaw yaw :pitch pitch})))
+                     #js {:controls (clj->js (gait-controls policy state' pose controls)) :yaw yaw :pitch pitch})))
         t (js/Date.now)
         r (await (ctx/act c :steer (steer-args timeout-s decide)))
         ms (- (js/Date.now) t)]

@@ -50,14 +50,16 @@
           best))
       (.octileTo s x z (.-goal-x s) (.-goal-z s))))
 
-  ;; a goal set's heuristic is the least of its goals' (each admissible and consistent, so their least is too)
+  ;; a goal set's heuristic is the least of its goals' (each admissible and consistent, so their least is too); a block costs
+  ;; at least the cheaper of a walk and a swim (a sneaking walk is dearer than a swim)
   (heuristic [s x z]
-    (if (pos? (.-n-goals s))
-      (loop [i 0 best js/Infinity]
-        (if (< i (.-n-goals s))
-          (recur (inc i) (js/Math.min best (js/Math.max 0 (- (.octileTo s x z (aget ^js (.-g-xs s) i) (aget ^js (.-g-zs s) i)) (aget ^js (.-g-slack s) i)))))
-          (* best (.-c-walk-s s))))
-      (* (js/Math.max 0 (- (.distanceTo s x z) (.-slack s))) (.-c-walk-s s))))
+    (let [per-block (js/Math.min (.-c-walk-s s) (.-c-swim-h s))]
+      (if (pos? (.-n-goals s))
+        (loop [i 0 best js/Infinity]
+          (if (< i (.-n-goals s))
+            (recur (inc i) (js/Math.min best (js/Math.max 0 (- (.octileTo s x z (aget ^js (.-g-xs s) i) (aget ^js (.-g-zs s) i)) (aget ^js (.-g-slack s) i)))))
+            (* best per-block)))
+        (* (js/Math.max 0 (- (.distanceTo s x z) (.-slack s))) per-block))))
 
   ;; ---- node storage ----
   (hashOf [s x y z region]

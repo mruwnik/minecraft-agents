@@ -24,6 +24,10 @@ const climbableAt = (bot, cell) => {
   return below?.name === 'ladder' && props.open === true && props.facing === below.getProperties().facing
 }
 
+// scaffolding at the feet or under them: there sneak means descend, so a sneaking walk lets go of it
+const onScaffolding = (bot, cell) =>
+  bot.blockAt(cell)?.name === 'scaffolding' || bot.blockAt(cell.offset(0, -1, 0))?.name === 'scaffolding'
+
 export function createSteer ({ act, getBot, badArgs }) {
   const pose = bot => {
     const { position, velocity, onGround, isInWater, isInLava, isCollidedHorizontally, yaw } = bot.entity
@@ -37,6 +41,7 @@ export function createSteer ({ act, getBot, badArgs }) {
       vz: velocity.z,
       onGround,
       onClimbable: climbableAt(bot, cell),
+      onScaffolding: onScaffolding(bot, cell),
       inWater: isInWater,
       inLava: isInLava,
       collided: isCollidedHorizontally,

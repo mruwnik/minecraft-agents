@@ -190,7 +190,7 @@
   ((if (:over-budget c) cost/survivable-budget cost/damage-budget) (damage-body c) (walk-settings c)))
 
 (defn body-policy
-  "executor/policy for the body: the gait (:walk, :sneak) never sprints, and :sneak takes neither drop nor gap; with the walk's food (food-of) 6 or less the client does not sprint, so :sprint is false (a corner jump past
+  "executor/policy for the body: the gait (:walk, :sneak) never sprints; with the walk's food (food-of) 6 or less the client does not sprint, so :sprint is false (a corner jump past
   a high block is then refused). :damage-budget (hp, damage-budget) and :damage-weight (seconds an hp costs at its health)
   price the damage of a walk, :danger-cap the total hp a second its known dangers cost (jobs.lib.cost/danger-cap, more when the job's :danger-max-rate is) (the job's :hp-seconds arg: the seconds an hp costs at full health, default jobs.lib.cost/hp-seconds);
   :max-drop and :fall-factor follow its fall enchantments and the longest drop it survives (the survivable-budget under the job's :max-damage,
@@ -207,7 +207,7 @@
                    (when-some [landing (:landing (:args c))] {:landing landing}))
       (and (number? food) (<= food 6)) (assoc :sprint false)
       (= :walk (gait c)) (assoc :sprint false :gait :walk)
-      (= :sneak (gait c)) (-> (assoc :sprint false :gait :sneak) (update :moves disj :drop :gap)))))
+      (= :sneak (gait c)) (assoc :sprint false :gait :sneak))))
 
 (defn body-cell
   "The cell the body stands in, as a step's {:x :y :z}."

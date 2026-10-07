@@ -38,7 +38,7 @@ test('decide gets a pose of the body each tick and its controls and look are app
   const { result } = await start(p, bot, pose => { poses.push(pose); return poses.length > 1 ? { done: {} } : walking })
   bot.emit('physicsTick')
   assert.equal(poses.length, 1)
-  assert.deepEqual({ ...poses[0], t: 0 }, { x: 1.5, y: 64, z: 2.5, vx: 0, vy: -0.1, vz: 0, onGround: true, onClimbable: false, inWater: undefined, inLava: undefined, collided: undefined, yaw: 0.5, t: 0 })
+  assert.deepEqual({ ...poses[0], t: 0 }, { x: 1.5, y: 64, z: 2.5, vx: 0, vy: -0.1, vz: 0, onGround: true, onClimbable: false, onScaffolding: false, inWater: undefined, inLava: undefined, collided: undefined, yaw: 0.5, t: 0 })
   assert.deepEqual(bot.controlState, { forward: true, sprint: true })
   assert.deepEqual([bot.entity.yaw, bot.entity.pitch], [1.5, 0.25])
   bot.emit('physicsTick')
@@ -52,6 +52,22 @@ test('the pose says climbable when the feet are in a ladder', async () => {
   bot.emit('physicsTick')
   assert.equal(poses[0].onClimbable, true)
 })
+
+// sneak is descend in scaffolding (prismarine-physics), so a sneaking walk lets go of sneak in it and on it
+const scaffoldingCases = [
+  ['feet in scaffolding', '0,64,0', true],
+  ['standing on scaffolding', '0,63,0', true],
+  ['scaffolding two below the feet', '0,62,0', false]
+]
+for (const [name, at, expected] of scaffoldingCases) {
+  test(`the pose's onScaffolding: ${name}`, async () => {
+    const { bot, p } = rig({ pos: [0.5, 64, 0.5], blocks: { [at]: 'scaffolding' } })
+    const poses = []
+    await start(p, bot, pose => { poses.push(pose); return { done: {} } })
+    bot.emit('physicsTick')
+    assert.equal(poses[0].onScaffolding, expected)
+  })
+}
 
 // vanilla climbs an open trapdoor over a ladder of its own facing, and so does the client once tools/patch-deps.mjs has run
 const hatchCases = [
