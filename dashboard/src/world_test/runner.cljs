@@ -469,6 +469,22 @@
   (.then (acquire-time-lock! phase what)
          (fn [_] (.finally (thunk) release-time-lock!))))
 
+(defn confirm-phase!
+  "Resolves once the world reports phase (:day or :night), polling `time query` a few times."
+  [phase]
+  (letfn [(poll [n]
+            (.then (rcon! ["time query day"])
+                   (fn [[reply]]
+                     (if (or (zero? n) (= phase (if (night? (daytime (or reply ""))) :night :day)))
+                       true
+                       (.then (sleep 300) #(poll (dec n)))))))]
+    (poll 10)))
+
+(defn mark-phase-set!
+  "Called by the first holder once its phase is in place; joiners wait for it."
+  []
+  (lease/mark-set (time-lock-dir-ops) (.-pid js/process)))
+
 (defn time-set-main
   "argv: ticks or day|noon|night|midnight -> promise of the exit code; one `time set` under the time lock."
   [argv]
@@ -477,7 +493,7 @@
       (do (js/console.error "usage: node tools/time-set.mjs <ticks|day|noon|night|midnight>") (js/Promise.resolve 2))
       (with-time-lock! (lease/phase-of-ticks (case t "day" 1000 "noon" 6000 "night" 14000 "midnight" 18000 (js/parseInt t 10)))
         (str "time set " t)
-        #(.then (rcon! [(str "time set " t)]) (fn [[reply]] (log! reply) 0))))))
+        #(.then (rcon! [(str "time set " t)]) (fn [[reply]] (mark-phase-set!) (log! reply) 0))))))
 
 (defn local-now
   "Now as local ISO with the UTC offset, the shared time log's format."
@@ -664,7 +680,15 @@
         result (fn [m] (merge {:id (:id c) :run run :plot i :origin origin :elapsed-s (/ (- (js/Date.now) started) 1000)} m))]
     (-> (let [phase (lock-phase opts rc)]
           (.then (acquire-time-lock! phase (str (:id c) (if (= :any phase) " runs under the current time" " depends on the time of day")))
-                 (fn [held] (if (and (not= :any phase) (:first? held)) (time-ok! opts (if (lease/time-phase rc) rc (assoc rc :time :day))) true))))
+                 (fn [held]
+                   (if-not (:first? held)
+                     true
+                     (-> (if (= :any phase) true (time-ok! opts (if (lease/time-phase rc) rc (assoc rc :time :day))))
+                         (.then (fn [ok]
+                                  (if (or (not ok) (= :any phase))
+                                    ok
+                                    (.then (confirm-phase! (if (#{:night :night-x} phase) :night :day)) (fn [_] ok)))))
+                         (.then (fn [ok] (mark-phase-set!) ok)))))))
         (.then (fn [ok]
                  (if-not ok
                    (result {:status :skipped :why (str "needs " (name (:time rc)) " (no --allow-time)")})

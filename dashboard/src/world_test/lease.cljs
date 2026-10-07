@@ -86,7 +86,8 @@
 
 (defn try-share
   "One attempt at the time lock shared by phase: any number of processes may hold the same phase together; the other
-  phase waits for all of them, and once it waits, new holders of the current phase queue behind it. Dead processes'
+  phase waits for all of them, and once it waits, new holders of the current phase queue behind it. A joiner also waits
+  ({:waiting-on [setter] :setting true}) while the first holder has not yet called mark-set. Dead processes'
   entries are dropped. dir: {:guard (thunk -> its result, run exclusively) :entries (-> {pid entry}) :put! (pid entry)
   :remove! (pid) :alive? (pid -> bool)}. seq: when this process began waiting (keeps its place in the queue). phase :any
   (a time-independent case) joins the holders' phase, else world-phase (:day or :night), and waits like a holder of it."
@@ -97,9 +98,19 @@
       (let [live (into {} (filter (fn [[p _]] (or (= p pid) (alive? p)))) (entries))
             _ (run! remove! (remove live (keys (entries))))
             phase (effective-phase live pid phase world-phase)
-            r (decide live pid phase seq)]
-        (put! pid {:phase phase :state (if (:held r) :hold :want) :seq seq})
-        r)))))
+            r (decide live pid phase seq)
+            pending (when (:held r) (vec (sort (keep (fn [[p e]] (when (and (not= p pid) (= :hold (:state e)) (:setting e)) p)) live))))]
+        (cond
+          (not-empty pending) (do (put! pid {:phase phase :state :want :seq seq}) {:waiting-on pending :setting true})
+          (:held r) (do (put! pid (cond-> {:phase phase :state :hold :seq seq} (:first? r) (assoc :setting true))) r)
+          :else (do (put! pid {:phase phase :state :want :seq seq}) r)))))))
+
+(defn mark-set
+  "The first holder calls this once the phase is really in place (its `time set` returned and `time query` confirmed):
+  joiners of the phase wait until then. Same dir as try-share. A holder that dies before this leaves no entry, so the
+  next joiner is first again."
+  [{:keys [guard entries put!]} pid]
+  (guard (fn [] (when-let [e (get (entries) pid)] (put! pid (dissoc e :setting))))))
 
 (defn time-phase
   "The phase (:day, :night or :night-x) whose time lock case c holds: its :time, else the phase of its first :time-set step; nil

@@ -234,6 +234,7 @@
     (is (= :want (:state (get @files 12))))
     (swap! files dissoc 10)
     (is (= {:held true :first? true} (l/try-share d 11 :night 5)))
+    (l/mark-set d 11)
     (is (= {:held true :first? false} (l/try-share d 12 :any 9 :day)) "the joiner follows the new phase")
     (is (= :night (:phase (get @files 12))))))
 
@@ -250,3 +251,25 @@
   (let [files (atom {10 (hold :day)})]
     (is (= {:held true :first? true} (l/try-share (fake-share files #{11}) 11 :any 5 :night)))
     (is (= #{11} (set (keys @files))))))
+
+(deftest a-joiner-waits-until-the-first-holder-marks-the-phase-set
+  (let [files (atom {})
+        d (fake-share files #{10 11})]
+    (l/try-share d 10 :day 5)
+    (is (= {:waiting-on [10] :setting true} (l/try-share d 11 :day 6)))
+    (l/mark-set d 10)
+    (is (= {:held true :first? false} (l/try-share d 11 :day 6)))))
+
+(deftest a-setter-that-died_before_marking_leaves_the_next_joiner_first
+  (let [files (atom {})]
+    (l/try-share (fake-share files #{10}) 10 :day 5)
+    (is (= {:held true :first? true} (l/try-share (fake-share files #{11}) 11 :day 6)))
+    (is (= [11] (keys @files)))))
+
+(deftest a-setter-that-died-after-marking-leaves-the-phase-set
+  (let [files (atom {})]
+    (l/try-share (fake-share files #{10 11}) 10 :day 5)
+    (l/try-share (fake-share files #{10 11}) 11 :day 6)
+    (l/mark-set (fake-share files #{10 11}) 10)
+    (l/try-share (fake-share files #{10 11}) 11 :day 6)
+    (is (= {:held true :first? false} (l/try-share (fake-share files #{11 12}) 12 :day 7)))))
