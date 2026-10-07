@@ -14,7 +14,7 @@
   and ends stopped :dismount-failed, with the body still aboard. Never :continue. The :mounted trigger runs it (cooldown persistence: a body still aboard is tried again 30 s later).")
 
 (def args
-  {:toward {:doc "a position {:x :y :z} to face when getting off (its cell's centre); nil picks a dry cell" :default nil}
+  {:toward {:doc "a position {:x :y :z} to face when getting off (its cell's centre); nil picks a dry cell" :type :pos :default nil}
    :max-tries {:doc "dismounts tried before giving up" :default 8}
    :wait-ms {:doc "the wait after the first failed dismount; it doubles per try, at most 1000" :default 50}
    :radius {:doc "dry cells this many blocks (horizontally) from the vehicle are faced" :default 2}})

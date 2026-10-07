@@ -80,7 +80,7 @@
   child does not fetch itself.")
 
 (def args
-  {:target {:doc "the buried block [x y z]" :default nil}
+  {:target {:doc "the buried block [x y z] or {:x :y :z}" :type :pos :default nil}
    :max-length {:doc "longest line, in blocks along the heading from the entry to the target" :default 24}
    :accept {:doc "hazards taken: #{:water :lava :falling-block}" :default #{}}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
@@ -252,12 +252,17 @@
     (vec (keep (fn [s] (when-let [cell (torch-cell block-at cells s)] {:cell cell :site s :block (block-at cell)}))
                (:sites plan)))))
 
+(defn target-of
+  "The :target arg as [x y z], or nil when unset."
+  [c]
+  (when-let [{:keys [x y z]} (:target (:args c))] [x y z]))
+
 (defn finish!
   "Hand the result over and end: :done when reached, else :stopped (warn)."
   [c reason detail]
   (let [{:keys [plan dug unlit]} (ctx/mem c)
         feet (feet-of c)
-        result (merge (cond-> {:status (if (= :reached reason) :done :stopped) :reason reason :target (:target (:args c))
+        result (merge (cond-> {:status (if (= :reached reason) :done :stopped) :reason reason :target (target-of c)
                                :at feet :dug (or dug []) :inside (boolean (and plan (not= feet (:entry plan))))
                                :keep (boolean (:keep (:args c))) :torches [] :unlit (or unlit [])}
                         plan (assoc :line (select-keys plan [:entry :heading :dir :steps :run :stand :target])
@@ -465,12 +470,13 @@
     (finish! c reason (cond-> (dissoc stop :reason :outside) outside (assoc :inside false)))
     (do (ctx/update-mem! c assoc :stop stop :way-out (way-out c)) :continue)))
 
-(defn bad-target? [t] (not (and (vector? t) (= 3 (count t)) (every? int? t))))
+(defn bad-target? [t] (not (and (vector? t) (every? int? t))))
 
 (defn refusal
   "While no line is chosen: the approach's stop when every heading is refused by a zone, claim or plan, else nil."
   [c]
-  (let [{:keys [target max-length accept]} (:args c)
+  (let [{:keys [max-length accept]} (:args c)
+        target (target-of c)
         a (when-not (or (:plan (ctx/mem c)) (bad-target? target))
             (approach (dissoc (stair/rules-in c (feet-of c)) :feet) target (feet-of c) max-length (set accept)))]
     (when (contains? #{:zone :footprint :claim} (:reason a)) a)))
@@ -487,7 +493,8 @@
 (defn choose!
   "Judge the lines and keep the best, or finish with why there is none."
   [c]
-  (let [{:keys [target max-length accept]} (:args c)
+  (let [{:keys [max-length accept]} (:args c)
+        target (target-of c)
         feet (feet-of c)]
     (if (bad-target? target)
       (finish! c :bad-args {:why "target must be [x y z] of integers"})

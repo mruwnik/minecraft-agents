@@ -20,7 +20,7 @@
   refuses the chest; bake.refused).")
 
 (def args
-  {:chest {:doc "store chest position; the known :chest place when nil" :default nil}
+  {:chest {:doc "store chest position [x y z] or {:x :y :z}; the known :chest place when nil" :type :pos :default nil}
    :keep {:doc "loaves to carry when done" :default 16}
    :table-radius {:doc "how far from the chest the table may be" :default 8}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})

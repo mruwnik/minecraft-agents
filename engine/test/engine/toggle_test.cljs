@@ -152,8 +152,7 @@
                                          ["oak_button" {:powered false} {:pos at :state :on} :bad-state]
                                          ["oak_door" {:open false} {:pos at :state :ajar} :bad-state]
                                          ["oak_door" {:open false} {:pos at} :bad-args]
-                                         ["oak_door" {:open false} {:state :open} :bad-args]
-                                         ["oak_door" {:open false} {:pos [1 2] :state :open} :bad-args]]]
+                                         ["oak_door" {:open false} {:state :open} :bad-args]]]
           (let [{:keys [result p seen]} (await (run (world name from 3 14) args))]
             (is (= {:status :declined :reason reason} (head result [:status :reason])) (str name args))
             (is (empty? (calls p "useOn")) (str name args))

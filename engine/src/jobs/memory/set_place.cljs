@@ -21,7 +21,7 @@
 
 (def args
   {:name {:doc "the place's name: a keyword or string of 1 to 32 lowercase letters, digits and dashes" :default nil}
-   :pos {:doc "[x y z] or {:x :y :z}; nil: where the body stands" :default nil}
+   :pos {:doc "[x y z] or {:x :y :z}; nil: where the body stands" :type :pos :default nil}
    :block {:doc "block name that must stand at or within 1 of :pos (\"bed\" matches any *_bed); the place is recorded at it" :default nil}})
 
 (defn check [_c] true)

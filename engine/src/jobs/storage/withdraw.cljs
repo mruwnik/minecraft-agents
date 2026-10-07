@@ -21,7 +21,7 @@
   (jobs.lib.fetch), for jobs.items.obtain.")
 
 (def args
-  {:chest {:doc "chest position [x y z] or {:x :y :z}; the known :chest place when nil" :default nil}
+  {:chest {:doc "chest position [x y z] or {:x :y :z}; the known :chest place when nil" :type :pos :default nil}
    :items {:doc "{item-name count}: carry at least this many of each name" :default {}}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 

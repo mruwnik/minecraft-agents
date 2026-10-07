@@ -14,7 +14,7 @@
   is :bad-args with a blocks.use-on.declined warn.")
 
 (def args
-  {:pos {:doc "the block to click, [x y z] or {:x :y :z}" :default nil}
+  {:pos {:doc "the block to click, [x y z] or {:x :y :z}" :type :pos :default nil}
    :item {:doc "the item to hold for the click; nil: the empty hand" :default nil}
    :face {:doc "the face clicked: up down north south east west" :default "up"}})
 

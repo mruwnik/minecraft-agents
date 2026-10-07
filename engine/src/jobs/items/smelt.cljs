@@ -30,7 +30,7 @@
     :put (loading) or :take (collecting, or the output already there). Nothing is loaded or taken. :ignore-zones? true skips the check.")
 
 (def args
-  {:furnace {:doc "furnace, blast furnace or smoker position {:x :y :z}; when nil the nearest one the body has seen within 32 blocks that cooks :item (or anything carried) is chosen (smelt.furnace says which), or the job ends with no-furnace-seen" :default nil}
+  {:furnace {:doc "furnace, blast furnace or smoker position [x y z] or {:x :y :z}; when nil the nearest one the body has seen within 32 blocks that cooks :item (or anything carried) is chosen (smelt.furnace says which), or the job ends with no-furnace-seen" :type :pos :default nil}
    :item {:doc "what to smelt; the first smeltable thing carried when nil" :default nil}
    :count {:doc "how many; all carried (at most one stack) when nil" :default nil}
    :fuel {:doc "fuel item to load; the best carried when nil" :default nil}

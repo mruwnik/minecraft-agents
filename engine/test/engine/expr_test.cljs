@@ -1,7 +1,8 @@
 (ns engine.expr-test
   (:require [cljs.test :refer [deftest is are]]
             [cljs.reader :as reader]
-            [engine.expr :as expr]))
+            [engine.expr :as expr]
+            [engine.registry :as registry]))
 
 (defn ^:async noop-round [_] :done)
 
@@ -107,3 +108,21 @@
 (deftest a-default-of-the-wrong-type-is-refused-too
   (let [r {'jobs.d {:check (constantly true) :round noop-round :args {:n {:type :int :default "x"}}}}]
     (is (re-find #"jobs.d :n must be a whole number" (try (expr/parse-spec r '(jobs.d)) nil (catch :default e (ex-message e)))))))
+
+(def pos-args
+  "The position-valued args of real jobs: [job arg]."
+  [['jobs.movement.go-to :pos] ['jobs.blocks.dig :pos] ['jobs.blocks.place :pos] ['jobs.blocks.use-on :pos]
+   ['jobs.access.toggle :pos] ['jobs.movement.leave-vehicle :toward]
+   ['jobs.storage.withdraw :chest] ['jobs.storage.deposit :chest] ['jobs.items.smelt :furnace] ['jobs.items.bake :chest]
+   ['jobs.build.clear-box :from] ['jobs.build.clear-box :to] ['jobs.access.tunnel :target] ['jobs.debug.walk-plan :to]
+   ['jobs.animals.pen-check :at] ['jobs.memory.set-place :pos]])
+
+(deftest real-jobs-take-position-args-as-a-vector-or-a-map-and-refuse-junk-at-submit
+  (doseq [[job k] pos-args]
+    (is (= :pos (get-in registry/jobs [job :args k :type])) (str job " " k))
+    (let [args #(:args (expr/parse registry/jobs (list job {k %})))]
+      (is (= {:x 1 :y 64 :z -3} (get (args [1 64 -3]) k)) (str job " vector"))
+      (is (= (args [1 64 -3]) (args {:x 1 :y 64 :z -3})) (str job " map"))
+      (is (re-find (re-pattern (str job " " k " must be \\[x y z\\]"))
+                   (try (expr/parse registry/jobs (list job {k [1 2]})) nil (catch :default e (ex-message e))))
+          (str job " junk")))))

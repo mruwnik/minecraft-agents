@@ -336,7 +336,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:self body})
-              result (await (child-outcome eng job {:pos "here"} 3))]
+              result (await (child-outcome eng job {} 3))]
           (is (= {:dug false :reason :bad-args} (select-keys result [:dug :reason])))
           (is (= 1 (count (filter #(= :blocks.dig.declined (:kind %)) @seen)))))))))
 

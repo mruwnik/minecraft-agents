@@ -40,7 +40,7 @@
   body has been more than 2 blocks away for 4 s.")
 
 (def args
-  {:pos {:doc "the block, [x y z] or {:x :y :z}; either half of a door" :default nil}
+  {:pos {:doc "the block, [x y z] or {:x :y :z}; either half of a door" :type :pos :default nil}
    :state {:doc ":open or :closed (gate, door, trapdoor), :on or :off (lever), :press (button)" :default nil}
    :reach {:doc "walk until within this many cells of the block (the click reaches 4.5 from the eye)" :default 3}})
 

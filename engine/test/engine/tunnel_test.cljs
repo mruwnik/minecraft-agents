@@ -280,8 +280,7 @@
         (doseq [[spec args reason]
                 [[{:blocks ground} {:target [6 57 0] :max-length 6} :too-far]
                  [{:blocks (merge ground (into {} (for [x (range -12 13) z (range -3 4)] [(str x ",55," z) "air"])))}
-                  {:target [6 57 0]} :cave-below]
-                 [{:blocks ground} {:target [6 57]} :bad-args]]]
+                  {:target [6 57 0]} :cave-below]]]
           (let [{:keys [out p]} (await (tunnel! spec args (fn [_])))]
             (is (= reason (:reason @out)) (str reason))
             (is (= :stopped (:status @out)) (str reason))

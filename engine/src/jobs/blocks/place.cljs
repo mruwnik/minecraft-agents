@@ -39,7 +39,7 @@
   :need with {:fetch {:failed reason ...}}.")
 
 (def args
-  {:pos {:doc "the cell to fill, [x y z] or {:x :y :z}" :default nil}
+  {:pos {:doc "the cell to fill, [x y z] or {:x :y :z}" :type :pos :default nil}
    :item {:doc "the block item to place" :default nil}
    :any-of {:doc "block items, the first carried one is placed (instead of :item)" :default nil}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :default nil}

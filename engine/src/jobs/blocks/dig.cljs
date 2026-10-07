@@ -44,7 +44,7 @@
   remembered for :fail-minutes; meanwhile the check waits :no-tool with {:fetch {:failed reason ...}}.")
 
 (def args
-  {:pos {:doc "the block to dig, [x y z] or {:x :y :z}" :default nil}
+  {:pos {:doc "the block to dig, [x y z] or {:x :y :z}" :type :pos :default nil}
    :collect {:doc "pick up what the dig dropped (needs a free slot)" :default true}
    :need-drop {:doc "wait :no-tool when no carried tool harvests the block; false digs anyway and the drop is lost (clearing)" :default true}
    :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent :falling-block :under-feet)" :default #{}}

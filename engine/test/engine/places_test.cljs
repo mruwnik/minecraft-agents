@@ -208,9 +208,7 @@
         (doseq [[args reason] [[{:pos [1 64 1]} :bad-name]
                                [{:name "Home Base" :pos [1 64 1]} :bad-name]
                                [{:name :hurt :pos [1 64 1]} :reserved-name]
-                               [{:name :home :pos [1 64]} :bad-pos]
                                [{:name :home :pos [1 999 1]} :bad-pos]
-                               [{:name :home :pos "1 64 1"} :bad-pos]
                                [{:name :home :pos [1 64 1] :block 5} :bad-block]
                                [{:name :home :pos [1 64 1] :block ""} :bad-block]]]
           (let [{:keys [eng seen reasons]} (await (try-job identity set-place args))]
@@ -293,7 +291,8 @@
           (is (= true (:ok (submit "set-home" '(jobs.memory.set-place {:name :home :pos [2 64 3]})))))
           (await (run-until-empty eng 8))
           (is (= {:x 2 :y 64 :z 3} (place eng :home)))
-          (is (= true (:ok (submit "set-bad" '(jobs.memory.set-place {:name :home :pos [2 3]})))) "the refusal comes as an event")
+          (is (false? (:ok (submit "set-junk" '(jobs.memory.set-place {:name :home :pos [2 3]})))) "a malformed position is refused at submit")
+          (is (= true (:ok (submit "set-bad" '(jobs.memory.set-place {:name :home :pos [2 999 3]})))) "an impossible one comes as an event")
           (await (run-until-empty eng 8))
           (is (= [:bad-pos] (mapv :reason (events-of seen :place.refused))))
           (is (= {:x 2 :y 64 :z 3} (place eng :home)))

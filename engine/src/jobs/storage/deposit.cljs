@@ -26,7 +26,7 @@
   Stock: a chest whose stock is booked in body memory :fetch/stock gets what was put in added (jobs.lib.fetch).")
 
 (def args
-  {:chest {:doc "chest position [x y z] or {:x :y :z}; the known :chest place when nil" :default nil}
+  {:chest {:doc "chest position [x y z] or {:x :y :z}; the known :chest place when nil" :type :pos :default nil}
    :items {:doc "item names to put away, in this order (the first name with something to spare goes first); everything but tools and armour when nil" :default nil}
    :keep {:doc "{item-name count}: leave at least this many of the name carried" :default {}}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})

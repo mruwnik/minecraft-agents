@@ -59,7 +59,7 @@
     doors are walls.")
 
 (def args
-  {:pos {:doc "target position {:x :y :z}" :default nil}
+  {:pos {:doc "target position [x y z] or {:x :y :z}" :type :pos :default nil}
    :place {:doc "name of a place in body memory (:home, :bed, ...) to walk to instead of :pos" :default nil}
    :range {:doc "how close counts as there, in cells" :default 1}
    :doors {:doc "what to do at shut doors, gates and trapdoors: :shut (open, pass, shut again what the walk opened), :leave-open (open and pass), :never (walls)"

@@ -21,7 +21,7 @@
   body stands.")
 
 (def args
-  {:to {:doc "goal cell [x y z]" :default nil}
+  {:to {:doc "goal cell [x y z] or {:x :y :z}" :type :pos :default nil}
    :range {:doc "planner goal range (0: that cell)" :default 0}
    :timeout-s {:doc "bound of one walk (one plan followed), at most 120" :default 60}
    :weight {:doc "planner heuristic weight (policy: 1.2)" :default walk/default-weight}})
@@ -50,8 +50,8 @@
                     (ctx/emit! c (case kind :plan :walk-plan.plan :replan :walk-plan.replan) :info data))]
     (cond
       (nil? (walk/path-world (:primitives c))) (finish! c {:status :unsupported} t0 0 0)
-      (not= 3 (count to)) (finish! c {:status :bad-args :reason "to must be [x y z]"} t0 0 0)
+      (nil? to) (finish! c {:status :bad-args :reason "to must be [x y z] or {:x :y :z}"} t0 0 0)
       :else
       (let [{:keys [result walked walk-ms]}
-            (await (walk/walk-to! c {:to to :range range :weight weight :timeout-s timeout-s :announce! announce!}))]
+            (await (walk/walk-to! c {:to [(:x to) (:y to) (:z to)] :range range :weight weight :timeout-s timeout-s :announce! announce!}))]
         (finish! c result t0 walked walk-ms)))))

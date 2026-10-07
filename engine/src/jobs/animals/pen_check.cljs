@@ -21,7 +21,7 @@
   - :gates lists every fence gate in or beside those cells with :open?.")
 
 (def args
-  {:at {:doc "feet cell [x y z] of a spot inside the pen (the floor's top, where the animal's feet are)" :default nil}
+  {:at {:doc "feet cell [x y z] or {:x :y :z} of a spot inside the pen (the floor's top, where the animal's feet are)" :type :pos :default nil}
    :box {:doc "the pen: {:min {:x :y :z} :max {:x :y :z}}, inclusive; a step out of it is a leak" :default nil}
    :max-cells {:doc "most cells the fill visits before it gives up with :unbounded" :default pen/default-max-cells}})
 
@@ -38,9 +38,8 @@
 
 (defn ^:async round [c]
   (let [{:keys [at box max-cells]} (:args c)
-        [x y z] at
         result (summary (pen/check {:block-at (apiary/block-at-fn (:primitives c))
-                                    :at (when at {:x x :y y :z z})
+                                    :at at
                                     :box box
                                     :max-cells max-cells}))]
     (ctx/emit! c :pen-check.done :info

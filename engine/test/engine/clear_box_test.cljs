@@ -127,21 +127,11 @@
     {})
   (is (= 400 (count (clear-box/cells {:from {:x 0 :y 0 :z 0} :to {:x 7 :y 4 :z 9}})))))
 
-(deftest clear-box-takes-vector-corners-like-map-corners
-  (is (= (clear-box/cells {:from {:x 0 :y 1 :z 2} :to {:x 1 :y 1 :z 2}})
-         (clear-box/cells {:from [0 1 2] :to [1 1 2]}))))
-
-(deftest clear-box-declines-corners-of-another-shape-and-does-not-move
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (doseq [args [{:from "9 71 9" :to [1 1 1]} {:from [1 2] :to [1 1 1]} {:from [1 "a" 3] :to [1 1 1]}]]
-          (let [{:keys [eng p seen]} (setup {:blocks eight})]
-            (core/submit! eng (list job args) {})
-            (dotimes [_ 4] (await (core/tick! eng)))
-            (is (empty? (.-calls (.-world p))) (pr-str args))
-            (is (= [:bad-args] (map :reason (kinds seen :clear-box.declined))) (pr-str args))
-            (is (re-find #"\[x y z\]" (:text (first (kinds seen :clear-box.declined)))))))))))
+(deftest clear-box-refuses-corners-of-another-shape-at-submit-and-does-not-move
+  (doseq [args [{:from "9 71 9" :to [1 1 1]} {:from [1 2] :to [1 1 1]} {:from [1 "a" 3] :to [1 1 1]}]]
+    (let [{:keys [eng p]} (setup {:blocks eight})]
+      (is (thrown-with-msg? js/Error #"clear-box :from must be \[x y z\]" (core/submit! eng (list job args) {})) (pr-str args))
+      (is (empty? (.-calls (.-world p))) (pr-str args)))))
 
 (deftest clear-box-keeps-its-count-across-a-cut
   (async done
