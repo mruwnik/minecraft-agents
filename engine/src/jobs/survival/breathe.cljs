@@ -5,7 +5,6 @@
             [jobs.lib.blocks :as blocks]
             [jobs.lib.escape :as escape]
             [jobs.lib.ledger :as ledger]
-            [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.result :as result]
             [jobs.lib.util :as u]
@@ -34,7 +33,7 @@
   :no_blocks when only a step cell was left and no pillar block is carried. Stopped
   :no_land_in_range (fields :searched :swum :legs :headings-failed :step, one of :no-wall :no-blocks :refused :failed) when every way is spent or the run has gone
   3 x :swim-range blocks; the searched area (the start and the failed headings) is remembered (:breathe-afloat, 5 min), so a refire there swims no leg the run already did. Stopped
-  :no_air (fields :air-radius, :cap why no cap was dug: :no-cap :not-natural :protected :gravity :dig-failed) or
+  :no_air (fields :air-radius, :cap why no cap was dug: :no-cap :unseen :not-natural :protected :gravity :dig-failed) or
   :no_way_out (with a warn) after three failed tries in the run. It never holds still while afloat.
   Memory: one :breathe entry per run.")
 
@@ -105,20 +104,11 @@
 (defn passable-water-or-air? [name]
   (or (breath/air? name) (= "water" name)))
 
-(defn seen-name
-  "The name of the block at cell as the body last saw it; nil for a cell never seen. A body without a perception
-  reads the cell directly."
-  [p cell]
-  (if (aget p "seenBlockAt")
-    (let [b (look/seen-block p cell)]
-      (when-not (:unknown b) (:name b)))
-    (u/block-name p cell)))
-
 (defn surface-in-column
   "The feet cell in column x z, at or above fy and within reach, whose head
   cell is air and which is reached through water or air only; nil if the
-  column is capped or leaves the loaded world. name-at (default u/block-name) reads the cells."
-  ([p x z fy reach] (surface-in-column p x z fy reach u/block-name))
+  column is capped or leaves the loaded world. name-at (default u/seen-name) reads the cells; a cell never seen ends the column."
+  ([p x z fy reach] (surface-in-column p x z fy reach u/seen-name))
   ([p x z fy reach name-at]
    (loop [k 0]
      (when (<= k reach)
@@ -133,7 +123,7 @@
 
 (defn nearest-air
   "The surface cell of the nearest column within radius that reaches air, not one of failed (a seq of cells); nil if none.
-  The own column is read directly, every other column only through cells the body has seen."
+  Every column is read only through cells the body has seen or feels, never through stone."
   ([p self-pos radius reach] (nearest-air p self-pos radius reach nil))
   ([p self-pos radius reach failed]
    (let [fx (js/Math.floor (:x self-pos))
@@ -141,7 +131,7 @@
          fz (js/Math.floor (:z self-pos))
          skip (set failed)]
      (some (fn [[dx dz]]
-             (let [cell (surface-in-column p (+ fx dx) (+ fz dz) fy reach (if (and (zero? dx) (zero? dz)) u/block-name seen-name))]
+             (let [cell (surface-in-column p (+ fx dx) (+ fz dz) fy reach)]
                (when-not (contains? skip cell) cell)))
            (columns radius)))))
 
@@ -278,18 +268,31 @@
 
 (defn cap-above
   "The own column's cap: {:cells [..]} to dig, or {:why kw} when none may be. The first block within 3 above the head
-  that is neither air nor water is the cap (the only cell read); it must be natural, not protected and not a falling block.
-  What lies over it is learned by digging, a cell a pass."
+  that is neither air nor water is the cap (the only cell read, as seen); it must be natural, not protected and not a
+  falling block; a cell not seen (look first, see look-up!) gives :unseen. What lies over the cap is learned by digging,
+  a cell a pass."
   [p head]
-  (let [cell (fn [k] (update head :y + k))
-        cap-k (first (filter #(let [n (u/block-name p (cell %))] (not (and n (passable-water-or-air? n)))) (range 4)))
-        cap (when cap-k (u/block-name p (cell cap-k)))]
-    (cond
-      (nil? cap) {:why :no-cap}
-      (escape/protected? cap) {:why :protected}
-      (not (escape/natural? cap)) {:why :not-natural}
-      (contains? falling cap) {:why :gravity}
-      :else {:cells [(cell cap-k)]})))
+  (let [cell (fn [k] (update head :y + k))]
+    (loop [k 0]
+      (let [n (when (<= k 3) (u/seen-name p (cell k)))]
+        (cond
+          (> k 3) {:why :no-cap}
+          (nil? n) {:why :unseen}
+          (passable-water-or-air? n) (recur (inc k))
+          (escape/protected? n) {:why :protected}
+          (not (escape/natural? n)) {:why :not-natural}
+          (contains? falling n) {:why :gravity}
+          :else {:cells [(cell k)]})))))
+
+(defn ^:async look-up!
+  "Look at each cell within 3 above head that the body has not seen, so cap-above reads what is there."
+  [c head]
+  (loop [k 0]
+    (when (<= k 3)
+      (let [cell (update head :y + k)]
+        (when (access/unknown? (:primitives c) [(:x cell) (:y cell) (:z cell)])
+          (await (access/look-at! c [(:x cell) (:y cell) (:z cell)])))
+        (recur (inc k))))))
 
 (defn ^:async go-air!
   "Drowning with no air near: a go-to child to the nearest air-reaching surface within :air-radius that did not fail
@@ -311,7 +314,9 @@
   up; else the reason (see cap-above, or :dig-failed, also after :max-cap-digs digs that left the body drowning)."
   [c]
   (let [p (:primitives c)
-        {:keys [cells why]} (cap-above p (breath/eye-cell (.self p)))]
+        head (breath/eye-cell (.self p))
+        _ (await (look-up! c head))
+        {:keys [cells why]} (cap-above p head)]
     (cond
       (not cells) why
       (<= max-cap-digs (:cap-digs (ctx/mem c) 0)) :dig-failed

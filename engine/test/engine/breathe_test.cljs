@@ -881,12 +881,13 @@
 (defn stub-seen!
   "Gives the fake body a perception: seen? (cell vector -> bool) cells read as the world holds them, the rest as never seen."
   [p seen?]
-  (aset p "seenBlockAt"
+  (aset p "sensedAt"
         (fn [a]
-          (let [cell [(.-x a) (.-y a) (.-z a)]]
+          (let [cell [(.-x a) (.-y a) (.-z a)]
+                b (.blockAt p a)]
             (if (seen? cell)
-              #js {:name (.-name (.blockAt p a)) :pos a :age-ms 10}
-              #js {:unknown true :pos a})))))
+              b
+              #js {:unknown true :name (.-name b)})))))
 
 (def pocket-tunnel
   "A stone block with a water tunnel at y 64..65 from x 0 to 9 and a one-cell shaft to air at x 6; the own column has a stone cap at y 66."
@@ -962,3 +963,21 @@
 
 (deftest a-sand-cap-is-never-dug-it-would-fall-into-the-water
   (async done (never-dug! done "sand" :gravity)))
+
+(deftest a-cap-cell-never-seen-is-unseen-not-read
+  (let [p (:p (setup {:self {:inWater true :oxygen 4} :blocks (capped-world "dirt")}))]
+    (stub-seen! p (fn [[_ y]] (< y 68)))
+    (is (= {:why :unseen} (b/cap-above p {:x 0 :y 65 :z 0})))))
+
+(deftest drowning-under-a-cap-looks-up-before-digging-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4} :blocks (capped-world "dirt")})
+              looked (atom false)]
+          (stub-seen! p (fn [[_ y]] (or @looked (< y 68))))
+          (.override (.-world p) "look" (fn [_ _ _] (reset! looked true) #js {:status "ok"}))
+          (await (one-run! eng cap-args))
+          (is @looked)
+          (is (= "air" (.-name (.blockAt p (tu/pos 0 68 0)))) "dug once seen")
+          (is (= [[:completed nil]] (ended seen))))))))
