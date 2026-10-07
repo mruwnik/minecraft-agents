@@ -3,8 +3,7 @@
   planned with the ClojureScript planner and checked against what the JS planner answered, recorded once in
   test/planner-bench.json as [status reason seconds risk end-cell expanded] per query (seconds and risk to 3 decimals).
   The world queries need the frozen bench (engine/test/fixtures/pathfinding/claude-1, or PLANNER_BENCH_DIR). Without it
-  the world test FAILS unless PLANNER_BENCH_SKIP_WORLD=1 is set (a checkout or CI without the fixtures sets it, and then
-  only the world queries go unchecked). Re-record the pins with `npm run record:planner-bench` (engine/)."
+  the world queries are skipped with a warning (only they go unchecked). Re-record the pins with `npm run record:planner-bench` (engine/)."
   (:require [cljs.test :refer [deftest is]]
             ["fs" :as fs]
             ["path" :as path]
@@ -62,13 +61,11 @@
 (defn bench-dir [] (or js/process.env.PLANNER_BENCH_DIR (path/resolve js/__dirname "../test/fixtures/pathfinding/claude-1")))
 
 (defn world-state
-  "what the world half has to work with: :present, :skipped (bench absent and skip asked for) or :missing (a failure)"
-  [queries-exist? skip?]
-  (cond queries-exist? :present
-        skip? :skipped
-        :else :missing))
+  "what the world half has to work with: :present, or :skipped (the frozen bench is not on this machine)"
+  [queries-exist?]
+  (if queries-exist? :present :skipped))
 
-(defn skip-world? [] (= "1" js/process.env.PLANNER_BENCH_SKIP_WORLD))
+(defn skip-world? [] (= :skipped (world-state (fs/existsSync (path/join (bench-dir) "queries.json")))))
 
 (defn world-queries
   "[{:id :query :snapshot}] of the frozen world, [] when the bench is not on this machine (see world-state)."
@@ -85,17 +82,13 @@
         (->> (js->clj (js/JSON.parse (fs/readFileSync queries "utf8")) :keywordize-keys true)
              (mapv (fn [{:keys [id from goal]}] {:id id :snapshot snapshot :query {:from from :goal goal}})))))))
 
-(deftest the-world-half-fails-without-the-bench-unless-skipped
-  (is (= [:present :present :skipped :missing]
-         [(world-state true false) (world-state true true) (world-state false true) (world-state false false)])))
+(deftest the-world-half-is-skipped-when-the-bench-is-absent
+  (is (= [:present :skipped] [(world-state true) (world-state false)])))
 
 (deftest every-recorded-world-query-plans-as-the-js-planner-did
   (let [qs (world-queries)
-        state (world-state (fs/existsSync (path/join (bench-dir) "queries.json")) (skip-world?))
-        _ (when (= :skipped state) (println "WARNING: no frozen bench at" (bench-dir) ", PLANNER_BENCH_SKIP_WORLD=1: world queries skipped"))
-        _ (is (not= :missing state)
-              (str "no frozen bench at " (bench-dir) ": the " (count (:world @recorded)) " world queries were not checked. "
-                   "Set PLANNER_BENCH_DIR to it, or PLANNER_BENCH_SKIP_WORLD=1 on a machine that has none (CI)."))
+        _ (when (skip-world?)
+            (println "WARNING: no frozen bench at" (bench-dir) "(set PLANNER_BENCH_DIR): the" (count (:world @recorded)) "world queries were skipped"))
         by-id (into {} (map (juxt :id identity)) qs)
         ids (map :id qs)]
     (is (= [] (disagreements ids

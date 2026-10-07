@@ -653,7 +653,7 @@ the fastest), `jobs.lib.tools/needs-tool-to-clear?` (what stair, tunnel cleanup 
 `src/engine/path/planner_tuned.cljs` is the only planner (the `Search` fields and its methods by part in `src/engine/path/planner/`): an A* over a snapshot of section state ids (walking, jumps, drops,
 gap jumps, climbing, water, doors), with costs in seconds plus risk. Tests are `test/engine/planner_*_test.cljs`;
 the recorded pins (`planner_{bench,options,goals,courses}_golden.cljs`, `js/path/bench.golden.mjs`) are opt-in: `tools/test-engine --golden` or `npm run test:golden`, run when planner code changes (`tools/test-engine <ns>` of a -golden namespace exits 2: it is not in the :test bundle). `planner_bench_golden.cljs` replays recorded queries against `test/planner-bench.json` (the frozen-world queries need
-`PLANNER_BENCH_DIR`, or `PLANNER_BENCH_SKIP_WORLD=1` where there is no world; after an intended planner change run
+`PLANNER_BENCH_DIR` (skipped with a warning where there is no world); after an intended planner change run
 `npm run record:planner-bench`). Benchmarks are under `bench-lang/` (compile `planner-bench`, `goto-bench`, `search-bench`).
 
 - `jobs.lib.walk` plans and walks one round (`walk-to!`, `follow!`, `walk!`); its pieces: `jobs.lib.walk.plan` (planning), `jobs.lib.walk.search` (budgeted search a round), `jobs.lib.walk.watch` (look-ahead), `jobs.lib.walk.world` (pathWorld and its costs). `engine.path.executor` steers a plan
