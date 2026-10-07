@@ -1,0 +1,20 @@
+;; jobs.movement.path-preview (card ee7d7b5e): a dry run of go-to. Same plot as doors-go-to: a stone wall across it at x 16
+;; with one door in it, the body 6 west, the goal 6 east. The preview plans through the door and opens nothing; with
+;; :doors :never the door is a wall, there is no way round, and it says :found false with a reason. The body never moves.
+{:defaults
+ {:tags [:movement] :time :any
+  :plot {:height 8}
+  :blocks [[:fill [16 0 0] [16 3 31] "stone"] [:fill [0 0 0] [31 3 0] "stone"] [:fill [0 0 31] [31 3 31] "stone"]
+           [:fill [0 0 0] [0 3 31] "stone"] [:fill [31 0 0] [31 3 31] "stone"]
+           [:set [16 0 16] "oak_door[facing=east,half=lower,open=false]"] [:set [16 1 16] "oak_door[facing=east,half=upper,open=false]"]]
+  :body {:at [10.5 0 16.5]}
+  :limit-s 30}
+ :cases
+ [{:name "preview-plans-through-a-door-and-opens-nothing"
+   :act [[:job (jobs.movement.path-preview {:pos #at [22 0 16] :range 1})]]
+   :expect [{:event {:source :job :kind :result :data {:found true}} :within-s 20 :of-job true}]
+   :after [[:block [16 0 16] "oak_door[half=lower,open=false]"] [:body-near [10.5 0 16.5] 1]]}
+  {:name "preview-with-doors-never-finds-no-way-and-says-why"
+   :act [[:job (jobs.movement.path-preview {:pos #at [22 0 16] :range 1 :doors :never})]]
+   :expect [{:event {:source :job :kind :result :data {:found false}} :within-s 20 :of-job true}]
+   :after [[:block [16 0 16] "oak_door[half=lower,open=false]"] [:body-near [10.5 0 16.5] 1]]}]}
