@@ -1,0 +1,44 @@
+;; Cards 3a1a9591, 381267c0: the food reserve (jobs.lib.cost/food-reserve: 3 days of 20 hunger points = 60 points = 20 carrots,
+;; 12 bread) never blocks replanting what a harvest cut, but holds back sowing cells that were already bare and food taken
+;; or put away. Carrots: 3 points each, so 5 carried plus the drops of two cut plants stay under 20.
+;; Should-succeed: both cut cells replanted below the reserve; kit tops the food up to the reserve (12 bread) from a big stack.
+;; Should-fail: already-bare planned cells stay unsown below the reserve; make-room (no chest: it tosses junk) never tosses the reserve food.
+;; Floor y -1 is the ground layer; farmland at y -1 with water beside, crops at y 0.
+{:defaults
+ {:tags [:farm :harvest :food-reserve :jobs]
+  :time :any
+  :body {:at [10.5 0 14.5] :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "harvest-plan-replants-cut-cells-below-reserve"
+   :blocks [[:fill [10 -1 16] [11 -1 16] "farmland[moisture=7]"] [:fill [10 -1 17] [11 -1 17] "water"]
+            [:set [10 0 16] "carrots[age=7]"] [:set [11 0 16] "carrots[age=7]"]]
+   :plans [{:id "field" :metadata {:by "$body"}
+            :parts [{:id "row" :box [#at [10 0 16] #at [11 0 16]] :want {:crop "carrots"}}]}]
+   :body {:inventory [["carrot" 5]]}
+   :act [[:job (jobs.farm.harvest {:plan "field"})]]
+   :expect [{:event {:source :job :kind :harvest.done :data {:cut 2 :replanted 2}} :within-s 70 :of-job true}]
+   :after [[:block [10 0 16] "carrots[age=0]"] [:block [11 0 16] "carrots[age=0]"]]}
+  {:name "harvest-plan-leaves-bare-cells-unsown-below-reserve"
+   :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -1 17] [13 -1 17] "water"]
+            [:set [10 0 16] "carrots[age=7]"] [:set [11 0 16] "carrots[age=7]"]]
+   :plans [{:id "field" :metadata {:by "$body"}
+            :parts [{:id "row" :box [#at [10 0 16] #at [13 0 16]] :want {:crop "carrots"}}]}]
+   :body {:inventory [["carrot" 5]]}
+   :act [[:job (jobs.farm.harvest {:plan "field"})]]
+   :expect [{:event {:source :job :kind :harvest.done :data {:cut 2 :replanted 2}} :within-s 70 :of-job true}]
+   :after [[:block [10 0 16] "carrots[age=0]"] [:block [11 0 16] "carrots[age=0]"]
+           [:block [12 0 16] "air"] [:block [13 0 16] "air"]]}
+  {:name "kit-tops-food-up-to-the-reserve"
+   :blocks [[:set [14 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:bread\",count:40}]}"]]
+   :body {:at [12.5 0 16.5] :inventory [["bread" 5]]}
+   :act [[:job (jobs.storage.kit {:tools [] :chest #xyz [14 0 16]})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
+   :after [[:item "bread" [:>= 12]] [:item "bread" [:<= 14]]]}
+  {:name "make-room-keeps-the-food-reserve"
+   :body {:at [12.5 0 16.5] :inventory [["bread" 20] ["cobblestone" 64] ["dirt" 64] ["gravel" 64]]}
+   :act [[:job (jobs.storage.make-room {:free 34})]]
+   :expect [{:event {:source :job :kind #{:make-room.done :make-room.stopped}} :within-s 70 :of-job true}
+            {:no-event {:source :job :kind :make-room.tossed :data {:item "bread"}} :for-s 70
+             :until {:source :job :kind #{:make-room.done :make-room.stopped}}}]
+   :after [[:item "bread" [:>= 12]]]}]}

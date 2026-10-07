@@ -1,0 +1,24 @@
+;; Card 2f9da188: a felled mangrove tree is replanted with a mangrove_propagule (trees/sapling-of: mangrove's sapling is the propagule,
+;; crimson and warped trees use their fungus), where it was left owed before. The propagule is carried; the grass floor takes it.
+;; Should-succeed: harvest-wood on a mangrove log column replants the propagule. Should-fail: no propagule carried leaves the
+;; replant owed (harvest-wood.replant-owed :no-sapling) and plants nothing.
+{:defaults
+ {:tags [:forestry :harvest-wood :mangrove] :time :day
+  :plot {:height 10 :floor "grass_block"}
+  :blocks [[:fill [16 0 16] [16 3 16] "mangrove_log"]
+           [:fill [14 3 14] [18 4 18] "mangrove_leaves[persistent=true]"]
+           [:set [16 3 16] "mangrove_log"]]
+  :body {:at [10.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :act [[:job (jobs.forestry.harvest-wood {:radius 32})]]
+  :limit-s 120}
+ :cases
+ [{:name "propagule-replanted"
+   :body {:inventory [["iron_axe" 1] ["mangrove_propagule" 1]]}
+   :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :harvest-wood.replant-owed} :for-s 100 :until {:source :job :kind :completed}}]
+   :after [[:block [16 0 16] "mangrove_propagule"] [:not-block [16 1 16] "mangrove_log"]]}
+  {:name "no-propagule-leaves-the-replant-owed"
+   :body {:inventory [["iron_axe" 1]]}
+   :expect [{:event {:source :job :kind :harvest-wood.replant-owed :data {:reason :no-sapling}} :within-s 100 :of-job true}
+            {:event {:source :job :kind :completed} :within-s 100 :of-job true}]
+   :after [[:not-block [16 0 16] "mangrove_propagule"]]}]}

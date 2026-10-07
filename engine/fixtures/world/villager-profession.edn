@@ -1,0 +1,42 @@
+;; Card 4af16cbe: entities() villager rows carry :profession ("farmer", "librarian", "unemployed" for none). Rows are not logged
+;; as such, so this reads them through jobs.village.maintain, which compares each role's :profession with the seen villagers'
+;; and books a role a villager holds as {:skipped :filled}. Two roles, farmer then librarian: the librarian one has no villager
+;; holding it, so the pass runs and ends with maintain.done (the roll child then stops, which only makes the pass incomplete).
+;; NoAI villagers keep the profession they are summoned with (no workstation needed). Should-succeed: a farmer fills :roll-0.
+;; Should-fail: an unemployed villager (no profession) does not fill it, a nitwit neither.
+{:defaults
+ {:tags [:village :sensing :jobs]
+  :plot {:floor "grass_block"}
+  :body {:at [10.5 0 16.5] :yaw 270}
+  :limit-s 120}
+ :cases
+ [{:name "farmer-fills-the-farmer-role"
+   :act [[:summon "villager" [16.5 0 16.5] "{NoAI:1b,VillagerData:{profession:\"minecraft:farmer\",level:1,type:\"minecraft:plains\"}}"]
+         [:wait-s 2]
+         [:job (jobs.village.maintain {:roles [{:profession "farmer"} {:profession "librarian"}]})]]
+   :expect [{:event {:source :job :kind :maintain.done :data {:steps {:roll-0 {:skipped :filled}}}} :within-s 100 :of-job true}]}
+  {:name "librarian-fills-the-librarian-role-not-the-farmer-one"
+   :act [[:summon "villager" [16.5 0 16.5] "{NoAI:1b,VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
+         [:wait-s 2]
+         [:job (jobs.village.maintain {:roles [{:profession "farmer"} {:profession "librarian"}]})]]
+   :expect [{:event {:source :job :kind :maintain.done :data {:steps {:roll-1 {:skipped :filled}}}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :maintain.done :data {:steps {:roll-0 {:skipped :filled}}}} :for-s 100
+             :until {:source :job :kind :maintain.done}}]}
+  {:name "unemployed-villager-fills-no-role"
+   :act [[:summon "villager" [16.5 0 16.5] "{NoAI:1b}"]
+         [:wait-s 2]
+         [:job (jobs.village.maintain {:roles [{:profession "farmer"} {:profession "librarian"}]})]]
+   :expect [{:event {:source :job :kind :maintain.done} :within-s 95 :of-job true}
+            {:no-event {:source :job :kind :maintain.done :data {:steps {:roll-0 {:skipped :filled}}}} :for-s 90
+             :until {:source :job :kind :maintain.done}}
+            {:no-event {:source :job :kind :maintain.done :data {:steps {:roll-1 {:skipped :filled}}}} :for-s 90
+             :until {:source :job :kind :maintain.done}}]
+   :limit-s 100}
+  {:name "nitwit-fills-no-role"
+   :act [[:summon "villager" [16.5 0 16.5] "{NoAI:1b,VillagerData:{profession:\"minecraft:nitwit\",level:1,type:\"minecraft:plains\"}}"]
+         [:wait-s 2]
+         [:job (jobs.village.maintain {:roles [{:profession "farmer"} {:profession "librarian"}]})]]
+   :expect [{:event {:source :job :kind :maintain.done} :within-s 95 :of-job true}
+            {:no-event {:source :job :kind :maintain.done :data {:steps {:roll-0 {:skipped :filled}}}} :for-s 90
+             :until {:source :job :kind :maintain.done}}]
+   :limit-s 100}]}

@@ -1,0 +1,24 @@
+;; Card 41bd78e9: a crafting table behind a stone wall is not known to the body (craft no longer scans for tables through walls):
+;; it does not walk to it or name it, it places its own table when it has logs, and waits for material when it has none.
+;; The walled table is [19 0 16], inside a 3x2x3 stone block; the body stands 2 west of the block's face.
+{:defaults
+ {:tags [:fetch :crafting :sensing]
+  :time :any
+  :plot {:height 12}
+  :blocks [[:fill [18 0 15] [20 1 17] "stone"] [:set [19 0 16] "crafting_table"]]
+  :body {:at [16.5 0 16.5] :yaw 270 :settle-s 3}
+  :act [[:rcon "kill @e[type=item,$BOX]"]]
+  :limit-s 90}
+ :cases
+ [{:name "walled-table-logs-place-own-table"
+   :body {:inventory [["oak_log" 12]]}
+   :act [[:job (jobs.items.get-tool {:kind "pickaxe"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
+   :after [[:item "wooden_pickaxe" 1] [:block [19 0 16] "crafting_table"] [:block [18 0 16] "stone"]]}
+  {:name "walled-table-no-logs-waits-for-material"
+   :body {:inventory [["dirt" 20]]}
+   :act [[:job (jobs.items.get-tool {:kind "pickaxe"})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-source :why [:contains "no seen chest"]}} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-source}}}
+            {:no-event {:source :job :kind :waiting :data {:table [:any]}} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-source}}}]
+   :after [[:item "wooden_pickaxe" 0] [:block [18 0 16] "stone"]]}]}

@@ -1,0 +1,33 @@
+;; Card 19c5ce04 (Access S7, fell tall trees from a pillar): a 12-log trunk (x 16, z 16, the top logs out of ground reach) is felled
+;; from a pillar, the pillar taken back; forest maintain fells it by default and leaves it (forest.left :too-tall) with :pillar? false.
+;; forestry-pillar.edn (cards b72b070d, e87d918f) has the 10-log cases: no blocks waits :need, zone/plan footprint refuses, fetch.
+;; Should-succeed: dirt carried, fell-tree on the 12-log tree; maintain on a forest plan with the tree (default :pillar? true).
+;; Should-fail: maintain :pillar? false leaves the tall tree standing.
+{:defaults
+ {:tags [:forestry :fell-tree :pillar :maintain] :time :any
+  :plot {:height 24 :floor "stone"}
+  :blocks [[:fill [16 0 16] [16 11 16] "oak_log"]
+           [:fill [14 10 14] [18 12 18] "oak_leaves[persistent=true]"]
+           [:fill [16 10 16] [16 11 16] "oak_log"]]
+  :body {:at [16.5 0 22.5] :yaw 180 :settle-s 2 :inventory [["iron_axe" 1] ["dirt" 20]] :effects [["resistance" 600 4]]}
+  :limit-s 200}
+ :cases
+ [{:name "twelve-log-tree-felled-from-a-pillar"
+   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16]})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 180 :of-job true}
+            {:no-event {:source :job :kind #{:tree_blocked :fell-tree.declined}} :for-s 180 :until {:source :job :kind :completed}}]
+   :after [[:not-block [16 11 16] "oak_log"] [:not-block [16 0 16] "oak_log"] [:item "dirt" [:>= 14]]]}
+  {:name "maintain-fells-the-tall-tree-by-default"
+   :plans [{:id "forest" :metadata {:by "$body"}
+            :parts [{:id "t" :cells [#at [16 0 16]] :want {:tree "oak"}}]}]
+   :act [[:job (jobs.forestry.maintain {:plan "forest"})]]
+   :expect [{:event {:source :job :kind :forest.done} :within-s 190 :of-job true}
+            {:no-event {:source :job :kind :forest.left} :for-s 190 :until {:source :job :kind :forest.done}}]
+   :after [[:not-block [16 11 16] "oak_log"] [:not-block [16 5 16] "oak_log"]]}
+  {:name "maintain-without-pillar-leaves-the-tall-tree"
+   :plans [{:id "forest" :metadata {:by "$body"}
+            :parts [{:id "t" :cells [#at [16 0 16]] :want {:tree "oak"}}]}]
+   :act [[:job (jobs.forestry.maintain {:plan "forest" :pillar? false})]]
+   :expect [{:event {:source :job :kind :forest.left :data {:reason :too-tall}} :within-s 90 :of-job true}]
+   :after [[:block [16 11 16] "oak_log"] [:item "dirt" 20]]
+   :limit-s 100}]}

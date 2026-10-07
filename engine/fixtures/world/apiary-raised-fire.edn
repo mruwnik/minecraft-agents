@@ -1,0 +1,30 @@
+;; Card 2f9da188: a raised campfire that is carpeted over no longer blocks apiary harvest (maintain skipped every ripe hive as
+;; :unsafe-fire when any smoking fire was raised; now only an open one, with nothing on it, does). The hive stands over the fire:
+;; campfire [14 0 22] (raised: the floor is y -1), carpet [14 1 22], hive [14 2 22]; the open case has no carpet and the hive at [14 1 22].
+;; Should-succeed: harvest and maintain take the hive over the carpeted raised fire. Should-fail: an open raised fire declines (:open-fire), untouched.
+{:defaults
+ {:tags [:apiary :jobs] :time :day
+  :plot {:height 8}
+  :body {:at [6.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 120}
+ :cases
+ [{:name "harvest-over-a-carpeted-raised-fire"
+   :blocks [[:set [14 0 22] "campfire[lit=true]"] [:set [14 1 22] "white_carpet"] [:set [14 2 22] "beehive[honey_level=5]"]]
+   :body {:inventory [["shears" 1]]}
+   :act [[:job (jobs.apiary.harvest {:radius 20})]]
+   :expect [{:event {:kind :apiary.done :data {:harvested 1 :reason :harvested}} :within-s 100 :of-job true}]
+   :after [[:block [14 2 22] "beehive[honey_level=0]"] [:item "honeycomb" [:>= 3]]]}
+  {:name "maintain-harvests-over-a-carpeted-raised-fire"
+   :blocks [[:set [14 0 22] "campfire[lit=true]"] [:set [14 1 22] "white_carpet"] [:set [14 2 22] "beehive[honey_level=5]"]]
+   :body {:inventory [["shears" 1]]}
+   :act [[:job (jobs.apiary.maintain {:radius 20})]]
+   :expect [{:event {:kind :maintain.done :data {:steps {:harvest {:harvested 1}}}} :within-s 100 :of-job true}
+            {:no-event {:kind :maintain.done :data {:steps {:harvest {:skipped :unsafe-fire}}}} :for-s 100 :until {:kind :maintain.done}}]
+   :after [[:block [14 2 22] "beehive[honey_level=0]"] [:item "honeycomb" [:>= 3]]]}
+  {:name "harvest-over-an-open-raised-fire-declines"
+   :blocks [[:set [14 0 22] "campfire[lit=true]"] [:set [14 1 22] "beehive[honey_level=5]"]]
+   :body {:inventory [["shears" 1]]}
+   :act [[:job (jobs.apiary.harvest {:radius 20})]]
+   :expect [{:event {:kind :apiary.done :data {:reason :open-fire}} :within-s 60 :of-job true}]
+   :after [[:block [14 1 22] "beehive[honey_level=5]"] [:item "honeycomb" 0]]
+   :limit-s 80}]}

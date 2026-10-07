@@ -1,0 +1,23 @@
+;; Card 42ca606f: get-seeds chest way (take! reads the withdraw child) never loops :continue on a child that did not do the job.
+;; A decline needs the withdraw check to fail, which a given :chest never does live (it is the unit-tested a-declined-withdraw-
+;; ends-with-a-reason), so this pins the live chest way around it: a chest with the item is emptied to the goal, a chest without it
+;; ends :short at once with the child's reason and the job does not loop.
+;; The chest is [20 0 16] east of the body; carrot is a material that is taken from a chest only.
+{:defaults
+ {:tags [:gather :get-seeds :jobs]
+  :time :any
+  :plot {:height 8}
+  :body {:at [16.5 0 16.5] :yaw 270 :settle-s 2}
+  :limit-s 60}
+ :cases
+ [{:name "chest-with-carrots-is-withdrawn-to-the-goal"
+   :blocks [[:set [20 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:carrot\",count:12}]}"]]
+   :act [[:job (jobs.gather.get-seeds {:item "carrot" :count 8 :chest #xyz [20 0 16]})]]
+   :expect [{:event {:source :job :kind :get-seeds.done :data {:got 8 :reason :count}} :within-s 45 :of-job true}]
+   :after [[:item "carrot" 8]]}
+  {:name "chest-without-carrots-ends-short-not-looping"
+   :blocks [[:set [20 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:bread\",count:12}]}"]]
+   :act [[:job (jobs.gather.get-seeds {:item "carrot" :count 8 :chest #xyz [20 0 16]})]]
+   :expect [{:event {:source :job :kind :get-seeds.done :data {:got 0 :reason :short}} :within-s 45 :of-job true}
+            {:no-event {:source :job :kind :yielded} :for-s 30 :until {:source :job :kind :get-seeds.done}}]
+   :after [[:item "carrot" 0] [:item "bread" 0]]}]}

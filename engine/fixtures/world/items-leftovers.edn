@@ -1,0 +1,39 @@
+;; Card 0663315e: the items leftovers. bake (wheat chest to bread through the table) and the reasoned endings of enchant and
+;; get-tool: enchant without a table or without lapis gives up with its reason (enchant.gave-up), get-tool with an unknown block
+;; name is refused :bad-args (it was read as a block the hand harvests). The bake "declined child" ending needs a child whose check
+;; fails three rounds and the enchant unknown-status ending a window answer the server never gives: unit tests only.
+;; Should-succeed: bake 9 wheat to 3 bread. Should-fail: bake without a table, enchant with no table, enchant with no lapis, get-tool unknown block.
+{:defaults
+ {:tags [:items :bake :enchant :get-tool :jobs]
+  :time :any
+  :plot {:height 8}
+  :body {:at [16.5 0 16.5] :yaw 270 :settle-s 2}
+  :limit-s 90}
+ :cases
+ [{:name "bake-wheat-to-bread"
+   :blocks [[:set [20 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:wheat\",count:9}]}"] [:set [20 0 18] "crafting_table"]]
+   :act [[:job (jobs.items.bake {:chest #xyz [20 0 16]})]]
+   :expect [{:event {:source :job :kind :bake.done :data {:baked 3}} :within-s 80 :of-job true}]
+   :after [[:item "bread" [:>= 3]]]}
+  {:name "bake-without-a-table-stops-no-table"
+   :blocks [[:set [20 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:wheat\",count:9}]}"]]
+   :act [[:job (jobs.items.bake {:chest #xyz [20 0 16]})]]
+   :expect [{:event {:source :job :kind :bake.no-table :data {:reason "no-table"}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :bake.done} :for-s 20}]
+   :after [[:item "bread" 0] [:item "wheat" 0]]}
+  {:name "enchant-without-a-table-gives-up-no-table"
+   :body {:inventory [["diamond_pickaxe" 1] ["lapis_lazuli" 3]]}
+   :act [[:job (jobs.items.enchant {:item "diamond_pickaxe"})]]
+   :expect [{:event {:source :job :kind :enchant.gave-up :data {:reason "no-table"}} :within-s 40 :of-job true}]
+   :after [[:item "diamond_pickaxe" 1]]}
+  {:name "enchant-without-lapis-gives-up-no-lapis"
+   :blocks [[:set [19 0 16] "enchanting_table"]]
+   :body {:inventory [["diamond_pickaxe" 1]]}
+   :act [[:rcon "xp set $BODY 30 levels"]
+         [:job (jobs.items.enchant {:item "diamond_pickaxe"})]]
+   :expect [{:event {:source :job :kind :enchant.gave-up :data {:reason "no-lapis"}} :within-s 60 :of-job true}]
+   :after [[:item "diamond_pickaxe" 1]]}
+  {:name "get-tool-unknown-block-is-bad-args"
+   :act [[:job (jobs.items.get-tool {:block "not_a_block"})]]
+   :expect [{:event {:source :job :kind :get-tool.declined :data {:reason :bad-args}} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 15}]}]}

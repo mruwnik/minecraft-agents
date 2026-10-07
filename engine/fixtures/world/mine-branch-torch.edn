@@ -1,0 +1,28 @@
+;; Card 152e1d95 (mine branch torches, 6346d75d): a dig of seen ore that takes the body 4+ blocks off the tunnel line hangs a
+;; torch of its own; ore within reach from the line gets none. The ore is seen down a side corridor (stone mass x 2..30, z 8..30,
+;; y 0..6, body in a 1x2 cell at [16 0 16] facing south, tunnel line east along z 16): perception shows a random subset of the
+;; corridor, so the sweep repeats these. Torches are carried (8). Not ported (unit-tested in mine-test): a second branch within
+;; 4 of the first gets none (needs a count of placements), and ore straight above the line booking mine.torch-left-out :no-site
+;; (needs a vertical shaft the body must pillar up).
+;; Should-succeed: ore at the far end of a 12-long corridor (13 off the line) is dug and a torch is placed, none left out.
+;; Should-fail: ore 3 off the line places no torch.
+{:defaults
+ {:tags [:mine :torch :jobs] :time :any
+  :plot {:height 12}
+  :blocks [[:fill [2 0 8] [30 6 30] "stone"] [:fill [16 0 16] [16 1 16] "air"]]
+  :body {:at [16.5 0 16.5] :yaw 0 :inventory [["stone_pickaxe" 1] ["cobblestone" 16] ["torch" 8]] :effects [["resistance" 600 4]]}
+  :limit-s 160}
+ :cases
+ [{:name "ore-far-off-the-line-gets-a-branch-torch"
+   :blocks [[:fill [16 0 17] [16 1 28] "air"] [:set [16 0 29] "iron_ore"]]
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
+   :expect [{:event {:source :job :kind :mine.done :data {:got 1}} :within-s 150 :of-job true}
+            {:event {:source :action :kind :done :data {:name "place" :status "placed"}} :within-s 150}
+            {:no-event {:source :job :kind :mine.torch-left-out} :for-s 150 :until {:source :job :kind :mine.done}}]
+   :after [[:item "raw_iron" 1] [:not-block [16 0 29] "iron_ore"]]}
+  {:name "ore-three-off-the-line-gets-no-torch"
+   :blocks [[:fill [16 0 17] [16 1 19] "air"] [:set [16 0 20] "iron_ore"]]
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
+   :expect [{:event {:source :job :kind :mine.done :data {:got 1}} :within-s 100 :of-job true}
+            {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 100 :until {:source :job :kind :mine.done}}]
+   :after [[:item "raw_iron" 1] [:not-block [16 0 20] "iron_ore"]]}]}

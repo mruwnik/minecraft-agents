@@ -1,0 +1,29 @@
+;; Card 0a74133e: the rail builder's stands follow the ground (build/ground-stands), not the body's feet height. A rail line
+;; up a 1:1 hillside (plan.rail/layout [[2 0 16] [16 0 16] [24 8 16] [38 8 16]], written out below) from a plateau 8 high:
+;; the hill is stone columns x 17..24 (column x rises to y x-17, z 14..18) and a plateau x 25..40 up to y 7.
+;; Should-succeed: the body at the foot builds the whole line, walking the stands on the slope (rail-build.done, no gave-up or declined).
+;; Should-fail: without the redstone torches the line waits for them (rail-build.short), no rail is laid.
+;; Line plan is plan.rail/layout output; items: rail 25, powered_rail 12, redstone_torch 6, fill 47 (cobblestone).
+{:defaults
+ {:tags [:build :rail :jobs] :time :any
+  :plot {:height 14 :length 48 :width 32}
+  :blocks [[:fill [17 -1 14] [17 0 18] "stone"] [:fill [18 -1 14] [18 1 18] "stone"] [:fill [19 -1 14] [19 2 18] "stone"] [:fill [20 -1 14] [20 3 18] "stone"] [:fill [21 -1 14] [21 4 18] "stone"] [:fill [22 -1 14] [22 5 18] "stone"] [:fill [23 -1 14] [23 6 18] "stone"] [:fill [24 -1 14] [24 7 18] "stone"] [:fill [25 -1 14] [40 7 18] "stone"]]
+  :plans [{:id "line" :metadata {:by "$body"} :parts [{:id "bed", :cells [#at [2 -1 16] #at [3 -1 16] #at [4 -1 16] #at [5 -1 16] #at [6 -1 16] #at [7 -1 16] #at [8 -1 16] #at [9 -1 16] #at [10 -1 16] #at [11 -1 16] #at [12 -1 16] #at [13 -1 16] #at [14 -1 16] #at [15 -1 16] #at [16 -1 16] #at [17 0 16] #at [18 1 16] #at [19 2 16] #at [20 3 16] #at [21 4 16] #at [22 5 16] #at [23 6 16] #at [24 7 16] #at [25 7 16] #at [26 7 16] #at [27 7 16] #at [28 7 16] #at [29 7 16] #at [30 7 16] #at [31 7 16] #at [32 7 16] #at [33 7 16] #at [34 7 16] #at [35 7 16] #at [36 7 16] #at [37 7 16] #at [38 7 16] #at [1 -1 16] #at [39 7 16] #at [5 -1 15] #at [16 -1 15] #at [18 1 15] #at [20 3 15] #at [22 5 15] #at [34 7 15]], :want [:any "cobblestone" "dirt" "stone"]} {:id "buffers", :cells [#at [1 0 16] #at [39 8 16]], :want [:any "cobblestone" "dirt" "stone"]} {:id "power", :cells [#at [5 0 15] #at [16 0 15] #at [18 2 15] #at [20 4 15] #at [22 6 15] #at [34 8 15]], :want "redstone_torch"} {:id "rails", :cells [#at [2 0 16] #at [3 0 16] #at [8 0 16] #at [9 0 16] #at [10 0 16] #at [11 0 16] #at [12 0 16] #at [13 0 16] #at [14 0 16] #at [15 0 16] #at [24 8 16] #at [25 8 16] #at [26 8 16] #at [27 8 16] #at [28 8 16] #at [29 8 16] #at [30 8 16] #at [31 8 16] #at [32 8 16] #at [37 8 16] #at [38 8 16]], :want {:block "rail", :shape :east_west}} {:id "rails-ascending_east", :cells [#at [17 1 16] #at [19 3 16] #at [21 5 16] #at [23 7 16]], :want {:block "rail", :shape :ascending_east}} {:id "powered", :cells [#at [4 0 16] #at [5 0 16] #at [6 0 16] #at [7 0 16] #at [33 8 16] #at [34 8 16] #at [35 8 16] #at [36 8 16]], :want {:block "powered_rail", :shape :east_west, :powered true}} {:id "powered-ascending_east", :cells [#at [16 0 16] #at [18 2 16] #at [20 4 16] #at [22 6 16]], :want {:block "powered_rail", :shape :ascending_east, :powered true}} {:id "head", :cells [#at [2 1 16] #at [3 1 16] #at [4 1 16] #at [5 1 16] #at [6 1 16] #at [7 1 16] #at [8 1 16] #at [9 1 16] #at [10 1 16] #at [11 1 16] #at [12 1 16] #at [13 1 16] #at [14 1 16] #at [15 1 16] #at [16 1 16] #at [17 2 16] #at [18 3 16] #at [19 4 16] #at [20 5 16] #at [21 6 16] #at [22 7 16] #at [23 8 16] #at [24 9 16] #at [25 9 16] #at [26 9 16] #at [27 9 16] #at [28 9 16] #at [29 9 16] #at [30 9 16] #at [31 9 16] #at [32 9 16] #at [33 9 16] #at [34 9 16] #at [35 9 16] #at [36 9 16] #at [37 9 16] #at [38 9 16] #at [16 2 16] #at [17 3 16] #at [18 4 16] #at [19 5 16] #at [20 6 16] #at [21 7 16] #at [22 8 16] #at [23 9 16]], :want :clear}]}]
+  :body {:at [3.5 0 18.5] :yaw 270 :effects [["resistance" 600 4]]}
+  :limit-s 420}
+ :cases
+ [{:name "builds-the-line-up-the-hillside"
+   :body {:inventory [["rail" 25] ["powered_rail" 12] ["redstone_torch" 6] ["cobblestone" 70]]}
+   :act [[:job (jobs.build.rail-line {:plan "line"})]]
+   :expect [{:event {:source :job :kind :rail-build.done} :within-s 400 :of-job true}
+            {:no-event {:source :job :kind #{:rail-build.broken :rail-build.declined :build.gave-up}} :for-s 400 :until {:source :job :kind :rail-build.done}}]
+   :after [[:block [10 0 16] "rail[shape=east_west]"] [:block [30 8 16] "rail[shape=east_west]"]
+           [:block [17 1 16] "rail[shape=ascending_east]"] [:block [21 5 16] "rail[shape=ascending_east]"]
+           [:block [22 6 16] "powered_rail[shape=ascending_east]"]]}
+  {:name "no-torches-waits-short"
+   :body {:inventory [["rail" 25] ["powered_rail" 12] ["cobblestone" 70]]}
+   :act [[:job (jobs.build.rail-line {:plan "line"})]]
+   :expect [{:event {:source :job :kind :rail-build.short} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :rail-build.done} :for-s 30 :until {:source :job :kind :rail-build.short}}]
+   :after [[:not-block [10 0 16] "rail"] [:not-block [3 0 16] "rail"]]
+   :limit-s 60}]}
