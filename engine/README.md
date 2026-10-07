@@ -104,12 +104,12 @@ Notes:
 - `health` and `food` are 0..20. `equipment` is `{head, torso, legs, feet, offHand, mainHand}`, each `null` or
   `{name, count, durability?, enchants?: [{name, level}]}`. `inventory` is main and hotbar only: `[{name, count, slot}]`. `effects` are
   `[{name, amplifier, duration}]` with snake_case names. `vehicle` is `{id, uuid, name}` or `null` (`js/vehicle.mjs` repairs
-  mineflayer's stale `bot.vehicle` and moves riders with their mount). `isDay` is `timeOfDay < 12542 || timeOfDay > 23460`.
+  mineflayer's stale `bot.vehicle` and moves riders with their mount). `engine.senses` derives `isDay` (`timeOfDay < 12542 || > 23460`), `raining` (rain level above 0.2) and `thundering` (above 0.9 while raining) from the raw `timeOfDay`, `rainState`, `thunderState`, and flips `weather-changed` from the raw `weather-levels` event.
 - `chunkLoaded` false means the column under the body is not loaded (physics then emits no tick). `settling` is true while
   the body is connected but its senses are not yet trustworthy.
 - Entities: items carry `item {name, count}`; players `username`, `sleeping` (only in sight); mobs `uuid`, `baby`, villagers `profession` (`unemployed` when none), sheep `sheared`; leashed
   mobs `leashed`, `leashedToMe`, `leashHolder`; riders `passengers` and `vehicle`. Creepers carry `creeper: true`. Every
-  hostile carries `visible` (a raycast from the eye to the entity's middle; glass, fences, gates, iron bars, water, fire and the like do not block, an
+  hostile carries `visible` (`engine.senses` over the raw world: a raycast from the eye to the entity's middle; glass, fences, gates, iron bars, water, fire and the like do not block, an
   unloaded cell never blocks). Raw entity lists go through `js/live-entities.mjs` (drops bare, never-spawned entities, picked-up drops and mobs that died).
 - Blocks carry `age` for crops (wheat/carrots/potatoes ripe at 7, beetroots 3, sweet berries from 2) and, with
   `properties`, every block state (integers as numbers, booleans and enum names as they are).
@@ -141,7 +141,7 @@ Statuses below are the common ones; `reason` and extra fields are in `js/primiti
 | `furnace` | `{pos, op: read/load/take, input?, fuel?, output?}` | `ok`, `missing`, `unreachable`, `cannot`, `no-item`, `busy`, `rejected`, `full`; never waits for cooking |
 | `enchant` | `{pos, op: offers/enchant, item, choice?, levelCost?}` | `ok`, `enchanted`, `cannot`, `no-item`, `no-lapis`, `no-levels`, `full`, `failed` |
 | `chat` | `{message, to?}` validated by `engine.chat/validate` | `sent`, `gone`, `cannot` (`bad-name`, `empty`, `command`, `too-long`), `blocked` (rate), `failed` |
-| `eat` | `{item?}` | `ate`, `no-food`, `full` |
+| `eat` | `{item}` | `ate`, `no-food`, `full` |
 | `attack` | `{id}` (one swing) | `hit`, `killed`, `gone`, `out-of-reach` |
 | `interact` | `{id, item?}` use item on entity | `used`, `no-effect`, `gone`, `out-of-reach`, `no-item`, `full`, `cannot`, `failed` |
 | `trade` | `{villager uuid, op: offers/buy, offer?, times?}` | `ok`, `bought`, `gone`, `out-of-reach`, `no-item`, `full`, `cannot`, `failed`; `bought` ends `stopped: window-closed` if the window closed mid-run |
