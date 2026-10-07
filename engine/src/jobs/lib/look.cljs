@@ -179,3 +179,15 @@
                    unseen
                    (let [packed (.lightAt ^js raw x y z)]
                      (if (or (pos? (bit-and packed 15)) (>= (- (bit-shift-right packed 4) subtract) dark-light)) 0 1)))))}))))
+
+(def toss-reach 10)
+
+(defn drops
+  "Item entities of name within radius as [{:id :pos :count}], nearest first; only those within toss-reach of near
+  (a position) when given."
+  ([p name radius] (drops p name radius nil))
+  ([p name radius near]
+   (->> (seen-items p {:radius radius :max 32})
+        (filter #(= name (some-> (.-item %) .-name)))
+        (mapv (fn [e] {:id (.-id e) :pos (u/pos-of (.-pos e)) :count (or (some-> (.-item e) .-count) 1)}))
+        (filterv #(or (nil? near) (u/within? near (:pos %) toss-reach))))))

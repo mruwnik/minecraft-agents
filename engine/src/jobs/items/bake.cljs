@@ -4,7 +4,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.look :as look]
             [jobs.lib.blocks :as b]
-            [jobs.storage.deposit :as deposit]))
+            [jobs.lib.storage :as storage]))
 
 (def doc
   "Turn the store chest's wheat into bread. Walks to the chest, finds a crafting table within :table-radius of it,
@@ -31,13 +31,13 @@
 (defn check
   "A chest is known."
   [c]
-  (or (boolean (deposit/chest-of (ctx/view c) (:args c)))
+  (or (boolean (storage/chest-of (ctx/view c) (:args c)))
       (ctx/wait c {:reason :no-chest})))
 
 (defn carried
   "How many of name the inventory holds over all stacks."
   [p name]
-  (deposit/carried (u/inventory p) name))
+  (storage/carried (u/inventory p) name))
 
 (defn counts
   "The :baked and :deposited counts so far. Baked is derived from the bread:
@@ -218,7 +218,7 @@
   drawn back to the chest between the table and the bread. :again, :continue (a child waits) or :done."
   [c]
   (let [p (:primitives c)
-        chest (deposit/chest-of (ctx/view c) (:args c))
+        chest (storage/chest-of (ctx/view c) (:args c))
         _ (when-not (contains? (ctx/mem c) :bread0)
             (ctx/update-mem! c assoc :bread0 (carried p "bread")))
         bread (carried p "bread")

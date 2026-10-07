@@ -6,7 +6,7 @@
             [jobs.combat.attack :as attack]
             [jobs.debug.notify :as notify]
             [jobs.farm.compost :as compost]
-            [jobs.items.give :as give]
+            [jobs.lib.look :as look]
             [jobs.lib.combat :as combat]
             [jobs.storage.make-room :as make-room]))
 
@@ -21,7 +21,7 @@
 (deftest items-behind-a-wall-are-not-counted
   (let [p (world (item 1 "bone_meal" behind) (item 2 "bone_meal" open))]
     (is (= [2] (mapv :id (make-room/ground-items {:primitives p} 20))))
-    (is (= [2] (mapv :id (give/drops p "bone_meal" 20))))
+    (is (= [2] (mapv :id (look/drops p "bone_meal" 20))))
     (is (nil? (compost/meal-near {:primitives (world (item 1 "bone_meal" behind))} {:x 5 :y 64 :z 1})))))
 
 (defn stub

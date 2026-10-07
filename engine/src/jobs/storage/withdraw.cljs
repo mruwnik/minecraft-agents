@@ -5,7 +5,8 @@
             [jobs.lib.fetch :as fetch]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
-            [jobs.storage.deposit :as deposit]))
+            [jobs.storage.deposit :as deposit]
+            [jobs.lib.storage :as storage]))
 
 (def doc
   "Walk to the chest (one go-to) and take items out, every name in one call, until at least the wanted count of
@@ -32,14 +33,14 @@
   carried over all stacks, for the names with n above 0."
   [inventory items]
   (->> items
-       (map (fn [[name target]] [name (- target (deposit/carried inventory name))]))
+       (map (fn [[name target]] [name (- target (storage/carried inventory name))]))
        (filter (fn [[_ n]] (pos? n)))
        vec))
 
 (defn check-run
   "A chest is known; else waits with reason :no-chest."
   [c]
-  (or (boolean (deposit/chest-of (ctx/view c) (:args c)))
+  (or (boolean (storage/chest-of (ctx/view c) (:args c)))
       (ctx/wait c {:reason :no-chest})))
 
 (defn stop!
@@ -94,7 +95,7 @@
                                            (stop! c (.-status r) short)
                                            (give-up! c (.-status r) short))
               (or (zero? (.-moved r))
-                  (<= (deposit/carried (u/inventory (:primitives c)) name) (deposit/carried before name)))
+                  (<= (storage/carried (u/inventory (:primitives c)) name) (storage/carried before name)))
               (give-up! c "nothing-moved" short)
               :else (do (fetch/note-moved! c chest name (- (.-moved r)))
                         (u/progress! c)
@@ -105,7 +106,7 @@
   holds none of what is short, or it stopped. The shortfall is read at the start of the step."
   [c]
   (let [{:keys [items]} (:args c)
-        chest (deposit/chest-of (ctx/view c) (:args c))
+        chest (storage/chest-of (ctx/view c) (:args c))
         short (shortfall (u/inventory (:primitives c)) items)]
     (cond
       (empty? short) (do (ctx/result! c {:gave-up false :short {}}) :done)

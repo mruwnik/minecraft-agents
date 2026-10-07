@@ -6,7 +6,7 @@
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
             [jobs.lib.look :as look]
-            [jobs.storage.deposit :as deposit]
+            [jobs.lib.storage :as storage]
             [jobs.lib.world :as known]))
 
 (def doc
@@ -82,7 +82,7 @@
 (defn carried
   "Total of the item carried over all stacks."
   [c]
-  (deposit/carried (u/inventory (:primitives c)) (:item (:args c))))
+  (storage/carried (u/inventory (:primitives c)) (:item (:args c))))
 
 (defn chest-want? [want]
   (or (= "chest" want) (and (map? want) (= "chest" (:block want)))))
@@ -104,7 +104,7 @@
   (let [{:keys [plan chest] :as a} (:args c)]
     (cond
       plan (plan-chest c plan)
-      (deposit/chest-of (ctx/view c) a) {:chest chest}
+      (storage/chest-of (ctx/view c) a) {:chest chest}
       :else {:trouble :no-chest})))
 
 (defn cut-cell?

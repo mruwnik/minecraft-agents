@@ -9,7 +9,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.items.craft]
-            [jobs.storage.deposit :as deposit]
+            [jobs.lib.storage :as storage]
             [jobs.storage.withdraw]
             [jobs.lib.foods :as foods]))
 
@@ -118,7 +118,7 @@
                                     (let [k (min left (get held name))]
                                       [(if (pos? k) (assoc taken name k) taken) (- left k)]))
                                   [{} n] names)
-             targets (into {} (map (fn [[name k]] [name (+ k (deposit/carried inventory name))])) taken)]
+             targets (into {} (map (fn [[name k]] [name (+ k (storage/carried inventory name))])) taken)]
          (-> acc
              (update :take merge targets)
              (update :short #(if (pos? left) (assoc % kind left) %)))))
@@ -130,7 +130,7 @@
   admitted to report {:short {}} (a parent reads it), and its first round
   then ends at once without walking or inspecting."
   [c]
-  (or (boolean (deposit/chest-of (ctx/view c) (:args c)))
+  (or (boolean (storage/chest-of (ctx/view c) (:args c)))
       (ctx/wait c {:reason :no-chest})))
 
 (defn give-up!
@@ -180,7 +180,7 @@
 (defn chest-count
   "How many of name the inspected stacks hold."
   [stacks name]
-  (deposit/carried stacks name))
+  (storage/carried stacks name))
 
 (defn rule-out
   "Drop the tool being made for its kind: remember the tier and why."
@@ -200,7 +200,7 @@
   [mem a still stacks inv chest]
   (let [[kind n] (first (remove #(contains? (:missing mem) (mkey (first %))) still))
         wheat-held (chest-count stacks "wheat")
-        wheat-body (deposit/carried inv "wheat")]
+        wheat-body (storage/carried inv "wheat")]
     (cond
       (nil? kind) [mem nil]
       (= :food kind)
@@ -251,7 +251,7 @@
         [name n [how arg]] (first hows)]
     (cond
       none (rule-out mem (second (nth none 2)))
-      (= :get how) (assoc mem :steps (conj steps {:get arg :count (+ n (deposit/carried inv arg))}))
+      (= :get how) (assoc mem :steps (conj steps {:get arg :count (+ n (storage/carried inv arg))}))
       :else (assoc mem :steps (conj steps {:item arg :count n})))))
 
 (defn absorb
@@ -335,7 +335,7 @@
   "One bounded craft-phase round: one child call, then fold its result into memory."
   [c]
   (let [a (:args c)
-        chest (deposit/chest-of (ctx/view c) a)
+        chest (storage/chest-of (ctx/view c) a)
         still (needs (u/inventory (:primitives c)) a)]
     (if (empty? still)
       (finish-craft! c still nil)
@@ -365,7 +365,7 @@
   :again, :continue (a child waits) or :done."
   [c]
   (let [a (:args c)
-        chest (deposit/chest-of (ctx/view c) a)
+        chest (storage/chest-of (ctx/view c) a)
         still (needs (u/inventory (:primitives c)) a)]
     (cond
       (= :craft (:phase (ctx/mem c))) (await (craft-round c))

@@ -1,6 +1,5 @@
 (ns jobs.storage.deposit
   (:require [jobs.lib.args :as jargs]
-            [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.cost :as cost]
@@ -8,7 +7,8 @@
             [jobs.lib.util :as u]
             [engine.memory :as mem]
             [jobs.lib.pace :as pace]
-            [jobs.lib.places :as places]))
+            [jobs.lib.places :as places]
+            [jobs.lib.storage :as storage]))
 
 (def doc
   "Walk to the chest (one go-to) and deposit every stack in one call: the named :items in the order named, or everything but tools
@@ -34,26 +34,6 @@
    :free {:doc "stop once this many inventory slots are free; all of it when nil" :type :int :min 0 :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :type :bool :default false}})
 
-(def gear-suffixes ["_pickaxe" "_axe" "_shovel" "_hoe" "_sword" "_helmet" "_chestplate" "_leggings" "_boots"])
-(def gear-names #{"shears" "bow" "crossbow" "fishing_rod" "flint_and_steel" "shield" "trident"})
-
-(defn tool? [n]
-  (or (contains? gear-names n)
-      (some #(str/ends-with? n %) gear-suffixes)))
-
-(defn chest-of
-  "The chest position: args :chest as {:x :y :z} (read from [x y z] or {:x :y :z}; nil when unreadable), else the
-  known :chest place."
-  [view args]
-  (if (some? (:chest args))
-    (:pos (places/parse-pos (:chest args)))
-    (mem/place view :chest)))
-
-(defn carried
-  "Total carried of name over all stacks."
-  [items name]
-  (transduce (comp (filter #(= name (:name %))) (map :count)) + 0 items))
-
 (defn to-deposit
   "The next carried stack to put away and how many of it: {:stack s :count n}
   or nil. With wanted names, the first carried stack of the first name (in
@@ -63,17 +43,17 @@
   n is the stack count, cut so the keep stays carried."
   ([items wanted] (to-deposit items wanted {}))
   ([items wanted keep]
-   (let [spare (fn [stack] (- (carried items (:name stack)) (get keep (:name stack) 0)))
+   (let [spare (fn [stack] (- (storage/carried items (:name stack)) (get keep (:name stack) 0)))
          pick (fn [stack] (when (pos? (spare stack))
                             {:stack stack :count (min (:count stack) (spare stack))}))]
      (if wanted
        (some (fn [n] (some #(when (= n (:name %)) (pick %)) items)) wanted)
-       (some #(when-not (tool? (:name %)) (pick %)) items)))))
+       (some #(when-not (storage/tool? (:name %)) (pick %)) items)))))
 
 (defn check-run
   "A chest is known; else waits with reason :no-chest."
   [c]
-  (or (boolean (chest-of (ctx/view c) (:args c)))
+  (or (boolean (storage/chest-of (ctx/view c) (:args c)))
       (ctx/wait c {:reason :no-chest})))
 
 (defn stop!
@@ -119,7 +99,7 @@
   "Put the next stack away, walking to the chest first: :again, :continue (go-to waits), or :done."
   [c]
   (let [{:keys [items keep free]} (:args c)
-        chest (chest-of (ctx/view c) (:args c))
+        chest (storage/chest-of (ctx/view c) (:args c))
         inventory (u/inventory (:primitives c))
         pick (when-not (and free (>= (u/free-slots (:primitives c)) free))
                (to-deposit inventory items (if items keep (merge-with max (cost/food-reserve inventory) keep))))]
@@ -142,7 +122,7 @@
                                                          :item (:name (:stack pick)) :count (:count pick)})))]
             (if (= "ok" (.-status r))
               (if (and (pos? (or (.-moved r) 0))
-                       (< (carried (u/inventory (:primitives c)) (:name (:stack pick))) (carried inventory (:name (:stack pick)))))
+                       (< (storage/carried (u/inventory (:primitives c)) (:name (:stack pick))) (storage/carried inventory (:name (:stack pick)))))
                 (do (ctx/update-mem! c #(-> % (update :deposited (fnil inc 0)) (update :moved (fnil + 0) (.-moved r))))
                     (u/progress! c)
                     (fetch/note-moved! c chest (:name (:stack pick)) (.-moved r))

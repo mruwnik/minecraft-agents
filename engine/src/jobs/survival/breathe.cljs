@@ -1,7 +1,6 @@
 (ns jobs.survival.breathe
   (:require [jobs.lib.tidy :as tidy]
             [engine.ctx :as ctx]
-            [jobs.blocks.place :as place]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.escape :as escape]
@@ -413,7 +412,7 @@
          (filter #(and (= "water" (u/block-name p %))
                        (breath/air? (u/block-name p (update % :y inc)))
                        (breath/air? (u/block-name p (update % :y + 2)))
-                       (place/support? p %)))
+                       (blocks/support? p %)))
          first)))
 
 (defn ^:async step!
@@ -424,7 +423,7 @@
         block-at (escape/block-at-of p)
         at [(:x cell) (:y cell) (:z cell)]
         args {:pos at :any-of escape/pillar-items :fetch false}
-        item (place/chosen c escape/pillar-items)
+        item (blocks/chosen c escape/pillar-items)
         refused (= :not-allowed (:reason (blocks/child-wait c :step 'jobs.blocks.place args)))
         l (ledger/reconcile (ledger/open-entries (ctx/view c)) block-at)]
     (if refused

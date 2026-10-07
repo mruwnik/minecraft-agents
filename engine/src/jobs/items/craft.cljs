@@ -6,7 +6,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.lib.look :as look]
-            [jobs.storage.deposit :as deposit]))
+            [jobs.lib.storage :as storage]))
 
 (def doc
   "Craft :count more of :item. 2x2 recipes work anywhere. Bigger ones need a crafting table: :table, else the
@@ -69,7 +69,7 @@
           table-offsets)))
 
 (defn carried-table? [c]
-  (pos? (deposit/carried (u/inventory (:primitives c)) "crafting_table")))
+  (pos? (storage/carried (u/inventory (:primitives c)) "crafting_table")))
 
 (defn table-problem
   "The :need wait for a crafting table while one is wanted and none is carried, else nil."
@@ -135,7 +135,7 @@
   [c]
   (let [have (u/inventory (:primitives c))]
     (some (fn [[name want]]
-            (let [n (deposit/carried have name)]
+            (let [n (storage/carried have name)]
               (when (< n want) {:reason :need :item name :count (- want n)})))
           (:wants (ctx/mem c)))))
 
@@ -166,16 +166,16 @@
   (let [p (:primitives c)
         {:keys [item count]} (:args c)
         _ (when-not (contains? (ctx/mem c) :start)
-            (ctx/update-mem! c assoc :start (deposit/carried (u/inventory p) item)))
+            (ctx/update-mem! c assoc :start (storage/carried (u/inventory p) item)))
         start (:start (ctx/mem c))
         target (+ start count)
-        have (deposit/carried (u/inventory p) item)]
+        have (storage/carried (u/inventory p) item)]
     (if (>= have target)
       (finish! c (- have start) {})
       (let [table (or (:table (ctx/mem c)) (:table (:args c)))
             r (await (ctx/act c :craft (clj->js {:item item :count (- target have) :table table})))
             status (.-status r)
-            made (- (deposit/carried (u/inventory p) item) start)]
+            made (- (storage/carried (u/inventory p) item) start)]
         (when table (ctx/update-mem! c assoc :table table))
         (case status
           "crafted" (finish! c made {})

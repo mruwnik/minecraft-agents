@@ -10,7 +10,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.child :as child]
             [jobs.lib.result :as res]
-            [jobs.storage.deposit :as deposit]
+            [jobs.lib.storage :as storage]
             [jobs.survival.dig-in :as dig-in]
             [jobs.lib.foods :as foods]))
 
@@ -79,7 +79,7 @@
 (defn protected?
   "Never put away, never thrown: tools, weapons, armour, the buckets, torches and golden apples."
   [name]
-  (boolean (or (deposit/tool? name) (tool-like name) (= "torch" name) (contains? foods/precious name))))
+  (boolean (or (storage/tool? name) (tool-like name) (= "torch" name) (contains? foods/precious name))))
 
 (defn totals
   "{name carried} over all stacks."

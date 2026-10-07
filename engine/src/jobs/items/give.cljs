@@ -3,7 +3,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
-            [jobs.storage.deposit :as deposit]))
+            [jobs.lib.storage :as storage]))
 
 (def doc
   "Walk to the player :player, toss them :count of :item (everything carried when nil) and confirm the drop was
@@ -57,18 +57,6 @@
            .-pos
            u/pos-of))
 
-(def toss-reach 10)
-
-(defn drops
-  "Item entities of name within radius as [{:id :pos :count}], nearest first; only those within toss-reach of near
-  (a position) when given."
-  ([p name radius] (drops p name radius nil))
-  ([p name radius near]
-   (->> (look/seen-items p {:radius radius :max 32})
-        (filter #(= name (some-> (.-item %) .-name)))
-        (mapv (fn [e] {:id (.-id e) :pos (u/pos-of (.-pos e)) :count (or (some-> (.-item e) .-count) 1)}))
-        (filterv #(or (nil? near) (u/within? near (:pos %) toss-reach))))))
-
 (defn finish!
   "Hand the parent result and return :done."
   [c result]
@@ -114,7 +102,7 @@
   (let [{:keys [item count radius]} (:args c)
         p (:primitives c)
         n (if count (min count have) have)]
-    (ctx/update-mem! c assoc :before (set (map :id (drops p item radius))) :had have)
+    (ctx/update-mem! c assoc :before (set (map :id (look/drops p item radius))) :had have)
     (await (ctx/act c :look (clj->js {:pos (update pos :y + head-height)})))
     (let [r (await (ctx/act c :toss (clj->js {:item item :count n})))
           status (.-status r)]
@@ -154,8 +142,8 @@
   (let [{:keys [item radius wait-s]} (:args c)
         {:keys [tossed tossed-t toss-at before had collecting seen-drop]} (ctx/mem c)
         p (:primitives c)
-        lying (remove #(contains? before (:id %)) (drops p item radius toss-at))
-        back (max 0 (- (deposit/carried (u/inventory p) item) (- had tossed)))
+        lying (remove #(contains? before (:id %)) (look/drops p item radius toss-at))
+        back (max 0 (- (storage/carried (u/inventory p) item) (- had tossed)))
         given (- tossed back)
         since (- (ctx/now c) tossed-t)]
     (when (seq lying) (ctx/update-mem! c assoc :seen-drop true))
@@ -188,7 +176,7 @@
   [c now]
   (let [{:keys [player item radius reach]} (:args c)
         p (:primitives c)
-        have (deposit/carried (u/inventory p) item)
+        have (storage/carried (u/inventory p) item)
         pos (find-player p player radius)]
     (cond
       (zero? have)

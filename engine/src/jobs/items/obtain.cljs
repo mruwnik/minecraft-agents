@@ -9,7 +9,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.items.craft :as craft]
-            [jobs.storage.deposit :as deposit]
+            [jobs.lib.storage :as storage]
             [engine.game :as game]
             [clojure.string]))
 
@@ -68,7 +68,7 @@
       (not (and (int? (:count a)) (pos? (:count a)))) ":count is a positive whole number")))
 
 (defn carried-of [inv names]
-  (reduce + 0 (map #(deposit/carried inv %) names)))
+  (reduce + 0 (map #(storage/carried inv %) names)))
 
 (defn limits [c]
   (fetch/merge-limits 'jobs.items.obtain nil (fetch/body-limits (ctx/view c)) (:args c)))
@@ -261,7 +261,7 @@
   (let [name (holds items names)
         need (- (:target (:start (ctx/mem c))) have)
         r (await (ctx/call-child c :take 'jobs.storage.withdraw
-                                 {:chest pos :items {name (+ (deposit/carried (u/inventory (:primitives c)) name) need)}}))]
+                                 {:chest pos :items {name (+ (storage/carried (u/inventory (:primitives c)) name) need)}}))]
     (when (#{:done :declined} r)
       (ctx/update-mem! c update :done-chests (fnil conj #{}) (fetch/cell-of pos)))
     (if (= :continue r) :continue :again)))

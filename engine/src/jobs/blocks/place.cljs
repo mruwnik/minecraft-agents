@@ -66,22 +66,6 @@
     (when-not (some carried items)
       (if (= 1 (count items)) {:item (first items)} {:any-of items}))))
 
-(defn chosen
-  "The first of items carried, or nil."
-  [c items]
-  (let [carried (set (map :name (u/inventory (:primitives c))))]
-    (first (filter carried items))))
-
-(def neighbours [[0 -1 0] [1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 1 0]])
-
-(defn support?
-  "Whether a neighbour of pos is a block to place against (not air, a fluid or a plant)."
-  [p {:keys [x y z]}]
-  (boolean (some (fn [[dx dy dz]]
-                   (let [n (u/block-name p {:x (+ x dx) :y (+ y dy) :z (+ z dz)})]
-                     (and n (not (b/air n)) (not (b/fluids n)) (not (b/clearable n)))))
-                 neighbours)))
-
 (defn clear-args
   "The jobs.blocks.dig args for clearing the plant at pos."
   [c pos]
@@ -122,7 +106,7 @@
           (= :not-replaceable (:reason v)) nil
           (not (:ok v)) {:reason (:reason v) :pos pos}
           :else (or (when-let [n (needs c items)] (assoc n :reason :need :pos pos))
-                    (when-not (support? p pos) {:reason :no-support :pos pos})
+                    (when-not (b/support? p pos) {:reason :no-support :pos pos})
                     (b/unreachable-wait c (b/mem-for c pos) pos)
                     (when (b/clearable block) (b/child-wait c :clear 'jobs.blocks.dig (clear-args c pos)))))))))
 
@@ -159,7 +143,7 @@
 (defn ^:async place!
   "Place the chosen item. Resolves to :done (finished) or :unreachable (the primitive says out of reach)."
   [c pos items]
-  (let [item (chosen c items)
+  (let [item (b/chosen c items)
         r (await (tidy/place! c pos item))
         status (.-status r)]
     (case status
@@ -202,7 +186,7 @@
             (= :arrived w) (recur fails (inc steps))
             (>= (inc fails) max-walks) (unreachable! c (:unreachable w))
             :else (recur (inc fails) (inc steps))))
-        (nil? (chosen c items))
+        (nil? (b/chosen c items))
         :declined
         (b/refused-now c (problem c)) :declined
         :else

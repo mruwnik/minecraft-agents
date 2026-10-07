@@ -3,7 +3,7 @@
             [jobs.lib.fetch :as fetch]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
-            [jobs.items.give :as give]))
+            [jobs.lib.look :as look]))
 
 (def doc
   "Toss :count food to the villager with uuid :villager and confirm that villager took it. One call is the whole
@@ -131,7 +131,7 @@
   (keep (fn [d]
           (let [more (- (:count d) (get skip (:id d) 0))]
             (when (pos? more) (assoc d :count more))))
-        (give/drops (:primitives c) item (:radius (:args c)) at)))
+        (look/drops (:primitives c) item (:radius (:args c)) at)))
 
 (defn held
   "How many of item the body carries."
