@@ -849,8 +849,8 @@
     {:list ["A" "B"] :cursor 9} ["A" "B" "X"]
     {:list [] :cursor 0} ["X"]))
 
-(deftest insert-front-puts-the-job-directly-after-the-current-one
-  (are [state expected] (= expected (:list (core/insert-front (merge {:list [] :cursor 0} state) "X")))
+(deftest insert-next-puts-the-job-directly-after-the-current-one
+  (are [state expected] (= expected (:list (core/insert-next (merge {:list [] :cursor 0} state) "X")))
     {:list ["A" "B" "C" "D"] :current "C"} ["A" "B" "C" "X" "D"]
     {:list ["A" "B" "C" "D"] :cursor 3} ["A" "B" "C" "X" "D"]
     {:list ["A" "B" "C" "D"] :current "D" :cursor 0} ["A" "B" "C" "D" "X"]
@@ -862,7 +862,7 @@
 
 (deftest two-front-jobs-in-one-round-each-go-directly-after-the-current-one
   (let [s {:list ["A" "B" "C" "D"] :current "C" :cursor 0}]
-    (is (= ["A" "B" "C" "Y" "X" "D"] (:list (core/insert-front (core/insert-front s "X") "Y"))))))
+    (is (= ["A" "B" "C" "Y" "X" "D"] (:list (core/insert-next (core/insert-next s "X") "Y"))))))
 
 (deftest a-front-job-submitted-during-a-round-runs-in-the-very-next-round
   (async done
@@ -873,7 +873,7 @@
                           (.hold (.-world p) "moveTo"))
               walking (core/tick! eng)
               plain (core/submit! eng '(count) {})
-              front (core/submit! eng '(count) {:front? true})]
+              front (core/submit! eng '(count) {:next? true})]
           (is (= ["j1" front plain] (listed eng)) "the front job sits directly after the running one, a plain submit appends")
           (is (= "j1" (:id (core/running eng))) "the running round is not cut")
           (release)
@@ -890,7 +890,7 @@
           (dotimes [_ 3] (core/submit! eng '(count) {}))
           (await (core/tick! eng))
           (await (core/tick! eng))
-          (let [front (core/submit! eng '(count) {:front? true})]
+          (let [front (core/submit! eng '(count) {:next? true})]
             (is (= ["j1" "j2" front "j3"] (listed eng)))
             (dotimes [_ 3] (await (core/tick! eng)))
             (is (= ["j1" "j2" front "j3" "j1"] (ran seen)))))))))
@@ -904,8 +904,8 @@
                           (core/submit! eng '(count) {})
                           (.hold (.-world p) "moveTo"))
               walking (core/tick! eng)
-              x (core/submit! eng '(count) {:front? true})
-              y (core/submit! eng '(count) {:front? true})]
+              x (core/submit! eng '(count) {:next? true})
+              y (core/submit! eng '(count) {:next? true})]
           (is (= ["j1" y x "j2"] (listed eng)))
           (release)
           (await walking)
@@ -919,7 +919,7 @@
         (let [{:keys [eng seen]} (setup)]
           (core/submit! eng '(count) {:hold? true})
           (await (core/tick! eng))
-          (let [front (core/submit! eng '(count) {:front? true})]
+          (let [front (core/submit! eng '(count) {:next? true})]
             (is (= ["j1" front] (listed eng)))
             (dotimes [_ 3] (await (core/tick! eng)))
             (is (= ["j1" "j1" "j1" "j1"] (ran seen)) "the held job keeps the body")))))))
@@ -933,7 +933,7 @@
           (core/submit! eng '(count) {})
           (core/submit! eng '(count) {})
           (await (core/tick! eng))
-          (let [gated (core/submit! eng '(gated) {:front? true})]
+          (let [gated (core/submit! eng '(gated) {:next? true})]
             (is (= ["j1" gated "j2"] (listed eng)))
             (await (core/tick! eng))
             (is (= ["j1" "j2"] (ran seen)) "the round goes to the job after the gated one")))))))
@@ -948,7 +948,7 @@
                           (core/submit! eng '(count) {})
                           (.hold (.-world p) "moveTo"))]
           (core/tick! eng)
-          (let [front (core/submit! eng '(count) {:front? true})
+          (let [front (core/submit! eng '(count) {:next? true})
                 {again :eng seen :seen} (setup {} dir)]
             (is (= ["j1" front "j2"] (listed again)))
             (is (= "j1" (:resume (core/state again))) "the in-flight job resumes first, then the front job")
@@ -966,7 +966,7 @@
           (dotimes [_ 3] (core/submit! eng '(count) {}))
           (await (core/tick! eng))
           (await (core/tick! eng))
-          (let [front (core/submit! eng '(count) {:front? true})
+          (let [front (core/submit! eng '(count) {:next? true})
                 {again :eng seen :seen} (setup {} dir)]
             (is (= ["j1" "j2" front "j3"] (listed again)))
             (await (core/tick! again))

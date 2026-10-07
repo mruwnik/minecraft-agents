@@ -390,7 +390,7 @@
                   one (await (http-request socket-path "GET" "/triggers?id=bread-low" nil))
                   job (await (http-request socket-path "POST" "/jobs"
                                            (pr-str {:op :submit :request-id "r1" :generation-id gen
-                                                    :spec '(quick) :front? true :by "steward"})))]
+                                                    :spec '(quick) :next? true :by "steward"})))]
               (is (= [200 true true] [(:status put) (get-in put [:value :ok]) (get-in put [:value :created?])]))
               (is (= [409 :bad-condition [:when]] [(:status bad) (get-in bad [:value :reason]) (get-in bad [:value :at])]))
               (is (= 400 (:status unreadable)))

@@ -51,7 +51,7 @@
       (walk spec 0))))
 (defn fingerprint [request]
   (let [canonical (walk/postwalk #(if (map? %) (into (sorted-map-by (fn [a b] (compare (pr-str a) (pr-str b)))) %) %)
-                                (select-keys request [:op :id :spec :generation-id :front? :hold? :by]))]
+                                (select-keys request [:op :id :spec :generation-id :next? :hold? :by]))]
     (.digest (.update (.createHash crypto "sha256") (pr-str canonical)) "hex")))
 (defn remember! [eng id record]
   (swap! (:state eng)
@@ -61,9 +61,9 @@
                  order (vec (take-last max-requests order))]
              (assoc s :job-requests {:order order :records (select-keys (assoc (:records ledger) id record) order)})))))
 (defn submit-opts
-  "core/submit! opts from a request's :front? :hold? :by."
+  "core/submit! opts from a request's :next? :hold? :by."
   [request by]
-  (merge {:by by} (select-keys request [:front? :hold?])))
+  (merge {:by by} (select-keys request [:next? :hold?])))
 (defn mutate! [eng {:keys [op id spec request-id generation-id by] :or {by :agent} :as request}]
   (let [prior (get-in (core/state eng) [:job-requests :records request-id])
         signature (fingerprint request)
@@ -72,7 +72,7 @@
     (cond
       (not (map? request)) (fail :bad-request)
       (not (contains? #{:submit :interrupt :cancel :cancel-all :retry} op)) (fail :bad-op)
-      (seq (remove #{:op :id :spec :request-id :generation-id :front? :hold? :by} (keys request))) (fail :unknown-field)
+      (seq (remove #{:op :id :spec :request-id :generation-id :next? :hold? :by} (keys request))) (fail :unknown-field)
       (not (valid-request-id? request-id)) (fail :bad-request-id)
       (not= generation-id (:generation-id (core/state eng))) (fail :generation-mismatch)
       prior (if (= signature (:signature prior))
@@ -84,13 +84,13 @@
                   (fail :request-uncertain "A previous attempt was interrupted; it will not be executed again."))
               (fail :request-id-conflict))
       spec-error (fail :bad-spec spec-error)
-      (some #(and (contains? request %) (not (boolean? (get request %)))) [:front? :hold?]) (fail :bad-field ":front? and :hold? are true or false")
+      (some #(and (contains? request %) (not (boolean? (get request %)))) [:next? :hold?]) (fail :bad-field ":next? and :hold? are true or false")
       (not (valid-by? by)) (fail :bad-by ":by is a short string or keyword naming who asks")
       (and (#{:cancel :retry} op) (not (valid-job-id? id))) (fail :bad-job-id)
       (and (#{:cancel :retry} op) (nil? (get-in (core/state eng) [:instances id]))) (fail :job-not-found)
       (and (= op :cancel-all) (contains? request :id)) (fail :bad-field ":cancel-all takes no :id; it clears the whole list")
-      (and (= op :submit) (:front? request) (core/manual? eng) (not (core/driver? eng by)))
-      (fail :manual-control "Manual control is held: only its holder may submit :front?; a plain submit queues and waits.")
+      (and (= op :submit) (:next? request) (core/manual? eng) (not (core/driver? eng by)))
+      (fail :manual-control "Manual control is held: only its holder may submit :next?; a plain submit queues and waits.")
       (and (= op :interrupt) (core/manual? eng)) (fail :manual-control "Release the exclusive body lease before interrupting; submit can still queue work.")
       :else
       (do

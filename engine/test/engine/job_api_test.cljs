@@ -92,7 +92,7 @@
 (deftest submit-takes-front-hold-and-who-added-it
   (let [{:keys [eng]} (setup)]
     (command eng "first" :submit {:spec '(wait)})
-    (let [r (command eng "second" :submit {:spec '(done) :front? true :hold? true :by "steward"})
+    (let [r (command eng "second" :submit {:spec '(done) :next? true :hold? true :by "steward"})
           id (get-in r [:job :id])]
       (is (true? (:ok r)))
       (is (true? (get-in r [:job :hold?])) "held submissions echo their effective hold state")
@@ -100,19 +100,19 @@
       (is (= {:hold? true :by "steward"}
              (select-keys (get-in (core/state eng) [:instances id]) [:hold? :backoff :by])))
     (is (= :agent (get-in (core/state eng) [:instances "j1" :by])) "who defaults to :agent")
-    (let [duplicate (command eng "second" :submit {:spec '(done) :front? true :hold? true :by "steward"})]
+    (let [duplicate (command eng "second" :submit {:spec '(done) :next? true :hold? true :by "steward"})]
       (is (true? (:duplicate duplicate)))
       (is (true? (get-in duplicate [:job :hold?])) "idempotent replay re-reads effective hold state from the created instance"))
     (is (= :request-id-conflict (:reason (command eng "second" :submit {:spec '(done)}))) "the options are part of the request")
     (command eng "cancel-second" :cancel {:id id})
-    (let [replay (command eng "second" :submit {:spec '(done) :front? true :hold? true :by "steward"})]
+    (let [replay (command eng "second" :submit {:spec '(done) :next? true :hold? true :by "steward"})]
       (is (= :absent (get-in replay [:job :status])))
       (is (true? (get-in replay [:job :hold?])) "replay keeps the created job's hold value after it leaves the active instance map")))
     (core/shutdown! eng)))
 (deftest bad-submit-options-are-refused-before-anything-changes
   (let [{:keys [eng]} (setup)]
     (are [extra reason] (= reason (:reason (command eng (str (random-uuid)) :submit (merge {:spec '(done)} extra))))
-      {:front? "yes"} :bad-field
+      {:next? "yes"} :bad-field
       {:hold? 1} :bad-field
       {:backoff {:after 2}} :unknown-field
       {:by 7} :bad-by)

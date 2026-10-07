@@ -592,7 +592,7 @@
   (let [{:keys [eng p seen]} (setup {})
         a (core/submit! eng job {})
         b (core/submit! eng job {:hold? true})
-        c (core/submit! eng job {:front? true})]
+        c (core/submit! eng job {:next? true})]
     (die-event p)
     (is (= [] (:list (core/state eng))))
     (is (= {} (:instances (core/state eng))))

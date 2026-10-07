@@ -1,11 +1,11 @@
 (ns engine.core.list-edits
-  "Edits of the job list: submit! (at the end, front or now), cancel! and retry!."
+  "Edits of the job list: submit! (at the end, next or now), cancel! and retry!."
   (:require [engine.core.base :refer [add-instance driver? drop-reflex-job! emit! free-owner! job-of manual-job new-id! remove-listed running save-memory! state]]
             [engine.core.attention :refer [resolve-job-attention!]]
             [engine.expr :as expr]
             [engine.memory :as mem]))
 
-(defn front-position
+(defn next-position
   "Index in the list right after the current job: the one running (or cut and
   waiting to resume), else where the next scan starts, which is just after the
   job that ran last."
@@ -15,10 +15,10 @@
       (min cursor (count list))
       (inc idx))))
 
-(defn insert-front
+(defn insert-next
   "State with id listed directly after the current job, so it gets the next round."
   [state id]
-  (let [pos (front-position state)]
+  (let [pos (next-position state)]
     (update state :list #(into (conj (subvec % 0 pos) id) (subvec % pos)))))
 
 (defn insert-now
@@ -52,17 +52,17 @@
   "Put a job spec (an expression, see engine.expr) on the list. Returns the instance id; throws on a bad spec.
   opts:
     :hold?     hold the body (same as wrapping the spec in (hold e))
-    :front?    list it directly after the current job, so it gets the next round
+    :next?    list it directly after the current job, so it gets the next round
     :now?      list it directly before the current job (do-now!)
     :by        who asked, for the event
-  While someone holds the manual lease, a job submitted by them is the slot job: it is listed at the end (:front? and
+  While someone holds the manual lease, a job submitted by them is the slot job: it is listed at the end (:next? and
   :now? ignored) and replaces (cancels) the previous slot job. Jobs from others are listed as usual and wait."
-  [eng spec {:keys [front? now? by] :as opts}]
+  [eng spec {:keys [next? now? by] :as opts}]
   (let [{:keys [node hold?]} (expr/parse-spec (:jobs eng) spec)
         hold? (boolean (or hold? (:hold? opts)))
         args (second (job-of eng {:spec node}))
         slot? (driver? eng by)
-        front? (and front? (not slot?))
+        next? (and next? (not slot?))
         now? (and now? (not slot?))
         _ (when-let [old (and slot? (manual-job eng))] (cancel! eng old by))
         id (new-id! eng)]
@@ -70,7 +70,7 @@
     (swap! (:state eng) #(let [s (add-instance % id node (cond-> {:hold? hold?} slot? (assoc :slot? true)))]
                            (cond
                              now? (insert-now s id)
-                             front? (insert-front s id)
+                             next? (insert-next s id)
                              :else (update s :list conj id))))
     (mem/create-job! (:store eng) id args)
     (save-memory! eng)

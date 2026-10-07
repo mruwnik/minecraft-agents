@@ -206,7 +206,7 @@
 (deftest front-and-interrupt-from-a-non-driver-are-refused-while-manual
   (let [{:keys [eng]} (setup)]
     (takeover/take! eng me)
-    (is (= :manual-control (:reason (submit-as eng "other" '(nop) {:front? true}))))
+    (is (= :manual-control (:reason (submit-as eng "other" '(nop) {:next? true}))))
     (is (= :manual-control (:reason (api/mutate! eng {:op :interrupt :spec '(nop) :by "other" :request-id "i1"
                                                       :generation-id (:generation-id (core/state eng))}))))
     (is (empty? (:list (core/state eng))) "nothing was listed")

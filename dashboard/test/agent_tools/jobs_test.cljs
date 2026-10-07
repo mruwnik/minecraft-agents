@@ -20,11 +20,11 @@
   (let [plain (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-day)")
         now (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-day)" "--now")]
     (is (= :submit (get-in plain [:request :op])))
-    (is (= {:op :submit} (select-keys (:request plain) [:op :front? :hold?])) "a plain submit appends")
+    (is (= {:op :submit} (select-keys (:request plain) [:op :next? :hold?])) "a plain submit appends")
     (is (= :interrupt (get-in now [:request :op])))
     (is (= '(jobs.time.wait-for-day) (get-in now [:request :spec]))))
   (doseq [[pattern args] [[#"unknown operation" ["interrupt" "(jobs.time.wait-for-day)"]]
-                          [#"--now and --front" ["submit" "(jobs.time.wait-for-day)" "--now" "--front"]]
+                          [#"--now and --next" ["submit" "(jobs.time.wait-for-day)" "--now" "--next"]]
                           [#"--now requires submit" ["list" "--now"]]
                           [#"--now requires submit" ["cancel" "j1" "--now"]]]]
     (is (re-find pattern (str (:error (apply request "Bob" "--world" "w" args)))) (pr-str args))))
@@ -83,7 +83,7 @@
 (deftest cancel-all-has-no-job-argument-and-hold-and-front-are-submission-options
   (let [cancel (request "Bob" "--world" "w" "cancel-all" "--request-id" "all")
         held (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-day)" "--hold")
-        front (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-day)" "--front")
+        front (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-day)" "--next")
         plain (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-day)")]
     (is (= :cancel-all (get-in cancel [:request :op])))
     (is (= "all" (get-in cancel [:request :request-id])))
@@ -92,15 +92,15 @@
     (is (true? (:mutating cancel)))
     (is (true? (get-in held [:request :hold?])))
     (is (re-find #":hold\? true" (data/write-edn (:request held))))
-    (is (true? (get-in front [:request :front?])))
-    (is (re-find #":front\? true" (data/write-edn (:request front))))
+    (is (true? (get-in front [:request :next?])))
+    (is (re-find #":next\? true" (data/write-edn (:request front))))
     (is (not (contains? (:request plain) :hold?)))
-    (is (not (contains? (:request plain) :front?))))
+    (is (not (contains? (:request plain) :next?))))
   (doseq [args [["cancel-all" "j1"] ["cancel-all" "--hold"] ["list" "--hold"] ["show" "j1" "--hold"] ["retry" "j1" "--hold"]]]
     (is (string? (:error (apply request "Bob" "--world" "w" args))) (pr-str args)))
-  (doseq [args [["list" "--front"] ["show" "j1" "--front"]
-                ["cancel-all" "--front"] ["cancel" "j1" "--front"] ["retry" "j1" "--front"]]]
-    (is (re-find #"--front requires submit" (:error (apply request "Bob" "--world" "w" args))) (pr-str args))))
+  (doseq [args [["list" "--next"] ["show" "j1" "--next"]
+                ["cancel-all" "--next"] ["cancel" "j1" "--next"] ["retry" "j1" "--next"]]]
+    (is (re-find #"--next requires submit" (:error (apply request "Bob" "--world" "w" args))) (pr-str args))))
 
 (defn state-dir [] (.mkdtempSync fs (.join path (.tmpdir os) "jobs-cli-")))
 
@@ -120,7 +120,7 @@
   (let [state (state-dir)]
     (async done
       (-> (run-main! state ["submit" "(seq (jobs.time.wait-for-day) (jobs.movement.go-to {:pos {:x -1 :y 64 :z 2}}))"
-                            "--hold" "--front" "--request-id" "held"] engine)
+                            "--hold" "--next" "--request-id" "held"] engine)
           (.then (fn [first-run]
                    (is (= 0 (:code first-run)))
                    (is (= {:ok true} (data/read-edn (:out first-run))))
@@ -129,7 +129,7 @@
                      (is (= 1 (count posts)))
                      (is (= "/jobs" (:path (first posts))))
                      (is (true? (:hold? sent)))
-                     (is (true? (:front? sent)))
+                     (is (true? (:next? sent)))
                      (is (= "generation" (:generation-id sent)))
                      (is (= 'seq (first (:spec sent))))
                      (is (= {:pos {:x -1 :y 64 :z 2}} (second (nth (:spec sent) 2)))))

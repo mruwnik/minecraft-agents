@@ -16,7 +16,7 @@
   :no-such-block, :ambiguous (two such blocks lie within 1 and neither at the position: give the exact one),
   :not-loaded.
   Success: info place.set and result {:ok true :name :pos}.
-  To run it on a body that is running: {:op :submit :front? true :spec (jobs.memory.set-place {...})}. The
+  To run it on a body that is running: {:op :submit :next? true :spec (jobs.memory.set-place {...})}. The
   outcome is in the event stream.")
 
 (def args

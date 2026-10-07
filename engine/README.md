@@ -398,9 +398,9 @@ scheduler emits one `job.waiting` when a check first declines and again only whe
 `:waiting` in `jobs show`/`list` and `observe`. A parent whose round returns a child's `:declined` keeps the child's reason;
 `jobs.lib.declined` parks such a parent until the child's check passes.
 
-**List edits** (agent): `submit!` (appends; opts `:hold?`, `:front?`, `:now?`, `:by`), `cancel!`, `retry!`
+**List edits** (agent): `submit!` (appends; opts `:hold?`, `:next?`, `:now?`, `:by`), `cancel!`, `retry!`
 (clears a failed mark), `do-now!` (cuts the running listed job, never a reflex, lists the new job directly before it as a
-holder; the cut job continues afterwards with its memory). `:front?` lists the job directly after the current one so it gets
+holder; the cut job continues afterwards with its memory). `:next?` lists the job directly after the current one so it gets
 the very next round, without cutting anything.
 
 **Persistence.** The list, register and changes are written to `engine.edn` on every change. On boot they are reloaded,
@@ -483,7 +483,7 @@ For rescuing a stuck body by hand. The body listens on `worlds/<world>/agents/<n
 Three control modes exist: normal scheduling, `do-now!` (an urgent holder), and manual takeover. `take` cuts the current
 holder and mutes all triggers and the loop until release or lease expiry: only the driver's slot job runs (the job the
 driver submits with `:by` = the lease's `who`; a new one replaces it). It gets one call and leaves the slot whatever it returns: `:done`/`:stopped` as returned, an error ends it `job.failed` with attention (unlisted, not parked), a cut ends it `:stopped` reason `:cut`, `:continue` or `:declined` end it `:stopped` reason `:yielded` (or the child's wait reason) plus the wait text, a failing check ends it at once `:stopped` with the check's reason. Then the body idles. Jobs from others queue and
-wait, `:front?`/`interrupt` from them are refused `:manual-control`, release cancels the slot job, and a slot round in
+wait, `:next?`/`interrupt` from them are refused `:manual-control`, release cancels the slot job, and a slot round in
 flight keeps the lease alive (nothing else does); `/drive set` answers 409 `job-running` while a slot job exists; `/drive stop` cancels the slot job (running or just submitted), then stops. A cut listed job (not the slot job) stays listed; a cut
 reflex job is dropped. Who drives is decided by a lease, first come (`take` is refused `held-by <who>` otherwise). The
 lease is not saved; restart or going offline ends it.
@@ -686,7 +686,7 @@ node engine/tools/observe.mjs Bob --world claude catalog jobs jobs.farm. --limit
 node engine/tools/observe.mjs Bob --world claude inventory [--slots] | equipment
 node engine/tools/entities.mjs Bob --world claude [--type zombie --radius 32 --player Alex --limit 20]
 node engine/tools/jobs.mjs Bob --world claude list | show j17 | cancel j17 | cancel-all | retry j17 | resolve <attention> --reason handled
-node engine/tools/jobs.mjs Bob --world claude submit '(jobs.movement.go-to {:pos {:x 10 :y 64 :z 20}})' [--front|--now|--hold] [--wait --timeout 5m]
+node engine/tools/jobs.mjs Bob --world claude submit '(jobs.movement.go-to {:pos {:x 10 :y 64 :z 20}})' [--next|--now|--hold] [--wait --timeout 5m]
 node engine/tools/triggers.mjs Bob --world claude list | show hungry | upgrade [ids] | decline [ids] | add hungry --trigger hungry | mute hungry --for 10m | unmute | move X --before Y | reset X --property position | remove X
 node engine/tools/triggers.mjs Bob --world claude put near-home --when '(< (inventory "bread") 8)' --job '(jobs.movement.look-around)' --persistence cooldown --cooldown-s 30
 node engine/tools/say.mjs Bob --world claude [--to Steve] "message"       # chat, shares the engine's rate limits
@@ -699,7 +699,7 @@ node engine/tools/time.mjs --world claude clock | dawn --timeout 1200   # world 
   is at least once. `--chatter none|addressed|all`, `--danger` and `--disconnect` choose what wakes it. Only the first `reconnect-failed` of an
   outage wakes it (later tries are summarised). Status of an offline body adds `:back-in-s`. A `died` wake or summary item carries `:cancelled-jobs [{:id :name}]` (jobs the death cancelled, seen in the same call).
 - `jobs.mjs show jID` of a job the scheduler no longer holds answers from the event history, as `observe job` does.
-- `jobs.mjs submit` appends to the list; `--front` lists after the current job without cutting; `--now` cuts the current
+- `jobs.mjs submit` appends to the list; `--next` lists after the current job without cutting; `--now` cuts the current
   listed job and runs the new one as a holder (a running reflex is not cut); `--hold` keeps the body while the check
   declines. `--wait` blocks until the job ends (or a wake) and prints the result and a bounded summary. Mutations carry a
   request id (`--request-id` to retry safely); the engine keeps the latest 128 ids and a duplicate returns the original

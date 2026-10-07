@@ -100,7 +100,7 @@
 (def away activity/away)
 (def holding activity/holding)
 (def cancel! list-edits/cancel!)
-(def insert-front list-edits/insert-front)
+(def insert-next list-edits/insert-next)
 (def insert-now list-edits/insert-now)
 (def retry! list-edits/retry!)
 (def submit! list-edits/submit!)
