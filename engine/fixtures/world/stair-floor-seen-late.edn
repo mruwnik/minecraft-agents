@@ -1,7 +1,8 @@
 ;; Card f198fa2f: jobs.access.stair looks once more at a floor still unseen once its cut is open before it stops :floor-unseen.
-;; Stone mass x 8..24, z 8..24, y 0..9 (as stair-undercuts-way); a cave pocket (air) holds the cut cells of the step at x 14
-;; so they are open before the stair digs there. The stair goes on through it instead of stopping :floor-unseen. The second
-;; case opens the pocket only after the stair is under way (a delayed reveal: setblock after a wait).
+;; Stone mass x 8..24, z 8..24, y 0..9; the body starts at (10 10 16). Step k lands on feet (10+k, 10-k), cuts the three cells
+;; feet..feet+2 and its floor is feet-1 (stair/step-cells), so step 4 cuts (14 6..8 16) and floors on (14 5 16). The pocket
+;; (air) holds exactly those cut cells so they are open before the stair digs there, with the floor still stone. The stair goes on through it instead of stopping :floor-unseen. The second
+;; case opens the pocket only after the stair is under way (a delayed reveal, after the stair has stepped to (12 8 16)).
 ;; Whether the floor is really unseen at the pocket is the live run's finding; the geometry follows stair-undercuts-way.
 {:defaults
  {:tags [:access :mining]
@@ -12,13 +13,13 @@
   :limit-s 150}
  :cases
  [{:name "stair-through-open-pocket-goes-on"
-   :blocks [[:fill [14 7 16] [14 8 16] "air"]]
+   :blocks [[:fill [14 6 16] [14 8 16] "air"]]
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 6})]]
    :expect [{:event {:source :job :kind :stair.done :data {:steps 6}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind :stair.stopped :data {:reason :floor-unseen}} :for-s 140 :until {:source :job :kind :stair.done}}]}
   {:name "pocket-opens-while-the-stair-is-under-way"
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 6})]
-         [:wait-s 8]
-         [:rcon "execute positioned $X $Y $Z run fill ~14 ~7 ~16 ~14 ~8 ~16 air"]]
+         [:await {:source :job :kind :stair.step :data {:at #at [12 8 16]}} 100]
+         [:rcon "execute positioned $X $Y $Z run fill ~14 ~6 ~16 ~14 ~8 ~16 air"]]
    :expect [{:event {:source :job :kind :stair.done :data {:steps 6}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind :stair.stopped :data {:reason :floor-unseen}} :for-s 140 :until {:source :job :kind :stair.done}}]}]}

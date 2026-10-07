@@ -1,5 +1,5 @@
 ;; Card 526bad3c: go-to keeps the walk's closest approach in process, not in job memory: a 38 block walk wrote 77 memory_written
-;; events before (each a synchronous event-log append), now at most 12. The count is of the run's own jobs' events.
+;; events before (each a synchronous event-log append), now at most 12 (events.edn holds the :debug memory_written events; at-least 3 fails an empty log). The count is of the run's own jobs' events.
 {:name "long-walk-writes-few-memory-events"
  :tags [:movement :large]
  :time :any
@@ -7,6 +7,6 @@
  :body {:at [1.5 0 16.5] :effects [["resistance" 600 4]]}
  :act [[:job (jobs.movement.go-to {:pos #at [40 0 16] :range 1 :escalate false})]]
  :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 90 :of-job true}
-          {:count-event {:source :job :kind :memory_written} :of-job true :for-s 90 :at-most 20}]
+          {:count-event {:source :job :kind :memory_written} :of-job true :for-s 90 :at-least 3 :at-most 20}]
  :after [[:body-near [40.5 0 16.5] 3]]
  :limit-s 100}
