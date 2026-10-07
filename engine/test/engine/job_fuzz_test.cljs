@@ -115,7 +115,7 @@
 (def max-rounds 12)
 
 (defn capped-primitives
-  "p with every act (a call returning a promise) counted in calls (reset before each round); past the cap one throws, so a loop that never ends fails instead of hanging."
+  "p with every act (a call returning a promise) counted in calls (reset before each round); past the cap one throws, so a loop that never ends fails instead of hanging. The act it drops is handled, so its late rejection (a cut) is not a stray one."
   [p calls hit act-cap]
   (js/Proxy. p #js {:get (fn [t k]
                            (let [v (aget t k)]
@@ -129,6 +129,7 @@
                                      (swap! calls assoc :all 0))
                                    (when (and r (fn? (.-then r)) (> (:acts (swap! calls update :acts inc)) act-cap))
                                      (reset! hit :act)
+                                     (.catch r (fn [_] nil))
                                      (throw (js/Error. "fuzz: act cap (runaway job)")))
                                    r))
                                v)))}))
@@ -278,14 +279,30 @@
   (let [seen (into #{} (map (juxt (comp str :job) :kind)) found)]
     (vec (remove seen (keys known)))))
 
-(defn ^:async run-all [opts]
-  (loop [todo (job-cases opts) found []]
-    (if-let [c (first todo)]
-      (let [_ (when (env "FUZZ_TRACE" nil) (println "fuzz" (:job c) (:seed c)))
-            res (try (await (run-case c))
-                     (catch :default e {:job (:job c) :defects [[:harness-threw (str e)]]}))]
-        (recur (rest todo) (into found (map (fn [[kind detail]] (assoc (select-keys res [:job :args :ground]) :repro (repro-line c) :kind kind :detail detail))) (:defects res))))
-      found)))
+(defn tick!
+  "A promise resolving after the event loop has run what was waiting: a rejection nobody handled is reported by then."
+  []
+  (js/Promise. (fn [resolve] (js/setTimeout resolve 0))))
+
+(defn ^:async run-all
+  "The defects of every case ([{:job :kind :detail :repro ...}]). A case that throws, or leaves a promise rejected with no handler, is that case's defect (with its repro line), never a crash of the run."
+  ([opts] (run-all opts (job-cases opts) run-case))
+  ([_opts cases run]
+   (let [stray (atom [])
+         handler #(swap! stray conj (str %))]
+     (.on js/process "unhandledRejection" handler)
+     (try
+       (loop [todo cases found []]
+         (if-let [c (first todo)]
+           (let [_ (when (env "FUZZ_TRACE" nil) (println "fuzz" (:job c) (:seed c)))
+                 _ (reset! stray [])
+                 res (try (await (run c))
+                          (catch :default e {:job (:job c) :defects [[:harness-threw (str e)]]}))
+                 _ (await (tick!))
+                 defects (concat (:defects res) (map (fn [s] [:stray-rejection s]) @stray))]
+             (recur (rest todo) (into found (map (fn [[kind detail]] (assoc (select-keys res [:job :args :ground]) :repro (repro-line c) :kind kind :detail detail))) defects)))
+           found))
+       (finally (.off js/process "unhandledRejection" handler))))))
 
 (defn summary [found]
   (->> (group-by (juxt (comp str :job) :kind) found)
@@ -390,3 +407,30 @@
 (deftest a-job-that-changes-a-block-every-third-round-is-progress
   (let [sigs (sigs-over 12 (fn [w i] (if (zero? (mod i 3)) (assoc-in w [:blocks [1 64 i]] "dirt") w)))]
     (is (every? progressing? (map #(take % sigs) (range 4 13))))))
+
+(deftest an-act-cut-off-by-the-cap-leaves-no-unhandled-rejection
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [stray (atom [])
+              handler #(swap! stray conj (str %))
+              p (capped-primitives #js {:act (fn [] (js/Promise.reject (js/Error. "late cut")))} (atom {:all 0 :acts 0}) (atom nil) 0)]
+          (.on js/process "unhandledRejection" handler)
+          (is (thrown? js/Error (.act p)))
+          (await (js/Promise. (fn [resolve] (js/setTimeout resolve 20))))
+          (.off js/process "unhandledRejection" handler)
+          (is (empty? @stray)))))))
+
+(deftest an-exception-or-stray-rejection-in-a-case-is-that-cases-defect
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cases [{:job 'jobs.a :seed 5 :k 0 :base 1 :n 2} {:job 'jobs.b :seed 6 :k 1 :base 1 :n 2} {:job 'jobs.c :seed 7 :k 2 :base 1 :n 2}]
+              run (fn ^:async run [c]
+                    (case (:job c)
+                      jobs.a (throw (js/Error. "boom"))
+                      jobs.b (do (js/Promise.reject (js/Error. "late")) {:job (:job c) :defects []})
+                      {:job (:job c) :defects []}))
+              found (await (run-all {} cases run))]
+          (is (= [['jobs.a :harness-threw] ['jobs.b :stray-rejection]] (map (juxt :job :kind) found)))
+          (is (= ["FUZZ_JOB=jobs.a FUZZ_SEED=1 FUZZ_CASES=2 FUZZ_CASE=0" "FUZZ_JOB=jobs.b FUZZ_SEED=1 FUZZ_CASES=2 FUZZ_CASE=1"] (map :repro found))))))))
