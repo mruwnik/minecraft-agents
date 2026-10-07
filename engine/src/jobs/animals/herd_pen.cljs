@@ -6,7 +6,7 @@
             [jobs.lib.declined :as declined]
             [jobs.lib.gate :as gate]
             [jobs.lib.near :as near]
-            [jobs.animals.pen :as pen]
+            [jobs.lib.pen :as pen]
             [jobs.lib.util :as u]
             [jobs.animals.herd-run :refer [adults animal-now approach-range box-centre cell cell-pos drop-gate! end! finish! gate-cell gate-open? hold-gate! in-pen-adults max-reopens near-pen orthogonal out-1 read-pen set-phase! settle-ms shut-failed!]]))
 

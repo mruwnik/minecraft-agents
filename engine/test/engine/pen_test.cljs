@@ -1,7 +1,7 @@
 (ns engine.pen-test
-  "jobs.animals.pen: the pen check, over a block grid that is stone up to y 63 and air above."
+  "jobs.lib.pen: the pen check, over a block grid that is stone up to y 63 and air above."
   (:require [cljs.test :refer [deftest is are]]
-            [jobs.animals.pen :as pen]))
+            [jobs.lib.pen :as pen]))
 
 (defn block
   "A JS block from a cell value: a name, or [name {property value}]."

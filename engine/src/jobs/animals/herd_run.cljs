@@ -3,7 +3,7 @@
   (:require [jobs.lib.animals :as animals]
             [jobs.lib.apiary :as apiary]
             [engine.ctx :as ctx]
-            [jobs.animals.pen :as pen]
+            [jobs.lib.pen :as pen]
             [triggers.animals.pen-gate :as pg]
             [jobs.lib.util :as u]))
 

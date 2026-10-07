@@ -15,10 +15,6 @@
   :why "S1/S5: sensing fn shared with its trigger moves to jobs.lib"}
  {:from jobs.animals.shut-gate :to triggers.animals.pen-gate :rule :job-requires-trigger
   :why "S1/S5: sensing fn shared with its trigger moves to jobs.lib"}
- {:from jobs.build.pen :to jobs.animals.pen :rule :helper-required-cross-family
-  :why "S3: pen helpers move to jobs.lib.pen"}
- {:from jobs.build.pen :to jobs.animals.pen-check :rule :job-requires-other-family-job
-  :why "S3: pen helpers move to jobs.lib.pen"}
  {:from jobs.forestry.fell-tree :to jobs.access.pillar :rule :job-requires-other-family-job
   :why "layering E/F (6b05372f, 24ac6454): pillar helpers or child call"}
  {:from jobs.forestry.prepare-field :to jobs.farm.tidy :rule :job-requires-other-family-job
@@ -49,6 +45,4 @@
   :why "S1/S5: sensing fn shared with its trigger moves to jobs.lib"}
  {:from jobs.survival.retreat-refuge :to jobs.access.pillar :rule :job-requires-other-family-job
   :why "layering E/F (6b05372f, 24ac6454): pillar helpers or child call"}
- {:from triggers.animals.pen-gate :to jobs.animals.pen :rule :lib-requires-job
-  :why "S3: pen helpers move to jobs.lib.pen"}
 ]

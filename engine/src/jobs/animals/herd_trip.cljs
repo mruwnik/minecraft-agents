@@ -2,7 +2,7 @@
   "One animal's trip for jobs.animals.herd: leashing the next, regathering, the steps through the gate and the release."
   (:require [jobs.lib.animals :as animals]
             [engine.ctx :as ctx]
-            [jobs.animals.pen :as pen]
+            [jobs.lib.pen :as pen]
             [jobs.lib.util :as u]
             [jobs.animals.herd-run :refer [animal-now deepest end! finish! gate-open? in-pen-adults near-pen out-1 read-pen regather-radius set-phase!]]
             [jobs.animals.herd-pen :refer [animal-pos pinned-ms settle-at! step-in-step]]))

@@ -1,11 +1,11 @@
 (ns jobs.animals.pen-check
   (:require [engine.ctx :as ctx]
             [jobs.lib.apiary :as apiary]
-            [jobs.animals.pen :as pen]))
+            [jobs.lib.pen :as pen]))
 
 (def doc
   "Read-only: say whether an animal can walk out of a pen. Flood-fills what a cow can walk (rules in
-  jobs.animals.pen: fences, walls and closed gates are 1.5 high, an open gate is a way out, a drop of more than 3
+  jobs.lib.pen: fences, walls and closed gates are 1.5 high, an open gate is a way out, a drop of more than 3
   is not taken) from the feet cell :at [x y z], or from every surface inside :box, where a step out of the box
   is a leak. Never moves, digs or places. Declines without :at and :box.
 
@@ -25,24 +25,16 @@
    :box {:doc "the pen: {:min {:x :y :z} :max {:x :y :z}}, inclusive; a step out of it is a leak" :default nil}
    :max-cells {:doc "most cells the fill visits before it gives up with :unbounded" :default pen/default-max-cells}})
 
-(def max-listed 12)
-
 (defn check [c]
   (or (boolean (or (:at (:args c)) (:box (:args c))))
       (ctx/wait c {:reason :no-pen :why "needs :at or :box"})))
 
-(defn summary
-  "The answer as the event and result carry it: the cells counted, the leaks capped."
-  [{:keys [closed? reason inside leaks gates]}]
-  (cond-> {:closed? closed? :reason reason :cells (count inside) :leaks (vec (take max-listed leaks)) :gates gates}
-    (> (count leaks) max-listed) (assoc :leaks-total (count leaks))))
-
 (defn ^:async round [c]
   (let [{:keys [at box max-cells]} (:args c)
-        result (summary (pen/check {:block-at (apiary/block-at-fn (:primitives c))
-                                    :at at
-                                    :box box
-                                    :max-cells max-cells}))]
+        result (pen/summary (pen/check {:block-at (apiary/block-at-fn (:primitives c))
+                                        :at at
+                                        :box box
+                                        :max-cells max-cells}))]
     (ctx/emit! c :pen-check.done :info
                (assoc result :text (if (:closed? result)
                                      (str "pen closed, " (:cells result) " cells")

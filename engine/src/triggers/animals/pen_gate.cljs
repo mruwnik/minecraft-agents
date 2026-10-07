@@ -11,7 +11,7 @@
     :gate-held     written by a job leading animals through, dropped after it shuts the gate; skipped while
                    younger than :held-s (30)
     :opened        written by a walk (jobs.lib.pass) that opened it; the shut-doors job owns that gate"
-  (:require [jobs.animals.pen :as pen]
+  (:require [jobs.lib.pen :as pen]
             [jobs.lib.click :as click]
             [jobs.lib.look :as look]
             [engine.memory :as mem]
@@ -53,7 +53,7 @@
 ;; ------------------------------------------------------------------ reading the world
 
 (defn open-gate?
-  "Whether block b is a fence gate standing open: the reading jobs.animals.pen counts an open gate by."
+  "Whether block b is a fence gate standing open: the reading jobs.lib.pen counts an open gate by."
   [b]
   (boolean (and b (pen/gate? b) (pen/on? b "open"))))
 

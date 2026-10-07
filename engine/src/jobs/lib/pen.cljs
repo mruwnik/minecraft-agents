@@ -1,4 +1,4 @@
-(ns jobs.animals.pen
+(ns jobs.lib.pen
   "The pen check: from a standing cell or a box, flood-fill what a cow can walk
   and say whether it stays inside. Pure over a block-at function that takes
   {:x :y :z} and returns a block (#js {:name :properties}) or nil (unloaded).
@@ -372,3 +372,11 @@
   "True when position pos ({:x :y :z}, floats) is on a feet cell of the pen's inside."
   [{:keys [inside]} {:keys [x y z]}]
   (contains? inside [(js/Math.floor x) (js/Math.floor (+ y 0.01)) (js/Math.floor z)]))
+
+(def max-listed 12)
+
+(defn summary
+  "The answer as the event and result carry it: the cells counted, the leaks capped."
+  [{:keys [closed? reason inside leaks gates]}]
+  (cond-> {:closed? closed? :reason reason :cells (count inside) :leaks (vec (take max-listed leaks)) :gates gates}
+    (> (count leaks) max-listed) (assoc :leaks-total (count leaks))))

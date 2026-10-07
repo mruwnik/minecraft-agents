@@ -4,7 +4,7 @@
             [engine.core :as core]
             [engine.hostile-test :as h]
             [engine.test-util :as tu]
-            [jobs.animals.pen :as pen]))
+            [jobs.lib.pen :as pen]))
 
 (def job 'jobs.animals.pen-check)
 
