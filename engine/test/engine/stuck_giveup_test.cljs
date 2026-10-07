@@ -6,6 +6,7 @@
             [engine.core :as core]
             [jobs.lib.reach :as reach]
             [engine.memory :as mem]
+            [engine.path-near-test :as pnt]
             [engine.test-util :as tu :refer [box floor]]
             [engine.triggers :as triggers]
             [engine.unstick-test :as ut]))
@@ -49,10 +50,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (ut/setup {:self {:pos {:x 0 :y 64 :z 0}} :blocks cliff-island})
-              top {:x 47 :y 67 :z 0}]
-          (core/submit! eng (list 'jobs.movement.pace {:a top :b top :laps 1 :rounds 1}) {})
-          (await (core/tick! eng))
+        (let [top {:x 47 :y 67 :z 0}
+              {:keys [p]} (await (pnt/walk! {:blocks cliff-island} [top 1]))]
           (is (= 64 (js/Math.floor (.-y (.-pos (.self p))))) "still on the plateau"))))))
 
 ;; ------------------------------------------------------------------ unstick ends once out
