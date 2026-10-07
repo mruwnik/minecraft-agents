@@ -141,15 +141,6 @@
         second-read (ee/complete-lines (:rest first-read) (.subarray bytes 7))]
     (is (= "{\"t\":\"é\"}\n" (decode (:complete second-read))))))
 
-(deftest drop-torn-head-removes-through-first-newline
-  (is (= "{\"a\":1}\n" (decode (ee/drop-torn-head (enc "rn\"}\n{\"a\":1}\n")))))
-  (is (= "" (decode (ee/drop-torn-head (enc "no newline"))))))
-
-(deftest parse-event-lines-skips-garbage
-  (is (= [{:seq 1} {:seq 2}] (ee/parse-event-lines "{\"seq\":1}\n\nnot json\n{\"seq\":2}\n")))
-  (is (= [] (ee/parse-event-lines "42\n[1]\n\"s\"\n")))
-  (is (= [{:seq 1 :chain ["j1"] :pos {:x 1}}] (ee/parse-event-lines "{\"seq\":1,\"chain\":[\"j1\"],\"pos\":{\"x\":1}}\n"))))
-
 (deftest decode-bytes-roundtrip
   (is (= "héllo" (ee/decode-bytes (enc "héllo")))))
 
@@ -240,44 +231,6 @@
     (testing title
       (is (= expected (select-keys (signals events) [:takeover? :takeover-who :takeover-t]))))))
 
-(deftest log-entries
-  (doseq [[title e worthy?]
-          [["a job completing" (ev 1 {:kind "completed"}) true]
-           ["a job stopping" (ev 1 {:kind "stopped"}) true]
-           ["a heartbeat" (ev 1 {:kind "round_started"}) false]
-           ["a yield" (ev 1 {:kind "yielded"}) false]
-           ["memory saves" (ev 1 {:source "memory" :kind "saved" :level "debug"}) false]
-           ["memory written note" (ev 1 {:kind "memory_written" :level "debug"}) false]
-           ["view stats" (ev 1 {:source "body" :kind "view.stats"}) false]
-           ["an action start (debug)" (ev 1 {:source "action" :kind "started" :level "debug"}) true]
-           ["other debug noise" (ev 1 {:source "path" :kind "x" :level "debug"}) false]
-           ["a warning level does not determine attention" (ev 1 {:source "path" :kind "x" :level "warn"}) false]]]
-    (is (= worthy? (ee/log-worthy? e)) title)))
-
-(deftest log-entry-shape
-  (is (= {:generation-id "legacy" :time-ms 1 :seq 2 :source :job :kind :completed :attention :none
-          :context {} :message nil :data {:name "n" :args {:a 1} :pos {:x 1}}}
-         (ee/log-entry {:t 1 :seq 2 :level "info" :source "job" :kind "completed" :name "n" :args {:a 1} :inventory [1 2 3] :pos {:x 1}}))))
-
-(deftest log-tail
-  (let [events (mapv #(ev % (if (even? %) {:kind "yielded"} {:kind "completed"})) (range 1 11))]
-    (is (= [7 9] (mapv :seq (ee/log-tail events 2))))
-    (is (= [1 3 5 7 9] (mapv :seq (ee/log-tail events 99))))))
-
-(defn jsonl [events] (apply str (map #(str (js/JSON.stringify (clj->js %)) "\n") events)))
-
-(deftest fold-text-equals-fold-of-parsed-events
-  (let [noise {:inventory [{:name "dirt" :count 3}] :args {:to "x"}}
-        events [(ev 1 {:name "(repeat look)"})
-                (ev 2 (merge noise {:source "body" :kind "hurt" :level "debug"}))
-                (ev 3 {:kind "failed" :error "boom" :level "warn"})
-                (ev 4 {:source "reflex" :kind "fired" :reflex "stuck" :level "info" :pos nil})
-                (ev 5 {:source "job" :kind "backoff" :name "dig" :level "debug"})
-                (ev 6 {:source "job" :kind "failed" :error {:code 3} :level "error"})]
-        text (str (jsonl events) "garbage\n\n")]
-    (is (= (fold events) (ee/fold-text ee/empty-engine text)))
-    (is (= (fold events) (ee/fold-text (ee/fold-text ee/empty-engine (jsonl (take 2 events))) (jsonl (drop 2 events)))))))
-
 (deftest split-chunk-cases
   (doseq [[title state chunk text rest-text skipping?]
           [["whole lines" {} "a\nb\n" "a\nb\n" "" false]
@@ -289,10 +242,6 @@
         (is (= text (decode (:complete r))))
         (is (= rest-text (decode (:rest r))))
         (is (= skipping? (:skipping? r)))))))
-
-(deftest parse-event-lines-with-line-filter
-  (is (= [{:seq 2 :kind "chat"}]
-         (ee/parse-event-lines "{\"seq\":1,\"kind\":\"x\"}\n{\"seq\":2,\"kind\":\"chat\"}\n" #(.includes % "chat")))))
 
 ;; ---------------------------------------------------------------- offline as soon as the last lifecycle event says so
 (def spawned (fn [n] (ev n {:source "body" :kind "spawned"})))
@@ -401,9 +350,6 @@
     (is (nil? (:reflex v)))))
 
 (deftest a-legacy-line-without-a-kind-folds-and-is-kept
-  (let [text "{\"source\":\"job\",\"t\":1000}\n{\"source\":\"job\",\"kind\":\"round_started\",\"t\":2000}\n"
-        state (ee/fold-text ee/empty-engine text)]
+  (let [state (fold [{:source "job" :t 1000} {:source "job" :kind "round_started" :t 2000}])]
     (is (= 2000 (get-in state [:last :t])))
-    (is (false? (boolean (ee/offline-event? {:source "job"}))))
-    (is (boolean? (ee/log-worthy? {:source "job"})))
-    (is (map? (ee/log-entry {:source "job" :t 1})))))
+    (is (false? (boolean (ee/offline-event? {:source "job"}))))))

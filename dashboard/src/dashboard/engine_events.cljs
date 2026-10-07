@@ -7,8 +7,6 @@
 (def engine-up-ms 30000)
 (def recent-max 10)
 
-;; job.round_started / job.yielded arrive at info every 0.25-10 s per running job: noise in a "what happened" list
-(def heartbeats #{"round-started" "yielded"})
 (def job-ends #{"completed" "failed" "cancelled" "stopped"})
 (def levels-shown #{"info" "warn" "error"})
 
@@ -181,11 +179,6 @@
         cut (inc (.lastIndexOf bytes newline-byte))]
     {:complete (.subarray bytes 0 cut) :rest (.subarray bytes cut)}))
 
-;; a read that starts mid-file begins inside some line: drop it
-(defn drop-torn-head [bytes]
-  (let [i (.indexOf bytes newline-byte)]
-    (.subarray bytes (if (neg? i) (.-length bytes) (inc i)))))
-
 (defn decode-bytes [bytes]
   (.decode (js/TextDecoder.) bytes))
 
@@ -196,36 +189,6 @@
         starts-whole? (not (neg? i))
         usable (cond (not skipping?) chunk starts-whole? (.subarray chunk (inc i)) :else (js/Uint8Array. 0))]
     (assoc (complete-lines rest usable) :skipping? (not starts-whole?))))
-
-(defn parse-line [line]
-  (let [parsed (try (js/JSON.parse line) (catch :default _ nil))]
-    (when (and (some? parsed) (identical? "object" (goog/typeOf parsed)) (not (array? parsed)))
-      [(js->clj parsed :keywordize-keys true)])))
-
-;; line-test: a cheap string test run before parsing; lines it rejects are never JSON-parsed
-(defn parse-event-lines
-  ([text] (parse-event-lines text any?))
-  ([text line-test]
-   (into [] (comp (remove empty?) (filter line-test) (mapcat parse-line)) (.split text "\n"))))
-
-;; What fold-one reads, and nothing else: inventories, args and path dumps are never converted.
-(def fold-fields ["t" "seq" "who" "pos" "job" "chain" "source" "kind" "name" "reflex" "level" "text" "error"])
-
-(defn fold-event [o]
-  (reduce (fn [m k]
-            (let [v (aget o k)]
-              (if (undefined? v) m (assoc m (keyword k) (js->clj v :keywordize-keys true)))))
-          {}
-          fold-fields))
-
-(defn parse-fold-line [line]
-  (let [parsed (try (js/JSON.parse line) (catch :default _ nil))]
-    (when (and (some? parsed) (identical? "object" (goog/typeOf parsed)) (not (array? parsed)))
-      [(fold-event parsed)])))
-
-;; fold-engine over the lines of a text, one line at a time: no vector of events
-(defn fold-text [state text]
-  (transduce (comp (remove empty?) (mapcat parse-fold-line)) (completing fold-one) state (.split text "\n")))
 
 ;; ---------------------------------------------------------------- agents and bodies
 ;; entries: [{:name :world :text raw config.json}], the world being where the folder is (config.json names none).
@@ -251,36 +214,6 @@
 ;; an agent folder with no engine files is an old HTTP-API body: listed, never contacted
 (defn unsupported-body [agent]
   (assoc agent :up false :error "not an engine body (unsupported)" :at nil :state nil :engine nil))
-
-;; ---------------------------------------------------------------- the action log
-;; What a body's popup lists: the events people read, not memory saves, heartbeats and path debug.
-(defn log-worthy? [e]
-  (let [{:keys [source kind attention]} (canonical-event e)
-        kind (dashed kind)]
-    (cond
-      (= "memory" source) false
-      (= "memory-written" kind) false
-      (and (= "job" source) (heartbeats kind)) false
-      (and (= "body" source) (= "view.stats" kind)) false
-      :else (or (= "action" source) (not= "none" (or attention "none"))
-                (contains? #{"job" "reflex" "body" "system" "chat"} source)))))
-
-;; only the fields the log shows: inventories and path dumps in other events never leave the server
-(defn log-entry [e]
-  (let [event (canonical-event e)]
-    (if (:time-ms e)
-      e
-      {:seq (:seq event) :generation-id "legacy" :time-ms (:t event)
-       :source (keyword (:source event)) :kind (keyword (dashed (:kind event)))
-       :context (cond-> {} (:job event) (assoc :job-id (:job event)) (:chain event) (assoc :chain (:chain event))
-                  (:round event) (assoc :round (:round event)) (:reflex event) (assoc :reflex-id (:reflex event)))
-       :data (dissoc event :seq :t :source :kind :job :chain :round :reflex :text :message :attention :request-id :level :inventory)
-       :message (or (:message event) (:text event)) :attention :none})))
-
-(defn log-tail
-  "The last n log-worthy events of a list, oldest first."
-  [events n]
-  (vec (take-last n (filter log-worthy? events))))
 
 (defn socket-failure-text
   "What the dashboard says when a body's event service cannot be reached: the system error code (ENOENT,
