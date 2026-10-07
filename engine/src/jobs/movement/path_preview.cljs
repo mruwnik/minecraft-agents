@@ -18,8 +18,8 @@
   would open, waypoints the cells [x y z] where the route turns or changes move kind, ending at the goal's end of the plan.
   A route that only gets nearer (a partial plan) or none is {:status :stopped :found false :reason (the planner's, as
   go-to's :why; :abilities with :kind) :near} plus :partial {the same fields up to where it ends} when there is one.
-  A bad :pos, :tolls or :drop-cost, or a body without pathWorld sensing, is {:status :stopped :found false :reason
-  :bad-pos|:bad-tolls|:bad-drop-cost|:unsupported :text}.")
+  A bad :pos or :place, :tolls or :drop-cost, or a body without pathWorld sensing, is {:status :stopped :found false :reason
+  :bad-pos|:bad-name|:unknown-place|:bad-tolls|:bad-drop-cost|:unsupported :text}.")
 
 (def args
   {:pos {:doc "target position [x y z] or {:x :y :z}" :type :pos :default nil}
@@ -58,7 +58,9 @@
    :doors (vec (distinct (for [s steps o (:opens s)] [(:x o) (:y o) (:z o)])))
    :waypoints (waypoints steps)})
 
-(defn u-dist [c to] (js/Math.round (js/Math.hypot (- (:x to) (:x (wworld/body-cell c))) (- (:z to) (:z (wworld/body-cell c))))))
+(defn u-dist
+  "The horizontal distance in blocks, rounded, from the body to the goal cell to."
+  [c to] (js/Math.round (js/Math.hypot (- (:x to) (:x (wworld/body-cell c))) (- (:z to) (:z (wworld/body-cell c))))))
 
 (defn report
   "The job's result for a plan (jobs.lib.near/plan!)."
@@ -71,18 +73,20 @@
       (nil? no) {:status :stopped :found false :reason :partial :near here :partial (route steps (.-path r))}
       :else (assoc (dissoc no :replans) :status :stopped :found false :near here))))
 
+(defn refuse!
+  "End the preview with a refusal: {:status :stopped :found false :reason :text}."
+  [c {:keys [reason message]}]
+  (ctx/emit! c :refused :warn {:reason reason :text message})
+  (end/finish! c {:status :stopped :found false :reason reason :text message}))
+
 (defn ^:async round [c]
   (let [{:keys [doors range dangers dark tolls drop-cost one-way]} (:args c)
-        parsed (go-to/target c)
-        pos (:pos parsed)
-        tolls-problem (wworld/tolls-problem tolls)]
+        refusal (go-to/args-refusal c)
+        pos (:pos (go-to/target c))]
     (cond
-      (:reason parsed) (end/refuse! c parsed)
-      (not (or (nil? drop-cost) (false? drop-cost) (and (number? drop-cost) (js/isFinite drop-cost) (>= drop-cost 0))))
-      (end/refuse! c {:reason :bad-drop-cost :message (str ":drop-cost must be a number >= 0 or false, got " (pr-str drop-cost))})
-      tolls-problem (end/refuse! c {:reason :bad-tolls :message tolls-problem})
+      refusal (refuse! c refusal)
       (nil? (wworld/path-world (:primitives c)))
-      (end/refuse! c {:reason :unsupported :message "the body cannot sense the world for path planning"})
+      (refuse! c {:reason :unsupported :message "the body cannot sense the world for path planning"})
       :else
       (let [doors (or doors :shut)
             policy (cond-> (wworld/body-policy c)
@@ -93,5 +97,5 @@
                                     (not (false? dangers)) nil (not (false? dark)) tolls))
             result (report c plan pos policy)]
         (ctx/result! c result)
-        (ctx/emit! c :path-preview :info (assoc (dissoc result :partial) :text (if (:found result) (str "route: " (:summary result)) (str "no route: " (name (:reason result))))))
+        (ctx/emit! c :path-preview :info (assoc (dissoc result :partial) :nodes (some-> plan :r .-expanded) :text (if (:found result) (str "route: " (:summary result)) (str "no route: " (name (:reason result))))))
         :done))))

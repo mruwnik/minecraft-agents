@@ -285,23 +285,28 @@
           shared (places/parse-pos [(:x shared) (:y shared) (:z shared)])
           :else (places/refusal :unknown-place (str "no place called " s " is recorded in memory or among the shared markers")))))))
 
+(defn args-refusal
+  "The refusal {:reason :message} of the args go-to and its dry run share (target, :drop-cost, :tolls), nil when they are
+  usable; the target's parse is {:pos ...} when there is no refusal."
+  [c]
+  (let [parsed (target c)
+        drop-cost (:drop-cost (:args c))
+        tolls-problem (wworld/tolls-problem (:tolls (:args c)))]
+    (cond
+      (:reason parsed) parsed
+      (not (or (nil? drop-cost) (false? drop-cost) (and (number? drop-cost) (js/isFinite drop-cost) (>= drop-cost 0))))
+      {:reason :bad-drop-cost :message (str ":drop-cost must be a number >= 0 or false, got " (pr-str drop-cost))}
+      tolls-problem {:reason :bad-tolls :message tolls-problem})))
+
 (defn ^:async round
   "One whole attempt: step! until it arrives, gives up, or waits on a child (:continue), with pace! between steps. A
   cut ends it at once (ctx/alive? per iteration, else at the next memory write or act, which throws)."
   [c]
-  (let [parsed (target c)
-        pos (:pos parsed)
-        tolls-problem (wworld/tolls-problem (:tolls (:args c)))
-        drop-cost (:drop-cost (:args c))]
+  (let [refusal (args-refusal c)
+        pos (:pos (target c))]
     (cond
-      (:reason parsed)
-      (end/refuse! c parsed)
-
-      (not (or (nil? drop-cost) (false? drop-cost) (and (number? drop-cost) (js/isFinite drop-cost) (>= drop-cost 0))))
-      (end/refuse! c {:reason :bad-drop-cost :message (str ":drop-cost must be a number >= 0 or false, got " (pr-str drop-cost))})
-
-      tolls-problem
-      (end/refuse! c {:reason :bad-tolls :message tolls-problem})
+      refusal
+      (end/refuse! c refusal)
 
       :else
       (do (start-attempt! c pos)
