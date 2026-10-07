@@ -1,7 +1,7 @@
 // Why JavaScript: node --test file for tools/world-test-pool.mjs.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { splitForms, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper, countListed, listArgs, knownFailures, parseListed, unitsWithCases, noCasesSelected } from './world-test-pool.mjs'
+import { splitForms, scanForms, failSig, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper, countListed, listArgs, knownFailures, parseListed, unitsWithCases, noCasesSelected } from './world-test-pool.mjs'
 
 const form = (id, status, secs = 1, extra = '') =>
   `{:plot 0, :file "${id.split('/')[0]}", :expects [{:status :pass, :evidence "a } \\" {"}], :status :${status}, :id "${id}", :elapsed-s ${secs}${extra}}`
@@ -11,6 +11,28 @@ test('splitForms: top-level maps of a result vector, braces inside strings and n
   const forms = splitForms(vec(form('a/x', 'pass'), form('b/y', 'fail')))
   assert.equal(forms.length, 2)
   assert.deepEqual(forms.map((f) => summarize(f).id), ['a/x', 'b/y'])
+})
+test('splitForms: empty, whitespace-only and truncated text end, returning the complete forms only', () => {
+  const whole = form('a/x', 'pass')
+  const cut = form('b/y', 'fail')
+  assert.deepEqual(splitForms(''), [])
+  assert.deepEqual(splitForms('  \n'), [])
+  assert.deepEqual(splitForms('['), [])
+  assert.deepEqual(splitForms(`[${whole} ${cut.slice(0, 40)}`), [whole])
+  assert.deepEqual(splitForms(`[${whole} {:a "unterminated`), [whole])
+  assert.deepEqual(splitForms(`[${whole} {:a [1 2`), [whole])
+  assert.deepEqual(splitForms(`[${whole}  \n ]  \n`), [whole])
+})
+test('scanForms: complete only for a closed vector', () => {
+  assert.equal(scanForms(vec(form('a/x', 'pass'))).complete, true)
+  assert.equal(scanForms('[]\n').complete, true)
+  assert.equal(scanForms('').complete, false)
+  assert.equal(scanForms(`[${form('a/x', 'pass')}`).complete, false)
+})
+test('failSig: the :why of a failed case without a failed expectation, else empty', () => {
+  assert.equal(failSig('{:status :fail, :why "no body", :id "a/x"}'), '"no body"')
+  assert.equal(failSig('{:status :fail, :expects [{:status :pass}], :why "late"}'), '"late"')
+  assert.equal(failSig('{:status :fail, :id "a/x"}'), '')
 })
 test('summarize: reads the top-level :status, not a nested expectation status', () => {
   assert.equal(summarize(form('a/x', 'fail')).status, 'fail')

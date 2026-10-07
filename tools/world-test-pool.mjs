@@ -30,7 +30,7 @@ const CLOSERS = { '{': '}', '[': ']', '(': ')' }
 
 // ---- EDN text: just enough to split a results vector into its maps and read their top-level keys
 const skipSpace = (s, i) => { while (i < s.length && /[\s,]/.test(s[i])) i++; return i }
-const skipString = (s, i) => { i++; while (s[i] !== '"') i += s[i] === '\\' ? 2 : 1; return i + 1 }
+const skipString = (s, i) => { i++; while (i < s.length && s[i] !== '"') i += s[i] === '\\' ? 2 : 1; return i + 1 }
 // end index of the value starting at i (i at a non-space char)
 const skipValue = (s, i) => {
   if (s[i] === '"') return skipString(s, i)
@@ -38,7 +38,7 @@ const skipValue = (s, i) => {
   const close = CLOSERS[s[i]]
   if (!close) { while (i < s.length && !/[\s,}\])]/.test(s[i])) i++; return i }
   i++
-  for (i = skipSpace(s, i); s[i] !== close; i = skipSpace(s, i)) i = skipValue(s, i)
+  for (i = skipSpace(s, i); i < s.length && s[i] !== close; i = skipSpace(s, i)) i = skipValue(s, i)
   return i + 1
 }
 const entries = (formText) => {
@@ -50,15 +50,21 @@ const entries = (formText) => {
   }
   return out
 }
-export const splitForms = (text) => {
+// the complete top-level forms of a results vector; complete is false when the text is empty, not a vector or cut off (the forms before the cut are still returned)
+export const scanForms = (text) => {
   const forms = []
-  for (let i = skipSpace(text, 1); text[i] !== ']'; i = skipSpace(text, i)) {
+  const start = skipSpace(text, 0)
+  if (text[start] !== '[') return { forms, complete: false }
+  let i = skipSpace(text, start + 1)
+  while (i < text.length && text[i] !== ']') {
     const end = skipValue(text, i)
+    if (end > text.length) return { forms, complete: false }
     forms.push(text.slice(i, end))
-    i = end
+    i = skipSpace(text, end)
   }
-  return forms
+  return { forms, complete: i < text.length }
 }
+export const splitForms = (text) => scanForms(text).forms
 const valueOf = (formText, key) => {
   const e = entries(formText).find((x) => x.key === key)
   return e && formText.slice(e.start, e.end)
@@ -83,7 +89,7 @@ const withStatus = (formText, status, extra) => {
 export const failSig = (formText) => {
   const list = valueOf(formText, ':expects')
   if (list?.startsWith('[')) {
-    for (let i = skipSpace(list, 1); list[i] !== ']'; i = skipSpace(list, i)) {
+    for (let i = skipSpace(list, 1); i < list.length && list[i] !== ']'; i = skipSpace(list, i)) {
       const end = skipValue(list, i)
       const item = list.slice(i, end)
       if (valueOf(item, ':status') === ':fail') return valueOf(item, ':expect') ?? ''
@@ -303,10 +309,18 @@ const listCases = (script, p) => {
   return r.status === 0 ? r.stdout : null
 }
 
+// the texts of the existing --durations files that hold a complete results vector; an empty or cut-off one is warned about and skipped
+const readDurations = (files) => files.filter((f) => fs.existsSync(f)).flatMap((f) => {
+  const text = fs.readFileSync(f, 'utf8')
+  if (scanForms(text).complete) return [text]
+  console.error(`world-test pool: --durations file ${f} is empty or truncated, skipped`)
+  return []
+})
+
 export const main = async (args) => {
   const p = parsePoolArgs(args)
   const byStem = new Map(fixtureFiles(p.paths).map((f) => [path.basename(f, '.edn'), f]))
-  const previous = p.durations.filter((f) => fs.existsSync(f)).map((f) => fs.readFileSync(f, 'utf8'))
+  const previous = readDurations(p.durations)
   const script = path.join(here, 'world-test.mjs')
   const listing = listCases(script, p)
   const listed = listing === null ? null : parseListed(listing)
