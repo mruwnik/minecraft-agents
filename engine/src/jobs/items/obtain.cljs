@@ -26,7 +26,7 @@
     planks to sticks to the tool, and a crafting table when the chain needs one and none is seen (crafted, then put
     down on a free cell beside the body with a jobs.blocks.place child). Each step is a jobs.items.craft child. The
     names are tried in order; the first with a plan is made. Three fruitless steps stop it (:tried :craft).
-  - :gather (in :how): a sapling (no recipe) comes from the leaves of its tree the body has seen, broken by
+  - :gather (in :how): coal comes from a plain or deepslate ore seen; every raw item a chain lacks must be seen before it starts. A sapling (no recipe) comes from the leaves of its tree the body has seen, broken by
     jobs.gather.get-seeds (the drop is picked up). What a craft chain lacks that has no recipe (logs, cobblestone, coal; recipes/gatherable?) is
     felled or mined as one child per round, only what the body has seen: logs by jobs.forestry.harvest-wood,
     cobblestone and coal by jobs.gather.mine. The crafts follow once the chain is whole (a chain that is craftable now
@@ -131,33 +131,51 @@
 
 (defn log? [name] (clojure.string/ends-with? name "_log"))
 
-(defn gather-need
-  "The first raw need of a plan's :gather map, logs first: {:key k :count n :job sym :args {..} :seen fn of a block name: what must have been seen}. A new gather source
-  is one more case here."
+(defn gather-needs
+  "The raw needs of a plan's :gather map, logs first: [{:key k :count n :job sym :args {..} :seen fn of a block name: what must have been seen}]. A new gather source
+  is one more case here. Coal is mined from a plain or a deepslate ore: :block is set by with-block."
   [gather]
-  (let [logs (reduce + 0 (for [[k v] gather :when (log? k)] v))
-        [sapling n] (first (filter (comp leaves-of key) gather))]
-    (cond
-      sapling {:key sapling :count n :job 'jobs.gather.get-seeds :seen #{(leaves-of sapling)}
-               :args {:item sapling :count n :sources [(leaves-of sapling)]}}
-      (pos? logs) {:key "log" :count logs :job 'jobs.forestry.harvest-wood :seen log? :args {}}
-      (get gather "cobblestone") {:key "cobblestone" :count (get gather "cobblestone") :job 'jobs.gather.mine
-                                  :seen #{"stone"}
-                                  :args {:block "stone" :item "cobblestone" :count (get gather "cobblestone")}}
-      (get gather "coal") {:key "coal" :count (get gather "coal") :job 'jobs.gather.mine
-                           :seen #{"coal_ore"}
-                           :args {:block "coal_ore" :item "coal" :count (get gather "coal")}})))
+  (let [logs (reduce + 0 (for [[k v] gather :when (log? k)] v))]
+    (vec (concat
+          (for [[sapling n] gather :when (leaves-of sapling)]
+            {:key sapling :count n :job 'jobs.gather.get-seeds :seen #{(leaves-of sapling)}
+             :args {:item sapling :count n :sources [(leaves-of sapling)]}})
+          (when (pos? logs) [{:key "log" :count logs :job 'jobs.forestry.harvest-wood :seen log? :args {}}])
+          (when-let [n (get gather "cobblestone")]
+            [{:key "cobblestone" :count n :job 'jobs.gather.mine :seen #{"stone"}
+              :args {:block "stone" :item "cobblestone" :count n}}])
+          (when-let [n (get gather "coal")]
+            [{:key "coal" :count n :job 'jobs.gather.mine :seen #{"coal_ore" "deepslate_coal_ore"}
+              :args {:block "coal_ore" :item "coal" :count n}}])))))
+
+(defn gather-need
+  "The first of gather-needs."
+  [gather]
+  (first (gather-needs gather)))
 
 (defn gather-carried [p {:keys [key]}]
   (reduce + 0 (for [[k v] (carried-counts p) :when (if (= "log" key) (log? k) (= key k))] v)))
 
+(defn seen-of
+  "The nearest seen block of a need (within 16), or nil."
+  [c need]
+  (first (look/seen-blocks (:primitives c) {:match #((:seen need) %) :radius 16 :max 1})))
+
+(defn with-block
+  "The need with :block of its args the kind of ore seen when it could be either."
+  [c need]
+  (if-let [name (when (= "coal" (:key need)) (:name (seen-of c need)))]
+    (assoc-in need [:args :block] name)
+    need))
+
 (defn gather-viable?
-  "Whether a chain is craftable once raw items are gathered, and a block for the first raw need has been seen and
-  its child would run."
+  "Whether a chain is craftable once raw items are gathered, and a block for every raw need has been seen and
+  the child of the first would run."
   [c names n]
-  (when-let [need (some-> (gather-plan c names n) :gather gather-need)]
-    (and (seq (look/seen-blocks (:primitives c) {:match #((:seen need) %) :radius 16 :max 1}))
-         (boolean (ctx/check-child c :gather (:job need) (:args need))))))
+  (when-let [needs (some-> (gather-plan c names n) :gather gather-needs seq)]
+    (and (every? #(seen-of c %) needs)
+         (let [need (with-block c (first needs))]
+           (boolean (ctx/check-child c :gather (:job need) (:args need)))))))
 
 (defn no-source-why
   "Text for the no-source wait: what each allowed source lacks."
@@ -300,7 +318,7 @@
   "One round of the gather source: the child for the first raw item the chain lacks, until it ends."
   [c names have target]
   (let [p (:primitives c)
-        need (some-> (gather-plan c names (- target have)) :gather gather-need)]
+        need (some->> (some-> (gather-plan c names (- target have)) :gather gather-need) (with-block c))]
     (cond
       (nil? need) (do (tried! c :gather :no-plan) :continue)
       (and (not (get-in (ctx/mem c) [:gather :before])) (not (gather-viable? c names (- target have))))

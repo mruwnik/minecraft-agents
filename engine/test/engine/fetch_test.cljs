@@ -725,3 +725,37 @@
           (core/submit! (:eng s) (list 'jobs.items.obtain {:item "oak_sapling" :how #{:chest :craft}}) {})
           (await (run-ticks s 10))
           (is (empty? (calls s "dig"))))))))
+
+(deftest obtain-gather-needs-every-raw-item-seen-before-it-starts
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (update (bare []) :blocks merge tree-blocks) [own-zone])]
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "stone_pickaxe"}) {})
+          (await (run-ticks s 10))
+          (is (= 1 (count (filter #(= :no-source (:reason %)) (events-of s :waiting)))))
+          (is (empty? (calls s "dig")) "no tree felled for a chain that then lacks stone"))))))
+
+(deftest obtain-gathers-coal-from-a-deepslate-ore
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (assoc (update (world {}) :blocks merge {"1,64,5" "deepslate_coal_ore" "2,64,5" "deepslate_coal_ore"})
+                              :drops {"deepslate_coal_ore" "coal"}
+                              :inventory [{:name "wooden_pickaxe" :count 1} {:name "stick" :count 4}]) [own-zone])]
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "torch"}) {})
+          (await (run-ticks s 80))
+          (is (empty? (listed s)))
+          (is (pos? (get (inv s) "torch" 0))))))))
+
+(deftest obtain-gather-that-brings-in-nothing-stops-no-source-with-tried
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (assoc (update (bare []) :blocks merge tree-blocks) :unreachable (vec (keys tree-blocks))) [own-zone])]
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wooden_pickaxe"}) {})
+          (await (run-ticks s 200))
+          (is (empty? (listed s)))
+          (is (nil? (get (inv s) "wooden_pickaxe")))
+          (let [st (last (events-of s :stopped))]
+            (is (= :no-source (:reason st)))))))))
