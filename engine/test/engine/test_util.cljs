@@ -8,7 +8,8 @@
             [engine.fake :as fake-world]
             [engine.fake.node :as node]
             [engine.fast-pace]
-            [engine.memory :as mem]))
+            [engine.memory :as mem]
+            [jobs.lib.near :as near]))
 
 (def require-here node/require-here)
 
@@ -163,3 +164,12 @@
   "The \"source.kind\" names of collected events, in order."
   [seen]
   (mapv #(str (name (:source %)) "." (name (:kind %))) @seen))
+
+(defn ^:async with-near-stub
+  "Run the async f with jobs.lib.near/go-near! replaced by stub, restored after."
+  [stub f]
+  (let [k "cljs$core$IFn$_invoke$arity$4" ; callers use the 4-arity, which the compiler calls directly
+        orig (aget near/go-near! k)]
+    (aset near/go-near! k stub)
+    (try (await (f))
+         (finally (aset near/go-near! k orig)))))

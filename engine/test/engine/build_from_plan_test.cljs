@@ -10,8 +10,7 @@
             [engine.triggers :as triggers]
             [jobs.lib.reach :as reach]
             [jobs.lib.world-files :as world]
-            [jobs.build.from-plan :as build]
-            [jobs.lib.near :as near]))
+            [jobs.build.from-plan :as build]))
 
 (def job 'jobs.build.from-plan)
 
@@ -637,15 +636,6 @@
           (is (= {[4 64 3] :no-tool} (:given-up result)))
           (is (= "stone" (block p [4 64 3]))))))))
 
-(defn ^:async with-near-stub
-  "Run the async f with jobs.lib.near/go-near! replaced by stub, restored after."
-  [stub f]
-  (let [k "cljs$core$IFn$_invoke$arity$4" ; callers use the 4-arity, which the compiler calls directly
-        orig (aget near/go-near! k)]
-    (aset near/go-near! k stub)
-    (try (await (f))
-         (finally (aset near/go-near! k orig)))))
-
 (deftest the-walk-to-a-stand-never-escalates-and-a-waiting-walk-counts-no-failure
   (async done
     (tu/run-async done
@@ -653,7 +643,7 @@
         (let [plan {:id "far" :parts [{:id "post" :cells [[40 64 0]] :want "oak_fence"}]}
               opts (atom [])
               {:keys [eng]} (start {:inventory kit} {"far" plan})
-              result (await (with-near-stub (fn ^:async f [_ _ _ o] (swap! opts conj o) :partial)
+              result (await (tu/with-near-stub (fn ^:async f [_ _ _ o] (swap! opts conj o) :partial)
             (fn ^:async b [] (await (h/child-outcome eng job {:plan "far"} 6)))))]
           (is (seq @opts))
           (is (every? #(false? (:escalate %)) @opts) "a walk to a stand never digs through the build")

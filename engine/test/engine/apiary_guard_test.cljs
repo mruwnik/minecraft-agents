@@ -9,8 +9,7 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
-            [jobs.apiary.guard :as guard]
-            [jobs.lib.near :as near]))
+            [jobs.apiary.guard :as guard]))
 
 (defn setup
   "The engine over the fake world; with floor? the walk-floor ground under it, for the walks of go-to."
@@ -319,15 +318,6 @@
     (is (= {:op :dig :pos {:x 2 :y 64 :z 0}}
            (guard/next-step (fn [pos] (when-let [n (get (assoc cells {:x 2 :y 63 :z 0} "air") pos "air")] #js {:name n})) s)))))
 
-(defn ^:async with-near-stub
-  "Run the async f with jobs.lib.near/go-near! replaced by stub, restored after."
-  [stub f]
-  (let [k "cljs$core$IFn$_invoke$arity$4" ; callers use the 4-arity, which the compiler calls directly
-        orig (aget near/go-near! k)]
-    (aset near/go-near! k stub)
-    (try (await (f))
-         (finally (aset near/go-near! k orig)))))
-
 (deftest the-walk-to-a-fire-never-escalates-and-a-waiting-walk-is-a-yield
   (async done
     (tu/run-async done
@@ -335,7 +325,7 @@
         (let [opts (atom [])
               w (assoc (fire-world {:inventory (inv "white_carpet" 1)}) :self {:pos {:x 20 :y 64 :z 0}})
               {:keys [eng p]} (setup w)]
-          (await (with-near-stub (fn ^:async f [_ _ _ o] (swap! opts conj o) :partial)
+          (await (tu/with-near-stub (fn ^:async f [_ _ _ o] (swap! opts conj o) :partial)
             (fn ^:async b [] (await (child-outcome eng job {:radius 30} 6)))))
           (is (seq @opts))
           (is (every? #(false? (:escalate %)) @opts) "a walk to a fire never digs or pillars")

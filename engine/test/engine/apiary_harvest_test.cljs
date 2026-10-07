@@ -6,7 +6,6 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.test-util :as tu]
-            [jobs.lib.near :as near]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
             [jobs.apiary.harvest :as harvest]))
@@ -235,15 +234,6 @@
           (is (empty? (calls p "useOn")))
           (is (= [:no-zones] (mapv :reason (kinds seen :apiary.declined)))))))))
 
-(defn ^:async with-near-stub
-  "Run the async f with jobs.lib.near/go-near! replaced by stub, restored after."
-  [stub f]
-  (let [k "cljs$core$IFn$_invoke$arity$4" ; callers use the 4-arity, which the compiler calls directly
-        orig (aget near/go-near! k)]
-    (aset near/go-near! k stub)
-    (try (await (f))
-         (finally (aset near/go-near! k orig)))))
-
 (deftest the-walk-to-a-hive-never-escalates-and-a-waiting-walk-is-a-yield
   (async done
     (tu/run-async done
@@ -251,7 +241,7 @@
         (let [opts (atom [])
               w (assoc (world {:inventory (inv "shears" 1)}) :self {:pos {:x 20 :y 64 :z 0}})
               {:keys [eng p]} (setup w)]
-          (await (with-near-stub (fn ^:async f [_ _ _ o] (swap! opts conj o) :partial)
+          (await (tu/with-near-stub (fn ^:async f [_ _ _ o] (swap! opts conj o) :partial)
             (fn ^:async b [] (await (child-outcome eng job {:radius 30} 6)))))
           (is (seq @opts))
           (is (every? #(false? (:escalate %)) @opts) "a walk to a hive never digs or pillars")

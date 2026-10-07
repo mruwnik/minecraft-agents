@@ -14,7 +14,6 @@
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
             [jobs.gather.mine :as mine]
-            [jobs.lib.near :as near]
             [plan.shape :as shape]))
 
 (defn spec [args] (list 'jobs.gather.mine args))
@@ -238,7 +237,7 @@
           (is (zero? (dig-count s)))
           (is (finished? s)))))))
 
-(deftest endless-partial-walks-skip-the-target
+(deftest a-short-first-walk-is-partial-and-the-job-ends-without-digging
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -1334,22 +1333,13 @@
                                  (rock-world {"2,64,1" "lava"}) 80))]
           (is (some #(= 2 (first %)) (dug-cells s)) "the body cut past lava no sight reached"))))))
 
-(defn ^:async with-near-stub
-  "Run the async f with jobs.lib.near/go-near! replaced by stub, restored after."
-  [stub f]
-  (let [k "cljs$core$IFn$_invoke$arity$4" ; callers use the 4-arity, which the compiler calls directly
-        orig (aget near/go-near! k)]
-    (aset near/go-near! k stub)
-    (try (await (f))
-         (finally (aset near/go-near! k orig)))))
-
 (deftest the-walk-to-a-target-is-go-near-and-a-waiting-walk-is-a-yield
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (start {:world {:blocks {"15,64,0" "sand"}}})
               opts (atom [])]
-          (await (with-near-stub (fn ^:async f [_ _ _ o] (swap! opts conj o) :partial)
+          (await (tu/with-near-stub (fn ^:async f [_ _ _ o] (swap! opts conj o) :partial)
             (fn ^:async b [] (core/submit! (:eng s) (spec {:block "sand" :tunnel-length 0}) {})
             (await (run-ticks s 6)))))
           (is (seq @opts))
