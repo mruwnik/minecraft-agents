@@ -1,5 +1,5 @@
-;; jobs.village.feed (card 7f843e67): toss food to one villager (a fixed UUID, NoAI so it stays) and confirm it took it by the
-;; toss receipt. Live-only facts: whether a NoAI villager collects thrown food, and whether the toss lands on it from 2 blocks.
+;; jobs.village.feed (card 7f843e67): toss food to one villager (a fixed UUID, kept still by movement_speed 0; NoAI would stop it collecting drops, card d86c8544) and confirm it took it by the
+;; toss receipt. Live-only fact: whether the toss lands within the villager's pickup reach from 2 blocks.
 {:defaults
  {:tags [:village :jobs]
   :plot {:floor "grass_block"}
@@ -7,14 +7,14 @@
   :limit-s 120}
  :cases
  [{:name "feeds-three-bread"
-   :act [[:summon "villager" [16.5 0 16.5] "{NoAI:1b,UUID:[I;20260,7,1,843]}"]
+   :act [[:summon "villager" [16.5 0 16.5] "{Attributes:[{id:\"minecraft:movement_speed\",base:0.0d}],UUID:[I;20260,7,1,843]}"]
          [:wait-s 2]
          [:job (jobs.village.feed {:villager "00004f24-0000-0007-0000-00010000034b" :count 3})]]
    :expect [{:event {:source :job :kind :feed.done} :within-s 90 :of-job true}]
    :after [[:item "bread" 5]]}
   ;; cards 7f843e67, 127a31a1: a real villager takes the toss within the 4 s watch (feed.done), and a bread lying near beforehand is not collected
   {:name "feeds-two-bread-taken-within-4s"
-   :act [[:summon "villager" [16.5 0 16.5] "{NoAI:1b,UUID:[I;20260,7,1,843]}"]
+   :act [[:summon "villager" [16.5 0 16.5] "{Attributes:[{id:\"minecraft:movement_speed\",base:0.0d}],UUID:[I;20260,7,1,843]}"]
          [:wait-s 2]
          [:job (jobs.village.feed {:villager "00004f24-0000-0007-0000-00010000034b" :count 2})]]
    :expect [{:event {:source :job :kind :feed.done :data {:fed 2}} :within-s 40 :of-job true}
@@ -23,7 +23,7 @@
   ;; should stay: a stray bread of someone else lying near before the toss is never collected back
   {:name "stray-bread-stays"
    :act [[:summon "item" [14.5 0 20.5] "{Item:{id:\"minecraft:bread\",count:1}}"]
-         [:summon "villager" [16.5 0 16.5] "{NoAI:1b,UUID:[I;20260,7,1,843]}"]
+         [:summon "villager" [16.5 0 16.5] "{Attributes:[{id:\"minecraft:movement_speed\",base:0.0d}],UUID:[I;20260,7,1,843]}"]
          [:wait-s 2]
          [:job (jobs.village.feed {:villager "00004f24-0000-0007-0000-00010000034b" :count 2})]]
    :expect [{:event {:source :job :kind :feed.done :data {:fed 2}} :within-s 40 :of-job true}]
@@ -35,7 +35,7 @@
    :after [[:item "bread" 8]]}
   ;; should fail: a full inventory takes nothing; every drop is collected back
   {:name "full-villager-takes-nothing"
-   :act [[:summon "villager" [16.5 0 16.5] "{NoAI:1b,UUID:[I;20260,7,1,843],Inventory:[{id:\"minecraft:bread\",count:64},{id:\"minecraft:bread\",count:64},{id:\"minecraft:bread\",count:64},{id:\"minecraft:bread\",count:64},{id:\"minecraft:bread\",count:64},{id:\"minecraft:bread\",count:64},{id:\"minecraft:bread\",count:64},{id:\"minecraft:bread\",count:64}]}"]
+   :act [[:summon "villager" [16.5 0 16.5] "{Attributes:[{id:\"minecraft:movement_speed\",base:0.0d}],UUID:[I;20260,7,1,843],Inventory:[{id:\"minecraft:bread\",count:64},{id:\"minecraft:bread\",count:64},{id:\"minecraft:bread\",count:64},{id:\"minecraft:bread\",count:64},{id:\"minecraft:bread\",count:64},{id:\"minecraft:bread\",count:64},{id:\"minecraft:bread\",count:64},{id:\"minecraft:bread\",count:64}]}"]
          [:wait-s 2]
          [:job (jobs.village.feed {:villager "00004f24-0000-0007-0000-00010000034b" :count 2})]]
    :expect [{:event {:source :job :kind :feed.gave-up :data {:reason "not-taken"}} :within-s 90 :of-job true}]
