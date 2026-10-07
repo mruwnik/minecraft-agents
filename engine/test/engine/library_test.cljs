@@ -12,6 +12,7 @@
             [engine.test-util :as tu]
             [engine.trigger-api :as trigger-api]
             [engine.triggers :as triggers]
+            [jobs.lib.cost :as cost]
             [jobs.lib.world-files :as ew]
             [jobs.movement.look-around :as look-around]
             [jobs.storage.deposit :as dep]))
@@ -487,8 +488,9 @@
           (await (core/tick! eng))
           (is (= 1 (count (calls p "transfer"))) "one stack per round")
           (await (run-until-empty eng 6))
-          (is (= {"stone_axe" 1} (inv p)))
-          (is (= [{:name "oak_log" :count 5} {:name "bread" :count 2}]
+          (is (= {"stone_axe" 1 "bread" (get (cost/food-reserve (:inventory chest-world)) "bread")} (inv p))
+              "tools and the food reserve stay carried")
+          (is (= [{:name "oak_log" :count 5}]
                  (get-in @(fake/state p) [:containers [10 64 0]]))))))))
 
 (deftest deposit-item-filter-and-chest-from-places
