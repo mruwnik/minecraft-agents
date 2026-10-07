@@ -439,3 +439,20 @@
   (let [r (run (pools [[16 64 3 17 65 3 "air"]]) in-lift (near 17 64 3 0) {:goalFlood 0})]
     (is (found? r))
     (is (re-find #"magma column down" (summary r)))))
+
+;; ---- a drag column across a channel ----
+
+(defn channel
+  "A 1-wide water channel x 3..9 (y 64..66, z 1) in stone, air over it, no bank to climb out onto; a bubble column (drag as given) across it at x 6."
+  [drag]
+  (world [[2 64 0 10 69 2 "stone"]
+          [3 64 1 9 66 1 "water"]
+          [3 67 1 9 69 1 "air"]
+          [6 63 1 6 63 1 (if drag "magma_block" "soul_sand")]
+          [6 64 1 6 66 1 "bubble_column" {:drag drag}]]))
+
+(deftest a-drag-column-across-a-channel-is-never-swum-sideways-into
+  (let [goal (near 9 66 1 0)
+        from {:x 3 :y 66 :z 1}]
+    (is (not (found? (run (channel true) from goal))) "a dragging column blocks the way")
+    (is (found? (run (channel false) from goal)) "a lifting column is crossed")))

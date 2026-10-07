@@ -18,8 +18,9 @@
     :reach blocks, else step sideways, at the feet's height, to the nearest column within :radius that does; else a go-to
     child to the nearest air-reaching surface within :air-radius (a failed target is not tried again); else dig up through
     a cap within 3 blocks over the head when it is natural (jobs.lib.escape/natural?), not protected and not sand or gravel,
-    one cell a pass, at most 3 digs (zones respected, trespass only as a last resort). Kelp, seagrass and bubble columns
-    count as water. Air is looked for only in cells the body has seen or looked at (perception memory), never through
+    one cell a pass, at most 3 digs (zones respected, trespass only as a last resort). Kelp, seagrass and upward bubble columns
+    count as water; a downward (drag) bubble column is never swum into or crossed (a side step or a straight walk to a
+    column behind it is refused too). Air is looked for only in cells the body has seen or looked at (perception memory), never through
     stone: it looks up the own column first, and when no block is seen over it (a dark column learns nothing) swims
     up it at once; only a seen block over the own column sends the looks to the neighbour columns.
   - Enclosed (head cell holds a suffocating block, see jobs.lib.breath): step to a side cell with room
@@ -119,6 +120,24 @@
                      (or (true? (some-> props .-drag)) (= "true" (some-> props .-drag str)))))]
     (if drag? "bubble_column_down" (some-> b .-name))))
 
+(defn rose?
+  "A swim that ended with the feet at floor y is progress only above the best height reached so far (best, nil before
+  the first swim) and the feet height the pass started at (fy): a body pushed back down between passes is not progress."
+  [best fy y]
+  (> y (max (or best fy) fy)))
+
+(defn drag-between?
+  "A downward bubble column lies in a cell the straight walk from the feet column (fx, fz) to (x, z) crosses, at the feet's
+  height or the one above (the target column itself included)."
+  [p fx fz x z fy]
+  (let [n (max (js/Math.abs (- x fx)) (js/Math.abs (- z fz)))]
+    (boolean
+     (some (fn [i]
+             (let [cx (js/Math.round (+ fx (* (- x fx) (/ i n))))
+                   cz (js/Math.round (+ fz (* (- z fz) (/ i n))))]
+               (some #(= "bubble_column_down" (seen-water-name p {:x cx :y % :z cz})) [fy (inc fy)])))
+           (range 1 (inc n))))))
+
 (defn passable-water-or-air? [name]
   (or (breath/air? name) (contains? swimmable name)))
 
@@ -150,7 +169,7 @@
          skip (set failed)]
      (some (fn [[dx dz]]
              (let [cell (surface-in-column p (+ fx dx) (+ fz dz) fy reach)]
-               (when-not (contains? skip cell) cell)))
+               (when-not (or (contains? skip cell) (drag-between? p fx fz (+ fx dx) (+ fz dz) fy)) cell)))
            (columns radius)))))
 
 (defn solid-at? [p cell] (breath/suffocates? p cell))
@@ -246,7 +265,8 @@
 (defn ^:async swim-up!
   "Drowning: look, then swim up the own column when it reaches air, else walk (through
   water, at the feet's height) to the nearest column that does. With no air seen and no block seen over the own
-  column, swim up anyway: a body in the dark learns by moving, as a player does. True when the action succeeded; :no-air
+  column, swim up anyway: a body in the dark learns by moving, as a player does. True when the action succeeded (a swim
+  counts when it surfaced or rose above the best height reached); :no-air
   when there is no air in reach; nil when the move failed (failure counted)."
   [c]
   (let [{:keys [reach]} (:args c)
@@ -258,9 +278,12 @@
         target (await (find-air! c pos))
         ;; a swim that timed out but rose is progress, not a failed try: a deep column takes several 3 s swims
         swim! (fn ^:async f []
-                (let [surfaced? (= "surfaced" (status (await (ctx/act c :swim #js {}))))]
+                (let [surfaced? (= "surfaced" (status (await (ctx/act c :swim #js {}))))
+                      y (js/Math.floor (:y (u/self-pos c)))
+                      rose (rose? (:best-y (ctx/mem c)) fy y)]
                   (when surfaced? (ctx/update-mem! c assoc :surfaced true))
-                  (or surfaced? (<= (inc fy) (js/Math.floor (:y (u/self-pos c)))))))]
+                  (ctx/update-mem! c update :best-y #(max (or % y) y))
+                  (or surfaced? rose)))]
     (cond
       (and (nil? target) (column-open? p fx fz fy reach))
       (or (await (swim!)) :no-air)
@@ -286,13 +309,14 @@
         fy (js/Math.floor (.. self -pos -y))
         fz (js/Math.floor (.. self -pos -z))
         fits? (fn [cell]
-                (let [feet (u/seen-name p cell)
-                      head (u/seen-name p (update cell :y inc))
-                      below (u/seen-name p (update cell :y dec))]
+                (let [feet (seen-water-name p cell)
+                      head (seen-water-name p (update cell :y inc))
+                      below (seen-water-name p (update cell :y dec))]
                   (and feet head below
                        (not (breath/suffocates? p cell)) (not (breath/suffocates? p (update cell :y inc)))
                        (not (contains? harmful-in-cell feet)) (not (contains? harmful-in-cell head))
-                       (not (breath/air? below)) (not (contains? #{"water" "lava" "magma_block"} below)))))]
+                       (not (breath/air? below)) (not (contains? #{"water" "lava" "magma_block"} below))
+                       (not-any? #{"bubble_column_down"} [feet head below]))))]
     (->> [[1 0] [-1 0] [0 1] [0 -1]]
          (map (fn [[dx dz]] {:x (+ fx dx) :y fy :z (+ fz dz)}))
          (filter fits?)

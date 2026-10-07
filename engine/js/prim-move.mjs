@@ -90,7 +90,12 @@ export function createMove (env) {
   }
 
   const oxygenNow = () => env.bot.oxygenLevel ?? 20
-  const headUnderwater = () => env.bot.blockAt(vec(cell(eye())))?.name === 'water'
+  // Water plants and bubble columns hold water: a head in one is under water and cannot breathe.
+  const WATER_HOLDERS = new Set(['water', 'kelp', 'kelp_plant', 'seagrass', 'tall_seagrass', 'bubble_column'])
+  const headUnderwater = () => {
+    const block = env.bot.blockAt(vec(cell(eye())))
+    return !!block && (WATER_HOLDERS.has(block.name) || block.getProperties?.().waterlogged === true)
+  }
 
   // Holds jump until the head is out of the water. The pathfinder has no swim-up move, so a submerged body cannot
   // surface with moveTo. Jump is released on every exit: surfaced, timeout, cut, error.

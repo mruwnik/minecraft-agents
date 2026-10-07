@@ -1141,3 +1141,39 @@
           (is (<= top (js/Math.floor (:y (core/self-pos p)))) "swam to the top")
           (is (empty? (of-kind seen :no_air)) "a swim that rose is not a failed try")
           (is (>= (count (filter #{"swim"} (call-names p))) 5)))))))
+
+(defn crossing-world
+  "Stone y 64..67 around; water at x 0 capped at y 68, a bubble column (drag as given) at x 1, and water open to air at x 2."
+  [drag]
+  (let [column (fn [x] (for [y (range 64 68)] (str x "," y ",0")))]
+    {:self {:inWater true :oxygen 4}
+     :blocks (merge (into {} (for [x (range -2 4) y (range 64 68) z (range -2 3)] [(str x "," y "," z) "stone"]))
+                    {"0,68,0" "stone"}
+                    (into {} (for [c (column 0)] [c "water"]))
+                    (into {} (for [c (column 1)] [c "bubble_column"]))
+                    (into {} (for [c (column 2)] [c "water"])))
+     :states (into {} (for [c (column 1)] [c {:drag drag}]))}))
+
+(deftest a-down-bubble-column-between-the-body-and-the-air-is-never-crossed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (crossing-world true))]
+          (await (one-run! eng (assoc defaults :radius 2 :air-radius 1)))
+          (is (not-any? #(some-> % .-args .-pos .-x (>= 1)) (array-seq (.. p -world -calls))) "no move past x=0")
+          (is (> 1 (js/Math.floor (:x (core/self-pos p))))))))))
+
+(deftest side-cell-refuses-a-down-bubble-column-in-feet-head-or-below
+  (doseq [[cells drag? expect?] [[["1,64,0" "1,65,0" "1,63,0"] true false]
+                                 [["1,64,0" "1,65,0" "1,63,0"] false true]]]
+    (let [world {:blocks (merge {"0,65,0" "stone"} (into {} (for [c cells] [c "bubble_column"])))
+                 :states (into {} (for [c cells] [c {:drag drag?}]))}
+          {:keys [p]} (setup (assoc world :self {:inWater true :oxygen 20 :pos {:x 0.5 :y 64 :z 0.5}}))]
+      (is (= expect? (some? (b/side-cell p (.self p)))) (str "drag " drag?)))))
+
+(deftest a-swim-is-progress-only-above-the-best-height-reached
+  (is (b/rose? nil 64 65) "first rise")
+  (is (not (b/rose? 65 64 65)) "pushed back down, back to the best: no progress")
+  (is (b/rose? 65 64 66) "above the best")
+  (is (b/rose? 65 66 67) "carried up between passes, then a block more")
+  (is (not (b/rose? nil 64 64)) "no rise"))

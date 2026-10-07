@@ -169,9 +169,10 @@
                   (.verticalMove s i x y z 0 region y2 0 move (+ base extra) risk 0)
                   (.swimEnd s)))))))))
 
-  ;; a sideways swim move into the water cell beside (x, y, z)
+  ;; a sideways swim move into the water cell beside (x, y, z); into a dragging column only when the goal is well below it
   (swimSideways [s i x y z region c x2 z2 ^boolean tight-src ^boolean src-sub]
-    (let [risk (.swimRisk s x2 y z2)
+    (when-not (and (== (aget (.-tbl-bubble s) (.stateAt s x2 y z2)) 2) (not (< (.-goal-y s) (- y 1))))
+     (let [risk (.swimRisk s x2 y z2)
           tight (or tight-src ^boolean (.tightAt s x2 y z2))
           base (.-c-swim-h s)
           extra (.currentAt s x2 y z2)]
@@ -179,7 +180,7 @@
         (if tight
           (.tightMove s i x y z 0 region c x2 y z2 0 MOVE-SWIM (+ base extra) risk 0 SNAP SNAP)
           (.edge s x2 y z2 0 MOVE-SWIM i (+ base extra) risk 0 0 0))
-        (.swimEnd s))))
+        (.swimEnd s)))))
 
   ;; out of the water onto the bank cells beside it, from the same level up to last-ty
   (swimExit [s i x y z region c x2 z2 ^boolean tight-src ^boolean src-sub last-ty max-stand]
@@ -204,7 +205,8 @@
           dz (aget (.-adz s) c)
           x2 (+ x dx)
           z2 (+ z dz)]
-      (when-not (or (< (.swimAt s x2 y z2) 0) ^boolean (.tightAt s x2 y z2) ^boolean (.refuses s x2 y z2 src-surface))
+      (when-not (or (< (.swimAt s x2 y z2) 0) ^boolean (.tightAt s x2 y z2) ^boolean (.refuses s x2 y z2 src-surface)
+                    (and (== (aget (.-tbl-bubble s) (.stateAt s x2 y z2)) 2) (not (< (.-goal-y s) (- y 1)))))
         (let [lo (* y 16)
               hi (+ lo BODY)
               sa (.side s (+ x dx) z lo hi)
