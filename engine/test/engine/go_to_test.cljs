@@ -865,6 +865,14 @@
           (let [s (await (go! {:blocks flat :self {:pos {:x 0.5 :y 64 :z 0.5} :food food}} {:pos [5 64 0] :range 0}))]
             (is (= [sprint] (distinct (map :sprint (events-of s :planned)))) (str "food " food))))))))
 
+(deftest the-plan-may-sprint-by-the-food-the-caller-gave
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[body-food arg sprint] [[20 0 false] [0 20 true]]]
+          (let [s (await (go! {:blocks flat :self {:pos {:x 0.5 :y 64 :z 0.5} :food body-food}} {:pos [5 64 0] :range 0 :food arg}))]
+            (is (= [sprint] (distinct (map :sprint (events-of s :planned)))) (str "body " body-food " :food " arg))))))))
+
 (defn ^:async go-marker!
   "Run go-to over flat with the places in memory and a shared places.json holding markers; {:out :p :seen}."
   [places markers args]

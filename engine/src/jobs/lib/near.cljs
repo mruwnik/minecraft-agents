@@ -93,9 +93,11 @@
                    (let [plan (await (plan! c to range doors (policy-of) walls explore one-way budget progress dangers avoid dark tolls))]
                      (if-let [no (wplan/no-walk plan 0 (policy-of))]
                        (if stuck (door-stuck stuck) no)
-                       (let [{done :done last-plan :plan}
+                       (let [began (ctx/now c)
+                             {done :done last-plan :plan planned :damage}
                              (await (walk/follow! c plan {:plan-fn #(plan! c to range doors (policy-of) (into walls %) explore one-way (wsearch/replan-budget budget) progress dangers avoid dark tolls)
-                                                          :walk-fn walk-fn :to to :policy (policy-of) :announce! announce! :dangers dangers}))]
+                                                          :walk-fn walk-fn :to to :policy (policy-of) :announce! announce! :dangers dangers}))
+                             _ (walk/note-mismatch! c planned began (:fall-margin (:args c)))]
                          (cond
                            (not= :door-stuck (:status done))
                            (cond-> (walk/partial-end done (:status last-plan) to range (:steps last-plan) (:stop last-plan))

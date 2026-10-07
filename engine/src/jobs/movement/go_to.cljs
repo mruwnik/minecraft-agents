@@ -75,7 +75,8 @@
    :dark {:doc "false: plan dark cells like lit ones; true: a dark cell (seen dark, or unseen at night) costs twice a lit one" :default true}
    :tolls {:doc "cells to cross only as a last resort, [{:x :y :z :factor}]: each costs factor times its own seconds more (jobs.lib.cost farm-tolls, zone-tolls)" :default nil}
    :min-health {:doc "hp (1-20) a drop or a plant's prick may not take the body below, less a margin of 1 (the walk's damage budget); 12 when absent; a floor the walk never crosses, not even when it goes over its budget" :default nil}
-   :food {:doc "the body's food level (0-20) the walk counts on for its damage budget and for whether it can heal by waiting (18 or more regenerates); the caller tells it" :default 20}
+   :food {:doc "the food level (0-20) the walk counts on for its damage budget, its sprinting and whether it can heal by waiting (18 or more regenerates); default the body's own" :default nil}
+   :fall-margin {:doc "hp the falls of a walk may cost over the plan before an info go-to damage-mismatch" :default 1}
    :hp-seconds {:doc "seconds an hp costs at full health when the planner weighs a drop or a plant's prick against a longer way (more at low health)" :default 10}
    :max-damage {:doc "hp at most a walk may spend on drops and plants that hurt (0: none), under the :min-health budget" :default nil}
    :drop-cost {:doc "number: scales the cost of a drop (fall seconds and damage; 1 as is, 0 free, 5 dear); false: no drop of 2 or 3 at all. :one-way :closed instead refuses only a drop the body cannot climb back" :default 1}
@@ -263,10 +264,19 @@
                           (-> (dissoc :escalation :escalation-from :planned :holes-before)
                               (assoc :restore-pending true))))))
 
+(defn with-body-food
+  "c with the :food arg the caller gave, else the body's own food now (a felt fact): the walk counts on it."
+  [c]
+  (if (number? (:food (:args c)))
+    c
+    (let [food (.-food (.self (:primitives c)))]
+      (cond-> c (number? food) (assoc-in [:args :food] food)))))
+
 (defn ^:async step!
   "One iteration of a call: :again to go on in the same call, else what the call returns."
-  [c pos]
-  (let [m (ctx/mem c)]
+  [c0 pos]
+  (let [c (with-body-food c0)
+        m (ctx/mem c)]
     (cond
       (:restore-now m) (await (esc/restore-round! c))
       (:escalation m) (await (esc/escalation-round! c pos))

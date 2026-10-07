@@ -97,7 +97,7 @@
 
 (defn ^:async probe!
   "The hp of the whole way for a body that may spend all but 1 hp, planned again only when the health or the cell changed
-  since the last probe of this wait (mem :probe, kept heal-gap-ms): see probe-plan!."
+  since the last probe of this wait (a probe that found no way is not kept) (mem :probe, kept heal-gap-ms): see probe-plan!."
   [c pos range]
   (let [now (ctx/now c)
         key [(.-health (.self (:primitives c))) (mapv #(js/Math.floor (% pos)) [:x :y :z])]
@@ -105,7 +105,8 @@
     (if (and m (= key (:key m)) (< (- now (:at m)) heal-gap-ms))
       (:planned m)
       (let [planned (await (probe-plan! c pos range))]
-        (ctx/update-mem! c assoc :probe {:key key :planned planned :at now})
+        ;; a nil (no way) is not kept: it ends the wait, and the world may have changed by the next call
+        (when planned (ctx/update-mem! c assoc :probe {:key key :planned planned :at now}))
         planned))))
 
 (defn ^:async heal-or-drop!

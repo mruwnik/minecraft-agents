@@ -2,6 +2,7 @@
   "go-to when the damage budget refuses the only way: heal or wait, then the over-budget drop down to the floor, against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.fake :as fake]
             [engine.go-to-test :as g]
             [engine.test-util :as tu :refer [floor]]
@@ -98,15 +99,18 @@
           (is (empty? (g/events-of r :go-to.over-budget)))
           (is (= :unreachable (:reason @out))))))))
 
-(deftest the-food-comes-from-the-caller-not-the-body
+(deftest the-food-defaults-to-the-bodys-own-and-the-caller-overrides-it
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [fed (await (go-heal! (world {:health 13 :food 3}) args true))
-              hungry (await (go-heal! (world {:health 13 :food 20}) (assoc args :food 3) false))]
-          (is (seq (g/events-of fed :go-to.waiting-health)) "no :food given: counted as fed, whatever the body's food")
-          (is (empty? (g/events-of hungry :go-to.waiting-health)) ":food 3 given: nothing to regenerate with")
-          (is (= 1 (count (g/events-of hungry :go-to.over-budget)))))))))
+        (let [starving (await (go-heal! (world {:health 13 :food 3}) args false))
+              told-fed (await (go-heal! (world {:health 13 :food 3}) (assoc args :food 20) true))
+              told-hungry (await (go-heal! (world {:health 13 :food 20}) (assoc args :food 3) false))]
+          (is (empty? (g/events-of starving :go-to.waiting-health)) "no :food given: the body's own 3, nothing to regenerate with")
+          (is (= 1 (count (g/events-of starving :go-to.over-budget))))
+          (is (seq (g/events-of told-fed :go-to.waiting-health)) ":food 20 given: counted as fed")
+          (is (empty? (g/events-of told-hungry :go-to.waiting-health)) ":food 3 given: nothing to regenerate with")
+          (is (= 1 (count (g/events-of told-hungry :go-to.over-budget)))))))))
 
 (defn ^:async probes-while-waiting
   "How many probe plans (a survivable budget over 0) a body that never heals asks for while go-to waits for it."
@@ -152,3 +156,27 @@
     (is (not (gth/stalled? st 14 (+ now 31000))))
     (is (= {:health 14 :t (+ now 31000)} (select-keys (gth/next-state st 14 (+ now 31000) {}) [:health :t])))
     (is (nil? (gth/heal-state {:heal (assoc st :last now)} (+ now gth/heal-gap-ms))) "an old state is a new wait")))
+
+(deftest a-probe-that-found-no-way-is-not-kept-a-changed-world-may-have-one
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [memo (atom {})
+              answers (atom ["none" "found"])
+              orig-plan wplan/plan-within!
+              orig-mem ctx/mem
+              orig-update ctx/update-mem!
+              orig-now ctx/now
+              c {:primitives (tu/fake-on-floor {:floor [-5 -5 20 5]}) :args {}}]
+          (set! wplan/plan-within! (fn [& _] (let [a (first @answers)] (swap! answers rest)
+                                               (js/Promise.resolve {:r #js {:status a :path #js {:cost #js {:damage 1}}}}))))
+          (set! ctx/mem (fn [_] @memo))
+          (set! ctx/update-mem! (fn [_ f & args] (apply swap! memo f args)))
+          (set! ctx/now (fn [_] 1000))
+          (try
+            (let [first-probe (await (gth/probe! c {:x 5 :y 64 :z 0} 0))
+                  second-probe (await (gth/probe! c {:x 5 :y 64 :z 0} 0))]
+              (is (nil? first-probe))
+              (is (= 1 second-probe) "the second probe plans again: a nil is no reason to give up for heal-gap-ms"))
+            (finally (set! wplan/plan-within! orig-plan) (set! ctx/mem orig-mem)
+                     (set! ctx/update-mem! orig-update) (set! ctx/now orig-now))))))))

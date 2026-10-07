@@ -131,10 +131,10 @@
   (let [snapshot (.-snapshot pw) tops (.-top (.-table pw))]
     (fn [x y z] (pos? (aget tops (.stateAt snapshot x y z))))))
 
-(def default-food "The food a walk counts on when its caller gives none: fed (nothing caps the damage)." 20)
+(def default-food "The food a walk counts on when it has neither a :food arg nor a body food: fed (nothing caps the damage)." 20)
 
 (defn food-of
-  "The food level (0-20) the walk counts on: the job's :food arg (a number), else default-food. The caller knows it; the walk does not read it off the body."
+  "The food level (0-20) the walk counts on: the job's :food arg (a number), else default-food. go-to fills the arg with the body's own food (jobs.movement.go-to/step!); the walk does not read the body."
   [c]
   (let [food (:food (:args c))]
     (if (number? food) food default-food)))
@@ -153,14 +153,14 @@
   ((if (:over-budget c) cost/survivable-budget cost/damage-budget) (damage-body c) (select-keys (:args c) [:min-health :max-damage])))
 
 (defn body-policy
-  "executor/policy for the body: with food 6 or less the client does not sprint, so :sprint is false (a corner jump past
+  "executor/policy for the body: with the walk's food (food-of) 6 or less the client does not sprint, so :sprint is false (a corner jump past
   a high block is then refused). :damage-budget (hp, damage-budget) and :damage-weight (seconds an hp costs at its health)
   price the damage of a walk (the job's :hp-seconds arg: the seconds an hp costs at full health, default jobs.lib.cost/hp-seconds);
   :max-drop and :fall-factor follow its fall enchantments and the longest drop it survives (the survivable-budget under the job's :max-damage,
   whatever the budget: a drop the budget refuses is a refusal the planner reports as :damageRefused, jobs.lib.cost/fall-profile)."
   [c]
   (let [self (.self (:primitives c))
-        food (.-food self)]
+        food (food-of c)]
     (cond-> (merge executor/policy
                    (cost/fall-profile {:damage-budget (cost/survivable-budget (damage-body c) (select-keys (:args c) [:max-damage]))
                                        :equipment (cost/equipment-of (.-equipment self))})

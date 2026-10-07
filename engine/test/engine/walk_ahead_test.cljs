@@ -361,9 +361,11 @@
   steps). {:done :walks}: walks the number of walk-fn calls."
   [why fresh-status reason fresh-steps]
   (let [walks (atom 0)
+        watches (atom [])
         fresh {:status fresh-status :r #js {:reason reason} :steps fresh-steps :ms 5}
         plan {:status "partial" :r #js {} :steps (line 3) :ms 5}
-        walk-fn (fn [steps _watch]
+        walk-fn (fn [steps watch]
+                  (swap! watches conj watch)
                   (js/Promise.resolve
                    (if (= 1 (swap! walks inc))
                      [{:status :replan :why why :step 1 :at [1 64 0]} 1]
@@ -371,7 +373,7 @@
         c {:primitives (tu/fake-on-floor {:floor [-5 -5 20 5]})}]
     (-> (walk/follow! c plan {:plan-fn (fn [_] (js/Promise.resolve fresh)) :walk-fn walk-fn :to [9 64 0]
                               :policy executor/policy})
-        (.then (fn [r] (assoc r :walks @walks))))))
+        (.then (fn [r] (assoc r :walks @walks :watches @watches))))))
 
 (deftest a-danger-replan-that-proves-the-goal-cut-off-ends-the-walk
   (async done
@@ -443,6 +445,14 @@
           (let [r (await (follow-with :health status reason steps))]
             (is (= 1 (:walks r)) (str status reason ": no second walk of the old plan"))
             (is (not= :arrived (:status (:done r))) (str status reason))))))))
+
+(deftest a-mob-replan-that-finds-no-walkable-plan-walks-the-kept-plan-watched
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (await (follow-with :mob "none" nil []))]
+          (is (= 2 (:walks r)))
+          (is (every? some? (:watches r)) "the kept plan keeps its health watch"))))))
 
 (deftest a-health-replan-that-finds-a-walkable-plan-walks-it
   (async done
@@ -522,3 +532,16 @@
         (let [world {:blocks (merge (floor -2 -3 10 3) (floor 59 11 -3 47 3))}
               [result replans at] (await (walk-to world [14 60 0] (fn [p] nil)))]
           (is (= [:arrived [] 14] [(:status result) replans (js/Math.floor (first at))])))))))
+
+(deftest note-mismatch-emits-when-falls-cost-over-the-callers-margin
+  (let [emitted (atom [])
+        orig-since ctx/since
+        c {:emit (fn [kind level m] (swap! emitted conj [kind level m]))}]
+    (set! ctx/since (fn [_ _ _] [{:data {:amount 5 :damageType "minecraft:fall"}}]))
+    (try
+      (walk/note-mismatch! c 3 0 nil)
+      (walk/note-mismatch! c 3 0 2)
+      (walk/note-mismatch! c 3 0 1)
+      (finally (set! ctx/since orig-since)))
+    (is (= [[:damage-mismatch :info {:planned 3 :lost 5}] [:damage-mismatch :info {:planned 3 :lost 5}]] @emitted)
+        "default margin 1 and margin 1: 5 is over 3 + 1; margin 2: 5 is not over 3 + 2")))

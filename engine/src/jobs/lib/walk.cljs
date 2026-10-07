@@ -151,7 +151,7 @@
   the look-ahead saw the way change (:changed: the new plan is walked), a partial plan is due a refresh (:refresh: the new
   plan is walked only when take-refresh? says it is clearly better, else the rest of the old one), or the body is stuck with
   a mob in its way (:mob: wait, plan round it). A replan that proves the goal cut off or enclosed ends the call with that
-  no-walk. At most max-watch-replans; past that the plan is walked unwatched.
+  no-walk. At most max-watch-replans; past that the plan is walked unwatched (a kept plan counts as a replan, and is watched).
   opts: :plan-fn (fn [walls]) -> a plan-walk! result (or a promise of one: plan-walk!) from where the body stands now, the
   cells {:x :y :z} read as walls;
   :walk-fn (fn [steps watch]) -> [done ms] (walk! or jobs.lib.pass/walk!); :to the goal cell; :policy for no-walk;
@@ -188,7 +188,7 @@
             (tell! :mob plan-ms false)
             (if (walkable? fresh)
               (recur (assoc fresh :ms plan-ms) (:steps fresh) (inc n) ms walked' damage')
-              (recur plan (subvec steps (max 0 (dec k))) wwatch/max-watch-replans ms walked' kept-damage)))
+              (recur plan (subvec steps (max 0 (dec k))) (inc n) ms walked' kept-damage)))
 
           (and (= :replan (:status done)) (= :health (:why done)))
           (let [t (js/performance.now)
@@ -236,6 +236,12 @@
 
           :else (finish done plan walked'))))))
 
+(defn note-mismatch!
+  "Emit the info :damage-mismatch when the falls hurt since began cost more than margin (default wwatch/fall-margin) over planned hp."
+  [c planned began margin]
+  (when-let [m (wwatch/damage-mismatch planned (ctx/since c :hurt began) (or margin wwatch/fall-margin))]
+    (ctx/emit! c :damage-mismatch :info m)))
+
 (defn ^:async walk-to!
   "Walk the body to within range of the goal cell to ([x y z]): settle, plan, follow the plan (follow!: at most timeout-s
   seconds a walk, planning again in the same call when the way ahead changes, a partial plan is refreshed or a mob is in the
@@ -263,8 +269,7 @@
                                           :walk-fn (fn [steps watch] (walk! c steps timeout-s watch))}))
                   walked (+ walked length)
                   walk-ms (+ walk-ms ms)
-                  _ (when-let [m (wwatch/damage-mismatch planned (ctx/since c :hurt began) (or fall-margin wwatch/fall-margin))]
-                      (ctx/emit! c :damage-mismatch :info m))
+                  _ (note-mismatch! c planned began fall-margin)
                   done (partial-end walk-result (:status last-plan) to range (:steps last-plan) (:stop last-plan))
                   after (if (#{:arrived :off-plan :stuck} (:status done))
                           (executor/after-walk executor/policy replans done)
