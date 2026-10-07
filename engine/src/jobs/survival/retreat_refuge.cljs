@@ -183,23 +183,42 @@
         mobs (hostile-cells p (:radius (:args c) 0))]
     (every? #(and (dig-cells/open-cell? p %) (not (mobs %))) [cell (update cell :y inc)])))
 
+(defn dug-cells-ok?
+  "Whether cells are all solid rock to dig (rock the body has not looked into reads stone, dig-cells/rock-name) with no
+  hazard in or fluid beside them, harvestable with what is carried; names are their block names."
+  [p cells]
+  (let [names (map #(dig-cells/rock-name p %) cells)]
+    (and (every? #(dig-cells/rock-solid? p %) cells)
+         (not-any? dig-cells/hazards names)
+         (not-any? #(dig-cells/lateral-fluid p %) cells)
+         (every? #(tools/can-harvest? p %) names))))
+
 (defn pit-plan
-  "A pit to dig down from feet and plug over the head (dig-cells/pit-shapes): {:steps :plugs :roof :target-y}, or nil: every cell
-  to dig solid (rock the body has not looked into reads stone, dig-cells/rock-name), no fluid in or beside it,
-  harvestable with what is carried, solid under the bottom, and a block to plug with carried or dug."
+  "A pit to dig down from feet and plug over the head (dig-cells/pit-shapes): {:steps :plugs :roof :prep :target-y}, or nil:
+  every cell to dig solid, no fluid in or beside it, harvestable with what is carried, solid under the bottom, and a block
+  to plug with carried or dug. With no side column open the zigzag takes a rock side: :prep is its two cells at feet and
+  head height, dug first."
   [c feet]
   (let [p (:primitives c)
         blocks (:blocks (:args c))
-        fits? (fn [{:keys [steps]}]
+        fits? (fn [{:keys [steps prep]}]
                 (let [cells (mapcat :dig steps)
                       names (map #(dig-cells/rock-name p %) cells)]
-                  (and (every? #(dig-cells/rock-solid? p %) cells)
-                       (not-any? dig-cells/hazards names)
-                       (not-any? #(dig-cells/lateral-fluid p %) cells)
-                       (every? #(tools/can-harvest? p %) names)
+                  (and (dug-cells-ok? p (concat prep cells))
                        (dig-cells/rock-solid? p (:floor (peek steps)))
-                       (or (lb/pick c blocks) (some (set blocks) (map #(get drop-of % %) names))))))]
-    (when-let [shape (first (filter fits? (dig-cells/pit-shapes (:primitives c) feet #(side-open? c %))))]
+                       (or (lb/pick c blocks) (some (set blocks) (map #(get drop-of % %) names))))))
+        prepped (fn [shape]
+                  (let [side (update (:to (first (:steps shape))) :y inc)]
+                    (assoc shape :prep [side (update side :y inc)])))
+        mobs (hostile-cells p (:radius (:args c) 0))
+        shapes (dig-cells/pit-shapes p feet #(side-open? c %))
+        shape (or (first (filter fits? shapes))
+                  (->> (dig-cells/pit-shapes p feet #(not (mobs %)))
+                       (filter (comp seq :plugs))
+                       (map prepped)
+                       (filter fits?)
+                       first))]
+    (when shape
       (assoc shape :target-y (:y (:to (peek (:steps shape))))))))
 
 (defn cell-vec [{:keys [x y z]}] [x y z])
@@ -208,9 +227,9 @@
   "Start digging down and plugging (pit-plan) when it can: a step's result, else nil."
   [c]
   (let [feet (sh/feet (:primitives c))]
-    (when-let [{:keys [steps plugs roof] :as plan} (pit-plan c feet)]
+    (when-let [{:keys [steps plugs roof prep] :as plan} (pit-plan c feet)]
       (let [in (access/rules-input c)
-            digs (mapcat :dig steps)]
+            digs (concat prep (mapcat :dig steps))]
         (access/trespass! c "retreat" (or (some #(access/trespass-refusal in :dig %) digs)
                                           (some #(access/trespass-refusal (assoc in :feet nil) :place %) (conj plugs roof))))
         (ctx/update-mem! c dissoc :pit-drops)
@@ -394,19 +413,19 @@
   "One step of the pit (pit-plan): dig the next drop's cells, then drop into it once its floor is seen solid, or at the
   bottom plug. The body never digs the cell under its feet unless it knows the floor under that, nor drops onto a floor
   it has not seen solid: the refuge is abandoned instead."
-  [c {:keys [anchor steps plugs roof] :as refuge}]
+  [c {:keys [anchor steps plugs roof prep] :as refuge}]
   (let [p (:primitives c)
         feet (sh/feet p)
         at (first (keep-indexed #(when (= feet %2) %1) (cons anchor (map :to steps))))
         keep (into #{anchor (update anchor :y inc) roof}
-                   (concat plugs (mapcat :dig steps) (mapcat (fn [{:keys [to]}] [to (update to :y inc)]) steps)))]
+                   (concat plugs prep (mapcat :dig steps) (mapcat (fn [{:keys [to]}] [to (update to :y inc)]) steps)))]
     (when at (await (dig-cells/collect-pit-drops! c feet)))
     (cond
       (nil? at) (await (abandon-refuge! c))
       (= at (count steps)) (await (plug! c refuge))
       :else
       (let [{:keys [dig to floor]} (nth steps at)
-            cell (first (remove #(dig-cells/open-cell? p %) dig))
+            cell (first (remove #(dig-cells/open-cell? p %) (if (zero? at) (concat prep dig) dig)))
             under? (= cell (update feet :y dec))]
         (when (and cell (look/unknown? p (cell-vec cell))) (await (look/look-at! c (cell-vec cell))))
         (cond

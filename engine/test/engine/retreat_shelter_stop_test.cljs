@@ -240,7 +240,8 @@
       (fn ^:async t []
         (let [r (await (pit-round (plain-world {} false) {}))]
           (is ((:kinds r) :retreat_sealed) "hidden in the pit")
-          (is (= 61 (:feet-y r)) "three down"))))))
+          (is (= 61 (:feet-y r)) "three down")
+          (is (= #{62 63} (set (map second (calls (:p r) "place")))) "the plug beside the head and the roof over it are placed"))))))
 
 (deftest a-zigzag-pit-digs-beside-the-body-and-drops-onto-floors-it-can-see
   (let [{:keys [steps plugs roof]} (dig-cells/pit-steps (cell 0 64 0) [1 0] 2)]
@@ -250,3 +251,64 @@
     (is (= [(cell 1 63 0)] plugs) "the side cell beside the head")
     (is (= (cell 0 64 0) roof)))
   (is (= [[(cell 0 63 0)] [(cell 0 62 0)]] (mapv :dig (:steps (dig-cells/pit-steps (cell 0 64 0) nil 2)))) "straight down"))
+
+;; ------------------------------------------------------------------ pit shapes without an open side
+
+(defn closed-cell-world
+  "Rock over x -3..3, y 58..68, z -3..3 less the body's own 1x2 cell (0 64 0), the four cells beside it (feet and head) being
+  the named wall block."
+  [wall]
+  {:blocks (into {} (for [x (range -3 4) y (range 58 69) z (range -3 4)
+                          :when (not (and (zero? x) (zero? z) (#{64 65} y)))]
+                      [(key-of x y z) (if (and wall (#{64 65} y) (= 1 (+ (Math/abs x) (Math/abs z)))) wall "stone")]))
+   :self {:pos [0.5 64 0.5]}
+   :inventory kit})
+
+(defn plan-ctx [p] {:primitives p :args {:blocks ["cobblestone"]}})
+
+(defn seen-closed-cell
+  "Primitives over world that know every cell but those below y 63 (unknown, as the ground under a body's own floor is) when
+  blind-below?, else every cell."
+  [world blind-below?]
+  (let [p (tu/seeing-all (tu/fake-on-floor world))
+        sensed (.-sensedAt p)]
+    (when blind-below?
+      (aset p "sensedAt" (fn [pos] (if (< (.-y pos) 63) #js {:unknown true :pos pos} (sensed pos)))))
+    p))
+
+(deftest a-closed-cell-digs-a-side-cell-first-and-zigzags
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (seen-closed-cell (closed-cell-world nil) true)
+              plan (refuge/pit-plan (plan-ctx p) (cell 0 64 0))
+              [lo hi] (:prep plan)]
+          (is (some? plan) "a pit is planned although no side is open")
+          (is (= 2 (count (:prep plan))) "the side cells at feet and head height are dug first")
+          (is (= 1 (+ (Math/abs (- (:x lo) 0)) (Math/abs (- (:z lo) 0)))) "beside the feet")
+          (is (= (update lo :y inc) hi) "head cell over it")
+          (is (= (:to (first (:steps plan))) (update lo :y dec)) "the first drop is into the side column"))))))
+
+(deftest a-closed-cell-with-walls-it-cannot-dig-gets-no-pit
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (seen-closed-cell (closed-cell-world "obsidian") true)]
+          (is (nil? (refuge/pit-plan (plan-ctx p) (cell 0 64 0)))))))))
+
+(deftest a-pit-goes-straight-down-when-the-floors-are-known
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (seen-closed-cell (closed-cell-world nil) false)
+              plan (refuge/pit-plan (plan-ctx p) (cell 0 64 0))]
+          (is (some? plan))
+          (is (nil? (:prep plan)) "nothing dug beside it")
+          (is (empty? (:plugs plan)) "straight down has no side plug")
+          (is (every? #(= 0 (:x %) (:z %)) (mapcat :dig (:steps plan))) "every dig in the body's own column"))))))
+
+(deftest drops-are-collected-only-within-pickup-reach
+  (let [item (fn [id x y z] {:id id :name "item" :kind "item" :pos {:x x :y y :z z} :item {:name "cobblestone" :count 1}})
+        p (tu/seeing-all (tu/fake {:blocks {} :entities [(item 1 0.5 64 0.5) (item 2 0.8 64 0.5) (item 3 2.5 64 0.5) (item 4 0.5 70 0.5)]}))]
+    (is (= [1 2] (sort (dig-cells/in-reach-ids {:primitives p} [1 2 3 4]))) "under foot and a step off, not 2 blocks away or 6 above")
+    (is (= [2] (dig-cells/in-reach-ids {:primitives p} [2])) "only the ids asked for")))
