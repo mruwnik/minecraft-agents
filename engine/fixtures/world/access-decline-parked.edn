@@ -39,7 +39,7 @@
             {:no-event {:source :job :kind :round_started :round [:> 8]} :for-s 150 :of-job true :until {:source :job :kind :leave-tunnel.escape}}
             {:event {:source :job :kind :leave-tunnel.escape} :within-s 150 :of-job true}]
    :limit-s 170}
-  ;; the control: a toggle that can never succeed is NOT parked for ever; its own decline ends the herd (:short, a few
+  ;; the control: a toggle that can never succeed is NOT parked for ever; its own decline ends the herd (:gate-stuck: the cow is in the pen, the body cannot get out; a few
   ;; rounds). Once the cow is released inside the pen the gate is swapped for a closed iron door, which ignores a hand (toggle
   ;; :needs-redstone); swapped earlier it hid the cow behind it and the herd ended :lost before any toggle.
   {:name "herd-stuck-gate-ends-through-its-own-give-up"
@@ -55,6 +55,6 @@
          [:rcon "execute positioned $X $Y $Z run setblock ~18 ~ ~16 iron_door[facing=east,half=lower,open=false]"]
          [:rcon "execute positioned $X $Y $Z run setblock ~18 ~1 ~16 iron_door[facing=east,half=upper,open=false]"]]
    :expect [{:event {:source :job :kind :toggle.declined :data {:reason :needs-redstone}} :within-s 120 :of-job true}
-            {:event {:source :job :kind :herd.done :data {:reason :short}} :within-s 120 :of-job true}
+            {:event {:source :job :kind :herd.done :data {:reason :gate-stuck}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :round_started :round [:> 20]} :for-s 120 :until {:source :job :kind :herd.done} :of-job true}]
    :limit-s 140}]}
