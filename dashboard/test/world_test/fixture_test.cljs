@@ -178,8 +178,8 @@
 (deftest failed-entities-check-names-the-stray-entity
   (let [origin [20000 150 20000]
         check [:entities "tag=!wt,type=!player" [[0 -1 0] [32 6 32]] 0]
-        reply "Zombie has the following entity data: {Air: 300s, Motion: [0.0d, -0.07d, 0.0d], Pos: [20010.5d, 151.0d, 20007.25d], id: \"minecraft:zombie\"}"]
-    (is (= "data get entity @e[tag=!wt,type=!player,x=20000,y=149,z=20000,dx=32,dy=7,dz=32,limit=1]"
+        reply "Zombie has the following entity data: [20010.5d, 151.0d, 20007.25d]"]
+    (is (= "data get entity @e[tag=!wt,type=!player,x=20000,y=149,z=20000,dx=32,dy=7,dz=32,limit=1] Pos"
            (f/entity-probe-command origin check)))
     (is (nil? (f/entity-probe-command origin [:block [3 0 4] "air"])))
     (is (= "stray entity zombie at plot [10.5 1 7.25]" (f/describe-entity-reply origin reply)))

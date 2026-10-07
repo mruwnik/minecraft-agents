@@ -428,17 +428,24 @@
   [origin [op & args]]
   (when (= op :entities)
     (let [sel (entities-selector origin args)]
-      (str "data get entity " (subs sel 0 (dec (count sel))) ",limit=1]"))))
+      (str "data get entity " (subs sel 0 (dec (count sel))) ",limit=1] Pos"))))
+
+(defn reply-pos
+  "The [x y z] in a `data get entity <body> Pos` reply, or nil."
+  [reply]
+  (when-let [[_ x y z] (re-find #"\[(-?[\d.E-]+)d, (-?[\d.E-]+)d, (-?[\d.E-]+)d\]" reply)]
+    [(js/Number x) (js/Number y) (js/Number z)]))
 
 (defn describe-entity-reply
-  "Names the entity in a `data get entity` reply: its type and plot-relative position."
+  "Names the entity in a `data get entity <sel> Pos` reply: its type and plot-relative position."
   [origin reply]
-  (let [[_ id] (re-find #"id: \"minecraft:([a-z_]+)\"" reply)
-        [_ x y z] (re-find #"Pos: \[(-?[\d.E-]+)d, (-?[\d.E-]+)d, (-?[\d.E-]+)d\]" reply)]
-    (if-not (and id x)
+  (let [[_ type] (re-find #"^(.+?) has the following entity data" reply)
+        pos (reply-pos reply)]
+    (if-not (and type pos)
       (str "stray entity: no data in reply: " reply)
-      (let [[ox oy oz] origin]
-        (str "stray entity " id " at plot " [(- (js/Number x) ox) (- (js/Number y) oy) (- (js/Number z) oz)])))))
+      (let [[ox oy oz] origin
+            [x y z] pos]
+        (str "stray entity " (str/lower-case type) " at plot " [(- x ox) (- y oy) (- z oz)])))))
 
 (defn reply-count
   "The count an `execute if` reply reports: 0 for a failed test, 1 for a pass without a count, nil for any other reply."
@@ -447,12 +454,6 @@
     (str/includes? reply "Test failed") 0
     (re-find #"Count: (\d+)" reply) (js/Number (second (re-find #"Count: (\d+)" reply)))
     (str/includes? reply "Test passed") 1))
-
-(defn reply-pos
-  "The [x y z] in a `data get entity <body> Pos` reply, or nil."
-  [reply]
-  (when-let [[_ x y z] (re-find #"\[(-?[\d.E-]+)d, (-?[\d.E-]+)d, (-?[\d.E-]+)d\]" reply)]
-    [(js/Number x) (js/Number y) (js/Number z)]))
 
 (defn count-ok? [want n]
   (if (vector? want)
