@@ -172,17 +172,35 @@
   []
   (some-> (io/resource "triggers") io/file))
 
+(defn settings-in
+  "The namespaces under dir (helper files included) that define a top-level `settings`, in path order, minus skip."
+  [dir skip]
+  (vec (for [f (job-files dir)
+             :when (re-find #"\.cljs$" (.getName f))
+             :let [ns (expected-ns dir f)]
+             :when (and (contains? (defined-names (read-forms f)) 'settings) (not (skip ns)))]
+         ns)))
+
 (defn settings-namespaces
   "Every namespace under the given directories (default: jobs/ and triggers/; helper files included) that defines
   a top-level `settings`, in path order."
   ([] (settings-namespaces [(jobs-dir) (triggers-dir)]))
-  ([dirs]
-   (vec (for [dir dirs
-              :when dir
-              f (job-files dir)
-              :let [forms (read-forms f)]
-              :when (contains? (defined-names forms) 'settings)]
-          (expected-ns dir f)))))
+  ([dirs] (vec (mapcat #(when % (settings-in % #{})) dirs))))
+
+(defn engine-dir
+  "The engine/ source directory on the classpath (engine/src/engine), or nil."
+  []
+  (some-> (io/resource "engine/registry.clj") io/file .getParentFile))
+
+(def engine-ungathered
+  "Engine namespaces that declare `settings` but cannot be gathered: the ones that hold the gathering (the registry,
+  engine.settings-registry) and main, which requires it (main adds its own map)."
+  '#{engine.registry engine.settings-registry engine.main})
+
+(defn engine-settings-namespaces
+  "Every engine namespace that defines a top-level `settings`, except `engine-ungathered`."
+  []
+  (if-let [dir (engine-dir)] (settings-in dir engine-ungathered) []))
 
 (defn settings-form [nss]
   (into {} (map (fn [ns] [(list 'quote ns) (symbol (str ns) "settings")])) nss))
@@ -288,3 +306,8 @@
   "{hook-key fn} of jobs/hooks.edn."
   []
   (hook-defs))
+
+(defmacro engine-settings-registry
+  "{ns-symbol ns/settings} for every engine namespace that declares a top-level `settings` map of its keys."
+  []
+  (settings-form (engine-settings-namespaces)))

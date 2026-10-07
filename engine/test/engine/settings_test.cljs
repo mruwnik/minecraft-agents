@@ -4,6 +4,7 @@
             [clojure.string :as str]
             [engine.registry :as registry]
             [engine.settings :as settings]
+            [engine.settings-registry :as settings-registry]
             [engine.test-util :as tu]
             [settings-demo.declares :as demo]
             ["fs" :as fs]
@@ -130,7 +131,7 @@
   [by-ns]
   (let [pairs (for [[sym s] by-ns [k v] s] [k sym v])
         misplaced (for [[k sym _] pairs
-                        :let [ok (if (= 'engine.settings sym) (str/starts-with? (namespace k) "engine.") (= (str sym) (namespace k)))]
+                        :let [ok (if (str/starts-with? (str sym) "engine.") (str/starts-with? (namespace k) "engine.") (= (str sym) (namespace k)))]
                         :when (not ok)]
                     (str k " declared in " sym))
         dups (for [[k n] (frequencies (map first pairs)) :when (> n 1)] (str k " declared twice"))
@@ -138,7 +139,7 @@
     (concat misplaced dups bad-defaults)))
 
 (deftest declared-keys-are-in-place-unique-and-fit-their-spec
-  (is (empty? (key-problems (assoc registry/settings-by-ns 'engine.settings settings/settings)))))
+  (is (empty? (key-problems (merge registry/settings-by-ns settings-registry/settings-by-ns)))))
 
 (def int-key {:default 1 :type :int})
 
@@ -172,3 +173,12 @@
                   :when (and (re-find #"^\((def|defonce) " form) (re-find reads form))]
               f)]
     (is (empty? bad))))
+
+
+(deftest every-engine-namespace-declaring-settings-is-gathered
+  (let [declaring (set (for [f (source-files "src/engine")
+                             :when (and (re-find #"\.cljs$" f) (re-find #"(?m)^\(def settings\b" (fs/readFileSync f "utf8")))]
+                         (-> f (str/replace #"^src/" "") (str/replace #"\.cljs$" "") (str/replace "/" ".") (str/replace "_" "-") symbol)))
+        gathered (set (keys settings-registry/settings-by-ns))]
+    (is (seq declaring))
+    (is (empty? (remove gathered (disj declaring 'engine.registry 'engine.settings-registry 'engine.main))))))

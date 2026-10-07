@@ -13,7 +13,7 @@
 
 (def families
   {:lease lease/settings :events events/settings :event-api event-api/settings :backoff backoff/settings
-   :hurt hurt/settings :senses senses/settings :entities obs/settings :perception perception/settings})
+   :hurt hurt/settings :entities obs/settings :perception perception/settings})
 
 (def defaults-then
   "The values the constants had before they became settings."
@@ -28,7 +28,6 @@
    :engine.backoff/after 3 :engine.backoff/first-s 1 :engine.backoff/max-s 30 :engine.backoff/moved-min 1
    :engine.backoff/walk-moved-min 8
    :engine.hurt/window-ms 1000
-   :engine.senses/hit-range 6 :engine.senses/monster-range 8 :engine.senses/monster-height 5
    :engine.entities/ttl-ms 120000 :engine.entities/sample-ms 1000 :engine.entities/max-entities 10000
    :engine.entities/max-snapshot-bytes 4194304
    :engine.perception/radius 48 :engine.perception/fov 70 :engine.perception/aspect (/ 16 9)
@@ -93,3 +92,18 @@
     (fn []
       (is (= 20 (:radius (perception/defaults))))
       (is (= 5000 (:save-ms (perception/defaults)))))))
+
+(deftest vanilla-sensing-facts-are-constants-not-settings
+  (is (= {:hit-range 6 :monster-range 8 :monster-height 5}
+         {:hit-range senses/hit-range :monster-range senses/monster-range :monster-height senses/monster-height})))
+
+(deftest events-max-bytes-is-validated-on-its-setting
+  (let [spec (get events/settings :engine.events/max-bytes)]
+    (doseq [ok [1024 4096 67108864]]
+      (is (nil? (settings/spec-problem spec ok)) (str ok)))
+    (doseq [bad [1023 0 -1 1.5 "4096" nil]]
+      (is (some? (settings/spec-problem spec bad)) (str (pr-str bad))))))
+
+(deftest events-make-rejects-a-cap-below-the-minimum
+  (is (thrown? js/Error (events/make {:file "/nonexistent/x.ndjson" :max-bytes 1023})))
+  (is (thrown? js/Error (events/make {:file "/nonexistent/x.ndjson" :max-bytes 1.5}))))

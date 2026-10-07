@@ -13,6 +13,7 @@
             [engine.path.offsets :as offsets]
             [engine.perception :as perception]
             [engine.registry :as registry]
+            [engine.settings-registry :as settings-registry]
             [jobs.survival.recover-drops :as recover-drops]
             [engine.scenario :as scenario]
             [engine.settings :as settings]
@@ -159,9 +160,7 @@
         _ (offsets/set-root! root)
         ;; the settings files; their problems wait here until the engine exists to emit them
         settings-events (atom [])
-        _ (settings/load! {:specs (merge registry/settings settings/settings perception/settings lease/settings events/settings
-                                    event-api/settings backoff/settings hurt/settings senses/settings
-                                    entity-observations/settings settings)
+        _ (settings/load! {:specs (merge registry/settings settings-registry/settings settings)
                            :world-file (path/join (bodies/worlds-dir state-dir) (:world cfg) "settings.edn")
                            :body-file (path/join (bodies/body-dir state-dir (:world cfg) (:agent opts)) "settings.edn")
                            :body (:agent opts)
