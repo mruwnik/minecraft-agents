@@ -39,7 +39,7 @@
      and the result says so as searchedOut true (the way on, if any, is not in the land this goal's searches can reach).
    - options.dangers: known hostiles, an array of {x y z close radius rate} (at most 8): a move adds to its risk rate
      (hp a second) times its seconds within close blocks of a danger's point, falling linearly to 0 at radius; all the
-     dangers together add at most options.dangerCap (4) a second (see dangerRisk). jobs.lib.threats builds them.
+     dangers together add at most options.dangerCap (4) a second (see dangerRisk), each hp priced at options.damageWeight. jobs.lib.threats builds them.
    - options.dark {at, factor}: a cell that at(x, y, z) calls dark (returns 1) costs factor times its own seconds
      more, in g and in cost.darkSeconds (see darkOf; jobs.lib.look builds at).
    - options.tolls {cells}: cells is a Map of cell-key (planner/cell-key) to a factor: entering such a cell costs factor

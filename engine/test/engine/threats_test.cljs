@@ -15,11 +15,11 @@
     armed "zombie" :fight
     armed "creeper" :flee))
 
-(deftest rate-falls-with-a-weapon-and-rises-with-lost-health
+(deftest rate-falls-with-a-weapon-and-armour-and-is-the-hp-a-second-not-the-price
   (let [rate #(/ (js/Math.round (* 100 (cost/danger-rate %1 %2))) 100)]
     (is (= 4 (rate unarmed "zombie")) "3 dps x 4 (flee), capped at 4")
     (is (= 0.3 (rate armed "zombie")) "3 dps x 0.1 (fight)")
-    (is (= 0.6 (rate (assoc armed :health 10) "zombie")) "health 10: still a fight, x2")
+    (is (= 0.3 (rate (assoc armed :health 10) "zombie")) "health 10: still a fight; the dearer hp is the planner's damage weight")
     (is (= 4 (rate (assoc armed :health 5) "zombie")) "health 5: the fight would leave too little, fled")
     (is (= 0.2 (rate (assoc armed :equipment {:head {:name "iron_helmet"} :torso {:name "iron_chestplate"}
                                               :feet {:name "iron_boots"}}) "zombie"))

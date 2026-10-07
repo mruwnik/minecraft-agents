@@ -9,7 +9,8 @@
 
   ;; the risk (hp) of dsec seconds spent entering the cell x,y,z: each danger's rate times its weight there (1 within
   ;; close blocks of its point, falling linearly to 0 at radius; the cell's centre at its floor), the sum at most
-  ;; danger-cap a second. 0 at once for a cell outside every danger's radius.
+  ;; danger-cap a second, priced at damage-weight like any damage (the move adds risk-weight times its risk to g, so the risk is
+  ;; scaled by damage-weight / risk-weight; equal by default). 0 at once for a cell outside every danger's radius.
   (dangerRisk [s x y z dsec]
     (if (or (< x (.-dbx0 s)) (> x (.-dbx1 s)) (< y (.-dby0 s)) (> y (.-dby1 s)) (< z (.-dbz0 s)) (> z (.-dbz1 s)))
       0
@@ -29,4 +30,4 @@
                 (>= d2 (* radius radius)) (recur (inc i) rate)
                 (<= d2 (* close close)) (recur (inc i) (+ rate (aget a (+ o 5))))
                 :else (recur (inc i) (+ rate (/ (* (aget a (+ o 5)) (- radius (js/Math.sqrt d2))) (- radius close))))))
-            (* dsec (js/Math.min rate (.-danger-cap s)))))))))
+            (* dsec (/ (.-damage-weight s) (.-risk-weight s)) (js/Math.min rate (.-danger-cap s)))))))))

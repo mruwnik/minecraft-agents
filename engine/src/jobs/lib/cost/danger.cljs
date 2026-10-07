@@ -7,10 +7,9 @@
   after armour; weight 1 within 2 blocks of the route, falling to 0 at :radius; counts only if a melee mob can walk to
   the route or a ranged mob has a line of fire to it. Overrides {mob-name number-or-{:times n}}: threat before armour.
 
-  danger-rate: mob-hurt over 1 s x stance factor (:flee x4, :fight x0.1) x 20 / health (at most 4), at most max-rate."
+  danger-rate: mob-hurt over 1 s x stance factor (:flee x4, :fight x0.1), at most max-rate: hp a second, which the planner prices at go-to's hp price (:hp-seconds x health-scale) like a drop's damage."
   (:require [jobs.lib.cost.armour :as armour]
             [jobs.lib.cost.fight :as fight]
-            [jobs.lib.cost.health :as health]
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.reach :as reach]
             [jobs.lib.util :as u]))
@@ -129,11 +128,10 @@
 
 (defn danger-rate
   "hp a second near mob-name costs body {:health :equipment :weapon} (see the ns doc)."
-  [{:keys [health equipment] :as body} mob-name]
+  [{:keys [equipment] :as body} mob-name]
   (min max-rate
        (* (threat/mob-hurt (armour/armour-stats equipment) mob-name 1)
-          (get stances (stance body mob-name))
-          (health/health-scale health))))
+          (get stances (stance body mob-name)))))
 
 (defn danger-of [body kind {:keys [name pos]}]
   (merge {:x (:x pos) :y (:y pos) :z (:z pos) :rate (danger-rate body name) :mob name}

@@ -55,3 +55,14 @@
       (is (= [38 64 20] (pf/last-cell r)))
       (is (some #{[20 64 20]} (pf/cells r)))
       (is (pos? (get-in r [:path :cost :risk])) "the crossing is charged as risk"))))
+
+(defn plan-with [damage-weight rate]
+  (pf/run open-world goal {:dangers [(danger rate)] :damageWeight damage-weight} from))
+
+(deftest a-danger-is-priced-at-the-damage-weight-the-hp-price
+  (testing "a dearer hp makes the body detour wider round the same danger"
+    (is (> (nearest (plan-with 40 0.5)) (nearest (plan-with 2 0.5)))))
+  (testing "one formula: hp a second times the weight, so 0.4 hp/s at 10 plans as 2 hp/s at 2"
+    (is (= (pf/cells (plan-with 10 0.4)) (pf/cells (plan-with 2 2)))))
+  (testing "without a danger the weight changes nothing"
+    (is (= (pf/cells (pf/run open-world goal {:damageWeight 40} from)) (pf/cells (pf/run open-world goal {} from))))))
