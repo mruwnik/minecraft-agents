@@ -48,4 +48,42 @@
    :expect [{:event {:source :job :kind :plant.declined :data {:reason :refused}} :within-s 20 :of-job true}
             {:event {:source :job :kind :waiting :data {:reason :refused}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :plant.done :data {:planted [:>= 1]}} :for-s 20}]
-   :after [[:block [10 0 16] "air"] [:item "wheat_seeds" 10]]}]}
+   :after [[:block [10 0 16] "air"] [:item "wheat_seeds" 10]]}
+  ;; Card df309ff7: two plans over the same cells. "mine" (the body's) wants wheat on x 10..13, "other" (someone else's)
+  ;; claims x 12..15. The shared cells 12, 13 are left bare with one plant.declined :refused naming "other" (no silence);
+  ;; the own cells 10, 11 are sown. When every cell is shared the job never starts, still one warn. :ignore-zones? sows
+  ;; the shared cells and warns nothing.
+  {:name "overlapping-plans-sow-own-cells-and-warn"
+   :blocks [[:fill [10 -1 16] [15 -1 16] "farmland[moisture=7]"] [:fill [10 -1 17] [15 -1 17] "water"]]
+   :plans [{:id "mine" :metadata {:by "$body"}
+            :parts [{:id "p" :cells [#at [10 0 16] #at [11 0 16] #at [12 0 16] #at [13 0 16]] :want {:crop "wheat"}}]}
+           {:id "other" :metadata {:by "SomeoneElse"}
+            :parts [{:id "p" :cells [#at [12 0 16] #at [13 0 16] #at [14 0 16] #at [15 0 16]] :want {:crop "wheat"}}]}]
+   :body {:inventory [["wheat_seeds" 10]]}
+   :act [[:job (jobs.farm.plant {:plan "$plan:mine"})]]
+   :expect [{:event {:source :job :kind :plant.declined :data {:reason :refused :plans [[:contains "other"]]}} :within-s 30 :of-job true}
+            {:event {:source :job :kind :plant.done :data {:planted 2}} :within-s 60 :of-job true}]
+   :after [[:block [10 0 16] "wheat"] [:block [11 0 16] "wheat"] [:block [12 0 16] "air"] [:block [13 0 16] "air"]
+           [:block [14 0 16] "air"]]}
+  {:name "all-cells-shared-with-another-plan-warns-and-never-starts"
+   :blocks [[:fill [10 -1 16] [11 -1 16] "farmland[moisture=7]"] [:fill [10 -1 17] [11 -1 17] "water"]]
+   :plans [{:id "mine" :metadata {:by "$body"}
+            :parts [{:id "p" :cells [#at [10 0 16] #at [11 0 16]] :want {:crop "wheat"}}]}
+           {:id "other" :metadata {:by "SomeoneElse"}
+            :parts [{:id "p" :cells [#at [10 0 16] #at [11 0 16]] :want {:crop "wheat"}}]}]
+   :body {:inventory [["wheat_seeds" 10]]}
+   :act [[:job (jobs.farm.plant {:plan "$plan:mine"})]]
+   :expect [{:event {:source :job :kind :plant.declined :data {:reason :refused :plans [[:contains "other"]]}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :plant.done :data {:planted [:>= 1]}} :for-s 20}]
+   :after [[:block [10 0 16] "air"] [:block [11 0 16] "air"] [:item "wheat_seeds" 10]]}
+  {:name "ignore-zones-sows-cells-shared-with-another-plan"
+   :blocks [[:fill [10 -1 16] [11 -1 16] "farmland[moisture=7]"] [:fill [10 -1 17] [11 -1 17] "water"]]
+   :plans [{:id "mine" :metadata {:by "$body"}
+            :parts [{:id "p" :cells [#at [10 0 16] #at [11 0 16]] :want {:crop "wheat"}}]}
+           {:id "other" :metadata {:by "SomeoneElse"}
+            :parts [{:id "p" :cells [#at [10 0 16] #at [11 0 16]] :want {:crop "wheat"}}]}]
+   :body {:inventory [["wheat_seeds" 10]]}
+   :act [[:job (jobs.farm.plant {:plan "$plan:mine" :ignore-zones? true})]]
+   :expect [{:event {:source :job :kind :plant.done :data {:planted 2}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :plant.declined} :for-s 20 :until {:source :job :kind :plant.done}}]
+   :after [[:block [10 0 16] "wheat"] [:block [11 0 16] "wheat"]]}]}

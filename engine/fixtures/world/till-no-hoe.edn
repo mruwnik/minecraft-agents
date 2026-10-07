@@ -1,0 +1,24 @@
+;; Card bbd70c0e: jobs.farm.till with nothing tilled and every cell skipped :no-hoe ends :stopped :no-hoe (not :completed),
+;; and its fetch event names the tool kind ("fetching hoe for no-tool", not "fetching nil ...").
+;; Should-fail: no hoe and no chest in view: the fetch finds nothing, the job ends :stopped :no-hoe, till.done tilled 0.
+;; Should-succeed: a seen chest holds a hoe: it is fetched (fetch.started names hoe) and the 9 grass cells are tilled.
+;; The floor is grass (floor y -1 is the ground layer); the 3x3 square is centred at [16 -1 16].
+{:defaults
+ {:tags [:farm :till :fetch :jobs]
+  :time :any
+  :plot {:height 16 :floor "grass_block"}
+  :body {:at [16.5 0 12.5] :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "no-hoe-and-no-chest-stops-no-hoe"
+   :act [[:job (jobs.farm.till {:center #xyz [16 -1 16] :radius 1})]]
+   :expect [{:event {:source :job :kind :till.done :data {:tilled 0}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :stopped :data {:reason :no-hoe}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 60 :until {:source :job :kind :stopped :data {:reason :no-hoe}}}]
+   :after [[:block [16 -1 16] "grass_block"]]}
+  {:name "hoe-in-a-seen-chest-is-fetched-and-tills"
+   :blocks [[:set [18 0 12] "chest{Items:[{Slot:0b,id:\"minecraft:stone_hoe\",count:1}]}"]]
+   :act [[:job (jobs.farm.till {:center #xyz [16 -1 16] :radius 1 :ignore-zones? true})]]
+   :expect [{:event {:source :job :kind :fetch.started :message [:contains "fetching hoe for no-tool"]} :within-s 40 :of-job true}
+            {:event {:source :job :kind :till.done :data {:tilled 9}} :within-s 80 :of-job true}]
+   :after [[:block [15 -1 15] "farmland"] [:block [17 -1 17] "farmland"] [:item "stone_hoe" 1]]}]}

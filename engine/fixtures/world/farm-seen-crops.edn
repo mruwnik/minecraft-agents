@@ -1,0 +1,47 @@
+;; Card a8f06213: harvest, fertilize and tend read crops through the body's seen blocks (look/seen-blocks), not the raw
+;; world scan, so a crop the body never saw is left alone (no x-ray). A crop at [18 0 16] is walled in solid stone (no
+;; face open, farmland below, water at [17 -1 16] to keep it wet): it is loaded but can never be seen.
+;; Should-succeed: the three open crops at [10..12 0 16] are cut / fertilized / tended, and a far-from-centre harvest
+;; (centre 25 blocks from the body) ends within 60 s without scanning the whole sphere.
+;; Should-fail: the walled crop is untouched (still age 7 / age 2).
+;; Floor y -1 is the ground layer; farmland at y -1 with water beside, crops at y 0.
+{:defaults
+ {:tags [:farm :seen :jobs]
+  :time :any
+  :body {:at [10.5 0 14.5] :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "harvest-cuts-open-crops-and-leaves-the-walled-one"
+   :blocks [[:fill [10 -1 16] [12 -1 16] "farmland[moisture=7]"] [:fill [10 -1 17] [12 -1 17] "water"]
+            [:fill [10 0 16] [12 0 16] "wheat[age=7]"]
+            [:fill [17 0 15] [19 2 17] "stone"] [:set [17 -1 16] "water"] [:set [18 -1 16] "farmland[moisture=7]"]
+            [:set [18 0 16] "wheat[age=7]"]]
+   :act [[:job (jobs.farm.harvest {:center #xyz [14 0 16] :radius 8 :replant false})]]
+   :expect [{:event {:source :job :kind :harvest.done :data {:cut 3}} :within-s 70 :of-job true}]
+   :after [[:block [10 0 16] "air"] [:block [12 0 16] "air"] [:block [18 0 16] "wheat[age=7]"]]}
+  {:name "fertilize-grows-open-crops-and-leaves-the-walled-one"
+   :blocks [[:fill [10 -1 16] [12 -1 16] "farmland[moisture=7]"] [:fill [10 -1 17] [12 -1 17] "water"]
+            [:fill [10 0 16] [12 0 16] "wheat[age=2]"]
+            [:fill [17 0 15] [19 2 17] "stone"] [:set [17 -1 16] "water"] [:set [18 -1 16] "farmland[moisture=7]"]
+            [:set [18 0 16] "wheat[age=2]"]]
+   :body {:inventory [["bone_meal" 16]]}
+   :act [[:job (jobs.farm.fertilize {:center #xyz [14 0 16] :radius 8 :fetch false})]]
+   :expect [{:event {:source :job :kind :fertilize.done :data {:used [:>= 3]}} :within-s 70 :of-job true}]
+   :after [[:block [10 0 16] "wheat[age=7]"] [:block [12 0 16] "wheat[age=7]"] [:block [18 0 16] "wheat[age=2]"]]}
+  {:name "tend-harvests-open-crops-and-leaves-the-walled-one"
+   :blocks [[:fill [10 -1 16] [12 -1 16] "farmland[moisture=7]"] [:fill [10 -1 17] [12 -1 17] "water"]
+            [:fill [10 0 16] [12 0 16] "wheat[age=7]"]
+            [:fill [17 0 15] [19 2 17] "stone"] [:set [17 -1 16] "water"] [:set [18 -1 16] "farmland[moisture=7]"]
+            [:set [18 0 16] "wheat[age=7]"]]
+   :body {:inventory [["wheat_seeds" 10]]}
+   :act [[:job (jobs.farm.tend {:box {:min #xyz [10 -1 16] :max #xyz [18 0 16]}})]]
+   :expect [{:event {:source :job :kind :farm-tend.done :data {:steps {:harvest {:cut 3 :replanted 3}}}} :within-s 80 :of-job true}]
+   :after [[:block [10 0 16] "wheat[age=0]"] [:block [12 0 16] "wheat[age=0]"] [:block [18 0 16] "wheat[age=7]"]]}
+  {:name "harvest-far-from-the-centre-finishes-in-time"
+   :blocks [[:fill [19 -1 20] [21 -1 20] "farmland[moisture=7]"] [:fill [19 -1 21] [21 -1 21] "water"]
+            [:fill [19 0 20] [21 0 20] "wheat[age=7]"]]
+   :body {:at [2.5 0 2.5]}
+   :act [[:job (jobs.farm.harvest {:center #xyz [20 0 20] :radius 6 :replant false})]]
+   :expect [{:event {:source :job :kind :harvest.done :data {:cut 3}} :within-s 60 :of-job true}]
+   :limit-s 70
+   :after [[:block [19 0 20] "air"] [:block [21 0 20] "air"]]}]}
