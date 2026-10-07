@@ -15,7 +15,7 @@
   The check waits (:unseen) while a given :pos is not sensed. Ends {:status :done :land {:x :y :z} :boat id :recovered bool}, info boat.landed, or
   {:status :stopped :reason r}: :bad-args, :not-aboard (on foot: jobs.movement.boat-launch puts the body in a boat), :no-shore (none in sight, or :pos is no shore),
   :blocked (every spot tried could not be reached; with :cause), :drive-failed (the drive failed otherwise, with :cause), :not-landed (the dismount failed or left the body in water),
-  :recover-failed (landed, the boat not taken back; with :cause).
+  :recover-failed (landed and boat.landed emitted, the boat not taken back; with :cause).
 
   Never :continue except when a child waits on the world.")
 
@@ -61,12 +61,20 @@
           (result/finish! c {:land land :boat boat-id :recovered true}))
       :else
       (do (ctx/forget-where! c landed-kind #(= (:root c) (:job %)))
+          (ctx/emit! c :boat.landed :info {:land land :boat boat-id :recovered false :text "landed, the boat was not taken back"})
           (result/stop! c :recover-failed "landed, but the boat was not taken back" :land land :boat boat-id
                         :cause (when res (result/cause-of :recover res)))))))
 
 (defn ^:async drive-to! [c water]
   (let [r (await (ctx/call-child c :drive 'jobs.movement.boat-drive {:pos water}))]
     (if (= :continue r) :continue {:r r :res (ctx/child-result c :drive)})))
+
+(defn drive-failure
+  "[reason failed-drive-result] for spots that all failed to drive to: :blocked only when every one was blocked
+  (the last one is shown), else :drive-failed with the first other failure."
+  [fails]
+  (let [other (some #(when (not= :blocked (:reason %)) %) fails)]
+    [(if other :drive-failed :blocked) (or other (peek fails))]))
 
 (defn ^:async round [c]
   (let [p (:primitives c)
@@ -83,9 +91,8 @@
           (result/stop! c :no-shore "no seen shore to land on")
           (loop [[{:keys [land water]} & more] spots fails []]
             (if (nil? land)
-              (let [other (some #(when (not= :blocked (:reason %)) %) fails)
-                    shown (or other (peek fails))]
-                (result/stop! c (if other :drive-failed :blocked)
+              (let [[reason shown] (drive-failure fails)]
+                (result/stop! c reason
                               (str "could not steer to any of " (count spots) " shore spots")
                               :cause (some->> shown (result/cause-of :drive))))
               (let [d (await (drive-to! c water))]

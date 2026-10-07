@@ -154,6 +154,22 @@
         (let [{:keys [res seen]} (await (run (assoc-in world [:entities 0 :drops] []) {:recover true}))]
           (is (= :recover-failed (:reason res)) (pr-str res))
           (is (= {:x 21 :y 64 :z 10} (:land res)))
+          (is (= 1 (kinds seen :boat.landed)) "the body did land")
+          (is (some? (:cause res))))))))
+
+(deftest drive-failure-is-blocked-only-when-every-spot-was-blocked
+  (let [blocked {:status :stopped :reason :blocked}
+        other {:status :stopped :reason :not-a-boat}]
+    (is (= [:blocked blocked] (boat-land/drive-failure [blocked blocked])))
+    (is (= [:drive-failed other] (boat-land/drive-failure [blocked other blocked])) "one other failure among blocked ones")
+    (is (= [:drive-failed {}] (boat-land/drive-failure [blocked {}])) "a drive that ended without a result")))
+
+(deftest a-drive-that-is-not-done-passes-its-cause-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [res]} (await (run (assoc-in world [:entities 0 :name] "minecart") {:max-spots 3}))]
+          (is (= :drive-failed (:reason res)) (pr-str res))
           (is (some? (:cause res))))))))
 
 (deftest recover-lands-once
