@@ -551,7 +551,7 @@
   [c kind text]
   (if-not (u/count-fail! c)
     :again
-    (do (ctx/emit! c kind :warn {:tries u/max-failures :text text})
+    (do (ctx/emit! c kind :warn {:tries (u/max-failures) :text text})
         (result/stop! c kind text))))
 
 (defn fail-air!
@@ -561,7 +561,7 @@
     :again
     (let [text "drowning and no air within reach"
           fields {:air-radius (:air-radius (:args c)) :cap (:cap (ctx/mem c) :no-cap)}]
-      (ctx/emit! c :no_air :warn (assoc fields :tries u/max-failures :text text))
+      (ctx/emit! c :no_air :warn (assoc fields :tries (u/max-failures) :text text))
       (apply result/stop! c :no_air text (mapcat identity fields)))))
 
 (defn ^:async pass!

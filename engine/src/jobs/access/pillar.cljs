@@ -176,8 +176,8 @@
   [c [x z] [hx hz]]
   (let [{px :x pz :z} (u/self-pos c)]
     (and (= [x z] [(js/Math.floor px) (js/Math.floor pz)])
-         (<= (js/Math.abs (- px hx)) walk/centre-tolerance)
-         (<= (js/Math.abs (- pz hz)) walk/centre-tolerance))))
+         (<= (js/Math.abs (- px hx)) (walk/centre-tolerance))
+         (<= (js/Math.abs (- pz hz)) (walk/centre-tolerance)))))
 
 (defn ^:async recentre!
   "Walk back to [hx hz], the point the pillar began at, after a shove. :in when the body is over its column again,
