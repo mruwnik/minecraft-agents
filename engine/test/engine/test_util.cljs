@@ -190,3 +190,15 @@
   [[pos range opts]]
   [pos range (cond-> (merge {:escalate false} (dissoc opts :timeout-s))
                (:timeout-s opts) (assoc :leg-s (:timeout-s opts)))])
+
+(defn shutdown-at!
+  "On the nth call of the fake act named act, the engine shuts down (the round is cut, the act undone): the job stays
+  listed with its memory, for a restart over the same dir."
+  [{:keys [p eng]} act n]
+  (let [k (atom 0)]
+    (.override (.-world p) act
+               (fn [token a impl]
+                 (if (= n (swap! k inc))
+                   (do (core/shutdown! eng)
+                       (js/Promise.reject (core/cut-error)))
+                   (impl token a))))))

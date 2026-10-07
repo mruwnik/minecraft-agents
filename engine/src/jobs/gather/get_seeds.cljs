@@ -3,6 +3,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
+            [jobs.lib.pace :as pace]
             [jobs.lib.look :as look]
             [jobs.storage.deposit :as deposit]
             [jobs.lib.world :as known]))
@@ -18,7 +19,8 @@
   - A :chest or :plan always means the chest way. :sources always means the break way. Any other material
     with neither declines.
 
-  The goal (carried + :count) is fixed in the first round. One step per round:
+  The goal (carried + :count) is fixed in the first step. One call runs these steps until the job ends (it yields with :continue only while a child or
+  a walk waits on the world, and after 400 steps):
   1. Carrying the goal ends :count.
   2. Chest way: the withdraw child takes the item. It ends :count when the goal is carried, else :short (warn
      get-seeds.gave-up with withdraw's reason when it gave up).
@@ -49,7 +51,7 @@
    :count {:doc "how many more to carry than at the start" :default 8}
    :radius {:doc "source blocks within this many blocks of the body count" :default 16}
    :sources {:doc "block names to break for the item; nil: the material's own (grass for wheat_seeds)" :default nil}
-   :per-round {:doc "blocks dug per round at most" :default 4}
+   :per-round {:doc "blocks dug per step at most" :default 4}
    :chest {:doc "chest position: take the item from it instead of breaking blocks" :type :pos :default nil}
    :plan {:doc "id of a plan: take the item from the chest cell (want \"chest\") of the plan" :default nil}
    :collect-radius {:doc "how far around to collect drops after a batch" :default 8}
@@ -210,7 +212,7 @@
           (do (if (= :refused judged) (refuse! c pos v) (skip! c pos)) :skipped)
           (let [status (.-status (await (ctx/act c :dig (clj->js {:pos pos}))))]
             (cond
-              (= "dug" status) (do (ctx/update-mem! c update :dry (fnil inc 0)) :dug)
+              (= "dug" status) (do (ctx/update-mem! c #(-> % (update :dry (fnil inc 0)) (assoc :collecting true))) :dug)
               (= "missing" status) :missing
               :else (do (skip! c pos) :skipped))))))))
 
@@ -243,14 +245,14 @@
 (defn ^:async collect! [c]
   (let [{:keys [item collect-radius]} (:args c)
         r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius collect-radius :filter [item]}))]
-    (when (= :done r)
+    (when (not= :continue r)
       (let [now (carried c)]
         (ctx/update-mem! c (fn [m]
                              (-> m
                                  (dissoc :collecting)
                                  (cond-> (> now (:last-carried m 0)) (assoc :dry 0))
                                  (assoc :last-carried now))))))
-    :continue))
+    (if (= :continue r) :continue :again)))
 
 (defn ^:async dig-round! [c targets]
   (let [{:keys [dug skipped walking]} (await (dig-batch! c targets))
@@ -260,9 +262,9 @@
       :else (do (ctx/update-mem! c assoc :barren barren :collecting true)
                 (if (>= barren 2)
                   (give-up! c :barren)
-                  :continue)))))
+                  :again)))))
 
-(defn ^:async round [c]
+(defn ^:async step [c]
   (when-not (:goal (ctx/mem c))
     (let [now (carried c)]
       (ctx/update-mem! c assoc :goal (+ now (:count (:args c))) :last-carried now :dry 0 :barren 0)))
@@ -278,3 +280,10 @@
       (and (empty? targets) (seq (:refused (ctx/mem c)))) (refuse-up! c)
       (empty? targets) (finish! c :none)
       :else (await (dig-round! c targets)))))
+
+(def max-steps "Pieces of work of one call before it gives the round back with :continue." 400)
+
+(defn ^:async round
+  [c]
+  (let [n (atom 0)]
+    (await (pace/steps! c #(if (< (swap! n inc) max-steps) (step c) :continue)))))

@@ -9,6 +9,7 @@
             [jobs.lib.access.rules :as rules]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
+            [jobs.lib.pace :as pace]
             [jobs.lib.targets :as targets]
             [jobs.lib.watch :as watch]
             [jobs.lib.reach :as reach-lib]
@@ -42,7 +43,8 @@
   tunnel heading (:direction, else the way the body faces) and the ground (the solid cells of the 5x5 under the
   start at y-1 and y-2; empty when :mend is false). So a cut or restart still mends.
 
-  One step per round, in order:
+  One call runs these steps in order, again and again until the job ends (it yields with :continue only while a child or
+  a walk waits on the world, and after 400 steps):
   1. Collecting: the collect-drops child gathers the item within :collect-radius. The count is the
      inventory's, never the dig's report. Drops of the item still lying afterwards (out of reach) are reported
      once each, info mine.left-behind {:items [{:pos :count}]}. The result's :left is re-checked after the walk
@@ -50,7 +52,7 @@
   2. Carrying the goal ends :count.
   3. :max-failures failures end :gave-up (warn mine.gave-up). :dry-digs digs in a row after which the carried
      count did not rise end :no-drops (warn mine.gave-up).
-  4. Dig the nearest target by walking (one bounded search, jobs.lib.targets, going on next round; a seen
+  4. Dig the nearest target by walking (one bounded search, jobs.lib.targets, going on in the next step; a seen
      block out of every stand's reach is passed over; when the search finds none reachable, the nearest in a straight
      line is tried; targets over the ground snapshot come last, so the floor
      under the start is dug last; targets whose drop lies in a clear line from the eye come first, and a body
@@ -62,7 +64,7 @@
      ahead), once per cell and after each dig, so a vein's next block comes into view. It also looks around
      once before the first target.
   6. Still none, the block stone-type (stone, cobblestone, deepslate, andesite, granite, diorite, tuff) and the
-     tunnel not begun: a stair down (jobs.access.stair child, one step a round, :fetch) along the heading, at most
+     tunnel not begun: a stair down (jobs.access.stair child, one step at a time, :fetch) along the heading, at most
      :descend-limit steps, soil dug by hand; each step looks round, so stone that comes into view is a target.
      The limit used up, or the stair stopping, ends :stopped :no-stone-found (warn mine.no-stone-found, result
      :descent {:steps :stop}); the mend and the walk home follow.
@@ -284,14 +286,14 @@
   "The normal end: the body walks back to where it started (phase :home), whatever the run did, then finishes."
   [c]
   (ctx/update-mem! c assoc :phase :home)
-  :continue)
+  :again)
 
 (defn to-mend!
   "End the dig phase with a reason: mend next, or wrap up when there is nothing to mend."
   [c reason]
   (ctx/update-mem! c assoc :phase :mend :reason reason :at-mend (carried c))
   (if (:mend (:args c))
-    :continue
+    :again
     (wrap-up! c)))
 
 (defn skip! [c pos] (ctx/update-mem! c update :skipped (fnil conj []) pos))
@@ -357,7 +359,7 @@
 (defn ^:async collect! [c]
   (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops
                                  {:radius (drop-radius c) :filter [(item-name (:args c))]}))]
-    (when (= :done r)
+    (when (not= :continue r)
       (await (note-left! c))
       (let [now (carried c)]
         (ctx/update-mem! c (fn [m]
@@ -365,7 +367,7 @@
                                  (dissoc :collecting)
                                  (assoc :dry (if (> now (:last-carried m 0)) 0 (inc (:dry m 0)))
                                         :last-carried now))))))
-    :continue))
+    (if (= :continue r) :continue :again)))
 
 (defn refused!
   "The rules refused pos (verdict v) right before the dig, no failure: a hazard skips it; a zone or a plan keeps it
@@ -376,19 +378,34 @@
                                           (select-keys v [:reason :zone :claim :owner :plan :hazards])
                                           {:text (str "mine left " (access/cell pos) ": " (name verdict))})))
 
+(defn dug-booked!
+  "Book a dig of the mined block at pos: drops to collect, a look round at the next cell."
+  [c pos]
+  (ctx/update-mem! c #(-> % (dissoc :digging) (assoc :failures 0 :collecting true :looked :dug :dug-at (access/cell pos)))))
+
+(defn settle-dig!
+  "A round cut during a dig of the mined block (:digging written before it) books the dig when the cell is air now."
+  [c]
+  (when-let [pos (:digging (ctx/mem c))]
+    (ctx/update-mem! c dissoc :digging)
+    (when (air (u/block-name (:primitives c) pos))
+      (dug-booked! c pos))))
+
 (defn ^:async dig! [c pos]
   (await (equip! c))
   (let [v (access/may-dig? (rules-in c) pos)
         verdict (access/judge v (:accept (:args c)))]
     (if (not= :ok verdict)
       (refused! c pos v verdict)
-      (let [status (.-status (await (tidy/dig! c pos)))]
+      (let [_ (ctx/update-mem! c assoc :digging pos)
+            status (.-status (await (tidy/dig! c pos)))]
+        (ctx/update-mem! c dissoc :digging)
         (cond
-          (= "dug" status) (ctx/update-mem! c assoc :failures 0 :collecting true :looked :dug :dug-at (access/cell pos))
+          (= "dug" status) (dug-booked! c pos)
           (= "missing" status) nil
           (= "cannot" status) (skip! c pos)
           :else (do (skip! c pos) (ctx/update-mem! c update :failures (fnil inc 0))))))
-    :continue))
+    :again))
 
 
 (defn skip-failed!
@@ -454,7 +471,9 @@
             _ (await (equip! c block))
             v (access/may-dig? (rules-in c) pos)
             verdict (access/judge v (:accept (:args c)))
-            status (when (= :ok verdict) (.-status (await (tidy/dig! c pos))))]
+            _ (when (and (= :ok verdict) (= block (:block (:args c)))) (ctx/update-mem! c assoc :digging pos))
+            status (when (= :ok verdict) (.-status (await (tidy/dig! c pos))))
+            _ (ctx/update-mem! c dissoc :digging)]
         (cond
           (not= :ok verdict) (do (refused! c pos v verdict) :refused)
           (not (#{"dug" "missing"} status)) :dig-failed
@@ -566,9 +585,9 @@
     (cond
       (and (< n 2) (craftable? c) (not (:craft-failed m)))
       (let [r (await (ctx/call-child c :torches 'jobs.items.craft {:item "torch" :count 4 :fetch false}))]
-        (when (and (= :done r) (zero? (:made (ctx/child-result c :torches) 0)))
+        (when (and (not= :continue r) (not (and (= :done r) (pos? (:made (ctx/child-result c :torches) 0)))))
           (ctx/update-mem! c assoc :craft-failed true))
-        :continue)
+        (if (= :continue r) :continue :again))
 
       (zero? n)
       (do (when-not (get-in m [:no-torches-said (boolean branch)])
@@ -576,9 +595,9 @@
                                                             (if branch "branch" "tunnel") " stays dark")}))
           (ctx/update-mem! c assoc-in [:no-torches-said (boolean branch)] true)
           (booked! c branch)
-          :continue)
+          :again)
 
-      :else (do (await (hang-torch! c branch)) :continue))))
+      :else (do (await (hang-torch! c branch)) :again))))
 
 (defn ^:async end!
   "tunnel-end!, after a torch at the cut's end when one is due."
@@ -613,7 +632,7 @@
                 (do (await (glance! c [(headings heading)]))
                     (if (await (step-to! c next))
                       (do (ctx/update-mem! c #(-> % (update-in [:tunnel :steps] inc) (assoc :looked next)))
-                          :continue)
+                          :again)
                       (end! c :walk-failed next))))))))
 
 ;; ------------------------------------------------------------------ the dig phase
@@ -692,7 +711,7 @@
         (cond
           (= :continue r) :continue
           (and (= :done r) (= :done (:status res)))
-          (do (ctx/update-mem! c update-in [:descent :steps] (fnil + 0) (or (:steps res) 1)) :continue)
+          (do (ctx/update-mem! c update-in [:descent :steps] (fnil + 0) (or (:steps res) 1)) :again)
           :else (do (ctx/update-mem! c update :descent assoc :stop (or (:reason res) :declined))
                     (no-stone! c)))))))
 
@@ -708,16 +727,16 @@
                                    (to-mend! c :no-drops))
       (>= failures max-failures) (do (ctx/emit! c :mine.gave-up :warn {:failures failures :text (str "mine gave up after " failures " failures")})
                                      (to-mend! c :gave-up))
-      (nil? looked) (await (look-around! c))
-      (= :searching pos) :continue
+      (nil? looked) (do (await (look-around! c)) :again)
+      (= :searching pos) :again
       (some? pos) (let [walked (await (walk-to-dig! c pos))]
                     (cond
-                      (= :blocked walked) (do (skip-failed! c pos) :continue)
+                      (= :blocked walked) (do (skip-failed! c pos) :again)
                       (= :partial walked) :continue
                       (branch-torch-due? c) (await (torch-step! c true))
                       :else (do (await (watch/watch! c {:before-dig pos}))
                                 (await (dig! c pos)))))
-      (not= looked (cell-of (u/self-pos c))) (await (look-around! c))
+      (not= looked (cell-of (u/self-pos c))) (do (await (look-around! c)) :again)
       :else (do (when (and wet? (not wet)) (ctx/update-mem! c update :wet-skipped #(max (or % 0) wet-n)))
                 (when (seq refused)
                   (access/decline! c :mine.declined "mine" (assoc (access/refusal-fields refused) :reason :refused)))
@@ -774,22 +793,21 @@
                  (await (near/go-near! c pos reach {:zone-tolls true}))
                  :there)]
     (if (not= :there walked)
-      (do (when (= :blocked walked) (mend-fail! c)) :continue)
+      (do (when (= :blocked walked) (mend-fail! c)) (if (= :blocked walked) :again :continue))
       (let [status (if (gate/allowed? c :mine.declined "mine" :place pos)
                      (.-status (await (ctx/act c :place (clj->js {:pos pos :item item}))))
                      "refused")]
         (cond
           (= "placed" status) (ctx/update-mem! c #(-> % (assoc :mend-failures 0) (update :mended (fnil inc 0))))
-          (= "occupied" status) (ctx/update-mem! c assoc :mend-failures 0)
           :else (mend-fail! c))
-        :continue))))
+        :again))))
 
 (defn ^:async raise! [c item]
   (let [status (.-status (await (ctx/act c :jumpPlace (clj->js {:item item :count 1}))))]
     (if (contains? #{"done" "partial"} status)
       (ctx/update-mem! c update :mended (fnil inc 0))
       (mend-fail! c))
-    :continue))
+    :again))
 
 (defn cells-text [cells] (str/join " " (map #(str (:x (:pos %)) "," (:y (:pos %)) "," (:z (:pos %))) cells)))
 
@@ -811,12 +829,12 @@
         more? (some #(off-ground? c %) (:targets (scan c)))]
     (cond
       (not (spent-on-mend? c)) (wrap-up! c)
-      (not= looked (cell-of (u/self-pos c))) (await (look-around! c))
+      (not= looked (cell-of (u/self-pos c))) (do (await (look-around! c)) :again)
       (and more? (< (or resumes 0) max-resumes))
       (do (ctx/update-mem! c #(-> % (assoc :phase :dig :failures 0 :dry 0 :last-carried (carried c) :mend-failures 0)
                                   (dissoc :collecting)
                                   (update :resumes (fnil inc 0))))
-          :continue)
+          :again)
       :else (do (ctx/update-mem! c assoc :reason :spent-on-mend :dig-reason reason)
                 (wrap-up! c)))))
 
@@ -911,12 +929,13 @@
   (let [r (await (fetch/fetch! c 'jobs.gather.mine tool-problem))]
     (cond
       r r
-      (not (no-tool? c)) :continue
+      (not (no-tool? c)) :again
       (nil? (:phase (ctx/mem c))) (no-tool! c)
       :else (do (ctx/emit! c :mine.no-tool :warn {:tool (needed-kind c) :text (str "mine has no " (needed-kind c) " for " (:block (:args c)) " and could not get one")})
                 (to-mend! c :no-tool)))))
 
-(defn ^:async round [c]
+(defn ^:async step [c]
+  (settle-dig! c)
   (let [m (ctx/mem c)
         heading (heading-name (:direction (:args c)))]
     (cond
@@ -936,9 +955,16 @@
                          :heading (or heading (facing (:primitives c)))
                          :ground (if (:mend (:args c)) (snapshot c start) [])
                          :phase :dig)
-        :continue)
+        :again)
 
       (= :home (:phase m)) (await (home-round! c))
       (= :mend (:phase m)) (await (mend-round! c))
       (:collecting m) (await (collect! c))
       :else (await (dig-round! c)))))
+
+(def max-steps "Pieces of work of one call before it gives the round back with :continue." 400)
+
+(defn ^:async round
+  [c]
+  (let [n (atom 0)]
+    (await (pace/steps! c #(if (< (swap! n inc) max-steps) (step c) :continue)))))

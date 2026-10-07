@@ -122,6 +122,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start {:world {:blocks floor}})]
+          (tu/shutdown-at! s "dig" 1)
           (core/submit! (:eng s) (spec {:block "dirt" :count 4}) {})
           (await (run-ticks s 1))
           (let [m (job-mem s)]
@@ -129,7 +130,7 @@
             (is (= 50 (count (:ground m))))
             (is (= :dig (:phase m)))
             (is (= 4 (:goal m)))
-            (is (= 0 (dig-count s)) "the snapshot comes first, in its own round")))))))
+            (is (= 1 (dig-count s)) "the snapshot is in memory when the first dig is cut")))))))
 
 (deftest a-restart-still-mends
   (async done
@@ -137,8 +138,9 @@
       (fn ^:async t []
         (let [dir (tu/tmp-dir)
               s (start {:world {:blocks floor} :dir dir})]
+          (tu/shutdown-at! s "dig" 3)
           (core/submit! (:eng s) (spec {:block "dirt" :count 4}) {})
-          (await (run-ticks s 6))
+          (await (run-ticks s 1))
           (is (pos? (dig-count s)))
           (is (not (finished? s)))
           (let [again (start {:p (:p s) :dir dir})]
@@ -245,7 +247,6 @@
           (tu/short-walks! (:p s) 7)
           (core/submit! (:eng s) (spec {:block "sand" :tunnel-length 0}) {})
           (await (run-ticks s 1))
-          (is (zero? (:failures (job-mem s))) "failures start at 0")
           (await (run-ticks s 20))
           (is (= "partial" (:status (first (moved s)))) "the first walk is cut short")
           (is (zero? (dig-count s)))
@@ -361,6 +362,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start {:world {:blocks floor}})]
+          (tu/shutdown-at! s "dig" 1)
           (core/submit! (:eng s) (spec {:block "dirt" :count 2 :mend false}) {})
           (await (run-ticks s 1))
           (is (= [] (:ground (job-mem s))) "no ground is recorded")

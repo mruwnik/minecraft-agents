@@ -64,6 +64,7 @@
       (fn ^:async t []
         (let [s (setup-seeing {:inventory [{:name "wheat_seeds" :count 5}]
                           :blocks (patch "short_grass" (range 2 6) (range 0 4)) :drops seed-drops})]
+          (tu/shutdown-at! s "dig" 1)
           (core/submit! (:eng s) (spec {:count 2}) {})
           (await (run-ticks s 1 700))
           (is (= 7 (:goal (job-mem s))))
@@ -402,8 +403,9 @@
         (let [dir (tu/tmp-dir)
               p (tu/seeing-all (tu/fake-on-floor {:blocks (merge (stand "sugar_cane" 3 0 3) (stand "sugar_cane" 5 2 3) (stand "sugar_cane" 7 4 3))}))
               s (start {:p p :dir dir})]
+          (tu/shutdown-at! s "dig" 2)
           (core/submit! (:eng s) (spec {:item "sugar_cane" :count 3 :per-round 1}) {})
-          (await (run-ticks s 3 700))
+          (await (run-ticks s 1 700))
           (is (not (finished? s)))
           (is (= 3 (:goal (job-mem s))))
           (let [again (start {:p p :dir dir})]
