@@ -7,7 +7,8 @@
   "Grow the villagers seen within :radius to :target (adults and babies count). One call is the whole attempt. Each
   attempt takes the two nearest adults not yet tried in this call, feeds each enough to be willing (jobs.village.feed
   child, fetched unless :fetch is off: 3 bread, else 12 of carrot, potato or beetroot), then stays near them for
-  :wait-s seconds (jobs.movement.linger-near child) and counts again. A rise in the count is a birth.
+  :wait-s seconds (jobs.movement.linger-near child) and counts again. A rise in the baby villagers in sight is a birth
+  (an adult walking into view is not).
   Needs adult villagers in sight and beds the villagers can claim (the body cannot see which are free): it only counts
   what it sees, so a villager out of sight is not counted. Zones are the walks' (go-to tolls), never claimed here.
   Result: {:population n :target t :births b}; short of the target also :status :stopped and :reason, warn
@@ -17,7 +18,8 @@
   - \"no-food\": a feed child ended without food.
   A pair a feed could not complete (villager gone, unreachable, would not take food) counts as an attempt without a
   birth. What was tried, the birth baseline and the wait are kept in job memory, so a cut and restart re-checks the
-  count and goes on. It yields :continue while a feed, walk or the wait is under way.")
+  count and goes on. It yields :continue while a feed, walk or the wait is under way; with :fetch off and no food it waits and warns
+  breed.waiting once.")
 
 (def args
   {:target {:doc "villagers wanted in sight (adults and babies)" :type :int :min 2 :max 64 :default nil}
@@ -55,33 +57,42 @@
   (or (first (filter (fn [[item n]] (>= (held c item) n)) [["bread" 3] ["carrot" 12] ["potato" 12] ["beetroot" 12]]))
       ["bread" 3]))
 
+(defn sight
+  "{:pop n :kids k}: the villagers in sight, and how many of them are babies."
+  [vs]
+  {:pop (count vs) :kids (count (remove adult? vs))})
+
+(defn born
+  "The babies that came into sight since the pair now being fed or waited for was chosen."
+  [c seen]
+  (if (:pair (ctx/mem c)) (max 0 (- (:kids seen) (:baseline (ctx/mem c) (:kids seen)))) 0))
+
 (defn births
-  "The births so far: the booked ones plus the rise in the count since the pair now being fed or waited for was chosen."
-  [c pop]
-  (let [m (ctx/mem c)]
-    (+ (:births m 0) (if (:pair m) (max 0 (- pop (:baseline m pop))) 0))))
+  "The births so far: the booked ones plus those since the pair was chosen."
+  [c seen]
+  (+ (:births (ctx/mem c) 0) (born c seen)))
 
 (defn finish!
   "Hand the parent the counts and return :done."
-  [c pop extra]
-  (ctx/result! c (merge {:population pop :target (:target (:args c)) :births (births c pop)} extra))
+  [c seen extra]
+  (ctx/result! c (merge {:population (:pop seen) :target (:target (:args c)) :births (births c seen)} extra))
   :done)
 
 (defn stop!
   "Warn and end stopped with a reason."
-  [c pop reason text]
-  (ctx/emit! c :breed.gave-up :warn {:reason reason :text text :population pop :births (births c pop)})
-  (finish! c pop {:status :stopped :reason reason}))
+  [c seen reason text]
+  (ctx/emit! c :breed.gave-up :warn {:reason reason :text text :population (:pop seen) :births (births c seen)})
+  (finish! c seen {:status :stopped :reason reason}))
 
 (defn done!
   "Info and end: the target is met."
-  [c pop]
-  (ctx/emit! c :breed.done :info {:population pop :births (births c pop) :text (str pop " villagers in sight")})
-  (finish! c pop {}))
+  [c seen]
+  (ctx/emit! c :breed.done :info {:population (:pop seen) :births (births c seen) :text (str (:pop seen) " villagers in sight")})
+  (finish! c seen {}))
 
 (defn choose!
   "Pick the two nearest untried adults and book them with the baseline count, or end without a pair. :again or :done."
-  [c vs pop]
+  [c vs seen]
   (let [m (ctx/mem c)
         me (u/self-pos c)
         tried (set (:tried m))
@@ -89,9 +100,9 @@
                   (sort-by #(u/dist me (u/pos-of (.-pos %)))) (take 2))]
     (cond
       (< (count pair) 2) (if (seq tried)
-                           (stop! c pop "no-births" "no untried pair left")
-                           (stop! c pop "no-pair" "fewer than two adult villagers in sight"))
-      :else (do (ctx/update-mem! c #(assoc % :pair (mapv (fn [e] (.-uuid e)) pair) :fed [] :baseline pop
+                           (stop! c seen "no-births" "no untried pair left")
+                           (stop! c seen "no-pair" "fewer than two adult villagers in sight"))
+      :else (do (ctx/update-mem! c #(assoc % :pair (mapv (fn [e] (.-uuid e)) pair) :fed [] :baseline (:kids seen)
                                            :tried (into (vec (:tried %)) (map (fn [e] (.-uuid e))) pair)))
                 :again))))
 
@@ -103,7 +114,7 @@
 
 (defn ^:async feed-pair!
   "Feed the next villager of the pair; both fed starts the wait near them. :again, :continue or :done."
-  [c vs pop]
+  [c vs seen]
   (let [m (ctx/mem c)
         next (first (remove (set (:fed m)) (:pair m)))
         {:keys [radius fetch]} (:args c)]
@@ -114,22 +125,24 @@
       (let [[item n] (meal c)
             r (await (ctx/call-child c (keyword (str "feed-" next)) 'jobs.village.feed
                                      {:villager next :item item :count n :radius radius :fetch fetch}))]
+        (when (= :declined r)
+          (ctx/warn-once! c :feed-declined :breed.waiting {:text (str "waiting for " n " " item ": none carried and :fetch is off")}))
         (if (not= :done r)
           :continue
           (let [res (ctx/child-result c (keyword (str "feed-" next)))]
             (cond
-              (= "no-food" (:reason res)) (stop! c pop "no-food" "no food to feed the villagers")
+              (= "no-food" (:reason res)) (stop! c seen "no-food" "no food to feed the villagers")
               (:status res) (failed-pair! c)
               :else (do (ctx/update-mem! c update :fed conj next) :again))))))))
 
 (defn ^:async wait!
   "Stay near the fed pair; when the wait ends count the births. :again or :continue."
-  [c pop]
+  [c seen]
   (let [m (ctx/mem c)
         r (await (ctx/call-child c :wait 'jobs.movement.linger-near {:pos (:at m) :range wait-range :wait-s (:wait-s (:args c))}))]
     (if (not= :done r)
       :continue
-      (let [born (max 0 (- pop (:baseline m pop)))]
+      (let [born (born c seen)]
         (ctx/update-mem! c #(-> % (dissoc :waiting :pair :fed :at)
                                 (update :births (fnil + 0) born)
                                 (assoc :fruitless (if (pos? born) 0 (inc (:fruitless % 0))))))
@@ -141,13 +154,13 @@
   [c]
   (let [m (ctx/mem c)
         vs (villagers (:primitives c) (:radius (:args c)))
-        pop (count vs)]
+        seen (sight vs)]
     (cond
-      (>= pop (:target (:args c))) (done! c pop)
-      (:waiting m) (await (wait! c pop))
-      (>= (:fruitless m 0) max-fruitless) (stop! c pop "no-births" "three attempts without a birth")
-      (:pair m) (await (feed-pair! c vs pop))
-      :else (choose! c vs pop))))
+      (>= (:pop seen) (:target (:args c))) (done! c seen)
+      (:waiting m) (await (wait! c seen))
+      (>= (:fruitless m 0) max-fruitless) (stop! c seen "no-births" "three attempts without a birth")
+      (:pair m) (await (feed-pair! c vs seen))
+      :else (choose! c vs seen))))
 
 (defn ^:async round
   "The whole attempt: steps (a pace between) until the target is met or it gives up; yields only while a child waits."
