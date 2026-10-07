@@ -308,7 +308,7 @@
   [c chest still]
   (if (u/within? (u/self-pos c) chest 3)
     nil
-    (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos chest :range 3 :escalate false :warn false :retry false}))]
+    (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos chest :range 3 :escalate false :warn false :retry false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
       (cond
         (= :continue r) :continue
         (:arrived (ctx/child-result c :walk)) nil

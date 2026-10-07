@@ -212,7 +212,7 @@
   "Walk to within 3 of cell; a permanent verdict holds it :unreachable, an end out of reach, a walk that did not end or
   a go-to that gave up for a passing reason counts a failure."
   [c {:keys [cell]}]
-  (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos cell :range walk-range :escalate false}))
+  (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos cell :range walk-range :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))
         result (when (= :done r) (ctx/child-result c :walk))
         status (:status result)]
     (cond

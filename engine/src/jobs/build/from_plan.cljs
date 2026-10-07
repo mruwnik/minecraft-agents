@@ -497,7 +497,7 @@
   or not: the next round judges where the body stands). :continue."
   [c]
   (let [[x y z] (:leave (ctx/mem c))
-        r (await (ctx/call-child c :leave 'jobs.movement.go-to {:pos {:x x :y y :z z} :range 1 :escalate false}))]
+        r (await (ctx/call-child c :leave 'jobs.movement.go-to {:pos {:x x :y y :z z} :range 1 :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (when-not (= :continue r)
       (ctx/update-mem! c dissoc :leave))
     :continue))
@@ -515,7 +515,7 @@
         give-up (:give-up (:args c))]
     (if-not stand
       (ctx/update-mem! c count-fail (:pos cell) :unreachable give-up)
-      (let [w (await (near/walk-near! c (zipmap [:x :y :z] stand) 0))]
+      (let [w (await (near/walk-near! c (zipmap [:x :y :z] stand) 0 {:zone-tolls true}))]
         (when (= :blocked w)
           (ctx/update-mem! c #(-> (count-fail % (:pos cell) :unreachable give-up)
                                   (update :bad-stands (fnil conj []) stand))))

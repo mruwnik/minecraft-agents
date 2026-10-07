@@ -179,7 +179,7 @@
             result {:spot pos :spots found}]
         (if-not (:walk a)
           (do (ctx/result! c (assoc result :walked false)) :done)
-          (case (await (near/walk-near! c (update pos :y inc) 2))
+          (case (await (near/walk-near! c (update pos :y inc) 2 {:zone-tolls true}))
             :partial :continue
             :blocked (do (ctx/result! c (assoc result :walked false :reason :unreachable)) :done)
             (do (ctx/result! c (assoc result :walked true)) :done)))))))

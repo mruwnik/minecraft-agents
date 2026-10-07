@@ -18,10 +18,10 @@
 
 (defn zone [owner] {:name "z" :min [19 60 -6] :max [21 70 6] :owner owner :allow #{}})
 
-(defn setup [blocks zones]
+(defn setup [blocks zones & [extra]]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/seeing-all (tu/fake-on-floor {:floor [-5 -20 45 20] :blocks blocks :self {:pos [0.5 64 0.5]}}))
+        p (tu/seeing-all (tu/fake-on-floor (merge {:floor [-5 -20 45 20] :blocks blocks :self {:pos [0.5 64 0.5]}} extra)))
         eng (core/create {:primitives p :jobs registry/jobs :triggers {} :dir (tu/tmp-dir) :now #(deref clock)
                           :world (ew/of-data {} {} zones)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -111,19 +111,40 @@
           (is (contains? cells [12 64 12]) "the start end too")
           (is (= 1 (count warns))))))))
 
-(defn ^:async go-to-trail
-  "The [x z] cells the body steered through on a go-to to [40 64 0] with args, a foreign zone across x 19..21, z -6..6."
-  [args]
-  (let [{:keys [p eng]} (setup {} [(zone "Other")])
+(defn ^:async job-trail
+  "The [x z] cells the body steered through running form with the fake world's extra keys, a foreign zone across x 19..21, z -6..6."
+  [form extra]
+  (let [{:keys [p eng]} (setup {} [(zone "Other")] extra)
         trail (atom [])]
     (.override (.-world p) "steer"
                (fn [token a impl]
                  (let [decide (.-decide a)
                        logged (fn [pose] (swap! trail conj [(js/Math.floor (.-x pose)) (js/Math.floor (.-z pose))]) (decide pose))]
                    (impl token (walk/steer-args (.-timeoutS a) logged)))))
-    (core/submit! eng (list 'jobs.movement.go-to (merge {:pos [40 64 0] :range 1 :escalate false} args)) {})
+    (core/submit! eng form {})
     (await (tu/tick-until-idle! eng 60))
     @trail))
+
+(defn ^:async go-to-trail
+  "job-trail of a go-to to [40 64 0] with args."
+  [args]
+  (await (job-trail (list 'jobs.movement.go-to (merge {:pos [40 64 0] :range 1 :escalate false} args)) {})))
+
+(defn ^:async kit-trail
+  "job-trail of a kit run on a chest at 40 64 0 with args."
+  [args]
+  (await (job-trail (list 'jobs.storage.kit (merge {:chest {:x 40 :y 64 :z 0} :tools [] :spare 0 :food 2 :craft false} args))
+                    {:containers {"40,64,0" [{:name "bread" :count 8}]}})))
+
+(deftest kit-bends-round-another-bodys-zone-unless-ignoring-zones
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [tolled (await (kit-trail {}))
+              ignoring (await (kit-trail {:ignore-zones? true}))]
+          (is (seq tolled))
+          (is (not (on-strip? tolled -5 5)))
+          (is (on-strip? ignoring -5 5)))))))
 
 (deftest go-to-zone-tolls-bends-round-another-bodys-zone
   (async done
