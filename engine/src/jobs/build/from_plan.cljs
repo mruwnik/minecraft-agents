@@ -9,6 +9,7 @@
             [jobs.lib.watch :as watch]
             [jobs.build.clear-box :as clear-box]
             [jobs.lib.near :as near]
+            [jobs.lib.pace :as pace]
             [jobs.lib.placement :as placement]
             [jobs.lib.reach :as reach]
             [plan.rail :as rail]
@@ -28,7 +29,8 @@
   A door's upper half, a bed's head and a tall plant's upper half are never targets: the lower or foot cell places
   the whole item. A :clear cell holding a block that is not replaceable and no container is dug (nothing carried
   needed). Crops and trees are not this job's.
-  Each round re-reads the plan and the world, then takes the first step that applies:
+  One call works until the plan is built or nothing more applies (:continue only while a walk or fetch waits). Every
+  step re-reads the plan and the world, then takes the first step that applies:
   0. A place that would shut the body in (it has a way out and would have none) is held back; the body first walks
      out of the plan's footprint (go-to child), then places from outside. Held back :give-up times, a cell is given
      up as :unreachable.
@@ -43,7 +45,7 @@
   5. Finish.
   A cell whose state no neighbour gives, or with no block to click beside it yet, waits for one. If still missing at
   the end it is given up with jobs.lib.placement's reason (:no-support, :no-room, :opened, :double-slab). A cell whose place is refused, or whose stand cell
-  cannot be reached, :give-up times is given up (:refused, :unreachable or :unloaded).
+  cannot be reached, :give-up times is given up (:refused, :occupied, :no-item, :unreachable or :unloaded).
   Zones: every place is checked against zones and the footprints of the other active plans, when the cell is
   chosen and again before the place. A cell in a zone that does not allow :place, or in another plan's footprint,
   is refused for good (not counted as given up). It is listed in :refused [{:pos :reason :zone|:claim|:footprint|:hazard}], with one
@@ -423,14 +425,24 @@
       (not= :place d) nil
       (:refused h) (ctx/update-mem! c assoc-in [:unplaceable pos] (:refused h))
       :else
-      (let [r (await (ctx/act c :place (clj->js (cond-> {:pos (zipmap [:x :y :z] pos) :item item}
+      (let [_ (ctx/update-mem! c assoc :placing pos)
+            r (await (ctx/act c :place (clj->js (cond-> {:pos (zipmap [:x :y :z] pos) :item item}
                                                   (:click h) (assoc :click (js-click (:click h)))))))
-            wrong (misplaced want item (placed-block r))]
+            wrong (misplaced want item (placed-block r))
+            give-up (:give-up (:args c))]
         (case (.-status r)
-          "placed" (ctx/update-mem! c #(cond-> (update % :placed (fnil inc 0))
+          "placed" (ctx/update-mem! c #(cond-> (update (dissoc % :placing) :placed (fnil inc 0))
                                          wrong (assoc-in [:misplaced pos] wrong)))
-          ("occupied" "no-item") nil
-          (ctx/update-mem! c count-fail pos :refused (:give-up (:args c))))))))
+          ("occupied" "no-item") (ctx/update-mem! c #(count-fail (dissoc % :placing) pos (keyword (.-status r)) give-up))
+          (ctx/update-mem! c #(count-fail (dissoc % :placing) pos :refused give-up)))))))
+
+(defn settle-placing!
+  "A place that a cut left unbooked (:placing, set before the act): the world is the answer, so a cell no longer owed
+  was placed and counts."
+  [c cells]
+  (when-let [pos (:placing (ctx/mem c))]
+    (let [placed? (not-any? #(= pos (:pos %)) (owed cells))]
+      (ctx/update-mem! c #(cond-> (dissoc % :placing) placed? (update :placed (fnil inc 0)))))))
 
 (defn pos-map [pos] (zipmap [:x :y :z] pos))
 
@@ -453,7 +465,7 @@
                                             (if (>= (get-in m [:digs pos]) (:give-up (:args c)))
                                               (assoc-in m [:given-up pos] :refilled)
                                               m)))
-                "missing" nil
+                "missing" (ctx/update-mem! c count-fail pos :missing (:give-up (:args c)))
                 (ctx/update-mem! c count-fail pos :refused (:give-up (:args c))))))
       :refused (ctx/update-mem! c refuse pos (select-keys v [:reason :zone :plan :claim]))
       :hazard (ctx/update-mem! c refuse pos {:reason :hazard
@@ -519,17 +531,17 @@
          first)))
 
 (defn ^:async leave!
-  "One go-to round (child :leave) out of the plan's footprint to the :leave cell; dropped once the walk ends (arrived
-  or not: the next round judges where the body stands). :continue."
+  "One go-to call (child :leave) out of the plan's footprint to the :leave cell; dropped once the walk ends (arrived
+  or not: the next step judges where the body stands). :continue while the walk waits, else :again."
   [c]
   (let [[x y z] (:leave (ctx/mem c))
         r (await (ctx/call-child c :leave 'jobs.movement.go-to {:pos {:x x :y y :z z} :range 1 :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (when-not (= :continue r)
       (ctx/update-mem! c dissoc :leave))
-    :continue))
+    (if (= :continue r) :continue :again)))
 
 (defn ^:async walk-to!
-  "Walk to a stand cell beside cell; a cell that cannot be walked to, or is still out of reach (or unseen, as
+  "Walk to a stand cell beside cell (:continue while the walk waits, else :again); a cell that cannot be walked to, or is still out of reach (or unseen, as
   :unloaded) on arrival, counts a failure."
   [c cells cell]
   (let [body (u/self-pos c)
@@ -540,7 +552,8 @@
         stand (first (sort-by #(u/dist body (zipmap [:x :y :z] %)) stands))
         give-up (:give-up (:args c))]
     (if-not stand
-      (ctx/update-mem! c count-fail (:pos cell) :unreachable give-up)
+      (do (ctx/update-mem! c count-fail (:pos cell) :unreachable give-up)
+          :again)
       (let [w (await (near/go-near! c (zipmap [:x :y :z] stand) 0 {:zone-tolls true :escalate false}))]
         (when (= :blocked w)
           (ctx/update-mem! c #(-> (count-fail % (:pos cell) :unreachable give-up)
@@ -548,8 +561,8 @@
         (when (and (= :there w) (nil? (:found cell)))
           (ctx/update-mem! c count-fail (:pos cell) :unloaded give-up))
         (when (and (= :there w) (:found cell) (empty? (if (:dig? cell) (in-dig-reach c [cell]) (in-reach c [cell]))))
-          (ctx/update-mem! c count-fail (:pos cell) :unreachable give-up))))
-    :continue))
+          (ctx/update-mem! c count-fail (:pos cell) :unreachable give-up))
+        (if (= :partial w) :continue :again)))))
 
 (defn kept-ground
   "The predicate of cells that stay unlisted as wrong: with sturdy-ground, ground of a rail line holding a sturdy block."
@@ -620,7 +633,7 @@
     :done))
 
 (defn ^:async build-step!
-  "One step of the build: place or dig what is in reach, else walk, else finish."
+  "One step of the build (:again, or :continue while a walk waits): place or dig what is in reach, else walk, else finish."
   [c cells]
   (let [closed #(merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))
         todo (placeable c (permitted c (buildable cells (carried-counts (:primitives c)) (closed))))
@@ -639,21 +652,29 @@
                                                    (assoc :leave (exit-point cells (u/self-pos c)))))
                            (do (await (place-one! c (first left)))
                                (recur (rest left))))))
-                     :continue)
+                     :again)
       (seq dig-near) (do (loop [left dig-near]
                            (when (seq left)
                              (await (dig-one! c (first left)))
                              (recur (rest left))))
-                         :continue)
+                         :again)
       (seq todo) (await (walk-to! c cells (nearest todo)))
       (seq digs) (await (walk-to! c cells (nearest digs)))
       (seq (unseen cells given-up)) (await (walk-to! c cells (nearest (unseen cells given-up))))
       :else (finish! c cells))))
 
-(defn ^:async round [c]
+(defn ^:async step [c]
   (let [{:keys [trouble]} (planned c)]
     (if trouble
       :declined
       (do (when-not (:begun (ctx/mem c)) (ctx/update-mem! c assoc :begun true))
           (or (await (fetch/fetch! c 'jobs.build.from-plan problem))
-              (await (build-step! c (:cells (planned c)))))))))
+              (let [cells (:cells (planned c))]
+                (settle-placing! c cells)
+                (await (build-step! c cells))))))))
+
+(defn ^:async round
+  "The whole attempt: loop the steps until the plan is built or nothing more applies (finish); :continue only while a
+  walk or a fetch waits on the world."
+  [c]
+  (await (pace/steps! c (fn ^:async s [] (await (step c))))))

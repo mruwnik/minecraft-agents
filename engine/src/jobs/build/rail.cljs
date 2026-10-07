@@ -110,7 +110,8 @@
 
 (defn ^:async walk-to!
   "Walk to a stand for cell: the rail behind it, else a cell beside it. Counts a failure when the stand cannot be
-  walked to, or on arrival the cell is still out of reach or unseen (:unloaded)."
+  walked to, or on arrival the cell is still out of reach or unseen (:unloaded). :continue while the walk waits, else
+  :again."
   [c ps from cells cell]
   (let [body (u/self-pos c)
         planned (set (map :pos cells))
@@ -119,7 +120,8 @@
         stand (or (stand-behind c ps from cell) beside)
         give-up (:give-up (:args c))]
     (if-not stand
-      (ctx/update-mem! c build/count-fail (:pos cell) :unreachable give-up)
+      (do (ctx/update-mem! c build/count-fail (:pos cell) :unreachable give-up)
+          :again)
       (let [w (await (near/go-near! c (zipmap [:x :y :z] stand) 0 {:zone-tolls true :escalate false}))]
         (when (= :blocked w)
           (ctx/update-mem! c #(-> (build/count-fail % (:pos cell) :unreachable give-up)
@@ -127,8 +129,8 @@
         (when (and (= :there w) (nil? (:found cell)))
           (ctx/update-mem! c build/count-fail (:pos cell) :unloaded give-up))
         (when (and (= :there w) (:found cell) (empty? (build/in-reach c [cell])))
-          (ctx/update-mem! c build/count-fail (:pos cell) :unreachable give-up))))
-    :continue))
+          (ctx/update-mem! c build/count-fail (:pos cell) :unreachable give-up))
+        (if (= :partial w) :continue :again)))))
 
 (defn ^:async place-run!
   "Place the cells in order while each is within reach. Returns {:placed n} and, when one was out of reach, :next cell."
@@ -144,8 +146,8 @@
 (defn ^:async dig-away!
   "Dig the rail at pos through the jobs.blocks.dig child (hazards, tidy record, tool, drops) if the rules agree, and
   count one fix when it is dug. Water beside is taken as :accept says, lava never. A hazard or a failed dig counts a
-  :shape failure; a cell already clear counts nothing (it is placed in its turn). Resolves to the child's :continue
-  or :declined, else :continue."
+  :shape failure; a cell already clear counts nothing and waits (:continue: the world still shows the rail). Resolves to the
+  child's :continue or :declined, else :again."
   [c pos]
   (let [v (rules/may-dig? (assoc (build/rules-input c) :cell pos))
         [x y z] pos
@@ -155,7 +157,7 @@
                     {:pos {:x x :y y :z z} :need-drop false :collect true :on-fluid :fail :for-plan (:plan (:args c))})]
     (if-not (:ok v)
       (do (ctx/update-mem! c build/refuse pos (select-keys v [:reason :zone :plan :claim]))
-          :continue)
+          :again)
       (let [r (await (declined/call-child! c :dig 'jobs.blocks.dig args))]
         (if (#{:continue :declined} r)
           r
@@ -164,7 +166,7 @@
               dug (ctx/update-mem! c update-in [:fixes pos] (fnil inc 0))
               (= :already-clear reason) nil
               :else (ctx/update-mem! c build/count-fail pos :shape (:give-up (:args c))))
-            :continue))))))
+            (if (= :already-clear reason) :continue :again)))))))
 
 (defn ^:async fix-step!
   "Deal with the settled wrong rail at pos: give up as :shape once the fixes are spent, else dig it (walking into
@@ -173,7 +175,7 @@
   (let [cell (first (filter #(= pos (:pos %)) cells))]
     (cond
       (>= (get-in (ctx/mem c) [:fixes pos] 0) (fix-budget c)) (do (ctx/update-mem! c assoc-in [:given-up pos] :shape)
-                                                                   :continue)
+                                                                   :again)
       (empty? (build/in-reach c [cell])) (await (walk-to! c ps from cells cell))
       :else (await (dig-away! c pos)))))
 
@@ -183,14 +185,15 @@
   (let [result (build/summary c cells (ctx/mem c) true)]
     (build/announce! c result)
     (ctx/update-mem! c assoc :phase :switch :built result)
-    :continue))
+    :again))
 
 (defn ^:async step!
   "One round of the builder over the plan's judged cells, in this order: fix a settled wrong rail, place work in reach,
-  walk on, go toward unseen cells, else finish. Always :continue."
+  walk on, go toward unseen cells, else finish. :again, or :continue while a walk or the dig child waits."
   [c cells]
   (let [p (:primitives c)
         ps (mapv :pos (rail/line cells))
+        _ (build/settle-placing! c cells)
         _ (when-not (:from (ctx/mem c)) (ctx/update-mem! c assoc :from (nearer-end c ps)))
         from (:from (ctx/mem c))
         closed (merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))
@@ -202,7 +205,7 @@
     (cond
       (seq bad) (await (fix-step! c ps from cells (first bad)))
       (seq todo) (let [{:keys [placed next]} (await (place-run! c (work-order ps from todo)))]
-                   (if (and (zero? placed) next) (await (walk-to! c ps from cells next)) :continue))
+                   (if (and (zero? placed) next) (await (walk-to! c ps from cells next)) :again))
       (seq underfoot) (await (walk-to! c ps from cells (first (work-order ps from underfoot))))
       (seq unseen) (await (walk-to! c ps from cells (first (work-order ps from unseen))))
       :else (finish! c cells))))

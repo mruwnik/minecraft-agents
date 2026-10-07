@@ -3,6 +3,8 @@
   (:require [cljs.test :refer [deftest is are async]]
             [engine.fake]
             [engine.core :as core]
+            [engine.ctx :as ctx]
+            [engine.takeover :as takeover]
             [engine.events :as events]
             [engine.harvest-test :as h]
             [engine.registry :as registry]
@@ -668,3 +670,48 @@
           (is (every? #(false? (:escalate %)) @opts) "a walk to a stand never digs through the build")
           (is (every? :zone-tolls @opts))
           (is (not= :unreachable (get-in result [:given-up [40 64 0]]))))))))
+
+(deftest a-whole-plan-is-built-in-one-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (start {:inventory kit} {"pen" (pen-plan)})
+              result (await (h/child-outcome eng job {:plan "pen"} 1))]
+          (is (= {:placed 9 :missing [] :short {} :given-up {} :wrong [] :refused []} result)))))))
+
+(deftest a-place-that-finds-no-item-or-an-occupied-cell-is-given-up-after-the-tries
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [status ["no-item" "occupied"]]
+          (let [{:keys [eng p]} (start {:inventory kit} {"post" {:id "post" :parts [{:id "p" :cells [[3 64 3]] :want "oak_fence"}]}})
+                _ (.override (.-world p) "place" (fn ^:async f [_ _ _] #js {:status status}))
+                result (await (h/child-outcome eng job {:plan "post"} 1))]
+            (is (= {[3 64 3] (keyword status)} (:given-up result)) status)
+            (is (= 3 (count (places p))) status)))))))
+
+(deftest a-cut-right-after-a-place-keeps-the-count
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (start {:inventory kit} {"pen" (pen-plan)})
+              out (atom nil)
+              cut? (atom false)
+              parent {:check (constantly true)
+                      :round (fn ^:async r [c]
+                               (let [r (await (ctx/call-child c :kid job {:plan "pen"}))]
+                                 (when (= :done r) (reset! out (ctx/child-result c :kid)))
+                                 r))}
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
+          (.override (.-world p) "place"
+                     (fn ^:async f [token args impl]
+                       (let [r (await (impl token args))]
+                         (when-not @cut?
+                           (reset! cut? true)
+                           (takeover/take! eng {:who "claude" :why "cut"}))
+                         r)))
+          (core/submit! eng '(recording-parent) {})
+          (await (core/tick! eng))
+          (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
+          (await (h/run-until-empty eng 40))
+          (is (= 9 (:placed @out))))))))

@@ -232,3 +232,11 @@
           (is (= "oak_fence_gate" (h/block-at p 3 64 2)))
           (is (= 1 (count (kinds-of seen :pen-build.done))))
           (is (empty? (:list (core/state eng)))))))))
+
+(deftest a-pen-is-built-and-checked-in-one-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (b/start (spec kit) {"pen" (ring-plan)} [])
+              result (await (h/child-outcome eng job {:plan "pen"} 1))]
+          (is (true? (:closed? result))))))))

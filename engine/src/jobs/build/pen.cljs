@@ -5,6 +5,7 @@
             [jobs.animals.pen :as pen]
             [jobs.animals.pen-check :as pen-check]
             [jobs.build.from-plan :as build]
+            [jobs.lib.pace :as pace]
             [jobs.lib.world :as known]))
 
 (def doc
@@ -136,9 +137,9 @@
   (let [r (await (ctx/call-child c :build 'jobs.build.from-plan (build-args c)))]
     (when (= :done r)
       (ctx/update-mem! c assoc :phase :check :built (ctx/child-result c :build)))
-    (if (= :done r) :continue r)))
+    (if (= :done r) :again r)))
 
-(defn ^:async round [c]
+(defn ^:async step [c]
   (let [{:keys [cells trouble]} (planned c)
         phase (:phase (ctx/mem c))]
     (cond
@@ -146,3 +147,8 @@
       (= :check phase) (finish! c cells)
       :else (do (when-not phase (ctx/update-mem! c assoc :phase :build))
                 (await (build-step! c))))))
+
+(defn ^:async round
+  "The whole attempt: build, then check the pen, in steps (pace/steps!); :continue only while the builder waits."
+  [c]
+  (await (pace/steps! c (fn ^:async s [] (await (step c))))))

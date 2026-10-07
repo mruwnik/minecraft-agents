@@ -2,6 +2,7 @@
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.declined :as declined]
+            [jobs.lib.pace :as pace]
             [jobs.build.rail :as builder]
             [jobs.lib.placement :as placement]
             [jobs.build.from-plan :as build]
@@ -181,7 +182,7 @@
                        :built {:placed 0 :missing (mapv :pos left)
                                :short (short-of left (build/carried-counts (:primitives c)))
                                :given-up {} :wrong [] :refused []})
-      :continue)
+      :again)
     (do (when-not (:building (ctx/mem c)) (ctx/update-mem! c assoc :building true))
         (await (builder/step! c cells)))))
 
@@ -201,9 +202,9 @@
   (if-let [{:keys [pos]} (first (unlit-levers c cells))]
     (let [r (await (declined/call-child! c :lever 'jobs.access.toggle {:pos pos :state :on}))]
       (when (= :done r) (ctx/update-mem! c update :switched (fnil conj []) pos))
-      (if (= :done r) :continue r))
+      (if (= :done r) :again r))
     (do (ctx/update-mem! c assoc :phase :check)
-        :continue)))
+        :again)))
 
 (defn still-wrong
   "The builder's result with only the :wrong cells that are wrong now (cells judged this round; a powered rail lit by
@@ -239,8 +240,7 @@
     (ctx/result! c (assoc proof :built built))
     :done))
 
-(defn ^:async round [c]
-  (declined/begin! c)
+(defn ^:async step [c]
   (let [{:keys [cells trouble]} (planned c)
         phase (:phase (ctx/mem c))]
     (cond
@@ -249,3 +249,10 @@
       (= :switch phase) (await (switch-step! c cells))
       :else (do (when-not phase (ctx/update-mem! c assoc :phase :build))
                 (await (build-step! c cells))))))
+
+(defn ^:async round
+  "The whole attempt: build, switch the levers, prove the line, in steps (pace/steps!); :continue only while a walk, a dig
+  or a lever child waits on the world."
+  [c]
+  (declined/begin! c)
+  (await (pace/steps! c (fn ^:async s [] (await (step c))))))

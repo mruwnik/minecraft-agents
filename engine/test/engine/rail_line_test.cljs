@@ -551,3 +551,13 @@
           (is (seq @opts))
           (is (every? #(false? (:escalate %)) @opts) "a walk to a stand never digs through the line")
           (is (empty? (h/calls p "dig"))))))))
+
+(deftest a-lever-line-is-built-switched-and-proved-in-one-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [opts {:power :lever}
+              {:keys [eng p]} (b/start (spec "stone" 63 (kit opts)) {"line" (line-plan opts)} [])
+              result (await (h/child-outcome eng job {:plan "line"} 1))]
+          (is (true? (:ok? result)))
+          (is (true? (:powered (props p [3 64 0])))))))))
