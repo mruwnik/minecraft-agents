@@ -160,6 +160,17 @@ test('layers: every layer a material names exists and the layer count fits the i
 })
 
 test('the texture array holds the mobs\' model faces', { skip }, () => {
-  const names = new Set(build.table.textures.names)
-  assert.deepEqual(modelLayers().filter(layer => !names.has(layer)), [])
+  const { names, alias } = build.table.textures
+  const known = new Set(names)
+  assert.deepEqual(modelLayers().filter(layer => !known.has(layer) && !(layer in alias)), [])
+})
+
+test('layers with the same pixels are one layer, the other names alias it', { skip }, () => {
+  const { names, alias } = build.table.textures
+  const { bytes, layers } = build.textures
+  const level0 = i => Buffer.from(bytes.subarray(i * 1024, (i + 1) * 1024)).toString('base64')
+  assert.equal(new Set(names.map((_, i) => level0(i))).size, names.length)
+  assert.ok(Object.keys(alias).length > 100)
+  assert.ok(Object.entries(alias).every(([name, layer]) => !names.includes(name) && layer >= 0 && layer < names.length))
+  assert.ok(build.table.materials.flatMap(m => [...(m.tex ?? []), ...(m.tex6 ?? [])]).every(l => l < names.length))
 })

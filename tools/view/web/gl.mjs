@@ -222,8 +222,8 @@ export function createRenderer (canvasOrGl) {
 
   // once per page: texStorage is immutable
   let layerIndex = new Map() // texture layer name -> layer, for the mobs' model faces
-  const setTextures = ({ bytes, layers, size, levels, names = [] }) => {
-    layerIndex = new Map(names.map((name, i) => [name, i]))
+  const setTextures = ({ bytes, layers, size, levels, names = [], alias = {} }) => {
+    layerIndex = new Map([...names.map((name, i) => [name, i]), ...Object.entries(alias)])
     gl.activeTexture(gl.TEXTURE4)
     gl.bindTexture(gl.TEXTURE_2D_ARRAY, tex)
     gl.texStorage3D(gl.TEXTURE_2D_ARRAY, levels, gl.RGBA8, size, size, layers)

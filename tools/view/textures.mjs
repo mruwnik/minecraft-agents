@@ -145,7 +145,7 @@ export const parseEntityLayer = layerName => {
 export const isEntityLayer = layerName => layerName.startsWith('entity/')
 
 // `name`: the texture tinted as the renderer's grass/leaf/water list says (tintOf). `name@rrggbb`: tinted by exactly that colour.
-const layerOf = (textureDir, layerName, sheet) => {
+export const layerOf = (textureDir, layerName, sheet) => {
   if (isEntityLayer(layerName)) {
     const { sheet: sheetName, region, hex } = parseEntityLayer(layerName)
     return mipChain(tinted(cropRegion(sheet(sheetName), region), hex ? hexColor(hex) : null))
@@ -156,8 +156,9 @@ const layerOf = (textureDir, layerName, sheet) => {
 }
 
 // `sheet(name)` reads an entity sheet (decoded) by its `entity/...` path
-export function textureSet (textureDir, names, { sheet } = {}) {
-  const layers = names.map(name => layerOf(textureDir, name, sheet))
+// `chains` (name -> mip chain) are layers already built
+export function textureSet (textureDir, names, { sheet, chains } = {}) {
+  const layers = names.map(name => chains?.get(name) ?? layerOf(textureDir, name, sheet))
   const parts = Array.from({ length: LEVELS }, (_, level) => layers.map(chain => chain[level])).flat()
   const bytes = new Uint8Array(parts.reduce((n, p) => n + p.length, 0))
   parts.reduce((at, p) => { bytes.set(p, at); return at + p.length }, 0)

@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import prismarineRegistry from 'prismarine-registry'
 import prismarineBlock from 'prismarine-block'
-import { textureSet, decodeTexture, SIZE, LEVELS, isEntityLayer } from './textures.mjs'
+import { textureSet, layerOf, decodeTexture, SIZE, LEVELS, isEntityLayer } from './textures.mjs'
 import { decodePng, textureCandidates, tintOf, colorOf } from './renderer.mjs'
 import { findClientJar, zipEntries, entryContent, openJar } from './jar-read.mjs'
 import { loadModels } from './block-models.mjs'
@@ -132,9 +132,20 @@ export function textureBytes (version, textureDir, { jarPath = findClientJar() }
   }
   const layerNames = []
   const layerIndex = new Map()
+  const chains = new Map()
+  const byPixels = new Map()
+  const alias = {}
+  // a name whose pixels (the first mip level) another layer has already is that layer, listed in `alias`
   const layerFor = name => {
     if (!name) return -1
-    if (!layerIndex.has(name)) layerIndex.set(name, layerNames.push(name) - 1)
+    if (layerIndex.has(name)) return layerIndex.get(name)
+    const chain = layerOf(textureDir, name, sheet)
+    const key = Buffer.from(chain[0]).toString('base64')
+    if (!byPixels.has(key)) {
+      byPixels.set(key, layerNames.push(name) - 1)
+      chains.set(name, chain)
+    } else alias[name] = byPixels.get(key)
+    layerIndex.set(name, byPixels.get(key))
     return layerIndex.get(name)
   }
   const faceTexture = (block, kind, face, props) => textureCandidates(block.name === 'bubble_column' ? 'water' : block.name, kind === 'cross' ? 'cross' : face, props).find(n => image(n))
@@ -252,11 +263,11 @@ export function textureBytes (version, textureDir, { jarPath = findClientJar() }
     stateCount,
     materialOf: Buffer.from(materialOf.buffer).toString('base64'),
     materials,
-    textures: { size: SIZE, levels: LEVELS, names: layerNames },
+    textures: { size: SIZE, levels: LEVELS, names: layerNames, alias },
     ...(jar ? { tints: jar.tints } : {}),
     ...(packed ? { elements: { width: TABLE_WIDTH, rows: packed.rows, listTexels: packed.listTexels, count: packed.elementCount, ids: packed.idCount, overCapStates: stats.overCapStates } } : {})
   }
-  return { table, textures: textureSet(textureDir, layerNames, { sheet }), elements: packed?.data ?? null }
+  return { table, textures: textureSet(textureDir, layerNames, { sheet, chains }), elements: packed?.data ?? null }
 }
 
 export const materialTable = (version, textureDir, options) => textureBytes(version, textureDir, options).table
