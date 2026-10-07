@@ -99,13 +99,17 @@
 (defn gait-controls
   "The executor's controls under the policy's gait: a sneaking walk never sprints and holds sneak only on the ground, on a
   sneak-moves step out of water (it sinks the body, and stops it at a deep bank), off a climbable and scaffolding (sneak descends there); in the air it
-  lets go, so a slime landing bounces."
+  lets go, so a slime landing bounces. A :climb-down step from scaffolding holds sneak under every gait (scaffolding is
+  solid on top unless sneaking)."
   [policy {:keys [steps i]} {:keys [on-ground in-water on-climbable on-scaffolding]} controls]
-  (cond-> controls
-    (= :sneak (:gait policy))
-    (assoc :sprint false
-           :sneak (boolean (and on-ground (not in-water) (not on-climbable) (not on-scaffolding)
-                                (contains? sneak-moves (:move (get steps i))) (not (executor/water-step? (get steps i))))))))
+  (let [step (get steps i)
+        scaffold-down? (and on-scaffolding (= :climb-down (:move step)))]
+    (cond-> controls
+      (= :sneak (:gait policy))
+      (assoc :sprint false
+             :sneak (boolean (and on-ground (not in-water) (not on-climbable) (not on-scaffolding)
+                                  (contains? sneak-moves (:move step)) (not (executor/water-step? step)))))
+      scaffold-down? (assoc :sneak true))))
 
 (defn ^:async walk!
   "Follow steps once. [result ms]: the executor's done map, or {:status :stuck ...} on a timeout,

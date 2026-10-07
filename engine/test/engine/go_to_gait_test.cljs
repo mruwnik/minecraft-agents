@@ -122,3 +122,13 @@
     :sneak (on :walk) (assoc ground :on-scaffolding true) {:sneak false :sprint false}
     :walk (on :walk) ground {:sneak false :sprint true}
     :auto (on :walk) ground {:sneak false :sprint true}))
+
+(deftest climb-down-from-scaffolding-holds-sneak
+  (are [gait move pose expected] (= expected (:sneak (walk/gait-controls {:gait gait} (on move) pose {:sneak false :sprint true})))
+    :walk :climb-down (assoc ground :on-scaffolding true) true
+    :auto :climb-down (assoc ground :on-scaffolding true) true
+    :sneak :climb-down (assoc ground :on-scaffolding true) true
+    :sneak :climb-down (assoc ground :on-scaffolding true :on-ground false) true
+    :walk :climb-down ground false
+    :walk :walk (assoc ground :on-scaffolding true) false
+    :sneak :walk (assoc ground :on-scaffolding true) false))
