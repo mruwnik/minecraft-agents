@@ -51,5 +51,5 @@
    :blocks [[:fill [10 0 10] [20 5 22] "stone"]]
    :act [[:job (jobs.survival.night {:flee-radius 0})]]
    :expect [{:event {:source :job :kind :dig_in_failed :message [:contains "cannot harvest stone"]} :within-s 60}
-            {:no-event {:source :job :kind :child_started :data {:slot :fetch}} :for-s 60 :until {:source :job :kind :dig_in_failed}}]
+            {:no-event {:source :job :kind :child_started :data {:slot :fetch}} :for-s 60}]
    :limit-s 90}]}
