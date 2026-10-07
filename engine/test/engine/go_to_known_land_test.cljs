@@ -190,3 +190,25 @@
                                         {:pos [20 71 20] :range 1 :escalate false}))]
           (is (= {:reason :unreachable :at [20 64 20]} (select-keys @out [:reason :at])) (str "result " @out))
           (is (number? (:near @out)) (str "result " @out)))))))
+
+;; a small deck 11 blocks over the ground, 15 blocks from the body (live fixture go-to-sealed-platform-pool): the goal is proved
+;; cut off in the first rounds, with no walk towards it
+(def small-deck
+  (merge (box -70 63 -70 70 63 70 "stone") (box 13 74 13 19 74 19 "stone")))
+
+(def small-deck-pool
+  (merge small-deck (box 14 73 14 15 73 15 "stone") (box 14 74 14 15 74 15 "water")))
+
+(defn ^:async small-deck-cut-off! [blocks]
+  (let [{:keys [out eng p]} (await (go! {:blocks blocks :self {:pos {:x 2.5 :y 64 :z 16.5}}}
+                                        {:pos [17 75 17] :range 1 :escalate false}))]
+    (is (= {:arrived false :reason :unreachable :why :goal-cut-off} (select-keys @out [:arrived :reason :why]))
+        (str "result " @out))
+    (is (< (dist-to (at p) [2.5 64 16.5]) 3)
+        (str "body at " (at p) " walks: " (mapv (juxt :status :to) (moved eng))))))
+
+(deftest go-to-a-small-sealed-deck-is-cut-off-without-walking
+  (async done (tu/run-async done (fn ^:async t [] (await (small-deck-cut-off! small-deck))))))
+
+(deftest go-to-a-small-sealed-deck-with-a-pool-is-cut-off-without-walking
+  (async done (tu/run-async done (fn ^:async t [] (await (small-deck-cut-off! small-deck-pool))))))
