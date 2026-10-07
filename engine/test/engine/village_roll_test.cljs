@@ -62,10 +62,10 @@
 
 (defn ^:async roll
   "Run the job on a world with a lectern at ws-pos; [result p seen]. scripts feed the villager's next offers."
-  [{:keys [entities inventory blocks scripts]} args]
-  (let [env (bd/setup {:entities entities :inventory inventory :blocks (merge {ws-key "lectern" "2,63,0" "stone"} blocks)})
+  [{:keys [entities inventory blocks scripts zones keeps-job?]} args]
+  (let [env (bd/setup {:entities entities :inventory inventory :zones (or zones []) :blocks (merge {ws-key "lectern" "2,63,0" "stone"} blocks)})
         {:keys [p seen]} env
-        _ (rolls-offers! p scripts)
+        _ (when-not keeps-job? (rolls-offers! p scripts))
         result (await (child-outcome env (merge {:villager "v-1" :pos ws-pos :item "lectern" :want "enchanted_book"
                                                  :claim-s 5} args) 300))]
     [result p seen]))
@@ -189,3 +189,23 @@
       (fn ^:async t []
         (let [[result] (await (roll {:entities [(librarian [(offer "paper")])] :blocks {ws-key "stone"}} {}))]
           (is (= "occupied" (:reason result))))))))
+
+(deftest a-workstation-in-anothers-zone-is-not-broken
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[_ p] (await (roll {:entities [(librarian [(offer "paper")])]
+                                  :zones [{:name "farm" :min [2 60 0] :max [2 70 0] :owner "Miles"}]}
+                                 {}))]
+          (is (zero? (digs p)))
+          (is (= "lectern" (workstation p))))))))
+
+(deftest a-villager-that-keeps-its-job-after-the-break-stops-without-another-roll
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (roll {:entities [(librarian [(offer "paper")])] :keeps-job? true} {}))]
+          (is (= {:found false :rolls 1 :status :stopped :reason "still-employed"}
+                 (select-keys result [:found :rolls :status :reason])))
+          (is (= 1 (digs p)))
+          (is (= "lectern" (workstation p))))))))
