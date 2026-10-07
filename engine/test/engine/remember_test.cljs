@@ -63,7 +63,8 @@
         (doseq [[args policy] [[{} mem/default-policy]
                                [{:ttl-s 259200} {:cap 50 :ttl (* 3 24 hour-ms)}]
                                [{:cap 1} {:cap 1 :ttl hour-ms}]
-                               [{:ttl-s 90 :cap 3} {:cap 3 :ttl 90000}]]]
+                               [{:ttl-s 90 :cap 3} {:cap 3 :ttl 90000}]
+                               [{:ttl-s :forever :cap 1} {:cap 1 :ttl :forever}]]]
           (let [{:keys [eng]} (setup)]
             (await (run-job eng (list remember (assoc args :kind :bred-cows))))
             (is (= policy (mem/policy (view eng) :bred-cows)) (pr-str args))))))))

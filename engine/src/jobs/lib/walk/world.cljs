@@ -147,12 +147,31 @@
     {:health (.-health self) :absorption (.-absorption self) :food (food-of c) :on-fire (.-onFire self)
      :effects (map #(.-name %) (array-seq (.-effects self)))}))
 
-(defn walk-settings
-  "The {:min-health :max-damage} the walk keeps: the body's memory :walk-settings entry (jobs.memory.remember, a long :ttl-s, :cap 1),
-  each overridden by the job's arg (go-to's) when given."
+(def setting-checks
+  "The body setting's keys and what a valid value is."
+  {:min-health #(and (number? %) (<= 1 % 20))
+   :max-damage #(and (number? %) (>= % 0))})
+
+(defn body-setting
+  "The body's memory :walk-settings entry's {:min-health :max-damage} (written with jobs.memory.remember, :ttl-s :forever,
+  :cap 1), a value outside the go-to arg's range left out; the second item names the keys left out."
   [c]
-  (let [body (if (:view c) (select-keys (:data (ctx/latest c :walk-settings)) [:min-health :max-damage]) {})]
-    (into body (remove (comp nil? val)) (select-keys (:args c) [:min-health :max-damage]))))
+  (let [data (if (:view c) (select-keys (:data (ctx/latest c :walk-settings)) (keys setting-checks)) {})
+        bad (into [] (comp (remove (fn [[k v]] ((setting-checks k) v))) (map key)) data)]
+    [(apply dissoc data bad) bad]))
+
+(defn walk-settings
+  "The {:min-health :max-damage} the walk keeps: the body's setting (body-setting), each overridden by the job's arg (go-to's) when given."
+  [c]
+  (into (first (body-setting c)) (remove (comp nil? val)) (select-keys (:args c) [:min-health :max-damage])))
+
+(defn warn-bad-settings!
+  "A :warn walk-settings.bad event naming the keys of the body's setting that are ignored; go-to calls it once per attempt."
+  [c]
+  (let [bad (second (body-setting c))]
+    (when (seq bad)
+      (ctx/emit! c :walk-settings.bad :warn
+                 {:keys bad :text (str "the body's :walk-settings " (pr-str bad) " is out of range (:min-health 1-20, :max-damage >= 0); ignored")}))))
 
 (defn damage-budget
   "The hp the body may spend walking now (jobs.lib.cost/damage-budget): its health, food and effects, and the walk-settings

@@ -264,6 +264,7 @@
   [c pos]
   (let [m (ctx/mem c)
         there? (here? c pos (:range (:args c)))]
+    (wworld/warn-bad-settings! c)
     (ctx/update-mem! c #(cond-> (-> % (dissoc :best :fault-cells :over-budget) (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {}))
                           (and there? (:escalate-now m)) (dissoc :escalate-now)
                           (and there? (:escalation m))

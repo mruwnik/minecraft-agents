@@ -11,7 +11,7 @@
   :kind is an unnamespaced keyword that nothing else writes. :data is an optional map kept in the entry.
   Without :ttl-s and :cap the kind gets the engine's default policy (cap 50, 1 hour; a kind that already has a
   policy keeps it). After the hour the entry is gone and (since :kind) is unknown again. A job that wants \"every
-  3 days\" passes :ttl-s 259200. :ttl-s is in seconds and must be positive. :cap is the number of newest entries
+  3 days\" passes :ttl-s 259200. :ttl-s is in seconds and must be positive, or :forever. :cap is the number of newest entries
   kept, a positive whole number.
   Refused (warn memory.refused with :reason and :text, result {:ok false :reason}, and the job still ends):
   :bad-kind (not a keyword, or namespaced), :reserved-kind (a kind the engine or another job writes, such as
@@ -21,7 +21,7 @@
 (def args
   {:kind {:doc "the memory kind to write: an unnamespaced keyword no engine job writes, e.g. :bred-cows" :default nil}
    :data {:doc "a map kept in the entry, for jobs that read it back" :default nil}
-   :ttl-s {:doc "seconds the entry is kept; nil: the kind's own policy, or the default hour" :default nil}
+   :ttl-s {:doc "seconds the entry is kept (or :forever); nil: the kind's own policy, or the default hour" :default nil}
    :cap {:doc "entries of the kind kept, the newest; nil: the kind's own policy, or the default 50" :default nil}})
 
 (defn check [_c] true)
@@ -42,8 +42,8 @@
     (not (or (nil? data) (map? data)))
     (refusal :bad-data (str ":data is a map; got " (pr-str data)))
 
-    (not (or (nil? ttl-s) (and (number? ttl-s) (js/isFinite ttl-s) (pos? ttl-s))))
-    (refusal :bad-ttl (str ":ttl-s is a positive number of seconds; got " (pr-str ttl-s)))
+    (not (or (nil? ttl-s) (= :forever ttl-s) (and (number? ttl-s) (js/isFinite ttl-s) (pos? ttl-s))))
+    (refusal :bad-ttl (str ":ttl-s is a positive number of seconds, or :forever; got " (pr-str ttl-s)))
 
     (not (or (nil? cap) (and (int? cap) (pos? cap))))
     (refusal :bad-cap (str ":cap is a positive whole number; got " (pr-str cap)))
@@ -53,7 +53,7 @@
      :policy (when (or ttl-s cap)
                {:cap (or cap (get-in view [:data :policies kind :cap] (:cap mem/default-policy)))
                 :ttl (if ttl-s
-                       (* 1000 ttl-s)
+                       (if (= :forever ttl-s) :forever (* 1000 ttl-s))
                        (get-in view [:data :policies kind :ttl] (:ttl mem/default-policy)))})}))
 
 (defn round [c]
