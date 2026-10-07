@@ -1,6 +1,7 @@
 (ns jobs.items.craft
   (:require [jobs.items.shortfall :as craft]
             [engine.ctx :as ctx]
+            [jobs.lib.blocks :as b]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
@@ -17,7 +18,9 @@
   status), after a warn, and its status is stopped. One call is the whole craft: it walks (a go-to child) and crafts
   again until the count is carried or it stops; it yields only while go-to waits on the world.
   An ingredient that runs out is fetched (jobs.lib.fetch: a jobs.items.obtain child for each missing item) and the
-  craft goes on, unless :fetch is false or the fetch failed: then it stops with :short. A missing table is not fetched.")
+  craft goes on, unless :fetch is false or the fetch failed: then it stops with :short. With no table in reach a
+  carried one is put down beside the body, else one is fetched (a crafting_table obtain child) and put down, the same
+  way; :fetch false or a failed fetch stops with :reason \"no-table\".")
 
 (def args
   {:item {:doc "item name to craft" :default nil}
@@ -48,11 +51,64 @@
   (let [r (u/fail! c :craft.gave-up (str "craft gave up: " reason))]
     (if (= :done r) (finish! c made {:reason reason}) :again)))
 
-(defn no-table!
-  "Warn that no crafting table is within the radius and finish."
+(def table-offsets [[1 0] [-1 0] [0 1] [0 -1] [1 1] [-1 1] [1 -1] [-1 -1]])
+
+(defn table-spot
+  "A free cell beside the body to put a table in: air at the body's level with a solid block under it, or nil."
+  [c]
+  (let [p (:primitives c)
+        self (u/self-pos c)
+        [x y z] (mapv #(js/Math.floor (% self)) [:x :y :z])
+        solid? (fn [n] (and n (not (b/air n)) (not (b/fluids n)) (not (b/clearable n))))]
+    (some (fn [[dx dz]]
+            (let [pos {:x (+ x dx) :y y :z (+ z dz)}]
+              (when (and (b/air (u/block-name p pos))
+                         (solid? (u/block-name p (update pos :y dec))))
+                pos)))
+          table-offsets)))
+
+(defn carried-table? [c]
+  (pos? (deposit/carried (u/inventory (:primitives c)) "crafting_table")))
+
+(defn table-problem
+  "The :need wait for a crafting table while one is wanted and none is carried, else nil."
+  [c]
+  (when (and (:want-table (ctx/mem c)) (not (carried-table? c)))
+    {:reason :need :item "crafting_table" :count 1}))
+
+(defn ^:async place-table!
+  "Put the carried table down in a free cell beside the body (a jobs.blocks.place child). :again once it stands (it
+  is the table to craft at), :continue while the child waits, nil when it could not be put down."
+  [c]
+  (let [spot (or (:table-spot (ctx/mem c)) (table-spot c))]
+    (when spot
+      (ctx/update-mem! c assoc :table-spot spot)
+      (let [r (await (ctx/call-child c :place 'jobs.blocks.place {:item "crafting_table" :pos spot :fetch false}))]
+        (if (= :continue r)
+          :continue
+          (do (ctx/update-mem! c dissoc :table-spot)
+              (when (and (= :done r) (:placed (ctx/child-result c :place)))
+                (ctx/update-mem! c #(-> % (assoc :table spot) (dissoc :want-table)))
+                :again)))))))
+
+(defn ^:async table-fetch!
+  "With no table in reach: put a carried table down, else fetch one (:fetch) and put it down. Once per craft.
+  :again / :continue to go on, :done for a bad :fetch arg, nil when there is nothing to do (give up)."
+  [c]
+  (let [o (fetch/opts c 'jobs.items.craft)]
+    (when (and o (not (:error o)) (not (:table-tried (ctx/mem c))))
+      (when-not (carried-table? c) (ctx/update-mem! c assoc :want-table true))
+      (let [f (when (:want-table (ctx/mem c)) (await (fetch/fetch! c 'jobs.items.craft table-problem)))
+            r (when (and (nil? f) (carried-table? c)) (await (place-table! c)))]
+        (when-not (or f r) (ctx/update-mem! c #(-> % (dissoc :want-table) (assoc :table-tried true))))
+        (or f r)))))
+
+(defn ^:async no-table!
+  "No crafting table is within the radius: fetch one (table-fetch!), else warn and finish. :again, :continue or :done."
   [c made]
-  (ctx/emit! c :craft.no-table :warn {:text (str "no crafting table within " (:radius (:args c)))})
-  (finish! c made {:reason "no-table"}))
+  (or (await (table-fetch! c))
+      (do (ctx/emit! c :craft.no-table :warn {:text (str "no crafting table within " (:radius (:args c)))})
+          (finish! c made {:reason "no-table"}))))
 
 (defn ^:async reach-table!
   "The craft was unreachable: walk to the remembered or the nearest table with a go-to child.
@@ -63,7 +119,7 @@
         handed? (some? table)
         table (or table (nearest-table p radius))]
     (if (nil? table)
-      (no-table! c made)
+      (await (no-table! c made))
       (do (ctx/update-mem! c assoc :table table)
           (if (u/within? (u/self-pos c) table 3)
             (if handed? (give-up! c made "unreachable") :again)
@@ -129,7 +185,7 @@
           "out-of-reach" (let [handed (u/pos-of (.-table r))]
                            (cond
                              (:table (:args c)) (await (reach-table! c made))
-                             (> (u/dist (u/self-pos c) handed) (:radius (:args c))) (no-table! c made)
+                             (> (u/dist (u/self-pos c) handed) (:radius (:args c))) (await (no-table! c made))
                              :else (do (ctx/update-mem! c assoc :table handed)
                                        (await (reach-table! c made)))))
           "unreachable" (cond

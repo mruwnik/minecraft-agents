@@ -271,22 +271,6 @@
           (mark!))
         :again))))
 
-(def table-offsets [[1 0] [-1 0] [0 1] [0 -1] [1 1] [-1 1] [1 -1] [-1 -1]])
-
-(defn table-spot
-  "A free cell beside the body to put a table in: air at the body's level with a solid block under it, or nil."
-  [c]
-  (let [p (:primitives c)
-        self (u/self-pos c)
-        [x y z] (mapv #(js/Math.floor (% self)) [:x :y :z])
-        solid? (fn [n] (and n (not (b/air n)) (not (b/fluids n)) (not (b/clearable n))))]
-    (some (fn [[dx dz]]
-            (let [pos {:x (+ x dx) :y y :z (+ z dz)}]
-              (when (and (b/air (u/block-name p pos))
-                         (solid? (u/block-name p (update pos :y dec))))
-                pos)))
-          table-offsets)))
-
 (def max-fruitless 3)
 
 (defn fruitless! [c why]
@@ -313,7 +297,7 @@
       (tried! c :craft :no-plan)
 
       (= :place (:op step))
-      (let [spot (or (:spot mem) (table-spot c))]
+      (let [spot (or (:spot mem) (craft/table-spot c))]
         (if-not spot
           (fruitless! c :no-table-spot)
           (do (ctx/update-mem! c assoc-in [:craft :step] step)

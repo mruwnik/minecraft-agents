@@ -92,7 +92,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p seen eng] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks {"60,64,0" "crafting_table"}} {:item "bread"}))]
+        (let [[result p seen eng] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks {"60,64,0" "crafting_table"}} {:item "bread" :fetch false}))]
           (is (= {:made 0 :status :stopped :reason "no-table"} result))
           (is (empty? (tu/walked-to eng)))
           (is (some #(= :craft.no-table (:kind %)) @seen)))))))
@@ -288,3 +288,33 @@
               result (await (child-outcome eng job {:item "bread" :fetch false} 80))]
           (is (= {:made 0 :status :stopped :short {"wheat" 1}} result))
           (is (= 1 (chest-wheat p))))))))
+
+
+(deftest craft-places-a-carried-table-when-none-is-in-reach
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory [{:name "wheat" :count 3} {:name "crafting_table" :count 1}]})
+              result (await (child-outcome eng job {:item "bread"} 40))]
+          (is (= {:made 1} result))
+          (is (= 1 (get (inv p) "bread")))
+          (is (nil? (get (inv p) "crafting_table"))))))))
+
+(deftest craft-fetches-a-missing-table-from-a-seen-chest-by-default
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory [{:name "wheat" :count 3}] :blocks {"-2,64,3" "chest"}
+                                      :containers {"-2,64,3" [{:name "crafting_table" :count 1}]}})
+              result (await (child-outcome eng job {:item "bread"} 120))]
+          (is (= {:made 1} result))
+          (is (= 1 (get (inv p) "bread"))))))))
+
+(deftest craft-fetch-false-without-a-table-stops-no-table
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory [{:name "wheat" :count 3} {:name "crafting_table" :count 1}]})
+              result (await (child-outcome eng job {:item "bread" :fetch false} 40))]
+          (is (= {:made 0 :status :stopped :reason "no-table"} result))
+          (is (= 1 (get (inv p) "crafting_table"))))))))
