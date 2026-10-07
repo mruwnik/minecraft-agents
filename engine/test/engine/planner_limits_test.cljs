@@ -168,7 +168,7 @@
                              #js {:table (.-table pw) :space (.-space pw) :weight 1.2
                                   :limits (ex/planner-limits ex/policy (wworld/solid-fn pw))}))))
 
-;; a search the limits never turned a move away from searched what a search without them would (wplan/plan-within then
+;; a search the limits never turned a move away from searched what a search without them would (wplan/plan-within! then
 ;; needs no second search to know there is no way beyond the walker's abilities)
 (deftest a-result-says-whether-the-limits-refused-a-move
   (are [blocks goal limited] (= limited (limited-flag blocks goal))

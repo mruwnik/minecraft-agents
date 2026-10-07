@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.fake :as fake]
+            [jobs.lib.walk :as walk]
             [jobs.lib.walk.plan :as wplan]
             [jobs.animals.lead-to :as lead-to]
             [engine.fetch-test :as fetch-test]
@@ -359,28 +360,59 @@
 
 (def animal-at-3 {:x 3 :y 64 :z 0})
 
+(defn reach-check
+  "lead-to/path-leaves-reach? of the body of setup s toward target (a promise: the search yields)."
+  [s target]
+  (lead-to/path-leaves-reach? {:primitives (:p s)} target animal-at-3))
+
 (deftest the-reach-check-takes-a-fractional-pull-target-without-throwing
-  (let [s (setup {:floor tu/walk-floor :blocks wall-32 :inventory lead})
-        c {:primitives (:p s)}]
-    (is (boolean? (lead-to/path-leaves-reach? c {:x 33.4 :y 64 :z 0.6} animal-at-3)))))
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup {:floor tu/walk-floor :blocks wall-32 :inventory lead})]
+          (is (boolean? (await (reach-check s {:x 33.4 :y 64 :z 0.6})))))))))
 
 (deftest the-reach-check-judges-a-fractional-target-by-its-walk
-  (let [far (setup {:floor tu/walk-floor :blocks wall-32 :inventory lead})
-        near (setup {:floor tu/walk-floor :inventory lead})]
-    (is (true? (lead-to/path-leaves-reach? {:primitives (:p far)} {:x 33.4 :y 64 :z 0.6} animal-at-3)) "detour past the wall end")
-    (is (false? (lead-to/path-leaves-reach? {:primitives (:p near)} {:x 9.4 :y 64 :z 0.6} animal-at-3)) "open floor")))
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [far (setup {:floor tu/walk-floor :blocks wall-32 :inventory lead})
+              near (setup {:floor tu/walk-floor :inventory lead})]
+          (is (true? (await (reach-check far {:x 33.4 :y 64 :z 0.6}))) "detour past the wall end")
+          (is (false? (await (reach-check near {:x 9.4 :y 64 :z 0.6}))) "open floor"))))))
 
 (deftest the-reach-check-plans-to-the-floored-cell
-  (let [s (setup {:floor tu/walk-floor :inventory lead})
-        asked (atom nil)]
-    (with-redefs [wplan/plan-walk (fn ([_ _ to _ _] (reset! asked to) nil) ([_ _ to _ _ _] (reset! asked to) nil))]
-      (lead-to/path-leaves-reach? {:primitives (:p s)} {:x 9794.82 :y 64 :z -3.5} animal-at-3))
-    (is (= [9794 64 -4] @asked) "the planner is given whole cells, as go-to gives it")))
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup {:floor tu/walk-floor :inventory lead})
+              asked (atom nil)]
+          (with-redefs [walk/plan-walk! (fn ([_ _ to _ _] (reset! asked to) (js/Promise.resolve nil)) ([_ _ to _ _ _] (reset! asked to) (js/Promise.resolve nil)))]
+            (await (reach-check s {:x 9794.82 :y 64 :z -3.5})))
+          (is (= [9794 64 -4] @asked) "the planner is given whole cells, as go-to gives it"))))))
 
 (deftest the-reach-check-is-false-when-planning-throws
-  (let [s (setup {:floor tu/walk-floor :inventory lead})]
-    (with-redefs [wplan/plan-walk (fn ([_ _ _ _ _] (throw (js/RangeError. "cannot be converted to a BigInt"))) ([_ _ _ _ _ _] (throw (js/RangeError. "cannot be converted to a BigInt"))))]
-      (is (false? (lead-to/path-leaves-reach? {:primitives (:p s)} {:x 33.4 :y 64 :z 0.6} animal-at-3))))))
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup {:floor tu/walk-floor :inventory lead})]
+          (with-redefs [walk/plan-walk! (fn ([_ _ _ _ _] (js/Promise.reject (js/RangeError. "cannot be converted to a BigInt"))) ([_ _ _ _ _ _] (js/Promise.reject (js/RangeError. "cannot be converted to a BigInt"))))]
+            (is (false? (await (reach-check s {:x 33.4 :y 64 :z 0.6}))))))))))
+
+;; the reach check's search runs in slices: a timer set before it fires before it ends
+(deftest the-reach-check-yields-to-other-work-during-its-search
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup {:floor tu/walk-floor :blocks wall-32 :inventory lead})
+              order (atom [])
+              chunk wplan/chunk-expansions]
+          (set! wplan/chunk-expansions 16)
+          (js/setTimeout #(swap! order conj :timer) 0)
+          (await (reach-check s {:x 33.4 :y 64 :z 0.6}))
+          (swap! order conj :checked)
+          (set! wplan/chunk-expansions chunk)
+          (is (= [:timer :checked] @order)))))))
 
 ;; ------------------------------------------------------- looking round while leading (card 9970c377)
 

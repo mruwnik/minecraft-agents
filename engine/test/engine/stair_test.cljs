@@ -13,6 +13,7 @@
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as world]
             [jobs.access.stair :as stair]
+            [jobs.lib.walk.plan :as wplan]
             [plan.shape :as shape]))
 
 (def job 'jobs.access.stair)
@@ -652,10 +653,10 @@
 
 ;; ---------------------------------------------------------------- way-back
 
-(defn way-back-of
-  "stair/way-back from (1 64 1) to origin over the block map."
+(defn ^:async way-back-of
+  "stair/way-back from (1 64 1) to origin over the block map (its answer, awaited)."
   [blocks origin]
-  (stair/way-back {:primitives (tu/fake {:blocks blocks :self {:pos {:x 1 :y 64 :z 1}}})} origin))
+  (await (stair/way-back {:primitives (tu/fake {:blocks blocks :self {:pos {:x 1 :y 64 :z 1}}})} origin)))
 
 (defn slab
   "Stone at y for x in xs, z 0..2."
@@ -663,19 +664,40 @@
   (into {} (for [x xs z (range 3)] [(str x "," y "," z) "stone"])))
 
 (deftest way-back-judges-the-plan-like-walk-plan
-  (let [level (merge (slab 63 (range 5)) (slab 63 (range 7 12)))]
-    (are [blocks origin expected] (= expected (some-> (way-back-of blocks origin) (dissoc :step)))
-      level [10 64 1] nil
-      (merge (slab 63 (range 5)) (slab 64 (range 7 12))) [10 65 1]
-      {:reason :no-way-back :why :refused :kind :gap-up}
-      (merge level (slab 66 (range 4 7))) [10 64 1]
-      {:reason :no-way-back :why :refused :kind :gap-low-ceiling})))
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [level (merge (slab 63 (range 5)) (slab 63 (range 7 12)))]
+          (doseq [[blocks origin expected]
+                  [[level [10 64 1] nil]
+                   [(merge (slab 63 (range 5)) (slab 64 (range 7 12))) [10 65 1]
+                    {:reason :no-way-back :why :refused :kind :gap-up}]
+                   [(merge level (slab 66 (range 4 7))) [10 64 1]
+                    {:reason :no-way-back :why :refused :kind :gap-low-ceiling}]]]
+            (is (= expected (some-> (await (way-back-of blocks origin)) (dissoc :step))))))))))
 
 (deftest way-back-walks-round-a-gap-under-a-low-ceiling
-  (let [at (fn [y xs zs] (into {} (for [x xs z zs] [(str x "," y "," z) "stone"])))
-        blocks (merge (at 63 (range 5) (range -8 11)) (at 63 (range 7 13) (range -8 11)) (at 63 [5 6] [9 10])
-                      (at 66 (range 4 7) (range -8 9)))]
-    (is (nil? (way-back-of blocks [10 64 1])))))
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [at (fn [y xs zs] (into {} (for [x xs z zs] [(str x "," y "," z) "stone"])))
+              blocks (merge (at 63 (range 5) (range -8 11)) (at 63 (range 7 13) (range -8 11)) (at 63 [5 6] [9 10])
+                            (at 66 (range 4 7) (range -8 9)))]
+          (is (nil? (await (way-back-of blocks [10 64 1])))))))))
+
+;; the way-back search runs in slices: a timer set before it fires before it ends
+(deftest way-back-yields-to-other-work-during-its-search
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [order (atom [])
+              chunk wplan/chunk-expansions]
+          (set! wplan/chunk-expansions 16)
+          (js/setTimeout #(swap! order conj :timer) 0)
+          (await (way-back-of (slab 63 (range 60)) [50 64 1]))
+          (swap! order conj :planned)
+          (set! wplan/chunk-expansions chunk)
+          (is (= [:timer :planned] @order)))))))
 
 (def around-the-cut {:name "plot" :min [1 60 -1] :max [3 70 1]})
 

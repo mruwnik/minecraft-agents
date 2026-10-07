@@ -26,7 +26,7 @@
 
 ;; ------------------------------------------------------------------ the option and its limits
 
-(def kinds #{:tool :item :station})
+(def kinds #{:tool :item})
 (def sources #{:chest :craft :gather})
 
 (def built-in

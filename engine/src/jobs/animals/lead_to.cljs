@@ -7,7 +7,6 @@
             [jobs.lib.near :as near]
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.world :as wworld]
-            [jobs.lib.walk.plan :as wplan]
             [jobs.lib.reach :as reach]
             [jobs.lib.places :as places]))
 
@@ -199,20 +198,21 @@
   the animal is jammed at) would break the lead."
   11)
 
-(defn plan-or-nil
-  "The walk plan to the cell of target (floored by places/parse-pos, as go-to does), nil when there is none or
-  planning throws a RangeError (a far target the planner cannot index): the check never fails the job."
+(defn ^:async plan-or-nil
+  "The walk plan to the cell of target (floored by places/parse-pos, as go-to does; a promise: the search yields to
+  the event loop), nil when there is none or planning throws a RangeError (a far target the planner cannot index):
+  the check never fails the job."
   [c pw target]
   (when-let [{:keys [x y z]} (:pos (places/parse-pos target))]
-    (try (wplan/plan-walk c pw [x y z] 1 walk/default-weight)
+    (try (await (walk/plan-walk! c pw [x y z] 1 walk/default-weight))
          (catch js/RangeError _ nil))))
 
-(defn path-leaves-reach?
+(defn ^:async path-leaves-reach?
   "True when the walk the body would now take to target passes farther than path-reach from the animal. A body
   that cannot plan (no path sensing, no path, a planner that throws) is not judged here: go-to deals with that."
   [c target animal-pos]
   (let [pw (wworld/path-world (:primitives c))
-        plan (when pw (plan-or-nil c pw target))]
+        plan (when pw (await (plan-or-nil c pw target)))]
     (boolean
      (some #(> (js/Math.hypot (- (:px %) (:x animal-pos)) (- (:pz %) (:z animal-pos))) path-reach)
            (:steps plan)))))
@@ -236,12 +236,12 @@
                    (concat (range y (- y 12) -1) (range (inc y) (+ y 4)))))]
     (if y' {:x x :y y' :z z} target)))
 
-(defn leg-target
+(defn ^:async leg-target
   "Where the next leg of a walk to target (within range) goes: the planned path's cell leg-steps on, or nil when the
   rest is within one leg, there is no plan, or the leg would not move the body (the caller walks the whole way)."
   [c target range]
   (let [pw (wworld/path-world (:primitives c))
-        steps (when pw (:steps (plan-or-nil c pw (snap-to-ground c target))))
+        steps (when pw (:steps (await (plan-or-nil c pw (snap-to-ground c target)))))
         step (when (< leg-steps (count steps)) (nth steps leg-steps))
         me (u/self-pos c)]
     (when (and step (< 1 (flat-dist me {:x (:px step) :z (:pz step)})))
@@ -318,7 +318,7 @@
       (do
         (ctx/update-mem! c dissoc :catching-up)
         (loop []
-          (let [leg (leg-target c target range)
+          (let [leg (await (leg-target c target range))
                 r (await (ctx/call-child c slot 'jobs.movement.go-to
                                          {:pos (or leg target) :range (if leg 1 range) :doors :leave-open :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
             (cond
@@ -360,7 +360,7 @@
     (ctx/update-mem! c assoc :pull-started started)
     (cond
       (>= (- now started) (* 1000 pull-timeout-s)) (stop-gathering! c d)
-      (path-leaves-reach? c target animal-pos) (stop-gathering! c d)
+      (await (path-leaves-reach? c target animal-pos)) (stop-gathering! c d)
       :else
       (let [r (await (walk-legs! c :pull target pull-range started (* 1000 pull-timeout-s) follow-reach))]
         (cond

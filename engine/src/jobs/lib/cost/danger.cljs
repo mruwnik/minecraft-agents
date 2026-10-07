@@ -38,18 +38,9 @@
 (defn centre [{:keys [x y z]}] {:x (+ (js/Math.floor x) 0.5) :y (js/Math.floor y) :z (+ (js/Math.floor z) 0.5)})
 
 (defn line-clear?
-  "Whether no :solid cell of kind-at lies on the segment from a to b ({:x :y :z}), sampled every 0.25 block."
+  "Whether no :solid cell of kind-at lies on the segment from a to b ({:x :y :z}): reach/ray-clear?."
   [kind-at a b]
-  (let [d (dist a b)
-        n (max 1 (js/Math.ceil (/ d 0.25)))]
-    (loop [i 1]
-      (if (>= i n)
-        true
-        (let [t (/ i n)
-              x (js/Math.floor (+ (:x a) (* t (- (:x b) (:x a)))))
-              y (js/Math.floor (+ (:y a) (* t (- (:y b) (:y a)))))
-              z (js/Math.floor (+ (:z a) (* t (- (:z b) (:z a)))))]
-          (if (keyword-identical? :solid (kind-at x y z)) false (recur (inc i))))))))
+  (reach/ray-clear? kind-at [(:x a) (:y a) (:z a)] [(:x b) (:y b) (:z b)]))
 
 (defn reaches?
   "Whether mob (at pos) can hurt a body on the route: a line of fire to one of the nearest route cells within radius

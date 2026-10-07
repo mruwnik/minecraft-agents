@@ -16,7 +16,7 @@
    :depth {:doc "nested fetches allowed" :default nil}
    :minutes {:doc "time budget of one fetch, minutes" :default nil}
    :fail-minutes {:doc "how long a failed fetch is remembered and not tried again, minutes" :default nil}
-   :what {:doc "kinds fetched, a subset of #{:tool :item :station}" :default nil}
+   :what {:doc "kinds fetched, a subset of #{:tool :item}" :default nil}
    :how {:doc "sources used, a subset of #{:chest :craft :gather}" :default nil}
    :clear {:doc "drop the defaults (of :job, or all) instead" :default false}})
 

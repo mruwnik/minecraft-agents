@@ -1,5 +1,5 @@
 (ns jobs.lib.walk.plan
-  "The walk driver's planning: plan the walk from the body's cell to a goal within the executor's abilities (plan-walk, plan-within),
+  "The walk driver's planning: plan the walk from the body's cell to a goal within the executor's abilities (walk/plan-walk!, plan-within!),
   in slices that yield to the event loop, and say when a plan is not walked (no-walk)."
   (:require [engine.ctx :as ctx]
             [engine.path.executor :as executor]
@@ -13,7 +13,7 @@
   {:margin 256 :yMargin 96})
 
 (def chunk-expansions
-  "Expansions a search of the walking plans (plan-from! and the functions over it) runs between yields to the event
+  "Expansions a search of the walking plans (plan-from! and plan-within!) runs between yields to the event
   loop, so the body's HTTP API, perception and the other jobs run during a long search. An expansion costs some tens
   of microseconds."
   1000)
@@ -58,14 +58,9 @@
                          :dark (.-dark pw) :tolls (.-tolls pw)}
                     (clj->js box)))
 
-(defn plan-from
-  "Plan from the body's cell to the goal in wide-box, within limits (the planner's options.limits, nil for none); the
-  planner's JS result. In one go: the walks plan with plan-from!, which yields to the event loop."
-  [c pw to range weight limits]
-  (planner/plan (.-snapshot pw) (plan-query c to range) (plan-options pw weight limits wide-box)))
-
 (defn ^:async plan-from!
-  "plan-from in slices (run-plan!), yielding to the event loop between them."
+  "Plan from the body's cell to the goal in wide-box, within limits (the planner's options.limits, nil for none): the
+  planner's JS result, searched in slices (run-plan!) with the event loop run between them."
   [c pw to range weight limits]
   (await (run-plan! c (.-snapshot pw) (plan-query c to range) (plan-options pw weight limits wide-box))))
 
@@ -100,21 +95,11 @@
   [r]
   (and (not= "found" (.-status r)) (true? (.-limited r))))
 
-(defn plan-within
-  "Plan within the executor's abilities (policy, default executor/policy): {:r :steps} (steps nil when r has no path). When
-  that finds no whole path, and the limits turned a move away (beyond-needed?), but a search without the limits finds one,
-  also :beyond, the executor's refusal of that path: no path within abilities, and the kind of step that would have made
-  one."
-  ([c pw to range weight] (plan-within c pw to range weight (wworld/body-policy c)))
-  ([c pw to range weight policy]
-   (let [r (plan-from c pw to range weight (executor/planner-limits policy (wworld/solid-fn pw)))
-         within (within-of pw r)]
-     (if (beyond-needed? r)
-       (with-beyond within pw policy (plan-from c pw to range weight nil))
-       within))))
-
 (defn ^:async plan-within!
-  "plan-within with plan-from! (yields to the event loop between search slices)."
+  "Plan within the executor's abilities (policy, default executor/policy): {:r :steps} (steps nil when r has no path), in
+  slices that yield to the event loop. When that finds no whole path, and the limits turned a move away (beyond-needed?),
+  but a search without the limits finds one, also :beyond, the executor's refusal of that path: no path within abilities,
+  and the kind of step that would have made one."
   [c pw to range weight policy]
   (let [r (await (plan-from! c pw to range weight (executor/planner-limits policy (wworld/solid-fn pw))))
         within (within-of pw r)]
@@ -166,7 +151,7 @@
       (some? (.-target f)) (assoc :target (vec (.-target f))))))
 
 (defn walk-plan
-  "plan-walk's answer from its plan-within answer {:r :steps :beyond} over walled (pw with the walls).
+  "plan-walk!'s answer from its plan-within! answer {:r :steps :beyond} over walled (pw with the walls).
   With frontier, a search that ran out of loaded land (no path within abilities beyond it) walks to its frontier, not
   its nearest end. Every way the loaded land holds is known and none arrives, so a way can only go on past what is
   loaded. A body standing at its frontier walks nowhere, not even to the nearest end: that would swing between
@@ -186,24 +171,6 @@
      :frontier-taken (when (and edge (> (count walked) 1)) (cond-> {:at (:at edge)} (:known edge) (assoc :known true) (:target edge) (assoc :target (:target edge))))
      :searched-out out
      :stop (when (and step (not past) (not edge)) (stopped-one-way r (or (peek walked) (first steps) (wworld/body-cell c)) to step))}))
-
-(defn plan-walk
-  "Plan the next walk from where the body stands: plan-within, and for a partial plan only the steps up to its last
-  dry step (dry-end). The planner ends a partial plan at the nearest node the body can come back from.
-  Answer {:r :steps :beyond :status :stop :one-way-taken}. :stop is the no-path result (stopped-one-way) for a plan
-  whose nearer end lies behind a step that cannot be undone, else nil.
-  opts:
-  - :policy, the executor policy the plan must fit (default executor/policy).
-  - :walls, cells {:x :y :z} to read as walls.
-  - :one-way :open, to take a one-way step when the land past it runs on into unloaded land (open-path; a far goal
-    past a cliff). The plan is then the partial path past it, with no :stop and :one-way-taken {:kind :at}. By default
-    it never takes one.
-  - :frontier true, so a search that ran out of loaded land walks to its frontier (walk-plan), with
-    :frontier-taken {:at [x y z]}."
-  ([c pw to range weight] (plan-walk c pw to range weight nil))
-  ([c pw to range weight {:keys [policy walls one-way frontier] :or {policy (wworld/body-policy c)}}]
-   (let [walled (wworld/with-walls pw walls)]
-     (walk-plan c pw walled to one-way frontier (plan-within c walled to range weight policy)))))
 
 (defn no-walk
   "The result of a plan that is not walked, nil when it is: no path within abilities (:beyond), a goal the planner proved

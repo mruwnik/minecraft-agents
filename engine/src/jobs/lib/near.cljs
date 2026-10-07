@@ -35,9 +35,9 @@
   "Plan from where the body stands over a fresh pathWorld (the live one copies a section the first time it reads it, so an
   old one is stale), with walls read as stone; with doors other than :never, the iron doors the plan would open are walls
   too (planned again without them). A one-way step (a drop of 2 or 3, a gap jump down) is taken when the land past it runs
-  on into unloaded land (wplan/plan-walk :one-way :open) when one-way is :open: a far goal past a cliff is walked on to; a
+  on into unloaded land (walk/plan-walk! :one-way :open) when one-way is :open: a far goal past a cliff is walked on to; a
   loaded pit is never entered. With one-way nil a partial plan ends at the nearest node the body can come back from. With
-  explore, a search that ran out of loaded land walks to its frontier (wplan/plan-walk :frontier). With budget, at most
+  explore, a search that ran out of loaded land walks to its frontier (walk/plan-walk! :frontier). With budget, at most
   that many expansions of search (walk/plan-walk! :budget): the plan may be status \"searching\" (walk nowhere, the
   search goes on at the next call) or a walk to where an unfinished search has got to (never, with progress false).
   With budget, each plan's search is an info :planned event {:ms :status :why :nodes} (nodes only once the search is over).

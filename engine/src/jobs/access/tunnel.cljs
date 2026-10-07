@@ -432,11 +432,11 @@
     (or (when k (await (torch-step! c k)))
         (cond
           (and i (not stair-done) (or (< i steps) (not (segment-start? c))))
-          (if-let [stop (when (and (pos? i) (not= i checked) (segment-start? c)) (stair/way-back c entry))]
+          (if-let [stop (when (and (pos? i) (not= i checked) (segment-start? c)) (await (stair/way-back c entry)))]
             stop
             (do (when (segment-start? c) (ctx/update-mem! c assoc :checked i))
                 (await (stair-part! c plan i))))
-          j (if-let [stop (when (and (not= feet entry) (not= (+ steps j) checked)) (stair/way-back c entry))]
+          j (if-let [stop (when (and (not= feet entry) (not= (+ steps j) checked)) (await (stair/way-back c entry)))]
               stop
               (do (ctx/update-mem! c assoc :checked (+ steps j))
                   (if (= feet stand) (await (open-over-target! c feet)) (await (run-step! c feet)))))

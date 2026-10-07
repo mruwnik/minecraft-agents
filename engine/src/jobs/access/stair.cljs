@@ -246,13 +246,14 @@
       (not= block (block-at cell)) (update :dug (fnil conj []) {:cell cell :block block}))
     m))
 
-(defn way-back
-  "nil when a whole plan the executor can walk leads from the body to origin on a fresh pathWorld, else the stop."
+(defn ^:async way-back
+  "nil when a whole plan the executor can walk leads from the body to origin on a fresh pathWorld, else the stop (a
+  promise: the search yields to the event loop)."
   [c origin]
   (let [pw (wworld/path-world (:primitives c))]
     (if (nil? pw)
       {:reason :no-way-back :why :unsupported}
-      (let [{:keys [r steps beyond]} (wplan/plan-within c pw origin 0 walk/default-weight)
+      (let [{:keys [r steps beyond]} (await (wplan/plan-within! c pw origin 0 walk/default-weight (wworld/body-policy c)))
             status (.-status r)
             stop (fn [refused] {:reason :no-way-back :why :refused :kind (:kind refused) :step (:at refused)})]
         (cond
@@ -380,7 +381,7 @@
       :else
       (do
         (ctx/update-mem! c assoc :at-step i)
-        (if-let [stop (when (and (pos? i) (not= i checked)) (way-back c origin))]
+        (if-let [stop (when (and (pos? i) (not= i checked)) (await (way-back c origin)))]
           stop
           (do
             (ctx/update-mem! c assoc :checked i)
