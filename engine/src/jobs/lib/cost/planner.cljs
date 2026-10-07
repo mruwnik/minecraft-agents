@@ -62,7 +62,7 @@
 
 (def default-landing
   "Block name -> share of a fall's damage a body takes landing on it (go-to's :landing, which overrides entry by entry): hay
-  and honey take 80% off; a negative factor (slime) takes no drop over 3 onto the block at all, the body bounces off it."
+  and honey take 80% off; a negative factor (slime) is a bounce: no damage, but the body takes seconds to settle."
   {"hay_block" 0.2 "honey_block" 0.2 "slime_block" -1})
 
 (defn landing-problem

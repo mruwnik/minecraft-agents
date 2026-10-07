@@ -1,6 +1,6 @@
 (ns engine.path.planner.moves
   "Search methods: the moves out of a node: walks, diagonals, jumps, drops, gap jumps and climbing."
-  (:require [engine.path.planner.base :refer [ARC ARC-UP BODY CLIMB-TRAP-SHUT CORNER-S GAP-PIT-RISK GAP-S GAP-UP-S GRID HAZARD-SLIDE-RISK JUMP-S JUMP-UP LAVA MOVE-CLIMB-DOWN MOVE-CLIMB-UP MOVE-CORNER MOVE-DIAGONAL MOVE-DROP MOVE-GAP MOVE-JUMP MOVE-JUMP-CLIMB MOVE-OPEN MOVE-SWIM MOVE-WALK SLOW-EXTRA SNAP SQRT2 STEP UNLOADED WATER WHOLE FREE-FALL]]
+  (:require [engine.path.planner.base :refer [ARC ARC-UP BODY CLIMB-TRAP-SHUT CORNER-S GAP-PIT-RISK GAP-S GAP-UP-S GRID HAZARD-SLIDE-RISK JUMP-S JUMP-UP LAVA MOVE-CLIMB-DOWN MOVE-CLIMB-UP MOVE-CORNER MOVE-DIAGONAL MOVE-DROP MOVE-GAP MOVE-JUMP MOVE-JUMP-CLIMB MOVE-OPEN MOVE-SWIM MOVE-WALK SLOW-EXTRA SNAP SQRT2 STEP UNLOADED WATER WHOLE FREE-FALL BOUNCE-S]]
             [engine.path.planner.search :refer [Search]]))
 
 (set! *warn-on-infer* true)
@@ -43,7 +43,7 @@
             (.edge s x2 y2 z2 0 MOVE-DROP i sec (.swimRisk s x2 y2 z2) 0 0 0))))))
 
   ;; the hp a fall of fall16 (1/16 blocks) onto the block `id` (the support of the landing) takes: over FREE-FALL blocks, scaled by the block's landing factor
-  ;; (options.landing), the fall factor and the drop factor; -1 when the block takes no fall over FREE-FALL (a negative factor)
+  ;; (options.landing), the fall factor and the drop factor; a negative factor is a bouncing block: no damage (see bounceS)
   (dropDamage [s id fall16]
     (let [over (- (/ fall16 16) FREE-FALL)]
       (if (<= over 0)
@@ -51,8 +51,15 @@
         (let [land (if (some? (.-land-factors s)) (.get ^js (.-land-factors s) id) nil)
               f (if (some? land) land 1)]
           (if (neg? f)
-            -1
+            0
             (* (.-c-drop-factor s) (.-fall-factor s) (js/Math.ceil (* over f))))))))
+
+  ;; the seconds a fall of fall16 onto the block `id` costs to bounce away on a block with a negative landing factor, else 0
+  (bounceS [s id fall16]
+    (let [land (if (some? (.-land-factors s)) (.get ^js (.-land-factors s) id) nil)]
+      (if (and (some? land) (neg? land) (> fall16 (* FREE-FALL 16)))
+        (* BOUNCE-S (js/Math.sqrt (/ fall16 16)))
+        0)))
 
   ;; walk off an edge into the first standable cell below the neighbour column, or into water of any depth up to maxWaterDrop
   ;; (the fall is cancelled there). A tight cell at either end: the body falls straight down from the crossing point, which
@@ -74,6 +81,7 @@
                     (when-not (or (> fall (* (.-max-drop s) 16)) (neg? dmg))
                       (let [sec (+ (* (.-c-walk-s s) (+ 1 (* SLOW-EXTRA (+ slow-from (.-enter-slow s)))))
                                    (* (.-c-drop-factor s) 0.25 (js/Math.sqrt (/ (js/Math.max 0 fall) 16)))
+                                   (.bounceS s sup fall)
                                    (.-enter-extra s))]
                         (set! (.-move-dmg s) (+ dmg (.-enter-dmg s)))
                         (if tight-drop
@@ -314,7 +322,7 @@
                       fall (- from16 (+ (* y3 16) h3))]
                   (when-not (or (> fall (* (.-max-drop s) 16)) (neg? dmg))
                     (set! (.-move-dmg s) (+ dmg (.-enter-dmg s)))
-                    (.verticalMove s i x y z h region y3 h3 MOVE-DROP (* (.-c-drop-factor s) 0.25 (js/Math.sqrt (/ fall 16)))
+                    (.verticalMove s i x y z h region y3 h3 MOVE-DROP (+ (* (.-c-drop-factor s) 0.25 (js/Math.sqrt (/ fall 16))) (.bounceS s (.-support s) fall))
                                    (+ (.-enter-risk s) dmg) (.-enter-slow s))
                     (set! (.-move-dmg s) 0))))))))))
 

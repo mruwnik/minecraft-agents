@@ -32,7 +32,7 @@
    :tolls {:doc "cells to cross only as a last resort, [{:x :y :z :factor}]" :default nil}
    :drop-cost {:doc "number: scales the cost of a drop; false: no drop of 2 or 3 at all" :default 1}
    :costs {:doc "as go-to :costs" :default nil}
-   :landing {:doc "as go-to :landing: block name -> share of a fall's damage taken landing on it (negative: no drop over 3 onto it)" :default nil}
+   :landing {:doc "as go-to :landing: block name -> share of a fall's damage taken landing on it (negative: a bounce, no damage but settle time)" :default nil}
    :gait {:doc "as go-to :gait: :auto, :walk (no sprint) or :sneak (slow, no sprint); nil: the body's setting, else :auto" :default nil}
    :min-health {:doc "go-to's :min-health: the hp the walk may not spend below" :default nil}
    :max-damage {:doc "go-to's :max-damage: at most this many hp spent on drops and plants" :default nil}

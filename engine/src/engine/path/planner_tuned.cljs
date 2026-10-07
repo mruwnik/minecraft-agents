@@ -48,7 +48,7 @@
      touch); a move over it is refused, and a search that finds nothing for that reason says damageRefused true. options.maxDrop
      is still the length of the longest fall. options.damageWeight (riskWeight): seconds an hp of that damage costs.
      options.fallFactor (1) scales a fall's damage (feather falling, protection); options.landing, a Map of state id to the
-     factor of the fall damage onto that block (hay 0.2), a negative one: no fall over 3 onto it. result.cost.damage is the
+     factor of the fall damage onto that block (hay 0.2), a negative one: a bounce (no damage, BOUNCE-S settle seconds). result.cost.damage is the
      path's damage, a step's damage its own.
    - options.costs.dropFactor (1): scales the fall seconds and fall damage of every drop on land (0: free); options.maxDrop
      (3) refuses a drop of more than that many blocks (1: none of 2 or 3). go-to's :drop-cost sets them.

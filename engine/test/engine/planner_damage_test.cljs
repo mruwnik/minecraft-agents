@@ -76,8 +76,14 @@
                   {:x 4 :y 75 :z 2}))]
     (testing "10 blocks onto hay: 2 hp, where the floor beside it would cost 8"
       (is (= 2 (cost (on "hay_block" 5) :damage))))
-    (testing "onto slime: no drop over 3 (the floor beside it is over budget)"
-      (is (not= "found" (:status (on "slime_block" 5)))))
+    (testing "onto slime: the body bounces and settles, no damage even with no budget"
+      (is (= "found" (:status (on "slime_block" 0))))
+      (is (= 0 (cost (on "slime_block" 0) :damage))))
+    (testing "the bounce takes time: more seconds than a landing that does not bounce (factor 0)"
+      (let [still (run (pf/world {:fill [[0 64 0 4 74 4 "stone"] [5 64 0 7 64 4 "slime_block"]]}) (near 6 65 2)
+                       {:maxDrop 16 :damageBudget 0 :landing (landing slime-id 0)}
+                       {:x 4 :y 75 :z 2})]
+        (is (> (cost (on "slime_block" 0) :seconds) (+ 1 (cost still :seconds))))))
     (testing "onto stone: the full fall"
       (is (= 7 (cost (on "stone" 10) :damage))))))
 

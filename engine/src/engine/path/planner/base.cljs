@@ -87,6 +87,7 @@
 ;; to about a minute's walk wins; still allowed, so a body in a pocket whose only way out is such a slide gets out.
 (def ^:const HAZARD-SLIDE-RISK 10)
 (def ^:const FREE-FALL 3)
+(def ^:const BOUNCE-S 1.4) ; seconds a body takes to settle on a bouncing block, per square root of the blocks it fell (10 blocks: about 4.4 s)
 (def ^:const EXIT-SLACK 1) ; 1/16: a floating body exits onto land up to this over the water's top face
 (def ^:const SQRT2 1.4142135623730951)
 (def ^:const OCTILE-SLACK 1.0824) ; octile length of a vector of length r is at most this times r
