@@ -74,7 +74,7 @@
 
 (defn check [c]
   (case (or (:action (:args c)) :launch)
-    :launch (or (some? (launch-pos c)) (ctx/wait c {:reason :no-water :why "no water to put a boat on in sight"}))
+    :launch (or (some? (launch-pos c)) (look/wait-unless-surveyed c {:reason :no-water :why "no water to put a boat on in sight"}))
     :recover (or (if-let [id (:id (:args c))]
                    (some #(= id (:id %)) (boats-in-sight c))
                    (seq (boats-in-sight c)))
@@ -103,6 +103,7 @@
         cell (launch-pos c)]
     (cond
       (not (boat-name? item)) (result/stop! c :bad-args (str item " is not a boat"))
+      (and (nil? cell) (not (look/surveyed? c))) (await (look/survey! c)) ; water behind the body is not seen until it looks
       (nil? cell) (result/stop! c :no-water "no water to put a boat on in sight")
       (vehicle/mounted? p) (result/stop! c :aboard "already on a vehicle")
       :else

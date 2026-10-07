@@ -478,3 +478,13 @@
         (let [{:keys [eng]} (start tidy-spec {"field" field-plan} nil)
               result (await (outcome eng {:plan "field" :ignore-zones? true} 200))]
           (is (= (count strays) (:dug result))))))))
+
+(deftest it-looks-around-before-it-calls-the-field-tidy
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (start tidy-spec {"field" field-plan})
+              _ (tu/seeing-after-look p)
+              result (await (outcome eng {:plan "field"} 200))]
+          (is (seq (calls p "look")))
+          (is (= 5 (:dug result))))))))

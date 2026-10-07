@@ -203,12 +203,20 @@
       (do (ctx/update-mem! c assoc :scan (assoc (select-keys r [:next-ring :found]) :from from :reads spent))
           :again))))
 
+(defn water-unseen?
+  "Whether the first scan would run with no water in sight, so a look around could still show some."
+  [c a]
+  (and (not (:spots (ctx/mem c))) (not (:scan (ctx/mem c))) (not (look/surveyed? c))
+       (empty? (look/seen-blocks (:primitives c) {:names ["water"] :radius (+ (:range a) (:w a) (:h a) 4) :max 1}))))
+
 (defn ^:async step
-  "Scan (a bounded slice per step, remembering the spots), then walk to the
+  "Look around when no water is in sight, scan (a bounded slice per step, remembering the spots), then walk to the
   best one if :walk."
   [c]
   (let [a (merge (into {} (map (fn [[k v]] [k (:default v)])) args) (:args c))
-        found (or (:spots (ctx/mem c)) (scan-step! c a))]
+        found (if (water-unseen? c a)
+                (do (await (look/survey! c)) :again)
+                (or (:spots (ctx/mem c)) (scan-step! c a)))]
     (cond
       (= :again found) :again
       (nil? found) (do (ctx/result! c {:spot nil :reason :none}) :done)

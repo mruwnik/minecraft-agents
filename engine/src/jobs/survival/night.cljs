@@ -500,7 +500,12 @@
                        (sort-by #(u/dist here (:pos %)))
                        (take targets/max-targets)
                        vec)]
-        (when (seq cands)
+        (cond
+          (and (empty? cands) (not (look/surveyed? c)))
+          (do (await (look/survey! c)) ; a cave or roofed place behind the body is not seen until it looks
+              :searching)
+
+          (seq cands)
           (let [a (await (targets/nearest! c (mapv (fn [{:keys [kind pos]}] (cond-> pos (= :bed kind) (assoc :range 2))) cands) 0
                                            {:tag :night-flee}))]
             (case (:status a)

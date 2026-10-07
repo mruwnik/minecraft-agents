@@ -134,6 +134,9 @@
       :else
       (let [spot (target-spot c)]
         (cond
+          (and (or (nil? spot) (not (water-in-sight? c))) (not (look/surveyed? c)))
+          (await (look/survey! c)) ; a shore or water behind the body is not seen until it looks
+
           (nil? spot) (result/stop! c :no-far-shore (if (given-pos c) "the given cell is no seen shore" "no far shore in sight"))
           mounted (await (land! c (:land spot)))
           (not (water-in-sight? c)) (result/stop! c :not-water "no water in sight to launch a boat on")

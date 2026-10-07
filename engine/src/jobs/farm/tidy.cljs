@@ -2,6 +2,7 @@
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as blocks]
+            [jobs.lib.look :as look]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
@@ -282,6 +283,11 @@
     (ctx/update-mem! c (fn [m] (cond-> (dissoc m :digging)
                                  (not-any? #(= pos (:pos %)) (:dig found)) (update :dug (fnil inc 0)))))))
 
+(defn cells-unseen?
+  "Whether a cell of the work was never seen (the body has not looked at it), so no stray is known there."
+  [c cells]
+  (look/unseen? (:primitives c) (map (comp pos-map :pos) cells)))
+
 (defn ^:async step [c]
   (let [{:keys [answer trouble]} (planned c)]
     (if trouble
@@ -295,6 +301,7 @@
         (cond
           (seq todo) (await (work! c todo))
           (:collect m) (await (collect! c cells))
+          (and (not (look/surveyed? c)) (cells-unseen? c cells)) (do (await (look/survey! c)) :again)
           :else (finish! c found))))))
 
 (defn ^:async round

@@ -787,3 +787,20 @@
           (aset p "seenBlocks" (fn [q] (.filter (all q) (fn [b] (< (.-y (.-pos b)) 66)))))
           (await (tu/run-until-empty eng 160))
           (is (empty? (st/emitted seen :shelter.fled))))))))
+
+(deftest with-nothing-seen-the-night-looks-around-and-then-flees-to-the-ground-it-saw
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (st/setup {:time night :inventory st/dirt-stack :blocks stone-and-dirt-patch})]
+          (tu/seeing-after-look p)
+          (.override (.-world p) "place"
+                     (fn ^:async f [token a impl]
+                       (if (< (.-x (.-pos a)) 20)
+                         #js {:status "no-support"}
+                         (await (impl token a)))))
+          (st/dawn-after! p 12)
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (tu/run-until-empty eng 160))
+          (is (seq (st/calls p "look")))
+          (is (= [:ground] (mapv :target (st/emitted seen :shelter.fled)))))))))

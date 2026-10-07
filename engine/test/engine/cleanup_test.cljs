@@ -658,3 +658,15 @@
           (is (= [[2 65 0]] (mapv (juxt :x :y :z) (d/digs p))) "only the seen scaffold is dug; the unseen cell is looked at first, found swapped, left")
           (is (= "oak_planks" (d/block-at p [0 65 0])))
           (is (= [] (ledger/open-entries (mem/view (:store (:eng s))))) "the entry is dropped once the cell is seen"))))))
+
+(deftest it-looks-around-before-it-declines-cells-it-has-not-seen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p out] :as s} (setup {:self {:x 3.5 :y 64 :z 0.5} :blocks (merge (floor -2 5) {"0,64,0" "dirt"})
+                                                :entries [(entry [0 64 0])]})
+              _ (tu/seeing-after-look p)]
+          (core/submit! eng '(recording-parent) {})
+          (await (ticks s eng 60))
+          (is (some #(= "look" (.-name %)) (.-calls (.-world p))))
+          (is (= [{:cell [0 64 0] :item "dirt"}] (:removed @out))))))))

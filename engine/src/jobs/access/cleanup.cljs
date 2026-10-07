@@ -6,6 +6,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
+            [jobs.lib.look :as look]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
@@ -191,6 +192,14 @@
 
 ;; ------------------------------------------------------------------ check
 
+(defn unseen-entries?
+  "Whether an entry this cleanup would work on lies in a cell the body has never seen (it reads as not loaded)."
+  [c]
+  (let [v (ctx/view c)
+        cells (->> (ledger/select (ledger/open-entries v) v (:job (:args c)))
+                   (map (fn [{[x y z] :cell}] {:x x :y y :z z})))]
+    (look/unseen? (:primitives c) cells)))
+
 (defn check [c]
   (cond
     (and (nil? (known/zones c)) (not (:ignore-zones? (:args c))))
@@ -199,7 +208,9 @@
         (ctx/wait c {:reason :no-zones}))
     (:started (ctx/mem c)) true
     :else (or (boolean (seq (ledger/offered (ctx/view c) (access/sensed-at (:primitives c) nil) (:job (:args c)))))
-              (ctx/wait c {:reason :nothing-to-do}))))
+              (if (unseen-entries? c)
+                (look/wait-unless-surveyed c {:reason :nothing-to-do})
+                (ctx/wait c {:reason :nothing-to-do})))))
 
 ;; ------------------------------------------------------------------ steps
 
@@ -350,7 +361,10 @@
       (bad-job? job) (do (ctx/result! c {:status :bad-args :text ":job must be nil, :all or an instance id"}) :done)
       (and (nil? zones) (not (:ignore-zones? (:args c)))) :declined
       (and (not (:started (ctx/mem c)))
-           (empty? (ledger/offered (ctx/view c) (access/sensed-at (:primitives c) nil) job))) :declined
+           (empty? (ledger/offered (ctx/view c) (access/sensed-at (:primitives c) nil) job)))
+      (if (and (not (look/surveyed? c)) (unseen-entries? c))
+        (await (look/survey! c)) ; a block behind the body is not seen until it looks
+        :declined)
       :else (do (ctx/update-mem! c assoc :started true)
                 (loop [i 0]
                   (cond

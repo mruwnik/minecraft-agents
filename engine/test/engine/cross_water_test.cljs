@@ -179,3 +179,13 @@
           (is (= :done (:status res)) (pr-str res))
           (is (some #(= :fetch.done (:kind %)) @seen))
           (is (some #(= :boat.launched (:kind %)) @seen)))))))
+
+(deftest it-looks-around-before-it-says-no-far-shore
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (lt/setup world)
+              _ (tu/seeing-after-look p)
+              res (await (tu/child-outcome eng 'jobs.movement.cross-water {:min-cross 4} 200))]
+          (is (some #(= "look" (.-name %)) (.-calls (.-world p))))
+          (is (= :done (:status res)) (pr-str res)))))))

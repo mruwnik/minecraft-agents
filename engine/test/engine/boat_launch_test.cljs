@@ -157,3 +157,14 @@
       (fn ^:async t []
         (let [{:keys [res]} (await (run {:blocks pond :inventory [boat-item] :mountFails true} {}))]
           (is (= {:status :stopped :reason :board-failed} (select-keys res [:status :reason])) (pr-str res)))))))
+
+(deftest it-looks-around-before-it-waits-for-water
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (lt/setup {:blocks pond :inventory [boat-item]})
+              _ (tu/seeing-after-look p)]
+          (core/submit! eng '(jobs.movement.boat-launch {:board false}) {})
+          (await (tu/run-until-empty eng 30))
+          (is (some #(= "look" (.-name %)) (.-calls (.-world p))))
+          (is (empty? (:list (core/state eng)))))))))

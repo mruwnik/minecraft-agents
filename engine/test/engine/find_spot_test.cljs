@@ -178,7 +178,7 @@
               r (await (child-outcome eng job (assoc small :range 8 :walk true :center {:x 102 :y 64 :z 1}) 12))]
           (is (= true (:walked r)))
           (is (= 2 (count (tu/walked-to eng))) "a walk cut short is partial, the next one arrives")
-          (is (= 2 @n) "one water read per scan round (2 rounds); the walk rounds do not rescan")
+          (is (= 3 @n) "one water read before the look, one per scan round (2 rounds); the walk rounds do not rescan")
           (is (= 1 (count (kinds seen :find-spot.found)))))))))
 
 (defn scan-at [world self args from]
@@ -307,3 +307,13 @@
         a {:w 5 :h 5 :range 24 :depth 12 :limit 3}
         [_ spots] (scan-reads world [0 64 0] a)]
     (is (pos? (:water-share (first spots))) "the best spot has water within 4")))
+
+(deftest find-spot-looks-around-before-it-judges-the-water
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:blocks wet-world})
+              _ (tu/seeing-after-look p)
+              r (await (child-outcome eng job (assoc small :walk false) 8))]
+          (is (seq (calls p "look")))
+          (is (= [1.0 0] (mapv :water-share (take 2 (:spots r))))))))))
