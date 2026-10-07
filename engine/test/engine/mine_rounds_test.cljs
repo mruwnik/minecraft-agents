@@ -75,11 +75,16 @@
           (is (= 1 (count (m/events-of s :mine.mend-failed))))
           (is (>= 6 (count (m/calls s "place"))) "bounded"))))))
 
+(def three-dirt
+  "Stone with exactly three dirt cells beside the start: whichever the job digs first, count 3 needs all three, so the cut one again."
+  (merge (m/cells "stone" (range -2 3) [61 62 63] (range -2 3))
+         {"1,63,0" "dirt" "-1,63,0" "dirt" "0,63,-1" "dirt"}))
+
 (defn ^:async resume-after-cut
   "Submit a dirt job, cut it with cut!, restart over the same dir and run on; the restarted setup."
-  [cut!]
+  [cut! blocks]
   (let [dir (tu/tmp-dir)
-        s (m/start {:world {:blocks m/floor} :dir dir})]
+        s (m/start {:world {:blocks blocks} :dir dir})]
     (cut! s)
     (core/submit! (:eng s) (m/spec {:block "dirt" :count 3 :mend false}) {})
     (await (m/run-ticks s 1))
@@ -119,7 +124,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [again]} (await (resume-after-cut #(tu/shutdown-at! % "dig" 1)))
+        (let [{:keys [again]} (await (resume-after-cut #(tu/shutdown-at! % "dig" 1) three-dirt))
               cells (m/dug-cells again)]
           (is (m/finished? again))
           (is (= :count (:reason (m/done-event again))))
