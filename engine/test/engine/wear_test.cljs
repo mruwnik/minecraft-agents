@@ -49,7 +49,12 @@
     "iron_helmet" "head" "diamond_chestplate" "torso" "golden_leggings" "legs" "netherite_boots" "feet" "turtle_helmet" "head")
   (are [item] (nil? (armour/parse item))
     "dirt" "iron_pickaxe" "turtle_boots" "shield" nil)
-  (is (apply < (map armour/rank-of ["leather_helmet" "golden_helmet" "turtle_helmet" "chainmail_helmet" "iron_helmet" "diamond_helmet" "netherite_helmet"]))))
+  (is (apply <= (map armour/rank-of ["leather_helmet" "golden_helmet" "turtle_helmet" "chainmail_helmet" "iron_helmet" "diamond_helmet" "netherite_helmet"]))
+      "by armour points, then toughness")
+  (is (= (armour/rank-of "golden_helmet") (armour/rank-of "turtle_helmet") (armour/rank-of "iron_helmet"))
+      "helmets of equal points tie: a worn one is not swapped")
+  (is (< (armour/rank-of "golden_leggings") (armour/rank-of "chainmail_leggings") (armour/rank-of "iron_leggings")))
+  (is (< (armour/rank-of "diamond_boots") (armour/rank-of "netherite_boots")) "toughness breaks the points tie"))
 
 (deftest plan-without-item-takes-the-best-for-empty-or-worse-slots
   (is (= [{:item "diamond_helmet" :slot "head"} {:item "iron_boots" :slot "feet"}]

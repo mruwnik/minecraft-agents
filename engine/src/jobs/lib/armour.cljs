@@ -1,24 +1,25 @@
 (ns jobs.lib.armour
   "Wearing armour: which carried item goes into which slot, as pure data, and the async runner that equips it.
-  The slots are mineflayer's equip destinations (head, torso, legs, feet).")
+  The slots are mineflayer's equip destinations (head, torso, legs, feet)."
+  (:require [clojure.string :as str]
+            [jobs.lib.cost.armour :as cost-armour]))
 
 (def slots ["head" "torso" "legs" "feet"])
 
 (def piece-slot
   {"helmet" "head" "chestplate" "torso" "leggings" "legs" "boots" "feet"})
 
-(def material-rank
-  "Weakest first. The turtle shell helmet sits between golden and chainmail (its defence is a helmet's 2 points)."
-  {"leather" 1 "golden" 2 "turtle" 2.5 "chainmail" 3 "iron" 4 "diamond" 5 "netherite" 6})
+(defn piece-rank
+  "Sort key of an armour piece, higher is better: its armour points (jobs.lib.cost.armour), toughness breaking a tie."
+  [item]
+  (+ (cost-armour/piece-points item)
+     (/ (get cost-armour/toughness-by-material (first (str/split item #"_")) 0) 10)))
 
 (defn parse
   "{:slot :rank} of an armour item name (\"iron_helmet\", \"turtle_helmet\"), nil for anything else."
   [item]
-  (when (string? item)
-    (let [[_ material piece] (re-matches #"([a-z]+)_(helmet|chestplate|leggings|boots)" item)
-          rank (get material-rank material)]
-      (when (and rank (or (not= material "turtle") (= piece "helmet")))
-        {:slot (piece-slot piece) :rank rank}))))
+  (when (and (string? item) (re-matches #"[a-z]+_(helmet|chestplate|leggings|boots)" item) (pos? (cost-armour/piece-points item)))
+    {:slot (piece-slot (peek (str/split item #"_"))) :rank (piece-rank item)}))
 
 (defn rank-of [item] (or (:rank (parse item)) 0))
 
