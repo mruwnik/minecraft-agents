@@ -5,8 +5,11 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
             [jobs.lib.result :as r]
+            [jobs.lib.shelter :as sh]
             [jobs.lib.threats :as threats]
-            [jobs.lib.util :as u]))
+            [jobs.lib.tools :as tools]
+            [jobs.lib.util :as u]
+            [jobs.survival.dig-in :as dig-in]))
 
 (def doc
   "A hostile is near: fight it (jobs.survival.fight-back, best weapon equipped) when the odds are fair,
@@ -16,6 +19,9 @@
   leaves at least :reserve health (jobs.lib.cost/fight-damage: weapon, armour worn, each mob's kind
   and what is left of it after the hits landed, the dangers killed nearest first).
   If the chosen child declines, the other one runs.
+  Only ranged mobs with a line of fire near and the body under a roof, carrying building blocks and a tool that digs
+  stone (a block in the doorway must not shut it in): it stops the arrows instead (jobs.survival.block-arrow-gap, no
+  fetch), once per call; when that places nothing it decides as above.
   Done once no real danger (as the hostile-near trigger, jobs.lib.reach, in sight) is within :radius
   (:ranged-radius for ranged mobs) and the retreat is not hiding (sealed in, up a pillar or down a pit).
   A child that stops (a retreat that cannot escape) stops it with that cause; three calls in a row that change
@@ -82,6 +88,24 @@
         (await (run-child c (other decision) a))
         result))))
 
+(defn gap-wanted?
+  "Whether to stop arrows with a block rather than fight or flee: only ranged mobs near, the body roofed, building blocks
+  carried and a tool that digs stone (the way out of a sealed doorway), and the gap job not yet tried
+  (tried?)."
+  [c hs tried?]
+  (let [p (:primitives c)]
+    (boolean (and (not tried?)
+                  (every? combat/ranged? hs)
+                  (sh/roofed? p sh/default-roof-height)
+                  (dig-in/pick c dig-in/building-blocks)
+                  (tools/can-harvest? p "stone")))))
+
+(defn ^:async gap!
+  "One call of block-arrow-gap (never fetching); what it placed is the outcome, nothing placed lets the round decide as usual."
+  [c]
+  (ctx/update-mem! c assoc :gap-tried true)
+  (await (ctx/call-child c :gap 'jobs.survival.block-arrow-gap {:radius (:ranged-radius (:args c)) :fetch false})))
+
 (defn hiding?
   "Whether the retreat child holds a refuge (sealed in, a pillar or a pit): a hostile it hides from is out of sight
   and has no way to the body, yet is still there."
@@ -118,6 +142,7 @@
       (cond
         (hiding? c) (await (run-child c :flee (:args c)))
         (empty? hs) nil
+        (gap-wanted? c hs (:gap-tried (ctx/mem c))) (await (gap! c))
         :else (await (respond c hs)))
       (let [after (near c)]
         (if-let [[slot res] (stopped-child c)]

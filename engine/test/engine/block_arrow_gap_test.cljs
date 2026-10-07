@@ -82,7 +82,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [seen] :as s} (setup [] {:inventory []})]
-          (await (run-job! s {}))
+          (await (run-job! s {:fetch false}))
           (is (= :no-blocks (:reason (failed seen)))))))))
 
 (deftest a-gap-in-a-foreign-zone-fails-refused-and-places-nothing
@@ -142,3 +142,17 @@
           (await (run-job! s {}))
           (is (= :no-gap (:reason (failed seen))) "the doorway was never seen, so it is not filled")
           (is (= 8 (cobble p)) "nothing placed"))))))
+
+(defn ^:async one-tick! [{:keys [eng] :as s} args]
+  (core/submit! eng (list 'jobs.survival.block-arrow-gap args) {})
+  (await (core/tick! eng))
+  s)
+
+(deftest no-blocks-fetches-them-by-default-and-stops-without-fetch
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen]} (await (one-tick! (setup [] {:inventory [] :entities [pit-skeleton] :blocks (merge ground pit shell)}) {}))]
+          (is (contains? (kinds-seen seen) :fetch.started) "a block is fetched when none is carried"))
+        (let [{:keys [seen]} (await (one-tick! (setup [] {:inventory [] :entities [pit-skeleton] :blocks (merge ground pit shell)}) {:fetch false}))]
+          (is (= :no-blocks (:reason (failed seen)))))))))

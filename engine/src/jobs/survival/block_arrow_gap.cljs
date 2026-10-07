@@ -2,6 +2,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.combat :as combat]
+            [jobs.lib.fetch :as fetch]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
@@ -18,8 +19,9 @@
   taken at the rough spot its direction and band give (jobs.lib.reach/mob-pos). A door, gate or trapdoor standing
   open in the way is shut, not walled over (jobs.survival.dig-in/place-all!).
   Declines (waiting) with :no-ranged-danger when no ranged mob within :radius has a line of fire.
+  With none of :blocks carried it fetches one (:fetch, default true; jobs.lib.fetch, jobs.items.obtain) before it stops :no-blocks.
   Ends done {:placed [cells]} once none has (also when the mob moved away meanwhile), else stopped :no-blocks (none
-  carried that :blocks names), :refused (every cell that would help is another's zone, claim or plan; :ignore-zones?
+  carried that :blocks names, nothing fetched), :refused (every cell that would help is another's zone, claim or plan; :ignore-zones?
   lifts it), :no-gap (a line of fire stays and no open cell within :reach would end it), :place-failed or
   :no-progress (over max-steps rounds).
   Does not fight, flee or walk: respond-to-hostile and retreat own that.
@@ -32,7 +34,8 @@
   {:radius {:doc "ranged mobs within this many blocks count" :default 16}
    :reach {:doc "open cells within this many blocks of the body's feet may be filled" :default 3}
    :blocks {:doc "names of the blocks it may place" :default dig-in/shelter-blocks}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
+   :fetch {:doc "get a missing block (jobs.lib.fetch): true, a set of kinds or a map of limits; false stops :no-blocks" :default true}})
 
 (def max-steps "Rounds one call takes at most." 12)
 
@@ -93,7 +96,7 @@
   (r/stop! c reason text))
 
 (defn ^:async step
-  "One cell: :done, or :again."
+  "One cell: :done, :again, or :continue while it fetches a block."
   [c]
   (let [p (:primitives c)
         {:keys [blocks] within :reach} (:args c)
@@ -112,11 +115,13 @@
             cells (candidates (sh/feet p) within)
             cell (plug-cell kind-at cells mob body #(and (allowed? %) (permitted? %)))]
         (cond
-          (nil? (dig-in/pick c blocks)) (fail! c :no-blocks "no block to stop the arrows with")
+          (nil? (dig-in/pick c blocks)) (or (await (fetch/step! c 'jobs.survival.block-arrow-gap {:reason :need :any-of (vec blocks)}))
+                                            (fail! c :no-blocks "no block to stop the arrows with"))
           (nil? cell) (if (plug-cell kind-at cells mob body allowed?)
                         (fail! c :refused "every cell that would stop the arrows is another's (zone, claim or plan)")
                         (fail! c :no-gap "no open cell within reach would stop the arrows"))
-          :else (let [status (await (dig-in/place-all! c blocks [cell]))]
+          :else (let [_ (fetch/settle! c)
+                      status (await (dig-in/place-all! c blocks [cell]))]
                   (if (not= :ok status)
                     (fail! c :place-failed (str "cannot place at the gap: " status))
                     (do (ctx/update-mem! c update :skip (fnil conj #{}) cell)
