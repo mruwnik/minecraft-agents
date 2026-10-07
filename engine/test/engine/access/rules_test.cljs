@@ -194,3 +194,9 @@
     ;; physics still refuses under the opt-out
     plain [5 64 5] place {:ignore-zones? true :zones nil} {:ok false :reason :not-replaceable}
     plain [9 9 9] dig {:ignore-zones? true} {:ok false :reason :not-loaded}))
+
+(deftest no-collision-from-the-placed-blocks-shape
+  (are [item] (rules/no-collision? "1.21.4" item)
+    "wheat_seeds" "oak_sapling" "white_carpet" "torch" "sugar_cane" "nether_wart" "brown_mushroom" "pink_petals" "carrot" "melon_seeds")
+  (are [item] (not (rules/no-collision? "1.21.4" item))
+    "cobblestone" "wheat" "sand" "soul_torch_holder" "oak_planks" nil))

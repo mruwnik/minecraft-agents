@@ -403,6 +403,14 @@
           (is (= ["oak_fence" "oak_fence"] (mapv #(block p %) [[4 64 3] [2 64 3]])))
           (is (= {:placed 9 :wrong [] :missing [] :given-up {}} (select-keys result [:placed :wrong :missing :given-up]))))))))
 
+(deftest every-place-goes-through-the-place-job
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[_ p seen] (await (fence-run {} kit {} {}))]
+          (is (= 9 (count (h/calls p "place"))))
+          (is (= 9 (count (filter #(= :blocks.place.done (:kind %)) @seen)))))))))
+
 (deftest every-dig-goes-through-the-dig-job
   (async done
     (tu/run-async done

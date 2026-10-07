@@ -18,7 +18,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (bd/setup {:self body :inventory cobble})
               result (await (bd/child-outcome eng job {:pos [2 64 0] :item "cobblestone"} 5))]
-          (is (= {:placed true :pos at :item "cobblestone" :reason :placed} result))
+          (is (= {:placed true :pos at :item "cobblestone" :reason :placed :block {:name "cobblestone" :state {}}} result))
           (is (= "cobblestone" (bd/block-at p at)))
           (is (= 3 (bd/carried p "cobblestone")))
           (is (= 1 (count (filter #(= :blocks.place.done (:kind %)) @seen)))))))))

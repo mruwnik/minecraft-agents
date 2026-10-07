@@ -3,7 +3,8 @@
   the world into a lookup and acts on the verdict.
 
   Input, one map:
-    :block-at    fn [x y z] -> block name, or nil when the cell is not loaded
+    :block-at    fn [x y z] -> block name, or nil when the cell is not loaded. Jobs read what the body senses and
+                 give a cell it has not seen their own guess (jobs.access.stair/sensed-at: stone, dug to see)
     :cell        [x y z] the cell to dig or fill
     :feet        [x y z] the body's feet cell (its head cell is one above)
     :zones       nil (no zone list loaded) or a vector of zones {:name :min :max :owner :allow}
@@ -33,7 +34,8 @@
     dig:   :not-loaded, :footprint, :zone, :no-zones, then the hazards
     place: :not-loaded, :footprint, :zone, :own-body, :not-replaceable, :no-zones
   A cell holding air, water, lava or a bubble column can be placed into."
-  (:require [clojure.string :as str]
+  (:require ["minecraft-data" :as minecraft-data]
+            [clojure.string :as str]
             [jobs.lib.access.zones :as zones]))
 
 (def air #{"air" "cave_air" "void_air"})
@@ -45,11 +47,21 @@
   plants and snow a placement overwrites."
   (into (into air fluids) #{"short_grass" "tall_grass" "fern" "large_fern" "dead_bush" "snow" "vine" "glow_lichen" "leaf_litter" "hanging_roots"}))
 
+(def item-block
+  "Items whose placed block is not the block of the same name: seeds and root crops place a crop block, and the
+  wheat item is no block (nil) though a wheat crop block exists."
+  {"wheat" nil "wheat_seeds" "wheat" "carrot" "carrots" "potato" "potatoes" "beetroot_seeds" "beetroots"
+   "melon_seeds" "melon_stem" "pumpkin_seeds" "pumpkin_stem" "torchflower_seeds" "torchflower_crop"
+   "pitcher_pod" "pitcher_crop"})
+
 (defn no-collision?
-  "True when the placed block item has no collision, so the body may stand in the cell: seeds, saplings, carpets,
-  torches, flowers and crops."
-  [item]
-  (boolean (and item (re-find #"(_seeds|_sapling|_carpet|torch|_tulip|_orchid|_bush|^(wheat|carrot|potato|beetroot|dandelion|poppy|cornflower|azure_bluet|oxeye_daisy|lily_of_the_valley|allium)$)" item))))
+  "True when the block that item places has an empty collision shape in minecraft-data for version, so the body
+  may stand in the cell: seeds, saplings, torches, flowers, crops. Carpets count too (a 1/16 layer). False for an
+  item that places no block."
+  [version item]
+  (let [block (if (contains? item-block item) (item-block item) item)
+        shape (some-> block (->> (aget (.-blocksByName (minecraft-data version)))) .-boundingBox)]
+    (boolean (and block (or (= "empty" shape) (and shape (str/ends-with? block "_carpet")))))))
 
 (def not-a-floor
   "Non-fluid, non-replaceable names that are no floor to stand on after the block above is gone."

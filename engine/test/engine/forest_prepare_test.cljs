@@ -1,6 +1,7 @@
 (ns engine.forest-prepare-test
   "jobs.forestry.prepare: a forest plan's planting spots made ready (cleared, soiled, planted), against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
+            [clojure.string :as str]
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.forest-maintain-test :refer [ground forest-plan item start ticks digs places warns listed? give! with-zones]]
@@ -42,9 +43,11 @@
 (defn calls-made [p] (count (.-calls (.-world p))))
 
 (defn wet-world
-  "A world where the cells in levels {\"x,y,z\" n} hold water of that level (the fake does not flow)."
+  "A world where the cells in levels {\"x,y,z\" n} hold water of that level (the fake does not flow), each over a dirt bed."
   [levels & inventory]
-  (-> (apply world (into {} (map (fn [[cell _]] [cell "water"])) levels) inventory)
+  (-> (apply world (merge (into {} (map (fn [[cell _]] [(str/join "," (update (mapv js/Number (str/split cell #",")) 1 dec)) "dirt"])) levels)
+                          (into {} (map (fn [[cell _]] [cell "water"])) levels))
+             inventory)
       (assoc :states (into {} (map (fn [[cell n]] [cell {:level n}])) levels))))
 
 (defn drain!
@@ -545,6 +548,15 @@
           (is (= [[3 64 0]] (digs p)))
           (is (= [{:dammed 3 :cleared 1 :planted 1}] (mapv #(select-keys % [:dammed :cleared :planted]) (h/events-of seen :prepare.done)))))))))
 
+(deftest the-dam-goes-through-the-place-job
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen]} (await (outcome (apply wet-world {"3,64,0" 0} sapling-and-dirt) {"forest" one-cell}))
+              placed (count (h/calls p "place"))]
+          (is (= 2 placed))
+          (is (= 1 (count (filter #(= "dirt" (:item %)) (h/events-of seen :blocks.place.done))))))))))
+
 (deftest a-source-beside-the-cell-is-dammed-and-the-flow-given-time-to-recede
   (async done
     (tu/run-async done
@@ -574,7 +586,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p]} (await (run (apply wet-world {"3,64,0" 8 "3,65,0" 8 "3,66,0" 0} sapling-and-dirt)
+        (let [{:keys [p]} (await (run (-> (apply wet-world {"3,64,0" 8 "3,65,0" 8 "3,66,0" 0} sapling-and-dirt)
+                                        (update :blocks assoc "4,66,0" "stone"))
                                       {"forest" one-cell} {:plan "forest"} 60))]
           (is (= [[3 66 0 "dirt"]] (places p))))))))
 

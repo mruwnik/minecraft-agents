@@ -226,9 +226,10 @@
                      (do (abandon! c fire outcome) :again))))
           :place (if-not (permitted? c :place pos)
                    (do (abandon! c fire :refused) :again)
-                   (let [status (.-status (await (ctx/act c :place (clj->js {:pos pos :item item}))))]
-                     (if (= "placed" status)
-                       (await (finish-sink! c s))
+                   (let [outcome (await (blocks/place-cell! c pos item {:ignore-zones? true}))]
+                     (case outcome
+                       :continue :continue
+                       (:placed :already) (await (finish-sink! c s))
                        (do (abandon! c fire :place-failed) :again)))))))))
 
 (defn start-sink!

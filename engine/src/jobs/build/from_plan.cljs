@@ -305,12 +305,6 @@
     (ctx/update-mem! c assoc :unplaceable (into {} (keep (fn [[cell d]] (when (:refused d) [(:pos cell) (:refused d)]))) decided))
     (into [] (keep (fn [[cell d]] (when-not (:refused d) (assoc cell :click (:click d))))) decided)))
 
-(defn placed-block
-  "The block a place result reports, in plan.shape's shape, or nil."
-  [r]
-  (when-let [b (.-placed r)]
-    {:name (.-name b) :state (js->clj (.-properties b) :keywordize-keys true)}))
-
 (defn misplaced
   "The text of what was placed (the want's state keys only) when block does not hold want, else nil. A rail's shape
   and power settle as its neighbours land, so the place result is judged by the rail's name alone."
@@ -421,14 +415,17 @@
       (:refused h) (ctx/update-mem! c assoc-in [:unplaceable pos] (:refused h))
       :else
       (let [_ (ctx/update-mem! c assoc :placing pos)
-            r (await (ctx/act c :place (clj->js (cond-> {:pos (zipmap [:x :y :z] pos) :item item}
-                                                  (:click h) (assoc :click (placement/js-click (:click h)))))))
-            wrong (misplaced want item (placed-block r))
+            outcome (await (blocks/place-cell! c (zipmap [:x :y :z] pos) item
+                                               {:for-plan (:plan (:args c)) :ignore-zones? (boolean (:ignore-zones? (:args c)))
+                                                :click (:click h) :clear false}))
             give-up (:give-up (:args c))]
-        (case (.-status r)
-          "placed" (ctx/update-mem! c #(cond-> (update (dissoc % :placing) :placed (fnil inc 0))
-                                         wrong (assoc-in [:misplaced pos] wrong)))
-          ("occupied" "no-item") (ctx/update-mem! c #(count-fail (dissoc % :placing) pos (keyword (.-status r)) give-up))
+        (case outcome
+          :continue :continue
+          :placed (let [wrong (misplaced want item (:block (ctx/child-result c :place)))]
+                    (ctx/update-mem! c #(cond-> (update (dissoc % :placing) :placed (fnil inc 0))
+                                          wrong (assoc-in [:misplaced pos] wrong))))
+          :already (ctx/update-mem! c dissoc :placing)
+          (:occupied :need :no-item) (ctx/update-mem! c #(count-fail (dissoc % :placing) pos (if (= :need outcome) :no-item outcome) give-up))
           (ctx/update-mem! c #(count-fail (dissoc % :placing) pos :refused give-up)))))))
 
 (defn settle-placing!

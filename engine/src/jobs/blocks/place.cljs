@@ -4,8 +4,10 @@
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
             [jobs.lib.fetch :as fetch]
+            [jobs.lib.placement :as placement]
             [jobs.lib.tidy :as tidy]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [engine.game :as game]))
 
 (def doc
   "Place one block at :pos ([x y z] or {:x :y :z}): :item, or the first carried of :any-of. One call is the
@@ -28,7 +30,8 @@
   In reach it places through jobs.lib.tidy/place!, so a block placed in another's zone with :ignore-zones? is
   recorded for jobs.survival.restore-broken.
 
-  Ends with info blocks.place.done and {:placed true|false :pos :item :reason}. :reason is :placed or :already
+  Ends with info blocks.place.done and {:placed true|false :pos :item :reason}; a placed block carries :block
+  {:name :state} as the place act reported it. :reason is :placed or :already
   (the cell holds the block: nothing done): done. Stopped ({:status :stopped}, :placed false): :occupied (another
   block fills the cell), :clear-failed (the plant could not be dug), :bad-args (with a blocks.place.declined
   warn) or :failed (the primitive refused, with its status as :primitive). Declined, the check then waits: :unreachable (the walk failed twice or the place is out of reach), a zone
@@ -45,6 +48,8 @@
    :any-of {:doc "block items, the first carried one is placed (instead of :item)" :default nil}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
+   :clear {:doc "dig a plant, flower or snow layer out of the cell first; false places into what a placement overwrites" :default true}
+   :click {:doc "how to place it ({:against [x y z] :cursor [x y z] :yaw :pitch :sneak}, jobs.lib.placement/click); nil: plainly" :default nil}
    :fetch {:doc "get the missing block item instead of waiting :need (jobs.lib.fetch): true, a set of kinds or a map of limits" :default true}})
 
 (defn wanted [{:keys [item any-of]}]
@@ -73,14 +78,19 @@
   (merge (select-keys (:args c) [:for-plan :ignore-zones?])
          {:pos pos :collect false :need-drop false :accept #{:fluid-adjacent :falling-block}}))
 
+(defn clears?
+  "Whether the call digs block out of the cell before placing (jobs.lib.blocks/clearable, unless :clear is false)."
+  [c block]
+  (and (:clear (:args c) true) (b/clearable block)))
+
 (defn place-verdict
   "The rules' place verdict for pos, a plant there counted as gone (it is dug first). A block without collision
   (seeds, carpet, a sapling: rules/no-collision?) may go where the body stands."
   [c pos items]
-  (let [in (cond-> (b/rules-in c) (every? rules/no-collision? items) (assoc :feet nil))
+  (let [in (cond-> (b/rules-in c) (every? #(rules/no-collision? (game/version-of (:primitives c)) %) items) (assoc :feet nil))
         at (b/cell pos)
         block-at (:block-at in)]
-    (access/may? (assoc in :block-at (fn [cell] (let [n (block-at cell)] (if (and (= cell at) (b/clearable n)) "air" n))))
+    (access/may? (assoc in :block-at (fn [cell] (let [n (block-at cell)] (if (and (= cell at) (clears? c n)) "air" n))))
                  :place pos)))
 
 (defn occupied-by
@@ -110,7 +120,7 @@
           :else (or (when-let [n (needs c items)] (assoc n :reason :need :pos pos))
                     (when-not (b/support? p pos) {:reason :no-support :pos pos})
                     (b/unreachable-wait c (b/mem-for c pos) pos)
-                    (when (b/clearable block) (b/child-wait c :clear 'jobs.blocks.dig (clear-args c pos)))))))))
+                    (when (clears? c block) (b/child-wait c :clear 'jobs.blocks.dig (clear-args c pos)))))))))
 
 (defn check [c]
   (if-let [r (problem c)]
@@ -146,10 +156,13 @@
   "Place the chosen item. Resolves to :done (finished) or :unreachable (the primitive says out of reach)."
   [c pos items]
   (let [item (b/chosen c items)
-        r (await (tidy/place! c pos item))
+        click (:click (:args c))
+        r (await (tidy/place! c pos item false (some-> click placement/js-click)))
         status (.-status r)]
     (case status
-      "placed" (finish! c {:placed true :pos pos :item item :reason :placed})
+      "placed" (finish! c (cond-> {:placed true :pos pos :item item :reason :placed}
+                            (.-placed r) (assoc :block {:name (.-name (.-placed r))
+                                                        :state (js->clj (.-properties (.-placed r)) :keywordize-keys true)})))
       "unreachable" :unreachable
       (stop! c {:placed false :pos pos :item item :reason :failed :primitive status}))))
 
@@ -177,7 +190,7 @@
         r r
         already (finish! c {:placed false :pos pos :item block :reason :already})
         (>= steps max-steps) :continue
-        (b/clearable block)
+        (clears? c block)
         (let [w (await (clear! c pos items))]
           (cond (= :cleared w) (recur fails (inc steps))
                 :else w))
