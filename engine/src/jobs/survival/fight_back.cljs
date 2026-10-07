@@ -79,7 +79,7 @@
 
 (defn note-hit!
   "Record a landed hit on target in :struck {id {:name :hits :health}}, so a
-  parent can tell how close the mob is to dying (see combat/nearly-dead?);
+  parent can tell how close the mob is to dying;
   :health is the attack's reported health, when the layer knows it."
   [c target result]
   (let [h (.-health result)]

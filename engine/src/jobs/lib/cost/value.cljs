@@ -31,6 +31,7 @@
   group one."
   (:require ["minecraft-data" :as minecraft-data]
             [clojure.string :as str]
+            [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.foods :as foods]
             [engine.game :as game]))
 
@@ -43,10 +44,6 @@
 (def min-hardness 0.1)
 (def per-enchant-level 30)
 (def min-durability-share 0.1)
-
-(def tool-tiers
-  "Tier of a harvest tool by its material prefix."
-  {"wooden" 1 "golden" 1 "stone" 2 "copper" 2 "iron" 3 "diamond" 4 "netherite" 4})
 
 (defn tier-factor [tier] (if (<= tier 1) 1 (js/Math.pow 4 (dec tier))))
 
@@ -72,7 +69,7 @@
   (let [tools (some-> (.-harvestTools b) js/Object.keys array-seq)]
     (if (empty? tools)
       0
-      (apply min (map (fn [id] (get tool-tiers (first (str/split (.-name (aget (.-items md) id)) #"_")) 1)) tools)))))
+      (apply min (map (fn [id] (weapon/tool-tier (.-name (aget (.-items md) id)))) tools)))))
 
 (defn natural-values
   "{item name worth} of what blocks no recipe makes drop: the cheapest such block."

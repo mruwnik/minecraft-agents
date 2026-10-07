@@ -3,6 +3,7 @@
   the weapons carried."
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
+            [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.util :as u]
             [jobs.lib.watch :as watch]))
 
@@ -10,11 +11,7 @@
   "Item name substrings that count as weapons; _axe does not match pickaxes."
   ["_sword" "_axe"])
 
-(def ranged-mobs
-  "Hostiles that shoot or throw from a distance, so count from further away."
-  #{"skeleton" "stray" "bogged" "pillager" "witch"})
-
-(defn ranged? [e] (contains? ranged-mobs (.-name e)))
+(defn ranged? [e] (contains? weapon/ranged-mobs (.-name e)))
 
 (defn known-or-raw
   "Hostiles within radius as JS entities: the perception's known mobs (seen or heard) when p has them, else the raw
@@ -50,13 +47,10 @@
 (defn creeper? [e]
   (or (true? (.-creeper e)) (= "creeper" (.-name e))))
 
-(def material-rank
-  {"netherite" 5 "diamond" 4 "iron" 3 "stone" 2 "copper" 2 "golden" 1 "wooden" 0})
-
 (defn weapon-score
   "Higher is better: the material, and swords over axes of the same material."
   [item-name]
-  (+ (get material-rank (first (str/split item-name #"_")) 0)
+  (+ (weapon/weapon-rank item-name)
      (if (str/ends-with? item-name "_sword") 0.5 0)))
 
 (defn weapon? [weapons item-name]
@@ -78,21 +72,6 @@
   (when (and weapon (not= weapon (.-held (.self (:primitives c)))))
     (await (ctx/act c :equip #js {:item weapon :dest "hand"}))))
 
-(def axe-gap-ms
-  {"wooden_axe" 1250 "stone_axe" 1250 "copper_axe" 1250 "iron_axe" 1112 "golden_axe" 1000 "diamond_axe" 1000 "netherite_axe" 1000})
-
-(def min-gap-ms
-  "Mobs ignore damage for 0.5 s after a hit, so a swing sooner than this is wasted."
-  500)
-
-(defn attack-gap-ms
-  "The full-strength attack cooldown in ms of the held item (nil: a fist), at least min-gap-ms."
-  [item-name]
-  (max min-gap-ms
-       (cond
-         (and item-name (str/ends-with? item-name "_sword")) 625
-         :else (get axe-gap-ms item-name min-gap-ms))))
-
 (defn ^:async wait-gap!
   "Spend the rest of the attack gap after a swing at last-attack (ms): look round (watch!), then wait out what is left."
   [c last-attack gap]
@@ -100,30 +79,3 @@
   (let [left (- (+ last-attack gap) (ctx/now c))]
     (when (pos? left)
       (await (ctx/act c :wait #js {:ms left})))))
-
-(def mob-max-health
-  "Full health of the common hostiles; unknown ones count as 20."
-  {"zombie" 20 "husk" 20 "drowned" 20 "zombie_villager" 20 "skeleton" 20 "stray" 20 "bogged" 16
-   "spider" 16 "cave_spider" 12 "creeper" 20 "witch" 26 "pillager" 24 "slime" 16 "silverfish" 8
-   "endermite" 8 "phantom" 20 "vindicator" 24 "enderman" 40})
-
-(def weapon-damage-by-name
-  {"wooden_sword" 4 "golden_sword" 4 "stone_sword" 5 "copper_sword" 5 "iron_sword" 6 "diamond_sword" 7 "netherite_sword" 8
-   "wooden_axe" 7 "golden_axe" 7 "stone_axe" 9 "copper_axe" 9 "iron_axe" 9 "diamond_axe" 9 "netherite_axe" 10})
-
-(defn weapon-damage
-  "Damage of one hit with item-name (a fist, 1, for nil or an unknown item)."
-  [item-name]
-  (get weapon-damage-by-name item-name 1))
-
-(defn remaining-health
-  "What is left of a mob: its reported :health, else full health less :hits times :damage (an estimate)."
-  [{:keys [name hits damage health]}]
-  (if (number? health)
-    health
-    (- (get mob-max-health name 20) (* (or hits 0) damage))))
-
-(defn nearly-dead?
-  "Whether one more hit of damage likely kills the mob."
-  [m]
-  (<= (remaining-health m) (:damage m)))

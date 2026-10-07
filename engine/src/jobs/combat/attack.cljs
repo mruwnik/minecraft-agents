@@ -2,6 +2,7 @@
   (:require [jobs.lib.args :as jargs]
             [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
+            [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.shelter :as sh]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
@@ -230,7 +231,7 @@
   "The least time between swings: :attack-gap-ms, else the held weapon's cooldown."
   [c]
   (or (:attack-gap-ms (:args c))
-      (combat/attack-gap-ms (.-held (.self (:primitives c))))))
+      (weapon/attack-gap-ms (.-held (.self (:primitives c))))))
 
 (defn within-gap?
   "Whether the last swing was less than the gap ago."

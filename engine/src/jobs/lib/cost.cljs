@@ -6,6 +6,8 @@
     armour   armour-stats, after-armour, equipment-of: vanilla's per-hit formula, the only one; fall-damage, fall-profile: a fall's hp and the drops a body takes
              (jobs.lib.cost.armour).
     threat   hostile?, mob-hurt: what one mob does over some seconds, after armour (jobs.lib.cost.threat).
+    weapon   attack-gap-ms, weapon-damage, remaining-health, mob-max-health, ranged-mobs: the fight inputs; the one tool-material table
+             (tool-tier, weapon-rank, cheapness) (jobs.lib.cost.weapon).
     fight    fight-damage, decide: the damage of a fight with the current kit, :fight or :flee (jobs.lib.cost.fight).
     danger   route-danger, straight-route: the danger of a walk past mobs; stance, danger-rate, danger-list: go-to's
              planner dangers (jobs.lib.cost.danger).
@@ -20,6 +22,7 @@
             [jobs.lib.cost.food :as food]
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.cost.tolls :as tolls]
+            [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.cost.value :as value]))
 
 (def equipment-of armour/equipment-of)
@@ -30,6 +33,14 @@
 
 (def hostile? threat/hostile?)
 (def mob-hurt threat/mob-hurt)
+
+(def attack-gap-ms weapon/attack-gap-ms)
+(def weapon-damage weapon/weapon-damage)
+(def remaining-health weapon/remaining-health)
+(def ranged-mobs weapon/ranged-mobs)
+(def tool-tier weapon/tool-tier)
+(def weapon-rank weapon/weapon-rank)
+(def cheapness weapon/cheapness)
 
 (def fight-damage fight/fight-damage)
 (def decide fight/decide)

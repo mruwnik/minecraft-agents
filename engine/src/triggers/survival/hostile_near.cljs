@@ -13,7 +13,7 @@
   "Holds when a real danger is near. A danger is either:
     a known hostile mob within :radius (args, default 8) that has a walkable way to the body
       (jobs.lib.danger: not walled off, not across a pit it cannot climb, body not sealed in), or
-    a known ranged mob (jobs.lib.combat/ranged-mobs) with a line of fire within :ranged-radius (default 16).
+    a known ranged mob (jobs.lib.cost.weapon/ranged-mobs) with a line of fire within :ranged-radius (default 16).
   Only known mobs count (engine.perception's mob memory), so an unseen silent creeper behind the body does not.
   :visible-only false lets a heard melee mob count unseen; the way to the body still counts.
   Players and passive mobs never count. A dead body (a :died entry with no newer :respawned) sees no danger.

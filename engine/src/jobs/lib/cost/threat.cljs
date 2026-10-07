@@ -4,7 +4,7 @@
   A creeper is one blast of 43 (:explosion) however long the exposure; a ranged mob shoots (:projectile); any other
   hits at its mob-dps (3 if unknown) once a second (:melee). Endermen and zombified piglins only fight when provoked."
   (:require ["minecraft-data" :as minecraft-data]
-            [jobs.lib.combat :as combat]
+            [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.cost.armour :as armour]))
 
 (def mob-dps
@@ -27,7 +27,7 @@
 
 (defn damage-type [mob-name]
   (cond (= "creeper" mob-name) :explosion
-        (contains? combat/ranged-mobs mob-name) :projectile
+        (contains? weapon/ranged-mobs mob-name) :projectile
         :else :melee))
 
 (defn base-threat

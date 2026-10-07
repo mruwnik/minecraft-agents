@@ -1,9 +1,9 @@
 (ns jobs.items.get-tool
   (:require ["minecraft-data" :as minecraft-data]
-            [clojure.string :as str]
             [engine.ctx :as ctx]
             [engine.game :as game]
             [jobs.lib.blocks :as b]
+            [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]))
@@ -31,10 +31,6 @@
 
 (def tiered #{"pickaxe" "axe" "shovel" "hoe" "sword"})
 
-(defn rank [n]
-  (let [i (.indexOf tools/cheapness (first (str/split n #"_")))]
-    (if (neg? i) (count tools/cheapness) i)))
-
 (defn known-block?
   "Whether minecraft-data lists the block for the body's version."
   [p name]
@@ -45,7 +41,7 @@
   [p {:keys [block item kind]}]
   (cond
     (and (string? block) (not (known-block? p block))) {:error (str "unknown block " block)}
-    (string? block) (vec (sort-by rank (or (some-> (.harvestTools p block) js->clj) [])))
+    (string? block) (vec (sort-by weapon/cheap-rank (or (some-> (.harvestTools p block) js->clj) [])))
     (string? item) [item]
     (and (string? kind) (tiered kind)) (mapv #(str % "_" kind) tools/cheapness)
     (string? kind) [kind]

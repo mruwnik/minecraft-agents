@@ -2,7 +2,7 @@
   "Which carried tool suits a block."
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
-            [jobs.lib.combat :as combat]
+            [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.util :as u]))
 
 (def shovel-blocks
@@ -22,7 +22,7 @@
   highest material, or nil."
   [item-names block-name]
   (let [suffix (str "_" (tool-kind block-name))
-        rank #(get combat/material-rank (first (str/split % #"_")) 0)]
+        rank weapon/weapon-rank]
     (->> item-names
          (filter #(str/ends-with? % suffix))
          (sort-by rank >)
@@ -30,13 +30,12 @@
 
 (def cheapness
   "Pickaxe materials, cheapest first, as a player would pick the tool to make: gold last (it harvests as wood does)."
-  ["wooden" "stone" "copper" "iron" "diamond" "netherite" "golden"])
+  weapon/cheapness)
 
 (defn cheapest-tool
   "The cheapest of item-names by material (cheapness order; unknown materials last), or nil for none."
   [item-names]
-  (let [rank (fn [n] (let [i (.indexOf cheapness (first (str/split n #"_")))] (if (neg? i) (count cheapness) i)))]
-    (first (sort-by rank item-names))))
+  (first (sort-by weapon/cheap-rank item-names)))
 
 (defn harvest-need
   "nil when the carried items (names) can harvest a block with these harvest-tools (item names; empty when the hand
@@ -50,11 +49,10 @@
   kind and, when harvest-tools is not empty, one of them. Cheapest material first, then the most worn."
   [items block-name harvest-tools]
   (let [suffix (str "_" (tool-kind block-name))
-        ok (set harvest-tools)
-        rank (fn [n] (let [i (.indexOf cheapness (first (str/split n #"_")))] (if (neg? i) (count cheapness) i)))]
+        ok (set harvest-tools)]
     (->> items
          (filter #(and (str/ends-with? (:name %) suffix) (or (empty? ok) (ok (:name %)))))
-         (sort-by (juxt (comp rank :name) #(or (:durability %) js/Infinity)))
+         (sort-by (juxt (comp weapon/cheap-rank :name) #(or (:durability %) js/Infinity)))
          first)))
 
 (defn suited-tool

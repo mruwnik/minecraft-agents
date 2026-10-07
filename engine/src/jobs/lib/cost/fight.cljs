@@ -1,6 +1,6 @@
 (ns jobs.lib.cost.fight
   "The cost of a fight with the current kit (fight-damage) and what the hostile reflex makes of it (decide)."
-  (:require [jobs.lib.combat :as combat]
+  (:require [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.cost.armour :as armour]
             [jobs.lib.cost.threat :as threat]))
 
@@ -14,10 +14,10 @@
   body walks up to it (distance less 3, at walk-speed)."
   [{:keys [weapon equipment mobs]}]
   (let [stats (armour/armour-stats equipment)
-        dmg (combat/weapon-damage weapon)
-        gap-s (/ (combat/attack-gap-ms weapon) 1000)
-        approach (fn [m] (if (contains? combat/ranged-mobs (:name m)) (/ (max 0 (- (:distance m 0) 3)) walk-speed) 0))
-        kill-s (fn [m] (* gap-s (js/Math.ceil (/ (max 0 (combat/remaining-health (assoc m :damage dmg))) dmg))))
+        dmg (weapon/weapon-damage weapon)
+        gap-s (/ (weapon/attack-gap-ms weapon) 1000)
+        approach (fn [m] (if (contains? weapon/ranged-mobs (:name m)) (/ (max 0 (- (:distance m 0) 3)) walk-speed) 0))
+        kill-s (fn [m] (* gap-s (js/Math.ceil (/ (max 0 (weapon/remaining-health (assoc m :damage dmg))) dmg))))
         ends (rest (reductions + 0 (map #(+ (approach %) (kill-s %)) mobs)))]
     (reduce + 0 (map (fn [m end] (threat/mob-hurt stats (:name m) end)) mobs ends))))
 

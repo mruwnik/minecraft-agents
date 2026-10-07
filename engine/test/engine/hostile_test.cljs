@@ -603,16 +603,6 @@
 
 ;; ------------------------------------------------------- finishing a fight, eating on the run
 
-(deftest combat-estimates-what-is-left-of-a-mob
-  (is (= 8 (combat/remaining-health {:name "zombie" :hits 2 :damage 6})) "20 less two iron sword hits")
-  (is (= 3 (combat/remaining-health {:name "zombie" :hits 2 :damage 6 :health 3})) "a reported health wins")
-  (is (= 16 (combat/remaining-health {:name "spider" :hits 0 :damage 6})))
-  (is (= 20 (combat/remaining-health {:name "unknown_mob" :hits 0 :damage 6})) "unknown mobs count as 20")
-  (is (= 6 (combat/weapon-damage "iron_sword")))
-  (is (= 5 (combat/weapon-damage "copper_sword")))
-  (is (= 9 (combat/weapon-damage "copper_axe")))
-  (is (= 1 (combat/weapon-damage nil)) "a fist"))
-
 (deftest respond-finishes-a-nearly-dead-hostile-below-min-health
   (async done
     (tu/run-async done

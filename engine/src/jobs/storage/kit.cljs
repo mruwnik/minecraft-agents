@@ -2,7 +2,7 @@
   (:require [jobs.lib.args :as jargs]
             [clojure.string :as str]
             [engine.ctx :as ctx]
-            [jobs.lib.combat :as combat]
+            [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.food :as food]
             [jobs.lib.fetch :as fetch]
@@ -100,7 +100,7 @@
   [kind name]
   (if (= :food kind)
     (or (foods/points name) 0)
-    (get combat/material-rank (first (str/split name #"_")) 0)))
+    (weapon/weapon-rank name)))
 
 (defn plan
   "{:take {name target} :short {kind n}} for needs against chest-items (maps
