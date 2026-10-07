@@ -5,6 +5,8 @@
 
 (set! *warn-on-infer* true)
 
+(defn- run-move? [m] (or (== m MOVE-WALK) (== m MOVE-DIAGONAL)))
+
 (extend-type Search
   Object
 
@@ -140,6 +142,14 @@
                         (set! (.-move-dmg s) 0))))
                   (recur (inc n) hole pit up-arc)))))))))
 
+  ;; seconds a block of walking costs after node i: the executor sprints a run of three walk or diagonal steps, so a step
+  ;; that follows two of them is priced at sprintS (the gait sets it equal to walkS when the body may not sprint)
+  (runS [s i]
+    (if (and (>= i 0) (run-move? (aget (.-moves s) i)))
+      (let [p (aget (.-parents s) i)]
+        (if (and (>= p 0) (run-move? (aget (.-moves s) p))) (.-c-sprint-s s) (.-c-walk-s s)))
+      (.-c-walk-s s)))
+
   (expandCardinal [s x y z h slow-from i region c h0 ^boolean tight-src ^boolean climbing]
     (let [x2 (+ x (aget (.-adx s) c))
           z2 (+ z (aget (.-adz s) c))
@@ -147,11 +157,11 @@
       (if (>= h1 0)
         (let [y2 (.-ty s)
               delta (- (+ (* y2 16) h1) h0)
-              walk (* (.-c-walk-s s) (+ 1 (* SLOW-EXTRA (+ slow-from (.-enter-slow s)))))
               ;; climbing a stairs block in its direction is a walk, though the node above it is a whole block up
               climbs (and (== (aget (.-tbl-stair s) (.-support s)) (inc c)) (<= delta WHOLE))
               ;; (the body steps off a climbable without a jump: it is already rising)
-              walks (or (<= delta STEP) climbs (and climbing (<= delta JUMP-UP)))]
+              walks (or (<= delta STEP) climbs (and climbing (<= delta JUMP-UP)))
+              walk (* (if walks (.runS s i) (.-c-walk-s s)) (+ 1 (* SLOW-EXTRA (+ slow-from (.-enter-slow s)))))]
           ;; a jump needs headroom over the start column; a tight start's mask checks that itself
           (when (and (or walks (and (<= delta JUMP-UP) (or tight-src ^boolean (.clear s x z h0 (+ (* y2 16) h1 BODY)))))
                      ;; a walk up lifts the body into the slab above its old top: that must be free in the start column
@@ -212,7 +222,7 @@
                          (or (not jump) (zero? slide) (nil? ^js (.-limit-corner s))
                              (true? (^js (.-limit-corner s) x y z (- h0 (* y 16)) x2 y2 z2 h1))
                              (do (set! (.-limit-refused s) true) false)))
-                (let [walk (+ (* (.-c-walk-s s) SQRT2 (+ 1 (* SLOW-EXTRA (+ slow-from (.-enter-slow s))))) (* slide CORNER-S))
+                (let [walk (+ (* (if (or jump (== slide 1)) (.-c-walk-s s) (.runS s i)) SQRT2 (+ 1 (* SLOW-EXTRA (+ slow-from (.-enter-slow s))))) (* slide CORNER-S))
                       touched (+ (.sideTouch s x2 z lo hi) (.sideTouch s x z2 lo hi))
                       brushed (+ touched
                                  ;; a slide over a hole onto lava or fire (the open side is x2 z when sb holds the corner)

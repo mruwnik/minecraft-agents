@@ -83,7 +83,7 @@
 
 (deftest the-walk-through-the-gap-costs-a-plain-walk-plus-tenth-per-tight-cell
   (let [r (plan-course "cocoa-a2-both-feethead")
-        plain (/ (dec (count (steps r))) 4.317)]
+        plain (* (dec (count (steps r))) 0.1781895937277263)] ; (a straight run sprints)
     (is (>= (get-in r [:path :cost :seconds]) (- (+ plain 0.3) 1e-6)))))
 
 (defn gap-start [z pz] {:x 2880 :y 161 :z z :px 2880.9 :pz pz})

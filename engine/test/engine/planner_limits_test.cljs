@@ -31,10 +31,12 @@
 (def bridge (box 5 63 9 6 63 10 "stone"))
 
 (def gap-up-only (merge near-floor (box 7 63 -8 12 64 10 "stone")))
-(def gap-up-around (merge gap-up-only bridge))
+;; (the walk round is long, so that the sprinting gap jump is the cheaper way)
+(def long-bridge (box 5 63 39 6 63 40 "stone"))
+(def gap-up-around (merge (box 0 63 -8 4 63 40 "stone") (box 7 63 -8 12 64 40 "stone") long-bridge))
 
 (def ceiling-only (merge near-floor (box 7 63 -8 12 63 10 "stone") (box 4 66 -8 6 66 10 "stone")))
-(def ceiling-around (merge near-floor (box 7 63 -8 12 63 10 "stone") (box 4 66 -8 6 66 8 "stone") bridge))
+(def ceiling-around (merge (box 0 63 -8 4 63 40 "stone") (box 7 63 -8 12 63 40 "stone") (box 4 66 -8 6 66 38 "stone") long-bridge))
 
 ;; a vine at x 5 against a wall; from its second cell a gap jump over x 6 onto a platform with feet at 66; the walk round
 ;; climbs two blocks at z 9..10

@@ -51,9 +51,9 @@
       (.octileTo s x z (.-goal-x s) (.-goal-z s))))
 
   ;; a goal set's heuristic is the least of its goals' (each admissible and consistent, so their least is too); a block costs
-  ;; at least the cheaper of a walk and a swim (a sneaking walk is dearer than a swim)
+  ;; at least the cheapest of a walk, a sprint and a swim (a sneaking walk is dearer than a swim)
   (heuristic [s x z]
-    (let [per-block (js/Math.min (.-c-walk-s s) (.-c-swim-h s))]
+    (let [per-block (js/Math.min (.-c-walk-s s) (.-c-sprint-s s) (.-c-swim-h s))]
       (if (pos? (.-n-goals s))
         (loop [i 0 best js/Infinity]
           (if (< i (.-n-goals s))

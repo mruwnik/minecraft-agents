@@ -48,7 +48,7 @@
     (is (= "found" (:status r)))
     (is (= 0 (cost r :damage)))
     (is (<= (cost r :maxDrop) 3) "only free drops")
-    (is (> (cost r :seconds) 15))
+    (is (> (cost r :seconds) 10))
     (is (not (:damageRefused r)))))
 
 ;; two 6-drops in a row (3 hp each), the only way: a one-way trip down a pair of ledges

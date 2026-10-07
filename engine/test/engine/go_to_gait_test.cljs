@@ -36,7 +36,7 @@
               walk (await (preview-out flat {:pos [30 64 1] :gait :walk}))
               sneak (await (preview-out flat {:pos [30 64 1] :gait :sneak}))]
           (is (true? (:found sneak)))
-          (is (= (:seconds auto) (:seconds walk)) "walking and auto are priced alike on level ground")
+          (is (< (:seconds auto) (:seconds walk)) "auto sprints a straight run, walking does not")
           (is (> (:seconds sneak) (* 3 (:seconds walk))) "sneak speed is about a third of walking"))))))
 
 (deftest sneaking-steps-down-and-over-a-one-block-gap
@@ -71,7 +71,7 @@
     (.heuristic s x z)))
 
 (deftest the-heuristic-never-overestimates-a-sneaking-swim
-  (is (< (js/Math.abs (- (heuristic-at {} 2 2) (* 10 0.23164234422052352))) 1e-9) "auto: walking seconds, as before")
+  (is (< (js/Math.abs (- (heuristic-at {} 2 2) (* 10 0.1781895937277263))) 1e-9) "auto: sprinting seconds, the cheapest a block costs")
   (is (<= (heuristic-at {:walkS 0.7722007722007722 :sprintS 0.7722007722007722} 2 2) (+ 5 1e-9))
       "sneak: no more than swimming (swimH 0.5 a block)"))
 
