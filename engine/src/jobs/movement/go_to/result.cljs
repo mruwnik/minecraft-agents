@@ -80,7 +80,7 @@
            :stuck (str "the body got stuck" (some->> kind name (str " on ")) (some->> detail (str ": ")))
            :off-plan (or detail "the walk left its plan")
            :steer-failed (str "steering failed" (some->> detail (str ": ")))
-           :cut-again (str "the walk was cut again and again, each time with the body sent back, and got no nearer" (when nearest-hostile (str " (nearest hostile: a " nearest-hostile ")")))
+           :cut-again (str "the walk was cut again and again, each time with the body sent back, and got no nearer" (when nearest-hostile (str " (nearest hostile: " (str/replace (str nearest-hostile) "_" " ") ")")))
            :moved-while-searching "the body was pushed about while the path was searched"
            :needs-health "every way costs more hp than the body may spend and it cannot heal first"
            :one-way "the way back is one-way"

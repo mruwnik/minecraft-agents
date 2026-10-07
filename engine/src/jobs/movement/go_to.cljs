@@ -39,7 +39,7 @@
   - :dangers false plans straight past known dangers (default: the plans keep away from them, jobs.lib.threats). :leg-s n
     walks one leg of at most n s and, when it got more than 1 block nearer, ends {:arrived false :leg true} (job :done)
     for a caller chasing a moving target to call again; a leg that got no nearer goes on as any round.
-  - A call starts afresh from the world: its counters are per call, and a saved escalation is dropped when the body
+  - A call starts afresh from the world: its walk counters are per call (the cut count carries over only a cut of this run's call to the same goal), and a saved escalation is dropped when the body
     is already there (a cut call's memory is a hint).
   - A walk that gets more than 1 block nearer is progress. Three walks in a row without progress give up, and so
     does a goal the planner proves walled in (:goal-enclosed, :goal-cut-off), at once.
@@ -56,7 +56,7 @@
     :escalate false.
   - Gives up with {:status :stopped :arrived false :reason :unreachable :why ... :text words} (the job ends :stopped) and an :unreachable warn: :why is the planner's
     reason (:exhausted, :goal-unloaded (the goal lies in unloaded land and the loaded land leads no nearer), :goal-enclosed, :goal-cut-off, :door-stuck with :cells, :one-way with :near and :one-way ...), or :stuck
-    (:kind the step, :detail the executor's text), :off-plan, :steer-failed, :no-progress, :cut-again (cut 3 times in a row, each restart more than send-back-margin farther than where the cut found the body, with no 2 blocks gained on the closest approach; :nearest-hostile names a guess at the cause) or :moved-while-searching; :at is the
+    (:kind the step, :detail the executor's text), :off-plan, :steer-failed, :no-progress, :cut-again (sent back by 3 cuts, each restart more than send-back-margin farther than where the cut found the body, with no 2 blocks gained on the closest approach in between (in-place cuts do not count or break it); an escalation child's own walk is its own call, a parent waiting on it is not walking; :nearest-hostile names a guess at the cause) or :moved-while-searching; :at is the
     body's feet cell and :near its blocks from the goal. A failed
     escalation adds :escalation {:step :reason ...}, the child's reason or wait.
   - Success is {:arrived true}. The result is also a :result info event.
@@ -190,18 +190,19 @@
                                        (:why result) (assoc :detail (:why result))))
     (ctx/update-mem! c update :fault-cells #(vec (take-last max-fault-cells (distinct (into (vec %) cells)))))))
 
-(def pose-step "Blocks the body's distance to the goal must change before a walk records it again." 0.5)
+(def approaches
+  "This run's record of each open go-to's walk, by job id: {:last-dist :closest}, the body's distance to the goal now and
+  its least. In process, not in job memory: a walk updates it every tick and a memory write is an event."
+  (atom {}))
 
 (defn approach-recorder
-  "The walk's :on-pose for a call to pos: while the round is alive, writes the body's distance to the goal as :last-dist
-  and the least of them as :closest, each time it changed by pose-step, so a cut walk leaves where the cut found it."
+  "The walk's :on-pose for a call to pos: while the round is alive, keeps the body's distance to the goal as :last-dist
+  and the least of them as :closest in approaches, so a cut walk leaves where the cut found it."
   [c pos]
-  (let [written (volatile! nil)]
-    (fn [pose]
+  (fn [pose]
+    (when (ctx/alive? c)
       (let [d (u/dist pose pos)]
-        (when (and (or (nil? @written) (>= (js/Math.abs (- @written d)) pose-step)) (ctx/alive? c))
-          (vreset! written d)
-          (ctx/update-mem! c #(assoc % :last-dist d :closest (min d (:closest % d)))))))))
+        (swap! approaches update (:id c) #(assoc % :last-dist d :closest (min d (:closest % d))))))))
 
 (defn ^:async walk! [c0 pos range doors]
   (let [c (cond-> c0 (:over-budget (ctx/mem c0)) (assoc :over-budget true))
@@ -277,7 +278,7 @@
 
 (defn start-attempt!
   "Begin a call from the world, with memory as a hint: the counters of an earlier call (cut, or ended :continue) start
-  again, and a saved escalation, or a pending one, is dropped when the body is already there (its holes, if any, are
+  again (but for the cut count, kept by note-restart!), and a saved escalation, or a pending one, is dropped when the body is already there (its holes, if any, are
   put back as after a made way)."
   [c pos]
   (let [m (ctx/mem c)
@@ -323,7 +324,9 @@
   "Record this call's start in memory: the call is open (this session) until it returns, an open one found at the start
   was cut. The cut state."
   [c pos]
-  (let [state (cut-state (ctx/mem c) pos (u/dist (u/self-pos c) pos))]
+  (let [walked (get @approaches (:id c))
+        state (cut-state (merge (ctx/mem c) walked) pos (u/dist (u/self-pos c) pos))]
+    (swap! approaches dissoc (:id c))
     (ctx/update-mem! c #(-> % (assoc :open session-id) (merge state)))
     state))
 
@@ -429,4 +432,4 @@
             (let [r (await (step! c pos))]
               (cond
                 (= :again r) (if (ctx/alive? c) (do (await (pace!)) (recur)) :continue)
-                :else (do (ctx/update-mem! c dissoc :open) r)))))))))
+                :else (do (swap! approaches dissoc (:id c)) (ctx/update-mem! c dissoc :open) r)))))))))

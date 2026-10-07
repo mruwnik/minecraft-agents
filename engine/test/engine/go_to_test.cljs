@@ -788,13 +788,13 @@
     (is (= {:goal goal :closest 14 :ref 14 :cuts 0 :last-dist 14} (go-to/cut-state (dissoc m :open) goal 14)))))
 
 (deftest the-cut-again-text-names-the-nearest-hostile-as-a-guess
-  (is (str/includes? (end/give-up-words [10 64 0] {:why :cut-again :nearest-hostile "zombie"}) "nearest hostile: a zombie"))
+  (is (str/includes? (end/give-up-words [10 64 0] {:why :cut-again :nearest-hostile "zombie"}) "nearest hostile: zombie"))
   (is (not (str/includes? (end/give-up-words [10 64 0] {:why :cut-again}) "hostile"))))
 
 (defn ^:async cut-cycles!
   "Run go-to with args under returns-parent over world, cut once for each [pred after!] of cuts: the walk is cut at the
   first pose (js) pred holds for, then (after! p) moves the body (a reflex) and the engine is released; then ticked out.
-  {:eng :p :seen :out :returns :mems}, mems the go-to's memory after each cut."
+  {:eng :p :seen :out :returns :mems}, mems the go-to's memory and walk approach after each cut."
   [world args cuts]
   (let [{:keys [eng p] :as s} (setup world)
         out (atom :not-done)
@@ -802,7 +802,7 @@
         armed (atom nil)
         eng (assoc eng :jobs (assoc (:jobs eng) 'returns-parent (returns-parent out returns args nil)))
         id (atom nil)
-        kid-mem (fn [] (mem/job-mem (mem/view (:store eng)) @id [:kid]))]
+        kid-mem (fn [] (merge (mem/job-mem (mem/view (:store eng)) @id [:kid]) (first (vals @go-to/approaches))))]
     (.override (.-world p) "steer"
                (fn [token ^js a impl]
                  (let [decide (.-decide a)
@@ -853,6 +853,15 @@
           (is (= 3 (count mems)))
           (is (= {:arrived true} @out) (pr-str @out))
           (is (= [6 64 0] (at p))))))))
+
+(deftest a-long-walk-writes-job-memory-a-few-times-not-per-half-block
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out] :as s} (await (go! {:blocks flat} {:pos [38 64 0] :range 0}))
+              writes (events-of s :memory_written)]
+          (is (= {:arrived true} @out) (pr-str @out))
+          (is (<= (count writes) 12) (str (count writes) " memory writes on a 38 block walk")))))))
 
 (deftest a-call-that-yields-continue-is-no-longer-open
   (async done
