@@ -2,6 +2,7 @@
 // The mineflayer layer of the engine: a small set of time-bounded operations, each a cut point. The contract is in
 // engine/README.md (Primitives). Nothing here imports from src/.
 
+import './compile-cache.mjs'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { connectBot } from './connect.mjs'
