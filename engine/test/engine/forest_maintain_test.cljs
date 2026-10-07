@@ -341,11 +341,11 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p eng seen]} (await (run {:blocks (merge (ground [[3 0]]) (lt/tree 3 0 "oak" 8)) :inventory [(item "oak_sapling" 1)]}
-                                               {"forest" oak-cell} {:plan "forest"} 60))]
+                                               {"forest" oak-cell} {:plan "forest" :pillar? false} 60))]
           (is (= [] (vec (.-calls (.-world p)))))
           (is (= [{:pos {:x 3 :y 64 :z 0} :reason :too-tall}] (warns seen :forest.left)))
           (is (not (listed? eng)) "the run ends")
-          (core/submit! eng (list job {:plan "forest"}) {})
+          (core/submit! eng (list job {:plan "forest" :pillar? false}) {})
           (await (ticks eng 40))
           (is (= [] (vec (.-calls (.-world p)))) "a second run does not retry the tree")
           (is (= 1 (count (warns seen :forest.left))))
@@ -487,6 +487,13 @@
 (deftest maintain-hands-its-accept-to-the-fell-child
   (is (= #{:falling-block}
          (:accept (maintain/fell-args {:args {:accept #{:falling-block}}} {:x 3 :y 64 :z 0} "oak")))))
+
+(deftest maintain-fells-a-tall-tree-from-a-pillar-unless-told-not-to
+  (is (false? (maintain/too-tall? {:args {:max-logs 6 :pillar? true}} (range 9))))
+  (is (true? (maintain/too-tall? {:args {:max-logs 6 :pillar? false}} (range 9))))
+  (is (false? (maintain/too-tall? {:args {:max-logs 6 :pillar? false}} (range 6))))
+  (are [on] (= on (:pillar? (maintain/fell-args {:args {:pillar? on}} {:x 3 :y 64 :z 0} "oak")))
+    true false))
 
 (deftest a-declined-dig-hazard-is-refused-not-unreachable
   (are [waits out] (= out (fell-tree/outcome :declined nil waits))

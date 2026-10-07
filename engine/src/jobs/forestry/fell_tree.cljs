@@ -2,11 +2,16 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.watch :as watch]
             [jobs.lib.blocks :as blocks]
+            [jobs.access.pillar :as pillar]
+            [jobs.lib.access :as access]
+            [jobs.lib.access.approach :as approach]
             [jobs.lib.gate :as gate]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.look :as look]
             [jobs.forestry.trees :refer [scan-logs tree-near trees-near tree-at logs-at unreachable-set debts replant-kind
                                           replant-policy default-radius max-partials dig-reach log-name?]]
             [jobs.lib.util :as u]
+            [jobs.lib.walk :as walk]
             [jobs.lib.near :as near]
             [jobs.lib.targets :as targets]))
 
@@ -19,6 +24,13 @@
   one. The search continues over several rounds if needed. If it proves every candidate out of reach, the job
   warns tree_blocked and ends. If it runs out of nodes, it takes the nearest in a line and the walk decides.
   A tree whose walk is blocked, or partial three times in a row, is marked unreachable and the next one is chosen.
+  A log still out of reach once the body stands at the foot is felled from a pillar: jobs.lib.access.approach/plan picks
+  the stand or the pillar base for the highest logs, the body walks there (go-to), builds the pillar
+  (jobs.access.pillar, every block in the scaffold ledger), digs the logs in reach top-down, then jobs.access.cleanup
+  takes the pillar back before the tree counts as felled (the same cleanup runs when a round starts with this job's
+  scaffold still open). With no dirt or cobblestone carried it waits (check) with :reason :need (:any-of the two,
+  :count the height). A tree whose pillar a zone, claim or footprint refuses (warn fell-tree.declined, :reason
+  :refused), or that has no ground or stand to reach it from, counts as unreachable. :pillar? false leaves such a tree.
   Each log is dug by a jobs.blocks.dig child. That child holds the best carried axe and leaves the drop on the
   ground (jobs.forestry.harvest-wood collects it).
   Waits (check) with :reason :no-tree when no tree is in sight, after one look around from where it stands.
@@ -35,6 +47,7 @@
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :default nil}
    :spare-own-builds {:doc "a log in a plan this body made is not felled; false: it may be" :default true}
    :accept {:doc "dig hazards (jobs.lib.access.rules) taken: a set of :fluid-adjacent :falling-block :under-feet" :default #{:fluid-adjacent :falling-block :under-feet}}
+   :pillar? {:doc "fell a log out of reach of the ground from a pillar (blocks placed, then taken back); false: such a tree is left" :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
 (defn log-allowed?
@@ -91,7 +104,7 @@
 (defn ^:async dig-log!
   "Dig the log l (one blocks.dig child round), walking in reach first. Commits the replant debt before the base log
   is dug (write-ahead; withdrawn when the log is still standing after the round). Resolves to :ok, :partial (the walk
-  made progress but is not in reach yet; call again) or a non-ok outcome for the round to count as a failure
+  made progress but is not in reach yet; call again), :high (the log is out of reach from the ground: a pillar) or a non-ok outcome for the round to count as a failure
   (:unreachable, :cannot, :refused and :out-of-reach mean the tree cannot be dug from here)."
   [c l]
   (let [pos (:pos l)
@@ -99,8 +112,10 @@
     (case w
       :blocked :blocked
       :partial :partial
-      (if-not (log-allowed? c pos)
-        :refused
+      (cond
+        (not (log-allowed? c pos)) :refused
+        (and (:pillar? (:args c)) (> (u/eye-dist (u/self-pos c) pos) dig-reach)) :high
+        :else
         (let [base? (= pos (:base (ctx/mem c)))
               wrote? (and base? (record-debt! c))
               args (log-dig-args c pos)
@@ -169,6 +184,113 @@
                              (dissoc :column :species :base)
                              (assoc :partials 0)))))
 
+;; ------------------------------------------------------------------ the pillar
+
+(def pillar-items pillar/default-items)
+
+(defn cell-pos [[x y z]] {:x x :y y :z z})
+
+(defn log-cell [l] (let [{:keys [x y z]} (:pos l)] [x y z]))
+
+(defn pillar-plan
+  "The approach plan (jobs.lib.access.approach/plan) for the highest logs: every log, then without the lowest one at a
+  time until the planner finds a stand or a pillar (a zone refusal ends the tries)."
+  [c logs]
+  (let [in (assoc (access/rules-input c {:except (:for-plan (:args c)) :own-plans-ok? true}) :reach dig-reach)
+        top-down (vec (sort-by #(- (:y (:pos %))) logs))]
+    (loop [n (count top-down)]
+      (let [r (approach/plan (assoc in :targets (set (map log-cell (take n top-down)))))]
+        (if (and (:reason r) (not= :zone (:reason r)) (> n 1))
+          (recur (dec n))
+          r)))))
+
+(defn set-pillar! [c m] (ctx/update-mem! c assoc :pillar m))
+
+(defn pillar-failed!
+  "Take back what was built, then count the tree unreachable."
+  [c]
+  (ctx/update-mem! c update :pillar assoc :phase :clean :failed true)
+  :continue)
+
+(defn carries-block? [c]
+  (some? (pillar/item-to-use nil (pillar/carried (:primitives c)))))
+
+(defn pillar-problem
+  "The wait {:reason :need :any-of :count} while a planned pillar is not begun and no block to build it is carried."
+  [c]
+  (let [{:keys [phase plan]} (:pillar (ctx/mem c))]
+    (when (and (= :walk phase) (:height plan) (not (carries-block? c)))
+      {:reason :need :any-of pillar-items :count (:height plan)})))
+
+(defn ^:async start-pillar!
+  "The next log is out of reach from the ground: plan a stand or a pillar for the highest logs and remember it."
+  [c logs]
+  (let [r (pillar-plan c logs)]
+    (cond
+      (:stand r) (set-pillar! c {:phase :walk :plan {:stand (first (:stand r))}})
+      (:pillar r) (set-pillar! c {:phase :walk :plan (:pillar r)})
+      :else (do (when (= :zone (:reason r))
+                  (ctx/warn-once! c [:pillar-refused] :fell-tree.declined {:reason :refused :why :pillar :text "a zone or plan refuses a pillar by the tree"}))
+                (mark-unreachable! c)))
+    :continue))
+
+(defn ^:async pillar-walk!
+  [c {:keys [plan]}]
+  (let [r (await (ctx/call-child c :pwalk 'jobs.movement.go-to {:pos (cell-pos (or (:base plan) (:stand plan))) :range 0 :escalate false}))
+        res (ctx/child-result c :pwalk)]
+    (cond
+      (= :continue r) :continue
+      (and (= :done r) (:arrived res)) (do (ctx/update-mem! c assoc-in [:pillar :phase] (if (:height plan) :build :dig)) :continue)
+      :else (pillar-failed! c))))
+
+(defn ^:async pillar-build!
+  [c {:keys [plan]}]
+  (let [r (await (ctx/call-child c :pillar 'jobs.access.pillar {:height (:height plan) :ignore-zones? (:ignore-zones? (:args c))}))]
+    (cond
+      (= :continue r) :continue
+      (and (= :done r) (= :done (:status (ctx/child-result c :pillar)))) (do (ctx/update-mem! c assoc-in [:pillar :phase] :dig) :continue)
+      :else (pillar-failed! c))))
+
+(defn ^:async pillar-dig!
+  "Centre on the stand cell the plan counted reach from, then dig the highest log in reach; none in reach: take the
+  pillar back."
+  [c {:keys [plan]} logs]
+  (let [[sx _ sz] (:stand plan)
+        _ (await (walk/centre! c (+ sx 0.5) (+ sz 0.5)))
+        here (u/self-pos c)
+        in-reach (filter #(<= (u/eye-dist here (:pos %)) dig-reach) logs)
+        l (first (sort-by #(- (:y (:pos %))) in-reach))]
+    (if-not l
+      (do (ctx/update-mem! c assoc-in [:pillar :phase] :clean) :continue)
+      (let [r (await (dig-log! c l))]
+        (if (= :ok r)
+          (do (u/progress! c) :continue)
+          (pillar-failed! c))))))
+
+(defn ^:async pillar-clean!
+  "Take the pillar back (jobs.access.cleanup child for this job's blocks); then the tree is unreachable when the pillar failed."
+  [c {:keys [failed]}]
+  (let [r (await (ctx/call-child c :cleanup 'jobs.access.cleanup {:job (:id c)}))]
+    (when-not (= :continue r)
+      (ctx/update-mem! c dissoc :pillar)
+      (when failed (mark-unreachable! c)))
+    :continue))
+
+(defn ^:async pillar-round!
+  "One round of the pillar: walk to its base (or stand), build it, dig from it, take it back."
+  [c logs]
+  (let [m (:pillar (ctx/mem c))]
+    (case (:phase m)
+      :walk (await (pillar-walk! c m))
+      :build (await (pillar-build! c m))
+      :dig (await (pillar-dig! c m logs))
+      :clean (await (pillar-clean! c m)))))
+
+(defn open-scaffold?
+  "Whether this job's scaffold ledger entries are still open (a pillar left by a cut or a restart)."
+  [c]
+  (boolean (some #(ledger/of-instance? (:id c) %) (ledger/open-entries (ctx/view c)))))
+
 (defn walk-failed!
   "Book a walk result of :blocked or :partial against the chosen tree."
   [c r]
@@ -183,6 +305,8 @@
   (let [{:keys [species radius]} (:args c)
         _ (when (and (not (:column (ctx/mem c))) (not (first (candidates c radius species))) (not (look/looked-here? c)))
             (await (look/look-around! c)))
+        _ (when (and (not (:pillar (ctx/mem c))) (open-scaffold? c))
+            (set-pillar! c {:phase :clean}))
         chosen (or (:column (ctx/mem c)) (await (choose-tree! c radius species)))]
     (cond
       (= :searching chosen) :continue
@@ -192,6 +316,8 @@
           :done)
 
       (not chosen) :continue
+
+      (:pillar (ctx/mem c)) (await (pillar-round! c (tree-logs c radius)))
 
       :else
       (let [logs (tree-logs c radius)]
@@ -204,6 +330,7 @@
               :ok (do (ctx/update-mem! c assoc :partials 0)
                       (u/progress! c)
                       :continue)
+              :high (await (start-pillar! c logs))
               (:partial :blocked) (walk-failed! c r)
               (:unreachable :cannot :out-of-reach :refused) (do (mark-unreachable! c) :continue)
               (u/fail! c :tree_blocked (str "cannot dig the tree: " (name r))))))))))
@@ -214,8 +341,10 @@
   [c]
   (let [m (ctx/mem c)
         {:keys [radius species]} (:args c)]
-    (or (boolean (or (:column m)
+    (if-let [w (pillar-problem c)]
+      (ctx/wait c w)
+      (or (boolean (or (:column m)
                      (seq (:unreachable m))
                      (first (candidates c radius species))
                      (not (look/looked-here? c))))
-        (ctx/wait c (cond-> {:reason :no-tree :radius radius} species (assoc :species species))))))
+        (ctx/wait c (cond-> {:reason :no-tree :radius radius} species (assoc :species species)))))))

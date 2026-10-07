@@ -22,7 +22,7 @@
   the planned cells are never touched.
   A bare cell whose sapling is not carried is skipped, with one forest.no-sapling note. A later run plants it.
   A tree is left standing (forest.left, once, and skipped for 30 minutes via body memory :forestry/left) when:
-  - its column holds more than :max-logs logs,
+  - its column holds more than :max-logs logs and :pillar? is false (else it is felled from a pillar),
   - fell-tree gave up on it,
   - a log of it may not be dug (another plan's footprint or a zone; checked for the whole column before the first
     dig and again before every felling round), or
@@ -35,7 +35,8 @@
 (def args
   {:plan {:doc "id of a plan of the body's world; its tree cells are the forest" :default nil}
    :part {:doc "only the cells of this part" :default nil}
-   :max-logs {:doc "a tree whose column holds more logs than this is too tall to fell from the ground and is left" :default 6}
+   :max-logs {:doc "with :pillar? false, a tree whose column holds more logs than this is too tall to fell from the ground and is left" :default 6}
+   :pillar? {:doc "fell a tree too tall for the ground from a pillar (jobs.forestry.fell-tree); false: leave one over :max-logs" :default true}
    :accept {:doc "dig hazards (jobs.lib.access.rules) taken: a set of :fluid-adjacent :falling-block :under-feet"
             :default #{:fluid-adjacent :falling-block}}
    :collect-radius {:doc "how far from where the body stands the drops of a felled tree are collected, in blocks" :default 8}
@@ -256,7 +257,7 @@
   [c logs]
   (some #(when-let [r (refusal c (:pos %))] [(:pos %) r]) logs))
 
-(defn too-tall? [c logs] (> (count logs) (:max-logs (:args c))))
+(defn too-tall? [c logs] (and (not (:pillar? (:args c))) (> (count logs) (:max-logs (:args c)))))
 
 (defn finished-felling!
   "The fell child ended: count the tree felled, or leave it when logs of it still stand; collect either way."
@@ -271,7 +272,7 @@
   "The args of the fell-tree child for the tree of species at pos."
   [c pos species]
   {:at pos :species species :radius 16 :for-plan (:plan (:args c))
-   :accept (:accept (:args c)) :ignore-zones? (:ignore-zones? (:args c))})
+   :accept (:accept (:args c)) :pillar? (:pillar? (:args c)) :ignore-zones? (:ignore-zones? (:args c))})
 
 (defn ^:async fell!
   "Steps 2 and 4: go on with the tree begun, else begin the nearest ripe one. :continue, or nil with no tree."
