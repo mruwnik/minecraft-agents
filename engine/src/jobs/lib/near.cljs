@@ -40,7 +40,7 @@
   explore, a search that ran out of loaded land walks to its frontier (walk/plan-walk! :frontier). With budget, at most
   that many expansions of search (walk/plan-walk! :budget): the plan may be status \"searching\" (walk nowhere, the
   search goes on at the next call) or a walk to where an unfinished search has got to (never, with progress false).
-  With budget, each plan's search is an info :planned event {:ms :status :why :nodes} (nodes only once the search is over).
+  With budget, each plan's search is an info :planned event {:ms :status :sprint :why :nodes} (:sprint: whether the policy lets the plan sprint; nodes only once the search is over).
   With dangers, each plan costs the dangers the body knows of now (jobs.lib.threats/planner-dangers): it keeps away from them.
   With dark (default: unless false), each plan costs dark cells twice (wworld/with-dark: look/dark-fn).
   With avoid (a set of [x y z] cells), each plan costs entering them much more (wworld/with-avoid): a way round is taken when there is one.
@@ -57,7 +57,7 @@
           iron (when-not (= :never doors) (iron-cells c (:steps plan)))]
       (when budget
         (let [^js r (:r plan)]
-          (ctx/emit! c :planned :info (cond-> {:ms (js/Math.round (or (:ms plan) 0)) :status (:status plan)}
+          (ctx/emit! c :planned :info (cond-> {:ms (js/Math.round (or (:ms plan) 0)) :status (:status plan) :sprint (boolean (:sprint policy))}
                                         (some-> r .-reason) (assoc :why (.-reason r))
                                         (some-> r .-expanded) (assoc :nodes (.-expanded r))))))
       (if (seq iron)

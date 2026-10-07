@@ -754,3 +754,27 @@
                   (await (go! {:blocks flat} {:pos [35 64 0] :range 0})))]
           (is (= {:arrived true} @(:out s)))
           (is (= [:danger] (mapv :why (events-of s :replan))) "a wandering, flickering mob is one mob"))))))
+
+(defn gap-strip
+  "Stone strips along x at y 63, z 0: x 0-4 and x (5+n)-(9+n), an n-wide gap; a floor 5 below."
+  [n]
+  (merge (box 0 63 0 4 63 0 "stone") (box (+ 5 n) 63 0 (+ 9 n) 63 0 "stone") (box -2 58 -3 20 58 3 "stone")))
+
+(deftest go-to-does-not-jump-a-gap-at-food-6-or-less
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[n food] [[2 0] [2 6] [3 0] [3 6]]]
+          (let [{:keys [out p]} (await (go! {:blocks (gap-strip n) :self {:pos {:x 0.5 :y 64 :z 0.5} :food food}}
+                                            {:pos [(+ 7 n) 64 0] :range 0 :escalate false}))]
+            (is (false? (:arrived @out)) (str "gap " n " food " food " " (pr-str @out)))
+            (is (= [:abilities :gap-sprint] ((juxt :why :kind) @out)) (str "gap " n " food " food " " (pr-str @out)))
+            (is (< (first (at p)) 5) (str "gap " n " food " food " at " (at p)))))))))
+
+(deftest the-planned-event-says-whether-the-plan-may-sprint
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[food sprint] [[0 false] [6 false] [7 true] [20 true]]]
+          (let [s (await (go! {:blocks flat :self {:pos {:x 0.5 :y 64 :z 0.5} :food food}} {:pos [5 64 0] :range 0}))]
+            (is (= [sprint] (distinct (map :sprint (events-of s :planned)))) (str "food " food))))))))
