@@ -138,6 +138,17 @@
   (let [snapshot (.-snapshot pw) tops (.-top (.-table pw))]
     (fn [x y z] (pos? (aget tops (.stateAt snapshot x y z))))))
 
+(def bounce-blocks
+  "The blocks a fall bounces off (prismarine-physics bounces only slime)."
+  ["slime_block"])
+
+(defn bounce-fn
+  "bounce? for executor/with-bounces over a pathWorld: the block at x y z is a bouncing one."
+  [pw]
+  (let [snapshot (.-snapshot pw)
+        ids (set (mapcat #(blocks/state-ids (.-table pw) %) bounce-blocks))]
+    (fn [x y z] (contains? ids (.stateAt snapshot x y z)))))
+
 (defn default-food [] (settings/get settings ::default-food))
 
 (defn food-of

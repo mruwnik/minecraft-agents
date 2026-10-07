@@ -839,3 +839,74 @@
     (is (false? (boolean (ex/reached? p bend (pose 2.6 64 3.5)))) "in the cell but 0.3 from the corner")
     (is (true? (boolean (ex/reached? p bend (pose 2.4 64 3.5)))) "0.1 from the corner")
     (is (true? (boolean (ex/reached? p (dissoc bend :bend) (pose 2.6 64 3.5)))) "a plain step needs only its cell")))
+
+;; a planned drop onto a bouncing block (slime)
+
+(def slime-drop
+  "Off a ledge 10 high onto a slime pad at x 2 (the drop step is marked :bounce), then on along the ground."
+  [(step 0 74 0 :start) (step 1 74 0 :walk) (step 2 64 0 :drop {:bounce true}) (step 3 64 0 :walk) (step 4 64 0 :walk)])
+
+(defn run-poses
+  "The tick results for poses fed one after another from state st."
+  [st poses]
+  (rest (reductions (fn [r ps] (ex/tick p (:state r) ps)) {:state st} poses)))
+
+(deftest with-bounces-marks-drops-onto-a-bouncing-block
+  (let [steps [(step 0 74 0 :start) (step 1 64 0 :drop) (step 2 64 0 :walk) (step 3 60 0 :drop) (step 4 60 1 :drop {:h 9})]
+        bounce? (fn [x y z] (contains? #{[1 63 0] [2 63 0] [4 60 1]} [x y z]))]
+    (is (= [nil true nil nil true] (map :bounce (ex/with-bounces steps bounce?))))))
+
+(deftest a-bounce-drop-is-not-reached-at-contact
+  (let [r (ex/tick p (state-at slime-drop 2 :tick 30 :since 10) (pose 2.5 64 0.5 {:vy 0.8}))]
+    (is (nil? (:done r)))
+    (is (= 2 (:i (:state r))))))
+
+(deftest the-bounce-stays-on-the-drop-leg
+  (let [rs (run-poses (state-at slime-drop 2 :tick 30 :since 10)
+                      [(pose 2.5 64 0.5 {:vy 0.8})
+                       (pose 2.5 68 0.5 {:vy 0.4 :on-ground false})
+                       (pose 2.5 70.3 0.5 {:vy 0 :on-ground false})
+                       (pose 2.5 66 0.5 {:vy -0.6 :on-ground false})])]
+    (is (every? nil? (map :done rs)))
+    (is (every? #{2} (map (comp :i :state) rs)))))
+
+(deftest a-settled-bounce-goes-on
+  (let [rs (run-poses (state-at slime-drop 2 :tick 30 :since 10)
+                      [(pose 2.5 64 0.5 {:vy 0.8})
+                       (pose 2.5 64 0.5 {:vy 0.1})])]
+    (is (= 3 (:i (:state (last rs)))))))
+
+(deftest a-final-bounce-drop-arrives-only-once-settled
+  (let [steps (subvec slime-drop 0 3)
+        st (state-at steps 2 :tick 30 :since 10)]
+    (is (nil? (:done (ex/tick p st (pose 2.5 64 0.5 {:vy 0.8})))))
+    (is (= :arrived (:status (:done (ex/tick p st (pose 2.5 64 0.5 {:vy 0.05}))))))))
+
+(deftest bouncing-off-the-pad-is-off-plan
+  (let [rs (run-poses (state-at slime-drop 2 :tick 30 :since 10)
+                      [(pose 2.5 64 0.5 {:vy 0.8})
+                       (pose 3.9 67 0.5 {:vy 0.3 :on-ground false})])]
+    (is (= :off-plan (:status (:done (last rs)))))))
+
+(deftest drifting-within-the-pad-is-on-plan
+  (let [rs (run-poses (state-at slime-drop 2 :tick 30 :since 10)
+                      [(pose 2.5 64 0.5 {:vy 0.8})
+                       (pose 3.2 67 0.9 {:vy 0.3 :on-ground false})])]
+    (is (nil? (:done (last rs))))))
+
+(deftest the-bounce-wait-is-bounded
+  (let [bouncing (fn [n] (if (even? n) (pose 2.5 64 0.5 {:vy 0.5}) (pose 2.5 65 0.5 {:vy 0.2 :on-ground false})))
+        wait (:bounce-max-ticks p)
+        rs (vec (run-poses (state-at slime-drop 2 :tick 30 :since 10) (map bouncing (range (+ wait 3)))))]
+    (is (every? nil? (map :done (take wait rs))))
+    (is (every? #{2} (map (comp :i :state) (take wait rs))))
+    (is (= 3 (:i (:state (peek rs)))))
+    (is (nil? (:done (peek rs))))))
+
+(deftest a-plain-drop-is-reached-at-contact
+  (let [steps (assoc-in slime-drop [2 :bounce] nil)]
+    (is (= 3 (:i (:state (ex/tick p (state-at steps 2 :tick 30 :since 10) (pose 2.5 64 0.5 {:vy 0.8}))))))))
+
+(deftest landing-beside-the-pad-cell-is-off-plan
+  (let [r (ex/tick p (state-at slime-drop 2 :tick 30 :since 10) (pose 3.9 64 0.5 {:vy 0.8}))]
+    (is (= :off-plan (:status (:done r))))))

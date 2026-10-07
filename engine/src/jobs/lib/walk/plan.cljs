@@ -95,17 +95,19 @@
         steps (array-seq js-steps)))
 
 (defn path-steps
-  "The executor's steps for a planner path over pw: corner free sides and hops, high corners and gap ceilings marked,
-  and the planned damage of each."
+  "The executor's steps for a planner path over pw: corner free sides and hops, high corners, gap ceilings and drops onto a
+  bouncing block marked, and the planned damage of each."
   [pw ^js path]
   (let [solid? (wworld/solid-fn pw)]
-    (executor/with-gap-ceilings
-      executor/policy
-      (executor/with-high-corners
+    (executor/with-bounces
+      (executor/with-gap-ceilings
         executor/policy
-        (executor/with-corner-hops (executor/with-free-sides (with-damage (executor/steps-of (.-steps path)) (.-steps path)) solid?) solid?)
+        (executor/with-high-corners
+          executor/policy
+          (executor/with-corner-hops (executor/with-free-sides (with-damage (executor/steps-of (.-steps path)) (.-steps path)) solid?) solid?)
+          solid?)
         solid?)
-      solid?)))
+      (wworld/bounce-fn pw))))
 
 (defn plan-steps
   "The executor's steps for a found plan r over pw (path-steps of its path)."
