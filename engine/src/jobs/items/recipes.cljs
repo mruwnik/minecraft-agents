@@ -7,7 +7,8 @@
   before the first craft that needs one). Ingredients are taken from what is carried first, then crafted; a recipe
   whose ingredients are carried is tried before one that needs more crafts. opts: :table? (a table is at hand: no table
   steps), :max-depth (nested crafts, default 6), :gather? (items that are gatherable? and not carried count as
-  gathered, not crafted: the plan then has :gather {name n}, what must be mined or felled before its crafts can run).
+  gathered, not crafted: the plan then has :gather {name n}, what must be mined or felled before its crafts can run),
+  :materials (the stone-materials that count as gatherable, default all; the cheapest recipe among them wins).
   (lacking version have item n) says why a craft cannot start."
   (:require ["minecraft-data" :as minecraft-data]
             [clojure.string]))
@@ -15,9 +16,9 @@
 (def table-item "crafting_table")
 
 (defn gatherable?
-  "Items with no recipe that the body gets by mining or felling: logs, cobblestone, coal."
+  "Items with no recipe that the body gets by mining or felling: logs, coal (and stone-materials)."
   [item]
-  (boolean (or (#{"cobblestone" "coal"} item) (clojure.string/ends-with? item "_log"))))
+  (boolean (or (= "coal" item) (clojure.string/ends-with? item "_log"))))
 
 (defn id-of [x]
   (cond (number? x) x (and (some? x) (number? (.-id x))) (.-id x)))
@@ -48,6 +49,21 @@
 
 (def recipes-for (memoize recipes-of))
 
+(def stone-materials
+  "The blocks stone tools are made from for a version (cobblestone, cobbled_deepslate, blackstone), read off the
+  stone_pickaxe recipes: every ingredient but the stick. Each is gathered like cobblestone."
+  (memoize
+   (fn [version]
+     (->> (get (recipes-for version) "stone_pickaxe") (mapcat (comp keys :needs)) (remove #{"stick"}) set))))
+
+(def material-ranks
+  "{material rank} for a version, 0 the one the most recipes use (cobblestone): the tie-break between materials
+  that gather equally."
+  (memoize
+   (fn [version]
+     (let [uses (frequencies (for [rs (vals (recipes-for version)) r rs k (keys (:needs r))] k))]
+       (into {} (map-indexed (fn [i m] [m i]) (sort-by #(- (uses % 0)) (stone-materials version))))))))
+
 (defn ceil-div [a b] (js/Math.ceil (/ a b)))
 
 (declare make)
@@ -61,7 +77,7 @@
         deficit (- n use)]
     (cond
       (zero? deficit) st
-      (and (:gather? st) (gatherable? item)) (update-in st [:gather item] (fnil + 0) deficit)
+      (and (:gather? st) (or (gatherable? item) (contains? (:materials st) item))) (update-in st [:gather item] (fnil + 0) deficit)
       :else (when-let [st (make rs st item deficit chain depth)]
               (update-in st [:have item] - deficit)))))
 
@@ -86,7 +102,7 @@
                                (update :steps conj {:op :craft :item item :count (* batches (:count r)) :table? (:table? r)})))))]
       (if (:gather? st)
         ;; the option that gathers least (a carried species of log wins over a new one)
-        (first (sort-by #(reduce + 0 (vals (:gather %))) (keep try-option options)))
+        (first (sort-by (juxt #(reduce + 0 (vals (:gather %))) #(reduce + 0 (map (:ranks st) (keys (:gather %))))) (keep try-option options)))
         (some try-option options)))))
 
 (defn lacking
@@ -105,9 +121,9 @@
 
 (defn plan
   "See the ns doc."
-  [version have item n {:keys [table? max-depth gather?] :or {max-depth 6}}]
+  [version have item n {:keys [table? max-depth gather? materials] :or {max-depth 6}}]
   (let [rs (recipes-for version)
-        st0 {:have have :steps [] :gather? gather?}
+        st0 {:have have :steps [] :gather? gather? :materials (or materials (stone-materials version)) :ranks (material-ranks version)}
         with-gather (fn [pl st] (cond-> pl (seq (:gather st)) (assoc :gather (:gather st))))
         main (make rs st0 item n #{} max-depth)
         needs-table (and main (some :table? (:steps main)) (not table?))]

@@ -774,6 +774,24 @@
     (is (= 1 (obtain/fruitless-limit sapling :done)))
     (is (= obtain/max-fruitless (obtain/fruitless-limit sapling :declined)) "a child that could not start broke no leaves")))
 
+(deftest gather-needs-mine-the-block-that-drops-the-material
+  (is (= #{"stone"} (:seen (obtain/gather-need {"cobblestone" 1}))))
+  (let [n (obtain/gather-need {"cobbled_deepslate" 2})]
+    (is (= #{"deepslate"} (:seen n)))
+    (is (= {:block "deepslate" :item "cobbled_deepslate" :count 2} (:args n)))))
+
+(deftest obtain-mines-seen-deepslate-for-a-stone-pickaxe
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (assoc (update (bare [{:name "wooden_pickaxe" :count 1} {:name "oak_planks" :count 4} {:name "stick" :count 4} {:name "crafting_table" :count 1}])
+                                    :blocks merge (into {} (for [x [0 1] z [5 6]] [(str x ",64," z) "deepslate"])))
+                              :drops {"deepslate" "cobbled_deepslate"}
+                              :recipes {"stone_pickaxe" {:count 1 :needs {"cobbled_deepslate" 3 "stick" 2} :table true}}) [own-zone])]
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "stone_pickaxe"}) {})
+          (await (run-ticks s 80))
+          (is (= 1 (get (inv s) "stone_pickaxe"))))))))
+
 (deftest obtain-sapling-does-not-break-leaves-in-another-owners-zone
   (async done
     (tu/run-async done

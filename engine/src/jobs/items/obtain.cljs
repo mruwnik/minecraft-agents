@@ -4,6 +4,7 @@
             [jobs.lib.fetch :as fetch]
             [jobs.lib.look :as look]
             [jobs.items.recipes :as recipes]
+            [jobs.gather.mine :as mine]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
             [jobs.items.craft :as craft]
@@ -27,7 +28,7 @@
     down on a free cell beside the body with a jobs.blocks.place child). Each step is a jobs.items.craft child. The
     names are tried in order; the first with a plan is made. Three fruitless steps stop it (:tried :craft).
   - :gather (in :how): coal comes from a plain or deepslate ore seen; every raw item a chain lacks must be seen before it starts. A sapling (no recipe) comes from the leaves of its tree the body has seen, broken by
-    jobs.gather.get-seeds (at most 20 leaves, one run; the drop is picked up). What a craft chain lacks that has no recipe (logs, cobblestone, coal; recipes/gatherable?) is
+    jobs.gather.get-seeds (at most 20 leaves, one run; the drop is picked up). What a craft chain lacks that has no recipe (logs, coal, stone-tool material; recipes/gatherable?, stone-materials) is
     felled or mined as one child per round, only what the body has seen: logs by jobs.forestry.harvest-wood,
     cobblestone and coal by jobs.gather.mine. The crafts follow once the chain is whole (a chain that is craftable now
     is crafted first). A child that brings in nothing three times stops it (:tried :gather).
@@ -112,20 +113,31 @@
     (clojure.string/ends-with? name "_sapling") (str (subs name 0 (- (count name) (count "_sapling"))) "_leaves")
     (= "mangrove_propagule" name) "mangrove_leaves"))
 
+(defn material-blocks
+  "The blocks mining which gives a stone-material (stone: cobblestone), or nil for any other item. A block
+  that drops itself (blackstone) is its own."
+  [item]
+  (when (contains? (recipes/stone-materials game/default-version) item)
+    (let [bs (set (for [[b d] mine/drop-item :when (= d item)] b))]
+      (if (seq bs) bs #{item}))))
+
 (defn gather-plan
   "The craft chain for the first of names that has one once the raw items it lacks are gathered, with :gather
   {name n} when it lacks any, else nil. A sapling has no recipe: its plan is just :gather {name n}, when its leaves are seen (or its child is running)."
   [c names n]
   (let [p (:primitives c)
         have (carried-counts p)
-        version (game/version-of p)]
+        version (game/version-of p)
+        seen? #(seq (look/seen-blocks p {:names (vec (material-blocks %)) :radius 16 :max 1}))
+        seen (set (filter seen? (recipes/stone-materials version)))
+        materials (if (seq seen) seen (recipes/stone-materials version))]
     (some (fn [name]
             (if-let [leaves (leaves-of name)]
               (when (or (= name (get-in (ctx/mem c) [:gather :item]))
                         (seq (look/seen-blocks p {:match #(= leaves %) :radius 16 :max 1})))
                 {:steps [] :gather {name n} :item name})
               (when-let [pl (recipes/plan version have name n {:table? (boolean (or (:table (ctx/mem c)) (craft/nearest-table p craft-radius)))
-                                                           :gather? true})]
+                                                           :gather? true :materials materials})]
                 (assoc pl :item name))))
           names)))
 
@@ -145,9 +157,10 @@
             {:key sapling :count n :job 'jobs.gather.get-seeds :seen #{(leaves-of sapling)} :max-runs 1
              :args {:item sapling :count n :sources [(leaves-of sapling)] :dry-digs sapling-leaf-limit}})
           (when (pos? logs) [{:key "log" :count logs :job 'jobs.forestry.harvest-wood :seen log? :args {}}])
-          (when-let [n (get gather "cobblestone")]
-            [{:key "cobblestone" :count n :job 'jobs.gather.mine :seen #{"stone"}
-              :args {:block "stone" :item "cobblestone" :count n}}])
+          (for [[k n] gather :when (material-blocks k)]
+            (let [blocks (material-blocks k)]
+              {:key k :count n :job 'jobs.gather.mine :seen blocks
+               :args {:block (first (sort blocks)) :item k :count n}}))
           (when-let [n (get gather "coal")]
             [{:key "coal" :count n :job 'jobs.gather.mine :seen #{"coal_ore" "deepslate_coal_ore"}
               :args {:block "coal_ore" :item "coal" :count n}}])))))

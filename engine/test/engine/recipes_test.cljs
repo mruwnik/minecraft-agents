@@ -45,3 +45,16 @@
   (is (nil? (plan {} "stone_pickaxe" 1)) "without :gather? nothing is assumed")
   (is (nil? (:gather (plan {"oak_log" 3 "cobblestone" 3} "stone_pickaxe" 1 {:gather? true}))) "nothing lacks")
   (is (= {"cobblestone" 2} (:gather (plan {"oak_planks" 4 "stick" 2 "cobblestone" 1 "crafting_table" 1} "stone_pickaxe" 1 {:gather? true :table? true})))))
+
+(deftest stone-tool-materials-come-from-the-recipe-data
+  (is (= #{"cobblestone" "cobbled_deepslate" "blackstone"} (recipes/stone-materials game/default-version))))
+
+(deftest a-stone-pickaxe-accepts-cobbled-deepslate
+  (is (= [[:craft "stone_pickaxe" 1]]
+         (shape (plan {"cobbled_deepslate" 3 "stick" 2} "stone_pickaxe" 1 {:table? true}))))
+  (is (= {"cobbled_deepslate" 3}
+         (:gather (plan {"stick" 2 "crafting_table" 1} "stone_pickaxe" 1 {:gather? true :table? true :materials #{"cobbled_deepslate"}})))
+      "only the seen material is gathered")
+  (is (= {"cobblestone" 3}
+         (:gather (plan {"stick" 2} "stone_pickaxe" 1 {:gather? true :table? true})))
+      "no :materials: the first recipe's"))
