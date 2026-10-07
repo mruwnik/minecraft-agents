@@ -30,4 +30,4 @@
 
 (defn night
   [world memory args kn]
-  (holds? world memory args (sh/bed-permit world kn (:now memory))))
+  (holds? world memory args (sh/bed-permit world kn)))
