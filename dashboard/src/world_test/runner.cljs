@@ -1333,15 +1333,39 @@
         room (- goal/max-text (count tail))]
     (str (if (> (count head) room) (str (subs head 0 (dec room)) "…") head) tail)))
 
+(def goal-dirs
+  "Body dirs whose goal this process set and has not yet cleared."
+  (atom #{}))
+
+(defn clear-goals!
+  "Clears the goal of every body dir in goal-dirs (synchronously, so an exit or signal handler can call it)."
+  []
+  (doseq [dir @goal-dirs]
+    (try (goal/clear-goal! dir) (catch :default _ nil)))
+  (reset! goal-dirs #{}))
+
+(defonce goal-cleanup-installed? (atom false))
+
+(defn install-goal-cleanup!
+  "Once per process: clear-goals! on exit, and on SIGINT / SIGTERM (then exit with 130 / 143), so a killed runner does not
+  leave its goal on an idle body."
+  []
+  (when-not @goal-cleanup-installed?
+    (reset! goal-cleanup-installed? true)
+    (.on js/process "exit" clear-goals!)
+    (doseq [[sig code] [["SIGINT" 130] ["SIGTERM" 143]]]
+      (.on js/process sig (fn [] (clear-goals!) (.exit js/process code))))))
+
 (defn with-goal!
-  "Sets the body goal in body-dir to text, runs thunk (-> promise) and clears the goal when it settles, also on an error.
-  A goal that cannot be written is logged; the run goes on."
+  "Sets the body goal in body-dir to text, runs thunk (-> promise) and clears the goal when it settles, also on an error
+  (and on exit or a signal, see install-goal-cleanup!). A goal that cannot be written is logged; the run goes on."
   [body-dir text thunk]
   (try (goal/write-goal! body-dir text "world-test" (js/Date.now))
+       (swap! goal-dirs conj body-dir)
        (catch :default e (log! "world-test: goal not set: " (.-message e))))
   (-> (js/Promise.resolve nil)
       (.then thunk)
-      (.finally #(goal/clear-goal! body-dir))))
+      (.finally (fn [] (swap! goal-dirs disj body-dir) (goal/clear-goal! body-dir)))))
 
 (defn run-groups!
   "Runs the [case run] pairs of each register group in order on the body, on-result! (result -> any) after each; resolves
@@ -1406,6 +1430,7 @@
   [argv]
   (-> (js/Promise.resolve nil)
       (.then (fn []
+               (install-goal-cleanup!)
                (let [opts (parse-args (array-seq argv))
                      final-results (atom nil)
                      run-start (atom nil)

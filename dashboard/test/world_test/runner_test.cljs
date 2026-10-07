@@ -839,3 +839,22 @@
                                (keeps {:register [{:id "t"}] :expect never-expect})
                                (keeps {:expect [{:no-event {:kind :bad} :for-s 4}]})])
           (.then (fn [oks] (is (every? true? oks)) (done)))))))
+
+(deftest clear-goals-removes-the-goal-of-a-run-still-in-flight
+  (async done
+    (let [dir (fs/mkdtempSync (path/join (os/tmpdir) "runner-goal-"))
+          file (path/join dir "goal.edn")
+          release (atom nil)
+          in-flight (r/with-goal! dir "world-test a/b (run 1, retry 0)" #(js/Promise. (fn [resolve] (reset! release resolve))))]
+      (is (fs/existsSync file))
+      (r/clear-goals!)
+      (is (not (fs/existsSync file)) "the exit and signal handlers call this")
+      (js/setTimeout #(@release nil) 10)
+      (.then in-flight (fn [] (fs/rmSync dir #js {:recursive true}) (done))))))
+
+(deftest goal-cleanup-listens-for-exit-sigint-and-sigterm-once
+  (let [counts #(mapv (fn [s] (.listenerCount js/process s)) ["exit" "SIGINT" "SIGTERM"])
+        before (counts)]
+    (r/install-goal-cleanup!)
+    (r/install-goal-cleanup!)
+    (is (= (mapv inc before) (counts)))))
