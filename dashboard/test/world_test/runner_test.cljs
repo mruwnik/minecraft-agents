@@ -386,6 +386,27 @@
           (.catch (fn [e] (is (= "no rcon" (.-message e))) (is (= [:stop] @calls))))
           (.then done)))))
 
+(deftest phase-time-fix-says-when-the-phase-window-was-left
+  (is (= [nil nil 1000 1000 nil nil 14000 14000 nil nil]
+         [(r/phase-time-fix :day 1000) (r/phase-time-fix :day 10999) (r/phase-time-fix :day 11000) (r/phase-time-fix :day 18000)
+          (r/phase-time-fix :day 23500)
+          (r/phase-time-fix :night 14000) (r/phase-time-fix :night 12999) (r/phase-time-fix :night 22500)
+          (r/phase-time-fix :night-x 20000) (r/phase-time-fix :any 18000)])))
+
+(deftest a-joiner-re-sets-a-drifted-phase-time-and-leaves-an-in-window-one
+  (async done
+    (let [sets (atom [])
+          env (fn [ticks] {:read-ticks #(js/Promise.resolve ticks)
+                           :set-ticks! (fn [t why] (swap! sets conj [t why]) (js/Promise.resolve true))})]
+      (-> (r/refresh-phase-time! (env 11500) :day "c1")
+          (.then (fn [ok] (is (true? ok)) (is (= [1000] (map first @sets))) (reset! sets [])
+                   (r/refresh-phase-time! (env 5000) :day "c1")))
+          (.then (fn [_] (is (empty? @sets))
+                   (r/refresh-phase-time! (env 9000) :night "c2")))
+          (.then (fn [_] (is (= [14000] (map first @sets))) (reset! sets [])
+                   (r/refresh-phase-time! (env 9000) :any "c3")))
+          (.then (fn [_] (is (empty? @sets)) (done)))))))
+
 (defn fake-watch-io
   "A fake clock: now advances by 500 per sleep, plus the jumps (a map sleep-number -> extra ms)."
   [jumps events]

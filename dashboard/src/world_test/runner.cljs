@@ -986,15 +986,36 @@
                              :else (.then (sleep 1000) #(attempt (dec retries)))))))))]
     (attempt 3)))
 
+(defn phase-time-fix
+  "The ticks to `time set` when the world time left the window of phase (:day, :night, :night-x), else nil. A held phase
+  drifts with the clock (a day is 24000 ticks, ~10 real min at the sweep tick rate): day ends ~2 min before dusk (11000), night spans
+  13000-22000."
+  [phase ticks]
+  (case phase
+    :day (when (and ticks (<= 11000 ticks 22999)) 1000)
+    (:night :night-x) (when (and ticks (not (<= 13000 ticks 22000))) 14000)
+    nil))
+
+(defn refresh-phase-time!
+  "Keeps the phase's time of day for the whole phase: re-sets the time (env :set-ticks!, which logs) when it left the window.
+  Resolves to true. env: {:read-ticks (-> promise of ticks or nil), :set-ticks! (ticks why -> promise)}."
+  [{:keys [read-ticks set-ticks!]} phase what]
+  (.then (read-ticks)
+         (fn [ticks]
+           (if-let [fix (phase-time-fix phase ticks)]
+             (.then (set-ticks! fix (str what " found the " (name phase) " phase at " ticks)) (fn [_] true))
+             true))))
+
 (defn hold-phase!
   "Resolves to ok? once stop! (the previous body goes offline, before the wait so it cannot sleep or act meanwhile),
-  this process holds the time lock, the first holder has put the world in the phase (first-set!, resolving to ok?) and
+  this process holds the time lock, the first holder has put the world in the phase (first-set!, resolving to ok?; a
+  joiner runs refresh!, which re-sets the time when it drifted out of the phase) and
   start! (the body start) has run. The body starts under the lock, so it never comes up while another runner's body
   sleeps (its sleep-status would make a night job log out for the whole case)."
-  [{:keys [stop! acquire! first-set! start!]}]
+  [{:keys [stop! acquire! first-set! refresh! start!]}]
   (.then (stop!)
          (fn [_] (.then (acquire!) (fn [held]
-           (.then (if (:first? held) (first-set!) (js/Promise.resolve true))
+           (.then (if (:first? held) (first-set!) (if refresh! (refresh!) (js/Promise.resolve true)))
                   (fn [ok] (.then (start!) (fn [_] ok)))))))))
 
 (defn run-case!
@@ -1025,6 +1046,13 @@
                                          ok
                                          (.then (confirm-phase! (if (#{:night :night-x} phase) :night :day)) (fn [_] ok)))))
                               (.then (fn [ok] (mark-phase-set!) ok))))
+            :refresh! (fn []
+                        (if (or (= :any phase) (not (:allow-time opts)) (some #(= :time-set (first %)) (:act rc)))
+                          (js/Promise.resolve true)
+                          (refresh-phase-time!
+                           {:read-ticks #(.then (rcon! ["time query day"]) (fn [[reply]] (daytime (or reply ""))))
+                            :set-ticks! (fn [ticks why] (set-time! opts ticks why))}
+                           phase (:id c))))
             :start! start!}))
         (.then (fn [ok] (note-last-plot! opts origin grid) ok))
         (.then (fn [ok]
