@@ -283,6 +283,23 @@
     (is (> (cost r :airMin) (- (:airSupply costs) (:airLimit costs))))
     (is (> (cost r :waterSeconds) 15))))
 
+;; a sealed tunnel 3 high (y 64..66) whose middle cell is a dragging column over magma: the head breathes in it, but only
+;; for the moments the body spends there
+(defn column-tunnel [len]
+  (let [mid (+ 11 (bit-shift-right len 1))]
+    (world [[10 64 -2 (+ 12 len) 68 40 "stone"]
+            [11 64 1 (+ 10 len) 66 1 "water"]
+            [10 64 1 10 65 1 "air"]
+            [(+ 11 len) 64 1 (+ 12 len) 65 1 "air"]
+            [mid 63 1 mid 63 1 "magma_block"]
+            [mid 64 1 mid 66 1 "bubble_column" {:drag true}]])))
+
+(deftest a-short-drag-column-is-no-air-station
+  (let [goal (near 49 64 1 0)]
+    (is (= "air" (:reason (run (column-tunnel 36) from2 goal {:goalFlood 0})))
+        "two 9 s dives either side of a column ridden a block: the column gives back 4 s of air a second, not a full breath")
+    (is (found? (run (column-tunnel 36) from2 goal {:goalFlood 0 :costs {:airLimit 24}})))))
+
 ;; ---- water: exits ----
 
 (defn bank-world [bank]
@@ -440,6 +457,11 @@
     (is (found? r))
     (is (re-find #"magma column down" (summary r)))))
 
+(deftest step-after-the-exit-may-enter-the-magma-column-to-come-back-up-beside-it
+  (let [r (run (pools [[16 64 3 16 65 3 "air"] [17 64 3 17 70 3 "water"]]) in-lift (near 17 70 3 0) {:goalFlood 0})]
+    (is (found? r) "down the magma column, out at its bottom, up the water beside it")
+    (is (re-find #"magma column down" (summary r)))))
+
 ;; ---- a drag column: a fast forced descent to its bottom ----
 
 (defn channel
@@ -486,6 +508,28 @@
     (is (not (found? (run (channel true 45) from goal))) "44 blocks back up under water is over the air limit")
     (is (found? (run (channel true 45) from goal {:costs {:airLimit 20}})) "a caller with more breath crosses it")
     (is (found? (run (channel false 45) from goal)) "a lifting column is swum across")))
+
+(defn shelf-channel
+  "channel, but west of the column the water is 1 deep (y 66) on stone: the only way east is into the column's top."
+  []
+  (world [[2 64 0 10 69 2 "stone"]
+          [3 66 1 5 66 1 "water"]
+          [7 64 1 9 66 1 "water"]
+          [3 67 1 9 69 1 "air"]
+          [6 63 1 6 63 1 "magma_block"]
+          [6 64 1 6 66 1 "bubble_column" {:drag true}]]))
+
+(deftest a-way-into-a-drag-column-above-its-bottom-is-one-way
+  (let [r (run (shelf-channel) {:x 3 :y 66 :z 1} (near 20 64 1 0) {:goalFlood 0})
+        ow (:oneWay r)]
+    (is (= "partial" (:status r)))
+    (is (= [6 66 1] [(:x ow) (:y ow) (:z ow)]) "the swim into the column's top cannot be undone")
+    (is (every? #(< (:x %) 6) (steps r)) "the partial path stops before it")))
+
+(deftest a-returnable-search-crosses-a-drag-column-only-at-its-bottom
+  (let [r (run (channel true) {:x 3 :y 66 :z 1} (near 9 66 1 0) {:returnable true})]
+    (is (found? r))
+    (is (= [64] (mapv :y (in-column r))))))
 
 (defn wide-channel
   "channel 3 wide (z 0..2), a dragging column in its middle row only at x 6."

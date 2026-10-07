@@ -52,7 +52,6 @@
    ^:mutable ^boolean quiet ; no special block near the cell being expanded: nothing it looks at is tight
    ^:mutable ^boolean open-mode ; the opening pass of an expansion: closed doors, gates and trapdoors read as open
    ^:mutable ^boolean allow-shut ; standH refuses a shut trapdoor's cell unless the caller pays for opening it
-   ^:mutable ^boolean after-exit ; the node being expanded was reached by an EXIT
    ^:mutable ^boolean gap-seen ; a ladder was refused because the feet would leave it at a gap
    ^:mutable ^boolean air-seen ; a swim move was refused for lack of air
    ^:mutable ^boolean enters-shut ; the last enterCell was a shut trapdoor

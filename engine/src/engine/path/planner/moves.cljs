@@ -1,6 +1,6 @@
 (ns engine.path.planner.moves
   "Search methods: the moves out of a node: walks, diagonals, jumps, drops, gap jumps and climbing."
-  (:require [engine.path.planner.base :refer [ARC ARC-UP BODY CLIMB-TRAP-SHUT CORNER-S GAP-PIT-RISK GAP-S GAP-UP-S GRID HAZARD-SLIDE-RISK JUMP-S JUMP-UP LAVA MOVE-CLIMB-DOWN MOVE-CLIMB-UP MOVE-CORNER MOVE-DIAGONAL MOVE-DROP MOVE-EXIT MOVE-GAP MOVE-JUMP MOVE-JUMP-CLIMB MOVE-OPEN MOVE-SWIM MOVE-WALK SLOW-EXTRA SNAP SQRT2 STEP UNLOADED WATER WHOLE FREE-FALL]]
+  (:require [engine.path.planner.base :refer [ARC ARC-UP BODY CLIMB-TRAP-SHUT CORNER-S GAP-PIT-RISK GAP-S GAP-UP-S GRID HAZARD-SLIDE-RISK JUMP-S JUMP-UP LAVA MOVE-CLIMB-DOWN MOVE-CLIMB-UP MOVE-CORNER MOVE-DIAGONAL MOVE-DROP MOVE-GAP MOVE-JUMP MOVE-JUMP-CLIMB MOVE-OPEN MOVE-SWIM MOVE-WALK SLOW-EXTRA SNAP SQRT2 STEP UNLOADED WATER WHOLE FREE-FALL]]
             [engine.path.planner.search :refer [Search]]))
 
 (set! *warn-on-infer* true)
@@ -32,11 +32,6 @@
                     (or ^boolean (.tightAt s x2 (dec y) z2) ^boolean (.clear s x2 z2 lo (+ h0 BODY))) down
                     :else -1)))))))))
 
-  ;; The step after leaving a soul-sand column sideways must not be into a magma column cell, unless the path is going down it
-  ;; (the goal well below the cell): the body slips in.
-  (magmaTrap [s x y z]
-    (and ^boolean (.-after-exit s) (== (aget (.-tbl-bubble s) (.stateAt ^js (.-snapshot s) x y z)) 2) (not (< (.-goal-y s) (- y 1)))))
-
   (dropIntoWater [s i x y z h region c x2 y2 z2 h0 slow-from ^boolean tight-src]
     (let [fall (- h0 (* y2 16))]
       (when-not (or (< (.swimAt s x2 y2 z2) 0) (> fall (* (.-c-max-water-drop s) 16)))
@@ -66,8 +61,7 @@
         (let [id (.stateAt s x2 y2 z2)]
           (when-not (or (== id UNLOADED) (== (aget (.-tbl-kind s) id) LAVA) ^boolean (.avoids s id x2 y2 z2))
             (if (== (aget (.-tbl-kind s) id) WATER)
-              (when-not ^boolean (.magmaTrap s x2 y2 z2)
-                (.dropIntoWater s i x y z h region c x2 y2 z2 h0 slow-from tight-src))
+              (.dropIntoWater s i x y z h region c x2 y2 z2 h0 slow-from tight-src)
               (let [h1 (.landing s x2 y2 z2)]
                 (if (neg? h1)
                   (when-not (pos? (aget (.-tbl-top s) id)) (recur (dec y2)))
@@ -172,17 +166,16 @@
               (set! (.-move-dmg s) 0))))
         (if (>= (.swimAt s x2 y z2) 0)
           ;; water ahead at our level: walk in and swim
-          (when-not ^boolean (.magmaTrap s x2 y z2)
-            (let [risk (.swimRisk s x2 y z2)
-                  tight (or tight-src ^boolean (.tightAt s x2 y z2))
-                  base (.-c-swim-h s)
-                  extra (if (== (aget (.-tbl-flowing s) (.stateAt ^js (.-snapshot s) x2 y z2)) 1) (.-c-current s) 0)
-                  sec (+ base extra)]
-              (when ^boolean (.swimBegin s i true x2 y z2 base extra false)
-                (if tight
-                  (.tightMove s i x y z h region c x2 y z2 0 MOVE-SWIM sec risk 0 SNAP SNAP)
-                  (.edge s x2 y z2 0 MOVE-SWIM i sec risk 0 0 0))
-                (.swimEnd s))))
+          (let [risk (.swimRisk s x2 y z2)
+                tight (or tight-src ^boolean (.tightAt s x2 y z2))
+                base (.-c-swim-h s)
+                extra (if (== (aget (.-tbl-flowing s) (.stateAt ^js (.-snapshot s) x2 y z2)) 1) (.-c-current s) 0)
+                sec (+ base extra)]
+            (when ^boolean (.swimBegin s i true x2 y z2 base extra false)
+              (if tight
+                (.tightMove s i x y z h region c x2 y z2 0 MOVE-SWIM sec risk 0 SNAP SNAP)
+                (.edge s x2 y z2 0 MOVE-SWIM i sec risk 0 0 0))
+              (.swimEnd s)))
           ;; no ground ahead at our level: the body must at least fit in the column to leave the edge
           (when ^boolean (.clear s x2 z2 h0 (+ h0 BODY))
             (.expandDrop s i x y z h region c x2 z2 h0 slow-from tight-src)
@@ -240,7 +233,6 @@
             tight-src ^boolean (.tightAt s x y z)
             ;; (the same quiet test as for tight cells: no climbable within reach of the cell either)
             climbing (and (not ^boolean (.-quiet s)) ^boolean (.climbHere s x y z))]
-        (set! (.-after-exit s) (and (>= i 0) (== (aget (.-moves s) i) MOVE-EXIT)))
         (if climbing
           (do (.climbUp s i x y z h region)
               (.climbDown s i x y z h region))

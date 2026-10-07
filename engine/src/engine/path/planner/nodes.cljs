@@ -266,11 +266,12 @@
   (stand16 [s node] (+ (* (aget (.-ys s) node) 16) (aget (.-hs s) node)))
 
   ;; The returnable search plans no step the body cannot undo. True when the move is not considered now.
-  ;; A gap jump down and a drop of more than JUMP-UP are refused. Any other drop is held back until the probe
+  ;; A gap jump down, a drop of more than JUMP-UP and a way into a dragging column above its bottom are refused. Any other drop is held back until the probe
   ;; (canReturn) says the body can climb back. The probe runs the moves of another cell, so it cannot run inside an
   ;; expansion: see flushHeld.
   (holdsBack [s x y z h move parent-node dsec drisk slow-to corner shape]
     (cond
+      ^boolean (.dragEntry s x y z parent-node) true
       (== move MOVE-GAP) (< (+ (* y 16) h) (.stand16 s parent-node))
       (== move MOVE-DROP) (do (when-not (> (- (.stand16 s parent-node) (+ (* y 16) h)) JUMP-UP)
                                 (.push ^js (.-held s) #js [x y z h move parent-node dsec drisk slow-to corner shape (.-move-open s) (.-move-air s) (.-move-peak s) (.-move-water s) (.-move-dmg s)]))

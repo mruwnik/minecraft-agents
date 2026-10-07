@@ -228,8 +228,8 @@
      (js/Float64Array. cap) (js/Float64Array. cap)
      (js/Int32Array. cap)
      (js/Int32Array. cap) 0 0
-     ;; support touch enter-risk enter-slow enter-extra ty gap-y quiet open-mode allow-shut after-exit gap-seen air-seen enters-shut
-     0 0 0 0 0 0 0 false false false false false false false
+     ;; support touch enter-risk enter-slow enter-extra ty gap-y quiet open-mode allow-shut gap-seen air-seen enters-shut
+     0 0 0 0 0 0 0 false false false false false false
      ;; move-air move-peak move-water move-open open-lists activators view
      0 0 0 0 #js [] (js/Map.) nil
      ;; edge-mode seen-edges door-arrival door-here door-through open-x open-y open-z

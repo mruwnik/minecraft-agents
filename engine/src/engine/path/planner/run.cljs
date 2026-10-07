@@ -168,12 +168,20 @@
     (set! (.-flooding s) false)
     ^boolean (.-hit s))
 
-  ;; A one-way step cannot be undone with the body's own moves: a gap jump down, a drop of more than JUMP-UP, or a
-  ;; drop the planner has no step-up move back from.
+  ;; a way into a dragging column above its bottom (from outside it): the body's one move there is down
+  (dragEntry [s x y z parent-node]
+    (let [snap ^js (.-snapshot s)]
+      (and (== (aget (.-tbl-bubble s) (.stateAt snap x y z)) 2)
+           (>= (.swimAt s x (dec y) z) 0)
+           (not (== (aget (.-tbl-bubble s) (.stateAt snap (aget (.-xs s) parent-node) (aget (.-ys s) parent-node) (aget (.-zs s) parent-node))) 2)))))
+
+  ;; A one-way step cannot be undone with the body's own moves: a gap jump down, a drop of more than JUMP-UP, a
+  ;; drop the planner has no step-up move back from, or a way into a dragging column above its bottom.
   (isOneWay [s node]
     (let [p (aget (.-parents s) node)
           m (aget (.-moves s) node)]
       (cond
+        ^boolean (.dragEntry s (aget (.-xs s) node) (aget (.-ys s) node) (aget (.-zs s) node) p) true
         (== m MOVE-GAP) (< (.stand16 s node) (.stand16 s p))
         (not (== m MOVE-DROP)) false
         :else (or (> (- (.stand16 s p) (.stand16 s node)) JUMP-UP)
