@@ -34,7 +34,7 @@
 (def fall-limit 256)
 (def bury 3)
 (def passable
-  #{"air" "water" "ladder" "vine" "short_grass" "tall_grass" "rail" "powered_rail" "detector_rail" "activator_rail"})
+  #{"air" "water" "bubble_column" "ladder" "vine" "short_grass" "tall_grass" "rail" "powered_rail" "detector_rail" "activator_rail"})
 ;; small blocks (and crops) with no collision box: the planner and the game walk through them
 (def no-collision #"^(lever|torch|wall_torch|redstone_torch|redstone_wall_torch|wheat|carrots|potatoes|beetroots)$|_(button|pressure_plate|sign|wall_sign|hanging_sign)$")
 (def climbable-names #{"ladder" "vine"})
@@ -47,6 +47,16 @@
 (defn cut-error [] (ex-info "cut: the ownership token changed" {:code "cut"}))
 
 (defn name-at [w x y z] (get-in w [:blocks [x y z]] "air"))
+
+(defn wet?
+  "Is the cell water or a bubble column (swum like water)?"
+  [w x y z]
+  (contains? #{"water" "bubble_column"} (name-at w x y z)))
+
+(defn dragging?
+  "Is the cell a bubble column that pulls down (drag true)? An upward one lifts."
+  [w x y z]
+  (and (= "bubble_column" (name-at w x y z)) (boolean (get-in w [:states [x y z] :drag]))))
 
 (defn solid? [w x y z]
   (let [name (name-at w x y z)]
@@ -104,10 +114,10 @@
         (let [g (ground-at w cx (:y body) cz)
               rise (if (nil? g) js/Infinity (- g (:y body)))
               cell (floor (:y body))
-              wet? (fn [y] (= "water" (name-at w cx y cz)))]
+              wet-y? (fn [y] (wet? w cx y cz))]
           (cond
             ;; a swimmer moves through open water, or over its surface, with no floor under it
-            (and (or (wet? cell) (wet? (dec cell))) (not (solid? w cx cell cz)) (not (solid? w cx (inc cell) cz)))
+            (and (or (wet-y? cell) (wet-y? (dec cell))) (not (solid? w cx cell cz)) (not (solid? w cx (inc cell) cz)))
             (assoc body :x x :z z :collided false)
             (or (<= rise step) (and (<= rise jump-step) jump)) (assoc body :x x :y g :z z :collided false)
             :else (assoc body :collided true))))))))
@@ -120,17 +130,19 @@
         cell (floor (:y body))]
     (cond
       (and jump (not forward) (not (:lifted body)) (= (:y body) cell) (solid? w cx (dec cell) cz)
-           (not= "water" (name-at w cx cell cz)) (not (climbable? w cx cell cz)))
+           (not (wet? w cx cell cz)) (not (climbable? w cx cell cz)))
       (assoc body :y (round (+ (:y body) jump-step)) :vy 0.42 :lifted true)
       (:lifted body) (dissoc body :lifted)
       ;; swimming: a jump rises a cell, with none the body sinks a cell per tick, and a body in the air over water
       ;; falls into it one cell at a time (it neither flies nor drops through to the floor at once)
-      (= "water" (name-at w cx cell cz))
+      (wet? w cx cell cz)
       (cond
-        (and jump (not (solid? w cx (inc cell) cz))) (assoc body :y (inc cell) :vy 0.3)
+        (and (not (dragging? w cx cell cz)) (not (solid? w cx (inc cell) cz))
+             (or jump (= "bubble_column" (name-at w cx cell cz))))
+        (assoc body :y (inc cell) :vy 0.3)
         (solid? w cx (dec cell) cz) (assoc body :vy 0)
         :else (assoc body :y (dec cell) :vy -0.3))
-      (and (not (solid? w cx (dec cell) cz)) (= "water" (name-at w cx (dec cell) cz)))
+      (and (not (solid? w cx (dec cell) cz)) (wet? w cx (dec cell) cz))
       (assoc body :y (dec cell) :vy -0.3)
       :else
     (if (climbable? w cx cell cz)
@@ -176,7 +188,7 @@
      :vy (:vy body)
      :on-ground (and (solid? w cx (dec cell) cz) (= (:y body) cell))
      :on-climbable (climbable? w cx cell cz)
-     :in-water (= "water" (name-at w cx cell cz))
+     :in-water (wet? w cx cell cz)
      :collided (:collided body)
      :yaw yaw
      :t (js/Date.now)}))
