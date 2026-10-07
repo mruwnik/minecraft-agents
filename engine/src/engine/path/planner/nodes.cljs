@@ -227,7 +227,8 @@
         :else
         (let [drisk (if (pos? (.-n-dangers s)) (+ drisk (.dangerRisk s x y z dsec)) drisk)
               extra (if ^boolean (.-avoiding s) (.avoidCost s x y z move dsec drisk) 0)
-              ddark (if (some? (.-dark-at s)) (* (.-dark-factor s) dsec (.darkOf s x y z)) 0)]
+              ddark (+ (if (some? (.-dark-at s)) (* (.-dark-factor s) dsec (.darkOf s x y z)) 0)
+                       (if (some? (.-tolls s)) (* dsec (or (.get ^js (.-tolls s) (cell-key x y z)) 0)) 0))]
           (when-not (neg? extra)
             (let [key (.keyOf s x y z region)
                   slot (.findSlot s key (bit-and (.hashOf s x y z region) (dec (.-slots s))))

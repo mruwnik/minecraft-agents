@@ -10,12 +10,15 @@
              planner dangers (jobs.lib.cost.danger).
     food     food-reserve: the food a body keeps carried, 3 days of it (jobs.lib.cost.food).
     value    item-value, fetch-cost, walk-cost: what items are worth, what fetching them or walking costs (jobs.lib.cost.value);
-             per-dark, dark-factor: the one price of a dark block, which go-to's planner costs."
+             per-dark, dark-factor: the one price of a dark block, which go-to's planner costs.
+    tolls    farm-tolls, zone-tolls: go-to's :tolls for planted cells and zone cells to cross only as a last resort
+             (jobs.lib.cost.tolls)."
   (:require [jobs.lib.cost.armour :as armour]
             [jobs.lib.cost.danger :as danger]
             [jobs.lib.cost.fight :as fight]
             [jobs.lib.cost.food :as food]
             [jobs.lib.cost.threat :as threat]
+            [jobs.lib.cost.tolls :as tolls]
             [jobs.lib.cost.value :as value]))
 
 (def equipment-of armour/equipment-of)
@@ -40,6 +43,9 @@
 (def walk-cost value/walk-cost)
 (def per-dark value/per-dark)
 (def dark-factor value/dark-factor)
+
+(def farm-tolls tolls/farm-tolls)
+(def zone-tolls tolls/zone-tolls)
 
 (def food-reserve food/food-reserve)
 (def food-short food/food-short)

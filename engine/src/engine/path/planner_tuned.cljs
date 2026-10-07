@@ -42,6 +42,8 @@
      dangers together add at most options.dangerCap (4) a second (see dangerRisk). jobs.lib.threats builds them.
    - options.dark {at, factor}: a cell that at(x, y, z) calls dark (returns 1) costs factor times its own seconds
      more, in g and in cost.darkSeconds (see darkOf; jobs.lib.look builds at).
+   - options.tolls {cells}: cells is a Map of cell-key (planner/cell-key) to a factor: entering such a cell costs factor
+     times its own seconds more, in g and in cost.darkSeconds (the caller's price of a cell; no zone knowledge here).
    - options.stopAtEdge: with the goal unloaded, the search ends at the first node it expands at the loaded edge (edgeStop)
      and names it as its frontier, not after searching all loaded land. go-to's budgeted searches set it (walk/new-search)."
   (:require [engine.path.planner.base :as base :refer [OCTILE-SLACK REGIONS TABLE WHOLE next-pow2]]
@@ -164,6 +166,7 @@
         n-dangers (if (some? dangers) (/ (.-length dangers) DANGER-STRIDE) 0)
         ^js dbox (danger-box dangers)
         ^js dark (.-dark options)
+        ^js tolls (.-tolls options)
         dark-at (when (some? dark) (.-at dark))
         dark-factor (if (some? dark) (or-else (.-factor dark) 1) 0)]
     (->Search
@@ -251,7 +254,9 @@
      (aget dbox 0) (aget dbox 1) (aget dbox 2) (aget dbox 3) (aget dbox 4) (aget dbox 5)
      ;; dark-at dark-factor dark-keys dark-flags darks
      dark-at dark-factor
-     (when (some? dark-at) (js/Float64Array. TABLE)) (when (some? dark-at) (js/Uint8Array. TABLE)) (js/Float64Array. cap))))
+     (when (some? dark-at) (js/Float64Array. TABLE)) (when (some? dark-at) (js/Uint8Array. TABLE)) (js/Float64Array. cap)
+     ;; tolls
+     (when (some? tolls) (.-cells tolls)))))
 
 ;; the body's hitbox reaches this far from its centre in x and z
 (def ^:const HITBOX-HALF 0.3)

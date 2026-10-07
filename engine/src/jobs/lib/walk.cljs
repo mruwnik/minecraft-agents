@@ -104,7 +104,7 @@
           wall? (wall-cells snapshot (.-table pw) walls)
           walled (js/Object.create snapshot)]
       (set! (.-stateAt walled) (fn [x y z] (if (contains? wall? [x y z]) id (.stateAt snapshot x y z))))
-      #js {:snapshot walled :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw) :avoid (.-avoid pw) :dark (.-dark pw)})))
+      #js {:snapshot walled :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw) :avoid (.-avoid pw) :dark (.-dark pw) :tolls (.-tolls pw)})))
 
 (def wide-box
   "The planner's search box (options margin and yMargin, blocks round start and goal) of the walks' searches. A way
@@ -155,7 +155,7 @@
   (with-dangers) as options.dangers and its dark (with-dark) as options.dark."
   [pw weight limits box]
   (js/Object.assign #js {:table (.-table pw) :space (.-space pw) :weight weight :limits limits :dangers (.-dangers pw) :avoid (.-avoid pw)
-                         :dark (.-dark pw)}
+                         :dark (.-dark pw) :tolls (.-tolls pw)}
                     (clj->js box)))
 
 (defn with-dangers
@@ -163,7 +163,7 @@
   [pw dangers]
   (if (nil? dangers)
     pw
-    #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers dangers :avoid (.-avoid pw) :dark (.-dark pw)}))
+    #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers dangers :avoid (.-avoid pw) :dark (.-dark pw) :tolls (.-tolls pw)}))
 
 (defn with-dark
   "pw whose plans cost dark cells more (the planner's options.dark): dark is look/dark-fn's {:at ..} (nil: pw). A dark
@@ -171,7 +171,7 @@
   [pw dark]
   (if (nil? dark)
     pw
-    #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw) :avoid (.-avoid pw)
+    #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw) :avoid (.-avoid pw) :tolls (.-tolls pw)
          :dark #js {:at (:at dark) :factor cost/dark-factor}}))
 
 (defn costed-world
@@ -193,9 +193,24 @@
   (if (empty? cells)
     pw
     (let [sorted (vec (sort cells))]
-      #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw) :dark (.-dark pw)
+      #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw) :dark (.-dark pw) :tolls (.-tolls pw)
            :avoid #js {:kinds 0 :factor avoid-factor :list sorted
                        :cells (js/Set. (clj->js (mapv (fn [[x y z]] (planner/cell-key x y z)) sorted)))}})))
+
+(defn with-tolls
+  "pw whose plans cost the cells of tolls ([{:x :y :z :factor}], jobs.lib.cost farm-tolls and zone-tolls) factor times their
+  own seconds more (the planner's options.tolls; none: pw)."
+  [pw tolls]
+  (if (empty? tolls)
+    pw
+    #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw) :dark (.-dark pw) :avoid (.-avoid pw)
+         :tolls #js {:list (vec (sort-by (juxt :x :y :z) tolls))
+                     :cells (js/Map. (clj->js (mapv (fn [{:keys [x y z factor]}] [(planner/cell-key x y z) factor]) tolls)))}}))
+
+(defn tolls-key
+  "What a kept search's key holds of pw's tolls (with-tolls): the cells with their factors, nil for none."
+  [pw]
+  (some-> (.-tolls pw) .-list))
 
 (defn avoid-key
   "What a kept search's key holds of pw's avoided cells (with-avoid): the cells, nil for none."
@@ -473,7 +488,7 @@
 (defn search-key [c to range weight policy walls & [pw]]
   (let [{:keys [x y z]} (body-cell c)]
     (cond-> [[x y z] to range weight policy walls]
-      pw (conj (danger-key pw) (avoid-key pw)))))
+      pw (conj (danger-key pw) (avoid-key pw) (tolls-key pw)))))
 
 (defn goal-unloaded?
   "Whether the snapshot reads the goal cell to [x y z] as unloaded (the planner's goal-unloaded: no goal flood runs)."
