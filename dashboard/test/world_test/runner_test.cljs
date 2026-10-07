@@ -43,6 +43,22 @@
                    (is (re-find #"plot not built.*not loaded" res))
                    (done)))))))
 
+(deftest the-happy-paths-of-build-and-start-check-sleep-never
+  (let [sleeps (atom 0)
+        io (fn [send] {:send send :sleep (fn [_] (swap! sleeps inc) (js/Promise.resolve nil))})
+        at "x has the following entity data: [20016.5d, 150.0d, 20016.5d]"]
+    (async done
+      (-> (r/build-plot! (io (fn [cmds] (js/Promise.resolve (mapv (constantly "ok") cmds))))
+                         f/default-grid [20000 150 20000]
+                         {:plot {:height 4 :floor "stone"} :blocks [[:fill [0 0 0] [1 1 1] "water"]]})
+          (.then (fn [res] (is (nil? res))))
+          (.then #(r/ensure-at-start! (io (fn [cmds] (js/Promise.resolve (mapv (constantly at) cmds))))
+                                      [20000 150 20000] "B" {:body {:at [16.5 0 16.5]}}))
+          (.then (fn [res]
+                   (is (nil? res))
+                   (is (zero? @sleeps) "no fixed sleep when the world is already right")
+                   (done)))))))
+
 (deftest ensure-at-start-retries-the-tp-then-fails-with-a-message
   (let [origin [20000 150 20000]
         c {:body {:at [16.5 0 16.5]}}

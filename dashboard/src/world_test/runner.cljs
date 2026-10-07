@@ -258,14 +258,14 @@
   #js ["--max-old-space-size=128" "--max-semi-space-size=8" "out/body.cjs" "--agent" (:body opts) "--world" (:world opts) "--scenario" scenario "--fresh"])
 
 (defn await-online!
-  "Polls the server's player list (every 250 ms, up to 10 s) until the body is on it, then lets it settle 500 ms."
+  "Polls the server's player list (every 250 ms, up to 10 s) until the body is on it (the start check polls the rest)."
   [opts]
   (let [until (+ (js/Date.now) 10000)]
     (letfn [(poll []
               (.then (rcon! ["list"])
                      (fn [[reply]]
                        (if (or (str/includes? (or reply "") (:body opts)) (> (js/Date.now) until))
-                         (sleep 500)
+                         nil
                          (.then (sleep 250) poll)))))]
       (poll))))
 
@@ -721,8 +721,8 @@
                          (cond
                            pass? nil
                            (zero? retries) (str why " (tp repeated 3 times)")
-                           :else (.then (send [tp]) (fn [_] (.then (sleep 1000) #(check (dec retries))))))))))]
-      (.then (sleep 300) #(check 3)))))
+                           :else (.then (send [tp]) (fn [_] (.then (sleep 300) #(check (dec retries))))))))))]
+      (check 3))))
 
 (defn build-plot!
   "Sends the plot's setup and block commands (idempotent), then checks the replies: a plot whose chunks were not loaded
@@ -731,7 +731,7 @@
   [{:keys [send sleep]} grid origin c]
   (letfn [(attempt [retries]
             (-> (send (f/setup-commands grid origin c))
-                (.then (fn [setup] (.then (sleep 1000) (fn [_] (.then (send (f/block-commands origin c)) #(into setup %))))))
+                (.then (fn [setup] (.then (send (f/block-commands origin c)) #(into setup %))))
                 (.then (fn [replies]
                          (let [bad (f/build-failure replies)]
                            (cond
