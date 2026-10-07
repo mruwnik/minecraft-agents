@@ -127,6 +127,14 @@
     (is (= "Ann" (:username (second entities))))
     (is (= [{:name "skeleton" :direction :north-east :band :near}] heard))))
 
+(deftest perceived-marks-hostile-mobs-and-drops-the-body
+  (let [rows [{:type "zombie" :id 1 :sense :seen :pos {:x 1 :y 64 :z 2}}
+              {:type "cow" :id 2 :sense :seen :pos {:x 3 :y 64 :z 4}}
+              {:type "player" :id 3 :sense :seen :username "Ann" :pos {:x 5 :y 64 :z 6}}
+              {:type "wolf" :id 4 :sense :seen :self? true :pos {:x 0 :y 64 :z 0}}]
+        {:keys [entities]} (snap/perceived rows)]
+    (is (= [["zombie" "hostile"] ["cow" nil] ["player" "player"]] (map (juxt :name :type) entities)))))
+
 (defn capture-stdout [f]
   (let [out (atom "") write (.-write (.-stdout js/process))]
     (set! (.-write (.-stdout js/process)) (fn [s] (swap! out str s) true))

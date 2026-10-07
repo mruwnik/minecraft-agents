@@ -7,6 +7,7 @@
             [agent-tools.http :as http]
             [agent-tools.map :as map-tool]
             [agent-tools.world-data :as data]
+            ["minecraft-data" :as minecraft-data]
             ["node:fs" :as fs]
             ["node:path" :as path]))
 
@@ -121,14 +122,26 @@
 (defn- round1 [n] (/ (js/Math.round (* 10 n)) 10))
 (defn- coords [xs] (str/join " " xs))
 
+(def mc-version "26.1")
+
+(defn- hostile-name?
+  "Same rule as jobs.lib.cost.threat/hostile?: minecraft-data's entity type \"hostile\" (or category \"Hostile mobs\")."
+  [mob-name]
+  (let [e (some-> (minecraft-data mc-version) .-entitiesByName (aget mob-name))]
+    (boolean (and e (or (= "hostile" (.-type e)) (= "Hostile mobs" (.-category e)))))))
+
+(defn- entity-kind [type]
+  (cond (= "player" type) "player"
+        (hostile-name? type) "hostile"))
+
 (defn perceived
   "{:entities :heard} from the body's /entities rows: the :seen rows as pose entities for the renderer, and the :heard
   rows (no position) as {:name :direction :band}. Remembered rows and the body itself are not drawn."
   [rows]
   {:entities (->> rows
-                  (filter #(and (= :seen (:sense %)) (:pos %)))
+                  (filter #(and (= :seen (:sense %)) (:pos %) (not (:self? %))))
                   (mapv (fn [{:keys [type id username pos]}]
-                          (cond-> {:id id :name type :type (when (= "player" type) "player") :pos pos}
+                          (cond-> {:id id :name type :type (entity-kind type) :pos pos}
                             username (assoc :username username)))))
    :heard (->> rows
                (filter #(= :heard (:sense %)))

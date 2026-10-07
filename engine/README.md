@@ -688,7 +688,7 @@ node engine/tools/jobs.mjs Bob --world claude submit '(jobs.movement.go-to {:pos
 node engine/tools/triggers.mjs Bob --world claude list | show hungry | upgrade [ids] | decline [ids] | add hungry --trigger hungry | mute hungry --for 10m | unmute | move X --before Y | reset X --property position | remove X
 node engine/tools/triggers.mjs Bob --world claude put near-home --when '(< (inventory "bread") 8)' --job '(jobs.movement.look-around)' --persistence cooldown --cooldown-s 30
 node engine/tools/say.mjs Bob --world claude [--to Steve] "message"       # chat, shares the engine's rate limits
-node engine/tools/snapshot.mjs Bob --world claude [--yaw 90 --pitch -20 --look-at X,Y,Z]   # PNG of the body's view
+node engine/tools/snapshot.mjs Bob --world claude [--yaw 90 --pitch -20 --look-at X,Y,Z]   # PNG of its view: draws its seen entities, prints :heard and :light
 node engine/tools/time.mjs --world claude clock | dawn --timeout 1200   # world time from a fresh observer pose
 ```
 
