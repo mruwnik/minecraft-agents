@@ -174,13 +174,6 @@
     (boolean (and b (or (and (is :half "upper") (or (str/ends-with? b "_door") (tall-plants b)))
                         (and (is :part "head") (str/ends-with? b "_bed")))))))
 
-(def soft-by-hand #"_leaves$|_wool$|_carpet$|glass")
-
-(defn by-hand?
-  "Whether the block is dug without a tool that suits it (everything but pickaxe blocks, and soft ones)."
-  [block-name]
-  (or (not= "pickaxe" (tools/tool-kind block-name)) (some? (re-find soft-by-hand block-name))))
-
 (defn plan-trouble
   "Why a plan answer with these cells cannot be built, or nil."
   [answer cells]
@@ -363,14 +356,12 @@
 ;; ------------------------------------------------------------------ check
 
 (defn tool-of
-  "The :no-tool wait for the first open dig whose pickaxe block cannot be dug with what is carried, else nil."
+  "The :no-tool wait for the first open dig whose block cannot be harvested with what is carried, else nil."
   [c cells]
   (let [mem (ctx/mem c)
-        closed (merge (:given-up mem) (:refused mem))
-        names (map :name (u/inventory (:primitives c)))]
+        closed (merge (:given-up mem) (:refused mem))]
     (some #(when (and (not (contains? closed (:pos %)))
-                      (not (by-hand? (:found %)))
-                      (nil? (tools/best-tool names (:found %))))
+                      (not (tools/can-harvest? (:primitives c) (:found %))))
              {:reason :no-tool :block (:found %)})
           (digging cells))))
 
@@ -470,13 +461,10 @@
       nil)))
 
 (defn diggable
-  "The cells of digs not closed (given up or refused); a pickaxe block without a pickaxe is given up here as :no-tool."
+  "The cells of digs not closed (given up or refused); a block no carried tool harvests is given up here as :no-tool."
   [c digs closed]
-  (let [names (map :name (u/inventory (:primitives c)))
-        open (remove #(contains? closed (:pos %)) digs)
-        {no-tool true ok false} (group-by #(boolean (and (not (by-hand? (:found %)))
-                                                         (nil? (tools/best-tool names (:found %)))))
-                                          open)]
+  (let [open (remove #(contains? closed (:pos %)) digs)
+        {no-tool true ok false} (group-by #(not (tools/can-harvest? (:primitives c) (:found %))) open)]
     (when (seq no-tool)
       (ctx/update-mem! c update :given-up merge (into {} (map (fn [cell] [(:pos cell) :no-tool])) no-tool)))
     (vec ok)))

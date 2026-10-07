@@ -401,6 +401,14 @@
           (is (= ["oak_fence" "oak_fence"] (mapv #(block p %) [[4 64 3] [2 64 3]])))
           (is (= {:placed 9 :wrong [] :missing [] :given-up {}} (select-keys result [:placed :wrong :missing :given-up]))))))))
 
+(deftest a-wrong-hand-block-outside-the-soft-names-is-dug-by-hand-not-given-up-as-no-tool
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (fence-run {"4,64,3" "ice"} kit {} {}))]
+          (is (= "oak_fence" (block p [4 64 3])))
+          (is (= {} (:given-up result))))))))
+
 (deftest a-wrong-stone-is-dug-with-the-carried-pickaxe-and-without-one-is-given-up-as-no-tool
   (async done
     (tu/run-async done
