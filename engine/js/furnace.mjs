@@ -108,8 +108,8 @@ const OPS = {
 
 export async function furnaceVisit (bot, ctx, a, { distanceTo, reach, settle }) {
   const block = bot.blockAt(new Vec3(a.pos.x, a.pos.y, a.pos.z))
-  if (!block || block.name === 'air') return { status: 'missing' }
-  if (!FURNACE.test(block.name)) return { status: 'cannot', reason: 'not-a-furnace' }
+  if (!block || block.name === 'air') return { status: 'missing', block: block ? block.name : 'nothing' }
+  if (!FURNACE.test(block.name)) return { status: 'cannot', reason: 'not-a-furnace', block: block.name }
   const distance = distanceTo(a.pos)
   if (distance > reach) return { status: 'unreachable', reason: 'too-far', distance: Math.round(distance * 100) / 100 }
   const bars = collectBars(bot)

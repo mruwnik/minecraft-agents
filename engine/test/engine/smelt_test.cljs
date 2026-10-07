@@ -44,10 +44,10 @@
   (are [item] (nil? (smelt/fuel-per-unit "furnace" item))
     "crimson_planks" "warped_planks" "crimson_stem" "warped_hyphae"))
 
-(deftest the-quick-kinds-smelt-twice-the-items-per-fuel-item
+(deftest the-quick-kinds-burn-fuel-twice-as-fast-so-an-item-costs-the-same
   (are [kind item per] (= per (smelt/fuel-per-unit kind item))
-    "blast_furnace" "coal" 16
-    "smoker" "oak_planks" 3
+    "blast_furnace" "coal" 8
+    "smoker" "oak_planks" 1.5
     "smoker" "dirt" nil))
 
 (deftest cook-times-per-kind
@@ -90,7 +90,7 @@
 
 (deftest a-quick-kind-is-not-over-fuelled
   (are [kind item expected] (= expected (plan {:carried (inv item 20 "coal" 3) :item item :count 20 :state (assoc empty-furnace :kind kind)}))
-    "blast_furnace" "raw_iron" {:item "raw_iron" :count 20 :fuel {:item "coal" :count 2}}
+    "blast_furnace" "raw_iron" {:item "raw_iron" :count 20 :fuel {:item "coal" :count 3}}
     "furnace" "raw_iron" {:item "raw_iron" :count 20 :fuel {:item "coal" :count 3}}))
 
 (deftest real-fuel-is-chosen-over-nether-wood
@@ -504,6 +504,36 @@
               _ (await (ticks eng 2))]
           (is (= "output-gone" (:reason (first (of-kind seen :smelt.gave-up)))))
           (is (empty? (:list (core/state eng)))))))))
+
+(deftest a-blast-furnace-cooks-four-iron-on-two-planks-without-a-second-load
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (setup {:blocks {pos-key "blast_furnace"}
+                                            :inventory [{:name "raw_iron" :count 4} {:name "oak_planks" :count 4}]})
+              _ (core/submit! eng '(jobs.items.smelt {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 4 :fuel "oak_planks"}) {})
+              _ (await (ticks eng 1))]
+          (is (= {:name "oak_planks" :count 3} (select-keys (:fuel (furnace-of p)) [:name :count])) "4 iron need 3 planks")
+          (advance! p 2000)
+          (swap! clock + 100000)
+          (await (ticks eng 2))
+          (is (= 4 (get (inv-of p) "iron_ingot")))
+          (is (= 1 (get (inv-of p) "oak_planks")))
+          (is (empty? (:list (core/state eng)))))))))
+
+(deftest the-furnace-gone-warning-names-the-block-the-body-saw
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen clock]} (setup base-world)
+              _ (core/submit! eng iron-job {})
+              _ (await (ticks eng 1))
+              _ (fake/set-block! p (fake/parse-cell pos-key) "chest")
+              _ (swap! clock + 40000)
+              _ (await (ticks eng 2))
+              ev (first (of-kind seen :smelt.gave-up))]
+          (is (= "furnace-gone" (:reason ev)))
+          (is (re-find #"chest" (:text ev))))))))
 
 (deftest a-furnace-replaced-by-another-block-mid-cook-is-gone
   (async done

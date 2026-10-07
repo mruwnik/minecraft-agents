@@ -2670,8 +2670,8 @@ test('furnace reads a furnace within reach and reports a refusal as data when it
   const { p } = rig({ blocks: { '0,64,2': 'furnace', '0,64,3': 'furnace', '9,64,0': 'furnace', '1,64,0': 'dirt' } })
   assert.deepEqual(await p.furnace('t1', { pos: at(0, 64, 2), op: 'read' }), { status: 'ok', kind: 'furnace', input: null, fuel: null, output: null, lit: false, burn: null, cook: null })
   assert.deepEqual(await p.furnace('t1', { pos: at(9, 64, 0), op: 'read' }), { status: 'unreachable', reason: 'too-far', distance: 9.58 })
-  assert.deepEqual(await p.furnace('t1', { pos: at(1, 64, 0), op: 'read' }), { status: 'cannot', reason: 'not-a-furnace' })
-  assert.deepEqual(await p.furnace('t1', { pos: at(5, 64, 5), op: 'read' }), { status: 'missing' })
+  assert.deepEqual(await p.furnace('t1', { pos: at(1, 64, 0), op: 'read' }), { status: 'cannot', reason: 'not-a-furnace', block: 'dirt' })
+  assert.deepEqual(await p.furnace('t1', { pos: at(5, 64, 5), op: 'read' }), { status: 'missing', block: 'air' })
 })
 
 test('blockAt marks a block fullCube only when its collision shape fills the cell', () => {

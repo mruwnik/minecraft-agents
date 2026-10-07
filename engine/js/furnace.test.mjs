@@ -150,8 +150,8 @@ for (const kind of ['furnace', 'blast_furnace', 'smoker']) {
 }
 
 const refusals = [
-  { label: 'no block', setup: { block: 'air' }, expect: { status: 'missing' } },
-  { label: 'another container', setup: { block: 'chest' }, expect: { status: 'cannot', reason: 'not-a-furnace' } },
+  { label: 'no block', setup: { block: 'air' }, expect: { status: 'missing', block: 'air' } },
+  { label: 'another container', setup: { block: 'chest' }, expect: { status: 'cannot', reason: 'not-a-furnace', block: 'chest' } },
   { label: 'too far', setup: { far: true }, expect: { status: 'unreachable', reason: 'too-far', distance: 9.57 } }
 ]
 for (const op of ['read', 'load', 'take']) {

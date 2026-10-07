@@ -93,8 +93,8 @@
 
 (deftest refused-as-data
   (doseq [{:keys [label spec args expect]}
-          [{:label "no block there" :args {:pos [2 64 0] :op "read"} :expect {:status "missing"}}
-           {:label "a chest" :spec {:blocks {at "chest"}} :args {:op "read"} :expect {:status "cannot" :reason "not-a-furnace"}}
+          [{:label "no block there" :args {:pos [2 64 0] :op "read"} :expect {:status "missing" :block "air"}}
+           {:label "a chest" :spec {:blocks {at "chest"}} :args {:op "read"} :expect {:status "cannot" :reason "not-a-furnace" :block "chest"}}
            {:label "too far" :spec {:blocks {at "furnace" [9 64 0] "furnace"}} :args {:pos [9 64 0] :op "read"}
             :expect {:status "unreachable" :reason "too-far" :distance 9}}
            {:label "an item not carried" :args {:op "load" :input {:item "cobblestone" :count 1}}

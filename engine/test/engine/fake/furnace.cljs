@@ -127,8 +127,8 @@
   (let [block (get-in w [:blocks pos])
         distance (when pos (pockets/distance (get-in w [:self :pos]) pos))]
     (cond
-      (or (nil? block) (= block "air")) [w {:status "missing"}]
-      (not (kinds block)) [w {:status "cannot" :reason "not-a-furnace"}]
+      (or (nil? block) (= block "air")) [w {:status "missing" :block (or block "air")}]
+      (not (kinds block)) [w {:status "cannot" :reason "not-a-furnace" :block block}]
       (> distance reach) [w {:status "unreachable" :reason "too-far" :distance (pockets/round2 distance)}]
       :else
       (let [f (get-in w [:furnaces pos] empty-furnace)

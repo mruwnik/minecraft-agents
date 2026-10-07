@@ -71,17 +71,16 @@
   (boolean (and (re-find #"_(planks|log|wood)$" name) (not (re-find #"^(crimson|warped)_" name)))))
 
 (defn fuel-per-unit
-  "How many items one fuel item smelts in a kind of furnace (the quick kinds cook twice as many), or nil when it
-  is no fuel this job knows."
+  "How many items one fuel item smelts (the same in every kind: the quick ones cook and burn twice as fast), or nil
+  when it is no fuel this job knows."
   [kind name]
-  (when-let [per (cond
-                   (#{"coal" "charcoal"} name) 8
-                   (= "coal_block" name) 80
-                   (= "blaze_rod" name) 12
-                   (= "dried_kelp_block" name) 20
-                   (wood-fuel? name) 1.5
-                   (= "stick" name) 0.5)]
-    (* per (/ (cook-ticks "furnace") (cook-ticks kind)))))
+  (cond
+         (#{"coal" "charcoal"} name) 8
+         (= "coal_block" name) 80
+         (= "blaze_rod" name) 12
+         (= "dried_kelp_block" name) 20
+         (wood-fuel? name) 1.5
+         (= "stick" name) 0.5))
 
 (defn fuel-rank
   "Lower burns first: coal and charcoal, then wood, then sticks, then the rest."
@@ -251,10 +250,12 @@
     :done))
 
 (defn stop!
-  "Warn and finish with a reason."
-  [c reason]
-  (ctx/emit! c :smelt.gave-up :warn {:reason reason :text (str "smelt gave up: " reason)})
-  (finish! c {:reason reason}))
+  "Warn and finish with a reason; block is the block the body saw where the furnace should be."
+  ([c reason] (stop! c reason nil))
+  ([c reason block]
+   (ctx/emit! c :smelt.gave-up :warn (cond-> {:reason reason :text (str "smelt gave up: " reason (when block (str " (saw " block ")")))}
+                                       block (assoc :block block)))
+   (finish! c {:reason reason})))
 
 (defn ^:async stop-back!
   "Give up after a load: leftover input goes back to the pockets first."
@@ -368,8 +369,8 @@
         "ok" (if (and owed? (:ready-at (ctx/mem c)))
                (await (collect! c state))
                (await (start! c state)))
-        "missing" (stop! c (if owed? "furnace-gone" "no-furnace"))
-        "cannot" (stop! c (if owed? "furnace-gone" "not-a-furnace"))
+        "missing" (stop! c (if owed? "furnace-gone" "no-furnace") (:block state))
+        "cannot" (stop! c (if owed? "furnace-gone" "not-a-furnace") (:block state))
         "unreachable" (give-up! c "unreachable")
         (stop! c (str "furnace " (:status state)))))))
 
