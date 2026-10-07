@@ -21,7 +21,7 @@
      jobs.items.smelt
      jobs.items.enchant jobs.items.obtain jobs.items.get-tool jobs.items.fetch-limits
      jobs.build.from-plan jobs.build.pen jobs.build.rail-line
-     jobs.access.pillar
+     jobs.access.pillar jobs.access.bridge
      jobs.explore.search jobs.explore.look
      jobs.combat.hunt jobs.gather.get-seeds jobs.gather.mine
      jobs.movement.go-to jobs.movement.path-preview jobs.movement.look-around jobs.movement.follow jobs.movement.leave-vehicle jobs.movement.mount jobs.movement.linger-near jobs.survival.block-arrow-gap
