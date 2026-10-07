@@ -3,21 +3,9 @@
   (:require [jobs.lib.foods :as foods]
             [engine.memory :as mem]))
 
-(def default-food 6)
-
 (def default-health
   "Below this health (of 20) carried food is eaten up to a full bar: saturation heals fastest on a full bar."
   7)
-
-(def top-up-food
-  "Natural regeneration needs food of at least this much (of 20)."
-  18)
-
-(defn hungry?
-  "Food is below :food (default 6) plus one per missing hp, at most top-up-food: a hurt body below 18 food does not
-  heal, so the more hurt it is the sooner it looks for food."
-  [food health args]
-  (< food (min top-up-food (+ (:food args default-food) (- 20 health)))))
 
 (def rare-food
   "Foods kept for emergencies; never eaten just to top up."
@@ -27,7 +15,7 @@
   "Health is below full, food is below top-up-food and a common food is
   carried (names: the carried item names): eat to regenerate like a player."
   [food health carried-names]
-  (boolean (and (< health 20) (< food top-up-food)
+  (boolean (and (< health 20) (< food foods/top-up-food)
                 (some #(and (foods/edible? %) (not (rare-food %))) carried-names))))
 
 (defn carried-names [self]
@@ -74,7 +62,7 @@
                   (< (wheat-carried self) bake-wheat)
                   (not (and learned (> learned gave-up)))))))
 
-(def defaults {:food default-food :health default-health :rest-s default-rest-s})
+(def defaults {:food foods/default-food :health default-health :rest-s default-rest-s})
 
 (defn hungry
   "Holds when hungry? says so, top-up? does (a hurt body below 18 food carrying common food), or eat-now? does.
@@ -83,7 +71,7 @@
   searching again every cooldown. The rest ends when food is carried, wheat to bake is, or a food source is learned."
   [world memory args]
   (let [self (.self world)]
-    (and (or (hungry? (.-food self) (.-health self) args)
+    (and (or (foods/hungry? (.-food self) (.-health self) args)
              (top-up? (.-food self) (.-health self) (carried-names self))
              (eat-now? self args))
          (not (resting? self memory args)))))

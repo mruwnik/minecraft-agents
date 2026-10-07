@@ -39,7 +39,7 @@
   this run): :eating (a meal under way), :tried-sources, :skipped-blocks, :skipped-animals.")
 
 (def args
-  {:food {:doc "hungry below this much food (of 20)" :default hungry/default-food}
+  {:food {:doc "hungry below this much food (of 20)" :default foods/default-food}
    :health {:doc "below this health eat up to a full bar" :default hungry/default-health}
    :source-radius {:doc "how far away a remembered food source still counts, in blocks" :default 64}
    :hunt-radius {:doc "how far to look for animals and wild crops, in blocks" :default 24}
@@ -78,7 +78,7 @@
 
 (defn hungry-now? [c]
   (let [self (.self (:primitives c))]
-    (hungry/hungry? (.-food self) (.-health self) (:args c))))
+    (foods/hungry? (.-food self) (.-health self) (:args c))))
 
 (defn check
   "Hungry, or in the middle of a meal that began when it was."
@@ -411,7 +411,7 @@
   [c]
   (let [low? (< (.-health (.self (:primitives c))) (:health (:args c)))
         _ (ctx/update-mem! c assoc :eating true)
-        st (await (child/run! c :eat 'jobs.survival.eat {:until (if low? 20 hungry/top-up-food)}))]
+        st (await (child/run! c :eat 'jobs.survival.eat {:until (if low? 20 foods/top-up-food)}))]
     (if (= :continue st)
       :continue
       (do (ctx/update-mem! c dissoc :eating) nil))))

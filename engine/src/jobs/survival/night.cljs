@@ -16,6 +16,7 @@
             [jobs.lib.places :as places]
             [triggers.survival.night :as night]
             [triggers.survival.hungry :as hungry]
+            [jobs.lib.foods :as foods]
             [jobs.survival.dig-in :as dig-in]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.dig-in-leave :as dig-leave]
@@ -118,7 +119,7 @@
   (let [p (:primitives c)
         self (.self p)
         health (.-health self)
-        best (when (and (not (sh/sleeping? p)) (or (hungry/hungry? (.-food self) health {}) (hungry/eat-now? self {})))
+        best (when (and (not (sh/sleeping? p)) (or (foods/hungry? (.-food self) health {}) (hungry/eat-now? self {})))
                (eat/best-food (u/inventory p) false nil health))]
     (when best
       (await (ctx/act c :equip #js {:item best}))

@@ -41,3 +41,15 @@
   "A food worth carrying as food: any food that is not harmful."
   [item]
   (and (food? item) (not (contains? harmful item))))
+
+(def default-food "Hungry below this much food (of 20), plus one per missing hp." 6)
+
+(def top-up-food
+  "Natural regeneration needs food of at least this much (of 20)."
+  18)
+
+(defn hungry?
+  "Food is below :food (default 6) plus one per missing hp, at most top-up-food: a hurt body below 18 food does not
+  heal, so the more hurt it is the sooner it looks for food. The hungry trigger's line."
+  [food health args]
+  (< food (min top-up-food (+ (:food args default-food) (- 20 health)))))

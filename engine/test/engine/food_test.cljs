@@ -35,7 +35,7 @@
 ;; ---------------------------------------------------------------- hungry
 
 (deftest hungry-food-line-rises-one-per-missing-hp-up-to-18
-  (are [food health expected] (= expected (hungry/hungry? food health {}))
+  (are [food health expected] (= expected (foods/hungry? food health {}))
     5 20 true
     6 20 false
     2 20 true
@@ -48,8 +48,8 @@
     18 3 false))
 
 (deftest hungry-thresholds-are-args
-  (is (hungry/hungry? 9 20 {:food 10}))
-  (is (not (hungry/hungry? 13 10 {:food 2})) "2 + 10 missing hp: hungry below 12"))
+  (is (foods/hungry? 9 20 {:food 10}))
+  (is (not (foods/hungry? 13 10 {:food 2})) "2 + 10 missing hp: hungry below 12"))
 
 (deftest hungry-trigger-reads-the-world
   (let [when-fn (:when (get triggers/all :hungry))
