@@ -30,7 +30,7 @@
 (defn setup [world]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake-on-floor (merge {:floor big-floor} world))
+        p (tu/seeing-all (tu/fake-on-floor (merge {:floor big-floor} world)))
         now (tu/act-clock clock p ms-per-call)
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
                           :events (events/make {:body "Fake" :sinks [sink] :now now})})]

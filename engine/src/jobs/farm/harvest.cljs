@@ -432,6 +432,8 @@
             walked (when (empty? near) (await (walk! c (first ripe) 3)))
             targets (if (seq near) near [(first ripe)])
             targets (still-ripe p targets)]
+        (when (and (empty? targets) (not (#{:partial :blocked} walked)))
+          (ctx/update-mem! c skip-crop (first ripe)))
         (case walked
           :partial :continue
           :blocked (do (ctx/update-mem! c walk-fail-crop (first ripe))

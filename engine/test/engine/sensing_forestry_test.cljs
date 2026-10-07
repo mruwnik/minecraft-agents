@@ -38,6 +38,7 @@
   "p whose seen blocks stay empty until the body has turned (a look call), then answer the world."
   [p]
   (aset p "seenBlocks" (fn [q] (if (seq (lt/calls p "look")) (.blocks p q) #js [])))
+  (aset p "sensedAt" (fn [pos] (if (seq (lt/calls p "look")) (.blockAt p pos) #js {:unknown true})))
   p)
 
 (deftest fell-tree-looks-around-before-it-waits

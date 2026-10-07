@@ -15,7 +15,7 @@
 (defn rig
   ([blocks] (rig blocks {}))
   ([blocks opts]
-   (let [p (tu/fake {:blocks blocks})
+   (let [p (tu/blind (tu/fake {:blocks blocks}))
          raw (fake-raw/create p)]
      {:p p :raw raw :per (perception/create raw opts)})))
 

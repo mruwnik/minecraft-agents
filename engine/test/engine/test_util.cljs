@@ -39,14 +39,17 @@
   ([y x0 z0 x1 z1] (box x0 y z0 x1 y z1 "stone")))
 
 (defn fake
-  "A fake primitives object (engine.fake/create) built from a cljs spec map. The spec's :floor, [x0 z0 x1 z1], is stone at
+  "A fake primitives object (engine.fake/create) built from a cljs spec map, with an omniscient sensedAt (a fully informed
+  body; blind removes it, perception/wrap replaces it). The spec's :floor, [x0 z0 x1 z1], is stone at
   y 63 over that rectangle (floor) added under the spec's :blocks, for walks over the path planner."
   ([] (fake {}))
   ([spec]
    (let [spec (if-let [rect (:floor spec)]
                 (-> spec (dissoc :floor) (update :blocks #(merge (apply floor rect) %)))
                 spec)]
-     (fake-world/create spec))))
+     (let [p (fake-world/create spec)]
+       (aset p "sensedAt" (fn [pos] (.blockAt p pos)))
+       p))))
 
 (def walk-floor
   "The :floor rectangle most go-to callers' tests use: every spot they walk between."
@@ -77,6 +80,7 @@
   (aset p "seenBlocks" (fn [q] (.blocks p q)))
   (aset p "seenBlockAt" (fn [pos] (let [b (.blockAt p pos)]
                                     #js {:name (.-name b) :properties (.-properties b) :pos pos :age-ms 0})))
+  (aset p "sensedAt" (fn [pos] (.blockAt p pos)))
   p)
 
 (defn blind
@@ -84,6 +88,7 @@
   [p]
   (js-delete p "seenBlocks")
   (js-delete p "seenBlockAt")
+  (js-delete p "sensedAt")
   p)
 
 (defn short-walks!

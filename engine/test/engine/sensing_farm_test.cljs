@@ -95,6 +95,7 @@
         (let [{:keys [eng p]} (setup (assoc field :inventory [{:name "bone_meal" :count 9}]))]
           (tu/blind p)
           (aset p "seenBlocks" (fn [q] (if (seq (calls p "look")) (.blocks p q) #js [])))
+          (aset p "sensedAt" (fn [pos] (if (seq (calls p "look")) (.blockAt p pos) #js {:unknown true})))
           (aset p "seenBlockAt" (fn [pos] (let [b (.blockAt p pos)] #js {:name (.-name b) :properties (.-properties b) :pos pos :age-ms 0})))
           (await (child-outcome eng 'jobs.farm.fertilize {} 12))
           (is (seq (calls p "useOn"))))))))
@@ -104,6 +105,7 @@
   [p]
   (tu/blind p)
   (aset p "seenBlocks" (fn [q] (if (seq (calls p "look")) (.blocks p q) #js [])))
+  (aset p "sensedAt" (fn [pos] (if (seq (calls p "look")) (.blockAt p pos) #js {:unknown true})))
   (aset p "seenBlockAt" (fn [pos] (let [b (.blockAt p pos)] #js {:name (.-name b) :properties (.-properties b) :pos pos :age-ms 0}))))
 
 (deftest get-food-looks-around-once-then-digs-what-it-sees

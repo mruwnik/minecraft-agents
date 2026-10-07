@@ -16,7 +16,7 @@
 
 (defn site
   ([extra] (site extra [{:name "iron_pickaxe" :count 1}]))
-  ([extra inventory] (niche/find-site (tu/fake {:blocks (merge ground extra) :inventory inventory}) 16)))
+  ([extra inventory] (niche/find-site (tu/seeing-all (tu/fake {:blocks (merge ground extra) :inventory inventory})) 16)))
 
 (deftest a-hill-with-a-shell-gives-a-site-facing-it
   (is (= {:stand {:x 3 :y 64 :z 0} :dir [1 0]} (site (blocks "stone" [4 8] [64 66] [-3 3])))))
@@ -39,8 +39,8 @@
     (is (nil? (niche/find-site p 16)))))
 
 (defn ok? [extra]
-  (niche/niche-ok? (tu/fake {:blocks (merge ground (blocks "stone" [4 8] [64 66] [-3 3]) extra)
-                             :inventory [{:name "iron_pickaxe" :count 1}]})
+  (niche/niche-ok? (tu/seeing-all (tu/fake {:blocks (merge ground (blocks "stone" [4 8] [64 66] [-3 3]) extra)
+                                           :inventory [{:name "iron_pickaxe" :count 1}]}))
                    {:x 3 :y 64 :z 0} [1 0]))
 
 (deftest sand-gravel-or-water-in-or-round-the-niche-rules-it-out
@@ -173,10 +173,10 @@
           (is (not (contains? (kinds-seen seen) :dig-niche.sealed))))))))
 
 (deftest scan-reports-refusals-and-stops-at-the-first-allowed-site
-  (let [p (tu/fake {:blocks (merge ground hill) :inventory [{:name "iron_pickaxe" :count 1}]})
+  (let [p (tu/seeing-all (tu/fake {:blocks (merge ground hill) :inventory [{:name "iron_pickaxe" :count 1}]}))
         asked (atom 0)]
     (is (= {:site nil :refused? true} (niche/scan p 16 (fn [_ _] false))))
-    (is (= {:site nil :refused? false} (niche/scan (tu/fake {:blocks ground}) 16 (fn [_ _] true))))
+    (is (= {:site nil :refused? false} (niche/scan (tu/seeing-all (tu/fake {:blocks ground})) 16 (fn [_ _] true))))
     (is (= {:stand {:x 3 :y 64 :z 0} :dir [1 0]}
            (:site (niche/scan p 16 (fn [_ _] (swap! asked inc) true)))))
     (is (= 1 @asked) "stops at the first allowed site")))

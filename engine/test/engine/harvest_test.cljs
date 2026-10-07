@@ -237,7 +237,8 @@
   [p]
   (tu/blind p)
   (aset p "seenBlocks" (fn [q] (if (seq (calls p "look")) (.blocks p q) #js [])))
-  (aset p "seenBlockAt" (fn [pos] (let [b (.blockAt p pos)] #js {:name (.-name b) :properties (.-properties b) :pos pos :age-ms 0}))))
+  (aset p "seenBlockAt" (fn [pos] (let [b (.blockAt p pos)] #js {:name (.-name b) :properties (.-properties b) :pos pos :age-ms 0})))
+  (aset p "sensedAt" (fn [pos] (if (seq (calls p "look")) (.blockAt p pos) #js {:unknown true}))))
 
 (deftest nothing-seen-looks-around-once-then-harvests
   (async done
@@ -480,6 +481,17 @@
           (is (= 9 (count (events-of seen :blocks.place.done)))))))))
 
 (deftest still-ripe-rereads-the-cells
-  (let [p (tu/fake {:blocks (field "wheat" 7 [1 2] [1]) :ages (merge (ages 7 [1] [1]) (ages 2 [2] [1]))})
+  (let [p (tu/seeing-all (tu/fake {:blocks (field "wheat" 7 [1 2] [1]) :ages (merge (ages 7 [1] [1]) (ages 2 [2] [1]))}))
         cells [{:x 1 :y 64 :z 1} {:x 2 :y 64 :z 1} {:x 3 :y 64 :z 1}]]
     (is (= [{:x 1 :y 64 :z 1}] (harvest/still-ripe p cells)) "unripe and missing crops are dropped")))
+
+(deftest a-ripe-crop-that-reads-unripe-after-the-walk-is-skipped
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/seeing-all (tu/fake-on-floor one-cell))
+              _ (aset p "sensedAt" (fn [pos] #js {:name "air" :pos pos}))
+              {:keys [eng]} (start {:p p})
+              result (await (child-outcome eng job {} 100))]
+          (is (zero? (count (calls p "dig"))))
+          (is (= {:cut 0 :replanted 0 :bare [] :lost [] :gave-up false} result)))))))

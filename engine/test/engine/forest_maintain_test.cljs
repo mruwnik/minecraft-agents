@@ -97,7 +97,7 @@
 
 (deftest a-cell-is-classified-by-what-stands-on-it
   (are [here below above expected]
-       (= expected (maintain/classify (tu/fake-on-floor {:blocks {"3,64,0" here "3,63,0" below "3,65,0" above}}) {:x 3 :y 64 :z 0} "oak"))
+       (= expected (maintain/classify (tu/seeing-all (tu/fake-on-floor {:blocks {"3,64,0" here "3,63,0" below "3,65,0" above}})) {:x 3 :y 64 :z 0} "oak"))
     "oak_log" "dirt" "air" :ripe
     "oak_sapling" "dirt" "air" :growing
     "birch_sapling" "dirt" "air" :foreign
