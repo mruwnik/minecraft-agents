@@ -339,7 +339,7 @@
 (defn ^:async step-off!
   "Walk off pos, which the body stands on, so a sapling can go there (jobs.lib.step-off). :again."
   [c pos]
-  (let [r (await (step-off/step-off! c pos {:ok? (step-off/zone-ok (access/rules-input c))}))]
+  (let [r (await (step-off/step-off-zoned! c pos {}))]
     (when (:unreachable r)
       (fail-plant! c pos :unreachable))
     :again))

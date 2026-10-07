@@ -3,7 +3,6 @@
             [jobs.lib.blocks :as b]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
-            [jobs.lib.access :as access]
             [jobs.lib.step-off :as step-off]
             [jobs.village.trade :as trade]))
 
@@ -168,7 +167,7 @@
 (defn ^:async clear-cell!
   "Walk off the workstation cell so it can be placed (jobs.lib.step-off). :again, :continue or the stop."
   [c pos]
-  (let [r (await (step-off/step-off! c pos {:ok? (step-off/zone-ok (access/rules-input c))}))]
+  (let [r (await (step-off/step-off-zoned! c pos {}))]
     (cond
       (= :continue r) :continue
       (= :arrived r) :again

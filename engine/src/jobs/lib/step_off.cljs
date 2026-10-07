@@ -44,3 +44,8 @@
         (and (= :done r) (:arrived res)) :arrived
         :else {:unreachable (if (= :done r) (:why res :unreachable) :declined)}))
     {:unreachable :no-cell}))
+
+(defn ^:async step-off-zoned!
+  "step-off! with :ok? refusing the cells the zones, claims and footprints refuse for c (zone-ok over its rules input)."
+  [c cell opts]
+  (await (step-off! c cell (assoc opts :ok? (zone-ok (access/rules-input c))))))

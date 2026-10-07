@@ -6,7 +6,6 @@
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
             [jobs.lib.step-off :as step-off]
-            [jobs.lib.access :as access]
             [jobs.forestry.maintain :as maintain]
             [jobs.forestry.prepare-field :as field]))
 
@@ -145,7 +144,7 @@
 (defn ^:async step-off!
   "Walk off the column of pos, which the body stands in (jobs.lib.step-off). :again."
   [c pos]
-  (let [r (await (step-off/step-off! c pos {:ok? (step-off/zone-ok (access/rules-input c))}))]
+  (let [r (await (step-off/step-off-zoned! c pos {}))]
     (when (:unreachable r)
       (count-cell-fail! c pos :unreachable))
     :again))
