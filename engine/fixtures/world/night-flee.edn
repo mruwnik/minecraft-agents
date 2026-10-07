@@ -1,7 +1,8 @@
 ;; Card 173c5390: a night that cannot dig in (no pickaxe on stone, no site) flees somewhere safer within :flee-radius, never
 ;; fetches a pickaxe in the dark. Stone pad y -6..-1 (the plot floor is over void), torches around; the body has no tools.
 ;; :walk-radius 5 makes the roofed home a flee target instead of the lit roof walk. Needs night: --allow-time --time-log <the
-;; shared time log>, one case per call.
+;; shared time log>, one case per call. The three flee cases thin the floor near the start (one block over air, x 0..18) so no
+;; pit site within 16 exists and night flees instead of hand-digging a pit; the dirt field and overhang lie beyond 16.
 {:defaults
  {:tags [:night :survival :flee]
   :time :night-exclusive
@@ -19,21 +20,21 @@
    :after [[:body-near [30.5 0 16.5] 3]]
    :limit-s 150}
   {:name "flees-to-seen-ground-it-can-dig"
-   :blocks [[:fill [22 -6 10] [30 -1 22] "dirt"]]
-   :body {:at [2.5 0 16.5] :inventory [["dirt" 20]]}
+   :blocks [[:fill [0 -6 0] [18 -2 31] "air"] [:fill [22 -6 10] [30 -1 22] "dirt"]]
+   :body {:at [2.5 0 16.5] :inventory [["dirt" 2]]}
    :act [[:job (jobs.survival.night {})]]
    :expect [{:event {:source :job :kind :shelter.fled :data {:target :ground}} :within-s 150}
             {:event {:source :job :kind :dig-in.sealed} :within-s 200}]
    :limit-s 230}
   {:name "flees-to-an-overhang-and-walls-in"
-   :blocks [[:fill [22 2 14] [25 2 18] "stone"] [:fill [25 0 14] [25 1 18] "stone"]]
+   :blocks [[:fill [0 -6 0] [18 -2 31] "air"] [:fill [22 2 14] [25 2 18] "stone"] [:fill [25 0 14] [25 1 18] "stone"]]
    :body {:at [2.5 0 16.5] :inventory [["dirt" 8]]}
    :act [[:job (jobs.survival.night {})]]
    :expect [{:event {:source :job :kind :shelter.fled :data {:target :cave}} :within-s 150}
             {:event {:source :job :kind :dig-in.sealed} :within-s 200}]
    :limit-s 230}
   {:name "too-few-blocks-ignore-the-overhang"
-   :blocks [[:fill [22 2 14] [25 2 18] "stone"] [:fill [25 0 14] [25 1 18] "stone"]]
+   :blocks [[:fill [0 -6 0] [18 -2 31] "air"] [:fill [22 2 14] [25 2 18] "stone"] [:fill [25 0 14] [25 1 18] "stone"]]
    :body {:at [2.5 0 16.5] :inventory [["dirt" 3]]}
    :act [[:job (jobs.survival.night {})]]
    :expect [{:no-event {:source :job :kind :shelter.fled :data {:target :cave}} :for-s 90}
