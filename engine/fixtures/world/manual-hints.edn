@@ -1,0 +1,20 @@
+;; Card 2e7cf451: while manual control is held, a job submitted by someone else sits queued and jobs.mjs says so: the submit answer and `jobs list` carry a :hint naming
+;; who holds the body (until drive.mjs release). Without the lease there is no hint.
+{:defaults
+ {:tags [:movement :manual :tool] :time :any
+  :plot {:height 8}
+  :body {:at [4.5 0 16.5]}
+  :limit-s 60}
+ :cases
+ [{:name "queued-submit-and-list-name-the-holder"
+   :act [[:http :take {:who "wt" :why "fixture" :idle-s 60} {:ok true}]
+         [:http :submit (jobs.movement.go-to {:pos #at [20 0 16] :range 1}) []
+          {:ok true :hint [:contains "manual control held by wt"]}]
+         [:cli "jobs" ["$body" "--world" "$world" "list"] {:hint [:contains "manual control held by wt (fixture)"]}]]
+   :expect [{:no-event {:source :job :kind :result} :for-s 8}]
+   :after [[:body-near [4.5 0 16.5] 2]]}
+  {:name "no-lease-no-hint"
+   :act [[:http :submit (jobs.movement.go-to {:pos #at [20 0 16] :range 1}) [] [:not {:hint [:any]}]]
+         [:cli "jobs" ["$body" "--world" "$world" "list"] [:not {:hint [:any]}]]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 40}]
+   :after [[:body-near [20.5 0 16.5] 2]]}]}

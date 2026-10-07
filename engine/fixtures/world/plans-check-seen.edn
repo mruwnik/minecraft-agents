@@ -1,0 +1,30 @@
+;; Card 77da0ee5: plans.mjs check judges a plan against what the body has seen (its seen memory, saved on stop: the case restarts the body), not the world's chunks.
+;; A stone mass x 10..22, y 0..3, z 12..20 with the body outside it to the west: its west face is in sight, its inside never is.
+;; seen-face-cell-matches: a plan cell on the west face, wanted stone, is seen and matches. hidden-cell-is-unseen-not-matching: a plan cell deep inside the mass counts :unseen/unknown, never matching.
+;; check-without-body-refused: no --body, no answer from the world (:body-required).
+{:defaults
+ {:tags [:build :tool :memory] :time :any
+  :plot {:height 8}
+  :blocks [[:fill [10 0 12] [22 3 20] "stone"]]
+  :body {:at [4.5 0 16.5] :settle-s 2}
+  :limit-s 90}
+ :cases
+ [{:name "seen-face-cell-matches"
+   :plans [{:id "face" :metadata {:by "tester"} :parts [{:id "face" :cells [#at [10 1 16]] :want [:any "stone"]}]}]
+   :act [[:wait-s 8] [:restart-body]
+         [:cli "plans" ["--world" "$world" "check" "$plan:face" "--body" "$body"]
+          {:evidence :seen-memory :score {:counts {:match 1} :checked {:seen 1 :unseen 0}}}]]
+   :expect [{:no-event {:level :error} :for-s 3}]
+   :after [[:body-near [4.5 0 16.5] 4]]}
+  {:name "hidden-cell-is-unseen-not-matching"
+   :plans [{:id "deep" :metadata {:by "tester"} :parts [{:id "deep" :cells [#at [16 1 16]] :want [:any "stone"]}]}]
+   :act [[:wait-s 8] [:restart-body]
+         [:cli "plans" ["--world" "$world" "check" "$plan:deep" "--body" "$body"]
+          {:evidence :seen-memory :score {:counts {:unknown 1} :checked {:seen 0 :unseen 1}}}]]
+   :expect [{:no-event {:level :error} :for-s 3}]
+   :after [[:body-near [4.5 0 16.5] 4]]}
+  {:name "check-without-body-refused"
+   :plans [{:id "face" :metadata {:by "tester"} :parts [{:id "face" :cells [#at [10 1 16]] :want [:any "stone"]}]}]
+   :act [[:cli "plans" ["--world" "$world" "check" "$plan:face"] {:ok false :reason :body-required}]]
+   :expect [{:no-event {:level :error} :for-s 3}]
+   :after [[:body-near [4.5 0 16.5] 4]]}]}

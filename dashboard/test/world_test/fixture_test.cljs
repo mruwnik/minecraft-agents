@@ -400,8 +400,26 @@
            (argv [:http :take {:who "wt" :why "t"}])))
     (is (= ["engine/tools/drive.mjs" "B" "release" "--world" "claude" "--who" "wt"] (argv [:http :release {:who "wt"}])))
     (is (= ["engine/tools/jobs.mjs" "B" "--world" "claude" "cancel" "j7"] (argv [:http :cancel "$job"])))
+    (is (= ["engine/tools/jobs.mjs" "B" "--world" "claude" "cancel" "j3"]
+           (f/step-argv "B" "claude" [:http :cancel "$event-job"] "j7" "j3"))
+        "$event-job is the job of the last awaited event (a reflex's job has no submit)")
+    (is (= ["engine/tools/plans.mjs" "check" "test-bob-w" "--body" "Bob"]
+           (f/step-argv "Bob" "claude" [:cli "plans" ["check" "$plan:w" "--body" "$body"]] nil nil))
+        "$plan:<id> is the id the runner gives a case's plan (test-<lowercase body>-<id>)")
+    (is (= ["engine/tools/map.mjs" "add" "marker" "hut-wt-bob" "--data" "{:kind \"base\", :x 3, :y 0, :z 4}"]
+           (f/step-argv "Bob" "claude" [:cli "map" ["add" "marker" "hut-$tag" "--data" {:kind "base" :at [3 0 4]}]] nil nil))
+        "$tag is the body's shared tag; a map argument is printed as EDN, its :at (resolved) becoming :x :y :z")
     (is (= ["engine/tools/jobs.mjs" "B" "--world" "claude" "submit" "(jobs.x {:a 1})" "--next"]
            (argv [:http :submit '(jobs.x {:a 1}) [:next]])))))
+
+(deftest cli-steps-take-string-map-and-position-arguments
+  (let [step-problem? f/step-problem?]
+    (is (not (step-problem? [:cli "map" ["add" {:at [1 0 2]}]])))
+    (is (not (step-problem? [:cli "world" ["b" "submit" "dig" [1 0 2]]])))
+    (is (step-problem? [:cli "map" ["add" 5]]) "only strings, maps and positions")
+    (is (= ["engine/tools/world.mjs" "B" "submit" "dig" "7" "0" "9"]
+           (f/step-argv "B" "claude" [:cli "world" ["$body" "submit" "dig" [7 0 9]]] nil nil))
+        "a position argument is spread into x y z")))
 
 (deftest a-tool-answer-is-judged-by-its-edn-and-exit-code
   (is (:pass? (f/judge-reply {:ok true} 0 "{:ok true :id \"j1\"}")))

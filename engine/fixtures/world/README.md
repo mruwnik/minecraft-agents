@@ -60,7 +60,7 @@ Act steps:
 - `[:job (spec) [:now]]`: submitted with `engine/tools/jobs.mjs`; its id joins the run's jobs.
 - `[:await pattern s]`: wait for an event since t0, error after s. `[:until check s]`: poll a `:memory` / `:file` check or a `:cli` step every 0.5 s until it passes, error after s. Prefer these to `[:wait-s n]`.
 - `[:kill-body]`, `[:time-set ticks]` (needs `--allow-time`), `[:restart-body]` (stops the body, starts it keeping memory and position, puts the register again).
-- `[:cli "tool" [args] pattern?]`: runs `engine/tools/<tool>.mjs` with `$body $world $job` filled in (an unfilled one fails the step); the printed EDN must match the pattern, else exit 0.
+- `[:cli "tool" [args] pattern?]`: runs `engine/tools/<tool>.mjs` with `$body $world $job` (last submitted) `$event-job` (job of the last `:await`ed event, e.g. a reflex's) `$plan:<id>` and `$tag` filled in (an unfilled `$job` fails the step); a map argument is printed as EDN (its `:at` becomes `:x :y :z`), a position vector is spread into x y z; the printed EDN must match the pattern, else exit 0.
 - `[:http op arg pattern?]`: `:submit spec [flags]` (its id becomes `$job` and joins the run's jobs), `:cancel id`, `:cancel-all`, `:take {:who :why :idle-s}`, `:release {:who}` through jobs.mjs / drive.mjs; the manual lease is force-released after the run.
 - `:memory` pattern: the body's `engine/memory.edn` is `{:entries {kind [{:t :wt :data {...}}]} :policies {...}}`, so match `{:entries {:deaths [{:data {:pos [:any]}}]}}`.
 

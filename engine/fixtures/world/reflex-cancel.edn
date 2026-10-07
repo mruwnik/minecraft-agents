@@ -1,0 +1,26 @@
+;; Card ce57094f: POST /jobs cancel (jobs.mjs cancel) also ends a reflex job: reflex.ended :cancelled. The reflex job's id
+;; is the :job-id of the reflex.fired event the case awaited ($event-job). Setup as breathe-pond.edn (walled pond: the breathe reflex fires when the air runs out).
+;; cancel-reflex-job-ends-cancelled: cancelled by id, the reflex ends :cancelled and job.cancelled is logged.
+;; cancel-unknown-id-refused-reflex-runs-on: a job id nobody holds is refused :job-not-found and the reflex runs to its own end (stopped :no_blocks).
+{:defaults
+ {:tags [:survival :water :triggers] :time :any
+  :plot {:height 10}
+  :register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12}
+              :job (jobs.survival.breathe {:min-oxygen 12})}]
+  :blocks [[:fill [0 0 0] [31 3 31] "stone"]
+           [:fill [10 4 10] [21 5 21] "stone"]
+           [:fill [11 4 11] [20 5 20] "air"]
+           [:fill [11 0 11] [20 3 20] "water"]]
+  :body {:at [15.5 2 15.5] :settle-s 1 :effects [["resistance" 600 4]]}
+  :limit-s 120}
+ :cases
+ [{:name "cancel-reflex-job-ends-cancelled"
+   :act [[:await {:source :reflex :kind :fired} 40]
+         [:http :cancel "$event-job" {:ok true :status :cancelled}]]
+   :expect [{:event {:source :reflex :kind :ended :data {:outcome :cancelled}} :within-s 60}
+            {:event {:source :job :kind :cancelled} :within-s 60}]}
+  {:name "cancel-unknown-id-refused-reflex-runs-on"
+   :act [[:await {:source :reflex :kind :fired} 40]
+         [:http :cancel "j9999" {:ok false :reason :job-not-found}]]
+   :expect [{:event {:source :reflex :kind :ended :data {:outcome :stopped :reason :no_blocks}} :within-s 90}
+            {:no-event {:source :reflex :kind :ended :data {:outcome :cancelled}} :for-s 60 :until {:source :reflex :kind :ended :data {:outcome :stopped}}}]}]}

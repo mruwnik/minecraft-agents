@@ -720,8 +720,8 @@
 
 (defn tool-step!
   "Runs a :cli or :http step: the tool's answer must pass f/judge-reply or the step throws. Resolves to the tool's output."
-  [opts step last-job]
-  (let [argv (f/step-argv (:body opts) (:world opts) step last-job)]
+  [opts step last-job event-job]
+  (let [argv (f/step-argv (:body opts) (:world opts) step last-job event-job)]
     (if-let [why (f/argv-gap argv)]
       (js/Promise.reject (js/Error. (str (pr-str (vec (take 2 step))) " step: " why)))
       (.then (exec-file argv)
@@ -735,11 +735,11 @@
 (defn until-step!
   "Polls check (a :memory / :file after check or a :cli step) every 500 ms until it passes; throws with its last evidence
   after limit-s seconds."
-  [opts check limit-s last-job]
+  [opts check limit-s last-job event-job]
   (let [until (+ (js/Date.now) (* 1000 limit-s))
         run (fn [] (if (f/after-file check)
                      (js/Promise.resolve (let [r (judge-file-check opts check)] (when-not (:pass? r) (:evidence r))))
-                     (-> (tool-step! opts check last-job)
+                     (-> (tool-step! opts check last-job event-job)
                          (.then (constantly nil))
                          (.catch #(.-message %)))))]
     (letfn [(poll []
@@ -756,7 +756,8 @@
   offset/since (the watch window: a trigger firing inside the settle counts, as it does for :expect)."
   [opts origin c offset t0]
   (let [box (f/box-selector (f/case-grid c) origin (get-in c [:plot :height]))
-        last-job (atom nil)]
+        last-job (atom nil)
+        event-job (atom nil)]
    (reduce (fn [p [op a b :as step]]
             (.then p (fn [ids]
                        (case op
@@ -768,10 +769,10 @@
                          :time-set (.then (set-time! opts a (str (:id c) " step"))
                                           (fn [ok] (if ok ids (throw (js/Error. "a :time-set step needs --allow-time")))))
                          :await (.then (await-event opts offset a t0 (* 1000 b))
-                                       (fn [ev] (if ev ids (throw (js/Error. (str ":await " (pr-str a) " timed out after " b " s"))))))
+                                       (fn [ev] (if ev (do (reset! event-job (get-in ev [:context :job-id])) ids) (throw (js/Error. (str ":await " (pr-str a) " timed out after " b " s"))))))
                          :restart-body (.then (restart-body! opts origin c) (constantly ids))
-                         :until (.then (until-step! opts a b @last-job) (constantly ids))
-                         (:cli :http) (.then (tool-step! opts step @last-job)
+                         :until (.then (until-step! opts a b @last-job @event-job) (constantly ids))
+                         (:cli :http) (.then (tool-step! opts step @last-job @event-job)
                                              (fn [out] (if-let [id (and (= [:http :submit] (take 2 step)) (f/submitted-id out))]
                                                          (do (reset! last-job id) (conj ids id))
                                                          ids)))

@@ -1,0 +1,43 @@
+;; Card 5eccd58b: jobs.mjs submit --next lists the job directly after the running one (it gets the next round); a plain submit goes to the end; the old --front
+;; flag and --next together with --now are refused (:bad-args), nothing is queued. A far go-to runs first and keeps the list busy while the others are submitted.
+;; The names in `jobs list` tell the jobs apart: go-to runs, then (next) forget-place, then set-place.
+{:defaults
+ {:tags [:scheduler :tool] :time :any
+  :plot {:height 8}
+  :body {:at [4.5 0 16.5]}
+  :limit-s 80}
+ :cases
+ [{:name "next-jumps-ahead-of-an-earlier-plain-submit"
+   :act [[:job (jobs.movement.go-to {:pos #at [28 0 16] :range 1})]
+         [:http :submit (jobs.memory.set-place {:name :wt-b :pos #at [6 0 16]}) [] {:ok true}]
+         [:http :submit (jobs.memory.forget-place {:name :wt-c}) [:next] {:ok true}]
+         [:cli "jobs" ["$body" "--world" "$world" "list"]
+          {:items [{:name [:contains "go-to"] :status :running}
+                   {:name [:contains "forget-place"]}
+                   {:name [:contains "set-place"]}]}]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
+   :after [[:body-near [28.5 0 16.5] 2]]}
+  {:name "plain-submits-keep-their-order"
+   :act [[:job (jobs.movement.go-to {:pos #at [28 0 16] :range 1})]
+         [:http :submit (jobs.memory.set-place {:name :wt-b :pos #at [6 0 16]}) [] {:ok true}]
+         [:http :submit (jobs.memory.forget-place {:name :wt-c}) [] {:ok true}]
+         [:cli "jobs" ["$body" "--world" "$world" "list"]
+          {:items [{:name [:contains "go-to"] :status :running}
+                   {:name [:contains "set-place"]}
+                   {:name [:contains "forget-place"]}]}]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
+   :after [[:body-near [28.5 0 16.5] 2]]}
+  {:name "old-front-flag-refused"
+   :act [[:job (jobs.movement.go-to {:pos #at [28 0 16] :range 1})]
+         [:cli "jobs" ["$body" "--world" "$world" "submit" "(jobs.memory.forget-place {:name :wt-c})" "--front"]
+          {:ok false :reason :bad-args :message [:contains "front"]}]
+         [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 1}]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
+   :after [[:body-near [28.5 0 16.5] 2]]}
+  {:name "next-with-now-refused"
+   :act [[:job (jobs.movement.go-to {:pos #at [28 0 16] :range 1})]
+         [:cli "jobs" ["$body" "--world" "$world" "submit" "(jobs.memory.forget-place {:name :wt-c})" "--next" "--now"]
+          {:ok false :reason :bad-args :message [:contains "exclusive"]}]
+         [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 1}]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
+   :after [[:body-near [28.5 0 16.5] 2]]}]}

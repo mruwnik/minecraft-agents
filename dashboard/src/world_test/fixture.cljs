@@ -187,7 +187,7 @@
   [[op a b :as step]]
   (case op
     :until (not (and (= 3 (count step)) (number? b) (vector? a) (or (#{:memory :file} (first a)) (and (= :cli (first a)) (not (step-problem? a))))))
-    :cli (not (and (cli-tools a) (vector? b) (every? string? b)))
+    :cli (not (and (cli-tools a) (vector? b) (every? #(or (string? %) (map? %) (vector? %)) b)))
     :http (not (http-ops a))
     (not (step-kinds op))))
 
@@ -596,13 +596,27 @@
       :release (into ["engine/tools/drive.mjs" body "release" "--world" world] (opt :who)))))
 
 (defn step-argv
-  "The node arguments of a :cli or :http step; \"$body\", \"$world\" and \"$job\" (the last submitted job id) are filled in."
-  [body world [op tool args :as step] last-job]
-  (let [fill (fn [v] (case v "$body" body "$world" world "$job" last-job v))
-        argv (if (= :cli op)
-               (into [(str "engine/tools/" tool ".mjs")] args)
-               (http-argv body world (walk/postwalk fill step)))]
-    (if (= :cli op) (mapv fill argv) argv)))
+  "The node arguments of a :cli or :http step. In strings \"$body\", \"$world\", \"$job\" (the last submitted job id) and
+  \"$event-job\" (the job of the last awaited event, e.g. a reflex's) are filled in, \"$tag\" (inside a string) is the body's
+  shared tag and \"$plan:<id>\" the id of the case's plan. A :cli argument that is a map is printed as EDN; its :at
+  ([x y z], resolved) becomes :x :y :z; a vector (a resolved position) is spread into one argument per number."
+  ([body world step last-job] (step-argv body world step last-job nil))
+  ([body world [op tool args :as step] last-job event-job]
+   (let [fill (fn [v]
+                (cond
+                  (not (string? v)) v
+                  (str/starts-with? v "$plan:") (str "test-" (str/lower-case body) "-" (subs v 6))
+                  :else (case v
+                          "$body" body "$world" world "$job" last-job "$event-job" event-job
+                          (str/replace v "$tag" (shared-tag body)))))
+         texts (fn [v]
+                 (cond
+                   (string? v) [(fill v)]
+                   (vector? v) (mapv str v)
+                   :else [(pr-str (if-let [[x y z] (:at v)] (-> v (dissoc :at) (assoc :x x :y y :z z)) v))]))]
+     (if (= :cli op)
+       (into [(str "engine/tools/" tool ".mjs")] (mapcat texts args))
+       (http-argv body world (walk/postwalk fill step))))))
 
 (defn argv-gap
   "Why argv cannot run (a \"$job\" placeholder had no job to fill it), nil when it can."
