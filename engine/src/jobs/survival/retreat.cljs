@@ -7,6 +7,8 @@
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
+            [jobs.lib.dig-look :as dig-look]
+            [jobs.lib.look :as look]
             [jobs.lib.shelter :as sh]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
@@ -27,6 +29,8 @@
   2. Walks a short step (:step blocks) away from all chasers (nearer ones weigh more) with a go-to child (:escalate false),
      leaning toward the latest :bed or :home when it is within :home-range and not through the hostiles, avoiding :hazard positions.
      When a wall blocks the way away it turns up to 120 degrees towards open ground (at least 2 clear cells).
+     It first looks away and to either side where it has not seen the ground (at most 3 looks); a cell still unseen
+     reads as rock.
      Eats one bite a step (up to food 20) when the nearest chaser is at least :eat-gap blocks away and food is carried.
   3. Cornered (no open direction worth a walk, or the walk is blocked; checked afresh every step) with no hostile within
      :radius: holds a second (wait, why cornered) and looks again; after :no-gain-steps such steps or holds with no gain the flight ends :keeps-off. With one within :radius: takes the safest option it has not yet failed.
@@ -99,16 +103,11 @@
 (defn check-run [_c] true)
 
 (defn block-at-fn
-  "pos -> the block name the body sees or remembers there. A cell it has not seen reads as rock (the cells behind it
-  are no free way) unless seen open air is right under it (the sky over a seen open cell); nil (open: the walk finds
-  out) when the cell is not loaded."
+  "pos -> the block name the body sees or remembers there. A cell it has not seen reads as rock (behind the body or a
+  wall is no free way until it looks: glance-away!); nil (open: the walk finds out) when the cell is not loaded."
   [p]
   (let [at (access/sensed-at p access/hidden-guess)]
-    (fn [{:keys [x y z] :as pos}]
-      (let [name (at [x y z])
-            under (u/seen-name p {:x x :y (dec y) :z z})]
-        (when-not (and (some? name) (nil? (u/seen-name p pos)) (some? under) (walk/passable? under))
-          name)))))
+    (fn [{:keys [x y z]}] (at [x y z]))))
 
 (defn ^:async fight!
   "Fight back with the best of weapons (the fist when none is carried) whatever
@@ -224,6 +223,45 @@
           (seq more) (recur more)
           :else (await (blocked! c why)))))))
 
+(def glance-turns
+  "Degrees from the way away a flight turns to look before it chooses: the view cone (about 100 degrees wide) then
+  takes in every turn walk/choose-target tries."
+  [0 90 -90])
+
+(def glance-reach "Blocks along a direction to the feet cell a glance looks at." 3)
+
+(defn ^:async glance-away!
+  "Turn to look along each glance-turns direction from dir ([ux uz]) with a cell the body has not sensed in its first
+  glance-reach columns (feet, head, floor, and under an open floor the cell below), at the feet cell glance-reach
+  blocks along, as a player turns round before running: at most three looks, a sight pass after each."
+  [c dir]
+  (let [p (:primitives c)
+        from (u/self-pos c)
+        y (js/Math.floor (:y from))]
+    (loop [[turn & more] glance-turns]
+      (when turn
+        (let [d (walk/rotate dir turn)
+              unseen? (some (fn [k] (let [[x z] (walk/column-along from d k)
+                                          open-floor? (walk/floorless? (u/seen-name p {:x x :y (dec y) :z z}))]
+                                      (some #(dig-look/unknown? p [x % z]) (range (if open-floor? (- y 2) (dec y)) (+ y 2)))))
+                            (range 1 (inc glance-reach)))]
+          (when unseen?
+            (let [[gx gz] (walk/column-along from d glance-reach)]
+              (await (dig-look/look-at! c [gx y gz]))
+              (look/see! c)))
+          (recur more))))))
+
+(defn ^:async flight-target!
+  "The walk target away from threats (walk/choose-target over what the body sees, after glance-away!), nil when none."
+  [c threats]
+  (let [p (:primitives c)
+        from (u/self-pos c)
+        threat-pos (mapv #(danger-q/mob-pos p %) threats)
+        home (home-pos c)]
+    (await (glance-away! c (walk/direction from threat-pos home)))
+    (walk/choose-target (block-at-fn p) from threat-pos home (keep (comp :pos :data) (ctx/entries c :hazard))
+                        (:step (:args c)))))
+
 (defn ^:async eat-on-the-run!
   "One bite a flee step, with the nearest hostile at least :eat-gap away; none for the rest of the flight once
   nothing is left to eat or a bite fails."
@@ -292,7 +330,7 @@
   "One step of the flight (flight/look!, then shut a door, or walk a step away, or the cornered options), :again; the flight's
   end (flight/end-flight!) once no chaser is left."
   [c]
-  (let [{:keys [step no-gain-steps]} (:args c)
+  (let [{:keys [no-gain-steps]} (:args c)
         p (:primitives c)
         threats (flight/look! c)
         threat (first threats)
@@ -312,9 +350,7 @@
       door (await (shut-door! c door))
       :else
       (let [_ (await (eat-on-the-run! c threat))
-            from (u/self-pos c)
-            target (walk/choose-target (block-at-fn p) from (mapv #(danger-q/mob-pos p %) threats) (home-pos c)
-                                  (keep (comp :pos :data) (ctx/entries c :hazard)) step)]
+            target (await (flight-target! c threats))]
         (if (nil? target)
           (await (stuck "no open way away from the hostile"))
           (let [_ (when (:cornered (ctx/mem c)) (ctx/update-mem! c dissoc :cornered))

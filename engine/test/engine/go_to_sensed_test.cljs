@@ -138,7 +138,14 @@
         block-at (retreat/block-at-fn w)]
     (is (= "stone" (block-at {:x 1 :y 65 :z 0})))
     (is (= "stone" (block-at {:x 2 :y 64 :z 0})) "behind the wall: unseen is taken for rock, never a free way")
-    (is (zero? (walk/open-cells block-at {:x 0 :y 64 :z 0} [0 1] 3)) "no flight into the unseen rock")))
+    (is (zero? (walk/open-cells block-at {:x 0 :y 64 :z 0} [-1 0] 3)) "behind the body: open ground it never saw is no way")))
+
+(deftest retreat-reads-an-unseen-head-cell-as-rock-over-a-seen-open-feet-cell
+  (let [{:keys [w]} (sensed-only {:self {:pos {:x 0.5 :y 64 :z 0.5}} :yaw 270 :pitch 60
+                                  :blocks (merge ground {"2,65,0" "stone"})})
+        block-at (retreat/block-at-fn w)]
+    (is (= "air" (block-at {:x 2 :y 64 :z 0})) "the feet cell is in view")
+    (is (= "stone" (block-at {:x 2 :y 65 :z 0})) "the head cell over it is not: a 1-high gap is no way")))
 
 (deftest vehicle-dry-cell-reads-what-the-body-sees
   (let [{:keys [w]} (sensed-only (wall-east 1))]

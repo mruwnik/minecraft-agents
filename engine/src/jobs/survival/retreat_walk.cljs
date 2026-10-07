@@ -18,7 +18,7 @@
     "water" "dandelion" "poppy" "torch" "sweet_berry_bush" "vine"})
 
 (defn passable?
-  "Whether a block name lets the body walk through; an unloaded or unseen cell (nil) counts as open."
+  "Whether a block name lets the body walk through; an unloaded cell (nil) counts as open."
   [block-name]
   (or (nil? block-name) (contains? passable-names block-name)
       (some #(.endsWith block-name %) ["_sapling" "_flower" "_carpet" "_tulip" "_orchid" "_button" "_pressure_plate"])))

@@ -414,3 +414,64 @@
         cells (retreat-refuge/hostile-cells p 40)]
     (is (contains? (set (map :x cells)) (js/Math.floor (+ bx 16))) "heard 10 blocks east (far band): 16 east")
     (is (not-any? #(= (js/Math.floor (+ bx 10)) (:x %)) cells) "the exact place is not kept")))
+
+;; ------------------------------------------------------------------ a flight reads what the body sees
+
+(defn setup-sensed
+  "setup over perception (nothing seen yet, nothing remembered): the body at the origin looking east, level."
+  [world]
+  (let [clock (atom 1000000)
+        [seen sink] (tu/legacy-capture-sink)
+        raw (tu/fake-on-floor (merge {:floor big-floor :yaw 270 :pitch 0} world))
+        p (perception/wrap raw (perception/create (fake-raw/create raw) {:now (fn [] @clock)}))
+        now (tu/act-clock clock p ms-per-call)
+        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
+                          :events (events/make {:body "Fake" :sinks [sink] :now now})})]
+    {:eng eng :p p :raw raw :seen seen :clock clock}))
+
+(defn targeter
+  "A job that picks one flight target (retreat/flight-target!) away from the hostiles it knows, kept in out."
+  [out]
+  {:check (constantly true)
+   :round (fn ^:async targeter-round [c]
+            (let [threats (danger-q/known-hostiles (:primitives c) 30 {:ranged-radius 30})]
+              (reset! out (await (retreat/flight-target! c threats)))
+              :done))})
+
+(deftest a-flight-in-an-open-field-turns-to-see-its-way-and-flees-far
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [raw seen out]} (await (run-job! (setup-sensed {:entities [(zombie 7 5 {:chase {:speed 0.7}})]})
+                                                      'jobs.survival.retreat {}))
+              names (set (map #(.-name %) (.-calls (.-world raw))))]
+          (is (contains? #{:far :lost} (:ended out)) (str "out of its range, or out of sight and hearing: " (pr-str out)))
+          (is (> (fake/dist (body-pos raw) (mob-pos raw 7)) 16) "beyond hearing")
+          (is (< (first (body-pos raw)) -30) "fled far west, away from the zombie")
+          (is (not (contains? names "attack")) "a chased body in the open never fights")
+          (is (empty? (filter #(= :retreat_blocked (:kind %)) @seen)) "never cornered"))))))
+
+(deftest a-flight-target-behind-the-body-is-looked-at-first
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [out (atom nil)
+              s (setup-sensed {:entities [(zombie 7 5 {})]})
+              s (assoc-in s [:eng :jobs 'targeter] (targeter out))]
+          (await (run-job! s 'targeter {:step 6}))
+          (is (= {:x -6 :y 64 :z 0} @out) "straight west, away from the zombie"))))))
+
+(def tunnel-cells (set (for [x (range 0 9) y [64 65]] [x y 0])))
+
+(deftest a-flight-target-never-reads-unseen-rock-as-a-way
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [out (atom nil)
+              rock (into {} (for [x (range -6 10) y (range 63 68) z [-1 0 1]
+                                  :when (not (or (tunnel-cells [x y z]) (and (<= -4 x -2) (#{64 65} y) (zero? z))))]
+                              [(key-of x y z) "stone"]))
+              s (setup-sensed {:blocks rock :entities [(zombie 7 5 {})]})
+              s (assoc-in s [:eng :jobs 'targeter] (targeter out))]
+          (await (run-job! s 'targeter {:step 6}))
+          (is (nil? @out) (str "the cave behind its rock wall is no way: " (pr-str @out))))))))
