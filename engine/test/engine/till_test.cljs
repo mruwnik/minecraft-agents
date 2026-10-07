@@ -323,9 +323,21 @@
         (let [{:keys [eng p]} (setup {:inventory hoe :blocks four})]
           (.override (.-world p) "useOn" (fn ^:async f [_token _args _impl] #js {:status "no-item"}))
           (let [result (await (child-outcome eng job box 40))]
-            (is (= {:tilled 0 :skipped {{:x 1 :y 63 :z 1} :no-hoe {:x 2 :y 63 :z 1} :no-hoe
-                                        {:x 1 :y 63 :z 2} :no-hoe {:x 2 :y 63 :z 2} :no-hoe}}
-                   result))))))))
+            (is (= {:status :stopped :reason :no-hoe :tilled 0
+                    :skipped {{:x 1 :y 63 :z 1} :no-hoe {:x 2 :y 63 :z 1} :no-hoe
+                              {:x 1 :y 63 :z 2} :no-hoe {:x 2 :y 63 :z 2} :no-hoe}}
+                   (dissoc result :text)))
+            (is (re-find #"no hoe" (:text result)))))))))
+
+(deftest till-with-no-hoe-and-nothing-to-fetch-stops-no-hoe
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:blocks four})
+              result (await (child-outcome eng job box 80))]
+          (is (= :stopped (:status result)))
+          (is (= :no-hoe (:reason result)))
+          (is (= 0 (:tilled result))))))))
 
 (def hoe-chest "-2,64,3")
 
@@ -346,6 +358,16 @@
       (fn ^:async t []
         (let [{:keys [p]} (await (seeing-till {} 120))]
           (is (every? #(= "farmland" (block-at p %)) [{:x 1 :y 63 :z 1} {:x 2 :y 63 :z 1} {:x 1 :y 63 :z 2} {:x 2 :y 63 :z 2}])))))))
+
+(deftest till-fetch-event-names-the-tool-kind
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen]} (await (seeing-till {} 120))
+              texts (map :text (kinds seen :fetch.started))]
+          (is (seq texts))
+          (is (every? #(re-find #"hoe" %) texts))
+          (is (not-any? #(re-find #"nil" %) texts)))))))
 
 (deftest till-fetch-false-waits-no-tool-and-leaves-the-chest
   (async done

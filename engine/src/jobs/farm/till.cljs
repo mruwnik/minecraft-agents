@@ -22,7 +22,7 @@
   and the footprints of other plans are checked when a cell is chosen and again before the hoe or cover dig.
   The job declines while no zone list has been read, unless :ignore-zones? is true, and before its first round when
   every tillable cell is refused (wait :refused); cells refused later are skipped :not-permitted.
-  Result: {:tilled n :skipped {pos reason}}.")
+  Result: {:tilled n :skipped {pos reason}}; with none tilled and a cell skipped :no-hoe it is {:status :stopped :reason :no-hoe}.")
 
 (def args
   {:from {:doc "box corner (inclusive); with :to, any order" :type :pos :default nil}
@@ -183,7 +183,9 @@
               skipped (:skipped mem {})]
           (ctx/emit! c :till.done :info {:tilled tilled :skipped (count skipped)
                                          :text (str "tilled " tilled ", skipped " (count skipped))})
-          (ctx/result! c {:tilled tilled :skipped skipped})
+          (ctx/result! c (cond-> {:tilled tilled :skipped skipped}
+                           (and (zero? tilled) (some #{:no-hoe} (vals skipped)))
+                           (assoc :status :stopped :reason :no-hoe :text "no hoe, nothing tilled")))
           :done)
 
         (nil? hoe)

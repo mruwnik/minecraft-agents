@@ -193,16 +193,21 @@
     (check c job w)
     true))
 
+(defn need-name
+  "What a fetch's args name: the item, block, tool kind or any-of list."
+  [args]
+  (or (:item args) (:block args) (:kind args) (pr-str (:any-of args))))
+
 (defn fail!
   "Book the failed fetch (until now + :fail-minutes), warn fetch.failed, :again (the check now waits)."
   [c {:keys [key opts wait args]} res]
-  (let [f (merge (select-keys args [:item :any-of :block])
+  (let [f (merge (select-keys args [:item :any-of :block :kind])
                  {:key key :until (+ (ctx/now c) (* 60000 (:fail-minutes opts))) :failed (:reason res :failed)}
                  (select-keys res [:tried :chain :why]))]
     (ctx/remember! c failed-kind f failed-policy)
     (ctx/update-mem! c #(-> % (dissoc :fetching :fetched :fetch-return) (update :children dissoc :fetch)))
     (ctx/emit! c :fetch.failed :warn (assoc (shown f) :for (:reason wait)
-                                            :text (str "could not fetch " (or (:item args) (:block args) (pr-str (:any-of args)))
+                                            :text (str "could not fetch " (need-name args)
                                                        ": " (name (:failed f)))))
     :again))
 
@@ -227,7 +232,7 @@
                               (not= key (first (:fetched %))) (dissoc :fetched)
                               (and (:return? pl) (not (:fetch-return %))) (assoc :fetch-return (feet c))))
         (ctx/emit! c :fetch.started :info {:for (:reason (:wait pl)) :job job :args (:args pl)
-                                           :text (str "fetching " (or (:item args) (:block args) (pr-str (:any-of args)))
+                                           :text (str "fetching " (need-name args)
                                                       " for " (name (:reason (:wait pl))))}))
       (let [r (await (ctx/call-child c :fetch job args))]
         (case r
