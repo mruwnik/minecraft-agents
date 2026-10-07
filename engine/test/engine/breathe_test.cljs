@@ -1164,12 +1164,19 @@
           (is (> 1 (js/Math.floor (:x (core/self-pos p))))))))))
 
 (deftest side-cell-refuses-a-down-bubble-column-in-feet-head-or-below
-  (doseq [[cells drag? expect?] [[["1,64,0" "1,65,0" "1,63,0"] true false]
-                                 [["1,64,0" "1,65,0" "1,63,0"] false true]]]
-    (let [world {:blocks (merge {"0,65,0" "stone"} (into {} (for [c cells] [c "bubble_column"])))
+  (doseq [[cells drag? expect?] [[["1,64,0" "1,65,0"] true false]
+                                 [["1,64,0" "1,65,0"] false true]
+                                 [["1,63,0"] true false]]]
+    (let [world {:blocks (merge {"0,65,0" "stone" "1,63,0" "stone"} (into {} (for [c cells] [c "bubble_column"])))
                  :states (into {} (for [c cells] [c {:drag drag?}]))}
           {:keys [p]} (setup (assoc world :self {:inWater true :oxygen 20 :pos {:x 0.5 :y 64 :z 0.5}}))]
-      (is (= expect? (some? (b/side-cell p (.self p)))) (str "drag " drag?)))))
+      (is (= expect? (some? (b/side-cell p (.self p)))) (str cells " drag " drag?)))))
+
+(deftest side-cell-never-stands-on-an-upward-bubble-column-or-a-water-plant
+  (doseq [below ["bubble_column" "kelp" "seagrass"]]
+    (let [world {:blocks {"0,65,0" "stone" "1,63,0" below} :states {"1,63,0" {:drag false}}}
+          {:keys [p]} (setup (assoc world :self {:inWater true :oxygen 20 :pos {:x 0.5 :y 64 :z 0.5}}))]
+      (is (nil? (b/side-cell p (.self p))) below))))
 
 (deftest a-swim-is-progress-only-above-the-best-height-reached
   (is (b/rose? nil 64 65) "first rise")
@@ -1177,3 +1184,85 @@
   (is (b/rose? 65 64 66) "above the best")
   (is (b/rose? 65 66 67) "carried up between passes, then a block more")
   (is (not (b/rose? nil 64 64)) "no rise"))
+
+(defn drag-tunnel
+  "A water tunnel x 0..9, z -1..1 (feet y 64, head y 65) under a stone ceiling at y 66, a glass cap over the body (never
+  dug), a dragging column across the middle row at x 3, and the only opening at (6, 66, 0)."
+  []
+  (merge (into {} (for [x (range -9 19) z (range -8 9) y [64 65 66]] [(str x "," y "," z) "stone"]))
+         (into {} (for [x (range 0 10) z [-1 0 1] y [64 65]] [(str x "," y "," z) "water"]))
+         {"0,66,0" "glass" "6,66,0" "water" "3,63,0" "magma_block" "3,64,0" "bubble_column" "3,65,0" "bubble_column"}))
+
+(deftest air-behind-a-drag-column-is-gone-to-round-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}} :blocks (drag-tunnel)
+                                           :states {"3,64,0" {:drag true} "3,65,0" {:drag true}}})]
+          (await (one-run! eng (assoc defaults :air-radius 8)))
+          (is (empty? (of-kind seen :no_air)) "the go-to leg routes round the column")
+          (is (= [[:completed nil]] (ended seen)))
+          (is (not (.-inWater (.self p)))))))))
+
+(defn drag-corner
+  "Water at x 0 capped at y 68, stone at (0, z 1), a dragging column at (1, z 0) and water open to air at (1, z 1): the
+  straight walk to (1, 1) brushes the dragging column's corner."
+  []
+  (let [column (fn [x z] (for [y (range 64 68)] (str x "," y "," z)))]
+    {:self {:inWater true :oxygen 4}
+     :blocks (merge (into {} (for [x (range -2 4) y (range 64 68) z (range -2 3)] [(str x "," y "," z) "stone"]))
+                    {"0,68,0" "stone" "1,63,0" "magma_block"}
+                    (into {} (for [c (column 0 0)] [c "water"]))
+                    (into {} (for [c (column 1 0)] [c "bubble_column"]))
+                    (into {} (for [c (column 1 1)] [c "water"])))
+     :states (into {} (for [c (column 1 0)] [c {:drag true}]))}))
+
+(deftest a-diagonal-step-past-a-drag-column-corner-is-never-a-raw-move
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (drag-corner))]
+          (is (b/drag-between? p 0 0 1 1 64) "the corner cell counts")
+          (await (one-run! eng (assoc defaults :radius 2 :air-radius 1)))
+          (is (not-any? #(and (= "moveTo" (.-name %)) (= [1 64 1] (some-> % .-args .-pos (as-> q [(.-x q) (.-y q) (.-z q)]))))
+                        (array-seq (.. p -world -calls)))
+              "no raw moveTo past the corner"))))))
+
+(deftest drag-between-checks-both-cells-beside-each-diagonal-step
+  (let [{:keys [p]} (setup {:blocks {"1,64,0" "bubble_column"} :states {"1,64,0" {:drag true}}})]
+    (is (b/drag-between? p 0 0 2 1 64) "(0,0) to (2,1) passes the corner (1,0)")
+    (is (b/drag-between? p 0 0 1 1 64))
+    (is (not (b/drag-between? p 0 0 0 2 64)))))
+
+(deftest a-second-drowning-in-the-same-run-counts-rises-afresh
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [top 80
+              n (atom 0)
+              pulled (atom false)
+              {:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4}
+                                           :blocks (into {} (concat (for [y (range 64 (inc top))] [(str "0," y ",0") "water"])
+                                                                    (for [y (range 64 (inc top)) x (range -2 3) z (range -2 3) :when (not= 0 x z)]
+                                                                      [(str x "," y "," z) "stone"])))})]
+          ;; the first swim surfaces at the top; the first swim toward the shore ends with the body pulled back to the
+          ;; floor, drowning again; later swims up rise 3 blocks each (timed out) until the top
+          (.override (.-world p) "swim"
+                     (fn ^:async f [token a impl]
+                       (let [k (swap! n inc)
+                             y #(js/Math.floor (:y (core/self-pos p)))]
+                         (cond
+                           (= 1 k) (do (fake/swap-self! p (fn [s] (assoc-in s [:pos 1] top))) (set-self! p {"oxygen" 20})
+                                       #js {:status "surfaced"})
+                           (and (some-> a .-toward) (not @pulled))
+                           (do (reset! pulled true) (fake/swap-self! p (fn [s] (assoc-in s [:pos 1] 64))) (set-self! p {"oxygen" 4})
+                               #js {:status "timeout"})
+                           (some-> a .-toward) (await (impl token a))
+                           :else (do (fake/swap-self! p (fn [s] (update-in s [:pos 1] #(min top (+ % 3)))))
+                                     (if (= top (y))
+                                       (do (set-self! p {"oxygen" 20}) #js {:status "surfaced"})
+                                       #js {:status "timeout"}))))))
+          (await (one-run! eng (assoc defaults :reach 20)))
+          (is @pulled "drowned a second time")
+          (is (empty? (of-kind seen :no_air)) "rises below the first surfacing are progress")
+          (is (< 4 @n) "swam up again"))))))

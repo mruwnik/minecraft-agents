@@ -589,14 +589,19 @@
     (:skip-night w) [(assoc w :time 0) {:status "sleeping"}]
     :else [(assoc-in w [:self :isSleeping] true) {:status "sleeping"}]))
 
+(def swims-up
+  "Cells a swim rises through: water, the water plants and an upward bubble column (one with drag true pulls down)."
+  #{"water" "kelp" "kelp_plant" "seagrass" "tall_seagrass" "bubble_column"})
+
 (defn swim
-  "Rises to the top water cell above the body and refills oxygen; swimFails makes it time out unmoved. With :toward it
+  "Rises to the top water cell (see swims-up) above the body and refills oxygen; swimFails makes it time out unmoved. With :toward it
   swims there by the steer's kinematics (steer/swim-lands?): landed on the target, else timed out on a jump crest
   where it was, out of the water and off the ground."
   [w {:keys [toward]}]
   (let [before (get-in w [:self :oxygen])
-        head #(block-name % (update (body-pos %) 1 + 1))
-        risen (loop [w w] (if (= "water" (head w)) (recur (update-in w [:self :pos 1] inc)) w))
+        head #(update (body-pos %) 1 + 1)
+        rises? #(and (swims-up (block-name % (head %))) (not (:drag (properties-of % (head %)))))
+        risen (loop [w w] (if (rises? w) (recur (update-in w [:self :pos 1] inc)) w))
         w' (assoc-in risen [:self :oxygen] 20)
         oxygen {:before before :after 20}
         crest #(-> % (assoc-in [:self :inWater] false) (assoc-in [:self :onGround] false))]

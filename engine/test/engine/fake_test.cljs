@@ -440,6 +440,25 @@
        (is (= (at 0 63 0) (:pos s)))
        (is (= 20 (:oxygen s)))))))
 
+(deftest swim-rises-through-water-plants-and-an-upward-bubble-column
+  (async-test
+   (fn ^:async t []
+     (let [p (owned {:self {:pos (at 0 60 0) :oxygen 3 :inWater true}
+                     :blocks {"0,60,0" "water" "0,61,0" "kelp_plant" "0,62,0" "seagrass" "0,63,0" "bubble_column"
+                              "0,64,0" "tall_seagrass" "0,65,0" "water"}
+                     :states {"0,63,0" {:drag false}}})]
+       (await (act p "swim" {:ms 3000}))
+       (is (= (at 0 65 0) (:pos (self-of p))) "up to the top water cell, not the first plant")))))
+
+(deftest swim-does-not-rise-into-a-downward-bubble-column
+  (async-test
+   (fn ^:async t []
+     (let [p (owned {:self {:pos (at 0 60 0) :oxygen 3 :inWater true}
+                     :blocks {"0,60,0" "water" "0,61,0" "bubble_column" "0,62,0" "water"}
+                     :states {"0,61,0" {:drag true}}})]
+       (await (act p "swim" {:ms 3000}))
+       (is (= (at 0 60 0) (:pos (self-of p))))))))
+
 (deftest swim-on-dry-land-reports-surfaced-and-changes-nothing
   (async-test
    (fn ^:async t []

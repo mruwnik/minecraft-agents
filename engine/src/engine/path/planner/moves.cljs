@@ -176,11 +176,12 @@
             (let [risk (.swimRisk s x2 y z2)
                   tight (or tight-src ^boolean (.tightAt s x2 y z2))
                   base (.-c-swim-h s)
-                  extra (if (== (aget (.-tbl-flowing s) (.stateAt ^js (.-snapshot s) x2 y z2)) 1) (.-c-current s) 0)]
+                  extra (if (== (aget (.-tbl-flowing s) (.stateAt ^js (.-snapshot s) x2 y z2)) 1) (.-c-current s) 0)
+                  sec (+ base extra (.dragPrice s x2 y z2))]
               (when ^boolean (.swimBegin s i true x2 y z2 base extra false)
                 (if tight
-                  (.tightMove s i x y z h region c x2 y z2 0 MOVE-SWIM (+ base extra) risk 0 SNAP SNAP)
-                  (.edge s x2 y z2 0 MOVE-SWIM i (+ base extra) risk 0 0 0))
+                  (.tightMove s i x y z h region c x2 y z2 0 MOVE-SWIM sec risk 0 SNAP SNAP)
+                  (.edge s x2 y z2 0 MOVE-SWIM i sec risk 0 0 0))
                 (.swimEnd s))))
           ;; no ground ahead at our level: the body must at least fit in the column to leave the edge
           (when ^boolean (.clear s x2 z2 h0 (+ h0 BODY))

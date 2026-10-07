@@ -5,6 +5,8 @@
   (:require ["fs" :as fs]
             ["path" :as path]
             [clojure.string :as str]
+            ;; first: engine.hooks (reached through engine.core) names its fns, so it loads before them
+            [jobs.lib.world-files]
             [engine.planner-bench-golden :as bench :refer [recorded record changes]]
             [engine.planner-fixture :as pf]
             [engine.planner-options-golden :as options-test]))

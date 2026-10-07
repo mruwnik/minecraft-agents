@@ -1227,6 +1227,15 @@ test('swim: a head in kelp, seagrass or a bubble column is still under water: ju
   }
 })
 
+test('swim: a head in a waterlogged block is still under water: jump is held until the head is in air', async () => {
+  const blocks = { '0,65,0': 'oak_slab', '0,64,0': 'water' }
+  const { bot, p } = rig({ blocks, props: { '0,65,0': { waterlogged: true } }, oxygen: 4 })
+  setTimeout(() => { delete blocks['0,65,0']; bot.oxygenLevel = 20 }, 5)
+  const result = await p.swim('t1', { ms: 3000 })
+  assert.equal(result.status, 'surfaced')
+  assert.deepEqual(controls(bot), [['jump', true], ['jump', false]])
+})
+
 test('swim: already surfaced returns at once without pressing jump', async () => {
   const { bot, p } = rig(world)
   assert.deepEqual(await p.swim('t1'), { status: 'surfaced', oxygen: { before: 20, after: 20 } })

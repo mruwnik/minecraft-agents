@@ -20,8 +20,8 @@
     child to the nearest air-reaching surface within :air-radius (a failed target is not tried again); else dig up through
     a cap within 3 blocks over the head when it is natural (jobs.lib.escape/natural?), not protected and not sand or gravel,
     one cell a pass, at most 3 digs (zones respected, trespass only as a last resort). Kelp, seagrass and upward bubble columns
-    count as water; a downward (drag) bubble column is never swum into or crossed (a side step or a straight walk to a
-    column behind it is refused too). Air is looked for only in cells the body has seen or looked at (perception memory), never through
+    count as water; a downward (drag) bubble column is never swum into or crossed by a side step or a straight walk (nor
+    its corner cut); a go-to child's planner prices one (go-to :costs :drag-column) and routes round it. Air is looked for only in cells the body has seen or looked at (perception memory), never through
     stone: it looks up the own column first, and when no block is seen over it (a dark column learns nothing) swims
     up it at once; only a seen block over the own column sends the looks to the neighbour columns.
   - Enclosed (head cell holds a suffocating block, see jobs.lib.breath): step to a side cell with room
@@ -129,15 +129,19 @@
 
 (defn drag-between?
   "A downward bubble column lies in a cell the straight walk from the feet column (fx, fz) to (x, z) crosses, at the feet's
-  height or the one above (the target column itself included)."
+  height or the one above (the target column itself included). A diagonal step crosses both cells beside it too: the
+  body may cut either corner."
   [p fx fz x z fy]
-  (let [n (max (js/Math.abs (- x fx)) (js/Math.abs (- z fz)))]
+  (let [n (max (js/Math.abs (- x fx)) (js/Math.abs (- z fz)))
+        at (fn [i] [(js/Math.round (+ fx (* (- x fx) (/ i n)))) (js/Math.round (+ fz (* (- z fz) (/ i n))))])
+        cells (mapcat (fn [i]
+                        (let [[ax az] (at (dec i)) [bx bz :as b] (at i)]
+                          (if (and (not= ax bx) (not= az bz)) [[bx az] [ax bz] b] [b])))
+                      (range 1 (inc n)))]
     (boolean
-     (some (fn [i]
-             (let [cx (js/Math.round (+ fx (* (- x fx) (/ i n))))
-                   cz (js/Math.round (+ fz (* (- z fz) (/ i n))))]
-               (some #(= "bubble_column_down" (seen-water-name p {:x cx :y % :z cz})) [fy (inc fy)])))
-           (range 1 (inc n))))))
+     (some (fn [[cx cz]]
+             (some #(= "bubble_column_down" (seen-water-name p {:x cx :y % :z cz})) [fy (inc fy)]))
+           cells))))
 
 (defn passable-water-or-air? [name]
   (or (breath/air? name) (contains? swimmable name)))
@@ -161,16 +165,18 @@
 
 (defn nearest-air
   "The surface cell of the nearest column within radius that reaches air, not one of failed (a seq of cells); nil if none.
-  Every column is read only through cells the body has seen or feels, never through stone."
-  ([p self-pos radius reach] (nearest-air p self-pos radius reach nil))
-  ([p self-pos radius reach failed]
+  Every column is read only through cells the body has seen or feels, never through stone. With straight? (the default)
+  a column whose straight walk crosses a downward bubble column (drag-between?) is skipped: a raw move walks straight; a
+  go-to leg passes false, as its planner routes round one."
+  ([p self-pos radius reach] (nearest-air p self-pos radius reach nil true))
+  ([p self-pos radius reach failed straight?]
    (let [fx (js/Math.floor (:x self-pos))
          fy (js/Math.floor (:y self-pos))
          fz (js/Math.floor (:z self-pos))
          skip (set failed)]
      (some (fn [[dx dz]]
              (let [cell (surface-in-column p (+ fx dx) (+ fz dz) fy reach)]
-               (when-not (or (contains? skip cell) (drag-between? p fx fz (+ fx dx) (+ fz dz) fy)) cell)))
+               (when-not (or (contains? skip cell) (and straight? (drag-between? p fx fz (+ fx dx) (+ fz dz) fy))) cell)))
            (columns radius)))))
 
 (defn solid-at? [p cell] (breath/suffocates? p cell))
@@ -282,8 +288,9 @@
                 (let [surfaced? (= "surfaced" (status (await (ctx/act c :swim #js {}))))
                       y (js/Math.floor (:y (u/self-pos c)))
                       rose (rose? (:best-y (ctx/mem c)) fy y)]
-                  (when surfaced? (ctx/update-mem! c assoc :surfaced true))
-                  (ctx/update-mem! c update :best-y #(max (or % y) y))
+                  (if surfaced?
+                    (ctx/update-mem! c #(-> % (assoc :surfaced true) (dissoc :best-y)))
+                    (ctx/update-mem! c update :best-y #(max (or % y) y)))
                   (or surfaced? rose)))]
     (cond
       (and (nil? target) (column-open? p fx fz fy reach))
@@ -303,8 +310,8 @@
 
 (defn side-cell
   "A horizontal neighbour of the feet cell where the body fits (feet and head
-  cells passable and not harmful: lava, fire, cactus...) and can stand (the cell below is neither air, water, lava
-  nor magma); nil if none. Unloaded cells do not count."
+  cells passable and not harmful: lava, fire, cactus...) and can stand (the cell below is neither air, water, a water
+  plant, a bubble column, lava nor magma); nil if none. Unloaded cells do not count."
   [p self]
   (let [fx (js/Math.floor (.. self -pos -x))
         fy (js/Math.floor (.. self -pos -y))
@@ -316,7 +323,7 @@
                   (and feet head below
                        (not (breath/suffocates? p cell)) (not (breath/suffocates? p (update cell :y inc)))
                        (not (contains? harmful-in-cell feet)) (not (contains? harmful-in-cell head))
-                       (not (breath/air? below)) (not (contains? #{"water" "lava" "magma_block"} below))
+                       (not (breath/air? below)) (not (contains? swimmable below)) (not (contains? #{"lava" "magma_block"} below))
                        (not-any? #{"bubble_column_down"} [feet head below]))))]
     (->> [[1 0] [-1 0] [0 1] [0 -1]]
          (map (fn [[dx dz]] {:x (+ fx dx) :y fy :z (+ fz dz)}))
@@ -377,12 +384,12 @@
   [c]
   (let [{:keys [air-radius reach]} (:args c)
         p (:primitives c)
-        target (nearest-air p (u/self-pos c) air-radius reach (:failed-air (ctx/mem c)))]
+        target (nearest-air p (u/self-pos c) air-radius reach (:failed-air (ctx/mem c)) false)]
     (if-not target
       :none
       (let [arrived? (await (go! c :air target 0))]
         (ctx/update-mem! c update :failed-air (fnil conj []) target)
-        (when arrived? (ctx/update-mem! c assoc :surfaced true))
+        (when arrived? (ctx/update-mem! c #(-> % (assoc :surfaced true) (dissoc :best-y))))
         (when arrived? true)))))
 
 (defn ^:async dig-cap!

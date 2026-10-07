@@ -140,9 +140,9 @@
     (is (> slow (+ base 10)))))
 
 (deftest default-water-costs-are-the-stated-ones
-  (is (= {:swimH 0.5 :swimUp 0.3 :swimDown 0.35 :exit 0.6 :current 0.3 :bubbleUp 0.08 :bubbleDown 0.12
+  (is (= {:swimH 0.5 :swimUp 0.3 :swimDown 0.35 :exit 0.6 :current 0.3 :bubbleUp 0.08 :bubbleDown 0.12 :dragColumn 30
           :airSupply 15 :airLimit 12 :maxWaterDrop 64 :dripleaf 0.2}
-         (select-keys costs [:swimH :swimUp :swimDown :exit :current :bubbleUp :bubbleDown :airSupply :airLimit
+         (select-keys costs [:swimH :swimUp :swimDown :exit :current :bubbleUp :bubbleDown :dragColumn :airSupply :airLimit
                              :maxWaterDrop :dripleaf]))))
 
 (deftest start-in-the-water-way-out-is-an-exit
@@ -451,8 +451,44 @@
           [6 63 1 6 63 1 (if drag "magma_block" "soul_sand")]
           [6 64 1 6 66 1 "bubble_column" {:drag drag}]]))
 
-(deftest a-drag-column-across-a-channel-is-never-swum-sideways-into
+(deftest a-drag-column-across-a-channel-is-crossed-only-at-its-price
   (let [goal (near 9 66 1 0)
-        from {:x 3 :y 66 :z 1}]
-    (is (not (found? (run (channel true) from goal))) "a dragging column blocks the way")
-    (is (found? (run (channel false) from goal)) "a lifting column is crossed")))
+        from {:x 3 :y 66 :z 1}
+        through (run (channel true) from goal)]
+    (is (found? through) "with no other way the dragging column is crossed")
+    (is (>= (cost through :seconds) (:dragColumn costs)) "at the dragColumn price")
+    (is (< (cost (run (channel true) from goal {:costs {:dragColumn 0}}) :seconds) (:dragColumn costs)) "a caller may lower it")
+    (is (< (cost (run (channel false) from goal) :seconds) (:dragColumn costs)) "a lifting column costs nothing extra")))
+
+(defn wide-channel
+  "channel 3 wide (z 0..2), a dragging column in its middle row only at x 6."
+  []
+  (world [[2 64 -1 10 69 3 "stone"]
+          [3 64 0 9 66 2 "water"]
+          [3 67 0 9 69 2 "air"]
+          [6 63 1 6 63 1 "magma_block"]
+          [6 64 1 6 66 1 "bubble_column" {:drag true}]]))
+
+(deftest a-drag-column-with-a-way-round-is-swum-round
+  (let [r (run (wide-channel) {:x 3 :y 66 :z 1} (near 9 66 1 0))]
+    (is (found? r))
+    (is (not-any? #(= [6 1] [(:x %) (:z %)]) (steps r)) "never in the dragging column")
+    (is (< (cost r :seconds) (:dragColumn costs)) "the way round pays no drag price")))
+
+(defn drag-corner
+  "Water x 3..5 at z 0 and x 6..9 at z 1 in stone, air over the water; a dragging column at (6, z 0): the only ways from one
+  to the other enter it or brush its corner on a diagonal."
+  []
+  (world [[2 64 -1 10 69 2 "stone"]
+          [3 64 0 6 66 0 "water"]
+          [6 64 1 9 66 1 "water"]
+          [3 67 0 6 69 0 "air"]
+          [6 67 1 9 69 1 "air"]
+          [6 63 0 6 63 0 "magma_block"]
+          [6 64 0 6 66 0 "bubble_column" {:drag true}]]))
+
+(deftest a-diagonal-swim-brushing-a-drag-column-pays-its-price
+  (let [from {:x 3 :y 66 :z 0}
+        goal (near 9 66 1 0)]
+    (is (>= (cost (run (drag-corner) from goal) :seconds) (:dragColumn costs)))
+    (is (< (cost (run (drag-corner) from goal {:costs {:dragColumn 0}}) :seconds) (:dragColumn costs)))))
