@@ -114,6 +114,12 @@
 (def read-cap "Calls allowed since the last act: a loop over reads never awaits, so only a count stops it." 60000)
 (def max-rounds 12)
 
+(def round-caps
+  "{job rounds}: jobs whose rounds are small slices of one long scan, so max-rounds is too few."
+  {'jobs.farm.find-spot 100})
+
+(defn rounds-for [job] (get round-caps job max-rounds))
+
 (def current-case "The case run-all is running: acts started now belong to it." (atom nil))
 
 (def owners "Act promise -> the case that started it, so a late stray rejection is blamed on that case." (js/WeakMap.))
@@ -155,14 +161,16 @@
 (defn act-cap? [text] (str/includes? (str text) "(runaway job)"))
 
 (defn declared-wait?
-  "True when the job said why it waits (a :waiting event with a :reason): a yield, not a runaway."
-  [events]
-  (boolean (some #(and (= :job (:source %)) (= :waiting (:kind %)) (event-reason %)) events)))
+  "True when the job said why it waits (a :waiting event with a :reason): a yield, not a runaway. A :holding event with a :reason counts only in the last round (events from index last-start on): a job that held once and then spins is still flagged."
+  [events last-start]
+  (boolean (or (some #(and (= :job (:source %)) (= :waiting (:kind %)) (event-reason %)) events)
+               (some #(and (= :job (:source %)) (= :holding (:kind %)) (event-reason %)) (drop last-start events)))))
 
 (def long-running
   "{job reason}: jobs whose rounds legitimately outlast the fuzzer's caps (the fake world's time is frozen), so a cut-off is no defect."
   {'jobs.survival.night "a night round waits for dawn, which the fake world's frozen clock never brings"
-   'jobs.survival.retreat "flight keeps moving while the danger lasts, and the fake danger never goes"})
+   'jobs.survival.retreat "flight keeps moving while the danger lasts, and the fake danger never goes"
+   'jobs.survival.respond-to-hostile "a round is a whole flight (it calls retreat), and the frozen fake mob never closes or leaves; this also hides the real retreat ping-pong of card 0ec013bb: delete the entry when that is fixed"})
 
 (def progress-window "Rounds over which a change in the fake world counts as progress, not a spin." 3)
 
@@ -193,7 +201,7 @@
     (cond
       (= :act cap) [[:runaway "act cap hit"]]
       (= :read cap) [[:runaway "call cap hit"]]
-      still-listed? [[:runaway (str "still running after " max-rounds " rounds")]])))
+      still-listed? [[:runaway (str "still running after " (rounds-for job) " rounds")]])))
 
 (defn defects
   "Defect keywords (with detail) for the events and final state of a case; runaway cut-offs are reported by runaway."
@@ -225,17 +233,20 @@
       (assoc base :outcome :refused :defects (when (str/blank? (ex-message id)) [[:blank-refusal ""]]))
       (let [thrown (atom nil)
             sigs (atom [(world-sig raw)])
+            last-start (atom 0)
+            max-rounds (rounds-for job)
             unrefused (when (seq (:wrong-typed (meta args))) [[:wrong-type-accepted (pr-str (:wrong-typed (meta args)))]])]
         (loop [i 0]
           (when (and (< i max-rounds) (seq (running-ids (core/state eng))) (not @thrown) (not @capped))
             (swap! clock + 1500)
+            (reset! last-start (count @seen))
             (reset! calls {:all 0 :acts 0})
             (let [ok? (try (await (core/tick! eng)) true (catch :default e (reset! thrown (str e)) false))]
               (swap! sigs conj (world-sig raw))
               (when ok? (recur (inc i))))))
         (assoc base :outcome :ran
                :defects (concat unrefused (when (and @thrown (not (act-cap? @thrown))) [[:tick-threw @thrown]])
-                                (runaway job @capped (and (not @thrown) (seq (running-ids (core/state eng))) (not (declared-wait? @seen)) (not (progressing? @sigs))))
+                                (runaway job @capped (and (not @thrown) (seq (running-ids (core/state eng))) (not (declared-wait? @seen @last-start)) (not (progressing? @sigs))))
                                 (defects @seen (core/state eng))))))))
 
 ;; ---- the run
@@ -254,11 +265,8 @@
 (def known
   "{[job kind] card}: defects already carded, so the suite stays green and a new one fails it. A default run fails when an entry no longer occurs: delete it with its fix."
   {["jobs.explore.search" :runaway] "7ef2db8f"
-   ["jobs.farm.find-spot" :runaway] "bc44edcd"
    ["jobs.gather.mine" :runaway] "cd74fd83"
-   ["jobs.items.enchant" :round-threw] "1b671b73"
-   ["jobs.movement.linger-near" :runaway] "df540718"
-   ["jobs.survival.respond-to-hostile" :runaway] "e7ed9147"})
+   ["jobs.items.enchant" :round-threw] "1b671b73"})
 
 (defn case-seed
   "Seed of case k of job: stable under the job filter and the other jobs."
@@ -394,6 +402,20 @@
   (is (= [[:runaway "still running after 12 rounds"]] (runaway 'jobs.farm.till nil true)))
   (is (empty? (runaway 'jobs.farm.till nil false)))
   (is (empty? (runaway (first (keys long-running)) :act true))))
+
+(deftest a-per-job-round-cap-raises-only-that-jobs-limit
+  (is (= 100 (rounds-for 'jobs.farm.find-spot)))
+  (is (= max-rounds (rounds-for 'jobs.farm.till)))
+  (is (= [[:runaway "still running after 100 rounds"]] (runaway 'jobs.farm.find-spot nil true)) "a find-spot that never finishes is still flagged")
+  (is (= [[:runaway "still running after 12 rounds"]] (runaway 'jobs.farm.till nil true))))
+
+(deftest a-holding-reason-is-a-declared-wait-only-in-the-last-round
+  (let [hold {:source :job :kind :holding :reason :lingering}
+        other {:source :job :kind :moved}]
+    (is (declared-wait? [other hold other hold] 2) "held in the last round")
+    (is (not (declared-wait? [hold other other other] 2)) "held only in round 1, then spins")
+    (is (not (declared-wait? [other {:source :job :kind :holding}] 0)) "no reason")
+    (is (declared-wait? [{:source :job :kind :waiting :reason :x} other] 2) "a :waiting reason counts anywhere")))
 
 (deftest only-the-jobs-own-ex-info-shapes-are-declared-failures
   (is (declared-failure? "#error {:message \"clear-box needs :from and :to\", :data {}}"))
