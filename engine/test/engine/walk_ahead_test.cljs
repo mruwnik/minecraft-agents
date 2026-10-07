@@ -389,13 +389,14 @@
           (is (= :goal-enclosed (:reason (:done r)))))))))
 
 (deftest a-danger-or-refresh-replan-that-finds-a-full-route-keeps-walking
-  (doseq [why [:danger :refresh]]
-    (async done
-      (tu/run-async done
-        (fn ^:async t []
-          (let [r (await (follow-with why "found" nil (line 10)))]
-            (is (= 2 (:walks r)) (str why))
-            (is (= :arrived (:status (:done r))))))))))
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (await (tu/each-async [:danger :refresh]
+                 (fn ^:async each [why]
+                   (let [r (await (follow-with why "found" nil (line 10)))]
+                     (is (= 2 (:walks r)) (str why))
+                     (is (= :arrived (:status (:done r))))))))))))
 
 (deftest a-danger-replan-with-no-route-for-another-reason-keeps-the-old-plan
   (async done
