@@ -324,16 +324,20 @@
             (rules/air block) :continue
             :else
             (do
-              (ctx/update-mem! c #(-> % (assoc :digging {:cell cell :block block}) (update-in [:tries cell] (fnil inc 0))))
+              ;; a waiting child is resumed on the same cell: only the first round of a dig counts a try
+              (ctx/update-mem! c #(cond-> (assoc % :digging {:cell cell :block block} :counted cell)
+                                    (not= cell (:counted %)) (update-in [:tries cell] (fnil inc 0))))
               (let [[x y z] cell
                     outcome (await (blocks/dig-cell! c {:x x :y y :z z} {:accept #{:fluid-adjacent :falling-block :under-feet}
                                                                          :ignore-zones? true}))]
-                (ctx/update-mem! c record-dug (:block-at in))
-                (when-let [tag (when (= :dug outcome) (:note (:args c)))] (escape/note-hole! c tag cell block))
-                (case outcome
-                  :continue :yield
-                  (:dug :missing) :continue
-                  {:reason :dig-failed :cell cell :block block :dig outcome})))))))))
+                (if (= :continue outcome)
+                  :yield
+                  (do
+                    (ctx/update-mem! c #(-> % (dissoc :counted) (record-dug (:block-at in))))
+                    (when-let [tag (when (= :dug outcome) (:note (:args c)))] (escape/note-hole! c tag cell block))
+                    (case outcome
+                      (:dug :missing) :continue
+                      {:reason :dig-failed :cell cell :block block :dig outcome})))))))))))
 
 (defn ^:async bridge!
   "Place carried filler on the missing floor of the step. :again, or a stop map."

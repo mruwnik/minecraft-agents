@@ -167,17 +167,18 @@
       :else
       (do
         (ctx/update-mem! c assoc :digging pos :collect true)
-        (let [outcome (await (blocks/dig-cell! c (pos-map pos)
-                                               ;; decide has judged the hazards, lava apart from water
-                                               {:for-plan (:plan (:args c)) :accept #{:fluid-adjacent :falling-block :under-feet}
-                                                :ignore-zones? (:ignore-zones? (:args c))}))]
+        (let [;; decide has judged the hazards, lava apart from water
+              dig-args {:for-plan (:plan (:args c)) :accept #{:fluid-adjacent :falling-block :under-feet}
+                        :ignore-zones? (:ignore-zones? (:args c))}
+              outcome (await (blocks/dig-cell! c (pos-map pos) dig-args))]
           (when-not (= :continue outcome) (ctx/update-mem! c dissoc :digging))
           (case outcome
             :continue :continue
             :dug (ctx/update-mem! c update :dug (fnil inc 0))
             :missing nil
             :cannot (ctx/update-mem! c refuse stray {:reason :cannot})
-            :refused (ctx/update-mem! c count-fail stray :hazard give-up)
+            :refused (let [why (:reason (blocks/child-wait c :dig 'jobs.blocks.dig (merge {:collect false :need-drop false :fetch false} dig-args {:pos (pos-map pos)})) :hazard)]
+                       (ctx/update-mem! c count-fail stray why give-up))
             :unreachable (ctx/update-mem! c count-fail stray :unreachable give-up)
             (ctx/update-mem! c count-fail stray :failed give-up)))))))
 

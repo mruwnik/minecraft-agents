@@ -199,7 +199,7 @@
   [spec args prep]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake (merge {:self {:pos {:x 0 :y 65 :z 0}} :inventory pick} (dissoc spec :zones :plans)))
+        p (tu/fake (merge {:self {:pos {:x 0 :y 65 :z 0}} :inventory pick} (dissoc spec :zones :plans :wrap-rounds)))
         out (atom :not-done)
         w (world/of-data (:plans spec {}) {} (get spec :zones []))
         parent {:check (constantly true)
@@ -207,7 +207,8 @@
                          (let [r (await (ctx/call-child c :kid job (if (satisfies? IDeref args) @args args)))]
                            (when (= :done r) (reset! out (ctx/child-result c :kid)))
                            r))}
-        eng (core/create {:primitives p :jobs (assoc registry/jobs 'recording-parent parent)
+        jobs (reduce-kv (fn [m k wrap] (update-in m [k :round] wrap)) (assoc registry/jobs 'recording-parent parent) (:wrap-rounds spec))
+        eng (core/create {:primitives p :jobs jobs
                           :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock) :world w
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     (prep p)
@@ -298,6 +299,20 @@
         (let [{:keys [p] :as s} (await (stair! {:blocks ground} east (fn [_])))]
           (is (= 6 (count (digs p))))
           (is (= 6 (count (events-of s :blocks.dig.done)))))))))
+
+(deftest a-dig-child-that-waits-three-rounds-is-one-try-and-resumes-the-same-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls (atom [])
+              waiting (fn [round]
+                        (fn ^:async waiting-round [c]
+                          (swap! calls conj (:pos (:args c)))
+                          (if (<= (count @calls) 4) :continue (await (round c)))))
+              {:keys [out p]} (await (stair! {:blocks ground :wrap-rounds {'jobs.blocks.dig waiting}} east (fn [_])))]
+          (is (= :done (:status @out)) (pr-str @out))
+          (is (= 3 (:steps @out)))
+          (is (= 1 (count (set (take 5 @calls)))) "the waiting rounds all dig the one cell"))))))
 
 (deftest one-call-cuts-the-whole-stair
   (async done

@@ -25,11 +25,12 @@
 (defn start
   "An engine over the fake world spec with the plans {id plan} and the zones (nil: never read) as its world data."
   ([spec plans] (start spec plans []))
-  ([spec plans zones]
+  ([spec plans zones] (start spec plans zones registry/jobs))
+  ([spec plans zones jobs]
    (let [[seen sink] (tu/capture-sink)
          p (tu/fake-on-floor spec)
          w (world/of-data plans {} zones)
-         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+         eng (core/create {:primitives p :jobs jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                            :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})
                            :world w})]
      {:eng eng :p p :seen seen :w w})))
@@ -169,6 +170,17 @@
         (let [{:keys [eng seen]} (start tidy-spec {"field" field-plan})]
           (await (outcome eng {:plan "field"} 200))
           (is (= 5 (count (of-kind seen :blocks.dig.done)))))))))
+
+(deftest a-dig-child-that-declines-books-its-own-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [dig (get registry/jobs 'jobs.blocks.dig)
+              declining (assoc dig :check (fn [c] (ctx/wait c {:reason :not-allowed :why "claimed"}) false))
+              {:keys [eng]} (start tidy-spec {"field" field-plan} [] (assoc registry/jobs 'jobs.blocks.dig declining))
+              result (await (outcome eng {:plan "field" :give-up 1} 200))]
+          (is (seq (:refused result)))
+          (is (= #{:not-allowed} (set (map :reason (:refused result)))) (pr-str (:refused result))))))))
 
 (deftest what-is-dug-is-picked-up
   (async done
