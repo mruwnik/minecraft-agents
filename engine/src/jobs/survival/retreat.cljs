@@ -304,7 +304,7 @@
 (defn hostile-cells
   "The cells the hostiles within radius overlap: no block goes there."
   [p radius]
-  (set (mapcat #(hitbox-cells (u/pos-of (.-pos %))) (reach/known-hostiles p radius {}))))
+  (set (mapcat #(hitbox-cells (reach/mob-pos p %)) (reach/known-hostiles p radius {}))))
 
 (defn occupied? [c cell] (contains? (:seal-occupied (ctx/mem c)) cell))
 
@@ -422,7 +422,7 @@
           (not-any? combat/creeper? hostiles)
           (<= (cost/fight-damage {:weapon (combat/best-weapon p weapons)
                                   :equipment (cost/equipment-of (.-equipment self))
-                                  :mobs (map (fn [e] {:name (.-name e) :distance (.-distance e) :hits 0}) hostiles)})
+                                  :mobs (map (fn [e] {:name (.-name e) :distance (reach/mob-distance p e) :hits 0}) hostiles)})
               (- (.-health self) reserve))))))
 
 (defn back-off-target
@@ -440,7 +440,7 @@
 (defn ^:async back-off!
   "Step back from threat (back-off-target): :again, nil when there is no such cell or the walk is blocked."
   [c threat]
-  (when-let [target (back-off-target (block-at-fn (:primitives c)) (u/self-pos c) (u/pos-of (.-pos threat))
+  (when-let [target (back-off-target (block-at-fn (:primitives c)) (u/self-pos c) (reach/mob-pos (:primitives c) threat)
                                      (keep (comp :pos :data) (ctx/entries c :hazard)))]
     (if (= :blocked (await (near/walk-near! c target 0 {:timeout-s flight-timeout-s})))
       (do (tried! c :back-off) nil)
@@ -645,8 +645,8 @@
   "What stopped-chasing needs of hostile e (a JS entity; visible: a clear line from the eye, whichever way the body
   faces). A way: a walkable way to the body, or for a ranged mob a line of fire (a shut door takes both)."
   [p e]
-  {:mob (.-name e) :distance (.-distance e) :in-line? (true? (.-visible e))
-   :way? (or (reach/walkable-way? p (u/pos-of (.-pos e)) (u/pos-of (.-pos (.self p))))
+  {:mob (.-name e) :distance (reach/mob-distance p e) :in-line? (true? (.-visible e))
+   :way? (or (reach/walkable-way? p (reach/mob-pos p e) (u/pos-of (.-pos (.self p))))
              (and (combat/ranged? e) (reach/danger? p e {:sight? false})))})
 
 (defn known-chasers
@@ -693,7 +693,7 @@
     (ctx/update-mem! c #(-> %
                             (assoc :chasers (into {} (map (juxt :id :ch)) on))
                             (update :fled (fnil into []) (map (fn [{:keys [ch why]}] (assoc ch :ended why))) off)))
-    (sort-by #(.-distance %) (map :e on))))
+    (sort-by #(reach/mob-distance p %) (map :e on))))
 
 (defn end-flight!
   "Write a :threat entry per mob fled (jobs.lib.threats; one per mob, its last way out) and end the flight: done with
@@ -732,8 +732,8 @@
         {:keys [ranged-radius]} (:args c)
         reach-of (fn [e] (cond-> (threats/follow-range (.-name e)) (combat/ranged? e) (max ranged-radius)))
         known (near-known p (set (dead-ids c)) threats/max-follow-range ranged-radius)]
-    (boolean (some #(and (<= (.-distance %) (reach-of %))
-                         (reach/walkable-way? p (u/pos-of (.-pos %)) anchor #{} open))
+    (boolean (some #(and (<= (reach/mob-distance p %) (reach-of %))
+                         (reach/walkable-way? p (reach/mob-pos p %) anchor #{} open))
                    known))))
 
 (defn ^:async hide-hold!
@@ -818,7 +818,7 @@
   nothing is left to eat or a bite fails."
   [c threat]
   (when (and (not (:ate (ctx/mem c)))
-             (>= (.-distance threat) (:eat-gap (:args c))))
+             (>= (reach/mob-distance (:primitives c) threat) (:eat-gap (:args c))))
     (let [r (await (ctx/call-child c :eat 'jobs.survival.eat {:until 20 :max-bites 1}))]
       (when (or (= :declined r) (:reason (ctx/child-result c :eat)))
         (ctx/update-mem! c assoc :ate true)))))
@@ -885,7 +885,7 @@
         p (:primitives c)
         threats (look! c)
         threat (first threats)
-        door (when threat (door-to-shut c (u/pos-of (.-pos threat))))
+        door (when threat (door-to-shut c (reach/mob-pos p threat)))
         stuck (fn ^:async stuck [why]
                 (if (empty? (near-hostiles c)) (await (wait-far! c)) (await (cornered! c why))))]
     (cond
@@ -897,7 +897,7 @@
       :else
       (let [_ (await (eat-on-the-run! c threat))
             from (u/self-pos c)
-            target (choose-target (block-at-fn p) from (mapv #(u/pos-of (.-pos %)) threats) (home-pos c)
+            target (choose-target (block-at-fn p) from (mapv #(reach/mob-pos p %) threats) (home-pos c)
                                   (keep (comp :pos :data) (ctx/entries c :hazard)) step)]
         (if (nil? target)
           (await (stuck "no open way away from the hostile"))
@@ -905,7 +905,7 @@
                 r (await (near/walk-near! c target 1 {:timeout-s flight-timeout-s}))]
             (if (= :blocked r)
               (await (stuck "the way away from the hostile is blocked"))
-              (let [gap (or (some-> (first (near-hostiles c)) .-distance) (:ranged-radius (:args c)))]
+              (let [gap (or (some->> (first (near-hostiles c)) (reach/mob-distance p)) (:ranged-radius (:args c)))]
                     (ctx/update-mem! c #(-> % (dissoc :tried) (note-gap gap)))
                 :again))))))))
 

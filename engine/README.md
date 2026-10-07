@@ -118,7 +118,7 @@ Notes:
   fire (in a tunnel: solid overhead and both sides along an axis, it must be seen, not only heard). A mob walled in or fenced in (fences, walls and shut gates are 1.5 high, never stepped onto), across a deep trench, or with the body sealed in is no danger. "Knows of" comes from perception's
   mob memory (`engine.perception`): heard within 16 blocks (not a silent creeper), or seen (clear line, within 48, in the
   view cone or heard, and lit; in the dark only within 4). A creeper with a lit fuse hisses (`fusing`) and is heard. A heard
-  melee mob counts as a danger at its place when a walkable way leads to the body. `retreat` and `respond-to-hostile` use the
+  mob is judged at its rough spot (direction, band: near 4, far 16; `reach/mob-pos`, `mob-distance`), never its exact place. `retreat` and `respond-to-hostile` use the
   same danger rules.
   A hostile that cannot hurt the body firing the response is a trigger bug, not a job bug.
 

@@ -144,10 +144,10 @@
   (into {} (for [[x z] [[5 0] [7 0] [6 1] [6 -1]] y [64 65 66]] [(str x "," y "," z) "stone"])))
 
 (deftest a-mob-that-can-drop-into-a-dead-pit-still-walks-to-the-body
-  (let [rim (assoc (mob 2 "zombie" 6 0) :pos {:x 6.5 :y 67 :z 1.5})
+  (let [rim (assoc (mob 2 "zombie" 6 0) :pos {:x 6.5 :y 67 :z 1.5} :visible true)
         p (tu/fake {:self {:pos body} :floor [-20 -20 20 20]
                     :blocks (merge pit (tu/box 4 64 1 8 66 3 "stone"))
-                    :entities [(mob 1 "zombie" 6 0) rim]})]
+                    :entities [(assoc (mob 1 "zombie" 6 0) :visible true) rim]})]
     (is (false? (reach/walkable-way? p {:x 6.5 :y 64 :z 0.5} body)) "the pit is closed")
     (is (true? (reach/walkable-way? p {:x 6.5 :y 67 :z 1.5} body)) "the rim walks down")
     (is (= [2] (mapv #(.-id %) (reach/dangers p 8 {} {:sight? false})))
@@ -217,13 +217,12 @@
     (is (true? (hostile-near? p)))))
 
 (def glass-box
-  "A zombie boxed in glass at (0 64 8): heard, but no way to the body."
+  "A zombie boxed in glass at (0 64 8): seen through it, with no way to the body."
   (concat (tu/box -1 64 7 1 65 7 "glass") (tu/box -1 64 9 1 65 9 "glass")
           (tu/box -1 64 7 -1 65 9 "glass") (tu/box 1 64 7 1 65 9 "glass")))
 
-(deftest a-zombie-heard-in-a-sealed-glass-box-is-no-danger
-  (let [{:keys [p]} (rig {:entities [(mob 1 "zombie" 0 8)] :blocks glass-box})]
-    (dark-around! p 0 8)
+(deftest a-zombie-seen-in-a-sealed-glass-box-is-no-danger
+  (let [{:keys [p]} (rig {:entities [(assoc (mob 1 "zombie" 0 8) :visible true)] :blocks glass-box})]
     (is (= [] (danger-ids p)))))
 
 (deftest a-fusing-creeper-behind-the-body-is-heard-and-a-danger

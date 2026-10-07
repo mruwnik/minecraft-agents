@@ -8,6 +8,7 @@
   Candidates are the mobs the body knows of (known-hostiles).
   The mobs of one query share block reads (lookup) and walk proofs (proofs)."
   (:require [clojure.string :as str]
+            [engine.entity-observations :as obs]
             [jobs.lib.combat :as combat]
             [jobs.lib.shelter :as sh]
             [jobs.lib.util :as u]))
@@ -563,15 +564,46 @@
          (or (and (solid? (dec x) y z) (solid? (inc x) y z) (solid? (dec x) (inc y) z) (solid? (inc x) (inc y) z))
              (and (solid? x y (dec z)) (solid? x y (inc z)) (solid? x (inc y) (dec z)) (solid? x (inc y) (inc z)))))))
 
+(def band-distance "Blocks a heard mob's band stands for when a maths needs a place." {:near 4 :far 16})
+
+(defn rough-pos
+  "The place a remembered mob entry stands for: its :pos, else the point its band away from :from toward its
+  direction (nil when it has neither)."
+  [{:keys [pos direction band from]}]
+  (or pos
+      (when (and direction band from)
+        (let [a (* (/ js/Math.PI 4) (.indexOf obs/directions direction))
+              d (band-distance band)]
+          (assoc from :x (+ (:x from) (* d (js/Math.sin a))) :z (- (:z from) (* d (js/Math.cos a))))))))
+
+(defn mob-pos
+  "Where the body takes hostile e to be: its exact place when seen, else (heard only) the rough spot its direction and
+  band from the body give (rough-pos); the exact place of a heard mob is never read."
+  [p e]
+  (if (seen-only? e)
+    (u/pos-of (.-pos e))
+    (let [from (u/pos-of (.-pos (.self p)))]
+      (rough-pos (assoc (obs/rough-hearing from (u/pos-of (.-pos e))) :from from)))))
+
+(defn mob-distance
+  "Blocks from the body to hostile e: exact when seen, else to its rough spot (mob-pos)."
+  [p e]
+  (if (seen-only? e)
+    (.-distance e)
+    (u/dist (u/pos-of (.-pos (.self p))) (mob-pos p e))))
+
+(def known-scan "Blocks out to which the mobs a distance filter weighs are fetched." 64)
+
 (defn known-hostiles
-  "The hostiles the body knows of within radius (ranged ones within :ranged-radius), nearest first. Uses the
-  perception's mob memory (p.knownMobs) when p has one, else combat/hostiles."
+  "The hostiles the body knows of within radius (ranged ones within :ranged-radius), nearest first; a heard one by
+  its band (mob-distance). Uses the perception's mob memory (p.knownMobs) when p has one, else the raw hostile list."
   [p radius {:keys [ranged-radius]}]
-  (if-let [known (.-knownMobs p)]
-    (let [rr (or ranged-radius radius)]
-      (filterv #(and (= "hostile" (.-kind %)) (<= (.-distance %) (if (combat/ranged? %) rr radius)))
-               (array-seq (.call known p))))
-    (combat/hostiles p radius {:ranged-radius ranged-radius})))
+  (let [rr (or ranged-radius radius)
+        within (fn [e] (<= (mob-distance p e) (if (combat/ranged? e) rr radius)))]
+    (->> (combat/known-or-raw p (max known-scan radius rr))
+         (filter within)
+         (sort-by #(mob-distance p %))
+         vec)))
 
 (defn danger-in?
   "danger? reading blocks through kind-at (shared by the mobs of one query) and, with pr, sharing walk proofs."
@@ -579,9 +611,9 @@
   ([p kind-at pr e {:keys [sight?] :or {sight? true}}]
    (if (combat/ranged? e)
      (and (or (not sight?) (seen-only? e) (not (in-tunnel? kind-at (cell-of (u/pos-of (.-pos (.self p)))))))
-          (line-of-fire? (lookup p arrow-kind-of) (u/pos-of (.-pos e)) (u/pos-of (.-pos (.self p)))))
+          (line-of-fire? (lookup p arrow-kind-of) (mob-pos p e) (u/pos-of (.-pos (.self p)))))
      (and (or (seen-mob? e) (not sight?))
-          (let [mob (cell-of (u/pos-of (.-pos e)))
+          (let [mob (cell-of (mob-pos p e))
                 body (cell-of (u/pos-of (.-pos (.self p))))]
             (if pr (proved-way? kind-at pr mob body) (way? kind-at mob body)))))))
 

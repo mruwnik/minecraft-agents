@@ -35,17 +35,7 @@
     (let [from (u/pos-of (.-pos (.self p)))]
       (assoc (obs/rough-hearing from (u/pos-of (.-pos e))) :from from))))
 
-(def band-distance "Blocks a heard mob's band stands for when a cost needs a place." {:near 4 :far 16})
-
-(defn rough-pos
-  "The place a remembered :threat entry stands for: its :pos, else the point its band away from :from toward its
-  direction (nil when it has neither)."
-  [{:keys [pos direction band from]}]
-  (or pos
-      (when (and direction band from)
-        (let [a (* (/ js/Math.PI 4) (.indexOf obs/directions direction))
-              d (band-distance band)]
-          (assoc from :x (+ (:x from) (* d (js/Math.sin a))) :z (- (:z from) (* d (js/Math.cos a))))))))
+(def rough-pos reach/rough-pos)
 
 (defn mob-key [e] (or (.-uuid e) (.-id e)))
 
@@ -83,7 +73,7 @@
   seen or heard, with a way to the body or a line of fire; never x-ray) and the remembered :threat entries' data."
   [p remembered]
   (cost/danger-list (body-of p)
-                    (mapv (fn [e] {:key (mob-key e) :name (.-name e) :pos (u/pos-of (.-pos e))})
+                    (mapv (fn [e] {:key (mob-key e) :name (.-name e) :pos (reach/mob-pos p e)})
                           (reach/dangers p sensed-radius {:ranged-radius sensed-radius}))
                     remembered))
 

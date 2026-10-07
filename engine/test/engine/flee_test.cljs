@@ -302,3 +302,11 @@
               {:keys [calls out]} (await (run-job! s 'jobs.survival.respond-to-hostile {}))]
           (is (= [:done] calls))
           (is (not= :stopped (:status out))))))))
+
+(deftest a-heard-mob-keeps-cells-clear-at-its-rough-spot-not-its-exact-one
+  (let [p0 (tu/fake-on-floor {:floor big-floor})
+        [bx] (body-pos p0)
+        p (tu/fake-on-floor {:floor big-floor :entities [(zombie 7 (+ bx 10) {:visible false})]})
+        cells (retreat/hostile-cells p 40)]
+    (is (contains? (set (map :x cells)) (js/Math.floor (+ bx 16))) "heard 10 blocks east (far band): 16 east")
+    (is (not-any? #(= (js/Math.floor (+ bx 10)) (:x %)) cells) "the exact place is not kept")))

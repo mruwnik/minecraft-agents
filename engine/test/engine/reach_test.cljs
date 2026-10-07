@@ -106,7 +106,7 @@
 
 (deftest a-fenced-in-zombie-is-no-danger-but-a-skeleton-behind-the-fence-is
   (let [skel {:id 9 :name "skeleton" :kind "hostile" :pos {:x 6.5 :y 64 :z 0.5}}
-        p (tu/fake {:self {:pos body} :floor [-20 -20 20 20] :blocks (ring "oak_fence") :entities [(zed 1 6 0)]})
+        p (tu/fake {:self {:pos body} :floor [-20 -20 20 20] :blocks (ring "oak_fence") :entities [(assoc (zed 1 6 0) :visible true)]})
         q (tu/fake {:self {:pos body} :floor [-20 -20 20 20] :blocks (ring "oak_fence") :entities [skel]})]
     (is (= [] (reach/dangers p 8 {} {:sight? false})))
     (is (= [9] (map #(.-id %) (reach/dangers q 16 {:ranged-radius 16} {:sight? false}))))))
@@ -223,3 +223,20 @@
 (deftest a-tunnel-with-an-opening-at-the-side-is-no-tunnel
   (doseq [gap ["1,64,0" "-1,65,0"]]
     (is (= [9] (danger-ids (dissoc tunnel gap) heard-skel)) (str "gap at " gap))))
+
+;; ---------------------------------------------------------------- a heard mob is judged by its direction and band only
+
+(def heard-zed {:id 8 :name "zombie" :kind "hostile" :seen false :heard true :pos {:x 0.5 :y 64 :z 6.5}})
+
+(def boxed-cell
+  "Stone round and over the cell (0 64 6): a zombie standing there cannot walk out."
+  (into {"0,66,6" "stone"} (for [x [-1 0 1] z [5 6 7] :when (not= 0 x (- z 6)) y [64 65]] [(str x "," y "," z) "stone"])))
+
+(deftest a-heard-melee-mob-is-judged-at-its-rough-spot-not-its-exact-cell
+  (is (= [8] (danger-ids boxed-cell heard-zed)) "boxed in at its exact cell, but heard south and near: the open rough spot has a way")
+  (is (= [] (danger-ids boxed-cell (assoc heard-zed :seen true :heard false))) "seen: the exact cell counts"))
+
+(deftest a-heard-mob-is-within-a-radius-by-its-band-not-its-exact-distance
+  (let [far (assoc heard-zed :pos {:x 0.5 :y 64 :z 20.5} :distance 20)]
+    (is (= [8] (danger-ids {} far)) "heard far: 16 blocks, inside radius 16")
+    (is (= [] (danger-ids {} (assoc far :seen true :heard false))) "seen: 20 blocks, outside")))
