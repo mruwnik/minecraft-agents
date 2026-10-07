@@ -37,6 +37,11 @@
   (let [w (world {[0 64 0] "ladder"} {[0 64 0] {:facing "south" :other 1}})]
     (is (= {:facing "south"} (doors/path-props w [0 64 0])))))
 
+(deftest planner-properties-of-a-bubble-column
+  (let [w (world {[0 64 0] "bubble_column" [1 64 0] "bubble_column"} {[0 64 0] {:drag false :other 1} [1 64 0] {:drag true}})]
+    (is (= {:drag false} (doors/path-props w [0 64 0])))
+    (is (= {:drag true} (doors/path-props w [1 64 0])))))
+
 (deftest open-trapdoor-over-a-ladder-of-its-facing-is-climbed
   (let [w (world {[0 64 0] "ladder" [0 65 0] "oak_trapdoor"
                   [3 64 0] "stone" [3 65 0] "oak_trapdoor"

@@ -6,7 +6,7 @@
 
 (def openable-re #"_(fence_gate|door|trapdoor)$")
 ;; the block properties the planner's state ids carry
-(def path-keys [:open :half :facing :hinge :face :powered])
+(def path-keys [:open :half :facing :hinge :face :powered :drag])
 ;; what opens a door from a distance: the planner looks for these beside an iron door
 (def activator-re #"_button$|^lever$")
 
@@ -28,10 +28,10 @@
 
 (defn path-props
   "The properties of the block at pos for a planner state id, {} for a block that is neither openable, a button or
-  lever, nor a ladder (a trapdoor over it is judged against its facing)."
+  lever, a ladder, nor a bubble column (a trapdoor over it is judged against its facing)."
   [w pos]
   (let [name (get-in w [:blocks pos] "")]
-    (if (or (openable? name) (re-find activator-re name) (= name "ladder"))
+    (if (or (openable? name) (re-find activator-re name) (= name "ladder") (= name "bubble_column"))
       (select-keys (get-in w [:states pos]) path-keys)
       {})))
 
