@@ -291,6 +291,14 @@
           (is (= 3 (count (events-of s :stair.step))))
           (is (= 1 (count (events-of s :stair.done)))))))))
 
+(deftest every-cell-is-dug-through-the-dig-job
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p] :as s} (await (stair! {:blocks ground} east (fn [_])))]
+          (is (= 6 (count (digs p))))
+          (is (= 6 (count (events-of s :blocks.dig.done)))))))))
+
 (deftest one-call-cuts-the-whole-stair
   (async done
     (tu/run-async done

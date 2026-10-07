@@ -168,8 +168,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (run-out! (setup {:blocks eight-down :inventory (inventory)} {:target [6 57 0]} {})))]
-          (is (= 2 (count (events-of s :blocks.dig.done)))))))))
+        (let [{:keys [p] :as s} (await (run-out! (setup {:blocks eight-down :inventory (inventory)} {:target [6 57 0]} {})))]
+          (is (= (count (calls-of p "dig")) (count (events-of s :blocks.dig.done)))))))))
 
 (deftest each-mouth-cell-is-filled-through-the-place-job
   (async done

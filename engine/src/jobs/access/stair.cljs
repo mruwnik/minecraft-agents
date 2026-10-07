@@ -7,6 +7,7 @@
             [jobs.lib.fetch :as fetch]
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
+            [jobs.lib.blocks :as blocks]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [engine.path.executor :as executor]
@@ -305,7 +306,7 @@
     (if-let [lack (need c)] (fetch/check c 'jobs.access.stair lack) true)))
 
 (defn ^:async dig!
-  "Equip the best tool, check the cell again, write the intent and dig it. :continue (dug, go on), or a stop map."
+  "Equip the best tool, check the cell again, write the intent and dig it (a blocks.dig child). :continue (dug, go on), :yield (the child waits on the world), or a stop map."
   [c in cell cut accept]
   (let [p (:primitives c)
         block ((:block-at in) cell)
@@ -328,13 +329,14 @@
             (do
               (ctx/update-mem! c #(-> % (assoc :digging {:cell cell :block block}) (update-in [:tries cell] (fnil inc 0))))
               (let [[x y z] cell
-                    status (.-status (await (ctx/act c :dig #js {:pos #js {:x x :y y :z z}})))]
-                (await (tools/note-wear! c))
+                    outcome (await (blocks/dig-cell! c {:x x :y y :z z} {:accept #{:fluid-adjacent :falling-block :under-feet}
+                                                                         :ignore-zones? true}))]
                 (ctx/update-mem! c record-dug (:block-at in))
-                (when-let [tag (when (= "dug" status) (:note (:args c)))] (escape/note-hole! c tag cell block))
-                (if (#{"dug" "missing"} status)
-                  :continue
-                  {:reason :dig-failed :cell cell :block block :dig status})))))))))
+                (when-let [tag (when (= :dug outcome) (:note (:args c)))] (escape/note-hole! c tag cell block))
+                (case outcome
+                  :continue :yield
+                  (:dug :missing) :continue
+                  {:reason :dig-failed :cell cell :block block :dig outcome})))))))))
 
 (defn ^:async bridge!
   "Place carried filler on the missing floor of the step. :again, or a stop map."
@@ -404,7 +406,7 @@
                   (await (bridge! c in cells))
                   (or stop
                     (if-let [cell (first (remove #(rules/air ((:block-at in) %)) cut))]
-                      (let [r (await (dig! c in cell cut accept))] (if (= :continue r) :again r))
+                      (let [r (await (dig! c in cell cut accept))] (case r :continue :again :yield :continue r))
                       (await (step! c next)))))))))))))
 
 (defn ^:async next!
