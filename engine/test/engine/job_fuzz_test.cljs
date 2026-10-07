@@ -151,6 +151,19 @@
   {'jobs.survival.night "a night round waits for dawn, which the fake world's frozen clock never brings"
    'jobs.survival.retreat "flight keeps moving while the danger lasts, and the fake danger never goes"})
 
+(def progress-window "Rounds over which a changing job memory counts as progress, not a spin." 3)
+
+(defn running-ids
+  "The listed job ids that are not parked after a failure (a parked job has stopped with its reason)."
+  [state]
+  (remove #(contains? (:failed state) %) (:list state)))
+
+(defn progressing?
+  "True when the memories (one per round, oldest first) differ across the last progress-window rounds: the job is working through its input."
+  [mems]
+  (let [tail (take-last (inc progress-window) mems)]
+    (and (> (count tail) 1) (not= (first tail) (last tail)))))
+
 (defn runaway
   "[[:runaway detail]] when job hit the act or call cap (cap is :act, :read or nil) or still ran after max-rounds, unless job is in long-running."
   [job cap still-listed?]
@@ -189,16 +202,18 @@
     (if (instance? js/Error id)
       (assoc base :outcome :refused :defects (when (str/blank? (ex-message id)) [[:blank-refusal ""]]))
       (let [thrown (atom nil)
+            mems (atom [])
             unrefused (when (seq (:wrong-typed (meta args))) [[:wrong-type-accepted (pr-str (:wrong-typed (meta args)))]])]
         (loop [i 0]
-          (when (and (< i max-rounds) (seq (:list (core/state eng))) (not @thrown) (not @capped))
+          (when (and (< i max-rounds) (seq (running-ids (core/state eng))) (not @thrown) (not @capped))
             (swap! clock + 1500)
             (reset! calls {:all 0 :acts 0})
             (let [ok? (try (await (core/tick! eng)) true (catch :default e (reset! thrown (str e)) false))]
+              (swap! mems conj (into {} (map (juxt identity #(core/job-memory eng %))) (:list (core/state eng))))
               (when ok? (recur (inc i))))))
         (assoc base :outcome :ran
                :defects (concat unrefused (when (and @thrown (not (act-cap? @thrown))) [[:tick-threw @thrown]])
-                                (runaway job @capped (and (not @thrown) (seq (:list (core/state eng))) (not (declared-wait? @seen))))
+                                (runaway job @capped (and (not @thrown) (seq (running-ids (core/state eng))) (not (declared-wait? @seen)) (not (progressing? @mems))))
                                 (defects @seen (core/state eng))))))))
 
 ;; ---- the run
@@ -212,10 +227,7 @@
 
 (def known
   "{[job kind] card}: defects already carded, so the suite stays green and a new one fails it. A default run fails when an entry no longer occurs: delete it with its fix."
-  {["jobs.farm.find-spot" :runaway] "a9fb6a61"
-   ["jobs.animals.herd" :runaway] "abd5fa6b"
-   ["jobs.build.clear-box" :runaway] "abd5fa6b"
-   ["jobs.farm.till" :runaway] "abd5fa6b"})
+  {})
 
 (defn case-seed
   "Seed of case k of job: stable under the job filter and the other jobs."
@@ -230,12 +242,21 @@
         k (if kase [kase] (range n))]
     {:job job :entry entry :seed (case-seed base job k) :k k :base base :n n :wrong-untyped? wrong-untyped?}))
 
-(defn env-opts [wrong-untyped?]
-  {:only (env "FUZZ_JOB" nil)
-   :n (js/parseInt (env "FUZZ_CASES" "10"))
-   :base (js/parseInt (env "FUZZ_SEED" "1"))
-   :case (some-> (env "FUZZ_CASE" nil) js/parseInt)
-   :wrong-untyped? wrong-untyped?})
+(defn env-opts
+  "Run options from the FUZZ_* variables; getenv is (fn [k default]), the process env by default."
+  ([wrong-untyped?] (env-opts wrong-untyped? env))
+  ([wrong-untyped? getenv]
+   {:only (getenv "FUZZ_JOB" nil)
+    :n (js/parseInt (getenv "FUZZ_CASES" "10"))
+    :base (js/parseInt (getenv "FUZZ_SEED" "1"))
+    :case (some-> (getenv "FUZZ_CASE" nil) js/parseInt)
+    :wrong-untyped? wrong-untyped?}))
+
+(defn repro-getenv
+  "A getenv fn over the K=V pairs of a printed repro line."
+  [line]
+  (let [vars (into {} (map #(str/split % #"=" 2)) (str/split line #" "))]
+    (fn [k default] (get vars k default))))
 
 (defn repro-line
   "The env vars that replay case c alone."
@@ -253,7 +274,7 @@
   (loop [todo (job-cases opts) found []]
     (if-let [c (first todo)]
       (let [_ (when (env "FUZZ_TRACE" nil) (println "fuzz" (:job c) (:seed c)))
-                res (try (await (run-case c))
+            res (try (await (run-case c))
                      (catch :default e {:job (:job c) :defects [[:harness-threw (str e)]]}))]
         (recur (rest todo) (into found (map (fn [[kind detail]] (assoc (select-keys res [:job :args :ground]) :repro (repro-line c) :kind kind :detail detail))) (:defects res))))
       found)))
@@ -328,11 +349,19 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [opts {:n 10 :base 1 :only "jobs.animals.herd"}
+        (let [opts {:n 10 :base 1 :only "jobs.movement.go-to"}
               c (nth (job-cases opts) 1)
-              replay (first (job-cases (assoc opts :case 1)))
+              getenv (repro-getenv (repro-line c))
+              replay-opts (env-opts false getenv)
+              replay (first (job-cases replay-opts))
               a (await (run-case c))
               b (await (run-case replay))]
+          (is (= 1 (:case replay-opts)))
           (is (= (:seed c) (:seed replay)))
-          (is (= (select-keys a [:args :ground :defects]) (select-keys b [:args :ground :defects])))
-          (is (= [[:runaway "still running after 12 rounds"]] (:defects a))))))))
+          (is (= (select-keys a [:args :ground :defects]) (select-keys b [:args :ground :defects]))))))))
+
+(deftest runaway-ignores-parked-jobs-and-jobs-whose-memory-changes
+  (is (= ["j2"] (running-ids {:list ["j1" "j2"] :failed {"j1" {}}})))
+  (is (progressing? [{:a 0} {:a 0} {:a 1} {:a 2}]))
+  (is (not (progressing? [{:a 1} {:a 1} {:a 1} {:a 1} {:a 1}])))
+  (is (not (progressing? [{:a 1}]))))

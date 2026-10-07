@@ -9,7 +9,6 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [jobs.lib.near :as near]
             [jobs.lib.world-files :as ew]))
 
 (defn setup-seeing
