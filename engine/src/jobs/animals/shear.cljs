@@ -2,8 +2,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
             [jobs.lib.fetch :as fetch]
-            [jobs.lib.util :as u]
-            [jobs.lib.near :as near]))
+            [jobs.lib.util :as u]))
 
 (def doc
   "Shear the adult sheep within :radius and pick up the wool. A one-shot order that starts and ends itself. The
@@ -104,36 +103,6 @@
     (go-collect! c :shorn)
     (finish! c (none-reason c))))
 
-(defn give-up! [c k reason]
-  (ctx/update-mem! c assoc-in [:given-up k] reason))
-
-(defn bump-row! [c]
-  (ctx/update-mem! c update :in-row (fnil inc 0)))
-
-(defn reset-row! [c]
-  (ctx/update-mem! c assoc :in-row 0))
-
-(defn ^:async walk!
-  "Walk within reach of sheep when further than reach. Resolves to :there,
-  :partial or :blocked; a blocked walk gives the sheep up."
-  [c sheep]
-  (let [tpos (u/pos-of (.-pos sheep))]
-    (if (<= (u/dist (u/self-pos c) tpos) reach)
-      :there
-      (let [r (await (near/go-near! c tpos 2 {:zone-tolls true :doors :shut :leg-s (:walk-timeout-s (:args c)) :escalate false :look-round false}))]
-        (case r
-          :there (do (reset-row! c) :there)
-          :partial :partial
-          (do (give-up! c (animals/key-of sheep) :unreachable)
-              (bump-row! c)
-              :blocked))))))
-
-(defn book-out-of-reach! [c k]
-  (let [n (inc (get-in (ctx/mem c) [:fails k] 0))]
-    (ctx/update-mem! c assoc-in [:fails k] n)
-    (when (>= n 2) (give-up! c k :unreachable))
-    (bump-row! c)))
-
 (defn ^:async shear!
   "Use the shears on sheep once and book the outcome."
   [c sheep]
@@ -141,17 +110,17 @@
         r (await (ctx/act c :interact #js {:id (.-id sheep) :item "shears"}))]
     (case (.-status r)
       "used" (ctx/update-mem! c #(-> % (update :shorn (fnil conj []) k) (assoc :in-row 0)))
-      "no-effect" (do (give-up! c k :no-effect) (bump-row! c))
-      "gone" (give-up! c k :gone)
-      "out-of-reach" (book-out-of-reach! c k)
-      "cannot" (do (give-up! c k :cannot) (bump-row! c))
-      "failed" (do (give-up! c k :failed) (bump-row! c))
+      "no-effect" (do (animals/give-up! c k :no-effect) (animals/bump-row! c))
+      "gone" (animals/give-up! c k :gone)
+      "out-of-reach" (animals/book-out-of-reach! c k)
+      "cannot" (do (animals/give-up! c k :cannot) (animals/bump-row! c))
+      "failed" (do (animals/give-up! c k :failed) (animals/bump-row! c))
       nil)))
 
 (defn ^:async engage!
   "Walk to the sheep and shear it; end when fruitless three times in a row."
   [c sheep]
-  (let [walked (await (walk! c sheep))]
+  (let [walked (await (animals/walk! c (animals/key-of sheep) sheep reach {:reset-row? true :doors :shut}))]
     (when (= :there walked)
       (await (shear! c sheep)))
     (if (>= (:in-row (ctx/mem c) 0) max-in-row)

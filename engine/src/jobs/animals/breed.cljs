@@ -2,8 +2,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
             [jobs.lib.fetch :as fetch]
-            [jobs.lib.util :as u]
-            [jobs.lib.near :as near]))
+            [jobs.lib.util :as u]))
 
 (def doc
   "Feed :count animals of type :mob (such as \"cow\") within :radius so that they breed. A one-shot order that
@@ -134,30 +133,6 @@
       (animals/refusal c) (animals/refusal c)
       :else :too-few)))
 
-(defn give-up! [c k reason]
-  (ctx/update-mem! c assoc-in [:given-up k] reason))
-
-(defn bump-row! [c]
-  (ctx/update-mem! c update :in-row (fnil inc 0)))
-
-(defn reset-row! [c]
-  (ctx/update-mem! c assoc :in-row 0))
-
-(defn ^:async walk!
-  "Walk within reach of animal when further than reach. Resolves to :there,
-  :partial or :blocked; a blocked walk gives the animal up."
-  [c animal]
-  (let [tpos (u/pos-of (.-pos animal))]
-    (if (<= (u/dist (u/self-pos c) tpos) reach)
-      :there
-      (let [r (await (near/go-near! c tpos 2 {:zone-tolls true :leg-s (:walk-timeout-s (:args c)) :escalate false :look-round false}))]
-        (case r
-          :there (do (reset-row! c) :there)
-          :partial :partial
-          (do (give-up! c (animals/key-of animal) :unreachable)
-              (bump-row! c)
-              :blocked))))))
-
 (defn fed?
   "Whether the animal went into love mode."
   [r]
@@ -179,27 +154,27 @@
     (case (.-status r)
       "used" (cond
                (fed? r) (ctx/update-mem! c #(-> % (update :fed (fnil conj []) k) (assoc :in-row 0)))
-               (baby? r) (do (give-up! c k :baby)
+               (baby? r) (do (animals/give-up! c k :baby)
                              (ctx/emit! c :breed.baby :warn {:uuid k :text "fed a baby the sensing missed; given up on"}))
                (zero? (or (.-consumed r) 0)) (do (ctx/update-mem! c update :refused (fnil conj []) k)
-                                                 (bump-row! c))
-               :else (reset-row! c))
+                                                 (animals/bump-row! c))
+               :else (animals/reset-row! c))
       "no-effect" (do (ctx/update-mem! c update :refused (fnil conj []) k)
-                      (bump-row! c))
-      "gone" (give-up! c k :gone)
-      "cannot" (do (give-up! c k :cannot) (bump-row! c))
-      "failed" (do (give-up! c k :failed) (bump-row! c))
+                      (animals/bump-row! c))
+      "gone" (animals/give-up! c k :gone)
+      "cannot" (do (animals/give-up! c k :cannot) (animals/bump-row! c))
+      "failed" (do (animals/give-up! c k :failed) (animals/bump-row! c))
       "out-of-reach" (let [n (inc (get-in (ctx/mem c) [:fails k] 0))]
                        (ctx/update-mem! c assoc-in [:fails k] n)
-                       (when (>= n 2) (give-up! c k :unreachable))
-                       (bump-row! c))
+                       (when (>= n 2) (animals/give-up! c k :unreachable))
+                       (animals/bump-row! c))
       nil)
     (if (= "no-item" (.-status r)) :no-food :again)))
 
 (defn ^:async engage!
   "Walk to the animal and feed it; finish when out of food or fruitless three times in a row."
   [c animal food]
-  (let [walked (await (walk! c animal))
+  (let [walked (await (animals/walk! c (animals/key-of animal) animal reach {:reset-row? true}))
         fed (case walked
               :there (await (feed! c animal food))
               :again)]

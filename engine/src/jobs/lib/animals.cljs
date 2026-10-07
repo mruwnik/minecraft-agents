@@ -2,6 +2,7 @@
   "Helpers for the animal jobs: what each mob breeds on, and the herd near the body."
   (:require [engine.ctx :as ctx]
             [jobs.lib.gate :as gate]
+            [jobs.lib.near :as near]
             [jobs.lib.util :as u]))
 
 (defn in-box?
@@ -84,3 +85,41 @@
   "The member of the herd tracked by key, or nil."
   [p mob radius k]
   (first (filter #(= k (key-of %)) (herd p mob radius))))
+
+(defn give-up!
+  "Book animal k as given up on for reason in the job's memory."
+  [c k reason]
+  (ctx/update-mem! c assoc-in [:given-up k] reason))
+
+(defn bump-row!
+  "Count one more fruitless attempt in a row."
+  [c]
+  (ctx/update-mem! c update :in-row (fnil inc 0)))
+
+(defn reset-row!
+  [c]
+  (ctx/update-mem! c assoc :in-row 0))
+
+(defn book-out-of-reach!
+  "Book an out-of-reach click on k: given up (:unreachable) on the second."
+  [c k]
+  (let [n (inc (get-in (ctx/mem c) [:fails k] 0))]
+    (ctx/update-mem! c assoc-in [:fails k] n)
+    (when (>= n 2) (give-up! c k :unreachable))
+    (bump-row! c)))
+
+(defn ^:async walk!
+  "Walk within reach of the entity target (animal k) when further than reach. Resolves to :there, :partial or
+  :blocked; a blocked walk gives k up and bumps the row. opts: :reset-row? (a :there ends the row), :doors."
+  [c k target reach {:keys [reset-row? doors]}]
+  (let [tpos (u/pos-of (.-pos target))]
+    (if (<= (u/dist (u/self-pos c) tpos) reach)
+      :there
+      (let [r (await (near/go-near! c tpos 2 (cond-> {:zone-tolls true :leg-s (:walk-timeout-s (:args c)) :escalate false :look-round false}
+                                               doors (assoc :doors doors))))]
+        (case r
+          :there (do (when reset-row? (reset-row! c)) :there)
+          :partial :partial
+          (do (give-up! c k :unreachable)
+              (bump-row! c)
+              :blocked))))))

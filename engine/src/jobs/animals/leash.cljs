@@ -2,8 +2,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
             [jobs.lib.fetch :as fetch]
-            [jobs.lib.util :as u]
-            [jobs.lib.near :as near]))
+            [jobs.lib.util :as u]))
 
 (def doc
   "Put a lead on one animal of type :mob (such as \"cow\") within :radius and end. A one-shot order that starts and
@@ -79,32 +78,6 @@
       (some animals/leashed? (herd c)) :all-leashed
       :else :none)))
 
-(defn give-up! [c k reason]
-  (ctx/update-mem! c assoc-in [:given-up k] reason))
-
-(defn bump-row! [c]
-  (ctx/update-mem! c update :in-row (fnil inc 0)))
-
-(defn ^:async walk!
-  "Walk within reach of the animal. Resolves to :there, :partial or :blocked; a blocked walk gives it up."
-  [c animal]
-  (let [tpos (u/pos-of (.-pos animal))]
-    (if (<= (u/dist (u/self-pos c) tpos) reach)
-      :there
-      (let [r (await (near/go-near! c tpos 2 {:zone-tolls true :doors :shut :leg-s (:walk-timeout-s (:args c)) :escalate false :look-round false}))]
-        (case r
-          :there :there
-          :partial :partial
-          (do (give-up! c (animals/key-of animal) :unreachable)
-              (bump-row! c)
-              :blocked))))))
-
-(defn book-out-of-reach! [c k]
-  (let [n (inc (get-in (ctx/mem c) [:fails k] 0))]
-    (ctx/update-mem! c assoc-in [:fails k] n)
-    (when (>= n 2) (give-up! c k :unreachable))
-    (bump-row! c)))
-
 (defn on-my-lead
   "The animal as the sensing shows it now when it is on this body's lead, else nil."
   [c k]
@@ -120,19 +93,19 @@
     (case (.-status r)
       "used" (if-let [now (on-my-lead c k)]
                [:leashed now]
-               (do (give-up! c k :unconfirmed) (bump-row! c) nil))
+               (do (animals/give-up! c k :unconfirmed) (animals/bump-row! c) nil))
       "no-item" [:no-lead nil]
-      "no-effect" (do (give-up! c k :no-effect) (bump-row! c) nil)
-      "gone" (do (give-up! c k :gone) nil)
-      "out-of-reach" (do (book-out-of-reach! c k) nil)
-      "cannot" (do (give-up! c k :cannot) (bump-row! c) nil)
-      "failed" (do (give-up! c k :failed) (bump-row! c) nil)
+      "no-effect" (do (animals/give-up! c k :no-effect) (animals/bump-row! c) nil)
+      "gone" (do (animals/give-up! c k :gone) nil)
+      "out-of-reach" (do (animals/book-out-of-reach! c k) nil)
+      "cannot" (do (animals/give-up! c k :cannot) (animals/bump-row! c) nil)
+      "failed" (do (animals/give-up! c k :failed) (animals/bump-row! c) nil)
       nil)))
 
 (defn ^:async engage!
   "Walk to the animal and lead it; end when fruitless three times in a row."
   [c animal]
-  (let [walked (await (walk! c animal))
+  (let [walked (await (animals/walk! c (animals/key-of animal) animal reach {:doors :shut}))
         [reason led] (when (= :there walked) (await (lead! c animal)))]
     (cond
       reason (finish! c reason led)
