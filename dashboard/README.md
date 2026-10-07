@@ -191,5 +191,5 @@ A further close-pan experiment tested a spatial grid for label collision checks.
 
 `tools/rcon.mjs`, `tools/rcon-raw.mjs` and `tools/rcon-test.mjs` are thin entry points over the compiled
 `out/rcon-tools.cjs` (`dashboard.rcon-tools`, codec and client in `dashboard.rcon`). A fresh checkout builds it
-once with `npm --prefix dashboard run build-rcon-tools`; unbuilt, the tools print that command and exit 1.
+once with `tools/compile dashboard rcon-tools --release`; unbuilt, the tools print that command and exit 1.
 Startup is about 80 ms. Rebuild after editing the allow-list in `rcon_tools.cljs`.

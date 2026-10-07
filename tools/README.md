@@ -97,4 +97,4 @@ with evidence. `--check` only loads and validates the fixtures (no body, server 
 Follows one minecart over RCON (game time, Pos, Motion each tick; `--near` pins the nearest minecart once, `--rider` the cart
 the player rides). JSON lines to `--out` or stdout; prints the minimum windowed speed (blocks/tick, 3D path length over `--window` ticks, so bends read true)
 and where, per-cell speeds, and the path distance from `--cell` until the speed is back at `--threshold`. Logic in
-`dashboard/src/dashboard/rcon_cart.cljs`; rebuild the bundle with `npm --prefix dashboard run build-rcon-tools`.
+`dashboard/src/dashboard/rcon_cart.cljs`; rebuild the bundle with `tools/compile dashboard rcon-tools --release`.

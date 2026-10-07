@@ -5,7 +5,7 @@ import { createRequire } from 'node:module'
 
 export const BUNDLE = path.join(import.meta.dirname, '..', 'dashboard', 'out', 'rcon-tools.cjs')
 export const SOURCE_DIR = path.join(import.meta.dirname, '..', 'dashboard', 'src', 'dashboard')
-export const BUILD_HINT = 'npm --prefix dashboard run build-rcon-tools'
+export const BUILD_HINT = 'tools/compile dashboard rcon-tools --release'
 
 // the newest modification time among the rcon*.cljs sources (the bundle's inputs)
 const newestSource = dir => Math.max(0, ...fs.readdirSync(dir).filter(f => /^rcon.*\.cljs$/.test(f)).map(f => fs.statSync(path.join(dir, f)).mtimeMs))

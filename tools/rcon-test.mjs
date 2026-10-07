@@ -3,7 +3,7 @@
 // (time, weather, tp, give, effects, damage, summon, setblock, fill, ...) aimed at allowed test players only.
 //   node tools/rcon-test.mjs <subcommand> [args...]      e.g. node tools/rcon-test.mjs give ClaudeProbe bread 3
 // Extra target players: RCON_TEST_TARGETS=Name1,Name2. To extend, edit the lists and `builders` in rcon_tools.cljs, then rebuild:
-//   npm --prefix dashboard run build-rcon-tools
+//   tools/compile dashboard rcon-tools --release
 // This is a guard rail against accidents, not a security boundary.
 import { runRconTool } from './rcon-bundle.mjs'
 

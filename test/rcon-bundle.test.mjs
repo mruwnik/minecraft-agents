@@ -43,3 +43,7 @@ test('only rcon*.cljs sources count towards staleness', () => {
   touch(other, 2000)
   assert.deepEqual(loadRconTools(bundle, dir), {})
 })
+
+test('the build hint goes through tools/compile (the compile lock), not a raw shadow-cljs npm script', () => {
+  assert.match(BUILD_HINT, /^tools\/compile dashboard rcon-tools --release$/)
+})
